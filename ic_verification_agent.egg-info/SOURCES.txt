@@ -44,8 +44,8 @@ src/tools/coverage_tools.py
 src/tools/debug_tools.py
 src/tools/spec_tools.py
 src/tools/uvm_tools.py
-src/tools/templates/__init__.py
-src/tools/templates/init.py
+src/tools/compilesim/Verify_run.py
+src/tools/compilesim/_gen_uart.py
 src/tools/uvm/__init__.py
 src/tools/uvm/tool_sc_red/generate.py
 src/tools/uvm/tool_uvm/__init__.py

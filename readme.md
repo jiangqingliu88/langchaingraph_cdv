@@ -11,7 +11,7 @@ cd C:\Users\liujiangqing\Desktop\cdv_advanced
 .\venv\Scripts\activate
 
 # 2. 设置 API Key
-$env:LLM_API_KEY="sk-your-deepseek-key"
+$env:LLM_API_KEY="sk-507794d503fb4195b85dfe23fba481fa"
 
 # 3. 初始化
 ic-verify init

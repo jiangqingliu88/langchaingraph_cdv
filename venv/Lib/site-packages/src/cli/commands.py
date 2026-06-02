@@ -115,6 +115,7 @@ def verify(spec_file, workflow, bypass, output):
                     results[name] = "passed"
                 else:
                     table.add_row(name, "[red]FAIL[/red]", f"{t1:.1f}s")
+                    console.print(f"[red]  Error: {r.error[:200] if r.error else 'unknown'}[/red]")
             except Exception as e:
                 table.add_row(name, "[red]ERR[/red]", f"{time.time()-t0:.1f}s")
         console.print(table)

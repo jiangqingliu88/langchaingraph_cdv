@@ -1,0 +1,15 @@
+// Environment Package: {{ environment.env_name }}_pkg
+package {{ environment.env_name }}_pkg;
+  import uvm_pkg::*;
+  `include "uvm_macros.svh"
+  // 导入所有 Agent 包
+{%- for agent in agents %}
+  import {{ agent.name }}_pkg::*;
+{%- endfor %}
+
+  // 包含环境组件文件
+  `include "{{ environment.env_name }}_config.sv"
+  `include "seqs/{{ environment.env_name }}_virtual_sequencer.sv"
+  `include "{{ environment.env_name }}.sv"
+
+endpackage : {{ environment.env_name }}_pkg

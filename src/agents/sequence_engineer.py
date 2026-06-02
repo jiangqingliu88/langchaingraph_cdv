@@ -9,7 +9,7 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from src.core.base import BaseAgent, AgentResult
 from src.core.registry import register_agent
-from src.tools.uvm import generate_uvm
+from src.tools.uvm import generate_uvm, uvm_tool
 import structlog
 import yaml
 
@@ -50,7 +50,7 @@ class SequenceEngineer(BaseAgent):
         ])
 
     async def _get_tools(self) -> List:
-        return [generate_uvm]
+        return [uvm_tool]
 
     async def _execute(self, input_text: str) -> Dict[str, Any]:
         if self._executor:

@@ -1,0 +1,103 @@
+# ALU_constraint_config.yaml
+constraint:
+  name: ALU_constraint
+  env_name: ALU_env
+  
+# 事务定义
+transactions:
+  - name: cfg
+    type: ALU_cfg_transaction
+    description: "配置事务"
+    fields:
+      - { name: mem_size, type: "mem_size_e", rand: true }
+      - { name: precision, type: "data_precision_e", rand: true }
+      - { name: compute_op, type: "compute_op_e", rand: true }
+      
+  - name: weight
+    type: ALU_weight_transaction
+    description: "权重事务"
+    fields:
+      - { name: addr, type: "bit [15:0]", rand: true }
+      - { name: count, type: "int", rand: true }
+      - { name: data, type: "bit [15:0][]", rand: true }
+      
+  - name: input
+    type: ALU_input_transaction
+    description: "输入数据事务"
+    fields:
+      - { name: addr, type: "bit [15:0]", rand: true }
+      - { name: count, type: "int", rand: true }
+      - { name: data, type: "bit [15:0][]", rand: true }
+      
+  - name: output
+    type: ALU_output_transaction
+    description: "输出事务"
+    fields:
+      - { name: addr, type: "bit [15:0]", rand: true }
+      - { name: count, type: "int", rand: true }
+      - { name: data, type: "int[]", rand: true }
+
+# 策略定义
+policies:
+  - name: precision_consistency
+    description: "精度一致性策略"
+    priority: 1
+    enabled: true
+    params:
+      - { name: enforce_match, type: bool, default: true }
+    applies_to: [cfg, weight, input]
+    
+  - name: mem_capacity
+    description: "存储容量策略"
+    priority: 2
+    enabled: true
+    params:
+      - { name: addr_boundary, type: "list", default: [4096, 8192, 16384] }
+    applies_to: [weight, input]
+    
+  - name: data_dependency
+    description: "数据依赖策略"
+    priority: 3
+    enabled: true
+    params:
+      - { name: dep_type, type: string, default: "CROSS", enum: ["INDEPENDENT", "WEIGHT_DEPENDENT", "INPUT_DEPENDENT", "CROSS_DEPENDENT"] }
+      - { name: pipeline_depth, type: int, default: 1 }
+    applies_to: [weight, input, output]
+    
+  - name: boundary_overflow
+    description: "边界溢出策略"
+    priority: 4
+    enabled: true
+    params:
+      - { name: boundary_type, type: string, default: "NORMAL", enum: ["NORMAL", "BOUNDARY", "OVERFLOW", "UNDERFLOW"] }
+    applies_to: [weight, input]
+    
+  - name: compute_mode
+    description: "计算模式策略"
+    priority: 5
+    enabled: true
+    params:
+      - { name: profiles, type: "list", default: [] }
+    applies_to: [cfg, weight, input, output]
+    
+  - name: concurrent_access
+    description: "并发访问策略"
+    priority: 6
+    enabled: true
+    params:
+      - { name: num_ports, type: int, default: 4 }
+      - { name: conflict_prob, type: float, default: 0.1 }
+    applies_to: [weight, input]
+    
+  - name: power_performance
+    description: "功耗性能策略"
+    priority: 7
+    enabled: true
+    params:
+      - { name: power_mode, type: string, default: "BALANCED", enum: ["LOW_POWER", "HIGH_PERFORMANCE", "BALANCED"] }
+    applies_to: [cfg, weight, input]
+
+# 策略组合配置
+combinator:
+  default_mode: APPLY_ALL
+  modes: [APPLY_ALL, APPLY_WEIGHTED, APPLY_FIRST_MATCH, APPLY_SEQUENTIAL, APPLY_CHAIN]

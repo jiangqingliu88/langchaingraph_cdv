@@ -1,0 +1,15 @@
+environment:
+  agents:
+    UART_in:
+      clock: pclk
+      interface: uart_if
+      reset: presetn
+  clk_rst_vip:
+    enabled: false
+  config_vars: []
+  env_name: uart_env
+  name: uart_env
+  scoreboards: []
+  tlm_connections: []
+  virtual_sequencer:
+    enabled: false
