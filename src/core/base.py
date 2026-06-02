@@ -212,7 +212,11 @@ class BaseAgent(ABC, AgentSubject):
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
         bypass = task.get('bypass', False) if isinstance(task, dict) else False
         if bypass:
-            return AgentResult(success=True, data={"output": f"[{self.display_name}] bypass mode"})
+            result = AgentResult(success=True, data={"output": f"[{self.display_name}] bypass mode"})
+            # 记录调试日志
+            from src.middleware.debug_logger import debug_logger
+            debug_logger.log_agent_call(self.role, self.display_name, str(task)[:500], "bypass", result.data.get("output", ""), [], 0, 0, True)
+            return result
         start_time = datetime.now()
         self.status = AgentStatus.BUSY
         await self.notify_start(self.role, task)
@@ -227,6 +231,14 @@ class BaseAgent(ABC, AgentSubject):
             self.metrics["tasks_completed"] += 1
             self.metrics["total_time"] += execution_time
             agent_result = AgentResult(success=True, data=processed_result, execution_time=execution_time)
+            # 记录调试日志
+            try:
+                from src.middleware.debug_logger import debug_logger
+                prompt_preview = str(getattr(self, '_last_prompt', ''))[:500]
+                tools_names = [t.name for t in self.tools] if self.tools else []
+                debug_logger.log_agent_call(self.role, self.display_name, str(task)[:500], prompt_preview, str(processed_result)[:500], tools_names, 0, execution_time, True)
+            except:
+                pass
             await self.notify_complete(self.role, agent_result)
             return agent_result
         except Exception as e:
