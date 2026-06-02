@@ -1,0 +1,37 @@
+# UART 验证回归配置 (QuestaSim + bash)
+config:
+  name: uart_verification
+  description: "UART 控制器验证"
+
+  defaults:
+    simulator: echo
+    compile_timeout: 600
+    sim_timeout: 3600
+    verbosity: UVM_MEDIUM
+
+  builds:
+    - name: uart_base_build
+      description: "UART 基础编译"
+      simulator: echo
+      pre_build:
+        - "bash -c 'mkdir -p build/uart/work'"
+        - "bash -c 'f:/questasim64_2024.1/win64/vlib.exe build/uart/work'"
+        - "bash -c 'f:/questasim64_2024.1/win64/vlog.exe -work build/uart/work -sv +acc -timescale=1ns/1ps -f D:/tmp/uart_gen/filelist.f'"
+      post_build:
+        - "bash -c 'echo @f:/questasim64_2024.1/win64/vsim.exe -c -do \\\"run -all; quit\\\" -work build/uart/work uart_bench_tb_top %* > build/uart/simv.bat'"
+      compile_options: ["Compile done in pre_build"]
+      filelist: D:/tmp/uart_gen/filelist.f
+      top_module: uart_bench_tb_top
+      executable: build/uart/simv.bat
+      output_dir: build/uart
+      compile_timeout: 300
+
+  tests:
+    - name: uart_smoke_test
+      build: uart_base_build
+      tags: [smoke]
+      seed: 1
+      count: 1
+      sim_timeout: 120
+      plusargs:
+        - "+UVM_TESTNAME=uart_base_test"

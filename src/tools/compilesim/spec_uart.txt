@@ -1,0 +1,48 @@
+# UART Controller Specification v2.1
+
+## Overview
+Full-duplex asynchronous serial communication controller with AXI4-Lite configuration interface.
+Supports configurable baud rate, 8-N-1 frame format, TX/RX with status interrupts.
+
+## Interfaces
+
+### AXI4-Lite Slave (pclk domain)
+- AW: awaddr[31:0], awvalid, awready
+- W:  wdata[31:0],  wvalid,  wready
+- B:  bvalid, bready
+- AR: araddr[31:0], arvalid, arready
+- R:  rdata[31:0],  rvalid,  rready
+
+### UART Serial (pclk domain)
+- tx       : output, idle high
+- rx       : input,  idle high
+- interrupt: output, level (TX_EMPTY | RX_FULL)
+
+## Register Map
+
+| Offset | Name      | Access | Width | Description          |
+|--------|-----------|--------|-------|----------------------|
+| 0x00   | BAUD_RATE | RW     | 16    | Baud rate divisor    |
+| 0x04   | CTRL      | RW     | 8     | bit[0]=TX_EN, bit[1]=RX_EN |
+| 0x08   | STATUS    | RO     | 8     | bit[0]=TX_EMPTY, bit[1]=RX_FULL |
+| 0x0C   | TX_DATA   | WO     | 8     | TX data register     |
+| 0x10   | RX_DATA   | RO     | 8     | RX data register     |
+
+## Clock & Reset
+- pclk: APB clock 50MHz
+- presetn: async reset active low
+
+## Key Features
+1. TX: parallel-to-serial with start(0) + 8-bit data + stop(1) framing
+2. RX: serial-to-parallel with start bit detection, 8-bit data sampling
+3. AXI4-Lite register read/write access
+4. Interrupt generation on TX_EMPTY and RX_FULL
+
+## Test Points
+- TX single byte
+- RX single byte
+- Back-to-back TX
+- Back-to-back RX
+- Register read/write via AXI4-Lite
+- Reset behavior
+- Interrupt assertion/clear

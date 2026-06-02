@@ -1,0 +1,5 @@
+pytest_cache
+ic_verification_agent.egg-info
+venv/Scripts/ic-verify.
+venv/pyvenv.cfg
+venv/Scripts/*

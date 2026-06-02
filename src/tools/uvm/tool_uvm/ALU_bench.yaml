@@ -1,0 +1,50 @@
+bench:
+  # 基本信息
+  name: alu_bench
+  # 环境名称
+  env_name: alu_env
+  # 系统配置
+  timeout: 10ms
+
+  # 是否包含断言
+  include_assertions: true
+  
+  # 时钟复位接口连接
+  clk_rst:
+    interface: clk_rst_if
+    clocks: [sys_clk, fast_clk]
+    resets: [sys_rst_n, por_rst_n]
+  
+  # Agent 接口连接
+  agents:
+    ALU_in:
+      interface: alu_in_interface
+      clock: sys_clk
+      reset: sys_rst_n
+    ALU_out:
+      interface: alu_out_interface
+      clock: sys_clk
+      reset: sys_rst_n
+
+  # DUT initiation
+  # UVM 配置
+  uvm_config:
+    verbosity: UVM_MEDIUM
+    report_handler:
+      max_quit_count: 100
+    factory_debug: false
+    
+  # 波形转储
+  wave_dump:
+    enabled: true
+    format: "FST"         # FST / VCD / FSDB
+    file_name: "alu_bench_tb_top.fst"
+    levels: 0             # 0 = 所有层次
+    plusargs: "DUMP_WAVES"
+
+  # 仿真控制
+  simulation:
+    seed: 0               # 0 = 随机种子
+    max_runtime: 100ms
+    stop_on_error: false
+    stop_on_fatal: true

@@ -153,35 +153,39 @@ class BaseAgent(ABC, AgentSubject):
     async def initialize(self):
         """
         初始化Agent
-        
+
         模板方法 - 定义初始化流程
-        1. 创建LLM
+        1. 创建LLM (若 API Key 不可用则跳过，支持 bypass)
         2. 子类特定初始化
         3. 创建Agent Executor
         """
         logger.info(f"正在初始化Agent: {self.display_name}")
-        
-        # 1. 创建LLM
-        self.llm = self._create_llm()
-        
+
+        # 1. 尝试创建LLM，失败则跳过（bypass 模式不需要）
+        try:
+            self.llm = self._create_llm()
+        except (ValueError, Exception) as e:
+            logger.warning(f"LLM创建失败，将使用 bypass 模式", error=str(e))
+            self.llm = None
+
         # 2. 获取工具
         self.tools = await self._get_tools()
-        
+
         # 3. 获取Prompt
         prompt = await self._get_prompt_template()
-        
+
         # 4. 子类特定初始化
         await self._setup()
-        
-        # 5. 创建Agent
-        if self.tools and prompt:
+
+        # 5. 创建Agent Executor（仅当 LLM 可用时）
+        if self.llm and self.tools and prompt:
             from langchain.agents import create_openai_tools_agent
             agent = create_openai_tools_agent(
                 llm=self.llm,
                 tools=self.tools,
                 prompt=prompt
             )
-            
+
             self._executor = AgentExecutor(
                 agent=agent,
                 tools=self.tools,
@@ -190,7 +194,7 @@ class BaseAgent(ABC, AgentSubject):
                 handle_parsing_errors=True,
                 return_intermediate_steps=False
             )
-        
+
         self.status = AgentStatus.IDLE
         logger.info(f"Agent初始化完成: {self.display_name}")
     

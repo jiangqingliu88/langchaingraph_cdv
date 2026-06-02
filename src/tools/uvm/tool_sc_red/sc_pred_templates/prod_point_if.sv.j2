@@ -1,0 +1,17 @@
+// prod/mon {{ point.point_name }}_if.sv 
+interface {{ point.point_name }}_if (
+  input logic clk,
+  input logic rst
+);
+  
+{% for port in point.ports %}
+{% if port.name != 'clk' and port.name != 'rst' %}
+  {% if port.width > 1 %}
+  logic [{{ port.width-1 }}:0] {{ port.name }};
+  {% else %}
+  logic {{ port.name }};
+  {% endif %}  // {{ port.dir }}
+{% endif %}
+{% endfor %}
+  
+endinterface

@@ -1,0 +1,1 @@
+1.compile 不要单写一个python文件，Verify_run支持编译和仿真。
