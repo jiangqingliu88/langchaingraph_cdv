@@ -1,0 +1,102 @@
+{% import 'base/component_macros.j2' as comp %}
+{% import 'base/tlm_macros.j2' as tlm %}
+
+{{ comp.component_header(env_name, 'uvm_env', description or 'UVM Environment') }}
+
+class {{ env_name }} extends uvm_env;
+    `uvm_component_utils({{ env_name }})
+    
+    // Configuration
+    {{ env_config_type }} cfg;
+    
+    // Agents
+    {% for agent in agents %}
+    {{ agent.class_name }} {{ agent.instance_name }};
+    {% endfor %}
+    
+    // Scoreboard
+    {% if has_scoreboard %}
+    {{ scoreboard_name }} scoreboard;
+    {% endif %}
+    
+    // Coverage Collector
+    {% if has_coverage %}
+    {{ coverage_collector_name }} coverage_collector;
+    {% endif %}
+    
+    // Virtual Sequencer
+    {% if has_virtual_sequencer %}
+    {{ virtual_sequencer_name }} virtual_sequencer;
+    {% endif %}
+    
+    // Constructor
+    function new(string name, uvm_component parent);
+        super.new(name, parent);
+    endfunction
+    
+    // Build Phase
+    function void build_phase(uvm_phase phase);
+        super.build_phase(phase);
+        
+        // Get configuration
+        if(!uvm_config_db #({{ env_config_type }})::get(this, "", "cfg", cfg))
+            `uvm_fatal("NOCFG", "Environment configuration not found")
+        
+        // Set agent configurations
+        {% for agent in agents %}
+        uvm_config_db #({{ agent.config_type }})::set(this, "{{ agent.instance_name }}.*", "cfg", cfg.{{ agent.config_name }});
+        {% endfor %}
+        
+        // Create agents
+        {% for agent in agents %}
+        {{ agent.instance_name }} = {{ agent.class_name }}::type_id::create("{{ agent.instance_name }}", this);
+        {% endfor %}
+        
+        // Create scoreboard
+        {% if has_scoreboard %}
+        if(cfg.has_scoreboard) begin
+            scoreboard = {{ scoreboard_name }}::type_id::create("scoreboard", this);
+            uvm_config_db #({{ scoreboard_config_type }})::set(this, "scoreboard.*", "cfg", cfg.scoreboard_cfg);
+        end
+        {% endif %}
+        
+        // Create coverage collector
+        {% if has_coverage %}
+        if(cfg.has_coverage) begin
+            coverage_collector = {{ coverage_collector_name }}::type_id::create("coverage_collector", this);
+        end
+        {% endif %}
+        
+        // Create virtual sequencer
+        {% if has_virtual_sequencer %}
+        virtual_sequencer = {{ virtual_sequencer_name }}::type_id::create("virtual_sequencer", this);
+        {% endif %}
+    endfunction
+    
+    // Connect Phase
+    function void connect_phase(uvm_phase phase);
+        super.connect_phase(phase);
+        
+        {% for connection in connections %}
+        // {{ connection.description or 'Connection ' + loop.index|string }}
+        {{ connection.source }}.{{ connection.source_port }}.connect({{ connection.target }}.{{ connection.target_port }});
+        {% endfor %}
+        
+        // Connect virtual sequencer to agent sequencers
+        {% if has_virtual_sequencer %}
+        {% for vseq_conn in virtual_sequencer_connections %}
+        virtual_sequencer.{{ vseq_conn.handle_name }} = {{ vseq_conn.agent_path }}.sequencer;
+        {% endfor %}
+        {% endif %}
+    endfunction
+    
+    // End of Elaboration Phase
+    function void end_of_elaboration_phase(uvm_phase phase);
+        super.end_of_elaboration_phase(phase);
+        
+        // Print topology
+        `uvm_info("{{ env_name }}", "Environment topology:", UVM_MEDIUM)
+        uvm_top.print_topology();
+    endfunction
+    
+endclass : {{ env_name }}

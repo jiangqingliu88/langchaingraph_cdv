@@ -1,0 +1,173 @@
+# Agent配置 - 定义9个Agent的能力和协作关系
+agents:
+  verification_orchestrator:
+    role: "verification_orchestrator"
+    display_name: "验证编排器"
+    description: "项目管理核心，负责任务分解和资源调度"
+    priority: 1
+    tools:
+      - create_task
+      - query_agent_status
+      - update_project_status
+      - make_decision
+    collaborators:
+      - spec_and_test_planner
+      - verification_architect
+      - regression_manager
+      - quality_assurance
+    
+  spec_and_test_planner:
+    role: "spec_and_test_planner"
+    display_name: "规格与测试规划师"
+    description: "分析设计规格，生成验证计划"
+    priority: 2
+    tools:
+      - analyze_specification
+      - generate_test_plan
+      - extract_features
+    collaborators:
+      - verification_architect
+      - sequence_engineer
+      - assertion_engineer
+    
+  verification_architect:
+    role: "verification_architect"
+    display_name: "验证架构师"
+    description: "设计UVM验证环境架构并生成组件代码"
+    priority: 3
+    tools:
+      - generate_uvm_architecture
+      - generate_uvm_driver
+      - generate_uvm_monitor
+      - generate_uvm_scoreboard
+      - generate_uvm_agent
+    collaborators:
+      - sequence_engineer
+      - assertion_engineer
+      - coverage_manager
+    
+  sequence_engineer:
+    role: "sequence_engineer"
+    display_name: "序列工程师"
+    description: "设计UVM测试序列和场景"
+    priority: 4
+    tools:
+      - generate_sequence
+      - generate_virtual_sequence
+      - analyze_sequence_coverage
+    collaborators:
+      - verification_architect
+      - regression_manager
+    
+  assertion_engineer:
+    role: "assertion_engineer"
+    display_name: "断言工程师"
+    description: "生成SVA断言和形式验证属性"
+    priority: 4
+    tools:
+      - generate_sva_assertions
+      - generate_formal_properties
+      - check_assertion_coverage
+    collaborators:
+      - verification_architect
+      - debug_engineer
+    
+  coverage_manager:
+    role: "coverage_manager"
+    display_name: "覆盖率管理器"
+    description: "收集和分析代码及功能覆盖率"
+    priority: 5
+    tools:
+      - collect_coverage
+      - analyze_coverage_gaps
+      - generate_coverage_report
+      - suggest_coverage_tests
+    collaborators:
+      - regression_manager
+      - quality_assurance
+    
+  regression_manager:
+    role: "regression_manager"
+    display_name: "回归管理器"
+    description: "管理回归测试执行和结果分析"
+    priority: 5
+    tools:
+      - execute_regression
+      - analyze_regression_results
+      - manage_test_queue
+      - optimize_test_order
+    collaborators:
+      - coverage_manager
+      - debug_engineer
+    
+  debug_engineer:
+    role: "debug_engineer"
+    display_name: "调试工程师"
+    description: "分析失败测试，定位问题根因"
+    priority: 6
+    tools:
+      - analyze_simulation_log
+      - analyze_waveform
+      - trace_error_source
+      - generate_fix_suggestion
+    collaborators:
+      - regression_manager
+      - assertion_engineer
+    
+  quality_assurance:
+    role: "quality_assurance"
+    display_name: "质量保证"
+    description: "代码审查和验证质量评估"
+    priority: 7
+    tools:
+      - review_code
+      - evaluate_quality_metrics
+      - check_standards_compliance
+      - generate_qa_report
+    collaborators:
+      - verification_orchestrator
+      - coverage_manager
+
+# 验证流程定义
+pipelines:
+  full_verification:
+    name: "完整验证流程"
+    phases:
+      - name: "spec_analysis"
+        agent: "spec_and_test_planner"
+        next: "architecture_design"
+      - name: "architecture_design"
+        agent: "verification_architect"
+        next: "parallel_development"
+      - name: "parallel_development"
+        parallel: true
+        agents:
+          - "sequence_engineer"
+          - "assertion_engineer"
+        next: "regression"
+      - name: "regression"
+        agent: "regression_manager"
+        next: "parallel_analysis"
+      - name: "parallel_analysis"
+        parallel: true
+        agents:
+          - "coverage_manager"
+          - "debug_engineer"
+        next: "quality_review"
+      - name: "quality_review"
+        agent: "quality_assurance"
+        next: "decision"
+      - name: "decision"
+        agent: "verification_orchestrator"
+        
+  quick_check:
+    name: "快速检查流程"
+    phases:
+      - name: "spec_analysis"
+        agent: "spec_and_test_planner"
+        next: "architecture_design"
+      - name: "architecture_design"
+        agent: "verification_architect"
+        next: "review"
+      - name: "review"
+        agent: "quality_assurance"

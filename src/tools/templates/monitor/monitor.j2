@@ -1,0 +1,103 @@
+{% import 'base/component_macros.j2' as comp %}
+{% import 'base/tlm_macros.j2' as tlm %}
+
+{{ comp.component_header(monitor_name, 'uvm_monitor', description or 'UVM Monitor Component') }}
+
+class {{ monitor_name }} extends uvm_monitor;
+    {{ comp.factory_registration(monitor_name) }}
+    
+    // Virtual Interface
+    virtual {{ interface_type }} vif;
+    
+    // Configuration
+    {{ agent_config_type }} cfg;
+    
+    // Analysis Ports
+    {{ tlm.analysis_port_declaration('item_collected_port', transaction_type) }}
+    
+    {% if has_coverage %}
+    // Coverage Port
+    {{ tlm.analysis_port_declaration('coverage_port', transaction_type) }}
+    {% endif %}
+    
+    // Internal Members
+    protected {{ transaction_type }} trans_collected;
+    protected int num_transactions = 0;
+    
+    {% if has_protocol_checker %}
+    // Protocol Checker
+    protected {{ protocol_checker_name }} protocol_checker;
+    {% endif %}
+    
+    // Constructor
+    function new(string name, uvm_component parent);
+        super.new(name, parent);
+        item_collected_port = new("item_collected_port", this);
+        {% if has_coverage %}
+        coverage_port = new("coverage_port", this);
+        {% endif %}
+    endfunction
+    
+    // Build Phase
+    function void build_phase(uvm_phase phase);
+        super.build_phase(phase);
+        
+        {{ comp.config_db_get('virtual ' + interface_type, 'this', '', 'vif', 'NOVIF') }}
+        {{ comp.config_db_get(agent_config_type, 'this', '', 'cfg', 'NOCFG') }}
+        
+        {% if has_protocol_checker %}
+        protocol_checker = {{ comp.create_component(protocol_checker_name, 'protocol_checker') }}
+        {% endif %}
+    endfunction
+    
+    // Run Phase
+    virtual task run_phase(uvm_phase phase);
+        forever begin
+            collect_transaction();
+        end
+    endtask
+    
+    // Collect Transaction
+    virtual protected task collect_transaction();
+        trans_collected = {{ transaction_type }}::type_id::create("trans_collected");
+        
+        {% for collect_step in collect_steps %}
+        // {{ collect_step.description or 'Step ' + loop.index|string }}
+        {{ collect_step.code | indent_code(8) }}
+        {% endfor %}
+        
+        {% if has_protocol_checker %}
+        // Check protocol
+        protocol_checker.check(trans_collected);
+        {% endif %}
+        
+        // Write to analysis port
+        item_collected_port.write(trans_collected);
+        
+        {% if has_coverage %}
+        coverage_port.write(trans_collected);
+        {% endif %}
+        
+        num_transactions++;
+        
+        `uvm_info("{{ monitor_name }}", 
+            $sformatf("Collected transaction #%0d:\n%s", 
+            num_transactions, trans_collected.sprint()), UVM_HIGH)
+    endtask
+    
+    {% if has_coverage %}
+    // Coverage Collection
+    virtual protected task sample_coverage({{ transaction_type }} tr);
+        // Coverage sampling logic
+        covergroup_sample(tr);
+    endtask
+    {% endif %}
+    
+    // Report Phase
+    function void report_phase(uvm_phase phase);
+        super.report_phase(phase);
+        `uvm_info("{{ monitor_name }}", 
+            $sformatf("Total transactions collected: %0d", num_transactions), UVM_MEDIUM)
+    endfunction
+    
+endclass : {{ monitor_name }}
