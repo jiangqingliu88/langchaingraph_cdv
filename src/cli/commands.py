@@ -6,10 +6,10 @@ import sys
 from pathlib import Path
 from typing import Optional
 import click
+import json
 from rich.console import Console
 from rich.table import Table
 import yaml
-from pathlib import Path
 from src.database.repository import save_task, save_pipeline_run, get_recent_tasks
 from src.database.connection import init_db
 from rich.panel import Panel
@@ -17,9 +17,6 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn
 from rich import box
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn
-from rich.syntax import Syntax
-from rich import print as rprint
 import json
 
 # 添加项目根目录到路径
@@ -48,6 +45,10 @@ class VerificationCLI:
         self.registry = AgentRegistry.get_instance()
         self.orchestrator: Optional[VerificationOrchestrator] = None
         self.initialized = False
+        self.agent_config = {}
+    
+    def get_agent_config(self, role):
+        return self.agent_config.get("agents", {}).get(role, {})
     
     async def initialize(self):
         """初始化系统"""
@@ -282,25 +283,78 @@ def verify(spec_file, workflow, bypass, output):
             spec = f.read()
         
         # 优先从 YAML 加载，fallback 到硬编码
-        wf = app.get_pipeline(workflow)
+        # 从 YAML 配置或 agent_config 加载
+        pipelines = app.agent_config.get("pipelines", {}) if hasattr(app, 'agent_config') else {}
+        wf = pipelines.get(workflow, {})
         if not wf or not wf.get("phases"):
-            # fallback
             wf = {
                 "name": workflow,
                 "phases": [
-                    {"name": "spec", "agent": "spec_and_test_planner", "input": ""},
-                    {"name": "arch", "agent": "verification_architect", "input": ".output"},
-                    {"name": "qa", "agent": "quality_assurance", "input": ".output"},
+                    {"name": "spec", "agent": "spec_and_test_planner", "input": "$spec"},
+                    {"name": "arch", "agent": "verification_architect", "input": "$spec.output"},
+                    {"name": "seq", "agent": "sequence_engineer", "input": "$arch.output", "parallel_group": 1},
+                    {"name": "assert", "agent": "assertion_engineer", "input": "$arch.output", "parallel_group": 1},
+                    {"name": "regress", "agent": "regression_manager", "input": "$seq.output"},
+                    {"name": "cover", "agent": "coverage_manager", "input": "$regress.output"},
+                    {"name": "qa", "agent": "quality_assurance", "input": "$cover.output"},
                 ]
             }
         phases = wf["phases"]
         
-        console.print(Panel.fit(f"[bold]{wf['name']}[/bold]\n{len(phases)} phases", title="Pipeline"))
-        
-        wf = WORKFLOWS.get(workflow, WORKFLOWS["full_verification"])
-        phases = wf["phases"]
-        
         console.print(Panel.fit(f"[bold]{wf['name']}[/bold] | {len(phases)} phases | bypass={bypass}", title="Pipeline"))
+        
+        async def _execute_phase(name, agent_role, phase, context, results):
+            progress.update(overall, description=f"[cyan]{name}")
+            
+            agent = app.registry.get_agent_instance(agent_role)
+            if not agent:
+                results[name] = {"status": "skip", "time": 0}
+                progress.advance(overall)
+                return
+            
+            # 解析输入引用
+            inp_ref = phase.get("input", "")
+            inp = spec
+            if inp_ref.startswith("$") and "." in inp_ref:
+                parts = inp_ref[1:].split(".")
+                key = "$" + parts[0]
+                if key in context:
+                    inp = context[key].get(parts[1], spec)
+            
+            t0 = time.time()
+            cfg = app.get_agent_config(agent_role)
+            max_retries = cfg.get("retry", {}).get("max_retries", 3)
+            retry_count = 0
+            result = None
+            
+            while retry_count <= max_retries:
+                try:
+                    result = await agent.execute_task({"input": inp, "bypass": bypass})
+                    if result.success:
+                        break
+                    retry_count += 1
+                    if retry_count <= max_retries:
+                        progress.console.print(f"  [yellow]Retry {retry_count}/{max_retries}[/yellow]")
+                except Exception as e:
+                    retry_count += 1
+                    if retry_count <= max_retries:
+                        progress.console.print(f"  [yellow]Error retry {retry_count}: {e}[/yellow]")
+                    else:
+                        result = type('obj', (object,), {'success': False, 'error': str(e)})()
+            
+            elapsed = time.time() - t0
+            
+            if result and result.success:
+                progress.console.print(f"  [green]OK[/green] {name} ({elapsed:.1f}s)")
+                context[f"${name}"] = result.data
+                results[name] = {"status": "passed", "time": elapsed}
+            else:
+                err_msg = getattr(result, 'error', 'unknown') if result else 'no result'
+                progress.console.print(f"  [yellow]DEGRADED[/yellow] {name} - {err_msg[:60]}")
+                results[name] = {"status": "degraded", "time": elapsed, "error": err_msg}
+                context[f"${name}"] = {"output": inp}
+            
+            progress.advance(overall)
         
         # Phase级别进度条
         with Progress(
@@ -315,103 +369,52 @@ def verify(spec_file, workflow, bypass, output):
             overall = progress.add_task("[cyan]Overall Pipeline", total=len(phases))
             
             results = {}
-            context = {"": {"output": spec}}
+            context = {"$spec": {"output": spec}}
             
             # 按 parallel_group 分组
-                groups = {}
-                for phase in phases:
-                    g = phase.get("parallel_group", 0)
-                    if g not in groups:
-                        groups[g] = []
-                    groups[g].append(phase)
-                
-                import asyncio as aio
-                
-                for g, group_phases in sorted(groups.items()):
-                    if g == 0:
-                        # 串行执行
-                        for phase in group_phases:
-                            name = phase["name"]
-                            agent_role = phase["agent"]
-                            await _execute_phase(name, agent_role, phase, app, bypass, inp, spec, context, results, progress, overall)
-                    else:
-                        # 并行执行
-                        progress.console.print(f"[cyan]Parallel group {g}: {[p['name'] for p in group_phases]}[/cyan]")
-                        tasks = [_execute_phase(p["name"], p["agent"], p, app, bypass, inp, spec, context, results, progress, overall) for p in group_phases]
-                        await aio.gather(*tasks)
-                
-                break  # 跳出外层循环，因为已经内部分组处理了
-
-        # 定义 phase 执行函数
-        async def _execute_phase(name, agent_role, phase, app, bypass, inp, spec, context, results, progress, overall):
-            progress.update(overall, description=f"[cyan]{name}")
+            groups = {}
+            for phase in phases:
+                g = phase.get("parallel_group", 0)
+                if g not in groups:
+                    groups[g] = []
+                groups[g].append(phase)
             
-            agent = app.registry.get_agent_instance(agent_role)
-            if not agent:
-                results[name] = {"status": "skip", "time": 0}
-                progress.advance(overall)
-                return
+            import asyncio as aio
             
-            inp_ref = phase.get("input", "")
-                inp = spec
-                if inp_ref.startswith("$") and "." in inp_ref:
-                    parts = inp_ref[1:].split(".")
-                    key = "$" + parts[0]
-                    if key in context:
-                        inp = context[key].get(parts[1], spec)
-                
-                import time
-                t0 = time.time()
-                retry_count = 0
-                cfg = app.get_agent_config(agent_role)
-                max_retries = cfg.get("retry", {}).get("max_retries", 3)
-                result = None
-                
-                while retry_count <= max_retries:
-                    try:
-                        result = await agent.execute_task({"input": inp, "bypass": bypass})
-                        if result.success:
-                            break
-                        retry_count += 1
-                        if retry_count <= max_retries:
-                            progress.console.print(f"  [yellow]Retry {retry_count}/{max_retries}[/yellow]")
-                    except Exception as e:
-                        retry_count += 1
-                        if retry_count <= max_retries:
-                            progress.console.print(f"  [yellow]Error retry {retry_count}: {e}[/yellow]")
-                        else:
-                            result = type('obj', (object,), {'success': False, 'error': str(e)})()
-                
-                elapsed = time.time() - t0
-                
-                if result and result.success:
-                    progress.console.print(f"  [green]OK[/green] {name} ({elapsed:.1f}s)")
-                    context[f""] = result.data
-                    results[name] = {"status": "passed", "time": elapsed}
+            for g, group_phases in sorted(groups.items()):
+                if g == 0:
+                    for phase in group_phases:
+                        await _execute_phase(phase["name"], phase["agent"], phase, context, results)
                 else:
-                    err_msg = getattr(result, 'error', 'unknown') if result else 'no result'
-                    progress.console.print(f"  [yellow]DEGRADED[/yellow] {name} - {err_msg[:60]}")
-                    results[name] = {"status": "degraded", "time": elapsed, "error": err_msg}
-                    context[f""] = {"output": inp}
-                
-                progress.advance(overall)
+                    progress.console.print(f"[cyan]Parallel group {g}: {[p['name'] for p in group_phases]}[/cyan]")
+                    tasks = [_execute_phase(p["name"], p["agent"], p, context, results) for p in group_phases]
+                    await aio.gather(*tasks)
         
         # 汇总报告
         passed = sum(1 for v in results.values() if v["status"] == "passed")
         degraded = sum(1 for v in results.values() if v["status"] == "degraded")
         total_time = sum(v["time"] for v in results.values())
         
-        console.print()        
+        console.print()
+        console.print(Panel.fit(
+            f"[bold]Pipeline Complete[/bold]\n"
+            f"[green]Passed: {passed}[/green] | [yellow]Degraded: {degraded}[/yellow] | Total: {len(phases)}\n"
+            f"Total time: {total_time:.1f}s",
+            border_style="green" if degraded == 0 else "yellow"
+        ))
+        
+        # 保存到数据库
+        try:
+            await save_pipeline_run(workflow, spec_file, len(phases), passed, degraded, total_time, results)
+        except:
+            pass
+        
         if output:
             with open(output, "w", encoding="utf-8") as f:
                 j.dump({"workflow": workflow, "results": results}, f, indent=2)
             console.print(f"[green]Saved: {output}[/green]")
     
     asyncio.run(run())
-
-@cli.command()
-def workflows():asyncio.run(run())
-
 @cli.command()
 def workflows():
     """列出可用工作流"""
@@ -425,14 +428,6 @@ def workflows():
 def create_project(project_name, description):
     """创建新项目"""
     console.print(f"[green]Project created: {project_name}[/green]")
-
-@cli.command()
-@click.argument('project_name')
-@click.option('--description', '-d', help='项目描述')
-def create_project(project_name, description):
-    """创建新的验证项目"""
-    console.print(f"[green]创建项目: {project_name}[/green]")
-    console.print(f"描述: {description or '无'}")
 
 @cli.command()
 def init():
@@ -667,6 +662,26 @@ def repl(bypass):
         else:
             console.print(f"[red]Unknown command: {action}. Type 'help'[/red]")
 
+
+@cli.command()
+def status():
+    """View all agent status"""
+    app = VerificationCLI()
+    async def run():
+        await app.initialize()
+        table = Table(title="Agent Status")
+        table.add_column("Agent", style="cyan")
+        table.add_column("Role")
+        table.add_column("Status")
+        table.add_column("Tasks")
+        for role, agent in app.registry.get_all_instances().items():
+            try:
+                m = agent.get_metrics()
+                table.add_row(m.get("display_name", role), role, m.get("status", "?"), str(m.get("tasks_completed", 0)))
+            except:
+                table.add_row(role, role, "error", "0")
+        console.print(table)
+    asyncio.run(run())
 
 @cli.command()
 def history():
