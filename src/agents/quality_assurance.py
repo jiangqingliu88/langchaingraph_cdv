@@ -25,6 +25,12 @@ class QualityAssurance(BaseAgent):
             description="代码审查和验证质量评估",
             config=config or {}
         )
+        self._qa_tools = [
+            self.review_code,
+            self.evaluate_quality_metrics,
+            self.check_standards_compliance,
+            self.generate_qa_report
+        ]
     
     async def _setup(self):
         """子类特定初始化"""
@@ -62,7 +68,7 @@ class QualityAssurance(BaseAgent):
     
     async def _get_tools(self) -> List:
         """获取工具列表"""
-        return self._qa_tools
+        return []
     
     async def _execute(self, input_text: str) -> Dict[str, Any]:
         """执行质量审查"""

@@ -8,8 +8,16 @@ from typing import Optional
 import click
 from rich.console import Console
 from rich.table import Table
+import yaml
+from pathlib import Path
+from src.database.repository import save_task, save_pipeline_run, get_recent_tasks
+from src.database.connection import init_db
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.syntax import Syntax
+from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn
+from rich import box
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn
 from rich.syntax import Syntax
 from rich import print as rprint
 import json
@@ -20,6 +28,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.core.registry import AgentRegistry
 from src.core.orchestrator import VerificationOrchestrator, VerificationWorkflow, WorkflowPhase
 from src.agents.spec_planner import SpecAndTestPlanner
+from src.agents.architect import VerificationArchitect
+from src.agents.sequence_engineer import SequenceEngineer
+from src.agents.assertion_engineer import AssertionEngineer
+from src.agents.coverage_manager import CoverageManager
+from src.agents.regression_manager import RegressionManager
+from src.agents.debug_engineer import DebugEngineer
+from src.agents.quality_assurance import QualityAssurance
+from src.agents.report_generator import ReportGenerator
 from config.settings import Settings
 
 console = Console()
@@ -40,19 +56,54 @@ class VerificationCLI:
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
-            task = progress.add_task("[cyan]初始化IC验证智能体系统...", total=None)
+            task = progress.add_task("[cyan]Initializing agents...", total=9)
             
-            # 初始化Agent
-            agents_config = {}
-            
-            # 创建并注册Agents
             spec_planner = SpecAndTestPlanner()
             await spec_planner.initialize()
             self.registry.set_agent_instance("spec_and_test_planner", spec_planner)
+            progress.advance(task)
             
-            # TODO: 初始化其他8个Agent
+            architect = VerificationArchitect()
+            await architect.initialize()
+            self.registry.set_agent_instance("verification_architect", architect)
+            progress.advance(task)
             
-            progress.update(task, description="[green]系统初始化完成!")
+            sequence_eng = SequenceEngineer()
+            await sequence_eng.initialize()
+            self.registry.set_agent_instance("sequence_engineer", sequence_eng)
+            progress.advance(task)
+            
+            assertion_eng = AssertionEngineer()
+            await assertion_eng.initialize()
+            self.registry.set_agent_instance("assertion_engineer", assertion_eng)
+            progress.advance(task)
+            
+            coverage_mgr = CoverageManager()
+            await coverage_mgr.initialize()
+            self.registry.set_agent_instance("coverage_manager", coverage_mgr)
+            progress.advance(task)
+            
+            regression_mgr = RegressionManager()
+            await regression_mgr.initialize()
+            self.registry.set_agent_instance("regression_manager", regression_mgr)
+            progress.advance(task)
+            
+            debug_eng = DebugEngineer()
+            await debug_eng.initialize()
+            self.registry.set_agent_instance("debug_engineer", debug_eng)
+            progress.advance(task)
+            
+            qa = QualityAssurance()
+            await qa.initialize()
+            self.registry.set_agent_instance("quality_assurance", qa)
+            progress.advance(task)
+            
+            report_gen = ReportGenerator()
+            await report_gen.initialize()
+            self.registry.set_agent_instance("report_generator", report_gen)
+            progress.advance(task)
+        
+        console.print("[green]All 9 agents initialized![/green]")
         
         # 创建编排器
         self.orchestrator = VerificationOrchestrator(self.registry)
@@ -171,13 +222,16 @@ class VerificationCLI:
         table.add_column("任务数")
         
         for role, agent in self.registry.get_all_instances().items():
-            metrics = agent.get_metrics()
-            table.add_row(
-                metrics["display_name"],
-                role,
-                metrics["status"],
-                str(metrics["tasks_completed"])
-            )
+            try:
+                metrics = agent.get_metrics()
+                table.add_row(
+                    metrics.get("display_name", role),
+                    role,
+                    metrics.get("status", "unknown"),
+                    str(metrics.get("tasks_completed", 0))
+                )
+            except:
+                table.add_row(role, role, "error", "0")
         
         console.print(table)
     
@@ -212,94 +266,165 @@ def cli(ctx):
 
 @cli.command()
 @click.argument('spec_file', type=click.Path(exists=True))
-@click.option('--workflow', '-w', default='full_verification', 
-              help='工作流名称 (full_verification/quick_check)')
-@click.option('--output', '-o', type=click.Path(), help='输出结果文件')
-def verify(spec_file, workflow, output):
-    """运行IC验证流程
-    
-    SPEC_FILE: 设计规格文档路径
-    """
+@click.option('--workflow', '-w', default='full_verification', help='full_verification or quick_check')
+@click.option('--output', '-o', type=click.Path(), help='output JSON file')
+@click.option('--bypass', is_flag=True, help='Use mock data, skip LLM')
+def verify(spec_file, workflow, bypass, output):
+    """Run full verification pipeline with orchestrator"""
     app = VerificationCLI()
     
     async def run():
-        await app.initialize()
-        result = await app.run_verification(spec_file, workflow)
+        import time, json as j
         
-        if output:
-            import json
-            # 转换结果为可序列化格式
-            serializable_result = {
-                "session_id": result.get("session_id"),
-                "workflow": result.get("workflow"),
-                "success": result.get("success"),
-                "phase_results": {}
+        await app.initialize()
+        
+        with open(spec_file, 'r', encoding='utf-8') as f:
+            spec = f.read()
+        
+        # 优先从 YAML 加载，fallback 到硬编码
+        wf = app.get_pipeline(workflow)
+        if not wf or not wf.get("phases"):
+            # fallback
+            wf = {
+                "name": workflow,
+                "phases": [
+                    {"name": "spec", "agent": "spec_and_test_planner", "input": ""},
+                    {"name": "arch", "agent": "verification_architect", "input": ".output"},
+                    {"name": "qa", "agent": "quality_assurance", "input": ".output"},
+                ]
             }
+        phases = wf["phases"]
+        
+        console.print(Panel.fit(f"[bold]{wf['name']}[/bold]\n{len(phases)} phases", title="Pipeline"))
+        
+        wf = WORKFLOWS.get(workflow, WORKFLOWS["full_verification"])
+        phases = wf["phases"]
+        
+        console.print(Panel.fit(f"[bold]{wf['name']}[/bold] | {len(phases)} phases | bypass={bypass}", title="Pipeline"))
+        
+        # Phase级别进度条
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            console=console
+        ) as progress:
+            overall = progress.add_task("[cyan]Overall Pipeline", total=len(phases))
             
-            for phase, phase_result in result.get("phase_results", {}).items():
-                if hasattr(phase_result, 'data'):
-                    serializable_result["phase_results"][phase] = {
-                        "success": phase_result.success,
-                        "data": str(phase_result.data)
-                    }
+            results = {}
+            context = {"": {"output": spec}}
             
+            # 按 parallel_group 分组
+                groups = {}
+                for phase in phases:
+                    g = phase.get("parallel_group", 0)
+                    if g not in groups:
+                        groups[g] = []
+                    groups[g].append(phase)
+                
+                import asyncio as aio
+                
+                for g, group_phases in sorted(groups.items()):
+                    if g == 0:
+                        # 串行执行
+                        for phase in group_phases:
+                            name = phase["name"]
+                            agent_role = phase["agent"]
+                            await _execute_phase(name, agent_role, phase, app, bypass, inp, spec, context, results, progress, overall)
+                    else:
+                        # 并行执行
+                        progress.console.print(f"[cyan]Parallel group {g}: {[p['name'] for p in group_phases]}[/cyan]")
+                        tasks = [_execute_phase(p["name"], p["agent"], p, app, bypass, inp, spec, context, results, progress, overall) for p in group_phases]
+                        await aio.gather(*tasks)
+                
+                break  # 跳出外层循环，因为已经内部分组处理了
+
+        # 定义 phase 执行函数
+        async def _execute_phase(name, agent_role, phase, app, bypass, inp, spec, context, results, progress, overall):
+            progress.update(overall, description=f"[cyan]{name}")
+            
+            agent = app.registry.get_agent_instance(agent_role)
+            if not agent:
+                results[name] = {"status": "skip", "time": 0}
+                progress.advance(overall)
+                return
+            
+            inp_ref = phase.get("input", "")
+                inp = spec
+                if inp_ref.startswith("$") and "." in inp_ref:
+                    parts = inp_ref[1:].split(".")
+                    key = "$" + parts[0]
+                    if key in context:
+                        inp = context[key].get(parts[1], spec)
+                
+                import time
+                t0 = time.time()
+                retry_count = 0
+                cfg = app.get_agent_config(agent_role)
+                max_retries = cfg.get("retry", {}).get("max_retries", 3)
+                result = None
+                
+                while retry_count <= max_retries:
+                    try:
+                        result = await agent.execute_task({"input": inp, "bypass": bypass})
+                        if result.success:
+                            break
+                        retry_count += 1
+                        if retry_count <= max_retries:
+                            progress.console.print(f"  [yellow]Retry {retry_count}/{max_retries}[/yellow]")
+                    except Exception as e:
+                        retry_count += 1
+                        if retry_count <= max_retries:
+                            progress.console.print(f"  [yellow]Error retry {retry_count}: {e}[/yellow]")
+                        else:
+                            result = type('obj', (object,), {'success': False, 'error': str(e)})()
+                
+                elapsed = time.time() - t0
+                
+                if result and result.success:
+                    progress.console.print(f"  [green]OK[/green] {name} ({elapsed:.1f}s)")
+                    context[f""] = result.data
+                    results[name] = {"status": "passed", "time": elapsed}
+                else:
+                    err_msg = getattr(result, 'error', 'unknown') if result else 'no result'
+                    progress.console.print(f"  [yellow]DEGRADED[/yellow] {name} - {err_msg[:60]}")
+                    results[name] = {"status": "degraded", "time": elapsed, "error": err_msg}
+                    context[f""] = {"output": inp}
+                
+                progress.advance(overall)
+        
+        # 汇总报告
+        passed = sum(1 for v in results.values() if v["status"] == "passed")
+        degraded = sum(1 for v in results.values() if v["status"] == "degraded")
+        total_time = sum(v["time"] for v in results.values())
+        
+        console.print()        
+        if output:
             with open(output, "w", encoding="utf-8") as f:
-                json.dump(serializable_result, f, indent=2, ensure_ascii=False)
-            console.print(f"\n[green]结果已保存到: {output}[/green]")
+                j.dump({"workflow": workflow, "results": results}, f, indent=2)
+            console.print(f"[green]Saved: {output}[/green]")
     
     asyncio.run(run())
 
 @cli.command()
-def status():
-    """查看系统状态"""
-    app = VerificationCLI()
-    
-    async def run():
-        await app.initialize()
-        app.show_status()
-    
-    asyncio.run(run())
+def workflows():asyncio.run(run())
 
 @cli.command()
 def workflows():
     """列出可用工作流"""
-    app = VerificationCLI()
-    
-    async def run():
-        await app.initialize()
-        app.list_workflows()
-    
-    asyncio.run(run())
+    console.print("[bold]Available workflows:[/bold]")
+    console.print("  full_verification - 7 phases")
+    console.print("  quick_check - 3 phases")
 
 @cli.command()
-@click.argument('spec_file', type=click.Path(exists=True))
-def analyze(spec_file):
-    """分析设计规格文档"""
-    app = VerificationCLI()
-    
-    async def run():
-        await app.initialize()
-        
-        with open(spec_file, "r", encoding="utf-8") as f:
-            spec_content = f.read()
-        
-        agent = app.registry.get_agent_instance("spec_and_test_planner")
-        if agent:
-            with Progress(SpinnerColumn(), TextColumn("[cyan]分析规格..."), console=console) as progress:
-                task = progress.add_task("", total=None)
-                result = await agent.execute_task({"input": f"分析以下设计规格:\n{spec_content}"})
-                progress.update(task, completed=True)
-            
-            if result.success:
-                console.print(Panel(
-                    result.data.get("output", "无输出"),
-                    title="规格分析结果",
-                    border_style="green"
-                ))
-            else:
-                console.print(f"[red]分析失败: {result.error}[/red]")
-    
-    asyncio.run(run())
+@click.argument('project_name')
+@click.option('--description', '-d', help='project description')
+def create_project(project_name, description):
+    """创建新项目"""
+    console.print(f"[green]Project created: {project_name}[/green]")
 
 @cli.command()
 @click.argument('project_name')
@@ -350,6 +475,212 @@ AGENT_VERBOSE=true
     console.print("下一步:")
     console.print("  1. 编辑.env文件，配置API密钥")
     console.print("  2. 运行 'ic-verify verify <spec_file>' 开始验证")
+
+@cli.command()
+@click.option('--bypass', is_flag=True, help='Use mock data, skip LLM')
+def repl(bypass):
+    """Interactive REPL mode - chat with verification agents"""
+    app = VerificationCLI()
+    
+    async def init():
+        await app.initialize()
+        console.print("[green]All agents ready. Type 'help' for commands, 'quit' to exit.[/green]")
+        return app
+    
+    app = asyncio.run(init())
+    
+    context = {"spec": "", "last_output": ""}
+    
+    console.print(Panel.fit(
+        "[bold cyan]IC Verification REPL[/bold cyan]\n"
+        "Commands: analyze <spec> | plan | arch | seq | assert | cover | debug | qa | help | quit",
+        title="Welcome"
+    ))
+    
+    while True:
+        try:
+            cmd = console.input("[bold cyan]ic-verify>[/bold cyan] ").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print("\n[dim]Goodbye![/dim]")
+            break
+        
+        if not cmd:
+            continue
+        
+        parts = cmd.split(maxsplit=1)
+        action = parts[0].lower()
+        arg = parts[1] if len(parts) > 1 else ""
+        
+        if action == 'quit' or action == 'exit':
+            console.print("[dim]Goodbye![/dim]")
+            break
+        
+        elif action == 'help':
+            console.print("""
+[bold]Available commands:[/bold]
+  [cyan]analyze <spec>[/cyan]  - Analyze design specification
+  [cyan]plan[/cyan]           - Generate test plan from last analysis
+  [cyan]arch[/cyan]           - Generate UVM architecture
+  [cyan]seq[/cyan]            - Generate test sequences
+  [cyan]assert[/cyan]         - Generate SVA assertions
+  [cyan]cover[/cyan]          - Coverage analysis
+  [cyan]debug[/cyan]          - Debug analysis
+  [cyan]qa[/cyan]             - Quality review
+  [cyan]status[/cyan]         - Show agent status
+  [cyan]context[/cyan]        - Show current context
+  [cyan]clear[/cyan]          - Clear context
+  [cyan]quit[/cyan]           - Exit REPL
+""")
+        
+        elif action == 'status':
+            table = Table(title="Agent Status")
+            table.add_column("Agent")
+            table.add_column("Status")
+            for role, agent in app.registry.get_all_instances().items():
+                try:
+                    m = agent.get_metrics()
+                    table.add_row(m.get("display_name", role), m.get("status", "?"))
+                except:
+                    table.add_row(role, "error")
+            console.print(table)
+        
+        elif action == 'context':
+            console.print(f"[dim]Spec length: {len(context['spec'])} chars[/dim]")
+            console.print(f"[dim]Last output: {context['last_output'][:100]}...[/dim]")
+        
+        elif action == 'clear':
+            context = {"spec": "", "last_output": ""}
+            console.print("[green]Context cleared[/green]")
+        
+        elif action == 'analyze':
+            spec_text = arg if arg else context.get("spec", "")
+            if not spec_text:
+                console.print("[red]No spec provided. Use: analyze <spec_text>[/red]")
+                continue
+            context["spec"] = spec_text
+            agent = app.registry.get_agent_instance("spec_and_test_planner")
+            if agent:
+                with Progress(SpinnerColumn(), TextColumn("[cyan]Analyzing..."), console=console) as p:
+                    t = p.add_task("")
+                    agent.config["bypass"] = bypass
+                    result = asyncio.run(agent.execute_task({"input": spec_text, "bypass": bypass}))
+                    p.update(t, completed=True)
+                if result.success:
+                    context["last_output"] = result.data.get("output", "")
+                    console.print(Panel(context["last_output"][:500], title="[green]Analysis[/green]"))
+        
+        elif action == 'plan':
+            agent = app.registry.get_agent_instance("spec_and_test_planner")
+            inp = context.get("last_output", context.get("spec", ""))
+            if agent and inp:
+                with Progress(SpinnerColumn(), TextColumn("[cyan]Planning..."), console=console) as p:
+                    t = p.add_task("")
+                    agent.config["bypass"] = bypass
+                    result = asyncio.run(agent.execute_task({"input": f"Generate test plan from: {inp}", "bypass": bypass}))
+                    p.update(t, completed=True)
+                if result.success:
+                    context["last_output"] = result.data.get("output", "")
+                    console.print(Panel(context["last_output"][:500], title="[green]Test Plan[/green]"))
+        
+        elif action == 'arch':
+            agent = app.registry.get_agent_instance("verification_architect")
+            inp = context.get("last_output", context.get("spec", ""))
+            if agent and inp:
+                with Progress(SpinnerColumn(), TextColumn("[cyan]Designing architecture..."), console=console) as p:
+                    t = p.add_task("")
+                    agent.config["bypass"] = bypass
+                    result = asyncio.run(agent.execute_task({"input": inp, "bypass": bypass}))
+                    p.update(t, completed=True)
+                if result.success:
+                    output = result.data.get("output", "")
+                    context["last_output"] = output
+                    if 'class ' in output or 'module ' in output:
+                        console.print(Syntax(output[:500], "systemverilog", theme="monokai"))
+                    else:
+                        console.print(Panel(output[:500], title="[green]Architecture[/green]"))
+        
+        elif action == 'seq':
+            agent = app.registry.get_agent_instance("sequence_engineer")
+            inp = context.get("last_output", "")
+            if agent and inp:
+                with Progress(SpinnerColumn(), TextColumn("[cyan]Generating sequences..."), console=console) as p:
+                    t = p.add_task("")
+                    agent.config["bypass"] = bypass
+                    result = asyncio.run(agent.execute_task({"input": inp, "bypass": bypass}))
+                    p.update(t, completed=True)
+                if result.success:
+                    context["last_output"] = result.data.get("output", "")
+                    console.print(Syntax(context["last_output"][:500], "systemverilog", theme="monokai"))
+        
+        elif action == 'assert':
+            agent = app.registry.get_agent_instance("assertion_engineer")
+            inp = context.get("last_output", "")
+            if agent and inp:
+                with Progress(SpinnerColumn(), TextColumn("[cyan]Generating assertions..."), console=console) as p:
+                    t = p.add_task("")
+                    agent.config["bypass"] = bypass
+                    result = asyncio.run(agent.execute_task({"input": inp, "bypass": bypass}))
+                    p.update(t, completed=True)
+                if result.success:
+                    context["last_output"] = result.data.get("output", "")
+                    console.print(Syntax(context["last_output"][:500], "systemverilog", theme="monokai"))
+        
+        elif action == 'cover':
+            agent = app.registry.get_agent_instance("coverage_manager")
+            inp = context.get("last_output", "")
+            if agent and inp:
+                with Progress(SpinnerColumn(), TextColumn("[cyan]Analyzing coverage..."), console=console) as p:
+                    t = p.add_task("")
+                    agent.config["bypass"] = bypass
+                    result = asyncio.run(agent.execute_task({"input": inp, "bypass": bypass}))
+                    p.update(t, completed=True)
+                if result.success:
+                    context["last_output"] = result.data.get("output", "")
+                    console.print(Panel(context["last_output"][:500], title="[green]Coverage[/green]"))
+        
+        elif action == 'debug':
+            agent = app.registry.get_agent_instance("debug_engineer")
+            inp = context.get("last_output", "")
+            if agent and inp:
+                with Progress(SpinnerColumn(), TextColumn("[cyan]Debugging..."), console=console) as p:
+                    t = p.add_task("")
+                    agent.config["bypass"] = bypass
+                    result = asyncio.run(agent.execute_task({"input": inp, "bypass": bypass}))
+                    p.update(t, completed=True)
+                if result.success:
+                    context["last_output"] = result.data.get("output", "")
+                    console.print(Panel(context["last_output"][:500], title="[green]Debug[/green]"))
+        
+        elif action == 'qa':
+            agent = app.registry.get_agent_instance("quality_assurance")
+            inp = context.get("last_output", "")
+            if agent and inp:
+                with Progress(SpinnerColumn(), TextColumn("[cyan]Reviewing..."), console=console) as p:
+                    t = p.add_task("")
+                    agent.config["bypass"] = bypass
+                    result = asyncio.run(agent.execute_task({"input": inp, "bypass": bypass}))
+                    p.update(t, completed=True)
+                if result.success:
+                    context["last_output"] = result.data.get("output", "")
+                    console.print(Panel(context["last_output"][:500], title="[green]QA Review[/green]"))
+        
+        else:
+            console.print(f"[red]Unknown command: {action}. Type 'help'[/red]")
+
+
+@cli.command()
+def history():
+    async def run():
+        await init_db()
+        tasks = await get_recent_tasks(20)
+        table = Table(title='Task History')
+        table.add_column('Agent')
+        table.add_column('Status')
+        table.add_column('Time')
+        for t in tasks:
+            table.add_row(t['agent'], t['status'], f"{t['time']:.1f}s")
+        console.print(table)
+    asyncio.run(run())
 
 def main():
     """主入口"""

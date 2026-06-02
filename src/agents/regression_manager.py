@@ -27,6 +27,13 @@ class RegressionManager(BaseAgent):
         )
         self.test_queue: List[Dict] = []
         self.results_cache: Dict[str, Any] = {}
+        self._regression_tools = [
+            self.execute_regression,
+            self.analyze_regression_results,
+            self.manage_test_queue,
+            self.optimize_test_order,
+            self.generate_regression_report
+        ]
     
     async def _setup(self):
         """子类特定初始化"""
@@ -64,7 +71,7 @@ class RegressionManager(BaseAgent):
     
     async def _get_tools(self) -> List:
         """获取工具列表"""
-        return self._regression_tools
+        return []
     
     async def _execute(self, input_text: str) -> Dict[str, Any]:
         """执行回归管理"""

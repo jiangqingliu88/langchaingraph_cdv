@@ -25,6 +25,12 @@ class ReportGenerator(BaseAgent):
             description="生成最终验证报告和签核文档",
             config=config or {}
         )
+        self._report_tools = [
+            self.generate_verification_report,
+            self.generate_signoff_document,
+            self.generate_coverage_report,
+            self.generate_traceability_matrix
+        ]
     
     async def _setup(self):
         """子类特定初始化"""
@@ -65,7 +71,7 @@ class ReportGenerator(BaseAgent):
     
     async def _get_tools(self) -> List:
         """获取工具列表"""
-        return self._report_tools
+        return []
     
     async def _execute(self, input_text: str) -> Dict[str, Any]:
         """执行报告生成"""
