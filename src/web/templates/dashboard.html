@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IC验证多Agent智能平台 (Mock)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', sans-serif; }
+        .card { box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-radius: 12px; border: none; margin-bottom: 16px; }
+        .output-console { background: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace; 
+                          padding: 12px; border-radius: 8px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-size: 0.85rem; }
+        .btn { margin: 2px 4px 2px 0; border-radius: 8px; font-size: 0.9rem; }
+        .status-ok { color: #198754; font-weight: bold; }
+        .status-fail { color: #dc3545; font-weight: bold; }
+        .status-warn { color: #fd7e14; font-weight: bold; }
+        .agent-badge { margin: 2px 3px; font-size: 0.8rem; }
+        .testcase-table { font-size: 0.85rem; }
+        .testcase-table th { background: #f8f9fa; }
+        .nav-tabs .nav-link { font-size: 0.9rem; padding: 6px 12px; }
+        .badge-scenario { font-size: 0.75rem; }
+        .code-preview { font-family: 'Courier New', monospace; font-size: 0.8rem; background: #f8f9fa; 
+                        padding: 8px; border-radius: 6px; max-height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid mt-3">
+        <div class="d-flex align-items-center mb-3">
+            <h4 class="me-3">🚀 IC验证多Agent智能平台</h4>
+            <span class="badge bg-warning text-dark">Mock Demo</span>
+        </div>
+        
+        <!-- 标签页导航 -->
+        <ul class="nav nav-tabs mb-3" id="mainTabs" role="tablist">
+            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-pipeline">⚡ 验证流程</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-testcases">📋 测试用例管理</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-agents">🤖 Agent状态</a></li>
+        </ul>
+        
+        <div class="tab-content">
+            <!-- ==================== Tab 1: 验证流程 ==================== -->
+            <div class="tab-pane fade show active" id="tab-pipeline">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="card p-3">
+                            <h6>📄 规格分析</h6>
+                            <textarea id="specInput" class="form-control" rows="3" placeholder="输入设计规格..."></textarea>
+                            <button class="btn btn-primary btn-sm mt-2" onclick="analyzeSpec()">开始分析</button>
+                            <div id="specResult" class="mt-2 small"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card p-3">
+                            <h6>🔧 环境管理</h6>
+                            <button class="btn btn-success btn-sm" onclick="generateEnv()">生成UVM环境</button>
+                            <button class="btn btn-info btn-sm" onclick="runLoopback()">闭环验证</button>
+                            <button class="btn btn-secondary btn-sm" onclick="runHealthCheck()">健康检查</button>
+                            <div id="envResult" class="mt-2 small"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card p-3">
+                            <h6>📊 回归测试</h6>
+                            <button class="btn btn-warning btn-sm" onclick="runRegression()">启动回归</button>
+                            <button class="btn btn-outline-danger btn-sm" onclick="rerunFailed()">重跑失败</button>
+                            <div id="regressionStatus" class="mt-2 small"></div>
+                            <div id="regressionProgress" class="progress mt-2 d-none" style="height:16px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 控制台 -->
+                <div class="card p-3 mt-3">
+                    <div class="d-flex justify-content-between"><h6>📋 操作日志</h6><button class="btn btn-sm btn-outline-secondary" onclick="clearConsole()">清空</button></div>
+                    <div id="consoleOutput" class="output-console">[系统] 就绪</div>
+                </div>
+            </div>
+            
+            <!-- ==================== Tab 2: 测试用例管理 ==================== -->
+            <div class="tab-pane fade" id="tab-testcases">
+                <!-- 工具栏 -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <button class="btn btn-primary btn-sm" onclick="generateTestMatrix()">📊 生成测试矩阵</button>
+                        <button class="btn btn-success btn-sm" onclick="generateAllTestcases()">📝 生成所有用例</button>
+                        <button class="btn btn-info btn-sm" onclick="runSingleTest()">▶ 运行选中</button>
+                        <button class="btn btn-warning btn-sm" onclick="batchRunTests()">▶ 批量运行</button>
+                    </div>
+                    <div>
+                        <span class="badge bg-primary" id="totalTestsBadge">0 个用例</span>
+                        <span class="badge bg-success" id="passedBadge">0 通过</span>
+                        <span class="badge bg-danger" id="failedBadge">0 失败</span>
+                    </div>
+                </div>
+                
+                <!-- 测试用例表格 -->
+                <div class="card p-3">
+                    <div class="table-responsive">
+                        <table class="table table-hover testcase-table" id="testcaseTable">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                                    <th>用例名称</th>
+                                    <th>场景</th>
+                                    <th>策略组合</th>
+                                    <th>事务数</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="testcaseTableBody">
+                                <tr><td colspan="7" class="text-center text-muted">点击"生成测试矩阵"加载用例</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 用例详情预览 -->
+                <div class="card p-3 mt-3" id="detailCard" style="display:none;">
+                    <div class="d-flex justify-content-between">
+                        <h6 id="detailTitle">用例详情</h6>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('detailCard').style.display='none'">✕</button>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <h6 class="small">Sequence 代码预览</h6>
+                            <pre id="seqPreview" class="code-preview"></pre>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="small">Test 代码预览</h6>
+                            <pre id="testPreview" class="code-preview"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ==================== Tab 3: Agent状态 ==================== -->
+            <div class="tab-pane fade" id="tab-agents">
+                <div class="card p-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <h6>🤖 9个Agent状态</h6>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="refreshAgentStatus()">🔄 刷新</button>
+                    </div>
+                    <div id="agentStatusContainer" class="d-flex flex-wrap"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // ==================== 全局状态 ====================
+        const agentList = [
+            { name: 'spec_planner', label: '规格规划师' },
+            { name: 'architect', label: '验证架构师' },
+            { name: 'sequence_engineer', label: '序列工程师' },
+            { name: 'assertion_engineer', label: '断言工程师' },
+            { name: 'coverage_manager', label: '覆盖率管理器' },
+            { name: 'regression_manager', label: '回归管理器' },
+            { name: 'debug_engineer', label: '调试工程师' },
+            { name: 'quality_assurance', label: '质量保证' },
+            { name: 'report_generator', label: '报告生成器' }
+        ];
+        let agentStatus = {};
+        agentList.forEach(a => agentStatus[a.name] = 'idle');
+        
+        // 测试用例数据
+        let testcases = [];
+        
+        // ==================== 工具函数 ====================
+        function appendConsole(text, type = 'info') {
+            const el = document.getElementById('consoleOutput');
+            const now = new Date().toLocaleTimeString();
+            el.textContent += `\n${now} [${type.toUpperCase()}] ${text}`;
+            el.scrollTop = el.scrollHeight;
+        }
+        function clearConsole() { document.getElementById('consoleOutput').textContent = '[系统] 已清空'; }
+        function mockApi(d = 500) { return new Promise(r => setTimeout(r, d)); }
+        
+        function renderAgentStatus() {
+            const c = document.getElementById('agentStatusContainer');
+            let h = '';
+            agentList.forEach(a => {
+                const s = agentStatus[a.name];
+                const bc = s === 'idle' ? 'bg-success' : s === 'busy' ? 'bg-warning text-dark' : 'bg-danger';
+                h += `<span class="badge ${bc} agent-badge p-2">${a.label} (${a.name}) - ${s}</span>`;
+            });
+            c.innerHTML = h;
+        }
+        function refreshAgentStatus() {
+            agentList.forEach(a => agentStatus[a.name] = Math.random() > 0.3 ? 'idle' : 'busy');
+            renderAgentStatus();
+        }
+        
+        // ==================== 测试用例 Mock 数据 ====================
+        const scenarios = [
+            { id: 'test_precision_consistency', name: 'test_precision_consistency', 
+              scenario: '单策略', policies: ['precision_consistency'], trans: 20, priority: 'P0' },
+            { id: 'test_mem_capacity', name: 'test_mem_capacity', 
+              scenario: '单策略', policies: ['mem_capacity'], trans: 30, priority: 'P0' },
+            { id: 'test_data_dependency', name: 'test_data_dependency', 
+              scenario: '单策略', policies: ['data_dependency'], trans: 25, priority: 'P0' },
+            { id: 'test_boundary_overflow', name: 'test_boundary_overflow', 
+              scenario: '单策略', policies: ['boundary_overflow'], trans: 20, priority: 'P0' },
+            { id: 'test_compute_mode', name: 'test_compute_mode', 
+              scenario: '单策略', policies: ['compute_mode'], trans: 15, priority: 'P0' },
+            { id: 'test_concurrent_access', name: 'test_concurrent_access', 
+              scenario: '单策略', policies: ['concurrent_access'], trans: 40, priority: 'P0' },
+            { id: 'test_power_performance', name: 'test_power_performance', 
+              scenario: '单策略', policies: ['power_performance'], trans: 15, priority: 'P0' },
+            { id: 'test_all_policies', name: 'test_all_policies', 
+              scenario: '全策略组合', policies: ['all'], trans: 100, priority: 'P0' },
+            { id: 'test_weighted_random', name: 'test_weighted_random', 
+              scenario: '加权随机', policies: ['all'], trans: 200, priority: 'P1' },
+            { id: 'test_policy_chain', name: 'test_policy_chain', 
+              scenario: '链式', policies: ['all'], trans: 50, priority: 'P1' },
+            { id: 'test_power_vs_perf', name: 'test_power_vs_performance', 
+              scenario: '冲突场景', policies: ['power_performance','compute_mode'], trans: 30, priority: 'P1' },
+            { id: 'test_precision_overflow', name: 'test_precision_overflow', 
+              scenario: '冲突场景', policies: ['precision_consistency','boundary_overflow'], trans: 40, priority: 'P1' },
+        ];
+        
+        function generateTestMatrix() {
+            appendConsole('正在生成测试矩阵...');
+            testcases = scenarios.map((s, i) => ({
+                ...s,
+                id: s.id,
+                index: i,
+                status: 'pending',
+                policies_display: s.policies.join(', '),
+            }));
+            updateTestcaseTable();
+            updateBadges();
+            appendConsole(`测试矩阵生成完成，共 ${testcases.length} 个用例`);
+        }
+        
+        function generateAllTestcases() {
+            if (testcases.length === 0) { generateTestMatrix(); }
+            appendConsole('正在批量生成测试用例代码...');
+            testcases.forEach(t => {
+                t.generated = true;
+                t.seq_code = `class ${t.name}_seq extends uvm_sequence;\n    // Sequence for ${t.scenario}\n    // Policies: ${t.policies.join(', ')}\n    // Transactions: ${t.trans}\n    \n    virtual task body();\n        repeat(${t.trans}) begin\n            // ...\n        end\n    endtask\nendclass`;
+                t.test_code = `class ${t.name} extends base_test;\n    \`uvm_component_utils(${t.name})\n    \n    function new(string name, parent);\n        super.new(name, parent);\n    endfunction\n    \n    virtual task run_phase(phase);\n        ${t.name}_seq seq;\n        seq.start(sequencer);\n    endtask\nendclass`;
+            });
+            updateTestcaseTable();
+            updateBadges();
+            appendConsole(`所有用例代码生成完成`);
+        }
+        
+        function updateTestcaseTable() {
+            const tbody = document.getElementById('testcaseTableBody');
+            if (testcases.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">点击"生成测试矩阵"加载用例</td></tr>';
+                return;
+            }
+            tbody.innerHTML = testcases.map((t, i) => `
+                <tr>
+                    <td><input type="checkbox" class="test-select" value="${i}" ${t.status === 'passed' ? 'checked' : ''}></td>
+                    <td><strong>${t.name}</strong> <span class="badge bg-light text-dark badge-scenario">${t.priority}</span></td>
+                    <td><span class="badge bg-info">${t.scenario}</span></td>
+                    <td><small>${t.policies_display}</small></td>
+                    <td>${t.trans}</td>
+                    <td>${statusBadge(t.status)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewDetail(${i})" title="查看详情">📄</button>
+                        <button class="btn btn-sm btn-outline-success" onclick="runSingleTestByIndex(${i})" title="运行">▶</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        function statusBadge(status) {
+            const map = { pending: '⏳ 待运行', running: '🔄 运行中', passed: '✅ 通过', failed: '❌ 失败' };
+            const cls = { pending: 'bg-secondary', running: 'bg-info', passed: 'bg-success', failed: 'bg-danger' };
+            return `<span class="badge ${cls[status] || 'bg-secondary'}">${map[status] || status}</span>`;
+        }
+        
+        function updateBadges() {
+            const total = testcases.length;
+            const passed = testcases.filter(t => t.status === 'passed').length;
+            const failed = testcases.filter(t => t.status === 'failed').length;
+            document.getElementById('totalTestsBadge').textContent = `${total} 个用例`;
+            document.getElementById('passedBadge').textContent = `${passed} 通过`;
+            document.getElementById('failedBadge').textContent = `${failed} 失败`;
+        }
+        
+        function toggleSelectAll() {
+            const checkAll = document.getElementById('selectAll').checked;
+            document.querySelectorAll('.test-select').forEach(cb => cb.checked = checkAll);
+        }
+        
+        function getSelectedIndices() {
+            return [...document.querySelectorAll('.test-select:checked')].map(cb => parseInt(cb.value));
+        }
+        
+        function viewDetail(index) {
+            const t = testcases[index];
+            document.getElementById('detailTitle').textContent = `📄 ${t.name} 详情`;
+            document.getElementById('seqPreview').textContent = t.seq_code || '尚未生成，点击"生成所有用例"';
+            document.getElementById('testPreview').textContent = t.test_code || '尚未生成，点击"生成所有用例"';
+            document.getElementById('detailCard').style.display = 'block';
+        }
+        
+        async function runSingleTestByIndex(index) {
+            const t = testcases[index];
+            t.status = 'running';
+            updateTestcaseTable();
+            updateBadges();
+            appendConsole(`运行: ${t.name}`);
+            await mockApi(800 + Math.random() * 1200);
+            t.status = Math.random() > 0.15 ? 'passed' : 'failed';
+            updateTestcaseTable();
+            updateBadges();
+            appendConsole(`${t.name}: ${t.status === 'passed' ? '✅ 通过' : '❌ 失败'}`);
+        }
+        
+        async function runSingleTest() {
+            const selected = getSelectedIndices();
+            if (selected.length === 0) { alert('请先选择用例'); return; }
+            for (const i of selected) {
+                await runSingleTestByIndex(i);
+            }
+        }
+        
+        async function batchRunTests() {
+            if (testcases.length === 0) { generateTestMatrix(); }
+            appendConsole('开始批量运行...');
+            for (let i = 0; i < testcases.length; i++) {
+                await runSingleTestByIndex(i);
+            }
+            appendConsole('批量运行完成');
+        }
+        
+        // ==================== 验证流程函数 ====================
+        async function analyzeSpec() {
+            const text = document.getElementById('specInput').value.trim();
+            if (!text) { alert('请输入规格'); return; }
+            appendConsole('分析规格...');
+            await mockApi(800);
+            document.getElementById('specResult').innerHTML = '<span class="status-ok">✓ 分析完成</span>，提取3个功能特性';
+            appendConsole('规格分析完成');
+        }
+        async function generateEnv() {
+            appendConsole('生成UVM环境...');
+            await mockApi(600);
+            document.getElementById('envResult').innerHTML = '<span class="status-ok">✓ 环境已生成</span>，11个文件';
+            appendConsole('环境生成完成');
+        }
+        async function runLoopback() {
+            appendConsole('闭环验证...');
+            await mockApi(1000);
+            document.getElementById('envResult').innerHTML = '<span class="status-ok">✓ 闭环验证通过</span>';
+            appendConsole('闭环验证通过');
+        }
+        async function runHealthCheck() {
+            appendConsole('健康检查...');
+            await mockApi(800);
+            document.getElementById('envResult').innerHTML = '<span class="status-ok">✓ 健康检查通过</span>，评分95/100';
+            appendConsole('健康检查完成');
+        }
+        async function runRegression() {
+            const bar = document.getElementById('regressionProgress');
+            const inner = bar.querySelector('.progress-bar');
+            bar.classList.remove('d-none');
+            appendConsole('启动回归...');
+            await mockApi(300);
+            let c = 0, t = 10;
+            const iv = setInterval(() => {
+                c++;
+                inner.style.width = (c/t*100) + '%';
+                inner.textContent = (c/t*100).toFixed(0) + '%';
+                if (c >= t) {
+                    clearInterval(iv);
+                    bar.classList.add('d-none');
+                    document.getElementById('regressionStatus').innerHTML = '<span class="badge bg-success">完成</span> 通过: 9, 失败: 1';
+                    appendConsole('回归完成：9/10 通过');
+                }
+            }, 500);
+        }
+        async function rerunFailed() {
+            appendConsole('重跑失败用例...');
+            await mockApi(1500);
+            document.getElementById('regressionStatus').innerHTML = '<span class="badge bg-success">重跑完成</span>';
+            appendConsole('重跑完成');
+        }
+        
+        // ==================== 初始化 ====================
+        renderAgentStatus();
+        setInterval(refreshAgentStatus, 15000);
+        appendConsole('平台就绪 (Mock模式)');
+    </script>
+</body>
+</html>
