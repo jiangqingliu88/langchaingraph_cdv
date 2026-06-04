@@ -19,6 +19,8 @@ class SpecAndTestPlanner(BaseAgent):
     
     # 设置任务类型，LLM工厂会自动选择最优模型
     task_type = "spec_analysis"
+    consumes = []
+    produces = "spec"
     
     def __init__(self, config: Dict[str, Any] = None):
         super().__init__(
@@ -526,4 +528,4 @@ class SpecAndTestPlanner(BaseAgent):
             [], 0, execution_time, True
         )
 
-        return AgentResult(success=True, data={"output": result_text}, execution_time=execution_time)
+        return AgentResult(success=True, data={"output": result_text, "spec": plan}, execution_time=execution_time)

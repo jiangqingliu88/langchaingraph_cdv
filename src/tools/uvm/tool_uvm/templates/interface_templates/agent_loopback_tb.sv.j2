@@ -1,73 +1,33 @@
-// Testbench Top: {{ agent.name }}_tb_top
-// 自动生成的 UVMF 风格测试平台顶层
+// === Agent Loopback Testbench: {{ agent.name }} ===
+// 单 Agent 自测顶层 —— 独立编译运行，无需完整 env
 
-module {{ agent.name }}_tb_top;
+`include "uvm_macros.svh"
+import uvm_pkg::*;
+import {{ agent.name }}_pkg::*;
 
-  import uvm_pkg::*;
- 
+module {{ agent.name }}_loopback_tb;
+  reg clk   = 0;
+  reg rst_n = 0;
 
-  // ═══════════════════════════════════════════════════════════════
-  // 1. Clock & Reset VIP 接口实例
-  // ═══════════════════════════════════════════════════════════════
-  clk_rst_if #(
-    .NUM_CLKS({{ bench.clk_rst.clocks | length }}),
-    .NUM_RSTS({{ bench.clk_rst.resets | length }})
-  ) clk_rst_if();
+  // 接口实例
+  {{ agent.name }}_interface #(
+{%- for param in parameters %}
+    .{{ param.name }}({{ param.value }}){% if not loop.last %},{% endif %}
+{%- endfor %}
+  ) {{ agent.name }}_if (.{{ agent.clock }}(clk), .{{ agent.reset }}(rst_n));
 
-  // ═══════════════════════════════════════════════════════════════
-  // 2. Agent 接口实例（绑定到 VIP 信号）
-  // ═══════════════════════════════════════════════════════════════
-{% for name, agent in bench.agents.items() %}
-  {{ agent.interface }} {{ name }}_if (
-    .clk(clk_rst_if.clk[{{ get_clock_index(agent.clock, bench.clk_rst.clocks) }}]),
-    .rst_n(clk_rst_if.rst_n[{{ get_reset_index(agent.reset, bench.clk_rst.resets) }}])
-  );
-{% endfor %}
+  always #5 clk = ~clk;
 
-  // ═══════════════════════════════════════════════════════════════
-  // 3. DUT 实例
-  // ═══════════════════════════════════════════════════════════════
-
-  // ──── UVM 测试启动 ────
   initial begin
-      // 设置 VIP 接口
-    uvm_config_db #(virtual clk_rst_if)::set(null, "*", "vif", clk_rst_if);
-    // 设置虚拟接口到 config_db
-
-    uvm_config_db #(virtual {{ agent.interface_name }})::set(null, "*", "{{ agent.name }}_vif", {{ agent.name }}_if);
-
-
-    // 设置超时时间
-    uvm_root::get().set_timeout({{ timeout | default('10ms') }});
-
-    // 方式1: 从命令行参数获取测试名（推荐）
-    run_test();
-    
-    // 方式2: 硬编码默认测试名（兜底方案）
-    // 如果命令行没有 +UVM_TESTNAME，则使用默认测试
-    // if (!$value$plusargs("UVM_TESTNAME=%s", test_name))
-    //   run_test("{{ agent.name }}_base_test");
-    // else
-    //   run_test();
-
+    // 设置 virtual interface
+    uvm_config_db #(virtual {{ agent.name }}_interface)::set(null, "*", "vif", {{ agent.name }}_if);
+    // 启动测试
+    run_test("{{ agent.name }}_loopback_test");
   end
 
-  // ──── 波形转储 ────
   initial begin
-    if ($test$plusargs("DUMP_WAVES")) begin
-      $dumpfile("{{ agent.name }}_tb_top.vcd");
-      $dumpvars(0, {{ agent.name }}_tb_top);
-    end
+    #100 rst_n = 1;
+    #500000 $display("LOOPBACK_TIMEOUT");
+    $finish;
   end
-
-
-  // ──── 结束报告 ────
-  final begin
-    $display("========================================");
-    $display("Testbench: {{ agent.name }}_tb_top");
-    $display("Test: {{ agent.name }}_base_test");
-    $display("End time: %0t", $time);
-    $display("========================================");
-  end
-
-endmodule : {{ agent.name }}_tb_top
+endmodule : {{ agent.name }}_loopback_tb

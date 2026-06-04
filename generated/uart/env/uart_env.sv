@@ -10,12 +10,18 @@ class uart_env extends uvm_env;
   uart_env_config cfg;
 
   // Agent 实例
+  AXI_in_agent AXI_in_agent_h;
   UART_in_agent UART_in_agent_h;
+  UART_out_agent UART_out_agent_h;
 
   // Scoreboard 实例
+  uvm_scoreboard uart_scoreboard_h;
+  uvm_scoreboard uart_coverage_collector_h;
 
   // TLM 连接
+  uvm_analysis_port #(AXI_in_seq_item) AXI_in_agent_ap;
   uvm_analysis_port #(UART_in_seq_item) UART_in_agent_ap;
+  uvm_analysis_port #(UART_out_seq_item) UART_out_agent_ap;
  // Sequencer 中央管理（virtual_sequencer 在 seq_pkg 中，env_pkg 不可直接引用）
   uart_env_virtual_sequencer virtual_sqr;
 
@@ -32,13 +38,27 @@ class uart_env extends uvm_env;
 
     // ─── 创建时钟复位 Agent ───
     // 创建 Agent 并设置配置
+    AXI_in_agent_h = AXI_in_agent::type_id::create("AXI_in_agent_h", this);
+    uvm_config_db #(AXI_in_config)::set(this, "AXI_in_agent_h", "cfg", cfg.AXI_in_cfg);
     UART_in_agent_h = UART_in_agent::type_id::create("UART_in_agent_h", this);
     uvm_config_db #(UART_in_config)::set(this, "UART_in_agent_h", "cfg", cfg.UART_in_cfg);
+    UART_out_agent_h = UART_out_agent::type_id::create("UART_out_agent_h", this);
+    uvm_config_db #(UART_out_config)::set(this, "UART_out_agent_h", "cfg", cfg.UART_out_cfg);
 
     // 创建 Scoreboard
+    if (cfg.has_scoreboard) begin
+      // uvm_scoreboard 基类无 type_id，改用 new()
+      uart_scoreboard_h = new("uart_scoreboard_h", this);
+    end
+    if (cfg.has_scoreboard) begin
+      // uvm_scoreboard 基类无 type_id，改用 new()
+      uart_coverage_collector_h = new("uart_coverage_collector_h", this);
+    end
 
     // 创建 Analysis Ports
+    AXI_in_agent_ap = new("AXI_in_agent_ap", this);
     UART_in_agent_ap = new("UART_in_agent_ap", this);
+    UART_out_agent_ap = new("UART_out_agent_ap", this);
 
     // 创建 Virtual Sequencer（virtual_sequencer 在 seq_pkg 中，env_pkg 不可引用）
     virtual_sqr = uart_env_virtual_sequencer::type_id::create("virtual_sqr", this);
@@ -49,10 +69,22 @@ class uart_env extends uvm_env;
     super.connect_phase(phase);
     
     // 连接 Agent Monitor 到 Analysis Ports
+    AXI_in_agent_h.mon.item_collected_port.connect(AXI_in_agent_ap);
     UART_in_agent_h.mon.item_collected_port.connect(UART_in_agent_ap);
+    UART_out_agent_h.mon.item_collected_port.connect(UART_out_agent_ap);
 
     // 连接 Analysis Ports 到 Scoreboard（uvm_scoreboard 基类无 analysis_export，需子类化）
     // TODO: 创建 uvm_scoreboard 子类并注册 uvm_component_utils
+    //if (cfg.has_scoreboard) begin
+    //  AXI_in_agent_ap.connect(uart_scoreboard_h.analysis_export);
+    //  UART_in_agent_ap.connect(uart_scoreboard_h.analysis_export);
+    //  UART_out_agent_ap.connect(uart_scoreboard_h.analysis_export);
+    //end
+    //if (cfg.has_scoreboard) begin
+    //  AXI_in_agent_ap.connect(uart_coverage_collector_h.analysis_export);
+    //  UART_in_agent_ap.connect(uart_coverage_collector_h.analysis_export);
+    //  UART_out_agent_ap.connect(uart_coverage_collector_h.analysis_export);
+    //end
 
   endfunction
 
@@ -60,7 +92,11 @@ class uart_env extends uvm_env;
     super.end_of_elaboration_phase(phase);
     // 打印环境拓扑
     `uvm_info("ENV_TOPOLOGY", "Environment uart_env structure:", UVM_LOW)
+    `uvm_info("ENV_TOPOLOGY", "  Agent: AXI_in_agent_h", UVM_LOW)
     `uvm_info("ENV_TOPOLOGY", "  Agent: UART_in_agent_h", UVM_LOW)
+    `uvm_info("ENV_TOPOLOGY", "  Agent: UART_out_agent_h", UVM_LOW)
+    `uvm_info("ENV_TOPOLOGY", "  Scoreboard: uart_scoreboard_h", UVM_LOW)
+    `uvm_info("ENV_TOPOLOGY", "  Scoreboard: uart_coverage_collector_h", UVM_LOW)
   endfunction
 
   function void start_of_simulation_phase(uvm_phase phase);

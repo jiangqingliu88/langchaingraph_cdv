@@ -30,19 +30,23 @@ class TestStatus(Enum):
 
 @dataclass
 class Requirement:
-    """需求项"""
+    """需求项 —— 支持 Chip/ST/IT/BT/UT 五级层级"""
     id: str
     description: str
-    priority: str = "P1"              # P0/P1/P2
-    category: str = "functional"      # functional/performance/safety
+    priority: str = "P1"
+    category: str = "functional"
     owner: str = ""
     status: RequirementStatus = RequirementStatus.NOT_STARTED
-    
+    level: str = "bt"                # chip / st / it / bt / ut
+    parent_id: str = ""              # 上级需求 ID（chip 级为空）
+    children_ids: List[str] = field(default_factory=list)
+    doc_path: str = ""               # 关联的 MD 规格文档路径，如 specs/uart_spec.md
+
     # 关联
-    test_ids: List[str] = field(default_factory=list)      # 关联的测试用例
-    coverage_goal: float = 100.0                            # 覆盖率目标
-    coverage_actual: float = 0.0                            # 实际覆盖率
-    assertions: List[str] = field(default_factory=list)     # 关联的断言
+    test_ids: List[str] = field(default_factory=list)
+    coverage_goal: float = 100.0
+    coverage_actual: float = 0.0
+    assertions: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -124,10 +128,14 @@ class VPlanManager:
     
     # ==================== 需求管理 ====================
     
-    def add_requirement(self, req_id: str, description: str, 
-                        priority: str = "P1", category: str = "functional") -> Requirement:
-        req = Requirement(id=req_id, description=description, 
-                         priority=priority, category=category)
+    def add_requirement(self, req_id: str, description: str,
+                        priority: str = "P1", category: str = "functional",
+                        level: str = "bt", parent_id: str = "", doc_path: str = "") -> Requirement:
+        req = Requirement(id=req_id, description=description,
+                         priority=priority, category=category,
+                         level=level, parent_id=parent_id, doc_path=doc_path)
+        if parent_id and parent_id in self.matrix.requirements:
+            self.matrix.requirements[parent_id].children_ids.append(req_id)
         self.matrix.requirements[req_id] = req
         return req
     
@@ -176,6 +184,140 @@ class VPlanManager:
                 for tid in req.test_ids if tid in self.matrix.testcases):
             req.status = RequirementStatus.IN_PROGRESS
     
+    # ==================== 层级管理 ====================
+
+    LEVEL_NAMES = {"chip": "芯片级(Chip)", "st": "系统级(ST)", "it": "集成级(IT)",
+                   "bt": "模块级(BT)", "ut": "单元级(UT)"}
+    LEVEL_ORDER = ["chip", "st", "it", "bt", "ut"]
+
+    def get_requirements_by_level(self, level: str) -> List[Requirement]:
+        return [r for r in self.matrix.requirements.values() if r.level == level]
+
+    def get_children(self, req_id: str) -> List[Requirement]:
+        req = self.matrix.requirements.get(req_id)
+        if not req: return []
+        return [self.matrix.requirements[cid] for cid in req.children_ids if cid in self.matrix.requirements]
+
+    def get_hierarchy(self) -> List[dict]:
+        """构建完整层级树，含每级统计数据"""
+        def _calc_coverage(reqs: List[Requirement]) -> float:
+            if not reqs: return 0.0
+            return round(sum(r.coverage_actual for r in reqs) / max(len(reqs), 1), 1)
+
+        def _node(level: str, parent_id: str = "", name: str = "") -> dict:
+            reqs = [r for r in self.matrix.requirements.values()
+                    if r.level == level and (parent_id == "" or r.parent_id == parent_id)]
+            if not reqs and level != "chip":
+                return None
+            verified = sum(1 for r in reqs if r.status == RequirementStatus.VERIFIED)
+            blocked = sum(1 for r in reqs if r.status == RequirementStatus.BLOCKED)
+            cov = _calc_coverage(reqs)
+            node = {
+                "level": level, "name": name or self.LEVEL_NAMES.get(level, level),
+                "req_count": len(reqs), "verified": verified, "blocked": blocked,
+                "coverage": cov,
+                "requirements": [self._req_to_dict(r) for r in reqs],
+                "children": []
+            }
+            # 递归构建子节点
+            for r in reqs:
+                child = _node(self._child_level(level), r.id, r.description)
+                if child:
+                    node["children"].append(child)
+            return node
+
+        def _all_of_level(level: str) -> List[Requirement]:
+            return [r for r in self.matrix.requirements.values() if r.level == level]
+
+        # Chip 级根节点
+        chip_reqs = _all_of_level("chip")
+        if not chip_reqs:
+            # 如果没有 chip 级需求，将所有无 parent 的顶级需求作为根
+            chip_reqs = [r for r in self.matrix.requirements.values() if not r.parent_id]
+            if not chip_reqs:
+                all_reqs = list(self.matrix.requirements.values())
+                root = {
+                    "level": "chip", "name": self.LEVEL_NAMES["chip"],
+                    "req_count": len(all_reqs), "verified": sum(1 for r in all_reqs if r.status == RequirementStatus.VERIFIED),
+                    "blocked": sum(1 for r in all_reqs if r.status == RequirementStatus.BLOCKED),
+                    "coverage": _calc_coverage(all_reqs),
+                    "requirements": [self._req_to_dict(r) for r in all_reqs],
+                    "children": []
+                }
+                return [root]
+
+        result = []
+        for r in chip_reqs:
+            node = {
+                "level": "chip", "name": r.description,
+                "req_id": r.id,
+                "req_count": 1, "verified": 1 if r.status == RequirementStatus.VERIFIED else 0,
+                "blocked": 1 if r.status == RequirementStatus.BLOCKED else 0,
+                "coverage": r.coverage_actual,
+                "requirements": [self._req_to_dict(r)],
+                "children": []
+            }
+            # 递归构建 ST → IT → BT → UT
+            st_reqs = [r2 for r2 in self.matrix.requirements.values() if r2.level == "st" and r2.parent_id == r.id]
+            for st in st_reqs:
+                st_node = self._build_branch(st)
+                if st_node: node["children"].append(st_node)
+            result.append(node)
+        return result
+
+    def _build_branch(self, req: Requirement) -> dict:
+        """递归构建一个需求节点及其下级"""
+        level_order = {"st": "it", "it": "bt", "bt": "ut"}
+        children = self.get_children(req.id)
+        child_reqs = [r for r in self.matrix.requirements.values() if r.parent_id == req.id]
+
+        node = {
+            "level": req.level, "name": req.description,
+            "req_id": req.id,
+            "req_count": 1 + len(child_reqs),  # 本节点 + 下级全部
+            "verified": (1 if req.status == RequirementStatus.VERIFIED else 0),
+            "blocked": (1 if req.status == RequirementStatus.BLOCKED else 0),
+            "coverage": req.coverage_actual,
+            "requirements": [self._req_to_dict(req)],
+            "children": []
+        }
+        next_level = level_order.get(req.level)
+        if next_level:
+            for child in [r for r in self.matrix.requirements.values()
+                          if r.level == next_level and r.parent_id == req.id]:
+                child_node = self._build_branch(child)
+                if child_node:
+                    node["children"].append(child_node)
+                    node["req_count"] += child_node["req_count"]
+                    node["verified"] += child_node["verified"]
+                    node["blocked"] += child_node["blocked"]
+        # 重新计算覆盖率（包含子节点）
+        all_ids = [req.id] + self._all_descendant_ids(req.id)
+        all_reqs = [self.matrix.requirements[rid] for rid in all_ids if rid in self.matrix.requirements]
+        if all_reqs:
+            node["coverage"] = round(sum(r.coverage_actual for r in all_reqs) / len(all_reqs), 1)
+        return node
+
+    def _all_descendant_ids(self, req_id: str) -> List[str]:
+        ids = []
+        for r in self.matrix.requirements.values():
+            if r.parent_id == req_id:
+                ids.append(r.id)
+                ids.extend(self._all_descendant_ids(r.id))
+        return ids
+
+    def _child_level(self, level: str) -> str:
+        return {"chip": "st", "st": "it", "it": "bt", "bt": "ut"}.get(level, "")
+
+    def _req_to_dict(self, r: Requirement) -> dict:
+        return {
+            "id": r.id, "description": r.description, "priority": r.priority,
+            "category": r.category, "level": r.level, "parent_id": r.parent_id,
+            "status": r.status.value, "test_ids": r.test_ids,
+            "coverage_goal": r.coverage_goal, "coverage_actual": r.coverage_actual,
+            "doc_path": r.doc_path,
+        }
+
     # ==================== 导入 ====================
     
     def import_from_csv(self, csv_content: str):

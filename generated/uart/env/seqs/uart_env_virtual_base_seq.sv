@@ -20,6 +20,19 @@ class uart_env_virtual_base_seq extends uvm_sequence;
   virtual task body();
     `uvm_info("VSEQ", "Virtual base seq body - override in derived", UVM_MEDIUM)
   endtask
+  protected task start_AXI_in_sequence(uvm_sequence #(AXI_in_seq_item) _s);
+    m_started++;
+    fork
+      _s.start(get_sequencer());
+    join_none
+  endtask
+
+  protected task send_AXI_in_random(int count = 1);
+    AXI_in_random_seq _rs;
+    _rs = AXI_in_random_seq::type_id::create("_rs");
+    _rs.num_transactions = count;
+    start_AXI_in_sequence(_rs);
+  endtask
   protected task start_UART_in_sequence(uvm_sequence #(UART_in_seq_item) _s);
     m_started++;
     fork
@@ -32,6 +45,19 @@ class uart_env_virtual_base_seq extends uvm_sequence;
     _rs = UART_in_random_seq::type_id::create("_rs");
     _rs.num_transactions = count;
     start_UART_in_sequence(_rs);
+  endtask
+  protected task start_UART_out_sequence(uvm_sequence #(UART_out_seq_item) _s);
+    m_started++;
+    fork
+      _s.start(get_sequencer());
+    join_none
+  endtask
+
+  protected task send_UART_out_random(int count = 1);
+    UART_out_random_seq _rs;
+    _rs = UART_out_random_seq::type_id::create("_rs");
+    _rs.num_transactions = count;
+    start_UART_out_sequence(_rs);
   endtask
 
 endclass : uart_env_virtual_base_seq

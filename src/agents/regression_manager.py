@@ -1,23 +1,31 @@
 """
-回归管理器Agent - 使用LLM工厂
+回归管理器Agent —— bypass 模式调用 Verify_run 真实编译+仿真
 """
 from typing import Dict, List, Any
+import json
+from datetime import datetime
+
 from langchain.agents import create_openai_tools_agent, AgentExecutor
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from src.core.base import BaseAgent
+from src.core.base import BaseAgent, AgentResult
 from src.core.registry import register_agent
 import structlog
-import json
 
 logger = structlog.get_logger()
 
+QUESTA = "f:/questasim64_2024.1/win64"
+UVM_SRC = "f:/questasim64_2024.1/verilog_src/uvm-1.2/src"
+
+
 @register_agent("regression_manager")
 class RegressionManager(BaseAgent):
-    """回归管理器Agent"""
-    
+    """回归管理器Agent —— 编译 + 仿真 + 结果分析"""
+
     task_type = "regression_management"
-    
+    consumes = ["env", "tests"]
+    produces = "regression"
+
     def __init__(self, config: Dict[str, Any] = None):
         super().__init__(
             role="regression_manager",
@@ -25,42 +33,19 @@ class RegressionManager(BaseAgent):
             description="管理回归测试执行和结果分析",
             config=config or {}
         )
-        self.test_queue: List[Dict] = []
-        self.results_cache: Dict[str, Any] = {}
-        self._regression_tools = [
-            self.execute_regression,
-            self.analyze_regression_results,
-            self.manage_test_queue,
-            self.optimize_test_order,
-            self.generate_regression_report
-        ]
-    
+
     async def _setup(self):
-        """子类特定初始化"""
-        self._regression_tools = [
-            self.execute_regression,
-            self.analyze_regression_results,
-            self.manage_test_queue,
-            self.optimize_test_order,
-            self.generate_regression_report
-        ]
         logger.info(f"{self.display_name} 特定初始化完成")
-    
+
     async def _get_prompt_template(self):
-        """获取Prompt模板"""
         return ChatPromptTemplate.from_messages([
             ("system", """你是回归测试管理专家。
 
 【职责】
-1. 管理回归测试队列
-2. 优化测试执行顺序
-3. 分析回归测试结果
+1. 编译 UVM 环境
+2. 执行仿真测试
+3. 分析结果
 4. 生成回归报告
-
-【回归策略】
-- Smoke Test: 5-10分钟，每次提交触发
-- Daily Regression: 2-4小时，每天运行
-- Weekly Regression: 完整测试套件，每周运行
 
 可用工具：{tools}
             """),
@@ -68,16 +53,63 @@ class RegressionManager(BaseAgent):
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad")
         ])
-    
+
     async def _get_tools(self) -> List:
-        """获取工具列表"""
         return []
-    
+
     async def _execute(self, input_text: str) -> Dict[str, Any]:
-        """执行回归管理"""
         if self._executor:
             return await self._executor.ainvoke({"input": input_text})
         return {"output": "Agent未初始化"}
+
+    # ── bypass: 真实编译 + 仿真 ──
+
+    async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
+        bypass = task.get('bypass', False) if isinstance(task, dict) else False
+        if not bypass:
+            return await super().execute_task(task)
+
+        from datetime import datetime as dt
+        start_time = dt.now()
+
+        try:
+            ctx = task.get("ctx", {})
+            env = ctx.get("env", {})
+            tests = ctx.get("tests", {})
+
+            filelist = env.get("filelist", "")
+            env_output_dir = env.get("output_dir", "generated/uart")
+            test_scenarios = tests.get("scenarios", [])
+
+            # 转换为 RegressionRunner 格式
+            runner_tests = []
+            for s in test_scenarios:
+                runner_tests.append({
+                    "name": s.get("test_name", s.get("id", "test")),
+                    "plusargs": ["+UVM_TESTNAME=" + s.get("test_name", s.get("id", "test"))],
+                })
+
+            from src.tools.compilesim.regression_wrapper import RegressionRunner
+            runner = RegressionRunner(
+                env_output_dir=env_output_dir,
+                filelist=filelist,
+                top_module="uart_bench_tb_top",
+                coverage=True,  # 收集真实覆盖率
+            )
+            results = runner.run(tests=runner_tests[:2], tags=["smoke"])  # smoke: 前2个
+
+            summary = (f"Regression: compile={results['compile']['status']} "
+                       f"tests={results['summary']['total']}/{results['summary']['passed']} passed "
+                       f"({results['summary'].get('total_time_s', 0)}s)")
+
+            return AgentResult(success=True, data={
+                "output": summary,
+                "regression": results,
+            }, execution_time=(dt.now() - start_time).total_seconds())
+
+        except Exception as e:
+            import traceback
+            return AgentResult(success=False, error=f"{e}\n{traceback.format_exc()}")
     
     def execute_regression(self, test_suite: str) -> str:
         """执行回归测试"""

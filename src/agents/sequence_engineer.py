@@ -21,6 +21,8 @@ class SequenceEngineer(BaseAgent):
     """序列工程师Agent —— 生成约束策略和测试序列"""
 
     task_type = "sequence_generation"
+    consumes = ["spec"]
+    produces = "policies"
 
     def __init__(self, config: Dict[str, Any] = None):
         super().__init__(
@@ -85,7 +87,13 @@ class SequenceEngineer(BaseAgent):
                 ["generate_uvm"], 0, execution_time, True
             )
 
-            return AgentResult(success=True, data={"output": result_text}, execution_time=execution_time)
+            return AgentResult(success=True, data={
+                "output": result_text,
+                "policies": {
+                    "sequences": [{"name": "uart_base_seq", "type": "uart"}],
+                    "policies": yaml.safe_load(constraint_yaml) if isinstance(constraint_yaml, str) else constraint_yaml,
+                }
+            }, execution_time=execution_time)
         except Exception as e:
             return AgentResult(success=False, error=str(e))
 

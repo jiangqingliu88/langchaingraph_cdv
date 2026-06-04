@@ -18,7 +18,17 @@ module uart_bench_tb_top;
   // 2. Agent 接口实例（绑定到 VIP 信号）
   // ═══════════════════════════════════════════════════════════════
 
+  axi4_lite_if AXI_in_if (
+    .clk(clk_rst_if.clk[0]),
+    .rst_n(clk_rst_if.rst_n[0])
+  );
+
   uart_if UART_in_if (
+    .clk(clk_rst_if.clk[0]),
+    .rst_n(clk_rst_if.rst_n[0])
+  );
+
+  uart_if UART_out_if (
     .clk(clk_rst_if.clk[0]),
     .rst_n(clk_rst_if.rst_n[0])
   );

@@ -1,6 +1,14 @@
 bench:
   agents:
+    AXI_in:
+      clock: pclk
+      interface: axi4_lite_if
+      reset: presetn
     UART_in:
+      clock: pclk
+      interface: uart_if
+      reset: presetn
+    UART_out:
       clock: pclk
       interface: uart_if
       reset: presetn

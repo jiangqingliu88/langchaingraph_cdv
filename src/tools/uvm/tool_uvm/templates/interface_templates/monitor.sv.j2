@@ -115,15 +115,19 @@ class {{ agent.name }}_monitor extends uvm_monitor;
   endtask
 
   virtual function void sample_transaction({{ agent.name }}_seq_item item);
-{%- for var in transaction_vars %}
-    item.{{ var.name }} = vif.cb.{{ var.name }};
+{%- for port in ports %}
+{%-   if port.dir == 'input' and port.name != clock and port.name != reset %}
+    item.{{ port.name }} = vif.cb.{{ port.name }};
+{%-   endif %}
 {%- endfor %}
   endfunction
 
   // ─── X/Z 检测 ───
   virtual function bit is_xz_detected();
-{%- for var in transaction_vars %}
-    if ($isunknown(vif.cb.{{ var.name }})) return 1;
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset %}
+    if ($isunknown(vif.cb.{{ port.name }})) return 1;
+{%-   endif %}
 {%- endfor %}
     return 0;
   endfunction

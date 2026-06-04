@@ -15,6 +15,18 @@ class {{ agent.name }}_seq_item extends uvm_sequence_item;
   rand {{ var.type }} {{ var.name }}; // is_compare={{ var.iscompare }}, is_rand={{ var.isrand }}
 {%- endfor %}
 
+  // ── 物理端口字段（Driver 驱动 / Monitor 采样）──
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset %}
+{%-     set width_str = port.width|string %}
+{%-     if width_str == '1' %}
+  rand logic {{ port.name }};  // {{ port.dir }}
+{%-     else %}
+  rand logic [{{ port.width }}-1:0] {{ port.name }};  // {{ port.dir }}
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+
   // ─── 内建字段 ───
   int      req_id;
   int      tag;

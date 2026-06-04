@@ -18,6 +18,8 @@ class DebugEngineer(BaseAgent):
     """调试工程师Agent"""
     
     task_type = "debug_analysis"
+    consumes: List[str] = []
+    produces = None  # text chain only
     
     def __init__(self, config: Dict[str, Any] = None):
         super().__init__(

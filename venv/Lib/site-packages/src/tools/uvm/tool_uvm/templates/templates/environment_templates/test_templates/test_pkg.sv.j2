@@ -1,0 +1,18 @@
+// Test Package: {{ environment.env_name }}_test_pkg
+package {{ environment.env_name }}_test_pkg;
+  import uvm_pkg::*;
+  `include "uvm_macros.svh"
+    // 直接导入 Agent 包（SV import 不可传递）
+{%- for agent in agents %}
+  import {{ agent.name }}_pkg::*;
+{%- endfor %}
+  // 导入 env 包
+  import {{ environment.env_name }}_pkg::*;
+
+
+
+  // 包含环境组件文件
+  `include "{{ environment.env_name }}_base_test.sv"
+
+
+endpackage : {{ environment.env_name }}_test_pkg

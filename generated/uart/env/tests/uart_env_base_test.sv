@@ -11,7 +11,9 @@ class uart_env_base_test extends uvm_test;
   uart_env_config cfg;
  
   // 虚拟接口
+  virtual axi4_lite_if_interface AXI_in_vif;
   virtual uart_if_interface UART_in_vif;
+  virtual uart_if_interface UART_out_vif;
 
   function new(string name = "uart_env_base_test", uvm_component parent);
     super.new(name, parent);
@@ -30,23 +32,45 @@ class uart_env_base_test extends uvm_test;
     end
     
     // 配置 Agent 模式
+    cfg.AXI_in_cfg.is_active = UVM_ACTIVE;
     cfg.UART_in_cfg.is_active = UVM_ACTIVE;
+    cfg.UART_out_cfg.is_active = UVM_ACTIVE;
 
     // 设置配置到 config_db
     uvm_config_db #(uart_env_config)::set(this, "env", "cfg", cfg);
     
     // 获取虚拟接口
+    if (!uvm_config_db #(virtual axi4_lite_if_interface)::get(this, "", "AXI_in_vif", AXI_in_vif)) begin
+      `uvm_fatal("VIF", $sformatf("Virtual interface not set for AXI_in"))
+    end
     if (!uvm_config_db #(virtual uart_if_interface)::get(this, "", "UART_in_vif", UART_in_vif)) begin
       `uvm_fatal("VIF", $sformatf("Virtual interface not set for UART_in"))
     end
+    if (!uvm_config_db #(virtual uart_if_interface)::get(this, "", "UART_out_vif", UART_out_vif)) begin
+      `uvm_fatal("VIF", $sformatf("Virtual interface not set for UART_out"))
+    end
     // 创建并注册错误注入 Callback
     /*
+    *AXI_in_error_injection_callback err_cb;
+    *err_cb = AXI_in_error_injection_callback::type_id::create("err_cb");
+    *err_cb.error_rate = 20;
+    *err_cb.inject_error = 1;
+    *AXI_in_callback_base::add(
+    *  env.AXI_in_agent_h.drv, err_cb
+    *);
     *UART_in_error_injection_callback err_cb;
     *err_cb = UART_in_error_injection_callback::type_id::create("err_cb");
     *err_cb.error_rate = 20;
     *err_cb.inject_error = 1;
     *UART_in_callback_base::add(
     *  env.UART_in_agent_h.drv, err_cb
+    *);
+    *UART_out_error_injection_callback err_cb;
+    *err_cb = UART_out_error_injection_callback::type_id::create("err_cb");
+    *err_cb.error_rate = 20;
+    *err_cb.inject_error = 1;
+    *UART_out_callback_base::add(
+    *  env.UART_out_agent_h.drv, err_cb
     *);
     */
   endfunction

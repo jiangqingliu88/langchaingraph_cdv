@@ -1,0 +1,38 @@
+// Random Test: {{ environment.env_name }}_random_test
+// 随机事务 + 覆盖率收集
+
+class {{ environment.env_name }}_random_test extends {{ environment.env_name }}_base_test;
+  `uvm_component_utils({{ environment.env_name }}_random_test)
+
+  rand int num_transactions = 100;
+
+  function new(string name = "{{ environment.env_name }}_random_test", uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    // 随机测试配置
+{%- for agent in agents %}
+    cfg.{{ agent.name }}_cfg.is_active = UVM_ACTIVE;
+    cfg.{{ agent.name }}_cfg.has_coverage = 1'b1;
+{%- endfor %}
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    phase.raise_objection(this);
+
+    // 在所有 Agent Sequencer 上启动随机序列
+{%- for agent in agents %}
+    begin
+      {{ agent.name }}_random_seq _seq;
+      _seq = {{ agent.name }}_random_seq::type_id::create("_seq");
+      _seq.num_transactions = num_transactions;
+      _seq.start(env.{{ agent.name }}_agent_h.sqr);
+    end
+{%- endfor %}
+
+    phase.drop_objection(this);
+  endtask
+
+endclass : {{ environment.env_name }}_random_test

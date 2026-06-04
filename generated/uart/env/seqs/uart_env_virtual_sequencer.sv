@@ -12,8 +12,12 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   // ═══════════════════════════════════════════════════════════════
   // 1. 子 Sequencer 句柄
   // ═══════════════════════════════════════════════════════════════
+  // AXI_in Agent Sequencer
+  uvm_sequencer #(AXI_in_seq_item) AXI_in_sqr;
   // UART_in Agent Sequencer
   uvm_sequencer #(UART_in_seq_item) UART_in_sqr;
+  // UART_out Agent Sequencer
+  uvm_sequencer #(UART_out_seq_item) UART_out_sqr;
   
   // Clock & Reset Sequencer（如果启用）
 
@@ -48,10 +52,18 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   // ═══════════════════════════════════════════════════════════════
   // 3. 优先级和权重配置
   // ═══════════════════════════════════════════════════════════════
+  // AXI_in 优先级（数值越小优先级越高）
+  int AXI_in_priority = 5;
+  // AXI_in 权重（用于加权轮询）
+  int AXI_in_weight = 1;
   // UART_in 优先级（数值越小优先级越高）
   int UART_in_priority = 5;
   // UART_in 权重（用于加权轮询）
   int UART_in_weight = 1;
+  // UART_out 优先级（数值越小优先级越高）
+  int UART_out_priority = 5;
+  // UART_out 权重（用于加权轮询）
+  int UART_out_weight = 1;
 
   // ═══════════════════════════════════════════════════════════════
   // 4. 内部状态变量
@@ -61,7 +73,9 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   protected int round_robin_counter = 0;
   
   // 加权轮询剩余权重
+  protected int AXI_in_remaining_weight = 1;
   protected int UART_in_remaining_weight = 1;
+  protected int UART_out_remaining_weight = 1;
   
   // 令牌环
   protected int token_holder = 0;
@@ -85,7 +99,9 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   function new(string name, uvm_component parent);
     super.new(name, parent);
     // 初始化统计
+    grants_per_sequencer["AXI_in_sqr"] = 0;
     grants_per_sequencer["UART_in_sqr"] = 0;
+    grants_per_sequencer["UART_out_sqr"] = 0;
   endfunction
   
   // ═══════════════════════════════════════════════════════════════
@@ -109,11 +125,23 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
     super.connect_phase(phase);
     
     // 从 config_db 获取子 Sequencer 句柄
+    if (!uvm_config_db #(uvm_sequencer #(AXI_in_seq_item))::get(
+        this, "", "AXI_in_sqr", AXI_in_sqr)) begin
+      `uvm_warning(get_name(), $sformatf("AXI_in_sqr not found in config_db"))
+    end else begin
+      `uvm_info(get_name(), $sformatf("Connected to AXI_in_sqr"), UVM_HIGH)
+    end
     if (!uvm_config_db #(uvm_sequencer #(UART_in_seq_item))::get(
         this, "", "UART_in_sqr", UART_in_sqr)) begin
       `uvm_warning(get_name(), $sformatf("UART_in_sqr not found in config_db"))
     end else begin
       `uvm_info(get_name(), $sformatf("Connected to UART_in_sqr"), UVM_HIGH)
+    end
+    if (!uvm_config_db #(uvm_sequencer #(UART_out_seq_item))::get(
+        this, "", "UART_out_sqr", UART_out_sqr)) begin
+      `uvm_warning(get_name(), $sformatf("UART_out_sqr not found in config_db"))
+    end else begin
+      `uvm_info(get_name(), $sformatf("Connected to UART_out_sqr"), UVM_HIGH)
     end
     
 
@@ -131,21 +159,41 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   endfunction
   
   // 设置优先级
+  function void set_AXI_in_priority(int pri);
+    AXI_in_priority = pri;
+    `uvm_info(get_name(), $sformatf("AXI_in priority set to %0d", pri), UVM_HIGH)
+  endfunction
   function void set_UART_in_priority(int pri);
     UART_in_priority = pri;
     `uvm_info(get_name(), $sformatf("UART_in priority set to %0d", pri), UVM_HIGH)
   endfunction
+  function void set_UART_out_priority(int pri);
+    UART_out_priority = pri;
+    `uvm_info(get_name(), $sformatf("UART_out priority set to %0d", pri), UVM_HIGH)
+  endfunction
   
   // 设置权重
+  function void set_AXI_in_weight(int weight);
+    AXI_in_weight = weight;
+    reset_weight_counts();
+    `uvm_info(get_name(), $sformatf("AXI_in weight set to %0d", weight), UVM_HIGH)
+  endfunction
   function void set_UART_in_weight(int weight);
     UART_in_weight = weight;
     reset_weight_counts();
     `uvm_info(get_name(), $sformatf("UART_in weight set to %0d", weight), UVM_HIGH)
   endfunction
+  function void set_UART_out_weight(int weight);
+    UART_out_weight = weight;
+    reset_weight_counts();
+    `uvm_info(get_name(), $sformatf("UART_out weight set to %0d", weight), UVM_HIGH)
+  endfunction
   
   // 重置权重计数器
   function void reset_weight_counts();
+    AXI_in_remaining_weight = AXI_in_weight;
     UART_in_remaining_weight = UART_in_weight;
+    UART_out_remaining_weight = UART_out_weight;
   endfunction
   
   // 启用/禁用调试
@@ -220,10 +268,20 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   
   protected function void collect_active_sequencers(
       ref uvm_sequencer_base sqrs[$]);
+    if (AXI_in_sqr != null && has_sequence(AXI_in_sqr)) begin
+      sqrs.push_back(AXI_in_sqr);
+      if (debug_enabled)
+        `uvm_info(get_name(), "AXI_in_sqr has sequence", UVM_HIGH)
+    end
     if (UART_in_sqr != null && has_sequence(UART_in_sqr)) begin
       sqrs.push_back(UART_in_sqr);
       if (debug_enabled)
         `uvm_info(get_name(), "UART_in_sqr has sequence", UVM_HIGH)
+    end
+    if (UART_out_sqr != null && has_sequence(UART_out_sqr)) begin
+      sqrs.push_back(UART_out_sqr);
+      if (debug_enabled)
+        `uvm_info(get_name(), "UART_out_sqr has sequence", UVM_HIGH)
     end
     
 
@@ -268,10 +326,26 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
 
     sqr_pri_t pri_list[$];
     foreach (sqrs[i]) begin
+      if (sqrs[i] == AXI_in_sqr) begin
+        sqr_pri_t item;
+        item.sqr = sqrs[i];
+        item.pri = AXI_in_priority;
+        pri_list.push_back(item);
+      end
+    end
+    foreach (sqrs[i]) begin
       if (sqrs[i] == UART_in_sqr) begin
         sqr_pri_t item;
         item.sqr = sqrs[i];
         item.pri = UART_in_priority;
+        pri_list.push_back(item);
+      end
+    end
+    foreach (sqrs[i]) begin
+      if (sqrs[i] == UART_out_sqr) begin
+        sqr_pri_t item;
+        item.sqr = sqrs[i];
+        item.pri = UART_out_priority;
         pri_list.push_back(item);
       end
     end
@@ -302,11 +376,23 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
       ref uvm_sequencer_base sqrs[$]);
     
     // 检查是否有剩余权重的 sequencer
+    if (AXI_in_remaining_weight > 0 && 
+        AXI_in_sqr != null && 
+        has_sequence(AXI_in_sqr)) begin
+      AXI_in_remaining_weight--;
+      return AXI_in_sqr;
+    end
     if (UART_in_remaining_weight > 0 && 
         UART_in_sqr != null && 
         has_sequence(UART_in_sqr)) begin
       UART_in_remaining_weight--;
       return UART_in_sqr;
+    end
+    if (UART_out_remaining_weight > 0 && 
+        UART_out_sqr != null && 
+        has_sequence(UART_out_sqr)) begin
+      UART_out_remaining_weight--;
+      return UART_out_sqr;
     end
     
     // 所有权重耗尽，重置并重新开始
@@ -402,7 +488,9 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   // 检查指定 Sequencer 是否有序列
   function bit has_sequence_on(string sqr_name);
     case (sqr_name)
+      "AXI_in": return (AXI_in_sqr != null && has_sequence(AXI_in_sqr));
       "UART_in": return (UART_in_sqr != null && has_sequence(UART_in_sqr));
+      "UART_out": return (UART_out_sqr != null && has_sequence(UART_out_sqr));
       default: return 0;
     endcase
   endfunction
@@ -410,9 +498,17 @@ class uart_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   // 获取所有活跃 Sequencer 名称
   function string get_active_sequencers_str();
     string str = "";
+    if (AXI_in_sqr != null && has_sequence(AXI_in_sqr)) begin
+      if (str != "") str = {str, ", "};
+      str = {str, "AXI_in"};
+    end
     if (UART_in_sqr != null && has_sequence(UART_in_sqr)) begin
       if (str != "") str = {str, ", "};
       str = {str, "UART_in"};
+    end
+    if (UART_out_sqr != null && has_sequence(UART_out_sqr)) begin
+      if (str != "") str = {str, ", "};
+      str = {str, "UART_out"};
     end
     return str;
   endfunction

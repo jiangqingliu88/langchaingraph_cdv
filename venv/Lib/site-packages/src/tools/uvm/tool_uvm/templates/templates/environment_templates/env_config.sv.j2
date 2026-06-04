@@ -1,0 +1,34 @@
+// Environment Configuration: {{ environment.env_name }}_config
+// 自动生成，不要手动修改
+
+class {{ environment.env_name }}_config extends uvm_object;
+  `uvm_object_utils({{ environment.env_name }}_config)
+{%- if clk_rst_vip and clk_rst_vip.enabled %}
+  clk_rst_config clk_rst_cfg;
+{%- endif %}
+{%- for var in config_vars %}
+  rand {{ var.type }} {{ var.name }};
+{%- endfor %}
+
+{%- for cons in config_constraints %}
+  constraint {{ cons.name }} {{ cons.value | safe }}
+{%- endfor %}
+
+  // Agent 配置数组
+{%- for agent in agents %}
+  {{ agent.name }}_config {{ agent.name }}_cfg;
+{%- endfor %}
+
+  function new(string name = "{{ environment.env_name }}_config");
+    super.new(name);
+{%- for agent in agents %}
+    {{ agent.name }}_cfg = {{ agent.name }}_config::type_id::create("{{ agent.name }}_cfg");
+{%- endfor %}
+  endfunction
+
+  // 配置有效性检查
+  virtual function void check_config();
+    // TODO: 实现配置合法性检查
+  endfunction
+
+endclass : {{ environment.env_name }}_config

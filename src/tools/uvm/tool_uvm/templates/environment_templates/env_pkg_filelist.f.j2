@@ -10,13 +10,13 @@
 
 // ─── Interface ───
 {%- for agent in agents %}
-{{ agent_dir }}/{{ agent.name }}_interface.sv
+{{ agent_dir }}/{{ agent.name }}/{{ agent.name }}_interface.sv
 {%- endfor %}
 
 // ─── Agent Package ───
 {%- for agent in agents %}
-+incdir+{{ agent_dir }}
-{{ agent_dir }}/{{ agent.name }}_pkg.sv
++incdir+{{ agent_dir }}/{{ agent.name }}
+{{ agent_dir }}/{{ agent.name }}/{{ agent.name }}_pkg.sv
 {%- endfor %}
 
 // ─── Environment ───

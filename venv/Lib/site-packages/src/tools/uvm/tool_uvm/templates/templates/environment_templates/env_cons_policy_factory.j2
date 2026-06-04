@@ -1,0 +1,90 @@
+// {{ project.name }}_policy_factory.sv
+// 自动生成的策略工厂
+
+`include "{{ project.env_name }}_policy_combinator.sv"
+
+class {{ project.env_name }}_policy_factory;
+  static {{ project.env_name }}_constraint_policy policies[string];
+  
+  // 注册策略
+  static function void register_policy(string name, {{ project.env_name }}_constraint_policy policy);
+    policies[name] = policy;
+  endfunction
+  
+  // 获取策略
+  static function {{ project.env_name }}_constraint_policy get_policy(string name);
+    if (policies.exists(name))
+      return policies[name];
+    else
+      return null;
+  endfunction
+  
+  // 创建默认组合器
+  static function {{ project.env_name }}_policy_combinator create_default_combinator();
+    {{ project.env_name }}_policy_combinator combo = new("combo");
+    
+{% for policy in policies %}
+    // 添加 {{ policy.name }} 策略
+    {{ policy.name }}_policy {{ policy.name }}_p = {{ policy.name }}_policy::type_id::create("{{ policy.name }}_p");
+    combo.add_policy({{ policy.name }}_p);
+    
+{% endfor %}
+    return combo;
+  endfunction
+  
+  // 从 plusargs 创建组合器
+  static function {{ project.env_name }}_policy_combinator create_from_plusargs();
+    {{ project.env_name }}_policy_combinator combo = new("combo");
+    string policy_list;
+    
+    if ($value$plusargs("{{ project.env_name | upper }}_POLICY_LIST=%s", policy_list)) begin
+      string policies_to_add[$];
+      int start = 0, end;
+      
+      do begin
+        end = policy_list.index(",", start);
+        if (end == -1)
+          policies_to_add.push_back(policy_list.substr(start, policy_list.len()-1));
+        else
+          policies_to_add.push_back(policy_list.substr(start, end-1));
+        start = end + 1;
+      end while (end != -1);
+      
+      foreach (policies_to_add[i]) begin
+        {{ project.env_name }}_constraint_policy p = get_policy(policies_to_add[i]);
+        if (p != null) begin
+          // 创建新实例
+          {{ project.env_name }}_constraint_policy new_p;
+          $cast(new_p, p.clone());
+          combo.add_policy(new_p);
+        end
+      end
+    end else begin
+      // 默认添加所有策略
+      combo = create_default_combinator();
+    end
+    
+    combo.configure_from_plusargs();
+    return combo;
+  endfunction
+  
+  // 从 YAML 创建组合器
+  static function {{ project.env_name }}_policy_combinator create_from_yaml(string yaml_file);
+    {{ project.env_name }}_policy_combinator combo = new("combo");
+    // YAML 解析逻辑
+    // ...
+    return combo;
+  endfunction
+  
+  // 注册所有策略
+  static function void register_all_policies();
+{% for policy in policies %}
+    register_policy("{{ policy.name }}", {{ policy.name }}_policy::type_id::create("{{ policy.name }}"));
+{% endfor %}
+  endfunction
+endclass
+
+// 自动注册
+initial begin
+  {{ project.env_name }}_policy_factory::register_all_policies();
+end

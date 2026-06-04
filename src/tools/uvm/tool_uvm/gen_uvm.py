@@ -37,8 +37,15 @@ INTERFACE_TEMPLATES = [
     ("interface_templates/agent.sv.j2", "{agent_name}_agent.sv"),
     ("interface_templates/agent_pkg.sv.j2", "{agent_name}_pkg.sv"),
     ("interface_templates/agent_sequence_base.sv.j2", "{agent_name}_base_seq.sv"),
-
     ("interface_templates/agent_cov.sv.j2", "{agent_name}_coverage_collector.sv"),
+]
+
+# Agent 自闭环测试套件（独立编译运行的 LB test）
+AGENT_LOOPBACK_TEMPLATES = [
+    ("interface_templates/agent_loopback_env.sv.j2",  "{agent_name}_loopback_env.sv"),
+    ("interface_templates/agent_loopback_scb.sv.j2",  "{agent_name}_loopback_scb.sv"),
+    ("interface_templates/agent_loopback_test.sv.j2", "{agent_name}_loopback_test.sv"),
+    ("interface_templates/agent_loopback_tb.sv.j2",  "{agent_name}_loopback_tb.sv"),
 ]
 
 ENVIRONMENT_ROOT_TEMPLATES = [
@@ -279,11 +286,18 @@ class RenderTask:
 class AgentRenderTask(RenderTask):
     def generate(self, agent: AgentModel) -> List[Path]:
         rendered: List[Path] = []
-        base_dir = self.output_dir / "agents"
+        base_dir = self.output_dir / "agents" / agent.name
         context = {"agent": agent, **agent.to_context()}
         for template_path, target_pattern in INTERFACE_TEMPLATES:
             target_name = target_pattern.format(agent_name=agent.name)
             target_path = base_dir / target_name
+            rendered.append(self.render_file(template_path, target_path, context))
+
+        # Agent 自闭环测试套件
+        lb_dir = base_dir / "loopback"
+        for template_path, target_pattern in AGENT_LOOPBACK_TEMPLATES:
+            target_name = target_pattern.format(agent_name=agent.name)
+            target_path = lb_dir / target_name
             rendered.append(self.render_file(template_path, target_path, context))
 
         for file_name_pattern, template_text in CALLBACK_FILES:

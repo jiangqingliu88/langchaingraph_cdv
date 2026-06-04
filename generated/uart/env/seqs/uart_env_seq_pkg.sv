@@ -3,7 +3,9 @@ package uart_env_seq_pkg;
   import uvm_pkg::*;
   `include "uvm_macros.svh"
     // 直接导入 Agent 包（SV import 不可传递）
+  import AXI_in_pkg::*;
   import UART_in_pkg::*;
+  import UART_out_pkg::*;
   // 导入 env 包
   import uart_env_pkg::*;
 

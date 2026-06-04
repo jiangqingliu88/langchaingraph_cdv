@@ -18,6 +18,8 @@ class AssertionEngineer(BaseAgent):
     """断言工程师Agent - 使用DeepSeek Coder生成断言代码"""
     
     task_type = "assertion_generation"
+    consumes: List[str] = []
+    produces = None  # text chain only
     
     def __init__(self, config: Dict[str, Any] = None):
         super().__init__(

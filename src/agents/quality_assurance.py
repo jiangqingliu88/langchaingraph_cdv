@@ -17,6 +17,8 @@ class QualityAssurance(BaseAgent):
     """质量保证Agent"""
     
     task_type = "quality_review"
+    consumes: List[str] = []
+    produces = None  # text chain only
     
     def __init__(self, config: Dict[str, Any] = None):
         super().__init__(

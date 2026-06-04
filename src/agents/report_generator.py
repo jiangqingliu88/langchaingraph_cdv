@@ -17,6 +17,8 @@ class ReportGenerator(BaseAgent):
     """报告生成器Agent"""
     
     task_type = "report_generation"
+    consumes: List[str] = []
+    produces = None  # text chain only
     
     def __init__(self, config: Dict[str, Any] = None):
         super().__init__(

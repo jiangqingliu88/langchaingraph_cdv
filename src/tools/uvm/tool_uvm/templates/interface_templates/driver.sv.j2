@@ -58,6 +58,9 @@ class {{ agent.name }}_driver extends uvm_driver #({{ agent.name }}_seq_item);
   virtual {{ agent.interface }}_interface vif;
   {{ agent.name }}_config cfg;
 
+  // Loopback 自测端口：Driver 发送的 item → Scoreboard expected
+  uvm_analysis_port #({{ agent.name }}_seq_item) expected_port;
+
   // ─── 请求队列（异步响应）───
   protected {{ agent.name }}_seq_item req_queue[$];
   protected int req_id;
@@ -75,6 +78,7 @@ class {{ agent.name }}_driver extends uvm_driver #({{ agent.name }}_seq_item);
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
+    expected_port = new("expected_port", this);
   endfunction
 
   virtual function void build_phase(uvm_phase phase);
@@ -96,9 +100,9 @@ class {{ agent.name }}_driver extends uvm_driver #({{ agent.name }}_seq_item);
   endtask
 
   virtual task reset_signals();
-{%- for var in transaction_vars %}
-{%-   if var.isrand == 'True' %}
-    vif.cb.{{ var.name }} <= 0;
+{%- for port in ports %}
+{%-   if port.dir == 'output' %}
+    vif.cb.{{ port.name }} <= 0;
 {%-   endif %}
 {%- endfor %}
   endtask
@@ -140,6 +144,7 @@ class {{ agent.name }}_driver extends uvm_driver #({{ agent.name }}_seq_item);
       req.req_id = req_id++;
       req_queue.push_back(req);
       m_driven++;
+      expected_port.write(req);  // Loopback: 通知 Scoreboard 期望值
       seq_item_port.item_done();
       //sqr.inc_req();  -- sqr 引用待连接
     end
@@ -197,9 +202,9 @@ class {{ agent.name }}_driver extends uvm_driver #({{ agent.name }}_seq_item);
   virtual task drive_transaction({{ agent.name }}_seq_item req);
     @(vif.cb);
     req.begin_time = $realtime;
-{%- for var in transaction_vars %}
-{%-   if var.isrand == 'True' %}
-    vif.cb.{{ var.name }} <= req.{{ var.name }};
+{%- for port in ports %}
+{%-   if port.dir == 'output' %}
+    vif.cb.{{ port.name }} <= req.{{ port.name }};
 {%-   endif %}
 {%- endfor %}
   endtask

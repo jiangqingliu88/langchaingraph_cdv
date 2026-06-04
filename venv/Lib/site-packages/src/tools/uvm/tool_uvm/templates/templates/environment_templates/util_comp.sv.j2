@@ -1,0 +1,109 @@
+// ============================================================
+// Predictor: {{ predictor_name }}
+// 自动生成 - 通过 YAML 配置端口
+// ============================================================
+
+class {{ predictor_name }} extends uvm_component;
+  `uvm_component_utils({{ predictor_name }})
+
+{%- for port in analysis_exports %}
+  // ─── 输入端口: {{ port.name }} ───
+  uvm_analysis_imp_{{ port.name }} #({{ port.type }}, {{ predictor_name }}) {{ port.name }};
+{%- endfor %}
+
+{%- for port in analysis_ports %}
+  // ─── 输出端口: {{ port.name }} ───
+  uvm_analysis_port #({{ port.type }}) {{ port.name }};
+{%- endfor %}
+
+  // ─── 内部统计 ───
+{%- for port in analysis_exports %}
+  protected int {{ port.name }}_count;
+  protected {{ port.type }} {{ port.name }}_queue[$];
+{%- endfor %}
+{%- for port in analysis_ports %}
+  protected int {{ port.name }}_count;
+{%- endfor %}
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+
+{%- for port in analysis_exports %}
+    {{ port.name }} = new("{{ port.name }}", this);
+{%- endfor %}
+{%- for port in analysis_ports %}
+    {{ port.name }} = new("{{ port.name }}", this);
+{%- endfor %}
+  endfunction
+
+  // ═══════════════════════════════════════════
+  // TLM write
+  // ═══════════════════════════════════════════
+
+{%- for port in analysis_exports %}
+  virtual function void write_{{ port.name }}({{ port.type }} tr);
+    {{ port.type }} clone;
+    $cast(clone, tr.clone());
+    {{ port.name }}_queue.push_back(clone);
+    {{ port.name }}_count++;
+    process_{{ port.name }}(clone);
+  endfunction
+
+{%- endfor %}
+
+  // ═══════════════════════════════════════════
+  // 处理逻辑（子类覆写）
+  // ═══════════════════════════════════════════
+
+{%- for port in analysis_exports %}
+  virtual function void process_{{ port.name }}({{ port.type }} tr);
+    // TODO: override in derived class
+  endfunction
+
+{%- endfor %}
+
+  // ═══════════════════════════════════════════
+  // 输出
+  // ═══════════════════════════════════════════
+
+{%- if analysis_ports|length == 1 %}
+  virtual function void send_output({{ analysis_ports[0].type }} tr);
+    {{ analysis_ports[0].name }}.write(tr);
+    {{ analysis_ports[0].name }}_count++;
+  endfunction
+
+{%- else %}
+{%- for port in analysis_ports %}
+  virtual function void send_to_{{ port.name }}({{ port.type }} tr);
+    {{ port.name }}.write(tr);
+    {{ port.name }}_count++;
+  endfunction
+
+{%- endfor %}
+{%- endif %}
+
+  // ═══════════════════════════════════════════
+  // 报告
+  // ═══════════════════════════════════════════
+
+  virtual function void report_phase(uvm_phase phase);
+    super.report_phase(phase);
+    `uvm_info("PRED", "", UVM_NONE)
+    `uvm_info("PRED", "========================================", UVM_NONE)
+    `uvm_info("PRED", $sformatf("Predictor: %s", get_full_name()), UVM_NONE)
+    `uvm_info("PRED", "========================================", UVM_NONE)
+{%- for port in analysis_exports %}
+    `uvm_info("PRED", $sformatf("  [IN]  {{ port.name }}: %0d", {{ port.name }}_count), UVM_NONE)
+{%- endfor %}
+{%- for port in analysis_ports %}
+    `uvm_info("PRED", $sformatf("  [OUT] {{ port.name }}: %0d", {{ port.name }}_count), UVM_NONE)
+{%- endfor %}
+    `uvm_info("PRED", "========================================", UVM_NONE)
+  endfunction
+
+endclass : {{ predictor_name }}
+```

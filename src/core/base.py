@@ -96,14 +96,22 @@ class AgentSubject:
 class BaseAgent(ABC, AgentSubject):
     """
     基础Agent类
-    
+
     使用模板方法模式定义Agent生命周期
     集成LLM工厂自动选择最优模型
+
+    consumes / produces 声明 Agent 对共享上下文 (ctx) 的读写契约：
+      consumes: List[str]  — 从 ctx 读取哪些 key，如 ["spec"]
+      produces: str | None — 向 ctx 写入哪个 key，如 "env"；None 表示只产生文本
     """
-    
+
     # 子类需要定义的任务类型，用于LLM工厂选择模型
     task_type: str = "spec_analysis"
-    
+
+    # 共享上下文契约 —— 子类覆盖
+    consumes: List[str] = []
+    produces: Optional[str] = None
+
     def __init__(
         self,
         role: str,
@@ -213,10 +221,54 @@ class BaseAgent(ABC, AgentSubject):
         """获取工具列表"""
         pass
     
+    # ── 共享上下文 (ctx) 读写 ──
+
+    def _read_ctx(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """根据 consumes 声明，从 task["ctx"] 中读取本 Agent 需要的数据"""
+        ctx = task.get("ctx", {}) if isinstance(task, dict) else {}
+        if not ctx or not self.consumes:
+            return {}
+        result = {}
+        for key in self.consumes:
+            if key in ctx:
+                val = ctx[key]
+                result[key] = val.model_dump() if isinstance(val, BaseModel) else val
+        return result
+
+    def _write_ctx(self, task: Dict[str, Any], result: "AgentResult") -> None:
+        """根据 produces 声明，将 result.data 写回 task["ctx"]"""
+        if not self.produces or not isinstance(task, dict):
+            return
+        ctx = task.get("ctx")
+        if not isinstance(ctx, dict):
+            return
+        # 优先查找 result.data[self.produces]，其次查找 result.data 中的其他结构化字段
+        data = result.data if isinstance(result.data, dict) else {}
+        if self.produces in data:
+            ctx[self.produces] = data[self.produces]
+        else:
+            # 兼容：architect 返回 env_name/filelist 等扁平字段 → 包装成 dict
+            flat_keys = {"env_name", "output_dir", "filelist", "agent_count", "files",
+                         "scenario_count", "test_names", "scenarios",
+                         "compile_status", "pass_count", "fail_count",
+                         "coverage_data", "gaps", "suggestions"}
+            relevant = {k: v for k, v in data.items() if k in flat_keys}
+            if relevant:
+                ctx[self.produces] = relevant
+
+    # ── 任务执行 ──
+
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
         bypass = task.get('bypass', False) if isinstance(task, dict) else False
+
+        # 将 ctx 数据注入到 task["input"]（如果尚未注入）
+        ctx_data = self._read_ctx(task)
+        if ctx_data and isinstance(task, dict):
+            task["_ctx_data"] = ctx_data
+
         if bypass:
             result = AgentResult(success=True, data={"output": f"[{self.display_name}] bypass mode"})
+            self._write_ctx(task, result)
             # 记录调试日志
             from src.middleware.debug_logger import debug_logger
             debug_logger.log_agent_call(self.role, self.display_name, str(task)[:500], "bypass", result.data.get("output", ""), [], 0, 0, True)
@@ -235,6 +287,8 @@ class BaseAgent(ABC, AgentSubject):
             self.metrics["tasks_completed"] += 1
             self.metrics["total_time"] += execution_time
             agent_result = AgentResult(success=True, data=processed_result, execution_time=execution_time)
+            # 将产出写回共享上下文
+            self._write_ctx(task, agent_result)
             # 记录调试日志
             try:
                 from src.middleware.debug_logger import debug_logger

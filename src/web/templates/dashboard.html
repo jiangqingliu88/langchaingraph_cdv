@@ -1,395 +1,793 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-bs-theme="light">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IC验证多Agent智能平台 (Mock)</title>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IC验证企业平台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        body { background-color: #f0f2f5; font-family: 'Segoe UI', sans-serif; }
-        .card { box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-radius: 12px; border: none; margin-bottom: 16px; }
-        .output-console { background: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace; 
-                          padding: 12px; border-radius: 8px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-size: 0.85rem; }
-        .btn { margin: 2px 4px 2px 0; border-radius: 8px; font-size: 0.9rem; }
-        .status-ok { color: #198754; font-weight: bold; }
-        .status-fail { color: #dc3545; font-weight: bold; }
-        .status-warn { color: #fd7e14; font-weight: bold; }
-        .agent-badge { margin: 2px 3px; font-size: 0.8rem; }
-        .testcase-table { font-size: 0.85rem; }
-        .testcase-table th { background: #f8f9fa; }
-        .nav-tabs .nav-link { font-size: 0.9rem; padding: 6px 12px; }
-        .badge-scenario { font-size: 0.75rem; }
-        .code-preview { font-family: 'Courier New', monospace; font-size: 0.8rem; background: #f8f9fa; 
-                        padding: 8px; border-radius: 6px; max-height: 200px; overflow-y: auto; }
+        :root {
+            --sidebar-w:220px; --bg:#f0f2f5; --card-bg:#fff; --text:#212529; --text-muted:#6c757d;
+            --sidebar-bg:linear-gradient(180deg,#1a2332 0%,#15202b 100%); --sidebar-text:#a8b2c0;
+            --border:rgba(0,0,0,.06); --hover:#f8f9fa; --input-bg:#fff; --console-bg:#1e1e1e;
+        }
+        [data-bs-theme="dark"] {
+            --bg:#1a1d23; --card-bg:#212529; --text:#e9ecef; --text-muted:#adb5bd;
+            --sidebar-bg:linear-gradient(180deg,#0d1117 0%,#161b22 100%); --sidebar-text:#8b949e;
+            --border:rgba(255,255,255,.06); --hover:#2d333b; --input-bg:#2d333b; --console-bg:#0d1117;
+        }
+        body { background:var(--bg); font-family:'Segoe UI',sans-serif; margin:0; color:var(--text); transition:background .3s,color .3s; }
+        .sidebar { position:fixed; left:0; top:0; bottom:0; width:var(--sidebar-w);
+                   background:var(--sidebar-bg); color:var(--sidebar-text); overflow-y:auto; z-index:1000; }
+        .sidebar .nav-item { padding:10px 16px; cursor:pointer; display:flex; align-items:center; gap:8px;
+                             border-left:3px solid transparent; transition:all .15s; font-size:.9rem;
+                             border-radius:0 8px 8px 0; margin:2px 8px 2px 0; }
+        .sidebar .logo { padding:16px; font-size:1.1rem; font-weight:bold; color:#fff; border-bottom:1px solid rgba(255,255,255,.08); }
+        .sidebar .nav-item:hover,.sidebar .nav-item.active { background:rgba(255,255,255,.06); color:#fff; border-left-color:#4e8cff; }
+        .sidebar .nav-item i { font-size:1.1rem; width:20px; text-align:center; }
+        .main { margin-left:var(--sidebar-w); padding:16px 20px; }
+        .navbar-top { margin-left:var(--sidebar-w); background:var(--card-bg); padding:8px 20px;
+                      display:flex; align-items:center; justify-content:space-between; gap:12px;
+                      box-shadow:0 1px 3px var(--border); transition:background .3s; }
+        .card { background:var(--card-bg); border:none; border-radius:12px; box-shadow:0 2px 8px var(--border);
+                margin-bottom:16px; transition:background .3s; }
+        .stat-card { text-align:center; padding:20px; }
+        .stat-card .value { font-size:2rem; font-weight:700; }
+        .page { display:none; } .page.active { display:block; }
+        .output-console { background:var(--console-bg); color:#d4d4d4; font-family:'Courier New',monospace;
+                          padding:12px; border-radius:8px; max-height:300px; overflow-y:auto; white-space:pre-wrap; font-size:.8rem; }
+        .phase-dot { width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center;
+                     justify-content:center; font-size:.6rem; font-weight:bold; color:#fff; margin:2px; }
+        .phase-dot.pending{background:#dee2e6;color:#6c757d} .phase-dot.passed{background:#198754}
+        .phase-dot.failed{background:#dc3545} .phase-dot.running{background:#0d6efd;animation:pulse 1s infinite}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+        [hidden] { display: none !important; }
+        .login-overlay { position:fixed; inset:0; background:linear-gradient(135deg,#1a2332,#2d4b6e);
+                         display:flex; align-items:center; justify-content:center; z-index:9999; }
+        .login-box { background:#fff; padding:32px; border-radius:16px; width:380px; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+        .login-box h3 { text-align:center; margin-bottom:24px; color:#1a2332; }
+        .progress-thin { height:6px; }
+        .cover-bar { height:18px; border-radius:9px; background:#e9ecef; overflow:hidden; }
+        .cover-fill { height:100%; border-radius:9px; transition:width .5s; }
+        .tree-node { cursor:pointer; padding:6px 10px; border-radius:6px; transition:background .15s; font-size:.85rem; }
+        .tree-node:hover { background:var(--hover); }
+        .tree-node.selected { background:rgba(78,140,255,.15); color:#4e8cff; }
+        .tree-children { padding-left:16px; }
+        .toast-container { position:fixed; top:20px; right:20px; z-index:9999; }
+        .toast-msg { padding:10px 18px; border-radius:8px; margin-bottom:8px; color:#fff; font-size:.85rem;
+                     animation:slideIn .3s ease; box-shadow:0 4px 12px rgba(0,0,0,.2); }
+        .toast-msg.success{background:#198754} .toast-msg.error{background:#dc3545} .toast-msg.info{background:#0d6efd}
+        @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+        .hierarchy-line { border-left:2px solid #dee2e6; margin-left:10px; }
+        .badge-chip{background:#6f42c1} .badge-st{background:#0d6efd} .badge-it{background:#0dcaf0}
+        .badge-bt{background:#198754} .badge-ut{background:#6c757d}
     </style>
 </head>
 <body>
-    <div class="container-fluid mt-3">
-        <div class="d-flex align-items-center mb-3">
-            <h4 class="me-3">🚀 IC验证多Agent智能平台</h4>
-            <span class="badge bg-warning text-dark">Mock Demo</span>
+<!-- Login -->
+<div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+        <h3>🚀 IC验证企业平台</h3>
+        <div class="mb-3"><input class="form-control" id="loginUser" placeholder="用户名" value="admin"></div>
+        <div class="mb-3"><input class="form-control" id="loginPass" type="password" placeholder="密码" value="admin123"></div>
+        <button class="btn btn-primary w-100" onclick="doLogin()">登 录</button>
+        <div class="text-center mt-3"><small class="text-muted">默认: admin / admin123</small></div>
+        <div class="text-danger mt-2 small text-center" id="loginError"></div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar" hidden>
+    <div class="logo">🚀 IC-Verify</div>
+    <div class="nav-item active" data-page="dashboard"><i class="bi-speedometer2"></i> 仪表盘</div>
+    <div class="nav-item" data-page="docs"><i class="bi-file-earmark-text"></i> 文档库</div>
+    <div class="nav-item" data-page="vplan"><i class="bi-diagram-3"></i> 需求管理</div>
+    <div class="nav-item" data-page="design"><i class="bi-cpu"></i> 设计架构</div>
+    <div class="nav-item" data-page="pipeline"><i class="bi-play-circle"></i> 流水线</div>
+    <div class="nav-item" data-page="testcases"><i class="bi-file-code"></i> 测试用例</div>
+    <div class="nav-item" data-page="coverage"><i class="bi-graph-up"></i> 覆盖率</div>
+    <div class="nav-item" data-page="regression"><i class="bi-arrow-repeat"></i> 回归管理</div>
+    <div class="nav-item" data-page="signoff"><i class="bi-check2-square"></i> 签核报告</div>
+    <div class="nav-item" data-page="knowledge"><i class="bi-book"></i> 知识库</div>
+    <div class="nav-item" data-page="admin"><i class="bi-gear"></i> 管理</div>
+    <div style="position:absolute;bottom:10px;left:16px;right:16px;">
+        <div class="nav-item" onclick="doLogout()"><i class="bi-box-arrow-right"></i> 退出</div>
+    </div>
+</div>
+
+<!-- Top bar -->
+<div class="navbar-top" id="navbarTop" hidden>
+    <span id="pageTitle" style="font-weight:600;"></span>
+    <input class="form-control form-control-sm" id="globalSearch" placeholder="🔍 搜索需求/测试/知识..." style="width:220px;background:var(--input-bg);color:var(--text);" onkeyup="doGlobalSearch(event)">
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-sm btn-outline-secondary" onclick="toggleDark()" title="暗色模式">🌓</button>
+        <span class="badge bg-success" id="sysBadge">● Online</span>
+        <small class="text-muted" id="loginUserDisplay"></small>
+    </div>
+</div>
+
+<!-- Main content -->
+<div class="main" id="mainContent" hidden>
+
+<!-- ===== DASHBOARD ===== -->
+<div class="page active" id="page-dashboard">
+    <div class="row" id="statsRow">
+        <div class="col-md-3"><div class="card stat-card"><div class="text-muted small">需求总数</div><div class="value text-primary" id="sReqs">-</div></div></div>
+        <div class="col-md-3"><div class="card stat-card"><div class="text-muted small">验证进度</div><div class="value text-success" id="sProgress">-</div></div></div>
+        <div class="col-md-3"><div class="card stat-card"><div class="text-muted small">代码覆盖率</div><div class="value text-info" id="sCover">-</div></div></div>
+        <div class="col-md-3"><div class="card stat-card"><div class="text-muted small">回归通过率</div><div class="value text-warning" id="sReg">-</div></div></div>
+    </div>
+    <div class="row">
+        <div class="col-md-8"><div class="card"><div class="card-body"><h6>📈 回归通过率趋势</h6><canvas id="trendChart" height="180"></canvas></div></div></div>
+        <div class="col-md-4"><div class="card"><div class="card-body"><h6>📋 最近活动</h6><div id="recentActivity" class="small"></div></div></div></div>
+    </div>
+</div>
+
+<!-- ===== DOCS LIBRARY ===== -->
+<div class="page" id="page-docs">
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card" style="height:calc(100vh - 120px);overflow-y:auto">
+                <div class="card-body">
+                    <div class="d-flex mb-2"><h6 class="mb-0">📁 规格文档库</h6></div>
+                    <div id="docsList"></div>
+                </div>
+            </div>
         </div>
-        
-        <!-- 标签页导航 -->
-        <ul class="nav nav-tabs mb-3" id="mainTabs" role="tablist">
-            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-pipeline">⚡ 验证流程</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-testcases">📋 测试用例管理</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-agents">🤖 Agent状态</a></li>
-        </ul>
-        
-        <div class="tab-content">
-            <!-- ==================== Tab 1: 验证流程 ==================== -->
-            <div class="tab-pane fade show active" id="tab-pipeline">
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <div class="card p-3">
-                            <h6>📄 规格分析</h6>
-                            <textarea id="specInput" class="form-control" rows="3" placeholder="输入设计规格..."></textarea>
-                            <button class="btn btn-primary btn-sm mt-2" onclick="analyzeSpec()">开始分析</button>
-                            <div id="specResult" class="mt-2 small"></div>
-                        </div>
+        <div class="col-md-8">
+            <div class="card" style="height:calc(100vh - 120px);overflow-y:auto">
+                <div class="card-body">
+                    <div class="d-flex mb-2">
+                        <h6 class="mb-0" id="docViewerTitle">📄 选择文档查看</h6>
                     </div>
-                    <div class="col-md-4">
-                        <div class="card p-3">
-                            <h6>🔧 环境管理</h6>
-                            <button class="btn btn-success btn-sm" onclick="generateEnv()">生成UVM环境</button>
-                            <button class="btn btn-info btn-sm" onclick="runLoopback()">闭环验证</button>
-                            <button class="btn btn-secondary btn-sm" onclick="runHealthCheck()">健康检查</button>
-                            <div id="envResult" class="mt-2 small"></div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card p-3">
-                            <h6>📊 回归测试</h6>
-                            <button class="btn btn-warning btn-sm" onclick="runRegression()">启动回归</button>
-                            <button class="btn btn-outline-danger btn-sm" onclick="rerunFailed()">重跑失败</button>
-                            <div id="regressionStatus" class="mt-2 small"></div>
-                            <div id="regressionProgress" class="progress mt-2 d-none" style="height:16px;">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">0%</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 控制台 -->
-                <div class="card p-3 mt-3">
-                    <div class="d-flex justify-content-between"><h6>📋 操作日志</h6><button class="btn btn-sm btn-outline-secondary" onclick="clearConsole()">清空</button></div>
-                    <div id="consoleOutput" class="output-console">[系统] 就绪</div>
-                </div>
-            </div>
-            
-            <!-- ==================== Tab 2: 测试用例管理 ==================== -->
-            <div class="tab-pane fade" id="tab-testcases">
-                <!-- 工具栏 -->
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <button class="btn btn-primary btn-sm" onclick="generateTestMatrix()">📊 生成测试矩阵</button>
-                        <button class="btn btn-success btn-sm" onclick="generateAllTestcases()">📝 生成所有用例</button>
-                        <button class="btn btn-info btn-sm" onclick="runSingleTest()">▶ 运行选中</button>
-                        <button class="btn btn-warning btn-sm" onclick="batchRunTests()">▶ 批量运行</button>
-                    </div>
-                    <div>
-                        <span class="badge bg-primary" id="totalTestsBadge">0 个用例</span>
-                        <span class="badge bg-success" id="passedBadge">0 通过</span>
-                        <span class="badge bg-danger" id="failedBadge">0 失败</span>
-                    </div>
-                </div>
-                
-                <!-- 测试用例表格 -->
-                <div class="card p-3">
-                    <div class="table-responsive">
-                        <table class="table table-hover testcase-table" id="testcaseTable">
-                            <thead>
-                                <tr>
-                                    <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
-                                    <th>用例名称</th>
-                                    <th>场景</th>
-                                    <th>策略组合</th>
-                                    <th>事务数</th>
-                                    <th>状态</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="testcaseTableBody">
-                                <tr><td colspan="7" class="text-center text-muted">点击"生成测试矩阵"加载用例</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- 用例详情预览 -->
-                <div class="card p-3 mt-3" id="detailCard" style="display:none;">
-                    <div class="d-flex justify-content-between">
-                        <h6 id="detailTitle">用例详情</h6>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('detailCard').style.display='none'">✕</button>
-                    </div>
-                    <div class="row g-3 mt-1">
-                        <div class="col-md-6">
-                            <h6 class="small">Sequence 代码预览</h6>
-                            <pre id="seqPreview" class="code-preview"></pre>
-                        </div>
-                        <div class="col-md-6">
-                            <h6 class="small">Test 代码预览</h6>
-                            <pre id="testPreview" class="code-preview"></pre>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- ==================== Tab 3: Agent状态 ==================== -->
-            <div class="tab-pane fade" id="tab-agents">
-                <div class="card p-3">
-                    <div class="d-flex justify-content-between mb-2">
-                        <h6>🤖 9个Agent状态</h6>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="refreshAgentStatus()">🔄 刷新</button>
-                    </div>
-                    <div id="agentStatusContainer" class="d-flex flex-wrap"></div>
+                    <div id="docViewerContent" class="small" style="white-space:pre-wrap;font-family:'Courier New',monospace;background:var(--console-bg);color:#d4d4d4;padding:16px;border-radius:8px;max-height:500px;overflow-y:auto"></div>
+                    <div id="docLinkedReqs" class="mt-2 small"></div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script>
-        // ==================== 全局状态 ====================
-        const agentList = [
-            { name: 'spec_planner', label: '规格规划师' },
-            { name: 'architect', label: '验证架构师' },
-            { name: 'sequence_engineer', label: '序列工程师' },
-            { name: 'assertion_engineer', label: '断言工程师' },
-            { name: 'coverage_manager', label: '覆盖率管理器' },
-            { name: 'regression_manager', label: '回归管理器' },
-            { name: 'debug_engineer', label: '调试工程师' },
-            { name: 'quality_assurance', label: '质量保证' },
-            { name: 'report_generator', label: '报告生成器' }
-        ];
-        let agentStatus = {};
-        agentList.forEach(a => agentStatus[a.name] = 'idle');
-        
-        // 测试用例数据
-        let testcases = [];
-        
-        // ==================== 工具函数 ====================
-        function appendConsole(text, type = 'info') {
-            const el = document.getElementById('consoleOutput');
-            const now = new Date().toLocaleTimeString();
-            el.textContent += `\n${now} [${type.toUpperCase()}] ${text}`;
-            el.scrollTop = el.scrollHeight;
+<!-- ===== VPLAN (Tree View) ===== -->
+<div class="page" id="page-vplan">
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card" style="height:calc(100vh - 120px);overflow-y:auto">
+                <div class="card-body">
+                    <div class="d-flex mb-2"><h6 class="mb-0">📁 需求层级</h6>
+                        <button class="btn btn-outline-primary btn-sm ms-auto" onclick="vplanShowAdd()">+</button>
+                    </div>
+                    <div id="vplanTree"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card" style="height:calc(100vh - 120px);overflow-y:auto">
+                <div class="card-body">
+                    <div class="d-flex mb-2">
+                        <h6 class="mb-0" id="vplanDetailTitle">📋 需求详情</h6>
+                        <div class="ms-auto">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="vplanShowAdd()">+需求</button>
+                            <button class="btn btn-outline-secondary btn-sm ms-1" onclick="vplanShowAddTest()">+测试</button>
+                            <button class="btn btn-outline-secondary btn-sm ms-1" onclick="vplanExportCSV()">📥 CSV</button>
+                        </div>
+                    </div>
+                    <div id="vplanLevelStats" class="mb-2 small"></div>
+                    <table class="table table-sm table-hover"><thead><tr><th>ID</th><th>需求</th><th>层级</th><th>P</th><th>状态</th><th>测试</th><th>覆盖率</th><th>文档</th></tr></thead>
+                    <tbody id="vplanReqBody"><tr><td colspan="9" class="text-muted">选择左侧节点查看需求</td></tr></tbody></table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== DESIGN ARCH ===== -->
+<div class="page" id="page-design">
+    <div class="card"><div class="card-body">
+        <div class="d-flex mb-2"><h6 class="mb-0">🏗 模块设计架构</h6>
+            <button class="btn btn-outline-primary btn-sm ms-auto" onclick="runDesignArch()">▶ 生成架构</button>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card"><div class="card-body p-2"><h6 class="small">📐 功能层级</h6><div id="daFuncHier" class="small"></div></div></div>
+            </div>
+            <div class="col-md-6">
+                <div class="card"><div class="card-body p-2"><h6 class="small">🗂 寄存器表 <span class="badge bg-info" id="daRegCount">0</span></h6>
+                <div style="max-height:400px;overflow-y:auto"><table class="table table-sm table-bordered small mb-0"><thead><tr><th>寄存器</th><th>地址</th><th>位段</th><th>R/W</th><th>复位</th></tr></thead><tbody id="daRegBody"></tbody></table></div></div></div>
+            </div>
+        </div>
+        <div class="mt-2">
+            <div class="card"><div class="card-body p-2"><h6 class="small">📦 RTL 架构</h6><div id="daRtlHier" class="small"></div></div></div>
+        </div>
+        <div class="mt-2">
+            <div class="card"><div class="card-body p-2"><h6 class="small">✅ 签核检查清单 <span class="badge bg-warning" id="daSocCount">0</span></h6><div id="daSignoff" class="small"></div></div></div>
+        </div>
+    </div></div>
+</div>
+
+<!-- ===== PIPELINE ===== -->
+<div class="page" id="page-pipeline">
+    <div class="card"><div class="card-body">
+        <h6>📝 规格输入</h6>
+        <textarea id="specInput" class="form-control mb-2" rows="6" placeholder="输入设计规格..." style="background:var(--input-bg);color:var(--text)"></textarea>
+        <div class="d-flex">
+            <button class="btn btn-outline-secondary btn-sm" onclick="loadDefaultSpec()">📥 加载默认</button>
+            <select id="workflowSelect" class="form-select form-select-sm ms-2" style="width:auto;background:var(--input-bg);color:var(--text)"><option value="full_verification">完整验证</option><option value="quick_check">快速检查</option></select>
+            <div class="form-check ms-2"><input class="form-check-input" type="checkbox" id="bypassCheck" checked><label class="form-check-label">Bypass</label></div>
+            <button class="btn btn-success btn-sm ms-auto" onclick="runPipeline()">▶ 运行</button>
+        </div>
+    </div></div>
+    <div class="card"><div class="card-body">
+        <h6>📊 进度 <span id="pStatus" class="badge bg-secondary">待运行</span></h6>
+        <div id="phaseBar" class="mb-2"></div>
+        <div class="progress progress-thin"><div class="progress-bar" id="pProgress" style="width:0%"></div></div>
+        <div class="d-flex justify-content-between small text-muted mt-1"><span id="pResult"></span><span id="pTime"></span></div>
+    </div></div>
+    <div class="card"><div class="card-body"><h6>🖥️ 操作日志</h6><div class="output-console" id="console"></div></div></div>
+</div>
+
+<!-- ===== TESTCASES ===== -->
+<div class="page" id="page-testcases">
+    <div class="card"><div class="card-body">
+        <div class="d-flex mb-2"><h6 class="mb-0">📋 测试用例 <span class="badge bg-primary" id="tcCount">0</span></h6>
+            <button class="btn btn-outline-success btn-sm ms-auto" onclick="genTC()">🔄 生成</button>
+            <button class="btn btn-outline-secondary btn-sm ms-2" onclick="loadTC()">🔃</button></div>
+        <table class="table table-sm"><thead><tr><th>名称</th><th>文件</th><th>操作</th></tr></thead><tbody id="tcBody"></tbody></table>
+    </div></div>
+</div>
+
+<!-- ===== COVERAGE ===== -->
+<div class="page" id="page-coverage">
+    <div class="row" id="covCards"></div>
+    <div class="card"><div class="card-body"><h6>📁 文件覆盖率</h6><div id="covFiles"></div></div></div>
+    <div class="card"><div class="card-body"><h6>⚠ 覆盖率空洞</h6><div id="covGaps"></div></div></div>
+</div>
+
+<!-- ===== REGRESSION ===== -->
+<div class="page" id="page-regression">
+    <div class="card"><div class="card-body">
+        <div class="d-flex mb-2"><h6 class="mb-0">🔄 回归历史</h6>
+            <button class="btn btn-outline-success btn-sm ms-auto" onclick="runRegression()">▶ 运行回归</button></div>
+        <table class="table table-sm"><thead><tr><th>运行</th><th>状态</th><th>PASS</th><th>FAIL</th><th>总计</th><th>耗时</th><th>时间</th></tr></thead><tbody id="regBody"></tbody></table>
+    </div></div>
+</div>
+
+<!-- ===== SIGNOFF ===== -->
+<div class="page" id="page-signoff">
+    <div class="card"><div class="card-body">
+        <div class="d-flex mb-2"><h6 class="mb-0">📝 签核报告</h6>
+            <button class="btn btn-outline-primary btn-sm ms-auto" onclick="createSignoff()">+ 新建报告</button></div>
+        <table class="table table-sm"><thead><tr><th>标题</th><th>类型</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody id="sfBody"></tbody></table>
+    </div></div>
+</div>
+
+<!-- ===== KNOWLEDGE ===== -->
+<div class="page" id="page-knowledge">
+    <div class="card"><div class="card-body">
+        <div class="d-flex mb-2"><h6 class="mb-0">🗄️ 知识库</h6>
+            <input class="form-control form-control-sm ms-2 w-25" id="kSearch" placeholder="搜索..." style="background:var(--input-bg);color:var(--text)">
+            <button class="btn btn-outline-secondary btn-sm ms-2" onclick="searchKB()">搜索</button>
+            <button class="btn btn-outline-primary btn-sm ms-auto" onclick="addKB()">+ 添加</button></div>
+        <table class="table table-sm"><thead><tr><th>标题</th><th>分类</th><th>标签</th><th>引用</th><th>时间</th></tr></thead><tbody id="kbBody"></tbody></table>
+    </div></div>
+</div>
+
+<!-- ===== ADMIN ===== -->
+<div class="page" id="page-admin">
+    <ul class="nav nav-tabs mb-3"><li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#admin-users">👥 用户</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#admin-audit">📋 审计</a></li></ul>
+    <div class="tab-content"><div class="tab-pane fade show active" id="admin-users">
+            <div class="card"><div class="card-body">
+                <button class="btn btn-outline-primary btn-sm mb-2" onclick="adminAddUser()">+ 用户</button>
+                <table class="table table-sm"><thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>邮箱</th><th>最后登录</th></tr></thead><tbody id="userBody"></tbody></table>
+            </div></div>
+        </div>
+        <div class="tab-pane fade" id="admin-audit">
+            <div class="card"><div class="card-body">
+                <table class="table table-sm"><thead><tr><th>用户</th><th>操作</th><th>详情</th><th>时间</th></tr></thead><tbody id="auditBody"></tbody></table>
+            </div></div>
+        </div>
+    </div>
+</div>
+
+</div><!-- /main -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════
+// GLOBAL STATE & UTILS
+// ═══════════════════════════════════════════════════════════
+let AUTH={token:'',user:null}, vpSelectedLevel='', vpSelectedParent='', vpSelectedName='';
+const LVL={chip:'芯片级(Chip)',st:'系统级(ST)',it:'集成级(IT)',bt:'模块级(BT)',ut:'单元级(UT)'};
+const LVL_BADGE={chip:'badge-chip',st:'badge-st',it:'badge-it',bt:'badge-bt',ut:'badge-ut'};
+const API=(path,opts={})=>{
+    const h={...opts.headers}; if(AUTH.token) h['Authorization']=`Bearer ${AUTH.token}`;
+    if(opts.body&&typeof opts.body==='object'){h['Content-Type']='application/json';opts.body=JSON.stringify(opts.body)}
+    return fetch(path,{...opts,headers:h}).then(r=>{
+        if(r.status===401){doLogout();throw new Error('Unauthorized')}
+        return r.ok?r.json():r.json().then(e=>Promise.reject(e.detail||r.statusText))
+    });
+};
+const toast=(msg,type='info')=>{
+    const c=document.getElementById('toastContainer');
+    const d=document.createElement('div'); d.className=`toast-msg ${type}`; d.textContent=msg;
+    c.appendChild(d); setTimeout(()=>{d.style.opacity='0';setTimeout(()=>d.remove(),300)},2500);
+};
+const log=(msg,cls='')=>{
+    const c=document.getElementById('console'); if(!c)return;
+    const t=new Date().toLocaleTimeString();
+    c.innerHTML+=`<div style="color:${cls==='error'?'#f48771':cls==='ok'?'#89d185':'#d4d4d4'}">[${t}] ${msg}</div>`;
+    c.scrollTop=c.scrollHeight;
+};
+
+// ═══════════════════════════════════════════════════════════
+// DARK MODE
+// ═══════════════════════════════════════════════════════════
+function toggleDark(){
+    const html=document.documentElement;
+    const cur=html.getAttribute('data-bs-theme');
+    const next=cur==='dark'?'light':'dark';
+    html.setAttribute('data-bs-theme',next);
+    localStorage.setItem('theme',next);
+}
+(function(){ const t=localStorage.getItem('theme')||'light'; document.documentElement.setAttribute('data-bs-theme',t); })();
+
+// ═══════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════
+async function doLogin(){
+    var u=document.getElementById('loginUser').value;
+    var p=document.getElementById('loginPass').value;
+    document.getElementById('loginError').textContent='登录中...';
+    fetch('/api/auth/login',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username:u,password:p})
+    }).then(function(res){
+        if(!res.ok){ document.getElementById('loginError').textContent='用户名或密码错误'; return; }
+        return res.json();
+    }).then(function(data){
+        if(!data||!data.token){ return; }
+        AUTH.token=data.token; AUTH.user=data.user;
+        // 隐藏登录遮罩
+        document.getElementById('loginOverlay').setAttribute('hidden','');
+        // 显示主界面
+        document.getElementById('sidebar').removeAttribute('hidden');
+        document.getElementById('navbarTop').removeAttribute('hidden');
+        document.getElementById('mainContent').removeAttribute('hidden');
+        document.getElementById('loginUserDisplay').textContent='\u{1F464} '+data.user.display_name+' ('+data.user.role+')';
+        document.getElementById('pageTitle').textContent='仪表盘';
+        initApp();
+    }).catch(function(e){
+        document.getElementById('loginError').textContent='网络错误: '+e.message;
+    });
+}
+function doLogout(){AUTH={token:'',user:null};document.getElementById('loginOverlay').style.display='flex';document.getElementById('sidebar').style.display='none';document.getElementById('navbarTop').style.display='none';document.getElementById('mainContent').style.display='none'}
+
+// ═══════════════════════════════════════════════════════════
+// NAVIGATION & SEARCH
+// ═══════════════════════════════════════════════════════════
+const PAGE_LOADERS={dashboard:loadDashboard,docs:loadDocs,vplan:loadVPlan,design:loadDesignArch,pipeline:loadPipelineTab,testcases:loadTC,coverage:loadCoverage,regression:loadRegression,signoff:loadSignoffs,knowledge:searchKB,admin:loadAdmin};
+document.addEventListener('DOMContentLoaded',()=>{
+    document.querySelectorAll('.sidebar .nav-item[data-page]').forEach(item=>{
+        item.addEventListener('click',()=>{
+            document.querySelectorAll('.sidebar .nav-item').forEach(i=>i.classList.remove('active'));
+            item.classList.add('active');
+            document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+            const pg=document.getElementById('page-'+item.dataset.page); if(pg)pg.classList.add('active');
+            document.getElementById('pageTitle').textContent=item.textContent.trim();
+            if(PAGE_LOADERS[item.dataset.page])PAGE_LOADERS[item.dataset.page]();
+        });
+    });
+});
+function doGlobalSearch(e){ if(e.key==='Enter'){const q=e.target.value.trim().toLowerCase(); if(!q)return; openSearchTab(q);} }
+function openSearchTab(q){
+    document.querySelectorAll('.sidebar .nav-item').forEach(i=>i.classList.remove('active'));
+    const item=document.querySelector('[data-page="vplan"]'); if(item)item.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    const pg=document.getElementById('page-vplan'); if(pg)pg.classList.add('active');
+    document.getElementById('pageTitle').textContent='搜索结果: '+q;
+    loadVPlan(q);
+}
+
+// ═══════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════
+async function loadDashboard(){
+    try{
+        const [stats,cov,vplan]=await Promise.all([API('/api/dashboard/stats'),API('/api/coverage/summary'),API('/api/vplan/stats')]);
+        document.getElementById('sReqs').textContent=vplan.total||'-';
+        const vr=vplan.stats?Object.values(vplan.stats).reduce((a,b)=>a+(b.verified||0),0):0;
+        document.getElementById('sProgress').textContent=vplan.total?Math.round(vr/vplan.total*100)+'%':'-';
+        document.getElementById('sCover').textContent=cov.code_coverage+'%';
+        document.getElementById('sReg').textContent=(stats.last_regression?.pass_rate||'-')+'%';
+        const trend=stats.regression_trend||[];
+        const ctx=document.getElementById('trendChart');
+        if(ctx&&trend.length&&typeof Chart!=='undefined'){
+            if(ctx._chart)ctx._chart.destroy();
+            ctx._chart=new Chart(ctx,{type:'line',data:{labels:trend.map(function(t){return t.date}),datasets:[{label:'通过率 %',data:trend.map(function(t){return t.pass_rate}),borderColor:'#198754',tension:0.3,fill:false}]},options:{responsive:true,plugins:{legend:{display:false}}}});
         }
-        function clearConsole() { document.getElementById('consoleOutput').textContent = '[系统] 已清空'; }
-        function mockApi(d = 500) { return new Promise(r => setTimeout(r, d)); }
-        
-        function renderAgentStatus() {
-            const c = document.getElementById('agentStatusContainer');
-            let h = '';
-            agentList.forEach(a => {
-                const s = agentStatus[a.name];
-                const bc = s === 'idle' ? 'bg-success' : s === 'busy' ? 'bg-warning text-dark' : 'bg-danger';
-                h += `<span class="badge ${bc} agent-badge p-2">${a.label} (${a.name}) - ${s}</span>`;
+        try{const logs=await API('/api/audit?limit=10');document.getElementById('recentActivity').innerHTML=logs.logs.map(l=>`<div class="mb-1"><small class="text-muted">${l.created_at?.substring(0,16)}</small> <strong>${l.username}</strong> ${l.action}</div>`).join('')||'<div class="text-muted">暂无</div>'}catch(e){}
+    }catch(e){console.error('Dashboard:',e)}
+}
+
+// ═══════════════════════════════════════════════════════════
+// DOCUMENT LIBRARY
+// ═══════════════════════════════════════════════════════════
+async function loadDocs(){
+    try{
+        const data=await API('/api/docs');
+        const list=document.getElementById('docsList');
+        list.innerHTML=data.docs.map(d=>`
+            <div class="tree-node mb-1" onclick="viewDoc('${d.name}')">
+                <i class="bi bi-file-earmark-text me-1"></i>
+                <strong>${d.title}</strong>
+                <div class="small text-muted">${d.name} (${d.size}B, ${d.req_count}需求)</div>
+            </div>`).join('')||'<div class="text-muted">暂无文档</div>';
+    }catch(e){document.getElementById('docsList').innerHTML='<div class="text-danger">加载失败: '+e+'</div>'}
+}
+async function viewDoc(name){
+    try{
+        const d=await API('/api/docs/'+name);
+        document.getElementById('docViewerTitle').textContent='📄 '+d.name;
+        document.getElementById('docViewerContent').textContent=d.content;
+        // 显示关联需求
+        if(d.linked_reqs&&d.linked_reqs.length>0){
+            var html='<strong>关联需求:</strong> ';
+            d.linked_reqs.forEach(function(r){
+                var clean=r.replace(/\*\*/g,'');
+                html+='<span class="badge bg-primary me-1" style="cursor:pointer" onclick="jumpToReq(\''+clean+'\')">'+clean+'</span>';
             });
-            c.innerHTML = h;
+            document.getElementById('docLinkedReqs').innerHTML=html;
+        }else{document.getElementById('docLinkedReqs').innerHTML=''}
+    }catch(e){document.getElementById('docViewerContent').textContent='加载失败: '+e}
+}
+function jumpToReq(reqId){
+    document.querySelectorAll('.sidebar .nav-item').forEach(i=>i.classList.remove('active'));
+    document.querySelector('[data-page="vplan"]').classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-vplan').classList.add('active');
+    document.getElementById('pageTitle').textContent='需求管理 - '+reqId;
+    loadVPlan(reqId.toLowerCase());
+}
+function switchToDoc(docPath){
+    document.querySelectorAll('.sidebar .nav-item').forEach(i=>i.classList.remove('active'));
+    document.querySelector('[data-page="docs"]').classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-docs').classList.add('active');
+    document.getElementById('pageTitle').textContent='文档库';
+    loadDocs();
+    setTimeout(()=>viewDoc(docPath.split('/').pop()),300);
+}
+
+// ═══════════════════════════════════════════════════════════
+// VPLAN (Tree View)
+// ═══════════════════════════════════════════════════════════
+async function loadVPlan(filter=''){
+    try{
+        const [hier,stats]=await Promise.all([API('/api/vplan/hierarchy'),API('/api/vplan/stats')]);
+        renderVPlanTree(hier.hierarchy,filter);
+        if(stats&&stats.stats){
+            const badges=Object.entries(stats.stats).map(([k,v])=>`<span class="badge ${LVL_BADGE[k]||'bg-secondary'} me-1">${LVL[k]}: ${v.count||0}项 覆盖${v.coverage}%</span>`).join('');
+            document.getElementById('vplanLevelStats').innerHTML=badges;
         }
-        function refreshAgentStatus() {
-            agentList.forEach(a => agentStatus[a.name] = Math.random() > 0.3 ? 'idle' : 'busy');
-            renderAgentStatus();
+        // 如果无数据，显示提示（服务端启动时会自动 seed）
+        if(!hier.hierarchy||hier.hierarchy.length===0||hier.hierarchy[0].req_count===0){
+            document.getElementById('vplanTree').innerHTML='<div class="text-muted text-center py-4">暂无需求层级数据<br><small>点击 + 按钮添加，或重启服务自动生成演示数据</small></div>';
         }
-        
-        // ==================== 测试用例 Mock 数据 ====================
-        const scenarios = [
-            { id: 'test_precision_consistency', name: 'test_precision_consistency', 
-              scenario: '单策略', policies: ['precision_consistency'], trans: 20, priority: 'P0' },
-            { id: 'test_mem_capacity', name: 'test_mem_capacity', 
-              scenario: '单策略', policies: ['mem_capacity'], trans: 30, priority: 'P0' },
-            { id: 'test_data_dependency', name: 'test_data_dependency', 
-              scenario: '单策略', policies: ['data_dependency'], trans: 25, priority: 'P0' },
-            { id: 'test_boundary_overflow', name: 'test_boundary_overflow', 
-              scenario: '单策略', policies: ['boundary_overflow'], trans: 20, priority: 'P0' },
-            { id: 'test_compute_mode', name: 'test_compute_mode', 
-              scenario: '单策略', policies: ['compute_mode'], trans: 15, priority: 'P0' },
-            { id: 'test_concurrent_access', name: 'test_concurrent_access', 
-              scenario: '单策略', policies: ['concurrent_access'], trans: 40, priority: 'P0' },
-            { id: 'test_power_performance', name: 'test_power_performance', 
-              scenario: '单策略', policies: ['power_performance'], trans: 15, priority: 'P0' },
-            { id: 'test_all_policies', name: 'test_all_policies', 
-              scenario: '全策略组合', policies: ['all'], trans: 100, priority: 'P0' },
-            { id: 'test_weighted_random', name: 'test_weighted_random', 
-              scenario: '加权随机', policies: ['all'], trans: 200, priority: 'P1' },
-            { id: 'test_policy_chain', name: 'test_policy_chain', 
-              scenario: '链式', policies: ['all'], trans: 50, priority: 'P1' },
-            { id: 'test_power_vs_perf', name: 'test_power_vs_performance', 
-              scenario: '冲突场景', policies: ['power_performance','compute_mode'], trans: 30, priority: 'P1' },
-            { id: 'test_precision_overflow', name: 'test_precision_overflow', 
-              scenario: '冲突场景', policies: ['precision_consistency','boundary_overflow'], trans: 40, priority: 'P1' },
-        ];
-        
-        function generateTestMatrix() {
-            appendConsole('正在生成测试矩阵...');
-            testcases = scenarios.map((s, i) => ({
-                ...s,
-                id: s.id,
-                index: i,
-                status: 'pending',
-                policies_display: s.policies.join(', '),
-            }));
-            updateTestcaseTable();
-            updateBadges();
-            appendConsole(`测试矩阵生成完成，共 ${testcases.length} 个用例`);
+    }catch(e){console.error('VPlan:',e); document.getElementById('vplanTree').innerHTML='<div class="text-danger py-2">加载失败: '+e+'</div>';}
+}
+function renderVPlanTree(hierarchy,filter){
+    var tree=document.getElementById('vplanTree');
+    if(!hierarchy||!hierarchy.length){ tree.innerHTML='<div class="text-muted text-center py-4">暂无数据</div>'; return; }
+    function esc(s){ return (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+    function renderNode(node,depth){
+        depth=depth||0;
+        if(node.level==='ut') return '';  // 隐藏 UT 层级
+        var nodeKey=node.req_id||(node.level+'_'+node.name);
+        var hasChildren=node.children&&node.children.length>0;
+        var id='tn_'+nodeKey.replace(/[^a-zA-Z0-9一-鿿]/g,'_');
+        var isSelected=(vpSelectedLevel===node.level&&vpSelectedKey===nodeKey);
+        var h='';
+        h+='<div class="tree-node'+(isSelected?' selected':'')+' mb-1"';
+        h+=' onclick="vplanSelectNode(\''+esc(node.level)+'\',\''+esc(nodeKey)+'\',\''+esc(node.name||'')+'\')"';
+        h+=' id="'+id+'" style="padding-left:'+(10+depth*16)+'px">';
+        if(hasChildren){
+            h+='<i class="bi bi-chevron-down me-1" style="font-size:.7rem;cursor:pointer" onclick="event.stopPropagation();vplanToggleChildren(\''+id+'_kids\')"></i>';
         }
-        
-        function generateAllTestcases() {
-            if (testcases.length === 0) { generateTestMatrix(); }
-            appendConsole('正在批量生成测试用例代码...');
-            testcases.forEach(t => {
-                t.generated = true;
-                t.seq_code = `class ${t.name}_seq extends uvm_sequence;\n    // Sequence for ${t.scenario}\n    // Policies: ${t.policies.join(', ')}\n    // Transactions: ${t.trans}\n    \n    virtual task body();\n        repeat(${t.trans}) begin\n            // ...\n        end\n    endtask\nendclass`;
-                t.test_code = `class ${t.name} extends base_test;\n    \`uvm_component_utils(${t.name})\n    \n    function new(string name, parent);\n        super.new(name, parent);\n    endfunction\n    \n    virtual task run_phase(phase);\n        ${t.name}_seq seq;\n        seq.start(sequencer);\n    endtask\nendclass`;
-            });
-            updateTestcaseTable();
-            updateBadges();
-            appendConsole(`所有用例代码生成完成`);
+        h+='<span class="badge '+(LVL_BADGE[node.level]||'bg-secondary')+' me-1" style="font-size:.6rem">'+(node.level||'').toUpperCase()+'</span>';
+        h+='<strong>'+(node.name||'').substring(0,40)+'</strong>';
+        h+=' <small class="text-muted">('+(node.req_count||0)+'项</small>';
+        if(node.verified>0) h+=' <small class="text-success">V'+node.verified+'</small>';
+        if(node.blocked>0) h+=' <small class="text-danger">B'+node.blocked+'</small>';
+        h+='<small class="text-muted"> '+(node.coverage||0)+'%)</small>';
+        h+='</div>';
+        if(hasChildren){
+            h+='<div class="tree-children" id="'+id+'_kids">';
+            for(var i=0;i<node.children.length;i++){ h+=renderNode(node.children[i],depth+1); }
+            h+='</div>';
         }
-        
-        function updateTestcaseTable() {
-            const tbody = document.getElementById('testcaseTableBody');
-            if (testcases.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">点击"生成测试矩阵"加载用例</td></tr>';
-                return;
+        return h;
+    }
+    var html='';
+    for(var i=0;i<hierarchy.length;i++){ html+=renderNode(hierarchy[i]); }
+    tree.innerHTML=html;
+    // 初始化：展开 CHIP 的第一层
+    setTimeout(function(){
+        var roots=tree.querySelectorAll('.tree-node');
+        if(roots.length>0){
+            var firstKids=roots[0].nextElementSibling;
+            if(firstKids&&firstKids.classList.contains('tree-children')) firstKids.style.display='block';
+        }
+    },100);
+    if(!vpSelectedKey&&hierarchy.length>0){
+        // 首次加载自动选中根节点
+        const root=hierarchy[0];
+        const rk=root.req_id||(root.level+'_'+root.name);
+        vplanSelectNode(root.level,rk,root.name);
+    }
+}
+function vplanToggleChildren(elId){
+    var el=document.getElementById(elId);
+    if(!el) return;
+    el.style.display=(el.style.display==='none'||el.style.display==='')?'block':'none';
+}
+let vpSelectedKey='';
+function vplanSelectNode(level,nodeKey,name){
+    vpSelectedLevel=level; vpSelectedKey=nodeKey; vpSelectedName=name;
+    var displayLevel=level;
+    if(nodeKey&&nodeKey.startsWith('REQ_')){
+        var next={chip:'st',st:'it',it:'bt',bt:'ut'};
+        if(next[level])displayLevel=next[level];
+    }
+    document.getElementById('vplanDetailTitle').textContent='📋 '+name+' → '+(LVL[displayLevel]||displayLevel);
+    document.querySelectorAll('.tree-node').forEach(function(n){n.classList.remove('selected')});
+    var id='tn_'+nodeKey.replace(/[^a-zA-Z0-9一-鿿]/g,'_');
+    var el=document.getElementById(id); if(el)el.classList.add('selected');
+    loadVPlanReqs(level,nodeKey);
+}
+async function loadVPlanReqs(level,nodeKey){
+    var params=new URLSearchParams();
+    if(nodeKey&&nodeKey.startsWith('REQ_')){
+        // 显示该需求的下级需求（任意层级）
+        params.set('parent_id',nodeKey);
+    }else{
+        // 显示该层级的所有需求
+        params.set('level',level);
+    }
+    var data=await API('/api/vplan/requirements?'+params.toString());
+    const tbody=document.getElementById('vplanReqBody');
+    tbody.innerHTML=data.requirements.length===0?'<tr><td colspan="9" class="text-muted">暂无需求，点击 +需求 添加</td></tr>':
+        data.requirements.map(r=>`<tr>
+        <td><code>${r.id}</code></td>
+        <td>${r.description}</td>
+        <td><span class="badge ${LVL_BADGE[r.level]||'bg-secondary'}">${r.level?.toUpperCase()}</span></td>
+        <td><span class="badge bg-${r.priority==='P0'?'danger':r.priority==='P1'?'warning':'secondary'}">${r.priority}</span></td>
+        <td><span class="badge bg-${r.status==='verified'?'success':r.status==='blocked'?'danger':r.status==='in_progress'?'info':'secondary'}">${r.status}</span></td>
+        <td><small>${(r.test_ids||[]).join(',')||'-'}</small></td>
+        <td><div class="cover-bar"><div class="cover-fill bg-${r.coverage_actual>=100?'success':r.coverage_actual>=50?'warning':'danger'}" style="width:${r.coverage_actual}%"></div></div><small>${r.coverage_actual}%</small></td>
+        <td>${r.doc_path?`<a href="#" onclick="event.preventDefault();switchToDoc('${r.doc_path}')" title="${r.doc_path}" style="font-size:.75rem;color:#4e8cff">📄</a>`:`<span class="text-muted">-</span>`}</td>
+        </tr>`).join('');
+}
+function vplanShowAdd(){
+    const id=prompt('需求ID (如 REQ_010):');if(!id)return;
+    const desc=prompt('描述:');const pri=prompt('优先级 (P0/P1/P2):','P1');
+    const level=prompt('层级 (chip/st/it/bt/ut):',vpSelectedLevel||'bt');
+    const parent=prompt('父级ID (可选):',vpSelectedParent||'');
+    const doc=prompt('关联文档路径 (如 specs/uart_tx_spec.md):','');
+    API('/api/vplan/requirements',{method:'POST',body:{req_id:id,description:desc,priority:pri,level,parent_id:parent,doc_path:doc}}).then(()=>{toast('需求已添加','success');loadVPlan()}).catch(e=>toast('添加失败: '+e,'error'));
+}
+function vplanShowAddTest(){
+    const id=prompt('测试ID (如 test_010):');if(!id)return;
+    const name=prompt('名称:');API('/api/vplan/testcases',{method:'POST',body:{test_id:id,name,description:name}}).then(()=>{toast('测试已添加','success');loadVPlan()}).catch(e=>toast('失败: '+e,'error'));
+}
+function vplanExportCSV(){
+    let csv='ID,描述,层级,优先级,状态,关联测试,覆盖率\n';
+    document.querySelectorAll('#vplanReqBody tr').forEach(tr=>{
+        const tds=tr.querySelectorAll('td'); if(tds.length<7)return;
+        csv+=`${tds[0].textContent.trim()},${tds[1].textContent.trim()},${tds[2].textContent.trim()},${tds[3].textContent.trim()},${tds[4].textContent.trim()},${tds[5].textContent.trim()},${tds[6].textContent.trim()}\n`;
+    });
+    const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='vplan_requirements.csv'; a.click();
+    toast('CSV 已导出','info');
+}
+
+// ═══════════════════════════════════════════════════════════
+// DESIGN ARCHITECT
+// ═══════════════════════════════════════════════════════════
+async function loadDesignArch(){ runDesignArch(); }
+async function runDesignArch(){
+    document.getElementById('daFuncHier').innerHTML='<div class="text-muted">生成中...</div>';
+    try{
+        var r=await API('/api/design_arch',{method:'POST',body:{spec_text:'UART IP'}});
+        if(!r.success){ toast('生成失败','error'); return; }
+        var da=r.design_arch||{};
+        // 功能层级
+        var fh=da.function_hier;
+        if(fh){
+            function renderFH(node,d){
+                var h='<div style="padding-left:'+(d*16)+'px">';
+                var hasC=node.children&&node.children.length>0;
+                h+=hasC?'📁 ':'└─ ';
+                h+=node.name+' <small class="text-muted">'+node.description+'</small></div>';
+                if(hasC) for(var i=0;i<node.children.length;i++) h+=renderFH(node.children[i],d+1);
+                return h;
             }
-            tbody.innerHTML = testcases.map((t, i) => `
-                <tr>
-                    <td><input type="checkbox" class="test-select" value="${i}" ${t.status === 'passed' ? 'checked' : ''}></td>
-                    <td><strong>${t.name}</strong> <span class="badge bg-light text-dark badge-scenario">${t.priority}</span></td>
-                    <td><span class="badge bg-info">${t.scenario}</span></td>
-                    <td><small>${t.policies_display}</small></td>
-                    <td>${t.trans}</td>
-                    <td>${statusBadge(t.status)}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary" onclick="viewDetail(${i})" title="查看详情">📄</button>
-                        <button class="btn btn-sm btn-outline-success" onclick="runSingleTestByIndex(${i})" title="运行">▶</button>
-                    </td>
-                </tr>
-            `).join('');
+            document.getElementById('daFuncHier').innerHTML=renderFH(fh,0);
         }
-        
-        function statusBadge(status) {
-            const map = { pending: '⏳ 待运行', running: '🔄 运行中', passed: '✅ 通过', failed: '❌ 失败' };
-            const cls = { pending: 'bg-secondary', running: 'bg-info', passed: 'bg-success', failed: 'bg-danger' };
-            return `<span class="badge ${cls[status] || 'bg-secondary'}">${map[status] || status}</span>`;
-        }
-        
-        function updateBadges() {
-            const total = testcases.length;
-            const passed = testcases.filter(t => t.status === 'passed').length;
-            const failed = testcases.filter(t => t.status === 'failed').length;
-            document.getElementById('totalTestsBadge').textContent = `${total} 个用例`;
-            document.getElementById('passedBadge').textContent = `${passed} 通过`;
-            document.getElementById('failedBadge').textContent = `${failed} 失败`;
-        }
-        
-        function toggleSelectAll() {
-            const checkAll = document.getElementById('selectAll').checked;
-            document.querySelectorAll('.test-select').forEach(cb => cb.checked = checkAll);
-        }
-        
-        function getSelectedIndices() {
-            return [...document.querySelectorAll('.test-select:checked')].map(cb => parseInt(cb.value));
-        }
-        
-        function viewDetail(index) {
-            const t = testcases[index];
-            document.getElementById('detailTitle').textContent = `📄 ${t.name} 详情`;
-            document.getElementById('seqPreview').textContent = t.seq_code || '尚未生成，点击"生成所有用例"';
-            document.getElementById('testPreview').textContent = t.test_code || '尚未生成，点击"生成所有用例"';
-            document.getElementById('detailCard').style.display = 'block';
-        }
-        
-        async function runSingleTestByIndex(index) {
-            const t = testcases[index];
-            t.status = 'running';
-            updateTestcaseTable();
-            updateBadges();
-            appendConsole(`运行: ${t.name}`);
-            await mockApi(800 + Math.random() * 1200);
-            t.status = Math.random() > 0.15 ? 'passed' : 'failed';
-            updateTestcaseTable();
-            updateBadges();
-            appendConsole(`${t.name}: ${t.status === 'passed' ? '✅ 通过' : '❌ 失败'}`);
-        }
-        
-        async function runSingleTest() {
-            const selected = getSelectedIndices();
-            if (selected.length === 0) { alert('请先选择用例'); return; }
-            for (const i of selected) {
-                await runSingleTestByIndex(i);
+        // 寄存器
+        var regs=da.registers||[];
+        document.getElementById('daRegCount').textContent=regs.length;
+        var rh='';
+        regs.forEach(function(reg){
+            var fields=(reg.fields||[]).map(function(f){
+                return '<tr><td></td><td></td><td><small>['+f.bit+'] '+f.name+'</small></td><td></td><td><small>'+f.reset+'</small></td></tr>';
+            }).join('');
+            rh+='<tr class="table-active"><td><strong>'+reg.name+'</strong></td><td><code>'+reg.addr+'</code></td><td>'+reg.bits+'bit</td><td>'+reg.access+'</td><td>-</td></tr>'+fields;
+        });
+        document.getElementById('daRegBody').innerHTML=rh;
+        // RTL 架构
+        var rtl=da.rtl_hier;
+        if(rtl){
+            function renderRTL(node,d){
+                var h='<div style="padding-left:'+(d*16)+'px">└─ '+node.name;
+                if(node.children&&node.children.length>0) for(var i=0;i<node.children.length;i++) h+=renderRTL(node.children[i],d+1);
+                return h;
             }
+            var mods=rtl.modules||[];
+            var rtlHtml='<div><strong>TOP:</strong> '+rtl.top+' ('+rtl.language+')</div>';
+            rtlHtml+='<div class="mt-1"><strong>接口:</strong> ';
+            (rtl.interfaces||[]).forEach(function(s){ rtlHtml+='<span class="badge bg-secondary me-1">'+s.name+'('+s.width+')</span>'; });
+            rtlHtml+='</div><div class="mt-1">';
+            mods.forEach(function(m){ rtlHtml+=renderRTL(m,0); });
+            rtlHtml+='</div>';
+            document.getElementById('daRtlHier').innerHTML=rtlHtml;
         }
-        
-        async function batchRunTests() {
-            if (testcases.length === 0) { generateTestMatrix(); }
-            appendConsole('开始批量运行...');
-            for (let i = 0; i < testcases.length; i++) {
-                await runSingleTestByIndex(i);
-            }
-            appendConsole('批量运行完成');
+        // 签核清单
+        var soc=da.signoff_checklist||[];
+        document.getElementById('daSocCount').textContent=soc.length;
+        document.getElementById('daSignoff').innerHTML=soc.map(function(s){
+            return '<div class="d-flex justify-content-between py-1 border-bottom small"><span>'+s.item+'</span><span class="badge bg-'+(s.status==='done'?'success':'warning')+'">'+s.status+'</span></div>';
+        }).join('');
+        toast('设计架构已生成 ('+(da.function_count||0)+'功能, '+(da.register_count||0)+'寄存器)', 'success');
+    }catch(e){ document.getElementById('daFuncHier').innerHTML='<div class="text-danger">错误: '+e+'</div>'; }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PIPELINE
+// ═══════════════════════════════════════════════════════════
+const P_FULL=['spec','arch','seq','tc','assert','regress','cover','debug','qa','report'];
+function buildPhaseBar(wf){
+    const phases=wf==='quick_check'?P_FULL.slice(0,4):P_FULL;
+    document.getElementById('phaseBar').innerHTML=phases.map((p,i)=>`<div style="display:inline-block;text-align:center;margin:2px"><div class="phase-dot pending" id="dot-${p}">${i+1}</div><small style="font-size:.55rem">${p}</small></div>`).join('');
+}
+async function runPipeline(){
+    const spec=document.getElementById('specInput').value.trim();if(!spec){alert('请输入规格');return}
+    const wf=document.getElementById('workflowSelect').value,bp=document.getElementById('bypassCheck').checked;
+    buildPhaseBar(wf);document.getElementById('pStatus').textContent='运行中...';document.getElementById('pStatus').className='badge bg-warning';document.getElementById('pProgress').style.width='0%';document.getElementById('console').innerHTML='';
+    log('▶ 启动: '+wf);const t0=Date.now();
+    try{
+        const r=await API('/api/pipeline/run',{method:'POST',body:{spec_text:spec,workflow:wf,bypass:bp}});
+        const elapsed=((Date.now()-t0)/1000).toFixed(1);
+        document.getElementById('pProgress').style.width='100%';const ok=r.passed===r.total;
+        document.getElementById('pStatus').textContent=ok?'✅ 全部通过':'⚠ 部分失败';
+        document.getElementById('pStatus').className='badge bg-'+(ok?'success':'warning');
+        document.getElementById('pResult').textContent=`${r.passed}/${r.total} 通过`;
+        r.phases.forEach(p=>{const d=document.getElementById('dot-'+p.name);if(d)d.className='phase-dot '+(p.status==='passed'?'passed':'failed');log(`  ${p.status==='passed'?'✅':'❌'} ${p.name} (${p.time}s)`,p.status==='passed'?'ok':'error')});
+        log(`🏁 完成: ${r.passed}/${r.total}`,ok?'ok':'error');toast('流水线完成: '+r.passed+'/'+r.total,ok?'success':'error');
+    }catch(e){log('失败: '+e,'error');toast('流水线失败','error');document.getElementById('pStatus').textContent='❌';document.getElementById('pStatus').className='badge bg-danger'}
+}
+async function loadDefaultSpec(){const d=await API('/api/spec/default');document.getElementById('specInput').value=d.content}
+function loadPipelineTab(){buildPhaseBar('full_verification');loadDefaultSpec()}
+
+// ═══════════════════════════════════════════════════════════
+// TESTCASES
+// ═══════════════════════════════════════════════════════════
+async function loadTC(){const d=await API('/api/testcases/list');document.getElementById('tcCount').textContent=d.count;document.getElementById('tcBody').innerHTML=d.testcases.map(t=>`<tr><td><strong>${t.name}</strong></td><td><small class="text-muted">${(t.sv_files||[]).join(', ')}</small></td><td><button class="btn btn-outline-primary btn-sm" onclick="viewTC('${t.name}')">👁</button></td></tr>`).join('')||'<tr><td colspan="3" class="text-muted">暂无</td></tr>'}
+async function genTC(){log('🔄 生成测试用例...');const r=await API('/api/testcases/generate',{method:'POST',body:{bypass:true}});toast(r.success?'生成成功':'生成失败',r.success?'success':'error');loadTC()}
+async function viewTC(name){const d=await API(`/api/testcases/${name}`);const f=Object.keys(d.files)[0];log(`📄 ${name}\n${'─'.repeat(40)}\n${f?d.files[f].substring(0,2000):'(empty)'}`)}
+
+// ═══════════════════════════════════════════════════════════
+// COVERAGE
+// ═══════════════════════════════════════════════════════════
+async function loadCoverage(){
+    const d=await API('/api/coverage/summary');
+    document.getElementById('covCards').innerHTML=`<div class="col-md-4"><div class="card stat-card"><div class="text-muted small">代码覆盖率</div><div class="value text-info">${d.code_coverage}%</div></div></div><div class="col-md-4"><div class="card stat-card"><div class="text-muted small">功能覆盖率</div><div class="value text-success">${d.functional_coverage}%</div></div></div><div class="col-md-4"><div class="card stat-card"><div class="text-muted small">断言覆盖率</div><div class="value text-warning">${d.assertion_coverage}%</div></div></div>`;
+    document.getElementById('covFiles').innerHTML=d.files.map(f=>`<div class="mb-2"><div class="d-flex justify-content-between small"><span>${f.name}</span><span>${f.line_pct}% (${f.lines_hit}/${f.lines_total})</span></div><div class="cover-bar"><div class="cover-fill bg-${f.line_pct>=90?'success':f.line_pct>=70?'warning':'danger'}" style="width:${f.line_pct}%"></div></div></div>`).join('');
+    document.getElementById('covGaps').innerHTML=d.gaps.map(g=>`<div class="alert alert-warning py-1 px-2 mb-1 small">⚠ <strong>${g.file}:${g.line}</strong> — ${g.signal}: ${g.reason}<br><em>建议: ${g.suggestion}</em></div>`).join('')||'<span class="text-success">✅ 无覆盖空洞</span>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// REGRESSION
+// ═══════════════════════════════════════════════════════════
+async function loadRegression(){const d=await API('/api/regression/history?limit=20');document.getElementById('regBody').innerHTML=d.runs.map(r=>`<tr><td><code>${r.run_name}</code></td><td><span class="badge bg-${r.status==='completed'?'success':'warning'}">${r.status}</span></td><td class="text-success">${r.pass_count}</td><td class="text-danger">${r.fail_count}</td><td>${r.total_count}</td><td>${r.duration_seconds}s</td><td><small>${(r.created_at||'').substring(0,16)}</small></td></tr>`).join('')||'<tr><td colspan="7" class="text-muted">暂无</td></tr>'}
+async function runRegression(){log('▶ 启动回归...');const r=await API('/api/regression/run',{method:'POST',body:{}});toast(`完成: ${r.passed}/${r.total} PASS`,r.failed===0?'success':'error');loadRegression();loadDashboard()}
+
+// ═══════════════════════════════════════════════════════════
+// SIGNOFF
+// ═══════════════════════════════════════════════════════════
+async function loadSignoffs(){
+    var d=await API('/api/signoffs');
+    var rows=d.signoffs.map(function(s){
+        var summary=s.summary||{};
+        var html='<tr><td><strong>'+s.title+'</strong><br><small class="text-muted">'+s.report_type+'</small></td>';
+        html+='<td><span class="badge bg-'+(s.status==='approved'?'success':s.status==='rejected'?'danger':'warning')+'">'+s.status+'</span></td>';
+        html+='<td><small>'+(summary.req_total||'-')+'需求 / '+(summary.cov||'-')+'%覆盖 / '+(summary.pass_rate||'-')+'%通过</small></td>';
+        html+='<td><small>'+(s.created_at||'').substring(0,16)+'</small></td>';
+        html+='<td>';
+        if(s.status==='pending'){
+            html+='<button class="btn btn-success btn-sm me-1" onclick="approveSF('+s.id+')">批准</button>';
+            html+='<button class="btn btn-danger btn-sm me-1" onclick="rejectSF('+s.id+')">驳回</button>';
         }
-        
-        // ==================== 验证流程函数 ====================
-        async function analyzeSpec() {
-            const text = document.getElementById('specInput').value.trim();
-            if (!text) { alert('请输入规格'); return; }
-            appendConsole('分析规格...');
-            await mockApi(800);
-            document.getElementById('specResult').innerHTML = '<span class="status-ok">✓ 分析完成</span>，提取3个功能特性';
-            appendConsole('规格分析完成');
-        }
-        async function generateEnv() {
-            appendConsole('生成UVM环境...');
-            await mockApi(600);
-            document.getElementById('envResult').innerHTML = '<span class="status-ok">✓ 环境已生成</span>，11个文件';
-            appendConsole('环境生成完成');
-        }
-        async function runLoopback() {
-            appendConsole('闭环验证...');
-            await mockApi(1000);
-            document.getElementById('envResult').innerHTML = '<span class="status-ok">✓ 闭环验证通过</span>';
-            appendConsole('闭环验证通过');
-        }
-        async function runHealthCheck() {
-            appendConsole('健康检查...');
-            await mockApi(800);
-            document.getElementById('envResult').innerHTML = '<span class="status-ok">✓ 健康检查通过</span>，评分95/100';
-            appendConsole('健康检查完成');
-        }
-        async function runRegression() {
-            const bar = document.getElementById('regressionProgress');
-            const inner = bar.querySelector('.progress-bar');
-            bar.classList.remove('d-none');
-            appendConsole('启动回归...');
-            await mockApi(300);
-            let c = 0, t = 10;
-            const iv = setInterval(() => {
-                c++;
-                inner.style.width = (c/t*100) + '%';
-                inner.textContent = (c/t*100).toFixed(0) + '%';
-                if (c >= t) {
-                    clearInterval(iv);
-                    bar.classList.add('d-none');
-                    document.getElementById('regressionStatus').innerHTML = '<span class="badge bg-success">完成</span> 通过: 9, 失败: 1';
-                    appendConsole('回归完成：9/10 通过');
-                }
-            }, 500);
-        }
-        async function rerunFailed() {
-            appendConsole('重跑失败用例...');
-            await mockApi(1500);
-            document.getElementById('regressionStatus').innerHTML = '<span class="badge bg-success">重跑完成</span>';
-            appendConsole('重跑完成');
-        }
-        
-        // ==================== 初始化 ====================
-        renderAgentStatus();
-        setInterval(refreshAgentStatus, 15000);
-        appendConsole('平台就绪 (Mock模式)');
-    </script>
+        html+='<button class="btn btn-outline-secondary btn-sm" onclick="viewSignoff('+s.id+')">查看</button>';
+        html+='</td></tr>';
+        return html;
+    }).join('');
+    document.getElementById('sfBody').innerHTML=rows||'<tr><td colspan="5" class="text-muted">暂无签核报告</td></tr>';
+}
+async function createSignoff(){
+    var title=prompt('报告标题 (如: UART IP Tape-out 签核):');
+    if(!title)return;
+    var type=prompt('类型 (tapeout/milestone/coverage):','tapeout');
+    // 自动收集系统数据
+    var summary={};
+    try{
+        var stats=await API('/api/vplan/stats');
+        var cov=await API('/api/coverage/summary');
+        var reg=await API('/api/regression/history?limit=1');
+        summary.req_total=stats.total||0;
+        var v=0; for(var k in stats.stats){v+=stats.stats[k].verified||0;}
+        summary.req_verified=v;
+        summary.coverage=cov.code_coverage||0;
+        summary.functional_cov=cov.functional_coverage||0;
+        summary.pass_rate=reg.runs&&reg.runs.length>0?Math.round(reg.runs[0].pass_count/Math.max(reg.runs[0].total_count,1)*100):0;
+        summary.gaps=cov.gaps?cov.gaps.length:0;
+        summary.generated_at=new Date().toISOString().substring(0,16);
+    }catch(e){}
+    await API('/api/signoffs',{method:'POST',body:{title:title,report_type:type,summary:summary}});
+    toast('签核报告已创建 (含实时数据)','success'); loadSignoffs();
+}
+async function viewSignoff(id){
+    var signs=await API('/api/signoffs');
+    var s=signs.signoffs.find(function(sf){return sf.id===id;});
+    if(!s)return;
+    var sum=s.summary||{};
+    var report='════════════════════════════════\n';
+    report+='  验证签核报告: '+s.title+'\n';
+    report+='  类型: '+s.report_type+'  |  状态: '+s.status+'\n';
+    report+='  生成时间: '+s.created_at+'\n';
+    report+='──────────────────────────────────\n';
+    report+='  需求总数: '+(sum.req_total||'N/A')+'  已验证: '+(sum.req_verified||'N/A')+'\n';
+    report+='  代码覆盖率: '+(sum.coverage||'N/A')+'%  功能覆盖率: '+(sum.functional_cov||'N/A')+'%\n';
+    report+='  回归通过率: '+(sum.pass_rate||'N/A')+'%  覆盖率空洞: '+(sum.gaps||'N/A')+'个\n';
+    report+='  生成时间: '+(sum.generated_at||'N/A')+'\n';
+    report+='──────────────────────────────────\n';
+    if(s.comment)report+='  审批意见: '+s.comment+'\n';
+    report+='════════════════════════════════\n';
+    log(report);
+}
+async function approveSF(id){await API('/api/signoffs/'+id+'/approve',{method:'PUT'});toast('已批准','success');loadSignoffs()}
+async function rejectSF(id){var c=prompt('驳回理由:');await API('/api/signoffs/'+id+'/reject?comment='+encodeURIComponent(c||''),{method:'PUT'});toast('已驳回','error');loadSignoffs()}
+
+// ═══════════════════════════════════════════════════════════
+// KNOWLEDGE
+// ═══════════════════════════════════════════════════════════
+async function searchKB(){const q=document.getElementById('kSearch').value;const d=await API(`/api/knowledge?q=${encodeURIComponent(q)}`);document.getElementById('kbBody').innerHTML=d.entries.map(e=>`<tr><td><strong>${e.title}</strong></td><td><span class="badge bg-info">${e.category}</span></td><td><small>${e.tags}</small></td><td>${e.usage_count}</td><td><small>${(e.created_at||'').substring(0,16)}</small></td></tr>`).join('')||'<tr><td colspan="5" class="text-muted">暂无</td></tr>'}
+async function addKB(){const title=prompt('标题:');if(!title)return;const cat=prompt('分类 (protocol/uvm_pattern/bug_case/best_practice):','best_practice');const tags=prompt('标签:','');const content=prompt('内容:');await API('/api/knowledge',{method:'POST',body:{title,category:cat,tags,content}});toast('知识条目已添加','success');searchKB()}
+
+// ═══════════════════════════════════════════════════════════
+// ADMIN
+// ═══════════════════════════════════════════════════════════
+async function loadAdmin(){try{const users=await API('/api/users');document.getElementById('userBody').innerHTML=users.users.map(function(u){return '<tr><td>'+u.id+'</td><td><strong>'+u.username+'</strong></td><td><span class="badge bg-'+(u.role==='admin'?'danger':u.role==='verification_manager'?'warning':'info')+'">'+u.role+'</span></td><td>'+(u.email||'-')+'</td><td><small>'+(u.last_login||'-')+'</small></td></tr>';}).join('');const audit=await API('/api/audit?limit=50');document.getElementById('auditBody').innerHTML=audit.logs.map(function(l){return '<tr><td><strong>'+l.username+'</strong></td><td>'+l.action+'</td><td><small>'+(l.detail||'')+'</small></td><td><small>'+(l.created_at||'').substring(0,16)+'</small></td></tr>';}).join('');}catch(e){}}
+async function adminAddUser(){const u=prompt('用户名:');if(!u)return;const p=prompt('密码:');await API('/api/users',{method:'POST',body:{username:u,password:p}});toast('用户已添加','success');loadAdmin()}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+async function initApp(){loadDashboard();setTimeout(loadVPlan,300)}
+</script>
 </body>
 </html>

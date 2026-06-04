@@ -20,6 +20,9 @@ interfaces:
   - dir: input
     name: rx
     width: 1
+  - dir: output
+    name: interrupt
+    width: 4
   reset: presetn
   transaction_constraints:
   - name: valid_c
@@ -29,3 +32,15 @@ interfaces:
     isrand: 'True'
     name: data
     type: bit [7:0]
+  - iscompare: 'True'
+    isrand: 'True'
+    name: parity
+    type: bit [1:0]
+  - iscompare: 'True'
+    isrand: 'True'
+    name: stop_bits
+    type: bit [1:0]
+  - iscompare: 'True'
+    isrand: 'True'
+    name: baud_rate
+    type: int
