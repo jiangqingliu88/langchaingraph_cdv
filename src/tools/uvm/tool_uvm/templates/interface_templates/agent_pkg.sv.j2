@@ -13,6 +13,22 @@ package {{ agent.name }}_pkg;
      uvm_callbacks #(T,CB)::m_do_callbacks(this, METHOD)
   `endif
 
+{%- for param in agent.parameters %}
+  localparam {{ param.type }} {{ param.name }} = {{ param.value }};
+{%- endfor %}
+{%- if agent.hdl_typedefs %}
+  // HDL type definitions (mirror interface typedefs)
+{%-   for td in agent.hdl_typedefs %}
+  typedef {{ td.type }} {{ td.name }};
+{%-   endfor %}
+{%- endif %}
+{%- if agent.hvl_typedefs %}
+  // HVL type definitions
+{%-   for td in agent.hvl_typedefs %}
+  typedef {{ td.type }} {{ td.name }};
+{%-   endfor %}
+{%- endif %}
+
   `include "{{ agent.name }}_interface_structure.sv"
   `include "{{ agent.name }}_transaction.sv"
   `include "{{ agent.name }}_config.sv"

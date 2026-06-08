@@ -1,6 +1,0 @@
-agents
-cli
-core
-database
-middleware
-tools

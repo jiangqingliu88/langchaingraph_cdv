@@ -40,6 +40,10 @@ dev = [
 [project.scripts]
 ic-verify = "src.cli.commands:cli"
 
+[tool.pytest.ini_options]
+testpaths = ["tests", "src"]
+python_files = ["test_*.py"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*", "config*"]

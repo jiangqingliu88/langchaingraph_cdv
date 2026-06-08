@@ -1,2 +1,0 @@
-[console_scripts]
-ic-verify = src.cli.commands:cli

@@ -153,7 +153,7 @@ class {{ agent.name }}_base_seq extends uvm_sequence #({{ agent.name }}_seq_item
                                        input realtime timeout_ns = 0,
                                        output bit success);
     send_transaction(req);
-    p_sequencer.get_response_timeout(rsp, timeout_ns);
+    p_sequencer.get_response_timeout(rsp, timeout_ns, success);
     `uvm_info("SEQ_RSP", $sformatf("Got response: %s", rsp.convert2string()), UVM_HIGH)
   endtask
 

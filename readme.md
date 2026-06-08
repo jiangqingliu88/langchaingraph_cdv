@@ -1,225 +1,353 @@
 # IC Verification Multi-Agent System
 
-基于 LangChain + DeepSeek 的 IC 验证多 Agent 协作系统，10 个专业 Agent 协同完成规格分析、UVM 代码生成、SVA 断言、测试用例生成、覆盖率分析等验证全流程。
+基于 LangChain + DeepSeek 的 IC 验证多 Agent 协作系统。**11 个**专业 Agent 协同完成规格分析、设计架构生成、UVM 环境编码、测试用例生成、SVA 断言、编译仿真、覆盖率分析、错误诊断与自动修复全流程。
+
+> 📖 数据流详见 [agent-dataflow.md](agent-dataflow.md)
 
 ## 快速开始
 
 ```powershell
-# 1. 激活环境
 cd D:\cdv_a
 .\venv\Scripts\activate
-
-# 2. 设置 API Key
-$env:LLM_API_KEY="sk-your-deepseek-key"
-
-# 3. 初始化
-ic-verify init
-
-# 4. 查看状态
-ic-verify status
-
-# 5. 模拟运行（不消耗API）
-ic-verify verify spec_uart.txt --bypass
-
-# 6. 真实运行（消耗API）
-ic-verify verify spec_uart.txt
-
-# 7. 带编译检查的运行
-ic-verify verify spec_uart.txt --bypass --compile
+pip install -r requirements.txt
 ```
 
-## 命令速查
+### 配置（可选）
 
-| 命令 | 说明 |
-|------|------|
-| `ic-verify init` | 初始化系统 |
-| `ic-verify status` | 查看 10 个 Agent 状态 |
-| `ic-verify analyze <file>` | 分析设计规格 |
-| `ic-verify analyze <file> --bypass` | 模拟分析（不消耗API） |
-| `ic-verify verify <file>` | 运行完整验证流程 |
-| `ic-verify verify <file> --bypass` | 模拟验证 |
-| `ic-verify verify <file> -w quick_check` | 快速检查（4阶段） |
-| `ic-verify verify <file> --compile` | 验证 + QuestaSim 编译检查 |
-| `ic-verify verify <file> -o <dir>` | 指定输出目录 |
-| `ic-verify workflows` | 列出可用工作流 |
-| `ic-verify repl --bypass` | 交互式调试控制台 |
-| `ic-verify debug-log` | 查看 Agent 调试日志 |
-| `ic-verify debug-log -s <session>` | 查看特定会话日志 |
-| `ic-verify history` | 查看历史记录 |
+`.env`：
+```ini
+LLM_PROVIDER=deepseek
+LLM_API_KEY=sk-your-key
+LLM_MODEL=deepseek-chat
+LLM_BASE_URL=https://api.deepseek.com/v1
+```
 
-## 10 个 Agent
+### CLI 一键运行
 
-| Agent | 角色 | 模型 |
-|-------|------|------|
-| `spec_and_test_planner` | 规格分析与测试规划 | deepseek-chat |
-| `verification_architect` | UVM 架构设计与代码生成 | deepseek-coder |
-| `sequence_engineer` | 测试序列生成 | deepseek-coder |
-| `testcase_engineer` | 测试用例自动生成 | deepseek-coder |
-| `assertion_engineer` | SVA 断言生成 | deepseek-coder |
-| `coverage_manager` | 覆盖率分析 | deepseek-chat |
-| `regression_manager` | 回归测试管理 | deepseek-chat |
-| `debug_engineer` | 调试与问题定位 | deepseek-chat |
-| `quality_assurance` | 质量审查 | deepseek-chat |
-| `report_generator` | 报告生成 | deepseek-chat |
+```powershell
+# Bypass 模式（全自动：分析→RTL→UVM→编译→仿真→覆盖率）
+python -m src.cli.commands verify specs\alu_combined.md --bypass
+
+# 输出：11/11 passed, Score: 67/100, 覆盖率: line=51.5% branch=32.2% toggle=60.7%
+```
+
+### Python API
+
+```python
+import asyncio
+from pathlib import Path
+from src.core.execution import PipelineExecutionService
+
+async def main():
+    spec = Path('specs/alu_combined.md').read_text(encoding='utf-8')
+    service = PipelineExecutionService.get_instance()
+    result = await service.run_pipeline(
+        spec_text=spec,
+        workflow='full_verification',
+        bypass=True,
+    )
+    print(f"Passed: {result['passed']}/{result['total']}")
+    print(f"Score: {result['overall_score']}")
+
+asyncio.run(main())
+```
+
+### Python API
+
+```python
+import asyncio
+from pathlib import Path
+from src.core.execution import PipelineExecutionService
+
+async def main():
+    spec = Path('specs/alu_combined.md').read_text(encoding='utf-8')
+    service = PipelineExecutionService.get_instance()
+    result = await service.run_pipeline(
+        spec_text=spec,
+        workflow='full_verification',       # full_verification | quick_check
+        output_root='output/alu_pipeline',
+        bypass=True,                         # True=模板 | False=LLM hybrid
+    )
+    print(f'Passed: {result["passed"]}/{result["total"]}')
+    print(f'Overall: {result["overall_score"]}/100')
+
+asyncio.run(main())
+```
+
+### 启动 Web
+
+```powershell
+uvicorn src.web.api:app --host 0.0.0.0 --port 8000
+# 浏览器打开 http://localhost:8000 → 账号 admin / admin123
+```
+
+## 运行模式
+
+| 模式 | 命令 | Spec | 代码生成 | 耗时 | API |
+|------|------|------|---------|------|-----|
+| **Bypass** | `--bypass` | 模板规则 | 模板 | ~10s | 0 |
+| **Hybrid (LLM)** | 默认 | LLM 分析 | 模板 bypass | ~90s | 1次 |
+
+> Hybrid：spec_planner 用 LLM 分析规格，后续 agent 检测 ctx 有数据后自动切 bypass 模板模式。
+
+### Bypass 模式输出
+
+```
+11/11 passed  Score: 71/100  迭代: 0  覆盖率: line=51.5% branch=32.2%
++--------+--------+--------+-------+------+------+
+| Phase  | Output | Status | Score | Time | Note |
++--------+--------+--------+-------+------+------+
+| spec   | spec   | PASS   | 95    | 0s   | 模板规则匹配 ALU |
+| design | design | PASS   | 90    | 0s   | 12 functions, 8 regs |
+| arch   | env    | PASS   | 95    | 7s   | ★ 真实编译+仿真 |
+| model  | model  | PASS   | 75    | 0s   | C++ 参考模型 |
+| test   | tests  | PASS   | 85    | 0s   | 5 场景, 7 约束策略 |
+| regress| regr   | PASS   | 95    | 9s   | ★ 真实编译+仿真 |
+| cover  | cov    | PASS   | 76    | 2s   | ★ 真实覆盖率 |
+| debug  | debug  | PASS   | 80    | 0s   | 设计↔模型一致 ✅ |
++--------+--------+--------+-------+------+------+
+```
+
+## 11 个 Agent
+
+| # | Agent | 产出 | 说明 |
+|---|-------|------|------|
+| ① | `spec_planner` | spec | 规格分析 → 结构化验证计划 |
+| ② | `design_architect` | design_arch + **RTL** | 生成可综合 Verilog (`rtl/<module>.v`) |
+| ③ | `verify_architect` | env + quality_report | UVM 环境 + 编译+循环验证 + 质量评分 |
+| ④ | `model_agent` | model + **C++ cmodel** | C++ 参考模型 + DPI 桥接 + UVM predictor |
+| ⑤ | `test_engineer` | tests | YAML 约束→策略→场景→SV 代码 |
+| ⑥ | `assertion_engineer` | (text) | SVA 断言 + 形式验证属性 |
+| ⑦ | `regression_manager` | regression | 编译 + 仿真（QuestaSim） |
+| ⑧ | `coverage_manager` | coverage | 真实覆盖率收集（line/branch/toggle） |
+| ⑨ | `debug_engineer` | debug | 日志分析 + 错误分类 + 设计↔模型交叉验证 |
+| ⑩ | `quality_assurance` | (text) | 质量审查 |
+| ⑪ | `report_generator` | (text) | 报告生成 |
+
+### Verification Architect 质量检查流水线
+
+```
+Step 1: 生成代码（Jinja2 模板，45 个 SV 文件）
+Step 2: check_static   → 文件完整性检查
+Step 3: check_compile  → QuestaSim vlog 编译
+Step 4: check_loopback → Agent 闭环验证（每个 agent 独立编译+仿真）
+Step 5: quality_report → quality_report.json（评分：static/compile/loopback）
+```
+
+### Debug Engineer 错误诊断
+
+```
+仿真日志 → 模式匹配分类:
+  env:   virtual interface, config_db, Module.*not defined
+  rtl:   X/Z detected, scoreboard.*mismatch
+  model: predictor.*mismatch
+  spec:  port.*mismatch, width.*mismatch
+→ 路由到对应 agent 重生成 → 自动重跑 test→regress→cover→debug（2 轮闭环）
+```
+
+### Agent 评分与验证
+
+每个 Agent 有 `min_score` 阈值，不达标自动重试 2 次：
+
+| Agent | min_score | 公式 |
+|-------|-----------|------|
+| spec_planner | 60 | 10×features + 5×interfaces + 3×test_points + 5×registers |
+| design_architect | 50 | 5×functions + 8×registers |
+| verify_architect | 50 | 15×agents + files + quality_score×3 |
+| regression_manager | 40 | compile_pass?50:0 + test_rate%×0.45 |
+| coverage_manager | 20 | line%×0.8 + branch%×0.2 |
+| 其余 agent | 50 | baseline |
 
 ## 工作流
 
-### Full Verification（10 阶段）
-
 ```
-spec → arch → seq → tc → assert → regress → cover → debug → qa → report
-```
+Full (11 阶段):
+spec → design → arch → model → test → assert → regress → cover → debug → qa → report
+                ↑                         ↑        ↑                  ↑
+                └── debug 路由修复 ────────┴────────┴──────────────────┘ (反馈闭环)
 
-### Quick Check（4 阶段）
-
-```
-spec → arch → seq → tc
+Quick (5 阶段):
+spec → design → arch → model → test
 ```
 
-## REPL 调试控制台
-
-交互式单 Agent 调试，支持逐一验证 Tool 代码：
+### Agent 数据流 + 反馈闭环
 
 ```
-ic-verify> agents                    # 列出所有 Agent
-ic-verify> tools arch                # 查看 Agent 的 Tool 列表
-ic-verify> arch <input>              # 执行 Agent
-ic-verify> exec arch generate_uvm    # 直接调用 Tool 函数
-ic-verify> bypass on|off             # 切换 bypass 模式
-ic-verify> ctx                       # 显示上下文
+spec → design → arch → model → test → regress → cover → debug → qa → report
+                     ↑        ↑        ↑                  │
+                     └────────┴────────┴── fix_agent ──────┘ (反馈闭环, max 2 轮)
+
+debug_engineer 比对:
+  ctx.design_arch.register_count ↔ ctx.model.analysis.register_count
+  ctx.design_arch.function_count ↔ ctx.model.analysis.function_count
+  不一致 → fix_agent=model_agent (模型落后) 或 fix_agent=design_architect (设计不足)
 ```
 
-## 调试日志
+### 错误诊断与自动修复
 
-每次运行自动记录到 `logs/agent_debug/debug_<session>.jsonl`：
+```
+仿真失败 → debug_engineer 解析日志 → 分类:
+  env:     virtual interface, config_db → fix: verify_architect
+  rtl:     X/Z detected, mismatch       → fix: design_architect  
+  model:   predictor mismatch           → fix: model_agent
+  spec:    port/width mismatch          → fix: spec_planner
+  cross:   design(8 regs) ≠ model(5)    → fix: model_agent ← 新增
 
-```jsonl
-{"timestamp":"...","event":"pipeline_start","workflow":"full_verification","phases":["spec","arch",...]}
-{"timestamp":"...","agent":{"role":"spec_and_test_planner","name":"规格与测试规划师"},"input":"分析规格...","output":"{...}","tools_used":[],"elapsed":"0.0s","success":true}
-{"timestamp":"...","event":"pipeline_end","passed":10,"degraded":0,"total_time":"0.5s"}
+编译失败 → _try_autofix_loopback() 读生成文件 → 删错误行 → 写回 → 重编译
 ```
 
-查看日志：
+## 管道运行示例
+
 ```powershell
-ic-verify debug-log                    # 列出所有会话
-ic-verify debug-log -s 20260602_210500 # 查看特定会话
+python -m src.cli.commands verify specs/alu_combined.md --bypass
+```
+
+```
+═══ Pipeline: full_verification ═══
+  [+] spec     OK → spec score=95 (0.0s)
+  [+] design   OK → design_arch score=90 (0.0s)
+  [+] arch     OK → env score=95 (7.7s)       ← 真实编译+仿真
+  [+] model    OK → model score=75 (0.4s)
+  [+] test     OK → tests score=30 (0.0s)
+  [+] assert   OK score=50 (0.0s)
+  [+] regress  OK → regression score=95 (9.1s) ← 真实编译+仿真
+  [+] cover    OK → coverage score=76 (1.7s)   ← 真实覆盖率
+  [+] debug    OK → debug score=80 (0.0s)
+  [+] qa       OK score=50 (0.0s)
+  [+] report   OK score=50 (0.0s)
+
++-----------+-------------+--------+-------+---------+-------+
+| Phase     | Produces    | Status | Score | Retries | Time  |
++-----------+-------------+--------+-------+---------+-------+
+| spec      | spec        | PASS   | 95    | 0       | 0.0s  |
+| design    | design_arch | PASS   | 90    | 0       | 0.0s  |
+| arch      | env         | PASS   | 95    | 0       | 7.7s  |
+| model     | model       | PASS   | 75    | 0       | 0.4s  |
+| test      | tests       | PASS   | 30    | 0       | 0.0s  |
+| assert    |             | PASS   | 50    | 0       | 0.0s  |
+| regress   | regression  | PASS   | 95    | 0       | 9.1s  |
+| cover     | coverage    | PASS   | 76    | 0       | 1.7s  |
+| debug     | debug       | PASS   | 80    | 0       | 0.0s  |
+| qa        |             | PASS   | 50    | 0       | 0.0s  |
+| report    |             | PASS   | 50    | 0       | 0.0s  |
++-----------+-------------+--------+-------+---------+-------+
+Passed: 11/11  Score: 71/100
+Coverage: line=51.5% branch=32.2% toggle=60.0%
 ```
 
 ## 项目结构
 
 ```
 cdv_a/
-├── config/
-│   ├── settings.py                  # 全局配置
-│   └── agent_config.yaml            # Agent & Pipeline 定义
+├── config/settings.py              # 全局配置
 ├── src/
-│   ├── agents/                      # 10 个 Agent
-│   │   ├── spec_planner.py
-│   │   ├── architect.py
-│   │   ├── sequence_engineer.py
-│   │   ├── testcase_engineer.py     # 测试用例生成
-│   │   ├── assertion_engineer.py
-│   │   ├── coverage_manager.py
-│   │   ├── regression_manager.py
-│   │   ├── debug_engineer.py
-│   │   ├── quality_assurance.py
-│   │   └── report_generator.py
-│   ├── core/                        # 核心框架
-│   │   ├── base.py                  # Agent 基类 + 责任链
-│   │   ├── registry.py              # Agent 注册中心
-│   │   ├── orchestrator.py          # 编排器（中介者 + 管道模式）
-│   │   ├── pipeline.py              # 管道策略
-│   │   ├── llm_factory.py           # LLM 工厂
-│   │   └── deepseek_config.py       # DeepSeek 配置
-│   ├── cli/
-│   │   └── commands.py              # CLI 命令 + REPL
-│   ├── tools/                       # 工具集
-│   │   ├── spec_tools.py            # 规格分析工具
-│   │   ├── uvm_tools.py             # UVM 代码生成工具
-│   │   ├── assertion_tools.py       # SVA 断言工具
-│   │   ├── debug_tools.py           # 调试工具
-│   │   ├── coverage_tools.py        # 覆盖率工具
-│   │   ├── reuse_tools.py           # 复用顾问工具
-│   │   ├── uvm/                     # UVM 模板 + 代码生成器
-│   │   │   ├── tool_uvm/            #   Jinja2 模板 + gen_uvm.py
-│   │   │   └── tool_sc_red/         #   SC 参考模型生成
-│   │   ├── testcase/                # 测试用例生成器
-│   │   │   ├── generator.py
-│   │   │   └── templates/           #   Jinja2 序列/测试模板
-│   │   └── compilesim/              # 仿真编译集成
-│   │       ├── regression_wrapper.py
-│   │       └── agent_loopback_test.py  # Agent 回环测试
-│   ├── database/                    # 数据持久化
-│   │   ├── models.py
-│   │   ├── connection.py
-│   │   └── repository.py
-│   ├── infra/                       # 基础设施
-│   │   ├── vplan_manager.py         # 验证计划管理
-│   │   ├── rbac.py                  # RBAC 权限管理
-│   │   └── project_isolation.py     # 多项目隔离
-│   ├── middleware/                   # 中间件
-│   │   ├── logging.py
-│   │   ├── retry.py
-│   │   ├── cache.py
-│   │   └── debug_logger.py          # Agent 调试日志
-│   ├── prompts/                     # Prompt 管理
-│   └── web/                         # Web 管理平台
-│       └── templates/
-│           └── dashboard.html       # Mock 仪表盘
-├── generated/                       # 生成的 UVM 代码
+│   ├── agents/                     # 11 个 Agent（每个独立目录）
+│   │   ├── spec_planner/           #   规格分析
+│   │   ├── design_architect/       #   设计架构
+│   │   ├── verify_architect/       #   UVM 环境 + 质量自检
+│   │   ├── model_agent/            #   参考模型
+│   │   ├── test_engineer/          #   测试生成
+│   │   ├── assertion_engineer/     #   SVA 断言
+│   │   ├── coverage_manager/       #   覆盖率
+│   │   ├── regression_manager/     #   回归管理
+│   │   ├── debug_engineer/         #   错误诊断
+│   │   ├── quality_assurance/      #   质量审查
+│   │   └── report_generator/       #   报告生成
+│   ├── core/                       # 核心框架
+│   │   ├── base.py                 #   Agent 基类 + 验证 + 评分
+│   │   ├── execution.py            #   管道引擎 + 反馈闭环 + hybrid 模式
+│   │   └── llm_factory.py          #   LLM 工厂
+│   ├── tools/                      # 工具集
+│   │   ├── uvm/tool_uvm/           #   Jinja2 模板 + gen_uvm 生成器
+│   │   ├── compilesim/             #   QuestaSim 编译+仿真+覆盖率
+│   │   └── testcase/               #   测试用例生成器
+│   ├── cli/commands.py             # CLI 命令行
+│   └── web/api.py                  # Web API (FastAPI)
+├── specs/                          # 模块规格库
+│   ├── alu/  (6 md files)
 │   └── uart/
-│       ├── agents/                  #   UART_in / UART_out / AXI_in
-│       ├── bench/                   #   testbench top
-│       └── env/                     #   验证环境
-├── output/                          # 流水线输出
-│   └── testcases/                   #   生成的测试用例
-├── build/                           # 编译产物（QuestaSim work lib）
-├── tests/                           # 单元测试
-├── logs/agent_debug/                # 调试日志输出
-├── scripts/
-│   └── init_db.py                   # 数据库初始化
-├── spec_uart.txt                    # 示例规格文件
-├── verify_architect_loopback.py     # Agent 回环验证脚本
-├── switch_llm.sh                    # LLM 切换脚本
-├── pyproject.toml
-└── requirements.txt
+├── generated/alu/                  # 生成的 UVM 代码
+│   ├── agents/  env/  bench/  rtl/
+│   ├── build/   sim/
+│   ├── quality_report.json
+│   └── filelist.f
+├── tests/
+├── .env                            # API key 配置
+└── pyproject.toml
 ```
-
-## 设计模式
-
-| 模式 | 应用 |
-|------|------|
-| Singleton | Settings, AgentRegistry, DebugLogger |
-| Factory | LLMFactory |
-| Template Method | BaseAgent 生命周期 |
-| Mediator | VerificationOrchestrator |
-| Pipeline / Chain of Responsibility | 工作流阶段串联 + 请求处理链 |
-| Observer | AgentSubject |
-| Decorator | @tool 工具函数 |
-| Repository | 数据访问层 |
-| Strategy | SequentialStrategy / ParallelStrategy / ConditionalStrategy |
 
 ## 关键特性
 
 | 特性 | 说明 |
 |------|------|
-| bypass 模式 | `--bypass` 使用模拟数据，不消耗 API，快速测试 |
-| 调试日志 | 自动记录每个 Agent 的输入/输出/Prompt |
-| 并行执行 | seq + assert 阶段可并行运行 |
-| 失败重试 | 自动重试 3 次，失败后降级继续 |
-| Rich 输出 | 表格、进度条、语法高亮 |
-| QuestaSim 集成 | `--compile` 自动编译检查生成的 UVM 代码 |
-| REPL 调试 | 单 Agent 交互式调试，支持直接调用 Tool |
-| Agent 回环测试 | 验证 Agent 生成代码的可编译性 |
-| Web 仪表盘 | Mock 管理界面（Pipeline / 测试用例 / Agent 状态） |
-| 验证计划管理 | vPlan 导入/导出 + 需求追踪矩阵 |
-| RBAC 权限 | 角色-based 权限控制（管理员/经理/工程师） |
-| 多项目隔离 | 项目间数据 + 权限隔离 |
+| **设计↔模型比对** | debug_engineer 交叉验证 design 和 model 输出一致性 |
+| **反馈闭环** | 不一致→路由到对应 agent 重生成→重测试（2轮迭代） |
+| **自动修复** | 编译失败时自动读代码→删错误行→写回→重编 |
+| Hybrid 模式 | LLM 分析 spec → 模板生成代码 |
+| Agent 协作 | 11 agent consumes/produces 自动传递 ctx |
+| 真实编译仿真 | QuestaSim vlog + vsim，真实覆盖率 |
+| Agent 闭环 | 每个 agent 独立编译+仿真 loopback TB |
+| 调试日志 | `logs/agent_debug/debug_*.jsonl` 记录每个 agent I/O |
+| Web 平台 | FastAPI + JWT + RBAC，40+ API |
+
+## 配置
+
+### `.env`
+
+```ini
+LLM_PROVIDER=deepseek
+LLM_API_KEY=sk-your-key
+LLM_MODEL=deepseek-chat
+LLM_BASE_URL=https://api.deepseek.com/v1
+```
+
+### 调试日志
+
+每次运行生成 `logs/agent_debug/debug_YYYYMMDD_HHMMSS.jsonl`：
+
+```jsonl
+{"event":"pipeline_start","workflow":"full_verification","phases":["spec","design",...]}
+{"agent":{"role":"spec_and_test_planner"},"input":"# ALU spec...","output":"{\"design_name\":\"ALU\",...}"}
+{"agent":{"role":"debug_engineer"},"input":"...","output":"cross_check: design(8) vs model(8)"}
+{"event":"pipeline_end","passed":11,"degraded":0,"total_time":"10.8s"}
+```
+
+### 常见问题
+
+| 问题 | 解决 |
+|------|------|
+| `LLM API Key未设置` | `.env` 变量名大写 (`LLM_API_KEY`) |
+| Agent SKIP | 用 `--bypass` 模式 |
+| QuestaSim 路径 | 修改 `src/agents/regression_manager/main.py` 第17行 |
+| test 得分低 | `_build_policies` 优先读 `ALU_constraint.yaml` |
+| 模拟日志为空 | `debug_engineer` 自动读 `generated/alu/sim/*.log` |
+
+## 配置
+
+### .env 格式
+
+```ini
+LLM_PROVIDER=deepseek
+LLM_API_KEY=sk-your-key
+LLM_MODEL=deepseek-chat
+LLM_BASE_URL=https://api.deepseek.com/v1
+```
+
+> 不配置 API key 也能用 `--bypass` 模式运行。
+
+### 常见问题
+
+| 问题 | 解决 |
+|------|------|
+| `LLM API Key未设置` | 检查 `.env` 文件变量名是否大写（`LLM_API_KEY`） |
+| Agent 全部 SKIP | 使用 `--bypass` 模式 |
+| QuestaSim 找不到 | 路径在 `src/agents/regression_manager/main.py` 第 17 行修改 |
+| `{chat_history}` 错误 | 已修复：base.py 显式传入空列表 |
 
 ## 测试
 
 ```powershell
-pytest tests/ -v --tb=short
+pytest tests/ src/agents/ src/tools/ -v --tb=short
 ```
 
 ## 环境要求
@@ -228,12 +356,9 @@ pytest tests/ -v --tb=short
 |------|------|
 | Python | 3.10 - 3.12 |
 | langchain | 0.1.20 |
-| langchain-core | 0.1.52 |
-| langchain-openai | 0.0.8 |
+| FastAPI | >=0.110 |
 | Jinja2 | >=3.1.0 |
 | Rich | >=13.0 |
-| Click | >=8.0 |
 | PyYAML | >=6.0 |
-| SQLAlchemy | >=2.0 |
-| DeepSeek API Key | [获取](https://platform.deepseek.com/) |
-| QuestaSim（可选） | 用于 `--compile` 编译检查 |
+| DeepSeek API Key | 可选（bypass 模式不需要） |
+| QuestaSim | 可选（编译仿真 + 覆盖率） |

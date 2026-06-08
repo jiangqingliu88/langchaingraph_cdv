@@ -2,7 +2,7 @@ bench:
   # 基本信息
   name: alu_bench
   # 环境名称
-  env_name: alu_env
+  env_name: alu
   # 系统配置
   timeout: 10ms
 
@@ -18,13 +18,13 @@ bench:
   # Agent 接口连接
   agents:
     ALU_in:
-      interface: alu_in_interface
+      interface: ALU_in
       clock: sys_clk
-      reset: sys_rst_n
+      reset: rst
     ALU_out:
-      interface: alu_out_interface
+      interface: ALU_out
       clock: sys_clk
-      reset: sys_rst_n
+      reset: rst
 
   # DUT initiation
   # UVM 配置

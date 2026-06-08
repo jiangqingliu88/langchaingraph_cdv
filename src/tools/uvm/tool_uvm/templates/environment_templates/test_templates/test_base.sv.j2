@@ -39,36 +39,24 @@ class {{ environment.env_name }}_base_test extends uvm_test;
     // 设置配置到 config_db
     uvm_config_db #({{ environment.env_name }}_config)::set(this, "env", "cfg", cfg);
     
-    // 获取虚拟接口
-{%- for agent in agents %}
-    if (!uvm_config_db #(virtual {{ agent.interface }}_interface)::get(this, "", "{{ agent.name }}_vif", {{ agent.name }}_vif)) begin
-      `uvm_fatal("VIF", $sformatf("Virtual interface not set for {{ agent.name }}"))
-    end
-{%- endfor %}
-    // 创建并注册错误注入 Callback
-    /*
-{%- for agent in agents %}
-    *{{ agent.name }}_error_injection_callback err_cb;
-    *err_cb = {{ agent.name }}_error_injection_callback::type_id::create("err_cb");
-    *err_cb.error_rate = 20;
-    *err_cb.inject_error = 1;
-    *{{ agent.name }}_callback_base::add(
-    *  env.{{ agent.name }}_agent_h.drv, err_cb
-    *);
-{%- endfor %}
-    */
   endfunction
 
   virtual function void end_of_elaboration_phase(uvm_phase phase);
     super.end_of_elaboration_phase(phase);
-    // 打印测试配置
-    `uvm_info("TEST_CFG", $sformatf("Test: %s", get_name()), UVM_LOW)
-    cfg.print();
+    `uvm_info("TEST", "{{ environment.env_name }}_base_test elaborated", UVM_LOW)
   endfunction
 
-  // 工厂覆盖方法（可在派生测试中重载）
-  virtual function void set_factory_overrides();
-    // TODO: 在此设置工厂覆盖
-  endfunction
+  task run_phase(uvm_phase phase);
+{%- for agent in agents %}
+    {{ agent.name }}_random_seq {{ agent.name }}_seq;
+{%- endfor %}
+    phase.raise_objection(this);
+{%- for agent in agents %}
+    {{ agent.name }}_seq = {{ agent.name }}_random_seq::type_id::create("{{ agent.name }}_seq");
+    {{ agent.name }}_seq.start(env.{{ agent.name }}_agent_h.sqr);
+{%- endfor %}
+    #1us;
+    phase.drop_objection(this);
+  endtask
 
 endclass : {{ environment.env_name }}_base_test

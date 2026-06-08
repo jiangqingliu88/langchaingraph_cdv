@@ -1,0 +1,10 @@
++incdir+f:/questasim64_2024.1/verilog_src/uvm-1.2/src
+f:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv
++incdir+D:\cdv_a\output\agents\ALU_in
++incdir+D:\cdv_a\output\agents\ALU_in/loopback
+D:\cdv_a\output\agents\ALU_in\ALU_in_interface.sv
+D:\cdv_a\output\agents\ALU_in\ALU_in_pkg.sv
+D:\cdv_a\output\agents\ALU_in\loopback\ALU_in_loopback_scb.sv
+D:\cdv_a\output\agents\ALU_in\loopback\ALU_in_loopback_env.sv
+D:\cdv_a\output\agents\ALU_in\loopback\ALU_in_loopback_test.sv
+D:\cdv_a\output\agents\ALU_in\loopback\ALU_in_loopback_tb.sv

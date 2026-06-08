@@ -1,12 +1,4 @@
 // Sequence Item: {{ agent.name }}_seq_item
-// 通过 `include 引入，不包含独立 package
-
-{%- if hvl_typedefs %}
-// HVL 类型定义
-{%-   for td in hvl_typedefs %}
-typedef {{ td.type }} {{ td.name }};
-{%-   endfor %}
-{%- endif %}
 
 class {{ agent.name }}_seq_item extends uvm_sequence_item;
   `uvm_object_utils({{ agent.name }}_seq_item)
@@ -18,11 +10,17 @@ class {{ agent.name }}_seq_item extends uvm_sequence_item;
   // ── 物理端口字段（Driver 驱动 / Monitor 采样）──
 {%- for port in ports %}
 {%-   if port.name != clock and port.name != reset %}
-{%-     set width_str = port.width|string %}
-{%-     if width_str == '1' %}
+{%-     set ns = namespace(duplicate=false) %}
+{%-     for var in transaction_vars %}
+{%-       if var.name == port.name %}{% set ns.duplicate = true %}{% endif %}
+{%-     endfor %}
+{%-     if not ns.duplicate %}
+{%-       set width_str = port.width|string %}
+{%-       if width_str == '1' %}
   rand logic {{ port.name }};  // {{ port.dir }}
-{%-     else %}
+{%-       else %}
   rand logic [{{ port.width }}-1:0] {{ port.name }};  // {{ port.dir }}
+{%-       endif %}
 {%-     endif %}
 {%-   endif %}
 {%- endfor %}

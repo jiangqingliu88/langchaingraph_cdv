@@ -1,6 +1,6 @@
 environment:
   # 环境基本信息
-  name: alu_env
+  name: alu
   # 时钟复位接口连接
   clk_rst:
     interface: clk_rst_if
@@ -33,7 +33,7 @@ environment:
   # Virtual Sequencer 配置
   virtual_sequencer:
     enabled: true
-    name: alu_env_virtual_sequencer
+    name: alu_virtual_sequencer
 
   # 环境配置变量
   config_vars:

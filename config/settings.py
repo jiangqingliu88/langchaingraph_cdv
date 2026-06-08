@@ -7,7 +7,7 @@ class DatabaseSettings(BaseSettings):
     echo: bool = False
 
 class LLMSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="LLM_", extra="allow")
+    model_config = SettingsConfigDict(env_prefix="LLM_", env_file=".env", env_file_encoding="utf-8", extra="allow")
     provider: str = "deepseek"
     model: str = "deepseek-chat"
     temperature: float = 0.0

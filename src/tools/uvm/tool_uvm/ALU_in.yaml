@@ -7,8 +7,8 @@ interfaces:
 
     # 接口参数（可传入宽度等）
     parameters:
-      - { name: ALU_WIDTH, type: int, value: '8' }
-      - { name: ALU_OP_WIDTH, type: int, value: '3' }
+      - { name: ALU_WIDTH, type: int, value: '32' }
+      - { name: ALU_OP_WIDTH, type: int, value: '4' }
 
     # HDL 类型定义（会出现在 interface 中）
     hdl_typedefs:

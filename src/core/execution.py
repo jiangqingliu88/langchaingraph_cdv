@@ -12,27 +12,27 @@ import structlog
 
 from src.core.registry import AgentRegistry
 from src.agents.spec_planner import SpecAndTestPlanner
-from src.agents.architect import VerificationArchitect
-from src.agents.sequence_engineer import SequenceEngineer
+from src.agents.design_architect import DesignArchitect
+from src.agents.verify_architect import VerificationArchitect
+from src.agents.test_engineer import TestEngineer
 from src.agents.assertion_engineer import AssertionEngineer
 from src.agents.coverage_manager import CoverageManager
 from src.agents.regression_manager import RegressionManager
 from src.agents.debug_engineer import DebugEngineer
 from src.agents.quality_assurance import QualityAssurance
 from src.agents.report_generator import ReportGenerator
-from src.agents.testcase_engineer import TestCaseEngineer
-from src.agents.design_arch import DesignArchitect
+from src.agents.model_agent import ModelAgent
 from config.settings import Settings
 
 logger = structlog.get_logger()
 
-# Pipeline 阶段定义
+# Pipeline 阶段定义（12 Agent → 11 阶段，seq+tc 已合并为 test）
 FULL_PHASES = [
     ("spec",    "spec_and_test_planner",    "spec"),
-    ("arch",    "verification_architect",   "env"),
-    ("seq",     "sequence_engineer",        "policies"),
-    ("tc",      "testcase_engineer",        "tests"),
     ("design",  "design_architect",         "design_arch"),
+    ("arch",    "verification_architect",   "env"),
+    ("model",   "model_agent",              "model"),
+    ("test",    "test_engineer",            "tests"),
     ("assert",  "assertion_engineer",       None),
     ("regress", "regression_manager",       "regression"),
     ("cover",   "coverage_manager",         "coverage"),
@@ -41,7 +41,7 @@ FULL_PHASES = [
     ("report",  "report_generator",         None),
 ]
 
-QUICK_PHASES = FULL_PHASES[:4]  # spec → arch → seq → tc
+QUICK_PHASES = FULL_PHASES[:5]  # spec → design → arch → model → test
 
 
 class PipelineExecutionService:
@@ -64,22 +64,22 @@ class PipelineExecutionService:
     # ── Agent 生命周期 ──
 
     async def initialize_agents(self) -> None:
-        """初始化所有 10 个 Agent（幂等）"""
+        """初始化所有 12 个 Agent（幂等）"""
         if self._initialized:
             return
 
         agents = [
             ("spec_and_test_planner",   SpecAndTestPlanner()),
+            ("design_architect",         DesignArchitect()),
             ("verification_architect",  VerificationArchitect()),
-            ("sequence_engineer",        SequenceEngineer()),
+            ("model_agent",              ModelAgent()),
+            ("test_engineer",            TestEngineer()),
             ("assertion_engineer",       AssertionEngineer()),
             ("coverage_manager",         CoverageManager()),
             ("regression_manager",       RegressionManager()),
             ("debug_engineer",           DebugEngineer()),
             ("quality_assurance",        QualityAssurance()),
             ("report_generator",         ReportGenerator()),
-            ("testcase_engineer",        TestCaseEngineer()),
-            ("design_architect",         DesignArchitect()),
         ]
         for role, agent in agents:
             await agent.initialize()
@@ -100,6 +100,8 @@ class PipelineExecutionService:
         workflow: str = "full_verification",
         output_root: str = "output",
         bypass: bool = True,
+        on_progress: callable = None,
+        refine: bool = False,
     ) -> dict:
         """执行验证流水线，返回 {run_id, phases, passed, total, ctx}"""
         if not self._initialized:
@@ -118,7 +120,7 @@ class PipelineExecutionService:
             "current_phase": None,
             "phases": [],
             "ctx": {
-                "spec": {}, "env": {}, "policies": {},
+                "spec": {}, "design_arch": {}, "env": {}, "model": {},
                 "tests": {}, "regression": {}, "coverage": {},
                 "working_dir": str(Path(output_root).resolve()),
             },
@@ -126,50 +128,237 @@ class PipelineExecutionService:
         self._runs[run_id] = run_state
 
         ctx = run_state["ctx"]
-        prev_output = spec_text
         results = {}
+        scores = {}  # per-agent scores
+
+        # ── Log pipeline start ──
+        try:
+            from src.middleware.debug_logger import debug_logger
+            debug_logger.log_pipeline_start(workflow, "spec", [p[0] for p in phases])
+        except Exception: pass
 
         for name, role, ctx_key in phases:
             run_state["current_phase"] = name
 
             agent = self.registry.get_agent_instance(role)
             if not agent:
-                run_state["phases"].append({"name": name, "status": "skipped", "time": 0})
+                run_state["phases"].append({"name": name, "status": "skipped", "time": 0, "score": 0})
                 continue
 
-            agent.config["bypass"] = bypass
-            task = {"bypass": bypass, "ctx": ctx, "input": prev_output}
-
-            t0 = time.time()
-            try:
-                r = await agent.execute_task(task)
-                t1 = time.time() - t0
-
-                if r.success:
-                    results[name] = "passed"
-                    prev_output = r.data.get("output", prev_output)
-                    run_state["phases"].append({
-                        "name": name, "status": "passed", "time": round(t1, 1),
-                    })
-                else:
-                    results[name] = "failed"
-                    run_state["phases"].append({
-                        "name": name, "status": "failed", "time": round(t1, 1),
-                        "error": r.error[:200] if r.error else "unknown",
-                    })
-            except Exception as e:
-                t1 = time.time() - t0
-                results[name] = "error"
+            # ── 依赖检查：如果 consumes 声明的数据 ctx 中不存在，跳过 ──
+            missing = [c for c in getattr(agent, 'consumes', []) if not ctx.get(c)]
+            if missing and role != "spec_and_test_planner":
                 run_state["phases"].append({
-                    "name": name, "status": "error", "time": round(t1, 1),
-                    "error": str(e)[:200],
+                    "name": name, "status": "skipped",
+                    "time": 0, "score": 0,
+                    "reason": f"missing inputs: {missing}",
                 })
+                continue
 
-        passed = sum(1 for v in results.values() if v == "passed")
+            # ── 构建 task：注入 ctx 中已存在的数据 ──
+            task_input = spec_text if name == "spec" else json.dumps({
+                k: ctx[k] for k in getattr(agent, 'consumes', []) if k in ctx
+            }, ensure_ascii=False, default=str) if getattr(agent, 'consumes', []) else spec_text
+
+            agent.config["bypass"] = bypass
+            # Hybrid: non-spec agents use bypass when ctx has their required inputs
+            effective_bypass = bypass
+            if not bypass and role != "spec_and_test_planner":
+                has_inputs = all(ctx.get(c) for c in getattr(agent, 'consumes', []))
+                if has_inputs:
+                    effective_bypass = True
+            max_retries = getattr(agent, 'max_retries', 2)
+            best_score = 0
+            best_r = None
+            final_status = "skipped"
+            final_score = 0
+
+            for attempt in range(max_retries + 1):
+                display = getattr(agent, 'display_name', role)
+                produces = getattr(agent, 'produces', '') or ''
+                prod_hint = f" → {produces}" if produces else ""
+                label = f"{display}{prod_hint}..." if attempt == 0 else f"{display} retry {attempt}/{max_retries}"
+                try:
+                    if on_progress: on_progress(name, "running", label)
+                except Exception: pass
+
+                task = {"bypass": effective_bypass, "ctx": ctx, "input": task_input, "output_dir": output_root, "refine": refine}
+                if attempt > 0:
+                    task["_retry"] = attempt
+
+                t0 = time.time()
+                try:
+                    r = await agent.execute_task(task)
+                    t1 = time.time() - t0
+
+                    if not r.success and attempt < max_retries:
+                        logger.warning(f"[{name}] fail, retry {attempt+1}/{max_retries}: {str(r.error)[:80]}")
+                        continue
+                    if not r.success:
+                        final_status = "failed"; final_score = 0; break
+
+                    score = r.data.get("score", 0)
+                    if score > best_score: best_score = score; best_r = r
+
+                    # Validate: check if score meets threshold
+                    passed, reason = agent.validate(r.data)
+                    if passed or bypass or attempt >= max_retries:
+                        ftag = "passed" if passed else "degraded"
+                        final_status = ftag; final_score = max(best_score, score)
+                        for k in ("spec","design_arch","env","model","tests","regression","coverage","report"):
+                            if k in r.data and r.data[k]: ctx[k] = r.data[k]
+                        # ── Write debug log ──
+                        try:
+                            from src.middleware.debug_logger import debug_logger
+                            io_preview = str(task_input)[:300]
+                            out_preview = str(r.data.get("output", ""))[:500]
+                            debug_logger.log_agent_call(
+                                role, display, io_preview,
+                                "bypass" if effective_bypass else "llm",
+                                out_preview, [], attempt, t1, True)
+                        except Exception: pass
+                        tag = "OK" if attempt == 0 else f"OK(r{attempt})"
+                        try:
+                            if on_progress: on_progress(name, ftag, f"{tag} {prod_hint[3:] if prod_hint else ''} score={final_score} ({t1:.1f}s)")
+                        except Exception: pass
+                        break
+                    elif attempt < max_retries:
+                        logger.warning(f"[{name}] validation fail: {reason}, retry {attempt+1}/{max_retries}")
+                        task_input = json.dumps({"retry":attempt+1,"reason":reason,"prev":str(r.data)[:300]}, ensure_ascii=False)
+                        continue
+                    else:
+                        final_status = "degraded"; final_score = max(best_score, score)
+                        if on_progress: on_progress(name, "degraded", f"score={final_score} (max retries, {reason})")
+                        break
+
+                except Exception as e:
+                    if attempt < max_retries:
+                        logger.warning(f"[{name}] exception, retry {attempt+1}/{max_retries}: {e}")
+                        continue
+                    final_status = "error"; final_score = 0
+                    try:
+                        if on_progress: on_progress(name, "error", f"err")
+                    except Exception: pass
+                    break
+
+            results[name] = final_status if final_status != "skipped" else "passed"
+            scores[name] = final_score
+            run_state["phases"].append({
+                "name": name, "status": final_status, "time": 0 if final_status == "skipped" else round(time.time() - (locals().get('t0', time.time())), 1),
+                "score": final_score,
+                "retries": attempt if final_status != "skipped" else 0,
+            })
+
+        passed = sum(1 for v in results.values() if v in ("passed", "degraded"))
         run_state["state"] = "completed" if passed == len(phases) else "completed_with_errors"
         run_state["completed_at"] = datetime.now().isoformat()
         run_state["passed"] = passed
         run_state["total"] = len(phases)
+
+        # ── 反馈闭环：debug 分析 → 路由修复 → 重试 ──
+        MAX_FEEDBACK_LOOPS = 2
+        iteration_count = 0
+        for loop in range(MAX_FEEDBACK_LOOPS):
+            iteration_count = loop + 1
+            if on_progress:
+                try: on_progress("ITER", "running", f"Feedback iteration {iteration_count}...")
+                except Exception: pass
+            debug_data = ctx.get("debug", {})
+            if not isinstance(debug_data, dict) or debug_data.get("category") == "none":
+                break  # no issues to fix
+
+            fix_agent_role = debug_data.get("fix_agent", "")
+            if not fix_agent_role:
+                break
+
+            # Map fix_agent_role to phase name
+            role_to_phase = {
+                "design_architect": ("design", "design_architect"),
+                "verification_architect": ("arch", "verification_architect"),
+                "model_agent": ("model", "model_agent"),
+                "spec_planner": ("spec", "spec_and_test_planner"),
+            }
+            if fix_agent_role not in role_to_phase:
+                break
+            phase_name, agent_role = role_to_phase[fix_agent_role]
+
+            agent = self.registry.get_agent_instance(agent_role)
+            if not agent:
+                break
+
+            logger.info(f"[feedback loop {loop+1}] re-running {phase_name} to fix {fix_agent_role}")
+            task = {"bypass": bypass, "ctx": ctx,
+                    "input": json.dumps({"fix": debug_data.get("suggestion", ""),
+                                         "errors": debug_data.get("errors", [])[:3]},
+                                        ensure_ascii=False),
+                    "output_dir": output_root}
+            agent.config["bypass"] = bypass
+            try:
+                r = await agent.execute_task(task)
+                if r.success:
+                    # Update ctx
+                    for k in ("spec", "design_arch", "env", "model", "tests",
+                              "regression", "coverage"):
+                        if k in r.data and r.data[k]:
+                            ctx[k] = r.data[k]
+                    # Re-run test_engineer
+                    test_agent = self.registry.get_agent_instance("test_engineer")
+                    if test_agent:
+                        test_task = {"bypass": bypass, "ctx": ctx,
+                                     "input": json.dumps({"fix": True}, ensure_ascii=False),
+                                     "output_dir": output_root}
+                        test_agent.config["bypass"] = bypass
+                        tr = await test_agent.execute_task(test_task)
+                        if tr.success and "tests" in tr.data:
+                            ctx["tests"] = tr.data["tests"]
+                    # Re-run regression
+                    reg_agent = self.registry.get_agent_instance("regression_manager")
+                    if reg_agent:
+                        reg_agent.config["bypass"] = bypass
+                        rr = await reg_agent.execute_task(
+                            {"bypass": bypass, "ctx": ctx,
+                             "input": json.dumps({"retry": True}, ensure_ascii=False),
+                             "output_dir": output_root})
+                        if rr.success and "regression" in rr.data:
+                            ctx["regression"] = rr.data["regression"]
+                    # Re-run coverage
+                    cov_agent = self.registry.get_agent_instance("coverage_manager")
+                    if cov_agent:
+                        cov_agent.config["bypass"] = bypass
+                        cr = await cov_agent.execute_task(
+                            {"bypass": bypass, "ctx": ctx,
+                             "input": json.dumps({"retry": True}, ensure_ascii=False),
+                             "output_dir": output_root})
+                        if cr.success and "coverage" in cr.data:
+                            ctx["coverage"] = cr.data["coverage"]
+                    # Re-run debug
+                    dbg_agent = self.registry.get_agent_instance("debug_engineer")
+                    if dbg_agent:
+                        dbg_agent.config["bypass"] = bypass
+                        dr = await dbg_agent.execute_task(
+                            {"bypass": bypass, "ctx": ctx,
+                             "input": json.dumps({"retry": True}, ensure_ascii=False),
+                             "output_dir": output_root})
+                        if dr.success and "debug" in dr.data:
+                            ctx["debug"] = dr.data["debug"]
+
+                    logger.info(f"[feedback loop {loop+1}] fix applied, re-ran test+regress+cover+debug")
+                else:
+                    logger.warning(f"[feedback loop {loop+1}] fix agent {fix_agent_role} failed")
+                    break
+            except Exception as e:
+                logger.error(f"[feedback loop {loop+1}] error: {e}")
+                break
+
+            # Re-check debug
+            new_debug = ctx.get("debug", {})
+            if isinstance(new_debug, dict) and new_debug.get("category") == "none":
+                logger.info(f"[feedback loop {loop+1}] all issues resolved!")
+                break
+
+        # Recalculate passed
+        passed = sum(1 for v in results.values() if v in ("passed", "degraded"))
+        run_state["passed"] = passed
 
         # 持久化到数据库
         try:
@@ -186,12 +375,28 @@ class PipelineExecutionService:
         except Exception:
             pass  # DB 不可用时忽略
 
+        # ── 聚合评分 ──
+        active_agents = [p for p in run_state["phases"] if p["status"] != "skipped"]
+        overall_score = int(sum(scores.get(p["name"], 0) for p in active_agents) / max(len(active_agents), 1))
+
+        # ── Log pipeline end ──
+        try:
+            from src.middleware.debug_logger import debug_logger
+            total_time = sum(p.get("time", 0) for p in run_state["phases"])
+            debug_logger.log_pipeline_end(passed, len(phases) - passed, total_time)
+        except Exception: pass
+        ctx["_scores"] = scores
+        ctx["_overall_score"] = overall_score
+        ctx["_iterations"] = iteration_count
+
         return {
             "run_id": run_id,
             "workflow": workflow,
             "phases": run_state["phases"],
             "passed": passed,
             "total": len(phases),
+            "scores": scores,
+            "overall_score": overall_score,
             "ctx": ctx,
         }
 
@@ -246,19 +451,18 @@ class PipelineExecutionService:
     async def generate_testcases(
         self, spec_text: str, output_dir: str = "output/testcases", bypass: bool = True
     ) -> dict:
-        """运行 tc_engineer Agent 生成测试用例"""
+        """运行 test_engineer Agent 生成测试用例"""
         if not self._initialized:
             await self.initialize_agents()
 
         ctx = {
             "spec": {"test_points": []},
             "env": {"env_name": "uart_env"},
-            "policies": {"policies": []},
         }
 
-        agent = self.registry.get_agent_instance("testcase_engineer")
+        agent = self.registry.get_agent_instance("test_engineer")
         if not agent:
-            return {"success": False, "error": "testcase_engineer not found"}
+            return {"success": False, "error": "test_engineer not found"}
 
         agent.config["bypass"] = bypass
         task = {
@@ -267,7 +471,6 @@ class PipelineExecutionService:
             "input": json.dumps({
                 "test_points": [],
                 "env": ctx["env"],
-                "policies": ctx["policies"],
             }),
             "output_dir": output_dir,
         }

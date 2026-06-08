@@ -18,11 +18,6 @@ class {{ environment.env_name }}_virtual_sequencer extends uvm_sequencer #(uvm_s
   uvm_sequencer #({{ name }}_seq_item) {{ name }}_sqr;
 {%- endfor %}
   
-  // Clock & Reset Sequencer（如果启用）
-{% if clk_rst_vip and clk_rst_vip.enabled %}
-  clk_rst_sequencer clk_rst_sqr;
-{% endif %}
-
   // ═══════════════════════════════════════════════════════════════
   // 1.5 has_sequence 辅助 —— UVM-1.2 中 uvm_sequencer_base 无此 API
   //    通过 grab/lock 状态判断是否有活跃 sequence 占用
@@ -129,17 +124,8 @@ class {{ environment.env_name }}_virtual_sequencer extends uvm_sequencer #(uvm_s
       `uvm_info(get_name(), $sformatf("Connected to {{ name }}_sqr"), UVM_HIGH)
     end
 {%- endfor %}
-    
-{% if clk_rst_vip and clk_rst_vip.enabled %}
-    if (!uvm_config_db #(clk_rst_sequencer)::get(
-        this, "", "clk_rst_sqr", clk_rst_sqr)) begin
-      `uvm_warning(get_name(), "clk_rst_sqr not found in config_db")
-    end else begin
-      `uvm_info(get_name(), "Connected to clk_rst_sqr", UVM_HIGH)
-    end
-{% endif %}
   endfunction
-  
+
   // ═══════════════════════════════════════════════════════════════
   // 8. 仲裁策略设置
   // ═══════════════════════════════════════════════════════════════
@@ -255,16 +241,8 @@ class {{ environment.env_name }}_virtual_sequencer extends uvm_sequencer #(uvm_s
         `uvm_info(get_name(), "{{ name }}_sqr has sequence", UVM_HIGH)
     end
 {%- endfor %}
-    
-{% if clk_rst_vip and clk_rst_vip.enabled %}
-    if (clk_rst_sqr != null && has_sequence(clk_rst_sqr)) begin
-      sqrs.push_back(clk_rst_sqr);
-      if (debug_enabled)
-        `uvm_info(get_name(), "clk_rst_sqr has sequence", UVM_HIGH)
-    end
-{% endif %}
   endfunction
-  
+
   // ═══════════════════════════════════════════════════════════════
   // 11. 轮询仲裁实现
   // ═══════════════════════════════════════════════════════════════

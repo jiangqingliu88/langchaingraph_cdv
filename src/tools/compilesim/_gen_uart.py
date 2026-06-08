@@ -2,7 +2,7 @@
 import asyncio, os
 from pathlib import Path
 from src.agents.spec_planner import SpecAndTestPlanner
-from src.agents.architect import VerificationArchitect
+from src.agents.verify_architect import VerificationArchitect
 
 GENDIR = Path(os.environ.get("GENDIR", "D:/tmp/uart_gen"))
 SPEC_FILE = Path("spec_uart.txt")

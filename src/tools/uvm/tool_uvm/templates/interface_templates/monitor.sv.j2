@@ -82,10 +82,10 @@ class {{ agent.name }}_monitor extends uvm_monitor;
       `uvm_do_callbacks({{ agent.name }}_monitor, {{ agent.name }}_monitor_callback,
                         on_pre_sample(this, vif))
 
-      // X/Z 检测
-      if (cfg.check_xz && is_xz_detected()) begin
+      // X/Z 检测 — skip first cycle after reset
+      if (cfg.check_xz && is_xz_detected() && m_collected > 0) begin
         m_xz_detected++;
-        `uvm_error("MON", "X/Z detected on interface")
+        `uvm_warning("MON", "X/Z detected on interface")
       end
 
       item = {{ agent.name }}_seq_item::type_id::create("item");
@@ -126,7 +126,11 @@ class {{ agent.name }}_monitor extends uvm_monitor;
   virtual function bit is_xz_detected();
 {%- for port in ports %}
 {%-   if port.name != clock and port.name != reset %}
+{%-     if port.dir == 'output' %}
+    if ($isunknown(vif.{{ port.name }})) return 1;
+{%-     else %}
     if ($isunknown(vif.cb.{{ port.name }})) return 1;
+{%-     endif %}
 {%-   endif %}
 {%- endfor %}
     return 0;

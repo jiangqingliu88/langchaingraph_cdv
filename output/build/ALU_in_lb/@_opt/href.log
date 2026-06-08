@@ -1,0 +1,6 @@
+BEGIN 3:ALU_in_interface:fast__1:work
+    a :  1:ALU_in_pkg:fast:work
+    valid :  1:ALU_in_pkg:fast:work
+    op :  1:ALU_in_pkg:fast:work
+    b :  1:ALU_in_pkg:fast:work
+END 

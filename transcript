@@ -1,13 +1,13 @@
-# vsim -c -coverage -do "run -all; coverage save D:/tmp/lb.ucdb; quit -f" -work D:/tmp/lb_work UART_in_lb_opt "+UVM_TESTNAME=UART_in_loopback_test" 
-# Start time: 01:22:46 on Jun 04,2026
+# vsim -c -coverage -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -do "run -all; coverage save D:/cdv_a/output/sim/pipeline_cov.ucdb; quit -f" -work D:/cdv_a/output/build/work uart_bench_tb_top "+UVM_TESTNAME=alu_base_test" 
+# Start time: 08:34:17 on Jun 08,2026
 # ** Note: (vsim-3812) Design is being optimized...
 # Support of the MGLS_LICENSE_FILE and LM_LICENSE_FILE licensing environment variables will be discontinued starting with the 2025.1 release. Please update to using the SALT_LICENSE_SERVER variable.
 # Please contact Siemens EDA Customer Support (https://support.sw.siemens.com/) for assistance.
-# ** Error: (vopt-13130) Failed to find design unit 'UART_in_lb_opt'.
+# ** Error: (vopt-13130) Failed to find design unit 'uart_bench_tb_top'.
 #         Searched libraries:
 #             work
 # Optimization failed
 # ** Note: (vsim-12126) Error and warning message counts have been restored: Errors=1, Warnings=0.
 # Error loading design
-# End time: 01:22:47 on Jun 04,2026, Elapsed time: 0:00:01
+# End time: 08:34:18 on Jun 08,2026, Elapsed time: 0:00:01
 # Errors: 1, Warnings: 0

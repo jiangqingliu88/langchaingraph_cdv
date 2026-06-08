@@ -647,16 +647,22 @@ async def design_arch_result():
     result = await service.run_single_agent("design_architect", spec, bypass=True)
     return {"success": result["success"], "data": result.get("output", ""), "error": result.get("error")}
 
+class DesignArchRequest(BaseModel):
+    spec_text: str = ""
+
 @app.post("/api/design_arch")
-async def design_arch_run(spec_text: str = "", user: dict = Depends(require_auth)):
-    """运行设计架构师"""
-    from src.core.execution import PipelineExecutionService
-    service = PipelineExecutionService.get_instance()
-    ctx = {"spec": {}, "env": {"env_name": "uart_env"}}
-    agent = service.registry.get_agent_instance("design_architect")
-    if not agent: raise HTTPException(status_code=404, detail="design_architect not found")
+async def design_arch_run(req: DesignArchRequest, user: dict = Depends(require_auth)):
+    """运行设计架构师 — 每次新建实例确保最新代码"""
+    import importlib
+    import src.agents.design_architect as da_pkg
+    import src.agents.design_architect.main as da_mod
+    importlib.reload(da_mod)
+    importlib.reload(da_pkg)
+    agent = da_pkg.DesignArchitect()
+    await agent.initialize()
     agent.config["bypass"] = True
-    task = {"bypass": True, "ctx": ctx, "input": spec_text or "UART IP with AXI interface"}
+    ctx = {"spec": {}, "env": {"env_name": "uart_env"}}
+    task = {"bypass": True, "ctx": ctx, "input": req.spec_text or "UART IP with AXI interface"}
     r = await agent.execute_task(task)
     return {"success": r.success, "design_arch": r.data.get("design_arch", {}), "output": r.data.get("output", ""), "error": r.error}
 

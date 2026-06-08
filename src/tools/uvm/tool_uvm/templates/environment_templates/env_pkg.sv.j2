@@ -6,9 +6,13 @@ package {{ environment.env_name }}_pkg;
 {%- for agent in agents %}
   import {{ agent.name }}_pkg::*;
 {%- endfor %}
-
+`ifdef USE_SC_MODEL_CHECK
+  import {{ environment.env_name }}_sc_pred_env_pkg::*;
+`endif
   // 包含环境组件文件
   `include "{{ environment.env_name }}_config.sv"
   `include "seqs/{{ environment.env_name }}_virtual_sequencer.sv"
   `include "{{ environment.env_name }}.sv"
+
+endpackage : {{ environment.env_name }}_pkg
 

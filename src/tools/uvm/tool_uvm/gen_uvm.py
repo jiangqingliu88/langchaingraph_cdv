@@ -94,6 +94,11 @@ BENCH_TEMPLATES = [
     ("bench_templates/tb_top.sv.j2", "{bench_name}_tb_top.sv"),
 ]
 
+CMODEL_TEMPLATES = [
+    ("environment_templates/cmodel_predictor.sv.j2", "{module_name}_cmodel_predictor.sv"),
+    ("environment_templates/cmodel_dpi.cpp.j2", "{module_name}_dpi_wrapper.cpp"),
+]
+
 CALLBACK_FILES = [
     ("{agent_name}_callback_base.sv", """// Callback Base: {agent_name}_callback_base
 class {agent_name}_callback_base extends {agent_name}_agent_callback;
@@ -143,6 +148,13 @@ class AgentModel:
     config: Dict[str, Any] = field(default_factory=lambda: {"is_active": "UVM_ACTIVE"})
 
     def __post_init__(self) -> None:
+        if not self.interface:
+            self.interface = self.name
+        # Normalize: strip _interface suffix (may come from env/bench YAML)
+        if self.interface.endswith("_interface"):
+            self.interface = self.interface[:-len("_interface")]
+        if not self.reset:
+            self.reset = "rst"
         for var in self.transaction_vars:
             var.setdefault("iscompare", "False")
             var.setdefault("isrand", "False")

@@ -9,16 +9,16 @@ from rich.syntax import Syntax
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn
 from src.core.registry import AgentRegistry
 from src.agents.spec_planner import SpecAndTestPlanner
-from src.agents.architect import VerificationArchitect
-from src.agents.sequence_engineer import SequenceEngineer
+from src.agents.design_architect import DesignArchitect
+from src.agents.verify_architect import VerificationArchitect
+from src.agents.test_engineer import TestEngineer
 from src.agents.assertion_engineer import AssertionEngineer
 from src.agents.coverage_manager import CoverageManager
 from src.agents.regression_manager import RegressionManager
 from src.agents.debug_engineer import DebugEngineer
 from src.agents.quality_assurance import QualityAssurance
 from src.agents.report_generator import ReportGenerator
-from src.agents.testcase_engineer import TestCaseEngineer
-from src.agents.design_arch import DesignArchitect
+from src.agents.model_agent import ModelAgent
 from config.settings import Settings
 
 console = Console()
@@ -33,21 +33,21 @@ class VerificationCLI:
     async def initialize(self):
         agents = [
             ("spec_and_test_planner", SpecAndTestPlanner()),
+            ("design_architect", DesignArchitect()),
             ("verification_architect", VerificationArchitect()),
-            ("sequence_engineer", SequenceEngineer()),
+            ("model_agent", ModelAgent()),
+            ("test_engineer", TestEngineer()),
             ("assertion_engineer", AssertionEngineer()),
             ("coverage_manager", CoverageManager()),
             ("regression_manager", RegressionManager()),
             ("debug_engineer", DebugEngineer()),
             ("quality_assurance", QualityAssurance()),
             ("report_generator", ReportGenerator()),
-            ("testcase_engineer", TestCaseEngineer()),
-            ("design_architect", DesignArchitect()),
         ]
         for role, agent in agents:
             await agent.initialize()
             self.registry.set_agent_instance(role, agent)
-        console.print("[green]All 9 agents initialized[/green]")
+        console.print("[green]All 11 agents initialized[/green]")
 
 @click.group()
 def cli():
@@ -80,31 +80,59 @@ def analyze(spec_file, bypass):
 @click.argument('spec_file', type=click.Path(exists=True))
 @click.option('--workflow', '-w', default='full_verification')
 @click.option('--bypass', is_flag=True)
+@click.option('--refine', is_flag=True, help='LLM refine: template foundation + LLM polish + iterative fix')
 @click.option('--compile', is_flag=True, help='Run QuestaSim compile after arch phase')
 @click.option('--output', '-o', type=click.Path())
-def verify(spec_file, workflow, bypass, compile, output):
-    """完整验证流水线 —— 10 Agent 共享上下文协调"""
+def verify(spec_file, workflow, bypass, compile, output, refine):
+    """完整验证流水线 —— 每阶段实时输出"""
     from src.core.execution import PipelineExecutionService
     output_root = output or "output"
+    if refine:
+        console.print("[bold cyan]LLM Refine mode: template foundation + LLM polish + iterative fix[/bold cyan]")
     async def run():
         service = PipelineExecutionService.get_instance()
         spec = Path(spec_file).read_text(encoding='utf-8')
 
-        result = await service.run_pipeline(
-            spec_text=spec,
-            workflow=workflow,
-            output_root=output_root,
-            bypass=bypass,
-        )
+        console.print(f"[bold cyan]═══ Pipeline: {workflow} ═══[/bold cyan]")
 
-        # Rich 表格输出
-        table = Table(title=f"Pipeline: {workflow}")
-        table.add_column("Phase"); table.add_column("Status"); table.add_column("Time")
+        def progress(phase, status, msg):
+            icon = {"running": ">", "passed": "+", "failed": "X", "error": "!"}.get(status, ".")
+            color = {"running": "yellow", "passed": "green", "failed": "red", "error": "red"}.get(status, "")
+            clean_msg = str(msg).replace("[", "(").replace("]", ")")  # avoid Rich markup conflicts
+            console.print(f"  [{color}][{icon}] {phase:8s}[/{color}] {clean_msg}")
+
+        result = await service.run_pipeline(
+            spec_text=spec, workflow=workflow, output_root=output_root, bypass=bypass,
+            on_progress=progress, refine=refine)
+
+        # Build agent role map for display
+        agent_info = {}
+        for role, inst in service.registry.get_all_instances().items():
+            agent_info[inst.role] = getattr(inst, 'produces', '') or ''
+        # Map phase name → role
+        from src.core.execution import FULL_PHASES
+        phase_map = {p[0]: p[1] for p in FULL_PHASES}
+
+        # Table summary
+        table = Table(title=f"Results")
+        table.add_column("Phase"); table.add_column("Produces"); table.add_column("Status"); table.add_column("Score"); table.add_column("Retries"); table.add_column("Time")
         for p in result["phases"]:
-            icon = "[green]OK[/green]" if p["status"] == "passed" else "[red]FAIL[/red]"
-            table.add_row(p["name"], icon, f"{p['time']}s")
+            st = p["status"]
+            icon = "[green]PASS[/green]" if st == "passed" else ("[yellow]DEGRADED[/yellow]" if st == "degraded" else ("[red]FAIL[/red]" if st == "failed" else "[dim]SKIP[/dim]"))
+            sc = str(p.get("score", "")) if p.get("score") else "-"
+            rt = str(p.get("retries", 0))
+            role = phase_map.get(p["name"], "")
+            prod = agent_info.get(role, "-")
+            table.add_row(p["name"], prod, icon, sc, rt, f"{p['time']}s")
         console.print(table)
-        console.print(f"[bold]Result: {result['passed']}/{result['total']}[/bold]")
+        overall = result.get("overall_score", 0)
+        ov_color = "green" if overall >= 80 else "yellow" if overall >= 50 else "red"
+        console.print(f"[bold]Passed: {result['passed']}/{result['total']}  Score: [{ov_color}]{overall}/100[/{ov_color}][/bold]")
+        cov = result.get("ctx", {}).get("coverage", {})
+        if isinstance(cov, dict):
+            rc = cov.get("_real_coverage", {})
+            if rc:
+                console.print(f"[cyan]Coverage: line={rc.get('line_pct',0):.1f}% branch={rc.get('branch_pct',0):.1f}% toggle={rc.get('toggle_pct',0):.1f}%[/cyan]")
 
         # ── 可选：arch 后编译 ──
         if compile and any(p["name"] == "arch" and p["status"] == "passed" for p in result["phases"]):
@@ -190,15 +218,16 @@ def workflows():
 # ── Agent 快捷名 → role 映射 ──
 AGENT_ALIASES = {
     "spec":    "spec_and_test_planner",
+    "design":  "design_architect",
     "arch":    "verification_architect",
-    "seq":     "sequence_engineer",
+    "model":   "model_agent",
+    "test":    "test_engineer",
     "assert":  "assertion_engineer",
     "cover":   "coverage_manager",
     "regress": "regression_manager",
     "debug":   "debug_engineer",
     "qa":      "quality_assurance",
     "report":  "report_generator",
-    "tc":      "testcase_engineer",
 }
 AGENT_HELP = ", ".join(AGENT_ALIASES.keys())
 

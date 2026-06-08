@@ -27,8 +27,8 @@ agents:
       - extract_features
     collaborators:
       - verification_architect
-      - sequence_engineer
-      - assertion_engineer
+      - design_architect
+      - test_engineer
     
   verification_architect:
     role: "verification_architect"
@@ -46,15 +46,43 @@ agents:
       - assertion_engineer
       - coverage_manager
     
-  sequence_engineer:
-    role: "sequence_engineer"
-    display_name: "序列工程师"
-    description: "设计UVM测试序列和场景"
+  design_architect:
+    role: "design_architect"
+    display_name: "设计架构师"
+    description: "模块 Spec → function hierarchy + register map + RTL hierarchy"
+    priority: 2
+    tools:
+      - analyze_specification
+      - generate_function_hierarchy
+      - generate_register_map
+    collaborators:
+      - spec_and_test_planner
+      - verification_architect
+
+  model_agent:
+    role: "model_agent"
+    display_name: "参考模型工程师"
+    description: "生成 C++/SC 参考模型用于 Scoreboard 比对"
+    priority: 3
+    tools:
+      - generate_reference_model
+      - generate_predictor
+      - validate_model
+    collaborators:
+      - design_architect
+      - verification_architect
+
+  test_engineer:
+    role: "test_engineer"
+    display_name: "测试工程师"
+    description: "约束策略→场景映射→SV测试代码+simargs 一站式生成"
     priority: 4
     tools:
-      - generate_sequence
-      - generate_virtual_sequence
-      - analyze_sequence_coverage
+      - parse_test_points
+      - map_policies_to_tests
+      - build_scenario_yaml
+      - generate_test_cases
+      - check_test_coverage
     collaborators:
       - verification_architect
       - regression_manager
@@ -131,18 +159,24 @@ agents:
 # 验证流程定义
 pipelines:
   full_verification:
-    name: "完整验证流程"
+    name: "完整验证流程（11 阶段）"
     phases:
       - name: "spec_analysis"
         agent: "spec_and_test_planner"
+        next: "design_architecture"
+      - name: "design_architecture"
+        agent: "design_architect"
         next: "architecture_design"
       - name: "architecture_design"
         agent: "verification_architect"
+        next: "model_generation"
+      - name: "model_generation"
+        agent: "model_agent"
         next: "parallel_development"
       - name: "parallel_development"
         parallel: true
         agents:
-          - "sequence_engineer"
+          - "test_engineer"
           - "assertion_engineer"
         next: "regression"
       - name: "regression"
@@ -159,15 +193,21 @@ pipelines:
         next: "decision"
       - name: "decision"
         agent: "verification_orchestrator"
-        
+
   quick_check:
-    name: "快速检查流程"
+    name: "快速检查流程（5 阶段）"
     phases:
       - name: "spec_analysis"
         agent: "spec_and_test_planner"
+        next: "design_architecture"
+      - name: "design_architecture"
+        agent: "design_architect"
         next: "architecture_design"
       - name: "architecture_design"
         agent: "verification_architect"
+        next: "test_generation"
+      - name: "test_generation"
+        agent: "test_engineer"
         next: "review"
       - name: "review"
         agent: "quality_assurance"

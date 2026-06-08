@@ -44,8 +44,8 @@ class AgentDebugLogger:
         }
         self._buffer.append(entry)
         
-        # 每10条写入一次
-        if len(self._buffer) >= 10:
+        # 每 2 条写入一次（确保实时可见）
+        if len(self._buffer) >= 2:
             self.flush()
     
     def log_pipeline_start(self, workflow, spec_file, phases):

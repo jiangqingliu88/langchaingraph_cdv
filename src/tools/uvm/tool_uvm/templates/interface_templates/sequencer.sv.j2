@@ -209,7 +209,7 @@ class {{ agent.name }}_sequencer extends uvm_sequencer #({{ agent.name }}_seq_it
     `uvm_do_callbacks({{ agent.name }}_sequencer, {{ agent.name }}_sequencer_callback,
                       on_response_received(this, item))
 
-    super.put_response(rsp);
+    super.put_response(item);
   endfunction
 
   virtual task get_response_timeout(output {{ agent.name }}_seq_item rsp,

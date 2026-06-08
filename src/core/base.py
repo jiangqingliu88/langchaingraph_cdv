@@ -19,6 +19,25 @@ from config.settings import Settings
 
 logger = structlog.get_logger()
 
+# ── Helper: extract JSON from LLM text output ──
+
+def _extract_json_from_llm(text: str):
+    """Try to extract a JSON dict from LLM text (may be in ```json blocks)."""
+    if not text or not isinstance(text, str):
+        return None
+    import re as _re
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        pass
+    m = _re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, _re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return None
+
 # ==================== 基础数据模型 ====================
 
 class AgentStatus(Enum):
@@ -140,7 +159,14 @@ class BaseAgent(ABC, AgentSubject):
         
         # 设置
         self.settings = Settings.get_instance()
-        
+
+        # ── 验证与重试 ──
+        self.min_score = 50       # 最低分阈值（低于此分触发重试）
+        self.max_retries = 2      # 最大重试次数
+        self._retry_count = 0     # 当前重试计数
+        self._best_score = 0      # 历史最高分
+        self._best_result = None  # 历史最佳产出
+
         logger.info(f"Agent初始化", role=self.role, name=self.display_name)
     
     def _create_llm(
@@ -256,6 +282,25 @@ class BaseAgent(ABC, AgentSubject):
             if relevant:
                 ctx[self.produces] = relevant
 
+    # ── 验证 ──
+
+    def validate(self, result_data: dict) -> tuple[bool, str]:
+        """验证 Agent 产出是否达到最低质量标准。
+
+        返回 (passed, reason)。子类可覆盖此方法定义自己的验证规则。
+        默认：检查 score >= min_score。
+        """
+        score = result_data.get("score", 0)
+        if score < self.min_score:
+            return False, f"score {score} < min {self.min_score}"
+        return True, "OK"
+
+    def reset_retry_state(self):
+        """重置重试状态（每次管道调用时清空）"""
+        self._retry_count = 0
+        self._best_score = 0
+        self._best_result = None
+
     # ── 任务执行 ──
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
@@ -267,7 +312,10 @@ class BaseAgent(ABC, AgentSubject):
             task["_ctx_data"] = ctx_data
 
         if bypass:
-            result = AgentResult(success=True, data={"output": f"[{self.display_name}] bypass mode"})
+            result = AgentResult(success=True, data={
+                "output": f"[{self.display_name}] bypass mode",
+                "score": 50,  # default baseline score for agents without override
+            })
             self._write_ctx(task, result)
             # 记录调试日志
             from src.middleware.debug_logger import debug_logger
@@ -279,13 +327,50 @@ class BaseAgent(ABC, AgentSubject):
         try:
             processed_input = await self._pre_process(task)
             if self._executor:
-                result = await self._executor.ainvoke({"input": processed_input})
+                result = await self._executor.ainvoke({
+                    "input": processed_input,
+                    "chat_history": [],
+                    "tool_names": [t.name for t in self.tools] if self.tools else [],
+                })
             else:
                 result = await self._execute(processed_input)
             processed_result = await self._post_process(result)
             execution_time = (datetime.now() - start_time).total_seconds()
             self.metrics["tasks_completed"] += 1
             self.metrics["total_time"] += execution_time
+
+            # ── Extract structured data from LLM text output ──
+            if isinstance(processed_result, dict):
+                llm_output = processed_result.get("output", "")
+                if isinstance(llm_output, str):
+                    # Try to extract JSON from LLM text
+                    parsed = _extract_json_from_llm(llm_output)
+                    if parsed:
+                        for k, v in parsed.items():
+                            if k not in processed_result:
+                                processed_result[k] = v
+                        # Auto-detect which ctx key this agent's output maps to
+                        # If parsed has spec-like keys, wrap in "spec"
+                        SPEC_KEYS = {"design_name", "features", "interfaces", "test_points",
+                                     "verification_architecture", "registers", "clock_domains"}
+                        DESIGN_KEYS = {"module_name", "function_hier", "rtl_hier", "signoff_checklist"}
+                        ENV_KEYS = {"env_name", "agent_count", "files", "filelist"}
+                        parsed_keys = set(parsed.keys())
+                        if parsed_keys & SPEC_KEYS and "spec" not in processed_result:
+                            processed_result["spec"] = parsed
+                        if parsed_keys & DESIGN_KEYS and "design_arch" not in processed_result:
+                            processed_result["design_arch"] = parsed
+                        if parsed_keys & ENV_KEYS and "env" not in processed_result:
+                            processed_result["env"] = parsed
+                    # Heuristic scoring
+                    if "score" not in processed_result and llm_output:
+                        n_lines = len(llm_output.split("\n"))
+                        has_json = "{" in llm_output
+                        processed_result["score"] = min(60 + (n_lines // 20) * 5 + (10 if has_json else 0), 85)
+
+            # Ensure a score is present
+            if isinstance(processed_result, dict) and "score" not in processed_result:
+                processed_result["score"] = 60  # LLM-based agents get baseline
             agent_result = AgentResult(success=True, data=processed_result, execution_time=execution_time)
             # 将产出写回共享上下文
             self._write_ctx(task, agent_result)

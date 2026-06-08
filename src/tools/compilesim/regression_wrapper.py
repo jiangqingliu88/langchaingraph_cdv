@@ -28,13 +28,14 @@ class RegressionRunner:
         self.top_module = top_module
         self.simulator = simulator
         self.coverage = coverage
-        self.work_dir = Path(work_dir) if work_dir else (self.env_dir / "build" / "work")
+        self.work_dir = (Path(work_dir) if work_dir else (self.env_dir / "build" / "work")).resolve()
+        self.work_dir_str = str(self.work_dir).replace("\\", "/")
         self.vlib = os.path.join(QUESTA, "vlib.exe")
         self.vlog = os.path.join(QUESTA, "vlog.exe")
         self.vsim = os.path.join(QUESTA, "vsim.exe")
         self.vcover = os.path.join(QUESTA, "vcover.exe")
         self.uvm_pkg = os.path.join(UVM_SRC, "uvm_pkg.sv")
-        self.cov_dir = self.work_dir.parent / "coverage"
+        self.cov_dir = self.env_dir / "sim"
 
     # ── 动态生成 YAML ──
 
@@ -65,9 +66,9 @@ class RegressionRunner:
                 "builds": [{
                     "name": build_name, "simulator": self.simulator,
                     "pre_build": [
-                        "bash -c 'mkdir -p " + str(self.work_dir) + "'",
-                        "bash -c '" + self.vlib + " " + str(self.work_dir) + "'",
-                        "bash -c '" + self.vlog + " -work " + str(self.work_dir)
+                        "bash -c 'mkdir -p " + self.work_dir_str + "'",
+                        "bash -c '" + self.vlib + " " + self.work_dir_str + "'",
+                        "bash -c '" + self.vlog + " -work " + self.work_dir_str
                         + " -sv +incdir+" + UVM_SRC + " -timescale=1ns/1ps "
                         + self.uvm_pkg + " -f " + self.filelist + "'",
                     ],
@@ -87,17 +88,19 @@ class RegressionRunner:
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
         # vlib
-        r1 = subprocess.run([self.vlib, str(self.work_dir)],
+        r1 = subprocess.run([self.vlib, self.work_dir_str],
                             capture_output=True, text=True, timeout=60)
         if r1.returncode != 0 and "already exists" not in r1.stdout:
             return {"status": "FAIL", "errors": 1, "time_s": time.time() - t0, "stderr": r1.stderr[:500]}
 
         # vlog（coverage 模式加 +acc）
         vlog_cmd = [
-            self.vlog, "-work", str(self.work_dir), "-sv",
+            self.vlog, "-work", self.work_dir_str, "-sv",
             "+incdir+" + UVM_SRC, "-timescale=1ns/1ps",
         ]
         if self.coverage:
+            vlog_cmd += ["+acc", "+cover"]
+        else:
             vlog_cmd.append("+acc")
         vlog_cmd += [self.uvm_pkg, "-f", self.filelist]
         r2 = subprocess.run(vlog_cmd, capture_output=True, text=True, timeout=300)
@@ -136,55 +139,43 @@ class RegressionRunner:
         """运行单次仿真 + -coverage + vcover report，返回真实覆盖率数字"""
         self.cov_dir.mkdir(parents=True, exist_ok=True)
         test_tag = uvm_test or test_name
-        ucdb = str(self.cov_dir / f"{test_name}.ucdb")
+        ucdb = str(self.cov_dir.resolve() / f"{test_name}.ucdb").replace("\\", "/")
 
-        # vsim -coverage
+        # vsim -coverage with UVM DPI library
+        uvm_dpi = "f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi"
         vsim_cmd = [
-            self.vsim, "-c", "-coverage", "-do",
-            f"run -all; coverage save {ucdb}; quit",
-            "-work", str(self.work_dir),
-            "-L", "uvm", self.top_module,
+            self.vsim, "-c", "-coverage",
+            "-sv_lib", uvm_dpi,
+            "-onfinish", "stop",
+            "-do", f"run -all; coverage save {ucdb}; quit -f",
+            "-work", self.work_dir_str,
+            self.top_module,
             "+UVM_TESTNAME=" + test_tag,
         ]
-        r = subprocess.run(vsim_cmd, capture_output=True, text=True, timeout=300,
-                           cwd=str(self.work_dir.parent))
+        r = subprocess.run(vsim_cmd, capture_output=True, text=True, timeout=300)
 
         if not Path(ucdb).exists():
             return {"status": "FAIL", "error": "ucdb not generated", "test": test_name}
 
-        # vcover report
+        # vcover report (use -summary for cleaner parsing)
         r2 = subprocess.run([
-            self.vcover, "report", "-details", ucdb,
+            self.vcover, "report", "-summary", "-code", "bcest", "-du=alu", ucdb,
         ], capture_output=True, text=True, timeout=60)
 
-        # 解析 vcover report 输出
-        lines = r2.stdout.split("\n")
+        # Parse vcover summary
         cov_data = {"test": test_name, "status": "PASS" if r.returncode == 0 else "FAIL"}
-        current_section = None
-        for line in lines:
+        for line in r2.stdout.split("\n"):
             line = line.strip()
-            if "Statement Coverage" in line or "Line Coverage" in line:
-                current_section = "line"
-            elif "Branch Coverage" in line:
-                current_section = "branch"
-            elif "Toggle Coverage" in line:
-                current_section = "toggle"
-            elif "FSM" in line and "Coverage" in line:
-                current_section = "fsm"
-            elif "%" in line and current_section:
-                # parse "85.2%" style output
-                try:
-                    pct_str = line.split("%")[0].strip().split()[-1]
-                    pct = float(pct_str)
-                    cov_data[f"{current_section}_pct"] = pct
-                except (ValueError, IndexError):
-                    pass
+            # Match: "Statements     37    21    16    56.75%"
+            m = __import__('re').match(r"(Statements|Branches|Conditions|Expressions|Toggles)\s+\d+\s+\d+\s+\d+\s+([\d.]+)%", line)
+            if m:
+                key_map = {"Statements":"line","Branches":"branch","Toggles":"toggle","Conditions":"cond","Expressions":"expr"}
+                k = key_map.get(m.group(1), m.group(1).lower())
+                cov_data[f"{k}_pct"] = float(m.group(2))
 
-        # 汇总
         cov_data.setdefault("line_pct", 0)
         cov_data.setdefault("branch_pct", 0)
         cov_data.setdefault("toggle_pct", 0)
-        cov_data.setdefault("fsm_pct", 0)
         return cov_data
 
     # ── 完整回归 ──
