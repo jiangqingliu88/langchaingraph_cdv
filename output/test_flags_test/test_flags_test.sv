@@ -1,7 +1,7 @@
 # src/tools/testcase_gen/templates/test.sv.j2
 // ============================================
 // Test: test_flags_test
-// Scenario: flags — 5 个测试用例
+// Scenario: flags — 4 个测试用例
 // Policy Mode: APPLY_SEQUENTIAL
 // Active Policies: precision_consistency, compute_mode
 // ============================================

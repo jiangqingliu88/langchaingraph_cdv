@@ -1,7 +1,7 @@
 # src/tools/testcase_gen/templates/test.sv.j2
 // ============================================
 // Test: test_logic_test
-// Scenario: logic — 5 个测试用例
+// Scenario: logic — 6 个测试用例
 // Policy Mode: APPLY_SEQUENTIAL
 // Active Policies: precision_consistency, compute_mode
 // ============================================

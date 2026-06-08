@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-08T08:45:22.147717",
+  "timestamp": "2026-06-08T12:49:31.362204",
   "agent": "verification_architect",
   "output_dir": "D:\\cdv_a\\output",
   "env_name": "alu_env",
@@ -31,26 +31,26 @@
           "compile": "PASS",
           "compile_errors": 0,
           "compile_time_s": 1.0,
-          "sim_time_s": 2.3,
+          "sim_time_s": 2.4,
           "sim_passed": false,
           "sim_errors": 3,
           "matched": 200,
           "mismatched": 200,
           "timeout": false,
-          "score": 10
+          "score": 7
         },
         {
           "agent": "ALU_out",
           "compile": "PASS",
           "compile_errors": 0,
           "compile_time_s": 1.0,
-          "sim_time_s": 2.2,
+          "sim_time_s": 2.1,
           "sim_passed": false,
           "sim_errors": 3,
           "matched": 200,
           "mismatched": 200,
           "timeout": false,
-          "score": 10
+          "score": 7
         }
       ],
       "all_compile_pass": true,

@@ -1,7 +1,7 @@
 # src/tools/testcase_gen/templates/test.sv.j2
 // ============================================
 // Test: test_mode_test
-// Scenario: mode — 3 个测试用例
+// Scenario: mode — 4 个测试用例
 // Policy Mode: APPLY_SEQUENTIAL
 // Active Policies: precision_consistency, compute_mode
 // ============================================

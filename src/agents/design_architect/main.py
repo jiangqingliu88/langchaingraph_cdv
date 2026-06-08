@@ -1,5 +1,5 @@
 """
-设计架构师 Agent —— 模块 Spec → function_hier(代码风格) + 寄存器 + RTL hierarchy
+设计架构师 Agent —— 模块 Spec ->function_hier(代码风格) + 寄存器 + RTL hierarchy
 
 Output: 函数模块声明 + 寄存器 map + RTL 例化层次 + signoff checklist
 """
@@ -23,7 +23,7 @@ class DesignArchitect(BaseAgent):
     def __init__(self, config: Dict[str, Any] = None):
         super().__init__(
             role="design_architect", display_name="设计架构师",
-            description="模块 Spec → function hierarchy + register map + RTL hierarchy",
+            description="模块 Spec ->function hierarchy + register map + RTL hierarchy",
             config=config or {})
         self.min_score = 50
 
@@ -45,6 +45,7 @@ class DesignArchitect(BaseAgent):
         try:
             spec_text = task.get("input", str(task))
             module_name = _extract_module(spec_text)
+            print(f"  [DE] module={module_name}", flush=True)
 
             # 根据模块名选择生成器
             if module_name == 'alu':
@@ -56,8 +57,18 @@ class DesignArchitect(BaseAgent):
             rtl_hier   = _gen_rtl_hierarchy(module_name, func_hier)
             signoff    = _gen_signoff(module_name, func_hier, registers)
 
+            # ── Print decomposition ──
+            leaves = _extract_leaf_ops(func_hier)
+            leaf_names = [n.get("name","?") for n in leaves]
+            print(f"  [DE] sub-modules: {len(leaves)} ->{leaf_names[:8]}{'...' if len(leaves)>8 else ''}", flush=True)
+            reg_names = [r.get("name","?") for r in registers]
+            print(f"  [DE] registers: {len(registers)} ->{reg_names[:6]}{'...' if len(registers)>6 else ''}", flush=True)
+
             doc_code = _render_code(module_name, func_hier, registers, rtl_hier, signoff)
             synth_rtl = _render_synth_rtl(module_name, func_hier, registers)
+            rtl_lines = len(synth_rtl.splitlines())
+            op_count = len([l for l in synth_rtl.splitlines() if 'localparam' in l and "= 4'h" in l])
+            print(f"  [DE] RTL: {rtl_lines} lines, {op_count} ops, ports=clk/rst_n/a/b/op/valid/result/flags", flush=True)
 
             result = {
                 "module_name": module_name,
@@ -77,6 +88,7 @@ class DesignArchitect(BaseAgent):
             rtl_path.write_text(synth_rtl, encoding="utf-8")
             result["rtl_file"] = str(rtl_path)
             result["rtl_type"] = "synthesizable"
+            print(f"  [DE] wrote RTL ->{rtl_path} ({rtl_path.stat().st_size}b)", flush=True)
 
             elapsed = (dt.now() - start).total_seconds()
             fc = result.get("function_count", 0)
@@ -198,7 +210,7 @@ def _gen_function_hierarchy(name: str, spec: str) -> dict:
                     {"dir": "output", "name": "tick_o",       "width": 1,  "desc": "16x baud tick"},
                 ],
                 "children": [
-                    {"name": "baud_counter", "comment": "// Baud Counter: cnt=divisor → tick pulse //",
+                    {"name": "baud_counter", "comment": "// Baud Counter: cnt=divisor ->tick pulse //",
                      "ports": [
                          {"dir": "input","name":"divisor_i","width":16,"desc":"Division ratio"},
                          {"dir": "output","name":"tick_o","width":1,"desc":"16x baud rate tick"},
@@ -301,7 +313,7 @@ def _gen_register_map(name: str, spec: str) -> list:
          "desc": "IP Version Register",
          "fields": [
              {"bits":"[3:0]",  "name":"MINOR_REV", "access":"RO","reset":"4'h1","desc":"Minor revision"},
-             {"bits":"[7:4]",  "name":"MAJOR_REV", "access":"RO","reset":"4'h0","desc":"Major revision → v0.1"},
+             {"bits":"[7:4]",  "name":"MAJOR_REV", "access":"RO","reset":"4'h0","desc":"Major revision ->v0.1"},
          ]},
     ]
 
@@ -403,7 +415,7 @@ def _gen_signoff(name: str, func_hier: dict, registers: list) -> list:
                           "cat":"register_field","status":"pending"})
     # Cross checks
     items.extend([
-        {"item":"// TODO: CDC check — PCLK → baud_clk synchronizer","cat":"cdc","status":"pending"},
+        {"item":"// TODO: CDC check — PCLK ->baud_clk synchronizer","cat":"cdc","status":"pending"},
         {"item":"// TODO: reset sequence — assert rst_n ≥ 100ns, de-assert sync to clk","cat":"reset","status":"pending"},
         {"item":"// TODO: APB protocol — no wait states, pslverr on unmapped addr","cat":"interface","status":"pending"},
         {"item":"// TODO: clock gating — gate baud_clk when SLEEP_EN=1","cat":"power","status":"pending"},
@@ -616,7 +628,7 @@ def _gen_alu_function_hierarchy() -> dict:
                       {"dir":"input","name":"b_i","width":32,"desc":"Multiplier"},
                       {"dir":"output","name":"prod_o","width":64,"desc":"Product"},
                   ],"children":[]},
-                 {"name":"restoring_div","comment":"// Restoring Divider: 32b/32b → quotient + remainder //",
+                 {"name":"restoring_div","comment":"// Restoring Divider: 32b/32b ->quotient + remainder //",
                   "ports":[
                       {"dir":"input","name":"dividend_i","width":32,"desc":""},
                       {"dir":"input","name":"divisor_i","width":32,"desc":""},

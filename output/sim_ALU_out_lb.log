@@ -1,6 +1,6 @@
 # vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -do "run 2us; quit -f" -work D:/cdv_a/output/build/ALU_out_lb -l D:/cdv_a/output/sim_ALU_out_lb.log ALU_out_loopback_tb "+UVM_TESTNAME=ALU_out_loopback_test" 
-# Start time: 08:45:20 on Jun 08,2026
-# Loading C:/Users/jiang/AppData/Local/Temp\jiang@LIUJIANGQING_dpi_30860\win64_gcc-8.1.0\export_tramp.dll
+# Start time: 12:49:29 on Jun 08,2026
+# Loading C:/Users/jiang/AppData/Local/Temp\jiang@LIUJIANGQING_dpi_9072\win64_gcc-8.1.0\export_tramp.dll
 # ** Note: (vsim-8009) Loading existing optimized design _opt
 # //  Questa Sim-64
 # //  Version 2024.1 win64 Feb  1 2024
@@ -26,8 +26,8 @@
 # Loading work.uvm_pkg_sv_unit(fast)
 # Loading work.ALU_out_loopback_tb(fast)
 # Loading work.ALU_out_interface(fast__2)
-# Compiling C:/Users/jiang/AppData/Local/Temp\jiang@LIUJIANGQING_dpi_30860\win64_gcc-8.1.0\exportwrapper.c
-# Loading C:/Users/jiang/AppData/Local/Temp\jiang@LIUJIANGQING_dpi_30860\win64_gcc-8.1.0\vsim_auto_compile.dll
+# Compiling C:/Users/jiang/AppData/Local/Temp\jiang@LIUJIANGQING_dpi_9072\win64_gcc-8.1.0\exportwrapper.c
+# Loading C:/Users/jiang/AppData/Local/Temp\jiang@LIUJIANGQING_dpi_9072\win64_gcc-8.1.0\vsim_auto_compile.dll
 # Loading f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi.dll
 # run 2us
 # UVM_INFO f:/questasim64_2024.1/verilog_src/uvm-1.2/src/base/uvm_root.svh(392) @ 0: reporter [UVM/RELNOTES] 
@@ -484,5 +484,5 @@
 # Break in Task uvm_pkg/uvm_root::run_test at f:/questasim64_2024.1/verilog_src/uvm-1.2/src/base/uvm_root.svh line 517
 # Stopped at f:/questasim64_2024.1/verilog_src/uvm-1.2/src/base/uvm_root.svh line 517
 #  quit -f
-# End time: 08:45:21 on Jun 08,2026, Elapsed time: 0:00:01
+# End time: 12:49:31 on Jun 08,2026, Elapsed time: 0:00:02
 # Errors: 0, Warnings: 0

@@ -206,8 +206,58 @@ def _build_alu_plan(spec_text: str) -> dict:
                 {"name": "has_scoreboard", "type": "bit", "value": 1},
                 {"name": "has_functional_coverage", "type": "bit", "value": 1},
             ],
+            "constraint_policies": _derive_constraint_policies(spec_text, features, registers),
         },
     }
+
+
+def _derive_constraint_policies(spec_text: str, features: list, registers: list) -> list:
+    """Derive constraint policies from spec analysis — replaces static YAML."""
+    policies = []
+    text = spec_text.lower()
+
+    # Arithmetic precision
+    if any(kw in text for kw in ["add", "sub", "mul", "div", "arithmetic"]):
+        policies.append({"name": "arithmetic_precision", "description": "Arithmetic operation precision",
+                         "priority": 1, "enabled": True, "applies_to": ["cfg", "input"]})
+
+    # Data width / overflow
+    if any(kw in text for kw in ["32bit", "32-bit", "overflow", "flag"]):
+        policies.append({"name": "overflow_detection", "description": "Overflow and carry flag validation",
+                         "priority": 2, "enabled": True, "applies_to": ["input", "output"]})
+
+    # Multi-mode (single cycle / multi cycle / pipeline)
+    if any(kw in text for kw in ["single", "multi", "cycle", "pipeline", "mode"]):
+        policies.append({"name": "operation_mode", "description": "Single/multi-cycle mode switching",
+                         "priority": 3, "enabled": True, "applies_to": ["cfg", "input"]})
+
+    # Shift ops
+    if any(kw in text for kw in ["shift", "sll", "srl", "sra", "barrel"]):
+        policies.append({"name": "shift_boundary", "description": "Shift amount boundary (0-31)",
+                         "priority": 4, "enabled": True, "applies_to": ["input"]})
+
+    # Boundary stress
+    policies.append({"name": "boundary_stress", "description": "Max/min operand boundaries",
+                     "priority": 5, "enabled": True, "applies_to": ["input", "output"]})
+
+    # Flag consistency
+    if any(kw in text for kw in ["flag", "n", "z", "c", "v", "negative", "zero", "carry"]):
+        policies.append({"name": "flag_consistency", "description": "N/Z/C/V flag cross-check",
+                         "priority": 6, "enabled": True, "applies_to": ["output"]})
+
+    # Register access
+    if registers:
+        policies.append({"name": "register_access", "description": "APB register read/write consistency",
+                         "priority": 7, "enabled": True, "applies_to": ["cfg"]})
+
+    if not policies:
+        policies = [
+            {"name": "basic_stimulus", "description": "Basic input stimulus", "priority": 1,
+             "enabled": True, "applies_to": ["cfg", "input"]},
+            {"name": "error_injection", "description": "Error injection", "priority": 2,
+             "enabled": True, "applies_to": ["input", "output"]},
+        ]
+    return policies
 
 
 def _build_uart_plan() -> dict:
