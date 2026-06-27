@@ -15,9 +15,9 @@ async def test_init():
 
 
 @pytest.mark.asyncio
-async def test_bypass():
-    """Test design architect bypass mode"""
+async def test_basic():
+    """Test design architect basic execution"""
     agent = DesignArchitect()
     await agent.initialize()
-    result = await agent.execute_task({"input": "module UART ... bypass spec", "bypass": True})
+    result = await agent.execute_task({"input": "module UART ... spec"})
     assert result.success

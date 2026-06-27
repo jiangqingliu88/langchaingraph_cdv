@@ -2,14 +2,35 @@
 LLM工厂 - 支持多种LLM提供商
 使用工厂模式创建LLM实例
 """
-from typing import Optional, Dict, Any, Literal
+from typing import Optional, Dict, Any, Literal, List
 from langchain_openai import ChatOpenAI
 from langchain_core.language_models import BaseChatModel
-import structlog
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.outputs import LLMResult
+import structlog, time
 
 from config.settings import Settings
 
 logger = structlog.get_logger()
+
+
+class LLMTracerCallback(BaseCallbackHandler):
+    """LangChain callback that logs LLM calls to ExecutionTracer."""
+
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        self._start_time = time.time()
+        self._prompts = prompts
+
+    def on_llm_end(self, response: LLMResult, **kwargs):
+        elapsed = time.time() - self._start_time
+        try:
+            from src.middleware.debug_logger import tracer
+            prompt_text = self._prompts[0][:200] if self._prompts else ""
+            resp_text = str(response.generations[0][0].text)[:200] if response.generations else ""
+            tokens = response.llm_output.get("token_usage", {}).get("total_tokens", 0) if response.llm_output else 0
+            tracer.llm_call("langchain", prompt_text, resp_text, tokens, elapsed, True)
+        except Exception:
+            pass
 
 class LLMFactory:
     """
@@ -220,7 +241,7 @@ class LLMFactory:
             max_tokens=max_tokens,
             request_timeout=request_timeout,
             max_retries=max_retries,
-            # DeepSeek不支持所有OpenAI参数，保持简洁
+            callbacks=[LLMTracerCallback()],
             model_kwargs={}
         )
     
@@ -246,8 +267,9 @@ class LLMFactory:
         }
         if base_url:
             kwargs["base_url"] = base_url
+        kwargs["callbacks"] = [LLMTracerCallback()]
         return ChatOpenAI(**kwargs)
-    
+
     @classmethod
     def _create_custom(
         cls,
@@ -271,6 +293,7 @@ class LLMFactory:
             max_tokens=max_tokens,
             request_timeout=request_timeout,
             max_retries=max_retries,
+            callbacks=[LLMTracerCallback()],
         )
     
     @classmethod

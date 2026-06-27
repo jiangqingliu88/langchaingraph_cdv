@@ -19,7 +19,7 @@
 from src.agents.debug_engineer import DebugEngineer
 agent = DebugEngineer()
 await agent.initialize()
-result = await agent.execute_task({"input": log_data, "bypass": True})
+result = await agent.execute_task({"input": log_data})
 ```
 
 ## Test

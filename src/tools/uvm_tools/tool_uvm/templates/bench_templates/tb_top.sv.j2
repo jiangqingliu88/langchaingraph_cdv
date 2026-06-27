@@ -1,0 +1,122 @@
+// Testbench Top: {{ bench.name }}_tb_top
+// Data-driven generated from bench YAML configuration.
+module {{ bench.name }}_tb_top;
+  import uvm_pkg::*;
+  import {{ bench.env_name }}_test_pkg::*;
+
+  // ── Clock & Reset Generation ──
+{%- for clk in bench.clk_rst.clocks %}
+  reg {{ clk.name }} = {{ clk.init | default(0) }};
+{%- endfor %}
+{%- for rst in bench.clk_rst.resets %}
+  reg {{ rst.name }} = {{ rst.init | default(0) }};
+{%- endfor %}
+{%- for clk in bench.clk_rst.clocks %}
+{%-   set period_str = clk.period | default("10ns") | string %}
+{%-   set period_val = period_str | replace("ns", "") | int %}
+  always #{{ period_val // 2 }}ns {{ clk.name }} = ~{{ clk.name }};
+{%- endfor %}
+
+  // ── Wire Declarations ──
+{%- for wire in bench.wire_decls %}
+{%-   set w = wire.width | int %}
+{%-   if w > 1 %}
+  wire [{{ w - 1 }}:0] {{ wire.name }};
+{%-   else %}
+  wire {{ wire.name }};
+{%-   endif %}
+{%- endfor %}
+
+  // ── Continuous Assignments ──
+{%- for assign in bench.assignments %}
+  assign {{ assign.lhs }} = {{ assign.rhs }};
+{%- endfor %}
+
+  // ── Interface Instances ──
+{%- for agent in agents %}
+  {{ agent.interface }}_interface {{ agent.instance }} (
+{%-   for conn in agent.connections %}
+    .{{ conn.port }}({{ conn.wire }}){% if not loop.last %},{% endif %}
+
+{%-   endfor %}
+  );
+{%- endfor %}
+
+  // ── DUT Instantiation ──
+{%- if bench.dut and bench.dut.module %}
+  {{ bench.dut.module }}
+{%-   if bench.dut.parameters %}
+  #(
+{%-     for param in bench.dut.parameters %}
+    .{{ param.name }}({{ param.value }}){% if not loop.last %},{% endif %}
+
+{%-     endfor %}
+  )
+{%-   endif %}
+  {{ bench.dut.instance }} (
+{%-   for port in bench.dut.ports %}
+    .{{ port.name }}({{ port.connection }}){% if not loop.last %},{% endif %}
+
+{%-   endfor %}
+  );
+{%- endif %}
+
+  // ── UVM Configuration & Test Launch ──
+  initial begin
+{%- for rst in bench.clk_rst.resets %}
+{%-   set delay = rst.release_delay | default(0) | int %}
+{%-   if delay > 0 %}
+    #{{ delay }} {{ rst.name }} = ~{{ rst.name }};
+{%-   else %}
+    {{ rst.name }} = ~{{ rst.name }};
+{%-   endif %}
+{%- endfor %}
+{%- for agent in agents %}
+    uvm_config_db #(virtual {{ agent.interface }}_interface)::set(
+        null, "{{ agent.config_db_path }}", "vif", {{ agent.instance }}
+    );
+{%- endfor %}
+{%- if bench.uvm_config.verbosity %}
+    uvm_root::get().set_report_verbosity_level_hier({{ bench.uvm_config.verbosity }});
+{%- endif %}
+    uvm_root::get().set_timeout({{ bench.timeout }});
+    run_test();
+  end
+
+  // ── Waveform Dump ──
+{%- if bench.wave_dump and bench.wave_dump.enabled %}
+  initial begin
+    if ($test$plusargs("{{ bench.wave_dump.plusargs | default('DUMP_WAVES') }}")) begin
+{%-   if bench.wave_dump.format | default('FST') == 'FSDB' %}
+      $fsdbDumpfile("{{ bench.wave_dump.file_name | default(bench.name + '_tb_top.fsdb') }}");
+      $fsdbDumpvars({{ bench.wave_dump.levels | default(0) }}, {{ bench.name }}_tb_top);
+{%-   elif bench.wave_dump.format | default('FST') == 'VCD' %}
+      $dumpfile("{{ bench.wave_dump.file_name | default(bench.name + '_tb_top.vcd') }}");
+      $dumpvars({{ bench.wave_dump.levels | default(0) }}, {{ bench.name }}_tb_top);
+{%-   else %}
+      $dumpfile("{{ bench.wave_dump.file_name | default(bench.name + '_tb_top.fst') }}");
+      $dumpvars({{ bench.wave_dump.levels | default(0) }}, {{ bench.name }}_tb_top);
+{%-   endif %}
+    end
+  end
+{%- endif %}
+
+  // ── Simulation Control ──
+{%- if bench.simulation and bench.simulation.max_runtime %}
+  initial begin
+    #{{ bench.simulation.max_runtime }};
+    $display("SIM_TIMEOUT after {{ bench.simulation.max_runtime }}");
+    $finish;
+  end
+{%- endif %}
+{%- if bench.simulation and bench.simulation.stop_on_fatal %}
+  initial begin
+    forever begin
+      @(uvm_report_fatal);
+      #100ns;
+      $finish;
+    end
+  end
+{%- endif %}
+
+endmodule : {{ bench.name }}_tb_top

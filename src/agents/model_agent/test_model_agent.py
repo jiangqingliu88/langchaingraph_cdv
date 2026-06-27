@@ -15,9 +15,9 @@ async def test_init():
 
 
 @pytest.mark.asyncio
-async def test_bypass():
-    """Test model agent bypass mode"""
+async def test_basic():
+    """Test model agent basic execution"""
     agent = ModelAgent()
     await agent.initialize()
-    result = await agent.execute_task({"input": "test design", "bypass": True})
+    result = await agent.execute_task({"input": "test design"})
     assert result.success

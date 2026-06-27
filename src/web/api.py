@@ -34,12 +34,10 @@ class PipelineRunRequest(BaseModel):
     spec_file: str = ""
     workflow: str = "full_verification"
     output_dir: str = "output"
-    bypass: bool = True
 
 class TestCaseGenerateRequest(BaseModel):
     spec_text: str = ""
     output_dir: str = "output/testcases"
-    bypass: bool = True
 
 class ProjectCreateRequest(BaseModel):
     name: str
@@ -286,7 +284,7 @@ async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_aut
     if not spec_text: raise HTTPException(status_code=400, detail="spec_text required")
     service = PipelineExecutionService.get_instance()
     result = await service.run_pipeline(spec_text=spec_text, workflow=req.workflow,
-                                        output_root=req.output_dir, bypass=req.bypass)
+                                        output_root=req.output_dir)
     # 审计日志
     from src.database.repository import add_audit_log
     await add_audit_log(user["user_id"], user["username"], "pipeline_run", "",
@@ -350,7 +348,7 @@ async def testcase_detail(test_name: str, output_dir: str = "output/testcases"):
 async def testcases_generate(req: TestCaseGenerateRequest, user: dict = Depends(require_auth)):
     spec_text = req.spec_text or Path("spec_uart.txt").read_text(encoding="utf-8")
     service = PipelineExecutionService.get_instance()
-    result = await service.generate_testcases(spec_text=spec_text, output_dir=req.output_dir, bypass=req.bypass)
+    result = await service.generate_testcases(spec_text=spec_text, output_dir=req.output_dir)
     from src.database.repository import add_audit_log
     await add_audit_log(user["user_id"], user["username"], "testcase_generate")
     return {"success": result["success"], "tests": result.get("tests", {}), "error": result.get("error")}
@@ -644,7 +642,7 @@ async def design_arch_result():
     if not service.initialized: await service.initialize_agents()
     ctx = {"spec": {}, "env": {"env_name": "uart_env"}}
     spec = Path("spec_uart.txt").read_text(encoding="utf-8") if Path("spec_uart.txt").exists() else "UART IP"
-    result = await service.run_single_agent("design_architect", spec, bypass=True)
+    result = await service.run_single_agent("design_architect", spec)
     return {"success": result["success"], "data": result.get("output", ""), "error": result.get("error")}
 
 class DesignArchRequest(BaseModel):
@@ -660,9 +658,8 @@ async def design_arch_run(req: DesignArchRequest, user: dict = Depends(require_a
     importlib.reload(da_pkg)
     agent = da_pkg.DesignArchitect()
     await agent.initialize()
-    agent.config["bypass"] = True
     ctx = {"spec": {}, "env": {"env_name": "uart_env"}}
-    task = {"bypass": True, "ctx": ctx, "input": req.spec_text or "UART IP with AXI interface"}
+    task = {"ctx": ctx, "input": req.spec_text or "UART IP with AXI interface"}
     r = await agent.execute_task(task)
     return {"success": r.success, "design_arch": r.data.get("design_arch", {}), "output": r.data.get("output", ""), "error": r.error}
 

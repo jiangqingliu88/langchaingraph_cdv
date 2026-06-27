@@ -20,7 +20,7 @@
 from src.agents.regression_manager import RegressionManager
 agent = RegressionManager()
 await agent.initialize()
-result = await agent.execute_task({"input": regression_config, "bypass": True})
+result = await agent.execute_task({"input": regression_config})
 ```
 
 ## Test

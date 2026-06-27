@@ -154,83 +154,8 @@ class DebugEngineer(BaseAgent):
             return await self._executor.ainvoke({"input": input_text})
         return {"output": "Agent未初始化"}
 
-    # ── bypass: real log analysis + error classification ──
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
-        bypass = task.get('bypass', False) if isinstance(task, dict) else False
-        if not bypass:
-            return await super().execute_task(task)
+        # Always use LLM
+        return await super().execute_task(task)
 
-        from datetime import datetime as dt
-        start = dt.now()
-        ctx = task.get("ctx", {})
-
-        # Collect log sources
-        regression = ctx.get("regression", {})
-        env_data = ctx.get("env", {})
-        tests_data = ctx.get("tests", {})
-
-        # Try to read actual simulation logs
-        log_text = ""
-        output_dir = env_data.get("output_dir", "")
-        if output_dir:
-            sim_dir = Path(output_dir) / "sim"
-            for log_file in sorted(sim_dir.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True):
-                try:
-                    log_text = log_file.read_text(encoding="utf-8", errors="replace")
-                    break
-                except Exception:
-                    pass
-        if not log_text:
-            sim_dir = Path("generated/alu/sim")
-            for log_file in sorted(sim_dir.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True):
-                try:
-                    log_text = log_file.read_text(encoding="utf-8", errors="replace")
-                    break
-                except Exception:
-                    pass
-
-        # Also collect from regression
-        compile_errors = ""
-        for t in regression.get("tests", []):
-            if t.get("status") != "PASS":
-                compile_errors += f"Test {t['name']}: {t.get('status','?')}\n"
-
-        combined = log_text + "\n" + compile_errors
-
-        # ── Design vs Model 交叉验证 ──
-        design = ctx.get("design_arch", {})
-        model = ctx.get("model", {})
-        cross_check = _cross_check_design_model(design, model)
-        if cross_check["mismatches"]:
-            diagnosis["cross_check"] = cross_check
-            # Override category if cross-check finds actual issues
-            if diagnosis["category"] == "none":
-                diagnosis["category"] = cross_check["primary_issue"]
-                diagnosis["suggestion"] = cross_check["suggestion"]
-                diagnosis["fix_agent"] = cross_check["fix_agent"]
-
-        # Classify
-        if not combined.strip() and not cross_check["mismatches"]:
-            diagnosis = {"category": "none", "scores": {}, "errors": [],
-                        "total_errors": 0,
-                        "suggestion": "No log data available — run simulation first",
-                        "fix_agent": ""}
-        else:
-            diagnosis = _classify_error(combined)
-        has_issues = diagnosis["category"] != "none"
-
-        # Score
-        score = 80 if not has_issues else (60 if diagnosis.get("category") == "env" else 50)
-
-        scores = diagnosis.get('scores', {})
-        summary = (f"Debug: {diagnosis.get('total_errors',0)} errors → {diagnosis.get('category','none')}\n"
-                   f"  env={scores.get('env',0)} rtl={scores.get('rtl',0)} "
-                   f"model={scores.get('model',0)} spec={scores.get('spec',0)}\n"
-                   f"  → {diagnosis.get('suggestion','')}")
-
-        return AgentResult(success=True, data={
-            "output": summary,
-            "debug": diagnosis,
-            "score": score,
-        }, execution_time=(dt.now() - start).total_seconds())

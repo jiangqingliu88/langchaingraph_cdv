@@ -30,8 +30,8 @@ logger = structlog.get_logger()
 FULL_PHASES = [
     ("spec",    "spec_and_test_planner",    "spec"),
     ("design",  "design_architect",         "design_arch"),
-    ("arch",    "verification_architect",   "env"),
     ("model",   "model_agent",              "model"),
+    ("arch",    "verification_architect",   "env"),
     ("test",    "test_engineer",            "tests"),
     ("assert",  "assertion_engineer",       None),
     ("regress", "regression_manager",       "regression"),
@@ -99,7 +99,6 @@ class PipelineExecutionService:
         spec_text: str,
         workflow: str = "full_verification",
         output_root: str = "output",
-        bypass: bool = True,
         on_progress: callable = None,
         refine: bool = False,
     ) -> dict:
@@ -115,7 +114,6 @@ class PipelineExecutionService:
             "run_id": run_id,
             "workflow": workflow,
             "state": "running",
-            "bypass": bypass,
             "started_at": datetime.now().isoformat(),
             "current_phase": None,
             "phases": [],
@@ -133,12 +131,17 @@ class PipelineExecutionService:
 
         # ── Log pipeline start ──
         try:
-            from src.middleware.debug_logger import debug_logger
-            debug_logger.log_pipeline_start(workflow, "spec", [p[0] for p in phases])
+            from src.middleware.debug_logger import tracer
+            tracer.pipeline_start(workflow, spec_text[:80], [p[0] for p in phases])
         except Exception: pass
 
         for name, role, ctx_key in phases:
             run_state["current_phase"] = name
+            try:
+                from src.middleware.debug_logger import tracer
+                display = getattr(self.registry.get_agent_instance(role), 'display_name', role)
+                tracer.phase_start(name, display)
+            except Exception: pass
 
             agent = self.registry.get_agent_instance(role)
             if not agent:
@@ -160,13 +163,6 @@ class PipelineExecutionService:
                 k: ctx[k] for k in getattr(agent, 'consumes', []) if k in ctx
             }, ensure_ascii=False, default=str) if getattr(agent, 'consumes', []) else spec_text
 
-            agent.config["bypass"] = bypass
-            # Hybrid: non-spec agents use bypass when ctx has their required inputs
-            effective_bypass = bypass
-            if not bypass and role != "spec_and_test_planner":
-                has_inputs = all(ctx.get(c) for c in getattr(agent, 'consumes', []))
-                if has_inputs:
-                    effective_bypass = True
             max_retries = getattr(agent, 'max_retries', 2)
             best_score = 0
             best_r = None
@@ -182,7 +178,7 @@ class PipelineExecutionService:
                     if on_progress: on_progress(name, "running", label)
                 except Exception: pass
 
-                task = {"bypass": effective_bypass, "ctx": ctx, "input": task_input, "output_dir": output_root, "refine": refine}
+                task = {"ctx": ctx, "input": task_input, "output_dir": output_root, "refine": refine}
                 if attempt > 0:
                     task["_retry"] = attempt
 
@@ -202,7 +198,7 @@ class PipelineExecutionService:
 
                     # Validate: check if score meets threshold
                     passed, reason = agent.validate(r.data)
-                    if passed or bypass or attempt >= max_retries:
+                    if passed or attempt >= max_retries:
                         ftag = "passed" if passed else "degraded"
                         final_status = ftag; final_score = max(best_score, score)
                         for k in ("spec","design_arch","env","model","tests","regression","coverage","report"):
@@ -214,7 +210,7 @@ class PipelineExecutionService:
                             out_preview = str(r.data.get("output", ""))[:500]
                             debug_logger.log_agent_call(
                                 role, display, io_preview,
-                                "bypass" if effective_bypass else "llm",
+                                "llm",
                                 out_preview, [], attempt, t1, True)
                         except Exception: pass
                         tag = "OK" if attempt == 0 else f"OK(r{attempt})"
@@ -243,11 +239,16 @@ class PipelineExecutionService:
 
             results[name] = final_status if final_status != "skipped" else "passed"
             scores[name] = final_score
+            phase_time = 0 if final_status == "skipped" else round(time.time() - (locals().get('t0', time.time())), 1)
             run_state["phases"].append({
-                "name": name, "status": final_status, "time": 0 if final_status == "skipped" else round(time.time() - (locals().get('t0', time.time())), 1),
+                "name": name, "status": final_status, "time": phase_time,
                 "score": final_score,
                 "retries": attempt if final_status != "skipped" else 0,
             })
+            try:
+                from src.middleware.debug_logger import tracer
+                tracer.phase_end(name, final_status, final_score, phase_time)
+            except Exception: pass
 
         passed = sum(1 for v in results.values() if v in ("passed", "degraded"))
         run_state["state"] = "completed" if passed == len(phases) else "completed_with_errors"
@@ -287,12 +288,11 @@ class PipelineExecutionService:
                 break
 
             logger.info(f"[feedback loop {loop+1}] re-running {phase_name} to fix {fix_agent_role}")
-            task = {"bypass": bypass, "ctx": ctx,
+            task = {"ctx": ctx,
                     "input": json.dumps({"fix": debug_data.get("suggestion", ""),
                                          "errors": debug_data.get("errors", [])[:3]},
                                         ensure_ascii=False),
                     "output_dir": output_root}
-            agent.config["bypass"] = bypass
             try:
                 r = await agent.execute_task(task)
                 if r.success:
@@ -304,19 +304,17 @@ class PipelineExecutionService:
                     # Re-run test_engineer
                     test_agent = self.registry.get_agent_instance("test_engineer")
                     if test_agent:
-                        test_task = {"bypass": bypass, "ctx": ctx,
+                        test_task = {"ctx": ctx,
                                      "input": json.dumps({"fix": True}, ensure_ascii=False),
                                      "output_dir": output_root}
-                        test_agent.config["bypass"] = bypass
                         tr = await test_agent.execute_task(test_task)
                         if tr.success and "tests" in tr.data:
                             ctx["tests"] = tr.data["tests"]
                     # Re-run regression
                     reg_agent = self.registry.get_agent_instance("regression_manager")
                     if reg_agent:
-                        reg_agent.config["bypass"] = bypass
                         rr = await reg_agent.execute_task(
-                            {"bypass": bypass, "ctx": ctx,
+                            {"ctx": ctx,
                              "input": json.dumps({"retry": True}, ensure_ascii=False),
                              "output_dir": output_root})
                         if rr.success and "regression" in rr.data:
@@ -324,9 +322,8 @@ class PipelineExecutionService:
                     # Re-run coverage
                     cov_agent = self.registry.get_agent_instance("coverage_manager")
                     if cov_agent:
-                        cov_agent.config["bypass"] = bypass
                         cr = await cov_agent.execute_task(
-                            {"bypass": bypass, "ctx": ctx,
+                            {"ctx": ctx,
                              "input": json.dumps({"retry": True}, ensure_ascii=False),
                              "output_dir": output_root})
                         if cr.success and "coverage" in cr.data:
@@ -334,9 +331,8 @@ class PipelineExecutionService:
                     # Re-run debug
                     dbg_agent = self.registry.get_agent_instance("debug_engineer")
                     if dbg_agent:
-                        dbg_agent.config["bypass"] = bypass
                         dr = await dbg_agent.execute_task(
-                            {"bypass": bypass, "ctx": ctx,
+                            {"ctx": ctx,
                              "input": json.dumps({"retry": True}, ensure_ascii=False),
                              "output_dir": output_root})
                         if dr.success and "debug" in dr.data:
@@ -381,9 +377,9 @@ class PipelineExecutionService:
 
         # ── Log pipeline end ──
         try:
-            from src.middleware.debug_logger import debug_logger
+            from src.middleware.debug_logger import tracer
             total_time = sum(p.get("time", 0) for p in run_state["phases"])
-            debug_logger.log_pipeline_end(passed, len(phases) - passed, total_time)
+            tracer.pipeline_end(passed, len(phases), total_time, scores)
         except Exception: pass
         ctx["_scores"] = scores
         ctx["_overall_score"] = overall_score
@@ -427,7 +423,7 @@ class PipelineExecutionService:
     # ── 单 Agent 执行 ──
 
     async def run_single_agent(
-        self, role: str, input_text: str, bypass: bool = True
+        self, role: str, input_text: str
     ) -> dict:
         """执行单个 Agent，返回 {success, output, error}"""
         if not self._initialized:
@@ -437,8 +433,7 @@ class PipelineExecutionService:
         if not agent:
             return {"success": False, "error": f"Agent not found: {role}"}
 
-        agent.config["bypass"] = bypass
-        task = {"bypass": bypass, "ctx": {}, "input": input_text}
+        task = {"ctx": {}, "input": input_text}
         r = await agent.execute_task(task)
         return {
             "success": r.success,
@@ -449,7 +444,7 @@ class PipelineExecutionService:
     # ── 测试用例生成 ──
 
     async def generate_testcases(
-        self, spec_text: str, output_dir: str = "output/testcases", bypass: bool = True
+        self, spec_text: str, output_dir: str = "output/testcases"
     ) -> dict:
         """运行 test_engineer Agent 生成测试用例"""
         if not self._initialized:
@@ -464,9 +459,7 @@ class PipelineExecutionService:
         if not agent:
             return {"success": False, "error": "test_engineer not found"}
 
-        agent.config["bypass"] = bypass
         task = {
-            "bypass": bypass,
             "ctx": ctx,
             "input": json.dumps({
                 "test_points": [],

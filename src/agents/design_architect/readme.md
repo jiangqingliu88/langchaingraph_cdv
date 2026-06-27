@@ -16,19 +16,12 @@
 - Signoff checklist 生成
 - 代码渲染 (SystemVerilog)
 
-## Bypass Mode
-解析 spec JSON 生成：
-- 函数模块声明
-- 寄存器定义
-- RTL 层次结构
-- Signoff 检查点
-
 ## Usage
 ```python
 from src.agents.design_architect import DesignArchitect
 agent = DesignArchitect()
 await agent.initialize()
-result = await agent.execute_task({"input": spec_json, "bypass": True})
+result = await agent.execute_task({"input": spec_json})
 ```
 
 ## Test

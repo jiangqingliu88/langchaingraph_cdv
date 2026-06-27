@@ -18,7 +18,7 @@
 from src.agents.report_generator import ReportGenerator
 agent = ReportGenerator()
 await agent.initialize()
-result = await agent.execute_task({"input": all_results, "bypass": True})
+result = await agent.execute_task({"input": all_results})
 ```
 
 ## Test

@@ -89,5 +89,19 @@ class TestTask(Task):
             self.elapsed = time.time() - self.start_time
             return True
 
+class TaskFactory:
+    """任务工厂 - 根据扫描到的目录结构创建 Build/Test 任务"""
+
+    @staticmethod
+    def create_build_task(build_name: str, build_path: str) -> BuildTask:
+        """根据 build 目录创建 BuildTask"""
+        return BuildTask(build_name, build_path)
+
+    @staticmethod
+    def create_test_task(test_name: str, test_path: str, build_name: str) -> TestTask:
+        """根据 test 目录创建 TestTask"""
+        return TestTask(test_name, test_path, build_name)
+
+
 # 避免循环导入
 from ..execution.strategy import LsfStrategy

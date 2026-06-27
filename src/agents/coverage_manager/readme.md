@@ -19,7 +19,7 @@
 from src.agents.coverage_manager import CoverageManager
 agent = CoverageManager()
 await agent.initialize()
-result = await agent.execute_task({"input": coverage_data, "bypass": True})
+result = await agent.execute_task({"input": coverage_data})
 ```
 
 ## Test

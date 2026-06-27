@@ -15,9 +15,9 @@ async def test_init():
 
 
 @pytest.mark.asyncio
-async def test_bypass():
-    """Test coverage manager bypass mode"""
+async def test_basic():
+    """Test coverage manager basic execution"""
     agent = CoverageManager()
     await agent.initialize()
-    result = await agent.execute_task({"input": "test", "bypass": True})
+    result = await agent.execute_task({"input": "test"})
     assert result.success

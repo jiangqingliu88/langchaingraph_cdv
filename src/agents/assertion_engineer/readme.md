@@ -19,7 +19,7 @@
 from src.agents.assertion_engineer import AssertionEngineer
 agent = AssertionEngineer()
 await agent.initialize()
-result = await agent.execute_task({"input": design_info, "bypass": True})
+result = await agent.execute_task({"input": design_info})
 ```
 
 ## Test

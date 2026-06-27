@@ -19,7 +19,7 @@
 from src.agents.quality_assurance import QualityAssurance
 agent = QualityAssurance()
 await agent.initialize()
-result = await agent.execute_task({"input": verification_data, "bypass": True})
+result = await agent.execute_task({"input": verification_data})
 ```
 
 ## Test

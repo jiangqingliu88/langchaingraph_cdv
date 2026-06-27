@@ -216,7 +216,6 @@
         <div class="d-flex">
             <button class="btn btn-outline-secondary btn-sm" onclick="loadDefaultSpec()">📥 加载默认</button>
             <select id="workflowSelect" class="form-select form-select-sm ms-2" style="width:auto;background:var(--input-bg);color:var(--text)"><option value="full_verification">完整验证</option><option value="quick_check">快速检查</option></select>
-            <div class="form-check ms-2"><input class="form-check-input" type="checkbox" id="bypassCheck" checked><label class="form-check-label">Bypass</label></div>
             <button class="btn btn-success btn-sm ms-auto" onclick="runPipeline()">▶ 运行</button>
         </div>
     </div></div>
@@ -666,11 +665,11 @@ function buildPhaseBar(wf){
 }
 async function runPipeline(){
     const spec=document.getElementById('specInput').value.trim();if(!spec){alert('请输入规格');return}
-    const wf=document.getElementById('workflowSelect').value,bp=document.getElementById('bypassCheck').checked;
+    const wf=document.getElementById('workflowSelect').value;
     buildPhaseBar(wf);document.getElementById('pStatus').textContent='运行中...';document.getElementById('pStatus').className='badge bg-warning';document.getElementById('pProgress').style.width='0%';document.getElementById('console').innerHTML='';
     log('▶ 启动: '+wf);const t0=Date.now();
     try{
-        const r=await API('/api/pipeline/run',{method:'POST',body:{spec_text:spec,workflow:wf,bypass:bp}});
+        const r=await API('/api/pipeline/run',{method:'POST',body:{spec_text:spec,workflow:wf}});
         const elapsed=((Date.now()-t0)/1000).toFixed(1);
         document.getElementById('pProgress').style.width='100%';const ok=r.passed===r.total;
         document.getElementById('pStatus').textContent=ok?'✅ 全部通过':'⚠ 部分失败';
@@ -687,7 +686,7 @@ function loadPipelineTab(){buildPhaseBar('full_verification');loadDefaultSpec()}
 // TESTCASES
 // ═══════════════════════════════════════════════════════════
 async function loadTC(){const d=await API('/api/testcases/list');document.getElementById('tcCount').textContent=d.count;document.getElementById('tcBody').innerHTML=d.testcases.map(t=>`<tr><td><strong>${t.name}</strong></td><td><small class="text-muted">${(t.sv_files||[]).join(', ')}</small></td><td><button class="btn btn-outline-primary btn-sm" onclick="viewTC('${t.name}')">👁</button></td></tr>`).join('')||'<tr><td colspan="3" class="text-muted">暂无</td></tr>'}
-async function genTC(){log('🔄 生成测试用例...');const r=await API('/api/testcases/generate',{method:'POST',body:{bypass:true}});toast(r.success?'生成成功':'生成失败',r.success?'success':'error');loadTC()}
+async function genTC(){log('🔄 生成测试用例...');const r=await API('/api/testcases/generate',{method:'POST',body:{}});toast(r.success?'生成成功':'生成失败',r.success?'success':'error');loadTC()}
 async function viewTC(name){const d=await API(`/api/testcases/${name}`);const f=Object.keys(d.files)[0];log(`📄 ${name}\n${'─'.repeat(40)}\n${f?d.files[f].substring(0,2000):'(empty)'}`)}
 
 // ═══════════════════════════════════════════════════════════

@@ -34,11 +34,11 @@ async def test_agent_init(agent_cls):
 
 @pytest.mark.parametrize("agent_cls", AGENTS)
 @pytest.mark.asyncio
-async def test_agent_bypass(agent_cls):
-    """Test agent bypass mode"""
+async def test_agent_basic(agent_cls):
+    """Test agent basic execution"""
     agent = agent_cls()
     await agent.initialize()
-    result = await agent.execute_task({"input": "test", "bypass": True})
+    result = await agent.execute_task({"input": "test"})
     assert result.success
 
 @pytest.mark.asyncio
@@ -46,16 +46,16 @@ async def test_spec_planner_analyze():
     """Test spec planner analysis"""
     agent = SpecAndTestPlanner()
     await agent.initialize()
-    result = await agent.execute_task({"input": "UART design spec", "bypass": True})
+    result = await agent.execute_task({"input": "UART design spec"})
     assert result.success
     assert "output" in result.data
 
 @pytest.mark.asyncio
 async def test_architect_generate():
-    """Test architect bypass execution"""
+    """Test architect basic execution"""
     agent = VerificationArchitect()
     await agent.initialize()
-    result = await agent.execute_task({"input": "UART spec with tx/rx signals", "bypass": True})
+    result = await agent.execute_task({"input": "UART spec with tx/rx signals"})
     assert result.success
 
 @pytest.mark.asyncio
@@ -63,7 +63,7 @@ async def test_agent_metrics():
     """Test agent metrics tracking"""
     agent = SpecAndTestPlanner()
     await agent.initialize()
-    await agent.execute_task({"input": "test", "bypass": True})
+    await agent.execute_task({"input": "test"})
     metrics = agent.get_metrics()
     assert metrics["tasks_completed"] >= 1
     assert metrics["status"] == "idle"

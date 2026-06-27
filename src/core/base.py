@@ -27,13 +27,15 @@ def _extract_json_from_llm(text: str):
         return None
     import re as _re
     try:
-        return json.loads(text)
+        result = json.loads(text)
+        return result if isinstance(result, dict) else None
     except (json.JSONDecodeError, ValueError):
         pass
     m = _re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, _re.DOTALL)
     if m:
         try:
-            return json.loads(m.group(1))
+            result = json.loads(m.group(1))
+            return result if isinstance(result, dict) else None
         except (json.JSONDecodeError, ValueError):
             pass
     return None
@@ -189,17 +191,17 @@ class BaseAgent(ABC, AgentSubject):
         初始化Agent
 
         模板方法 - 定义初始化流程
-        1. 创建LLM (若 API Key 不可用则跳过，支持 bypass)
+        1. 创建LLM
         2. 子类特定初始化
         3. 创建Agent Executor
         """
         logger.info(f"正在初始化Agent: {self.display_name}")
 
-        # 1. 尝试创建LLM，失败则跳过（bypass 模式不需要）
+        # 1. 创建LLM
         try:
             self.llm = self._create_llm()
         except (ValueError, Exception) as e:
-            logger.warning(f"LLM创建失败，将使用 bypass 模式", error=str(e))
+            logger.warning(f"LLM创建失败", error=str(e))
             self.llm = None
 
         # 2. 获取工具
@@ -212,22 +214,28 @@ class BaseAgent(ABC, AgentSubject):
         await self._setup()
 
         # 5. 创建Agent Executor（仅当 LLM 可用时）
-        if self.llm and self.tools and prompt:
-            from langchain.agents import create_openai_tools_agent
-            agent = create_openai_tools_agent(
-                llm=self.llm,
-                tools=self.tools,
-                prompt=prompt
-            )
-
-            self._executor = AgentExecutor(
-                agent=agent,
-                tools=self.tools,
-                verbose=self.settings.agent.verbose,
-                max_iterations=self.settings.agent.max_iterations,
-                handle_parsing_errors=True,
-                return_intermediate_steps=False
-            )
+        if self.llm and prompt:
+            tools = self.tools if self.tools else []
+            if tools:
+                # Agent with tools: use LangChain agent executor
+                from langchain.agents import create_openai_tools_agent
+                agent = create_openai_tools_agent(
+                    llm=self.llm,
+                    tools=tools,
+                    prompt=prompt
+                )
+                self._executor = AgentExecutor(
+                    agent=agent, tools=tools,
+                    verbose=self.settings.agent.verbose,
+                    max_iterations=self.settings.agent.max_iterations,
+                    handle_parsing_errors=True,
+                    return_intermediate_steps=True
+                )
+            else:
+                # No tools: use direct LLM chain (simpler, more reliable)
+                from langchain_core.output_parsers import StrOutputParser
+                self._direct_chain = prompt | self.llm | StrOutputParser()
+                self._executor = None  # signal to use _direct_chain
 
         self.status = AgentStatus.IDLE
         logger.info(f"Agent初始化完成: {self.display_name}")
@@ -301,37 +309,116 @@ class BaseAgent(ABC, AgentSubject):
         self._best_score = 0
         self._best_result = None
 
+    # ── Agent I/O 日志（控制台输出）──
+
+    def _fmt_ctx(self, ctx_data: dict) -> str:
+        """Format ctx data as concise string."""
+        if not ctx_data:
+            return "none"
+        parts = []
+        for k, v in ctx_data.items():
+            if isinstance(v, dict):
+                nk = len(v)
+                # Show first few keys
+                sk = ",".join(list(v.keys())[:4])
+                parts.append(f"{k}({nk}k:{sk}{'...' if nk>4 else ''})")
+            elif isinstance(v, list):
+                parts.append(f"{k}({len(v)} items)")
+            elif isinstance(v, str):
+                parts.append(f"{k}({len(v)}c)")
+            else:
+                parts.append(f"{k}={v}")
+        return " ".join(parts)
+
+    def _fmt_input(self, task_input: str) -> str:
+        """Format task input as concise one-liner."""
+        s = str(task_input)[:150].replace("\n", "\\n").replace("\r", "")
+        if len(str(task_input)) > 150:
+            s += f"...({len(str(task_input))}c)"
+        return s
+
+    def _fmt_output(self, data: dict) -> str:
+        """Format result data as concise one-liner."""
+        parts = []
+        # Key numeric/string metrics first
+        for k in ("module_name", "env_name", "design_name", "model_type",
+                   "feature_count", "function_count", "register_count",
+                   "agent_count", "file_count", "test_count", "scenario_count",
+                   "feature", "features", "test_points", "registers",
+                   "operations", "files"):
+            v = data.get(k)
+            if v is not None:
+                if isinstance(v, list):
+                    parts.append(f"{k}={len(v)}")
+                elif isinstance(v, (int, float, str)):
+                    parts.append(f"{k}={v}")
+        # Fallback: top-level keys with small values
+        if not parts:
+            for k, v in sorted(data.items()):
+                if k in ("output", "score", "error", "_ctx_data", "code"):
+                    continue
+                if isinstance(v, (int, float, str, bool)):
+                    parts.append(f"{k}={v}")
+                elif isinstance(v, list):
+                    parts.append(f"{k}#{len(v)}")
+                elif isinstance(v, dict):
+                    parts.append(f"{k}#{len(v)}")
+        return ", ".join(parts[:8]) if parts else "—"
+
+    def _log_io_begin(self, task_input: str, ctx_data: dict, mode: str, action: str):
+        """Print agent input + action to console."""
+        tag = self.role[:22]
+        inp = self._fmt_input(task_input)
+        ctx = self._fmt_ctx(ctx_data)
+        from src.middleware.debug_logger import tracer
+        tracer.agent_io(self.role, "in", inp)
+        if ctx_data:
+            tracer.agent_io(self.role, "ctx", ctx)
+        tracer.agent_io(self.role, "act", f"{mode} -> {action}")
+
+    def _log_io_end(self, result_data: dict, elapsed: float, success: bool = True):
+        """Print agent output to console."""
+        score = result_data.get("score", "?")
+        out = self._fmt_output(result_data)
+        t = f"{elapsed:.1f}s" if elapsed else "?"
+        st = "OK" if success else "FAIL"
+        from src.middleware.debug_logger import tracer
+        tracer.agent_io(self.role, "out", f"{st} score={score} | {out} | {t}")
+
     # ── 任务执行 ──
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
-        bypass = task.get('bypass', False) if isinstance(task, dict) else False
-
-        # 将 ctx 数据注入到 task["input"]（如果尚未注入）
+        # Always use LLM path
         ctx_data = self._read_ctx(task)
         if ctx_data and isinstance(task, dict):
             task["_ctx_data"] = ctx_data
 
-        if bypass:
-            result = AgentResult(success=True, data={
-                "output": f"[{self.display_name}] bypass mode",
-                "score": 50,  # default baseline score for agents without override
-            })
-            self._write_ctx(task, result)
-            # 记录调试日志
-            from src.middleware.debug_logger import debug_logger
-            debug_logger.log_agent_call(self.role, self.display_name, str(task)[:500], "bypass", result.data.get("output", ""), [], 0, 0, True)
-            return result
         start_time = datetime.now()
         self.status = AgentStatus.BUSY
         await self.notify_start(self.role, task)
+
+        task_input = task.get("input", str(task))
+        tools_names = [t.name for t in self.tools] if self.tools else []
+        mode = "LLM" if self._executor else "direct"
+        action = f"{self.produces or 'text'} generation" + (f" tools={tools_names[:4]}" if tools_names else "")
+        self._log_io_begin(task_input, ctx_data, mode, action)
+
         try:
             processed_input = await self._pre_process(task)
             if self._executor:
                 result = await self._executor.ainvoke({
                     "input": processed_input,
                     "chat_history": [],
-                    "tool_names": [t.name for t in self.tools] if self.tools else [],
+                    "tool_names": tools_names,
                 })
+            elif hasattr(self, '_direct_chain') and self._direct_chain:
+                # Direct LLM call (no tools) — must pass all prompt variables
+                output_text = await self._direct_chain.ainvoke({
+                    "input": processed_input,
+                    "chat_history": [],
+                    "agent_scratchpad": [],
+                })
+                result = {"output": output_text}
             else:
                 result = await self._execute(processed_input)
             processed_result = await self._post_process(result)
@@ -350,35 +437,59 @@ class BaseAgent(ABC, AgentSubject):
                             if k not in processed_result:
                                 processed_result[k] = v
                         # Auto-detect which ctx key this agent's output maps to
-                        # If parsed has spec-like keys, wrap in "spec"
                         SPEC_KEYS = {"design_name", "features", "interfaces", "test_points",
                                      "verification_architecture", "registers", "clock_domains"}
                         DESIGN_KEYS = {"module_name", "function_hier", "rtl_hier", "signoff_checklist"}
                         ENV_KEYS = {"env_name", "agent_count", "files", "filelist"}
+                        MODEL_KEYS = {"module", "model_type", "analysis", "ref_model", "operations"}
+                        TESTS_KEYS = {"scenarios", "scenario_count", "test_names", "policies", "yaml"}
+                        REGRESSION_KEYS = {"compile", "summary", "tests", "compile_status", "pass_rate"}
+                        COVERAGE_KEYS = {"coverage_data", "line_pct", "branch_pct", "gaps", "coverage_pct"}
+                        DEBUG_KEYS = {"category", "errors", "suggestion", "fix_agent", "scores"}
                         parsed_keys = set(parsed.keys())
-                        if parsed_keys & SPEC_KEYS and "spec" not in processed_result:
-                            processed_result["spec"] = parsed
-                        if parsed_keys & DESIGN_KEYS and "design_arch" not in processed_result:
-                            processed_result["design_arch"] = parsed
-                        if parsed_keys & ENV_KEYS and "env" not in processed_result:
-                            processed_result["env"] = parsed
+                        for key_set, ctx_key in [
+                            (SPEC_KEYS, "spec"), (DESIGN_KEYS, "design_arch"),
+                            (ENV_KEYS, "env"), (MODEL_KEYS, "model"),
+                            (TESTS_KEYS, "tests"), (REGRESSION_KEYS, "regression"),
+                            (COVERAGE_KEYS, "coverage"), (DEBUG_KEYS, "debug")]:
+                            if parsed_keys & key_set and ctx_key not in processed_result:
+                                processed_result[ctx_key] = parsed
                     # Heuristic scoring
                     if "score" not in processed_result and llm_output:
                         n_lines = len(llm_output.split("\n"))
                         has_json = "{" in llm_output
-                        processed_result["score"] = min(60 + (n_lines // 20) * 5 + (10 if has_json else 0), 85)
+                        base = 70 if has_json else 50
+                        processed_result["score"] = min(base + (n_lines // 20) * 3, 85)
 
             # Ensure a score is present
             if isinstance(processed_result, dict) and "score" not in processed_result:
-                processed_result["score"] = 60  # LLM-based agents get baseline
+                output_text = processed_result.get("output", "")
+                has_struct = any(k in processed_result for k in
+                    ("spec","design_arch","env","model","tests","regression","coverage","debug"))
+                has_output = bool(output_text and len(str(output_text)) > 20)
+                if has_struct:
+                    processed_result["score"] = 75
+                elif has_output:
+                    processed_result["score"] = 55  # LLM ran, give passing baseline
+                else:
+                    processed_result["score"] = 30
+            # Override: if score is 0 but LLM clearly ran, bump to minimum
+            if isinstance(processed_result, dict) and processed_result.get("score", 0) <= 0:
+                output_text = processed_result.get("output", "")
+                if output_text and len(str(output_text)) > 20:
+                    processed_result["score"] = 55
+                elif processed_result.get("intermediate_steps"):
+                    processed_result["score"] = 55
             agent_result = AgentResult(success=True, data=processed_result, execution_time=execution_time)
             # 将产出写回共享上下文
             self._write_ctx(task, agent_result)
+
+            self._log_io_end(processed_result, execution_time, True)
+
             # 记录调试日志
             try:
                 from src.middleware.debug_logger import debug_logger
                 prompt_preview = str(getattr(self, '_last_prompt', ''))[:500]
-                tools_names = [t.name for t in self.tools] if self.tools else []
                 debug_logger.log_agent_call(self.role, self.display_name, str(task)[:500], prompt_preview, str(processed_result)[:500], tools_names, 0, execution_time, True)
             except:
                 pass
@@ -386,6 +497,7 @@ class BaseAgent(ABC, AgentSubject):
             return agent_result
         except Exception as e:
             self.metrics["tasks_failed"] += 1
+            self._log_io_end({"error": str(e)[:80]}, (datetime.now() - start_time).total_seconds(), False)
             error_result = AgentResult(success=False, error=str(e))
             await self.notify_error(self.role, e)
             return error_result

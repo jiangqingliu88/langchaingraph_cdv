@@ -25,8 +25,8 @@ LLM_BASE_URL=https://api.deepseek.com/v1
 ### CLI 一键运行
 
 ```powershell
-# Bypass 模式（全自动：分析→RTL→UVM→编译→仿真→覆盖率）
-python -m src.cli.commands verify specs\alu_combined.md --bypass
+# 全自动：分析→RTL→UVM→编译→仿真→覆盖率
+python -m src.cli.commands verify specs\alu_combined.md
 
 # 输出：11/11 passed, Score: 67/100, 覆盖率: line=51.5% branch=32.2% toggle=60.7%
 ```
@@ -43,33 +43,11 @@ async def main():
     service = PipelineExecutionService.get_instance()
     result = await service.run_pipeline(
         spec_text=spec,
-        workflow='full_verification',
-        bypass=True,
-    )
-    print(f"Passed: {result['passed']}/{result['total']}")
-    print(f"Score: {result['overall_score']}")
-
-asyncio.run(main())
-```
-
-### Python API
-
-```python
-import asyncio
-from pathlib import Path
-from src.core.execution import PipelineExecutionService
-
-async def main():
-    spec = Path('specs/alu_combined.md').read_text(encoding='utf-8')
-    service = PipelineExecutionService.get_instance()
-    result = await service.run_pipeline(
-        spec_text=spec,
         workflow='full_verification',       # full_verification | quick_check
         output_root='output/alu_pipeline',
-        bypass=True,                         # True=模板 | False=LLM hybrid
     )
-    print(f'Passed: {result["passed"]}/{result["total"]}')
-    print(f'Overall: {result["overall_score"]}/100')
+    print(f"Passed: {result['passed']}/{result['total']}")
+    print(f"Score: {result['overall_score']}/100")
 
 asyncio.run(main())
 ```
@@ -83,21 +61,16 @@ uvicorn src.web.api:app --host 0.0.0.0 --port 8000
 
 ## 运行模式
 
-| 模式 | 命令 | Spec | 代码生成 | 耗时 | API |
-|------|------|------|---------|------|-----|
-| **Bypass** | `--bypass` | 模板规则 | 模板 | ~10s | 0 |
-| **Hybrid (LLM)** | 默认 | LLM 分析 | 模板 bypass | ~90s | 1次 |
+所有 Agent 统一走 LLM 路径：`spec_planner` 用 LLM 分析规格，后续 Agent 基于模板 + LLM polish 生成代码，每阶段有评分阈值和自动重试机制。
 
-> Hybrid：spec_planner 用 LLM 分析规格，后续 agent 检测 ctx 有数据后自动切 bypass 模板模式。
-
-### Bypass 模式输出
+### 输出示例
 
 ```
 11/11 passed  Score: 71/100  迭代: 0  覆盖率: line=51.5% branch=32.2%
 +--------+--------+--------+-------+------+------+
 | Phase  | Output | Status | Score | Time | Note |
 +--------+--------+--------+-------+------+------+
-| spec   | spec   | PASS   | 95    | 0s   | 模板规则匹配 ALU |
+| spec   | spec   | PASS   | 95    | 0s   | LLM 规格解析 |
 | design | design | PASS   | 90    | 0s   | 12 functions, 8 regs |
 | arch   | env    | PASS   | 95    | 7s   | ★ 真实编译+仿真 |
 | model  | model  | PASS   | 75    | 0s   | C++ 参考模型 |
@@ -199,7 +172,7 @@ debug_engineer 比对:
 ## 管道运行示例
 
 ```powershell
-python -m src.cli.commands verify specs/alu_combined.md --bypass
+python -m src.cli.commands verify specs/alu_combined.md
 ```
 
 ```
@@ -255,12 +228,17 @@ cdv_a/
 │   │   └── report_generator/       #   报告生成
 │   ├── core/                       # 核心框架
 │   │   ├── base.py                 #   Agent 基类 + 验证 + 评分
-│   │   ├── execution.py            #   管道引擎 + 反馈闭环 + hybrid 模式
+│   │   ├── execution.py            #   管道引擎 + 反馈闭环
 │   │   └── llm_factory.py          #   LLM 工厂
 │   ├── tools/                      # 工具集
-│   │   ├── uvm/tool_uvm/           #   Jinja2 模板 + gen_uvm 生成器
-│   │   ├── compilesim/             #   QuestaSim 编译+仿真+覆盖率
-│   │   └── testcase/               #   测试用例生成器
+│   │   ├── uvm_tools/              #   Jinja2 模板 + UVM 代码生成
+│   │   ├── regression_tools/       #   回归测试框架 (YAML→脚本→执行→报告)
+│   │   ├── testcase_tools/         #   测试用例生成器
+│   │   ├── assertion_tools/        #   断言工具
+│   │   ├── coverage_tools/         #   覆盖率工具
+│   │   ├── debug_tools/            #   调试工具
+│   │   ├── spec_tools/             #   规格工具
+│   │   └── reuse_tools/            #   复用工具
 │   ├── cli/commands.py             # CLI 命令行
 │   └── web/api.py                  # Web API (FastAPI)
 ├── specs/                          # 模块规格库
@@ -283,7 +261,7 @@ cdv_a/
 | **设计↔模型比对** | debug_engineer 交叉验证 design 和 model 输出一致性 |
 | **反馈闭环** | 不一致→路由到对应 agent 重生成→重测试（2轮迭代） |
 | **自动修复** | 编译失败时自动读代码→删错误行→写回→重编 |
-| Hybrid 模式 | LLM 分析 spec → 模板生成代码 |
+| **LLM 驱动** | 全部 Agent 统一走 LLM 路径，模板打底 + LLM 精修 |
 | Agent 协作 | 11 agent consumes/produces 自动传递 ctx |
 | 真实编译仿真 | QuestaSim vlog + vsim，真实覆盖率 |
 | Agent 闭环 | 每个 agent 独立编译+仿真 loopback TB |
@@ -317,32 +295,13 @@ LLM_BASE_URL=https://api.deepseek.com/v1
 | 问题 | 解决 |
 |------|------|
 | `LLM API Key未设置` | `.env` 变量名大写 (`LLM_API_KEY`) |
-| Agent SKIP | 用 `--bypass` 模式 |
+| Agent SKIP | 检查前置 agent 输出是否正确传递 |
 | QuestaSim 路径 | 修改 `src/agents/regression_manager/main.py` 第17行 |
 | test 得分低 | `_build_policies` 优先读 `ALU_constraint.yaml` |
 | 模拟日志为空 | `debug_engineer` 自动读 `generated/alu/sim/*.log` |
-
-## 配置
-
-### .env 格式
-
-```ini
-LLM_PROVIDER=deepseek
-LLM_API_KEY=sk-your-key
-LLM_MODEL=deepseek-chat
-LLM_BASE_URL=https://api.deepseek.com/v1
-```
-
-> 不配置 API key 也能用 `--bypass` 模式运行。
-
-### 常见问题
-
-| 问题 | 解决 |
-|------|------|
-| `LLM API Key未设置` | 检查 `.env` 文件变量名是否大写（`LLM_API_KEY`） |
-| Agent 全部 SKIP | 使用 `--bypass` 模式 |
-| QuestaSim 找不到 | 路径在 `src/agents/regression_manager/main.py` 第 17 行修改 |
 | `{chat_history}` 错误 | 已修复：base.py 显式传入空列表 |
+
+> 不配置 API key 仍可运行模板模式。
 
 ## 测试
 
@@ -360,5 +319,5 @@ pytest tests/ src/agents/ src/tools/ -v --tb=short
 | Jinja2 | >=3.1.0 |
 | Rich | >=13.0 |
 | PyYAML | >=6.0 |
-| DeepSeek API Key | 可选（bypass 模式不需要） |
+| DeepSeek API Key | 推荐（也可用模板模式） |
 | QuestaSim | 可选（编译仿真 + 覆盖率） |

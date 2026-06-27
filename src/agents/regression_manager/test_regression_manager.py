@@ -15,9 +15,9 @@ async def test_init():
 
 
 @pytest.mark.asyncio
-async def test_bypass():
-    """Test regression manager bypass mode"""
+async def test_basic():
+    """Test regression manager basic execution"""
     agent = RegressionManager()
     await agent.initialize()
-    result = await agent.execute_task({"input": "test", "bypass": True})
+    result = await agent.execute_task({"input": "test"})
     assert result.success

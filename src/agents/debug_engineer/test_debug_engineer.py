@@ -15,9 +15,9 @@ async def test_init():
 
 
 @pytest.mark.asyncio
-async def test_bypass():
-    """Test debug engineer bypass mode"""
+async def test_basic():
+    """Test debug engineer basic execution"""
     agent = DebugEngineer()
     await agent.initialize()
-    result = await agent.execute_task({"input": "test", "bypass": True})
+    result = await agent.execute_task({"input": "test"})
     assert result.success

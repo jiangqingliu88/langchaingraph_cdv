@@ -15,7 +15,6 @@ class TaskRecord(Base):
     status = Column(String(20))
     error_msg = Column(Text, nullable=True)
     execution_time = Column(Float, default=0)
-    bypass = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
 
 class PipelineRun(Base):

@@ -50,8 +50,19 @@ class ShellGenerator:
                 if self.default_build not in builds:
                     builds[self.default_build] = {}
         for b in config.get('builds', []):
-            if b['name'] not in builds:
-                builds[b['name']] = b
+            name = b.get('name')
+            if not name:
+                continue
+            if name not in builds or not builds[name]:
+                # 覆盖空占位符或新增
+                builds[name] = b
+            else:
+                # 合并：已有的 inline build 可能只有部分字段
+                existing = builds[name]
+                if isinstance(existing, dict):
+                    merged = b.copy()
+                    merged.update(existing)
+                    builds[name] = merged
         return builds
 
     def _generate_build(self, build_name, build_conf, root_dir, mode, config):

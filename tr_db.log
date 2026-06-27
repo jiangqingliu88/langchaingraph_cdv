@@ -1,4 +1,0 @@
-  CREATE_STREAM @0 {NAME:seq T:Transactions SCOPE:uvm_test_top.env_h.agent_h.sqr STREAM:691}
-  CREATE_STREAM @0 {NAME:seq T:Transactions SCOPE:uvm_test_top.env_h.agent_h.sqr STREAM:691}
-  CREATE_STREAM @0 {NAME:seq T:Transactions SCOPE:uvm_test_top.env_h.agent_h.sqr STREAM:691}
-  CREATE_STREAM @0 {NAME:seq T:Transactions SCOPE:uvm_test_top.env.ALU_in_agent_h.sqr STREAM:771}

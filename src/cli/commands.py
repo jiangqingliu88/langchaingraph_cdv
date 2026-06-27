@@ -61,15 +61,13 @@ def init():
 
 @cli.command()
 @click.argument('spec_file', type=click.Path(exists=True))
-@click.option('--bypass', is_flag=True)
-def analyze(spec_file, bypass):
+def analyze(spec_file):
     app = VerificationCLI()
     async def run():
         await app.initialize()
         spec = Path(spec_file).read_text(encoding='utf-8')
         agent = app.registry.get_agent_instance("spec_and_test_planner")
-        agent.config["bypass"] = bypass
-        result = await agent.execute_task({"input": spec, "bypass": bypass})
+        result = await agent.execute_task({"input": spec})
         if result.success:
             console.print(Panel(str(result.data.get("output", ""))[:1000], title="Result"))
         else:
@@ -79,11 +77,10 @@ def analyze(spec_file, bypass):
 @cli.command()
 @click.argument('spec_file', type=click.Path(exists=True))
 @click.option('--workflow', '-w', default='full_verification')
-@click.option('--bypass', is_flag=True)
 @click.option('--refine', is_flag=True, help='LLM refine: template foundation + LLM polish + iterative fix')
 @click.option('--compile', is_flag=True, help='Run QuestaSim compile after arch phase')
 @click.option('--output', '-o', type=click.Path())
-def verify(spec_file, workflow, bypass, compile, output, refine):
+def verify(spec_file, workflow, compile, output, refine):
     """完整验证流水线 —— 每阶段实时输出"""
     from src.core.execution import PipelineExecutionService
     output_root = output or "output"
@@ -102,7 +99,7 @@ def verify(spec_file, workflow, bypass, compile, output, refine):
             console.print(f"  [{color}][{icon}] {phase:8s}[/{color}] {clean_msg}")
 
         result = await service.run_pipeline(
-            spec_text=spec, workflow=workflow, output_root=output_root, bypass=bypass,
+            spec_text=spec, workflow=workflow, output_root=output_root,
             on_progress=progress, refine=refine)
 
         # Build agent role map for display
@@ -233,17 +230,16 @@ AGENT_HELP = ", ".join(AGENT_ALIASES.keys())
 
 
 @cli.command()
-@click.option('--bypass', is_flag=True)
-def repl(bypass):
+def repl():
     """单 Agent 调试控制台 —— 逐个验证 Tool 代码"""
     console.print("[bold cyan]IC-Verify Agent Debug REPL[/bold cyan]")
     console.print(f"Agents: {AGENT_HELP}")
     console.print("Commands: [yellow]agents[/yellow] | [yellow]tools[/yellow] <agent> | [yellow]<agent>[/yellow] [input] | "
-                   "[yellow]exec[/yellow] <agent> <tool> | [yellow]bypass[/yellow] on|off | [yellow]ctx[/yellow] | [yellow]quit[/yellow]")
+                   "[yellow]exec[/yellow] <agent> <tool> | [yellow]ctx[/yellow] | [yellow]quit[/yellow]")
     app = VerificationCLI()
     asyncio.run(app.initialize())
 
-    ctx = {"input": "", "output": "", "bypass": bypass, "last_agent": None}
+    ctx = {"input": "", "output": "", "last_agent": None}
 
     while True:
         try:
@@ -266,24 +262,10 @@ def repl(bypass):
             console.print("[bold]Commands:[/bold]")
             console.print("  [yellow]agents[/yellow]              — 列出所有 Agent 及状态")
             console.print("  [yellow]tools[/yellow] <agent>       — 列出 Agent 的所有 Tool")
-            console.print("  [yellow]<agent>[/yellow] [input]     — 执行 Agent（bypass/LLM），input 可选")
+            console.print("  [yellow]<agent>[/yellow] [input]     — 执行 Agent（LLM），input 可选")
             console.print("  [yellow]exec[/yellow] <agent> <tool> — 直接调用 Tool 函数，查看返回值")
-            console.print("  [yellow]bypass[/yellow] on|off       — 切换 bypass 模式（默认: on）")
             console.print("  [yellow]ctx[/yellow]                 — 显示当前上下文（上一个 Agent 的输出）")
             console.print("  [yellow]quit[/yellow]                — 退出")
-            continue
-
-        # ── bypass ──
-        if cmd == 'bypass':
-            val = args[0].lower() if args else ''
-            if val in ('on', 'true', '1'):
-                ctx['bypass'] = True
-                console.print("[green]bypass = ON[/green] (skip LLM)")
-            elif val in ('off', 'false', '0'):
-                ctx['bypass'] = False
-                console.print("[yellow]bypass = OFF[/yellow] (use LLM)")
-            else:
-                console.print(f"bypass = [cyan]{ctx['bypass']}[/cyan]")
             continue
 
         # ── ctx ──
@@ -291,8 +273,7 @@ def repl(bypass):
             console.print(Panel(
                 f"[bold]input[/bold]: {str(ctx['input'])[:200]}\n"
                 f"[bold]output[/bold]: {str(ctx['output'])[:300]}\n"
-                f"[bold]last_agent[/bold]: {ctx['last_agent']}\n"
-                f"[bold]bypass[/bold]: {ctx['bypass']}",
+                f"[bold]last_agent[/bold]: {ctx['last_agent']}",
                 title="Context"
             ))
             continue
@@ -384,12 +365,10 @@ def repl(bypass):
             console.print("[red]No input provided[/red]")
             continue
 
-        agent.config["bypass"] = ctx["bypass"]
-        bp = ctx["bypass"]
-        console.print(f"  [{alias}] running (bypass={bp})...")
+        console.print(f"  [{alias}] running (LLM)...")
         start = __import__('time').time()
         try:
-            r = asyncio.run(agent.execute_task({"input": agent_input, "bypass": bp}))
+            r = asyncio.run(agent.execute_task({"input": agent_input}))
             elapsed = __import__('time').time() - start
             if r.success:
                 output = str(r.data.get("output", ""))

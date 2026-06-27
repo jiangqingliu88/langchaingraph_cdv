@@ -15,11 +15,11 @@ async def test_init():
 
 
 @pytest.mark.asyncio
-async def test_bypass():
-    """Test spec planner bypass mode"""
+async def test_basic():
+    """Test spec planner basic execution"""
     agent = SpecAndTestPlanner()
     await agent.initialize()
-    result = await agent.execute_task({"input": "UART design spec", "bypass": True})
+    result = await agent.execute_task({"input": "UART design spec"})
     assert result.success
 
 
@@ -28,6 +28,6 @@ async def test_analyze():
     """Test spec planner outputs proper data structure"""
     agent = SpecAndTestPlanner()
     await agent.initialize()
-    result = await agent.execute_task({"input": "UART design spec", "bypass": True})
+    result = await agent.execute_task({"input": "UART design spec"})
     assert result.success
     assert "output" in result.data

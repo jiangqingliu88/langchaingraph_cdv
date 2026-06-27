@@ -12,14 +12,14 @@
 - 纯 C++ 参考模型生成（无 SystemC 依赖）
 - 自测验证向量生成
 - Scoreboard Predictor 桥接
-- 基于 `src/tools/uvm/tool_sc_red/` 工具
+- 基于 `src/tools/uvm_tools/tool_sc_red/` 工具
 
 ## Usage
 ```python
 from src.agents.model_agent import ModelAgent
 agent = ModelAgent()
 await agent.initialize()
-result = await agent.execute_task({"input": design_arch, "bypass": True})
+result = await agent.execute_task({"input": design_arch})
 ```
 
 ## Test

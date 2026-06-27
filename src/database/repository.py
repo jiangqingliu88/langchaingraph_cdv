@@ -8,11 +8,11 @@ from src.database.models import (
 
 # ── 原有 ──
 
-async def save_task(role, ttype, inp, out, status, error=None, extime=0, bypass=False):
+async def save_task(role, ttype, inp, out, status, error=None, extime=0):
     s = await get_session()
     r = TaskRecord(agent_role=role, task_type=ttype, input_text=str(inp)[:5000],
                    output_text=str(out)[:10000], status=status, error_msg=error,
-                   execution_time=extime, bypass=1 if bypass else 0)
+                   execution_time=extime)
     s.add(r); await s.commit(); await s.close()
 
 async def save_pipeline_run(wf, spec, total, passed, degraded, ttime, results):

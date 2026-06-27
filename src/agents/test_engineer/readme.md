@@ -17,15 +17,12 @@
 - 仿真参数 (simargs) 生成
 - 测试覆盖率检查
 
-## Bypass Mode
-基于 spec 和 env 自动生成约束策略 → 场景映射 → SV 测试代码。
-
 ## Usage
 ```python
 from src.agents.test_engineer import TestEngineer
 agent = TestEngineer()
 await agent.initialize()
-result = await agent.execute_task({"input": context, "bypass": True})
+result = await agent.execute_task({"input": context})
 ```
 
 ## Test

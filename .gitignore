@@ -1,5 +1,37 @@
-pytest_cache
-ic_verification_agent.egg-info
-venv/Scripts/ic-verify.
-venv/pyvenv.cfg
-venv/Scripts/*
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+
+# Virtual environment
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing & coverage
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Databases (local)
+*.db
+*.db-journal
+
+# Logs
+*.log
+logs/
+
+# Environment (local only — contains API keys)
+.env
+.env_bak
+
+# Generated regression output
+regression_*/
+.build_cache/
+
+# OS
+.DS_Store
+Thumbs.db

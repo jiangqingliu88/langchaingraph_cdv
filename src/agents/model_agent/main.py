@@ -182,346 +182,49 @@ class ModelAgent(BaseAgent):
             return await self._executor.ainvoke({"input": input_text})
         return {"output": "Agent未初始化"}
 
-    # ── bypass: design_arch → analyze → C++ ref model + test vectors ──
+    async def _post_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract model data from LLM output and tool results."""
+        output_text = result.get("output", "") if isinstance(result, dict) else str(result)
+        from src.core.base import _extract_json_from_llm
+        import json as _json
+
+        # Try final LLM output first
+        model = _extract_json_from_llm(output_text)
+
+        # If not found, build from tool results
+        if not model:
+            steps = result.get("intermediate_steps", []) if isinstance(result, dict) else []
+            model = {"module": "", "model_type": "cpp", "files": [], "analysis": {}, "ref_model": {}, "test_vectors": {}}
+            for action, tool_output in steps:
+                tool_name = getattr(action, 'tool', '') if hasattr(action, 'tool') else ''
+                try:
+                    data = _json.loads(str(tool_output)) if isinstance(tool_output, str) and tool_output.strip().startswith('{') else None
+                except Exception:
+                    data = None
+                if not data:
+                    continue
+                if 'analyze' in tool_name:
+                    model["analysis"] = data
+                    model["module"] = data.get("module_name", "")
+                elif 'ref_model' in tool_name or 'generate_ref' in tool_name:
+                    model["ref_model"] = data
+                    model["files"] = data.get("files", {})
+                    model["module"] = data.get("module", model["module"])
+                elif 'test_vector' in tool_name:
+                    model["test_vectors"] = data
+
+        steps = result.get("intermediate_steps", []) if isinstance(result, dict) else []
+        if model and (model.get("module") or model.get("files") or model.get("ref_model")):
+            result["model"] = model
+            n_files = len(model.get("files", {})) if isinstance(model.get("files"), dict) else len(model.get("files", []))
+            result["score"] = min(50 + n_files*10, 80)
+        elif steps:
+            # LLM ran tools — give partial credit
+            result["model"] = {"module": model.get("module","") if model else "", "status": "tool_executed", "tool_calls": len(steps)}
+            result["score"] = min(40 + len(steps)*10, 70)
+        else:
+            result["score"] = 15
+        return result
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
-        bypass = task.get('bypass', False) if isinstance(task, dict) else False
-        if not bypass:
-            # Hybrid: use bypass when ctx has required data
-            ctx = task.get("ctx", {}) if isinstance(task, dict) else {}
-            if ctx.get("spec"):
-                task["bypass"] = True
-            return await super().execute_task(task)
-
-        start = dt.now()
-        try:
-            ctx = task.get("ctx", {})
-            output_dir = task.get("output_dir", "generated/alu")
-            self._last_prompt = "bypass: design_arch → C++ ref model + test vectors"
-
-            design = ctx.get("design_arch", {})
-            spec = ctx.get("spec", {})
-
-            module_name = design.get("module_name", spec.get("module_name", "dut"))
-            registers = design.get("registers", [])
-            func_hier = design.get("function_hier", {})
-
-            # ── Step 1: analyze design_arch ──
-            design_data = {
-                "module_name": module_name,
-                "registers": registers,
-                "function_hier": func_hier,
-            }
-            analysis_str = _analyze_design_arch(json.dumps(design_data, ensure_ascii=False))
-            analysis = json.loads(analysis_str)
-
-            # ── Step 2: generate C++ ref model ──
-            # Rebuild analysis with proper data for model generation
-            a_data = {"module_name": module_name, "registers": registers,
-                      "operations": _extract_operations(func_hier) if func_hier else []}
-            model_str = _generate_ref_model(json.dumps(a_data, ensure_ascii=False))
-            model = json.loads(model_str)
-
-            # ── Step 3: generate test vectors ──
-            vectors_str = _generate_test_vectors(json.dumps(model, ensure_ascii=False))
-            vectors = json.loads(vectors_str)
-
-            # ── Step 4: write files to disk ──
-            cmodel_dir = Path(output_dir) / "cmodel"
-            cmodel_dir.mkdir(parents=True, exist_ok=True)
-            model_files = model.get("files", {})
-            h_path = cmodel_dir / model_files.get("header", f"{module_name}_ref_model.h")
-            cpp_path = cmodel_dir / model_files.get("source", f"{module_name}_ref_model.cpp")
-            test_path = cmodel_dir / vectors.get("test_file", f"test_{module_name}_ref_model.cpp")
-            h_path.write_text(model_files.get("header_code", f"// {module_name} ref model header"), encoding="utf-8")
-            cpp_path.write_text(model_files.get("source_code", f"// {module_name} ref model impl"), encoding="utf-8")
-            test_path.write_text(vectors.get("test_code", "// test vectors"), encoding="utf-8")
-            vectors_path = cmodel_dir / "test_vectors.json"
-            vectors_path.write_text(json.dumps(vectors.get("vectors", []), indent=2), encoding="utf-8")
-            written_files = [str(h_path), str(cpp_path), str(test_path), str(vectors_path)]
-
-            summary = (
-                f"Ref Model: {module_name}_ref_model.h + .cpp + test vectors\n"
-                f"  Written: {len(written_files)} files → {cmodel_dir}\n"
-                f"  Registers: {a_data.get('register_count', len(registers))} mapped\n"
-                f"  Operations: {a_data.get('operation_count', 0)} mapped\n"
-                f"  Test vectors: {vectors.get('test_count', 0)}\n"
-                f"  Compile: {vectors.get('compile_cmd', 'g++ -std=c++17 test_...')}\n"
-                f"  Run: {vectors.get('run_cmd', './a.out')}\n"
-            )
-
-            self.metrics["tasks_completed"] += 1
-            self.metrics["total_time"] += (dt.now() - start).total_seconds()
-
-            # ── Step 5: generate UVM cmodel predictor + DPI wrapper ──
-            try:
-                from src.tools.compilesim.gen_cmodel import generate_cmodel
-                cm_r = generate_cmodel(str(cmodel_dir), module_name)
-                if cm_r["status"] == "PASS":
-                    written_files.extend(cm_r["files"])
-                    summary += f"  UVM Predictor: {len(cm_r['files'])} files generated\n"
-            except Exception as e:
-                summary += f"  UVM Predictor: skipped ({e})\n"
-
-            tv_count = len(vectors) if vectors else 0
-            return AgentResult(success=True, data={
-                "output": summary,
-                "model": {
-                    "module": module_name,
-                    "model_type": "cpp",
-                    "analysis": a_data,
-                    "ref_model": model,
-                    "test_vectors": vectors,
-                    "files": written_files,
-                    "output_dir": str(cmodel_dir),
-                },
-                "score": min(40 + tv_count * 5, 80),
-            }, execution_time=(dt.now() - start).total_seconds())
-
-        except Exception as e:
-            import traceback
-            return AgentResult(success=False, error=f"{e}\n{traceback.format_exc()}")
-
-
-# ═══════════════════════════════════════════════════════════
-# 辅助函数 —— 纯 C++ 参考模型渲染
-# ═══════════════════════════════════════════════════════════
-
-def _extract_operations(func_hier: dict) -> list:
-    """从 function hierarchy 提取叶子运算列表"""
-    ops = []
-
-    def _walk(node, depth=0):
-        if isinstance(node, dict):
-            name = node.get("name", "")
-            children = node.get("children", [])
-            if name and not children:
-                ops.append({"name": name, "depth": depth})
-            for child in children:
-                _walk(child, depth + 1)
-        elif isinstance(node, list):
-            for item in node:
-                _walk(item, depth)
-
-    _walk(func_hier)
-    return ops
-
-
-def _extract_inputs(func_hier: dict) -> list:
-    """从 function hierarchy 提取输入信号"""
-    # 默认输入集，实际可从 spec 字段扩展
-    return [
-        {"name": "cmd", "width": 8, "desc": "operation code"},
-        {"name": "operand_a", "width": 32, "desc": "input operand A"},
-        {"name": "operand_b", "width": 32, "desc": "input operand B"},
-    ]
-
-
-def _extract_outputs(func_hier: dict, registers: list) -> list:
-    """从 function hierarchy + registers 提取输出信号"""
-    outputs = [
-        {"name": "result", "width": 32, "desc": "computation result"},
-        {"name": "flags", "width": 8, "desc": "status flags (Z/N/C/V)"},
-    ]
-    for r in registers:
-        if r.get("access", "RW") in ("RO", "RW"):
-            outputs.append({"name": r.get("name", "reg"), "width": r.get("width", 32),
-                            "desc": f"register {r.get('name')}"})
-    return outputs
-
-
-def _render_ref_model_h(module_name: str, registers: list, operations: list) -> str:
-    """生成纯 C++ 参考模型 .h（无 SystemC 依赖）"""
-    reg_enum = "\n".join(
-        f'    REG_{r["name"].upper()} = 0x{int(str(r.get("offset", r.get("addr","0x00"))).replace("0x",""), 16):08X},'
-        for r in registers
-    ) if registers else '    REG_CTRL = 0x00000000,'
-
-    op_enum = "\n".join(
-        f'    OP_{op["name"].upper()},'
-        for op in operations
-    ) if operations else '    OP_NOP,'
-
-    reg_count = len(registers) if registers else 1
-
-    return f'''// Auto-generated C++ reference model for {module_name}
-// No SystemC dependency — pure C++17, no external libs
-#pragma once
-#include <cstdint>
-#include <unordered_map>
-#include <string>
-
-namespace refmodel {{
-
-// ── 操作码 ──
-enum class OpCode : uint8_t {{
-{op_enum}
-}};
-
-// ── 标志位 ──
-enum Flags : uint8_t {{
-    FLAG_ZERO     = 1 << 0,
-    FLAG_NEGATIVE = 1 << 1,
-    FLAG_CARRY    = 1 << 2,
-    FLAG_OVERFLOW = 1 << 3,
-}};
-
-// ── 寄存器地址 ──
-enum RegAddr : uint32_t {{
-{reg_enum}
-}};
-
-// ── IO 事务（与 SV transaction 对应，无 TLM 依赖）──
-struct input_txn {{
-    uint8_t  cmd;
-    uint32_t operand_a;
-    uint32_t operand_b;
-}};
-
-struct output_txn {{
-    uint32_t result;
-    uint8_t  flags;
-}};
-
-// ── 参考模型 ──
-class {module_name}_ref_model {{
-public:
-    {module_name}_ref_model();
-    void reset();
-
-    // 纯函数：输入事务 → 输出事务（无副作用、无时序、无并发）
-    output_txn predict(const input_txn& in);
-
-    // 寄存器访问
-    void     reg_write(uint32_t addr, uint32_t data);
-    uint32_t reg_read(uint32_t addr);
-    const std::unordered_map<std::string, uint32_t>& reg_map() const {{ return reg_map_; }}
-
-private:
-    uint32_t reg_file_[{reg_count}];
-    uint32_t flags_;
-    std::unordered_map<std::string, uint32_t> reg_map_;
-}};
-
-}} // namespace refmodel'''
-
-
-def _render_ref_model_cpp(module_name: str, registers: list, operations: list) -> str:
-    """生成纯 C++ 参考模型 .cpp"""
-    reg_init = ",\n    ".join(
-        f'{{"{r["name"]}", 0x{int(str(r.get("offset", r.get("addr","0x00"))).replace("0x",""), 16):08X}}}'
-        for r in registers
-    ) if registers else '{"CTRL", 0x00000000}'
-
-    reg_accessor = ""
-    if registers:
-        reg_accessor = f'''
-void {module_name}_ref_model::reg_write(uint32_t addr, uint32_t data) {{
-    for (int i = 0; i < {len(registers)}; i++) {{
-        if (reg_map_.at(reg_names_[i]) == addr) {{
-            reg_file_[i] = data;
-            return;
-        }}
-    }}
-}}
-
-uint32_t {module_name}_ref_model::reg_read(uint32_t addr) {{
-    for (int i = 0; i < {len(registers)}; i++) {{
-        if (reg_map_.at(reg_names_[i]) == addr) {{
-            return reg_file_[i];
-        }}
-    }}
-    return 0;
-}}
-'''
-
-    # 生成运算分支
-    cases = []
-    for op in operations:
-        name = op["name"].upper()
-        cases.append(f'        case OpCode::OP_{name}: out.result = a + b; break;  // TODO: 替换为{op["name"]}算法')
-
-    if not cases:
-        cases.append('        default: out.result = 0; break;')
-
-    op_switch = "\n".join(cases)
-
-    return f'''// Auto-generated C++ reference model for {module_name}
-#include "{module_name}_ref_model.h"
-#include <cstring>
-
-namespace refmodel {{
-
-{module_name}_ref_model::{module_name}_ref_model() {{
-    reg_map_ = {{{reg_init}}};
-    reset();
-}}
-
-void {module_name}_ref_model::reset() {{
-    memset(reg_file_, 0, sizeof(reg_file_));
-    flags_ = 0;
-}}{reg_accessor}
-
-output_txn {module_name}_ref_model::predict(const input_txn& in) {{
-    output_txn out = {{0, 0}};
-    uint32_t a = in.operand_a;
-    uint32_t b = in.operand_b;
-
-    switch (static_cast<OpCode>(in.cmd)) {{
-{op_switch}
-    }}
-
-    // 标志位更新
-    out.flags = 0;
-    if (out.result == 0)        out.flags |= FLAG_ZERO;
-    if (out.result >> 31)       out.flags |= FLAG_NEGATIVE;
-    // FLAG_CARRY / FLAG_OVERFLOW 按具体运算补充
-
-    return out;
-}}
-
-}} // namespace refmodel'''
-
-
-def _render_test_main(module_name: str, tests: list) -> str:
-    """生成自测 main() —— g++ 直接编译运行，无任何框架依赖"""
-    test_cases = []
-    for i, t in enumerate(tests):
-        inp = t["input"]
-        exp = t["expect"]
-        test_cases.append(f'''    // [{i}] {t["name"]}
-    {{
-        input_txn in  = {{{inp["cmd"]}, {inp["a"]}, {inp["b"]}}};
-        output_txn out = model.predict(in);
-        bool pass = (out.result == {exp["result"]}) && (out.flags == {exp["flags"]});
-        printf("  [%d] %-20s: %s (got result=0x%08X flags=0x%02X)\\n",
-               {i}, "{t['name']}", pass ? "PASS" : "FAIL", out.result, out.flags);
-        if (!pass) all_pass = false;
-    }}''')
-
-    test_body = "\n".join(test_cases)
-
-    return f'''// Auto-generated test driver for {module_name}_ref_model
-// Compile: g++ -std=c++17 {module_name}_ref_model.cpp test_{module_name}_ref_model.cpp -o test_{module_name}
-// Run:     ./test_{module_name}
-#include "{module_name}_ref_model.h"
-#include <cstdio>
-
-using namespace refmodel;
-
-int main() {{
-    bool all_pass = true;
-    {module_name}_ref_model model;
-
-    printf("=== {module_name} Reference Model Self-Test ===\\n\\n");
-
-    // ── reset check ──
-    model.reset();
-    printf("  reset : reg[0]=0x%08X (expect 0)\\n", model.reg_read(0));
-
-    printf("\\n── Test Vectors ──\\n");
-{test_body}
-
-    printf("\\n=== Result: %s ===\\n", all_pass ? "ALL PASSED" : "SOME FAILED");
-    return all_pass ? 0 : 1;
-}}'''
+        return await super().execute_task(task)

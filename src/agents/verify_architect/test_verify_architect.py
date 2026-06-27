@@ -15,21 +15,20 @@ async def test_init():
 
 
 @pytest.mark.asyncio
-async def test_bypass():
-    """Test verification architect bypass mode"""
+async def test_basic():
+    """Test verification architect basic execution"""
     agent = VerificationArchitect()
     await agent.initialize()
-    result = await agent.execute_task({"input": "UART spec with tx/rx signals", "bypass": True})
+    result = await agent.execute_task({"input": "UART spec with tx/rx signals"})
     assert result.success
 
 
 @pytest.mark.asyncio
-async def test_bypass_with_spec():
-    """Test bypass execution with UART spec"""
+async def test_basic_with_spec():
+    """Test basic execution with UART spec"""
     agent = VerificationArchitect()
     await agent.initialize()
     result = await agent.execute_task({
         "input": "UART module with tx, rx, baud_rate signals",
-        "bypass": True
     })
     assert result.success

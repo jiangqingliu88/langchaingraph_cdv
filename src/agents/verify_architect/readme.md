@@ -20,25 +20,12 @@
   7. fix_issues — 修复问题
 - 质量评分 ≥80/100 才交付
 
-## Bypass Mode
-从 spec 提取信号构建 YAML 配置 → 调用 UVM generator 生成真实 SV 代码。
-
-输出结构：
-```
-generated/<module>/
-├── shared/              # transaction, interface, driver, monitor, ...
-├── agent_tb/            # Agent 闭环验证 TB
-├── env_tb/              # 完整验证环境 TB
-├── filelist.f           # QuestaSim 编译文件列表
-└── quality_report.json  # 自动质量检查报告
-```
-
 ## Usage
 ```python
 from src.agents.verify_architect import VerificationArchitect
 agent = VerificationArchitect()
 await agent.initialize()
-result = await agent.execute_task({"input": spec_text, "bypass": True})
+result = await agent.execute_task({"input": spec_text})
 ```
 
 ## Test
