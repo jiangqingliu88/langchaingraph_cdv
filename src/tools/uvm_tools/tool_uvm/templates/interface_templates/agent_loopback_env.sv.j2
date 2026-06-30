@@ -1,7 +1,9 @@
 import uvm_pkg::*;
-typedef class {{ agent.name }}_loopback_scb;
 import {{ agent.name }}_pkg::*;
 `include "uvm_macros.svh"
+
+// Forward declaration: SCB 在 agent_loopback_scb.sv 中定义，此文件之后编译
+typedef class {{ agent.name }}_loopback_scb;
 
 // === Agent Loopback Env: {{ agent.name }} ===
 // 单 Agent 自测环境 —— Driver → Monitor 闭环验证
@@ -19,18 +21,16 @@ class {{ agent.name }}_loopback_env extends uvm_env;
 
   virtual function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    cfg = {{ agent.name }}_config::type_id::create("cfg");
+    cfg = {{ agent.name }}_config::type_id::create("cfg", this);
     cfg.is_active = UVM_ACTIVE;
     uvm_config_db #({{ agent.name }}_config)::set(this, "*", "cfg", cfg);
     agent_h = {{ agent.name }}_agent::type_id::create("agent_h", this);
-    scb_h  = {{ agent.name }}_loopback_scb::type_id::create("scb_h", this);
+    scb_h   = {{ agent.name }}_loopback_scb::type_id::create("scb_h", this);
   endfunction
 
   virtual function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
-    // Driver.expected_port → Scoreboard.expected_export (期望值)
     agent_h.drv.expected_port.connect(scb_h.expected_export);
-    // Monitor.item_collected_port → Scoreboard.actual_export (实际值)
     agent_h.mon.item_collected_port.connect(scb_h.actual_export);
   endfunction
 

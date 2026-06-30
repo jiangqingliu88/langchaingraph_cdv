@@ -658,7 +658,7 @@ async function runDesignArch(){
 // ═══════════════════════════════════════════════════════════
 // PIPELINE
 // ═══════════════════════════════════════════════════════════
-const P_FULL=['spec','arch','seq','tc','assert','regress','cover','debug','qa','report'];
+const P_FULL=['spec','UVM','seq','tc','assert','regress','cover','debug','qa','report'];
 function buildPhaseBar(wf){
     const phases=wf==='quick_check'?P_FULL.slice(0,4):P_FULL;
     document.getElementById('phaseBar').innerHTML=phases.map((p,i)=>`<div style="display:inline-block;text-align:center;margin:2px"><div class="phase-dot pending" id="dot-${p}">${i+1}</div><small style="font-size:.55rem">${p}</small></div>`).join('');

@@ -85,6 +85,21 @@ class TestEngineer(BaseAgent):
         return {"output": "Agent未初始化"}
 
 
+    async def _post_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """从 LLM 输出提取测试用例数据。"""
+        output_text = result.get("output", "") if isinstance(result, dict) else str(result)
+        from src.core.base import _extract_json_from_llm
+        parsed = _extract_json_from_llm(output_text)
+        if parsed:
+            tests = parsed.get("tests", parsed.get("test_cases", []))
+            if tests:
+                result["tests"] = {
+                    "test_names": [t.get("name", f"test_{i}") for i, t in enumerate(tests)],
+                    "test_count": len(tests),
+                    "test_cases": tests,
+                }
+                result["score"] = min(60 + len(tests) * 5, 95)
+        return result
+
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
-        # Always use LLM
         return await super().execute_task(task)

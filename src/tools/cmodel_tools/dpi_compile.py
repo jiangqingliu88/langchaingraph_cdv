@@ -3,7 +3,7 @@ import os, subprocess, sys
 from pathlib import Path
 
 
-def compile_cmodel_dpi(cmodel_dir: str, module_name: str = "alu",
+def compile_cmodel_dpi(cmodel_dir: str, module_name: str = "dut",
                        questa_dir: str = "f:/questasim64_2024.1") -> dict:
     """
     Compile C++ model + DPI wrapper into a shared library.
@@ -69,8 +69,8 @@ def compile_cmodel_dpi(cmodel_dir: str, module_name: str = "alu",
 
 
 if __name__ == "__main__":
-    result = compile_cmodel_dpi(sys.argv[1] if len(sys.argv) > 1 else "generated/alu/cmodel",
-                                sys.argv[2] if len(sys.argv) > 2 else "alu")
+    result = compile_cmodel_dpi(sys.argv[1] if len(sys.argv) > 1 else "output/cmodel",
+                                sys.argv[2] if len(sys.argv) > 2 else "dut")
     print(result["status"])
     if result["status"] == "PASS":
         print(f"  Library: {result['lib_path']}")

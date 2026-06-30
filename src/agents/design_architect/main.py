@@ -49,8 +49,9 @@ RULES:
         ])
     async def _get_tools(self) -> List: return []
     async def _execute(self, input_text: str) -> Dict[str, Any]:
-        # Handled by base class: direct chain for tool-less, executor for tooled
-        return {"output": "Agent not initialized", "score": 0}
+        if self._executor:
+            return await self._executor.ainvoke({"input": input_text})
+        return {"output": "Agent未初始化"}
 
     async def _post_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Extract design_arch JSON from LLM output text."""

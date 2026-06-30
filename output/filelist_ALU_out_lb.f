@@ -1,0 +1,9 @@
++define+ALU_out_loop_back_test
++incdir+D:\cdv_a\output\agents\ALU_out
++incdir+D:\cdv_a\output\agents\ALU_out/loopback
+D:\cdv_a\output\agents\ALU_out\ALU_out_interface.sv
+D:\cdv_a\output\agents\ALU_out\ALU_out_pkg.sv
+D:\cdv_a\output\agents\ALU_out\loopback\ALU_out_loopback_scb.sv
+D:\cdv_a\output\agents\ALU_out\loopback\ALU_out_loopback_env.sv
+D:\cdv_a\output\agents\ALU_out\loopback\ALU_out_loopback_test.sv
+D:\cdv_a\output\agents\ALU_out\loopback\ALU_out_loopback_tb.sv

@@ -1,0 +1,48 @@
+import uvm_pkg::*;
+import ALU_in_pkg::*;
+`include "uvm_macros.svh"
+
+// === Agent Loopback Test: ALU_in ===
+// Uses random_seq with actual body to send N transactions.
+// Verifies Driver->Monitor closed-loop data consistency.
+
+class ALU_in_loopback_test extends uvm_test;
+  `uvm_component_utils(ALU_in_loopback_test)
+
+  ALU_in_loopback_env env_h;
+  int num_items = 20;
+
+  function new(string name = "ALU_in_loopback_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    env_h = ALU_in_loopback_env::type_id::create("env_h", this);
+  endfunction
+
+  task run_phase(uvm_phase phase);
+    ALU_in_random_seq seq;
+
+    phase.raise_objection(this);
+
+    `uvm_info("LB_TEST", "Starting ALU_in loopback test", UVM_NONE)
+
+    // Wait for reset de-assertion (rst released at #100 in TB, first posedge at #105)
+    #105ns;
+
+    // Use random_seq (has actual body, unlike base_seq which is empty)
+    seq = ALU_in_random_seq::type_id::create("seq");
+    seq.num_transactions = num_items;
+    seq.delay_min = 0;
+    seq.delay_max = 0;
+    seq.start(env_h.agent_h.sqr);
+
+    // Brief wait for last item to propagate
+    #30ns;
+
+    `uvm_info("LB_TEST", $sformatf("Loopback test completed: %0d items sent", num_items), UVM_NONE)
+    phase.drop_objection(this);
+  endtask
+
+endclass : ALU_in_loopback_test

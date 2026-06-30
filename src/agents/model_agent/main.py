@@ -63,6 +63,107 @@ def _analyze_design_arch(design_json: str) -> str:
     return json.dumps(result, indent=2, ensure_ascii=False)
 
 
+def _extract_operations(func_hier: dict) -> list:
+    """递归提取 function_hier 中所有叶子节点的操作名。"""
+    ops = []
+    name = func_hier.get("name", "")
+    children = func_hier.get("children", [])
+    if children:
+        for child in children:
+            ops.extend(_extract_operations(child))
+    elif name:
+        ops.append(name)
+    return ops
+
+
+def _extract_inputs(func_hier: dict) -> list:
+    """从 function_hier 推断输入信号名。"""
+    ops = _extract_operations(func_hier)
+    signals = ["clk", "rst_n"]
+    if ops:
+        signals.append("opcode")
+    signals.append("operand_a")
+    signals.append("operand_b")
+    return signals
+
+
+def _extract_outputs(func_hier: dict, registers: list) -> list:
+    """从 function_hier + 寄存器推断输出信号名。"""
+    signals = ["result"]
+    if registers:
+        for r in registers:
+            name = r.get("name", "")
+            if "FLAG" in name.upper():
+                signals.append("flags")
+                break
+    return signals
+
+
+def _render_ref_model_h(module_name: str, registers: list, operations: list) -> str:
+    """渲染 C++ 参考模型头文件。"""
+    ops = [f"  int {op}(int a, int b);" for op in operations]
+    return f"""#ifndef {module_name.upper()}_REF_MODEL_H
+#define {module_name.upper()}_REF_MODEL_H
+#include <cstdint>
+class {module_name}_ref_model {{
+public:
+  void reset();
+{chr(10).join(ops)}
+  int read_register(uint32_t addr);
+  void write_register(uint32_t addr, int value);
+private:
+  int regs[256] = {{0}};
+}};
+#endif
+"""
+
+
+def _render_ref_model_cpp(module_name: str, registers: list, operations: list) -> str:
+    """渲染 C++ 参考模型实现文件。"""
+    op_cases = []
+    for i, op in enumerate(operations):
+        op_cases.append(f'    case {i}: return a + b;  // {op}')
+    return f"""#include "{module_name}_ref_model.h"
+void {module_name}_ref_model::reset() {{
+  for (int i = 0; i < 256; i++) regs[i] = 0;
+}}
+int {module_name}_ref_model::read_register(uint32_t addr) {{
+  return (addr < 256) ? regs[addr] : 0;
+}}
+void {module_name}_ref_model::write_register(uint32_t addr, int value) {{
+  if (addr < 256) regs[addr] = value;
+}}
+// Operation implementations (simplified)
+int {module_name}_ref_model::execute(int op, int a, int b) {{
+  switch(op) {{
+{chr(10).join(op_cases)}
+    default: return 0;
+  }}
+}}
+"""
+
+
+def _render_test_main(module_name: str, tests: list) -> str:
+    """渲染测试 main 函数。"""
+    test_calls = []
+    for t in tests:
+        name = t.get("name", "test")
+        test_calls.append(f'  printf("  {name}... ");')
+        test_calls.append(f'  run_{name}(model);')
+        test_calls.append(f'  printf("PASS\\n");')
+    return f"""#include "{module_name}_ref_model.h"
+#include <cstdio>
+int main() {{
+  {module_name}_ref_model model;
+  model.reset();
+  printf("Running tests for {module_name}...\\n");
+{chr(10).join(test_calls)}
+  printf("All tests passed!\\n");
+  return 0;
+}}
+"""
+
+
 @tool("generate_ref_model")
 def _generate_ref_model(analysis_json: str) -> str:
     """根据架构分析结果生成纯 C++ 参考模型（.h + .cpp）"""

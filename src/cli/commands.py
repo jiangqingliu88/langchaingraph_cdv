@@ -78,7 +78,7 @@ def analyze(spec_file):
 @click.argument('spec_file', type=click.Path(exists=True))
 @click.option('--workflow', '-w', default='full_verification')
 @click.option('--refine', is_flag=True, help='LLM refine: template foundation + LLM polish + iterative fix')
-@click.option('--compile', is_flag=True, help='Run QuestaSim compile after arch phase')
+@click.option('--compile', is_flag=True, help='Run QuestaSim compile after UVM phase')
 @click.option('--output', '-o', type=click.Path())
 def verify(spec_file, workflow, compile, output, refine):
     """完整验证流水线 —— 每阶段实时输出"""
@@ -131,31 +131,24 @@ def verify(spec_file, workflow, compile, output, refine):
             if rc:
                 console.print(f"[cyan]Coverage: line={rc.get('line_pct',0):.1f}% branch={rc.get('branch_pct',0):.1f}% toggle={rc.get('toggle_pct',0):.1f}%[/cyan]")
 
-        # ── 可选：arch 后编译 ──
-        if compile and any(p["name"] == "arch" and p["status"] == "passed" for p in result["phases"]):
+        # ── 可选：UVM 后编译（通过 RegressionRunner） ──
+        if compile and any(p["name"] == "UVM" and p["status"] == "passed" for p in result["phases"]):
             ctx = result["ctx"]
             console.print("\n[bold cyan]Compile Check[/bold cyan]")
             fl = ctx.get("env", {}).get("filelist", "")
             out_dir = ctx.get("env", {}).get("output_dir", "")
             if fl and Path(fl).exists():
-                work_dir = Path(out_dir) / "build" / "work"
-                work_dir.mkdir(parents=True, exist_ok=True)
-                import subprocess
-                rc = subprocess.run([
-                    "f:/questasim64_2024.1/win64/vlog.exe",
-                    "-work", str(work_dir), "-sv",
-                    "+incdir+f:/questasim64_2024.1/verilog_src/uvm-1.2/src",
-                    "-timescale=1ns/1ps",
-                    "f:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv",
-                    "-f", fl,
-                ], capture_output=True, text=True, timeout=120)
-                if rc.returncode == 0:
-                    console.print("[green]Compile OK - 0 errors[/green]")
+                from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner
+                runner = RegressionRunner(
+                    env_output_dir=out_dir,
+                    filelist=fl,
+                    top_module=ctx.get("env", {}).get("env_name", "dut") + "_bench_tb_top",
+                )
+                rc = runner.compile()
+                if rc["status"] == "PASS":
+                    console.print(f"[green]Compile PASS ({rc['time_s']}s, {rc.get('errors', 0)} errors)[/green]")
                 else:
-                    err_lines = [l for l in rc.stdout.split("\n") if "** Error" in l]
-                    console.print(f"[red]Compile: {len(err_lines)} errors[/red]")
-                    for l in err_lines[:5]:
-                        console.print(f"  [red]{l.strip()}[/red]")
+                    console.print(f"[red]Compile FAIL ({rc.get('errors', 0)} errors)[/red]")
             else:
                 console.print(f"[yellow]Filelist not found: {fl}[/yellow]")
 
@@ -216,7 +209,7 @@ def workflows():
 AGENT_ALIASES = {
     "spec":    "spec_and_test_planner",
     "design":  "design_architect",
-    "arch":    "verification_architect",
+    "UVM":     "verification_architect",
     "model":   "model_agent",
     "test":    "test_engineer",
     "assert":  "assertion_engineer",

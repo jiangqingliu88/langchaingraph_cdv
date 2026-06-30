@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Regression Report</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+.container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+.summary { display: flex; gap: 20px; flex-wrap: wrap; margin: 20px 0; }
+.summary-card { background: #f9f9f9; padding: 15px 25px; border-radius: 5px; flex: 1; min-width: 100px; text-align: center; }
+.summary-card .number { font-size: 28px; font-weight: bold; }
+.pass .number { color: #4CAF50; } .fail .number { color: #f44336; } .unknown .number { color: #ff9800; }
+.pass-rate { font-size: 24px; font-weight: bold; color: #2196F3; }
+.build-section { margin: 30px 0; border: 1px solid #ddd; border-radius: 5px; }
+.build-header { background: #e0e0e0; padding: 10px 15px; cursor: pointer; font-weight: bold; display: flex; justify-content: space-between; }
+.build-header:hover { background: #d0d0d0; }
+.test-table { width: 100%; border-collapse: collapse; }
+.test-table th, .test-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #eee; }
+.test-table th { background: #f2f2f2; }
+.status-badge { padding: 2px 10px; border-radius: 12px; color: white; font-size: 12px; font-weight: bold; }
+.status-pass { background: #4CAF50; } .status-fail { background: #f44336; } .status-unknown { background: #ff9800; }
+.performance-badge { background: #ff6f00; color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; }
+.wave-link { color: #2196F3; text-decoration: none; }
+.wave-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>Regression Report</h1>
+    <p>Generated: 2026-06-28 12:17:05 | Total Time: N/A</p>
+    <div class="summary">
+        <div class="summary-card"><div class="number">25</div><div class="label">Total</div></div>
+        <div class="summary-card pass"><div class="number">25</div><div class="label">Pass</div></div>
+        <div class="summary-card fail"><div class="number">0</div><div class="label">Fail</div></div>
+        <div class="summary-card unknown"><div class="number">0</div><div class="label">Unknown</div></div>
+        <div class="summary-card"><div class="pass-rate">100.0%</div><div class="label">Pass Rate</div></div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_CHIP_001</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_CHIP_001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_BT_001</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_BT_001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_BT_002</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_BT_002</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_BT_003</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_BT_003</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_BT_004</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_BT_004</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_BT_005</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_BT_005</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_BT_006</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_BT_006</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_BT_007</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_BT_007</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_001</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_002</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_002</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_003</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_003</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_004</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_004</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_005</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_005</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_006</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_006</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_007</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_007</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_008</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_008</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_009</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_009</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_010</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_010</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_011</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_011</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_012</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_012</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_013</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_013</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_014</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_014</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_015</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_015</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_016</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_016</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: REQ_ALU_UT_017</span>
+            <span>Total: 1 | Pass: 1 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>REQ_ALU_UT_017</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir"></td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+</div>
+</body>
+</html>

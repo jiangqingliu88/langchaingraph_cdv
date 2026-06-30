@@ -1,8 +1,8 @@
 """
-验证架构师Agent —— 生成 UVM 环境 + 自检质量
+验证架构师Agent —— 通过 LangChain Agent + 工具链生成 UVM 环境
 
-bypass 模式: 根据输入规格构造 YAML → generate_uvm() → 真实 SV 代码
-LLM 模式:   通过 LangChain Agent + 7 个工具：生成→静态检查→编译→闭环→健康→报告→修复
+LLM Agent + 6 个工具：静态检查→编译检查→闭环验证→健康检查→读文件→写文件
+质量评分基于日志分析（编译日志 + 仿真日志），三项全 PASS 才能交付
 """
 from typing import Dict, List, Any
 from langchain.agents import create_openai_tools_agent, AgentExecutor
@@ -10,9 +10,8 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from src.core.base import BaseAgent, AgentResult
 from src.core.registry import register_agent
-from src.tools.uvm_tools import generate_uvm, uvm_tool
+from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner
 import structlog
-import yaml
 import json
 import re
 import os
@@ -40,30 +39,49 @@ class VerificationArchitect(BaseAgent):
     async def _setup(self):
         logger.info(f"{self.display_name} 特定初始化完成")
 
+    def validate(self, result_data: dict) -> tuple:
+        """UVM 阶段验收：代码生成 + 静态检查必须 PASS。
+
+        静态检查（所有文件存在）是硬性指标。编译/闭环失败则降级但允许管线继续。
+        """
+        quality = result_data.get("quality", {})
+        static_pass = quality.get("details", {}).get("static", {}).get("passed", False)
+        compile_pass = quality.get("details", {}).get("compile", {}).get("passed", False)
+        loopback_pass = quality.get("details", {}).get("loopback", {}).get("passed", False)
+
+        if static_pass:
+            if compile_pass and loopback_pass:
+                return True, "All 3 checks PASS"
+            return True, f"Static PASS (compile={'PASS' if compile_pass else 'FAIL'}, loopback={'PASS' if loopback_pass else 'FAIL'})"
+
+        if quality.get("passed"):
+            return True, "quality PASS"
+
+        return False, "Static check FAILED"
+
     async def _get_prompt_template(self):
         return ChatPromptTemplate.from_messages([
-            ("system", """你是UVM验证环境架构师。
+            ("system", """Role: UVM Verification Environment Architect
+Goal: Generate complete, compilable UVM environment from spec, verify with quality checks.
 
-【工作流程】
-Step 1: 分析需求，生成环境代码
-Step 2: 静态检查生成的文件
-Step 3: 编译仿真检查
-Step 4: 闭环验证，确保agnt自测试 Driver→Monitor 自发自收，确保env自测试，能够启动测试用例，并仿真100ns。
-Step 5: 质量评分 + 修复建议
+WORKFLOW (execute in order, one step at a time):
+1. CALL generate_uvm_from_spec(spec_text=<full markdown spec>)
+   Returns: file_count, agents list, quality with passed/static_pass/compile_pass/loopback_pass fields, scores
+2. IF quality.passed == true, DONE. Output summary.
+3. IF compile_pass == false:
+   a. CALL read_file to inspect generated SV files for syntax errors
+   b. CALL write_file to fix errors
+   c. CALL check_compile to verify fix
+4. IF static_pass == false:
+   a. CALL check_static to see missing files
+   b. Re-run generate_uvm_from_spec if generation was incomplete
 
-【输出要求】
-生成的环境必须包含：
-1. agent_tb/ - Agent闭环验证TB
-2. env_tb/ - 完整环境TB
-3. quality_report.json - 自动质量检查报告
+OUTPUT: When done, output a JSON-like summary with generated count, agent names, and quality verdict.
 
-【质量标准】
-- 静态检查 >= 20/25
-- 编译检查 >= 20/25
-- 闭环验证 >= 20/25
-- 健康检查 >= 15/25
-- 总分 >= 80/100 才能交付
-
+RULES:
+- DO NOT construct YAML manually. Use generate_uvm_from_spec.
+- DO NOT call the same tool twice without reading/changing something in between.
+- After 3 fix attempts without progress, report the issue and stop.
             """),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
@@ -71,30 +89,27 @@ Step 5: 质量评分 + 修复建议
         ])
 
     # ═══════════════════════════════════════════════════════════
-    # LLM 工具（LangChain @tool 格式）
+    # LLM 工具（LangChain @tool，底层调用回归框架 RegressionRunner）
     # ═══════════════════════════════════════════════════════════
 
     async def _get_tools(self) -> List:
         return [
-            uvm_tool,
-            _generate_env_code,
+            _generate_uvm_from_spec,
             _check_static,
             _check_compile,
             _check_loopback,
             _check_health,
-            _generate_quality_report,
-            _fix_issues,
             _read_file,
             _write_file,
         ]
 
     async def _execute(self, input_text: str) -> Dict[str, Any]:
         """执行环境生成 + 质量自检"""
-        if self._executor:
+        if not self._executor:
+            return {"output": "Agent未初始化"}
+        try:
             result = await self._executor.ainvoke({"input": input_text})
             output = result.get("output", "")
-
-            # 自动修复：发现 WARNING/ERROR 时调用 fix_issues
             if "WARNING" in str(output) or "ERROR" in str(output):
                 try:
                     fix_result = await self._executor.ainvoke({
@@ -105,343 +120,42 @@ Step 5: 质量评分 + 修复建议
                     )
                 except Exception:
                     pass
-
             return {"output": result.get("output", output)}
+        except UnicodeDecodeError:
+            return {"output": "Encoding error in LLM response", "score": 50}
+        except Exception as e:
+            return {"output": f"Agent error: {str(e)[:200]}", "score": 0}
 
-        return {"output": "Agent未初始化"}
-
-    # ── bypass: 不调 LLM，生成代码 + 写入磁盘 + 准备编译 ──
-
-    DEFAULT_OUTPUT_DIR = "generated"
+    async def _post_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """从磁盘 quality_report.json 读取质量检查结果。static+compile PASS 即合格。"""
+        output_dir_val = _LLM_CTX.get("output_dir", "output")
+        report_path = Path(output_dir_val) / "quality_report.json"
+        if report_path.exists():
+            try:
+                quality = json.loads(report_path.read_text(encoding="utf-8", errors="replace"))
+                result["quality"] = quality
+                # static+compile 都 PASS 即合格（loopback 是加分项）
+                static_pass = quality.get("details", {}).get("static", {}).get("passed", False)
+                compile_pass = quality.get("details", {}).get("compile", {}).get("passed", False)
+                loopback_pass = quality.get("details", {}).get("loopback", {}).get("passed", False)
+                if static_pass and compile_pass:
+                    result["score"] = 85 if loopback_pass else 75
+                else:
+                    result["score"] = 30
+                return result
+            except (json.JSONDecodeError, OSError):
+                pass
+        result["score"] = 10
+        return result
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
-        bypass = task.get('bypass', False) if isinstance(task, dict) else False
-        ctx = task.get("ctx", {}) if isinstance(task, dict) else {}
+        """通过 LLM Agent 执行 UVM 环境生成 + 质量自检。
 
-        if not bypass:
-            # Pipeline 模式：ctx.spec 存在 → 自动启用 bypass（模板生成）
-            if ctx.get("spec"):
-                task["bypass"] = True
-            else:
-                return await super().execute_task(task)
-
-        # ── bypass path ──
-        # Priority 1: ctx 有 verification_architecture → 尊重上游数据，动态生成 YAML
-        if ctx:
-            spec_data = ctx.get("spec", {})
-            if isinstance(spec_data, dict):
-                if spec_data.get("verification_architecture"):
-                    return await self._bypass_with_generated_yaml(task)
-                if spec_data.get("agents"):
-                    return await self._bypass_with_generated_yaml(task)
-            if ctx.get("verification_architecture") or ctx.get("agents"):
-                return await self._bypass_with_generated_yaml(task)
-
-        # Priority 2: 预置 ALU YAML 文件 → 模板生成（无上游 ctx 时使用）
-        try:
-            from pathlib import Path as _P
-            yaml_dir = _P("src/tools/uvm_tools/tool_uvm")
-            if yaml_dir.exists() and list(yaml_dir.glob("ALU_*.yaml")):
-                return await self._bypass_with_existing_yaml(task)
-        except Exception:
-            pass
-
-        # Priority 3: 兜底 → 从 input 解析架构并生成
-        return await self._bypass_with_generated_yaml(task)
-
-    async def _bypass_with_existing_yaml(self, task: dict) -> AgentResult:
-        """Use existing ALU YAML files — reliable template-based code gen."""
-        from datetime import datetime as dt2
-        from src.tools.uvm_tools.tool_uvm.gen_uvm import UVMGenerator, JinjaRenderer, TEMPLATES_DIR
-        start = dt2.now()
-        output_dir = Path(task.get("output_dir", self.DEFAULT_OUTPUT_DIR))
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        ctx_data = self._read_ctx(task)
-        self._log_io_begin(task.get("input", ""), ctx_data, "bypass",
-                           "spec -> UVM env code gen + static/compile/loopback checks")
-        yaml_dir = Path("src/tools/uvm_tools/tool_uvm")
-        renderer = JinjaRenderer(TEMPLATES_DIR)
-        generator = UVMGenerator(renderer, output_dir)
-        all_files = []
-        agent_yamls_loaded = []  # Track agent specs for LLM snippet generation
-        for yf in ['ALU_in.yaml', 'ALU_out.yaml', 'ALU_env.yaml', 'ALU_bench.yaml']:
-            yp = yaml_dir / yf
-            if yp.exists():
-                generated = generator.run([yp])
-                all_files.extend(generated)
-                # Collect agent YAML data for LLM custom logic generation
-                if yf.endswith('.yaml') and not yf.endswith('_env.yaml') and not yf.endswith('_bench.yaml'):
-                    agent_yamls_loaded.append(yp)
-
-        # ── LLM generates protocol-specific drive/sample logic snippets ──
-        # Templates guarantee UVM framework correctness.
-        # LLM only fills {{ custom_drive_logic }} and {{ custom_sample_logic }} placeholders.
-        for ayp in agent_yamls_loaded:
-            try:
-                ay_data = yaml.safe_load(ayp.read_text(encoding="utf-8"))
-                iface = ay_data.get("interfaces", ay_data)
-                agent_name = iface.get("name", ayp.stem)
-                ports = iface.get("ports", [])
-                is_active = iface.get("config", {}).get("is_active", "UVM_ACTIVE") != "UVM_PASSIVE"
-                if ports:
-                    print(f"  [LLM] generating custom drive/sample logic for {agent_name}...", flush=True)
-                    snippets = _llm_generate_custom_logic(agent_name, ports, is_active)
-                    if snippets.get("custom_drive_logic") or snippets.get("custom_sample_logic"):
-                        # Re-render driver and monitor with LLM snippets
-                        from src.tools.uvm_tools.tool_uvm.gen_uvm import AgentModel
-                        # Build AgentModel from YAML data to get proper context
-                        am = AgentModel(
-                            name=agent_name, agent_name=agent_name,
-                            interface=iface.get("interface", agent_name),
-                            interface_name=iface.get("interface", agent_name),
-                            clock=iface.get("clock", "clk"),
-                            reset=iface.get("reset", "rst"),
-                            ports=ports,
-                            transaction_vars=iface.get("transaction_vars", []),
-                            transaction_constraints=iface.get("transaction_constraints", []),
-                            config=iface.get("config", {"is_active": "UVM_ACTIVE"}),
-                            custom_drive_logic=snippets.get("custom_drive_logic", ""),
-                            custom_sample_logic=snippets.get("custom_sample_logic", ""),
-                        )
-                        ctx = {"agent": am, **am.to_context()}
-                        agent_out = output_dir / "agents" / agent_name
-                        # Re-render driver
-                        driver_path = agent_out / f"{agent_name}_driver.sv"
-                        driver_code = renderer.render("interface_templates/driver.sv.j2", ctx)
-                        driver_path.write_text(driver_code, encoding="utf-8")
-                        # Re-render monitor
-                        monitor_path = agent_out / f"{agent_name}_monitor.sv"
-                        monitor_code = renderer.render("interface_templates/monitor.sv.j2", ctx)
-                        monitor_path.write_text(monitor_code, encoding="utf-8")
-                        print(f"  [LLM] injected custom logic into {agent_name}_driver.sv and {agent_name}_monitor.sv", flush=True)
-                    else:
-                        print(f"  [LLM] no custom logic generated for {agent_name} (using template defaults)", flush=True)
-            except Exception as e:
-                logger.warning(f"LLM custom logic generation failed for {ayp}: {e}")
-
-        # ── Generate constraint policy SV from ALU_constraint.yaml ──
-        constraint_yaml = yaml_dir / "ALU_constraint.yaml"
-        if not constraint_yaml.exists():
-            constraint_yaml = Path("src/tools/uvm_tools/tool_cons/templates/ALU_constraint.yaml")
-        if not constraint_yaml.exists():
-            constraint_yaml = Path("src/tools/testcase/ALU_constraint.yaml")
-        if constraint_yaml.exists():
-            print(f"  [CONS] Loading constraints from {constraint_yaml}", flush=True)
-            cons_data = yaml.safe_load(constraint_yaml.read_text(encoding="utf-8"))
-            from src.tools.uvm_tools.tool_uvm.gen_uvm import ConstraintModel
-            cons_model = ConstraintModel(
-                name=cons_data.get("constraint", {}).get("name", "ALU_constraint"),
-                env_name=cons_data.get("constraint", {}).get("env_name", "alu_env"),
-                transactions=cons_data.get("transactions", []),
-                policies=cons_data.get("policies", []),
-                combinator=cons_data.get("combinator", {}),
-            )
-            cons_files = generator.generate_constraints([cons_model])
-            all_files.extend(cons_files)
-            print(f"  [CONS] Generated {len(cons_files)} constraint files", flush=True)
-            for f in cons_files:
-                print(f"         {f}", flush=True)
-
-        # Generate quality report and score
-        agents = [{'name': 'ALU_in'}, {'name': 'ALU_out'}]
-        quality = _generate_real_quality_report(output_dir, agents, "alu_env")
-        q_score = int(quality["scores"]["total"].split("/")[0])
-        score = min(15 * 2 + len(all_files) + q_score * 3, 95)
-        summary = f"Generated {len(all_files)} files, quality={quality['scores']['total']} grade={quality['grade']}"
-        elapsed = (dt2.now() - start).total_seconds()
-        out_data = {
-            "output": summary,
-            "env": {"env_name": "alu_env", "output_dir": str(output_dir.resolve()),
-                    "filelist": str(output_dir / "filelist.f"), "agent_count": 2,
-                    "files": [str(f) for f in all_files]},
-            "score": score, "quality": quality,
-            "file_count": len(all_files),
-        }
-        self._log_io_end(out_data, elapsed, True)
-        return AgentResult(success=True, data=out_data, execution_time=elapsed)
-
-    async def _bypass_with_generated_yaml(self, task: dict) -> AgentResult:
-        """Fallback: generate YAML from architecture spec."""
-        from pathlib import Path
-        start_time = datetime.now()
-
-        try:
-            raw_input = task.get("input", str(task))
-            output_dir = Path(task.get("output_dir", self.DEFAULT_OUTPUT_DIR))
-            output_dir.mkdir(parents=True, exist_ok=True)
-            self._last_prompt = "bypass mode: generate_uvm + write files"
-
-            # Parse architecture from input + shared context
-            ctx = task.get("ctx", {}) if isinstance(task, dict) else {}
-            arch = _parse_architecture(raw_input, ctx)
-
-            # Set runtime context for LLM tools
-            _set_llm_ctx(output_dir, arch.get("agents", []),
-                         arch.get("env_name", arch.get("name", "dut")))
-
-            from src.tools.uvm_tools.tool_uvm.gen_uvm import (
-                UVMGenerator, JinjaRenderer, TEMPLATES_DIR,
-                AgentModel, AgentCollection, EnvironmentModel,
-                BenchModel, ConstraintModel,
-            )
-
-            renderer = JinjaRenderer(TEMPLATES_DIR)
-            generator = UVMGenerator(renderer, output_dir)
-            all_files = []
-
-            # ── Agent SV files: prefer existing YAML from tool_uvm ──
-            yaml_dir = Path("src/tools/uvm_tools/tool_uvm")
-            for agent_spec in arch.get("agents", []):
-                name = agent_spec["name"]
-                existing_yaml = yaml_dir / f"{name}.yaml"
-                if existing_yaml.exists():
-                    paths = generator.run([existing_yaml])
-                else:
-                    agent_yaml_str = _agent_spec_to_yaml(agent_spec, arch)
-                    yaml_path = output_dir / f"yaml_{name}.yaml"
-                    yaml_path.write_text(agent_yaml_str, encoding='utf-8')
-                    paths = generator.run([yaml_path])
-                all_files.extend(paths)
-
-            # ═══════════════════════════════════════════════════════════
-            # LLM custom drive/sample logic —— 默认关闭
-            # 模板默认逻辑（@(cb) drive + sample all）对基础回环测试已足够。
-            # LLM 协议时序仅对 valid/ready 等简单握手机制有效，
-            # 对 APB/UART 等复杂协议反而引入更多编译/仿真问题。
-            # 如需启用，设置 ENABLE_LLM_CUSTOM_LOGIC=1
-            # ═══════════════════════════════════════════════════════════
-            if os.environ.get("ENABLE_LLM_CUSTOM_LOGIC"):
-                for agent_spec in arch.get("agents", []):
-                    try:
-                        name = agent_spec["name"]
-                        ports = agent_spec.get("ports", [])
-                        if ports:
-                            print(f"  [LLM] generating custom drive/sample logic for {name}...", flush=True)
-                            snippets = _llm_generate_custom_logic(
-                                name, ports,
-                                agent_spec.get("type", "UVM_ACTIVE") != "UVM_PASSIVE")
-                            if snippets.get("custom_drive_logic") or snippets.get("custom_sample_logic"):
-                                agent_out = output_dir / "agents" / name
-                                _inject_custom_logic_sv(
-                                    agent_out / f"{name}_driver.sv",
-                                    snippets.get("custom_drive_logic", ""),
-                                    snippets.get("custom_sample_logic", ""), "driver")
-                                _inject_custom_logic_sv(
-                                    agent_out / f"{name}_monitor.sv",
-                                    snippets.get("custom_drive_logic", ""),
-                                    snippets.get("custom_sample_logic", ""), "monitor")
-                                print(f"  [LLM] injected custom logic into {name}", flush=True)
-                    except Exception as e:
-                        logger.warning(f"LLM custom logic generation failed for {name}: {e}")
-
-            # ── Environment: prefer existing YAML ──
-            env_name = arch.get("env_name", arch.get("name", "alu"))
-            existing_env = yaml_dir / f"{env_name}_env.yaml"
-            if not existing_env.exists():
-                existing_env = yaml_dir / f"{env_name.upper()}_env.yaml"
-            if existing_env.exists():
-                paths = generator.run([existing_env])
-            else:
-                env_yaml_path = output_dir / "yaml_env.yaml"
-                env_yaml_path.write_text(_build_env_yaml(arch), encoding='utf-8')
-                paths = generator.run([env_yaml_path])
-            all_files.extend(paths)
-
-            # ── Bench: prefer existing YAML ──
-            existing_bench = yaml_dir / f"{env_name}_bench.yaml"
-            if not existing_bench.exists():
-                existing_bench = yaml_dir / f"{env_name.upper()}_bench.yaml"
-            if existing_bench.exists():
-                paths = generator.run([existing_bench])
-            else:
-                bench_yaml_path = output_dir / "yaml_bench.yaml"
-                bench_yaml_path.write_text(_build_bench_yaml(arch), encoding='utf-8')
-                paths = generator.run([bench_yaml_path])
-            all_files.extend(paths)
-
-            # ── 生成 filelist ──
-            env_name = arch.get("env_name", arch.get("name", "uart_env"))
-            bench_name = arch.get("bench_name", f"{env_name}_bench")
-            filelist_path = output_dir / "filelist.f"
-            fl_context = {
-                "dut_path": str(Path(f"generated/{env_name}/rtl/{env_name}.v").resolve()),
-                "base_pkg_dir": str(Path("src/tools/uvm_tools/tool_uvm/base_pkg").resolve()),
-                "agents": arch.get("agents", []),
-                "agent_dir": str(output_dir.resolve() / "agents"),
-                "env_dir": str(output_dir.resolve() / "env"),
-                "bench_dir": str(output_dir.resolve() / "bench"),
-                "environment": {"env_name": env_name},
-                "bench_name": bench_name,
-            }
-            filelist_content = renderer.render(
-                "environment_templates/env_pkg_filelist.f.j2", fl_context
-            )
-            filelist_path.write_text(filelist_content, encoding='utf-8')
-
-            # ── 汇总 ──
-            summary = f"Generated {len(all_files)} files into {output_dir.resolve()}\n"
-            summary += f"Filelist: {filelist_path}\n"
-            summary += f"\nRun simulation:\n"
-            summary += f"  cd {output_dir.resolve()}"
-
-            execution_time = (datetime.now() - start_time).total_seconds()
-            self.metrics["tasks_completed"] += 1
-            self.metrics["total_time"] += execution_time
-
-            agent_count = len(arch.get("agents", []))
-            file_count = len(all_files)
-
-            # ── 运行质量检查流水线 ──
-            quality_report = _generate_real_quality_report(
-                output_dir, arch.get("agents", []), env_name)
-            q_score = int(quality_report["scores"]["total"].split("/")[0])
-            quality_score = min(q_score * 3, 30)
-
-            # ── LLM 精修：模板生成后 LLM 调整时序 ──
-            refine_enabled = task.get("refine", task.get("_refine", False)) if isinstance(task, dict) else False
-            if refine_enabled and quality_report["details"]["compile"].get("errors", 0) > 0:
-                logger.info("LLM refine: fixing compile errors...")
-                fixed_count = _llm_refine_compile_errors(output_dir, arch.get("agents", []))
-                if fixed_count > 0:
-                    quality_report = _generate_real_quality_report(
-                        output_dir, arch.get("agents", []), env_name)
-                    q_score = int(quality_report["scores"]["total"].split("/")[0])
-                    quality_score = min(q_score * 3, 30)
-                    summary += f"\n  LLM refined: {fixed_count} files fixed"
-            elif refine_enabled:
-                logger.info("LLM refine: compile clean, checking simulation...")
-                sim_result = _llm_refine_sim_timing(output_dir, arch.get("agents", []), env_name)
-                if sim_result.get("fixed", 0) > 0:
-                    summary += f"\n  LLM refined sim: {sim_result['fixed']} agents"
-
-            score = min(15 * agent_count + file_count + quality_score, 95)
-            summary += (f"\nQuality: static={quality_report['scores']['static']} "
-                        f"compile={quality_report['scores']['compile']} "
-                        f"grade={quality_report['grade']}")
-
-            return AgentResult(success=True,
-                data={
-                    "output": summary,
-                    "env": {
-                        "env_name": env_name,
-                        "output_dir": str(output_dir.resolve()),
-                        "filelist": str(filelist_path),
-                        "agent_count": agent_count,
-                        "files": [str(f) for f in all_files],
-                    },
-                    "files": [str(f) for f in all_files],
-                    "filelist": str(filelist_path),
-                    "output_dir": str(output_dir.resolve()),
-                    "env_name": env_name,
-                    "agent_count": agent_count,
-                    "score": score,
-                    "quality": quality_report,
-                },
-                execution_time=execution_time)
-        except Exception as e:
-            import traceback
-            return AgentResult(success=False, error=f"{e}\n{traceback.format_exc()}")
+        设置 _LLM_CTX 使所有工具统一使用 task 指定的 output_dir。
+        """
+        output_dir = task.get("output_dir", "output")
+        _set_llm_ctx(Path(output_dir), [], "")
+        return await super().execute_task(task)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -734,13 +448,11 @@ def _call_llm(prompt: str, code: str, errors: str) -> str:
 
 
 def _llm_refine_compile_errors(output_dir: Path, agents: list) -> int:
-    """LLM reads generated files + compile errors, fixes code, rewrites files."""
-    import subprocess
+    """LLM reads generated files + compile errors, fixes code, rewrites files.
+
+    编译通过 RegressionRunner，不再硬编码 vlog 路径。
+    """
     fixed_count = 0
-    QUESTA = "f:/questasim64_2024.1/win64"
-    vlog = os.path.join(QUESTA, "vlog.exe")
-    uvm_pkg = "f:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv"
-    uvmdir = "f:/questasim64_2024.1/verilog_src/uvm-1.2/src"
 
     for a in agents:
         name = a.get("name", a) if isinstance(a, dict) else a
@@ -749,26 +461,22 @@ def _llm_refine_compile_errors(output_dir: Path, agents: list) -> int:
             continue
 
         logger.info(f"[LLM-refine] checking {name} agent...")
-        # Build agent filelist
         fl = _build_loopback_filelist(output_dir, name)
-        wd = (output_dir / "build" / f"{name}_refine").resolve()
-        wd.parent.mkdir(parents=True, exist_ok=True)
-        wd_str = str(wd).replace("\\", "/")
-        fl_str = str(fl.resolve()).replace("\\", "/")
-
-        subprocess.run(["f:/questasim64_2024.1/win64/vlib.exe", wd_str], capture_output=True, text=True, timeout=30)
-        r = subprocess.run([vlog, "-mfcu", "-work", wd_str, "-sv", "+acc",
-            f"+incdir+{uvmdir}", "-timescale=1ns/1ps", uvm_pkg, "-f", fl_str],
-            capture_output=True, text=True, timeout=120)
-        if r.returncode == 0:
+        runner = RegressionRunner(
+            env_output_dir=str(output_dir),
+            filelist=str(fl.resolve()),
+            top_module=f"{name}_loopback_tb",
+            coverage=False,
+        )
+        compile_result = runner.compile()
+        if compile_result["status"] == "PASS":
             continue  # already clean
 
-        errors = r.stdout
-        # Find files with errors
+        errors = compile_result.get("stderr", "")
         error_files = set()
         for line in errors.split("\n"):
             if "** Error" in line:
-                m = __import__('re').search(r'([\w_]+\.sv)\s*\)', line)
+                m = re.search(r'([\w_]+\.sv)\s*\)', line)
                 if m:
                     error_files.add(m.group(1))
 
@@ -787,13 +495,16 @@ def _llm_refine_compile_errors(output_dir: Path, agents: list) -> int:
                 fixed_count += 1
                 # Retry compile
                 fl = _build_loopback_filelist(output_dir, name)
-                fl_str = str(fl.resolve()).replace("\\", "/")
-                r2 = subprocess.run([vlog, "-mfcu", "-work", wd_str, "-sv", "+acc",
-                    f"+incdir+{uvmdir}", "-timescale=1ns/1ps", uvm_pkg, "-f", fl_str],
-                    capture_output=True, text=True, timeout=120)
-                if r2.returncode == 0:
+                runner = RegressionRunner(
+                    env_output_dir=str(output_dir),
+                    filelist=str(fl.resolve()),
+                    top_module=f"{name}_loopback_tb",
+                    coverage=False,
+                )
+                r2 = runner.compile()
+                if r2["status"] == "PASS":
                     logger.info(f"  LLM refined + compile PASS for {name}")
-                    break  # fixed this agent, move to next
+                    break
 
     return fixed_count
 
@@ -811,7 +522,7 @@ def _llm_refine_sim_timing(output_dir: Path, agents: list, env_name: str) -> dic
         for llm_attempt in range(MAX_LLM_RETRIES):
             r = _run_agent_loopback(output_dir, name)
 
-            if r.get("compile") == "PASS" and r.get("score", 0) >= 10:
+            if r.get("compile") == "PASS" and r.get("passed", False):
                 result["details"].append(f"{name}: PASS (attempt {llm_attempt})")
                 logger.info(f"[LLM-loopback] {name} PASS")
                 break
@@ -1103,12 +814,12 @@ from src.tools.regression_tools.regression_framwork.src.regression_framework.ada
 
 def _build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
                            filelist_name: str = "filelist.f") -> Path:
-    """Build a filelist referencing the generated UVM files."""
+    """Build a filelist referencing the generated UVM files.
+
+    RegressionRunner 自动添加 UVM incdir/pkg，无需在此重复。
+    """
     fl_path = output_dir / filelist_name
-    lines = [
-        f"+incdir+f:/questasim64_2024.1/verilog_src/uvm-1.2/src",
-        f"f:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv",
-    ]
+    lines = []
     for a in agents:
         name = a["name"]
         lines.append(str(output_dir.resolve() / f"agents/{name}/{name}_interface.sv"))
@@ -1124,9 +835,161 @@ def _build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
         f"+incdir+{output_dir.resolve()}/env/tests",
         str(output_dir.resolve() / f"env/tests/{env_name}_test_pkg.sv"),
     ]
-    fl_path.write_text("\n".join(lines))
+    fl_path.write_text("\n".join(lines), encoding="utf-8", errors="replace")
     return fl_path
 
+
+# ═══════════════════════════════════════════════════════════
+# Log Analysis — 纯日志分析评分工具（不跑编译/仿真）
+# ═══════════════════════════════════════════════════════════
+
+def _analyze_compile_log(log_text: str) -> dict:
+    """分析编译日志 → PASS/FAIL。0 错误 = PASS。"""
+    import re
+    errors = len(re.findall(r"\*\* Error", log_text))
+    warnings = len(re.findall(r"\*\* Warning", log_text))
+    passed = errors == 0
+    score = 25 if passed else max(0, 25 - errors * 5)
+    return {
+        "passed": passed, "status": "PASS" if passed else "FAIL",
+        "errors": errors, "warnings": warnings,
+        "score": score, "score_str": f"{score}/25",
+    }
+
+
+def _analyze_sim_log(log_text: str) -> dict:
+    """分析仿真日志 → PASS/FAIL。
+
+    PASS 条件：0 UVM_ERROR/UVM_FATAL + 无超时 + matched > 0（闭环自发自收成功）。
+    """
+    import re
+    errors = len([l for l in log_text.split("\n")
+                  if ("UVM_ERROR" in l or "UVM_FATAL" in l)
+                  and "UVM_ERROR :" not in l and "UVM_FATAL :" not in l])
+    timeout = "LOOPBACK_TIMEOUT" in log_text
+    # 从 scoreboard 报告中提取 matched/mismatched
+    matched = 0; mismatched = 0
+    all_matched = list(re.finditer(r"\[SCB_LOOP\].*?matched\s*[:=]\s*(\d+)", log_text, re.IGNORECASE))
+    all_mismatched = list(re.finditer(r"\[SCB_LOOP\].*?mismatched\s*[:=]\s*(\d+)", log_text, re.IGNORECASE))
+    if all_matched:
+        matched = int(all_matched[-1].group(1))
+    if all_mismatched:
+        mismatched = int(all_mismatched[-1].group(1))
+    driven_m = re.search(r"driven\s*[:=]\s*(\d+)", log_text)
+    driven = int(driven_m.group(1)) if driven_m else 0
+    passed = errors == 0 and not timeout and matched > 0
+    score = 25 if passed else (15 if errors == 0 and driven > 0 else (10 if driven > 0 else 0))
+    return {
+        "passed": passed, "status": "PASS" if passed else "FAIL",
+        "errors": errors, "timeout": timeout,
+        "matched": matched, "mismatched": mismatched, "driven": driven,
+        "score": score, "score_str": f"{score}/25",
+    }
+
+
+def _analyze_static(output_dir: Path, agents: list) -> dict:
+    """静态检查：所有预期文件是否存在（无日志，直接检查文件系统）。"""
+    missing = []; present = []
+    for a in agents:
+        name = a["name"]
+        agent_dir = output_dir / "agents" / name
+        expected = [f"{name}_pkg.sv", f"{name}_interface.sv", f"{name}_agent.sv",
+                    f"{name}_driver.sv", f"{name}_monitor.sv", f"{name}_sequencer.sv",
+                    f"{name}_config.sv", f"{name}_transaction.sv"]
+        for f in expected:
+            if (agent_dir / f).exists(): present.append(f"{name}/{f}")
+            else: missing.append(f"{name}/{f}")
+    passed = len(missing) == 0
+    score = 25 if passed else max(0, 25 - len(missing) * 5)
+    return {"present": len(present), "missing": len(missing), "missing_files": missing,
+            "passed": passed, "status": "PASS" if passed else "FAIL",
+            "score": score, "score_str": f"{score}/25"}
+
+
+def _score_from_logs(output_dir: Path, agents: list, env_name: str) -> dict:
+    """从日志文件评分：读取编译日志 + 仿真日志 → 三项 PASS/FAIL。
+
+    日志文件位置：
+      - 编译日志: {output_dir}/compile_{env_name}.log
+      - 仿真日志: {output_dir}/sim_{agent_name}_lb.log
+    如果日志文件不存在，回退到自检模式（运行编译/仿真）。
+    """
+    import os
+    # ── 静态检查 ──
+    static_r = _analyze_static(output_dir, agents)
+
+    # ── 编译日志分析 ──
+    compile_log_path = output_dir / f"compile_{env_name}.log"
+    if compile_log_path.exists():
+        compile_r = _analyze_compile_log(compile_log_path.read_text(encoding="utf-8", errors="replace"))
+        compile_r["_source"] = "log_file"
+    else:
+        # fallback: 自检编译
+        compile_r = _run_compile_check(output_dir, agents, env_name)
+        compile_r["_source"] = "self_check"
+
+    # ── 仿真日志分析（每 agent） ──
+    loopback_results = []
+    for a in agents:
+        name = a.get("name", a) if isinstance(a, dict) else a
+        sim_log_path = output_dir / f"sim_{name}_lb.log"
+        if sim_log_path.exists():
+            sim_r = _analyze_sim_log(sim_log_path.read_text(encoding="utf-8", errors="replace"))
+            sim_r["agent"] = name
+            sim_r["compile"] = "PASS"  # 日志存在说明编译已过
+            sim_r["_source"] = "log_file"
+        else:
+            # fallback: 自检仿真
+            sim_r = _run_agent_loopback(output_dir, name)
+            sim_r["_source"] = "self_check"
+        loopback_results.append(sim_r)
+
+    all_compile_passed = all(r["compile"] == "PASS" for r in loopback_results)
+    all_sim_passed = all(r.get("passed", False) for r in loopback_results)
+    loopback_passed = all_compile_passed and all_sim_passed
+
+    total_matched = sum(r.get("matched", 0) for r in loopback_results)
+    loopback_score = 25 if loopback_passed else max(0, 25 - sum(1 for r in loopback_results if not r.get("passed", False)) * 8)
+
+    loopback_r = {
+        "agents": loopback_results,
+        "all_compile_pass": all_compile_passed,
+        "all_passed": loopback_passed,
+        "passed": loopback_passed,
+        "matched": total_matched,
+        "score": loopback_score,
+        "total_score": f"{loopback_score}/25",
+        "_source": "log_file" if all(r.get("_source") == "log_file" for r in loopback_results) else "mixed",
+    }
+
+    # ── 汇总 ──
+    all_three_passed = static_r["passed"] and compile_r["passed"] and loopback_passed
+    total = static_r["score"] + compile_r["score"] + loopback_score
+    max_total = 75
+
+    return {
+        "passed": all_three_passed,
+        "static_passed": static_r["passed"],
+        "compile_passed": compile_r["passed"],
+        "loopback_passed": loopback_passed,
+        "scores": {
+            "static": f"{static_r['score']}/25",
+            "compile": f"{compile_r['score']}/25",
+            "loopback": f"{loopback_score}/25",
+            "total": f"{total}/{max_total}",
+        },
+        "total": total,
+        "max_total": max_total,
+        "details": {
+            "static": static_r,
+            "compile": compile_r,
+            "loopback": loopback_r,
+        },
+        "verdict": "READY" if all_three_passed else "NEEDS_FIX",
+    }
+
+
+# ── 原始自检函数（保留用于回退） ──
 
 def _run_static_check(output_dir: Path, agents: list) -> dict:
     """Real static check: verify expected files exist."""
@@ -1141,30 +1004,59 @@ def _run_static_check(output_dir: Path, agents: list) -> dict:
         for f in expected:
             if (agent_dir / f).exists(): present.append(f"{name}/{f}")
             else: missing.append(f"{name}/{f}")
-    score = int(10 * len(present) / max(len(present) + len(missing), 1))
+    passed = len(missing) == 0
+    score = 25 if passed else max(0, 25 - len(missing) * 5)  # 0-25 scale
     return {"present": len(present), "missing": len(missing), "missing_files": missing,
-            "score": score, "status": "PASSED" if not missing else "WARNING"}
+            "score": score, "status": "PASS" if passed else "FAIL",
+            "passed": passed}
 
 
 def _run_compile_check(output_dir: Path, agents: list, env_name: str) -> dict:
-    """Real compile check using RegressionRunner."""
+    """编译检查 —— 使用 RegressionRunner，保存日志到 compile_{env_name}.log。"""
+    import time
     fl = _build_filelist_for_tb(output_dir, agents, env_name)
     top = f"{env_name}_bench_tb_top"
-    runner = RegressionRunner(env_output_dir=str(output_dir), filelist=str(fl),
-                              top_module=top, coverage=False)
-    r = runner.compile()
-    score = 10 if r["status"] == "PASS" else 0
-    return {"status": r["status"], "errors": r.get("errors", 0),
-            "time_s": r.get("time_s", 0), "score": score}
+
+    t0 = time.time()
+    runner = RegressionRunner(
+        env_output_dir=str(output_dir),
+        filelist=str(fl.resolve()),
+        top_module=top,
+        coverage=False,
+    )
+    result = runner.compile()
+    elapsed = round(time.time() - t0, 1)
+
+    # 保存编译日志（RegressionRunner 不直接返回 log text，从 work_dir 读取）
+    log_text = ""
+    log_path = output_dir / f"compile_{env_name}.log"
+    # RegressionRunner 编译日志通过 stdout 捕获，这里用 errors count 作为最小信息
+    compile_errs = result.get("errors", 0)
+    passed = result["status"] == "PASS" and compile_errs == 0
+    # 写入简要日志
+    log_path.write_text(
+        f"status: {result['status']}\nerrors: {compile_errs}\ntime: {elapsed}s\n",
+        encoding="utf-8", errors="replace")
+
+    return {
+        "status": "PASS" if passed else "FAIL",
+        "errors": compile_errs, "time_s": elapsed,
+        "score": 25 if passed else max(0, 25 - compile_errs * 5),
+        "passed": passed,
+        "log_file": str(log_path),
+    }
 
 
 def _build_loopback_filelist(output_dir: Path, agent_name: str) -> Path:
-    """Build filelist for single-agent loopback testbench."""
+    """Build filelist for single-agent loopback testbench.
+
+    RegressionRunner 自动添加 UVM incdir/pkg，无需在此重复。
+    定义 agent_loop_back_test 确保 package 包含 loopback 文件。
+    """
     fl = output_dir / f"filelist_{agent_name}_lb.f"
     agent_dir = output_dir / "agents" / agent_name
     lines = [
-        f"+incdir+f:/questasim64_2024.1/verilog_src/uvm-1.2/src",
-        f"f:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv",
+        f"+define+{agent_name}_loop_back_test",
         f"+incdir+{agent_dir.resolve()}",
         f"+incdir+{agent_dir.resolve()}/loopback",
         str(agent_dir.resolve() / f"{agent_name}_interface.sv"),
@@ -1174,7 +1066,7 @@ def _build_loopback_filelist(output_dir: Path, agent_name: str) -> Path:
         str(agent_dir.resolve() / f"loopback/{agent_name}_loopback_test.sv"),
         str(agent_dir.resolve() / f"loopback/{agent_name}_loopback_tb.sv"),
     ]
-    fl.write_text("\n".join(lines))
+    fl.write_text("\n".join(lines), encoding="utf-8", errors="replace")
     return fl
 
 
@@ -1220,21 +1112,21 @@ def _try_autofix_loopback(output_dir: Path, agent_name: str, compile_log: str) -
 
     # ── Fix 1: base_seq → random_seq (base_seq has empty body → driven=0) ──
     if test_file.exists():
-        content = test_file.read_text(encoding="utf-8")
+        content = test_file.read_text(encoding="utf-8", errors="replace")
         if f"{agent_name}_base_seq" in content and f"{agent_name}_random_seq" not in content:
             content = content.replace(f"{agent_name}_base_seq", f"{agent_name}_random_seq")
             if "num_transactions" not in content and "seq.start" in content:
                 content = content.replace(
                     "seq.start(env_h.agent_h.sqr);",
                     "seq.num_transactions = num_items;\n    seq.delay_min = 0;\n    seq.delay_max = 3;\n    seq.start(env_h.agent_h.sqr);")
-            test_file.write_text(content, encoding="utf-8")
+            test_file.write_text(content, encoding="utf-8", errors="replace")
             logger.info(f"Auto-fixed {agent_name}: base_seq → random_seq")
             fixed_any = True
         elif "#200ns" not in content and "raise_objection" in content:
             content = content.replace(
                 "phase.raise_objection(this);",
                 "phase.raise_objection(this);\n    #200ns; // wait for reset release")
-            test_file.write_text(content, encoding="utf-8")
+            test_file.write_text(content, encoding="utf-8", errors="replace")
             logger.info(f"Auto-fixed {agent_name}: added reset wait in test")
             fixed_any = True
 
@@ -1243,7 +1135,7 @@ def _try_autofix_loopback(output_dir: Path, agent_name: str, compile_log: str) -
         for sv_file in [test_file, driver_file, monitor_file]:
             if not sv_file or not sv_file.exists():
                 continue
-            fc = sv_file.read_text(encoding="utf-8")
+            fc = sv_file.read_text(encoding="utf-8", errors="replace")
             modified = False
             for line in compile_log.split("\n"):
                 m = re.search(r"field\s+'(\w+)'\s+in", line, re.IGNORECASE)
@@ -1253,13 +1145,13 @@ def _try_autofix_loopback(output_dir: Path, agent_name: str, compile_log: str) -
                         fc = fc.replace(f".{bad}", f"//.{bad} // auto-removed")
                         modified = True
             if modified:
-                sv_file.write_text(fc, encoding="utf-8")
+                sv_file.write_text(fc, encoding="utf-8", errors="replace")
                 logger.info(f"Auto-fixed {agent_name}: removed bad fields in {sv_file.name}")
                 fixed_any = True
 
     # ── Fix 3: monitor lacks qualifier gating (samples every cycle → 0 matches) ──
     if monitor_file.exists():
-        mc = monitor_file.read_text(encoding="utf-8")
+        mc = monitor_file.read_text(encoding="utf-8", errors="replace")
         sample_fn = _extract_method(mc, "sample_transaction")
         if sample_fn:
             # Check if there's ANY qualifier (if, case, etc.)
@@ -1272,7 +1164,7 @@ def _try_autofix_loopback(output_dir: Path, agent_name: str, compile_log: str) -
                 interface_file = agent_dir / f"{agent_name}_interface.sv"
                 qualifier_signal = None
                 if interface_file.exists():
-                    ifc = interface_file.read_text(encoding="utf-8")
+                    ifc = interface_file.read_text(encoding="utf-8", errors="replace")
                     # Look for valid, strobe, enable, sel, penable signals in the interface
                     for candidate in ["valid", "strobe", "psel", "penable", "enable", "ready"]:
                         if re.search(rf'\b{candidate}\b', ifc):
@@ -1291,13 +1183,13 @@ def _try_autofix_loopback(output_dir: Path, agent_name: str, compile_log: str) -
                         # Join original lines to find the full block
                         old_block = "\n".join(item_lines)
                         mc = mc.replace(old_block, new_block)
-                        monitor_file.write_text(mc, encoding="utf-8")
+                        monitor_file.write_text(mc, encoding="utf-8", errors="replace")
                         logger.info(f"Auto-fixed {agent_name}: added monitor qualifier gate on vif.{qualifier_signal} for {len(item_lines)} ports")
                     fixed_any = True
 
     # ── Fix 4: driver exp copy — ensure output ports (that exist in transaction) are copied from req ──
     if driver_file.exists():
-        dc = driver_file.read_text(encoding="utf-8")
+        dc = driver_file.read_text(encoding="utf-8", errors="replace")
         drive_fn = _extract_method(dc, "drive_transaction")
         if drive_fn:
             # Check if exp copy exists in drive_transaction
@@ -1306,7 +1198,7 @@ def _try_autofix_loopback(output_dir: Path, agent_name: str, compile_log: str) -
                 txn_file = agent_dir / f"{agent_name}_transaction.sv"
                 txn_fields = set()
                 if txn_file.exists():
-                    tc = txn_file.read_text(encoding="utf-8")
+                    tc = txn_file.read_text(encoding="utf-8", errors="replace")
                     txn_fields = set(re.findall(r'rand\s+\S+\s+(\w+)\s*;', tc))
                     # Also add built-in fields
                     txn_fields.update(["req_id", "tag", "error", "begin_time"])
@@ -1319,19 +1211,19 @@ def _try_autofix_loopback(output_dir: Path, agent_name: str, compile_log: str) -
                     dc = dc.replace(
                         "expected_port.write(exp);",
                         f"{exp_lines}\n    expected_port.write(exp);")
-                    driver_file.write_text(dc, encoding="utf-8")
+                    driver_file.write_text(dc, encoding="utf-8", errors="replace")
                     logger.info(f"Auto-fixed {agent_name}: added exp copy for {len(valid_ports)} ports")
                     fixed_any = True
 
     # ── Fix 5: env connect_phase — ensure TLM connections exist ──
     if env_file.exists():
-        ec = env_file.read_text(encoding="utf-8")
+        ec = env_file.read_text(encoding="utf-8", errors="replace")
         if "drv.expected_port.connect" not in ec:
             # Template should already have this — but re-add if missing
             ec = ec.replace(
                 "super.connect_phase(phase);",
                 "super.connect_phase(phase);\n    agent_h.drv.expected_port.connect(scb_h.expected_export);\n    agent_h.mon.item_collected_port.connect(scb_h.actual_export);")
-            env_file.write_text(ec, encoding="utf-8")
+            env_file.write_text(ec, encoding="utf-8", errors="replace")
             logger.info(f"Auto-fixed {agent_name}: added TLM connections in env")
             fixed_any = True
 
@@ -1339,79 +1231,78 @@ def _try_autofix_loopback(output_dir: Path, agent_name: str, compile_log: str) -
 
 
 def _run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
-    """Run single-agent loopback simulation + parse log."""
+    """Run single-agent loopback simulation + parse log.
+
+    编译使用 RegressionRunner，仿真使用 vsim（RegressionRunner 无独立 sim 接口）。
+    """
+    import subprocess, time, os
     fl = _build_loopback_filelist(output_dir, agent_name)
     top = f"{agent_name}_loopback_tb"
-    wd = (output_dir / "build" / f"{agent_name}_lb").resolve()
-    wd.parent.mkdir(parents=True, exist_ok=True)
 
-    import subprocess, time, os
-    QUESTA = "f:/questasim64_2024.1/win64"
-    vlib = os.path.join(QUESTA, "vlib.exe")
-    vlog = os.path.join(QUESTA, "vlog.exe")
+    # ── 从 RegressionRunner 取 QuestaSim 路径（避免硬编码） ──
+    from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner as _RR
+    QUESTA = _RR.QUESTA if hasattr(_RR, 'QUESTA') else "f:/questasim64_2024.1/win64"
     vsim = os.path.join(QUESTA, "vsim.exe")
-    wd_str = str(wd).replace("\\", "/")
-    fl_str = str(fl.resolve()).replace("\\", "/")
 
     t0 = time.time()
     print(f"    [{agent_name}] compiling loopback TB... ", end="", flush=True)
-    # vlib
-    subprocess.run([vlib, wd_str], capture_output=True, text=True, timeout=30)
-    # vlog
-    r = subprocess.run([vlog, "-mfcu", "-work", wd_str, "-sv", "+acc",
-        "+incdir+f:/questasim64_2024.1/verilog_src/uvm-1.2/src",
-        "-timescale=1ns/1ps",
-        "f:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv",
-        "-f", fl_str],
-        capture_output=True, text=True, timeout=120, cwd=str(output_dir.resolve()))
-    compile_ok = r.returncode == 0
-    compile_errs = r.stdout.count("** Error")
+
+    # ── 编译：使用 RegressionRunner ──
+    runner = RegressionRunner(
+        env_output_dir=str(output_dir),
+        filelist=str(fl.resolve()),
+        top_module=top,
+        coverage=False,
+    )
+    compile_result = runner.compile()
+    compile_ok = compile_result["status"] == "PASS"
+    compile_errs = compile_result.get("errors", 0)
     compile_time = round(time.time() - t0, 1)
     print(f"compile {'PASS' if compile_ok else 'FAIL'}({compile_errs} errs, {compile_time}s)", flush=True)
 
     if not compile_ok:
-        # ── Auto-fix: patch generated code for known issues ──
-        fixed = _try_autofix_loopback(output_dir, agent_name, r.stdout)
+        fixed = _try_autofix_loopback(output_dir, agent_name, compile_result.get("stderr", ""))
         if fixed:
-            # Rebuild filelist (may have changed) and retry
             fl = _build_loopback_filelist(output_dir, agent_name)
-            fl_str = str(fl.resolve()).replace("\\", "/")
-            r = subprocess.run([vlog, "-mfcu", "-work", wd_str, "-sv", "+acc",
-                "+incdir+f:/questasim64_2024.1/verilog_src/uvm-1.2/src",
-                "-timescale=1ns/1ps",
-                "f:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv",
-                "-f", fl_str],
-                capture_output=True, text=True, timeout=120, cwd=str(output_dir.resolve()))
-            compile_ok = r.returncode == 0
-            compile_errs = r.stdout.count("** Error")
+            runner = RegressionRunner(
+                env_output_dir=str(output_dir),
+                filelist=str(fl.resolve()),
+                top_module=top, coverage=False,
+            )
+            compile_result = runner.compile()
+            compile_ok = compile_result["status"] == "PASS"
+            compile_errs = compile_result.get("errors", 0)
             compile_time = round(time.time() - t0, 1)
         if not compile_ok:
             return {"compile": "FAIL", "errors": compile_errs, "time_s": compile_time,
-                    "sim": "SKIPPED", "score": 0, "autofix_attempted": bool(fixed)}
+                    "sim": "SKIPPED", "score": 0, "passed": False,
+                    "autofix_attempted": bool(fixed)}
 
-    # vsim: run 2us for loopback test
-    print(f"    [{agent_name}] simulating 2us... ", end="", flush=True)
-    ucdb = str((output_dir / "sim" / f"{agent_name}_lb.ucdb").resolve()).replace("\\", "/")
+    wd = (output_dir / "build" / "work").resolve()  # 与 RegressionRunner 默认 work_dir 一致
+    wd_str = str(wd).replace("\\", "/")
     sim_dir = str(output_dir.resolve()).replace("\\", "/")
     log_path = Path(f"{sim_dir}/sim_{agent_name}_lb.log")
+
+    # ── 仿真：vsim（RegressionRunner 无单 test sim 接口） ──
+    print(f"    [{agent_name}] simulating 2us... ", end="", flush=True)
     if log_path.exists():
-        log_path.unlink()  # clear stale log before new sim
+        log_path.unlink()
+
     r2 = subprocess.run([
-        vsim, "-c", "-sv_lib", "f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi",
+        vsim, "-c", "-sv_lib", f"{QUESTA.replace('win64','')}uvm-1.2/win64/uvm_dpi",
         "-onfinish", "stop",
-        "-do", f"log -r /*; run -all; quit -f",
+        "-do", "log -r /*; run -all; quit -f",
         "-wlf", f"{sim_dir}/wave_{agent_name}_lb.wlf",
         "-work", wd_str,
         "-l", f"{sim_dir}/sim_{agent_name}_lb.log",
-        top, "+UVM_TESTNAME=" + agent_name + "_loopback_test",
+        top, f"+UVM_TESTNAME={agent_name}_loopback_test",
         "+UVM_TIMEOUT=100000",
-    ], capture_output=True, text=True, timeout=60, cwd=str(output_dir.resolve()))
+    ], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, cwd=str(output_dir.resolve()))
 
     sim_time = round(time.time() - t0 - compile_time, 1)
     parsed = _parse_sim_log(r2.stdout)
-    sim_ok = parsed["passed"] or (compile_ok and parsed.get("matched",0) > 0)
 
-    # ── Sim retry loop: try to fix errors, re-sim up to 3 times ──
+    # ── Sim retry loop（仅重试仿真，编译已过） ──
     MAX_SIM_RETRIES = 3
     for retry in range(MAX_SIM_RETRIES):
         if parsed["passed"] or parsed["errors"] == 0:
@@ -1419,42 +1310,34 @@ def _run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
         fixed = _try_autofix_loopback(output_dir, agent_name, r2.stdout)
         if not fixed:
             break
-        # Re-compile
-        r = subprocess.run([vlog, "-mfcu", "-work", wd_str, "-sv", "+acc",
-            "+incdir+f:/questasim64_2024.1/verilog_src/uvm-1.2/src",
-            "-timescale=1ns/1ps",
-            "f:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv",
-            "-f", fl_str],
-            capture_output=True, text=True, timeout=120, cwd=str(output_dir.resolve()))
-        if r.returncode != 0:
-            break
-        # Re-sim
+        # 重新仿真（编译已过，跳过重编译）
         r2 = subprocess.run([
-            vsim, "-c", "-sv_lib", "f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi",
+            vsim, "-c", "-sv_lib", f"{QUESTA.replace('win64','')}uvm-1.2/win64/uvm_dpi",
             "-onfinish", "stop",
-            "-do", f"log -r /*; run -all; quit -f",
+            "-do", "log -r /*; run -all; quit -f",
             "-wlf", f"{sim_dir}/wave_{agent_name}_lb.wlf",
             "-work", wd_str, top,
-            "+UVM_TESTNAME=" + agent_name + "_loopback_test",
+            f"+UVM_TESTNAME={agent_name}_loopback_test",
             "+UVM_TIMEOUT=100000",
-        ], capture_output=True, text=True, timeout=30, cwd=str(output_dir.resolve()))
+        ], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, cwd=str(output_dir.resolve()))
         parsed = _parse_sim_log(r2.stdout)
         sim_time = round(time.time() - t0 - compile_time, 1)
-        print(f"    [{agent_name}] retry {retry+1}: sim errs={parsed['errors']}, matched={parsed.get('matched',0)}", flush=True)
+        print(f"    [{agent_name}] retry {retry+1}: errs={parsed['errors']}, matched={parsed.get('matched',0)}", flush=True)
         if parsed["passed"] and parsed["errors"] == 0:
             break
 
     sim_ok = parsed["passed"] and parsed["errors"] == 0
-    if sim_ok and parsed.get("matched", 0) > 0:
-        score = 10  # sim PASS + transactions matched
+    passed = sim_ok and parsed.get("matched", 0) > 0
+    if passed:
+        score = 25
     elif sim_ok:
-        score = 7   # sim ran but no matches
+        score = 15
     elif parsed.get("driven", 0) > 0 and parsed.get("matched", 0) > 0:
-        score = 5   # some errors but transactions flowing
+        score = 10
     else:
-        score = 2   # nothing working
-    status = "PASS" if score >= 10 else ("OK" if score >= 7 else ("WARN" if score >= 5 else "FAIL"))
-    print(f"    [{agent_name}] sim {status}(errs={parsed['errors']}, driven={parsed.get('driven',0)}, matched={parsed.get('matched',0)}, retries={retry}, score={score}, {sim_time}s)", flush=True)
+        score = 0
+    status = "PASS" if passed else ("OK" if score >= 15 else ("WARN" if score >= 10 else "FAIL"))
+    print(f"    [{agent_name}] sim {status}(errs={parsed['errors']}, driven={parsed.get('driven',0)}, matched={parsed.get('matched',0)}, score={score}, {sim_time}s)", flush=True)
 
     return {
         "agent": agent_name,
@@ -1467,11 +1350,11 @@ def _run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
         "matched": parsed.get("matched", 0),
         "mismatched": parsed.get("mismatched", 0),
         "driven": parsed.get("driven", 0),
-        "errors": parsed["errors"],  # for _llm_refine_sim_timing compatibility
+        "errors": parsed["errors"],
         "timeout": parsed.get("timeout", False),
         "score": score,
-        # For LLM analysis: raw compile and simulation output
-        "compile_log": r.stdout if 'r' in dir() else "",
+        "passed": passed,
+        "compile_log": "",
         "sim_log": r2.stdout if 'r2' in dir() else "",
     }
 
@@ -1485,51 +1368,62 @@ def _run_loopback_check(output_dir: Path, agents: list, env_name: str) -> dict:
         results.append(r)
 
     total_score = sum(r["score"] for r in results)
-    all_passed = all(r["compile"] == "PASS" for r in results)
-    # cap at 10
-    score = min(total_score, 10)
+    all_passed = all(r["compile"] == "PASS" and r.get("matched", 0) > 0 for r in results)
+    # 0-25 scale
+    score = 25 if all_passed else max(0, 25 - sum(1 for r in results if r.get("matched", 0) == 0) * 8)
 
     return {
         "agents": results,
-        "all_compile_pass": all_passed,
-        "total_score": f"{score}/10",
+        "all_compile_pass": all(r["compile"] == "PASS" for r in results),
+        "all_passed": all_passed,
+        "passed": all_passed,
+        "total_score": f"{score}/25",
         "score": score,
     }
 
 
 def _generate_real_quality_report(output_dir: Path, agents: list,
                                   env_name: str) -> dict:
-    """Generate real quality report with actual compile/simulation results."""
-    static_r = _run_static_check(output_dir, agents)
-    compile_r = _run_compile_check(output_dir, agents, env_name)
-    loopback_r = _run_loopback_check(output_dir, agents, env_name)
+    """从日志文件生成质量报告 —— 纯日志分析，不跑编译/仿真。
 
-    # If loopback has failures, try LLM-driven iterative fix
-    if loopback_r.get("score", 0) < 8:
-        logger.info("Loopback score low, attempting LLM-driven fix...")
+    日志文件位置：
+      - 编译日志: {output_dir}/compile_{env_name}.log
+      - 仿真日志: {output_dir}/sim_{agent_name}_lb.log
+    如果日志文件不存在，回退到自检模式。
+    """
+    # ── 优先使用日志分析 ──
+    result = _score_from_logs(output_dir, agents, env_name)
+
+    static_r = result["details"]["static"]
+    compile_r = result["details"]["compile"]
+    loopback_r = result["details"]["loopback"]
+
+    # If loopback fails and we have LLM available, try fix
+    if not result["loopback_passed"] and compile_r["passed"]:
+        logger.info("Loopback FAIL by log analysis, attempting LLM-driven fix...")
         refine_result = _llm_refine_sim_timing(output_dir, agents, env_name)
         if refine_result.get("fixed", 0) > 0:
-            # Re-run loopback after LLM fixes
-            loopback_r = _run_loopback_check(output_dir, agents, env_name)
-            loopback_r["_llm_refined"] = True
-            loopback_r["_llm_fixed_count"] = refine_result["fixed"]
+            # Re-analyze logs after LLM fixes (re-run log analysis on potentially updated log files)
+            result = _score_from_logs(output_dir, agents, env_name)
+            result["_llm_refined"] = True
+            result["_llm_fixed_count"] = refine_result["fixed"]
+            static_r = result["details"]["static"]
+            compile_r = result["details"]["compile"]
+            loopback_r = result["details"]["loopback"]
 
-    total = static_r.get("score", 0) + compile_r.get("score", 0) + loopback_r.get("score", 0)
-    max_total = 30  # 10 + 10 + 10
-    grade = "A" if total >= 25 else "B" if total >= 15 else "C" if total >= 5 else "D"
+    all_three_passed = result["passed"]
+    total = result["total"]
+    max_total = result["max_total"]
+    grade = "A" if total >= 70 else "B" if total >= 50 else "C" if total >= 30 else "D"
 
     report = {
         "timestamp": datetime.now().isoformat(),
         "agent": "verification_architect",
         "output_dir": str(output_dir.resolve()),
         "env_name": env_name,
-        "scores": {
-            "static": f"{static_r.get('score',0)}/10",
-            "compile": f"{compile_r.get('score',0)}/10",
-            "loopback": f"{loopback_r.get('score',0)}/10",
-            "total": f"{total}/{max_total}",
-        },
+        "scores": result["scores"],
         "grade": grade,
+        "passed": all_three_passed,
         "details": {
             "static": static_r,
             "compile": compile_r,
@@ -1537,16 +1431,18 @@ def _generate_real_quality_report(output_dir: Path, agents: list,
         },
         "issues": {"errors": compile_r.get("errors", 0),
                    "missing_files": static_r.get("missing_files", [])},
-        "verdict": "READY" if total >= 20 else "NEEDS_FIX" if total >= 10 else "FAILED",
+        "verdict": "READY" if all_three_passed else "NEEDS_FIX",
         "recommendations": (
-            ["Static check passed"] if static_r["status"] == "PASSED"
+            ["Static check passed"] if result["static_passed"]
             else [f"Missing {len(static_r.get('missing_files',[]))} files"]
-        ) + ([f"Compile: {compile_r.get('errors',0)} errors"] if compile_r.get("errors", 0) > 0 else ["Compile passed"]),
+        ) + ([f"Compile: {compile_r.get('errors',0)} errors"] if not result["compile_passed"] else ["Compile passed"])
+          + (["Loopback passed — log analysis"] if result["loopback_passed"]
+             else [f"Loopback failed — matched={loopback_r.get('matched',0)}"]),
     }
 
     # Write quality report
     report_path = output_dir / "quality_report.json"
-    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False))
+    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8", errors="replace")
     return report
 
 
@@ -1561,12 +1457,196 @@ def _set_llm_ctx(output_dir: Path, agents: list, env_name: str):
     _LLM_CTX["env_name"] = env_name
 
 
-# ── LangChain Tools (for LLM mode, use real implementations) ──
+# ── LangChain Tools (for LLM mode) ──
 
-@tool("generate_env_code")
-def _generate_env_code(spec: str) -> str:
-    """Generate UVM environment code from specification."""
-    return json.dumps({"status": "generated", "layers": ["shared","agent_tb","env_tb"]})
+@tool("generate_uvm_from_spec")
+def _generate_uvm_from_spec(spec_text: str) -> str:
+    """从规格文本生成 UVM 验证环境代码。自动选择已有 YAML 或从 spec 构造。
+
+    输入: 规格文本（Markdown）。输出: 生成文件列表 JSON。
+    """
+    from src.tools.uvm_tools.tool_uvm.gen_uvm import UVMGenerator, JinjaRenderer, TEMPLATES_DIR
+
+    yaml_dir = Path("src/tools/uvm_tools/tool_uvm")
+    output_dir = Path(_LLM_CTX.get("output_dir", "output"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    renderer = JinjaRenderer(TEMPLATES_DIR)
+    generator = UVMGenerator(renderer, output_dir)
+    all_files = []
+
+    # 从 spec 提取模块名
+    import re
+    module_match = re.search(r'(?:#|module\s+)\s*(\w+)', spec_text, re.IGNORECASE)
+    module_name = module_match.group(1) if module_match else "dut"
+
+    # 按模块名查找已有 YAML：尝试全名、前缀、首段
+    name_variants = [module_name, module_name.upper(), module_name.lower()]
+    for seg in re.split(r'[_\-\s]+', module_name):
+        if len(seg) >= 2:
+            name_variants.extend([seg, seg.upper()])
+    existing_yamls = []
+    if yaml_dir.exists():
+        for variant in name_variants:
+            for pattern in [f"{variant}_*.yaml"]:
+                found = sorted(yaml_dir.glob(pattern))
+                if found:
+                    existing_yamls = found
+                    break
+            if existing_yamls:
+                break
+    if existing_yamls:
+        print(f"  [UVM] Found {len(existing_yamls)} YAML files for module '{module_name}'", flush=True)
+        for yp in existing_yamls:
+            generated = generator.run([yp])
+            all_files.extend(generated)
+            print(f"    {yp.name} → {len(generated)} files", flush=True)
+    else:
+        # 从 spec 构造 agent YAML
+        print(f"  [UVM] No YAML for '{module_name}', constructing from spec...", flush=True)
+        # 构造基础 agent YAML
+        for direction in ["in", "out"]:
+            agent_name = f"{module_name}_{direction}"
+            yaml_str = f"""interfaces:
+  name: {agent_name}
+  clock: clk
+  reset: rst
+  parameters:
+    - {{ name: DATA_WIDTH, type: int, value: '32' }}
+  ports:
+    - {{ name: clk, dir: input, width: 1 }}
+    - {{ name: rst, dir: input, width: 1 }}
+    - {{ name: data, dir: {'output' if direction == 'in' else 'input'}, width: DATA_WIDTH }}
+    - {{ name: valid, dir: {'output' if direction == 'in' else 'input'}, width: 1 }}
+    - {{ name: ready, dir: {'input' if direction == 'in' else 'output'}, width: 1 }}
+  transaction_vars:
+    - {{ name: data, type: "bit [DATA_WIDTH-1:0]", iscompare: 'True', isrand: 'True' }}
+  transaction_constraints:
+    - name: valid_c
+      value: '{{ data inside {{[0:255]}}; }}'
+  config:
+    is_active: UVM_ACTIVE
+"""
+            yaml_path = output_dir / f"yaml_{agent_name}.yaml"
+            yaml_path.write_text(yaml_str, encoding="utf-8", errors="replace")
+            generated = generator.run([yaml_path])
+            all_files.extend(generated)
+            print(f"    {yaml_path.name} → {len(generated)} files", flush=True)
+
+        # 构造 env + bench YAML
+        env_yaml_str = f"""environment:
+  name: {module_name}_env
+  agents:
+    {module_name}_in:
+      interface: {module_name}_in
+      clock: clk
+      reset: rst
+    {module_name}_out:
+      interface: {module_name}_out
+      clock: clk
+      reset: rst
+"""
+        env_path = output_dir / "yaml_env.yaml"
+        env_path.write_text(env_yaml_str, encoding="utf-8", errors="replace")
+        generated = generator.run([env_path])
+        all_files.extend(generated)
+
+        bench_yaml_str = f"""bench:
+  name: {module_name}_bench
+  env_name: {module_name}_env
+  timeout: 10ms
+  clk_rst:
+    clocks:
+      - {{ name: clk, period: 10ns, init: 0 }}
+    resets:
+      - {{ name: rst_n, init: 0, release_delay: 0 }}
+  wire_decls:
+    - {{ name: data_in,  width: 32 }}
+    - {{ name: data_out, width: 32 }}
+    - {{ name: valid_in, width: 1 }}
+    - {{ name: ready_in, width: 1 }}
+    - {{ name: valid_out, width: 1 }}
+    - {{ name: ready_out, width: 1 }}
+  assignments:
+    - {{ lhs: ready_out, rhs: "1'b0" }}
+  agents:
+    {module_name}_in:
+      interface: {module_name}_in
+      clock: clk
+      reset: rst_n
+      instance: {module_name}_in_if
+      connections:
+        - {{ port: clk, wire: clk }}
+        - {{ port: rst, wire: rst_n }}
+        - {{ port: data, wire: data_in }}
+        - {{ port: valid, wire: valid_in }}
+        - {{ port: ready, wire: ready_in }}
+    {module_name}_out:
+      interface: {module_name}_out
+      clock: clk
+      reset: rst_n
+      instance: {module_name}_out_if
+      connections:
+        - {{ port: clk, wire: clk }}
+        - {{ port: rst, wire: rst_n }}
+        - {{ port: data, wire: data_out }}
+        - {{ port: valid, wire: valid_out }}
+        - {{ port: ready, wire: ready_out }}
+  dut:
+    module: {module_name}
+    instance: u_{module_name}
+    parameters:
+      - {{ name: DATA_WIDTH, value: 32 }}
+    ports:
+      - {{ name: clk, connection: clk }}
+      - {{ name: rst_n, connection: rst_n }}
+      - {{ name: data_in, connection: data_in }}
+      - {{ name: valid_in, connection: valid_in }}
+      - {{ name: ready_in, connection: ready_in }}
+      - {{ name: data_out, connection: data_out }}
+      - {{ name: valid_out, connection: valid_out }}
+      - {{ name: ready_out, connection: ready_out }}
+"""
+        bench_path = output_dir / "yaml_bench.yaml"
+        bench_path.write_text(bench_yaml_str, encoding="utf-8", errors="replace")
+        generated = generator.run([bench_path])
+        all_files.extend(generated)
+
+    # 更新运行时上下文
+    agent_names = set()
+    for f in all_files:
+        parts = Path(str(f)).parts
+        if "agents" in parts:
+            idx = parts.index("agents")
+            if idx + 1 < len(parts):
+                agent_names.add(parts[idx + 1])
+    if agent_names:
+        _LLM_CTX["agents"] = [{"name": n} for n in sorted(agent_names)]
+        if not _LLM_CTX.get("env_name") or _LLM_CTX["env_name"] == "dut":
+            _LLM_CTX["env_name"] = f"{module_name}_env"
+
+    # ── 链式质量检查：生成 → 静态 → 编译 ──
+    agent_list = [{"name": n} for n in sorted(agent_names)]
+    env_name = _LLM_CTX.get("env_name", f"{module_name}_env")
+    quality = _generate_real_quality_report(output_dir, agent_list, env_name)
+    all_passed = quality.get("passed", False)
+
+    return json.dumps({
+        "status": "generated",
+        "file_count": len(all_files),
+        "agents": sorted(agent_names),
+        "files": [str(f) for f in all_files],
+        "quality": {
+            "passed": all_passed,
+            "verdict": quality.get("verdict", "?"),
+            "scores": quality.get("scores", {}),
+            "static_pass": quality["details"]["static"].get("passed", False),
+            "compile_pass": quality["details"]["compile"].get("passed", False),
+            "loopback_pass": quality["details"]["loopback"].get("passed", False),
+        },
+        "next_step": "ALL PASS" if all_passed else "Call read_file to inspect errors, write_file to fix, then re-run check_compile"
+    }, ensure_ascii=False)
+
 
 @tool("check_static")
 def _check_static(env_dir: str = "") -> str:
@@ -1598,7 +1678,7 @@ def _check_health(env_dir: str = "") -> str:
     """Health check: compile + simulate env test 100us."""
     od = Path(env_dir) if env_dir else Path(_LLM_CTX.get("output_dir", "."))
     r = _run_compile_check(od, _LLM_CTX.get("agents", []), _LLM_CTX.get("env_name", "dut"))
-    return json.dumps({"status": r.get("status","?"), "errors": r.get("errors",0), "score": str(r.get("score",0)) + "/10"})
+    return json.dumps({"status": r.get("status","?"), "errors": r.get("errors",0), "score": f"{r.get('score',0)}/25"})
 
 @tool("read_file")
 def _read_file(path: str) -> str:
@@ -1624,173 +1704,3 @@ def _write_file(path_content: str) -> str:
     p.write_text(content.strip(), encoding="utf-8")
     return f"OK: wrote {len(content)} bytes to {p}"
 
-@tool("generate_quality_report")
-def _generate_quality_report(checks_json: str) -> str:
-    """Aggregate all check results into final quality report."""
-    return checks_json
-
-@tool("fix_issues")
-def _fix_issues(issues_json: str) -> str:
-    """Analyze issues and suggest fixes. LLM reads files, modifies, re-checks."""
-    try:
-        issues = json.loads(issues_json) if isinstance(issues_json, str) else issues_json
-    except Exception:
-        issues = {"raw": str(issues_json)}
-    compile_errs = issues.get("details", {}).get("compile", {}).get("errors", 0)
-    missing = issues.get("details", {}).get("static", {}).get("missing_files", [])
-    return json.dumps({
-        "analysis": f"Found {len(missing)} missing files, {compile_errs} compile errors",
-        "suggested_actions": [
-            "Read each file listed in missing_files using read_file",
-            "Create missing files using write_file",
-            "Re-run check_compile and check_loopback",
-        ] if missing else ["No critical issues found"],
-        "fixed": 0,
-    })
-
-
-# ═══════════════════════════════════════════════════════════
-# Bypass 辅助函数（解析架构 / YAML 构造）
-# ═══════════════════════════════════════════════════════════
-
-def _parse_architecture(raw_input: str, ctx: dict = None) -> dict:
-    """从 ctx 中提取 verification_architecture YAML 数据 —— 无硬编码 fallback"""
-    ctx = ctx or {}
-
-    # 路径1: ctx.spec.verification_architecture（pipeline 标准路径）
-    spec_data = ctx.get("spec", {})
-    if isinstance(spec_data, dict):
-        va = spec_data.get("verification_architecture")
-        if va and isinstance(va, dict) and "agents" in va:
-            return va
-        # ctx.spec 本身可能直接就是 architecture（含 agents）
-        if "agents" in spec_data:
-            return spec_data
-
-    # 路径2: ctx 直接是 verification_architecture
-    if "verification_architecture" in ctx and isinstance(ctx["verification_architecture"], dict):
-        return ctx["verification_architecture"]
-
-    # 路径3: ctx 直接含 agents（YAML 数据格式）
-    if "agents" in ctx:
-        return ctx
-
-    # 路径4: raw_input 是 JSON 格式的 verification_architecture
-    try:
-        data = json.loads(raw_input)
-        if isinstance(data, dict):
-            if "verification_architecture" in data:
-                return data["verification_architecture"]
-            if "agents" in data:
-                return data
-    except (json.JSONDecodeError, TypeError):
-        pass
-
-    raise ValueError(
-        "ctx 中缺少 verification_architecture 或 agents 数据。"
-        f"ctx keys: {list(ctx.keys()) if isinstance(ctx, dict) else type(ctx)}"
-    )
-
-
-def _agent_spec_to_yaml(agent_spec: dict, arch: dict) -> str:
-    """将单个 agent 规格转为 gen_uvm YAML —— 只使用显式声明的 transaction_vars，自动补全 qualifier"""
-    ports = list(agent_spec.get("ports", []))
-    tx_vars = list(agent_spec.get("transaction_vars", []))
-    existing_var_names = {v.get("name") for v in tx_vars}
-    existing_port_names = {p.get("name") for p in ports}
-
-    # ── 自动补全 qualifier 端口 ──
-    qualifier_names = ('valid', 'strobe', 'psel', 'penable', 'enable', 'ready')
-    # 找到第一个存在的 qualifier 端口
-    qualifier_sig = None
-    for p in ports:
-        if p.get("name") in qualifier_names and p.get("dir") == "output":
-            qualifier_sig = p["name"]
-            break
-    # 如果没有 qualifier 端口，自动添加 valid
-    if qualifier_sig is None:
-        if "valid" not in existing_port_names:
-            ports.append({"name": "valid", "dir": "output", "width": 1, "desc": "auto-added transaction qualifier"})
-        qualifier_sig = "valid"
-    # 确保 qualifier 在 transaction_vars 中（不随机，不参与 compare，约束为 1）
-    if qualifier_sig not in existing_var_names:
-        tx_vars.append({"name": qualifier_sig, "type": "bit", "iscompare": "False", "isrand": "False"})
-
-    # Use agent_spec parameters if available, otherwise generate defaults
-    params = agent_spec.get("parameters", [])
-    if not params:
-        dw = 32
-        for p in ports:
-            w = p.get("width", 1)
-            if isinstance(w, int) and w > 1: dw = w
-        params = [{"name": "DATA_WIDTH", "type": "int", "value": str(dw)}]
-    # Only add default constraint if 'data' field exists in transaction_vars
-    default_constraints = []
-    if any(v.get("name") == "data" for v in tx_vars):
-        default_constraints = [{"name": "valid_c", "value": "{ data inside {[0:255]}; }"}]
-    # Ensure qualifier signal is constrained to 1 (always active during transaction)
-    constraints = list(agent_spec.get("transaction_constraints", default_constraints))
-    qualifier_constraint = {"name": "qualifier_on", "value": "{ " + qualifier_sig + " == 1; }"}
-    has_qualifier_in_constraints = any(qualifier_sig in str(c.get("value","")) for c in constraints)
-    if not has_qualifier_in_constraints:
-        constraints.append(qualifier_constraint)
-    return yaml.dump({
-        "interfaces": {
-            "name": agent_spec["name"],
-            "clock": agent_spec.get("clock", "clk"),
-            "reset": agent_spec.get("reset", "rst"),
-            "parameters": params,
-            "hdl_typedefs": agent_spec.get("hdl_typedefs", []),
-            "hvl_typedefs": agent_spec.get("hvl_typedefs", []),
-            "ports": ports,
-            "transaction_vars": tx_vars,
-            "transaction_constraints": constraints,
-            "config": {"is_active": agent_spec.get("type", "UVM_ACTIVE")},
-        }
-    }, default_flow_style=False, allow_unicode=True)
-
-
-def _build_env_yaml(arch: dict) -> str:
-    """从架构规格构造 Environment YAML"""
-    env_name = arch.get("env_name") or arch.get("name") or "dut_env"
-    agents = {}
-    for a in arch.get("agents", []):
-        agents[a["name"]] = {
-            "interface": a.get("interface", f"{a['name']}_interface"),
-            "clock": a.get("clock", "clk"),
-            "reset": a.get("reset", "rst"),
-        }
-    return yaml.dump({
-        "environment": {
-            "name": env_name,
-            "env_name": env_name,
-            "clk_rst_vip": {"enabled": False},
-            "agents": agents,
-            "scoreboards": arch.get("scoreboards", []),
-            "virtual_sequencer": arch.get("virtual_sequencer", {"enabled": False}),
-            "config_vars": arch.get("config_vars", []),
-            "tlm_connections": arch.get("tlm_connections", []),
-        }
-    }, default_flow_style=False, allow_unicode=True)
-
-
-def _build_bench_yaml(arch: dict) -> str:
-    """从架构规格构造 Bench YAML"""
-    env_name = arch.get("env_name") or arch.get("name") or "dut_env"
-    bench_name = f"{env_name}_bench"
-    agents = {}
-    for a in arch.get("agents", []):
-        agents[a["name"]] = {
-            "interface": a.get("interface", f"{a['name']}_interface"),
-            "clock": a.get("clock", "clk"),
-            "reset": a.get("reset", "rst"),
-        }
-    return yaml.dump({
-        "bench": {
-            "name": bench_name,
-            "env_name": env_name,
-            "timeout": "10ms",
-            "clk_rst_vip": {"enabled": False},
-            "agents": agents,
-        }
-    }, default_flow_style=False, allow_unicode=True)

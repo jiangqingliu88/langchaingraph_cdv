@@ -31,7 +31,7 @@ FULL_PHASES = [
     ("spec",    "spec_and_test_planner",    "spec"),
     ("design",  "design_architect",         "design_arch"),
     ("model",   "model_agent",              "model"),
-    ("arch",    "verification_architect",   "env"),
+    ("UVM",     "verification_architect",   "env"),
     ("test",    "test_engineer",            "tests"),
     ("assert",  "assertion_engineer",       None),
     ("regress", "regression_manager",       "regression"),
@@ -275,7 +275,7 @@ class PipelineExecutionService:
             # Map fix_agent_role to phase name
             role_to_phase = {
                 "design_architect": ("design", "design_architect"),
-                "verification_architect": ("arch", "verification_architect"),
+                "verification_architect": ("UVM", "verification_architect"),
                 "model_agent": ("model", "model_agent"),
                 "spec_planner": ("spec", "spec_and_test_planner"),
             }
@@ -452,7 +452,7 @@ class PipelineExecutionService:
 
         ctx = {
             "spec": {"test_points": []},
-            "env": {"env_name": "uart_env"},
+            "env": {"env_name": "dut_env"},
         }
 
         agent = self.registry.get_agent_instance("test_engineer")

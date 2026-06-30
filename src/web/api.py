@@ -640,7 +640,7 @@ async def design_arch_result():
     from src.core.execution import PipelineExecutionService
     service = PipelineExecutionService.get_instance()
     if not service.initialized: await service.initialize_agents()
-    ctx = {"spec": {}, "env": {"env_name": "uart_env"}}
+    ctx = {"spec": {}, "env": {"env_name": "dut_env"}}
     spec = Path("spec_uart.txt").read_text(encoding="utf-8") if Path("spec_uart.txt").exists() else "UART IP"
     result = await service.run_single_agent("design_architect", spec)
     return {"success": result["success"], "data": result.get("output", ""), "error": result.get("error")}
@@ -658,7 +658,7 @@ async def design_arch_run(req: DesignArchRequest, user: dict = Depends(require_a
     importlib.reload(da_pkg)
     agent = da_pkg.DesignArchitect()
     await agent.initialize()
-    ctx = {"spec": {}, "env": {"env_name": "uart_env"}}
+    ctx = {"spec": {}, "env": {"env_name": "dut_env"}}
     task = {"ctx": ctx, "input": req.spec_text or "UART IP with AXI interface"}
     r = await agent.execute_task(task)
     return {"success": r.success, "design_arch": r.data.get("design_arch", {}), "output": r.data.get("output", ""), "error": r.error}

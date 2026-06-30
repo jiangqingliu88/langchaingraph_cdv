@@ -22,12 +22,10 @@ def _detect_signals(module_name: str) -> dict:
     candidates = [
         yaml_dir / f"{module_name}_in.yaml",
         yaml_dir / f"{module_name.upper()}_in.yaml",
-        yaml_dir / "ALU_in.yaml",
     ]
     out_candidates = [
         yaml_dir / f"{module_name}_out.yaml",
         yaml_dir / f"{module_name.upper()}_out.yaml",
-        yaml_dir / "ALU_out.yaml",
     ]
 
     for yf in candidates:
@@ -58,8 +56,8 @@ def _detect_signals(module_name: str) -> dict:
     }
 
 
-def generate_cmodel(cmodel_dir: str, module_name: str = "alu",
-                    agent_in: str = "ALU_in", agent_out: str = "ALU_out") -> dict:
+def generate_cmodel(cmodel_dir: str, module_name: str = "dut",
+                    agent_in: str = "", agent_out: str = "") -> dict:
     """Generate UVM cmodel predictor + DPI wrapper from C++ ref model."""
     from src.tools.uvm_tools.tool_uvm.gen_uvm import JinjaRenderer, TEMPLATES_DIR
 
@@ -90,8 +88,8 @@ def generate_cmodel(cmodel_dir: str, module_name: str = "alu",
 
 
 if __name__ == "__main__":
-    d = sys.argv[1] if len(sys.argv) > 1 else "generated/alu/cmodel"
-    n = sys.argv[2] if len(sys.argv) > 2 else "alu"
+    d = sys.argv[1] if len(sys.argv) > 1 else "output/cmodel"
+    n = sys.argv[2] if len(sys.argv) > 2 else "dut"
     r = generate_cmodel(d, n)
     print(f"{r['status']}: {len(r['files'])} files → {r['cmodel_dir']}")
     print(f"  Inputs: {r['signals']['input_signals']}")

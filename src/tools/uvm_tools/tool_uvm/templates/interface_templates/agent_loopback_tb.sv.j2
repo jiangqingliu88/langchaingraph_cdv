@@ -1,5 +1,6 @@
 // === Agent Loopback Testbench: {{ agent.name }} ===
 // 单 Agent 自测顶层 —— 独立编译运行，无需完整 env
+// 编译时需 +define+{{ agent.name }}_loop_back_test（filelist 中已添加）
 
 `include "uvm_macros.svh"
 import uvm_pkg::*;
@@ -8,13 +9,22 @@ import {{ agent.name }}_pkg::*;
 module {{ agent.name }}_loopback_tb;
   reg clk   = 0;
   reg rst_n = 0;
+{%- for param in parameters %}
+  localparam {{ param.type }} {{ param.name }} = {{ param.value }};
+{%- endfor %}
 {%- for port in ports %}
 {%-   if port.name != clock and port.name != reset %}
-{%-     set w = port.width|int %}
-{%-     if w > 1 %}
+{%-     set w_str = port.width|string %}
+{%-     set is_numeric = w_str|int != 0 or w_str == '0' %}
+{%-     if is_numeric %}
+{%-       set w = w_str|int %}
+{%-       if w > 1 %}
   wire [{{ w-1 }}:0] {{ port.name }};
-{%-     else %}
+{%-       else %}
   wire {{ port.name }};
+{%-       endif %}
+{%-     else %}
+  wire [{{ w_str }}-1:0] {{ port.name }};
 {%-     endif %}
 {%-   endif %}
 {%- endfor %}
