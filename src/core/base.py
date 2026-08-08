@@ -130,6 +130,7 @@ class BaseAgent(ABC, AgentSubject):
     task_type: str = "spec_analysis"
 
     # 共享上下文契约 —— 子类覆盖
+    # consumes: List[str]  → 全部字段; Dict[str, List[str]] → 字段级
     consumes: List[str] = []
     produces: Optional[str] = None
 
@@ -169,6 +170,9 @@ class BaseAgent(ABC, AgentSubject):
         self._best_score = 0      # 历史最高分
         self._best_result = None  # 历史最佳产出
 
+        # ── Tool Schema 验证 (可选) ──
+        self.tool_registry = None  # 外部设置: agent.tool_registry = registry
+
         logger.info(f"Agent初始化", role=self.role, name=self.display_name)
     
     def _create_llm(
@@ -198,14 +202,23 @@ class BaseAgent(ABC, AgentSubject):
         logger.info(f"正在初始化Agent: {self.display_name}")
 
         # 1. 创建LLM
+        self._llm_unavailable = False
         try:
             self.llm = self._create_llm()
         except (ValueError, Exception) as e:
             logger.warning(f"LLM创建失败", error=str(e))
             self.llm = None
+            self._llm_unavailable = True
 
         # 2. 获取工具
         self.tools = await self._get_tools()
+
+        # 2.5 可选: Tool Schema 验证包装
+        if self.tool_registry and self.tools:
+            from src.core.tool_system import ToolRegistryAdapter
+            adapter = ToolRegistryAdapter(self.tool_registry)
+            self.tools = adapter.wrap(self.tools)
+            self._tool_adapter = adapter
 
         # 3. 获取Prompt
         prompt = await self._get_prompt_template()
@@ -258,15 +271,40 @@ class BaseAgent(ABC, AgentSubject):
     # ── 共享上下文 (ctx) 读写 ──
 
     def _read_ctx(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """根据 consumes 声明，从 task["ctx"] 中读取本 Agent 需要的数据"""
-        ctx = task.get("ctx", {}) if isinstance(task, dict) else {}
-        if not ctx or not self.consumes:
+        """根据 consumes 声明读取数据。支持两种格式:
+          List[str]:           consumes = ["spec"]        → 全部字段
+          Dict[str,List[str]]: consumes = {"spec":["features","interfaces"]} → 字段级
+        """
+        raw_ctx = task.get("ctx", {}) if isinstance(task, dict) else {}
+        if not raw_ctx or not self.consumes:
             return {}
+
+        # 兼容 ContextStore 和原始 dict
+        if hasattr(raw_ctx, 'get'):
+            ctx_store = raw_ctx
+        else:
+            ctx_store = raw_ctx
+
         result = {}
-        for key in self.consumes:
-            if key in ctx:
-                val = ctx[key]
-                result[key] = val.model_dump() if isinstance(val, BaseModel) else val
+        if isinstance(self.consumes, dict):
+            # 字段级: {"spec": ["features", "interfaces"]}
+            for key, fields in self.consumes.items():
+                if hasattr(ctx_store, 'fetch'):
+                    val = ctx_store.fetch(key, fields=fields)
+                elif key in ctx_store:
+                    val = ctx_store[key] if not hasattr(ctx_store, 'get') else ctx_store.get(key)
+                    if isinstance(val, dict) and fields:
+                        val = {f: val[f] for f in fields if f in val}
+                else:
+                    continue
+                if val is not None:
+                    result[key] = val.model_dump() if isinstance(val, BaseModel) else val
+        else:
+            # 列表: ["spec", "env"] → 全部字段
+            for key in self.consumes:
+                val = ctx_store.get(key) if hasattr(ctx_store, 'get') else ctx_store[key] if key in ctx_store else None
+                if val is not None:
+                    result[key] = val.model_dump() if isinstance(val, BaseModel) else val
         return result
 
     def _write_ctx(self, task: Dict[str, Any], result: "AgentResult") -> None:
@@ -274,15 +312,38 @@ class BaseAgent(ABC, AgentSubject):
         if not self.produces or not isinstance(task, dict):
             return
         ctx = task.get("ctx")
-        if not isinstance(ctx, dict):
+        if ctx is None:
             return
-        # 优先查找 result.data[self.produces]，其次查找 result.data 中的其他结构化字段
+        # Accept both raw dict and ContextStore
+        is_dict_like = isinstance(ctx, dict) or hasattr(ctx, 'put')
+        if not is_dict_like:
+            return
+
         data = result.data if isinstance(result.data, dict) else {}
+        source = getattr(self, 'role', 'unknown')
+
+        # ContextStore.put 优先
+        if hasattr(ctx, 'put'):
+            if self.produces in data:
+                ctx.put(self.produces, data[self.produces], source=source)
+            else:
+                flat_keys = {"env_name", "output_dir", "filelist", "agent_count", "files",
+                             "agents", "top_module", "scenario_count", "test_names", "scenarios", "test_cases",
+                             "compile_status", "pass_count", "fail_count", "passed", "failed",
+                             "total", "pass_rate", "compile",
+                             "coverage_data", "gaps", "suggestions",
+                             "line_pct", "branch_pct", "toggle_pct", "coverage_pct"}
+                relevant = {k: v for k, v in data.items() if k in flat_keys}
+                if relevant:
+                    ctx.put(self.produces, relevant, source=source)
+            return
+
+        # Fallback: raw dict
         if self.produces in data:
             ctx[self.produces] = data[self.produces]
         else:
-            # 兼容：architect 返回 env_name/filelist 等扁平字段 → 包装成 dict
             flat_keys = {"env_name", "output_dir", "filelist", "agent_count", "files",
+                         "agents", "top_module",
                          "scenario_count", "test_names", "scenarios",
                          "compile_status", "pass_count", "fail_count",
                          "coverage_data", "gaps", "suggestions"}
@@ -420,7 +481,8 @@ class BaseAgent(ABC, AgentSubject):
                 })
                 result = {"output": output_text}
             else:
-                result = await self._execute(processed_input)
+                # Keep local/template workflows usable when no provider is configured.
+                result = self._offline_result()
             processed_result = await self._post_process(result)
             execution_time = (datetime.now() - start_time).total_seconds()
             self.metrics["tasks_completed"] += 1
@@ -496,6 +558,24 @@ class BaseAgent(ABC, AgentSubject):
             await self.notify_complete(self.role, agent_result)
             return agent_result
         except Exception as e:
+            # A disconnected provider must not make template/offline workflows unusable.
+            # Keep this opt-in through configuration for deployments that require strict LLM availability.
+            if self.settings.agent.fallback_on_llm_error:
+                logger.warning("LLM执行失败，使用本地降级结果", role=self.role, error=str(e))
+                try:
+                    fallback = self._offline_result(str(e))
+                    processed_result = await self._post_process(fallback)
+                    execution_time = (datetime.now() - start_time).total_seconds()
+                    self.metrics["tasks_completed"] += 1
+                    self.metrics["total_time"] += execution_time
+                    agent_result = AgentResult(success=True, data=processed_result, execution_time=execution_time,
+                                               metadata={"degraded": True, "llm_error": str(e)[:200]})
+                    self._write_ctx(task, agent_result)
+                    self._log_io_end(processed_result, execution_time, True)
+                    await self.notify_complete(self.role, agent_result)
+                    return agent_result
+                except Exception as fallback_error:
+                    logger.error("本地降级执行失败", role=self.role, error=str(fallback_error))
             self.metrics["tasks_failed"] += 1
             self._log_io_end({"error": str(e)[:80]}, (datetime.now() - start_time).total_seconds(), False)
             error_result = AgentResult(success=False, error=str(e))
@@ -507,6 +587,17 @@ class BaseAgent(ABC, AgentSubject):
     async def _pre_process(self, task: Dict[str, Any]) -> str:
         """预处理任务输入"""
         return task.get("input", str(task))
+
+    def _offline_result(self, reason: str = "LLM provider is unavailable") -> Dict[str, Any]:
+        """Return a deterministic degraded result without retrying a failed LLM executor."""
+        payload = {"status": "degraded", "agent": self.role, "reason": reason}
+        result = {
+            "output": json.dumps(payload, ensure_ascii=False),
+            "offline": True,
+        }
+        if self.produces:
+            result[self.produces] = payload
+        return result
     
     async def _post_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """后处理执行结果"""
@@ -535,98 +626,4 @@ class BaseAgent(ABC, AgentSubject):
             **self.metrics
         }
 
-# ==================== 策略模式 ====================
-
-class ExecutionStrategy(ABC):
-    """执行策略抽象类"""
-    @abstractmethod
-    async def execute(self, tasks: list, executor) -> list:
-        pass
-
-class SequentialStrategy(ExecutionStrategy):
-    """顺序执行策略"""
-    async def execute(self, tasks: list, executor) -> list:
-        results = []
-        for task in tasks:
-            result = await executor(task)
-            results.append(result)
-            if hasattr(result, 'success') and not result.success:
-                break
-        return results
-
-class ParallelStrategy(ExecutionStrategy):
-    """并行执行策略"""
-    async def execute(self, tasks: list, executor) -> list:
-        import asyncio
-        coroutines = [executor(task) for task in tasks]
-        return await asyncio.gather(*coroutines, return_exceptions=True)
-
-class ConditionalStrategy(ExecutionStrategy):
-    """条件执行策略"""
-    def __init__(self, condition):
-        self.condition = condition
-    
-    async def execute(self, tasks: list, executor) -> list:
-        results = []
-        for task in tasks:
-            if self.condition(task):
-                result = await executor(task)
-                results.append(result)
-        return results
-
-# ==================== 命令模式 ====================
-
-class Command(ABC):
-    """命令抽象类"""
-    @abstractmethod
-    async def execute(self) -> AgentResult:
-        pass
-    
-    @abstractmethod
-    async def undo(self) -> AgentResult:
-        pass
-
-# ==================== 责任链模式 ====================
-
-class Handler(ABC):
-    """责任链处理器抽象类"""
-    def __init__(self):
-        self._next_handler = None
-    
-    def set_next(self, handler) -> 'Handler':
-        self._next_handler = handler
-        return handler
-    
-    @abstractmethod
-    async def handle(self, request: dict) -> dict:
-        if self._next_handler:
-            return await self._next_handler.handle(request)
-        return request
-
-class ValidationHandler(Handler):
-    """验证处理器"""
-    async def handle(self, request: dict) -> dict:
-        if not request.get("input"):
-            raise ValueError("input cannot be empty")
-        return await super().handle(request)
-
-class EnrichmentHandler(Handler):
-    """丰富处理器"""
-    async def handle(self, request: dict) -> dict:
-        from datetime import datetime
-        request["timestamp"] = datetime.now().isoformat()
-        request["agent_version"] = "1.0"
-        return await super().handle(request)
-
-# ==================== Agent消息 ====================
-
-class AgentMessage(BaseModel):
-    """Agent间通信消息"""
-    id: str = Field(default_factory=lambda: f"msg_{datetime.now().timestamp()}")
-    sender: str = ""
-    receiver: str = ""
-    content: Dict[str, Any] = Field(default_factory=dict)
-    message_type: str = "task"
-    timestamp: datetime = Field(default_factory=datetime.now)
-    correlation_id: Optional[str] = None
     requires_response: bool = False

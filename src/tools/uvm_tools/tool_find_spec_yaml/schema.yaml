@@ -1,0 +1,25 @@
+name: find_spec_yaml
+description: "从 spec 文本查找已有 YAML 或构造默认 agent/env/bench YAML 文件"
+input_schema:
+  type: object
+  properties:
+    spec_text:
+      type: string
+      description: "Markdown 规格文本，包含 module 声明"
+  required: [spec_text]
+output_schema:
+  type: object
+  properties:
+    status:
+      type: string
+    module_name:
+      type: string
+    yaml_files:
+      type: array
+      items:
+        type: string
+    yaml_count:
+      type: integer
+    env_name:
+      type: string
+risk_level: write

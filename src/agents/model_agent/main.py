@@ -248,6 +248,8 @@ class ModelAgent(BaseAgent):
         )
 
     async def _setup(self):
+        from src.core.agent_tools import register_all_tools
+        self.tool_registry = register_all_tools()
         logger.info(f"{self.display_name} 特定初始化完成")
 
     async def _get_prompt_template(self):
@@ -320,11 +322,11 @@ class ModelAgent(BaseAgent):
             n_files = len(model.get("files", {})) if isinstance(model.get("files"), dict) else len(model.get("files", []))
             result["score"] = min(50 + n_files*10, 80)
         elif steps:
-            # LLM ran tools — give partial credit
-            result["model"] = {"module": model.get("module","") if model else "", "status": "tool_executed", "tool_calls": len(steps)}
-            result["score"] = min(40 + len(steps)*10, 70)
+            # LLM called tools but produced no model artifacts — insufficient
+            result["model"] = {"module": model.get("module","") if model else "", "status": "tool_executed_no_output", "tool_calls": len(steps)}
+            result["score"] = 25  # below min_score(50), triggers validation fail
         else:
-            result["score"] = 15
+            result["score"] = 10
         return result
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:

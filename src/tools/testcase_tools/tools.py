@@ -102,8 +102,8 @@ def map_policies_to_tests(input_json: str) -> str:
 
 
 @tool("build_scenario_yaml")
-def build_scenario_yaml(scenarios_json: str) -> str:
-    """将场景 JSON 转为 ALU_constraint.yaml 格式的 YAML 字符串"""
+def build_scenario_yaml(scenarios_json: str, output_dir: str = "") -> str:
+    """将场景 JSON 转为 YAML 并保存到 output_dir/inputs/yaml/（如果提供）"""
     try:
         data = json.loads(scenarios_json) if isinstance(scenarios_json, str) else scenarios_json
     except (json.JSONDecodeError, TypeError):
@@ -128,19 +128,37 @@ def build_scenario_yaml(scenarios_json: str) -> str:
         if "params_override" in s:
             entry["params_override"] = s["params_override"]
         yaml_data["scenarios"].append(entry)
-    return yaml.dump(yaml_data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    yaml_str = yaml.dump(yaml_data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    # Save to disk if output_dir provided
+    if output_dir:
+        test_yaml_dir = Path(output_dir) / "inputs" / "yaml" / "agent_test"
+        test_yaml_dir.mkdir(parents=True, exist_ok=True)
+        save_path = test_yaml_dir / "scenarios.yaml"
+        save_path.write_text(yaml_str, encoding="utf-8", errors="replace")
+
+    return yaml_str
 
 
 @tool("generate_test_cases")
 def generate_test_cases(yaml_spec: str, output_dir: str = "output/testcases") -> str:
-    """根据场景 YAML 调用 TestCaseGenerator 生成 SV 测试代码"""
+    """根据场景 YAML 调用 TestCaseGenerator 生成 SV 测试代码。同时保存 YAML 到 inputs/yaml/。"""
     from src.tools.testcase_tools.generator import TestCaseGenerator
+
+    # Save input YAML to inputs/yaml/agent_test/ for traceability
+    test_yaml_dir = Path(output_dir) / "inputs" / "yaml" / "agent_test"
+    test_yaml_dir.mkdir(parents=True, exist_ok=True)
+    (test_yaml_dir / "test_config.yaml").write_text(yaml_spec, encoding="utf-8", errors="replace")
+
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8")
     try:
         tmp.write(yaml_spec)
         tmp.close()
         gen = TestCaseGenerator(tmp.name)
-        return json.dumps(gen.generate_all(output_dir), indent=2, ensure_ascii=False)
+        # Write generated test code under output_dir/testcases/
+        test_out = str(Path(output_dir) / "testcases")
+        return json.dumps(gen.generate_all(test_out), indent=2, ensure_ascii=False)
     finally:
         try: os.unlink(tmp.name)
         except Exception: pass

@@ -17,7 +17,7 @@ class QualityAssurance(BaseAgent):
     """质量保证Agent"""
 
     task_type = "quality_review"
-    consumes: List[str] = []
+    consumes: List[str] = ["regression", "coverage"]
     produces = None  # text chain only
 
     def __init__(self, config: Dict[str, Any] = None):

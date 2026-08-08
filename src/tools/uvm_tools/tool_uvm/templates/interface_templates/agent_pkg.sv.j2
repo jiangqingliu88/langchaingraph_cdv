@@ -3,14 +3,14 @@ package {{ agent.name }}_pkg;
   import uvm_pkg::*;
   `include "uvm_macros.svh"
 
-  // UVM-1.2 callback macros (use built-in if available, otherwise stub)
+  // UVM callback macros — compatible with UVM 1.2 and 1800.2
+  // In UVM 1.2, uvm_register_cb/uvm_do_callbacks are built-in via uvm_macros.svh.
+  // In 1800.2, callbacks use uvm_callback pool; stubs are no-ops.
   `ifndef uvm_register_cb
-  `define uvm_register_cb(T, CB) \
-     static local bit m_register_cb_``CB = uvm_callbacks #(T,CB)::m_register_pair(`"T`",`"CB`");
+  `define uvm_register_cb(T, CB)  /* callback disabled (UVM 1800.2 compat mode) */
   `endif
   `ifndef uvm_do_callbacks
-  `define uvm_do_callbacks(T, CB, METHOD) \
-     uvm_callbacks #(T,CB)::m_do_callbacks(this, METHOD)
+  `define uvm_do_callbacks(T, CB, METHOD)  /* callback disabled (UVM 1800.2 compat mode) */
   `endif
 
 {%- for param in agent.parameters %}

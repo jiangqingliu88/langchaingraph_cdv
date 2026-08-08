@@ -15,13 +15,44 @@ from pydantic import BaseModel, Field
 from src.core.execution import PipelineExecutionService
 from src.core.registry import AgentRegistry
 from src.core.auth import (
-    hash_password, verify_password, create_token, decode_token,
+    hash_password, verify_password, password_needs_rehash, create_token, decode_token,
     get_current_user, require_auth, require_admin, require_engineer,
 )
 from src.middleware.debug_logger import debug_logger
 from config.settings import Settings
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+WORKSPACE_ROOT = Path(os.environ.get("IC_VERIFY_WORKSPACE", Path.cwd())).resolve()
+SPECS_DIR = (WORKSPACE_ROOT / "specs").resolve()
+OUTPUT_ROOT = (WORKSPACE_ROOT / "output").resolve()
+MAX_DOCUMENT_BYTES = 2 * 1024 * 1024
+
+
+def _resolve_within(root: Path, value: str, *, suffixes: tuple[str, ...] | None = None) -> Path:
+    """Resolve an API path without allowing absolute paths or directory traversal."""
+    candidate = Path(value)
+    if candidate.is_absolute():
+        raise HTTPException(status_code=400, detail="absolute paths are not allowed")
+    resolved = (root / candidate).resolve()
+    if not resolved.is_relative_to(root):
+        raise HTTPException(status_code=403, detail="path is outside the allowed workspace")
+    if suffixes and resolved.suffix.lower() not in suffixes:
+        raise HTTPException(status_code=400, detail="unsupported file type")
+    return resolved
+
+
+def _resolve_spec_path(value: str) -> Path:
+    path = Path(value)
+    if path.parts and path.parts[0].lower() == "specs":
+        path = Path(*path.parts[1:])
+    return _resolve_within(SPECS_DIR, str(path), suffixes=(".md",))
+
+
+def _resolve_output_path(value: str) -> Path:
+    path = Path(value or ".")
+    if path.parts and path.parts[0].lower() == "output":
+        path = Path(*path.parts[1:])
+    return _resolve_within(OUTPUT_ROOT, str(path))
 
 # ── 请求模型 ──
 
@@ -33,11 +64,11 @@ class PipelineRunRequest(BaseModel):
     spec_text: str = ""
     spec_file: str = ""
     workflow: str = "full_verification"
-    output_dir: str = "output"
+    output_dir: str = "."
 
 class TestCaseGenerateRequest(BaseModel):
     spec_text: str = ""
-    output_dir: str = "output/testcases"
+    output_dir: str = "testcases"
 
 class ProjectCreateRequest(BaseModel):
     name: str
@@ -69,34 +100,59 @@ class VPlanTestCaseRequest(BaseModel):
     name: str
     description: str = ""
 
+# ── MD 文档生态请求模型 ──
+
+class DocCreateRequest(BaseModel):
+    project_id: int
+    path: str
+    title: str
+    content: str
+    level: str = 'module'
+    tags: str = ''
+
+class DocUpdateRequest(BaseModel):
+    content: str
+    change_summary: str = ''
+
+class DocLinkRequest(BaseModel):
+    source_id: int
+    target_id: int
+    relation_type: str = 'parent'
+    description: str = ''
+
 # ── 生命周期 ──
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        if os.environ.get("APP_ENV", "development").lower() == "production" and not os.environ.get("JWT_SECRET"):
+            raise RuntimeError("JWT_SECRET must be configured in production")
         from src.database.connection import init_db
         await init_db()
         service = PipelineExecutionService.get_instance()
         await service.initialize_agents()
-        # 创建默认管理员
+        # Bootstrap is explicit so production never exposes a predictable account.
         try:
             from src.database.repository import get_user_by_username, create_user
-            admin = await get_user_by_username("admin")
-            if not admin:
-                await create_user("admin", hash_password("admin123"), "系统管理员", "admin@ic-verify.com", "admin")
-                print("[web] Default admin created: admin / admin123")
+            bootstrap_password = os.environ.get("BOOTSTRAP_ADMIN_PASSWORD")
+            if bootstrap_password:
+                admin = await get_user_by_username("admin")
+                if not admin:
+                    await create_user("admin", hash_password(bootstrap_password), "系统管理员", "admin@signoffai.dev", "admin")
+                    print("[web] Bootstrap administrator created")
         except Exception: pass
-        # 注入演示数据
-        try:
-            seed_demo_vplan()
-        except Exception as e:
-            print(f"[web] Demo seed failed: {e}")
+        # 演示数据仅在 demo 模式下注入
+        if os.environ.get("APP_MODE", "demo").lower() == "demo":
+            try:
+                seed_demo_vplan()
+            except Exception as e:
+                print(f"[web] Demo seed failed: {e}")
         print("[web] Agents initialized")
     except Exception as e:
         print(f"[web] Init failed: {e}")
     yield
 
-app = FastAPI(title="IC Verification Enterprise Platform", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="SignOffAI — IC Verification Signoff Platform", version="2.0.0", lifespan=lifespan)
 
 
 # ── Demo 数据初始化 ──
@@ -209,10 +265,12 @@ async def test_login_page():
 
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
-    from src.database.repository import get_user_by_username, update_user_login
+    from src.database.repository import get_user_by_username, update_user_login, update_user_password
     user = await get_user_by_username(req.username)
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    if password_needs_rehash(user.password_hash):
+        await update_user_password(user.id, hash_password(req.password))
     await update_user_login(user.id)
     token = create_token(user.id, user.username, user.role)
     return {
@@ -277,34 +335,82 @@ async def agent_detail(role: str):
 
 @app.post("/api/pipeline/run")
 async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_auth)):
+    """启动验证流水线——立即返回 run_id，后台异步执行。"""
     spec_text = req.spec_text
     if not spec_text and req.spec_file:
-        p = Path(req.spec_file)
-        if p.exists(): spec_text = p.read_text(encoding="utf-8")
+        p = _resolve_spec_path(req.spec_file)
+        if p.exists():
+            if p.stat().st_size > MAX_DOCUMENT_BYTES:
+                raise HTTPException(status_code=413, detail="spec file is too large")
+            spec_text = p.read_text(encoding="utf-8")
     if not spec_text: raise HTTPException(status_code=400, detail="spec_text required")
     service = PipelineExecutionService.get_instance()
-    result = await service.run_pipeline(spec_text=spec_text, workflow=req.workflow,
-                                        output_root=req.output_dir)
-    # 审计日志
+    if not service.initialized:
+        await service.initialize_agents()
+
+    # 生成 run_id 并立即创建 DB 记录
+    import uuid
+    run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    output_root = str(_resolve_output_path(req.output_dir))
+
+    # 后台执行流水线
+    async def _run():
+        try:
+            await service.run_pipeline(spec_text=spec_text, workflow=req.workflow,
+                                       output_root=output_root, run_id=run_id)
+        except Exception as e:
+            logger.error("pipeline background task failed", run_id=run_id, error=str(e))
+
+    asyncio.create_task(_run())
+
+    # 审计日志（仅记录启动）
     from src.database.repository import add_audit_log
-    await add_audit_log(user["user_id"], user["username"], "pipeline_run", "",
-                        f"workflow={req.workflow} passed={result['passed']}/{result['total']}")
-    return {"run_id": result["run_id"], "workflow": result["workflow"],
-            "passed": result["passed"], "total": result["total"], "phases": result["phases"]}
+    await add_audit_log(user["user_id"], user["username"], "pipeline_run", run_id,
+                        f"workflow={req.workflow} started")
+    return {"run_id": run_id, "workflow": req.workflow, "status": "started"}
 
 @app.get("/api/pipeline/history")
 async def pipeline_history(limit: int = 20):
     from src.database.repository import get_recent_pipelines
     return {"runs": await get_recent_pipelines(limit)}
 
+@app.get("/api/pipeline/run/{run_id}")
+async def pipeline_run_status(run_id: str):
+    """查询单个运行状态（内存优先，重启后 DB 回退）。"""
+    service = PipelineExecutionService.get_instance()
+    s = service.get_run_status(run_id)
+    if s:
+        return s
+    try:
+        from src.database.repository import get_pipeline_run_by_run_id
+        db_run = await get_pipeline_run_by_run_id(run_id)
+        if db_run:
+            return db_run
+    except Exception:
+        pass
+    raise HTTPException(status_code=404, detail="run not found")
+
+
 @app.get("/api/pipeline/run/{run_id}/stream")
 async def pipeline_stream(run_id: str):
+    """SSE 流式推送运行状态。优先读内存（运行中），服务重启后回退到 DB。"""
     service = PipelineExecutionService.get_instance()
     async def gen():
         last = 0
-        for _ in range(300):
+        for _ in range(900):  # max 15 min
             s = service.get_run_status(run_id)
-            if not s: yield f"data: {json.dumps({'error':'not found'})}\n\n"; break
+            # 内存中没有 → DB 回退
+            if not s:
+                try:
+                    from src.database.repository import get_pipeline_run_by_run_id
+                    db_run = await get_pipeline_run_by_run_id(run_id)
+                    if db_run:
+                        yield f"data: {json.dumps(db_run)}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'error':'not found'})}\n\n"
+                except Exception:
+                    yield f"data: {json.dumps({'error':'not found'})}\n\n"
+                break
             if len(s.get("phases",[])) > last:
                 yield f"data: {json.dumps(s)}\n\n"; last = len(s["phases"])
             if s["state"] in ("completed","completed_with_errors"):
@@ -323,7 +429,7 @@ async def default_spec():
 
 @app.get("/api/testcases/list")
 async def testcases_list(output_dir: str = "output/testcases"):
-    base = Path(output_dir)
+    base = _resolve_output_path(output_dir)
     if not base.exists(): return {"testcases": [], "count": 0}
     tests = []
     for d in sorted(base.iterdir()):
@@ -336,7 +442,7 @@ async def testcases_list(output_dir: str = "output/testcases"):
 
 @app.get("/api/testcases/{test_name}")
 async def testcase_detail(test_name: str, output_dir: str = "output/testcases"):
-    test_dir = Path(output_dir) / test_name
+    test_dir = _resolve_within(_resolve_output_path(output_dir), test_name)
     if not test_dir.exists(): raise HTTPException(status_code=404)
     files = {}
     for f in test_dir.iterdir():
@@ -348,7 +454,7 @@ async def testcase_detail(test_name: str, output_dir: str = "output/testcases"):
 async def testcases_generate(req: TestCaseGenerateRequest, user: dict = Depends(require_auth)):
     spec_text = req.spec_text or Path("spec_uart.txt").read_text(encoding="utf-8")
     service = PipelineExecutionService.get_instance()
-    result = await service.generate_testcases(spec_text=spec_text, output_dir=req.output_dir)
+    result = await service.generate_testcases(spec_text=spec_text, output_dir=str(_resolve_output_path(req.output_dir)))
     from src.database.repository import add_audit_log
     await add_audit_log(user["user_id"], user["username"], "testcase_generate")
     return {"success": result["success"], "tests": result.get("tests", {}), "error": result.get("error")}
@@ -504,8 +610,29 @@ async def vplan_export(format: str = "json"):
 
 @app.get("/api/coverage/summary")
 async def coverage_summary():
+    # 生产模式：读取真实 run 的 ctx.coverage
+    if os.environ.get("APP_MODE", "demo").lower() != "demo":
+        service = PipelineExecutionService.get_instance()
+        # 尝试从最近的 run 获取
+        runs = service.list_runs()
+        if runs:
+            run = service._runs.get(runs[-1]["run_id"], {})
+            ctx = run.get("ctx", {})
+            cov = ctx.get("coverage", {}) if hasattr(ctx, 'get') else {}
+            if isinstance(cov, dict) and cov.get("line_pct"):
+                return {
+                    "line_pct": cov.get("line_pct", 0),
+                    "branch_pct": cov.get("branch_pct", 0),
+                    "toggle_pct": cov.get("toggle_pct", 0),
+                    "coverage_pct": cov.get("coverage_pct", 0),
+                    "gaps": cov.get("gaps", []),
+                    "suggestions": cov.get("suggestions", []),
+                    "_source": "run_result",
+                }
+
+    # 演示模式：返回 DEMO 标记的数据
     return {
-        "code_coverage": 92.3, "functional_coverage": 78.5, "assertion_coverage": 56.2,
+        "code_coverage": 92.3, "functional_coverage": 78.5, "assertion_coverage": 56.2, "_demo": True,
         "files": [
             {"name": "uart_ctrl.v", "line_pct": 92.0, "toggle_pct": 88.5, "lines_hit": 119, "lines_total": 130},
             {"name": "uart_fifo.v", "line_pct": 64.0, "toggle_pct": 58.2, "lines_hit": 87, "lines_total": 136},
@@ -545,24 +672,33 @@ async def regression_trend(days: int = 7):
 
 @app.post("/api/regression/run")
 async def regression_run(user: dict = Depends(require_auth)):
-    from src.database.repository import save_regression
-    import random, time as _time
-    t0 = _time.time()
-    tests = ["test_basic", "test_config", "test_corner", "test_error", "test_stress"]
-    results = []
-    passed = 0; failed = 0
-    for t in tests:
-        ok = random.random() > 0.05
-        if ok: passed += 1
-        else: failed += 1
-        results.append({"test": t, "status": "passed" if ok else "failed", "time": round(random.uniform(0.5, 5.0), 1)})
-    duration = round(_time.time() - t0 + random.uniform(10, 60), 1)
-    await save_regression(None, f"regression_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                          "completed", passed, failed, 0, len(tests), duration, {"results": results})
+    """回归执行 —— demo 模式返回模拟数据，生产模式调用真实 RegressionManager。"""
+    if os.environ.get("APP_MODE", "demo").lower() == "demo":
+        from src.database.repository import save_regression
+        import random, time as _time
+        t0 = _time.time()
+        tests = ["test_basic", "test_config", "test_corner", "test_error", "test_stress"]
+        results = []
+        passed = 0; failed = 0
+        for t in tests:
+            ok = random.random() > 0.05
+            if ok: passed += 1
+            else: failed += 1
+            results.append({"test": t, "status": "passed" if ok else "failed", "time": round(random.uniform(0.5, 5.0), 1)})
+        duration = round(_time.time() - t0 + random.uniform(10, 60), 1)
+        await save_regression(None, f"regression_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                              "completed", passed, failed, 0, len(tests), duration, {"results": results, "_demo": True})
+        from src.database.repository import add_audit_log
+        await add_audit_log(user["user_id"], user["username"], "regression_run", "", f"{passed}/{len(tests)} passed (demo)")
+        return {"status": "completed", "passed": passed, "failed": failed, "total": len(tests),
+                "duration": duration, "results": results, "_demo": True}
+
+    # ── 生产模式：调用真实 RegressionManager ──
+    service = PipelineExecutionService.get_instance()
+    result = await service.run_single_agent("regression_manager", json.dumps({"retry": False}))
     from src.database.repository import add_audit_log
-    await add_audit_log(user["user_id"], user["username"], "regression_run", "", f"{passed}/{len(tests)} passed")
-    return {"status": "completed", "passed": passed, "failed": failed, "total": len(tests),
-            "duration": duration, "results": results}
+    await add_audit_log(user["user_id"], user["username"], "regression_run", "", str(result.get("output", ""))[:200])
+    return {"success": result["success"], "output": result.get("output", ""), "error": result.get("error")}
 
 # ═══════════════════════════════════════════════════════════
 # 签核
@@ -667,8 +803,6 @@ async def design_arch_run(req: DesignArchRequest, user: dict = Depends(require_a
 # 文档库 —— MD 规格文档管理
 # ═══════════════════════════════════════════════════════════
 
-SPECS_DIR = Path("specs")
-
 @app.get("/api/docs")
 async def list_docs():
     """列出所有规格文档"""
@@ -704,8 +838,8 @@ async def list_docs():
 @app.get("/api/docs/{path:path}")
 async def read_doc(path: str):
     """读取单个规格文档"""
-    fp = SPECS_DIR / path
-    if not fp.exists() or not fp.is_relative_to(SPECS_DIR):
+    fp = _resolve_spec_path(path)
+    if not fp.exists():
         raise HTTPException(status_code=404, detail="文档不存在")
     content = fp.read_text(encoding="utf-8")
     # 解析出关联需求
@@ -717,12 +851,89 @@ async def read_doc(path: str):
 @app.post("/api/docs/{path:path}")
 async def write_doc(path: str, content: str = "", user: dict = Depends(require_auth)):
     """保存规格文档"""
-    fp = SPECS_DIR / path
+    if len(content.encode("utf-8")) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=413, detail="document is too large")
+    fp = _resolve_spec_path(path)
     fp.parent.mkdir(parents=True, exist_ok=True)
     fp.write_text(content, encoding="utf-8")
     from src.database.repository import add_audit_log
     await add_audit_log(user["user_id"], user["username"], "doc_save", str(fp))
     return {"ok": True, "path": str(fp)}
+
+# ═══════════════════════════════════════════════════════════
+# 文档生态 API v2 —— SQL 后端
+# ═══════════════════════════════════════════════════════════
+
+@app.post("/api/v2/docs")
+async def v2_create_doc(req: DocCreateRequest, current_user=Depends(require_auth)):
+    from src.database import repository
+    doc_id = await repository.create_document(
+        req.project_id, req.path, req.title, req.content, current_user['id'], req.level, req.tags
+    )
+    await repository.add_audit_log(current_user['id'], current_user.get('username', ''), 'doc.create',
+                                   f'doc/{doc_id}', f'创建文档: {req.path}')
+    return {"id": doc_id, "status": "created"}
+
+@app.put("/api/v2/docs/{doc_id}")
+async def v2_update_doc(doc_id: int, req: DocUpdateRequest, current_user=Depends(require_auth)):
+    from src.database import repository
+    result = await repository.update_document(doc_id, req.content, current_user['id'], req.change_summary)
+    if result == 0:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    await repository.add_audit_log(current_user['id'], current_user.get('username', ''), 'doc.update',
+                                   f'doc/{doc_id}', f'更新文档: {req.change_summary}')
+    return {"id": result, "status": "updated"}
+
+@app.get("/api/v2/docs/{doc_id}")
+async def v2_get_doc(doc_id: int):
+    from src.database import repository
+    doc = await repository.get_document(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    return doc
+
+@app.get("/api/v2/docs")
+async def v2_search_docs(project_id: int = None, level: str = None, keyword: str = '',
+                           req_id: str = '', tags: str = '', limit: int = 50):
+    from src.database import repository
+    return await repository.search_documents(project_id, level, keyword, req_id, tags, limit)
+
+@app.get("/api/v2/requirements/{req_id}")
+async def v2_get_req_trace(req_id: str):
+    from src.database import repository
+    r = await repository.get_requirement_trace(req_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="需求 ID 不存在")
+    return r
+
+@app.get("/api/v2/requirements")
+async def v2_list_requirements(project_id: int = None):
+    from src.database import repository
+    return {"requirements": await repository.list_all_requirements(project_id)}
+
+@app.post("/api/v2/docs/links")
+async def v2_link_docs(req: DocLinkRequest, current_user=Depends(require_auth)):
+    from src.database import repository
+    link_id = await repository.link_documents(req.source_id, req.target_id, req.relation_type, req.description)
+    await repository.add_audit_log(current_user['id'], current_user.get('username', ''), 'doc.link',
+                                   f'link/{link_id}', f'{req.source_id} -> {req.target_id} ({req.relation_type})')
+    return {"id": link_id, "status": "linked"}
+
+@app.get("/api/v2/docs/tree/{project_id}")
+async def v2_get_doc_tree(project_id: int, root: str = None):
+    from src.database import repository
+    return await repository.get_document_tree(project_id, root)
+
+@app.post("/api/v2/docs/sync")
+async def v2_sync_docs(project_id: int = 1, current_user=Depends(require_admin)):
+    from src.database import repository
+    from config.settings import Settings
+    settings = Settings()
+    specs_dir = settings.SPECS_DIR if hasattr(settings, 'SPECS_DIR') else str(SPECS_DIR)
+    result = await repository.sync_fs_to_db(specs_dir, project_id, current_user['id'])
+    await repository.add_audit_log(current_user['id'], current_user.get('username', ''), 'doc.sync',
+                                   'sync/', f'新建{result["created"]} 更新{result["updated"]} 跳过{result["skipped"]}')
+    return result
 
 # ═══════════════════════════════════════════════════════════
 # 调试日志

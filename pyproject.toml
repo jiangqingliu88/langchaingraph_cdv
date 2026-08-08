@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ic-verification-agent"
+name = "signoffai"
 version = "1.0.0"
-description = "IC Verification Multi-Agent System"
+description = "SignOffAI — IC 验证签核平台"
 requires-python = ">=3.10,<3.13"
 dependencies = [
     "langchain==0.1.20",
@@ -38,7 +38,7 @@ dev = [
 ]
 
 [project.scripts]
-ic-verify = "src.cli.commands:cli"
+vagent = "src.cli.commands:cli"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "src"]

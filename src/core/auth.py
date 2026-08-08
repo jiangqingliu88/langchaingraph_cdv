@@ -1,13 +1,13 @@
 """
 JWT 认证模块 —— 用户登录 / Token 签发 / 权限中间件
 """
-import hashlib, os, time, jwt
+import hashlib, hmac, os, secrets, jwt
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import HTTPException, Request, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-SECRET_KEY = os.environ.get("JWT_SECRET", "ic-verify-secret-key-change-in-production")
+SECRET_KEY = os.environ.get("JWT_SECRET") or secrets.token_urlsafe(48)
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24
 
@@ -15,17 +15,35 @@ security = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    salt = os.urandom(16).hex()
-    h = hashlib.sha256((password + salt).encode()).hexdigest()
-    return f"{salt}:{h}"
+    """Hash passwords with a salted, work-factor protected KDF."""
+    salt = os.urandom(16)
+    iterations = 600_000
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${digest.hex()}"
 
 
 def verify_password(password: str, stored: str) -> bool:
-    parts = stored.split(":")
-    if len(parts) != 2:
-        return False
-    salt, h = parts
-    return hashlib.sha256((password + salt).encode()).hexdigest() == h
+    try:
+        scheme, raw_iterations, raw_salt, expected = stored.split("$", 3)
+        if scheme != "pbkdf2_sha256":
+            return False
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), bytes.fromhex(raw_salt), int(raw_iterations)
+        ).hex()
+        return hmac.compare_digest(digest, expected)
+    except (TypeError, ValueError):
+        # Compatibility for accounts created before the PBKDF2 migration.  The
+        # caller upgrades a successfully authenticated legacy hash immediately.
+        try:
+            salt, expected = stored.split(":", 1)
+            actual = hashlib.sha256((password + salt).encode("utf-8")).hexdigest()
+            return hmac.compare_digest(actual, expected)
+        except (AttributeError, ValueError):
+            return False
+
+
+def password_needs_rehash(stored: str) -> bool:
+    return not stored.startswith("pbkdf2_sha256$")
 
 
 def create_token(user_id: int, username: str, role: str) -> str:

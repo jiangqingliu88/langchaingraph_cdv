@@ -1,8 +1,18 @@
 """
-LLM工厂 - 支持多种LLM提供商
-使用工厂模式创建LLM实例
+LLM 工厂 — 多提供商抽象层
+
+支持的提供商:
+  - deepseek:  DeepSeek API (OpenAI 兼容)
+  - openai:    OpenAI API
+  - anthropic: Anthropic Claude API
+  - custom:    自定义 OpenAI 兼容 API (vLLM / Ollama / local)
+
+设计原则:
+  1. 所有 Agent 通过 create_llm() / create_for_task() 获取 LLM
+  2. 禁止硬编码 API URL（如 verify_architect 的 _call_llm）
+  3. 支持 fallback 链：主提供商失败 → 自动切换备用
 """
-from typing import Optional, Dict, Any, Literal, List
+from typing import Optional, Dict, Any, List
 from langchain_openai import ChatOpenAI
 from langchain_core.language_models import BaseChatModel
 from langchain_core.callbacks import BaseCallbackHandler
@@ -12,6 +22,13 @@ import structlog, time
 from config.settings import Settings
 
 logger = structlog.get_logger()
+
+# ── 支持的提供商 ──
+ProviderType = str
+PROVIDER_DEEPSEEK: ProviderType = "deepseek"
+PROVIDER_OPENAI:   ProviderType = "openai"
+PROVIDER_ANTHROPIC: ProviderType = "anthropic"
+PROVIDER_CUSTOM:   ProviderType = "custom"
 
 
 class LLMTracerCallback(BaseCallbackHandler):
@@ -32,16 +49,54 @@ class LLMTracerCallback(BaseCallbackHandler):
         except Exception:
             pass
 
+
 class LLMFactory:
     """
-    LLM工厂类
-    根据配置创建对应的LLM实例
-    
-    支持的提供商:
-    - deepseek: DeepSeek API (兼容OpenAI格式)
-    - openai: OpenAI API
-    - custom: 自定义兼容OpenAI API的服务
+    LLM 工厂 — 提供商抽象 + 任务路由 + fallback
+
+    用法:
+      # 按任务类型
+      llm = LLMFactory.create_for_task("code_generation")
+
+      # 直接指定
+      llm = LLMFactory.create_llm(model="claude-sonnet-4-6")
+
+      # 测试模式（不访问网络）
+      LLMFactory.enable_test_mode()
+      LLMFactory.disable_test_mode()
     """
+
+    _test_llm: Optional[BaseChatModel] = None
+    """注入测试替身：非 None 时 create_llm / create_for_task 直接返回此实例。"""
+    _test_role_map: dict = {}
+    """按 role 返回不同替身：{role: FakeChatModel}。"""
+
+    @classmethod
+    def enable_test_mode(cls, task_type: str = "spec_analysis") -> None:
+        """启用测试模式：所有 LLM 请求返回确定性 FakeChatModel。"""
+        from src.core.fake_llm import FakeChatModel
+        cls._test_llm = FakeChatModel(role=task_type)
+        cls._test_role_map = {}
+
+    @classmethod
+    def enable_test_mode_per_role(cls, role_map: dict) -> None:
+        """启用测试模式并按 role 返回不同 FakeChatModel。"""
+        from src.core.fake_llm import FakeChatModel
+        cls._test_llm = None
+        cls._test_role_map = {role: FakeChatModel(role=role) for role in role_map}
+
+    @classmethod
+    def disable_test_mode(cls) -> None:
+        """关闭测试模式。"""
+        cls._test_llm = None
+        cls._test_role_map = {}
+
+    @classmethod
+    def _get_test_llm(cls, role_hint: str = "spec_and_test_planner") -> Optional[BaseChatModel]:
+        """按 role 获取测试替身。"""
+        if cls._test_role_map:
+            return cls._test_role_map.get(role_hint, next(iter(cls._test_role_map.values())))
+        return cls._test_llm
     
     # DeepSeek模型配置
     DEEPSEEK_MODELS = {
@@ -67,6 +122,22 @@ class LLMFactory:
         }
     }
     
+    # Anthropic Claude 模型配置
+    ANTHROPIC_MODELS = {
+        "claude-sonnet-4-6": {
+            "description": "Claude Sonnet 4.6，平衡性能与成本",
+            "max_tokens": 4096, "context_window": 200000,
+        },
+        "claude-opus-4-8": {
+            "description": "Claude Opus 4.8，最强推理能力",
+            "max_tokens": 4096, "context_window": 200000,
+        },
+        "claude-haiku-4-5": {
+            "description": "Claude Haiku 4.5，最快速度",
+            "max_tokens": 4096, "context_window": 200000,
+        },
+    }
+
     # OpenAI模型配置
     OPENAI_MODELS = {
         "gpt-4-turbo": {
@@ -162,6 +233,11 @@ class LLMFactory:
         返回:
             BaseChatModel实例
         """
+        # 测试模式：直接返回注入的替身
+        test_llm = cls._get_test_llm()
+        if test_llm is not None:
+            return test_llm
+
         if settings is None:
             settings = Settings.get_instance()
         
@@ -189,112 +265,95 @@ class LLMFactory:
             max_tokens=selected_max_tokens
         )
         
-        # 根据提供商创建
-        if llm_config.provider == "deepseek":
-            return cls._create_deepseek(
-                api_key=api_key,
-                model=selected_model,
-                temperature=selected_temperature,
-                max_tokens=selected_max_tokens,
-                request_timeout=request_timeout,
-                max_retries=max_retries,
-                base_url=base_url or "https://api.deepseek.com/v1"
+        # ── 根据提供商创建（支持 fallback） ──
+        providers = [llm_config.provider]
+        # 添加 fallback 提供商
+        fallback = llm_config.fallback_provider if hasattr(llm_config, 'fallback_provider') else None
+        if fallback and fallback != llm_config.provider:
+            providers.append(fallback)
+
+        last_error = None
+        for provider in providers:
+            try:
+                return cls._create_for_provider(
+                    provider=provider,
+                    api_key=api_key,
+                    model=selected_model,
+                    temperature=selected_temperature,
+                    max_tokens=selected_max_tokens,
+                    request_timeout=request_timeout,
+                    max_retries=max_retries,
+                    base_url=base_url,
+                )
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Provider '{provider}' failed: {e}, trying next...")
+
+        raise ValueError(f"All providers failed. Last error: {last_error}")
+
+    @classmethod
+    def _create_for_provider(
+        cls, provider: str, api_key: str, model: str,
+        temperature: float, max_tokens: int, request_timeout: int,
+        max_retries: int, base_url: Optional[str] = None,
+    ) -> BaseChatModel:
+        """根据提供商名称创建 LLM 实例。"""
+        if provider == PROVIDER_DEEPSEEK:
+            return cls._create_openai_compat(
+                api_key=api_key, model=model,
+                temperature=temperature, max_tokens=max_tokens,
+                request_timeout=request_timeout, max_retries=max_retries,
+                base_url=base_url or "https://api.deepseek.com/v1",
             )
-        elif llm_config.provider == "openai":
-            return cls._create_openai(
-                api_key=api_key,
-                model=selected_model,
-                temperature=selected_temperature,
-                max_tokens=selected_max_tokens,
-                request_timeout=request_timeout,
-                max_retries=max_retries,
-                base_url=base_url
+        elif provider == PROVIDER_OPENAI:
+            return cls._create_openai_compat(
+                api_key=api_key, model=model,
+                temperature=temperature, max_tokens=max_tokens,
+                request_timeout=request_timeout, max_retries=max_retries,
+                base_url=base_url,
             )
-        else:
-            return cls._create_custom(
-                api_key=api_key,
-                model=selected_model,
-                temperature=selected_temperature,
-                max_tokens=selected_max_tokens,
-                request_timeout=request_timeout,
-                max_retries=max_retries,
-                base_url=base_url
+        elif provider == PROVIDER_ANTHROPIC:
+            return cls._create_anthropic(
+                api_key=api_key, model=model,
+                temperature=temperature, max_tokens=max_tokens,
+                request_timeout=request_timeout, max_retries=max_retries,
+            )
+        else:  # custom
+            if not base_url:
+                raise ValueError("自定义 LLM 需要提供 base_url (如 http://localhost:11434/v1 for Ollama)")
+            return cls._create_openai_compat(
+                api_key=api_key or "not-needed", model=model,
+                temperature=temperature, max_tokens=max_tokens,
+                request_timeout=request_timeout, max_retries=max_retries,
+                base_url=base_url,
             )
     
     @classmethod
-    def _create_deepseek(
-        cls,
-        api_key: str,
-        model: str,
-        temperature: float,
-        max_tokens: int,
-        request_timeout: int,
-        max_retries: int,
-        base_url: str = "https://api.deepseek.com/v1"
+    def _create_openai_compat(
+        cls, api_key: str, model: str, temperature: float,
+        max_tokens: int, request_timeout: int, max_retries: int,
+        base_url: Optional[str] = None,
     ) -> ChatOpenAI:
-        """创建DeepSeek LLM实例"""
-        return ChatOpenAI(
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            request_timeout=request_timeout,
-            max_retries=max_retries,
-            callbacks=[LLMTracerCallback()],
-            model_kwargs={}
-        )
-    
-    @classmethod
-    def _create_openai(
-        cls,
-        api_key: str,
-        model: str,
-        temperature: float,
-        max_tokens: int,
-        request_timeout: int,
-        max_retries: int,
-        base_url: Optional[str] = None
-    ) -> ChatOpenAI:
-        """创建OpenAI LLM实例"""
-        kwargs = {
-            "model": model,
-            "api_key": api_key,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "request_timeout": request_timeout,
-            "max_retries": max_retries,
-        }
+        """创建 OpenAI 兼容 LLM (DeepSeek/OpenAI/vLLM/Ollama)"""
+        kwargs = {"model": model, "api_key": api_key, "temperature": temperature,
+                  "max_tokens": max_tokens, "request_timeout": request_timeout,
+                  "max_retries": max_retries, "callbacks": [LLMTracerCallback()]}
         if base_url:
             kwargs["base_url"] = base_url
-        kwargs["callbacks"] = [LLMTracerCallback()]
         return ChatOpenAI(**kwargs)
 
     @classmethod
-    def _create_custom(
-        cls,
-        api_key: str,
-        model: str,
-        temperature: float,
-        max_tokens: int,
-        request_timeout: int,
-        max_retries: int,
-        base_url: Optional[str] = None
-    ) -> ChatOpenAI:
-        """创建自定义LLM实例"""
-        if not base_url:
-            raise ValueError("自定义LLM需要提供base_url")
-        
-        return ChatOpenAI(
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            request_timeout=request_timeout,
-            max_retries=max_retries,
-            callbacks=[LLMTracerCallback()],
-        )
+    def _create_anthropic(
+        cls, api_key: str, model: str, temperature: float,
+        max_tokens: int, request_timeout: int, max_retries: int,
+    ) -> BaseChatModel:
+        """创建 Anthropic Claude 实例"""
+        try:
+            from langchain_anthropic import ChatAnthropic
+        except ImportError:
+            raise ImportError("pip install langchain-anthropic")
+        return ChatAnthropic(model=model, api_key=api_key, temperature=temperature,
+                            max_tokens=max_tokens, timeout=request_timeout)
     
     @classmethod
     def create_for_task(
@@ -324,9 +383,19 @@ class LLMFactory:
         返回:
             针对任务优化的LLM实例
         """
+        # 测试模式：直接返回注入的替身
+        test_llm = cls._get_test_llm()
+        if test_llm is not None:
+            return test_llm
+
+        # 测试模式
         if settings is None:
             settings = Settings.get_instance()
-        
+
+        test_llm = cls._get_test_llm(task_type)
+        if test_llm is not None:
+            return test_llm
+
         provider = settings.llm.provider
         task_config = cls.TASK_MODEL_MAPPING.get(task_type, {})
         provider_config = task_config.get(provider, {})

@@ -21,6 +21,7 @@ class AgentSettings(BaseSettings):
     max_iterations: int = 8
     timeout: int = 300
     verbose: bool = True
+    fallback_on_llm_error: bool = True
 
 class VerificationSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="VERIFY_", extra="allow")

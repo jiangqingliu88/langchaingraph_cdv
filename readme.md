@@ -1,6 +1,6 @@
-# IC Verification Multi-Agent System
+# SignOffAI — IC 验证签核平台
 
-基于 LangChain + DeepSeek 的 IC 验证多 Agent 协作系统。**11 个**专业 Agent 协同完成规格分析、设计架构生成、UVM 环境编码、测试用例生成、SVA 断言、编译仿真、覆盖率分析、错误诊断与自动修复全流程。
+**可复现、可审计、可治理的 IC 验证 AI 签核平台。** 11 个专业 Agent 协同完成规格分析 → 设计架构生成 → UVM 环境编码 → 测试用例生成 → SVA 断言 → 编译仿真 → 覆盖率分析 → 错误诊断 → 签核全流程。
 
 > 📖 数据流详见 [agent-dataflow.md](agent-dataflow.md)
 
@@ -26,7 +26,7 @@ LLM_BASE_URL=https://api.deepseek.com/v1
 
 ```powershell
 # 全自动：分析→RTL→UVM→编译→仿真→覆盖率
-python -m src.cli.commands verify specs\alu_combined.md
+vagent verify specs\alu_combined.md
 
 # 输出：11/11 passed, Score: 67/100, 覆盖率: line=51.5% branch=32.2% toggle=60.7%
 ```
@@ -172,7 +172,7 @@ debug_engineer 比对:
 ## 管道运行示例
 
 ```powershell
-python -m src.cli.commands verify specs/alu_combined.md
+vagent verify specs/alu_combined.md
 ```
 
 ```
@@ -211,7 +211,7 @@ Coverage: line=51.5% branch=32.2% toggle=60.0%
 ## 项目结构
 
 ```
-cdv_a/
+SignOffAI/
 ├── config/settings.py              # 全局配置
 ├── src/
 │   ├── agents/                     # 11 个 Agent（每个独立目录）
@@ -239,7 +239,7 @@ cdv_a/
 │   │   ├── debug_tools/            #   调试工具
 │   │   ├── spec_tools/             #   规格工具
 │   │   └── reuse_tools/            #   复用工具
-│   ├── cli/commands.py             # CLI 命令行
+│   ├── cli/commands.py             # vagent CLI 命令行
 │   └── web/api.py                  # Web API (FastAPI)
 ├── specs/                          # 模块规格库
 │   ├── alu/  (6 md files)

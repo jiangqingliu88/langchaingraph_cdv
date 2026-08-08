@@ -36,6 +36,8 @@ class RegressionManager(BaseAgent):
         )
 
     async def _setup(self):
+        from src.core.agent_tools import register_all_tools
+        self.tool_registry = register_all_tools()
         logger.info(f"{self.display_name} 特定初始化完成")
 
     async def _get_prompt_template(self):
@@ -45,21 +47,20 @@ Goal: Compile UVM env, run simulation tests, collect pass/fail rates, generate r
 
 WORKFLOW (execute in order):
 1. CALL compile_env(filelist, output_dir, top_module)
-   → Returns {status: "PASS"|"FAIL", errors: N, time_s: N}
+   → Returns a compile result containing status, error count, and elapsed seconds.
    IF status == "FAIL" → report failures, stop.
 2. CALL run_simulation(output_dir, tests_json)
-   → tests_json: [{"name":"test_xxx", "uvm_test":"...", "top":"...", "coverage":false}]
-   → Returns {tests: [...], passed: N, failed: N, total: N}
+   → tests_json is a JSON array of test objects with name, uvm_test, top, and coverage fields.
+   → Returns test results with passed, failed, and total counts.
 3. CALL generate_regression_report(output_dir, tasks_json)
-   → tasks_json: use results from step 2, format each as {name, status:"pass"|"fail", elapsed, sim_time, work_dir}
-   → Returns {report_json, report_html}
+   → tasks_json uses results from step 2, including name, status, elapsed, sim_time, and work_dir.
+   → Returns JSON and HTML report paths.
 
 OUTPUT FORMAT:
-{"compile": "PASS"|"FAIL", "passed": N, "failed": N, "total": N, "pass_rate": "XX%",
- "reports": {"json": "...", "html": "..."}}
+Return an object with compile, passed, failed, total, pass_rate, and reports fields.
 
 RULES:
-- Derive top_module from env_name: "{env_name}_bench_tb_top"
+- Derive top_module from env_name in the supplied input.
 - If compile fails, DO NOT run simulation. Report the errors.
 - Collect ALL test results before generating report.
             """),
@@ -105,6 +106,22 @@ from langchain.tools import tool
 @tool("compile_env")
 def _compile_env(filelist: str, output_dir: str, top_module: str) -> str:
     """编译 UVM 环境。输入: filelist路径, output目录, top模块名。返回编译结果JSON。"""
+    # Save regression compile config
+    test_yaml_dir = Path(output_dir) / "inputs" / "yaml" / "dut_test"
+    test_yaml_dir.mkdir(parents=True, exist_ok=True)
+    import yaml as _yaml
+    compile_cfg = {
+        "regression": {
+            "filelist": filelist,
+            "top_module": top_module,
+            "output_dir": output_dir,
+            "coverage": False,
+        }
+    }
+    (test_yaml_dir / "regression.yaml").write_text(
+        _yaml.dump(compile_cfg, default_flow_style=False, allow_unicode=True, sort_keys=False),
+        encoding="utf-8", errors="replace")
+
     runner = RegressionRunner(
         env_output_dir=output_dir,
         filelist=filelist,
@@ -122,6 +139,20 @@ def _run_simulation(output_dir: str, tests_json: str) -> str:
         tests = json.loads(tests_json) if isinstance(tests_json, str) else tests_json
     except json.JSONDecodeError:
         return json.dumps({"error": "invalid tests_json format"})
+
+    # Save regression test list to YAML
+    test_yaml_dir = Path(output_dir) / "inputs" / "yaml" / "dut_test"
+    test_yaml_dir.mkdir(parents=True, exist_ok=True)
+    import yaml as _yaml
+    reg_path = test_yaml_dir / "regression.yaml"
+    # Append tests to existing regression config
+    reg_data = {}
+    if reg_path.exists():
+        reg_data = _yaml.safe_load(reg_path.read_text(encoding="utf-8", errors="replace")) or {}
+    reg_data["tests"] = tests
+    reg_path.write_text(
+        _yaml.dump(reg_data, default_flow_style=False, allow_unicode=True, sort_keys=False),
+        encoding="utf-8", errors="replace")
 
     results = []
     for t in tests:

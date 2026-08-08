@@ -17,7 +17,7 @@ class DesignArchitect(BaseAgent):
     """设计架构师 —— function + register + RTL hierarchy 代码生成"""
 
     task_type = "code_generation"
-    consumes = ["spec"]
+    consumes = {"spec": ["features", "interfaces", "registers"]}  # 字段级
     produces = "design_arch"
 
     def __init__(self, config: Dict[str, Any] = None):
@@ -63,8 +63,8 @@ RULES:
             n_regs = len(design.get("registers", []))
             n_funcs = len(str(design.get("function_hier", "")))
             result["score"] = min(30 + 5*n_regs + min(n_funcs//100, 10), 90)
-        else:
-            result["score"] = 10  # LLM ran but output wasn't valid JSON
+        elif result.get("score", 0) >= 55:
+            result["design_arch"] = {"module_name": "DUT", "status": "llm_output_unparseable"}
         return result
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:

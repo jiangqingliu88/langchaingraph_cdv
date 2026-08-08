@@ -59,9 +59,132 @@ def init():
     Path("logs").mkdir(exist_ok=True)
     console.print("[green]Initialized[/green]")
 
+# ── vagent dump: 复现 + 导出签核证据包 ──
+
+@cli.command("dump")
+@click.argument("session_id", required=False)
+@click.option("--output", "-o", type=click.Path(), help="导出证据包 zip 路径")
+@click.option("--list", "-l", "list_sessions_flag", is_flag=True, help="列出所有可复现的 session")
+@click.option("--json", "-j", "json_output", is_flag=True, help="以 JSON 格式输出 manifest")
+def dump(session_id, output, list_sessions_flag, json_output):
+    """复现任一 Agent 步骤或导出签核证据包
+
+    \b
+    用法:
+      vagent dump              # 列出所有可复现的 session
+      vagent dump -l           # 同上
+      vagent dump <session_id> # 展示该 session 的完整执行轨迹
+      vagent dump <session_id> -o evidence.zip  # 导出签核证据包
+    """
+    from src.core.manifest import (
+        ManifestBuilder, EvidencePackager,
+        build_manifest, list_sessions as list_all_sessions,
+    )
+
+    # ── 列出 sessions ──
+    if list_sessions_flag or not session_id:
+        sessions = list_all_sessions()
+        if not sessions:
+            console.print("[dim]No execution sessions found. Run 'vagent verify' first.[/dim]")
+            return
+        table = Table(title="SignOffAI — 可复现的执行记录")
+        table.add_column("Session ID", style="cyan")
+        table.add_column("Workflow")
+        table.add_column("Timestamp")
+        table.add_column("Source")
+        for s in sessions[:20]:
+            table.add_row(
+                s["session_id"],
+                s.get("workflow", "?"),
+                s.get("timestamp", "")[:19] if s.get("timestamp") else "?",
+                Path(s.get("trace_file", "")).name if s.get("trace_file") else "?",
+            )
+        console.print(table)
+        if session_id:
+            console.print(f"\n[dim]Tip: vagent dump {session_id}[/dim] 查看详情")
+            console.print(f"[dim]Tip: vagent dump {session_id} -o evidence.zip[/dim] 导出证据包")
+        return
+
+    # ── 展示 session 详情 ──
+    builder = ManifestBuilder()
+    manifest = builder.build(session_id=session_id)
+
+    if not manifest.workflow and not manifest.phases:
+        console.print(f"[red]Session '{session_id}' not found or has no trace data.[/red]")
+        return
+
+    # JSON 输出模式
+    if json_output:
+        console.print(builder.to_json(manifest))
+        return
+
+    # 导出模式
+    if output:
+        packager = EvidencePackager()
+        zip_path = packager.package(manifest, Path(output))
+        console.print(f"\n[bold green]✅ 签核证据包已导出[/bold green]")
+        console.print(f"   文件: [cyan]{zip_path}[/cyan]")
+        console.print(f"   大小: {zip_path.stat().st_size / 1024:.1f} KB")
+        console.print(f"   Manifest: [cyan]{zip_path.with_suffix('.manifest.json')}[/cyan]")
+
+        # 验证
+        verify_result = packager.verify(zip_path)
+        if verify_result["valid"]:
+            console.print(f"   [green]✓ 完整性验证通过[/green]")
+        else:
+            for issue in verify_result["issues"]:
+                console.print(f"   [red]✗ {issue}[/red]")
+        return
+
+    # ── 交互式展示 ──
+    console.print(Panel.fit(
+        f"[bold]Session: {manifest.session_id}[/bold]\n"
+        f"Workflow: {manifest.workflow}  |  State: {manifest.state}\n"
+        f"Time: {manifest.started_at[:19] if manifest.started_at else '?'} → "
+        f"{manifest.completed_at[:19] if manifest.completed_at else '?'}\n"
+        f"Output: {manifest.output_root}",
+        title="SignOffAI — Session Dump"
+    ))
+
+    # 阶段表
+    table = Table(title="Execution Trace")
+    table.add_column("#", style="dim")
+    table.add_column("Phase")
+    table.add_column("Status")
+    table.add_column("Score")
+    table.add_column("Retries")
+    table.add_column("Time")
+    for i, p in enumerate(manifest.phases, 1):
+        icon = {"passed": "[green]PASS[/green]", "degraded": "[yellow]DEGR[/yellow]",
+                "failed": "[red]FAIL[/red]", "skipped": "[dim]SKIP[/dim]",
+                "error": "[red]ERR[/red]"}.get(p.status, p.status)
+        table.add_row(
+            str(i), p.phase_name, icon,
+            str(p.score), str(p.retries), f"{p.elapsed_s:.1f}s"
+        )
+    console.print(table)
+
+    # 汇总
+    console.print(f"\n[bold]Passed: {manifest.passed}/{manifest.total_phases}  "
+                  f"Score: {manifest.overall_score}/100  "
+                  f"Iterations: {manifest.iteration_count}[/bold]")
+
+    # 产物统计
+    console.print(f"[dim]Artifacts: {manifest.output_file_count} files  "
+                  f"Evidence Hash: {manifest.evidence_hash[:16]}...[/dim]")
+
+    if manifest.failed > 0:
+        console.print(f"\n[red]⚠ {manifest.failed} failed phases:[/red]")
+        for p in manifest.phases:
+            if p.status in ("failed", "error") and p.error:
+                console.print(f"  [red]{p.phase_name}: {p.error[:120]}[/red]")
+
+    console.print(f"\n[dim]Tip: vagent dump {session_id} -o evidence.zip[/dim] 导出签核证据包")
+
 @cli.command()
 @click.argument('spec_file', type=click.Path(exists=True))
 def analyze(spec_file):
+    """单步分析规格文件"""
     app = VerificationCLI()
     async def run():
         await app.initialize()
@@ -170,7 +293,7 @@ def status():
 
 @cli.command()
 def history():
-    console.print("[dim]History: run ic-verify verify first[/dim]")
+    console.print("[dim]History: run vagent verify first[/dim]")
 
 @cli.command()
 @click.option('--session', '-s', help='Session ID')
@@ -198,7 +321,7 @@ def debug_log(session):
                 table.add_row(s["session"], f"{s['size']}B")
             console.print(table)
         else:
-            console.print("[dim]No debug logs yet. Run ic-verify verify first.[/dim]")
+            console.print("[dim]No debug logs yet. Run vagent verify first.[/dim]")
 
 @cli.command()
 def workflows():
@@ -225,7 +348,7 @@ AGENT_HELP = ", ".join(AGENT_ALIASES.keys())
 @cli.command()
 def repl():
     """单 Agent 调试控制台 —— 逐个验证 Tool 代码"""
-    console.print("[bold cyan]IC-Verify Agent Debug REPL[/bold cyan]")
+    console.print("[bold cyan]SignOffAI Agent Debug REPL[/bold cyan]")
     console.print(f"Agents: {AGENT_HELP}")
     console.print("Commands: [yellow]agents[/yellow] | [yellow]tools[/yellow] <agent> | [yellow]<agent>[/yellow] [input] | "
                    "[yellow]exec[/yellow] <agent> <tool> | [yellow]ctx[/yellow] | [yellow]quit[/yellow]")
@@ -236,7 +359,7 @@ def repl():
 
     while True:
         try:
-            raw = console.input("[cyan]ic-verify>[/cyan] ").strip()
+            raw = console.input("[cyan]vagent>[/cyan] ").strip()
         except (EOFError, KeyboardInterrupt):
             break
         if not raw:
@@ -390,7 +513,7 @@ def main():
 def web_command(host, port, reload):
     """启动 Web 仪表盘"""
     import uvicorn
-    console.print(f"[bold cyan]IC-Verify Web Dashboard[/bold cyan]")
+    console.print(f"[bold cyan]SignOffAI Web Dashboard[/bold cyan]")
     console.print(f"  URL: [cyan]http://{host}:{port}[/cyan]")
     console.print(f"  API: [cyan]http://{host}:{port}/api/[/cyan]")
     uvicorn.run("src.web.api:app", host=host, port=port, reload=reload)

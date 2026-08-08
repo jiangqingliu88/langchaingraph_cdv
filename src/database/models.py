@@ -20,13 +20,18 @@ class TaskRecord(Base):
 class PipelineRun(Base):
     __tablename__ = 'pipeline_runs'
     id = Column(Integer, primary_key=True)
+    run_id = Column(String(64), unique=True, nullable=False)  # 服务端生成，供 SSE/API 追踪
     workflow = Column(String(100))
     spec_file = Column(String(500))
+    state = Column(String(30), default='running')  # running / completed / completed_with_errors / cancelled
     total_phases = Column(Integer)
     passed = Column(Integer)
     degraded = Column(Integer)
     total_time = Column(Float)
-    results = Column(JSON)
+    phases_json = Column(JSON)        # 每个阶段的 [{name, status, time, score, ...}]
+    results = Column(JSON)            # {"spec":"passed", ...}
+    started_at = Column(DateTime, default=datetime.now)
+    completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
 
 # ── 企业级模型 ──
@@ -120,4 +125,59 @@ class RegressionRecord(Base):
     total_count = Column(Integer, default=0)
     duration_seconds = Column(Float, default=0)
     results_json = Column(JSON)
+    created_at = Column(DateTime, default=datetime.now)
+
+# ── MD 文档生态模型 ──
+
+class DocDocument(Base):
+    """MD 规格文档"""
+    __tablename__ = 'doc_documents'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey('projects.id'), nullable=True)
+    path = Column(String(500), unique=True, nullable=False)   # 相对路径: "alu/alu_arith_spec.md"
+    title = Column(String(300))                                # 从 # 标题提取
+    content = Column(Text, default='')                         # 完整 Markdown 原文
+    content_hash = Column(String(64))                          # SHA256，快速检测变更
+    level = Column(String(20), default='module')               # chip / subsystem / module / unit
+    status = Column(String(20), default='draft')               # draft / review / approved / deprecated
+    author_id = Column(Integer, ForeignKey('users.id'))
+    tags = Column(String(500))                                 # 逗号分隔
+    metadata_json = Column(JSON, default={})                   # 扩展元数据
+    view_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
+
+class DocVersion(Base):
+    """文档版本历史"""
+    __tablename__ = 'doc_versions'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_id = Column(Integer, ForeignKey('doc_documents.id'), nullable=False)
+    version = Column(String(20))                               # "1.0", "2.1"
+    content = Column(Text)                                     # 该版本的完整内容快照
+    content_hash = Column(String(64))
+    change_summary = Column(String(500))
+    author_id = Column(Integer, ForeignKey('users.id'))
+    created_at = Column(DateTime, default=datetime.now)
+
+class DocRequirement(Base):
+    """从 MD 文档中提取的需求条目"""
+    __tablename__ = 'doc_requirements'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_id = Column(Integer, ForeignKey('doc_documents.id'), nullable=False)
+    req_id = Column(String(100), nullable=False)               # "REQ_ALU_BT_001"
+    description = Column(Text)                                 # 需求描述原文
+    req_type = Column(String(30))                              # BT / UT / CHIP / PERF
+    line_number = Column(Integer)                              # 在原文档中的行号
+    is_covered = Column(Boolean, default=False)                # 是否有对应测试用例
+    coverage_json = Column(JSON, default={})                   # 覆盖信息
+    created_at = Column(DateTime, default=datetime.now)
+
+class DocRelation(Base):
+    """文档间关系"""
+    __tablename__ = 'doc_relations'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_id = Column(Integer, ForeignKey('doc_documents.id'), nullable=False)
+    target_id = Column(Integer, ForeignKey('doc_documents.id'), nullable=False)
+    relation_type = Column(String(30))                         # parent / child / implements / references
+    description = Column(String(500))
     created_at = Column(DateTime, default=datetime.now)

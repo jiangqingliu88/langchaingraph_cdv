@@ -1,12 +1,13 @@
 """
-UVM 工具包 —— 独立封装的参数化代码生成器
+UVM 工具包 —— 独立封装的参数化代码生成器 + Agent 工具
 
     from src.tools.uvm_tools import generate_uvm, uvm_tool
     result = generate_uvm("agent", yaml_string)
-    result = generate_uvm("env", yaml_string)
-    result = generate_uvm("bench", yaml_string)
-    result = generate_uvm("constraint", yaml_string)
-    result = generate_uvm("util", yaml_string)
+
+    # 手动调用 Agent 工具
+    from src.tools.uvm_tools.tools import generate_uvm_from_spec, _uvm_ctx
+    _uvm_ctx.set(output_dir=Path("output"), agents=[], env_name="dut_env")
+    result = generate_uvm_from_spec.func(spec_text)
 """
 from .tool_uvm.gen_uvm import generate_uvm, SUPPORTED_TOOL_TYPES  # noqa: F401
 
@@ -23,4 +24,19 @@ uvm_tool = StructuredTool.from_function(
         "yaml_spec: 描述接口/环境的 YAML 字符串。"
         "返回生成的文件列表和代码摘要。"
     ),
+)
+
+# 从 tools 子模块导出 Agent 工具（手动测试用）
+from .agent_tools import (  # noqa: E402, F401
+    find_spec_yaml,
+    jinja_render,
+    quality_report,
+    check_static,
+    check_compile,
+    check_loopback,
+    check_health,
+    read_file,
+    write_file,
+    _uvm_ctx,
+    ensure_uvm_tool_registry,
 )

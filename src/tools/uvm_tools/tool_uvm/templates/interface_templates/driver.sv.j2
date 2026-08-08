@@ -128,18 +128,30 @@ class {{ agent.name }}_driver extends uvm_driver #({{ agent.name }}_seq_item);
   // (custom_drive_logic placeholder filled by LLM with protocol timing)
   virtual task drive_transaction({{ agent.name }}_seq_item req);
     // Copy expected values from item BEFORE driving
+    // Only copy fields that correspond to OUTPUT ports (TB drives these)
     {{ agent.name }}_seq_item exp = {{ agent.name }}_seq_item::type_id::create("exp");
 {%- for var in transaction_vars %}
+{%-   set is_output = namespace(found=false) %}
+{%-   for port in ports %}
+{%-     if port.dir == 'output' and port.name == var.name %}{% set is_output.found = true %}{% endif %}
+{%-   endfor %}
+{%-   if is_output.found %}
     exp.{{ var.name }} = req.{{ var.name }};
+{%-   endif %}
 {%- endfor %}
 
 {% if agent.custom_drive_logic %}
     // === LLM-generated protocol timing ===
 {{ agent.custom_drive_logic | indent(4, first=true) }}
 {% else %}
-    // === Default: simple @(cb) drive all output ports (blocking on wire, no NBA delay) ===
+    // === Default: simple @(cb) drive all output ports ===
     @(vif.cb);
     req.begin_time = $realtime;
+{%- for port in ports %}
+{%-   if port.dir == 'output' and port.name in ('valid', 'ready', 'psel', 'penable', 'strobe', 'enable') %}
+    vif.cb.{{ port.name }} <= 1'b1;  // assert strobe
+{%-   endif %}
+{%- endfor %}
 {%- for port in ports %}
 {%-   if port.dir == 'output' %}
 {%-     set port_in_txn = namespace(found=false) %}

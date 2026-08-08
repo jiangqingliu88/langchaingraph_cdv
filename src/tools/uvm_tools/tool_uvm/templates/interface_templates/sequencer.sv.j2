@@ -165,10 +165,8 @@ class {{ agent.name }}_sequencer extends uvm_sequencer #({{ agent.name }}_seq_it
         end
         begin
           #(timeout_ns * 1ns);
-          if (seq.get_sequence_state() != UVM_FINISHED) begin
-            `uvm_warning("SEQ", "Sequence timeout, killing")
-            seq.kill();
-          end
+          `uvm_warning("SEQ", "Sequence timeout, killing")
+          seq.kill();
         end
       join_any
       disable fork;

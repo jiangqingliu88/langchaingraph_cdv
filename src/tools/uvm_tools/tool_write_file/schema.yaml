@@ -1,0 +1,12 @@
+name: write_file
+description: '写入/覆盖 SystemVerilog 文件。输入格式: filepath::content'
+input_schema:
+  type: object
+  properties:
+    path_content:
+      type: string
+      description: '格式: filepath::content，用 :: 分隔'
+  required: [path_content]
+output_schema:
+  type: string
+risk_level: write

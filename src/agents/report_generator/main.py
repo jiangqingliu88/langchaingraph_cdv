@@ -33,6 +33,8 @@ class ReportGenerator(BaseAgent):
         )
 
     async def _setup(self):
+        from src.core.agent_tools import register_all_tools
+        self.tool_registry = register_all_tools()
         logger.info(f"{self.display_name} 特定初始化完成")
 
     async def _get_prompt_template(self):

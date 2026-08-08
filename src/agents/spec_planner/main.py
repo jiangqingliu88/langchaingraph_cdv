@@ -84,8 +84,10 @@ JSON 格式：{{"design_name":"...","version":"...","overview":"...","features":
             nt = sum(len(tp.get("tests", [])) for tp in spec.get("test_points", []))
             nr = len(spec.get("registers", []))
             result["score"] = min(10*nf + 5*ni + 3*nt + 5*nr, 90)
-        else:
-            result["score"] = 10
+        elif result.get("score", 0) >= 55:
+            # LLM ran but output format was wrong — keep heuristic score, mark degraded
+            result["spec"] = {"design_name": "DUT", "status": "llm_output_unparseable",
+                              "raw_output": str(output_text)[:500]}
         return result
 
 

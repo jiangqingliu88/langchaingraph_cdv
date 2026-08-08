@@ -1,0 +1,20 @@
+name: check_static
+description: '验证 agent 目录下 8 个预期 SystemVerilog 文件是否全部存在'
+input_schema:
+  type: object
+  properties:
+    env_dir:
+      type: string
+      default: ''
+output_schema:
+  type: object
+  properties:
+    status:
+      type: string
+    present:
+      type: integer
+    missing:
+      type: integer
+    passed:
+      type: boolean
+risk_level: safe
