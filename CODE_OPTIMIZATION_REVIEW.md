@@ -126,6 +126,24 @@
 - 以真实工具链验证为基础的工作流自动化系统；
 - 以可追溯、可审计、可治理的工程产物为核心竞争力。
 
+### 7. 可追溯 / 可审计 / 可治理的当前评估
+
+本项目已经具备以下关键能力：
+
+- 证据链设计：通过 `src/core/evidence.py` 的 `EvidenceChain`，覆盖需求层、设计层、验证层、执行层和签核层；
+- 运行追踪：`src/middleware/debug_logger.py` 记录 LLM 调用、工具调用、文件写入等到 `logs/execution`，支持后续 `manifest` 重建；
+- 审计日志：`src/database/models.py` 的 `AuditLog`，配合 `src/database/repository.py` 的 `add_audit_log()` 在 API 中多处写入；
+- RBAC 和项目隔离：`src/infra/rbac.py` 提供细粒度权限模型，`src/infra/project_isolation.py` 提供项目边界管理；
+- 交互接口：`src/web/api.py` 支持 REST、SSE、vPlan、签核、回归、覆盖率查询等交互能力。
+
+但当前实现仍有待补强的点：
+
+1. 权限链路需进一步落到每个项目资源与 API 上。部分 API 仅做 `require_auth`，未按项目/角色过滤。  
+2. 审计范围需扩大到“登录/权限拒绝/导出证据包/审批操作”等关键事件，并补充更完整的审计上下文。  
+3. 证据包完整性需加强：必须确保每个文件 hash、manifest hash、evidence hash 与导出包一致，并支持证据包验签和回放。  
+
+如果你要继续推进，建议优先补齐这三项，让现有架构从“原型级可追溯”升级为“企业级可治理”。
+
 如果继续沿着“通用 Agent + 生成代码”的路线走，项目很容易被通用 AI 编程产品同质化；但如果把重点放在“验证流程的专业性、可信度和工程化”，它就有机会形成真正有壁垒的差异化。
 
 ---

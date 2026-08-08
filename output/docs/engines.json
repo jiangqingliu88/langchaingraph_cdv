@@ -1,0 +1,30 @@
+{
+  "vplan": {
+    "reqs": 1,
+    "cps": 6,
+    "tests": 6,
+    "risks": 0
+  },
+  "smart_regression": {
+    "selected": 2,
+    "skipped": 4,
+    "time_saved_pct": 67
+  },
+  "debug": {
+    "insights": 0,
+    "time_saved": "0min",
+    "auto_fixable": 0
+  },
+  "triage": {
+    "total": 0,
+    "root_causes": {
+      "RTL_bug": 0,
+      "UVM_env_bug": 0,
+      "testcase_bug": 0,
+      "random_seed_issue": 0,
+      "tool_issue": 0,
+      "unknown": 0
+    },
+    "estimated_manual_time": "~0min (~0.0h)"
+  }
+}

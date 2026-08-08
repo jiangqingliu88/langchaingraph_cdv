@@ -1,27 +1,78 @@
-# UART RX 模块规格
+# UART RX 接收模块
+<!--
+  module: uart_rx
+  parent: UART
+  level: BT
+  over_sampling: [3x, 8x, 16x]
+  data_bits: [5, 6, 7, 8]
+  parity: [N, E, O]
+  requirements: [REQ_UART_RX_001]
+-->
 
-## 功能描述
-UART 接收模块负责将串行数据接收并转换为并行数据。
+## 1. 概述
+UART 接收模块负责将串行数据接收并转换为并行数据。支持 3x/8x/16x 过采样。
 
-## 架构
-```
-RX Pin → Sampling (3x/8x/16x) → Shift Register → RX FIFO (16x8) → APB Bus
-             ↑
-        Baud Gen (16x)
-```
+## 2. 功能需求
 
-## 模块级需求 (BT)
-- **REQ_BT_002**: RX 接收模块功能验证
-- **REQ_BT_004**: FIFO 缓冲区管理验证（overflow/underflow）
+### 起始位检测
+**级别**：P0
+**类型**：FUNCTIONAL
+**描述**：检测 RX 线的下降沿作为起始位
+**验收标准**：无虚假起始位检测，抗毛刺
 
-## 单元级需求 (UT)
-- **REQ_UT_004**: RX 采样计数器验证 (3x/8x/16x 过采样)
-- **REQ_UT_005**: RX 奇偶校验逻辑验证 (N/E/O)
-- **REQ_UT_007**: FIFO overflow/underflow 检测
+### 数据采样
+**级别**：P0
+**类型**：FUNCTIONAL
+**描述**：在比特中点采样，3x/8x/16x 过采样可配置
+**验收标准**：所有采样配置下数据正确
 
-## 测试点
-1. 正常接收: 8N1, 9600bps
-2. 错误注入: 奇偶校验错误, 帧错误, 溢出错误
+### 校验检测
+**级别**：P0
+**类型**：FUNCTIONAL
+**描述**：N/E/O 校验位接收和验证
+**验收标准**：校验错误检测正确，PE 标志置位
 
-## 关联
-- 父文档: uart_chip_spec.md
+### 停止位检测
+**级别**：P0
+**类型**：FUNCTIONAL
+**描述**：停止位接收验证，帧错误检测
+**验收标准**：停止位错误时 FE 标志置位
+
+### RX FIFO
+**级别**：P1
+**类型**：CONTROL
+**描述**：接收 FIFO 管理和满标志
+**验收标准**：FIFO 溢出时产生 overrun 标志
+
+### 错误恢复
+**级别**：P2
+**类型**：ERROR
+**描述**：帧错误/校验错误/溢出后的恢复
+**验收标准**：错误后能正确接收下一帧
+
+## 3. 接口规范
+
+| 信号 | 位宽 | 方向 | 协议 | 描述 |
+|------|------|------|------|------|
+| clk | 1 | INPUT | — | 时钟 |
+| rst_n | 1 | INPUT | — | 复位 |
+| rx | 1 | INPUT | UART | 串行输入 |
+| rx_data[7:0] | 8 | OUTPUT | — | 接收数据 |
+| rx_valid | 1 | OUTPUT | — | 数据有效 |
+| rx_error | 1 | OUTPUT | — | 帧/校验错误 |
+| rx_overflow | 1 | OUTPUT | — | FIFO 溢出 |
+| baud_tick | 1 | INPUT | — | 波特率时钟 |
+
+## 4. 时序约束
+
+| 路径 | 约束 | 说明 |
+|------|------|------|
+| rx → sample | ≥ 3x 过采样周期 | 抗干扰 |
+| rx_valid → rx_data | ≤ 1 cycle | 数据有效 |
+
+## 5. 功耗约束
+
+| 模式 | 功耗 | 说明 |
+|------|------|------|
+| Active (接收中) | ≤ 3mW | 过采样工作 |
+| Idle | ≤ 0.3mW | 等待起始位 |

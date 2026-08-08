@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 from datetime import datetime
 
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, Body
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 
@@ -65,6 +65,7 @@ class PipelineRunRequest(BaseModel):
     spec_file: str = ""
     workflow: str = "full_verification"
     output_dir: str = "."
+    run_type: str = "traditional"  # traditional | ai_exploration
 
 class TestCaseGenerateRequest(BaseModel):
     spec_text: str = ""
@@ -247,6 +248,296 @@ def seed_demo_vplan():
 
     print(f"[web] Demo vPlan seeded: {len(vp.matrix.requirements)} reqs, {len(vp.matrix.testcases)} tests")
 
+
+# ═══════════════════════════════════════════════════════════
+# 结构化文档编辑器 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/editor/{path:path}")
+async def editor_load(path: str):
+    """加载文档为结构化 JSON（供编辑器使用）"""
+    fp = _resolve_spec_path(path)
+    if not fp.exists():
+        raise HTTPException(status_code=404, detail="文档不存在")
+    md_text = fp.read_text(encoding="utf-8")
+    from src.core.doc_serializer import DocumentSerializer
+    serializer = DocumentSerializer()
+    doc = serializer.md_to_doc(md_text)
+    return {"path": str(fp.relative_to(SPECS_DIR)), "doc": doc.to_dict(), "md_raw": md_text}
+
+
+@app.post("/api/editor/{path:path}")
+async def editor_save(path: str, payload: dict, user: dict = Depends(require_auth)):
+    """保存结构化 JSON → 渲染 MD → 写回文件 — 仅经理可编辑"""
+    role = user.get("role", "")
+    if role not in ("admin", "verification_manager"):
+        raise HTTPException(status_code=403, detail="仅 SignOff 经理可以编辑规格文档")
+    try:
+        from src.core.doc_serializer import DocumentSerializer, StructuredDocument
+        serializer = DocumentSerializer()
+
+        if "doc" in payload:
+            doc = StructuredDocument.from_dict(payload["doc"])
+        else:
+            doc = serializer.md_to_doc(payload.get("md_raw", ""))
+
+        md_text = serializer.doc_to_md(doc)
+        fp = _resolve_spec_path(path)
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        fp.write_text(md_text, encoding="utf-8")
+
+        try:
+            from src.database.repository import add_audit_log
+            await add_audit_log(user["user_id"], user["username"], "doc_editor_save",
+                                str(fp.relative_to(SPECS_DIR)),
+                                f"requirements={len(doc.requirements)} interfaces={len(doc.interfaces)}")
+        except Exception: pass
+
+        return {"ok": True, "path": str(fp.relative_to(SPECS_DIR)), "md": md_text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Editor save failed: {str(e)}")
+
+
+# ═══════════════════════════════════════════════════════════
+# 设计层三层映射 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/design/mapping/{project_id}")
+async def get_design_mapping(project_id: int = 0):
+    """获取三层映射矩阵: 需求→模块→功能点→测试点"""
+    from src.core.design_mapper import DesignArchitectMapper
+    mapper = DesignArchitectMapper()
+    return await mapper.get_mapping_report(project_id)
+
+
+@app.get("/api/design/modules/{project_id}")
+async def get_design_modules(project_id: int = 0):
+    """获取模块列表 + 功能点"""
+    from src.database.connection import get_session
+    from src.database.models import DesignModule, DesignFeature
+    from sqlalchemy import select
+    s = await get_session()
+    modules = (await s.execute(select(DesignModule).where(DesignModule.project_id == project_id if project_id else True))).scalars().all()
+    result = []
+    for m in modules:
+        feats = (await s.execute(select(DesignFeature).where(DesignFeature.module_id == m.id))).scalars().all()
+        result.append({
+            "id": m.id, "name": m.name, "description": m.description,
+            "interfaces": m.interfaces, "signals": m.signals,
+            "rtl_file": m.rtl_file, "rtl_hash": m.rtl_hash,
+            "features": [{"id": f.id, "name": f.name, "level": f.level, "keywords": f.keywords} for f in feats],
+        })
+    await s.close()
+    return {"modules": result, "total": len(result)}
+
+
+@app.post("/api/design/modules/upload")
+async def upload_design_modules(project_id: int = 0, md_text: str = "", user: dict = Depends(require_auth)):
+    """上传模块划分 MD → 解析并存储"""
+    from src.core.design_mapper import DesignArchitectMapper
+    mapper = DesignArchitectMapper()
+    modules = mapper.parse_md_modules(md_text)
+
+    # 获取需求
+    vp = _get_vplan()
+    requirements = [{"id": r.id, "description": r.description}
+                    for r in (vp.matrix.requirements.values() if hasattr(vp, 'matrix') else [])]
+
+    mappings = mapper.match_req_to_features(requirements, modules)
+    stored = await mapper.store(project_id, modules, mappings)
+
+    from src.database.repository import add_audit_log
+    await add_audit_log(user["user_id"], user["username"], "design_upload",
+                        f"project/{project_id}",
+                        f"modules={stored['modules']} features={stored['features']} mappings={stored['mappings']}")
+
+    return {"ok": True, "stored": stored, "modules_parsed": len(modules)}
+
+
+@app.patch("/api/design/mapping/{mapping_id}")
+async def update_design_mapping(mapping_id: int, req_id: str = "", feature_id: int = 0,
+                                 mapping_type: str = "MANUAL", user: dict = Depends(require_auth)):
+    """手动调整映射关系"""
+    from src.database.connection import get_session
+    from src.database.models import ReqFeatureMap
+    from sqlalchemy import select
+    s = await get_session()
+    m = (await s.execute(select(ReqFeatureMap).where(ReqFeatureMap.id == mapping_id))).scalar_one_or_none()
+    if m:
+        if req_id: m.req_id = req_id
+        if feature_id: m.feature_id = feature_id
+        m.mapping_type = mapping_type
+        m.mapped_by = user.get("username", "manual")
+        await s.commit()
+    await s.close()
+    return {"ok": m is not None}
+
+
+@app.get("/api/design/trace/{req_id}")
+async def trace_requirement(req_id: str):
+    """单个需求的完整追溯链: 需求→模块→功能点→测试点"""
+    from src.database.connection import get_session
+    from src.database.models import ReqFeatureMap, DesignFeature, DesignModule, FeatureTestpointMap
+    from sqlalchemy import select
+    s = await get_session()
+    mappings = (await s.execute(select(ReqFeatureMap).where(ReqFeatureMap.req_id == req_id))).scalars().all()
+    chain = {"req_id": req_id, "mappings": []}
+    for m in mappings:
+        feat = (await s.execute(select(DesignFeature).where(DesignFeature.id == m.feature_id))).scalar_one_or_none()
+        mod = None
+        tps = []
+        if feat:
+            mod = (await s.execute(select(DesignModule).where(DesignModule.id == feat.module_id))).scalar_one_or_none()
+            tp_rows = (await s.execute(select(FeatureTestpointMap).where(FeatureTestpointMap.feature_id == feat.id))).scalars().all()
+            tps = [t.testpoint_id for t in tp_rows]
+        chain["mappings"].append({
+            "mapping_type": m.mapping_type, "confidence": m.confidence,
+            "module": mod.name if mod else "", "module_rtl_hash": mod.rtl_hash if mod else "",
+            "feature": feat.name if feat else "", "feature_level": feat.level if feat else "",
+            "testpoints": tps,
+        })
+    await s.close()
+    return chain
+
+
+# ═══════════════════════════════════════════════════════════
+# Agent 契约 & 状态监控 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/agents/contracts")
+async def list_agent_contracts():
+    """列出所有 Agent 的 I/O 契约 — consumes/produces/tools/min_score"""
+    service = PipelineExecutionService.get_instance()
+    if not service.initialized:
+        await service.initialize_agents()
+    contracts = {}
+    for role, agent in service.registry.get_all_instances().items():
+        contracts[role] = {
+            "display_name": getattr(agent, 'display_name', role),
+            "task_type": getattr(agent, 'task_type', ''),
+            "consumes": getattr(agent, 'consumes', []),
+            "produces": getattr(agent, 'produces', ''),
+            "min_score": getattr(agent, 'min_score', 50),
+            "max_retries": getattr(agent, 'max_retries', 2),
+            "tools": [t.name if hasattr(t, 'name') else str(t) for t in (getattr(agent, 'tools', None) or [])],
+            "status": getattr(agent, 'status', 'unknown'),
+        }
+    return {"agents": contracts, "total": len(contracts)}
+
+
+@app.get("/api/agents/status")
+async def get_agent_status():
+    """获取所有 Agent 的运行状态、指标和健康度"""
+    service = PipelineExecutionService.get_instance()
+    if not service.initialized:
+        await service.initialize_agents()
+    agents_status = []
+    for role, agent in service.registry.get_all_instances().items():
+        metrics = agent.get_metrics() if hasattr(agent, 'get_metrics') else {}
+        agents_status.append({
+            "role": role,
+            "display_name": getattr(agent, 'display_name', role),
+            "status": str(getattr(agent, 'status', 'unknown')),
+            "task_type": getattr(agent, 'task_type', ''),
+            "produces": getattr(agent, 'produces', ''),
+            "tasks_completed": metrics.get("tasks_completed", 0),
+            "success_rate": metrics.get("success_rate", 0),
+            "avg_execution_time": metrics.get("avg_execution_time", 0),
+            "last_error": metrics.get("last_error", ""),
+            "tools_count": len(getattr(agent, 'tools', None) or []),
+        })
+    return {"agents": agents_status, "total": len(agents_status),
+            "healthy": sum(1 for a in agents_status if a["status"] == "idle"),
+            "busy": sum(1 for a in agents_status if a["status"] != "idle")}
+
+
+# ═══════════════════════════════════════════════════════════
+# vPlan 导出 & 覆盖率 Diff
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/vplan/export")
+async def export_vplan(project_id: int = 0):
+    """导出完整 vPlan — 需求树 + 用例映射 + 覆盖率目标"""
+    from src.database.repository import list_projects
+    # 收集需求层级
+    try:
+        vp = _get_vplan()
+        reqs = [{"id": r.id, "description": r.description, "level": r.level,
+                 "status": r.status.value if hasattr(r.status, 'value') else str(r.status),
+                 "coverage": r.coverage_actual}
+                for r in (vp.matrix.requirements.values() if hasattr(vp, 'matrix') else [])]
+        tests = [{"id": t.id, "name": t.name, "status": t.status.value if hasattr(t.status, 'value') else str(t.status)}
+                 for t in (vp.matrix.testcases.values() if hasattr(vp, 'matrix') else [])]
+        return {"project_id": project_id, "requirements": reqs, "testcases": tests,
+                "total_requirements": len(reqs), "total_testcases": len(tests)}
+    except Exception as e:
+        return {"error": str(e), "note": "运行一次流水线以生成 vPlan 数据"}
+
+
+@app.get("/api/coverage/diff")
+async def coverage_diff(run_id_1: str = "", run_id_2: str = ""):
+    """比较两次回归的覆盖率变化"""
+    from pathlib import Path
+    import json
+
+    def load_cov(run_id: str) -> dict:
+        for ef in sorted(Path("output").glob("**/evidence_chain.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                data = json.loads(ef.read_text(encoding="utf-8"))
+                if run_id in data.get("run_id", ""):
+                    cov = {}
+                    for layer in data.get("layers", {}).values():
+                        for item in layer.get("items", []):
+                            detail = item.get("detail", {})
+                            if "line" in detail:
+                                cov = detail
+                    return cov
+            except Exception:
+                pass
+        return {}
+
+    cov1 = load_cov(run_id_1) if run_id_1 else {}
+    cov2 = load_cov(run_id_2) if run_id_2 else {}
+
+    diff = {}
+    for key in ["line", "branch", "toggle"]:
+        v1 = cov1.get(key, 0)
+        v2 = cov2.get(key, 0)
+        diff[key] = {"before": v1, "after": v2, "delta": round(v2 - v1, 1),
+                      "trend": "up" if v2 > v1 else ("down" if v2 < v1 else "flat")}
+
+    return {"run_1": run_id_1, "run_2": run_id_2, "coverage_diff": diff,
+            "summary": f"Line: {diff['line']['delta']:+.1f}%, Branch: {diff['branch']['delta']:+.1f}%, Toggle: {diff['toggle']['delta']:+.1f}%"}
+
+
+# ═══════════════════════════════════════════════════════════
+# 项目访问控制 & 签核状态机
+# ═══════════════════════════════════════════════════════════
+
+async def require_project_access(project_id: int = 0, user: dict = Depends(require_auth)):
+    """验证用户是否有指定项目的访问权限。无 project_id 则跳过检查。"""
+    if not project_id:
+        return user
+    if user.get("role") in ("admin", "verification_manager"):
+        return user
+    from src.database.repository import list_projects, add_audit_log
+    projects = await list_projects(user["user_id"])
+    if project_id not in {p["id"] for p in projects}:
+        try: await add_audit_log(user["user_id"], user.get("username",""), "access_denied", f"project/{project_id}", "项目访问被拒绝")
+        except Exception: pass
+        raise HTTPException(status_code=403, detail="无权访问该项目")
+    return user
+
+
+SIGNOFF_TRANSITIONS = {
+    "draft":   ["pending", "deleted"],
+    "pending": ["approved", "rejected", "draft"],
+    "approved": [],
+    "rejected": ["draft", "pending"],
+    "deleted":  [],
+}
+
+
 # ═══════════════════════════════════════════════════════════
 # HTML
 # ═══════════════════════════════════════════════════════════
@@ -264,15 +555,23 @@ async def test_login_page():
 # ═══════════════════════════════════════════════════════════
 
 @app.post("/api/auth/login")
-async def login(req: LoginRequest):
-    from src.database.repository import get_user_by_username, update_user_login, update_user_password
+async def login(req: LoginRequest, request: Request = None):
+    from src.database.repository import get_user_by_username, update_user_login, update_user_password, add_audit_log
     user = await get_user_by_username(req.username)
     if not user or not verify_password(req.password, user.password_hash):
+        # Log failed attempt
+        ip = request.client.host if request else "unknown"
+        try: await add_audit_log(0, req.username, "login_failed", "auth", f"IP: {ip}")
+        except Exception: pass
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     if password_needs_rehash(user.password_hash):
         await update_user_password(user.id, hash_password(req.password))
     await update_user_login(user.id)
     token = create_token(user.id, user.username, user.role)
+    # Log successful login
+    ip = request.client.host if request else "unknown"
+    try: await add_audit_log(user.id, user.username, "login_success", "auth", f"IP: {ip}")
+    except Exception: pass
     return {
         "token": token,
         "user": {"id": user.id, "username": user.username,
@@ -334,7 +633,8 @@ async def agent_detail(role: str):
 # ═══════════════════════════════════════════════════════════
 
 @app.post("/api/pipeline/run")
-async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_auth)):
+async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_auth),
+                       _perm: dict = Depends(lambda: None)):
     """启动验证流水线——立即返回 run_id，后台异步执行。"""
     spec_text = req.spec_text
     if not spec_text and req.spec_file:
@@ -353,6 +653,10 @@ async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_aut
     run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
     output_root = str(_resolve_output_path(req.output_dir))
 
+    # 记录 run_type 到 ctx（供 manifest 使用）
+    service._run_types = getattr(service, '_run_types', {})
+    service._run_types[run_id] = req.run_type
+
     # 后台执行流水线
     async def _run():
         try:
@@ -367,7 +671,44 @@ async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_aut
     from src.database.repository import add_audit_log
     await add_audit_log(user["user_id"], user["username"], "pipeline_run", run_id,
                         f"workflow={req.workflow} started")
-    return {"run_id": run_id, "workflow": req.workflow, "status": "started"}
+    return {"run_id": run_id, "workflow": req.workflow, "status": "started", "run_type": req.run_type}
+
+
+@app.get("/api/pipeline/{run_id}/stream")
+async def pipeline_sse_stream(run_id: str):
+    """SSE 实时推送管线状态（供前端 EventSource 连接）"""
+    from src.web.sse import subscribe, unsubscribe
+
+    async def event_generator():
+        q = await subscribe(run_id)
+        try:
+            # 先发当前快照
+            service = PipelineExecutionService.get_instance()
+            state = service.get_run_status(run_id)
+            if state:
+                yield f"data: {json.dumps({'event': 'snapshot', 'data': state}, ensure_ascii=False)}\n\n"
+
+            while True:
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=30)
+                    yield f"data: {msg}\n\n"
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'event': 'heartbeat', 'data': {}}, ensure_ascii=False)}\n\n"
+                    # Check if still running
+                    state = service.get_run_status(run_id)
+                    if state and state.get("state") in ("completed", "completed_with_errors"):
+                        yield f"data: {json.dumps({'event': 'run_complete', 'data': state}, ensure_ascii=False)}\n\n"
+                        break
+        except asyncio.CancelledError:
+            pass
+        finally:
+            unsubscribe(run_id, q)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 @app.get("/api/pipeline/history")
 async def pipeline_history(limit: int = 20):
@@ -718,17 +1059,907 @@ async def create_signoff_api(req: SignoffCreateRequest, user: dict = Depends(req
 
 @app.put("/api/signoffs/{sid}/approve")
 async def approve_signoff(sid: int, comment: str = "", user: dict = Depends(require_auth)):
-    from src.database.repository import update_signoff, add_audit_log
+    """批准签核 — 仅管理员和验证经理"""
+    if user.get("role") not in ("admin", "verification_manager"):
+        raise HTTPException(status_code=403, detail="仅 SignOff 经理可以批准签核")
+    from src.database.repository import update_signoff, add_audit_log, get_signoff_by_id
+    sf = await get_signoff_by_id(sid)
+    if not sf:
+        raise HTTPException(status_code=404, detail="签核记录不存在")
+    if sf.get("status") not in ("pending",):
+        raise HTTPException(status_code=400, detail=f"签核状态 '{sf.get('status')}' 不可批准，仅 pending 状态可批准")
     ok = await update_signoff(sid, "approved", user["user_id"], comment)
-    await add_audit_log(user["user_id"], user["username"], "signoff_approve", str(sid))
-    return {"ok": ok}
+    await add_audit_log(user["user_id"], user["username"], "signoff_approve", str(sid),
+                        f"状态: pending->approved | 意见: {comment[:100]}")
+    return {"ok": ok, "status": "approved", "locked": True}
 
 @app.put("/api/signoffs/{sid}/reject")
 async def reject_signoff(sid: int, comment: str = "", user: dict = Depends(require_auth)):
-    from src.database.repository import update_signoff, add_audit_log
+    """驳回签核 — 仅管理员和验证经理"""
+    if user.get("role") not in ("admin", "verification_manager"):
+        raise HTTPException(status_code=403, detail="仅 SignOff 经理可以驳回签核")
+    from src.database.repository import update_signoff, add_audit_log, get_signoff_by_id
+    sf = await get_signoff_by_id(sid)
+    if not sf:
+        raise HTTPException(status_code=404, detail="签核记录不存在")
+    if sf.get("status") not in ("pending",):
+        raise HTTPException(status_code=400, detail=f"签核状态 '{sf.get('status')}' 不可驳回，仅 pending 状态可驳回")
     ok = await update_signoff(sid, "rejected", user["user_id"], comment)
-    await add_audit_log(user["user_id"], user["username"], "signoff_reject", str(sid))
-    return {"ok": ok}
+    await add_audit_log(user["user_id"], user["username"], "signoff_reject", str(sid),
+                        f"状态: pending->rejected | 理由: {comment[:100]}")
+    return {"ok": ok, "status": "rejected"}
+
+# ═══════════════════════════════════════════════════════════
+# Manifest / 证据链 API (SignOffAI 核心)
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/manifest/latest")
+async def get_latest_manifest():
+    """获取最新的 manifest 摘要（供前端签核页面展示证据链）"""
+    from pathlib import Path
+    import json
+    # 扫描 output 目录寻找最新的 manifest.json
+    docs_dirs = sorted(Path("output").glob("**/docs/manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if docs_dirs:
+        try:
+            return json.loads(docs_dirs[0].read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    # fallback: 扫描所有 output 子目录
+    fallback = sorted(Path("output").glob("*/docs/manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if fallback:
+        try:
+            return json.loads(fallback[0].read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"error": "no manifest found", "run_id": "", "session_id": ""}
+
+
+@app.get("/api/manifest/{session_id}")
+async def get_manifest(session_id: str):
+    """获取指定 session 的完整 manifest"""
+    from pathlib import Path
+    import json
+    for pattern in [f"**/{session_id}/**/manifest.json", f"**/docs/manifest.json"]:
+        for mf in Path("output").glob(pattern):
+            try:
+                data = json.loads(mf.read_text(encoding="utf-8"))
+                if data.get("session_id") == session_id:
+                    return data
+            except Exception:
+                pass
+    # 尝试从 execution logs 重建
+    try:
+        from src.core.manifest import build_manifest, list_sessions
+        manifest = build_manifest(session_id)
+        return json.loads(ManifestBuilder().to_json(manifest))
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Manifest not found for session {session_id}")
+
+
+@app.get("/api/manifest/{session_id}/export")
+async def export_evidence_package(session_id: str, user: dict = Depends(get_current_user)):
+    """导出签核证据包 (zip)"""
+    import tempfile
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+
+    try:
+        from src.core.manifest import export_evidence_package as export_pkg
+        from src.database.repository import add_audit_log
+        # 审计：证据包导出
+        username = user.get("username", "anonymous") if user else "anonymous"
+        uid = user.get("user_id", 0) if user else 0
+        try: await add_audit_log(uid, username, "evidence_export", session_id, "证据包导出")
+        except Exception: pass
+
+        tmp_dir = Path(tempfile.mkdtemp())
+        zip_path = tmp_dir / f"signoffai_evidence_{session_id}.zip"
+        result = export_pkg(session_id, str(zip_path))
+        return FileResponse(
+            path=str(result),
+            media_type="application/zip",
+            filename=f"signoffai_evidence_{session_id}.zip",
+            headers={"X-Evidence-Hash": "See manifest.json in archive"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Evidence export failed: {e}")
+
+
+@app.get("/api/manifest")
+async def list_manifests():
+    """列出所有 manifest sessions"""
+    from src.core.manifest import list_sessions
+    return {"sessions": list_sessions()}
+
+
+@app.get("/api/engines/latest")
+async def get_latest_engines():
+    """获取五大差异化引擎的最新输出"""
+    from pathlib import Path
+    import json
+    for ef in sorted(Path("output").glob("**/docs/engines.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            return json.loads(ef.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    raise HTTPException(status_code=404, detail="No engines output found — run vagent verify first")
+
+
+# ═══════════════════════════════════════════════════════════
+# 五大引擎独立 API
+# ═══════════════════════════════════════════════════════════
+
+@app.post("/api/engines/vplan")
+async def generate_vplan(spec_text: str = "", module_name: str = ""):
+    """从 MD 规格自动生成验证计划"""
+    from src.core.engines import VPlanGenerator
+    gen = VPlanGenerator()
+    vplan = gen.generate(spec_text, module_name)
+    return {
+        "module": module_name or "auto",
+        "requirements": [{"id": r["id"], "description": r["description"]} for r in vplan.requirements],
+        "coverage_points": [{"name": cp.name, "description": cp.description, "category": cp.category, "target": cp.target} for cp in vplan.coverage_points],
+        "testcases": [{"name": tc.name, "description": tc.description, "level": tc.level, "coverage_points": tc.coverage_points} for tc in vplan.testcases],
+        "risk_items": vplan.risk_items,
+        "coverage_targets": vplan.coverage_targets,
+        "signoff_criteria": vplan.signoff_criteria,
+        "traceability": vplan.traceability_matrix,
+    }
+
+
+@app.post("/api/engines/smart-regression")
+async def smart_regression(coverage_data: dict = None, testcases: List[dict] = None):
+    """覆盖率驱动的智能回归选择"""
+    from src.core.engines import CoverageDrivenRegressor
+    reg = CoverageDrivenRegressor(coverage_data or {}, testcases or [])
+    plan = reg.select()
+    return {
+        "selected": plan.selected_tests,
+        "skipped": plan.skipped_tests,
+        "gaps_addressed": plan.coverage_gaps_addressed,
+        "estimated_runtime": plan.estimated_runtime,
+        "original_runtime": plan.original_runtime,
+        "time_saved_pct": plan.time_saved_pct,
+    }
+
+
+@app.post("/api/engines/debug")
+async def debug_copilot(log_text: str = ""):
+    """仿真日志自动分析 + 根因定位"""
+    from src.core.engines import DebugCopilot
+    copilot = DebugCopilot()
+    insights = copilot.analyze(log_text)
+    return {
+        "insights": [{"type": i.error_type, "location": i.location, "root_cause": i.root_cause, "suggested_fix": i.suggested_fix, "confidence": i.confidence, "auto_fixable": i.auto_fixable} for i in insights],
+        "time_saved": copilot.time_saved_estimate(insights),
+        "total_insights": len(insights),
+    }
+
+
+@app.post("/api/engines/triage")
+async def regression_triage(failed_logs: List[dict] = None):
+    """批量回归智能研判"""
+    from src.core.engines import RegressionTriage
+    triage = RegressionTriage()
+    result = triage.classify(failed_logs or [])
+    return {
+        "total": result.total, "failed": result.failed,
+        "root_causes": result.root_causes,
+        "recommended_actions": result.recommended_actions,
+        "estimated_manual_time": result.estimated_manual_time,
+        "estimated_ai_time": result.estimated_ai_time,
+    }
+
+
+@app.get("/api/evidence/latest")
+async def get_latest_evidence():
+    """获取最新证据链"""
+    from pathlib import Path
+    import json
+    for ef in sorted(Path("output").glob("**/evidence_chain.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            return json.loads(ef.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    raise HTTPException(status_code=404, detail="No evidence chain found")
+
+
+@app.get("/api/evidence/{run_id}")
+async def get_evidence_chain(run_id: str):
+    """获取指定 run 的 5 层证据链"""
+    from pathlib import Path
+    import json
+    for ef in sorted(Path("output").glob("**/evidence_chain.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(ef.read_text(encoding="utf-8"))
+            rid = data.get("run_id", "")
+            if rid == run_id or run_id in rid or rid.endswith(run_id[-12:]):
+                return data
+        except Exception:
+            pass
+    raise HTTPException(status_code=404, detail=f"Evidence chain not found for {run_id}")
+
+
+@app.get("/api/manifest/{session_id}/verify")
+async def verify_manifest_integrity(session_id: str):
+    """验证证据包完整性：检查 manifest hash、阶段 hash、文件是否缺失或被篡改"""
+    from pathlib import Path
+    import json, hashlib
+
+    result = {
+        "session_id": session_id,
+        "valid": False,
+        "manifest_hash_ok": False,
+        "evidence_hash_ok": False,
+        "phases_complete": False,
+        "file_count": 0,
+        "missing_files": [],
+        "hash_mismatches": [],
+        "issues": [],
+    }
+
+    # 查找 manifest — 多种路径模式
+    manifest_data = None
+    manifest_path = None
+    patterns = [f"**/{session_id}/**/manifest.json", "**/docs/manifest.json", "**/manifest.json"]
+    for pattern in patterns:
+        for mf in sorted(Path("output").glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                data = json.loads(mf.read_text(encoding="utf-8"))
+                if (data.get("session_id") == session_id
+                    or data.get("run_id") == session_id
+                    or (data.get("run_id", "").endswith(session_id[-6:]) and len(session_id) >= 6)):
+                    manifest_data = data
+                    manifest_path = mf
+                    break
+            except Exception:
+                pass
+        if manifest_data:
+            break
+
+    if not manifest_data:
+        result["issues"].append("Manifest not found")
+        return result
+
+    # 1. Manifest hash 自校验
+    stored_hash = manifest_data.get("manifest_hash", "")
+    calc_data = {k: v for k, v in manifest_data.items() if k != "manifest_hash"}
+    from src.core.manifest import hash_json
+    calc_hash = hash_json(calc_data)
+    result["manifest_hash_ok"] = stored_hash == calc_hash
+    if not result["manifest_hash_ok"]:
+        result["issues"].append("Manifest hash mismatch — evidence may be tampered")
+
+    # 2. 阶段完整性
+    phases = manifest_data.get("phases", [])
+    total = manifest_data.get("total_phases", len(phases))
+    result["phases_complete"] = len(phases) == total
+    result["total_phases"] = total
+    result["phases_completed"] = len(phases)
+    skipped = sum(1 for p in phases if p.get("status") == "skipped")
+    result["phases_passed"] = sum(1 for p in phases if p.get("status") == "passed")
+    result["phases_failed"] = sum(1 for p in phases if p.get("status") in ("failed", "error"))
+    result["phases_degraded"] = sum(1 for p in phases if p.get("status") == "degraded")
+    result["phases_skipped"] = skipped
+
+    # 3. 文件完整性
+    output_root = manifest_data.get("output_root", "")
+    output_path = Path(output_root)
+    if not output_path.is_absolute():
+        output_path = Path(os.getcwd()) / output_root
+    if output_root and output_path.exists():
+        all_files = []
+        for f in output_path.rglob("*"):
+            if f.is_file() and not f.name.startswith("."):
+                all_files.append(f)
+        result["file_count"] = len(all_files)
+
+        # Check against phase artifacts
+        for p in phases:
+            for art in p.get("artifacts", []):
+                art_path = output_path / art
+                if not art_path.exists():
+                    result["missing_files"].append(art)
+                else:
+                    expected_hash = p.get("artifact_hashes", {}).get(art, "")
+                    if expected_hash:
+                        actual = hashlib.sha256(art_path.read_bytes()).hexdigest()
+                        if actual != expected_hash:
+                            result["hash_mismatches"].append({"file": art, "expected": expected_hash[:16], "actual": actual[:16]})
+
+    # 4. Evidence hash 校验
+    stored_evidence = manifest_data.get("evidence_hash", "")
+    if stored_evidence and result["file_count"] > 0:
+        from src.core.manifest import ManifestBuilder
+        mb = ManifestBuilder()
+        files_list = [str(f.relative_to(output_root)) for f in output_path.rglob("*") if f.is_file()]
+        calc_evidence = mb._compute_aggregate_hash(output_path, files_list)
+        result["evidence_hash_ok"] = stored_evidence == calc_evidence
+
+    result["valid"] = (
+        result["manifest_hash_ok"]
+        and len(result["missing_files"]) == 0
+        and len(result["hash_mismatches"]) == 0
+    )
+
+    # 5. 结论
+    if result["valid"]:
+        result["conclusion"] = "🟢 证据链完整，未被篡改"
+    elif result["manifest_hash_ok"]:
+        result["conclusion"] = "🟡 证据链部分可验证，存在文件缺失或变更"
+    else:
+        result["conclusion"] = "🔴 证据链已被篡改或损坏"
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════
+# 版本管理 API — RTL/UVM/Env 代码版本追踪
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/versions")
+async def list_versions():
+    """列出所有 pipeline run 作为版本记录，包含 RTL/UVM hash"""
+    from pathlib import Path
+    import json, hashlib
+    versions = []
+    seen = set()
+
+    for mf in sorted(Path("output").glob("**/docs/manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(mf.read_text(encoding="utf-8"))
+            run_id = data.get("run_id", "")
+            if not run_id or run_id in seen:
+                continue
+            seen.add(run_id)
+
+            # 提取各阶段产物 hash
+            rtl_hash = uvm_hash = model_hash = ""
+            file_count = data.get("output_file_count", 0)
+            for p in data.get("phases", []):
+                ah = p.get("artifact_hashes", {})
+                if p.get("phase_name") == "design" and ah:
+                    rtl_hash = list(ah.values())[0] if ah else ""
+                elif p.get("phase_name") == "UVM" and ah:
+                    uvm_hash = list(ah.values())[0] if ah else ""
+                elif p.get("phase_name") == "model" and ah:
+                    model_hash = list(ah.values())[0] if ah else ""
+
+            versions.append({
+                "run_id": run_id,
+                "workflow": data.get("workflow", ""),
+                "state": data.get("state", ""),
+                "started_at": data.get("started_at", ""),
+                "total_phases": data.get("total_phases", 0),
+                "passed": data.get("passed", 0),
+                "overall_score": data.get("overall_score", 0),
+                "evidence_hash": data.get("evidence_hash", ""),
+                "manifest_hash": data.get("manifest_hash", ""),
+                "rtl_hash": rtl_hash,
+                "uvm_hash": uvm_hash,
+                "model_hash": model_hash,
+                "file_count": file_count,
+            })
+        except Exception:
+            pass
+
+    return {"versions": versions}
+
+
+@app.get("/api/versions/{run_id}")
+async def get_version_detail(run_id: str):
+    """获取某个版本的详细信息，包含完整文件清单及 hash"""
+    from pathlib import Path
+    import json, hashlib
+
+    for mf in sorted(Path("output").glob("**/docs/manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(mf.read_text(encoding="utf-8"))
+            if data.get("run_id") != run_id:
+                continue
+
+            # 按阶段分组文件
+            phase_files = {}
+            for p in data.get("phases", []):
+                pname = p.get("phase_name", "")
+                artifacts = p.get("artifacts", [])
+                hashes = p.get("artifact_hashes", {})
+                if artifacts:
+                    phase_files[pname] = {
+                        "status": p.get("status", ""),
+                        "score": p.get("score", 0),
+                        "elapsed_s": p.get("elapsed_s", 0),
+                        "files": [{"path": a, "hash": hashes.get(a, "")} for a in artifacts],
+                    }
+
+            # 扫描实际产物目录
+            output_root = data.get("output_root", "")
+            actual_files = []
+            if output_root and output_path.exists():
+                for f in sorted(output_path.rglob("*")):
+                    if f.is_file() and not f.name.startswith("."):
+                        rel = str(f.relative_to(output_root))
+                        sha = hashlib.sha256(f.read_bytes()).hexdigest()
+                        actual_files.append({
+                            "path": rel,
+                            "hash": sha,
+                            "size": f.stat().st_size,
+                        })
+
+            return {
+                "run_id": run_id,
+                "workflow": data.get("workflow", ""),
+                "started_at": data.get("started_at", ""),
+                "completed_at": data.get("completed_at", ""),
+                "evidence_hash": data.get("evidence_hash", ""),
+                "manifest_hash": data.get("manifest_hash", ""),
+                "phases": data.get("phases", []),
+                "phase_files": phase_files,
+                "files": actual_files[:200],  # 截断
+                "total_files": len(actual_files),
+            }
+        except Exception:
+            pass
+
+    raise HTTPException(status_code=404, detail=f"Version not found: {run_id}")
+
+
+# ═══════════════════════════════════════════════════════════
+# 多模块聚合 API — SignOff 经理总览
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/modules")
+async def list_modules():
+    """聚合所有模块的 AI 验证进展 — SignOff 经理总览"""
+    from pathlib import Path
+    import json, hashlib
+    from datetime import datetime
+
+    modules = {}
+    # 从 specs/ 目录发现所有模块
+    specs_dir = SPECS_DIR
+    if specs_dir.exists():
+        for md_file in sorted(specs_dir.glob("**/*.md")):
+            # 提取模块名 = 目录名
+            mod_name = md_file.parent.name if md_file.parent != specs_dir else md_file.stem
+            if mod_name not in modules:
+                modules[mod_name] = {
+                    "name": mod_name,
+                    "specs": [],
+                    "runs": [],
+                    "latest_status": "unknown",
+                    "latest_score": 0,
+                    "latest_passed": 0,
+                    "latest_total": 0,
+                    "latest_time": "",
+                    "evidence_hash": "",
+                    "coverage": {"line": 0, "branch": 0, "toggle": 0},
+                }
+            modules[mod_name]["specs"].append({
+                "file": md_file.name,
+                "path": str(md_file.relative_to(specs_dir)),
+                "modified": datetime.fromtimestamp(md_file.stat().st_mtime).isoformat(),
+            })
+
+    # 从 manifest 聚合运行数据
+    for mf in sorted(Path("output").glob("**/docs/manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(mf.read_text(encoding="utf-8"))
+            run_id = data.get("run_id", "")
+            metadata = data.get("metadata", {})
+
+            # 尝试从 ctx 推断模块名
+            mod_name = "default"
+            ctx_keys = metadata.get("ctx_keys", [])
+            if isinstance(ctx_keys, list) and ctx_keys:
+                spec_data = None
+                # Try to find spec data with design_name
+                for k in ctx_keys:
+                    pass  # can't easily extract from ctx here
+
+            # 从 manifest 阶段数据推断
+            for p in data.get("phases", []):
+                ah = p.get("artifact_hashes", {})
+                artifacts = p.get("artifacts", [])
+
+            # 用 output_root 的父目录作为模块名
+            out_root = Path(data.get("output_root", ""))
+            if out_root.parts:
+                # output/<spec_name>/... 或 output/<run_id>/...
+                idx = 0
+                for i, part in enumerate(out_root.parts):
+                    if part == "output" and i + 1 < len(out_root.parts):
+                        idx = i + 1
+                pot_name = out_root.parts[idx] if idx < len(out_root.parts) else out_root.name
+                if pot_name not in ("output", "docs", ""):
+                    mod_name = pot_name
+
+            if mod_name not in modules:
+                modules[mod_name] = {"name": mod_name, "specs": [], "runs": [],
+                                    "latest_status": "unknown", "latest_score": 0,
+                                    "latest_passed": 0, "latest_total": 0, "latest_time": "",
+                                    "evidence_hash": "", "coverage": {"line": 0, "branch": 0, "toggle": 0}}
+
+            modules[mod_name]["runs"].append({
+                "run_id": run_id,
+                "workflow": data.get("workflow", ""),
+                "state": data.get("state", ""),
+                "passed": data.get("passed", 0),
+                "total": data.get("total_phases", 0),
+                "score": data.get("overall_score", 0),
+                "started_at": data.get("started_at", ""),
+                "evidence_hash": data.get("evidence_hash", ""),
+            })
+
+            # 更新最新状态
+            if not modules[mod_name]["latest_time"] or data.get("started_at", "") > modules[mod_name]["latest_time"]:
+                modules[mod_name]["latest_status"] = data.get("state", "unknown")
+                modules[mod_name]["latest_score"] = data.get("overall_score", 0)
+                modules[mod_name]["latest_passed"] = data.get("passed", 0)
+                modules[mod_name]["latest_total"] = data.get("total_phases", 0)
+                modules[mod_name]["latest_time"] = data.get("started_at", "")
+                modules[mod_name]["evidence_hash"] = data.get("evidence_hash", "")
+
+                # 提取覆盖率
+                cov = metadata.get("coverage", {})
+                if isinstance(cov, dict):
+                    modules[mod_name]["coverage"] = {
+                        "line": cov.get("line_pct", 0),
+                        "branch": cov.get("branch_pct", 0),
+                        "toggle": cov.get("toggle_pct", 0),
+                    }
+
+        except Exception:
+            pass
+
+    # 计算整体统计
+    all_modules = list(modules.values())
+    for m in all_modules:
+        m["runs"] = m["runs"][:5]  # 只保留最近 5 次
+        m["run_count"] = len(m["runs"])
+
+    total_runs = sum(m["run_count"] for m in all_modules)
+    total_passed = sum(1 for m in all_modules if m["latest_status"] == "completed" and m["latest_passed"] == m["latest_total"])
+    total_with_errors = sum(1 for m in all_modules if m["latest_status"] == "completed_with_errors")
+    total_active = sum(1 for m in all_modules if m["latest_status"] in ("running",))
+
+    return {
+        "modules": all_modules,
+        "total_modules": len(all_modules),
+        "total_runs": total_runs,
+        "total_passed": total_passed,
+        "total_with_errors": total_with_errors,
+        "total_active": total_active,
+        "overall_health": "good" if total_passed == len(all_modules) and len(all_modules) > 0 else (
+            "warning" if total_passed > 0 or total_with_errors > 0 else "idle"),
+    }
+
+
+@app.get("/api/modules/members")
+async def get_all_module_members():
+    """批量返回所有模块及其成员"""
+    data = await list_modules()
+    result = []
+    for m in data.get("modules", []):
+        members = []
+        try:
+            from src.database.repository import list_projects
+            projects = await list_projects()
+            pid = None
+            for p in projects:
+                if p["name"] == m["name"]: pid = p["id"]; break
+            if pid:
+                from src.database.connection import get_session
+                from src.database.models import ProjectMember, User
+                from sqlalchemy import select
+                s = await get_session()
+                pm_result = await s.execute(select(ProjectMember).where(ProjectMember.project_id == pid))
+                for pm in pm_result.scalars().all():
+                    u_result = await s.execute(select(User).where(User.id == pm.user_id))
+                    u = u_result.scalar_one_or_none()
+                    if u: members.append({"username": u.username, "display_name": u.display_name})
+                await s.close()
+        except Exception: pass
+        result.append({"module": m["name"], "members": members})
+    return {"modules": result}
+
+
+@app.get("/api/modules/{module_name}")
+async def get_module_detail(module_name: str):
+    """获取单个模块的详细验证进展"""
+    data = await list_modules()
+    for m in data.get("modules", []):
+        if m["name"] == module_name:
+            return m
+    raise HTTPException(status_code=404, detail=f"Module not found: {module_name}")
+
+
+# ═══════════════════════════════════════════════════════════
+# 模块分配 & 权限过滤 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/my-modules")
+async def list_my_modules(user: dict = Depends(get_current_user)):
+    """返回当前工程师负责的模块（经理可看全部）"""
+    data = await list_modules()
+    all_mods = data.get("modules", [])
+
+    # 管理员和SignOff 经理看全部
+    role = user.get("role", "") if user else ""
+    if role in ("admin", "verification_manager"):
+        return data
+
+    # 工程师只看分配给自己（通过 ProjectMember）的模块
+    user_id = user.get("user_id") if user else 0
+    try:
+        from src.database.repository import list_projects
+        projects = await list_projects(user_id)
+        assigned_names = {p["name"] for p in projects}
+        my_mods = [m for m in all_mods if m["name"] in assigned_names]
+        return {**data, "modules": my_mods, "total_modules": len(my_mods), "filtered": True}
+    except Exception:
+        # 无分配则返回空
+        return {**data, "modules": [], "total_modules": 0, "filtered": True, "message": "无模块分配 — 请联系SignOff 经理"}
+
+
+@app.post("/api/modules/assign")
+async def assign_module(module_name: str = "", username: str = "", user: dict = Depends(require_auth)):
+    """管理员/经理将工程师分配到模块 — 参数从 query string 读取"""
+    if user.get("role") not in ("admin", "verification_manager"):
+        raise HTTPException(status_code=403, detail="仅管理员和SignOff 经理可以分配模块")
+
+    from src.database.repository import get_user_by_username, create_project, list_projects
+    eng = await get_user_by_username(username)
+    if not eng:
+        raise HTTPException(status_code=404, detail=f"用户不存在: {username}")
+
+    # 创建或获取 project（模块=项目）
+    pid = None
+    existing = await list_projects()
+    for p in existing:
+        if p["name"] == module_name:
+            pid = p["id"]
+            break
+
+    if not pid:
+        result = await create_project(module_name, f"AI 验证模块: {module_name}", user["user_id"])
+        pid = result["id"]
+
+    # 将工程师加入项目
+    from src.database.connection import get_session
+    from src.database.models import ProjectMember
+    s = await get_session()
+    from sqlalchemy import select
+    existing_member = await s.execute(
+        select(ProjectMember).where(ProjectMember.project_id == pid, ProjectMember.user_id == eng.id)
+    )
+    if not existing_member.scalar_one_or_none():
+        s.add(ProjectMember(project_id=pid, user_id=eng.id, role="member"))
+        await s.commit()
+    await s.close()
+
+    from src.database.repository import add_audit_log
+    await add_audit_log(user["user_id"], user["username"], "module_assign",
+                        module_name, f"分配工程师 {username}")
+
+    return {"ok": True, "module": module_name, "engineer": username}
+
+
+
+@app.get("/api/modules/{module_name}/members")
+async def get_module_members(module_name: str):
+    """查看模块的分配成员"""
+    from src.database.repository import list_projects
+    projects = await list_projects()
+    pid = None
+    for p in projects:
+        if p["name"] == module_name:
+            pid = p["id"]
+            break
+    if not pid:
+        return {"members": [], "module": module_name}
+
+    from src.database.connection import get_session
+    from src.database.models import ProjectMember, User
+    from sqlalchemy import select
+    s = await get_session()
+    result = await s.execute(select(ProjectMember).where(ProjectMember.project_id == pid))
+    members = []
+    for pm in result.scalars().all():
+        u_result = await s.execute(select(User).where(User.id == pm.user_id))
+        u = u_result.scalar_one_or_none()
+        if u:
+            members.append({"username": u.username, "display_name": u.display_name, "role": pm.role})
+    await s.close()
+    return {"module": module_name, "members": members}
+
+
+# ═══════════════════════════════════════════════════════════
+# Token 用量统计 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/token-usage")
+async def get_token_usage(days: int = 7):
+    """汇总 Token 用量（从 execution logs 聚合）"""
+    from pathlib import Path
+    import json
+    from datetime import datetime, timedelta
+
+    cutoff = datetime.now() - timedelta(days=days)
+    total_tokens = 0
+    total_llm_calls = 0
+    per_agent = {}
+    daily = {}
+
+    exec_dir = Path("logs/execution")
+    if exec_dir.exists():
+        for f in sorted(exec_dir.glob("exec_*.jsonl"), reverse=True):
+            try:
+                for line in f.read_text(encoding="utf-8").strip().split("\n"):
+                    if not line.strip():
+                        continue
+                    evt = json.loads(line)
+                    if evt.get("event") != "llm_call":
+                        continue
+                    ts = evt.get("timestamp", "")
+                    if ts:
+                        try:
+                            evt_time = datetime.fromisoformat(ts)
+                            if evt_time < cutoff:
+                                continue
+                        except Exception:
+                            pass
+                    tokens = evt.get("tokens", 0)
+                    total_tokens += tokens
+                    total_llm_calls += 1
+                    agent = evt.get("agent", "unknown")
+                    per_agent[agent] = per_agent.get(agent, 0) + tokens
+                    day = ts[:10] if ts else "unknown"
+                    daily[day] = daily.get(day, 0) + tokens
+            except Exception:
+                pass
+
+    return {
+        "total_tokens": total_tokens,
+        "total_llm_calls": total_llm_calls,
+        "period_days": days,
+        "per_agent": per_agent,
+        "daily": [{"date": k, "tokens": v} for k, v in sorted(daily.items())],
+        "estimated_cost": round(total_tokens / 1000 * 0.002, 2),  # ~$0.002/1K tokens estimate
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# AI 智能错误分析 (Human-in-the-loop)
+# ═══════════════════════════════════════════════════════════
+
+@app.post("/api/ai/analyze-error")
+async def ai_analyze_error(phase_name: str = "", error_log: str = "", agent_role: str = ""):
+    import re
+    suggestions = []; category = "unknown"; summary = ""
+    log_lower = error_log.lower()
+
+    compile_errors = re.findall(r"\*\*\s*Error[:\s]*(.*?)(?=\n|$)", error_log, re.IGNORECASE)
+    uvm_errors = re.findall(r"UVM_ERROR.*?(\S.*?)(?=\n|$)", error_log, re.IGNORECASE)
+    uvm_fatals = re.findall(r"UVM_FATAL.*?(\S.*?)(?=\n|$)", error_log, re.IGNORECASE)
+
+    if compile_errors:
+        category = "compile"
+        summary = f"编译阶段发现 {len(compile_errors)} 个错误"
+        for err in compile_errors:
+            ec = err.strip()[:200]
+            if "could not find field" in ec.lower():
+                field = re.search(r"field\s+'(\w+)'", ec, re.IGNORECASE)
+                suggestions.append({"type":"missing_field","severity":"medium","diagnosis":f"接口信号 '{field.group(1) if field else 'unknown'}' 在目标模块中不存在","fix":"检查 interface 定义，确认信号名拼写正确，或从 driver/monitor 中移除对该信号的引用","auto_fixable":True})
+            elif "undefined" in ec.lower():
+                suggestions.append({"type":"undefined_identifier","severity":"high","diagnosis":f"未定义的标识符: '{ec[:80]}'","fix":"检查是否缺少 include 或 import","auto_fixable":False})
+            else:
+                suggestions.append({"type":"syntax_error","severity":"medium","diagnosis":ec,"fix":"请检查对应行号的语法","auto_fixable":False})
+
+    if uvm_errors or uvm_fatals:
+        category = category or "simulation"
+        total = len(uvm_errors) + len(uvm_fatals)
+        if not summary:
+            summary = f"仿真阶段发现 {total} 个 UVM 错误 (ERROR:{len(uvm_errors)}, FATAL:{len(uvm_fatals)})"
+        for err in (uvm_fatals + uvm_errors)[:5]:
+            ec = err.strip()[:200]
+            if "scoreboard" in ec.lower() and "mismatch" in ec.lower():
+                suggestions.append({"type":"scoreboard_mismatch","severity":"high","diagnosis":"Scoreboard 比对失败：参考模型输出与 DUT 输出不一致","fix":"1. 检查 C++ 参考模型实现逻辑\n2. 检查 DUT RTL 运算逻辑\n3. 比对波形定位第一个不一致的 cycle\n4. 确认时序对齐","auto_fixable":False})
+            elif "timeout" in ec.lower():
+                suggestions.append({"type":"sim_timeout","severity":"high","diagnosis":"仿真超时 — 可能由死锁、无限循环或等待条件未满足导致","fix":"1. 增大 UVM_TIMEOUT 值\n2. 检查 phase objection\n3. 检查 driver 是否正确发送 sequence","auto_fixable":False})
+            else:
+                suggestions.append({"type":"uvm_error","severity":"medium","diagnosis":ec,"fix":"查看详细日志定位具体原因","auto_fixable":False})
+
+    if not suggestions:
+        category = "general"
+        summary = "未识别到已知错误模式，建议人工审查日志"
+        key_lines = [l.strip() for l in error_log.split("\n") if "error" in l.lower() or "fail" in l.lower() or "fatal" in l.lower()][:5]
+        if key_lines:
+            suggestions.append({"type":"unknown","severity":"medium","diagnosis":"日志中包含以下可疑行:\n" + "\n".join(key_lines),"fix":"建议将完整日志提交给SignOff 经理进行人工分析","auto_fixable":False})
+
+    return {"category":category,"summary":summary,"phase":phase_name,"agent":agent_role,"suggestions":suggestions,"suggestion_count":len(suggestions),"auto_fixable_count":sum(1 for s in suggestions if s.get("auto_fixable")),"timestamp":datetime.now().isoformat()}
+
+
+# ═══════════════════════════════════════════════════════════
+# 门限双轨 API — AI 找方向 + 传统盖章
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/modules/{module_name}/gating")
+async def get_module_gating(module_name: str):
+    """获取模块的门限双轨状态：传统已验证 + AI 待验证"""
+    data = await list_modules()
+    module = None
+    for m in data.get("modules", []):
+        if m["name"] == module_name:
+            module = m
+            break
+    if not module:
+        raise HTTPException(status_code=404, detail=f"Module not found: {module_name}")
+
+    # 分析该模块所有 runs
+    traditional_verified = 0
+    ai_pending = 0
+    traditional_runs = []
+    ai_runs = []
+
+    for run in module.get("runs", []):
+        is_ai = "ai" in run.get("workflow", "").lower()
+        if is_ai:
+            ai_runs.append(run)
+            # AI 产出的覆盖率需要传统验证
+            ai_pending += run.get("passed", 0)
+        else:
+            traditional_runs.append(run)
+            # 传统轨的结果可以直接计数
+            traditional_verified += run.get("passed", 0)
+
+    # 计算覆盖率门限
+    cov = module.get("coverage", {})
+    traditional_cov = cov.get("line", 0)
+    # AI 发现但未验证的额外覆盖（估算为 10-15%）
+    ai_estimated_cov = min(15, max(0, 95 - traditional_cov)) if traditional_cov > 0 else 0
+
+    total_phases = module.get("latest_total", 17)
+    trad_pct = round(traditional_verified / max(total_phases * max(len(traditional_runs), 1), 1) * 100)
+    ai_pct = round(ai_pending / max(total_phases * max(len(ai_runs), 1), 1) * 30) if ai_runs else 0
+
+    # 门限判定
+    threshold = 85  # 传统覆盖率门限
+    gating_status = "open"  # open | partial | locked
+    if traditional_cov >= threshold:
+        gating_status = "locked"  # 传统已达到门限，可以签核
+    elif traditional_cov >= threshold * 0.7:
+        gating_status = "partial"  # 接近门限，AI 探索中
+
+    return {
+        "module": module_name,
+        "gating_status": gating_status,
+        "threshold": threshold,
+        "traditional": {
+            "coverage": traditional_cov,
+            "verified_phases": traditional_verified,
+            "run_count": len(traditional_runs),
+            "color": "#3b82f6",  # deep blue
+            "label": "传统已验证",
+        },
+        "ai": {
+            "pending_phases": ai_pending,
+            "run_count": len(ai_runs),
+            "estimated_extra_coverage": ai_estimated_cov,
+            "color": "#60a5fa",  # light blue
+            "label": "AI 待传统验证",
+        },
+        "total_coverage_estimated": min(100, traditional_cov + ai_estimated_cov),
+        "gap_to_threshold": max(0, threshold - traditional_cov),
+        "recommendation": (
+            "已达到签核门限 ✅" if gating_status == "locked"
+            else f"AI 探索中，距门限还差 {max(0, threshold - traditional_cov)}% 覆盖率"
+            if gating_status == "partial"
+            else "请先运行传统仿真建立基线"
+        ),
+    }
+
 
 # ═══════════════════════════════════════════════════════════
 # 知识库
@@ -804,8 +2035,21 @@ async def design_arch_run(req: DesignArchRequest, user: dict = Depends(require_a
 # ═══════════════════════════════════════════════════════════
 
 @app.get("/api/docs")
-async def list_docs():
-    """列出所有规格文档"""
+async def list_docs(user: dict = Depends(get_current_user)):
+    """列出规格文档 — 经理看全部，工程师只看已分配模块的文档"""
+    role = user.get("role", "") if user else ""
+    user_id = user.get("user_id", 0) if user else 0
+
+    # 工程师只看分配模块的文档
+    allowed_dirs = None
+    if role not in ("admin", "verification_manager", ""):
+        try:
+            from src.database.repository import list_projects
+            projects = await list_projects(user_id)
+            allowed_dirs = {p["name"] for p in projects}
+        except Exception:
+            allowed_dirs = set()
+
     docs = []
     if SPECS_DIR.exists():
         for f in sorted(SPECS_DIR.glob("**/*.md")):
@@ -824,9 +2068,16 @@ async def list_docs():
                     for m in re.findall(r'REQ_\w+', line):
                         if m not in linked_reqs:
                             linked_reqs.append(m)
+            # 工程师过滤：只显示已分配模块目录下的文档
+            parent_dir = f.parent.name if f.parent != SPECS_DIR else ""
+            if allowed_dirs is not None and parent_dir and parent_dir not in allowed_dirs:
+                continue
+
+            rel = str(f.relative_to(SPECS_DIR)).replace("\\", "/")
             docs.append({
                 "path": str(f),
                 "name": f.name,
+                "rel_path": rel,
                 "title": title,
                 "size": len(content),
                 "linked_reqs": linked_reqs,
@@ -850,14 +2101,21 @@ async def read_doc(path: str):
 
 @app.post("/api/docs/{path:path}")
 async def write_doc(path: str, content: str = "", user: dict = Depends(require_auth)):
-    """保存规格文档"""
+    """保存规格文档 — content 作为 query 参数传递"""
+    role = user.get("role", "")
+    if role not in ("admin", "verification_manager"):
+        raise HTTPException(status_code=403, detail="仅 SignOff 经理可以编辑规格文档")
+    if not content:
+        raise HTTPException(status_code=400, detail="content is required")
     if len(content.encode("utf-8")) > MAX_DOCUMENT_BYTES:
-        raise HTTPException(status_code=413, detail="document is too large")
+        raise HTTPException(status_code=413, detail="document too large")
     fp = _resolve_spec_path(path)
     fp.parent.mkdir(parents=True, exist_ok=True)
     fp.write_text(content, encoding="utf-8")
-    from src.database.repository import add_audit_log
-    await add_audit_log(user["user_id"], user["username"], "doc_save", str(fp))
+    try:
+        from src.database.repository import add_audit_log
+        await add_audit_log(user["user_id"], user["username"], "doc_save", str(fp))
+    except Exception: pass
     return {"ok": True, "path": str(fp)}
 
 # ═══════════════════════════════════════════════════════════

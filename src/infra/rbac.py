@@ -88,10 +88,10 @@ ROLES = {
         permissions=set(Permission)
     ),
     
-    # 验证经理 - 管理权限
+    # SignOff 经理 - 管理权限
     "verification_manager": Role(
         name="verification_manager",
-        display_name="验证经理",
+        display_name="SignOff 经理",
         description="管理验证项目，审批签核，查看所有数据",
         permissions={
             # 项目
@@ -119,10 +119,10 @@ ROLES = {
         }
     ),
     
-    # 高级验证工程师
+    # 高级 SignOff 工程师
     "senior_engineer": Role(
         name="senior_engineer",
-        display_name="高级验证工程师",
+        display_name="高级 SignOff 工程师",
         description="可以创建和运行测试，生成环境，备份知识库",
         permissions={
             Permission.PROJECT_VIEW, Permission.PROJECT_EDIT,
@@ -140,10 +140,10 @@ ROLES = {
         }
     ),
     
-    # 验证工程师
+    # SignOff 工程师
     "engineer": Role(
         name="engineer",
-        display_name="验证工程师",
+        display_name="SignOff 工程师",
         description="运行测试，查看结果，不能修改环境配置",
         permissions={
             Permission.PROJECT_VIEW,

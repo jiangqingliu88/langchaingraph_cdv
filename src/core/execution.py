@@ -377,6 +377,13 @@ class PipelineExecutionService:
                 tracer.phase_end(name, final_status, final_score, phase_time)
             except Exception: pass
 
+            # ── SSE 实时推送阶段状态 ──
+            try:
+                from src.web.sse import _sse_notify_phase
+                import asyncio as _asyncio
+                _asyncio.create_task(_sse_notify_phase(run_id, name, final_status, final_score, phase_time))
+            except Exception: pass
+
             # ── 文本链阶段：存储输出数据 ──
             if ctx_key is None:
                 # 从 ctx diff 中提取文本输出
@@ -567,6 +574,9 @@ class PipelineExecutionService:
             from src.core.manifest import ManifestBuilder
             from src.middleware.debug_logger import tracer
             session_id = getattr(tracer, 'session_id', run_id.replace('run_', ''))
+            # 注入 run_type
+            run_type = getattr(self, '_run_types', {}).get(run_id, 'traditional')
+            ctx["_run_type"] = run_type
             builder = ManifestBuilder()
             manifest = builder.build(
                 session_id=session_id,
@@ -588,6 +598,71 @@ class PipelineExecutionService:
         except Exception as e:
             logger.warning(f"Manifest generation failed: {e}")
 
+        # ── 证据链收集 ──
+        evidence_path = ""
+        try:
+            from src.core.evidence import collect_evidence
+            chain = collect_evidence(run_id, output_root, ctx, run_state["phases"])
+            evidence_json = json.dumps(chain.to_dict(), indent=2, ensure_ascii=False, default=str)
+            evidence_path = str(Path(output_root) / "docs" / "evidence_chain.json")
+            Path(evidence_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(evidence_path).write_text(evidence_json, encoding="utf-8")
+            logger.info(f"Evidence chain saved: {evidence_path}")
+        except Exception as e:
+            logger.warning(f"Evidence collection failed: {e}")
+
+        # ── 三层映射: 需求→模块→功能点→测试点 ──
+        try:
+            from src.core.design_mapper import DesignArchitectMapper
+            mapper = DesignArchitectMapper()
+            spec_data = ctx.get("spec", {}) if hasattr(ctx, 'get') else {}
+            design_data = ctx.get("design_arch", {}) if hasattr(ctx, 'get') else {}
+
+            # 从 spec + design 提取结构化数据
+            spec_str = json.dumps(spec_data, default=str) if isinstance(spec_data, dict) else str(spec_data)
+            design_str = json.dumps(design_data, default=str) if isinstance(design_data, dict) else str(design_data)
+            combined_md = spec_str + "\n" + design_str
+
+            modules = mapper.parse_md_modules(combined_md)
+            # 从 spec 提取需求
+            vp = None
+            try:
+                from src.web.api import _get_vplan
+                vp = _get_vplan()
+            except Exception: pass
+            requirements = [{"id": r.id, "description": r.description}
+                            for r in (vp.matrix.requirements.values() if vp and hasattr(vp, 'matrix') else [])]
+            if not requirements and isinstance(spec_data, dict):
+                features = spec_data.get("features", [])
+                requirements = [{"id": f"REQ_AUTO_{i:03d}", "description": f.get("name", f.get("description", ""))}
+                                for i, f in enumerate(features[:20])]
+
+            mappings = mapper.match_req_to_features(requirements, modules)
+            stored = await mapper.store(0, modules, mappings)
+            logger.info(f"Design mapping stored: {stored}")
+        except Exception as e:
+            logger.warning(f"Design mapping failed: {e}")
+
+        # ── 五大差异化引擎 ──
+        try:
+            from src.core.engines import VPlanGenerator, CoverageDrivenRegressor, DebugCopilot, RegressionTriage
+            spec_str = json.dumps(ctx.get("spec", {}), default=str) if hasattr(ctx, 'get') else ""
+            vplan_gen = VPlanGenerator(); vplan = vplan_gen.generate(spec_str)
+            regressor = CoverageDrivenRegressor(ctx.get("coverage", {}) if hasattr(ctx, 'get') else {}, [{"name": tc.name, "level": tc.level} for tc in vplan.testcases]); smart_plan = regressor.select()
+            copilot = DebugCopilot(); sim_logs = ""; [sim_logs := sim_logs + f.read_text(encoding="utf-8", errors="replace")[:50000] for f in Path(output_root).rglob("*.log") if f.exists()]; insights = copilot.analyze(sim_logs) if sim_logs else []
+            triage = RegressionTriage(); failed_ps = [p for p in run_state["phases"] if p.get("status") in ("failed", "error")]; triage_result = triage.classify(failed_ps)
+            engines = {"vplan":{"reqs":len(vplan.requirements),"cps":len(vplan.coverage_points),"tests":len(vplan.testcases),"risks":len(vplan.risk_items)},"smart_regression":{"selected":len(smart_plan.selected_tests),"skipped":len(smart_plan.skipped_tests),"time_saved_pct":smart_plan.time_saved_pct},"debug":{"insights":len(insights),"time_saved":copilot.time_saved_estimate(insights),"auto_fixable":sum(1 for i in insights if i.auto_fixable)},"triage":{"total":triage_result.total,"root_causes":triage_result.root_causes,"estimated_manual_time":triage_result.estimated_manual_time}}
+            engines_path = str(Path(output_root) / "docs" / "engines.json"); Path(engines_path).parent.mkdir(parents=True, exist_ok=True); Path(engines_path).write_text(json.dumps(engines, indent=2, ensure_ascii=False, default=str), encoding="utf-8"); logger.info(f"Engines saved: {engines_path}")
+        except Exception as e:
+            logger.warning(f"Engines failed: {e}")
+
+        # ── SSE 推送完成 ──
+        try:
+            from src.web.sse import _sse_notify_complete
+            import asyncio as _asyncio
+            _asyncio.create_task(_sse_notify_complete(run_id, passed, len(phases), overall_score))
+        except Exception: pass
+
         return {
             "run_id": run_id,
             "workflow": workflow,
@@ -598,6 +673,7 @@ class PipelineExecutionService:
             "overall_score": overall_score,
             "ctx": ctx,
             "manifest_path": manifest_path,
+            "evidence_path": evidence_path,
         }
 
     # ── 运行状态查询 ──

@@ -202,6 +202,20 @@ async def search_knowledge(query: str = "", category: str = "", limit: int = 20)
 
 # ── 签核 ──
 
+async def check_project_membership(user_id: int, project_id: int) -> bool:
+    """检查用户是否为项目成员。管理员和经理始终返回 True。"""
+    if not project_id:
+        return True
+    s = await get_session()
+    user = (await s.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if user and user.role in ("admin", "verification_manager"):
+        await s.close(); return True
+    member = (await s.execute(
+        select(ProjectMember).where(ProjectMember.project_id == project_id, ProjectMember.user_id == user_id)
+    )).scalar_one_or_none()
+    await s.close(); return member is not None
+
+
 async def create_signoff(project_id: int, title: str, report_type: str, summary: dict, requester_id: int):
     s = await get_session()
     sf = Signoff(project_id=project_id, title=title, report_type=report_type,
@@ -219,6 +233,19 @@ async def list_signoffs(project_id: int = None, limit: int = 20):
              'report_type': sf.report_type, 'status': sf.status,
              'summary': sf.summary_json, 'comment': sf.comment,
              'created_at': str(sf.created_at)} for sf in sfs]
+
+async def get_signoff_by_id(sid: int):
+    """获取单条签核记录"""
+    s = await get_session()
+    sf = (await s.execute(select(Signoff).where(Signoff.id == sid))).scalar_one_or_none()
+    if sf:
+        result = {"id": sf.id, "project_id": sf.project_id, "title": sf.title,
+                  "report_type": sf.report_type, "status": sf.status,
+                  "summary": sf.summary_json, "requester_id": sf.requester_id,
+                  "approver_id": sf.approver_id, "comment": sf.comment,
+                  "created_at": str(sf.created_at), "updated_at": str(sf.updated_at)}
+        await s.close(); return result
+    await s.close(); return None
 
 async def update_signoff(sid: int, status: str, approver_id: int = None, comment: str = ""):
     s = await get_session()

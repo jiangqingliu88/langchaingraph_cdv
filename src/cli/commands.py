@@ -181,8 +181,160 @@ def dump(session_id, output, list_sessions_flag, json_output):
 
     console.print(f"\n[dim]Tip: vagent dump {session_id} -o evidence.zip[/dim] 导出签核证据包")
 
-@cli.command()
-@click.argument('spec_file', type=click.Path(exists=True))
+# ── vagent watch: 实时监控流水线 ──
+
+@cli.command("watch")
+@click.option("--run-id", "-r", help="监控指定 run_id")
+@click.option("--interval", "-i", default=1, help="轮询间隔 (秒), 默认 1s")
+@click.option("--follow", "-f", is_flag=True, help="持续监控直到完成")
+@click.option("--compact", "-c", is_flag=True, help="紧凑模式（单行刷新）")
+def watch(run_id, interval, follow, compact):
+    """实时监控流水线执行状态
+
+    \b
+    用法:
+      vagent watch              # 监控最新 running 状态的 run
+      vagent watch -r <run_id>  # 监控指定 run
+      vagent watch -f           # 持续监控直到完成
+      vagent watch -i 1 -f      # 每秒刷新，直到完成
+    """
+    import time as _time
+    from src.core.execution import PipelineExecutionService
+
+    service = PipelineExecutionService.get_instance()
+    last_phases = {}
+
+    def _find_run():
+        """找到要监控的 run"""
+        if run_id:
+            return run_id
+        # 找最新的 running 状态
+        for rid, state in service._runs.items():
+            if state.get("state") == "running":
+                return rid
+        # 找最新的任意状态
+        runs = list(service._runs.items())
+        if runs:
+            return runs[-1][0]
+        return None
+
+    def _render(phase_name, status, score, elapsed):
+        """单阶段状态行"""
+        icons = {"passed": "[green]✔[/green]", "degraded": "[yellow]⚠[/yellow]",
+                 "failed": "[red]✘[/red]", "running": "[cyan]⏳[/cyan]",
+                 "skipped": "[dim]·[/dim]", "error": "[red]!![/red]"}
+        icon = icons.get(status, "?")
+        score_str = f"[dim]{score:3d}[/dim]" if score else "[dim]  -[/dim]"
+        elapsed_str = f"[dim]{elapsed:5.1f}s[/dim]" if elapsed else "[dim]     -[/dim]"
+        return f"  {icon} {phase_name:8s} {score_str} {elapsed_str}"
+
+    try:
+        rid = _find_run()
+        if not rid:
+            console.print("[yellow]No active or recent pipeline runs found.[/yellow]")
+            console.print("[dim]Run 'vagent verify <spec>' first, then 'vagent watch'.[/dim]")
+            return
+
+        console.print(f"[bold]SignOffAI Watch — {rid}[/bold]")
+        console.print(f"[dim]Interval: {interval}s | {'Follow mode' if follow else 'Snapshot'} | Ctrl+C to stop[/dim]")
+
+        import sys as _sys
+        iteration = 0
+        while True:
+            state = service.get_run_status(rid)
+            if not state:
+                # Try DB
+                try:
+                    import asyncio
+                    from src.database.repository import get_pipeline_run_by_run_id
+                    state = asyncio.run(get_pipeline_run_by_run_id(rid))
+                    if state:
+                        state = {
+                            "run_id": state.get("run_id", rid),
+                            "state": state.get("state", "unknown"),
+                            "phases": state.get("phases", state.get("phases_json", [])),
+                            "passed": state.get("passed", 0),
+                            "total": state.get("total", 0),
+                        }
+                except Exception:
+                    pass
+
+            if not state:
+                console.print(f"[red]Run {rid} not found[/red]")
+                return
+
+            phases = state.get("phases", [])
+            if isinstance(phases, str):
+                import json
+                try:
+                    phases = json.loads(phases)
+                except Exception:
+                    phases = []
+
+            # Print header
+            run_state = state.get("state", "unknown")
+            state_color = {"running": "cyan", "completed": "green",
+                           "completed_with_errors": "yellow"}.get(run_state, "white")
+            passed = state.get("passed", 0)
+            total = state.get("total", len(phases))
+            pct = round(passed/max(total,1)*100)
+
+            if compact and iteration > 0:
+                # Compact: single-line overwrite
+                bar = "█" * (pct // 5) + "░" * (20 - pct // 5)
+                _sys.stdout.write(f"\r[{state_color}]● {run_state:20s}[/{state_color}] [{bar}] {passed}/{total} ({pct}%)  ")
+                _sys.stdout.flush()
+            else:
+                console.print(f"\n[bold {state_color}]● {run_state}[/bold {state_color}]  "
+                              f"Passed: [green]{passed}[/green]/{total} ({pct}%)  "
+                              f"Phases: {len(phases)}")
+                if phases:
+                    table = Table(show_header=False, box=None, padding=(0, 1))
+                    table.add_column("icon", width=4)
+                    table.add_column("phase", width=10)
+                    table.add_column("score", width=6)
+                    table.add_column("time", width=10)
+                    for p in phases:
+                        if isinstance(p, dict):
+                            table.add_row(*_render(
+                                p.get("name", "?"),
+                                p.get("status", "unknown"),
+                                p.get("score", 0),
+                                p.get("time", 0),
+                            ).split("  ", 3))
+                    console.print(table)
+
+            # Evidence hash (if available from manifest)
+            try:
+                import json
+                from pathlib import Path
+                mf_path = Path("output") / str(rid) / "docs" / "manifest.json"
+                if mf_path.exists():
+                    mf = json.loads(mf_path.read_text(encoding="utf-8"))
+                    eh = mf.get("evidence_hash", "")
+                    if eh:
+                        console.print(f"[dim]Evidence: {eh[:16]}...[/dim]")
+            except Exception:
+                pass
+
+            # Check if done
+            if run_state in ("completed", "completed_with_errors"):
+                console.print(f"\n[bold green]Pipeline complete.[/bold green]")
+                if passed == total:
+                    console.print(f"[bold green]✅ All {total} phases passed[/bold green]")
+                else:
+                    console.print(f"[yellow]⚠ {passed}/{total} passed[/yellow]")
+                break
+
+            iteration += 1
+            if not follow:
+                break
+
+            _time.sleep(interval)
+
+    except KeyboardInterrupt:
+        console.print("\n[dim]Watch stopped. Pipeline continues in background.[/dim]")
+        console.print(f"[dim]Tip: vagent dump {rid} 查看最终结果[/dim]")
 def analyze(spec_file):
     """单步分析规格文件"""
     app = VerificationCLI()
@@ -253,6 +405,31 @@ def verify(spec_file, workflow, compile, output, refine):
             rc = cov.get("_real_coverage", {})
             if rc:
                 console.print(f"[cyan]Coverage: line={rc.get('line_pct',0):.1f}% branch={rc.get('branch_pct',0):.1f}% toggle={rc.get('toggle_pct',0):.1f}%[/cyan]")
+
+        # ── 证据链摘要 ──
+        if result.get("evidence_path"):
+            console.print(f"\n[bold cyan]=== Evidence Chain ===[/bold cyan]")
+            try:
+                import json as _json
+                chain = _json.loads(Path(result["evidence_path"]).read_text(encoding="utf-8"))
+                for name, layer in chain.get("layers", {}).items():
+                    pct = round(layer["passed"] / max(layer["total"], 1) * 100)
+                    bar = "█" * (pct // 10) + "░" * (10 - pct // 10)
+                    console.print(f"  [{bar}] {layer['description']}: {layer['passed']}/{layer['total']} PASS")
+                # 功能覆盖率模型
+                fc = chain.get("functional_coverage", {})
+                if fc:
+                    cgs = fc.get("covergroups", [])
+                    fc_pct = fc.get("overall_coverage", 0)
+                    fc_bar = "█" * (int(fc_pct) // 10) + "░" * (10 - int(fc_pct) // 10)
+                    holes = fc.get("holes_by_priority", {})
+                    console.print(f"  [{fc_bar}] 功能覆盖率: {fc_pct}% ({len(cgs)} covergroups, P0:{holes.get('P0',0)} P1:{holes.get('P1',0)} holes)")
+                    for cg in cgs[:5]:
+                        cps = len(cg.get("coverpoints", []))
+                        console.print(f"         {cg['name']}: {cg['actual']}% (goal: {cg['goal']}%, {cps} CPs)")
+                console.print(f"\n  Signoff Ready: {'[green]YES[/green]' if chain.get('signoff_ready') else '[red]NO[/red]'}  |  Overall: {'[green]PASS[/green]' if chain.get('overall_status') == 'PASS' else '[red]FAIL[/red]'}")
+            except Exception:
+                pass
 
         # ── 可选：UVM 后编译（通过 RegressionRunner） ──
         if compile and any(p["name"] == "UVM" and p["status"] == "passed" for p in result["phases"]):

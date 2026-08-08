@@ -1,0 +1,198 @@
+# ═══════════════════════════════════════════════════════════════
+# SignOffAI 证据链 Schema v1.0
+# IC 验证专用证据链 — 从规格到签核的完整可追溯映射
+# ═══════════════════════════════════════════════════════════════
+
+evidence_chain:
+  version: "1.0"
+  layers:
+
+    # ── Layer 1: 需求层证据 ──
+    requirement_layer:
+      description: "MD 规格文档 → 结构化需求树"
+      checks:
+        - id: req_spec_completeness
+          name: "规格完整性检查"
+          description: "每个需求是否有对应的规格文档"
+          method: auto_scan
+          constraint: "所有 REQ_* 必须有 doc_path"
+        - id: req_test_mapping
+          name: "需求-测试映射"
+          description: "每个需求是否至少对应一个测试用例"
+          method: cross_reference
+          constraint: "mapped_count == total_count"
+      evidence_fields:
+        - total_requirements
+        - mapped_requirements
+        - unmapped_requirements
+        - mapping_details
+
+    # ── Layer 2: 设计层证据 ──
+    design_layer:
+      description: "需求树 → RTL 信号/接口映射"
+      checks:
+        - id: rtl_signal_mapping
+          name: "RTL 信号映射"
+          description: "规格接口是否在 RTL 中实现"
+          method: signal_scan
+          constraint: "每个 spec interface 在 RTL module 中有对应 port"
+        - id: register_mapping
+          name: "寄存器映射"
+          description: "规格寄存器是否在 RTL 中实现"
+          method: register_scan
+          constraint: "spec registers ⊆ RTL registers"
+      evidence_fields:
+        - interface_count_spec
+        - interface_count_rtl
+        - register_count_spec
+        - register_count_rtl
+        - unmapped_signals
+
+    # ── Layer 3: 验证层证据（用例分级） ──
+    verification_layer:
+      description: "需求树 → UVM 测试用例 + 覆盖率"
+      checks:
+        - id: case_coverage_P0
+          name: "P0 核心场景覆盖"
+          description: "主要功能路径的测试覆盖"
+          constraint: "P0 pass_rate >= 100% 且 coverage >= 98%"
+          level: P0
+        - id: case_coverage_P1
+          name: "P1 次要场景覆盖"
+          description: "非核心但重要的功能路径"
+          constraint: "P1 pass_rate >= 95% 且 coverage >= 90%"
+          level: P1
+        - id: case_coverage_P2
+          name: "P2 异常/中断覆盖"
+          description: "错误注入、中断、复位等"
+          constraint: "P2 pass_rate >= 85% 且 coverage >= 80%"
+          level: P2
+        - id: case_coverage_P3
+          name: "P3 随机用例覆盖"
+          description: "随机化生成的测试用例"
+          constraint: "P3 pass_rate >= 70% 或累计 coverage 增量 > 5%"
+          level: P3
+      evidence_fields:
+        - total_cases
+        - passed_cases
+        - failed_cases
+        - pass_rate
+        - coverage_by_level
+        - seed_list
+
+    # ── Layer 4: 执行层证据 ──
+    execution_layer:
+      description: "仿真执行 + 数据通路 + 控制功能"
+      checks:
+        - id: sim_executed
+          name: "仿真是否执行"
+          description: "检查仿真日志和返回码"
+          method: log_scan
+          constraint: "returncode == 0 且 log 含 'Simulation finished'"
+        - id: data_path_check
+          name: "数据通路检查"
+          description: "输入数据 → 内部流转 → 输出正确"
+          method: scoreboard_scan
+          constraint: "scoreboard mismatched == 0"
+        - id: control_path_check
+          name: "控制功能检查"
+          description: "FSM 状态转移 + enable/ready/valid 时序"
+          method: assertion_scan
+          constraint: "SVA assertion failures == 0"
+        - id: timing_driver_check
+          name: "Driver 时序/反压检查"
+          description: "驱动信号时序对齐 + 反压响应"
+          method: waveform_check
+          constraint: "timing violations == 0 且 backpressure handled"
+      evidence_fields:
+        - sim_returncode
+        - sim_log_path
+        - scoreboard_matched
+        - scoreboard_mismatched
+        - assertion_failures
+        - timing_violations
+        - backpressure_events
+
+    # ── Layer 4.5: 功能覆盖率模型 ──
+    functional_coverage_layer:
+      description: "SystemVerilog Covergroup/Coverpoint/Cross 模型"
+      checks:
+        - id: func_cov_covergroups
+          name: "Covergroup 覆盖率"
+          description: "每个 covergroup 是否达到目标覆盖率"
+          method: ucdb_parse
+          constraint: "所有 covergroup >= 95%"
+        - id: func_cov_cross
+          name: "Cross 交叉覆盖"
+          description: "关键信号的交叉覆盖是否充分"
+          method: cross_analysis
+          constraint: "所有 cross >= 90%"
+        - id: func_cov_holes
+          name: "功能覆盖空洞"
+          description: "未被覆盖的功能组合"
+          method: hole_analysis
+          constraint: "P0 功能 0 holes, P1 功能 <= 3 holes"
+        - id: func_cov_features
+          name: "特性覆盖率映射"
+          description: "每个设计特性是否对应 coverpoint"
+          method: feature_map
+          constraint: "所有 spec features 有对应 covergroup"
+      evidence_fields:
+        - covergroups:
+            - name: string
+            - goal: number
+            - actual: number
+            - coverpoints: list
+            - crosses: list
+        - total_holes: number
+        - holes_by_priority:
+            P0: number
+            P1: number
+            P2: number
+        - feature_coverage_map:
+            - feature: string
+            - coverpoint: string
+            - coverage: number
+
+    # ── Layer 5: 签核层证据 ──
+    signoff_layer:
+      description: "覆盖率 + 回归 + waived issue + 门限判定"
+      checks:
+        - id: coverage_threshold
+          name: "覆盖率门限"
+          description: "代码覆盖率是否达标"
+          constraint: "line >= 95% 且 branch >= 90% 且 toggle >= 85%"
+        - id: regression_pass
+          name: "回归通过率"
+          description: "回归测试全部通过"
+          constraint: "regression pass_rate >= 100%"
+        - id: waived_issues
+          name: "豁免问题"
+          description: "已豁免的 issue 是否有记录"
+          constraint: "所有 waived issue 有审批记录"
+        - id: evidence_integrity
+          name: "证据完整性"
+          description: "Manifest hash 校验"
+          constraint: "manifest_hash_ok == true"
+      evidence_fields:
+        - coverage_line
+        - coverage_branch
+        - coverage_toggle
+        - regression_pass_rate
+        - waived_count
+        - manifest_hash
+        - evidence_hash
+
+  # ── 门限矩阵 ──
+  signoff_thresholds:
+    tapeout:
+      P0: { pass_rate: 100, coverage: 98 }
+      P1: { pass_rate: 99, coverage: 95 }
+      P2: { pass_rate: 95, coverage: 85 }
+      P3: { pass_rate: 85, coverage: 70 }
+    milestone:
+      P0: { pass_rate: 100, coverage: 95 }
+      P1: { pass_rate: 95, coverage: 90 }
+      P2: { pass_rate: 90, coverage: 80 }
+    coverage_only:
+      P0: { pass_rate: 95, coverage: 90 }

@@ -72,15 +72,19 @@ class ProjectMember(Base):
     joined_at = Column(DateTime, default=datetime.now)
 
 class AuditLog(Base):
-    """审计日志"""
+    """审计日志 — 企业级可追溯"""
     __tablename__ = 'audit_logs'
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
     username = Column(String(50))
-    action = Column(String(100))       # pipeline_run / testcase_create / signoff_approve / ...
-    resource = Column(String(200))     # project_id / test_name / ...
+    action = Column(String(100))       # login_success / pipeline_run / signoff_approve / evidence_export / access_denied
+    resource_type = Column(String(50), default='')  # project / signoff / pipeline / evidence / auth
+    resource = Column(String(200))     # resource_id
     detail = Column(Text, default='')
+    before_state = Column(Text, default='')   # 变更前状态 (JSON)
+    after_state = Column(Text, default='')    # 变更后状态 (JSON)
     ip_address = Column(String(50))
+    user_agent = Column(String(300), default='')
     created_at = Column(DateTime, default=datetime.now)
 
 class KnowledgeEntry(Base):
@@ -98,7 +102,7 @@ class KnowledgeEntry(Base):
     updated_at = Column(DateTime, default=datetime.now)
 
 class Signoff(Base):
-    """签核记录"""
+    """签核记录 — 证据绑定，不可篡改"""
     __tablename__ = 'signoffs'
     id = Column(Integer, primary_key=True, autoincrement=True)
     project_id = Column(Integer, ForeignKey('projects.id'))
@@ -106,6 +110,8 @@ class Signoff(Base):
     report_type = Column(String(50))   # tapeout / milestone / coverage
     status = Column(String(20), default='draft')  # draft / pending / approved / rejected
     summary_json = Column(JSON)        # 报告摘要数据
+    evidence_package_hash = Column(String(64), default='')  # 绑定的证据包 hash
+    manifest_hash = Column(String(64), default='')          # 绑定的 manifest hash
     requester_id = Column(Integer, ForeignKey('users.id'))
     approver_id = Column(Integer, ForeignKey('users.id'), nullable=True)
     comment = Column(Text, default='')
@@ -170,6 +176,56 @@ class DocRequirement(Base):
     line_number = Column(Integer)                              # 在原文档中的行号
     is_covered = Column(Boolean, default=False)                # 是否有对应测试用例
     coverage_json = Column(JSON, default={})                   # 覆盖信息
+    created_at = Column(DateTime, default=datetime.now)
+
+# ═══════════════════════════════════════════════════════════
+# 设计层三层映射模型 (需求 → 模块/功能点 → 测试点)
+# ═══════════════════════════════════════════════════════════
+
+class DesignModule(Base):
+    """设计模块 — DesignArchitect 输出"""
+    __tablename__ = 'design_modules'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey('projects.id'), nullable=True)
+    name = Column(String(255), nullable=False)
+    parent_id = Column(Integer, nullable=True)
+    description = Column(Text, default='')
+    interfaces = Column(JSON, default=[])      # [{name, direction, width, protocol}]
+    signals = Column(JSON, default=[])          # [{name, type, description}]
+    rtl_file = Column(String(500), default='')
+    rtl_hash = Column(String(64), default='')
+    created_at = Column(DateTime, default=datetime.now)
+
+class DesignFeature(Base):
+    """功能点 — 对应 spec features"""
+    __tablename__ = 'design_features'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    module_id = Column(Integer, ForeignKey('design_modules.id'), nullable=False)
+    name = Column(String(255), nullable=False)
+    level = Column(String(10), default='P0')
+    description = Column(Text, default='')
+    keywords = Column(String(500), default='')
+    spec_feature_ref = Column(String(100), default='')
+    created_at = Column(DateTime, default=datetime.now)
+
+class ReqFeatureMap(Base):
+    """需求→功能点映射"""
+    __tablename__ = 'req_feature_map'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    req_id = Column(String(50), nullable=False)
+    feature_id = Column(Integer, ForeignKey('design_features.id'), nullable=False)
+    mapping_type = Column(String(20), default='DIRECT')  # DIRECT / INFERRED / MANUAL
+    confidence = Column(Float, default=1.0)
+    mapped_by = Column(String(50), default='auto')
+    created_at = Column(DateTime, default=datetime.now)
+
+class FeatureTestpointMap(Base):
+    """功能点→测试点映射"""
+    __tablename__ = 'feature_testpoint_map'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    feature_id = Column(Integer, ForeignKey('design_features.id'), nullable=False)
+    testpoint_id = Column(String(50), nullable=False)
+    mapping_type = Column(String(20), default='DIRECT')
     created_at = Column(DateTime, default=datetime.now)
 
 class DocRelation(Base):

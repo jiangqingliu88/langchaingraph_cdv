@@ -1,31 +1,59 @@
-# ALU 逻辑运算模块规格
+# ALU 逻辑运算模块
+<!--
+  module: alu_logic
+  parent: ALU
+  level: BT
+  data_width: 32
+  operations: [AND, OR, XOR, NOR, NOT]
+  requirements: [REQ_ALU_LOGIC_001]
+-->
 
-## 功能描述
+## 1. 概述
 执行 AND/OR/XOR/NOR/NOT 五种按位逻辑运算，32bit 数据通路，纯组合逻辑。
 
-## 模块级需求 (BT)
-- **REQ_ALU_BT_004**: 逻辑运算模块功能验证 (AND/OR/XOR/NOR/NOT)
+## 2. 功能需求
 
-## 单元级需求 (UT)
-- **REQ_ALU_UT_006**: AND 按位与验证
-- **REQ_ALU_UT_007**: OR 按位或验证
-- **REQ_ALU_UT_008**: XOR 按位异或验证
-- **REQ_ALU_UT_009**: NOT 按位取反验证
+### 按位与运算
+**级别**：P0
+**类型**：FUNCTIONAL
+**描述**：32bit 按位 AND，输出 result = A & B
+**验收标准**：覆盖率 100%，随机测试 10000 次
 
-## 运算表
-| ALU_OP[3:0] | 运算 | 公式 | 标志 |
-|-------------|------|------|------|
-| 4'b0101 | AND  | RESULT = A & B | N,Z |
-| 4'b0110 | OR   | RESULT = A | B | N,Z |
-| 4'b0111 | XOR  | RESULT = A ^ B | N,Z |
-| 4'b1000 | NOR  | RESULT = ~(A | B) | N,Z |
-| 4'b1001 | NOT  | RESULT = ~A | N,Z |
+### 按位或运算
+**级别**：P0
+**类型**：FUNCTIONAL
+**描述**：32bit 按位 OR，输出 result = A | B
+**验收标准**：覆盖率 100%
 
-## 测试点
-1. 全 0 输入
-2. 全 1 输入 (0xFFFFFFFF)
-3. 交替位模式 (0xAAAAAAAA & 0x55555555)
-4. 随机 1000 组
+### 按位异或运算
+**级别**：P0
+**类型**：FUNCTIONAL
+**描述**：32bit 按位 XOR，输出 result = A ^ B
+**验收标准**：覆盖率 100%
 
-## 关联
-- 父文档: alu_chip_spec.md
+### 按位或非/非运算
+**级别**：P1
+**类型**：FUNCTIONAL
+**描述**：NOR 和 NOT 运算
+**验收标准**：覆盖率 ≥ 95%
+
+## 3. 接口规范
+
+| 信号 | 位宽 | 方向 | 协议 | 描述 |
+|------|------|------|------|------|
+| op_a[31:0] | 32 | INPUT | Native | 操作数 A |
+| op_b[31:0] | 32 | INPUT | Native | 操作数 B |
+| op_sel[2:0] | 3 | INPUT | Native | AND/OR/XOR/NOR/NOT |
+| result[31:0] | 32 | OUTPUT | Native | 运算结果 |
+
+## 4. 时序约束
+
+| 路径 | 约束 | 说明 |
+|------|------|------|
+| op_a/op_b → result | ≤ 1ns | 纯组合逻辑 |
+
+## 5. 功耗约束
+
+| 模式 | 功耗 | 说明 |
+|------|------|------|
+| Active | ≤ 1mW | 纯组合，功耗极低 |
