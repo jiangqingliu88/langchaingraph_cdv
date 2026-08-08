@@ -1636,35 +1636,6 @@ async def list_modules():
     }
 
 
-@app.get("/api/modules/members")
-async def get_all_module_members():
-    """批量返回所有模块及其成员"""
-    data = await list_modules()
-    result = []
-    for m in data.get("modules", []):
-        members = []
-        try:
-            from src.database.repository import list_projects
-            projects = await list_projects()
-            pid = None
-            for p in projects:
-                if p["name"] == m["name"]: pid = p["id"]; break
-            if pid:
-                from src.database.connection import get_session
-                from src.database.models import ProjectMember, User
-                from sqlalchemy import select
-                s = await get_session()
-                pm_result = await s.execute(select(ProjectMember).where(ProjectMember.project_id == pid))
-                for pm in pm_result.scalars().all():
-                    u_result = await s.execute(select(User).where(User.id == pm.user_id))
-                    u = u_result.scalar_one_or_none()
-                    if u: members.append({"username": u.username, "display_name": u.display_name})
-                await s.close()
-        except Exception: pass
-        result.append({"module": m["name"], "members": members})
-    return {"modules": result}
-
-
 @app.get("/api/modules/{module_name}")
 async def get_module_detail(module_name: str):
     """获取单个模块的详细验证进展"""
@@ -1744,7 +1715,6 @@ async def assign_module(module_name: str = "", username: str = "", user: dict = 
                         module_name, f"分配工程师 {username}")
 
     return {"ok": True, "module": module_name, "engineer": username}
-
 
 
 @app.get("/api/modules/{module_name}/members")

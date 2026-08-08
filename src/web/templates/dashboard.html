@@ -1,310 +1,1627 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="zh-CN" data-theme="dark">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SignOffAI - IC Verification Signoff Platform</title>
-<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t)})()</script>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>
-:root{--bg:#0a0e14;--bg2:#12171f;--card:#181e28;--inp:#1a202c;--hov:#1e2632;--bd:#1e2632;--tx:#e2e6ed;--tx2:#8896a6;--tx3:#5a6678;--bl:#3b82f6;--gn:#10b981;--am:#f59e0b;--rd:#ef4444;--pu:#8b5cf6;--sw:220px;--th:48px;--r:8px;--mon:'Cascadia Code','JetBrains Mono','Courier New',monospace;--sans:'Inter','Segoe UI',system-ui,sans-serif;--sh:0 1px 2px rgba(0,0,0,.3),0 2px 8px rgba(0,0,0,.2)}
-[data-theme="light"]{--bg:#f4f6f9;--bg2:#eef1f5;--card:#fff;--inp:#f8f9fb;--hov:#f0f3f7;--bd:#e2e6ed;--tx:#1a202c;--tx2:#5a6678;--tx3:#8896a6;--sh:0 1px 2px rgba(0,0,0,.05),0 2px 8px rgba(0,0,0,.06)}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:13px;line-height:1.5;height:100vh;overflow:hidden}
-.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--bg2);border-right:1px solid var(--bd);display:flex;flex-direction:column;z-index:100}
-.sb-brand{padding:18px 16px 14px;border-bottom:1px solid var(--bd)}
-.sb-brand .bn{font-size:16px;font-weight:700;color:var(--tx)}.sb-brand .bn span{color:var(--gn)}
-.sb-brand .bs{font-size:10px;color:var(--tx3);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
-.sb-nav{flex:1;overflow-y:auto;padding:8px}
-.sb-nav .ns{font-size:10px;color:var(--tx3);padding:12px 8px 4px;text-transform:uppercase;letter-spacing:1px;font-weight:600}
-.sb-nav .ni{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:4px;cursor:pointer;color:var(--tx2);font-size:12.5px;margin-bottom:1px}
-.sb-nav .ni:hover{background:var(--hov);color:var(--tx)}
-.sb-nav .ni.active{background:rgba(59,130,246,.15);color:var(--bl);font-weight:550}
-.sb-nav .ni i{font-size:15px;width:18px;text-align:center}
-.sb-foot{padding:10px 12px;border-top:1px solid var(--bd);display:flex;align-items:center;gap:8px;font-size:11px;color:var(--tx2)}
-.sb-foot .av{width:28px;height:28px;border-radius:50%;background:rgba(59,130,246,.15);color:var(--bl);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px}
-.sb-foot .lo{margin-left:auto;cursor:pointer;color:var(--tx3);padding:4px}.sb-foot .lo:hover{color:var(--rd)}
-.tb{position:fixed;left:var(--sw);right:0;top:0;height:var(--th);background:var(--bg2);border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 20px;gap:16px;z-index:99}
-.tb .pt{font-size:14px;font-weight:600}
-.tb .ta{margin-left:auto;display:flex;align-items:center;gap:8px}
-.tb .pill{padding:4px 10px;border-radius:12px;font-size:10px;font-weight:600;background:rgba(16,185,129,.15);color:var(--gn)}
-.tb .thm{background:none;border:1px solid var(--bd);color:var(--tx2);width:30px;height:30px;border-radius:4px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
-.tb .rt{display:flex;background:var(--inp);border-radius:6px;padding:2px;margin-right:8px}
-.tb .rt button{padding:3px 10px;border-radius:4px;border:none;cursor:pointer;font-size:11px;font-weight:550}
-.main{margin-left:var(--sw);margin-top:var(--th);height:calc(100vh - var(--th));overflow-y:auto;padding:20px}
-.page{display:none}.page.active{display:block}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);padding:16px;margin-bottom:16px;box-shadow:var(--sh)}
-.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--bd)}
-.ch h6{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}.ch h6 i{color:var(--bl);font-size:15px}
-.sr{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
-.sc{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);padding:18px 20px;box-shadow:var(--sh);position:relative;overflow:hidden}
-.sc .sl{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.sc .sv{font-size:28px;font-weight:700}
-.sc::after{content:'';position:absolute;top:0;left:0;width:3px;height:100%}
-.sc.abl .sv{color:var(--bl)}.sc.abl::after{background:var(--bl)}
-.sc.agn .sv{color:var(--gn)}.sc.agn::after{background:var(--gn)}
-.sc.aam .sv{color:var(--am)}.sc.aam::after{background:var(--am)}
-.sc.apu .sv{color:var(--pu)}.sc.apu::after{background:var(--pu)}
-table{width:100%;border-collapse:collapse}table th{text-align:left;padding:8px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);border-bottom:2px solid var(--bd)}table td{padding:8px 10px;font-size:12px;border-bottom:1px solid var(--bd);color:var(--tx2)}table tbody tr:hover{background:var(--hov)}
-.badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:3px 8px;border-radius:10px}
-.bbl{background:rgba(59,130,246,.15);color:var(--bl)}.bgn{background:rgba(16,185,129,.15);color:var(--gn)}.brd{background:rgba(239,68,68,.15);color:var(--rd)}.bam{background:rgba(245,158,11,.15);color:var(--am)}.bpu{background:rgba(139,92,246,.15);color:var(--pu)}.bmu{background:var(--inp);color:var(--tx3)}
-.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:4px;font-size:12px;font-weight:550;cursor:pointer;border:1px solid transparent;font-family:inherit;background:transparent}
-.bpri{background:var(--bl);color:#fff;border-color:var(--bl)}.bpri:hover{opacity:.9}
-.bsuc{background:var(--gn);color:#fff}.bout{border-color:var(--bd);color:var(--tx2)}.bout:hover{background:var(--hov);color:var(--tx)}.bdan{background:var(--rd);color:#fff}.bsm{padding:4px 10px;font-size:11px}.bxs{padding:2px 7px;font-size:10px}.bgrp{display:flex;gap:6px}
-input,textarea,select{background:var(--inp);border:1px solid var(--bd);border-radius:4px;padding:7px 10px;font-size:12px;color:var(--tx);font-family:inherit;outline:none;width:100%}input:focus,textarea:focus,select:focus{border-color:var(--bl)}textarea{resize:vertical;font-family:var(--mon);font-size:11px}select{cursor:pointer;width:auto}
-.console{background:#0a0e14;color:#d4d4d4;font-family:var(--mon);padding:12px 16px;border-radius:4px;max-height:260px;overflow-y:auto;font-size:11px;line-height:1.6;border:1px solid var(--bd)}
-.console .cts{color:#5a6678;margin-right:8px}.console .cok{color:var(--gn)}.console .cer{color:var(--rd)}.console .cin{color:var(--bl)}
-.ptrack{display:flex;align-items:center;gap:0;overflow-x:auto;padding:8px 0}
-.pn{display:flex;flex-direction:column;align-items:center;gap:4px}
-.pn .dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--tx3);background:var(--inp);border:2px solid var(--bd)}
-.pn .dot.pass{background:rgba(16,185,129,.15);border-color:var(--gn);color:var(--gn)}
-.pn .dot.fail{background:rgba(239,68,68,.15);border-color:var(--rd);color:var(--rd)}
-.pn .dot.run{background:rgba(59,130,246,.15);border-color:var(--bl);color:var(--bl);animation:pulse 1.2s infinite}
-.pn .lbl{font-size:9px;color:var(--tx3)}.pln{width:14px;height:2px;background:var(--bd);margin:0 2px 16px}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.pbar{height:5px;border-radius:3px;background:var(--inp);overflow:hidden}.pfill{height:100%;border-radius:3px}.pfill.blu{background:var(--bl)}.pfill.grn{background:var(--gn)}
-.cbar{height:14px;border-radius:7px;background:var(--inp);overflow:hidden}.cfill{height:100%;border-radius:7px}
-.evbar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--card);border:1px solid var(--bd);border-radius:var(--r);margin-bottom:14px;font-size:11px;overflow-x:auto}
-.evn{padding:4px 10px;border-radius:10px;background:var(--inp);white-space:nowrap;font-family:var(--mon);font-size:10px}
-.evn.ok{border:1px solid rgba(16,185,129,.3);color:var(--gn)}.eva{color:var(--tx3)}
-.evhash{margin-left:auto;font-size:10px;color:var(--tx3)}.evhash code{color:var(--gn);background:rgba(16,185,129,.15);padding:3px 8px;border-radius:10px}
-.tnode{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--tx2)}.tnode:hover{background:var(--hov)}.tnode.sel{background:rgba(59,130,246,.15);color:var(--bl)}.tkids{padding-left:16px}
-.login-overlay{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 30%,#121f2f,#080c14);display:flex;align-items:center;justify-content:center;z-index:9999}
-.login-box{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:36px 32px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.login-box .brand{text-align:center;margin-bottom:28px}.login-box .brand h2{font-size:22px;font-weight:700}.login-box .brand h2 span{color:var(--gn)}.login-box .brand p{font-size:11px;color:var(--tx3);margin-top:4px}
-.login-box .field{margin-bottom:14px}.login-box .field label{display:block;font-size:11px;font-weight:600;color:var(--tx2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}.login-box .field input{padding:10px 12px}
-.login-box .btn{width:100%;justify-content:center;padding:10px}.login-box .hint{text-align:center;margin-top:12px;font-size:10px;color:var(--tx3)}
-.toast-container{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px}
-.toast-msg{padding:10px 16px;border-radius:4px;font-size:12px;color:#fff;animation:slideIn .3s ease;box-shadow:0 4px 16px rgba(0,0,0,.4)}
-.toast-msg.success{background:#065f46;border:1px solid var(--gn)}.toast-msg.error{background:#7f1d1d;border:1px solid var(--rd)}.toast-msg.info{background:#1e3a6e;border:1px solid var(--bl)}
-@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
-[hidden]{display:none!important}
-code{font-family:var(--mon);font-size:10px}
-.xs{font-size:10px}.mono{font-family:var(--mon)}.fl{display:flex}.fb{display:flex;justify-content:space-between;align-items:center}.g2{gap:8px}.mt1{margin-top:4px}.mt2{margin-top:8px}.mb1{margin-bottom:4px}.mb2{margin-bottom:8px}
-::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
-.cp{cursor:pointer}
-</style>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignOffAI — IC 功能设计验证签核平台</title>
+    <script>// 消除主题闪烁：在页面渲染前应用存储的主题
+(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t)})()</script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        /* ═══════════════════════════════════════════════════════
+           SignOffAI Design System v2.0
+           品牌色: 深蓝 (信任/专业) + 翠绿 (证据/通过)
+           ═══════════════════════════════════════════════════════ */
+        :root {
+            --bg-primary: #0a0e14;
+            --bg-secondary: #12171f;
+            --bg-card: #181e28;
+            --bg-input: #1a202c;
+            --bg-hover: #1e2632;
+            --border: #1e2632;
+            --border-active: #253045;
+
+            --text-primary: #e2e6ed;
+            --text-secondary: #8896a6;
+            --text-muted: #5a6678;
+
+            --brand-blue: #3b82f6;
+            --brand-blue-dim: #1e3a6e;
+            --brand-green: #10b981;
+            --brand-green-dim: #0d3d2e;
+            --brand-amber: #f59e0b;
+            --brand-red: #ef4444;
+            --brand-purple: #8b5cf6;
+
+            --sidebar-w: 224px;
+            --topbar-h: 48px;
+            --radius: 8px;
+            --radius-sm: 4px;
+            --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+            --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            --shadow: 0 1px 2px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.2);
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #f4f6f9;
+            --bg-secondary: #eef1f5;
+            --bg-card: #ffffff;
+            --bg-input: #f8f9fb;
+            --bg-hover: #f0f3f7;
+            --border: #e2e6ed;
+            --border-active: #ccd4de;
+            --text-primary: #1a202c;
+            --text-secondary: #5a6678;
+            --text-muted: #8896a6;
+            --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.06);
+        }
+
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body {
+            background: var(--bg-primary); color: var(--text-primary);
+            font-family: var(--font-sans); font-size: 13px; line-height: 1.5;
+            overflow: hidden; height: 100vh;
+        }
+
+        /* ════════ SIDEBAR ════════ */
+        .sidebar {
+            position: fixed; left: 0; top: 0; bottom: 0; width: var(--sidebar-w);
+            background: var(--bg-secondary); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; z-index: 100;
+        }
+        .sidebar-brand {
+            padding: 18px 16px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-brand .brand-name { font-size: 16px; font-weight: 700; color: var(--text-primary); letter-spacing: -.3px; }
+        .sidebar-brand .brand-name span { color: var(--brand-green); }
+        .sidebar-brand .brand-sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; letter-spacing: .5px; text-transform: uppercase; }
+        .sidebar-nav { flex: 1; overflow-y: auto; padding: 8px; }
+        .sidebar-nav .nav-section { font-size: 10px; color: var(--text-muted); padding: 12px 8px 4px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+        .sidebar-nav .nav-item {
+            display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+            border-radius: var(--radius-sm); cursor: pointer; transition: all .12s;
+            color: var(--text-secondary); font-size: 12.5px; font-weight: 450;
+            margin-bottom: 1px; position: relative;
+        }
+        .sidebar-nav .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .sidebar-nav .nav-item.active { background: var(--brand-blue-dim); color: var(--brand-blue); font-weight: 550; }
+        .sidebar-nav .nav-item i { font-size: 15px; width: 18px; text-align: center; }
+        .sidebar-nav .nav-item .badge-dot {
+            margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted);
+        }
+        .sidebar-nav .nav-item .badge-dot.on { background: var(--brand-green); }
+        .sidebar-footer {
+            padding: 10px 12px; border-top: 1px solid var(--border);
+            display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary);
+        }
+        .sidebar-footer .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--brand-blue-dim); color: var(--brand-blue); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; }
+        .sidebar-footer .logout { margin-left: auto; cursor: pointer; color: var(--text-muted); padding: 4px; border-radius: var(--radius-sm); }
+        .sidebar-footer .logout:hover { color: var(--brand-red); background: var(--bg-hover); }
+
+        /* ════════ TOPBAR ════════ */
+        .topbar {
+            position: fixed; left: var(--sidebar-w); right: 0; top: 0; height: var(--topbar-h);
+            background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 20px; gap: 16px; z-index: 99;
+        }
+        .topbar .page-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+        .topbar .page-breadcrumb { font-size: 11px; color: var(--text-muted); }
+        .topbar .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+        .topbar .topbar-actions .pill {
+            padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;
+            background: var(--brand-green-dim); color: var(--brand-green);
+            display: flex; align-items: center; gap: 5px;
+        }
+        .topbar .theme-toggle {
+            background: none; border: 1px solid var(--border); color: var(--text-secondary);
+            width: 30px; height: 30px; border-radius: var(--radius-sm); cursor: pointer;
+            font-size: 14px; display: flex; align-items: center; justify-content: center;
+        }
+        .topbar .theme-toggle:hover { border-color: var(--border-active); color: var(--text-primary); }
+
+        /* ════════ MAIN ════════ */
+        .main {
+            margin-left: var(--sidebar-w); margin-top: var(--topbar-h);
+            height: calc(100vh - var(--topbar-h)); overflow-y: auto; padding: 20px;
+        }
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* ════════ CARDS ════════ */
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
+            box-shadow: var(--shadow);
+        }
+        .card-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .card-header h6 { font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+        .card-header h6 i { color: var(--brand-blue); font-size: 15px; }
+
+        /* ════════ STAT CARDS ════════ */
+        .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow);
+            position: relative; overflow: hidden;
+        }
+        .stat-card .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+        .stat-card .stat-value { font-size: 28px; font-weight: 700; letter-spacing: -1px; }
+        .stat-card .stat-sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+        .stat-card::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%;
+        }
+        .stat-card.accent-blue .stat-value { color: var(--brand-blue); }
+        .stat-card.accent-blue::after { background: var(--brand-blue); }
+        .stat-card.accent-green .stat-value { color: var(--brand-green); }
+        .stat-card.accent-green::after { background: var(--brand-green); }
+        .stat-card.accent-amber .stat-value { color: var(--brand-amber); }
+        .stat-card.accent-amber::after { background: var(--brand-amber); }
+        .stat-card.accent-purple .stat-value { color: var(--brand-purple); }
+        .stat-card.accent-purple::after { background: var(--brand-purple); }
+
+        /* ════════ EVIDENCE CHAIN BAR ════════ */
+        .evidence-bar {
+            display: flex; align-items: center; gap: 0; padding: 10px 16px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); margin-bottom: 16px; font-size: 11px;
+            overflow-x: auto; box-shadow: var(--shadow);
+        }
+        .evidence-bar .ev-node {
+            display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+            border-radius: 12px; background: var(--bg-input); white-space: nowrap;
+            font-family: var(--font-mono); font-size: 10px;
+        }
+        .evidence-bar .ev-node.pass { border: 1px solid var(--brand-green-dim); color: var(--brand-green); }
+        .evidence-bar .ev-node.fail { border: 1px solid rgba(239,68,68,.3); color: var(--brand-red); }
+        .evidence-bar .ev-node.pending { border: 1px solid var(--border-active); color: var(--text-muted); }
+        .evidence-bar .ev-arrow { color: var(--text-muted); margin: 0 2px; font-size: 9px; }
+        .evidence-bar .ev-hash {
+            margin-left: auto; font-family: var(--font-mono); font-size: 10px;
+            color: var(--text-muted); white-space: nowrap;
+        }
+        .evidence-bar .ev-hash code { color: var(--brand-green); background: var(--brand-green-dim); padding: 3px 8px; border-radius: 10px; font-size: 10px; }
+
+        /* ════════ TABLE ════════ */
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        table th {
+            text-align: left; padding: 8px 10px; font-size: 10px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted);
+            border-bottom: 2px solid var(--border);
+        }
+        table td { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+        table tbody tr:hover { background: var(--bg-hover); }
+        table tbody tr.clickable { cursor: pointer; }
+
+        /* ════════ BADGES ════════ */
+        .badge {
+            display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600;
+            padding: 3px 8px; border-radius: 10px; letter-spacing: .3px;
+        }
+        .badge-blue { background: var(--brand-blue-dim); color: var(--brand-blue); }
+        .badge-green { background: var(--brand-green-dim); color: var(--brand-green); }
+        .badge-red { background: rgba(239,68,68,.15); color: var(--brand-red); }
+        .badge-amber { background: rgba(245,158,11,.15); color: var(--brand-amber); }
+        .badge-purple { background: rgba(139,92,246,.15); color: var(--brand-purple); }
+        .badge-muted { background: var(--bg-input); color: var(--text-muted); }
+
+        /* ════════ BUTTONS ════════ */
+        .btn {
+            display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px;
+            border-radius: var(--radius-sm); font-size: 12px; font-weight: 550; cursor: pointer;
+            border: 1px solid transparent; transition: all .12s; font-family: inherit;
+        }
+        .btn-primary { background: var(--brand-blue); color: #fff; border-color: var(--brand-blue); }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: var(--brand-green); color: #fff; }
+        .btn-success:hover { background: #059669; }
+        .btn-outline { background: transparent; border-color: var(--border-active); color: var(--text-secondary); }
+        .btn-outline:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--text-secondary); }
+        .btn-danger { background: var(--brand-red); color: #fff; border-color: var(--brand-red); }
+        .btn-sm { padding: 4px 10px; font-size: 11px; }
+        .btn-xs { padding: 2px 7px; font-size: 10px; border-radius: 3px; }
+        .btn-group { display: flex; gap: 6px; }
+
+        /* ════════ INPUT ════════ */
+        input, textarea, select {
+            background: var(--bg-input); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 7px 10px; font-size: 12px;
+            color: var(--text-primary); font-family: inherit; outline: none;
+            transition: border-color .15s;
+        }
+        input:focus, textarea:focus, select:focus { border-color: var(--brand-blue); }
+        textarea { resize: vertical; font-family: var(--font-mono); font-size: 11px; }
+        select { cursor: pointer; }
+
+        /* ════════ CONSOLE ════════ */
+        .console {
+            background: #0a0e14; color: #d4d4d4; font-family: var(--font-mono);
+            padding: 12px 16px; border-radius: var(--radius-sm); max-height: 260px;
+            overflow-y: auto; font-size: 11px; line-height: 1.6; border: 1px solid var(--border);
+        }
+        .console .ts { color: #5a6678; margin-right: 8px; }
+        .console .ok { color: var(--brand-green); }
+        .console .err { color: var(--brand-red); }
+        .console .info { color: var(--brand-blue); }
+
+        /* ════════ PIPELINE PHASE DOTS ════════ */
+        .phase-track { display: flex; align-items: center; gap: 0; }
+        .phase-node { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .phase-node .dot {
+            width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 10px; font-weight: 700; color: var(--text-muted);
+            background: var(--bg-input); border: 2px solid var(--border); transition: all .3s;
+        }
+        .phase-node .dot.pass { background: var(--brand-green-dim); border-color: var(--brand-green); color: var(--brand-green); }
+        .phase-node .dot.fail { background: rgba(239,68,68,.15); border-color: var(--brand-red); color: var(--brand-red); }
+        .phase-node .dot.running { background: var(--brand-blue-dim); border-color: var(--brand-blue); color: var(--brand-blue); animation: pulse 1.2s infinite; }
+        .phase-node .label { font-size: 9px; color: var(--text-muted); }
+        .phase-line { width: 14px; height: 2px; background: var(--border); margin: 0 2px 16px; }
+        .phase-line.done { background: var(--brand-green); }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+        /* ════════ TREE ════════ */
+        .tree-node {
+            display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+            border-radius: var(--radius-sm); cursor: pointer; font-size: 12px;
+            transition: background .1s; color: var(--text-secondary);
+        }
+        .tree-node:hover { background: var(--bg-hover); }
+        .tree-node.selected { background: var(--brand-blue-dim); color: var(--brand-blue); }
+        .tree-children { padding-left: 16px; }
+
+        /* ════════ PROGRESS ════════ */
+        .progress-bar { height: 5px; border-radius: 3px; background: var(--bg-input); overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+        .progress-fill.green { background: var(--brand-green); }
+        .progress-fill.blue { background: var(--brand-blue); }
+        .progress-fill.amber { background: var(--brand-amber); }
+
+        /* ════════ COVERAGE BAR ════════ */
+        .cover-bar { height: 14px; border-radius: 7px; background: var(--bg-input); overflow: hidden; }
+        .cover-fill { height: 100%; border-radius: 7px; transition: width .5s; }
+        .cover-fill.high { background: var(--brand-green); }
+        .cover-fill.mid { background: var(--brand-amber); }
+        .cover-fill.low { background: var(--brand-red); }
+
+        /* ════════ LOGIN ════════ */
+        .login-overlay {
+            position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 30%, #121f2f, #080c14);
+            display: flex; align-items: center; justify-content: center; z-index: 9999;
+        }
+        .login-box {
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 36px 32px; width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+        }
+        .login-box .brand { text-align: center; margin-bottom: 28px; }
+        .login-box .brand h2 { font-size: 22px; font-weight: 700; color: var(--text-primary); letter-spacing: -.5px; }
+        .login-box .brand h2 span { color: var(--brand-green); }
+        .login-box .brand p { font-size: 11px; color: var(--text-muted); margin-top: 4px; letter-spacing: .5px; }
+        .login-box .field { margin-bottom: 14px; }
+        .login-box .field label { display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+        .login-box .field input { width: 100%; padding: 10px 12px; }
+        .login-box .btn { width: 100%; justify-content: center; padding: 10px; }
+        .login-box .hint { text-align: center; margin-top: 12px; font-size: 10px; color: var(--text-muted); }
+
+        /* ════════ TOAST ════════ */
+        .toast-container { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+        .toast-msg { padding: 10px 16px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500;
+            color: #fff; animation: slideIn .3s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4); max-width: 380px; }
+        .toast-msg.success { background: #065f46; border: 1px solid var(--brand-green); }
+        .toast-msg.error { background: #7f1d1d; border: 1px solid var(--brand-red); }
+        .toast-msg.info { background: #1e3a6e; border: 1px solid var(--brand-blue); }
+        @keyframes slideIn { from{transform:translateX(120%);opacity:0} to{transform:translateX(0);opacity:1} }
+
+        /* ════════ UTILITY ════════ */
+        [hidden] { display: none !important; }
+        .text-mono { font-family: var(--font-mono); }
+        .text-xs { font-size: 10px; }
+        .mb-2 { margin-bottom: 8px; }
+        .mt-2 { margin-top: 8px; }
+        .gap-2 { gap: 8px; }
+        .flex { display: flex; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .flex-wrap { flex-wrap: wrap; }
+        code { font-family: var(--font-mono); font-size: 10px; }
+
+        /* ════════ SCROLLBAR ════════ */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    </style>
 </head>
 <body>
 
+<!-- ═══════════════════════════ LOGIN ═══════════════════════════ -->
 <div class="login-overlay" id="loginOverlay">
-<div class="login-box">
-<div class="brand"><h2>Sign<span>Off</span>AI</h2><p>Reproducible . Auditable . Governable</p></div>
-<div class="field"><label>Username</label><input id="loginUser" value="admin"></div>
-<div class="field"><label>Password</label><input id="loginPass" type="password" value="admin123"></div>
-<button class="btn bpri" onclick="doLogin()">Sign In</button>
-<div class="hint">admin / admin123 &nbsp;|&nbsp; <span id="loginError" style="color:var(--rd)"></span></div>
-</div></div>
+    <div class="login-box">
+        <div class="brand">
+            <h2>Sign<span>Off</span>AI</h2>
+            <p>可复现 · 可审计 · 可治理 · 可交付</p>
+        </div>
+        <div class="field"><label>用户名</label><input id="loginUser" placeholder="输入用户名" value="admin"></div>
+        <div class="field"><label>密码</label><input id="loginPass" type="password" placeholder="输入密码" value="admin123"></div>
+        <button class="btn btn-primary" onclick="doLogin()">登 录 平 台</button>
+        <div class="hint">默认账号 admin / admin123 &nbsp;|&nbsp; <span id="loginError" style="color:var(--brand-red)"></span></div>
+    </div>
+</div>
 
+<!-- ═══════════════════════════ SIDEBAR ═══════════════════════════ -->
 <aside class="sidebar" id="sidebar" hidden>
-<div class="sb-brand"><div class="bn">Sign<span>Off</span>AI</div><div class="bs">Verification Signoff Platform</div></div>
-<nav class="sb-nav">
-<div class="ns">Overview</div>
-<div class="ni active" data-page="dashboard"><i class="bi-speedometer2"></i>Dashboard</div>
-<div class="ni" data-page="pipeline"><i class="bi-play-circle"></i>Pipeline</div>
-<div class="ns">Assets</div>
-<div class="ni" data-page="docs"><i class="bi-file-earmark-text"></i>Spec Docs</div>
-<div class="ni" data-page="vplan"><i class="bi-diagram-3"></i>Requirements</div>
-<div class="ni" data-page="design"><i class="bi-cpu"></i>Design</div>
-<div class="ni" data-page="testcases"><i class="bi-file-code"></i>Testcases</div>
-<div class="ns">Quality & Evidence</div>
-<div class="ni" data-page="coverage"><i class="bi-graph-up"></i>Coverage</div>
-<div class="ni" data-page="regression"><i class="bi-arrow-repeat"></i>Regression</div>
-<div class="ni" data-page="signoff"><i class="bi-check2-circle"></i>Signoff</div>
-<div class="ns">Platform</div>
-<div class="ni" data-page="knowledge"><i class="bi-book"></i>Knowledge</div>
-<div class="ni" data-page="admin"><i class="bi-gear"></i>Admin</div>
-</nav>
-<div class="sb-foot"><div class="av" id="sbAvatar">A</div><div><div id="sbUser" style="font-weight:600"></div><div id="sbRole" style="font-size:10px;color:var(--tx3)"></div></div><div class="lo" onclick="doLogout()"><i class="bi-box-arrow-right"></i></div></div>
+    <div class="sidebar-brand">
+        <div class="brand-name">Sign<span>Off</span>AI</div>
+        <div class="brand-sub">Verification Signoff Platform</div>
+    </div>
+    <nav class="sidebar-nav">
+        <div class="nav-section">概览</div>
+        <div class="nav-item active" data-page="dashboard" data-role="engineer"><i class="bi-speedometer2"></i>仪表盘</div>
+        <div class="nav-item" data-page="manager" data-role="manager"><i class="bi-grid-3x3-gap"></i>模块总览</div>
+        <div class="nav-item" data-page="docs" data-role="both"><i class="bi-file-earmark-text"></i>规格文档</div>
+        <div class="nav-item" data-page="pipeline" data-role="engineer"><i class="bi-play-circle"></i>流水线<span class="badge-dot on"></span></div>
+        <div class="nav-section" data-role="manager">验证规划</div>
+        <div class="nav-item" data-page="vplan" data-role="manager"><i class="bi-diagram-3"></i>需求追踪矩阵</div>
+        <div class="nav-item" data-page="trace" data-role="both"><i class="bi-link-45deg"></i>三层追溯</div>
+        <div class="nav-section" data-role="engineer">代码生成</div>
+        <div class="nav-item" data-page="design" data-role="engineer"><i class="bi-cpu"></i>设计架构</div>
+        <div class="nav-item" data-page="testcases" data-role="engineer"><i class="bi-file-code"></i>测试用例</div>
+        <div class="nav-section" data-role="both">质量与证据</div>
+        <div class="nav-item" data-page="coverage" data-role="both"><i class="bi-graph-up"></i>覆盖率</div>
+        <div class="nav-item" data-page="regression" data-role="both"><i class="bi-arrow-repeat"></i>回归管理</div>
+        <div class="nav-item" data-page="versions" data-role="both"><i class="bi-git"></i>版本管理</div>
+        <div class="nav-item" data-page="signoff" data-role="both"><i class="bi-check2-circle"></i>签核证据链</div>
+        <div class="nav-section" data-role="both">平台</div>
+        <div class="nav-item" data-page="knowledge" data-role="both"><i class="bi-book"></i>知识库</div>
+        <div class="nav-item" data-page="admin" data-role="manager"><i class="bi-gear"></i>管理</div>
+        <div class="nav-item" data-page="settings" data-role="engineer"><i class="bi-person-gear"></i>个人设置</div>
+    </nav>
+    <div class="sidebar-footer">
+        <div class="avatar" id="sbAvatar">A</div>
+        <div><div id="sbUser" style="font-weight:600"></div><div id="sbRole" style="font-size:10px;color:var(--text-muted)"></div></div>
+        <div class="logout" onclick="doLogout()" title="退出"><i class="bi-box-arrow-right"></i></div>
+    </div>
 </aside>
 
-<header class="tb" id="topbar" hidden>
-<div><div class="pt" id="pageTitle">Dashboard</div></div>
-<div class="ta">
-<div class="rt"><button id="roleMgrBtn" onclick="switchRole('manager')">Manager</button><button id="roleEngBtn" onclick="switchRole('engineer')">Engineer</button></div>
-<div class="pill" id="sysBadge">Online</div>
-<button class="thm" onclick="toggleTheme()">O</button>
-</div>
+<!-- ═══════════════════════════ TOPBAR ═══════════════════════════ -->
+<header class="topbar" id="topbar" hidden>
+    <div>
+        <div class="page-title" id="pageTitle">仪表盘</div>
+        <div class="page-breadcrumb" id="pageBreadcrumb">SignOffAI / 仪表盘</div>
+    </div>
+    <div class="topbar-actions">
+        <div style="display:flex;background:var(--bg-input);border-radius:6px;padding:2px;margin-right:8px">
+            <button class="btn btn-xs" id="roleMgrBtn" onclick="switchRole('manager')" style="border-radius:4px;background:var(--brand-blue);color:#fff;border:none;padding:3px 10px">📊 SignOff 经理</button>
+            <button class="btn btn-xs" id="roleEngBtn" onclick="switchRole('engineer')" style="border-radius:4px;background:transparent;color:var(--text-secondary);border:none;padding:3px 10px">🔧 SignOff 工程师</button>
+        </div>
+        <div class="pill" id="sysBadge">● 系统在线</div>
+        <button class="theme-toggle" onclick="toggleTheme()" title="切换亮色/暗色">🌓</button>
+    </div>
 </header>
 
+<!-- ═══════════════════════════ MAIN ═══════════════════════════ -->
 <main class="main" id="mainContent" hidden>
 
+<!-- ── DASHBOARD ── -->
 <div class="page active" id="page-dashboard">
-<div class="sr"><div class="sc abl"><div class="sl">Requirements</div><div class="sv" id="sReqs">-</div></div><div class="sc agn"><div class="sl">Progress</div><div class="sv" id="sProgress">-</div></div><div class="sc apu"><div class="sl">Coverage</div><div class="sv" id="sCover">-</div></div><div class="sc aam"><div class="sl">Pass Rate</div><div class="sv" id="sReg">-</div></div></div>
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">
-<div class="card"><div class="ch"><h6><i class="bi-graph-up"></i>Regression Trend</h6></div><canvas id="trendChart" height="180"></canvas></div>
-<div class="card"><div class="ch"><h6><i class="bi-clock-history"></i>Recent Activity</h6></div><div id="recentActivity" class="xs"></div></div>
-</div></div>
-
-<div class="page" id="page-pipeline">
-<div class="card"><div class="ch"><h6><i class="bi-play-circle"></i>Pipeline</h6><div class="bgrp"><select id="workflowSelect"><option value="full_verification">Full (17 phases)</option><option value="quick_check">Quick (5 phases)</option></select><button class="btn bout bsm" onclick="loadDefaultSpec()">Load Sample</button><button class="btn bpri bsm" onclick="runPipeline()">Run</button></div></div>
-<textarea id="specInput" rows="6" placeholder="Paste Markdown spec..."></textarea></div>
-<div class="card"><div class="ch"><h6><i class="bi-activity"></i>Phases</h6><span class="badge bmu" id="pStatus">Idle</span></div>
-<div class="ptrack" id="phaseTrack"></div>
-<div class="pbar mt2"><div class="pfill blu" id="pProgress" style="width:0%"></div></div>
-<div class="fb xs mt1"><span id="pResult"></span><span id="pTime"></span></div></div>
-<div class="card"><div class="ch"><h6><i class="bi-terminal"></i>Log</h6></div><div class="console" id="console"></div></div></div>
-
-<div class="page" id="page-docs">
-<div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;height:calc(100vh - 120px)">
-<div class="card" style="overflow-y:auto"><div class="ch"><h6><i class="bi-folder"></i>Spec Documents</h6><button class="btn bpri bxs" onclick="newDoc()">+ New</button></div><div id="docsList"></div></div>
-<div class="card" style="overflow-y:auto;display:flex;flex-direction:column">
-<div class="ch"><h6 id="docViewerTitle"><i class="bi-file-text"></i>Select a document</h6><div class="bgrp"><button class="btn bout bxs" id="docEditBtn" onclick="toggleDocEdit()" style="display:none">Edit</button><button class="btn bpri bxs" id="docSaveBtn" onclick="saveDoc()" style="display:none">Save</button><span class="badge bgn" id="docSavedBadge" style="display:none">Saved</span></div></div>
-<div id="docPreview" style="flex:1;overflow-y:auto;padding:12px;background:var(--bg);border-radius:4px;font-size:12px;line-height:1.7"></div>
-<textarea id="docEditor" style="flex:1;display:none;font-family:var(--mon);font-size:11px;line-height:1.6;padding:12px;background:var(--inp);color:var(--tx);border:1px solid var(--bl);border-radius:4px;resize:none" spellcheck="false"></textarea>
-<div id="docLinkedReqs" class="mt2 xs"></div><div id="docMeta" class="xs mt1" style="color:var(--tx3)"></div>
-</div></div></div>
-
-<div class="page" id="page-vplan">
-<div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;height:calc(100vh - 120px)">
-<div class="card" style="overflow-y:auto"><div class="ch"><h6><i class="bi-diagram-3"></i>Requirement Tree</h6><button class="btn bout bxs" onclick="vplanShowAdd()">+</button></div><div id="vplanLevelStats" class="mb2 xs"></div><div id="vplanTree"></div></div>
-<div class="card" style="overflow-y:auto"><div class="ch"><h6 id="vplanDetailTitle"><i class="bi-list-ul"></i>Requirements</h6><div class="bgrp"><button class="btn bout bxs" onclick="vplanShowAdd()">+Req</button><button class="btn bout bxs" onclick="vplanExportCSV()">CSV</button></div></div>
-<table><thead><tr><th>ID</th><th>Description</th><th>Level</th><th>P</th><th>Status</th><th>Coverage</th><th></th></tr></thead><tbody id="vplanReqBody"></tbody></table></div></div></div>
-
-<div class="page" id="page-design">
-<div class="card"><div class="ch"><h6><i class="bi-cpu"></i>Design Architecture</h6><button class="btn bpri bsm" onclick="runDesignArch()">Generate</button></div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-<div class="card"><div class="ch"><h6>Functions</h6></div><div id="daFuncHier" class="xs"></div></div>
-<div class="card"><div class="ch"><h6>Registers <span class="badge bbl" id="daRegCount">0</span></h6></div><div style="max-height:300px;overflow-y:auto"><table><thead><tr><th>Register</th><th>Addr</th><th>Width</th><th>R/W</th></tr></thead><tbody id="daRegBody"></tbody></table></div></div>
-</div></div></div>
-
-<div class="page" id="page-testcases">
-<div class="card"><div class="ch"><h6><i class="bi-file-code"></i>Testcases <span class="badge bbl" id="tcCount">0</span></h6><div class="bgrp"><button class="btn bpri bsm" onclick="genTC()">Generate</button><button class="btn bout bsm" onclick="loadTC()">Refresh</button></div></div>
-<table><thead><tr><th>Name</th><th>Files</th><th></th></tr></thead><tbody id="tcBody"></tbody></table></div></div>
-
-<div class="page" id="page-coverage">
-<div class="sr" id="covCards"></div>
-<div class="card"><div class="ch"><h6><i class="bi-files"></i>File Coverage</h6></div><div id="covFiles"></div></div>
-<div class="card"><div class="ch"><h6><i class="bi-exclamation-triangle"></i>Coverage Holes</h6></div><div id="covGaps"></div></div></div>
-
-<div class="page" id="page-regression">
-<div class="card"><div class="ch"><h6><i class="bi-arrow-repeat"></i>Regression History</h6><button class="btn bpri bsm" onclick="runRegression()">Run</button></div>
-<table><thead><tr><th>Run</th><th>Status</th><th>Pass</th><th>Fail</th><th>Total</th><th>Time</th><th>Date</th></tr></thead><tbody id="regBody"></tbody></table></div></div>
-
-<div class="page" id="page-signoff">
-<div class="card"><div class="ch"><h6><i class="bi-check2-circle"></i>Signoff Reports</h6><button class="btn bpri bsm" onclick="createSignoff()">+ New</button></div>
-<table><thead><tr><th>Title</th><th>Type</th><th>Status</th><th>Date</th><th></th></tr></thead><tbody id="sfBody"></tbody></table></div></div>
-
-<div class="page" id="page-knowledge">
-<div class="card"><div class="ch"><h6><i class="bi-book"></i>Knowledge Base</h6><div class="bgrp"><input id="kSearch" placeholder="Search..." style="width:180px"><button class="btn bout bsm" onclick="searchKB()">Search</button><button class="btn bout bsm" onclick="addKB()">+ Add</button></div></div>
-<table><thead><tr><th>Title</th><th>Category</th><th>Tags</th><th>Used</th><th>Date</th></tr></thead><tbody id="kbBody"></tbody></table></div></div>
-
-<div class="page" id="page-admin">
-<div class="fl g2 mb2" style="border-bottom:1px solid var(--bd);padding-bottom:8px">
-<span class="badge bbl cp" onclick="switchAdminTab('users')" id="atab-users">Users</span>
-<span class="badge bmu cp" onclick="switchAdminTab('modules')" id="atab-modules">Modules</span>
-<span class="badge bmu cp" onclick="switchAdminTab('audit')" id="atab-audit">Audit</span>
+    <div class="stat-row">
+        <div class="stat-card accent-blue">
+            <div class="stat-label">需求总数</div><div class="stat-value" id="sReqs">-</div><div class="stat-sub">Requirements</div>
+        </div>
+        <div class="stat-card accent-green">
+            <div class="stat-label">验证进度</div><div class="stat-value" id="sProgress">-</div><div class="stat-sub">Verification Progress</div>
+        </div>
+        <div class="stat-card accent-purple">
+            <div class="stat-label">代码覆盖率</div><div class="stat-value" id="sCover">-</div><div class="stat-sub">Code Coverage</div>
+        </div>
+        <div class="stat-card accent-amber">
+            <div class="stat-label">回归通过率</div><div class="stat-value" id="sReg">-</div><div class="stat-sub">Regression Pass Rate</div>
+        </div>
+    </div>
+    <!-- Evidence chain summary -->
+    <div class="evidence-bar" id="dashEvidence" style="display:none">
+        <span style="font-weight:600;font-size:11px;margin-right:4px;">🔗 最新证据链</span>
+        <span class="ev-node pass" id="evRunId">-</span>
+        <span class="ev-arrow">→</span>
+        <span class="ev-node pass" id="evPhases">-</span>
+        <span class="ev-arrow">→</span>
+        <span class="ev-node pass" id="evScore">-</span>
+        <span class="ev-hash">Evidence <code id="evHash">-</code></span>
+    </div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-graph-up"></i>回归通过率趋势</h6></div>
+            <canvas id="trendChart" height="200"></canvas>
+        </div>
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-clock-history"></i>最近活动</h6></div>
+            <div id="recentActivity" class="text-xs" style="color:var(--text-secondary)"></div>
+        </div>
+    </div>
 </div>
-<div id="apanel-users">
-<div class="card"><div class="ch"><h6><i class="bi-people"></i>Users</h6><button class="btn bout bxs" onclick="adminAddUser()">+ User</button></div>
-<table><thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Email</th></tr></thead><tbody id="userBody"></tbody></table></div></div>
-<div id="apanel-modules" style="display:none">
-<div class="card"><div class="ch"><h6><i class="bi-puzzle"></i>Module Assignment</h6><button class="btn bout bxs" onclick="assignEngineerPrompt()">+ Assign</button></div>
-<table><thead><tr><th>Module</th><th>Members</th><th></th></tr></thead><tbody id="assignBody"><tr><td colspan="3" class="xs" style="color:var(--tx3)">Loading...</td></tr></tbody></table></div></div>
-<div id="apanel-audit" style="display:none">
-<div class="card"><div class="ch"><h6><i class="bi-journal-text"></i>Audit Log</h6></div>
-<table><thead><tr><th>User</th><th>Action</th><th>Detail</th><th>Time</th></tr></thead><tbody id="auditBody"></tbody></table></div></div>
+
+<!-- ── MODULE DETAIL (模块详情) ── -->
+<div class="page" id="page-module-detail">
+    <div class="card"><div class="card-header"><h6 id="mdTitle"><i class="bi-cpu"></i>模块详情</h6><button class="btn btn-outline btn-xs" onclick="switchRole('manager')">← 返回总览</button></div></div>
+    <div class="stat-row" id="mdStats"></div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">
+        <div class="card"><div class="card-header"><h6><i class="bi-graph-up"></i>覆盖率趋势</h6></div><canvas id="mdCovChart" height="180"></canvas></div>
+        <div class="card"><div class="card-header"><h6>🤖 AI 智能分析</h6></div><div id="mdAiSummary" style="font-size:11px;color:var(--text-secondary)"></div></div>
+    </div>
+    <div class="card"><div class="card-header"><h6><i class="bi-clock-history"></i>管线运行历史</h6></div>
+        <div class="table-wrap"><table><thead><tr><th>Run ID</th><th>类型</th><th>状态</th><th>通过</th><th>评分</th><th>覆盖率</th><th>证据</th><th>时间</th></tr></thead><tbody id="mdRunsBody"></tbody></table></div>
+    </div>
+</div>
+
+<!-- ── MANAGER DASHBOARD (SignOff 经理总览) ── -->
+<div class="page" id="page-manager">
+    <div class="stat-row" id="mgrStats"></div>
+    <div class="card"><div class="card-header"><h6><i class="bi-grid-3x3-gap"></i>模块 AI 验证进展</h6>
+        <span class="badge badge-muted" id="mgrModuleCount">0 模块</span></div>
+        <div id="mgrModuleGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px"></div>
+    </div>
+    <div class="card"><div class="card-header"><h6><i class="bi-clock-history"></i>最近运行记录</h6></div>
+        <div class="table-wrap"><table><thead><tr><th>模块</th><th>Run ID</th><th>状态</th><th>通过</th><th>评分</th><th>证据</th><th>时间</th></tr></thead><tbody id="mgrRecentRuns"></tbody></table></div>
+    </div>
+</div>
+
+<!-- ── PIPELINE ── -->
+<div class="page" id="page-pipeline">
+    <div class="card">
+        <div class="card-header"><h6><i class="bi-play-circle"></i>执行流水线</h6><div class="btn-group"><select id="workflowSelect" onchange="buildPhaseTrack(this.value)"><option value="full_verification">完整验证 (17 阶段)</option><option value="quick_check">快速检查 (5 阶段)</option></select><button class="btn btn-outline btn-sm" onclick="loadDefaultSpec()">加载示例</button><button class="btn btn-primary btn-sm" onclick="runPipeline()">▶ 运行</button></div></div>
+        <!-- Dual-track tabs -->
+    <div class="card-header" style="padding-bottom:0;border-bottom:none">
+        <div style="display:flex;gap:0;margin-bottom:-1px">
+            <div id="trackTraditional" class="track-tab active" onclick="switchTrack('traditional')" style="padding:8px 16px;border-radius:6px 6px 0 0;cursor:pointer;background:var(--brand-blue-dim);color:var(--brand-blue);font-weight:600;font-size:12px;border:1px solid var(--brand-blue-dim);border-bottom:none">🔬 常规仿真</div>
+            <div id="trackAI" class="track-tab" onclick="switchTrack('ai_exploration')" style="padding:8px 16px;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;color:var(--text-secondary);border:1px solid transparent">🤖 AI 智能探索</div>
+            <span style="flex:1;border-bottom:1px solid var(--border)"></span>
+        </div>
+    </div>
+    <textarea id="specInput" rows="6" placeholder="粘贴 Markdown 设计规格，或点击「加载示例」..." style="width:100%;margin-top:0;border-radius:0 6px 6px 6px"></textarea>
+    <div id="aiHint" style="display:none;padding:6px 12px;margin-bottom:0;font-size:10px;color:var(--brand-purple);background:rgba(139,92,246,.08);border-radius:0 0 6px 6px;border-left:2px solid var(--brand-purple)">🤖 AI 智能探索模式：自动发现 coverage gap，生成 corner case 测试，对未覆盖场景进行针对性验证</div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h6><i class="bi-activity"></i>阶段进度</h6><span class="badge badge-muted" id="pStatus">待运行</span></div>
+        <div style="overflow-x:auto;padding:8px 0">
+            <div class="phase-track" id="phaseTrack"></div>
+        </div>
+        <div class="progress-bar mt-2"><div class="progress-fill blue" id="pProgress" style="width:0%"></div></div>
+        <div class="flex-between text-xs mt-2"><span style="color:var(--text-muted)" id="pResult"></span><span style="color:var(--text-muted)" id="pTime"></span></div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h6><i class="bi-terminal"></i>操作日志</h6><button class="btn btn-outline btn-xs" onclick="document.getElementById('console').innerHTML=''">清空</button></div>
+        <div class="console" id="console"></div>
+    </div>
+</div>
+
+<!-- ── DOCS (可视化编辑器) ── -->
+<div class="page" id="page-docs">
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;height:calc(100vh - 120px)">
+        <div class="card" style="overflow-y:auto">
+            <div class="card-header"><h6><i class="bi-folder"></i>规格文档库</h6><button class="btn btn-primary btn-xs" id="newDocBtn" onclick="newDoc()">+ 新建</button></div>
+            <div id="docsList"></div>
+        </div>
+        <div class="card" style="overflow-y:auto;display:flex;flex-direction:column">
+            <div class="card-header">
+                <h6 id="docViewerTitle"><i class="bi-file-text"></i>选择文档</h6>
+                <div class="btn-group">
+                    <button class="btn btn-outline btn-xs" id="docEditBtn" onclick="toggleDocEdit()" style="display:none">✏ 编辑</button>
+                    <button class="btn btn-primary btn-xs" id="docSaveBtn" onclick="saveDoc()" style="display:none">💾 保存</button>
+                    <span class="badge badge-green" id="docSavedBadge" style="display:none">已保存</span>
+                </div>
+            </div>
+            <div id="docPreview" style="flex:1;overflow-y:auto;padding:12px;background:var(--bg-primary);border-radius:var(--radius-sm);font-size:12px;line-height:1.7;min-height:300px"></div>
+            <textarea id="docEditor" style="flex:1;display:none;width:100%;min-height:300px;font-family:var(--font-mono);font-size:11px;line-height:1.6;padding:12px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--brand-blue);border-radius:var(--radius-sm);resize:none" spellcheck="false"></textarea>
+            <div id="docLinkedReqs" class="mt-2 text-xs"></div>
+            <div id="docMeta" class="text-xs mt-1" style="color:var(--text-muted)"></div>
+        </div>
+        <!-- 结构化编辑器面板 -->
+        <div class="card mt-2" id="structEditor" style="display:none">
+            <div class="card-header"><h6><i class="bi-tools"></i>结构化编辑器</h6></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div>
+                    <div class="flex-between mb-1"><strong class="text-xs">🔌 接口规范</strong><button class="btn btn-outline btn-xs" onclick="addInterface()">+</button></div>
+                    <div id="ifaceEditor"></div>
+                </div>
+                <div>
+                    <div class="flex-between mb-1"><strong class="text-xs">⏱️ 时序约束</strong><button class="btn btn-outline btn-xs" onclick="addTiming()">+</button></div>
+                    <div id="timingEditor"></div>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+                <div>
+                    <div class="flex-between mb-1"><strong class="text-xs">⚡ 功耗约束</strong><button class="btn btn-outline btn-xs" onclick="addPower()">+</button></div>
+                    <div id="powerEditor"></div>
+                </div>
+                <div>
+                    <div class="flex-between mb-1"><strong class="text-xs">📋 需求列表</strong><button class="btn btn-outline btn-xs" onclick="addRequirement()">+</button></div>
+                    <div id="reqEditor"></div>
+                </div>
+            </div>
+            <button class="btn btn-success btn-sm mt-2" onclick="saveStructured()">💾 保存结构化文档</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── VPLAN ── -->
+<div class="page" id="page-vplan">
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;height:calc(100vh - 120px)">
+        <div class="card" style="overflow-y:auto">
+            <div class="card-header"><h6><i class="bi-diagram-3"></i>需求层级</h6><button class="btn btn-outline btn-xs" onclick="vplanShowAdd()">+</button></div>
+            <div id="vplanLevelStats" class="text-xs mb-2"></div>
+            <div id="vplanTree"></div>
+        </div>
+        <div class="card" style="overflow-y:auto">
+            <div class="card-header"><h6 id="vplanDetailTitle"><i class="bi-list-ul"></i>需求详情</h6>
+                <div class="btn-group"><button class="btn btn-outline btn-xs" onclick="vplanShowAdd()">+需求</button><button class="btn btn-outline btn-xs" onclick="vplanExportCSV()">📥 CSV</button></div>
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>ID</th><th>需求描述</th><th>层级</th><th>P</th><th>状态</th><th>覆盖率</th><th></th></tr></thead>
+            <tbody id="vplanReqBody"><tr><td colspan="7" style="color:var(--text-muted);text-align:center;padding:20px">选择左侧节点查看需求</td></tr></tbody></table></div>
+        </div>
+    </div>
+</div>
+
+<!-- ── DESIGN ── -->
+<div class="page" id="page-design">
+    <div class="card"><div class="card-header"><h6><i class="bi-cpu"></i>模块设计架构</h6><button class="btn btn-primary btn-sm" onclick="runDesignArch()">▶ 生成架构</button></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="card"><div class="card-header"><h6>📐 功能层级</h6></div><div id="daFuncHier" class="text-xs"></div></div>
+            <div class="card"><div class="card-header"><h6>🗂 寄存器表 <span class="badge badge-blue" id="daRegCount">0</span></h6></div>
+                <div style="max-height:300px;overflow-y:auto" class="table-wrap"><table><thead><tr><th>寄存器</th><th>地址</th><th>位宽</th><th>R/W</th></tr></thead><tbody id="daRegBody"></tbody></table></div>
+            </div>
+        </div>
+        <div class="card mt-2"><div class="card-header"><h6>📦 RTL 架构</h6></div><div id="daRtlHier" class="text-xs"></div></div>
+        <div class="card mt-2"><div class="card-header"><h6>✅ 签核检查清单 <span class="badge badge-amber" id="daSocCount">0</span></h6></div><div id="daSignoff"></div></div>
+    </div>
+</div>
+
+<!-- ── VERSIONS (代码版本管理) ── -->
+<div class="page" id="page-versions">
+    <div class="card">
+        <div class="card-header"><h6><i class="bi-git"></i>代码版本管理 — RTL / UVM / Model</h6></div>
+        <div class="table-wrap"><table><thead><tr><th>Run ID</th><th>工作流</th><th>状态</th><th>RTL Hash</th><th>UVM Hash</th><th>Model Hash</th><th>文件数</th><th>评分</th><th>时间</th><th></th></tr></thead>
+        <tbody id="verBody"><tr><td colspan="10" style="color:var(--text-muted);text-align:center;padding:20px">加载中...</td></tr></tbody></table></div>
+    </div>
+    <!-- Version detail panel -->
+    <div class="card" id="verDetail" style="display:none">
+        <div class="card-header"><h6 id="verDetailTitle"><i class="bi-file-earmark-diff"></i>版本详情</h6><button class="btn btn-outline btn-xs" onclick="document.getElementById('verDetail').style.display='none'">✕ 关闭</button></div>
+        <div class="flex gap-2 mb-2" id="verPhaseBadges"></div>
+        <div class="table-wrap"><table><thead><tr><th>文件路径</th><th>SHA256</th><th>大小</th></tr></thead><tbody id="verFilesBody"></tbody></table></div>
+    </div>
+</div>
+
+<!-- ── TESTCASES ── -->
+<div class="page" id="page-testcases">
+    <div class="card"><div class="card-header"><h6><i class="bi-file-code"></i>测试用例 <span class="badge badge-blue" id="tcCount">0</span></h6>
+        <div class="btn-group"><button class="btn btn-primary btn-sm" onclick="genTC()">🔄 自动生成</button><button class="btn btn-outline btn-sm" onclick="loadTC()">刷新</button></div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>名称</th><th>文件</th><th>操作</th></tr></thead><tbody id="tcBody"></tbody></table></div></div>
+</div>
+
+<!-- ── COVERAGE ── -->
+<div class="page" id="page-coverage">
+    <div class="stat-row" id="covCards"></div>
+    <div class="card"><div class="card-header"><h6><i class="bi-files"></i>文件覆盖率</h6></div><div id="covFiles"></div></div>
+    <div class="card"><div class="card-header"><h6><i class="bi-exclamation-triangle"></i>覆盖率空洞</h6></div><div id="covGaps"></div></div>
+</div>
+
+<!-- ── REGRESSION ── -->
+<div class="page" id="page-regression">
+    <div class="card"><div class="card-header"><h6><i class="bi-arrow-repeat"></i>回归历史</h6><button class="btn btn-primary btn-sm" onclick="runRegression()">▶ 运行回归</button></div>
+    <div class="table-wrap"><table><thead><tr><th>运行</th><th>状态</th><th>PASS</th><th>FAIL</th><th>总计</th><th>耗时</th><th>时间</th></tr></thead><tbody id="regBody"></tbody></table></div></div>
+</div>
+
+<!-- ── SIGNOFF (可追溯 · 可审计 · 可治理) ── -->
+<div class="page" id="page-signoff">
+    <!-- 证据链追溯表 -->
+    <div class="card">
+        <div class="card-header"><h6><i class="bi-shield-check"></i>证据链追溯</h6>
+            <div class="btn-group">
+                <button class="btn btn-outline btn-xs" onclick="loadEvidenceChain()">🔄 刷新</button>
+                <button class="btn btn-outline btn-xs" onclick="verifyIntegrity()">🔍 校验完整性</button>
+                <button class="btn btn-success btn-xs" onclick="exportEvidencePackage()">📦 导出证据包</button>
+            </div>
+        </div>
+        <div id="sfEvidenceEmpty" style="color:var(--text-muted);text-align:center;padding:20px">加载中...</div>
+        <div id="sfEvidenceTable" style="display:none">
+            <div class="table-wrap"><table><thead><tr><th>#</th><th>阶段</th><th>状态</th><th>评分</th><th>耗时</th><th>输入摘要</th><th>产出 Hash</th><th>工具调用</th></tr></thead>
+            <tbody id="sfChainBody"></tbody></table></div>
+            <div class="flex-between mt-2 text-xs" style="padding:8px 12px;background:var(--bg-input);border-radius:var(--radius-sm)">
+                <span>🔗 <strong>Manifest:</strong> <code style="color:var(--brand-green)" id="sfManifestHash">-</code></span>
+                <span>📦 <strong>Evidence:</strong> <code style="color:var(--brand-blue)" id="sfEvidenceHash">-</code></span>
+                <span>📋 <code style="cursor:pointer;color:var(--brand-purple)" id="sfDumpCmd" onclick="copyDumpCmd()" title="点击复制">vagent dump -</code></span>
+                <span id="sfIntegrityBadge"></span>
+            </div>
+        </div>
+    </div>
+    <!-- 完整性校验面板 -->
+    <div class="card" id="sfIntegrityPanel" style="display:none">
+        <div class="card-header"><h6><i class="bi-shield-check"></i>完整性校验报告</h6><button class="btn btn-outline btn-xs" onclick="document.getElementById('sfIntegrityPanel').style.display='none'">✕</button></div>
+        <div id="sfIntegrityContent" class="text-xs"></div>
+    </div>
+    <!-- 签核审批 -->
+    <div class="card">
+        <div class="card-header"><h6><i class="bi-check2-circle"></i>签核审批</h6><button class="btn btn-primary btn-sm" onclick="createSignoff()">+ 新建签核</button></div>
+        <div class="table-wrap"><table><thead><tr><th>标题</th><th>类型</th><th>状态</th><th>证据 Hash</th><th>审批人</th><th>时间</th><th>操作</th></tr></thead><tbody id="sfBody"></tbody></table></div>
+    </div>
+</div>
+
+<!-- ── KNOWLEDGE ── -->
+<div class="page" id="page-knowledge">
+    <div class="card"><div class="card-header"><h6><i class="bi-book"></i>知识库</h6>
+        <div class="btn-group"><input id="kSearch" placeholder="搜索..." style="width:180px"><button class="btn btn-outline btn-sm" onclick="searchKB()">搜索</button><button class="btn btn-outline btn-sm" onclick="addKB()">+ 添加</button></div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>标题</th><th>分类</th><th>标签</th><th>引用</th><th>时间</th></tr></thead><tbody id="kbBody"></tbody></table></div></div>
+</div>
+
+<!-- ── TRACE (三层追溯) ── -->
+<div class="page" id="page-trace">
+    <div class="card">
+        <div class="card-header"><h6><i class="bi-link-45deg"></i>三层追溯 — 需求→模块→功能点→测试点</h6>
+            <button class="btn btn-outline btn-xs" onclick="loadTrace()">🔄 刷新</button></div>
+        <div id="traceStats" class="stat-row"></div>
+        <div class="table-wrap"><table><thead><tr><th>需求 ID</th><th>模块</th><th>功能点</th><th>级别</th><th>测试点</th><th>映射类型</th><th>置信度</th><th></th></tr></thead><tbody id="traceBody"></tbody></table></div>
+    </div>
+    <!-- Trace detail -->
+    <div class="card" id="traceDetail" style="display:none">
+        <div class="card-header"><h6 id="traceDetailTitle"><i class="bi-search"></i>追溯详情</h6><button class="btn btn-outline btn-xs" onclick="document.getElementById('traceDetail').style.display='none'">✕</button></div>
+        <div id="traceDetailContent" class="text-xs"></div>
+    </div>
+</div>
+
+<!-- ── SETTINGS (SignOff 工程师个人设置) ── -->
+<div class="page" id="page-settings">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-person-badge"></i>我的账户</h6></div>
+            <div style="padding:8px 0">
+                <div class="flex-between mb-3"><span style="color:var(--text-secondary)">用户名</span><strong id="setUsername">-</strong></div>
+                <div class="flex-between mb-3"><span style="color:var(--text-secondary)">显示名称</span><strong id="setDisplayName">-</strong></div>
+                <div class="flex-between mb-3"><span style="color:var(--text-secondary)">角色</span><span class="badge badge-blue" id="setRole">-</span></div>
+                <div class="flex-between mb-3"><span style="color:var(--text-secondary)">邮箱</span><span id="setEmail">-</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-puzzle"></i>我的模块</h6></div>
+            <div id="setMyModules" style="color:var(--text-muted);font-size:12px;padding:8px 0">加载中...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ── ADMIN ── -->
+<div class="page" id="page-admin">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-people"></i>用户管理</h6><button class="btn btn-outline btn-xs" onclick="adminAddUser()">+ 用户</button></div>
+            <div class="table-wrap"><table><thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>邮箱</th></tr></thead><tbody id="userBody"></tbody></table></div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-puzzle"></i>模块分配</h6><button class="btn btn-outline btn-xs" onclick="adminAssignModule()">+ 分配</button></div>
+            <div class="table-wrap"><table><thead><tr><th>模块</th><th>工程师</th><th>操作</th></tr></thead><tbody id="assignBody"><tr><td colspan="3" style="color:var(--text-muted);text-align:center;padding:12px">加载中...</td></tr></tbody></table></div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-journal-text"></i>审计日志</h6></div>
+            <div class="table-wrap"><table><thead><tr><th>用户</th><th>操作</th><th>时间</th></tr></thead><tbody id="auditBody"></tbody></table></div>
+        </div>
+    </div>
+    <!-- Token 预算治理 -->
+    <div class="card mt-2">
+        <div class="card-header"><h6>🪙 Token 用量治理</h6></div>
+        <div id="tokenDashboard" class="text-xs" style="color:var(--text-muted);padding:8px">加载中...</div>
+    </div>
+    </div>
 </div>
 
 </main>
+
+<!-- ═══════════════════════════ TOAST ═══════════════════════════ -->
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
-var AUTH={token:'',user:null},vpSelL='',vpSelK='',vpSelN='',APP_ROLE='manager',docState={name:'',content:'',dirty:false};
-var LVL={chip:'Chip',st:'ST',it:'IT',bt:'BT',ut:'UT'};
+/* ═══════════════════════════════════════════════════════════════
+   SignOffAI Frontend Application v2.0
+   ═══════════════════════════════════════════════════════════════ */
 
-var API=function(path,opts){opts=opts||{};var h=opts.headers||{};if(AUTH.token)h['Authorization']='Bearer '+AUTH.token;if(opts.body&&typeof opts.body==='object'){h['Content-Type']='application/json';opts.body=JSON.stringify(opts.body)}return fetch(path,{method:opts.method||'GET',headers:h,body:opts.body}).then(function(r){if(r.status===401){doLogout();throw new Error('Unauthorized')}return r.ok?r.json():r.json().then(function(e){return Promise.reject(e.detail||r.statusText)})})};
-var toast=function(msg,type){type=type||'info';var c=document.getElementById('toastContainer');var d=document.createElement('div');d.className='toast-msg '+type;d.textContent=msg;c.appendChild(d);setTimeout(function(){d.style.opacity='0';setTimeout(function(){d.remove()},300)},2500)};
-var log=function(msg,cls){cls=cls||'';var c=document.getElementById('console');if(!c)return;var t=new Date().toLocaleTimeString();var color=cls==='error'?'cer':cls==='ok'?'cok':cls==='info'?'cin':'';c.innerHTML+='<div><span class=\"cts\">['+t+']</span><span class=\"'+color+'\">'+msg+'</span></div>';c.scrollTop=c.scrollHeight};
+// ── GLOBAL STATE ──
+let AUTH={token:'',user:null}, vpSelectedLevel='', vpSelectedParent='', vpSelectedKey='', vpSelectedName='';
+const LVL={chip:'芯片级',st:'系统级',it:'集成级',bt:'模块级',ut:'单元级'};
 
-function toggleTheme(){var h=document.documentElement;var c=h.getAttribute('data-theme');h.setAttribute('data-theme',c==='dark'?'light':'dark');localStorage.setItem('theme',c==='dark'?'light':'dark')}
-function switchRole(r){APP_ROLE=r;var m=document.getElementById('roleMgrBtn'),e=document.getElementById('roleEngBtn');if(r==='manager'){m.style.background='var(--bl)';m.style.color='#fff';e.style.background='transparent';e.style.color='var(--tx2)'}else{e.style.background='var(--bl)';e.style.color='#fff';m.style.background='transparent';m.style.color='var(--tx2)'}}
-function switchAdminTab(t){['users','modules','audit'].forEach(function(x){document.getElementById('atab-'+x).className=t===x?'badge bbl cp':'badge bmu cp';document.getElementById('apanel-'+x).style.display=t===x?'':'none'});if(t==='modules')loadModuleAssignments();if(t==='audit')loadAudit()}
+// ── API helper ──
+const API=(path,opts={})=>{
+    const h={...opts.headers}; if(AUTH.token) h['Authorization']=`Bearer ${AUTH.token}`;
+    if(opts.body&&typeof opts.body==='object'){h['Content-Type']='application/json';opts.body=JSON.stringify(opts.body)}
+    return fetch(path,{...opts,headers:h}).then(r=>{
+        if(r.status===401){doLogout();throw new Error('Unauthorized')}
+        return r.ok?r.json():r.json().then(e=>Promise.reject(e.detail||r.statusText))
+    });
+};
 
+// ── Toast ──
+const toast=(msg,type='info')=>{
+    const c=document.getElementById('toastContainer');
+    const d=document.createElement('div'); d.className=`toast-msg ${type}`; d.textContent=msg;
+    c.appendChild(d); setTimeout(()=>{d.style.opacity='0';setTimeout(()=>d.remove(),300)},2800);
+};
+
+// ── Console log ──
+const log=(msg,cls='')=>{
+    const c=document.getElementById('console'); if(!c)return;
+    const t=new Date().toLocaleTimeString();
+    const color=cls==='error'?'err':cls==='ok'?'ok':cls==='info'?'info':'';
+    c.innerHTML+=`<div><span class="ts">[${t}]</span><span class="${color}">${msg}</span></div>`;
+    c.scrollTop=c.scrollHeight;
+};
+
+// ── Theme toggle ──
+function toggleTheme(){
+    const html=document.documentElement;
+    const cur=html.getAttribute('data-theme');
+    const next=cur==='dark'?'light':'dark';
+    html.setAttribute('data-theme',next);
+    localStorage.setItem('theme',next);
+}
+
+// ── AUTH ──
 async function doLogin(){
-    var u=document.getElementById('loginUser').value,p=document.getElementById('loginPass').value;
-    var errEl=document.getElementById('loginError');errEl.textContent='Logging in...';
+    var u=document.getElementById('loginUser').value;
+    var p=document.getElementById('loginPass').value;
+    var errEl=document.getElementById('loginError');
+    errEl.textContent='登录中...';
     try{
         var resp=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
-        var d=await resp.json();
-        if(!resp.ok||!d.token){errEl.textContent=d.detail||'Invalid credentials';return}
-        AUTH.token=d.token;AUTH.user=d.user;
+        if(!resp.ok){errEl.textContent='用户名或密码错误';return}
+        var data=await resp.json();
+        AUTH.token=data.token; AUTH.user=data.user;
         document.getElementById('loginOverlay').setAttribute('hidden','');
         document.getElementById('sidebar').removeAttribute('hidden');
         document.getElementById('topbar').removeAttribute('hidden');
         document.getElementById('mainContent').removeAttribute('hidden');
-        document.getElementById('sbUser').textContent=d.user.display_name;
-        document.getElementById('sbRole').textContent=d.user.role;
-        document.getElementById('sbAvatar').textContent=d.user.display_name[0].toUpperCase();
+        document.getElementById('sbUser').textContent=data.user.display_name;
+        document.getElementById('sbRole').textContent=data.user.role;
+        document.getElementById('sbAvatar').textContent=data.user.display_name[0].toUpperCase();
         initApp();
-    }catch(e){errEl.textContent='Network error: '+e.message}
+    }catch(e){ errEl.textContent='网络错误: '+e.message }
 }
 function doLogout(){AUTH={token:'',user:null};location.reload()}
 
-var PAGE_LOADERS={dashboard:loadDashboard,docs:loadDocs,vplan:loadVPlan,design:loadDesignArch,pipeline:loadPipelineTab,testcases:loadTC,coverage:loadCoverage,regression:loadRegression,signoff:loadSignoffs,knowledge:searchKB,admin:loadAdmin};
-document.addEventListener('DOMContentLoaded',function(){
-    document.querySelectorAll('.sb-nav .ni[data-page]').forEach(function(item){item.addEventListener('click',function(){
-        document.querySelectorAll('.sb-nav .ni').forEach(function(i){i.classList.remove('active')});
-        item.classList.add('active');
-        document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});
-        var pg=document.getElementById('page-'+item.dataset.page);if(pg)pg.classList.add('active');
-        document.getElementById('pageTitle').textContent=item.textContent.trim();
-        if(PAGE_LOADERS[item.dataset.page])PAGE_LOADERS[item.dataset.page]();
-    })})
+// ── NAVIGATION ──
+let APP_ROLE='manager';
+const PAGE_LOADERS={dashboard:loadDashboard,manager:loadManager,docs:loadDocs,vplan:loadVPlan,design:loadDesignArch,versions:loadVersions,pipeline:loadPipelineTab,testcases:loadTC,coverage:loadCoverage,regression:loadRegression,signoff:loadSignoffs,knowledge:searchKB,admin:loadAdmin,settings:loadSettings,trace:loadTrace};
+
+function switchRole(role){
+    APP_ROLE=role;
+    const mgrBtn=document.getElementById('roleMgrBtn');const engBtn=document.getElementById('roleEngBtn');
+    if(role==='manager'){mgrBtn.style.background='var(--brand-blue)';mgrBtn.style.color='#fff';engBtn.style.background='transparent';engBtn.style.color='var(--text-secondary)';}
+    else{engBtn.style.background='var(--brand-blue)';engBtn.style.color='#fff';mgrBtn.style.background='transparent';mgrBtn.style.color='var(--text-secondary)';}
+    // Show/hide sidebar items + sections
+    document.querySelectorAll('.sidebar-nav .nav-item[data-role], .sidebar-nav .nav-section[data-role]').forEach(i=>{
+        const r=i.dataset.role; i.style.display=(r===role||r==='both')?'':'none';
+    });
+    // Switch to default page for role
+    const defaultPage=role==='manager'?'manager':'dashboard';
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(i=>i.classList.remove('active'));
+    const item=document.querySelector(`.sidebar-nav .nav-item[data-page="${defaultPage}"]`); if(item)item.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    const pg=document.getElementById('page-'+defaultPage); if(pg)pg.classList.add('active');
+    document.getElementById('pageTitle').textContent=role==='manager'?'模块总览':'仪表盘';
+    document.getElementById('pageBreadcrumb').textContent='SignOffAI / '+(role==='manager'?'SignOff 经理':'SignOff 工程师');
+    if(PAGE_LOADERS[defaultPage])PAGE_LOADERS[defaultPage]();
+}
+document.addEventListener('DOMContentLoaded',()=>{
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(item=>{
+        item.addEventListener('click',()=>{
+            document.querySelectorAll('.sidebar-nav .nav-item').forEach(i=>i.classList.remove('active'));
+            item.classList.add('active');
+            document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+            const pg=document.getElementById('page-'+item.dataset.page); if(pg)pg.classList.add('active');
+            const label=item.textContent.replace(/[●●]/g,'').trim();
+            document.getElementById('pageTitle').textContent=label;
+            document.getElementById('pageBreadcrumb').textContent='SignOffAI / '+(APP_ROLE==='manager'?'SignOff 经理':'SignOff 工程师')+' / '+label;
+            if(PAGE_LOADERS[item.dataset.page])PAGE_LOADERS[item.dataset.page]();
+        });
+    });
 });
-async function initApp(){switchRole('manager');loadDashboard();setTimeout(loadVPlan,400)}
 
-async function loadDashboard(){try{var a=await Promise.all([API('/api/dashboard/stats'),API('/api/coverage/summary'),API('/api/vplan/stats')]);var stats=a[0],cov=a[1],vplan=a[2];document.getElementById('sReqs').textContent=vplan.total||0;var vr=vplan.stats?Object.values(vplan.stats).reduce(function(a,b){return a+(b.verified||0)},0):0;document.getElementById('sProgress').textContent=vplan.total?Math.round(vr/vplan.total*100)+'%':'--';document.getElementById('sCover').textContent=(cov.code_coverage||0)+'%';document.getElementById('sReg').textContent=(stats.last_regression?stats.last_regression.pass_rate:'--')+'%';var trend=stats.regression_trend||[];var ctx=document.getElementById('trendChart');if(ctx&&trend.length&&typeof Chart!=='undefined'){if(ctx._chart)ctx._chart.destroy();ctx._chart=new Chart(ctx,{type:'line',data:{labels:trend.map(function(t){return t.date}),datasets:[{label:'Pass Rate %',data:trend.map(function(t){return t.pass_rate}),borderColor:'#10b981',tension:.4,fill:false}]},options:{responsive:true,plugins:{legend:{display:false}}}})};try{var logs=await API('/api/audit?limit=8');document.getElementById('recentActivity').innerHTML=logs.logs.map(function(l){return '<div class=\"fb mb1\"><span><strong>'+l.username+'</strong> '+l.action+'</span><span style=\"color:var(--tx3)\">'+(l.created_at||'').substring(5,16)+'</span></div>'}).join('')||'<span style=\"color:var(--tx3)\">No activity</span>'}catch(e){}}catch(e){}}
+// ── DASHBOARD ──
+async function loadDashboard(){
+    try{
+        const [stats,cov,vplan]=await Promise.all([API('/api/dashboard/stats'),API('/api/coverage/summary'),API('/api/vplan/stats')]);
+        document.getElementById('sReqs').textContent=vplan.total||0;
+        const verified=vplan.stats?Object.values(vplan.stats).reduce((a,b)=>a+(b.verified||0),0):0;
+        document.getElementById('sProgress').textContent=vplan.total?Math.round(verified/vplan.total*100)+'%':'--';
+        document.getElementById('sCover').textContent=(cov.code_coverage||0)+'%';
+        document.getElementById('sReg').textContent=(stats.last_regression?.pass_rate||'--')+'%';
 
-var P_FULL=['spec','design','model','ifspec','rtlsign','vplan','tpoint','rtm','UVM','test','assert','regress','cover','debug','qa','report','vclose'];
-function buildPhaseTrack(wf){var phases=wf==='quick_check'?P_FULL.slice(0,5):P_FULL;document.getElementById('phaseTrack').innerHTML=phases.map(function(p,i){return '<div class=\"pn\"><div class=\"dot\" id=\"dot-'+p+'\">'+(i+1)+'</div><div class=\"lbl\">'+p+'</div></div>'+(i<phases.length-1?'<div class=\"pln\"></div>':'')}).join('')}
-async function runPipeline(){var spec=document.getElementById('specInput').value.trim();if(!spec){toast('Please enter spec','error');return}var wf=document.getElementById('workflowSelect').value;buildPhaseTrack(wf);document.getElementById('pStatus').textContent='Running';document.getElementById('pStatus').className='badge bbl';document.getElementById('pProgress').style.width='0%';document.getElementById('console').innerHTML='';log('Start: '+wf,'info');var t0=Date.now();try{var r=await API('/api/pipeline/run',{method:'POST',body:{spec_text:spec,workflow:wf}});var ok=r.passed===r.total;document.getElementById('pProgress').style.width='100%';document.getElementById('pStatus').textContent=ok?'All Passed':'Partial';document.getElementById('pStatus').className='badge '+(ok?'bgn':'bam');document.getElementById('pResult').textContent=r.passed+'/'+r.total+' passed';document.getElementById('pTime').textContent=((Date.now()-t0)/1000).toFixed(1)+'s';r.phases.forEach(function(p){var d=document.getElementById('dot-'+p.name);if(d)d.className='dot '+(p.status==='passed'?'pass':p.status==='failed'?'fail':'')});log('Done: '+r.passed+'/'+r.total,ok?'ok':'error');toast('Done: '+r.passed+'/'+r.total,ok?'success':'error');setTimeout(loadDashboard,500)}catch(e){log('Failed: '+e,'error');toast('Pipeline failed','error')}}
-async function loadDefaultSpec(){var d=await API('/api/spec/default');document.getElementById('specInput').value=d.content}
-function loadPipelineTab(){buildPhaseTrack('full_verification');loadDefaultSpec()}
+        // Evidence bar
+        try{
+            const mfs=await API('/api/manifest/latest');
+            if(mfs&&mfs.run_id){
+                document.getElementById('dashEvidence').style.display='flex';
+                document.getElementById('evRunId').textContent='Run '+mfs.run_id.substring(0,18);
+                document.getElementById('evPhases').textContent=mfs.passed+'/'+mfs.total_phases+' passed';
+                document.getElementById('evScore').textContent='Score '+mfs.overall_score+'/100';
+                document.getElementById('evHash').textContent=(mfs.manifest_hash||'').substring(0,14)+'...';
+            }
+        }catch(e){}
 
-function renderMarkdown(md){var h=md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');h=h.replace(/^#### (.+)$/gm,'<h6 style=\"margin:12px 0 4px\">$1</h6>');h=h.replace(/^### (.+)$/gm,'<h5 style=\"margin:14px 0 4px\">$1</h5>');h=h.replace(/^## (.+)$/gm,'<h4 style=\"margin:16px 0 6px;border-bottom:1px solid var(--bd);padding-bottom:4px\">$1</h4>');h=h.replace(/^# (.+)$/gm,'<h3 style=\"margin:18px 0 8px\">$1</h3>');h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');h=h.replace(/`([^`]+)`/g,'<code style=\"background:var(--inp);padding:1px 5px;border-radius:3px;font-size:11px\">$1</code>');h=h.replace(/```(\w*)\n([\s\S]*?)```/g,'<pre style=\"background:var(--bg);padding:10px;border-radius:6px;overflow-x:auto;font-size:11px\"><code>$2</code></pre>');h=h.replace(/\n\n/g,'</p><p style=\"margin:4px 0\">');return'<p style=\"margin:4px 0\">'+h+'</p>'}
-async function loadDocs(){var d=await API('/api/docs');document.getElementById('docsList').innerHTML=d.docs.map(function(doc){return'<div class=\"tnode\" onclick=\"viewDoc(\''+doc.name+'\')\"><i class=\"bi-file-earmark-text\"></i><div><strong>'+doc.title+'</strong><div class=\"xs\" style=\"color:var(--tx3)\">'+doc.name+'</div></div></div>'}).join('')||'<div style=\"color:var(--tx3);padding:8px\">No documents</div>'}
-async function viewDoc(name){try{var d=await API('/api/docs/'+name);docState={name:d.name,content:d.content};document.getElementById('docViewerTitle').innerHTML='<i class=\"bi-file-text\"></i>'+d.name;document.getElementById('docPreview').innerHTML=renderMarkdown(d.content);document.getElementById('docEditor').value=d.content;document.getElementById('docMeta').textContent=d.lines+' lines - '+(d.content.length/1024).toFixed(1)+'KB';document.getElementById('docEditBtn').style.display='';document.getElementById('docSaveBtn').style.display='none';document.getElementById('docSavedBadge').style.display='none';document.getElementById('docPreview').style.display='';document.getElementById('docEditor').style.display='none';if(d.linked_reqs&&d.linked_reqs.length)document.getElementById('docLinkedReqs').innerHTML='<strong>Linked Reqs:</strong> '+d.linked_reqs.map(function(r){return'<span class=\"badge bbl cp\" onclick=\"jumpToReq(\''+r.replace(/\*\*/g,'')+'\')\">'+r.replace(/\*\*/g,'')+'</span>'}).join(' ');else document.getElementById('docLinkedReqs').innerHTML=''}catch(e){document.getElementById('docPreview').textContent='Load failed: '+e}}
-function toggleDocEdit(){var preview=document.getElementById('docPreview'),editor=document.getElementById('docEditor'),editBtn=document.getElementById('docEditBtn'),saveBtn=document.getElementById('docSaveBtn');if(editor.style.display==='none'){preview.style.display='none';editor.style.display='';editor.style.height=(preview.offsetHeight+40)+'px';editBtn.textContent='Preview';saveBtn.style.display=''}else{editor.style.display='none';preview.style.display='';preview.innerHTML=renderMarkdown(editor.value);editBtn.textContent='Edit';saveBtn.style.display='none';saveDoc()}}
-async function saveDoc(){if(!docState.name)return;var content=document.getElementById('docEditor').value;try{await API('/api/docs/'+docState.name+'?content='+encodeURIComponent(content),{method:'POST'});docState.content=content;document.getElementById('docSavedBadge').style.display='';document.getElementById('docPreview').innerHTML=renderMarkdown(content);toast('Saved','success');setTimeout(function(){document.getElementById('docSavedBadge').style.display='none'},2000)}catch(e){toast('Save failed','error')}}
-function newDoc(){var name=prompt('Filename (e.g. alu_spec.md):');if(!name)return;var title=prompt('Title:');if(!title)return;var content='# '+title+'\n\n## Overview\n\n## Requirements\n\n### Req 1\n\n**Level**: P0\n**Type**: FUNCTIONAL\n**Description**: ...\n**Acceptance**: ...\n\n## Interfaces\n\n## Timing\n\n## Power\n';API('/api/docs/'+name+'?content='+encodeURIComponent(content),{method:'POST'}).then(function(){toast('Created','success');loadDocs();viewDoc(name)}).catch(function(e){toast('Create failed','error')})}
-function jumpToReq(reqId){document.querySelectorAll('.sb-nav .ni').forEach(function(i){i.classList.remove('active')});document.querySelector('[data-page=\"vplan\"]').classList.add('active');document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});document.getElementById('page-vplan').classList.add('active');document.getElementById('pageTitle').textContent='Req - '+reqId;loadVPlan(reqId.toLowerCase())}
+        // Trend chart
+        const trend=stats.regression_trend||[];
+        const ctx=document.getElementById('trendChart');
+        if(ctx&&trend.length&&typeof Chart!=='undefined'){
+            if(ctx._chart)ctx._chart.destroy();
+            ctx._chart=new Chart(ctx,{type:'line',data:{labels:trend.map(t=>t.date),datasets:[{label:'通过率 %',data:trend.map(t=>t.pass_rate),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.1)',tension:0.4,fill:true,pointRadius:2,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a6678',font:{size:9}},grid:{color:'#1e2632'}},y:{ticks:{color:'#5a6678',font:{size:9}},grid:{color:'#1e2632'},min:0,max:100}}}});
+        }
 
-async function loadVPlan(filter){try{var a=await Promise.all([API('/api/vplan/hierarchy'),API('/api/vplan/stats')]);renderVPlanTree(a[0].hierarchy,filter);if(a[1]&&a[1].stats)document.getElementById('vplanLevelStats').innerHTML=Object.entries(a[1].stats).map(function(e){return'<span class=\"badge bmu me-1\">'+LVL[e[0]]+': '+(e[1].count||0)+' items '+(e[1].coverage||0)+'%</span>'}).join('')}catch(e){}}
-function renderVPlanTree(hierarchy,filter){var tree=document.getElementById('vplanTree');if(!hierarchy||!hierarchy.length){tree.innerHTML='<div style=\"color:var(--tx3);text-align:center;padding:20px\">No data</div>';return}function rn(node,depth){if(node.level==='ut')return'';var nk=node.req_id||(node.level+'_'+node.name);var id='tn_'+nk.replace(/[^a-zA-Z0-9]/g,'_');var isSel=vpSelL===node.level&&vpSelK===nk;var h='<div class=\"tnode'+(isSel?' sel':'')+'\" onclick=\"vplanSelectNode(\''+node.level+'\',\''+nk+'\',\''+(node.name||'').replace(/'/g,'\\\'')+'\')\" id=\"'+id+'\" style=\"padding-left:'+(10+depth*16)+'px\">';if(node.children&&node.children.length)h+='<i class=\"bi-chevron-right\" style=\"font-size:9px;cursor:pointer\" onclick=\"event.stopPropagation();vplanToggleKids(\''+id+'_kids\',this)\"></i>';else h+='<span style=\"width:9px;display:inline-block\"></span>';h+='<span class=\"badge bmu\" style=\"font-size:8px;padding:1px 5px\">'+(node.level||'').toUpperCase()+'</span> ';h+='<strong>'+(node.name||'').substring(0,36)+'</strong> ';h+='<span style=\"margin-left:auto;font-size:10px;color:var(--tx3)\">'+(node.req_count||0)+' '+(node.coverage||0)+'%</span></div>';if(node.children&&node.children.length){h+='<div class=\"tkids\" id=\"'+id+'_kids\">';node.children.forEach(function(c){h+=rn(c,depth+1)});h+='</div>'}return h}tree.innerHTML=hierarchy.map(function(n){return rn(n,0)}).join('');setTimeout(function(){var fk=tree.querySelector('.tkids');if(fk)fk.style.display='block'},100);if(!vpSelK&&hierarchy.length){var root=hierarchy[0];vplanSelectNode(root.level,root.req_id||(root.level+'_'+root.name),root.name)}}
-function vplanToggleKids(elId,icon){var el=document.getElementById(elId);if(!el)return;el.style.display=(el.style.display==='none'||el.style.display==='')?'block':'none';icon.classList.toggle('bi-chevron-right');icon.classList.toggle('bi-chevron-down')}
-function vplanSelectNode(level,nodeKey,name){vpSelL=level;vpSelK=nodeKey;vpSelN=name;document.getElementById('vplanDetailTitle').innerHTML='<i class=\"bi-list-ul\"></i>'+name;document.querySelectorAll('.tnode').forEach(function(n){n.classList.remove('sel')});var el=document.getElementById('tn_'+nodeKey.replace(/[^a-zA-Z0-9]/g,'_'));if(el)el.classList.add('sel');loadVPlanReqs(level,nodeKey)}
-async function loadVPlanReqs(level,nodeKey){var params=new URLSearchParams();if(nodeKey&&nodeKey.startsWith('REQ_'))params.set('parent_id',nodeKey);else params.set('level',level);var d=await API('/api/vplan/requirements?'+params);document.getElementById('vplanReqBody').innerHTML=d.requirements.length?d.requirements.map(function(r){return'<tr><td><code style=\"font-size:10px\">'+r.id+'</code></td><td>'+r.description+'</td><td><span class=\"badge bmu\">'+(r.level||'').toUpperCase()+'</span></td><td><span class=\"badge '+(r.priority==='P0'?'brd':r.priority==='P1'?'bam':'bmu')+'\">'+r.priority+'</span></td><td><span class=\"badge '+(r.status==='verified'?'bgn':'bmu')+'\">'+r.status+'</span></td><td><div class=\"cbar\" style=\"width:60px\"><div class=\"cfill\" style=\"width:'+r.coverage_actual+'%;background:'+(r.coverage_actual>=90?'var(--gn)':r.coverage_actual>=50?'var(--am)':'var(--rd)')+'\"></div></div>'+r.coverage_actual+'%</td><td>'+(r.doc_path?'<span class=\"badge bbl cp\" onclick=\"switchToDoc(\''+r.doc_path+'\')\">Doc</span>':'—')+'</td></tr>'}).join(''):'<tr><td colspan=\"7\" style=\"color:var(--tx3);text-align:center;padding:12px\">No requirements</td></tr>'}
-function vplanShowAdd(){var id=prompt('Req ID:');if(!id)return;API('/api/vplan/requirements',{method:'POST',body:{req_id:id,description:prompt('Description:'),priority:prompt('Priority:','P1'),level:prompt('Level:','bt'),parent_id:prompt('Parent ID:',''),doc_path:prompt('Doc path:','')}}).then(function(){toast('Added','success');loadVPlan()}).catch(function(e){toast('Failed: '+e,'error')})}
-function vplanExportCSV(){var csv='ID,Description,Level,Priority,Status,Coverage\n';document.querySelectorAll('#vplanReqBody tr').forEach(function(tr){var tds=tr.querySelectorAll('td');if(tds.length>=6)csv+=tds[0].textContent.trim()+','+tds[1].textContent.trim()+','+tds[2].textContent.trim()+','+tds[3].textContent.trim()+','+tds[4].textContent.trim()+','+tds[5].textContent.trim()+'\n'});var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'}));a.download='vplan.csv';a.click();toast('Exported','info')}
-function switchToDoc(docPath){document.querySelectorAll('.sb-nav .ni').forEach(function(i){i.classList.remove('active')});document.querySelector('[data-page=\"docs\"]').classList.add('active');document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});document.getElementById('page-docs').classList.add('active');document.getElementById('pageTitle').textContent='Spec Docs';loadDocs();setTimeout(function(){viewDoc(docPath.split('/').pop())},300)}
+        try{const logs=await API('/api/audit?limit=8');document.getElementById('recentActivity').innerHTML=logs.logs.map(l=>`<div class="mb-1 flex-between"><span><strong>${l.username}</strong> ${l.action}</span><span style="color:var(--text-muted)">${(l.created_at||'').substring(5,16)}</span></div>`).join('')||'<div style="color:var(--text-muted)">暂无活动</div>'}catch(e){}
+    }catch(e){console.error('Dashboard:',e)}
+}
 
+// ── PIPELINE ──
+const P_FULL=['spec','design','model','ifspec','rtlsign','vplan','tpoint','rtm','UVM','test','assert','regress','cover','debug','qa','report','vclose'];
+const P_QUICK=P_FULL.slice(0,5);
+let currentTrack='traditional';
+
+function switchTrack(track){
+    currentTrack=track;
+    const t=document.getElementById('trackTraditional');const a=document.getElementById('trackAI');
+    const hint=document.getElementById('aiHint');
+    if(track==='traditional'){
+        t.style.background='var(--brand-blue-dim)';t.style.color='var(--brand-blue)';t.style.borderColor='var(--brand-blue-dim)';t.style.fontWeight='600';
+        a.style.background='transparent';a.style.color='var(--text-secondary)';a.style.borderColor='transparent';a.style.fontWeight='normal';
+        hint.style.display='none';
+    }else{
+        a.style.background='var(--brand-blue-dim)';a.style.color='var(--brand-blue)';a.style.borderColor='var(--brand-blue-dim)';a.style.fontWeight='600';
+        t.style.background='transparent';t.style.color='var(--text-secondary)';t.style.borderColor='transparent';t.style.fontWeight='normal';
+        hint.style.display='block';
+    }
+}
+
+function buildPhaseTrack(wf){
+    const phases=wf==='quick_check'?P_QUICK:P_FULL;
+    const track=document.getElementById('phaseTrack');
+    track.innerHTML=phases.map((p,i)=>`<div class="phase-node"><div class="dot" id="dot-${p}">${i+1}</div><div class="label">${p}</div></div>${i<phases.length-1?'<div class="phase-line" id="line-${i}"></div>':''}`).join('');
+}
+async function runPipeline(){
+    const spec=document.getElementById('specInput').value.trim();if(!spec){toast('请输入规格','error');return}
+    const wf=document.getElementById('workflowSelect').value;
+    const trackLabel=currentTrack==='ai_exploration'?'🤖 AI智能探索':'🔬 常规仿真';
+    buildPhaseTrack(wf);
+    document.getElementById('pStatus').textContent='运行中';document.getElementById('pStatus').className='badge badge-blue';
+    document.getElementById('pProgress').style.width='0%';
+    document.getElementById('console').innerHTML='';
+    log(`▶ 启动: ${wf} [${trackLabel}]`,'info');const t0=Date.now();
+    try{
+        const r=await API('/api/pipeline/run',{method:'POST',body:{spec_text:spec,workflow:wf,run_type:currentTrack}});
+        // Connect SSE for real-time updates
+        const sse=new EventSource('/api/pipeline/'+r.run_id+'/stream');
+        sse.addEventListener('phase_update',function(e){const d=JSON.parse(e.data);const dot=document.getElementById('dot-'+d.phase);if(dot)dot.className='dot '+(d.status==='passed'?'pass':d.status==='failed'?'fail':'');log(`  ${d.status==='passed'?'✅':'❌'} ${d.phase} (${d.elapsed}s score=${d.score})`,d.status==='passed'?'ok':'error')});
+        sse.addEventListener('run_complete',function(e){sse.close();const d=JSON.parse(e.data);document.getElementById('pProgress').style.width='100%';const ok=d.passed===d.total;document.getElementById('pStatus').textContent=ok?'全部通过':'部分失败';document.getElementById('pStatus').className='badge '+(ok?'badge-green':'badge-amber');document.getElementById('pResult').textContent=d.passed+'/'+d.total+' 阶段通过';log('🏁 SSE实时: '+d.passed+'/'+d.total,ok?'ok':'error');
+        // Auto-refresh manager module data
+        try{API('/api/modules').then(d=>{if(d.total_modules>0){document.getElementById('evHash').textContent=(d.modules[0]?.evidence_hash||'').substring(0,14)+'...';}})}catch(e){}
+        });
+        sse.onerror=function(){sse.close()};
+        const elapsed=((Date.now()-t0)/1000).toFixed(1);
+        document.getElementById('pProgress').style.width='100%';
+        const ok=r.passed===r.total;
+        document.getElementById('pStatus').textContent=ok?'全部通过':'部分失败';
+        document.getElementById('pStatus').className='badge '+(ok?'badge-green':'badge-amber');
+        document.getElementById('pResult').textContent=`${r.passed}/${r.total} 阶段通过`;
+        document.getElementById('pTime').textContent=`${elapsed}s`;
+        const failedPhases=[];
+        r.phases.forEach(p=>{const d=document.getElementById('dot-'+p.name);if(d)d.className='dot '+(p.status==='passed'?'pass':p.status==='failed'?'fail':'');log(`  ${p.status==='passed'?'✅':'❌'} ${p.name} (${p.time}s score=${p.score})`,p.status==='passed'?'ok':'error');if(p.status==='failed'||p.status==='error')failedPhases.push(p)});
+        log(`🏁 完成: ${r.passed}/${r.total}`,ok?'ok':'error');
+        toast(`${trackLabel}完成: ${r.passed}/${r.total}`,ok?'success':'error');
+        setTimeout(loadDashboard,500);
+        if(r.manifest_path) log(`📦 Manifest: ${r.manifest_path}`,'info');
+        if(r.run_id) log(`📋 复现: vagent dump ${r.run_id}  |  vagent dump ${r.run_id} -o evidence.zip`,'info');
+
+        // AI 智能分析失败的阶段
+        if(failedPhases.length>0){
+            log('','');
+            log('━━━ 🤖 AI 智能分析 ━━━','info');
+            for(const fp of failedPhases){
+                const errText=fp.error||fp.reason||`Phase ${fp.name} failed with score ${fp.score}`;
+                try{
+                    const ai=await API('/api/ai/analyze-error',{method:'POST',body:JSON.stringify({phase_name:fp.name,error_log:errText,agent_role:fp.name}),headers:{'Content-Type':'application/json'}});
+                    log(`  📋 ${fp.name}: ${ai.summary}`,'error');
+                    ai.suggestions.forEach(s=>{
+                        const sev={high:'🔴',medium:'🟡',low:'🟢'}[s.severity]||'⚪';
+                        log(`     ${sev} ${s.diagnosis}`,'error');
+                        log(`     💡 ${s.fix}`,s.auto_fixable?'info':'');
+                    });
+                    if(ai.auto_fixable_count>0) log(`     ✅ ${ai.auto_fixable_count} 个问题可自动修复`,'info');
+                }catch(e){log(`  AI分析失败: ${e}`,'error')}
+            }
+            log('━━━━━━━━━━━━━━━━━━━━','info');
+        }
+    }catch(e){log('失败: '+e,'error');toast('流水线失败','error')}
+}
+async function loadDefaultSpec(){const d=await API('/api/spec/default');document.getElementById('specInput').value=d.content}
+function loadPipelineTab(){const wf=document.getElementById('workflowSelect').value;buildPhaseTrack(wf);loadDefaultSpec()}
+
+// ── DOCS (可视化编辑器) ──
+let docState={name:'',content:'',title:'',isDirty:false};
+async function loadDocs(){const d=await API('/api/docs');const canEdit=AUTH.user&&(AUTH.user.role==='admin'||AUTH.user.role==='verification_manager');document.getElementById('newDocBtn').style.display=canEdit?'':'none';document.getElementById('docsList').innerHTML=d.docs.map(doc=>{const rp=doc.rel_path||doc.name;return`<div class="tree-node" onclick="viewDoc('${rp}')"><i class="bi-file-earmark-text"></i><div><strong>${doc.title}</strong><div class="text-xs" style="color:var(--text-muted)">${doc.name} · ${(doc.size/1024).toFixed(1)}KB · ${doc.req_count||0}需求</div></div></div>`}).join('')||`<div style="color:var(--text-muted);padding:8px">暂无文档${canEdit?' — 点击 + 新建':' — 请联系 SignOff 经理添加'}</div>`}
+
+function renderMarkdown(md){
+    // Simple markdown→HTML renderer
+    let h=md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Headers
+    h=h.replace(/^#### (.+)$/gm,'<h6 style="margin:12px 0 4px;color:var(--text-primary)">$1</h6>');
+    h=h.replace(/^### (.+)$/gm,'<h5 style="margin:14px 0 4px;color:var(--text-primary)">$1</h5>');
+    h=h.replace(/^## (.+)$/gm,'<h4 style="margin:16px 0 6px;color:var(--text-primary);border-bottom:1px solid var(--border);padding-bottom:4px">$1</h4>');
+    h=h.replace(/^# (.+)$/gm,'<h3 style="margin:18px 0 8px;color:var(--text-primary)">$1</h3>');
+    // Bold / italic
+    h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+    h=h.replace(/\*(.+?)\*/g,'<em>$1</em>');
+    // Inline code
+    h=h.replace(/`([^`]+)`/g,'<code style="background:var(--bg-input);padding:1px 5px;border-radius:3px;font-size:11px">$1</code>');
+    // Code blocks
+    h=h.replace(/```(\w*)\n([\s\S]*?)```/g,'<pre style="background:var(--bg-primary);padding:10px;border-radius:6px;overflow-x:auto;font-size:11px;line-height:1.4"><code>$2</code></pre>');
+    // Tables
+    h=h.replace(/^\|(.+)\|$/gm,function(line){return'<tr>'+line.slice(1,-1).split('|').map(c=>{const t=c.trim();return /^[-:]+$/.test(t)?'':(t.startsWith('**')?'<th>'+t.replace(/\*\*/g,'')+'</th>':'<td>'+t+'</td>')}).join('')+'</tr>'});
+    h=h.replace(/(<tr>.*<\/tr>\n?)+/g,'<table style="width:100%;border-collapse:collapse;margin:8px 0">$&</table>');
+    h=h.replace(/<tr><th>/g,'<thead><tr><th style="border-bottom:2px solid var(--border);padding:6px 8px;text-align:left;font-size:11px">');
+    h=h.replace(/<tr><td>/g,'<tr><td style="border-bottom:1px solid var(--border);padding:4px 8px;font-size:11px">');
+    // Lists
+    h=h.replace(/^- (.+)$/gm,'<li style="margin-left:20px">$1</li>');
+    h=h.replace(/^\d+\. (.+)$/gm,'<li style="margin-left:20px">$1</li>');
+    h=h.replace(/((?:<li[^>]*>.*<\/li>\n?)+)/g,'<ul style="margin:4px 0">$1</ul>');
+    // Horizontal rules
+    h=h.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">');
+    // Paragraphs — wrap remaining text lines
+    h=h.replace(/\n\n/g,'</p><p style="margin:4px 0">');
+    h='<p style="margin:4px 0">'+h+'</p>';
+    return h;
+}
+
+function toggleDocEdit(){
+    var preview=document.getElementById('docPreview'), editor=document.getElementById('docEditor');
+    var editBtn=document.getElementById('docEditBtn'), saveBtn=document.getElementById('docSaveBtn');
+    if(editor.style.display==='none'){preview.style.display='none';editor.style.display='';editor.style.height=(preview.offsetHeight+40)+'px';editBtn.textContent='预览';saveBtn.style.display=''}
+    else{editor.style.display='none';preview.style.display='';preview.innerHTML=renderMarkdown(editor.value);editBtn.textContent='编辑';saveBtn.style.display='none';saveDoc()}
+}
+async function saveDoc(){
+    if(!docState.name)return;var content=document.getElementById('docEditor').value;
+    try{await API('/api/docs/'+docState.name+'?content='+encodeURIComponent(content),{method:'POST'});docState.content=content;document.getElementById('docSavedBadge').style.display='';document.getElementById('docPreview').innerHTML=renderMarkdown(content);toast('Saved','success');setTimeout(function(){document.getElementById('docSavedBadge').style.display='none'},2000)}catch(e){}
+}
+
+// ── 结构化编辑器 ──
+let structDoc=null;
+
+async function viewDoc(name){
+    try{
+        const d=await API('/api/docs/'+encodeURIComponent(name));
+        docState={name:name,content:d.content,title:d.path,isDirty:false};
+        document.getElementById('docViewerTitle').innerHTML=`<i class="bi-file-text"></i>${d.name}`;
+        document.getElementById('docPreview').innerHTML=renderMarkdown(d.content);
+        document.getElementById('docEditor').value=d.content;
+        document.getElementById('docMeta').textContent=`${d.lines} 行 · ${(d.content.length/1024).toFixed(1)}KB · ${d.path}`;
+        // Role-based: only manager/SignOff经理 can edit
+        const canEdit=AUTH.user&&(AUTH.user.role==='admin'||AUTH.user.role==='verification_manager');
+        document.getElementById('docEditBtn').style.display=canEdit?'':'none';
+        document.getElementById('docSaveBtn').style.display='none';
+        document.getElementById('docSavedBadge').style.display='none';
+        document.getElementById('docPreview').style.display='';
+        document.getElementById('docEditor').style.display='none';
+        document.getElementById('structEditor').style.display=canEdit?'':'none';
+        if(d.linked_reqs&&d.linked_reqs.length) document.getElementById('docLinkedReqs').innerHTML='<strong>关联需求:</strong> '+d.linked_reqs.map(r=>`<span class="badge badge-blue" style="cursor:pointer" onclick="jumpToReq('${r.replace(/\*\*/g,'')}')">${r.replace(/\*\*/g,'')}</span>`).join(' ');
+        else document.getElementById('docLinkedReqs').innerHTML='';
+        // Load structured editor (only for manager)
+        if(canEdit) loadStructuredEditor(name);
+    }catch(e){document.getElementById('docPreview').textContent='加载失败: '+e}
+}
+
+async function loadStructuredEditor(docPath){
+    try{
+        const d=await API('/api/editor/'+docPath);
+        structDoc=d.doc;
+        document.getElementById('structEditor').style.display='';
+        renderInterfaceEditor();
+        renderTimingEditor();
+        renderPowerEditor();
+        renderReqEditor();
+    }catch(e){document.getElementById('structEditor').style.display='none'}
+}
+
+function renderInterfaceEditor(){
+    const ifaces=structDoc?.interfaces||[];
+    document.getElementById('ifaceEditor').innerHTML=ifaces.map((f,i)=>`<div class="mb-2" style="padding:6px;background:var(--bg-input);border-radius:4px">
+        <div class="flex-between text-xs mb-1"><strong>接口 ${i+1}</strong><span style="cursor:pointer;color:var(--brand-red)" onclick="deleteItem('interfaces',${i})">✕</span></div>
+        <input class="mb-1" style="width:100%;font-size:10px" placeholder="名称" value="${f.name}" onchange="updateField('interfaces',${i},'name',this.value)">
+        <div class="flex gap-1 mb-1">
+            <select style="flex:1;font-size:10px" onchange="updateField('interfaces',${i},'direction',this.value)"><option ${f.direction==='INPUT'?'selected':''}>INPUT</option><option ${f.direction==='OUTPUT'?'selected':''}>OUTPUT</option><option ${f.direction==='INOUT'?'selected':''}>INOUT</option></select>
+            <input style="width:50px;font-size:10px" placeholder="宽度" value="${f.width}" onchange="updateField('interfaces',${i},'width',parseInt(this.value)||1)">
+        </div>
+        <input style="width:100%;font-size:10px" placeholder="协议 (如 AXI-Stream)" value="${f.protocol||''}" onchange="updateField('interfaces',${i},'protocol',this.value)">
+    </div>`).join('')||'<div class="text-xs" style="color:var(--text-muted)">无接口 — 点击 + 添加</div>';
+}
+
+function renderTimingEditor(){
+    const tcs=structDoc?.timing_constraints||[];
+    document.getElementById('timingEditor').innerHTML=tcs.map((t,i)=>`<div class="mb-2" style="padding:6px;background:var(--bg-input);border-radius:4px">
+        <div class="flex-between text-xs mb-1"><strong>约束 ${i+1}</strong><span style="cursor:pointer;color:var(--brand-red)" onclick="deleteItem('timing_constraints',${i})">✕</span></div>
+        <div class="flex gap-1 mb-1">
+            <input style="flex:1;font-size:10px" placeholder="信号A" value="${t.signal_a}" onchange="updateField('timing_constraints',${i},'signal_a',this.value)">
+            <select style="width:50px;font-size:10px" onchange="updateField('timing_constraints',${i},'relation',this.value)"><option ${t.relation==='≥'?'selected':''}>≥</option><option ${t.relation==='≤'?'selected':''}>≤</option><option ${t.relation==='='?'selected':''}>=</option><option ${t.relation==='setup'?'selected':''}>setup</option><option ${t.relation==='hold'?'selected':''}>hold</option></select>
+            <input style="flex:1;font-size:10px" placeholder="信号B" value="${t.signal_b}" onchange="updateField('timing_constraints',${i},'signal_b',this.value)">
+        </div>
+        <input style="width:100%;font-size:10px" placeholder="周期数" value="${t.cycles}" onchange="updateField('timing_constraints',${i},'cycles',parseFloat(this.value)||1)">
+    </div>`).join('')||'<div class="text-xs" style="color:var(--text-muted)">无约束 — 点击 + 添加</div>';
+}
+
+function renderPowerEditor(){
+    const pcs=structDoc?.power_constraints||[];
+    document.getElementById('powerEditor').innerHTML=pcs.map((p,i)=>`<div class="mb-2" style="padding:6px;background:var(--bg-input);border-radius:4px">
+        <div class="flex-between text-xs mb-1"><strong>模式 ${i+1}</strong><span style="cursor:pointer;color:var(--brand-red)" onclick="deleteItem('power_constraints',${i})">✕</span></div>
+        <input class="mb-1" style="width:100%;font-size:10px" placeholder="模式名" value="${p.mode}" onchange="updateField('power_constraints',${i},'mode',this.value)">
+        <input style="width:100%;font-size:10px" placeholder="功耗 (mW)" type="number" value="${p.power_mw}" onchange="updateField('power_constraints',${i},'power_mw',parseFloat(this.value)||0)">
+    </div>`).join('')||'<div class="text-xs" style="color:var(--text-muted)">无约束 — 点击 + 添加</div>';
+}
+
+function renderReqEditor(){
+    const reqs=structDoc?.requirements||[];
+    document.getElementById('reqEditor').innerHTML=reqs.map((r,i)=>`<div class="mb-2" style="padding:6px;background:var(--bg-input);border-radius:4px">
+        <div class="flex-between text-xs mb-1"><strong>${r.level||'P0'} ${r.title||'需求 '+(i+1)}</strong><span style="cursor:pointer;color:var(--brand-red)" onclick="deleteItem('requirements',${i})">✕</span></div>
+        <input class="mb-1" style="width:100%;font-size:10px" placeholder="标题" value="${r.title||''}" onchange="updateField('requirements',${i},'title',this.value)">
+        <div class="flex gap-1 mb-1">
+            <select style="flex:1;font-size:10px" onchange="updateField('requirements',${i},'level',this.value)"><option ${r.level==='P0'?'selected':''}>P0</option><option ${r.level==='P1'?'selected':''}>P1</option><option ${r.level==='P2'?'selected':''}>P2</option><option ${r.level==='P3'?'selected':''}>P3</option></select>
+            <select style="flex:1;font-size:10px" onchange="updateField('requirements',${i},'req_type',this.value)"><option ${r.req_type==='FUNCTIONAL'?'selected':''}>FUNCTIONAL</option><option ${r.req_type==='CONTROL'?'selected':''}>CONTROL</option><option ${r.req_type==='ERROR'?'selected':''}>ERROR</option><option ${r.req_type==='TIMING'?'selected':''}>TIMING</option><option ${r.req_type==='POWER'?'selected':''}>POWER</option></select>
+        </div>
+    </div>`).join('')||'<div class="text-xs" style="color:var(--text-muted)">无需求 — 点击 + 添加</div>';
+}
+
+function updateField(section,idx,field,value){
+    if(!structDoc||!structDoc[section])return;
+    structDoc[section][idx][field]=value;
+}
+
+function deleteItem(section,idx){
+    if(!structDoc||!structDoc[section])return;
+    structDoc[section].splice(idx,1);
+    if(section==='interfaces')renderInterfaceEditor();
+    else if(section==='timing_constraints')renderTimingEditor();
+    else if(section==='power_constraints')renderPowerEditor();
+    else if(section==='requirements')renderReqEditor();
+}
+
+function addInterface(){if(!structDoc)return;structDoc.interfaces=structDoc.interfaces||[];structDoc.interfaces.push({name:'new_signal',width:1,direction:'INPUT',protocol:'',description:''});renderInterfaceEditor()}
+function addTiming(){if(!structDoc)return;structDoc.timing_constraints=structDoc.timing_constraints||[];structDoc.timing_constraints.push({signal_a:'',signal_b:'',relation:'≥',cycles:1,description:''});renderTimingEditor()}
+function addPower(){if(!structDoc)return;structDoc.power_constraints=structDoc.power_constraints||[];structDoc.power_constraints.push({mode:'Active',power_mw:1,description:''});renderPowerEditor()}
+function addRequirement(){if(!structDoc)return;structDoc.requirements=structDoc.requirements||[];structDoc.requirements.push({title:'新需求',level:'P0',req_type:'FUNCTIONAL',description:'',acceptance:''});renderReqEditor()}
+
+async function saveStructured(){
+    if(!docState.name||!structDoc){toast('请先选择文档','error');return}
+    try{
+        const r=await API('/api/editor/'+docState.name,{method:'POST',body:{doc:structDoc}});
+        if(r.ok){
+            docState.content=r.md;docState.isDirty=false;
+            document.getElementById('docPreview').innerHTML=renderMarkdown(r.md);
+            document.getElementById('docEditor').value=r.md;
+            document.getElementById('docMeta').textContent=`已保存 · ${structDoc.requirements?.length||0}需求, ${structDoc.interfaces?.length||0}接口`;
+            document.getElementById('structEditor').style.display='none';
+            toast('✅ 结构化文档已保存','success');
+        }
+    }catch(e){toast('保存失败: '+e,'error')}
+}
+
+function newDoc(){
+    const name=prompt('文档文件名 (如 alu_spec.md):');if(!name)return;
+    const title=prompt('文档标题 (如 ALU 设计规格):');if(!title)return;
+    const content=`# ${title}\n\n## 概述\n\n## 接口\n\n| 信号 | 位宽 | 方向 | 描述 |\n|------|------|------|------|\n\n## 功能\n\n## 寄存器\n\n| 寄存器 | 地址 | 位宽 | R/W | 描述 |\n|--------|------|------|-----|------|\n\n## 测试点\n\n`;
+    API('/api/docs/'+name,{method:'POST',body:JSON.stringify({content:content}),headers:{'Content-Type':'application/json'}}).then(()=>{toast('文档已创建','success');loadDocs();viewDoc(name)}).catch(e=>toast('创建失败: '+e,'error'));
+}
+function jumpToReq(reqId){
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(i=>i.classList.remove('active'));
+    const item=document.querySelector('[data-page="vplan"]'); if(item)item.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-vplan').classList.add('active');
+    document.getElementById('pageTitle').textContent='需求管理';loadVPlan(reqId.toLowerCase())
+}
+
+// ── VPLAN ──
+async function loadVPlan(filter=''){
+    try{const [hier,stats]=await Promise.all([API('/api/vplan/hierarchy'),API('/api/vplan/stats')]);
+        renderVPlanTree(hier.hierarchy,filter);
+        if(stats&&stats.stats) document.getElementById('vplanLevelStats').innerHTML=Object.entries(stats.stats).map(([k,v])=>`<span class="badge badge-muted me-1">${LVL[k]}: ${v.count}项 ${v.coverage}%</span>`).join('');
+        if(!hier.hierarchy||!hier.hierarchy.length) document.getElementById('vplanTree').innerHTML='<div style="color:var(--text-muted);text-align:center;padding:20px">暂无数据<br><span class="text-xs">点击 + 添加或重启自动生成</span></div>'
+    }catch(e){console.error(e)}
+}
+function renderVPlanTree(hierarchy,filter){
+    const tree=document.getElementById('vplanTree'); if(!hierarchy||!hierarchy.length){tree.innerHTML='<div style="color:var(--text-muted);text-align:center;padding:20px">暂无</div>';return}
+    function renderNode(node,depth){
+        if(node.level==='ut')return'';
+        const nodeKey=node.req_id||(node.level+'_'+node.name);
+        const id='tn_'+nodeKey.replace(/[^a-zA-Z0-9一-鿿]/g,'_');
+        const isSelected=vpSelectedLevel===node.level&&vpSelectedKey===nodeKey;
+        let h=`<div class="tree-node${isSelected?' selected':''}" onclick="vplanSelectNode('${node.level}','${nodeKey}','${(node.name||'').replace(/'/g,"\\'")}')" id="${id}" style="padding-left:${10+depth*16}px">`;
+        if(node.children&&node.children.length) h+=`<i class="bi-chevron-right" style="font-size:9px;cursor:pointer" onclick="event.stopPropagation();vplanToggleKids('${id}_kids',this)"></i>`;
+        else h+='<span style="width:9px;display:inline-block"></span>';
+        h+=`<span class="badge badge-muted" style="font-size:8px;padding:1px 5px">${(node.level||'').toUpperCase()}</span>`;
+        h+=`<strong>${(node.name||'').substring(0,36)}</strong>`;
+        h+=`<span style="margin-left:auto;font-size:10px;color:var(--text-muted)">${node.req_count||0}项 ${node.coverage||0}%</span></div>`;
+        if(node.children&&node.children.length){h+=`<div class="tree-children" id="${id}_kids">`;node.children.forEach(c=>{h+=renderNode(c,depth+1)});h+='</div>'}
+        return h
+    }
+    tree.innerHTML=hierarchy.map(n=>renderNode(n,0)).join('');
+    setTimeout(()=>{const firstKids=tree.querySelector('.tree-children');if(firstKids)firstKids.style.display='block'},100);
+    if(!vpSelectedKey&&hierarchy.length){const root=hierarchy[0];vplanSelectNode(root.level,root.req_id||(root.level+'_'+root.name),root.name)}
+}
+function vplanToggleKids(elId,icon){const el=document.getElementById(elId);if(!el)return;el.style.display=(el.style.display==='none'||el.style.display==='')?'block':'none';icon.classList.toggle('bi-chevron-right');icon.classList.toggle('bi-chevron-down')}
+function vplanSelectNode(level,nodeKey,name){vpSelectedLevel=level;vpSelectedKey=nodeKey;vpSelectedName=name;document.getElementById('vplanDetailTitle').innerHTML='<i class="bi-list-ul"></i>'+name+' → '+(LVL[level]||level);document.querySelectorAll('.tree-node').forEach(n=>n.classList.remove('selected'));const el=document.getElementById('tn_'+nodeKey.replace(/[^a-zA-Z0-9一-鿿]/g,'_'));if(el)el.classList.add('selected');loadVPlanReqs(level,nodeKey)}
+async function loadVPlanReqs(level,nodeKey){
+    const params=new URLSearchParams(); nodeKey&&nodeKey.startsWith('REQ_')?params.set('parent_id',nodeKey):params.set('level',level);
+    const data=await API('/api/vplan/requirements?'+params);
+    document.getElementById('vplanReqBody').innerHTML=data.requirements.length?data.requirements.map(r=>`<tr>
+        <td><code style="font-size:10px">${r.id}</code></td><td>${r.description}</td>
+        <td><span class="badge badge-muted">${(r.level||'').toUpperCase()}</span></td>
+        <td><span class="badge ${r.priority==='P0'?'badge-red':r.priority==='P1'?'badge-amber':'badge-muted'}">${r.priority}</span></td>
+        <td><span class="badge ${r.status==='verified'?'badge-green':'badge-muted'}">${r.status}</span></td>
+        <td><div class="cover-bar" style="width:60px"><div class="cover-fill ${r.coverage_actual>=90?'high':r.coverage_actual>=50?'mid':'low'}" style="width:${r.coverage_actual}%"></div></div><span class="text-xs">${r.coverage_actual}%</span></td>
+        <td>${r.doc_path?`<span class="badge badge-blue" style="cursor:pointer" onclick="event.preventDefault();switchToDoc('${r.doc_path}')">📄</span>`:'-'}</td></tr>`).join(''):'<tr><td colspan="7" style="color:var(--text-muted);text-align:center;padding:12px">暂无需求</td></tr>'
+}
+function vplanShowAdd(){const id=prompt('需求ID:');if(!id)return;API('/api/vplan/requirements',{method:'POST',body:{req_id:id,description:prompt('描述:'),priority:prompt('优先级(P0/P1/P2):','P1'),level:prompt('层级(chip/st/it/bt/ut):',vpSelectedLevel||'bt'),parent_id:prompt('父级ID(可选):',''),doc_path:prompt('关联文档(可选):','')}}).then(()=>{toast('已添加','success');loadVPlan()}).catch(e=>toast('失败: '+e,'error'))}
+function vplanExportCSV(){let csv='ID,描述,层级,优先级,状态,覆盖率\n';document.querySelectorAll('#vplanReqBody tr').forEach(tr=>{const tds=tr.querySelectorAll('td');if(tds.length>=6)csv+=tds[0].textContent.trim()+','+tds[1].textContent.trim()+','+tds[2].textContent.trim()+','+tds[3].textContent.trim()+','+tds[4].textContent.trim()+','+tds[5].textContent.trim()+'\n'});const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'}));a.download='vplan.csv';a.click();toast('已导出','info')}
+function switchToDoc(docPath){document.querySelectorAll('.sidebar-nav .nav-item').forEach(i=>i.classList.remove('active'));const item=document.querySelector('[data-page="docs"]');if(item)item.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-docs').classList.add('active');document.getElementById('pageTitle').textContent='规格文档';loadDocs();setTimeout(()=>viewDoc(docPath.split('/').pop()),300)}
+
+// ── DESIGN ──
 async function loadDesignArch(){runDesignArch()}
-async function runDesignArch(){document.getElementById('daFuncHier').innerHTML='<span style=\"color:var(--tx3)\">Generating...</span>';try{var r=await API('/api/design_arch',{method:'POST',body:{spec_text:'UART IP'}});if(!r.success){toast('Generation failed','error');return}var da=r.design_arch||{};function renderFH(node,d){var h='<div style=\"padding-left:'+(d*16)+'px\">'+(node.children&&node.children.length?'+ ':'')+node.name+' <span style=\"color:var(--tx3)\">'+(node.description||'')+'</span></div>';if(node.children)node.children.forEach(function(c){h+=renderFH(c,d+1)});return h}document.getElementById('daFuncHier').innerHTML=da.function_hier?renderFH(da.function_hier,0):'<span style=\"color:var(--tx3)\">No data</span>';var regs=da.registers||[];document.getElementById('daRegCount').textContent=regs.length;document.getElementById('daRegBody').innerHTML=regs.map(function(r){return'<tr><td><strong>'+r.name+'</strong></td><td><code>'+r.addr+'</code></td><td>'+(r.bits||'-')+'bit</td><td>'+(r.access||'-')+'</td></tr>'}).join('')}catch(e){document.getElementById('daFuncHier').innerHTML='<span style=\"color:var(--rd)\">Error: '+e+'</span>'}}
+async function runDesignArch(){
+    document.getElementById('daFuncHier').innerHTML='<span style="color:var(--text-muted)">生成中...</span>';
+    try{const r=await API('/api/design_arch',{method:'POST',body:{spec_text:'UART IP'}});if(!r.success){toast('生成失败','error');return}
+        const da=r.design_arch||{};
+        function renderFH(node,d){let h=`<div style="padding-left:${d*16}px">${node.children&&node.children.length?'📁 ':''}${node.name} <span style="color:var(--text-muted)">${node.description||''}</span></div>`;if(node.children)node.children.forEach(c=>{h+=renderFH(c,d+1)});return h}
+        document.getElementById('daFuncHier').innerHTML=da.function_hier?renderFH(da.function_hier,0):'<span style="color:var(--text-muted)">无数据</span>';
+        const regs=da.registers||[];document.getElementById('daRegCount').textContent=regs.length;
+        document.getElementById('daRegBody').innerHTML=regs.map(r=>`<tr><td><strong>${r.name}</strong></td><td><code>${r.addr}</code></td><td>${r.bits||'-'}bit</td><td>${r.access||'-'}</td></tr>`).join('');
+        const rtl=da.rtl_hier;if(rtl)document.getElementById('daRtlHier').innerHTML=`<div><strong>TOP:</strong> ${rtl.top} (${rtl.language})</div><div class="mt-2">${(rtl.modules||[]).map(m=>`<span class="badge badge-blue me-1">${m.name}</span>`).join('')}</div>`;
+        const soc=da.signoff_checklist||[];document.getElementById('daSocCount').textContent=soc.length;
+        document.getElementById('daSignoff').innerHTML=soc.map(s=>`<div class="flex-between py-1 text-xs" style="border-bottom:1px solid var(--border)"><span>${s.item}</span><span class="badge ${s.status==='done'?'badge-green':'badge-amber'}">${s.status}</span></div>`).join('');
+        toast('架构已生成','success')
+    }catch(e){document.getElementById('daFuncHier').innerHTML='<span style="color:var(--brand-red)">错误: '+e+'</span>'}
+}
 
-async function loadTC(){var d=await API('/api/testcases/list');document.getElementById('tcCount').textContent=d.count;document.getElementById('tcBody').innerHTML=d.testcases.map(function(t){return'<tr><td><strong>'+t.name+'</strong></td><td class=\"xs\" style=\"color:var(--tx3)\">'+(t.sv_files||[]).join(', ')+'</td><td><button class=\"btn bout bxs\" onclick=\"viewTC(\''+t.name+'\')\">View</button></td></tr>'}).join('')||'<tr><td colspan=\"3\" style=\"color:var(--tx3)\">None</td></tr>'}
-async function genTC(){log('Generating testcases...','info');var r=await API('/api/testcases/generate',{method:'POST',body:{}});toast(r.success?'Generated':'Failed',r.success?'success':'error');loadTC()}
-async function viewTC(name){var d=await API('/api/testcases/'+name);log('Test: '+name+'\n'+'-'.repeat(30)+'\n'+(d.output||'(empty)'))}
+// ── TESTCASES ──
+async function loadTC(){const d=await API('/api/testcases/list');document.getElementById('tcCount').textContent=d.count;document.getElementById('tcBody').innerHTML=d.testcases.map(t=>`<tr><td><strong>${t.name}</strong></td><td class="text-xs" style="color:var(--text-muted)">${(t.sv_files||[]).join(', ')}</td><td><button class="btn btn-outline btn-xs" onclick="viewTC('${t.name}')">查看</button></td></tr>`).join('')||'<tr><td colspan="3" style="color:var(--text-muted);text-align:center;padding:12px">暂无</td></tr>'}
+async function genTC(){log('生成测试用例...','info');const r=await API('/api/testcases/generate',{method:'POST',body:{}});toast(r.success?'生成成功':'生成失败',r.success?'success':'error');loadTC()}
+async function viewTC(name){const d=await API(`/api/testcases/${name}`);const f=Object.keys(d.files)[0];log(`📄 ${name}\n${'─'.repeat(30)}\n${f?d.files[f]:(d.output||'(empty)')}`)}
 
-async function loadCoverage(){var d=await API('/api/coverage/summary');document.getElementById('covCards').innerHTML='<div class=\"sc apu\"><div class=\"sl\">Code Cov</div><div class=\"sv\">'+(d.code_coverage||0)+'%</div></div><div class=\"sc agn\"><div class=\"sl\">Func Cov</div><div class=\"sv\">'+(d.functional_coverage||0)+'%</div></div><div class=\"sc aam\"><div class=\"sl\">Assert Cov</div><div class=\"sv\">'+(d.assertion_coverage||0)+'%</div></div><div class=\"sc abl\"><div class=\"sl\">Total</div><div class=\"sv\">'+(d.code_coverage||0)+'%</div></div>';document.getElementById('covFiles').innerHTML=d.files.map(function(f){return'<div class=\"mb2\"><div class=\"fb xs\"><span>'+f.name+'</span><span>'+f.line_pct+'%</span></div><div class=\"cbar\"><div class=\"cfill\" style=\"width:'+f.line_pct+'%;background:'+(f.line_pct>=90?'var(--gn)':f.line_pct>=70?'var(--am)':'var(--rd)')+'\"></div></div></div>'}).join('');document.getElementById('covGaps').innerHTML=d.gaps.map(function(g){return'<div class=\"mb2\" style=\"padding:8px 10px;background:rgba(245,158,11,.08);border-left:2px solid var(--am);font-size:11px\"><strong>'+g.file+':'+g.line+'</strong> - '+g.signal+': '+g.reason+'<br><em style=\"color:var(--tx3)\">Suggestion: '+g.suggestion+'</em></div>'}).join('')||'<div style=\"color:var(--gn);padding:8px\">No coverage holes</div>'}
+// ── COVERAGE ──
+async function loadCoverage(){
+    const d=await API('/api/coverage/summary');
+    document.getElementById('covCards').innerHTML=`<div class="stat-card accent-purple"><div class="stat-label">代码覆盖率</div><div class="stat-value">${d.code_coverage}%</div></div><div class="stat-card accent-green"><div class="stat-label">功能覆盖率</div><div class="stat-value">${d.functional_coverage}%</div></div><div class="stat-card accent-amber"><div class="stat-label">断言覆盖率</div><div class="stat-value">${d.assertion_coverage}%</div></div><div class="stat-card accent-blue"><div class="stat-label">总覆盖率</div><div class="stat-value">${d.code_coverage}%</div></div>`;
+    document.getElementById('covFiles').innerHTML=d.files.map(f=>`<div class="mb-2"><div class="flex-between text-xs"><span>${f.name}</span><span>${f.line_pct}%</span></div><div class="cover-bar"><div class="cover-fill ${f.line_pct>=90?'high':f.line_pct>=70?'mid':'low'}" style="width:${f.line_pct}%"></div></div></div>`).join('');
+    document.getElementById('covGaps').innerHTML=d.gaps.map(g=>`<div class="mb-2" style="padding:8px 10px;background:rgba(245,158,11,.08);border-left:2px solid var(--brand-amber);border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:11px"><strong>${g.file}:${g.line}</strong> — ${g.signal}: ${g.reason}<br><em style="color:var(--text-muted)">建议: ${g.suggestion}</em></div>`).join('')||'<div style="color:var(--brand-green);font-size:12px;padding:8px">✅ 无覆盖率空洞</div>'
+}
 
-async function loadRegression(){var d=await API('/api/regression/history?limit=20');document.getElementById('regBody').innerHTML=d.runs.map(function(r){return'<tr><td><code style=\"font-size:10px\">'+r.run_name+'</code></td><td><span class=\"badge '+(r.status==='completed'?'bgn':'bam')+'\">'+r.status+'</span></td><td style=\"color:var(--gn);font-weight:600\">'+r.pass_count+'</td><td style=\"color:var(--rd)\">'+r.fail_count+'</td><td>'+r.total_count+'</td><td>'+r.duration_seconds+'s</td><td class=\"xs\" style=\"color:var(--tx3)\">'+(r.created_at||'').substring(0,16)+'</td></tr>'}).join('')||'<tr><td colspan=\"7\" style=\"color:var(--tx3)\">No data</td></tr>'}
-async function runRegression(){log('Starting regression...','info');var r=await API('/api/regression/run',{method:'POST',body:{}});toast('Done: '+r.passed+'/'+r.total,r.failed===0?'success':'error');loadRegression();loadDashboard()}
+// ── REGRESSION ──
+async function loadRegression(){const d=await API('/api/regression/history?limit=20');document.getElementById('regBody').innerHTML=d.runs.map(r=>`<tr><td><code style="font-size:10px">${r.run_name}</code></td><td><span class="badge ${r.status==='completed'?'badge-green':'badge-amber'}">${r.status}</span></td><td style="color:var(--brand-green);font-weight:600">${r.pass_count}</td><td style="color:var(--brand-red)">${r.fail_count}</td><td>${r.total_count}</td><td>${r.duration_seconds}s</td><td class="text-xs" style="color:var(--text-muted)">${(r.created_at||'').substring(0,16)}</td></tr>`).join('')||'<tr><td colspan="7" style="color:var(--text-muted);text-align:center;padding:12px">暂无数据</td></tr>'}
+async function runRegression(){log('▶ 启动回归...','info');const r=await API('/api/regression/run',{method:'POST',body:{}});toast(`完成: ${r.passed}/${r.total} PASS`,r.failed===0?'success':'error');loadRegression();loadDashboard()}
 
-async function loadSignoffs(){var d=await API('/api/signoffs');document.getElementById('sfBody').innerHTML=d.signoffs.length?d.signoffs.map(function(s){return'<tr><td><strong>'+s.title+'</strong><br><span class=\"xs\" style=\"color:var(--tx3)\">'+s.report_type+'</span></td><td><span class=\"badge '+(s.status==='approved'?'bgn':s.status==='rejected'?'brd':'bam')+'\">'+s.status+'</span></td><td class=\"xs\" style=\"color:var(--tx3)\">'+(s.created_at||'').substring(0,16)+'</td><td><div class=\"bgrp\">'+(s.status==='pending'?'<button class=\"btn bsuc bxs\" onclick=\"approveSF('+s.id+')\">Approve</button><button class=\"btn bdan bxs\" onclick=\"rejectSF('+s.id+')\">Reject</button>':'')+'<button class=\"btn bout bxs\" onclick=\"viewSignoff('+s.id+')\">View</button></div></td></tr>'}).join(''):'<tr><td colspan=\"4\" style=\"color:var(--tx3)\">No signoffs</td></tr>'}
-async function createSignoff(){var title=prompt('Signoff title:');if(!title)return;var type=prompt('Type (tapeout/milestone/coverage):','tapeout');var summary={};try{var stats=await API('/api/vplan/stats'),cov=await API('/api/coverage/summary'),reg=await API('/api/regression/history?limit=1');summary.req_total=stats.total||0;summary.coverage=cov.code_coverage||0;summary.pass_rate=reg.runs&&reg.runs.length?Math.round(reg.runs[0].pass_count/Math.max(reg.runs[0].total_count,1)*100):0}catch(e){}await API('/api/signoffs',{method:'POST',body:{title:title,report_type:type,summary:summary}});toast('Created','success');loadSignoffs()}
-async function viewSignoff(id){var s=await API('/api/signoffs');var sf=s.signoffs.find(function(x){return x.id===id});if(!sf)return;var sum=sf.summary||{};log('Signoff: '+sf.title+'\nStatus: '+sf.status+'\nReqs: '+(sum.req_total||'N/A')+'\nCoverage: '+(sum.coverage||'N/A')+'%\nPass Rate: '+(sum.pass_rate||'N/A')+'%')}
-async function approveSF(id){if(!confirm('Approve this signoff? Evidence will be locked.'))return;await API('/api/signoffs/'+id+'/approve',{method:'PUT'});toast('Approved','success');loadSignoffs()}
-async function rejectSF(id){var c=prompt('Rejection reason:');if(!c)return;await API('/api/signoffs/'+id+'/reject?comment='+encodeURIComponent(c),{method:'PUT'});toast('Rejected','error');loadSignoffs()}
+// ── SIGNOFF (可追溯 · 可审计 · 可治理) ──
+async function loadSignoffs(){
+    await loadEvidenceChain();
+    // Load signoff list
+    try{const d=await API('/api/signoffs');renderSignoffList(d)}catch(e){}
+}
 
-async function searchKB(){var q=document.getElementById('kSearch').value;var d=await API('/api/knowledge?q='+encodeURIComponent(q));document.getElementById('kbBody').innerHTML=d.entries.map(function(e){return'<tr><td><strong>'+e.title+'</strong></td><td><span class=\"badge bbl\">'+e.category+'</span></td><td class=\"xs\">'+(e.tags||'')+'</td><td>'+(e.usage_count||0)+'</td><td class=\"xs\" style=\"color:var(--tx3)\">'+(e.created_at||'').substring(0,16)+'</td></tr>'}).join('')||'<tr><td colspan=\"5\" style=\"color:var(--tx3)\">No entries</td></tr>'}
-async function addKB(){var title=prompt('Title:');if(!title)return;await API('/api/knowledge',{method:'POST',body:{title:title,category:prompt('Category:','best_practice'),tags:prompt('Tags:',''),content:prompt('Content:','')}});toast('Added','success');searchKB()}
+async function loadEvidenceChain(){
+    try{
+        const mfs=await API('/api/manifest/latest');
+        if(!mfs||!mfs.run_id){document.getElementById('sfEvidenceEmpty').style.display='';document.getElementById('sfEvidenceTable').style.display='none';return}
+        document.getElementById('sfEvidenceEmpty').style.display='none';
+        document.getElementById('sfEvidenceTable').style.display='';
+        document.getElementById('sfManifestHash').textContent=(mfs.manifest_hash||'').substring(0,18)+'...';
+        document.getElementById('sfEvidenceHash').textContent=(mfs.evidence_hash||'').substring(0,18)+'...';
+        document.getElementById('sfDumpCmd').textContent='vagent dump '+mfs.session_id;
+        // Phase chain table
+        const phases=mfs.phases||[];
+        document.getElementById('sfChainBody').innerHTML=phases.map((p,i)=>{
+            const icon={'passed':'✅','degraded':'⚠️','failed':'❌','skipped':'⏭️','error':'💥'}[p.status]||'❓';
+            const input=p.input_summary||(p.phase_name==='spec'?'Markdown 规格输入':p.agent_role?'ctx → '+p.agent_role:'');
+            const outputHash=p.output_hash||(p.artifact_hashes?Object.values(p.artifact_hashes)[0]||'':'');const hashDisplay=outputHash?`<code style="font-size:9px;color:var(--brand-green)">${(outputHash||'').substring(0,12)}...</code>`:'<span style="color:var(--text-muted)">—</span>';
+            const toolCalls=p.tool_call_count||0;
+            return `<tr class="clickable" onclick="togglePhaseDetail(${i})">
+                <td>${i+1}</td><td><strong>${p.phase_name}</strong></td><td>${icon} ${p.status}</td>
+                <td>${p.score||'-'}</td><td>${p.elapsed_s||0}s</td>
+                <td class="text-xs" style="color:var(--text-secondary);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(input||'').replace(/"/g,'&quot;')}">${(input||'').substring(0,60)}</td>
+                <td>${hashDisplay}</td><td>${toolCalls>0?toolCalls+' 次':'—'}</td>
+            </tr>`;
+        }).join('');
+        // Integrity badge
+        document.getElementById('sfIntegrityBadge').innerHTML=`<span class="badge badge-green" onclick="verifyIntegrity()" style="cursor:pointer">🔍 校验</span>`;
+    }catch(e){console.error('Evidence chain:',e)}
+}
 
-async function loadAdmin(){try{var users=await API('/api/users');document.getElementById('userBody').innerHTML=users.users.map(function(u){return'<tr><td>'+u.id+'</td><td><strong>'+u.username+'</strong></td><td><span class=\"badge '+(u.role==='admin'?'brd':'bbl')+'\">'+u.role+'</span></td><td class=\"xs\">'+(u.email||'-')+'</td></tr>'}).join('');loadModuleAssignments()}catch(e){}}
-async function loadAudit(){try{var audit=await API('/api/audit?limit=50');document.getElementById('auditBody').innerHTML=audit.logs.map(function(l){return'<tr><td><strong>'+l.username+'</strong></td><td>'+l.action+'</td><td class=\"xs\">'+(l.detail||'')+'</td><td class=\"xs\" style=\"color:var(--tx3)\">'+(l.created_at||'').substring(0,16)+'</td></tr>'}).join('')}catch(e){}}
-async function loadModuleAssignments(){try{var d=await API('/api/modules/members');var rows='';for(var i=0;i<d.modules.length;i++){var m=d.modules[i];var names=m.members.map(function(x){return x.username}).join(', ')||'<span style=\"color:var(--tx3)\">Unassigned</span>';rows+='<tr><td><strong>'+m.module+'</strong></td><td>'+names+'</td><td><button class=\"btn bout bxs\" onclick=\"assignEngineerPrompt()\">Assign</button></td></tr>'}document.getElementById('assignBody').innerHTML=rows||'<tr><td colspan=\"3\" style=\"color:var(--tx3)\">No modules</td></tr>'}catch(e){document.getElementById('assignBody').innerHTML='<tr><td colspan=\"3\" style=\"color:var(--rd)\">Load failed</td></tr>'}}
-function assignEngineerPrompt(){var mod=prompt('Module name:');if(!mod)return;var user=prompt('Engineer username:');if(!user)return;API('/api/modules/assign?module_name='+mod+'&username='+user,{method:'POST'}).then(function(){toast('Assigned','success');loadModuleAssignments()}).catch(function(e){toast('Failed: '+e,'error')})}
-async function adminAddUser(){var u=prompt('Username:');if(!u)return;await API('/api/users',{method:'POST',body:{username:u,password:prompt('Password:')}});toast('Added','success');loadAdmin()}
+function togglePhaseDetail(idx){
+    // Expand to show full input/output for a phase
+    toast('选中阶段 '+(idx+1)+' — 详细展开功能待实现','info')
+}
+
+async function verifyIntegrity(){
+    const panel=document.getElementById('sfIntegrityPanel');const content=document.getElementById('sfIntegrityContent');
+    panel.style.display='';content.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-muted)">校验中...</div>';
+    try{
+        const mfs=await API('/api/manifest/latest');if(!mfs||!mfs.session_id){content.innerHTML='<div style="color:var(--brand-red);padding:12px">未找到证据链</div>';return}
+        const v=await API('/api/manifest/'+mfs.session_id+'/verify');
+        const rows=[
+            ['Manifest Hash',v.manifest_hash_ok?'✅ 匹配':'🔴 不匹配'],
+            ['Evidence Hash',v.evidence_hash_ok?'✅ 匹配':(v.evidence_hash_ok===false?'🔴 不匹配':'⚪ 无数据')],
+            ['阶段完整性',v.phases_complete?`✅ ${v.phases_completed}/${v.total_phases}`:'⚠️ 不完整'],
+            ['文件总数',v.file_count+' 个'],
+            ['缺失文件',v.missing_files.length?v.missing_files.join(', '):'✅ 无'],
+            ['Hash 不一致',v.hash_mismatches.length?v.hash_mismatches.map(h=>h.file).join(', '):'✅ 无'],
+            ['结论',`<strong>${v.conclusion||''}</strong>`],
+        ];
+        content.innerHTML=`<table style="width:100%">${rows.map(r=>`<tr><td style="padding:6px 12px;color:var(--text-secondary);width:140px">${r[0]}</td><td style="padding:6px 12px">${r[1]}</td></tr>`).join('')}</table>`;
+    }catch(e){content.innerHTML=`<div style="color:var(--brand-red);padding:12px">校验失败: ${e}</div>`}
+}
+
+function copyDumpCmd(){
+    const cmd=document.getElementById('sfDumpCmd').textContent;
+    navigator.clipboard.writeText(cmd).then(()=>toast('✅ 已复制: '+cmd,'success')).catch(()=>toast('复制失败，请手动选择','error'));
+}
+
+async function renderSignoffList(d){
+    document.getElementById('sfBody').innerHTML=d.signoffs.length?d.signoffs.map(s=>{
+        const sum=s.summary||{};const eh=(sum.evidence_hash||sum.manifest_hash||'');const hashDisplay=eh?`<code style="font-size:9px;color:var(--brand-green)" title="${eh}">${eh.substring(0,14)}...</code>`:'<span style="color:var(--text-muted)">—</span>';
+        return `<tr><td><strong>${s.title}</strong><br><span class="text-xs" style="color:var(--text-muted)">${s.report_type||'-'}</span></td>
+        <td><span class="badge ${s.status==='approved'?'badge-green':s.status==='rejected'?'badge-red':s.status==='pending'?'badge-amber':'badge-muted'}">${s.status}</span></td>
+        <td>${hashDisplay}</td><td class="text-xs" style="color:var(--text-muted)">${(s.created_at||'').substring(0,16)}</td>
+        <td><div class="btn-group">${s.status==='pending'?`<button class="btn btn-success btn-xs" onclick="approveSF(${s.id})">批准</button><button class="btn btn-danger btn-xs" onclick="rejectSF(${s.id})">驳回</button>`:''}<button class="btn btn-outline btn-xs" onclick="viewSignoff(${s.id})">详情</button></div></td></tr>`;
+    }).join(''):'<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:16px">暂无签核报告<br><span class="text-xs">运行流水线后创建第一份签核</span></td></tr>';
+
+    // Evidence chain
+    try{const mfs=await API('/api/manifest/latest');if(mfs&&mfs.run_id){
+        document.getElementById('sfEvidenceEmpty').style.display='none';
+        const chain=document.getElementById('sfEvidenceChain');chain.style.display='flex';
+        chain.innerHTML=`<span class="ev-node pass">Run ${mfs.run_id.substring(0,18)}</span><span class="ev-arrow">→</span><span class="ev-node pass">${mfs.passed}/${mfs.total_phases} phases</span><span class="ev-arrow">→</span><span class="ev-node pass">Score ${mfs.overall_score}/100</span><span class="ev-hash"><code>${(mfs.manifest_hash||'').substring(0,14)}...</code></span>`;
+    }}catch(e){}
+}
+async function createSignoff(){
+    const title=prompt('签核标题 (如: UART IP Tape-out):');if(!title)return;
+    const type=prompt('类型 (tapeout/milestone/coverage):','tapeout');
+    let summary={};try{const stats=await API('/api/vplan/stats'),cov=await API('/api/coverage/summary'),reg=await API('/api/regression/history?limit=1'),mfs=await API('/api/manifest/latest');summary.req_total=stats.total||0;let v=0;for(const k in stats.stats)v+=stats.stats[k].verified||0;summary.req_verified=v;summary.coverage=cov.code_coverage||0;summary.functional_cov=cov.functional_coverage||0;summary.pass_rate=reg.runs&&reg.runs.length?Math.round(reg.runs[0].pass_count/Math.max(reg.runs[0].total_count,1)*100):0;summary.gaps=cov.gaps?cov.gaps.length:0;summary.manifest_hash=mfs?mfs.manifest_hash:'';summary.evidence_hash=mfs?mfs.evidence_hash:'';summary.run_id=mfs?mfs.run_id:'';summary.generated_at=new Date().toISOString().substring(0,16)}catch(e){}
+    await API('/api/signoffs',{method:'POST',body:{title,report_type:type,summary}});toast('签核已创建 (含证据链)','success');loadSignoffs()
+}
+async function viewSignoff(id){const signs=await API('/api/signoffs');const s=signs.signoffs.find(sf=>sf.id===id);if(!s)return;const sum=s.summary||{};log(`\n══════ SignOffAI 签核证据报告 ══════\n  标题: ${s.title}\n  状态: ${s.status}\n  类型: ${s.report_type}\n──────────────────────────────────\n  需求: ${sum.req_total||'N/A'} / 验证: ${sum.req_verified||'N/A'}\n  覆盖率: ${sum.coverage||'N/A'}%\n  回归通过率: ${sum.pass_rate||'N/A'}%\n──────────────────────────────────\n  🔗 证据链:\n  Run ID: ${sum.run_id||'N/A'}\n  Manifest: ${(sum.manifest_hash||'').substring(0,16)}...\n  Evidence: ${(sum.evidence_hash||'').substring(0,16)}...\n══════════════════════════════════\n`)}
+async function approveSF(id){
+    if(!confirm('批准此签核将锁定证据链 Hash，之后不可篡改。确认批准？'))return;
+    // 锁定证据：获取最新 manifest hash 记录到签核
+    let evidenceHash='';
+    try{const mfs=await API('/api/manifest/latest');evidenceHash=mfs?mfs.manifest_hash||'':''}catch(e){}
+    await API('/api/signoffs/'+id+'/approve',{method:'PUT'});
+    toast('✅ 已批准 — 证据链已锁定 🔒'+(evidenceHash?' Hash: '+evidenceHash.substring(0,14)+'...':''),'success');
+    loadSignoffs();
+}
+async function rejectSF(id){const c=prompt('驳回理由:');if(!c)return;await API('/api/signoffs/'+id+'/reject?comment='+encodeURIComponent(c),{method:'PUT'});toast('已驳回','error');loadSignoffs()}
+async function exportEvidencePackage(){
+    try{const mfs=await API('/api/manifest/latest');if(!mfs||!mfs.session_id){toast('未找到证据链','error');return}
+        const r=await fetch('/api/manifest/'+mfs.session_id+'/export');if(!r.ok)throw new Error('导出失败');
+        const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='signoffai_evidence_'+mfs.session_id+'.zip';a.click();toast('✅ 证据包已下载','success')
+    }catch(e){toast('导出失败: '+e,'error')}
+}
+
+// ── KNOWLEDGE ──
+async function searchKB(){const q=document.getElementById('kSearch').value;const d=await API(`/api/knowledge?q=${encodeURIComponent(q)}`);document.getElementById('kbBody').innerHTML=d.entries.map(e=>`<tr><td><strong>${e.title}</strong></td><td><span class="badge badge-blue">${e.category}</span></td><td class="text-xs">${e.tags||''}</td><td>${e.usage_count||0}</td><td class="text-xs" style="color:var(--text-muted)">${(e.created_at||'').substring(0,16)}</td></tr>`).join('')||'<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:12px">暂无条目</td></tr>'}
+async function addKB(){const title=prompt('标题:');if(!title)return;await API('/api/knowledge',{method:'POST',body:{title,category:prompt('分类:','best_practice'),tags:prompt('标签:',''),content:prompt('内容:','')}});toast('已添加','success');searchKB()}
+
+// ── ADMIN ──
+async function loadAdmin(){try{const users=await API('/api/users');document.getElementById('userBody').innerHTML=users.users.map(u=>`<tr><td>${u.id}</td><td><strong>${u.username}</strong></td><td><span class="badge ${u.role==='admin'?'badge-red':'badge-blue'}">${u.role}</span></td><td class="text-xs">${u.email||'-'}</td></tr>`).join('');const audit=await API('/api/audit?limit=30');document.getElementById('auditBody').innerHTML=audit.logs.map(l=>`<tr><td><strong>${l.username}</strong></td><td>${l.action}</td><td class="text-xs" style="color:var(--text-muted)">${(l.created_at||'').substring(0,16)}</td></tr>`).join('');
+    // Token dashboard
+    try{const tu=await API('/api/token-usage?days=30');const agents=Object.entries(tu.per_agent||{}).sort((a,b)=>b[1]-a[1]);const maxT=agents.length?agents[0][1]:1;
+        document.getElementById('tokenDashboard').innerHTML=`
+            <div class="flex-between mb-2"><span>本月用量</span><strong>${(tu.total_tokens/1000).toFixed(1)}K / 1000K</strong></div>
+            <div class="dual-bar mb-2" style="height:10px;border-radius:5px;background:var(--bg-input);overflow:hidden"><div style="height:100%;width:${Math.min(100,tu.total_tokens/10000)}%;background:${tu.total_tokens>800000?'var(--brand-red)':tu.total_tokens>500000?'var(--brand-amber)':'var(--brand-green)'};border-radius:5px;transition:width .5s"></div></div>
+            <div class="text-xs" style="color:var(--text-muted)">${tu.total_llm_calls} 次调用 · 约 $${tu.estimated_cost} · ${tu.total_tokens>800000?'⚠️ 接近预算上限':tu.total_tokens>500000?'📊 正常使用中':'✅ 预算充足'}</div>
+            <div class="mt-2"><strong>Agent 分布:</strong></div>
+            ${agents.map(([k,v])=>`<div class="flex-between text-xs mb-1"><span>${k}</span><span>${(v/1000).toFixed(1)}K</span></div><div class="dual-bar mb-1" style="height:6px;border-radius:3px;background:var(--bg-input);overflow:hidden"><div style="height:100%;width:${Math.round(v/maxT*100)}%;background:var(--brand-blue);border-radius:3px"></div></div>`).join('')}
+            <div class="mt-2 text-xs" style="color:var(--text-muted)">🔒 可治理: Token 用量实时追踪 · 预算上限 1000K/月</div>`;
+    }catch(e){}
+    // Load module assignments
+    try{const mods=await API('/api/modules');let rows='';for(const m of mods.modules||[]){try{const mem=await API(`/api/modules/${m.name}/members`);const names=(mem.members||[]).map(x=>x.username).join(', ')||'<span style="color:var(--text-muted)">未分配</span>';rows+=`<tr><td><strong>${m.name}</strong></td><td>${names}</td><td><button class="btn btn-outline btn-xs" onclick="event.stopPropagation();assignEngineer('${m.name}')">👤 分配</button></td></tr>`}catch(e){rows+=`<tr><td><strong>${m.name}</strong></td><td>—</td><td><button class="btn btn-outline btn-xs" onclick="event.stopPropagation();assignEngineer('${m.name}')">👤 分配</button></td></tr>`}}document.getElementById('assignBody').innerHTML=rows||'<tr><td colspan="3" style="color:var(--text-muted);text-align:center;padding:12px">暂无模块</td></tr>'}catch(e){document.getElementById('assignBody').innerHTML='<tr><td colspan="3" style="color:var(--brand-red)">加载失败</td></tr>'}}catch(e){}}
+async function adminAddUser(){const u=prompt('用户名:');if(!u)return;await API('/api/users',{method:'POST',body:{username:u,password:prompt('密码:')}});toast('已添加','success');loadAdmin()}
+async function adminAssignModule(){const mod=prompt('模块名:');if(!mod)return;const user=prompt('工程师用户名:');if(!user)return;try{await API('/api/modules/assign?module_name='+mod+'&username='+user,{method:'POST'});toast(`✅ ${user} → ${mod}`,'success');loadAdmin()}catch(e){toast('分配失败: '+e,'error')}}
+
+// ── MANAGER DASHBOARD (SignOff 经理总览) ──
+async function loadManager(){
+    try{
+        const apiUrl=APP_ROLE==='manager'?'/api/modules':'/api/my-modules';
+        const d=await API(apiUrl);
+        // Stats + Token
+        const healthIcons={good:'✅',warning:'⚠️',idle:'💤'};
+        document.getElementById('mgrStats').innerHTML=`
+            <div class="stat-card accent-blue"><div class="stat-label">模块总数</div><div class="stat-value">${d.total_modules}</div></div>
+            <div class="stat-card accent-green"><div class="stat-label">全部通过</div><div class="stat-value">${d.total_passed}</div></div>
+            <div class="stat-card accent-amber"><div class="stat-label">部分通过</div><div class="stat-value">${d.total_with_errors}</div></div>
+            <div class="stat-card accent-purple"><div class="stat-label">健康度</div><div class="stat-value">${healthIcons[d.overall_health]||'?'}</div></div>`;
+        // Token usage
+        try{const tu=await API('/api/token-usage?days=7');document.getElementById('mgrStats').innerHTML+=`
+            <div class="stat-card accent-blue" style="grid-column:span 2"><div class="stat-label">🪙 7日 Token 用量</div><div class="stat-value" style="font-size:22px">${(tu.total_tokens/1000).toFixed(1)}K <span style="font-size:12px;color:var(--text-muted)">≈ $${tu.estimated_cost}</span></div><div class="stat-sub">${tu.total_llm_calls} 次 LLM 调用 · ${Object.keys(tu.per_agent).length} 个 Agent</div></div>`}catch(e){}
+        document.getElementById('mgrModuleCount').textContent=d.total_modules+' 模块';
+        // Module cards
+        const grid=document.getElementById('mgrModuleGrid');
+        if(!d.modules||!d.modules.length){grid.innerHTML='<div style="color:var(--text-muted);padding:20px;text-align:center;grid-column:1/-1">'+(d.filtered?'暂无分配模块 — 请联系SignOff 经理分配':'暂无模块 — 添加 Markdown 规格文件到 specs/ 目录并运行流水线')+'</div>';}
+        else{grid.innerHTML=d.modules.map(m=>{
+            const statusIcon=m.latest_status==='completed'&&m.latest_passed===m.latest_total?'✅':m.latest_status==='completed_with_errors'?'⚠️':m.latest_status==='running'?'⏳':'💤';
+            const hasAI=m.runs&&m.runs.some(r=>r.workflow&&r.workflow.includes('ai')||(r.state&&r.state.includes('ai')));
+            const scoreColor=m.latest_score>=80?'var(--brand-green)':m.latest_score>=50?'var(--brand-amber)':'var(--brand-red)';
+            const hasEvidence=m.evidence_hash?'':'opacity:0.4';
+            const specList=(m.specs||[]).map(s=>`<span class="badge badge-muted" style="font-size:9px">${s.file}</span>`).join(' ')||'<span style="color:var(--text-muted)">无规格</span>';
+            const lastTime=m.latest_time?m.latest_time.substring(0,16):'未运行';
+            const cov=m.coverage||{};
+            const assignBtn=APP_ROLE==='manager'?`<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();assignEngineer('${m.name}')" title="分配工程师" style="padding:1px 6px;font-size:9px">👤+</button>`:'';
+            const aiBadge=hasAI?'<span class="badge badge-purple" style="font-size:9px" title="含AI智能探索记录">🤖 AI</span>':'';
+            // Dual-track progress: traditional (dark blue) + AI pending (light blue)
+            const tradPct=m.latest_total?Math.round(m.latest_passed/m.latest_total*100):0;
+            const aiPct=hasAI?Math.min(20,95-tradPct):0;  // AI estimated extra
+            const totalPct=Math.min(100,tradPct+aiPct);
+            return `<div class="card" style="cursor:pointer;${m.latest_status==='running'?'border-left:3px solid var(--brand-blue)':''}" onclick="viewModuleDetail('${m.name}')">
+                <div class="flex-between mb-2"><strong style="font-size:14px">${statusIcon} ${m.name} ${aiBadge}</strong>
+                    <span>${assignBtn} <span class="badge ${m.latest_status==='running'?'badge-blue':m.latest_status==='completed'?'badge-green':m.latest_status==='completed_with_errors'?'badge-amber':'badge-muted'}">${m.latest_status}</span></span></div>
+                <div class="text-xs" style="color:var(--text-muted);margin-bottom:8px">${specList}</div>
+                <!-- Dual-track progress bar -->
+                <div class="flex-between text-xs mb-1"><span>总进度 <span class="badge badge-muted" style="font-size:8px;padding:1px 5px">🔬传统+🤖AI</span></span><span style="color:var(--text-primary);font-weight:600">${totalPct}%</span></div>
+                <div class="dual-bar mb-2" style="height:12px;border-radius:6px;background:var(--bg-input);overflow:hidden;display:flex">
+                    <div style="height:100%;width:${tradPct}%;background:var(--brand-blue);border-radius:6px 0 0 6px;transition:width .5s;position:relative" title="传统轨: ${tradPct}%"></div>
+                    ${aiPct>0?`<div style="height:100%;width:${aiPct}%;background:linear-gradient(90deg,#60a5fa,#93c5fd);border-radius:0 ${totalPct>=95?'6px':0} ${totalPct>=95?'6px':0} 0;transition:width .5s;position:relative" title="AI轨(待传统验证): +${aiPct}%"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;font-weight:600">🤖</span></div>`:''}
+                </div>
+                <div class="flex-between text-xs mb-1"><span>AI 评分</span><span style="color:${scoreColor};font-weight:600">${m.latest_score||0}/100</span></div>
+                <div class="flex-between text-xs mb-1"><span>覆盖率</span><span style="color:var(--text-primary)">L:${cov.line||0}% B:${cov.branch||0}% T:${cov.toggle||0}%</span></div>
+                <div class="flex-between text-xs mt-3" style="border-top:1px solid var(--border);padding-top:8px">
+                    <span style="color:var(--text-muted)">${lastTime}</span>
+                    <span style="display:flex;gap:6px;align-items:center">
+                        ${aiPct>0?`<span class="badge badge-purple" style="font-size:8px;padding:1px 5px" title="AI 发现需传统验证">🔒 待验证</span>`:''}
+                        <span style="${hasEvidence}">${m.evidence_hash?`🔗 <code style="font-size:9px;color:var(--brand-green)">${m.evidence_hash.substring(0,10)}...</code>`:'🔗 待生成'}</span>
+                    </span>
+                </div>
+                ${m.latest_status==='running'?'<div style="margin-top:6px;font-size:10px;color:var(--brand-blue)">⏳ 验证进行中...</div>':''}
+                ${aiPct>0&&m.latest_status!=='running'?`<div style="margin-top:4px;font-size:9px;color:var(--brand-purple)">🤖 AI 发现 +${aiPct}% 额外覆盖 → <span style="color:var(--brand-blue);text-decoration:underline;cursor:pointer" onclick="event.stopPropagation();goValidate('${m.name}')">触发传统验证</span></div>`:''}
+                <div class="flex-between text-xs mt-2" style="border-top:1px solid var(--border);padding-top:6px">
+                    <span style="color:var(--text-muted);cursor:pointer" onclick="event.stopPropagation();traceModule('${m.name}')">🔗 可追溯</span>
+                    <span style="color:var(--text-muted);cursor:pointer" onclick="event.stopPropagation();viewModuleDetail('${m.name}')">📋 详情</span>
+                </div>
+            </div>`;
+        }).join('');}
+        // Recent runs table
+        const allRuns=[];d.modules.forEach(m=>{(m.runs||[]).forEach(r=>{r.module=m.name;allRuns.push(r)})});
+        allRuns.sort((a,b)=>b.started_at.localeCompare(a.started_at));
+        document.getElementById('mgrRecentRuns').innerHTML=allRuns.slice(0,20).map(r=>`<tr class="clickable" onclick="viewModuleDetail('${r.module}')">
+            <td><strong>${r.module}</strong></td><td><code style="font-size:10px">${(r.run_id||'').substring(0,20)}</code></td>
+            <td><span class="badge ${r.state==='completed'?'badge-green':r.state==='completed_with_errors'?'badge-amber':'badge-blue'}">${r.state}</span></td>
+            <td>${r.passed}/${r.total}</td><td>${r.score}/100</td>
+            <td>${r.evidence_hash?`<code style="font-size:9px;color:var(--brand-green)">${r.evidence_hash.substring(0,10)}...</code>`:'—'}</td>
+            <td class="text-xs" style="color:var(--text-muted)">${(r.started_at||'').substring(0,16)}</td></tr>`).join('')||'<tr><td colspan="7" style="color:var(--text-muted);text-align:center;padding:12px">暂无运行记录</td></tr>';
+    }catch(e){document.getElementById('mgrModuleGrid').innerHTML=`<div style="color:var(--brand-red);padding:20px">加载失败: ${e}</div>`}
+}
+
+function traceModule(moduleName){
+    // Navigate to signoff evidence chain
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(i=>i.classList.remove('active'));
+    const item=document.querySelector('[data-page="signoff"]');if(item)item.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-signoff').classList.add('active');
+    document.getElementById('pageTitle').textContent='证据链追溯 — '+moduleName;
+    document.getElementById('pageBreadcrumb').textContent='SignOffAI / 可追溯 / '+moduleName;
+    loadSignoffs();
+    toast('🔗 查看 '+moduleName+' 完整证据链','info');
+}
+
+function goValidate(moduleName){
+    // Switch to engineer role and open pipeline to verify AI suggestions
+    switchRole('engineer');
+    setTimeout(()=>{
+        document.querySelectorAll('.sidebar-nav .nav-item').forEach(i=>i.classList.remove('active'));
+        const item=document.querySelector('[data-page="pipeline"]');if(item)item.classList.add('active');
+        document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+        document.getElementById('page-pipeline').classList.add('active');
+        document.getElementById('pageTitle').textContent='流水线 — 验证 '+moduleName;
+        loadPipelineTab();
+        toast('切换到传统仿真验证 '+moduleName+' 的AI建议','info');
+    },200);
+}
+
+async function assignEngineer(moduleName){
+    const username=prompt(`分配工程师到 "${moduleName}":\n输入工程师用户名:`);
+    if(!username)return;
+    try{
+        await API('/api/modules/assign?module_name='+moduleName+'&username='+username,{method:'POST'});
+        toast(`✅ ${username} 已分配到 ${moduleName}`,'success');
+        // Load members
+        try{const members=await API(`/api/modules/${moduleName}/members`);if(members.members.length)toast(`模块成员: ${members.members.map(m=>m.username).join(', ')}`,'info')}catch(e){}
+    }catch(e){toast('分配失败: '+e,'error')}
+}
+
+async function viewModuleDetail(moduleName){
+    // Navigate to module detail page
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(i=>i.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    const pg=document.getElementById('page-module-detail');if(pg)pg.classList.add('active');
+    document.getElementById('pageTitle').textContent='模块详情 — '+moduleName;
+    document.getElementById('pageBreadcrumb').textContent='SignOffAI / '+moduleName;
+    document.getElementById('mdTitle').innerHTML='<i class="bi-cpu"></i>'+moduleName+' <span class="badge badge-blue">加载中</span>';
+    loadModuleDetail(moduleName);
+}
+
+async function loadModuleDetail(moduleName){
+    try{
+        const mod=await API('/api/modules/'+moduleName);
+        const gate=await API('/api/modules/'+moduleName+'/gating');
+        // Stats
+        document.getElementById('mdStats').innerHTML=`
+            <div class="stat-card accent-blue"><div class="stat-label">AI 评分</div><div class="stat-value">${mod.latest_score||0}</div><div class="stat-sub">/100</div></div>
+            <div class="stat-card accent-green"><div class="stat-label">覆盖率 (传统)</div><div class="stat-value">${gate.traditional.coverage}%</div><div class="stat-sub">门限: ${gate.threshold}%</div></div>
+            <div class="stat-card accent-purple"><div class="stat-label">AI 待验证</div><div class="stat-value">+${gate.ai.estimated_extra_coverage}%</div><div class="stat-sub">${gate.ai.pending_phases} 阶段</div></div>
+            <div class="stat-card accent-amber"><div class="stat-label">签核状态</div><div class="stat-value">${gate.gating_status==='locked'?'🔒 可签核':gate.gating_status==='partial'?'⚠️ 接近门限':'🔓 待建立'}</div><div class="stat-sub">${gate.recommendation}</div></div>`;
+        document.getElementById('mdTitle').innerHTML='<i class="bi-cpu"></i>'+moduleName+' <span class="badge '+(gate.gating_status==='locked'?'badge-green':gate.gating_status==='partial'?'badge-amber':'badge-muted')+'">'+gate.gating_status+'</span>';
+        // Run history
+        const runs=mod.runs||[];
+        document.getElementById('mdRunsBody').innerHTML=runs.length?runs.map(r=>{
+            const isAI=r.workflow&&r.workflow.includes('ai');
+            return `<tr class="clickable" onclick="switchRole('engineer');setTimeout(()=>{document.querySelector('[data-page=\\'signoff\\']').click()},200)">
+                <td><code style="font-size:10px">${(r.run_id||'').substring(0,20)}</code>${isAI?' <span class="badge badge-purple" style="font-size:8px">🤖AI</span>':''}</td>
+                <td>${isAI?'AI 探索':'传统仿真'}</td>
+                <td><span class="badge ${r.state==='completed'?'badge-green':'badge-amber'}">${r.state||'?'}</span></td>
+                <td>${r.passed||0}/${r.total||0}</td><td>${r.score||0}</td>
+                <td>—</td>
+                <td>${r.evidence_hash?`<code style="font-size:9px;color:var(--brand-green)">${r.evidence_hash.substring(0,10)}...</code>`:'—'}</td>
+                <td class="text-xs" style="color:var(--text-muted)">${(r.started_at||'').substring(0,16)}</td></tr>`;
+        }).join(''):'<tr><td colspan="8" style="color:var(--text-muted);text-align:center;padding:12px">暂无运行记录</td></tr>';
+        // AI summary
+        const aiRuns=runs.filter(r=>r.workflow&&r.workflow.includes('ai'));
+        document.getElementById('mdAiSummary').innerHTML=aiRuns.length?`<div class="mb-2"><span class="badge badge-purple">🤖 ${aiRuns.length} 次 AI 探索</span></div>
+            <div class="mb-2 text-xs">最近: ${(aiRuns[0].started_at||'').substring(0,16)}</div>
+            <div class="mb-2 text-xs">评分: ${aiRuns[0].score||0}/100 · 通过: ${aiRuns[0].passed||0}/${aiRuns[0].total||0}</div>
+            <div class="text-xs" style="color:var(--text-muted)">${gate.ai.pending_phases>0?'⚠️ 有 '+gate.ai.pending_phases+' 项 AI 产出待传统验证':'✅ AI 产出均已通过传统验证'}</div>
+            <div class="mt-2"><button class="btn btn-outline btn-xs" data-module="${moduleName}" onclick="event.stopPropagation();goValidate(this.getAttribute('data-module'))">🔬 触发传统验证</button></div>`:'<div class="text-xs" style="color:var(--text-muted)">暂无 AI 探索记录<br><span class="text-xs">在流水线选择"AI 智能探索"模式运行</span></div>';
+        // Coverage chart
+        const ctx=document.getElementById('mdCovChart');if(ctx&&typeof Chart!=='undefined'){
+            if(ctx._chart)ctx._chart.destroy();
+            const cov=mod.coverage||{};
+            ctx._chart=new Chart(ctx,{type:'bar',data:{labels:['Line','Branch','Toggle'],datasets:[
+                {label:'传统已验证',data:[cov.line||0,cov.branch||0,cov.toggle||0],backgroundColor:'#3b82f6'},
+                {label:'AI 估计额外',data:[gate.ai.estimated_extra_coverage,Math.round(gate.ai.estimated_extra_coverage*0.7),Math.round(gate.ai.estimated_extra_coverage*0.5)],backgroundColor:'rgba(147,197,253,0.5)'}
+            ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false}},y:{max:100,grid:{color:'#1e2632'}}},plugins:{legend:{position:'bottom',labels:{color:'#8896a6',font:{size:10}}}}}});
+        }
+    }catch(e){toast('加载模块详情失败: '+e,'error')}
+}
+
+// ── VERSIONS (代码版本管理) ──
+async function loadVersions(){
+    try{
+        const data=await API('/api/versions');
+        if(!data.versions||!data.versions.length){
+            document.getElementById('verBody').innerHTML='<tr><td colspan="10" style="color:var(--text-muted);text-align:center;padding:20px">暂无版本 — 运行流水线后自动生成</td></tr>';
+        }else{
+            document.getElementById('verBody').innerHTML=data.versions.map(v=>{
+                const rth=v.rtl_hash?`<code style="font-size:9px;color:var(--brand-green)" title="${v.rtl_hash}">${v.rtl_hash.substring(0,10)}...</code>`:'<span style="color:var(--text-muted)">—</span>';
+                const uvh=v.uvm_hash?`<code style="font-size:9px;color:var(--brand-blue)" title="${v.uvm_hash}">${v.uvm_hash.substring(0,10)}...</code>`:'<span style="color:var(--text-muted)">—</span>';
+                const mdh=v.model_hash?`<code style="font-size:9px;color:var(--brand-purple)" title="${v.model_hash}">${v.model_hash.substring(0,10)}...</code>`:'<span style="color:var(--text-muted)">—</span>';
+                const statusClass=v.state==='completed'?'badge-green':v.state==='completed_with_errors'?'badge-amber':'badge-muted';
+                return `<tr class="clickable" onclick="viewVersion('${v.run_id}')">
+                <td><code style="font-size:10px">${v.run_id.substring(0,20)}</code></td>
+                <td>${v.workflow}</td><td><span class="badge ${statusClass}">${v.state}</span></td>
+                <td>${rth}</td><td>${uvh}</td><td>${mdh}</td><td>${v.file_count||0}</td>
+                <td><span class="badge ${v.overall_score>=80?'badge-green':v.overall_score>=50?'badge-amber':'badge-red'}">${v.overall_score}/100</span></td>
+                <td class="text-xs" style="color:var(--text-muted)">${(v.started_at||'').substring(0,16)}</td>
+                <td><span class="badge badge-blue" style="cursor:pointer">详情</span></td></tr>`;
+            }).join('');
+        }
+    }catch(e){document.getElementById('verBody').innerHTML=`<tr><td colspan="10" style="color:var(--brand-red);text-align:center">加载失败: ${e}</td></tr>`}
+}
+
+async function viewVersion(runId){
+    try{
+        const v=await API('/api/versions/'+runId);
+        document.getElementById('verDetail').style.display='block';
+        document.getElementById('verDetailTitle').innerHTML=`<i class="bi-file-earmark-diff"></i>${runId.substring(0,24)} — ${v.workflow} — ${v.total_files} 个文件`;
+        // Phase badges
+        const badges=v.phases.filter(p=>p.status!=='skipped').map(p=>{
+            const cls=p.status==='passed'?'badge-green':p.status==='failed'?'badge-red':'badge-muted';
+            return `<span class="badge ${cls}">${p.phase_name} ${p.score||''}</span>`;
+        }).join(' ');
+        document.getElementById('verPhaseBadges').innerHTML=badges;
+        // Evidence hash row
+        let rows=v.files.map(f=>`<tr><td><code style="font-size:10px">${f.path}</code></td><td><code style="font-size:9px;color:var(--text-muted)" title="${f.hash}">${f.hash.substring(0,18)}...</code></td><td class="text-xs">${(f.size/1024).toFixed(1)} KB</td></tr>`).join('');
+        // Add evidence hash footer
+        rows+=`<tr style="background:var(--bg-input)"><td colspan="3" class="text-xs">
+            <strong>🔗 证据链:</strong>
+            Evidence <code style="color:var(--brand-green)">${v.evidence_hash? v.evidence_hash.substring(0,20)+'...' : 'N/A'}</code> &nbsp;|&nbsp;
+            Manifest <code style="color:var(--brand-blue)">${v.manifest_hash? v.manifest_hash.substring(0,20)+'...' : 'N/A'}</code>
+            <span style="float:right"><button class="btn btn-success btn-xs" onclick="event.stopPropagation();exportVersionEvidence('${runId}')">📦 导出此版本证据包</button></span>
+        </td></tr>`;
+        document.getElementById('verFilesBody').innerHTML=rows||'<tr><td colspan="3" style="color:var(--text-muted);text-align:center">无文件</td></tr>';
+    }catch(e){toast('加载版本详情失败: '+e,'error')}
+}
+
+async function exportVersionEvidence(runId){
+    try{
+        // Find session_id from manifest
+        const v=await API('/api/versions/'+runId);
+        const r=await fetch('/api/manifest/'+(v.session_id||runId)+'/export');
+        if(!r.ok)throw new Error('导出失败');
+        const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='signoffai_'+runId.substring(0,12)+'.zip';a.click();toast('✅ 版本证据包已下载','success')
+    }catch(e){toast('导出失败: '+e,'error')}
+}
+
+
+// ── SETTINGS (工程师个人设置) ──
+async function loadSettings(){
+    // 显示当前用户信息
+    if(AUTH.user){
+        document.getElementById('setUsername').textContent=AUTH.user.username;
+        document.getElementById('setDisplayName').textContent=AUTH.user.display_name||AUTH.user.username;
+        document.getElementById('setRole').textContent=AUTH.user.role;
+        document.getElementById('setEmail').textContent=AUTH.user.email||'未设置';
+    }
+    // 加载我的模块
+    try{
+        const d=await API('/api/my-modules');
+        const mods=d.modules||[];
+        document.getElementById('setMyModules').innerHTML=mods.length?mods.map(m=>{
+            const icon=m.latest_status==='completed'&&m.latest_passed===m.latest_total?'✅':m.latest_status==='completed_with_errors'?'⚠️':m.latest_status==='running'?'⏳':'💤';
+            return `<div class="flex-between mb-2" style="padding:6px 8px;background:var(--bg-input);border-radius:4px">
+                <span>${icon} <strong>${m.name}</strong></span>
+                <span class="text-xs" style="color:var(--text-muted)">${m.run_count||0} 次运行 · 评分 ${m.latest_score||0}</span>
+            </div>`;
+        }).join(''):'<div style="text-align:center;padding:8px">暂未分配模块<br><span class="text-xs" style="color:var(--text-muted)">请联系 SignOff 经理分配</span></div>';
+    }catch(e){document.getElementById('setMyModules').innerHTML='<span style="color:var(--brand-red)">加载失败</span>'}
+}
+
+// ── TRACE (三层追溯) ──
+async function loadTrace(){
+    try{
+        const d=await API('/api/design/mapping/0');
+        const s=d.stats||{};
+        document.getElementById('traceStats').innerHTML=`
+            <div class="stat-card accent-blue"><div class="stat-label">需求总数</div><div class="stat-value">${s.total_reqs||0}</div></div>
+            <div class="stat-card accent-green"><div class="stat-label">已映射</div><div class="stat-value">${s.mapped_reqs||0}</div></div>
+            <div class="stat-card accent-purple"><div class="stat-label">模块</div><div class="stat-value">${s.total_modules||0}</div></div>
+            <div class="stat-card accent-amber"><div class="stat-label">覆盖率</div><div class="stat-value">${s.coverage||0}%</div></div>`;
+        const matrix=d.mapping_matrix||[];
+        document.getElementById('traceBody').innerHTML=matrix.length?matrix.map(r=>{
+            const tpBadges=(r.testpoints||[]).map(t=>`<span class="badge badge-muted" style="font-size:8px">${t}</span>`).join(' ')||'—';
+            const confColor=r.confidence>=0.8?'var(--brand-green)':r.confidence>=0.5?'var(--brand-amber)':'var(--brand-red)';
+            return `<tr class="clickable" onclick="traceReq('${r.req_id}')">
+                <td><code>${r.req_id}</code></td><td>${r.module_name||'<span style=\"color:var(--brand-red)\">未映射</span>'}</td>
+                <td>${r.feature_name||'—'}</td><td><span class="badge ${r.feature_level==='P0'?'badge-red':r.feature_level==='P1'?'badge-amber':'badge-muted'}">${r.feature_level||'—'}</span></td>
+                <td>${tpBadges}</td><td><span class="badge ${r.mapping_type==='DIRECT'?'badge-green':r.mapping_type==='INFERRED'?'badge-amber':'badge-red'}">${r.mapping_type}</span></td>
+                <td style="color:${confColor}">${Math.round((r.confidence||0)*100)}%</td>
+                <td><span class="badge badge-blue" style="cursor:pointer">追溯</span></td></tr>`;
+        }).join(''):'<tr><td colspan="8" style="color:var(--text-muted);text-align:center;padding:16px">暂无映射数据 — 运行设计架构师生成模块划分</td></tr>';
+    }catch(e){document.getElementById('traceBody').innerHTML=`<tr><td colspan="8" style="color:var(--brand-red)">加载失败: ${e}</td></tr>`}
+}
+
+async function traceReq(reqId){
+    try{
+        const d=await API('/api/design/trace/'+reqId);
+        const panel=document.getElementById('traceDetail');panel.style.display='';
+        document.getElementById('traceDetailTitle').innerHTML=`<i class="bi-search"></i>追溯: ${reqId}`;
+        let html=`<div style="padding:12px;background:var(--bg-input);border-radius:8px;margin-bottom:8px"><strong>${reqId}</strong></div>`;
+        (d.mappings||[]).forEach((m,i)=>{
+            html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+                <span style="font-size:20px">${i===0?'📋':'├─'}</span>
+                <span class="badge badge-blue">${m.module||'?'}</span>
+                <span>→</span>
+                <span class="badge badge-purple">${m.feature||'?'} (${m.feature_level})</span>
+                <span>→</span>
+                <span>${(m.testpoints||[]).map(t=>'<span class=\"badge badge-green\">'+t+'</span>').join(' ')||'—'}</span>
+                <span class="text-xs" style="margin-left:auto;color:var(--text-muted)">${m.mapping_type} · ${Math.round((m.confidence||0)*100)}%</span>
+            </div>`;
+        });
+        if(!d.mappings||!d.mappings.length)html+='<div style="color:var(--brand-red);padding:8px">未找到映射 — 该需求尚未与设计模块建立关联</div>';
+        document.getElementById('traceDetailContent').innerHTML=html;
+    }catch(e){toast('追溯失败: '+e,'error')}
+}
+
+// ── INIT ──
+async function initApp(){
+    // Default: manager view with module overview
+    switchRole('manager');
+}
 </script>
 </body>
 </html>
