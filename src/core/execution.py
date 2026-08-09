@@ -24,6 +24,7 @@ from src.agents.debug_engineer import DebugEngineer
 from src.agents.quality_assurance import QualityAssurance
 from src.agents.report_generator import ReportGenerator
 from src.agents.model_agent import ModelAgent
+from src.agents.write_rtl.main import WriteRTL
 from config.settings import Settings
 
 logger = structlog.get_logger()
@@ -35,6 +36,7 @@ FULL_PHASES = [
     ("spec",    "spec_and_test_planner",    "spec",        False),
     ("design",  "design_architect",         "design_arch", False),
     ("model",   "model_agent",              "model",       False),
+    ("rtl",     "write_rtl",                "rtl",         False),   # RTL 代码生成
     ("ifspec",  None,                       None,          True),   # 接口控制文档
     ("rtlsign", None,                       None,          True),   # RTL 签核报告
     # 功能验证 (dv/)
@@ -53,6 +55,21 @@ FULL_PHASES = [
 ]
 
 QUICK_PHASES = FULL_PHASES[:5]  # spec → design → model → vplan → tpoint
+
+# 工作流名称 → 可执行阶段列表映射
+_WORKFLOW_PHASE_MAP = {
+    "full_verification": FULL_PHASES,
+    "quick_check":       QUICK_PHASES,
+    "regression_only":   [
+        FULL_PHASES[11],  # regress
+        FULL_PHASES[12],  # cover
+        FULL_PHASES[15],  # report
+    ],
+    "ppa_analysis":      [
+        FULL_PHASES[6],   # vplan (doc_only)
+        FULL_PHASES[15],  # report
+    ],
+}
 
 
 def _writeback_produces(agent, result_data: Any, ctx: dict) -> None:
@@ -73,12 +90,34 @@ def _writeback_produces(agent, result_data: Any, ctx: dict) -> None:
 def _backfill_ctx_deps(ctx: dict, phase_name: str, phase_status: str, output_root: str) -> None:
     """自动回填下游阶段的 ctx 依赖数据，确保管道能持续运行。
 
+    ⚠️ DEMO MODE ONLY — 生产模式下不应合成数据。
     当某个阶段 SKIP 或输出不完整时，从已有 spec/env 数据合成最小可用数据。
+    所有合成数据均标记 _synthetic=True 和 _demo=True。
     """
+    import os as _os
     import json as _json
     from pathlib import Path as _Path
 
-    # ── 回填 env 数据（供 test_engineer / regression_manager 使用）──
+    app_mode = _os.environ.get("APP_MODE", "demo").lower()
+    is_demo = app_mode == "demo"
+
+    if not is_demo:
+        # 生产模式：不合成数据，仅记录缺失警告
+        missing = []
+        if not ctx.get("env"):
+            missing.append("env")
+        if not ctx.get("tests"):
+            missing.append("tests")
+        if not ctx.get("regression"):
+            missing.append("regression")
+        if not ctx.get("coverage"):
+            missing.append("coverage")
+        if missing:
+            print(f"[execution] PRODUCTION MODE — missing ctx keys: {missing}. "
+                  f"Skipping backfill (require real data).")
+        return
+
+    # ── DEMO MODE: 回填 env 数据 ──
     # 当 env 缺失或不完整时，从文件系统扫描生成的 agent 目录构造 env
     env = ctx.get("env")
     spec = ctx.get("spec", {})
@@ -92,7 +131,6 @@ def _backfill_ctx_deps(ctx: dict, phase_name: str, phase_status: str, output_roo
                 if d.is_dir() and (d / f"{d.name}_pkg.sv").exists()
             )
         # 从 spec 提取 module name 作为 env_name
-        env_name = "dut_env"
         if isinstance(spec, dict):
             env_name = spec.get("design_name", spec.get("module_name", ""))
         if not env_name:
@@ -174,12 +212,13 @@ def _backfill_ctx_deps(ctx: dict, phase_name: str, phase_status: str, output_roo
                           for n in (tests_data.get("test_names", []) if isinstance(tests_data, dict) else [])],
             }, source="backfill", synthetic=True)
 
-    # ── 回填 coverage 数据 ──
+    # ── DEMO MODE: 回填 coverage 数据（使用合成覆盖率，仅供演示） ──
     if not ctx.get("coverage"):
         ctx.put("coverage", {
-            "line_pct": 29.75, "branch_pct": 15.0, "toggle_pct": 10.0, "coverage_pct": 29.75,
-            "gaps": [{"description": "DUT级回归未运行，仅Agent闭环覆盖率"}],
-            "suggestions": [{"type": "regression", "description": "运行DUT回归测试提升覆盖率至95%+"}],
+            "line_pct": 0.0, "branch_pct": 0.0, "toggle_pct": 0.0, "coverage_pct": 0.0,
+            "gaps": [{"description": "DEMO MODE: 未运行真实回归，无实际覆盖率数据"}],
+            "suggestions": [{"type": "regression", "description": "运行DUT回归测试获取真实覆盖率"}],
+            "_demo": True, "_synthetic": True,
         }, source="backfill", synthetic=True)
 
 
@@ -212,6 +251,7 @@ class PipelineExecutionService:
             ("design_architect",         DesignArchitect()),
             ("verification_architect",  VerificationArchitect()),
             ("model_agent",              ModelAgent()),
+            ("write_rtl",                WriteRTL()),
             ("test_engineer",            TestEngineer()),
             ("assertion_engineer",       AssertionEngineer()),
             ("coverage_manager",         CoverageManager()),
@@ -251,7 +291,7 @@ class PipelineExecutionService:
 
         if run_id is None:
             run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
-        phases = FULL_PHASES if workflow != "quick_check" else QUICK_PHASES
+        phases = _WORKFLOW_PHASE_MAP.get(workflow, FULL_PHASES)
 
         # 初始化运行状态
         run_state = {

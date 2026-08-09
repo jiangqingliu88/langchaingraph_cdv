@@ -2,12 +2,36 @@
 JWT 认证模块 —— 用户登录 / Token 签发 / 权限中间件
 """
 import hashlib, hmac, os, secrets, jwt
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import HTTPException, Request, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-SECRET_KEY = os.environ.get("JWT_SECRET") or secrets.token_urlsafe(48)
+# JWT 密钥持久化：优先环境变量 → 文件 → 生成并持久化
+_SECRET_FILE = Path(".jwt_secret")
+
+
+def _load_secret_key() -> str:
+    """加载 JWT 密钥，优先顺序:
+    1. JWT_SECRET 环境变量（生产推荐）
+    2. .jwt_secret 文件（持久化，跨重启有效）
+    3. 自动生成并写入 .jwt_secret 文件
+    """
+    env_secret = os.environ.get("JWT_SECRET")
+    if env_secret:
+        return env_secret
+
+    if _SECRET_FILE.exists():
+        return _SECRET_FILE.read_text(encoding="utf-8").strip()
+
+    # 首次启动：生成并持久化，避免重启丢登录
+    generated = secrets.token_urlsafe(48)
+    _SECRET_FILE.write_text(generated, encoding="utf-8")
+    return generated
+
+
+SECRET_KEY = _load_secret_key()
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24
 
@@ -103,3 +127,33 @@ async def require_engineer(user: dict = Depends(require_auth)) -> dict:
     if user.get("role") not in ("admin", "verification_manager", "senior_engineer", "engineer"):
         raise HTTPException(status_code=403, detail="需要工程师及以上权限")
     return user
+
+
+def require_permission(code: str):
+    """动作级权限检查 — 基于 Permission 矩阵而非角色字符串"""
+    async def checker(user: dict = Depends(require_auth)) -> dict:
+        role = user.get("role", "viewer")
+        # admin 拥有所有权限
+        if role == "admin":
+            return user
+
+        import sqlite3
+        conn = sqlite3.connect("ic_verification.db")
+        try:
+            # 查询角色是否有此权限
+            row = conn.execute(
+                """SELECT 1 FROM permissions p
+                   JOIN role_permissions rp ON rp.permission_id = p.id
+                   WHERE rp.role = ? AND p.code = ?""",
+                (role, code)
+            ).fetchone()
+            if not row:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"需要权限: {code}（当前角色: {role}）")
+        finally:
+            conn.close()
+        return user
+
+    return checker
+

@@ -1,0 +1,28 @@
+TP_ID,Category,TestName,Description,StimulusType,CheckType,Priority,GoalMapping
+TP-0001,basic_function,test_apb_reg_rw,验证 APB 总线对波特率、控制字、状态字寄存器的读写功能，覆盖所有寄存器地址，验证读写数据正确性,Directed,Scoreboard,P0,VGOAL-001
+TP-0002,basic_function,test_uart_tx_basic,验证 UART 发送功能，写入数据到发送 FIFO，检查串行输出波形符合起始位+8bit数据+停止位格式,Directed,Scoreboard,P0,VGOAL-001
+TP-0003,basic_function,test_uart_rx_basic,验证 UART 接收功能，通过 rx 输入串行数据，检查接收 FIFO 中恢复的数据正确,Directed,Scoreboard,P0,VGOAL-001
+TP-0004,basic_function,test_uart_loopback,验证回环模式，发送数据通过内部回环接收，检查收发数据一致性,Directed,Scoreboard,P0,VGOAL-001
+TP-0005,baud_rate,test_baud_9600,验证 9600 波特率下发送和接收功能，检查波特率误差 ≤2%,Directed,Scoreboard,P0,VGOAL-002
+TP-0006,baud_rate,test_baud_19200,验证 19200 波特率下发送和接收功能，检查波特率误差 ≤2%,Directed,Scoreboard,P0,VGOAL-002
+TP-0007,baud_rate,test_baud_38400,验证 38400 波特率下发送和接收功能，检查波特率误差 ≤2%,Directed,Scoreboard,P0,VGOAL-002
+TP-0008,baud_rate,test_baud_57600,验证 57600 波特率下发送和接收功能，检查波特率误差 ≤2%,Directed,Scoreboard,P0,VGOAL-002
+TP-0009,baud_rate,test_baud_115200,验证 115200 波特率下发送和接收功能，检查波特率误差 ≤2%,Directed,Scoreboard,P0,VGOAL-002
+TP-0010,baud_rate,test_baud_accuracy,验证所有标准波特率下发送时序精度，测量实际波特率与配置波特率误差 ≤2%,Directed,Scoreboard,P0,VGOAL-002
+TP-0011,fifo_management,test_fifo_full_flag,验证发送/接收 FIFO 满标志位正确触发，满标志触发时无数据丢失,Directed,Assertion,P1,VGOAL-003
+TP-0012,fifo_management,test_fifo_empty_flag,验证发送/接收 FIFO 空标志位正确触发,Directed,Assertion,P1,VGOAL-003
+TP-0013,fifo_management,test_fifo_overflow,验证 FIFO 溢出标志位正确触发，溢出时数据不丢失,Directed,Scoreboard,P1,VGOAL-003
+TP-0014,fifo_management,test_fifo_depth_16,验证 16 字节 FIFO 深度，写入 16 字节后满标志触发，第 17 字节触发溢出,Directed,Scoreboard,P1,VGOAL-003
+TP-0015,fifo_management,test_fifo_concurrent_rw,验证 FIFO 同时读写场景，确保数据完整性和标志位正确性,Directed,Scoreboard,P1,VGOAL-003
+TP-0016,interrupt,test_int_rx_done,验证接收完成中断产生，中断延迟 ≤2 时钟周期,Directed,Scoreboard,P1,VGOAL-004
+TP-0017,interrupt,test_int_tx_done,验证发送完成中断产生，中断延迟 ≤2 时钟周期,Directed,Scoreboard,P1,VGOAL-004
+TP-0018,interrupt,test_int_fifo_overflow,验证 FIFO 溢出中断产生，中断延迟 ≤2 时钟周期,Directed,Scoreboard,P1,VGOAL-004
+TP-0019,interrupt,test_int_enable_disable,验证中断使能/禁止功能，禁止时中断不产生,Directed,Scoreboard,P1,VGOAL-004
+TP-0020,interrupt,test_int_clear,验证中断状态清除功能，清除后中断信号释放,Directed,Scoreboard,P1,VGOAL-004
+TP-0021,reset,test_reset_initial,验证异步复位后所有寄存器复位到默认值，FIFO 清空，中断释放,Directed,Scoreboard,P2,VGOAL-004
+TP-0022,reset,test_reset_during_tx,验证发送过程中复位，发送状态正确终止，FIFO 清空,Directed,Scoreboard,P2,VGOAL-004
+TP-0023,reset,test_reset_during_rx,验证接收过程中复位，接收状态正确终止，FIFO 清空,Directed,Scoreboard,P2,VGOAL-004
+TP-0024,stress,test_rx_10000_transfers,验证所有标准波特率下 10000 次传输无误，覆盖随机数据模式,Directed,Scoreboard,P2,VGOAL-004
+TP-0025,stress,test_tx_rx_concurrent,验证发送和接收同时进行，全双工模式下数据正确性,Directed,Scoreboard,P2,VGOAL-004
+TP-0026,stress,test_random_data_pattern,使用随机数据模式验证收发功能，覆盖边界值 0x00 和 0xFF,Random,Scoreboard,P2,VGOAL-004
+TP-0027,stress,test_apb_back_to_back,验证 APB 连续读写操作，确保读写延迟满足 ≤2 时钟周期约束,Directed,Scoreboard,P2,VGOAL-004

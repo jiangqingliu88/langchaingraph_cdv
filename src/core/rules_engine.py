@@ -545,3 +545,175 @@ def example_custom_rules():
             ),
         ),
     ]
+
+
+# ═══════════════════════════════════════════════════════════
+# 集中化策略规则 — 审批门禁 / 证据完整性 / 阶段门禁
+# ═══════════════════════════════════════════════════════════
+
+@dataclass
+class PolicyRule:
+    """可配置的策略规则"""
+    rule_id: str
+    name: str
+    category: str              # approval_gate / evidence_integrity / stage_gate / review_required
+    severity: str = "P0"        # P0/P1/P2
+    condition: str = ""         # 条件描述（可读）
+    is_active: bool = True
+    config: dict = field(default_factory=dict)
+
+
+class PolicyRuleEngine:
+    """集中化策略控制引擎 — 审批规则 / 门禁规则 / 证据完整性规则"""
+
+    def __init__(self):
+        self._rules: dict[str, PolicyRule] = {}
+        self._register_builtin_rules()
+
+    def _register_builtin_rules(self):
+        """注册内置策略规则"""
+        builtins = [
+            # ── 审批门禁 ──
+            PolicyRule("approval_evidence_required", "签核必须有证据绑定",
+                       "evidence_integrity", "P0",
+                       "签核批准前必须绑定 manifest_hash 或至少一个 Artifact"),
+            PolicyRule("approval_coverage_gate", "覆盖率门禁",
+                       "approval_gate", "P0",
+                       "tapeout 签核批准前 coverage_line_pct >= 95%"),
+            PolicyRule("approval_regression_gate", "回归通过率门禁",
+                       "approval_gate", "P0",
+                       "签核批准前回归 pass_rate >= 95%"),
+            PolicyRule("approval_dual_review", "双人审批规则",
+                       "approval_gate", "P1",
+                       "高风险签核需要至少两名经理审批"),
+
+            # ── 阶段门禁 ──
+            PolicyRule("stage_vplan_required", "必须先有验证计划",
+                       "stage_gate", "P0",
+                       "进入设计阶段前必须有 vPlan"),
+            PolicyRule("stage_tests_required", "必须有测试用例",
+                       "stage_gate", "P0",
+                       "进入回归阶段前必须有测试用例列表"),
+            PolicyRule("stage_coverage_required", "必须有覆盖率数据",
+                       "stage_gate", "P0",
+                       "进入 QA 阶段前必须有覆盖率报告"),
+
+            # ── 证据完整性 ──
+            PolicyRule("evidence_manifest_integrity", "Manifest 哈希自校验",
+                       "evidence_integrity", "P0",
+                       "证据包的 manifest_hash 必须与内容计算一致"),
+            PolicyRule("evidence_file_completeness", "产物文件完整性",
+                       "evidence_integrity", "P0",
+                       "Manifest 声明的产物文件必须都存在且 hash 匹配"),
+            PolicyRule("evidence_chain_continuity", "审计链连续性",
+                       "evidence_integrity", "P1",
+                       "审计日志的 chain_index 必须连续，chain_hash 链接正确"),
+
+            # ── 文档审查 ──
+            PolicyRule("doc_review_on_signoff", "签核时检查关联文档状态",
+                       "review_required", "P1",
+                       "签核批准前检查关联文档是否都已 approved"),
+        ]
+
+        for r in builtins:
+            self._rules[r.rule_id] = r
+
+    def get_rules(self, category: str = "") -> list[PolicyRule]:
+        if category:
+            return [r for r in self._rules.values() if r.category == category]
+        return list(self._rules.values())
+
+    def get_active(self, category: str = "") -> list[PolicyRule]:
+        return [r for r in self.get_rules(category) if r.is_active]
+
+    def check_signoff_gates(self, signoff: dict, metrics: dict, evidence: dict) -> dict:
+        """检查签核门禁 — 返回通过/失败的门禁清单"""
+        results = []
+
+        # P0: 证据绑定
+        if not signoff.get("manifest_hash") and not signoff.get("evidence_package_hash"):
+            results.append({"rule": "approval_evidence_required", "passed": False,
+                            "reason": "签核未绑定证据 hash"})
+        else:
+            results.append({"rule": "approval_evidence_required", "passed": True})
+
+        # P0: 覆盖率门禁（仅 tapeout 类型）
+        if signoff.get("report_type") == "tapeout":
+            coverage = metrics.get("coverage", {}).get("line_pct", 0)
+            if coverage < 95:
+                results.append({"rule": "approval_coverage_gate", "passed": False,
+                                "reason": f"覆盖率 {coverage}% < 95%"})
+            else:
+                results.append({"rule": "approval_coverage_gate", "passed": True})
+
+        # P0: 回归通过率
+        pass_rate = metrics.get("regression", {}).get("pass_rate", 0)
+        if pass_rate < 95:
+            results.append({"rule": "approval_regression_gate", "passed": False,
+                            "reason": f"回归通过率 {pass_rate}% < 95%"})
+        else:
+            results.append({"rule": "approval_regression_gate", "passed": True})
+
+        all_pass = all(r["passed"] for r in results)
+        return {
+            "all_pass": all_pass,
+            "can_approve": all_pass,
+            "gates": results,
+            "blockers": [r for r in results if not r["passed"]],
+        }
+
+    def check_evidence_integrity(self, manifest_data: dict, artifacts: list[dict]) -> dict:
+        """检查证据完整性"""
+        results = []
+
+        # Manifest hash 自校验
+        from src.core.manifest import hash_json
+        stored = manifest_data.get("manifest_hash", "")
+        calc_data = {k: v for k, v in manifest_data.items() if k != "manifest_hash"}
+        calc = hash_json(calc_data)
+        results.append({
+            "rule": "evidence_manifest_integrity",
+            "passed": stored == calc,
+            "detail": f"stored={stored[:16]}... calc={calc[:16]}..." if stored else "no hash",
+        })
+
+        # 文件完整性
+        phases = manifest_data.get("phases", [])
+        missing = []
+        for p in phases:
+            for art in p.get("artifacts", []):
+                found = any(a.get("name") == art for a in artifacts)
+                if not found:
+                    missing.append(art)
+        results.append({
+            "rule": "evidence_file_completeness",
+            "passed": len(missing) == 0,
+            "detail": f"missing={len(missing)} files" if missing else "all present",
+        })
+
+        return {
+            "all_pass": all(r["passed"] for r in results),
+            "checks": results,
+        }
+
+    def register_rule(self, rule: PolicyRule):
+        self._rules[rule.rule_id] = rule
+
+    def disable_rule(self, rule_id: str):
+        if rule_id in self._rules:
+            self._rules[rule_id].is_active = False
+
+    def enable_rule(self, rule_id: str):
+        if rule_id in self._rules:
+            self._rules[rule_id].is_active = True
+
+
+# ── 全局 ──
+_policy_engine: Optional[PolicyRuleEngine] = None
+
+
+def get_policy_engine() -> PolicyRuleEngine:
+    global _policy_engine
+    if _policy_engine is None:
+        _policy_engine = PolicyRuleEngine()
+    return _policy_engine

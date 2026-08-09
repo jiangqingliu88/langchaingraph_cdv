@@ -220,6 +220,17 @@ class BaseAgent(ABC, AgentSubject):
             self.tools = adapter.wrap(self.tools)
             self._tool_adapter = adapter
 
+        # 2.6 Phase 1: 从 ToolHub 补充工具（ITool 协议）
+        try:
+            from src.core.tool_hub import ToolHub
+            hub = ToolHub.get_instance()
+            if hub.tool_count > 0:
+                hub_tools = hub.wrap_agent_tools(self.role, self.tools)
+                if hub_tools:
+                    self.tools = hub_tools
+        except Exception:
+            pass  # ToolHub 不可用时保持原有工具
+
         # 3. 获取Prompt
         prompt = await self._get_prompt_template()
 

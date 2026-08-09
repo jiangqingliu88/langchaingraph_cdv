@@ -294,7 +294,7 @@ class DocumentSerializer:
 
         # 1. 概述
         lines.append("## 1. 概述")
-        lines.append(doc.overview or "待补充")
+        lines.append(doc.overview or "")
         lines.append("")
 
         # 2. 功能需求
@@ -304,11 +304,11 @@ class DocumentSerializer:
             lines.append(f"### {req.title}")
             lines.append(f"**级别**：{req.level}")
             lines.append(f"**类型**：{req.req_type}")
-            lines.append(f"**描述**：{req.description or '待补充'}")
-            lines.append(f"**验收标准**：{req.acceptance or '待补充'}")
+            lines.append(f"**描述**：{req.description or ''}")
+            lines.append(f"**验收标准**：{req.acceptance or ''}")
             lines.append("")
         if not doc.requirements:
-            lines.append("待补充")
+            lines.append("")
             lines.append("")
 
         # 3. 接口规范
@@ -320,7 +320,7 @@ class DocumentSerializer:
             for iface in doc.interfaces:
                 lines.append(f"| {iface.name} | {iface.width} | {iface.direction} | {iface.protocol or '—'} | {iface.description or ''} |")
         else:
-            lines.append("待补充")
+            lines.append("")
         lines.append("")
 
         # 4. 时序约束
@@ -332,7 +332,7 @@ class DocumentSerializer:
             for tc in doc.timing_constraints:
                 lines.append(f"| {tc.signal_a} | {tc.signal_b} | {tc.relation} | {tc.cycles} | {tc.description} |")
         else:
-            lines.append("待补充")
+            lines.append("")
         lines.append("")
 
         # 5. 功耗约束
@@ -344,7 +344,7 @@ class DocumentSerializer:
             for pc in doc.power_constraints:
                 lines.append(f"| {pc.mode} | ≤ {pc.power_mw}mW | {pc.description} |")
         else:
-            lines.append("待补充")
+            lines.append("")
         lines.append("")
 
         return "\n".join(lines)

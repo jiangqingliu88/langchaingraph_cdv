@@ -1,0 +1,9 @@
++define+dut_in_loop_back_test
++incdir+D:\SignOffAI\output\demo_apb_uart\agents\dut_in
++incdir+D:\SignOffAI\output\demo_apb_uart\agents\dut_in/loopback
+D:\SignOffAI\output\demo_apb_uart\agents\dut_in\dut_in_interface.sv
+D:\SignOffAI\output\demo_apb_uart\agents\dut_in\dut_in_pkg.sv
+D:\SignOffAI\output\demo_apb_uart\agents\dut_in\loopback\dut_in_loopback_scb.sv
+D:\SignOffAI\output\demo_apb_uart\agents\dut_in\loopback\dut_in_loopback_env.sv
+D:\SignOffAI\output\demo_apb_uart\agents\dut_in\loopback\dut_in_loopback_test.sv
+D:\SignOffAI\output\demo_apb_uart\agents\dut_in\loopback\dut_in_loopback_tb.sv

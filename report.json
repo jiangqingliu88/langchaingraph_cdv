@@ -1,19 +1,19 @@
 {
-  "timestamp": "2026-08-08T11:51:10.271893",
-  "root_dir": "D:\\cdv_a",
+  "timestamp": "2026-08-09T08:03:21.840656",
+  "root_dir": "D:\\SignOffAI",
   "total_time": "N/A",
-  "total": 6,
+  "total": 5,
   "stats": {
     "pass": 5,
-    "fail": 1,
+    "fail": 0,
     "unknown": 0
   },
   "tasks": [
     {
-      "name": "test_case_1",
+      "name": "APB寄存器读写",
       "status": "pass",
       "work_dir": "",
-      "elapsed": 1.2,
+      "elapsed": 12.5,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -21,10 +21,10 @@
       "performance_degraded": false
     },
     {
-      "name": "test_case_2",
+      "name": "UART发送",
       "status": "pass",
       "work_dir": "",
-      "elapsed": 0.8,
+      "elapsed": 18.2,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -32,10 +32,10 @@
       "performance_degraded": false
     },
     {
-      "name": "test_case_3",
+      "name": "UART接收",
       "status": "pass",
       "work_dir": "",
-      "elapsed": 1.5,
+      "elapsed": 22.7,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -43,10 +43,10 @@
       "performance_degraded": false
     },
     {
-      "name": "test_case_4",
+      "name": "FIFO管理",
       "status": "pass",
       "work_dir": "",
-      "elapsed": 0.9,
+      "elapsed": 15.3,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -54,21 +54,10 @@
       "performance_degraded": false
     },
     {
-      "name": "test_case_5",
+      "name": "中断输出",
       "status": "pass",
       "work_dir": "",
-      "elapsed": 1.1,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "test_case_6",
-      "status": "fail",
-      "work_dir": "",
-      "elapsed": 2.3,
+      "elapsed": 9.8,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,

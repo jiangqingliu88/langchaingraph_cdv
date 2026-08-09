@@ -11,6 +11,12 @@ async def init_db():
         async with _engine.begin() as conn:
             from src.database.models import Base
             await conn.run_sync(Base.metadata.create_all)
+        # 填充默认角色→工作流绑定
+        try:
+            from src.database.repository import seed_default_role_workflow_bindings
+            await seed_default_role_workflow_bindings()
+        except Exception:
+            pass
 async def get_session():
     if _factory is None:
         await init_db()

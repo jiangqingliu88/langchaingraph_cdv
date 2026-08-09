@@ -1,0 +1,8 @@
+Register,Offset,Width,Access,Description
+BAUD_RATE,0x00,8,RW,波特率配置寄存器，配置 9600/19200/38400/57600/115200
+CTRL,0x01,8,RW,控制字寄存器，控制发送/接收使能、中断使能等
+STATUS,0x02,8,RO,状态字寄存器，包含 FIFO 空/满/溢出标志、收发状态
+TX_DATA,0x03,8,WO,发送数据寄存器，写入数据进入发送 FIFO
+RX_DATA,0x04,8,RO,接收数据寄存器，读取接收 FIFO 数据
+INT_EN,0x05,8,RW,中断使能寄存器，控制接收完成/发送完成/FIFO溢出中断使能
+INT_STATUS,0x06,8,RO,中断状态寄存器，指示中断源

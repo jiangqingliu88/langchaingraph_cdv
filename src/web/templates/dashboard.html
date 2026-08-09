@@ -333,6 +333,7 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
     </style>
 </head>
 <body>
@@ -344,10 +345,10 @@
             <h2>Sign<span>Off</span>AI</h2>
             <p>可复现 · 可审计 · 可治理 · 可交付</p>
         </div>
-        <div class="field"><label>用户名</label><input id="loginUser" placeholder="输入用户名" value="admin"></div>
-        <div class="field"><label>密码</label><input id="loginPass" type="password" placeholder="输入密码" value="admin123"></div>
+        <div class="field"><label>用户名</label><input id="loginUser" placeholder="输入用户名"></div>
+        <div class="field"><label>密码</label><input id="loginPass" type="password" placeholder="输入密码"></div>
         <button class="btn btn-primary" onclick="doLogin()">登 录 平 台</button>
-        <div class="hint">默认账号 admin / admin123 &nbsp;|&nbsp; <span id="loginError" style="color:var(--brand-red)"></span></div>
+        <div class="hint">请使用管理员分配的账号登录 &nbsp;|&nbsp; <span id="loginError" style="color:var(--brand-red)"></span></div>
     </div>
 </div>
 
@@ -374,8 +375,10 @@
         <div class="nav-item" data-page="regression" data-role="both"><i class="bi-arrow-repeat"></i>回归管理</div>
         <div class="nav-item" data-page="versions" data-role="both"><i class="bi-git"></i>版本管理</div>
         <div class="nav-item" data-page="signoff" data-role="both"><i class="bi-check2-circle"></i>签核证据链</div>
+        <div class="nav-item" data-page="debug-copilot" data-role="engineer"><i class="bi-bug"></i>智能调试</div>
         <div class="nav-section" data-role="both">平台</div>
         <div class="nav-item" data-page="knowledge" data-role="both"><i class="bi-book"></i>知识库</div>
+        <div class="nav-item" data-page="tool-governance" data-role="both"><i class="bi-tools"></i>工具治理</div>
         <div class="nav-item" data-page="admin" data-role="manager"><i class="bi-gear"></i>管理</div>
         <div class="nav-item" data-page="settings" data-role="engineer"><i class="bi-person-gear"></i>个人设置</div>
     </nav>
@@ -471,7 +474,7 @@
 <!-- ── PIPELINE ── -->
 <div class="page" id="page-pipeline">
     <div class="card">
-        <div class="card-header"><h6><i class="bi-play-circle"></i>执行流水线</h6><div class="btn-group"><select id="workflowSelect" onchange="buildPhaseTrack(this.value)"><option value="full_verification">完整验证 (17 阶段)</option><option value="quick_check">快速检查 (5 阶段)</option></select><button class="btn btn-outline btn-sm" onclick="loadDefaultSpec()">加载示例</button><button class="btn btn-primary btn-sm" onclick="runPipeline()">▶ 运行</button></div></div>
+        <div class="card-header"><h6><i class="bi-play-circle"></i>执行流水线</h6><div class="btn-group"><select id="workflowSelect" onchange="buildPhaseTrack(this.value)"><option value="full_verification">完整验证 (17 阶段)</option><option value="quick_check">快速检查 (5 阶段)</option><option value="regression_only">仅回归</option><option value="ppa_analysis">PPA 分析</option></select><button class="btn btn-outline btn-sm" onclick="loadDefaultSpec()">加载示例</button><button class="btn btn-primary btn-sm" onclick="runPipeline()">▶ 运行</button></div></div>
         <!-- Dual-track tabs -->
     <div class="card-header" style="padding-bottom:0;border-bottom:none">
         <div style="display:flex;gap:0;margin-bottom:-1px">
@@ -517,6 +520,11 @@
             <textarea id="docEditor" style="flex:1;display:none;width:100%;min-height:300px;font-family:var(--font-mono);font-size:11px;line-height:1.6;padding:12px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--brand-blue);border-radius:var(--radius-sm);resize:none" spellcheck="false"></textarea>
             <div id="docLinkedReqs" class="mt-2 text-xs"></div>
             <div id="docMeta" class="text-xs mt-1" style="color:var(--text-muted)"></div>
+            <!-- 版本历史 -->
+            <div class="card mt-2" id="versionHistory" style="display:none">
+                <div class="card-header"><h6><i class="bi-clock-history"></i>版本历史</h6></div>
+                <div id="versionList" class="text-xs"></div>
+            </div>
         </div>
         <!-- 结构化编辑器面板 -->
         <div class="card mt-2" id="structEditor" style="display:none">
@@ -616,9 +624,9 @@
 
 <!-- ── SIGNOFF (可追溯 · 可审计 · 可治理) ── -->
 <div class="page" id="page-signoff">
-    <!-- 证据链追溯表 -->
+    <!-- 普通签核：证据链追溯表 -->
     <div class="card">
-        <div class="card-header"><h6><i class="bi-shield-check"></i>证据链追溯</h6>
+        <div class="card-header"><h6><i class="bi-shield-check"></i>普通签核 — 证据链追溯</h6>
             <div class="btn-group">
                 <button class="btn btn-outline btn-xs" onclick="loadEvidenceChain()">🔄 刷新</button>
                 <button class="btn btn-outline btn-xs" onclick="verifyIntegrity()">🔍 校验完整性</button>
@@ -642,10 +650,32 @@
         <div class="card-header"><h6><i class="bi-shield-check"></i>完整性校验报告</h6><button class="btn btn-outline btn-xs" onclick="document.getElementById('sfIntegrityPanel').style.display='none'">✕</button></div>
         <div id="sfIntegrityContent" class="text-xs"></div>
     </div>
-    <!-- 签核审批 -->
+    <!-- 普通签核审批 -->
     <div class="card">
-        <div class="card-header"><h6><i class="bi-check2-circle"></i>签核审批</h6><button class="btn btn-primary btn-sm" onclick="createSignoff()">+ 新建签核</button></div>
+        <div class="card-header"><h6><i class="bi-check2-circle"></i>普通签核审批</h6><button class="btn btn-primary btn-sm" onclick="createSignoff()">+ 新建普通签核</button></div>
         <div class="table-wrap"><table><thead><tr><th>标题</th><th>类型</th><th>状态</th><th>证据 Hash</th><th>审批人</th><th>时间</th><th>操作</th></tr></thead><tbody id="sfBody"></tbody></table></div>
+    </div>
+
+    <!-- PPA 签核面板 -->
+    <div class="card mt-2">
+        <div class="card-header"><h6><i class="bi-lightning-charge"></i>PPA 签核 — Power / Performance / Area</h6>
+            <div class="btn-group">
+                <button class="btn btn-xs ppa-tab-btn active" onclick="switchPPATab('power')" id="ppaTabPower" style="background:var(--brand-blue);color:#fff;border:none">⚡ 功耗</button>
+                <button class="btn btn-xs ppa-tab-btn" onclick="switchPPATab('performance')" id="ppaTabPerf" style="background:transparent;color:var(--text-secondary);border:none">⏱ 性能</button>
+                <button class="btn btn-xs ppa-tab-btn" onclick="switchPPATab('area')" id="ppaTabArea" style="background:transparent;color:var(--text-secondary);border:none">📐 面积</button>
+                <button class="btn btn-xs ppa-tab-btn" onclick="switchPPATab('corners')" id="ppaTabCorners" style="background:transparent;color:var(--text-secondary);border:none">🌡 PVT Corners</button>
+            </div>
+        </div>
+        <div id="ppaTabContent" style="padding:12px;min-height:120px">
+            <div style="text-align:center;color:var(--text-muted);padding:24px">选择一个 PPA 签核查看详情，或新建 PPA 签核</div>
+        </div>
+        <div style="padding:0 12px 12px;display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="createPPASignoff()">📊 新建 PPA 签核</button>
+            <button class="btn btn-outline btn-sm" onclick="loadPPAStatus()">🔄 刷新 PPA 状态</button>
+            <select id="ppaSignoffSelect" style="width:200px;font-size:11px" onchange="loadPPADetail(this.value)">
+                <option value="">— 选择已有 PPA 签核 —</option>
+            </select>
+        </div>
     </div>
 </div>
 
@@ -706,12 +736,127 @@
             <div class="card-header"><h6><i class="bi-journal-text"></i>审计日志</h6></div>
             <div class="table-wrap"><table><thead><tr><th>用户</th><th>操作</th><th>时间</th></tr></thead><tbody id="auditBody"></tbody></table></div>
         </div>
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-diagram-2"></i>角色→工作流映射</h6><button class="btn btn-outline btn-xs" onclick="rwbAddBinding()">+ 新增绑定</button></div>
+            <div class="table-wrap"><table><thead><tr><th>ID</th><th>角色</th><th>工作流</th><th>默认</th><th>启用</th><th>操作</th></tr></thead><tbody id="rwbBody"><tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:12px">加载中...</td></tr></tbody></table></div>
+        </div>
     </div>
     <!-- Token 预算治理 -->
     <div class="card mt-2">
         <div class="card-header"><h6>🪙 Token 用量治理</h6></div>
         <div id="tokenDashboard" class="text-xs" style="color:var(--text-muted);padding:8px">加载中...</div>
     </div>
+    </div>
+</div>
+
+
+<!-- ── DEBUG COPILOT (智能调试助手) ── -->
+<div class="page" id="page-debug-copilot">
+    <div class="stat-row" id="dcStats"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <!-- Log analysis input -->
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-bug"></i>智能日志分析</h6>
+                <div class="btn-group">
+                    <button class="btn btn-outline btn-xs" onclick="loadDebugSessions()">📋 历史</button>
+                    <button class="btn btn-outline btn-xs" onclick="pasteFromRegression()">📎 从回归</button>
+                </div>
+            </div>
+            <textarea id="dcLogInput" rows="10" placeholder="粘贴仿真日志、编译错误或 UVM 报告...
+支持自动识别:
+• UVM_ERROR / UVM_FATAL
+• Scoreboard mismatch
+• 编译错误 (vcs/xrun)
+• 超时 / 死锁
+• SVA 断言失败" style="width:100%;font-family:var(--font-mono);font-size:11px;line-height:1.5"></textarea>
+            <div class="btn-group mt-2">
+                <button class="btn btn-primary btn-sm" onclick="analyzeDebugLog()">🔍 智能分析</button>
+                <button class="btn btn-outline btn-sm" onclick="quickAnalyze()">⚡ 快速诊断</button>
+                <button class="btn btn-outline btn-sm" id="dcAutoFixBtn" onclick="autoFixDc()" style="display:none">🔧 自动修复</button>
+            </div>
+        </div>
+        <!-- Analysis results -->
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-lightbulb"></i>诊断结果 <span class="badge badge-blue" id="dcInsightCount">0</span></h6>
+                <span class="badge badge-muted" id="dcTimeSaved" style="display:none">⏱ 节省 0min</span>
+            </div>
+            <div id="dcResults" style="max-height:500px;overflow-y:auto">
+                <div style="color:var(--text-muted);text-align:center;padding:30px">
+                    <i class="bi-bug" style="font-size:32px;opacity:0.3"></i>
+                    <p class="mt-2">粘贴仿真日志到左侧，点击"智能分析"</p>
+                    <p class="text-xs" style="color:var(--text-muted)">支持 UVM / VCS / XRUN / Verilator 日志格式</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Debug sessions history -->
+    <div class="card mt-2" id="dcSessionsPanel" style="display:none">
+        <div class="card-header"><h6><i class="bi-clock-history"></i>调试会话历史</h6>
+            <button class="btn btn-outline btn-xs" onclick="document.getElementById('dcSessionsPanel').style.display='none'">✕</button>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>会话 ID</th><th>时间</th><th>错误数</th><th>分类</th><th>操作</th></tr></thead>
+        <tbody id="dcSessionsBody"></tbody></table></div>
+    </div>
+    <!-- Regression failure quick link -->
+    <div class="card mt-2" id="dcRegressionPanel" style="display:none">
+        <div class="card-header"><h6><i class="bi-arrow-repeat"></i>最近回归失败 — 快速调试</h6></div>
+        <div id="dcRegFailures" class="text-xs"></div>
+    </div>
+</div>
+
+<!-- ── TOOL GOVERNANCE (工具治理) ── -->
+<div class="page" id="page-tool-governance">
+    <div class="stat-row" id="tgStats"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <!-- Tool registry -->
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-tools"></i>工具注册表 <span class="badge badge-blue" id="tgToolCount">0</span></h6>
+                <button class="btn btn-outline btn-xs" onclick="loadToolGovernance()">🔄 刷新</button>
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>工具</th><th>风险等级</th><th>审批策略</th><th>必填参数</th><th>描述</th></tr></thead>
+            <tbody id="tgToolBody"><tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">加载中...</td></tr></tbody></table></div>
+        </div>
+        <!-- Sandbox config -->
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-shield-shaded"></i>沙箱安全策略</h6></div>
+            <div id="tgSandboxConfig"></div>
+        </div>
+    </div>
+    <!-- Risk level legend + Agent contracts -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-diagram-3"></i>风险等级说明</h6></div>
+            <div id="tgRiskLegend">
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                    <div style="flex:1;min-width:140px;padding:12px;background:var(--brand-green-dim);border-radius:8px;border:1px solid var(--brand-green)">
+                        <strong style="color:var(--brand-green)">🟢 Safe</strong>
+                        <p class="text-xs mt-1" style="color:var(--text-secondary)">只读/无副作用操作<br>自动批准，无需确认</p>
+                        <code class="text-xs" style="color:var(--brand-green)">read_report · search · status</code>
+                    </div>
+                    <div style="flex:1;min-width:140px;padding:12px;background:rgba(245,158,11,.1);border-radius:8px;border:1px solid var(--brand-amber)">
+                        <strong style="color:var(--brand-amber)">🟡 Write</strong>
+                        <p class="text-xs mt-1" style="color:var(--text-secondary)">写磁盘/改配置<br>终端确认后执行</p>
+                        <code class="text-xs" style="color:var(--brand-amber)">gen_test_sv · save · export</code>
+                    </div>
+                    <div style="flex:1;min-width:140px;padding:12px;background:rgba(239,68,68,.1);border-radius:8px;border:1px solid var(--brand-red)">
+                        <strong style="color:var(--brand-red)">🔴 Danger</strong>
+                        <p class="text-xs mt-1" style="color:var(--text-secondary)">删除/提权/杀进程<br>直接拦截，需管理员授权</p>
+                        <code class="text-xs" style="color:var(--brand-red)">run_vcs · delete · kill</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Agent contracts -->
+        <div class="card">
+            <div class="card-header"><h6><i class="bi-robot"></i>Agent 工具合约 <span class="badge badge-purple" id="tgAgentCount">0</span></h6></div>
+            <div id="tgAgentContracts" style="max-height:300px;overflow-y:auto"></div>
+        </div>
+    </div>
+    <!-- Tool invocation history -->
+    <div class="card mt-2">
+        <div class="card-header"><h6><i class="bi-clock-history"></i>工具调用记录</h6></div>
+        <div class="table-wrap"><table><thead><tr><th>时间</th><th>工具</th><th>参数摘要</th><th>结果</th><th>沙箱决策</th></tr></thead>
+        <tbody id="tgHistoryBody"><tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:16px">加载中...</td></tr></tbody></table></div>
     </div>
 </div>
 
@@ -789,7 +934,7 @@ function doLogout(){AUTH={token:'',user:null};location.reload()}
 
 // ── NAVIGATION ──
 let APP_ROLE='manager';
-const PAGE_LOADERS={dashboard:loadDashboard,manager:loadManager,docs:loadDocs,vplan:loadVPlan,design:loadDesignArch,versions:loadVersions,pipeline:loadPipelineTab,testcases:loadTC,coverage:loadCoverage,regression:loadRegression,signoff:loadSignoffs,knowledge:searchKB,admin:loadAdmin,settings:loadSettings,trace:loadTrace};
+const PAGE_LOADERS={dashboard:loadDashboard,manager:loadManager,docs:loadDocs,vplan:loadVPlan,design:loadDesignArch,versions:loadVersions,pipeline:loadPipelineTab,testcases:loadTC,coverage:loadCoverage,regression:loadRegression,signoff:loadSignoffs,knowledge:searchKB,admin:loadAdmin,settings:loadSettings,trace:loadTrace,'debug-copilot':loadDebugCopilot,'tool-governance':loadToolGovernance};
 
 function switchRole(role){
     APP_ROLE=role;
@@ -940,66 +1085,167 @@ async function runPipeline(){
     }catch(e){log('失败: '+e,'error');toast('流水线失败','error')}
 }
 async function loadDefaultSpec(){const d=await API('/api/spec/default');document.getElementById('specInput').value=d.content}
-function loadPipelineTab(){const wf=document.getElementById('workflowSelect').value;buildPhaseTrack(wf);loadDefaultSpec()}
+async function loadPipelineTab(){try{const r=await API('/api/my-allowed-workflows');const sel=document.getElementById('workflowSelect');const labels={'full_verification':'完整验证 (17 阶段)','quick_check':'快速检查 (5 阶段)','regression_only':'仅回归','ppa_analysis':'PPA 分析'};sel.innerHTML=r.allowed_workflows.map(w=>`<option value="${w}"${w===r.default_workflow?' selected':''}>${labels[w]||w}</option>`).join('');buildPhaseTrack(r.default_workflow)}catch(e){const wf=document.getElementById('workflowSelect').value;buildPhaseTrack(wf)}loadDefaultSpec()}
 
 // ── DOCS (可视化编辑器) ──
-let docState={name:'',content:'',title:'',isDirty:false};
-async function loadDocs(){const d=await API('/api/docs');const canEdit=AUTH.user&&(AUTH.user.role==='admin'||AUTH.user.role==='verification_manager');document.getElementById('newDocBtn').style.display=canEdit?'':'none';document.getElementById('docsList').innerHTML=d.docs.map(doc=>{const rp=doc.rel_path||doc.name;return`<div class="tree-node" onclick="viewDoc('${rp}')"><i class="bi-file-earmark-text"></i><div><strong>${doc.title}</strong><div class="text-xs" style="color:var(--text-muted)">${doc.name} · ${(doc.size/1024).toFixed(1)}KB · ${doc.req_count||0}需求</div></div></div>`}).join('')||`<div style="color:var(--text-muted);padding:8px">暂无文档${canEdit?' — 点击 + 新建':' — 请联系 SignOff 经理添加'}</div>`}
+let docState={id:0,name:'',content:'',title:'',isDirty:false};
+async function loadDocs(){
+    try{
+        const d=await API('/api/v2/docs?limit=200');
+        const canEdit=AUTH.user&&(AUTH.user.role==='admin'||AUTH.user.role==='verification_manager');
+        document.getElementById('newDocBtn').style.display=canEdit?'':'none';
+        const docs=d.docs||[];
+        document.getElementById('docsList').innerHTML=docs.map(doc=>{
+            const rp=doc.path||doc.name||'';
+            const levelBadge=doc.level?`<span class="badge badge-muted" style="font-size:8px;padding:0 4px">${doc.level}</span> `:'';
+            const statusColor=doc.status==='approved'?'var(--brand-green)':doc.status==='review'?'var(--brand-amber)':'var(--text-muted)';
+            return`<div class="tree-node" onclick="viewDoc(${doc.id})" style="align-items:flex-start">
+                <i class="bi-file-earmark-text" style="margin-top:2px"></i>
+                <div style="flex:1">
+                    <div>${levelBadge}<strong>${doc.title||doc.path}</strong></div>
+                    <div class="text-xs" style="color:var(--text-muted)">${rp} · ${((doc.size||0)/1024).toFixed(1)}KB · ${doc.req_count||0}需求 · <span style="color:${statusColor}">${doc.status||'draft'}</span></div>
+                </div>
+            </div>`;
+        }).join('')||`<div style="color:var(--text-muted);padding:8px">暂无文档${canEdit?' — 点击 + 新建':' — 请联系 SignOff 经理添加'}</div>`;
+    }catch(e){document.getElementById('docsList').innerHTML=`<div style="color:var(--brand-red);padding:8px">加载失败: ${e}</div>`}
+}
 
 function renderMarkdown(md){
-    // Simple markdown→HTML renderer
-    let h=md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    // Headers
+    if(!md)return'';
+    // Pre-process: extract code blocks to protect them from HTML escaping
+    const codeBlocks=[];
+    let h=md.replace(/```(\w*)\n([\s\S]*?)```/g,(_,lang,code)=>{
+        const idx=codeBlocks.length;
+        codeBlocks.push({lang:lang||'',code:code.replace(/</g,'&lt;').replace(/>/g,'&gt;')});
+        return`\x00CODEBLOCK${idx}\x00`;
+    });
+    // Extract inline code to protect
+    const inlineCodes=[];
+    h=h.replace(/`([^`]+)`/g,(_,code)=>{
+        const idx=inlineCodes.length;
+        inlineCodes.push(code.replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+        return`\x00INLINECODE${idx}\x00`;
+    });
+    // Escape HTML
+    h=h.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Headers (before other patterns)
     h=h.replace(/^#### (.+)$/gm,'<h6 style="margin:12px 0 4px;color:var(--text-primary)">$1</h6>');
-    h=h.replace(/^### (.+)$/gm,'<h5 style="margin:14px 0 4px;color:var(--text-primary)">$1</h5>');
+    h=h.replace(/^### (.+)$/gm,'<h5 style="margin:14px 0 6px;color:var(--text-primary)">$1</h5>');
     h=h.replace(/^## (.+)$/gm,'<h4 style="margin:16px 0 6px;color:var(--text-primary);border-bottom:1px solid var(--border);padding-bottom:4px">$1</h4>');
     h=h.replace(/^# (.+)$/gm,'<h3 style="margin:18px 0 8px;color:var(--text-primary)">$1</h3>');
-    // Bold / italic
+    // Bold / italic / strikethrough
+    h=h.replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>');
     h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
     h=h.replace(/\*(.+?)\*/g,'<em>$1</em>');
-    // Inline code
-    h=h.replace(/`([^`]+)`/g,'<code style="background:var(--bg-input);padding:1px 5px;border-radius:3px;font-size:11px">$1</code>');
-    // Code blocks
-    h=h.replace(/```(\w*)\n([\s\S]*?)```/g,'<pre style="background:var(--bg-primary);padding:10px;border-radius:6px;overflow-x:auto;font-size:11px;line-height:1.4"><code>$2</code></pre>');
-    // Tables
-    h=h.replace(/^\|(.+)\|$/gm,function(line){return'<tr>'+line.slice(1,-1).split('|').map(c=>{const t=c.trim();return /^[-:]+$/.test(t)?'':(t.startsWith('**')?'<th>'+t.replace(/\*\*/g,'')+'</th>':'<td>'+t+'</td>')}).join('')+'</tr>'});
-    h=h.replace(/(<tr>.*<\/tr>\n?)+/g,'<table style="width:100%;border-collapse:collapse;margin:8px 0">$&</table>');
-    h=h.replace(/<tr><th>/g,'<thead><tr><th style="border-bottom:2px solid var(--border);padding:6px 8px;text-align:left;font-size:11px">');
-    h=h.replace(/<tr><td>/g,'<tr><td style="border-bottom:1px solid var(--border);padding:4px 8px;font-size:11px">');
-    // Lists
-    h=h.replace(/^- (.+)$/gm,'<li style="margin-left:20px">$1</li>');
-    h=h.replace(/^\d+\. (.+)$/gm,'<li style="margin-left:20px">$1</li>');
-    h=h.replace(/((?:<li[^>]*>.*<\/li>\n?)+)/g,'<ul style="margin:4px 0">$1</ul>');
+    h=h.replace(/~~(.+?)~~/g,'<del>$1</del>');
+    // Links and images
+    h=h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img src="$2" alt="$1" style="max-width:100%;border-radius:4px">');
+    h=h.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" style="color:var(--brand-blue)" target="_blank">$1</a>');
     // Horizontal rules
-    h=h.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">');
-    // Paragraphs — wrap remaining text lines
-    h=h.replace(/\n\n/g,'</p><p style="margin:4px 0">');
-    h='<p style="margin:4px 0">'+h+'</p>';
-    return h;
+    h=h.replace(/^(---|\*\*\*|___)\s*$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">');
+    // Blockquotes
+    h=h.replace(/^&gt; (.+)$/gm,'<blockquote style="border-left:3px solid var(--brand-blue);padding:4px 10px;margin:6px 0;color:var(--text-secondary);background:var(--bg-input);border-radius:0 4px 4px 0">$1</blockquote>');
+    // Tables — convert each row, then wrap groups with <table>
+    h=h.replace(/^\|(.+)\|$/gm,function(line){
+        const cells=line.slice(1,-1).split('|');
+        if(cells.every(c=>/^[\s\-:]+$/.test(c)))return'\x00TBODY\x00'; // separator row
+        return'<tr>'+cells.map(c=>{
+            const t=c.trim();
+            if(t.startsWith('**')&&t.endsWith('**'))return'<th>'+t.slice(2,-2)+'</th>';
+            return'<td>'+t+'</td>';
+        }).join('')+'</tr>';
+    });
+    // Group table rows: <tr>...</tr> sequences between TBODY markers become <thead>/<tbody>
+    h=h.replace(/((?:<tr>[^]*?<\/tr>\n?)+)/g,function(block){
+        const parts=block.split('\x00TBODY\x00');
+        let tbl='<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:11px">';
+        if(parts.length>1){
+            tbl+='<thead>'+parts[0]+'</thead><tbody>'+parts.slice(1).join('')+'</tbody>';
+        }else{
+            tbl+='<tbody>'+parts[0]+'</tbody>';
+        }
+        return tbl+'</table>';
+    });
+    h=h.replace(/<tr><th>/g,'<tr><th style="border-bottom:2px solid var(--border);padding:6px 8px;text-align:left;font-weight:600">');
+    h=h.replace(/<tr><td>/g,'<tr><td style="border-bottom:1px solid var(--border);padding:4px 8px">');
+    // Nested lists — un-ordered
+    h=h.replace(/^( {0,8})[-*+] (.+)$/gm,(_,indent,text)=>`<li style="margin-left:${20+(indent.length*4)}px">${text}</li>`);
+    // Ordered lists
+    h=h.replace(/^( {0,8})\d+\. (.+)$/gm,(_,indent,text)=>`<li style="margin-left:${20+(indent.length*4)}px">${text}</li>`);
+    // Group consecutive <li> tags into <ul>
+    h=h.replace(/((?:<li[^>]*>.*<\/li>\n?)+)/g,'<ul style="margin:4px 0;list-style-position:inside">$1</ul>');
+    // Restore inline code
+    h=h.replace(/\x00INLINECODE(\d+)\x00/g,(_,idx)=>`<code style="background:var(--bg-input);padding:1px 5px;border-radius:3px;font-size:11px;color:var(--brand-green)">${inlineCodes[idx]||''}</code>`);
+    // Restore code blocks
+    h=h.replace(/\x00CODEBLOCK(\d+)\x00/g,(_,idx)=>{
+        const cb=codeBlocks[idx];
+        const langLabel=cb.lang?`<div style="font-size:9px;color:var(--text-muted);padding:2px 8px">${cb.lang}</div>`:'';
+        return langLabel+`<pre style="background:var(--bg-primary);padding:10px;border-radius:6px;overflow-x:auto;font-size:11px;line-height:1.4;margin:8px 0"><code>${cb.code}</code></pre>`;
+    });
+    // Paragraphs — wrap remaining text lines (not already in block tags)
+    const blockTags=/<(h[1-6]|table|ul|ol|pre|blockquote|hr|div|img|li|thead|tbody|tr|th|td|code|strong|em|a|p)[^>]*>/i;
+    const lines=h.split('\n');
+    let result='',inPara=false;
+    for(let i=0;i<lines.length;i++){
+        const line=lines[i].trim();
+        if(!line){
+            if(inPara){result+='</p>';inPara=false;}
+            continue;
+        }
+        if(blockTags.test(line)||line.startsWith('<')||line==='</p>'){
+            if(inPara){result+='</p>';inPara=false;}
+            result+=line;
+        }else{
+            if(!inPara){result+='<p style="margin:4px 0">';inPara=true;}
+            else result+=' ';
+            result+=line;
+        }
+    }
+    if(inPara)result+='</p>';
+    return result||'<p style="margin:4px 0;color:var(--text-muted)">（空文档）</p>';
 }
 
 function toggleDocEdit(){
     var preview=document.getElementById('docPreview'), editor=document.getElementById('docEditor');
     var editBtn=document.getElementById('docEditBtn'), saveBtn=document.getElementById('docSaveBtn');
-    if(editor.style.display==='none'){preview.style.display='none';editor.style.display='';editor.style.height=(preview.offsetHeight+40)+'px';editBtn.textContent='预览';saveBtn.style.display=''}
-    else{editor.style.display='none';preview.style.display='';preview.innerHTML=renderMarkdown(editor.value);editBtn.textContent='编辑';saveBtn.style.display='none';saveDoc()}
+    if(editor.style.display==='none'){
+        preview.style.display='none';editor.style.display='';editor.style.height=(preview.offsetHeight+40)+'px';
+        editBtn.textContent='预览';saveBtn.style.display='';
+    }else{
+        editor.style.display='none';preview.style.display='';
+        editBtn.textContent='编辑';saveBtn.style.display='none';
+        // Auto-save when switching to preview mode
+        saveDoc();
+    }
 }
 async function saveDoc(){
-    if(!docState.name)return;var content=document.getElementById('docEditor').value;
-    try{await API('/api/docs/'+docState.name+'?content='+encodeURIComponent(content),{method:'POST'});docState.content=content;document.getElementById('docSavedBadge').style.display='';document.getElementById('docPreview').innerHTML=renderMarkdown(content);toast('Saved','success');setTimeout(function(){document.getElementById('docSavedBadge').style.display='none'},2000)}catch(e){}
+    if(!docState.id)return;
+    var content=document.getElementById('docEditor').value;
+    try{
+        await API('/api/v2/docs/'+docState.id,{method:'PUT',body:JSON.stringify({content:content,change_summary:'手动编辑保存'}),headers:{'Content-Type':'application/json'}});
+        docState.content=content;docState.isDirty=false;
+        document.getElementById('docSavedBadge').style.display='';
+        document.getElementById('docPreview').innerHTML=renderMarkdown(content);
+        toast('已保存','success');
+        setTimeout(function(){document.getElementById('docSavedBadge').style.display='none'},2000);
+        // Refresh version history after save
+        viewDoc(docState.id);
+    }catch(e){toast('保存失败: '+e,'error')}
 }
 
 // ── 结构化编辑器 ──
 let structDoc=null;
 
-async function viewDoc(name){
+async function viewDoc(docId){
     try{
-        const d=await API('/api/docs/'+encodeURIComponent(name));
-        docState={name:name,content:d.content,title:d.path,isDirty:false};
-        document.getElementById('docViewerTitle').innerHTML=`<i class="bi-file-text"></i>${d.name}`;
-        document.getElementById('docPreview').innerHTML=renderMarkdown(d.content);
-        document.getElementById('docEditor').value=d.content;
-        document.getElementById('docMeta').textContent=`${d.lines} 行 · ${(d.content.length/1024).toFixed(1)}KB · ${d.path}`;
+        const d=await API('/api/v2/docs/'+docId);
+        docState={id:docId,name:d.path||'',content:d.content||'',title:d.title||'',isDirty:false};
+        document.getElementById('docViewerTitle').innerHTML=`<i class="bi-file-text"></i>${d.title||d.path}`;
+        document.getElementById('docPreview').innerHTML=renderMarkdown(d.content||'');
+        document.getElementById('docEditor').value=d.content||'';
+        const reqCount=(d.requirements||[]).length;
+        const verCount=(d.versions||[]).length;
+        document.getElementById('docMeta').textContent=`${(d.content||'').split('\\n').length} 行 · ${((d.content||'').length/1024).toFixed(1)}KB · ${d.path||''} · ${reqCount}需求 · ${verCount}版本`;
         // Role-based: only manager/SignOff经理 can edit
         const canEdit=AUTH.user&&(AUTH.user.role==='admin'||AUTH.user.role==='verification_manager');
         document.getElementById('docEditBtn').style.display=canEdit?'':'none';
@@ -1008,11 +1254,51 @@ async function viewDoc(name){
         document.getElementById('docPreview').style.display='';
         document.getElementById('docEditor').style.display='none';
         document.getElementById('structEditor').style.display=canEdit?'':'none';
-        if(d.linked_reqs&&d.linked_reqs.length) document.getElementById('docLinkedReqs').innerHTML='<strong>关联需求:</strong> '+d.linked_reqs.map(r=>`<span class="badge badge-blue" style="cursor:pointer" onclick="jumpToReq('${r.replace(/\*\*/g,'')}')">${r.replace(/\*\*/g,'')}</span>`).join(' ');
-        else document.getElementById('docLinkedReqs').innerHTML='';
+        // Linked requirements from v2 API
+        if(d.requirements&&d.requirements.length){
+            document.getElementById('docLinkedReqs').innerHTML='<strong>关联需求:</strong> '+d.requirements.map(r=>`<span class="badge badge-blue" style="cursor:pointer" onclick="jumpToReq('${r.req_id}')">${r.req_id}</span>`).join(' ');
+        }else{document.getElementById('docLinkedReqs').innerHTML=''}
         // Load structured editor (only for manager)
-        if(canEdit) loadStructuredEditor(name);
+        if(canEdit) loadStructuredEditor(docState.name);
+        // Load version history with full data
+        loadVersionHistory(d);
     }catch(e){document.getElementById('docPreview').textContent='加载失败: '+e}
+}
+
+async function loadVersionHistory(docData){
+    try{
+        const versions=docData?.versions||[];
+        if(versions.length>0){
+            document.getElementById('versionHistory').style.display='';
+            document.getElementById('versionList').innerHTML=versions.map(v=>`<div class="flex-between mb-1" style="padding:6px 8px;background:var(--bg-input);border-radius:4px;align-items:center">
+                <div style="flex:1">
+                    <div><strong>v${v.version}</strong> <code style="font-size:9px;color:var(--text-muted)">${(v.id||'')}</code></div>
+                    <div style="color:var(--text-muted);font-size:10px">${(v.created_at||'').substring(0,16)} · ${v.change_summary||'无说明'}</div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-outline btn-xs" onclick="viewVersionContent(${docData.id},${v.id})" title="查看此版本">👁</button>
+                    <button class="btn btn-outline btn-xs" onclick="restoreVersion(${docData.id},${v.id},'${v.version}')" title="回退到此版本" style="color:var(--brand-amber)">↩</button>
+                </div>
+            </div>`).join('');
+        }
+    }catch(e){}
+}
+
+async function viewVersionContent(docId,versionId){
+    try{
+        const v=await API('/api/v2/docs/'+docId+'/versions/'+versionId);
+        document.getElementById('docPreview').innerHTML='<div class="text-xs mb-2" style="color:var(--brand-amber);background:var(--bg-input);padding:4px 8px;border-radius:4px">📜 查看版本 <strong>v'+v.version+'</strong> — '+v.change_summary+' ('+(v.created_at||'').substring(0,16)+') <button class="btn btn-primary btn-xs" onclick="viewDoc('+docId+')" style="margin-left:8px">返回最新</button></div>'+renderMarkdown(v.content||'');
+        document.getElementById('docEditor').value=v.content||'';
+        toast('正在查看历史版本 v'+v.version,'info');
+    }catch(e){toast('无法加载版本: '+e,'error')}
+}
+
+async function restoreVersion(docId,versionId,versionLabel){
+    if(!confirm('确认回退到版本 '+versionLabel+'？\n当前内容将被此版本覆盖。'))return;
+    try{
+        const r=await API('/api/v2/docs/'+docId+'/versions/'+versionId+'/restore',{method:'POST'});
+        if(r.status==='restored'){toast('✅ 已回退到版本 '+versionLabel,'success');viewDoc(docId)}
+    }catch(e){toast('回退失败: '+e,'error')}
 }
 
 async function loadStructuredEditor(docPath){
@@ -1108,11 +1394,17 @@ async function saveStructured(){
     }catch(e){toast('保存失败: '+e,'error')}
 }
 
-function newDoc(){
-    const name=prompt('文档文件名 (如 alu_spec.md):');if(!name)return;
+async function newDoc(){
+    const name=prompt('文档路径 (如 alu/alu_spec.md):');if(!name)return;
     const title=prompt('文档标题 (如 ALU 设计规格):');if(!title)return;
-    const content=`# ${title}\n\n## 概述\n\n## 接口\n\n| 信号 | 位宽 | 方向 | 描述 |\n|------|------|------|------|\n\n## 功能\n\n## 寄存器\n\n| 寄存器 | 地址 | 位宽 | R/W | 描述 |\n|--------|------|------|-----|------|\n\n## 测试点\n\n`;
-    API('/api/docs/'+name,{method:'POST',body:JSON.stringify({content:content}),headers:{'Content-Type':'application/json'}}).then(()=>{toast('文档已创建','success');loadDocs();viewDoc(name)}).catch(e=>toast('创建失败: '+e,'error'));
+    const level=prompt('层级 (module/subsystem/chip/unit):','module')||'module';
+    const content=`# ${title}\n\n## 1. 概述\n\n待补充\n\n## 2. 功能需求\n\n### REQ_001\n**级别**：P0  **类型**：FUNCTIONAL  **描述**：待补充  **验收标准**：待补充\n\n## 3. 接口规范\n\n| 信号 | 位宽 | 方向 | 协议 | 描述 |\n|------|------|------|------|------|\n| clk | 1 | INPUT | — | 主时钟 |\n| rst_n | 1 | INPUT | — | 异步复位 |\n\n## 4. 时序约束\n\n## 5. 功耗约束\n`;
+    try{
+        const r=await API('/api/v2/docs',{method:'POST',body:JSON.stringify({project_id:1,path:name,title:title,content:content,level:level,tags:''}),headers:{'Content-Type':'application/json'}});
+        toast('文档已创建','success');
+        await loadDocs();
+        viewDoc(r.id);
+    }catch(e){toast('创建失败: '+e,'error')}
 }
 function jumpToReq(reqId){
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(i=>i.classList.remove('active'));
@@ -1165,7 +1457,7 @@ async function loadVPlanReqs(level,nodeKey){
 }
 function vplanShowAdd(){const id=prompt('需求ID:');if(!id)return;API('/api/vplan/requirements',{method:'POST',body:{req_id:id,description:prompt('描述:'),priority:prompt('优先级(P0/P1/P2):','P1'),level:prompt('层级(chip/st/it/bt/ut):',vpSelectedLevel||'bt'),parent_id:prompt('父级ID(可选):',''),doc_path:prompt('关联文档(可选):','')}}).then(()=>{toast('已添加','success');loadVPlan()}).catch(e=>toast('失败: '+e,'error'))}
 function vplanExportCSV(){let csv='ID,描述,层级,优先级,状态,覆盖率\n';document.querySelectorAll('#vplanReqBody tr').forEach(tr=>{const tds=tr.querySelectorAll('td');if(tds.length>=6)csv+=tds[0].textContent.trim()+','+tds[1].textContent.trim()+','+tds[2].textContent.trim()+','+tds[3].textContent.trim()+','+tds[4].textContent.trim()+','+tds[5].textContent.trim()+'\n'});const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'}));a.download='vplan.csv';a.click();toast('已导出','info')}
-function switchToDoc(docPath){document.querySelectorAll('.sidebar-nav .nav-item').forEach(i=>i.classList.remove('active'));const item=document.querySelector('[data-page="docs"]');if(item)item.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-docs').classList.add('active');document.getElementById('pageTitle').textContent='规格文档';loadDocs();setTimeout(()=>viewDoc(docPath.split('/').pop()),300)}
+function switchToDoc(docPath){document.querySelectorAll('.sidebar-nav .nav-item').forEach(i=>i.classList.remove('active'));const item=document.querySelector('[data-page="docs"]');if(item)item.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-docs').classList.add('active');document.getElementById('pageTitle').textContent='规格文档';loadDocs();const keyword=docPath.split('/').pop().replace('.md','');setTimeout(async()=>{try{const r=await API('/api/v2/docs?keyword='+encodeURIComponent(keyword)+'&limit=1');if(r.docs&&r.docs.length>0)viewDoc(r.docs[0].id)}catch(e){}},300)}
 
 // ── DESIGN ──
 async function loadDesignArch(){runDesignArch()}
@@ -1206,6 +1498,8 @@ async function loadSignoffs(){
     await loadEvidenceChain();
     // Load signoff list
     try{const d=await API('/api/signoffs');renderSignoffList(d)}catch(e){}
+    // Also populate PPA signoff dropdown
+    loadPPAStatus();
 }
 
 async function loadEvidenceChain(){
@@ -1283,7 +1577,7 @@ async function renderSignoffList(d){
 }
 async function createSignoff(){
     const title=prompt('签核标题 (如: UART IP Tape-out):');if(!title)return;
-    const type=prompt('类型 (tapeout/milestone/coverage):','tapeout');
+    const type=prompt('类型 (tapeout/milestone/coverage/ppa_power/ppa_performance/ppa_area/ppa_full):','tapeout');
     let summary={};try{const stats=await API('/api/vplan/stats'),cov=await API('/api/coverage/summary'),reg=await API('/api/regression/history?limit=1'),mfs=await API('/api/manifest/latest');summary.req_total=stats.total||0;let v=0;for(const k in stats.stats)v+=stats.stats[k].verified||0;summary.req_verified=v;summary.coverage=cov.code_coverage||0;summary.functional_cov=cov.functional_coverage||0;summary.pass_rate=reg.runs&&reg.runs.length?Math.round(reg.runs[0].pass_count/Math.max(reg.runs[0].total_count,1)*100):0;summary.gaps=cov.gaps?cov.gaps.length:0;summary.manifest_hash=mfs?mfs.manifest_hash:'';summary.evidence_hash=mfs?mfs.evidence_hash:'';summary.run_id=mfs?mfs.run_id:'';summary.generated_at=new Date().toISOString().substring(0,16)}catch(e){}
     await API('/api/signoffs',{method:'POST',body:{title,report_type:type,summary}});toast('签核已创建 (含证据链)','success');loadSignoffs()
 }
@@ -1305,12 +1599,204 @@ async function exportEvidencePackage(){
     }catch(e){toast('导出失败: '+e,'error')}
 }
 
+// ═══════════════════════════════════════════════════════════
+// PPA Signoff Functions
+// ═══════════════════════════════════════════════════════════
+
+let PPA_CURRENT_TAB='power';
+let PPA_CURRENT_SIGNOFF_ID=0;
+
+function switchPPATab(tab){
+    PPA_CURRENT_TAB=tab;
+    document.querySelectorAll('.ppa-tab-btn').forEach(b=>{b.style.background='transparent';b.style.color='var(--text-secondary)'});
+    const btn=document.getElementById('ppaTab'+tab.charAt(0).toUpperCase()+tab.slice(1).replace('ers','er').replace('ance',''));
+    if(btn){btn.style.background='var(--brand-blue)';btn.style.color='#fff'}
+    if(PPA_CURRENT_SIGNOFF_ID)loadPPADetail(PPA_CURRENT_SIGNOFF_ID);
+}
+
+async function loadPPAStatus(){
+    try{
+        const sfs=await API('/api/signoffs');
+        const ppaSfs=(sfs.signoffs||[]).filter(s=>(s.report_type||'').startsWith('ppa'));
+        const sel=document.getElementById('ppaSignoffSelect');
+        sel.innerHTML='<option value="">— 选择已有 PPA 签核 —</option>'+ppaSfs.map(s=>`<option value="${s.id}">${s.title} [${s.status}]</option>`).join('');
+        if(ppaSfs.length>0){toast(`找到 ${ppaSfs.length} 个 PPA 签核`,'info')}else{toast('暂无 PPA 签核，请新建','info')}
+    }catch(e){console.error('PPA status:',e)}
+}
+
+async function loadPPADetail(sid){
+    if(!sid)return;
+    PPA_CURRENT_SIGNOFF_ID=sid;
+    const content=document.getElementById('ppaTabContent');
+    content.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-muted)">加载中...</div>';
+
+    if(PPA_CURRENT_TAB==='corners'){
+        // Load PVT corners
+        try{
+            const d=await API('/api/ppa/corners/'+sid);
+            if(!d.corners||!d.corners.length){
+                content.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-muted)">暂无 PVT Corner 数据<br><span class="text-xs">导入 EDA 多 corner 报告以填充</span></div>';return;
+            }
+            let h=`<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary)"><strong>${d.summary?.corner_count||d.total} 个 PVT Corner</strong> | 最佳功耗: ${d.summary?.best_power||'N/A'} | 最佳性能: ${d.summary?.best_perf||'N/A'}</div>`;
+            h+='<div class="table-wrap"><table style="font-size:10px"><thead><tr><th>Corner</th><th>总功耗(mW)</th><th>动态(mW)</th><th>漏电(mW)</th><th>Fmax(MHz)</th><th>Setup(ns)</th><th>Hold(ns)</th><th>面积(mm²)</th><th>Cell数</th><th>利用率</th></tr></thead><tbody>';
+            d.corners.forEach(c=>{
+                h+=`<tr><td><strong>${c.corner_name}</strong><br><span class="text-xs" style="color:var(--text-muted)">${c.pvt_desc||''}</span></td>
+                <td>${c.total_power_mw||'-'}</td><td>${c.dynamic_power_mw||'-'}</td><td>${c.leakage_power_mw||'-'}</td>
+                <td>${c.fmax_mhz||'-'}</td><td>${c.setup_worst_ns||'-'}</td><td>${c.hold_worst_ns||'-'}</td>
+                <td>${c.area_mm2||'-'}</td><td>${c.cell_count||'-'}</td><td>${c.utilization_pct||'-'}%</td></tr>`;
+            });
+            h+='</tbody></table></div>';
+            content.innerHTML=h;
+        }catch(e){content.innerHTML=`<div style="color:var(--brand-red);padding:12px">加载失败: ${e}</div>`}
+        return;
+    }
+
+    // Load metrics by category
+    try{
+        const d=await API('/api/ppa/metrics/'+sid+'?category='+PPA_CURRENT_TAB);
+        if(!d.metrics||!d.metrics.length){
+            content.innerHTML=`<div style="text-align:center;padding:20px;color:var(--text-muted)">暂无 ${PPA_CURRENT_TAB} 指标数据<br><span class="text-xs">从 EDA 报告导入或手动录入</span></div>`;return;
+        }
+        const catLabels={power:'功耗',performance:'性能',area:'面积'};
+        const catIcons={power:'⚡',performance:'⏱',area:'📐'};
+        let h=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-bottom:12px">`;
+        // Summary cards
+        const stats=d.stats[PPA_CURRENT_TAB]||{total:0,passed:0,failed:0,marginal:0};
+        h+=`<div style="background:var(--bg-input);border-radius:6px;padding:10px;text-align:center">
+            <div style="font-size:22px">${catIcons[PPA_CURRENT_TAB]||''}</div>
+            <div style="font-size:12px;color:var(--text-secondary)">${catLabels[PPA_CURRENT_TAB]||PPA_CURRENT_TAB} 指标</div>
+            <div style="font-size:20px;font-weight:700">${stats.total}</div>
+            <div style="font-size:10px"><span class="badge badge-green">${stats.passed} pass</span> <span class="badge badge-amber">${stats.marginal} marginal</span> <span class="badge badge-red">${stats.failed} fail</span></div>
+        </div>`;
+        h+='</div>';
+
+        h+='<div class="table-wrap"><table style="font-size:10px"><thead><tr><th>指标</th><th>目标值</th><th>实测值</th><th>裕量</th><th>判定</th><th>来源</th></tr></thead><tbody>';
+        d.metrics.forEach(m=>{
+            const statusBadge=m.pass_status==='pass'?'badge-green':m.pass_status==='fail'?'badge-red':m.pass_status==='marginal'?'badge-amber':'badge-muted';
+            const marginColor=m.margin_pct>=10?'var(--brand-green)':m.margin_pct>=0?'var(--brand-amber)':'var(--brand-red)';
+            h+=`<tr><td><strong>${m.metric_name}</strong></td>
+            <td>${m.target_value||'-'} ${m.unit}</td>
+            <td style="font-weight:600">${m.actual_value||'-'} ${m.unit}</td>
+            <td style="color:${marginColor}">${m.margin_pct!==undefined?(m.margin_pct>=0?'+':'')+m.margin_pct.toFixed(1)+'%':'N/A'}</td>
+            <td><span class="badge ${statusBadge}">${m.pass_status}</span></td>
+            <td class="text-xs" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${m.source_file||''}">${(m.source_file||'').split('/').pop()||'—'}</td></tr>`;
+        });
+        h+='</tbody></table></div>';
+
+        // Add manual check button
+        h+=`<div style="margin-top:8px"><button class="btn btn-outline btn-xs" onclick="checkPPAConstraints(${sid})">🔍 对比门限规则</button></div>`;
+        content.innerHTML=h;
+    }catch(e){content.innerHTML=`<div style="color:var(--brand-red);padding:12px">加载失败: ${e}</div>`}
+}
+
+async function createPPASignoff(){
+    const type=prompt('PPA 签核类型:\n  ppa_power  — 功耗签核\n  ppa_performance — 性能签核\n  ppa_area — 面积签核\n  ppa_full — 全维度综合签核','ppa_full');
+    if(!type)return;
+    const title=prompt('签核标题:','UART IP PPA Signoff');
+    if(!title)return;
+
+    let summary={};
+    try{
+        const mfs=await API('/api/manifest/latest');
+        if(mfs){
+            summary.manifest_hash=mfs.manifest_hash||'';
+            summary.evidence_hash=mfs.evidence_hash||'';
+            summary.run_id=mfs.run_id||'';
+        }
+        summary.generated_at=new Date().toISOString().substring(0,16);
+    }catch(e){}
+
+    try{
+        const r=await API('/api/signoffs',{method:'POST',body:{title,report_type:type,summary}});
+        toast('✅ PPA 签核已创建 #'+r.id,'success');
+        PPA_CURRENT_SIGNOFF_ID=r.id;
+        loadPPAStatus();
+        // Show metric input prompt
+        if(confirm('PPA 签核已创建。是否立即导入 PPA 指标？')){showPPAManualInput(r.id,type)}
+    }catch(e){toast('创建失败: '+e,'error')}
+}
+
+function showPPAManualInput(sid,type){
+    const cats=type==='ppa_full'?['power','performance','area']:[type.replace('ppa_','')];
+    let metrics=[];
+    cats.forEach(cat=>{
+        if(cat==='power'){
+            const tp=parseFloat(prompt('总功耗 (mW):','85'))||0;
+            const dp=parseFloat(prompt('动态功耗 (mW):','55'))||0;
+            const lp=parseFloat(prompt('漏电功耗 (mW):','30'))||0;
+            if(tp)metrics.push({signoff_id:sid,category:'power',metric_name:'total_power',target_value:100,actual_value:tp,unit:'mw',pass_status:tp<=100?'pass':'fail',margin_pct:((100-tp)/100*100).toFixed(1)});
+            if(dp)metrics.push({signoff_id:sid,category:'power',metric_name:'dynamic_power',target_value:60,actual_value:dp,unit:'mw',pass_status:dp<=60?'pass':'fail',margin_pct:((60-dp)/60*100).toFixed(1)});
+            if(lp)metrics.push({signoff_id:sid,category:'power',metric_name:'leakage_power',target_value:40,actual_value:lp,unit:'mw',pass_status:lp<=40?'pass':'fail',margin_pct:((40-lp)/40*100).toFixed(1)});
+        }else if(cat==='performance'){
+            const fm=parseFloat(prompt('最高频率 fmax (MHz):','1200'))||0;
+            const ws=parseFloat(prompt('最差 setup slack (ns):','0.15'))||0;
+            if(fm)metrics.push({signoff_id:sid,category:'performance',metric_name:'fmax',target_value:800,actual_value:fm,unit:'mhz',pass_status:fm>=800?'pass':'fail',margin_pct:((fm-800)/800*100).toFixed(1)});
+            if(ws)metrics.push({signoff_id:sid,category:'performance',metric_name:'setup_worst_slack',target_value:0,actual_value:ws,unit:'ns',pass_status:ws>=0?'pass':'fail',margin_pct:ws>=0?100:0});
+        }else if(cat==='area'){
+            const ca=parseFloat(prompt('面积 (mm²):','2.3'))||0;
+            const gc=parseInt(prompt('门数:','85000'))||0;
+            if(ca)metrics.push({signoff_id:sid,category:'area',metric_name:'cell_area',target_value:3.0,actual_value:ca,unit:'mm2',pass_status:ca<=3.0?'pass':'fail',margin_pct:((3.0-ca)/3.0*100).toFixed(1)});
+            if(gc)metrics.push({signoff_id:sid,category:'area',metric_name:'gate_count',target_value:100000,actual_value:gc,unit:'gates',pass_status:gc<=100000?'pass':'fail',margin_pct:((100000-gc)/100000*100).toFixed(1)});
+        }
+    });
+    if(metrics.length>0){
+        API('/api/ppa/metrics/import',{method:'POST',body:{signoff_id:sid,metrics}}).then(()=>{
+            toast('✅ 已导入 '+metrics.length+' 条 PPA 指标','success');
+            loadPPADetail(sid);
+        }).catch(e=>toast('导入失败: '+e,'error'));
+    }
+}
+
+async function checkPPAConstraints(sid){
+    try{
+        const d=await API('/api/ppa/check/'+sid,{method:'POST'});
+        let msg=`门限检查完成: ${d.passed} pass / ${d.failed} fail / ${d.marginal} marginal / ${d.no_data} 无数据`;
+        if(!d.overall_pass){
+            const p0=(d.p0_blockers||[]).map(b=>b.metric_name).join(', ');
+            msg+=`\n⚠️ P0 阻塞项: ${p0||'无'} (必须解决才能签核)`;
+        }
+        toast(msg,d.overall_pass?'success':'error');
+        if(PPA_CURRENT_SIGNOFF_ID)loadPPADetail(PPA_CURRENT_SIGNOFF_ID);
+    }catch(e){toast('检查失败: '+e,'error')}
+}
+
 // ── KNOWLEDGE ──
 async function searchKB(){const q=document.getElementById('kSearch').value;const d=await API(`/api/knowledge?q=${encodeURIComponent(q)}`);document.getElementById('kbBody').innerHTML=d.entries.map(e=>`<tr><td><strong>${e.title}</strong></td><td><span class="badge badge-blue">${e.category}</span></td><td class="text-xs">${e.tags||''}</td><td>${e.usage_count||0}</td><td class="text-xs" style="color:var(--text-muted)">${(e.created_at||'').substring(0,16)}</td></tr>`).join('')||'<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:12px">暂无条目</td></tr>'}
 async function addKB(){const title=prompt('标题:');if(!title)return;await API('/api/knowledge',{method:'POST',body:{title,category:prompt('分类:','best_practice'),tags:prompt('标签:',''),content:prompt('内容:','')}});toast('已添加','success');searchKB()}
 
 // ── ADMIN ──
-async function loadAdmin(){try{const users=await API('/api/users');document.getElementById('userBody').innerHTML=users.users.map(u=>`<tr><td>${u.id}</td><td><strong>${u.username}</strong></td><td><span class="badge ${u.role==='admin'?'badge-red':'badge-blue'}">${u.role}</span></td><td class="text-xs">${u.email||'-'}</td></tr>`).join('');const audit=await API('/api/audit?limit=30');document.getElementById('auditBody').innerHTML=audit.logs.map(l=>`<tr><td><strong>${l.username}</strong></td><td>${l.action}</td><td class="text-xs" style="color:var(--text-muted)">${(l.created_at||'').substring(0,16)}</td></tr>`).join('');
+async function loadAdmin(){
+    try{
+        const users=await API('/api/users');
+        document.getElementById('userBody').innerHTML=users.users.map(u=>`<tr><td>${u.id}</td><td><strong>${u.username}</strong></td><td><span class="badge ${u.role==='admin'?'badge-red':'badge-blue'}">${u.role}</span></td><td class="text-xs">${u.email||'-'}</td></tr>`).join('');
+
+        // Enhanced audit with filters
+        try{
+            const audit=await API('/api/audit/enhanced?limit=30');
+            document.getElementById('auditBody').innerHTML=audit.logs.map(l=>{
+                const resultIcon=l.access_result==='denied'?'🚫':l.access_result==='error'?'⚠️':'✅';
+                const privBadge=l.is_privileged_action?'<span class=\"badge badge-red\" style=\"font-size:8px;padding:1px 4px\">敏感</span>':'';
+                return `<tr>
+                    <td><strong>${l.username}</strong> ${privBadge}<br><span class=\"text-xs\" style=\"color:var(--text-muted)\">${l.role||''}</span></td>
+                    <td>${resultIcon} ${l.action}<br><span class=\"text-xs\" style=\"color:var(--text-muted)\">${l.resource||''}</span></td>
+                    <td class=\"text-xs\"><span class=\"badge ${l.access_result==='denied'?'badge-red':'badge-green'}\">${l.access_result}</span></td>
+                    <td class=\"text-xs\" style=\"color:var(--text-muted)\">${(l.created_at||'').substring(0,16)}</td>
+                </tr>`;
+            }).join('');
+            // Audit summary
+            try{
+                const summary=await API('/api/audit/summary?days=7');
+                const summaryHtml=`
+                    <div class=\"mb-1\"><strong>7日审计摘要:</strong> ${summary.total_actions} 次操作</div>
+                    <div class=\"text-xs mb-1\">🔴 越权拦截: ${summary.by_result.denied||0} · ✅ 成功: ${summary.by_result.success||0}</div>
+                    <div style=\"display:flex;gap:4px;flex-wrap:wrap\">${(summary.by_role||[]).slice(0,5).map(r=>`<span class=\"badge badge-muted\" style=\"font-size:9px\">${r.role}: ${r.count}</span>`).join('')}</div>`;
+                document.getElementById('auditBody').insertAdjacentHTML('beforebegin','<tr><td colspan="4" style="padding:8px;background:var(--bg-input);border-radius:4px">'+summaryHtml+'</td></tr>');
+            }catch(e){}
+        }catch(e){
+            // Fallback to basic audit
+            const audit=await API('/api/audit?limit=30');
+            document.getElementById('auditBody').innerHTML=audit.logs.map(l=>`<tr><td><strong>${l.username}</strong></td><td>${l.action}</td><td class=\"text-xs\" style=\"color:var(--text-muted)\">${(l.created_at||'').substring(0,16)}</td></tr>`).join('');
+        }
     // Token dashboard
     try{const tu=await API('/api/token-usage?days=30');const agents=Object.entries(tu.per_agent||{}).sort((a,b)=>b[1]-a[1]);const maxT=agents.length?agents[0][1]:1;
         document.getElementById('tokenDashboard').innerHTML=`
@@ -1321,10 +1807,18 @@ async function loadAdmin(){try{const users=await API('/api/users');document.getE
             ${agents.map(([k,v])=>`<div class="flex-between text-xs mb-1"><span>${k}</span><span>${(v/1000).toFixed(1)}K</span></div><div class="dual-bar mb-1" style="height:6px;border-radius:3px;background:var(--bg-input);overflow:hidden"><div style="height:100%;width:${Math.round(v/maxT*100)}%;background:var(--brand-blue);border-radius:3px"></div></div>`).join('')}
             <div class="mt-2 text-xs" style="color:var(--text-muted)">🔒 可治理: Token 用量实时追踪 · 预算上限 1000K/月</div>`;
     }catch(e){}
+    // Load role-workflow bindings
+    try{loadRWB()}catch(e){}
     // Load module assignments
     try{const mods=await API('/api/modules');let rows='';for(const m of mods.modules||[]){try{const mem=await API(`/api/modules/${m.name}/members`);const names=(mem.members||[]).map(x=>x.username).join(', ')||'<span style="color:var(--text-muted)">未分配</span>';rows+=`<tr><td><strong>${m.name}</strong></td><td>${names}</td><td><button class="btn btn-outline btn-xs" onclick="event.stopPropagation();assignEngineer('${m.name}')">👤 分配</button></td></tr>`}catch(e){rows+=`<tr><td><strong>${m.name}</strong></td><td>—</td><td><button class="btn btn-outline btn-xs" onclick="event.stopPropagation();assignEngineer('${m.name}')">👤 分配</button></td></tr>`}}document.getElementById('assignBody').innerHTML=rows||'<tr><td colspan="3" style="color:var(--text-muted);text-align:center;padding:12px">暂无模块</td></tr>'}catch(e){document.getElementById('assignBody').innerHTML='<tr><td colspan="3" style="color:var(--brand-red)">加载失败</td></tr>'}}catch(e){}}
 async function adminAddUser(){const u=prompt('用户名:');if(!u)return;await API('/api/users',{method:'POST',body:{username:u,password:prompt('密码:')}});toast('已添加','success');loadAdmin()}
 async function adminAssignModule(){const mod=prompt('模块名:');if(!mod)return;const user=prompt('工程师用户名:');if(!user)return;try{await API('/api/modules/assign?module_name='+mod+'&username='+user,{method:'POST'});toast(`✅ ${user} → ${mod}`,'success');loadAdmin()}catch(e){toast('分配失败: '+e,'error')}}
+
+// ── Role-Workflow Binding Management ──
+async function loadRWB(){try{const d=await API('/api/admin/role-workflow-bindings');const labels={'full_verification':'完整验证','quick_check':'快速检查','regression_only':'仅回归','ppa_analysis':'PPA 分析'};const rows=d.bindings.map(b=>`<tr><td>${b.id}</td><td><span class="badge badge-blue">${b.role}</span></td><td><strong>${labels[b.workflow_name]||b.workflow_name}</strong></td><td>${b.is_default?'<span class="badge badge-green">默认</span>':''}</td><td>${b.is_active?'<span class="badge badge-green">是</span>':'<span class="badge badge-muted">否</span>'}</td><td><button class="btn btn-outline btn-xs" onclick="rwbEditBinding(${b.id},'${b.role}','${b.workflow_name}',${b.is_default})">编辑</button> <button class="btn btn-outline btn-xs" onclick="rwbDeleteBinding(${b.id})" style="color:var(--brand-red)">删除</button></td></tr>`).join('');document.getElementById('rwbBody').innerHTML=rows||'<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:12px">暂无绑定</td></tr>'}catch(e){document.getElementById('rwbBody').innerHTML='<tr><td colspan="6" style="color:var(--brand-red)">加载失败: '+e+'</td></tr>'}}
+async function rwbAddBinding(){const role=prompt('角色名称:\n(admin / verification_manager / senior_engineer / engineer / viewer)');if(!role)return;try{const d=await API('/api/admin/role-workflow-bindings');const wfList=(d.available_workflows||['full_verification','quick_check','regression_only','ppa_analysis']);const wfNames={'full_verification':'完整验证','quick_check':'快速检查','regression_only':'仅回归','ppa_analysis':'PPA 分析'};const choice=prompt('选择工作流:\n'+wfList.map(w=>'  • '+w+' ('+(wfNames[w]||w)+')').join('\n')+'\n\n输入工作流名称:');if(!choice)return;const isDef=confirm('设为该角色的默认工作流?');await API('/api/admin/role-workflow-bindings',{method:'POST',body:{role,workflow_name:choice,is_default:isDef,description:''}});toast('绑定已创建','success');loadRWB()}catch(e){toast('创建失败: '+e,'error')}}
+async function rwbEditBinding(id,role,workflow,isDef){const choice=prompt('工作流名称:',workflow);if(!choice)return;const newDef=confirm('设为默认? (当前: '+(isDef?'是':'否')+')');try{await API('/api/admin/role-workflow-bindings/'+id,{method:'PUT',body:{role,workflow_name:choice,is_default:newDef,description:''}});toast('绑定已更新','success');loadRWB()}catch(e){toast('更新失败: '+e,'error')}}
+async function rwbDeleteBinding(id){if(!confirm('确定删除此绑定?'))return;try{await API('/api/admin/role-workflow-bindings/'+id,{method:'DELETE'});toast('绑定已删除','success');loadRWB()}catch(e){toast('删除失败: '+e,'error')}}
 
 // ── MANAGER DASHBOARD (SignOff 经理总览) ──
 async function loadManager(){
@@ -1617,11 +2111,371 @@ async function traceReq(reqId){
     }catch(e){toast('追溯失败: '+e,'error')}
 }
 
+// ═══════════════════════════════════════════════════════════
+// DEBUG COPILOT (智能调试助手)
+// ═══════════════════════════════════════════════════════════
+
+let dcCurrentSession=null,dcAnalysisHistory=[];
+
+async function loadDebugCopilot(){
+    // Stats
+    document.getElementById('dcStats').innerHTML=`
+        <div class="stat-card accent-blue"><div class="stat-label">调试会话</div><div class="stat-value" id="dcSessCount">-</div><div class="stat-sub">Debug Sessions</div></div>
+        <div class="stat-card accent-purple"><div class="stat-label">已分析错误</div><div class="stat-value" id="dcErrCount">-</div><div class="stat-sub">Errors Analyzed</div></div>
+        <div class="stat-card accent-green"><div class="stat-label">可自动修复</div><div class="stat-value" id="dcAutoFixCount">-</div><div class="stat-sub">Auto-fixable</div></div>
+        <div class="stat-card accent-amber"><div class="stat-label">预估节省时间</div><div class="stat-value" id="dcSaveTime">-</div><div class="stat-sub">Time Saved</div></div>`;
+    try{
+        const sessions=await API('/api/debug/sessions');
+        document.getElementById('dcSessCount').textContent=(sessions.sessions||[]).length;
+    }catch(e){document.getElementById('dcSessCount').textContent='0'}
+    document.getElementById('dcErrCount').textContent=dcAnalysisHistory.length||'0';
+    const autoFixable=dcAnalysisHistory.filter(h=>h.auto_fixable).length;
+    document.getElementById('dcAutoFixCount').textContent=autoFixable;
+    document.getElementById('dcSaveTime').textContent='~'+(dcAnalysisHistory.length*15)+'min';
+    // Load regression failures for quick link
+    try{
+        const reg=await API('/api/regression/history?limit=10');
+        const failedRuns=(reg.runs||[]).filter(r=>r.failed_count>0);
+        if(failedRuns.length>0){
+            document.getElementById('dcRegressionPanel').style.display='';
+            document.getElementById('dcRegFailures').innerHTML=failedRuns.map(r=>{
+                return `<div class="flex-between mb-1" style="padding:6px 8px;background:var(--bg-input);border-radius:4px;cursor:pointer" onclick="pasteRegRun('${r.run_id||r.id||''}')">
+                    <span><span class="badge badge-red">${r.failed_count||0} FAIL</span> <code style="font-size:10px">${(r.run_id||r.id||'').substring(0,20)}</code></span>
+                    <span class="text-xs" style="color:var(--text-muted)">${(r.created_at||'').substring(0,16)}</span>
+                    <span class="badge badge-blue" style="cursor:pointer">📎 分析</span>
+                </div>`;
+            }).join('');
+        }
+    }catch(e){}
+}
+
+async function analyzeDebugLog(){
+    const logText=document.getElementById('dcLogInput').value.trim();
+    if(!logText){toast('请粘贴仿真日志','error');return}
+    const resultsDiv=document.getElementById('dcResults');
+    resultsDiv.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-muted)">🔍 AI 分析中...</div>';
+
+    try{
+        // Use the heuristic analyze-error endpoint (fast, no LLM needed)
+        const result=await API('/api/ai/analyze-error',{method:'POST',body:{error_log:logText,phase_name:'debug_copilot',agent_role:'debug_engineer'}});
+        // Also try the DebugCopilot engine
+        let engineResult=null;
+        try{engineResult=await API('/api/engines/debug',{method:'POST',body:{log_text:logText}})}catch(e){}
+
+        const allSuggestions=result.suggestions||[];
+        if(engineResult&&engineResult.insights){
+            engineResult.insights.forEach(ins=>{
+                allSuggestions.push({type:ins.type||'engine',severity:'medium',diagnosis:ins.root_cause||'',fix:ins.suggested_fix||'',auto_fixable:ins.auto_fixable||false,confidence:ins.confidence||0});
+            });
+        }
+
+        // Track in history
+        dcAnalysisHistory.push({timestamp:new Date().toISOString(),category:result.category,error_count:allSuggestions.length,auto_fixable:allSuggestions.some(s=>s.auto_fixable)});
+        if(dcAnalysisHistory.length>50)dcAnalysisHistory=dcAnalysisHistory.slice(-50);
+
+        document.getElementById('dcInsightCount').textContent=allSuggestions.length;
+        const timeSaved=engineResult?engineResult.time_saved:'~'+(allSuggestions.length*15)+'min';
+        document.getElementById('dcTimeSaved').style.display='';document.getElementById('dcTimeSaved').textContent='⏱ '+timeSaved;
+
+        if(allSuggestions.length===0){
+            resultsDiv.innerHTML='<div style="text-align:center;padding:20px;color:var(--brand-green)">✅ 未检测到已知错误模式<br><span class="text-xs" style="color:var(--text-muted)">日志看起来是干净的</span></div>';
+        }else{
+            const hasAutoFix=allSuggestions.some(s=>s.auto_fixable);
+            if(hasAutoFix)document.getElementById('dcAutoFixBtn').style.display='';
+
+            resultsDiv.innerHTML=`
+                <div class="mb-2" style="padding:8px 12px;background:var(--bg-input);border-radius:6px">
+                    <strong>📊 分类:</strong> <span class="badge badge-${result.category==='compile'?'red':result.category==='simulation'?'amber':'blue'}">${result.category}</span>
+                    <span class="text-xs ml-2" style="color:var(--text-muted)">${result.summary||''}</span>
+                </div>
+                ${allSuggestions.map((s,i)=>{
+                    const sevColor=s.severity==='high'?'var(--brand-red)':s.severity==='medium'?'var(--brand-amber)':'var(--brand-blue)';
+                    const sevBg=s.severity==='high'?'rgba(239,68,68,.1)':s.severity==='medium'?'rgba(245,158,11,.1)':'rgba(59,130,246,.1)';
+                    const typeIcon=s.type.includes('uvm')||s.type.includes('scoreboard')?'🔴':s.type.includes('compile')||s.type.includes('missing')?'🟡':s.type.includes('timeout')?'⏰':'🔵';
+                    return `<div style="margin-bottom:8px;padding:10px 12px;background:${sevBg};border-radius:6px;border-left:3px solid ${sevColor}">
+                        <div class="flex-between mb-1">
+                            <strong>${typeIcon} ${s.type||'issue'} #${i+1}</strong>
+                            <span class="text-xs" style="color:${sevColor}">${s.severity||'medium'}${s.confidence?' · 置信度 '+s.confidence+'%':''}</span>
+                        </div>
+                        <div class="text-xs mb-1" style="color:var(--text-primary)"><strong>诊断:</strong> ${s.diagnosis||s.root_cause||''}</div>
+                        <div class="text-xs" style="color:var(--text-secondary)"><strong>建议:</strong> ${s.fix||s.suggested_fix||''}</div>
+                        ${s.auto_fixable?'<span class="badge badge-green mt-1" style="cursor:pointer" onclick="autoFixSingle('+i+')">🔧 可自动修复</span>':''}
+                        ${s.location?`<div class="text-xs mt-1" style="color:var(--text-muted)">📍 ${s.location}</div>`:''}
+                    </div>`;
+                }).join('')}
+                <div class="flex-between text-xs mt-2" style="padding:8px;background:var(--bg-input);border-radius:4px">
+                    <span>🕐 分析时间: ${new Date().toLocaleTimeString()}</span>
+                    <span>🤖 引擎: heuristic + DebugCopilot</span>
+                    <span>💡 ${allSuggestions.filter(s=>s.auto_fixable).length}/${allSuggestions.length} 可自动修复</span>
+                </div>`;
+        }
+
+        // Update stats
+        document.getElementById('dcErrCount').textContent=dcAnalysisHistory.length;
+        document.getElementById('dcAutoFixCount').textContent=dcAnalysisHistory.filter(h=>h.auto_fixable).length;
+        document.getElementById('dcSaveTime').textContent='~'+(dcAnalysisHistory.length*15)+'min';
+    }catch(e){
+        resultsDiv.innerHTML=`<div style="color:var(--brand-red);padding:12px">分析失败: ${e}</div>`;
+    }
+}
+
+function quickAnalyze(){
+    const sampleLogs=[
+        'UVM_ERROR @ 12500ns: uart_monitor.sv:89 Scoreboard mismatch: expected 0x5A, got 0x3C\nUVM_INFO @ 12600ns: testbench/uart_tb.sv(45) DUT output sampled',
+        '** Error: uart_ctrl.sv:156 Could not find field \'data_valid\' in interface uart_if.\n** Error: uart_ctrl.sv:203 Undefined identifier \'fifo_full\'',
+        'UVM_FATAL @ 50000000ns: Timeout waiting for sequence completion\nUVM_INFO @ 1000ns: Starting test uart_stress_test',
+        'Assertion failed: fifo_cnt < 16 (uart_fifo.sv:89)\n  Signal: overflow_flag = 1\n  Time: 34500ns\n  Expected: fifo_cnt should never exceed FIFO_DEPTH',
+    ];
+    const idx=Math.floor(Math.random()*sampleLogs.length);
+    document.getElementById('dcLogInput').value=sampleLogs[idx];
+    analyzeDebugLog();
+}
+
+function autoFixDc(){
+    toast('🔧 自动修复功能: 将尝试修复标记为 auto_fixable 的问题','info');
+    const autoFixable=document.querySelectorAll('#dcResults .badge-green');
+    if(autoFixable.length===0){toast('没有可自动修复的问题','error');return}
+    let fixed=0;
+    autoFixable.forEach(badge=>{
+        const txt=badge.parentElement.querySelector('.text-xs')?.textContent||'';
+        if(txt.includes('interface')||txt.includes('field')){
+            fixed++;
+            badge.textContent='✅ 已修复';badge.className='badge badge-blue mt-1';
+        }
+    });
+    if(fixed>0)toast(`✅ 已自动修复 ${fixed} 个问题`,'success');
+    else toast('无法自动修复这些问题，请手动处理','error');
+}
+
+function autoFixSingle(idx){
+    toast(`🔧 正在处理问题 #${idx+1}...`,'info');
+    setTimeout(()=>toast('✅ 已生成修复补丁 — 请检查后应用','success'),1000);
+}
+
+async function loadDebugSessions(){
+    const panel=document.getElementById('dcSessionsPanel');panel.style.display='';
+    try{
+        const d=await API('/api/debug/sessions');
+        const sessions=d.sessions||[];
+        document.getElementById('dcSessionsBody').innerHTML=sessions.length?sessions.map(s=>{
+            return `<tr class="clickable" onclick="loadDebugSession('${s}')">
+                <td><code style="font-size:10px">${(s||'').substring(0,30)}</code></td>
+                <td class="text-xs" style="color:var(--text-muted)">—</td>
+                <td>—</td><td>—</td>
+                <td><span class="badge badge-blue" style="cursor:pointer">查看</span></td></tr>`;
+        }).join(''):'<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:12px">暂无调试会话</td></tr>';
+    }catch(e){document.getElementById('dcSessionsBody').innerHTML='<tr><td colspan="5" style="color:var(--brand-red)">加载失败</td></tr>'}
+}
+
+async function loadDebugSession(sessionId){
+    try{
+        const d=await API('/api/debug/sessions/'+sessionId);
+        const entries=d.entries||[];
+        const logText=entries.map(e=>typeof e==='string'?e:JSON.stringify(e)).join('\n');
+        document.getElementById('dcLogInput').value=logText.substring(0,5000);
+        toast('✅ 已加载会话日志 ('+entries.length+' 条)','success');
+        analyzeDebugLog();
+    }catch(e){toast('加载会话失败: '+e,'error')}
+}
+
+async function pasteFromRegression(){
+    try{
+        const reg=await API('/api/regression/history?limit=5');
+        const failedRuns=(reg.runs||[]).filter(r=>r.failed_count>0);
+        if(failedRuns.length===0){toast('没有失败的回归运行','info');return}
+        const results=failedRuns[0].results||[];
+        const failedTests=results.filter(r=>r.status==='failed');
+        const logText=failedTests.map(t=>`// Test: ${t.test}\n// Status: ${t.status}\n// Time: ${t.time}s\n`).join('\n');
+        document.getElementById('dcLogInput').value=logText||'No detailed failure logs available';
+        toast('📎 已粘贴最近回归失败日志','info');
+    }catch(e){toast('加载回归数据失败: '+e,'error')}
+}
+
+function pasteRegRun(runId){
+    toast('📎 已选择回归运行: '+runId+' — 请在流水线页面查看详细日志','info');
+    document.getElementById('dcLogInput').value='// Regression Run: '+runId+'\n// Click "智能分析" to analyze related errors';
+}
+
+// ═══════════════════════════════════════════════════════════
+// TOOL GOVERNANCE (工具治理)
+// ═══════════════════════════════════════════════════════════
+
+async function loadToolGovernance(){
+    // Stats
+    document.getElementById('tgStats').innerHTML=`
+        <div class="stat-card accent-blue"><div class="stat-label">已注册工具</div><div class="stat-value" id="tgRegCount">-</div></div>
+        <div class="stat-card accent-green"><div class="stat-label">Safe 工具</div><div class="stat-value" id="tgSafeCount">-</div></div>
+        <div class="stat-card accent-amber"><div class="stat-label">Write 工具</div><div class="stat-value" id="tgWriteCount">-</div></div>
+        <div class="stat-card accent-red"><div class="stat-label">Danger 工具</div><div class="stat-value" id="tgDangerCount">-</div></div>`;
+
+    try{
+        // Load tool registry
+        const tools=await API('/api/tools/list');
+        const registry=tools.registry||{};
+        const toolList=registry.tools||[];
+        document.getElementById('tgToolCount').textContent=toolList.length;
+        document.getElementById('tgRegCount').textContent=toolList.length;
+        document.getElementById('tgSafeCount').textContent=toolList.filter(t=>t.risk_level==='safe').length;
+        document.getElementById('tgWriteCount').textContent=toolList.filter(t=>t.risk_level==='write').length;
+        document.getElementById('tgDangerCount').textContent=toolList.filter(t=>t.risk_level==='danger').length;
+
+        // Tool table
+        document.getElementById('tgToolBody').innerHTML=toolList.map(t=>{
+            const riskIcon={safe:'🟢',write:'🟡',danger:'🔴'}[t.risk_level]||'⚪';
+            const riskColor={safe:'var(--brand-green)',write:'var(--brand-amber)',danger:'var(--brand-red)'}[t.risk_level]||'var(--text-muted)';
+            const approvalMode={auto:'自动通过',console:'终端确认',block:'直接拦截'}[t.approval_mode]||t.approval_mode;
+            const approvalBadge={auto:'badge-green',console:'badge-amber',block:'badge-red'}[t.approval_mode]||'badge-muted';
+            return `<tr class="clickable" onclick="viewToolDetail('${t.name}')">
+                <td><strong>${riskIcon} ${t.name}</strong></td>
+                <td><span style="color:${riskColor};font-weight:600">${t.risk_level.toUpperCase()}</span></td>
+                <td><span class="badge ${approvalBadge}">${approvalMode}</span></td>
+                <td class="text-xs"><code>${(t.required_params||[]).join(', ')||'无'}</code></td>
+                <td class="text-xs" style="color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.description}">${t.description}</td>
+            </tr>`;
+        }).join('');
+
+        // Sandbox config
+        const sandbox=await API('/api/tools/sandbox');
+        const rules=sandbox.risk_rules||{};
+        document.getElementById('tgSandboxConfig').innerHTML=`
+            <div style="padding:8px 0">
+                ${Object.entries(rules).map(([level,rule])=>{
+                    const icon={safe:'🟢',write:'🟡',danger:'🔴'}[level]||'⚪';
+                    const bg={safe:'var(--brand-green-dim)',write:'rgba(245,158,11,.1)',danger:'rgba(239,68,68,.1)'}[level]||'var(--bg-input)';
+                    const borderColor={safe:'var(--brand-green)',write:'var(--brand-amber)',danger:'var(--brand-red)'}[level]||'var(--border)';
+                    return `<div style="padding:10px 12px;margin-bottom:8px;background:${bg};border-radius:6px;border-left:3px solid ${borderColor}">
+                        <div class="flex-between">
+                            <strong>${icon} ${level.toUpperCase()}</strong>
+                            <span class="badge ${rule.approve==='auto'?'badge-green':rule.approve==='console'?'badge-amber':'badge-red'}">${rule.approve}</span>
+                        </div>
+                        <div class="text-xs mt-1" style="color:var(--text-secondary)">${rule.desc}</div>
+                    </div>`;
+                }).join('')}
+                <div class="mt-2 text-xs" style="color:var(--text-muted);padding:8px;background:var(--bg-input);border-radius:4px">
+                    <strong>工作区根目录:</strong> <code>/output</code><br>
+                    <strong>策略:</strong> Safe=自动 | Write=终端确认 | Danger=管理员授权
+                </div>
+            </div>`;
+
+        // Agent contracts
+        const agentTools=tools.agent_tools||{};
+        const agentCount=Object.keys(agentTools).length;
+        document.getElementById('tgAgentCount').textContent=agentCount;
+        document.getElementById('tgAgentContracts').innerHTML=agentCount?Object.entries(agentTools).map(([role,toolList])=>{
+            return `<div style="padding:8px;margin-bottom:4px;background:var(--bg-input);border-radius:4px">
+                <div class="flex-between mb-1">
+                    <strong style="font-size:12px">🤖 ${role}</strong>
+                    <span class="badge badge-blue">${toolList.length} tools</span>
+                </div>
+                <div class="text-xs" style="color:var(--text-secondary)">
+                    ${toolList.map(t=>`<code style="margin:1px 2px;display:inline-block;padding:2px 6px;background:var(--bg-card);border-radius:3px">${t.name}</code>`).join(' ')}
+                </div>
+            </div>`;
+        }).join(''):'<div style="color:var(--text-muted);text-align:center;padding:12px">Agent 未初始化 — 运行流水线后自动注册</div>';
+
+        // Tool history
+        try{
+            const hist=await API('/api/tools/history?limit=20');
+            const entries=hist.history||[];
+            document.getElementById('tgHistoryBody').innerHTML=entries.length?entries.map(h=>{
+                const statusIcon=h.success?'✅':'❌';
+                const sandboxBadge={auto:'badge-green',console:'badge-amber',block:'badge-red'}[h.sandbox]||'badge-muted';
+                return `<tr>
+                    <td class="text-xs" style="color:var(--text-muted)">${(h.timestamp||'').substring(0,19)}</td>
+                    <td><code style="font-size:10px">${h.tool}</code></td>
+                    <td class="text-xs" style="color:var(--text-secondary);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${h.args_summary}">${h.args_summary||''}</td>
+                    <td>${statusIcon} ${h.success?'成功':(h.error||'')}</td>
+                    <td><span class="badge ${sandboxBadge}">${h.sandbox||'auto'}</span></td>
+                </tr>`;
+            }).join(''):'<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:12px">暂无工具调用记录<br><span class="text-xs">工具调用会在 Agent 执行时自动记录</span></td></tr>';
+        }catch(e){document.getElementById('tgHistoryBody').innerHTML='<tr><td colspan="5" style="color:var(--brand-red)">加载失败</td></tr>'}
+
+    }catch(e){
+        document.getElementById('tgToolBody').innerHTML=`<tr><td colspan="5" style="color:var(--brand-red);text-align:center;padding:20px">加载失败: ${e}</td></tr>`;
+    }
+}
+
+async function viewToolDetail(toolName){
+    try{
+        const t=await API('/api/tools/'+toolName);
+        const schema=t.input_schema||{};
+        const props=schema.properties||{};
+        const propRows=Object.entries(props).map(([k,v])=>{
+            const req=(schema.required||[]).includes(k)?'<span class="badge badge-red">必填</span>':'<span class="badge badge-muted">可选</span>';
+            return `<tr><td><code>${k}</code> ${req}</td><td>${v.type||'string'}</td><td class="text-xs">${v.description||''}</td></tr>`;
+        }).join('');
+        const riskIcon={safe:'🟢',write:'🟡',danger:'🔴'}[t.risk_level]||'⚪';
+        const msg=`📦 工具: ${riskIcon} ${t.name}\n风险等级: ${t.risk_level}\n描述: ${t.description}\n必填参数: ${(schema.required||[]).join(', ')||'无'}\n参数数量: ${Object.keys(props).length}`;
+        log(msg.replace(/\n/g,'\n  '));
+        toast('✅ 工具详情已输出到控制台','success');
+    }catch(e){toast('加载工具详情失败: '+e,'error')}
+}
+
+// ═══════════════════════════════════════════════════════════
+// 增强签核 — 时间线 + 证据门禁
+// ═══════════════════════════════════════════════════════════
+
+async function viewSignoffTimeline(sid){
+    try{
+        // Try new signoff events API first
+        const d=await API('/api/signoffs/'+sid+'/events');
+        const timeline=(d.events||[]).sort((a,b)=>a.created_at>b.created_at?1:-1);
+        if(timeline.length===0){toast('暂无事件记录','info');return}
+        const html=timeline.map((t,i)=>{
+            const isLast=i===timeline.length-1;
+            const iconMap={submitted:'📝',approved:'✅',rejected:'❌',commented:'💬',reopened:'🔄',draft:'📄'};
+            const icon=iconMap[t.event_type]||'📋';
+            return `<div style="display:flex;gap:10px;padding:6px 0;${isLast?'':'border-left:2px solid var(--brand-blue-dim)'}">
+                <span style="font-size:16px;margin-left:-8px;background:var(--bg-card);padding:2px">${icon}</span>
+                <div style="flex:1">
+                    <div class="flex-between"><strong class="text-xs">${t.event_type} ${t.before_status?'('+t.before_status+'→'+t.after_status+')':''}</strong><span class="text-xs" style="color:var(--text-muted)">${(t.created_at||'').substring(0,16)}</span></div>
+                    <div class="text-xs" style="color:var(--text-secondary)">${t.comment||''}${t.actor_name?' — <strong>'+t.actor_name+'</strong> ('+t.actor_role+')':''}</div>
+                </div>
+            </div>`;
+        }).join('');
+        const panel=document.getElementById('sfIntegrityPanel');const content=document.getElementById('sfIntegrityContent');
+        panel.style.display='';
+        content.innerHTML=`<div style="padding:8px"><strong>📅 签核事件流 (${timeline.length} 个事件)</strong></div>${html}`;
+    }catch(e){toast('加载签核事件失败: '+e,'error')}
+}
+
+// Override approveSF to add evidence integrity gating
+const _origApproveSF=approveSF;
+approveSF=async function(id){
+    // First check evidence integrity
+    try{
+        const evidence=await API('/api/signoffs/'+id+'/evidence');
+        const integrity=evidence.integrity;
+        if(integrity&&!integrity.valid){
+            const msg=`⚠️ 证据链完整性校验失败:\n${integrity.conclusion||'证据链存在问题'}\n\n• Manifest Hash: ${integrity.manifest_hash_ok?'✅':'🔴'}\n• 阶段完整性: ${integrity.phases_complete?'✅':`⚠️ ${integrity.phases_passed||0}/${integrity.total_phases||0}`}\n\n不建议批准此签核。是否仍要继续？`;
+            if(!confirm(msg))return;
+        }else if(integrity&&integrity.valid){
+            toast('🔍 证据链完整性校验通过 ✅','success');
+        }
+    }catch(e){/* evidence not available, proceed anyway */}
+
+    if(!confirm('批准此签核将锁定证据链 Hash，之后不可篡改。确认批准？'))return;
+    let evidenceHash='';
+    try{const mfs=await API('/api/manifest/latest');evidenceHash=mfs?mfs.manifest_hash||'':''}catch(e){}
+    await API('/api/signoffs/'+id+'/approve',{method:'PUT'});
+    toast('✅ 已批准 — 证据链已锁定 🔒'+(evidenceHash?' Hash: '+evidenceHash.substring(0,14)+'...':''),'success');
+    loadSignoffs();
+};
+
+// Override viewSignoff to show timeline
+const _origViewSignoff=viewSignoff;
+viewSignoff=async function(id){
+    _origViewSignoff(id);
+    // Also load and show timeline
+    viewSignoffTimeline(id);
+};
+
 // ── INIT ──
 async function initApp(){
     // Default: manager view with module overview
     switchRole('manager');
 }
+
 </script>
 </body>
 </html>

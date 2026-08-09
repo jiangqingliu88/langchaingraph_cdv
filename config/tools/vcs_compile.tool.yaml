@@ -1,0 +1,77 @@
+# SignOffAI CLI Tool Configuration — 零代码接入 VCS 编译
+# 放在 .signoffai/cli_tools/ 或 config/tools/ 目录下即可自动发现
+name: vcs_compile
+version: "1.0.0"
+description: >
+  Compile SystemVerilog design with Synopsys VCS.
+  Use this when you need to check if the design compiles without errors.
+
+risk_level: safe
+timeout_s: 600
+category: simulation
+author: SignOffAI
+tags: [simulation, synopsys, compile]
+agent_roles: [regression_manager]
+tips:
+  - "Ensure VCS_HOME environment variable is set"
+  - "Use -debug_pp for debug access in later steps"
+  - "Check the log file for detailed error messages"
+
+input_schema:
+  type: object
+  properties:
+    filelist:
+      type: string
+      description: "Path to filelist.f containing all source files"
+    top_module:
+      type: string
+      description: "Name of the top-level testbench module"
+    options:
+      type: string
+      default: "-sverilog -debug_pp"
+      description: "Additional VCS compile options"
+  required: [filelist, top_module]
+
+output_schema:
+  type: object
+  properties:
+    status:
+      type: string
+      enum: [PASS, FAIL]
+      description: "Compilation result"
+    errors:
+      type: integer
+      description: "Number of errors found"
+    warnings:
+      type: integer
+      description: "Number of warnings found"
+    returncode:
+      type: integer
+      description: "VCS process exit code"
+
+exec:
+  command: "vcs -f {filelist} -top {top_module} {options}"
+  working_dir: "{output_dir}"
+  env:
+    VCS_HOME: "$VCS_HOME"
+
+parse_output:
+  status:
+    regex: "Compilation (succeeded|failed)"
+    map: {succeeded: PASS, failed: FAIL}
+  errors:
+    regex: "Error-[A-Z]+"
+    group: 0
+  warnings:
+    regex: "Warning-[A-Z]+"
+    group: 0
+
+examples:
+  - description: "Compile ALU testbench"
+    args:
+      filelist: "output/filelist.f"
+      top_module: "alu_tb_top"
+    expected_output: "status=PASS, errors=0, warnings=0"
+
+requires_binaries: [vcs]
+requires_python: ">=3.10"

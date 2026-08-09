@@ -10,6 +10,7 @@ from datetime import datetime
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Body
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.core.execution import PipelineExecutionService
@@ -121,6 +122,12 @@ class DocLinkRequest(BaseModel):
     relation_type: str = 'parent'
     description: str = ''
 
+class RoleWorkflowBindingRequest(BaseModel):
+    role: str
+    workflow_name: str
+    is_default: bool = False
+    description: str = ""
+
 # ── 生命周期 ──
 
 @asynccontextmanager
@@ -140,14 +147,21 @@ async def lifespan(app: FastAPI):
                 admin = await get_user_by_username("admin")
                 if not admin:
                     await create_user("admin", hash_password(bootstrap_password), "系统管理员", "admin@signoffai.dev", "admin")
-                    print("[web] Bootstrap administrator created")
+                    print("[web] Bootstrap administrator created (via BOOTSTRAP_ADMIN_PASSWORD)")
+            elif os.environ.get("APP_ENV", "development") == "production":
+                print("[web] WARNING: Production mode without BOOTSTRAP_ADMIN_PASSWORD. Admin account must be created manually.")
         except Exception: pass
-        # 演示数据仅在 demo 模式下注入
-        if os.environ.get("APP_MODE", "demo").lower() == "demo":
+        # 演示数据仅在显式开启 demo 模式时注入
+        app_mode = os.environ.get("APP_MODE", "production").lower()
+        demo_enabled = os.environ.get("DEMO_ENABLED", "0").lower() in ("1", "true", "yes")
+        if app_mode == "demo" or demo_enabled:
             try:
                 seed_demo_vplan()
+                print("[web] Demo data seeded (APP_MODE=demo or DEMO_ENABLED=1)")
             except Exception as e:
                 print(f"[web] Demo seed failed: {e}")
+        else:
+            print("[web] Demo mode disabled — running in production-safe mode")
         print("[web] Agents initialized")
     except Exception as e:
         print(f"[web] Init failed: {e}")
@@ -155,6 +169,31 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="SignOffAI — IC Verification Signoff Platform", version="2.0.0", lifespan=lifespan)
 
+# ── 注册子路由（业务域模块化） ──
+from src.web.routes import signoff_router, pipeline_router, ppa_router, docs_router
+app.include_router(signoff_router)
+app.include_router(pipeline_router)
+app.include_router(ppa_router)
+app.include_router(docs_router)
+
+# ── 静态文件 ──
+_static_dir = Path(__file__).parent / "static"
+_static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+# ── 统一错误处理 ──
+from src.infra.error_handler import register_error_handlers
+register_error_handlers(app)
+
+# ── 插件系统启动 ──
+@asynccontextmanager
+async def plugin_lifespan(app: FastAPI):
+    from src.infra.plugin_system import bootstrap_plugins
+    await bootstrap_plugins()
+    print("[web] Plugin system bootstrapped")
+    yield
+
+# 将插件启动合并到主 lifespan 中（在现有 lifespan 内部调用）
 
 # ── Demo 数据初始化 ──
 
@@ -556,6 +595,19 @@ async def test_login_page():
 
 @app.post("/api/auth/login")
 async def login(req: LoginRequest, request: Request = None):
+    # 速率限制检查
+    try:
+        from src.infra.security import get_rate_limiter, RATE_LIMITS
+        limiter = get_rate_limiter()
+        ip = request.client.host if request else "unknown"
+        result = limiter.check(f"login:{ip}",
+                               max_calls=RATE_LIMITS["login"]["max_calls"],
+                               window_s=RATE_LIMITS["login"]["window_s"])
+        if not result.allowed:
+            raise HTTPException(status_code=429, detail=f"登录尝试过于频繁，请 {result.retry_after_s:.0f} 秒后重试")
+    except HTTPException: raise
+    except Exception: pass
+
     from src.database.repository import get_user_by_username, update_user_login, update_user_password, add_audit_log
     user = await get_user_by_username(req.username)
     if not user or not verify_password(req.password, user.password_hash):
@@ -659,9 +711,44 @@ async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_aut
 
     # 后台执行流水线
     async def _run():
+        started = __import__('time').time()
         try:
             await service.run_pipeline(spec_text=spec_text, workflow=req.workflow,
                                        output_root=output_root, run_id=run_id)
+            # 记录可观测性指标
+            try:
+                duration = __import__('time').time() - started
+                from src.infra.observability import get_metrics
+                state_obj = service.get_run_status(run_id) or {}
+                phases = state_obj.get("phases", [])
+                get_metrics().record_pipeline_run(
+                    run_id=run_id, workflow=req.workflow,
+                    state=state_obj.get("state", "completed"),
+                    duration_s=duration,
+                    phases_total=len(phases),
+                    phases_passed=sum(1 for p in phases if p.get("status") == "passed"),
+                    phases_failed=sum(1 for p in phases if p.get("status") in ("failed", "error")),
+                    started_at=str(state_obj.get("started_at", "")),
+                    completed_at=str(state_obj.get("completed_at", ""))
+                )
+            except Exception: pass
+
+            # 发布事件
+            try:
+                from src.infra.event_bus import get_event_bus, StandardEvent
+                bus = get_event_bus()
+                state_obj = service.get_run_status(run_id) or {}
+                if state_obj.get("state") == "completed_with_errors":
+                    await bus.publish(StandardEvent.PIPELINE_FAILED,
+                                      {"run_id": run_id, "workflow": req.workflow,
+                                       "error": "Pipeline completed with errors"},
+                                      source="api.pipeline")
+                else:
+                    await bus.publish(StandardEvent.PIPELINE_COMPLETED,
+                                      {"run_id": run_id, "workflow": req.workflow,
+                                       "project_id": 0},
+                                      source="api.pipeline")
+            except Exception: pass
         except Exception as e:
             logger.error("pipeline background task failed", run_id=run_id, error=str(e))
 
@@ -1053,40 +1140,139 @@ async def list_signoffs(project_id: int = None):
 @app.post("/api/signoffs")
 async def create_signoff_api(req: SignoffCreateRequest, user: dict = Depends(require_auth)):
     from src.database.repository import create_signoff, add_audit_log
-    sid = await create_signoff(req.project_id, req.title, req.report_type, req.summary, user["user_id"])
-    await add_audit_log(user["user_id"], user["username"], "signoff_create", str(sid), req.title)
-    return {"id": sid, "status": "pending"}
+    # Gather evidence info
+    run_id = ""; manifest_hash = ""
+    try:
+        from pathlib import Path; import json
+        for mf in sorted(Path("output").glob("**/docs/manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            data = json.loads(mf.read_text(encoding="utf-8"))
+            run_id = data.get("run_id", "")
+            manifest_hash = data.get("manifest_hash", "")
+            break
+    except Exception: pass
+
+    sid = await create_signoff(req.project_id, req.title, req.report_type,
+                                req.summary, user["user_id"],
+                                run_id=run_id, manifest_hash=manifest_hash)
+    await add_audit_log(user["user_id"], user["username"], "signoff_create", str(sid),
+                        req.title, role=user.get("role", ""),
+                        resource_type="signoff", is_privileged=True)
+    return {"id": sid, "status": "pending", "run_id": run_id}
 
 @app.put("/api/signoffs/{sid}/approve")
 async def approve_signoff(sid: int, comment: str = "", user: dict = Depends(require_auth)):
-    """批准签核 — 仅管理员和验证经理"""
-    if user.get("role") not in ("admin", "verification_manager"):
+    """批准签核 — 仅管理员和验证经理，自动记录审批事件和审计日志"""
+    user_role = user.get("role", "")
+    if user_role not in ("admin", "verification_manager"):
+        # 越权尝试审计
+        from src.database.repository import add_audit_log
+        await add_audit_log(user["user_id"], user["username"], "signoff_approve_denied", str(sid),
+                            f"越权尝试批准签核", role=user_role, resource_type="signoff",
+                            access_result="denied", is_privileged=True)
         raise HTTPException(status_code=403, detail="仅 SignOff 经理可以批准签核")
+
     from src.database.repository import update_signoff, add_audit_log, get_signoff_by_id
     sf = await get_signoff_by_id(sid)
     if not sf:
         raise HTTPException(status_code=404, detail="签核记录不存在")
     if sf.get("status") not in ("pending",):
         raise HTTPException(status_code=400, detail=f"签核状态 '{sf.get('status')}' 不可批准，仅 pending 状态可批准")
-    ok = await update_signoff(sid, "approved", user["user_id"], comment)
-    await add_audit_log(user["user_id"], user["username"], "signoff_approve", str(sid),
-                        f"状态: pending->approved | 意见: {comment[:100]}")
+
+    ok = await update_signoff(sid, "approved", user["user_id"], comment,
+                              approver_name=user.get("display_name", user["username"]))
+
+    # 增强审计日志 — 记录角色上下文和状态变更
+    await add_audit_log(
+        user["user_id"], user["username"], "signoff_approve", str(sid),
+        f"状态: pending->approved | 意见: {comment[:100]}",
+        role=user_role, resource_type="signoff",
+        access_result="success", is_privileged=True,
+        before_state="pending", after_state="approved"
+    )
+
+    # 发布事件 + 记录签核周期指标
+    try:
+        from src.infra.event_bus import get_event_bus, StandardEvent
+        bus = get_event_bus()
+        await bus.publish(StandardEvent.SIGNOFF_APPROVED, {
+            "signoff_id": sid, "approver": user["username"],
+            "evidence_hash": sf.get("manifest_hash", ""),
+            "user_id": user["user_id"], "role": user_role,
+        }, source="api.signoff")
+    except Exception: pass
+
+    # 触发工作流
+    try:
+        from src.infra.workflow_triggers import get_trigger_service
+        svc = get_trigger_service()
+        await svc.evaluate("signoff_approved", {
+            "signoff_id": sid, "project_id": sf.get("project_id", 0),
+            "approver": user.get("username", ""), "role": user_role,
+        })
+    except Exception: pass
+
+    try:
+        from src.infra.observability import get_metrics
+        created = sf.get("created_at", "")
+        if created:
+            from datetime import datetime as dt
+            c_time = dt.fromisoformat(str(created))
+            cycle_min = (dt.now() - c_time).total_seconds() / 60
+            get_metrics().record_signoff_cycle(sid, sf.get("title", ""), "approved",
+                                                cycle_min, user["username"],
+                                                created_at=str(created),
+                                                approved_at=dt.now().isoformat())
+    except Exception: pass
+
     return {"ok": ok, "status": "approved", "locked": True}
 
 @app.put("/api/signoffs/{sid}/reject")
 async def reject_signoff(sid: int, comment: str = "", user: dict = Depends(require_auth)):
-    """驳回签核 — 仅管理员和验证经理"""
-    if user.get("role") not in ("admin", "verification_manager"):
+    """驳回签核 — 仅管理员和验证经理，自动记录驳回事件"""
+    user_role = user.get("role", "")
+    if user_role not in ("admin", "verification_manager"):
+        from src.database.repository import add_audit_log
+        await add_audit_log(user["user_id"], user["username"], "signoff_reject_denied", str(sid),
+                            f"越权尝试驳回签核", role=user_role, resource_type="signoff",
+                            access_result="denied", is_privileged=True)
         raise HTTPException(status_code=403, detail="仅 SignOff 经理可以驳回签核")
+
     from src.database.repository import update_signoff, add_audit_log, get_signoff_by_id
     sf = await get_signoff_by_id(sid)
     if not sf:
         raise HTTPException(status_code=404, detail="签核记录不存在")
     if sf.get("status") not in ("pending",):
         raise HTTPException(status_code=400, detail=f"签核状态 '{sf.get('status')}' 不可驳回，仅 pending 状态可驳回")
-    ok = await update_signoff(sid, "rejected", user["user_id"], comment)
-    await add_audit_log(user["user_id"], user["username"], "signoff_reject", str(sid),
-                        f"状态: pending->rejected | 理由: {comment[:100]}")
+
+    ok = await update_signoff(sid, "rejected", user["user_id"], comment, reject_reason=comment)
+    await add_audit_log(
+        user["user_id"], user["username"], "signoff_reject", str(sid),
+        f"状态: pending->rejected | 理由: {comment[:100]}",
+        role=user_role, resource_type="signoff",
+        access_result="success", is_privileged=True,
+        before_state="pending", after_state="rejected"
+    )
+
+    # 发布事件
+    try:
+        from src.infra.event_bus import get_event_bus, StandardEvent
+        bus = get_event_bus()
+        await bus.publish(StandardEvent.SIGNOFF_REJECTED, {
+            "signoff_id": sid, "reason": comment,
+            "user_id": user["user_id"], "role": user_role,
+        }, source="api.signoff")
+    except Exception: pass
+
+    # 触发工作流
+    try:
+        from src.infra.workflow_triggers import get_trigger_service
+        svc = get_trigger_service()
+        await svc.evaluate("signoff_rejected", {
+            "signoff_id": sid, "project_id": sf.get("project_id", 0),
+            "reason": comment, "rejected_by": user.get("username", ""),
+        })
+    except Exception: pass
+
     return {"ok": ok, "status": "rejected"}
 
 # ═══════════════════════════════════════════════════════════
@@ -2071,7 +2257,7 @@ async def read_doc(path: str):
 
 @app.post("/api/docs/{path:path}")
 async def write_doc(path: str, content: str = "", user: dict = Depends(require_auth)):
-    """保存规格文档 — content 作为 query 参数传递"""
+    """保存规格文档 — 文件系统 + SQL 双写 + 版本历史"""
     role = user.get("role", "")
     if role not in ("admin", "verification_manager"):
         raise HTTPException(status_code=403, detail="仅 SignOff 经理可以编辑规格文档")
@@ -2082,6 +2268,26 @@ async def write_doc(path: str, content: str = "", user: dict = Depends(require_a
     fp = _resolve_spec_path(path)
     fp.parent.mkdir(parents=True, exist_ok=True)
     fp.write_text(content, encoding="utf-8")
+
+    # 同步到 SQL 文档生态 + 版本历史
+    try:
+        from src.database.repository import create_document, update_document, add_audit_log
+        import hashlib
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        # 查找是否已有记录
+        from src.database.repository import search_documents
+        existing = await search_documents(keyword=fp.stem, limit=1)
+        if existing and len(existing.get("docs", [])) > 0:
+            doc = existing["docs"][0]
+            await update_document(doc["id"], content, user["user_id"], f"保存于 {fp.name}")
+        else:
+            # 提取标题
+            title = fp.stem
+            for line in content.split("\n"):
+                if line.startswith("# "): title = line[2:].strip(); break
+            await create_document(0, str(fp.relative_to(SPECS_DIR)), title, content, user["user_id"])
+    except Exception: pass
+
     try:
         from src.database.repository import add_audit_log
         await add_audit_log(user["user_id"], user["username"], "doc_save", str(fp))
@@ -2126,6 +2332,55 @@ async def v2_search_docs(project_id: int = None, level: str = None, keyword: str
     from src.database import repository
     return await repository.search_documents(project_id, level, keyword, req_id, tags, limit)
 
+@app.get("/api/v2/docs/{doc_id}/versions")
+async def v2_get_versions(doc_id: int):
+    """获取文档的版本历史"""
+    from src.database.connection import get_session
+    from src.database.models import DocVersion
+    from sqlalchemy import select, desc
+    s = await get_session()
+    rows = (await s.execute(select(DocVersion).where(DocVersion.document_id == doc_id).order_by(desc(DocVersion.created_at)).limit(20))).scalars().all()
+    versions = [{"id": r.id, "version": r.version, "content_hash": r.content_hash,
+                 "change_summary": r.change_summary, "created_at": str(r.created_at),
+                 "author_id": r.author_id} for r in rows]
+    await s.close()
+    return {"doc_id": doc_id, "versions": versions, "count": len(versions)}
+
+@app.get("/api/v2/docs/{doc_id}/versions/{version_id}")
+async def v2_get_version_content(doc_id: int, version_id: int):
+    """获取特定版本的内容"""
+    from src.database.connection import get_session
+    from src.database.models import DocVersion
+    from sqlalchemy import select
+    s = await get_session()
+    v = (await s.execute(select(DocVersion).where(DocVersion.id == version_id, DocVersion.document_id == doc_id))).scalar_one_or_none()
+    await s.close()
+    if not v:
+        raise HTTPException(status_code=404, detail="版本不存在")
+    return {"id": v.id, "version": v.version, "content": v.content, "content_hash": v.content_hash,
+            "change_summary": v.change_summary, "created_at": str(v.created_at)}
+
+@app.post("/api/v2/docs/{doc_id}/versions/{version_id}/restore")
+async def v2_restore_version(doc_id: int, version_id: int, current_user=Depends(require_auth)):
+    """回退文档到指定版本"""
+    from src.database.connection import get_session
+    from src.database.models import DocVersion
+    from src.database import repository
+    from sqlalchemy import select
+    s = await get_session()
+    v = (await s.execute(select(DocVersion).where(DocVersion.id == version_id, DocVersion.document_id == doc_id))).scalar_one_or_none()
+    await s.close()
+    if not v:
+        raise HTTPException(status_code=404, detail="版本不存在")
+    result = await repository.update_document(doc_id, v.content, current_user['id'],
+                                               f"回退到版本 {v.version}")
+    if result == 0:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    await repository.add_audit_log(current_user['id'], current_user.get('username', ''), 'doc.restore',
+                                   f'doc/{doc_id}', f'回退到版本 {v.version}')
+    return {"id": result, "status": "restored", "version": v.version}
+
+
 @app.get("/api/v2/requirements/{req_id}")
 async def v2_get_req_trace(req_id: str):
     from src.database import repository
@@ -2164,7 +2419,1013 @@ async def v2_sync_docs(project_id: int = 1, current_user=Depends(require_admin))
     return result
 
 # ═══════════════════════════════════════════════════════════
-# 调试日志
+# 工具治理 API — Tool Registry + Sandbox
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/tools/list")
+async def list_tools():
+    """列出所有已注册工具及其 schema、风险等级"""
+    from src.core.tool_system import ToolRegistry, register_builtin_tools, RISK_RULES
+    registry = ToolRegistry()
+    register_builtin_tools(registry)
+
+    # Also collect tools from agent contracts
+    service = PipelineExecutionService.get_instance()
+    agent_tools = {}
+    if service.initialized:
+        for role, agent in service.registry.get_all_instances().items():
+            agent_tools_list = []
+            for t in (getattr(agent, 'tools', None) or []):
+                if hasattr(t, 'name'):
+                    agent_tools_list.append({"name": t.name, "description": getattr(t, 'description', '')[:100]})
+            if agent_tools_list:
+                agent_tools[role] = agent_tools_list
+
+    return {
+        "registry": registry.get_stats(),
+        "risk_levels": RISK_RULES,
+        "agent_tools": agent_tools,
+        "total_agent_tools": sum(len(v) for v in agent_tools.values()),
+    }
+
+
+@app.get("/api/tools/sandbox")
+async def get_sandbox_config():
+    """获取沙箱配置和统计"""
+    from src.core.tool_system import RISK_RULES
+    return {
+        "risk_rules": RISK_RULES,
+        "config": {
+            "auto_approve_safe": True,
+            "console_confirm_write": True,
+            "block_danger": True,
+            "allowed_root": str(WORKSPACE_ROOT),
+        },
+        "stats": {
+            "total_tools_registered": 3,  # builtin count
+            "safe_tools": 1,
+            "write_tools": 1,
+            "danger_tools": 1,
+        },
+    }
+
+
+@app.get("/api/tools/history")
+async def get_tool_history(limit: int = 50):
+    """获取工具调用历史记录"""
+    from src.core.tool_system import ToolRegistry, register_builtin_tools
+    registry = ToolRegistry()
+    register_builtin_tools(registry)
+    # Also try to get registry from pipeline service
+    service = PipelineExecutionService.get_instance()
+    if service.initialized:
+        for agent in service.registry.get_all_instances().values():
+            agent_registry = getattr(agent, 'tool_registry', None)
+            if agent_registry:
+                return {"history": agent_registry.get_history(limit), "total": agent_registry._total_calls}
+    return {"history": registry.get_history(limit), "note": "使用独立 registry（Agent 未初始化）"}
+
+
+@app.get("/api/tools/{tool_name}")
+async def get_tool_detail(tool_name: str):
+    """获取单个工具的详细信息"""
+    from src.core.tool_system import ToolRegistry, register_builtin_tools
+    registry = ToolRegistry()
+    register_builtin_tools(registry)
+    tool = registry.get(tool_name)
+    if not tool:
+        raise HTTPException(status_code=404, detail=f"Tool not found: {tool_name}")
+    return {
+        "name": tool.name,
+        "description": tool.description,
+        "risk_level": tool.risk_level,
+        "input_schema": tool.input_schema,
+        "has_handler": tool.handler is not None,
+        "llm_spec": tool.to_llm_description(),
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# 签核证据链增强 API — 时间线 + 证据门禁
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/signoffs/{sid}/evidence")
+async def get_signoff_evidence(sid: int):
+    """获取签核关联的完整证据链（manifest + evidence + integrity）"""
+    from src.database.repository import get_signoff_by_id
+    sf = await get_signoff_by_id(sid)
+    if not sf:
+        raise HTTPException(status_code=404, detail="签核记录不存在")
+
+    summary = sf.get("summary", {}) or {}
+    run_id = summary.get("run_id", "")
+    manifest_hash = summary.get("manifest_hash", "")
+
+    # 尝试获取完整 manifest
+    manifest_data = None
+    integrity = None
+    if run_id:
+        try:
+            from pathlib import Path
+            import json
+            for mf in sorted(Path("output").glob("**/docs/manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+                try:
+                    data = json.loads(mf.read_text(encoding="utf-8"))
+                    if data.get("run_id") == run_id:
+                        manifest_data = data
+                        break
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    # 完整性校验
+    if run_id:
+        try:
+            # Reuse verify logic
+            from src.core.manifest import hash_json
+            import hashlib
+            if manifest_data:
+                stored_hash = manifest_data.get("manifest_hash", "")
+                calc_data = {k: v for k, v in manifest_data.items() if k != "manifest_hash"}
+                calc_hash = hash_json(calc_data)
+                manifest_ok = stored_hash == calc_hash
+
+                phases = manifest_data.get("phases", [])
+                total = manifest_data.get("total_phases", len(phases))
+
+                integrity = {
+                    "manifest_hash_ok": manifest_ok,
+                    "phases_complete": len(phases) == total,
+                    "phases_passed": sum(1 for p in phases if p.get("status") == "passed"),
+                    "phases_failed": sum(1 for p in phases if p.get("status") in ("failed", "error")),
+                    "total_phases": total,
+                    "valid": manifest_ok and len(phases) == total,
+                    "conclusion": "🟢 证据链完整" if (manifest_ok and len(phases) == total) else "🔴 证据链存在问题",
+                }
+        except Exception:
+            pass
+
+    return {
+        "signoff_id": sid,
+        "status": sf.get("status", ""),
+        "run_id": run_id,
+        "manifest_hash": manifest_hash,
+        "evidence_hash": summary.get("evidence_hash", ""),
+        "manifest": manifest_data,
+        "integrity": integrity,
+        "summary": summary,
+    }
+
+
+@app.get("/api/signoffs/{sid}/timeline")
+async def get_signoff_timeline(sid: int):
+    """获取签核的完整时间线（创建→证据关联→审批→锁定）"""
+    from src.database.repository import get_audit_logs
+    # Get all audit logs related to this signoff
+    logs = await get_audit_logs(limit=200)
+    related = []
+    for log in logs:
+        target = log.get("target", "") or log.get("target_id", "")
+        if str(sid) in str(target) or log.get("action", "") in ("signoff_create", "signoff_approve", "signoff_reject", "evidence_export", "pipeline_run"):
+            if str(sid) in str(target) or log.get("action", "").startswith("signoff"):
+                related.append({
+                    "id": log.get("id", 0),
+                    "username": log.get("username", ""),
+                    "action": log.get("action", ""),
+                    "detail": log.get("detail", ""),
+                    "timestamp": str(log.get("created_at", "")),
+                })
+
+    # Also get the signoff itself
+    from src.database.repository import get_signoff_by_id
+    sf = await get_signoff_by_id(sid)
+
+    timeline = []
+    if sf:
+        timeline.append({
+            "event": "created",
+            "title": "签核创建",
+            "description": f"创建签核: {sf.get('title', '')}",
+            "timestamp": str(sf.get("created_at", "")),
+            "icon": "📝",
+        })
+        if sf.get("approved_at"):
+            timeline.append({
+                "event": "approved",
+                "title": "签核批准",
+                "description": f"由 {sf.get('approved_by_name', 'N/A')} 批准",
+                "timestamp": str(sf.get("approved_at", "")),
+                "icon": "✅",
+            })
+        elif sf.get("status") == "rejected":
+            timeline.append({
+                "event": "rejected",
+                "title": "签核驳回",
+                "description": sf.get("reject_reason", ""),
+                "timestamp": str(sf.get("updated_at", "")),
+                "icon": "❌",
+            })
+
+    # Add audit trail events
+    for log in related:
+        icon_map = {"signoff_create": "📝", "signoff_approve": "✅", "signoff_reject": "❌",
+                    "evidence_export": "📦", "pipeline_run": "▶️"}
+        timeline.append({
+            "event": log["action"],
+            "title": log["action"].replace("_", " ").title(),
+            "description": log.get("detail", ""),
+            "timestamp": log["timestamp"],
+            "icon": icon_map.get(log["action"], "📋"),
+            "user": log["username"],
+        })
+
+    # Sort by timestamp
+    timeline.sort(key=lambda x: x.get("timestamp", ""))
+    return {"signoff_id": sid, "timeline": timeline, "total_events": len(timeline)}
+
+
+# ═══════════════════════════════════════════════════════════
+# 签核事件 + 证据对象 API（数据库模型升级）
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/signoffs/{sid}/events")
+async def get_signoff_events_api(sid: int):
+    """获取签核的完整事件流（审批历史、状态变更）"""
+    from src.database.repository import get_signoff_events
+    events = await get_signoff_events(sid)
+    return {"signoff_id": sid, "events": events, "total": len(events)}
+
+
+@app.get("/api/artifacts")
+async def list_artifacts(run_id: str = "", signoff_id: int = None, artifact_type: str = "", limit: int = 50):
+    """列出证据产物 — 支持按 run_id / signoff_id / type 过滤"""
+    from src.database.repository import get_artifacts
+    return {"artifacts": await get_artifacts(run_id, signoff_id, artifact_type, limit)}
+
+
+@app.post("/api/artifacts")
+async def create_artifact_api(project_id: int = 0, run_id: str = "", signoff_id: int = 0,
+                              artifact_type: str = "", name: str = "", path: str = "",
+                              content_hash: str = "", size_bytes: int = 0,
+                              user: dict = Depends(require_auth)):
+    """注册一个证据产物"""
+    from src.database.repository import create_artifact, add_audit_log
+    aid = await create_artifact(project_id, run_id, signoff_id, artifact_type, name,
+                                path, content_hash, size_bytes)
+    await add_audit_log(user["user_id"], user["username"], "artifact_create", str(aid),
+                        f"{artifact_type}: {name}", role=user.get("role", ""),
+                        resource_type="artifact")
+    return {"id": aid, "status": "registered"}
+
+
+@app.get("/api/evidence-links")
+async def list_evidence_links(object_type: str = "", object_id: int = None, limit: int = 50):
+    """列出证据关联"""
+    from src.database.repository import get_evidence_links
+    return {"links": await get_evidence_links(object_type, object_id, limit)}
+
+
+@app.post("/api/evidence-links")
+async def create_evidence_link_api(artifact_id: int = 0, object_type: str = "",
+                                    object_id: int = 0, relation_type: str = "attached_to",
+                                    user: dict = Depends(require_auth)):
+    """创建证据关联"""
+    from src.database.repository import link_evidence, add_audit_log
+    lid = await link_evidence(artifact_id, object_type, object_id, relation_type)
+    await add_audit_log(user["user_id"], user["username"], "evidence_link", str(lid),
+                        f"{object_type}#{object_id} <- artifact#{artifact_id} ({relation_type})",
+                        role=user.get("role", ""), resource_type="evidence")
+    return {"id": lid, "status": "linked"}
+
+
+# ═══════════════════════════════════════════════════════════
+# 增强审计 API — 支持角色上下文和越权过滤
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/audit/enhanced")
+async def enhanced_audit_logs(limit: int = 50, action: str = "", role: str = "",
+                               access_result: str = "", user: dict = Depends(require_admin)):
+    """增强审计日志 — 支持按操作类型、角色、访问结果(成功/越权)过滤"""
+    from src.database.repository import get_audit_logs
+    logs = await get_audit_logs(limit=limit, action_filter=action or None,
+                                role_filter=role or None, access_result=access_result or None)
+    # 统计
+    total = len(logs)
+    denied = sum(1 for l in logs if l.get("access_result") == "denied")
+    privileged = sum(1 for l in logs if l.get("is_privileged_action"))
+    return {
+        "logs": logs,
+        "total": total,
+        "denied_count": denied,
+        "privileged_count": privileged,
+        "filters": {"action": action, "role": role, "access_result": access_result},
+    }
+
+
+@app.get("/api/audit/summary")
+async def audit_summary(days: int = 7, user: dict = Depends(require_admin)):
+    """审计摘要 — 按角色、操作类型、访问结果聚合"""
+    from src.database.repository import get_audit_logs
+    logs = await get_audit_logs(limit=500)
+    from datetime import datetime, timedelta
+    cutoff = datetime.now() - timedelta(days=days)
+
+    by_role = {}
+    by_action = {}
+    by_result = {"success": 0, "denied": 0, "error": 0}
+    for log in logs:
+        try:
+            ts = datetime.fromisoformat(str(log.get("created_at", "")))
+            if ts < cutoff: continue
+        except: pass
+        role = log.get("role", "unknown")
+        action = log.get("action", "unknown")
+        result = log.get("access_result", "success")
+        by_role[role] = by_role.get(role, 0) + 1
+        by_action[action] = by_action.get(action, 0) + 1
+        if result in by_result: by_result[result] += 1
+
+    return {
+        "period_days": days,
+        "total_actions": sum(by_role.values()),
+        "by_role": [{"role": k, "count": v} for k, v in sorted(by_role.items(), key=lambda x: -x[1])],
+        "by_action": [{"action": k, "count": v} for k, v in sorted(by_action.items(), key=lambda x: -x[1])[:10]],
+        "by_result": by_result,
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# 平台化能力 API — 数据治理 + 事件总线 + 可观测性 + 安全
+# ═══════════════════════════════════════════════════════════
+
+# ── 数据字典 ──
+
+@app.get("/api/governance/data-dictionary")
+async def get_data_dictionary(user: dict = Depends(require_auth)):
+    """获取统一数据字典 — 所有实体定义、状态机、字段约束"""
+    from src.infra.data_governance import get_data_dictionary as get_dd
+    dd = get_dd()
+    entities = {}
+    for name, entity in dd.entities.items():
+        entities[name] = {
+            "table_name": entity.table_name,
+            "display_name": entity.display_name,
+            "description": entity.description,
+            "fields": [{
+                "name": f.name, "type": f.type, "required": f.required,
+                "max_length": f.max_length, "enum_values": f.enum_values,
+                "description": f.description,
+            } for f in entity.fields],
+            "state_machine": entity.state_machine,
+            "unique_constraints": entity.unique_constraints,
+            "foreign_keys": entity.foreign_keys,
+        }
+    return {"entities": entities, "total_entities": len(entities)}
+
+
+@app.get("/api/governance/data-dictionary/export")
+async def export_data_dictionary_api(user: dict = Depends(require_admin)):
+    """导出 Markdown 数据字典"""
+    from src.infra.data_governance import export_data_dictionary
+    path = export_data_dictionary()
+    return {"path": path, "format": "markdown"}
+
+
+@app.get("/api/governance/consistency-check")
+async def run_consistency_check(user: dict = Depends(require_admin)):
+    """运行跨表一致性检查"""
+    from src.infra.data_governance import ConsistencyChecker
+    checker = ConsistencyChecker()
+    issues = await checker.check_all()
+    return {
+        "total_issues": len(issues),
+        "errors": sum(1 for i in issues if i.severity == "error"),
+        "warnings": sum(1 for i in issues if i.severity == "warning"),
+        "issues": [{"entity": i.entity, "entity_id": i.entity_id,
+                     "issue": i.issue, "severity": i.severity,
+                     "related_entity": i.related_entity} for i in issues],
+    }
+
+
+# ── 事件总线 ──
+
+@app.get("/api/events/history")
+async def get_event_history(event_type: str = "", limit: int = 50, user: dict = Depends(require_auth)):
+    """获取事件历史"""
+    from src.infra.event_bus import get_event_bus, StandardEvent
+    bus = get_event_bus()
+    evt_type = StandardEvent(event_type) if event_type else None
+    return {"events": bus.get_history(evt_type, limit), "stats": bus.get_stats()}
+
+
+@app.get("/api/events/stats")
+async def get_event_stats(user: dict = Depends(require_auth)):
+    """获取事件总线统计"""
+    from src.infra.event_bus import get_event_bus
+    return get_event_bus().get_stats()
+
+
+# ── 可观测性仪表盘 ──
+
+@app.get("/api/observability/dashboard")
+async def observability_dashboard(user: dict = Depends(require_admin)):
+    """运维仪表盘 — 流水线耗时、签核周期、模块失败率、API 延迟"""
+    from src.infra.observability import get_metrics, get_slow_query_detector
+    metrics = get_metrics()
+    slow = get_slow_query_detector()
+    stats = metrics.get_dashboard_stats()
+    stats["slow_queries"] = {
+        "summary": slow.get_summary(),
+        "recent": slow.get_slow_queries(10),
+    }
+    return stats
+
+
+@app.get("/api/observability/pipeline-timeline")
+async def pipeline_timeline(limit: int = 30, user: dict = Depends(require_auth)):
+    """获取流水线时间线（趋势图数据）"""
+    from src.infra.observability import get_metrics
+    return {"timeline": get_metrics().get_pipeline_timeline(limit)}
+
+
+@app.get("/api/observability/health")
+async def system_health():
+    """系统健康检查（公开端点）"""
+    from src.infra.observability import HealthChecker
+    return await HealthChecker.check_all()
+
+
+# ── 安全 ──
+
+@app.get("/api/security/audit-chain/verify")
+async def verify_audit_chain(user: dict = Depends(require_admin)):
+    """验证审计链完整性 — 检测是否被篡改"""
+    from src.infra.security import get_audit_chain
+    chain = get_audit_chain()
+    valid, message = chain.verify()
+    return {
+        "valid": valid,
+        "message": message,
+        "chain_info": chain.get_chain_info(),
+    }
+
+
+@app.get("/api/security/audit-chain/export")
+async def export_audit_chain(user: dict = Depends(require_admin)):
+    """导出审计链（前 50 条）"""
+    from src.infra.security import get_audit_chain
+    return {"chain": get_audit_chain().export_chain()[-50:]}
+
+
+@app.get("/api/security/rate-limits")
+async def get_rate_limits(user: dict = Depends(require_admin)):
+    """获取速率限制器状态"""
+    from src.infra.security import get_rate_limiter, RATE_LIMITS
+    limiter = get_rate_limiter()
+    return {
+        "config": RATE_LIMITS,
+        "current_status": limiter.get_status(),
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# 业务口径 + 可解释性 + 协作 + 影响评估 + 健康监控 API
+# ═══════════════════════════════════════════════════════════
+
+# ── 业务术语表 ──
+
+@app.get("/api/glossary")
+async def get_glossary():
+    """获取统一业务术语表"""
+    from src.infra.business_glossary import get_glossary as get_gloss
+    g = get_gloss()
+    return {"terms": g.export_glossary(), "total": len(g.all_terms())}
+
+
+@app.get("/api/glossary/check/{term}")
+async def check_business_term(term: str, line_pct: float = 0, branch_pct: float = 0,
+                               toggle_pct: float = 0, score: float = 0,
+                               regression_pass_rate: float = 0):
+    """检查给定指标是否满足某业务口径"""
+    from src.infra.business_glossary import get_glossary as get_gloss
+    g = get_gloss()
+    metrics = {"line_pct": line_pct, "branch_pct": branch_pct, "toggle_pct": toggle_pct,
+               "score": score, "regression_pass_rate": regression_pass_rate}
+    ok, reason, failures = g.check(term, metrics)
+    return {"term": term, "ok": ok, "reason": reason, "failures": failures, "checked_metrics": metrics}
+
+
+# ── 决策追溯 ──
+
+@app.get("/api/decisions/recent")
+async def get_recent_decisions(limit: int = 20, user: dict = Depends(require_auth)):
+    """获取最近的 AI 决策追溯"""
+    from src.infra.business_glossary import get_tracer
+    tracer = get_tracer()
+    traces = tracer.get_recent_traces(limit)
+    return {"traces": [{"decision_id": t.decision_id, "decision_type": t.decision_type,
+             "timestamp": t.timestamp, "final_conclusion": t.final_conclusion,
+             "overall_confidence": t.overall_confidence,
+             "human_review_required": t.human_review_required,
+             "steps_count": len(t.steps)} for t in traces], "total": len(traces)}
+
+
+@app.get("/api/decisions/{decision_id}")
+async def get_decision_detail(decision_id: str, user: dict = Depends(require_auth)):
+    """获取决策的完整推理链"""
+    from src.infra.business_glossary import get_tracer
+    tracer = get_tracer()
+    trace = tracer.get_trace(decision_id)
+    if not trace: raise HTTPException(status_code=404, detail="决策不存在")
+    return {"decision_id": trace.decision_id, "decision_type": trace.decision_type,
+            "steps": [{"step": s.step_number, "description": s.description,
+                        "evidence": s.evidence, "rule": s.rule_applied,
+                        "conclusion": s.conclusion, "confidence": s.confidence}
+                      for s in trace.steps],
+            "evidence_sources": trace.evidence_sources,
+            "final_conclusion": trace.final_conclusion,
+            "overall_confidence": trace.overall_confidence,
+            "human_review_required": trace.human_review_required,
+            "review_reason": trace.review_reason,
+            "report": tracer.generate_explainability_report(decision_id)}
+
+
+@app.get("/api/decisions/review-required")
+async def get_decisions_requiring_review(user: dict = Depends(require_auth)):
+    """获取所有需要人工审核的决策"""
+    from src.infra.business_glossary import get_tracer
+    traces = get_tracer().get_traces_requiring_review()
+    return {"traces": [{"decision_id": t.decision_id, "decision_type": t.decision_type,
+             "confidence": t.overall_confidence, "reason": t.review_reason}
+            for t in traces], "total": len(traces)}
+
+
+# ── 协作 ──
+
+@app.get("/api/collaboration/gates/{object_key:path}")
+async def get_review_gates(object_key: str):
+    """获取对象的审核门禁状态"""
+    from src.infra.collaboration import get_gate_manager
+    gm = get_gate_manager()
+    passed, results = gm.check_all_gates(object_key)
+    return {"object_key": object_key, "all_passed": passed,
+            "gates": [{"gate_id": r.gate_id, "passed": r.passed,
+                        "reason": r.reason, "escalation": r.escalation_required}
+                      for r in results]}
+
+
+@app.post("/api/collaboration/gates/{object_key:path}/approve")
+async def approve_gate(object_key: str, gate_id: str = "", comment: str = "",
+                        user: dict = Depends(require_auth)):
+    """审批通过一个门禁"""
+    from src.infra.collaboration import get_gate_manager
+    gm = get_gate_manager()
+    result = gm.approve_gate(object_key, gate_id, user["username"],
+                              user.get("role", ""), comment)
+    return {"passed": result.passed, "gate_id": result.gate_id,
+            "reason": result.reason, "missing_approvals": result.missing_approvals}
+
+
+@app.get("/api/collaboration/comments/{object_type}/{object_id}")
+async def get_comments(object_type: str, object_id: int):
+    """获取评论线程"""
+    from src.infra.collaboration import get_comment_system
+    return {"threads": get_comment_system().get_thread(object_type, object_id)}
+
+
+@app.post("/api/collaboration/comments")
+async def add_comment(object_type: str = "", object_id: int = 0, content: str = "",
+                      parent_id: str = "", user: dict = Depends(require_auth)):
+    """添加评论（支持 @mentions）"""
+    from src.infra.collaboration import get_comment_system
+    cs = get_comment_system()
+    comment = cs.add_comment(object_type, object_id, user["username"],
+                              content, user.get("role", ""), parent_id)
+    return {"comment_id": comment.comment_id, "mentions": comment.mentions}
+
+
+@app.get("/api/collaboration/notifications")
+async def get_notifications(unread_only: bool = False, user: dict = Depends(require_auth)):
+    """获取用户通知"""
+    from src.infra.collaboration import get_comment_system
+    cs = get_comment_system()
+    return {"notifications": cs.get_notifications(user["username"], unread_only),
+            "unread": cs.get_unread_count(user["username"])}
+
+
+@app.get("/api/collaboration/tasks")
+async def get_my_tasks(status: str = "", user: dict = Depends(require_auth)):
+    """获取我的任务"""
+    from src.infra.collaboration import get_task_manager, TaskStatus
+    tm = get_task_manager()
+    status_filter = TaskStatus(status) if status else None
+    tasks = tm.get_user_tasks(user["username"], status_filter)
+    return {"tasks": [{"task_id": t.task_id, "title": t.title, "status": t.status.value,
+             "priority": t.priority, "due_date": t.due_date,
+             "handoff_count": len(t.handoff_history)} for t in tasks], "total": len(tasks)}
+
+
+# ── 影响评估 ──
+
+@app.get("/api/rules")
+async def get_rules(category: str = "", user: dict = Depends(require_auth)):
+    """获取所有可配置规则"""
+    from src.infra.impact_analyzer import get_rule_registry
+    registry = get_rule_registry()
+    rules = registry.get_all_rules()
+    if category: rules = [r for r in rules if r.category.value == category]
+    return {"rules": [{"rule_id": r.rule_id, "name": r.name, "category": r.category.value,
+             "current_value": r.current_value, "version": r.version,
+             "usage_count": r.usage_count, "affects": r.affects} for r in rules], "total": len(rules)}
+
+
+@app.post("/api/rules/analyze-change")
+async def analyze_rule_change(rule_id: str = "", new_value: str = "",
+                               user: dict = Depends(require_auth)):
+    """分析规则变更的影响范围（模拟，不执行）"""
+    from src.infra.impact_analyzer import get_impact_analyzer
+    import json as _json
+    try: parsed_value = _json.loads(new_value)
+    except Exception: parsed_value = new_value
+    analyzer = get_impact_analyzer()
+    report = analyzer.analyze_change(rule_id, parsed_value, user["username"], "API analysis")
+    return {"rule_id": report.rule_id, "old_value": report.old_value,
+            "new_value": report.new_value, "risk": report.risk.value,
+            "affected_projects": report.affected_projects,
+            "affected_signoffs": report.affected_signoffs,
+            "affected_rules": report.affected_rules,
+            "affected_functions": report.affected_functions,
+            "recommendations": report.recommendations,
+            "requires_approval": report.requires_approval,
+            "rollback_plan": report.rollback_plan}
+
+
+@app.post("/api/rules/change")
+async def execute_rule_change(rule_id: str = "", new_value: str = "", reason: str = "",
+                               user: dict = Depends(require_admin)):
+    """执行规则变更（需管理员权限）"""
+    from src.infra.impact_analyzer import get_rule_registry, get_impact_analyzer
+    import json as _json
+    try: parsed_value = _json.loads(new_value)
+    except Exception: parsed_value = new_value
+    analyzer = get_impact_analyzer()
+    report = analyzer.analyze_change(rule_id, parsed_value, user["username"], reason)
+    if report.risk.value in ("high", "critical") and not reason:
+        raise HTTPException(status_code=400, detail=f"风险等级 {report.risk.value}，必须提供变更理由")
+    registry = get_rule_registry()
+    change = registry.change_rule(rule_id, parsed_value, user["username"], reason)
+    from src.database.repository import add_audit_log
+    await add_audit_log(user["user_id"], user["username"], "rule_change", rule_id,
+                        f"{change.old_value} -> {change.new_value}",
+                        role=user.get("role",""), resource_type="rule", is_privileged=True)
+    return {"ok": True, "rule_id": rule_id, "version": change.version_after,
+            "risk": report.risk.value}
+
+
+# ── 健康监控 ──
+
+@app.get("/api/health/full-check")
+async def run_health_check(user: dict = Depends(require_admin)):
+    """运行全面的平台健康检查"""
+    from src.infra.health_monitor import get_health_monitor
+    monitor = get_health_monitor()
+    report = await monitor.run_full_check()
+    return {"timestamp": report.timestamp, "overall_health": report.overall_health,
+            "stuck_workflows": report.stuck_workflows, "timeout_items": report.timeout_items,
+            "evidence_gaps": report.evidence_gaps, "coverage_gaps": report.coverage_gaps,
+            "rule_anomalies": report.rule_anomalies, "active_alerts": report.active_alerts,
+            "stuck_details": [{"type": s.object_type, "id": s.object_id,
+             "state": s.current_state, "stuck_hours": s.stuck_hours,
+             "recommendation": s.recommendation} for s in report.stuck_details],
+            "gap_details": [{"type": g.gap_type, "severity": g.severity,
+             "description": g.description, "recommendation": g.recommendation}
+             for g in report.gap_details[:20]]}
+
+
+@app.get("/api/health/quick")
+async def quick_health_check():
+    """快速健康检查（公开端点）"""
+    from src.infra.health_monitor import get_health_monitor
+    return get_health_monitor().quick_check()
+
+
+@app.get("/api/health/alerts")
+async def get_alerts(level: str = "", user: dict = Depends(require_auth)):
+    """获取活跃告警"""
+    from src.infra.health_monitor import AlertLevel, get_health_monitor
+    monitor = get_health_monitor()
+    lvl = AlertLevel(level) if level else None
+    alerts = monitor.alerts.get_active_alerts(lvl)
+    return {"alerts": [{"alert_id": a.alert_id, "level": a.level.value,
+             "title": a.title, "description": a.description, "source": a.source,
+             "detected_at": a.detected_at, "acknowledged": a.acknowledged}
+            for a in alerts], "total": len(alerts), "summary": monitor.alerts.get_summary()}
+
+
+# ═══════════════════════════════════════════════════════════
+# 审批协作 + 模板系统 + 自动修复 API
+# ═══════════════════════════════════════════════════════════
+
+# ── 审批工作流 ──
+
+@app.get("/api/approval/{object_type}/{object_id}")
+async def get_approval_status(object_type: str, object_id: int):
+    """获取审批状态和线程化历史"""
+    from src.infra.approval_workflow import get_approval_workflow
+    wf = get_approval_workflow()
+    return {
+        "status": wf.get_status(object_type, object_id).value,
+        "round": wf.get_round(object_type, object_id),
+        "history": wf.get_threaded_history(object_type, object_id),
+        "summary": wf.get_summary(object_type, object_id),
+        "available_actions": [],  # need user context
+    }
+
+
+@app.get("/api/approval/{object_type}/{object_id}/actions")
+async def get_available_actions(object_type: str, object_id: int,
+                                 user: dict = Depends(require_auth)):
+    """获取当前用户可执行的审批动作"""
+    from src.infra.approval_workflow import get_approval_workflow
+    wf = get_approval_workflow()
+    actions = wf.can_actor(object_type, object_id, user.get("role", "engineer"))
+    return {"actions": [a.value for a in actions]}
+
+
+@app.post("/api/approval/{object_type}/{object_id}/submit")
+async def submit_for_approval(object_type: str, object_id: int, comment: str = "",
+                               user: dict = Depends(require_auth)):
+    """提交审批"""
+    from src.infra.approval_workflow import get_approval_workflow
+    wf = get_approval_workflow()
+    try:
+        entry = wf.submit(object_type, object_id, user["username"],
+                          user.get("role", "engineer"), comment)
+        return {"ok": True, "entry_id": entry.entry_id, "status": entry.status_after}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/approval/{object_type}/{object_id}/approve")
+async def approve_workflow(object_type: str, object_id: int, comment: str = "",
+                            user: dict = Depends(require_auth)):
+    """批准"""
+    from src.infra.approval_workflow import get_approval_workflow
+    wf = get_approval_workflow()
+    try:
+        entry = wf.approve(object_type, object_id, user["username"],
+                           user.get("role", ""), comment)
+        return {"ok": True, "entry_id": entry.entry_id, "status": entry.status_after}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/approval/{object_type}/{object_id}/ask-back")
+async def ask_back_approval(object_type: str, object_id: int, question: str = "",
+                             user: dict = Depends(require_auth)):
+    """追问"""
+    from src.infra.approval_workflow import get_approval_workflow
+    wf = get_approval_workflow()
+    try:
+        entry = wf.ask_back(object_type, object_id, user["username"],
+                            user.get("role", ""), question)
+        return {"ok": True, "entry_id": entry.entry_id, "status": entry.status_after}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/approval/{object_type}/{object_id}/return")
+async def return_for_revision(object_type: str, object_id: int, notes: str = "",
+                               user: dict = Depends(require_auth)):
+    """退回修改"""
+    from src.infra.approval_workflow import get_approval_workflow
+    wf = get_approval_workflow()
+    try:
+        entry = wf.return_for_revision(object_type, object_id, user["username"],
+                                        user.get("role", ""), notes)
+        return {"ok": True, "entry_id": entry.entry_id, "status": entry.status_after}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/approval/{object_type}/{object_id}/resubmit")
+async def resubmit_approval(object_type: str, object_id: int, comment: str = "",
+                             user: dict = Depends(require_auth)):
+    """修改后重新提交"""
+    from src.infra.approval_workflow import get_approval_workflow
+    wf = get_approval_workflow()
+    try:
+        wf.start_revision(object_type, object_id, user["username"], user.get("role", ""))
+        entry = wf.resubmit(object_type, object_id, user["username"],
+                            user.get("role", ""), comment)
+        return {"ok": True, "entry_id": entry.entry_id, "status": entry.status_after}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── 模板系统 ──
+
+@app.get("/api/templates")
+async def list_templates(template_type: str = "", tag: str = ""):
+    """获取可用模板"""
+    from src.infra.template_system import get_template_registry, TemplateType
+    registry = get_template_registry()
+    if tag:
+        templates = registry.get_templates_by_tag(tag)
+    elif template_type:
+        templates = registry.get_all_templates(TemplateType(template_type))
+    else:
+        templates = registry.get_all_templates()
+    return {"templates": [{"template_id": t.template_id, "name": t.name,
+             "type": t.template_type.value, "version": t.version,
+             "tags": t.tags, "usage_count": t.usage_count,
+             "description": t.description} for t in templates], "total": len(templates)}
+
+
+@app.get("/api/templates/reusable")
+async def get_reusable_assets(project_id: int = 0):
+    """获取可跨项目复用的资产"""
+    from src.infra.template_system import get_template_registry
+    return {"assets": get_template_registry().get_reusable_assets(project_id)}
+
+
+@app.post("/api/templates/instantiate")
+async def instantiate_template(template_id: str = "", project_id: int = 0,
+                                overrides: str = "{}",
+                                user: dict = Depends(require_auth)):
+    """从模板实例化配置"""
+    from src.infra.template_system import get_template_instantiator
+    import json as _json
+    try: overrides_dict = _json.loads(overrides)
+    except Exception: overrides_dict = {}
+    instantiator = get_template_instantiator()
+    config = instantiator.instantiate(template_id, project_id, overrides_dict)
+    return config
+
+
+# ── 自动修复引擎 ──
+
+@app.post("/api/auto-fix/analyze")
+async def analyze_and_suggest_fix(error_log: str = "", context_json: str = "{}",
+                                   user: dict = Depends(require_auth)):
+    """分析错误并推荐修复方案（含自动修复检测）"""
+    from src.infra.auto_fix_engine import get_auto_fix_engine
+    import json as _json
+    try: context = _json.loads(context_json)
+    except Exception: context = {}
+    engine = get_auto_fix_engine()
+    result = engine.analyze_and_suggest(error_log, context)
+    return {
+        "category": result.analysis.category.value,
+        "root_cause": result.analysis.root_cause,
+        "location": result.analysis.location,
+        "severity": result.analysis.severity,
+        "confidence": result.analysis.confidence,
+        "auto_fixable": result.auto_fixable,
+        "auto_fix_reason": result.auto_fix_reason,
+        "suggestions": [{"title": s.title, "description": s.description,
+                          "auto_fixable": s.auto_fixable,
+                          "estimated_effort_minutes": s.estimated_effort_minutes,
+                          "success_rate": s.success_rate,
+                          "risk_level": s.risk_level}
+                        for s in result.suggestions[:5]],
+        "fix_script": result.fix_script,
+        "recommended_action": result.recommended_action,
+    }
+
+
+@app.post("/api/auto-fix/verify")
+async def verify_fix(original_log: str = "", after_log: str = "",
+                      user: dict = Depends(require_auth)):
+    """验证修复效果"""
+    from src.infra.auto_fix_engine import get_auto_fix_engine, FailureAnalyzer, FixSuggestion
+    engine = get_auto_fix_engine()
+    analyzer = FailureAnalyzer()
+    analysis = analyzer.analyze(original_log)
+    dummy_fix = FixSuggestion("verify", "Manual fix", "User-applied fix", "manual_fix")
+    verification = engine.verify_fix(dummy_fix, analysis, after_log)
+    return {
+        "verified": verification.verified,
+        "original_error_gone": verification.original_error_gone,
+        "new_errors": verification.new_errors,
+        "side_effects": verification.side_effects,
+        "recommendation": verification.recommendation,
+    }
+
+
+@app.get("/api/auto-fix/history")
+async def get_auto_fix_history(limit: int = 20, user: dict = Depends(require_auth)):
+    """获取自动修复历史"""
+    from src.infra.auto_fix_engine import get_auto_fix_engine
+    return {"history": get_auto_fix_engine().get_history(limit)}
+
+
+# ── 变更审批链 ──
+
+@app.post("/api/rules/request-change")
+async def request_rule_change(rule_id: str = "", new_value: str = "", reason: str = "",
+                               user: dict = Depends(require_auth)):
+    """发起规则变更请求（高风险需审批）"""
+    from src.infra.impact_analyzer import get_rule_registry, get_impact_analyzer, ChangeApprovalChain
+    import json as _json
+    try: parsed_value = _json.loads(new_value)
+    except Exception: parsed_value = new_value
+    analyzer = get_impact_analyzer()
+    registry = get_rule_registry()
+    chain = ChangeApprovalChain(analyzer, registry)
+    cr = chain.request_change(rule_id, parsed_value, user["username"], reason)
+    return {"request_id": cr.request_id, "status": cr.status,
+            "requires_approval": cr.impact_report.requires_approval,
+            "risk": cr.impact_report.risk.value}
+
+
+@app.post("/api/rules/approve-change/{request_id}")
+async def approve_rule_change(request_id: str, user: dict = Depends(require_admin)):
+    """审批规则变更请求"""
+    from src.infra.impact_analyzer import get_rule_registry, get_impact_analyzer, ChangeApprovalChain
+    analyzer = get_impact_analyzer()
+    registry = get_rule_registry()
+    chain = ChangeApprovalChain(analyzer, registry)
+    try:
+        cr = chain.approve_change(request_id, user["username"])
+        return {"ok": True, "request_id": request_id, "status": cr.status}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════
+# 架构校验 + 命名一致性 + 领域映射 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/architecture/domain-map")
+async def get_domain_map(user: dict = Depends(require_auth)):
+    """获取领域映射 — 所有模块的领域归属和分层"""
+    from src.infra.architecture import get_domain_map, BoundedContext, ArchitectureLayer
+    dm = get_domain_map()
+    contexts = {}
+    for ctx in BoundedContext:
+        mods = dm.get_modules_by_context(ctx)
+        contexts[ctx.value] = {
+            "total_modules": len(mods),
+            "by_layer": {layer.value: [m.name for m in mods if m.layer == layer]
+                         for layer in ArchitectureLayer if any(m.layer == layer for m in mods)},
+        }
+    return {"contexts": contexts, "total_modules": len(dm.get_all_modules())}
+
+
+@app.get("/api/architecture/validate")
+async def validate_architecture(user: dict = Depends(require_admin)):
+    """运行架构一致性校验"""
+    from src.infra.architecture import ArchitectureValidator
+    from src.core.domain_registry import ConsistencyLinter
+    arch_issues = ArchitectureValidator().check_all()
+    lint_issues = ConsistencyLinter().lint_all()
+    return {
+        "architecture_violations": [{"module": v.module, "violation": v.violation,
+                                       "severity": v.severity, "fix": v.fix}
+                                      for v in arch_issues],
+        "consistency_issues": [{"category": i.category, "location": i.location,
+                                 "description": i.description, "severity": i.severity}
+                                for i in lint_issues],
+        "total_issues": len(arch_issues) + len(lint_issues),
+        "healthy": len(arch_issues) == 0,
+    }
+
+
+@app.get("/api/architecture/state-machine")
+async def get_state_machine(domain: str = ""):
+    """获取状态机定义"""
+    from src.core.domain_registry import STATE_TRANSITIONS, is_valid_transition, get_valid_transitions
+    if domain and domain in STATE_TRANSITIONS:
+        return {"domain": domain, "transitions": STATE_TRANSITIONS[domain]}
+    return {"domains": list(STATE_TRANSITIONS.keys()),
+            "transitions": {k: {ks: vs for ks, vs in v.items()} for k, v in STATE_TRANSITIONS.items()}}
+
+
+@app.get("/api/architecture/state-machine/check")
+async def check_state_transition(domain: str = "", from_state: str = "", to_state: str = ""):
+    """校验状态转移是否合法"""
+    from src.core.domain_registry import is_valid_transition, is_terminal_state
+    valid = is_valid_transition(domain, from_state, to_state)
+    terminal = is_terminal_state(domain, from_state)
+    return {"domain": domain, "from": from_state, "to": to_state,
+            "valid": valid, "from_is_terminal": terminal}
+
+
+@app.get("/api/architecture/naming-scan")
+async def scan_naming(directory: str = "src", user: dict = Depends(require_admin)):
+    """扫描命名规范违规"""
+    from src.core.domain_registry import NamingValidator
+    validator = NamingValidator()
+    violations = validator.scan_directory(directory)
+    return {"violations": [{"location": v.location, "name": v.name,
+                             "expected": v.expected, "severity": v.severity}
+                            for v in violations[:50]],
+            "total": len(violations)}
+
+
+# ── 调试日志 ──
 # ═══════════════════════════════════════════════════════════
 
 @app.get("/api/debug/sessions")
@@ -2178,3 +3439,795 @@ async def debug_session_log(session_id: str):
         entries = debug_logger.get_session_log(session_id)
         return {"session_id": session_id, "entries": entries[:100], "count": len(entries)}
     except: return {"session_id": session_id, "entries": [], "count": 0}
+
+
+# ═══════════════════════════════════════════════════════════
+# 平台基础设施 API (todo0 优化)
+# ═══════════════════════════════════════════════════════════
+
+# ── 审计链验证 ──
+
+@app.get("/api/audit/chain/verify")
+async def verify_audit_chain_integrity(user: dict = Depends(require_admin)):
+    """验证审计哈希链的完整性 — 检测篡改/删除"""
+    from src.database.repository import verify_audit_chain
+    result = await verify_audit_chain()
+    return result
+
+
+# ── 数据库备份 ──
+
+@app.post("/api/admin/backup")
+async def create_database_backup(user: dict = Depends(require_admin)):
+    """创建数据库备份"""
+    from src.database.backup import backup_database, get_db_stats
+    path = backup_database()
+    stats = get_db_stats()
+    return {"backup_path": path, "stats": stats, "status": "done"}
+
+
+@app.get("/api/admin/db-stats")
+async def get_database_stats(user: dict = Depends(require_admin)):
+    """获取数据库统计信息"""
+    from src.database.backup import get_db_stats
+    return get_db_stats()
+
+
+# ── 权限管理 ──
+
+@app.get("/api/admin/permissions")
+async def list_all_permissions(user: dict = Depends(require_admin)):
+    """列出所有权限及角色分配"""
+    from src.database.connection import get_session
+    from src.database.models import Permission, RolePermission
+    from sqlalchemy import select
+    s = await get_session()
+    perms = (await s.execute(select(Permission).order_by(Permission.resource_type, Permission.code))).scalars().all()
+    role_perms = (await s.execute(select(RolePermission))).scalars().all()
+    await s.close()
+
+    rp_map = {}
+    for rp in role_perms:
+        rp_map.setdefault(rp.role, []).append(rp.permission_id)
+
+    return {
+        "permissions": [{"id": p.id, "code": p.code, "name": p.name,
+                         "resource_type": p.resource_type, "action": p.action} for p in perms],
+        "roles": {role: pids for role, pids in rp_map.items()},
+        "total_permissions": len(perms),
+    }
+
+
+@app.post("/api/admin/permissions/check")
+async def check_user_permission(code: str = "", user: dict = Depends(require_auth)):
+    """检查当前用户是否有指定权限"""
+    role = user.get("role", "viewer")
+    from src.database.connection import get_session
+    from src.database.models import Permission, RolePermission
+    from sqlalchemy import select
+    s = await get_session()
+    perm = (await s.execute(select(Permission).where(Permission.code == code))).scalar_one_or_none()
+    if not perm:
+        await s.close()
+        return {"code": code, "has_permission": False, "reason": "权限码不存在"}
+    rp = (await s.execute(
+        select(RolePermission).where(RolePermission.role == role, RolePermission.permission_id == perm.id)
+    )).scalar_one_or_none()
+    await s.close()
+    return {"code": code, "has_permission": rp is not None, "role": role}
+
+
+# ── 工作流触发器管理 ──
+
+@app.get("/api/admin/workflow-triggers")
+async def list_workflow_triggers(event_type: str = "", user: dict = Depends(require_admin)):
+    """列出工作流触发器"""
+    from src.infra.workflow_triggers import get_trigger_service
+    svc = get_trigger_service()
+    return {"triggers": await svc.get_triggers(event_type)}
+
+
+@app.post("/api/admin/workflow-triggers")
+async def create_workflow_trigger(name: str = "", event_type: str = "", trigger_action: str = "",
+                                   target_type: str = "", target_value: str = "",
+                                   user: dict = Depends(require_admin)):
+    """创建工作流触发器"""
+    from src.infra.workflow_triggers import get_trigger_service
+    svc = get_trigger_service()
+    tid = await svc.create_trigger(name, event_type, trigger_action, target_type, target_value)
+    from src.database.repository import add_audit_log
+    await add_audit_log(user["user_id"], user["username"], "trigger_create", str(tid),
+                        f"{name}: {event_type} -> {trigger_action}",
+                        role=user.get("role", ""), resource_type="workflow", is_privileged=True)
+    return {"id": tid, "status": "created"}
+
+
+# ── 迁移管理 ──
+
+@app.get("/api/admin/migrations")
+async def get_migration_status(user: dict = Depends(require_admin)):
+    """查看数据库迁移状态"""
+    import sqlite3
+    from pathlib import Path
+    db_path = Path("ic_verification.db")
+    if not db_path.exists():
+        return {"applied": [], "pending": []}
+    conn = sqlite3.connect(str(db_path))
+    try:
+        rows = conn.execute("SELECT version, description, applied_at FROM schema_versions ORDER BY id").fetchall()
+    except Exception:
+        rows = []
+    conn.close()
+    return {"applied": [{"version": r[0], "description": r[1], "applied_at": r[2]} for r in rows]}
+
+
+@app.post("/api/admin/migrations/run")
+async def run_migrations(user: dict = Depends(require_admin)):
+    """手动执行数据库迁移"""
+    from src.database.migrations import run_migrations, seed_permissions
+    run_migrations()
+    seed_permissions()
+    from src.database.repository import add_audit_log
+    await add_audit_log(user["user_id"], user["username"], "migration_run", "db/migrations",
+                        "手动触发迁移", role=user.get("role", ""), resource_type="system", is_privileged=True)
+    return {"status": "done"}
+
+
+# ── 软删除/归档 API ──
+
+@app.delete("/api/signoffs/{sid}")
+async def soft_delete_signoff_endpoint(sid: int, user: dict = Depends(require_auth)):
+    """软删除签核（仅管理员/经理）"""
+    if user.get("role") not in ("admin", "verification_manager"):
+        raise HTTPException(status_code=403, detail="仅管理员和SignOff 经理可以删除签核")
+    from src.database.repository import soft_delete_signoff, add_audit_log
+    ok = await soft_delete_signoff(sid)
+    if not ok:
+        raise HTTPException(status_code=404, detail="签核不存在")
+    await add_audit_log(user["user_id"], user["username"], "signoff_soft_delete", str(sid),
+                        "软删除签核", role=user.get("role", ""), resource_type="signoff", is_privileged=True)
+    return {"ok": True, "status": "deleted"}
+
+
+@app.post("/api/signoffs/{sid}/archive")
+async def archive_signoff_endpoint(sid: int, user: dict = Depends(require_auth)):
+    """归档签核"""
+    from src.database.repository import archive_signoff, add_audit_log
+    ok = await archive_signoff(sid)
+    if not ok:
+        raise HTTPException(status_code=404, detail="签核不存在")
+    await add_audit_log(user["user_id"], user["username"], "signoff_archive", str(sid),
+                        "归档签核", role=user.get("role", ""), resource_type="signoff")
+    return {"ok": True, "status": "archived"}
+
+
+# ═══════════════════════════════════════════════════════════
+# 运营仪表盘 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/ops/dashboard")
+async def ops_dashboard(user: dict = Depends(require_admin)):
+    """运营仪表盘 — 最慢流程、最常失败模块、签核耗时分布"""
+    from src.infra.observability import get_metrics, get_slow_query_detector
+    metrics = get_metrics()
+    stats = metrics.get_dashboard_stats()
+
+    # 增强: 添加业务层面的聚合
+    try:
+        from src.database.repository import get_audit_logs, list_signoffs
+        recent_audit = await get_audit_logs(limit=500)
+        signoffs = await list_signoffs()
+
+        # 用户活跃度
+        user_actions = {}
+        for log in recent_audit:
+            u = log.get("username", "unknown")
+            action = log.get("action", "unknown")
+            if u not in user_actions:
+                user_actions[u] = {"total": 0, "actions": {}}
+            user_actions[u]["total"] += 1
+            user_actions[u]["actions"][action] = user_actions[u]["actions"].get(action, 0) + 1
+
+        # 签核周期分布
+        signoff_stats = {"total": len(signoffs), "approved": 0, "pending": 0, "rejected": 0}
+        for s in signoffs:
+            st = s.get("status", "")
+            if st in signoff_stats:
+                signoff_stats[st] += 1
+
+        stats["business"] = {
+            "top_users": sorted(
+                [{"username": u, "actions": d["total"], "top_action": max(d["actions"], key=d["actions"].get)}
+                 for u, d in user_actions.items()],
+                key=lambda x: -x["actions"]
+            )[:10],
+            "signoff_distribution": signoff_stats,
+            "total_audit_records": len(recent_audit),
+        }
+    except Exception:
+        pass
+
+    return stats
+
+
+@app.get("/api/ops/slow-flows")
+async def get_slow_flows(user: dict = Depends(require_admin)):
+    """最慢的流水线/签核流程"""
+    from src.infra.observability import get_metrics
+    metrics = get_metrics()
+    stats = metrics.get_dashboard_stats()
+    return {
+        "slowest_pipelines": sorted(
+            [{"run_id": p.run_id, "workflow": p.workflow, "duration_s": p.duration_s,
+              "state": p.state, "started_at": p.started_at}
+             for p in metrics._pipeline_runs],
+            key=lambda x: -x["duration_s"]
+        )[:10],
+        "slowest_signoffs": sorted(
+            [{"signoff_id": s.signoff_id, "title": s.title, "cycle_time_minutes": s.cycle_time_minutes}
+             for s in metrics._signoff_cycles],
+            key=lambda x: -x["cycle_time_minutes"]
+        )[:10],
+        "api_stats": stats.get("performance", {}),
+    }
+
+
+@app.get("/api/ops/errors")
+async def get_error_summary(user: dict = Depends(require_admin)):
+    """错误统计摘要"""
+    from src.infra.observability import get_metrics
+    metrics = get_metrics()
+    stats = metrics.get_dashboard_stats()
+    return {
+        "error_summary": stats.get("errors", []),
+        "module_failure_rates": stats.get("modules", {}).get("failure_rates", []),
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# 插件管理 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/admin/plugins")
+async def list_plugins(user: dict = Depends(require_admin)):
+    """列出所有已注册插件"""
+    from src.infra.plugin_system import get_plugin_registry, ExtensionPoint
+    registry = get_plugin_registry()
+    plugins = []
+    for pid, plugin in registry._plugins.items():
+        plugins.append({
+            "plugin_id": pid,
+            "plugin_name": plugin.plugin_name,
+            "extension_point": plugin.extension_point.value,
+        })
+    return {
+        "plugins": plugins,
+        "total": len(plugins),
+        "extensions": registry.list_extensions(),
+        "available_points": [e.value for e in ExtensionPoint],
+    }
+
+
+@app.post("/api/admin/plugins/bootstrap")
+async def bootstrap_plugins_endpoint(user: dict = Depends(require_admin)):
+    """手动触发插件系统初始化"""
+    from src.infra.plugin_system import bootstrap_plugins
+    registry = await bootstrap_plugins()
+    return {"status": "bootstrapped", "plugins": len(registry._plugins)}
+
+
+# ═══════════════════════════════════════════════════════════
+# 领域边界 & 状态机检查 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/domain/contexts")
+async def list_bounded_contexts(user: dict = Depends(require_auth)):
+    """列出所有限界上下文及其状态机"""
+    from src.core.domain_registry import (
+        PipelineState, SignoffState, DocState
+    )
+    from src.core.domain_registry import STATE_TRANSITIONS
+    return {
+        "contexts": {
+            "pipeline": {
+                "states": [s.value for s in PipelineState],
+                "terminal": [s.value for s in PipelineState.terminal_states()],
+            },
+            "signoff": {
+                "states": [s.value for s in SignoffState],
+                "terminal": [s.value for s in SignoffState.terminal_states()],
+            },
+            "document": {
+                "states": [s.value for s in DocState],
+            },
+        },
+        "transitions": STATE_TRANSITIONS,
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# 上下文快照 + 产物归类 API
+# ═══════════════════════════════════════════════════════════
+
+@app.post("/api/snapshots/capture")
+async def capture_context_snapshot(run_id: str = "", workflow: str = "", phase: str = "",
+                                   spec_text: str = "", user: dict = Depends(require_auth)):
+    """捕获当前执行上下文快照"""
+    from src.infra.context_snapshot import get_snapshotter
+    snap = get_snapshotter().capture(run_id, workflow, phase, spec_text)
+    if run_id:
+        get_snapshotter().save(snap.snapshot_id)
+    return {"snapshot_id": snap.snapshot_id, "status": "captured"}
+
+
+@app.get("/api/snapshots")
+async def list_snapshots(run_id: str = "", user: dict = Depends(require_auth)):
+    """列出上下文快照"""
+    from src.infra.context_snapshot import get_snapshotter
+    return {"snapshots": get_snapshotter().list_snapshots(run_id)}
+
+
+@app.get("/api/snapshots/{snapshot_id}")
+async def get_snapshot(snapshot_id: str, user: dict = Depends(require_auth)):
+    """获取指定快照详情"""
+    from src.infra.context_snapshot import get_snapshotter
+    snap = get_snapshotter().load(snapshot_id)
+    if not snap:
+        raise HTTPException(status_code=404, detail="快照不存在")
+    return snap
+
+
+@app.post("/api/artifacts/organize")
+async def organize_artifacts(source_dir: str = "", dry_run: bool = False,
+                             user: dict = Depends(require_admin)):
+    """自动归类产物到分类目录"""
+    from src.infra.context_snapshot import ArtifactClassifier
+    classifier = ArtifactClassifier("output")
+    result = classifier.organize(source_dir or None, dry_run)
+    return result
+
+
+@app.get("/api/artifacts/catalog")
+async def get_artifact_catalog(user: dict = Depends(require_auth)):
+    """获取产物分类目录"""
+    from src.infra.context_snapshot import ArtifactClassifier
+    classifier = ArtifactClassifier("output")
+    return {"catalog": classifier.get_catalog()}
+
+
+# ═══════════════════════════════════════════════════════════
+# 失败聚类 + 知识复用 API
+# ═══════════════════════════════════════════════════════════
+
+@app.post("/api/ops/failure-cluster")
+async def cluster_failures(failed_logs: list[dict] = None,
+                           user: dict = Depends(require_auth)):
+    """对失败日志进行聚类分析"""
+    from src.infra.failure_cluster import get_failure_cluster
+    engine = get_failure_cluster()
+    return engine.analyze(failed_logs or [])
+
+
+@app.post("/api/knowledge/extract")
+async def extract_knowledge(run_id: str = "", success: bool = True,
+                            phases: list[dict] = None, error_log: str = "",
+                            user: dict = Depends(require_auth)):
+    """从执行经验中自动提取知识"""
+    from src.infra.failure_cluster import get_knowledge_extractor, get_failure_cluster
+    extractor = get_knowledge_extractor()
+    suggestions = []
+
+    if success:
+        suggestions = extractor.extract_from_success(run_id, phases or [])
+    elif error_log:
+        cluster_result = get_failure_cluster().analyze(
+            [{"run_id": run_id, "error_log": error_log, "timestamp": datetime.now().isoformat()}])
+        if cluster_result["clusters"]:
+            s = extractor.extract_from_failure(run_id, error_log, cluster_result["clusters"][0])
+            suggestions = [s]
+
+    for s in suggestions:
+        await extractor.auto_store(s)
+
+    return {
+        "run_id": run_id,
+        "extracted": len(suggestions),
+        "suggestions": [{"type": s.type, "title": s.title, "confidence": s.confidence} for s in suggestions],
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# 批量操作 API
+# ═══════════════════════════════════════════════════════════
+
+@app.post("/api/batch/approve-signoffs")
+async def batch_approve_signoffs(signoff_ids: list[int] = None, comment: str = "",
+                                 user: dict = Depends(require_auth)):
+    """批量批准签核"""
+    if user.get("role") not in ("admin", "verification_manager"):
+        raise HTTPException(status_code=403, detail="仅管理员和SignOff 经理可以批量批准")
+    from src.infra.failure_cluster import get_batch_ops
+    ops = get_batch_ops()
+    result = await ops.batch_approve_signoffs(
+        signoff_ids or [], user["user_id"],
+        user.get("display_name", user["username"]), comment)
+    from src.database.repository import add_audit_log
+    await add_audit_log(user["user_id"], user["username"], "batch_approve",
+                        "", f"{result.succeeded}/{result.total} approved",
+                        role=user.get("role", ""), is_privileged=True)
+    return {
+        "operation": result.operation, "total": result.total,
+        "succeeded": result.succeeded, "failed": result.failed,
+        "skipped": result.skipped, "details": result.details,
+    }
+
+
+@app.post("/api/batch/sync-docs")
+async def batch_sync_docs(project_ids: list[int] = None,
+                          user: dict = Depends(require_admin)):
+    """批量同步项目文档"""
+    from src.infra.failure_cluster import get_batch_ops
+    ops = get_batch_ops()
+    result = await ops.batch_sync_docs(project_ids or [], user["user_id"])
+    return {
+        "operation": result.operation, "total": result.total,
+        "succeeded": result.succeeded, "failed": result.failed,
+        "details": result.details,
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# 用户行为分析 API
+# ═══════════════════════════════════════════════════════════
+
+@app.post("/api/ops/track-action")
+async def track_user_action(action: str = "", page: str = "", duration_ms: float = 0,
+                            result: str = "success", detail: str = "",
+                            user: dict = Depends(require_auth)):
+    """记录用户操作（前端自动调用）"""
+    from src.infra.behavior_analyzer import get_behavior_tracker
+    tracker = get_behavior_tracker()
+    tracker.track(
+        username=user.get("username", "anonymous"),
+        action=action, page=page,
+        duration_ms=duration_ms, result=result, detail=detail,
+    )
+    return {"status": "tracked"}
+
+
+@app.get("/api/ops/behavior-analysis")
+async def get_behavior_analysis(days: int = 7, user: dict = Depends(require_admin)):
+    """获取用户行为分析报告"""
+    from src.infra.behavior_analyzer import get_behavior_tracker
+    tracker = get_behavior_tracker()
+    return tracker.get_analysis(days)
+
+
+@app.get("/api/ops/stuck-points")
+async def get_stuck_points(user: dict = Depends(require_admin)):
+    """获取最常卡住的操作步骤"""
+    from src.infra.behavior_analyzer import get_behavior_tracker
+    tracker = get_behavior_tracker()
+    return {"stuck_points": tracker.get_stuck_points()}
+
+
+# ═══════════════════════════════════════════════════════════
+# 文档一致性检查 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/docs/consistency-check")
+async def check_docs_consistency(spec_dir: str = "specs", doc_id: int = None,
+                                 user: dict = Depends(require_auth)):
+    """运行文档-代码一致性检查"""
+    from src.infra.behavior_analyzer import get_doc_checker
+    checker = get_doc_checker()
+
+    result = checker.check_all(spec_dir)
+
+    if doc_id:
+        hash_issues = checker.check_spec_hash_integrity(doc_id)
+        result["hash_check"] = {
+            "issues": [{"type": i.type, "severity": i.severity,
+                        "description": i.description} for i in hash_issues],
+            "match": len(hash_issues) == 0,
+        }
+
+    return result
+
+
+@app.post("/api/docs/consistency-check/auto-fix")
+async def auto_fix_consistency_issues(user: dict = Depends(require_engineer)):
+    """自动修复可自动处理的文档一致性问题"""
+    from src.infra.behavior_analyzer import get_doc_checker
+    checker = get_doc_checker()
+    issues = checker.check_all()
+
+    fixed = 0
+    for i in issues.get("issues", []):
+        if i.get("type") == "hash_mismatch":
+            try:
+                from src.database.repository import sync_fs_to_db
+                await sync_fs_to_db("specs", 1, user["user_id"])
+                fixed += 1
+            except Exception:
+                pass
+
+    return {"fixed": fixed, "total_issues": issues.get("total_issues", 0)}
+
+
+# ═══════════════════════════════════════════════════════════
+# 流水线检查点 API (暂停/恢复/断点续跑)
+# ═══════════════════════════════════════════════════════════
+
+@app.post("/api/pipeline/{run_id}/pause")
+async def pause_pipeline(run_id: str, user: dict = Depends(require_auth)):
+    """暂停流水线"""
+    from src.core.checkpoint import get_checkpoint_mgr
+    mgr = get_checkpoint_mgr()
+    ok = mgr.pause(run_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="检查点不存在，请先运行流水线")
+    return {"ok": True, "run_id": run_id, "status": "paused"}
+
+
+@app.post("/api/pipeline/{run_id}/resume")
+async def resume_pipeline(run_id: str, user: dict = Depends(require_auth)):
+    """从检查点恢复流水线"""
+    from src.core.checkpoint import get_checkpoint_mgr
+    from src.core.execution import PipelineExecutionService
+    mgr = get_checkpoint_mgr()
+    cp = mgr.resume(run_id)
+    if not cp:
+        raise HTTPException(status_code=404, detail="检查点不存在")
+    return {
+        "run_id": run_id, "status": "resumed",
+        "resume_from": cp.current_phase,
+        "progress": f"{cp.current_phase_index+1}/{cp.total_phases}",
+        "resume_count": cp.resume_count,
+    }
+
+
+@app.get("/api/pipeline/checkpoints")
+async def list_checkpoints(user: dict = Depends(require_auth)):
+    """列出所有暂停的流水线"""
+    from src.core.checkpoint import get_checkpoint_mgr
+    mgr = get_checkpoint_mgr()
+    return {"paused": mgr.list_paused()}
+
+
+@app.get("/api/pipeline/{run_id}/checkpoint")
+async def get_checkpoint(run_id: str, user: dict = Depends(require_auth)):
+    """获取流水线的当前检查点"""
+    from src.core.checkpoint import get_checkpoint_mgr
+    cp = get_checkpoint_mgr().get(run_id)
+    if not cp:
+        raise HTTPException(status_code=404, detail="检查点不存在")
+    return cp.to_dict()
+
+
+# ═══════════════════════════════════════════════════════════
+# 任务依赖图 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/pipeline/dependency-graph")
+async def get_dependency_graph(workflow: str = "full_verification",
+                               user: dict = Depends(require_auth)):
+    """获取任务依赖图（供前端渲染）"""
+    from src.infra.resource_scheduler import get_dep_graph
+    graph = get_dep_graph()
+    return graph.build_graph(workflow)
+
+
+@app.get("/api/pipeline/agent-deps/{role}")
+async def get_agent_dependencies(role: str, user: dict = Depends(require_auth)):
+    """获取单个 Agent 的上下游依赖"""
+    from src.infra.resource_scheduler import get_dep_graph
+    return get_dep_graph().get_agent_deps(role)
+
+
+# ═══════════════════════════════════════════════════════════
+# 资源调度 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/admin/resources")
+async def get_resource_status(user: dict = Depends(require_admin)):
+    """获取资源池状态"""
+    from src.infra.resource_scheduler import get_scheduler
+    return get_scheduler().get_status()
+
+
+@app.post("/api/admin/resources/configure")
+async def configure_resources(max_agents: int = None, max_regressions: int = None,
+                              user: dict = Depends(require_admin)):
+    """配置资源池参数"""
+    from src.infra.resource_scheduler import get_scheduler
+    get_scheduler().configure(max_agents=max_agents, max_regressions=max_regressions)
+    return {"ok": True, "status": get_scheduler().get_status()}
+
+
+# ═══════════════════════════════════════════════════════════
+# 配置化工作流 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/workflows")
+async def list_workflow_templates(user: dict = Depends(require_auth)):
+    """列出所有工作流模板"""
+    from src.infra.workflow_config import get_workflow_registry
+    registry = get_workflow_registry()
+    return {"workflows": registry.list_all()}
+
+
+@app.get("/api/workflows/{name}")
+async def get_workflow_detail(name: str, user: dict = Depends(require_auth)):
+    """获取工作流模板详情（含步骤依赖）"""
+    from src.infra.workflow_config import get_workflow_registry
+    registry = get_workflow_registry()
+    deps = registry.get_step_deps(name)
+    tmpl = registry.get(name)
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="模板不存在")
+    return {**tmpl.to_dict(), "step_deps": deps}
+
+
+@app.post("/api/workflows")
+async def create_workflow_template(name: str = "", description: str = "",
+                                   category: str = "custom", steps: list[dict] = None,
+                                   user: dict = Depends(require_auth)):
+    """创建自定义工作流模板"""
+    from src.infra.workflow_config import get_workflow_registry
+    registry = get_workflow_registry()
+    data = {"name": name, "description": description,
+            "category": category, "steps": steps or []}
+    tmpl = registry.create_from_dict(data)
+    errors = registry.validate(tmpl)
+    if errors:
+        raise HTTPException(status_code=400, detail={"errors": errors})
+    registry.register(tmpl)
+    return {"name": name, "status": "created", "steps": len(steps or [])}
+
+
+@app.get("/api/workflows/{name}/validate")
+async def validate_workflow(name: str, user: dict = Depends(require_auth)):
+    """验证工作流合法性"""
+    from src.infra.workflow_config import get_workflow_registry
+    registry = get_workflow_registry()
+    tmpl = registry.get(name)
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="模板不存在")
+    errors = registry.validate(tmpl)
+    return {"name": name, "valid": len(errors) == 0, "errors": errors}
+
+
+@app.get("/api/workflows/{name}/export")
+async def export_workflow_yaml(name: str, user: dict = Depends(require_auth)):
+    """导出工作流为 YAML"""
+    from src.infra.workflow_config import get_workflow_registry
+    registry = get_workflow_registry()
+    yaml_str = registry.export_to_yaml(name)
+    if not yaml_str:
+        raise HTTPException(status_code=404, detail="模板不存在")
+    return {"name": name, "yaml": yaml_str}
+
+
+# ═══════════════════════════════════════════════════════════
+# 角色→工作流绑定管理 (Admin only)
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/admin/role-workflow-bindings")
+async def list_role_workflow_bindings_api(role: str = "", user: dict = Depends(require_admin)):
+    """列出所有角色→工作流绑定（管理员）"""
+    from src.database.repository import list_role_workflow_bindings as lrwb
+    from src.infra.workflow_config import get_workflow_registry
+    bindings = await lrwb(role)
+    registry = get_workflow_registry()
+    available_workflows = [w["name"] for w in registry.list_all()]
+    return {"bindings": bindings, "available_workflows": available_workflows}
+
+
+@app.post("/api/admin/role-workflow-bindings")
+async def create_role_workflow_binding_api(req: RoleWorkflowBindingRequest,
+                                            user: dict = Depends(require_admin)):
+    """创建角色→工作流绑定（管理员）"""
+    from src.database.repository import create_role_workflow_binding
+    from src.infra.workflow_config import get_workflow_registry
+    registry = get_workflow_registry()
+    available = [w["name"] for w in registry.list_all()]
+    if req.workflow_name not in available:
+        raise HTTPException(status_code=400,
+                           detail=f"未知工作流: {req.workflow_name}，可用: {available}")
+    bid = await create_role_workflow_binding(
+        req.role, req.workflow_name, req.is_default, req.description, user["user_id"])
+    from src.database.repository import add_audit_log
+    await add_audit_log(user["user_id"], user["username"], "rwb_create", str(bid),
+                        f"role={req.role} workflow={req.workflow_name} default={req.is_default}",
+                        role=user.get("role", ""), resource_type="workflow", is_privileged=True)
+    return {"id": bid, "status": "created"}
+
+
+@app.put("/api/admin/role-workflow-bindings/{binding_id}")
+async def update_role_workflow_binding_api(binding_id: int,
+                                            req: RoleWorkflowBindingRequest,
+                                            user: dict = Depends(require_admin)):
+    """更新角色→工作流绑定（管理员）"""
+    from src.database.repository import update_role_workflow_binding, get_role_workflow_binding
+    from src.infra.workflow_config import get_workflow_registry
+    existing = await get_role_workflow_binding(binding_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="绑定不存在")
+    registry = get_workflow_registry()
+    available = [w["name"] for w in registry.list_all()]
+    if req.workflow_name not in available:
+        raise HTTPException(status_code=400,
+                           detail=f"未知工作流: {req.workflow_name}，可用: {available}")
+    ok = await update_role_workflow_binding(binding_id,
+        role=req.role, workflow_name=req.workflow_name,
+        is_default=req.is_default, description=req.description)
+    from src.database.repository import add_audit_log
+    await add_audit_log(user["user_id"], user["username"], "rwb_update", str(binding_id),
+                        f"role={req.role} workflow={req.workflow_name} default={req.is_default}",
+                        role=user.get("role", ""), resource_type="workflow", is_privileged=True)
+    return {"ok": ok}
+
+
+@app.delete("/api/admin/role-workflow-bindings/{binding_id}")
+async def delete_role_workflow_binding_api(binding_id: int,
+                                            user: dict = Depends(require_admin)):
+    """删除角色→工作流绑定（管理员）"""
+    from src.database.repository import delete_role_workflow_binding, get_role_workflow_binding
+    existing = await get_role_workflow_binding(binding_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="绑定不存在")
+    ok = await delete_role_workflow_binding(binding_id)
+    from src.database.repository import add_audit_log
+    await add_audit_log(user["user_id"], user["username"], "rwb_delete", str(binding_id),
+                        f"role={existing.role} workflow={existing.workflow_name}",
+                        role=user.get("role", ""), resource_type="workflow", is_privileged=True)
+    return {"ok": ok}
+
+
+@app.get("/api/my-allowed-workflows")
+async def get_my_allowed_workflows(user: dict = Depends(require_auth)):
+    """返回当前用户角色可用的工作流列表 + 默认工作流"""
+    from src.database.repository import get_allowed_workflows_for_role, get_default_workflow_for_role
+    role = user.get("role", "engineer")
+    allowed = await get_allowed_workflows_for_role(role)
+    default_wf = await get_default_workflow_for_role(role)
+    return {"role": role, "allowed_workflows": allowed, "default_workflow": default_wf}
+
+
+# ═══════════════════════════════════════════════════════════
+# 多租户 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/admin/tenants")
+async def list_tenants(user: dict = Depends(require_admin)):
+    """列出所有租户"""
+    from src.infra.platform_health import get_tenant_mgr
+    return {"tenants": get_tenant_mgr().list_tenants()}
+
+
+@app.post("/api/admin/tenants")
+async def create_tenant(tenant_id: str = "", name: str = "", description: str = "",
+                        user: dict = Depends(require_admin)):
+    """创建租户"""
+    from src.infra.platform_health import get_tenant_mgr
+    tenant = get_tenant_mgr().create_tenant(tenant_id, name, description)
+    return {"tenant_id": tenant.tenant_id, "name": tenant.name, "status": "created"}
+
+
+# ═══════════════════════════════════════════════════════════
+# 平台健康管理 API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/admin/health-check")
+async def run_platform_health_check(user: dict = Depends(require_admin)):
+    """运行平台全面健康检查"""
+    from src.infra.platform_health import get_health_monitor
+    return get_health_monitor().check_all()
+
+
+@app.get("/api/admin/expired-rules")
+async def get_expired_rules(days: int = 90, user: dict = Depends(require_admin)):
+    """获取过期规则列表"""
+    from src.infra.platform_health import get_health_monitor
+    return {"expired": get_health_monitor().get_expired_rules(days=days)}

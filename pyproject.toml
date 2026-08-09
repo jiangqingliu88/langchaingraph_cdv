@@ -41,8 +41,29 @@ dev = [
 vagent = "src.cli.commands:cli"
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "src"]
+testpaths = ["tests"]
 python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--tb=short", "--strict-markers", "-p no:warnings"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests requiring DB",
+    "slow: Slow running tests",
+    "api: API endpoint tests",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["venv", "__pycache__", ".git", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.setuptools.packages.find]
 where = ["."]

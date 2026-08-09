@@ -24,7 +24,9 @@ def run(spec_text: str) -> str:
     output_dir = Path(ctx.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    module_match = re.search(r'(?:#|module\s+)\s*(\w+)', spec_text, re.IGNORECASE)
+    module_match = re.search(r'module:\s*(\w+)', spec_text, re.IGNORECASE)
+    if not module_match:
+        module_match = re.search(r'(?:#|module\s+)\s*(\w+)', spec_text, re.IGNORECASE)
     module_name = module_match.group(1) if module_match else "dut"
 
     # 尝试找已有 YAML

@@ -133,8 +133,35 @@ RULES:
             return {"output": f"Agent error: {str(e)[:200]}", "score": 0}
 
     async def _post_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """从磁盘 quality_report.json 读取质量检查结果，并构造 env 数据供下游使用。"""
+        """从磁盘 quality_report.json 读取质量检查结果，并构造 env 数据供下游使用。
+        同时修正 LLM 可能用错误名字生成的 YAML 和 UVM 代码。"""
         output_dir = Path(_uvm_ctx.output_dir)
+        # ── 用正确的模块名重新生成 YAML 并渲染，覆盖 LLM 的错误输出 ──
+        module_name = getattr(self, '_module_name', '') or _uvm_ctx.env_name or ""
+        if module_name.endswith("_env"):
+            module_name = module_name[:-4]
+        if module_name and module_name != "dut":
+            try:
+                from src.tools.uvm_tools.tool_find_spec_yaml.main import run as _fsy_run
+                from src.tools.uvm_tools.tool_jinja_render.main import run as _render_run
+                _fsy_run(f"module: {module_name}")
+                _render_run(str(output_dir))
+                # 清理 LLM 用错误名字（dut_* / APB_* 等）生成的旧目录
+                import shutil
+                for sub in list((output_dir / "agents").iterdir()):
+                    if sub.is_dir() and not sub.name.startswith(module_name):
+                        shutil.rmtree(sub, ignore_errors=True)
+                for f in list((output_dir / "bench").glob("*_tb_top.sv")):
+                    if module_name not in f.stem:
+                        f.unlink()
+                # 清理 env 目录及子目录中非本模块的文件
+                for f in list((output_dir / "env").rglob("*.sv")):
+                    if module_name not in f.stem:
+                        f.unlink()
+            except Exception:
+                pass
+
+        env_name = f"{module_name}_env" if module_name else (_uvm_ctx.env_name or "dut_env")
 
         # ── 构造 env 数据（确保下游 test_engineer/regression_manager 可用）──
         agents_dir = output_dir / "agents"
@@ -142,15 +169,6 @@ RULES:
             d.name for d in agents_dir.iterdir()
             if d.is_dir() and (d / f"{d.name}_pkg.sv").exists()
         ) if agents_dir.exists() else []
-
-        env_name = _uvm_ctx.env_name or "dut_env"
-        # 从 LLM 输出回退提取 env_name
-        if env_name == "dut_env":
-            import re
-            llm_output = result.get("output", "")
-            m = re.search(r"(?:#|module\s+)\s*(\w+)", str(llm_output), re.IGNORECASE)
-            if m:
-                env_name = f"{m.group(1)}_env"
         fl_path = output_dir / "inputs" / "filelists" / "filelist.f"
         if not fl_path.exists():
             fl_path = output_dir / "filelist.f"
@@ -187,7 +205,12 @@ RULES:
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
         """通过 LLM Agent 执行 UVM 环境生成 + 质量自检。"""
         output_dir = task.get("output_dir", "output")
-        _uvm_ctx.set(output_dir=Path(output_dir), agents=[], env_name="")
+        # 从 ctx/spec 提取模块名
+        ctx = task.get("ctx", {})
+        spec = ctx.get("spec", {}) if hasattr(ctx, 'get') else {}
+        self._module_name = spec.get("design_name", "") if isinstance(spec, dict) else ""
+        _uvm_ctx.set(output_dir=Path(output_dir), agents=[],
+                     env_name=f"{self._module_name}_env" if self._module_name else "")
         return await super().execute_task(task)
 
 # ── Tools imported from src.tools.uvm_tools.tools ──

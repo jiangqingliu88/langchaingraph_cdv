@@ -16,13 +16,24 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
     fl_dir.mkdir(parents=True, exist_ok=True)
     fl_path = fl_dir / filelist_name
     lines = []
+    # 添加生成的 RTL 文件
+    rtl_dir = output_dir / "rtl"
+    if rtl_dir.exists():
+        for sv in sorted(rtl_dir.glob("*.sv")):
+            lines.append(str(sv.resolve()))
     for a in agents:
         name = a["name"]
-        lines.append(str(output_dir.resolve() / f"agents/{name}/{name}_interface.sv"))
+        iface = output_dir / f"agents/{name}/{name}_interface.sv"
+        if iface.exists():
+            lines.append(str(iface.resolve()))
     for a in agents:
         name = a["name"]
-        lines.append(f"+incdir+{output_dir.resolve()}/agents/{name}")
-        lines.append(str(output_dir.resolve() / f"agents/{name}/{name}_pkg.sv"))
+        agent_dir = output_dir / f"agents/{name}"
+        if agent_dir.exists():
+            lines.append(f"+incdir+{agent_dir.resolve()}")
+            pkg = agent_dir / f"{name}_pkg.sv"
+            if pkg.exists():
+                lines.append(str(pkg.resolve()))
     lines += [
         f"+incdir+{output_dir.resolve()}/env",
         str(output_dir.resolve() / f"env/{env_name}_pkg.sv"),

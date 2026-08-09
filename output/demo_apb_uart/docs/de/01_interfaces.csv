@@ -1,0 +1,4 @@
+Interface,Type,DataWidth,Clock,SignalCount
+apb_slave,APB,8,pclk,8
+uart_serial,UART,1,pclk,2
+interrupt,Interrupt,1,pclk,1

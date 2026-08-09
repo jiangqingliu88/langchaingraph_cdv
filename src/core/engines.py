@@ -1,11 +1,12 @@
 """
-SignOffAI 五大差异化引擎
+SignOffAI 六大差异化引擎
 
 1. vPlanGenerator      — MD 规格 → 结构化验证计划 (P0)
 2. CoverageRegressor   — 覆盖率驱动智能回归选择器 (P0)
 3. DebugCopilot        — 仿真日志自动分析 + 根因定位 (P1)
 4. RTLUVMSyncer        — RTL 变化 → UVM 环境更新建议 (P1)
 5. RegressionTriage    — 批量回归智能研判 (P2)
+6. PPAAnalyzer         — EDA PPA 报告解析 + 门限对比 + 签核摘要 (P1)
 
 每个引擎都是 SignOffAI 的独家能力，通用 AI 工具无法提供。
 """
@@ -574,3 +575,529 @@ class RegressionTriage:
         result.estimated_ai_time = f"~{ai_min}min"
 
         return result
+
+
+# ═══════════════════════════════════════════════════════════════
+# Engine 6: PPA Analyzer (P1 — Power / Performance / Area 签核引擎)
+# ═══════════════════════════════════════════════════════════════
+
+@dataclass
+class PPAMetricResult:
+    """解析后的单条 PPA 指标"""
+    category: str = ""            # power / performance / area
+    metric_name: str = ""         # total_power / fmax / cell_area ...
+    value: float = 0.0
+    unit: str = ""
+    target: float = 0.0
+    margin_pct: float = 0.0
+    pass_status: str = "pending"  # pass / fail / marginal
+    source_line: str = ""         # 原始报告行
+
+
+@dataclass
+class PPAReportResult:
+    """PPA 报告解析结果"""
+    report_type: str = ""         # pt_power / pt_timing / dc_area / innovus_area
+    tool: str = ""                # PrimeTime / Design Compiler / Innovus / Voltus
+    design_name: str = ""
+    metrics: list = field(default_factory=list)  # list[PPAMetricResult]
+    corners: list = field(default_factory=list)  # 多 corner 数据
+    raw_summary: str = ""         # 报告摘要文本
+    warnings: list = field(default_factory=list)
+    errors: list = field(default_factory=list)
+
+
+class PPAAnalyzer:
+    """PPA 签核分析引擎
+
+    功能:
+    1. 解析主流 EDA 工具的 PPA 报告（PrimeTime / Design Compiler / Innovus / Voltus）
+    2. 自动识别指标类型、数值、单位
+    3. 多 PVT corner 数据提取与聚合
+    4. 对比门限规则，输出 pass/fail/marginal 判定
+    5. 生成结构化的签核摘要数据
+    """
+
+    # ── EDA 工具识别 ──
+
+    TOOL_SIGNATURES = {
+        'prime_time': [r'Prime\s*Time', r'pt_shell', r'Version\s+\w+-\d+'],
+        'design_compiler': [r'Design\s*Compiler', r'dc_shell', r'compile_ultra'],
+        'innovus': [r'Innovus', r'Cadence\s+Innovus', r'place_opt_design'],
+        'voltus': [r'Voltus', r'Cadence\s+Voltus', r'power_analysis'],
+        'genus': [r'Genus', r'Cadence\s+Genus', r'synth_generic'],
+        'tempus': [r'Tempus', r'Cadence\s+Tempus', r'timing_analysis'],
+    }
+
+    def detect_tool(self, report_text: str) -> str:
+        """自动识别 EDA 工具"""
+        for tool, patterns in self.TOOL_SIGNATURES.items():
+            for pat in patterns:
+                if re.search(pat, report_text, re.IGNORECASE):
+                    return tool
+        return "unknown"
+
+    # ── 主解析入口 ──
+
+    def parse_report(self, report_text: str, report_type: str = "auto") -> dict:
+        """主解析入口 — 根据 report_type 分发到对应解析器
+
+        Args:
+            report_text: EDA 报告文本
+            report_type: pt_power / pt_timing / dc_area / innovus_area / auto
+
+        Returns:
+            {"tool": ..., "design_name": ..., "metrics": [...], "corners": [...], ...}
+        """
+        tool = self.detect_tool(report_text)
+
+        if report_type == "auto":
+            # 自动推断报告类型
+            report_type = self._infer_report_type(report_text, tool)
+
+        if report_type in ('pt_power', 'voltus_power'):
+            result = self.parse_power_report(report_text)
+        elif report_type in ('pt_timing', 'tempus_timing'):
+            result = self.parse_timing_report(report_text)
+        elif report_type in ('dc_area', 'innovus_area', 'genus_area'):
+            result = self.parse_area_report(report_text)
+        else:
+            # fallback: try all
+            result = self._parse_generic(report_text)
+
+        result.tool = tool
+        result.report_type = report_type
+        return self._result_to_dict(result)
+
+    def _infer_report_type(self, text: str, tool: str) -> str:
+        """根据文本内容推断报告类型"""
+        text_lower = text.lower()
+        power_kw = ['total power', 'dynamic power', 'leakage power', 'power report',
+                    'power consumption', 'internal power', 'switching power']
+        timing_kw = ['slack', 'setup', 'hold', 'clock period', 'fmax', 'timing report',
+                     'data arrival', 'clock arrival', 'data required']
+        area_kw = ['cell area', 'total area', 'gate count', 'utilization',
+                   'area report', 'leaf cells', 'combinational area']
+
+        power_score = sum(1 for kw in power_kw if kw in text_lower)
+        timing_score = sum(1 for kw in timing_kw if kw in text_lower)
+        area_score = sum(1 for kw in area_kw if kw in text_lower)
+
+        scores = {'power': power_score, 'timing': timing_score, 'area': area_score}
+        best = max(scores, key=scores.get)
+        if scores[best] == 0:
+            return 'generic'
+
+        if tool in ('prime_time',):
+            return f'pt_{best}'
+        elif tool in ('design_compiler',):
+            return f'dc_{best}'
+        elif tool in ('innovus',):
+            return f'innovus_{best}'
+        elif tool in ('voltus',):
+            return 'voltus_power'
+        elif tool in ('tempus',):
+            return 'tempus_timing'
+        return best
+
+    # ── 功耗报告解析 ──
+
+    def parse_power_report(self, text: str) -> PPAReportResult:
+        """解析 PrimeTime / Voltus 功耗报告"""
+        result = PPAReportResult(report_type='power')
+        result.design_name = self._extract_design_name(text)
+
+        # 总功耗: Total Power = xxx mW / uW
+        total_patterns = [
+            r'Total\s+Power\s*[=:]\s*([\d.]+)\s*(mW|uW|W)',
+            r'(?:Cell|Net)\s+Internal\s+Power.*?([\d.e+-]+)\s*(mW|uW|W)',
+            r'Total\s+Dynamic\s+Power\s*[=:]\s*([\d.]+)\s*(mW|uW|W)',
+        ]
+
+        for pat in total_patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                result.metrics.append(PPAMetricResult(
+                    category='power', metric_name='total_power',
+                    value=float(m.group(1)), unit=m.group(2).lower(),
+                ).__dict__)
+                break
+
+        # 动态功耗
+        m = re.search(r'(?:Cell\s+)?Dynamic\s+Power\s*[=:]\s*([\d.]+)\s*(mW|uW|W)', text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='power', metric_name='dynamic_power',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        # 漏电功耗
+        m = re.search(r'(?:Cell\s+)?Leakage\s+Power\s*[=:]\s*([\d.]+)\s*(mW|uW|W)', text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='power', metric_name='leakage_power',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        # 内部功耗 (Internal Power)
+        m = re.search(r'Internal\s+Power\s*[=:]\s*([\d.]+)\s*(mW|uW|W)', text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='power', metric_name='internal_power',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        # 开关功耗 (Switching Power)
+        m = re.search(r'Switching\s+Power\s*[=:]\s*([\d.]+)\s*(mW|uW|W)', text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='power', metric_name='switching_power',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        # Power groups breakdown
+        power_groups = re.findall(
+            r'(clock_network|register|combinational|sequential|memory|io_pad|clock_tree)_power\s*[=:]\s*([\d.]+)\s*(mW|uW|W)',
+            text, re.IGNORECASE
+        )
+        for gname, gval, gunit in power_groups:
+            result.metrics.append(PPAMetricResult(
+                category='power', metric_name=f'{gname}_power',
+                value=float(gval), unit=gunit.lower(),
+            ).__dict__)
+
+        result.raw_summary = self._extract_summary_section(text, 'Power')
+        return result
+
+    # ── 时序报告解析 ──
+
+    def parse_timing_report(self, text: str) -> PPAReportResult:
+        """解析 PrimeTime / Tempus 时序报告"""
+        result = PPAReportResult(report_type='performance')
+        result.design_name = self._extract_design_name(text)
+
+        # Fmax = 1 / clock_period (最差路径)
+        m = re.search(r'(?:clock|operating)\s+(?:period|frequency)\s*[=:]\s*([\d.]+)\s*(ns|MHz|GHz|ps)',
+                      text, re.IGNORECASE)
+        if m:
+            period_val = float(m.group(1))
+            unit = m.group(2).lower()
+            if unit in ('ns', 'ps'):
+                period_ns = period_val if unit == 'ns' else period_val / 1000
+                fmax = 1000 / period_ns if period_ns > 0 else 0
+                result.metrics.append(PPAMetricResult(
+                    category='performance', metric_name='clock_period',
+                    value=period_val, unit=unit,
+                ).__dict__)
+                result.metrics.append(PPAMetricResult(
+                    category='performance', metric_name='fmax',
+                    value=round(fmax, 1), unit='mhz',
+                ).__dict__)
+            else:
+                result.metrics.append(PPAMetricResult(
+                    category='performance', metric_name='fmax',
+                    value=period_val, unit=unit,
+                ).__dict__)
+
+        # Worst slack (setup)
+        m = re.search(r'(?:worst|min)\s+(?:setup\s+)?slack\s*[=:]\s*(-?[\d.]+)\s*(ns|ps)',
+                      text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='performance', metric_name='setup_worst_slack',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        # Worst slack (hold)
+        m = re.search(r'(?:worst|min)\s+hold\s+slack\s*[=:]\s*(-?[\d.]+)\s*(ns|ps)',
+                      text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='performance', metric_name='hold_worst_slack',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        # WNS / TNS (PrimeTime style)
+        m = re.search(r'WNS\s*[=:]\s*(-?[\d.]+)', text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='performance', metric_name='wns',
+                value=float(m.group(1)), unit='ns',
+            ).__dict__)
+        m = re.search(r'TNS\s*[=:]\s*(-?[\d.]+)', text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='performance', metric_name='tns',
+                value=float(m.group(1)), unit='ns',
+            ).__dict__)
+
+        # Violating paths count
+        m = re.search(r'(?:violating|failing)\s+(?:paths|endpoints)\s*[=:]\s*(\d+)',
+                      text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='performance', metric_name='violating_paths',
+                value=int(m.group(1)), unit='paths',
+            ).__dict__)
+
+        result.raw_summary = self._extract_summary_section(text, 'Timing')
+        return result
+
+    # ── 面积报告解析 ──
+
+    def parse_area_report(self, text: str) -> PPAReportResult:
+        """解析 Design Compiler / Innovus / Genus 面积报告"""
+        result = PPAReportResult(report_type='area')
+        result.design_name = self._extract_design_name(text)
+
+        # Cell area (DC style)
+        m = re.search(r'(?:Total\s+)?(?:Cell|Combinational)\s+Area\s*[=:]\s*([\d.]+)\s*(um2|mm2|nm2)',
+                      text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='area', metric_name='cell_area',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        # Total area
+        m = re.search(r'Total\s+Area\s*[=:]\s*([\d.]+)\s*(um2|mm2|nm2)',
+                      text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='area', metric_name='total_area',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        # Gate count
+        m = re.search(r'(?:Gate|Cell)\s+Count\s*[=:]\s*([\d,]+)',
+                      text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='area', metric_name='gate_count',
+                value=float(m.group(1).replace(',', '')), unit='gates',
+            ).__dict__)
+
+        # Combinational / Noncombinational area
+        m = re.search(r'Combinational\s+Area\s*[=:]\s*([\d.]+)\s*(um2|mm2)', text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='area', metric_name='combinational_area',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        m = re.search(r'(?:Noncombinational|Sequential)\s+Area\s*[=:]\s*([\d.]+)\s*(um2|mm2)',
+                      text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='area', metric_name='sequential_area',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        # Utilization
+        m = re.search(r'(?:Chip\s+)?Utilization\s*[=:]\s*([\d.]+)\s*%?',
+                      text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='area', metric_name='utilization',
+                value=float(m.group(1)), unit='%',
+            ).__dict__)
+
+        # Macro / Memory area
+        m = re.search(r'Macro\s+Area\s*[=:]\s*([\d.]+)\s*(um2|mm2)', text, re.IGNORECASE)
+        if m:
+            result.metrics.append(PPAMetricResult(
+                category='area', metric_name='macro_area',
+                value=float(m.group(1)), unit=m.group(2).lower(),
+            ).__dict__)
+
+        result.raw_summary = self._extract_summary_section(text, 'Area')
+        return result
+
+    # ── Generic fallback ──
+
+    def _parse_generic(self, text: str) -> PPAReportResult:
+        """通用解析 — 提取所有 <metric>=<value><unit> 模式"""
+        result = PPAReportResult(report_type='generic')
+        result.design_name = self._extract_design_name(text)
+
+        # 通用模式: name = value unit
+        generic_patterns = [
+            (r'(?:total_?)?power\s*[=:]\s*([\d.]+)\s*(mW|uW|W)', 'power', 'total_power'),
+            (r'(?:max_?|clock_?)?freq(?:uency)?\s*[=:]\s*([\d.]+)\s*(MHz|GHz|kHz)', 'performance', 'fmax'),
+            (r'(?:cell_?|total_?)?area\s*[=:]\s*([\d.]+)\s*(um2|mm2|nm2)', 'area', 'cell_area'),
+            (r'(?:dynamic|switching)_?power\s*[=:]\s*([\d.]+)\s*(mW|uW|W)', 'power', 'dynamic_power'),
+            (r'(?:leakage|static)_?power\s*[=:]\s*([\d.]+)\s*(mW|uW|W)', 'power', 'leakage_power'),
+            (r'(?:gate|cell)_?count\s*[=:]\s*([\d,]+)', 'area', 'gate_count'),
+            (r'utilization\s*[=:]\s*([\d.]+)\s*%?', 'area', 'utilization'),
+            (r'(?:setup\s+)?wns\s*[=:]\s*(-?[\d.]+)\s*(ns|ps)', 'performance', 'wns'),
+            (r'(?:hold\s+)?wns\s*[=:]\s*(-?[\d.]+)\s*(ns|ps)', 'performance', 'hold_wns'),
+        ]
+
+        seen = set()
+        for pat, cat, mname in generic_patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m and mname not in seen:
+                seen.add(mname)
+                result.metrics.append(PPAMetricResult(
+                    category=cat, metric_name=mname,
+                    value=float(m.group(1).replace(',', '')),
+                    unit=m.group(2).lower() if m.lastindex >= 2 else '',
+                ).__dict__)
+
+        return result
+
+    # ── Helpers ──
+
+    def _extract_design_name(self, text: str) -> str:
+        """提取设计名称"""
+        patterns = [
+            r'Design\s*[:\s]+(\S+)',
+            r'Module\s*[:\s]+(\S+)',
+            r'Cell\s*[:\s]+(\S+)',
+            r'^\s*Report\s*[:\s]+(\S+)',
+        ]
+        for pat in patterns:
+            m = re.search(pat, text, re.IGNORECASE | re.MULTILINE)
+            if m:
+                return m.group(1).strip('"\'')
+        return ""
+
+    def _extract_summary_section(self, text: str, section_type: str) -> str:
+        """提取报告摘要区域"""
+        lines = text.split('\n')
+        # 取前 30 行作为摘要（通常包含关键指标）
+        return '\n'.join(lines[:30])
+
+    def _result_to_dict(self, result: PPAReportResult) -> dict:
+        """将解析结果转为 dict（JSON 序列化友好）"""
+        metrics_list = []
+        for m in result.metrics:
+            if isinstance(m, dict):
+                metrics_list.append(m)
+            elif hasattr(m, '__dict__'):
+                metrics_list.append(m.__dict__)
+
+        return {
+            'report_type': result.report_type,
+            'tool': result.tool,
+            'design_name': result.design_name,
+            'metrics': metrics_list,
+            'corners': result.corners,
+            'raw_summary': result.raw_summary[:2000],
+            'warnings': result.warnings,
+            'errors': result.errors,
+        }
+
+    # ── 门限对比 ──
+
+    def check_against_constraints(self, metrics: list[dict],
+                                  constraints: list[dict]) -> list[dict]:
+        """逐条对比 PPA 指标与约束门限
+
+        Args:
+            metrics: [{'category', 'metric_name', 'actual_value', 'unit'}, ...]
+            constraints: [{'category', 'metric_name', 'constraint_type', 'threshold_value',
+                          'margin_required_pct', 'severity'}, ...]
+
+        Returns:
+            [{'category', 'metric_name', 'status': pass/fail/marginal, 'margin_pct', ...}, ...]
+        """
+        results = []
+        for c in constraints:
+            matched = [m for m in metrics
+                       if m['category'] == c['category']
+                       and m['metric_name'] == c['metric_name']]
+            if not matched:
+                results.append({**c, 'actual': None, 'status': 'no_data', 'margin_pct': 0})
+                continue
+
+            m = matched[0]
+            actual = m.get('actual_value', m.get('value', 0))
+            threshold = c['threshold_value']
+
+            if c['constraint_type'] == 'max':
+                margin = (threshold - actual) / max(threshold, 0.001) * 100
+                ok = actual <= threshold
+            elif c['constraint_type'] == 'min':
+                margin = (actual - threshold) / max(threshold, 0.001) * 100
+                ok = actual >= threshold
+            else:
+                margin = 0
+                ok = True
+
+            marginal = ok and margin < c['margin_required_pct']
+            status = 'fail' if not ok else ('marginal' if marginal else 'pass')
+
+            results.append({
+                'category': c['category'],
+                'metric_name': c['metric_name'],
+                'threshold': threshold,
+                'actual': actual,
+                'unit': c.get('unit', ''),
+                'constraint_type': c['constraint_type'],
+                'margin_pct': round(margin, 2),
+                'margin_required_pct': c['margin_required_pct'],
+                'severity': c['severity'],
+                'status': status,
+            })
+
+        return results
+
+    # ── 签核摘要生成 ──
+
+    def generate_signoff_summary(self, metrics: list[dict],
+                                 corners: list[dict] = None) -> dict:
+        """生成 PPA 签核 summary_json
+
+        Args:
+            metrics: PPA 指标列表
+            corners: PVT corner 数据列表 (可选)
+
+        Returns:
+            可存入 Signoff.summary_json 的结构
+        """
+        by_cat = {}
+        for m in metrics:
+            by_cat.setdefault(m['category'], []).append(m)
+
+        categories = {}
+        overall_pass = True
+        for cat, items in by_cat.items():
+            passed = sum(1 for i in items if i.get('pass_status') == 'pass')
+            failed = sum(1 for i in items if i.get('pass_status') == 'fail')
+            marginal = sum(1 for i in items if i.get('pass_status') == 'marginal')
+            pending = sum(1 for i in items if i.get('pass_status') == 'pending')
+            categories[cat] = {
+                'total': len(items),
+                'passed': passed,
+                'failed': failed,
+                'marginal': marginal,
+                'pending': pending,
+                'all_pass': failed == 0 and marginal == 0,
+            }
+            if failed > 0:
+                overall_pass = False
+
+        # Corner summary
+        corner_summary = {}
+        if corners:
+            best_power = min(corners, key=lambda c: c.get('total_power_mw', float('inf')))
+            worst_power = max(corners, key=lambda c: c.get('total_power_mw', 0))
+            best_perf = max(corners, key=lambda c: c.get('fmax_mhz', 0))
+            worst_perf = min(corners, key=lambda c: c.get('fmax_mhz', float('inf')))
+            corner_summary = {
+                'corner_count': len(corners),
+                'corners': [c.get('corner_name', '') for c in corners],
+                'best_power': f"{best_power.get('total_power_mw', 0)}mW @ {best_power.get('corner_name', '')}",
+                'worst_power': f"{worst_power.get('total_power_mw', 0)}mW @ {worst_power.get('corner_name', '')}",
+                'best_perf': f"{best_perf.get('fmax_mhz', 0)}MHz @ {best_perf.get('corner_name', '')}",
+                'worst_perf': f"{worst_perf.get('fmax_mhz', 0)}MHz @ {worst_perf.get('corner_name', '')}",
+            }
+
+        return {
+            'categories': categories,
+            'overall_pass': overall_pass,
+            'total_metrics': len(metrics),
+            'corners': corner_summary,
+            'generated_at': datetime.now().isoformat()[:19],
+        }

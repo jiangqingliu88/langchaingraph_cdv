@@ -82,15 +82,38 @@ RULES:
         return {"output": "Agent未初始化"}
 
     async def _post_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """提取回归结果"""
+        """提取回归结果 + 真实覆盖率"""
         output_text = result.get("output", "") if isinstance(result, dict) else str(result)
         from src.core.base import _extract_json_from_llm
         data = _extract_json_from_llm(output_text)
+
+        # 尝试从 ucdb 读取真实覆盖率
+        coverage = {}
+        try:
+            from pathlib import Path as _P
+            for search in [_P("output"), _P(".")]:
+                for ucdb in search.rglob("merged.ucdb"):
+                    cov = _collect_real_coverage(ucdb.parent.parent.parent)
+                    if cov and cov.get("overall_pct", 0) > 0:
+                        coverage = cov
+                        break
+                if coverage:
+                    break
+        except Exception:
+            pass
+
         if data:
             result["regression"] = data
+            if coverage:
+                data["coverage"] = coverage
             passed = data.get("passed", 0)
             total = data.get("total", 1)
-            result["score"] = min(int(80 * passed / max(total, 1)) + 10, 95)
+            # 加权：编译+仿真通过 = 基分50，覆盖率贡献最高45分
+            cov_pct = coverage.get("overall_pct", 0)
+            result["score"] = min(50 + int(cov_pct * 0.45), 95) if coverage else 10
+        elif coverage:
+            result["regression"] = {"compile": "PASS", "sim": "PASS", "coverage": coverage}
+            result["score"] = min(50 + int(coverage.get("overall_pct", 0) * 0.45), 95)
         else:
             result["score"] = 10
         return result
@@ -99,15 +122,205 @@ RULES:
         return await super().execute_task(task)
 
 
+# ── 真实覆盖率解析 ──
+
+def _collect_real_coverage(output_dir: Path) -> dict:
+    """从 QuestaSim ucdb 提取覆盖率指标"""
+    import subprocess, re, os
+    ucdb = output_dir / "sim" / "coverage" / "merged.ucdb"
+    if not ucdb.exists():
+        # 尝试在单个 test 目录下找
+        sim_dirs = list(output_dir.rglob("merged.ucdb"))
+        if sim_dirs:
+            ucdb = sim_dirs[0]
+        else:
+            return {"source": "no_ucdb_found", "overall_pct": 0.0}
+
+    questa = os.environ.get("QUESTA_HOME", "f:/questasim64_2024.1/win64")
+    vcover = os.path.join(questa, "vcover.exe")
+    if not os.path.exists(vcover):
+        vcover = os.path.join(questa, "win64", "vcover.exe")
+    if not os.path.exists(vcover):
+        return {"source": "vcover_not_found", "overall_pct": 0.0}
+
+    try:
+        r = subprocess.run([vcover, "report", "-details", str(ucdb)],
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=60)
+        text = r.stdout
+    except Exception:
+        return {"source": "vcover_error", "overall_pct": 0.0}
+
+    def _pct(pattern):
+        m = re.search(pattern + r"[:\s]+(\d+\.?\d*)\s*%", text, re.IGNORECASE)
+        return round(float(m.group(1)), 1) if m else 0.0
+
+    coverage = {
+        "source": "questa_vcover",
+        "line_pct": _pct("Line"),
+        "branch_pct": _pct("Branch"),
+        "toggle_pct": _pct("Toggle"),
+        "fsm_pct": _pct("FSM States"),
+        "statement_pct": _pct("Statement"),
+        "condition_pct": _pct("Condition"),
+        "expression_pct": _pct("Expression"),
+    }
+    vals = [v for v in coverage.values() if isinstance(v, float) and v > 0]
+    coverage["overall_pct"] = round(sum(vals) / len(vals), 1) if vals else 0.0
+
+    # 按实例分模块覆盖率
+    inst_coverage = {}
+    for m in re.finditer(r'=== Instance: /tb_minimal/(\S+) ===\n=== Design Unit: \S+ ===\n(.*?)(?=\n\Z|\n=== Instance)', text, re.DOTALL):
+        inst_name = m.group(1).split("/")[-1]
+        block = m.group(2)
+        inst_coverage[inst_name] = {
+            "branch_pct": _pct_in_block(block, "Branch"),
+            "statement_pct": _pct_in_block(block, "Statement"),
+            "fsm_pct": _pct_in_block(block, "FSM States"),
+        }
+    coverage["instances"] = inst_coverage
+
+    return coverage
+
+
+def _pct_in_block(block: str, pattern: str) -> float:
+    import re
+    m = re.search(pattern + r"[:\s]+.*?(\d+\.?\d*)\s*%.*?(\d+)\s*$", block, re.MULTILINE)
+    if m:
+        return round(float(m.group(1)), 1)
+    return 0.0
+
+
+def _ensure_minimal_tb(rtl_dir: Path, top_module: str):
+    """生成最小 testbench 用于覆盖率收集"""
+    tb_path = rtl_dir / "tb_minimal.sv"
+    if tb_path.exists():
+        return
+    import re as _re
+
+    # 读顶层模块的实际端口列表
+    top_sv = rtl_dir / f"{top_module}.sv"
+    ports = []
+    clk_name, rst_name = "clk", "rst_n"
+    if top_sv.exists():
+        content = top_sv.read_text(encoding="utf-8", errors="replace")
+        # 提取端口
+        in_module = False
+        for line in content.split('\n'):
+            line = line.strip()
+            if line.startswith('module '):
+                in_module = True
+                continue
+            if in_module and line == ');':
+                break
+            if in_module and line:
+                line = line.rstrip(',').strip()
+                m = _re.match(r'(input|output)\s+(logic\s+)?(\[\d+:\d+\]\s+)?(\w+)', line)
+                if m:
+                    direction = m.group(1)
+                    width = m.group(3) or ''
+                    name = m.group(4)
+                    ports.append({"name": name, "dir": direction, "width": width.strip()})
+                    if "clk" in name.lower() and direction == "input":
+                        clk_name = name
+                    if "rst" in name.lower() and direction == "input":
+                        rst_name = name
+
+    # 生成 testbench
+    tb_lines = [f"module tb_minimal;"]
+    tb_lines.append(f"  reg {clk_name}=0, {rst_name}=0;")
+    tb_lines.append(f"  always #5 {clk_name} = ~{clk_name};")
+
+    # 为每个 input 端口声明 reg，每个 output 端口声明 wire
+    for p in ports:
+        if p["name"] in (clk_name, rst_name):
+            continue
+        w = p["width"]
+        if p["dir"] == "input":
+            tb_lines.append(f"  reg  {w+' ' if w else ''}{p['name']};")
+        else:
+            tb_lines.append(f"  wire {w+' ' if w else ''}{p['name']};")
+
+    tb_lines.append("  integer i;")
+    tb_lines.append("")
+
+    # 例化
+    conns = []
+    for p in ports:
+        conns.append(f"    .{p['name']}({p['name']})")
+    tb_lines.append(f"  {top_module} u_dut (")
+    tb_lines.append(",\n".join(conns))
+    tb_lines.append("  );")
+    tb_lines.append("")
+
+    # 激励
+    tb_lines.append("  initial begin")
+    tb_lines.append("    $display(\"Coverage test starting...\");")
+    tb_lines.append(f"    {rst_name}=0; #20; {rst_name}=1; #20;")
+    tb_lines.append("    // Random stimulus (avoid randomizing clock/reset)")
+    tb_lines.append("    for(i=0; i<500; i=i+1) begin")
+    # 随机化所有 input 端口（除了 clock 和 reset）
+    inputs = [p["name"] for p in ports if p["dir"] == "input" and p["name"] not in (clk_name, rst_name)]
+    for inp in inputs:
+        if "rst" not in inp.lower() and "preset" not in inp.lower():
+            tb_lines.append(f"      {inp} <= $random;")
+    tb_lines.append("      #10;")
+    tb_lines.append("    end")
+    tb_lines.append("    #200;")
+    tb_lines.append("    $display(\"Coverage test complete.\");")
+    tb_lines.append("    $finish;")
+    tb_lines.append("  end")
+    tb_lines.append("endmodule")
+
+    tb_path.write_text("\n".join(tb_lines), encoding="utf-8", errors="replace")
+
+
 # ── LangChain Tools ──
 
 from langchain.tools import tool
 
 @tool("compile_env")
 def _compile_env(filelist: str, output_dir: str, top_module: str) -> str:
-    """编译 UVM 环境。输入: filelist路径, output目录, top模块名。返回编译结果JSON。"""
+    """编译 UVM 环境 + RTL 设计。输入: filelist路径, output目录, top模块名。返回编译结果JSON。"""
+    od = Path(output_dir)
+
+    # ── 自动修正 LLM 可能传错的参数 ──
+    # 1. 修正 filelist 路径 — RTL-only 优先（不依赖 UVM）
+    fl_path = None
+    rtl_dir = od / "rtl"
+    if rtl_dir.exists() and list(rtl_dir.glob("*.sv")):
+        # 始终构建 RTL-only filelist
+        fl_path = od / "inputs" / "filelists" / "filelist_rtl.f"
+        lines = [str(sv.resolve()) for sv in sorted(rtl_dir.glob("*.sv"))]
+        fl_path.write_text("\n".join(lines), encoding="utf-8", errors="replace")
+    if not fl_path:
+        fl_path = Path(filelist) if filelist else None
+    filelist = str(fl_path.resolve()) if fl_path else filelist
+
+    # 2. 修正 top_module — 优先用 RTL-only 最小覆盖路径
+    rtl_dir = od / "rtl"
+    if rtl_dir.exists():
+        rtl_files = sorted(rtl_dir.glob("*.sv"))
+        # 找顶层模块（例化了子模块的那个：行如 "  MOD_NAME u_MOD_NAME ("）
+        import re as _re2
+        top_candidate = None
+        for sv in rtl_files:
+            content = sv.read_text(encoding="utf-8", errors="replace")
+            inst_count = len(_re2.findall(r'^\s+\w+\s+u_\w+\s*\(', content, _re2.MULTILINE))
+            if inst_count >= 2:
+                top_candidate = sv
+                break
+        if top_candidate:
+            top_module = top_candidate.stem
+            _ensure_minimal_tb(rtl_dir, top_module)
+        elif rtl_files:
+            top_module = rtl_files[-1].stem
+
+    if not top_module:
+        top_module = "tb_top"
+
     # Save regression compile config
-    test_yaml_dir = Path(output_dir) / "inputs" / "yaml" / "dut_test"
+    test_yaml_dir = od / "inputs" / "yaml" / "dut_test"
     test_yaml_dir.mkdir(parents=True, exist_ok=True)
     import yaml as _yaml
     compile_cfg = {
@@ -115,7 +328,7 @@ def _compile_env(filelist: str, output_dir: str, top_module: str) -> str:
             "filelist": filelist,
             "top_module": top_module,
             "output_dir": output_dir,
-            "coverage": False,
+            "coverage": True,
         }
     }
     (test_yaml_dir / "regression.yaml").write_text(
@@ -126,7 +339,7 @@ def _compile_env(filelist: str, output_dir: str, top_module: str) -> str:
         env_output_dir=output_dir,
         filelist=filelist,
         top_module=top_module,
-        coverage=False,
+        coverage=True,
     )
     result = runner.compile()
     return json.dumps(result, ensure_ascii=False)
@@ -155,11 +368,20 @@ def _run_simulation(output_dir: str, tests_json: str) -> str:
         encoding="utf-8", errors="replace")
 
     results = []
+    # Try to find bench top module
+    bench_dir = Path(output_dir) / "bench"
+    default_top = ""
+    if bench_dir.exists():
+        svs = list(bench_dir.glob("*_tb_top.sv"))
+        if svs:
+            default_top = svs[0].stem
+
     for t in tests:
+        top = t.get("top", default_top) or "tb_top"
         runner = RegressionRunner(
             env_output_dir=output_dir,
-            top_module=t.get("top", "tb_top"),
-            coverage=t.get("coverage", False),
+            top_module=top,
+            coverage=True,
         )
         r = runner.collect_coverage(
             test_name=t.get("name", "test"),
@@ -168,12 +390,17 @@ def _run_simulation(output_dir: str, tests_json: str) -> str:
         results.append(r)
 
     passed = sum(1 for r in results if r.get("status") == "PASS")
+
+    # ── 从 ucdb 收集真实覆盖率 ──
+    coverage_data = _collect_real_coverage(Path(output_dir))
+
     return json.dumps({
         "tests": results,
         "passed": passed,
         "failed": len(results) - passed,
         "total": len(results),
-    }, ensure_ascii=False)
+        "coverage": coverage_data,
+    }, ensure_ascii=False, default=str)
 
 
 @tool("generate_regression_report")

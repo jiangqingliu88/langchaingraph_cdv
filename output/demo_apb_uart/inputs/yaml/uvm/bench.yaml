@@ -1,0 +1,55 @@
+bench:
+  name: apb_uart_bench
+  env_name: apb_uart_env
+  timeout: 10ms
+  clk_rst:
+    clocks:
+      - { name: clk, period: 10ns, init: 0 }
+    resets:
+      - { name: rst_n, init: 0, release_delay: 0 }
+  wire_decls:
+    - { name: data_in,  width: 32 }
+    - { name: data_out, width: 32 }
+    - { name: valid_in, width: 1 }
+    - { name: ready_in, width: 1 }
+    - { name: valid_out, width: 1 }
+    - { name: ready_out, width: 1 }
+  assignments:
+    - { lhs: ready_out, rhs: "1'b0" }
+  agents:
+    apb_uart_in:
+      interface: apb_uart_in
+      clock: clk
+      reset: rst_n
+      instance: apb_uart_in_if
+      connections:
+        - { port: clk, wire: clk }
+        - { port: rst, wire: rst_n }
+        - { port: data, wire: data_in }
+        - { port: valid, wire: valid_in }
+        - { port: ready, wire: ready_in }
+    apb_uart_out:
+      interface: apb_uart_out
+      clock: clk
+      reset: rst_n
+      instance: apb_uart_out_if
+      connections:
+        - { port: clk, wire: clk }
+        - { port: rst, wire: rst_n }
+        - { port: data, wire: data_out }
+        - { port: valid, wire: valid_out }
+        - { port: ready, wire: ready_out }
+  dut:
+    module: apb_uart
+    instance: u_apb_uart
+    parameters:
+      - { name: DATA_WIDTH, value: 32 }
+    ports:
+      - { name: clk, connection: clk }
+      - { name: rst_n, connection: rst_n }
+      - { name: data_in, connection: data_in }
+      - { name: valid_in, connection: valid_in }
+      - { name: ready_in, connection: ready_in }
+      - { name: data_out, connection: data_out }
+      - { name: valid_out, connection: valid_out }
+      - { name: ready_out, connection: ready_out }

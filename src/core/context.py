@@ -36,9 +36,10 @@ class ContextEntry:
 
 # 每个 ctx key 被哪些 agent 消费（用于自动清理）
 _CONSUMES_TOPOLOGY: Dict[str, List[str]] = {
-    "spec":        ["design_architect", "model_agent", "verification_architect"],
-    "design_arch": ["model_agent"],
+    "spec":        ["design_architect", "model_agent", "write_rtl", "verification_architect"],
+    "design_arch": ["model_agent", "write_rtl"],
     "model":       [],
+    "rtl":         ["verification_architect", "test_engineer"],
     "env":         ["test_engineer", "regression_manager"],
     "tests":       ["regression_manager"],
     "regression":  ["coverage_manager", "debug_engineer"],
