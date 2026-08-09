@@ -258,6 +258,15 @@ RULES:
 
         _uvm_ctx.set(output_dir=Path(output_dir), agents=[],
                      env_name=f"{self._module_name}_env" if self._module_name else "")
+        # 保存 spec 数据到输出目录，供 find_spec_yaml 读取以生成带真实端口的 YAML
+        if isinstance(spec, dict) and (spec.get("interfaces") or spec.get("verification_architecture")):
+            try:
+                spec_path = Path(output_dir) / "spec.json"
+                import json as _json
+                spec_path.write_text(_json.dumps(spec, ensure_ascii=False, default=str), encoding="utf-8")
+                logger.info(f"spec 已保存到 {spec_path}")
+            except Exception:
+                pass
         return await super().execute_task(task)
 
 # ── Tools imported from src.tools.uvm_tools.tools ──
