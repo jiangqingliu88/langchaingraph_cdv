@@ -39,9 +39,8 @@ class AppContainer:
         return self._factories[name]()
 
     def override(self, name: str, instance: Any):
-        """测试用：注入 mock 替换"""
+        """注入依赖替换（用于测试或运行时覆盖）"""
         self._instances[name] = instance
-        # 清除单例缓存，下次 resolve 使用 override 的实例
         if name in self._singletons:
             self._singletons[name] = None
 

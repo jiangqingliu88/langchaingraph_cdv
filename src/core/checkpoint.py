@@ -57,8 +57,9 @@ class PipelineCheckpoint:
 class CheckpointManager:
     """检查点管理器"""
 
-    def __init__(self, output_root: str = "output"):
-        self.output_root = Path(output_root)
+    def __init__(self, output_root: str | None = None):
+        from src.core.output_config import make_output_root
+        self.output_root = Path(make_output_root(output_root))
         self._checkpoints: dict[str, PipelineCheckpoint] = {}
         self._checkpoint_dir = self.output_root / "checkpoints"
         self._checkpoint_dir.mkdir(parents=True, exist_ok=True)

@@ -441,9 +441,10 @@ class SyncImpact:
 class RTLUVMSyncer:
     """检测 RTL 变化 → 生成 UVM 环境更新建议"""
 
-    def __init__(self, rtl_dir: str = "output", uvm_dir: str = "output"):
-        self.rtl_dir = Path(rtl_dir)
-        self.uvm_dir = Path(uvm_dir)
+    def __init__(self, rtl_dir: str | None = None, uvm_dir: str | None = None):
+        from src.core.output_config import make_output_root
+        self.rtl_dir = Path(make_output_root(rtl_dir))
+        self.uvm_dir = Path(make_output_root(uvm_dir))
 
     def detect_changes(self, prev_manifest: dict = None, curr_manifest: dict = None) -> List[SyncImpact]:
         """对比两次运行的 manifest，检测 RTL 变化对 UVM 的影响"""

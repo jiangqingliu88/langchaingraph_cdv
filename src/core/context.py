@@ -26,7 +26,6 @@ class ContextEntry:
     value: Any
     source: str           # agent role name
     timestamp: float = field(default_factory=time.time)
-    synthetic: bool = False
     version: int = 1
 
 
@@ -70,8 +69,7 @@ class ContextStore:
 
     # ── 写入 ──
 
-    def put(self, key: str, value: Any, source: str = "",
-            synthetic: bool = False) -> None:
+    def put(self, key: str, value: Any, source: str = "") -> None:
         """写入数据。如果 key 已存在，追加 version。"""
         old = self._data.get(key)
         new_version = (old.version + 1) if old else 1
@@ -79,7 +77,6 @@ class ContextStore:
             value=deepcopy(value) if isinstance(value, (dict, list)) else value,
             source=source,
             timestamp=time.time(),
-            synthetic=synthetic,
             version=new_version,
         )
 
@@ -112,10 +109,6 @@ class ContextStore:
 
     def has(self, key: str) -> bool:
         return key in self._data
-
-    def is_synthetic(self, key: str) -> bool:
-        entry = self._data.get(key)
-        return entry.synthetic if entry else False
 
     def keys(self) -> Set[str]:
         return set(self._data.keys())
@@ -171,7 +164,6 @@ class ContextStore:
         key         TEXT   NOT NULL,
         value_json  TEXT   NOT NULL,
         source      TEXT   NOT NULL DEFAULT '',
-        synthetic   INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (version, key)
     );
     CREATE INDEX IF NOT EXISTS idx_commits_version ON commits(version);
@@ -200,10 +192,10 @@ class ContextStore:
         for key, entry in self._data.items():
             value_json = json.dumps(entry.value, ensure_ascii=False, default=str)
             self._db.execute(
-                "INSERT INTO commits(version,step_name,timestamp,parent_version,key,value_json,source,synthetic) "
-                "VALUES(?,?,?,?,?,?,?,?)",
+                "INSERT INTO commits(version,step_name,timestamp,parent_version,key,value_json,source) "
+                "VALUES(?,?,?,?,?,?,?)",
                 (new_version, step_name, ts, parent, key, value_json,
-                 entry.source, 1 if entry.synthetic else 0))
+                 entry.source))
         self._db.commit()
         return new_version
 
@@ -221,14 +213,14 @@ class ContextStore:
         self._data.clear()
         # 加载指定版本
         for row in self._db.execute(
-            "SELECT key, value_json, source, synthetic, timestamp FROM commits WHERE version=?",
+            "SELECT key, value_json, source, timestamp FROM commits WHERE version=?",
             (version,)
         ):
-            key, value_json, source, synthetic, ts = row
+            key, value_json, source, ts = row
             value = json.loads(value_json)
             self._data[key] = ContextEntry(
                 value=value, source=source, timestamp=ts,
-                synthetic=bool(synthetic), version=version)
+                version=version)
         return version
 
     def list_versions(self) -> List[dict]:
@@ -252,14 +244,14 @@ class ContextStore:
     # ── 自动保存 ──
 
     def put(self, key: str, value: Any, source: str = "",
-            synthetic: bool = False, step_name: str = "") -> None:
+            step_name: str = "") -> None:
         """写入数据。如果启用了持久化，自动 save。"""
         old = self._data.get(key)
         new_version = (old.version + 1) if old else 1
         self._data[key] = ContextEntry(
             value=deepcopy(value) if isinstance(value, (dict, list)) else value,
             source=source, timestamp=time.time(),
-            synthetic=synthetic, version=new_version,
+            version=new_version,
         )
         # 自动持久化
         if hasattr(self, '_auto_save') and self._auto_save:
@@ -267,8 +259,7 @@ class ContextStore:
 
     def __repr__(self) -> str:
         items = ", ".join(
-            f"{k}(v{e.version}, {'syn' if e.synthetic else 'real'})"
-            for k, e in self._data.items()
+            f"{k}(v{e.version})" for k, e in self._data.items()
         )
         return f"ContextStore({items})"
 

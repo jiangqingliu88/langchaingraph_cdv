@@ -61,43 +61,8 @@ class LLMFactory:
       # 直接指定
       llm = LLMFactory.create_llm(model="claude-sonnet-4-6")
 
-      # 测试模式（不访问网络）
-      LLMFactory.enable_test_mode()
-      LLMFactory.disable_test_mode()
     """
 
-    _test_llm: Optional[BaseChatModel] = None
-    """注入测试替身：非 None 时 create_llm / create_for_task 直接返回此实例。"""
-    _test_role_map: dict = {}
-    """按 role 返回不同替身：{role: FakeChatModel}。"""
-
-    @classmethod
-    def enable_test_mode(cls, task_type: str = "spec_analysis") -> None:
-        """启用测试模式：所有 LLM 请求返回确定性 FakeChatModel。"""
-        from src.core.fake_llm import FakeChatModel
-        cls._test_llm = FakeChatModel(role=task_type)
-        cls._test_role_map = {}
-
-    @classmethod
-    def enable_test_mode_per_role(cls, role_map: dict) -> None:
-        """启用测试模式并按 role 返回不同 FakeChatModel。"""
-        from src.core.fake_llm import FakeChatModel
-        cls._test_llm = None
-        cls._test_role_map = {role: FakeChatModel(role=role) for role in role_map}
-
-    @classmethod
-    def disable_test_mode(cls) -> None:
-        """关闭测试模式。"""
-        cls._test_llm = None
-        cls._test_role_map = {}
-
-    @classmethod
-    def _get_test_llm(cls, role_hint: str = "spec_and_test_planner") -> Optional[BaseChatModel]:
-        """按 role 获取测试替身。"""
-        if cls._test_role_map:
-            return cls._test_role_map.get(role_hint, next(iter(cls._test_role_map.values())))
-        return cls._test_llm
-    
     # DeepSeek模型配置
     DEEPSEEK_MODELS = {
         "deepseek-chat": {
@@ -233,11 +198,6 @@ class LLMFactory:
         返回:
             BaseChatModel实例
         """
-        # 测试模式：直接返回注入的替身
-        test_llm = cls._get_test_llm()
-        if test_llm is not None:
-            return test_llm
-
         if settings is None:
             settings = Settings.get_instance()
         
@@ -383,18 +343,8 @@ class LLMFactory:
         返回:
             针对任务优化的LLM实例
         """
-        # 测试模式：直接返回注入的替身
-        test_llm = cls._get_test_llm()
-        if test_llm is not None:
-            return test_llm
-
-        # 测试模式
         if settings is None:
             settings = Settings.get_instance()
-
-        test_llm = cls._get_test_llm(task_type)
-        if test_llm is not None:
-            return test_llm
 
         provider = settings.llm.provider
         task_config = cls.TASK_MODEL_MAPPING.get(task_type, {})

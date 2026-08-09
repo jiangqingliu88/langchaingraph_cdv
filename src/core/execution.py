@@ -10,6 +10,8 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 import structlog
 
+from src.core.output_config import make_output_root
+
 from src.core.registry import AgentRegistry
 from src.core.context import ContextStore
 from src.tools.doc_tools.pipeline_docs import generate_phase_doc, update_flow_doc
@@ -87,141 +89,6 @@ def _writeback_produces(agent, result_data: Any, ctx: dict) -> None:
         ctx[key] = value
 
 
-def _backfill_ctx_deps(ctx: dict, phase_name: str, phase_status: str, output_root: str) -> None:
-    """自动回填下游阶段的 ctx 依赖数据，确保管道能持续运行。
-
-    ⚠️ DEMO MODE ONLY — 生产模式下不应合成数据。
-    当某个阶段 SKIP 或输出不完整时，从已有 spec/env 数据合成最小可用数据。
-    所有合成数据均标记 _synthetic=True 和 _demo=True。
-    """
-    import os as _os
-    import json as _json
-    from pathlib import Path as _Path
-
-    app_mode = _os.environ.get("APP_MODE", "demo").lower()
-    is_demo = app_mode == "demo"
-
-    if not is_demo:
-        # 生产模式：不合成数据，仅记录缺失警告
-        missing = []
-        if not ctx.get("env"):
-            missing.append("env")
-        if not ctx.get("tests"):
-            missing.append("tests")
-        if not ctx.get("regression"):
-            missing.append("regression")
-        if not ctx.get("coverage"):
-            missing.append("coverage")
-        if missing:
-            print(f"[execution] PRODUCTION MODE — missing ctx keys: {missing}. "
-                  f"Skipping backfill (require real data).")
-        return
-
-    # ── DEMO MODE: 回填 env 数据 ──
-    # 当 env 缺失或不完整时，从文件系统扫描生成的 agent 目录构造 env
-    env = ctx.get("env")
-    spec = ctx.get("spec", {})
-    if not env or (isinstance(env, dict) and not env.get("agent_count")):
-        out_dir = _Path(output_root)
-        agents_dir = out_dir / "agents"
-        agent_names = []
-        if agents_dir.exists():
-            agent_names = sorted(
-                d.name for d in agents_dir.iterdir()
-                if d.is_dir() and (d / f"{d.name}_pkg.sv").exists()
-            )
-        # 从 spec 提取 module name 作为 env_name
-        if isinstance(spec, dict):
-            env_name = spec.get("design_name", spec.get("module_name", ""))
-        if not env_name:
-            env_name = "dut_env"
-        # 查找 filelist
-        fl_path = out_dir / "inputs" / "filelists" / "filelist.f"
-        if not fl_path.exists():
-            fl_path = out_dir / "filelist.f"
-        env = {
-            "env_name": env_name,
-            "output_dir": str(out_dir.resolve()),
-            "agent_count": len(agent_names),
-            "agents": agent_names,
-            "filelist": str(fl_path) if fl_path.exists() else "",
-            "files": [str(p) for p in agents_dir.rglob("*.sv")] if agents_dir.exists() else [],
-            "top_module": f"{env_name}_tb_top",
-        }
-        if agent_names:
-            ctx.put("env", env, source="backfill", synthetic=True)
-
-    tests = ctx.get("tests", {})
-
-    # ── 回填 tests 数据（供 regression_manager 使用） ──
-    # 标记 _synthetic=True 以区分真实数据与合成数据
-    if not tests or not tests.get("test_names"):
-        if spec and env:
-            tp = spec.get("test_points", []) if isinstance(spec, dict) else []
-            test_names = []
-            test_list = []
-            for cat in (tp if isinstance(tp, list) else []):
-                if isinstance(cat, dict):
-                    for t in cat.get("tests", []):
-                        tn = t.get("name", str(t)) if isinstance(t, dict) else str(t)
-                        test_names.append(tn)
-                        test_list.append({
-                            "name": tn,
-                            "uvm_test": "alu_base_test",
-                            "top": env.get("env_name", "dut_env") + "_tb_top" if isinstance(env, dict) else "tb_top",
-                            "category": cat.get("category", "unknown"),
-                        })
-            if test_names:
-                ctx.put("tests", {
-                    "test_names": test_names,
-                    "test_count": len(test_names),
-                    "scenario_count": len(test_names),
-                    "test_cases": test_list,
-                    "scenarios": [{"name": tn, "description": t.get("description", "")} for tn, t in zip(test_names[:5], test_list[:5])],
-                }, source="backfill", synthetic=True)
-                # Write test YAML to disk
-                try:
-                    out_dir = _Path(output_root)
-                    yaml_dir = out_dir / "inputs" / "yaml" / "dut_test"
-                    yaml_dir.mkdir(parents=True, exist_ok=True)
-                    import yaml as _yaml
-                    reg_cfg = {
-                        "regression": {
-                            "env_name": env.get("env_name", "dut_env") if isinstance(env, dict) else "dut_env",
-                            "top_module": (env.get("env_name", "dut_env") if isinstance(env, dict) else "dut_env") + "_tb_top",
-                            "filelist": str(out_dir / "inputs" / "filelists" / "filelist.f"),
-                            "coverage": True,
-                        },
-                        "tests": test_list[:20],
-                    }
-                    (yaml_dir / "regression.yaml").write_text(
-                        _yaml.dump(reg_cfg, default_flow_style=False, allow_unicode=True),
-                        encoding="utf-8", errors="replace")
-                except Exception:
-                    pass
-
-    # ── 回填 regression 数据（供 coverage_manager 使用） ──
-    if not ctx.get("regression"):
-        tests_data = ctx.get("tests", {})
-        if tests_data:
-            tc = tests_data.get("test_count", 0) if isinstance(tests_data, dict) else 0
-            ctx.put("regression", {
-                "compile": "PASS", "compile_status": "PASS",
-                "passed": tc, "failed": 0, "total": tc, "pass_rate": "100%",
-                "tests": [{"name": n, "status": "PASS", "time": "0.5s"}
-                          for n in (tests_data.get("test_names", []) if isinstance(tests_data, dict) else [])],
-            }, source="backfill", synthetic=True)
-
-    # ── DEMO MODE: 回填 coverage 数据（使用合成覆盖率，仅供演示） ──
-    if not ctx.get("coverage"):
-        ctx.put("coverage", {
-            "line_pct": 0.0, "branch_pct": 0.0, "toggle_pct": 0.0, "coverage_pct": 0.0,
-            "gaps": [{"description": "DEMO MODE: 未运行真实回归，无实际覆盖率数据"}],
-            "suggestions": [{"type": "regression", "description": "运行DUT回归测试获取真实覆盖率"}],
-            "_demo": True, "_synthetic": True,
-        }, source="backfill", synthetic=True)
-
-
 class PipelineExecutionService:
     """流水线执行服务（单例）"""
 
@@ -277,7 +144,7 @@ class PipelineExecutionService:
         self,
         spec_text: str,
         workflow: str = "full_verification",
-        output_root: str = "output",
+        output_root: str | None = None,
         on_progress: callable = None,
         refine: bool = False,
         run_id: str | None = None,
@@ -285,7 +152,9 @@ class PipelineExecutionService:
         """执行验证流水线，返回 {run_id, phases, passed, total, ctx}
 
         run_id 可由调用方预生成（Web API），或自动生成（CLI）。
+        output_root 默认 None → 自动生成 output_{user}_{timestamp}。
         """
+        output_root = make_output_root(output_root)
         if not self._initialized:
             await self.initialize_agents()
 
@@ -365,6 +234,7 @@ class PipelineExecutionService:
             executor = StepExecutor(name, agent, ctx, output_root, on_progress)
             missing = executor.check_dependencies()
             if missing and role != "spec_and_test_planner":
+                print(f"\n  [PIPE] {name}: SKIPPED — missing={missing}  ctx_keys={list(ctx.keys())}")
                 run_state["phases"].append({
                     "name": name, "status": "skipped", "time": 0, "score": 0,
                     "reason": f"missing inputs: {missing}",
@@ -438,9 +308,6 @@ class PipelineExecutionService:
                 generate_phase_doc(name, ctx, str(docs_dir), run_state["phases"])
             except Exception as e:
                 logger.warning(f"Doc generation failed for phase {name}: {e}")
-
-            # ── 依赖回填 ──
-            _backfill_ctx_deps(ctx, name, final_status, output_root)
 
             # ── ctx 清理 ──
             try:

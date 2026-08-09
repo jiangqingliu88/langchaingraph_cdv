@@ -197,7 +197,7 @@ class ManifestBuilder:
 
     def build(self, session_id: str, run_state: dict = None,
               phases: List[dict] = None, ctx: Any = None,
-              output_root: str = "output") -> RunManifest:
+              output_root: str | None = None) -> RunManifest:
         """从多种来源构建完整的 RunManifest。
 
         Args:
@@ -590,8 +590,10 @@ def list_sessions(project_root: str = ".") -> List[dict]:
 
 def build_manifest(session_id: str, project_root: str = ".",
                    run_state: dict = None, phases: List[dict] = None,
-                   ctx: Any = None, output_root: str = "output") -> RunManifest:
+                   ctx: Any = None, output_root: str | None = None) -> RunManifest:
     """构建单个 session 的 manifest"""
+    from src.core.output_config import make_output_root
+    output_root = make_output_root(output_root)
     return ManifestBuilder(project_root).build(
         session_id=session_id,
         run_state=run_state,
@@ -606,8 +608,10 @@ def export_evidence_package(session_id: str, output_zip: str,
                             run_state: dict = None,
                             phases: List[dict] = None,
                             ctx: Any = None,
-                            output_root: str = "output") -> Path:
+                            output_root: str | None = None) -> Path:
     """导出签核证据包"""
+    from src.core.output_config import make_output_root
+    output_root = make_output_root(output_root)
     manifest = build_manifest(
         session_id=session_id,
         project_root=project_root,

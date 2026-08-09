@@ -138,8 +138,9 @@ class EvidenceChain:
 class EvidenceCollector:
     """从 pipeline context + 文件系统自动收集证据"""
 
-    def __init__(self, output_root: str = "output"):
-        self.output_root = Path(output_root)
+    def __init__(self, output_root: str | None = None):
+        from src.core.output_config import make_output_root
+        self.output_root = Path(make_output_root(output_root))
         self.chain = EvidenceChain(
             timestamp=datetime.now().isoformat(),
         )
@@ -555,7 +556,7 @@ class EvidenceCollector:
 # Convenience
 # ═══════════════════════════════════════════════════════════
 
-def collect_evidence(run_id: str, output_root: str = "output",
+def collect_evidence(run_id: str, output_root: str | None = None,
                      ctx: Any = None, phases: List[dict] = None) -> EvidenceChain:
     """一键收集完整证据链"""
     return EvidenceCollector(output_root).collect(run_id, ctx, phases)

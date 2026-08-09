@@ -835,6 +835,18 @@ def _build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
         name = a["name"]
         lines.append(f"+incdir+{output_dir.resolve()}/agents/{name}")
         lines.append(str(output_dir.resolve() / f"agents/{name}/{name}_pkg.sv"))
+    # RTL 文件（在 rtl/ 目录下所有 .sv）
+    rtl_dir = output_dir / "rtl"
+    if rtl_dir.exists():
+        for sv in sorted(rtl_dir.glob("*.sv")):
+            lines.append(str(sv.resolve()))
+        lines.append(f"+incdir+{rtl_dir.resolve()}")
+
+    # Bench 顶层
+    bench_top = output_dir / "bench" / f"{env_name}_bench_tb_top.sv"
+    if bench_top.exists():
+        lines.append(str(bench_top.resolve()))
+
     lines += [
         f"+incdir+{output_dir.resolve()}/env",
         str(output_dir.resolve() / f"env/{env_name}_pkg.sv"),

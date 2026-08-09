@@ -36,7 +36,10 @@ class UvmToolContext:
 
     @property
     def output_dir(self) -> str:
-        return self._output_dir or str(Path("output").resolve())
+        if self._output_dir:
+            return self._output_dir
+        from src.core.output_config import make_output_root
+        return str(Path(make_output_root()).resolve())
 
     @property
     def agents(self) -> List:

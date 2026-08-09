@@ -43,6 +43,8 @@ class PlatformSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PLATFORM_", extra="allow")
     # 环境标识: dev / test / prod
     env: str = "production"
+    # 产品等级: personal / community / enterprise
+    tier: str = "personal"
     # 安全
     jwt_secret: str = ""
     bootstrap_admin_password: str = ""    # 生产环境必须显式设置
@@ -77,6 +79,58 @@ class Settings(BaseSettings):
     @property
     def is_test(self) -> bool:
         return self.platform.env == "test"
+
+    # ── 产品等级 ──
+
+    @property
+    def tier(self) -> str:
+        """personal | community | enterprise"""
+        return self.platform.tier
+
+    @property
+    def is_personal(self) -> bool:
+        return self.tier == "personal"
+
+    @property
+    def is_enterprise(self) -> bool:
+        return self.tier == "enterprise"
+
+    # ── 等级差异化开关（按 cost/benefit 优先级排列）──
+
+    @property
+    def max_agents(self) -> int:
+        """Agent 并发上限"""
+        return {"personal": 5, "community": 9, "enterprise": 20}.get(self.tier, 5)
+
+    @property
+    def feedback_loop_enabled(self) -> bool:
+        """debug→修复→重试 闭环"""
+        return self.tier in ("enterprise",)
+
+    @property
+    def evidence_chain_enabled(self) -> bool:
+        """签核证据链收集"""
+        return self.tier in ("community", "enterprise")
+
+    @property
+    def sse_enabled(self) -> bool:
+        """SSE 实时推送"""
+        return self.tier != "personal"
+
+    @property
+    def engines_enabled(self) -> bool:
+        """五大差异化引擎 (VPlan/SmartRegress/DebugCopilot/Triage)"""
+        return self.tier in ("enterprise",)
+
+    @property
+    def web_dashboard_enabled(self) -> bool:
+        """Web 仪表盘"""
+        return self.tier != "personal"
+
+    @property
+    def multi_user_enabled(self) -> bool:
+        """多用户 / RBAC"""
+        return self.tier == "enterprise"
 
     def validate_production(self):
         """生产环境安全校验"""

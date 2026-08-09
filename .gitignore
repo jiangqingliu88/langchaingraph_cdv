@@ -32,6 +32,11 @@ logs/
 regression_*/
 .build_cache/
 
+# Generated output directories
+output/
+output_*/
+output_dir/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -211,7 +211,7 @@ class ExecutionContext:
     """工具执行上下文 —— 隔离全局状态"""
     # 工作目录
     working_dir: str = "."
-    output_dir: str = "output"
+    output_dir: str = ""  # 空字符串 → 运行时由 make_output_root 生成
 
     # 项目信息
     project_name: str = ""
@@ -244,8 +244,10 @@ class ExecutionContext:
         }
 
     @classmethod
-    def from_ctx(cls, ctx: Any, output_root: str = "output") -> ExecutionContext:
+    def from_ctx(cls, ctx: Any, output_root: str | None = None) -> ExecutionContext:
         """从 ContextStore 或 dict 创建 ExecutionContext"""
+        from src.core.output_config import make_output_root
+        output_root = make_output_root(output_root)
         if ctx is None:
             return cls(output_dir=output_root)
 

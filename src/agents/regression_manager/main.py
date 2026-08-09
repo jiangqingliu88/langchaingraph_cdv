@@ -139,8 +139,6 @@ def _collect_real_coverage(output_dir: Path) -> dict:
     questa = os.environ.get("QUESTA_HOME", "f:/questasim64_2024.1/win64")
     vcover = os.path.join(questa, "vcover.exe")
     if not os.path.exists(vcover):
-        vcover = os.path.join(questa, "win64", "vcover.exe")
-    if not os.path.exists(vcover):
         return {"source": "vcover_not_found", "overall_pct": 0.0}
 
     try:

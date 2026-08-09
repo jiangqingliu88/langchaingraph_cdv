@@ -39,12 +39,13 @@ class StepExecutor:
     """阶段执行器 — 每个阶段一个实例，管理完整的执行生命周期"""
 
     def __init__(self, phase_name: str, agent, ctx: ContextStore,
-                 output_dir: str = "output",
+                 output_dir: str | None = None,
                  on_progress: Callable = None):
         self.phase_name = phase_name
         self.agent = agent
         self.ctx = ctx
-        self.output_dir = output_dir
+        from src.core.output_config import make_output_root
+        self.output_dir = make_output_root(output_dir)
         self.on_progress = on_progress
 
         self.max_retries = getattr(agent, 'max_retries', 2)
@@ -65,7 +66,14 @@ class StepExecutor:
             keys = list(consumes.keys())
         else:
             keys = consumes
-        return [k for k in keys if self.ctx.get(k) is None]
+        missing = []
+        for k in keys:
+            val = self.ctx.get(k)
+            if val is None:
+                missing.append(k)
+        if missing:
+            print(f"  [DEPS] {self.agent.role}: missing={missing}  ctx_keys={list(self.ctx.keys())}")  # DEBUG
+        return missing
 
     # ═══════════════════════════════════════════════════════
     # 状态快照
@@ -559,10 +567,11 @@ class PipelineState:
 class PipelineOrchestrator:
     """管道编排器 — 协调阶段调度、反馈闭环、状态追踪"""
 
-    def __init__(self, ctx: ContextStore, output_dir: str = "output",
+    def __init__(self, ctx: ContextStore, output_dir: str | None = None,
                  on_progress: Callable = None):
         self.ctx = ctx
-        self.output_dir = output_dir
+        from src.core.output_config import make_output_root
+        self.output_dir = make_output_root(output_dir)
         self.on_progress = on_progress
         self.state = PipelineState(run_id="", workflow="")
 

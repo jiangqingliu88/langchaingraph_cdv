@@ -837,7 +837,8 @@ def _build_env(ctx: dict, ps: dict) -> str:
         return _build_placeholder("06", "UVM验证环境", "UVM-DOC-006", "UVM phase skipped")
 
     env_name = _safe(data, "env_name", default="Unknown")
-    output_dir = _safe(data, "output_dir", default=str(Path.cwd() / "output"))
+    from src.core.output_config import make_output_root
+    output_dir = _safe(data, "output_dir", default=make_output_root())
     agent_count = _safe(data, "agent_count", default="-")
     filelist = _safe(data, "filelist", default="-")
     files = data.get("files", []) or []
@@ -1433,11 +1434,6 @@ def _build_verification_closure(ctx: dict, ps: dict) -> str:
     out = []
     out.append(_doc_header("VCLS-DOC-015", "验证收敛报告", status="Review"))
 
-    # Synthetic data warning
-    is_synthetic = reg.get("_synthetic") or cov.get("_synthetic") or False
-    if is_synthetic:
-        out.append("> ⚠️ **注意**: 部分数据为合成回填（Agent 阶段未实际运行），不代表真实测试结果。\n")
-
     # 1. 签核判定标准（固定阈值，来自验证计划）
     out.append("## 1. 签核判定标准\n")
     out.append("| 判定项 | 阈值 | 说明 |")
@@ -1486,9 +1482,7 @@ def _build_verification_closure(ctx: dict, ps: dict) -> str:
         all_ok = False
 
     out.append("## 3. Go / No-Go 决策\n")
-    if is_synthetic:
-        out.append("### ⚠️ CONDITIONAL — 数据为合成回填，需真实运行后重新判定\n")
-    elif all_ok:
+    if all_ok:
         out.append("### ✅ GO — 验证收敛，建议进入下一阶段\n")
     else:
         out.append("### ⏳ NO-GO — 验证未完全收敛\n")
@@ -1651,11 +1645,6 @@ def _build_flow(run_state: dict, ctx: dict) -> str:
     out.append(_doc_header("FLOW-DOC-000", "验证流程总览"))
     out.append(f"**Run ID**: `{run_id}` | **Workflow**: `{workflow}` | **更新时间**: {now}\n")
     out.append(f"\n📄 **系统架构与策略**: [CONTEXT.md](../CONTEXT.md)\n")
-    # Synthetic data warning
-    reg = _parse_json(ctx.get("regression")) or {}
-    if reg.get("_synthetic"):
-        out.append("\n> ⚠️ **注意**: 回归/覆盖率数据为合成回填。请运行 `python output/run_tools.py --agent` 获取真实数据。\n")
-
     # ── 1. 前端设计流程 ──
     out.append("## 1. 前端设计流程\n")
     out.append("| 阶段 | 文档 | 文档ID | 状态 |")
@@ -1696,17 +1685,6 @@ def _build_flow(run_state: dict, ctx: dict) -> str:
         out.append(f"| {title} | [{title}](./{link}) | `{doc_id}` | {_status_badge(st)} | {sc} |")
 
     out.append(f"\n📄 **功能验证总结**: [functional_verification_summary.md](./dv/functional_verification_summary.md)\n")
-
-    # ── Synthetic data warning ──
-    is_syn = False
-    if hasattr(ctx, 'is_synthetic'):
-        is_syn = ctx.is_synthetic("regression") or ctx.is_synthetic("coverage")
-    elif isinstance(ctx, dict):
-        reg = _parse_json(ctx.get("regression")) or {}
-        cov = _parse_json(ctx.get("coverage")) or {}
-        is_syn = reg.get("_synthetic") or cov.get("_synthetic") or False
-    if is_syn:
-        out.append("\n> ⚠️ **注意**: 回归/覆盖率数据为合成回填。请运行 `python output/run_tools.py --agent` 获取真实数据。\n")
 
     # ── 3. 质量仪表盘 ──
     out.append("## 3. 质量仪表盘\n")

@@ -144,13 +144,15 @@ def cli():
 @common_options
 def init(json_output, quiet, verbose, output_dir):
     """初始化输出目录结构"""
+    from src.core.output_config import make_output_root
     out = get_output_adapter(json_output, quiet)
-    paths = ["output", "logs", "output/docs", "output/docs/de", "output/docs/dv"]
+    root = make_output_root(output_dir or None)
+    paths = [root, "logs", f"{root}/docs", f"{root}/docs/de", f"{root}/docs/dv"]
     for p in paths:
         Path(p).mkdir(parents=True, exist_ok=True)
-    Path("output/.gitkeep").touch(exist_ok=True)
+    Path(f"{root}/.gitkeep").touch(exist_ok=True)
     Path("logs/.gitkeep").touch(exist_ok=True)
-    out.print_success("Initialized — output/ logs/ created")
+    out.print_success(f"Initialized — {root}/ logs/ created")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -193,7 +195,8 @@ def verify(spec_file, workflow, compile, output, refine,
       vagent verify spec.md --retry-failed            # 只重跑失败阶段
     """
     out = get_output_adapter(json_output, quiet)
-    output_root = output or "output"
+    from src.core.output_config import make_output_root
+    output_root = make_output_root(output)
 
     # ── 处理阶段过滤 ──
     phases = _WORKFLOW_PHASE_MAP.get(workflow, FULL_PHASES)
@@ -1974,9 +1977,11 @@ def project_init(name, template):
         return
 
     # Create directory structure
+    from src.core.output_config import make_output_root
+    project_output = make_output_root()
     dirs = [
-        "specs", "output", "logs",
-        "output/docs/de", "output/docs/dv",
+        "specs", project_output, "logs",
+        f"{project_output}/docs/de", f"{project_output}/docs/dv",
         "src/rtl", "src/tb", "src/agents",
     ]
     for d in dirs:
@@ -1987,7 +1992,7 @@ def project_init(name, template):
         f"# {name}\n\nSignOffAI Project — Created with template: {template}\n", encoding="utf-8"
     )
     (project_dir / ".gitignore").write_text(
-        "output/\nlogs/\n*.pyc\n__pycache__/\n.env\n*.db\n", encoding="utf-8"
+        "output_*/\noutput/\nlogs/\n*.pyc\n__pycache__/\n.env\n*.db\n", encoding="utf-8"
     )
     (project_dir / "valiflow.md").write_text(
         "---\nproject: " + name + "\n---\n\n## constraints\n\n## fi_profile\n\n## known_issues\n",
@@ -2022,7 +2027,7 @@ def project_status(json_output):
 
     status_info = {
         "directory": str(cwd),
-        "has_output": (cwd / "output").exists(),
+        "has_output": bool(list(cwd.glob("output_*")) or (cwd / "output").exists()),
         "has_logs": (cwd / "logs").exists(),
         "has_specs": list((cwd / "specs").glob("*.md")) if (cwd / "specs").exists() else [],
         "has_valiflow": (cwd / "valiflow.md").exists(),
@@ -2101,19 +2106,21 @@ def project_clean(clean_all):
       vagent project clean --all        # 清理 output/ + logs/
     """
     cwd = Path.cwd()
-    dirs_to_clean = ["output"]
-    if clean_all:
-        dirs_to_clean.append("logs")
-
     import shutil
-    for d in dirs_to_clean:
-        target = cwd / d
+    # 清理所有 output_ 前缀的目录（含旧 output/ 目录）
+    removed_any = False
+    for pattern in ["output"] + sorted(cwd.glob("output_*")):
+        target = cwd / pattern if isinstance(pattern, str) else pattern
         if target.exists():
             shutil.rmtree(target)
-            target.mkdir()
-            console.print(f"[green]Cleaned: {d}/[/green]")
-        else:
-            console.print(f"[dim]No {d}/ directory[/dim]")
+            console.print(f"[green]Cleaned: {target.name}/[/green]")
+            removed_any = True
+    if clean_all and (logs := cwd / "logs").exists():
+        shutil.rmtree(logs)
+        console.print(f"[green]Cleaned: logs/[/green]")
+        removed_any = True
+    if not removed_any:
+        console.print("[dim]No output directories found[/dim]")
 
 
 def _get_git_info(cwd: Path) -> dict:
@@ -2799,8 +2806,10 @@ def env_generate(spec_file, output):
     示例:
       vagent env generate --spec spec.md
     """
+    from src.core.output_config import make_output_root
+    output_dir = make_output_root(output) + "/uvm_env"
     console.print(f"[cyan]Generating UVM environment from {spec_file}...[/cyan]")
-    console.print(f"[dim]Output: {output}[/dim]")
+    console.print(f"[dim]Output: {output_dir}[/dim]")
     console.print("[yellow]Use 'vagent verify <spec> --step UVM' for full UVM environment generation.[/yellow]")
 
 
@@ -2844,12 +2853,51 @@ def env_compile(env_dir):
       vagent env compile --dir output/agents
     """
     env_path = Path(env_dir)
-    filelist = env_path / "filelist.f"
-    if filelist.exists():
-        console.print(f"[cyan]Compiling with filelist: {filelist}[/cyan]")
-        console.print("[yellow]Compilation requires a simulator (VCS/QuestaSim) in PATH.[/yellow]")
-    else:
+    # 搜索 filelist.f（可能在 inputs/filelists/ 子目录下）
+    filelists = list(env_path.glob("**/filelist.f"))
+    if not filelists:
         console.print(f"[red]No filelist.f found in {env_dir}[/red]")
+        return
+    filelist = filelists[0]
+    if len(filelists) > 1:
+        console.print(f"[dim]Found {len(filelists)} filelists, using: {filelist}[/dim]")
+
+    console.print(f"[cyan]Compiling with filelist: {filelist}[/cyan]")
+
+    # 实际运行编译
+    from src.tools.uvm_tools._tools_old import _build_filelist_for_tb, _run_compile_check
+    from src.tools.lib.uvm_context import ctx as _uctx
+    import json as _json
+
+    output_dir = env_path
+    # 尝试从 env.yaml 读取配置
+    env_yaml = output_dir / "inputs" / "yaml" / "uvm" / "env.yaml"
+    env_name = "dut_env"
+    agents = []
+    if env_yaml.exists():
+        try:
+            import yaml as _yaml
+            with open(env_yaml, encoding="utf-8") as f:
+                env_data = _yaml.safe_load(f)
+            env_info = env_data.get("environment", {}) if isinstance(env_data, dict) else {}
+            env_name = env_info.get("name", "dut_env")
+            ag_list = env_info.get("agents", {})
+            agents = list(ag_list.keys()) if isinstance(ag_list, dict) else []
+        except Exception:
+            pass
+
+    if not agents:
+        # 从 agents 目录推断
+        ag_dir = output_dir / "agents"
+        if ag_dir.exists():
+            agents = [d.name for d in ag_dir.iterdir() if d.is_dir() and (d / f"{d.name}_pkg.sv").exists()]
+
+    # _run_compile_check 期望 agents 是 [{"name": "xxx"}, ...] 格式
+    agent_dicts = [{"name": a} for a in agents]
+    _uctx.set(output_dir=str(output_dir), agents=agent_dicts, env_name=env_name)
+    result = _run_compile_check(output_dir, agent_dicts, env_name)
+    console.print(f"[bold]Compile:[/bold] {'PASS' if result.get('passed') else 'FAIL'}")
+    console.print(f"  Errors: {result.get('errors', '?')}  Warnings: {result.get('warnings', '?')}")
 
 
 @env.command("template")
