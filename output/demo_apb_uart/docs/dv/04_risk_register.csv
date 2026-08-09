@@ -1,5 +1,0 @@
-RiskID,Description,Impact,Mitigation
-RSK-001,Spec 变更导致环境返工,高,模块化 Agent 设计
-RSK-002,覆盖率收敛慢,中,自动覆盖率驱动测试生成
-RSK-003,仿真时间过长,中,并行回归 + LSF 调度
-RSK-004,参考模型与 RTL 不一致,低,Spec 双重审查 + 交叉验证

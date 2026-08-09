@@ -1,9 +1,0 @@
-+define+dut_out_loop_back_test
-+incdir+D:\SignOffAI\output\demo_apb_uart\agents\dut_out
-+incdir+D:\SignOffAI\output\demo_apb_uart\agents\dut_out/loopback
-D:\SignOffAI\output\demo_apb_uart\agents\dut_out\dut_out_interface.sv
-D:\SignOffAI\output\demo_apb_uart\agents\dut_out\dut_out_pkg.sv
-D:\SignOffAI\output\demo_apb_uart\agents\dut_out\loopback\dut_out_loopback_scb.sv
-D:\SignOffAI\output\demo_apb_uart\agents\dut_out\loopback\dut_out_loopback_env.sv
-D:\SignOffAI\output\demo_apb_uart\agents\dut_out\loopback\dut_out_loopback_test.sv
-D:\SignOffAI\output\demo_apb_uart\agents\dut_out\loopback\dut_out_loopback_tb.sv

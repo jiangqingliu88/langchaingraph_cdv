@@ -1,8 +1,0 @@
-Phase,Task,EstimatedDays,Dependency
-Phase 1,Agent 开发与闭环调试,3,Spec 冻结
-Phase 2,环境集成与编译,2,Agent 闭环 PASS
-Phase 3,定向测试开发,3,环境编译 PASS
-Phase 4,随机测试与回归,5,定向测试 PASS
-Phase 5,覆盖率收敛,3,回归环境就绪
-Phase 6,签核与报告,1,覆盖率达标
-Total,,17,

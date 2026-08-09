@@ -1,8 +1,0 @@
-GoalID,Goal,Priority,Criteria
-VGOAL-001,功能正确性,P0,所有功能特性通过 directed + random 测试
-VGOAL-002,接口协议合规,P0,所有接口协议检查通过
-VGOAL-003,寄存器访问,P0,所有寄存器读写回环测试通过
-VGOAL-004,代码覆盖率,P1,"Line≥95%, Branch≥90%"
-VGOAL-005,功能覆盖率,P1,所有 covergroup 覆盖点 100%
-VGOAL-006,跨时钟域,P1,CDC 检查通过
-VGOAL-007,性能验证,P2,时序满足规格要求
