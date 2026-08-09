@@ -1,16 +1,60 @@
 {
-  "timestamp": "2026-08-09T19:23:52.970990",
+  "timestamp": "2026-08-09T20:13:27.933842",
   "root_dir": "D:\\SignOffAI",
   "total_time": "N/A",
-  "total": 14,
+  "total": 15,
   "stats": {
-    "pass": 14,
+    "pass": 15,
     "fail": 0,
     "unknown": 0
   },
   "tasks": [
     {
-      "name": "APB寄存器读写-波特率配置",
+      "name": "APB寄存器读写-配置寄存器访问",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 0.5,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "APB寄存器读写-波特率寄存器",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 0.4,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "APB寄存器读写-控制字寄存器",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 0.4,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "APB寄存器读写-状态字寄存器",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 0.5,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "UART发送-9600波特率误差",
       "status": "pass",
       "work_dir": "",
       "elapsed": 1.2,
@@ -21,117 +65,7 @@
       "performance_degraded": false
     },
     {
-      "name": "APB寄存器读写-控制字配置",
-      "status": "pass",
-      "work_dir": "",
-      "elapsed": 1.0,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "APB寄存器读写-状态字读取",
-      "status": "pass",
-      "work_dir": "",
-      "elapsed": 0.9,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "UART发送-9600波特率",
-      "status": "pass",
-      "work_dir": "",
-      "elapsed": 2.5,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "UART发送-19200波特率",
-      "status": "pass",
-      "work_dir": "",
-      "elapsed": 2.3,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "UART发送-38400波特率",
-      "status": "pass",
-      "work_dir": "",
-      "elapsed": 2.1,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "UART发送-57600波特率",
-      "status": "pass",
-      "work_dir": "",
-      "elapsed": 2.0,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "UART发送-115200波特率",
-      "status": "pass",
-      "work_dir": "",
-      "elapsed": 1.9,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "UART接收-10000次传输",
-      "status": "pass",
-      "work_dir": "",
-      "elapsed": 5.0,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "FIFO管理-溢出标志",
-      "status": "pass",
-      "work_dir": "",
-      "elapsed": 1.5,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "FIFO管理-空满标志",
-      "status": "pass",
-      "work_dir": "",
-      "elapsed": 1.3,
-      "job_id": "",
-      "fingerprint": "",
-      "sim_time": 0,
-      "wave_path": "",
-      "performance_degraded": false
-    },
-    {
-      "name": "中断输出-接收完成",
+      "name": "UART发送-19200波特率误差",
       "status": "pass",
       "work_dir": "",
       "elapsed": 1.1,
@@ -142,7 +76,7 @@
       "performance_degraded": false
     },
     {
-      "name": "中断输出-发送完成",
+      "name": "UART发送-38400波特率误差",
       "status": "pass",
       "work_dir": "",
       "elapsed": 1.0,
@@ -153,10 +87,87 @@
       "performance_degraded": false
     },
     {
-      "name": "中断输出-FIFO溢出",
+      "name": "UART发送-57600波特率误差",
       "status": "pass",
       "work_dir": "",
-      "elapsed": 1.2,
+      "elapsed": 1.0,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "UART发送-115200波特率误差",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 1.0,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "UART接收-9600波特率10000次传输",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 2.5,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "UART接收-115200波特率10000次传输",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 2.3,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "FIFO管理-16字节收发FIFO",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 1.5,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "FIFO管理-溢出/空/满标志位",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 1.4,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "FIFO管理-满标志无数据丢失",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 1.6,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "中断输出-接收/发送/溢出中断延迟",
+      "status": "pass",
+      "work_dir": "",
+      "elapsed": 1.3,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
