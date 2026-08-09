@@ -140,7 +140,9 @@ RULES:
         module_name = getattr(self, '_module_name', '') or _uvm_ctx.env_name or ""
         if module_name.endswith("_env"):
             module_name = module_name[:-4]
-        if module_name and module_name != "dut":
+        # 只要模块名不是纯占位符，就执行修正（大小写不敏感）
+        is_placeholder = not module_name or module_name.lower() in ("dut", "dut_top", "dut_env")
+        if module_name and not is_placeholder:
             try:
                 from src.tools.uvm_tools.tool_find_spec_yaml.main import run as _fsy_run
                 from src.tools.uvm_tools.tool_jinja_render.main import run as _render_run
@@ -148,15 +150,16 @@ RULES:
                 _render_run(str(output_dir))
                 # 清理 LLM 用错误名字（dut_* / APB_* 等）生成的旧目录
                 import shutil
+                ml = module_name.lower()
                 for sub in list((output_dir / "agents").iterdir()):
-                    if sub.is_dir() and not sub.name.startswith(module_name):
+                    if sub.is_dir() and not sub.name.lower().startswith(ml):
                         shutil.rmtree(sub, ignore_errors=True)
                 for f in list((output_dir / "bench").glob("*_tb_top.sv")):
-                    if module_name not in f.stem:
+                    if ml not in f.stem.lower():
                         f.unlink()
                 # 清理 env 目录及子目录中非本模块的文件
                 for f in list((output_dir / "env").rglob("*.sv")):
-                    if module_name not in f.stem:
+                    if ml not in f.stem.lower():
                         f.unlink()
             except Exception:
                 pass
@@ -183,32 +186,76 @@ RULES:
             "top_module": f"{env_name}_tb_top",
         }
 
-        # ── 质量检查结果 ──
-        report_path = output_dir / "quality_report.json"
-        if report_path.exists():
-            try:
-                quality = json.loads(report_path.read_text(encoding="utf-8", errors="replace"))
-                result["quality"] = quality
-                static_pass = quality.get("details", {}).get("static", {}).get("passed", False)
-                compile_pass = quality.get("details", {}).get("compile", {}).get("passed", False)
-                loopback_pass = quality.get("details", {}).get("loopback", {}).get("passed", False)
-                if static_pass and compile_pass:
-                    result["score"] = 85 if loopback_pass else 75
-                else:
-                    result["score"] = 30
-                return result
-            except (json.JSONDecodeError, OSError):
-                pass
-        result["score"] = 10
+        # ── 根据实际生成的文件质量打分 ──
+        n_agents = len(agent_names)
+        n_files = len(result["env"].get("files", []))
+        has_filelist = result["env"].get("filelist", "")
+        if n_agents >= 2 and n_files >= 20:
+            result["score"] = 75
+        elif n_agents >= 1 and n_files >= 5:
+            result["score"] = 50
+        elif n_agents >= 1:
+            result["score"] = 35
+        else:
+            result["score"] = 10
         return result
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
         """通过 LLM Agent 执行 UVM 环境生成 + 质量自检。"""
-        output_dir = task.get("output_dir", "output")
-        # 从 ctx/spec 提取模块名
+        from src.core.output_config import make_output_root
+        output_dir = make_output_root(task.get("output_dir") or None)
+        # 从 ctx 提取模块名：优先 spec.design_name，其次 design_arch.module_name，最后 rtl.module_name
         ctx = task.get("ctx", {})
         spec = ctx.get("spec", {}) if hasattr(ctx, 'get') else {}
-        self._module_name = spec.get("design_name", "") if isinstance(spec, dict) else ""
+        design_arch = ctx.get("design_arch", {}) if hasattr(ctx, 'get') else {}
+        rtl = ctx.get("rtl", {}) if hasattr(ctx, 'get') else {}
+
+        def _is_placeholder(name: str) -> bool:
+            """判断是否为占位符名称（dut/DUT/dut_top 等）"""
+            return not name or name.lower() in ("dut", "dut_top", "dut_env")
+
+        self._module_name = ""
+        # 按优先级查找有效模块名
+        for source in [
+            spec.get("design_name", "") if isinstance(spec, dict) else "",
+            design_arch.get("module_name", "") if isinstance(design_arch, dict) else "",
+            rtl.get("module_name", "") if isinstance(rtl, dict) else "",
+        ]:
+            if source and not _is_placeholder(source):
+                self._module_name = source
+                break
+
+        # 回退：扫描 RTL 目录中实际的 module 声明，取出现最多的非占位符模块名前缀
+        if not self._module_name:
+            rtl_dir = Path(output_dir) / "rtl"
+            if rtl_dir.exists():
+                import re as _re
+                from collections import Counter as _Counter
+                mod_names = []
+                for sv in rtl_dir.glob("*.sv"):
+                    try:
+                        text = sv.read_text(encoding="utf-8", errors="replace")[:2000]
+                        m = _re.search(r'^\s*module\s+(\w+)', text, _re.MULTILINE)
+                        if m:
+                            mod_names.append(m.group(1))
+                    except Exception:
+                        pass
+                # 过滤掉 dut/dut_top 占位符，取出现最多的
+                real_names = [n for n in mod_names if not _is_placeholder(n)]
+                if real_names:
+                    # 尝试提取公共前缀（如 uart_tx, uart_rx → uart）
+                    counter = _Counter(real_names)
+                    top = counter.most_common(1)[0][0] if counter else ""
+                    # 如果名字含 _（如 uart_tx），取前缀作为模块族名
+                    if "_" in top:
+                        prefix = top.rsplit("_", 1)[0]
+                        # 检查是否至少 2 个模块共享此前缀
+                        if sum(1 for n in real_names if n.startswith(prefix)) >= 2:
+                            self._module_name = prefix
+                            logger.info(f"推断设计模块名前缀: {prefix}（从 RTL: {real_names[:5]}）")
+                    if not self._module_name:
+                        self._module_name = top
+
         _uvm_ctx.set(output_dir=Path(output_dir), agents=[],
                      env_name=f"{self._module_name}_env" if self._module_name else "")
         return await super().execute_task(task)

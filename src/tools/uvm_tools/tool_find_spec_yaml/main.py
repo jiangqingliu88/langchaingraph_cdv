@@ -27,7 +27,16 @@ def run(spec_text: str) -> str:
     module_match = re.search(r'module:\s*(\w+)', spec_text, re.IGNORECASE)
     if not module_match:
         module_match = re.search(r'(?:#|module\s+)\s*(\w+)', spec_text, re.IGNORECASE)
-    module_name = module_match.group(1) if module_match else "dut"
+    module_name = module_match.group(1) if module_match else ""
+    # 回退：使用共享上下文中已设置的 env_name（去除 _env 后缀）
+    if not module_name or module_name.lower() in ("dut", "dut_top"):
+        env = ctx.env_name or ""
+        if env.endswith("_env"):
+            env = env[:-4]
+        if env and env.lower() not in ("dut", "dut_top"):
+            module_name = env
+    if not module_name:
+        module_name = "dut"
 
     # 尝试找已有 YAML
     name_variants = [module_name, module_name.upper(), module_name.lower()]

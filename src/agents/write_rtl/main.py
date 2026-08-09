@@ -24,6 +24,17 @@ from pathlib import Path
 
 logger = structlog.get_logger()
 
+# 模块级变量：由 execute_task 设置，供工具函数使用，防止 LLM 随意指定输出目录
+_current_output_dir: str | None = None
+
+
+def _get_output_root() -> str:
+    """获取当前会话的输出根目录。优先使用 execute_task 设置的值，
+    回退到自动生成（防止并发/未初始化场景）。"""
+    from src.core.output_config import make_output_root
+    return _current_output_dir if _current_output_dir else make_output_root()
+
+
 # ── 模块级工具函数 ──
 
 @tool("parse_module_tree")
@@ -393,7 +404,8 @@ def write_rtl_files(files_json: str) -> str:
     except (json.JSONDecodeError, TypeError):
         return json.dumps({"error": "Invalid JSON input"}, ensure_ascii=False)
 
-    output_dir = Path(data.get("output_dir", "output"))
+    # 使用会话级输出根目录，防止 LLM 传入 "rtl" 等短名称导致写错位置
+    output_dir = Path(_get_output_root())
     files = data.get("files", [])
     rtl_dir = output_dir / "rtl"
     rtl_dir.mkdir(parents=True, exist_ok=True)
@@ -494,7 +506,7 @@ OUTPUT: After writing files, output a JSON summary with generated modules, file 
         """从 LLM 输出和 intermediate_steps 提取 RTL 代码，确定性写入磁盘"""
         output = result.get("output", "")
         steps = result.get("intermediate_steps", [])
-        module_name = "dut"
+        module_name = getattr(self, '_design_name', None) or "dut"
         sv_files = {}  # {module_name: verilog_code}
 
         # 从 intermediate_steps 收集所有生成的 SV 代码
@@ -508,8 +520,10 @@ OUTPUT: After writing files, output a JSON summary with generated modules, file 
                     continue
                 if "module_name" in obs_data:
                     mn = obs_data["module_name"]
-                    if mn != module_name and module_name == "dut":
-                        module_name = mn
+                    # 更新模块名：当前是占位符时总是更新；有更具体的名称时也更新
+                    if mn and mn.lower() not in ("dut", "dut_top"):
+                        if module_name.lower() in ("dut", "dut_top") or mn != module_name:
+                            module_name = mn
                     code = obs_data.get("verilog_code", obs_data.get("content", ""))
                     if code and mn not in sv_files:
                         sv_files[mn] = code
@@ -523,7 +537,7 @@ OUTPUT: After writing files, output a JSON summary with generated modules, file 
                 sv_files[mn] = block.strip()
 
         # 确定性写入磁盘 + 自动修复 LLM 常见语法错误
-        rtl_dir = Path(self._last_output_dir) / "rtl" if hasattr(self, '_last_output_dir') else Path("output") / "rtl"
+        rtl_dir = Path(self._last_output_dir) / "rtl" if hasattr(self, '_last_output_dir') and self._last_output_dir else Path(_get_output_root()) / "rtl"
         rtl_dir.mkdir(parents=True, exist_ok=True)
         written = []
         for mn, code in sv_files.items():
@@ -551,6 +565,23 @@ OUTPUT: After writing files, output a JSON summary with generated modules, file 
         return result
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
-        """保存 output_dir 供 post_process 使用"""
-        self._last_output_dir = task.get("output_dir", "output")
+        """保存 output_dir 供 post_process 和工具函数使用，同时提取设计模块名"""
+        global _current_output_dir
+        from src.core.output_config import make_output_root
+        self._last_output_dir = make_output_root(task.get("output_dir") or None)
+        _current_output_dir = self._last_output_dir
+        # 从 ctx 提取设计模块名，优先使用 spec.design_name
+        ctx = task.get("ctx", {})
+        if hasattr(ctx, 'get'):
+            spec = ctx.get("spec", {})
+            if isinstance(spec, dict):
+                dn = spec.get("design_name", "")
+                if dn and dn.lower() not in ("dut", "dut_top"):
+                    self._design_name = dn
+                    return await super().execute_task(task)
+            design_arch = ctx.get("design_arch", {})
+            if isinstance(design_arch, dict):
+                dn = design_arch.get("module_name", "")
+                if dn and dn.lower() not in ("dut", "dut_top"):
+                    self._design_name = dn
         return await super().execute_task(task)
