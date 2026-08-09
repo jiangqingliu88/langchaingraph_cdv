@@ -134,33 +134,45 @@ RULES:
 
     async def _post_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """从磁盘 quality_report.json 读取质量检查结果，并构造 env 数据供下游使用。
-        同时修正 LLM 可能用错误名字生成的 YAML 和 UVM 代码。"""
+        仅在 LLM 未生成有效 agents（如都叫 dut_*）时才用 RTL 端口重新生成。"""
         output_dir = Path(_uvm_ctx.output_dir)
-        # ── 用正确的模块名重新生成 YAML 并渲染，覆盖 LLM 的错误输出 ──
         module_name = getattr(self, '_module_name', '') or _uvm_ctx.env_name or ""
         if module_name.endswith("_env"):
             module_name = module_name[:-4]
-        # 只要模块名不是纯占位符，就执行修正（大小写不敏感）
         is_placeholder = not module_name or module_name.lower() in ("dut", "dut_top", "dut_env")
-        if module_name and not is_placeholder:
+
+        # 检查 LLM 是否已经生成了有效的 agents（非占位符名）
+        agents_dir = output_dir / "agents"
+        existing_agents = []
+        if agents_dir.exists():
+            existing_agents = [d.name for d in agents_dir.iterdir()
+                             if d.is_dir() and any(d.glob("*.sv"))]
+        has_valid_agents = any(
+            a.lower() not in ("dut_in", "dut_out", "in", "out")
+            for a in existing_agents
+        ) if existing_agents else False
+
+        if not has_valid_agents and not is_placeholder:
+            # LLM 没生成有效 agents → 用 RTL/spec 端口重新生成
             try:
                 from src.tools.uvm_tools.tool_find_spec_yaml.main import run as _fsy_run
                 from src.tools.uvm_tools.tool_jinja_render.main import run as _render_run
                 _fsy_run(f"module: {module_name}")
                 _render_run(str(output_dir))
-                # 清理 LLM 用错误名字（dut_* / APB_* 等）生成的旧目录
                 import shutil
                 ml = module_name.lower()
-                for sub in list((output_dir / "agents").iterdir()):
+                for sub in list((agents_dir).iterdir()):
                     if sub.is_dir() and not sub.name.lower().startswith(ml):
                         shutil.rmtree(sub, ignore_errors=True)
                 for f in list((output_dir / "bench").glob("*_tb_top.sv")):
                     if ml not in f.stem.lower():
                         f.unlink()
-                # 清理 env 目录及子目录中非本模块的文件
                 for f in list((output_dir / "env").rglob("*.sv")):
                     if ml not in f.stem.lower():
                         f.unlink()
+                # 刷新 agent 列表
+                existing_agents = [d.name for d in agents_dir.iterdir()
+                                 if d.is_dir() and any(d.glob("*.sv"))]
             except Exception:
                 pass
 
