@@ -515,7 +515,18 @@ def run(spec_text: str) -> str:
         bench_path.write_text(bench_str, encoding="utf-8", errors="replace")
         yaml_files.append(str(bench_path))
 
-    ctx.update_env_name(f"{module_name}_env")
+    env_name = f"{module_name}_env"
+    ctx.update_env_name(env_name)
+
+    # ── 8. 生成回归框架 YAML ──
+    reg_yaml_path = _generate_regression_yaml(
+        output_dir=output_dir, yaml_dir=uvm_yaml_archive,
+        module_name=module_name, env_name=env_name,
+        top_module=dut_module, agents=agent_names,
+        filelist_name="filelist.f"
+    )
+    yaml_files.append(str(reg_yaml_path))
+    print(f"  [find_yaml] Generated regression.yaml", flush=True)
 
     return json.dumps({
         "status": "ok",
@@ -524,6 +535,112 @@ def run(spec_text: str) -> str:
         "yaml_count": len(yaml_files),
         "env_name": f"{module_name}_env",
     }, ensure_ascii=False)
+
+
+def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
+                               module_name: str, env_name: str,
+                               top_module: str,
+                               agents: list, filelist_name: str = "filelist.f") -> Path:
+    """生成回归框架可用的 regression.yaml（builds + tests）。
+
+    从 spec.json 提取 test_points 作为测试用例列表。
+    """
+    reg_dir = output_dir / "inputs" / "yaml"
+    reg_dir.mkdir(parents=True, exist_ok=True)
+    reg_path = reg_dir / "regression.yaml"
+
+    fl_dir = output_dir / "inputs" / "filelists"
+    fl_path = fl_dir / filelist_name
+
+    # 从 spec.json 提取测试点
+    test_points = []
+    spec_path = output_dir / "spec.json"
+    if spec_path.exists():
+        try:
+            spec_data = json.loads(spec_path.read_text(encoding="utf-8"))
+            test_points = spec_data.get("test_points", []) or []
+        except Exception:
+            pass
+
+    # 构建测试列表
+    test_lines = []
+    if test_points:
+        for i, tp in enumerate(test_points):
+            tid = tp.get("id", f"test_{i}")
+            tname = tid.lower().replace("-", "_")
+            desc = tp.get("description", tp.get("feature", ""))
+            priority = tp.get("priority", "P1")
+            test_lines.append(f"  - name: {tname}")
+            test_lines.append(f"    build: build_{module_name}")
+            test_lines.append(f"    count: 1")
+            test_lines.append(f"    run_opts:")
+            test_lines.append(f'      - "+UVM_TESTNAME={env_name}_base_test"')
+            test_lines.append(f"    expect:")
+            test_lines.append(f"      errors: 0")
+            test_lines.append(f"    tags: [\"{priority.lower()}\", \"{tid}\"]")
+            if desc:
+                test_lines.append(f"    desc: \"{desc[:80]}\"")
+            test_lines.append("")
+    else:
+        # 回退：基于 agent 生成烟雾测试
+        for ag in agents:
+            test_lines.append(f"  - name: test_{ag}_loopback")
+            test_lines.append(f"    build: build_{module_name}")
+            test_lines.append(f"    count: 1")
+            test_lines.append(f"    run_opts:")
+            test_lines.append(f'      - "+UVM_TESTNAME={ag}_loopback_test"')
+            test_lines.append(f"    expect:")
+            test_lines.append(f"      errors: 0")
+            test_lines.append(f"    tags: [\"smoke\", \"loopback\"]")
+            test_lines.append("")
+        test_lines.append(f"  - name: test_{module_name}_base")
+        test_lines.append(f"    build: build_{module_name}")
+        test_lines.append(f"    count: 1")
+        test_lines.append(f"    run_opts:")
+        test_lines.append(f'      - "+UVM_TESTNAME={env_name}_base_test"')
+        test_lines.append(f"    expect:")
+        test_lines.append(f"      errors: 0")
+        test_lines.append(f"    tags: [\"smoke\"]")
+        test_lines.append("")
+
+    tests_section = "\n".join(test_lines)
+
+    # 收集所有 RTL 文件路径
+    rtl_files = []
+    rtl_dir = output_dir / "rtl"
+    if rtl_dir.exists():
+        rtl_files = [str(p.resolve()).replace("\\", "/") for p in sorted(rtl_dir.glob("*.sv"))]
+
+    filelist_ref = str(fl_path.resolve()).replace("\\", "/") if fl_path.exists() else ""
+
+    yaml_content = f"""# 回归测试配置 — 由 find_spec_yaml 自动生成
+# 用法: python regression.py --config {reg_path.as_posix()} --action all --mode local
+
+global_vars:
+  SEED: 12345
+  WAVES: 0
+
+settings:
+  default_build: build_{module_name}
+  default_count: 1
+  build_cache: true
+  simulators:
+    questa:
+      compile: "vlog -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} -sv -mfcu -f {filelist_ref}"
+      run: "vsim -c -onfinish stop -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} {top_module}_bench_tb_top +UVM_TESTNAME=${{UVM_TESTNAME}} -do 'log -r /*; run -all; quit -f'"
+
+builds:
+  - name: build_{module_name}
+    compile_opts: ["-sv", "-mfcu"]
+    files:
+{chr(10).join('      - ' + f for f in rtl_files) if rtl_files else '      - ' + filelist_ref}
+
+tests:
+{tests_section}
+"""
+
+    reg_path.write_text(yaml_content, encoding="utf-8", errors="replace")
+    return reg_path
 
 
 def _name_match_rtl(target: str, rtl_dir: Path) -> str | None:
