@@ -170,18 +170,31 @@ def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> 
                  for sig_name, sig in sigs.items()]
 
     # 从 ports 中识别 clock/reset（优先级：端口名检测 > agent 预设 > 默认值）
-    detected_clock = ""
-    detected_reset = ""
+    detected_clock = None
+    detected_reset = None
     data_ports = []
     for p in ports:
         if _is_clock_port(p["name"]):
-            detected_clock = p["name"]
+            detected_clock = p
         elif _is_reset_port(p["name"]):
-            detected_reset = p["name"]
+            detected_reset = p
         else:
             data_ports.append(p)
-    clock = detected_clock or agent.get("clock", "") or "clk"
-    reset = detected_reset or agent.get("reset", "") or "rst"
+    clock_name = (detected_clock or {}).get("name") or agent.get("clock", "") or "clk"
+    reset_name = (detected_reset or {}).get("name") or agent.get("reset", "") or "rst"
+    # 接口端口列表：clock/reset 作为 input 加入（SV interface 需要它们声明为端口）
+    all_interface_ports = []
+    if detected_clock:
+        all_interface_ports.append({"name": detected_clock["name"], "direction": "input",
+                                     "width": detected_clock.get("width", 1)})
+    else:
+        all_interface_ports.append({"name": clock_name, "direction": "input", "width": 1})
+    if detected_reset:
+        all_interface_ports.append({"name": detected_reset["name"], "direction": "input",
+                                     "width": detected_reset.get("width", 1)})
+    else:
+        all_interface_ports.append({"name": reset_name, "direction": "input", "width": 1})
+    all_interface_ports.extend(data_ports)
 
     trans_vars = agent.get("transaction_vars", [])
     if not trans_vars:
@@ -198,8 +211,8 @@ def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> 
     lines = []
     lines.append("interfaces:")
     lines.append("  name: " + ag_name)
-    lines.append("  clock: " + clock)
-    lines.append("  reset: " + reset)
+    lines.append("  clock: " + clock_name)
+    lines.append("  reset: " + reset_name)
 
     lines.append("  parameters:")
     has_params = False
@@ -212,7 +225,7 @@ def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> 
         lines.append("    []")
 
     lines.append("  ports:")
-    for p in data_ports:
+    for p in all_interface_ports:
         w = p.get("width", 1)
         lines.append("    - { name: " + p['name'] + ", dir: " + p['direction'] + ", width: " + str(w) + " }")
 
@@ -225,15 +238,21 @@ def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> 
     else:
         lines.append("    []")
 
-    # Compute max constraint value
-    max_val = 255
-    if data_ports:
-        min_w = min(p.get("width", 1) for p in data_ports)
-        if min_w > 0:
-            max_val = (1 << min(min_w, 8)) - 1
+    # Compute constraint using first random transaction variable
+    if trans_vars and data_ports:
+        first_tv = trans_vars[0]["name"]
+        first_p = data_ports[0]
+        max_w = first_p.get("width", 1)
+        if max_w > 1:
+            max_val = (1 << min(max_w, 16)) - 1
+            constraint_val = "{" + first_tv + " inside {[0:" + str(max_val) + "]}; }"
+        else:
+            constraint_val = "{" + first_tv + " inside {[0:1]}; }"
+    else:
+        constraint_val = "{ data inside {[0:255]}; }"
     lines.append("  transaction_constraints:")
     lines.append("    - name: data_c")
-    lines.append("      value: '{{{{ data inside {{{{[0:" + str(max_val) + "]}}}}; }}}}'")
+    lines.append("      value: '" + constraint_val + "'")
 
     lines.append("  config:")
     lines.append("    is_active: " + active)
