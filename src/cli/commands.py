@@ -30,7 +30,9 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeEl
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.core.registry import AgentRegistry
-from src.core.execution import PipelineExecutionService, FULL_PHASES, _WORKFLOW_PHASE_MAP
+from src.core.execution import (PipelineExecutionService, FULL_PHASES,
+    _WORKFLOW_PHASE_MAP, VERIFY_PROFILES, resolve_phases_from_profile)
+from src.core.approval import create_approval_gate, ApprovalDecision, PipelineTerminatedError
 from src.cli.output import OutputAdapter, common_options, get_output_adapter
 
 console = Console()
@@ -178,9 +180,17 @@ def init(json_output, quiet, verbose, output_dir):
 @click.option("--resume", "resume_run_id", help="断点续跑 <run_id>")
 @click.option("--retry-failed", is_flag=True, help="只重跑失败阶段")
 @click.option("--ctx", "ctx_file", type=click.Path(exists=True), help="从外部 JSON 注入上下文")
+@click.option("--profile", "-p", "profile_name",
+              default="standard",
+              type=click.Choice(list(VERIFY_PROFILES.keys())),
+              help="验证流程预设 (覆盖 --workflow)")
+@click.option("--approval", default="auto",
+              type=click.Choice(["interactive", "auto", "threshold"]),
+              help="审批模式 (interactive/auto/threshold)")
 def verify(spec_file, workflow, compile, output, refine,
            single_step, steps, from_step, to_step,
-           json_output, summary, quiet, resume_run_id, retry_failed, ctx_file):
+           json_output, summary, quiet, resume_run_id, retry_failed, ctx_file,
+           profile_name, approval):
     """完整验证流水线 —— AI 驱动的芯片验证签核
 
     \b
@@ -198,8 +208,25 @@ def verify(spec_file, workflow, compile, output, refine,
     from src.core.output_config import make_output_root
     output_root = make_output_root(output)
 
+    # ── 处理 profile / workflow ──
+    # profile 优先级高于 workflow
+    if profile_name and profile_name in VERIFY_PROFILES:
+        phases = resolve_phases_from_profile(profile_name)
+        if not quiet:
+            console.print(f"[cyan]Profile: {profile_name} — "
+                          f"{VERIFY_PROFILES[profile_name]['description']}[/cyan]")
+    else:
+        phases = _WORKFLOW_PHASE_MAP.get(workflow, FULL_PHASES)
+
+    # ── 审批门控 ──
+    approval_gate = create_approval_gate(approval)
+    profile_config = VERIFY_PROFILES.get(profile_name, {})
+    approval_gates = profile_config.get("approval_gates", [])
+    if not quiet and approval != "auto" and approval_gates:
+        console.print(f"[yellow]审批模式: {approval} — "
+                      f"审批节点: {', '.join(approval_gates)}[/yellow]")
+
     # ── 处理阶段过滤 ──
-    phases = _WORKFLOW_PHASE_MAP.get(workflow, FULL_PHASES)
 
     if single_step:
         if single_step not in VALID_STEPS:
@@ -416,6 +443,89 @@ def _do_compile_check(result: dict):
             console.print(f"[yellow]Compile skipped: {e}[/yellow]")
     else:
         console.print(f"[yellow]Filelist not found: {fl}[/yellow]")
+
+
+# ═══════════════════════════════════════════════════════════════
+# vagent plan — 一站式验证计划（借鉴原型 python main.py plan）
+# ═══════════════════════════════════════════════════════════════
+
+@cli.command()
+@click.argument("spec", type=click.Path(exists=True))
+@click.option("--profile", "-p", "profile_name", default="standard",
+              type=click.Choice(list(VERIFY_PROFILES.keys())),
+              help="验证流程预设")
+@click.option("--approval", default="auto",
+              type=click.Choice(["interactive", "auto", "threshold"]),
+              help="审批模式")
+@click.option("--output", "-o", type=click.Path(), help="输出目录")
+@click.option("--dry-run", is_flag=True, help="只打印计划，不执行")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 格式输出")
+@click.pass_context
+def plan(ctx_obj, spec, profile_name, approval, output, dry_run, json_output):
+    """一站式验证计划：从 Spec 到签核报告。
+
+    对标原型: python main.py plan --spec xx.md --task-type xx
+
+    \b
+    示例:
+      vagent plan uart_spec.md                              # 标准流程
+      vagent plan uart_spec.md --profile quick --approval interactive
+      vagent plan uart_spec.md --profile full               # 完整签核
+      vagent plan uart_spec.md --dry-run                    # 只看计划不执行
+    """
+    out = get_output_adapter(json_output)
+    profile_config = VERIFY_PROFILES[profile_name]
+    phases = resolve_phases_from_profile(profile_name)
+
+    # 打印计划
+    click.echo(f"\n🧠 SignOffAI 验证计划")
+    click.echo(f"   Spec:      {spec}")
+    click.echo(f"   Profile:   {profile_name} ({profile_config['description']})")
+    click.echo(f"   阶段数:    {len(phases)}")
+    click.echo(f"   审批模式:  {approval}")
+    approval_gates = profile_config.get("approval_gates", [])
+    click.echo(f"   审批节点:  {len(approval_gates)} 个")
+    click.echo()
+    for i, p_tuple in enumerate(phases):
+        name = p_tuple[0]
+        gate_mark = "🔴审批" if name in approval_gates else "  ⏩"
+        agent = p_tuple[1] or "(doc)"
+        click.echo(f"   [{i+1}/{len(phases)}] {gate_mark}  {name}  ->  {agent}")
+
+    if dry_run:
+        click.echo("\n📋 Dry-run 模式，不执行。")
+        return
+
+    # 确认开始（交互模式下）
+    if approval == "interactive":
+        confirm = click.confirm("\n开始执行？", default=True)
+        if not confirm:
+            click.echo("已取消。")
+            return
+
+    click.echo(f"\n▶️ 开始执行...")
+
+    # 委托给 verify 命令
+    ctx_obj.invoke(
+        verify,
+        spec_file=spec,
+        workflow=None,
+        compile=False,
+        output=output,
+        refine=False,
+        single_step=None,
+        steps=None,
+        from_step=None,
+        to_step=None,
+        json_output=json_output,
+        summary=False,
+        quiet=False,
+        resume_run_id=None,
+        retry_failed=False,
+        ctx_file=None,
+        profile_name=profile_name,
+        approval=approval,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════

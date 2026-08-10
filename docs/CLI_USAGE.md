@@ -1,6 +1,6 @@
 # SignOffAI CLI 使用手册
 
-> **运行方式**: `python -m src.cli.commands <command>` (无需 pip install)
+> **运行方式**: `vagent` 或 `python -m src.cli.commands <command>`
 
 ---
 
@@ -9,6 +9,7 @@
 1. [快速开始](#1-快速开始)
 2. [命令总览](#2-命令总览)
 3. [核心命令详解](#3-核心命令详解)
+   - [plan — 一站式验证计划（推荐）](#plan)
    - [verify — 一键验证流水线](#verify)
    - [agent — Agent 管理](#agent)
    - [spec — 规格文档工具](#spec)
@@ -20,9 +21,11 @@
    - [dump — 证据导出](#dump)
    - [pipeline — 流水线管理](#pipeline)
    - [其他命令](#其他命令)
-4. [工作流 (Workflow)](#4-工作流-workflow)
-5. [Agent 流水线](#5-agent-流水线)
-6. [环境配置](#6-环境配置)
+4. [Profile 预设](#4-profile-预设)
+5. [审批门控](#5-审批门控)
+6. [工作流 (Workflow)](#6-工作流-workflow)
+7. [Agent 流水线](#7-agent-流水线)
+8. [环境配置](#8-环境配置)
 
 ---
 
@@ -33,17 +36,22 @@
 cd D:\SignOffAI
 .\venv\Scripts\activate
 
-# 最简用法：拿一个 spec 文件，全自动跑
-python -m src.cli.commands verify specs\apb_uart\apb_uart_spec.md
+# ── 推荐：一站式验证计划 ──
+vagent plan uart_spec.md                              # 标准流程（8阶段）
+vagent plan uart_spec.md --profile quick               # 快速检查（4阶段）
+vagent plan uart_spec.md --profile full                # 完整签核（全部Agent）
+vagent plan uart_spec.md --dry-run                     # 只看计划不执行
 
-# 只看结果摘要
-python -m src.cli.commands verify specs\apb_uart\apb_uart_spec.md --summary
+# ── 带审批的验证 ──
+vagent plan uart_spec.md --approval interactive         # 关键阶段人工审批
+vagent plan uart_spec.md --approval threshold           # 只有高风险阶段审批
+vagent verify uart_spec.md --approval interactive
 
-# 只跑单个阶段
-python -m src.cli.commands verify specs\apb_uart\apb_uart_spec.md --step spec
-
-# 快速检查（前 5 阶段，跳过仿真）
-python -m src.cli.commands verify specs\apb_uart\apb_uart_spec.md --workflow quick_check
+# ── 传统用法：verify 命令 ──
+vagent verify uart_spec.md --profile standard           # 等价于 plan
+vagent verify uart_spec.md --summary                    # 只看结果摘要
+vagent verify uart_spec.md --step spec                  # 只跑单个阶段
+vagent verify uart_spec.md --profile quick --json       # CI JSON输出
 ```
 
 ---
@@ -81,34 +89,68 @@ python -m src.cli.commands verify specs\apb_uart\apb_uart_spec.md --workflow qui
 
 ## 3. 核心命令详解
 
+### plan （⭐ 推荐新用户从这里开始）
+
+**一站式验证计划**，从 Spec 到签核报告一条命令。对标原型架构的简洁体验。
+
+```powershell
+# 最简用法
+vagent plan uart_spec.md
+
+# 选择预设流程
+vagent plan uart_spec.md --profile quick       # 快速检查
+vagent plan uart_spec.md --profile standard    # 标准验证（默认）
+vagent plan uart_spec.md --profile full        # 完整签核
+vagent plan uart_spec.md --profile design_only # 只做设计
+vagent plan uart_spec.md --profile spec_only   # 只分析规格
+
+# 人工审批模式
+vagent plan uart_spec.md --approval interactive  # 关键阶段暂停确认
+vagent plan uart_spec.md --approval threshold    # 只有高风险才审批
+
+# 只看计划，不实际执行
+vagent plan uart_spec.md --dry-run
+
+# JSON 输出
+vagent plan uart_spec.md --json
+```
+
 ### verify
 
-**一键验证流水线**，从 Spec 到签核全自动。
+**一键验证流水线**，从 Spec 到签核全自动。适合 CI 和精细控制。
 
 ```powershell
 # 完整流水线
-python -m src.cli.commands verify <spec_file>
+vagent verify <spec_file>
+
+# 使用预设（--profile）
+vagent verify <spec_file> --profile quick
+vagent verify <spec_file> --profile standard --json  # CI 模式
 
 # 指定工作流
-python -m src.cli.commands verify <spec_file> --workflow quick_check
+vagent verify <spec_file> --workflow full_verification
 
 # 单阶段
-python -m src.cli.commands verify <spec_file> --step spec
-python -m src.cli.commands verify <spec_file> --step UVM
+vagent verify <spec_file> --step spec
+vagent verify <spec_file> --step UVM
 
 # 阶段范围
-python -m src.cli.commands verify <spec_file> --from design --to cover
+vagent verify <spec_file> --from design --to cover
 
 # 指定多个阶段（逗号分隔）
-python -m src.cli.commands verify <spec_file> --steps spec,design,rtl
+vagent verify <spec_file> --steps spec,design,rtl
 
 # 输出模式
-python -m src.cli.commands verify <spec_file> --json        # CI 模式
-python -m src.cli.commands verify <spec_file> --summary     # 只出摘要
-python -m src.cli.commands verify <spec_file> --quiet       # 静默
+vagent verify <spec_file> --json        # CI JSON
+vagent verify <spec_file> --summary     # 只出摘要
+vagent verify <spec_file> --quiet       # 静默
+
+# 审批门控（需 approve.py）
+vagent verify <spec_file> --approval interactive
+vagent verify <spec_file> --approval threshold
 
 # 断点续跑
-python -m src.cli.commands verify <spec_file> --resume <run_id>
+vagent verify <spec_file> --resume <run_id>
 
 # 只重跑失败阶段
 python -m src.cli.commands verify <spec_file> --retry-failed
@@ -383,7 +425,45 @@ python -m src.cli.commands web --port 8000             # 启动 Web
 
 ---
 
-## 4. 工作流 (Workflow)
+## 4. Profile 预设
+
+借鉴原型架构 `--task-type` 设计，提供 6 个预设流程。无需记忆 workflow 名称。
+
+| Profile | 阶段数 | 说明 | 审批节点 |
+|---------|:---:|------|:---:|
+| `quick` | 4 | 快速质量检查：编译+冒烟+QA | design, UVM |
+| `standard` | 9 | 标准验证：设计+UVM+测试+回归+报告 | design, UVM |
+| `full` | 全量 | 完整签核：全部12个Agent | 无 |
+| `debug` | 1 | 调试模式：只跑失败分析 | 无 |
+| `spec_only` | 1 | 只做规格分析 | 无 |
+| `design_only` | 4 | 只做设计：Spec→RTL | design, rtl |
+
+```powershell
+vagent plan uart.md --profile quick              # 快速模式
+vagent verify uart.md --profile design_only      # 只要RTL
+vagent plan uart.md --dry-run                    # 只看计划
+```
+
+## 5. 审批门控
+
+支持三种审批模式，对标原型的 `input("y/n/q?")` 功能：
+
+| 模式 | 说明 | 适用场景 |
+|------|------|---------|
+| `auto` | 全自动（默认） | CI / 无人值守 |
+| `interactive` | 终端交互 `[y/n/s/d/q]` | 本地开发 |
+| `threshold` | 只有高风险阶段审批 | 折中方案 |
+
+```powershell
+vagent plan uart.md --approval interactive       # 关键阶段暂停等 y/n
+vagent verify uart.md --approval threshold       # 只有高风险弹窗
+```
+
+审批选项：`y`=通过 `n`=拒绝终止 `s`=跳过 `d`=详情 `q`=退出
+
+---
+
+## 6. 工作流 (Workflow)
 
 ```powershell
 # 列出所有工作流

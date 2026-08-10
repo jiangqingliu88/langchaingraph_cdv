@@ -263,6 +263,20 @@ class ContextStore:
         )
         return f"ContextStore({items})"
 
+    def summary(self) -> Dict[str, Any]:
+        """返回扁平摘要（对标原型的 ctx 字典视图）。
+        不替代分层结构，只提供快速概览。"""
+        import time
+        return {
+            "keys": list(self._data.keys()),
+            "entry_count": len(self._data),
+            "sources": list(set(e.source for e in self._data.values())),
+            "latest_timestamp": max(
+                (e.timestamp for e in self._data.values()), default=0
+            ),
+            "snapshot": self.snapshot(),
+        }
+
 
 # ═══════════════════════════════════════════════════════════════
 # Pydantic Schema (保留兼容)

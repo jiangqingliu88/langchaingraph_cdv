@@ -435,9 +435,11 @@ def run(spec_text: str) -> str:
             ]
             dut_module = module_name
 
-        # Wire declarations
+        # Wire declarations（排除 clock/reset，它们已在 bench 模板中声明为 reg）
         wire_lines = []
         for p in all_ports:
+            if _is_clock_port(p["name"]) or _is_reset_port(p["name"]):
+                continue
             w = p.get("width", 1)
             wire_lines.append(
                 f"    - {{ name: {p['name']}, width: {w} }}"
@@ -450,12 +452,13 @@ def run(spec_text: str) -> str:
         for p in all_ports:
             dut_port_lines.append(f"      - {{ name: {p['name']}, connection: {p['name']} }}")
 
-        # DUT parameters
+        # DUT parameters（从 RTL 实际 parameter 列表，不从端口宽度推断）
         dut_params_lines = []
-        for p in all_ports:
-            w = p.get("width", 1)
-            if w > 1:
-                dut_params_lines.append(f"      - {{ name: {p['name'].upper()}_WIDTH, value: {w} }}")
+        if rtl_data and rtl_data.get("params"):
+            for param in rtl_data["params"]:
+                dut_params_lines.append(
+                    f"      - {{ name: {param['name']}, value: {param['value']} }}"
+                )
 
         # Agent connections (connect each agent's ports to corresponding wires)
         agent_bench_lines = []
@@ -623,14 +626,16 @@ global_vars:
 settings:
   default_build: build_{module_name}
   default_count: 1
-  build_cache: true
+  default_simulator: questa
+  build_cache: False
   simulators:
     questa:
-      compile: "vlog -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} -sv -mfcu -f {filelist_ref}"
-      run: "vsim -c -onfinish stop -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} {top_module}_bench_tb_top +UVM_TESTNAME=${{UVM_TESTNAME}} -do 'log -r /*; run -all; quit -f'"
+      compile: "vlog -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} -sv -mfcu -f {filelist_ref} +incdir+F:/questasim64_2024.1/verilog_src/uvm-1.2/src F:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv"
+      run: "vsim -c -sv_lib F:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} {top_module}_bench_tb_top {{run_opts}} -do 'log -r /*; run -all; quit -f'"
 
 builds:
   - name: build_{module_name}
+    simulator: questa
     compile_opts: ["-sv", "-mfcu"]
     files:
 {chr(10).join('      - ' + f for f in rtl_files) if rtl_files else '      - ' + filelist_ref}

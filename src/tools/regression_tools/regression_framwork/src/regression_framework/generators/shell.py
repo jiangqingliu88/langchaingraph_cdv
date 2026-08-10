@@ -158,12 +158,11 @@ class ShellGenerator:
                 wave_file = os.path.join(wave_dir, f"{test_name}.fsdb")
                 f.write(f"mkdir -p {wave_dir}\n")
                 # 计时并运行仿真
-                f.write(f"start_time=$(date +%s.%N)\n")
+                f.write(f"start_time=$(date +%s)\n")
                 f.write(f"{sim_cmd} > sim.log 2>&1\n")
                 f.write(f"ret=$?\n")
-                f.write(f"end_time=$(date +%s.%N)\n")
-                # 计算仿真耗时
-                f.write(f"sim_time=$(echo \"$end_time - $start_time\" | bc)\n")
+                f.write(f"end_time=$(date +%s)\n")
+                f.write(f"sim_time=$((end_time - start_time))\n")
                 f.write(f"echo \"SIM_TIME=$sim_time\" > sim_time.log\n")
                 # 如果失败，记录波形路径
                 f.write(f"if [ $ret -ne 0 ]; then\n")

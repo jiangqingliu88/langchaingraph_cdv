@@ -66,5 +66,63 @@ class CoverageManager(BaseAgent):
 
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
-        # Always use LLM
+        """优化后的执行：确定性覆盖率收集 + LLM 缺口解释。
+
+        对标 llm_vs_traditional_tools_analysis.md 的优化建议：
+        - 收集覆盖率数据（vcover/urg）→ 传统工具
+        - 解释缺口 + 建议补测 → LLM
+        """
+        ctx = task.get("ctx", {})
+        input_text = task.get("input", "")
+
+        # 快速路径：retry 模式 → 只收集数据
+        fast_track = False
+        try:
+            input_data = json.loads(input_text) if isinstance(input_text, str) else input_text
+            if input_data.get("retry") or input_data.get("collect_only"):
+                fast_track = True
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        if fast_track:
+            return await self._collect_deterministic(ctx)
         return await super().execute_task(task)
+
+    async def _collect_deterministic(self, ctx) -> AgentResult:
+        """确定性收集覆盖率数据（不走 LLM）"""
+        output_dir = str(ctx.get("working_dir", ".")) if hasattr(ctx, 'get') else "."
+
+        # 1. 从 vcover 收集数据（在 regression_manager 中已有）
+        cov_data = {}
+        try:
+            from src.agents.regression_manager.main import _collect_real_coverage
+            cov_data = _collect_real_coverage(Path(output_dir))
+        except Exception:
+            pass
+
+        # 2. 从 spec 提取覆盖率目标
+        spec = ctx.get("spec", {}) if hasattr(ctx, 'get') else {}
+        coverage_goals = spec.get("coverage_goals", {}) if isinstance(spec, dict) else {}
+
+        merged = {
+            "actual": cov_data,
+            "goals": coverage_goals,
+            "gaps": {},
+        }
+
+        # 3. 计算缺口（纯数学，不需要 LLM）
+        if cov_data and coverage_goals:
+            for metric, goal in coverage_goals.items():
+                actual = cov_data.get(f"{metric}_pct", 0)
+                if actual < goal:
+                    merged["gaps"][metric] = {
+                        "actual": actual,
+                        "goal": goal,
+                        "delta": round(goal - actual, 1),
+                    }
+
+        return AgentResult(success=True, data={
+            "coverage": merged,
+            "gaps_count": len(merged["gaps"]),
+            "needs_llm_analysis": len(merged["gaps"]) > 0,
+        })

@@ -842,9 +842,16 @@ def _build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
             lines.append(str(sv.resolve()))
         lines.append(f"+incdir+{rtl_dir.resolve()}")
 
-    # Bench 顶层
+    # Bench 顶层（按 glob 匹配，兼容 {module}_bench_tb_top 和 {env}_bench_tb_top 两种命名）
+    bench_dir = output_dir / "bench"
+    if bench_dir.exists():
+        bench_tops = sorted(bench_dir.glob("*_bench_tb_top.sv"))
+        for bt in bench_tops:
+            lines.append(str(bt.resolve()))
+    bench_top_found = len(list(bench_dir.glob("*_bench_tb_top.sv"))) > 0 if bench_dir.exists() else False
+    # 兼容旧逻辑（如果 glob 没找到）
     bench_top = output_dir / "bench" / f"{env_name}_bench_tb_top.sv"
-    if bench_top.exists():
+    if not bench_top_found and bench_top.exists():
         lines.append(str(bench_top.resolve()))
 
     lines += [

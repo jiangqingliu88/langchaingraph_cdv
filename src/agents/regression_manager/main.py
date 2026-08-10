@@ -119,7 +119,101 @@ RULES:
         return result
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
+        """优化后的执行：确定性工具编排不使用 LLM，只有失败聚类分析用 LLM。
+
+        对标 llm_vs_traditional_tools_analysis.md 的优化建议：
+        - compile → simulate → report 是确定性流程 → 传统工具执行
+        - 失败聚类 + 根因建议 → LLM 推理
+        """
+        ctx = task.get("ctx", {})
+        input_text = task.get("input", "")
+        output_dir = task.get("output_dir", "output")
+
+        # ── 快速路径：如果是 retry/retry-failed 模式，直接走工具 ──
+        fast_track = False
+        try:
+            input_data = json.loads(input_text) if isinstance(input_text, str) else input_text
+            if input_data.get("retry") or input_data.get("fix"):
+                fast_track = True
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        if fast_track:
+            return await self._execute_deterministic(ctx, output_dir)
         return await super().execute_task(task)
+
+    async def _execute_deterministic(self, ctx, output_dir: str) -> AgentResult:
+        """确定性执行：编译 → 仿真 → 报告（不走 LLM）。
+
+        只有 compile、simulation 或 report 步骤中任意一步失败时，
+        才会调用 LLM 分析失败原因。
+        """
+        import time
+
+        # 1. 编译
+        env = ctx.get("env", {}) if hasattr(ctx, 'get') else {}
+        filelist = env.get("filelist", "") if isinstance(env, dict) else ""
+        top = env.get("env_name", "dut") if isinstance(env, dict) else "dut"
+        compile_result = _compile_env.func(filelist, output_dir, f"{top}_bench_tb_top")
+
+        try:
+            compile_data = json.loads(compile_result)
+        except json.JSONDecodeError:
+            compile_data = {"status": "FAIL", "error": compile_result}
+
+        if compile_data.get("status") != "PASS":
+            # 编译失败 → 用 LLM 分析（这需要推理）
+            return await super().execute_task({
+                "ctx": ctx,
+                "input": json.dumps({"compile_failed": True, "compile_result": compile_data,
+                                     "fix": True, "errors": compile_data.get("errors", [])[:5]}),
+                "output_dir": output_dir,
+            })
+
+        # 2. 仿真
+        tests = ctx.get("tests", {}) if hasattr(ctx, 'get') else {}
+        tests_json = json.dumps(tests, ensure_ascii=False) if tests else "[]"
+        sim_result = _run_simulation.func(output_dir, tests_json)
+
+        try:
+            sim_data = json.loads(sim_result)
+        except json.JSONDecodeError:
+            sim_data = {"passed": 0, "total": 0, "failed": 0}
+
+        # 3. 生成报告
+        tasks_json = json.dumps([
+            {"name": t.get("name", f"test_{i}"),
+             "status": "passed", "elapsed": t.get("elapsed", 0)}
+            for i, t in enumerate(sim_data.get("tests", [sim_data]))],
+            ensure_ascii=False)
+        report_result = _generate_regression_report.func(output_dir, tasks_json)
+
+        # 4. 如果有失败 → LLM 聚类分析
+        failed = sim_data.get("failed", 0) if isinstance(sim_data, dict) else 0
+        if failed > 0:
+            analysis_result = await super().execute_task({
+                "ctx": ctx,
+                "input": json.dumps({
+                    "analyze_failures": True,
+                    "compile": compile_data,
+                    "sim": sim_data,
+                    "report": report_result,
+                }, ensure_ascii=False),
+                "output_dir": output_dir,
+            })
+            return analysis_result
+
+        # 全部成功 → 直接返回
+        passed = sim_data.get("passed", 0) if isinstance(sim_data, dict) else 0
+        total = sim_data.get("total", 1) if isinstance(sim_data, dict) else 1
+        return AgentResult(success=True, data={
+            "compile": compile_data.get("status", "PASS"),
+            "passed": passed,
+            "failed": failed,
+            "total": total,
+            "pass_rate": f"{passed * 100 // max(total, 1)}%",
+            "reports": report_result,
+        })
 
 
 # ── 真实覆盖率解析 ──

@@ -73,6 +73,61 @@ _WORKFLOW_PHASE_MAP = {
     ],
 }
 
+# ═══════════════════════════════════════════════════════════════
+# 验证 Profile 预设（借鉴原型 --task-type）
+# ═══════════════════════════════════════════════════════════════
+
+VERIFY_PROFILES = {
+    "quick": {
+        "description": "快速质量检查：编译 + 冒烟 + QA 审查",
+        "phases": ["design", "rtl", "UVM", "qa"],
+        "approval_gates": ["design", "UVM"],
+    },
+    "standard": {
+        "description": "标准验证流程：设计 + UVM + 测试 + 回归 + 报告",
+        "phases": ["spec", "design", "model", "rtl", "UVM", "test",
+                   "regress", "cover", "report"],
+        "approval_gates": ["design", "UVM"],
+    },
+    "full": {
+        "description": "完整签核流程：全部 Agent + 断言 + 调试 + 证据链",
+        "phases": None,  # None = 走默认 FULL_PHASES
+        "approval_gates": [],
+    },
+    "debug": {
+        "description": "调试模式：只跑失败分析",
+        "phases": ["debug"],
+        "approval_gates": [],
+    },
+    "spec_only": {
+        "description": "只做规格分析，输出结构化测试计划",
+        "phases": ["spec"],
+        "approval_gates": [],
+    },
+    "design_only": {
+        "description": "只做设计：从 Spec 到 RTL",
+        "phases": ["spec", "design", "model", "rtl"],
+        "approval_gates": ["design", "rtl"],
+    },
+}
+
+
+def resolve_phases_from_profile(profile: str) -> list:
+    """从 profile 名称解析出阶段列表"""
+    if profile not in VERIFY_PROFILES:
+        raise ValueError(f"Unknown profile: {profile}. "
+                         f"Available: {list(VERIFY_PROFILES.keys())}")
+    config = VERIFY_PROFILES[profile]
+    if config["phases"] is None:
+        return FULL_PHASES
+    # 将简写 phase 名映射到 FULL_PHASES 中的 tuple
+    phase_map = {p[0]: p for p in FULL_PHASES}
+    resolved = []
+    for name in config["phases"]:
+        if name in phase_map:
+            resolved.append(phase_map[name])
+    return resolved
+
 
 def _writeback_produces(agent, result_data: Any, ctx: dict) -> None:
     """按 Agent 声明的 produces 契约写回共享上下文。"""

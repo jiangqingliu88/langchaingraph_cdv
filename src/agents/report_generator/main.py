@@ -135,3 +135,72 @@ def _query_trend_history(task_name: str = "", limit: int = 10) -> str:
     else:
         history = db.query_history(limit)
     return json.dumps(history, ensure_ascii=False, default=str)
+
+
+@tool("generate_spa_summary")
+def _generate_spa_summary(
+    output_dir: str,
+    run_id: str = "",
+    profile: str = "standard",
+    phases_json: str = "[]",
+    coverage_json: str = "{}",
+    regression_json: str = "{}",
+    approvals_json: str = "{}",
+) -> str:
+    """
+    生成 SPA 风格摘要 JSON（对标原型架构输出）。
+    不替代完整证据链——只提供快速概览。
+
+    参数:
+      output_dir: 输出目录路径
+      run_id: 运行 ID
+      profile: 使用的 profile 名称
+      phases_json: 阶段状态 JSON 字符串
+      coverage_json: 覆盖率数据 JSON 字符串
+      regression_json: 回归结果 JSON 字符串
+      approvals_json: 审批记录 JSON 字符串
+    """
+    try:
+        phases = json.loads(phases_json) if isinstance(phases_json, str) else phases_json
+        coverage = json.loads(coverage_json) if isinstance(coverage_json, str) else coverage_json
+        regression = json.loads(regression_json) if isinstance(regression_json, str) else regression_json
+        approvals = json.loads(approvals_json) if isinstance(approvals_json, str) else approvals_json
+    except json.JSONDecodeError as e:
+        return json.dumps({"error": f"Invalid JSON: {e}"})
+
+    spa = {
+        "spa_id": run_id or f"spa_{uuid.uuid4().hex[:8]}",
+        "profile": profile,
+        "version": "1.0",
+        "created_at": datetime.now().isoformat(),
+        "stages_executed": [p.get("name", "") for p in phases],
+        "stages": [
+            {
+                "name": p.get("name", ""),
+                "status": p.get("status", "unknown"),
+                "score": p.get("score", 0),
+                "time_s": p.get("time", 0),
+                "retries": p.get("retries", 0),
+            }
+            for p in phases
+        ],
+        "passed_count": sum(1 for p in phases if p.get("status") == "passed"),
+        "total_count": len(phases),
+        "coverage": coverage,
+        "regression": regression,
+        "approvals": approvals,
+        "quality_score": sum(p.get("score", 0) for p in phases) // max(len(phases), 1),
+    }
+
+    import uuid
+    output_path = Path(output_dir) / "spa_summary.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(spa, indent=2, ensure_ascii=False, default=str),
+                           encoding="utf-8")
+
+    return json.dumps({
+        "status": "generated",
+        "spa_path": str(output_path),
+        "summary": f"{spa['passed_count']}/{spa['total_count']} phases passed, "
+                    f"quality_score={spa['quality_score']}",
+    }, ensure_ascii=False)

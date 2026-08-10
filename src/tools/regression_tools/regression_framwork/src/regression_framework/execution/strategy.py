@@ -25,11 +25,35 @@ class LocalStrategy(ExecutionStrategy):
             logger.warning(f"Script not found: {script_path}")
             return True
         logger.info(f"[LOCAL] Executing {script_path} in {cwd}")
+
+        # Windows: .sh 脚本需要通过 bash 执行（优先 Git Bash，避免 WSL）
+        if os.name == 'nt' and script_path.endswith('.sh'):
+            bash_exe = None
+            for candidate in [
+                r'D:\Gitt\usr\bin\bash.exe',
+                r'C:\Program Files\Git\bin\bash.exe',
+                r'C:\Program Files (x86)\Git\bin\bash.exe',
+            ]:
+                if os.path.exists(candidate):
+                    bash_exe = candidate
+                    break
+            if not bash_exe:
+                bash_exe = 'bash'
+            # 用绝对路径 + 正斜杠给 bash
+            abs_script = os.path.abspath(script_path).replace('\\', '/')
+            abs_cwd = os.path.abspath(cwd).replace('\\', '/')
+            cmd = [bash_exe, '-c', f'cd "{abs_cwd}" && bash "{abs_script}"']
+        else:
+            cmd = [script_path]
+
         try:
-            subprocess.run([script_path], cwd=cwd, check=True, shell=False)
+            subprocess.run(cmd, cwd=cwd, check=True, shell=False, timeout=timeout)
             return True
         except subprocess.CalledProcessError as e:
             logger.error(f"Script failed with exit code {e.returncode}")
+            return False
+        except subprocess.TimeoutExpired:
+            logger.error(f"Script timed out after {timeout}s")
             return False
 
 class LsfStrategy(ExecutionStrategy):

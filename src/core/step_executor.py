@@ -40,13 +40,15 @@ class StepExecutor:
 
     def __init__(self, phase_name: str, agent, ctx: ContextStore,
                  output_dir: str | None = None,
-                 on_progress: Callable = None):
+                 on_progress: Callable = None,
+                 approval_gate = None):
         self.phase_name = phase_name
         self.agent = agent
         self.ctx = ctx
         from src.core.output_config import make_output_root
         self.output_dir = make_output_root(output_dir)
         self.on_progress = on_progress
+        self.approval_gate = approval_gate
 
         self.max_retries = getattr(agent, 'max_retries', 2)
         self.min_score = getattr(agent, 'min_score', 50)
@@ -160,6 +162,28 @@ class StepExecutor:
                     phase_name=self.phase_name,
                     status="error",
                     error=str(e)[:200],
+                    retries=attempt,
+                    snapshot_id=id(snapshot),
+                )
+
+        # ── 审批门控: 执行完成后检查是否需要人工审批 ──
+        if self.approval_gate and self.approval_gate.requires_approval(
+            self.phase_name,
+            "medium" if final_status == "degraded" else "low"
+        ):
+            summary = f"阶段: {self.phase_name}, 状态: {final_status}, 评分: {best_score}"
+            record = self.approval_gate.ask(self.phase_name, summary,
+                                            "medium" if final_status == "degraded" else "low")
+            if record.decision.value == "reject":
+                from src.core.approval import PipelineTerminatedError
+                raise PipelineTerminatedError(
+                    f"用户拒绝 {self.phase_name} 阶段，流程终止")
+            if record.decision.value == "skip":
+                final_status = "skipped"
+                return StepResult(
+                    phase_name=self.phase_name,
+                    status="skipped",
+                    error="用户跳过",
                     retries=attempt,
                     snapshot_id=id(snapshot),
                 )
