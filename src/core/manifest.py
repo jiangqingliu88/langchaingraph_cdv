@@ -73,11 +73,16 @@ class PhaseArtifact:
 
     # 输入输出
     input_summary: str = ""      # 输入摘要（截断）
-    input_hash: str = ""         # SHA256 of input
+    input_hash: str = ""         # SHA256 of input (整体)
     output_summary: str = ""     # 输出摘要（截断）
-    output_hash: str = ""        # SHA256 of output
+    output_hash: str = ""        # SHA256 of output (整体)
     ctx_keys_before: List[str] = field(default_factory=list)
     ctx_keys_after: List[str] = field(default_factory=list)
+
+    # 字段级 snapshot — 可审计的变更追踪
+    # { "spec.design_name": "a1b2", "spec.features": "c3d4", ... }
+    field_snapshots: Dict[str, str] = field(default_factory=dict)
+    input_key_count: Dict[str, int] = field(default_factory=dict)  # key → item count
 
     # 产物文件
     artifacts: List[str] = field(default_factory=list)   # 相对路径
@@ -226,6 +231,7 @@ class ManifestBuilder:
             manifest.total_phases = run_state.get("total", 0)
             manifest.output_root = run_state.get("ctx", {}).get("working_dir", output_root) \
                 if isinstance(run_state.get("ctx"), dict) else output_root
+            manifest.output_root = manifest.output_root or ""
 
         if trace_data:
             if not manifest.workflow:
@@ -264,8 +270,34 @@ class ManifestBuilder:
             manifest.overall_score = ctx_dict.get("_overall_score", 0)
             manifest.iteration_count = ctx_dict.get("_iterations", 0)
 
+            # ── 字段级 snapshot: 每个 ctx key 的子字段分别 hash ──
+            for p in manifest.phases:
+                # 找到该 phase 的输入 (从 ctx_dict 中)
+                for ctx_key in ctx_dict:
+                    if ctx_key.startswith("_"):
+                        continue
+                    val = ctx_dict[ctx_key]
+                    if val is None:
+                        continue
+                    try:
+                        if isinstance(val, dict):
+                            # 字典: 每个一级 key 单独 hash
+                            for sub_key, sub_val in val.items():
+                                full_key = f"{ctx_key}.{sub_key}"
+                                p.field_snapshots[full_key] = hash_json(sub_val)
+                            p.input_key_count[ctx_key] = len(val)
+                        elif isinstance(val, list):
+                            # 列表: hash 整个列表 + 记录长度
+                            p.field_snapshots[ctx_key] = hash_json(val)
+                            p.input_key_count[ctx_key] = len(val)
+                        else:
+                            p.field_snapshots[ctx_key] = hash_json(val)
+                    except Exception:
+                        pass
+
         # ── 扫描产物文件 ──
-        output_path = self.project_root / manifest.output_root if manifest.output_root else self.project_root / output_root
+        resolved_root = manifest.output_root or output_root or ""
+        output_path = self.project_root / resolved_root if resolved_root else self.project_root
         manifest.output_root = str(output_path.resolve())
         if output_path.exists():
             files = []
@@ -391,6 +423,8 @@ class ManifestBuilder:
                 "elapsed_s": p.elapsed_s,
                 "input_hash": p.input_hash,
                 "output_hash": p.output_hash,
+                "field_snapshots": dict(list(p.field_snapshots.items())[:30]),  # top 30
+                "input_key_count": p.input_key_count,
                 "input_summary": p.input_summary[:200] if p.input_summary else "",
                 "output_summary": p.output_summary[:200] if p.output_summary else "",
                 "artifact_count": len(p.artifacts),
@@ -531,6 +565,52 @@ class EvidencePackager:
             "valid": len(issues) == 0,
             "issues": issues,
             "manifest": manifest,
+        }
+
+    @staticmethod
+    def diff(manifest_a: RunManifest, manifest_b: RunManifest) -> dict:
+        """两个 manifest 的字段级 diff。
+
+        返回: {phase_diffs: {phase_name: {added, removed, changed}}, summary}
+        用途: 审计时回答 "两次签核之间到底哪里不同"
+        """
+        phase_diffs = {}
+        phases_a = {p.phase_name: p for p in manifest_a.phases}
+        phases_b = {p.phase_name: p for p in manifest_b.phases}
+
+        all_phases = set(phases_a.keys()) | set(phases_b.keys())
+        for pname in sorted(all_phases):
+            pa = phases_a.get(pname)
+            pb = phases_b.get(pname)
+            if not pa or not pb:
+                phase_diffs[pname] = {"status": "phase_only_in_one_run",
+                                      "in_run": manifest_a.run_id if pa else manifest_b.run_id}
+                continue
+
+            # 比较字段级 snapshot
+            fields_a = pa.field_snapshots
+            fields_b = pb.field_snapshots
+            all_fields = set(fields_a.keys()) | set(fields_b.keys())
+
+            added = [f for f in all_fields if f in fields_b and f not in fields_a]
+            removed = [f for f in all_fields if f in fields_a and f not in fields_b]
+            changed = [f for f in all_fields
+                       if f in fields_a and f in fields_b and fields_a[f] != fields_b[f]]
+
+            phase_diffs[pname] = {
+                "added_fields": added,
+                "removed_fields": removed,
+                "changed_fields": changed,
+                "unchanged": len(all_fields) - len(added) - len(removed) - len(changed),
+                "score_delta": pb.score - pa.score,
+            }
+
+        return {
+            "run_a": manifest_a.run_id,
+            "run_b": manifest_b.run_id,
+            "phase_diffs": phase_diffs,
+            "summary": f"{len(phase_diffs)} phases compared, "
+                       f"{sum(1 for v in phase_diffs.values() if v.get('changed_fields'))} phases have field changes",
         }
 
     def _generate_summary_md(self, m: RunManifest) -> str:

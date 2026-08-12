@@ -136,6 +136,10 @@ def run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
     import structlog
     logger = structlog.get_logger()
 
+    from src.tools.lib.regress_dir import get_compile_dir, get_sim_dir
+    compile_dir = get_compile_dir(output_dir)
+    sim_dir = get_sim_dir(output_dir)
+
     fl = build_loopback_filelist(output_dir, agent_name)
     top = f"{agent_name}_loopback_tb"
 
@@ -146,7 +150,8 @@ def run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
     t0 = time.time()
     runner = RegressionRunner(
         env_output_dir=str(output_dir), filelist=str(fl.resolve()),
-        top_module=top, coverage=False)
+        top_module=top, coverage=False,
+        compile_dir=compile_dir, sim_dir=sim_dir)
     compile_result = runner.compile()
     compile_ok = compile_result["status"] == "PASS"
     compile_errs = compile_result.get("errors", 0)
@@ -159,7 +164,8 @@ def run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
             fl = build_loopback_filelist(output_dir, agent_name)
             runner = RegressionRunner(
                 env_output_dir=str(output_dir), filelist=str(fl.resolve()),
-                top_module=top, coverage=False)
+                top_module=top, coverage=False,
+                compile_dir=compile_dir, sim_dir=sim_dir)
             compile_result = runner.compile()
             compile_ok = compile_result["status"] == "PASS"
             compile_errs = compile_result.get("errors", 0)
@@ -168,7 +174,8 @@ def run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
             return {"compile": "FAIL", "errors": compile_errs, "time_s": compile_time,
                     "sim": "SKIPPED", "score": 0, "passed": False, "autofix_attempted": bool(fixed)}
 
-    wd = (output_dir / "build" / "work").resolve()
+    compile_base = output_dir / compile_dir if compile_dir else output_dir
+    wd = (compile_base / "build" / "work").resolve()
     wd_str = str(wd).replace("\\", "/")
     sim_agent_dir = (output_dir / "sim" / "agent").resolve()
     sim_agent_dir.mkdir(parents=True, exist_ok=True)

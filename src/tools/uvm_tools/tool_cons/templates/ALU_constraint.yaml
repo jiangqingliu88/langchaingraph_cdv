@@ -2,6 +2,7 @@
 constraint:
   name: ALU_constraint
   env_name: ALU_env
+  regress_dir: uvm_regress    # UVM 阶段用 uvm_regress，Test 阶段切换为 test_regress
   
 # 事务定义
 transactions:

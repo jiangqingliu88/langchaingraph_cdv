@@ -1,10 +1,125 @@
-# ALU_constraint_config.yaml - 补充场景部分
+# ============================================================
+# ALU_constraint.yaml — 约束配置与测试场景定义
+# ============================================================
+# 职责分工:
+#   UVM 工程师  → 维护 constraint / transactions / policies / combinator (env + P0 基础)
+#   Test 工程师 → 维护 scenarios (次要场景 + 随机 case)，调用 testcase_tools 生成 SV 代码
+# ============================================================
 
-# ============ 场景定义 ============
+# ============ 项目约束 ============
+constraint:
+  name: ALU_constraint
+  env_name: ALU_env
+  regress_dir: test_regress    # UVM 阶段: uvm_regress | Test 阶段: test_regress
+  description: "ALU 模块约束配置 — 精度一致性、存储容量、数据依赖、并发访问、功耗"
+
+# ============ 事务定义 ============
+transactions:
+  - name: cfg
+    type: ALU_cfg_transaction
+    description: "配置事务"
+    fields:
+      - { name: mem_size, type: "mem_size_e", rand: true }
+      - { name: precision, type: "data_precision_e", rand: true }
+      - { name: compute_op, type: "compute_op_e", rand: true }
+
+  - name: weight
+    type: ALU_weight_transaction
+    description: "权重事务"
+    fields:
+      - { name: addr, type: "bit [15:0]", rand: true }
+      - { name: count, type: "int", rand: true }
+      - { name: data, type: "bit [15:0][]", rand: true }
+
+  - name: input
+    type: ALU_input_transaction
+    description: "输入数据事务"
+    fields:
+      - { name: addr, type: "bit [15:0]", rand: true }
+      - { name: count, type: "int", rand: true }
+      - { name: data, type: "bit [15:0][]", rand: true }
+
+  - name: output
+    type: ALU_output_transaction
+    description: "输出事务"
+    fields:
+      - { name: addr, type: "bit [15:0]", rand: true }
+      - { name: count, type: "int", rand: true }
+      - { name: data, type: "int[]", rand: true }
+
+# ============ 策略定义 (UVM 工程师维护) ============
+policies:
+  - name: precision_consistency
+    description: "精度一致性策略 — 确保 cfg/weight/input 精度参数一致"
+    priority: 1
+    enabled: true
+    params:
+      - { name: enforce_match, type: bool, default: true }
+    applies_to: [cfg, weight, input]
+
+  - name: mem_capacity
+    description: "存储容量策略 — 边界地址覆盖"
+    priority: 2
+    enabled: true
+    params:
+      - { name: addr_boundary, type: "list", default: [4096, 8192, 16384] }
+    applies_to: [weight, input]
+
+  - name: data_dependency
+    description: "数据依赖策略 — 跨事务依赖关系编排"
+    priority: 3
+    enabled: true
+    params:
+      - { name: dep_type, type: string, default: "CROSS", enum: ["INDEPENDENT", "WEIGHT_DEPENDENT", "INPUT_DEPENDENT", "CROSS_DEPENDENT"] }
+      - { name: pipeline_depth, type: int, default: 1 }
+    applies_to: [weight, input, output]
+
+  - name: boundary_overflow
+    description: "边界溢出策略 — 正常/边界/溢出/下溢"
+    priority: 4
+    enabled: true
+    params:
+      - { name: boundary_type, type: string, default: "NORMAL", enum: ["NORMAL", "BOUNDARY", "OVERFLOW", "UNDERFLOW"] }
+    applies_to: [weight, input]
+
+  - name: compute_mode
+    description: "计算模式策略 — CONV2D/MATMUL/... 组合"
+    priority: 5
+    enabled: true
+    params:
+      - { name: profiles, type: "list", default: [] }
+    applies_to: [cfg, weight, input, output]
+
+  - name: concurrent_access
+    description: "并发访问策略 — 多端口竞争"
+    priority: 6
+    enabled: true
+    params:
+      - { name: num_ports, type: int, default: 4 }
+      - { name: conflict_prob, type: float, default: 0.1 }
+    applies_to: [weight, input]
+
+  - name: power_performance
+    description: "功耗性能策略 — LOW_POWER / HIGH_PERFORMANCE / BALANCED"
+    priority: 7
+    enabled: true
+    params:
+      - { name: power_mode, type: string, default: "BALANCED", enum: ["LOW_POWER", "HIGH_PERFORMANCE", "BALANCED"] }
+    applies_to: [cfg, weight, input]
+
+# ============ 策略组合器配置 ============
+combinator:
+  default_mode: APPLY_ALL
+  modes: [APPLY_ALL, APPLY_WEIGHTED, APPLY_FIRST_MATCH, APPLY_SEQUENTIAL, APPLY_CHAIN]
+
+# ============ 场景定义 (Test 工程师维护) ============
 scenarios:
-  # 场景1: 冒烟测试 - 只用基础策略，快速通过
+  # --- P0 场景: 冒烟 + 定向 (UVM 工程师定义骨架，Test 工程师补充参数) ---
+
+  # 场景1: 冒烟测试 — 只用基础策略，快速通过
   - name: smoke_test
     description: "冒烟测试，5分钟内完成"
+    priority: P0
     timeout: 300
     combinator_mode: APPLY_FIRST_MATCH
     policies:
@@ -14,9 +129,10 @@ scenarios:
       - { policy: precision_consistency, weight: 10 }
       - { policy: mem_capacity, weight: 5 }
 
-  # 场景2: 定向功能测试 - 固定参数，验证特定功能
+  # 场景2: 定向功能测试 — 固定参数，验证特定功能
   - name: directed_functional
-    description: "定向功能验证"
+    description: "定向功能验证 — 精度一致性 + 计算模式"
+    priority: P0
     timeout: 600
     combinator_mode: APPLY_SEQUENTIAL
     policies:
@@ -29,9 +145,12 @@ scenarios:
         profiles: [CONV2D, MATMUL]
     repeat: 10
 
-  # 场景3: 随机回归 - 随机组合策略，覆盖更多状态空间
+  # --- P1 场景: 次要场景 + 随机回归 (Test 工程师主力维护) ---
+
+  # 场景3: 随机回归 — 加权随机组合策略，覆盖更多状态空间
   - name: random_regression
-    description: "随机回归测试"
+    description: "随机回归测试 — 全部 7 个策略加权随机组合"
+    priority: P1
     timeout: 3600
     combinator_mode: APPLY_WEIGHTED
     policies:
@@ -41,6 +160,7 @@ scenarios:
       - boundary_overflow
       - compute_mode
       - concurrent_access
+      - power_performance
     priority_rules:
       - { policy: precision_consistency, weight: 10 }
       - { policy: mem_capacity, weight: 8 }
@@ -48,12 +168,14 @@ scenarios:
       - { policy: boundary_overflow, weight: 6 }
       - { policy: compute_mode, weight: 5 }
       - { policy: concurrent_access, weight: 4 }
+      - { policy: power_performance, weight: 3 }
     seed: random
     repeat: 100
 
-  # 场景4: 压力测试 - 极端参数组合
+  # 场景4: 压力测试 — 极端参数组合
   - name: stress_test
-    description: "压力测试，极限参数"
+    description: "压力测试 — 极限容量 + 溢出 + 高并发 + 高性能"
+    priority: P1
     timeout: 7200
     combinator_mode: APPLY_ALL
     policies:
@@ -73,9 +195,12 @@ scenarios:
         power_mode: HIGH_PERFORMANCE
     repeat: 50
 
-  # 场景5: 功耗专项
+  # --- P2 场景: 专项补充 (Test 工程师按需添加) ---
+
+  # 场景5: 功耗专项 — 遍历功耗模式
   - name: power_test
-    description: "功耗场景专项测试"
+    description: "功耗场景专项 — LOW_POWER / HIGH_PERFORMANCE / BALANCED 遍历"
+    priority: P2
     timeout: 1800
     combinator_mode: APPLY_SEQUENTIAL
     policies:
@@ -87,9 +212,10 @@ scenarios:
     repeat_per_param: true
     repeat: 5
 
-  # 场景6: CDC/并发专项
+  # 场景6: CDC/并发专项 — 逐步升级并发压力
   - name: concurrency_test
-    description: "并发与竞争测试"
+    description: "并发与竞争测试 — 2→4→8 端口逐步增压"
+    priority: P2
     timeout: 3600
     combinator_mode: APPLY_CHAIN
     policies:

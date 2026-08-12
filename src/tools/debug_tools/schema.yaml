@@ -1,0 +1,150 @@
+# debug_tools — Tool Schema 契约
+# 7 个真实工具，无 mock
+
+tools:
+  collect_sim_log:
+    description: "解析 vsim 仿真日志 → 结构化错误树"
+    input:
+      output_dir:
+        type: string
+        required: true
+        description: "回归输出目录路径"
+    output:
+      type: json
+      schema:
+        logs_scanned: int
+        logs_with_errors: int
+        total_errors: int
+        unique_errors: int
+        by_category: object
+        errors:
+          - log_file: string
+            errors:
+              - timestamp: string
+                file: string
+                line: int
+                message: string
+                context: list
+                fingerprint: string
+                classification: {category, fix_agent, confidence}
+    risk_level: safe
+
+  collect_compile_log:
+    description: "解析 vlog/vopt 编译错误"
+    input:
+      output_dir:
+        type: string
+        required: true
+        description: "输出目录路径"
+    output:
+      type: json
+      schema:
+        logs_scanned: int
+        error_count: int
+        warning_count: int
+        by_file: object
+        errors:
+          - severity: string
+            file: string
+            line: int
+            message: string
+            fingerprint: string
+    risk_level: safe
+
+  collect_waveform:
+    description: "解析 WLF/VCD 波形，提取关键信号时间线"
+    input:
+      input_json:
+        type: string
+        required: true
+        description: '{"output_dir": "...", "signals": "clk,rst_n,data"}'
+    output:
+      type: json
+      schema:
+        waveforms_found: int
+        wlf_count: int
+        vcd_count: int
+        analyzed:
+          - waveform: string
+            size_kb: float
+            signal_values: string
+    risk_level: medium
+    side_effects: ["calls vsim -view if QuestaSim available"]
+
+  fingerprint_error:
+    description: "错误消息归一化 + MD5 指纹用于去重"
+    input:
+      error_text:
+        type: string
+        required: true
+        description: "错误消息文本"
+    output:
+      type: json
+      schema:
+        fingerprint: string (12-char hex)
+        classification: {category, fix_agent, confidence}
+        normalized: string
+    risk_level: safe
+
+  bisect_test:
+    description: "二分法定位失败测试的最小集合"
+    input:
+      input_json:
+        type: string
+        required: true
+        description: '{"output_dir": "...", "failed_tests": [...]}'
+    output:
+      type: json
+      schema:
+        total_failed: int
+        failed_tests: list
+        unique_fingerprints: int
+        shared_root_cause: bool
+        suggestion: string
+        bisect_plan: list
+    risk_level: safe
+
+  auto_fix:
+    description: "模板匹配 → 自动修复 → 应用 patch"
+    input:
+      input_json:
+        type: string
+        required: true
+        description: '{"error_text": "...", "output_dir": "..."}'
+    output:
+      type: json
+      schema:
+        matched: bool
+        fix_name: string
+        fix_description: string
+        fix_type: string
+        patch_applied: bool
+        file_modified: string
+    risk_level: high
+    side_effects: ["edits source files", "injects code"]
+    fix_templates:
+      - fix_missing_vif: "inject uvm_config_db::set for virtual interface"
+      - fix_missing_package: "check filelist for package source"
+      - fix_module_not_defined: "append missing .sv to filelist"
+      - fix_double_declare: "remove duplicate import/include"
+      - fix_sequence_timeout: "ensure raise/drop_objection pairing"
+      - fix_scoreboard_width: "add $size() check + auto-pad"
+      - fix_xz_in_driver: "drive known values during reset"
+      - fix_timing_violation: "adjust delay/constraint (manual hint)"
+
+  rerun_failed_test:
+    description: "重跑失败 case 验证修复"
+    input:
+      input_json:
+        type: string
+        required: true
+        description: '{"output_dir": "...", "test_name": "..."}'
+    output:
+      type: json
+      schema:
+        test_name: string
+        status: string (PASS|FAIL|TIMEOUT|ERROR)
+        stdout_tail: string
+        run_script: string
+    risk_level: medium
+    side_effects: ["executes bash run.sh"]

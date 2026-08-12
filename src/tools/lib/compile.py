@@ -12,8 +12,16 @@ from src.tools.lib.filelist import build_filelist_for_tb
 from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner
 
 
-def run_compile_check(output_dir: Path, agents: list, env_name: str) -> dict:
-    """编译 UVM 环境，返回 {status, errors, time_s, score, passed, log_file}。"""
+def run_compile_check(output_dir: Path, agents: list, env_name: str,
+                      compile_dir: str = None) -> dict:
+    """编译 UVM 环境，返回 {status, errors, time_s, score, passed, log_file}。
+
+    compile_dir: None=自动检测(uvm_regress, 共享 work library)
+    """
+    if compile_dir is None:
+        from src.tools.lib.regress_dir import get_compile_dir
+        compile_dir = get_compile_dir(output_dir)
+
     fl = build_filelist_for_tb(output_dir, agents, env_name)
     top = f"{env_name}_bench_tb_top"
 
@@ -23,6 +31,7 @@ def run_compile_check(output_dir: Path, agents: list, env_name: str) -> dict:
         filelist=str(fl.resolve()),
         top_module=top,
         coverage=False,
+        compile_dir=compile_dir,
     )
     result = runner.compile()
     elapsed = round(time.time() - t0, 1)

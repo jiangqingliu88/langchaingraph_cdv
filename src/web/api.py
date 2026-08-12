@@ -65,8 +65,13 @@ class PipelineRunRequest(BaseModel):
     spec_text: str = ""
     spec_file: str = ""
     workflow: str = "full_verification"
+    profile: str = ""               # quick/standard/full/spec_update/rtl_update/uvm_update/model_update/regress_cov/regress_xprop
+    regression_mode: str = ""       # cov (覆盖率) / xprop (X传播) — 覆盖 profile 默认值
     output_dir: str = "."
-    run_type: str = "traditional"  # traditional | ai_exploration
+    run_type: str = "traditional"   # traditional | ai_exploration
+    gate_enabled: bool = False      # 门禁开关
+    approval_mode: str = "auto"     # auto | interactive | threshold
+    phase_timeout: int = 600        # 单阶段超时秒数
 
 class TestCaseGenerateRequest(BaseModel):
     spec_text: str = ""
@@ -344,8 +349,8 @@ async def editor_save(path: str, payload: dict, user: dict = Depends(require_aut
 @app.get("/api/design/mapping/{project_id}")
 async def get_design_mapping(project_id: int = 0):
     """获取三层映射矩阵: 需求→模块→功能点→测试点"""
-    from src.core.design_mapper import DesignArchitectMapper
-    mapper = DesignArchitectMapper()
+    from src.core.design_mapper import DesignAgentMapper
+    mapper = DesignAgentMapper()
     return await mapper.get_mapping_report(project_id)
 
 
@@ -373,8 +378,8 @@ async def get_design_modules(project_id: int = 0):
 @app.post("/api/design/modules/upload")
 async def upload_design_modules(project_id: int = 0, md_text: str = "", user: dict = Depends(require_auth)):
     """上传模块划分 MD → 解析并存储"""
-    from src.core.design_mapper import DesignArchitectMapper
-    mapper = DesignArchitectMapper()
+    from src.core.design_mapper import DesignAgentMapper
+    mapper = DesignAgentMapper()
     modules = mapper.parse_md_modules(md_text)
 
     # 获取需求
@@ -684,6 +689,23 @@ async def agent_detail(role: str):
 # Pipeline
 # ═══════════════════════════════════════════════════════════
 
+@app.get("/api/pipeline/profiles")
+async def pipeline_profiles(user: dict = Depends(require_auth)):
+    """列出所有可用的管线 profile（供前端下拉选择）"""
+    from src.core.execution import VERIFY_PROFILES
+    profiles = []
+    for name, cfg in VERIFY_PROFILES.items():
+        profiles.append({
+            "name": name,
+            "description": cfg.get("description", ""),
+            "phases": cfg.get("phases") or ["(full pipeline)"],
+            "approval_gates": cfg.get("approval_gates", []),
+            "regression_mode": cfg.get("regression_mode", ""),
+            "regress_dir": cfg.get("regress_dir", ""),
+        })
+    return {"profiles": profiles, "default": "standard"}
+
+
 @app.post("/api/pipeline/run")
 async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_auth),
                        _perm: dict = Depends(lambda: None)):
@@ -713,8 +735,12 @@ async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_aut
     async def _run():
         started = __import__('time').time()
         try:
-            await service.run_pipeline(spec_text=spec_text, workflow=req.workflow,
-                                       output_root=output_root, run_id=run_id)
+            await service.run_pipeline(
+                spec_text=spec_text, workflow=req.workflow,
+                output_root=output_root, run_id=run_id,
+                gate_enabled=req.gate_enabled,
+                phase_timeout=req.phase_timeout,
+            )
             # 记录可观测性指标
             try:
                 duration = __import__('time').time() - started
@@ -758,7 +784,26 @@ async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_aut
     from src.database.repository import add_audit_log
     await add_audit_log(user["user_id"], user["username"], "pipeline_run", run_id,
                         f"workflow={req.workflow} started")
-    return {"run_id": run_id, "workflow": req.workflow, "status": "started", "run_type": req.run_type}
+    exec_log = str(Path("logs/execution") / f"exec_{run_id.replace('run_','')}.jsonl")
+    return {"run_id": run_id, "workflow": req.workflow, "status": "started",
+            "run_type": req.run_type, "exec_log": exec_log}
+
+
+@app.get("/api/logs/execution/{filename}")
+async def read_execution_log(filename: str, user: dict = Depends(require_auth)):
+    """读取执行日志文件 (JSONL)"""
+    log_path = Path("logs/execution") / filename
+    if not log_path.exists():
+        raise HTTPException(status_code=404, detail=f"log not found: {filename}")
+    lines = log_path.read_text(encoding="utf-8", errors="replace").strip().split("\n")
+    events = []
+    for line in lines[-200:]:  # 最近 200 行
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            events.append({"raw": line[:200]})
+    return {"filename": filename, "path": str(log_path), "total_lines": len(lines),
+            "events": events, "last_200": len(events)}
 
 
 @app.get("/api/pipeline/{run_id}/stream")
@@ -848,8 +893,17 @@ async def pipeline_stream(run_id: str):
 
 @app.get("/api/spec/default")
 async def default_spec():
-    p = Path("spec_uart.txt")
-    return {"content": p.read_text(encoding="utf-8") if p.exists() else "", "file": str(p) if p.exists() else ""}
+    """返回默认设计规格"""
+    # 使用工作区根目录查找 specs
+    root = WORKSPACE_ROOT.resolve()
+    specs_dir = root / "specs"
+    if specs_dir.exists():
+        for md in sorted(specs_dir.rglob("*.md"), reverse=True):
+            content = md.read_text(encoding="utf-8", errors="replace")
+            if len(content) > 50:
+                return {"content": content, "file": str(md)}
+
+    return {"content": "# APB UART Module\n\nAPB UART with 8bit data, baud 9600-115200, 16-byte FIFO, interrupt output.\n\n## Features\n- APB register R/W\n- UART TX/RX\n- 16-byte FIFO\n- Interrupt\n- Baud 9600-115200", "file": "builtin"}
 
 # ═══════════════════════════════════════════════════════════
 # 测试用例
@@ -1100,7 +1154,7 @@ async def regression_trend(days: int = 7):
 
 @app.post("/api/regression/run")
 async def regression_run(user: dict = Depends(require_auth)):
-    """回归执行 —— demo 模式返回模拟数据，生产模式调用真实 RegressionManager。"""
+    """回归执行 —— demo 模式返回模拟数据，生产模式调用真实 RegressAgent。"""
     if os.environ.get("APP_MODE", "demo").lower() == "demo":
         from src.database.repository import save_regression
         import random, time as _time
@@ -1121,9 +1175,9 @@ async def regression_run(user: dict = Depends(require_auth)):
         return {"status": "completed", "passed": passed, "failed": failed, "total": len(tests),
                 "duration": duration, "results": results, "_demo": True}
 
-    # ── 生产模式：调用真实 RegressionManager ──
+    # ── 生产模式：调用真实 RegressAgent ──
     service = PipelineExecutionService.get_instance()
-    result = await service.run_single_agent("regression_manager", json.dumps({"retry": False}))
+    result = await service.run_single_agent("regress", json.dumps({"retry": False}))
     from src.database.repository import add_audit_log
     await add_audit_log(user["user_id"], user["username"], "regression_run", "", str(result.get("output", ""))[:200])
     return {"success": result["success"], "output": result.get("output", ""), "error": result.get("error")}
@@ -2165,7 +2219,7 @@ async def design_arch_result():
     if not service.initialized: await service.initialize_agents()
     ctx = {"spec": {}, "env": {"env_name": "dut_env"}}
     spec = Path("spec_uart.txt").read_text(encoding="utf-8") if Path("spec_uart.txt").exists() else "UART IP"
-    result = await service.run_single_agent("design_architect", spec)
+    result = await service.run_single_agent("design", spec)
     return {"success": result["success"], "data": result.get("output", ""), "error": result.get("error")}
 
 class DesignArchRequest(BaseModel):
@@ -2173,13 +2227,13 @@ class DesignArchRequest(BaseModel):
 
 @app.post("/api/design_arch")
 async def design_arch_run(req: DesignArchRequest, user: dict = Depends(require_auth)):
-    """运行设计架构师 — 每次新建实例确保最新代码"""
+    """运行模块分解器 — 每次新建实例确保最新代码"""
     import importlib
     import src.agents.design_architect as da_pkg
     import src.agents.design_architect.main as da_mod
     importlib.reload(da_mod)
     importlib.reload(da_pkg)
-    agent = da_pkg.DesignArchitect()
+    agent = da_pkg.DesignAgent()
     await agent.initialize()
     ctx = {"spec": {}, "env": {"env_name": "dut_env"}}
     task = {"ctx": ctx, "input": req.spec_text or "UART IP with AXI interface"}
@@ -2244,12 +2298,19 @@ async def list_docs(user: dict = Depends(get_current_user)):
 
 @app.get("/api/docs/{path:path}")
 async def read_doc(path: str):
-    """读取单个规格文档"""
+    """读取文档 — 优先 specs/ 目录，其次 output/ 生成的文档"""
     fp = _resolve_spec_path(path)
     if not fp.exists():
-        raise HTTPException(status_code=404, detail="文档不存在")
-    content = fp.read_text(encoding="utf-8")
-    # 解析出关联需求
+        # 回退：查找 output 目录下的生成文档
+        output_dir = Path("output")
+        if output_dir.exists():
+            for candidate in output_dir.rglob(path.split("/")[-1]):
+                if candidate.exists():
+                    fp = candidate
+                    break
+    if not fp.exists():
+        raise HTTPException(status_code=404, detail=f"doc not found: {path}")
+    content = fp.read_text(encoding="utf-8", errors="replace")
     import re
     req_ids = list(set(re.findall(r'\*\*REQ_\w+\*\*', content)))
     return {"path": str(fp), "name": fp.name, "content": content,
@@ -4231,3 +4292,216 @@ async def get_expired_rules(days: int = 90, user: dict = Depends(require_admin))
     """获取过期规则列表"""
     from src.infra.platform_health import get_health_monitor
     return {"expired": get_health_monitor().get_expired_rules(days=days)}
+
+
+# ═══════════════════════════════════════════════════════════
+# 治理 API — gate / harness / quality guard / token budget
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/governance/{run_id}")
+async def get_governance(run_id: str, user: dict = Depends(require_auth)):
+    """获取完整治理摘要：门禁 + 审批 + Token + 质量守护 + Harness"""
+    state = PipelineExecutionService.get_instance().get_run_status(run_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="run not found")
+    return state.get("governance", {})
+
+
+@app.get("/api/governance/{run_id}/quality-guard")
+async def get_quality_guard(run_id: str, user: dict = Depends(require_auth)):
+    """获取质量守护统计"""
+    state = PipelineExecutionService.get_instance().get_run_status(run_id)
+    if not state:
+        raise HTTPException(status_code=404)
+    gov = state.get("governance", {})
+    return gov.get("quality_guard", {})
+
+
+@app.get("/api/governance/{run_id}/harness")
+async def get_harness_status(run_id: str, user: dict = Depends(require_auth)):
+    """获取 Harness 状态：快照、中断信息、恢复点"""
+    state = PipelineExecutionService.get_instance().get_run_status(run_id)
+    if not state:
+        raise HTTPException(status_code=404)
+    gov = state.get("governance", {})
+    return gov.get("harness", {})
+
+
+@app.post("/api/pipeline/{run_id}/pause")
+async def pause_pipeline(run_id: str, user: dict = Depends(require_engineer)):
+    """暂停管线——在 output 目录创建 .harness_pause 标记"""
+    from src.core.harness import Harness
+    state = PipelineExecutionService.get_instance().get_run_status(run_id)
+    if not state:
+        raise HTTPException(status_code=404)
+    output_root = state.get("output_root", "output")
+    h = Harness(output_root=output_root)
+    (h.output_root / Harness.PAUSE_MARKER).touch()
+    return {"status": "paused", "run_id": run_id, "message": "Pipeline will pause at next phase boundary"}
+
+
+@app.post("/api/pipeline/{run_id}/resume")
+async def resume_pipeline(run_id: str, user: dict = Depends(require_engineer)):
+    """恢复管线——清除 .harness_pause 标记"""
+    from src.core.harness import Harness
+    state = PipelineExecutionService.get_instance().get_run_status(run_id)
+    if not state:
+        raise HTTPException(status_code=404)
+    output_root = state.get("output_root", "output")
+    h = Harness(output_root=output_root)
+    h.clear_interrupt()
+    return {"status": "resumed", "run_id": run_id}
+
+
+@app.post("/api/pipeline/{run_id}/abort")
+async def abort_pipeline(run_id: str, user: dict = Depends(require_engineer)):
+    """终止管线——创建 .harness_abort 标记"""
+    from src.core.harness import Harness
+    state = PipelineExecutionService.get_instance().get_run_status(run_id)
+    if not state:
+        raise HTTPException(status_code=404)
+    output_root = state.get("output_root", "output")
+    h = Harness(output_root=output_root)
+    (h.output_root / Harness.ABORT_MARKER).touch()
+    return {"status": "aborted", "run_id": run_id}
+
+
+# ═══════════════════════════════════════════════════════════
+# 审计 API — 字段级 diff
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/manifest/diff")
+async def manifest_diff(run_a: str, run_b: str, fmt: str = "json",
+                        user: dict = Depends(require_auth)):
+    """字段级审计 diff——两次签核之间的精确定位差异"""
+    from src.core.manifest import ManifestBuilder, EvidencePackager
+    builder = ManifestBuilder()
+    ma = builder.build(session_id=run_a.replace("run_", ""))
+    mb = builder.build(session_id=run_b.replace("run_", ""))
+    diff = EvidencePackager.diff(ma, mb)
+    return diff
+
+
+@app.get("/api/manifest/{session_id}/field-snapshot")
+async def manifest_field_snapshot(session_id: str, user: dict = Depends(require_auth)):
+    """获取 manifest 的字段级 snapshot"""
+    from src.core.manifest import ManifestBuilder
+    builder = ManifestBuilder()
+    m = builder.build(session_id=session_id)
+    snapshots = {}
+    for p in m.phases:
+        snapshots[p.phase_name] = {
+            "field_snapshots": dict(list(p.field_snapshots.items())[:30]),
+            "input_key_count": p.input_key_count,
+        }
+    return {"session_id": session_id, "phases": snapshots}
+
+
+# ═══════════════════════════════════════════════════════════
+# 双角色 Dashboard API (UVM 工程师 / Test 工程师)
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/dashboard/role/{role}")
+async def role_dashboard(role: str, user: dict = Depends(require_auth)):
+    """角色专属 Dashboard 数据
+
+    role="uvm"  → UVM 工程师视角: env 质量, P0 case, uvm_regress 路径
+    role="test" → Test 工程师视角: 场景覆盖, 随机回归, test_regress 路径
+    """
+    from src.core.manifest import ManifestBuilder
+    builder = ManifestBuilder()
+    latest_run_id = ""
+
+    # 获取最新 run
+    try:
+        from src.database.repository import get_recent_runs
+        runs = await get_recent_runs(limit=1)
+        if runs:
+            latest_run_id = runs[0].get("run_id", "")
+    except Exception:
+        pass
+
+    if role == "uvm":
+        return {
+            "role": "uvm",
+            "display_name": "UVM 工程师",
+            "focus": "env 质量 + P0 case 调试",
+            "regress_dir": "uvm_regress",
+            "latest_run": latest_run_id,
+            "key_phases": ["UVM", "test", "regress_cov"],
+            "quality_gate": 70,
+        }
+    elif role == "test":
+        return {
+            "role": "test",
+            "display_name": "测试工程师",
+            "focus": "次要场景 + 随机 case + 覆盖率收敛",
+            "regress_dir": "test_regress",
+            "latest_run": latest_run_id,
+            "key_phases": ["test", "regress_cov", "debug", "docs"],
+            "quality_gate": 50,
+        }
+    else:
+        raise HTTPException(status_code=400, detail=f"unknown role: {role}")
+
+
+@app.get("/api/dashboard/stats")
+async def dashboard_stats(user: dict = Depends(require_auth)):
+    """Dashboard 统计: 最新 run 的 phase 状态 + 覆盖率 + 治理数据"""
+    try:
+        from src.database.repository import get_recent_runs
+        runs = await get_recent_runs(limit=1)
+    except Exception:
+        runs = []
+
+    if not runs:
+        return {"has_data": False, "message": "No pipeline runs yet"}
+
+    latest = runs[0]
+    run_id = latest.get("run_id", "")
+    phases = latest.get("phases", []) or []
+    gov = latest.get("governance", {}) or {}
+
+    return {
+        "has_data": True,
+        "run_id": run_id,
+        "phases": [
+            {"name": p.get("name"), "status": p.get("status"), "score": p.get("score"),
+             "input_hash": p.get("input_hash", "")[:8]}
+            for p in phases
+        ],
+        "passed": sum(1 for p in phases if p.get("status") == "passed"),
+        "total": len(phases),
+        "overall_score": latest.get("overall_score", 0),
+        "coverage": {
+            "overall": latest.get("metadata", {}).get("coverage", {}).get("overall_pct", "N/A"),
+            "line": latest.get("metadata", {}).get("coverage", {}).get("line_pct", "N/A"),
+        },
+        "governance": {
+            "gate_enabled": gov.get("gate_enabled", False),
+            "token_used": gov.get("token_budget", {}).get("total_tokens", 0),
+            "quality_guard": gov.get("quality_guard", {}),
+            "harness_snapshots": gov.get("harness", {}).get("snapshots_taken", 0),
+        },
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# 覆盖率 Gap API
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/coverage/gaps/{run_id}")
+async def coverage_gaps(run_id: str, user: dict = Depends(require_auth)):
+    """获取覆盖率 gap 分析和增补建议"""
+    state = PipelineExecutionService.get_instance().get_run_status(run_id)
+    if not state:
+        raise HTTPException(status_code=404)
+    metadata = state.get("metadata", {}) or {}
+    cov = metadata.get("coverage", {}) or {}
+    return {
+        "run_id": run_id,
+        "coverage": cov,
+        "gaps": cov.get("gaps", []),
+        "functional_gaps": cov.get("functional_gaps", []),
+        "suggestions": cov.get("suggestions", []),
+    }

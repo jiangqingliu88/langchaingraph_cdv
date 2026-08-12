@@ -89,10 +89,10 @@ class DomainMap:
         self._add(ModuleDef("pipeline", "src/core/execution.py", ctx, ArchitectureLayer.SERVICE,
                             "流水线执行编排", exports=["PipelineExecutionService"],
                             depends_on=["registry", "engines"]))
-        self._add(ModuleDef("regression", "src/agents/regression_manager", ctx, ArchitectureLayer.SERVICE,
-                            "回归管理", exports=["RegressionManager"]))
-        self._add(ModuleDef("coverage", "src/agents/coverage_manager", ctx, ArchitectureLayer.SERVICE,
-                            "覆盖率管理", exports=["CoverageManager"]))
+        self._add(ModuleDef("regression", "src/agents/regress", ctx, ArchitectureLayer.SERVICE,
+                            "失败聚类", exports=["RegressAgent"]))
+        self._add(ModuleDef("coverage", "src/agents/cover", ctx, ArchitectureLayer.SERVICE,
+                            "覆盖率缺口解释", exports=["CoverAgent"]))
         self._add(ModuleDef("testcase", "src/tools/testcase_tools", ctx, ArchitectureLayer.TOOL,
                             "测试用例生成", exports=["TestCaseGenerator"]))
         self._add(ModuleDef("engines", "src/core/engines.py", ctx, ArchitectureLayer.DOMAIN,
@@ -132,8 +132,8 @@ class DomainMap:
                             "设计映射"))
         self._add(ModuleDef("design_models", "src/database/models.py (DesignModule/Feature/Map)", ctx, ArchitectureLayer.DOMAIN,
                             "设计实体"))
-        self._add(ModuleDef("design_architect", "src/agents/design_architect", ctx, ArchitectureLayer.SERVICE,
-                            "设计架构师 Agent"))
+        self._add(ModuleDef("design", "src/agents/design", ctx, ArchitectureLayer.SERVICE,
+                            "模块分解器 Agent"))
 
         # ═══ Platform Context ═══
         ctx = BoundedContext.PLATFORM
@@ -168,8 +168,8 @@ class DomainMap:
 
         # ═══ Intelligence Context ═══
         ctx = BoundedContext.INTELLIGENCE
-        self._add(ModuleDef("debug_copilot", "src/agents/debug_engineer", ctx, ArchitectureLayer.SERVICE,
-                            "智能调试", exports=["DebugEngineer"]))
+        self._add(ModuleDef("debug_copilot", "src/agents/debug", ctx, ArchitectureLayer.SERVICE,
+                            "根因追踪", exports=["DebugAgent"]))
         self._add(ModuleDef("auto_fix", "src/infra/auto_fix_engine.py", ctx, ArchitectureLayer.SERVICE,
                             "自动修复引擎", exports=["AutoFixEngine","FailureAnalyzer","FixRecommender"]))
         self._add(ModuleDef("business_glossary", "src/infra/business_glossary.py", ctx, ArchitectureLayer.DOMAIN,

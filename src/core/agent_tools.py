@@ -15,7 +15,7 @@ def register_all_tools() -> ToolRegistry:
     registry = ToolRegistry()
 
     # ═══════════════════════════════════════════════════
-    # verify_architect (7 tools) — delegated to uvm_tools
+    # verification_architect (7 tools) — delegated to uvm_tools
     # ═══════════════════════════════════════════════════
     from src.tools.uvm_tools.agent_tools import ensure_uvm_tool_registry
     uvm_reg = ensure_uvm_tool_registry()

@@ -1,19 +1,19 @@
 {
-  "timestamp": "2026-08-10T08:46:52.757523",
+  "timestamp": "2026-08-12T12:56:42.050494",
   "root_dir": "D:\\SignOffAI",
   "total_time": "N/A",
-  "total": 9,
+  "total": 13,
   "stats": {
-    "pass": 9,
-    "fail": 0,
+    "pass": 0,
+    "fail": 13,
     "unknown": 0
   },
   "tasks": [
     {
-      "name": "APB寄存器读写测试",
-      "status": "pass",
+      "name": "APB Register Access Test",
+      "status": "FAIL",
       "work_dir": "",
-      "elapsed": 1.2,
+      "elapsed": 0.5,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -21,10 +21,10 @@
       "performance_degraded": false
     },
     {
-      "name": "UART发送-9600波特率",
-      "status": "pass",
+      "name": "UART TX Data Transmission",
+      "status": "FAIL",
       "work_dir": "",
-      "elapsed": 2.5,
+      "elapsed": 0.4,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -32,10 +32,10 @@
       "performance_degraded": false
     },
     {
-      "name": "UART发送-19200波特率",
-      "status": "pass",
+      "name": "UART RX Data Reception",
+      "status": "FAIL",
       "work_dir": "",
-      "elapsed": 2.1,
+      "elapsed": 0.4,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -43,10 +43,10 @@
       "performance_degraded": false
     },
     {
-      "name": "UART发送-38400波特率",
-      "status": "pass",
+      "name": "UART TX/RX Loopback",
+      "status": "FAIL",
       "work_dir": "",
-      "elapsed": 1.8,
+      "elapsed": 0.5,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -54,10 +54,10 @@
       "performance_degraded": false
     },
     {
-      "name": "UART发送-57600波特率",
-      "status": "pass",
+      "name": "Baud Rate Configuration",
+      "status": "FAIL",
       "work_dir": "",
-      "elapsed": 1.5,
+      "elapsed": 0.3,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -65,10 +65,10 @@
       "performance_degraded": false
     },
     {
-      "name": "UART发送-115200波特率",
-      "status": "pass",
+      "name": "Interrupt Generation Test",
+      "status": "FAIL",
       "work_dir": "",
-      "elapsed": 1.3,
+      "elapsed": 0.4,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -76,10 +76,10 @@
       "performance_degraded": false
     },
     {
-      "name": "UART接收-10000次传输",
-      "status": "pass",
+      "name": "FIFO Overflow Handling",
+      "status": "FAIL",
       "work_dir": "",
-      "elapsed": 3.2,
+      "elapsed": 0.3,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -87,10 +87,10 @@
       "performance_degraded": false
     },
     {
-      "name": "FIFO管理-溢出/空/满标志",
-      "status": "pass",
+      "name": "Parity Error Detection",
+      "status": "FAIL",
       "work_dir": "",
-      "elapsed": 1.9,
+      "elapsed": 0.4,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,
@@ -98,10 +98,54 @@
       "performance_degraded": false
     },
     {
-      "name": "中断输出-延迟测试",
-      "status": "pass",
+      "name": "APB Write/Read Back",
+      "status": "FAIL",
       "work_dir": "",
-      "elapsed": 1.1,
+      "elapsed": 0.3,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "UART TX Empty Flag",
+      "status": "FAIL",
+      "work_dir": "",
+      "elapsed": 0.3,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "UART RX Full Flag",
+      "status": "FAIL",
+      "work_dir": "",
+      "elapsed": 0.3,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "Reset Behavior Test",
+      "status": "FAIL",
+      "work_dir": "",
+      "elapsed": 0.2,
+      "job_id": "",
+      "fingerprint": "",
+      "sim_time": 0,
+      "wave_path": "",
+      "performance_degraded": false
+    },
+    {
+      "name": "Clock Divider Verification",
+      "status": "FAIL",
+      "work_dir": "",
+      "elapsed": 0.3,
       "job_id": "",
       "fingerprint": "",
       "sim_time": 0,

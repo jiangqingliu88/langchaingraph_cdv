@@ -20,6 +20,12 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+# ── UTF-8 强制编码 (修复 Windows 中文乱码) ──
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
 import click
 from rich.console import Console
 from rich.table import Table
@@ -41,31 +47,11 @@ console = Console()
 # Agent 初始化
 # ═══════════════════════════════════════════════════════════════
 
-# Agent 角色映射
-AGENT_ALIASES = {
-    "spec":    "spec_and_test_planner",
-    "design":  "design_architect",
-    "UVM":     "verification_architect",
-    "model":   "model_agent",
-    "rtl":     "write_rtl",
-    "test":    "test_engineer",
-    "assert":  "assertion_engineer",
-    "cover":   "coverage_manager",
-    "regress": "regression_manager",
-    "debug":   "debug_engineer",
-    "qa":      "quality_assurance",
-    "report":  "report_generator",
-}
-AGENT_HELP = ", ".join(AGENT_ALIASES.keys())
-
-# Phase → role 映射
-PHASE_ROLE_MAP = {p[0]: p[1] for p in FULL_PHASES if p[1]}
-
-# 阶段快捷名（给 --step 用）
+# Agent 角色名 = Phase 名（无需映射表）
 VALID_STEPS = [p[0] for p in FULL_PHASES]
-
-# 工作流列表
 VALID_WORKFLOWS = list(_WORKFLOW_PHASE_MAP.keys())
+AGENT_ALIASES = {p[0]: p[1] for p in FULL_PHASES if p[1]}  # identity: phase→role
+AGENT_HELP = ", ".join(AGENT_ALIASES.keys())
 
 
 class VerificationCLI:
@@ -77,30 +63,30 @@ class VerificationCLI:
         self.agent_config = {}
 
     async def initialize(self):
-        from src.agents.spec_planner import SpecAndTestPlanner
-        from src.agents.design_architect import DesignArchitect
-        from src.agents.verify_architect import VerificationArchitect
-        from src.agents.test_engineer import TestEngineer
-        from src.agents.assertion_engineer import AssertionEngineer
-        from src.agents.coverage_manager import CoverageManager
-        from src.agents.regression_manager import RegressionManager
-        from src.agents.debug_engineer import DebugEngineer
-        from src.agents.quality_assurance import QualityAssurance
-        from src.agents.report_generator import ReportGenerator
-        from src.agents.model_agent import ModelAgent
+        from src.agents.spec import SpecAgent
+        from src.agents.design import DesignAgent
+        from src.agents.uvm import UvmAgent
+        from src.agents.test import TestAgent
+        from src.agents.asserts import AssertsAgent
+        from src.agents.cover import CoverAgent
+        from src.agents.regress import RegressAgent
+        from src.agents.debug import DebugAgent
+        from src.agents.qa import QaAgent
+        from src.agents.report import ReportAgent
+        from src.agents.model import ModelAgent
 
         agents = [
-            ("spec_and_test_planner", SpecAndTestPlanner()),
-            ("design_architect", DesignArchitect()),
-            ("verification_architect", VerificationArchitect()),
-            ("model_agent", ModelAgent()),
-            ("test_engineer", TestEngineer()),
-            ("assertion_engineer", AssertionEngineer()),
-            ("coverage_manager", CoverageManager()),
-            ("regression_manager", RegressionManager()),
-            ("debug_engineer", DebugEngineer()),
-            ("quality_assurance", QualityAssurance()),
-            ("report_generator", ReportGenerator()),
+            ("spec", SpecAgent()),
+            ("design", DesignAgent()),
+            ("uvm", UvmAgent()),
+            ("model", ModelAgent()),
+            ("test", TestAgent()),
+            ("assert", AssertsAgent()),
+            ("cover", CoverAgent()),
+            ("regress", RegressAgent()),
+            ("debug", DebugAgent()),
+            ("qa", QaAgent()),
+            ("report", ReportAgent()),
         ]
         for role, agent in agents:
             await agent.initialize()
@@ -187,10 +173,12 @@ def init(json_output, quiet, verbose, output_dir):
 @click.option("--approval", default="auto",
               type=click.Choice(["interactive", "auto", "threshold"]),
               help="审批模式 (interactive/auto/threshold)")
+@click.option("--gate", is_flag=True, help="开启门禁检查，低分阶段阻断管线 (默认关闭)")
+@click.option("--timeout", default=600, type=int, help="单阶段超时秒数 (默认600)")
 def verify(spec_file, workflow, compile, output, refine,
            single_step, steps, from_step, to_step,
            json_output, summary, quiet, resume_run_id, retry_failed, ctx_file,
-           profile_name, approval):
+           profile_name, approval, gate, timeout):
     """完整验证流水线 —— AI 驱动的芯片验证签核
 
     \b
@@ -217,6 +205,15 @@ def verify(spec_file, workflow, compile, output, refine,
                           f"{VERIFY_PROFILES[profile_name]['description']}[/cyan]")
     else:
         phases = _WORKFLOW_PHASE_MAP.get(workflow, FULL_PHASES)
+
+    # ── 治理: RBAC 权限检查 ──
+    try:
+        from src.infra.rbac import RBACEngine
+        rbac = RBACEngine()
+        if not rbac.check_permission(os.environ.get("USER", "cli_user"), "pipeline.execute"):
+            console.print("[yellow]⚠ RBAC: 权限不足，但继续执行 (开发模式)[/yellow]")
+    except Exception:
+        pass  # RBAC 不可用时跳过
 
     # ── 审批门控 ──
     approval_gate = create_approval_gate(approval)
@@ -313,6 +310,7 @@ def verify(spec_file, workflow, compile, output, refine,
             result = await service.run_pipeline(
                 spec_text=spec, workflow=workflow, output_root=output_root,
                 on_progress=progress, refine=refine, run_id=actual_run_id,
+                gate_enabled=gate, approval_gate=approval_gate, phase_timeout=timeout,
             )
             # 对结果按 phases 过滤
             filtered_phases = [p for p in result["phases"] if any(
@@ -323,6 +321,7 @@ def verify(spec_file, workflow, compile, output, refine,
             result = await service.run_pipeline(
                 spec_text=spec, workflow=workflow, output_root=output_root,
                 on_progress=progress, refine=refine, run_id=actual_run_id,
+                gate_enabled=gate, approval_gate=approval_gate, phase_timeout=timeout,
             )
 
         return result
@@ -388,6 +387,27 @@ def verify(spec_file, workflow, compile, output, refine,
     # Evidence chain
     if result.get("evidence_path"):
         _print_evidence_chain(result["evidence_path"])
+
+    # ── 友好提示 ──
+    gov = result.get("governance", {}) or {}
+    if gov:
+        qg = gov.get("quality_guard", {}) or {}
+        h = gov.get("harness", {}) or {}
+        token_used = gov.get("token_budget", {}).get("total_tokens", 0) or 0
+        console.print(f"[dim]🛡️ 质量守护: 通过{qg.get('passed_directly',0)} | "
+                      f"回退{qg.get('fallback_used',0)} | "
+                      f"升级{qg.get('escalated_to_human',0)} | "
+                      f"Token={token_used}[/dim]")
+    # Degraded/failed hints
+    failed = [p for p in result["phases"] if p["status"] in ("failed", "degraded")]
+    if failed:
+        console.print(f"\n[yellow]💡 建议:[/yellow]")
+        for p in failed[:3]:
+            console.print(f"   {p['name']}: score={p['score']} — 重新运行: [bold]vagent verify spec.md --step {p['name']}[/bold]")
+    if result.get("governance", {}).get("halted"):
+        hp = gov.get("halt_phase", "")
+        console.print(f"\n[red]⛔ 门禁阻断于 {hp}[/red] — 原因: {gov.get('halt_reason','')}")
+        console.print(f"[dim]关闭门禁重跑: vagent verify spec.md --step {hp}  (不加 --gate)[/dim]")
 
     # Optional compile
     if compile and any(p["name"] == "UVM" and p["status"] == "passed" for p in result["phases"]):
@@ -896,6 +916,80 @@ def diff_regression(run_a, run_b, fmt):
         out.print_error(f"Diff failed: {e}")
 
 
+@diff.command("audit")
+@click.option("--run-a", required=True, help="Run A ID (基准)")
+@click.option("--run-b", required=True, help="Run B ID (对比)")
+@click.option("--format", "-f", "fmt", default="table",
+              type=click.Choice(["table", "json", "detail"]), help="输出格式")
+def diff_audit(run_a, run_b, fmt):
+    """字段级审计 diff — 精确定位两次签核之间的差异
+
+    \b
+    示例:
+      vagent diff audit --run-a run_20260810 --run-b run_20260812
+      vagent diff audit --run-a run_20260810 --run-b run_20260812 --format json
+      vagent diff audit --run-a run_20260810 --run-b run_20260812 --format detail
+
+    输出: 每个阶段的字段级变更（added/removed/changed）
+    """
+    out = get_output_adapter(fmt == "json")
+    try:
+        from src.core.manifest import ManifestBuilder, EvidencePackager
+        builder = ManifestBuilder()
+        ma = builder.build(session_id=run_a.replace("run_", ""))
+        mb = builder.build(session_id=run_b.replace("run_", ""))
+
+        diff = EvidencePackager.diff(ma, mb)
+
+        if fmt == "json":
+            out.print_result(diff)
+        elif fmt == "detail":
+            # 详细输出：每个字段的 hash 对比
+            table = Table(title=f"Audit Diff: {run_a[:16]} vs {run_b[:16]}")
+            table.add_column("Phase", style="cyan")
+            table.add_column("Changed Fields", style="yellow")
+            table.add_column("Added", style="green")
+            table.add_column("Removed", style="red")
+            table.add_column("Score Δ", style="magenta")
+
+            for pname, pdiff in diff.get("phase_diffs", {}).items():
+                changed = ", ".join(pdiff.get("changed_fields", [])[:5])
+                if len(pdiff.get("changed_fields", [])) > 5:
+                    changed += f" +{len(pdiff['changed_fields']) - 5} more"
+                added = str(len(pdiff.get("added_fields", []))) if pdiff.get("added_fields") else "-"
+                removed = str(len(pdiff.get("removed_fields", []))) if pdiff.get("removed_fields") else "-"
+                score_d = pdiff.get("score_delta", 0)
+                score_str = f"{score_d:+.0f}" if score_d != 0 else "-"
+                table.add_row(pname, changed or "-", added, removed, score_str)
+
+            console.print(table)
+            console.print(f"\n[dim]{diff['summary']}[/dim]")
+        else:
+            # table: 简洁摘要
+            rows = []
+            has_changes = False
+            for pname, pdiff in diff.get("phase_diffs", {}).items():
+                n_changed = len(pdiff.get("changed_fields", []))
+                n_added = len(pdiff.get("added_fields", []))
+                n_removed = len(pdiff.get("removed_fields", []))
+                if n_changed + n_added + n_removed > 0:
+                    has_changes = True
+                    rows.append([pname, str(n_changed), str(n_added), str(n_removed),
+                                 str(pdiff.get("unchanged", 0)), f"{pdiff.get('score_delta', 0):+.0f}"])
+
+            if rows:
+                out.print_table(
+                    ["Phase", "Changed", "Added", "Removed", "Unchanged", "Score Δ"],
+                    rows, title="Field-Level Audit Diff"
+                )
+                console.print(f"\n[dim]{diff['summary']}[/dim]")
+            else:
+                console.print("[green]No field-level changes detected — runs are identical[/green]")
+
+    except Exception as e:
+        out.print_error(f"Audit diff failed: {e}")
+
+
 def _extract_requirements_from_md(text: str) -> list:
     """从 Markdown 提取需求 ID"""
     import re
@@ -1278,7 +1372,7 @@ def tool_list(agent_name, risk, json_output):
 
     all_tools = []
     for role, agent in app.registry.get_all_instances().items():
-        if agent_name and role != agent_name and AGENT_ALIASES.get(agent_name) != role:
+        if agent_name and role != agent_name and agent_name != role:
             continue
         for t in (agent.tools or []):
             tname = getattr(t, "name", str(t))
@@ -1490,10 +1584,10 @@ def agent_show(role, tools, contract, json_output):
     app = VerificationCLI()
     asyncio.run(app.initialize())
 
-    resolved_role = AGENT_ALIASES.get(role, role)
+    resolved_role = role
     inst = app.registry.get_agent_instance(resolved_role)
     if not inst:
-        out.print_error(f"Agent '{role}' not found. Available: {AGENT_HELP}")
+        out.print_error(f"Agent '{role}' not found. Available: {', '.join(p[0] for p in FULL_PHASES if p[1])}")
         return
 
     info = {
@@ -1537,7 +1631,7 @@ def agent_run(role, input_text, spec_file, dry_run, json_output):
       vagent agent run spec --spec alu_spec.md --dry-run
     """
     out = get_output_adapter(json_output)
-    resolved_role = AGENT_ALIASES.get(role, role)
+    resolved_role = role
     service = PipelineExecutionService.get_instance()
 
     if dry_run:
@@ -1717,7 +1811,7 @@ def debug_repl(agent_alias):
       vagent debug repl --agent spec              # 指定 Agent 的调试模式
     """
     console.print("[bold cyan]SignOffAI Debug REPL[/bold cyan]")
-    console.print(f"Agents: {AGENT_HELP}")
+    console.print(f"Agents: {', '.join(p[0] for p in FULL_PHASES if p[1])}")
     console.print("Commands: [yellow]agents[/yellow] | [yellow]tools[/yellow] <agent> | "
                    "[yellow]<agent>[/yellow] [input] | [yellow]exec[/yellow] <agent> <tool> | "
                    "[yellow]ctx[/yellow] | [yellow]quit[/yellow]")
@@ -1779,7 +1873,7 @@ def debug_repl(agent_alias):
                 console.print("[red]Usage: tools <agent_alias>[/red]")
                 continue
             alias = args[0].lower()
-            role = AGENT_ALIASES.get(alias, alias)
+            role = alias
             inst = app.registry.get_agent_instance(role)
             if not inst:
                 console.print(f"[red]Agent '{alias}' not found[/red]")
@@ -1801,7 +1895,7 @@ def debug_repl(agent_alias):
             alias = args[0].lower()
             tool_name = args[1]
             tool_args = " ".join(args[2:]) if len(args) > 2 else "{}"
-            role = AGENT_ALIASES.get(alias, alias)
+            role = alias
             inst = app.registry.get_agent_instance(role)
             if not inst:
                 console.print(f"[red]Agent '{alias}' not found[/red]")
@@ -1827,7 +1921,7 @@ def debug_repl(agent_alias):
 
         # Agent execution
         alias = cmd
-        role = AGENT_ALIASES.get(alias, alias)
+        role = alias
         inst = app.registry.get_agent_instance(role)
         if not inst:
             console.print(f"[red]Unknown command/agent: {cmd}[/red] (try [yellow]help[/yellow])")
@@ -3189,7 +3283,7 @@ def hub_status(json_output):
             "tags": hub.tags,
             "tool_stats": stats,
             "agent_tools": {role: hub.list_by_agent(role) for role in
-                           ["verification_architect", "test_engineer", "regression_manager"]},
+                           ["uvm", "test", "regress"]},
         }
         out.print_result(result, title="ToolHub Status")
     except Exception as e:

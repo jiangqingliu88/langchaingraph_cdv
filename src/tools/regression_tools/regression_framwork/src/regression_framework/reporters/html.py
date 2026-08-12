@@ -8,17 +8,21 @@ logger = get_logger(__name__)
 
 class HtmlReporter:
     def generate(self, tasks, root_dir, total_time="N/A"):
+        _status_map = {'PASS': 'pass', 'passed': 'pass', 'FAIL': 'fail', 'failed': 'fail'}
         stats = {'pass': 0, 'fail': 0, 'unknown': 0}
         build_groups = {}
         for task in tasks:
-            stats[task.status] += 1
+            s = _status_map.get(task.status, task.status.lower() if hasattr(task, 'status') else 'unknown')
+            if s not in stats:
+                s = 'unknown'
+            stats[s] += 1
             build_key = getattr(task, 'build_name', task.name)
             if build_key not in build_groups:
                 build_groups[build_key] = {
                     'pass': 0, 'fail': 0, 'unknown': 0,
                     'total': 0, 'tasks': []
                 }
-            build_groups[build_key][task.status] += 1
+            build_groups[build_key][s] += 1
             build_groups[build_key]['total'] += 1
             build_groups[build_key]['tasks'].append(task)
 

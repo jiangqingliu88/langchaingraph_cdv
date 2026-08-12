@@ -95,7 +95,7 @@ class WorkflowTriggerService:
         try:
             from src.core.execution import PipelineExecutionService
             service = PipelineExecutionService.get_instance()
-            result = await service.run_single_agent("regression_manager", "{}")
+            result = await service.run_single_agent("regress", "{}")
             return f"回归已触发 (project={project_id}): {'success' if result.get('success') else 'failed'}"
         except Exception as e:
             return f"回归触发失败: {e}"

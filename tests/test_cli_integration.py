@@ -8,6 +8,7 @@ CLI 集成测试 — 覆盖核心命令和审批门控
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -185,8 +186,15 @@ class TestCLIBasicCommands:
         with tempfile.TemporaryDirectory() as tmp:
             result = runner.invoke(cli, ["init", "--output-dir", tmp])
             assert result.exit_code == 0
-            assert Path(tmp).exists()
-            assert (Path(tmp) / "docs").exists()
+            # make_output_root creates {tmp}_{user}_{YYYYMMDD_HHMMSS} as sibling of tmp
+            # search for docs/ in parent directory (tmp_dir or sibling dirs)
+            parent = Path(tmp).parent
+            found = False
+            for d in parent.iterdir():
+                if d.is_dir() and (d / "docs").exists():
+                    found = True
+                    break
+            assert found, f"docs/ not found under any sibling of {tmp}"
 
     def test_plan_dry_run(self, runner, sample_spec):
         """vagent plan --dry-run"""
@@ -318,7 +326,7 @@ class TestContextStoreSummary:
 class TestSPASummary:
     def test_generate_spa_summary(self, tmp_path):
         import importlib
-        from src.agents.report_generator.main import _generate_spa_summary
+        from src.agents.report.main import _generate_spa_summary
 
         phases = [
             {"name": "spec", "status": "passed", "score": 90, "time": 1.5, "retries": 0},
@@ -350,8 +358,8 @@ class TestRegressionManagerFastPath:
     @pytest.mark.asyncio
     async def test_execute_task_fast_path(self):
         """retry/fix 模式 → 走确定性路径"""
-        from src.agents.regression_manager.main import RegressionManager
-        agent = RegressionManager()
+        from src.agents.regress.main import RegressAgent
+        agent = RegressAgent()
         await agent._setup()
 
         task = {
@@ -367,8 +375,8 @@ class TestRegressionManagerFastPath:
     @pytest.mark.asyncio
     async def test_execute_task_normal_path(self):
         """普通模式 → 走 LLM"""
-        from src.agents.regression_manager.main import RegressionManager
-        agent = RegressionManager()
+        from src.agents.regress.main import RegressAgent
+        agent = RegressAgent()
         await agent._setup()
 
         task = {
@@ -387,8 +395,8 @@ class TestCoverageManagerFastPath:
     @pytest.mark.asyncio
     async def test_execute_task_fast_path(self):
         """retry/collect_only 模式 → 走确定性路径"""
-        from src.agents.coverage_manager.main import CoverageManager
-        agent = CoverageManager()
+        from src.agents.cover.main import CoverAgent
+        agent = CoverAgent()
         await agent._setup()
 
         task = {

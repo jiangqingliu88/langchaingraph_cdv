@@ -131,7 +131,7 @@ class RulesEngine:
             action=lambda ctx: ActionResult(
                 action="abort",
                 message=f"Regression has {ctx.get('regression', {}).get('failed', 0)} failures",
-                fix_agent="debug_engineer",
+                fix_agent="debug",
                 suggestion="运行 DebugAgent 分析失败根因，修复后重新回归",
             ),
         ))
@@ -148,7 +148,7 @@ class RulesEngine:
             action=lambda ctx: ActionResult(
                 action="abort",
                 message="Compile failed — cannot proceed to simulation",
-                fix_agent="verification_architect",
+                fix_agent="uvm",
                 suggestion="检查编译日志中的 Error，修复语法/依赖问题",
             ),
         ))
@@ -186,7 +186,7 @@ class RulesEngine:
             action=lambda ctx: ActionResult(
                 action="retry",
                 message="Agent loopback has 0 matches — check driver/monitor timing",
-                fix_agent="verification_architect",
+                fix_agent="uvm",
                 suggestion="检查 driver 是否正确断言 valid 信号，monitor 是否正确门控采样",
             ),
         ))
@@ -204,7 +204,7 @@ class RulesEngine:
             action=lambda ctx: ActionResult(
                 action="suggest",
                 message=f"Found {len(ctx.get('coverage',{}).get('gaps',[]))} coverage gaps",
-                suggestion="建议运行 test_engineer 针对缺口类别生成定向测试",
+                suggestion="建议运行 scenario_designer 针对缺口类别生成定向测试",
                 data={"gaps": ctx.get("coverage", {}).get("gaps", [])},
             ),
         ))
@@ -327,7 +327,7 @@ def builtin_closed_loop_rules() -> List[ClosedLoopRule]:
         tests["test_names"] = existing + new_tests
         tests["test_count"] = len(existing) + len(new_tests)
         tests["_fixed"] = True
-        ctx.put("tests", tests, source="test_engineer")
+        ctx.put("tests", tests, source="test")
 
     async def _rerun_regression(ctx):
         """重新运行回归（模拟）"""
@@ -338,7 +338,7 @@ def builtin_closed_loop_rules() -> List[ClosedLoopRule]:
         reg["fail"] = 0
         reg["pass_rate"] = "100%"
         reg["_rerun_count"] = reg.get("_rerun_count", 0) + 1
-        ctx.put("regression", reg, source="regression_manager")
+        ctx.put("regression", reg, source="regress")
         return True  # verify passed
 
     regression_fix_rule = ClosedLoopRule(
@@ -355,7 +355,7 @@ def builtin_closed_loop_rules() -> List[ClosedLoopRule]:
         action=lambda ctx: ActionResult(
             action="fix",
             message=f"Auto-fixing {ctx.get('regression',{}).get('failed',0) or ctx.get('regression',{}).get('fail',0)} regression failures",
-            fix_agent="debug_engineer",
+            fix_agent="debug",
         ),
         fix_actions=[
             FixAction(
@@ -384,7 +384,7 @@ def builtin_closed_loop_rules() -> List[ClosedLoopRule]:
         cov = ctx.get("coverage", {})
         gaps = cov.get("gaps", [])
         cov["gap_analysis"] = f"Found {len(gaps)} gaps, targeting uncovered paths"
-        ctx.put("coverage", cov, source="coverage_manager")
+        ctx.put("coverage", cov, source="cover")
 
     async def _generate_coverage_tests(ctx, agents):
         cov = ctx.get("coverage", {})
@@ -396,7 +396,7 @@ def builtin_closed_loop_rules() -> List[ClosedLoopRule]:
             existing.append(f"test_cov_{desc[:20].replace(' ','_')}")
         tests["test_names"] = existing
         tests["test_count"] = len(existing)
-        ctx.put("tests", tests, source="test_engineer")
+        ctx.put("tests", tests, source="test")
 
     async def _rerun_coverage(ctx):
         cov = ctx.get("coverage", {})
@@ -404,7 +404,7 @@ def builtin_closed_loop_rules() -> List[ClosedLoopRule]:
         cov["branch_pct"] = 92.0
         cov["gaps"] = []
         cov["_rerun_count"] = cov.get("_rerun_count", 0) + 1
-        ctx.put("coverage", cov, source="coverage_manager")
+        ctx.put("coverage", cov, source="cover")
         return True
 
     coverage_fix_rule = ClosedLoopRule(
@@ -541,7 +541,7 @@ def example_custom_rules():
             action=lambda ctx: ActionResult(
                 action="abort",
                 message=f"APB protocol violation detected",
-                fix_agent="design_architect",
+                fix_agent="design",
             ),
         ),
     ]

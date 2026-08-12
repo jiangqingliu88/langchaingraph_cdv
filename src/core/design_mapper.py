@@ -1,5 +1,5 @@
 """
-DesignArchitectMapper — 需求→模块→功能点→测试点 三层强映射引擎
+DesignAgentMapper — 需求→模块→功能点→测试点 三层强映射引擎
 
 这是 SignOffAI "可追溯" 的核心支柱:
   Layer 1: Requirements → Modules/Features
@@ -55,7 +55,7 @@ class MappingReport:
     coverage_by_layer: Dict[str, float] = field(default_factory=dict)
 
 
-class DesignArchitectMapper:
+class DesignAgentMapper:
     """设计架构师 → 需求 → 测试点 三层映射引擎"""
 
     def parse_md_modules(self, md_text: str) -> List[ParsedModule]:

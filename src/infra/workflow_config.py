@@ -59,14 +59,14 @@ BUILTIN_TEMPLATES = {
         description="完整 AI 验证流水线：规格分析 -> 架构设计 -> UVM生成 -> 测试 -> 回归 -> 覆盖率 -> 报告",
         category="verification",
         steps=[
-            WorkflowStep("vplan", "spec_and_test_planner", "生成验证计划", on_failure="stop", max_retries=2),
-            WorkflowStep("design", "design_architect", "设计架构分析", depends_on=["vplan"], on_failure="skip"),
-            WorkflowStep("uvm", "verification_architect", "生成 UVM 环境", depends_on=["design"], on_failure="retry", max_retries=3),
-            WorkflowStep("tests", "test_engineer", "生成测试用例", depends_on=["uvm"], on_failure="retry", max_retries=2),
-            WorkflowStep("regression", "regression_manager", "运行回归", depends_on=["tests"], on_failure="retry", max_retries=1, timeout_s=3600),
-            WorkflowStep("coverage", "coverage_manager", "覆盖率分析", depends_on=["regression"], on_failure="skip"),
-            WorkflowStep("qa", "quality_assurance", "质量审核", depends_on=["coverage"], on_failure="stop"),
-            WorkflowStep("report", "report_generator", "生成签核报告", depends_on=["qa"], on_failure="stop"),
+            WorkflowStep("vplan", "spec", "生成验证计划", on_failure="stop", max_retries=2),
+            WorkflowStep("design", "design", "设计架构分析", depends_on=["vplan"], on_failure="skip"),
+            WorkflowStep("uvm", "uvm", "生成 UVM 环境", depends_on=["design"], on_failure="retry", max_retries=3),
+            WorkflowStep("tests", "test", "生成测试用例", depends_on=["uvm"], on_failure="retry", max_retries=2),
+            WorkflowStep("regression", "regress", "运行回归", depends_on=["tests"], on_failure="retry", max_retries=1, timeout_s=3600),
+            WorkflowStep("coverage", "cover", "覆盖率分析", depends_on=["regression"], on_failure="skip"),
+            WorkflowStep("qa", "qa", "质量审核", depends_on=["coverage"], on_failure="stop"),
+            WorkflowStep("report", "report", "生成签核报告", depends_on=["qa"], on_failure="stop"),
         ],
     ),
     "quick_check": WorkflowTemplate(
@@ -74,9 +74,9 @@ BUILTIN_TEMPLATES = {
         description="快速检查：仅规格分析 + 设计检查，不跑仿真",
         category="verification",
         steps=[
-            WorkflowStep("vplan", "spec_and_test_planner", "生成验证计划"),
-            WorkflowStep("design", "design_architect", "设计架构分析", depends_on=["vplan"]),
-            WorkflowStep("qa", "quality_assurance", "质量审核", depends_on=["design"]),
+            WorkflowStep("vplan", "spec", "生成验证计划"),
+            WorkflowStep("design", "design", "设计架构分析", depends_on=["vplan"]),
+            WorkflowStep("qa", "qa", "质量审核", depends_on=["design"]),
         ],
     ),
     "regression_only": WorkflowTemplate(
@@ -84,9 +84,9 @@ BUILTIN_TEMPLATES = {
         description="仅回归：编译 + 仿真 + 覆盖率",
         category="regression",
         steps=[
-            WorkflowStep("regression", "regression_manager", "运行回归", timeout_s=3600),
-            WorkflowStep("coverage", "coverage_manager", "覆盖率分析", depends_on=["regression"]),
-            WorkflowStep("report", "report_generator", "生成报告", depends_on=["coverage"]),
+            WorkflowStep("regression", "regress", "运行回归", timeout_s=3600),
+            WorkflowStep("coverage", "cover", "覆盖率分析", depends_on=["regression"]),
+            WorkflowStep("report", "report", "生成报告", depends_on=["coverage"]),
         ],
     ),
     "ppa_analysis": WorkflowTemplate(
@@ -94,10 +94,10 @@ BUILTIN_TEMPLATES = {
         description="PPA 签核：功耗 + 性能 + 面积分析",
         category="ppa",
         steps=[
-            WorkflowStep("power", "coverage_manager", "功耗分析"),
-            WorkflowStep("timing", "coverage_manager", "时序分析"),
-            WorkflowStep("area", "coverage_manager", "面积分析"),
-            WorkflowStep("ppa_report", "report_generator", "PPA 签核报告", depends_on=["power", "timing", "area"]),
+            WorkflowStep("power", "cover", "功耗分析"),
+            WorkflowStep("timing", "cover", "时序分析"),
+            WorkflowStep("area", "cover", "面积分析"),
+            WorkflowStep("ppa_report", "report", "PPA 签核报告", depends_on=["power", "timing", "area"]),
         ],
     ),
 }

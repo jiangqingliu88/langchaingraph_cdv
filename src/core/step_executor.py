@@ -85,15 +85,20 @@ class StepExecutor:
         """创建 ctx 快照，返回 (snapshot_copy, keys_before)。"""
         return (self.ctx.snapshot(), set(self.ctx.keys()))
 
-    def _restore(self, snapshot: dict) -> None:
-        """回滚 ctx 到快照状态。"""
-        # 清除当前所有 key
-        for key in list(self.ctx.keys()):
-            if key in self.ctx:
+    def _restore(self, snapshot: dict, keys_before: set = None) -> None:
+        """回滚 ctx 到快照状态（仅还原本阶段涉及的 key，不影响并行执行的其它阶段）。"""
+        if keys_before is None:
+            keys_before = set(snapshot.keys())
+        keys_after = set(self.ctx.keys())
+        # 仅删除本阶段新增的 key (不影响其它并行阶段写入的)
+        keys_added_by_us = keys_after - keys_before
+        for key in keys_added_by_us:
+            if key in self.ctx._data:
                 del self.ctx._data[key]
-        # 恢复快照
+        # 恢复快照中本阶段可能修改过的 key
         for key, value in snapshot.items():
-            self.ctx.put(key, value, source="restore")
+            if key in keys_before:
+                self.ctx.put(key, value, source="restore")
 
     def _diff(self, keys_before: set) -> Dict[str, Any]:
         """计算执行前后的 ctx 变更。"""
@@ -114,8 +119,8 @@ class StepExecutor:
 
         for attempt in range(self.max_retries + 1):
             if attempt > 0:
-                # 重试前回滚 ctx
-                self._restore(snapshot)
+                # 重试前回滚 ctx（仅还原本阶段涉及的 key）
+                self._restore(snapshot, keys_before)
                 self._notify("running", f"retry {attempt}/{self.max_retries} (ctx restored)")
 
             task = {
@@ -142,12 +147,19 @@ class StepExecutor:
                     best_score = score
                     best_result = r
 
-                # 验证
+                # ── ReAct 循环: Think → Observe → Act ──
+                # 1. Validate: agent 自己的 validate() + schema 校验
                 passed, reason = self.agent.validate(r.data)
-                if passed or attempt >= self.max_retries:
-                    final_status = "passed" if passed else "degraded"
+                schema_ok, schema_issues = self.agent.validate_output(r.data)
+
+                if not schema_ok:
+                    reason += f" | Schema violations: {'; '.join(schema_issues[:3])}"
+
+                if (passed and schema_ok) or attempt >= self.max_retries:
+                    final_status = "passed" if (passed and schema_ok) else "degraded"
                     break
                 elif attempt < self.max_retries:
+                    # 2. Observe: 将校验问题反馈给 Agent
                     task_input = self._build_retry_input(attempt, reason, r)
                     continue
                 else:
@@ -271,11 +283,11 @@ class PipelineExecutor:
 
     用法:
       executor = PipelineExecutor(ctx)
-      executor.register_agent("TestEngineer", test_engineer_func)
+      executor.register_agent("TestAgent", scenario_designer_func)
       executor.register_agent("Regression", regression_func)
 
       pipeline = [
-          Step("TestEngineer", consumes=["test_points"],
+          Step("TestAgent", consumes=["test_points"],
                condition=lambda ctx: ctx.get("dut_config") == "ready",
                on_error=[Step("DebugAgent")], loop_back=True),
           Step("Regression", consumes=["test_cases"]),
@@ -307,7 +319,7 @@ class PipelineExecutor:
         {
           "pipeline_id": "cim_fi_boost",
           "override_params": {"coverage_threshold": 85, "max_loop_back": 3},
-          "steps": ["DesignArchitect", "TestEngineer", "Regression", "Coverage"]
+          "steps": ["DesignAgent", "TestAgent", "Regression", "Coverage"]
         }
         """
         executor = cls(ctx)
@@ -612,10 +624,10 @@ class PipelineOrchestrator:
     def resolve_fix_chain(self, fix_agent_role: str) -> List[str]:
         """根据 fix_agent 确定需要重新运行的阶段链。"""
         chain_map = {
-            "design_architect":      ["design"],
-            "verification_architect": ["UVM", "test", "regress", "cover", "debug"],
-            "model_agent":           ["model", "test", "regress", "cover", "debug"],
-            "spec_planner":          ["spec", "design", "model", "UVM", "test"],
+            "design":      ["design"],
+            "uvm": ["UVM", "test", "regress", "cover", "debug"],
+            "model":           ["model", "test", "regress", "cover", "debug"],
+            "spec":          ["spec", "design", "model", "UVM", "test"],
         }
         return chain_map.get(fix_agent_role, [])
 

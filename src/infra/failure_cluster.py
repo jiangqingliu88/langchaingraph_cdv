@@ -294,7 +294,7 @@ class BatchOperations:
             try:
                 status = service.get_run_status(rid)
                 if status:
-                    await service.run_single_agent("regression_manager", json.dumps({"rerun_id": rid}))
+                    await service.run_single_agent("regress", json.dumps({"rerun_id": rid}))
                     result.succeeded += 1
                 else:
                     result.skipped += 1

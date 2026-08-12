@@ -6,8 +6,8 @@
 
 用法:
   gate = create_approval_gate("interactive")
-  if gate.requires_approval("write_rtl", "medium"):
-      record = gate.ask("write_rtl", summary, "medium")
+  if gate.requires_approval("rtl", "medium"):
+      record = gate.ask("rtl", summary, "medium")
       if record.decision == ApprovalDecision.REJECT:
           raise PipelineTerminatedError(...)
 """

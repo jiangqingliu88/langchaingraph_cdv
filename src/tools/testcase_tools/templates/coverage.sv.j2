@@ -1,0 +1,64 @@
+// ============================================
+// Functional Coverage: {{ env_name }}
+// Project: {{ project_name }}
+// Generated: {{ timestamp }}
+// Traceability: spec test_points → covergroups
+// ============================================
+
+`ifndef {{ env_name | upper }}_COVERAGE_SV
+`define {{ env_name | upper }}_COVERAGE_SV
+
+class {{ env_name }}_functional_coverage extends uvm_subscriber #({{ env_name }}_transaction);
+    `uvm_component_utils({{ env_name }}_functional_coverage)
+
+    // ---- Sampled transaction fields ----
+{% for tp in test_points %}
+    // [{{ tp.id }}] {{ tp.feature }} (priority: {{ tp.priority }})
+{% for cp in tp.coverpoints %}
+    {{ cp.type }} {{ cp.name }}_{{ tp.id | lower }};
+{% endfor %}
+{% endfor %}
+
+    function new(string name = "{{ env_name }}_functional_coverage", uvm_component parent = null);
+        super.new(name, parent);
+    endfunction
+
+    function void build_phase(uvm_phase phase);
+        super.build_phase(phase);
+{% for tp in test_points %}
+{% for cp in tp.coverpoints %}
+        {{ cp.name }}_{{ tp.id | lower }} = new();
+{% endfor %}
+{% endfor %}
+    endfunction
+
+{% for tp in test_points %}
+    // ============================================================
+    // Covergroup: cg_{{ tp.id | lower }}
+    // Trace: spec.test_points.{{ tp.id }} — {{ tp.description }}
+    // Acceptance: {{ tp.acceptance }}
+    // ============================================================
+    covergroup cg_{{ tp.id | lower }} @(posedge {{ clock }});
+{% for cp in tp.coverpoints %}
+        // {{ cp.description | default(cp.name) }}
+        {{ cp.name }}_cp: coverpoint {{ cp.signal | default("txn." + cp.field) }}
+{% if cp.bins %}
+            bins {{ cp.bins | join(', ') }};
+{% endif %}
+{% if cp.illegal_bins %}
+            illegal_bins illegal = { {{ cp.illegal_bins | join(', ') }} };
+{% endif %}
+{% endfor %}
+    endgroup : cg_{{ tp.id | lower }}
+
+{% endfor %}
+    // ---- Sampling ----
+    virtual function void write({{ env_name }}_transaction t);
+{% for tp in test_points %}
+        cg_{{ tp.id | lower }}.sample();
+{% endfor %}
+    endfunction
+
+endclass : {{ env_name }}_functional_coverage
+
+`endif // {{ env_name | upper }}_COVERAGE_SV

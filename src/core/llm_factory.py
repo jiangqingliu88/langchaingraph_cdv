@@ -9,7 +9,7 @@ LLM 工厂 — 多提供商抽象层
 
 设计原则:
   1. 所有 Agent 通过 create_llm() / create_for_task() 获取 LLM
-  2. 禁止硬编码 API URL（如 verify_architect 的 _call_llm）
+  2. 禁止硬编码 API URL（如 testbench_orchestrator 的 _call_llm）
   3. 支持 fallback 链：主提供商失败 → 自动切换备用
 """
 from typing import Optional, Dict, Any, List
@@ -32,11 +32,16 @@ PROVIDER_CUSTOM:   ProviderType = "custom"
 
 
 class LLMTracerCallback(BaseCallbackHandler):
-    """LangChain callback that logs LLM calls to ExecutionTracer."""
+    """LangChain callback that logs LLM calls to ExecutionTracer + tracks token usage."""
+
+    # Token budget tracking (shared across all LLM instances)
+    total_tokens_used = 0
+    call_count = 0
 
     def on_llm_start(self, serialized, prompts, **kwargs):
         self._start_time = time.time()
         self._prompts = prompts
+        LLMTracerCallback.call_count += 1
 
     def on_llm_end(self, response: LLMResult, **kwargs):
         elapsed = time.time() - self._start_time
@@ -45,9 +50,16 @@ class LLMTracerCallback(BaseCallbackHandler):
             prompt_text = self._prompts[0][:200] if self._prompts else ""
             resp_text = str(response.generations[0][0].text)[:200] if response.generations else ""
             tokens = response.llm_output.get("token_usage", {}).get("total_tokens", 0) if response.llm_output else 0
+            if tokens:
+                LLMTracerCallback.total_tokens_used += tokens
             tracer.llm_call("langchain", prompt_text, resp_text, tokens, elapsed, True)
         except Exception:
             pass
+
+    @classmethod
+    def reset_budget(cls):
+        cls.total_tokens_used = 0
+        cls.call_count = 0
 
 
 class LLMFactory:

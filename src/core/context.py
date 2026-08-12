@@ -35,15 +35,15 @@ class ContextEntry:
 
 # 每个 ctx key 被哪些 agent 消费（用于自动清理）
 _CONSUMES_TOPOLOGY: Dict[str, List[str]] = {
-    "spec":        ["design_architect", "model_agent", "write_rtl", "verification_architect"],
-    "design_arch": ["model_agent", "write_rtl"],
-    "model":       [],
-    "rtl":         ["verification_architect", "test_engineer"],
-    "env":         ["test_engineer", "regression_manager"],
-    "tests":       ["regression_manager"],
-    "regression":  ["coverage_manager", "debug_engineer"],
-    "coverage":    ["quality_assurance"],
-    "debug":       [],
+    "spec":         ["design", "model", "rtl", "uvm"],
+    "design_arch":  ["model", "rtl"],
+    "model":        [],
+    "rtl":          ["uvm", "test"],
+    "env":          ["test", "regress_cov"],
+    "tests":        ["regress_cov"],
+    "regression":   ["debug", "qa"],
+    "coverage":     ["debug", "qa", "docs"],
+    "debug":        [],
 }
 
 
@@ -57,15 +57,85 @@ class ContextStore:
     用法:
       store = ContextStore()
       store.put("spec", {"features": [...], "test_points": [...]},
-                source="spec_planner")
+                source="spec")
       # 下游只取需要的字段
       features = store.get("spec", fields=["features"])
       # 消费完成后自动清理
-      store.prune(["design_architect", "model_agent"])
+      store.prune(["design", "model"])
     """
 
     def __init__(self):
         self._data: Dict[str, ContextEntry] = {}
+        self._compressed: Dict[str, Any] = {}
+        self._original_sizes: Dict[str, int] = {}
+
+    # ── 上下文压缩 ──
+
+    def compress(self, key: str = None, max_chars: int = 8000,
+                 max_list_items: int = 10, max_str_len: int = 500) -> int:
+        """压缩 ContextStore 数据，减少 LLM context 消耗（确定性，不调 LLM）。
+
+        策略: dict 中 list 截断到 max_list_items，str 截断到 max_str_len。
+        压缩版存入 _compressed，原始数据不变供审计。
+        返回节省的字符数。
+        """
+        saved = 0
+        keys = [key] if key else list(self._data.keys())
+        for k in keys:
+            entry = self._data.get(k)
+            if not entry:
+                continue
+            val = entry.value
+            orig_str = json.dumps(val, ensure_ascii=False, default=str)
+            orig_len = len(orig_str)
+            self._original_sizes[k] = orig_len
+            if orig_len <= max_chars:
+                self._compressed[k] = val
+                continue
+            if isinstance(val, dict):
+                c = {}
+                for dk, dv in val.items():
+                    if isinstance(dv, list) and len(dv) > max_list_items:
+                        c[dk] = dv[:max_list_items] + [{"_truncated": True, "_total": len(dv)}]
+                    elif isinstance(dv, str) and len(dv) > max_str_len:
+                        c[dk] = dv[:200] + f"\n... [{len(dv)-400} chars] ...\n" + dv[-200:]
+                    else:
+                        c[dk] = dv
+                self._compressed[k] = c
+            elif isinstance(val, str) and len(val) > max_chars:
+                self._compressed[k] = val[:200] + f"\n... [{len(val)-400} chars] ...\n" + val[-200:]
+            elif isinstance(val, list) and len(val) > max_list_items:
+                self._compressed[k] = val[:max_list_items] + [{"_truncated": True, "_total": len(val)}]
+            else:
+                self._compressed[k] = val
+            saved += orig_len - len(json.dumps(self._compressed[k], ensure_ascii=False, default=str))
+        return saved
+
+    def get_compressed(self, key: str, default: Any = None) -> Any:
+        """获取压缩后数据（LLM context 用）。"""
+        if key in self._compressed:
+            return self._compressed[key]
+        entry = self._data.get(key)
+        return entry.value if entry else default
+
+    def snapshot(self, compressed: bool = False) -> dict:
+        """导出 ContextStore 为 dict。compressed=True 用压缩版。"""
+        if compressed:
+            return {k: self.get_compressed(k) for k in self._data}
+        return {k: e.value for k, e in self._data.items()}
+
+    def stats(self) -> dict:
+        """上下文压缩统计"""
+        total_orig = sum(self._original_sizes.values())
+        total_comp = sum(len(json.dumps(v, ensure_ascii=False, default=str))
+                        for v in self._compressed.values())
+        return {
+            "keys": len(self._data),
+            "original_chars": total_orig,
+            "compressed_chars": total_comp,
+            "saved_chars": max(0, total_orig - total_comp),
+            "compression_pct": round((1 - total_comp / max(total_orig, 1)) * 100, 1),
+        }
 
     # ── 写入 ──
 
@@ -127,10 +197,6 @@ class ContextStore:
                 del self._data[key]
                 removed.append(key)
         return removed
-
-    def snapshot(self) -> dict:
-        """返回当前所有数据的纯值副本（不含溯源）。"""
-        return {k: e.value for k, e in self._data.items()}
 
     # ── Dict-compatible API (for backward compat) ──
 

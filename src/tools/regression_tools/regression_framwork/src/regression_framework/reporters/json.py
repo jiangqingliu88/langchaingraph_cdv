@@ -16,8 +16,12 @@ class JsonReporter:
             'stats': {'pass': 0, 'fail': 0, 'unknown': 0},
             'tasks': []
         }
+        _status_map = {'PASS': 'pass', 'passed': 'pass', 'FAIL': 'fail', 'failed': 'fail'}
         for task in tasks:
-            data['stats'][task.status] += 1
+            s = _status_map.get(task.status, task.status.lower() if hasattr(task, 'status') else 'unknown')
+            if s not in data['stats']:
+                s = 'unknown'
+            data['stats'][s] += 1
             task_entry = {
                 'name': task.name,
                 'status': task.status,

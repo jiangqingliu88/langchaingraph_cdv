@@ -1,26 +1,26 @@
 """Agent tests"""
 import pytest
 import asyncio
-from src.agents.spec_planner import SpecAndTestPlanner
-from src.agents.verify_architect import VerificationArchitect
-from src.agents.assertion_engineer import AssertionEngineer
-from src.agents.coverage_manager import CoverageManager
-from src.agents.regression_manager import RegressionManager
-from src.agents.debug_engineer import DebugEngineer
-from src.agents.quality_assurance import QualityAssurance
-from src.agents.report_generator import ReportGenerator
+from src.agents.spec import SpecAgent
+from src.agents.design import DesignAgent
+from src.agents.asserts import AssertsAgent
+from src.agents.cover import CoverAgent
+from src.agents.regress import RegressAgent
+from src.agents.debug import DebugAgent
+from src.agents.qa import QaAgent
+from src.agents.report import ReportAgent
 from src.core.registry import AgentRegistry
 from src.core.llm_factory import LLMFactory
 
 AGENTS = [
-    SpecAndTestPlanner,
-    VerificationArchitect,
-    AssertionEngineer,
-    CoverageManager,
-    RegressionManager,
-    DebugEngineer,
-    QualityAssurance,
-    ReportGenerator,
+    SpecAgent,
+    DesignAgent,
+    AssertsAgent,
+    CoverAgent,
+    RegressAgent,
+    DebugAgent,
+    QaAgent,
+    ReportAgent,
 ]
 
 @pytest.mark.parametrize("agent_cls", AGENTS)
@@ -42,18 +42,18 @@ async def test_agent_basic(agent_cls):
     assert result.success
 
 @pytest.mark.asyncio
-async def test_spec_planner_analyze():
-    """Test spec planner analysis"""
-    agent = SpecAndTestPlanner()
+async def test_spec_agent_analyze():
+    """Test spec agent analysis"""
+    agent = SpecAgent()
     await agent.initialize()
     result = await agent.execute_task({"input": "UART design spec"})
     assert result.success
     assert "output" in result.data
 
 @pytest.mark.asyncio
-async def test_architect_generate():
-    """Test architect basic execution"""
-    agent = VerificationArchitect()
+async def test_design_agent_generate():
+    """Test design agent basic execution"""
+    agent = DesignAgent()
     await agent.initialize()
     result = await agent.execute_task({"input": "UART spec with tx/rx signals"})
     assert result.success
@@ -61,7 +61,7 @@ async def test_architect_generate():
 @pytest.mark.asyncio
 async def test_agent_metrics():
     """Test agent metrics tracking"""
-    agent = SpecAndTestPlanner()
+    agent = SpecAgent()
     await agent.initialize()
     await agent.execute_task({"input": "test"})
     metrics = agent.get_metrics()

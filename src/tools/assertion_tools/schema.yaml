@@ -1,0 +1,67 @@
+# assertion_tools — Tool Schema 契约
+# NOTE: 当前多数工具为占位实现，需要真实 SVA 生成逻辑
+
+tools:
+  generate_sva_assertions:
+    description: "生成 SVA 断言"
+    input:
+      specs: { type: string, required: true, description: "设计规格文本" }
+    output: { type: json, schema: { assertions: list } }
+    risk_level: safe
+    status: placeholder
+
+  generate_immediate_assertions:
+    description: "生成即时断言 (assert)"
+    input:
+      specs: { type: string, required: true }
+    output: { type: systemverilog }
+    risk_level: safe
+    status: placeholder
+
+  generate_concurrent_assertions:
+    description: "生成并发断言 (property)"
+    input:
+      specs: { type: string, required: true }
+    output: { type: systemverilog }
+    risk_level: safe
+    status: placeholder
+
+  generate_formal_properties:
+    description: "生成形式验证属性"
+    input:
+      specs: { type: string, required: true }
+    output: { type: systemverilog }
+    risk_level: safe
+    status: placeholder
+
+  generate_cdc_assertions:
+    description: "生成跨时钟域检查断言"
+    input:
+      specs: { type: string, required: true }
+    output: { type: systemverilog }
+    risk_level: medium
+    status: placeholder
+
+  generate_cover_properties:
+    description: "生成 cover property (覆盖率属性)"
+    input:
+      specs: { type: string, required: true }
+    output: { type: systemverilog }
+    risk_level: safe
+    status: placeholder
+
+  generate_assertion_package:
+    description: "生成断言 package 封装"
+    input:
+      specs: { type: string, required: true }
+    output: { type: systemverilog }
+    risk_level: safe
+    status: placeholder
+
+  analyze_assertion_coverage:
+    description: "分析断言覆盖率"
+    input:
+      data: { type: string, required: true }
+    output: { type: json }
+    risk_level: safe
+    status: placeholder

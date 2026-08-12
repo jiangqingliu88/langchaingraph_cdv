@@ -376,6 +376,9 @@
         <div class="nav-item" data-page="versions" data-role="both"><i class="bi-git"></i>版本管理</div>
         <div class="nav-item" data-page="signoff" data-role="both"><i class="bi-check2-circle"></i>签核证据链</div>
         <div class="nav-item" data-page="debug-copilot" data-role="engineer"><i class="bi-bug"></i>智能调试</div>
+        <div class="nav-section" data-role="both">治理</div>
+        <div class="nav-item" data-page="governance" data-role="both"><i class="bi-shield-check"></i>治理总览</div>
+        <div class="nav-item" data-page="manifest-diff" data-role="both"><i class="bi-diff"></i>审计 Diff</div>
         <div class="nav-section" data-role="both">平台</div>
         <div class="nav-item" data-page="knowledge" data-role="both"><i class="bi-book"></i>知识库</div>
         <div class="nav-item" data-page="tool-governance" data-role="both"><i class="bi-tools"></i>工具治理</div>
@@ -411,38 +414,27 @@
 <!-- ── DASHBOARD ── -->
 <div class="page active" id="page-dashboard">
     <div class="stat-row">
-        <div class="stat-card accent-blue">
-            <div class="stat-label">需求总数</div><div class="stat-value" id="sReqs">-</div><div class="stat-sub">Requirements</div>
-        </div>
-        <div class="stat-card accent-green">
-            <div class="stat-label">验证进度</div><div class="stat-value" id="sProgress">-</div><div class="stat-sub">Verification Progress</div>
-        </div>
-        <div class="stat-card accent-purple">
-            <div class="stat-label">代码覆盖率</div><div class="stat-value" id="sCover">-</div><div class="stat-sub">Code Coverage</div>
-        </div>
-        <div class="stat-card accent-amber">
-            <div class="stat-label">回归通过率</div><div class="stat-value" id="sReg">-</div><div class="stat-sub">Regression Pass Rate</div>
-        </div>
+        <div class="stat-card accent-blue"><div class="stat-label">需求总数</div><div class="stat-value" id="sReqs">-</div></div>
+        <div class="stat-card accent-green"><div class="stat-label">验证进度</div><div class="stat-value" id="sProgress">-</div></div>
+        <div class="stat-card accent-purple"><div class="stat-label">代码覆盖率</div><div class="stat-value" id="sCover">-</div></div>
+        <div class="stat-card accent-amber"><div class="stat-label">回归通过率</div><div class="stat-value" id="sReg">-</div></div>
     </div>
-    <!-- Evidence chain summary -->
+    <div class="stat-row" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat-card" style="border-left:3px solid var(--brand-green)"><div class="stat-label">🪙 Token 用量</div><div class="stat-value" id="sToken" style="color:var(--brand-green);font-size:22px">-</div></div>
+        <div class="stat-card" style="border-left:3px solid var(--brand-blue)"><div class="stat-label">🛡️ 质量守护</div><div class="stat-value" id="sGuard" style="color:var(--brand-blue);font-size:22px">-</div></div>
+        <div class="stat-card" style="border-left:3px solid var(--brand-purple)"><div class="stat-label">📸 Harness 快照</div><div class="stat-value" id="sHarness" style="color:var(--brand-purple);font-size:22px">-</div></div>
+        <div class="stat-card" style="border-left:3px solid var(--brand-amber)"><div class="stat-label">🔴 门禁状态</div><div class="stat-value" id="sGate" style="color:var(--brand-amber);font-size:22px">-</div></div>
+    </div>
     <div class="evidence-bar" id="dashEvidence" style="display:none">
-        <span style="font-weight:600;font-size:11px;margin-right:4px;">🔗 最新证据链</span>
-        <span class="ev-node pass" id="evRunId">-</span>
-        <span class="ev-arrow">→</span>
-        <span class="ev-node pass" id="evPhases">-</span>
-        <span class="ev-arrow">→</span>
+        <span style="font-weight:600;font-size:11px;margin-right:4px">🔗 最新证据链</span>
+        <span class="ev-node pass" id="evRunId">-</span><span class="ev-arrow">→</span>
+        <span class="ev-node pass" id="evPhases">-</span><span class="ev-arrow">→</span>
         <span class="ev-node pass" id="evScore">-</span>
         <span class="ev-hash">Evidence <code id="evHash">-</code></span>
     </div>
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">
-        <div class="card">
-            <div class="card-header"><h6><i class="bi-graph-up"></i>回归通过率趋势</h6></div>
-            <canvas id="trendChart" height="200"></canvas>
-        </div>
-        <div class="card">
-            <div class="card-header"><h6><i class="bi-clock-history"></i>最近活动</h6></div>
-            <div id="recentActivity" class="text-xs" style="color:var(--text-secondary)"></div>
-        </div>
+        <div class="card"><div class="card-header"><h6><i class="bi-graph-up"></i>回归通过率趋势</h6></div><canvas id="trendChart" height="200"></canvas></div>
+        <div class="card"><div class="card-header"><h6><i class="bi-clock-history"></i>最近活动</h6></div><div id="recentActivity" class="text-xs" style="color:var(--text-secondary)"></div></div>
     </div>
 </div>
 
@@ -474,28 +466,44 @@
 <!-- ── PIPELINE ── -->
 <div class="page" id="page-pipeline">
     <div class="card">
-        <div class="card-header"><h6><i class="bi-play-circle"></i>执行流水线</h6><div class="btn-group"><select id="workflowSelect" onchange="buildPhaseTrack(this.value)"><option value="full_verification">完整验证 (17 阶段)</option><option value="quick_check">快速检查 (5 阶段)</option><option value="regression_only">仅回归</option><option value="ppa_analysis">PPA 分析</option></select><button class="btn btn-outline btn-sm" onclick="loadDefaultSpec()">加载示例</button><button class="btn btn-primary btn-sm" onclick="runPipeline()">▶ 运行</button></div></div>
-        <!-- Dual-track tabs -->
-    <div class="card-header" style="padding-bottom:0;border-bottom:none">
+        <div class="card-header"><h6><i class="bi-play-circle"></i>执行流水线</h6>
+            <div class="btn-group"><button class="btn btn-outline btn-sm" onclick="loadDefaultSpec()">加载示例</button><button class="btn btn-primary btn-sm" onclick="runPipeline()">▶ 运行</button></div></div>
+        <!-- Profile + Options -->
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+            <select id="profileSelect" onchange="onProfileChange(this.value)" style="font-weight:600;min-width:180px"></select>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);cursor:pointer" title="低分阶段阻断管线">
+                <input type="checkbox" id="gateEnabled"> 🔴 门禁
+            </label>
+            <select id="approvalMode" style="width:100px;font-size:11px">
+                <option value="auto">自动审批</option><option value="interactive">交互审批</option><option value="threshold">阈值审批</option>
+            </select>
+            <span style="font-size:10px;color:var(--text-muted)">超时</span>
+            <input type="number" id="phaseTimeout" value="600" min="60" max="3600" step="60" style="width:68px;font-size:11px">
+            <span style="font-size:10px;color:var(--text-muted)">目录</span>
+            <input id="outputDir" value="output" style="width:120px;font-size:11px" title="输出目录路径，如 output/my_run">
+            <span id="profileDesc" style="font-size:10px;color:var(--text-muted)"></span>
+        </div>
+        <!-- Regression mode -->
+        <div id="regressModeRow" style="display:none;margin-bottom:8px;padding:6px 10px;background:var(--bg-input);border-radius:var(--radius-sm)">
+            <span style="font-size:10px;color:var(--text-muted);margin-right:8px">回归模式:</span>
+            <label style="margin-right:12px;font-size:11px;cursor:pointer"><input type="radio" name="regressMode" value="cov" checked> 📊 覆盖率 (cov)</label>
+            <label style="font-size:11px;cursor:pointer"><input type="radio" name="regressMode" value="xprop"> ⚡ X-Propagation (xprop)</label>
+        </div>
+        <!-- Track tabs -->
         <div style="display:flex;gap:0;margin-bottom:-1px">
             <div id="trackTraditional" class="track-tab active" onclick="switchTrack('traditional')" style="padding:8px 16px;border-radius:6px 6px 0 0;cursor:pointer;background:var(--brand-blue-dim);color:var(--brand-blue);font-weight:600;font-size:12px;border:1px solid var(--brand-blue-dim);border-bottom:none">🔬 常规仿真</div>
             <div id="trackAI" class="track-tab" onclick="switchTrack('ai_exploration')" style="padding:8px 16px;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;color:var(--text-secondary);border:1px solid transparent">🤖 AI 智能探索</div>
             <span style="flex:1;border-bottom:1px solid var(--border)"></span>
         </div>
+        <textarea id="specInput" rows="5" placeholder="粘贴 Markdown 设计规格，或点击「加载示例」..." style="width:100%;margin-top:0;border-radius:0 6px 6px 6px"></textarea>
+        <div id="aiHint" style="display:none;padding:6px 12px;margin-bottom:0;font-size:10px;color:var(--brand-purple);background:rgba(139,92,246,.08);border-radius:0 0 6px 6px;border-left:2px solid var(--brand-purple)">🤖 AI 智能探索模式：自动发现 coverage gap，生成 corner case 测试</div>
     </div>
-    <textarea id="specInput" rows="6" placeholder="粘贴 Markdown 设计规格，或点击「加载示例」..." style="width:100%;margin-top:0;border-radius:0 6px 6px 6px"></textarea>
-    <div id="aiHint" style="display:none;padding:6px 12px;margin-bottom:0;font-size:10px;color:var(--brand-purple);background:rgba(139,92,246,.08);border-radius:0 0 6px 6px;border-left:2px solid var(--brand-purple)">🤖 AI 智能探索模式：自动发现 coverage gap，生成 corner case 测试，对未覆盖场景进行针对性验证</div>
-    </div>
-    <div class="card">
-        <div class="card-header"><h6><i class="bi-activity"></i>阶段进度</h6><span class="badge badge-muted" id="pStatus">待运行</span></div>
-        <div style="overflow-x:auto;padding:8px 0">
-            <div class="phase-track" id="phaseTrack"></div>
-        </div>
+    <div class="card"><div class="card-header"><h6><i class="bi-activity"></i>阶段进度</h6><span class="badge badge-muted" id="pStatus">待运行</span></div>
+        <div style="overflow-x:auto;padding:8px 0"><div class="phase-track" id="phaseTrack"></div></div>
         <div class="progress-bar mt-2"><div class="progress-fill blue" id="pProgress" style="width:0%"></div></div>
         <div class="flex-between text-xs mt-2"><span style="color:var(--text-muted)" id="pResult"></span><span style="color:var(--text-muted)" id="pTime"></span></div>
     </div>
-    <div class="card">
-        <div class="card-header"><h6><i class="bi-terminal"></i>操作日志</h6><button class="btn btn-outline btn-xs" onclick="document.getElementById('console').innerHTML=''">清空</button></div>
+    <div class="card"><div class="card-header"><h6><i class="bi-terminal"></i>操作日志</h6><button class="btn btn-outline btn-xs" onclick="document.getElementById('console').innerHTML=''">清空</button></div>
         <div class="console" id="console"></div>
     </div>
 </div>
@@ -612,13 +620,21 @@
 <!-- ── COVERAGE ── -->
 <div class="page" id="page-coverage">
     <div class="stat-row" id="covCards"></div>
-    <div class="card"><div class="card-header"><h6><i class="bi-files"></i>文件覆盖率</h6></div><div id="covFiles"></div></div>
-    <div class="card"><div class="card-header"><h6><i class="bi-exclamation-triangle"></i>覆盖率空洞</h6></div><div id="covGaps"></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card"><div class="card-header"><h6><i class="bi-files"></i>文件覆盖率</h6></div><div id="covFiles"></div></div>
+        <div class="card"><div class="card-header"><h6><i class="bi-exclamation-triangle"></i>覆盖率空洞 & 增补建议</h6><button class="btn btn-outline btn-xs" onclick="loadCoverageGaps()">🔄 刷新</button></div>
+            <div id="covGaps"></div><div id="covSuggestions" class="mt-2"></div></div>
+    </div>
 </div>
 
 <!-- ── REGRESSION ── -->
 <div class="page" id="page-regression">
-    <div class="card"><div class="card-header"><h6><i class="bi-arrow-repeat"></i>回归历史</h6><button class="btn btn-primary btn-sm" onclick="runRegression()">▶ 运行回归</button></div>
+    <div class="card"><div class="card-header"><h6><i class="bi-arrow-repeat"></i>回归历史</h6>
+        <div class="btn-group">
+            <select id="regProfileSelect" style="width:160px;font-size:11px"><option value="regress_cov">覆盖率回归</option><option value="regress_xprop">X-Prop 回归</option></select>
+            <label style="font-size:11px;cursor:pointer"><input type="checkbox" id="regGate"> 🔴门禁</label>
+            <button class="btn btn-primary btn-sm" onclick="runRegression()">▶ 运行回归</button>
+        </div></div>
     <div class="table-wrap"><table><thead><tr><th>运行</th><th>状态</th><th>PASS</th><th>FAIL</th><th>总计</th><th>耗时</th><th>时间</th></tr></thead><tbody id="regBody"></tbody></table></div></div>
 </div>
 
@@ -749,6 +765,34 @@
     </div>
 </div>
 
+
+<!-- ── GOVERNANCE (治理总览) ── -->
+<div class="page" id="page-governance">
+    <div class="stat-row" id="gvStats"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card"><div class="card-header"><h6><i class="bi-shield-check"></i>质量守护</h6></div><div id="gvQualityGuard" class="text-xs"></div></div>
+        <div class="card"><div class="card-header"><h6>🪙 Token 用量</h6></div><div id="gvToken" class="text-xs"></div></div>
+        <div class="card"><div class="card-header"><h6>⏱️ Harness 快照</h6><button class="btn btn-outline btn-xs" onclick="loadGovernance()">🔄</button></div><div id="gvHarness" class="text-xs"></div></div>
+        <div class="card"><div class="card-header"><h6>🔗 审计 Hash 链</h6></div><div id="gvHashes" class="text-xs"></div></div>
+    </div>
+    <div class="card mt-2"><div class="card-header"><h6>📋 最近运行治理摘要</h6></div><div class="table-wrap"><table><thead><tr><th>Run ID</th><th>门禁</th><th>审批</th><th>Token</th><th>守护通过</th><th>回退</th><th>升级</th><th>快照</th></tr></thead><tbody id="gvHistoryBody"></tbody></table></div></div>
+</div>
+
+<!-- ── MANIFEST DIFF (字段级审计) ── -->
+<div class="page" id="page-manifest-diff">
+    <div class="card"><div class="card-header"><h6><i class="bi-diff"></i>字段级审计 Diff — 精确定位两次签核差异</h6><button class="btn btn-primary btn-sm" onclick="runManifestDiff()">▶ 对比</button></div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <input id="diffRunA" placeholder="Run A ID (基准)" style="flex:1;min-width:200px">
+            <span style="color:var(--text-muted)">vs</span>
+            <input id="diffRunB" placeholder="Run B ID (对比)" style="flex:1;min-width:200px">
+            <select id="diffFmt" style="width:100px"><option value="table">简洁</option><option value="detail">详细</option><option value="json">JSON</option></select>
+        </div>
+    </div>
+    <div id="mdiffResult" style="display:none">
+        <div class="card"><div class="card-header"><h6>📊 Diff 摘要</h6></div><div id="mdiffSummary" class="text-xs"></div></div>
+        <div class="card"><div class="card-header"><h6>📋 阶段级字段变更</h6></div><div class="table-wrap"><table><thead><tr><th>阶段</th><th>变更字段</th><th>新增</th><th>删除</th><th>未变</th><th>分数Δ</th></tr></thead><tbody id="mdiffBody"></tbody></table></div></div>
+    </div>
+</div>
 
 <!-- ── DEBUG COPILOT (智能调试助手) ── -->
 <div class="page" id="page-debug-copilot">
@@ -934,7 +978,7 @@ function doLogout(){AUTH={token:'',user:null};location.reload()}
 
 // ── NAVIGATION ──
 let APP_ROLE='manager';
-const PAGE_LOADERS={dashboard:loadDashboard,manager:loadManager,docs:loadDocs,vplan:loadVPlan,design:loadDesignArch,versions:loadVersions,pipeline:loadPipelineTab,testcases:loadTC,coverage:loadCoverage,regression:loadRegression,signoff:loadSignoffs,knowledge:searchKB,admin:loadAdmin,settings:loadSettings,trace:loadTrace,'debug-copilot':loadDebugCopilot,'tool-governance':loadToolGovernance};
+const PAGE_LOADERS={dashboard:loadDashboard,manager:loadManager,docs:loadDocs,vplan:loadVPlan,design:loadDesignArch,versions:loadVersions,pipeline:function(){loadPipelineTab();buildPhaseTrack()},testcases:loadTC,coverage:loadCoverage,regression:loadRegression,signoff:loadSignoffs,knowledge:searchKB,admin:loadAdmin,settings:loadSettings,trace:loadTrace,'debug-copilot':loadDebugCopilot,'tool-governance':loadToolGovernance};
 
 function switchRole(role){
     APP_ROLE=role;
@@ -1005,8 +1049,7 @@ async function loadDashboard(){
 }
 
 // ── PIPELINE ──
-const P_FULL=['spec','design','model','ifspec','rtlsign','vplan','tpoint','rtm','UVM','test','assert','regress','cover','debug','qa','report','vclose'];
-const P_QUICK=P_FULL.slice(0,5);
+const P_FULL=['spec','design','model','rtl','UVM','test','assert','regress_cov','debug','docs','qa','report','vclose'];
 let currentTrack='traditional';
 
 function switchTrack(track){
@@ -1024,68 +1067,97 @@ function switchTrack(track){
     }
 }
 
-function buildPhaseTrack(wf){
-    const phases=wf==='quick_check'?P_QUICK:P_FULL;
+let PROFILES_CACHE=[];
+async function loadPipelineTab(){
+    try{const r=await API('/api/pipeline/profiles');PROFILES_CACHE=r.profiles;const sel=document.getElementById('profileSelect');sel.innerHTML=r.profiles.map(p=>`<option value="${p.name}" data-regmode="${p.regression_mode||''}" data-desc="${p.description||''}">${p.description||p.name}</option>`).join('');if(r.default){sel.value=r.default;onProfileChange(r.default)}buildPhaseTrack()}catch(e){console.error('load profiles',e)}
+}
+function onProfileChange(name){
+    const p=PROFILES_CACHE.find(x=>x.name===name);if(!p)return;
+    document.getElementById('profileDesc').textContent='📋 '+name;
+    const regMode=document.getElementById('regressModeRow');
+    if(p.regression_mode){regMode.style.display='block';document.querySelector('input[name=regressMode][value='+p.regression_mode+']').checked=true}
+    else regMode.style.display='none';
+    if(p.phases&&p.phases.length>0&&p.phases[0]!=='(full pipeline)'){buildPhaseTrack(p.phases)}
+    else buildPhaseTrack();
+}
+function buildPhaseTrack(phases){
+    const p=phases||P_FULL;
     const track=document.getElementById('phaseTrack');
-    track.innerHTML=phases.map((p,i)=>`<div class="phase-node"><div class="dot" id="dot-${p}">${i+1}</div><div class="label">${p}</div></div>${i<phases.length-1?'<div class="phase-line" id="line-${i}"></div>':''}`).join('');
+    track.innerHTML=p.map((n,i)=>`<div class="phase-node"><div class="dot" id="dot-${n}">${i+1}</div><div class="label">${n}</div></div>${i<p.length-1?'<div class="phase-line" id="line-'+i+'"></div>':''}`).join('');
 }
 async function runPipeline(){
     const spec=document.getElementById('specInput').value.trim();if(!spec){toast('请输入规格','error');return}
-    const wf=document.getElementById('workflowSelect').value;
+    const profile=document.getElementById('profileSelect').value;
+    const gate=document.getElementById('gateEnabled').checked;
+    const approval=document.getElementById('approvalMode').value;
+    const timeout=parseInt(document.getElementById('phaseTimeout').value)||600;
+    const outputDir=document.getElementById('outputDir').value.trim()||'output';
+    const regMode=document.querySelector('input[name=regressMode]:checked')?.value||'';
     const trackLabel=currentTrack==='ai_exploration'?'🤖 AI智能探索':'🔬 常规仿真';
-    buildPhaseTrack(wf);
+    const profileCfg=PROFILES_CACHE.find(x=>x.name===profile)||{};
+    const phases=profileCfg.phases&&profileCfg.phases[0]!=='(full pipeline)'?profileCfg.phases:null;
+    buildPhaseTrack(phases);
     document.getElementById('pStatus').textContent='运行中';document.getElementById('pStatus').className='badge badge-blue';
     document.getElementById('pProgress').style.width='0%';
     document.getElementById('console').innerHTML='';
-    log(`▶ 启动: ${wf} [${trackLabel}]`,'info');const t0=Date.now();
+    const opts={gate:gate?'ON':'OFF',approval:approval,timeout:timeout+'s',regmode:regMode||'default'};
+    log(`▶ 启动: ${profile} [${trackLabel}] gate=${opts.gate}`,'info');const t0=Date.now();
     try{
-        const r=await API('/api/pipeline/run',{method:'POST',body:{spec_text:spec,workflow:wf,run_type:currentTrack}});
-        // Connect SSE for real-time updates
-        const sse=new EventSource('/api/pipeline/'+r.run_id+'/stream');
-        sse.addEventListener('phase_update',function(e){const d=JSON.parse(e.data);const dot=document.getElementById('dot-'+d.phase);if(dot)dot.className='dot '+(d.status==='passed'?'pass':d.status==='failed'?'fail':'');log(`  ${d.status==='passed'?'✅':'❌'} ${d.phase} (${d.elapsed}s score=${d.score})`,d.status==='passed'?'ok':'error')});
-        sse.addEventListener('run_complete',function(e){sse.close();const d=JSON.parse(e.data);document.getElementById('pProgress').style.width='100%';const ok=d.passed===d.total;document.getElementById('pStatus').textContent=ok?'全部通过':'部分失败';document.getElementById('pStatus').className='badge '+(ok?'badge-green':'badge-amber');document.getElementById('pResult').textContent=d.passed+'/'+d.total+' 阶段通过';log('🏁 SSE实时: '+d.passed+'/'+d.total,ok?'ok':'error');
-        // Auto-refresh manager module data
-        try{API('/api/modules').then(d=>{if(d.total_modules>0){document.getElementById('evHash').textContent=(d.modules[0]?.evidence_hash||'').substring(0,14)+'...';}})}catch(e){}
-        });
-        sse.onerror=function(){sse.close()};
-        const elapsed=((Date.now()-t0)/1000).toFixed(1);
-        document.getElementById('pProgress').style.width='100%';
-        const ok=r.passed===r.total;
-        document.getElementById('pStatus').textContent=ok?'全部通过':'部分失败';
-        document.getElementById('pStatus').className='badge '+(ok?'badge-green':'badge-amber');
-        document.getElementById('pResult').textContent=`${r.passed}/${r.total} 阶段通过`;
-        document.getElementById('pTime').textContent=`${elapsed}s`;
-        const failedPhases=[];
-        r.phases.forEach(p=>{const d=document.getElementById('dot-'+p.name);if(d)d.className='dot '+(p.status==='passed'?'pass':p.status==='failed'?'fail':'');log(`  ${p.status==='passed'?'✅':'❌'} ${p.name} (${p.time}s score=${p.score})`,p.status==='passed'?'ok':'error');if(p.status==='failed'||p.status==='error')failedPhases.push(p)});
-        log(`🏁 完成: ${r.passed}/${r.total}`,ok?'ok':'error');
-        toast(`${trackLabel}完成: ${r.passed}/${r.total}`,ok?'success':'error');
-        setTimeout(loadDashboard,500);
-        if(r.manifest_path) log(`📦 Manifest: ${r.manifest_path}`,'info');
-        if(r.run_id) log(`📋 复现: vagent dump ${r.run_id}  |  vagent dump ${r.run_id} -o evidence.zip`,'info');
+        const r=await API('/api/pipeline/run',{method:'POST',body:{spec_text:spec,workflow:'full_verification',profile:profile,gate_enabled:gate,approval_mode:approval,phase_timeout:timeout,regression_mode:regMode,run_type:currentTrack,output_dir:outputDir}});
+        // 立即显示元信息（run_id, exec_log 在 r 中已有）
+        if(r.exec_log) log(`📜 执行日志: <a href="#" onclick="viewExecLog('${r.exec_log}')" style="color:var(--brand-blue);cursor:pointer">${r.exec_log}</a>`,'info');
+        if(r.run_id) log(`📋 Run ID: ${r.run_id}  |  复现: vagent dump ${r.run_id}`,'info');
 
-        // AI 智能分析失败的阶段
-        if(failedPhases.length>0){
-            log('','');
-            log('━━━ 🤖 AI 智能分析 ━━━','info');
-            for(const fp of failedPhases){
-                const errText=fp.error||fp.reason||`Phase ${fp.name} failed with score ${fp.score}`;
-                try{
-                    const ai=await API('/api/ai/analyze-error',{method:'POST',body:JSON.stringify({phase_name:fp.name,error_log:errText,agent_role:fp.name}),headers:{'Content-Type':'application/json'}});
-                    log(`  📋 ${fp.name}: ${ai.summary}`,'error');
-                    ai.suggestions.forEach(s=>{
-                        const sev={high:'🔴',medium:'🟡',low:'🟢'}[s.severity]||'⚪';
-                        log(`     ${sev} ${s.diagnosis}`,'error');
-                        log(`     💡 ${s.fix}`,s.auto_fixable?'info':'');
-                    });
-                    if(ai.auto_fixable_count>0) log(`     ✅ ${ai.auto_fixable_count} 个问题可自动修复`,'info');
-                }catch(e){log(`  AI分析失败: ${e}`,'error')}
-            }
-            log('━━━━━━━━━━━━━━━━━━━━','info');
-        }
+        // 轮询阶段进度 (每 2 秒)
+        let loggedPhases=new Set();
+        let pollTimer=setInterval(async()=>{
+            try{const s=await API('/api/pipeline/run/'+r.run_id);if(!s)return;
+                const phases=s.phases||[];
+                const total=phases.length;let passed=0;
+                if(total===0){
+                    const label={pending:'等待执行',running:'初始化中...'}[s.state]||s.state||'等待中';
+                    document.getElementById('pStatus').textContent=label;
+                    document.getElementById('pStatus').className='badge badge-blue';
+                    document.getElementById('pResult').textContent='准备中';
+                    document.getElementById('pTime').textContent=((Date.now()-t0)/1000).toFixed(0)+'s';
+                    return;
+                }
+                phases.forEach(p=>{
+                    const dot=document.getElementById('dot-'+p.name);
+                    if(dot){dot.className='dot '+(p.status==='passed'?'pass':p.status==='running'?'running':p.status==='failed'||p.status==='error'?'fail':'');dot.textContent=p.score||dot.textContent}
+                    if(p.status==='passed')passed++;
+                    // 首次出现时写操作日志
+                    if(!loggedPhases.has(p.name)&&p.status!=='running'){
+                        loggedPhases.add(p.name);
+                        log(`${p.status==='passed'?'+' : '-'} ${p.name} score=${p.score}`,p.status==='passed'?'ok':'error');
+                    }
+                });
+                document.getElementById('pProgress').style.width=(total>0?Math.round(passed/total*100):0)+'%';
+                document.getElementById('pResult').textContent=passed+'/'+total;
+                document.getElementById('pTime').textContent=((Date.now()-t0)/1000).toFixed(1)+'s';
+                // 只有 completed/completed_with_errors/halted 才停止轮询
+                const isFinal=s.state==='completed'||s.state==='completed_with_errors'||s.state==='halted_by_gate';
+                if(isFinal){clearInterval(pollTimer);
+                    const ok=s.state==='completed';
+                    document.getElementById('pStatus').textContent=ok?'全部通过':s.state;document.getElementById('pStatus').className='badge '+(ok?'badge-green':'badge-amber');
+                    const failed=phases.filter(p=>p.status==='failed'||p.status==='error');
+                    log(`Done: ${passed}/${total}`,'ok');
+                    if(s.manifest_path) log(`Manifest: ${s.manifest_path}`,'info');
+                    toast(`${profile}: ${passed}/${total}`,ok?'success':'error');
+                    setTimeout(loadDashboard,500);
+                    if(failed.length>0){log('');log('--- AI ---','info');
+                        for(const fp of failed){
+                            try{const ai=await API('/api/ai/analyze-error',{method:'POST',body:JSON.stringify({phase_name:fp.name,error_log:fp.error||fp.reason||'',agent_role:fp.name}),headers:{'Content-Type':'application/json'}});log(`  ${fp.name}: ${ai.summary||'N/A'}`,'error');ai.suggestions?.forEach(s=>log(`     ${s.diagnosis||''} -> ${s.fix||''}`,'error'))}catch(e){}
+                        }
+                    }
+                }
+            }catch(e){console.error('poll',e)}
+        },2000);
     }catch(e){log('失败: '+e,'error');toast('流水线失败','error')}
 }
+async function viewExecLog(path){log(`📜 加载: ${path}`,'info');try{const fn=path.split('/').pop();const d=await API('/api/logs/execution/'+fn);log(`  ${d.total_lines} lines total, showing last ${d.last_200}`,'info');d.events.forEach(e=>{const ev=e.event||'';const ts=(e.timestamp||'').substring(11,19)||'';log(`  [${ts}] ${ev}: ${JSON.stringify(e).substring(0,120)}`,ev.includes('error')||ev.includes('fail')?'error':ev==='phase_end'?'ok':'')})}catch(e){log(`❌ 加载失败: ${e}`,'error')}}
 async function loadDefaultSpec(){const d=await API('/api/spec/default');document.getElementById('specInput').value=d.content}
-async function loadPipelineTab(){try{const r=await API('/api/my-allowed-workflows');const sel=document.getElementById('workflowSelect');const labels={'full_verification':'完整验证 (17 阶段)','quick_check':'快速检查 (5 阶段)','regression_only':'仅回归','ppa_analysis':'PPA 分析'};sel.innerHTML=r.allowed_workflows.map(w=>`<option value="${w}"${w===r.default_workflow?' selected':''}>${labels[w]||w}</option>`).join('');buildPhaseTrack(r.default_workflow)}catch(e){const wf=document.getElementById('workflowSelect').value;buildPhaseTrack(wf)}loadDefaultSpec()}
+async function loadPipelineTab(){try{const r=await API('/api/pipeline/profiles');PROFILES_CACHE=r.profiles;const sel=document.getElementById('profileSelect');sel.innerHTML=r.profiles.map(p=>`<option value="${p.name}" data-regmode="${p.regression_mode||''}" data-desc="${p.description||''}">${p.description||p.name}</option>`).join('');if(r.default){sel.value=r.default;onProfileChange(r.default)}buildPhaseTrack()}catch(e){console.error('load profiles',e);buildPhaseTrack()}loadDefaultSpec()}
 
 // ── DOCS (可视化编辑器) ──
 let docState={id:0,name:'',content:'',title:'',isDirty:false};
@@ -1486,12 +1558,13 @@ async function loadCoverage(){
     const d=await API('/api/coverage/summary');
     document.getElementById('covCards').innerHTML=`<div class="stat-card accent-purple"><div class="stat-label">代码覆盖率</div><div class="stat-value">${d.code_coverage}%</div></div><div class="stat-card accent-green"><div class="stat-label">功能覆盖率</div><div class="stat-value">${d.functional_coverage}%</div></div><div class="stat-card accent-amber"><div class="stat-label">断言覆盖率</div><div class="stat-value">${d.assertion_coverage}%</div></div><div class="stat-card accent-blue"><div class="stat-label">总覆盖率</div><div class="stat-value">${d.code_coverage}%</div></div>`;
     document.getElementById('covFiles').innerHTML=d.files.map(f=>`<div class="mb-2"><div class="flex-between text-xs"><span>${f.name}</span><span>${f.line_pct}%</span></div><div class="cover-bar"><div class="cover-fill ${f.line_pct>=90?'high':f.line_pct>=70?'mid':'low'}" style="width:${f.line_pct}%"></div></div></div>`).join('');
-    document.getElementById('covGaps').innerHTML=d.gaps.map(g=>`<div class="mb-2" style="padding:8px 10px;background:rgba(245,158,11,.08);border-left:2px solid var(--brand-amber);border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:11px"><strong>${g.file}:${g.line}</strong> — ${g.signal}: ${g.reason}<br><em style="color:var(--text-muted)">建议: ${g.suggestion}</em></div>`).join('')||'<div style="color:var(--brand-green);font-size:12px;padding:8px">✅ 无覆盖率空洞</div>'
+    document.getElementById('covGaps').innerHTML=d.gaps.map(g=>`<div class="mb-2" style="padding:8px 10px;background:rgba(245,158,11,.08);border-left:2px solid var(--brand-amber);border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:11px"><strong>${g.file}:${g.line}</strong> — ${g.signal}: ${g.reason}<br><em style="color:var(--text-muted)">建议: ${g.suggestion}</em></div>`).join('')||'<div style="color:var(--brand-green);font-size:12px;padding:8px">✅ 无覆盖率空洞</div>';
+    loadCoverageGaps();
 }
 
 // ── REGRESSION ──
 async function loadRegression(){const d=await API('/api/regression/history?limit=20');document.getElementById('regBody').innerHTML=d.runs.map(r=>`<tr><td><code style="font-size:10px">${r.run_name}</code></td><td><span class="badge ${r.status==='completed'?'badge-green':'badge-amber'}">${r.status}</span></td><td style="color:var(--brand-green);font-weight:600">${r.pass_count}</td><td style="color:var(--brand-red)">${r.fail_count}</td><td>${r.total_count}</td><td>${r.duration_seconds}s</td><td class="text-xs" style="color:var(--text-muted)">${(r.created_at||'').substring(0,16)}</td></tr>`).join('')||'<tr><td colspan="7" style="color:var(--text-muted);text-align:center;padding:12px">暂无数据</td></tr>'}
-async function runRegression(){log('▶ 启动回归...','info');const r=await API('/api/regression/run',{method:'POST',body:{}});toast(`完成: ${r.passed}/${r.total} PASS`,r.failed===0?'success':'error');loadRegression();loadDashboard()}
+async function runRegression(){const profile=document.getElementById('regProfileSelect').value||'regress_cov';const gate=document.getElementById('regGate').checked;log(`▶ 启动回归: ${profile} gate=${gate}`,'info');try{const r=await API('/api/pipeline/run',{method:'POST',body:{profile:profile,gate_enabled:gate,approval_mode:'auto',phase_timeout:600}});toast(`${profile}: ${r.passed||0}/${r.total||0}`,r.passed===r.total?'success':'error');loadRegression();loadDashboard()}catch(e){toast('回归失败: '+e,'error')}}
 
 // ── SIGNOFF (可追溯 · 可审计 · 可治理) ──
 async function loadSignoffs(){
@@ -2112,6 +2185,45 @@ async function traceReq(reqId){
 }
 
 // ═══════════════════════════════════════════════════════════
+// GOVERNANCE + AUDIT + COVERAGE GAPS
+// ═══════════════════════════════════════════════════════════
+
+async function loadGovernance(){
+    try{const s=await API('/api/dashboard/stats');if(!s.has_data){document.getElementById('gvStats').innerHTML='<div class="stat-card"><div class="stat-label">暂无运行数据</div></div>';return}
+        document.getElementById('gvStats').innerHTML=`<div class="stat-card accent-green"><div class="stat-label">最新 Run</div><div class="stat-value" style="font-size:16px">${(s.run_id||'').substring(0,20)}</div></div><div class="stat-card accent-blue"><div class="stat-label">综合评分</div><div class="stat-value">${s.overall_score||'-'}</div></div><div class="stat-card accent-purple"><div class="stat-label">Token 用量</div><div class="stat-value">${(s.governance?.token_budget?.total_tokens||0).toLocaleString()}</div></div><div class="stat-card accent-amber"><div class="stat-label">门禁</div><div class="stat-value">${s.governance?.gate_enabled?'🔴 ON':'🟢 OFF'}</div></div>`;
+        const qg=s.governance?.quality_guard||{};document.getElementById('gvQualityGuard').innerHTML=`<b>验证通过:</b> ${qg.passed_directly||0} &nbsp; <b>回退:</b> ${qg.fallback_used||0} &nbsp; <b>升级:</b> ${qg.escalated_to_human||0} &nbsp; <b>LLM依赖:</b> ${qg.llm_dependency_pct||0}%`;
+        document.getElementById('gvToken').innerHTML=`<b>总用量:</b> ${(s.governance?.token_budget?.total_tokens||0).toLocaleString()} / ${(s.governance?.token_budget?.limit||200000).toLocaleString()} &nbsp; <b>LLM调用:</b> ${s.governance?.token_budget?.llm_calls||0} 次`;
+        const h=s.governance?.harness||{};document.getElementById('gvHarness').innerHTML=`<b>快照:</b> ${h.snapshots_taken||0} &nbsp; <b>中断:</b> ${h.interrupted?'是':'否'} &nbsp; <b>中断阶段:</b> ${h.interrupt_phase||'-'}`;
+        document.getElementById('gvHashes').innerHTML=Object.entries(s.governance?.input_hashes||{}).map(([k,v])=>`<div><code>${k}</code>: ${v?.slice(0,12)||''}</div>`).join('')||'无';
+    }catch(e){console.error('governance',e)}
+}
+async function runManifestDiff(){
+    const a=document.getElementById('diffRunA').value.trim(),b=document.getElementById('diffRunB').value.trim(),fmt=document.getElementById('diffFmt').value;
+    if(!a||!b){toast('请输入两个 Run ID','error');return}
+    try{const d=await API(`/api/manifest/diff?run_a=${a}&run_b=${b}&fmt=${fmt}`);document.getElementById('mdiffResult').style.display='block';document.getElementById('mdiffSummary').innerHTML=`<b>${d.summary}</b>`;
+        document.getElementById('mdiffBody').innerHTML=Object.entries(d.phase_diffs||{}).map(([p,dd])=>`<tr><td><b>${p}</b></td><td>${(dd.changed_fields||[]).join(', ')||'-'}</td><td>${dd.added_fields?.length||0}</td><td>${dd.removed_fields?.length||0}</td><td>${dd.unchanged||0}</td><td style="color:${(dd.score_delta||0)<0?'var(--brand-red)':'var(--brand-green)'}">${(dd.score_delta||0)>0?'+':''}${dd.score_delta||0}</td></tr>`).join('');}catch(e){toast('Diff 失败: '+e,'error')}
+}
+async function loadCoverageGaps(){
+    try{const s=await API('/api/dashboard/stats');if(!s.has_data)return;const d=await API('/api/coverage/gaps/'+s.run_id);
+        document.getElementById('covGaps').innerHTML=(d.gaps||[]).map(g=>`<div style="padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--brand-red)">${g.metric||''}</span>: ${g.current||0}% < ${g.target||95}% (gap: ${g.gap||0}%)</div>`).join('')||'无空洞';
+        document.getElementById('covSuggestions').innerHTML='<b>💡 增补建议:</b><br>'+(d.suggestions||[]).map(s=>`<div style="padding:4px 8px;margin:4px 0;background:var(--bg-input);border-radius:4px">📋 <b>${s.feature||''}</b>: ${s.reason||s.suggested_scenario||''}</div>`).join('')||'无建议';
+    }catch(e){console.error('gaps',e)}
+}
+async function updateDashGovernance(){
+    try{const s=await API('/api/dashboard/stats');if(!s.has_data)return;
+        document.getElementById('sToken').textContent=(s.governance?.token_budget?.total_tokens||0).toLocaleString();
+        document.getElementById('sGuard').textContent=s.governance?.quality_guard?.passed_directly||'-';
+        document.getElementById('sHarness').textContent=s.governance?.harness?.snapshots_taken||'-';
+        document.getElementById('sGate').textContent=s.governance?.gate_enabled?'🔴 ON':'🟢 OFF';
+    }catch(e){}
+}
+const _origLoadDash=loadDashboard;
+loadDashboard=async function(){await _origLoadDash();updateDashGovernance()};
+
+// PAGE_LOADERS update
+PAGE_LOADERS['governance']=loadGovernance;
+PAGE_LOADERS['manifest-diff']=function(){};
+
 // DEBUG COPILOT (智能调试助手)
 // ═══════════════════════════════════════════════════════════
 
@@ -2157,7 +2269,7 @@ async function analyzeDebugLog(){
 
     try{
         // Use the heuristic analyze-error endpoint (fast, no LLM needed)
-        const result=await API('/api/ai/analyze-error',{method:'POST',body:{error_log:logText,phase_name:'debug_copilot',agent_role:'debug_engineer'}});
+        const result=await API('/api/ai/analyze-error',{method:'POST',body:{error_log:logText,phase_name:'debug_copilot',agent_role:'root_cause_tracer'}});
         // Also try the DebugCopilot engine
         let engineResult=null;
         try{engineResult=await API('/api/engines/debug',{method:'POST',body:{log_text:logText}})}catch(e){}

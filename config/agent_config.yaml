@@ -11,13 +11,13 @@ agents:
       - update_project_status
       - make_decision
     collaborators:
-      - spec_and_test_planner
-      - verification_architect
-      - regression_manager
-      - quality_assurance
+      - spec
+      - uvm
+      - regress_cov
+      - qa
     
-  spec_and_test_planner:
-    role: "spec_and_test_planner"
+  spec:
+    role: "spec"
     display_name: "规格与测试规划师"
     description: "分析设计规格，生成验证计划"
     priority: 2
@@ -26,12 +26,12 @@ agents:
       - generate_test_plan
       - extract_features
     collaborators:
-      - verification_architect
-      - design_architect
-      - test_engineer
+      - uvm
+      - design
+      - test
     
-  verification_architect:
-    role: "verification_architect"
+  uvm:
+    role: "uvm"
     display_name: "验证架构师"
     description: "设计UVM验证环境架构并生成组件代码"
     priority: 3
@@ -43,11 +43,11 @@ agents:
       - generate_uvm_agent
     collaborators:
       - sequence_engineer
-      - assertion_engineer
-      - coverage_manager
+      - assert
+      - regress_cov
     
-  design_architect:
-    role: "design_architect"
+  design:
+    role: "design"
     display_name: "设计架构师"
     description: "模块 Spec → function hierarchy + register map + RTL hierarchy"
     priority: 2
@@ -56,11 +56,11 @@ agents:
       - generate_function_hierarchy
       - generate_register_map
     collaborators:
-      - spec_and_test_planner
-      - verification_architect
+      - spec
+      - uvm
 
-  model_agent:
-    role: "model_agent"
+  model:
+    role: "model"
     display_name: "参考模型工程师"
     description: "生成 C++/SC 参考模型用于 Scoreboard 比对"
     priority: 3
@@ -69,26 +69,27 @@ agents:
       - generate_predictor
       - validate_model
     collaborators:
-      - design_architect
-      - verification_architect
+      - design
+      - uvm
 
-  test_engineer:
-    role: "test_engineer"
+  test:
+    role: "test"
     display_name: "测试工程师"
-    description: "约束策略→场景映射→SV测试代码+simargs 一站式生成"
+    description: "写case + 功能覆盖率点 + 约束策略→场景映射→SV代码 一站式生成"
     priority: 4
     tools:
       - parse_test_points
       - map_policies_to_tests
       - build_scenario_yaml
+      - generate_coverage_points
       - generate_test_cases
       - check_test_coverage
     collaborators:
-      - verification_architect
-      - regression_manager
+      - uvm
+      - regress_cov
     
-  assertion_engineer:
-    role: "assertion_engineer"
+  assert:
+    role: "assert"
     display_name: "断言工程师"
     description: "生成SVA断言和形式验证属性"
     priority: 4
@@ -97,39 +98,27 @@ agents:
       - generate_formal_properties
       - check_assertion_coverage
     collaborators:
-      - verification_architect
-      - debug_engineer
+      - uvm
+      - debug
     
-  coverage_manager:
-    role: "coverage_manager"
-    display_name: "覆盖率管理器"
-    description: "收集和分析代码及功能覆盖率"
+  regress_cov:
+    role: "regress_cov"
+    display_name: "回归与覆盖率管理器"
+    description: "编译仿真→收集覆盖率→分析gap→建议增补case，闭环迭代直到覆盖率收敛"
     priority: 5
     tools:
+      - compile_env
+      - run_simulation
+      - generate_regression_report
       - collect_coverage
       - analyze_coverage_gaps
-      - generate_coverage_report
       - suggest_coverage_tests
     collaborators:
-      - regression_manager
-      - quality_assurance
+      - test
+      - debug
     
-  regression_manager:
-    role: "regression_manager"
-    display_name: "回归管理器"
-    description: "管理回归测试执行和结果分析"
-    priority: 5
-    tools:
-      - execute_regression
-      - analyze_regression_results
-      - manage_test_queue
-      - optimize_test_order
-    collaborators:
-      - coverage_manager
-      - debug_engineer
-    
-  debug_engineer:
-    role: "debug_engineer"
+  debug:
+    role: "debug"
     display_name: "调试工程师"
     description: "分析失败测试，定位问题根因"
     priority: 6
@@ -139,11 +128,11 @@ agents:
       - trace_error_source
       - generate_fix_suggestion
     collaborators:
-      - regression_manager
-      - assertion_engineer
+      - regress_cov
+      - assert
     
-  quality_assurance:
-    role: "quality_assurance"
+  qa:
+    role: "qa"
     display_name: "质量保证"
     description: "代码审查和验证质量评估"
     priority: 7
@@ -154,42 +143,46 @@ agents:
       - generate_qa_report
     collaborators:
       - verification_orchestrator
-      - coverage_manager
+      - regress_cov
 
 # 验证流程定义
 pipelines:
   full_verification:
-    name: "完整验证流程（11 阶段）"
+    name: "完整验证流程（10 阶段，含 regress_cov 闭环 + docs 并行合并）"
     phases:
       - name: "spec_analysis"
-        agent: "spec_and_test_planner"
-        next: "design_architecture"
-      - name: "design_architecture"
-        agent: "design_architect"
+        agent: "spec"
+        next: "designure"
+      - name: "designure"
+        agent: "design"
         next: "architecture_design"
       - name: "architecture_design"
-        agent: "verification_architect"
+        agent: "uvm"
         next: "model_generation"
       - name: "model_generation"
-        agent: "model_agent"
+        agent: "model"
         next: "parallel_development"
       - name: "parallel_development"
         parallel: true
         agents:
-          - "test_engineer"
-          - "assertion_engineer"
-        next: "regression"
-      - name: "regression"
-        agent: "regression_manager"
-        next: "parallel_analysis"
-      - name: "parallel_analysis"
+          - "test"
+          - "assert"
+        next: "regress_cov"
+      - name: "regress_cov"
+        agent: "regress_cov"
+        retry_on_gap: true
+        max_retries: 2
+        next: "debug_analysis"
+      - name: "debug_analysis"
+        agent: "debug"
+        next: "docs"
+      - name: "docs"
         parallel: true
-        agents:
-          - "coverage_manager"
-          - "debug_engineer"
+        doc_types: ["ifspec", "rtlsign", "vplan", "tpoint", "rtm"]
+        description: "5 类文档并行生成 (基于 regress_cov 实际覆盖率数据)"
         next: "quality_review"
       - name: "quality_review"
-        agent: "quality_assurance"
+        agent: "qa"
         next: "decision"
       - name: "decision"
         agent: "verification_orchestrator"
@@ -198,16 +191,18 @@ pipelines:
     name: "快速检查流程（5 阶段）"
     phases:
       - name: "spec_analysis"
-        agent: "spec_and_test_planner"
-        next: "design_architecture"
-      - name: "design_architecture"
-        agent: "design_architect"
+        agent: "spec"
+        next: "designure"
+      - name: "designure"
+        agent: "design"
         next: "architecture_design"
       - name: "architecture_design"
-        agent: "verification_architect"
+        agent: "uvm"
         next: "test_generation"
       - name: "test_generation"
-        agent: "test_engineer"
-        next: "review"
-      - name: "review"
-        agent: "quality_assurance"
+        agent: "test"
+        next: "regress_cov"
+      - name: "regress_cov"
+        agent: "regress_cov"
+        retry_on_gap: true
+        max_retries: 1

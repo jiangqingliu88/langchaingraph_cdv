@@ -1281,7 +1281,7 @@ async function analyzeDebugLog(){
 
     try{
         // Use the heuristic analyze-error endpoint (fast, no LLM needed)
-        const result=await API('/api/ai/analyze-error',{method:'POST',body:{error_log:logText,phase_name:'debug_copilot',agent_role:'debug_engineer'}});
+        const result=await API('/api/ai/analyze-error',{method:'POST',body:{error_log:logText,phase_name:'debug_copilot',agent_role:'root_cause_tracer'}});
         // Also try the DebugCopilot engine
         let engineResult=null;
         try{engineResult=await API('/api/engines/debug',{method:'POST',body:{log_text:logText}})}catch(e){}

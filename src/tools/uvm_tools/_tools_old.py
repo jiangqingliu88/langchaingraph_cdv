@@ -1,5 +1,5 @@
 """
-UVM 验证工具集 —— 供 VerificationArchitect Agent 调用
+UVM 验证工具集 —— 供 UvmAgent Agent 调用
 
    generate_uvm_from_spec  — spec 文本 → UVM 环境代码 + 质量检查
    check_static            — 静态文件存在性检查
@@ -36,7 +36,7 @@ logger = structlog.get_logger()
 class UvmToolContext:
     """UVM 工具共享上下文 —— 替代原 _LLM_CTX 全局 dict。
 
-    VerificationArchitect.execute_task() 在每次 LLM 调用前设置上下文。
+    UvmAgent.execute_task() 在每次 LLM 调用前设置上下文。
     工具函数通过 _uvm_ctx 单例读写上下文。
     """
 
@@ -90,10 +90,10 @@ _registry_instance = None
 
 
 def ensure_uvm_tool_registry():
-    """返回 verify_architect 所有 Tool 的 ToolRegistry（含 JSON Schema）。
+    """返回 testbench_orchestrator 所有 Tool 的 ToolRegistry（含 JSON Schema）。
 
-    这是 verify_architect 工具 schema 的单一事实来源。
-    供 agent_tools.py 和 VerificationArchitect._setup() 使用。
+    这是 testbench_orchestrator 工具 schema 的单一事实来源。
+    供 agent_tools.py 和 UvmAgent._setup() 使用。
     """
     global _registry_initialized, _registry_instance
     if _registry_initialized:
@@ -1041,6 +1041,7 @@ def _run_static_check(output_dir: Path, agents: list) -> dict:
 def _run_compile_check(output_dir: Path, agents: list, env_name: str) -> dict:
     """编译检查 —— 使用 RegressionRunner，保存日志到 sim/agent/compile_{env_name}.log。"""
     import time
+    from src.tools.lib.regress_dir import get_compile_dir
     fl = _build_filelist_for_tb(output_dir, agents, env_name)
     top = f"{env_name}_bench_tb_top"
 
@@ -1050,6 +1051,7 @@ def _run_compile_check(output_dir: Path, agents: list, env_name: str) -> dict:
         filelist=str(fl.resolve()),
         top_module=top,
         coverage=False,
+        compile_dir=get_compile_dir(output_dir),
     )
     result = runner.compile()
     elapsed = round(time.time() - t0, 1)
@@ -1278,12 +1280,18 @@ def _run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
     t0 = time.time()
     print(f"    [{agent_name}] compiling loopback TB... ", end="", flush=True)
 
+    from src.tools.lib.regress_dir import get_compile_dir as _gcd, get_sim_dir as _gsd
+    _cd = _gcd(output_dir)
+    _sd = _gsd(output_dir)
+
     # ── 编译：使用 RegressionRunner ──
     runner = RegressionRunner(
         env_output_dir=str(output_dir),
         filelist=str(fl.resolve()),
         top_module=top,
         coverage=False,
+        compile_dir=_cd,
+        sim_dir=_sd,
     )
     compile_result = runner.compile()
     compile_ok = compile_result["status"] == "PASS"
@@ -1299,6 +1307,8 @@ def _run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
                 env_output_dir=str(output_dir),
                 filelist=str(fl.resolve()),
                 top_module=top, coverage=False,
+                compile_dir=_cd,
+                sim_dir=_sd,
             )
             compile_result = runner.compile()
             compile_ok = compile_result["status"] == "PASS"
@@ -1309,7 +1319,8 @@ def _run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
                     "sim": "SKIPPED", "score": 0, "passed": False,
                     "autofix_attempted": bool(fixed)}
 
-    wd = (output_dir / "build" / "work").resolve()  # 与 RegressionRunner 默认 work_dir 一致
+    compile_base = output_dir / _cd if _cd else output_dir
+    wd = (compile_base / "build" / "work").resolve()  # 与 RegressionRunner 默认 work_dir 一致
     wd_str = str(wd).replace("\\", "/")
     sim_agent_dir = (output_dir / "sim" / "agent").resolve()
     sim_agent_dir.mkdir(parents=True, exist_ok=True)
@@ -1452,7 +1463,7 @@ def _generate_real_quality_report(output_dir: Path, agents: list,
 
     report = {
         "timestamp": datetime.now().isoformat(),
-        "agent": "verification_architect",
+        "agent": "uvm",
         "output_dir": str(output_dir.resolve()),
         "env_name": env_name,
         "scores": result["scores"],

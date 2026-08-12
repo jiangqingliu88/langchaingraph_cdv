@@ -701,15 +701,17 @@ async def create_document(project_id: int, path: str, title: str, content: str,
         s.add(doc)
         await s.flush()
 
-        v = DocVersion(document_id=doc.id, version='1.0', content=content,
+        doc_id = doc.id  # capture before commit to avoid MissingGreenlet on expired instance
+
+        v = DocVersion(document_id=doc_id, version='1.0', content=content,
                        content_hash=content_hash, change_summary='初始创建', author_id=author_id)
         s.add(v)
 
         for r in _extract_requirements(content):
-            s.add(DocRequirement(document_id=doc.id, **r))
+            s.add(DocRequirement(document_id=doc_id, **r))
 
         await s.commit()
-        return doc.id
+        return doc_id
     finally:
         await s.close()
 
@@ -741,8 +743,9 @@ async def update_document(doc_id: int, content: str, author_id: int,
         for r in _extract_requirements(content):
             s.add(DocRequirement(document_id=doc_id, **r))
 
+        result_id = doc.id  # capture before commit to avoid MissingGreenlet
         await s.commit()
-        return doc.id
+        return result_id
     finally:
         await s.close()
 

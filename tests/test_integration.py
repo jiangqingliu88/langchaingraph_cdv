@@ -164,7 +164,7 @@ class TestContextPersistence:
         store.put("spec", {"design_name": "ALU"}, source="spec_planner")
         store.put("env", {"env_name": "alu_env"}, source="architect")
 
-        removed = store.prune(["design_architect", "model_agent", "verification_architect"])
+        removed = store.prune(["design", "model", "rtl", "uvm"])
         assert "spec" in removed
         assert "spec" not in store.keys()
         assert "env" in store.keys()

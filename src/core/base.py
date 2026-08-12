@@ -231,8 +231,19 @@ class BaseAgent(ABC, AgentSubject):
         except Exception:
             pass  # ToolHub 不可用时保持原有工具
 
-        # 3. 获取Prompt
+        # 3. 获取Prompt + 注入铁律
         prompt = await self._get_prompt_template()
+        if prompt and hasattr(prompt, 'messages'):
+            # 注入"先读后写"约束到 system prompt
+            for i, msg in enumerate(prompt.messages):
+                if hasattr(msg, 'prompt') and isinstance(msg.prompt, str) and hasattr(msg, 'template'):
+                    from langchain.prompts import SystemMessagePromptTemplate
+                    prompt.messages[i] = SystemMessagePromptTemplate.from_template(
+                        msg.prompt.template + "\n" + self.read_before_write_constraint()
+                    )
+                elif hasattr(msg, 'content') and isinstance(msg.content, str):
+                    setattr(msg, 'content', msg.content + "\n" + self.read_before_write_constraint())
+                    break
 
         # 4. 子类特定初始化
         await self._setup()
@@ -363,6 +374,72 @@ class BaseAgent(ABC, AgentSubject):
                 ctx[self.produces] = relevant
 
     # ── 验证 ──
+
+    # ── Tool Schema 运行时校验 ──
+
+    def validate_output(self, result_data: dict) -> tuple[bool, List[str]]:
+        """根据工具集的 schema.yaml 校验 Agent 输出结构。
+
+        自动查找对应工具目录下的 schema.yaml 并校验必填字段。
+        返回 (passed, issues)。
+        """
+        issues = []
+        # 根据角色查找 schema.yaml
+        schema_map = {
+            "spec": "src/tools/spec_tools/schema.yaml",
+            "uvm": "src/tools/uvm_tools/schema.yaml",
+            "test": "src/tools/testcase_tools/schema.yaml",
+            "assert": "src/tools/assertion_tools/schema.yaml",
+            "debug": "src/tools/debug_tools/schema.yaml",
+        }
+        schema_path = schema_map.get(self.role)
+        if not schema_path:
+            return True, []  # 无 schema 则跳过
+
+        try:
+            import yaml
+            with open(schema_path, "r", encoding="utf-8") as f:
+                schema = yaml.safe_load(f)
+        except Exception:
+            return True, []  # schema 读失败不阻断
+
+        tools = schema.get("tools", {})
+        # 取第一个 tool 的 output schema 做校验
+        for tool_def in tools.values():
+            expected = tool_def.get("output", {}).get("schema", {})
+            if not expected:
+                continue
+            # 检查 result_data 是否包含 schema 中定义的关键字段
+            if isinstance(result_data, dict):
+                for key in expected:
+                    if callable(expected[key]):
+                        continue
+                    # 宽松校验: result_data 或其子 key 中存在即可
+                    found = key in result_data
+                    if not found:
+                        for sub_key in result_data:
+                            sub_val = result_data[sub_key]
+                            if isinstance(sub_val, dict) and key in sub_val:
+                                found = True
+                                break
+                    if not found:
+                        issues.append(f"missing key '{key}' (expected by {tool_def.get('description','?')})")
+            break  # 只校验第一个 tool 的 schema
+
+        return len(issues) == 0, issues
+
+    # ── 先读后写约束 ──
+
+    @staticmethod
+    def read_before_write_constraint() -> str:
+        """注入到 Agent System Prompt 的 '先读后写' 铁律。"""
+        return (
+            "\n## ABSOLUTE RULES (违反即中断)\n"
+            "- **先读后写**: 修改任何文件前，必须先用 read_file 读取当前内容。禁止盲写。\n"
+            "- **一次性修复**: 同一文件不要反复修改。收集所有变更后一次性 write。\n"
+            "- **格式强制**: 输出必须是合法 JSON 或 SystemVerilog。不要输出 markdown 包装。\n"
+            "- **输出校验**: 输出前自查: design_name 不是占位符? interfaces 有信号? 文件都存在?\n"
+        )
 
     def validate(self, result_data: dict) -> tuple[bool, str]:
         """验证 Agent 产出是否达到最低质量标准。

@@ -1,8 +1,11 @@
 # src/tools/testcase_gen/templates/run_script.sh.j2
 #!/bin/bash
 # Run: {{ test_name }}
+# Regress Dir: {{ regress_dir }}          # uvm_regress (UVM 阶段) / test_regress (Test 阶段)
 # Policy Mode: {{ policy_mode }}
 # Active Policies: {{ active_policies|join(' ') }}
+
+cd {{ regress_dir }}/build/work || exit 1
 
 vsim -c -do "run -all" \
     +UVM_TESTNAME={{ test_name }} \

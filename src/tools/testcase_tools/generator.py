@@ -14,15 +14,19 @@ from jinja2 import Environment, FileSystemLoader
 class TestCaseGenerator:
     """测试用例生成器"""
     
-    def __init__(self, yaml_path: str):
+    def __init__(self, yaml_path: str, regress_dir: str = None):
         self.yaml_path = Path(yaml_path)
         self.config = self._load_config()
         self.env_name = self.config.get("constraint", {}).get("env_name", "ENV")
         self.project_name = self.config.get("constraint", {}).get("name", "project")
+        # regress_dir: CLI 参数 > YAML constraint > 默认 test_regress
+        self.regress_dir = (regress_dir
+                            or self.config.get("constraint", {}).get("regress_dir")
+                            or "test_regress")
         self.transactions = self.config.get("transactions", [])
         self.policies = self.config.get("policies", [])
         self.combinator = self.config.get("combinator", {})
-        
+
         # Jinja2 环境
         template_dir = Path(__file__).parent / "templates"
         self.jinja = Environment(loader=FileSystemLoader(str(template_dir)))
@@ -126,6 +130,7 @@ class TestCaseGenerator:
         return template.render(
             env_name=self.env_name,
             project_name=self.project_name,
+            regress_dir=self.regress_dir,
             sequence_name=f"{test_def['test_name']}_seq",
             policy_mode=test_def["policy_mode"],
             active_policies=test_def["active_policies"],
@@ -135,13 +140,14 @@ class TestCaseGenerator:
             policies=[p for p in self.policies if p["name"] in test_def["active_policies"]],
             clock="clk",
         )
-    
+
     def generate_test(self, test_def: Dict) -> str:
         """生成 Test 代码"""
         template = self.jinja.get_template("test.sv.j2")
         return template.render(
             env_name=self.env_name,
             project_name=self.project_name,
+            regress_dir=self.regress_dir,
             test_name=test_def["test_name"],
             sequence_name=f"{test_def['test_name']}_seq",
             scenario=test_def["scenario"],
@@ -153,12 +159,13 @@ class TestCaseGenerator:
                 {"name": "transactions_done", "condition": "1", "message": "All transactions completed"},
             ],
         )
-    
+
     def generate_run_script(self, test_def: Dict) -> str:
         """生成运行脚本"""
         template = self.jinja.get_template("run_script.sh.j2")
         return template.render(
             env_name=self.env_name,
+            regress_dir=self.regress_dir,
             test_name=test_def["test_name"],
             policy_mode=test_def["policy_mode"],
             active_policies=test_def["active_policies"],
@@ -301,20 +308,29 @@ def main():
         print("Usage: python generator.py <yaml_file> [OPTIONS]")
         print()
         print("OPTIONS:")
-        print("  --all             生成所有测试（自动检测矩阵/场景模式）")
-        print("  --scenarios       列出 YAML 中的场景")
-        print("  --matrix          显示测试矩阵（矩阵模式）")
-        print("  --test N          预览第 N 个测试/场景的代码")
-        print("  --output DIR      指定输出目录（默认: output/testcases）")
+        print("  --all                生成所有测试（自动检测矩阵/场景模式）")
+        print("  --scenarios          列出 YAML 中的场景")
+        print("  --matrix             显示测试矩阵（矩阵模式）")
+        print("  --test N             预览第 N 个测试/场景的代码")
+        print("  --output DIR         指定输出目录（默认: output/testcases）")
+        print("  --regress-dir DIR    编译仿真目录（默认: test_regress，UVM 阶段用 uvm_regress）")
         print()
         print("Examples:")
         print("  python generator.py ALU_constraint.yaml --all")
+        print("  python generator.py ALU_constraint.yaml --all --regress-dir uvm_regress")
         print("  python generator.py ALU_constraint.yaml --scenarios")
         print("  python generator.py ALU_constraint.yaml --test 0")
         sys.exit(1)
 
     yaml_file = sys.argv[1]
-    gen = TestCaseGenerator(yaml_file)
+
+    # 解析 --regress-dir
+    regress_dir = None
+    if "--regress-dir" in sys.argv:
+        ridx = sys.argv.index("--regress-dir")
+        regress_dir = sys.argv[ridx + 1] if ridx + 1 < len(sys.argv) else None
+
+    gen = TestCaseGenerator(yaml_file, regress_dir=regress_dir)
 
     # 解析 --output
     output_dir = "output/testcases"

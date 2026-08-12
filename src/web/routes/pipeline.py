@@ -51,8 +51,13 @@ class PipelineRunRequest(BaseModel):
     spec_text: str = ""
     spec_file: str = ""
     workflow: str = "full_verification"
+    profile: str = ""
     output_dir: str = "."
     run_type: str = "traditional"
+    gate_enabled: bool = False
+    approval_mode: str = "auto"
+    phase_timeout: int = 600
+    regression_mode: str = ""
 
 
 class TestCaseGenerateRequest(BaseModel):
@@ -104,47 +109,34 @@ async def pipeline_run(req: PipelineRunRequest, user: dict = Depends(require_aut
 
     app_mode = os.environ.get("APP_MODE", "demo").lower()
 
-    async def _run():
-        import time
-        started = time.time()
+    # 管线内部会设置 _runs[run_id] = run_state，我们预注册 status 记录
+    service._runs[run_id] = {"run_id": run_id, "state": "pending", "phases": [], "passed": 0,
+                              "total": 0, "overall_score": 0, "scores": {}, "governance": {},
+                              "output_root": output_root}
+
+    async def _execute():
         try:
-            await service.run_pipeline(spec_text=spec_text, workflow=resolved_workflow,
-                                       output_root=output_root, run_id=run_id)
-            duration = time.time() - started
-            try:
-                from src.infra.observability import get_metrics
-                state_obj = service.get_run_status(run_id) or {}
-                phases = state_obj.get("phases", [])
-                get_metrics().record_pipeline_run(
-                    run_id=run_id, workflow=resolved_workflow,
-                    state=state_obj.get("state", "completed"),
-                    duration_s=duration,
-                    phases_total=len(phases),
-                    phases_passed=sum(1 for p in phases if p.get("status") == "passed"),
-                    phases_failed=sum(1 for p in phases if p.get("status") in ("failed", "error")),
-                    started_at=str(state_obj.get("started_at", "")),
-                    completed_at=str(state_obj.get("completed_at", "")))
-            except Exception:
-                pass
-
-            try:
-                from src.infra.event_bus import get_event_bus, StandardEvent
-                bus = get_event_bus()
-                state_obj = service.get_run_status(run_id) or {}
-                event = StandardEvent.PIPELINE_FAILED if state_obj.get("state") == "completed_with_errors" else StandardEvent.PIPELINE_COMPLETED
-                await bus.publish(event, {"run_id": run_id, "workflow": resolved_workflow}, source="api.pipeline")
-            except Exception:
-                pass
+            await service.run_pipeline(
+                spec_text=spec_text, workflow=resolved_workflow,
+                output_root=output_root, run_id=run_id,
+                gate_enabled=req.gate_enabled,
+                phase_timeout=req.phase_timeout,
+                profile_name=req.profile or "")
+            # run_pipeline 已直接更新了 _runs[run_id]，无需再 update
         except Exception as e:
-            pass
+            service._runs[run_id].update({"state": "error", "phases": [
+                {"name": "error", "status": "error", "score": 0, "time": 0, "reason": str(e)[:200]}]})
 
-    asyncio.create_task(_run())
+    import asyncio
+    asyncio.ensure_future(_execute())
 
     from src.database.repository import add_audit_log
     await add_audit_log(user["user_id"], user["username"], "pipeline_run", run_id,
                         f"workflow={resolved_workflow} role={user_role} started run_type={req.run_type}")
+    exec_log = str(Path("logs/execution") / f"exec_{run_id.replace('run_','')}.jsonl")
     return {"run_id": run_id, "workflow": resolved_workflow, "status": "started",
-            "run_type": req.run_type, "role": user_role}
+            "run_type": req.run_type, "role": user_role, "exec_log": exec_log,
+            "output_dir": output_root}
 
 
 @router.get("/pipeline/{run_id}/stream")
@@ -227,12 +219,6 @@ async def pipeline_stream(run_id: str):
                 break
             await asyncio.sleep(1)
     return StreamingResponse(gen(), media_type="text/event-stream")
-
-
-@router.get("/spec/default")
-async def default_spec():
-    p = Path("spec_uart.txt")
-    return {"content": p.read_text(encoding="utf-8") if p.exists() else "", "file": str(p) if p.exists() else ""}
 
 
 @router.get("/testcases/list")

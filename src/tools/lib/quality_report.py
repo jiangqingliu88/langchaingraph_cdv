@@ -112,7 +112,7 @@ def generate_quality_report(output_dir: Path, agents: list, env_name: str) -> di
 
     report = {
         "timestamp": datetime.now().isoformat(),
-        "agent": "verification_architect",
+        "agent": "uvm",
         "output_dir": str(output_dir.resolve()),
         "env_name": env_name,
         "scores": result["scores"],

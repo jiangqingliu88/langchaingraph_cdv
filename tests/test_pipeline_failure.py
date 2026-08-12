@@ -166,19 +166,19 @@ class TestResourceScheduler:
         """单个 agent 依赖查询"""
         from src.infra.resource_scheduler import get_dep_graph
         graph = get_dep_graph()
-        deps = graph.get_agent_deps("coverage_manager")
-        assert deps["role"] == "coverage_manager"
-        assert "regression_manager" in deps["upstream"]
-        assert "test_engineer" in deps["upstream"]
+        deps = graph.get_agent_deps("cover")
+        assert deps["role"] == "cover"
+        assert "regress" in deps["upstream"]
+        assert "test" in deps["upstream"]
 
     def test_dependency_runnable_check(self):
         """依赖满足检查"""
         from src.infra.resource_scheduler import get_dep_graph
         graph = get_dep_graph()
-        # test_engineer 依赖 verification_architect
-        assert not graph.check_runnable("test_engineer", [])
-        assert graph.check_runnable("test_engineer", ["verification_architect", "design_architect"])
-        assert graph.check_runnable("spec_and_test_planner", [])
+        # test 依赖 uvm
+        assert not graph.check_runnable("test", [])
+        assert graph.check_runnable("test", ["uvm"])
+        assert graph.check_runnable("spec", [])
 
 
 class TestContextSnapshot:

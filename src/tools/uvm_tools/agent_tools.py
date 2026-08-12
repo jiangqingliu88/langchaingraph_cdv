@@ -79,7 +79,7 @@ def write_file(path_content: str) -> str:
 
 # ── Tool Schema 注册（供 agent_tools.py 使用）──
 def ensure_uvm_tool_registry():
-    """返回 verify_architect 所有 Tool 的 ToolRegistry（单例）。"""
+    """返回 testbench_orchestrator 所有 Tool 的 ToolRegistry（单例）。"""
     import importlib
     global _registry_instance
     if "_registry_instance" in dir() and _registry_instance is not None:

@@ -570,7 +570,7 @@ def register_to_hub(registry: ToolRegistry, agent_roles: List[str] = None) -> in
 
     用法:
       registry = register_all_tools()
-      register_to_hub(registry, ["verify_architect", "test_engineer"])
+      register_to_hub(registry, ["uvm", "test"])
     """
     from src.core.tool_hub import ToolHub, _OldToolAdapter
     hub = ToolHub.get_instance()
@@ -592,7 +592,7 @@ def wrap_agent_tools(agent, registry: ToolRegistry = None, sandbox: Sandbox = No
     """为 Agent 的工具添加 Schema 验证层。在 agent.initialize() 之后调用。
 
     用法:
-      agent = VerificationArchitect()
+      agent = UvmAgent()
       await agent.initialize()
       registry = ToolRegistry()
       register_builtin_tools(registry)

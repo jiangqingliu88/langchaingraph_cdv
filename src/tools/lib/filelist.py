@@ -42,6 +42,15 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
         f"+incdir+{output_dir.resolve()}/env/tests",
         str(output_dir.resolve() / f"env/tests/{env_name}_test_pkg.sv"),
     ]
+    # 添加 bench top (testbench 顶层模块)
+    bench_dir = output_dir / "bench"
+    if bench_dir.exists():
+        for sv in sorted(bench_dir.glob("*_tb_top.sv")):
+            lines.append(str(sv.resolve()))
+        # 如果没找到 _tb_top，添加所有 bench 下的 sv
+        if not list(bench_dir.glob("*_tb_top.sv")):
+            for sv in sorted(bench_dir.glob("*.sv")):
+                lines.append(str(sv.resolve()))
     fl_path.write_text("\n".join(lines), encoding="utf-8", errors="replace")
     return fl_path
 

@@ -7,13 +7,30 @@ from src.tools.debug_tools import analyze_simulation_log
 from src.tools.coverage_tools import collect_coverage
 
 def test_analyze_specification():
-    result = analyze_specification("UART spec")
+    spec_text = """# UART Module
+## Overview
+Universal asynchronous receiver transmitter supporting 8N1 format.
+
+## Interfaces
+| Signal | Width | Direction | Protocol | Description |
+|--------|-------|-----------|----------|-------------|
+| clk | 1 | INPUT |  | Clock |
+| rst_n | 1 | INPUT |  | Reset |
+| tx | 1 | OUTPUT | uart | TX out |
+| rx | 1 | INPUT | uart | RX in |
+
+## Features
+- Full duplex communication
+- Configurable baud rate
+- FIFO buffer support
+"""
+    result = analyze_specification(spec_text)
     data = json.loads(result)
     assert "features" in data
     assert "interfaces" in data
 
 def test_extract_features():
-    result = extract_features("spec")
+    result = extract_features("UART module with full duplex communication, configurable baud rate, and FIFO buffer support")
     data = json.loads(result)
     assert "basic_features" in data
 

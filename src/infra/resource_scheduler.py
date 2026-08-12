@@ -142,17 +142,17 @@ class DependencyGraph:
 
     # Agent 依赖关系（基于 consumes/produces 推断）
     AGENT_GRAPH = {
-        "spec_and_test_planner": {"produces": "vplan", "consumes": ["spec"], "deps": []},
-        "design_architect": {"produces": "design_arch", "consumes": ["spec"], "deps": ["spec_and_test_planner"]},
-        "verification_architect": {"produces": "verify_arch", "consumes": ["design_arch", "vplan"], "deps": ["design_architect"]},
-        "model_agent": {"produces": "cmodel", "consumes": ["spec", "design_arch"], "deps": ["design_architect"]},
-        "test_engineer": {"produces": "tests", "consumes": ["vplan", "verify_arch"], "deps": ["verification_architect"]},
-        "assertion_engineer": {"produces": "assertions", "consumes": ["design_arch", "spec"], "deps": ["design_architect"]},
-        "coverage_manager": {"produces": "coverage", "consumes": ["tests", "regression"], "deps": ["test_engineer", "regression_manager"]},
-        "regression_manager": {"produces": "regression", "consumes": ["tests", "env"], "deps": ["test_engineer"]},
-        "debug_engineer": {"produces": "debug_report", "consumes": ["regression", "tests"], "deps": ["regression_manager"]},
-        "quality_assurance": {"produces": "qa_report", "consumes": ["coverage", "regression", "debug_report"], "deps": ["coverage_manager", "regression_manager"]},
-        "report_generator": {"produces": "final_report", "consumes": ["qa_report", "coverage", "regression"], "deps": ["quality_assurance"]},
+        "spec": {"produces": "vplan", "consumes": ["spec"], "deps": []},
+        "design": {"produces": "design_arch", "consumes": ["spec"], "deps": ["spec"]},
+        "uvm": {"produces": "verify_arch", "consumes": ["design_arch", "vplan"], "deps": ["design"]},
+        "model": {"produces": "cmodel", "consumes": ["spec", "design_arch"], "deps": ["design"]},
+        "test": {"produces": "tests", "consumes": ["vplan", "verify_arch"], "deps": ["uvm"]},
+        "assert": {"produces": "assertions", "consumes": ["design_arch", "spec"], "deps": ["design"]},
+        "cover": {"produces": "coverage", "consumes": ["tests", "regression"], "deps": ["test", "regress"]},
+        "regress": {"produces": "regression", "consumes": ["tests", "env"], "deps": ["test"]},
+        "debug": {"produces": "debug_report", "consumes": ["regression", "tests"], "deps": ["regress"]},
+        "qa": {"produces": "qa_report", "consumes": ["coverage", "regression", "debug_report"], "deps": ["cover", "regress"]},
+        "report": {"produces": "final_report", "consumes": ["qa_report", "coverage", "regression"], "deps": ["qa"]},
     }
 
     def build_graph(self, workflow: str = "full_verification") -> dict:

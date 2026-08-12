@@ -12,7 +12,7 @@ ToolHub — 统一工具注册中心 (Phase 1)
   from src.core.tool_hub import ToolHub
   hub = ToolHub.get_instance()
   hub.bootstrap()
-  tools_for_agent = hub.get_llm_tools("verify_architect")
+  tools_for_agent = hub.get_llm_tools("uvm")
 """
 from __future__ import annotations
 
@@ -417,7 +417,7 @@ class ToolHub:
             uvm_reg = ensure_uvm_tool_registry()
             for old_tool in uvm_reg._tools.values():
                 itool = _OldToolAdapter(old_tool)
-                if self.register(itool, ["verification_architect"]):
+                if self.register(itool, ["uvm"]):
                     count += 1
         except Exception as e:
             logger.warning(f"Failed to load uvm_tools: {e}")

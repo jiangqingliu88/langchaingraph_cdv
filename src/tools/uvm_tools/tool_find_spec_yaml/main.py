@@ -16,7 +16,7 @@ from src.tools.uvm_tools.tool_uvm.gen_uvm import TEMPLATES_DIR
 
 
 def _load_spec(output_dir: Path) -> dict | None:
-    """尝试从输出目录加载 spec.json（由 verify_architect 保存）"""
+    """尝试从输出目录加载 spec.json（由 testbench_orchestrator 保存）"""
     spec_path = output_dir / "spec.json"
     if spec_path.exists():
         try:

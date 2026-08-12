@@ -1378,18 +1378,38 @@ def _build_rtm(ctx: dict, ps: dict) -> str:
     out.append(f"- **需求数**: {len(features)} | **测试点数**: {sum(len(tp.get('tests',[])) for tp in test_points if isinstance(tp,dict))}")
     out.append("")
 
+    # Read actual coverage + regression data (docs runs AFTER regress_cov)
+    cov_data = _parse_json(ctx.get("coverage")) or {}
+    reg_data = _parse_json(ctx.get("regression")) or {}
+
+    def _cov_badge(pct, target):
+        try:
+            v = float(str(pct).replace("%",""))
+            t = float(str(target).replace("%",""))
+            return f"{v:.1f}% ✅" if v >= t else f"{v:.1f}% ❌"
+        except (ValueError, TypeError):
+            return "⏳"
+
     # Main RTM table
     out.append("## 2. 需求追踪矩阵\n")
     out.append("| REQ-ID | 需求 | 设计模块 | 测试点 | 覆盖率 | 状态 |")
     out.append("|--------|------|----------|--------|--------|------|")
+
+    # 从 regress_cov 获取真实 pass/fail
+    test_results = reg_data.get("tests", []) or []
+    test_status_map = {}
+    for t in test_results:
+        if isinstance(t, dict):
+            test_status_map[t.get("name", "")] = t.get("status", "⏳")
+
     tp_counter = 0
     for feat_idx, feat in enumerate(features, 1):
         if not isinstance(feat, dict):
             continue
         fn = feat.get("name", str(feat))
         fd = feat.get("description", "-")
-        # Find matching test points
         matching_tps = []
+        tp_statuses = []
         for tp in test_points:
             if not isinstance(tp, dict):
                 continue
@@ -1399,21 +1419,41 @@ def _build_rtm(ctx: dict, ps: dict) -> str:
                 tn = t.get("name", "") if isinstance(t, dict) else str(t)
                 if fn.split("_")[0] in tn or cat.replace("_","") in fn.replace("_",""):
                     matching_tps.append(tn)
+                    # 从真实回归结果查状态
+                    st = test_status_map.get(tn, test_status_map.get(f"test_{tn}", "⏳"))
+                    tp_statuses.append(st if st != "⏳" else "—")
         tp_str = ", ".join(f"`{t}`" for t in matching_tps[:3])
         if len(matching_tps) > 3:
             tp_str += f" +{len(matching_tps)-3}"
+        status_icons = [{"PASS":"✅","FAIL":"❌","DEGRADED":"⚠️"}.get(s, "—") for s in tp_statuses[:3]]
+        status_str = " ".join(status_icons) if status_icons else "—"
+
+        # 覆盖率来自真实数据
+        overall_pct = cov_data.get("overall_pct", cov_data.get("coverage_pct", "⏳"))
+        cov_str = _cov_badge(overall_pct, "90") if overall_pct != "⏳" else "⏳"
+
         out.append(f"| REQ-{feat_idx:03d} | {fd[:40]} | `{fn}` | "
-                  f"{tp_str or '待分配'} | ⏳ | ⏳ |")
+                  f"{tp_str or '待分配'} | {cov_str} | {status_str} |")
     out.append("")
 
-    # Coverage mapping
+    # Coverage mapping — 来自真实数据
     out.append("## 3. 覆盖率映射\n")
     out.append("| 覆盖率类型 | 目标 | 关联需求 | 当前状态 |")
     out.append("|------------|------|----------|----------|")
     cov_goals = spec.get("coverage_goals", {}) or {}
-    for ct, reqs in [("Line", "REQ-001~REQ-004"), ("Branch", "REQ-001~REQ-004"),
-                      ("Toggle", "REQ-001~REQ-002"), ("Functional", "ALL")]:
-        out.append(f"| {ct} | {_safe(cov_goals, ct.lower(), default='-')} | {reqs} | ⏳ |")
+    cov_lines = [
+        ("Line",    str(cov_data.get("line_pct", "⏳")) + "%" if cov_data.get("line_pct") is not None else "⏳",
+         cov_goals.get("line_coverage", cov_goals.get("code_coverage", "95%"))),
+        ("Branch",  str(cov_data.get("branch_pct", "⏳")) + "%" if cov_data.get("branch_pct") is not None else "⏳",
+         cov_goals.get("branch_coverage", "90%")),
+        ("Toggle",  str(cov_data.get("toggle_pct", "⏳")) + "%" if cov_data.get("toggle_pct") is not None else "⏳",
+         cov_goals.get("toggle_coverage", "85%")),
+        ("Functional", str(cov_data.get("functional_pct", "⏳")) + "%" if cov_data.get("functional_pct") is not None else "⏳",
+         "100%"),
+    ]
+    for ct, current, target in cov_lines:
+        badge = _cov_badge(current, target) if current != "⏳" else "⏳"
+        out.append(f"| {ct} | {target} | REQ-001~REQ-004 | {badge} |")
     out.append("")
 
     out.append(_doc_footer("RTM-DOC-008"))
