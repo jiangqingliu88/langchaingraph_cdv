@@ -351,21 +351,8 @@ class ConsistencyLinter:
         self._naming = NamingValidator()
 
     def check_state_consistency(self) -> List[ConsistencyIssue]:
-        """检查各模块使用的状态字符串是否与统一定义一致"""
-        issues = []
-        # 扫描 api.py 中的状态字符串
-        api_file = Path("src/web/api.py")
-        if api_file.exists():
-            content = api_file.read_text(encoding="utf-8")
-            # 查找硬编码的状态字符串
-            hardcoded_states = re.findall(r'"status"\s*!=\s*"(\w+)"', content)
-            valid_states = {s.value for s in SignoffState}
-            for state in hardcoded_states:
-                if state not in valid_states:
-                    issues.append(ConsistencyIssue(
-                        "state", "api.py", f"硬编码的状态值 '{state}' 不在 SignoffState 枚举中",
-                        "warning"))
-        return issues
+        """检查各模块使用的状态字符串是否与统一定义一致（web 已移除，无 api.py 可扫描）"""
+        return []
 
     def check_duplicate_definitions(self) -> List[ConsistencyIssue]:
         """检查重复定义（如多处定义了相同的状态字符串）"""
@@ -385,18 +372,8 @@ class ConsistencyLinter:
         return issues
 
     def check_api_path_consistency(self) -> List[ConsistencyIssue]:
-        """检查 API 路径命名一致性"""
-        issues = []
-        api_file = Path("src/web/api.py")
-        if api_file.exists():
-            content = api_file.read_text(encoding="utf-8")
-            paths = re.findall(r'@app\.\w+\("([^"]+)"\)', content)
-            for p in paths:
-                v = self._naming.validate_api_path(p)
-                if v:
-                    issues.append(ConsistencyIssue("naming", f"api.py:{p}",
-                                                   f"API 路径不符合规范: {p}", "warning"))
-        return issues
+        """检查 API 路径命名一致性（web 已移除，无 api.py 可扫描）"""
+        return []
 
     def check_table_naming(self) -> List[ConsistencyIssue]:
         """检查数据库表命名"""

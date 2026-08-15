@@ -125,6 +125,9 @@ class Harness:
     PAUSE_MARKER = ".harness_pause"
     ABORT_MARKER = ".harness_abort"
 
+    # 快照备份范围：只备份关键源文件（不备份 build/sim 编译产物，可重新生成）
+    SNAPSHOT_DIRS = ["rtl", "env", "agents", "bench", "inputs", "docs"]
+
     def __init__(self, output_root: str = "output",
                  max_retries: int = 3, base_timeout: int = 600,
                  backoff_base: float = 2.0):
@@ -142,11 +145,48 @@ class Harness:
         self.interrupt_phase = ""
         self.human_modifications: Dict[str, dict] = {}  # phase → diff
 
+    # ── 快照备份 / 恢复（真回滚）──
+
+    def _backup_files(self, phase_index: int, phase_name: str) -> Path:
+        """备份关键源文件到快照目录（真回滚的数据源）。"""
+        import shutil
+        backup_dir = self.snapshots_dir / f"snap_{phase_index:02d}_{phase_name}" / "files"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        for sub in self.SNAPSHOT_DIRS:
+            src = self.output_root / sub
+            if not src.exists():
+                continue
+            for f in src.rglob("*"):
+                if not f.is_file():
+                    continue
+                rel = f.relative_to(self.output_root)
+                dst = backup_dir / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(f, dst)
+        return backup_dir
+
+    def restore_files(self, phase_index: int, phase_name: str) -> int:
+        """从快照备份恢复关键源文件，返回恢复文件数（真回滚）。"""
+        import shutil
+        backup_dir = self.snapshots_dir / f"snap_{phase_index:02d}_{phase_name}" / "files"
+        if not backup_dir.exists():
+            return 0
+        count = 0
+        for f in backup_dir.rglob("*"):
+            if not f.is_file():
+                continue
+            rel = f.relative_to(backup_dir)
+            dst = self.output_root / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, dst)
+            count += 1
+        return count
+
     # ── 快照 ──
 
     def snapshot(self, phase_name: str, phase_index: int,
                  ctx, results: dict, scores: dict) -> PhaseSnapshot:
-        """创建阶段快照，保存到磁盘。"""
+        """创建阶段快照，保存到磁盘（含文件备份，支持真回滚）。"""
         # 复制 ctx
         ctx_copy = {}
         if hasattr(ctx, 'snapshot'):
@@ -156,6 +196,11 @@ class Harness:
 
         # 文件快照
         file_manifest = _scan_files(self.output_root)
+        # 备份关键源文件（供 restore 真回滚）
+        try:
+            self._backup_files(phase_index, phase_name)
+        except Exception as e:
+            logger.warning(f"Snapshot backup failed: {e}")
 
         snap = PhaseSnapshot(
             phase_name=phase_name,
@@ -186,7 +231,7 @@ class Harness:
         return snap
 
     def restore(self, snapshot: PhaseSnapshot) -> dict:
-        """从快照恢复 — 返回恢复信息。"""
+        """从快照恢复 — 检测变更 + 真回滚文件。"""
         # 检测文件变更（人工可能修改了代码）
         current_files = _scan_files(self.output_root)
         diff = _diff_manifests(snapshot.file_manifest, current_files)
@@ -199,12 +244,16 @@ class Harness:
             self.interrupted = True
             self.interrupt_phase = snapshot.phase_name
 
+        # 真回滚：从快照备份恢复关键源文件
+        restored = self.restore_files(snapshot.phase_index, snapshot.phase_name)
+
         return {
             "snapshot_phase": snapshot.phase_name,
             "timestamp": snapshot.timestamp,
             "human_intervention": diff["human_intervention"],
             "files_modified": diff["modified"],
             "files_added": diff["added"],
+            "files_restored": restored,
             "can_resume": True,
         }
 

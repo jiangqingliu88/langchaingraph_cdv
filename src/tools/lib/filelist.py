@@ -21,6 +21,11 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
     if rtl_dir.exists():
         for sv in sorted(rtl_dir.glob("*.sv")):
             lines.append(str(sv.resolve()))
+    # 添加 SystemVerilog 参考模型（与 DUT 并排 compare 用）
+    model_dir = output_dir / "model"
+    if model_dir.exists():
+        for sv in sorted(model_dir.rglob("*_ref_model.sv")):
+            lines.append(str(sv.resolve()))
     for a in agents:
         name = a["name"]
         iface = output_dir / f"agents/{name}/{name}_interface.sv"

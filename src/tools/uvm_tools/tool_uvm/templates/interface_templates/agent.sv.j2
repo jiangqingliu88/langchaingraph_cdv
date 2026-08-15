@@ -19,10 +19,10 @@ class {{ agent.name }}_agent extends uvm_agent;
 
   virtual function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    if (!uvm_config_db #({{ agent.name }}_config)::get(this, "", "cfg", cfg))
+    if (!uvm_config_db#({{ agent.name }}_config)::get(this, "", "cfg", cfg))
       `uvm_fatal("CFG", "Config not set")
 
-    uvm_config_db #({{ agent.name }}_config)::set(this, "*", "cfg", cfg);
+    uvm_config_db#({{ agent.name }}_config)::set(this, "*", "cfg", cfg);
 
     mon = {{ agent.name }}_monitor::type_id::create("mon", this);
 

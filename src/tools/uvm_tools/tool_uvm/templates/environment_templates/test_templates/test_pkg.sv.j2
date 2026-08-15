@@ -13,6 +13,8 @@ package {{ environment.env_name }}_test_pkg;
 
   // 包含环境组件文件
   `include "{{ environment.env_name }}_base_test.sv"
+  `include "{{ environment.env_name }}_direct_test.sv"
+  `include "{{ environment.env_name }}_random_test.sv"
 
 
 endpackage : {{ environment.env_name }}_test_pkg

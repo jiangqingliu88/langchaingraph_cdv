@@ -23,7 +23,7 @@ class {{ agent.name }}_loopback_env extends uvm_env;
     super.build_phase(phase);
     cfg = {{ agent.name }}_config::type_id::create("cfg", this);
     cfg.is_active = UVM_ACTIVE;
-    uvm_config_db #({{ agent.name }}_config)::set(this, "*", "cfg", cfg);
+    uvm_config_db#({{ agent.name }}_config)::set(this, "*", "cfg", cfg);
     agent_h = {{ agent.name }}_agent::type_id::create("agent_h", this);
     scb_h   = {{ agent.name }}_loopback_scb::type_id::create("scb_h", this);
   endfunction

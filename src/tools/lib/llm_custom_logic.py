@@ -102,16 +102,16 @@ OUTPUT EXACTLY:
 
 
 def _call_llm_raw(prompt: str, code: str, errors: str) -> str:
-    """底层 LLM 调用。"""
+    """底层 LLM 调用（经集中式 Query Engine：预算 + 缓存 + 降级 + 审计）。"""
     try:
-        from src.core.llm_factory import LLMFactory
-        llm = LLMFactory.create_for_task("code_generation")
+        from src.core.query_engine import LLMQueryEngine
         user_msg = f"CODE:\n{code[:3000]}\n\nERRORS:\n{errors[:1000]}\n\nOutput ONLY the fixed complete code, no explanation."
-        resp = llm.invoke([
+        messages = [
             {"role": "system", "content": prompt},
             {"role": "user", "content": user_msg},
-        ])
-        content = resp.content if hasattr(resp, 'content') else str(resp)
+        ]
+        content = LLMQueryEngine.get_instance().query(
+            "code_generation", messages, cache_key=prompt[:80])
         if not content:
             return ""
         if "```" in content:

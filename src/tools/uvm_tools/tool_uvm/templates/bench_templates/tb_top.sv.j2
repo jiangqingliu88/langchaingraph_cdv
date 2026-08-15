@@ -1,5 +1,6 @@
 // Testbench Top: {{ bench.name }}_tb_top
 // Data-driven generated from bench YAML configuration.
+`timescale 1ns/1ps
 module {{ bench.name }}_tb_top;
   import uvm_pkg::*;
   import {{ bench.env_name }}_test_pkg::*;
@@ -61,7 +62,25 @@ module {{ bench.name }}_tb_top;
   );
 {%- endif %}
 
-  // ── UVM Configuration & Test Launch ──
+  // ── Reference Model Compare（DUT vs SystemVerilog 参考模型，逐拍对比）──
+  // 默认关闭：参考模型端口需跟随 DUT 接口（当前 model 占位 ALU 不匹配，比对无意义）。
+  // 待 model agent 按 spec 接口生成参考模型后，再按实际端口连接比对。
+{%- if bench.ref_model_enabled | default(false) %}
+  wire [31:0] ref_result;
+  {{ bench.dut.module }}_ref_model u_ref_model(
+    .clk(clk), .rst_n(rst_n),
+    .opcode(opcode), .operand_a(operand_a), .operand_b(operand_b),
+    .result(ref_result)
+  );
+  // mismatch 报 expected(参考模型)/actual(DUT)，供信号级诊断提取三方值
+  always @(posedge clk) begin
+    if (rst_n && result !== ref_result) begin
+      `uvm_error("REF_CMP", $sformatf("mismatch: expected=0x%0h actual=0x%0h", ref_result, result))
+    end
+  end
+{%- endif %}
+
+  // ── Reset Release（独立 initial 块，与 run_test 并行，避免 run_test 前消耗时间）──
   initial begin
 {%- for rst in bench.clk_rst.resets %}
 {%-   set delay = rst.release_delay | default(0) | int %}
@@ -71,8 +90,12 @@ module {{ bench.name }}_tb_top;
     {{ rst.name }} = ~{{ rst.name }};
 {%-   endif %}
 {%- endfor %}
+  end
+
+  // ── UVM Configuration & Test Launch ──
+  initial begin
 {%- for agent in agents %}
-    uvm_config_db #(virtual {{ agent.interface }}_interface)::set(
+    uvm_config_db#(virtual {{ agent.interface }}_interface)::set(
         null, "{{ agent.config_db_path }}", "vif", {{ agent.instance }}
     );
 {%- endfor %}

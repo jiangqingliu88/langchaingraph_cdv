@@ -37,7 +37,7 @@ class {{ environment.env_name }}_base_test extends uvm_test;
 {%- endfor %}
 
     // 设置配置到 config_db
-    uvm_config_db #({{ environment.env_name }}_config)::set(this, "env", "cfg", cfg);
+    uvm_config_db#({{ environment.env_name }}_config)::set(this, "env", "cfg", cfg);
     
   endfunction
 

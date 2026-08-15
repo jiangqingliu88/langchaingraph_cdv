@@ -9,9 +9,11 @@ package {{ environment.env_name }}_pkg;
 `ifdef USE_SC_MODEL_CHECK
   import {{ environment.env_name }}_sc_pred_env_pkg::*;
 `endif
-  // 包含环境组件文件
+  // 包含环境组件文件（依赖顺序：config → virtual_sequencer → coverage → env）
+  // env.sv 引用了 env_coverage 和 virtual_sequencer 类，必须在其后 include
   `include "{{ environment.env_name }}_config.sv"
   `include "seqs/{{ environment.env_name }}_virtual_sequencer.sv"
+  `include "{{ environment.env_name }}_coverage.sv"
   `include "{{ environment.env_name }}.sv"
 
 endpackage : {{ environment.env_name }}_pkg

@@ -74,7 +74,7 @@ module {{ agent.name }}_loopback_tb;
 
   initial begin
     // 设置 virtual interface
-    uvm_config_db #(virtual {{ agent.name }}_interface)::set(null, "*", "vif", {{ agent.name }}_if);
+    uvm_config_db#(virtual {{ agent.name }}_interface)::set(null, "*", "vif", {{ agent.name }}_if);
     // 启动测试
     run_test("{{ agent.name }}_loopback_test");
   end

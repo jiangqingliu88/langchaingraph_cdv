@@ -327,6 +327,12 @@ class BaseAgent(ABC, AgentSubject):
                 val = ctx_store.get(key) if hasattr(ctx_store, 'get') else ctx_store[key] if key in ctx_store else None
                 if val is not None:
                     result[key] = val.model_dump() if isinstance(val, BaseModel) else val
+        # 上下文管理：读出的 ctx 数据压缩，防止 LLM context 膨胀（数据级截断，原始不变）
+        if hasattr(ctx_store, 'compress'):
+            try:
+                ctx_store.compress()
+            except Exception:
+                pass
         return result
 
     def _write_ctx(self, task: Dict[str, Any], result: "AgentResult") -> None:
@@ -536,6 +542,23 @@ class BaseAgent(ABC, AgentSubject):
 
     # ── 任务执行 ──
 
+    async def execute(self, request) -> Any:
+        """标准接口: AgentRequest → AgentResponse。
+
+        决策层/编排层通过此接口调用 Agent，实现"可反复调用的微服务"。
+        内部适配现有 task 流程，向后兼容。
+        """
+        from src.core.agent_contract import AgentRequest, AgentResponse
+        if isinstance(request, AgentRequest):
+            task = request.to_task()
+        elif isinstance(request, dict):
+            task = request
+        else:
+            task = {"input": str(request), "ctx": {}, "output_dir": ""}
+
+        result = await self.execute_task(task)
+        return AgentResponse.from_agent_result(result)
+
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
         # Always use LLM path
         ctx_data = self._read_ctx(task)
@@ -571,7 +594,11 @@ class BaseAgent(ABC, AgentSubject):
             else:
                 # Keep local/template workflows usable when no provider is configured.
                 result = self._offline_result()
-            processed_result = await self._post_process(result)
+            # 把 task 传给 _post_process，支持去状态化（向后兼容单参数签名）
+            try:
+                processed_result = await self._post_process(result, task)
+            except TypeError:
+                processed_result = await self._post_process(result)
             execution_time = (datetime.now() - start_time).total_seconds()
             self.metrics["tasks_completed"] += 1
             self.metrics["total_time"] += execution_time
@@ -673,8 +700,51 @@ class BaseAgent(ABC, AgentSubject):
             self.status = AgentStatus.IDLE
 
     async def _pre_process(self, task: Dict[str, Any]) -> str:
-        """预处理任务输入"""
-        return task.get("input", str(task))
+        """预处理任务输入：检测修复请求 + 按需加载 Skills。"""
+        input_text = task.get("input", str(task))
+
+        # ── 1. 修复请求 ──
+        fix = self._extract_fix_request(input_text)
+        if fix:
+            return (
+                f"{input_text}\n\n"
+                f"═══════════ FIX MODE ═══════════\n"
+                f"这是修复请求，不是全新生成。\n"
+                f"需要修复的问题: {fix.get('suggestion', '')}\n"
+                f"相关错误: {fix.get('errors', [])[:3]}\n"
+                f"══════════════════════════════════\n\n"
+                f"请用 read_file 读取现有代码，定位 bug 所在模块，"
+                f"只修改出问题的部分，不要重写整个文件。"
+            )
+
+        # ── 2. 领域知识注入已迁移到策略包（verify/ops agent 按 design-style 加载）──
+        return input_text
+
+    @staticmethod
+    def _extract_fix_request(input_text) -> dict:
+        """从 task input 里提取 fix 标记（修复模式）。
+
+        执行层闭环传的格式: {"fix": "...", "errors": [...]}
+        或 {"fix": {"suggestion": "...", "errors": [...]}}
+        """
+        if isinstance(input_text, str):
+            try:
+                data = json.loads(input_text)
+            except (json.JSONDecodeError, TypeError):
+                return {}
+        elif isinstance(input_text, dict):
+            data = input_text
+        else:
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        # 两种格式: {"fix": "..."} 或 {"fix": {"suggestion": ...}}
+        fix = data.get("fix")
+        if isinstance(fix, str):
+            return {"suggestion": fix, "errors": data.get("errors", [])}
+        if isinstance(fix, dict):
+            return {"suggestion": fix.get("suggestion", ""), "errors": fix.get("errors", data.get("errors", []))}
+        return {}
 
     def _offline_result(self, reason: str = "LLM provider is unavailable") -> Dict[str, Any]:
         """Return a deterministic degraded result without retrying a failed LLM executor."""

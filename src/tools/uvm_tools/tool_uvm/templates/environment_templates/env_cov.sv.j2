@@ -1,0 +1,86 @@
+// Env Coverage: {{ environment.env_name }}_coverage
+// 环境级功能覆盖率模型（跨 agent 的语义级 covergroup，自动生成）
+
+// 为每个 agent 声明独立的 analysis_imp（不同 seq_item 类型）
+{%- for agent in agents %}
+`uvm_analysis_imp_decl(_{{ agent.name }})
+{%- endfor %}
+
+class {{ environment.env_name }}_coverage extends uvm_component;
+  `uvm_component_utils({{ environment.env_name }}_coverage)
+
+  // 分析端口：接收各 agent 的 monitor 采样
+{%- for agent in agents %}
+  uvm_analysis_imp_{{ agent.name }} #({{ agent.name }}_seq_item, {{ environment.env_name }}_coverage) {{ agent.name }}_export;
+{%- endfor %}
+
+  // 采样项（保存最新采样的 transaction，供 covergroup 采样）
+{%- for agent in agents %}
+  {{ agent.name }}_seq_item {{ agent.name }}_item;
+{%- endfor %}
+
+  // 功能覆盖率 covergroup（从 agent transaction 字段生成）
+  covergroup cg_env;
+{%- for agent in agents %}
+{%-   for var in agent.transaction_vars %}
+{%-     if var.isrand == 'True' %}
+    // coverpoint: {{ agent.name }}.{{ var.name }}
+    cp_{{ agent.name }}_{{ var.name }}: coverpoint {{ agent.name }}_item.{{ var.name }};
+{%-     endif %}
+{%-   endfor %}
+{%- endfor %}
+{%- for agent in agents %}
+{%-   set rand_vars = [] %}
+{%-   for var in agent.transaction_vars %}
+{%-     if var.isrand == 'True' %}
+{%-       set _ = rand_vars.append(var.name) %}
+{%-     endif %}
+{%-   endfor %}
+{%-   if rand_vars|length >= 2 %}
+    // cross: {{ agent.name }} 的关键信号组合（语义级）
+    cross_{{ agent.name }}: cross cp_{{ agent.name }}_{{ rand_vars[0] }}, cp_{{ agent.name }}_{{ rand_vars[1] }};
+{%-   endif %}
+{%- endfor %}
+{%- for bin in coverage_bins %}
+{%-   if bin.signals and bin.signals|length >= 2 %}
+{%-     set ns = namespace(sigs=[]) %}
+{%-     for sig in bin.signals %}
+{%-       for agent in agents %}
+{%-         for var in agent.transaction_vars %}
+{%-           if var.isrand == 'True' and var.name == sig %}
+{%-             set ns.sigs = ns.sigs + ['cp_' ~ agent.name ~ '_' ~ sig] %}
+{%-           endif %}
+{%-         endfor %}
+{%-       endfor %}
+{%-     endfor %}
+{%-     if ns.sigs|length >= 2 %}
+    // 语义化 cross: {{ bin.name }}（策略包 coverage_bins）
+    cross_{{ bin.name }}: cross {{ ns.sigs|join(', ') }};
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+  endgroup : cg_env
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+{%- for agent in agents %}
+    {{ agent.name }}_export = new("{{ agent.name }}_export", this);
+{%- endfor %}
+    cg_env = new();
+  endfunction
+
+  // write 函数：每个 agent 的 monitor 采样触发 covergroup 采样
+{%- for agent in agents %}
+  function void write_{{ agent.name }}({{ agent.name }}_seq_item t);
+    {{ agent.name }}_item = t;
+    cg_env.sample();
+  endfunction
+{%- endfor %}
+
+  // 报告功能覆盖率
+  function void report_phase(uvm_phase phase);
+    super.report_phase(phase);
+    `uvm_info("ENV_COV", $sformatf("功能覆盖率: %.1f%%", cg_env.get_inst_coverage()), UVM_NONE)
+  endfunction
+
+endclass : {{ environment.env_name }}_coverage

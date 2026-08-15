@@ -194,7 +194,12 @@ def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> 
                                      "width": detected_reset.get("width", 1)})
     else:
         all_interface_ports.append({"name": reset_name, "direction": "input", "width": 1})
-    all_interface_ports.extend(data_ports)
+    # 数据端口方向反转：DUT input → interface output（TB/driver 驱动）；DUT output → interface input（TB/monitor 采样）
+    for p in data_ports:
+        d = p.get("direction", p.get("dir", "input"))
+        rev = "output" if d == "input" else "input"
+        all_interface_ports.append({"name": p["name"], "direction": rev,
+                                     "width": p.get("width", 1)})
 
     trans_vars = agent.get("transaction_vars", [])
     if not trans_vars:
@@ -288,6 +293,13 @@ def run(spec_text: str) -> str:
     # ── 3. 尝试解析 RTL 端口 ──
     rtl_data = _parse_rtl_module(output_dir / "rtl", module_name)
 
+    # 从 RTL 端口识别 clock/reset（供 agent/bench 一致使用，避免 output agent 默认 rst 与 rst_n 不一致）
+    rtl_clock_port = None
+    rtl_reset_port = None
+    if rtl_data and rtl_data.get("ports"):
+        rtl_clock_port = next((p["name"] for p in rtl_data["ports"] if _is_clock_port(p["name"])), None)
+        rtl_reset_port = next((p["name"] for p in rtl_data["ports"] if _is_reset_port(p["name"])), None)
+
     # ── 4. 已有 YAML 检查 ──
     name_variants = [module_name, module_name.upper(), module_name.lower()]
     for seg in re.split(r'[_\-\s]+', module_name):
@@ -374,13 +386,16 @@ def run(spec_text: str) -> str:
 
         # ── 5. 从 spec/RTL 数据生成 agent YAML ──
         agent_names = []
-        clock_port = "clk"
-        reset_port = "rst"
+        clock_port = rtl_clock_port or "clk"
+        reset_port = rtl_reset_port or "rst"
         for ag, iface in agents_spec:
             ag_name = ag.get("name", f"{module_name}_agent")
             agent_names.append(ag_name)
-            clock_port = ag.get("clock", iface.get("clock", "clk"))
-            reset_port = ag.get("reset", "clk")  # The reset port name for agents
+            # 注入一致的 clock/reset：agent 自身 > iface > RTL 检测值 > 默认
+            ag["clock"] = ag.get("clock") or iface.get("clock") or clock_port
+            ag["reset"] = ag.get("reset") or iface.get("reset") or reset_port
+            clock_port = ag["clock"]
+            reset_port = ag["reset"]
 
             yaml_str = _generate_interface_yaml(ag, iface, module_name)
             yaml_path = uvm_yaml_archive / f"{ag_name}.yaml"
@@ -434,6 +449,14 @@ def run(spec_text: str) -> str:
                 {"name": "ready_out", "direction": "output", "width": 1},
             ]
             dut_module = module_name
+
+        # 从实际端口重新识别 clock/reset（覆盖 agent 循环里的默认值，修复 reset 误设为 clk）
+        _clk = next((p["name"] for p in all_ports if _is_clock_port(p["name"])), None)
+        _rst = next((p["name"] for p in all_ports if _is_reset_port(p["name"])), None)
+        if _clk:
+            clock_port = _clk
+        if _rst:
+            reset_port = _rst
 
         # Wire declarations（排除 clock/reset，它们已在 bench 模板中声明为 reg）
         wire_lines = []
@@ -500,7 +523,7 @@ def run(spec_text: str) -> str:
     clocks:
       - {{ name: {clock_port}, period: 10ns, init: 0 }}
     resets:
-      - {{ name: {reset_port}, init: 0, release_delay: 0 }}
+      - {{ name: {reset_port}, init: 0, release_delay: 10 }}
   wire_decls:
 {chr(10).join(wire_lines)}
   assignments: []
@@ -552,8 +575,11 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     reg_dir.mkdir(parents=True, exist_ok=True)
     reg_path = reg_dir / "regression.yaml"
 
+    # filelist 引用固定路径（filelist.f 的实际生成在回归执行时由 L1.run_regression 完成，
+    # 因为 find_spec_yaml 运行于 jinja_render 之前，agents/env/bench 尚未生成）
     fl_dir = output_dir / "inputs" / "filelists"
     fl_path = fl_dir / filelist_name
+    filelist_ref = str(fl_path.resolve()).replace("\\", "/")
 
     # 从 spec.json 提取测试点
     test_points = []
@@ -565,9 +591,36 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         except Exception:
             pass
 
+    # 从 case 库（testcase_registry）读用例 —— case 库是"用例真相源"，regression.yaml 与它对齐
+    # 注意：case 库是跨 run 共享的，在项目根 .signoffai/（而非 run 目录 .signoffai/）
+    cases = []
+    try:
+        from src.core.testcase_registry import TestcaseRegistry
+        case_reg = TestcaseRegistry()
+        cases = case_reg.get_priority_order(stage=0, limit=50)
+        cases = [c for c in cases if c.get("status") in ("planned", "generated")]
+        case_reg.close()
+    except Exception:
+        cases = []
+
     # 构建测试列表
     test_lines = []
-    if test_points:
+    if cases:
+        # case 库对齐：每个 case 一个 test（run_opts 用 random_test，case 名用于追踪 + 回写状态）
+        for c in cases:
+            cname = c.get("name", "case")
+            priority = c.get("priority", "P1")
+            scenario = c.get("scenario", "")
+            test_lines.append(f"  - name: {cname}")
+            test_lines.append(f"    build: build_{module_name}")
+            test_lines.append(f"    count: 1")
+            test_lines.append(f"    run_opts:")
+            test_lines.append(f'      - "+UVM_TESTNAME={env_name}_random_test"')
+            test_lines.append(f"    expect:")
+            test_lines.append(f"      errors: 0")
+            test_lines.append(f"    tags: [\"{priority.lower()}\", \"{scenario}\"]")
+            test_lines.append("")
+    elif test_points:
         for i, tp in enumerate(test_points):
             tid = tp.get("id", f"test_{i}")
             tname = tid.lower().replace("-", "_")
@@ -608,13 +661,11 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
 
     tests_section = "\n".join(test_lines)
 
-    # 收集所有 RTL 文件路径
+    # 收集所有 RTL 文件路径（builds.files 用 filelist 引用，RTL 已在 filelist 里）
     rtl_files = []
     rtl_dir = output_dir / "rtl"
     if rtl_dir.exists():
         rtl_files = [str(p.resolve()).replace("\\", "/") for p in sorted(rtl_dir.glob("*.sv"))]
-
-    filelist_ref = str(fl_path.resolve()).replace("\\", "/") if fl_path.exists() else ""
 
     yaml_content = f"""# 回归测试配置 — 由 find_spec_yaml 自动生成
 # 用法: python regression.py --config {reg_path.as_posix()} --action all --mode local
@@ -630,7 +681,7 @@ settings:
   build_cache: False
   simulators:
     questa:
-      compile: "vlog -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} -sv -mfcu -f {filelist_ref} +incdir+F:/questasim64_2024.1/verilog_src/uvm-1.2/src F:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv"
+      compile: "vlog -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} -sv -mfcu +incdir+F:/questasim64_2024.1/verilog_src/uvm-1.2/src F:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv -f {filelist_ref}"
       run: "vsim -c -sv_lib F:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} {top_module}_bench_tb_top {{run_opts}} -do 'log -r /*; run -all; quit -f'"
 
 builds:

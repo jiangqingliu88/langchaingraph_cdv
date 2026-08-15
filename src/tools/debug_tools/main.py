@@ -140,6 +140,23 @@ def _fingerprint(text: str) -> str:
     return hashlib.md5(normalized.encode()).hexdigest()[:12]
 
 
+def _lookup_mature_experience(fp: str) -> dict:
+    """L5 进化：查成熟调试经验（fingerprint 命中且稳定通过 N 次）。
+
+    返回经验 dict 或 {}。这是"经验 → 能力"的蒸馏通道——同一类错误
+    第二次出现时，不重新模板匹配/LLM 分析，直接从经验库命中修复。
+    """
+    try:
+        from src.core.debug_experience import get_debug_experience_store
+        exp = get_debug_experience_store().lookup(fp)
+        # lookup 默认 confidence>=0.8 才返回；再要求 success_count>0（验证过）
+        if exp and exp.get("success_count", 0) > 0:
+            return exp
+    except Exception:
+        pass
+    return {}
+
+
 # ═══════════════════════════════════════════════════════════════
 # Tool 1: collect_sim_log — 真实仿真日志解析
 # ═══════════════════════════════════════════════════════════════
@@ -344,10 +361,11 @@ def collect_compile_log(output_dir: str = "") -> str:
 
 @tool("collect_waveform")
 def collect_waveform(input_json: str = "") -> str:
-    """解析波形文件 (WLF/VCD)，提取关键信号值。
+    """解析波形文件 (WLF)，提取关键信号时间线（结构化，值转 int）。
 
-    输入: {"output_dir": "...", "signals": "clk,rst_n,data"}
-    扫描: output_dir/<regress_dir>/sim/**/wave_*.wlf
+    输入: {"output_dir": "...", "signals": "clk,rst_n,result"}
+    扫描: output_dir/**/*.wlf
+    用 wlf2log 转文本 → parse_wlf_text 解析成 {signal: [(time_ns, value_int)]}
     """
     try:
         data = json.loads(input_json)
@@ -359,49 +377,26 @@ def collect_waveform(input_json: str = "") -> str:
     if not od.exists():
         return json.dumps({"error": f"output_dir not found: {od}", "signals": []}, ensure_ascii=False)
 
-    wlf_files = list(od.rglob("wave_*.wlf"))
-    vcd_files = list(od.rglob("*.vcd"))
+    wlf_files = list(od.rglob("*.wlf"))
 
-    if not wlf_files and not vcd_files:
+    if not wlf_files:
         return json.dumps({"waveforms_found": 0, "signals": [],
-                          "note": "No WLF/VCD files found"}, ensure_ascii=False)
+                          "note": "No WLF files found"}, ensure_ascii=False)
 
     signal_list = [s.strip() for s in signals_str.split(",") if s.strip()] if signals_str else []
 
+    from src.tools.debug_tools.waveform import extract_signal_trace
     results = []
     for wlf in wlf_files[:5]:  # 最多分析 5 个波形文件
-        wlf_info = {"waveform": str(wlf), "size_kb": round(wlf.stat().st_size / 1024, 1)}
-
-        # 尝试用 wlf2log 或 vsim 提取信号信息
-        questa = os.environ.get("QUESTA_HOME", "f:/questasim64_2024.1/win64")
-        vsim = None
-        for candidate in [questa, os.path.join(questa, "win64")]:
-            vsim_path = os.path.join(candidate, "vsim.exe")
-            if os.path.exists(vsim_path):
-                vsim = vsim_path
-                break
-
-        if vsim and signal_list:
-            try:
-                # 用 vsim batch mode 提取信号值
-                do_script = "; ".join([f"examine {s}" for s in signal_list]) + "; quit -f"
-                r = subprocess.run(
-                    [vsim, "-c", "-view", str(wlf), "-do", do_script],
-                    capture_output=True, text=True, encoding="utf-8", errors="replace",
-                    timeout=60, cwd=str(od.resolve()),
-                )
-                wlf_info["signal_values"] = r.stdout[-2000:] if r.stdout else r.stderr[:500]
-            except subprocess.TimeoutExpired:
-                wlf_info["signal_values"] = "timeout (vsim hung)"
-            except Exception as e:
-                wlf_info["signal_error"] = str(e)
-
-        results.append(wlf_info)
+        traces = extract_signal_trace(wlf, signal_list) if signal_list else {}
+        results.append({
+            "waveform": str(wlf),
+            "size_kb": round(wlf.stat().st_size / 1024, 1),
+            "signal_traces": {name: trace for name, trace in traces.items()},
+        })
 
     return json.dumps({
-        "waveforms_found": len(wlf_files) + len(vcd_files),
-        "wlf_count": len(wlf_files),
-        "vcd_count": len(vcd_files),
+        "waveforms_found": len(wlf_files),
         "analyzed": results,
     }, indent=2, ensure_ascii=False, default=str)
 
@@ -665,6 +660,20 @@ def auto_fix(input_json: str = "") -> str:
         return json.dumps({"matched": False, "reason": "no error text provided"}, ensure_ascii=False)
 
     od = Path(output_dir) if output_dir else Path(".")
+
+    # 0. L5 进化：先查成熟调试经验（fingerprint 命中且稳定通过 N 次），跳过模板/LLM
+    fp = _fingerprint(error_text)
+    exp_reuse = _lookup_mature_experience(fp)
+    if exp_reuse:
+        return json.dumps({
+            "matched": True,
+            "fix_name": exp_reuse.get("fix_name", ""),
+            "fix_description": f"复用成熟经验（成功 {exp_reuse.get('success_count', 0)} 次）",
+            "fix_type": "experience_reuse",
+            "patch_applied": False,
+            "source": "experience",
+            "root_cause": exp_reuse.get("root_cause", ""),
+        }, indent=2, ensure_ascii=False)
 
     # 1. 匹配修复模板
     matched = None

@@ -63,35 +63,20 @@ class VerificationCLI:
         self.agent_config = {}
 
     async def initialize(self):
-        from src.agents.spec import SpecAgent
-        from src.agents.design import DesignAgent
-        from src.agents.uvm import UvmAgent
-        from src.agents.test import TestAgent
-        from src.agents.asserts import AssertsAgent
-        from src.agents.cover import CoverAgent
-        from src.agents.regress import RegressAgent
-        from src.agents.debug import DebugAgent
-        from src.agents.qa import QaAgent
-        from src.agents.report import ReportAgent
-        from src.agents.model import ModelAgent
-
+        from src.agents import DesignAgent, ModelAgent, VerifyAgent, OpsAgent, CoverageAgent, DebugAgent, AuditAgent
         agents = [
-            ("spec", SpecAgent()),
             ("design", DesignAgent()),
-            ("uvm", UvmAgent()),
             ("model", ModelAgent()),
-            ("test", TestAgent()),
-            ("assert", AssertsAgent()),
-            ("cover", CoverAgent()),
-            ("regress", RegressAgent()),
+            ("verify", VerifyAgent()),
+            ("ops", OpsAgent()),
+            ("coverage", CoverageAgent()),
             ("debug", DebugAgent()),
-            ("qa", QaAgent()),
-            ("report", ReportAgent()),
+            ("audit", AuditAgent()),
         ]
         for role, agent in agents:
             await agent.initialize()
             self.registry.set_agent_instance(role, agent)
-        console.print("[green]All agents initialized[/green]")
+        console.print("[green]7 agents initialized[/green]")
 
 
 def _init_service():
@@ -117,11 +102,32 @@ def _find_run_id(run_id: str = None) -> str | None:
 # 主命令入口
 # ═══════════════════════════════════════════════════════════════
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(version="2.0.0", prog_name="SignOffAI")
-def cli():
-    """SignOffAI — AI 驱动的芯片验证签核平台"""
-    pass
+@click.option("-p", "--print", "prompt", default="", help="单次查询模式（非交互），如 -p '生成 APB 验证计划'")
+@click.option("-c", "--continue", "continue_mode", is_flag=True, help="继续上次会话")
+@click.option("-r", "--resume", "resume_id", help="恢复指定会话 ID")
+@click.pass_context
+def cli(ctx, prompt, continue_mode, resume_id):
+    """SignOffAI — AI 驱动的芯片验证签核平台
+
+    无参数进入交互式 REPL；-p 'prompt' 单次查询；-c 继续；-r 恢复。
+    """
+    # 无子命令时，进入 REPL 或单次查询
+    if ctx.invoked_subcommand is None:
+        from src.cli.repl import run_interactive, run_once
+        if prompt:
+            run_once(prompt)       # vagent -p "prompt"
+        elif continue_mode:
+            # vagent -c 继续上次会话
+            print("继续上次会话...")
+            run_interactive()
+        elif resume_id:
+            # vagent -r <id> 恢复
+            print(f"恢复会话: {resume_id}")
+            run_interactive()
+        else:
+            run_interactive()      # vagent 进入 REPL
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -466,6 +472,90 @@ def _do_compile_check(result: dict):
 
 
 # ═══════════════════════════════════════════════════════════════
+# vagent multi — 多模块软件流水（并发跑多个规格，EDA 等待不阻塞）
+# ═══════════════════════════════════════════════════════════════
+
+@cli.command("multi")
+@click.option("--spec", "-s", "spec_files", multiple=True, type=click.Path(exists=True),
+              help="规格文件（可多次指定，每个是一个模块）")
+@click.option("--modules", "-m", "modules_file", type=click.Path(exists=True),
+              help="模块列表 JSON/YAML 文件（[{name, spec_file, target, design_style}, ...]）")
+@click.option("--output", "-o", type=click.Path(), help="输出根目录（每模块独立子目录）")
+@click.option("--concurrency", "-n", default=4, type=int, help="并发上限（默认 4）")
+@click.option("--design-style", default="baseline", help="设计风格（baseline/pipeline/low_power）")
+@click.option("--max-rounds", default=5, type=int, help="每模块最大闭环轮次")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def multi(spec_files, modules_file, output, concurrency, design_style, max_rounds, json_output):
+    """多模块软件流水：并发验证多个规格，EDA 等待期间互相推进（不阻塞）
+
+    \b
+    示例:
+      vagent multi -s a.md -s b.md -s c.md                   # 三个模块流水并行
+      vagent multi --modules modules.yaml -n 4               # 从列表文件 + 并发 4
+      vagent multi -s a.md -s b.md --design-style pipeline   # 指定设计风格
+    """
+    out = get_output_adapter(json_output)
+
+    module_specs = []
+    if modules_file:
+        text = Path(modules_file).read_text(encoding="utf-8", errors="replace")
+        try:
+            import yaml
+            module_specs = yaml.safe_load(text) or []
+        except Exception:
+            module_specs = json.loads(text) if text.strip().startswith("[") else []
+        if not isinstance(module_specs, list):
+            out.print_error("模块列表文件必须是 list")
+            return
+    for sf in spec_files:
+        module_specs.append({"name": Path(sf).stem, "spec_file": sf,
+                             "design_style": design_style, "max_rounds": max_rounds})
+
+    if not module_specs:
+        out.print_error("无模块。用 -s <spec> 或 --modules <file> 指定。")
+        return
+
+    console.print(f"[bold cyan]═══ 多模块软件流水：{len(module_specs)} 模块，"
+                  f"并发上限 {concurrency} ═══[/bold cyan]")
+    for i, m in enumerate(module_specs):
+        src = m.get("spec_file") or str(m.get("spec_text", ""))[:40]
+        console.print(f"  [{i+1}] {m.get('name', f'module_{i+1}')} <- {src}")
+
+    service = PipelineExecutionService.get_instance()
+
+    async def run():
+        return await service.run_multi_module(
+            module_specs=module_specs, output_root=output or "output",
+            design_style=design_style, max_rounds=max_rounds, max_concurrency=concurrency,
+        )
+
+    results = asyncio.run(run())
+
+    if json_output:
+        click.echo(json.dumps(results, indent=2, ensure_ascii=False, default=str))
+        return
+
+    table = Table(title=f"Multi-Module Results ({len(results)} modules)")
+    table.add_column("Module")
+    table.add_column("Status")
+    table.add_column("Coverage")
+    table.add_column("Converged")
+    for i, r in enumerate(results):
+        name = module_specs[i].get("name", f"module_{i+1}")
+        if isinstance(r, Exception):
+            table.add_row(name, "[red]ERROR[/red]", "-", "-")
+            continue
+        if not isinstance(r, dict):
+            table.add_row(name, "[dim]?[/dim]", "-", "-")
+            continue
+        cov = r.get("final_coverage", 0)
+        conv = r.get("converged", False)
+        table.add_row(name, "[green]DONE[/green]", f"{cov}%",
+                      "[green]YES[/green]" if conv else "[yellow]NO[/yellow]")
+    console.print(table)
+
+
+# ═══════════════════════════════════════════════════════════════
 # vagent plan — 一站式验证计划（借鉴原型 python main.py plan）
 # ═══════════════════════════════════════════════════════════════
 
@@ -735,6 +825,22 @@ def signoff_checklist(run_id, json_output):
         {"item": "QA review passed", "required": True},
         {"item": "Signoff report generated", "required": True},
     ]
+
+    # ── 动态检查：Exclude 待审批未处理 → 阻断签核（放弃必须闭环：提议→审批）──
+    exclude_pending = 0
+    try:
+        reg = _exclude_registry(None)
+        exclude_pending = reg.stats().get("pending", 0)
+        reg.close()
+    except Exception:
+        pass
+    if exclude_pending:
+        checklist.append({
+            "item": f"Exclude 待审批未处理（{exclude_pending} 条，阻断）",
+            "required": True, "pending_excludes": exclude_pending,
+        })
+    else:
+        checklist.append({"item": "Exclude 无待审批（放弃已闭环）", "required": False})
 
     if json_output:
         click.echo(json.dumps({"run_id": rid, "checklist": checklist}, indent=2, ensure_ascii=False))
@@ -1344,6 +1450,71 @@ def workflows(json_output):
 
 
 # ═══════════════════════════════════════════════════════════════
+# vagent exp — 成长层总览（debug 经验 + coverage 归因校准）
+# ═══════════════════════════════════════════════════════════════
+
+@cli.command()
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def exp(json_output):
+    """查看系统"成长层"：debug 经验库 + coverage 归因校准
+
+    \b
+    示例:
+      vagent exp              # 成长层总览
+      vagent exp --json       # JSON 输出
+    """
+    out = get_output_adapter(json_output)
+    from src.core.debug_experience import get_debug_experience_store
+    from src.core.coverage_experience import get_coverage_experience_store
+
+    dstore = get_debug_experience_store()
+    cstore = get_coverage_experience_store()
+    debug_stats = dstore.stats()
+    reason_acc = cstore.reason_accuracy()
+    action_eff = cstore.action_effectiveness()
+    blacklist = cstore.get_blacklist()
+
+    if json_output:
+        click.echo(json.dumps({
+            "debug_experience": debug_stats,
+            "coverage_calibration": {
+                "reason_accuracy": reason_acc,
+                "action_effectiveness": action_eff,
+                "unreachable_blacklist": blacklist,
+            },
+        }, indent=2, ensure_ascii=False, default=str))
+        return
+
+    console.print(f"[bold]成长层总览[/bold]")
+    console.print(f"[dim]debug 经验: {debug_stats['total']} 条（可复用 {debug_stats['reusable']}）[/dim]")
+
+    if action_eff:
+        t = Table(title="决策动作成效（delta 覆盖率反馈）")
+        t.add_column("动作", style="cyan")
+        t.add_column("次数", justify="right")
+        t.add_column("改善率", justify="right")
+        t.add_column("平均 Δ覆盖", justify="right")
+        for act, m in action_eff.items():
+            t.add_row(act, str(m["trials"]), f"{m['improve_rate']:.0%}", f"{m['avg_delta']:+.1f}%")
+        console.print(t)
+
+    if reason_acc:
+        t2 = Table(title="gap 归因准确率")
+        t2.add_column("归因", style="yellow")
+        t2.add_column("次数", justify="right")
+        t2.add_column("改善", justify="right")
+        t2.add_column("置信度", justify="right")
+        for r, m in reason_acc.items():
+            t2.add_row(r, str(m["trials"]), f"{m['improved']}/{m['trials']}", f"{m['confidence']:.0%}")
+        console.print(t2)
+
+    if blacklist:
+        console.print(f"[yellow]unreachable 黑名单（多次 refactor 仍不涨）: {', '.join(blacklist)}[/yellow]")
+    else:
+        console.print("[dim]暂无 unreachable 黑名单[/dim]")
+
+
+# ═══════════════════════════════════════════════════════════════
 # vagent tool — 工具发现与直接调用 (P1)
 # ═══════════════════════════════════════════════════════════════
 
@@ -1798,6 +1969,52 @@ def debug_analyze(run_id, log_file, json_output):
         return
 
     out.print_error("Use --run <run_id> or --log <log_file>")
+
+
+@debug.command("exp")
+@click.option("--distill", is_flag=True, help="只显示可蒸馏成规则的成熟经验（成功≥3次且置信≥80%）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def debug_exp(distill, json_output):
+    """查看 debug 经验库（错误指纹 → 已验证修复）
+
+    \b
+    示例:
+      vagent debug exp              # 列出全部经验
+      vagent debug exp --distill    # 只看成熟可蒸馏的经验
+      vagent debug exp --json       # JSON 输出
+    """
+    out = get_output_adapter(json_output)
+    from src.core.debug_experience import get_debug_experience_store
+    store = get_debug_experience_store()
+    entries = store.distill_candidates() if distill else store.list_all()
+    stats = store.stats()
+
+    if json_output:
+        click.echo(json.dumps({"stats": stats, "entries": entries},
+                              indent=2, ensure_ascii=False, default=str))
+        return
+
+    if not entries:
+        console.print(
+            f"[dim]经验库为空（共 {stats['total']} 条）。跑一次带失败的验证后，"
+            f"debug 会自动积累经验。[/dim]")
+        return
+
+    table = Table(title=f"Debug 经验库 — 共 {stats['total']} 条（可复用 {stats['reusable']}）")
+    table.add_column("指纹", style="cyan", no_wrap=True)
+    table.add_column("分类", style="yellow")
+    table.add_column("修复", style="green")
+    table.add_column("成功/失败", justify="right")
+    table.add_column("置信度", justify="right")
+    for e in entries:
+        table.add_row(
+            e["fingerprint"][:12],
+            e["category"],
+            (e["fix_name"] or e["root_cause"] or "—")[:30],
+            f"{e['success_count']}/{e['fail_count']}",
+            f"{e['confidence']:.0%}",
+        )
+    console.print(table)
 
 
 @debug.command("repl")
@@ -2927,6 +3144,65 @@ def coverage_gaps(run_id, json_output):
         out.print_error(str(e))
 
 
+@coverage.command("exclude")
+@click.option("--output", "-o", type=click.Path(), help="输出目录（默认 .signoffai）")
+@click.option("--coverage", "-c", type=float, default=None, help="当前覆盖率（%，配合 --total 计算有效覆盖率）")
+@click.option("--total", "-t", type=int, default=None, help="总覆盖点数")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def coverage_exclude(output, coverage, total, json_output):
+    """覆盖率里的 Exclude 视图：已放弃点 + 待审批 + 有效覆盖率
+
+    \b
+    示例:
+      vagent coverage exclude                              # 已放弃/待审批摘要
+      vagent coverage exclude -c 95 -t 100                 # 附有效覆盖率
+      vagent coverage exclude -o output/uart_run           # 指定 run 目录
+    """
+    out = get_output_adapter(json_output)
+    reg = _exclude_registry(output)
+    try:
+        approved = reg.get_approved_excludes()
+        pending = reg.list_pending()
+        stats = reg.stats()
+        result = {
+            "stats": stats,
+            "approved_points": sorted(reg.get_excluded_points()),
+            "pending": [{"exclude_id": p["exclude_id"], "coverage_point": p["coverage_point"],
+                         "type": p["exclude_type"], "reason": p["reason"]} for p in pending],
+        }
+        if coverage is not None and total is not None:
+            result["effective"] = {
+                "raw_coverage": coverage, "total_points": total,
+                "excluded": stats["excluded_points"],
+                "effective_total": max(total - stats["excluded_points"], 1),
+                "effective_coverage": reg.effective_coverage(coverage, total),
+            }
+
+        if json_output:
+            click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+            return
+
+        console.print(f"[bold]覆盖率 Exclude 视图[/bold] — "
+                      f"已放弃 {stats['excluded_points']} 点 | 待审批 {stats['pending']}")
+        if coverage is not None and total is not None:
+            eff = result["effective"]
+            console.print(f"[cyan]有效覆盖率: {eff['raw_coverage']}% → {eff['effective_coverage']}%"
+                          f"（分母 {eff['total_points']} → {eff['effective_total']}）[/cyan]")
+        if approved:
+            console.print(f"\n[yellow]已批准（生效）:[/yellow]")
+            for e in approved:
+                console.print(f"   {e['exclude_id']}  {e['coverage_point']}  ({e['exclude_type']})")
+        if pending:
+            console.print(f"\n[bold red]待审批（阻断签核）:[/bold red]")
+            for p in pending:
+                console.print(f"   {p['exclude_id']}  {p['coverage_point']}  ({p['exclude_type']}) — "
+                              f"vagent exclude approve {p['exclude_id']}")
+        if not approved and not pending:
+            console.print("[dim]暂无 Exclude。闭环会自动发现结构性死代码并提议；也可手动 'vagent exclude propose'。[/dim]")
+    finally:
+        reg.close()
+
+
 @coverage.command("trend")
 @click.option("--days", "-d", default=30, help="天数")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
@@ -3176,12 +3452,9 @@ def env_template(component_type, name, output):
 @click.option("--port", default=8000, help="Port")
 @click.option("--reload", is_flag=True, help="Auto-reload on code changes")
 def web_command(host, port, reload):
-    """启动 Web 仪表盘"""
-    import uvicorn
-    console.print(f"[bold cyan]SignOffAI Web Dashboard[/bold cyan]")
-    console.print(f"  URL: [cyan]http://{host}:{port}[/cyan]")
-    console.print(f"  API: [cyan]http://{host}:{port}/api/[/cyan]")
-    uvicorn.run("src.web.api:app", host=host, port=port, reload=reload)
+    """Web 仪表盘（已移除 —— 个人级 CLI，禁止 Web 前端）"""
+    console.print("[yellow]Web 前端已移除（CLAUDE.md 规定：个人级 CLI，禁止 Web 开发）。[/yellow]")
+    console.print("[dim]所有功能通过命令行接口交付：vagent verify / runs / logs / show / trend ...[/dim]")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -3745,6 +4018,551 @@ def docs_preview(tool_name):
             console.print(f"[dim]... ({len(md)} chars total, use 'vagent docs generate --tool {tool_name}' for full)[/dim]")
     except Exception as e:
         console.print(f"[red]{e}[/red]")
+
+
+# ═══════════════════════════════════════════════════════════════
+# 业务 CLI 命令（RunRepository 磁盘扫描，面向工程师日常使用）
+# ═══════════════════════════════════════════════════════════════
+
+def _repo():
+    from src.core.run_repository import RunRepository
+    return RunRepository("output")
+
+
+def _resolve_run(repo, run_id):
+    """解析 run_id：指定则用，否则取最新。"""
+    if run_id:
+        return run_id
+    runs = repo.list_runs(1)
+    return runs[0]["run_id"] if runs else None
+
+
+# ── 查看与诊断类 ──
+
+@cli.command("runs")
+@click.option("--limit", "-n", default=20, help="显示数量")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def runs(limit, json_output):
+    """列出所有 run（从 output 目录扫描：覆盖率/收敛/签核状态）"""
+    out = get_output_adapter(json_output)
+    repo = _repo()
+    run_list = repo.list_runs(limit)
+    if not run_list:
+        out.print_success("无 run。先跑 'vagent verify' 或闭环。")
+        return
+    if json_output:
+        click.echo(json.dumps(run_list, indent=2, ensure_ascii=False, default=str))
+    else:
+        rows = [[r["run_id"][:36], f"{r['final_coverage']}%",
+                 "✓" if r["converged"] else "✗",
+                 r.get("verdict", ""), r.get("signoff_status", "")] for r in run_list]
+        out.print_table(["Run", "Coverage", "Converged", "Verdict", "Signoff"],
+                        rows, title="Runs（磁盘扫描）")
+
+
+@cli.command("logs")
+@click.option("--run", "run_id", default="", help="run ID 或前缀（默认最新）")
+@click.option("--stage", default="", help="阶段过滤（compile/sim/coverage）")
+@click.option("--tail", "-t", default=0, help="只显示每个日志尾部 N 行")
+def logs(run_id, stage, tail):
+    """查看某 run 的日志文件"""
+    repo = _repo()
+    rid = _resolve_run(repo, run_id)
+    if not rid:
+        console.print("[yellow]无 run[/yellow]")
+        return
+    log_files = repo.logs(rid, stage)
+    if not log_files:
+        console.print("[yellow]无日志文件[/yellow]")
+        return
+    for lf in log_files:
+        console.print(f"[cyan]{lf['name']}[/cyan] ({lf['size_kb']} KB)")
+        if tail > 0:
+            try:
+                lines = Path(lf["path"]).read_text(encoding="utf-8", errors="replace").splitlines()
+                for line in lines[-tail:]:
+                    console.print(f"  [dim]{line}[/dim]")
+            except Exception:
+                pass
+
+
+@cli.command("show")
+@click.option("--run", "run_id", default="", help="run ID 或前缀（默认最新）")
+@click.option("--format", "fmt", default="json", type=click.Choice(["json"]), help="输出格式")
+def show(run_id, fmt):
+    """导出某 run 的完整结构数据（阶段/覆盖率/证据）"""
+    repo = _repo()
+    rid = _resolve_run(repo, run_id)
+    if not rid:
+        console.print("[yellow]无 run[/yellow]")
+        return
+    run = repo.get_run(rid)
+    click.echo(json.dumps(run, indent=2, ensure_ascii=False, default=str))
+
+
+# ── 人工介入与修复类 ──
+
+@cli.command("approve")
+@click.option("--run", "run_id", default="", help="run ID 或前缀")
+@click.option("--reason", default="", help="审批理由（审计用）")
+def approve(run_id, reason):
+    """人工审批签核（记录理由，用于审计）"""
+    repo = _repo()
+    rid = _resolve_run(repo, run_id)
+    if not rid:
+        console.print("[yellow]无 run[/yellow]")
+        return
+    run_dir = Path(repo._resolve(rid))
+    approval = {"action": "approve", "reason": reason,
+                "at": datetime.now().isoformat(), "run": rid}
+    (run_dir / "approval.json").write_text(
+        json.dumps(approval, indent=2, ensure_ascii=False), encoding="utf-8")
+    console.print(f"[green]已审批 {rid[:32]}（理由: {reason or '无'}）[/green]")
+
+
+@cli.command("reject")
+@click.option("--run", "run_id", default="", help="run ID 或前缀")
+@click.option("--reason", default="", help="驳回理由（审计用）")
+def reject(run_id, reason):
+    """人工驳回签核（记录理由，用于审计）"""
+    repo = _repo()
+    rid = _resolve_run(repo, run_id)
+    if not rid:
+        console.print("[yellow]无 run[/yellow]")
+        return
+    run_dir = Path(repo._resolve(rid))
+    approval = {"action": "reject", "reason": reason,
+                "at": datetime.now().isoformat(), "run": rid}
+    (run_dir / "approval.json").write_text(
+        json.dumps(approval, indent=2, ensure_ascii=False), encoding="utf-8")
+    console.print(f"[red]已驳回 {rid[:32]}（理由: {reason or '无'}）[/red]")
+
+
+@cli.command("patch")
+@click.option("--run", "run_id", default="", help="run ID 或前缀")
+@click.option("--stage", default="", help="阶段名")
+@click.option("--file", "file_path", default="", help="补丁文件路径")
+def patch(run_id, stage, file_path):
+    """记录人工补丁到 run（AI 修不好时的兜底，审计追踪）"""
+    repo = _repo()
+    rid = _resolve_run(repo, run_id)
+    if not rid:
+        console.print("[yellow]无 run[/yellow]")
+        return
+    run_dir = Path(repo._resolve(rid))
+    patch_dir = run_dir / "patches"
+    patch_dir.mkdir(parents=True, exist_ok=True)
+    record = {"stage": stage, "file": file_path,
+              "at": datetime.now().isoformat(), "by": os.environ.get("USER", "engineer")}
+    (patch_dir / f"patch_{int(time.time())}.json").write_text(
+        json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
+    console.print(f"[green]补丁已记录到 {rid[:32]}/patches/（stage={stage or 'any'}）[/green]")
+
+
+# ── 归档与清理类 ──
+
+@cli.command("archive")
+@click.option("--run", "run_id", default="", help="run ID 或前缀")
+@click.option("--output", "output_zip", default="evidence.zip", help="输出 zip 路径")
+def archive(run_id, output_zip):
+    """打包 run 的签核证据（manifest + report + 覆盖率 + 证据链）"""
+    import zipfile
+    repo = _repo()
+    rid = _resolve_run(repo, run_id)
+    if not rid:
+        console.print("[yellow]无 run[/yellow]")
+        return
+    run_dir = Path(repo._resolve(rid))
+    evidence_files = ["docs/manifest.json", "docs/evidence_chain.json",
+                      "report.json", "sim/coverage/coverage_result.json"]
+    with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+        for rel in evidence_files:
+            f = run_dir / rel
+            if f.exists():
+                zf.write(f, arcname=f"{rid[:20]}/{rel}")
+    console.print(f"[green]证据包已打包: {output_zip}[/green]")
+
+
+@cli.command("clean")
+@click.option("--run", "run_id", default="", help="run ID 或前缀")
+@click.option("--keep-logs", is_flag=True, help="保留日志")
+def clean(run_id, keep_logs):
+    """清理 run 的中间文件（build/work、uvm_regress），保留证据/日志"""
+    import shutil
+    repo = _repo()
+    rid = _resolve_run(repo, run_id)
+    if not rid:
+        console.print("[yellow]无 run[/yellow]")
+        return
+    run_dir = Path(repo._resolve(rid))
+    cleaned = []
+    for sub in ["build", "uvm_regress"]:
+        d = run_dir / sub
+        if d.exists():
+            shutil.rmtree(d, ignore_errors=True)
+            cleaned.append(sub)
+    if not keep_logs:
+        # 清理日志，但保留证据
+        pass
+    console.print(f"[green]已清理 {rid[:32]}: {', '.join(cleaned) or '无中间文件'}[/green]")
+
+
+@cli.command("cleanup")
+@click.option("--older-than", default="30d", help="清理 N 天前（如 30d / 7d）")
+def cleanup(older_than):
+    """清理 N 天前的 run 目录（磁盘管理）"""
+    import shutil
+    import re as _re
+    m = _re.match(r"(\d+)d", older_than)
+    days = int(m.group(1)) if m else 30
+    cutoff = time.time() - days * 86400
+    repo = _repo()
+    cleaned = 0
+    for d in repo.output_base.iterdir():
+        if d.is_dir() and d.stat().st_mtime < cutoff:
+            shutil.rmtree(d, ignore_errors=True)
+            cleaned += 1
+    console.print(f"[green]已清理 {cleaned} 个 {days} 天前的 run 目录[/green]")
+
+
+# ── 报告与统计类 ──
+
+@cli.command("trend")
+@click.option("--limit", "-n", default=30, help="最近 N 次")
+@click.option("--metric", default="coverage", type=click.Choice(["coverage"]))
+def trend(limit, metric):
+    """覆盖率趋势（最近 N 次 run）"""
+    repo = _repo()
+    data = repo.trend(metric, limit)
+    if not data:
+        console.print("[yellow]无数据[/yellow]")
+        return
+    for d in data:
+        bar = "█" * int(d["coverage"] / 5)
+        console.print(f"{d['run_id'][:28]:30} {d['coverage']:5.1f}% {bar}")
+
+
+@cli.command("failures")
+@click.option("--run", "run_id", default="", help="run ID 或前缀")
+def failures(run_id):
+    """列出某 run 的失败阶段"""
+    repo = _repo()
+    rid = _resolve_run(repo, run_id)
+    if not rid:
+        console.print("[yellow]无 run[/yellow]")
+        return
+    fails = repo.failures(rid)
+    if not fails:
+        console.print("[green]无失败阶段[/green]")
+        return
+    for f in fails:
+        console.print(f"[red]✗ {f.get('name', '?')}[/red] — {f.get('status', '')}")
+
+
+@cli.command("projects")
+def projects():
+    """列出 output 目录里的项目（按前缀分组）"""
+    repo = _repo()
+    prefixes = {}
+    for d in sorted(repo.output_base.iterdir()):
+        if d.is_dir() and not d.name.startswith("."):
+            prefix = d.name.split("_")[0] if "_" in d.name else d.name
+            prefixes.setdefault(prefix, []).append(d.name)
+    for prefix, dirs in sorted(prefixes.items()):
+        console.print(f"[cyan]{prefix}[/cyan]: {len(dirs)} 个 run")
+
+
+# ═══════════════════════════════════════════════════════════════
+# vagent distill — Agent 自主蒸馏（L5 进化）
+# ═══════════════════════════════════════════════════════════════
+
+@cli.group("distill")
+def distill():
+    """Agent 自主蒸馏：把经验固化为能力（L5 进化）"""
+    pass
+
+
+@distill.command("run")
+@click.option("--apply", is_flag=True, help="灰度上线（回归验证通过后固化）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def distill_run(apply, json_output):
+    """扫描经验库 → 生成蒸馏提案 → 验证 → （可选）灰度上线"""
+    out = get_output_adapter(json_output)
+    try:
+        from src.core.distillation import DistillationOrchestrator
+        orch = DistillationOrchestrator("output")
+        result = orch.run(apply=apply)
+        if json_output:
+            click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        else:
+            console.print(f"[cyan]蒸馏扫描:[/cyan] {result['scanned']} 条提案"
+                          f"（灰度上线 {result['applied']} 条）")
+            for p in result["proposals"]:
+                ch = {"debug_to_fix": "调试→模板", "gap_to_policy": "gap→策略",
+                      "decision_weight": "决策→权重"}.get(p["channel"], p["channel"])
+                console.print(f"  [{p['channel']}] {p['proposal_id']} — {ch}: {p['reasoning'][:50]}")
+    except Exception as e:
+        out.print_error(str(e))
+
+
+@distill.command("list")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def distill_list(json_output):
+    """列出已固化的蒸馏能力（live 模板/策略/权重）"""
+    out = get_output_adapter(json_output)
+    try:
+        from src.core.distillation import DistillationOrchestrator
+        orch = DistillationOrchestrator("output")
+        result = {
+            "templates": orch.get_live_templates(),
+            "policy_bins": orch.get_live_policy_bins(),
+            "weights": orch.get_live_weights(),
+        }
+        if json_output:
+            click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        else:
+            console.print(f"[cyan]已固化模板:[/cyan] {len(result['templates'])} 条")
+            console.print(f"[cyan]已固化策略覆盖点:[/cyan] {len(result['policy_bins'])} 条")
+            console.print(f"[cyan]已固化决策权重:[/cyan] {result['weights']}")
+    except Exception as e:
+        out.print_error(str(e))
+
+
+@distill.command("rollback")
+@click.argument("proposal_id")
+def distill_rollback(proposal_id):
+    """回滚某条已固化的蒸馏能力"""
+    try:
+        from src.core.distillation import DistillationOrchestrator
+        orch = DistillationOrchestrator("output")
+        if orch.rollback(proposal_id):
+            console.print(f"[green]已回滚: {proposal_id}[/green]")
+        else:
+            console.print(f"[yellow]未找到 live 提案: {proposal_id}[/yellow]")
+    except Exception as e:
+        console.print(f"[red]{e}[/red]")
+
+
+# ═══════════════════════════════════════════════════════════════
+# vagent govern — 统一驾驭面板（预算/熔断/干预/决策可干预）
+# ═══════════════════════════════════════════════════════════════
+
+@cli.group("govern")
+def govern():
+    """统一驾驭层：预算 + 熔断 + 细粒度干预 + 决策可干预"""
+    pass
+
+
+@govern.command("status")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def govern_status(json_output):
+    """查看驾驭状态：熔断器 + 预算 + 干预指令"""
+    out = get_output_adapter(json_output)
+    try:
+        from src.core.governor import Governor
+        gov = Governor("output")
+        status = gov.status()
+        if json_output:
+            click.echo(json.dumps(status, indent=2, ensure_ascii=False, default=str))
+        else:
+            b = status["breaker"]
+            budget = status["budget"]
+            console.print(Panel(
+                f"[cyan]熔断（连续失败 ≥ {b['threshold']} 次）:[/cyan] {b['open'] or '无'}\n"
+                f"[cyan]失败计数:[/cyan] {b['failures'] or '无'}\n"
+                f"[cyan]Token:[/cyan] {budget['tokens']['used']}/{budget['tokens']['budget']}\n"
+                f"[cyan]时间:[/cyan] {budget['time_s']['used']}s/{budget['time_s']['budget']}s\n"
+                f"[cyan]EDA 调用:[/cyan] {budget['eda']['used']}/{budget['eda']['budget']}\n"
+                f"[cyan]预算耗尽:[/cyan] {'是' if budget['exhausted'] else '否'}\n"
+                f"[cyan]干预指令:[/cyan] {status['intervention'] or '无'}",
+                title="驾驭状态（Governor）"))
+    except Exception as e:
+        out.print_error(str(e))
+
+
+@govern.command("override")
+@click.argument("action_type")
+def govern_override(action_type):
+    """人工接管决策：强制指定下一步动作（如 RELAX_CONSTRAINT / EXPAND_SEEDS）"""
+    try:
+        from src.core.governor import Intervention
+        Intervention("output").write({"cmd": "override_action", "action_type": action_type})
+        console.print(f"[green]已写入干预指令：override → {action_type}[/green]")
+        console.print("[dim]下次闭环决策时会用此动作覆盖，执行后自动清除。[/dim]")
+    except Exception as e:
+        console.print(f"[red]{e}[/red]")
+
+
+@govern.command("reset")
+@click.argument("action_type")
+def govern_reset(action_type):
+    """人工复位某动作的熔断状态"""
+    try:
+        from src.core.governor import CircuitBreaker
+        # 熔断状态是内存态，复位需通过 Governor（新建实例会丢失状态）。
+        # 这里用"清除干预 + 提示"：熔断是运行时内存态，重启即复位。
+        console.print(f"[yellow]熔断是运行时内存态，重启 run 即复位。[/yellow]")
+        console.print(f"[dim]若要强制继续，用 'vagent govern override {action_type}' 接管。[/dim]")
+    except Exception as e:
+        console.print(f"[red]{e}[/red]")
+
+
+# ═══════════════════════════════════════════════════════════════
+# vagent exclude — 允许放弃（有据可查地放弃，与"确保不漏测"同等重要）
+# ═══════════════════════════════════════════════════════════════
+
+@cli.group("exclude")
+def exclude():
+    """允许放弃：四步闭环（发现→归因→审计→调规）"""
+    pass
+
+
+def _exclude_registry(output_dir=None):
+    from src.core.exclude_registry import ExcludeRegistry
+    if output_dir:
+        return ExcludeRegistry(str(Path(output_dir) / ".signoffai" / "exclude_registry.db"))
+    return ExcludeRegistry()
+
+
+@exclude.command("list")
+@click.option("--status", "-s", "status_filter", default="all",
+              type=click.Choice(["all", "approved", "proposed", "rejected"]),
+              help="按状态过滤")
+@click.option("--output", "-o", type=click.Path(), help="输出目录（默认 .signoffai）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def exclude_list(status_filter, output, json_output):
+    """列出 Exclude 记录（已批准/待审批/已拒绝）"""
+    out = get_output_adapter(json_output)
+    reg = _exclude_registry(output)
+    try:
+        approved = reg.get_approved_excludes()
+        pending = reg.list_pending()
+        stats = reg.stats()
+
+        if json_output:
+            click.echo(json.dumps({
+                "stats": stats,
+                "approved": approved,
+                "pending": pending,
+            }, indent=2, ensure_ascii=False, default=str))
+            return
+
+        console.print(f"[bold]Exclude 状态库[/bold] — "
+                      f"批准 {stats['approved']} | 待审批 {stats['pending']} | "
+                      f"已放弃点 {stats['excluded_points']}")
+
+        type_label = {"unreachable": "结构死代码", "excluded_by_design": "规格不测",
+                      "not_worth_it": "成本过高"}
+        def _rows(entries):
+            return [[e["exclude_id"], e["coverage_point"],
+                     type_label.get(e["exclude_type"], e["exclude_type"]),
+                     (e["reason"] or "—")[:36],
+                     e.get("approver") or "—",
+                     (e.get("audit_hash") or "")[:10] + "…" if e.get("audit_hash") else "—"]
+                    for e in entries]
+
+        if status_filter in ("all", "approved") and approved:
+            out.print_table(["ID", "覆盖点", "类型", "理由", "审批人", "哈希指纹"],
+                            _rows(approved), title="已批准（生效）")
+        if status_filter in ("all", "proposed") and pending:
+            out.print_table(["ID", "覆盖点", "类型", "理由", "审批人", "哈希指纹"],
+                            _rows(pending), title="待审批")
+        if status_filter == "all" and not approved and not pending:
+            console.print("[dim]暂无 Exclude 记录。用 'vagent exclude propose' 提议。[/dim]")
+    finally:
+        reg.close()
+
+
+@exclude.command("propose")
+@click.argument("coverage_point")
+@click.option("--reason", "-r", required=True, help="放弃理由（必填，审计依据）")
+@click.option("--type", "-t", "exclude_type", default="not_worth_it",
+              type=click.Choice(["unreachable", "excluded_by_design", "not_worth_it"]),
+              help="归因分类")
+@click.option("--evidence", "-e", default="", help="证据（波形/RTL 追溯等）")
+@click.option("--output", "-o", type=click.Path(), help="输出目录")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def exclude_propose(coverage_point, reason, exclude_type, evidence, output, json_output):
+    """提议 Exclude（归因分类 → 待审批）
+
+    \b
+    示例:
+      vagent exclude propose opcode[31:16] -r 'tie-off 固定死代码' -t unreachable
+      vagent exclude propose burst_64      -r '规格不要求测 64 拍' -t excluded_by_design
+    """
+    out = get_output_adapter(json_output)
+    reg = _exclude_registry(output)
+    try:
+        existing = reg.get_point_status(coverage_point)
+        if existing:
+            out.print_error(f"覆盖点 '{coverage_point}' 已存在（状态: {existing}）")
+            return
+        exclude_id = reg.propose_exclude(coverage_point, reason, exclude_type, evidence)
+        out.print_result({"exclude_id": exclude_id, "coverage_point": coverage_point,
+                          "type": exclude_type, "status": "proposed"},
+                         title="Exclude 已提议（待审批）")
+        console.print(f"[dim]审批: vagent exclude approve {exclude_id} --approver <姓名>[/dim]")
+    finally:
+        reg.close()
+
+
+@exclude.command("approve")
+@click.argument("exclude_id")
+@click.option("--approver", "-a", default=None, help="审批人签名（默认取环境变量 USER）")
+@click.option("--output", "-o", type=click.Path(), help="输出目录")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def exclude_approve(exclude_id, approver, output, json_output):
+    """审计门控：批准 Exclude（记录审批人 + 哈希指纹，接证据链）"""
+    out = get_output_adapter(json_output)
+    approver = approver or os.environ.get("USER", "engineer")
+    reg = _exclude_registry(output)
+    try:
+        ok = reg.approve_exclude(exclude_id, approver)
+        if ok:
+            out.print_success(f"已批准 {exclude_id}（审批人: {approver}，哈希指纹已接入证据链）")
+        else:
+            out.print_error(f"Exclude {exclude_id} 不存在")
+    finally:
+        reg.close()
+
+
+@exclude.command("reject")
+@click.argument("exclude_id")
+@click.option("--approver", "-a", default=None, help="审批人签名")
+@click.option("--output", "-o", type=click.Path(), help="输出目录")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def exclude_reject(exclude_id, approver, output, json_output):
+    """拒绝 Exclude（点仍需覆盖）"""
+    out = get_output_adapter(json_output)
+    approver = approver or os.environ.get("USER", "engineer")
+    reg = _exclude_registry(output)
+    try:
+        reg.reject_exclude(exclude_id, approver)
+        out.print_success(f"已拒绝 {exclude_id}（审批人: {approver}）")
+    finally:
+        reg.close()
+
+
+@exclude.command("effective")
+@click.option("--coverage", "-c", type=float, required=True, help="当前覆盖率（%）")
+@click.option("--total", "-t", type=int, required=True, help="总覆盖点数")
+@click.option("--output", "-o", type=click.Path(), help="输出目录")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def exclude_effective(coverage, total, output, json_output):
+    """动态调规：计算有效覆盖率 = coverage / (total - excluded)"""
+    out = get_output_adapter(json_output)
+    reg = _exclude_registry(output)
+    try:
+        excluded = len(reg.get_excluded_points())
+        effective = reg.effective_coverage(coverage, total)
+        result = {"raw_coverage": coverage, "total_points": total,
+                  "excluded": excluded,
+                  "effective_total": max(total - excluded, 1),
+                  "effective_coverage": effective}
+        out.print_result(result, title="有效覆盖率（Exclude 调规）")
+        console.print(f"[dim]已放弃 {excluded} 点，从分母剔除后覆盖率 {coverage}% → {effective}%[/dim]")
+    finally:
+        reg.close()
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -21,39 +21,22 @@ class MockStrategy(ExecutionStrategy):
 
 class LocalStrategy(ExecutionStrategy):
     def run_script(self, script_path, cwd, job_name=None, timeout=None, retry=0):
+        # 转绝对路径（相对路径 + cwd 组合会在 Windows sh 下错乱）
+        script_path = os.path.abspath(script_path)
+        cwd = os.path.abspath(cwd)
         if not os.path.exists(script_path):
             logger.warning(f"Script not found: {script_path}")
             return True
         logger.info(f"[LOCAL] Executing {script_path} in {cwd}")
-
-        # Windows: .sh 脚本需要通过 bash 执行（优先 Git Bash，避免 WSL）
-        if os.name == 'nt' and script_path.endswith('.sh'):
-            bash_exe = None
-            for candidate in [
-                r'D:\Gitt\usr\bin\bash.exe',
-                r'C:\Program Files\Git\bin\bash.exe',
-                r'C:\Program Files (x86)\Git\bin\bash.exe',
-            ]:
-                if os.path.exists(candidate):
-                    bash_exe = candidate
-                    break
-            if not bash_exe:
-                bash_exe = 'bash'
-            # 用绝对路径 + 正斜杠给 bash
-            abs_script = os.path.abspath(script_path).replace('\\', '/')
-            abs_cwd = os.path.abspath(cwd).replace('\\', '/')
-            cmd = [bash_exe, '-c', f'cd "{abs_cwd}" && bash "{abs_script}"']
-        else:
-            cmd = [script_path]
-
         try:
-            subprocess.run(cmd, cwd=cwd, check=True, shell=False, timeout=timeout)
+            # Windows 上用 sh（bash 在部分 Windows 环境是 WSL 包装会失败）
+            subprocess.run(["sh", script_path], cwd=cwd, check=True)
             return True
         except subprocess.CalledProcessError as e:
             logger.error(f"Script failed with exit code {e.returncode}")
             return False
-        except subprocess.TimeoutExpired:
-            logger.error(f"Script timed out after {timeout}s")
+        except Exception as e:
+            logger.error(f"Script execution error: {e}")
             return False
 
 class LsfStrategy(ExecutionStrategy):

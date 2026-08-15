@@ -1,5 +1,5 @@
 """
-SignOffAI 六大差异化引擎
+[DEPRECATED] SignOffAI 六大差异化引擎 —— 旧线性流水线（run_pipeline）的引擎。
 
 1. vPlanGenerator      — MD 规格 → 结构化验证计划 (P0)
 2. CoverageRegressor   — 覆盖率驱动智能回归选择器 (P0)

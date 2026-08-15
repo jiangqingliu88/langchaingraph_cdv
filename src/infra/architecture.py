@@ -1,5 +1,9 @@
 """
-架构约束与分层规范 — Domain Boundaries + Layer Separation + Architecture Validator
+[DEPRECATED] 架构约束与分层规范 — 旧"六层"模型，与新 L1/L2/L3 三层 + 闭环架构脱节。
+
+本模块仍引用已删除的 src/web/api.py（六层里的 Interface 层），属历史遗留。
+新架构见 AI驱动芯片验证全栈闭环架构设计文档.md 的"三层 + 闭环"（L1 基础设施 / L2 七 Agent 调度 / L3 覆盖率决策）。
+保留仅供历史参考，不建议新代码依赖。
 
 六层架构:
   Interface  ── API 端点、CLI 命令、WebSocket/SSE

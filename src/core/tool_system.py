@@ -199,6 +199,8 @@ class Sandbox:
         self.console_approve = console_approve
         self.blocked_count = 0
         self.allowed_count = 0
+        # 会话级授权缓存：同一次 run 里已批准的工具不再重复询问（跨 run 不保留，保证安全）
+        self.session_approvals: set = set()
 
     def check(self, tool: Tool, args: dict) -> tuple[bool, str]:
         """检查工具是否允许执行。返回 (pass, reason)。"""
@@ -210,14 +212,20 @@ class Sandbox:
             self.blocked_count += 1
             return False, f"Tool '{tool.name}' is danger-level, execution blocked"
         if rule["approve"] == "console":
+            # 会话缓存：本次 run 已批准过该工具 → 直接放行
+            if tool.name in self.session_approvals:
+                self.allowed_count += 1
+                return True, "session-approved"
             if self.console_approve:
                 print(f"\n[PERMISSION] Tool: {tool.name}")
                 print(f"  Args: {json.dumps(args, ensure_ascii=False)[:200]}")
                 print(f"  Risk: {tool.risk_level}")
-                resp = input("  Proceed? (y/n): ").strip().lower()
-                if resp != 'y':
+                resp = input("  Proceed? (y/n, a=always this run): ").strip().lower()
+                if resp not in ('y', 'a'):
                     self.blocked_count += 1
                     return False, "user rejected"
+                if resp == 'a':
+                    self.session_approvals.add(tool.name)  # 记住本会话
             self.allowed_count += 1
             return True, "user approved"
         return False, "unknown risk level"

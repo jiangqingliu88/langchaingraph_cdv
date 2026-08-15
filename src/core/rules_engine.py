@@ -1,5 +1,5 @@
 """
-Verification Rules Engine — 验证领域规则引擎
+[DEPRECATED] Verification Rules Engine — 验证领域规则引擎（旧线性流水线依赖）
 
 验证领域的"壁垒"在于领域知识。这个引擎把验证专家的决策逻辑编码为可执行规则。
 

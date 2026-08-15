@@ -1,5 +1,5 @@
 """
-Step Executor — 阶段执行引擎 (内层确定)
+[DEPRECATED] Step Executor — 阶段执行引擎（旧线性流水线 run_pipeline 的内层）
 
 职责:
   1. 执行前: 条件求值 + 状态快照

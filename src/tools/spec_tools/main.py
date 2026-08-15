@@ -27,9 +27,19 @@ def analyze_specification(spec_text: str = "") -> str:
         return json.dumps({"error": "spec_text 太短或为空，无法分析"}, ensure_ascii=False)
 
     # ── 提取 design_name ──
-    title_m = re.search(r'^#\s+(.+)', spec_text, re.MULTILINE)
-    if title_m:
-        result["design_name"] = title_m.group(1).strip()
+    # 优先从 HTML 注释 <!-- module: xxx --> 提取（真模块名），回退到 # 一级标题
+    module_m = re.search(r'<!--[\s\S]*?\bmodule\s*[:：]\s*([A-Za-z_]\w*)', spec_text)
+    if module_m:
+        result["design_name"] = module_m.group(1).strip()
+    else:
+        title_m = re.search(r'^#\s+(.+)', spec_text, re.MULTILINE)
+        if title_m:
+            result["design_name"] = title_m.group(1).strip()
+
+    # 规范化 design_name：只保留字母/数字/下划线，其余转下划线
+    # （文件名/EDA filelist 路径不能被空格或中文截断）
+    result["design_name"] = re.sub(r'[^0-9A-Za-z_]+', '_',
+                                   result["design_name"] or "dut").strip('_') or "dut"
 
     # ── 提取 overview ──
     overview_parts = []

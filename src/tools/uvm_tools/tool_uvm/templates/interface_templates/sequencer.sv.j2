@@ -78,7 +78,7 @@ class {{ agent.name }}_sequencer extends uvm_sequencer #({{ agent.name }}_seq_it
 
   virtual function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    if (!uvm_config_db #({{ agent.name }}_config)::get(this, "", "cfg", cfg))
+    if (!uvm_config_db#({{ agent.name }}_config)::get(this, "", "cfg", cfg))
       `uvm_fatal("CFG", "Config not set")
   endfunction
 

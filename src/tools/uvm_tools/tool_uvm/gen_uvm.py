@@ -51,6 +51,7 @@ AGENT_LOOPBACK_TEMPLATES = [
 ENVIRONMENT_ROOT_TEMPLATES = [
     ("environment_templates/env_config.sv.j2", "{env_name}_config.sv"),
     ("environment_templates/environment.sv.j2", "{env_name}.sv"),
+    ("environment_templates/env_cov.sv.j2", "{env_name}_coverage.sv"),
     ("environment_templates/env_pkg.sv.j2", "{env_name}_pkg.sv"),
 ]
 
@@ -788,6 +789,8 @@ class EnvironmentRenderTask(RenderTask):
         rendered: List[Path] = []
         env_dir = self.output_dir / "env"
         context = {"environment": environment, **environment.to_context()}
+        # 补充 agent 的 transaction_vars（env 渲染需要，供 env_cov 生成 coverpoint/cross）
+        self._enrich_agents_transaction_vars(context)
 
         for template_path, target_pattern in ENVIRONMENT_ROOT_TEMPLATES:
             target_name = target_pattern.format(env_name=environment.env_name)
@@ -807,6 +810,46 @@ class EnvironmentRenderTask(RenderTask):
             rendered.append(self.render_file(template_path, target_path, context))
 
         return rendered
+
+    def _enrich_agents_transaction_vars(self, context: Dict[str, Any]):
+        """从 agent yaml 读取 transaction_vars + 策略包 coverage_bins，合并进 context。
+
+        parse_environment_model 只填 agent 的 name/interface，transaction_vars 在
+        独立的 agent yaml 里。env_cov 模板需要 transaction_vars 生成 coverpoint，
+        coverage_bins（策略包）生成语义化 cross。
+        """
+        import yaml as _yaml
+        yaml_dir = self.output_dir / "inputs" / "yaml" / "uvm"
+        agents = context.get("agents", [])
+        if not isinstance(agents, (list, tuple)):
+            return
+        for agent in agents:
+            name = getattr(agent, "name", None) or (agent.get("name", "") if isinstance(agent, dict) else "")
+            if not name:
+                continue
+            agent_yaml = yaml_dir / f"{name}.yaml"
+            if not agent_yaml.exists():
+                continue
+            try:
+                data = _yaml.safe_load(agent_yaml.read_text(encoding="utf-8", errors="replace")) or {}
+                txn_vars = data.get("transaction_vars", [])
+                if hasattr(agent, "transaction_vars"):
+                    agent.transaction_vars = txn_vars
+                elif isinstance(agent, dict):
+                    agent["transaction_vars"] = txn_vars
+            except Exception:
+                pass
+        # 读策略包的 coverage_bins（verify agent 落盘的 env_cov_bins.yaml）
+        bins_path = yaml_dir / "env_cov_bins.yaml"
+        if bins_path.exists():
+            try:
+                import json as _json
+                data = _json.loads(bins_path.read_text(encoding="utf-8", errors="replace"))
+                context["coverage_bins"] = data.get("coverage_bins", [])
+            except Exception:
+                context["coverage_bins"] = []
+        else:
+            context["coverage_bins"] = []
 
 
 class ConstraintRenderTask(RenderTask):

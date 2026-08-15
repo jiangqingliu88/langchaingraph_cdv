@@ -117,7 +117,7 @@ class {{ environment.env_name }}_virtual_sequencer extends uvm_sequencer #(uvm_s
     
     // 从 config_db 获取子 Sequencer 句柄
 {%- for name, agent in agents.items() %}
-    if (!uvm_config_db #(uvm_sequencer #({{ name }}_seq_item))::get(
+    if (!uvm_config_db#(uvm_sequencer #({{ name }}_seq_item))::get(
         this, "", "{{ name }}_sqr", {{ name }}_sqr)) begin
       `uvm_warning(get_name(), $sformatf("{{ name }}_sqr not found in config_db"))
     end else begin

@@ -125,6 +125,11 @@ class DebugAgent(BaseAgent):
             if fp not in unique:
                 unique[fp] = err
 
+        # ── Phase 2.5: 信号级诊断（对 mismatch 类错误，证据矩阵分类替代正则甩 model）──
+        signal_diagnosis = self._run_signal_diagnosis(
+            output_dir, [e for e in unique.values()
+                         if e["classification"]["category"] in ("model_mismatch", "unknown")])
+
         # ── Phase 3: Locate (bisect if multiple unique failures) ──
         by_category = {}
         for fp, err in unique.items():
@@ -138,20 +143,56 @@ class DebugAgent(BaseAgent):
                 bisect_test(json.dumps({"output_dir": output_dir, "failed_tests": failed_names}))
             )
 
+        # ── Phase 3.5: 经验库命中（debug 成长：记忆复用 + 教训升级）──
+        from src.core.debug_experience import get_debug_experience_store
+        experience = get_debug_experience_store()
+        _reused_fps = {}      # fp -> experience（已验证修复，直接复用）
+        _escalated_fps = {}   # fp -> experience（验证失败的修复，升级人工）
+        for _fp in unique:
+            _exp = experience.lookup(_fp)
+            if not _exp:
+                continue
+            if _exp["confidence"] >= 0.8:
+                _reused_fps[_fp] = _exp
+            else:
+                _escalated_fps[_fp] = _exp
+
         # ── Phase 4: Fix ──
         fixes_applied = []
+        manual_review = []
         for fp, err in list(unique.items())[:5]:  # 最多修 5 个独立错误
             msg = err.get("message", "")
+
+            # ── 成长: 已验证失败的修复 → 升级人工，不盲目重试 ──
+            if fp in _escalated_fps:
+                manual_review.append({
+                    "fingerprint": fp, "error": msg[:150],
+                    "reason": f"历史修复失败 {_escalated_fps[fp]['fail_count']} 次，升级人工",
+                })
+                continue
+
+            # ── 成长: 已验证通过的修复 → 复用（仍走 EDA 重验，跳过分析）──
+            _source = "experience_reuse" if fp in _reused_fps else "template"
             fix_result = json.loads(
                 auto_fix(json.dumps({"error_text": msg, "output_dir": output_dir}))
             )
-            if fix_result.get("matched") and fix_result.get("patch_applied"):
-                fixes_applied.append({
-                    "fingerprint": fp,
-                    "error": msg[:150],
-                    "fix_name": fix_result.get("fix_name"),
-                    "file_modified": fix_result.get("file_modified"),
-                })
+            if fix_result.get("matched"):
+                # 记忆: 记录 fingerprint → fix_name（供下次命中复用）
+                experience.record(
+                    fp,
+                    category=err["classification"]["category"],
+                    root_cause="",
+                    fix_name=fix_result.get("fix_name", ""),
+                    fix_patch="",
+                )
+                if fix_result.get("patch_applied"):
+                    fixes_applied.append({
+                        "fingerprint": fp,
+                        "error": msg[:150],
+                        "fix_name": fix_result.get("fix_name"),
+                        "file_modified": fix_result.get("file_modified"),
+                        "source": _source,
+                    })
 
         # ── Phase 5: Verify (rerun if fixes applied) ──
         verified = []
@@ -164,6 +205,9 @@ class DebugAgent(BaseAgent):
                         rerun = json.loads(
                             rerun_failed_test(json.dumps({"output_dir": output_dir, "test_name": test_name}))
                         )
+                        passed = rerun.get("status") == "PASS"
+                        # ── 成长: 把 PASS/FAIL 写回经验库，校准 confidence ──
+                        experience.record_result(fix_entry["fingerprint"], passed)
                         verified.append({"test": test_name, "fix": fix_entry["fix_name"],
                                          "status": rerun.get("status")})
 
@@ -189,6 +233,14 @@ class DebugAgent(BaseAgent):
             "bisect": bisect_data,
             "fixes": fixes_applied,
             "verified": verified,
+            "signal_diagnosis": signal_diagnosis,
+            "growth": {
+                "reused": len(_reused_fps),
+                "escalated_to_manual": len(manual_review),
+                "manual_review": manual_review,
+                "recorded": len(fixes_applied),
+                "experience_total": experience.stats()["total"],
+            },
         }
 
         # ── Phase 6: LLM 深度分析（可选） ──
@@ -229,3 +281,142 @@ class DebugAgent(BaseAgent):
         score = min(base, 95)
 
         return AgentResult(success=True, data={"debug": debug_result, "score": score})
+
+    # ═══════════════════════════════════════════════════════════
+    # 信号级诊断（证据矩阵分类，替代日志正则甩 model）
+    # ═══════════════════════════════════════════════════════════
+
+    def _run_signal_diagnosis(self, output_dir: str, errors: list) -> list:
+        """对 mismatch 类错误，从日志提取 DUT/Model/Expected 值，产出证据矩阵 + 根因分类。
+
+        LLM 不直接判断根因，而是基于信号级证据做分类。
+        先查跨 run 经验库：命中同类错误则直接复用历史根因，跳过重复诊断。
+        """
+        from src.tools.debug_tools.signal_diagnosis import diagnose
+        import hashlib
+        results = []
+        for err in errors:
+            msg = err.get("message", "")
+            fp = err.get("fingerprint", "") or hashlib.md5(msg.encode()).hexdigest()[:12]
+
+            # ── 经验库查询命中：复用历史根因，跳过诊断 ──
+            past = self._lookup_debug_experience(output_dir, fp)
+            if past and past.get("root_cause") not in (None, "unknown"):
+                results.append({
+                    "fingerprint": fp,
+                    "message": msg[:150],
+                    "verdict": {"root_cause": past["root_cause"],
+                                "reason": f"命中历史经验（{past.get('success_count', 1)} 次验证）：{past.get('fix_name', '')[:60]}",
+                                "confidence": past.get("confidence", 0)},
+                    "from_experience": True,
+                })
+                continue
+
+            dut_val, model_val, exp_val = self._extract_mismatch_values(msg)
+            if dut_val is None and model_val is None and exp_val is None:
+                # 日志里没有可提取的信号值 → 记录"证据不足"，不强行分类
+                results.append({
+                    "fingerprint": fp,
+                    "message": msg[:150],
+                    "verdict": {"root_cause": "unknown",
+                                "reason": "日志无信号值，无法做三方对比（需波形/参考模型数据）"},
+                })
+                continue
+            diag = diagnose(
+                dut={0: dut_val} if dut_val is not None else {},
+                model={0: model_val} if model_val is not None else {},
+                expected={0: exp_val} if exp_val is not None else {},
+            )
+            # L5 进化：跨项目迁移——按根因语义（category）检索同类历史经验
+            cross_project = self._lookup_cross_project(diag["verdict"]["root_cause"])
+            # 跨 run 经验沉淀：把根因分类 + 修复方向写进经验库（下次同类错误直接命中）
+            if diag["verdict"]["root_cause"] != "unknown":
+                self._record_debug_experience(output_dir, err, diag)
+            if cross_project:
+                diag["cross_project"] = cross_project
+            results.append({
+                "fingerprint": fp,
+                "message": msg[:150],
+                "evidence": diag["evidence"],
+                "verdict": diag["verdict"],
+            })
+        return results
+
+    @staticmethod
+    def _lookup_debug_experience(output_dir: str, fp: str):
+        """查 debug 经验库（sqlite，命中且 confidence>=0.8 才复用）。"""
+        try:
+            from src.core.debug_experience import get_debug_experience_store
+            return get_debug_experience_store().lookup(fp)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _lookup_cross_project(root_cause: str):
+        """L5 进化：跨项目迁移——按根因语义（category）检索同类历史经验。
+
+        fingerprint 是"某个特定错误"，category 是"某类问题"（rtl_issue/
+        model_issue）。fingerprint 未命中时，按 category 检索跨项目可复用的
+        同类根因经验，返回 Top-3 供诊断参考。
+        """
+        try:
+            from src.core.growth import lookup_experience_by_category
+            exps = lookup_experience_by_category(root_cause)
+            if not exps:
+                return []
+            return [{"root_cause": e.get("root_cause", ""),
+                     "fix_name": e.get("fix_name", ""),
+                     "success_count": e.get("success_count", 0)}
+                    for e in exps[:3]]
+        except Exception:
+            return []
+
+    @staticmethod
+    def _record_debug_experience(output_dir: str, err: dict, diag: dict):
+        """把诊断结论沉淀到 debug 经验库（sqlite）。"""
+        try:
+            import hashlib
+            from src.core.debug_experience import get_debug_experience_store
+            fp = err.get("fingerprint", "") or hashlib.md5(
+                err.get("message", "").encode()).hexdigest()[:12]
+            v = diag["verdict"]
+            cat = (err.get("classification") or {}).get("category", "unknown")
+            get_debug_experience_store().record(
+                fp, category=cat, root_cause=v.get("root_cause", "unknown"),
+                fix_name=v.get("reason", ""))
+        except Exception:
+            pass
+
+    @staticmethod
+    def _extract_mismatch_values(msg: str):
+        """从 mismatch 日志提取 (dut_val, model_val, expected_val)。
+
+        语义：scoreboard 的 expected/exp/want 来自参考模型 → 同时作为 model 和 expected；
+        actual/got/dut 是 DUT 实际输出。
+        支持格式：expected=0xA5 actual=0x00 / got 0x00 want 0xA5 / dut=0x00 model=0xA5
+        """
+        import re
+
+        def _hx(s):
+            m = re.search(r"0x([0-9a-fA-F]+)", s)
+            if m:
+                return int(m.group(1), 16)
+            m = re.search(r"(?<![0-9a-fA-F])(\d+)(?![0-9a-fA-F])", s)
+            return int(m.group(1)) if m else None
+
+        dut = model = exp = None
+        for key, val in re.findall(
+                r"(dut|model|expected|actual|exp|got|want)\s*[=:\s]\s*(0x[0-9a-fA-F]+|\d+)",
+                msg, re.IGNORECASE):
+            v = _hx(val)
+            k = key.lower()
+            if k in ("dut", "actual", "got"):
+                dut = v
+            elif k == "model":
+                model = v
+            elif k in ("expected", "exp", "want"):
+                # scoreboard 期望来自参考模型 → 同赋 model 和 expected
+                if model is None:
+                    model = v
+                exp = v
+        return dut, model, exp

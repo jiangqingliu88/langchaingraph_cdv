@@ -18,7 +18,7 @@ class {{ environment.env_name }}_base_test extends uvm_test;
 {%- for agent in agents %}
     cfg.{{ agent.name }}_cfg.is_active = UVM_ACTIVE;
 {%- endfor %}
-    uvm_config_db #({{ environment.env_name }}_config)::set(this, "env", "cfg", cfg);
+    uvm_config_db#({{ environment.env_name }}_config)::set(this, "env", "cfg", cfg);
   endfunction
 
   virtual function void end_of_elaboration_phase(uvm_phase phase);

@@ -27,6 +27,9 @@ class {{ environment.env_name }} extends uvm_env;
   uvm_scoreboard {{ sb.name }}_h;
 {%- endfor %}
 
+  // 功能覆盖率模型（env 级，跨 agent covergroup）
+  {{ environment.env_name }}_coverage env_cov;
+
   // TLM 连接
 {%- for agent in agents %}
   uvm_analysis_port #({{ agent.name }}_seq_item) {{ agent.name }}_agent_ap;
@@ -42,7 +45,7 @@ class {{ environment.env_name }} extends uvm_env;
     super.build_phase(phase);
 
     // 获取环境配置
-    if (!uvm_config_db #({{ environment.env_name }}_config)::get(this, "", "cfg", cfg))
+    if (!uvm_config_db#({{ environment.env_name }}_config)::get(this, "", "cfg", cfg))
       `uvm_fatal("CFG", "Environment configuration not set")
   `ifdef USE_SC_MODEL_CHECK
     {{ name }}_sc_pred={{ name }}_sc_pred_env::type_id::create("{{ name }}_sc_pred", this);
@@ -72,15 +75,15 @@ class {{ environment.env_name }} extends uvm_env;
       {%- endfor %}
       
       {{ clk.name }}_clk_rst_agent_h = clk_rst_agent::type_id::create("{{ clk.name }}_clk_rst_agent_h", this);
-      uvm_config_db #(clk_rst_config)::set(this, "{{ clk.name }}_clk_rst_agent_h", "cfg", {{ clk.name }}_clk_cfg);
-      uvm_config_db #(virtual clk_rst_if)::set(this, "{{ clk.name }}_clk_rst_agent_h", "vif", {{ clk.name }}_vif);
+      uvm_config_db#(clk_rst_config)::set(this, "{{ clk.name }}_clk_rst_agent_h", "cfg", {{ clk.name }}_clk_cfg);
+      uvm_config_db#(virtual clk_rst_if)::set(this, "{{ clk.name }}_clk_rst_agent_h", "vif", {{ clk.name }}_vif);
     end
   {%- endfor %}
 {%- endif %}
     // 创建 Agent 并设置配置
 {%- for agent in agents %}
     {{ agent.name }}_agent_h = {{ agent.name }}_agent::type_id::create("{{ agent.name }}_agent_h", this);
-    uvm_config_db #({{ agent.name }}_config)::set(this, "{{ agent.name }}_agent_h", "cfg", cfg.{{ agent.name }}_cfg);
+    uvm_config_db#({{ agent.name }}_config)::set(this, "{{ agent.name }}_agent_h", "cfg", cfg.{{ agent.name }}_cfg);
 {%- endfor %}
 
     // 创建 Scoreboard
@@ -91,6 +94,9 @@ class {{ environment.env_name }} extends uvm_env;
     end
 {%- endfor %}
 
+    // 创建功能覆盖率模型（env_cov）
+    env_cov = {{ environment.env_name }}_coverage::type_id::create("env_cov", this);
+
     // 创建 Analysis Ports
 {%- for agent in agents %}
     {{ agent.name }}_agent_ap = new("{{ agent.name }}_agent_ap", this);
@@ -98,7 +104,7 @@ class {{ environment.env_name }} extends uvm_env;
 
     // 创建 Virtual Sequencer（virtual_sequencer 在 seq_pkg 中，env_pkg 不可引用）
     virtual_sqr = {{ environment.env_name }}_virtual_sequencer::type_id::create("virtual_sqr", this);
-    uvm_config_db #({{ environment.env_name }}_config)::set(this, "virtual_sqr", "cfg", cfg);
+    uvm_config_db#({{ environment.env_name }}_config)::set(this, "virtual_sqr", "cfg", cfg);
   endfunction
 
   virtual function void connect_phase(uvm_phase phase);
@@ -107,6 +113,11 @@ class {{ environment.env_name }} extends uvm_env;
     // 连接 Agent Monitor 到 Analysis Ports
 {%- for agent in agents %}
     {{ agent.name }}_agent_h.mon.item_collected_port.connect({{ agent.name }}_agent_ap);
+{%- endfor %}
+
+    // 连接 Analysis Ports 到功能覆盖率模型（env_cov）
+{%- for agent in agents %}
+    {{ agent.name }}_agent_ap.connect(env_cov.{{ agent.name }}_export);
 {%- endfor %}
 
     // 连接 Analysis Ports 到 Scoreboard（uvm_scoreboard 基类无 analysis_export，需子类化）
