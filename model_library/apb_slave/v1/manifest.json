@@ -1,0 +1,14 @@
+{
+  "ip": "apb_slave",
+  "version": "v1",
+  "sha256": "PENDING_VERIFY",
+  "verified": false,
+  "verified_by": null,
+  "params_schema": {
+    "NREGS": {"type": "int", "default": 16, "min": 1, "max": 256},
+    "ADDR_W": {"type": "int", "default": 8, "min": 2, "max": 32},
+    "DATA_W": {"type": "int", "default": 8, "min": 1, "max": 64}
+  },
+  "matched_features": ["apb", "寄存器", "register", "paddr", "pwdata", "prdata", "psel", "penable"],
+  "notes": "通用 APB 从机参考模型：写回读回 + 越界保护。入库验证见 scripts/model_library_verify.py（需 EDA）。"
+}

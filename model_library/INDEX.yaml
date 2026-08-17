@@ -1,0 +1,17 @@
+# 黄金参考模型库索引（Golden Reference Model Library INDEX）
+#
+# 使用约定：
+#   1. 入库必须验证（scripts/model_library_verify.py 定向仿真 matched==N && mismatched==0）
+#   2. 模型不可变：只能新增版本（v2/v3...），禁止修改已发布版本
+#   3. model agent 按 spec 特征匹配本索引，命中 → 加载参数化；未命中 → 诚实占位
+# 维护命令：python scripts/model_library_import.py <ip> <version>
+
+apb_slave:
+  versions: [v1]
+  active: v1
+  matched_features: [apb, 寄存器, register, paddr, pwdata, prdata, psel, penable]
+
+# uart_tx:   待入库（起始位+8数据+停止位，波特率参数化）
+# uart_rx:   待入库（采样窗口 + 帧错误检测）
+# fifo16:    待入库（满/空/溢出/水印）
+# irq_gen:   待入库（触发条件 + 延迟）

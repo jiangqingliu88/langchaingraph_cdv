@@ -246,7 +246,26 @@ class ModelAgent(BaseAgent):
 
         # ── 动作: generate / update（生成新版本，旧版本并存）──
         interfaces = design_arch.get("interfaces", [])
-        rendered = _render(model_type, module, ops, regs, interfaces)
+        rendered = None
+        golden_ref = {}
+        # 优先黄金模型库（真实、可验证、可追溯）；LLM/模板只做选择与参数化
+        if model_type == "systemverilog":
+            try:
+                from src.tools.lib.golden_library import match_golden, load_golden, parameterize
+                hit = match_golden(design_arch)
+                if hit:
+                    sv = parameterize(load_golden(hit["ip"], hit["version"]), module, hit["params"])
+                    golden_ref = {"ip": hit["ip"], "version": hit["version"],
+                                  "sha256": hit["sha256"], "params": hit["params"]}
+                    rendered = {"model_type": "systemverilog", "source_code": sv,
+                                "file": f"{module}_ref_model.sv",
+                                "placeholder": False, "golden_ref": golden_ref}
+                    logger.info(f"黄金模型命中: {hit['ip']} {hit['version']} "
+                                f"(sha256={hit['sha256'][:12]}) → {module}_ref_model.sv")
+            except Exception as e:
+                logger.warning(f"黄金模型匹配失败: {e}")
+        if rendered is None:
+            rendered = _render(model_type, module, ops, regs, interfaces)
 
         # 版本管理: 读取当前版本号，+1 生成新版本
         model_dir = output_dir / "model"
@@ -275,14 +294,15 @@ class ModelAgent(BaseAgent):
             "all_versions": self._list_versions(model_dir, module),
         }
         # ── 说真话：参考模型是否"真实"由渲染结果决定 ──
-        # SV 模型含真实寄存器语义（spec.registers）→ placeholder=False；
+        # 黄金模型库命中（apb_slave 等）→ placeholder=False + golden_ref（sha256 可追溯）；
         # 否则为结构占位（历史 a+b 模板已废弃）→ placeholder=True，audit 拒绝签核。
         model_data["placeholder"] = rendered.get("placeholder", True)
+        model_data["golden_ref"] = rendered.get("golden_ref", None) or golden_ref or None
         if model_data["placeholder"]:
             model_data["placeholder_reason"] = (
-                "占位参考模型：spec 无寄存器表（或非 SV 模型），无真实功能语义。"
-                "仅作编译占位，禁止作为签核比对依据。真实参考模型需 spec.registers"
-                " + 协议逻辑（UART TX/RX 等）经定向仿真验证。")
+                "占位参考模型：黄金模型库无匹配（或非 SV 模型），无验证过的功能语义。"
+                "仅作编译占位，禁止作为签核比对依据。真实参考模型需先入库验证"
+                "（见 docs/design/golden_model_library.md）。")
         else:
             model_data["placeholder_reason"] = ""
         model_data["spec_interfaces"] = len(interfaces)

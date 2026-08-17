@@ -122,3 +122,82 @@ async def test_model_agent_placeholder_flag_in_result(tmp_path):
     assert result.success is True
     assert result.data["model"]["placeholder"] is True
     assert result.data["model"]["spec_interfaces"] == 1
+
+
+# ═══════════════════════════════════════════════════════
+# 黄金模型库：APB 设计命中 apb_slave（真实模型，非占位）
+# ═══════════════════════════════════════════════════════
+
+APB_SPEC_ARCH = {
+    "module_name": "apb_uart",
+    "interfaces": [
+        {"name": "pclk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
+        {"name": "preset_n", "data_width": 1, "direction": "INPUT", "protocol": "Reset"},
+        {"name": "paddr[7:0]", "data_width": 8, "direction": "INPUT", "protocol": "APB"},
+        {"name": "pwdata[7:0]", "data_width": 8, "direction": "INPUT", "protocol": "APB"},
+        {"name": "prdata[7:0]", "data_width": 8, "direction": "OUTPUT", "protocol": "APB"},
+        {"name": "pwrite", "data_width": 1, "direction": "INPUT", "protocol": "APB"},
+        {"name": "psel", "data_width": 1, "direction": "INPUT", "protocol": "APB"},
+        {"name": "penable", "data_width": 1, "direction": "INPUT", "protocol": "APB"},
+        {"name": "tx", "data_width": 1, "direction": "OUTPUT", "protocol": "UART"},
+    ],
+    "registers": [],
+    "function_hier": {"children": [{"name": "uart_tx"}, {"name": "uart_rx"}]},
+}
+
+
+def test_golden_library_match_apb():
+    """APB 接口 → 命中 apb_slave 黄金模型（带参数化）。"""
+    from src.tools.lib.golden_library import match_golden
+    hit = match_golden(APB_SPEC_ARCH)
+    assert hit is not None
+    assert hit["ip"] == "apb_slave"
+    assert hit["version"] == "v1"
+    assert hit["params"]["DATA_W"] == 8
+    assert hit["params"]["NREGS"] >= 1
+
+
+def test_golden_library_no_match_non_apb():
+    """无 APB 接口 → 无匹配（诚实占位路径）。"""
+    from src.tools.lib.golden_library import match_golden
+    arch = {"module_name": "uart", "interfaces": [
+        {"name": "clk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
+        {"name": "tx", "data_width": 1, "direction": "OUTPUT", "protocol": "UART"},
+        {"name": "rx", "data_width": 1, "direction": "INPUT", "protocol": "UART"},
+    ], "registers": [], "function_hier": {"children": []}}
+    assert match_golden(arch) is None
+
+
+def test_golden_model_parameterize_module_name():
+    """黄金模型参数化：模块名 → {module}_ref_model，parameter 默认值更新为 spec 推导值。"""
+    from src.tools.lib.golden_library import parameterize
+    sv = ("module apb_slave_golden #(parameter int NREGS = 16, parameter int ADDR_W = 8, "
+          "parameter int DATA_W = 8) (input logic clk); endmodule")
+    out = parameterize(sv, "apb_uart", {"NREGS": 256, "ADDR_W": 8, "DATA_W": 8})
+    assert "module apb_uart_ref_model" in out
+    assert "parameter int NREGS = 256" in out
+    assert "parameter int ADDR_W = 8" in out
+
+
+@pytest.mark.asyncio
+async def test_model_agent_golden_hit(tmp_path):
+    """APB 设计 → model agent 命中黄金模型：placeholder=False + golden_ref 可追溯。"""
+    agent = ModelAgent()
+    await agent.initialize()
+    result = await agent.execute_task({
+        "ctx": {"design_arch": APB_SPEC_ARCH},
+        "input": "",
+        "output_dir": str(tmp_path),
+        "params": {"model_type": "systemverilog"},
+    })
+    assert result.success is True
+    m = result.data["model"]
+    assert m["placeholder"] is False
+    assert m["golden_ref"] is not None
+    assert m["golden_ref"]["ip"] == "apb_slave"
+    assert m["golden_ref"]["sha256"], "golden_ref 必须带 sha256（可追溯）"
+    # 落盘的 SV 是黄金模型（含 APB 读写语义），不是 a+b 模板
+    from pathlib import Path
+    sv_text = Path(m["files"][0]).read_text(encoding="utf-8")
+    assert "regs[paddr]" in sv_text
+    assert "apb_slave_golden" not in sv_text  # 模块名已参数化为 {module}_ref_model
