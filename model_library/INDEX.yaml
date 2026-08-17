@@ -11,7 +11,15 @@ apb_slave:
   active: v1
   matched_features: [apb, 寄存器, register, paddr, pwdata, prdata, psel, penable]
 
-# uart_tx:   待入库（起始位+8数据+停止位，波特率参数化）
-# uart_rx:   待入库（采样窗口 + 帧错误检测）
+uart_tx:
+  versions: [v1]
+  active: v1
+  matched_features: [uart, tx, 串行, 发送, baud]
+
+uart_rx:
+  versions: [v1]
+  active: v1
+  matched_features: [uart, rx, 串行, 接收, baud]
+
 # fifo16:    待入库（满/空/溢出/水印）
 # irq_gen:   待入库（触发条件 + 延迟）

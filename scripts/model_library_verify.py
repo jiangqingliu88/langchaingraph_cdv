@@ -70,6 +70,85 @@ module tb_apb_slave;
     end
 endmodule
 """,
+    "uart_tx": r"""// 自检 TB：8N1 LSB-first 位流逐位比对（BAUD_DIV=4 快速仿真）
+module tb_uart_tx;
+    localparam BAUD_DIV = 4;
+    logic clk = 0, rst_n = 0;
+    logic tx_start = 0;
+    logic [7:0] tx_data = 0;
+    logic tx, tx_busy;
+    int total = 0, matched = 0, mismatched = 0;
+
+    uart_tx_golden #(.DATA_BITS(8), .BAUD_DIV(BAUD_DIV)) dut (.*);
+
+    always #5 clk = ~clk;
+
+    task check_bit(input logic exp);
+        total++;
+        if (dut.tx === exp) matched++; else mismatched++;
+    endtask
+
+    initial begin
+        repeat (2) @(posedge clk); rst_n = 1;
+        @(posedge clk); tx_start = 1; tx_data = 8'b1010_0101;  // 0xA5, LSB first
+        @(posedge clk); tx_start = 0;
+        repeat (BAUD_DIV / 2) @(posedge clk);
+        check_bit(1'b0);                      // start = 0
+        for (int i = 0; i < 8; i++) begin
+            repeat (BAUD_DIV) @(posedge clk);
+            check_bit(tx_data[i]);            // 数据位 LSB first
+        end
+        repeat (BAUD_DIV) @(posedge clk);
+        check_bit(1'b1);                      // stop = 1
+        repeat (2) @(posedge clk);
+        check_bit(1'b1);                      // idle 保持 1
+        repeat (2) @(posedge clk);
+        $display("SCOREBOARD: total=%0d matched=%0d mismatched=%0d", total, matched, mismatched);
+        $finish;
+    end
+endmodule
+""",
+    "uart_rx": r"""// 自检 TB：驱动位流 → 验证 rx_data 恢复 + rx_valid（BAUD_DIV=4 快速仿真）
+module tb_uart_rx;
+    localparam BAUD_DIV = 4;
+    logic clk = 0, rst_n = 0;
+    logic rx = 1;
+    logic [7:0] rx_data;
+    logic rx_valid;
+    int total = 0, matched = 0, mismatched = 0;
+
+    uart_rx_golden #(.DATA_BITS(8), .BAUD_DIV(BAUD_DIV)) dut (.*);
+
+    always #5 clk = ~clk;
+
+    task drive_bit(input logic v);
+        repeat (BAUD_DIV) @(posedge clk);
+        rx = v;
+    endtask
+
+    initial begin
+        repeat (2) @(posedge clk); rst_n = 1;
+        repeat (2) @(posedge clk);
+        // 第一帧 0xA5：start(0) + LSB-first 数据 + stop(1)
+        drive_bit(1'b0);
+        for (int i = 0; i < 8; i++) drive_bit(8'b1010_0101[i]);
+        drive_bit(1'b1);
+        repeat (20) @(posedge clk);
+        total++;
+        if (dut.rx_data === 8'b1010_0101 && dut.rx_valid) matched++; else mismatched++;
+        // 第二帧 0x3C
+        repeat (4) @(posedge clk);
+        drive_bit(1'b0);
+        for (int i = 0; i < 8; i++) drive_bit(8'b0011_1100[i]);
+        drive_bit(1'b1);
+        repeat (20) @(posedge clk);
+        total++;
+        if (dut.rx_data === 8'b0011_1100 && dut.rx_valid) matched++; else mismatched++;
+        $display("SCOREBOARD: total=%0d matched=%0d mismatched=%0d", total, matched, mismatched);
+        $finish;
+    end
+endmodule
+""",
 }
 
 

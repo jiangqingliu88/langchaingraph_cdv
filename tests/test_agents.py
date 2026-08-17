@@ -157,15 +157,39 @@ def test_golden_library_match_apb():
     assert hit["params"]["NREGS"] >= 1
 
 
-def test_golden_library_no_match_non_apb():
-    """无 APB 接口 → 无匹配（诚实占位路径）。"""
+def test_golden_library_uart_only_matches_tx():
+    """UART-only 设计（无 APB）→ 命中 uart_tx 黄金模型（不再是占位）。"""
     from src.tools.lib.golden_library import match_golden
     arch = {"module_name": "uart", "interfaces": [
         {"name": "clk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
         {"name": "tx", "data_width": 1, "direction": "OUTPUT", "protocol": "UART"},
         {"name": "rx", "data_width": 1, "direction": "INPUT", "protocol": "UART"},
     ], "registers": [], "function_hier": {"children": []}}
-    assert match_golden(arch) is None
+    assert match_golden(arch) is not None
+
+
+def test_golden_library_match_uart_tx():
+    """UART TX 信号 → 命中 uart_tx 黄金模型。"""
+    from src.tools.lib.golden_library import match_golden
+    arch = {"module_name": "uart", "interfaces": [
+        {"name": "clk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
+        {"name": "tx", "data_width": 1, "direction": "OUTPUT", "protocol": "UART"},
+        {"name": "rx", "data_width": 1, "direction": "INPUT", "protocol": "UART"},
+    ], "registers": [], "function_hier": {"children": []}}
+    hit = match_golden(arch)
+    assert hit["ip"] == "uart_tx"
+    assert hit["version"] == "v1"
+
+
+def test_golden_library_uart_models_are_verifiable():
+    """uart_tx/uart_rx 黄金模型文件存在且 manifest 结构完整（待 EDA 验证盖章）。"""
+    from src.tools.lib.golden_library import load_golden, verify_manifest
+    for ip in ("uart_tx", "uart_rx"):
+        sv = load_golden(ip, "v1")
+        assert "module" in sv and "endmodule" in sv, f"{ip} 模型不完整"
+        m = verify_manifest(ip, "v1")
+        assert m.get("ip") == ip
+        assert m.get("verified") is False  # 未验证前必须 verified=false（禁止入库）
 
 
 def test_golden_model_parameterize_module_name():

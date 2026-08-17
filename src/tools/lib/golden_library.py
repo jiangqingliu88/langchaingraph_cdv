@@ -30,6 +30,16 @@ _MATCH_RULES: Dict[str, Dict[str, Any]] = {
         "name_keywords": ("paddr", "pwdata", "prdata", "psel", "penable", "pwrite"),
         "require_registers": False,   # APB 从机语义与寄存器表无关（通用读写回读）
     },
+    "uart_tx": {
+        "protocol_keywords": ("uart", "serial"),
+        "name_keywords": ("tx", "txd", "sout"),
+        "require_registers": False,
+    },
+    "uart_rx": {
+        "protocol_keywords": ("uart", "serial"),
+        "name_keywords": ("rx", "rxd", "sin"),
+        "require_registers": False,
+    },
 }
 
 
