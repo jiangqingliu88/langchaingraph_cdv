@@ -111,7 +111,9 @@ class ShellGenerator:
             run_opts_raw = test.get('run_opts', [])
             run_opts = ' '.join([self._substitute(opt, t_context) for opt in run_opts_raw])
             sim_tmpl = self.simulators.get(sim, {}).get('run', './simv {run_opts}')
-            sim_cmd = sim_tmpl.format(run_opts=run_opts)
+            # 顶层模块按 build 指定（DUT build → {module}_bench_tb_top，loopback build → {ag}_loopback_tb）
+            top = build_conf.get('top', '')
+            sim_cmd = sim_tmpl.format(run_opts=run_opts, top=top)
             self._write_sim_script(test_dir, test_name, seed, sim_cmd, mode)
 
             post_sim_cmd = test.get('hooks', {}).get('post_sim') or self.hooks_global.get('post_sim')

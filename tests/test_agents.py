@@ -9,8 +9,8 @@ from src.agents.regress import RegressAgent
 from src.agents.debug import DebugAgent
 from src.agents.qa import QaAgent
 from src.agents.report import ReportAgent
-from src.core.registry import AgentRegistry
-from src.core.llm_factory import LLMFactory
+from src.layers.l2_orchestration.registry import AgentRegistry
+from src.layers.l2_orchestration.llm_factory import LLMFactory
 
 AGENTS = [
     SpecAgent,

@@ -837,7 +837,7 @@ def _build_env(ctx: dict, ps: dict) -> str:
         return _build_placeholder("06", "UVM验证环境", "UVM-DOC-006", "UVM phase skipped")
 
     env_name = _safe(data, "env_name", default="Unknown")
-    from src.core.output_config import make_output_root
+    from src.layers.l1_infrastructure.output_config import make_output_root
     output_dir = _safe(data, "output_dir", default=make_output_root())
     agent_count = _safe(data, "agent_count", default="-")
     filelist = _safe(data, "filelist", default="-")

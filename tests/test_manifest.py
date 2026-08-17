@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.core.manifest import (
+from src.layers.l2_orchestration.manifest import (
     ManifestBuilder, EvidencePackager, RunManifest, PhaseArtifact,
     build_manifest, list_sessions, hash_file, hash_content, hash_json,
 )
@@ -77,7 +77,7 @@ class TestManifestBuilder:
 
     def test_build_manifest_with_ctx(self):
         builder = ManifestBuilder()
-        from src.core.context import ContextStore
+        from src.layers.l2_orchestration.context import ContextStore
         ctx = ContextStore()
         ctx.put("spec", {"design_name": "ALU", "features": [{"name": "ADD"}]}, source="spec_planner")
         ctx.put("coverage", {"line_pct": 85.0, "branch_pct": 72.0, "toggle_pct": 60.0}, source="coverage_manager")

@@ -39,6 +39,8 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
             pkg = agent_dir / f"{name}_pkg.sv"
             if pkg.exists():
                 lines.append(str(pkg.resolve()))
+    # Predictor + Scoreboard 现在是 env pkg 的包内组件（env_pkg.sv.j2 里 include "pred/..."），
+    # 不再作为 standalone 文件编译（否则 $unit 类无法被 package 内部引用 vlog-2164）
     lines += [
         f"+incdir+{output_dir.resolve()}/env",
         str(output_dir.resolve() / f"env/{env_name}_pkg.sv"),

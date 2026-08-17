@@ -1,7 +1,7 @@
 """coverage 归因校准库单测：动作成效 / 归因准确率 / unreachable 黑名单。"""
 import pytest
 
-from src.core.coverage_experience import CoverageExperienceStore
+from src.layers.l4_memory.coverage_experience import CoverageExperienceStore
 
 
 @pytest.fixture

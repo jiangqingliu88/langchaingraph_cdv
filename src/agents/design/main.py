@@ -3,8 +3,8 @@ from typing import Dict, Any
 import json
 from pathlib import Path
 
-from src.core.base import BaseAgent, AgentResult
-from src.core.registry import register_agent
+from src.layers.l2_orchestration.agents.base import BaseAgent, AgentResult
+from src.layers.l2_orchestration.agents.registry import register_agent
 import structlog
 
 logger = structlog.get_logger()
@@ -37,7 +37,7 @@ class DesignAgent(BaseAgent):
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
         """spec 分析 → design_arch → rtl（真实工具链）"""
-        from src.core.output_config import make_output_root
+        from src.layers.l1_infrastructure.output_config import make_output_root
         output_dir = Path(make_output_root(task.get("output_dir") or None))
         task["output_dir"] = str(output_dir)
 
@@ -60,19 +60,57 @@ class DesignAgent(BaseAgent):
         if module_name.lower() in ("dut", "dut_top", ""):
             module_name = "dut"
 
-        # ── 2. 架构分解（function_hier + registers + interfaces）──
+        # ── 2. 架构拆 IP：从 spec features 拆解 IP 列表，注册进 IP 库 ──
+        #     fix_agent=rtl（REFACTOR_RTL）→ 强制重新生成，绕过 IP 缓存（缓存的是功能错的 RTL）
+        _params = task.get("params", {}) if isinstance(task.get("params"), dict) else {}
+        _force_regen = _params.get("fix_agent") == "rtl"
+        ips = self._decompose_ips(spec, module_name, force_regen=_force_regen)
+
+        # ── 3. LLM 写手：只对新 IP（reused=False）生成 RTL，复用的直接带库 RTL ──
+        rtl_dir = output_dir / "rtl"
+        rtl_dir.mkdir(parents=True, exist_ok=True)
+        for ip in ips:
+            if ip.get("reused"):
+                continue  # 查库复用：RTL 已在 ip["rtl_code"]，不再 LLM 生成
+            try:
+                rtl = self._llm_write_ip(ip, spec)
+                # RTL 完整性校验：module + 端口闭合 + endmodule（LLM 可能截断/残缺）
+                if not self._is_valid_rtl(rtl):
+                    logger.warning(f"IP {ip['ip_name']} RTL 残缺（缺端口闭合/endmodule），丢弃")
+                    continue
+                # 铁律一：走 L1 基础设施做 vlog 编译校验（EDA 是唯一真理）
+                if not self._verify_ip_rtl(rtl_dir, ip["ip_name"], rtl):
+                    logger.warning(f"IP {ip['ip_name']} vlog 编译失败，丢弃")
+                    continue
+                from src.layers.l4_memory.ip_registry import IpRegistry
+                _reg = IpRegistry()
+                _reg.update_rtl(ip["ip_name"], rtl)
+                ip["rtl_code"] = rtl
+                _reg.close()
+            except Exception as e:
+                logger.warning(f"IP {ip['ip_name']} LLM 写手失败: {e}")
+
+        # ── 4. 集成连线：各 IP RTL 集成为顶层 module ──
+        rtl_files = self._integrate_top(ips, module_name, spec, rtl_dir)
+
         design_arch = {
             "module_name": module_name,
+            "ips": ips,
             "function_hier": self._build_func_hier(spec),
             "registers": spec.get("registers", []),
             "interfaces": spec.get("interfaces", []),
             "signoff_checklist": [],
         }
 
-        # ── 3. RTL 生成（真实模板，从 function_hier 提取操作）──
-        rtl_dir = output_dir / "rtl"
-        rtl_dir.mkdir(parents=True, exist_ok=True)
-        rtl_files = self._generate_rtl(design_arch, rtl_dir)
+        # V2 Knowledge Graph：设计时子图落库（跨 run 沉淀，供决策层语义溯源）
+        try:
+            from src.tools.spec_tools.verify_dsl import build_graph_from_spec
+            from src.layers.l3_decision.knowledge.persistence import save_graph_to_db
+            _kg = build_graph_from_spec(spec)
+            await save_graph_to_db(_kg)
+            logger.info(f"验证知识图已落库: nodes={len(_kg)}")
+        except Exception as e:
+            logger.warning(f"验证知识图落库失败: {e}")
 
         result = {
             "design_arch": design_arch,
@@ -84,6 +122,237 @@ class DesignAgent(BaseAgent):
             if rtl_files else 30
         result["score"] = score
         return AgentResult(success=bool(rtl_files), data=result)
+
+    # ═══════════════════════════════════════════════════════════
+    # 架构拆 IP → LLM 写手 → 集成连线
+    # ═══════════════════════════════════════════════════════════
+
+    def _decompose_ips(self, spec: dict, module_name: str, force_regen: bool = False) -> list:
+        """架构拆 IP：用搜索策略从 IP 库匹配（替代硬编码关键词映射）。
+
+        每个 feature 文本通过 search_ip 匹配 IP 库（tags/desc 语义匹配），
+        命中 generated 的直接复用 RTL，命中 planned 的走 LLM 写手生成。
+        force_regen=True（fix_agent=rtl）时跳过复用，全部 LLM 重新生成。
+        """
+        from src.layers.l4_memory.ip_registry import IpRegistry
+        ip_reg = IpRegistry()
+
+        ips = []
+        seen = set()
+        features = spec.get("features", []) or []
+        for f in features:
+            fname = f.get("name", "") if isinstance(f, dict) else str(f)
+            # 搜索 IP 库：按 feature 文本匹配最相似的 IP（tags/desc 语义匹配）
+            matches = ip_reg.search_ip(fname, limit=1)
+            if not matches:
+                continue  # 库无匹配，跳过（该 feature 无对应 IP）
+            matched = matches[0]
+            generic_name = matched["ip_name"]
+            category = matched["category"]
+            if generic_name in seen:
+                continue
+            if matched["status"] == "generated" and matched["rtl_code"] and not force_regen:
+                # 查库复用：直接用库里已有 RTL，不再 LLM 生成
+                ip_reg.mark_reused(generic_name)
+                ips.append({"ip_name": generic_name, "category": category,
+                            "function_desc": fname,
+                            "interface": matched["interface"],
+                            "reused": True, "rtl_code": matched["rtl_code"]})
+            else:
+                # 新 IP：库里有 seed 预置的完整接口就用库的，否则从 spec 提取
+                iface = matched["interface"] or self._extract_ip_interface(spec, category)
+                ips.append({"ip_name": generic_name, "category": category,
+                            "function_desc": fname, "interface": iface,
+                            "reused": False})
+            seen.add(generic_name)
+        ip_reg.close()
+        return ips
+
+    @staticmethod
+    def _extract_ip_interface(spec: dict, category: str) -> list:
+        """从 spec interfaces 提取某类 IP 的相关信号（按 protocol 字段筛选）。"""
+        interfaces = spec.get("interfaces", []) or []
+        cat = category.lower()
+        if cat in ("apb", "uart", "irq"):
+            return [i for i in interfaces if cat in i.get("protocol", "").lower()]
+        return []  # fifo 等内部信号，由 LLM 写手决定
+
+    @staticmethod
+    def _llm_write_ip(ip: dict, spec: dict) -> str:
+        """LLM 写手：根据 IP 功能描述 + 接口，生成真实 RTL 逻辑。
+
+        这是"LLM 做完形填空"的落点——小 IP 的逻辑简单（状态机/寄存器），
+        LLM 容易生成正确；大模块拆成小 IP 后，每个 IP 的 RTL 是真实逻辑而非占位。
+        """
+        clk_rst = [i for i in spec.get("interfaces", [])
+                   if i.get("protocol", "").lower() in ("clock", "reset")]
+        prompt = f"""你是 IC 设计工程师，精通 SystemVerilog RTL 设计。
+
+请为以下 IP 生成完整的 RTL module：
+
+IP 名: {ip['ip_name']}
+类别: {ip['category']}
+功能: {ip['function_desc']}
+
+时钟/复位信号:
+{json.dumps(clk_rst, ensure_ascii=False)}
+
+该 IP 的接口信号:
+{json.dumps(ip.get('interface', []), ensure_ascii=False)}
+
+要求：
+1. 生成完整的 module，端口 = 时钟/复位 + 接口信号
+2. 用 always_ff 写真实的功能逻辑（状态机/寄存器/组合逻辑，不是占位）
+3. 每个 reg 变量只能在一个 always_ff 块里赋值（禁止多驱动），组合逻辑用 assign 或 always_comb
+4. 每个 always_ff 块的敏感列表统一用 @(posedge clk or negedge rst_n)
+5. 只输出 SystemVerilog 代码，无 markdown 代码块、无解释
+"""
+        try:
+            from src.tools.lib.llm_custom_logic import _call_llm_raw
+            return _call_llm_raw(prompt, "", "")
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _is_valid_rtl(rtl: str) -> bool:
+        """RTL 完整性校验：module 声明 + 端口闭合 `);` + endmodule。
+
+        LLM 生成的 RTL 可能截断（如端口列表没闭合就写 endmodule），
+        这种残缺 RTL 会导致 vlog 编译错误，必须丢弃。
+        """
+        import re
+        if not rtl:
+            return False
+        if "module" not in rtl or "endmodule" not in rtl:
+            return False
+        # 端口闭合：module X ( ... );  必须有 ");"
+        m = re.search(r'module\s+\w+\s*\(([^)]*)\)\s*;', rtl, re.DOTALL)
+        return m is not None
+
+    @staticmethod
+    def _verify_ip_rtl(output_dir: Path, ip_name: str, rtl_code: str) -> bool:
+        """铁律一：用 L1 基础设施（InfrastructureManager.compile → EdaBackend）做 vlog 编译校验。
+
+        LLM 生成的 RTL 语法对但可能有语义错误（多驱动/端口悬空），
+        vlog 编译返回 0/1，失败则丢弃（回退）。这是"EDA 是唯一真理"的落点。
+        """
+        import tempfile
+        from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
+        try:
+            # 落盘 IP RTL 到临时目录 + 生成 filelist
+            tmp_dir = Path(tempfile.mkdtemp(prefix="ip_verify_"))
+            (tmp_dir / f"{ip_name}.sv").write_text(rtl_code, encoding="utf-8")
+            fl = tmp_dir / "filelist.f"
+            fl.write_text(str(tmp_dir / f"{ip_name}.sv"), encoding="utf-8")
+            # L1 编译校验（vlog）
+            infra = InfrastructureManager(tmp_dir)
+            result = infra.compile(str(fl), coverage=False)
+            return result.get("status") == "PASS" and result.get("errors", 0) == 0
+        except Exception as e:
+            logger.warning(f"IP {ip_name} L1 编译校验失败: {e}")
+            return False
+
+    def _integrate_top(self, ips: list, module_name: str, spec: dict, rtl_dir: Path) -> list:
+        """集成连线：各 IP 的 RTL 落盘 + LLM 生成顶层 module（完整连线）。"""
+        from src.layers.l4_memory.ip_registry import IpRegistry
+        ip_reg = IpRegistry()
+
+        files = []
+        for ip in ips:
+            rtl_code = ip.get("rtl_code")  # 优先用 ip 里缓存的（复用/刚生成）
+            if not rtl_code:
+                rtl = ip_reg.get_ip(ip["ip_name"])
+                rtl_code = rtl["rtl_code"] if rtl else ""
+            if rtl_code:
+                fpath = rtl_dir / f"{ip['ip_name']}.sv"
+                fpath.write_text(rtl_code, encoding="utf-8")
+                files.append(str(fpath))
+
+        # 顶层 module：优先 LLM 生成（理解各 IP 接口做完整连线），失败回退规则骨架
+        if files:
+            top = self._llm_write_top(module_name, ips, spec)
+            if not top:
+                top = self._gen_top_module(module_name, ips, spec)
+            top_path = rtl_dir / f"{module_name}.sv"
+            top_path.write_text(top, encoding="utf-8")
+            files.append(str(top_path))
+
+        ip_reg.close()
+        return files
+
+    @staticmethod
+    def _llm_write_top(module_name: str, ips: list, spec: dict) -> str:
+        """LLM 集成：根据各 IP 的接口，生成顶层 module（实例化 + 完整连线）。"""
+        from src.layers.l4_memory.ip_registry import IpRegistry
+        reg = IpRegistry()
+        ip_rtls = []
+        for ip in ips:
+            rtl = reg.get_ip(ip["ip_name"])
+            if rtl and rtl["rtl_code"]:
+                ip_rtls.append({"ip_name": ip["ip_name"], "rtl": rtl["rtl_code"]})
+        reg.close()
+
+        if not ip_rtls:
+            return ""
+
+        prompt = f"""你是 IC 集成工程师，精通 SystemVerilog。
+
+请把以下 IP 集成成顶层 module。
+
+顶层模块名: {module_name}
+顶层端口（来自 spec，这些是 DUT 对外接口）:
+{json.dumps(spec.get('interfaces', []), ensure_ascii=False)}
+
+各 IP 的 RTL（注意各 IP 的端口名，连线时用端口名匹配）:
+{json.dumps([{'ip_name': r['ip_name'], 'rtl': r['rtl']} for r in ip_rtls], ensure_ascii=False)}
+
+要求：
+1. 顶层 module 端口 = spec 接口（时钟/复位 + 顶层接口）
+2. 实例化所有 IP，按端口名连线：顶层端口直连同名 IP 端口，跨 IP 的信号用内部 wire 声明
+3. 顶层输出（如 tx/irq/prdata）必须由某个 IP 的输出驱动，不能悬空
+4. 只输出 SystemVerilog 代码，无 markdown 代码块、无解释
+"""
+        try:
+            from src.tools.lib.llm_custom_logic import _call_llm_raw
+            return _call_llm_raw(prompt, "", "")
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _gen_top_module(module_name: str, ips: list, spec: dict) -> str:
+        """生成顶层 module：端口 = spec 接口，实例化各 IP（时钟/复位直连）。"""
+        interfaces = spec.get("interfaces", []) or []
+        # 端口声明
+        ports = DesignAgent._gen_ports(interfaces)
+        # 识别时钟/复位
+        clk = rst_n = None
+        for itf in interfaces:
+            proto = itf.get("protocol", "").lower()
+            nm = itf.get("name", "").split("[")[0]
+            if proto in ("clock", "clk"):
+                clk = nm
+            elif proto in ("reset", "rst"):
+                rst_n = nm
+
+        lines = [f"module {module_name} ("]
+        lines.append(ports)
+        lines.append(");")
+        # 实例化各 IP（时钟/复位直连，接口信号由 LLM 写手生成的 IP 端口决定）
+        for ip in ips:
+            ip_inst = ip["ip_name"].replace(module_name + "_", "")
+            lines.append("")
+            lines.append(f"  {ip['ip_name']} u_{ip_inst} (")
+            # 时钟/复位直连
+            conns = []
+            if clk:
+                conns.append(f"    .{clk}({clk})")
+            if rst_n:
+                conns.append(f"    .{rst_n}({rst_n})")
+            lines.append(",\n".join(conns) if conns else "    // 接口连线待 LLM 写手生成后补齐")
+            lines.append("  );")
+        lines.append("")
+        lines.append("endmodule")
+        return "\n".join(lines) + "\n"
 
     def _build_func_hier(self, spec: dict) -> dict:
         """从 spec features 构建功能层次。"""

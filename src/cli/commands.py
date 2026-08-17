@@ -35,10 +35,9 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeEl
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.core.registry import AgentRegistry
-from src.core.execution import (PipelineExecutionService, FULL_PHASES,
-    _WORKFLOW_PHASE_MAP, VERIFY_PROFILES, resolve_phases_from_profile)
-from src.core.approval import create_approval_gate, ApprovalDecision, PipelineTerminatedError
+from src.layers.l2_orchestration.agents.registry import AgentRegistry
+from src.layers.l2_orchestration.execution import PipelineExecutionService
+from src.layers.l2_orchestration.governance.approval import create_approval_gate, ApprovalDecision, PipelineTerminatedError
 from src.cli.output import OutputAdapter, common_options, get_output_adapter
 
 console = Console()
@@ -47,10 +46,11 @@ console = Console()
 # Agent 初始化
 # ═══════════════════════════════════════════════════════════════
 
-# Agent 角色名 = Phase 名（无需映射表）
-VALID_STEPS = [p[0] for p in FULL_PHASES]
-VALID_WORKFLOWS = list(_WORKFLOW_PHASE_MAP.keys())
-AGENT_ALIASES = {p[0]: p[1] for p in FULL_PHASES if p[1]}  # identity: phase→role
+# 七 Agent 角色映射（闭环架构 design/model/verify/ops/coverage/debug/audit）
+AGENT_ALIASES = {
+    "design": "design", "model": "model", "verify": "verify",
+    "ops": "ops", "coverage": "coverage", "debug": "debug", "audit": "audit",
+}
 AGENT_HELP = ", ".join(AGENT_ALIASES.keys())
 
 
@@ -138,7 +138,7 @@ def cli(ctx, prompt, continue_mode, resume_id):
 @common_options
 def init(json_output, quiet, verbose, output_dir):
     """初始化输出目录结构"""
-    from src.core.output_config import make_output_root
+    from src.layers.l1_infrastructure.output_config import make_output_root
     out = get_output_adapter(json_output, quiet)
     root = make_output_root(output_dir or None)
     paths = [root, "logs", f"{root}/docs", f"{root}/docs/de", f"{root}/docs/dv"]
@@ -150,274 +150,103 @@ def init(json_output, quiet, verbose, output_dir):
 
 
 # ═══════════════════════════════════════════════════════════════
-# vagent verify — 增强版
+# vagent verify — 覆盖率驱动闭环
 # ═══════════════════════════════════════════════════════════════
 
 @cli.command()
 @click.argument("spec_file", type=click.Path(exists=True))
-@click.option("--workflow", "-w", default="full_verification",
-              type=click.Choice(VALID_WORKFLOWS),
-              help="工作流名称")
-@click.option("--refine", is_flag=True, help="LLM refine 模式")
-@click.option("--compile", is_flag=True, help="UVM 后编译")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
-# ── P0 新增选项 ──
-@click.option("--step", "-s", "single_step", help=f"只跑指定阶段: {', '.join(VALID_STEPS[:8])}...")
-@click.option("--steps", help="跑指定几个阶段（逗号分隔）")
-@click.option("--from", "-f", "from_step", help="从指定阶段开始跑")
-@click.option("--to", "-t", "to_step", help="跑到指定阶段停止")
+@click.option("--design-style", default="baseline", help="设计风格（baseline/pipeline/low_power）")
+@click.option("--target", type=float, default=None, help="覆盖率目标（默认从配置读）")
+@click.option("--max-rounds", type=int, default=5, help="最大闭环轮次")
+@click.option("--approval", default="auto",
+              type=click.Choice(["interactive", "auto", "threshold"]),
+              help="审批模式")
+@click.option("--full-regression", is_flag=True, help="全量回归（跑所有 case，默认增量只跑未 passed）")
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 @click.option("--summary", is_flag=True, help="仅输出最终摘要")
 @click.option("--quiet", "-q", is_flag=True, help="只打印错误")
-@click.option("--resume", "resume_run_id", help="断点续跑 <run_id>")
-@click.option("--retry-failed", is_flag=True, help="只重跑失败阶段")
-@click.option("--ctx", "ctx_file", type=click.Path(exists=True), help="从外部 JSON 注入上下文")
-@click.option("--profile", "-p", "profile_name",
-              default="standard",
-              type=click.Choice(list(VERIFY_PROFILES.keys())),
-              help="验证流程预设 (覆盖 --workflow)")
-@click.option("--approval", default="auto",
-              type=click.Choice(["interactive", "auto", "threshold"]),
-              help="审批模式 (interactive/auto/threshold)")
-@click.option("--gate", is_flag=True, help="开启门禁检查，低分阶段阻断管线 (默认关闭)")
-@click.option("--timeout", default=600, type=int, help="单阶段超时秒数 (默认600)")
-def verify(spec_file, workflow, compile, output, refine,
-           single_step, steps, from_step, to_step,
-           json_output, summary, quiet, resume_run_id, retry_failed, ctx_file,
-           profile_name, approval, gate, timeout):
-    """完整验证流水线 —— AI 驱动的芯片验证签核
+def verify(spec_file, output, design_style, target, max_rounds,
+           approval, full_regression, json_output, summary, quiet):
+    """AI 驱动的芯片验证闭环（覆盖率驱动：case 回归 → coverage → 决策迭代）
 
-    \b
+    
     示例:
-      vagent verify spec.md                           # 默认全流程
-      vagent verify spec.md --step UVM                # 只跑 UVM 阶段
-      vagent verify spec.md --steps UVM,test,cover    # 跑指定阶段
-      vagent verify spec.md --from design --to test   # 区间执行
-      vagent verify spec.md --json                    # CI JSON 输出
-      vagent verify spec.md --summary                 # 仅摘要
-      vagent verify spec.md --resume run_20260809_001 # 断点续跑
-      vagent verify spec.md --retry-failed            # 只重跑失败阶段
+      vagent verify spec.md                              # 默认闭环
+      vagent verify spec.md --design-style pipeline      # 指定设计风格
+      vagent verify spec.md --target 90 --max-rounds 8   # 指定覆盖率目标/轮次
+      vagent verify spec.md --json                       # CI JSON 输出
     """
     out = get_output_adapter(json_output, quiet)
-    from src.core.output_config import make_output_root
+    from src.layers.l1_infrastructure.output_config import make_output_root
     output_root = make_output_root(output)
-
-    # ── 处理 profile / workflow ──
-    # profile 优先级高于 workflow
-    if profile_name and profile_name in VERIFY_PROFILES:
-        phases = resolve_phases_from_profile(profile_name)
-        if not quiet:
-            console.print(f"[cyan]Profile: {profile_name} — "
-                          f"{VERIFY_PROFILES[profile_name]['description']}[/cyan]")
-    else:
-        phases = _WORKFLOW_PHASE_MAP.get(workflow, FULL_PHASES)
-
-    # ── 治理: RBAC 权限检查 ──
-    try:
-        from src.infra.rbac import RBACEngine
-        rbac = RBACEngine()
-        if not rbac.check_permission(os.environ.get("USER", "cli_user"), "pipeline.execute"):
-            console.print("[yellow]⚠ RBAC: 权限不足，但继续执行 (开发模式)[/yellow]")
-    except Exception:
-        pass  # RBAC 不可用时跳过
-
-    # ── 审批门控 ──
     approval_gate = create_approval_gate(approval)
-    profile_config = VERIFY_PROFILES.get(profile_name, {})
-    approval_gates = profile_config.get("approval_gates", [])
-    if not quiet and approval != "auto" and approval_gates:
-        console.print(f"[yellow]审批模式: {approval} — "
-                      f"审批节点: {', '.join(approval_gates)}[/yellow]")
 
-    # ── 处理阶段过滤 ──
+    # 回归模式开关：--full-regression → 全量跑所有 case（覆盖默认增量）
+    if full_regression:
+        from config.settings import Settings
+        Settings.get_instance().verification.incremental_regression = False
 
-    if single_step:
-        if single_step not in VALID_STEPS:
-            out.print_error(f"Unknown step: {single_step}. Valid: {', '.join(VALID_STEPS)}")
-            sys.exit(1)
-        phases = [p for p in phases if p[0] == single_step]
-        if not phases:
-            out.print_error(f"Step '{single_step}' not in workflow '{workflow}'")
-            sys.exit(1)
-
-    if steps:
-        step_list = [s.strip() for s in steps.split(",")]
-        invalid = [s for s in step_list if s not in VALID_STEPS]
-        if invalid:
-            out.print_error(f"Unknown steps: {invalid}")
-            sys.exit(1)
-        # 保持原顺序
-        phase_order = {p[0]: i for i, p in enumerate(phases)}
-        phases = sorted(
-            [p for p in phases if p[0] in step_list],
-            key=lambda p: phase_order[p[0]]
-        )
-
-    if from_step:
-        if from_step not in VALID_STEPS:
-            out.print_error(f"Unknown step: {from_step}")
-            sys.exit(1)
-        start_idx = next((i for i, p in enumerate(phases) if p[0] == from_step), None)
-        if start_idx is not None:
-            phases = phases[start_idx:]
-
-    if to_step:
-        if to_step not in VALID_STEPS:
-            out.print_error(f"Unknown step: {to_step}")
-            sys.exit(1)
-        end_idx = next((i for i, p in enumerate(phases) if p[0] == to_step), None)
-        if end_idx is not None:
-            phases = phases[:end_idx + 1]
-
-    # ── 执行 ──
     if not quiet:
-        console.print(f"[bold cyan]═══ Pipeline: {workflow} ═══[/bold cyan]")
-        console.print(f"[dim]Phases: {' → '.join(p[0] for p in phases)}[/dim]")
-        if refine:
-            console.print("[bold cyan]LLM Refine mode: template + LLM polish + iterative fix[/bold cyan]")
+        console.print(f"[bold cyan]═══ Closed Loop: coverage-driven ═══[/bold cyan]")
 
     async def run():
         service = PipelineExecutionService.get_instance()
         spec = Path(spec_file).read_text(encoding="utf-8")
-
-        # 处理 --resume / --retry-failed
-        actual_run_id = None
-        if resume_run_id:
-            actual_run_id = resume_run_id
-            if not quiet:
-                console.print(f"[cyan]Resuming run: {actual_run_id}[/cyan]")
-        elif retry_failed:
-            # 找到最近的 completed_with_errors run
-            for rid in reversed(list(service._runs.keys())):
-                if service._runs[rid].get("state") == "completed_with_errors":
-                    actual_run_id = rid
-                    break
-            if actual_run_id and not quiet:
-                console.print(f"[cyan]Retrying failed phases from: {actual_run_id}[/cyan]")
-
-        # 处理 --ctx 外部上下文注入
-        if ctx_file:
-            ext_ctx = json.loads(Path(ctx_file).read_text(encoding="utf-8"))
-            if not quiet:
-                console.print(f"[cyan]External context loaded: {list(ext_ctx.keys())}[/cyan]")
-        else:
-            ext_ctx = None
-
-        def progress(phase, status, msg):
-            if quiet:
-                return
-            icon = {"running": ">", "passed": "+", "failed": "X", "error": "!"}.get(status, ".")
-            color = {"running": "yellow", "passed": "green", "failed": "red", "error": "red"}.get(status, "")
-            clean_msg = str(msg).replace("[", "(").replace("]", ")")
-            console.print(f"  [{color}][{icon}] {phase:8s}[/{color}] {clean_msg}")
-
-        # ── 如果指定了阶段过滤，用自定义 phases 执行 ──
-        if single_step or steps or from_step or to_step:
-            result = await service.run_pipeline(
-                spec_text=spec, workflow=workflow, output_root=output_root,
-                on_progress=progress, refine=refine, run_id=actual_run_id,
-                gate_enabled=gate, approval_gate=approval_gate, phase_timeout=timeout,
-            )
-            # 对结果按 phases 过滤
-            filtered_phases = [p for p in result["phases"] if any(
-                fp[0] == p["name"] for fp in phases
-            )]
-            result["phases"] = filtered_phases
-        else:
-            result = await service.run_pipeline(
-                spec_text=spec, workflow=workflow, output_root=output_root,
-                on_progress=progress, refine=refine, run_id=actual_run_id,
-                gate_enabled=gate, approval_gate=approval_gate, phase_timeout=timeout,
-            )
-
-        return result
+        return await service.run_closed_loop(
+            spec_text=spec, output_root=output_root,
+            target=target, max_rounds=max_rounds,
+            design_style=design_style, approval_gate=approval_gate,
+        )
 
     result = asyncio.run(run())
 
-    # ── 输出 ──
     if json_output:
         click.echo(json.dumps({
-            "run_id": result["run_id"],
-            "workflow": result["workflow"],
-            "passed": result["passed"],
-            "total": result["total"],
-            "overall_score": result["overall_score"],
-            "phases": result["phases"],
+            "run_id": result.get("run_id"),
+            "status": result.get("status"),
+            "passed": result.get("passed", 0),
+            "total": result.get("total", 0),
+            "overall_score": result.get("overall_score", 0),
+            "final_coverage": result.get("final_coverage", 0),
+            "effective_coverage": result.get("effective_coverage", 0),
+            "converged": result.get("converged", False),
+            "phases": result.get("phases", []),
         }, indent=2, ensure_ascii=False, default=str))
-        sys.exit(0 if result["passed"] == result["total"] else 1)
+        sys.exit(0 if result.get("converged") else 1)
 
     if summary:
-        passed = result["passed"]
-        total = result["total"]
-        score = result["overall_score"]
-        status = "PASS" if passed == total else "PARTIAL"
-        click.echo(f"Run: {result['run_id']} | {status} | {passed}/{total} phases | Score: {score}/100")
+        cov = result.get("final_coverage", 0)
+        eff = result.get("effective_coverage", 0)
+        click.echo(f"Run: {result.get('run_id')} | {result.get('status')} "
+                   f"| coverage={cov}% effective={eff}%")
         return
 
-    # Rich table summary
-    table = Table(title=f"Results — {result['run_id']}")
+    table = Table(title=f"Closed Loop Results — {result.get('run_id')}")
     table.add_column("Phase")
     table.add_column("Status")
     table.add_column("Score")
-    table.add_column("Retries")
     table.add_column("Time")
-    for p in result["phases"]:
-        st = p["status"]
+    for p in result.get("phases", []):
+        st = p.get("status", "?")
         icon = {
-            "passed": "[green]PASS[/green]",
-            "degraded": "[yellow]DEGRADED[/yellow]",
-            "failed": "[red]FAIL[/red]",
-            "skipped": "[dim]SKIP[/dim]",
+            "passed": "[green]PASS[/green]", "failed": "[red]FAIL[/red]",
+            "skipped": "[dim]SKIP[/dim]", "planned": "[dim]PLAN[/dim]",
+            "decision": "[cyan]DECIDE[/cyan]", "blocked": "[yellow]BLOCK[/yellow]",
+            "error": "[red]ERR[/red]",
         }.get(st, st)
-        sc = str(p.get("score", "")) if p.get("score") else "-"
-        rt = str(p.get("retries", 0))
-        table.add_row(p["name"], icon, sc, rt, f"{p['time']}s")
+        sc = str(p.get("score", "")) if p.get("score") is not None else "-"
+        table.add_row(p.get("name", "?"), icon, sc, f"{p.get('time', 0)}s")
     console.print(table)
 
-    overall = result.get("overall_score", 0)
-    ov_color = "green" if overall >= 80 else "yellow" if overall >= 50 else "red"
-    console.print(f"[bold]Passed: {result['passed']}/{result['total']}  "
-                  f"Score: [{ov_color}]{overall}/100[/{ov_color}][/bold]")
+    cov = result.get("final_coverage", 0)
+    eff = result.get("effective_coverage", 0)
+    conv = result.get("converged", False)
+    console.print(f"[bold]Coverage: {cov}%  Effective: {eff}%  "
+                  f"Converged: {'[green]YES[/green]' if conv else '[yellow]NO[/yellow]'}[/bold]")
 
-    # Coverage summary
-    cov = result.get("ctx", {})
-    if hasattr(cov, "get"):
-        rc = cov.get("_real_coverage", {})
-    else:
-        rc = {}
-    if isinstance(rc, dict) and rc:
-        console.print(f"[cyan]Coverage: line={rc.get('line_pct',0):.1f}% "
-                      f"branch={rc.get('branch_pct',0):.1f}% "
-                      f"toggle={rc.get('toggle_pct',0):.1f}%[/cyan]")
-
-    # Evidence chain
-    if result.get("evidence_path"):
-        _print_evidence_chain(result["evidence_path"])
-
-    # ── 友好提示 ──
-    gov = result.get("governance", {}) or {}
-    if gov:
-        qg = gov.get("quality_guard", {}) or {}
-        h = gov.get("harness", {}) or {}
-        token_used = gov.get("token_budget", {}).get("total_tokens", 0) or 0
-        console.print(f"[dim]🛡️ 质量守护: 通过{qg.get('passed_directly',0)} | "
-                      f"回退{qg.get('fallback_used',0)} | "
-                      f"升级{qg.get('escalated_to_human',0)} | "
-                      f"Token={token_used}[/dim]")
-    # Degraded/failed hints
-    failed = [p for p in result["phases"] if p["status"] in ("failed", "degraded")]
-    if failed:
-        console.print(f"\n[yellow]💡 建议:[/yellow]")
-        for p in failed[:3]:
-            console.print(f"   {p['name']}: score={p['score']} — 重新运行: [bold]vagent verify spec.md --step {p['name']}[/bold]")
-    if result.get("governance", {}).get("halted"):
-        hp = gov.get("halt_phase", "")
-        console.print(f"\n[red]⛔ 门禁阻断于 {hp}[/red] — 原因: {gov.get('halt_reason','')}")
-        console.print(f"[dim]关闭门禁重跑: vagent verify spec.md --step {hp}  (不加 --gate)[/dim]")
-
-    # Optional compile
-    if compile and any(p["name"] == "UVM" and p["status"] == "passed" for p in result["phases"]):
-        _do_compile_check(result)
+    if result.get("evidence", {}).get("evidence_path"):
+        _print_evidence_chain(result["evidence"]["evidence_path"])
 
 
 def _print_evidence_chain(evidence_path: str):
@@ -444,6 +273,32 @@ def _print_evidence_chain(evidence_path: str):
                       f"|  Overall: {'[green]PASS[/green]' if chain.get('overall_status') == 'PASS' else '[red]FAIL[/red]'}")
     except Exception:
         pass
+
+
+@cli.command("check-env-arch")
+@click.option("--output", "-o", "output_dir", type=click.Path(), help="输出目录（run 目录）")
+@click.option("--test", "-t", "test_name", default=None, help="定向测试名（默认自动解析 loopback > directed > base）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def check_env_arch(output_dir, test_name, json_output):
+    """验收 UVM env 架构：端口归属（通用）+ scoreboard 定向 case（通用）。"""
+    from src.tools.uvm_tools.tool_check_env_arch.main import check_env_arch as _check_env_arch
+    if not output_dir:
+        console.print("[red]需要 --output 指定 run 目录，如 vagent check-env-arch -o output/apb_uart_run_xxx[/red]")
+        return
+    result = _check_env_arch(output_dir, test_name=test_name)
+    if json_output:
+        click.echo(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    po = result.get("port_ownership", {})
+    sb = result.get("scoreboard", {})
+    status = result.get("status", "FAIL")
+    console.print(f"\n[bold]{'[green]✅ PASS[/green]' if status == 'PASS' else '[red]❌ FAIL[/red]'}[/bold] env 架构验收")
+    console.print(f"  [bold]端口归属[/bold]  {po.get('status')} — {po.get('message')}")
+    for w in po.get("warnings", []):
+        console.print(f"    [yellow]⚠ {w}[/yellow]")
+    for v in po.get("violations", []):
+        console.print(f"    [red]✗ {v}[/red]")
+    console.print(f"  [bold]scoreboard[/bold]  {sb.get('status')} — {sb.get('message')}")
 
 
 def _do_compile_check(result: dict):
@@ -556,89 +411,47 @@ def multi(spec_files, modules_file, output, concurrency, design_style, max_round
 
 
 # ═══════════════════════════════════════════════════════════════
-# vagent plan — 一站式验证计划（借鉴原型 python main.py plan）
+# vagent plan — 一站式验证闭环
 # ═══════════════════════════════════════════════════════════════
 
 @cli.command()
 @click.argument("spec", type=click.Path(exists=True))
-@click.option("--profile", "-p", "profile_name", default="standard",
-              type=click.Choice(list(VERIFY_PROFILES.keys())),
-              help="验证流程预设")
-@click.option("--approval", default="auto",
-              type=click.Choice(["interactive", "auto", "threshold"]),
-              help="审批模式")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
+@click.option("--design-style", default="baseline", help="设计风格（baseline/pipeline/low_power）")
+@click.option("--target", type=float, default=None, help="覆盖率目标（默认从配置读）")
+@click.option("--max-rounds", type=int, default=5, help="最大闭环轮次")
 @click.option("--dry-run", is_flag=True, help="只打印计划，不执行")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 格式输出")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 @click.pass_context
-def plan(ctx_obj, spec, profile_name, approval, output, dry_run, json_output):
-    """一站式验证计划：从 Spec 到签核报告。
-
-    对标原型: python main.py plan --spec xx.md --task-type xx
-
-    \b
-    示例:
-      vagent plan uart_spec.md                              # 标准流程
-      vagent plan uart_spec.md --profile quick --approval interactive
-      vagent plan uart_spec.md --profile full               # 完整签核
-      vagent plan uart_spec.md --dry-run                    # 只看计划不执行
-    """
+def plan(ctx_obj, spec, output, design_style, target, max_rounds, dry_run, json_output):
+    """一站式验证闭环：从 Spec 到签核报告（覆盖率驱动）"""
     out = get_output_adapter(json_output)
-    profile_config = VERIFY_PROFILES[profile_name]
-    phases = resolve_phases_from_profile(profile_name)
 
-    # 打印计划
-    click.echo(f"\n🧠 SignOffAI 验证计划")
-    click.echo(f"   Spec:      {spec}")
-    click.echo(f"   Profile:   {profile_name} ({profile_config['description']})")
-    click.echo(f"   阶段数:    {len(phases)}")
-    click.echo(f"   审批模式:  {approval}")
-    approval_gates = profile_config.get("approval_gates", [])
-    click.echo(f"   审批节点:  {len(approval_gates)} 个")
     click.echo()
-    for i, p_tuple in enumerate(phases):
-        name = p_tuple[0]
-        gate_mark = "🔴审批" if name in approval_gates else "  ⏩"
-        agent = p_tuple[1] or "(doc)"
-        click.echo(f"   [{i+1}/{len(phases)}] {gate_mark}  {name}  ->  {agent}")
+    click.echo("🧠 SignOffAI 验证闭环计划")
+    click.echo(f"   Spec:        {spec}")
+    click.echo(f"   设计风格:    {design_style}")
+    click.echo(f"   覆盖率目标:  {target or '默认(配置)'}")
+    click.echo(f"   最大轮次:    {max_rounds}")
+    click.echo()
+    for i, role in enumerate(AGENT_ALIASES.keys(), 1):
+        click.echo(f"   [{i}/{len(AGENT_ALIASES)}] {role}")
 
     if dry_run:
-        click.echo("\n📋 Dry-run 模式，不执行。")
+        click.echo()
+        click.echo("📋 Dry-run 模式，不执行。")
         return
 
-    # 确认开始（交互模式下）
-    if approval == "interactive":
-        confirm = click.confirm("\n开始执行？", default=True)
-        if not confirm:
-            click.echo("已取消。")
-            return
-
-    click.echo(f"\n▶️ 开始执行...")
-
-    # 委托给 verify 命令
+    click.echo()
+    click.echo("▶️ 开始执行...")
     ctx_obj.invoke(
         verify,
-        spec_file=spec,
-        workflow=None,
-        compile=False,
-        output=output,
-        refine=False,
-        single_step=None,
-        steps=None,
-        from_step=None,
-        to_step=None,
-        json_output=json_output,
-        summary=False,
-        quiet=False,
-        resume_run_id=None,
-        retry_failed=False,
-        ctx_file=None,
-        profile_name=profile_name,
-        approval=approval,
+        spec_file=spec, output=output, design_style=design_style,
+        target=target, max_rounds=max_rounds, approval="auto",
+        json_output=json_output, summary=False, quiet=False,
     )
 
 
-# ═══════════════════════════════════════════════════════════════
 # vagent signoff — 签核命令 (P0)
 # ═══════════════════════════════════════════════════════════════
 
@@ -672,7 +485,7 @@ def signoff_generate(run_id, report_type, title, project_id, json_output):
         sys.exit(1)
 
     try:
-        from src.core.manifest import ManifestBuilder
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         manifest = builder.build(session_id=rid.replace("run_", ""))
 
@@ -692,7 +505,7 @@ def signoff_generate(run_id, report_type, title, project_id, json_output):
         # 持久化到 DB
         if project_id:
             try:
-                from src.database.repository import create_signoff
+                from src.layers.l4_memory.persistence.repository import create_signoff
                 import asyncio as _a
                 sid = _a.run(create_signoff(
                     project_id=project_id, title=title_text,
@@ -729,7 +542,7 @@ def signoff_export(run_id, output, json_output):
         sys.exit(1)
 
     try:
-        from src.core.manifest import ManifestBuilder, EvidencePackager
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder, EvidencePackager
         builder = ManifestBuilder()
         manifest = builder.build(session_id=rid.replace("run_", ""))
 
@@ -769,7 +582,7 @@ def signoff_verify(run_id, json_output):
         sys.exit(1)
 
     try:
-        from src.core.manifest import ManifestBuilder
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         manifest = builder.build(session_id=rid.replace("run_", ""))
 
@@ -868,7 +681,7 @@ def signoff_diff(run_a, run_b, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.core.manifest import ManifestBuilder
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         ma = builder.build(session_id=run_a.replace("run_", ""))
         mb = builder.build(session_id=run_b.replace("run_", ""))
@@ -913,7 +726,7 @@ def diff_coverage(run_a, run_b, fmt):
     """
     out = get_output_adapter(fmt == "json")
     try:
-        from src.core.manifest import ManifestBuilder
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         ma = builder.build(session_id=run_a.replace("run_", ""))
         mb = builder.build(session_id=run_b.replace("run_", ""))
@@ -998,7 +811,7 @@ def diff_regression(run_a, run_b, fmt):
     """
     out = get_output_adapter(fmt == "json")
     try:
-        from src.core.manifest import ManifestBuilder
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         ma = builder.build(session_id=run_a.replace("run_", ""))
         mb = builder.build(session_id=run_b.replace("run_", ""))
@@ -1040,7 +853,7 @@ def diff_audit(run_a, run_b, fmt):
     """
     out = get_output_adapter(fmt == "json")
     try:
-        from src.core.manifest import ManifestBuilder, EvidencePackager
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder, EvidencePackager
         builder = ManifestBuilder()
         ma = builder.build(session_id=run_a.replace("run_", ""))
         mb = builder.build(session_id=run_b.replace("run_", ""))
@@ -1124,7 +937,7 @@ def dump(session_id, output, list_sessions_flag, json_output):
       vagent dump <session_id> # 展示该 session 的完整执行轨迹
       vagent dump <session_id> -o evidence.zip  # 导出签核证据包
     """
-    from src.core.manifest import (
+    from src.layers.l2_orchestration.evidence.manifest import (
         ManifestBuilder, EvidencePackager,
         build_manifest, list_sessions as list_all_sessions,
     )
@@ -1276,7 +1089,7 @@ def watch(run_id, interval, follow, compact, json_output):
             state = service.get_run_status(rid)
             if not state:
                 try:
-                    from src.database.repository import get_pipeline_run_by_run_id
+                    from src.layers.l4_memory.persistence.repository import get_pipeline_run_by_run_id
                     state = asyncio.run(get_pipeline_run_by_run_id(rid))
                     if state:
                         state = {
@@ -1426,25 +1239,19 @@ async def _get_history(limit: int = 20) -> list:
 @cli.command()
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def workflows(json_output):
-    """列出所有可用工作流"""
+    """列出七 Agent 闭环架构"""
     out = get_output_adapter(json_output)
-    workflow_info = []
-    for name, phases in _WORKFLOW_PHASE_MAP.items():
-        phase_names = [p[0] for p in phases]
-        workflow_info.append({
-            "name": name,
-            "phases": phase_names,
-            "phase_count": len(phase_names),
-        })
+    roles = list(AGENT_ALIASES.keys())
+    info = [{"name": "closed_loop_7agents", "phases": roles, "phase_count": len(roles)}]
 
     if json_output:
-        click.echo(json.dumps(workflow_info, indent=2, ensure_ascii=False))
+        click.echo(json.dumps(info, indent=2, ensure_ascii=False))
     else:
-        table = Table(title="Available Workflows")
-        table.add_column("Workflow", style="cyan")
-        table.add_column("Phases")
+        table = Table(title="Seven-Agent Closed Loop")
+        table.add_column("Architecture", style="cyan")
+        table.add_column("Agents")
         table.add_column("Count")
-        for w in workflow_info:
+        for w in info:
             table.add_row(w["name"], " → ".join(w["phases"]), str(w["phase_count"]))
         console.print(table)
 
@@ -1464,8 +1271,8 @@ def exp(json_output):
       vagent exp --json       # JSON 输出
     """
     out = get_output_adapter(json_output)
-    from src.core.debug_experience import get_debug_experience_store
-    from src.core.coverage_experience import get_coverage_experience_store
+    from src.layers.l4_memory.debug_experience import get_debug_experience_store
+    from src.layers.l4_memory.coverage_experience import get_coverage_experience_store
 
     dstore = get_debug_experience_store()
     cstore = get_coverage_experience_store()
@@ -1670,10 +1477,10 @@ def tool_history(limit, tool_filter):
       vagent tool history --tool run_vcs    # 指定工具
     """
     try:
-        from src.core.tool_system import ToolRegistry
+        from src.layers.l2_orchestration.communication.tool_system import ToolRegistry
         # 工具调用历史通过 debug_logger 追踪
         console.print("[dim]Tool call history:[/dim]")
-        from src.middleware.debug_logger import tracer
+        from src.layers.l2_orchestration.middleware.debug_logger import tracer
         # tracer doesn't have tool history directly, use file-based approach
         log_dir = Path("logs/execution")
         if log_dir.exists():
@@ -1758,7 +1565,7 @@ def agent_show(role, tools, contract, json_output):
     resolved_role = role
     inst = app.registry.get_agent_instance(resolved_role)
     if not inst:
-        out.print_error(f"Agent '{role}' not found. Available: {', '.join(p[0] for p in FULL_PHASES if p[1])}")
+        out.print_error(f"Agent '{role}' not found. Available: {', '.join(AGENT_ALIASES.keys())}")
         return
 
     info = {
@@ -1984,7 +1791,7 @@ def debug_exp(distill, json_output):
       vagent debug exp --json       # JSON 输出
     """
     out = get_output_adapter(json_output)
-    from src.core.debug_experience import get_debug_experience_store
+    from src.layers.l4_memory.debug_experience import get_debug_experience_store
     store = get_debug_experience_store()
     entries = store.distill_candidates() if distill else store.list_all()
     stats = store.stats()
@@ -2028,7 +1835,7 @@ def debug_repl(agent_alias):
       vagent debug repl --agent spec              # 指定 Agent 的调试模式
     """
     console.print("[bold cyan]SignOffAI Debug REPL[/bold cyan]")
-    console.print(f"Agents: {', '.join(p[0] for p in FULL_PHASES if p[1])}")
+    console.print(f"Agents: {', '.join(AGENT_ALIASES.keys())}")
     console.print("Commands: [yellow]agents[/yellow] | [yellow]tools[/yellow] <agent> | "
                    "[yellow]<agent>[/yellow] [input] | [yellow]exec[/yellow] <agent> <tool> | "
                    "[yellow]ctx[/yellow] | [yellow]quit[/yellow]")
@@ -2398,7 +2205,7 @@ def project_init(name, template):
         return
 
     # Create directory structure
-    from src.core.output_config import make_output_root
+    from src.layers.l1_infrastructure.output_config import make_output_root
     project_output = make_output_root()
     dirs = [
         "specs", project_output, "logs",
@@ -2558,7 +2365,7 @@ def _get_git_info(cwd: Path) -> dict:
 
 async def _get_db_stats() -> dict:
     try:
-        from src.database.repository import get_dashboard_stats
+        from src.layers.l4_memory.persistence.repository import get_dashboard_stats
         return await get_dashboard_stats()
     except Exception:
         return {}
@@ -2566,7 +2373,7 @@ async def _get_db_stats() -> dict:
 
 async def _list_db_projects() -> list:
     try:
-        from src.database.repository import list_projects
+        from src.layers.l4_memory.persistence.repository import list_projects
         return await list_projects()
     except Exception:
         return []
@@ -2772,7 +2579,7 @@ def spec_trace(req_id, full, json_output):
 
 async def _trace_requirement(req_id: str):
     try:
-        from src.database.repository import get_requirement_trace
+        from src.layers.l4_memory.persistence.repository import get_requirement_trace
         return await get_requirement_trace(req_id)
     except Exception:
         return None
@@ -2807,7 +2614,7 @@ def ci_verify(spec_file, json_output, junit, gitlab, quiet):
     spec = Path(spec_file).read_text(encoding="utf-8")
 
     async def run():
-        result = await service.run_pipeline(spec_text=spec, workflow="full_verification")
+        result = await service.run_closed_loop(spec_text=spec, output_root=None)
         return result
 
     result = asyncio.run(run())
@@ -2997,7 +2804,7 @@ def regression_report(run_id, json_output):
         return
 
     try:
-        from src.database.repository import get_regression_history
+        from src.layers.l4_memory.persistence.repository import get_regression_history
         history = asyncio.run(get_regression_history())
         if history:
             latest = history[0]
@@ -3020,7 +2827,7 @@ def regression_trend(days, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.database.repository import get_regression_trend
+        from src.layers.l4_memory.persistence.repository import get_regression_trend
         trend = asyncio.run(get_regression_trend(days=days))
         if trend:
             out.print_result({"days": days, "data_points": len(trend), "trend": trend},
@@ -3044,7 +2851,7 @@ def regression_compare(run_a, run_b, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.core.manifest import ManifestBuilder
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         ma = builder.build(session_id=run_a.replace("run_", ""))
         mb = builder.build(session_id=run_b.replace("run_", ""))
@@ -3088,7 +2895,7 @@ def coverage_report(run_id, json_output):
         return
 
     try:
-        from src.core.manifest import ManifestBuilder
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         manifest = builder.build(session_id=rid.replace("run_", ""))
         cov = manifest.metadata.get("coverage", {})
@@ -3124,7 +2931,7 @@ def coverage_gaps(run_id, json_output):
         return
 
     try:
-        from src.core.manifest import ManifestBuilder
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         manifest = builder.build(session_id=rid.replace("run_", ""))
         cov = manifest.metadata.get("coverage", {})
@@ -3216,7 +3023,7 @@ def coverage_trend(days, json_output):
     out = get_output_adapter(json_output)
     # Use regression trend as proxy
     try:
-        from src.database.repository import get_regression_trend
+        from src.layers.l4_memory.persistence.repository import get_regression_trend
         trend = asyncio.run(get_regression_trend(days=days))
         out.print_result({"days": days, "data_points": len(trend), "trend": trend},
                          title=f"Coverage Trend ({days}d)")
@@ -3242,7 +3049,7 @@ def coverage_merge(runs, json_output):
     count = 0
 
     try:
-        from src.core.manifest import ManifestBuilder
+        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         for rid in run_list:
             manifest = builder.build(session_id=rid.replace("run_", ""))
@@ -3286,7 +3093,7 @@ def env_generate(spec_file, output):
     示例:
       vagent env generate --spec spec.md
     """
-    from src.core.output_config import make_output_root
+    from src.layers.l1_infrastructure.output_config import make_output_root
     output_dir = make_output_root(output) + "/uvm_env"
     console.print(f"[cyan]Generating UVM environment from {spec_file}...[/cyan]")
     console.print(f"[dim]Output: {output_dir}[/dim]")
@@ -3544,7 +3351,7 @@ def hub_status(json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.core.tool_hub import ToolHub
+        from src.layers.l2_orchestration.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -3582,7 +3389,7 @@ def hub_list(agent, tag, category, risk, search, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.core.tool_hub import ToolHub
+        from src.layers.l2_orchestration.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -3596,7 +3403,7 @@ def hub_list(agent, tag, category, risk, search, json_output):
         elif category:
             manifests = hub.list_by_category(category)
         elif risk:
-            from src.core.tool_protocol import ToolRisk
+            from src.layers.l2_orchestration.communication.tool_protocol import ToolRisk
             manifests = hub.list_by_risk(ToolRisk(risk))
         else:
             manifests = hub.list_all()
@@ -3625,7 +3432,7 @@ def hub_health(json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.core.tool_hub import ToolHub
+        from src.layers.l2_orchestration.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -3645,7 +3452,7 @@ def hub_bootstrap():
       vagent hub bootstrap
     """
     try:
-        from src.core.tool_hub import ToolHub
+        from src.layers.l2_orchestration.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         # Reset
         hub._initialized = False
@@ -3680,7 +3487,7 @@ def plugin_list(json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.core.plugin_manager import PluginManager
+        from src.layers.l2_orchestration.plugin_manager import PluginManager
         mgr = PluginManager()
         discovered = mgr.discover()
 
@@ -3713,7 +3520,7 @@ def plugin_discover(plugin_dir, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.core.plugin_manager import PluginManager
+        from src.layers.l2_orchestration.plugin_manager import PluginManager
         mgr = PluginManager()
         if plugin_dir:
             mgr.add_plugin_dir(plugin_dir)
@@ -3744,7 +3551,7 @@ def plugin_install(name, version, upgrade):
       vagent plugin install vcs_compile --version 2.0.0
     """
     try:
-        from src.core.tool_marketplace import ToolMarketplace
+        from src.layers.l2_orchestration.tool_marketplace import ToolMarketplace
         market = ToolMarketplace()
         success, msg = asyncio.run(market.install(name, version, upgrade))
         if success:
@@ -3765,7 +3572,7 @@ def plugin_uninstall(name):
       vagent plugin uninstall vcs_compile
     """
     try:
-        from src.core.tool_marketplace import ToolMarketplace
+        from src.layers.l2_orchestration.tool_marketplace import ToolMarketplace
         market = ToolMarketplace()
         success, msg = market.uninstall(name)
         if success:
@@ -3791,7 +3598,7 @@ def plugin_search(query, category, tag, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.core.tool_marketplace import ToolMarketplace
+        from src.layers.l2_orchestration.tool_marketplace import ToolMarketplace
         market = ToolMarketplace()
         tags = [tag] if tag else None
         results = market.search(query, category=category, tags=tags)
@@ -3835,7 +3642,7 @@ def pipeline_list(json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.core.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
+        from src.layers.l2_orchestration.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
         orch = ToolOrchestrator()
 
         # 注册内置流水线
@@ -3866,8 +3673,8 @@ def pipeline_run(pipeline_name, json_output, dry_run):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.core.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
-        from src.core.tool_hub import ToolHub
+        from src.layers.l2_orchestration.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
+        from src.layers.l2_orchestration.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -3927,7 +3734,7 @@ def pipeline_graph(pipeline_name, fmt):
       vagent pipeline graph uvm_quality_check --format dot
     """
     try:
-        from src.core.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
+        from src.layers.l2_orchestration.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
         orch = ToolOrchestrator()
         for name, pdef in BUILTIN_PIPELINES.items():
             orch.register_pipeline(pdef)
@@ -3963,8 +3770,8 @@ def docs_generate(output, tool):
       vagent docs generate -o docs/reference   # 指定输出目录
     """
     try:
-        from src.core.tool_doc_generator import ToolDocGenerator
-        from src.core.tool_hub import ToolHub
+        from src.layers.l2_orchestration.tool_doc_generator import ToolDocGenerator
+        from src.layers.l2_orchestration.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -4000,8 +3807,8 @@ def docs_preview(tool_name):
       vagent docs preview check_compile
     """
     try:
-        from src.core.tool_doc_generator import ToolDocGenerator
-        from src.core.tool_hub import ToolHub
+        from src.layers.l2_orchestration.tool_doc_generator import ToolDocGenerator
+        from src.layers.l2_orchestration.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -4025,7 +3832,7 @@ def docs_preview(tool_name):
 # ═══════════════════════════════════════════════════════════════
 
 def _repo():
-    from src.core.run_repository import RunRepository
+    from src.layers.l2_orchestration.run_repository import RunRepository
     return RunRepository("output")
 
 
@@ -4289,7 +4096,7 @@ def distill_run(apply, json_output):
     """扫描经验库 → 生成蒸馏提案 → 验证 → （可选）灰度上线"""
     out = get_output_adapter(json_output)
     try:
-        from src.core.distillation import DistillationOrchestrator
+        from src.layers.l5_evolution.distillation import DistillationOrchestrator
         orch = DistillationOrchestrator("output")
         result = orch.run(apply=apply)
         if json_output:
@@ -4311,7 +4118,7 @@ def distill_list(json_output):
     """列出已固化的蒸馏能力（live 模板/策略/权重）"""
     out = get_output_adapter(json_output)
     try:
-        from src.core.distillation import DistillationOrchestrator
+        from src.layers.l5_evolution.distillation import DistillationOrchestrator
         orch = DistillationOrchestrator("output")
         result = {
             "templates": orch.get_live_templates(),
@@ -4333,7 +4140,7 @@ def distill_list(json_output):
 def distill_rollback(proposal_id):
     """回滚某条已固化的蒸馏能力"""
     try:
-        from src.core.distillation import DistillationOrchestrator
+        from src.layers.l5_evolution.distillation import DistillationOrchestrator
         orch = DistillationOrchestrator("output")
         if orch.rollback(proposal_id):
             console.print(f"[green]已回滚: {proposal_id}[/green]")
@@ -4359,7 +4166,7 @@ def govern_status(json_output):
     """查看驾驭状态：熔断器 + 预算 + 干预指令"""
     out = get_output_adapter(json_output)
     try:
-        from src.core.governor import Governor
+        from src.layers.l2_orchestration.governance.governor import Governor
         gov = Governor("output")
         status = gov.status()
         if json_output:
@@ -4385,7 +4192,7 @@ def govern_status(json_output):
 def govern_override(action_type):
     """人工接管决策：强制指定下一步动作（如 RELAX_CONSTRAINT / EXPAND_SEEDS）"""
     try:
-        from src.core.governor import Intervention
+        from src.layers.l2_orchestration.governance.governor import Intervention
         Intervention("output").write({"cmd": "override_action", "action_type": action_type})
         console.print(f"[green]已写入干预指令：override → {action_type}[/green]")
         console.print("[dim]下次闭环决策时会用此动作覆盖，执行后自动清除。[/dim]")
@@ -4398,7 +4205,7 @@ def govern_override(action_type):
 def govern_reset(action_type):
     """人工复位某动作的熔断状态"""
     try:
-        from src.core.governor import CircuitBreaker
+        from src.layers.l2_orchestration.governance.governor import CircuitBreaker
         # 熔断状态是内存态，复位需通过 Governor（新建实例会丢失状态）。
         # 这里用"清除干预 + 提示"：熔断是运行时内存态，重启即复位。
         console.print(f"[yellow]熔断是运行时内存态，重启 run 即复位。[/yellow]")
@@ -4418,7 +4225,7 @@ def exclude():
 
 
 def _exclude_registry(output_dir=None):
-    from src.core.exclude_registry import ExcludeRegistry
+    from src.layers.l4_memory.exclude_registry import ExcludeRegistry
     if output_dir:
         return ExcludeRegistry(str(Path(output_dir) / ".signoffai" / "exclude_registry.db"))
     return ExcludeRegistry()

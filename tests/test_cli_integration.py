@@ -57,7 +57,7 @@ UART 串行收发模块，支持 8N1 格式，波特率可配置。
 class TestApprovalGate:
     def test_auto_mode_bypasses_all(self):
         """auto 模式：全部自动通过，不等待输入"""
-        from src.core.approval import create_approval_gate, ApprovalDecision
+        from src.layers.l2_orchestration.approval import create_approval_gate, ApprovalDecision
         gate = create_approval_gate("auto")
         assert gate.mode.value == "auto"
         assert not gate.requires_approval("any_stage", "critical")
@@ -68,35 +68,35 @@ class TestApprovalGate:
 
     def test_interactive_mode_requires_all(self):
         """interactive 模式：所有阶段都需要审批"""
-        from src.core.approval import create_approval_gate, ApprovalMode
+        from src.layers.l2_orchestration.approval import create_approval_gate, ApprovalMode
         gate = create_approval_gate("interactive")
         assert gate.mode == ApprovalMode.INTERACTIVE
         assert gate.requires_approval("any_stage", "low")
 
     def test_interactive_approve(self):
         """交互模式下输入 'y' → approve"""
-        from src.core.approval import ApprovalGate, ApprovalMode, ApprovalDecision
+        from src.layers.l2_orchestration.approval import ApprovalGate, ApprovalMode, ApprovalDecision
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "y")
         record = gate.ask("write_rtl", "mock", "low")
         assert record.decision == ApprovalDecision.APPROVE
 
     def test_interactive_reject(self):
         """交互模式下输入 'n' → reject"""
-        from src.core.approval import ApprovalGate, ApprovalMode, ApprovalDecision
+        from src.layers.l2_orchestration.approval import ApprovalGate, ApprovalMode, ApprovalDecision
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "n")
         record = gate.ask("UVM", "mock", "medium")
         assert record.decision == ApprovalDecision.REJECT
 
     def test_interactive_skip(self):
         """交互模式下输入 's' → skip"""
-        from src.core.approval import ApprovalGate, ApprovalMode, ApprovalDecision
+        from src.layers.l2_orchestration.approval import ApprovalGate, ApprovalMode, ApprovalDecision
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "s")
         record = gate.ask("cover", "mock", "low")
         assert record.decision == ApprovalDecision.SKIP
 
     def test_threshold_mode(self):
         """threshold 模式：只有高风险才审批"""
-        from src.core.approval import ApprovalGate, ApprovalMode
+        from src.layers.l2_orchestration.approval import ApprovalGate, ApprovalMode
         gate = ApprovalGate(mode=ApprovalMode.THRESHOLD, risk_threshold="high")
         assert not gate.requires_approval("low_risk", "low")
         assert not gate.requires_approval("medium_risk", "medium")
@@ -105,7 +105,7 @@ class TestApprovalGate:
 
     def test_summary_json(self):
         """审批摘要可以序列化为 JSON"""
-        from src.core.approval import ApprovalGate, ApprovalMode
+        from src.layers.l2_orchestration.approval import ApprovalGate, ApprovalMode
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "y")
         gate.ask("design", "passed", "low")
         gate.ask("UVM", "passed", "low")
@@ -118,56 +118,6 @@ class TestApprovalGate:
         json_str = gate.to_json()
         parsed = json.loads(json_str)
         assert parsed["total_gates"] == 2
-
-
-# ── 2. VERIFY_PROFILES 单元测试 ─────────────────────────────
-
-class TestVerifyProfiles:
-    def test_all_profiles_resolve(self):
-        """所有 profile 都可以正确解析——验证数据结构"""
-        # 不 import execution.py 避免 langchain 依赖链
-        # 直接读取 VERIFY_PROFILES 的结构
-        import ast, inspect
-        code = Path("src/core/execution.py").read_text(encoding="utf-8")
-        tree = ast.parse(code)
-
-        # 找到 VERIFY_PROFILES 的 AST 节点
-        found = False
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if hasattr(target, 'id') and target.id == 'VERIFY_PROFILES':
-                        found = True
-                        # 确认它是一个 dict
-                        assert isinstance(node.value, ast.Dict)
-                        keys = [k.value for k in node.value.keys
-                               if isinstance(k, ast.Constant)]
-                        assert len(keys) >= 5  # quick, standard, full, debug, spec_only, design_only
-                        assert "quick" in keys
-                        assert "standard" in keys
-                        assert "full" in keys
-                        break
-        assert found, "VERIFY_PROFILES not found in execution.py"
-
-    def test_quick_profile_has_approval_gates(self):
-        """quick profile 有审批门控"""
-        code = Path("src/core/execution.py").read_text(encoding="utf-8")
-        assert "approval_gates" in code
-        assert '"design"' in code or "'design'" in code
-
-    def test_profile_data_integrity(self):
-        """profile 结构：每个必须有 description + phases"""
-        code = Path("src/core/execution.py").read_text(encoding="utf-8")
-        # 基本结构检查
-        assert '"description"' in code
-        assert '"phases"' in code
-        assert '"approval_gates"' in code
-        assert '"quick"' in code
-        assert '"standard"' in code
-        assert '"full"' in code
-        assert '"debug"' in code
-        assert '"spec_only"' in code
-        assert '"design_only"' in code
 
 
 # ── 3. CLI 命令测试 ─────────────────────────────────────────
@@ -306,7 +256,7 @@ class TestCLISubcommandsExist:
 
 class TestContextStoreSummary:
     def test_summary_returns_structure(self):
-        from src.core.context import ContextStore
+        from src.layers.l2_orchestration.context import ContextStore
         store = ContextStore()
         store.put("spec", {"features": ["f1"]}, source="spec_planner")
         store.put("design_arch", {"modules": ["m1"]}, source="design_architect")

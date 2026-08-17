@@ -100,6 +100,15 @@ CMODEL_TEMPLATES = [
     ("environment_templates/cmodel_dpi.cpp.j2", "{module_name}_dpi_wrapper.cpp"),
 ]
 
+# 环境级 Scoreboard 模板：mode → 模板路径
+SCOREBOARD_TEMPLATES = {
+    "inorder": "environment_templates/scoreboard_inorder.sv.j2",
+    "outoforder": "environment_templates/scoreboard_outoforder.sv.j2",
+}
+
+# 环境级 Predictor（SV 行为参考模型）模板
+PREDICTOR_TEMPLATE = "environment_templates/predictor.sv.j2"
+
 CALLBACK_FILES = [
     ("{agent_name}_callback_base.sv", """// Callback Base: {agent_name}_callback_base
 class {agent_name}_callback_base extends {agent_name}_agent_callback;
@@ -150,6 +159,7 @@ class AgentModel:
     # LLM-generated protocol-specific timing logic placeholders
     custom_drive_logic: str = ""   # Injected into driver.sv.j2 {{ custom_drive_logic }}
     custom_sample_logic: str = ""  # Injected into monitor.sv.j2 {{ custom_sample_logic }}
+    custom_collect_logic: str = ""  # Injected into monitor.sv.j2 {{ custom_collect_logic }} (task 级帧采集)
 
     def __post_init__(self) -> None:
         if not self.interface:
@@ -177,6 +187,7 @@ class EnvironmentModel:
     name: str
     env_name: str
     agents: AgentCollection = field(default_factory=AgentCollection)
+    predictors: List[Dict[str, Any]] = field(default_factory=list)
     scoreboards: List[Dict[str, Any]] = field(default_factory=list)
     virtual_sequencer: Dict[str, Any] = field(default_factory=lambda: {"enabled": False})
     clk_rst_vip: Dict[str, Any] = field(default_factory=dict)
@@ -809,6 +820,25 @@ class EnvironmentRenderTask(RenderTask):
             target_path = seqs_dir / target_name
             rendered.append(self.render_file(template_path, target_path, context))
 
+        # 生成 Predictor（SV 行为参考模型）
+        pred_dir = env_dir / "pred"
+        for pred in environment.predictors:
+            if not isinstance(pred, dict) or not pred.get("name"):
+                continue
+            target_path = pred_dir / f"{pred['name']}.sv"
+            rendered.append(self.render_file(PREDICTOR_TEMPLATE, target_path, {"pred": pred}))
+
+        # 生成 Scoreboard（inorder / outoforder 按 mode 选模板）
+        scb_dir = env_dir / "scb"
+        for sb in environment.scoreboards:
+            if not isinstance(sb, dict) or not sb.get("name"):
+                continue
+            template_path = SCOREBOARD_TEMPLATES.get(sb.get("mode", "inorder"))
+            if not template_path:
+                continue
+            target_path = scb_dir / f"{sb['name']}.sv"
+            rendered.append(self.render_file(template_path, target_path, {"scb": sb}))
+
         return rendered
 
     def _enrich_agents_transaction_vars(self, context: Dict[str, Any]):
@@ -894,6 +924,98 @@ class RenderTaskFactory:
         raise ValueError(f"Unknown task type: {task_type}")
 
 
+def _type_to_pkg(type_name):
+    """从 seq_item 类型名推断 agent package 名：xxx_seq_item → xxx_pkg。"""
+    if type_name.endswith("_seq_item"):
+        return type_name[: -len("_seq_item")] + "_pkg"
+    return ""
+
+
+def _import_pkgs_for_types(*types):
+    """根据事务类型集合，推导需要 import 的 agent package 列表（去重）。"""
+    pkgs = []
+    for t in types:
+        pkg = _type_to_pkg(t)
+        if pkg and pkg not in pkgs:
+            pkgs.append(pkg)
+    return pkgs
+
+
+def _resolve_port(name, agent_names, predictor_names):
+    """把来源名解析为 SystemVerilog 端口表达式。
+
+    - predictor 名 → `<name>_h.out_port`（参考模型输出）
+    - agent 名     → `<name>_agent_h.mon.item_collected_port`（monitor 输出）
+    - 空 / 未知    → ""（不接线）
+    """
+    if not name:
+        return ""
+    if name in predictor_names:
+        return f"{name}_h.out_port"
+    if name in agent_names:
+        return f"{name}_agent_h.mon.item_collected_port"
+    return ""
+
+
+def _normalize_predictors(predictors):
+    """填充 predictor 缺省字段，推导 import_pkgs。"""
+    normalized = []
+    for p in predictors or []:
+        if not isinstance(p, dict) or not p.get("name"):
+            continue
+        in_type = p.get("in_type", "uvm_sequence_item")
+        out_type = p.get("out_type", "uvm_sequence_item")
+        normalized.append({
+            "name": p["name"],
+            "in_type": in_type,
+            "out_type": out_type,
+            "input_from": p.get("input_from", ""),
+            "in_port": p.get("in_port", "in_export"),
+            "out_port": p.get("out_port", "out_port"),
+            "import_pkgs": _import_pkgs_for_types(in_type, out_type),
+            "model_state": p.get("model_state", ""),
+            "model_body": p.get("model_body", ""),
+        })
+    return normalized
+
+
+def _normalize_scoreboards(scoreboards, agent_names=None, predictor_names=None):
+    """填充 scoreboard 缺省字段，推断 item_type + import_pkgs + 端口表达式。
+
+    输入: env YAML 的 scoreboards 列表（原始 dict）
+    输出: 标准化后的 dict 列表
+          （name/mode/item_type/key_field/expected_from/actual_from/
+            expected_port/actual_port/import_pkgs）
+    """
+    agent_names = set(agent_names or [])
+    predictor_names = set(predictor_names or [])
+    normalized = []
+    for sb in scoreboards or []:
+        if not isinstance(sb, dict) or not sb.get("name"):
+            continue
+        mode = str(sb.get("mode", "inorder")).lower()
+        if mode not in ("inorder", "outoforder"):
+            mode = "inorder"
+        actual_from = sb.get("actual_from", "")
+        expected_from = sb.get("expected_from", "")
+        item_type = sb.get("item_type", "")
+        if not item_type:
+            src = actual_from or expected_from
+            item_type = f"{src}_seq_item" if src else "uvm_sequence_item"
+        normalized.append({
+            "name": sb["name"],
+            "mode": mode,
+            "item_type": item_type,
+            "key_field": sb.get("key_field", "req_id"),
+            "expected_from": expected_from,
+            "actual_from": actual_from,
+            "expected_port": _resolve_port(expected_from, agent_names, predictor_names),
+            "actual_port": _resolve_port(actual_from, agent_names, predictor_names),
+            "import_pkgs": _import_pkgs_for_types(item_type),
+        })
+    return normalized
+
+
 class YAMLLoader:
     SUPPORTED_SUFFIXES = {".yml", ".yaml"}
 
@@ -933,6 +1055,9 @@ class YAMLLoader:
             config_vars=data.get("config_vars", []),
             config_constraints=data.get("config_constraints", []),
             response_info=data.get("response_info", {}),
+            custom_drive_logic=data.get("custom_drive_logic", ""),
+            custom_sample_logic=data.get("custom_sample_logic", ""),
+            custom_collect_logic=data.get("custom_collect_logic", ""),
             config=data.get("config", {"is_active": "UVM_ACTIVE"}),
         )
 
@@ -962,11 +1087,16 @@ class YAMLLoader:
                 "resets": data["clk_rst"].get("resets", []),
             }
 
+        agent_names = [a.name for a in agents]
+        predictors = _normalize_predictors(data.get("predictors", []))
+        predictor_names = [p["name"] for p in predictors]
         return EnvironmentModel(
             name=name,
             env_name=env_name,
             agents=agents,
-            scoreboards=data.get("scoreboards", []),
+            predictors=predictors,
+            scoreboards=_normalize_scoreboards(data.get("scoreboards", []),
+                                               agent_names, predictor_names),
             virtual_sequencer=data.get("virtual_sequencer", {"enabled": False}),
             clk_rst_vip=clk_rst_vip,
             config_vars=data.get("config_vars", []),
@@ -1307,7 +1437,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             }
         env = EnvironmentModel(
             name=name, env_name=env_name, agents=agents,
-            scoreboards=payload.get("scoreboards", []),
+            scoreboards=_normalize_scoreboards(payload.get("scoreboards", [])),
             virtual_sequencer=payload.get("virtual_sequencer", {"enabled": False}),
             clk_rst_vip=clk_rst_vip,
             config_vars=payload.get("config_vars", []),

@@ -104,14 +104,14 @@ OUTPUT EXACTLY:
 def _call_llm_raw(prompt: str, code: str, errors: str) -> str:
     """底层 LLM 调用（经集中式 Query Engine：预算 + 缓存 + 降级 + 审计）。"""
     try:
-        from src.core.query_engine import LLMQueryEngine
+        from src.layers.l2_orchestration.context.query_engine import LLMQueryEngine
         user_msg = f"CODE:\n{code[:3000]}\n\nERRORS:\n{errors[:1000]}\n\nOutput ONLY the fixed complete code, no explanation."
         messages = [
             {"role": "system", "content": prompt},
             {"role": "user", "content": user_msg},
         ]
         content = LLMQueryEngine.get_instance().query(
-            "code_generation", messages, cache_key=prompt[:80])
+            "code_generation", messages, cache_key=prompt)
         if not content:
             return ""
         if "```" in content:

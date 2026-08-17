@@ -457,7 +457,7 @@ def run(output_dir: str, top_module: str = "", seed: int = 0) -> dict:
 
     # 2. 编译（复用 L1 EdaBackend，消除与 RegressionRunner 的重复 vlog 逻辑）
     print(f"[coverage] Compiling with +cover=bcesf...")
-    from src.core.eda_backend import get_eda_backend
+    from src.layers.l1_infrastructure.eda_backend import get_eda_backend
     compile_result = get_eda_backend().compile(od, str(fl), coverage=True)
     result["compile"] = compile_result
     if compile_result["status"] != "PASS":

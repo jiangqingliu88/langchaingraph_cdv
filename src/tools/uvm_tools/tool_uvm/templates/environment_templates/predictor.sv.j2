@@ -1,0 +1,79 @@
+// ============================================================
+// Predictor (SV 行为参考模型): {{ pred.name }}
+// ============================================================
+// 渲染上下文 (context) 约定:
+//   pred.name        (str)   predictor 类名 / 实例名
+//   pred.in_type     (str)   输入事务类型（如 apb_uart_in_seq_item）
+//   pred.out_type    (str)   输出事务类型（如 apb_uart_out_seq_item）
+//   pred.import_pkgs (list)  需要 import 的 agent package 列表
+// ============================================================
+// 语义:
+//   in_export ← 输入 agent monitor（in_type 事务）
+//   out_port  → scoreboard.expected_export（out_type 事务）
+//   在 process_in() 里实现 DUT 行为模型，把 in 事务转成 out 事务。
+// ============================================================
+
+`ifndef {{ pred.name | upper }}_PRED_SV
+`define {{ pred.name | upper }}_PRED_SV
+
+import uvm_pkg::*;
+`include "uvm_macros.svh"
+{%- for pkg in pred.import_pkgs %}
+import {{ pkg }}::*;
+{%- endfor %}
+
+`uvm_analysis_imp_decl(_in_{{ pred.name }})
+
+class {{ pred.name }} extends uvm_component;
+  `uvm_component_utils({{ pred.name }})
+
+  // in_export ← 输入 agent monitor；out_port → scoreboard.expected_export
+  uvm_analysis_imp_in_{{ pred.name }} #({{ pred.in_type }}, {{ pred.name }}) in_export;
+  uvm_analysis_port #({{ pred.out_type }}) out_port;
+
+  protected int m_predictions = 0;
+{%- if pred.model_state %}
+
+{{ pred.model_state }}
+{%- endif %}
+
+  function new(string name = "{{ pred.name }}", uvm_component parent = null);
+    super.new(name, parent);
+    in_export = new("in_export", this);
+    out_port  = new("out_port",  this);
+  endfunction
+
+  // ── 输入 agent monitor 发来事务 ──
+  virtual function void write_in_{{ pred.name }}({{ pred.in_type }} t);
+    {{ pred.out_type }} pred;
+    pred = {{ pred.out_type }}::type_id::create("pred");
+    process_in(t, pred);
+    out_port.write(pred);
+    m_predictions++;
+  endfunction
+
+  // ═══════════════════════════════════════════════════════
+  // TODO: 在此实现 DUT 行为参考模型（SV）
+  //   输入 t:  apb_uart_in_seq_item（paddr/pwdata/pwrite/psel/penable/rx）
+  //   输出 pred: apb_uart_out_seq_item（prdata/tx/irq）
+  //   示例:
+  //     1) 按 paddr/pwdata/pwrite 更新 UART 寄存器（波特率/使能/中断掩码）
+  //     2) 按 rx 串行帧（起始位+数据+停止位）解码出字节
+  //     3) 预测 prdata（读回的接收字节）、tx（回环/发送）、irq
+  // ═══════════════════════════════════════════════════════
+  virtual function void process_in({{ pred.in_type }} t, ref {{ pred.out_type }} pred);
+{%- if pred.model_body %}
+{{ pred.model_body }}
+{%- else %}
+    pred.req_id = t.req_id;   // 至少传递关联 key，供 outoforder scoreboard 关联
+{%- endif %}
+  endfunction
+
+  virtual function void report_phase(uvm_phase phase);
+    super.report_phase(phase);
+    `uvm_info(get_type_name(), $sformatf("Predictor: %0d predictions", m_predictions), UVM_NONE)
+  endfunction
+
+endclass : {{ pred.name }}
+
+`endif // {{ pred.name | upper }}_PRED_SV

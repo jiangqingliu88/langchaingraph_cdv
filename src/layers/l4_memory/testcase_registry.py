@@ -1,0 +1,454 @@
+"""
+TestCaseRegistry —— 用例状态库（sqlite）：生命周期管理 + 优先级规划 + 有效性评分。
+
+验证规划分层模型（L0 目标 → L1 Feature → L2 场景 → L3 用例）的"用例层"落地：
+  用例有状态（planned → generated → running → passed/failed → deprecated），
+  按规划目标（功能/协议/性能/鲁棒性）动态决定优先做哪个用例，
+  每轮评分、淘汰低效用例。
+
+用法:
+    from src.layers.l4_memory.testcase_registry import TestcaseRegistry
+    reg = TestcaseRegistry(".signoffai/testcase_registry.db")
+    reg.register("test_axi_rd_burst_len_16", purpose="functional", scenario="burst_read",
+                 priority="P0", coverage_bin="rd_burst_len[16]")
+    reg.update_status("test_axi_rd_burst_len_16", "passed", result={"sim_time": 80, "new_coverage": 3})
+    order = reg.get_priority_order(stage=2, limit=10)   # 按规划目标排序
+"""
+from __future__ import annotations
+
+import json
+import sqlite3
+import threading
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+# 用例状态机
+STATUS_PLANNED = "planned"
+STATUS_GENERATED = "generated"
+STATUS_RUNNING = "running"
+STATUS_PASSED = "passed"
+STATUS_FAILED = "failed"
+STATUS_DEPRECATED = "deprecated"
+
+# 规划目的（对应 L0 验证目标）
+PURPOSES = ("functional", "protocol", "performance", "corner")
+
+# 各阶段（迭代轮次）的 purpose 权重：前期多功能，后期多边界
+STAGE_PURPOSE_WEIGHTS = [
+    # stage 0（早期）：功能正确性优先
+    {"functional": 0.55, "protocol": 0.20, "performance": 0.15, "corner": 0.10},
+    # stage 1（中期）：协议兼容性上升
+    {"functional": 0.40, "protocol": 0.30, "performance": 0.20, "corner": 0.10},
+    # stage 2（后期）：边界/鲁棒性 + 性能
+    {"functional": 0.25, "protocol": 0.25, "performance": 0.25, "corner": 0.25},
+]
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS testcase_registry (
+    name             TEXT PRIMARY KEY,
+    purpose          TEXT NOT NULL DEFAULT 'functional',
+    scenario         TEXT NOT NULL DEFAULT '',
+    priority         TEXT NOT NULL DEFAULT 'P1',
+    status           TEXT NOT NULL DEFAULT 'planned',
+    constraints      TEXT NOT NULL DEFAULT '[]',
+    coverage_bin     TEXT NOT NULL DEFAULT '',
+    sim_time         REAL NOT NULL DEFAULT 0,
+    fail_rate        REAL NOT NULL DEFAULT 0,
+    new_coverage     REAL NOT NULL DEFAULT 0,
+    unique_coverage  INTEGER NOT NULL DEFAULT 0,
+    effectiveness    REAL NOT NULL DEFAULT 0,
+    run_count        INTEGER NOT NULL DEFAULT 0,
+    last_run         TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL DEFAULT '',
+    updated_at       TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS portfolio (
+    purpose TEXT PRIMARY KEY,
+    weight  REAL NOT NULL DEFAULT 0.25,
+    min_w   REAL NOT NULL DEFAULT 0.05,
+    max_w   REAL NOT NULL DEFAULT 0.70
+);
+"""
+
+# 默认 portfolio 权重（覆盖范围：min/max）
+DEFAULT_PORTFOLIO = {
+    "functional":  {"weight": 0.55, "min_w": 0.30, "max_w": 0.70},
+    "protocol":    {"weight": 0.20, "min_w": 0.10, "max_w": 0.30},
+    "performance": {"weight": 0.15, "min_w": 0.05, "max_w": 0.25},
+    "corner":      {"weight": 0.10, "min_w": 0.05, "max_w": 0.20},
+}
+
+
+class TestcaseRegistry:
+    """用例状态库（同步 sqlite，跨 run 持久）。"""
+
+    def __init__(self, db_path: Optional[str | Path] = None):
+        self.db_path = Path(db_path) if db_path else Path(".signoffai") / "testcase_registry.db"
+        self._lock = threading.Lock()
+        self._conn: Optional[sqlite3.Connection] = None
+
+    def _connect(self) -> sqlite3.Connection:
+        if self._conn is None:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn.executescript(_SCHEMA)
+            # 初始化 portfolio 默认权重（幂等）
+            for purpose, cfg in DEFAULT_PORTFOLIO.items():
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO portfolio (purpose, weight, min_w, max_w) "
+                    "VALUES (?, ?, ?, ?)",
+                    (purpose, cfg["weight"], cfg["min_w"], cfg["max_w"]))
+            self._conn.commit()
+        return self._conn
+
+    def close(self):
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            finally:
+                self._conn = None
+
+    @staticmethod
+    def _now() -> str:
+        return datetime.now().isoformat()
+
+    # ═══════════════════════════════════════════════════════════
+    # 注册 / 更新
+    # ═══════════════════════════════════════════════════════════
+
+    def register(self, name: str, purpose: str = "functional",
+                 scenario: str = "", priority: str = "P1",
+                 constraints: list = None, coverage_bin: str = "") -> None:
+        """注册/更新一个用例（不覆盖已有状态和验证历史）。"""
+        if not name:
+            return
+        now = self._now()
+        with self._lock:
+            conn = self._connect()
+            existing = conn.execute(
+                "SELECT 1 FROM testcase_registry WHERE name = ?", (name,)).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE testcase_registry SET purpose=?, scenario=?, priority=?, "
+                    "constraints=?, coverage_bin=?, updated_at=? WHERE name=?",
+                    (purpose, scenario, priority,
+                     json.dumps(constraints or [], ensure_ascii=False),
+                     coverage_bin, now, name))
+            else:
+                conn.execute(
+                    "INSERT INTO testcase_registry "
+                    "(name, purpose, scenario, priority, status, constraints, coverage_bin, "
+                    "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (name, purpose, scenario, priority, STATUS_PLANNED,
+                     json.dumps(constraints or [], ensure_ascii=False),
+                     coverage_bin, now, now))
+            conn.commit()
+
+    @staticmethod
+    def _safe_name(name: str) -> str:
+        """规范化用例名：去空格/中文/位宽后缀 → 字母数字下划线（回归目录/脚本不能含这些）。"""
+        import re
+        s = str(name or "")
+        s = s.split("[")[0]  # 去掉 [7:0] 位宽后缀
+        s = re.sub(r'[^0-9A-Za-z_]+', '_', s).strip('_')
+        return s or "case"
+
+    def register_from_spec(self, spec: Dict[str, Any], module_name: str = "dut") -> int:
+        """场景分解：从 spec 提取场景 → 注册用例（L2 场景 → L3 用例）。
+
+        分层：features → functional 用例，registers → functional 用例，
+        interfaces → protocol 用例，默认补 protocol/performance/corner 通用用例。
+        返回注册的用例数。
+        """
+        count = 0
+        module_name = self._safe_name(module_name)
+        # 1. features → functional 用例（每个功能一个基本用例）
+        for op in spec.get("features", []) or []:
+            name = op if isinstance(op, str) else (op.get("name") or "")
+            name = self._safe_name(name)
+            if name:
+                self.register(f"test_{module_name}_{name}_basic", purpose="functional",
+                              scenario=name, priority="P0", coverage_bin=name)
+                count += 1
+        # 2. registers → functional 用例（寄存器读写）
+        for r in spec.get("registers", []) or []:
+            if isinstance(r, dict) and r.get("name"):
+                rname = self._safe_name(r["name"])
+                self.register(f"test_{module_name}_{rname}_rw", purpose="functional",
+                              scenario="register_rw", priority="P0",
+                              coverage_bin=rname)
+                count += 1
+        # 3. interfaces → protocol 用例（握手/协议）
+        for iface in spec.get("interfaces", []) or []:
+            if isinstance(iface, dict) and iface.get("name"):
+                iname = self._safe_name(iface["name"])
+                self.register(f"test_{module_name}_{iname}_handshake",
+                              purpose="protocol", scenario="handshake", priority="P1")
+                count += 1
+        # 4. 默认补 performance / corner 通用用例（若还没有）
+        defaults = [
+            ("performance", "throughput", "P1", f"test_{module_name}_throughput"),
+            ("corner", "error_injection", "P1", f"test_{module_name}_error_injection"),
+            ("corner", "reset", "P0", f"test_{module_name}_reset"),
+        ]
+        for purpose, scenario, priority, name in defaults:
+            with self._lock:
+                exists = self._connect().execute(
+                    "SELECT 1 FROM testcase_registry WHERE name=?", (name,)).fetchone()
+            if not exists:
+                self.register(name, purpose=purpose, scenario=scenario, priority=priority)
+                count += 1
+        return count
+
+    def update_status(self, name: str, status: str, result: Dict = None) -> None:
+        """更新用例状态 + 结果（sim_time/fail_rate/new_coverage），并重算有效性。"""
+        if not name:
+            return
+        result = result or {}
+        now = self._now()
+        with self._lock:
+            conn = self._connect()
+            existing = conn.execute(
+                "SELECT sim_time, fail_rate, run_count FROM testcase_registry WHERE name = ?",
+                (name,)).fetchone()
+            if not existing:
+                return
+            # 累加统计（sim_time 取最新，fail_rate 累计，run_count +1）
+            run_count = existing[2] + 1
+            sim_time = result.get("sim_time", existing[0])
+            failed = 1 if status in (STATUS_FAILED, STATUS_DEPRECATED) else 0
+            # 累计失败率 = (历史失败 + 本次失败) / 总次数
+            fail_rate = round((existing[1] * (run_count - 1) + failed) / run_count, 3)
+            new_coverage = result.get("new_coverage", 0)
+            unique_coverage = result.get("unique_coverage", 0)
+            effectiveness = self._score_effectiveness(sim_time, fail_rate,
+                                                      new_coverage, unique_coverage)
+            conn.execute(
+                "UPDATE testcase_registry SET status=?, sim_time=?, fail_rate=?, "
+                "new_coverage=?, unique_coverage=?, effectiveness=?, run_count=?, "
+                "last_run=?, updated_at=? WHERE name=?",
+                (status, sim_time, fail_rate, new_coverage, unique_coverage,
+                 effectiveness, run_count, now, now, name))
+            conn.commit()
+
+    # ═══════════════════════════════════════════════════════════
+    # 优先级规划（不同规划目标，优先做什么用例）
+    # ═══════════════════════════════════════════════════════════
+
+    def get_priority_order(self, stage: int = 0, limit: int = None) -> List[Dict[str, Any]]:
+        """按规划目标（stage）排序，返回优先执行的用例列表。
+
+        排序规则：
+          1. purpose 权重（stage 决定：前期功能优先，后期边界优先）
+          2. 优先级（P0 > P1 > P2）
+          3. 状态（planned 优先，passed 次之，failed/deprecated 最后）
+          4. 有效性（高分的优先）
+        """
+        stage_idx = min(max(stage, 0), len(STAGE_PURPOSE_WEIGHTS) - 1)
+        # 优先用动态 portfolio 权重（optimize_portfolio 更新），未优化则用 stage 静态权重
+        weights = self._get_portfolio_weights()
+        if not weights:
+            weights = STAGE_PURPOSE_WEIGHTS[stage_idx]
+        with self._lock:
+            rows = self._connect().execute(
+                "SELECT name, purpose, scenario, priority, status, coverage_bin, "
+                "sim_time, fail_rate, effectiveness, run_count "
+                "FROM testcase_registry").fetchall()
+
+        # 状态排序权重：planned 最优先，deprecated 最后
+        status_rank = {STATUS_PLANNED: 0, STATUS_GENERATED: 1, STATUS_RUNNING: 2,
+                       STATUS_PASSED: 3, STATUS_FAILED: 4, STATUS_DEPRECATED: 5}
+        priority_rank = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+
+        items = []
+        for r in rows:
+            (name, purpose, scenario, priority, status, bin_name,
+             sim_time, fail_rate, eff, run_count) = r
+            items.append({
+                "name": name, "purpose": purpose, "scenario": scenario,
+                "priority": priority, "status": status, "coverage_bin": bin_name,
+                "sim_time": sim_time, "fail_rate": fail_rate,
+                "effectiveness": eff, "run_count": run_count,
+                # 排序键：purpose 权重（高优先）+ priority（P0 优先）+ 状态（planned 优先）
+                "_sort": (
+                    -weights.get(purpose, 0.1),       # purpose 权重高 → 排前面
+                    priority_rank.get(priority, 9),   # P0 → 排前面
+                    status_rank.get(status, 9),       # planned → 排前面
+                    -(eff or 0),                       # 有效性高 → 排前面
+                ),
+            })
+        items.sort(key=lambda x: x["_sort"])
+        for it in items:
+            it.pop("_sort", None)
+        return items[:limit] if limit else items
+
+    # ═══════════════════════════════════════════════════════════
+    # 比例动态优化（portfolio optimizer）
+    # ═══════════════════════════════════════════════════════════
+
+    def _get_portfolio_weights(self) -> Dict[str, float]:
+        """从 portfolio 表读取当前 purpose 权重。"""
+        with self._lock:
+            rows = self._connect().execute(
+                "SELECT purpose, weight FROM portfolio").fetchall()
+        return {p: w for p, w in rows}
+
+    def get_portfolio(self) -> Dict[str, Dict[str, float]]:
+        """返回当前 portfolio（purpose → {weight, min_w, max_w}）。"""
+        with self._lock:
+            rows = self._connect().execute(
+                "SELECT purpose, weight, min_w, max_w FROM portfolio").fetchall()
+        return {p: {"weight": w, "min_w": min_w, "max_w": max_w}
+                for p, w, min_w, max_w in rows}
+
+    def optimize_portfolio(self, coverage_report: Dict[str, Any],
+                           iteration: int = 0) -> Dict[str, float]:
+        """按覆盖率边际收益动态调整 purpose 权重（DynamicTestPortfolioOptimizer）。
+
+        coverage_report: {"by_purpose": {purpose: {"coverage", "sim_time"}}}
+        iteration: 迭代轮次（早期多 functional，后期多 corner 的启发式叠加）
+        """
+        # 1. 计算各 purpose 的边际收益（覆盖率 / 仿真时间）
+        marginal_gains: Dict[str, float] = {}
+        by_purpose = coverage_report.get("by_purpose", {}) if coverage_report else {}
+        for purpose, data in by_purpose.items():
+            cov = float(data.get("coverage", 0) or 0)
+            spent = float(data.get("sim_time", 0) or 0)
+            marginal_gains[purpose] = cov / (spent + 1)
+
+        # 2. 按边际收益更新权重（限制在 min/max 范围内）
+        total_gain = sum(marginal_gains.values()) or 1.0
+        portfolio = self.get_portfolio()
+        for purpose, gain in marginal_gains.items():
+            if purpose not in portfolio:
+                continue
+            new_weight = gain / total_gain
+            min_w = portfolio[purpose]["min_w"]
+            max_w = portfolio[purpose]["max_w"]
+            portfolio[purpose]["weight"] = max(min_w, min(max_w, new_weight))
+
+        # 3. 早期/后期启发式：前期多 functional，后期多 corner
+        if iteration < 5 and "functional" in portfolio:
+            portfolio["functional"]["weight"] = min(0.70,
+                portfolio["functional"]["weight"] * 1.1)
+        elif iteration > 15 and "corner" in portfolio:
+            portfolio["corner"]["weight"] = max(0.20,
+                portfolio["corner"]["weight"] * 1.1)
+
+        # 4. 归一化
+        total = sum(p["weight"] for p in portfolio.values()) or 1.0
+        for p in portfolio.values():
+            p["weight"] = round(p["weight"] / total, 3)
+
+        # 5. 写回 portfolio 表
+        now = self._now()
+        with self._lock:
+            conn = self._connect()
+            for purpose, cfg in portfolio.items():
+                conn.execute(
+                    "UPDATE portfolio SET weight=? WHERE purpose=?",
+                    (cfg["weight"], purpose))
+            conn.commit()
+
+        return {p: cfg["weight"] for p, cfg in portfolio.items()}
+
+    # ═══════════════════════════════════════════════════════════
+    # 有效性评分
+    # ═══════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _score_effectiveness(sim_time: float, fail_rate: float,
+                             new_coverage: float, unique_coverage: int) -> float:
+        """有效性评分（0-100）：
+        覆盖率贡献（0-50）+ 运行成本（0-20）+ 稳定性（0-20）+ 独特性（0-10）
+        """
+        score = 0.0
+        # 1. 覆盖率贡献
+        if new_coverage > 5:
+            score += 40
+        elif new_coverage > 0:
+            score += 20
+        # 2. 运行成本（时间越短越高）
+        if sim_time <= 0:
+            score += 20
+        elif sim_time < 100:
+            score += 20
+        elif sim_time < 500:
+            score += 15
+        elif sim_time < 1000:
+            score += 10
+        else:
+            score += 5
+        # 3. 稳定性（失败率越低越高）
+        score += max(0, 20 - (fail_rate or 0) * 20)
+        # 4. 独特性
+        if unique_coverage > 0:
+            score += 10
+        return round(min(score, 100.0), 1)
+
+    def score_effectiveness(self, name: str, result: Dict) -> float:
+        """对外评分入口：评分并写回 effectiveness 字段。"""
+        self.update_status(name, STATUS_PASSED, result)
+        with self._lock:
+            row = self._connect().execute(
+                "SELECT effectiveness FROM testcase_registry WHERE name = ?",
+                (name,)).fetchone()
+        return row[0] if row else 0.0
+
+    # ═══════════════════════════════════════════════════════════
+    # 查询 / 统计
+    # ═══════════════════════════════════════════════════════════
+
+    def get_by_purpose(self, purpose: str, status: str = None) -> List[Dict[str, Any]]:
+        with self._lock:
+            if status:
+                rows = self._connect().execute(
+                    "SELECT * FROM testcase_registry WHERE purpose=? AND status=?",
+                    (purpose, status)).fetchall()
+            else:
+                rows = self._connect().execute(
+                    "SELECT * FROM testcase_registry WHERE purpose=?",
+                    (purpose,)).fetchall()
+        return [self._row_to_dict(r) for r in rows]
+
+    def get_stats(self) -> Dict[str, Any]:
+        with self._lock:
+            conn = self._connect()
+            total = conn.execute("SELECT COUNT(*) FROM testcase_registry").fetchone()[0]
+            by_status = {}
+            for r in conn.execute("SELECT status, COUNT(*) FROM testcase_registry GROUP BY status").fetchall():
+                by_status[r[0]] = r[1]
+            by_purpose = {}
+            for r in conn.execute("SELECT purpose, COUNT(*) FROM testcase_registry GROUP BY purpose").fetchall():
+                by_purpose[r[0]] = r[1]
+        return {"total": total, "by_status": by_status, "by_purpose": by_purpose}
+
+    def deprecate_low_value(self, threshold: float = 10.0) -> List[str]:
+        """淘汰低效用例（有效性低于阈值且已运行过）。"""
+        with self._lock:
+            conn = self._connect()
+            rows = conn.execute(
+                "SELECT name FROM testcase_registry "
+                "WHERE run_count > 0 AND effectiveness < ? AND status != 'deprecated'",
+                (threshold,)).fetchall()
+            deprecated = [r[0] for r in rows]
+            for name in deprecated:
+                conn.execute(
+                    "UPDATE testcase_registry SET status='deprecated', updated_at=? WHERE name=?",
+                    (self._now(), name))
+            conn.commit()
+        return deprecated
+
+    @staticmethod
+    def _row_to_dict(row) -> Dict[str, Any]:
+        cols = ["name", "purpose", "scenario", "priority", "status", "constraints",
+                "coverage_bin", "sim_time", "fail_rate", "new_coverage",
+                "unique_coverage", "effectiveness", "run_count", "last_run",
+                "created_at", "updated_at"]
+        d = dict(zip(cols, row))
+        try:
+            d["constraints"] = json.loads(d.get("constraints") or "[]")
+        except Exception:
+            d["constraints"] = []
+        return d

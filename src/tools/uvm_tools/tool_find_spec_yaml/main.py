@@ -159,6 +159,366 @@ def _is_reset_port(name: str) -> bool:
     return "rst" in n or "reset" in n
 
 
+def _spec_iface_to_port(iface: dict) -> dict:
+    """spec.interfaces 项 → 端口 dict（去掉 [N:0] 后缀，方向小写，宽度取 data_width）。"""
+    name = str(iface.get("name", "")).split("[")[0].strip()
+    direction = str(iface.get("direction", "input") or "input").lower()
+    try:
+        width = int(iface.get("data_width", 1) or 1)
+    except (TypeError, ValueError):
+        width = 1
+    return {"name": name, "direction": direction, "width": width}
+
+
+def _classify_protocol_by_name(name: str) -> str:
+    """按命名约定推断 protocol（确定性兜底，LLM 不可用时用）。
+
+    规则与 LLM 分类 prompt 保持一致，保证两条路径行为可复现。
+    """
+    n = name.lower()
+    if "clk" in n or "clock" in n:
+        return "clock"
+    if "rst" in n or "reset" in n or "preset" in n:
+        return "reset"
+    if n in ("tx", "rx") or "uart" in n:
+        return "uart"
+    if n in ("irq", "intr") or "irq" in n or "interrupt" in n or "intr" in n:
+        return "intr"
+    if n in ("paddr", "pwdata", "prdata", "pwrite", "psel", "penable",
+             "pready", "pslverr", "pselx"):
+        return "apb"
+    # AXI 前缀：aw/w/b/ar/r + 后续字母（awaddr/wdata/bresp/araddr/rdata）
+    if re.match(r'^(aw|w|b|ar|r)[a-z]', n) and len(n) > 1:
+        return "axi"
+    return "generic"
+
+
+def _llm_classify_protocols(names: list) -> dict:
+    """LLM 按信号名分类 protocol，返回 {name: protocol}；失败返回 {}。"""
+    if not names:
+        return {}
+    try:
+        from src.tools.lib.llm_custom_logic import _call_llm_raw
+    except Exception:
+        return {}
+    prompt = (
+        "你是 IC 验证工程师。把以下 DUT 端口按协议分类，只从这些类别选："
+        "apb, uart, intr, axi, clock, reset, generic。\n"
+        "规则：clk/clock→clock；rst/reset/preset→reset；tx/rx→uart；"
+        "irq/interrupt/intr→intr；paddr/pwdata/prdata/pwrite/psel/penable→apb；"
+        "aw/w/b/ar/r 前缀→axi；其余→generic。\n"
+        f"端口列表：{json.dumps(names, ensure_ascii=False)}\n"
+        "只输出 JSON 对象 {\"端口名\": \"protocol\", ...}，不要任何解释或代码块。"
+    )
+    try:
+        raw = (_call_llm_raw(prompt, "", "") or "").strip()
+    except Exception:
+        return {}
+    if not raw:
+        return {}
+    raw = re.sub(r'^```(?:json)?\s*', '', raw)
+    raw = re.sub(r'\s*```$', '', raw)
+    m = re.search(r'\{.*\}', raw, re.DOTALL)
+    if not m:
+        return {}
+    try:
+        result = json.loads(m.group(0))
+    except Exception:
+        return {}
+    if isinstance(result, dict):
+        return {str(k): str(v).lower() for k, v in result.items()}
+    return {}
+
+
+def _group_agents_by_protocol(spec: dict, rtl_data: dict, module_name: str) -> list:
+    """按协议边界分组 agents（优先 spec.protocol，缺失时 LLM/命名约定分类）。
+
+    返回 [(agent_dict, iface_dict), ...]，空列表表示无法分组（交由方向兜底）。
+    """
+    ports = []  # [{name, direction, width, protocol}]
+    if spec and isinstance(spec, dict) and spec.get("interfaces"):
+        for i in spec["interfaces"]:
+            if not isinstance(i, dict):
+                continue
+            p = _spec_iface_to_port(i)
+            if not p["name"]:
+                continue
+            p["protocol"] = str(i.get("protocol", "") or "").strip().lower()
+            ports.append(p)
+    elif rtl_data and rtl_data.get("ports"):
+        for p in rtl_data["ports"]:
+            ports.append({
+                "name": p["name"],
+                "direction": str(p.get("direction", "input") or "input").lower(),
+                "width": int(p.get("width", 1) or 1),
+                "protocol": "",
+            })
+
+    if not ports:
+        return []
+
+    # 补全缺失 protocol：LLM 分类 → 命名约定兜底
+    missing = [p for p in ports if not p["protocol"] or p["protocol"] == "generic"]
+    if missing:
+        llm_map = _llm_classify_protocols([p["name"] for p in missing])
+        for p in missing:
+            p["protocol"] = (llm_map.get(p["name"])
+                             or _classify_protocol_by_name(p["name"])
+                             or "generic")
+
+    # 按 protocol 分组（clock/reset 是 clocking，不单独成 agent）
+    groups = {}
+    for p in ports:
+        proto = p["protocol"] or "generic"
+        if proto in ("clock", "reset", "clk", "rst"):
+            continue
+        groups.setdefault(proto, []).append(p)
+
+    generic_ports = groups.pop("generic", [])
+    if generic_ports:
+        print(f"  [find_yaml] 警告: {len(generic_ports)} 个端口无法分类协议，"
+              f"将走方向兜底: {[p['name'] for p in generic_ports]}", flush=True)
+
+    if not groups:
+        return []
+
+    print(f"  [find_yaml] 按协议分组: "
+          f"{', '.join(f'{k}({len(v)})' for k, v in sorted(groups.items()))}", flush=True)
+
+    agents_spec = []
+    for proto, grp in groups.items():
+        # 有 DUT input 端口（需驱动）→ ACTIVE；纯 DUT output（仅监控）→ PASSIVE
+        has_drive = any(p["direction"] == "input" for p in grp)
+        agent_type = "UVM_ACTIVE" if has_drive else "UVM_PASSIVE"
+        agents_spec.append((
+            {"name": proto, "type": agent_type, "ports": grp},
+            {"name": proto},
+        ))
+    return agents_spec
+
+
+def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
+                  clock_port: str, reset_port: str, registers: list = None) -> str:
+    """生成 env.yaml：agents + 按协议自动带 predictor/scoreboard 闭环。
+
+    规则：总线/寄存器协议（apb/axi/ahb/wb）且同时含 DUT input（驱动）和
+          output（监控）的 agent，自动生成 {agent}_predictor（寄存器模型）+
+         {agent}_scb；apb 且 spec.registers 非空时注入寄存器模型。
+         串行协议（uart）tx/rx 无回环 + 帧粒度不足，暂不生成（跨 agent）。
+    """
+    bus_protocols = {"apb", "axi", "axilite", "ahb", "wb"}
+
+    agent_lines = []
+    for ag_name in agent_names:
+        agent_lines.append(f"    {ag_name}:\n      interface: {ag_name}\n"
+                           f"      clock: {clock_port}\n      reset: {reset_port}")
+
+    loop_agents = []
+    for ag, _iface in agents_spec:
+        name = ag.get("name")
+        ports = ag.get("ports", []) or []
+        has_in = any(p.get("direction") == "input" for p in ports)
+        has_out = any(p.get("direction") == "output" for p in ports)
+        if has_in and has_out and name in bus_protocols:
+            loop_agents.append(name)
+
+    lines = [f"environment:\n  name: {module_name}_env\n  agents:\n" + "\n".join(agent_lines)]
+
+    if loop_agents:
+        pred_lines = []
+        scb_lines = []
+        for ag_name in loop_agents:
+            seq = f"{ag_name}_seq_item"
+            pred_lines.append(f"    - name: {ag_name}_predictor")
+            pred_lines.append(f"      in_type: {seq}")
+            pred_lines.append(f"      out_type: {seq}")
+            pred_lines.append(f"      input_from: {ag_name}")
+            if ag_name == "apb" and registers:
+                state, body = _gen_apb_register_model(registers)
+                pred_lines.append(_yaml_block("model_state", state))
+                pred_lines.append(_yaml_block("model_body", body))
+            scb_lines.append(f"    - name: {ag_name}_scb\n"
+                             f"      mode: inorder\n"
+                             f"      item_type: {seq}\n"
+                             f"      expected_from: {ag_name}_predictor\n"
+                             f"      actual_from: {ag_name}")
+        lines.append("  predictors:\n" + "\n".join(pred_lines))
+        lines.append("  scoreboards:\n" + "\n".join(scb_lines))
+
+    return "\n".join(lines) + "\n"
+
+
+def _yaml_block(key: str, text: str, indent: int = 6) -> str:
+    """生成 YAML 块标量 `key: |` + 缩进的多行内容（用于 model_state/model_body）。"""
+    lines = [f"{' ' * indent}{key}: |"]
+    for ln in text.split("\n"):
+        lines.append(f"{' ' * (indent + 2)}{ln}")
+    return "\n".join(lines)
+
+
+def _gen_apb_register_model(registers: list) -> tuple:
+    """从 spec.registers 生成 APB 寄存器参考模型（state 变量声明, process_in 函数体）。
+
+    建模可自包含的部分：RW 寄存器写回/读回 + 写时 prdata=0。
+    status / rx_data 是 UART 驱动（跨 agent），标记 TODO 不可预测。
+    """
+    state_lines = [
+        "  // ── APB 寄存器模型状态（与 DUT reg_* 对齐）──",
+        "  logic [7:0]  reg_tx_data  = 8'h00;",
+        "  logic [15:0] reg_baud_div = 16'h28B0; // 9600 @ 100MHz",
+        "  logic        reg_parity   = 1'b0;",
+        "  logic [31:0] reg_irq_en   = 32'h00000003;",
+        "  logic [7:0]  reg_status   = 8'h12;   // idle: fifo_empty(bit1)+tx_ready(bit4)",
+        "  logic [7:0]  reg_rx_data  = 8'h00;   // UART rx 驱动（跨 agent，TODO）",
+    ]
+    body_lines = [
+        "    // 复制请求字段，预测 prdata",
+        "    pred.paddr   = t.paddr;",
+        "    pred.pwdata  = t.pwdata;",
+        "    pred.pwrite  = t.pwrite;",
+        "    pred.psel    = t.psel;",
+        "    pred.penable = t.penable;",
+        "    pred.prdata  = 8'h00;",
+        "    pred.req_id  = t.req_id;",
+        "",
+        "    if (t.pwrite) begin",
+        "      // 写：APB 写时序 psel && penable && pwrite",
+        "      if (t.psel && t.penable) begin",
+        "        case (t.paddr[3:0])",
+        "          4'h0: reg_tx_data = t.pwdata;",
+        "          4'h1: begin",
+        "            reg_tx_data = t.pwdata;                  // 触发 TX",
+        "            reg_rx_data = t.pwdata;                  // 回环模型：写的数据经 tx→rx 收回来",
+        "          end",
+        "          4'h2: reg_baud_div[7:0]  = t.pwdata;",
+        "          4'h3: reg_baud_div[15:8] = t.pwdata;",
+        "          4'h4: reg_parity = t.pwdata[0];",
+        "          4'h5: reg_irq_en[7:0]   = t.pwdata;",
+        "          4'h6: reg_irq_en[15:8]  = t.pwdata;",
+        "          4'h7: reg_irq_en[23:16] = t.pwdata;",
+        "          4'h8: reg_irq_en[31:24] = t.pwdata;",
+        "          default: ;",
+        "        endcase",
+        "      end",
+        "    end else if (t.psel) begin",
+        "      // 读：APB 读时序 psel && !pwrite（组合逻辑），预测 prdata",
+        "      case (t.paddr[3:0])",
+        "          4'h0: pred.prdata = reg_tx_data;",
+        "          4'h1: pred.prdata = reg_status;",
+        "          4'h2: pred.prdata = reg_baud_div[7:0];",
+        "          4'h3: pred.prdata = reg_baud_div[15:8];",
+        "          4'h4: pred.prdata = {7'b0, reg_parity};",
+        "          4'h5: pred.prdata = reg_irq_en[7:0];",
+        "          4'h6: pred.prdata = reg_irq_en[15:8];",
+        "          4'h7: pred.prdata = reg_irq_en[23:16];",
+        "          4'h8: pred.prdata = reg_irq_en[31:24];",
+        "          4'h9: pred.prdata = reg_rx_data;          // 跨 agent，TODO",
+        "          default: pred.prdata = 8'h00;",
+        "      endcase",
+        "    end",
+    ]
+    return "\n".join(state_lines), "\n".join(body_lines)
+
+
+def _gen_uart_serial_logic() -> str:
+    """UART 帧串行化（driver 侧，8N1 LSB first）：req.data → rx 位流。
+
+    返回 custom_drive_logic 内容（无前导缩进，模板用 indent(4) 注入）。
+    波特率分频默认 10416（9600 @ 100MHz）；跨 agent 配置（APB 写 baud_div）暂不接。
+    """
+    return (
+        "// UART 帧串行化 (8N1, LSB first)：req.data → rx 位流\n"
+        "begin\n"
+        "  int unsigned baud_div = 10416;   // 9600 @ 100MHz（默认，后续从 APB 配置）\n"
+        "  vif.cb.rx <= 1'b0;               // 起始位\n"
+        "  repeat (baud_div) @(vif.cb);\n"
+        "  for (int i = 0; i < 8; i++) begin\n"
+        "    vif.cb.rx <= req.data[i];      // 8 数据位\n"
+        "    repeat (baud_div) @(vif.cb);\n"
+        "  end\n"
+        "  vif.cb.rx <= 1'b1;               // 停止位\n"
+        "  repeat (baud_div) @(vif.cb);\n"
+        "end"
+    )
+
+
+def _gen_uart_deserialize_logic() -> str:
+    """UART 帧反串行化（monitor 侧，8N1 LSB first）：tx 位流 → data 字节。
+
+    返回 custom_collect_logic 内容（无前导缩进，模板用 indent(4) 注入）。
+    task 级：跨多拍采样（等起始位 → 逐位采样）。
+    """
+    return (
+        "// UART 帧反串行化：tx 位流 → data 字节 (8N1, LSB first)\n"
+        "begin\n"
+        "  int unsigned baud_div = 10416;   // 9600 @ 100MHz\n"
+        "  bit [7:0] byte_val;\n"
+        "  @(negedge vif.tx);                        // 起始位下降沿\n"
+        "  repeat (baud_div + baud_div / 2) @(vif.cb);  // 到数据位 0 中点\n"
+        "  for (int i = 0; i < 8; i++) begin\n"
+        "    byte_val[i] = vif.tx;                   // 采样\n"
+        "    repeat (baud_div) @(vif.cb);            // 到下一数据位中点\n"
+        "  end\n"
+        "  item.data = byte_val;\n"
+        "end"
+    )
+
+
+def _generate_uart_yaml(agent: dict, interface: dict, module_name: str) -> str:
+    """生成 UART 帧级 agent YAML：事务 = data 字节 + irq，driver 串行化 rx。
+
+    tx/rx 是物理串行线（端口），不进事务；tx 反串行化（monitor 侧）需
+    task 级采样，当前 monitor 是 function 采样，暂不接（见 _gen_uart_serial_logic 注释）。
+    """
+    ag_name = agent.get("name", f"{module_name}_agent")
+    ports = agent.get("ports", []) or []
+
+    detected_clock = detected_reset = None
+    data_ports = []
+    for p in ports:
+        if _is_clock_port(p["name"]):
+            detected_clock = p
+        elif _is_reset_port(p["name"]):
+            detected_reset = p
+        else:
+            data_ports.append(p)
+    clock_name = (detected_clock or {}).get("name") or agent.get("clock", "") or "clk"
+    reset_name = (detected_reset or {}).get("name") or agent.get("reset", "") or "rst"
+
+    all_interface_ports = [
+        {"name": clock_name, "direction": "input", "width": 1},
+        {"name": reset_name, "direction": "input", "width": 1},
+    ]
+    for p in data_ports:
+        d = p.get("direction", p.get("dir", "input"))
+        rev = "output" if d == "input" else "input"
+        all_interface_ports.append({"name": p["name"], "direction": rev,
+                                     "width": p.get("width", 1)})
+
+    lines = []
+    lines.append("interfaces:")
+    lines.append("  name: " + ag_name)
+    lines.append("  clock: " + clock_name)
+    lines.append("  reset: " + reset_name)
+    lines.append("  parameters:")
+    lines.append("    - { name: BAUD_DIV, type: int, value: '10416' }")
+    lines.append("  ports:")
+    for p in all_interface_ports:
+        lines.append("    - { name: " + p['name'] + ", dir: " + p['direction']
+                     + ", width: " + str(p.get('width', 1)) + " }")
+    lines.append("  transaction_vars:")
+    lines.append("    - { name: data, type: \"bit [7:0]\", iscompare: 'True', isrand: 'True' }")
+    lines.append("  custom_drive_logic: |")
+    for ln in _gen_uart_serial_logic().split("\n"):
+        lines.append("    " + ln)
+    lines.append("  custom_collect_logic: |")
+    for ln in _gen_uart_deserialize_logic().split("\n"):
+        lines.append("    " + ln)
+    lines.append("  config:")
+    lines.append("    is_active: UVM_ACTIVE")
+    return "\n".join(lines) + "\n"
+
+
 def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> str:
     """根据 spec 中的 agent + interface 数据生成 agent YAML"""
     ag_name = agent.get("name", f"{module_name}_agent")
@@ -344,8 +704,14 @@ def run(spec_text: str) -> str:
                 agents_spec.append((ag, iface))
 
         if not agents_spec:
-            # 回退：从 RTL 端口构造 in/out agents
+            # 按协议边界分组（spec.protocol 优先；缺失时 LLM/命名约定分类）
+            agents_spec = _group_agents_by_protocol(spec, rtl_data, module_name)
+
+        if not agents_spec:
+            # 回退：从 RTL 端口构造 in/out agents（无 protocol 信息时的最后手段，带告警）
             if rtl_data and rtl_data.get("ports"):
+                print("  [find_yaml] 警告: 无 protocol 信息，退化为方向拆分 _in/_out（需人工 review）",
+                      flush=True)
                 in_ports = [p for p in rtl_data["ports"] if p["direction"] == "input"]
                 out_ports = [p for p in rtl_data["ports"] if p["direction"] == "output"]
                 if in_ports:
@@ -397,21 +763,20 @@ def run(spec_text: str) -> str:
             clock_port = ag["clock"]
             reset_port = ag["reset"]
 
-            yaml_str = _generate_interface_yaml(ag, iface, module_name)
+            if ag_name.lower() == "uart":
+                yaml_str = _generate_uart_yaml(ag, iface, module_name)
+            else:
+                yaml_str = _generate_interface_yaml(ag, iface, module_name)
             yaml_path = uvm_yaml_archive / f"{ag_name}.yaml"
             yaml_path.write_text(yaml_str, encoding="utf-8", errors="replace")
             yaml_files.append(str(yaml_path))
             print(f"  [find_yaml] Generated {ag_name}.yaml (from spec interfaces)" if spec else
                   f"  [find_yaml] Generated {ag_name}.yaml (from RTL ports)", flush=True)
 
-        # ── 6. 生成 env YAML ──
-        env_agents_lines = []
-        for ag_name in agent_names:
-            env_agents_lines.append(f"    {ag_name}:\n      interface: {ag_name}\n      clock: {clock_port}\n      reset: {reset_port}")
-        env_str = (
-            f"environment:\n  name: {module_name}_env\n  agents:\n"
-            + "\n".join(env_agents_lines) + "\n"
-        )
+        # ── 6. 生成 env YAML（agents + predictors + scoreboards 闭环）──
+        registers = (spec or {}).get("registers", []) if isinstance(spec, dict) else []
+        env_str = _gen_env_yaml(module_name, agent_names, agents_spec,
+                                clock_port, reset_port, registers)
         env_path = uvm_yaml_archive / "env.yaml"
         env_path.write_text(env_str, encoding="utf-8", errors="replace")
         yaml_files.append(str(env_path))
@@ -563,6 +928,18 @@ def run(spec_text: str) -> str:
     }, ensure_ascii=False)
 
 
+def _is_agent_active(output_dir: Path, agent_name: str) -> bool:
+    """检查 agent 是否 active（被动 agent 无 driver，loopback 自闭环无意义）。"""
+    yp = output_dir / "inputs" / "yaml" / "uvm" / f"{agent_name}.yaml"
+    if not yp.exists():
+        return True
+    try:
+        text = yp.read_text(encoding="utf-8", errors="replace")
+        return "UVM_PASSIVE" not in text
+    except Exception:
+        return True
+
+
 def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
                                module_name: str, env_name: str,
                                top_module: str,
@@ -595,10 +972,17 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     # 注意：case 库是跨 run 共享的，在项目根 .signoffai/（而非 run 目录 .signoffai/）
     cases = []
     try:
-        from src.core.testcase_registry import TestcaseRegistry
+        from src.layers.l4_memory.testcase_registry import TestcaseRegistry
         case_reg = TestcaseRegistry()
         cases = case_reg.get_priority_order(stage=0, limit=50)
-        cases = [c for c in cases if c.get("status") in ("planned", "generated")]
+        # 回归模式开关：增量（默认，只跑未 passed）/ 全量（跑所有用例）
+        try:
+            from config.settings import Settings
+            incremental = Settings.get_instance().verification.incremental_regression
+        except Exception:
+            incremental = True
+        if incremental:
+            cases = [c for c in cases if c.get("status") in ("planned", "generated")]
         case_reg.close()
     except Exception:
         cases = []
@@ -612,7 +996,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             priority = c.get("priority", "P1")
             scenario = c.get("scenario", "")
             test_lines.append(f"  - name: {cname}")
-            test_lines.append(f"    build: build_{module_name}")
+            test_lines.append(f"    build: build_{module_name}_dut")
             test_lines.append(f"    count: 1")
             test_lines.append(f"    run_opts:")
             test_lines.append(f'      - "+UVM_TESTNAME={env_name}_random_test"')
@@ -627,7 +1011,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             desc = tp.get("description", tp.get("feature", ""))
             priority = tp.get("priority", "P1")
             test_lines.append(f"  - name: {tname}")
-            test_lines.append(f"    build: build_{module_name}")
+            test_lines.append(f"    build: build_{module_name}_dut")
             test_lines.append(f"    count: 1")
             test_lines.append(f"    run_opts:")
             test_lines.append(f'      - "+UVM_TESTNAME={env_name}_base_test"')
@@ -638,34 +1022,64 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
                 test_lines.append(f"    desc: \"{desc[:80]}\"")
             test_lines.append("")
     else:
-        # 回退：基于 agent 生成烟雾测试
-        for ag in agents:
-            test_lines.append(f"  - name: test_{ag}_loopback")
-            test_lines.append(f"    build: build_{module_name}")
+        # 回退：环境级测试（base/directed/random）—— env/tests 里真正生成的 test 类
+        for _tname in (f"{env_name}_base_test", f"{env_name}_directed_test", f"{env_name}_random_test"):
+            test_lines.append(f"  - name: test_{_tname}")
+            test_lines.append(f"    build: build_{module_name}_dut")
             test_lines.append(f"    count: 1")
             test_lines.append(f"    run_opts:")
-            test_lines.append(f'      - "+UVM_TESTNAME={ag}_loopback_test"')
+            test_lines.append(f'      - "+UVM_TESTNAME={_tname}"')
             test_lines.append(f"    expect:")
             test_lines.append(f"      errors: 0")
-            test_lines.append(f"    tags: [\"smoke\", \"loopback\"]")
+            test_lines.append(f"    tags: [\"smoke\"]")
             test_lines.append("")
-        test_lines.append(f"  - name: test_{module_name}_base")
-        test_lines.append(f"    build: build_{module_name}")
+
+    # ── loopback 测试（每个 active agent 一个，独立 build + 独立顶层 {ag}_loopback_tb）──
+    # 同时把 loopback 用例注册进 case 库（用例真相源），跨 run 沉淀。
+    for ag in agents:
+        if not _is_agent_active(output_dir, ag):
+            continue
+        try:
+            from src.layers.l4_memory.testcase_registry import TestcaseRegistry
+            _cr = TestcaseRegistry()
+            _cr.register(f"test_{ag}_loopback", purpose="smoke",
+                         scenario="loopback", priority="P0")
+            _cr.close()
+        except Exception:
+            pass
+        test_lines.append(f"  - name: test_{ag}_loopback")
+        test_lines.append(f"    build: build_{module_name}_{ag}_loopback")
         test_lines.append(f"    count: 1")
         test_lines.append(f"    run_opts:")
-        test_lines.append(f'      - "+UVM_TESTNAME={env_name}_base_test"')
+        test_lines.append(f'      - "+UVM_TESTNAME={ag}_loopback_test"')
         test_lines.append(f"    expect:")
         test_lines.append(f"      errors: 0")
-        test_lines.append(f"    tags: [\"smoke\"]")
+        test_lines.append(f"    tags: [\"smoke\", \"loopback\"]")
         test_lines.append("")
 
     tests_section = "\n".join(test_lines)
 
-    # 收集所有 RTL 文件路径（builds.files 用 filelist 引用，RTL 已在 filelist 里）
-    rtl_files = []
-    rtl_dir = output_dir / "rtl"
-    if rtl_dir.exists():
-        rtl_files = [str(p.resolve()).replace("\\", "/") for p in sorted(rtl_dir.glob("*.sv"))]
+    # 构建 builds 段：DUT build（top={module}_bench_tb_top）+ per-agent loopback build（top={ag}_loopback_tb）。
+    # 每个 build 指定自己的 top（顶层模块）和 files（filelist），shell 生成器按 {top}/{files} 填充。
+    builds_lines = [
+        f"  - name: build_{module_name}_dut",
+        f"    simulator: questa",
+        f"    top: {top_module}_bench_tb_top",
+        f'    compile_opts: ["-sv", "-mfcu"]',
+        f"    files:",
+        f"      - {filelist_ref}",   # env + DUT 全在 filelist.f
+    ]
+    for ag in agents:
+        if not _is_agent_active(output_dir, ag):
+            continue
+        lb_ref = str((fl_dir / f"filelist_{ag}_lb.f").resolve()).replace("\\", "/")
+        builds_lines.append(f"  - name: build_{module_name}_{ag}_loopback")
+        builds_lines.append(f"    simulator: questa")
+        builds_lines.append(f"    top: {ag}_loopback_tb")
+        builds_lines.append(f'    compile_opts: ["-sv", "-mfcu"]')
+        builds_lines.append(f"    files:")
+        builds_lines.append(f"      - {lb_ref}")
+    builds_section = "\n".join(builds_lines)
 
     yaml_content = f"""# 回归测试配置 — 由 find_spec_yaml 自动生成
 # 用法: python regression.py --config {reg_path.as_posix()} --action all --mode local
@@ -675,21 +1089,17 @@ global_vars:
   WAVES: 0
 
 settings:
-  default_build: build_{module_name}
+  default_build: build_{module_name}_dut
   default_count: 1
   default_simulator: questa
   build_cache: False
   simulators:
     questa:
-      compile: "vlog -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} -sv -mfcu +incdir+F:/questasim64_2024.1/verilog_src/uvm-1.2/src F:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv -f {filelist_ref}"
-      run: "vsim -c -sv_lib F:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} {top_module}_bench_tb_top {{run_opts}} -do 'log -r /*; run -all; quit -f'"
+      compile: "vlog -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} -sv -mfcu +incdir+F:/questasim64_2024.1/verilog_src/uvm-1.2/src F:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv -f {{files}}"
+      run: "vsim -c -sv_lib F:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} {{top}} {{run_opts}} -do 'log -r /*; run -all; quit -f'"
 
 builds:
-  - name: build_{module_name}
-    simulator: questa
-    compile_opts: ["-sv", "-mfcu"]
-    files:
-{chr(10).join('      - ' + f for f in rtl_files) if rtl_files else '      - ' + filelist_ref}
+{builds_section}
 
 tests:
 {tests_section}

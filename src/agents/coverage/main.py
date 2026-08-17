@@ -3,8 +3,8 @@ from typing import Dict, Any
 import json
 from pathlib import Path
 
-from src.core.base import BaseAgent, AgentResult
-from src.core.registry import register_agent
+from src.layers.l2_orchestration.agents.base import BaseAgent, AgentResult
+from src.layers.l2_orchestration.agents.registry import register_agent
 import structlog
 
 logger = structlog.get_logger()
@@ -36,7 +36,7 @@ class CoverageAgent(BaseAgent):
         return {"output": ""}
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
-        from src.core.output_config import make_output_root
+        from src.layers.l1_infrastructure.output_config import make_output_root
         output_dir = Path(make_output_root(task.get("output_dir") or None))
         task["output_dir"] = str(output_dir)
 
@@ -67,7 +67,7 @@ class CoverageAgent(BaseAgent):
         coverage_data = {}
         try:
             import asyncio
-            from src.core.tool_subprocess import run_tool_in_subprocess
+            from src.layers.l2_orchestration.communication.tool_subprocess import run_tool_in_subprocess
             resp = await asyncio.to_thread(
                 run_tool_in_subprocess, "coverage.collect",
                 {"output_dir": str(output_dir), "seed": seed, "round_num": round_num})
@@ -89,7 +89,7 @@ class CoverageAgent(BaseAgent):
         toggle_details = []
         try:
             from src.tools.coverage_tools.main import build_coverage_gaps
-            from src.core.coverage_backend import get_coverage_backend
+            from src.layers.l1_infrastructure.coverage_backend import get_coverage_backend
             constraints = self._extract_constraints(output_dir)
             toggle_details = get_coverage_backend().parse_toggle_details(output_dir)
             gaps = build_coverage_gaps(nested_cov, constraints, toggle_details)
@@ -100,11 +100,37 @@ class CoverageAgent(BaseAgent):
         # ── 覆盖地图：bin 级精确定位（对应自动驾驶的"定位层"）──
         coverage_map = {}
         try:
-            from src.core.coverage_map import CoverageMap
+            from src.layers.l2_orchestration.coverage_map import CoverageMap
             functional_detail = nested_cov.get("functional_detail", {})
             coverage_map = CoverageMap().build(nested_cov, toggle_details, functional_detail)
         except Exception as e:
             logger.warning(f"覆盖地图生成失败: {e}")
+
+        # ── V2 Knowledge Graph：覆盖率 bin 命中状态落库（跨 run 跟踪进度）──
+        try:
+            from src.layers.l3_decision.knowledge.persistence import record_coverage_bins
+            _bins = coverage_map.get("bins", []) if isinstance(coverage_map, dict) else []
+            if _bins:
+                _run_id = Path(output_dir).name
+                await record_coverage_bins(_bins, run_id=_run_id)
+                logger.info(f"覆盖率 bin 落库: {len(_bins)} 个")
+        except Exception as e:
+            logger.warning(f"覆盖率 bin 落库失败: {e}")
+
+        # ── Event Bus：发布 COVERAGE_UPDATED（异步通知订阅者：KG / 决策 / 其它 Agent）──
+        try:
+            from src.layers.l2_orchestration.communication.verification_events import publish_coverage_updated
+            _module = (ctx.get("spec", {}).get("design_name", "dut")
+                       if isinstance(ctx, dict) else "dut")
+            _ov = nested_cov.get("overall_pct", nested_cov.get("coverage_pct", 0))
+            try:
+                _ov = float(_ov) if _ov else 0.0
+            except (TypeError, ValueError):
+                _ov = 0.0
+            _gap = ";".join(g.get("dimension", "") for g in gaps if isinstance(g, dict))[:200]
+            await publish_coverage_updated(module=_module, coverage=_ov, gap=_gap)
+        except Exception as e:
+            logger.warning(f"发布 COVERAGE_UPDATED 失败: {e}")
 
         if nested_cov:
             # 直接返回扁平覆盖率指标，避免外层再包一层 coverage → 双重嵌套
@@ -123,7 +149,7 @@ class CoverageAgent(BaseAgent):
         # ── 归因校准: 用历史反馈过滤 unreachable 黑名单 + 标注 reason 置信度 ──
         calibration = {}
         try:
-            from src.core.coverage_experience import get_coverage_experience_store
+            from src.layers.l4_memory.coverage_experience import get_coverage_experience_store
             cov_store = get_coverage_experience_store()
             blacklist = set(cov_store.get_blacklist())
             acc = cov_store.reason_accuracy()

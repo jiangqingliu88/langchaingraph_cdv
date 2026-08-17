@@ -9,11 +9,18 @@ package {{ environment.env_name }}_pkg;
 `ifdef USE_SC_MODEL_CHECK
   import {{ environment.env_name }}_sc_pred_env_pkg::*;
 `endif
-  // 包含环境组件文件（依赖顺序：config → virtual_sequencer → coverage → env）
-  // env.sv 引用了 env_coverage 和 virtual_sequencer 类，必须在其后 include
+  // 包含环境组件文件（依赖顺序：config → virtual_sequencer → coverage → pred/scb → env）
+  // pred/scb 必须在 env 之前 include（env.sv 引用其类）；它们作为包内组件，
+  // 否则 standalone $unit 类无法被 package 内部引用（vlog-2164 Class not found）
   `include "{{ environment.env_name }}_config.sv"
   `include "seqs/{{ environment.env_name }}_virtual_sequencer.sv"
   `include "{{ environment.env_name }}_coverage.sv"
+{%- for pred in predictors %}
+  `include "pred/{{ pred.name }}.sv"
+{%- endfor %}
+{%- for sb in scoreboards %}
+  `include "scb/{{ sb.name }}.sv"
+{%- endfor %}
   `include "{{ environment.env_name }}.sv"
 
 endpackage : {{ environment.env_name }}_pkg

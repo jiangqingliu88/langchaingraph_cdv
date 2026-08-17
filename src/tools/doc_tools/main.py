@@ -12,7 +12,7 @@ from langchain.tools import tool
 import asyncio
 import json
 
-from src.database import repository
+from src.layers.l4_memory.persistence import repository
 
 # 公开给测试与外部调用者直接 patch/替换
 search_documents = repository.search_documents

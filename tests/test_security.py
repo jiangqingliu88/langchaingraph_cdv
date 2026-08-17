@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 import hashlib
 
-from src.core.auth import hash_password, password_needs_rehash, verify_password
+from src.layers.l2_orchestration.auth import hash_password, password_needs_rehash, verify_password
 from src.web.api import _resolve_output_path, _resolve_spec_path, SPECS_DIR, OUTPUT_ROOT
 
 
@@ -87,7 +87,7 @@ def test_resolve_spec_auto_strips_specs_prefix():
 # ── JWT / Auth 安全测试 ──
 
 def test_create_and_decode_token():
-    from src.core.auth import create_token, decode_token
+    from src.layers.l2_orchestration.auth import create_token, decode_token
     token = create_token(1, "testuser", "engineer")
     payload = decode_token(token)
     assert payload is not None
@@ -97,7 +97,7 @@ def test_create_and_decode_token():
 
 
 def test_decode_expired_token():
-    from src.core.auth import create_token, decode_token, TOKEN_EXPIRE_HOURS
+    from src.layers.l2_orchestration.auth import create_token, decode_token, TOKEN_EXPIRE_HOURS
     import jwt as pyjwt
     from datetime import datetime, timedelta
     # 生成一个已过期的 token
@@ -113,7 +113,7 @@ def test_decode_expired_token():
 
 def test_decode_tampered_token():
     """篡改的 token 应返回 None"""
-    from src.core.auth import create_token, decode_token
+    from src.layers.l2_orchestration.auth import create_token, decode_token
     token = create_token(1, "user", "engineer")
     tampered = token[:-5] + "XXXXX"
     result = decode_token(tampered)
@@ -122,7 +122,7 @@ def test_decode_tampered_token():
 
 def test_hash_password_always_unique():
     """相同密码每次哈希结果不同（因随机盐）"""
-    from src.core.auth import hash_password
+    from src.layers.l2_orchestration.auth import hash_password
     p1 = hash_password("the same password")
     p2 = hash_password("the same password")
     assert p1 != p2
@@ -130,7 +130,7 @@ def test_hash_password_always_unique():
 
 def test_default_jwt_secret_is_not_hardcoded():
     """JWT SECRET_KEY 默认随机生成，而非硬编码"""
-    from src.core import auth
+    from src.layers.l2_orchestration import auth
     import os
     # 确保未设置环境变量时使用随机密钥
     if "JWT_SECRET" not in os.environ:

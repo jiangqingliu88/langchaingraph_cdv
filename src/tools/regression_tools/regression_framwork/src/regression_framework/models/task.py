@@ -85,9 +85,31 @@ class TestTask(Task):
                     self.status = 'fail'
                     self.elapsed = time.time() - self.start_time
                     return False
-            self.status = 'pass'
+            # ── 判定不以退出码为准：vsim 'quit -f' 即使 UVM_FATAL 也返回 0 ──
+            # INVTST（test not found）等致命错会漏判成 pass，必须解析 sim.log 的 UVM 汇总。
+            self.status = 'fail' if self._uvm_failed() else 'pass'
             self.elapsed = time.time() - self.start_time
             return True
+
+    def _uvm_failed(self) -> bool:
+        """解析 sim.log：UVM_ERROR/UVM_FATAL 计数 > 0 或 Questa ** Error 即判失败。"""
+        import re
+        log = os.path.join(self.work_dir, 'sim.log')
+        if not os.path.exists(log):
+            return False
+        try:
+            with open(log, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+        except Exception:
+            return False
+        # UVM 汇总: "# UVM_ERROR :    N" / "# UVM_FATAL :    N"
+        for m in re.finditer(r'UVM_(?:ERROR|FATAL)\s*:\s*(\d+)', content):
+            if int(m.group(1)) > 0:
+                return True
+        # Questa 硬错误（vopt/vlog 等）
+        if re.search(r'\*\*\s*Error', content):
+            return True
+        return False
 
 class TaskFactory:
     """任务工厂 - 根据扫描到的目录结构创建 Build/Test 任务"""

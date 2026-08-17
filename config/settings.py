@@ -36,6 +36,8 @@ class VerificationSettings(BaseSettings):
     regression_timeout: int = 3600
     coverage_target: float = 95.0
     max_retries: int = 3
+    # 回归模式：True=增量（只跑 planned/generated）；False=全量（每次跑所有用例，含已 passed，默认）
+    incremental_regression: bool = False
 
 
 class PlatformSettings(BaseSettings):

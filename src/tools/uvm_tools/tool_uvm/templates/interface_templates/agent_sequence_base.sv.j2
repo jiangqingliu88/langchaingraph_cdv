@@ -353,6 +353,11 @@ class {{ agent.name }}_directed_seq extends {{ agent.name }}_base_seq;
     req.{{ var.name }} = {{ var.name }};
 {%-   endif %}
 {%- endfor %}
+{%- for var in transaction_vars %}
+{%-   if var.name in ('psel', 'penable', 'valid') %}
+    req.{{ var.name }} = 1'b1;   // 定向：强制选中+使能（否则默认 0 被 monitor 门控跳过 → 空操作）
+{%-   endif %}
+{%- endfor %}
     finish_item(req);
     p_sequencer.inc_req();
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.core.execution import PipelineExecutionService
+from src.layers.l2_orchestration.execution import PipelineExecutionService
 
 
 async def main():
@@ -13,7 +13,7 @@ async def main():
     t0 = time.time()
     try:
         result = await svc.run_closed_loop(
-            spec_text, output_root="output/apb_uart_run", max_rounds=2,
+            spec_text, output_root="output/apb_uart_run", max_rounds=10,
         )
     except Exception as e:
         import traceback

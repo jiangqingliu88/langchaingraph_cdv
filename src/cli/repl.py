@@ -26,7 +26,7 @@ class SlashCommandHandler:
     @staticmethod
     def policies() -> str:
         """列出设计风格策略包（design-style 驱动，差异化核心）"""
-        from src.core.policy_pack import get_policy_pack_loader
+        from src.layers.l2_orchestration.governance.policy_pack import get_policy_pack_loader
         packs = get_policy_pack_loader().list()
         if not packs:
             return "无策略包"
@@ -34,27 +34,27 @@ class SlashCommandHandler:
 
     @staticmethod
     def hooks() -> str:
-        from src.core.hooks import get_hook_manager
+        from src.layers.l2_orchestration.context.hooks import get_hook_manager
         hm = get_hook_manager()
         return "\n".join(f"  {event}: {len(handlers)} handlers"
                          for event, handlers in hm._hooks.items()) or "无 hooks"
 
     @staticmethod
     def artifacts() -> str:
-        from src.core.artifacts import get_artifact_registry
+        from src.layers.l2_orchestration.artifacts import get_artifact_registry
         ar = get_artifact_registry()
         return "\n".join(f"  [{a.type}] {a.name} {a.version} (by {a.agent})"
                          for a in ar._artifacts) or "无产物"
 
     @staticmethod
     def agents() -> str:
-        from src.core.jsonrpc import A2ADispatcher
+        from src.layers.l2_orchestration.communication.jsonrpc import A2ADispatcher
         cards = A2ADispatcher.AGENT_CARDS
         return "\n".join(f"  {name}: {card.description}" for name, card in cards.items())
 
     @staticmethod
     def memory() -> str:
-        from src.core.context_loader import ContextLoader
+        from src.layers.l2_orchestration.context.context_loader import ContextLoader
         memory = ContextLoader('.').load_project_memory()
         return memory if memory else "无 SignOffAI.md"
 
@@ -64,7 +64,7 @@ class SlashCommandHandler:
         saved = 0
         # 1. 压缩 ContextStore（数据截断，原始保留供审计）
         try:
-            from src.core.context import ContextStore
+            from src.layers.l2_orchestration.context.context import ContextStore
             store = ContextStore()
             saved += store.compress()
         except Exception:
@@ -191,7 +191,7 @@ class Repl:
 
         # 调用闭环
         try:
-            from src.core.execution import PipelineExecutionService
+            from src.layers.l2_orchestration.execution import PipelineExecutionService
             svc = PipelineExecutionService.get_instance()
             result = await svc.run_closed_loop(query, output_root="output/repl")
             cov = result.get("final_coverage", 0)

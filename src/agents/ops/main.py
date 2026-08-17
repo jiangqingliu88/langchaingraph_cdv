@@ -3,8 +3,8 @@ from typing import Dict, Any
 import json
 from pathlib import Path
 
-from src.core.base import BaseAgent, AgentResult
-from src.core.registry import register_agent
+from src.layers.l2_orchestration.agents.base import BaseAgent, AgentResult
+from src.layers.l2_orchestration.agents.registry import register_agent
 import structlog
 
 logger = structlog.get_logger()
@@ -36,7 +36,7 @@ class OpsAgent(BaseAgent):
         return {"output": ""}
 
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
-        from src.core.output_config import make_output_root
+        from src.layers.l1_infrastructure.output_config import make_output_root
         output_dir = Path(make_output_root(task.get("output_dir") or None))
         task["output_dir"] = str(output_dir)
 
@@ -47,7 +47,7 @@ class OpsAgent(BaseAgent):
         # 所有 EDA 命令统一通过 regression_tool.py 的 ITool（MCP 协议）调用，
         # 工具内部走 L1 InfrastructureManager.run_regression → 回归框架。
         import asyncio
-        from src.core.tool_subprocess import run_tool_in_subprocess
+        from src.layers.l2_orchestration.communication.tool_subprocess import run_tool_in_subprocess
         try:
             resp = await asyncio.to_thread(
                 run_tool_in_subprocess, "regression.run",

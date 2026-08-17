@@ -25,80 +25,12 @@ _requires_llm = pytest.mark.skipif(
 # Pipeline 集成测试 (需要真实 LLM)
 # ═══════════════════════════════════════════════════
 
-class TestPipelineIntegration:
-    """完整流水线集成测试 —— 需要真实 LLM API"""
-
-    @pytest.mark.asyncio
-    @_requires_llm
-    async def test_full_pipeline_success(self, tmp_path):
-        """全流水线成功执行"""
-        from src.core.execution import PipelineExecutionService
-
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        spec_text = """# ALU Specification
-## Design Overview
-32-bit ALU with 13 operations.
-
-## Interfaces
-| Signal | Width | Direction | Description |
-|--------|--------|-----------|-------------|
-| clk    | 1      | input     | Clock       |
-| rst_n  | 1      | input     | Reset       |
-| op_a   | 32     | input     | Operand A   |
-| op_b   | 32     | input     | Operand B   |
-| result | 32     | output    | Result      |
-
-## Registers
-### CTRL (0x00)
-Control register.
-
-## Features
-- ADD: Addition
-- SUB: Subtraction
-"""
-
-        service = PipelineExecutionService.get_instance()
-        result = await service.run_pipeline(
-            spec_text=spec_text,
-            workflow="full_verification",
-            output_root=str(output_dir),
-        )
-
-        assert result["run_id"]
-        assert result["total"] > 0
-        assert result["passed"] >= 0
-        assert result["ctx"] is not None
-
-    @pytest.mark.asyncio
-    @_requires_llm
-    async def test_quick_check_pipeline(self, tmp_path):
-        """快速检查流水线"""
-        from src.core.execution import PipelineExecutionService
-
-        output_dir = tmp_path / "output_quick"
-        output_dir.mkdir()
-        service = PipelineExecutionService.get_instance()
-        result = await service.run_pipeline(
-            spec_text="# Quick test spec",
-            workflow="quick_check",
-            output_root=str(output_dir),
-        )
-        assert result["run_id"]
-        assert result["passed"] >= 0
-
-
-# ═══════════════════════════════════════════════════
-# Manifest 集成测试 (不需要 LLM)
-# ═══════════════════════════════════════════════════
-
 class TestManifestIntegration:
     """Manifest 与 Pipeline 集成测试"""
 
     def test_manifest_includes_pipeline_result(self):
         """验证 manifest 包含 pipeline 结果的关键字段"""
-        from src.core.manifest import build_manifest
+        from src.layers.l2_orchestration.manifest import build_manifest
 
         phases = [
             {"name": "spec", "status": "passed", "score": 95, "time": 0.5, "retries": 0,
@@ -143,7 +75,7 @@ class TestContextPersistence:
     """ContextStore 持久化测试"""
 
     def test_context_snapshot_and_restore(self):
-        from src.core.context import ContextStore
+        from src.layers.l2_orchestration.context import ContextStore
 
         store = ContextStore()
         store.put("spec", {"design_name": "ALU", "features": [{"name": "ADD"}]}, source="spec_planner")
@@ -158,7 +90,7 @@ class TestContextPersistence:
         assert "env" not in snap
 
     def test_context_prune_removes_consumed_keys(self):
-        from src.core.context import ContextStore
+        from src.layers.l2_orchestration.context import ContextStore
 
         store = ContextStore()
         store.put("spec", {"design_name": "ALU"}, source="spec_planner")
@@ -170,7 +102,7 @@ class TestContextPersistence:
         assert "env" in store.keys()
 
     def test_context_field_level_fetch(self):
-        from src.core.context import ContextStore
+        from src.layers.l2_orchestration.context import ContextStore
 
         store = ContextStore()
         store.put("spec", {

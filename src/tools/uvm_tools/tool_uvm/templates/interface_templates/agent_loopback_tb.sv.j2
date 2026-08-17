@@ -56,7 +56,6 @@ module {{ agent.name }}_loopback_tb;
 {# rx/tx #}{%-         if in_name.replace('rx','tx') == out_name or in_name.replace('tx','rx') == out_name %}{% set swapped.ok = true %}{% endif %}
 {# rts/cts #}{%-         if in_name.replace('rts','cts') == out_name or in_name.replace('cts','rts') == out_name %}{% set swapped.ok = true %}{% endif %}
 {# ready/enable #}{%- if in_name.replace('ready','enable') == out_name or in_name.replace('enable','ready') == out_name %}{% set swapped.ok = true %}{% endif %}
-{# rdata/wdata #}{%- if in_name.replace('rdata','wdata') == out_name or in_name.replace('wdata','rdata') == out_name %}{% set swapped.ok = true %}{% endif %}
 {# req/ack #}{%-     if in_name.replace('req','ack') == out_name or in_name.replace('ack','req') == out_name %}{% set swapped.ok = true %}{% endif %}
 {# mosi/miso #}{%-   if in_name.replace('mosi','miso') == out_name or in_name.replace('miso','mosi') == out_name %}{% set swapped.ok = true %}{% endif %}
 {# sdi/sdo #}{%-     if in_name.replace('sdi','sdo') == out_name or in_name.replace('sdo','sdi') == out_name %}{% set swapped.ok = true %}{% endif %}
@@ -81,7 +80,7 @@ module {{ agent.name }}_loopback_tb;
 
   initial begin
     #100 rst_n = 1;
-    #500000 $display("LOOPBACK_TIMEOUT");
+    #50000000 $display("LOOPBACK_TIMEOUT");   // 50ms：够 UART 等串行协议多帧收发
     $finish;
   end
 endmodule : {{ agent.name }}_loopback_tb

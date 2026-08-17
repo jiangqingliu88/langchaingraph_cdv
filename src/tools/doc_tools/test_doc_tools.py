@@ -68,14 +68,14 @@ class TestRepositoryHelpers:
     """测试 repository 中的辅助函数"""
 
     def test_hash_content(self):
-        from src.database.repository import _hash_content
+        from src.layers.l4_memory.persistence.repository import _hash_content
         h = _hash_content("hello")
         assert len(h) == 64
         assert _hash_content("hello") == _hash_content("hello")
         assert _hash_content("hello") != _hash_content("world")
 
     def test_extract_requirements(self):
-        from src.database.repository import _extract_requirements
+        from src.layers.l4_memory.persistence.repository import _extract_requirements
         content = """
 # UART TX 规格
 
@@ -95,19 +95,19 @@ class TestRepositoryHelpers:
         assert reqs[2]['req_type'] == 'UT'
 
     def test_extract_requirements_chip(self):
-        from src.database.repository import _extract_requirements
+        from src.layers.l4_memory.persistence.repository import _extract_requirements
         content = "**REQ_CHIP_001**: 芯片级验证"
         reqs = _extract_requirements(content)
         assert len(reqs) == 1
         assert reqs[0]['req_type'] == 'CHIP'
 
     def test_extract_requirements_empty(self):
-        from src.database.repository import _extract_requirements
+        from src.layers.l4_memory.persistence.repository import _extract_requirements
         assert _extract_requirements("") == []
         assert _extract_requirements("没有需求ID的文档") == []
 
     def test_parse_dsa_spec(self):
-        from src.database.repository import _parse_dsa_spec
+        from src.layers.l4_memory.persistence.repository import _parse_dsa_spec
         content = """
 DSA SPEC
 TITLE: ALU APB 寄存器接口规格

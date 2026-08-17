@@ -99,7 +99,7 @@ def ensure_uvm_tool_registry():
     if _registry_initialized:
         return _registry_instance
 
-    from src.core.tool_system import Tool, ToolRegistry
+    from src.layers.l2_orchestration.communication.tool_system import Tool, ToolRegistry
 
     registry = ToolRegistry()
     registry.register_many([
@@ -435,7 +435,7 @@ def _inject_custom_logic_sv(sv_path: Path, drive_logic: str, sample_logic: str, 
 def _call_llm(prompt: str, code: str, errors: str) -> str:
     """通过 LLMFactory 调用 LLM 修复代码。支持 DeepSeek / OpenAI / Anthropic / Custom。"""
     try:
-        from src.core.llm_factory import LLMFactory
+        from src.layers.l2_orchestration.context.llm_factory import LLMFactory
         llm = LLMFactory.create_for_task("code_generation")
         user_msg = f"CODE:\n{code[:3000]}\n\nERRORS:\n{errors[:1000]}\n\nOutput ONLY the fixed complete code, no explanation."
         resp = llm.invoke([

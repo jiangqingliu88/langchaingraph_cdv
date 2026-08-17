@@ -78,7 +78,14 @@ class {{ agent.name }}_monitor extends uvm_monitor;
     @(posedge vif.{{ agent.reset }});  // wait for reset release before sampling
     forever begin
       {{ agent.name }}_seq_item item;
-
+{%- if agent.custom_collect_logic %}
+      // === 任务级帧采集（串行协议）===
+      item = {{ agent.name }}_seq_item::type_id::create("item");
+      collect_transaction(item);
+      item_collected_port.write(item);
+      m_collected++;
+      `uvm_info("MON", $sformatf("MON: %s collected item #%0d:\n%s", get_name(), m_collected, item.sprint()), UVM_MEDIUM)
+{%- else %}
 {%- set qualifier = namespace(sig=None) %}
 {%- for port in ports %}
 {%-   if port.dir == 'output' and port.name in ('valid', 'strobe', 'psel', 'penable', 'enable', 'ready') %}
@@ -125,6 +132,7 @@ class {{ agent.name }}_monitor extends uvm_monitor;
 
       `uvm_do_callbacks({{ agent.name }}_monitor, {{ agent.name }}_monitor_callback,
                         on_post_write(this, item))
+{%- endif %}
     end
   endtask
 
@@ -147,6 +155,17 @@ class {{ agent.name }}_monitor extends uvm_monitor;
 {%- endfor %}
 {% endif %}
   endfunction
+
+  // 任务级帧采集（串行协议用：跨多拍采样，如 UART tx → data 字节）
+  // 与 sample_transaction（function 单拍采样）互斥：存在 custom_collect_logic 时走这里
+  virtual task collect_transaction({{ agent.name }}_seq_item item);
+{% if agent.custom_collect_logic %}
+    // === LLM-generated frame collection ===
+{{ agent.custom_collect_logic | indent(4, first=true) }}
+{% else %}
+    @(vif.cb);
+{% endif %}
+  endtask
 
   // ─── X/Z 检测 ───
   virtual function bit is_xz_detected();
@@ -181,7 +200,7 @@ class {{ agent.name }}_monitor extends uvm_monitor;
   endfunction
 
   virtual function real get_bandwidth_bps();
-    if (m_collected == 0) return 0;
+    if (m_collected == 0 || m_total_bw == 0) return 0;
     return (m_collected * 8) / (m_total_bw / 1e9);
   endfunction
 

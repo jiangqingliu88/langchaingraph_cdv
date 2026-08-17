@@ -38,7 +38,7 @@ class UvmToolContext:
     def output_dir(self) -> str:
         if self._output_dir:
             return self._output_dir
-        from src.core.output_config import make_output_root
+        from src.layers.l1_infrastructure.output_config import make_output_root
         return str(Path(make_output_root()).resolve())
 
     @property

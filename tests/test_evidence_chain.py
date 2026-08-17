@@ -15,7 +15,7 @@ class TestEvidenceChainIntegrity:
 
     def test_manifest_hash_self_check(self):
         """Manifest hash 自校验：存储的 hash 与重新计算一致"""
-        from src.core.manifest import hash_json
+        from src.layers.l2_orchestration.manifest import hash_json
 
         data = {
             "run_id": "test_001",

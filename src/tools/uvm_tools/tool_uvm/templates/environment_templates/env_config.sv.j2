@@ -7,6 +7,9 @@ class {{ environment.env_name }}_config extends uvm_object;
   rand {{ var.type }} {{ var.name }};
 {%- endfor %}
 
+  // 是否启用 scoreboard（默认开启；仅当存在 scoreboards 时 environment 才引用）
+  bit has_scoreboard = 1;
+
 {%- for cons in config_constraints %}
   constraint {{ cons.name }} {{ cons.value | safe }}
 {%- endfor %}

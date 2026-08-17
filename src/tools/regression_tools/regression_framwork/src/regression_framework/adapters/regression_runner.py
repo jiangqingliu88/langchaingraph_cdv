@@ -41,7 +41,14 @@ class RegressionRunner:
         wd = str(self.work_dir.resolve()).replace("\\", "/")
         fl = str(Path(self.filelist).resolve()).replace("\\", "/") if self.filelist else ""
 
-        cmd = [vlog, "-work", wd]
+        cmd = [vlog, "-work", wd, "-sv", "-mfcu", "+acc"]
+        # UVM 库：缺了会导致 `uvm_macros.svh` / `uvm_object_utils` 未定义（coverage 编译失败根因）。
+        # 与 regression.yaml 的 compile 模板保持一致：+incdir+uvm_src + uvm_pkg.sv。
+        _questa_root = os.path.dirname(self._questa())
+        _uvm_src = os.path.join(_questa_root, "verilog_src", "uvm-1.2", "src").replace("\\", "/")
+        _uvm_pkg = os.path.join(_uvm_src, "uvm_pkg.sv").replace("\\", "/")
+        if os.path.exists(_uvm_pkg):
+            cmd += [f"+incdir+{_uvm_src}", _uvm_pkg]
         if self.coverage:
             cmd.append("+cover=bcesf")  # branch/condition/expression/statement/fsm
         if fl:

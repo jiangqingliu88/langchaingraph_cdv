@@ -1,8 +1,10 @@
 # AI 驱动芯片验证全栈闭环架构设计文档
 
 > **SignOffAI 功能签核平台 · 架构深度分析**
-> 分支：`develop_claude` · 文档日期：2026-08-14
+> 分支：`develop_claude` · 文档日期：2026-08-16
 > 核心理念：**可复现、可审计、可治理的 IC 验证 AI 签核平台**
+>
+> **验证声明**：本架构不是 PPT——V1 已跑通真实 EDA 闭环，V2/V3/V4 均已落地为可运行代码（见 [附录文件索引](#十七附录目录结构与文件索引)）；正在用真实 IP（I2C/UART）跑通完整签核案例，产出可审计证据链作为对外展示样本。
 
 ---
 
@@ -22,7 +24,22 @@
 12. [治理体系](#十二治理体系)
 13. [关键设计决策与差异化壁垒](#十三关键设计决策与差异化壁垒)
 14. [现状、技术债与演进路线](#十四现状技术债与演进路线)
-15. [附录：目录结构与文件索引](#十五附录目录结构与文件索引)
+15. [Knowledge Graph 认知层（V2 架构升级）](#十五knowledge-graph-认知层v2-架构升级)
+16. [决策学习层与知识复用（V3/V4）](#十六决策学习层与知识复用v3--v4)
+17. [附录：目录结构与文件索引](#十七附录目录结构与文件索引)
+
+---
+
+## V2/V3/V4 新特性速览
+
+老读者只看这节即可：
+
+| 版本 | 核心能力 | 章节 |
+|------|---------|------|
+| **V2 Knowledge Graph** | 语义溯源：需求→功能→模块→信号→bin→bug→fix 成图，gap 不再是「数字」而是「归因」 | [第十五章](#十五knowledge-graph-认知层v2-架构升级) |
+| **V2 事件驱动** | L1 执行结果变异步事件（COVERAGE_UPDATED/BUG_DETECTED），KG 订阅更新世界模型 | [第十六章](#十六决策学习层与知识复用v3--v4) |
+| **V3 决策学习层** | Decision Brain：规则（硬失败）+ RL Q-learning（软决策）并行，覆盖率 delta 当奖励 | [第十六章](#十六决策学习层与知识复用v3--v4) |
+| **V4 跨项目 + marketplace** | 跨项目 bug/fix 语义复用 + 签核证据包导出/导入/合并 | [第十六章](#十六决策学习层与知识复用v3--v4) |
 
 ---
 
@@ -285,6 +302,8 @@ unstimulated  → GENERATE_DIRECTED_TEST（激励不足，定向补测）
 ```
 
 这使 L3 决策从"看数字"进化到"看原因"，是闭环收敛效率的核心提升点。
+
+> **V2 增强**：在 reason 分流之上，Knowledge Graph 提供更高一层的**语义溯源**（`gap_paths`）——reason 只回答「为什么没覆盖」，语义路径回答「这是哪个需求的哪个信号、已有哪个测试」。`decide()` 优先走语义分支，再退回 reason 分流。见 [第十五章](#十五knowledge-graph-认知层v2-架构升级)。
 
 ### 5.3 黄金基线与回归守卫
 
@@ -741,10 +760,14 @@ spec.md
 | `experience_store.py`（JSON 版经验库） | ✅ 已删，统一到 `debug_experience` + `coverage_experience`（sqlite） |
 | 照搬 Claude Code 的 `skills.py` / `plugins.py` 通用层 | ✅ 已删，统一到策略包（Policy Pack） |
 
+**已彻底退役**：
+
+- `run_pipeline`（旧 13 阶段线性流水线）✅ 已退役——`vagent verify` 已切 `run_closed_loop`（`commands.py` verify 入口直接调 `run_closed_loop`），`run_pipeline` 方法已删除，`src/` 内残留引用（注释 + docstring）已清理；仅 `abandoned/web/`（死代码）还残留引用，随 `abandoned/` 删除一并消失。
+- `src/agents/_legacy/` ✅ 已删除。
+
 **仍待决策 / 清理**：
 
-- `run_pipeline`（旧 13 阶段线性流水线）与 `run_closed_loop`（七 Agent 闭环）**两条路径并存**——`vagent verify` 仍调 `run_pipeline`，彻底退役需把 verify 入口切到闭环。
-- `abandoned/`（7.6M）与 `src/agents/_legacy/` 的 git 删除未 commit。
+- `abandoned/`（7.6M，含旧 `web/` 前端 + `dvsim` 适配器）git 删除未 commit。
 
 ### 14.2 演进路线（已落地里程碑）
 
@@ -757,14 +780,178 @@ spec.md
 | **L4/L5 成长** | debug/coverage 经验库（sqlite）+ 三条蒸馏通道（debug→fix / gap→policy / decision→weight）（见 [第八章](#八l4l5-成长层跨-run-进化)） |
 | **驾驭层** | 预算 / 熔断 / 干预 / 真回滚 / 虚拟文件系统 / 精确编辑（见 6.7） |
 | **Planning** | 统一覆盖率目标 + 非线性里程碑 + 收敛预测（见 6.8） |
+| **Knowledge Graph 认知层（V2）** | 验证语义图（需求→功能→模块→信号→bin→测试→bug→fix）+ DSL 建图 + BFS 溯源 + 设计时/运行时分层持久化 + 决策语义分支（见 [第十五章](#十五knowledge-graph-认知层v2-架构升级)） |
+| **决策学习层（V3）** | Decision Brain：规则（硬失败）+ RL Q-learning（软决策）并行，覆盖率 delta 当 reward（见 [第十六章](#十六决策学习层与知识复用v3--v4)） |
+| **跨项目复用 + marketplace（V4）** | 跨项目 bug/fix 语义检索 + 签核证据包导出/导入/合并（见 [第十六章](#十六决策学习层与知识复用v3--v4)） |
 
-剩余未闭环项：`run_pipeline` 与 `run_closed_loop` 两条路径并存（见 14.1），彻底退役需把 `vagent verify` 入口切到闭环。
+剩余未闭环项：`run_pipeline` 已彻底退役（见 14.1），`abandoned/`（旧 `web/` + `dvsim`）git 删除待 commit。
 
 ---
 
-## 十五、附录：目录结构与文件索引
+## 十五、Knowledge Graph 认知层（V2 架构升级）
 
-### 15.1 核心文件索引
+> V2 的核心升级：在 L1/L2/L3 之上加一层**验证知识图**，把「需求 → 功能 → RTL 模块 → 信号 → 覆盖率 bin → 测试 → bug → fix」这条验证语义链显式建模成**可遍历的图**，作为 Decision Engine 的 Observation 语义来源。决策层从此不再「看覆盖率数字」，而是「看这个未覆盖 bin 属于哪个需求/功能，已有哪个测试，该放宽约束还是补测」。
+
+### 15.1 为什么需要这一层
+
+V1 的决策层（见 [第五章](#五决策层覆盖率驱动的-l3-状态机)）已经能按 gap reason 分流（unreachable / constraint / unstimulated），但 `Observation.gaps` 是**扁平的 reason 向量**——它知道「这个 gap 是 constraint 型」，但**不知道**「这个 gap 是 REQ_GEMM_001 的 acc_value[15] toggle，已有 gemm_overflow_test」。所以只能泛泛地「GENERATE_DIRECTED_TEST」，说不出来精准建议。
+
+V2 的 Knowledge Graph 补上了这条**语义溯源链**：
+
+```
+coverage agent 发现: acc_value[15] toggle missing
+    ↓ trace_uncovered（图遍历）
+REQ_GEMM_001 ← GEMM_MAC ← mac_array ← acc_value[15] ← overflow_corner ← gemm_overflow_test
+    ↓
+决策: RELAX_CONSTRAINT（因为已有 gemm_overflow_test，是约束过紧，不是没测）
+```
+
+### 15.2 节点 / 边 Schema
+
+`src/layers/l3_decision/knowledge/schema.py`
+
+| 节点类型 | 含义 | 对应持久化表 |
+|----------|------|-------------|
+| `Requirement` | 需求条目（REQ_xxx） | `doc_requirements` / ReqFeatureMap.req_id |
+| `Feature` | 功能点 | `design_features` |
+| `Module` | RTL 模块 | `design_modules` |
+| `Signal` | 信号 | `design_modules.signals`（JSON） |
+| `CoverageBin` | 覆盖率 bin | `coverage_bin_records` |
+| `Test` | 测试用例 | `feature_testpoint_map` |
+| `Bug` / `Fix` | 缺陷 / 修复 | `verification_bugs` / `verification_fixes` |
+
+| 边类型 | 方向 | 含义 |
+|--------|------|------|
+| `implements` | Requirement → Feature | 需求由功能点实现 |
+| `rtl` | Feature → Module | 功能点映射到 RTL 模块 |
+| `signal` | Module → Signal | 模块包含信号 |
+| `coverage` | Signal/Module → CoverageBin | 信号/模块被 bin 覆盖 |
+| `test` | CoverageBin/Feature → Test | bin/功能由测试激励 |
+| `affects` | Bug → Signal/Feature | 缺陷影响信号/功能 |
+| `resolves` | Fix → Bug | 修复解决缺陷 |
+
+### 15.3 数据来源：Verification DSL + 自动推断
+
+`src/tools/spec_tools/verify_dsl.py`
+
+两种模式（`build_graph_from_spec` 自动检测）：
+
+1. **显式 DSL**：spec 含 `requirements/features/modules/signals/coverage_bins/tests/relations`，`VerificationGraph.from_spec` 直接建图；
+2. **自动推断**：从 spec.json 的 `interfaces[].protocol`（→模块）、`interfaces[].name`（→信号）、`features`（→功能，按关键词匹配模块）、`registers`（→bin），推断 `implements/rtl/signal/coverage` 边。
+
+> **诚实定位：KG 建图是「半自动」，不是「全自动」**。真实复杂 IP（PCIe/DDR 控制器）的 Spec 常常不完整或二义，`Requirement → Signal → Bin` 的完美映射很难全自动提取。所以落地方式是**人机协作**：AI 从 Spec/RTL 提建议（Propose）→ 工程师通过 CLI 确认/修正（Approve）→ 图落库。自动推断覆盖的是「协议清晰、命名规范」的常见场景（如 apb_uart 这种），复杂 IP 需要人工介入。
+
+### 15.4 溯源查询
+
+`src/layers/l3_decision/knowledge/query.py`
+
+`trace_uncovered(graph, signal, bin, metric)` 用 **BFS 上游找最近同类节点**（不依赖固定边链顺序，鲁棒处理 bin 直接挂 module 或挂 signal 两种情况），返回：
+
+```json
+{"requirement": "REQ_GEMM_001", "feature": "GEMM_MAC", "module": "mac_array",
+ "signal": "acc_value[15]", "bin": "overflow_corner", "test": "gemm_overflow_test",
+ "suggestion": "RELAX_CONSTRAINT"}
+```
+
+`_suggest` 规则：**已有测试没命中 → RELAX_CONSTRAINT（约束过紧）；有语义归属无测试 → GENERATE_DIRECTED_TEST；无语义归属 → INVESTIGATE**。
+
+### 15.5 持久化：设计时 / 运行时分层
+
+`src/layers/l3_decision/knowledge/persistence.py`
+
+| 函数 | 写入方 | 内容 |
+|------|--------|------|
+| `save_graph_to_db` | design agent | 设计时子图（module/signal/feature/requirement + 寄存器 bin） |
+| `record_coverage_bins` | coverage agent | 运行时 bin 命中状态（code/toggle，upsert 跟踪进度） |
+| `record_bugs_and_fixes` | debug agent | bug（affects 信号）+ fix（resolves bug） |
+| `load_graph_from_db` | decision 层 | 载回完整图（设计时 + 运行时） |
+
+**关键设计**：设计时数据（需求/功能/模块/信号）与运行时数据（bin 命中/bug/fix）分层持久化——设计时子图不随 run 变，运行时子图逐 run 更新。图是内存邻接图，现有 SQLAlchemy 表是持久化真相源。
+
+### 15.6 决策层接入：语义分支
+
+`src/layers/l3_decision/decision_engine.py`
+
+`Observation` 新增 `gap_paths` 字段；`enrich_observation`（async）优先 spec 建全图、DB 合并跨 run 数据，再 `find_gap_contexts` 溯源。`decide()` 在规则分流前先跑 `_decide_from_semantics`：
+
+```
+gap_paths 有 RELAX_CONSTRAINT 建议 → RELAX_CONSTRAINT（已有测试约束过紧）
+gap_paths 有 GENERATE_DIRECTED_TEST → GENERATE_DIRECTED_TEST（无测试）
+gap_paths 空/INVESTIGATE            → 退回原规则分流（reason 维度）
+```
+
+### 15.7 数据流
+
+```mermaid
+graph TB
+    SPEC[Spec] -->|verify_dsl| GRAPH[VerificationGraph<br/>内存邻接图]
+    D[design agent] -->|save_graph_to_db<br/>设计时子图+寄存器bin| DB[(持久化表<br/>DesignModule/Feature<br/>ReqFeatureMap/CoverageBin<br/>Bug/Fix)]
+    C[coverage agent] -->|record_coverage_bins<br/>运行时bin命中| DB
+    DBG[debug agent] -->|record_bugs_and_fixes| DB
+    DB -->|load_graph_from_db + merge| OBS[enrich_observation<br/>gap_paths]
+    GRAPH --> OBS
+    OBS --> DE[decide 语义分支<br/>RELAX_CONSTRAINT / GENERATE_DIRECTED_TEST]
+```
+
+---
+
+## 十六、决策学习层与知识复用（V3 / V4）
+
+> V3/V4 在 V2 的语义地基上继续往上长：V3 让**决策从「专家规则」进化到「规则 + 强化学习并行」**；V4 让**验证知识从「单项目经验」变成「跨项目可复用资产」**。
+
+### 16.1 V3 决策学习层：Decision Brain（规则 + RL 并行）
+
+`src/layers/l3_decision/brain/`
+
+把决策拆成两类，用不同的引擎：
+
+| 决策类型 | 引擎 | 确定性 |
+|----------|------|--------|
+| **硬失败**（编译错/比对错/环境失败） | Rule Engine | 确定性（错了就是错了） |
+| **软决策**（覆盖率 gap 下哪个动作提升最大） | RL Policy（Q-learning） | 学习 |
+
+三个组件：
+
+| 组件 | 文件 | 作用 |
+|------|------|------|
+| State Encoder | `brain/state_encoder.py` | Observation → 离散语义状态 `cov:bucket\|reason\|sugg`（把 gap_paths 语义归因编码进状态） |
+| RL Policy | `brain/rl_policy.py` | 表格 Q-learning：5 软动作 + ε-greedy + JSON 持久化 |
+| Decision Brain | `brain/decision_brain.py` | 硬失败走规则，软决策走 RL；冷启动回退规则语义决策；reward = 覆盖率 delta |
+
+```
+Observation
+    │
+DecisionBrain
+    ├─ 硬失败？ ──► Rule Engine（COMPILE_RETRY / UPDATE_MODEL / RETRY_ENV）
+    └─ 软决策 ──► RL Policy（Q-learning，学「哪类 gap 用哪个动作提升最大」）
+                     │ 冷启动（无经验）→ 回退规则语义决策
+                     └─ Action
+```
+
+学习信号：**覆盖率 delta**（本轮 functional − 上轮 functional）当 reward，逐轮 Q 更新，跨 run JSON 持久化。
+
+> 当前是「轻量 Q-learning」先跑通闭环；验证收益后再升级 DQN（神经网络近似 Q 函数）。这是对的工程顺序——先证明「学习有用」，再上复杂模型。
+
+> **诚实挑战 1：RL 的冷启动与奖励噪声**。IC 验证的覆盖率提升高度非线性（前 10 轮可能暴涨、后 50 轮停滞），覆盖率 delta 作为奖励信号噪声很大，Q 表可能难收敛。应对策略：① 冷启动阶段**完全回退规则引擎**（不采 RL），等 Q 表有足够样本（>100 轮）后再逐步增加 RL 决策权重；② 奖励函数用**平滑增量**（多轮滑动平均，非单轮 delta），降低噪声。
+
+### 16.2 V4 跨项目知识复用 + 签核证据 marketplace
+
+`src/layers/l3_decision/knowledge/cross_project.py` + `marketplace.py`
+
+| 能力 | 文件 | 作用 |
+|------|------|------|
+| 跨项目复用 | `cross_project.py` | 按 category 查其它项目的同类 bug + 修复（项目 B 遇到 model_mismatch → 复用项目 A 的 saturate 修复） |
+| 签核证据包 | `marketplace.py` | `export`（KG + 覆盖率 + bug/fix → JSON）→ `load` → `merge` 到新项目 |
+
+跨项目复用把「知识」从 fingerprint 维度（单点经验）提升到**语义维度**（category/feature/signal），用 KG 的节点/边做检索。签核证据包则把整个验证图 + 证据打包成可跨项目迁移的资产。
+
+> **诚实挑战 2：跨项目复用的边界条件**。Bug Fix 复用的前提是两个项目的代码风格、模块命名、验证环境高度相似，直接按 `category` 检索可能误用。应对策略：加**复用置信度门控**——只有 KG 子图相似度（信号名编辑距离、模块层次结构）> 80% 时才自动注入修复模板；否则仅作为「参考建议」展示给工程师，不自动应用。
+
+---
+
+## 十七、附录：目录结构与文件索引
+
+### 17.1 核心文件索引
 
 | 文件 | 职责 |
 |------|------|
@@ -796,11 +983,24 @@ spec.md
 | `src/core/file_editor.py` | 精确文件编辑（edit_file 冲突检测 + apply_patch）|
 | `src/core/distillation.py` | Agent 自主蒸馏流水线（L5 进化：经验 → 能力）|
 | `src/core/growth.py` | L4/L5 成长层（决策效果 + 经验蒸馏 + 跨项目迁移）|
+| `src/layers/l3_decision/knowledge/schema.py` | **V2** KG 节点/边 schema（Requirement/Feature/Module/Signal/CoverageBin/Test/Bug/Fix） |
+| `src/layers/l3_decision/knowledge/graph.py` | **V2** 验证图（纯 Python 邻接表 + from_spec/merge） |
+| `src/layers/l3_decision/knowledge/query.py` | **V2** 语义溯源（trace_uncovered BFS 上游 + find_gap_contexts） |
+| `src/layers/l3_decision/knowledge/persistence.py` | **V2** 图持久化（save/load/record_bins/record_bugs_fixes，设计时/运行时分层） |
+| `src/tools/spec_tools/verify_dsl.py` | **V2** 验证 DSL（显式 relations + spec.json 自动推断建图） |
+| `src/layers/l4_memory/persistence/models.py` | **V2** 新增 CoverageBinRecord / VerificationBug / VerificationFix 三张运行时语义表 |
+| `src/layers/l3_decision/knowledge/cross_project.py` | **V4** 跨项目 bug/fix 语义复用查询 |
+| `src/layers/l3_decision/knowledge/marketplace.py` | **V4** 签核证据包导出/导入/合并 |
+| `src/layers/l3_decision/brain/state_encoder.py` | **V3** Observation → 离散语义状态编码 |
+| `src/layers/l3_decision/brain/rl_policy.py` | **V3** 表格 Q-learning 策略（5 软动作 + ε-greedy） |
+| `src/layers/l3_decision/brain/decision_brain.py` | **V3** Decision Brain（规则硬失败 + RL 软决策并行） |
+| `src/layers/l2_orchestration/communication/verification_events.py` | **V2/V3** 验证事件桥（COVERAGE_UPDATED/BUG_DETECTED/DECISION_MADE 发布器 + 订阅者） |
+| `src/layers/l1_infrastructure/verification_os.py` | **V2** L1 执行机器门面（CompileManager/RegressionManager/EdaScheduler/CoverageCollector/WaveManager） |
 | `src/agents/coverage/functional_coverage.py` | 功能覆盖率点生成器（spec 语义 → covergroup）|
 | `src/core/base.py` | Agent 基类（LLM 工厂 + ctx 契约 + 重试） |
 | `src/cli/commands.py` | `vagent` CLI（业务命令 + 23 命令组） |
 
-### 15.2 Agent 目录
+### 17.2 Agent 目录
 
 ```
 src/agents/
@@ -813,7 +1013,7 @@ src/agents/
   └── audit/      # 审计智能体（qa+签核）
 ```
 
-### 15.3 工具层
+### 17.3 工具层
 
 ```
 src/tools/
@@ -829,7 +1029,7 @@ src/tools/
   └── lib/              # 通用库（编译/覆盖率/波形结构化/LLM refine）
 ```
 
-### 15.4 策略包目录
+### 17.4 策略包目录
 
 ```
 policies/
@@ -840,7 +1040,7 @@ policies/
 
 ---
 
-> **一句话总结**：SignOffAI 通过 **L1 基础设施 + L2 七 Agent 调度 + L3 覆盖率决策 + L4 记忆 / L5 蒸馏** 的五层闭环架构，配合 **统一通信（A2A/JSON-RPC）、统一证据链（哈希链 + 五层领域证据）、统一质量守护（三层兜底 + 三条铁律）**，把 IC 验证从"手工作坊"演变为"可复现、可审计、可治理、可进化"的工程平台。它的壁垒不在"AI 多聪明"，而在 **领域知识的工程化、工具链的深度集成、证据链的系统化、经验的跨 Run 进化**。
+> **一句话总结**：SignOffAI 通过 **L1 基础设施 + L2 七 Agent 调度 + L3 覆盖率决策 + L4 记忆 / L5 蒸馏 + Knowledge Graph 认知层（V2）** 的多层闭环架构，配合 **统一通信（A2A/JSON-RPC）、统一证据链（哈希链 + 五层领域证据）、统一质量守护（三层兜底 + 三条铁律）**，把 IC 验证从"手工作坊"演变为"可复现、可审计、可治理、可进化"的工程平台。它的壁垒不在"AI 多聪明"，而在 **领域知识的工程化、工具链的深度集成、证据链的系统化、经验的跨 Run 进化、验证语义的知识图谱化**。
 这套架构已经具备了与 Siemens Fuse、ChatDV 等竞品对标的基本面，并且在 "签核证据链"、"领域语义驱动的决策层" 和 "跨 Run 的 L4/L5 成长" 三个方向上有独特深度。
 
 它最大的优势不是"比 Claude Code 更聪明"，而是 "比 Claude Code 更懂芯片验证——更懂覆盖率、更懂 UVM、更懂签核、更懂怎么让老板签字"。

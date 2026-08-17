@@ -85,7 +85,7 @@ def ensure_uvm_tool_registry():
     if "_registry_instance" in dir() and _registry_instance is not None:
         return _registry_instance
 
-    from src.core.tool_system import Tool, ToolRegistry
+    from src.layers.l2_orchestration.communication.tool_system import Tool, ToolRegistry
     registry = ToolRegistry()
     registry.register_many([
         Tool("find_spec_yaml",

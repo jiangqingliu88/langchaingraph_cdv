@@ -128,17 +128,27 @@ class {{ agent.name }}_driver extends uvm_driver #({{ agent.name }}_seq_item);
   // (custom_drive_logic placeholder filled by LLM with protocol timing)
   virtual task drive_transaction({{ agent.name }}_seq_item req);
     // Copy expected values from item BEFORE driving
-    // Only copy fields that correspond to OUTPUT ports (TB drives these)
+    // 拷贝「被 driver 驱动的字段」（isrand=True）：既包括直接映射到 output 端口的，
+    // 也包括经 custom_drive_logic 串行化的字段（如 uart 的 data → rx）
     {{ agent.name }}_seq_item exp = {{ agent.name }}_seq_item::type_id::create("exp");
 {%- for var in transaction_vars %}
-{%-   set is_output = namespace(found=false) %}
-{%-   for port in ports %}
-{%-     if port.dir == 'output' and port.name == var.name %}{% set is_output.found = true %}{% endif %}
-{%-   endfor %}
-{%-   if is_output.found %}
+{%-   if var.isrand == 'True' %}
+{%-     if var.name in ('valid', 'ready', 'psel', 'penable', 'strobe', 'enable') %}
+    exp.{{ var.name }} = 1'b1;   // strobe 恒断言（否则随机 req 值会导致 expected 与实际驱动不一致）
+{%-     else %}
     exp.{{ var.name }} = req.{{ var.name }};
+{%-     endif %}
 {%-   endif %}
 {%- endfor %}
+
+    // Write expected BEFORE driving so it precedes the monitor's actual.
+    // UART 等串行协议里 monitor 在帧中采样并先写 actual，故 exp 必须先入队，
+    // 否则 scoreboard 的 FIFO 会错位（act 弹走上一帧的 exp）。
+    expected_port.write(exp);
+    m_driven++;
+
+    // Debug: print driven transaction
+    `uvm_info("DRV", $sformatf("DRV: %s driving item #%0d:\n%s", get_name(), m_driven, req.sprint()), UVM_MEDIUM)
 
 {% if agent.custom_drive_logic %}
     // === LLM-generated protocol timing ===
@@ -153,7 +163,7 @@ class {{ agent.name }}_driver extends uvm_driver #({{ agent.name }}_seq_item);
 {%-   endif %}
 {%- endfor %}
 {%- for port in ports %}
-{%-   if port.dir == 'output' %}
+{%-   if port.dir == 'output' and port.name not in ('valid', 'ready', 'psel', 'penable', 'strobe', 'enable') %}
 {%-     set port_in_txn = namespace(found=false) %}
 {%-     for var in transaction_vars %}
 {%-       if var.name == port.name %}{% set port_in_txn.found = true %}{% endif %}
@@ -164,13 +174,6 @@ class {{ agent.name }}_driver extends uvm_driver #({{ agent.name }}_seq_item);
 {%-   endif %}
 {%- endfor %}
 {% endif %}
-
-    // Write expected NOW (before next @(vif.cb) where monitor samples)
-    expected_port.write(exp);
-    m_driven++;
-
-    // Debug: print driven transaction
-    `uvm_info("DRV", $sformatf("DRV: %s driven item #%0d:\n%s", get_name(), m_driven, req.sprint()), UVM_MEDIUM)
 
 {%- set has_strobe = namespace(found=false) %}
 {%- for port in ports %}

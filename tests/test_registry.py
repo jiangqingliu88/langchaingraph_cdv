@@ -1,6 +1,6 @@
 """Registry tests"""
-from src.core.registry import AgentRegistry, register_agent
-from src.core.base import BaseAgent
+from src.layers.l2_orchestration.registry import AgentRegistry, register_agent
+from src.layers.l2_orchestration.base import BaseAgent
 
 class MockAgent(BaseAgent):
     task_type = "test"

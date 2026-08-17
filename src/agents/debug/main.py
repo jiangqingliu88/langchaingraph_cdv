@@ -10,8 +10,8 @@ Phase 5: Verify — 重跑失败 case 验证修复
 from typing import Dict, List, Any
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from src.core.base import BaseAgent, AgentResult
-from src.core.registry import register_agent
+from src.layers.l2_orchestration.agents.base import BaseAgent, AgentResult
+from src.layers.l2_orchestration.agents.registry import register_agent
 from src.tools.debug_tools.main import (
     DebugTools, _classify_error, _fingerprint,
     collect_sim_log, collect_compile_log,
@@ -84,6 +84,20 @@ class DebugAgent(BaseAgent):
         output_dir = task.get("output_dir", "output")
         od = Path(output_dir)
 
+        # ── 编译/elaboration 错误定向修复：编排层把 compile_error 传进来，直接 LLM 重写出错文件 ──
+        _params = task.get("params", {}) if isinstance(task.get("params"), dict) else {}
+        _ce = _params.get("compile_error") if isinstance(_params.get("compile_error"), dict) else None
+        if _ce:
+            _fname = _ce.get("file", "")
+            _msg = _ce.get("message", "")
+            _fixed = self._llm_regenerate_file(str(od), _fname, _msg) if _fname else False
+            logger.info(f"debug 编译错误定向修复: file={_fname} fixed={_fixed}")
+            return AgentResult(success=True, data={
+                "debug": {"compile_fix": {"file": _fname, "fixed": _fixed,
+                                          "message": _msg[:150]}},
+                "score": 85 if _fixed else 20,
+            })
+
         # ── Phase 1: Collect ──
         sim_result = json.loads(collect_sim_log(output_dir))
         compile_result = json.loads(collect_compile_log(output_dir))
@@ -144,7 +158,7 @@ class DebugAgent(BaseAgent):
             )
 
         # ── Phase 3.5: 经验库命中（debug 成长：记忆复用 + 教训升级）──
-        from src.core.debug_experience import get_debug_experience_store
+        from src.layers.l4_memory.debug_experience import get_debug_experience_store
         experience = get_debug_experience_store()
         _reused_fps = {}      # fp -> experience（已验证修复，直接复用）
         _escalated_fps = {}   # fp -> experience（验证失败的修复，升级人工）
@@ -193,6 +207,20 @@ class DebugAgent(BaseAgent):
                         "file_modified": fix_result.get("file_modified"),
                         "source": _source,
                     })
+            else:
+                # ── LLM 兜底：模板无匹配 → call_llm 重写出错文件（真修复 + 写回，不是只记假设）──
+                _fname = err.get("file", "")
+                if _fname and self._llm_regenerate_file(output_dir, _fname, msg):
+                    fixes_applied.append({
+                        "fingerprint": fp,
+                        "error": msg[:150],
+                        "fix_name": "llm_regenerate",
+                        "file_modified": _fname,
+                        "source": "llm",
+                    })
+                    experience.record(
+                        fp, category=err["classification"]["category"],
+                        root_cause="", fix_name="llm_regenerate", fix_patch="")
 
         # ── Phase 5: Verify (rerun if fixes applied) ──
         verified = []
@@ -224,6 +252,37 @@ class DebugAgent(BaseAgent):
             "verified": sum(1 for v in verified if v.get("status") == "PASS"),
             "failed": sum(1 for v in verified if v.get("status") != "PASS"),
         }
+
+        # ── V2 Knowledge Graph：bug/fix 落库（跨 run 沉淀，供图溯源）──
+        try:
+            from src.layers.l3_decision.knowledge.persistence import record_bugs_and_fixes
+            _bugs = []
+            for _fp, _err in unique.items():
+                _bugs.append({
+                    "bug_id": _fp,
+                    "description": _err.get("message", "")[:200],
+                    "affected_signal": "",   # 从消息/文件提取，暂空
+                    "affected_feature": (_err.get("classification") or {}).get("category", ""),
+                    "severity": _err.get("severity", "error"),
+                })
+            _fixes = [{"bug_id": f["fingerprint"], "fix_id": f.get("fix_name", ""),
+                       "description": f.get("error", "")[:200]} for f in fixes_applied]
+            await record_bugs_and_fixes(_bugs, _fixes, run_id=str(od.name))
+            logger.info(f"bug/fix 落库: {len(_bugs)} bug, {len(_fixes)} fix")
+        except Exception as e:
+            logger.warning(f"bug/fix 落库失败: {e}")
+
+        # ── Event Bus：发布 BUG_DETECTED（异步通知订阅者：KG / 决策 / 其它 Agent）──
+        try:
+            from src.layers.l2_orchestration.communication.verification_events import publish_bug_detected
+            for _fp, _err in list(unique.items())[:5]:
+                await publish_bug_detected(
+                    signature=_fp,
+                    signal="",
+                    category=(_err.get("classification") or {}).get("category", ""),
+                )
+        except Exception as e:
+            logger.warning(f"发布 BUG_DETECTED 失败: {e}")
 
         debug_result = {
             "phase": {"collect": "done", "classify": "done", "locate": "done",
@@ -346,7 +405,7 @@ class DebugAgent(BaseAgent):
     def _lookup_debug_experience(output_dir: str, fp: str):
         """查 debug 经验库（sqlite，命中且 confidence>=0.8 才复用）。"""
         try:
-            from src.core.debug_experience import get_debug_experience_store
+            from src.layers.l4_memory.debug_experience import get_debug_experience_store
             return get_debug_experience_store().lookup(fp)
         except Exception:
             return None
@@ -360,7 +419,7 @@ class DebugAgent(BaseAgent):
         同类根因经验，返回 Top-3 供诊断参考。
         """
         try:
-            from src.core.growth import lookup_experience_by_category
+            from src.layers.l5_evolution.growth import lookup_experience_by_category
             exps = lookup_experience_by_category(root_cause)
             if not exps:
                 return []
@@ -376,7 +435,7 @@ class DebugAgent(BaseAgent):
         """把诊断结论沉淀到 debug 经验库（sqlite）。"""
         try:
             import hashlib
-            from src.core.debug_experience import get_debug_experience_store
+            from src.layers.l4_memory.debug_experience import get_debug_experience_store
             fp = err.get("fingerprint", "") or hashlib.md5(
                 err.get("message", "").encode()).hexdigest()[:12]
             v = diag["verdict"]
@@ -420,3 +479,33 @@ class DebugAgent(BaseAgent):
                     model = v
                 exp = v
         return dut, model, exp
+
+    @staticmethod
+    def _llm_regenerate_file(output_dir: str, fname: str, error_msg: str) -> bool:
+        """LLM 兜底修复：读出错文件 → call_llm 产出修正版 → 写回。返回是否写回。
+
+        这是 debug agent 的「真修复」落地：模板 auto_fix 覆盖不到的错误（RTL 多驱动、
+        virtual interface 参数化等）由 LLM 重写出错文件，而非只记录假设。
+        """
+        try:
+            from src.tools.lib.llm_refine import call_llm
+            od = Path(output_dir)
+            fpath = od / fname
+            if not fpath.exists():
+                cands = list(od.rglob(fname))
+                fpath = cands[0] if cands else None
+            if fpath is None:
+                return False
+            code = fpath.read_text(encoding="utf-8", errors="replace")
+            prompt = (
+                "你是 IC 验证/设计工程师。下面 SystemVerilog 文件有编译/elaboration 错误。\n"
+                "只修复报错点，保留模块接口与整体结构，输出完整修正后的文件内容"
+                "（含 module/endmodule 或 class/endclass）。"
+            )
+            fixed = call_llm(prompt, code, error_msg)
+            if not fixed or ("module" not in fixed and "class" not in fixed):
+                return False
+            fpath.write_text(fixed, encoding="utf-8")
+            return True
+        except Exception:
+            return False

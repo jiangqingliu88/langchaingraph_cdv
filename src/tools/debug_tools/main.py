@@ -147,7 +147,7 @@ def _lookup_mature_experience(fp: str) -> dict:
     第二次出现时，不重新模板匹配/LLM 分析，直接从经验库命中修复。
     """
     try:
-        from src.core.debug_experience import get_debug_experience_store
+        from src.layers.l4_memory.debug_experience import get_debug_experience_store
         exp = get_debug_experience_store().lookup(fp)
         # lookup 默认 confidence>=0.8 才返回；再要求 success_count>0（验证过）
         if exp and exp.get("success_count", 0) > 0:

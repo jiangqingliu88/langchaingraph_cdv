@@ -22,9 +22,14 @@ class {{ environment.env_name }} extends uvm_env;
   {{ agent.name }}_agent {{ agent.name }}_agent_h;
 {%- endfor %}
 
-  // Scoreboard 实例
+  // Predictor 实例（SV 行为参考模型）
+{%- for pred in predictors %}
+  {{ pred.name }} {{ pred.name }}_h;
+{%- endfor %}
+
+  // Scoreboard 实例（inorder/outoforder 具体子类）
 {%- for sb in scoreboards %}
-  uvm_scoreboard {{ sb.name }}_h;
+  {{ sb.name }} {{ sb.name }}_h;
 {%- endfor %}
 
   // 功能覆盖率模型（env 级，跨 agent covergroup）
@@ -86,11 +91,15 @@ class {{ environment.env_name }} extends uvm_env;
     uvm_config_db#({{ agent.name }}_config)::set(this, "{{ agent.name }}_agent_h", "cfg", cfg.{{ agent.name }}_cfg);
 {%- endfor %}
 
-    // 创建 Scoreboard
+    // 创建 Predictor（SV 行为参考模型）
+{%- for pred in predictors %}
+    {{ pred.name }}_h = {{ pred.name }}::type_id::create("{{ pred.name }}_h", this);
+{%- endfor %}
+
+    // 创建 Scoreboard（具体子类，用 type_id::create）
 {%- for sb in scoreboards %}
     if (cfg.has_scoreboard) begin
-      // uvm_scoreboard 基类无 type_id，改用 new()
-      {{ sb.name }}_h = new("{{ sb.name }}_h", this);
+      {{ sb.name }}_h = {{ sb.name }}::type_id::create("{{ sb.name }}_h", this);
     end
 {%- endfor %}
 
@@ -109,7 +118,12 @@ class {{ environment.env_name }} extends uvm_env;
 
   virtual function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
-    
+
+    // 连接子 Sequencer 到 Virtual Sequencer（直接赋值，规避 config_db 时序/作用域问题）
+{%- for agent in agents %}
+    virtual_sqr.{{ agent.name }}_sqr = {{ agent.name }}_agent_h.sqr;
+{%- endfor %}
+
     // 连接 Agent Monitor 到 Analysis Ports
 {%- for agent in agents %}
     {{ agent.name }}_agent_h.mon.item_collected_port.connect({{ agent.name }}_agent_ap);
@@ -120,14 +134,23 @@ class {{ environment.env_name }} extends uvm_env;
     {{ agent.name }}_agent_ap.connect(env_cov.{{ agent.name }}_export);
 {%- endfor %}
 
-    // 连接 Analysis Ports 到 Scoreboard（uvm_scoreboard 基类无 analysis_export，需子类化）
-    // TODO: 创建 uvm_scoreboard 子类并注册 uvm_component_utils
+    // 连接输入 agent monitor → Predictor
+{%- for pred in predictors %}
+{%-   if pred.input_from %}
+    {{ pred.input_from }}_agent_h.mon.item_collected_port.connect({{ pred.name }}_h.in_export);
+{%-   endif %}
+{%- endfor %}
+
+    // 连接 Predictor / Monitor → Scoreboard（expected ← 期望来源，actual ← 实际来源）
 {%- for sb in scoreboards %}
-    //if (cfg.has_scoreboard) begin
-{%-   for agent in agents %}
-    //  {{ agent.name }}_agent_ap.connect({{ sb.name }}_h.analysis_export);
-{%-   endfor %}
-    //end
+    if (cfg.has_scoreboard) begin
+{%-   if sb.expected_port %}
+      {{ sb.expected_port }}.connect({{ sb.name }}_h.expected_export);
+{%-   endif %}
+{%-   if sb.actual_port %}
+      {{ sb.actual_port }}.connect({{ sb.name }}_h.actual_export);
+{%-   endif %}
+    end
 {%- endfor %}
 
   endfunction
