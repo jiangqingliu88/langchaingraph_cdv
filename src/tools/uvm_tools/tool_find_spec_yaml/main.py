@@ -910,6 +910,52 @@ def run(spec_text: str) -> str:
     ports:
 {chr(10).join(dut_port_lines)}
 """
+        # ── 参考模型接入（黄金模型命中时）：tb_top 真实实例化 DUT vs 参考模型比对 ──
+        # 修复历史缺口：ref_model_enabled 默认 false → "参考模型比对"从未真正发生。
+        # 现在按 spec 接口匹配黄金库（apb_slave 等），生成端口映射 + 比对输出。
+        try:
+            from src.tools.lib.golden_library import build_ref_model_config
+            _norm_ifaces = []
+            for _iface in (spec.get("interfaces", []) if isinstance(spec, dict) else []) or []:
+                if not isinstance(_iface, dict):
+                    continue
+                if _iface.get("signals"):
+                    # 嵌套格式 {signals: {sig: {direction, width}}}
+                    for _sig, _s in _iface["signals"].items():
+                        _norm_ifaces.append({
+                            "name": _sig,
+                            "direction": (_s or {}).get("direction", "input"),
+                            "protocol": _iface.get("protocol", ""),
+                        })
+                else:
+                    # 扁平格式 {name, direction, protocol}
+                    _norm_ifaces.append({
+                        "name": _iface.get("name", ""),
+                        "direction": _iface.get("direction", "input"),
+                        "protocol": _iface.get("protocol", ""),
+                    })
+            _ref_cfg = build_ref_model_config(
+                module_name, _norm_ifaces,
+                (spec.get("registers") if isinstance(spec, dict) else None) or [])
+            if _ref_cfg:
+                _ref_lines = [
+                    "  ref_model:",
+                    f"    enabled: {str(_ref_cfg['enabled']).lower()}",
+                    f"    module: {_ref_cfg['module']}",
+                    f"    golden: {{ ip: {_ref_cfg['golden']['ip']}, version: {_ref_cfg['golden']['version']} }}",
+                    "    port_map:",
+                ]
+                for _m in _ref_cfg["port_map"]:
+                    _ref_lines.append(
+                        f"      - {{ ref_port: {_m['ref_port']}, dut_port: {_m['dut_port']} }}")
+                _ref_lines.append(
+                    f"    compare_outputs: [{', '.join(_ref_cfg['compare_outputs'])}]")
+                bench_str += "\n".join(_ref_lines) + "\n"
+                print(f"  [find_yaml] 参考模型接入: {_ref_cfg['module']} "
+                      f"({_ref_cfg['golden']['ip']} {_ref_cfg['golden']['version']})")
+        except Exception as e:
+            print(f"  [find_yaml] 参考模型接入失败: {e}")
+
         bench_path = uvm_yaml_archive / "bench.yaml"
         bench_path.write_text(bench_str, encoding="utf-8", errors="replace")
         yaml_files.append(str(bench_path))

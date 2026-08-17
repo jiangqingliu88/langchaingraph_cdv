@@ -154,3 +154,91 @@ def verify_manifest(ip: str, version: str) -> Dict[str, Any]:
         return json.loads(mp.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+# ═══════════════════════════════════════════════════════════
+# bench 接入（tb_top 真实实例化比对）——参考模型端口 → DUT 信号解析
+# ═══════════════════════════════════════════════════════════
+
+# ref_port → 解析规则（先按信号名关键词，再按协议；clock/reset 用协议）
+_GOLDEN_PORT_MAP: Dict[str, Dict[str, Dict[str, Any]]] = {
+    "apb_slave": {
+        "clk":     {"names": ("clk", "pclk"), "protocol": ("clock", "clk")},
+        "rst_n":   {"names": ("rst_n", "preset_n", "rst"), "protocol": ("reset", "rst")},
+        "paddr":   {"names": ("paddr",), "protocol": ()},
+        "pwdata":  {"names": ("pwdata",), "protocol": ()},
+        "prdata":  {"names": ("prdata",), "protocol": ()},
+        "pwrite":  {"names": ("pwrite",), "protocol": ()},
+        "psel":    {"names": ("psel",), "protocol": ()},
+        "penable": {"names": ("penable",), "protocol": ()},
+    },
+    "uart_tx": {
+        "clk":     {"names": ("clk",), "protocol": ("clock", "clk")},
+        "rst_n":   {"names": ("rst_n", "preset_n", "rst"), "protocol": ("reset", "rst")},
+        "tx":      {"names": ("tx", "txd", "sout"), "protocol": ()},
+    },
+    "uart_rx": {
+        "clk":     {"names": ("clk",), "protocol": ("clock", "clk")},
+        "rst_n":   {"names": ("rst_n", "preset_n", "rst"), "protocol": ("reset", "rst")},
+        "rx":      {"names": ("rx", "rxd", "sin"), "protocol": ()},
+    },
+}
+
+# 每个黄金模型可逐拍比对的 DUT 输出端口（参考模型输出 vs DUT 输出）
+_GOLDEN_COMPARE_OUTPUTS: Dict[str, list] = {
+    "apb_slave": ["prdata"],
+    "uart_tx": [],
+    "uart_rx": [],
+}
+
+
+def _resolve_dut_port(interfaces: list, rule: Dict[str, Any]) -> Optional[str]:
+    """按规则从规范接口列表解析 DUT 信号名：名字关键词优先，其次协议（clock/reset）。
+
+    返回去位宽后缀的信号名（paddr[7:0] → paddr），保证 tb_top 端口连接是合法 SV。
+    """
+    def _base(name: str) -> str:
+        return str(name).split("[")[0]
+
+    # 1. 名字关键词
+    for i in interfaces:
+        nm = str(i.get("name", "")).lower()
+        if any(k in nm for k in rule.get("names", ())):
+            return _base(i.get("name", ""))
+    # 2. 协议（仅当该协议在接口中唯一时使用——避免多个 APB 信号全部匹配到第一个）
+    proto_hits = [i for i in interfaces
+                  if str(i.get("protocol", "")).lower() in rule.get("protocol", ())]
+    if len(proto_hits) == 1:
+        return _base(proto_hits[0].get("name", ""))
+    return None
+
+
+def build_ref_model_config(module_name: str, interfaces: list,
+                           registers: list = None) -> Optional[Dict[str, Any]]:
+    """为 bench.yaml 生成 ref_model 接入配置（黄金模型命中时）。
+
+    interfaces: 规范列表 [{name, direction, protocol}]。
+    返回 {"enabled", "module", "golden", "port_map", "compare_outputs"} 或 None（无命中）。
+    """
+    design_arch = {"module_name": module_name, "interfaces": interfaces,
+                   "registers": registers or []}
+    hit = match_golden(design_arch)
+    if not hit:
+        return None
+    meta = _GOLDEN_PORT_MAP.get(hit["ip"])
+    if not meta:
+        return None
+    port_map = []
+    for ref_port, rule in meta.items():
+        dut_port = _resolve_dut_port(interfaces, rule)
+        if dut_port:
+            port_map.append({"ref_port": ref_port, "dut_port": dut_port})
+    if not port_map:
+        return None
+    return {
+        "enabled": True,
+        "module": f"{module_name}_ref_model",
+        "golden": {"ip": hit["ip"], "version": hit["version"]},
+        "port_map": port_map,
+        "compare_outputs": _GOLDEN_COMPARE_OUTPUTS.get(hit["ip"], []),
+    }

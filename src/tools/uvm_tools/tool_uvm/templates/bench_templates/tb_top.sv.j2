@@ -62,20 +62,27 @@ module {{ bench.name }}_tb_top;
   );
 {%- endif %}
 
-  // ── Reference Model Compare（DUT vs SystemVerilog 参考模型，逐拍对比）──
-  // 默认关闭：参考模型端口需跟随 DUT 接口（当前 model 占位 ALU 不匹配，比对无意义）。
-  // 待 model agent 按 spec 接口生成参考模型后，再按实际端口连接比对。
-{%- if bench.ref_model_enabled | default(false) %}
-  wire [31:0] ref_result;
-  {{ bench.dut.module }}_ref_model u_ref_model(
-    .clk(clk), .rst_n(rst_n),
-    .opcode(opcode), .operand_a(operand_a), .operand_b(operand_b),
-    .result(ref_result)
+  // ── Reference Model Compare（DUT vs 黄金参考模型，逐拍对比）──
+  // 由 find_spec_yaml 按 spec 接口匹配黄金库自动接入（bench.ref_model）；
+  // 端口映射（clk→pclk 等）与比对输出（prdata 等）来自黄金模型元数据。
+  // 无黄金命中时该块不渲染（诚实：不假装比对）。
+{%- if bench.ref_model and bench.ref_model.enabled %}
+  {{ bench.ref_model.module }} u_ref_model (
+{%-   for m in bench.ref_model.port_map %}
+    .{{ m.ref_port }}({{ m.dut_port }}){% if not loop.last %},{% endif %}
+
+{%-   endfor %}
   );
   // mismatch 报 expected(参考模型)/actual(DUT)，供信号级诊断提取三方值
-  always @(posedge clk) begin
-    if (rst_n && result !== ref_result) begin
-      `uvm_error("REF_CMP", $sformatf("mismatch: expected=0x%0h actual=0x%0h", ref_result, result))
+{%-   set cmp_clk = bench.clk_rst.clocks[0].name if bench.clk_rst.clocks else "clk" %}
+{%-   set cmp_rst = bench.clk_rst.resets[0].name if bench.clk_rst.resets else "rst_n" %}
+  always @(posedge {{ cmp_clk }}) begin
+    if ({{ cmp_rst }}) begin
+{%-   for out in bench.ref_model.compare_outputs %}
+      if ({{ out }} !== u_ref_model.{{ out }}) begin
+        `uvm_error("REF_CMP", $sformatf("mismatch {{ out }}: expected=0x%0h actual=0x%0h", u_ref_model.{{ out }}, {{ out }}))
+      end
+{%-   endfor %}
     end
   end
 {%- endif %}
