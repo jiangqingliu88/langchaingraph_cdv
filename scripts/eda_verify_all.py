@@ -67,13 +67,20 @@ def main() -> int:
             results[ip] = "FAIL"
             print(f"[{ip}] 验证 FAIL —— 该模型禁止入索引（入库必须验证）")
 
-    # ── 3. 真实闭环 ──
+    # ── 3. 真实闭环（两个规格：apb_uart 基础 + apb_uart_regs 复合参考模型路径）──
     print("\n" + "=" * 60)
     print("3. 真实 EDA 闭环验收")
     print("=" * 60)
-    rc, out = run([str(PYTHON), "scripts/e2e_check.py"])
-    print(out.strip()[-1200:])
-    e2e_status = "PASS" if rc == 0 else ("FAIL" if rc == 1 else "EDA_MISSING")
+    e2e_status = "PASS"
+    for spec_rel in ("specs/apb_uart/apb_uart_spec.md",
+                     "specs/apb_uart_regs/apb_uart_regs_spec.md"):
+        print(f"\n--- e2e: {spec_rel} ---")
+        rc, out = run([str(PYTHON), "scripts/e2e_check.py", spec_rel])
+        print(out.strip()[-900:])
+        st = "PASS" if rc == 0 else ("FAIL" if rc == 1 else "EDA_MISSING")
+        e2e_status = st if e2e_status == "PASS" else e2e_status
+        if st == "FAIL":
+            e2e_status = "FAIL"
 
     # ── 4. 汇总 ──
     print("\n" + "=" * 60)

@@ -19,6 +19,7 @@ APB_INTERFACES = [
     {"name": "penable", "direction": "input", "protocol": "APB"},
     {"name": "tx", "direction": "output", "protocol": "UART"},
     {"name": "rx", "direction": "input", "protocol": "UART"},
+    {"name": "irq", "direction": "output", "protocol": "Intr"},
 ]
 
 
@@ -112,3 +113,60 @@ def test_tb_top_no_ref_model_when_not_matched():
     sv = _render_tb_top(_minimal_bench({"enabled": False}), agents=[])
     assert "u_ref_model" not in sv
     assert "REF_CMP" not in sv
+
+
+# ═══════════════════════════════════════════════════════
+# 复合参考模型（APB+UART + 寄存器表 → 多黄金 IP 接线）
+# ═══════════════════════════════════════════════════════
+
+REGS = [
+    {"offset": "0x00", "name": "TX_DATA", "width": 8, "access": "RW", "description": "写触发发送"},
+    {"offset": "0x01", "name": "RX_DATA", "width": 8, "access": "RO", "description": "接收数据"},
+    {"offset": "0x02", "name": "STATUS", "width": 8, "access": "RO", "description": "状态字"},
+    {"offset": "0x03", "name": "BAUD_DIV", "width": 16, "access": "RW", "description": "波特率分频"},
+    {"offset": "0x04", "name": "IRQ_EN", "width": 8, "access": "RW", "description": "中断使能"},
+]
+
+
+def test_composite_ref_model_generated():
+    """寄存器表含 tx_data/rx_data → 生成复合参考模型（多黄金 IP 实例化 + 接线）。"""
+    from src.tools.lib.golden_library import build_composite_ref_model
+    sv = build_composite_ref_model("apb_uart", APB_INTERFACES, REGS)
+    assert sv is not None
+    assert "module apb_uart_ref_model" in sv
+    # 多黄金 IP 实例化
+    assert "uart_tx_golden" in sv
+    assert "uart_rx_golden" in sv
+    # 寄存器语义 + 触发接线
+    assert "reg_tx_data" in sv
+    assert "reg_rx_data" in sv
+    assert "reg_irq_en" in sv
+    assert "0x00: reg_tx_data <= pwdata;" in sv
+    assert "0x01: prdata = reg_rx_data;" in sv
+    # UART 触发与回写
+    assert "paddr == 0x00" in sv        # 写 TX_DATA 触发 uart_tx
+    assert "rx_valid) reg_rx_data <= rx_data_w" in sv or "rx_valid) reg_rx_data <=" in sv
+    # irq 门控（IRQ_EN 寄存器存在）
+    assert "& reg_irq_en[0]" in sv
+    # 无 a+b 模板痕迹
+    assert "operand_a" not in sv
+
+
+def test_composite_requires_tx_rx_registers():
+    """寄存器表缺 tx/rx 数据寄存器 → 不生成复合（诚实：无法接线，回退单模型）。"""
+    from src.tools.lib.golden_library import build_composite_ref_model
+    partial = [{"offset": "0x00", "name": "CTRL", "width": 8, "access": "RW"}]
+    assert build_composite_ref_model("dut", APB_INTERFACES, partial) is None
+    assert build_composite_ref_model("dut", APB_INTERFACES, []) is None
+
+
+def test_ref_model_config_composite():
+    """bench 接入配置：复合模型 → golden=composite + 扩展比对输出（tx/irq）。"""
+    cfg = build_ref_model_config("apb_uart", APB_INTERFACES, REGS)
+    assert cfg is not None
+    assert cfg["golden"]["ip"] == "composite"
+    assert "uart_tx" in cfg["golden"]["parts"]
+    assert "tx" in cfg["compare_outputs"]
+    assert "irq" in cfg["compare_outputs"]
+    ref_ports = {m["ref_port"] for m in cfg["port_map"]}
+    assert {"tx", "rx", "irq"} <= ref_ports

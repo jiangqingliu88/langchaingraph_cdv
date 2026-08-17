@@ -22,8 +22,6 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 SPEC = ROOT / "specs" / "apb_uart" / "apb_uart_spec.md"
 PYTHON = ROOT / "venv" / "Scripts" / "python.exe"
-
-
 def env_report() -> dict:
     eda = {t: bool(shutil.which(t)) for t in ("vlog", "vsim", "vcover")}
     has_env = (ROOT / ".env").exists()
@@ -31,6 +29,8 @@ def env_report() -> dict:
 
 
 def main() -> int:
+    # 可指定规格（默认 apb_uart）：python e2e_check.py specs/apb_uart_regs/apb_uart_regs_spec.md
+    spec_file = Path(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].endswith(".md") else SPEC
     rep = env_report()
     print("=== 环境报告 ===")
     print(json.dumps(rep, indent=2, ensure_ascii=False))
@@ -41,7 +41,7 @@ def main() -> int:
         print("\n[info] 检测到 EDA 工具 → 期望闭环正常执行")
 
     cmd = [str(PYTHON), "-m", "src.cli.commands", "verify",
-           str(SPEC), "--max-rounds", "3", "--json"]
+           str(spec_file), "--max-rounds", "3", "--json"]
     print(f"\n=== 执行: {' '.join(cmd)} ===")
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
                        encoding="utf-8", errors="replace", timeout=1800)

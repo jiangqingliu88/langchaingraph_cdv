@@ -1,5 +1,6 @@
 """模型智能体 —— 多语言参考模型（cpp/python/systemverilog/verilog）"""
 from typing import Dict, Any
+import hashlib
 import json
 from pathlib import Path
 
@@ -246,26 +247,44 @@ class ModelAgent(BaseAgent):
 
         # ── 动作: generate / update（生成新版本，旧版本并存）──
         interfaces = design_arch.get("interfaces", [])
+        regs_all = design_arch.get("registers", [])
         rendered = None
         golden_ref = {}
         # 优先黄金模型库（真实、可验证、可追溯）；LLM/模板只做选择与参数化
         if model_type == "systemverilog":
             try:
-                from src.tools.lib.golden_library import match_golden, load_golden, parameterize
-                hit = match_golden(design_arch)
-                if hit:
-                    sv = parameterize(load_golden(hit["ip"], hit["version"]), module, hit["params"])
-                    golden_ref = {"ip": hit["ip"], "version": hit["version"],
-                                  "sha256": hit["sha256"], "params": hit["params"]}
-                    rendered = {"model_type": "systemverilog", "source_code": sv,
+                from src.tools.lib.golden_library import (
+                    match_golden, load_golden, parameterize,
+                    build_composite_ref_model)
+                # 1) 复合参考模型：APB+UART 且寄存器表可接线 → 多黄金 IP 实例化
+                composite_sv = build_composite_ref_model(module, interfaces, regs_all)
+                if composite_sv:
+                    golden_ref = {"ip": "composite",
+                                  "parts": ["apb_slave", "uart_tx", "uart_rx", "irq_gen"],
+                                  "sha256": hashlib.sha256(
+                                      composite_sv.encode("utf-8")).hexdigest()}
+                    rendered = {"model_type": "systemverilog", "source_code": composite_sv,
                                 "file": f"{module}_ref_model.sv",
                                 "placeholder": False, "golden_ref": golden_ref}
-                    logger.info(f"黄金模型命中: {hit['ip']} {hit['version']} "
-                                f"(sha256={hit['sha256'][:12]}) → {module}_ref_model.sv")
+                    logger.info(f"复合参考模型生成: {module}_ref_model.sv "
+                                f"(apb_slave+uart_tx+uart_rx, sha256={golden_ref['sha256'][:12]})")
+                else:
+                    # 2) 单黄金模型：按 spec 接口匹配
+                    hit = match_golden(design_arch)
+                    if hit:
+                        sv = parameterize(load_golden(hit["ip"], hit["version"]),
+                                          module, hit["params"])
+                        golden_ref = {"ip": hit["ip"], "version": hit["version"],
+                                      "sha256": hit["sha256"], "params": hit["params"]}
+                        rendered = {"model_type": "systemverilog", "source_code": sv,
+                                    "file": f"{module}_ref_model.sv",
+                                    "placeholder": False, "golden_ref": golden_ref}
+                        logger.info(f"黄金模型命中: {hit['ip']} {hit['version']} "
+                                    f"(sha256={hit['sha256'][:12]}) → {module}_ref_model.sv")
             except Exception as e:
                 logger.warning(f"黄金模型匹配失败: {e}")
         if rendered is None:
-            rendered = _render(model_type, module, ops, regs, interfaces)
+            rendered = _render(model_type, module, ops, regs_all, interfaces)
 
         # 版本管理: 读取当前版本号，+1 生成新版本
         model_dir = output_dir / "model"

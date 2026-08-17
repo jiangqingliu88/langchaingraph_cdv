@@ -938,11 +938,18 @@ def run(spec_text: str) -> str:
                 module_name, _norm_ifaces,
                 (spec.get("registers") if isinstance(spec, dict) else None) or [])
             if _ref_cfg:
+                _g = _ref_cfg.get("golden", {})
+                _g_str = f"{{ ip: {_g.get('ip', '')}"
+                if _g.get("version"):
+                    _g_str += f", version: {_g['version']}"
+                if _g.get("parts"):
+                    _g_str += f", parts: [{', '.join(_g['parts'])}]"
+                _g_str += " }"
                 _ref_lines = [
                     "  ref_model:",
                     f"    enabled: {str(_ref_cfg['enabled']).lower()}",
                     f"    module: {_ref_cfg['module']}",
-                    f"    golden: {{ ip: {_ref_cfg['golden']['ip']}, version: {_ref_cfg['golden']['version']} }}",
+                    f"    golden: {_g_str}",
                     "    port_map:",
                 ]
                 for _m in _ref_cfg["port_map"]:

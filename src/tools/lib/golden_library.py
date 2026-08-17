@@ -242,6 +242,7 @@ def build_ref_model_config(module_name: str, interfaces: list,
 
     interfaces: 规范列表 [{name, direction, protocol}]。
     返回 {"enabled", "module", "golden", "port_map", "compare_outputs"} 或 None（无命中）。
+    复合参考模型（APB+UART 多黄金 IP 实例化）可接线时优先，否则单黄金模型。
     """
     design_arch = {"module_name": module_name, "interfaces": interfaces,
                    "registers": registers or []}
@@ -258,10 +259,199 @@ def build_ref_model_config(module_name: str, interfaces: list,
             port_map.append({"ref_port": ref_port, "dut_port": dut_port})
     if not port_map:
         return None
+    compare_outputs = list(_GOLDEN_COMPARE_OUTPUTS.get(hit["ip"], []))
+
+    # ── 复合参考模型：APB+UART 设计且寄存器表可接线 → 扩展端口映射与比对输出 ──
+    plan = _composite_plan(interfaces, registers)
+    if plan:
+        extra_map = {
+            "tx":  _resolve_dut_port(interfaces, {"names": ("tx", "txd", "sout"), "protocol": ()}),
+            "rx":  _resolve_dut_port(interfaces, {"names": ("rx", "rxd", "sin"), "protocol": ()}),
+            "irq": _resolve_dut_port(interfaces, {"names": ("irq", "intr"), "protocol": ()}),
+        }
+        for ref_port, dut_port in extra_map.items():
+            if dut_port and not any(m["ref_port"] == ref_port for m in port_map):
+                port_map.append({"ref_port": ref_port, "dut_port": dut_port})
+        for out in ("tx", "irq"):
+            if extra_map.get(out) and out not in compare_outputs:
+                compare_outputs.append(out)
+        return {
+            "enabled": True,
+            "module": f"{module_name}_ref_model",
+            "golden": {"ip": "composite",
+                       "parts": ["apb_slave", "uart_tx", "uart_rx"]
+                                + (["irq_gen"] if plan.get("irq_reg") else [])},
+            "port_map": port_map,
+            "compare_outputs": compare_outputs,
+        }
     return {
         "enabled": True,
         "module": f"{module_name}_ref_model",
         "golden": {"ip": hit["ip"], "version": hit["version"]},
         "port_map": port_map,
-        "compare_outputs": _GOLDEN_COMPARE_OUTPUTS.get(hit["ip"], []),
+        "compare_outputs": compare_outputs,
     }
+
+
+# ═══════════════════════════════════════════════════════════
+# 复合参考模型：APB 寄存器 + uart_tx + uart_rx（寄存器名驱动接线）
+# ═══════════════════════════════════════════════════════════
+
+def _classify_register(reg: dict) -> str:
+    """按寄存器名分类角色：tx_data/rx_data/irq_en/baud/status/other。"""
+    name = str(reg.get("name", "")).lower()
+    if "irq" in name or "intr" in name:
+        return "irq_en" if any(k in name for k in ("en", "enable", "mask")) else "irq_status"
+    if "baud" in name:
+        return "baud"
+    if "status" in name or "state" in name:
+        return "status"
+    if "tx" in name or "tdata" in name:
+        return "tx_data"
+    if "rx" in name or "rdata" in name:
+        return "rx_data"
+    return "other"
+
+
+def _composite_plan(interfaces: list, registers: list) -> Optional[Dict[str, Any]]:
+    """判断能否生成复合参考模型（诚实接线前提：寄存器表 + tx_data/rx_data 寄存器）。"""
+    regs = [r for r in (registers or []) if isinstance(r, dict) and r.get("name")]
+    if not regs:
+        return None
+    roles = {}
+    for r in regs:
+        roles.setdefault(_classify_register(r), r)
+    tx_reg, rx_reg = roles.get("tx_data"), roles.get("rx_data")
+    if not (tx_reg and rx_reg):
+        return None  # 无 tx/rx 数据寄存器 → 无法接线 uart，回退单模型
+    data_w, addr_w = 8, 8
+    for i in (interfaces or []):
+        if not isinstance(i, dict):
+            continue
+        nm = str(i.get("name", "")).lower()
+        try:
+            w = int(i.get("data_width", i.get("width", 1)) or 1)
+        except (TypeError, ValueError):
+            continue
+        if "paddr" in nm:
+            addr_w = max(addr_w, w)
+        elif "pwdata" in nm or "prdata" in nm:
+            data_w = max(data_w, w)
+    return {"regs": regs, "roles": roles, "tx_reg": tx_reg, "rx_reg": rx_reg,
+            "irq_reg": roles.get("irq_en"), "data_w": data_w, "addr_w": addr_w}
+
+
+def build_composite_ref_model(module_name: str, interfaces: list,
+                              registers: list) -> Optional[str]:
+    """生成复合参考模型 SV（APB 寄存器 + uart_tx + uart_rx + 可选 irq_gen 接线）。
+
+    端口使用黄金风格名（clk/rst_n/paddr/.../tx/rx/irq），与 bench ref_model 端口映射兼容。
+    仅当 _composite_plan 可诚实接线时返回 SV；否则 None（回退单黄金模型）。
+    """
+    plan = _composite_plan(interfaces, registers)
+    if not plan:
+        return None
+    regs, roles = plan["regs"], plan["roles"]
+    tx_reg, rx_reg = plan["tx_reg"], plan["rx_reg"]
+    irq_reg = plan["irq_reg"]
+    data_w, addr_w = plan["data_w"], plan["addr_w"]
+
+    def _reg_name(r: dict) -> str:
+        return str(r["name"]).replace(" ", "_").lower()
+
+    # 寄存器状态声明 + 读写 case（RO 寄存器不生成写分支）
+    state_lines, write_case, read_case = [], [], []
+    for r in regs:
+        rn = _reg_name(r)
+        try:
+            w = int(r.get("width", data_w) or data_w)
+        except (TypeError, ValueError):
+            w = data_w
+        offset = str(r.get("offset", "0x00"))
+        access = str(r.get("access", "RW")).upper()
+        state_lines.append(f"    logic [{w - 1}:0] reg_{rn} = '0;  // {offset} {access}")
+        if access != "RO":
+            write_case.append(f"          {offset}: reg_{rn} <= pwdata;")
+        read_case.append(f"          {offset}: prdata = reg_{rn};")
+
+    tx_name = _reg_name(tx_reg)
+    rx_name = _reg_name(rx_reg)
+    tx_offset = str(tx_reg.get("offset", "0x00"))
+    rx_offset = str(rx_reg.get("offset", "0x00"))
+
+    # 预计算复位赋值（避免嵌套 f-string 转义，Python 3.11 限制）
+    reset_assigns = "\n".join(
+        f"            reg_{_reg_name(r)} <= '0;" for r in regs)
+
+    # 可选：irq_en 寄存器门控
+    irq_gate = ""
+    if irq_reg:
+        irq_gate = f"& reg_{_reg_name(irq_reg)}[0]"
+
+    sv = f"""// Composite Golden Reference Model（APB 寄存器 + UART TX/RX 接线）
+// 由 spec.registers 寄存器名驱动接线（tx_data/rx_data 寄存器识别），模型不可变（源自黄金库）。
+module {module_name}_ref_model (
+    input  logic                  clk,
+    input  logic                  rst_n,
+    input  logic [{addr_w - 1}:0] paddr,
+    input  logic [{data_w - 1}:0] pwdata,
+    input  logic                  pwrite,
+    input  logic                  psel,
+    input  logic                  penable,
+    output logic [{data_w - 1}:0] prdata,
+    input  logic                  rx,
+    output logic                  tx,
+    output logic                  irq
+);
+    // ── APB 寄存器（spec.registers 真实语义）──
+{chr(10).join(state_lines)}
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+{reset_assigns}
+        end else if (psel && penable && pwrite) begin
+            case (paddr)
+{chr(10).join(write_case)}
+                default: ;
+            endcase
+        end
+    end
+
+    always_comb begin
+        prdata = '0;
+        if (psel && !pwrite) begin
+            case (paddr)
+{chr(10).join(read_case)}
+                default: prdata = '0;
+            endcase
+        end
+    end
+
+    // ── uart_tx（APB 写 TX 数据寄存器触发）──
+    // 注：BAUD_DIV 为参数默认 10416（9600@100MHz）；baud 寄存器未做运行时接线（黄金模型参数限制）
+    logic tx_start_p, tx_busy, tx_busy_d, tx_done;
+    assign tx_start_p = (psel && penable && pwrite && paddr == {tx_offset});
+    uart_tx_golden #(.DATA_BITS(8), .BAUD_DIV(10416)) u_uart_tx (
+        .clk(clk), .rst_n(rst_n), .tx_start(tx_start_p),
+        .tx_data(reg_{tx_name}), .tx(tx), .tx_busy(tx_busy));
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) tx_busy_d <= 1'b0;
+        else tx_busy_d <= tx_busy;
+    end
+    assign tx_done = tx_busy_d && !tx_busy;
+
+    // ── uart_rx（rx_data → RX 数据寄存器）──
+    logic rx_valid;
+    logic [7:0] rx_data_w;
+    uart_rx_golden #(.DATA_BITS(8), .BAUD_DIV(10416)) u_uart_rx (
+        .clk(clk), .rst_n(rst_n), .rx(rx), .rx_data(rx_data_w), .rx_valid(rx_valid));
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) reg_{rx_name} <= '0;
+        else if (rx_valid) reg_{rx_name} <= rx_data_w;
+    end
+
+    // ── irq：事件驱动（rx_valid | tx_done），有 irq_en 寄存器则门控 ──
+    assign irq = (rx_valid | tx_done){irq_gate};
+endmodule
+"""
+    return sv
