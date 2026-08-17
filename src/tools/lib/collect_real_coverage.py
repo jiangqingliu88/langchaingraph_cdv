@@ -5,7 +5,14 @@
     python -m src.tools.lib.collect_real_coverage <output_dir> [--top apb_uart_bench_tb_top]
 """
 import os, subprocess, json, sys, re
+import builtins
 from pathlib import Path
+
+
+def print(*args, **kwargs):
+    """本模块诊断日志默认写 stderr（stdout 保留给业务输出/--json，不被污染）。"""
+    kwargs.setdefault("file", sys.stderr)
+    builtins.print(*args, **kwargs)
 
 
 def _questa():

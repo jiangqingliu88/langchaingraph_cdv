@@ -84,6 +84,22 @@ class DebugAgent(BaseAgent):
         output_dir = task.get("output_dir", "output")
         od = Path(output_dir)
 
+        # ── Phase 0: EDA 可用性检查（失败响亮：没有 EDA 工具就没有任何诊断证据）──
+        # 历史 bug：EDA 缺失导致无日志 → "No errors found" 95 分假通过。
+        # 现在必须先确认 EDA 可用，否则返回 EDA_MISSING（score 0，success=False）。
+        import shutil
+        eda_found = [t for t in ("vlog", "vsim") if shutil.which(t)]
+        if not eda_found:
+            return AgentResult(success=False, data={
+                "debug": {
+                    "status": "EDA_MISSING",
+                    "message": "未检测到 EDA 工具（vlog/vsim）。无法执行编译仿真，也就没有任何诊断证据。"
+                               "请安装 QuestaSim 并加入 PATH，或在 .env 中配置 EDA 路径。",
+                    "eda_tools_found": eda_found,
+                },
+                "score": 0,
+            })
+
         # ── 编译/elaboration 错误定向修复：编排层把 compile_error 传进来，直接 LLM 重写出错文件 ──
         _params = task.get("params", {}) if isinstance(task.get("params"), dict) else {}
         _ce = _params.get("compile_error") if isinstance(_params.get("compile_error"), dict) else None
@@ -92,7 +108,8 @@ class DebugAgent(BaseAgent):
             _msg = _ce.get("message", "")
             _fixed = self._llm_regenerate_file(str(od), _fname, _msg) if _fname else False
             logger.info(f"debug 编译错误定向修复: file={_fname} fixed={_fixed}")
-            return AgentResult(success=True, data={
+            # 修复未成功 → 如实失败（success=False），由编排层决定是否重试/终止
+            return AgentResult(success=_fixed, data={
                 "debug": {"compile_fix": {"file": _fname, "fixed": _fixed,
                                           "message": _msg[:150]}},
                 "score": 85 if _fixed else 20,
@@ -115,6 +132,22 @@ class DebugAgent(BaseAgent):
             })
 
         if not all_errors:
+            # 区分 clean 与 NO_EVIDENCE（历史 bug：无日志 = "No errors found" 95 分）
+            # clean 的前提是"EDA 跑了且日志里确实没有错误"；
+            # 没有任何仿真/编译日志 → 无法诊断 → NO_EVIDENCE（score 0，success=False）。
+            logs_exist = (sim_result.get("logs_scanned", 0) > 0
+                          or compile_result.get("logs_scanned", 0) > 0)
+            if not logs_exist:
+                return AgentResult(success=False, data={
+                    "debug": {
+                        "status": "NO_EVIDENCE",
+                        "message": "未找到任何仿真/编译日志，无法诊断"
+                                   "（可能是回归未执行、提前失败或日志路径异常）。",
+                        "sim_logs_scanned": sim_result.get("logs_scanned", 0),
+                        "compile_logs_scanned": compile_result.get("logs_scanned", 0),
+                    },
+                    "score": 0,
+                })
             return AgentResult(success=True, data={
                 "debug": {"status": "clean", "message": "No errors found"},
                 "score": 95,

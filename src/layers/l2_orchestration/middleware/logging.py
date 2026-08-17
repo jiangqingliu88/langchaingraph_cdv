@@ -2,6 +2,7 @@
 日志中间件 - 使用装饰器模式
 """
 import structlog
+import sys
 from functools import wraps
 from typing import Callable, Any
 import time
@@ -18,7 +19,8 @@ structlog.configure(
         structlog.dev.ConsoleRenderer()
     ],
     context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
+    # 显式写 stderr（structlog 25.x 的 WriteLoggerFactory() 默认 sys.stdout，会污染 --json 输出）
+    logger_factory=structlog.WriteLoggerFactory(sys.stderr),
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )

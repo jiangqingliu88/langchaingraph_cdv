@@ -91,6 +91,7 @@ class VerifyAgent(BaseAgent):
             return AgentResult(success=bool(files), data={"tests": tests_data, "score": score})
 
         # ── 1. UVM 环境生成（真实工具 uvm_tools）──
+        env_gen_ok = False
         try:
             from src.tools.uvm_tools.tool_find_spec_yaml.main import run as find_spec_yaml
             from src.tools.uvm_tools.tool_jinja_render.main import run as jinja_render
@@ -102,9 +103,20 @@ class VerifyAgent(BaseAgent):
             jinja_render(str(output_dir))
             env_files = [str(p) for p in (output_dir / "agents").rglob("*.sv")] \
                 if (output_dir / "agents").exists() else []
-            files.extend(env_files)
+            # 失败响亮：env 骨架没生成出来（agents/ 空）→ 记失败，不得靠断言文件蒙混"passed"
+            env_gen_ok = len(env_files) > 0
+            if env_gen_ok:
+                files.extend(env_files)
         except Exception as e:
             logger.warning(f"UVM 生成失败: {e}")
+        if not env_gen_ok:
+            logger.error(f"UVM 环境生成失败（agents/ 下无 SV 文件），verify 阶段如实失败")
+            return AgentResult(success=False, data={
+                "tests": {"module": module_name, "env_files": 0, "files": [],
+                          "status": "env_generation_failed"},
+                "score": 0,
+                "error": "UVM 环境生成失败：agents/ 下无 SV 文件（检查 find_spec_yaml/jinja_render 日志与 jsonschema 依赖）",
+            })
 
         # ── 2. 测试用例生成（真实工具 testcase_tools，用 .invoke 绕开 LangChain tool 包装）──
         try:

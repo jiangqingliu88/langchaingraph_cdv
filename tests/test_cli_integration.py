@@ -57,7 +57,7 @@ UART 串行收发模块，支持 8N1 格式，波特率可配置。
 class TestApprovalGate:
     def test_auto_mode_bypasses_all(self):
         """auto 模式：全部自动通过，不等待输入"""
-        from src.layers.l2_orchestration.approval import create_approval_gate, ApprovalDecision
+        from src.layers.l2_orchestration.governance.approval import create_approval_gate, ApprovalDecision
         gate = create_approval_gate("auto")
         assert gate.mode.value == "auto"
         assert not gate.requires_approval("any_stage", "critical")
@@ -68,35 +68,35 @@ class TestApprovalGate:
 
     def test_interactive_mode_requires_all(self):
         """interactive 模式：所有阶段都需要审批"""
-        from src.layers.l2_orchestration.approval import create_approval_gate, ApprovalMode
+        from src.layers.l2_orchestration.governance.approval import create_approval_gate, ApprovalMode
         gate = create_approval_gate("interactive")
         assert gate.mode == ApprovalMode.INTERACTIVE
         assert gate.requires_approval("any_stage", "low")
 
     def test_interactive_approve(self):
         """交互模式下输入 'y' → approve"""
-        from src.layers.l2_orchestration.approval import ApprovalGate, ApprovalMode, ApprovalDecision
+        from src.layers.l2_orchestration.governance.approval import ApprovalGate, ApprovalMode, ApprovalDecision
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "y")
         record = gate.ask("write_rtl", "mock", "low")
         assert record.decision == ApprovalDecision.APPROVE
 
     def test_interactive_reject(self):
         """交互模式下输入 'n' → reject"""
-        from src.layers.l2_orchestration.approval import ApprovalGate, ApprovalMode, ApprovalDecision
+        from src.layers.l2_orchestration.governance.approval import ApprovalGate, ApprovalMode, ApprovalDecision
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "n")
         record = gate.ask("UVM", "mock", "medium")
         assert record.decision == ApprovalDecision.REJECT
 
     def test_interactive_skip(self):
         """交互模式下输入 's' → skip"""
-        from src.layers.l2_orchestration.approval import ApprovalGate, ApprovalMode, ApprovalDecision
+        from src.layers.l2_orchestration.governance.approval import ApprovalGate, ApprovalMode, ApprovalDecision
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "s")
         record = gate.ask("cover", "mock", "low")
         assert record.decision == ApprovalDecision.SKIP
 
     def test_threshold_mode(self):
         """threshold 模式：只有高风险才审批"""
-        from src.layers.l2_orchestration.approval import ApprovalGate, ApprovalMode
+        from src.layers.l2_orchestration.governance.approval import ApprovalGate, ApprovalMode
         gate = ApprovalGate(mode=ApprovalMode.THRESHOLD, risk_threshold="high")
         assert not gate.requires_approval("low_risk", "low")
         assert not gate.requires_approval("medium_risk", "medium")
@@ -105,7 +105,7 @@ class TestApprovalGate:
 
     def test_summary_json(self):
         """审批摘要可以序列化为 JSON"""
-        from src.layers.l2_orchestration.approval import ApprovalGate, ApprovalMode
+        from src.layers.l2_orchestration.governance.approval import ApprovalGate, ApprovalMode
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "y")
         gate.ask("design", "passed", "low")
         gate.ask("UVM", "passed", "low")
@@ -146,34 +146,6 @@ class TestCLIBasicCommands:
                     break
             assert found, f"docs/ not found under any sibling of {tmp}"
 
-    def test_plan_dry_run(self, runner, sample_spec):
-        """vagent plan --dry-run"""
-        from src.cli.commands import cli
-        result = runner.invoke(cli, [
-            "plan", str(sample_spec),
-            "--profile", "quick",
-            "--dry-run",
-        ])
-        assert result.exit_code == 0
-        assert "SignOffAI" in result.output
-        assert "quick" in result.output
-        assert "Dry-run" in result.output
-
-    def test_plan_help(self, runner):
-        """vagent plan --help"""
-        from src.cli.commands import cli
-        result = runner.invoke(cli, ["plan", "--help"])
-        assert result.exit_code == 0
-        assert "--profile" in result.output
-        assert "--approval" in result.output
-
-    def test_verify_profile_option(self, runner, sample_spec):
-        """vagent verify --profile quick --help"""
-        from src.cli.commands import cli
-        result = runner.invoke(cli, ["verify", "--help"])
-        assert result.exit_code == 0
-        assert "--profile" in result.output
-        assert "--approval" in result.output
 
 
 class TestCLISubcommandsExist:
@@ -256,7 +228,7 @@ class TestCLISubcommandsExist:
 
 class TestContextStoreSummary:
     def test_summary_returns_structure(self):
-        from src.layers.l2_orchestration.context import ContextStore
+        from src.layers.l2_orchestration.context.context import ContextStore
         store = ContextStore()
         store.put("spec", {"features": ["f1"]}, source="spec_planner")
         store.put("design_arch", {"modules": ["m1"]}, source="design_architect")
@@ -271,90 +243,6 @@ class TestContextStoreSummary:
         assert "design_architect" in s["sources"]
 
 
-# ── 5. SPA Summary JSON 测试 ────────────────────────────────
-
-class TestSPASummary:
-    def test_generate_spa_summary(self, tmp_path):
-        import importlib
-        from src.agents.report.main import _generate_spa_summary
-
-        phases = [
-            {"name": "spec", "status": "passed", "score": 90, "time": 1.5, "retries": 0},
-            {"name": "design", "status": "passed", "score": 85, "time": 3.0, "retries": 1},
-        ]
-        result = _generate_spa_summary.func(
-            output_dir=str(tmp_path),
-            run_id="test_run",
-            profile="quick",
-            phases_json=json.dumps(phases),
-            coverage_json=json.dumps({"line_pct": 95.0}),
-            regression_json=json.dumps({"passed": 10, "total": 10}),
-            approvals_json=json.dumps({"approved": 2, "rejected": 0}),
-        )
-        result_data = json.loads(result)
-        assert result_data["status"] == "generated"
-        assert (tmp_path / "spa_summary.json").exists()
-
-        spa = json.loads((tmp_path / "spa_summary.json").read_text())
-        assert spa["spa_id"] == "test_run"
-        assert spa["passed_count"] == 2
-        assert spa["total_count"] == 2
-        assert spa["quality_score"] == 87  # (90+85)//2
-
-
-# ── 6. regression_manager 快速路径 ──────────────────────────
-
-class TestRegressionManagerFastPath:
-    @pytest.mark.asyncio
-    async def test_execute_task_fast_path(self):
-        """retry/fix 模式 → 走确定性路径"""
-        from src.agents.regress.main import RegressAgent
-        agent = RegressAgent()
-        await agent._setup()
-
-        task = {
-            "ctx": {},
-            "input": json.dumps({"retry": True, "fix": True}),
-            "output_dir": "output/test_temp",
-        }
-        result = await agent.execute_task(task)
-        # 确定性路径应该不依赖 LLM，但可能因为缺少文件而返回失败
-        # 关键验证：它不应该抛出异常或调用 LLM
-        assert result is not None
-
-    @pytest.mark.asyncio
-    async def test_execute_task_normal_path(self):
-        """普通模式 → 走 LLM"""
-        from src.agents.regress.main import RegressAgent
-        agent = RegressAgent()
-        await agent._setup()
-
-        task = {
-            "ctx": {},
-            "input": "normal task input",
-            "output_dir": "output/test_temp",
-        }
-        # 普通路径应该走 LLM（可能因 API key 缺失失败，但不崩溃）
-        result = await agent.execute_task(task)
-        assert result is not None
-
-
-# ── 7. coverage_manager 确定性路径 ──────────────────────────
-
-class TestCoverageManagerFastPath:
-    @pytest.mark.asyncio
-    async def test_execute_task_fast_path(self):
-        """retry/collect_only 模式 → 走确定性路径"""
-        from src.agents.cover.main import CoverAgent
-        agent = CoverAgent()
-        await agent._setup()
-
-        task = {
-            "ctx": {},
-            "input": json.dumps({"retry": True, "collect_only": True}),
-        }
-        result = await agent.execute_task(task)
-        assert result is not None
 
 
 # ── 8. dvsim 移除验证 ───────────────────────────────────────

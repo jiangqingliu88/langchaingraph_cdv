@@ -8,8 +8,16 @@ Tool: find_spec_yaml — 从 spec 文本查找已有 YAML 或构造新的 YAML
     result = run(spec_text)
 """
 import sys, json, re
+import builtins
 from pathlib import Path
 import shutil as _shutil
+
+
+def print(*args, **kwargs):
+    """本模块诊断日志默认写 stderr（stdout 保留给业务输出/--json，不被污染）。"""
+    kwargs.setdefault("file", sys.stderr)
+    builtins.print(*args, **kwargs)
+
 
 from src.tools.lib.uvm_context import ctx
 from src.tools.uvm_tools.tool_uvm.gen_uvm import TEMPLATES_DIR

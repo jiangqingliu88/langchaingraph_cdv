@@ -6,10 +6,17 @@
     result = run(output_dir)
 """
 import sys, json
+import builtins
 from pathlib import Path
 
 from src.tools.lib.uvm_context import ctx
 from src.tools.uvm_tools.tool_uvm.gen_uvm import UVMGenerator, JinjaRenderer, TEMPLATES_DIR
+
+
+def print(*args, **kwargs):
+    """本模块诊断日志默认写 stderr（stdout 保留给业务输出/--json，不被污染）。"""
+    kwargs.setdefault("file", sys.stderr)
+    builtins.print(*args, **kwargs)
 
 
 def run(output_dir: str = "") -> str:

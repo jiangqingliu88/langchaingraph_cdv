@@ -91,7 +91,7 @@ class DesignAgent(BaseAgent):
                 logger.warning(f"IP {ip['ip_name']} LLM 写手失败: {e}")
 
         # ── 4. 集成连线：各 IP RTL 集成为顶层 module ──
-        rtl_files = self._integrate_top(ips, module_name, spec, rtl_dir)
+        rtl_files, top_used_fallback = self._integrate_top(ips, module_name, spec, rtl_dir)
 
         design_arch = {
             "module_name": module_name,
@@ -100,6 +100,9 @@ class DesignAgent(BaseAgent):
             "registers": spec.get("registers", []),
             "interfaces": spec.get("interfaces", []),
             "signoff_checklist": [],
+            # 说真话：LLM 顶层连线失败 → 回退确定性骨架（只有 clk/rst 直连，无真实互连逻辑）
+            # audit 门禁 rtl_real 据此拒绝签核（见 audit agent gate）
+            "rtl_placeholder": top_used_fallback,
         }
 
         # V2 Knowledge Graph：设计时子图落库（跨 run 沉淀，供决策层语义溯源）
@@ -252,8 +255,12 @@ IP 名: {ip['ip_name']}
             logger.warning(f"IP {ip_name} L1 编译校验失败: {e}")
             return False
 
-    def _integrate_top(self, ips: list, module_name: str, spec: dict, rtl_dir: Path) -> list:
-        """集成连线：各 IP 的 RTL 落盘 + LLM 生成顶层 module（完整连线）。"""
+    def _integrate_top(self, ips: list, module_name: str, spec: dict, rtl_dir: Path) -> tuple:
+        """集成连线：各 IP 的 RTL 落盘 + LLM 生成顶层 module（完整连线）。
+
+        返回 (files, top_used_fallback)：LLM 顶层生成失败回退确定性骨架时
+        top_used_fallback=True（骨架只有 clk/rst 直连，无真实互连 → 标记占位）。
+        """
         from src.layers.l4_memory.ip_registry import IpRegistry
         ip_reg = IpRegistry()
 
@@ -269,16 +276,19 @@ IP 名: {ip['ip_name']}
                 files.append(str(fpath))
 
         # 顶层 module：优先 LLM 生成（理解各 IP 接口做完整连线），失败回退规则骨架
+        top_used_fallback = False
         if files:
             top = self._llm_write_top(module_name, ips, spec)
             if not top:
                 top = self._gen_top_module(module_name, ips, spec)
+                top_used_fallback = True
+                logger.warning(f"顶层 {module_name} 回退确定性骨架（LLM 连线失败，仅 clk/rst 直连，无真实互连逻辑）")
             top_path = rtl_dir / f"{module_name}.sv"
             top_path.write_text(top, encoding="utf-8")
             files.append(str(top_path))
 
         ip_reg.close()
-        return files
+        return files, top_used_fallback
 
     @staticmethod
     def _llm_write_top(module_name: str, ips: list, spec: dict) -> str:

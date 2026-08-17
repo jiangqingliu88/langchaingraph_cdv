@@ -18,7 +18,117 @@ def _extract_ops(func_hier: dict) -> list:
     return ops or ["default_op"]
 
 
-def _render(model_type: str, module: str, ops: list, regs: list) -> dict:
+def _render_sv(module: str, ops: list, regs: list, interfaces: list = None) -> dict:
+    """SystemVerilog 参考模型：端口对齐 spec 接口 + 寄存器真实语义（非 a+b）。
+
+    - 端口：从 spec.interfaces 确定性生成（方向/位宽/名字），无接口表才回退旧 ALU 端口
+    - 寄存器：从 spec.registers 生成真实读写语义（写 → 状态更新；读 → prdata 回读）
+    - placeholder：仅有真实寄存器语义时才算"真实模型"（False），否则占位（True）
+    """
+    interfaces = interfaces or []
+
+    # ── 1. 端口（确定性，从 spec 接口表）──
+    dir_map = {"INPUT": "input", "OUTPUT": "output", "INOUT": "inout"}
+    port_lines = []
+    for itf in interfaces:
+        if not isinstance(itf, dict) or not itf.get("name"):
+            continue
+        name = str(itf["name"]).split("[")[0]
+        try:
+            w = int(itf.get("data_width", 1) or 1)
+        except (TypeError, ValueError):
+            w = 1
+        d = dir_map.get(str(itf.get("direction", "INPUT")).upper(), "input")
+        decl = f"[{w - 1}:0] {name}" if w > 1 else name
+        port_lines.append(f"    {d} logic {decl}")
+    has_spec_ports = bool(port_lines)
+    if has_spec_ports:
+        ports = ",\n".join(port_lines)
+    else:
+        # 无接口表：回退旧 ALU 端口（保持向后兼容，但标记占位）
+        ports = ("    input logic clk, input logic rst_n,\n"
+                 "    input logic [31:0] opcode, input logic [31:0] operand_a, "
+                 "input logic [31:0] operand_b,\n"
+                 "    output logic [31:0] result")
+
+    # ── 2. 寄存器真实语义（spec.registers 有数据才算真实模型）──
+    reg_state, write_case, read_case = [], [], []
+    for r in regs:
+        if not isinstance(r, dict) or not r.get("name"):
+            continue
+        rname = str(r["name"])
+        try:
+            w = int(r.get("width", 8) or 8)
+        except (TypeError, ValueError):
+            w = 8
+        offset = str(r.get("offset", "0x00"))
+        access = str(r.get("access", "RW")).upper()
+        reg_state.append(f"    logic [{w - 1}:0] reg_{rname} = '0;  // {offset} {access} "
+                         f"{str(r.get('description', ''))[:40]}")
+        if access != "RO":
+            write_case.append(f"          {offset}: reg_{rname} = pwdata;")
+        read_case.append(f"          {offset}: prdata = reg_{rname};")
+    has_real_registers = bool(reg_state)
+    # 预计算复位赋值（避免嵌套 f-string 转义，Python 3.11 限制）
+    reset_assigns = "\n".join(
+        f"      reg_{str(r['name'])} <= '0;"
+        for r in regs if isinstance(r, dict) and r.get("name"))
+
+    if has_real_registers:
+        body = f"""  // ── APB 寄存器参考模型（真实语义，从 spec.registers 生成）──
+{chr(10).join(reg_state)}
+
+  // 写：psel && penable && pwrite → 更新寄存器
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+{reset_assigns}
+    end else if (psel && penable && pwrite) begin
+      case (paddr)
+{chr(10).join(write_case)}
+        default: ;
+      endcase
+    end
+  end
+
+  // 读：psel && !pwrite → prdata 回读（组合）
+  always_comb begin
+    prdata = '0;
+    if (psel && !pwrite) begin
+      case (paddr)
+{chr(10).join(read_case)}
+        default: prdata = '0;
+      endcase
+    end
+  end
+endmodule
+"""
+    else:
+        # 无寄存器表：诚实占位（真实模型需寄存器映射 + 协议逻辑，见 README 路线）
+        body = f"""  // ── 占位参考模型：spec 无寄存器表/接口表，无法生成真实语义 ──
+  // 真实参考模型需 spec.registers（寄存器映射）+ 协议逻辑（UART TX/RX 等）定向验证。
+  // 仅作编译占位；audit 门禁 model_real 会拒绝签核（见 report.json gates）。
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) result <= '0;
+    else result <= '0;
+  end
+endmodule
+"""
+        if not has_spec_ports:
+            # 无接口也无寄存器：完全无法建模
+            body = "  // 占位：spec 无接口表也无寄存器表，无法生成参考模型。\nendmodule\n"
+
+    code = f"module {module}_ref_model(\n{ports}\n);\n{body}"
+    return {
+        "model_type": "systemverilog",
+        "source_code": code,
+        "file": f"{module}_ref_model.sv",
+        "placeholder": not has_real_registers,
+        "has_spec_ports": has_spec_ports,
+    }
+
+
+def _render(model_type: str, module: str, ops: list, regs: list,
+            interfaces: list = None) -> dict:
     """按语言渲染参考模型（真实模板）。"""
     if model_type == "python":
         methods = "\n".join(f"    def {op}(self, a, b):\n        return a + b" for op in ops)
@@ -35,25 +145,10 @@ def _render(model_type: str, module: str, ops: list, regs: list) -> dict:
         return a + b
 {methods}
 """
-        return {"model_type": "python", "source_code": code, "file": f"{module}_ref_model.py"}
+        return {"model_type": "python", "source_code": code, "file": f"{module}_ref_model.py",
+                "placeholder": True}
     elif model_type == "systemverilog":
-        # 接口与 DUT 对齐（opcode/operand_a/operand_b/result，32 位），便于在 env 里并排 compare
-        cases = "\n".join(f"      {i}: result <= operand_a + operand_b;  // {op}"
-                          for i, op in enumerate(ops))
-        code = f"""module {module}_ref_model(
-    input logic clk, input logic rst_n,
-    input logic [31:0] opcode, input logic [31:0] operand_a, input logic [31:0] operand_b,
-    output logic [31:0] result);
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) result <= '0;
-    else case (opcode)
-{cases}
-      default: result <= '0;
-    endcase
-  end
-endmodule
-"""
-        return {"model_type": "systemverilog", "source_code": code, "file": f"{module}_ref_model.sv"}
+        return _render_sv(module, ops, regs, interfaces)
     elif model_type == "verilog":
         cases = "\n".join(f"      {i}: result = a + b;  // {op}" for i, op in enumerate(ops))
         code = f"""module {module}_ref_model(
@@ -69,7 +164,8 @@ endmodule
   end
 endmodule
 """
-        return {"model_type": "verilog", "source_code": code, "file": f"{module}_ref_model.v"}
+        return {"model_type": "verilog", "source_code": code, "file": f"{module}_ref_model.v",
+                "placeholder": True}
     else:  # cpp
         cases = "\n".join(f"    case {i}: return a + b;  // {op}" for i, op in enumerate(ops))
         h = f"""#ifndef {module.upper()}_REF_MODEL_H
@@ -92,7 +188,8 @@ int {module}_ref_model::predict(int op, int a, int b) {{
   }}
 }}
 """
-        return {"model_type": "cpp", "header_code": h, "source_code": cpp, "file": f"{module}_ref_model.cpp"}
+        return {"model_type": "cpp", "header_code": h, "source_code": cpp,
+                "file": f"{module}_ref_model.cpp", "placeholder": True}
 
 
 @register_agent("model")
@@ -148,7 +245,8 @@ class ModelAgent(BaseAgent):
             return self._rollback(output_dir, module)
 
         # ── 动作: generate / update（生成新版本，旧版本并存）──
-        rendered = _render(model_type, module, ops, regs)
+        interfaces = design_arch.get("interfaces", [])
+        rendered = _render(model_type, module, ops, regs, interfaces)
 
         # 版本管理: 读取当前版本号，+1 生成新版本
         model_dir = output_dir / "model"
@@ -176,6 +274,18 @@ class ModelAgent(BaseAgent):
             "status": "generated", "reason": params.get("reason", ""),
             "all_versions": self._list_versions(model_dir, module),
         }
+        # ── 说真话：参考模型是否"真实"由渲染结果决定 ──
+        # SV 模型含真实寄存器语义（spec.registers）→ placeholder=False；
+        # 否则为结构占位（历史 a+b 模板已废弃）→ placeholder=True，audit 拒绝签核。
+        model_data["placeholder"] = rendered.get("placeholder", True)
+        if model_data["placeholder"]:
+            model_data["placeholder_reason"] = (
+                "占位参考模型：spec 无寄存器表（或非 SV 模型），无真实功能语义。"
+                "仅作编译占位，禁止作为签核比对依据。真实参考模型需 spec.registers"
+                " + 协议逻辑（UART TX/RX 等）经定向仿真验证。")
+        else:
+            model_data["placeholder_reason"] = ""
+        model_data["spec_interfaces"] = len(interfaces)
         model_data["score"] = min(50 + len(ops) * 5, 85)
         return AgentResult(success=True, data={"model": model_data, "score": model_data["score"]})
 

@@ -25,6 +25,34 @@ from config.settings import Settings
 
 logger = structlog.get_logger()
 
+
+def _collect_llm_audit() -> dict:
+    """收集本 run 的 LLM 调用审计（prompt 哈希 + 调用状态 + token 用量）。
+
+    从 LLMQueryEngine 的 audit_log 读取（query_engine 记录每次调用的 cache_key =
+    prompt 内容的 SHA256 前缀），落进 manifest 的 llm_audit 字段，
+    支撑"同一 prompt 可复现调用"的可复现性承诺。
+    失败返回空结构（不阻断 manifest 落盘）。
+    """
+    try:
+        from src.layers.l2_orchestration.context.query_engine import LLMQueryEngine
+        qe = LLMQueryEngine.get_instance()
+        entries = list(getattr(qe, "audit_log", []) or [])[-50:]  # 最近 50 条
+        budget = qe.get_budget_status()
+        return {
+            "call_count": len(entries),
+            "prompt_hashes": [e.get("cache_key", "") for e in entries if e.get("cache_key")],
+            "response_hashes": [e.get("response_sha", "") for e in entries if e.get("response_sha")],
+            "statuses": {s: sum(1 for e in entries if e.get("status") == s)
+                         for s in set(e.get("status", "") for e in entries)},
+            "tokens_used": budget.get("tokens_used", 0),
+            "budget": budget.get("budget", 0),
+            "cache_hits": budget.get("cache_hits", 0),
+        }
+    except Exception as e:
+        logger.warning(f"LLM 审计收集失败: {e}")
+        return {"call_count": 0, "error": str(e)[:100]}
+
 class PipelineExecutionService:
     """流水线执行服务（单例）"""
 
@@ -358,10 +386,13 @@ class PipelineExecutionService:
             _env_arch = await asyncio.to_thread(_check_env_arch, str(output_root))
             _po = _env_arch.get("port_ownership", {}) or {}
             _sb = _env_arch.get("scoreboard", {}) or {}
-            _ok = _env_arch.get("status") == "PASS"
+            _arch_status = _env_arch.get("status", "FAIL")
+            _ok = _arch_status == "PASS"
+            _arch_phase_status = ("passed" if _ok
+                                  else ("error" if _arch_status == "EDA_MISSING" else "failed"))
             _env_arch_phase = {
                 "name": "env_arch_check",
-                "status": "passed" if _ok else "failed",
+                "status": _arch_phase_status,
                 "score": 100 if _ok else 0,
                 "port_ownership": _po.get("status"),
                 "scoreboard": _sb.get("status"),
@@ -381,6 +412,7 @@ class PipelineExecutionService:
         exclude_effect = {}               # 每轮有效覆盖率明细（excluded/effective_total/...）
         compile_retries = 0
         iterations = 0
+        eda_blocked = False               # EDA 缺失标记（终止闭环，失败响亮）
         seed = 0  # 随机种子（EXPAND_SEEDS 时递增，扩种 → 覆盖率变化）
         coverage_db_history = []  # 铁律 2：每轮覆盖率数据库版本固化记录
         prev_coverage = None       # 归因校准: 上一轮覆盖率
@@ -392,6 +424,17 @@ class PipelineExecutionService:
             # 统一从 data["regression"] 取回归数据（ops 返回 {"regression": {...}}）
             regression = regress_data.get("regression", {}) \
                 if isinstance(regress_data, dict) else {}
+
+            # ── EDA 缺失检测（优先级最高：环境问题不是代码问题，终止闭环）──
+            # 历史 bug：缺少 vlog/vsim 被决策层误判为"功能错 → REFACTOR_RTL"循环空转。
+            # 现在显式标记并终止：BLOCKED_EDA_MISSING（失败响亮，给出安装指引）。
+            if isinstance(regression, dict) and regression.get("eda_missing"):
+                _eda_err = str(regression.get("error", ""))[:200]
+                phases.append({"name": "eda_check", "status": "failed",
+                               "reason": f"EDA 工具缺失: {_eda_err}"})
+                logger.error(f"EDA 工具缺失，终止闭环（安装 QuestaSim 并加入 PATH 后重试）: {_eda_err}")
+                eda_blocked = True
+                break
 
             # ── 编译失败检测（优先级最高，编译不过后面全废）──
             compile_error = None
@@ -748,6 +791,11 @@ class PipelineExecutionService:
                 },
                 "rtl_hashes": rtl_hashes,
                 "coverage_db_history": coverage_db_history,
+                # ── 可复现性（铁律补充）：记录本 run 的 LLM 调用审计 ──
+                # prompt_hash = LLMQueryEngine 的 cache_key（prompt 内容的 SHA256 前缀），
+                # 同一 prompt 再次调用可命中缓存/复现；历史缺口：manifest 不含 LLM I/O，
+                # "vagent dump 复现" 无法追溯模型输入。
+                "llm_audit": _collect_llm_audit(),
                 "evidence": {
                     "total_changes": total_changes,
                     "chain_valid": chain_valid,
@@ -784,10 +832,12 @@ class PipelineExecutionService:
             "final_coverage": final_coverage,
             "effective_coverage": effective_coverage,
             "converged": effective_coverage >= target,
+            "eda_blocked": eda_blocked,
             "target": target,
             "iterations": iterations,
             "exclude": {"stats": exclude_stats, "effect": exclude_effect},
-            "status": "CONVERGED" if effective_coverage >= target else "COMPLETED",
+            "status": ("BLOCKED_EDA_MISSING" if eda_blocked
+                       else ("CONVERGED" if effective_coverage >= target else "COMPLETED")),
             "evidence": {
                 "total_changes": total_changes,
                 "chain_valid": chain_valid,

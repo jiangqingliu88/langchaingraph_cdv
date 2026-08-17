@@ -77,7 +77,7 @@ class LLMQueryEngine:
             return self.cache[key]
 
         # 3. LLM 调用（重试 + provider 降级）
-        content, elapsed, tokens = self._invoke_with_fallback(
+        content, elapsed, tokens, response_sha = self._invoke_with_fallback(
             task_type, messages, max_retries, timeout_s)
 
         # 4. 记账 + 缓存 + 审计
@@ -85,7 +85,8 @@ class LLMQueryEngine:
             self.tokens_used += tokens
         if content and self.cache_enabled:
             self.cache[key] = content
-        self._audit(task_type, key, content[:100] if content else "", "ok" if content else "failed", elapsed)
+        self._audit(task_type, key, content[:100] if content else "", "ok" if content else "failed",
+                    elapsed, response_sha=response_sha)
         return content
 
     # ═══════════════════════════════════════════════════════════
@@ -115,7 +116,10 @@ class LLMQueryEngine:
                     time.sleep(1.0 * (attempt + 1))  # 简单退避
         except Exception as e:
             logger.warning(f"LLM 引擎调用失败: {e}")
-        return content, round(time.time() - t0, 2), tokens
+        # 响应哈希（可复现性：同一 prompt 的响应可被版本比对）
+        response_sha = hashlib.sha256(str(content).encode("utf-8", errors="replace")).hexdigest()[:16] \
+            if content else ""
+        return content, round(time.time() - t0, 2), tokens, response_sha
 
     # ═══════════════════════════════════════════════════════════
     # 预算 / 缓存 / 审计
@@ -134,11 +138,12 @@ class LLMQueryEngine:
             return self.tokens_used
 
     def _audit(self, task_type: str, key: str, resp_preview: str,
-               status: str, elapsed: float):
+               status: str, elapsed: float, response_sha: str = ""):
         self.audit_log.append({
             "task_type": task_type, "cache_key": key,
             "status": status, "elapsed_s": elapsed,
             "resp_preview": resp_preview,
+            "response_sha": response_sha,   # 响应内容 SHA256 前缀（可复现性）
             "tokens_used_so_far": self.tokens_used,
         })
         # 只保留最近 500 条

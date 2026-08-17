@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
@@ -159,11 +160,11 @@ def get_settings() -> Settings:
         env_file = ".env" if env == "production" else f".env.{env}"
         _instance = Settings(_env_file=env_file if os.path.exists(env_file) else ".env")
 
-        # 生产环境安全提醒
+        # 生产环境安全提醒（写 stderr，避免污染 stdout 的 --json 输出）
         if _instance.is_production:
             issues = _instance.validate_production()
             for i in issues:
-                print(f"[settings] WARNING: {i}")
+                print(f"[settings] WARNING: {i}", file=sys.stderr)
     return _instance
 
 

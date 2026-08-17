@@ -63,15 +63,27 @@ class CoverageAgent(BaseAgent):
         except Exception as e:
             logger.warning(f"功能覆盖率点生成失败: {e}")
 
-        # ── 收集真实覆盖率（ucdb → 覆盖率报告），子进程隔离（EDA 崩溃不拖垮主流程）──
+        # ── EDA 可用性前置检查（失败响亮：没有 vsim 就不假装收集覆盖率）──
+        import shutil
+        if not shutil.which("vsim"):
+            return AgentResult(success=False, data={
+                "coverage": {"overall_pct": 0, "status": "EDA_MISSING"},
+                "gaps": [],
+                "score": 0,
+                "error": "未检测到 vsim，无法收集覆盖率。请安装 QuestaSim 并加入 PATH 后重试。",
+            })
+
+        # ── 收集真实覆盖率（vsim -coverage → ucdb → 报告），走 L1 统一入口 ──
+        # 不走 MCP 子进程工具（coverage.collect）：tool_worker 引用的 regression_tool
+        # 模块已不存在（断链）。L1 InfrastructureManager.collect_coverage 是同一后端
+        # 的统一封装（含 ucdb 归档 + SHA256 固化），返回 {coverage, simulation, ...}。
         coverage_data = {}
         try:
-            import asyncio
-            from src.layers.l2_orchestration.communication.tool_subprocess import run_tool_in_subprocess
-            resp = await asyncio.to_thread(
-                run_tool_in_subprocess, "coverage.collect",
-                {"output_dir": str(output_dir), "seed": seed, "round_num": round_num})
-            coverage_data = resp.get("data", {}) if isinstance(resp, dict) and resp.get("success") else {}
+            from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
+            infra = InfrastructureManager(output_dir)
+            coverage_data = infra.collect_coverage(round_num=round_num, seed=seed)
+            if not isinstance(coverage_data, dict):
+                coverage_data = {}
         except Exception as e:
             logger.warning(f"覆盖率收集失败: {e}")
 

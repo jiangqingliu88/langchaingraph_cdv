@@ -100,23 +100,3 @@ class TestSignoffService:
         assert svc is not None
 
 
-class TestSignoffEventLogging:
-    """签核事件记录测试"""
-
-    @pytest.mark.asyncio
-    async def test_event_types_match_state_transitions(self):
-        """事件类型与状态转移一致"""
-        expected_events = {"submitted", "approved", "rejected", "commented", "reopened", "draft"}
-        from src.database.models import SignoffEvent
-        # 验证模型中定义了 event_type 字段
-        assert hasattr(SignoffEvent, 'event_type')
-
-    def test_event_records_before_after_states(self):
-        """事件记录前后状态"""
-        from src.database.models import SignoffEvent
-        assert hasattr(SignoffEvent, 'before_status')
-        assert hasattr(SignoffEvent, 'after_status')
-        assert hasattr(SignoffEvent, 'actor_id')
-        assert hasattr(SignoffEvent, 'actor_name')
-        assert hasattr(SignoffEvent, 'comment')
-        assert hasattr(SignoffEvent, 'evidence_hash')

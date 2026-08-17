@@ -153,6 +153,13 @@ def check_scoreboard(output_dir: str, test_name: str = None,
         return {"check": "scoreboard", "status": "SKIP",
                 "message": f"未找到测试文件 {test_file}"}
 
+    # ── EDA 可用性前置检查（失败响亮：无 vlog/vsim → EDA_MISSING，而非 WinError）──
+    import shutil
+    if not (shutil.which("vlog") and shutil.which("vsim")):
+        return {"check": "scoreboard", "status": "EDA_MISSING",
+                "message": "未检测到 EDA 工具（vlog/vsim），无法执行编译仿真验收。"
+                           "请安装 QuestaSim 并加入 PATH。"}
+
     work = (od / "build" / "work").as_posix()
     filelist = (od / "inputs" / "filelists" / "filelist.f").as_posix()
     uvm_src = f"{questasim_uvm}/verilog_src/uvm-1.2/src"
@@ -215,10 +222,14 @@ def check_env_arch(output_dir: str, test_name: str = None) -> Dict[str, Any]:
     """env 架构验收：端口归属（通用）+ scoreboard 定向 case（通用）。
 
     test_name 为空时自动解析（loopback > directed > base）。
+    任一子检查 EDA_MISSING → 整体 EDA_MISSING（失败响亮，语义化而非 WinError）。
     """
     ownership = check_port_ownership(output_dir)
     scoreboard = check_scoreboard(output_dir, test_name)
-    status = "PASS" if (ownership["status"] == "PASS" and scoreboard["status"] == "PASS") else "FAIL"
+    if ownership.get("status") == "EDA_MISSING" or scoreboard.get("status") == "EDA_MISSING":
+        status = "EDA_MISSING"
+    else:
+        status = "PASS" if (ownership["status"] == "PASS" and scoreboard["status"] == "PASS") else "FAIL"
     return {"status": status, "port_ownership": ownership, "scoreboard": scoreboard}
 
 

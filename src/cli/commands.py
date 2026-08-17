@@ -35,6 +35,10 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeEl
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# ── structlog 统一写 stderr（stdout 保留给业务输出/--json，不被日志污染）──
+import structlog  # noqa: E402
+structlog.configure(logger_factory=structlog.WriteLoggerFactory(sys.stderr))
+
 from src.layers.l2_orchestration.agents.registry import AgentRegistry
 from src.layers.l2_orchestration.execution import PipelineExecutionService
 from src.layers.l2_orchestration.governance.approval import create_approval_gate, ApprovalDecision, PipelineTerminatedError
@@ -187,7 +191,7 @@ def verify(spec_file, output, design_style, target, max_rounds,
         from config.settings import Settings
         Settings.get_instance().verification.incremental_regression = False
 
-    if not quiet:
+    if not quiet and not json_output:
         console.print(f"[bold cyan]═══ Closed Loop: coverage-driven ═══[/bold cyan]")
 
     async def run():
