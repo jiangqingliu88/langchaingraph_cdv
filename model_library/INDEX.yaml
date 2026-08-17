@@ -21,5 +21,12 @@ uart_rx:
   active: v1
   matched_features: [uart, rx, 串行, 接收, baud]
 
-# fifo16:    待入库（满/空/溢出/水印）
-# irq_gen:   待入库（触发条件 + 延迟）
+fifo16:
+  versions: [v1]
+  active: v1
+  matched_features: [fifo, 缓冲, 队列, wr_en, rd_en, full, empty, overflow]
+
+irq_gen:
+  versions: [v1]
+  active: v1
+  matched_features: [irq, intr, 中断, interrupt, irq_src, irq_en, irq_pending]

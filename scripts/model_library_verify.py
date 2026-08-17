@@ -149,6 +149,109 @@ module tb_uart_rx;
     end
 endmodule
 """,
+    "fifo16": r"""// 自检 TB：先入先出顺序 + 满/空/overflow 标志
+module tb_fifo16;
+    logic clk = 0, rst_n = 0;
+    logic wr_en = 0, rd_en = 0;
+    logic [7:0] wdata = 0, rdata;
+    logic full, empty, overflow;
+    int total = 0, matched = 0, mismatched = 0;
+
+    fifo16_golden #(.DEPTH(16), .DATA_W(8)) dut (.*);
+
+    always #5 clk = ~clk;
+
+    task push(input logic [7:0] d);
+        @(posedge clk); wr_en = 1; wdata = d;
+        @(posedge clk); wr_en = 0;
+    endtask
+
+    task pop(output logic [7:0] d);
+        @(posedge clk); rd_en = 1;
+        @(posedge clk); d = dut.rdata; rd_en = 0;
+    endtask
+
+    task check(input string what, input logic cond);
+        total++;
+        if (cond) matched++; else mismatched++;
+    endtask
+
+    initial begin
+        logic [7:0] d;
+        repeat (2) @(posedge clk); rst_n = 1;
+        // 1. 空标志
+        check("empty_initial", dut.empty === 1);
+        // 2. 推 3 弹 3，顺序一致
+        push(8'h11); push(8'h22); push(8'h33);
+        pop(d); check("fifo_order_1", d === 8'h11);
+        pop(d); check("fifo_order_2", d === 8'h22);
+        pop(d); check("fifo_order_3", d === 8'h33);
+        check("empty_after_pop", dut.empty === 1);
+        // 3. 推满 16 → full
+        for (int i = 0; i < 16; i++) push(8'(i));
+        check("full_flag", dut.full === 1);
+        // 4. 满时再写 → overflow 脉冲
+        @(posedge clk); wr_en = 1; wdata = 8'hFF;
+        @(posedge clk); wr_en = 0;
+        check("overflow_pulse", dut.overflow === 1);
+        // 5. 弹空 → empty
+        for (int i = 0; i < 16; i++) begin
+            @(posedge clk); rd_en = 1;
+            @(posedge clk); rd_en = 0;
+        end
+        check("empty_after_drain", dut.empty === 1);
+        repeat (2) @(posedge clk);
+        $display("SCOREBOARD: total=%0d matched=%0d mismatched=%0d", total, matched, mismatched);
+        $finish;
+    end
+endmodule
+""",
+    "irq_gen": r"""// 自检 TB：源置位 + 使能门控 + 清除
+module tb_irq_gen;
+    logic clk = 0, rst_n = 0;
+    logic [3:0] irq_src = 0, irq_en = 0;
+    logic irq_clear = 0;
+    logic irq;
+    logic [3:0] irq_pending;
+    int total = 0, matched = 0, mismatched = 0;
+
+    irq_gen_golden #(.N_SRC(4)) dut (.*);
+
+    always #5 clk = ~clk;
+
+    task check(string what, input logic cond);
+        total++;
+        if (cond) matched++; else mismatched++;
+    endtask
+
+    initial begin
+        repeat (2) @(posedge clk); rst_n = 1;
+        repeat (2) @(posedge clk);
+        // 1. 未使能时源事件不产生 irq（pending 仍记录）
+        irq_src = 4'b0001; irq_en = 4'b0000;
+        @(posedge clk); irq_src = 0;
+        check("pending_set", dut.irq_pending[0] === 1'b1);
+        check("irq_gated_off", dut.irq === 1'b0);
+        // 2. 使能后 irq 拉高
+        irq_en = 4'b0001;
+        @(posedge clk);
+        check("irq_on_when_enabled", dut.irq === 1'b1);
+        // 3. 清除 → pending 清零、irq 拉低
+        irq_clear = 1;
+        @(posedge clk); irq_clear = 0;
+        check("irq_after_clear", dut.irq === 1'b0);
+        check("pending_after_clear", dut.irq_pending === 4'b0000);
+        // 4. 第二源
+        irq_src = 4'b0010; irq_en = 4'b0010;
+        @(posedge clk); irq_src = 0;
+        check("src1_irq", dut.irq === 1'b1);
+        check("src1_pending", dut.irq_pending[1] === 1'b1);
+        repeat (2) @(posedge clk);
+        $display("SCOREBOARD: total=%0d matched=%0d mismatched=%0d", total, matched, mismatched);
+        $finish;
+    end
+endmodule
+""",
 }
 
 

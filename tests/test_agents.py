@@ -184,12 +184,28 @@ def test_golden_library_match_uart_tx():
 def test_golden_library_uart_models_are_verifiable():
     """uart_tx/uart_rx 黄金模型文件存在且 manifest 结构完整（待 EDA 验证盖章）。"""
     from src.tools.lib.golden_library import load_golden, verify_manifest
-    for ip in ("uart_tx", "uart_rx"):
+    for ip in ("uart_tx", "uart_rx", "fifo16", "irq_gen"):
         sv = load_golden(ip, "v1")
         assert "module" in sv and "endmodule" in sv, f"{ip} 模型不完整"
         m = verify_manifest(ip, "v1")
         assert m.get("ip") == ip
         assert m.get("verified") is False  # 未验证前必须 verified=false（禁止入库）
+
+
+def test_golden_library_match_fifo_and_irq():
+    """FIFO/中断信号 → 命中 fifo16/irq_gen 黄金模型。"""
+    from src.tools.lib.golden_library import match_golden
+    fifo_arch = {"module_name": "fifo", "interfaces": [
+        {"name": "clk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
+        {"name": "wdata", "data_width": 8, "direction": "INPUT", "protocol": "generic"},
+        {"name": "rdata", "data_width": 8, "direction": "OUTPUT", "protocol": "generic"},
+    ], "registers": [], "function_hier": {"children": []}}
+    assert match_golden(fifo_arch)["ip"] == "fifo16"
+    irq_arch = {"module_name": "irq", "interfaces": [
+        {"name": "clk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
+        {"name": "irq", "data_width": 1, "direction": "OUTPUT", "protocol": "Intr"},
+    ], "registers": [], "function_hier": {"children": []}}
+    assert match_golden(irq_arch)["ip"] == "irq_gen"
 
 
 def test_golden_model_parameterize_module_name():

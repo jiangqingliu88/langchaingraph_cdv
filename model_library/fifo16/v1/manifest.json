@@ -1,0 +1,13 @@
+{
+  "ip": "fifo16",
+  "version": "v1",
+  "sha256": "PENDING_VERIFY",
+  "verified": false,
+  "verified_by": null,
+  "params_schema": {
+    "DEPTH": {"type": "int", "default": 16, "min": 2, "max": 1024},
+    "DATA_W": {"type": "int", "default": 8, "min": 1, "max": 64}
+  },
+  "matched_features": ["fifo", "缓冲", "队列", "wr_en", "rd_en", "full", "empty", "overflow"],
+  "notes": "FIFO 黄金模型：先入先出 + 满/空标志 + overflow 脉冲，深度/位宽参数化。入库验证见 scripts/model_library_verify.py（需 EDA）。"
+}

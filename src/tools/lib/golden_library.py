@@ -40,6 +40,16 @@ _MATCH_RULES: Dict[str, Dict[str, Any]] = {
         "name_keywords": ("rx", "rxd", "sin"),
         "require_registers": False,
     },
+    "fifo16": {
+        "protocol_keywords": (),
+        "name_keywords": ("fifo", "wr_en", "rd_en", "wdata", "rdata"),
+        "require_registers": False,
+    },
+    "irq_gen": {
+        "protocol_keywords": ("intr", "irq", "interrupt"),
+        "name_keywords": ("irq", "intr", "irq_src", "irq_en", "irq_pending"),
+        "require_registers": False,
+    },
 }
 
 
@@ -182,6 +192,17 @@ _GOLDEN_PORT_MAP: Dict[str, Dict[str, Dict[str, Any]]] = {
         "rst_n":   {"names": ("rst_n", "preset_n", "rst"), "protocol": ("reset", "rst")},
         "rx":      {"names": ("rx", "rxd", "sin"), "protocol": ()},
     },
+    "fifo16": {
+        "clk":     {"names": ("clk",), "protocol": ("clock", "clk")},
+        "rst_n":   {"names": ("rst_n", "preset_n", "rst"), "protocol": ("reset", "rst")},
+        "wdata":   {"names": ("wdata", "tx_data", "din"), "protocol": ()},
+        "rdata":   {"names": ("rdata", "rx_data", "dout"), "protocol": ()},
+    },
+    "irq_gen": {
+        "clk":     {"names": ("clk",), "protocol": ("clock", "clk")},
+        "rst_n":   {"names": ("rst_n", "preset_n", "rst"), "protocol": ("reset", "rst")},
+        "irq":     {"names": ("irq", "intr"), "protocol": ()},
+    },
 }
 
 # 每个黄金模型可逐拍比对的 DUT 输出端口（参考模型输出 vs DUT 输出）
@@ -189,6 +210,8 @@ _GOLDEN_COMPARE_OUTPUTS: Dict[str, list] = {
     "apb_slave": ["prdata"],
     "uart_tx": [],
     "uart_rx": [],
+    "fifo16": ["rdata"],
+    "irq_gen": ["irq"],
 }
 
 

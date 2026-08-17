@@ -101,13 +101,15 @@ spec.json
 
 ## 七、首批黄金模型（按价值排序）
 
-| IP | 来源 | 验证 case |
-|----|------|----------|
-| apb_slave（寄存器表参数化） | 从 `find_spec_yaml._gen_apb_register_model` 泛化（已有雏形） | 读写回环 + 边界地址 |
-| uart_tx | 新写 | 9600/115200 波特率逐位比对 |
-| uart_rx | 新写 | 采样窗口 + 帧错误注入 |
-| fifo16 | 新写 | 满/空/溢出/水印 |
-| irq_gen | 新写 | 触发条件 + 延迟 |
+| IP | 来源 | 验证 case | 状态 |
+|----|------|----------|------|
+| apb_slave（寄存器表参数化） | 从 `find_spec_yaml._gen_apb_register_model` 泛化 | 读写回环 + 边界地址 | ✅ v1 已入库（待 EDA 盖章） |
+| uart_tx | 新写 | 9600/115200 波特率逐位比对 | ✅ v1 已入库（待 EDA 盖章） |
+| uart_rx | 新写 | 采样窗口 + 帧错误注入 | ✅ v1 已入库（待 EDA 盖章） |
+| fifo16 | 新写 | 满/空/溢出/水印 | ✅ v1 已入库（待 EDA 盖章） |
+| irq_gen | 新写 | 触发条件 + 延迟 | ✅ v1 已入库（待 EDA 盖章） |
+
+> 盖章命令（有 QuestaSim 的机器）：`python scripts/model_library_verify.py <ip> v1`（PASS 后自动更新 manifest verified=true），再 `python scripts/model_library_import.py <ip> v1` 刷新索引。
 
 ## 八、验收标准
 
