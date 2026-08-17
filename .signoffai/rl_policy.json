@@ -1,7 +1,8 @@
 {
   "q": {
     "cov:below_80|reason:none|sugg:none::RETRY_ENV": 7.601161500000002,
-    "cov:below_80|reason:none|sugg:none::COMPILE_RETRY": 11.409363227728033,
-    "cov:below_80|reason:none|sugg:none::GENERATE_DIRECTED_TEST": 12.855
+    "cov:below_80|reason:none|sugg:none::COMPILE_RETRY": 11.457404259409623,
+    "cov:below_80|reason:none|sugg:none::GENERATE_DIRECTED_TEST": 12.855,
+    "cov:below_80|reason:none|sugg:none::REFACTOR_RTL": 3.4708500000000004
   }
 }
