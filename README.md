@@ -95,7 +95,15 @@ tests/                 # pytest 套件（84 passed）
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q      # 84 passed, 1 skipped
+python -m pytest tests/ -q      # 99 passed, 1 skipped
+```
+
+## EDA 机器一键验收（有 QuestaSim 时）
+
+```powershell
+python scripts\eda_verify_all.py
+# 1. 环境报告  2. 5 个黄金模型入库验证（PASS 自动盖章+入索引）  3. 真实闭环 e2e
+# exit: 0=全部 PASS  1=有 FAIL  2=EDA 缺失（如实报告，不假通过）
 ```
 
 ## 环境要求

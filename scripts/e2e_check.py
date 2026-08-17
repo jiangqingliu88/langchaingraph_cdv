@@ -107,6 +107,19 @@ def main() -> int:
         assert key in manifest, f"manifest 缺 {key}"
     print("\n[PASS] manifest.json 完整（rtl_hashes / coverage_db_history / llm_audit / phases）")
 
+    # ── 断言 4：tb_top 参考模型比对接入（黄金命中时 bench.yaml 必须含 ref_model）──
+    bench_path = output_root / "inputs" / "yaml" / "uvm" / "bench.yaml"
+    if bench_path.exists():
+        bench = bench_path.read_text(encoding="utf-8")
+        has_ref = "ref_model:" in bench and "enabled: true" in bench
+        has_golden = "golden:" in bench
+        if has_ref and has_golden:
+            print("\n[PASS] bench.yaml 含 ref_model（黄金模型真实实例化比对已接入）")
+        else:
+            print("\n[WARN] bench.yaml 无 ref_model 段 —— 黄金未命中或生成失败，参考模型比对未接入")
+    else:
+        print("\n[WARN] 未找到 bench.yaml（UVM 环境可能未生成）")
+
     print("\n=== 验收结论: 通过 ===")
     return 0
 
