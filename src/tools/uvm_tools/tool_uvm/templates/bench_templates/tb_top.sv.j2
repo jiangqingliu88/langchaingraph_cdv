@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // Testbench Top: {{ bench.name }}_tb_top
 // Data-driven generated from bench YAML configuration.
 `timescale 1ns/1ps
@@ -34,6 +36,8 @@ module {{ bench.name }}_tb_top;
 {%- endfor %}
 
   // ── Interface Instances ──
+  // 使用 harness 时接口直接 bind 到 DUT module（见 bench/harness/*.sv），此处不再实例化
+{%- if not bench.harness %}
 {%- for agent in agents %}
   {{ agent.interface }}_interface {{ agent.instance }} (
 {%-   for conn in agent.connections %}
@@ -42,6 +46,7 @@ module {{ bench.name }}_tb_top;
 {%-   endfor %}
   );
 {%- endfor %}
+{%- endif %}
 
   // ── DUT Instantiation ──
 {%- if bench.dut and bench.dut.module %}
@@ -100,12 +105,15 @@ module {{ bench.name }}_tb_top;
   end
 
   // ── UVM Configuration & Test Launch ──
+  // 使用 harness 时 vif 由 harness.set_vifs() 在测试 build_phase 里配置，此处不再 set
   initial begin
+{%- if not bench.harness %}
 {%- for agent in agents %}
     uvm_config_db#(virtual {{ agent.interface }}_interface)::set(
         null, "{{ agent.config_db_path }}", "vif", {{ agent.instance }}
     );
 {%- endfor %}
+{%- endif %}
 {%- if bench.uvm_config.verbosity %}
     uvm_root::get().set_report_verbosity_level_hier({{ bench.uvm_config.verbosity }});
 {%- endif %}

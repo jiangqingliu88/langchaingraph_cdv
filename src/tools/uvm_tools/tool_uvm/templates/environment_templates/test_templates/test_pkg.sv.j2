@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // Test Package: {{ environment.env_name }}_test_pkg
 package {{ environment.env_name }}_test_pkg;
   import uvm_pkg::*;
@@ -14,7 +16,7 @@ package {{ environment.env_name }}_test_pkg;
   // 包含环境组件文件
   `include "{{ environment.env_name }}_base_test.sv"
   `include "{{ environment.env_name }}_direct_test.sv"
-  `include "{{ environment.env_name }}_random_test.sv"
+  `include "{{ environment.env_name }}_gen_test.sv"
 
 
 endpackage : {{ environment.env_name }}_test_pkg

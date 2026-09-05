@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // ============================================================
 // Slave Config: {{ agent.name }}_slave_config
 // ============================================================
@@ -10,8 +12,8 @@ class {{ agent.name }}_slave_config extends uvm_object;
   int data_width = 32;
   int id_width   = 4;
 
-  // 模式控制
-  uvm_active_passive_enum is_active = UVM_ACTIVE;
+  // 模式控制（由 interface YAML is_active.slave 决定）
+  uvm_active_passive_enum is_active = {{ agent.is_active.slave }};
 
   // 错误注入公共开关
   int error_injection_rate = 0; // 0~100
@@ -29,6 +31,8 @@ class {{ agent.name }}_slave_config extends uvm_object;
   bit [31:0] memory_start_addr = 32'h0000_0000;
   bit [31:0] memory_end_addr   = 32'h000F_FFFF;
   byte unsigned default_read_data = 8'h0;
+  // 内存数组（AUTO_MEMORY 响应模式：写存、读取，协议默认驱动逻辑使用）
+  bit [31:0] memory[bit [31:0]];
 
   // 响应延迟
   int response_delay_min = 0;

@@ -1,0 +1,245 @@
+{
+  "tool": "tool_uvm",
+  "version": "0.1.0",
+  "inputs": [
+    "src\\tools\\uvm_tools\\tool_uvm\\examples"
+  ],
+  "generated": 51,
+  "skipped": 0,
+  "validation": {
+    "errors": [],
+    "warnings": [
+      {
+        "severity": "warning",
+        "rule": "tlm_connection_unknown_ref",
+        "target": "APB_env",
+        "message": "tlm_connections.driver 'apb_slave.monitored_ap' references unknown 'apb_slave'"
+      },
+      {
+        "severity": "warning",
+        "rule": "policy_unknown_name",
+        "target": "apb_cons",
+        "message": "policy 'apb_b2b_write' has no built-in apply body（自定义逻辑需手填）"
+      }
+    ]
+  },
+  "merge": {
+    "blocks": [
+      {
+        "file": "agents\\APB_agent\\3_transaction_sequencer\\APB_master_seq_item.sv",
+        "items": [
+          {
+            "slot": "field_decl",
+            "source": "default",
+            "lines": 0
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "agents\\APB_agent\\3_transaction_sequencer\\APB_slave_seq_item.sv",
+        "items": [
+          {
+            "slot": "field_decl",
+            "source": "default",
+            "lines": 0
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "agents\\APB_agent\\4_driver_monitor\\APB_master_driver.sv",
+        "items": [
+          {
+            "slot": "field_decl",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "build_logic",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "drive_logic",
+            "source": "default",
+            "lines": 11
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "agents\\APB_agent\\4_driver_monitor\\APB_slave_driver.sv",
+        "items": [
+          {
+            "slot": "field_decl",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "build_logic",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "drive_logic",
+            "source": "default",
+            "lines": 15
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "agents\\APB_agent\\4_driver_monitor\\APB_master_monitor.sv",
+        "items": [
+          {
+            "slot": "field_decl",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "build_logic",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "collect_logic",
+            "source": "default",
+            "lines": 7
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "agents\\APB_agent\\4_driver_monitor\\APB_slave_monitor.sv",
+        "items": [
+          {
+            "slot": "field_decl",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "build_logic",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "collect_logic",
+            "source": "default",
+            "lines": 7
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "agents\\APB_agent\\7_sequence\\APB_master_sequence.sv",
+        "items": [
+          {
+            "slot": "seq_body",
+            "source": "default",
+            "lines": 0
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "agents\\APB_agent\\7_sequence\\APB_slave_sequence.sv",
+        "items": [
+          {
+            "slot": "seq_body",
+            "source": "default",
+            "lines": 0
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "env\\APB_env.sv",
+        "items": [
+          {
+            "slot": "build_logic",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "connect_logic",
+            "source": "default",
+            "lines": 0
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "env\\tests\\APB_env_base_test.sv",
+        "items": [
+          {
+            "slot": "field_decl",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "build_logic",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "run_logic",
+            "source": "default",
+            "lines": 0
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "env\\tests\\APB_env_direct_test.sv",
+        "items": [
+          {
+            "slot": "build_logic",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "run_logic",
+            "source": "default",
+            "lines": 0
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "env\\tests\\APB_env_gen_test.sv",
+        "items": [
+          {
+            "slot": "field_decl",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "build_logic",
+            "source": "default",
+            "lines": 0
+          }
+        ],
+        "missing": []
+      },
+      {
+        "file": "env\\seqs\\APB_env_virtual_base_seq.sv",
+        "items": [
+          {
+            "slot": "field_decl",
+            "source": "default",
+            "lines": 0
+          },
+          {
+            "slot": "seq_body",
+            "source": "default",
+            "lines": 0
+          }
+        ],
+        "missing": []
+      }
+    ],
+    "load_errors": []
+  },
+  "gate": []
+}

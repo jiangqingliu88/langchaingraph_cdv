@@ -6,9 +6,14 @@ Generate UVM SystemVerilog from YAML interface and environment descriptions.
 from __future__ import annotations
 
 import argparse
+import json
+import os
+import re
+import shutil
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 try:
     import yaml
@@ -24,7 +29,284 @@ except ImportError as exc:
         "Missing dependency: Jinja2 is required. Install with: pip install jinja2"
     ) from exc
 
+try:
+    from .semantic_check import SemanticValidator  # 包内导入（python -m 路径）
+except ImportError:  # 直接脚本执行（python gen_uvm.py）
+    from semantic_check import SemanticValidator
+
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+
+__version__ = "0.1.0"
+
+# ════════════════════════════════════════════════════════════
+# 商标与版权（只改这里一个变量，全脚本生效）
+# YAML 顶层 meta.company / meta.rights 可覆盖
+# ════════════════════════════════════════════════════════════
+COMPANY_TRADEMARK = "SignOffAI（功能签核）"   # ← 替换成你的公司/组织名
+COPYRIGHT_YEAR = "2026"
+
+# ── 文件头元数据（base_templates/base_template.sv.j2 渲染用）──
+DEFAULT_META = {
+    "company": COMPANY_TRADEMARK,
+    "rights": (f"Copyright © {COPYRIGHT_YEAR} {COMPANY_TRADEMARK}. All rights reserved. "
+               "未经书面许可，禁止复制、修改、分发或用于商业用途。"),
+    "author": "-",
+    "email": "-",
+}
+
+# ============================================================
+#  pragma custom 自定义代码区域（细粒度语义槽，无粗区）
+# ============================================================
+# 槽位在单文件内必须唯一、不嵌套、begin/end 成对；回填优先级:
+#   YAML custom_code.<slot>（非空）> merge_source 旧文件内容 > 模板默认内容
+# 生成文件带 BANNER 签名；-c/--clean 只删除带签名的文件，绝不碰手写文件。
+
+def _make_banner(prefix: str = "// ") -> str:
+    """生成文件签名 banner（按目标文件类型选注释前缀：SV/filelist 用 //，Makefile 用 #）。"""
+    return "\n".join([
+        f"{prefix}════════════════════════════════════════════════════════════════",
+        f"{prefix}自动生成 (tool_uvm v{__version__}) — 请勿直接修改；"
+        f"自定义代码写入 pragma custom 区域",
+        f"{prefix}════════════════════════════════════════════════════════════════",
+    ]) + "\n"
+
+
+BANNER = _make_banner("// ")
+BANNER_MARKER = "自动生成 (tool_uvm"
+
+REGION_MARKER = re.compile(r"^\s*//\s*pragma\s+custom\s+(\w+)\s+(begin|end)\s*$")
+
+
+class RegionError(Exception):
+    """pragma custom 区域错误（未闭合 / 嵌套 / 同名重复 / 旧源无匹配）。"""
+
+
+@dataclass
+class MergeBlockInfo:
+    slot: str
+    source: str   # "yaml" | "merged" | "default"
+    lines: int
+
+
+@dataclass
+class MergeFileReport:
+    relpath: str
+    blocks: List[MergeBlockInfo] = field(default_factory=list)
+    missing: List[str] = field(default_factory=list)
+
+
+class RegionInjector:
+    """pragma custom 区域注入器。
+
+    模板静态写空区域（slot 文件内唯一）；渲染后按优先级回填。
+    -m/--merge_source 时预提取旧文件区域表，按目标相对路径索引。
+    """
+
+    def __init__(self, merge_source: Optional[Path] = None,
+                 skip_missing: bool = False,
+                 debug_dir: Optional[Path] = None,
+                 report: Optional[List[MergeFileReport]] = None) -> None:
+        self.merge_source = Path(merge_source) if merge_source else None
+        self.skip_missing = skip_missing
+        self.debug_dir = Path(debug_dir) if debug_dir else None
+        self.report: List[MergeFileReport] = report if report is not None else []
+        self.load_errors: List[str] = []   # merge_source 中区域解析失败的文件（不参与合并）
+        self._old_blocks: Dict[str, Dict[str, str]] = {}
+        if self.merge_source:
+            self._load_merge_source(self.merge_source)
+
+    # ── 提取 ──
+    @staticmethod
+    def extract_blocks(text: str) -> Dict[str, str]:
+        """提取 text 中全部 pragma custom 区域 → {slot: 内容}。
+
+        未闭合 / 嵌套 / 同名重复 → RegionError。
+        """
+        blocks: Dict[str, str] = {}
+        current: Optional[str] = None
+        buf: List[str] = []
+        for lineno, line in enumerate(text.splitlines(), 1):
+            m = REGION_MARKER.match(line)
+            if m:
+                slot, kind = m.group(1), m.group(2)
+                if kind == "begin":
+                    if current is not None:
+                        raise RegionError(
+                            f"line {lineno}: region '{slot}' nested inside '{current}'")
+                    if slot in blocks:
+                        raise RegionError(f"line {lineno}: duplicate region '{slot}'")
+                    current = slot
+                    buf = []
+                else:
+                    if current != slot:
+                        raise RegionError(
+                            f"line {lineno}: region end '{slot}' without begin "
+                            f"(open: '{current}')")
+                    blocks[slot] = "\n".join(buf)
+                    current = None
+            elif current is not None:
+                buf.append(line)
+        if current is not None:
+            raise RegionError(f"region '{current}' not closed")
+        return blocks
+
+    def _load_merge_source(self, root: Path) -> None:
+        """扫描 merge_source 目录，提取每个文件的区域表（按目标相对路径索引）。"""
+        if not root.is_dir():
+            raise RegionError(f"merge source directory not found: {root}")
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.suffix not in (".sv", ".svh"):
+                continue
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            try:
+                blocks = self.extract_blocks(text)
+            except RegionError as exc:
+                self.load_errors.append(f"[{path.relative_to(root)}] {exc}")
+                continue  # 坏区域文件不参与合并（错误记录进报告）
+            if blocks:
+                self._old_blocks[str(path.relative_to(root))] = blocks
+
+    # ── 注入 ──
+    def inject(self, rendered: str, defaults: Dict[str, str],
+               relpath: str, add_banner: bool = True,
+               banner_prefix: str = "// ") -> Tuple[str, MergeFileReport]:
+        """渲染产物 → 注入后文本。
+
+        defaults = YAML custom_code（键存在且内容非空 → "yaml" 源，每次生成覆盖）。
+        模板区域内已有的默认内容作为最后兜底（"default" 源）。
+        """
+        report = MergeFileReport(relpath=relpath)
+        old = self._old_blocks.get(relpath, {})
+        out: List[str] = []
+        current: Optional[str] = None
+        inner: List[str] = []
+        seen: List[str] = []
+
+        for lineno, line in enumerate(rendered.splitlines(), 1):
+            m = REGION_MARKER.match(line)
+            if m:
+                slot, kind = m.group(1), m.group(2)
+                if kind == "begin":
+                    if current is not None:
+                        raise RegionError(
+                            f"line {lineno}: region '{slot}' nested inside '{current}'")
+                    if slot in seen:
+                        raise RegionError(f"line {lineno}: duplicate region '{slot}'")
+                    current = slot
+                    inner = []
+                    out.append(line)
+                else:
+                    if current != slot:
+                        raise RegionError(
+                            f"line {lineno}: region end '{slot}' without begin "
+                            f"(open: '{current}')")
+                    yaml_val = (defaults.get(slot) or "").strip() if defaults else ""
+                    old_val = old.get(slot, "")
+                    if yaml_val:
+                        content, source = yaml_val, "yaml"
+                    elif old_val:
+                        content, source = old_val, "merged"
+                    else:
+                        content, source = "\n".join(inner), "default"
+                    out.extend(content.splitlines())
+                    out.append(line)
+                    report.blocks.append(
+                        MergeBlockInfo(slot, source, len(content.splitlines())))
+                    seen.append(slot)
+                    current = None
+            elif current is not None:
+                inner.append(line)
+            else:
+                out.append(line)
+        if current is not None:
+            raise RegionError(f"region '{current}' not closed")
+
+        # 旧文件多出的区域（新模板没有对应槽）
+        for slot in sorted(old):
+            if slot not in seen:
+                if not self.skip_missing:
+                    raise RegionError(
+                        f"[{relpath}] block '{slot}' found in old source has no "
+                        f"matching region in new output "
+                        f"(use --merge_skip_missing_blocks to continue)")
+                report.missing.append(slot)
+
+        text = "\n".join(out) + "\n"
+        if add_banner and BANNER_MARKER not in text:
+            text = _make_banner(banner_prefix) + "\n" + text
+        if self.debug_dir is not None:
+            debug_path = self.debug_dir / relpath
+            debug_path.parent.mkdir(parents=True, exist_ok=True)
+            debug_path.write_text(rendered + "\n", encoding="utf-8")
+        self.report.append(report)
+        return text, report
+
+
+def backup_merge_source(merge_source: Path) -> Path:
+    """备份 merge_source 目录 → <merge_source>_backup_<时间戳>。"""
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup = merge_source.with_name(f"{merge_source.name}_backup_{ts}")
+    shutil.copytree(merge_source, backup)
+    return backup
+
+
+def _is_generated_file(path: Path) -> bool:
+    """文件是否带生成签名（clean 只删除此类文件）。"""
+    try:
+        head = path.read_text(encoding="utf-8", errors="replace")[:2000]
+    except OSError:
+        return False
+    return BANNER_MARKER in head
+
+
+def _write_report_json(output_root: Path, *, generated: int, skipped: int,
+                       validation_issues: List[Any], merge_reports: List[Any],
+                       load_errors: List[str], gate_results: List[Dict[str, str]],
+                       inputs: Optional[List[Path]] = None) -> Path:
+    """P2-4: 结构化生成报告（供 Agent 决策 / 签核证据包引用）。"""
+    report = {
+        "tool": "tool_uvm",
+        "version": __version__,
+        "inputs": [str(p) for p in (inputs or [])],
+        "generated": generated,
+        "skipped": skipped,
+        "validation": {
+            "errors": [i.__dict__ for i in validation_issues if i.severity == "error"],
+            "warnings": [i.__dict__ for i in validation_issues if i.severity == "warning"],
+        },
+        "merge": {
+            "blocks": [
+                {"file": r.relpath,
+                 "items": [b.__dict__ for b in r.blocks],
+                 "missing": r.missing}
+                for r in merge_reports if r.blocks or r.missing
+            ],
+            "load_errors": load_errors,
+        },
+        "gate": gate_results,
+    }
+    report_path = output_root / "generation_report.json"
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
+                           encoding="utf-8")
+    return report_path
+
+
+def _clean_generated(dest_root: Path) -> int:
+    """-c/--clean：删除 dest_dir 下所有带签名的生成文件，并清理空目录。"""
+    if not dest_root.is_dir():
+        return 0
+    removed = 0
+    for path in sorted(dest_root.rglob("*"), reverse=True):
+        if path.is_file() and _is_generated_file(path):
+            path.unlink()
+            removed += 1
+    for path in sorted(dest_root.rglob("*"), reverse=True):
+        if path.is_dir() and not any(path.iterdir()):
+            path.rmdir()
+    return removed
 
 # AXI-VIP 风格：编号分层目录 + master/slave 完全分离
 INTERFACE_TEMPLATES = [
@@ -78,7 +360,7 @@ ENVIRONMENT_TEST_TEMPLATES = [
     ("environment_templates/test_templates/test_pkg.sv.j2", "{env_name}_test_pkg.sv"),
     ("environment_templates/test_templates/test_base.sv.j2", "{env_name}_base_test.sv"),
     ("environment_templates/test_templates/test_directed.sv.j2", "{env_name}_direct_test.sv"),
-    ("environment_templates/test_templates/test_random.sv.j2", "{env_name}_random_test.sv"),
+    ("environment_templates/test_templates/gen_test_sv.j2", "{env_name}_gen_test.sv"),
 ]
 
 ENVIRONMENT_SEQ_TEMPLATES = [
@@ -114,6 +396,10 @@ BENCH_TEMPLATES = [
     ("bench_templates/tb_top.sv.j2", "{bench_name}_tb_top.sv"),
 ]
 
+HARNESS_TEMPLATES = [
+    ("bench_templates/harness.sv.j2", "{name}.sv"),
+]
+
 CMODEL_TEMPLATES = [
     ("environment_templates/cmodel_predictor.sv.j2", "{module_name}_cmodel_predictor.sv"),
     ("environment_templates/cmodel_dpi.cpp.j2", "{module_name}_dpi_wrapper.cpp"),
@@ -125,8 +411,97 @@ SCOREBOARD_TEMPLATES = {
     "outoforder": "environment_templates/scoreboard_outoforder.sv.j2",
 }
 
+# ── P0-4: 编译仿真门禁（--gate）──
+_GATE_SIMULATORS = ("vlog", "vcs")   # 支持 UVM 的仿真器（iverilog/verilator 不支持 UVM 类）
+
+
+def _detect_simulator() -> Optional[str]:
+    for name in _GATE_SIMULATORS:
+        if shutil.which(name):
+            return name
+    return None
+
+
+def _run_gate(output_root: Path) -> List[Dict[str, str]]:
+    """对每个 agent 的 loopback 自检跑编译+仿真，提取 pass/fail/skip。
+
+    无仿真器 → 每项 skip（不阻断生成，仅报告）。
+    """
+    import subprocess as _sp
+
+    sim = _detect_simulator()
+    results: List[Dict[str, str]] = []
+    agents_dir = output_root / "agents"
+    if not agents_dir.is_dir():
+        return results
+    for agent_dir in sorted(agents_dir.iterdir()):
+        lb_dir = agent_dir / "loopback"
+        filelist = lb_dir / "filelist.f"
+        if not filelist.is_file():
+            continue
+        name = agent_dir.name
+        if sim is None:
+            results.append({"agent": name, "status": "skip",
+                            "reason": "no UVM simulator (vlog/vcs) found"})
+            continue
+        log_file = lb_dir / "gate_sim.log"
+        try:
+            if sim == "vlog":   # Questa/ModelSim
+                cmds = [
+                    ["vlog", "-sv", "-f", "filelist.f"],
+                    ["vsim", "-c", "-l", "gate_sim.log",
+                     "-do", "run -all; quit -f", f"{name}_loopback_tb"],
+                ]
+            else:               # VCS
+                cmds = [
+                    ["vcs", "-sverilog", "-f", "filelist.f", "-l", "gate_comp.log"],
+                    ["./simv", "-l", "gate_sim.log"],
+                ]
+            status = "pass"
+            for cmd in cmds:
+                proc = _sp.run(cmd, cwd=str(lb_dir), capture_output=True,
+                               text=True, timeout=300)
+                if proc.returncode != 0:
+                    status = "fail"
+                    break
+            if status == "pass":
+                log_text = ""
+                if log_file.is_file():
+                    log_text = log_file.read_text(encoding="utf-8", errors="replace")
+                if "UVM_ERROR" in log_text or "LOOPBACK_TIMEOUT" in log_text:
+                    status = "fail"
+            results.append({"agent": name, "status": status,
+                            "sim": sim, "log": str(log_file)})
+        except Exception as exc:
+            results.append({"agent": name, "status": "fail",
+                            "reason": f"{type(exc).__name__}: {exc}"})
+    return results
+
 # 环境级 Predictor（SV 行为参考模型）模板
 PREDICTOR_TEMPLATE = "environment_templates/predictor.sv.j2"
+
+def _normalize_is_active(raw: Any) -> Dict[str, str]:
+    """归一化 is_active 输入 → {"master": <enum>, "slave": <enum>}。
+
+    支持:
+      - dict:  {master: <bool|str>, slave: <bool|str>}（缺省项 = UVM_ACTIVE）
+      - 标量:  True/False/"UVM_ACTIVE"/"UVM_PASSIVE"/"active"/"passive" → 两角色同值
+    """
+    def _to_enum(value: Any) -> str:
+        if isinstance(value, bool):
+            return "UVM_ACTIVE" if value else "UVM_PASSIVE"
+        s = str(value or "").upper()
+        if "PASSIVE" in s or s == "FALSE":
+            return "UVM_PASSIVE"
+        return "UVM_ACTIVE"
+
+    if isinstance(raw, dict):
+        return {
+            "master": _to_enum(raw.get("master", "UVM_ACTIVE")),
+            "slave": _to_enum(raw.get("slave", "UVM_ACTIVE")),
+        }
+    return {"master": _to_enum(raw), "slave": _to_enum(raw)}
+
 
 @dataclass
 class AgentModel:
@@ -146,13 +521,34 @@ class AgentModel:
     config_constraints: List[Dict[str, Any]] = field(default_factory=list)
     response_info: Dict[str, Any] = field(default_factory=dict)
     config: Dict[str, Any] = field(default_factory=lambda: {"is_active": "UVM_ACTIVE"})
+    # 归一化后的激活模式：{"master": "UVM_ACTIVE"|"UVM_PASSIVE", "slave": ...}
+    # 输入（YAML）可为标量或 {master: ..., slave: ...}，见 _normalize_is_active
+    is_active: Optional[Dict[str, str]] = None
     agent_type: str = ""   # 从 YAML "type" 映射（如 "mem"）
+    # 协议名（如 "apb"）→ 模板渲染协议正确的默认驱动/采样时序；空 = 通用单拍
+    protocol: str = ""
+    # 复位极性（P0-2 复位门控用）：True = 低有效（如 presetn），缺省 True
+    reset_active_low: bool = True
+    # env 级 agents 列表项的角色标记（interface 级不用）：
+    is_master: Optional[bool] = None  # True=master 实例 / False=slave 实例 / None=未指定
+    active: Optional[bool] = None     # 该实例 is_active（None → 模板走缺省 ACTIVE）
     # LLM-generated protocol-specific timing logic placeholders
-    custom_drive_logic: str = ""   # Injected into driver.sv.j2 {{ custom_drive_logic }}
-    custom_sample_logic: str = ""  # Injected into monitor.sv.j2 {{ custom_sample_logic }}
-    custom_collect_logic: str = ""  # Injected into monitor.sv.j2 {{ custom_collect_logic }} (task 级帧采集)
+    custom_drive_logic: str = ""   # 旧字段：等价 custom_code.drive_logic（区域缺省值）
+    custom_sample_logic: str = ""  # 旧字段：等价 custom_code.sample_logic
+    custom_collect_logic: str = ""  # 旧字段：等价 custom_code.collect_logic（task 级帧采集）
+    # pragma custom 区域注入内容: {slot: 代码}，如 {"drive_logic": "...", "field_decl": "..."}
+    custom_code: Dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        # is_active 归一化：显式字段 > config.is_active > 缺省 ACTIVE
+        raw = self.is_active
+        if raw is None and isinstance(self.config, dict):
+            raw = self.config.get("is_active")
+        elif raw is None:
+            raw = self.config
+        self.is_active = _normalize_is_active(raw)
+        if isinstance(self.config, dict):
+            self.config["is_active"] = self.is_active  # 旧读取路径兼容
         if not self.interface:
             self.interface = self.name
         # Normalize: strip _interface suffix (may come from env/bench YAML)
@@ -180,7 +576,16 @@ class AgentModel:
         self.transaction_constraints.setdefault("slave", [])
 
     def to_context(self) -> Dict[str, Any]:
-        return asdict(self)
+        context = asdict(self)
+        # 旧字段（custom_drive_logic 等）→ 对应区域槽的缺省值（custom_code 显式优先）
+        custom_code = dict(self.custom_code or {})
+        for slot, val in (("drive_logic", self.custom_drive_logic),
+                          ("sample_logic", self.custom_sample_logic),
+                          ("collect_logic", self.custom_collect_logic)):
+            if val and not custom_code.get(slot):
+                custom_code[slot] = val
+        context["custom_code"] = custom_code
+        return context
 
 
 class AgentCollection(list):
@@ -201,6 +606,13 @@ class EnvironmentModel:
     analysis_ports: List[Dict[str, Any]] = field(default_factory=list)
     virtual_sequencer: Dict[str, Any] = field(default_factory=lambda: {"enabled": False})
     clk_rst_vip: Dict[str, Any] = field(default_factory=dict)
+    register_model: Dict[str, Any] = field(default_factory=dict)
+    # pragma custom 区域注入内容: {slot: 代码}（如 build_logic/connect_logic）
+    custom_code: Dict[str, str] = field(default_factory=dict)
+    # 可选：测试侧 harness 连接 {path: 层级路径, env_suffix: ".sub_env0"}
+    harness_connect: Dict[str, str] = field(default_factory=dict)
+    # 语义 cross（P1-2）：[[字段A, 字段B], ...] → env_cov 生成 cross coverpoint
+    coverage_crosses: List[List[str]] = field(default_factory=list)
     config_vars: List[Dict[str, Any]] = field(default_factory=list)
     config_constraints: List[Dict[str, Any]] = field(default_factory=list)
     tlm_connections: List[Dict[str, Any]] = field(default_factory=list)
@@ -240,6 +652,91 @@ class ConstraintModel:
             "policies": self.policies,
             "combinator": self.combinator,
         }
+
+@dataclass
+class HarnessModel:
+    """bind 式 UVM harness（dummy interface + set_vifs + bind 到 DUT module）。
+
+    style:
+      bind    — 各 interface 分别 bind 到目标 module；set_vifs 用向上查找
+                （{{ bind_to }}.{{ source_path }}.{{ name }}）
+      inside  — interface 实例化在 harness 内部（信号连接用向上查找），
+                只 bind harness 一次
+    """
+    name: str                       # dummy interface 名（如 math_coprocessor_harness）
+    bind_to: str = ""               # bind 目标 module 名（所有实例生效）
+    parameter: str = ""             # 可选：harness 参数化（值取 module 同名 parameter）
+    style: str = "bind"             # "bind" | "inside"
+    interfaces: List[Dict[str, Any]] = field(default_factory=list)
+    sub_harnesses: List[Dict[str, Any]] = field(default_factory=list)
+    connect_path: str = ""          # 可选：测试侧调用路径（如 "harness.U_X.harness"）
+
+    def to_context(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+def _opt_bool(value: Any) -> Optional[bool]:
+    """YAML 布尔（bool 或 "True"/"False" 字符串）→ Optional[bool]；无法解析 → None。"""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    s = str(value).strip().lower()
+    if s in ("true", "1", "yes", "on"):
+        return True
+    if s in ("false", "0", "no", "off"):
+        return False
+    return None
+
+
+def _to_count(value: Any) -> Any:
+    """interface 数组大小：数字 → int；否则保留字符串（参数名，如 NUM_CLIENTS）。"""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return value if value not in (None, "") else 1
+
+
+def _normalize_harness(data: Dict[str, Any]) -> Optional[HarnessModel]:
+    """归一化 harness YAML → HarnessModel。"""
+    if not isinstance(data, dict):
+        return None
+    name = data.get("name")
+    if not name:
+        return None
+    bind_to = data.get("bind_to", "")
+    interfaces = []
+    for raw in data.get("interfaces") or []:
+        if not isinstance(raw, dict) or not raw.get("name") or not raw.get("type"):
+            continue
+        conns = raw.get("connections") or {}
+        if not isinstance(conns, dict):
+            conns = {}
+        interfaces.append({
+            "name": raw["name"],
+            "type": raw["type"],
+            "agent_path": raw.get("agent_path", raw["name"]),
+            "connections": conns,
+            "bind_to": raw.get("bind_to", ""),      # 缺省用 harness.bind_to
+            "source_path": raw.get("source_path", ""),  # 多实例层级路径（如 cache.memory）
+            "count": _to_count(raw.get("count", 1)),
+        })
+    return HarnessModel(
+        name=name,
+        bind_to=bind_to,
+        parameter=data.get("parameter", ""),
+        style=data.get("style", "bind") if data.get("style") in ("bind", "inside") else "bind",
+        interfaces=interfaces,
+        sub_harnesses=[
+            {"path": s.get("path", ""), "env_path": s.get("env_path", "")}
+            for s in (data.get("sub_harnesses") or [])
+            if isinstance(s, dict) and s.get("path")
+        ],
+        connect_path=data.get("connect_path", data.get("connect", {}).get("path", "")
+                              if isinstance(data.get("connect"), dict) else ""),
+    )
+
 
 @dataclass
 class WireDecl:
@@ -353,6 +850,9 @@ class BenchModel:
     wire_decls: List[Dict[str, Any]] = field(default_factory=list)
     assignments: List[Dict[str, Any]] = field(default_factory=list)
     agents: Dict[str, BenchAgentEntry] = field(default_factory=dict)
+    # 可选：bind 式 harness（存在时 tb_top 跳过接口实例化与 config_db set，
+    # 由 harness.set_vifs() 在测试侧接管 vif 配置）
+    harness: Dict[str, Any] = field(default_factory=dict)
     dut: Optional[Dict[str, Any]] = None
     uvm_config: Dict[str, Any] = field(default_factory=dict)
     wave_dump: Dict[str, Any] = field(default_factory=dict)
@@ -418,6 +918,11 @@ class JinjaRenderer:
             keep_trailing_newline=True,
             autoescape=False,
         )
+        # 文件头元数据（创建/修改时间 + 商标变量，base_template 兜底用）
+        self.environment.globals["now"] = (
+            lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        self.environment.globals["trademark"] = COMPANY_TRADEMARK
+        self.environment.globals["copyright_year"] = COPYRIGHT_YEAR
         self.environment.filters["nl2br"] = lambda value: str(value).replace("\n", "\\n")
         self.environment.globals["get_clock_index"] = lambda name, clocks: clocks.index(name) if name in clocks else 0
         self.environment.globals["get_reset_index"] = lambda name, resets: resets.index(name) if name in resets else 0
@@ -438,38 +943,73 @@ class JinjaRenderer:
 
 
 class RenderTask:
-    def __init__(self, renderer: JinjaRenderer, output_dir: Path) -> None:
+    def __init__(self, renderer: JinjaRenderer, output_dir: Path,
+                 injector: Optional[RegionInjector] = None,
+                 overwrite: bool = False,
+                 meta: Optional[Dict[str, str]] = None) -> None:
         self.renderer = renderer
         self.output_dir = output_dir
+        self.injector = injector if injector is not None else RegionInjector()
+        self.overwrite = overwrite
+        self.meta = dict(meta or DEFAULT_META)
+        self.skipped = 0
 
-    def render_file(self, template_path: str, target_path: Path, context: Dict[str, Any]) -> Path:
+    def should_skip(self, target_path: Path) -> bool:
+        """默认跳过已存在文件（UVMF 语义）；-o/--overwrite 或合并流程例外。"""
+        if self.overwrite or self.injector.merge_source is not None:
+            return False
+        return target_path.exists()
+
+    def render_file(self, template_path: str, target_path: Path,
+                    context: Dict[str, Any]) -> Optional[Path]:
+        if self.should_skip(target_path):
+            self.skipped += 1
+            return None
         target_path.parent.mkdir(parents=True, exist_ok=True)
+        # 文件头元数据（base_template.sv.j2 继承渲染用）
+        context = dict(context)
+        context.setdefault("meta", self.meta)
+        context.setdefault("file_name", target_path.name)
         content = self.renderer.render(template_path, context)
-        target_path.write_text(content, encoding="utf-8")
+        defaults = context.get("custom_code") or {}
+        relpath = str(target_path.relative_to(self.output_dir))
+        # Makefile 用 # 注释（banner 与 pragma 区域均如此）
+        banner_prefix = "# " if target_path.name == "Makefile" else "// "
+        content, _report = self.injector.inject(content, defaults, relpath,
+                                                banner_prefix=banner_prefix)
+        # 原子写入：先写 .tmp 再 rename，防止生成中断截断旧文件（旧文件可能是 merge 源）
+        tmp_path = target_path.with_suffix(target_path.suffix + ".tmp")
+        tmp_path.write_text(content, encoding="utf-8")
+        os.replace(tmp_path, target_path)
         return target_path
 
 
 class AgentRenderTask(RenderTask):
     def generate(self, agent: AgentModel) -> List[Path]:
         rendered: List[Path] = []
-        base_dir = self.output_dir / "agents" / agent.name
+        base_dir = self.output_dir / "agents" / f"{agent.name}_agent"
         context = {"agent": agent, **agent.to_context()}
         for template_path, target_pattern in INTERFACE_TEMPLATES:
             target_name = target_pattern.format(agent_name=agent.name)
             target_path = base_dir / target_name
-            rendered.append(self.render_file(template_path, target_path, context))
+            result = self.render_file(template_path, target_path, context)
+            if result is not None:
+                rendered.append(result)
 
         # ── Agent 自闭环测试套件（master-drive → slave-monitor）──
         lb_dir = base_dir / "loopback"
         for template_path, target_pattern in AGENT_LOOPBACK_TEMPLATES:
             target_name = target_pattern.format(agent_name=agent.name)
             target_path = lb_dir / target_name
-            rendered.append(self.render_file(template_path, target_path, context))
-        rendered.append(_generate_loopback_filelist(agent, lb_dir))
+            result = self.render_file(template_path, target_path, context)
+            if result is not None:
+                rendered.append(result)
+        if not self.should_skip(lb_dir / "filelist.f"):
+            rendered.append(_generate_loopback_filelist(agent, lb_dir))
 
         # ── Generate human-readable markdown summary ──
-        md_path = _generate_agent_markdown(agent, base_dir)
-        rendered.append(md_path)
+        if not self.should_skip(base_dir / "summary.md"):
+            rendered.append(_generate_agent_markdown(agent, base_dir))
 
         return rendered
 
@@ -500,13 +1040,17 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
     """Generate a human-readable summary.md for a single UVM agent."""
     md_path = base_dir / "summary.md"
     lines: List[str] = []
+    lines.append(f"<!-- 自动生成 (tool_uvm v{__version__}) — 请勿直接修改本文件 -->")
+    lines.append("")
 
     name = agent.name
     iface = agent.interface_name or agent.interface or name
     clk = agent.clock or "clk"
     rst = agent.reset or "rst"
-    is_active = agent.config.get("is_active", "UVM_ACTIVE") if isinstance(agent.config, dict) else str(agent.config)
-    mode = "🟢 ACTIVE" if "ACTIVE" in str(is_active) else "🔵 PASSIVE"
+    m_mode = agent.is_active.get("master", "UVM_ACTIVE")
+    s_mode = agent.is_active.get("slave", "UVM_ACTIVE")
+    m_emoji = "🟢" if "ACTIVE" in str(m_mode) else "🔵"
+    s_emoji = "🟢" if "ACTIVE" in str(s_mode) else "🔵"
 
     lines.append(f"# Agent: `{name}`")
     lines.append("")
@@ -515,7 +1059,7 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
     lines.append(f"| Interface | `{iface}` |")
     lines.append(f"| Clock | `{clk}` |")
     lines.append(f"| Reset | `{rst}` |")
-    lines.append(f"| Mode | {mode} |")
+    lines.append(f"| Mode | master {m_emoji} `{m_mode}` · slave {s_emoji} `{s_mode}` |")
     lines.append("")
 
     # ── Interface Ports ──
@@ -674,10 +1218,12 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
 
 def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
                             environments: List["EnvironmentModel"] = None,
-                            benches: List["BenchModel"] = None) -> Path:
+                            benches: List["BenchModel"] = None,
+                            harnesses: List["HarnessModel"] = None) -> Path:
     """Generate an overall README.md at the output root indexing all agents."""
     readme_path = output_dir / "README.md"
     lines: List[str] = []
+    lines.append(f"<!-- 自动生成 (tool_uvm v{__version__}) — 请勿直接修改本文件 -->")
 
     lines.append("# UVM Verification Environment — Generated Output")
     lines.append("")
@@ -695,7 +1241,7 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
     if agents:
         lines.append("├── agents/")
         for a in agents:
-            lines.append(f"│   ├── {a.name}/")
+            lines.append(f"│   ├── {a.name}_agent/")
             lines.append(f"│   │   ├── summary.md     ← agent design summary")
             lines.append(f"│   │   ├── {a.name}_*.sv  ← UVM components")
             lines.append(f"│   │   └── loopback/      ← self-test testbench")
@@ -725,12 +1271,14 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
         lines.append("|-------|-----------|------|-------|--------------------|-------------|")
         for a in agents:
             iface = a.interface_name or a.interface or a.name
-            mode = "ACTIVE" if "ACTIVE" in str(a.config.get("is_active", "")) else "PASSIVE"
+            _m = "A" if "ACTIVE" in str(a.is_active.get("master", "")) else "P"
+            _s = "A" if "ACTIVE" in str(a.is_active.get("slave", "")) else "P"
+            mode = f"M:{_m} / S:{_s}"
             n_ports = len(a.ports) if a.ports else 0
             n_txn = len(a.transaction_vars) if a.transaction_vars else 0
             _tc = a.transaction_constraints or {}
             n_cons = (len(_tc.get("master", [])) + len(_tc.get("slave", []))) if isinstance(_tc, dict) else 0
-            lines.append(f"| [{a.name}](agents/{a.name}/summary.md) | `{iface}` | {mode} | {n_ports} | {n_txn} | {n_cons} |")
+            lines.append(f"| [{a.name}](agents/{a.name}_agent/summary.md) | `{iface}` | {mode} | {n_ports} | {n_txn} | {n_cons} |")
         lines.append("")
 
     # ── Per-Agent Detail ──
@@ -738,11 +1286,11 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
         lines.append("## 📋 Agent Details")
         lines.append("")
         for a in agents:
-            lines.append(f"### [{a.name}](agents/{a.name}/summary.md)")
+            lines.append(f"### [{a.name}](agents/{a.name}_agent/summary.md)")
             lines.append("")
             lines.append(f"- **Interface**: `{a.interface_name or a.interface or a.name}`")
             lines.append(f"- **Clock**: `{a.clock or 'clk'}`  |  **Reset**: `{a.reset or 'rst'}`")
-            lines.append(f"- **Mode**: `{a.config.get('is_active', 'UVM_ACTIVE')}`")
+            lines.append(f"- **Mode**: master `{a.is_active.get('master', 'UVM_ACTIVE')}` / slave `{a.is_active.get('slave', 'UVM_ACTIVE')}`")
 
             if a.ports:
                 port_list = ", ".join(
@@ -760,13 +1308,15 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
                     txn_list += f" +{len(a.transaction_vars) - 6} more"
                 lines.append(f"- **Transaction fields**: {txn_list}")
 
-            if a.transaction_constraints:
+            _tc = a.transaction_constraints or {}
+            _cons_all = (_tc.get("master", []) + _tc.get("slave", [])) if isinstance(_tc, dict) else list(_tc)
+            if _cons_all:
                 cons_list = ", ".join(
                     f"`{c.get('name','?')}`"
-                    for c in a.transaction_constraints[:4])
+                    for c in _cons_all[:4])
                 lines.append(f"- **Constraints**: {cons_list}")
 
-            lines.append(f"- **Files**: `agents/{a.name}/` (13 .sv + loopback)")
+            lines.append(f"- **Files**: `agents/{a.name}_agent/` (13 .sv + loopback)")
             lines.append("")
 
     # ── Environment ──
@@ -779,7 +1329,32 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
                 lines.append(f"  - Scoreboards: {len(env.scoreboards)}")
             if env.tlm_connections:
                 lines.append(f"  - TLM connections: {len(env.tlm_connections)}")
+            if env.register_model and env.register_model.get("components"):
+                comps = ", ".join(
+                    f"`{c['name']}` (`{c['type']}`)" for c in env.register_model["components"])
+                lines.append(f"  - Register model: {comps}")
+            if env.analysis_exports:
+                names = ", ".join(f"`{p['name']}`" for p in env.analysis_exports)
+                lines.append(f"  - Analysis exports: {names}")
+            if env.analysis_ports:
+                names = ", ".join(f"`{p['name']}`" for p in env.analysis_ports)
+                lines.append(f"  - Analysis ports: {names}")
             lines.append(f"  - Files: `env/{env.env_name}*.sv`")
+        lines.append("")
+
+    # ── Harness ──
+    if harnesses:
+        lines.append("## 🔌 UVM Harness (bind 式自连接)")
+        lines.append("")
+        for h in harnesses:
+            lines.append(f"- **{h.name}** — bind 到 `{h.bind_to}`（style: {h.style}）")
+            if h.interfaces:
+                for i in h.interfaces:
+                    arr = f"[{i['count']}-1:0]" if i["count"] != 1 else ""
+                    lines.append(f"  - `{i['type']} {i['name']}{arr}` → agent path `.{(i['agent_path'])}`")
+            if h.sub_harnesses:
+                lines.append(f"  - Sub-harnesses: {len(h.sub_harnesses)}")
+            lines.append(f"  - File: `bench/{h.name}.sv`")
         lines.append("")
 
     # ── Bench ──
@@ -809,7 +1384,7 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
     lines.append("")
 
     lines.append("---")
-    lines.append("*Generated by SignOffAI UVM Generator*")
+    lines.append(f"*Generated by {COMPANY_TRADEMARK} UVM Generator*")
     lines.append("")
 
     readme_path.write_text("\n".join(lines), encoding="utf-8")
@@ -841,6 +1416,15 @@ class EnvironmentRenderTask(RenderTask):
             target_path = seqs_dir / target_name
             rendered.append(self.render_file(template_path, target_path, context))
 
+        # 生成 Reg 自检序列（register_model 存在时，P1-3）
+        if environment.register_model and environment.register_model.get("reg_block"):
+            reg_smoke_path = seqs_dir / f"{environment.env_name}_reg_smoke_seq.sv"
+            result = self.render_file(
+                "environment_templates/reg_smoke_seq.sv.j2",
+                reg_smoke_path, context)
+            if result is not None:
+                rendered.append(result)
+
         # 生成 Predictor（SV 行为参考模型）
         pred_dir = env_dir / "pred"
         for pred in environment.predictors:
@@ -854,7 +1438,7 @@ class EnvironmentRenderTask(RenderTask):
         for sb in environment.scoreboards:
             if not isinstance(sb, dict) or not sb.get("name"):
                 continue
-            if sb.get("sb_type"):
+            if sb.get("sb_type") and not sb.get("generated"):
                 # 新格式（UVMF）：scoreboard 由 sb_type 指定外部类，不在此生成
                 continue
             template_path = SCOREBOARD_TEMPLATES.get(sb.get("mode", "inorder"))
@@ -934,17 +1518,30 @@ class BenchRenderTask(RenderTask):
         return self.render_file(BENCH_TEMPLATES[0][0], target_path, ctx)
 
 
+class HarnessRenderTask(RenderTask):
+    def generate(self, harness: HarnessModel) -> Optional[Path]:
+        harness_dir = self.output_dir / "bench"
+        target_path = harness_dir / f"{harness.name}.sv"
+        ctx = {"harness": harness, **harness.to_context()}
+        return self.render_file(HARNESS_TEMPLATES[0][0], target_path, ctx)
+
+
 class RenderTaskFactory:
     @staticmethod
-    def create(task_type: str, renderer: JinjaRenderer, output_dir: Path) -> RenderTask:
+    def create(task_type: str, renderer: JinjaRenderer, output_dir: Path,
+               injector: Optional[RegionInjector] = None,
+               overwrite: bool = False,
+               meta: Optional[Dict[str, str]] = None) -> RenderTask:
         if task_type == "agent":
-            return AgentRenderTask(renderer, output_dir)
+            return AgentRenderTask(renderer, output_dir, injector, overwrite, meta)
         if task_type == "environment":
-            return EnvironmentRenderTask(renderer, output_dir)
+            return EnvironmentRenderTask(renderer, output_dir, injector, overwrite, meta)
         if task_type == "constraint":
-            return ConstraintRenderTask(renderer, output_dir)
+            return ConstraintRenderTask(renderer, output_dir, injector, overwrite, meta)
         if task_type == "bench":
-            return BenchRenderTask(renderer, output_dir)
+            return BenchRenderTask(renderer, output_dir, injector, overwrite, meta)
+        if task_type == "harness":
+            return HarnessRenderTask(renderer, output_dir, injector, overwrite, meta)
         raise ValueError(f"Unknown task type: {task_type}")
 
 
@@ -1040,7 +1637,8 @@ def _normalize_scoreboards(scoreboards, agent_names=None, predictor_names=None):
             item_type = f"{src}_master_seq_item" if src else "uvm_sequence_item"
         normalized.append({
             "name": sb["name"],
-            "sb_type": "",
+            "sb_type": sb["name"],   # 生成式 scoreboard：类名 = name（P1-1 接线）
+            "generated": True,       # 标记为生成式（RenderTask 据此生成 scb 文件）
             "trans_type": item_type,
             "mode": mode,
             "item_type": item_type,
@@ -1087,6 +1685,23 @@ def _normalize_agents_list(agents):
     return []
 
 
+def _normalize_analysis_ports(entries):
+    """归一化 analysis_exports/analysis_ports → list[{name, type, connected_to}]。
+
+    事务类型兼容 type 与 trans_type 两种键名；缺省 type = uvm_sequence_item。
+    """
+    result = []
+    for e in entries or []:
+        if not isinstance(e, dict) or not e.get("name"):
+            continue
+        result.append({
+            "name": e["name"],
+            "type": e.get("type") or e.get("trans_type", "") or "uvm_sequence_item",
+            "connected_to": e.get("connected_to", ""),
+        })
+    return result
+
+
 def _normalize_analysis_components(components):
     """归一化 analysis_components → list[{name, type}]。type 缺省 = name。"""
     result = []
@@ -1124,6 +1739,174 @@ def _normalize_subenvs(subenvs):
     return result
 
 
+def _ral_role(name: str, item: Dict[str, Any]) -> str:
+    """旧列表风格：显式 role 字段优先，否则按 name 识别。"""
+    if item.get("role"):
+        r = str(item["role"]).lower()
+        if "predictor" in r or r.startswith("pred"):
+            return "predictor"
+        if "adapter" in r:
+            return "adapter"
+        return "reg_block"
+    n = str(name).lower()
+    if "predictor" in n or n.startswith("pred"):
+        return "predictor"
+    if "adapter" in n:
+        return "adapter"
+    return "reg_block"
+
+
+def _resolve_bus_agent(item: Dict[str, Any], agents: List[Any]) -> Tuple[str, bool]:
+    """bus 条目 → (env agent 名, 是否匹配)。
+
+    type 匹配 agent_type/name > bus_name 匹配 name > 回退第一个 agent。
+    多个候选时优先 is_master=True 的实例（如 master/slave 同 type 时选 master）。
+    """
+    itype = item.get("type") or ""
+    bus_name = item.get("bus_name") or ""
+    if itype:
+        candidates = [a for a in agents
+                      if getattr(a, "agent_type", "") == itype
+                      or getattr(a, "name", "") == itype]
+        if candidates:
+            for a in candidates:
+                if getattr(a, "is_master", None) is True:
+                    return a.name, True
+            return candidates[0].name, True
+    if bus_name:
+        for a in agents:
+            if getattr(a, "name", "") == bus_name:
+                return a.name, True
+    return (agents[0].name if agents else ""), False
+
+
+def _finalize_ral(components: List[Dict[str, Any]], agents: List[Any],
+                  bus_agent: str = "", bus_matched: bool = False,
+                  bus_entry_seen: bool = False) -> Dict[str, Any]:
+    rm = {
+        "components": components,
+        # 总线 agent（env 实例名，如 apb_master）：default_map.set_sequencer 与 predictor 连接使用
+        "bus_agent": bus_agent or (agents[0].name if agents else ""),
+        # 供 SemanticValidator 检测 bus 条目未匹配到任何 agent
+        "bus_matched": bus_matched,
+        "bus_entry_seen": bus_entry_seen,
+    }
+    for role in ("reg_block", "adapter", "predictor"):
+        rm[role] = next((c for c in components if c["role"] == role), None)
+    pkgs: List[str] = []
+    for c in components:
+        if c["pkg"] and c["pkg"] not in pkgs:
+            pkgs.append(c["pkg"])
+    rm["pkgs"] = pkgs
+    return rm
+
+
+def _normalize_register_model(raw: Any, agents: List[Any]) -> Dict[str, Any]:
+    """归一化 register_model → RAL 组件列表（env 模板渲染用）。
+
+    用户 key 字段风格（当前）:
+      register_model:
+        - bus_name: "apb"                  # 总线 agent（type 匹配 env agents）
+          type: "apb_master_agent"
+        - reg_block_name: "reg_block"      # uvm_reg_block（实例名 + 类名）
+          type: "regblock_t"
+        - reg_adpater_name: "adapter"      # uvm_reg_adapter（reg_adapter_name 亦兼容）
+          type: "my_adapter"
+        - predictor_name: "predictor"      # uvm_reg_predictor
+          type: "my_bus_predictor"         #   预测器类（缺省 = uvm_reg_predictor）
+          trans_type: "my_bus_trans"       #   总线事务类（缺省 = type）
+      type 可为 "pkg::class" 或配 pkg 字段（env_pkg 自动 import）。
+
+    兼容旧列表风格（name 识别角色）与旧 dict 格式（reg_block_class/...）。
+    """
+    # 解包嵌套: register_model: {reg_adapter: [...]}
+    if isinstance(raw, dict):
+        for nested_key in ("reg_adapter", "reg_adpater"):
+            nested = raw.get(nested_key)
+            if isinstance(nested, list):
+                raw = nested
+                break
+
+    def _mk(name: str, itype: str, role: str, pkg: str = "",
+            trans_type: str = "") -> Dict[str, Any]:
+        entry = {"name": name, "type": itype, "role": role, "pkg": pkg}
+        if role == "predictor":
+            entry["trans_type"] = trans_type or itype or "uvm_sequence_item"
+        return entry
+
+    # 列表 → components
+    if isinstance(raw, list):
+        components = []
+        bus_agent = ""
+        bus_matched = False
+        bus_entry_seen = False
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            itype = item.get("type") or ""
+            pkg = item.get("pkg", "")
+            if not pkg and isinstance(itype, str) and "::" in itype:
+                pkg = itype.split("::", 1)[0]
+            # 用户 key 字段风格
+            if item.get("bus_name") is not None:
+                bus_entry_seen = True
+                bus_agent, bus_matched = _resolve_bus_agent(item, agents)
+            elif item.get("reg_block_name"):
+                components.append(_mk(item["reg_block_name"], itype, "reg_block", pkg))
+            elif item.get("reg_adpater_name") or item.get("reg_adapter_name"):
+                components.append(_mk(item.get("reg_adpater_name") or item.get("reg_adapter_name"),
+                                      itype, "adapter", pkg))
+            elif item.get("predictor_name"):
+                components.append(_mk(item["predictor_name"],
+                                      itype or "uvm_reg_predictor", "predictor", pkg,
+                                      item.get("trans_type", "")))
+            elif item.get("name"):
+                # 旧列表风格（name 识别角色）：predictor 的 type 即总线事务类
+                role = _ral_role(item["name"], item)
+                if role == "predictor":
+                    components.append(_mk(item["name"], "uvm_reg_predictor", "predictor",
+                                          pkg, item.get("trans_type", "") or itype))
+                else:
+                    components.append(_mk(item["name"], itype, role, pkg))
+        return _finalize_ral(components, agents, bus_agent, bus_matched, bus_entry_seen)
+
+    # 旧 dict 格式 → components
+    if isinstance(raw, dict) and raw.get("reg_block_class"):
+        def _bool(value: Any, default: bool) -> bool:
+            if isinstance(value, bool):
+                return value
+            if value is None:
+                return default
+            return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+        default_agent = agents[0].name if agents else ""
+        components = [{
+            "name": "reg_model",
+            "type": f"{raw['reg_model_package']}::{raw['reg_block_class']}"
+                    if raw.get("reg_model_package") else raw["reg_block_class"],
+            "role": "reg_block",
+            "pkg": raw.get("reg_model_package", ""),
+        }]
+        if _bool(raw.get("use_adapter"), True) and raw.get("reg_adapter_class"):
+            components.append({
+                "name": "adapter",
+                "type": raw["reg_adapter_class"],
+                "role": "adapter",
+                "pkg": "",
+            })
+        if _bool(raw.get("use_explicit_prediction"), False) and default_agent:
+            components.append({
+                "name": "predictor",
+                "type": "uvm_reg_predictor",
+                "trans_type": f"{default_agent}_seq_item",
+                "role": "predictor",
+                "pkg": "",
+            })
+        return _finalize_ral(components, agents)
+
+    return {}
+
+
 class YAMLLoader:
     SUPPORTED_SUFFIXES = {".yml", ".yaml"}
 
@@ -1154,6 +1937,8 @@ class YAMLLoader:
             interface_name=data.get("interface_name", data.get("interface", "")),
             clock=data.get("clock") or data.get("clk"),
             reset=data.get("reset"),
+            protocol=data.get("protocol", ""),
+            reset_active_low=_opt_bool(data.get("reset_active_low", True)) is not False,
             parameters=data.get("parameters", []),
             hdl_typedefs=data.get("hdl_typedefs", []),
             hvl_typedefs=data.get("hvl_typedefs", []),
@@ -1166,7 +1951,9 @@ class YAMLLoader:
             custom_drive_logic=data.get("custom_drive_logic", ""),
             custom_sample_logic=data.get("custom_sample_logic", ""),
             custom_collect_logic=data.get("custom_collect_logic", ""),
+            custom_code=dict(data.get("custom_code") or {}),
             config=data.get("config", {"is_active": "UVM_ACTIVE"}),
+            is_active=data.get("is_active"),
         )
 
     @staticmethod
@@ -1186,6 +1973,8 @@ class YAMLLoader:
                 clock=agent_config.get("clock"),
                 reset=agent_config.get("reset"),
                 agent_type=agent_config.get("type", ""),
+                is_master=_opt_bool(agent_config.get("is_master")),
+                active=_opt_bool(agent_config.get("is_active")),
             )
             agents.append(agent)
 
@@ -1198,6 +1987,8 @@ class YAMLLoader:
             }
 
         agent_names = [a.name for a in agents]
+        register_model = _normalize_register_model(
+            data.get("register_model") or data.get("reg_adapter"), list(agents))
         predictors = _normalize_predictors(data.get("predictors", []))
         predictor_names = [p["name"] for p in predictors]
         return EnvironmentModel(
@@ -1209,10 +2000,16 @@ class YAMLLoader:
             scoreboards=_normalize_scoreboards(data.get("scoreboards", []),
                                                agent_names, predictor_names),
             analysis_components=_normalize_analysis_components(data.get("analysis_components", [])),
-            analysis_exports=data.get("analysis_exports", []),
-            analysis_ports=data.get("analysis_ports", []),
+            analysis_exports=_normalize_analysis_ports(data.get("analysis_exports", [])),
+            analysis_ports=_normalize_analysis_ports(data.get("analysis_ports", [])),
             virtual_sequencer=data.get("virtual_sequencer", {"enabled": False}),
             clk_rst_vip=clk_rst_vip,
+            register_model=register_model,
+            custom_code=dict(data.get("custom_code") or {}),
+            harness_connect=dict(data.get("harness_connect") or {}),
+            coverage_crosses=[
+                [str(f) for f in c] for c in (data.get("coverage_crosses") or [])
+                if isinstance(c, (list, tuple)) and len(c) >= 2],
             config_vars=data.get("config_vars", []),
             config_constraints=data.get("config_constraints", []),
             tlm_connections=data.get("tlm_connections", []),
@@ -1245,6 +2042,7 @@ class YAMLLoader:
             wire_decls=data.get("wire_decls", []),
             assignments=data.get("assignments", []),
             agents=agents,
+            harness=dict(data.get("harness") or {}),
             dut=data.get("dut", {}),
             uvm_config=data.get("uvm_config", {}),
             wave_dump=data.get("wave_dump", {}),
@@ -1282,7 +2080,9 @@ class YAMLLoader:
         environments: List[EnvironmentModel] = []
         benches: List[BenchModel] = []
         constraints: List[ConstraintModel] = []
+        harnesses: List[HarnessModel] = []
         utils: List[Dict[str, Any]] = []
+        meta: Dict[str, str] = {}
 
         for path in paths:
             with path.open("r", encoding="utf-8") as handle:
@@ -1290,6 +2090,12 @@ class YAMLLoader:
 
             if not isinstance(data, dict):
                 continue
+
+            # 顶层 meta: 文件头元数据（后读的文件覆盖同名键）
+            if isinstance(data.get("meta"), dict):
+                for k, v in data["meta"].items():
+                    if v not in (None, ""):
+                        meta[k] = str(v)
 
             if "util_components" in data:
                 payload = data["util_components"]
@@ -1335,46 +2141,140 @@ class YAMLLoader:
             if "constraint" in data:
                 constraints.append(YAMLLoader.parse_constraint_model(data))
 
+            if "harness" in data:
+                payload = data["harness"]
+                if isinstance(payload, list):
+                    for item in payload:
+                        h = _normalize_harness(item)
+                        if h:
+                            harnesses.append(h)
+                elif isinstance(payload, dict):
+                    h = _normalize_harness(payload)
+                    if h:
+                        harnesses.append(h)
+
+            if "bench" in data and isinstance(data["bench"], dict):
+                bh = data["bench"].get("harness")
+                if isinstance(bh, dict):
+                    h = _normalize_harness(bh)
+                    if h:
+                        harnesses.append(h)
+
+        # 后处理：env agents 的 transaction_vars 从同名 interface 文档补齐
+        # （校验层 coverage_cross 规则与 env_cov 渲染都需要；匹配:
+        #  精确 → 忽略大小写 → 前缀包含，如 apb_master ↔ APB）
+        _ifaces_lower = {a.interface_name.lower(): a for a in interfaces
+                         if a.interface_name}
+        _ifaces_name = {a.name.lower(): a for a in interfaces}
+        for env in environments:
+            for eagent in env.agents:
+                if getattr(eagent, "transaction_vars", None):
+                    continue
+                key = getattr(eagent, "interface", "") or eagent.name
+                ref = (_ifaces_name.get(key.lower())
+                       or _ifaces_lower.get(key.lower()))
+                if ref is None:   # 前缀匹配（apb_master → apb）
+                    for lower, agent in _ifaces_name.items():
+                        if lower and (key.lower().startswith(lower)
+                                      or lower.startswith(key.lower())):
+                            ref = agent
+                            break
+                if ref is not None:
+                    eagent.transaction_vars = list(ref.transaction_vars)
+
         return {
             "interfaces": interfaces,
             "environments": environments,
             "benches": benches,
             "constraints": constraints,
+            "harnesses": harnesses,
             "utils": utils,
+            "meta": meta,
         }
 
 
 class UVMGenerator:
-    def __init__(self, renderer: JinjaRenderer, output_root: Path) -> None:
+    def __init__(self, renderer: JinjaRenderer, output_root: Path,
+                 injector: Optional[RegionInjector] = None,
+                 overwrite: bool = False,
+                 generate_names: Optional[List[str]] = None,
+                 quiet: bool = False) -> None:
         self.renderer = renderer
         self.output_root = output_root
+        self.injector = injector if injector is not None else RegionInjector()
+        self.overwrite = overwrite
+        self.generate_names = generate_names or []
+        self.quiet = quiet
+        self.skipped = 0
+        self.meta: Dict[str, str] = dict(DEFAULT_META)
+        self.validation_issues: List[Any] = []
 
-    def generate_agents(self, agents: Iterable[AgentModel]) -> List[Path]:
-        task = RenderTaskFactory.create("agent", self.renderer, self.output_root)
-        generated: List[Path] = []
+    def _log(self, msg: str) -> None:
+        if not self.quiet:
+            print(msg)
+
+    def _should_skip(self, target_path: Path) -> bool:
+        if self.overwrite or self.injector.merge_source is not None:
+            return False
+        return target_path.exists()
+
+    def _filter_named(self, items: Iterable[Any], *keys) -> List[Any]:
+        if not self.generate_names:
+            return list(items)
+        result = []
+        for item in items:
+            for key in keys:
+                value = item.get(key, "") if isinstance(item, dict) else getattr(item, key, "")
+                if value in self.generate_names:
+                    result.append(item)
+                    break
+        return result
+
+    def generate_agents(self, agents: Iterable[AgentModel]) -> List[Optional[Path]]:
+        task = RenderTaskFactory.create(
+            "agent", self.renderer, self.output_root, self.injector, self.overwrite, self.meta)
+        generated: List[Optional[Path]] = []
         for agent in agents:
             generated.extend(task.generate(agent))
+        self.skipped += task.skipped
         return generated
 
-    def generate_environments(self, environments: Iterable[EnvironmentModel]) -> List[Path]:
-        task = RenderTaskFactory.create("environment", self.renderer, self.output_root)
-        generated: List[Path] = []
+    def generate_environments(self, environments: Iterable[EnvironmentModel]) -> List[Optional[Path]]:
+        task = RenderTaskFactory.create(
+            "environment", self.renderer, self.output_root, self.injector, self.overwrite, self.meta)
+        generated: List[Optional[Path]] = []
         for environment in environments:
             generated.extend(task.generate(environment))
+        self.skipped += task.skipped
         return generated
 
-    def generate_constraints(self, constraints: Iterable[ConstraintModel]) -> List[Path]:
-        task = RenderTaskFactory.create("constraint", self.renderer, self.output_root)
-        generated: List[Path] = []
+    def generate_constraints(self, constraints: Iterable[ConstraintModel]) -> List[Optional[Path]]:
+        task = RenderTaskFactory.create(
+            "constraint", self.renderer, self.output_root, self.injector, self.overwrite, self.meta)
+        generated: List[Optional[Path]] = []
         for constraint in constraints:
             generated.extend(task.generate(constraint))
+        self.skipped += task.skipped
         return generated
 
-    def generate_benches(self, benches: Iterable[BenchModel]) -> List[Path]:
-        task = RenderTaskFactory.create("bench", self.renderer, self.output_root)
-        generated: List[Path] = []
+    def generate_benches(self, benches: Iterable[BenchModel]) -> List[Optional[Path]]:
+        task = RenderTaskFactory.create(
+            "bench", self.renderer, self.output_root, self.injector, self.overwrite, self.meta)
+        generated: List[Optional[Path]] = []
         for bench in benches:
             generated.extend([task.generate(bench)])
+        self.skipped += task.skipped
+        return generated
+
+    def generate_harnesses(self, harnesses: Iterable[HarnessModel]) -> List[Optional[Path]]:
+        task = RenderTaskFactory.create(
+            "harness", self.renderer, self.output_root, self.injector, self.overwrite, self.meta)
+        generated: List[Optional[Path]] = []
+        for harness in harnesses:
+            result = task.generate(harness)
+            if result is not None:
+                generated.append(result)
+        self.skipped += task.skipped
         return generated
 
     def generate_utils(self, utils: Iterable[Dict[str, Any]]) -> List[Path]:
@@ -1398,6 +2298,9 @@ class UVMGenerator:
             for tpl_path, target_pattern in _util_templates:
                 target_name = target_pattern.format(name=name)
                 target_path = util_dir / target_name
+                if self._should_skip(target_path):
+                    self.skipped += 1
+                    continue
                 target_path.parent.mkdir(parents=True, exist_ok=True)
                 try:
                     content = self.renderer.render(tpl_path, ctx)
@@ -1413,16 +2316,59 @@ class UVMGenerator:
             raise SystemExit("No YAML files were found in the input paths.")
 
         data = YAMLLoader.parse_documents(yaml_files)
+        self.meta = {**DEFAULT_META, **data["meta"]}   # YAML meta 覆盖默认文件头元数据
         interfaces = data["interfaces"]
         environments = data["environments"]
         benches = data["benches"]
         constraints = data["constraints"]
+        harnesses = data["harnesses"]
         utils = data["utils"]
 
-        if not interfaces and not environments and not benches and not constraints and not utils:
+        # ── Phase A: 渲染前语义校验（error 阻断生成，warning 不阻断）──
+        issues = SemanticValidator.validate(data)
+        self.validation_issues = issues
+        if issues:
+            report_path = self.output_root / "validation_report.txt"
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(
+                "Semantic check report (tool_uvm)\n"
+                + "\n".join(str(i) for i in issues) + "\n",
+                encoding="utf-8")
+            for i in issues:
+                if i.severity == "warning":
+                    self._log(f"Warning: {i}")
+            errors = [i for i in issues if i.severity == "error"]
+            if errors:
+                for i in errors:
+                    self._log(f"Error: {i}")
+                raise SystemExit(
+                    f"Semantic validation failed: {len(errors)} error(s), "
+                    f"{len(issues) - len(errors)} warning(s) — see {report_path}")
+
+        # ── -g/--generate 名称过滤 ──
+        if self.generate_names:
+            interfaces = self._filter_named(interfaces, "name")
+            environments = self._filter_named(environments, "name", "env_name")
+            benches = self._filter_named(benches, "name")
+            constraints = self._filter_named(constraints, "name")
+            harnesses = self._filter_named(harnesses, "name")
+            utils = self._filter_named(utils, "name")
+            if not any((interfaces, environments, benches, constraints, harnesses, utils)):
+                available = sorted(
+                    [a.name for a in data["interfaces"]]
+                    + [e.name for e in data["environments"]]
+                    + [b.name for b in data["benches"]]
+                    + [c.name for c in data["constraints"]]
+                    + [h.name for h in data["harnesses"]]
+                    + [u.get("name", "") for u in data["utils"] if isinstance(u, dict)])
+                raise SystemExit(
+                    f"No component named '{', '.join(self.generate_names)}' found. "
+                    f"Available: {', '.join(available)}")
+
+        if not any((interfaces, environments, benches, constraints, harnesses, utils)):
             raise SystemExit("No supported YAML definitions were found.")
 
-        generated_files: List[Path] = []
+        generated_files: List[Optional[Path]] = []
         if interfaces:
             generated_files.extend(self.generate_agents(interfaces))
         if environments:
@@ -1431,29 +2377,68 @@ class UVMGenerator:
             generated_files.extend(self.generate_benches(benches))
         if constraints:
             generated_files.extend(self.generate_constraints(constraints))
+        if harnesses:
+            generated_files.extend(self.generate_harnesses(harnesses))
         if utils:
             generated_files.extend(self.generate_utils(utils))
 
-        # ── Generate overall README.md at output root ──
-        try:
-            readme_path = _generate_output_readme(
-                self.output_root,
-                list(interfaces) if interfaces else [],
-                list(environments) if environments else [],
-                list(benches) if benches else [],
-            )
-            generated_files.append(readme_path)
-        except Exception:
-            pass  # README is optional, don't fail generation
+        # ── ③ 整环境编译 filelist（闭环：env + bench + tc_pkg 一键编译入口）──
+        if environments:
+            generated_files.extend(
+                self._generate_env_filelists(environments, benches, harnesses))
 
-        return generated_files
+        # ── Generate overall README.md at output root ──
+        readme_path = self.output_root / "README.md"
+        if not self._should_skip(readme_path):
+            try:
+                generated_files.append(_generate_output_readme(
+                    self.output_root,
+                    list(interfaces) if interfaces else [],
+                    list(environments) if environments else [],
+                    list(benches) if benches else [],
+                    list(harnesses) if harnesses else [],
+                ))
+            except Exception:
+                pass  # README is optional, don't fail generation
+        else:
+            self.skipped += 1
+
+        return [p for p in generated_files if p is not None]
+
+    def _generate_env_filelists(self, environments: Iterable[EnvironmentModel],
+                                benches: Iterable[BenchModel],
+                                harnesses: Iterable[HarnessModel]) -> List[Path]:
+        """渲染 {env}_pkg_filelist.f（绝对路径，含 base_pkg/agent/env/bench/tc_pkg）。"""
+        rendered: List[Path] = []
+        base_pkg_dir = Path(TEMPLATES_DIR).resolve().parent / "base_pkg"
+        for env in environments:
+            ctx = {"environment": env, **env.to_context()}
+            target = self.output_root / "env" / f"{env.env_name}_pkg_filelist.f"
+            ctx["file_name"] = target.name
+            ctx["base_pkg_dir"] = str(base_pkg_dir)
+            ctx["agent_dir"] = str(self.output_root / "agents")
+            ctx["env_dir"] = str(self.output_root / "env")
+            ctx["bench_dir"] = str(self.output_root / "bench")
+            ctx["bench_name"] = benches[0].name if benches else "BENCH"
+            ctx["harnesses"] = list(harnesses)
+            ctx["dut_path"] = "// TODO: 填入 DUT 源码路径（替换本行）"
+            target = self.output_root / "env" / f"{env.env_name}_pkg_filelist.f"
+            if self._should_skip(target):
+                self.skipped += 1
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            content = self.renderer.render(
+                "environment_templates/env_pkg_filelist.f.j2", ctx)
+            target.write_text(content, encoding="utf-8")
+            rendered.append(target)
+        return rendered
 
 
 # ============================================================
 #  Parameterized entry point for LangChain / programmatic use
 # ============================================================
 
-SUPPORTED_TOOL_TYPES = ("agent", "env", "bench", "constraint", "util")
+SUPPORTED_TOOL_TYPES = ("agent", "env", "bench", "harness", "constraint", "util")
 
 
 def generate_uvm(tool_type: str, yaml_spec: str) -> str:
@@ -1506,6 +2491,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
                 interface_name=item.get("interface_name", item.get("interface", "")),
                 clock=item.get("clock") or item.get("clk"),
                 reset=item.get("reset"),
+                protocol=item.get("protocol", ""),
                 parameters=item.get("parameters", []),
                 hdl_typedefs=item.get("hdl_typedefs", []),
                 hvl_typedefs=item.get("hvl_typedefs", []),
@@ -1516,6 +2502,8 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
                 config_constraints=item.get("config_constraints", []),
                 response_info=item.get("response_info", {}),
                 config=item.get("config", {"is_active": "UVM_ACTIVE"}),
+                is_active=item.get("is_active"),
+                custom_code=dict(item.get("custom_code") or {}),
             )
             ctx = {"agent": agent, **agent.to_context()}
             files = []
@@ -1546,6 +2534,8 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
                 interface_name=acfg.get("interface", aname),
                 clock=acfg.get("clock"), reset=acfg.get("reset"),
                 agent_type=acfg.get("type", ""),
+                is_master=_opt_bool(acfg.get("is_master")),
+                active=_opt_bool(acfg.get("is_active")),
             ))
         clk_rst_vip = payload.get("clk_rst_vip") or {}
         if not clk_rst_vip and payload.get("clk_rst"):
@@ -1559,10 +2549,18 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             subenvs=_normalize_subenvs(payload.get("subenvs", [])),
             scoreboards=_normalize_scoreboards(payload.get("scoreboards", [])),
             analysis_components=_normalize_analysis_components(payload.get("analysis_components", [])),
-            analysis_exports=payload.get("analysis_exports", []),
-            analysis_ports=payload.get("analysis_ports", []),
+            analysis_exports=_normalize_analysis_ports(payload.get("analysis_exports", [])),
+            analysis_ports=_normalize_analysis_ports(payload.get("analysis_ports", [])),
             virtual_sequencer=payload.get("virtual_sequencer", {"enabled": False}),
             clk_rst_vip=clk_rst_vip,
+            register_model=_normalize_register_model(
+                payload.get("register_model") or payload.get("reg_adapter"),
+                list(agents)),
+            custom_code=dict(payload.get("custom_code") or {}),
+            harness_connect=dict(payload.get("harness_connect") or {}),
+            coverage_crosses=[
+                [str(f) for f in c] for c in (payload.get("coverage_crosses") or [])
+                if isinstance(c, (list, tuple)) and len(c) >= 2],
             config_vars=payload.get("config_vars", []),
             config_constraints=payload.get("config_constraints", []),
             tlm_connections=payload.get("tlm_connections", []),
@@ -1577,6 +2575,20 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             except Exception as e:
                 files.append(f"  {pat.format(env_name=env_name)}: ERR - {e}")
         return f"Environment: {env_name}\n" + "\n".join(files)
+
+    # ── Harness ────────────────────────────────────────────
+    if tool_type == "harness":
+        payload = data.get("harness")
+        if payload is None and isinstance(data.get("bench"), dict):
+            payload = data["bench"].get("harness")
+        if payload is None or not isinstance(payload, dict):
+            return "// Error: YAML must contain 'harness' dict"
+        harness = _normalize_harness(payload)
+        if harness is None:
+            return "// Error: harness YAML missing 'name'"
+        ctx = {"harness": harness, **harness.to_context()}
+        c = renderer.render(HARNESS_TEMPLATES[0][0], ctx)
+        return f"Harness: {harness.name}\n  {harness.name}.sv: {len(c)} chars"
 
     # ── Bench ──────────────────────────────────────────────
     if tool_type == "bench":
@@ -1607,6 +2619,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             wire_decls=payload.get("wire_decls", []),
             assignments=payload.get("assignments", []),
             agents=agents_b,
+            harness=dict(payload.get("harness") or {}),
             dut=payload.get("dut", {}),
             uvm_config=payload.get("uvm_config", {}),
             wave_dump=payload.get("wave_dump", {}),
@@ -1681,20 +2694,82 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Generate UVM SystemVerilog from YAML descriptors."
+        prog="gen_uvm.py",
+        description="Generate UVM SystemVerilog from YAML descriptors (tool_uvm).",
     )
     parser.add_argument(
-        "-i",
-        "--input",
-        nargs="+",
-        default=["."],
+        "--version", action="version",
+        version=f"%(prog)s (tool_uvm) {__version__}",
+        help="Show script version number and exit.",
+    )
+    parser.add_argument(
+        "-i", "--input", nargs="+", default=["."],
         help="Input YAML file(s) or directories containing YAML files.",
     )
     parser.add_argument(
-        "-o",
-        "--output",
-        default="generated",
-        help="Output root directory for generated UVM files.",
+        "-f", "--file", dest="input", nargs="+",
+        help="Specify a list of YAML configuration files (same as -i/--input).",
+    )
+    parser.add_argument(
+        "-d", "--dest_dir", "--output", dest="dest_dir", default="generated",
+        help="Specify a destination directory for output. Default is $CWD/generated.",
+    )
+    parser.add_argument(
+        "-o", "--overwrite", action="store_true",
+        help="Overwrite existing output files. Default behavior is to skip files "
+             "if they already exist in the destination directory.",
+    )
+    parser.add_argument(
+        "-g", "--generate", metavar="NAME",
+        help="Only produce the specified component (by name). By default, all "
+             "components defined by the input configuration files will be generated.",
+    )
+    parser.add_argument(
+        "-t", "--template_dir", metavar="DIR",
+        help="Override the location where templates for generated files are sourced.",
+    )
+    parser.add_argument(
+        "-c", "--clean", action="store_true",
+        help="Clean up generated code (banner-signed files only) instead of producing code.",
+    )
+    parser.add_argument(
+        "-q", "--quiet", action="store_true",
+        help="Suppress output while running.",
+    )
+    parser.add_argument(
+        "-m", "--merge_source", metavar="DIR",
+        help="Enable auto-merge flow, pulling hand-edited pragma custom blocks from "
+             "the specified directory. Updates from YAML will be overlaid on top of "
+             "the specified directory. Backup of the original source will be made by default.",
+    )
+    parser.add_argument(
+        "-s", "--merge_skip_missing_blocks", action="store_true",
+        help="Continue the merge even if a labeled block was found in old source that "
+             "can't be mapped to anything in the new output. A report of all such files "
+             "and labels will be produced at the end of the run. By default, missing "
+             "blocks will raise an error.",
+    )
+    parser.add_argument(
+        "--merge_no_backup", action="store_true",
+        help="Do not produce a backup of the original merge source.",
+    )
+    parser.add_argument(
+        "--merge_debug", action="store_true",
+        help="Provide an intermediate unmerged output directory for debug purposes. "
+             "The location of this directory is <dest_dir>/merge_debug.",
+    )
+    parser.add_argument(
+        "--merge_verbose", action="store_true",
+        help="Output details on names of files and named blocks that were affected "
+             "during the merging process.",
+    )
+    parser.add_argument(
+        "--gate", action="store_true",
+        help="生成后对每个 agent 的 loopback 自检跑编译+仿真门禁（无 vlog/vcs 则跳过）。",
+    )
+    parser.add_argument(
+        "--report-json", action="store_true",
+        help="输出结构化生成报告 generation_report.json（供 Agent 决策/签核证据包引用）。",
     )
     parser.add_argument(
         "--list-templates",
@@ -1702,6 +2777,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="List the supported Jinja2 templates and exit.",
     )
     args = parser.parse_args(argv)
+
+    def log(msg: str) -> None:
+        if not args.quiet:
+            print(msg)
+
+    dest_root = Path(args.dest_dir).expanduser().resolve()
+
+    # ── -c/--clean：清理带签名的生成文件 ──
+    if args.clean:
+        removed = _clean_generated(dest_root)
+        log(f"Cleaned {removed} generated file(s) from {dest_root}")
+        return 0
 
     if args.list_templates:
         print("Supported template sets:")
@@ -1726,17 +2813,98 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     input_paths = [Path(x).expanduser() for x in args.input]
-    output_root = Path(args.output).expanduser().resolve()
-    output_root.mkdir(parents=True, exist_ok=True)
+    dest_root.mkdir(parents=True, exist_ok=True)
 
-    renderer = JinjaRenderer(TEMPLATES_DIR)
-    generator = UVMGenerator(renderer, output_root)
+    templates_dir = Path(args.template_dir).expanduser().resolve() if args.template_dir else TEMPLATES_DIR
+    renderer = JinjaRenderer(templates_dir)
 
-    generated_files = generator.run(input_paths)
+    # ── 合并流程 ──
+    injector = RegionInjector(
+        merge_source=args.merge_source,
+        skip_missing=args.merge_skip_missing_blocks,
+        debug_dir=(dest_root / "merge_debug") if args.merge_debug else None,
+    )
+    if args.merge_source and not args.merge_no_backup:
+        try:
+            backup = backup_merge_source(Path(args.merge_source).expanduser())
+            log(f"Merge source backed up to: {backup}")
+        except OSError as exc:
+            log(f"Warning: backup failed: {exc}")
 
-    print(f"Generated {len(generated_files)} file(s) into: {output_root}")
+    generator = UVMGenerator(
+        renderer, dest_root,
+        injector=injector,
+        overwrite=args.overwrite,
+        generate_names=[args.generate] if args.generate else None,
+        quiet=args.quiet,
+    )
+
+    try:
+        generated_files = generator.run(input_paths)
+    except RegionError as exc:
+        print(f"Error: {exc}", file=__import__("sys").stderr)
+        return 1
+
+    skipped = generator.skipped
+    log(f"Generated {len(generated_files)} file(s) into: {dest_root}"
+        + (f" (skipped {skipped} existing)" if skipped else ""))
     for path in generated_files:
-        print(f"  {path.relative_to(output_root)}")
+        log(f"  {path.relative_to(dest_root)}")
+
+    # ── 校验摘要（可审计）──
+    n_warn = sum(1 for i in generator.validation_issues if i.severity == "warning")
+    if n_warn:
+        log(f"Semantic check: {n_warn} warning(s) — see {dest_root / 'validation_report.txt'}")
+
+    # ── P0-4: 编译仿真门禁 ──
+    gate_results: List[Dict[str, str]] = []
+    if args.gate:
+        log("Gate: running loopback compile+sim ...")
+        gate_results = _run_gate(dest_root)
+        for r in gate_results:
+            if r.get("status") == "skip":
+                log(f"  [SKIP] {r['agent']} — {r.get('reason', '')}")
+            else:
+                log(f"  [{r['status'].upper()}] {r['agent']} (sim={r.get('sim')})")
+
+    # ── P2-4: 结构化 JSON 报告 ──
+    if args.report_json:
+        report_path = _write_report_json(
+            dest_root,
+            generated=len(generated_files),
+            skipped=skipped,
+            validation_issues=generator.validation_issues,
+            merge_reports=injector.report,
+            load_errors=injector.load_errors,
+            gate_results=gate_results,
+            inputs=input_paths,
+        )
+        log(f"Report: {report_path}")
+
+    # ── 合并报告 ──
+    if args.merge_source:
+        report = injector.report
+        merged_files = [r for r in report if r.blocks]
+        total_blocks = sum(len(r.blocks) for r in report)
+        merged_count = sum(len([b for b in r.blocks if b.source == "merged"]) for r in report)
+        log(f"Merge: {len(merged_files)} file(s) with regions, "
+            f"{total_blocks} block(s) updated ({merged_count} from hand-edited source)")
+        missing = [(r.relpath, slot) for r in report for slot in r.missing]
+        if missing:
+            log(f"Merge: {len(missing)} block(s) in old source could not be mapped (skipped):")
+            for rel, slot in missing:
+                log(f"  [{rel}] {slot}")
+        if injector.load_errors:
+            log(f"Merge: {len(injector.load_errors)} file(s) skipped due to malformed regions:")
+            for err in injector.load_errors:
+                log(f"  {err}")
+        if args.merge_verbose:
+            for r in report:
+                if not r.blocks and not r.missing:
+                    continue
+                log(f"  [{r.relpath}]")
+                for b in r.blocks:
+                    log(f"    {b.slot} <- {b.source} ({b.lines} lines)")
 
     return 0
 

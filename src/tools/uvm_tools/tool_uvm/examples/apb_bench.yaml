@@ -16,6 +16,7 @@ bench:
       - { name: presetn, init: 0, release_delay: 100 }
 
   # ── 信号线声明（wire [width-1:0] name）──
+  #   dut.ports 的 connection 必须指向这里的 wire 或 clk/rst 名（语义校验层强制）
   wire_decls:
     - { name: paddr,   width: 32 }
     - { name: pwdata,  width: 32 }
@@ -29,27 +30,29 @@ bench:
   # ── 连续赋值（assign lhs = rhs）──
   assignments: []
 
-  # ── Agent 接口连接 ──
-  #   instance:       interface 实例名
-  #   config_db_path: vif 配置路径
-  #   connections:    端口 → 信号线
-  agents:
-    - name: APB
-      type: "mem"
-      interface: APB
-      clock: pclk
-      reset: presetn
-      instance: apb_if
-      config_db_path: "*APB_agent_h*"
-      connections:
-        - { port: paddr,   wire: paddr }
-        - { port: pwrite,  wire: pwrite }
-        - { port: psel,    wire: psel }
-        - { port: penable, wire: penable }
-        - { port: pwdata,  wire: pwdata }
-        - { port: prdata,  wire: prdata }
-        - { port: pready,  wire: pready }
-        - { port: pslverr, wire: pslverr }
+  # ── Harness（bind 式自连接）──
+  #   bind 各 interface 到 DUT module（按 module 名，所有实例生效）；
+  #   set_vifs() 在测试 build_phase 把每个 vif set 进环境 agent。
+  #   存在 harness 时 tb_top 不再实例化 interface / config_db set。
+  harness:
+    name: apb_harness
+    bind_to: apb_slave_dut
+    style: bind
+    interfaces:
+      - name: apb_if
+        type: apb_interface
+        agent_path: "apb_master_agent_h"
+        connections:
+          pclk: pclk
+          presetn: presetn
+          paddr: paddr
+          pwrite: pwrite
+          psel: psel
+          penable: penable
+          pwdata: pwdata
+          prdata: prdata
+          pready: pready
+          pslverr: pslverr
 
   # ── DUT 实例化 ──
   #   module:     DUT 模块名

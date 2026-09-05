@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // ============================================================
 // Master Sequence: {{ agent.name }}_master_sequence
 // ============================================================
@@ -24,4 +26,7 @@ class {{ agent.name }}_master_sequence extends uvm_sequence #({{ agent.name }}_m
     finish_item(req);
     get_response(req);
   endtask
+
+  // pragma custom seq_body begin
+  // pragma custom seq_body end
 endclass : {{ agent.name }}_master_sequence

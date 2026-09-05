@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // Env Coverage: {{ environment.env_name }}_coverage
 // 环境级功能覆盖率模型（跨 agent 的语义级 covergroup，自动生成）
 
@@ -58,6 +60,11 @@ class {{ environment.env_name }}_coverage extends uvm_component;
     cross_{{ bin.name }}: cross {{ ns.sigs|join(', ') }};
 {%-     endif %}
 {%-   endif %}
+{%- endfor %}
+{%- for cross in coverage_crosses %}
+{%-   set ag0 = agents[0].name %}
+    // 语义 cross（env YAML coverage_crosses: [{{ cross|join(', ') }}]）
+    cr_yaml_{{ loop.index0 }}: cross cp_{{ ag0 }}_{{ cross[0] }}, cp_{{ ag0 }}_{{ cross[1] }};
 {%- endfor %}
   endgroup : cg_env
 

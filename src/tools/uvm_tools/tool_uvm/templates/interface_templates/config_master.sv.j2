@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // ============================================================
 // Master Config: {{ agent.name }}_master_config
 // ============================================================
@@ -10,8 +12,8 @@ class {{ agent.name }}_master_config extends uvm_object;
   int data_width = 32;
   int id_width   = 4;
 
-  // 模式控制
-  uvm_active_passive_enum is_active = UVM_ACTIVE;
+  // 模式控制（由 interface YAML is_active.master 决定）
+  uvm_active_passive_enum is_active = {{ agent.is_active.master }};
 
   // 错误注入公共开关
   int error_injection_rate = 0; // 0~100

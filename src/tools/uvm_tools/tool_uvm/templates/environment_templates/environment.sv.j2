@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // Environment: {{ environment.env_name }}
 // 自动生成，不要手动修改
 
@@ -16,6 +18,17 @@ class {{ environment.env_name }} extends uvm_env;
 {%- endif %}
   // 配置对象
   {{ environment.env_name }}_config cfg;
+
+  // ── Register Model（RAL，可选，由 YAML register_model 列表决定）──
+{%- if register_model %}
+{%- for comp in register_model.components %}
+{%- if comp.role == 'predictor' %}
+  uvm_reg_predictor #({{ comp.trans_type }}) {{ comp.name }};  // 预测器需要指定总线事务类型
+{%- else %}
+  {{ comp.type }} {{ comp.name }};
+{%- endif %}
+{%- endfor %}
+{%- endif %}
 
   // Agent 实例
 {%- for agent in agents %}
@@ -43,6 +56,14 @@ class {{ environment.env_name }} extends uvm_env;
   // TLM 连接
 {%- for agent in agents %}
   uvm_analysis_port #({{ agent.name }}_seq_item) {{ agent.name }}_agent_ap;
+{%- endfor %}
+
+  // Analysis Exports / Ports（env 级 TLM 端口，由 YAML analysis_exports/analysis_ports 配置）
+{%- for port in analysis_exports %}
+  uvm_analysis_export #({{ port.type }}) {{ port.name }};   // 输入（外部 → 环境内部）
+{%- endfor %}
+{%- for port in analysis_ports %}
+  uvm_analysis_port #({{ port.type }}) {{ port.name }};     // 输出（环境 → 外部）
 {%- endfor %}
  // Sequencer 中央管理（virtual_sequencer 在 seq_pkg 中，env_pkg 不可直接引用）
   {{ environment.env_name }}_virtual_sequencer virtual_sqr;
@@ -96,6 +117,29 @@ class {{ environment.env_name }} extends uvm_env;
     uvm_config_db#({{ agent.name }}_config)::set(this, "{{ agent.name }}_agent_h", "cfg", cfg.{{ agent.name }}_cfg);
 {%- endfor %}
 
+    // ─── Register Model（RAL）创建 ───
+{%- if register_model %}
+{%- for comp in register_model.components %}
+{%- if comp.role == 'reg_block' %}
+    {{ comp.name }} = {{ comp.type }}::type_id::create("{{ comp.name }}", this);
+    {{ comp.name }}.build();       // 显式调用 build()
+    {{ comp.name }}.lock_model();  // 锁定模型，防止后续修改
+{%- elif comp.role == 'adapter' %}
+    {{ comp.name }} = {{ comp.type }}::type_id::create("{{ comp.name }}", this);
+{%- elif comp.role == 'predictor' %}
+{%- if comp.type == 'uvm_reg_predictor' %}
+    {{ comp.name }} = uvm_reg_predictor #({{ comp.trans_type }})::type_id::create("{{ comp.name }}", this);
+{%- else %}
+    {{ comp.name }} = {{ comp.type }}::type_id::create("{{ comp.name }}", this);
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- if register_model.reg_block %}
+    // reg model 暴露到 config_db（reg 自检序列等通过 "*" 获取）
+    uvm_config_db#(uvm_reg_block)::set(this, "*", "reg_model", {{ register_model.reg_block.name }});
+{%- endif %}
+{%- endif %}
+
     // 创建 Sub-env
 {%- for subenv in subenvs %}
     {{ subenv.name }} = {{ subenv.type }}::type_id::create("{{ subenv.name }}", this);
@@ -119,9 +163,20 @@ class {{ environment.env_name }} extends uvm_env;
     {{ agent.name }}_agent_ap = new("{{ agent.name }}_agent_ap", this);
 {%- endfor %}
 
+    // 创建 Analysis Exports / Ports
+{%- for port in analysis_exports %}
+    {{ port.name }} = new("{{ port.name }}", this);
+{%- endfor %}
+{%- for port in analysis_ports %}
+    {{ port.name }} = new("{{ port.name }}", this);
+{%- endfor %}
+
     // 创建 Virtual Sequencer（virtual_sequencer 在 seq_pkg 中，env_pkg 不可引用）
     virtual_sqr = {{ environment.env_name }}_virtual_sequencer::type_id::create("virtual_sqr", this);
     uvm_config_db#({{ environment.env_name }}_config)::set(this, "virtual_sqr", "cfg", cfg);
+
+    // pragma custom build_logic begin
+    // pragma custom build_logic end
   endfunction
 
   virtual function void connect_phase(uvm_phase phase);
@@ -142,10 +197,40 @@ class {{ environment.env_name }} extends uvm_env;
     {{ agent.name }}_agent_ap.connect(env_cov.{{ agent.name }}_export);
 {%- endfor %}
 
+    // ─── Register Model（RAL）连接 ───
+{%- if register_model and register_model.reg_block and register_model.bus_agent %}
+    // 1. 将寄存器模型的地址映射（default_map）连接到序列器和适配器
+    {{ register_model.reg_block.name }}.default_map.set_sequencer({{ register_model.bus_agent }}_agent_h.sqr{% if register_model.adapter %}, {{ register_model.adapter.name }}{% endif %});
+    {{ register_model.reg_block.name }}.default_map.set_auto_predict({{ 0 if register_model.predictor else 1 }});
+{%- endif %}
+{%- if register_model.predictor and register_model.reg_block and register_model.bus_agent %}
+    // 2. 配置预测器（显式预测模式）
+    {{ register_model.predictor.name }}.map = {{ register_model.reg_block.name }}.default_map;
+{%- if register_model.adapter %}
+    {{ register_model.predictor.name }}.adapter = {{ register_model.adapter.name }};
+{%- endif %}
+    {{ register_model.bus_agent }}_agent_ap.connect({{ register_model.predictor.name }}.bus_in);
+{%- endif %}
+
+    // Analysis Ports 连接（connected_to）
+{%- for port in analysis_ports %}
+{%- if port.connected_to %}
+    {{ port.name }}.connect({{ port.connected_to }});
+{%- endif %}
+{%- endfor %}
+{%- for port in analysis_exports %}
+{%- if port.connected_to %}
+    {{ port.connected_to }}.connect({{ port.name }});
+{%- endif %}
+{%- endfor %}
+
     // TLM 连接（显式 driver → receiver）
 {%- for conn in tlm_connections %}
     {{ conn.driver }}.connect({{ conn.receiver }});
 {%- endfor %}
+
+    // pragma custom connect_logic begin
+    // pragma custom connect_logic end
 
   endfunction
 
@@ -167,10 +252,11 @@ class {{ environment.env_name }} extends uvm_env;
       // 显示 banner
       // 初始化统计
   endfunction
-  task run_phase(uvm_phase phase);
-        super.run_phase(phase);
-        `uvm_info(get_name(), "run_phase", UVM_LOW)
-        // ⚠️ 需要 raise_objection / drop_objection
+  task configure_phase(uvm_phase phase);
+        super.configure_phase(phase);
+        `uvm_info(get_name(), "configure_phase: start", UVM_MEDIUM)
+        phase.raise_objection(this);
+        phase.drop_objection(this);
   endtask
     
   task pre_reset_phase(uvm_phase phase);
@@ -258,47 +344,9 @@ class {{ environment.env_name }} extends uvm_env;
   endfunction
   
   //========================================================================
-  // TEST_PASS 图案（与你显示的一致）
+  // TEST_PASS / TEST_FAIL 图案（include 片段，见 _report_patterns.sv.j2）
   //========================================================================
-  function void print_test_pass();
-      `uvm_info(get_name(), "", UVM_NONE)
-      `uvm_info(get_name(), "    ████████╗███████╗███████╗████████╗", UVM_NONE)
-      `uvm_info(get_name(), "    ╚══██╔══╝██╔════╝██╔════╝╚══██╔══╝", UVM_NONE)
-      `uvm_info(get_name(), "       ██║   █████╗  ███████╗   ██║   ", UVM_NONE)
-      `uvm_info(get_name(), "       ██║   ██╔══╝  ╚════██║   ██║   ", UVM_NONE)
-      `uvm_info(get_name(), "       ██║   ███████╗███████║   ██║   ", UVM_NONE)
-      `uvm_info(get_name(), "       ╚═╝   ╚══════╝╚══════╝   ╚═╝   ", UVM_NONE)
-      `uvm_info(get_name(), "                                       ", UVM_NONE)
-      `uvm_info(get_name(), "    ██████╗  █████╗ ███████╗███████╗   ", UVM_NONE)
-      `uvm_info(get_name(), "    ██╔══██╗██╔══██╗██╔════╝██╔════╝   ", UVM_NONE)
-      `uvm_info(get_name(), "    ██████╔╝███████║███████╗███████╗   ", UVM_NONE)
-      `uvm_info(get_name(), "    ██╔═══╝ ██╔══██║╚════██║╚════██║   ", UVM_NONE)
-      `uvm_info(get_name(), "    ██║     ██║  ██║███████║███████║   ", UVM_NONE)
-      `uvm_info(get_name(), "    ╚═╝     ╚═╝  ╚═╝╚══════╝╚══════╝   ", UVM_NONE)
-      `uvm_info(get_name(), "                                       ", UVM_NONE)
-      `uvm_info(get_name(), "                         ✓  TEST PASSED  ✓                         ", UVM_NONE)
-  endfunction
-  
-  //========================================================================
-  // TEST_FAIL 图案
-  //========================================================================
-  function void print_test_fail();
-      `uvm_info(get_name(), "", UVM_NONE)
-      `uvm_info(get_name(), "    ████████╗███████╗███████╗████████╗", UVM_NONE)
-      `uvm_info(get_name(), "    ╚══██╔══╝██╔════╝██╔════╝╚══██╔══╝", UVM_NONE)
-      `uvm_info(get_name(), "       ██║   █████╗  ███████╗   ██║   ", UVM_NONE)
-      `uvm_info(get_name(), "       ██║   ██╔══╝  ╚════██║   ██║   ", UVM_NONE)
-      `uvm_info(get_name(), "       ██║   ███████╗███████║   ██║   ", UVM_NONE)
-      `uvm_info(get_name(), "       ╚═╝   ╚══════╝╚══════╝   ╚═╝   ", UVM_NONE)
-      `uvm_info(get_name(), "                                       ", UVM_NONE)
-      `uvm_info(get_name(), "    ███████╗ █████╗ ██╗██╗     ███████╗", UVM_NONE)
-      `uvm_info(get_name(), "    ██╔════╝██╔══██╗██║██║     ██╔════╝", UVM_NONE)
-      `uvm_info(get_name(), "    █████╗  ███████║██║██║     █████╗  ", UVM_NONE)
-      `uvm_info(get_name(), "    ██╔══╝  ██╔══██║██║██║     ██╔══╝  ", UVM_NONE)
-      `uvm_info(get_name(), "    ██║     ██║  ██║██║███████╗███████╗", UVM_NONE)
-      `uvm_info(get_name(), "    ╚═╝     ╚═╝  ╚═╝╚═╝╚══════╝╚══════╝", UVM_NONE)
-      `uvm_info(get_name(), "                                       ", UVM_NONE)
-      `uvm_info(get_name(), "                         ✗  TEST FAILED  ✗                         ", UVM_NONE)
+{% include "environment_templates/_report_patterns.sv.j2" %}
   endfunction
   function void final_phase(uvm_phase phase);
       super.final_phase(phase);

@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // ============================================================
 // Slave Monitor: {{ agent.name }}_slave_monitor
 // ============================================================
@@ -10,6 +12,8 @@ class {{ agent.name }}_slave_monitor extends uvm_monitor;
   {{ agent.name }}_slave_config cfg;
   uvm_analysis_port #({{ agent.name }}_slave_seq_item) mon_ap;
   {{ agent.name }}_slave_sequencer sqr;  // ★ 持有 Sequencer 句柄
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -23,9 +27,22 @@ class {{ agent.name }}_slave_monitor extends uvm_monitor;
     if (!uvm_config_db#({{ agent.name }}_slave_config)::get(this, "", "cfg", cfg))
       `uvm_fatal("CFG", "Config not set")
     uvm_config_db#({{ agent.name }}_slave_sequencer)::get(this, "", "sqr", sqr);
+    // pragma custom build_logic begin
+    // pragma custom build_logic end
   endfunction
 
-  task run_phase(uvm_phase phase);
+  task configure_phase(uvm_phase phase);
+    super.configure_phase(phase);
+    `uvm_info(get_type_name(), "configure_phase: start", UVM_MEDIUM)
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+
+  task main_phase(uvm_phase phase);
+    super.main_phase(phase);
+    `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
+    // monitor 的 forever 循环不 raise objection（避免悬挂）；复位门控后才开始采样
+    wait (vif.{{ agent.reset }} == 1'b{{ 1 if agent.reset_active_low else 0 }});
     forever begin
       {{ agent.name }}_slave_seq_item tx;
       tx = {{ agent.name }}_slave_seq_item::type_id::create("tx");
@@ -41,11 +58,13 @@ class {{ agent.name }}_slave_monitor extends uvm_monitor;
   endtask
 
   virtual task collect_transaction({{ agent.name }}_slave_seq_item tx);
-{% if agent.custom_collect_logic %}
-    // === LLM-generated frame collection (task 级) ===
-{{ agent.custom_collect_logic | indent(4, first=true) }}
-{% else %}
+    // pragma custom collect_logic begin
+{%- if agent.protocol == 'apb' %}
+    // APB: 仅采样完整访问（penable && pready 拍）
+    do @(vif.mon_cb); while (!(vif.mon_cb.psel && vif.mon_cb.penable && vif.mon_cb.pready));
+{%- else %}
     @(vif.mon_cb);
+{%- endif %}
 {%- for var in transaction_vars %}
 {%-   set port_in_ports = namespace(found=false) %}
 {%-   for port in ports %}
@@ -55,6 +74,6 @@ class {{ agent.name }}_slave_monitor extends uvm_monitor;
     tx.{{ var.name }} = vif.{{ var.name }};
 {%-   endif %}
 {%- endfor %}
-{% endif %}
+    // pragma custom collect_logic end
   endtask
 endclass : {{ agent.name }}_slave_monitor

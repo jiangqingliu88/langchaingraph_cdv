@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // {{ project.name }}_constraint_policies.sv
 // 自动生成的具体策略实现
 
@@ -207,6 +209,12 @@ class {{ policy.name }}_policy extends {{ project.env_name }}_constraint_policy;
         endcase
       end
       
+{% elif policy.name == "apb_addr_align" %}
+      "apb_addr_align": begin
+        // APB 地址对齐（示例策略；applies_to 端口 = apb_master）
+        apb_master_trans.paddr = (apb_master_trans.paddr / align) * align;
+      end
+
 {% elif policy.name == "compute_mode" %}
       "compute_mode": begin
         case (cfg_trans.compute_op)

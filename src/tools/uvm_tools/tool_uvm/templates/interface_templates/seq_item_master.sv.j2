@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // ============================================================
 // Master Seq Item: {{ agent.name }}_master_seq_item
 // ============================================================
@@ -22,6 +24,9 @@ class {{ agent.name }}_master_seq_item extends uvm_sequence_item;
   {{ var.type }} {{ var.name }}; // slave 响应，master 采样
 {%-   endif %}
 {%- endfor %}
+
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
 
 {%- for cons in transaction_constraints.master %}
   constraint {{ cons.name }} {{ cons.value | safe }}

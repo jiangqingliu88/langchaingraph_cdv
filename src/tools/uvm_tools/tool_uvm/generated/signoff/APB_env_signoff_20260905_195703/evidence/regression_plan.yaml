@@ -1,0 +1,15 @@
+regression:
+  module: APB_env
+  seeds:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  source_xlsx: C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\examples\testpoint_apb.xlsx
+  tests:
+  - tc_name: APB_env_gen_test_APB_TP_001
+    id: APB_TP_001
+    priority: P0
+    policy: apb_policy_b2b
+    iterations: 100

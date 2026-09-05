@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // ============================================================
 // Master Driver: {{ agent.name }}_master_driver
 // ============================================================
@@ -7,6 +9,8 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
 
   virtual {{ agent.name }}_if vif;
   {{ agent.name }}_master_config cfg;
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -18,9 +22,22 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
       `uvm_fatal("NOVIF", "Virtual interface not set")
     if (!uvm_config_db#({{ agent.name }}_master_config)::get(this, "", "cfg", cfg))
       `uvm_fatal("CFG", "Config not set")
+    // pragma custom build_logic begin
+    // pragma custom build_logic end
   endfunction
 
-  task run_phase(uvm_phase phase);
+  task configure_phase(uvm_phase phase);
+    super.configure_phase(phase);
+    `uvm_info(get_type_name(), "configure_phase: start", UVM_MEDIUM)
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+
+  task main_phase(uvm_phase phase);
+    super.main_phase(phase);
+    `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
+    // driver 的 forever 循环不 raise objection（避免悬挂）；复位门控后才开始驱动
+    wait (vif.{{ agent.reset }} == 1'b{{ 1 if agent.reset_active_low else 0 }});
     forever begin
       {{ agent.name }}_master_seq_item req;
       seq_item_port.get_next_item(req);
@@ -30,10 +47,20 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
   endtask
 
   virtual task drive_transaction({{ agent.name }}_master_seq_item req);
-{% if agent.custom_drive_logic %}
-    // === LLM-generated protocol timing ===
-{{ agent.custom_drive_logic | indent(4, first=true) }}
-{% else %}
+    // pragma custom drive_logic begin
+{%- if agent.protocol == 'apb' %}
+    // === APB 两拍时序: setup（addr/sel/write/data）→ access（penable）→ 等 pready → 撤拍 ===
+    @(vif.master_cb);
+    vif.master_cb.psel    <= 1'b1;
+    vif.master_cb.paddr   <= req.paddr;
+    vif.master_cb.pwrite  <= req.pwrite;
+    vif.master_cb.pwdata  <= req.pwdata;
+    @(vif.master_cb);
+    vif.master_cb.penable <= 1'b1;
+    do @(vif.master_cb); while (vif.master_cb.pready !== 1'b1);
+    vif.master_cb.penable <= 1'b0;
+    vif.master_cb.psel    <= 1'b0;
+{%- else %}
     // === Default: 将 is_rand=True 且映射到 output 端口的字段单拍驱动 ===
     repeat (cfg.drive_delay_max > 0 ? $urandom_range(cfg.drive_delay_min, cfg.drive_delay_max) : 0)
       @(vif.master_cb);
@@ -49,6 +76,7 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
 {%-   endif %}
 {%- endfor %}
     @(vif.master_cb);
-{% endif %}
+{%- endif %}
+    // pragma custom drive_logic end
   endtask
 endclass : {{ agent.name }}_master_driver

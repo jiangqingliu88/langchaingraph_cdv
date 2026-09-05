@@ -1,0 +1,62 @@
+{
+  "module": "APB_env",
+  "packaged_at": "20260905_195703",
+  "inputs": [
+    {
+      "file": "src\\tools\\uvm_tools\\tool_uvm\\examples\\apb_bench.yaml",
+      "sha256": "0bed8d11f42d8927d43a8c13b0a11d912c99a285d85465dd8be5b9c132ab7511"
+    },
+    {
+      "file": "src\\tools\\uvm_tools\\tool_uvm\\examples\\apb_constraint.yaml",
+      "sha256": "4b4d528a1637222a2727c77897a918eeee513daa164ddda11e1815df5e71770e"
+    },
+    {
+      "file": "src\\tools\\uvm_tools\\tool_uvm\\examples\\apb_env.yaml",
+      "sha256": "44ecf5108aa167cd833d1bc364b4a7e7089d8ce074aac976608e7f9bee4cc004"
+    },
+    {
+      "file": "src\\tools\\uvm_tools\\tool_uvm\\examples\\apb_interface.yaml",
+      "sha256": "e938188f35ee6223b54da344db1978e7844df9b9276bd2ba05848f8c5564c93f"
+    },
+    {
+      "file": "src\\tools\\uvm_tools\\tool_uvm\\examples\\apb_util_comp.yaml",
+      "sha256": "22a9402d4c244c762db1c486dcdc7ed52b52dfb4a48e322004bf7ceddca2bae9"
+    },
+    {
+      "file": "C:\\Users\\liujiangqing\\Desktop\\cdv_advanced\\src\\tools\\uvm_tools\\tool_uvm\\examples\\testpoint_apb.xlsx",
+      "sha256": "b9f56b07e3f5d25ecafb5b67faba93427590e9327ea012aa111706301c596ddb"
+    }
+  ],
+  "outputs": [
+    {
+      "file": "test_run_results.json",
+      "sha256": "e19a72ab91757d6a6248cd3b84c2a1d765d9d37eaffbc51d3b3664fad42a19ea"
+    },
+    {
+      "file": "test_run_results.md",
+      "sha256": "3e592aa9117ac6e20e299b47b6663a6374b300480aca32ba3cc692ce4a6d4a8d"
+    },
+    {
+      "file": "generation_report.json",
+      "sha256": "248375ff3989d477a6e5a70d38b642fd20af08ee63ad8fd6b80c14340b448204"
+    },
+    {
+      "file": "validation_report.txt",
+      "sha256": "908cbe7b81ee8318c27375394fd20ef96c59aa272e69cf729d6718812ebbad7e"
+    },
+    {
+      "file": "testpoint_trace.md",
+      "sha256": "7a9a86600521d1d0448899222802b80bc71219e0ecfd40f2e479d8ebd8ef04da"
+    },
+    {
+      "file": "regression_plan.yaml",
+      "sha256": "b0194f35538b2245af71c9eef0419d61ce036cb5457f71a6a30adce949598b8f"
+    }
+  ],
+  "results_summary": {
+    "total": 3,
+    "pass": 0,
+    "fail": 0,
+    "other": 3
+  }
+}

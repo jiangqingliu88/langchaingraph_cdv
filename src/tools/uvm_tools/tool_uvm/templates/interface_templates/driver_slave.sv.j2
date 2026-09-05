@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // ============================================================
 // Slave Driver: {{ agent.name }}_slave_driver
 // ============================================================
@@ -7,6 +9,8 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
 
   virtual {{ agent.name }}_if vif;
   {{ agent.name }}_slave_config cfg;
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -18,9 +22,22 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
       `uvm_fatal("NOVIF", "Virtual interface not set")
     if (!uvm_config_db#({{ agent.name }}_slave_config)::get(this, "", "cfg", cfg))
       `uvm_fatal("CFG", "Config not set")
+    // pragma custom build_logic begin
+    // pragma custom build_logic end
   endfunction
 
-  task run_phase(uvm_phase phase);
+  task configure_phase(uvm_phase phase);
+    super.configure_phase(phase);
+    `uvm_info(get_type_name(), "configure_phase: start", UVM_MEDIUM)
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+
+  task main_phase(uvm_phase phase);
+    super.main_phase(phase);
+    `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
+    // driver 的 forever 循环不 raise objection（避免悬挂）；复位门控后才开始响应
+    wait (vif.{{ agent.reset }} == 1'b{{ 1 if agent.reset_active_low else 0 }});
     forever begin
       {{ agent.name }}_slave_seq_item rsp;
       seq_item_port.get_next_item(rsp);
@@ -30,6 +47,24 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
   endtask
 
   virtual task drive_response({{ agent.name }}_slave_seq_item rsp);
+    // pragma custom drive_logic begin
+{%- if agent.protocol == 'apb' %}
+    // === APB slave 响应: 等 setup+access 拍 → pready + 数据/错误 ===
+    do @(vif.slave_cb); while (!(vif.slave_cb.psel && vif.slave_cb.penable));
+    if (cfg.response_mode == AUTO_MEMORY) begin
+      if (vif.slave_cb.pwrite)
+        cfg.memory[vif.slave_cb.paddr] = vif.slave_cb.pwdata;
+      else
+        vif.slave_cb.prdata <= (cfg.memory.exists(vif.slave_cb.paddr))
+                               ? cfg.memory[vif.slave_cb.paddr] : cfg.default_read_data;
+    end else begin
+      vif.slave_cb.prdata  <= rsp.prdata;
+      vif.slave_cb.pslverr <= rsp.pslverr;
+    end
+    vif.slave_cb.pready <= 1'b1;
+    @(vif.slave_cb);
+    vif.slave_cb.pready <= 1'b0;
+{%- else %}
     // 响应延迟（由 slave sequence 决定）
     repeat (rsp.delay_cycles) @(vif.slave_cb);
 {%- set has_input_port = namespace(found=false) %}
@@ -54,5 +89,7 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
     // 无 input 端口：slave 仅产生响应延迟，不做信号驱动
     `uvm_info("SLV_DRV", $sformatf("slave response delay=%0d", rsp.delay_cycles), UVM_HIGH)
 {%- endif %}
+{%- endif %}
+    // pragma custom drive_logic end
   endtask
 endclass : {{ agent.name }}_slave_driver

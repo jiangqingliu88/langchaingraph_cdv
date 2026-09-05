@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // Environment Package: {{ environment.env_name }}_pkg
 package {{ environment.env_name }}_pkg;
   import uvm_pkg::*;
@@ -10,15 +12,26 @@ package {{ environment.env_name }}_pkg;
 {%- for subenv in subenvs %}
   import {{ subenv.type }}_pkg::*;
 {%- endfor %}
+  // 导入 Register Model 包（RAL，来自各组件 pkg 字段或 type 的 "pkg::" 前缀）
+{%- if register_model and register_model.pkgs %}
+{%- for pkg in register_model.pkgs %}
+  import {{ pkg }}::*;
+{%- endfor %}
+{%- endif %}
 `ifdef USE_SC_MODEL_CHECK
   import {{ environment.env_name }}_sc_pred_env_pkg::*;
 `endif
   // 包含环境组件文件（依赖顺序：config → virtual_sequencer → coverage → env）
-  // 注意：scoreboard / analysis 组件由 YAML 指定 sb_type/type（外部类），
-  // 不再由本包 include；它们通过 import 对应 package 引入。
+  // 注意：外部类 scoreboard（sb_type 指定）/ analysis 组件不在此 include，
+  // 通过 import 对应 package 引入；生成式 scoreboard（mode 指定）在此 include。
   `include "{{ environment.env_name }}_config.sv"
   `include "seqs/{{ environment.env_name }}_virtual_sequencer.sv"
   `include "{{ environment.env_name }}_coverage.sv"
+{%- for sb in scoreboards %}
+{%- if sb.generated %}
+  `include "scb/{{ sb.name }}.sv"
+{%- endif %}
+{%- endfor %}
   `include "{{ environment.env_name }}.sv"
 
 endpackage : {{ environment.env_name }}_pkg

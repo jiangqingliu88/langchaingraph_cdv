@@ -1,22 +1,31 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // ============================================================
-// UVM 编译 filelist —— 由模板生成（绝对路径）
+// UVM 编译 filelist —— 整环境 + bench + testpoint TC 一键编译（绝对路径）
+// 用法: vlog -sv -f {{ environment.env_name }}_pkg_filelist.f
 // ============================================================
 // DUT (项目源码)
 {{ dut_path }}
 
-// ─── Base PKG: Clock & Reset VIP ───
+// ─── Base PKG: Clock & Reset VIP + Scoreboard 组件族 ───
 +incdir+{{ base_pkg_dir }}/clk_and_rst
 {{ base_pkg_dir }}/clk_and_rst/clk_and_rst_pkg.sv
++incdir+{{ base_pkg_dir }}/scb
+{{ base_pkg_dir }}/scb/in_order_scoreboard.svh
+{{ base_pkg_dir }}/scb/out_of_order_scoreboard.svh
+{{ base_pkg_dir }}/scb/typed_scoreboard.svh
+{{ base_pkg_dir }}/scb/algorithm_scoreboard.svh
 
-// ─── Interface ───
+// ─── Interface & Agent Package ───
 {%- for agent in agents %}
-{{ agent_dir }}/{{ agent.name }}/{{ agent.name }}_interface.sv
++incdir+{{ agent_dir }}/{{ agent.name }}_agent
+{{ agent_dir }}/{{ agent.name }}_agent/1_interface/{{ agent.name }}_if.sv
+{{ agent_dir }}/{{ agent.name }}_agent/{{ agent.name }}_pkg.sv
 {%- endfor %}
 
-// ─── Agent Package ───
-{%- for agent in agents %}
-+incdir+{{ agent_dir }}/{{ agent.name }}
-{{ agent_dir }}/{{ agent.name }}/{{ agent.name }}_pkg.sv
+// ─── Harness（bind 式，须在 tb_top 前编译）──
+{%- for h in harnesses %}
+{{ bench_dir }}/{{ h.name }}.sv
 {%- endfor %}
 
 // ─── Environment ───
@@ -26,6 +35,10 @@
 {{ env_dir }}/tests/{{ environment.env_name }}_test_pkg.sv
 +incdir+{{ env_dir }}/seqs
 {{ env_dir }}/seqs/{{ environment.env_name }}_seq_pkg.sv
+
+// ─── Testpoint TC（tool_testgen 产物，可选；tc_constraints 随 tc_pkg include）──
++incdir+{{ env_dir }}/..
+{{ env_dir }}/../{{ environment.env_name }}_tc_pkg.sv
 
 // ─── Testbench Top ───
 {{ bench_dir }}/{{ bench_name }}_tb_top.sv

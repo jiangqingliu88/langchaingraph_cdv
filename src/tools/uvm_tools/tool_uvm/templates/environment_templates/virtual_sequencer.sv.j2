@@ -1,3 +1,5 @@
+{% include "base_templates/base_template.sv.j2" %}
+
 // ============================================================
 // Virtual Sequencer: {{ environment.env_name }}_virtual_sequencer
 // 支持多 Agent 仲裁和调度
@@ -501,9 +503,18 @@ class {{ environment.env_name }}_virtual_sequencer extends uvm_sequencer #(uvm_s
   // 20. 运行时相位
   // ═══════════════════════════════════════════════════════════════
   
-  virtual task run_phase(uvm_phase phase);
-    super.run_phase(phase);
-    `uvm_info(get_name(), "Virtual sequencer run phase", UVM_HIGH)
+  virtual task configure_phase(uvm_phase phase);
+    super.configure_phase(phase);
+    `uvm_info(get_name(), "Virtual sequencer configure_phase: start", UVM_MEDIUM)
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+
+  virtual task main_phase(uvm_phase phase);
+    super.main_phase(phase);
+    `uvm_info(get_name(), "Virtual sequencer main_phase: start", UVM_MEDIUM)
+    phase.raise_objection(this);
+    phase.drop_objection(this);
   endtask
   
   virtual function void report_phase(uvm_phase phase);

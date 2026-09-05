@@ -1,0 +1,100 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// Gen Test: {{ environment.env_name }}_gen_test
+// 所有具体 Test 的基类
+
+class {{ environment.env_name }}_gen_test extends uvm_test;
+  `uvm_component_utils({{ environment.env_name }}_gen_test)
+{%- for agent in agents %}
+{%-   if agent.is_master %}
+    {{ agent.name }}_master_sequence {{ agent.name }}_master_seq;
+{%-   else %}
+    {{ agent.name }}_slave_sequence {{ agent.name }}_slave_seq;
+{%-   endif %}
+{%- endfor %}
+  // 环境实例
+  {{ environment.env_name }} env;
+
+  // 环境配置
+  {{ environment.env_name }}_config cfg;
+ 
+  // 虚拟接口
+{%- for agent in agents %}
+  virtual {{ agent.interface }}_interface {{ agent.name }}_vif;
+{%- endfor %}
+{%- for subenv in subenvs %}
+  virtual {{ subenv.name }}_interface {{ subenv.name }}_vif;
+{%- endfor %}
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
+  function new(string name = "{{ environment.env_name }}_gen_test", uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+
+    // 创建并配置环境
+    env = {{ environment.env_name }}::type_id::create("env", this);
+{%- if harness_connect and harness_connect.path %}
+    // harness 连接：把 DUT 侧 bind 的 interface 一次性 set 进环境 agent
+    {{ harness_connect.path }}.set_vifs({% if harness_connect.env_suffix %}{env.get_full_name(), "{{ harness_connect.env_suffix }}"}{% else %}env.get_full_name(){% endif %});
+{%- endif %}
+
+    // 创建并随机化配置
+    cfg = {{ environment.env_name }}_config::type_id::create("cfg");
+    if (!cfg.randomize()) begin
+      `uvm_fatal("CFG_RAND", "Failed to randomize environment configuration")
+    end
+    
+    // 配置 Agent 模式（YAML agents 的 is_active；缺省 ACTIVE）
+{%- for agent in agents %}
+    cfg.{{ agent.name }}_cfg.is_active = {{ 'UVM_ACTIVE' if agent.active is not false else 'UVM_PASSIVE' }};
+{%- endfor %}
+
+    // 设置配置到 config_db
+    uvm_config_db#({{ environment.env_name }}_config)::set(this, "env", "cfg", cfg);
+
+
+    // pragma custom build_logic begin
+    // pragma custom build_logic end
+
+  endfunction
+
+  virtual function void end_of_elaboration_phase(uvm_phase phase);
+    super.end_of_elaboration_phase(phase);
+    `uvm_info("TEST", "{{ environment.env_name }}_base_test elaborated", UVM_LOW)
+  endfunction
+
+  task configure_phase(uvm_phase phase);
+    super.configure_phase(phase);
+    `uvm_info(get_type_name(), "configure_phase: start", UVM_MEDIUM)
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+
+  task main_phase(uvm_phase phase);
+    super.main_phase(phase);
+    `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+
+endclass : {{ environment.env_name }}_gen_test
+
+// SLPLIT SEQ
+`define GEN_TOP_TC(tc_name, tc_com, tc_reg, tc_seq) \
+class tc_name extends {{ environment.env_name }}_gen_test; \
+    `uvm_component_utils(tc_name) \
+    function new(string name, uvm_component parent); \
+    super.new(name, parent); \
+endfunction \
+virtual function void build_phase(uvm_phase phase); \
+    super.build_phase(phase); \
+    //different env_config_var var, cons BLOCK
+    set_type_override_by_type({{ environment.env_name }}_config::get_type(),tc_com::get_type()); \
+    //time driver split to DUT WORK
+    uvm_config_db #(uvm_object_wrapper):set(this,"env.vsqr.configure_phase","default_sequence",tc_reg::type_id::get()); \
+    uvm_config_db #(uvm_object_wrapper):set(this,"env.vsqr.main_phase","default_sequence",tc_seq::type_id::get()); \
+endfunction \
+endclass
