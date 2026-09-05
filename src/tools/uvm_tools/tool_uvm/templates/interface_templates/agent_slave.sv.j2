@@ -1,45 +1,44 @@
-// Agent: {{ agent.name }}_agent
-// Agent: {{ agent.name }}_agent
+// ============================================================
+// Slave Agent: {{ agent.name }}_slave_agent
+// ============================================================
 
-typedef class {{ agent.name }}_agent;
-typedef class {{ agent.name }}_config;
+class {{ agent.name }}_slave_agent extends uvm_agent;
+  `uvm_component_utils({{ agent.name }}_slave_agent)
 
-class {{ agent.name }}_agent extends uvm_agent;
-  `uvm_component_utils({{ agent.name }}_agent)
-
-  {{ agent.name }}_sequencer  sqr;
-  {{ agent.name }}_driver      drv;
-  {{ agent.name }}_monitor     mon;
-  {{ agent.name }}_config      cfg;
-
-  uvm_analysis_port #({{ agent.name }}_seq_item) agent_ap;
+  {{ agent.name }}_slave_sequencer sequencer;
+  {{ agent.name }}_slave_driver    driver;
+  {{ agent.name }}_slave_monitor   monitor;
+  {{ agent.name }}_slave_config    cfg;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
   endfunction
 
-  virtual function void build_phase(uvm_phase phase);
+  function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    if (!uvm_config_db#({{ agent.name }}_config)::get(this, "", "cfg", cfg))
-      `uvm_fatal("CFG", "Config not set")
+    uvm_config_db#({{ agent.name }}_slave_config)::get(this, "", "cfg", cfg);
+    if (cfg == null)
+      cfg = {{ agent.name }}_slave_config::type_id::create("cfg", this);
 
-    uvm_config_db#({{ agent.name }}_config)::set(this, "*", "cfg", cfg);
-
-    mon = {{ agent.name }}_monitor::type_id::create("mon", this);
-
+    monitor = {{ agent.name }}_slave_monitor::type_id::create("monitor", this);
     if (cfg.is_active == UVM_ACTIVE) begin
-      sqr = {{ agent.name }}_sequencer::type_id::create("sqr", this);
-      drv = {{ agent.name }}_driver::type_id::create("drv", this);
+      sequencer = {{ agent.name }}_slave_sequencer::type_id::create("sequencer", this);
+      driver    = {{ agent.name }}_slave_driver::type_id::create("driver", this);
     end
-
-    agent_ap = new("agent_ap", this);
   endfunction
 
-  virtual function void connect_phase(uvm_phase phase);
+  function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
-    if (cfg.is_active == UVM_ACTIVE)
-      drv.seq_item_port.connect(sqr.seq_item_export);
-    mon.item_collected_port.connect(agent_ap);
+    if (cfg.is_active == UVM_ACTIVE) begin
+      driver.seq_item_port.connect(sequencer.seq_item_export);
+      // ★ 将 Sequencer 句柄传给 Monitor（事件驱动）
+      uvm_config_db#({{ agent.name }}_slave_sequencer)::set(this, "monitor", "sqr", sequencer);
+    end
+    uvm_config_db#(virtual {{ agent.name }}_if)::set(this, "monitor", "vif", cfg.vif);
+    uvm_config_db#({{ agent.name }}_slave_config)::set(this, "monitor", "cfg", cfg);
+    if (driver != null) begin
+      uvm_config_db#(virtual {{ agent.name }}_if)::set(this, "driver", "vif", cfg.vif);
+      uvm_config_db#({{ agent.name }}_slave_config)::set(this, "driver", "cfg", cfg);
+    end
   endfunction
-
-endclass : {{ agent.name }}_agent
+endclass : {{ agent.name }}_slave_agent

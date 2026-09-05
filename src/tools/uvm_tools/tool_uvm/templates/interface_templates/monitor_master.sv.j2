@@ -1,214 +1,51 @@
 // ============================================================
-// Monitor Callback
+// Master Monitor: {{ agent.name }}_master_monitor
 // ============================================================
 
-typedef class {{ agent.name }}_monitor;
+class {{ agent.name }}_master_monitor extends uvm_monitor;
+  `uvm_component_utils({{ agent.name }}_master_monitor)
 
-class {{ agent.name }}_monitor_callback extends uvm_callback;
-  `uvm_object_utils({{ agent.name }}_monitor_callback)
-
-  function new(string name = "{{ agent.name }}_monitor_callback");
-    super.new(name);
-  endfunction
-
-  // 采样前
-  virtual function void on_pre_sample(
-    {{ agent.name }}_monitor monitor,
-    virtual {{ agent.interface }}_interface vif
-  );
-  endfunction
-
-  // 采样后（可修改 item）
-  virtual function void on_post_sample(
-    {{ agent.name }}_monitor monitor,
-    {{ agent.name }}_seq_item item
-  );
-  endfunction
-
-  // write 前
-  virtual function void on_pre_write(
-    {{ agent.name }}_monitor monitor,
-    {{ agent.name }}_seq_item item
-  );
-  endfunction
-
-  // write 后
-  virtual function void on_post_write(
-    {{ agent.name }}_monitor monitor,
-    {{ agent.name }}_seq_item item
-  );
-  endfunction
-
-endclass : {{ agent.name }}_monitor_callback
-
-// ============================================================
-// Monitor: {{ agent.name }}_monitor
-// 场景: 采样/过滤/XZ检测/带宽监控/回调/统计
-// ============================================================
-
-class {{ agent.name }}_monitor extends uvm_monitor;
-  `uvm_component_utils({{ agent.name }}_monitor)
-  `uvm_register_cb({{ agent.name }}_monitor, {{ agent.name }}_monitor_callback)
-
-  uvm_analysis_port #({{ agent.name }}_seq_item) item_collected_port;
-  virtual {{ agent.interface }}_interface vif;
-  {{ agent.name }}_config cfg;
-
-  // ─── 统计 ───
-  protected int m_collected    = 0;
-  protected int m_filtered_out = 0;
-  protected int m_xz_detected  = 0;
-  protected realtime m_last_time = 0;
-  protected realtime m_total_bw = 0;
+  virtual {{ agent.name }}_if vif;
+  {{ agent.name }}_master_config cfg;
+  uvm_analysis_port #({{ agent.name }}_master_seq_item) mon_ap;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
-    item_collected_port = new("item_collected_port", this);
+    mon_ap = new("mon_ap", this);
   endfunction
 
-  virtual function void build_phase(uvm_phase phase);
+  function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    if (!uvm_config_db#({{ agent.name }}_config)::get(this, "", "cfg", cfg))
-      `uvm_fatal("CFG", "Config not set")
-    if (!uvm_config_db#(virtual {{ agent.interface }}_interface)::get(this, "", "vif", vif))
+    if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "", "vif", vif))
       `uvm_fatal("NOVIF", "Virtual interface not set")
+    if (!uvm_config_db#({{ agent.name }}_master_config)::get(this, "", "cfg", cfg))
+      `uvm_fatal("CFG", "Config not set")
   endfunction
 
   task run_phase(uvm_phase phase);
-    @(posedge vif.{{ agent.reset }});  // wait for reset release before sampling
     forever begin
-      {{ agent.name }}_seq_item item;
-{%- if agent.custom_collect_logic %}
-      // === 任务级帧采集（串行协议）===
-      item = {{ agent.name }}_seq_item::type_id::create("item");
-      collect_transaction(item);
-      item_collected_port.write(item);
-      m_collected++;
-      `uvm_info("MON", $sformatf("MON: %s collected item #%0d:\n%s", get_name(), m_collected, item.sprint()), UVM_MEDIUM)
-{%- else %}
-{%- set qualifier = namespace(sig=None) %}
-{%- for port in ports %}
-{%-   if port.dir == 'output' and port.name in ('valid', 'strobe', 'psel', 'penable', 'enable', 'ready') %}
-{%-     if qualifier.sig is none %}{% set qualifier.sig = port.name %}{% endif %}
-{%-   endif %}
-{%- endfor %}
-      @(vif.cb);
-      #1;  // ensure driver's blocking assignments propagate before sampling
-{%- if qualifier.sig %}
-      if (!vif.{{ qualifier.sig }}) continue;  // gate: skip idle cycles
-{%- endif %}
-      `uvm_do_callbacks({{ agent.name }}_monitor, {{ agent.name }}_monitor_callback,
-                        on_pre_sample(this, vif))
-
-      // X/Z 检测 — skip first cycle after reset
-      if (cfg.check_xz && is_xz_detected() && m_collected > 0) begin
-        m_xz_detected++;
-        `uvm_warning("MON", "X/Z detected on interface")
-      end
-
-      item = {{ agent.name }}_seq_item::type_id::create("item");
-      sample_transaction(item);
-
-      // 过滤
-      if (cfg.filter_enabled && !filter_transaction(item)) begin
-        m_filtered_out++;
-        continue;
-      end
-
-      `uvm_do_callbacks({{ agent.name }}_monitor, {{ agent.name }}_monitor_callback,
-                        on_post_sample(this, item))
-
-      `uvm_do_callbacks({{ agent.name }}_monitor, {{ agent.name }}_monitor_callback,
-                        on_pre_write(this, item))
-
-      item_collected_port.write(item);
-      m_collected++;
-
-      // Debug: print sampled transaction
-      `uvm_info("MON", $sformatf("MON: %s collected item #%0d:\n%s", get_name(), m_collected, item.sprint()), UVM_MEDIUM)
-
-      // 带宽统计
-      update_bandwidth();
-
-      `uvm_do_callbacks({{ agent.name }}_monitor, {{ agent.name }}_monitor_callback,
-                        on_post_write(this, item))
-{%- endif %}
+      {{ agent.name }}_master_seq_item tx;
+      tx = {{ agent.name }}_master_seq_item::type_id::create("tx");
+      collect_transaction(tx);
+      mon_ap.write(tx);
     end
   endtask
 
-  virtual function void sample_transaction({{ agent.name }}_seq_item item);
-{% if agent.custom_sample_logic %}
-    // === LLM-generated protocol sampling ===
-{{ agent.custom_sample_logic | indent(4, first=true) }}
-{% else %}
-    // === Default: sample all ports from interface ===
-{%- for port in ports %}
-{%-   if port.name != clock and port.name != reset %}
-{%-     set port_in_txn = namespace(found=false) %}
-{%-     for var in transaction_vars %}
-{%-       if var.name == port.name %}{% set port_in_txn.found = true %}{% endif %}
-{%-     endfor %}
-{%-     if port_in_txn.found %}
-    item.{{ port.name }} = vif.{{ port.name }};
-{%-     endif %}
-{%-   endif %}
-{%- endfor %}
-{% endif %}
-  endfunction
-
-  // 任务级帧采集（串行协议用：跨多拍采样，如 UART tx → data 字节）
-  // 与 sample_transaction（function 单拍采样）互斥：存在 custom_collect_logic 时走这里
-  virtual task collect_transaction({{ agent.name }}_seq_item item);
+  virtual task collect_transaction({{ agent.name }}_master_seq_item tx);
 {% if agent.custom_collect_logic %}
-    // === LLM-generated frame collection ===
+    // === LLM-generated frame collection (task 级) ===
 {{ agent.custom_collect_logic | indent(4, first=true) }}
 {% else %}
-    @(vif.cb);
-{% endif %}
-  endtask
-
-  // ─── X/Z 检测 ───
-  virtual function bit is_xz_detected();
-{%- for port in ports %}
-{%-   if port.name != clock and port.name != reset %}
-{%-     if port.dir == 'output' %}
-    if ($isunknown(vif.{{ port.name }})) return 1;
-{%-     else %}
-    if ($isunknown(vif.cb.{{ port.name }})) return 1;
-{%-     endif %}
+    @(vif.mon_cb);
+{%- for var in transaction_vars %}
+{%-   set port_in_ports = namespace(found=false) %}
+{%-   for port in ports %}
+{%-     if port.name == var.name %}{% set port_in_ports.found = true %}{% endif %}
+{%-   endfor %}
+{%-   if port_in_ports.found %}
+    tx.{{ var.name }} = vif.{{ var.name }};
 {%-   endif %}
 {%- endfor %}
-    return 0;
-  endfunction
-
-  // ─── 过滤 ───
-  virtual function bit filter_transaction({{ agent.name }}_seq_item item);
-{%- if filter_condition %}
-    return {{ filter_condition }};
-{%- else %}
-    return 1;  // 默认全部通过
-{%- endif %}
-  endfunction
-
-  // ─── 带宽监控 ───
-  virtual function void update_bandwidth();
-    realtime now = $realtime;
-    if (m_last_time > 0) begin
-      m_total_bw += (now - m_last_time);
-    end
-    m_last_time = now;
-  endfunction
-
-  virtual function real get_bandwidth_bps();
-    if (m_collected == 0 || m_total_bw == 0) return 0;
-    return (m_collected * 8) / (m_total_bw / 1e9);
-  endfunction
-
-  virtual function void report_phase(uvm_phase phase);
-    `uvm_info("MON", $sformatf(
-      "Monitor %s: collected=%0d filtered=%0d xz=%0d bw=%.1f Gbps",
-      get_full_name(), m_collected, m_filtered_out, m_xz_detected,
-      get_bandwidth_bps()), UVM_NONE)
-  endfunction
-
-endclass : {{ agent.name }}_monitor
+{% endif %}
+  endtask
+endclass : {{ agent.name }}_master_monitor

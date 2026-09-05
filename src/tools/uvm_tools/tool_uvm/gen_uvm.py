@@ -26,42 +26,45 @@ except ImportError as exc:
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
+# AXI-VIP 风格：编号分层目录 + master/slave 完全分离
 INTERFACE_TEMPLATES = [
-    ("interface_templates/interface.sv.j2", "{agent_name}_interface.sv"),
-    ("interface_templates/interface_structure.j2", "{agent_name}_interface_structure.sv"),
+    ("interface_templates/interface.sv.j2", "1_interface/{agent_name}_if.sv"),
+    ("interface_templates/interface_system.j2", "1_interface/{agent_name}_system_if.sv"),
 
-    ("interface_templates/transaction.sv.j2", "{agent_name}_master_transaction.sv"),
-    ("interface_templates/sequencer.sv.j2", "{agent_name}_master_sequencer.sv"),
-    ("interface_templates/monitor.sv.j2", "{agent_name}_master_monitor.sv"),
-    ("interface_templates/driver.sv.j2", "{agent_name}_master_driver.sv"),
-    ("interface_templates/config.sv.j2", "{agent_name}_master_config.sv"),
-    ("interface_templates/agent.sv.j2", "{agent_name}_master_agent.sv"),
-    ("interface_templates/agent_sequence_base.sv.j2", "{agent_name}_slave_base_seq.sv"),
-    ("interface_templates/agent_cov.sv.j2", "{agent_name}_slave_coverage_collector.sv"),
+    ("interface_templates/config_master.sv.j2", "2_config/{agent_name}_master_config.sv"),
+    ("interface_templates/config_slave.sv.j2",  "2_config/{agent_name}_slave_config.sv"),
 
-    ("interface_templates/transaction.sv.j2", "{agent_name}_slave_transaction.sv"),
-    ("interface_templates/sequencer.sv.j2", "{agent_name}_slave_sequencer.sv"),
-    ("interface_templates/monitor.sv.j2", "{agent_name}_slave_monitor.sv"),
-    ("interface_templates/driver.sv.j2", "{agent_name}_slave_driver.sv"),
-    ("interface_templates/config.sv.j2", "{agent_name}_slave_config.sv"),
-    ("interface_templates/agent.sv.j2", "{agent_name}_slave_agent.sv"),
-    ("interface_templates/agent_sequence_base.sv.j2", "{agent_name}_slave_base_seq.sv"),
-    ("interface_templates/agent_cov.sv.j2", "{agent_name}_slave_coverage_collector.sv"),
+    ("interface_templates/seq_item_master.sv.j2", "3_transaction_sequencer/{agent_name}_master_seq_item.sv"),
+    ("interface_templates/seq_item_slave.sv.j2",  "3_transaction_sequencer/{agent_name}_slave_seq_item.sv"),
+    ("interface_templates/sequencer_master.sv.j2", "3_transaction_sequencer/{agent_name}_master_sequencer.sv"),
+    ("interface_templates/sequencer_slave.sv.j2",  "3_transaction_sequencer/{agent_name}_slave_sequencer.sv"),
+
+    ("interface_templates/driver_master.sv.j2", "4_driver_monitor/{agent_name}_master_driver.sv"),
+    ("interface_templates/driver_slave.sv.j2",  "4_driver_monitor/{agent_name}_slave_driver.sv"),
+    ("interface_templates/monitor_master.sv.j2", "4_driver_monitor/{agent_name}_master_monitor.sv"),
+    ("interface_templates/monitor_slave.sv.j2",  "4_driver_monitor/{agent_name}_slave_monitor.sv"),
+
+    ("interface_templates/agent_master.sv.j2", "5_agent/{agent_name}_master_agent.sv"),
+    ("interface_templates/agent_slave.sv.j2",  "5_agent/{agent_name}_slave_agent.sv"),
+    ("interface_templates/config_system.sv.j2", "5_agent/{agent_name}_system_config.sv"),
+    ("interface_templates/interface_system_env.j2", "5_agent/{agent_name}_system_env.sv"),
+
+    ("interface_templates/sequence_master.sv.j2", "7_sequence/{agent_name}_master_sequence.sv"),
+    ("interface_templates/sequence_slave.sv.j2",  "7_sequence/{agent_name}_slave_sequence.sv"),
+
+    ("interface_templates/reg_adapter.sv.j2", "8_ral/{agent_name}_reg_adapter.sv"),
 
     ("interface_templates/agent_pkg.sv.j2", "{agent_name}_pkg.sv"),
+    ("interface_templates/agent_filelist.sv.j2", "filelist.f"),
+    ("interface_templates/agent_Makefile.sv.j2", "Makefile"),
 ]
 
-# Agent 自闭环测试套件（独立编译运行的 LB test）
+# Agent 自闭环测试套件（master-drive → slave-monitor 闭环，独立编译运行）
 AGENT_LOOPBACK_TEMPLATES = [
-    ("interface_templates/agent_loopback_env.sv.j2",  "{agent_name}_loopback_master_env.sv"),
-    ("interface_templates/agent_loopback_scb.sv.j2",  "{agent_name}_loopback_master_scb.sv"),
-    ("interface_templates/agent_loopback_test.sv.j2", "{agent_name}_loopback_master_test.sv"),
-    ("interface_templates/agent_loopback_tb.sv.j2",  "{agent_name}_loopback_master_tb.sv"),
-
-    ("interface_templates/agent_loopback_env.sv.j2",  "{agent_name}_loopback_slave_env.sv"),
-    ("interface_templates/agent_loopback_scb.sv.j2",  "{agent_name}_loopback_slave_scb.sv"),
-    ("interface_templates/agent_loopback_test.sv.j2", "{agent_name}_loopback_slave_test.sv"),
-    ("interface_templates/agent_loopback_tb.sv.j2",  "{agent_name}_loopback_slave_tb.sv"),
+    ("interface_templates/agent_loopback_env.sv.j2",  "{agent_name}_loopback_env.sv"),
+    ("interface_templates/agent_loopback_scb.sv.j2",  "{agent_name}_loopback_scb.sv"),
+    ("interface_templates/agent_loopback_test.sv.j2", "{agent_name}_loopback_test.sv"),
+    ("interface_templates/agent_loopback_tb.sv.j2",   "{agent_name}_loopback_tb.sv"),
 ]
 
 ENVIRONMENT_ROOT_TEMPLATES = [
@@ -125,35 +128,6 @@ SCOREBOARD_TEMPLATES = {
 # 环境级 Predictor（SV 行为参考模型）模板
 PREDICTOR_TEMPLATE = "environment_templates/predictor.sv.j2"
 
-CALLBACK_FILES = [
-    ("{agent_name}_callback_base.sv", """// Callback Base: {agent_name}_callback_base
-class {agent_name}_callback_base extends {agent_name}_agent_callback;
-  `uvm_object_utils({agent_name}_callback_base)
-
-  function new(string name = "{agent_name}_callback_base");
-    super.new(name);
-  endfunction
-
-  // 用户可以在此覆盖基础回调方法
-endclass : {agent_name}_callback_base
-"""),
-    ("{agent_name}_callback_example.sv", """// Callback Example: {agent_name}_callback_example
-class {agent_name}_callback_example extends {agent_name}_callback_base;
-  `uvm_object_utils({agent_name}_callback_example)
-
-  function new(string name = "{agent_name}_callback_example");
-    super.new(name);
-  endfunction
-
-  // 示例：覆盖 Agent 连接回调
-  virtual function void on_agent_connected({agent_name}_agent agent);
-    `uvm_info(get_name(), $sformatf("{agent_name} connected: %s", agent.get_full_name()), UVM_LOW)
-  endfunction
-endclass : {agent_name}_callback_example
-"""),
-]
-
-
 @dataclass
 class AgentModel:
     name: str
@@ -172,6 +146,7 @@ class AgentModel:
     config_constraints: List[Dict[str, Any]] = field(default_factory=list)
     response_info: Dict[str, Any] = field(default_factory=dict)
     config: Dict[str, Any] = field(default_factory=lambda: {"is_active": "UVM_ACTIVE"})
+    agent_type: str = ""   # 从 YAML "type" 映射（如 "mem"）
     # LLM-generated protocol-specific timing logic placeholders
     custom_drive_logic: str = ""   # Injected into driver.sv.j2 {{ custom_drive_logic }}
     custom_sample_logic: str = ""  # Injected into monitor.sv.j2 {{ custom_sample_logic }}
@@ -185,9 +160,24 @@ class AgentModel:
             self.interface = self.interface[:-len("_interface")]
         if not self.reset:
             self.reset = "rst"
+        # agent_type：YAML "type" 映射为 agent 类名（如 "apb_master_agent"），
+        # 缺省 = "{name}_agent"（兼容旧 dict 格式）
+        if not self.agent_type:
+            self.agent_type = f"{self.name}_agent"
         for var in self.transaction_vars:
             var.setdefault("iscompare", "False")
             var.setdefault("isrand", "False")
+            # is_master: "True" → master 字段（master 驱动/生成）；
+            #            "False" → slave 字段（slave 响应/生成）
+            var.setdefault("is_master", "True")
+        # transaction_constraints 归一化为 dict：{master: [...], slave: [...]}
+        # 兼容旧 list 格式（全部归入 master）
+        if isinstance(self.transaction_constraints, list):
+            self.transaction_constraints = {"master": self.transaction_constraints, "slave": []}
+        elif not isinstance(self.transaction_constraints, dict):
+            self.transaction_constraints = {"master": [], "slave": []}
+        self.transaction_constraints.setdefault("master", [])
+        self.transaction_constraints.setdefault("slave", [])
 
     def to_context(self) -> Dict[str, Any]:
         return asdict(self)
@@ -203,8 +193,12 @@ class EnvironmentModel:
     name: str
     env_name: str
     agents: AgentCollection = field(default_factory=AgentCollection)
+    subenvs: List[Dict[str, Any]] = field(default_factory=list)
     predictors: List[Dict[str, Any]] = field(default_factory=list)
     scoreboards: List[Dict[str, Any]] = field(default_factory=list)
+    analysis_components: List[Dict[str, Any]] = field(default_factory=list)
+    analysis_exports: List[Dict[str, Any]] = field(default_factory=list)
+    analysis_ports: List[Dict[str, Any]] = field(default_factory=list)
     virtual_sequencer: Dict[str, Any] = field(default_factory=lambda: {"enabled": False})
     clk_rst_vip: Dict[str, Any] = field(default_factory=dict)
     config_vars: List[Dict[str, Any]] = field(default_factory=list)
@@ -335,12 +329,15 @@ class BenchAgentEntry:
     instance: str = ""
     config_db_path: str = ""
     connections: List[Dict[str, Any]] = field(default_factory=list)
+    agent_type: str = ""   # 从 YAML "type" 映射（如 "mem"）
 
     def __post_init__(self) -> None:
         if not self.instance:
             self.instance = f"{self.interface}_if"
         if not self.config_db_path:
             self.config_db_path = f"*{self.name}_agent_h*"
+        if not self.agent_type:
+            self.agent_type = f"{self.name}_agent"
 
     def to_context(self) -> Dict[str, Any]:
         return asdict(self)
@@ -462,25 +459,37 @@ class AgentRenderTask(RenderTask):
             target_path = base_dir / target_name
             rendered.append(self.render_file(template_path, target_path, context))
 
-        # Agent 自闭环测试套件
+        # ── Agent 自闭环测试套件（master-drive → slave-monitor）──
         lb_dir = base_dir / "loopback"
         for template_path, target_pattern in AGENT_LOOPBACK_TEMPLATES:
             target_name = target_pattern.format(agent_name=agent.name)
             target_path = lb_dir / target_name
             rendered.append(self.render_file(template_path, target_path, context))
-
-        for file_name_pattern, template_text in CALLBACK_FILES:
-            target_name = file_name_pattern.format(agent_name=agent.name)
-            target_path = base_dir / target_name
-            if not target_path.exists():
-                target_path.write_text(template_text.format(agent_name=agent.name), encoding="utf-8")
-                rendered.append(target_path)
+        rendered.append(_generate_loopback_filelist(agent, lb_dir))
 
         # ── Generate human-readable markdown summary ──
         md_path = _generate_agent_markdown(agent, base_dir)
         rendered.append(md_path)
 
         return rendered
+
+
+def _generate_loopback_filelist(agent: "AgentModel", lb_dir: Path) -> Path:
+    """Generate a compile filelist for the loopback self-test (master→slave)."""
+    name = agent.name
+    filelist_path = lb_dir / "filelist.f"
+    lines = [
+        "// Compile from the loopback directory: vlog -sv -f filelist.f",
+        "+incdir+..",
+        f"../1_interface/{name}_if.sv",
+        f"../{name}_pkg.sv",
+        f"{name}_loopback_env.sv",
+        f"{name}_loopback_scb.sv",
+        f"{name}_loopback_test.sv",
+        f"{name}_loopback_tb.sv",
+    ]
+    filelist_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return filelist_path
 
 
 # ────────────────────────────────────────────────────────────
@@ -569,7 +578,7 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
     # ── Transaction Fields ──
     txn_vars = agent.transaction_vars
     if txn_vars:
-        lines.append("## 📦 Transaction (`{name}_seq_item`)".format(name=name))
+        lines.append("## 📦 Transactions (`{name}_master_seq_item` / `{name}_slave_seq_item`)".format(name=name))
         lines.append("")
         lines.append("| Field | Type | Compare | Random |")
         lines.append("|-------|------|---------|--------|")
@@ -582,15 +591,18 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
         lines.append("")
 
     # ── Transaction Constraints ──
-    txn_cons = agent.transaction_constraints
-    if txn_cons:
-        lines.append("### Constraints")
-        lines.append("")
-        for c in txn_cons:
-            cn = c.get("name", "?")
-            cv = c.get("value", "?")
-            lines.append(f"- **`{cn}`**: `{cv}`")
-        lines.append("")
+    txn_cons = agent.transaction_constraints or {}
+    if isinstance(txn_cons, dict):
+        for role in ("master", "slave"):
+            role_cons = txn_cons.get(role, [])
+            if role_cons:
+                lines.append(f"### Constraints ({role})")
+                lines.append("")
+                for c in role_cons:
+                    cn = c.get("name", "?")
+                    cv = c.get("value", "?")
+                    lines.append(f"- **`{cn}`**: `{cv}`")
+                lines.append("")
 
     # ── Configuration Variables ──
     cfg_vars = agent.config_vars
@@ -621,46 +633,38 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
     lines.append("| # | File | Role |")
     lines.append("|---|------|------|")
     file_entries = [
-        (f"{name}_interface.sv", "Physical interface: ports, clocking block, modport"),
-        (f"{name}_interface_structure.sv", "Interface structure / typedef definitions"),
-        (f"{name}_transaction.sv", "Transaction (sequence item): fields + constraints"),
-        (f"{name}_config.sv", "Configuration object"),
-        (f"{name}_sequencer.sv", "Sequencer: controls stimulus flow"),
-        (f"{name}_driver.sv", "Driver: drives signals on the bus"),
-        (f"{name}_monitor.sv", "Monitor: samples signals, collects coverage"),
-        (f"{name}_agent.sv", "Top-level agent: instantiates driver/monitor/sequencer"),
-        (f"{name}_pkg.sv", "Package: imports all components"),
-        (f"{name}_base_seq.sv", "Base sequence template"),
-        (f"{name}_coverage_collector.sv", "Functional coverage collector"),
-        (f"{name}_callback_base.sv", "Base callback class (extensible)"),
-        (f"{name}_callback_example.sv", "Example callback implementation"),
+        (f"1_interface/{name}_if.sv", "Interface: internal logic + master/slave/monitor clocking + modport"),
+        (f"2_config/{name}_master_config.sv", "Master config: drive delay / outstanding / timeout"),
+        (f"2_config/{name}_slave_config.sv", "Slave config: response mode / memory / out-of-order / error window"),
+        (f"2_config/{name}_system_config.sv", "System config: aggregates master_cfgs[] / slave_cfgs[]"),
+        (f"3_transaction_sequencer/{name}_master_seq_item.sv", "Master transaction"),
+        (f"3_transaction_sequencer/{name}_slave_seq_item.sv", "Slave transaction (request + response control)"),
+        (f"3_transaction_sequencer/{name}_master_sequencer.sv", "Master sequencer"),
+        (f"3_transaction_sequencer/{name}_slave_sequencer.sv", "Slave sequencer (+ req_fifo, event-driven)"),
+        (f"4_driver_monitor/{name}_master_driver.sv", "Master driver"),
+        (f"4_driver_monitor/{name}_slave_driver.sv", "Slave driver (responds)"),
+        (f"4_driver_monitor/{name}_master_monitor.sv", "Master monitor"),
+        (f"4_driver_monitor/{name}_slave_monitor.sv", "Slave monitor (→ req_fifo)"),
+        (f"5_agent/{name}_master_agent.sv", "Master agent"),
+        (f"5_agent/{name}_slave_agent.sv", "Slave agent"),
+        (f"7_sequence/{name}_master_sequence.sv", "Master sequence"),
+        (f"7_sequence/{name}_slave_sequence.sv", "Slave sequence (memory model)"),
+        (f"8_ral/{name}_reg_adapter.sv", "RAL reg adapter"),
+        (f"{name}_pkg.sv", "Package: includes all class files"),
+        ("filelist.f", "Compile order: interface → package"),
     ]
     for i, (fname, desc) in enumerate(file_entries, 1):
         lines.append(f"| {i} | `{fname}` | {desc} |")
-    lines.append("")
-
-    # ── Loopback Self-Test ──
-    lines.append("## 🔁 Loopback Self-Test")
-    lines.append("")
-    lines.append("Self-contained testbench (no DUT required): driver → monitor closed loop.")
-    lines.append("")
-    lines.append("| File | Role |")
-    lines.append("|------|------|")
-    lines.append(f"| `loopback/{name}_loopback_env.sv` | Loopback environment: connects driver → scoreboard → monitor |")
-    lines.append(f"| `loopback/{name}_loopback_scb.sv` | Scoreboard: compares expected vs actual transactions |")
-    lines.append(f"| `loopback/{name}_loopback_test.sv` | Test case: starts sequence, checks results |")
-    lines.append(f"| `loopback/{name}_loopback_tb.sv` | Testbench top: instantiates interface + env, generates clock/reset |")
     lines.append("")
 
     # ── Compile / Sim Quick Reference ──
     lines.append("## 🚀 Quick Start")
     lines.append("")
     lines.append("```bash")
-    lines.append(f"# Compile (single agent loopback)")
-    lines.append(f"vlog -f inputs/filelists/filelist_{name}_lb.f")
+    lines.append(f"# Compile (from the agent directory)")
+    lines.append(f"vlog -sv -f filelist.f")
     lines.append("")
-    lines.append(f"# Simulate")
-    lines.append(f"vsim -c {name}_loopback_tb +UVM_TESTNAME={name}_loopback_test -do 'run -all; quit -f'")
+    lines.append(f"# Env/bench level compile+sim is handled by the environment/bench tooling")
     lines.append("```")
     lines.append("")
 
@@ -724,7 +728,8 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
             mode = "ACTIVE" if "ACTIVE" in str(a.config.get("is_active", "")) else "PASSIVE"
             n_ports = len(a.ports) if a.ports else 0
             n_txn = len(a.transaction_vars) if a.transaction_vars else 0
-            n_cons = len(a.transaction_constraints) if a.transaction_constraints else 0
+            _tc = a.transaction_constraints or {}
+            n_cons = (len(_tc.get("master", [])) + len(_tc.get("slave", []))) if isinstance(_tc, dict) else 0
             lines.append(f"| [{a.name}](agents/{a.name}/summary.md) | `{iface}` | {mode} | {n_ports} | {n_txn} | {n_cons} |")
         lines.append("")
 
@@ -844,10 +849,13 @@ class EnvironmentRenderTask(RenderTask):
             target_path = pred_dir / f"{pred['name']}.sv"
             rendered.append(self.render_file(PREDICTOR_TEMPLATE, target_path, {"pred": pred}))
 
-        # 生成 Scoreboard（inorder / outoforder 按 mode 选模板）
+        # 生成 Scoreboard（仅旧格式 mode/item_type；新格式 sb_type 为外部类，不生成）
         scb_dir = env_dir / "scb"
         for sb in environment.scoreboards:
             if not isinstance(sb, dict) or not sb.get("name"):
+                continue
+            if sb.get("sb_type"):
+                # 新格式（UVMF）：scoreboard 由 sb_type 指定外部类，不在此生成
                 continue
             template_path = SCOREBOARD_TEMPLATES.get(sb.get("mode", "inorder"))
             if not template_path:
@@ -941,9 +949,10 @@ class RenderTaskFactory:
 
 
 def _type_to_pkg(type_name):
-    """从 seq_item 类型名推断 agent package 名：xxx_seq_item → xxx_pkg。"""
-    if type_name.endswith("_seq_item"):
-        return type_name[: -len("_seq_item")] + "_pkg"
+    """从 seq_item 类型名推断 agent package 名：xxx_[master/slave]_seq_item → xxx_pkg。"""
+    for suffix in ("_master_seq_item", "_slave_seq_item", "_seq_item"):
+        if type_name.endswith(suffix):
+            return type_name[: -len(suffix)] + "_pkg"
     return ""
 
 
@@ -996,12 +1005,12 @@ def _normalize_predictors(predictors):
 
 
 def _normalize_scoreboards(scoreboards, agent_names=None, predictor_names=None):
-    """填充 scoreboard 缺省字段，推断 item_type + import_pkgs + 端口表达式。
+    """归一化 scoreboards。兼容 UVMF 新格式与旧格式。
 
-    输入: env YAML 的 scoreboards 列表（原始 dict）
-    输出: 标准化后的 dict 列表
-          （name/mode/item_type/key_field/expected_from/actual_from/
-            expected_port/actual_port/import_pkgs）
+    新格式（UVMF）: {name, sb_type, trans_type}
+       sb_type    scoreboard 类名（如 uvmf_in_order_scoreboard）
+       trans_type 事务类型（如 ALU_out_transaction）
+    旧格式:        {name, mode, item_type, key_field, expected_from, actual_from}
     """
     agent_names = set(agent_names or [])
     predictor_names = set(predictor_names or [])
@@ -1009,6 +1018,17 @@ def _normalize_scoreboards(scoreboards, agent_names=None, predictor_names=None):
     for sb in scoreboards or []:
         if not isinstance(sb, dict) or not sb.get("name"):
             continue
+        sb_type = sb.get("sb_type", "")
+        trans_type = sb.get("trans_type", "")
+        if sb_type or trans_type:
+            # 新格式：直接透传 sb_type / trans_type
+            normalized.append({
+                "name": sb["name"],
+                "sb_type": sb_type,
+                "trans_type": trans_type,
+            })
+            continue
+        # 旧格式：推断 item_type + 端口表达式
         mode = str(sb.get("mode", "inorder")).lower()
         if mode not in ("inorder", "outoforder"):
             mode = "inorder"
@@ -1017,9 +1037,11 @@ def _normalize_scoreboards(scoreboards, agent_names=None, predictor_names=None):
         item_type = sb.get("item_type", "")
         if not item_type:
             src = actual_from or expected_from
-            item_type = f"{src}_seq_item" if src else "uvm_sequence_item"
+            item_type = f"{src}_master_seq_item" if src else "uvm_sequence_item"
         normalized.append({
             "name": sb["name"],
+            "sb_type": "",
+            "trans_type": item_type,
             "mode": mode,
             "item_type": item_type,
             "key_field": sb.get("key_field", "req_id"),
@@ -1030,6 +1052,76 @@ def _normalize_scoreboards(scoreboards, agent_names=None, predictor_names=None):
             "import_pkgs": _import_pkgs_for_types(item_type),
         })
     return normalized
+
+
+def _normalize_agents_list(agents):
+    """把 agents 归一化为 list[dict]，兼容 dict（旧）与 list（新）两种格式。
+
+    dict 格式:  { name: {interface, clock, ...} }
+    list 格式:  [ {name, type, interface, clock, ...} ]
+    """
+    if not agents:
+        return []
+    if isinstance(agents, dict):
+        items = []
+        for k, v in agents.items():
+            if isinstance(v, dict):
+                items.append({"name": k, **v})
+            elif isinstance(v, str):
+                items.append({"name": k, "interface": v})
+            else:
+                items.append({"name": k})
+        return items
+    if isinstance(agents, list):
+        result = []
+        for a in agents:
+            if not isinstance(a, dict):
+                continue
+            if not a.get("name"):
+                # name 缺省从 type 推导："apb_master_agent" → "apb_master"
+                t = a.get("type", "")
+                a = dict(a)
+                a["name"] = t[:-len("_agent")] if t.endswith("_agent") else t
+            result.append(a)
+        return result
+    return []
+
+
+def _normalize_analysis_components(components):
+    """归一化 analysis_components → list[{name, type}]。type 缺省 = name。"""
+    result = []
+    for c in components or []:
+        if not isinstance(c, dict):
+            continue
+        name = c.get("name")
+        if not name:
+            continue
+        result.append({
+            "name": name,
+            "type": c.get("type", name),
+        })
+    return result
+
+
+def _normalize_subenvs(subenvs):
+    """归一化 subenvs → list[{name, type}]。
+
+    subenvs:
+      - name: "apb_sys_env"        # 实例名
+        type: "apb_system_env"     # 环境类名（缺省 = name）
+    """
+    result = []
+    for se in subenvs or []:
+        if not isinstance(se, dict):
+            continue
+        name = se.get("name")
+        if not name:
+            continue
+        result.append({
+            "name": name,
+            "type": se.get("type", name),
+        })
+    return result
 
 
 class YAMLLoader:
@@ -1082,16 +1174,18 @@ class YAMLLoader:
         name = data.get("name") or data.get("env_name")
         env_name = data.get("env_name") or name
         agents = AgentCollection()
-        for agent_name, agent_config in (data.get("agents") or {}).items():
-            if not isinstance(agent_config, dict):
+        for agent_config in _normalize_agents_list(data.get("agents")):
+            agent_name = agent_config.get("name") or agent_config.get("agent_name")
+            if not agent_name:
                 continue
             agent = AgentModel(
                 name=agent_name,
                 agent_name=agent_name,
-                interface=agent_config.get("interface", ""),
-                interface_name=agent_config.get("interface", ""),
+                interface=agent_config.get("interface", agent_name),
+                interface_name=agent_config.get("interface", agent_name),
                 clock=agent_config.get("clock"),
                 reset=agent_config.get("reset"),
+                agent_type=agent_config.get("type", ""),
             )
             agents.append(agent)
 
@@ -1110,9 +1204,13 @@ class YAMLLoader:
             name=name,
             env_name=env_name,
             agents=agents,
+            subenvs=_normalize_subenvs(data.get("subenvs", [])),
             predictors=predictors,
             scoreboards=_normalize_scoreboards(data.get("scoreboards", []),
                                                agent_names, predictor_names),
+            analysis_components=_normalize_analysis_components(data.get("analysis_components", [])),
+            analysis_exports=data.get("analysis_exports", []),
+            analysis_ports=data.get("analysis_ports", []),
             virtual_sequencer=data.get("virtual_sequencer", {"enabled": False}),
             clk_rst_vip=clk_rst_vip,
             config_vars=data.get("config_vars", []),
@@ -1124,8 +1222,9 @@ class YAMLLoader:
     @staticmethod
     def parse_bench_model(data: Dict[str, Any]) -> BenchModel:
         agents: Dict[str, BenchAgentEntry] = {}
-        for name, agent_config in (data.get("agents") or {}).items():
-            if not isinstance(agent_config, dict):
+        for agent_config in _normalize_agents_list(data.get("agents")):
+            name = agent_config.get("name")
+            if not name:
                 continue
             agents[name] = BenchAgentEntry(
                 name=name,
@@ -1135,6 +1234,7 @@ class YAMLLoader:
                 instance=agent_config.get("instance", ""),
                 config_db_path=agent_config.get("config_db_path", ""),
                 connections=agent_config.get("connections", []),
+                agent_type=agent_config.get("type", ""),
             )
         return BenchModel(
             name=data.get("name") or data.get("bench_name", "bench"),
@@ -1436,14 +1536,17 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
         name = payload.get("name") or payload.get("env_name", "env")
         env_name = payload.get("env_name") or name
         agents = AgentCollection()
-        for aname, acfg in (payload.get("agents") or {}).items():
-            if isinstance(acfg, dict):
-                agents.append(AgentModel(
-                    name=aname, agent_name=aname,
-                    interface=acfg.get("interface", ""),
-                    interface_name=acfg.get("interface", ""),
-                    clock=acfg.get("clock"), reset=acfg.get("reset"),
-                ))
+        for acfg in _normalize_agents_list(payload.get("agents")):
+            aname = acfg.get("name") or acfg.get("agent_name")
+            if not aname:
+                continue
+            agents.append(AgentModel(
+                name=aname, agent_name=aname,
+                interface=acfg.get("interface", aname),
+                interface_name=acfg.get("interface", aname),
+                clock=acfg.get("clock"), reset=acfg.get("reset"),
+                agent_type=acfg.get("type", ""),
+            ))
         clk_rst_vip = payload.get("clk_rst_vip") or {}
         if not clk_rst_vip and payload.get("clk_rst"):
             clk_rst_vip = {
@@ -1453,7 +1556,11 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             }
         env = EnvironmentModel(
             name=name, env_name=env_name, agents=agents,
+            subenvs=_normalize_subenvs(payload.get("subenvs", [])),
             scoreboards=_normalize_scoreboards(payload.get("scoreboards", [])),
+            analysis_components=_normalize_analysis_components(payload.get("analysis_components", [])),
+            analysis_exports=payload.get("analysis_exports", []),
+            analysis_ports=payload.get("analysis_ports", []),
             virtual_sequencer=payload.get("virtual_sequencer", {"enabled": False}),
             clk_rst_vip=clk_rst_vip,
             config_vars=payload.get("config_vars", []),
@@ -1477,17 +1584,20 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
         if payload is None or not isinstance(payload, dict):
             return "// Error: YAML must contain 'bench' dict"
         agents_b: dict = {}
-        for aname, acfg in (payload.get("agents") or {}).items():
-            if isinstance(acfg, dict):
-                agents_b[aname] = BenchAgentEntry(
-                    name=aname,
-                    interface=acfg.get("interface", ""),
-                    clock=acfg.get("clock", "clk"),
-                    reset=acfg.get("reset", "rst_n"),
-                    instance=acfg.get("instance", ""),
-                    config_db_path=acfg.get("config_db_path", ""),
-                    connections=acfg.get("connections", []),
-                )
+        for acfg in _normalize_agents_list(payload.get("agents")):
+            aname = acfg.get("name")
+            if not aname:
+                continue
+            agents_b[aname] = BenchAgentEntry(
+                name=aname,
+                interface=acfg.get("interface", ""),
+                clock=acfg.get("clock", "clk"),
+                reset=acfg.get("reset", "rst_n"),
+                instance=acfg.get("instance", ""),
+                config_db_path=acfg.get("config_db_path", ""),
+                connections=acfg.get("connections", []),
+                agent_type=acfg.get("type", ""),
+            )
         bench = BenchModel(
             name=payload.get("name") or payload.get("bench_name", "bench"),
             env_name=payload.get("env_name", ""),

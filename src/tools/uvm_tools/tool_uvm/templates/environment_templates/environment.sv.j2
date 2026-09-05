@@ -19,17 +19,22 @@ class {{ environment.env_name }} extends uvm_env;
 
   // Agent 实例
 {%- for agent in agents %}
-  {{ agent.name }}_agent {{ agent.name }}_agent_h;
+  {{ agent.agent_type }} {{ agent.name }}_agent_h;
 {%- endfor %}
 
-  // Predictor 实例（SV 行为参考模型）
-{%- for pred in predictors %}
-  {{ pred.name }} {{ pred.name }}_h;
+  // Sub-env 实例
+{%- for subenv in subenvs %}
+  {{ subenv.type }} {{ subenv.name }};
 {%- endfor %}
 
-  // Scoreboard 实例（inorder/outoforder 具体子类）
+  // Analysis 组件（predictor 等）
+{%- for comp in analysis_components %}
+  {{ comp.type }} {{ comp.name }};
+{%- endfor %}
+
+  // Scoreboard
 {%- for sb in scoreboards %}
-  {{ sb.name }} {{ sb.name }}_h;
+  {{ sb.sb_type }} {{ sb.name }};
 {%- endfor %}
 
   // 功能覆盖率模型（env 级，跨 agent covergroup）
@@ -87,20 +92,23 @@ class {{ environment.env_name }} extends uvm_env;
 {%- endif %}
     // 创建 Agent 并设置配置
 {%- for agent in agents %}
-    {{ agent.name }}_agent_h = {{ agent.name }}_agent::type_id::create("{{ agent.name }}_agent_h", this);
+    {{ agent.name }}_agent_h = {{ agent.agent_type }}::type_id::create("{{ agent.name }}_agent_h", this);
     uvm_config_db#({{ agent.name }}_config)::set(this, "{{ agent.name }}_agent_h", "cfg", cfg.{{ agent.name }}_cfg);
 {%- endfor %}
 
-    // 创建 Predictor（SV 行为参考模型）
-{%- for pred in predictors %}
-    {{ pred.name }}_h = {{ pred.name }}::type_id::create("{{ pred.name }}_h", this);
+    // 创建 Sub-env
+{%- for subenv in subenvs %}
+    {{ subenv.name }} = {{ subenv.type }}::type_id::create("{{ subenv.name }}", this);
 {%- endfor %}
 
-    // 创建 Scoreboard（具体子类，用 type_id::create）
+    // 创建 Analysis 组件
+{%- for comp in analysis_components %}
+    {{ comp.name }} = {{ comp.type }}::type_id::create("{{ comp.name }}", this);
+{%- endfor %}
+
+    // 创建 Scoreboard
 {%- for sb in scoreboards %}
-    if (cfg.has_scoreboard) begin
-      {{ sb.name }}_h = {{ sb.name }}::type_id::create("{{ sb.name }}_h", this);
-    end
+    {{ sb.name }} = {{ sb.sb_type }}::type_id::create("{{ sb.name }}", this);
 {%- endfor %}
 
     // 创建功能覆盖率模型（env_cov）
@@ -134,23 +142,9 @@ class {{ environment.env_name }} extends uvm_env;
     {{ agent.name }}_agent_ap.connect(env_cov.{{ agent.name }}_export);
 {%- endfor %}
 
-    // 连接输入 agent monitor → Predictor
-{%- for pred in predictors %}
-{%-   if pred.input_from %}
-    {{ pred.input_from }}_agent_h.mon.item_collected_port.connect({{ pred.name }}_h.in_export);
-{%-   endif %}
-{%- endfor %}
-
-    // 连接 Predictor / Monitor → Scoreboard（expected ← 期望来源，actual ← 实际来源）
-{%- for sb in scoreboards %}
-    if (cfg.has_scoreboard) begin
-{%-   if sb.expected_port %}
-      {{ sb.expected_port }}.connect({{ sb.name }}_h.expected_export);
-{%-   endif %}
-{%-   if sb.actual_port %}
-      {{ sb.actual_port }}.connect({{ sb.name }}_h.actual_export);
-{%-   endif %}
-    end
+    // TLM 连接（显式 driver → receiver）
+{%- for conn in tlm_connections %}
+    {{ conn.driver }}.connect({{ conn.receiver }});
 {%- endfor %}
 
   endfunction
@@ -163,7 +157,7 @@ class {{ environment.env_name }} extends uvm_env;
     `uvm_info("ENV_TOPOLOGY", "  Agent: {{ agent.name }}_agent_h", UVM_LOW)
 {%- endfor %}
 {%- for sb in scoreboards %}
-    `uvm_info("ENV_TOPOLOGY", "  Scoreboard: {{ sb.name }}_h", UVM_LOW)
+    `uvm_info("ENV_TOPOLOGY", "  Scoreboard: {{ sb.name }}", UVM_LOW)
 {%- endfor %}
   endfunction
 

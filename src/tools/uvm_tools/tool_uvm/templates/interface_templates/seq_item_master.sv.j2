@@ -1,0 +1,37 @@
+// ============================================================
+// Master Seq Item: {{ agent.name }}_master_seq_item
+// ============================================================
+
+class {{ agent.name }}_master_seq_item extends uvm_sequence_item;
+  `uvm_object_utils({{ agent.name }}_master_seq_item)
+
+  typedef enum {READ, WRITE} xact_type_e;
+
+  rand xact_type_e xact_type;
+
+  // ── master 字段（is_master=True：master 驱动/生成）──
+{%- for var in transaction_vars %}
+{%-   if var.is_master != 'False' %}
+  rand {{ var.type }} {{ var.name }}; // is_compare={{ var.iscompare }}, is_rand={{ var.isrand }}
+{%-   endif %}
+{%- endfor %}
+
+  // ── slave 响应字段（is_master=False：master 采样）──
+{%- for var in transaction_vars %}
+{%-   if var.is_master == 'False' %}
+  {{ var.type }} {{ var.name }}; // slave 响应，master 采样
+{%-   endif %}
+{%- endfor %}
+
+{%- for cons in transaction_constraints.master %}
+  constraint {{ cons.name }} {{ cons.value | safe }}
+{%- endfor %}
+
+  function new(string name = "{{ agent.name }}_master_seq_item");
+    super.new(name);
+  endfunction
+
+  function string convert2string();
+    return $sformatf("MST: type=%s", xact_type.name());
+  endfunction
+endclass : {{ agent.name }}_master_seq_item

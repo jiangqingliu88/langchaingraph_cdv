@@ -1,11 +1,12 @@
+// ============================================================
+// Loopback Scoreboard: {{ agent.name }}_loopback_scb
+// ============================================================
+// expected_export ← master monitor (master 实际驱动的字段)
+// actual_export   ← slave monitor  (slave 观察到的字段)
+// 比较 master_seq_item 与 slave_seq_item 的 is_compare 公共字段
 import uvm_pkg::*;
 import {{ agent.name }}_pkg::*;
 `include "uvm_macros.svh"
-
-// === Agent Loopback Scoreboard: {{ agent.name }} ===
-// expected_export ← Driver.expected_port (期望值)
-// actual_export   ← Monitor.item_collected_port (实际值)
-// 逐项比对，验证 Agent Driver→DUT→Monitor 数据闭环
 
 `uvm_analysis_imp_decl(_expected)
 `uvm_analysis_imp_decl(_actual)
@@ -13,11 +14,10 @@ import {{ agent.name }}_pkg::*;
 class {{ agent.name }}_loopback_scb extends uvm_scoreboard;
   `uvm_component_utils({{ agent.name }}_loopback_scb)
 
-  // 双端口：expected 来自 Driver，actual 来自 Monitor
-  uvm_analysis_imp_expected #({{ agent.name }}_seq_item, {{ agent.name }}_loopback_scb) expected_export;
-  uvm_analysis_imp_actual   #({{ agent.name }}_seq_item, {{ agent.name }}_loopback_scb) actual_export;
+  uvm_analysis_imp_expected #({{ agent.name }}_master_seq_item, {{ agent.name }}_loopback_scb) expected_export;
+  uvm_analysis_imp_actual   #({{ agent.name }}_slave_seq_item,  {{ agent.name }}_loopback_scb) actual_export;
 
-  protected {{ agent.name }}_seq_item  expected_q[$];
+  protected {{ agent.name }}_master_seq_item expected_q[$];
   protected int m_matched    = 0;
   protected int m_mismatched = 0;
   protected int m_total      = 0;
@@ -28,17 +28,15 @@ class {{ agent.name }}_loopback_scb extends uvm_scoreboard;
     actual_export   = new("actual_export",   this);
   endfunction
 
-  // ── Driver 发来期望值 ──
-  virtual function void write_expected({{ agent.name }}_seq_item exp);
+  virtual function void write_expected({{ agent.name }}_master_seq_item exp);
     expected_q.push_back(exp);
   endfunction
 
-  // ── Monitor 发来实际值 ──
-  virtual function void write_actual({{ agent.name }}_seq_item act);
+  virtual function void write_actual({{ agent.name }}_slave_seq_item act);
     m_total++;
     if (expected_q.size() > 0) begin
-      {{ agent.name }}_seq_item exp = expected_q.pop_front();
-      if (exp.compare(act)) begin
+      {{ agent.name }}_master_seq_item exp = expected_q.pop_front();
+      if (compare_fields(exp, act)) begin
         m_matched++;
         `uvm_info("SCB_LOOP_PASS", $sformatf("[PASS] #%0d matched", m_total), UVM_MEDIUM)
       end else begin
@@ -50,6 +48,18 @@ class {{ agent.name }}_loopback_scb extends uvm_scoreboard;
       m_mismatched++;
       `uvm_warning("SCB_LOOP", "Received actual without expected")
     end
+  endfunction
+
+  // 比较 master_seq_item 与 slave_seq_item 的 is_compare 公共字段
+  virtual function bit compare_fields({{ agent.name }}_master_seq_item exp,
+                                      {{ agent.name }}_slave_seq_item act);
+    bit ok = 1;
+{%- for var in transaction_vars %}
+{%-   if var.iscompare == 'True' and var.is_master != 'False' %}
+    ok &= (exp.{{ var.name }} == act.{{ var.name }});
+{%-   endif %}
+{%- endfor %}
+    return ok;
   endfunction
 
   virtual function void report_phase(uvm_phase phase);

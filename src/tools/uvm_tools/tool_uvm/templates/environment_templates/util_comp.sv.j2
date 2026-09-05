@@ -1,14 +1,14 @@
 // ============================================================
-// Predictor: {{ predictor_name }}
+// Predictor: {{ name }}
 // 自动生成 - 通过 YAML 配置端口
 // ============================================================
 
-class {{ predictor_name }} extends uvm_component;
-  `uvm_component_utils({{ predictor_name }})
+class {{ name }} extends uvm_component;
+  `uvm_component_utils({{ name }})
 
 {%- for port in analysis_exports %}
   // ─── 输入端口: {{ port.name }} ───
-  uvm_analysis_imp_{{ port.name }} #({{ port.type }}, {{ predictor_name }}) {{ port.name }};
+  uvm_analysis_imp_{{ port.name }} #({{ port.type }}, {{ name }}) {{ port.name }};
 {%- endfor %}
 
 {%- for port in analysis_ports %}
@@ -105,5 +105,5 @@ class {{ predictor_name }} extends uvm_component;
     `uvm_info("PRED", "========================================", UVM_NONE)
   endfunction
 
-endclass : {{ predictor_name }}
+endclass : {{ name }}
 ```

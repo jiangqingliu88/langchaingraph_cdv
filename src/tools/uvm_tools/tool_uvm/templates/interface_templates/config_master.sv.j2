@@ -1,45 +1,56 @@
 // ============================================================
-// Config: {{ agent.name }}_config
+// Master Config: {{ agent.name }}_master_config
 // ============================================================
 
-class {{ agent.name }}_config extends uvm_object;
-  `uvm_object_utils({{ agent.name }}_config)
+class {{ agent.name }}_master_config extends uvm_object;
+  `uvm_object_utils({{ agent.name }}_master_config)
 
-  rand uvm_active_passive_enum is_active = UVM_ACTIVE;
+  // 公共协议参数
+  int addr_width = 32;
+  int data_width = 32;
+  int id_width   = 4;
 
-  // ─── 子组件开关 ───
-  bit has_coverage         = 0;
+  // 模式控制
+  uvm_active_passive_enum is_active = UVM_ACTIVE;
 
-  // ─── Sequencer 配置 ───
-  int  max_pending         = 0;
-  int  min_interval_ns     = 0;
-  int  arbitration_mode    = 0;
-  string default_sequence  = "";
+  // 错误注入公共开关
+  int error_injection_rate = 0; // 0~100
 
-  // ─── Driver 配置 ───
-  int  drive_delay_min     = 0;
-  int  drive_delay_max     = 0;
-  int  max_retries         = 0;
+  // 虚拟接口句柄（由 TB 传入）
+  virtual {{ agent.name }}_if vif;
 
-  // ─── Monitor 配置 ───
-  bit  check_xz            = 1;
-  bit  filter_enabled      = 0;
+  // ── Master 专属 ──
+  // 驱动延迟（背压控制）
+  int drive_delay_min = 0;
+  int drive_delay_max = 0;
 
-  // ─── Scoreboard 配置 ───
-  int  compare_mode        = 0;  // 0=InOrder 1=OutOfOrder 2=Window
-  int  scb_window_size     = 10;
-  int  scb_timeout_ns      = 100000;
-  bit  scb_mask_enabled    = 0;
+  // Outstanding 与乱序（预留接口）
+  int max_outstanding          = 8;
+  bit enable_out_of_order_resp = 1;
 
-  // ─── Sequence 配置 ───
-  bit  fatal_on_rand_fail   = 0;
+  // 超时检测
+  int response_timeout   = 100;
+  bit timeout_raise_error = 1;
 
 {%- for var in config_vars %}
   rand {{ var.type }} {{ var.name }};
 {%- endfor %}
 
-  function new(string name = "{{ agent.name }}_config");
+{%- for cons in config_constraints %}
+  constraint {{ cons.name }} {{ cons.value | safe }}
+{%- endfor %}
+
+  function new(string name = "{{ agent.name }}_master_config");
     super.new(name);
   endfunction
 
-endclass : {{ agent.name }}_config
+  function string convert2string();
+    string s = super.convert2string();
+    s = {s, $sformatf("\n  role: MASTER")};
+    s = {s, $sformatf("\n  active: %s", is_active.name())};
+    s = {s, $sformatf("\n  addr_width: %0d", addr_width)};
+    s = {s, $sformatf("\n  data_width: %0d", data_width)};
+    s = {s, $sformatf("\n  error_injection_rate: %0d%%", error_injection_rate)};
+    return s;
+  endfunction
+endclass : {{ agent.name }}_master_config

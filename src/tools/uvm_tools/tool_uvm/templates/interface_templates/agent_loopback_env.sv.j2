@@ -1,0 +1,53 @@
+// ============================================================
+// Loopback Env: {{ agent.name }}_loopback_env
+// ============================================================
+// master-drive → slave-monitor 闭环自检：
+//   master driver 驱动事务 → interface 内部信号回环 → slave monitor 观察
+//   master monitor 的抓包 = expected，slave monitor 的抓包 = actual
+import uvm_pkg::*;
+import {{ agent.name }}_pkg::*;
+`include "uvm_macros.svh"
+
+class {{ agent.name }}_loopback_env extends uvm_env;
+  `uvm_component_utils({{ agent.name }}_loopback_env)
+
+  {{ agent.name }}_master_agent master_agent_h;
+  {{ agent.name }}_slave_agent  slave_agent_h;
+  {{ agent.name }}_loopback_scb  scb_h;
+
+  function new(string name = "{{ agent.name }}_loopback_env", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    {{ agent.name }}_master_config mcfg;
+    {{ agent.name }}_slave_config  scfg;
+    virtual {{ agent.name }}_if vif;
+
+    if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "", "vif", vif))
+      `uvm_fatal("NOVIF", "Virtual interface not set")
+
+    mcfg = {{ agent.name }}_master_config::type_id::create("mcfg");
+    mcfg.vif = vif;
+    mcfg.is_active = UVM_ACTIVE;
+
+    scfg = {{ agent.name }}_slave_config::type_id::create("scfg");
+    scfg.vif = vif;
+    scfg.is_active = UVM_PASSIVE;  // slave 仅监控，不响应
+
+    uvm_config_db#({{ agent.name }}_master_config)::set(this, "master_agent_h", "cfg", mcfg);
+    uvm_config_db#({{ agent.name }}_slave_config)::set(this, "slave_agent_h", "cfg", scfg);
+
+    master_agent_h = {{ agent.name }}_master_agent::type_id::create("master_agent_h", this);
+    slave_agent_h  = {{ agent.name }}_slave_agent::type_id::create("slave_agent_h", this);
+    scb_h          = {{ agent.name }}_loopback_scb::type_id::create("scb_h", this);
+  endfunction
+
+  function void connect_phase(uvm_phase phase);
+    super.connect_phase(phase);
+    master_agent_h.monitor.mon_ap.connect(scb_h.expected_export);
+    slave_agent_h.monitor.mon_ap.connect(scb_h.actual_export);
+  endfunction
+
+endclass : {{ agent.name }}_loopback_env

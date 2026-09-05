@@ -1,0 +1,30 @@
+# ============================================================
+# {{ agent.name }} 编译/仿真 Makefile
+# ============================================================
+
+AGENT  ?= {{ agent.name }}
+SEED   ?= 1
+OUTDIR ?= build/$(AGENT)
+
+QUESTA   = f:/questasim64_2024.1/win64
+WORK     = $(OUTDIR)/work
+UVM_HOME = f:/questasim64_2024.1/verilog_src/uvm-1.2/src
+
+SRC = 1_interface/{{ agent.name }}_if.sv \
+      1_interface/{{ agent.name }}_system_if.sv \
+      {{ agent.name }}_pkg.sv
+
+.PHONY: all compile clean
+
+all: compile
+
+compile:
+	@mkdir -p $(OUTDIR)
+	$(QUESTA)/vlib.exe $(WORK)
+	$(QUESTA)/vlog.exe -work $(WORK) -sv +incdir+. +acc \
+		+incdir+$(UVM_HOME) \
+		$(UVM_HOME)/uvm_pkg.sv \
+		$(SRC)
+
+clean:
+	rm -rf $(OUTDIR)

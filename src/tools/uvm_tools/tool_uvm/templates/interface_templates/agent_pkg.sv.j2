@@ -1,17 +1,10 @@
+// ============================================================
 // Agent Package: {{ agent.name }}_pkg
+// ============================================================
+// 注意：{{ agent.name }}_if.sv（interface）须在 package 之前单独编译（见 filelist）
 package {{ agent.name }}_pkg;
   import uvm_pkg::*;
   `include "uvm_macros.svh"
-
-  // UVM callback macros — compatible with UVM 1.2 and 1800.2
-  // In UVM 1.2, uvm_register_cb/uvm_do_callbacks are built-in via uvm_macros.svh.
-  // In 1800.2, callbacks use uvm_callback pool; stubs are no-ops.
-  `ifndef uvm_register_cb
-  `define uvm_register_cb(T, CB)  /* callback disabled (UVM 1800.2 compat mode) */
-  `endif
-  `ifndef uvm_do_callbacks
-  `define uvm_do_callbacks(T, CB, METHOD)  /* callback disabled (UVM 1800.2 compat mode) */
-  `endif
 
 {%- for param in agent.parameters %}
   localparam {{ param.type }} {{ param.name }} = {{ param.value }};
@@ -29,31 +22,22 @@ package {{ agent.name }}_pkg;
 {%-   endfor %}
 {%- endif %}
 
-  `include "{{ agent.name }}_interface_structure.sv"
-  `include "{{ agent.name }}_master_transaction.sv"
-  `include "{{ agent.name }}_slave_transaction.sv"
-  `include "{{ agent.name }}_master_config.sv"
-  `include "{{ agent.name }}_slave_config.sv"
-  `include "{{ agent.name }}_mastr_driver.sv"
-  `include "{{ agent.name }}_slave_driver.sv"
-  `include "{{ agent.name }}_master_monitor.sv"
-  `include "{{ agent.name }}_slave_monitor.sv"
-  `include "{{ agent.name }}_master_sequencer.sv"
-  `include "{{ agent.name }}_slave_sequencer.sv"
-  `include "{{ agent.name }}_master_base_seq.sv"
-  `include "{{ agent.name }}_slave_base_seq.sv"
-  `include "{{ agent.name }}_master_coverage_collector.sv"
-  `include "{{ agent.name }}_master_slave_collector.sv"
-  `include "{{ agent.name }}_master_agent.sv"
-  `include "{{ agent.name }}_slave_agent.sv"
-  `include "{{ agent.name }}_system_env_config.sv"
-  `include "{{ agent.name }}_system_env.sv"
-`ifdef {{ agent.name }}_loop_back_test
-  `include "loopback/{{ agent.name }}_loopback_master_env.sv"
-  `include "loopback/{{ agent.name }}_loopback_master_scb.sv"
-  `include "loopback/{{ agent.name }}_loopback_master_test.sv"
-  `include "loopback/{{ agent.name }}_loopback_slave_env.sv"
-  `include "loopback/{{ agent.name }}_loopback_slave_scb.sv"
-  `include "loopback/{{ agent.name }}_loopback_slave_test.sv"
-`endif
+  `include "2_config/{{ agent.name }}_master_config.sv"
+  `include "2_config/{{ agent.name }}_slave_config.sv"
+  `include "3_transaction_sequencer/{{ agent.name }}_master_seq_item.sv"
+  `include "3_transaction_sequencer/{{ agent.name }}_slave_seq_item.sv"
+  `include "3_transaction_sequencer/{{ agent.name }}_master_sequencer.sv"
+  `include "3_transaction_sequencer/{{ agent.name }}_slave_sequencer.sv"
+  `include "4_driver_monitor/{{ agent.name }}_master_driver.sv"
+  `include "4_driver_monitor/{{ agent.name }}_slave_driver.sv"
+  `include "4_driver_monitor/{{ agent.name }}_master_monitor.sv"
+  `include "4_driver_monitor/{{ agent.name }}_slave_monitor.sv"
+  `include "5_agent/{{ agent.name }}_master_agent.sv"
+  `include "5_agent/{{ agent.name }}_slave_agent.sv"
+  `include "5_agent/{{ agent.name }}_system_config.sv"
+  `include "5_agent/{{ agent.name }}_system_env.sv"
+  `include "7_sequence/{{ agent.name }}_master_sequence.sv"
+  `include "7_sequence/{{ agent.name }}_slave_sequence.sv"
+  `include "8_ral/{{ agent.name }}_reg_adapter.sv"
+
 endpackage : {{ agent.name }}_pkg

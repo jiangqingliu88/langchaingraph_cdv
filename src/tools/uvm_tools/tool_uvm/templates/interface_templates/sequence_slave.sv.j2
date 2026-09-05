@@ -1,0 +1,52 @@
+// ============================================================
+// Slave Sequence: {{ agent.name }}_slave_sequence
+// ============================================================
+// ★ 事件驱动：从 Sequencer FIFO 取 Monitor 抓到的请求，生成响应
+
+class {{ agent.name }}_slave_sequence extends uvm_sequence #({{ agent.name }}_slave_seq_item);
+  `uvm_object_utils({{ agent.name }}_slave_sequence)
+  `uvm_declare_p_sequencer({{ agent.name }}_slave_sequencer)
+
+  protected bit [7:0] memory [bit [31:0]];
+
+  function new(string name = "{{ agent.name }}_slave_sequence");
+    super.new(name);
+  endfunction
+
+  virtual task body();
+    {{ agent.name }}_slave_seq_item req_resp;
+    forever begin
+      // ★ 从 Sequencer FIFO 取 Monitor 抓到的请求
+      p_sequencer.req_fifo.get(req_resp);
+
+      if (req_resp.xact_type == {{ agent.name }}_slave_seq_item::READ)
+        handle_read(req_resp);
+      else
+        handle_write(req_resp);
+
+      start_item(req_resp);
+      finish_item(req_resp);
+    end
+  endtask
+
+  virtual function void handle_write({{ agent.name }}_slave_seq_item req);
+    // 写内存：addr/data 字段由 YAML transaction_vars 决定，LLM 可按协议扩展
+    bit status = req.randomize() with {
+      delay_cycles inside {[0:5]};
+      force_resp == 2'b00;
+    };
+    if (!status) `uvm_fatal("SEQ", "Randomize failed")
+  endfunction
+
+  virtual function void handle_read({{ agent.name }}_slave_seq_item req);
+    bit status = req.randomize() with {
+      delay_cycles inside {[0:3]};
+      force_resp == 2'b00;
+    };
+    if (!status) `uvm_fatal("SEQ", "Randomize failed")
+  endfunction
+
+  function void write_mem(bit [31:0] addr, byte data[]);
+    foreach (data[i]) memory[addr + i] = data[i];
+  endfunction
+endclass : {{ agent.name }}_slave_sequence

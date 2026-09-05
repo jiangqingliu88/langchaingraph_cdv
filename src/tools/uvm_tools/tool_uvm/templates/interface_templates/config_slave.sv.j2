@@ -1,45 +1,88 @@
 // ============================================================
-// Config: {{ agent.name }}_config
+// Slave Config: {{ agent.name }}_slave_config
 // ============================================================
 
-class {{ agent.name }}_config extends uvm_object;
-  `uvm_object_utils({{ agent.name }}_config)
+class {{ agent.name }}_slave_config extends uvm_object;
+  `uvm_object_utils({{ agent.name }}_slave_config)
 
-  rand uvm_active_passive_enum is_active = UVM_ACTIVE;
+  // 公共协议参数
+  int addr_width = 32;
+  int data_width = 32;
+  int id_width   = 4;
 
-  // ─── 子组件开关 ───
-  bit has_coverage         = 0;
+  // 模式控制
+  uvm_active_passive_enum is_active = UVM_ACTIVE;
 
-  // ─── Sequencer 配置 ───
-  int  max_pending         = 0;
-  int  min_interval_ns     = 0;
-  int  arbitration_mode    = 0;
-  string default_sequence  = "";
+  // 错误注入公共开关
+  int error_injection_rate = 0; // 0~100
 
-  // ─── Driver 配置 ───
-  int  drive_delay_min     = 0;
-  int  drive_delay_max     = 0;
-  int  max_retries         = 0;
+  // 虚拟接口句柄（由 TB 传入）
+  virtual {{ agent.name }}_if vif;
 
-  // ─── Monitor 配置 ───
-  bit  check_xz            = 1;
-  bit  filter_enabled      = 0;
+  // ── Slave 专属 ──
+  // 响应模式
+  typedef enum {AUTO_MEMORY, SEQUENCER_DRIVEN, ERROR_INJECTION} response_mode_e;
+  response_mode_e response_mode = SEQUENCER_DRIVEN;
 
-  // ─── Scoreboard 配置 ───
-  int  compare_mode        = 0;  // 0=InOrder 1=OutOfOrder 2=Window
-  int  scb_window_size     = 10;
-  int  scb_timeout_ns      = 100000;
-  bit  scb_mask_enabled    = 0;
+  // 内存模型参数
+  int memory_size = 1024 * 1024;
+  bit [31:0] memory_start_addr = 32'h0000_0000;
+  bit [31:0] memory_end_addr   = 32'h000F_FFFF;
+  byte unsigned default_read_data = 8'h0;
 
-  // ─── Sequence 配置 ───
-  bit  fatal_on_rand_fail   = 0;
+  // 响应延迟
+  int response_delay_min = 0;
+  int response_delay_max = 5;
+
+  // 乱序与 Outstanding（预留接口）
+  bit enable_out_of_order = 0;
+  int max_outstanding = 8;
+  int id_delay_map[string];
+
+  // 错误注入（特定地址窗口）
+  bit [31:0] error_addr_start = 32'h0000_0000;
+  bit [31:0] error_addr_end   = 32'h0000_0000;
+  typedef enum {RESP_RANDOM=0, RESP_OKAY=1, RESP_ERROR=2, RESP_DECERR=3} resp_type_e;
+  resp_type_e force_resp_type = RESP_RANDOM;
 
 {%- for var in config_vars %}
   rand {{ var.type }} {{ var.name }};
 {%- endfor %}
 
-  function new(string name = "{{ agent.name }}_config");
+{%- for cons in config_constraints %}
+  constraint {{ cons.name }} {{ cons.value | safe }}
+{%- endfor %}
+
+  function new(string name = "{{ agent.name }}_slave_config");
     super.new(name);
   endfunction
 
-endclass : {{ agent.name }}_config
+  function string convert2string();
+    string s = super.convert2string();
+    s = {s, $sformatf("\n  role: SLAVE")};
+    s = {s, $sformatf("\n  active: %s", is_active.name())};
+    s = {s, $sformatf("\n  addr_width: %0d", addr_width)};
+    s = {s, $sformatf("\n  data_width: %0d", data_width)};
+    s = {s, $sformatf("\n  error_injection_rate: %0d%%", error_injection_rate)};
+    return s;
+  endfunction
+
+  function bit is_addr_in_error_window(bit [31:0] addr);
+    if (error_addr_start == 0 && error_addr_end == 0) return 0;
+    return (addr >= error_addr_start && addr <= error_addr_end);
+  endfunction
+
+  function bit [1:0] get_random_resp(bit [31:0] addr);
+    if (force_resp_type == RESP_RANDOM) begin
+      return $urandom_range(0, 3);
+    end else if (force_resp_type == RESP_ERROR) begin
+      return 2'b10;
+    end else if (force_resp_type == RESP_DECERR) begin
+      return 2'b11;
+    end else begin
+      if (is_addr_in_error_window(addr) && $urandom() % 100 < error_injection_rate)
+        return 2'b10;
+      return 2'b00;
+    end
+  endfunction
+endclass : {{ agent.name }}_slave_config

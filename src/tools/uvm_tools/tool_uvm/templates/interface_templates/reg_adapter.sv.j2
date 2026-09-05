@@ -1,0 +1,37 @@
+// ============================================================
+// Reg Adapter: {{ agent.name }}_reg_adapter
+// ============================================================
+// RAL 集成：uvm_reg → {{ agent.name }}_master_seq_item 双向转换
+
+class {{ agent.name }}_reg_adapter extends uvm_reg_adapter;
+  `uvm_object_utils({{ agent.name }}_reg_adapter)
+
+  int m_bytes_per_word = 4;
+
+  function new(string name = "{{ agent.name }}_reg_adapter");
+    super.new(name);
+    provides_responses = 1;
+  endfunction
+
+  function uvm_sequence_item reg2bus(const ref uvm_reg_bus_op rw);
+    {{ agent.name }}_master_seq_item req = {{ agent.name }}_master_seq_item::type_id::create("reg_req");
+    req.xact_type = (rw.kind == UVM_READ) ? {{ agent.name }}_master_seq_item::READ
+                                          : {{ agent.name }}_master_seq_item::WRITE;
+{%- set has_addr = namespace(found=false) %}
+{%- for var in transaction_vars %}{% if var.name == 'addr' %}{% set has_addr.found = true %}{% endif %}{% endfor %}
+{%- if has_addr.found %}
+    req.addr = rw.addr;
+{%- endif %}
+    return req;
+  endfunction
+
+  function void bus2reg(uvm_sequence_item bus_item, ref uvm_reg_bus_op rw);
+    {{ agent.name }}_master_seq_item rsp;
+    if (!$cast(rsp, bus_item)) return;
+    rw.kind = (rsp.xact_type == {{ agent.name }}_master_seq_item::READ) ? UVM_READ : UVM_WRITE;
+{%- if has_addr.found %}
+    rw.addr = rsp.addr;
+{%- endif %}
+    rw.status = UVM_IS_OK;  // 协议错误映射在此扩展
+  endfunction
+endclass : {{ agent.name }}_reg_adapter

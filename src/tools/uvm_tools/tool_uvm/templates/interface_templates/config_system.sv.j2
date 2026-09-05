@@ -1,0 +1,41 @@
+// ============================================================
+// System Config: {{ agent.name }}_system_config
+// ============================================================
+
+class {{ agent.name }}_system_config extends uvm_object;
+  `uvm_object_utils({{ agent.name }}_system_config)
+
+  int num_masters = 1;
+  int num_slaves  = 1;
+
+  {{ agent.name }}_master_config master_cfgs[];
+  {{ agent.name }}_slave_config  slave_cfgs[];
+
+  int addr_width = 32;
+  int data_width = 32;
+  int id_width   = 4;
+
+  function new(string name = "{{ agent.name }}_system_config");
+    super.new(name);
+  endfunction
+
+  function void init_config(int m_num = 1, int s_num = 1);
+    num_masters = m_num;
+    num_slaves  = s_num;
+    master_cfgs = new[num_masters];
+    slave_cfgs  = new[num_slaves];
+    foreach (master_cfgs[i]) begin
+      master_cfgs[i] = {{ agent.name }}_master_config::type_id::create($sformatf("m_cfg_%0d", i));
+      master_cfgs[i].is_active = UVM_ACTIVE;
+      master_cfgs[i].addr_width = addr_width;
+      master_cfgs[i].data_width = data_width;
+    end
+    foreach (slave_cfgs[i]) begin
+      slave_cfgs[i] = {{ agent.name }}_slave_config::type_id::create($sformatf("s_cfg_%0d", i));
+      slave_cfgs[i].is_active = UVM_ACTIVE;
+      slave_cfgs[i].response_mode = SEQUENCER_DRIVEN;
+      slave_cfgs[i].addr_width = addr_width;
+      slave_cfgs[i].data_width = data_width;
+    end
+  endfunction
+endclass : {{ agent.name }}_system_config

@@ -1,0 +1,44 @@
+// ============================================================
+// Slave Seq Item: {{ agent.name }}_slave_seq_item
+// ============================================================
+
+class {{ agent.name }}_slave_seq_item extends uvm_sequence_item;
+  `uvm_object_utils({{ agent.name }}_slave_seq_item)
+
+  typedef enum {READ, WRITE} xact_type_e;
+
+  // 请求字段（is_master=True：由 Monitor 回填，非随机）
+  xact_type_e xact_type;
+{%- for var in transaction_vars %}
+{%-   if var.is_master != 'False' %}
+  {{ var.type }} {{ var.name }}; // 由 monitor 回填
+{%-   endif %}
+{%- endfor %}
+
+  // slave 响应字段（is_master=False：slave 生成）
+{%- for var in transaction_vars %}
+{%-   if var.is_master == 'False' %}
+  rand {{ var.type }} {{ var.name }}; // slave 响应
+{%-   endif %}
+{%- endfor %}
+
+  // 响应控制指令（由 Slave Sequence 填充）
+  rand int       delay_cycles;
+  rand bit [1:0] force_resp;
+  rand bit       override_rdata;
+
+{%- for cons in transaction_constraints.slave %}
+  constraint {{ cons.name }} {{ cons.value | safe }}
+{%- endfor %}
+  constraint c_delay_range { delay_cycles inside {[0:50]}; }
+  constraint c_resp_valid  { force_resp inside {2'b00, 2'b01, 2'b10, 2'b11}; }
+
+  function new(string name = "{{ agent.name }}_slave_seq_item");
+    super.new(name);
+  endfunction
+
+  function string convert2string();
+    return $sformatf("SLV: type=%s delay=%0d resp=%0b",
+                     xact_type.name(), delay_cycles, force_resp);
+  endfunction
+endclass : {{ agent.name }}_slave_seq_item

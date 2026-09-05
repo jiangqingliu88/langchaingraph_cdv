@@ -1,42 +1,64 @@
-// 自动生成的 Interface: {{ name }}
-interface {{ agent.name }}_interface #(
+// ============================================================
+// Interface: {{ agent.name }}_if
+// AXI-VIP 风格：内部 logic + master/slave/monitor 时钟块 + modport
+//   dir: 'output' => master 驱动、slave 采样
+//   dir: 'input'  => slave 驱动、master 采样
+// ============================================================
+
+interface {{ agent.name }}_if #(
 {%- for param in parameters %}
   parameter {{ param.type }} {{ param.name }} = {{ param.value }}{% if not loop.last %},{% endif %}
 {%- endfor %}
-) (
-{%- for port in ports %}
-  {%- set width_str = port.width|string %}
-  {%- if port.dir == 'input' %}input  {% elif port.dir == 'output' %}output {% endif %}
-  {%- if width_str == '1' %}logic{% else %}logic [{{ port.width }}-1:0]{% endif %} {{ port.name }}{% if not loop.last %},{% endif %}
-{%- endfor %}
-);
+) (input logic {{ clock }}, input logic {{ reset }});
 
-  // HDL 类型定义
-{%- for td in hdl_typedefs %}
-  typedef {{ td.type }} {{ td.name }};
-{%- endfor %}
-
-  // 时钟块
-  clocking cb @(posedge {{ clock }});
 {%- for port in ports %}
 {%-   if port.name != clock and port.name != reset %}
-    {%- if port.dir == 'output' %}output{% else %}input{% endif %} {{ port.name }};
+{%-     set width_str = port.width|string %}
+{%-     if width_str == '1' %}
+  logic {{ port.name }};                         // {{ port.dir }}
+{%-     else %}
+  logic [{{ port.width }}-1:0] {{ port.name }};  // {{ port.dir }}
+{%-     endif %}
 {%-   endif %}
 {%- endfor %}
-  endclocking : cb
 
-  // Modport
-  modport mp (
-    input  {{ clock }},
-    input  {{ reset }},
+  // -------- Master 时钟块（驱动 output，采样 input）--------
+  clocking master_cb @(posedge {{ clock }});
 {%- for port in ports %}
 {%-   if port.name != clock and port.name != reset %}
-    {%- if port.dir == 'output' %}output{% else %}input{% endif %} {{ port.name }},
+{%-     if port.dir == 'output' %}
+    output {{ port.name }};
+{%-     else %}
+    input  {{ port.name }};
+{%-     endif %}
 {%-   endif %}
 {%- endfor %}
-    clocking cb
-  );
+  endclocking : master_cb
 
-  // 复位断言电平: {{ reset_assertion_level }} (可用于驱动逻辑)
+  // -------- Slave 时钟块（采样 input，驱动 output）--------
+  clocking slave_cb @(posedge {{ clock }});
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset %}
+{%-     if port.dir == 'output' %}
+    input  {{ port.name }};
+{%-     else %}
+    output {{ port.name }};
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+  endclocking : slave_cb
 
-endinterface : {{ agent.name }}_interface
+  // -------- Monitor 时钟块（仅采样）--------
+  clocking mon_cb @(posedge {{ clock }});
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset %}
+    input  {{ port.name }};
+{%-   endif %}
+{%- endfor %}
+  endclocking : mon_cb
+
+  modport MASTER  (clocking master_cb, input {{ reset }});
+  modport SLAVE   (clocking slave_cb,  input {{ reset }});
+  modport MONITOR (clocking mon_cb,    input {{ reset }});
+
+endinterface : {{ agent.name }}_if

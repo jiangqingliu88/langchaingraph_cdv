@@ -1,0 +1,27 @@
+// ============================================================
+// Master Sequence: {{ agent.name }}_master_sequence
+// ============================================================
+
+class {{ agent.name }}_master_sequence extends uvm_sequence #({{ agent.name }}_master_seq_item);
+  `uvm_object_utils({{ agent.name }}_master_sequence)
+
+  function new(string name = "{{ agent.name }}_master_sequence");
+    super.new(name);
+  endfunction
+
+  task do_write();
+    {{ agent.name }}_master_seq_item req = {{ agent.name }}_master_seq_item::type_id::create("req");
+    start_item(req);
+    assert(req.randomize() with { xact_type == WRITE; });
+    finish_item(req);
+    get_response(req);
+  endtask
+
+  task do_read();
+    {{ agent.name }}_master_seq_item req = {{ agent.name }}_master_seq_item::type_id::create("req");
+    start_item(req);
+    assert(req.randomize() with { xact_type == READ; });
+    finish_item(req);
+    get_response(req);
+  endtask
+endclass : {{ agent.name }}_master_sequence

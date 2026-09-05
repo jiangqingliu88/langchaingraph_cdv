@@ -1,0 +1,59 @@
+// ============================================================
+// System Env: {{ agent.name }}_system_env
+// ============================================================
+// 顶层系统环境：通过 {{ agent.name }}_system_if 分发接口到各个 master/slave agent
+//   sys_vif.master_if[i] → m_agents[i]
+//   sys_vif.slave_if[i]  → s_agents[i]
+
+class {{ agent.name }}_system_env extends uvm_env;
+  `uvm_component_utils({{ agent.name }}_system_env)
+
+  {{ agent.name }}_master_agent m_agents[];
+  {{ agent.name }}_slave_agent  s_agents[];
+
+  {{ agent.name }}_system_config sys_cfg;
+  virtual {{ agent.name }}_system_if sys_vif;
+
+  function new(string name = "{{ agent.name }}_system_env", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    uvm_config_db#({{ agent.name }}_system_config)::get(this, "", "sys_cfg", sys_cfg);
+    if (sys_cfg == null) `uvm_fatal("ENV", "sys_cfg not found")
+    if (!uvm_config_db#(virtual {{ agent.name }}_system_if)::get(this, "", "sys_vif", sys_vif))
+      `uvm_fatal("NOVIF", "system interface not set")
+
+    m_agents = new[sys_cfg.num_masters];
+    foreach (m_agents[i]) begin
+      m_agents[i] = {{ agent.name }}_master_agent::type_id::create($sformatf("m_agent[%0d]", i), this);
+      uvm_config_db#({{ agent.name }}_master_config)::set(this, $sformatf("m_agent[%0d]", i), "cfg", sys_cfg.master_cfgs[i]);
+      if (sys_vif.master_if.size() > i) begin
+        uvm_config_db#(virtual {{ agent.name }}_if)::set(this, $sformatf("m_agent[%0d]", i), "vif", sys_vif.master_if[i]);
+      end
+    end
+
+    s_agents = new[sys_cfg.num_slaves];
+    foreach (s_agents[i]) begin
+      s_agents[i] = {{ agent.name }}_slave_agent::type_id::create($sformatf("s_agent[%0d]", i), this);
+      uvm_config_db#({{ agent.name }}_slave_config)::set(this, $sformatf("s_agent[%0d]", i), "cfg", sys_cfg.slave_cfgs[i]);
+      if (sys_vif.slave_if.size() > i) begin
+        uvm_config_db#(virtual {{ agent.name }}_if)::set(this, $sformatf("s_agent[%0d]", i), "vif", sys_vif.slave_if[i]);
+      end
+    end
+  endfunction
+
+  function void connect_phase(uvm_phase phase);
+    super.connect_phase(phase);
+  endfunction
+
+  function {{ agent.name }}_master_sequencer get_master_sequencer(int idx = 0);
+    return m_agents[idx].sequencer;
+  endfunction
+
+  function {{ agent.name }}_slave_sequencer get_slave_sequencer(int idx = 0);
+    return s_agents[idx].sequencer;
+  endfunction
+
+endclass : {{ agent.name }}_system_env

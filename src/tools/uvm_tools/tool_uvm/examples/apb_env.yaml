@@ -1,0 +1,56 @@
+# ============================================================
+# Environment 定义 —— 聚合多个 agent + predictor + scoreboard
+# ============================================================
+
+environment:
+  name: APB_env
+  env_name: APB_env
+
+  # ── Agent 实例（每项 = 一个 interface → master/slave agent）──
+  agents:
+    - name: 
+      type: "apb_master_agent"
+      is_active: True
+
+  subenvs :
+    - name: "apb_sys_env"
+      type: "apb_system_env"
+
+  # ── 时钟复位 VIP ──
+  clk_rst_vip:
+    enabled: true
+    clocks:
+      - { name: pclk, period_ps: 10000, duty_cycle: 50, initial_value: 0, jitter_ps: 0 }
+    resets:
+      - { name: presetn, assert_cycles: 10, recover_cycles: 5, active_low: true, reset_type: ASYNC_SYNC_DEASSERT }
+
+  # ── Scoreboard（UVMF 风格）──
+  #   sb_type:    scoreboard 类名（如 uvmf_in_order_scoreboard）
+  #   trans_type: 事务类型
+  scoreboards:
+    - name: apb_scb
+      sb_type: uvmf_in_order_scoreboard
+      trans_type: APB_master_seq_item
+
+  # ── Analysis 组件（predictor 等）──
+  #   type: 组件类名
+  analysis_components:
+    - name: apb_pred
+      type: apb_predictor
+  analysis_exports: []
+  analysis_ports: []
+
+  # ── 虚拟序列器 ──
+  virtual_sequencer: { enabled: true }
+
+  config_vars: []
+  config_constraints: []
+
+  # ── TLM 连接（显式 driver → receiver）──
+  tlm_connections:
+    - driver: apb_master.monitored_ap
+      receiver: apb_pred.in_export
+    - driver: apb_pred.out_port
+      receiver: apb_scb.expected_analysis_export
+    - driver: apb_slave.monitored_ap
+      receiver: apb_scb.actual_analysis_export

@@ -1,0 +1,8 @@
+# ============================================================
+# {{ agent.name }} 编译 filelist
+# ============================================================
+# 编译顺序：interface → system_if → pkg（pkg 内按依赖顺序 include 所有 class）
++incdir+.
+1_interface/{{ agent.name }}_if.sv
+1_interface/{{ agent.name }}_system_if.sv
+{{ agent.name }}_pkg.sv

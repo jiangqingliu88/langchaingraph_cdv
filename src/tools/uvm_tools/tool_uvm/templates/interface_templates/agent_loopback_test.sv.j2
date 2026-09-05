@@ -1,0 +1,67 @@
+// ============================================================
+// Loopback Test: {{ agent.name }}_loopback_test
+// ============================================================
+import uvm_pkg::*;
+import {{ agent.name }}_pkg::*;
+`include "uvm_macros.svh"
+
+// 简单激励序列：随机生成 N 个 master 事务（不等待响应，规避 get_response 阻塞）
+class {{ agent.name }}_loopback_seq extends uvm_sequence #({{ agent.name }}_master_seq_item);
+  `uvm_object_utils({{ agent.name }}_loopback_seq)
+
+  int num_items = 20;
+
+  function new(string name = "{{ agent.name }}_loopback_seq");
+    super.new(name);
+  endfunction
+
+  task body();
+    repeat (num_items) begin
+      {{ agent.name }}_master_seq_item req;
+      req = {{ agent.name }}_master_seq_item::type_id::create("req");
+      if (!req.randomize())
+        `uvm_fatal("SEQ", "randomize failed")
+      start_item(req);
+      finish_item(req);
+    end
+  endtask
+endclass : {{ agent.name }}_loopback_seq
+
+
+class {{ agent.name }}_loopback_test extends uvm_test;
+  `uvm_component_utils({{ agent.name }}_loopback_test)
+
+  {{ agent.name }}_loopback_env env_h;
+  int num_items = 20;
+
+  function new(string name = "{{ agent.name }}_loopback_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    env_h = {{ agent.name }}_loopback_env::type_id::create("env_h", this);
+  endfunction
+
+  task run_phase(uvm_phase phase);
+    {{ agent.name }}_loopback_seq seq;
+
+    phase.raise_objection(this);
+
+    `uvm_info("LB_TEST", "Starting {{ agent.name }} master→slave loopback test", UVM_NONE)
+
+    // 等待复位释放
+    #105ns;
+
+    seq = {{ agent.name }}_loopback_seq::type_id::create("seq");
+    seq.num_items = num_items;
+    seq.start(env_h.master_agent_h.sequencer);
+
+    // 等待最后一项被 slave monitor 采样
+    #30ns;
+
+    `uvm_info("LB_TEST", $sformatf("Loopback test completed: %0d items sent", num_items), UVM_NONE)
+    phase.drop_objection(this);
+  endtask
+
+endclass : {{ agent.name }}_loopback_test

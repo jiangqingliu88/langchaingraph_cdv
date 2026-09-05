@@ -1,0 +1,90 @@
+# ============================================================
+# Bench 定义 —— 顶层 testbench（接口实例化 + DUT 连接 + 时钟复位）
+# ============================================================
+
+bench:
+  name: APB_bench
+  env_name: APB_env
+  timeout: 10ms
+  include_assertions: false
+
+  # ── 时钟复位（bench 级，生成 always 块 + initial 释放）──
+  clk_rst:
+    clocks:
+      - { name: pclk, period: "10ns", init: 0 }
+    resets:
+      - { name: presetn, init: 0, release_delay: 100 }
+
+  # ── 信号线声明（wire [width-1:0] name）──
+  wire_decls:
+    - { name: paddr,   width: 32 }
+    - { name: pwdata,  width: 32 }
+    - { name: prdata,  width: 32 }
+    - { name: pwrite,  width: 1  }
+    - { name: psel,    width: 1  }
+    - { name: penable, width: 1  }
+    - { name: pready,  width: 1  }
+    - { name: pslverr, width: 1  }
+
+  # ── 连续赋值（assign lhs = rhs）──
+  assignments: []
+
+  # ── Agent 接口连接 ──
+  #   instance:       interface 实例名
+  #   config_db_path: vif 配置路径
+  #   connections:    端口 → 信号线
+  agents:
+    - name: APB
+      type: "mem"
+      interface: APB
+      clock: pclk
+      reset: presetn
+      instance: apb_if
+      config_db_path: "*APB_agent_h*"
+      connections:
+        - { port: paddr,   wire: paddr }
+        - { port: pwrite,  wire: pwrite }
+        - { port: psel,    wire: psel }
+        - { port: penable, wire: penable }
+        - { port: pwdata,  wire: pwdata }
+        - { port: prdata,  wire: prdata }
+        - { port: pready,  wire: pready }
+        - { port: pslverr, wire: pslverr }
+
+  # ── DUT 实例化 ──
+  #   module:     DUT 模块名
+  #   instance:   DUT 实例名
+  #   parameters: 参数
+  #   ports:      端口 → 信号线
+  dut:
+    module: apb_slave_dut
+    instance: u_dut
+    parameters: []
+    ports:
+      - { name: pclk,    connection: pclk }
+      - { name: presetn, connection: presetn }
+      - { name: paddr,   connection: paddr }
+      - { name: pwrite,  connection: pwrite }
+      - { name: psel,    connection: psel }
+      - { name: penable, connection: penable }
+      - { name: pwdata,  connection: pwdata }
+      - { name: prdata,  connection: prdata }
+      - { name: pready,  connection: pready }
+      - { name: pslverr, connection: pslverr }
+
+  # ── UVM 配置 ──
+  uvm_config:
+    verbosity: UVM_MEDIUM
+
+  # ── 波形 ──
+  wave_dump:
+    enabled: true
+    format: FST
+    file_name: apb_tb_top.fst
+    levels: 0
+    plusargs: DUMP_WAVES
+
+  # ── 仿真控制 ──
+  simulation:
+    max_runtime: 10ms
+    stop_on_fatal: true
