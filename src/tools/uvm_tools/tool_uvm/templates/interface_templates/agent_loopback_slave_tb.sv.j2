@@ -1,0 +1,86 @@
+// === Agent Loopback Testbench: {{ agent.name }} ===
+// 单 Agent 自测顶层 —— 独立编译运行，无需完整 env
+// 编译时需 +define+{{ agent.name }}_loop_back_test（filelist 中已添加）
+
+`include "uvm_macros.svh"
+import uvm_pkg::*;
+import {{ agent.name }}_pkg::*;
+
+module {{ agent.name }}_loopback_tb;
+  reg clk   = 0;
+  reg rst_n = 0;
+{%- for param in parameters %}
+  localparam {{ param.type }} {{ param.name }} = {{ param.value }};
+{%- endfor %}
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset %}
+{%-     set w_str = port.width|string %}
+{%-     set is_numeric = w_str|int != 0 or w_str == '0' %}
+{%-     if is_numeric %}
+{%-       set w = w_str|int %}
+{%-       if w > 1 %}
+  wire [{{ w-1 }}:0] {{ port.name }};
+{%-       else %}
+  wire {{ port.name }};
+{%-       endif %}
+{%-     else %}
+  wire [{{ w_str }}-1:0] {{ port.name }};
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+
+  // 接口实例
+  {{ agent.name }}_interface #(
+{%- for param in parameters %}
+    .{{ param.name }}({{ param.value }}){% if not loop.last %},{% endif %}
+{%- endfor %}
+  ) {{ agent.name }}_if (
+    .{{ agent.clock }}(clk),
+    .{{ agent.reset }}(rst_n)
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset %}
+   ,.{{ port.name }}({{ port.name }})
+{%-   endif %}
+{%- endfor %}
+  );
+
+  // ── Loopback wiring: auto-pair inputs←outputs by name pattern, rest tied to 0 ──
+{%- for port in ports %}
+{%-   if port.dir == 'input' and port.name != clock and port.name != reset %}
+{%-     set paired = namespace(found=false) %}
+{%-     for out_port in ports %}
+{%-       if out_port.dir == 'output' and out_port.name != clock and out_port.name != reset %}
+{%-         set in_name = port.name %}
+{%-         set out_name = out_port.name %}
+{%-         set swapped = namespace(ok=false) %}
+{# rx/tx #}{%-         if in_name.replace('rx','tx') == out_name or in_name.replace('tx','rx') == out_name %}{% set swapped.ok = true %}{% endif %}
+{# rts/cts #}{%-         if in_name.replace('rts','cts') == out_name or in_name.replace('cts','rts') == out_name %}{% set swapped.ok = true %}{% endif %}
+{# ready/enable #}{%- if in_name.replace('ready','enable') == out_name or in_name.replace('enable','ready') == out_name %}{% set swapped.ok = true %}{% endif %}
+{# req/ack #}{%-     if in_name.replace('req','ack') == out_name or in_name.replace('ack','req') == out_name %}{% set swapped.ok = true %}{% endif %}
+{# mosi/miso #}{%-   if in_name.replace('mosi','miso') == out_name or in_name.replace('miso','mosi') == out_name %}{% set swapped.ok = true %}{% endif %}
+{# sdi/sdo #}{%-     if in_name.replace('sdi','sdo') == out_name or in_name.replace('sdo','sdi') == out_name %}{% set swapped.ok = true %}{% endif %}
+{# _i/_o suffix #}{%- if in_name.endswith('_i') and out_name == in_name[:-2]+'_o' %}{% set swapped.ok = true %}{% endif %}
+{%-         if swapped.ok %}{% set paired.found = true %}  assign {{ port.name }} = {{ out_port.name }};
+{%-         endif %}
+{%-       endif %}
+{%-     endfor %}
+{%-     if not paired.found %}  assign {{ port.name }} = '0;
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+
+  always #5 clk = ~clk;
+
+  initial begin
+    // 设置 virtual interface
+    uvm_config_db#(virtual {{ agent.name }}_interface)::set(null, "*", "vif", {{ agent.name }}_if);
+    // 启动测试
+    run_test("{{ agent.name }}_loopback_test");
+  end
+
+  initial begin
+    #100 rst_n = 1;
+    #50000000 $display("LOOPBACK_TIMEOUT");   // 50ms：够 UART 等串行协议多帧收发
+    $finish;
+  end
+endmodule : {{ agent.name }}_loopback_tb

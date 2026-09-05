@@ -29,23 +29,39 @@ TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 INTERFACE_TEMPLATES = [
     ("interface_templates/interface.sv.j2", "{agent_name}_interface.sv"),
     ("interface_templates/interface_structure.j2", "{agent_name}_interface_structure.sv"),
-    ("interface_templates/transaction.sv.j2", "{agent_name}_transaction.sv"),
-    ("interface_templates/sequencer.sv.j2", "{agent_name}_sequencer.sv"),
-    ("interface_templates/monitor.sv.j2", "{agent_name}_monitor.sv"),
-    ("interface_templates/driver.sv.j2", "{agent_name}_driver.sv"),
-    ("interface_templates/config.sv.j2", "{agent_name}_config.sv"),
-    ("interface_templates/agent.sv.j2", "{agent_name}_agent.sv"),
+
+    ("interface_templates/transaction.sv.j2", "{agent_name}_master_transaction.sv"),
+    ("interface_templates/sequencer.sv.j2", "{agent_name}_master_sequencer.sv"),
+    ("interface_templates/monitor.sv.j2", "{agent_name}_master_monitor.sv"),
+    ("interface_templates/driver.sv.j2", "{agent_name}_master_driver.sv"),
+    ("interface_templates/config.sv.j2", "{agent_name}_master_config.sv"),
+    ("interface_templates/agent.sv.j2", "{agent_name}_master_agent.sv"),
+    ("interface_templates/agent_sequence_base.sv.j2", "{agent_name}_slave_base_seq.sv"),
+    ("interface_templates/agent_cov.sv.j2", "{agent_name}_slave_coverage_collector.sv"),
+
+    ("interface_templates/transaction.sv.j2", "{agent_name}_slave_transaction.sv"),
+    ("interface_templates/sequencer.sv.j2", "{agent_name}_slave_sequencer.sv"),
+    ("interface_templates/monitor.sv.j2", "{agent_name}_slave_monitor.sv"),
+    ("interface_templates/driver.sv.j2", "{agent_name}_slave_driver.sv"),
+    ("interface_templates/config.sv.j2", "{agent_name}_slave_config.sv"),
+    ("interface_templates/agent.sv.j2", "{agent_name}_slave_agent.sv"),
+    ("interface_templates/agent_sequence_base.sv.j2", "{agent_name}_slave_base_seq.sv"),
+    ("interface_templates/agent_cov.sv.j2", "{agent_name}_slave_coverage_collector.sv"),
+
     ("interface_templates/agent_pkg.sv.j2", "{agent_name}_pkg.sv"),
-    ("interface_templates/agent_sequence_base.sv.j2", "{agent_name}_base_seq.sv"),
-    ("interface_templates/agent_cov.sv.j2", "{agent_name}_coverage_collector.sv"),
 ]
 
 # Agent 自闭环测试套件（独立编译运行的 LB test）
 AGENT_LOOPBACK_TEMPLATES = [
-    ("interface_templates/agent_loopback_env.sv.j2",  "{agent_name}_loopback_env.sv"),
-    ("interface_templates/agent_loopback_scb.sv.j2",  "{agent_name}_loopback_scb.sv"),
-    ("interface_templates/agent_loopback_test.sv.j2", "{agent_name}_loopback_test.sv"),
-    ("interface_templates/agent_loopback_tb.sv.j2",  "{agent_name}_loopback_tb.sv"),
+    ("interface_templates/agent_loopback_env.sv.j2",  "{agent_name}_loopback_master_env.sv"),
+    ("interface_templates/agent_loopback_scb.sv.j2",  "{agent_name}_loopback_master_scb.sv"),
+    ("interface_templates/agent_loopback_test.sv.j2", "{agent_name}_loopback_master_test.sv"),
+    ("interface_templates/agent_loopback_tb.sv.j2",  "{agent_name}_loopback_master_tb.sv"),
+
+    ("interface_templates/agent_loopback_env.sv.j2",  "{agent_name}_loopback_slave_env.sv"),
+    ("interface_templates/agent_loopback_scb.sv.j2",  "{agent_name}_loopback_slave_scb.sv"),
+    ("interface_templates/agent_loopback_test.sv.j2", "{agent_name}_loopback_slave_test.sv"),
+    ("interface_templates/agent_loopback_tb.sv.j2",  "{agent_name}_loopback_slave_tb.sv"),
 ]
 
 ENVIRONMENT_ROOT_TEMPLATES = [

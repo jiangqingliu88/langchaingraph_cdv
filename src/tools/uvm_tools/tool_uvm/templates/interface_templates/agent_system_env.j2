@@ -1,0 +1,54 @@
+// Agent Package: {{ agent.name }}_pkg
+package {{ agent.name }}_pkg;
+  import uvm_pkg::*;
+  `include "uvm_macros.svh"
+
+  // UVM callback macros — compatible with UVM 1.2 and 1800.2
+  // In UVM 1.2, uvm_register_cb/uvm_do_callbacks are built-in via uvm_macros.svh.
+  // In 1800.2, callbacks use uvm_callback pool; stubs are no-ops.
+  `ifndef uvm_register_cb
+  `define uvm_register_cb(T, CB)  /* callback disabled (UVM 1800.2 compat mode) */
+  `endif
+  `ifndef uvm_do_callbacks
+  `define uvm_do_callbacks(T, CB, METHOD)  /* callback disabled (UVM 1800.2 compat mode) */
+  `endif
+
+{%- for param in agent.parameters %}
+  localparam {{ param.type }} {{ param.name }} = {{ param.value }};
+{%- endfor %}
+{%- if agent.hdl_typedefs %}
+  // HDL type definitions (mirror interface typedefs)
+{%-   for td in agent.hdl_typedefs %}
+  typedef {{ td.type }} {{ td.name }};
+{%-   endfor %}
+{%- endif %}
+{%- if agent.hvl_typedefs %}
+  // HVL type definitions
+{%-   for td in agent.hvl_typedefs %}
+  typedef {{ td.type }} {{ td.name }};
+{%-   endfor %}
+{%- endif %}
+
+  `include "{{ agent.name }}_interface_structure.sv"
+  `include "{{ agent.name }}_master_transaction.sv"
+  `include "{{ agent.name }}_slave_transaction.sv"
+  `include "{{ agent.name }}_master_config.sv"
+  `include "{{ agent.name }}_slave_config.sv"
+  `include "{{ agent.name }}_mastr_driver.sv"
+  `include "{{ agent.name }}_slave_driver.sv"
+  `include "{{ agent.name }}_master_monitor.sv"
+  `include "{{ agent.name }}_slave_monitor.sv"
+  `include "{{ agent.name }}_master_sequencer.sv"
+  `include "{{ agent.name }}_slave_sequencer.sv"
+  `include "{{ agent.name }}_master_base_seq.sv"
+  `include "{{ agent.name }}_slave_base_seq.sv"
+  `include "{{ agent.name }}_master_coverage_collector.sv"
+  `include "{{ agent.name }}_master_slave_collector.sv"
+  `include "{{ agent.name }}_master_agent.sv"
+  `include "{{ agent.name }}_agent.sv"
+`ifdef {{ agent.name }}_loop_back_test
+  `include "loopback/{{ agent.name }}_loopback_env.sv"
+  `include "loopback/{{ agent.name }}_loopback_scb.sv"
+  `include "loopback/{{ agent.name }}_loopback_test.sv"
+`endif
+endpackage : {{ agent.name }}_pkg

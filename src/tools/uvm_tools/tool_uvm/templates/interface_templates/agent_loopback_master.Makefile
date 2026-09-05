@@ -1,4 +1,3 @@
-# Agent Loopback Test Makefile — {{ agent.name }}
 # 用法: make AGENT={{ agent.name }} [SEED=1] [ITEMS=50]
 
 AGENT  ?= UART_in
