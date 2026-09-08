@@ -114,18 +114,6 @@ def test_harness_connect_path_missing_error():
 
 # ── bench 级 ──
 
-def test_bench_dut_port_wire_undefined_error():
-    bench = BenchModel(name="B", env_name="E",
-                       wire_decls=[{"name": "paddr", "width": 32}],
-                       clk_rst={"clocks": [{"name": "pclk"}],
-                                "resets": [{"name": "presetn"}]},
-                       dut={"module": "m", "instance": "u",
-                            "ports": [{"name": "pclk", "connection": "pclk"},
-                                      {"name": "paddr", "connection": "paddr"},
-                                      {"name": "pwdata", "connection": "ghost"}]})
-    assert _by_rule(_issues("benches", bench), "dut_port_wire_undefined")
-
-
 def test_bench_agent_wire_undefined_skipped_with_harness():
     from src.tools.uvm_tools.tool_uvm.gen_uvm import BenchAgentEntry
     bench = BenchModel(name="B", env_name="E", harness={"name": "h"},

@@ -165,9 +165,9 @@ def _render_harness(data):
     return _JinjaRenderer(_TEMPLATES_DIR).render("bench_templates/harness.sv.j2", ctx)
 
 
-def test_harness_bind_style():
+def test_harness_bind_render():
     out = _render_harness({
-        "name": "apb_harness", "bind_to": "apb_slave_dut", "style": "bind",
+        "name": "apb_harness", "bind_to": "apb_slave_dut",
         "interfaces": [{"name": "apb_if", "type": "apb_interface",
                         "agent_path": "apb_master_agent_h",
                         "connections": {"pclk": "pclk", "presetn": "presetn"}}],
@@ -178,9 +178,22 @@ def test_harness_bind_style():
     assert "bind apb_slave_dut apb_harness harness();" in out
 
 
-def test_harness_inside_array_parameter_sub():
+def test_harness_force_block_default():
+    """每个 interface 自动生成 force/release 块，控制信号缺省 0（无需 YAML 配置）。"""
     out = _render_harness({
-        "name": "reg_top_harness", "bind_to": "RegTopModule", "style": "inside",
+        "name": "h1", "bind_to": "dut",
+        "interfaces": [{"name": "dut_if", "type": "dut_interface",
+                        "agent_path": "a", "connections": {"clk": "clk", "data": "din"}}],
+    })
+    assert "logic dut_if_force_en = 0;" in out
+    assert "force din = dut_if.data;" in out
+    assert "release din;" in out
+    assert "force clk = dut_if.clk;" in out
+
+
+def test_harness_array_parameter_sub():
+    out = _render_harness({
+        "name": "reg_top_harness", "bind_to": "RegTopModule",
         "parameter": "NUM_CLIENTS",
         "interfaces": [{"name": "reg_if", "type": "reg_interface", "agent_path": "reg_a",
                         "count": "NUM_CLIENTS",
@@ -188,8 +201,9 @@ def test_harness_inside_array_parameter_sub():
         "sub_harnesses": [{"path": "chip_module.math.harness", "env_path": ".math_env"}],
     })
     assert "interface reg_top_harness#(parameter int NUM_CLIENTS = 1)();" in out
-    assert "reg_interface reg_if[NUM_CLIENTS-1:0](.clk(RegTopModule.SysClk));" in out
+    assert "bind RegTopModule reg_interface reg_if[NUM_CLIENTS-1:0](.clk(SysClk));" in out
     assert "virtual interface reg_interface vif_0[NUM_CLIENTS];" in out
+    assert "vif_0 = RegTopModule.reg_if;" in out
     assert '".reg_a["' in out and '"vif", vif_0[i]);' in out
     assert "chip_module.math.harness.set_vifs({path, \".math_env\"});" in out
     assert "bind RegTopModule reg_top_harness#(.NUM_CLIENTS(NUM_CLIENTS)) harness();" in out
@@ -197,7 +211,7 @@ def test_harness_inside_array_parameter_sub():
 
 def test_harness_multi_instance_source_path():
     out = _render_harness({
-        "name": "mc_harness", "bind_to": "math_coprocessor_module", "style": "bind",
+        "name": "mc_harness", "bind_to": "math_coprocessor_module",
         "interfaces": [{"name": "mem_if", "type": "mem_interface", "bind_to": "memory_module",
                         "agent_path": "mem_agent[0]", "source_path": "cache.memory",
                         "connections": {"clk": "clk"}}],
@@ -246,6 +260,13 @@ def test_bench_with_harness_skips_tb_top_interface(tmp_path):
     tb = (dest / "bench" / "APB_bench_tb_top.sv").read_text(encoding="utf-8")
     assert "apb_interface apb_if" not in tb
     assert "uvm_config_db#(virtual" not in tb
+    # DUT 在 tb_top 里例化（模块名 harness.bind_to，实例名 bench.dut_instance）
+    assert "apb_slave_dut u_dut (" in tb
+    # clk/rst 由 clk_rst_if 接口承载（环境 clk_rst_agent 驱动），DUT 端口直接接 vif
+    assert ".pclk(pclk_vif.clk[0])" in tb
+    assert ".presetn(pclk_vif.rst_n[0])" in tb
+    assert "clk_rst_if pclk_vif();" in tb
+    assert "always #" not in tb
     harness = (dest / "bench" / "apb_harness.sv").read_text(encoding="utf-8")
     assert "bind apb_slave_dut apb_interface apb_if(" in harness
     assert "function void set_vifs" in harness

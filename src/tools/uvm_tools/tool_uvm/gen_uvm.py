@@ -680,16 +680,12 @@ class ConstraintModel:
 class HarnessModel:
     """bind 式 UVM harness（dummy interface + set_vifs + bind 到 DUT module）。
 
-    style:
-      bind    — 各 interface 分别 bind 到目标 module；set_vifs 用向上查找
-                （{{ bind_to }}.{{ source_path }}.{{ name }}）
-      inside  — interface 实例化在 harness 内部（信号连接用向上查找），
-                只 bind harness 一次
+    各 interface 分别 bind 到目标 module（按 module 名，所有实例生效）；
+    set_vifs 用向上查找（{{ bind_to }}.{{ source_path }}.{{ name }}）。
     """
     name: str                       # dummy interface 名（如 math_coprocessor_harness）
     bind_to: str = ""               # bind 目标 module 名（所有实例生效）
     parameter: str = ""             # 可选：harness 参数化（值取 module 同名 parameter）
-    style: str = "bind"             # "bind" | "inside"
     interfaces: List[Dict[str, Any]] = field(default_factory=list)
     sub_harnesses: List[Dict[str, Any]] = field(default_factory=list)
     connect_path: str = ""          # 可选：测试侧调用路径（如 "harness.U_X.harness"）
@@ -749,7 +745,6 @@ def _normalize_harness(data: Dict[str, Any]) -> Optional[HarnessModel]:
         name=name,
         bind_to=bind_to,
         parameter=data.get("parameter", ""),
-        style=data.get("style", "bind") if data.get("style") in ("bind", "inside") else "bind",
         interfaces=interfaces,
         sub_harnesses=[
             {"path": s.get("path", ""), "env_path": s.get("env_path", "")}
@@ -874,9 +869,9 @@ class BenchModel:
     assignments: List[Dict[str, Any]] = field(default_factory=list)
     agents: Dict[str, BenchAgentEntry] = field(default_factory=dict)
     # 可选：bind 式 harness（存在时 tb_top 跳过接口实例化与 config_db set，
-    # 由 harness.set_vifs() 在测试侧接管 vif 配置）
+    # 由 harness.set_vifs() 在测试侧接管 vif 配置；DUT 实例化由 harness.bind_to 推导）
     harness: Dict[str, Any] = field(default_factory=dict)
-    dut: Optional[Dict[str, Any]] = None
+    dut_instance: str = "u_dut"     # DUT 实例名（tb_top 按 harness.bind_to 例化）
     uvm_config: Dict[str, Any] = field(default_factory=dict)
     wave_dump: Dict[str, Any] = field(default_factory=dict)
     simulation: Dict[str, Any] = field(default_factory=dict)
@@ -899,12 +894,6 @@ class BenchModel:
                         connections=v.get("connections", []),
                     )
             self.agents = typed
-
-        # Normalize DUT
-        if self.dut is None:
-            self.dut = {}
-        if isinstance(self.dut, dict) and "instance" not in self.dut:
-            self.dut["instance"] = f"u_{self.dut.get('module', 'dut')}"
 
         # Normalize clk_rst: old-style string lists → dict lists
         clocks = self.clk_rst.get("clocks", [])
@@ -1370,7 +1359,7 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
         lines.append("## 🔌 UVM Harness (bind 式自连接)")
         lines.append("")
         for h in harnesses:
-            lines.append(f"- **{h.name}** — bind 到 `{h.bind_to}`（style: {h.style}）")
+            lines.append(f"- **{h.name}** — bind 到 `{h.bind_to}`")
             if h.interfaces:
                 for i in h.interfaces:
                     arr = f"[{i['count']}-1:0]" if i["count"] != 1 else ""
@@ -1386,8 +1375,8 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
         lines.append("")
         for b in benches:
             lines.append(f"- **{b.name}** — env: `{b.env_name}`, timeout: `{b.timeout}`")
-            if b.dut:
-                lines.append(f"  - DUT: `{b.dut.get('module', '?')}` (instance: `{b.dut.get('instance', '?')}`)")
+            if b.harness and b.harness.get("bind_to"):
+                lines.append(f"  - DUT: `{b.harness['bind_to']}` (instance: `u_dut`)")
             agents_list = list(b.agents.keys()) if isinstance(b.agents, dict) else []
             if agents_list:
                 lines.append(f"  - Agents: {', '.join(agents_list)}")
@@ -2084,7 +2073,7 @@ class YAMLLoader:
             assignments=data.get("assignments", []),
             agents=agents,
             harness=dict(data.get("harness") or {}),
-            dut=data.get("dut", {}),
+            dut_instance=data.get("dut_instance", "u_dut"),
             uvm_config=data.get("uvm_config", {}),
             wave_dump=data.get("wave_dump", {}),
             simulation=data.get("simulation", {}),
@@ -2662,7 +2651,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             assignments=payload.get("assignments", []),
             agents=agents_b,
             harness=dict(payload.get("harness") or {}),
-            dut=payload.get("dut", {}),
+            dut_instance=payload.get("dut_instance", "u_dut"),
             uvm_config=payload.get("uvm_config", {}),
             wave_dump=payload.get("wave_dump", {}),
             simulation=payload.get("simulation", {}),

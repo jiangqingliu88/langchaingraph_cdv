@@ -8,7 +8,7 @@ environment:
 
   # ── Agent 实例（每项 = 一个 interface → master/slave agent）──
   agents:
-    - name: 
+    - name: apb_master
       type: "apb_master_agent"
       is_active: True
       is_master: True
@@ -30,6 +30,11 @@ environment:
       - { name: pclk, period_ps: 10000, duty_cycle: 50, initial_value: 0, jitter_ps: 0 }
     resets:
       - { name: presetn, assert_cycles: 10, recover_cycles: 5, active_low: true, reset_type: ASYNC_SYNC_DEASSERT }
+
+  # ── Harness 连接（测试 build_phase 调 <path>.set_vifs(env.get_full_name())）──
+  #   harness 是 bind 进 u_dut 的，所以路径经过 DUT 实例
+  harness_connect:
+    path: "APB_bench_tb_top.u_dut.harness"
 
   scoreboards:
     - name: apb_scb

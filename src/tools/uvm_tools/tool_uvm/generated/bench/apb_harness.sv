@@ -10,8 +10,8 @@
 // 
 //   文件:     apb_harness.sv
 //   作者:     -
-//   创建时间: 2026-09-07 23:32:17
-//   修改时间: 2026-09-07 23:32:17
+//   创建时间: 2026-09-08 17:16:01
+//   修改时间: 2026-09-08 17:16:01
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -22,18 +22,47 @@
 
 // ============================================================
 // UVM Harness: apb_harness（bind 式自连接）
-//   style: bind（bind — 接口分别 bind + 向上查找；
-//          inside — 接口实例化在 harness 内，只 bind harness 一次）
-//   使用: 测试 build_phase 里调用 <harness 层级路径>.set_vifs(env.get_full_name());
+//   各 interface 分别 bind 到目标 module（按 module 名，所有实例生效）
 // ============================================================
-// ── 1) 各 interface bind 到目标 module（module 名 → 所有实例生效）──
-bind apb_slave_dut apb_interface apb_if(.pclk(pclk), .presetn(presetn), .paddr(paddr), .pwrite(pwrite), .psel(psel), .penable(penable), .pwdata(pwdata), .prdata(prdata), .pready(pready), .pslverr(pslverr));
+
+
 // ── 2) dummy interface: set_vifs() 把每个 vif 配置进环境 agent ──
 interface apb_harness();
+// ── 1) 各 interface bind 到目标 module（module 名 → 所有实例生效）──
+bind apb_slave_dut apb_interface apb_if(.pclk(pclk), .presetn(presetn), .paddr(paddr), .pwrite(pwrite), .psel(psel), .penable(penable), .pwdata(pwdata), .prdata(prdata), .pready(pready), .pslverr(pslverr));
 
   function void set_vifs(string path);
     uvm_config_db#(virtual apb_interface)::set(null, {path, ".apb_master_agent_h.*"}, "vif", apb_slave_dut.apb_if);
   endfunction
+  // ── force/release 控制（apb_if_force_en 置 1 时把 DUT 信号 force 成接口信号）──
+  logic apb_if_force_en = 0;
+  always @(*) begin
+    if (apb_if_force_en) begin  // put force_en ctrl bit in interface
+      force pclk = apb_if.pclk;
+      force presetn = apb_if.presetn;
+      force paddr = apb_if.paddr;
+      force pwrite = apb_if.pwrite;
+      force psel = apb_if.psel;
+      force penable = apb_if.penable;
+      force pwdata = apb_if.pwdata;
+      force prdata = apb_if.prdata;
+      force pready = apb_if.pready;
+      force pslverr = apb_if.pslverr;
+    end
+    else begin
+      release pclk;
+      release presetn;
+      release paddr;
+      release pwrite;
+      release psel;
+      release penable;
+      release pwdata;
+      release prdata;
+      release pready;
+      release pslverr;
+    end
+  end
+
 endinterface : apb_harness
 
 // ── 3) 把 harness 本身 bind 到目标 module ──

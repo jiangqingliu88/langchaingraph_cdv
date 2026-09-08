@@ -192,17 +192,6 @@ def _bench_allowed_signals(bench) -> set:
     return allowed
 
 
-@rule("bench", "dut_port_wire_undefined", "error",
-      "DUT 端口连接的信号未在 wire_decls/clk/rst 中声明（tb_top 编译失败）")
-def _dut_port_wire_undefined(bench) -> List[str]:
-    if not bench.dut or not isinstance(bench.dut, dict):
-        return []
-    allowed = _bench_allowed_signals(bench)
-    return [f"dut port '{p.get('name')}' connects to undeclared signal '{p.get('connection')}'"
-            for p in (bench.dut.get("ports") or [])
-            if isinstance(p, dict) and p.get("connection") not in allowed]
-
-
 @rule("bench", "agent_wire_undefined", "error",
       "classic 风格 agent 连接的信号未声明（仅无 harness 时检查）")
 def _agent_wire_undefined(bench) -> List[str]:

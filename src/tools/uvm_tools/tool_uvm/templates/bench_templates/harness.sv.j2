@@ -2,31 +2,21 @@
 
 // ============================================================
 // UVM Harness: {{ harness.name }}（bind 式自连接）
-//   style: {{ harness.style }}（bind — 接口分别 bind + 向上查找；
-//          inside — 接口实例化在 harness 内，只 bind harness 一次）
-//   使用: 测试 build_phase 里调用 <harness 层级路径>.set_vifs(env.get_full_name());
+//   各 interface 分别 bind 到目标 module（按 module 名，所有实例生效）
 // ============================================================
 
-{%- if harness.style == 'bind' %}
+
+// ── 2) dummy interface: set_vifs() 把每个 vif 配置进环境 agent ──
+interface {{ harness.name }}{% if harness.parameter %}#(parameter int {{ harness.parameter }} = 1){% endif %}();
 // ── 1) 各 interface bind 到目标 module（module 名 → 所有实例生效）──
 {%- for i in harness.interfaces %}
 {%-   set cnt = i.count | string %}
 bind {{ i.bind_to or harness.bind_to }} {{ i.type }} {{ i.name }}{% if i.count != 1 %}[{{ cnt }}-1:0]{% endif %}({%- for pname, sig in i.connections.items() %}.{{ pname }}({{ sig }}){% if not loop.last %}, {% endif %}{%- endfor %});
 {%- endfor %}
-
-{%- endif %}
-// ── 2) dummy interface: set_vifs() 把每个 vif 配置进环境 agent ──
-interface {{ harness.name }}{% if harness.parameter %}#(parameter int {{ harness.parameter }} = 1){% endif %}();
-{%- if harness.style == 'inside' %}
-{%- for i in harness.interfaces %}
-{%-   set cnt = i.count | string %}
-  {{ i.type }} {{ i.name }}{% if i.count != 1 %}[{{ cnt }}-1:0]{% endif %}({%- for pname, sig in i.connections.items() %}.{{ pname }}({{ harness.bind_to }}.{{ sig }}){% if not loop.last %}, {% endif %}{%- endfor %});
-{%- endfor %}
-{%- endif %}
 {%- for i in harness.interfaces %}
 {%-   if i.count != 1 %}
 {%-     set cnt = i.count | string %}
-{%-     set src = i.name if harness.style == 'inside' else (i.bind_to or harness.bind_to) ~ "." ~ (i.source_path ~ "." if i.source_path else "") ~ i.name %}
+{%-     set src = (i.bind_to or harness.bind_to) ~ "." ~ (i.source_path ~ "." if i.source_path else "") ~ i.name %}
   // interface 数组不能 foreach，先整体赋值给 virtual interface 数组
   virtual interface {{ i.type }} vif_{{ loop.index0 }}[{{ cnt }}];
   initial begin
@@ -37,7 +27,7 @@ interface {{ harness.name }}{% if harness.parameter %}#(parameter int {{ harness
 
   function void set_vifs(string path);
 {%- for i in harness.interfaces %}
-{%-   set src = i.name if harness.style == 'inside' else (i.bind_to or harness.bind_to) ~ "." ~ (i.source_path ~ "." if i.source_path else "") ~ i.name %}
+{%-   set src = (i.bind_to or harness.bind_to) ~ "." ~ (i.source_path ~ "." if i.source_path else "") ~ i.name %}
 {%-   if i.count != 1 %}
     foreach (vif_{{ loop.index0 }}[i])
       uvm_config_db#(virtual {{ i.type }})::set(null, {path, ".{{ i.agent_path }}[", $sformatf("%0d", i), "]"}, "vif", vif_{{ loop.index0 }}[i]);
@@ -49,6 +39,26 @@ interface {{ harness.name }}{% if harness.parameter %}#(parameter int {{ harness
     {{ sub.path }}.set_vifs({path, "{{ sub.env_path }}"});
 {%- endfor %}
   endfunction
+
+{%- for i in harness.interfaces %}
+{%-   if i.count == 1 %}
+  // ── force/release 控制（{{ i.name }}_force_en 置 1 时把 DUT 信号 force 成接口信号）──
+  logic {{ i.name }}_force_en = 0;
+  always @(*) begin
+    if ({{ i.name }}_force_en) begin  // put force_en ctrl bit in interface
+{%-     for pname, sig in i.connections.items() %}
+      force {{ sig }} = {{ i.name }}.{{ pname }};
+{%-     endfor %}
+    end
+    else begin
+{%-     for pname, sig in i.connections.items() %}
+      release {{ sig }};
+{%-     endfor %}
+    end
+  end
+{%-   endif %}
+{%- endfor %}
+
 endinterface : {{ harness.name }}
 
 // ── 3) 把 harness 本身 bind 到目标 module ──

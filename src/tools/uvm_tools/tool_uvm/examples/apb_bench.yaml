@@ -1,5 +1,5 @@
 # ============================================================
-# Bench 定义 —— 顶层 testbench（接口实例化 + DUT 连接 + 时钟复位）
+# Bench 定义 —— 顶层 testbench（clk_rst_if 实例化 + DUT + UVM 启动 + 波形）
 # ============================================================
 
 bench:
@@ -8,36 +8,19 @@ bench:
   timeout: 10ms
   include_assertions: false
 
-  # ── 时钟复位（bench 级，生成 always 块 + initial 释放）──
+  # ── 时钟复位（bench 级，tb_top 实例化 clk_rst_if；clk/rst 由环境 clk_rst_agent 驱动）──
   clk_rst:
     clocks:
       - { name: pclk, period: "10ns", init: 0 }
     resets:
       - { name: presetn, init: 0, release_delay: 100 }
 
-  # ── 信号线声明（wire [width-1:0] name）──
-  #   dut.ports 的 connection 必须指向这里的 wire 或 clk/rst 名（语义校验层强制）
-  wire_decls:
-    - { name: paddr,   width: 32 }
-    - { name: pwdata,  width: 32 }
-    - { name: prdata,  width: 32 }
-    - { name: pwrite,  width: 1  }
-    - { name: psel,    width: 1  }
-    - { name: penable, width: 1  }
-    - { name: pready,  width: 1  }
-    - { name: pslverr, width: 1  }
-
-  # ── 连续赋值（assign lhs = rhs）──
-  assignments: []
-
+  dut_instance: u_dut          # DUT 实例名（tb_top 按 harness.bind_to 例化 DUT）
   # ── Harness（bind 式自连接）──
   #   bind 各 interface 到 DUT module（按 module 名，所有实例生效）；
-  #   set_vifs() 在测试 build_phase 把每个 vif set 进环境 agent。
-  #   存在 harness 时 tb_top 不再实例化 interface / config_db set。
   harness:
     name: apb_harness
     bind_to: apb_slave_dut
-    style: bind
     interfaces:
       - name: apb_if
         type: apb_interface
@@ -53,27 +36,8 @@ bench:
           prdata: prdata
           pready: pready
           pslverr: pslverr
-
-  # ── DUT 实例化 ──
-  #   module:     DUT 模块名
-  #   instance:   DUT 实例名
-  #   parameters: 参数
-  #   ports:      端口 → 信号线
-  dut:
-    module: apb_slave_dut
-    instance: u_dut
-    parameters: []
-    ports:
-      - { name: pclk,    connection: pclk }
-      - { name: presetn, connection: presetn }
-      - { name: paddr,   connection: paddr }
-      - { name: pwrite,  connection: pwrite }
-      - { name: psel,    connection: psel }
-      - { name: penable, connection: penable }
-      - { name: pwdata,  connection: pwdata }
-      - { name: prdata,  connection: prdata }
-      - { name: pready,  connection: pready }
-      - { name: pslverr, connection: pslverr }
+    # 每个 interface 自动生成 force/release 控制块：<if>_force_en 缺省 0，
+    # 测试里置 1 后把 DUT 信号 force 成接口信号（无需 YAML 配置）
 
   # ── UVM 配置 ──
   uvm_config:

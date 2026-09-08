@@ -7,113 +7,32 @@ module {{ bench.name }}_tb_top;
   import uvm_pkg::*;
   import {{ bench.env_name }}_test_pkg::*;
 
-  // ── Clock & Reset Generation ──
+  // ── Clock & Reset Interface（clk/rst 由环境 clk_rst_agent 驱动）──
 {%- for clk in bench.clk_rst.clocks %}
-  reg {{ clk.name }} = {{ clk.init | default(0) }};
-{%- endfor %}
-{%- for rst in bench.clk_rst.resets %}
-  reg {{ rst.name }} = {{ rst.init | default(0) }};
-{%- endfor %}
-{%- for clk in bench.clk_rst.clocks %}
-{%-   set period_str = clk.period | default("10ns") | string %}
-{%-   set period_val = period_str | replace("ns", "") | int %}
-  always #{{ period_val // 2 }}ns {{ clk.name }} = ~{{ clk.name }};
+  clk_rst_if {{ clk.name }}_vif();
 {%- endfor %}
 
-  // ── Wire Declarations ──
-{%- for wire in bench.wire_decls %}
-{%-   set w = wire.width | int %}
-{%-   if w > 1 %}
-  wire [{{ w - 1 }}:0] {{ wire.name }};
-{%-   else %}
-  wire {{ wire.name }};
-{%-   endif %}
-{%- endfor %}
-
-  // ── Continuous Assignments ──
-{%- for assign in bench.assignments %}
-  assign {{ assign.lhs }} = {{ assign.rhs }};
-{%- endfor %}
-
-  // ── Interface Instances ──
-  // 使用 harness 时接口直接 bind 到 DUT module（见 bench/harness/*.sv），此处不再实例化
-{%- if not bench.harness %}
-{%- for agent in agents %}
-  {{ agent.interface }}_interface {{ agent.instance }} (
-{%-   for conn in agent.connections %}
-    .{{ conn.port }}({{ conn.wire }}){% if not loop.last %},{% endif %}
-
-{%-   endfor %}
-  );
-{%- endfor %}
-{%- endif %}
-
-  // ── DUT Instantiation ──
-{%- if bench.dut and bench.dut.module %}
-  {{ bench.dut.module }}
-{%-   if bench.dut.parameters %}
-  #(
-{%-     for param in bench.dut.parameters %}
-    .{{ param.name }}({{ param.value }}){% if not loop.last %},{% endif %}
-
+  // ── DUT 实例化（模块名来自 harness.bind_to；clk/rst 端口接 clk_rst_if，
+  //   harness 的 bind 连接点即 DUT 模块内部同名信号，端口被驱动后 apb_if 自然拿到时钟/复位）──
+{%- if bench.harness and bench.harness.bind_to %}
+{%-   if bench.clk_rst.clocks %}
+  {{ bench.harness.bind_to }} {{ bench.dut_instance | default("u_dut") }} (
+{%-     for clk in bench.clk_rst.clocks %}
+    .{{ clk.name }}({{ clk.name }}_vif.clk[0]){% if not loop.last or bench.clk_rst.resets %},{% endif %}
 {%-     endfor %}
-  )
-{%-   endif %}
-  {{ bench.dut.instance }} (
-{%-   for port in bench.dut.ports %}
-    .{{ port.name }}({{ port.connection }}){% if not loop.last %},{% endif %}
-
-{%-   endfor %}
+{%-     for rst in bench.clk_rst.resets %}
+    .{{ rst.name }}({{ bench.clk_rst.clocks[0].name }}_vif.rst_n[{{ loop.index0 }}]){% if not loop.last %},{% endif %}
+{%-     endfor %}
   );
-{%- endif %}
-
-  // ── Reference Model Compare（DUT vs 黄金参考模型，逐拍对比）──
-  // 由 find_spec_yaml 按 spec 接口匹配黄金库自动接入（bench.ref_model）；
-  // 端口映射（clk→pclk 等）与比对输出（prdata 等）来自黄金模型元数据。
-  // 无黄金命中时该块不渲染（诚实：不假装比对）。
-{%- if bench.ref_model and bench.ref_model.enabled %}
-  {{ bench.ref_model.module }} u_ref_model (
-{%-   for m in bench.ref_model.port_map %}
-    .{{ m.ref_port }}({{ m.dut_port }}){% if not loop.last %},{% endif %}
-
-{%-   endfor %}
-  );
-  // mismatch 报 expected(参考模型)/actual(DUT)，供信号级诊断提取三方值
-{%-   set cmp_clk = bench.clk_rst.clocks[0].name if bench.clk_rst.clocks else "clk" %}
-{%-   set cmp_rst = bench.clk_rst.resets[0].name if bench.clk_rst.resets else "rst_n" %}
-  always @(posedge {{ cmp_clk }}) begin
-    if ({{ cmp_rst }}) begin
-{%-   for out in bench.ref_model.compare_outputs %}
-      if ({{ out }} !== u_ref_model.{{ out }}) begin
-        `uvm_error("REF_CMP", $sformatf("mismatch {{ out }}: expected=0x%0h actual=0x%0h", u_ref_model.{{ out }}, {{ out }}))
-      end
-{%-   endfor %}
-    end
-  end
-{%- endif %}
-
-  // ── Reset Release（独立 initial 块，与 run_test 并行，避免 run_test 前消耗时间）──
-  initial begin
-{%- for rst in bench.clk_rst.resets %}
-{%-   set delay = rst.release_delay | default(0) | int %}
-{%-   if delay > 0 %}
-    #{{ delay }} {{ rst.name }} = ~{{ rst.name }};
 {%-   else %}
-    {{ rst.name }} = ~{{ rst.name }};
+  {{ bench.harness.bind_to }} {{ bench.dut_instance | default("u_dut") }};
 {%-   endif %}
-{%- endfor %}
-  end
+{%- endif %}
 
   // ── UVM Configuration & Test Launch ──
-  // 使用 harness 时 vif 由 harness.set_vifs() 在测试 build_phase 里配置，此处不再 set
+  // 接口 vif 的 config_db 配置由测试 build_phase 的 harness.set_vifs(env.get_full_name())
+  // 完成（tb_top 不需要逐 agent 调 set_vif）
   initial begin
-{%- if not bench.harness %}
-{%- for agent in agents %}
-    uvm_config_db#(virtual {{ agent.interface }}_interface)::set(
-        null, "{{ agent.config_db_path }}", "vif", {{ agent.instance }}
-    );
-{%- endfor %}
-{%- endif %}
 {%- if bench.uvm_config.verbosity %}
     uvm_root::get().set_report_verbosity_level_hier({{ bench.uvm_config.verbosity }});
 {%- endif %}

@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_gen_test.sv
 //   作者:     -
-//   创建时间: 2026-09-07 23:32:17
-//   修改时间: 2026-09-07 23:32:17
+//   创建时间: 2026-09-08 17:16:01
+//   修改时间: 2026-09-08 17:16:01
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -46,6 +46,8 @@ class APB_env_gen_test extends uvm_test;
 
     // 创建并配置环境
     env = APB_env::type_id::create("env", this);
+    // harness 连接：把 DUT 侧 bind 的 interface 一次性 set 进环境 agent
+    APB_bench_tb_top.u_dut.harness.set_vifs(env.get_full_name());
 
     // 创建并随机化配置
     cfg = APB_env_config::type_id::create("cfg");

@@ -14,8 +14,9 @@
 - **auto-merge 流程**（`-m/--merge_source`）：从指定目录提取手改区域合并进新生成代码，
   备份 / 缺失块报错（`-s` 跳过）/ 未合并调试输出 / 详细报告
 - **bind 式 UVM Harness**（`harness:` YAML）：dummy interface + `set_vifs()` +
-  `bind` 到 DUT module（按 module 名 bind，所有实例生效）；bind/inside 两种风格、
-  interface 数组 + virtual interface foreach、参数化 scalable harness、virtual harness 子连接
+  `bind` 到 DUT module（按 module 名 bind，所有实例生效）；
+  interface 数组 + virtual interface foreach、参数化 scalable harness、virtual harness 子连接；
+  每个 interface 自动生成 force/release 控制块（`<if>_force_en` 缺省 0，测试置 1 后把 DUT 信号 force 成接口信号）
 - **统一文件头**（`templates/base_templates/base_template.sv.j2`，全部 53 个模板继承）：
   公司商标/权利声明、作者、创建时间、修改时间、联系邮箱、描述；
   YAML 顶层 `meta:` 可覆盖默认值；Makefile 自动用 `#` 注释前缀
@@ -39,7 +40,7 @@
 - `apb_env.yaml` — 环境定义（agents(list)/subenvs/scoreboards(sb_type,trans_type)/
   analysis_components/analysis_exports/analysis_ports/register_model/harness_connect/
   coverage_crosses/tlm_connections）
-- `apb_bench.yaml` — Bench 定义（clk_rst/wire_decls/agents/dut/harness/wave_dump/simulation）
+- `apb_bench.yaml` — Bench 定义（clk_rst/dut_instance/harness/uvm_config/wave_dump）
 - `apb_constraint.yaml` — 约束策略定义
 - `apb_util_comp.yaml` — 工具组件（analysis 端口）
 - `testpoint_apb.xlsx` — 测试点（`tool_uvmtestgen` 输入）
@@ -91,7 +92,7 @@ custom_code:
 harness:
   name: apb_harness              # dummy interface 名
   bind_to: apb_slave_dut         # bind 目标 module 名（所有实例生效）
-  style: bind                    # bind | inside
+  dut_instance: u_dut            # DUT 实例名（tb_top 按 bind_to 例化 DUT，缺省 u_dut）
   # parameter: NUM_CLIENTS       # 可选：scalable harness（自适应 module parameter）
   interfaces:                    # 每个 interface 一项
     - name: apb_if               #   bind 实例名

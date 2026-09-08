@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_coverage.sv
 //   作者:     -
-//   创建时间: 2026-09-07 23:32:17
-//   修改时间: 2026-09-07 23:32:17
+//   创建时间: 2026-09-08 17:16:01
+//   修改时间: 2026-09-08 17:16:01
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -37,14 +37,6 @@ class APB_env_coverage extends uvm_component;
 
   // 功能覆盖率 covergroup（从 agent transaction 字段生成）
   covergroup cg_env;
-    // coverpoint: apb_master.paddr
-    cp_apb_master_paddr: coverpoint apb_master_item.paddr;
-    // coverpoint: apb_master.pwrite
-    cp_apb_master_pwrite: coverpoint apb_master_item.pwrite;
-    // coverpoint: apb_master.pwdata
-    cp_apb_master_pwdata: coverpoint apb_master_item.pwdata;
-    // cross: apb_master 的关键信号组合（语义级）
-    cross_apb_master: cross cp_apb_master_paddr, cp_apb_master_pwrite;
   endgroup : cg_env
 
   function new(string name, uvm_component parent);
