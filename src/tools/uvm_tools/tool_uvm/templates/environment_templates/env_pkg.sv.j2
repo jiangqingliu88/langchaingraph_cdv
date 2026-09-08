@@ -3,6 +3,7 @@
 // Environment Package: {{ environment.env_name }}_pkg
 package {{ environment.env_name }}_pkg;
   import uvm_pkg::*;
+  import {{ environment.env_name }}_parameters_pkg::*;
   `include "uvm_macros.svh"
   // 导入所有 Agent 包
 {%- for agent in agents %}
@@ -11,6 +12,10 @@ package {{ environment.env_name }}_pkg;
   // 导入 Sub-env 包
 {%- for subenv in subenvs %}
   import {{ subenv.type }}_pkg::*;
+{%- endfor %}
+  // 导入 VIP env 包（外部 VIP 集成）
+{%- for ve in vipenvs %}
+  import {{ ve.type }}_pkg::*;
 {%- endfor %}
   // 导入 Register Model 包（RAL，来自各组件 pkg 字段或 type 的 "pkg::" 前缀）
 {%- if register_model and register_model.pkgs %}

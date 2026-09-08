@@ -251,12 +251,15 @@ class PipelineExecutionService:
     async def run_closed_loop(self, spec_text: str, output_root: str = "output",
                               target: Optional[float] = None, max_rounds: int = 5,
                               design_style: str = "baseline",
+                              bypass_design_model: bool = False,
                               approval_gate=None) -> dict:
         """七 Agent 闭环：design → model → verify → ops → coverage → [decision] → audit。
 
         决策层驱动迭代（5 动作），覆盖率达标收敛。
         target: 覆盖率目标（None=从统一配置 Settings.verification.coverage_target 读，默认 95）。
         design_style: 设计风格（baseline/pipeline/low_power），驱动策略包加载。
+        bypass_design_model: True = 验证专注模式，跳过 design（RTL 生成）与 model（参考模型），
+            直接从 spec 解析 spec/design_arch，使用预置 RTL + 黄金模型，专注 UVM 验证。
         approval_gate: 审批门控（None=自动；传入则高风险动作前审批）。
         """
         # 解析输出目录一次（幂等），避免每个 Agent 各自追加时间戳 → 目录不一致
@@ -354,17 +357,44 @@ class PipelineExecutionService:
             return data
 
         # ── 顺序: design → model → verify ──
-        await _run("design", "design")
-        # 用例注册：design 之后 ctx["spec"] 就绪，用真实 design_name（而非硬编码 "dut"）
-        try:
-            _spec = ctx.get("spec", {}) if isinstance(ctx, dict) else {}
-            if isinstance(_spec, dict):
+        if bypass_design_model:
+            # 验证专注模式：跳过 design（RTL 生成）与 model（参考模型生成），
+            # 使用预置 RTL + 黄金模型；直接从 spec 解析 spec/design_arch 供 verify 使用。
+            logger.info("验证专注模式：bypass design/model，直接进入 verify（预置 RTL + 黄金模型）")
+            try:
+                from src.tools.spec_tools.main import analyze_specification
+                _raw = analyze_specification(spec_text)
+                _spec = json.loads(_raw) if isinstance(_raw, str) and _raw.strip().startswith("{") else {}
+                if not isinstance(_spec, dict) or not _spec.get("design_name"):
+                    _spec = {"design_name": "dut"}
+                ctx["spec"] = _spec
                 _module = _spec.get("design_name", "dut") or "dut"
+                ctx["design_arch"] = {
+                    "module_name": _module,
+                    "interfaces": _spec.get("interfaces", []),
+                    "registers": _spec.get("registers", []),
+                    "function_hier": {"children": []},
+                }
                 testcase_reg.register_from_spec(_spec, _module)
-        except Exception:
-            pass
-        # SystemVerilog 参考模型（与 DUT 接口对齐，接入 env 做逐拍 compare）
-        await _run("model", "model", {"model_type": "systemverilog"})
+            except Exception as e:
+                logger.warning(f"验证专注模式 spec 解析失败（回退最小 spec）: {e}")
+                ctx["spec"] = {"design_name": "dut"}
+                ctx["design_arch"] = {"module_name": "dut", "interfaces": [],
+                                      "registers": [], "function_hier": {"children": []}}
+            phases.append({"name": "design", "status": "skipped", "score": 0})
+            phases.append({"name": "model", "status": "skipped", "score": 0})
+        else:
+            await _run("design", "design")
+            # 用例注册：design 之后 ctx["spec"] 就绪，用真实 design_name（而非硬编码 "dut"）
+            try:
+                _spec = ctx.get("spec", {}) if isinstance(ctx, dict) else {}
+                if isinstance(_spec, dict):
+                    _module = _spec.get("design_name", "dut") or "dut"
+                    testcase_reg.register_from_spec(_spec, _module)
+            except Exception:
+                pass
+            # SystemVerilog 参考模型（与 DUT 接口对齐，接入 env 做逐拍 compare）
+            await _run("model", "model", {"model_type": "systemverilog"})
         await _run("verify", "verify", {"design_style": design_style})
 
         # ── env 架构验收：端口归属（静态）+ scoreboard 定向 case（仿真）──

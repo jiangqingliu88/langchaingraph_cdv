@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_direct_test.sv
 //   作者:     -
-//   创建时间: 2026-09-05 19:56:58
-//   修改时间: 2026-09-05 19:56:58
+//   创建时间: 2026-09-07 23:32:17
+//   修改时间: 2026-09-07 23:32:17
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -53,9 +53,9 @@ class APB_env_directed_test extends APB_env_base_test;
 
     // 在所有 Agent Sequencer 上启动定向序列（is_master: False 的 slave 实例跳过）
     begin
-      apb_master_directed_seq _seq;
-      _seq = apb_master_directed_seq::type_id::create("_seq");
-      _seq.start(env.apb_master_agent_h.sqr);
+      apb_master_sequence _seq;
+      _seq = apb_master_sequence::type_id::create("_seq");
+      _seq.start(env.apb_master_agent_h.sequencer);
     end
 
     // pragma custom run_logic begin

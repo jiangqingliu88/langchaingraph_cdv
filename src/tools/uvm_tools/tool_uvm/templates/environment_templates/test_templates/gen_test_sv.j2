@@ -7,9 +7,9 @@ class {{ environment.env_name }}_gen_test extends uvm_test;
   `uvm_component_utils({{ environment.env_name }}_gen_test)
 {%- for agent in agents %}
 {%-   if agent.is_master %}
-    {{ agent.name }}_master_sequence {{ agent.name }}_master_seq;
+    {{ agent.sequence_type }} {{ agent.name }}_seq;
 {%-   else %}
-    {{ agent.name }}_slave_sequence {{ agent.name }}_slave_seq;
+    {{ agent.sequence_type }} {{ agent.name }}_seq;
 {%-   endif %}
 {%- endfor %}
   // 环境实例

@@ -250,6 +250,7 @@ class ModelAgent(BaseAgent):
         regs_all = design_arch.get("registers", [])
         rendered = None
         golden_ref = {}
+        unverified_golden = None  # 未验证黄金模型 (ip, version)，用于诚实占位原因
         # 优先黄金模型库（真实、可验证、可追溯）；LLM/模板只做选择与参数化
         if model_type == "systemverilog":
             try:
@@ -271,16 +272,23 @@ class ModelAgent(BaseAgent):
                 else:
                     # 2) 单黄金模型：按 spec 接口匹配
                     hit = match_golden(design_arch)
-                    if hit:
+                    if hit and hit.get("verified"):
                         sv = parameterize(load_golden(hit["ip"], hit["version"]),
                                           module, hit["params"])
                         golden_ref = {"ip": hit["ip"], "version": hit["version"],
-                                      "sha256": hit["sha256"], "params": hit["params"]}
+                                      "sha256": hit["sha256"], "params": hit["params"],
+                                      "verified": True}
                         rendered = {"model_type": "systemverilog", "source_code": sv,
                                     "file": f"{module}_ref_model.sv",
                                     "placeholder": False, "golden_ref": golden_ref}
                         logger.info(f"黄金模型命中: {hit['ip']} {hit['version']} "
                                     f"(sha256={hit['sha256'][:12]}) → {module}_ref_model.sv")
+                    elif hit:
+                        # 未验证黄金模型：诚实占位（audit 拒绝签核），不静默降级为"真实"
+                        unverified_golden = (hit["ip"], hit["version"])
+                        logger.warning(f"黄金模型 {hit['ip']} {hit['version']} 未验证"
+                                       f"（verified=false），按占位处理；"
+                                       f"待 scripts/model_library_verify.py 入库验证")
             except Exception as e:
                 logger.warning(f"黄金模型匹配失败: {e}")
         if rendered is None:
@@ -318,10 +326,16 @@ class ModelAgent(BaseAgent):
         model_data["placeholder"] = rendered.get("placeholder", True)
         model_data["golden_ref"] = rendered.get("golden_ref", None) or golden_ref or None
         if model_data["placeholder"]:
-            model_data["placeholder_reason"] = (
-                "占位参考模型：黄金模型库无匹配（或非 SV 模型），无验证过的功能语义。"
-                "仅作编译占位，禁止作为签核比对依据。真实参考模型需先入库验证"
-                "（见 docs/design/golden_model_library.md）。")
+            if unverified_golden:
+                model_data["placeholder_reason"] = (
+                    f"未验证黄金模型 {unverified_golden[0]} {unverified_golden[1]}"
+                    f"（verified=false），待 scripts/model_library_verify.py 入库验证后"
+                    f"才能作为签核比对依据。")
+            else:
+                model_data["placeholder_reason"] = (
+                    "占位参考模型：黄金模型库无匹配（或非 SV 模型），无验证过的功能语义。"
+                    "仅作编译占位，禁止作为签核比对依据。真实参考模型需先入库验证"
+                    "（见 docs/design/golden_model_library.md）。")
         else:
             model_data["placeholder_reason"] = ""
         model_data["spec_interfaces"] = len(interfaces)

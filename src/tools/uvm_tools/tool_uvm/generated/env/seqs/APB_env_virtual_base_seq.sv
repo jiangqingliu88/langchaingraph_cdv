@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_virtual_base_seq.sv
 //   作者:     -
-//   创建时间: 2026-09-05 19:56:58
-//   修改时间: 2026-09-05 19:56:58
+//   创建时间: 2026-09-07 23:32:17
+//   修改时间: 2026-09-07 23:32:17
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -53,8 +53,8 @@ class APB_env_virtual_base_seq extends uvm_sequence;
   endtask
 
   protected task send_apb_master_random(int count = 1);
-    apb_master_random_seq _rs;
-    _rs = apb_master_random_seq::type_id::create("_rs");
+    apb_master_sequence _rs;
+    _rs = apb_master_sequence::type_id::create("_rs");
     _rs.num_transactions = count;
     start_apb_master_sequence(_rs);
   endtask

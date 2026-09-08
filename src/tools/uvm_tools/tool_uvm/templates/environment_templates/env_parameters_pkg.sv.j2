@@ -1,0 +1,15 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// ============================================================
+// Env Parameter Package: {{ environment.env_name }}_parameters_pkg
+// ============================================================
+// 聚合各 agent 参数包 + env 级参数，供 env_config / env / tests 复用。
+package {{ environment.env_name }}_parameters_pkg;
+  import uvm_pkg::*;
+{%- for agent in agents %}
+  import {{ agent.name }}_parameter_pkg::*;
+{%- endfor %}
+{%- for var in config_vars %}
+  localparam {{ var.type }} {{ var.name }} = {{ var.default | default('0') }};
+{%- endfor %}
+endpackage : {{ environment.env_name }}_parameters_pkg

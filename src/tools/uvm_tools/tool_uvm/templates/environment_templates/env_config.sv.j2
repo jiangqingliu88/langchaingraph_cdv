@@ -18,13 +18,13 @@ class {{ environment.env_name }}_config extends uvm_object;
 
   // Agent 配置数组
 {%- for agent in agents %}
-  {{ agent.name }}_config {{ agent.name }}_cfg;
+  {{ agent.config_type }} {{ agent.name }}_cfg;
 {%- endfor %}
 
   function new(string name = "{{ environment.env_name }}_config");
     super.new(name);
 {%- for agent in agents %}
-    {{ agent.name }}_cfg = {{ agent.name }}_config::type_id::create("{{ agent.name }}_cfg");
+    {{ agent.name }}_cfg = {{ agent.config_type }}::type_id::create("{{ agent.name }}_cfg");
 {%- endfor %}
   endfunction
 

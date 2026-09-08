@@ -7,12 +7,8 @@ environment:
   env_name: APB_env
 
   # ── Agent 实例（每项 = 一个 interface → master/slave agent）──
-  #   is_master: True/False  → 实例角色（gen_test 按角色声明 master/slave 序列；
-  #                            False 的 slave 实例不会被测试启动序列；RAL bus 解析优先选 master）
-  #   is_active: True/False  → 该实例激活模式（测试里 cfg.<name>_cfg.is_active；
-  #                            缺省 UVM_ACTIVE）
   agents:
-    - name:
+    - name: 
       type: "apb_master_agent"
       is_active: True
       is_master: True
@@ -21,6 +17,12 @@ environment:
     - name: "apb_sys_env"
       type: "apb_system_env"
 
+  vipenvs :
+    - name: "aix_sys_env"
+      type: "axi_system_env"
+      vip_path: ""
+
+
   # ── 时钟复位 VIP ──
   clk_rst_vip:
     enabled: true
@@ -28,28 +30,6 @@ environment:
       - { name: pclk, period_ps: 10000, duty_cycle: 50, initial_value: 0, jitter_ps: 0 }
     resets:
       - { name: presetn, assert_cycles: 10, recover_cycles: 5, active_low: true, reset_type: ASYNC_SYNC_DEASSERT }
-  
-
-  # ── Register Model（RAL，可选）──
-  #   每条目用专用 key 字段声明角色：
-  #     bus_name + type           → 总线 agent（type 匹配 agents 列表的 type/name；缺省 = 第一个 agent）
-  #     reg_block_name + type     → uvm_reg_block（build_phase 创建 + build() + lock_model()）
-  #     reg_adpater_name + type   → uvm_reg_adapter（reg_adapter_name 亦兼容）
-  #     predictor_name + type     → uvm_reg_predictor（type = 预测器类，缺省 uvm_reg_predictor）
-  #       trans_type              →   总线事务类（缺省 = type）
-  #   connect_phase：default_map.set_sequencer(bus_agent.sqr, adapter)；predictor 接 bus_agent 事务流
-  #   type 可为 "pkg::class" 或配 pkg 字段（env_pkg 自动 import）
-  register_model:
-    - bus_name: "apb"      # uvm_reg_block
-      type: "apb_master_agent"
-    - reg_block_name: "reg_block"      # uvm_reg_block
-      type: "regblock_t"
-    - reg_adpater_name: "adapter"        # uvm_reg_adapter
-      type: "my_adapter"
-    - predictor_name: "predictor"      # uvm_reg_predictor #(总线事务类)
-      type: "my_bus_predictor"
-      trans_type: "my_bus_trans"
-
 
   scoreboards:
     - name: apb_scb
@@ -61,36 +41,8 @@ environment:
   analysis_components:
     - name: apb_pred
       type: apb_predictor
-
-  # ── env 级 TLM 端口（可选）──
-  #   analysis_exports: 输入（外部 → 环境内部）→ uvm_analysis_export #(type)
-  #   analysis_ports:   输出（环境 → 外部）   → uvm_analysis_port  #(type)
-  #   type/trans_type:  事务类；connected_to: 自动连接目标
-  #     ports   语义: {{ name }}.connect({{ connected_to }})       （本 port 连向目标）
-  #     exports 语义: {{ connected_to }}.connect({{ name }})       （数据源连入本 export）
-  #   缺省 type = uvm_sequence_item；未写 connected_to 则只声明+创建，由 tlm_connections 手工连
-  analysis_exports:
-      - name: "control_plane_in_ap"
-        trans_type: "mem_transaction"
-
-  analysis_ports :
-    - name: "control_plane_out_ap"      # 注意: 与 exports 重名会生成同名成员（校验层会拦）
-      trans_type: "mem_transaction"
-      connected_to: "apb_pred.monitored_ap"
-  # ── harness 连接（可选）──
-  #   test_base build_phase 里调用 <path>.set_vifs(env.get_full_name())，
-  #   把 DUT 侧 bind 的 interface 一次性 set 进环境 agent
-  #   path: 测试可见的 harness 层级路径（tb_top 模块名 + DUT 实例 + bind 实例）
-  #   env_suffix: ST 多环境时追加子环境路径（如 ".math_env0"）
-  harness_connect:
-    path: "APB_bench_tb_top.u_dut.harness"
-
-  # ── 语义 cross（可选）──
-  #   每项 = 两个事务字段名（第一个 agent），env_cov 生成 cross coverpoint
-  #   如 [paddr, pwrite] 交叉出「读/写 × 地址域」组合
-  coverage_crosses:
-    - [paddr, pwrite]
-    - [paddr, pslverr]
+  analysis_exports: []
+  analysis_ports: []
 
   # ── 虚拟序列器 ──
   virtual_sequencer: { enabled: true }
@@ -106,3 +58,5 @@ environment:
       receiver: apb_scb.expected_analysis_export
     - driver: apb_slave.monitored_ap
       receiver: apb_scb.actual_analysis_export
+
+  bench: {}

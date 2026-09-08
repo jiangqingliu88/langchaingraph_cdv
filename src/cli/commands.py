@@ -167,11 +167,12 @@ def init(json_output, quiet, verbose, output_dir):
               type=click.Choice(["interactive", "auto", "threshold"]),
               help="审批模式")
 @click.option("--full-regression", is_flag=True, help="全量回归（跑所有 case，默认增量只跑未 passed）")
+@click.option("--verify-only", is_flag=True, help="验证专注模式：bypass design/model，直接 UVM 验证（预置 RTL + 黄金模型）")
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 @click.option("--summary", is_flag=True, help="仅输出最终摘要")
 @click.option("--quiet", "-q", is_flag=True, help="只打印错误")
 def verify(spec_file, output, design_style, target, max_rounds,
-           approval, full_regression, json_output, summary, quiet):
+           approval, full_regression, verify_only, json_output, summary, quiet):
     """AI 驱动的芯片验证闭环（覆盖率驱动：case 回归 → coverage → 决策迭代）
 
     
@@ -201,6 +202,7 @@ def verify(spec_file, output, design_style, target, max_rounds,
             spec_text=spec, output_root=output_root,
             target=target, max_rounds=max_rounds,
             design_style=design_style, approval_gate=approval_gate,
+            bypass_design_model=verify_only,
         )
 
     result = asyncio.run(run())

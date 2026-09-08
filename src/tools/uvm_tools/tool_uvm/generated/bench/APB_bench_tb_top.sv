@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_bench_tb_top.sv
 //   作者:     -
-//   创建时间: 2026-09-05 19:56:58
-//   修改时间: 2026-09-05 19:56:58
+//   创建时间: 2026-09-07 23:32:17
+//   修改时间: 2026-09-07 23:32:17
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -89,17 +89,5 @@ module APB_bench_tb_top;
   end
 
   // ── Simulation Control ──
-  initial begin
-    #10ms;
-    $display("SIM_TIMEOUT after 10ms");
-    $finish;
-  end
-  initial begin
-    forever begin
-      @(uvm_report_fatal);
-      #100ns;
-      $finish;
-    end
-  end
 
 endmodule : APB_bench_tb_top

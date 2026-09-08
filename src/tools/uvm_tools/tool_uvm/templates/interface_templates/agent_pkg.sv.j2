@@ -6,23 +6,8 @@
 // 注意：{{ agent.name }}_if.sv（interface）须在 package 之前单独编译（见 filelist）
 package {{ agent.name }}_pkg;
   import uvm_pkg::*;
+  import {{ agent.name }}_parameter_pkg::*;
   `include "uvm_macros.svh"
-
-{%- for param in agent.parameters %}
-  localparam {{ param.type }} {{ param.name }} = {{ param.value }};
-{%- endfor %}
-{%- if agent.hdl_typedefs %}
-  // HDL type definitions (mirror interface typedefs)
-{%-   for td in agent.hdl_typedefs %}
-  typedef {{ td.type }} {{ td.name }};
-{%-   endfor %}
-{%- endif %}
-{%- if agent.hvl_typedefs %}
-  // HVL type definitions
-{%-   for td in agent.hvl_typedefs %}
-  typedef {{ td.type }} {{ td.name }};
-{%-   endfor %}
-{%- endif %}
 
   `include "2_config/{{ agent.name }}_master_config.sv"
   `include "2_config/{{ agent.name }}_slave_config.sv"

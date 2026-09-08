@@ -40,6 +40,11 @@ class {{ environment.env_name }} extends uvm_env;
   {{ subenv.type }} {{ subenv.name }};
 {%- endfor %}
 
+  // VIP env 实例（外部 VIP 集成）
+{%- for ve in vipenvs %}
+  {{ ve.type }} {{ ve.name }};
+{%- endfor %}
+
   // Analysis 组件（predictor 等）
 {%- for comp in analysis_components %}
   {{ comp.type }} {{ comp.name }};
@@ -55,7 +60,7 @@ class {{ environment.env_name }} extends uvm_env;
 
   // TLM 连接
 {%- for agent in agents %}
-  uvm_analysis_port #({{ agent.name }}_seq_item) {{ agent.name }}_agent_ap;
+  uvm_analysis_port #({{ agent.seq_item_type }}) {{ agent.name }}_agent_ap;
 {%- endfor %}
 
   // Analysis Exports / Ports（env 级 TLM 端口，由 YAML analysis_exports/analysis_ports 配置）
@@ -114,7 +119,7 @@ class {{ environment.env_name }} extends uvm_env;
     // 创建 Agent 并设置配置
 {%- for agent in agents %}
     {{ agent.name }}_agent_h = {{ agent.agent_type }}::type_id::create("{{ agent.name }}_agent_h", this);
-    uvm_config_db#({{ agent.name }}_config)::set(this, "{{ agent.name }}_agent_h", "cfg", cfg.{{ agent.name }}_cfg);
+    uvm_config_db#({{ agent.config_type }})::set(this, "{{ agent.name }}_agent_h", "cfg", cfg.{{ agent.name }}_cfg);
 {%- endfor %}
 
     // ─── Register Model（RAL）创建 ───
@@ -143,6 +148,11 @@ class {{ environment.env_name }} extends uvm_env;
     // 创建 Sub-env
 {%- for subenv in subenvs %}
     {{ subenv.name }} = {{ subenv.type }}::type_id::create("{{ subenv.name }}", this);
+{%- endfor %}
+
+    // 创建 VIP env
+{%- for ve in vipenvs %}
+    {{ ve.name }} = {{ ve.type }}::type_id::create("{{ ve.name }}", this);
 {%- endfor %}
 
     // 创建 Analysis 组件
@@ -184,12 +194,12 @@ class {{ environment.env_name }} extends uvm_env;
 
     // 连接子 Sequencer 到 Virtual Sequencer（直接赋值，规避 config_db 时序/作用域问题）
 {%- for agent in agents %}
-    virtual_sqr.{{ agent.name }}_sqr = {{ agent.name }}_agent_h.sqr;
+    virtual_sqr.{{ agent.name }}_sqr = {{ agent.name }}_agent_h.sequencer;
 {%- endfor %}
 
     // 连接 Agent Monitor 到 Analysis Ports
 {%- for agent in agents %}
-    {{ agent.name }}_agent_h.mon.item_collected_port.connect({{ agent.name }}_agent_ap);
+    {{ agent.name }}_agent_h.monitor.mon_ap.connect({{ agent.name }}_agent_ap);
 {%- endfor %}
 
     // 连接 Analysis Ports 到功能覆盖率模型（env_cov）
@@ -200,7 +210,7 @@ class {{ environment.env_name }} extends uvm_env;
     // ─── Register Model（RAL）连接 ───
 {%- if register_model and register_model.reg_block and register_model.bus_agent %}
     // 1. 将寄存器模型的地址映射（default_map）连接到序列器和适配器
-    {{ register_model.reg_block.name }}.default_map.set_sequencer({{ register_model.bus_agent }}_agent_h.sqr{% if register_model.adapter %}, {{ register_model.adapter.name }}{% endif %});
+    {{ register_model.reg_block.name }}.default_map.set_sequencer({{ register_model.bus_agent }}_agent_h.sequencer{% if register_model.adapter %}, {{ register_model.adapter.name }}{% endif %});
     {{ register_model.reg_block.name }}.default_map.set_auto_predict({{ 0 if register_model.predictor else 1 }});
 {%- endif %}
 {%- if register_model.predictor and register_model.reg_block and register_model.bus_agent %}

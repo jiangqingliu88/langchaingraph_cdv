@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
-from src.tools.uvm_tools.tool_testgen.main import (
+from src.tools.uvm_tools.tool_uvmtestgen.main import (
     make_template,
     main,
     parse_directed_constraints,
@@ -121,10 +121,13 @@ def test_validate_constraints_field_and_bus_item(tmp_path):
     assert any("bus seq_item" in e for e in errors2)
 
 
-def test_run_loop_closed_without_simulator(tmp_path):
+def test_run_loop_closed_without_simulator(tmp_path, monkeypatch):
     """闭环 ④⑤：testgen → testrun（无仿真器全 SKIP）→ xlsx execution 回写 + 签核证据包。"""
     import json
+    import shutil
     from openpyxl import load_workbook
+    # 强制「无仿真器」路径（本机可能装了 QuestaSim，vlog 在 PATH 上）
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     from src.tools.uvm_tools.tool_testrun.main import main as tr_main
     xlsx = tmp_path / "tp.xlsx"
     _make_xlsx(xlsx)

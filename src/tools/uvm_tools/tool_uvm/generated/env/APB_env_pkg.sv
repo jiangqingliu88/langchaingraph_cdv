@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_pkg.sv
 //   作者:     -
-//   创建时间: 2026-09-05 19:56:58
-//   修改时间: 2026-09-05 19:56:58
+//   创建时间: 2026-09-07 23:32:17
+//   修改时间: 2026-09-07 23:32:17
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -23,11 +23,14 @@
 // Environment Package: APB_env_pkg
 package APB_env_pkg;
   import uvm_pkg::*;
+  import APB_env_parameters_pkg::*;
   `include "uvm_macros.svh"
   // 导入所有 Agent 包
   import apb_master_pkg::*;
   // 导入 Sub-env 包
   import apb_system_env_pkg::*;
+  // 导入 VIP env 包（外部 VIP 集成）
+  import axi_system_env_pkg::*;
   // 导入 Register Model 包（RAL，来自各组件 pkg 字段或 type 的 "pkg::" 前缀）
 `ifdef USE_SC_MODEL_CHECK
   import APB_env_sc_pred_env_pkg::*;

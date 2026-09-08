@@ -220,8 +220,10 @@ def test_golden_model_parameterize_module_name():
 
 
 @pytest.mark.asyncio
-async def test_model_agent_golden_hit(tmp_path):
-    """APB 设计 → model agent 命中黄金模型：placeholder=False + golden_ref 可追溯。"""
+async def test_model_agent_golden_hit(tmp_path, monkeypatch):
+    """APB 设计 → model agent 命中【已验证】黄金模型：placeholder=False + golden_ref 可追溯。"""
+    import src.tools.lib.golden_library as gl
+    monkeypatch.setattr(gl, "verify_manifest", lambda ip, ver: {"verified": True})
     agent = ModelAgent()
     await agent.initialize()
     result = await agent.execute_task({
@@ -235,9 +237,28 @@ async def test_model_agent_golden_hit(tmp_path):
     assert m["placeholder"] is False
     assert m["golden_ref"] is not None
     assert m["golden_ref"]["ip"] == "apb_slave"
+    assert m["golden_ref"]["verified"] is True
     assert m["golden_ref"]["sha256"], "golden_ref 必须带 sha256（可追溯）"
     # 落盘的 SV 是黄金模型（含 APB 读写语义），不是 a+b 模板
     from pathlib import Path
     sv_text = Path(m["files"][0]).read_text(encoding="utf-8")
     assert "regs[paddr]" in sv_text
     assert "apb_slave_golden" not in sv_text  # 模块名已参数化为 {module}_ref_model
+
+
+@pytest.mark.asyncio
+async def test_model_agent_golden_hit_unverified(tmp_path):
+    """未验证黄金模型（verified=false）→ placeholder=True + 诚实原因，audit 据此拒绝签核。"""
+    agent = ModelAgent()
+    await agent.initialize()
+    result = await agent.execute_task({
+        "ctx": {"design_arch": APB_SPEC_ARCH},
+        "input": "",
+        "output_dir": str(tmp_path),
+        "params": {"model_type": "systemverilog"},
+    })
+    assert result.success is True
+    m = result.data["model"]
+    assert m["placeholder"] is True
+    assert "未验证" in m["placeholder_reason"]
+    assert m["golden_ref"] is None  # 未验证不当作真实模型，不落 golden_ref

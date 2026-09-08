@@ -71,7 +71,7 @@ class {{ environment.env_name }}_base_test extends uvm_test;
     `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
 {%- for agent in agents %}
 {%- if agent.is_master is not false %}
-    {{ agent.name }}_random_seq {{ agent.name }}_seq;
+    {{ agent.sequence_type }} {{ agent.name }}_seq;
 {%- endif %}
 {%- endfor %}
     // 随机种子管理（+SEED=<n> 复现回归）
@@ -83,8 +83,8 @@ class {{ environment.env_name }}_base_test extends uvm_test;
     phase.raise_objection(this);
 {%- for agent in agents %}
 {%- if agent.is_master is not false %}
-    {{ agent.name }}_seq = {{ agent.name }}_random_seq::type_id::create("{{ agent.name }}_seq");
-    {{ agent.name }}_seq.start(env.{{ agent.name }}_agent_h.sqr);
+    {{ agent.name }}_seq = {{ agent.sequence_type }}::type_id::create("{{ agent.name }}_seq");
+    {{ agent.name }}_seq.start(env.{{ agent.name }}_agent_h.sequencer);
 {%- endif %}
 {%- endfor %}
     // pragma custom run_logic begin

@@ -25,17 +25,24 @@
   `-g` 指定组件、`-t` 模板目录、`--version`
 
 ## Key Classes
-- `UVMGenerator`: 主生成器
-- `JinjaRenderer`: 模板渲染引擎
+- `UVMGenerator`: 主生成器（Phase A 语义校验 → 渲染 → filelist → 报告）
+- `JinjaRenderer`: 模板渲染引擎（`base_template` 文件头 + 商标/版权元数据）
 - `YAMLLoader`: YAML 配置加载器
-- `AgentModel`, `EnvironmentModel`, `BenchModel`: 数据模型
-- `ConstraintModel`: 约束模型
+- `AgentModel`, `EnvironmentModel`, `BenchModel`, `HarnessModel`, `ConstraintModel`: 数据模型
+- `RegionInjector`: pragma custom 区域注入器（YAML > merge 源 > 模板默认）
+- `SemanticValidator`: 渲染前语义校验（`semantic_check.py`，`@rule` 注册）
 
 ## YAML Config Files
-- `ALU_env.yaml` — 环境定义
-- `ALU_in.yaml` — 接口定义
-- `ALU_constraint.yaml` — 约束定义
-- `ALU_bench.yaml` — Bench 定义
+示例见 `examples/`（APB 全链路）：
+- `apb_interface.yaml` — 接口定义（name/clock/reset/protocol/reset_active_low/ports/
+  transaction_vars(带 is_master,iscompare,isrand)/transaction_constraints(master/slave)/custom_code）
+- `apb_env.yaml` — 环境定义（agents(list)/subenvs/scoreboards(sb_type,trans_type)/
+  analysis_components/analysis_exports/analysis_ports/register_model/harness_connect/
+  coverage_crosses/tlm_connections）
+- `apb_bench.yaml` — Bench 定义（clk_rst/wire_decls/agents/dut/harness/wave_dump/simulation）
+- `apb_constraint.yaml` — 约束策略定义
+- `apb_util_comp.yaml` — 工具组件（analysis 端口）
+- `testpoint_apb.xlsx` — 测试点（`tool_uvmtestgen` 输入）
 
 ## Entry Point
 ```bash
@@ -106,12 +113,21 @@ harness:
 
 ## Output
 ```
-generated/<module>/
-├── shared/       # transaction, interface, driver, monitor, agent
-├── agent_tb/     # Agent 回环验证 TB
-├── env_tb/       # 完整验证环境 TB
-├── filelist.f    # QuestaSim 编译文件列表
-└── quality_report.json
+generated/
+├── agents/<name>_agent/        # AXI-VIP 风格编号分层
+│   ├── 1_interface/  <name>_if.sv / <name>_system_if.sv
+│   ├── 2_config/     <name>_master_config.sv / _slave_config.sv
+│   ├── 3_transaction_sequencer/  seq_item + sequencer（slave 带 req_fifo）
+│   ├── 4_driver_monitor/  driver + monitor（slave monitor → req_fifo）
+│   ├── 5_agent/      agent + system_config + system_env
+│   ├── 7_sequence/   master/slave sequence
+│   ├── 8_ral/        reg_adapter
+│   ├── <name>_pkg.sv / filelist.f / Makefile
+│   └── loopback/     自闭环自检（master-drive → slave-monitor）
+├── env/             # config / env / coverage / pkg / tests / seqs / cons / utils
+├── bench/           # tb_top + harness
+├── validation_report.txt / generation_report.json
+└── README.md
 ```
 
 ## Consumed By

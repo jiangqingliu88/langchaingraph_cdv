@@ -1,0 +1,24 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// ============================================================
+// Agent Parameter Package: {{ agent.name }}_parameter_pkg
+// ============================================================
+// 集中管理接口/agent 参数（ADDR_WIDTH/DATA_WIDTH 等），
+// 供 seq_item / config / driver / monitor 复用，避免各处硬编码。
+package {{ agent.name }}_parameter_pkg;
+{%- for param in agent.parameters %}
+  localparam {{ param.type }} {{ param.name }} = {{ param.value }};
+{%- endfor %}
+{%- if agent.hdl_typedefs %}
+  // HDL type definitions (mirror interface typedefs)
+{%-   for td in agent.hdl_typedefs %}
+  typedef {{ td.type }} {{ td.name }};
+{%-   endfor %}
+{%- endif %}
+{%- if agent.hvl_typedefs %}
+  // HVL type definitions
+{%-   for td in agent.hvl_typedefs %}
+  typedef {{ td.type }} {{ td.name }};
+{%-   endfor %}
+{%- endif %}
+endpackage : {{ agent.name }}_parameter_pkg

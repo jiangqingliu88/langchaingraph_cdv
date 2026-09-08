@@ -87,7 +87,8 @@ def match_golden(design_arch: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             continue
         params = _params_from_spec(ip, design_arch)
         return {"ip": ip, "version": active, "path": str(path),
-                "sha256": _sha256(path), "params": params}
+                "sha256": _sha256(path), "params": params,
+                "verified": bool(verify_manifest(ip, active).get("verified", False))}
     return None
 
 

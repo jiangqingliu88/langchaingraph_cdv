@@ -6,8 +6,8 @@
 // 
 //   文件:     APB_env_pkg_filelist.f
 //   作者:     -
-//   创建时间: 2026-09-05 19:56:58
-//   修改时间: 2026-09-05 19:56:58
+//   创建时间: 2026-09-07 23:32:17
+//   修改时间: 2026-09-07 23:32:17
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -24,33 +24,35 @@
 // TODO: 填入 DUT 源码路径（替换本行）
 
 // ─── Base PKG: Clock & Reset VIP + Scoreboard 组件族 ───
-+incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/clk_and_rst
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/clk_and_rst/clk_and_rst_pkg.sv
-+incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/in_order_scoreboard.svh
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/out_of_order_scoreboard.svh
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/typed_scoreboard.svh
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/algorithm_scoreboard.svh
++incdir+D:\cdv_a\src\tools\uvm_tools\tool_uvm\base_pkg/clk_and_rst
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\base_pkg/clk_and_rst/clk_and_rst_pkg.sv
++incdir+D:\cdv_a\src\tools\uvm_tools\tool_uvm\base_pkg/scb
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\base_pkg/scb/in_order_scoreboard.svh
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\base_pkg/scb/out_of_order_scoreboard.svh
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\base_pkg/scb/typed_scoreboard.svh
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\base_pkg/scb/algorithm_scoreboard.svh
 
 // ─── Interface & Agent Package ───
-+incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent/1_interface/apb_master_if.sv
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent/apb_master_pkg.sv
++incdir+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent/1_interface/apb_master_if.sv
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent/apb_master_parameter_pkg.sv
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent/apb_master_pkg.sv
 
 // ─── Harness（bind 式，须在 tb_top 前编译）──
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\bench/apb_harness.sv
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\bench/apb_harness.sv
 
 // ─── Environment ───
-+incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\env
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\env/APB_env_pkg.sv
-+incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\env/tests
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\env/tests/APB_env_test_pkg.sv
-+incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\env/seqs
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\env/seqs/APB_env_seq_pkg.sv
++incdir+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\env
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\env/APB_env_parameters_pkg.sv
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\env/APB_env_pkg.sv
++incdir+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\env/tests
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\env/tests/APB_env_test_pkg.sv
++incdir+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\env/seqs
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\env/seqs/APB_env_seq_pkg.sv
 
 // ─── Testpoint TC（tool_testgen 产物，可选；tc_constraints 随 tc_pkg include）──
-+incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\env/..
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\env/../APB_env_tc_pkg.sv
++incdir+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\env/..
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\env/../APB_env_tc_pkg.sv
 
 // ─── Testbench Top ───
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\bench/APB_bench_tb_top.sv
+D:\cdv_a\src\tools\uvm_tools\tool_uvm\generated\bench/APB_bench_tb_top.sv

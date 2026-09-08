@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_pkg.sv
 //   作者:     -
-//   创建时间: 2026-09-05 19:56:58
-//   修改时间: 2026-09-05 19:56:58
+//   创建时间: 2026-09-07 23:32:17
+//   修改时间: 2026-09-07 23:32:17
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -26,9 +26,8 @@
 // 注意：APB_if.sv（interface）须在 package 之前单独编译（见 filelist）
 package APB_pkg;
   import uvm_pkg::*;
+  import APB_parameter_pkg::*;
   `include "uvm_macros.svh"
-  localparam int ADDR_WIDTH = 32;
-  localparam int DATA_WIDTH = 32;
 
   `include "2_config/APB_master_config.sv"
   `include "2_config/APB_slave_config.sv"

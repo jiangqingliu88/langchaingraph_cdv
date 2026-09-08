@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_virtual_sequencer.sv
 //   作者:     -
-//   创建时间: 2026-09-05 19:56:58
-//   修改时间: 2026-09-05 19:56:58
+//   创建时间: 2026-09-07 23:32:17
+//   修改时间: 2026-09-07 23:32:17
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -127,7 +127,7 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   virtual function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
     
-    // 子 Sequencer 句柄由 env.connect_phase 直接赋值（virtual_sqr.<name>_sqr = <name>_agent_h.sqr），
+    // 子 Sequencer 句柄由 env.connect_phase 直接赋值（virtual_sqr.<name>_sqr = <name>_agent_h.sequencer），
     // 此处不再从 config_db get，规避时序/作用域导致的 "not found" 告警。
   endfunction
 

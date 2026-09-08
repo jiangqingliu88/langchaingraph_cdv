@@ -336,6 +336,7 @@ INTERFACE_TEMPLATES = [
 
     ("interface_templates/reg_adapter.sv.j2", "8_ral/{agent_name}_reg_adapter.sv"),
 
+    ("interface_templates/agent_parameter_pkg.sv.j2", "{agent_name}_parameter_pkg.sv"),
     ("interface_templates/agent_pkg.sv.j2", "{agent_name}_pkg.sv"),
     ("interface_templates/agent_filelist.sv.j2", "filelist.f"),
     ("interface_templates/agent_Makefile.sv.j2", "Makefile"),
@@ -350,6 +351,7 @@ AGENT_LOOPBACK_TEMPLATES = [
 ]
 
 ENVIRONMENT_ROOT_TEMPLATES = [
+    ("environment_templates/env_parameters_pkg.sv.j2", "{env_name}_parameters_pkg.sv"),
     ("environment_templates/env_config.sv.j2", "{env_name}_config.sv"),
     ("environment_templates/environment.sv.j2", "{env_name}.sv"),
     ("environment_templates/env_cov.sv.j2", "{env_name}_coverage.sv"),
@@ -587,6 +589,26 @@ class AgentModel:
         context["custom_code"] = custom_code
         return context
 
+    # ── 派生类型名（env 层用）：从 agent_type（类名）推导 seq_item/config 类型 ──
+    # 例：agent_type="apb_master_agent" → base="apb_master" →
+    #     seq_item_type="apb_master_seq_item" / config_type="apb_master_config"
+    @property
+    def base_name(self) -> str:
+        t = self.agent_type or self.name
+        return t[:-len("_agent")] if t.endswith("_agent") else t
+
+    @property
+    def seq_item_type(self) -> str:
+        return f"{self.base_name}_seq_item"
+
+    @property
+    def config_type(self) -> str:
+        return f"{self.base_name}_config"
+
+    @property
+    def sequence_type(self) -> str:
+        return f"{self.base_name}_sequence"
+
 
 class AgentCollection(list):
     def items(self):
@@ -599,6 +621,7 @@ class EnvironmentModel:
     env_name: str
     agents: AgentCollection = field(default_factory=AgentCollection)
     subenvs: List[Dict[str, Any]] = field(default_factory=list)
+    vipenvs: List[Dict[str, Any]] = field(default_factory=list)
     predictors: List[Dict[str, Any]] = field(default_factory=list)
     scoreboards: List[Dict[str, Any]] = field(default_factory=list)
     analysis_components: List[Dict[str, Any]] = field(default_factory=list)
@@ -1564,10 +1587,10 @@ def _import_pkgs_for_types(*types):
 
 
 def _resolve_port(name, agent_names, predictor_names):
-    """把来源名解析为 SystemVerilog 端口表达式。
+    """把来源名解析为 SystemVerilog 端口表达式（旧 scoreboard 格式用）。
 
     - predictor 名 → `<name>_h.out_port`（参考模型输出）
-    - agent 名     → `<name>_agent_h.mon.item_collected_port`（monitor 输出）
+    - agent 名     → `<name>_agent_h.monitor.mon_ap`（monitor 输出）
     - 空 / 未知    → ""（不接线）
     """
     if not name:
@@ -1575,7 +1598,7 @@ def _resolve_port(name, agent_names, predictor_names):
     if name in predictor_names:
         return f"{name}_h.out_port"
     if name in agent_names:
-        return f"{name}_agent_h.mon.item_collected_port"
+        return f"{name}_agent_h.monitor.mon_ap"
     return ""
 
 
@@ -1714,6 +1737,23 @@ def _normalize_analysis_components(components):
         result.append({
             "name": name,
             "type": c.get("type", name),
+        })
+    return result
+
+
+def _normalize_vipenvs(vipenvs):
+    """归一化 vipenvs → list[{name, type, vip_path}]（外部 VIP 环境集成）。"""
+    result = []
+    for ve in vipenvs or []:
+        if not isinstance(ve, dict):
+            continue
+        name = ve.get("name")
+        if not name:
+            continue
+        result.append({
+            "name": name,
+            "type": ve.get("type", name),
+            "vip_path": ve.get("vip_path", ""),
         })
     return result
 
@@ -1996,6 +2036,7 @@ class YAMLLoader:
             env_name=env_name,
             agents=agents,
             subenvs=_normalize_subenvs(data.get("subenvs", [])),
+            vipenvs=_normalize_vipenvs(data.get("vipenvs", [])),
             predictors=predictors,
             scoreboards=_normalize_scoreboards(data.get("scoreboards", []),
                                                agent_names, predictor_names),
@@ -2547,6 +2588,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
         env = EnvironmentModel(
             name=name, env_name=env_name, agents=agents,
             subenvs=_normalize_subenvs(payload.get("subenvs", [])),
+            vipenvs=_normalize_vipenvs(payload.get("vipenvs", [])),
             scoreboards=_normalize_scoreboards(payload.get("scoreboards", [])),
             analysis_components=_normalize_analysis_components(payload.get("analysis_components", [])),
             analysis_exports=_normalize_analysis_ports(payload.get("analysis_exports", [])),

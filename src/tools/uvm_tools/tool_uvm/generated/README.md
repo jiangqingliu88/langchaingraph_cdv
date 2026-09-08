@@ -1,7 +1,7 @@
 <!-- 自动生成 (tool_uvm v0.1.0) — 请勿直接修改本文件 -->
 # UVM Verification Environment — Generated Output
 
-**Generated**: 2026-09-05 19:56:58
+**Generated**: 2026-09-07 23:32:17
 
 ---
 
@@ -55,9 +55,6 @@ output/
 - **APB_env** — 1 agents
   - Scoreboards: 1
   - TLM connections: 3
-  - Register model: `reg_block` (`regblock_t`), `adapter` (`my_adapter`), `predictor` (`my_bus_predictor`)
-  - Analysis exports: `control_plane_in_ap`
-  - Analysis ports: `control_plane_out_ap`
   - Files: `env/APB_env*.sv`
 
 ## 🔌 UVM Harness (bind 式自连接)

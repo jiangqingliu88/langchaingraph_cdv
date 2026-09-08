@@ -88,9 +88,10 @@ tests/                 # pytest 套件（84 passed）
 
 ## 已知问题与路线
 
-- [ ] **真实参考模型（golden 库）**：当前 model 产出为模板占位（audit 已拒绝签核）。路线：从 `spec.registers` 确定性生成 APB 寄存器参考模型（`find_spec_yaml._gen_apb_register_model` 已有雏形），协议逻辑（UART TX/RX）经 LLM + vlog 门禁 + 定向仿真验证后入库
-- [ ] MCP 工具层断链已绕过（ops/coverage 直接调 L1），`tool_worker.py` 引用的 `regression_tool` 模块待重建或删除
-- [ ] `env_arch_check` 无 EDA 时报 `[WinError 2]`（应为 EDA_MISSING 语义）
+- [x] **真实参考模型（golden 库）**：`model agent` 已接入黄金库（`match_golden`/`parameterize`/`build_composite_ref_model`，5 个黄金模型）。
+  **剩余**：黄金模型 `verified=false`（未 EDA 入库验证）。已修复「未验证黄金当真实」的 bug —— 未验证 → 诚实占位 + audit 拒签；待 `scripts/model_library_verify.py`（需 EDA）盖章后自动转真实。
+- [x] MCP 工具层断链：`tool_worker.py` 已无 `regression_tool` 引用（ops/coverage 直接调 L1）。
+- [x] `env_arch_check` 无 EDA：已返回 `EDA_MISSING`（不再 `[WinError 2]`）。
 
 ## 测试
 

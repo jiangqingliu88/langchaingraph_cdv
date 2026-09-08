@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_base_test.sv
 //   作者:     -
-//   创建时间: 2026-09-05 19:56:58
-//   修改时间: 2026-09-05 19:56:58
+//   创建时间: 2026-09-07 23:32:17
+//   修改时间: 2026-09-07 23:32:17
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -46,8 +46,6 @@ class APB_env_base_test extends uvm_test;
 
     // 创建并配置环境
     env = APB_env::type_id::create("env", this);
-    // harness 连接：把 DUT 侧 bind 的 interface 一次性 set 进环境 agent
-    APB_bench_tb_top.u_dut.harness.set_vifs(env.get_full_name());
 
     // 创建并随机化配置
     cfg = APB_env_config::type_id::create("cfg");
@@ -81,7 +79,7 @@ class APB_env_base_test extends uvm_test;
   task main_phase(uvm_phase phase);
     super.main_phase(phase);
     `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
-    apb_master_random_seq apb_master_seq;
+    apb_master_sequence apb_master_seq;
     // 随机种子管理（+SEED=<n> 复现回归）
     int seed;
     if ($value$plusargs("SEED=%0d", seed)) begin
@@ -89,8 +87,8 @@ class APB_env_base_test extends uvm_test;
       `uvm_info(get_type_name(), $sformatf("SEED=%0d", seed), UVM_LOW)
     end
     phase.raise_objection(this);
-    apb_master_seq = apb_master_random_seq::type_id::create("apb_master_seq");
-    apb_master_seq.start(env.apb_master_agent_h.sqr);
+    apb_master_seq = apb_master_sequence::type_id::create("apb_master_seq");
+    apb_master_seq.start(env.apb_master_agent_h.sequencer);
     // pragma custom run_logic begin
     // pragma custom run_logic end
     #1us;

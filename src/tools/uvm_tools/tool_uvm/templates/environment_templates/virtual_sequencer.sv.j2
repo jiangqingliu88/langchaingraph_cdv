@@ -17,7 +17,7 @@ class {{ environment.env_name }}_virtual_sequencer extends uvm_sequencer #(uvm_s
   
 {%- for name, agent in agents.items() %}
   // {{ name }} Agent Sequencer
-  uvm_sequencer #({{ name }}_seq_item) {{ name }}_sqr;
+  uvm_sequencer #({{ agent.seq_item_type }}) {{ name }}_sqr;
 {%- endfor %}
   
   // ═══════════════════════════════════════════════════════════════
@@ -117,7 +117,7 @@ class {{ environment.env_name }}_virtual_sequencer extends uvm_sequencer #(uvm_s
   virtual function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
     
-    // 子 Sequencer 句柄由 env.connect_phase 直接赋值（virtual_sqr.<name>_sqr = <name>_agent_h.sqr），
+    // 子 Sequencer 句柄由 env.connect_phase 直接赋值（virtual_sqr.<name>_sqr = <name>_agent_h.sequencer），
     // 此处不再从 config_db get，规避时序/作用域导致的 "not found" 告警。
   endfunction
 

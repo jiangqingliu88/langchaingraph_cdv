@@ -87,7 +87,3 @@ bench:
     levels: 0
     plusargs: DUMP_WAVES
 
-  # ── 仿真控制 ──
-  simulation:
-    max_runtime: 10ms
-    stop_on_fatal: true

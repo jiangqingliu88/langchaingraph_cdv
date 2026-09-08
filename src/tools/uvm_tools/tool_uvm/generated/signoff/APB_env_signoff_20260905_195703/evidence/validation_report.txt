@@ -1,3 +1,0 @@
-Semantic check report (tool_uvm)
-[WARNING] tlm_connection_unknown_ref @ APB_env: tlm_connections.driver 'apb_slave.monitored_ap' references unknown 'apb_slave'
-[WARNING] policy_unknown_name @ apb_cons: policy 'apb_b2b_write' has no built-in apply body（自定义逻辑需手填）

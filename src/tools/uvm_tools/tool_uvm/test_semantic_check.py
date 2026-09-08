@@ -180,7 +180,9 @@ def test_harness_if_empty_connections_warning():
 def test_run_blocks_on_errors_and_writes_report(tmp_path):
     import yaml
     src = yaml.safe_load((EXAMPLES / "apb_env.yaml").read_text(encoding="utf-8"))
-    src["environment"]["analysis_ports"][0]["name"] = src["environment"]["analysis_exports"][0]["name"]
+    # 显式构造同名 analysis_exports/analysis_ports，触发 dup_name 规则（不依赖示例条目）
+    src["environment"]["analysis_exports"] = [{"name": "dup_ap"}]
+    src["environment"]["analysis_ports"] = [{"name": "dup_ap"}]
     tmp_yaml = tmp_path / "env_bad.yaml"
     tmp_yaml.write_text(yaml.safe_dump(src, allow_unicode=True, sort_keys=False),
                         encoding="utf-8")

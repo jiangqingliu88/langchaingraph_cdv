@@ -13,12 +13,12 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 
   // 分析端口：接收各 agent 的 monitor 采样
 {%- for agent in agents %}
-  uvm_analysis_imp_{{ agent.name }} #({{ agent.name }}_seq_item, {{ environment.env_name }}_coverage) {{ agent.name }}_export;
+  uvm_analysis_imp_{{ agent.name }} #({{ agent.seq_item_type }}, {{ environment.env_name }}_coverage) {{ agent.name }}_export;
 {%- endfor %}
 
   // 采样项（保存最新采样的 transaction，供 covergroup 采样）
 {%- for agent in agents %}
-  {{ agent.name }}_seq_item {{ agent.name }}_item;
+  {{ agent.seq_item_type }} {{ agent.name }}_item;
 {%- endfor %}
 
   // 功能覆盖率 covergroup（从 agent transaction 字段生成）
@@ -78,7 +78,7 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 
   // write 函数：每个 agent 的 monitor 采样触发 covergroup 采样
 {%- for agent in agents %}
-  function void write_{{ agent.name }}({{ agent.name }}_seq_item t);
+  function void write_{{ agent.name }}({{ agent.seq_item_type }} t);
     {{ agent.name }}_item = t;
     cg_env.sample();
   endfunction

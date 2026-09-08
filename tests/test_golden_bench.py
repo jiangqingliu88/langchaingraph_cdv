@@ -7,6 +7,7 @@ from pathlib import Path
 import jinja2
 
 from src.tools.lib.golden_library import build_ref_model_config
+from src.tools.uvm_tools.tool_uvm.gen_uvm import JinjaRenderer, TEMPLATES_DIR
 
 APB_INTERFACES = [
     {"name": "pclk", "direction": "input", "protocol": "Clock"},
@@ -67,11 +68,14 @@ def test_build_ref_model_config_uart_only():
 
 
 def _render_tb_top(bench: dict, agents: list) -> str:
-    """用 bench dict 渲染 tb_top.sv.j2（模拟 gen_uvm 的 JinjaRenderer）。"""
-    tpl_path = (Path(__file__).parent.parent / "src" / "tools" / "uvm_tools"
-                / "tool_uvm" / "templates" / "bench_templates" / "tb_top.sv.j2")
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(tpl_path.parent)))
-    return env.get_template(tpl_path.name).render(bench=bench, agents=agents)
+    """用 bench dict 渲染 tb_top.sv.j2（复用 gen_uvm 的 JinjaRenderer）。
+
+    必须复用 JinjaRenderer（而非裸 jinja2.Environment）：base_template.sv.j2 依赖
+    其注册的 `now`/`trademark`/`copyright_year` globals，且 searchpath 为 templates 根目录
+    （`{% include "base_templates/..." %}` 才能解析）。
+    """
+    renderer = JinjaRenderer(TEMPLATES_DIR)
+    return renderer.render("bench_templates/tb_top.sv.j2", {"bench": bench, "agents": agents})
 
 
 def _minimal_bench(ref_model: dict) -> dict:

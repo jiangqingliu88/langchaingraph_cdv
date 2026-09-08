@@ -10,8 +10,8 @@
 // 
 //   文件:     filelist.f
 //   作者:     -
-//   创建时间: 2026-09-05 19:56:58
-//   修改时间: 2026-09-05 19:56:58
+//   创建时间: 2026-09-07 23:32:17
+//   修改时间: 2026-09-07 23:32:17
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -27,4 +27,5 @@
 +incdir+.
 1_interface/APB_if.sv
 1_interface/APB_system_if.sv
+APB_parameter_pkg.sv
 APB_pkg.sv

@@ -37,9 +37,9 @@ class {{ environment.env_name }}_directed_test extends {{ environment.env_name }
 {%- for agent in agents %}
 {%- if agent.is_master is not false %}
     begin
-      {{ agent.name }}_directed_seq _seq;
-      _seq = {{ agent.name }}_directed_seq::type_id::create("_seq");
-      _seq.start(env.{{ agent.name }}_agent_h.sqr);
+      {{ agent.sequence_type }} _seq;
+      _seq = {{ agent.sequence_type }}::type_id::create("_seq");
+      _seq.start(env.{{ agent.name }}_agent_h.sequencer);
     end
 {%- endif %}
 {%- endfor %}

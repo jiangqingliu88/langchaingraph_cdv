@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env.sv
 //   作者:     -
-//   创建时间: 2026-09-05 19:56:58
-//   修改时间: 2026-09-05 19:56:58
+//   创建时间: 2026-09-07 23:32:17
+//   修改时间: 2026-09-07 23:32:17
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -36,15 +36,15 @@ class APB_env extends uvm_env;
   APB_env_config cfg;
 
   // ── Register Model（RAL，可选，由 YAML register_model 列表决定）──
-  regblock_t reg_block;
-  my_adapter adapter;
-  uvm_reg_predictor #(my_bus_trans) predictor;  // 预测器需要指定总线事务类型
 
   // Agent 实例
   apb_master_agent apb_master_agent_h;
 
   // Sub-env 实例
   apb_system_env apb_sys_env;
+
+  // VIP env 实例（外部 VIP 集成）
+  axi_system_env aix_sys_env;
 
   // Analysis 组件（predictor 等）
   apb_predictor apb_pred;
@@ -59,8 +59,6 @@ class APB_env extends uvm_env;
   uvm_analysis_port #(apb_master_seq_item) apb_master_agent_ap;
 
   // Analysis Exports / Ports（env 级 TLM 端口，由 YAML analysis_exports/analysis_ports 配置）
-  uvm_analysis_export #(mem_transaction) control_plane_in_ap;   // 输入（外部 → 环境内部）
-  uvm_analysis_port #(mem_transaction) control_plane_out_ap;     // 输出（环境 → 外部）
  // Sequencer 中央管理（virtual_sequencer 在 seq_pkg 中，env_pkg 不可直接引用）
   APB_env_virtual_sequencer virtual_sqr;
 
@@ -104,16 +102,12 @@ class APB_env extends uvm_env;
     uvm_config_db#(apb_master_config)::set(this, "apb_master_agent_h", "cfg", cfg.apb_master_cfg);
 
     // ─── Register Model（RAL）创建 ───
-    reg_block = regblock_t::type_id::create("reg_block", this);
-    reg_block.build();       // 显式调用 build()
-    reg_block.lock_model();  // 锁定模型，防止后续修改
-    adapter = my_adapter::type_id::create("adapter", this);
-    predictor = my_bus_predictor::type_id::create("predictor", this);
-    // reg model 暴露到 config_db（reg 自检序列等通过 "*" 获取）
-    uvm_config_db#(uvm_reg_block)::set(this, "*", "reg_model", reg_block);
 
     // 创建 Sub-env
     apb_sys_env = apb_system_env::type_id::create("apb_sys_env", this);
+
+    // 创建 VIP env
+    aix_sys_env = axi_system_env::type_id::create("aix_sys_env", this);
 
     // 创建 Analysis 组件
     apb_pred = apb_predictor::type_id::create("apb_pred", this);
@@ -128,8 +122,6 @@ class APB_env extends uvm_env;
     apb_master_agent_ap = new("apb_master_agent_ap", this);
 
     // 创建 Analysis Exports / Ports
-    control_plane_in_ap = new("control_plane_in_ap", this);
-    control_plane_out_ap = new("control_plane_out_ap", this);
 
     // 创建 Virtual Sequencer（virtual_sequencer 在 seq_pkg 中，env_pkg 不可引用）
     virtual_sqr = APB_env_virtual_sequencer::type_id::create("virtual_sqr", this);
@@ -143,25 +135,17 @@ class APB_env extends uvm_env;
     super.connect_phase(phase);
 
     // 连接子 Sequencer 到 Virtual Sequencer（直接赋值，规避 config_db 时序/作用域问题）
-    virtual_sqr.apb_master_sqr = apb_master_agent_h.sqr;
+    virtual_sqr.apb_master_sqr = apb_master_agent_h.sequencer;
 
     // 连接 Agent Monitor 到 Analysis Ports
-    apb_master_agent_h.mon.item_collected_port.connect(apb_master_agent_ap);
+    apb_master_agent_h.monitor.mon_ap.connect(apb_master_agent_ap);
 
     // 连接 Analysis Ports 到功能覆盖率模型（env_cov）
     apb_master_agent_ap.connect(env_cov.apb_master_export);
 
     // ─── Register Model（RAL）连接 ───
-    // 1. 将寄存器模型的地址映射（default_map）连接到序列器和适配器
-    reg_block.default_map.set_sequencer(apb_master_agent_h.sqr, adapter);
-    reg_block.default_map.set_auto_predict(0);
-    // 2. 配置预测器（显式预测模式）
-    predictor.map = reg_block.default_map;
-    predictor.adapter = adapter;
-    apb_master_agent_ap.connect(predictor.bus_in);
 
     // Analysis Ports 连接（connected_to）
-    control_plane_out_ap.connect(apb_pred.monitored_ap);
 
     // TLM 连接（显式 driver → receiver）
     apb_master.monitored_ap.connect(apb_pred.in_export);

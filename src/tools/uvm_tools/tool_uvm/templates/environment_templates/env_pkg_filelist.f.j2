@@ -20,6 +20,7 @@
 {%- for agent in agents %}
 +incdir+{{ agent_dir }}/{{ agent.name }}_agent
 {{ agent_dir }}/{{ agent.name }}_agent/1_interface/{{ agent.name }}_if.sv
+{{ agent_dir }}/{{ agent.name }}_agent/{{ agent.name }}_parameter_pkg.sv
 {{ agent_dir }}/{{ agent.name }}_agent/{{ agent.name }}_pkg.sv
 {%- endfor %}
 
@@ -28,8 +29,16 @@
 {{ bench_dir }}/{{ h.name }}.sv
 {%- endfor %}
 
+// ─── VIP env（外部 VIP 集成，vip_path 指向 VIP 源码/incdir）──
+{%- for ve in vipenvs %}
+{%- if ve.vip_path %}
++incdir+{{ ve.vip_path }}
+{%- endif %}
+{%- endfor %}
+
 // ─── Environment ───
 +incdir+{{ env_dir }}
+{{ env_dir }}/{{ environment.env_name }}_parameters_pkg.sv
 {{ env_dir }}/{{ environment.env_name }}_pkg.sv
 +incdir+{{ env_dir }}/tests
 {{ env_dir }}/tests/{{ environment.env_name }}_test_pkg.sv

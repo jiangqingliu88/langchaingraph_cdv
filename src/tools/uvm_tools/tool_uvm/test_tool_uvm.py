@@ -230,11 +230,11 @@ def test_env_agents_is_master_and_is_active(tmp_path):
     assert main(["-i", str(tmp_yaml), "-d", str(dest), "-q"]) == 0
     gen = (dest / "env" / "tests" / "APB_env_gen_test.sv").read_text(encoding="utf-8")
     base = (dest / "env" / "tests" / "APB_env_base_test.sv").read_text(encoding="utf-8")
-    assert "apb_master_master_sequence apb_master_master_seq;" in gen
-    assert "apb_slave_slave_sequence apb_slave_slave_seq;" in gen
+    assert "apb_master_sequence apb_master_seq;" in gen
+    assert "apb_slave_sequence apb_slave_seq;" in gen
     assert "cfg.apb_master_cfg.is_active = UVM_ACTIVE;" in base
     assert "cfg.apb_slave_cfg.is_active = UVM_PASSIVE;" in base
-    assert "apb_master_seq.start(env.apb_master_agent_h.sqr);" in base
+    assert "apb_master_seq.start(env.apb_master_agent_h.sequencer);" in base
     assert "apb_slave_seq.start" not in base
 
 
