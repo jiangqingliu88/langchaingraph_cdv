@@ -54,6 +54,21 @@ generated/
 └── README.md
 ```
 
+### Agent Makefile 双后端（Questa / VCS）
+
+每个 agent 的 `Makefile` 同时支持 QuestaSim 与 VCS，`SIM` 变量切换（缺省 `questa`）：
+
+```bash
+cd agents/APB_agent
+make                  # Questa 编译（vlib + vlog）
+make compile SIM=vcs  # VCS 编译（单步 vcs → simv）
+make run              # loopback 自闭环：编译 + 仿真（Questa）
+make run SIM=vcs SEED=5
+```
+
+后端路径均可覆盖：`QUESTA` / `UVM_HOME` / `UVM_DPI`（Questa），`VCS` / `VCS_HOME`（VCS）。
+VCS 走 `-ntb_opts uvm-1.2` 自带 UVM 库，无需额外 UVM 路径配置。
+
 ---
 
 ## 2. 场景：单接口 agent（协议默认驱动/采样）

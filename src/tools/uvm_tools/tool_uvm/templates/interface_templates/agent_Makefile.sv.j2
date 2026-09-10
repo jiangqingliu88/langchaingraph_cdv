@@ -2,32 +2,82 @@
 {% include "base_templates/base_template.sv.j2" %}
 
 # ============================================================
-# {{ agent.name }} 编译/仿真 Makefile
+# {{ agent.name }} 编译/仿真 Makefile（Questa / VCS 双后端）
 # ============================================================
+# 用法:
+#   make                    # 编译（缺省 SIM=questa）
+#   make compile SIM=vcs    # 用 VCS 编译
+#   make run                # loopback 自闭环: 编译 + 仿真
+#   make run SIM=vcs SEED=5
+# 后端路径可覆盖: QUESTA / UVM_HOME / UVM_DPI / VCS / VCS_HOME
+
+SIM ?= questa        # questa | vcs
 
 AGENT  ?= {{ agent.name }}
 SEED   ?= 1
 OUTDIR ?= build/$(AGENT)
 
-QUESTA   = f:/questasim64_2024.1/win64
-WORK     = $(OUTDIR)/work
-UVM_HOME = f:/questasim64_2024.1/verilog_src/uvm-1.2/src
+# ── Questa 后端 ──
+QUESTA   ?= f:/questasim64_2024.1/win64
+WORK      = $(OUTDIR)/work
+UVM_HOME ?= f:/questasim64_2024.1/verilog_src/uvm-1.2/src
+UVM_DPI  ?= f:/questasim64_2024.1/verilog_src/uvm-1.2/win64/uvm_dpi
 
-SRC = 1_interface/{{ agent.name }}_if.sv \
-      1_interface/{{ agent.name }}_system_if.sv \
-      {{ agent.name }}_pkg.sv
+# ── VCS 后端 ──
+VCS     ?= vcs
+VCS_HOME ?= /cad/tools/synopsys/vcs
+SIMV     = $(OUTDIR)/simv
 
-.PHONY: all compile clean
+# ── loopback 自闭环（master-drive → slave-monitor）──
+LB_SRC  = loopback/{{ agent.name }}_loopback_env.sv \
+          loopback/{{ agent.name }}_loopback_scb.sv \
+          loopback/{{ agent.name }}_loopback_test.sv \
+          loopback/{{ agent.name }}_loopback_tb.sv
+LB_TOP   = {{ agent.name }}_loopback_tb
+LB_TEST  = {{ agent.name }}_loopback_test
+
+.PHONY: all compile run clean compile_questa compile_vcs run_questa run_vcs
 
 all: compile
 
-compile:
+# ── Questa: vlib + vlog ──
+compile_questa:
 	@mkdir -p $(OUTDIR)
 	$(QUESTA)/vlib.exe $(WORK)
 	$(QUESTA)/vlog.exe -work $(WORK) -sv +incdir+. +acc \
 		+incdir+$(UVM_HOME) \
 		$(UVM_HOME)/uvm_pkg.sv \
-		$(SRC)
+		-f filelist.f
+
+# ── VCS: 单步编译（vcs 直接出 simv）──
+compile_vcs:
+	@mkdir -p $(OUTDIR)
+	$(VCS) -sverilog +v2k -timescale=1ns/1ps \
+		-debug_access+all -ntb_opts uvm-1.2 \
+		+incdir+. -f filelist.f \
+		-o $(SIMV) -l $(OUTDIR)/comp.log
+
+# ── 仿真（loopback 自闭环）──
+run: run_$(SIM)
+
+run_questa: compile_questa
+	$(QUESTA)/vlog.exe -work $(WORK) -sv +incdir+. +incdir+loopback \
+		+incdir+$(UVM_HOME) $(LB_SRC)
+	$(QUESTA)/vsim.exe -c -do "run -all; quit -f" \
+		-sv_lib $(UVM_DPI) \
+		-work $(WORK) -l $(OUTDIR)/$(LB_TOP)_s$(SEED).log \
+		$(LB_TOP) +UVM_TESTNAME=$(LB_TEST) +ntb_random_seed=$(SEED)
+
+run_vcs:
+	@mkdir -p $(OUTDIR)
+	$(VCS) -sverilog +v2k -timescale=1ns/1ps \
+		-debug_access+all -ntb_opts uvm-1.2 \
+		+incdir+. +incdir+loopback -f filelist.f $(LB_SRC) \
+		-top $(LB_TOP) -o $(SIMV) -l $(OUTDIR)/comp.log
+	$(SIMV) +UVM_TESTNAME=$(LB_TEST) +ntb_random_seed=$(SEED) \
+		-l $(OUTDIR)/$(LB_TOP)_s$(SEED).log
+
+compile: compile_$(SIM)
 
 clean:
 	rm -rf $(OUTDIR)
