@@ -1,5 +1,5 @@
 # ============================================================
-# Bench 定义 —— 顶层 testbench（clk_rst_if 实例化 + DUT + UVM 启动 + 波形）
+# Bench 定义 —— 顶层 testbench（clk_rst_if 实例化 + DUT + UVM 启动）
 # ============================================================
 
 bench:
@@ -8,12 +8,13 @@ bench:
   timeout: 10ms
   include_assertions: false
 
-  # ── 时钟复位（bench 级，tb_top 实例化 clk_rst_if；clk/rst 由环境 clk_rst_agent 驱动）──
+  # ── 时钟复位（bench 级，tb_top 按此实例化 clk_rst_if；
+  #   周期/释放时机在 apb_env.yaml 的 clk_rst_vip 里配置，由 clk_rst_agent 驱动）──
   clk_rst:
     clocks:
-      - { name: pclk, period: "10ns", init: 0 }
+      - { name: pclk }
     resets:
-      - { name: presetn, init: 0, release_delay: 100 }
+      - { name: presetn }
 
   dut_instance: u_dut          # DUT 实例名（tb_top 按 harness.bind_to 例化 DUT）
   # ── Harness（bind 式自连接）──
@@ -36,18 +37,5 @@ bench:
           prdata: prdata
           pready: pready
           pslverr: pslverr
-    # 每个 interface 自动生成 force/release 控制块：<if>_force_en 缺省 0，
-    # 测试里置 1 后把 DUT 信号 force 成接口信号（无需 YAML 配置）
 
-  # ── UVM 配置 ──
-  uvm_config:
-    verbosity: UVM_MEDIUM
-
-  # ── 波形 ──
-  wave_dump:
-    enabled: true
-    format: FST
-    file_name: apb_tb_top.fst
-    levels: 0
-    plusargs: DUMP_WAVES
 

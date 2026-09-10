@@ -29,19 +29,13 @@ module {{ bench.name }}_tb_top;
 {%-   endif %}
 {%- endif %}
 
-  // ── UVM Configuration & Test Launch ──
-  // 接口 vif 的 config_db 配置由测试 build_phase 的 harness.set_vifs(env.get_full_name())
-  // 完成（tb_top 不需要逐 agent 调 set_vif）
+
   initial begin
-{%- if bench.uvm_config.verbosity %}
-    uvm_root::get().set_report_verbosity_level_hier({{ bench.uvm_config.verbosity }});
-{%- endif %}
-    uvm_root::get().set_timeout({{ bench.timeout }});
     run_test();
   end
 
-  // ── Waveform Dump ──
 {%- if bench.wave_dump and bench.wave_dump.enabled %}
+  // ── Waveform Dump ──
   initial begin
     if ($test$plusargs("{{ bench.wave_dump.plusargs | default('DUMP_WAVES') }}")) begin
 {%-   if bench.wave_dump.format | default('FST') == 'FSDB' %}
@@ -58,22 +52,7 @@ module {{ bench.name }}_tb_top;
   end
 {%- endif %}
 
-  // ── Simulation Control ──
-{%- if bench.simulation and bench.simulation.max_runtime %}
-  initial begin
-    #{{ bench.simulation.max_runtime }};
-    $display("SIM_TIMEOUT after {{ bench.simulation.max_runtime }}");
-    $finish;
-  end
-{%- endif %}
-{%- if bench.simulation and bench.simulation.stop_on_fatal %}
-  initial begin
-    forever begin
-      @(uvm_report_fatal);
-      #100ns;
-      $finish;
-    end
-  end
-{%- endif %}
+{# 仿真结束控制由 env 级 {{ bench.env_name }}_sim_end 组件负责：
+   objection 清零自动 $finish + +SIM_WATCHDOG_NS 看门狗，tb_top 不再内嵌控制块 #}
 
 endmodule : {{ bench.name }}_tb_top

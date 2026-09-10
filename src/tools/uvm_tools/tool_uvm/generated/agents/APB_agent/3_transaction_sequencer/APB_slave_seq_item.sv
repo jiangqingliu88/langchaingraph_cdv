@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_slave_seq_item.sv
 //   作者:     -
-//   创建时间: 2026-09-07 23:32:17
-//   修改时间: 2026-09-07 23:32:17
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -20,12 +20,27 @@
 // ════════════════════════════════════════════════════════════════
 
 
+
 // ============================================================
 // Slave Seq Item: APB_slave_seq_item
 // ============================================================
 
 class APB_slave_seq_item extends uvm_sequence_item;
-  `uvm_object_utils(APB_slave_seq_item)
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack 自动化）──
+  `uvm_object_utils_begin(APB_slave_seq_item)
+    `uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)
+    // 请求字段（由 monitor 回填）
+    `uvm_field_int(paddr, UVM_DEFAULT)
+    `uvm_field_int(pwrite, UVM_DEFAULT)
+    `uvm_field_int(pwdata, UVM_DEFAULT)
+    // slave 响应字段
+    `uvm_field_int(prdata, UVM_DEFAULT)
+    `uvm_field_int(pslverr, UVM_DEFAULT)
+    // 响应控制指令
+    `uvm_field_int(delay_cycles, UVM_DEFAULT)
+    `uvm_field_int(force_resp, UVM_DEFAULT)
+    `uvm_field_int(override_rdata, UVM_DEFAULT)
+  `uvm_object_utils_end
 
   typedef enum {READ, WRITE} xact_type_e;
 

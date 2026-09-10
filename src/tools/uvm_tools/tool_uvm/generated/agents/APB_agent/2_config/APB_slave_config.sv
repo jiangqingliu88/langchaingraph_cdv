@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_slave_config.sv
 //   作者:     -
-//   创建时间: 2026-09-07 23:32:17
-//   修改时间: 2026-09-07 23:32:17
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -20,12 +20,35 @@
 // ════════════════════════════════════════════════════════════════
 
 
+
 // ============================================================
 // Slave Config: APB_slave_config
 // ============================================================
 
 class APB_slave_config extends uvm_object;
-  `uvm_object_utils(APB_slave_config)
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
+  `uvm_object_utils_begin(APB_slave_config)
+    `uvm_field_int(addr_width, UVM_DEFAULT)
+    `uvm_field_int(data_width, UVM_DEFAULT)
+    `uvm_field_int(id_width, UVM_DEFAULT)
+    `uvm_field_enum(uvm_active_passive_enum, is_active, UVM_DEFAULT)
+    `uvm_field_int(error_injection_rate, UVM_DEFAULT)
+    // vif: virtual interface，UVM field 宏不支持注册（由 config_db 传递）
+    `uvm_field_enum(response_mode_e, response_mode, UVM_DEFAULT)
+    `uvm_field_int(memory_size, UVM_DEFAULT)
+    `uvm_field_int(memory_start_addr, UVM_DEFAULT)
+    `uvm_field_int(memory_end_addr, UVM_DEFAULT)
+    `uvm_field_int(default_read_data, UVM_DEFAULT)
+    `uvm_field_aa_int_int(memory, UVM_DEFAULT)
+    `uvm_field_int(response_delay_min, UVM_DEFAULT)
+    `uvm_field_int(response_delay_max, UVM_DEFAULT)
+    `uvm_field_int(enable_out_of_order, UVM_DEFAULT)
+    `uvm_field_int(max_outstanding, UVM_DEFAULT)
+    `uvm_field_aa_int_string(id_delay_map, UVM_DEFAULT)
+    `uvm_field_int(error_addr_start, UVM_DEFAULT)
+    `uvm_field_int(error_addr_end, UVM_DEFAULT)
+    `uvm_field_enum(resp_type_e, force_resp_type, UVM_DEFAULT)
+  `uvm_object_utils_end
 
   // 公共协议参数
   int addr_width = 32;

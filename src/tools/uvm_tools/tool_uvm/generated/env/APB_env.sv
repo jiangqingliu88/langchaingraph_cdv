@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env.sv
 //   作者:     -
-//   创建时间: 2026-09-08 17:16:01
-//   修改时间: 2026-09-08 17:16:01
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -39,12 +39,12 @@ class APB_env extends uvm_env;
 
   // Agent 实例
   apb_master_agent apb_master_agent_h;
+  apb_slave_agent apb_slave_agent_h;
 
   // Sub-env 实例
   apb_system_env apb_sys_env;
 
   // VIP env 实例（外部 VIP 集成）
-  axi_system_env aix_sys_env;
 
   // Analysis 组件（predictor 等）
   apb_predictor apb_pred;
@@ -57,6 +57,7 @@ class APB_env extends uvm_env;
 
   // TLM 连接
   uvm_analysis_port #(apb_master_seq_item) apb_master_agent_ap;
+  uvm_analysis_port #(apb_slave_seq_item) apb_slave_agent_ap;
 
   // Analysis Exports / Ports（env 级 TLM 端口，由 YAML analysis_exports/analysis_ports 配置）
  // Sequencer 中央管理（virtual_sequencer 在 seq_pkg 中，env_pkg 不可直接引用）
@@ -100,6 +101,8 @@ class APB_env extends uvm_env;
     // 创建 Agent 并设置配置
     apb_master_agent_h = apb_master_agent::type_id::create("apb_master_agent_h", this);
     uvm_config_db#(apb_master_config)::set(this, "apb_master_agent_h", "cfg", cfg.apb_master_cfg);
+    apb_slave_agent_h = apb_slave_agent::type_id::create("apb_slave_agent_h", this);
+    uvm_config_db#(apb_slave_config)::set(this, "apb_slave_agent_h", "cfg", cfg.apb_slave_cfg);
 
     // ─── Register Model（RAL）创建 ───
 
@@ -107,7 +110,6 @@ class APB_env extends uvm_env;
     apb_sys_env = apb_system_env::type_id::create("apb_sys_env", this);
 
     // 创建 VIP env
-    aix_sys_env = axi_system_env::type_id::create("aix_sys_env", this);
 
     // 创建 Analysis 组件
     apb_pred = apb_predictor::type_id::create("apb_pred", this);
@@ -120,6 +122,7 @@ class APB_env extends uvm_env;
 
     // 创建 Analysis Ports
     apb_master_agent_ap = new("apb_master_agent_ap", this);
+    apb_slave_agent_ap = new("apb_slave_agent_ap", this);
 
     // 创建 Analysis Exports / Ports
 
@@ -136,21 +139,24 @@ class APB_env extends uvm_env;
 
     // 连接子 Sequencer 到 Virtual Sequencer（直接赋值，规避 config_db 时序/作用域问题）
     virtual_sqr.apb_master_sqr = apb_master_agent_h.sequencer;
+    virtual_sqr.apb_slave_sqr = apb_slave_agent_h.sequencer;
 
     // 连接 Agent Monitor 到 Analysis Ports
     apb_master_agent_h.monitor.mon_ap.connect(apb_master_agent_ap);
+    apb_slave_agent_h.monitor.mon_ap.connect(apb_slave_agent_ap);
 
     // 连接 Analysis Ports 到功能覆盖率模型（env_cov）
     apb_master_agent_ap.connect(env_cov.apb_master_export);
+    apb_slave_agent_ap.connect(env_cov.apb_slave_export);
 
     // ─── Register Model（RAL）连接 ───
 
     // Analysis Ports 连接（connected_to）
 
     // TLM 连接（显式 driver → receiver）
-    apb_master.monitored_ap.connect(apb_pred.in_export);
+    apb_master_agent_ap.connect(apb_pred.in_export);
     apb_pred.out_port.connect(apb_scb.expected_analysis_export);
-    apb_slave.monitored_ap.connect(apb_scb.actual_analysis_export);
+    apb_slave_agent_ap.connect(apb_scb.actual_analysis_export);
 
     // pragma custom connect_logic begin
     // pragma custom connect_logic end
@@ -162,6 +168,7 @@ class APB_env extends uvm_env;
     // 打印环境拓扑
     `uvm_info("ENV_TOPOLOGY", "Environment APB_env structure:", UVM_LOW)
     `uvm_info("ENV_TOPOLOGY", "  Agent: apb_master_agent_h", UVM_LOW)
+    `uvm_info("ENV_TOPOLOGY", "  Agent: apb_slave_agent_h", UVM_LOW)
     `uvm_info("ENV_TOPOLOGY", "  Scoreboard: apb_scb", UVM_LOW)
   endfunction
 

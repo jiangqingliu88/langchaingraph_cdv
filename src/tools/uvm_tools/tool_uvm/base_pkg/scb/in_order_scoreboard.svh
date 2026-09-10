@@ -167,7 +167,7 @@ class in_order_scoreboard #(
   endfunction
 
   //--------------------------------------------------------------------------
-  // 严格顺序比较：队首一对一，不匹配即停（等待后续）
+  // 严格顺序比较：队首一对一，不匹配报错并消费该对
   //--------------------------------------------------------------------------
   protected function void compare_strict();
     REQ_T expected, actual;
@@ -175,8 +175,14 @@ class in_order_scoreboard #(
     while (m_expected_queue.size() > 0 && m_actual_queue.size() > 0) begin
       expected = m_expected_queue[0];
       actual   = m_actual_queue[0];
-      if (!compare_items(expected, actual))
-        break;
+      if (!compare_items(expected, actual)) begin
+        m_num_mismatches++;
+        `uvm_error(get_name(), $sformatf("mismatch\n  expected: %s\n  actual: %s",
+                   convert2string(expected), convert2string(actual)))
+        void'(m_expected_queue.pop_front());
+        void'(m_actual_queue.pop_front());
+        continue;
+      end
 
       void'(m_expected_queue.pop_front());
       void'(m_actual_queue.pop_front());

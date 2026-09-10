@@ -8,7 +8,7 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
   `uvm_component_utils({{ agent.name }}_master_driver)
 
   virtual {{ agent.name }}_if vif;
-  {{ agent.name }}_master_config cfg;
+  {{ agent.name }}_port_config cfg;
   // pragma custom field_decl begin
   // pragma custom field_decl end
 
@@ -20,7 +20,7 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
     super.build_phase(phase);
     if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "", "vif", vif))
       `uvm_fatal("NOVIF", "Virtual interface not set")
-    if (!uvm_config_db#({{ agent.name }}_master_config)::get(this, "", "cfg", cfg))
+    if (!uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg))
       `uvm_fatal("CFG", "Config not set")
     // pragma custom build_logic begin
     // pragma custom build_logic end

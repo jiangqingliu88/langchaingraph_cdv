@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_system_config.sv
 //   作者:     -
-//   创建时间: 2026-09-07 23:32:17
-//   修改时间: 2026-09-07 23:32:17
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -25,7 +25,16 @@
 // ============================================================
 
 class APB_system_config extends uvm_object;
-  `uvm_object_utils(APB_system_config)
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
+  `uvm_object_utils_begin(APB_system_config)
+    `uvm_field_int(num_masters, UVM_DEFAULT)
+    `uvm_field_int(num_slaves, UVM_DEFAULT)
+    `uvm_field_array_object(master_cfgs, UVM_DEFAULT)
+    `uvm_field_array_object(slave_cfgs, UVM_DEFAULT)
+    `uvm_field_int(addr_width, UVM_DEFAULT)
+    `uvm_field_int(data_width, UVM_DEFAULT)
+    `uvm_field_int(id_width, UVM_DEFAULT)
+  `uvm_object_utils_end
 
   int num_masters = 1;
   int num_slaves  = 1;

@@ -18,7 +18,7 @@ from src.tools.uvm_tools.tool_uvm.gen_uvm import (
     main,
 )
 
-EXAMPLES = Path(__file__).parent / "examples"
+EXAMPLES = Path(__file__).parent / "examples" / "apb"
 
 RENDERED = """// ============================================================
 class apb_master_driver extends uvm_driver;
@@ -172,9 +172,9 @@ def test_harness_bind_render():
                         "agent_path": "apb_master_agent_h",
                         "connections": {"pclk": "pclk", "presetn": "presetn"}}],
     })
-    assert "bind apb_slave_dut apb_interface apb_if(.pclk(pclk), .presetn(presetn));" in out
-    # set_vifs 向上查找 + 通配符
-    assert 'uvm_config_db#(virtual apb_interface)::set(null, {path, ".apb_master_agent_h.*"}, "vif", apb_slave_dut.apb_if);' in out
+    assert "apb_interface apb_if(.pclk(pclk), .presetn(presetn));" in out
+    # set_vifs 引用 harness 内实例化的 interface + 通配符
+    assert 'uvm_config_db#(virtual apb_interface)::set(null, {path, ".apb_master_agent_h.*"}, "vif", apb_if);' in out
     assert "bind apb_slave_dut apb_harness harness();" in out
 
 
@@ -201,9 +201,9 @@ def test_harness_array_parameter_sub():
         "sub_harnesses": [{"path": "chip_module.math.harness", "env_path": ".math_env"}],
     })
     assert "interface reg_top_harness#(parameter int NUM_CLIENTS = 1)();" in out
-    assert "bind RegTopModule reg_interface reg_if[NUM_CLIENTS-1:0](.clk(SysClk));" in out
+    assert "reg_interface reg_if[NUM_CLIENTS-1:0](.clk(SysClk));" in out
     assert "virtual interface reg_interface vif_0[NUM_CLIENTS];" in out
-    assert "vif_0 = RegTopModule.reg_if;" in out
+    assert "vif_0 = reg_if;" in out
     assert '".reg_a["' in out and '"vif", vif_0[i]);' in out
     assert "chip_module.math.harness.set_vifs({path, \".math_env\"});" in out
     assert "bind RegTopModule reg_top_harness#(.NUM_CLIENTS(NUM_CLIENTS)) harness();" in out
@@ -216,8 +216,8 @@ def test_harness_multi_instance_source_path():
                         "agent_path": "mem_agent[0]", "source_path": "cache.memory",
                         "connections": {"clk": "clk"}}],
     })
-    assert "bind memory_module mem_interface mem_if(.clk(clk));" in out
-    assert "vif\", memory_module.cache.memory.mem_if);" in out
+    assert "mem_interface mem_if(.clk(clk));" in out
+    assert "vif\", mem_if);" in out
 
 
 def test_harness_generate_uvm_tool_type():
@@ -268,7 +268,7 @@ def test_bench_with_harness_skips_tb_top_interface(tmp_path):
     assert "clk_rst_if pclk_vif();" in tb
     assert "always #" not in tb
     harness = (dest / "bench" / "apb_harness.sv").read_text(encoding="utf-8")
-    assert "bind apb_slave_dut apb_interface apb_if(" in harness
+    assert "apb_interface apb_if(" in harness
     assert "function void set_vifs" in harness
 
 
@@ -298,6 +298,86 @@ def test_meta_header_default_and_yaml_override(tmp_path):
     assert "作者:     张三" in sv2
     assert "联系邮箱: zhangsan@example.com" in sv2
     assert "创建时间: 2026-09-01" in sv2
+
+
+# ════════════════════════════════════════════════════════════
+# Config file 注册机制（factory 字段注册）测试
+# ════════════════════════════════════════════════════════════
+
+def test_config_field_registration_all_configs(tmp_path):
+    """所有继承 uvm_object 的 config 类都注册 uvm_object_utils_begin/end + uvm_field_*。"""
+    dest = tmp_path / "out"
+    assert main(["-i", str(EXAMPLES / "apb_interface.yaml"), "-d", str(dest), "-q"]) == 0
+    agent_dir = dest / "agents" / "APB_agent"
+    port = (agent_dir / "2_config" / "APB_port_config.sv").read_text(encoding="utf-8")
+    system = (agent_dir / "5_agent" / "APB_system_config.sv").read_text(encoding="utf-8")
+    for out in (port, system):
+        assert "`uvm_object_utils_begin" in out
+        assert "`uvm_object_utils_end" in out
+        assert "`uvm_field_" in out
+        assert "`uvm_object_utils(" not in out
+    # vif 不支持 field 宏注册，注释说明
+    assert "// vif: virtual interface，UVM field 宏不支持注册" in port
+    # 单类 port_config：master 侧与 slave 侧字段注册并存
+    assert "`uvm_field_enum(response_mode_e, response_mode, UVM_DEFAULT)" in port
+    assert "`uvm_field_aa_int_int(memory, UVM_DEFAULT)" in port
+    assert "`uvm_field_aa_int_string(id_delay_map, UVM_DEFAULT)" in port
+    assert "`uvm_field_int(drive_delay_min, UVM_DEFAULT)" in port
+    # system：uvm_object 动态数组
+    assert "`uvm_field_array_object(master_cfgs, UVM_DEFAULT)" in system
+
+
+def test_env_config_field_registration(tmp_path):
+    """env config 注册 config_vars + has_scoreboard + agent cfg 句柄。"""
+    dest = tmp_path / "out"
+    assert main(["-i", str(EXAMPLES / "apb_env.yaml"), "-d", str(dest), "-q"]) == 0
+    cfg = (dest / "env" / "APB_env_config.sv").read_text(encoding="utf-8")
+    assert "`uvm_object_utils_begin(APB_env_config)" in cfg
+    assert "`uvm_field_int(has_scoreboard, UVM_DEFAULT)" in cfg
+    assert "`uvm_field_object(apb_master_cfg, UVM_DEFAULT)" in cfg
+    assert "`uvm_field_object(apb_slave_cfg, UVM_DEFAULT)" in cfg
+
+
+def test_seq_item_field_registration(tmp_path):
+    """seq_item（master/slave）同样注册 uvm_object_utils_begin/end + transaction_vars 字段。"""
+    dest = tmp_path / "out"
+    assert main(["-i", str(EXAMPLES / "apb_interface.yaml"), "-d", str(dest), "-q"]) == 0
+    tx_dir = dest / "agents" / "APB_agent" / "3_transaction_sequencer"
+    master = (tx_dir / "APB_master_seq_item.sv").read_text(encoding="utf-8")
+    slave = (tx_dir / "APB_slave_seq_item.sv").read_text(encoding="utf-8")
+    for out in (master, slave):
+        assert "`uvm_object_utils_begin" in out
+        assert "`uvm_object_utils_end" in out
+        assert "`uvm_object_utils(" not in out
+    # master：xact_type enum + 事务字段
+    assert "`uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)" in master
+    assert "`uvm_field_int(paddr, UVM_DEFAULT)" in master
+    assert "`uvm_field_int(prdata, UVM_DEFAULT)" in master
+    # slave：额外响应控制指令字段
+    assert "`uvm_field_int(delay_cycles, UVM_DEFAULT)" in slave
+    assert "`uvm_field_int(force_resp, UVM_DEFAULT)" in slave
+    assert "`uvm_field_int(override_rdata, UVM_DEFAULT)" in slave
+
+
+def test_config_vars_field_macro_mapping():
+    """config_vars 类型 → uvm_field_* 映射：整型→int、string→string、其余→enum。"""
+    r = _JinjaRenderer(_TEMPLATES_DIR)
+    ctx = {
+        "environment": {"env_name": "T_env"},
+        "agents": [],
+        "config_vars": [
+            {"type": "int", "name": "a"},
+            {"type": "bit [7:0]", "name": "b"},
+            {"type": "string", "name": "c"},
+            {"type": "MyEnum_e", "name": "d"},
+        ],
+        "config_constraints": [],
+    }
+    out = r.render("environment_templates/env_config.sv.j2", ctx)
+    assert "`uvm_field_int(a, UVM_DEFAULT)" in out
+    assert "`uvm_field_int(b, UVM_DEFAULT)" in out
+    assert "`uvm_field_string(c, UVM_DEFAULT)" in out
+    assert "`uvm_field_enum(MyEnum_e, d, UVM_DEFAULT)" in out
 
 
 def test_cli_generate_filter_and_skip(tmp_path, capsys):

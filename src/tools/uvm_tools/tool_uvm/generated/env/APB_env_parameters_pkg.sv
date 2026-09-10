@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_parameters_pkg.sv
 //   作者:     -
-//   创建时间: 2026-09-08 17:16:01
-//   修改时间: 2026-09-08 17:16:01
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -27,4 +27,5 @@
 package APB_env_parameters_pkg;
   import uvm_pkg::*;
   import apb_master_parameter_pkg::*;
+  import apb_slave_parameter_pkg::*;
 endpackage : APB_env_parameters_pkg

@@ -23,8 +23,8 @@ class {{ agent.name }}_loopback_env extends uvm_env;
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    {{ agent.name }}_master_config mcfg;
-    {{ agent.name }}_slave_config  scfg;
+    {{ agent.name }}_port_config mcfg;
+    {{ agent.name }}_port_config  scfg;
     virtual {{ agent.name }}_if vif;
 
     if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "", "vif", vif))
@@ -32,16 +32,18 @@ class {{ agent.name }}_loopback_env extends uvm_env;
 
     // loopback 自检拓扑固定（master 驱动 → slave 监控），不随 YAML is_active 变化：
     // master 必须 ACTIVE 才能注入激励；slave 保持 PASSIVE 避免驱动响应端口干扰比对
-    mcfg = {{ agent.name }}_master_config::type_id::create("mcfg");
+    mcfg = {{ agent.name }}_port_config::type_id::create("mcfg");
     mcfg.vif = vif;
     mcfg.is_active = UVM_ACTIVE;
+    mcfg.is_master_side = 1;
 
-    scfg = {{ agent.name }}_slave_config::type_id::create("scfg");
+    scfg = {{ agent.name }}_port_config::type_id::create("scfg");
     scfg.vif = vif;
     scfg.is_active = UVM_PASSIVE;  // slave 仅监控，不响应
+    scfg.is_master_side = 0;
 
-    uvm_config_db#({{ agent.name }}_master_config)::set(this, "master_agent_h", "cfg", mcfg);
-    uvm_config_db#({{ agent.name }}_slave_config)::set(this, "slave_agent_h", "cfg", scfg);
+    uvm_config_db#({{ agent.name }}_port_config)::set(this, "master_agent_h", "cfg", mcfg);
+    uvm_config_db#({{ agent.name }}_port_config)::set(this, "slave_agent_h", "cfg", scfg);
 
     master_agent_h = {{ agent.name }}_master_agent::type_id::create("master_agent_h", this);
     slave_agent_h  = {{ agent.name }}_slave_agent::type_id::create("slave_agent_h", this);
@@ -51,7 +53,7 @@ class {{ agent.name }}_loopback_env extends uvm_env;
   function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
     master_agent_h.monitor.mon_ap.connect(scb_h.expected_export);
-    slave_agent_h.monitor.mon_ap.connect(scb_h.actual_export);
+    slave_agent_h.monitor.slave_mon_ap.connect(scb_h.actual_export);
   endfunction
 
 endclass : {{ agent.name }}_loopback_env

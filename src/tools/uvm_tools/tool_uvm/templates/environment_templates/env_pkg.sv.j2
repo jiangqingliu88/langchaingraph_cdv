@@ -7,11 +7,11 @@ package {{ environment.env_name }}_pkg;
   `include "uvm_macros.svh"
   // 导入所有 Agent 包
 {%- for agent in agents %}
-  import {{ agent.name }}_pkg::*;
+  import {{ agent.interface }}_pkg::*;
 {%- endfor %}
   // 导入 Sub-env 包
 {%- for subenv in subenvs %}
-  import {{ subenv.type }}_pkg::*;
+  import {{ subenv.interface }}_pkg::*;
 {%- endfor %}
   // 导入 VIP env 包（外部 VIP 集成）
 {%- for ve in vipenvs %}
@@ -26,12 +26,13 @@ package {{ environment.env_name }}_pkg;
 `ifdef USE_SC_MODEL_CHECK
   import {{ environment.env_name }}_sc_pred_env_pkg::*;
 `endif
-  // 包含环境组件文件（依赖顺序：config → virtual_sequencer → coverage → env）
+  // 包含环境组件文件（依赖顺序：config → virtual_sequencer → coverage → sim_end → env）
   // 注意：外部类 scoreboard（sb_type 指定）/ analysis 组件不在此 include，
   // 通过 import 对应 package 引入；生成式 scoreboard（mode 指定）在此 include。
   `include "{{ environment.env_name }}_config.sv"
   `include "seqs/{{ environment.env_name }}_virtual_sequencer.sv"
   `include "{{ environment.env_name }}_coverage.sv"
+  `include "{{ environment.env_name }}_sim_end.sv"
 {%- for sb in scoreboards %}
 {%- if sb.generated %}
   `include "scb/{{ sb.name }}.sv"

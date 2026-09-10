@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_direct_test.sv
 //   作者:     -
-//   创建时间: 2026-09-08 17:16:01
-//   修改时间: 2026-09-08 17:16:01
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -35,6 +35,8 @@ class APB_env_directed_test extends APB_env_base_test;
     // 定向测试配置
     cfg.apb_master_cfg.is_active = UVM_ACTIVE;
     cfg.apb_master_cfg.has_coverage = 1'b0;
+    cfg.apb_slave_cfg.is_active = UVM_PASSIVE;
+    cfg.apb_slave_cfg.has_coverage = 1'b0;
     // pragma custom build_logic begin
     // pragma custom build_logic end
   endfunction

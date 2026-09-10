@@ -265,6 +265,7 @@ def _is_generated_file(path: Path) -> bool:
 def _write_report_json(output_root: Path, *, generated: int, skipped: int,
                        validation_issues: List[Any], merge_reports: List[Any],
                        load_errors: List[str], gate_results: List[Dict[str, str]],
+                       schema_issues: Optional[List[Any]] = None,
                        inputs: Optional[List[Path]] = None) -> Path:
     """P2-4: 结构化生成报告（供 Agent 决策 / 签核证据包引用）。"""
     report = {
@@ -273,6 +274,10 @@ def _write_report_json(output_root: Path, *, generated: int, skipped: int,
         "inputs": [str(p) for p in (inputs or [])],
         "generated": generated,
         "skipped": skipped,
+        "schema": {
+            "errors": [i.__dict__ for i in (schema_issues or []) if i.severity == "error"],
+            "warnings": [i.__dict__ for i in (schema_issues or []) if i.severity == "warning"],
+        },
         "validation": {
             "errors": [i.__dict__ for i in validation_issues if i.severity == "error"],
             "warnings": [i.__dict__ for i in validation_issues if i.severity == "warning"],
@@ -313,8 +318,8 @@ INTERFACE_TEMPLATES = [
     ("interface_templates/interface.sv.j2", "1_interface/{agent_name}_if.sv"),
     ("interface_templates/interface_system.j2", "1_interface/{agent_name}_system_if.sv"),
 
-    ("interface_templates/config_master.sv.j2", "2_config/{agent_name}_master_config.sv"),
-    ("interface_templates/config_slave.sv.j2",  "2_config/{agent_name}_slave_config.sv"),
+    # 单类合并模板（不区分 master/slave）
+    ("interface_templates/port_config.sv.j2", "2_config/{agent_name}_port_config.sv"),
 
     ("interface_templates/seq_item_master.sv.j2", "3_transaction_sequencer/{agent_name}_master_seq_item.sv"),
     ("interface_templates/seq_item_slave.sv.j2",  "3_transaction_sequencer/{agent_name}_slave_seq_item.sv"),
@@ -323,8 +328,7 @@ INTERFACE_TEMPLATES = [
 
     ("interface_templates/driver_master.sv.j2", "4_driver_monitor/{agent_name}_master_driver.sv"),
     ("interface_templates/driver_slave.sv.j2",  "4_driver_monitor/{agent_name}_slave_driver.sv"),
-    ("interface_templates/monitor_master.sv.j2", "4_driver_monitor/{agent_name}_master_monitor.sv"),
-    ("interface_templates/monitor_slave.sv.j2",  "4_driver_monitor/{agent_name}_slave_monitor.sv"),
+    ("interface_templates/port_monitor.sv.j2", "4_driver_monitor/{agent_name}_port_monitor.sv"),
 
     ("interface_templates/agent_master.sv.j2", "5_agent/{agent_name}_master_agent.sv"),
     ("interface_templates/agent_slave.sv.j2",  "5_agent/{agent_name}_slave_agent.sv"),
@@ -342,6 +346,14 @@ INTERFACE_TEMPLATES = [
     ("interface_templates/agent_Makefile.sv.j2", "Makefile"),
 ]
 
+def _split_template_entry(entry) -> tuple:
+    """模板注册表条目 → (template_path, target_pattern, context_overrides)。
+
+    兼容 2 元组（无覆盖）与 3 元组（第 3 元素为渲染上下文覆盖，如 {"port": "master"}）。
+    """
+    return entry[0], entry[1], (entry[2] if len(entry) > 2 else {})
+
+
 # Agent 自闭环测试套件（master-drive → slave-monitor 闭环，独立编译运行）
 AGENT_LOOPBACK_TEMPLATES = [
     ("interface_templates/agent_loopback_env.sv.j2",  "{agent_name}_loopback_env.sv"),
@@ -355,6 +367,7 @@ ENVIRONMENT_ROOT_TEMPLATES = [
     ("environment_templates/env_config.sv.j2", "{env_name}_config.sv"),
     ("environment_templates/environment.sv.j2", "{env_name}.sv"),
     ("environment_templates/env_cov.sv.j2", "{env_name}_coverage.sv"),
+    ("environment_templates/sim_end.sv.j2", "{env_name}_sim_end.sv"),
     ("environment_templates/env_pkg.sv.j2", "{env_name}_pkg.sv"),
 ]
 
@@ -603,6 +616,11 @@ class AgentModel:
 
     @property
     def config_type(self) -> str:
+        # 单类 port_config：env 级 agent 在 parse_documents 后处理中
+        # 关联到 interface 级 agent 时覆盖为 "<interface_agent>_port_config"
+        override = getattr(self, "_config_type_override", "")
+        if override:
+            return override
         return f"{self.base_name}_config"
 
     @property
@@ -1001,10 +1019,12 @@ class AgentRenderTask(RenderTask):
         rendered: List[Path] = []
         base_dir = self.output_dir / "agents" / f"{agent.name}_agent"
         context = {"agent": agent, **agent.to_context()}
-        for template_path, target_pattern in INTERFACE_TEMPLATES:
+        for entry in INTERFACE_TEMPLATES:
+            template_path, target_pattern, extra_ctx = _split_template_entry(entry)
+            ctx = {**context, **extra_ctx}
             target_name = target_pattern.format(agent_name=agent.name)
             target_path = base_dir / target_name
-            result = self.render_file(template_path, target_path, context)
+            result = self.render_file(template_path, target_path, ctx)
             if result is not None:
                 rendered.append(result)
 
@@ -1190,8 +1210,7 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
     lines.append("|---|------|------|")
     file_entries = [
         (f"1_interface/{name}_if.sv", "Interface: internal logic + master/slave/monitor clocking + modport"),
-        (f"2_config/{name}_master_config.sv", "Master config: drive delay / outstanding / timeout"),
-        (f"2_config/{name}_slave_config.sv", "Slave config: response mode / memory / out-of-order / error window"),
+        (f"2_config/{name}_port_config.sv", "Port config: drive/response 统一（is_master_side 区分角色）"),
         (f"2_config/{name}_system_config.sv", "System config: aggregates master_cfgs[] / slave_cfgs[]"),
         (f"3_transaction_sequencer/{name}_master_seq_item.sv", "Master transaction"),
         (f"3_transaction_sequencer/{name}_slave_seq_item.sv", "Slave transaction (request + response control)"),
@@ -1199,8 +1218,7 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
         (f"3_transaction_sequencer/{name}_slave_sequencer.sv", "Slave sequencer (+ req_fifo, event-driven)"),
         (f"4_driver_monitor/{name}_master_driver.sv", "Master driver"),
         (f"4_driver_monitor/{name}_slave_driver.sv", "Slave driver (responds)"),
-        (f"4_driver_monitor/{name}_master_monitor.sv", "Master monitor"),
-        (f"4_driver_monitor/{name}_slave_monitor.sv", "Slave monitor (→ req_fifo)"),
+        (f"4_driver_monitor/{name}_port_monitor.sv", "Port monitor: is_master_side 分支（slave 侧 → slave_mon_ap + req_fifo）"),
         (f"5_agent/{name}_master_agent.sv", "Master agent"),
         (f"5_agent/{name}_slave_agent.sv", "Slave agent"),
         (f"7_sequence/{name}_master_sequence.sv", "Master sequence"),
@@ -2211,6 +2229,8 @@ class YAMLLoader:
                             break
                 if ref is not None:
                     eagent.transaction_vars = list(ref.transaction_vars)
+                    # 单类 port_config：env 级 config 类型指向 interface 级单类
+                    eagent._config_type_override = f"{ref.name}_port_config"
 
         return {
             "interfaces": interfaces,
@@ -2228,16 +2248,19 @@ class UVMGenerator:
                  injector: Optional[RegionInjector] = None,
                  overwrite: bool = False,
                  generate_names: Optional[List[str]] = None,
-                 quiet: bool = False) -> None:
+                 quiet: bool = False,
+                 schema_check: bool = True) -> None:
         self.renderer = renderer
         self.output_root = output_root
         self.injector = injector if injector is not None else RegionInjector()
         self.overwrite = overwrite
         self.generate_names = generate_names or []
         self.quiet = quiet
+        self.schema_check = schema_check  # Phase 0: YAML schema 语法检查（--skip-schema-check 关闭）
         self.skipped = 0
         self.meta: Dict[str, str] = dict(DEFAULT_META)
         self.validation_issues: List[Any] = []
+        self.schema_issues: List[Any] = []
 
     def _log(self, msg: str) -> None:
         if not self.quiet:
@@ -2340,10 +2363,45 @@ class UVMGenerator:
                     pass
         return generated
 
+    def _run_schema_check(self, yaml_files: Iterable[Path]) -> List[Any]:
+        """Phase 0: 原始 YAML 层 schema 语法检查（jsonschema 缺失时跳过并提示）。"""
+        try:
+            from .schema_check import SchemaChecker  # 包内导入（python -m 路径）
+        except ImportError:
+            try:
+                from schema_check import SchemaChecker
+            except ImportError as exc:
+                self._log(f"Warning: schema check skipped "
+                          f"(jsonschema not available: {exc})")
+                return []
+        return SchemaChecker().check(yaml_files)
+
     def run(self, inputs: Iterable[Path]) -> List[Path]:
         yaml_files = YAMLLoader.collect_paths(inputs)
         if not yaml_files:
             raise SystemExit("No YAML files were found in the input paths.")
+
+        # ── Phase 0: YAML schema 语法检查（原始 YAML 层，先于解析/语义校验；
+        #    error 阻断生成，warning 落盘不阻断）──
+        self.schema_issues = self._run_schema_check(yaml_files) if self.schema_check else []
+        if self.schema_issues:
+            report_path = self.output_root / "schema_report.txt"
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(
+                "Schema check report (tool_uvm)\n"
+                + "\n".join(str(i) for i in self.schema_issues) + "\n",
+                encoding="utf-8")
+            for i in self.schema_issues:
+                if i.severity == "warning":
+                    self._log(f"Warning: {i}")
+            schema_errors = [i for i in self.schema_issues if i.severity == "error"]
+            if schema_errors:
+                for i in schema_errors:
+                    self._log(f"Error: {i}")
+                raise SystemExit(
+                    f"Schema validation failed: {len(schema_errors)} error(s), "
+                    f"{len(self.schema_issues) - len(schema_errors)} warning(s) "
+                    f"— see {report_path}")
 
         data = YAMLLoader.parse_documents(yaml_files)
         self.meta = {**DEFAULT_META, **data["meta"]}   # YAML meta 覆盖默认文件头元数据
@@ -2537,9 +2595,10 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             )
             ctx = {"agent": agent, **agent.to_context()}
             files = []
-            for tpl, pat in INTERFACE_TEMPLATES:
+            for entry in INTERFACE_TEMPLATES:
+                tpl, pat, extra = _split_template_entry(entry)
                 try:
-                    c = renderer.render(tpl, ctx)
+                    c = renderer.render(tpl, {**ctx, **extra})
                     files.append(f"  {pat.format(agent_name=name)}: {len(c)} chars")
                 except Exception as e:
                     files.append(f"  {pat.format(agent_name=name)}: ERR - {e}")
@@ -2799,6 +2858,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="生成后对每个 agent 的 loopback 自检跑编译+仿真门禁（无 vlog/vcs 则跳过）。",
     )
     parser.add_argument(
+        "--skip-schema-check", action="store_true",
+        help="跳过 Phase 0 YAML schema 语法检查（缺省执行，schema error 阻断生成）。",
+    )
+    parser.add_argument(
         "--report-json", action="store_true",
         help="输出结构化生成报告 generation_report.json（供 Agent 决策/签核证据包引用）。",
     )
@@ -2824,8 +2887,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.list_templates:
         print("Supported template sets:")
         print("  interface_templates:")
-        for tpl, _ in INTERFACE_TEMPLATES:
-            print(f"    {tpl}")
+        seen: set = set()
+        for entry in INTERFACE_TEMPLATES:
+            if entry[0] not in seen:   # 合并模板（port 参数化）注册两次，只列一次
+                seen.add(entry[0])
+                print(f"    {entry[0]}")
         print("  environment_root_templates:")
         for tpl, _ in ENVIRONMENT_ROOT_TEMPLATES:
             print(f"    {tpl}")
@@ -2868,6 +2934,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         overwrite=args.overwrite,
         generate_names=[args.generate] if args.generate else None,
         quiet=args.quiet,
+        schema_check=not args.skip_schema_check,
     )
 
     try:
@@ -2883,6 +2950,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         log(f"  {path.relative_to(dest_root)}")
 
     # ── 校验摘要（可审计）──
+    n_schema_warn = sum(1 for i in generator.schema_issues if i.severity == "warning")
+    if n_schema_warn:
+        log(f"Schema check: {n_schema_warn} warning(s) — see {dest_root / 'schema_report.txt'}")
     n_warn = sum(1 for i in generator.validation_issues if i.severity == "warning")
     if n_warn:
         log(f"Semantic check: {n_warn} warning(s) — see {dest_root / 'validation_report.txt'}")
@@ -2908,6 +2978,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             merge_reports=injector.report,
             load_errors=injector.load_errors,
             gate_results=gate_results,
+            schema_issues=generator.schema_issues,
             inputs=input_paths,
         )
         log(f"Report: {report_path}")

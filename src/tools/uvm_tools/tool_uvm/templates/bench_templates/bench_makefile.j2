@@ -1,0 +1,123 @@
+TEST       := mpu_inst
+TEST_NAME  := test_top
+BUILD_NAME := npu_cmd_sched_build
+WORK_DIR   := ./work/
+HDL_FILELIST:= $(WORK_PATH)/files.f
+HVL_FILELIST:= $(WORK_PATH)/files.f
+SEED       := 3019561
+DUMP_WAVE  := 1
+CODE_COV   := 0
+COMP_OPTS  := +define+FSDB +define+DISABLE_NPU_LLSU_CTRL_DRIVER_SOCKET +define+DISABLE_NPU_VPU_CTRL_DRIVER_SOCKET +define+USE_SC_MODEL_CHECK
+SIM_OPTS   := +UVM_TEST_SEQ=mpu_inst_sequence  +UVM_TIMEOUT='1000.0000ns,YES'
+
+INCLUDE_FLAGS:=-I$(WORK_PATH)/../sc_model/include/
+
+SRC_SOURCES := $(wildcard $(WORK_PATH)/../sc_model/src/cmd_sched/*.cpp )
+
+UVMC_HOME := $(WORK_PATH)/../common/uvc/uvmc-2.3.3-v23.0.ld
+
+UVM_HOME  := /cad/tools/synopsys/vcs_vQ-2020.03-SP1/etc/uvm-1.2
+
+VCS_HOME:=/cad/tools/synopsys/vcs_vQ-2020.03-SP1
+
+SYSTEMC_HOME:=$(VCS_HOME)/etc/sysc/accelera_install/systemc232-gcc7
+SYSCAN_FLAG := syscan -sysc=232 -cflags ' -std=c++1y  -std=gnu++1y' -cpp g++ -cc gcc -full64
+SYSCAN_FLAG += -cflags -g -cflags -DVCS -cflags -I.
+SYSCAN_FLAG += -tlm2 -cflags -I$(SYSTEMC_HOME)/include/tlm_utils
+SYSCAN_FLAG += -cflags -I$(UVMC_HOME)/src/connect/sc $(UVMC_HOME)/src/connect/sc/uvmc.cpp
+SYSCAN_FLAG += -cflags -I$(INCLUDE_FLAGS) -DCODE_FOR_DV=1 -DUVMC_MAX_WORDS=65504' $(SRC_SOURCES) $(WORK_PATH)/env/sc_model_env_pkg/test_cmd_sched.cpp | tee -a sysc_comp_sim.log
+VLOGAN_FLAG := vlogan -fsdb -full64 +v2k -sverilog
+VLOGAN_FLAG += -timescale=1ns/1ps
+VLOGAN_FLAG += -top hdl_top -top hvl_top
+VLOGAN_FLAG += -debug_acc+all+dmpft
+VLOGAN_FLAG += -debug_region+cell+encrypt
+VLOGAN_FLAG += +vcs+lic+wait +lint=TFIPC-L +notimingcheck
+VLOGAN_FLAG += -kdb -lca
+VLOGAN_FLAG += -y ${DC_HOME}/dw/sim_ver +libext+.v
+VLOGAN_FLAG += +incdir+$(UVM_HOME) $(UVM_HOME)/uvm_pkg.sv +incdir+$(UVMC_HOME)/src/connect/sv $(UVMC_HOME)/src/connect/sv/uvmc_pkg.sv
+VLOGAN_FLAG += -f $(HVL_FILELIST)
+VLOGAN_FLAG += -l ./vlogan.log
+VLOGAN_FLAG += $(COMP_OPTS)
+ifeq ($(CODE_COV), 1)
+VLOGAN_FLAG += -cm line+cond+fsm+tgl+branch+assert
+VLOGAN_FLAG += -cm_hier $(WORK_PATH)/vc/cm_hier.h
+endif
+VCS_FLAG := vcs -kdb -fsdb -debug_access+all -q -sysc=delatasync -lca -full64 -sysc=232 -timescale=1ns/1ps -full64 -top hdl_top sc_main -l build.log
+COMP_FLAG := vcs -full64 +v2k -sverilog
+COMP_FLAG += -timescale=1ns/1ps
+ifeq ($(DUMP_WAVE), 1)
+COMP_FLAG += +define+FSDB
+endif
+COMP_FLAG += -top hdl_top -top hvl_top
+COMP_FLAG += -debug_acc+all+dmpft
+COMP_FLAG += -debug_region+cell+encrypt
+COMP_FLAG += +vcs+lic+wait +lint=TFIPC-L +notimingcheck
+COMP_FLAG += -kdb -lca
+COMP_FLAG += -y ${DC_HOME}/dw/sim_ver +libext+.v
+COMP_FLAG += -ntb_opts uvm-1.2
+COMP_FLAG += -f $(HVL_FILELIST)
+COMP_FLAG += -l ./comp.log
+COMP_FLAG += -o ./simv
+COMP_FLAG += $(COMP_OPTS)
+ifeq ($(CODE_COV), 1)
+COMP_FLAG += -cm line+cond+fsm+tgl+branch+assert
+COMP_FLAG += -cm_hier $(WORK_PATH)/vc/cm_hier.h
+endif
+
+PRE_RUN_FLAG1:=g++ -c -fPIC -DVCS -I$(VCS_HOME)/include $(UVM_HOME)/dpi/uvm_dpi.cc -o uvm_dpi.o
+PRE_RUN_FLAG2:=g++ -shared -o uvm_dpi.so uvm_dpi.o
+RUN_FLAG3 := $(WORK_PATH)/$(WORK_DIR)/$(BUILD_NAME)/simv
+RUN_FLAG3 += -q -sv_lib uvm_dpi +UVM_NO_RELNOTES +UVM_TESTNAME=$(TEST_NAME)
+RUN_FLAG3 += $(SIM_OPTS)
+RUN_FLAG3 += +ntb_random_seed=$(SEED)
+RUN_FLAG3 += -l $(WORK_PATH)/$(WORK_DIR)/$(BUILD_NAME)/$(TEST)_$(SEED)/simv.log
+ifeq ($(DUMP_WAVE), 1)
+RUN_FLAG3 += +DUMP_FILE=$(WORK_PATH)/$(WORK_DIR)/$(BUILD_NAME)/$(TEST)_$(SEED)/$(TEST)_$(SEED).fsdb
+endif
+ifeq ($(CODE_COV), 1)
+RUN_FLAG3 += -cm line+cond+fsm+tgl+branch+assert
+RUN_FLAG3 += -cm_dir $(WORK_PATH)/$(WORK_DIR)/$(BUILD_NAME)/$(TEST).vdb
+endif
+RUN_FLAG3 += |tee -a mix_sv_sc_sim.log
+RUN_FLAG := $(WORK_PATH)/$(WORK_DIR)/$(BUILD_NAME)/simv
+RUN_FLAG += +UVM_TESTNAME=$(TEST_NAME) $(SIM_OPTS)
+RUN_FLAG += +ntb_random_seed=$(SEED)
+RUN_FLAG += -l simv.log
+ifeq ($(DUMP_WAVE), 1)
+RUN_FLAG += -xprop=tmerge
+RUN_FLAG += +DUMP_FILE=$(TEST_NAME)_$(SEED).fsdb
+endif
+ifeq ($(CODE_COV), 1)
+RUN_FLAG += -cm line+cond+fsm+tgl+branch+assert
+RUN_FLAG += -cm_dir $(TEST_NAME).vdb
+endif
+
+vlogan_comp:
+	bsub -Ip -q int $(VLOGAN_FLAG)
+
+syscan_comp:
+	bsub -Ip -q int $(SYSCAN_FLAG)
+
+vcs_comp:
+	bsub -Ip -q int $(VCS_FLAG)
+
+comp:
+	bsub -Ip -q int $(COMP_FLAG)
+threecomp:
+	bsub -Ip -q int $(VLOGAN_FLAG)
+	bsub -Ip -q int $(SYSCAN_FLAG)
+	bsub -Ip -q int $(VCS_FLAG)
+
+run:
+	bsub -Ip -q int $(RUN_FLAG)
+threerun:
+	bsub -Ip -q int $(PRE_RUN_FLAG1)
+	bsub -Ip -q int $(PRE_RUN_FLAG2)
+	bsub -Ip -q int $(RUN_FLAG3)
+
+all:threecomp threerun
+
+verdi:
+	bsub -Ip -q int verdi -sverilog -dbdir $(WORK_PATH)/$(WORK_DIR)/$(BUILD_NAME)/simv.daidir -top hdl_top -ssf *.fsdb
+verdicov:
+	bsub -Ip -q int -m rd10 verdi -cov -covdir $(WORK_PATH)/$(WORK_DIR)/$(BUILD_NAME)/simv.vdb &

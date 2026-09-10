@@ -14,9 +14,15 @@ class {{ agent.name }}_slave_sequence extends uvm_sequence #({{ agent.name }}_sl
   function new(string name = "{{ agent.name }}_slave_sequence");
     super.new(name);
   endfunction
-
+  virtual task pre_body();
+  endtask
   virtual task body();
     {{ agent.name }}_slave_seq_item req_resp;
+    {{ agent.name }}_port_config cfg;
+    // 1. 向 p_sequencer 请求配置，存入 cfg
+    p_sequencer.get_cfg(cfg);
+    if (cfg == null)
+      `uvm_error(get_type_name(), "Sequencer cfg is null (agent build 未传入 config_db)")
     forever begin
       // ★ 从 Sequencer FIFO 取 Monitor 抓到的请求
       p_sequencer.req_fifo.get(req_resp);
@@ -30,7 +36,8 @@ class {{ agent.name }}_slave_sequence extends uvm_sequence #({{ agent.name }}_sl
       finish_item(req_resp);
     end
   endtask
-
+  virtual task post_body();
+  endtask
   virtual function void handle_write({{ agent.name }}_slave_seq_item req);
     // 写内存：addr/data 字段由 YAML transaction_vars 决定，LLM 可按协议扩展
     bit status = req.randomize() with {

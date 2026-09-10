@@ -9,17 +9,17 @@ util_components:
 
     # 输入 analysis port（生成 uvm_analysis_imp_<name> + write_<name> + process_<name>）
     analysis_exports:
-      - { name: in_export, type: APB_master_seq_item }
+      - { name: in_export, type: apb_master_seq_item }
 
     # 输出 analysis port（生成 uvm_analysis_port #(<type>)）
     analysis_ports:
-      - { name: out_port, type: APB_master_seq_item }
+      - { name: out_port, type: apb_master_seq_item }
 
   - name: apb_monitor_sink
     type: uvm_component
     description: "APB 监控汇聚点（多输入 → 单输出）"
     analysis_exports:
-      - { name: master_export, type: APB_master_seq_item }
-      - { name: slave_export,  type: APB_slave_seq_item }
+      - { name: master_export, type: apb_master_seq_item }
+      - { name: slave_export,  type: apb_slave_seq_item }
     analysis_ports:
-      - { name: merged_out, type: APB_master_seq_item }
+      - { name: merged_out, type: apb_master_seq_item }

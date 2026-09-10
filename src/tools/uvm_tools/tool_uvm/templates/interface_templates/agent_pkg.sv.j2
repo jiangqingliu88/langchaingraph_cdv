@@ -9,16 +9,14 @@ package {{ agent.name }}_pkg;
   import {{ agent.name }}_parameter_pkg::*;
   `include "uvm_macros.svh"
 
-  `include "2_config/{{ agent.name }}_master_config.sv"
-  `include "2_config/{{ agent.name }}_slave_config.sv"
+  `include "2_config/{{ agent.name }}_port_config.sv"
   `include "3_transaction_sequencer/{{ agent.name }}_master_seq_item.sv"
   `include "3_transaction_sequencer/{{ agent.name }}_slave_seq_item.sv"
   `include "3_transaction_sequencer/{{ agent.name }}_master_sequencer.sv"
   `include "3_transaction_sequencer/{{ agent.name }}_slave_sequencer.sv"
   `include "4_driver_monitor/{{ agent.name }}_master_driver.sv"
   `include "4_driver_monitor/{{ agent.name }}_slave_driver.sv"
-  `include "4_driver_monitor/{{ agent.name }}_master_monitor.sv"
-  `include "4_driver_monitor/{{ agent.name }}_slave_monitor.sv"
+  `include "4_driver_monitor/{{ agent.name }}_port_monitor.sv"
   `include "5_agent/{{ agent.name }}_master_agent.sv"
   `include "5_agent/{{ agent.name }}_slave_agent.sv"
   `include "5_agent/{{ agent.name }}_system_config.sv"

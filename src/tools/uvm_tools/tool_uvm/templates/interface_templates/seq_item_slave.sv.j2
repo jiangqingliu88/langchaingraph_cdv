@@ -1,11 +1,31 @@
 {% include "base_templates/base_template.sv.j2" %}
+{% import "base_templates/field_macros.j2" as fm %}
 
 // ============================================================
 // Slave Seq Item: {{ agent.name }}_slave_seq_item
 // ============================================================
 
 class {{ agent.name }}_slave_seq_item extends uvm_sequence_item;
-  `uvm_object_utils({{ agent.name }}_slave_seq_item)
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack 自动化）──
+  `uvm_object_utils_begin({{ agent.name }}_slave_seq_item)
+    `uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)
+    // 请求字段（由 monitor 回填）
+{%- for var in transaction_vars %}
+{%-   if var.is_master != 'False' %}
+    {{ fm.uvm_field(var) }}
+{%-   endif %}
+{%- endfor %}
+    // slave 响应字段
+{%- for var in transaction_vars %}
+{%-   if var.is_master == 'False' %}
+    {{ fm.uvm_field(var) }}
+{%-   endif %}
+{%- endfor %}
+    // 响应控制指令
+    `uvm_field_int(delay_cycles, UVM_DEFAULT)
+    `uvm_field_int(force_resp, UVM_DEFAULT)
+    `uvm_field_int(override_rdata, UVM_DEFAULT)
+  `uvm_object_utils_end
 
   typedef enum {READ, WRITE} xact_type_e;
 
@@ -42,8 +62,4 @@ class {{ agent.name }}_slave_seq_item extends uvm_sequence_item;
     super.new(name);
   endfunction
 
-  function string convert2string();
-    return $sformatf("SLV: type=%s delay=%0d resp=%0b",
-                     xact_type.name(), delay_cycles, force_resp);
-  endfunction
 endclass : {{ agent.name }}_slave_seq_item

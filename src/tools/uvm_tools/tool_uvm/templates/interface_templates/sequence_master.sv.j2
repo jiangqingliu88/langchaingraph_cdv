@@ -6,11 +6,23 @@
 
 class {{ agent.name }}_master_sequence extends uvm_sequence #({{ agent.name }}_master_seq_item);
   `uvm_object_utils({{ agent.name }}_master_sequence)
+  `uvm_declare_p_sequencer({{ agent.name }}_master_sequencer)
 
   function new(string name = "{{ agent.name }}_master_sequence");
     super.new(name);
   endfunction
+  virtual task pre_body();
+  endtask
 
+  virtual task body();
+    {{ agent.name }}_port_config cfg;
+    // 1. 向 p_sequencer 请求配置，存入 cfg
+    p_sequencer.get_cfg(cfg);
+    if (cfg == null)
+      `uvm_error(get_type_name(), "Sequencer cfg is null (agent build 未传入 config_db)")
+  endtask
+  virtual task post_body();
+  endtask
   task do_write();
     {{ agent.name }}_master_seq_item req = {{ agent.name }}_master_seq_item::type_id::create("req");
     start_item(req);

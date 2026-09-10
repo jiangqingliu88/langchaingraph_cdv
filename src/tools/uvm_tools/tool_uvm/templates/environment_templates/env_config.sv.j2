@@ -1,10 +1,20 @@
 {% include "base_templates/base_template.sv.j2" %}
+{% import "base_templates/field_macros.j2" as fm %}
 
 // Environment Configuration: {{ environment.env_name }}_config
 // 自动生成，不要手动修改
 
 class {{ environment.env_name }}_config extends uvm_object;
-  `uvm_object_utils({{ environment.env_name }}_config)
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
+  `uvm_object_utils_begin({{ environment.env_name }}_config)
+{%- for var in config_vars %}
+    {{ fm.uvm_field(var) }}
+{%- endfor %}
+    `uvm_field_int(has_scoreboard, UVM_DEFAULT)
+{%- for agent in agents %}
+    `uvm_field_object({{ agent.name }}_cfg, UVM_DEFAULT)
+{%- endfor %}
+  `uvm_object_utils_end
 {%- for var in config_vars %}
   rand {{ var.type }} {{ var.name }};
 {%- endfor %}
@@ -25,6 +35,7 @@ class {{ environment.env_name }}_config extends uvm_object;
     super.new(name);
 {%- for agent in agents %}
     {{ agent.name }}_cfg = {{ agent.config_type }}::type_id::create("{{ agent.name }}_cfg");
+    {{ agent.name }}_cfg.is_master_side = {{ 1 if agent.is_master is not false else 0 }};
 {%- endfor %}
   endfunction
 

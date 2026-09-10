@@ -10,8 +10,22 @@ class {{ agent.name }}_slave_sequencer extends uvm_sequencer #({{ agent.name }}_
   // ★ 核心：接收 Monitor 抓包的事件 FIFO（事件驱动）
   uvm_tlm_analysis_fifo #({{ agent.name }}_slave_seq_item) req_fifo;
 
+  // ★ 配置句柄（agent build_phase 经 config_db 传入；
+  //   sequence body 内通过 p_sequencer.get_cfg(...) 获取）
+  {{ agent.name }}_port_config cfg;
+
   function new(string name, uvm_component parent);
     super.new(name, parent);
     req_fifo = new("req_fifo", this);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg);
+  endfunction
+
+  // ★ 向序列提供配置（sequence 侧: p_sequencer.get_cfg(cfg)）
+  function void get_cfg(ref {{ agent.name }}_port_config _cfg);
+    _cfg = cfg;
   endfunction
 endclass : {{ agent.name }}_slave_sequencer

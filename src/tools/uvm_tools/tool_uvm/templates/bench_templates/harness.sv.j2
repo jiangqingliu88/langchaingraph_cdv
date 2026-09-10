@@ -8,15 +8,15 @@
 
 // ── 2) dummy interface: set_vifs() 把每个 vif 配置进环境 agent ──
 interface {{ harness.name }}{% if harness.parameter %}#(parameter int {{ harness.parameter }} = 1){% endif %}();
-// ── 1) 各 interface bind 到目标 module（module 名 → 所有实例生效）──
+// ── 1) 各 interface 实例化在 harness 内（信号在 harness bind 的 DUT 作用域里解析）──
 {%- for i in harness.interfaces %}
 {%-   set cnt = i.count | string %}
-bind {{ i.bind_to or harness.bind_to }} {{ i.type }} {{ i.name }}{% if i.count != 1 %}[{{ cnt }}-1:0]{% endif %}({%- for pname, sig in i.connections.items() %}.{{ pname }}({{ sig }}){% if not loop.last %}, {% endif %}{%- endfor %});
+      {{ i.type }} {{ i.name }}{% if i.count != 1 %}[{{ cnt }}-1:0]{% endif %}({%- for pname, sig in i.connections.items() %}.{{ pname }}({{ sig }}){% if not loop.last %}, {% endif %}{%- endfor %});
 {%- endfor %}
 {%- for i in harness.interfaces %}
 {%-   if i.count != 1 %}
 {%-     set cnt = i.count | string %}
-{%-     set src = (i.bind_to or harness.bind_to) ~ "." ~ (i.source_path ~ "." if i.source_path else "") ~ i.name %}
+{%-     set src = i.name %}
   // interface 数组不能 foreach，先整体赋值给 virtual interface 数组
   virtual interface {{ i.type }} vif_{{ loop.index0 }}[{{ cnt }}];
   initial begin
@@ -27,7 +27,7 @@ bind {{ i.bind_to or harness.bind_to }} {{ i.type }} {{ i.name }}{% if i.count !
 
   function void set_vifs(string path);
 {%- for i in harness.interfaces %}
-{%-   set src = (i.bind_to or harness.bind_to) ~ "." ~ (i.source_path ~ "." if i.source_path else "") ~ i.name %}
+{%-   set src = i.name %}
 {%-   if i.count != 1 %}
     foreach (vif_{{ loop.index0 }}[i])
       uvm_config_db#(virtual {{ i.type }})::set(null, {path, ".{{ i.agent_path }}[", $sformatf("%0d", i), "]"}, "vif", vif_{{ loop.index0 }}[i]);

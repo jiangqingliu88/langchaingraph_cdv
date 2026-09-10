@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_gen_test.sv
 //   作者:     -
-//   创建时间: 2026-09-08 17:16:01
-//   修改时间: 2026-09-08 17:16:01
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -26,6 +26,7 @@
 class APB_env_gen_test extends uvm_test;
   `uvm_component_utils(APB_env_gen_test)
     apb_master_sequence apb_master_seq;
+    apb_slave_sequence apb_slave_seq;
   // 环境实例
   APB_env env;
 
@@ -34,6 +35,7 @@ class APB_env_gen_test extends uvm_test;
  
   // 虚拟接口
   virtual apb_master_interface apb_master_vif;
+  virtual apb_slave_interface apb_slave_vif;
   virtual apb_sys_env_interface apb_sys_env_vif;
   // pragma custom field_decl begin
   // pragma custom field_decl end
@@ -57,6 +59,7 @@ class APB_env_gen_test extends uvm_test;
     
     // 配置 Agent 模式（YAML agents 的 is_active；缺省 ACTIVE）
     cfg.apb_master_cfg.is_active = UVM_ACTIVE;
+    cfg.apb_slave_cfg.is_active = UVM_PASSIVE;
 
     // 设置配置到 config_db
     uvm_config_db#(APB_env_config)::set(this, "env", "cfg", cfg);

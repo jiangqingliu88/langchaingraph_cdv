@@ -1,7 +1,7 @@
 <!-- 自动生成 (tool_uvm v0.1.0) — 请勿直接修改本文件 -->
 # UVM Verification Environment — Generated Output
 
-**Generated**: 2026-09-07 23:32:17
+**Generated**: 2026-09-09 17:58:44
 
 ---
 
@@ -52,14 +52,14 @@ output/
 
 ## 🌐 Environment
 
-- **APB_env** — 1 agents
+- **APB_env** — 2 agents
   - Scoreboards: 1
   - TLM connections: 3
   - Files: `env/APB_env*.sv`
 
 ## 🔌 UVM Harness (bind 式自连接)
 
-- **apb_harness** — bind 到 `apb_slave_dut`（style: bind）
+- **apb_harness** — bind 到 `apb_slave_dut`
   - `apb_interface apb_if` → agent path `.apb_master_agent_h`
   - File: `bench/apb_harness.sv`
 

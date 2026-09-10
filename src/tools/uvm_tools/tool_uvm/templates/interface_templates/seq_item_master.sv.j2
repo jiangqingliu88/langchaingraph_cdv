@@ -1,11 +1,27 @@
 {% include "base_templates/base_template.sv.j2" %}
+{% import "base_templates/field_macros.j2" as fm %}
 
 // ============================================================
 // Master Seq Item: {{ agent.name }}_master_seq_item
 // ============================================================
 
 class {{ agent.name }}_master_seq_item extends uvm_sequence_item;
-  `uvm_object_utils({{ agent.name }}_master_seq_item)
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack 自动化）──
+  `uvm_object_utils_begin({{ agent.name }}_master_seq_item)
+    `uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)
+    // master 字段
+{%- for var in transaction_vars %}
+{%-   if var.is_master != 'False' %}
+    {{ fm.uvm_field(var) }}
+{%-   endif %}
+{%- endfor %}
+    // slave 响应字段
+{%- for var in transaction_vars %}
+{%-   if var.is_master == 'False' %}
+    {{ fm.uvm_field(var) }}
+{%-   endif %}
+{%- endfor %}
+  `uvm_object_utils_end
 
   typedef enum {READ, WRITE} xact_type_e;
 
@@ -36,7 +52,4 @@ class {{ agent.name }}_master_seq_item extends uvm_sequence_item;
     super.new(name);
   endfunction
 
-  function string convert2string();
-    return $sformatf("MST: type=%s", xact_type.name());
-  endfunction
 endclass : {{ agent.name }}_master_seq_item

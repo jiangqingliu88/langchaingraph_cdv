@@ -1,0 +1,16 @@
+# ============================================================
+# util_components 定义 —— 工具组件（Predictor 等，YAML 配置端口）
+# ============================================================
+
+util_components:
+  - name: cmdsched_predictor          # 类名/实例名
+    type: uvm_component          # 组件基类（元数据）
+    description: "cmdsched 参考模型：预测 prdata/pslverr"
+
+    # 输入 analysis port（生成 uvm_analysis_imp_<name> + write_<name> + process_<name>）
+    analysis_exports:
+      - { name: in_export, type: apb_master_seq_item }
+
+    # 输出 analysis port（生成 uvm_analysis_port #(<type>)）
+    analysis_ports:
+      - { name: out_port, type: apb_master_seq_item }

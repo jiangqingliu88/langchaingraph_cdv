@@ -5,13 +5,22 @@
 // ============================================================
 
 class {{ agent.name }}_system_config extends uvm_object;
-  `uvm_object_utils({{ agent.name }}_system_config)
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
+  `uvm_object_utils_begin({{ agent.name }}_system_config)
+    `uvm_field_int(num_masters, UVM_DEFAULT)
+    `uvm_field_int(num_slaves, UVM_DEFAULT)
+    `uvm_field_array_object(master_cfgs, UVM_DEFAULT)
+    `uvm_field_array_object(slave_cfgs, UVM_DEFAULT)
+    `uvm_field_int(addr_width, UVM_DEFAULT)
+    `uvm_field_int(data_width, UVM_DEFAULT)
+    `uvm_field_int(id_width, UVM_DEFAULT)
+  `uvm_object_utils_end
 
   int num_masters = 1;
   int num_slaves  = 1;
 
-  {{ agent.name }}_master_config master_cfgs[];
-  {{ agent.name }}_slave_config  slave_cfgs[];
+  {{ agent.name }}_port_config master_cfgs[];
+  {{ agent.name }}_port_config  slave_cfgs[];
 
   int addr_width = 32;
   int data_width = 32;
@@ -27,14 +36,16 @@ class {{ agent.name }}_system_config extends uvm_object;
     master_cfgs = new[num_masters];
     slave_cfgs  = new[num_slaves];
     foreach (master_cfgs[i]) begin
-      master_cfgs[i] = {{ agent.name }}_master_config::type_id::create($sformatf("m_cfg_%0d", i));
+      master_cfgs[i] = {{ agent.name }}_port_config::type_id::create($sformatf("m_cfg_%0d", i));
       master_cfgs[i].is_active = {{ agent.is_active.master }};
+      master_cfgs[i].is_master_side = 1;
       master_cfgs[i].addr_width = addr_width;
       master_cfgs[i].data_width = data_width;
     end
     foreach (slave_cfgs[i]) begin
-      slave_cfgs[i] = {{ agent.name }}_slave_config::type_id::create($sformatf("s_cfg_%0d", i));
+      slave_cfgs[i] = {{ agent.name }}_port_config::type_id::create($sformatf("s_cfg_%0d", i));
       slave_cfgs[i].is_active = {{ agent.is_active.slave }};
+      slave_cfgs[i].is_master_side = 0;
       slave_cfgs[i].response_mode = SEQUENCER_DRIVEN;
       slave_cfgs[i].addr_width = addr_width;
       slave_cfgs[i].data_width = data_width;

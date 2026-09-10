@@ -10,8 +10,8 @@
 // 
 //   文件:     apb_harness.sv
 //   作者:     -
-//   创建时间: 2026-09-08 17:16:01
-//   修改时间: 2026-09-08 17:16:01
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -28,11 +28,11 @@
 
 // ── 2) dummy interface: set_vifs() 把每个 vif 配置进环境 agent ──
 interface apb_harness();
-// ── 1) 各 interface bind 到目标 module（module 名 → 所有实例生效）──
-bind apb_slave_dut apb_interface apb_if(.pclk(pclk), .presetn(presetn), .paddr(paddr), .pwrite(pwrite), .psel(psel), .penable(penable), .pwdata(pwdata), .prdata(prdata), .pready(pready), .pslverr(pslverr));
+// ── 1) 各 interface 实例化在 harness 内（信号在 harness bind 的 DUT 作用域里解析）──
+      apb_interface apb_if(.pclk(pclk), .presetn(presetn), .paddr(paddr), .pwrite(pwrite), .psel(psel), .penable(penable), .pwdata(pwdata), .prdata(prdata), .pready(pready), .pslverr(pslverr));
 
   function void set_vifs(string path);
-    uvm_config_db#(virtual apb_interface)::set(null, {path, ".apb_master_agent_h.*"}, "vif", apb_slave_dut.apb_if);
+    uvm_config_db#(virtual apb_interface)::set(null, {path, ".apb_master_agent_h.*"}, "vif", apb_if);
   endfunction
   // ── force/release 控制（apb_if_force_en 置 1 时把 DUT 信号 force 成接口信号）──
   logic apb_if_force_en = 0;

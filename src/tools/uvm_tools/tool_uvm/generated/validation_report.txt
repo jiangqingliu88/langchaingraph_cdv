@@ -1,2 +1,3 @@
 Semantic check report (tool_uvm)
-[WARNING] tlm_connection_unknown_ref @ APB_env: tlm_connections.driver 'apb_slave.monitored_ap' references unknown 'apb_slave'
+[WARNING] tlm_connection_unknown_ref @ APB_env: tlm_connections.driver 'apb_master_agent_ap' references unknown 'apb_master_agent_ap'
+[WARNING] tlm_connection_unknown_ref @ APB_env: tlm_connections.driver 'apb_slave_agent_ap' references unknown 'apb_slave_agent_ap'

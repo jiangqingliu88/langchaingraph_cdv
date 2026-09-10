@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_bench_tb_top.sv
 //   作者:     -
-//   创建时间: 2026-09-08 17:16:01
-//   修改时间: 2026-09-08 17:16:01
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -37,23 +37,9 @@ module APB_bench_tb_top;
     .presetn(pclk_vif.rst_n[0])
   );
 
-  // ── UVM Configuration & Test Launch ──
-  // 接口 vif 的 config_db 配置由测试 build_phase 的 harness.set_vifs(env.get_full_name())
-  // 完成（tb_top 不需要逐 agent 调 set_vif）
+
   initial begin
-    uvm_root::get().set_report_verbosity_level_hier(UVM_MEDIUM);
-    uvm_root::get().set_timeout(10ms);
     run_test();
   end
-
-  // ── Waveform Dump ──
-  initial begin
-    if ($test$plusargs("DUMP_WAVES")) begin
-      $dumpfile("apb_tb_top.fst");
-      $dumpvars(0, APB_bench_tb_top);
-    end
-  end
-
-  // ── Simulation Control ──
 
 endmodule : APB_bench_tb_top

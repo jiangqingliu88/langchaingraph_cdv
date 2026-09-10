@@ -124,6 +124,8 @@ def _analysis_port_dup_name(env) -> List[str]:
       "tlm_connections 引用了不存在的 agent/组件名（连接将悬空）")
 def _tlm_connection_unknown_ref(env) -> List[str]:
     known = {a.name for a in env.agents or []}
+    # env 模板自动生成的分析口（environment.sv.j2: `{agent}_agent_ap`），合法引用目标
+    known |= {f"{a.name}_agent_ap" for a in env.agents or []}
     known |= {c.get("name") for c in (env.analysis_components or []) if isinstance(c, dict)}
     known |= {s.get("name") for s in (env.scoreboards or []) if isinstance(s, dict)}
     known |= {s.get("name") for s in (env.subenvs or []) if isinstance(s, dict)}

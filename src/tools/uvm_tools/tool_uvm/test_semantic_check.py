@@ -18,7 +18,7 @@ from src.tools.uvm_tools.tool_uvm.gen_uvm import (
 )
 from src.tools.uvm_tools.tool_uvm.semantic_check import Issue, SemanticValidator
 
-EXAMPLES = Path(__file__).parent / "examples"
+EXAMPLES = Path(__file__).parent / "examples" / "apb"
 
 
 def _agent(**kw):

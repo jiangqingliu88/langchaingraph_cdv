@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_virtual_sequencer.sv
 //   作者:     -
-//   创建时间: 2026-09-08 17:16:01
-//   修改时间: 2026-09-08 17:16:01
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -36,6 +36,8 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   // ═══════════════════════════════════════════════════════════════
   // apb_master Agent Sequencer
   uvm_sequencer #(apb_master_seq_item) apb_master_sqr;
+  // apb_slave Agent Sequencer
+  uvm_sequencer #(apb_slave_seq_item) apb_slave_sqr;
   
   // ═══════════════════════════════════════════════════════════════
   // 1.5 has_sequence 辅助 —— UVM-1.2 中 uvm_sequencer_base 无此 API
@@ -71,6 +73,10 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   int apb_master_priority = 5;
   // apb_master 权重（用于加权轮询）
   int apb_master_weight = 1;
+  // apb_slave 优先级（数值越小优先级越高）
+  int apb_slave_priority = 5;
+  // apb_slave 权重（用于加权轮询）
+  int apb_slave_weight = 1;
 
   // ═══════════════════════════════════════════════════════════════
   // 4. 内部状态变量
@@ -81,6 +87,7 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   
   // 加权轮询剩余权重
   protected int apb_master_remaining_weight = 1;
+  protected int apb_slave_remaining_weight = 1;
   
   // 令牌环
   protected int token_holder = 0;
@@ -105,6 +112,7 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
     super.new(name, parent);
     // 初始化统计
     grants_per_sequencer["apb_master_sqr"] = 0;
+    grants_per_sequencer["apb_slave_sqr"] = 0;
   endfunction
   
   // ═══════════════════════════════════════════════════════════════
@@ -147,6 +155,10 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
     apb_master_priority = pri;
     `uvm_info(get_name(), $sformatf("apb_master priority set to %0d", pri), UVM_HIGH)
   endfunction
+  function void set_apb_slave_priority(int pri);
+    apb_slave_priority = pri;
+    `uvm_info(get_name(), $sformatf("apb_slave priority set to %0d", pri), UVM_HIGH)
+  endfunction
   
   // 设置权重
   function void set_apb_master_weight(int weight);
@@ -154,10 +166,16 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
     reset_weight_counts();
     `uvm_info(get_name(), $sformatf("apb_master weight set to %0d", weight), UVM_HIGH)
   endfunction
+  function void set_apb_slave_weight(int weight);
+    apb_slave_weight = weight;
+    reset_weight_counts();
+    `uvm_info(get_name(), $sformatf("apb_slave weight set to %0d", weight), UVM_HIGH)
+  endfunction
   
   // 重置权重计数器
   function void reset_weight_counts();
     apb_master_remaining_weight = apb_master_weight;
+    apb_slave_remaining_weight = apb_slave_weight;
   endfunction
   
   // 启用/禁用调试
@@ -237,6 +255,11 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
       if (debug_enabled)
         `uvm_info(get_name(), "apb_master_sqr has sequence", UVM_HIGH)
     end
+    if (apb_slave_sqr != null && has_sequence(apb_slave_sqr)) begin
+      sqrs.push_back(apb_slave_sqr);
+      if (debug_enabled)
+        `uvm_info(get_name(), "apb_slave_sqr has sequence", UVM_HIGH)
+    end
   endfunction
 
   // ═══════════════════════════════════════════════════════════════
@@ -285,6 +308,14 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
         pri_list.push_back(item);
       end
     end
+    foreach (sqrs[i]) begin
+      if (sqrs[i] == apb_slave_sqr) begin
+        sqr_pri_t item;
+        item.sqr = sqrs[i];
+        item.pri = apb_slave_priority;
+        pri_list.push_back(item);
+      end
+    end
 
     // 按优先级排序（数值小的优先）
     for (int i = 0; i < pri_list.size() - 1; i++) begin
@@ -317,6 +348,12 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
         has_sequence(apb_master_sqr)) begin
       apb_master_remaining_weight--;
       return apb_master_sqr;
+    end
+    if (apb_slave_remaining_weight > 0 && 
+        apb_slave_sqr != null && 
+        has_sequence(apb_slave_sqr)) begin
+      apb_slave_remaining_weight--;
+      return apb_slave_sqr;
     end
     
     // 所有权重耗尽，重置并重新开始
@@ -413,6 +450,7 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
   function bit has_sequence_on(string sqr_name);
     case (sqr_name)
       "apb_master": return (apb_master_sqr != null && has_sequence(apb_master_sqr));
+      "apb_slave": return (apb_slave_sqr != null && has_sequence(apb_slave_sqr));
       default: return 0;
     endcase
   endfunction
@@ -423,6 +461,10 @@ class APB_env_virtual_sequencer extends uvm_sequencer #(uvm_sequence_item);
     if (apb_master_sqr != null && has_sequence(apb_master_sqr)) begin
       if (str != "") str = {str, ", "};
       str = {str, "apb_master"};
+    end
+    if (apb_slave_sqr != null && has_sequence(apb_slave_sqr)) begin
+      if (str != "") str = {str, ", "};
+      str = {str, "apb_slave"};
     end
     return str;
   endfunction

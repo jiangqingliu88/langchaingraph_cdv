@@ -57,6 +57,7 @@ class {{ environment.env_name }} extends uvm_env;
 
   // 功能覆盖率模型（env 级，跨 agent covergroup）
   {{ environment.env_name }}_coverage env_cov;
+  {{ environment.env_name }}_sim_end sim_end_h;   // 仿真自动结束组件（watchdog + auto finish）
 
   // TLM 连接
 {%- for agent in agents %}
@@ -168,6 +169,9 @@ class {{ environment.env_name }} extends uvm_env;
     // 创建功能覆盖率模型（env_cov）
     env_cov = {{ environment.env_name }}_coverage::type_id::create("env_cov", this);
 
+    // 创建仿真自动结束组件（watchdog + 全部 objection 清零后 $finish）
+    sim_end_h = {{ environment.env_name }}_sim_end::type_id::create("sim_end_h", this);
+
     // 创建 Analysis Ports
 {%- for agent in agents %}
     {{ agent.name }}_agent_ap = new("{{ agent.name }}_agent_ap", this);
@@ -199,7 +203,11 @@ class {{ environment.env_name }} extends uvm_env;
 
     // 连接 Agent Monitor 到 Analysis Ports
 {%- for agent in agents %}
+{%-   if agent.is_master is not false %}
     {{ agent.name }}_agent_h.monitor.mon_ap.connect({{ agent.name }}_agent_ap);
+{%-   else %}
+    {{ agent.name }}_agent_h.monitor.slave_mon_ap.connect({{ agent.name }}_agent_ap);
+{%-   endif %}
 {%- endfor %}
 
     // 连接 Analysis Ports 到功能覆盖率模型（env_cov）

@@ -10,8 +10,8 @@
 // 
 //   文件:     APB_env_test_pkg.sv
 //   作者:     -
-//   创建时间: 2026-09-08 17:16:01
-//   修改时间: 2026-09-08 17:16:01
+//   创建时间: 2026-09-09 17:58:44
+//   修改时间: 2026-09-09 17:58:44
 //   联系邮箱: -
 //   描述:     tool_uvm 自动生成
 // 
@@ -26,6 +26,7 @@ package APB_env_test_pkg;
   `include "uvm_macros.svh"
     // 直接导入 Agent 包（SV import 不可传递）
   import apb_master_pkg::*;
+  import apb_slave_pkg::*;
   // 导入 env 包
   import APB_env_pkg::*;
 
