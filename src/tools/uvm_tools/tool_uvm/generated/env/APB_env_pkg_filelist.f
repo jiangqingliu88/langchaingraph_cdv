@@ -32,15 +32,12 @@ C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg
 C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/typed_scoreboard.svh
 C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/algorithm_scoreboard.svh
 
-// ─── Interface & Agent Package ───
-+incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent/1_interface/apb_master_if.sv
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent/apb_master_parameter_pkg.sv
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_master_agent/apb_master_pkg.sv
-+incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_slave_agent
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_slave_agent/1_interface/apb_slave_if.sv
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_slave_agent/apb_slave_parameter_pkg.sv
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/apb_slave_agent/apb_slave_pkg.sv
+// ─── Interface & Agent Package（interface 级 agent 目录）───
++incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/APB_agent
+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/APB_agent/1_interface/APB_if.sv
+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/APB_agent/1_interface/APB_system_if.sv
+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/APB_agent/APB_parameter_pkg.sv
+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/APB_agent/APB_pkg.sv
 
 // ─── Harness（bind 式，须在 tb_top 前编译）──
 C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\bench/apb_harness.sv

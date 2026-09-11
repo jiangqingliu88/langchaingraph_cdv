@@ -50,6 +50,7 @@ generated/
 │   └── loopback/      自闭环自检（master-drive → slave-monitor）
 ├── env/     config / env / coverage / pkg / tests / seqs / cons / utils
 ├── bench/   tb_top + harness
+├── Makefile  整环境双后端编译/仿真入口（env + agents + bench）
 ├── schema_report.txt / validation_report.txt / generation_report.json
 └── README.md
 ```
@@ -68,6 +69,25 @@ make run SIM=vcs SEED=5
 
 后端路径均可覆盖：`QUESTA` / `UVM_HOME` / `UVM_DPI`（Questa），`VCS` / `VCS_HOME`（VCS）。
 VCS 走 `-ntb_opts uvm-1.2` 自带 UVM 库，无需额外 UVM 路径配置。
+
+### 整环境 Makefile（生成目录根）
+
+生成目录根的 `Makefile` 一键编译整个环境（base_pkg → agents → harness → env →
+tests → seqs → tb_top），同样双后端，`SIM` 切换：
+
+```bash
+cd generated
+make                              # Questa 编译
+make compile SIM=vcs              # VCS 编译
+make run TEST=APB_env_base_test   # 编译 + 仿真一个测试
+make run SIM=vcs SEED=5 TEST=APB_env_direct_test
+make compile DUT=rtl/dut.sv       # 追加 DUT 源码
+make run COV=1                    # 覆盖率（Questa +cover/ucdb，VCS -cm/vdb）
+```
+
+编译文件清单为相对路径自包含（agent 段按 interface 级目录
+`agents/{NAME}_agent` 引用），可在 Windows Questa 与 Linux VCS 之间切换；
+`BASE_PKG` 相对路径由生成器渲染，跨机器可覆盖。
 
 ---
 

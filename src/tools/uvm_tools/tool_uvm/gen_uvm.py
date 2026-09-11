@@ -2470,10 +2470,10 @@ class UVMGenerator:
         if utils:
             generated_files.extend(self.generate_utils(utils))
 
-        # ── ③ 整环境编译 filelist（闭环：env + bench + tc_pkg 一键编译入口）──
+        # ── ③ 整环境编译 filelist + Makefile（闭环：env + bench + tc_pkg 一键编译入口）──
         if environments:
             generated_files.extend(
-                self._generate_env_filelists(environments, benches, harnesses))
+                self._generate_env_filelists(environments, benches, harnesses, interfaces))
 
         # ── Generate overall README.md at output root ──
         readme_path = self.output_root / "README.md"
@@ -2495,14 +2495,20 @@ class UVMGenerator:
 
     def _generate_env_filelists(self, environments: Iterable[EnvironmentModel],
                                 benches: Iterable[BenchModel],
-                                harnesses: Iterable[HarnessModel]) -> List[Path]:
-        """渲染 {env}_pkg_filelist.f（绝对路径，含 base_pkg/agent/env/bench/tc_pkg）。"""
+                                harnesses: Iterable[HarnessModel],
+                                interfaces: Iterable[Any]) -> List[Path]:
+        """渲染 {env}_pkg_filelist.f + 整环境 Makefile（env + bench + tc_pkg 一键编译入口）。
+
+        interface_agents：interface 级 agent（agents/{name}_agent 目录布局）——
+        文件清单与 Makefile 的 agent 段都按实际生成目录引用，不再用 env 级 agent 名。
+        """
         rendered: List[Path] = []
         base_pkg_dir = Path(TEMPLATES_DIR).resolve().parent / "base_pkg"
+        iface_agents = [{"name": getattr(a, "name", "")}
+                        for a in interfaces if getattr(a, "name", "")]
         for env in environments:
             ctx = {"environment": env, **env.to_context()}
-            target = self.output_root / "env" / f"{env.env_name}_pkg_filelist.f"
-            ctx["file_name"] = target.name
+            ctx["file_name"] = f"{env.env_name}_pkg_filelist.f"
             ctx["base_pkg_dir"] = str(base_pkg_dir)
             ctx["agent_dir"] = str(self.output_root / "agents")
             ctx["env_dir"] = str(self.output_root / "env")
@@ -2510,15 +2516,34 @@ class UVMGenerator:
             ctx["bench_name"] = benches[0].name if benches else "BENCH"
             ctx["harnesses"] = list(harnesses)
             ctx["dut_path"] = "// TODO: 填入 DUT 源码路径（替换本行）"
+            ctx["interface_agents"] = iface_agents
+
             target = self.output_root / "env" / f"{env.env_name}_pkg_filelist.f"
-            if self._should_skip(target):
+            if not self._should_skip(target):
+                target.parent.mkdir(parents=True, exist_ok=True)
+                content = self.renderer.render(
+                    "environment_templates/env_pkg_filelist.f.j2", ctx)
+                target.write_text(content, encoding="utf-8")
+                rendered.append(target)
+            else:
                 self.skipped += 1
-                continue
-            target.parent.mkdir(parents=True, exist_ok=True)
-            content = self.renderer.render(
-                "environment_templates/env_pkg_filelist.f.j2", ctx)
-            target.write_text(content, encoding="utf-8")
-            rendered.append(target)
+
+            # 整环境 Makefile（生成目录根；Questar/VCS 双后端）
+            mk_target = self.output_root / "Makefile"
+            if not self._should_skip(mk_target):
+                mk_ctx = dict(ctx)
+                mk_ctx["file_name"] = "Makefile"
+                mk_ctx["base_pkg_rel"] = os.path.relpath(
+                    base_pkg_dir, self.output_root).replace("\\", "/")
+                content = self.renderer.render(
+                    "bench_templates/bench_makefile.j2", mk_ctx)
+                content, _ = self.injector.inject(
+                    content, ctx.get("custom_code") or {}, "Makefile",
+                    banner_prefix="# ")
+                mk_target.write_text(content, encoding="utf-8")
+                rendered.append(mk_target)
+            else:
+                self.skipped += 1
         return rendered
 
 

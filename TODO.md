@@ -84,3 +84,12 @@ $env:ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-v4-flash"
 $env:CLAUDE_CODE_SUBAGENT_MODEL="deepseek-v4-flash"
 $env:CLAUDE_CODE_EFFORT_LEVEL="max"
 claude
+
+
+$env:ANTHROPIC_BASE_URL="https://open.bigmodel.cn/api/anthropic"
+$env:ANTHROPIC_AUTH_TOKEN="8f6c9d67bbcc446dbcd9dcb18882f48f.gxrwQrFxJPrJpVpx"
+$env:ANTHROPIC_MODEL="glm-5.3"
+$env:ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.3"
+$env:ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.3"
+$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.3-flash"
+$env:CLAUDE_CODE_EFFORT_LEVEL="high"
