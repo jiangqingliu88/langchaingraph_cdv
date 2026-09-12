@@ -8,7 +8,7 @@ MD 文档生态工具集 — 通过 SQL 后端读写规格文档
 - 文档层级树（父子关系）
 - 列出文档中的需求清单
 """
-from langchain.tools import tool
+from src.tools._lc_tool_compat import tool
 import asyncio
 import json
 

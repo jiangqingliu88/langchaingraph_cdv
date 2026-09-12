@@ -614,7 +614,7 @@ def wrap_agent_tools(agent, registry: ToolRegistry = None, sandbox: Sandbox = No
     agent.tools = adapter.wrap(agent.tools)
     # 重建 executor（如果存在）
     if hasattr(agent, '_executor') and agent._executor:
-        from langchain.agents import create_openai_tools_agent, AgentExecutor
+        from langchain_classic.agents import create_openai_tools_agent, AgentExecutor
         agent_instance = create_openai_tools_agent(
             llm=agent.llm, tools=agent.tools,
             prompt=agent._get_prompt_template_sync()

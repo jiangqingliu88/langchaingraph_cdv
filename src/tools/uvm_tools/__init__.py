@@ -12,7 +12,7 @@ UVM 工具包 —— 独立封装的参数化代码生成器 + Agent 工具
 from .tool_uvm.gen_uvm import generate_uvm, SUPPORTED_TOOL_TYPES  # noqa: F401
 
 # LangChain Tool 包装 —— AgentExecutor 要求 tools 为 BaseTool 实例
-from langchain.tools import StructuredTool  # noqa: E402
+from langchain_core.tools import StructuredTool  # noqa: E402
 
 uvm_tool = StructuredTool.from_function(
     func=generate_uvm,

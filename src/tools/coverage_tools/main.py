@@ -1,7 +1,7 @@
 """
 覆盖率工具集
 """
-from langchain.tools import tool
+from src.tools._lc_tool_compat import tool
 import json
 
 @tool("collect_coverage")

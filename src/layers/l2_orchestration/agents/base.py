@@ -9,7 +9,7 @@ from datetime import datetime
 import asyncio
 import json
 from pydantic import BaseModel, Field
-from langchain.agents import AgentExecutor
+from langchain_classic.agents import AgentExecutor
 from langchain.tools import BaseTool
 from langchain_core.language_models import BaseChatModel
 import structlog
@@ -237,7 +237,7 @@ class BaseAgent(ABC, AgentSubject):
             # 注入"先读后写"约束到 system prompt
             for i, msg in enumerate(prompt.messages):
                 if hasattr(msg, 'prompt') and isinstance(msg.prompt, str) and hasattr(msg, 'template'):
-                    from langchain.prompts import SystemMessagePromptTemplate
+                    from langchain_core.prompts import SystemMessagePromptTemplate
                     prompt.messages[i] = SystemMessagePromptTemplate.from_template(
                         msg.prompt.template + "\n" + self.read_before_write_constraint()
                     )
@@ -253,7 +253,7 @@ class BaseAgent(ABC, AgentSubject):
             tools = self.tools if self.tools else []
             if tools:
                 # Agent with tools: use LangChain agent executor
-                from langchain.agents import create_openai_tools_agent
+                from langchain_classic.agents import create_openai_tools_agent
                 agent = create_openai_tools_agent(
                     llm=self.llm,
                     tools=tools,

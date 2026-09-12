@@ -1,7 +1,7 @@
 """
 规格分析工具集 — 从 spec 文本提取结构化信息
 """
-from langchain.tools import tool
+from src.tools._lc_tool_compat import tool
 import json
 import re
 

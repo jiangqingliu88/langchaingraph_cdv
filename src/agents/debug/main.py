@@ -8,7 +8,7 @@ Phase 4: Fix — auto_fix 模板匹配 → 应用 patch
 Phase 5: Verify — 重跑失败 case 验证修复
 """
 from typing import Dict, List, Any
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from src.layers.l2_orchestration.agents.base import BaseAgent, AgentResult
 from src.layers.l2_orchestration.agents.registry import register_agent

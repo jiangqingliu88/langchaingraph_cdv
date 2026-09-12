@@ -1,5 +1,5 @@
 """断言工具集 — 真实 SVA 生成（非 mock）。"""
-from langchain.tools import tool
+from src.tools._lc_tool_compat import tool
 import json, re
 
 

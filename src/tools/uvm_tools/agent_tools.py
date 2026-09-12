@@ -5,7 +5,7 @@ UVM Agent 工具集 —— 将独立 tool_* 模块包装为 LangChain @tool
 LLM 通过 @tool 装饰器调用 main.py 中的 run() 函数。
 Jinja2 确定性生成模板，LLM 做完形填空。
 """
-from langchain.tools import tool
+from src.tools._lc_tool_compat import tool
 
 from src.tools.uvm_tools.tool_find_spec_yaml.main import run as _find_yaml_run
 from src.tools.uvm_tools.tool_jinja_render.main import run as _render_run

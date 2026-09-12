@@ -3,7 +3,7 @@
 通用复用顾问工具集 - 不绑定特定协议，适配任何验证组件
 """
 
-from langchain.tools import tool
+from src.tools._lc_tool_compat import tool
 import json
 import yaml
 from datetime import datetime

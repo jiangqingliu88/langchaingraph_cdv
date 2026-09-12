@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Any
 from datetime import datetime
 
-from langchain.tools import tool
+from src.tools._lc_tool_compat import tool
 
 
 # ═══════════════════════════════════════════════════════════════
