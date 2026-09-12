@@ -128,13 +128,15 @@ class DecisionReactor:
       L1 发 COVERAGE_UPDATED → DecisionReactor 决策 → 发 DECISION_MADE → 执行层订阅。
     """
 
-    def __init__(self, target: float = 95.0, rl_json_path: str = None):
+    def __init__(self, target: float = 95.0, rl_json_path: str = None,
+                 distilled_weights: dict = None):
         from src.layers.l3_decision.decision_engine import CoverageDrivenDecisionEngine
         from src.layers.l3_decision.brain.decision_brain import DecisionBrain
         from src.layers.l3_decision.brain.rl_policy import QLearningPolicy
         rule_engine = CoverageDrivenDecisionEngine(target=target)
         rl_policy = QLearningPolicy(json_path=rl_json_path)
-        self.brain = DecisionBrain(rule_engine, rl_policy, target=target)
+        self.brain = DecisionBrain(rule_engine, rl_policy, target=target,
+                                   distilled_weights=distilled_weights)
         self.last_action = None
         self._registered = False
 
@@ -176,12 +178,15 @@ class DecisionReactor:
 
 
 def register_decision_reactor(bus=None, target: float = 95.0,
-                              rl_json_path: str = None) -> DecisionReactor:
+                              rl_json_path: str = None,
+                              distilled_weights: dict = None) -> DecisionReactor:
     """注册 L3 决策订阅者，返回 reactor（可读 last_action）。
 
     rl_json_path: RL Q 表持久化路径（跨 run 学习）；默认 None（内存，不持久化）。
+    distilled_weights: L5 蒸馏出的动作权重（跨 run 成长）；默认 None（不启用）。
     """
     bus = bus or get_event_bus()
-    reactor = DecisionReactor(target=target, rl_json_path=rl_json_path)
+    reactor = DecisionReactor(target=target, rl_json_path=rl_json_path,
+                              distilled_weights=distilled_weights)
     reactor.register(bus)
     return reactor

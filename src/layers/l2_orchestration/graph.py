@@ -71,6 +71,8 @@ class Runtime:
         # 跨轮记忆（原本是局部变量 prev_coverage / last_action）
         self.prev_coverage: Optional[float] = None
         self.last_action = None
+        # 跨 run 成长：L5 蒸馏出的动作权重（init 节点载入）
+        self.distilled_weights: Dict[str, float] = {}
 
 
 def _rt(config) -> Runtime:
@@ -149,14 +151,28 @@ async def n_init(state: PipelineState, config) -> Dict[str, Any]:
 
     rt.engine = CoverageDrivenDecisionEngine(target=state.target)
 
+    # 跨 run 成长（L5 蒸馏）：把已固化的动作权重读进本次 run。
+    # 此前 DistillationOrchestrator.get_live_weights() 只有 CLI 展示会调用，
+    # 主循环从不读取——蒸馏结果等于白学。
+    try:
+        from src.layers.l5_evolution.distillation import DistillationOrchestrator
+        rt.distilled_weights = DistillationOrchestrator(state.output_root)\
+            .get_live_weights() or {}
+        if rt.distilled_weights:
+            logger.info(f"载入 {len(rt.distilled_weights)} 条蒸馏动作权重（跨 run 成长生效）")
+    except Exception as e:
+        rt.distilled_weights = {}
+        logger.warning(f"蒸馏权重载入失败（不影响闭环）: {e}")
+
     # Event Bus：KG 世界模型 + L3 决策 reactor
     try:
         from src.layers.l2_orchestration.communication.verification_events import (
             register_decision_reactor, register_verification_handlers)
         register_verification_handlers()
         _rl_path = str(Path.cwd() / ".signoffai" / "rl_policy.json")
-        rt.decision_reactor = register_decision_reactor(target=state.target,
-                                                        rl_json_path=_rl_path)
+        rt.decision_reactor = register_decision_reactor(
+            target=state.target, rl_json_path=_rl_path,
+            distilled_weights=rt.distilled_weights)
     except Exception:
         rt.decision_reactor = None
 
@@ -879,6 +895,8 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
                         "approved_points": sorted(rt.exclude_reg.get_excluded_points())},
             "rtl_hashes": rtl_hashes,
             "coverage_db_history": state.coverage_db_history,
+            # 跨 run 成长：本次实际生效的蒸馏动作权重（可追溯「为什么这次这样决策」）
+            "distilled_weights": rt.distilled_weights,
             "llm_audit": _collect_llm_audit(),
             "evidence": {"total_changes": total_changes,
                          "chain_valid": chain_valid,

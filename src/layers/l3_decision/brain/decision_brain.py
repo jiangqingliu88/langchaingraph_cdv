@@ -18,7 +18,7 @@ Q-learning 逐轮更新，跨 run 通过 JSON 持久化。
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from src.layers.l3_decision.decision_engine import Action
 from .state_encoder import encode_state
@@ -28,10 +28,15 @@ from .rl_policy import QLearningPolicy, SOFT_ACTIONS
 class DecisionBrain:
     """规则 + RL 并行的决策大脑。"""
 
-    def __init__(self, rule_engine, rl_policy: QLearningPolicy, target: float = 95.0):
+    def __init__(self, rule_engine, rl_policy: QLearningPolicy, target: float = 95.0,
+                 distilled_weights: Optional[Dict[str, float]] = None):
         self.rule_engine = rule_engine
         self.rl_policy = rl_policy
         self.target = target
+        # 跨 run 成长（L5 蒸馏）：{action_type: weight}，weight>1 表示该动作
+        # 历史改善率高。此前 DistillationOrchestrator.get_live_weights() **只有
+        # CLI 展示会调用**，主循环从不读取，蒸馏结果等于白学。
+        self.distilled_weights: Dict[str, float] = dict(distilled_weights or {})
         # 学习记忆（跨轮）
         self._prev_state: Optional[str] = None
         self._prev_action: Optional[str] = None
@@ -101,7 +106,46 @@ class DecisionBrain:
                 reason=(f"RL 覆盖规则：{rule_action.action_type} → {action_type}"
                         f"（状态 {state}，已学习 {self.rl_policy.q_entries_for(state)} 条）"),
             )
+
+        # 冷启动（RL 无经验）：先看有没有跨 run 蒸馏出的动作权重
+        pick = self._pick_by_weight(obs)
+        if pick and pick != rule_action.action_type:
+            return Action(
+                action_type=pick,
+                params=self._params_for(pick, obs, rule_action),
+                priority="MEDIUM",
+                reason=(f"蒸馏权重优先：{rule_action.action_type} → {pick}"
+                        f"（跨 run 学习：该动作历史改善率高，权重 "
+                        f"{self.distilled_weights.get(pick, 1.0):.2f}）"),
+            )
         return rule_action
+
+    def _pick_by_weight(self, obs: Any) -> Optional[str]:
+        """按蒸馏权重挑一个**观测支持**的动作；无权重或无适用动作时返回 None。
+
+        关键约束：只在观测确实支持该动作时才采纳权重——否则权重再高也可能
+        选出一个无依据的动作（比如没有任何 gap 却去 RELAX_CONSTRAINT）。
+        """
+        if not self.distilled_weights:
+            return None
+
+        gaps = [g for g in (getattr(obs, "gaps", None) or []) if isinstance(g, dict)]
+        reasons = {g.get("reason") for g in gaps}
+
+        supported: List[str] = []
+        if gaps and "constraint" in reasons:
+            supported.append("RELAX_CONSTRAINT")
+        if gaps:
+            supported.append("GENERATE_DIRECTED_TEST")
+        if (getattr(obs, "failed_tests", None)
+                or getattr(obs, "dead_code_modules", None)):
+            supported.append("REFACTOR_RTL")
+        supported.append("EXPAND_SEEDS")  # 扩种无前置条件，总是可用
+
+        candidates = [a for a in supported if a in self.distilled_weights]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda a: self.distilled_weights.get(a, 1.0))
 
     def _params_for(self, action_type: str, obs: Any, rule_action: Action) -> Dict[str, Any]:
         """为 RL 选中的动作补齐参数。
