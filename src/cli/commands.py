@@ -4082,6 +4082,75 @@ def projects():
 
 
 # ═══════════════════════════════════════════════════════════════
+# vagent knowledge — 验证知识图谱（V2 语义图 / V4 跨项目复用）
+# ═══════════════════════════════════════════════════════════════
+
+@cli.group("knowledge")
+def knowledge():
+    """验证知识图谱：导出/导入签核证据包（跨项目复用）
+
+    \b
+    示例:
+      vagent knowledge export gemm -c 96.0            # 导出本项目的签核证据包
+      vagent knowledge import other_project_signoff.json   # 合并进本项目 KG
+    """
+    pass
+
+
+@knowledge.command("export")
+@click.argument("project_name")
+@click.option("--output", "-o", "out_path", default=None,
+              help="输出 JSON 路径（默认 <project>_signoff.json）")
+@click.option("--coverage", "-c", type=float, default=None, help="本项目功能覆盖率（%%）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def knowledge_export(project_name, out_path, coverage, json_output):
+    """导出签核证据包（KG + 覆盖率摘要）供其它项目导入复用。
+
+    marketplace.export_signoff_package 一直存在却零调用（V4 的「签核证据包
+    交换」因此从未真正发生），此处接上 CLI。
+    """
+    import asyncio
+    out = get_output_adapter(json_output)
+    try:
+        from src.layers.l3_decision.knowledge.persistence import load_graph_from_db
+        from src.layers.l3_decision.knowledge.marketplace import export_signoff_package
+        g = asyncio.run(load_graph_from_db())
+        if len(g) == 0:
+            out.print_error("知识图谱为空：先跑一次 design 阶段把 KG 写入库")
+            return
+        path = out_path or f"{project_name}_signoff.json"
+        cov = {"functional": coverage} if coverage is not None else {}
+        p = export_signoff_package(g, project_name, cov, path)
+        out.print_result({"project": project_name, "nodes": len(g),
+                          "package": p, "coverage": cov}, title="签核证据包已导出")
+    except Exception as e:
+        out.print_error(f"导出失败: {e}")
+
+
+@knowledge.command("import")
+@click.argument("package_path", type=click.Path(exists=True))
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def knowledge_import(package_path, json_output):
+    """导入签核证据包并合并进本项目知识图谱（跨项目复用）。"""
+    import asyncio
+    out = get_output_adapter(json_output)
+    try:
+        from src.layers.l3_decision.knowledge.persistence import (
+            load_graph_from_db, save_graph_to_db)
+        from src.layers.l3_decision.knowledge.marketplace import (
+            load_signoff_package, merge_package_into_graph)
+        pkg = load_signoff_package(package_path)
+        g = asyncio.run(load_graph_from_db())
+        added = merge_package_into_graph(g, pkg)
+        if added:
+            asyncio.run(save_graph_to_db(g))
+        out.print_result({"from_project": pkg.get("project", ""), "added_nodes": added,
+                          "total_nodes": len(g)}, title=f"已合并 {added} 个新节点")
+    except Exception as e:
+        out.print_error(f"导入失败: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
 # vagent distill — Agent 自主蒸馏（L5 进化）
 # ═══════════════════════════════════════════════════════════════
 
