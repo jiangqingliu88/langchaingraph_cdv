@@ -136,12 +136,16 @@ def _resolve_test(output_dir: Path) -> str | None:
 
 
 def check_scoreboard(output_dir: str, test_name: str = None,
-                     questasim_uvm: str = "F:/questasim64_2024.1") -> Dict[str, Any]:
+                     questasim_uvm: str = None) -> Dict[str, Any]:
     """仿真检查：跑一个定向 case，断言 scoreboard 全部 match（matched==N && mismatched==0）。
 
     这是「逻辑闭环」的通用验收——适用于所有 DUT（物理回环只是其中一种 test）。
     test_name 为空时自动解析：loopback_test > directed_test > base_test。
+    questasim_uvm 为空时由 config.settings.questa_home() 解析。
     """
+    if not questasim_uvm:
+        from config.settings import questa_home
+        questasim_uvm = questa_home()
     od = Path(output_dir).resolve()  # 绝对路径：vlog/vsim 以 cwd=od 运行时，相对路径会翻倍
     if test_name is None:
         test_name = _resolve_test(od)

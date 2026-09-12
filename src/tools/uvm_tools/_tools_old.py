@@ -1272,10 +1272,11 @@ def _run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
     fl = _build_loopback_filelist(output_dir, agent_name)
     top = f"{agent_name}_loopback_tb"
 
-    # ── 从 RegressionRunner 取 QuestaSim 路径（避免硬编码） ──
-    from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner as _RR
-    QUESTA = _RR.QUESTA if hasattr(_RR, 'QUESTA') else "f:/questasim64_2024.1/win64"
-    vsim = os.path.join(QUESTA, "vsim.exe")
+    # ── QuestaSim 路径统一走 config.settings（不再硬编码） ──
+    from config.settings import questa_exe, questa_home
+    vsim = questa_exe("vsim.exe")
+    _uvm_dpi = os.path.join(questa_home(), os.environ.get("UVM_VERSION", "uvm-1.2"),
+                            "win64", "uvm_dpi")
 
     t0 = time.time()
     print(f"    [{agent_name}] compiling loopback TB... ", end="", flush=True)
@@ -1334,7 +1335,7 @@ def _run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
         log_path.unlink()
 
     r2 = subprocess.run([
-        vsim, "-c", "-sv_lib", f"{QUESTA.replace('win64','')}{os.environ.get('UVM_VERSION','uvm-1.2')}/win64/uvm_dpi",
+        vsim, "-c", "-sv_lib", _uvm_dpi,
         "-onfinish", "stop",
         "-do", "log -r /*; run -all; quit -f",
         "-wlf", f"{sim_agent_str}/wave_{agent_name}_lb.wlf",
@@ -1357,7 +1358,7 @@ def _run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
             break
         # 重新仿真（编译已过，跳过重编译）
         r2 = subprocess.run([
-            vsim, "-c", "-sv_lib", f"{QUESTA.replace('win64','')}{os.environ.get('UVM_VERSION','uvm-1.2')}/win64/uvm_dpi",
+            vsim, "-c", "-sv_lib", _uvm_dpi,
             "-onfinish", "stop",
             "-do", "log -r /*; run -all; quit -f",
             "-wlf", f"{sim_agent_str}/wave_{agent_name}_lb.wlf",

@@ -4,14 +4,18 @@ from pathlib import Path
 
 
 def compile_cmodel_dpi(cmodel_dir: str, module_name: str = "dut",
-                       questa_dir: str = "f:/questasim64_2024.1") -> dict:
+                       questa_dir: str = None) -> dict:
     """
     Compile C++ model + DPI wrapper into a shared library.
     Returns {"status": "PASS"/"FAIL", "lib_path": "...", "log": "..."}
+    questa_dir 为空时由 config.settings.questa_home() 解析。
     """
     cmodel = Path(cmodel_dir)
     if not cmodel.exists():
         return {"status": "FAIL", "error": f"cmodel dir not found: {cmodel_dir}"}
+    if not questa_dir:
+        from config.settings import questa_home
+        questa_dir = questa_home()
 
     # Source files
     ref_h     = cmodel / f"{module_name}_ref_model.h"

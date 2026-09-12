@@ -143,9 +143,10 @@ def run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
     fl = build_loopback_filelist(output_dir, agent_name)
     top = f"{agent_name}_loopback_tb"
 
-    from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner as _RR
-    QUESTA = _RR.QUESTA if hasattr(_RR, 'QUESTA') else "f:/questasim64_2024.1/win64"
-    vsim = os.path.join(QUESTA, "vsim.exe")
+    from config.settings import questa_exe, questa_home
+    vsim = questa_exe("vsim.exe")
+    _uvm_dpi = os.path.join(questa_home(), os.environ.get("UVM_VERSION", "uvm-1.2"),
+                            "win64", "uvm_dpi")
 
     t0 = time.time()
     runner = RegressionRunner(
@@ -186,7 +187,7 @@ def run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
         log_path.unlink()
 
     r2 = subprocess.run([
-        vsim, "-c", "-sv_lib", f"{QUESTA.replace('win64','')}{os.environ.get('UVM_VERSION','uvm-1.2')}/win64/uvm_dpi",
+        vsim, "-c", "-sv_lib", _uvm_dpi,
         "-onfinish", "stop", "-do", "log -r /*; run -all; quit -f",
         "-wlf", f"{sim_agent_str}/wave_{agent_name}_lb.wlf",
         "-work", wd_str, "-l", f"{sim_agent_str}/sim_{agent_name}_lb.log",
@@ -205,7 +206,7 @@ def run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
         if not fixed:
             break
         r2 = subprocess.run([
-            vsim, "-c", "-sv_lib", f"{QUESTA.replace('win64','')}{os.environ.get('UVM_VERSION','uvm-1.2')}/win64/uvm_dpi",
+            vsim, "-c", "-sv_lib", _uvm_dpi,
             "-onfinish", "stop", "-do", "log -r /*; run -all; quit -f",
             "-wlf", f"{sim_agent_str}/wave_{agent_name}_lb.wlf",
             "-work", wd_str, top,

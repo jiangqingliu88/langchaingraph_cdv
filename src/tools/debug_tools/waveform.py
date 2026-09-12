@@ -22,9 +22,10 @@ from typing import Any, Dict, List, Optional
 
 
 def _questa_win64() -> str:
-    questa = os.environ.get("QUESTA_HOME", "f:/questasim64_2024.1/win64")
-    candidates = [questa, os.path.join(questa, "win64")]
-    for c in candidates:
+    """QuestaSim 目录（含 wlf2log.exe）—— 统一走 config.settings，再回落 PATH。"""
+    from config.settings import questa_home
+    root = questa_home()
+    for c in (os.path.join(root, "win64"), root):
         if os.path.exists(os.path.join(c, "wlf2log.exe")):
             return c
     # PATH 搜索
@@ -33,7 +34,7 @@ def _questa_win64() -> str:
         found = shutil.which(cmd)
         if found:
             return str(Path(found).parent)
-    return questa
+    return os.path.join(root, "win64")
 
 
 def wlf_to_text(wlf_path: str | Path) -> str:

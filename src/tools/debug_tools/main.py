@@ -808,7 +808,10 @@ def rerun_failed_test(input_json: str = "") -> str:
         stdout = r.stdout[-3000:] if r.stdout else ""
         stderr = r.stderr[-1000:] if r.stderr else ""
 
-        passed = "UVM_FATAL" not in stdout and "UVM_ERROR" not in stdout
+        # 判据与 RegressionRunner 对齐：日志无 UVM_ERROR/FATAL **且** 退出码为 0。
+        # 原来只看日志，会把 vsim 崩溃/非零退出但未打印 UVM_ERROR 的情况误判为 PASS。
+        passed = ("UVM_FATAL" not in stdout and "UVM_ERROR" not in stdout
+                  and r.returncode == 0)
 
         return json.dumps({
             "test_name": test_name,

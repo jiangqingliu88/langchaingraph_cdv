@@ -39,6 +39,9 @@ class VerificationSettings(BaseSettings):
     max_retries: int = 3
     # 回归模式：True=增量（只跑 planned/generated）；False=全量（每次跑所有用例，含已 passed，默认）
     incremental_regression: bool = False
+    # QuestaSim 安装根目录（不含 win64）。留空则回落到 QUESTA_HOME 环境变量与候选探测，
+    # 见本模块的 questa_home()。此处配置对应环境变量 VERIFY_QUESTA_HOME。
+    questa_home: str = ""
 
 
 class PlatformSettings(BaseSettings):
@@ -169,3 +172,72 @@ def get_settings() -> Settings:
 
 
 Settings.get_instance = staticmethod(get_settings)
+
+
+# ═══════════════════════════════════════════════════════════════
+# QuestaSim 定位 —— 全仓唯一来源
+# ═══════════════════════════════════════════════════════════════
+# 历史上这条路径以字面量散落在 10+ 个模块里（f:/questasim64_2024.1/win64），
+# 换机器/换版本就得全仓搜改。统一收敛到此处。
+
+# 候选探测路径（兜底，非唯一真理）
+_QUESTA_CANDIDATES = (
+    "f:/questasim64_2024.1",
+    "c:/questasim64_2024.1",
+    "/opt/questasim",
+)
+
+
+def _normalize_questa_root(path: str) -> str:
+    """归一化为「不含 win64」的根目录。"""
+    p = str(path).strip().rstrip("/\\")
+    if p.lower().endswith("win64"):
+        p = p[:-len("win64")].rstrip("/\\")
+    return p
+
+
+def _has_questa(root: str) -> bool:
+    """根目录下能找到一个 vlog.exe 即认为有效（带或不带 win64 子目录）。"""
+    if not root:
+        return False
+    return (os.path.exists(os.path.join(root, "win64", "vlog.exe"))
+            or os.path.exists(os.path.join(root, "vlog.exe")))
+
+
+def questa_home() -> str:
+    """QuestaSim 安装根目录（**不含** win64）。
+
+    优先级: QUESTA_HOME 环境变量 > Settings.verification.questa_home > 候选探测。
+    都找不到时返回首个候选（不抛异常），由调用方按 os.path.exists 报
+    "vlog not found"，保持原有失败可见性。
+    """
+    candidates = []
+    env = os.environ.get("QUESTA_HOME", "").strip()
+    if env:
+        candidates.append(env)
+    try:
+        cfg = (get_settings().verification.questa_home or "").strip()
+        if cfg:
+            candidates.append(cfg)
+    except Exception:
+        pass
+    candidates.extend(_QUESTA_CANDIDATES)
+
+    for c in candidates:
+        root = _normalize_questa_root(c)
+        if _has_questa(root):
+            return root
+    return _normalize_questa_root(candidates[0]) if candidates else ""
+
+
+def questa_exe(name: str) -> str:
+    """QuestaSim 可执行文件全路径，如 questa_exe("vlog.exe")。
+
+    依次尝试 <root>/win64/<name>、<root>/<name>；都找不到时返回
+    <root>/win64/<name>，由调用方按 os.path.exists 判失败。
+    """
+    root = questa_home()
+    for cand in (os.path.join(root, "win64", name), os.path.join(root, name)):
+        if os.path.exists(cand):
+            return cand
+    return os.path.join(root, "win64", name)

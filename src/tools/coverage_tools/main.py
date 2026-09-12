@@ -2,6 +2,7 @@
 覆盖率工具集
 """
 from src.tools._lc_tool_compat import tool
+from config.settings import questa_exe
 import json
 
 @tool("collect_coverage")
@@ -20,10 +21,7 @@ def collect_coverage(coverage_type: str = "all") -> str:
             break
 
     if ucdb and os.path.exists(ucdb):
-        questa = os.environ.get("QUESTA_HOME", "f:/questasim64_2024.1/win64")
-        vcover = os.path.join(questa, "vcover.exe")
-        if not os.path.exists(vcover):
-            vcover = os.path.join(questa, "win64", "vcover.exe")
+        vcover = questa_exe("vcover.exe")
         if os.path.exists(vcover):
             try:
                 r = subprocess.run([vcover, "report", "-details", ucdb],

@@ -8,21 +8,13 @@ import os, subprocess, json, sys, re
 import builtins
 from pathlib import Path
 
+from config.settings import questa_exe, questa_home
+
 
 def print(*args, **kwargs):
     """本模块诊断日志默认写 stderr（stdout 保留给业务输出/--json，不被污染）。"""
     kwargs.setdefault("file", sys.stderr)
     builtins.print(*args, **kwargs)
-
-
-def _questa():
-    questa = os.environ.get("QUESTA_HOME", "f:/questasim64_2024.1/win64")
-    if questa and not os.path.exists(os.path.join(questa, "vlog.exe")):
-        if not os.path.exists(os.path.join(questa, "win64", "vlog.exe")):
-            default = "f:/questasim64_2024.1/win64"
-            if os.path.exists(os.path.join(default, "vlog.exe")):
-                return default
-    return questa
 
 
 def build_rtl_filelist(output_dir: Path) -> Path:
@@ -96,9 +88,7 @@ def compile_with_coverage(output_dir: Path, filelist: Path) -> dict:
     已由 L1 EdaBackend.compile() 取代（统一走 RegressionRunner 编译链，消除重复）。
     保留此函数仅为向后兼容，新代码请用 get_eda_backend().compile()。
     """
-    vlog = os.path.join(_questa(), "vlog.exe")
-    if not os.path.exists(vlog):
-        vlog = os.path.join(_questa(), "win64", "vlog.exe")
+    vlog = questa_exe("vlog.exe")
     if not os.path.exists(vlog):
         return {"status": "FAIL", "error": f"vlog not found: {vlog}"}
 
@@ -106,7 +96,7 @@ def compile_with_coverage(output_dir: Path, filelist: Path) -> dict:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     # UVM 源文件路径（与 RegressionRunner.compile 保持一致）
-    questa_root = os.path.dirname(_questa())
+    questa_root = questa_home()
     uvm_src_dir = os.path.join(questa_root, "verilog_src", "uvm-1.2", "src")
     uvm_pkg_path = os.path.join(uvm_src_dir, "uvm_pkg.sv")
 
@@ -144,9 +134,7 @@ def simulate_with_coverage(output_dir: Path, top_module: str, uvm_test: str = ""
 
     原始证据按 seed 命名（不覆盖）：sim_seed_<seed>.log（日志）+ wave_seed_<seed>.vcd（波形）。
     """
-    vsim = os.path.join(_questa(), "vsim.exe")
-    if not os.path.exists(vsim):
-        vsim = os.path.join(_questa(), "win64", "vsim.exe")
+    vsim = questa_exe("vsim.exe")
     if not os.path.exists(vsim):
         return {"status": "FAIL", "error": f"vsim not found: {vsim}"}
 
@@ -167,8 +155,7 @@ def simulate_with_coverage(output_dir: Path, top_module: str, uvm_test: str = ""
         f"coverage save -onexit {ucdb.as_posix()}; run -all; quit -f"
     )
 
-    questa_home = _questa()
-    uvm_dir = questa_home.replace("win64", "") + os.environ.get("UVM_VERSION", "uvm-1.2")
+    uvm_dir = os.path.join(questa_home(), os.environ.get("UVM_VERSION", "uvm-1.2"))
 
     # 关键: -work 参数必须用正斜杠（Windows 下反斜杠会被 vsim 解析成 . 分隔符）
     wd = str(work_dir.resolve()).replace("\\", "/")
@@ -209,9 +196,7 @@ def simulate_with_coverage(output_dir: Path, top_module: str, uvm_test: str = ""
 
 def parse_coverage_report(output_dir: Path) -> dict:
     """运行 vcover report 并解析覆盖率数据"""
-    vcover = os.path.join(_questa(), "vcover.exe")
-    if not os.path.exists(vcover):
-        vcover = os.path.join(_questa(), "win64", "vcover.exe")
+    vcover = questa_exe("vcover.exe")
     if not os.path.exists(vcover):
         return {"error": "vcover not found"}
 
@@ -372,9 +357,7 @@ def parse_toggle_details(output_dir: Path) -> list:
     返回: [{"signal", "high", "low", "h_to_l", "l_to_h", "misses", "instance"}]
     其中 misses = 未翻转的 bin 数（1H->0L 或 0L->1H 计数为 0 即未覆盖）。
     """
-    vcover = os.path.join(_questa(), "vcover.exe")
-    if not os.path.exists(vcover):
-        vcover = os.path.join(_questa(), "win64", "vcover.exe")
+    vcover = questa_exe("vcover.exe")
     if not os.path.exists(vcover):
         return []
 

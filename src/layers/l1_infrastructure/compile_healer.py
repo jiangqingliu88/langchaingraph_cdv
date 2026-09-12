@@ -351,9 +351,10 @@ class CompileSelfHealer:
 
     def _fix_env(self, msg: str) -> bool:
         """尝试修复环境变量问题。"""
+        from config.settings import questa_home
         env_map = {
             "VCS_HOME": "/usr/local/synopsys/vcs",
-            "QUESTA_HOME": "f:/questasim64_2024.1/win64",
+            "QUESTA_HOME": questa_home(),
         }
         fixed = False
         for var, default in env_map.items():

@@ -1158,6 +1158,9 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         builds_lines.append(f"      - {lb_ref}")
     builds_section = "\n".join(builds_lines)
 
+    from config.settings import questa_home
+    _questa_root = questa_home().replace("\\", "/")
+
     yaml_content = f"""# 回归测试配置 — 由 find_spec_yaml 自动生成
 # 用法: python regression.py --config {reg_path.as_posix()} --action all --mode local
 
@@ -1172,8 +1175,8 @@ settings:
   build_cache: False
   simulators:
     questa:
-      compile: "vlog -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} -sv -mfcu +incdir+F:/questasim64_2024.1/verilog_src/uvm-1.2/src F:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv -f {{files}}"
-      run: "vsim -c -sv_lib F:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} {{top}} {{run_opts}} -do 'log -r /*; run -all; quit -f'"
+      compile: "vlog -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} -sv -mfcu +incdir+{_questa_root}/verilog_src/uvm-1.2/src {_questa_root}/verilog_src/uvm-1.2/src/uvm_pkg.sv -f {{files}}"
+      run: "vsim -c -sv_lib {_questa_root}/uvm-1.2/win64/uvm_dpi -onfinish stop -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} {{top}} {{run_opts}} -do 'log -r /*; run -all; quit -f'"
 
 builds:
 {builds_section}
