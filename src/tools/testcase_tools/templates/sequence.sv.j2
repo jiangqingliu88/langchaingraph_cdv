@@ -1,0 +1,89 @@
+# src/tools/testcase_gen/templates/sequence.sv.j2
+// ============================================
+// Sequence: {{ sequence_name }}
+// Project: {{ project_name }}
+// Policy Mode: {{ policy_mode }}
+// Active Policies: {{ active_policies|join(', ') }}
+// Generated: {{ timestamp|default('auto') }}
+// ============================================
+
+class {{ sequence_name }} extends uvm_sequence #({{ env_name }}_transaction);
+    `uvm_object_utils({{ sequence_name }})
+    
+    // 策略注入
+    {{ env_name }}_policy_combinator policy_combo;
+    string active_policies[$] = '{{ active_policies|join(" ") }}';
+    
+    // 事务队列
+    {{ env_name }}_policy_context trans_queue[$];
+    
+    // 配置
+    rand int num_transactions;
+    rand int queue_depth;
+    
+    constraint num_c { num_transactions inside {[{{ min_trans }}:{{ max_trans }}]}; }
+    constraint queue_c { queue_depth inside {[5:50]}; }
+    
+    function new(string name = "{{ sequence_name }}");
+        super.new(name);
+    endfunction
+    
+    virtual task body();
+        // 初始化策略
+        if (policy_combo == null)
+            policy_combo = {{ env_name }}_policy_factory::create_from_plusargs();
+        policy_combo.apply_mode = {{ policy_mode }};
+        
+        `uvm_info(get_name(), $sformatf("Starting with %0d policies", 
+                   active_policies.size()), UVM_MEDIUM)
+        
+        fork
+            generate_transactions();
+            execute_transactions();
+        join
+        
+        policy_combo.report_stats();
+    endtask
+    
+    virtual task generate_transactions();
+        for (int i = 0; i < num_transactions; i++) begin
+            {{ env_name }}_policy_context ctx = new();
+            ctx.iteration = i;
+            ctx.total_iterations = num_transactions;
+            ctx.timestamp = $time;
+            
+            // 创建事务
+{% for trans in transactions %}
+            begin
+                {{ trans.type }} {{ trans.name }}_t = {{ trans.type }}::type_id::create("{{ trans.name }}_t");
+                assert({{ trans.name }}_t.randomize());
+                ctx.set_transaction("{{ trans.name }}", {{ trans.name }}_t);
+            end
+{% endfor %}
+            
+            // 应用策略
+            policy_combo.apply(ctx);
+            policy_combo.verify(ctx);
+            
+            trans_queue.push_back(ctx);
+            while (trans_queue.size() > queue_depth) @(posedge clk);
+        end
+    endtask
+    
+    virtual task execute_transactions();
+        while (trans_queue.size() > 0) begin
+            {{ env_name }}_policy_context ctx = trans_queue.pop_front();
+{% for trans in transactions %}
+            if (p_sequencer.{{ trans.name }}_sqr != null) begin
+                {{ trans.type }} {{ trans.name }}_t;
+                $cast({{ trans.name }}_t, ctx.get_transaction("{{ trans.name }}"));
+                if ({{ trans.name }}_t != null) begin
+                    start_item({{ trans.name }}_t, p_sequencer.{{ trans.name }}_sqr);
+                    finish_item({{ trans.name }}_t, p_sequencer.{{ trans.name }}_sqr);
+                end
+            end
+{% endfor %}
+        end
+    endtask
+    
+endclass : {{ sequence_name }}

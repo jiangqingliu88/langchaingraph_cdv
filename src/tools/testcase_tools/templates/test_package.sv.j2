@@ -1,0 +1,34 @@
+# src/tools/testcase_gen/templates/test_package.sv.j2
+// ============================================
+// Package: {{ scenario.name }}_pkg
+// Scenario: {{ scenario.desc }}
+// ============================================
+
+package {{ scenario.name }}_pkg;
+    
+    import uvm_pkg::*;
+    `include "uvm_macros.svh"
+    
+    // ===== 策略框架 =====
+    `include "{{ env_name }}_policy_context.sv"
+    `include "{{ env_name }}_constraint_policy.sv"
+    
+{% for policy in policies %}
+    `include "{{ policy.name }}_policy.sv"
+{% endfor %}
+    
+    `include "{{ env_name }}_policy_combinator.sv"
+    `include "{{ env_name }}_policy_factory.sv"
+    
+    // ===== 事务定义 =====
+{% for trans in transactions %}
+    `include "{{ trans.type }}.sv"
+{% endfor %}
+    
+    // ===== Sequence =====
+    `include "{{ scenario.name }}_seq.sv"
+    
+    // ===== Test =====
+    `include "{{ scenario.name }}.sv"
+    
+endpackage : {{ scenario.name }}_pkg
