@@ -201,6 +201,17 @@ class ToolResult:
     manifest_hash: str = ""           # 执行时的工具版本 hash
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    # ── 来源凭证（ADR-3）──
+    # success 只是「执行者自述」。verified_by 回答的是「凭什么说它成功」：
+    #   "eda"  —— 经真实 EDA（vlog/vsim）判定，铁律一要求的下游依据
+    #   "llm"  —— LLM 自述成功，未经工具验证，不可作为签核依据
+    #   "none" —— 纯确定性工具，本身无「外部验证」概念（如文件读写）
+    # 没有这三个字段时，「LLM 猜的 success=True」与「vlog 验过的 success=True」
+    # 在类型上完全不可区分——这是「可审计」最要命的一处缺口。
+    verified_by: str = "none"
+    evidence_ref: str = ""            # 证据位置：manifest / 日志 / ucdb 路径
+    returncode: Optional[int] = None  # 子进程退出码（EDA 类工具）
+
     def to_json(self) -> str:
         """序列化为 JSON string —— LLM 可解析"""
         return json.dumps({
@@ -208,8 +219,21 @@ class ToolResult:
             "data": self.data,
             "error": self.error,
             "execution_time_s": self.execution_time_s,
+            "verified_by": self.verified_by,
             **self.metadata,
         }, indent=2, ensure_ascii=False, default=str)
+
+    def to_receipt(self) -> Dict[str, Any]:
+        """回执行（落盘用）—— 比 to_json 多带凭证字段。"""
+        return {
+            "success": self.success,
+            "error": self.error,
+            "execution_time_s": self.execution_time_s,
+            "manifest_hash": self.manifest_hash,
+            "verified_by": self.verified_by,
+            "evidence_ref": self.evidence_ref,
+            "returncode": self.returncode,
+        }
 
     @classmethod
     def ok(cls, data: Dict[str, Any] = None, **kwargs) -> ToolResult:
@@ -549,12 +573,28 @@ class ToolCallRecord:
 
 
 class ToolAuditor:
-    """工具调用审计器 — 记录所有工具调用，支持查询和统计"""
+    """工具调用审计器 — 记录所有工具调用，支持查询和统计。
 
-    def __init__(self, max_records: int = 10000):
+    receipt_path 非空时，每条记录同时 append 到该 JSONL 文件（append-only）。
+    原来只有内存，进程退出即失——架构图声称的 tool_receipts 因此一直落不了地。
+    """
+
+    def __init__(self, max_records: int = 10000, receipt_path: str = ""):
         self._records: List[ToolCallRecord] = []
         self._max_records = max_records
         self._stats: Dict[str, Dict[str, Any]] = {}  # tool_name → {calls, failures, total_time}
+        self._receipt_path = receipt_path
+        if receipt_path:
+            p = Path(receipt_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            # 每次 run 覆盖上一轮，避免 JSONL 无限增长；同一 run 内为 append
+            p.write_text("", encoding="utf-8")
+
+    @classmethod
+    def with_receipts(cls, output_root: str, max_records: int = 10000) -> "ToolAuditor":
+        """把回执落到 <output_root>/docs/tool_receipts.jsonl（与证据链同目录）。"""
+        return cls(max_records=max_records,
+                   receipt_path=str(Path(output_root) / "docs" / "tool_receipts.jsonl"))
 
     def record(self, record: ToolCallRecord) -> None:
         self._records.append(record)
@@ -569,6 +609,25 @@ class ToolAuditor:
         if not record.success:
             s["failures"] += 1
         s["total_time_s"] += record.execution_time_s
+
+        self._append_receipt(record)
+
+    def _append_receipt(self, record: ToolCallRecord) -> None:
+        """落盘一条回执。写失败不应阻断工具执行，故吞掉异常。"""
+        if not self._receipt_path:
+            return
+        try:
+            with open(self._receipt_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "tool": record.tool_name, "version": record.tool_version,
+                    "args": record.args_summary, "success": record.success,
+                    "error": record.error, "time_s": record.execution_time_s,
+                    "timestamp": record.timestamp, "run_id": record.run_id,
+                    "manifest_hash": getattr(record, "manifest_hash", ""),
+                    "sandbox_decision": getattr(record, "sandbox_decision", ""),
+                }, ensure_ascii=False, default=str) + "\n")
+        except Exception:
+            pass
 
     def query(self, tool_name: str = None, success: bool = None, limit: int = 50) -> List[ToolCallRecord]:
         records = self._records

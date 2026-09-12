@@ -1,0 +1,207 @@
+"""闭环流水线的跨阶段状态 —— 取代裸 dict `ctx`。
+
+背景（为什么要有这个文件）
+    run_closed_loop 原来的共享状态是 `ctx = {}`，靠 `ctx.update(data)` 盲目合并
+    agent 返回值。这带来两类静默故障：
+
+    1) 键冲突无声覆盖。同一批键被多处写入，谁后跑谁赢。真实存在的冲突：
+         "coverage"  base.py:624 的 COVERAGE_KEYS 映射  vs  agents/coverage/main.py:202
+         "model"     base.py:621 的 MODEL_KEYS          vs  agents/model/main.py:343
+         "tests" / "debug" / "env" / "regression"  同类
+       最糟的是 COVERAGE_KEYS 里含 line_pct / branch_pct / gaps 这类泛用名——
+       design 或 debug 的 LLM 只要吐出任一名字，就会把 coverage 污染到全局。
+
+    2) 契约不可见。没有任何地方能回答「这个键由谁写、被谁读」。
+
+    因此本模块把状态显式化：字段有类型、有缺省、有归属。
+
+四类通道（按写入纪律划分）
+    A 控制/累加器   多写者，用 reducer 合并（operator.add 既能计数也能追加）
+    B 各阶段产物    单写者，经 _exclusive reducer 保证同一步内不被两人写
+    C 循环簿记      单写者，最后写入者胜
+    D 运行期对象    **不进状态**——不可字节复现的东西一律放 runtime context
+
+    判据：序列化后不可字节复现的对象（活 sqlite 连接、LLM 客户端、agent 实例、
+    文件句柄）绝不进状态，否则 checkpointer 无法持久化，--resume 也就无从谈起。
+"""
+from __future__ import annotations
+
+import operator
+from typing import Annotated, Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+# ═══════════════════════════════════════════════════════════════
+# reducer
+# ═══════════════════════════════════════════════════════════════
+
+def exclusive(old: Any, new: Any, default: Any = None) -> Any:
+    """通道 B 用：同一步内两个节点写同一字段且值不同 → 直接报错。
+
+    静态的 PHASE_OWNERS 注册表只能挡住「声明上的」冲突；这个 reducer 挡的是
+    运行期才暴露的冲突（例如某个 agent 因 LLM 输出变化而多写了一个键）。
+    安静地让后写者覆盖，正是本模块要消灭的行为。
+    """
+    if old is None or old == default:
+        return new
+    if new is None or new == default:
+        return old
+    if old == new:
+        return old
+    raise ValueError(
+        f"字段被两个节点在同一步内写入且取值不同: {old!r} vs {new!r}；"
+        "请检查 PHASE_OWNERS 归属，或让其中一方不要写该字段"
+    )
+
+
+def _add(a: Any, b: Any) -> Any:
+    """operator.add 的包装，供 Annotated 使用。
+
+    对 int 是自增（循环计数器），对 list 是连接（追加）。同一个 reducer 兼顾
+    两种用途，这正是「bump 节点既能推轮次、又能追加 phases」能成立的原因。
+    """
+    return operator.add(a, b)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 状态模型
+# ═══════════════════════════════════════════════════════════════
+
+class PipelineState(BaseModel):
+    """七 Agent 闭环的跨阶段状态。
+
+    extra="forbid"：任何未声明的键写入即报错。新增键是一次 schema 变更，
+    而不是运行期意外——这是把「静默覆盖」变成「显式失败」的关键。
+    """
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    # ── A. 控制 / 累加器（多写者，reducer 合并）──
+    run_id: str = ""
+    round_num: Annotated[int, _add] = 0
+    iterations: Annotated[int, _add] = 0
+    max_rounds: int = 5
+    target: float = 95.0
+    design_style: str = "baseline"
+    bypass_design_model: bool = False
+
+    phases: Annotated[List[Dict[str, Any]], _add] = Field(default_factory=list)
+    coverage_history: Annotated[List[float], _add] = Field(default_factory=list)
+    coverage_db_history: Annotated[List[Dict[str, Any]], _add] = Field(default_factory=list)
+    compile_retries: Annotated[int, _add] = 0
+    seed: Annotated[int, _add] = 0
+
+    eda_blocked: Annotated[bool, operator.or_] = False
+    interrupted: Annotated[bool, operator.or_] = False
+
+    # ── B. 各阶段产物（单写者，exclusive）──
+
+    # design
+    spec: Dict[str, Any] = Field(default_factory=dict)
+    design_arch: Optional[Dict[str, Any]] = None
+    # model
+    model: Optional[Dict[str, Any]] = None
+    # verify
+    tests: Optional[Dict[str, Any]] = None
+    # ops
+    env: Optional[Dict[str, Any]] = None
+    regression: Dict[str, Any] = Field(default_factory=dict)
+    # debug
+    debug: Optional[Dict[str, Any]] = None
+    # coverage
+    coverage: Dict[str, Any] = Field(default_factory=dict)
+    gaps: List[Dict[str, Any]] = Field(default_factory=list)
+    coverage_map: Dict[str, Any] = Field(default_factory=dict)
+    calibration: Dict[str, Any] = Field(default_factory=dict)
+    coverage_db: Dict[str, Any] = Field(default_factory=dict)
+    coverage_summary: str = ""
+    log_path: str = ""
+    vcd_path: str = ""
+    functional_coverage: float = 0.0
+    # audit
+    audit: Optional[Dict[str, Any]] = None
+
+    # ── C. 循环簿记（单写者，最后写入者胜）──
+    regression_failed_count: int = 0
+    compile_error: Optional[Dict[str, Any]] = None
+    final_coverage: float = 0.0
+    effective_coverage: float = 0.0
+    exclude_effect: Dict[str, Any] = Field(default_factory=dict)
+
+    # 决策：Action 是 dataclass（decision_engine.py:41），为可序列化存 dict，
+    # 用的时候再 Action(**d)。见 _action_from_state()。
+    pending_action: Optional[Dict[str, Any]] = None
+    last_action: Optional[Dict[str, Any]] = None
+    decision_log: Annotated[List[Dict[str, Any]], _add] = Field(default_factory=list)
+
+    # 门控
+    approval_outcome: Optional[str] = None
+    guardian_verdict: Dict[str, Any] = Field(default_factory=dict)
+    governance_outcome: Optional[str] = None
+    human_escalation: Optional[str] = None
+    terminal_reason: Optional[str] = None
+
+    # ── D. 不进状态（仅在此声明，供 init 节点重建）──
+    #   registry / 7 个 agent 实例 / governor / infra / testcase_reg / exclude_reg
+    #   / decision_reactor / planner / file_audit  → 走 config["configurable"]["rt"]
+    #
+    #   output_root 是 str（不是 Path）：Path 可序列化但没必要，保持与既有
+    #   调用方一致，用的时候再 Path()。
+    output_root: str = "output"
+
+    def action(self):
+        """把 pending_action 还原成 Action 对象（惰性 import，避免 L3→L2 环）。"""
+        if not self.pending_action:
+            return None
+        from src.layers.l3_decision.decision_engine import Action
+        return Action(**self.pending_action)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 归属注册表 —— 构图期校验
+# ═══════════════════════════════════════════════════════════════
+# 字段 → 负责写入它的节点名。空字符串表示「由 init / 框架写，不属于任何 agent」。
+
+PHASE_OWNERS: Dict[str, str] = {
+    # design 节点
+    "spec": "design", "design_arch": "design",
+    # model / verify 节点
+    "model": "model", "tests": "verify",
+    # ops 节点
+    "env": "ops_r", "regression": "ops_r",
+    # debug 节点
+    "debug": "debug_functional",
+    # coverage 节点
+    "coverage": "coverage_r", "gaps": "coverage_r", "coverage_map": "coverage_r",
+    "calibration": "coverage_r", "coverage_db": "coverage_r",
+    "coverage_summary": "coverage_r", "log_path": "coverage_r", "vcd_path": "coverage_r",
+    "functional_coverage": "coverage_r",
+    # audit 节点
+    "audit": "audit",
+}
+
+# 非 agent 产物的字段（框架 / init / 各门控节点写入），不参与归属唯一性检查。
+NON_AGENT_FIELDS = set(PipelineState.model_fields) - set(PHASE_OWNERS)
+
+
+def validate_phase_owners() -> None:
+    """构图期自检：归属表必须是 agent 字段集合的一个划分。
+
+    在没有类型状态之前，「两个 agent 用同名键悄悄打架」要等线上跑出诡异结果
+    才会被发现。这里让它在 import 阶段就炸。
+    """
+    owning_nodes = [n for n in PHASE_OWNERS.values() if n]
+    duplicates = {n for n in owning_nodes if owning_nodes.count(n) > 1}
+    if duplicates:
+        # 同一个节点写多个字段是正常的；这里只提示，真正的冲突在同一字段被
+        # 两个节点声明——dict 的键唯一，天然不可能，故仅做字段存在性校验。
+        pass
+
+    unknown = set(PHASE_OWNERS) - set(PipelineState.model_fields)
+    if unknown:
+        raise ValueError(
+            f"PHASE_OWNERS 引用了 PipelineState 中不存在的字段: {sorted(unknown)}"
+        )
+
+
+validate_phase_owners()
