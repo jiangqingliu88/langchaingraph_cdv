@@ -11,6 +11,7 @@ import sys, json, re
 import builtins
 from pathlib import Path
 import shutil as _shutil
+import yaml as _yaml
 
 
 def print(*args, **kwargs):
@@ -316,10 +317,21 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
     """
     bus_protocols = {"apb", "axi", "axilite", "ahb", "wb"}
 
+    # 激活模式落在 env 级 agents[].is_active（interface 级不再携带）：
+    #   有 DUT input 端口（需驱动）→ active；纯 output（仅监控）→ passive。
+    #   消费路径：_normalize_agents_list → AgentModel.active → 模板 agents[].is_active
+    active_by_name = {}
+    for ag, _iface in agents_spec:
+        if ag.get("name"):
+            active_by_name[ag["name"]] = (
+                str(ag.get("type", "")).upper() in ("UVM_ACTIVE", "ACTIVE"))
+
     agent_lines = []
     for ag_name in agent_names:
+        is_active = "true" if active_by_name.get(ag_name, True) else "false"
         agent_lines.append(f"    {ag_name}:\n      interface: {ag_name}\n"
-                           f"      clock: {clock_port}\n      reset: {reset_port}")
+                           f"      clock: {clock_port}\n      reset: {reset_port}\n"
+                           f"      is_active: {is_active}")
 
     loop_agents = []
     for ag, _iface in agents_spec:
@@ -522,8 +534,6 @@ def _generate_uart_yaml(agent: dict, interface: dict, module_name: str) -> str:
     lines.append("  custom_collect_logic: |")
     for ln in _gen_uart_deserialize_logic().split("\n"):
         lines.append("    " + ln)
-    lines.append("  config:")
-    lines.append("    is_active: UVM_ACTIVE")
     return "\n".join(lines) + "\n"
 
 
@@ -578,8 +588,6 @@ def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> 
             trans_vars.append({"name": p["name"], "type": ttype,
                                "iscompare": "True", "isrand": "True"})
 
-    active = "UVM_ACTIVE" if agent.get("type", "").upper() in ("UVM_ACTIVE", "ACTIVE") else "UVM_PASSIVE"
-
     # Build YAML line by line
     lines = []
     lines.append("interfaces:")
@@ -627,8 +635,6 @@ def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> 
     lines.append("    - name: data_c")
     lines.append("      value: '" + constraint_val + "'")
 
-    lines.append("  config:")
-    lines.append("    is_active: " + active)
     return "\n".join(lines) + "\n"
 
 
@@ -751,7 +757,6 @@ def run(spec_text: str) -> str:
                     f" iscompare: 'True', isrand: 'True' }}\n"
                     f"  transaction_constraints:\n    - name: valid_c\n"
                     f"      value: '{{{{ data inside {{{{[0:255]}}}}; }}}}'\n"
-                    f"  config:\n    is_active: UVM_ACTIVE\n"
                 )
                 yaml_path = uvm_yaml_archive / f"{agent_name}.yaml"
                 yaml_path.write_text(yaml_str, encoding="utf-8", errors="replace")
@@ -990,15 +995,26 @@ def run(spec_text: str) -> str:
 
 
 def _is_agent_active(output_dir: Path, agent_name: str) -> bool:
-    """检查 agent 是否 active（被动 agent 无 driver，loopback 自闭环无意义）。"""
-    yp = output_dir / "inputs" / "yaml" / "uvm" / f"{agent_name}.yaml"
+    """检查 agent 是否 active（被动 agent 无 driver，loopback 自闭环无意义）。
+
+    激活模式由 env 级 agents[].is_active 决定（interface 级不再携带）。
+    """
+    yp = output_dir / "inputs" / "yaml" / "uvm" / "env.yaml"
     if not yp.exists():
         return True
     try:
-        text = yp.read_text(encoding="utf-8", errors="replace")
-        return "UVM_PASSIVE" not in text
+        data = _yaml.safe_load(yp.read_text(encoding="utf-8", errors="replace")) or {}
+        agents = (data.get("environment") or {}).get("agents") or {}
+        if isinstance(agents, dict):
+            entry = agents.get(agent_name)
+        else:
+            entry = next((a for a in agents
+                          if isinstance(a, dict) and a.get("name") == agent_name), None)
+        if isinstance(entry, dict) and entry.get("is_active") is not None:
+            return str(entry["is_active"]).strip().lower() in ("true", "1", "yes", "on")
     except Exception:
         return True
+    return True
 
 
 def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
