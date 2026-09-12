@@ -19,6 +19,10 @@ class {{ agent.name }}_system_env extends uvm_env;
   // 系统级嗅探器（sys_cfg.system_monitor_enable = 1 时才构建）
   {{ agent.name }}_system_monitor sys_monitor;
 
+  // 系统级虚拟 sequencer：持有同协议全部 master/slave 子 sequencer 句柄，
+  // 供虚拟序列跨端口协调（句柄在 connect_phase 由本 env 赋值）
+  {{ agent.name }}_system_vsqr system_vsqr;
+
   function new(string name = "{{ agent.name }}_system_env", uvm_component parent = null);
     super.new(name, parent);
   endfunction
@@ -54,10 +58,24 @@ class {{ agent.name }}_system_env extends uvm_env;
       uvm_config_db#(virtual {{ agent.name }}_system_if)::set(this, "sys_monitor", "sys_vif", sys_vif);
       sys_monitor = {{ agent.name }}_system_monitor::type_id::create("sys_monitor", this);
     end
+
+    // 系统级 virtual sequencer：先传 sys_cfg（vsqr.build_phase 靠它定句柄数组规模），
+    // 再创建。子 sequencer 句柄在 connect_phase 赋值。
+    uvm_config_db#({{ agent.name }}_system_config)::set(this, "system_vsqr", "sys_cfg", sys_cfg);
+    system_vsqr = {{ agent.name }}_system_vsqr::type_id::create("system_vsqr", this);
   endfunction
 
   function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
+
+    // 子 sequencer 句柄由本 env 直接赋值。vsqr 刻意不引用 env 类型
+    // （二者互引会构成 SystemVerilog 循环类型依赖，见 vsqr 模板头部说明），
+    // 故这里直接逐个写数组，而非让 vsqr 从 config_db 反查。
+    for (int i = 0; i < sys_cfg.num_masters && i < system_vsqr.master_sqr.size(); i++)
+      system_vsqr.master_sqr[i] = m_agents[i].sequencer;
+    for (int i = 0; i < sys_cfg.num_slaves && i < system_vsqr.slave_sqr.size(); i++)
+      system_vsqr.slave_sqr[i] = s_agents[i].sequencer;
+    system_vsqr.mark_bound();
   endfunction
 
   function {{ agent.name }}_master_sequencer get_master_sequencer(int idx = 0);

@@ -335,6 +335,9 @@ INTERFACE_TEMPLATES = [
     ("interface_templates/agent_master.sv.j2", "5_agent/{agent_name}_master_agent.sv"),
     ("interface_templates/agent_slave.sv.j2",  "5_agent/{agent_name}_slave_agent.sv"),
     ("interface_templates/config_system.sv.j2", "5_agent/{agent_name}_system_config.sv"),
+    # vsqr 必须在 system_env 之前：env 持有 vsqr 句柄，vsqr 不引用 env（单向依赖，
+    # 见模板头部说明），故先声明 vsqr 才能让 env 使用它的类型。
+    ("interface_templates/interface_system_vsqr.sv.j2", "5_agent/{agent_name}_system_vsqr.sv"),
     ("interface_templates/interface_system_monitor.sv.j2", "5_agent/{agent_name}_system_monitor.sv"),
     ("interface_templates/interface_system_env.j2", "5_agent/{agent_name}_system_env.sv"),
 
@@ -1205,6 +1208,7 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
         (f"4_driver_monitor/{name}_port_monitor.sv", "Port monitor: port_kind 分支（SLAVE 侧 → slave_mon_ap + req_fifo）"),
         (f"5_agent/{name}_master_agent.sv", "Master agent"),
         (f"5_agent/{name}_slave_agent.sv", "Slave agent"),
+        (f"5_agent/{name}_system_vsqr.sv", "System virtual sequencer: 持有同协议全部 master/slave 子 sequencer 句柄"),
         (f"5_agent/{name}_system_monitor.sv", "System monitor: 直接嗅探 system_if 全端口（{kind, index} 标签）"),
         (f"7_sequence/{name}_master_sequence.sv", "Master sequence"),
         (f"7_sequence/{name}_slave_sequence.sv", "Slave sequence (memory model)"),
