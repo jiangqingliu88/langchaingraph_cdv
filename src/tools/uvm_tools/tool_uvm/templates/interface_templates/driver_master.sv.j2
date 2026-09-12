@@ -1,11 +1,48 @@
 {% include "base_templates/base_template.sv.j2" %}
 
 // ============================================================
+// Master Driver Callback: {{ agent.name }}_master_driver_cb
+// ============================================================
+// UVM callback 扩展点：测试可派生本类插入自己的行为（改激励、注入错误、
+// 记录时序），**无需改动 driver 本体**。
+//
+// 注册（test 的 build_phase）：
+//   {{ agent.name }}_master_driver_cb cb;
+//   cb = {{ agent.name }}_master_driver_cb::type_id::create("cb");
+//   uvm_callbacks#({{ agent.name }}_master_driver,
+//                  {{ agent.name }}_master_driver_cb)::add(drv, cb);
+//
+// 注：typedef class 是前置声明 —— callback 的方法签名要用到 driver 类型，
+//     而 driver 定义在下方，SystemVerilog 要求先声明后使用。
+
+typedef class {{ agent.name }}_master_driver;
+
+class {{ agent.name }}_master_driver_cb extends uvm_callback;
+  `uvm_object_utils({{ agent.name }}_master_driver_cb)
+
+  function new(string name = "{{ agent.name }}_master_driver_cb");
+    super.new(name);
+  endfunction
+
+  // 驱动前：可修改 req 字段（地址边界、错误注入、延迟调整等）
+  virtual task pre_drive({{ agent.name }}_master_driver drv,
+                         {{ agent.name }}_master_seq_item req);
+  endtask
+
+  // 驱动后：时序记录 / 协议检查
+  virtual task post_drive({{ agent.name }}_master_driver drv,
+                          {{ agent.name }}_master_seq_item req);
+  endtask
+endclass : {{ agent.name }}_master_driver_cb
+
+// ============================================================
 // Master Driver: {{ agent.name }}_master_driver
 // ============================================================
 
 class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_master_seq_item);
   `uvm_component_utils({{ agent.name }}_master_driver)
+  // 建立 driver 类型 ↔ callback 类型的回调池（uvm_do_callbacks 依赖它）
+  `uvm_register_cb({{ agent.name }}_master_driver, {{ agent.name }}_master_driver_cb)
 
   virtual {{ agent.name }}_if vif;
   {{ agent.name }}_port_config cfg;
@@ -47,6 +84,9 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
   endtask
 
   virtual task drive_transaction({{ agent.name }}_master_seq_item req);
+    // 回调：驱动前（可改 req）
+    `uvm_do_callbacks({{ agent.name }}_master_driver, {{ agent.name }}_master_driver_cb,
+                      pre_drive(this, req))
     // pragma custom drive_logic begin
 {%- if agent.protocol == 'apb' %}
     // === APB 两拍时序: setup（addr/sel/write/data）→ access（penable）→ 等 pready → 撤拍 ===
@@ -78,5 +118,8 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
     @(vif.master_cb);
 {%- endif %}
     // pragma custom drive_logic end
+    // 回调：驱动后
+    `uvm_do_callbacks({{ agent.name }}_master_driver, {{ agent.name }}_master_driver_cb,
+                      post_drive(this, req))
   endtask
 endclass : {{ agent.name }}_master_driver

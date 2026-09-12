@@ -1,11 +1,48 @@
 {% include "base_templates/base_template.sv.j2" %}
 
 // ============================================================
+// Slave Driver Callback: {{ agent.name }}_slave_driver_cb
+// ============================================================
+// UVM callback 扩展点：可在响应前后插入行为（改响应数据、注入 pslverr、
+// 调整延迟），**无需改动 driver 本体**。
+//
+// 注册（test 的 build_phase）：
+//   {{ agent.name }}_slave_driver_cb cb;
+//   cb = {{ agent.name }}_slave_driver_cb::type_id::create("cb");
+//   uvm_callbacks#({{ agent.name }}_slave_driver,
+//                  {{ agent.name }}_slave_driver_cb)::add(drv, cb);
+//
+// 注：typedef class 是前置声明 —— callback 方法签名要用到 driver 类型，
+//     而 driver 定义在下方（SystemVerilog 要求先声明后使用）。
+
+typedef class {{ agent.name }}_slave_driver;
+
+class {{ agent.name }}_slave_driver_cb extends uvm_callback;
+  `uvm_object_utils({{ agent.name }}_slave_driver_cb)
+
+  function new(string name = "{{ agent.name }}_slave_driver_cb");
+    super.new(name);
+  endfunction
+
+  // 响应前：可修改 rsp 字段（响应数据、错误位、延迟）
+  virtual task pre_drive({{ agent.name }}_slave_driver drv,
+                         {{ agent.name }}_slave_seq_item rsp);
+  endtask
+
+  // 响应后：时序记录 / 协议检查
+  virtual task post_drive({{ agent.name }}_slave_driver drv,
+                          {{ agent.name }}_slave_seq_item rsp);
+  endtask
+endclass : {{ agent.name }}_slave_driver_cb
+
+// ============================================================
 // Slave Driver: {{ agent.name }}_slave_driver
 // ============================================================
 
 class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_seq_item);
   `uvm_component_utils({{ agent.name }}_slave_driver)
+  // 建立 driver 类型 ↔ callback 类型的回调池（uvm_do_callbacks 依赖它）
+  `uvm_register_cb({{ agent.name }}_slave_driver, {{ agent.name }}_slave_driver_cb)
 
   virtual {{ agent.name }}_if vif;
   {{ agent.name }}_port_config cfg;
@@ -47,6 +84,9 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
   endtask
 
   virtual task drive_response({{ agent.name }}_slave_seq_item rsp);
+    // 回调：响应前（可改 rsp）
+    `uvm_do_callbacks({{ agent.name }}_slave_driver, {{ agent.name }}_slave_driver_cb,
+                      pre_drive(this, rsp))
     // pragma custom drive_logic begin
 {%- if agent.protocol == 'apb' %}
     // === APB slave 响应: 等 setup+access 拍 → pready + 数据/错误 ===
@@ -91,5 +131,8 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
 {%- endif %}
 {%- endif %}
     // pragma custom drive_logic end
+    // 回调：响应后
+    `uvm_do_callbacks({{ agent.name }}_slave_driver, {{ agent.name }}_slave_driver_cb,
+                      post_drive(this, rsp))
   endtask
 endclass : {{ agent.name }}_slave_driver

@@ -1,0 +1,59 @@
+{% include "base_templates/base_template.sv.j2" %}
+{% import "base_templates/field_macros.j2" as fm %}
+
+// ============================================================
+// Base Seq Item: {{ agent.name }}_base_seq_item
+// ============================================================
+// master / slave seq_item 的共同基类，承载「两侧都有」的东西：
+//   - xact_type（READ/WRITE）—— 两侧都要判方向
+//   - base_transaction_vars     —— 两侧共用的字段（如 addr / data）
+//   - base_transaction_constraints —— 两侧都成立的约束
+// 各侧专有的字段与约束留在 <name>_{master,slave}_seq_item 里
+// （按 transaction_vars 的 is_master 划分）。
+//
+// 依赖顺序：本文件必须在 <name>_master_seq_item.sv / _slave_seq_item.sv
+// **之前** include（见 agent_pkg.sv.j2）——派生类要引用 xact_type_e，
+// SystemVerilog 要求先声明后使用。
+//
+// 字段注册：本类的字段由这里的 uvm_object_utils_begin/end 注册；派生类各自
+// 注册自己的字段。UVM 的 do_copy/do_compare/do_print 会沿继承链调 super，
+// 故基类字段不会漏。
+
+class {{ agent.name }}_base_seq_item extends uvm_sequence_item;
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack 自动化）──
+  `uvm_object_utils_begin({{ agent.name }}_base_seq_item)
+    `uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)
+{%- for var in base_transaction_vars %}
+    {{ fm.uvm_field(var) }}
+{%- endfor %}
+  `uvm_object_utils_end
+
+  // ── 事务方向（两侧共用）──
+  typedef enum {READ, WRITE} xact_type_e;
+  // 注：声明为 rand。master 侧需要随机化它；slave 侧由 monitor 显式赋值，
+  //     rand 不阻碍显式赋值，故两侧共用一个声明是安全的。
+  rand xact_type_e xact_type;
+{%- if base_transaction_vars %}
+
+  // ── 共用事务字段（master/slave 都有）──
+{%-   for var in base_transaction_vars %}
+{%-     if var.isrand == 'True' %}
+  rand {{ var.type }} {{ var.name }}; // is_compare={{ var.iscompare }}, is_rand={{ var.isrand }}
+{%-     else %}
+  {{ var.type }} {{ var.name }}; // is_compare={{ var.iscompare }}, is_rand={{ var.isrand }}
+{%-     endif %}
+{%-   endfor %}
+{%- endif %}
+
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
+
+{%- for cons in base_transaction_constraints %}
+  constraint {{ cons.name }} {{ cons.value | safe }}
+{%- endfor %}
+
+  function new(string name = "{{ agent.name }}_base_seq_item");
+    super.new(name);
+  endfunction
+
+endclass : {{ agent.name }}_base_seq_item

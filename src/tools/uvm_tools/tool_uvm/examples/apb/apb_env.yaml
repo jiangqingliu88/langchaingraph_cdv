@@ -30,17 +30,6 @@ environment:
   #     type: "axi_system_env"
   #     vip_path: ""
 
-  # 旧格式 predictor（生成式，渲染进 env）：与 analysis_components 二选一使用
-  # predictors:
-  #   - name: apb_ref_pred
-  #     in_type:  apb_master_seq_item
-  #     out_type: apb_master_seq_item
-  #     input_from: apb_master_agent_ap
-  #     in_port:  in_export
-  #     out_port: out_port
-  #     model_state: ""
-  #     model_body: "// 参考模型逻辑"
-
   # ── 时钟复位 VIP ──
   clk_rst_vip:
     enabled: true
@@ -57,7 +46,7 @@ environment:
 
   scoreboards:
     - name: apb_scb
-      sb_type: uvmf_in_order_scoreboard
+      sb_type: in_order_scoreboard
       trans_type: apb_master_seq_item
     # 旧格式（生成式 scoreboard，按端口表达式推断 item_type）
     # - name: apb_scb_gen

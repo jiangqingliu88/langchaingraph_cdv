@@ -1,8 +1,11 @@
 {% include "base_templates/base_template.sv.j2" %}
 
 // ============================================================
-// UVM 编译 filelist —— 整环境 + bench + testpoint TC 一键编译（绝对路径）
-// 用法: vlog -sv -f {{ environment.env_name }}_pkg_filelist.f
+// UVM 编译 filelist —— 整环境 + bench + testpoint TC 一键编译
+// 用法: source Sourceme          # 定义 $WORK_PATH = 当前目录
+//       vlog -sv -f {{ environment.env_name }}_pkg_filelist.f
+// 路径一律以 $WORK_PATH 为根（而非生成时刻的绝对路径），故整目录可整体搬迁、
+// 换机器不必重新生成。
 // ============================================================
 // DUT (项目源码)
 {{ dut_path }}

@@ -13,17 +13,17 @@ class {{ environment.env_name }}_gen_test extends uvm_test;
 {%-   endif %}
 {%- endfor %}
   // 环境实例
-  {{ environment.env_name }} env;
+  {{ environment.env_name }}                   env;
 
   // 环境配置
-  {{ environment.env_name }}_config cfg;
+  {{ environment.env_name }}_config            cfg;
  
   // 虚拟接口
 {%- for agent in agents %}
-  virtual {{ agent.interface }}_interface {{ agent.name }}_vif;
+  virtual {{ agent.interface }}_interface      {{ agent.name }}_vif;
 {%- endfor %}
 {%- for subenv in subenvs %}
-  virtual {{ subenv.name }}_interface {{ subenv.name }}_vif;
+  virtual {{ subenv.name }}_interface          {{ subenv.name }}_vif;
 {%- endfor %}
   // pragma custom field_decl begin
   // pragma custom field_decl end

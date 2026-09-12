@@ -5,10 +5,12 @@
 // Master Seq Item: {{ agent.name }}_master_seq_item
 // ============================================================
 
-class {{ agent.name }}_master_seq_item extends uvm_sequence_item;
+// 继承 <name>_base_seq_item：xact_type 与 base_transaction_vars 由基类提供，
+// 本类只声明按 is_master 划分给 master/slave 的专有字段。
+class {{ agent.name }}_master_seq_item extends {{ agent.name }}_base_seq_item;
   // ── file 注册机制：字段注册进 factory（copy/compare/print/pack 自动化）──
+  //   基类字段由基类的 utils 块注册（do_* 会沿继承链调 super），这里只注册新增字段
   `uvm_object_utils_begin({{ agent.name }}_master_seq_item)
-    `uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)
     // master 字段
 {%- for var in transaction_vars %}
 {%-   if var.is_master != 'False' %}
@@ -22,9 +24,6 @@ class {{ agent.name }}_master_seq_item extends uvm_sequence_item;
 {%-   endif %}
 {%- endfor %}
   `uvm_object_utils_end
-
-  typedef enum {READ, WRITE} xact_type_e;
-  rand xact_type_e xact_type;
 
   // ── master 字段（is_master=True：master 驱动/生成）──
 {%- for var in transaction_vars %}

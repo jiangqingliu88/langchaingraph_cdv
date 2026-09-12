@@ -120,6 +120,16 @@
           "type": "array",
           "items": { "$ref": "#/$defs/port" }
         },
+        "base_transaction_vars": {
+          "$comment": "master/slave 共用的事务字段 —— 渲染进 <name>_base_seq_item，两侧 seq_item 继承它",
+          "type": "array",
+          "items": { "$ref": "#/$defs/transactionVar" }
+        },
+        "base_transaction_constraints": {
+          "$comment": "master/slave 共用的约束 —— 渲染进 <name>_base_seq_item",
+          "type": "array",
+          "items": { "$ref": "#/$defs/namedValue" }
+        },
         "transaction_vars": {
           "type": "array",
           "items": { "$ref": "#/$defs/transactionVar" }
@@ -245,10 +255,6 @@
             "additionalProperties": false
           }
         },
-        "predictors": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/predictorEntry" }
-        },
         "scoreboards": {
           "type": "array",
           "items": { "$ref": "#/$defs/scoreboardEntry" }
@@ -320,21 +326,6 @@
         "connections": { "type": "array" },
         "priority": { "$comment": "virtual_sequencer 仲裁（模板 default(5)）", "type": "integer" },
         "weight": { "$comment": "virtual_sequencer 权重（模板 default(1)）", "type": "integer" }
-      },
-      "additionalProperties": false
-    },
-    "predictorEntry": {
-      "type": "object",
-      "required": ["name"],
-      "properties": {
-        "name": { "type": "string" },
-        "in_type": { "type": "string" },
-        "out_type": { "type": "string" },
-        "input_from": { "type": "string" },
-        "in_port": { "type": "string" },
-        "out_port": { "type": "string" },
-        "model_state": { "type": "string" },
-        "model_body": { "type": "string" }
       },
       "additionalProperties": false
     },

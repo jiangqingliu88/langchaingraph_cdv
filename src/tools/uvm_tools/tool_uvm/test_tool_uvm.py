@@ -275,9 +275,15 @@ def test_bench_with_harness_skips_tb_top_interface(tmp_path):
 def test_meta_header_default_and_yaml_override(tmp_path):
     """所有生成文件继承 base_template.sv.j2 文件头；YAML meta 可覆盖。"""
     import yaml
-    # 默认 meta
+    # 默认 meta：必须剥掉示例里的 meta 块，否则测到的是被覆盖后的 company，
+    # 而不是 DEFAULT_META（examples/apb/apb_interface.yaml 自带 meta）
+    _src = yaml.safe_load((EXAMPLES / "apb_interface.yaml").read_text(encoding="utf-8"))
+    _src.pop("meta", None)
+    default_yaml = tmp_path / "if_no_meta.yaml"
+    default_yaml.write_text(yaml.safe_dump(_src, allow_unicode=True, sort_keys=False),
+                            encoding="utf-8")
     dest1 = tmp_path / "o1"
-    assert main(["-i", str(EXAMPLES / "apb_interface.yaml"), "-d", str(dest1), "-q"]) == 0
+    assert main(["-i", str(default_yaml), "-d", str(dest1), "-q"]) == 0
     sv = (dest1 / "agents" / "APB_agent" / "1_interface" / "APB_if.sv").read_text(encoding="utf-8")
     assert "SignOffAI（功能签核） — 商标与权利声明" in sv
     assert "文件:     APB_if.sv" in sv
@@ -339,18 +345,31 @@ def test_env_config_field_registration(tmp_path):
 
 
 def test_seq_item_field_registration(tmp_path):
-    """seq_item（master/slave）同样注册 uvm_object_utils_begin/end + transaction_vars 字段。"""
+    """seq_item 注册各自的 uvm_object_utils_begin/end；共用部分（xact_type +
+    base_transaction_vars）落在基类 APB_base_seq_item，master/slave 继承它。"""
     dest = tmp_path / "out"
     assert main(["-i", str(EXAMPLES / "apb_interface.yaml"), "-d", str(dest), "-q"]) == 0
     tx_dir = dest / "agents" / "APB_agent" / "3_transaction_sequencer"
+    base = (tx_dir / "APB_base_seq_item.sv").read_text(encoding="utf-8")
     master = (tx_dir / "APB_master_seq_item.sv").read_text(encoding="utf-8")
     slave = (tx_dir / "APB_slave_seq_item.sv").read_text(encoding="utf-8")
-    for out in (master, slave):
+    for out in (base, master, slave):
         assert "`uvm_object_utils_begin" in out
         assert "`uvm_object_utils_end" in out
         assert "`uvm_object_utils(" not in out
-    # master：xact_type enum + 事务字段
-    assert "`uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)" in master
+    # base：xact_type enum + base_transaction_vars（两侧共用），且直接继承 uvm_sequence_item
+    assert "class APB_base_seq_item extends uvm_sequence_item;" in base
+    assert "`uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)" in base
+    assert "`uvm_field_int(addr, UVM_DEFAULT)" in base
+    assert "`uvm_field_int(data, UVM_DEFAULT)" in base
+    # master/slave 继承基类，只注册各自专有字段
+    assert "class APB_master_seq_item extends APB_base_seq_item;" in master
+    assert "class APB_slave_seq_item extends APB_base_seq_item;" in slave
+    # xact_type 已上移到基类，派生类里不应再重复声明/注册
+    for out in (master, slave):
+        assert "`uvm_field_enum(xact_type_e, xact_type" not in out
+        assert "typedef enum {READ, WRITE} xact_type_e;" not in out
+    # master：按 is_master 划分的两组事务字段
     assert "`uvm_field_int(paddr, UVM_DEFAULT)" in master
     assert "`uvm_field_int(prdata, UVM_DEFAULT)" in master
     # slave：额外响应控制指令字段

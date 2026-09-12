@@ -1,6 +1,45 @@
 {% include "base_templates/base_template.sv.j2" %}
 
 // ============================================================
+// Port Monitor Callback: {{ agent.name }}_port_monitor_cb
+// ============================================================
+// UVM callback 扩展点：可在采样前后插入行为（改采样值、丢包、协议检查、
+// 覆盖率打点），**无需改动 monitor 本体**。
+//
+// 注册（test 的 build_phase）：
+//   {{ agent.name }}_port_monitor_cb cb;
+//   cb = {{ agent.name }}_port_monitor_cb::type_id::create("cb");
+//   uvm_callbacks#({{ agent.name }}_port_monitor,
+//                  {{ agent.name }}_port_monitor_cb)::add(mon, cb);
+//
+// master / slave 侧各有一对钩子：monitor 按 cfg.port_kind 只会走其中一条路径，
+// 但两对都提供，便于同一个 cb 类同时服务两种实例。
+//
+// 注：typedef class 是前置声明 —— callback 方法签名要用到 monitor 类型，
+//     而 monitor 定义在下方（SystemVerilog 要求先声明后使用）。
+
+typedef class {{ agent.name }}_port_monitor;
+
+class {{ agent.name }}_port_monitor_cb extends uvm_callback;
+  `uvm_object_utils({{ agent.name }}_port_monitor_cb)
+
+  function new(string name = "{{ agent.name }}_port_monitor_cb");
+    super.new(name);
+  endfunction
+
+  // ── master 侧（collect_transaction）──
+  // 采样后：可修改 tx 字段（如归一化、屏蔽某位）
+  virtual task post_sample({{ agent.name }}_port_monitor mon,
+                           {{ agent.name }}_master_seq_item tx);
+  endtask
+
+  // ── slave 侧（collect_slave_transaction）──
+  virtual task post_sample_slave({{ agent.name }}_port_monitor mon,
+                                 {{ agent.name }}_slave_seq_item tx);
+  endtask
+endclass : {{ agent.name }}_port_monitor_cb
+
+// ============================================================
 // Port Monitor: {{ agent.name }}_port_monitor
 // ============================================================
 // 单类 monitor（不区分 master/slave）：按 cfg.port_kind 分支
@@ -10,6 +49,8 @@
 
 class {{ agent.name }}_port_monitor extends uvm_monitor;
   `uvm_component_utils({{ agent.name }}_port_monitor)
+  // 建立 monitor 类型 ↔ callback 类型的回调池（uvm_do_callbacks 依赖它）
+  `uvm_register_cb({{ agent.name }}_port_monitor, {{ agent.name }}_port_monitor_cb)
 
   virtual {{ agent.name }}_if vif;
   {{ agent.name }}_port_config cfg;
@@ -87,6 +128,9 @@ class {{ agent.name }}_port_monitor extends uvm_monitor;
 {%-   endif %}
 {%- endfor %}
     // pragma custom collect_logic end
+    // 回调：master 侧采样后（可改 tx）
+    `uvm_do_callbacks({{ agent.name }}_port_monitor, {{ agent.name }}_port_monitor_cb,
+                      post_sample(this, tx))
   endtask
 
   virtual task collect_slave_transaction({{ agent.name }}_slave_seq_item tx);
@@ -107,5 +151,8 @@ class {{ agent.name }}_port_monitor extends uvm_monitor;
 {%-   endif %}
 {%- endfor %}
     // pragma custom collect_slave_logic end
+    // 回调：slave 侧采样后（可改 tx）
+    `uvm_do_callbacks({{ agent.name }}_port_monitor, {{ agent.name }}_port_monitor_cb,
+                      post_sample_slave(this, tx))
   endtask
 endclass : {{ agent.name }}_port_monitor

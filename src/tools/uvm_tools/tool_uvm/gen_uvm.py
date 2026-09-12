@@ -323,6 +323,9 @@ INTERFACE_TEMPLATES = [
     # 单类合并模板（不区分 master/slave）
     ("interface_templates/port_config.sv.j2", "2_config/{agent_name}_port_config.sv"),
 
+    # base 必须排在 master/slave 之前：派生类要引用基类的 xact_type_e / 字段，
+    # SystemVerilog 要求先声明后使用。
+    ("interface_templates/sequence_item_base.sv.j2", "3_transaction_sequencer/{agent_name}_base_seq_item.sv"),
     ("interface_templates/seq_item_master.sv.j2", "3_transaction_sequencer/{agent_name}_master_seq_item.sv"),
     ("interface_templates/seq_item_slave.sv.j2",  "3_transaction_sequencer/{agent_name}_slave_seq_item.sv"),
     ("interface_templates/sequencer_master.sv.j2", "3_transaction_sequencer/{agent_name}_master_sequencer.sv"),
@@ -498,9 +501,6 @@ def _run_gate(output_root: Path) -> List[Dict[str, str]]:
                             "reason": f"{type(exc).__name__}: {exc}"})
     return results
 
-# 环境级 Predictor（SV 行为参考模型）模板
-PREDICTOR_TEMPLATE = "environment_templates/predictor.sv.j2"
-
 @dataclass
 class AgentModel:
     name: str
@@ -513,6 +513,11 @@ class AgentModel:
     hdl_typedefs: List[Dict[str, Any]] = field(default_factory=list)
     hvl_typedefs: List[Dict[str, Any]] = field(default_factory=list)
     ports: List[Dict[str, Any]] = field(default_factory=list)
+    # master/slave 共用的事务字段/约束 → 渲染进 <name>_base_seq_item，两侧 seq_item 继承它。
+    # 与 transaction_vars 的分工：这里放「两侧都有」的（如 addr/data），
+    # transaction_vars 放按 is_master 划分给各侧的（如 paddr/prdata）。
+    base_transaction_vars: List[Dict[str, Any]] = field(default_factory=list)
+    base_transaction_constraints: List[Dict[str, Any]] = field(default_factory=list)
     transaction_vars: List[Dict[str, Any]] = field(default_factory=list)
     transaction_constraints: List[Dict[str, Any]] = field(default_factory=list)
     config_vars: List[Dict[str, Any]] = field(default_factory=list)
@@ -550,6 +555,11 @@ class AgentModel:
             # is_master: "True" → master 字段（master 驱动/生成）；
             #            "False" → slave 字段（slave 响应/生成）
             var.setdefault("is_master", "True")
+        # base_transaction_vars 是两侧共用的，不参与 master/slave 划分（is_master 无意义），
+        # 只补齐 iscompare/isrand 两个 flag 供 field_macros 统一处理。
+        for var in self.base_transaction_vars:
+            var.setdefault("iscompare", "False")
+            var.setdefault("isrand", "False")
         # transaction_constraints 归一化为 dict：{master: [...], slave: [...]}
         # 兼容旧 list 格式（全部归入 master）
         if isinstance(self.transaction_constraints, list):
@@ -601,7 +611,6 @@ class EnvironmentModel:
     agents: AgentCollection = field(default_factory=AgentCollection)
     subenvs: List[Dict[str, Any]] = field(default_factory=list)
     vipenvs: List[Dict[str, Any]] = field(default_factory=list)
-    predictors: List[Dict[str, Any]] = field(default_factory=list)
     scoreboards: List[Dict[str, Any]] = field(default_factory=list)
     analysis_components: List[Dict[str, Any]] = field(default_factory=list)
     analysis_exports: List[Dict[str, Any]] = field(default_factory=list)
@@ -1199,6 +1208,7 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
         (f"1_interface/{name}_if.sv", "Interface: internal logic + master/slave/monitor clocking + modport"),
         (f"2_config/{name}_port_config.sv", "Port config: drive/response 统一（port_kind 区分端口类型）"),
         (f"5_agent/{name}_system_config.sv", "System config: aggregates master_cfgs[] / slave_cfgs[]"),
+        (f"3_transaction_sequencer/{name}_base_seq_item.sv", "Base transaction: xact_type + base_transaction_vars（master/slave 共用）"),
         (f"3_transaction_sequencer/{name}_master_seq_item.sv", "Master transaction"),
         (f"3_transaction_sequencer/{name}_slave_seq_item.sv", "Slave transaction (request + response control)"),
         (f"3_transaction_sequencer/{name}_master_sequencer.sv", "Master sequencer"),
@@ -1444,14 +1454,6 @@ class EnvironmentRenderTask(RenderTask):
             if result is not None:
                 rendered.append(result)
 
-        # 生成 Predictor（SV 行为参考模型）
-        pred_dir = env_dir / "pred"
-        for pred in environment.predictors:
-            if not isinstance(pred, dict) or not pred.get("name"):
-                continue
-            target_path = pred_dir / f"{pred['name']}.sv"
-            rendered.append(self.render_file(PREDICTOR_TEMPLATE, target_path, {"pred": pred}))
-
         # 生成 Scoreboard（仅旧格式 mode/item_type；新格式 sb_type 为外部类，不生成）
         scb_dir = env_dir / "scb"
         for sb in environment.scoreboards:
@@ -1582,45 +1584,20 @@ def _import_pkgs_for_types(*types):
     return pkgs
 
 
-def _resolve_port(name, agent_names, predictor_names):
+def _resolve_port(name, agent_names):
     """把来源名解析为 SystemVerilog 端口表达式（旧 scoreboard 格式用）。
 
-    - predictor 名 → `<name>_h.out_port`（参考模型输出）
-    - agent 名     → `<name>_agent_h.monitor.mon_ap`（monitor 输出）
-    - 空 / 未知    → ""（不接线）
+    - agent 名  → `<name>_agent_h.monitor.mon_ap`（monitor 输出）
+    - 空 / 未知 → ""（不接线）
     """
     if not name:
         return ""
-    if name in predictor_names:
-        return f"{name}_h.out_port"
     if name in agent_names:
         return f"{name}_agent_h.monitor.mon_ap"
     return ""
 
 
-def _normalize_predictors(predictors):
-    """填充 predictor 缺省字段，推导 import_pkgs。"""
-    normalized = []
-    for p in predictors or []:
-        if not isinstance(p, dict) or not p.get("name"):
-            continue
-        in_type = p.get("in_type", "uvm_sequence_item")
-        out_type = p.get("out_type", "uvm_sequence_item")
-        normalized.append({
-            "name": p["name"],
-            "in_type": in_type,
-            "out_type": out_type,
-            "input_from": p.get("input_from", ""),
-            "in_port": p.get("in_port", "in_export"),
-            "out_port": p.get("out_port", "out_port"),
-            "import_pkgs": _import_pkgs_for_types(in_type, out_type),
-            "model_state": p.get("model_state", ""),
-            "model_body": p.get("model_body", ""),
-        })
-    return normalized
-
-
-def _normalize_scoreboards(scoreboards, agent_names=None, predictor_names=None):
+def _normalize_scoreboards(scoreboards, agent_names=None):
     """归一化 scoreboards。兼容 UVMF 新格式与旧格式。
 
     新格式（UVMF）: {name, sb_type, trans_type}
@@ -1629,7 +1606,6 @@ def _normalize_scoreboards(scoreboards, agent_names=None, predictor_names=None):
     旧格式:        {name, mode, item_type, key_field, expected_from, actual_from}
     """
     agent_names = set(agent_names or [])
-    predictor_names = set(predictor_names or [])
     normalized = []
     for sb in scoreboards or []:
         if not isinstance(sb, dict) or not sb.get("name"):
@@ -1664,8 +1640,8 @@ def _normalize_scoreboards(scoreboards, agent_names=None, predictor_names=None):
             "key_field": sb.get("key_field", "req_id"),
             "expected_from": expected_from,
             "actual_from": actual_from,
-            "expected_port": _resolve_port(expected_from, agent_names, predictor_names),
-            "actual_port": _resolve_port(actual_from, agent_names, predictor_names),
+            "expected_port": _resolve_port(expected_from, agent_names),
+            "actual_port": _resolve_port(actual_from, agent_names),
             "import_pkgs": _import_pkgs_for_types(item_type),
         })
     return normalized
@@ -1979,6 +1955,8 @@ class YAMLLoader:
             hdl_typedefs=data.get("hdl_typedefs", []),
             hvl_typedefs=data.get("hvl_typedefs", []),
             ports=data.get("ports", []),
+            base_transaction_vars=data.get("base_transaction_vars", []),
+            base_transaction_constraints=data.get("base_transaction_constraints", []),
             transaction_vars=data.get("transaction_vars", []),
             transaction_constraints=data.get("transaction_constraints", []),
             config_vars=data.get("config_vars", []),
@@ -2020,17 +1998,13 @@ class YAMLLoader:
         agent_names = [a.name for a in agents]
         register_model = _normalize_register_model(
             data.get("register_model") or data.get("reg_adapter"), list(agents))
-        predictors = _normalize_predictors(data.get("predictors", []))
-        predictor_names = [p["name"] for p in predictors]
         return EnvironmentModel(
             name=name,
             env_name=env_name,
             agents=agents,
             subenvs=_normalize_subenvs(data.get("subenvs", [])),
             vipenvs=_normalize_vipenvs(data.get("vipenvs", [])),
-            predictors=predictors,
-            scoreboards=_normalize_scoreboards(data.get("scoreboards", []),
-                                               agent_names, predictor_names),
+            scoreboards=_normalize_scoreboards(data.get("scoreboards", []), agent_names),
             analysis_components=_normalize_analysis_components(data.get("analysis_components", [])),
             analysis_exports=_normalize_analysis_ports(data.get("analysis_exports", [])),
             analysis_ports=_normalize_analysis_ports(data.get("analysis_ports", [])),
@@ -2724,13 +2698,19 @@ class UVMGenerator:
         base_pkg_dir = Path(TEMPLATES_DIR).resolve().parent / "base_pkg"
         iface_agents = [{"name": getattr(a, "name", "")}
                         for a in interfaces if getattr(a, "name", "")]
+        # filelist 里一律用 $WORK_PATH 而不是生成时刻的绝对路径：
+        # WORK_PATH 由 output_root/Sourceme（`setenv WORK_PATH \`pwd\``）定义，
+        # 故整份 filelist 可随目录整体搬迁/换机器，不必重新生成。
+        # 相对基准 = output_root（源码 Sourceme 时 pwd 即此处）。
+        _base_rel = os.path.relpath(base_pkg_dir, self.output_root).replace("\\", "/")
         for env in environments:
             ctx = {"environment": env, **env.to_context()}
             ctx["file_name"] = f"{env.env_name}_pkg_filelist.f"
-            ctx["base_pkg_dir"] = str(base_pkg_dir)
-            ctx["agent_dir"] = str(self.output_root / "agents")
-            ctx["env_dir"] = str(self.output_root / "env")
-            ctx["bench_dir"] = str(self.output_root / "bench")
+            ctx["work_path"] = "$WORK_PATH"
+            ctx["base_pkg_dir"] = f"$WORK_PATH/{_base_rel}"
+            ctx["agent_dir"] = "$WORK_PATH/agents"
+            ctx["env_dir"] = "$WORK_PATH/env"
+            ctx["bench_dir"] = "$WORK_PATH/bench"
             ctx["bench_name"] = benches[0].name if benches else "BENCH"
             ctx["harnesses"] = list(harnesses)
             ctx["dut_path"] = "// TODO: 填入 DUT 源码路径（替换本行）"
@@ -2743,6 +2723,19 @@ class UVMGenerator:
                     "environment_templates/env_pkg_filelist.f.j2", ctx)
                 target.write_text(content, encoding="utf-8")
                 rendered.append(target)
+            else:
+                self.skipped += 1
+
+            # Sourceme：定义 $WORK_PATH（filelist / Makefile 的路径基准）。
+            # 与 filelist 一并生成——否则引用 $WORK_PATH 的 filelist 没人定义它。
+            # 放在生成目录根：`source Sourceme` 后 pwd 即 output_root。
+            src_target = self.output_root / "Sourceme"
+            if not self._should_skip(src_target):
+                src_target.parent.mkdir(parents=True, exist_ok=True)
+                src_target.write_text(
+                    self.renderer.render("bench_templates/Sourceme", dict(ctx)),
+                    encoding="utf-8")
+                rendered.append(src_target)
             else:
                 self.skipped += 1
 

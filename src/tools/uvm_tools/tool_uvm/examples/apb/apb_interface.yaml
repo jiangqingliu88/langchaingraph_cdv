@@ -6,11 +6,11 @@
 #   包含: 公司商标/权利声明/作者/创建时间/修改时间/联系邮箱/描述。
 #   顶层 meta: 键可覆盖默认值（DEFAULT_META，见 gen_uvm.py）:
 meta:
-  company: "SignOffAI（功能签核）"
+  company: "nanocorechip.com NPU IP TEAM（功能签核）"
   rights:  "Copyright © 2026 SignOffAI. All rights reserved."
-  author:  "你的名字"
-  email:   "you@example.com"
-  created: "2026-09-01"          # 固定创建时间（缺省 = 生成时刻）
+  author:  "JQLIU"
+  email:   "jqliu@nanocorechip.com"
+  created: "2026-09-12"          # 固定创建时间（缺省 = 生成时刻）
   modified: ""                   # 修改时间（缺省 = 生成时刻）
 # dir 语义（AXI-VIP 风格）:
 #   output = master 驱动、slave 采样（master → slave 的通道）
@@ -63,13 +63,23 @@ interfaces:
     #               "False" → slave 字段（slave 生成响应，master 采样）
     #   iscompare: "True"  → 参与 loopback scoreboard 比对（仅 is_master="True" 字段参与）
     #   isrand:    "True"  → master driver 默认驱动该字段（映射到同名 output 端口）
+    base_transaction_vars:
+      - { name: addr,   type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True"}
+      - { name: data,   type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True"}
     transaction_vars:
       - { name: paddr,   type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True",  is_master: "True"  }
       - { name: pwrite,  type: "bit",                  iscompare: "True",  isrand: "True",  is_master: "True"  }
       - { name: pwdata,  type: "bit [DATA_WIDTH-1:0]", iscompare: "True",  isrand: "True",  is_master: "True"  }
       - { name: prdata,  type: "bit [DATA_WIDTH-1:0]", iscompare: "True",  isrand: "False", is_master: "False" }
       - { name: pslverr, type: "bit",                  iscompare: "True",  isrand: "False", is_master: "False" }
-
+    
+    base_transaction_constraints:
+      # 注意作用域：base 约束渲染进 <name>_base_seq_item（基类），**只能引用
+      # base_transaction_vars 里的字段**。写 paddr / prdata 这类只在派生类
+      # （master/slave seq_item）里声明的字段会编译不过。
+      # 另外约束名不要与 transaction_constraints 里的重名——基类与派生类
+      # 同名约束在 UVM 里会被后者覆盖，容易看走眼。
+      - { name: c_addr_align, value: "{ addr[1:0] == 2'b00; }" }
     # ── 事务约束（master/slave 分开，渲染进各自 seq_item 的 constraint）──
     transaction_constraints:
       master:

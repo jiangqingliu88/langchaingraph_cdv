@@ -310,13 +310,10 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
                   clock_port: str, reset_port: str, registers: list = None) -> str:
     """生成 env.yaml：agents + 按协议自动带 predictor/scoreboard 闭环。
 
-    规则：总线/寄存器协议（apb/axi/ahb/wb）且同时含 DUT input（驱动）和
-          output（监控）的 agent，自动生成 {agent}_predictor（寄存器模型）+
-         {agent}_scb；apb 且 spec.registers 非空时注入寄存器模型。
-         串行协议（uart）tx/rx 无回环 + 帧粒度不足，暂不生成（跨 agent）。
+    只生成 environment.agents（含 env 级 is_active）。原先还会生成
+    predictors + 依赖它的 scoreboards，但 predictors 已下线（见文末注释），
+    故此处不再生成任何参考模型/比对组件。
     """
-    bus_protocols = {"apb", "axi", "axilite", "ahb", "wb"}
-
     # 激活模式落在 env 级 agents[].is_active（interface 级不再携带）：
     #   有 DUT input 端口（需驱动）→ active；纯 output（仅监控）→ passive。
     #   消费路径：_normalize_agents_list → AgentModel.active → 模板 agents[].is_active
@@ -333,111 +330,16 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
                            f"      clock: {clock_port}\n      reset: {reset_port}\n"
                            f"      is_active: {is_active}")
 
-    loop_agents = []
-    for ag, _iface in agents_spec:
-        name = ag.get("name")
-        ports = ag.get("ports", []) or []
-        has_in = any(p.get("direction") == "input" for p in ports)
-        has_out = any(p.get("direction") == "output" for p in ports)
-        if has_in and has_out and name in bus_protocols:
-            loop_agents.append(name)
-
     lines = [f"environment:\n  name: {module_name}_env\n  agents:\n" + "\n".join(agent_lines)]
 
-    if loop_agents:
-        pred_lines = []
-        scb_lines = []
-        for ag_name in loop_agents:
-            seq = f"{ag_name}_seq_item"
-            pred_lines.append(f"    - name: {ag_name}_predictor")
-            pred_lines.append(f"      in_type: {seq}")
-            pred_lines.append(f"      out_type: {seq}")
-            pred_lines.append(f"      input_from: {ag_name}")
-            if ag_name == "apb" and registers:
-                state, body = _gen_apb_register_model(registers)
-                pred_lines.append(_yaml_block("model_state", state))
-                pred_lines.append(_yaml_block("model_body", body))
-            scb_lines.append(f"    - name: {ag_name}_scb\n"
-                             f"      mode: inorder\n"
-                             f"      item_type: {seq}\n"
-                             f"      expected_from: {ag_name}_predictor\n"
-                             f"      actual_from: {ag_name}")
-        lines.append("  predictors:\n" + "\n".join(pred_lines))
-        lines.append("  scoreboards:\n" + "\n".join(scb_lines))
+    # 注：原先这里还会生成 predictors + 依赖它的 scoreboards。predictors 已下线
+    # （schema 不再接受该字段，且 env 模板从不例化它——声明了只是个孤立文件），
+    # 故一并移除。scoreboards 也必须一起去掉：它的 expected_from 唯一来源就是
+    # predictor，留着会得到一个「永远收不到 expected」的空 scoreboard —— 它不会
+    # 报错，只会永远不报 mismatch，比没有更危险。
+    # 需要参考模型时走 analysis_components（见 examples/apb/apb_env.yaml）。
 
     return "\n".join(lines) + "\n"
-
-
-def _yaml_block(key: str, text: str, indent: int = 6) -> str:
-    """生成 YAML 块标量 `key: |` + 缩进的多行内容（用于 model_state/model_body）。"""
-    lines = [f"{' ' * indent}{key}: |"]
-    for ln in text.split("\n"):
-        lines.append(f"{' ' * (indent + 2)}{ln}")
-    return "\n".join(lines)
-
-
-def _gen_apb_register_model(registers: list) -> tuple:
-    """从 spec.registers 生成 APB 寄存器参考模型（state 变量声明, process_in 函数体）。
-
-    建模可自包含的部分：RW 寄存器写回/读回 + 写时 prdata=0。
-    status / rx_data 是 UART 驱动（跨 agent），标记 TODO 不可预测。
-    """
-    state_lines = [
-        "  // ── APB 寄存器模型状态（与 DUT reg_* 对齐）──",
-        "  logic [7:0]  reg_tx_data  = 8'h00;",
-        "  logic [15:0] reg_baud_div = 16'h28B0; // 9600 @ 100MHz",
-        "  logic        reg_parity   = 1'b0;",
-        "  logic [31:0] reg_irq_en   = 32'h00000003;",
-        "  logic [7:0]  reg_status   = 8'h12;   // idle: fifo_empty(bit1)+tx_ready(bit4)",
-        "  logic [7:0]  reg_rx_data  = 8'h00;   // UART rx 驱动（跨 agent，TODO）",
-    ]
-    body_lines = [
-        "    // 复制请求字段，预测 prdata",
-        "    pred.paddr   = t.paddr;",
-        "    pred.pwdata  = t.pwdata;",
-        "    pred.pwrite  = t.pwrite;",
-        "    pred.psel    = t.psel;",
-        "    pred.penable = t.penable;",
-        "    pred.prdata  = 8'h00;",
-        "    pred.req_id  = t.req_id;",
-        "",
-        "    if (t.pwrite) begin",
-        "      // 写：APB 写时序 psel && penable && pwrite",
-        "      if (t.psel && t.penable) begin",
-        "        case (t.paddr[3:0])",
-        "          4'h0: reg_tx_data = t.pwdata;",
-        "          4'h1: begin",
-        "            reg_tx_data = t.pwdata;                  // 触发 TX",
-        "            reg_rx_data = t.pwdata;                  // 回环模型：写的数据经 tx→rx 收回来",
-        "          end",
-        "          4'h2: reg_baud_div[7:0]  = t.pwdata;",
-        "          4'h3: reg_baud_div[15:8] = t.pwdata;",
-        "          4'h4: reg_parity = t.pwdata[0];",
-        "          4'h5: reg_irq_en[7:0]   = t.pwdata;",
-        "          4'h6: reg_irq_en[15:8]  = t.pwdata;",
-        "          4'h7: reg_irq_en[23:16] = t.pwdata;",
-        "          4'h8: reg_irq_en[31:24] = t.pwdata;",
-        "          default: ;",
-        "        endcase",
-        "      end",
-        "    end else if (t.psel) begin",
-        "      // 读：APB 读时序 psel && !pwrite（组合逻辑），预测 prdata",
-        "      case (t.paddr[3:0])",
-        "          4'h0: pred.prdata = reg_tx_data;",
-        "          4'h1: pred.prdata = reg_status;",
-        "          4'h2: pred.prdata = reg_baud_div[7:0];",
-        "          4'h3: pred.prdata = reg_baud_div[15:8];",
-        "          4'h4: pred.prdata = {7'b0, reg_parity};",
-        "          4'h5: pred.prdata = reg_irq_en[7:0];",
-        "          4'h6: pred.prdata = reg_irq_en[15:8];",
-        "          4'h7: pred.prdata = reg_irq_en[23:16];",
-        "          4'h8: pred.prdata = reg_irq_en[31:24];",
-        "          4'h9: pred.prdata = reg_rx_data;          // 跨 agent，TODO",
-        "          default: pred.prdata = 8'h00;",
-        "      endcase",
-        "    end",
-    ]
-    return "\n".join(state_lines), "\n".join(body_lines)
 
 
 def _gen_uart_serial_logic() -> str:

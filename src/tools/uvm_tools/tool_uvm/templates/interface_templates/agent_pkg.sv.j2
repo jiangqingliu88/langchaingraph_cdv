@@ -14,6 +14,7 @@ package {{ agent.name }}_pkg;
   `define {{ agent.name | default('', true) | upper }}_AXI_MAX_ID_WIDTH 16
   //  requirements
   `include "2_config/{{ agent.name }}_port_config.sv"
+  `include "3_transaction_sequencer/{{ agent.name }}_base_seq_item.sv"
   `include "3_transaction_sequencer/{{ agent.name }}_master_seq_item.sv"
   `include "3_transaction_sequencer/{{ agent.name }}_slave_seq_item.sv"
   `include "3_transaction_sequencer/{{ agent.name }}_master_sequencer.sv"
