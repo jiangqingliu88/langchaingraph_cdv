@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Type
 import structlog
 
 from src.layers.l2_orchestration.communication.tool_protocol import (
-    ITool, ToolManifest, ToolResult, ExecutionContext,
+    ITool, ToolManifest, ToolResult, ExecutionContext, ExecutionMode,
     ToolRisk, ToolStatus, ToolCallRecord, ToolAuditor, ToolWrapper,
 )
 
@@ -438,12 +438,119 @@ class ToolHub:
         except Exception as e:
             logger.warning(f"Failed to load agent_tools: {e}")
 
+        # 注册 LangChain @tool 工具
+        count += self._load_langchain_tools()
+
+        return count
+
+    # 此前 ToolHub 只加载 legacy Tool(...) 与 uvm_tools，这些包里的 @tool
+    # 函数**从未注册过**——ToolHub 看不见它们，经 ToolHub 调用自然也是零审计。
+    # 注：cmodel_tools 不在列——它只有普通函数（generate_cmodel / compile_cmodel_dpi），
+    # 没有任何 @tool，故无工具可注册。
+    _LC_TOOL_MODULES = (
+        ("src.tools.assertion_tools.main", "assert"),
+        ("src.tools.coverage_tools.main", "coverage"),
+        ("src.tools.debug_tools.main", "debug"),
+        ("src.tools.doc_tools.main", "doc"),
+        ("src.tools.reuse_tools.main", "reuse"),
+        ("src.tools.spec_tools.main", "spec"),
+    )
+
+    def _load_langchain_tools(self) -> int:
+        """把上述包里的 LangChain @tool 对象适配后注册进 ToolHub。"""
+        import importlib
+        from langchain_core.tools import BaseTool
+
+        count = 0
+        for mod_name, role in self._LC_TOOL_MODULES:
+            try:
+                mod = importlib.import_module(mod_name)
+            except Exception as e:
+                logger.warning(f"LangChain 工具包加载失败 {mod_name}: {e}")
+                continue
+            for attr in dir(mod):
+                if attr.startswith("_"):
+                    continue
+                obj = getattr(mod, attr, None)
+                if not isinstance(obj, BaseTool):
+                    continue
+                if obj.name in self._tools:
+                    continue
+                risk = ToolRisk.WRITE if attr in _LC_WRITE_TOOLS else ToolRisk.SAFE
+                if self.register(_LangChainToolAdapter(obj, risk), [role]):
+                    count += 1
         return count
 
 
 # ═══════════════════════════════════════════════════════════════
 # 向后兼容适配器
 # ═══════════════════════════════════════════════════════════════
+
+# 会写盘 / 跑 EDA 的 @tool：风险等级按 WRITE 计（会走终端确认）
+_LC_WRITE_TOOLS = {
+    "generate_sva_assertions", "generate_immediate_assertions",
+    "generate_concurrent_assertions", "generate_formal_properties",
+    "generate_cdc_assertions", "generate_cover_properties",
+    "generate_assertion_package", "collect_coverage", "collect_sim_log",
+    "collect_compile_log", "collect_waveform", "auto_fix", "rerun_failed_test",
+    "backup_to_library", "generate_integration_code", "generate_reuse_report",
+    "compile_cmodel_dpi", "scan_environment",
+}
+
+
+class _LangChainToolAdapter:
+    """把 LangChain `@tool` 对象适配为 ITool。
+
+    本仓有 49 个 @tool 函数，但 ToolHub 原先只认 legacy Tool / uvm_tools，
+    于是 assertion / coverage / debug / doc / reuse / spec / cmodel 七个包
+    从未注册——ToolHub 看不见它们，经此调用也就完全没有审计记录。
+    """
+
+    def __init__(self, lc_tool: Any, risk_level: ToolRisk = None):
+        self._tool = lc_tool
+        self._manifest = ToolManifest(
+            name=lc_tool.name,
+            version="1.0.0",
+            description=(lc_tool.description or lc_tool.name)[:300],
+            input_schema=_lc_args_to_schema(lc_tool),
+            output_schema={"type": "string"},
+            risk_level=risk_level or ToolRisk.SAFE,
+            execution_mode=ExecutionMode.INLINE,
+            tags=["builtin", "langchain"],
+        )
+
+    @property
+    def manifest(self) -> ToolManifest:
+        return self._manifest
+
+    async def execute(self, args: Dict[str, Any], context) -> ToolResult:
+        import time as _time
+        t0 = _time.time()
+        try:
+            out = self._tool.invoke(args or {})
+            return ToolResult(success=True, data={"result": out},
+                              execution_time_s=round(_time.time() - t0, 3),
+                              manifest_hash=self._manifest.hash)
+        except Exception as e:
+            return ToolResult.fail(f"{type(e).__name__}: {str(e)[:200]}",
+                                   execution_time_s=round(_time.time() - t0, 3))
+
+
+def _lc_args_to_schema(lc_tool: Any) -> Dict[str, Any]:
+    """从 LangChain 工具推导 input_schema（优先 args_schema，退回 args）。"""
+    schema = getattr(lc_tool, "args_schema", None)
+    if schema is not None:
+        try:
+            if hasattr(schema, "model_json_schema"):        # pydantic v2
+                return schema.model_json_schema()
+            if hasattr(schema, "schema"):                   # pydantic v1
+                return schema.schema()
+        except Exception:
+            pass
+    args = getattr(lc_tool, "args", None)
+    props = {k: {"type": "string"} for k in args} if isinstance(args, dict) else {}
+    return {"type": "object", "properties": props, "required": []}
+
 
 class _OldToolAdapter:
     """将旧的 src.core.tool_system.Tool 适配为 ITool"""
