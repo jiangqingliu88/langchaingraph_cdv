@@ -332,6 +332,24 @@ class ActionDispatcher:
                 "params": action.params, "reason": action.reason}
 
 
+# 动作全集 —— 全项目唯一来源。
+# 此前有三份互不同步的动作清单：本文件的 ACTION_HANDLERS、rl_policy 的
+# SOFT_ACTIONS（4 个）、以及 execution 里的 if/elif 分支。任何一份漏改都会
+# 造成「决策层发出了执行层不认的动作」这类只在运行期暴露的问题。
+ALL_ACTIONS = (
+    "COMPILE_RETRY",          # 编译失败 → 自愈
+    "UPDATE_MODEL",           # 比对失败 → 更新参考模型
+    "REFACTOR_RTL",           # 死代码/不可达 → 改设计
+    "EXPAND_SEEDS",           # 覆盖率停滞 → 扩种
+    "RELAX_CONSTRAINT",       # 约束过紧 → 放宽
+    "GENERATE_DIRECTED_TEST", # 激励不足 → 定向补测
+    "CONVERGE",               # 达标 → 收敛（确定性终态）
+)
+# 硬失败类：由规则引擎确定性处理，RL 不参与
+HARD_ACTIONS = ("COMPILE_RETRY", "UPDATE_MODEL")
+# 终态：达标收敛，不属于 RL 的动作空间
+TERMINAL_ACTIONS = ("CONVERGE",)
+
 # 注：原 "RETRY_ENV" 条目已移除——decide() 从不产生该动作（编译失败走
 # COMPILE_RETRY，见 infrastructure.py:244 "而非 RETRY_ENV"），execution.py
 # 的动作分支里也没有它，保留只会让动作全集看起来比实际多一个。
@@ -344,6 +362,14 @@ ACTION_HANDLERS = {
     "RELAX_CONSTRAINT":      ActionDispatcher._relax_constraint,
     "CONVERGE":              ActionDispatcher._converge,
 }
+
+# 构图期自检：handler 表必须与动作全集一一对应
+if set(ACTION_HANDLERS) != set(ALL_ACTIONS):
+    raise ValueError(
+        "ACTION_HANDLERS 与 ALL_ACTIONS 不一致："
+        f"仅前者有 {sorted(set(ACTION_HANDLERS) - set(ALL_ACTIONS))}；"
+        f"仅后者有 {sorted(set(ALL_ACTIONS) - set(ACTION_HANDLERS))}"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════

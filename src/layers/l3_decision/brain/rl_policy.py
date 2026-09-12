@@ -32,9 +32,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 
-# RL 只学「覆盖率提升」的软动作；CONVERGE 是达标时的确定性规则，不属于 RL 动作空间
-SOFT_ACTIONS = ["EXPAND_SEEDS", "REFACTOR_RTL", "RELAX_CONSTRAINT",
-                "GENERATE_DIRECTED_TEST"]
+# RL 只学「覆盖率提升」的软动作。从动作全集派生，避免出现第二份会走样的清单：
+#   - HARD_ACTIONS（编译失败/比对失败）由规则引擎确定性处理，RL 不参与
+#   - TERMINAL_ACTIONS（CONVERGE）是达标终态，不属于 RL 动作空间
+from src.layers.l3_decision.decision_engine import (
+    ALL_ACTIONS, HARD_ACTIONS, TERMINAL_ACTIONS,
+)
+
+SOFT_ACTIONS = [a for a in ALL_ACTIONS
+                if a not in HARD_ACTIONS and a not in TERMINAL_ACTIONS]
 
 
 class QLearningPolicy:

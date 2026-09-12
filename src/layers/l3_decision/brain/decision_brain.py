@@ -83,15 +83,45 @@ class DecisionBrain:
             )
 
         # 3. 软决策 → RL（有经验）或规则（冷启动）
+        rule_action = self.rule_engine.decide(obs)
         if self.rl_policy.has_experience(state):
             action_type = self.rl_policy.select_action(state)
+            if action_type == rule_action.action_type:
+                # RL 与规则选到同一个动作：直接用规则的结果，params 是它算好的
+                rule_action.reason += f"（RL 与规则一致，状态 {state}）"
+                return rule_action
+            # RL 覆盖规则。此前这里 params={}，导致 RELAX_CONSTRAINT /
+            # GENERATE_DIRECTED_TEST 带着**空 gaps** 到达执行层——
+            # 「放宽约束」实际什么都没放宽，「定向补测」也没指定目标。
+            # RL 只学「选哪个动作」，参数必须由我们补齐。
             return Action(
                 action_type=action_type,
-                params={},
+                params=self._params_for(action_type, obs, rule_action),
                 priority="MEDIUM",
-                reason=f"RL 策略选择 {action_type}（状态 {state}，已学习 {self.rl_policy.q_entries_for(state)} 条）",
+                reason=(f"RL 覆盖规则：{rule_action.action_type} → {action_type}"
+                        f"（状态 {state}，已学习 {self.rl_policy.q_entries_for(state)} 条）"),
             )
-        return self.rule_engine.decide(obs)
+        return rule_action
+
+    def _params_for(self, action_type: str, obs: Any, rule_action: Action) -> Dict[str, Any]:
+        """为 RL 选中的动作补齐参数。
+
+        RL 的动作空间只有动作名，没有参数；参数得从观测或规则结果里取，
+        否则下游拿到空 gaps。同动作时优先复用规则算好的 params——**但只在
+        动作相同时**，否则会把别的动作的参数（比如 gaps）塞给不认它的动作。
+        """
+        if rule_action.action_type == action_type and rule_action.params:
+            return dict(rule_action.params)
+
+        gaps = getattr(obs, "gaps", None) or []
+        if action_type in ("RELAX_CONSTRAINT", "GENERATE_DIRECTED_TEST"):
+            return {"gaps": list(gaps)}
+        if action_type == "REFACTOR_RTL":
+            return {"failed_tests": list(getattr(obs, "failed_tests", None) or [])}
+        if action_type == "EXPAND_SEEDS":
+            # 扩种数量取规则引擎的缺省，与 decide() 的 seed_expand_count 保持一致
+            return {"count": getattr(self.rule_engine, "seed_expand_count", 1000)}
+        return {}
 
     def _smooth_reward(self, raw_reward: float) -> float:
         """EMA 平滑奖励：覆盖率提升非线性（前涨后滞），单轮 delta 噪声大，平滑降噪。"""
