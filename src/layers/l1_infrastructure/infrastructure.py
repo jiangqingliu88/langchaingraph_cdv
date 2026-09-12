@@ -38,6 +38,23 @@ import structlog
 logger = structlog.get_logger()
 
 
+def sha256_file(path: str | Path, chunk_size: int = 65536) -> str:
+    """分块计算文件 SHA256 —— 覆盖率数据库的唯一哈希实现。
+
+    ucdb 动辄几十 GB，整文件 read_bytes() 会直接打爆内存。铁律二（覆盖率
+    数据库版本固化）与此处共用同一份实现，避免再出现「一份分块、一份整读」
+    的两套哈希。
+    """
+    p = Path(path)
+    if not p.exists():
+        return ""
+    sha = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(chunk_size), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
 class InfrastructureManager:
     """L1 基础设施层统一入口。"""
 
@@ -289,13 +306,7 @@ class InfrastructureManager:
 
     @staticmethod
     def _sha256(path: Path) -> str:
-        if not path.exists():
-            return ""
-        sha = hashlib.sha256()
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(65536), b""):
-                sha.update(chunk)
-        return sha.hexdigest()
+        return sha256_file(path)
 
     def archive_coverage(self, round_num: int, ucdb_path: str | Path) -> dict:
         """归档覆盖率数据库（硬链接，避免几十 GB 复制）+ 记录 SHA256。

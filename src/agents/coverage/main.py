@@ -187,15 +187,20 @@ class CoverageAgent(BaseAgent):
 
         # ── 铁律 2 + 3：覆盖率数据库版本固化 + 降采样 ──
         # ucdb 哈希（版本固化，复现时可回滚比对）；LLM 空洞分析只读 text 汇总，绝不读 ucdb
-        import hashlib
+        from src.layers.l1_infrastructure.infrastructure import sha256_file
         ucdb_path = nested_cov.get("ucdb_path", "")
         ucdb_hash = ""
         if ucdb_path:
             try:
-                ucdb_hash = hashlib.sha256(Path(ucdb_path).read_bytes()).hexdigest()
+                # 分块哈希：ucdb 可能几十 GB，整文件 read_bytes() 会打爆内存。
+                # 与铁律二的归档实现（InfrastructureManager.archive_coverage）共用
+                # 同一份 sha256_file()，避免出现两份行为不同的哈希。
+                ucdb_hash = sha256_file(ucdb_path)
             except Exception:
                 pass
-        summary_path = str(Path(nested_cov.get("report_dir", "")) / "coverage_summary.txt") \
+        # 铁律三：指向 <1KB 语义降采样（而非完整 vcover 报告）——LLM 只看这一份。
+        # 完整报告仍留在 coverage_summary.txt，供人工与解析使用。
+        summary_path = str(Path(nested_cov.get("report_dir", "")) / "coverage_summary_llm.txt") \
             if nested_cov.get("report_dir") else ""
 
         return AgentResult(success=True, data={

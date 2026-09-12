@@ -17,6 +17,48 @@ def print(*args, **kwargs):
     builtins.print(*args, **kwargs)
 
 
+# ── 铁律三：LLM 只读降采样文本，上限 1KB ──
+_LLM_SUMMARY_LIMIT = 1024
+
+
+def _build_llm_summary(raw: str, limit: int = _LLM_SUMMARY_LIMIT) -> str:
+    """把 vcover 报告压成 <1KB 的语义汇总（铁律三）。
+
+    按语义挑行（汇总行优先），而不是按长度粗暴截断——截断会把一行切成两半、
+    丢掉总量信息，也没有省略标记。头部记录原始长度，便于审计降采样比例。
+    """
+    raw = raw or ""
+    lines = [ln.rstrip() for ln in raw.splitlines() if ln.strip()]
+
+    # 汇总行优先；含 TOTAL 的最优先排到最前——铁律三要的是总量，
+    # 不能因为预算被逐条明细挤掉（vcover 报告里 TOTAL 通常在最后一行的情形很常见）。
+    def _rank(ln: str) -> int:
+        if "TOTAL" in ln:
+            return 0
+        return 1 if any(k in ln for k in ("Coverage", "Summary")) else 2
+
+    summary_lines = [ln for ln in lines if _rank(ln) < 2]
+    picked = sorted(summary_lines, key=_rank) if summary_lines else lines
+
+    header = f"# coverage summary（降采样；原始 {len(raw)} 字符）\n"
+    out, used, omitted = [], len(header.encode()), 0
+    for i, ln in enumerate(picked):
+        cost = len(ln.encode()) + 1
+        if used + cost > limit:
+            omitted = len(picked) - i
+            break
+        out.append(ln)
+        used += cost
+
+    text = header + "\n".join(out)
+    if omitted:
+        text += f"\n...（省略 {omitted} 行；完整报告见 coverage_summary.txt）"
+    if len(text.encode()) > limit:  # 极端超长单行的兜底
+        budget = max(0, limit - len(header.encode()) - 40)
+        text = header + "\n".join(out)[:budget] + "\n...（截断）"
+    return text
+
+
 def build_rtl_filelist(output_dir: Path) -> Path:
     """构建包含 RTL + UVM bench + env 的编译 filelist"""
     fl_dir = output_dir / "inputs" / "filelists"
@@ -231,6 +273,10 @@ def parse_coverage_report(output_dir: Path) -> dict:
                           cwd=str(output_dir.resolve()))
         txt_report.write_text(r.stdout, encoding="utf-8", errors="replace")
         raw_text = r.stdout
+        # 铁律三落地：再产出一份 <1KB 语义降采样，供 LLM 读取。
+        # coverage_summary.txt 仍是完整报告（人工/解析用），两者并存。
+        (report_dir / "coverage_summary_llm.txt").write_text(
+            _build_llm_summary(raw_text), encoding="utf-8", errors="replace")
     except subprocess.TimeoutExpired:
         raw_text = ""
 
