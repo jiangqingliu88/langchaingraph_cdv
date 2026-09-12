@@ -185,7 +185,11 @@ class DistillationOrchestrator:
     # ═══════════════════════════════════════════════════════════
 
     def _grayscale_apply(self, proposal: DistillationProposal) -> bool:
-        """灰度上线：写入注册表（live），标记为已固化。回归验证失败则回滚。"""
+        """灰度上线：写入注册表（live），标记为已固化。
+
+        注意：这里没有灰度回归验证——写入即上线，不存在「回归失败自动回滚」。
+        回滚目前只能由 rollback() 显式触发。
+        """
         try:
             live = self._registry.setdefault("live", {})
             live[proposal.proposal_id] = proposal.to_dict()

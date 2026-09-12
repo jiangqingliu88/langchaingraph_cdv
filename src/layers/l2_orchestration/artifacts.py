@@ -38,7 +38,6 @@ class ArtifactRegistry:
         self.artifacts_dir = Path(artifacts_dir)
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
         self._artifacts: List[Artifact] = []
-        self.prev_hash = ""
 
     def add(self, name: str, type: str, content: str, agent: str,
             version: str = "v1", metadata: Dict = None) -> Artifact:

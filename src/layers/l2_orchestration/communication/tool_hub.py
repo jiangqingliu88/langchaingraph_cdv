@@ -454,13 +454,12 @@ class _OldToolAdapter:
 
     @property
     def manifest(self) -> ToolManifest:
-        risk_map = {"safe": ToolRisk.SAFE, "write": ToolRisk.WRITE, "danger": ToolRisk.DANGER}
         return ToolManifest(
             name=self._old.name,
             version="1.0.0",
             description=self._old.description,
             input_schema=self._old.input_schema,
-            risk_level=risk_map.get(self._old.risk_level, ToolRisk.SAFE),
+            risk_level=ToolRisk.parse(self._old.risk_level),
         )
 
     async def execute(self, args: Dict[str, Any], context: ExecutionContext) -> ToolResult:

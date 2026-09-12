@@ -100,7 +100,6 @@ class CLIWrapperTool(BaseTool):
 
     def _parse_manifest(self) -> ToolManifest:
         c = self._config
-        risk_map = {"safe": ToolRisk.SAFE, "write": ToolRisk.WRITE, "danger": ToolRisk.DANGER}
 
         # Parse examples
         examples = []
@@ -117,7 +116,7 @@ class CLIWrapperTool(BaseTool):
             description=c.get("description", ""),
             input_schema=c.get("input_schema", {"type": "object", "properties": {}, "required": []}),
             output_schema=c.get("output_schema", {"type": "object", "properties": {}}),
-            risk_level=risk_map.get(c.get("risk_level", "safe"), ToolRisk.SAFE),
+            risk_level=ToolRisk.parse(c.get("risk_level", "safe")),
             timeout_s=c.get("timeout_s", 300.0),
             retry_count=c.get("retry_count", 0),
             requires_binaries=c.get("requires_binaries", []),

@@ -23,20 +23,13 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional
+from typing import Any, Callable, Dict, List, Optional
 
+from src.layers.l2_orchestration.communication.tool_protocol import ToolRisk
 
-# ═══════════════════════════════════════════════════════════
-# Risk Level
-# ═══════════════════════════════════════════════════════════
-
-RiskLevel = Literal["safe", "write", "danger"]
-
-RISK_RULES = {
-    "safe":   {"approve": "auto",    "desc": "只读/无副作用 — 自动通过"},
-    "write":  {"approve": "console", "desc": "写磁盘/改配置 — 终端确认"},
-    "danger": {"approve": "block",   "desc": "删除/提权/杀进程 — 直接拦截"},
-}
+# 风险等级统一用 ToolRisk（tool_protocol.py）。它是 str-Enum，取值
+# "safe"/"write"/"danger" 与原 RiskLevel Literal 完全一致、可直接相等比较，
+# 因此原并存的两份副本（RiskLevel 类型 + RISK_RULES 表）已删除。
 
 
 # ═══════════════════════════════════════════════════════════
@@ -49,7 +42,7 @@ class Tool:
     name: str
     description: str                          # 给 LLM 看的，决定何时调用
     input_schema: Dict[str, Any] = field(default_factory=dict)  # JSON Schema
-    risk_level: RiskLevel = "safe"
+    risk_level: ToolRisk = ToolRisk.SAFE
     handler: Optional[Callable] = None        # 实际执行函数 fn(args) -> dict
 
     def validate_args(self, args: dict) -> tuple[bool, str]:
@@ -177,7 +170,7 @@ class ToolRegistry:
                     "name": t.name,
                     "description": t.description,
                     "risk_level": t.risk_level,
-                    "approval_mode": RISK_RULES.get(t.risk_level, {}).get("approve", "auto"),
+                    "approval_mode": ToolRisk.parse(t.risk_level).approval_mode,
                     "has_handler": t.handler is not None,
                     "required_params": list(t.input_schema.get("required", [])),
                     "param_count": len(t.input_schema.get("properties", {})),
@@ -204,14 +197,14 @@ class Sandbox:
 
     def check(self, tool: Tool, args: dict) -> tuple[bool, str]:
         """检查工具是否允许执行。返回 (pass, reason)。"""
-        rule = RISK_RULES.get(tool.risk_level, RISK_RULES["safe"])
-        if rule["approve"] == "auto":
+        approval_mode = ToolRisk.parse(tool.risk_level).approval_mode
+        if approval_mode == "auto":
             self.allowed_count += 1
             return True, "auto-approved"
-        if rule["approve"] == "block":
+        if approval_mode == "block":
             self.blocked_count += 1
             return False, f"Tool '{tool.name}' is danger-level, execution blocked"
-        if rule["approve"] == "console":
+        if approval_mode == "console":
             # 会话缓存：本次 run 已批准过该工具 → 直接放行
             if tool.name in self.session_approvals:
                 self.allowed_count += 1

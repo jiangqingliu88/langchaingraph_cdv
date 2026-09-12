@@ -123,13 +123,9 @@ def cli(ctx, prompt, continue_mode, resume_id):
         if prompt:
             run_once(prompt)       # vagent -p "prompt"
         elif continue_mode:
-            # vagent -c 继续上次会话
-            print("继续上次会话...")
-            run_interactive()
+            run_interactive(continue_latest=True)   # vagent -c
         elif resume_id:
-            # vagent -r <id> 恢复
-            print(f"恢复会话: {resume_id}")
-            run_interactive()
+            run_interactive(session_id=resume_id)   # vagent -r <id>
         else:
             run_interactive()      # vagent 进入 REPL
 
@@ -648,7 +644,7 @@ def signoff_checklist(run_id, json_output):
     # ── 动态检查：Exclude 待审批未处理 → 阻断签核（放弃必须闭环：提议→审批）──
     exclude_pending = 0
     try:
-        reg = _exclude_registry(None)
+        reg = _exclude_registry()
         exclude_pending = reg.stats().get("pending", 0)
         reg.close()
     except Exception:
@@ -2958,21 +2954,19 @@ def coverage_gaps(run_id, json_output):
 
 
 @coverage.command("exclude")
-@click.option("--output", "-o", type=click.Path(), help="输出目录（默认 .signoffai）")
 @click.option("--coverage", "-c", type=float, default=None, help="当前覆盖率（%，配合 --total 计算有效覆盖率）")
 @click.option("--total", "-t", type=int, default=None, help="总覆盖点数")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def coverage_exclude(output, coverage, total, json_output):
+def coverage_exclude(coverage, total, json_output):
     """覆盖率里的 Exclude 视图：已放弃点 + 待审批 + 有效覆盖率
 
     \b
     示例:
       vagent coverage exclude                              # 已放弃/待审批摘要
       vagent coverage exclude -c 95 -t 100                 # 附有效覆盖率
-      vagent coverage exclude -o output/uart_run           # 指定 run 目录
     """
     out = get_output_adapter(json_output)
-    reg = _exclude_registry(output)
+    reg = _exclude_registry()
     try:
         approved = reg.get_approved_excludes()
         pending = reg.list_pending()
@@ -4230,10 +4224,14 @@ def exclude():
     pass
 
 
-def _exclude_registry(output_dir=None):
+def _exclude_registry():
+    """Exclude 状态库（项目根 .signoffai/，跨 run 共享）。
+
+    刻意不接受 output_dir：exclude 是治理产物，审计哈希链必须跨 run 连续，
+    因此与 run 输出目录隔离——主循环 execution.py 用的也是项目根路径。
+    历史上有过 output 相对路径的实现，结果是 CLI 批准的 exclude 主循环读不到。
+    """
     from src.layers.l4_memory.exclude_registry import ExcludeRegistry
-    if output_dir:
-        return ExcludeRegistry(str(Path(output_dir) / ".signoffai" / "exclude_registry.db"))
     return ExcludeRegistry()
 
 
@@ -4241,12 +4239,11 @@ def _exclude_registry(output_dir=None):
 @click.option("--status", "-s", "status_filter", default="all",
               type=click.Choice(["all", "approved", "proposed", "rejected"]),
               help="按状态过滤")
-@click.option("--output", "-o", type=click.Path(), help="输出目录（默认 .signoffai）")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def exclude_list(status_filter, output, json_output):
+def exclude_list(status_filter, json_output):
     """列出 Exclude 记录（已批准/待审批/已拒绝）"""
     out = get_output_adapter(json_output)
-    reg = _exclude_registry(output)
+    reg = _exclude_registry()
     try:
         approved = reg.get_approved_excludes()
         pending = reg.list_pending()
@@ -4293,9 +4290,8 @@ def exclude_list(status_filter, output, json_output):
               type=click.Choice(["unreachable", "excluded_by_design", "not_worth_it"]),
               help="归因分类")
 @click.option("--evidence", "-e", default="", help="证据（波形/RTL 追溯等）")
-@click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def exclude_propose(coverage_point, reason, exclude_type, evidence, output, json_output):
+def exclude_propose(coverage_point, reason, exclude_type, evidence, json_output):
     """提议 Exclude（归因分类 → 待审批）
 
     \b
@@ -4304,7 +4300,7 @@ def exclude_propose(coverage_point, reason, exclude_type, evidence, output, json
       vagent exclude propose burst_64      -r '规格不要求测 64 拍' -t excluded_by_design
     """
     out = get_output_adapter(json_output)
-    reg = _exclude_registry(output)
+    reg = _exclude_registry()
     try:
         existing = reg.get_point_status(coverage_point)
         if existing:
@@ -4322,13 +4318,12 @@ def exclude_propose(coverage_point, reason, exclude_type, evidence, output, json
 @exclude.command("approve")
 @click.argument("exclude_id")
 @click.option("--approver", "-a", default=None, help="审批人签名（默认取环境变量 USER）")
-@click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def exclude_approve(exclude_id, approver, output, json_output):
+def exclude_approve(exclude_id, approver, json_output):
     """审计门控：批准 Exclude（记录审批人 + 哈希指纹，接证据链）"""
     out = get_output_adapter(json_output)
     approver = approver or os.environ.get("USER", "engineer")
-    reg = _exclude_registry(output)
+    reg = _exclude_registry()
     try:
         ok = reg.approve_exclude(exclude_id, approver)
         if ok:
@@ -4342,13 +4337,12 @@ def exclude_approve(exclude_id, approver, output, json_output):
 @exclude.command("reject")
 @click.argument("exclude_id")
 @click.option("--approver", "-a", default=None, help="审批人签名")
-@click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def exclude_reject(exclude_id, approver, output, json_output):
+def exclude_reject(exclude_id, approver, json_output):
     """拒绝 Exclude（点仍需覆盖）"""
     out = get_output_adapter(json_output)
     approver = approver or os.environ.get("USER", "engineer")
-    reg = _exclude_registry(output)
+    reg = _exclude_registry()
     try:
         reg.reject_exclude(exclude_id, approver)
         out.print_success(f"已拒绝 {exclude_id}（审批人: {approver}）")
@@ -4359,12 +4353,11 @@ def exclude_reject(exclude_id, approver, output, json_output):
 @exclude.command("effective")
 @click.option("--coverage", "-c", type=float, required=True, help="当前覆盖率（%）")
 @click.option("--total", "-t", type=int, required=True, help="总覆盖点数")
-@click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def exclude_effective(coverage, total, output, json_output):
+def exclude_effective(coverage, total, json_output):
     """动态调规：计算有效覆盖率 = coverage / (total - excluded)"""
     out = get_output_adapter(json_output)
-    reg = _exclude_registry(output)
+    reg = _exclude_registry()
     try:
         excluded = len(reg.get_excluded_points())
         effective = reg.effective_coverage(coverage, total)

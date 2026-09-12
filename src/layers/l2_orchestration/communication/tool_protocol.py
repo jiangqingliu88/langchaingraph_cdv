@@ -42,7 +42,7 @@ from pathlib import Path
 # ═══════════════════════════════════════════════════════════════
 
 class ToolRisk(str, Enum):
-    """工具风险等级 —— 对标 tool_system.RiskLevel"""
+    """工具风险等级 —— 全项目唯一来源（tool_system 的 RiskLevel/RISK_RULES 已并入此处）。"""
     SAFE = "safe"        # 只读/无副作用 — 自动通过
     WRITE = "write"      # 写磁盘/改配置 — 终端确认
     DANGER = "danger"    # 删除/提权/杀进程 — 直接拦截
@@ -58,6 +58,20 @@ class ToolRisk(str, Enum):
             "write": "写磁盘/改配置 — 需确认",
             "danger": "删除/提权/杀进程 — 直接拦截",
         }[self.value]
+
+    @classmethod
+    def parse(cls, value: Any) -> "ToolRisk":
+        """把字符串/枚举归一化为 ToolRisk。
+
+        未知取值 fail-closed 返回 DANGER（而非静默当作 safe 放行）——
+        风险等级读不懂时应当拒绝执行。
+        """
+        if isinstance(value, cls):
+            return value
+        try:
+            return cls(value)
+        except ValueError:
+            return cls.DANGER
 
 
 class ToolStatus(str, Enum):

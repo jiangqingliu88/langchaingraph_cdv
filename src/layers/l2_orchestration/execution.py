@@ -576,7 +576,7 @@ class PipelineExecutionService:
             # 此处不再手动 archive，避免与子进程归档重复。
 
             # 决策：按"有效覆盖率"判断（已批准的 Exclude 点从分母剔除，不再追不可达死代码）
-            # 功能回归失败 → failed_tests 非空 → 决策层走 RETRY_ENV（环境自愈/重试），而非盲目补覆盖率
+            # 功能回归失败 → failed_tests 非空 → 决策层走 REFACTOR_RTL（decision_engine.py:100-106，scoreboard mismatch 说明 DUT 功能错，重试环境无意义），而非盲目补覆盖率
             _failed_tests = [f"functional_regress_r{round_num+1}"] if (failed and not compile_error) else []
             obs = Observation(
                 iteration_id=round_num,

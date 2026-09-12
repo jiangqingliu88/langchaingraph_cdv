@@ -209,8 +209,24 @@ def run_once(prompt: str):
     asyncio.run(repl._handle_query(prompt))
 
 
-def run_interactive():
-    """启动交互式 REPL。"""
+def run_interactive(session_id: Optional[str] = None, continue_latest: bool = False):
+    """启动交互式 REPL。
+
+    session_id:      载入指定会话历史（vagent -r <id>）
+    continue_latest: 载入最近一次会话（vagent -c）
+    """
     import asyncio
     repl = Repl()
+    if session_id:
+        if not repl.sessions.load(session_id):
+            avail = ", ".join(sorted(repl.sessions.list_sessions())) or "（无）"
+            print(f"错误：找不到会话 {session_id}。可用会话: {avail}", file=sys.stderr)
+            raise SystemExit(1)
+        print(f"已恢复会话 {session_id}（{len(repl.sessions.history)} 条历史）")
+    elif continue_latest:
+        sessions = sorted(repl.sessions.list_sessions())
+        if sessions and repl.sessions.load(sessions[-1]):
+            print(f"已继续会话 {sessions[-1]}（{len(repl.sessions.history)} 条历史）")
+        else:
+            print("无可继续的会话，已启动新会话")
     asyncio.run(repl.run_interactive())

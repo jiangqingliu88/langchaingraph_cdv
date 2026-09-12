@@ -41,7 +41,9 @@ class Observation:
 @dataclass
 class Action:
     """决策层下发给执行层的动作"""
-    action_type: str          # GENERATE_DIRECTED_TEST | EXPAND_SEEDS | REFACTOR_RTL | RETRY_ENV | CONVERGE
+    # 动作全集：与 decide() 实际产出、execution.py 的动作分支一一对应
+    action_type: str          # COMPILE_RETRY | UPDATE_MODEL | REFACTOR_RTL | EXPAND_SEEDS |
+                              # RELAX_CONSTRAINT | GENERATE_DIRECTED_TEST | CONVERGE
     params: Dict[str, Any] = field(default_factory=dict)
     priority: str = "MEDIUM"
     max_retries: int = 3
@@ -298,11 +300,6 @@ class ActionDispatcher:
                 "params": action.params, "reason": action.reason,
                 "fix": action.reason}
 
-    def _retry_env(self, action: Action) -> dict:
-        """环境自愈：重试编译/仿真"""
-        return {"status": "dispatched", "retry_env": True,
-                "params": action.params, "reason": action.reason}
-
     def _converge(self, action: Action) -> dict:
         """收敛：停止迭代"""
         return {"status": "converged", "final": action.params, "reason": action.reason}
@@ -335,13 +332,15 @@ class ActionDispatcher:
                 "params": action.params, "reason": action.reason}
 
 
+# 注：原 "RETRY_ENV" 条目已移除——decide() 从不产生该动作（编译失败走
+# COMPILE_RETRY，见 infrastructure.py:244 "而非 RETRY_ENV"），execution.py
+# 的动作分支里也没有它，保留只会让动作全集看起来比实际多一个。
 ACTION_HANDLERS = {
     "COMPILE_RETRY":         ActionDispatcher._compile_retry,
     "UPDATE_MODEL":          ActionDispatcher._update_model,
     "GENERATE_DIRECTED_TEST": ActionDispatcher._generate_directed_test,
     "EXPAND_SEEDS":          ActionDispatcher._expand_seeds,
     "REFACTOR_RTL":          ActionDispatcher._refactor_rtl,
-    "RETRY_ENV":             ActionDispatcher._retry_env,
     "RELAX_CONSTRAINT":      ActionDispatcher._relax_constraint,
     "CONVERGE":              ActionDispatcher._converge,
 }

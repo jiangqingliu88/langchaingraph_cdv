@@ -2,10 +2,11 @@
 RL Policy —— 轻量表格 Q-learning（V3 决策学习层的动作选择器）
 
 V3 的 RL 只负责「软决策」（覆盖率优化），不管「硬失败」（编译错/比对错/环境失败，
-那些由规则引擎确定性处理）。所以动作空间是 5 个软动作：
+那些由规则引擎确定性处理）。所以动作空间是 4 个软动作
+（CONVERGE 是达标时的确定性终态，不属于 RL 动作空间）：
 
     SOFT_ACTIONS = [EXPAND_SEEDS, REFACTOR_RTL, RELAX_CONSTRAINT,
-                    GENERATE_DIRECTED_TEST, CONVERGE]
+                    GENERATE_DIRECTED_TEST]
 
 Q-learning 核心：
     Q[s,a] += α * ( reward + γ * max_a' Q[s',a'] - Q[s,a] )
