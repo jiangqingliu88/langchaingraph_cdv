@@ -70,13 +70,15 @@ def test_legacy_aliases_accepted(tmp_path):
         # bench_name 别名 + clk_rst 裸字符串列表
         "a3.yaml": {"bench": {"bench_name": "B", "clk_rst": {"clocks": ["clk"],
                                                             "resets": ["rst"]}}},
-        # constraint list 格式 transaction_constraints + is_active 三种形态
+        # constraint list 格式 transaction_constraints + config 自由透传
         "a4.yaml": {"interfaces": [{"name": "A",
                                     "transaction_constraints": [
                                         {"name": "c1", "value": "{}"}],
-                                    "is_active": "UVM_ACTIVE"}]},
-        "a5.yaml": {"interfaces": [{"name": "A",
-                                    "is_active": {"master": True}}]},
+                                    "config": {"priority": 3}}]},
+        # env 级 agents[].is_active（标量 / active 别名）仍是合法输入
+        "a5.yaml": {"environment": {"name": "E",
+                                    "agents": [{"name": "m", "is_active": True},
+                                               {"name": "s", "active": False}]}},
         # harness connect.path 旧别名 + count 字符串（参数名）
         "a6.yaml": {"harness": {"name": "h",
                                 "connect": {"path": "tb.h"},
@@ -99,6 +101,23 @@ def test_interface_missing_name_error(tmp_path):
     assert "name" in errs[0].message and "agent_name" in errs[0].message
 
 
+def test_interface_is_active_now_unknown_key(tmp_path):
+    """interface 级 is_active 已下线：unknown key → error，不再静默生效。"""
+    issues = _check({"interfaces": [{"name": "A", "is_active": True}]}, tmp_path)
+    errs = _errors(issues)
+    assert len(errs) == 1 and errs[0].rule == "unknown_property"
+    assert errs[0].target.endswith("interfaces[0].is_active")
+
+
+def test_interface_config_is_active_rejected(tmp_path):
+    """旧读取路径 config.is_active 显式报错（而非静默忽略）；其余 config 键仍自由透传。"""
+    issues = _check({"interfaces": [{"name": "A", "config": {"is_active": True}}]}, tmp_path)
+    errs = _errors(issues)
+    assert len(errs) == 1 and errs[0].rule == "removed_field"
+    assert errs[0].target.endswith("interfaces[0].config")
+    assert _check({"interfaces": [{"name": "A", "config": {"priority": 3}}]}, tmp_path) == []
+
+
 def test_port_dir_enum_error(tmp_path):
     issues = _check({"interfaces": [{"name": "A", "ports": [
         {"name": "p", "dir": "inout"}]}]}, tmp_path)
@@ -114,18 +133,18 @@ def test_ports_not_list_type_error(tmp_path):
     assert any(e.rule == "type_mismatch" for e in errs)
 
 
-def test_typo_key_warning(tmp_path):
+def test_typo_key_error(tmp_path):
     issues = _check({"interfaces": [{"name": "A",
                                      "reset_active_loww": True}]}, tmp_path)
-    warns = _warnings(issues)
-    assert len(warns) == 1 and warns[0].rule == "unknown_property"
-    assert "reset_active_loww" in warns[0].target
-    assert not _errors(issues)
-    # 仅 warning → main 返回 0
+    errs = _errors(issues)
+    assert len(errs) == 1 and errs[0].rule == "unknown_property"
+    assert "reset_active_loww" in errs[0].target
+    assert _warnings(issues) == []
+    # 未知键 → error，main 返回 1（拼错键不再静默通过）
     assert main([str(_write(tmp_path, "typo_only.yaml",
                             {"interfaces": [{"name": "A",
                                              "reset_active_loww": True}]})),
-                 "-q"]) == 0
+                 "-q"]) == 1
 
 
 def test_env_agent_missing_name_and_type_error(tmp_path):
@@ -177,11 +196,11 @@ def test_combinator_bad_enum_error(tmp_path):
     assert "default_mode" in errs[0].target
 
 
-def test_top_level_unknown_key_warning(tmp_path):
+def test_top_level_unknown_key_error(tmp_path):
     issues = _check({"interfaces": [{"name": "A"}],
                      "interfases": [{"name": "B"}]}, tmp_path)
-    warns = _warnings(issues)
-    assert len(warns) == 1 and warns[0].rule == "unknown_property"
+    errs = _errors(issues)
+    assert len(errs) == 1 and errs[0].rule == "unknown_property"
 
 
 def test_meta_only_document_error(tmp_path):
@@ -215,9 +234,9 @@ def test_empty_file_error(tmp_path):
 def test_multiple_typos_fan_out(tmp_path):
     issues = _check({"environment": {"name": "E", "enabledd": 1,
                                      "agentsx": []}}, tmp_path)
-    warns = _warnings(issues)
-    assert len(warns) == 2
-    assert {w.rule for w in warns} == {"unknown_property"}
+    errs = _errors(issues)
+    assert len(errs) == 2
+    assert {e.rule for e in errs} == {"unknown_property"}
 
 
 # ── CLI / 元测试 ──
@@ -255,7 +274,7 @@ def test_schema_is_valid_jsonschema():
         json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
 
 
-# ── 集成：gen_uvm 生成流程 Phase 0（error 阻断 / warning 不阻断 / --skip-schema-check）──
+# ── 集成：gen_uvm 生成流程 Phase 0（error 阻断 / --skip-schema-check）──
 
 def test_gen_blocks_on_schema_error(tmp_path):
     from src.tools.uvm_tools.tool_uvm.gen_uvm import main as gen_main
@@ -267,16 +286,17 @@ def test_gen_blocks_on_schema_error(tmp_path):
     assert "[ERROR] missing_required" in report
 
 
-def test_gen_schema_warning_does_not_block(tmp_path):
+def test_gen_blocks_on_unknown_key(tmp_path):
     from src.tools.uvm_tools.tool_uvm.gen_uvm import main as gen_main
     src = yaml.safe_load((EXAMPLES / "apb_interface.yaml").read_text(encoding="utf-8"))
-    src["interfaces"][0]["reset_active_loww"] = True  # 拼错键 → 仅 warning
-    tmp_yaml = _write(tmp_path, "warn.yaml", src)
+    src["interfaces"][0]["reset_active_loww"] = True  # 拼错键 → unknown key error
+    tmp_yaml = _write(tmp_path, "typo.yaml", src)
     dest = tmp_path / "out"
-    assert gen_main(["-i", str(tmp_yaml), "-d", str(dest), "-q"]) == 0
+    with pytest.raises(SystemExit):
+        gen_main(["-i", str(tmp_yaml), "-d", str(dest), "-q"])
     report = (dest / "schema_report.txt").read_text(encoding="utf-8")
-    assert "[WARNING] unknown_property" in report
-    assert "[ERROR]" not in report
+    assert "[ERROR] unknown_property" in report
+    assert "reset_active_loww" in report
 
 
 def test_gen_skip_schema_check_bypasses(tmp_path):

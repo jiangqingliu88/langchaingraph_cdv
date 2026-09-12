@@ -8,7 +8,11 @@ package {{ agent.name }}_pkg;
   import uvm_pkg::*;
   import {{ agent.name }}_parameter_pkg::*;
   `include "uvm_macros.svh"
-
+  // 最大物理位宽（编译期固定）
+  `define {{ agent.name | default('', true) | upper }}_MAX_ADDR_WIDTH 512
+  `define {{ agent.name | default('', true) | upper }}_MAX_DATA_WIDTH 512
+  `define {{ agent.name | default('', true) | upper }}_AXI_MAX_ID_WIDTH 16
+  //  requirements
   `include "2_config/{{ agent.name }}_port_config.sv"
   `include "3_transaction_sequencer/{{ agent.name }}_master_seq_item.sv"
   `include "3_transaction_sequencer/{{ agent.name }}_slave_seq_item.sv"
@@ -20,6 +24,7 @@ package {{ agent.name }}_pkg;
   `include "5_agent/{{ agent.name }}_master_agent.sv"
   `include "5_agent/{{ agent.name }}_slave_agent.sv"
   `include "5_agent/{{ agent.name }}_system_config.sv"
+  `include "5_agent/{{ agent.name }}_system_monitor.sv"
   `include "5_agent/{{ agent.name }}_system_env.sv"
   `include "7_sequence/{{ agent.name }}_master_sequence.sv"
   `include "7_sequence/{{ agent.name }}_slave_sequence.sv"

@@ -59,12 +59,7 @@ SRC = \
   +incdir+$(BASE_PKG)/clk_and_rst \
   $(BASE_PKG)/clk_and_rst/clk_and_rst_pkg.sv \
   +incdir+$(BASE_PKG)/scb \
-  $(BASE_PKG)/scb/in_order_scoreboard.svh \
-  $(BASE_PKG)/scb/out_of_order_scoreboard.svh \
-  $(BASE_PKG)/scb/typed_scoreboard.svh \
-  $(BASE_PKG)/scb/multich_in_order_scoreboard.svh \
-  $(BASE_PKG)/scb/multich_out_of_order_scoreboard.svh \
-  $(BASE_PKG)/scb/algorithm_scoreboard.svh \
+  $(BASE_PKG)/scb/scb_pkg.sv \
   +incdir+agents/APB_agent \
   agents/APB_agent/1_interface/APB_if.sv \
   agents/APB_agent/1_interface/APB_system_if.sv \

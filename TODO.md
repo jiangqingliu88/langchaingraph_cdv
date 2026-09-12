@@ -73,16 +73,18 @@
   加一个后端，不用动五层引擎——职责分离清晰。
 
 
-
+$env:ANTHROPIC_MODEL="deepseek-v4-flash"
+$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4-flash"
+$env:ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-flash"
 
 $env:ANTHROPIC_BASE_URL="https://api.deepseek.com/anthropic"
 $env:ANTHROPIC_AUTH_TOKEN="sk-d34a3edfd4934661bff0752947f39518"
-$env:ANTHROPIC_MODEL="deepseek-v4-pro[1m]"
-$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4-pro[1m]"
-$env:ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-pro[1m]"
+$env:ANTHROPIC_MODEL="deepseek-v4-flash"
+$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4-flash"
+$env:ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-flash"
 $env:ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-v4-flash"
 $env:CLAUDE_CODE_SUBAGENT_MODEL="deepseek-v4-flash"
-$env:CLAUDE_CODE_EFFORT_LEVEL="max"
+$env:CLAUDE_CODE_EFFORT_LEVEL="high"
 claude
 
 
@@ -92,4 +94,21 @@ $env:ANTHROPIC_MODEL="glm-5.3"
 $env:ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.3"
 $env:ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.3"
 $env:ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.3-flash"
+$env:CLAUDE_CODE_EFFORT_LEVEL="high"
+
+
+$env:ANTHROPIC_BASE_URL="https://open.bigmodel.cn/api/anthropic"
+$env:ANTHROPIC_AUTH_TOKEN="82b96c255a1e496fbdccbd4c20c00e5b.5HqRGg6KWfSWUcB0"
+$env:ANTHROPIC_MODEL="glm-4.7-flash"
+$env:ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.7-flash"
+$env:ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.7-flash"
+$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.7-flash"
+$env:CLAUDE_CODE_EFFORT_LEVEL="high"
+
+$env:ANTHROPIC_BASE_URL="https://open.bigmodel.cn/api/anthropic"
+$env:ANTHROPIC_AUTH_TOKEN="82b96c255a1e496fbdccbd4c20c00e5b.5HqRGg6KWfSWUcB0"
+$env:ANTHROPIC_MODEL="glm-4.5-air"
+$env:ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.5-air"
+$env:ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.5-air"
+$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.5-air"
 $env:CLAUDE_CODE_EFFORT_LEVEL="high"

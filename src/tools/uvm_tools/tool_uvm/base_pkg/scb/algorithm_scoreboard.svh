@@ -12,7 +12,8 @@
 // write(T) 重载重定义冲突
 `uvm_analysis_imp_decl(_resp)
 
-class algorithm_scoreboard #(
+// virtual: 含 pure virtual predict()，按 LRM 8.21 须声明为虚类（不可直接例化）
+virtual class algorithm_scoreboard #(
     type REQ_T  = uvm_sequence_item,
     type RESP_T = uvm_sequence_item
 ) extends uvm_scoreboard;

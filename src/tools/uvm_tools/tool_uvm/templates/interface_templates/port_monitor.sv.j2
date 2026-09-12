@@ -3,7 +3,7 @@
 // ============================================================
 // Port Monitor: {{ agent.name }}_port_monitor
 // ============================================================
-// 单类 monitor（不区分 master/slave）：按 cfg.is_master_side 分支
+// 单类 monitor（不区分 master/slave）：按 cfg.port_kind 分支
 //   master 侧 → mon_ap 抓 master_seq_item（expected/参考模型流）
 //   slave 侧 → slave_mon_ap 抓 slave_seq_item（actual/比对流），
 //     ACTIVE 时同时 clone 写入 slave sequencer 的 req_fifo（事件驱动响应）
@@ -49,7 +49,7 @@ class {{ agent.name }}_port_monitor extends uvm_monitor;
     // monitor 的 forever 循环不 raise objection（避免悬挂）；复位门控后才开始采样
     wait (vif.{{ agent.reset }} == 1'b{{ 1 if agent.reset_active_low else 0 }});
     forever begin
-      if (cfg.is_master_side) begin
+      if (cfg.port_kind == MASTER) begin
         {{ agent.name }}_master_seq_item tx;
         tx = {{ agent.name }}_master_seq_item::type_id::create("tx");
         collect_transaction(tx);

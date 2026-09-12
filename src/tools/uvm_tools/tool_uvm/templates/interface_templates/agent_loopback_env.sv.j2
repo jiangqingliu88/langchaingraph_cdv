@@ -30,17 +30,17 @@ class {{ agent.name }}_loopback_env extends uvm_env;
     if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "", "vif", vif))
       `uvm_fatal("NOVIF", "Virtual interface not set")
 
-    // loopback 自检拓扑固定（master 驱动 → slave 监控），不随 YAML is_active 变化：
+    // loopback 自检拓扑固定（master 驱动 → slave 监控），不随 env 配置变化：
     // master 必须 ACTIVE 才能注入激励；slave 保持 PASSIVE 避免驱动响应端口干扰比对
     mcfg = {{ agent.name }}_port_config::type_id::create("mcfg");
     mcfg.vif = vif;
     mcfg.is_active = UVM_ACTIVE;
-    mcfg.is_master_side = 1;
+    mcfg.port_kind = MASTER;
 
     scfg = {{ agent.name }}_port_config::type_id::create("scfg");
     scfg.vif = vif;
     scfg.is_active = UVM_PASSIVE;  // slave 仅监控，不响应
-    scfg.is_master_side = 0;
+    scfg.port_kind = SLAVE;
 
     uvm_config_db#({{ agent.name }}_port_config)::set(this, "master_agent_h", "cfg", mcfg);
     uvm_config_db#({{ agent.name }}_port_config)::set(this, "slave_agent_h", "cfg", scfg);

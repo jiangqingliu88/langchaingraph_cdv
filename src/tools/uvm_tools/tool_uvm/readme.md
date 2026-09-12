@@ -12,7 +12,7 @@
 - 编译文件列表 (filelist) 生成
 - **pragma custom 自定义代码区域**：细粒度语义槽（field_decl / build_logic / connect_logic /
   drive_logic / collect_logic / seq_body），slot 文件内唯一，回填优先级
-  YAML `custom_code` > merge 源手改内容 > 模板默认
+  merge 源手改内容 > 模板默认（不再从 YAML 注入）
 - **auto-merge 流程**（`-m/--merge_source`）：从指定目录提取手改区域合并进新生成代码，
   备份 / 缺失块报错（`-s` 跳过）/ 未合并调试输出 / 详细报告
 - **bind 式 UVM Harness**（`harness:` YAML）：dummy interface + `set_vifs()` +
@@ -25,8 +25,8 @@
 - **语义校验层**（`semantic_check.py`）：渲染前拦截（error 阻断 / warning 落盘
   `validation_report.txt`），`@rule` 注册表 + 每规则一条测试（Phase B 约定）
 - **YAML schema 语法检查**（`schema_check.py` + `schema/uvm_config.schema.json`）：JSON Schema
-  校验 YAML 键名/类型/必填/枚举（未知键 → warning，其余 → error）。
-  生成流程 Phase 0 自动执行（error 阻断 / warning 落盘 `schema_report.txt`，
+  校验 YAML 键名/类型/必填/枚举（未知键/多余字段同样是 error）。
+  生成流程 Phase 0 自动执行（error 阻断，报告落盘 `schema_report.txt`，
   `--skip-schema-check` 关闭）；亦可独立命令运行
 - UVMF 风格 CLI：默认跳过已存在文件（`-o` 覆盖）、`-c` 清理、`-q` 静默、
   `-g` 指定组件、`-t` 模板目录、`--version`
@@ -43,7 +43,7 @@
 ## YAML Config Files
 示例见 `examples/`（APB 全链路）：
 - `apb_interface.yaml` — 接口定义（name/clock/reset/protocol/reset_active_low/ports/
-  transaction_vars(带 is_master,iscompare,isrand)/transaction_constraints(master/slave)/custom_code）
+  transaction_vars(带 is_master,iscompare,isrand)/transaction_constraints(master/slave)）
 - `apb_env.yaml` — 环境定义（agents(list)/subenvs/scoreboards(sb_type,trans_type)/
   analysis_components/analysis_exports/analysis_ports/register_model/harness_connect/
   coverage_crosses/tlm_connections）
@@ -84,18 +84,12 @@ python -m src.tools.uvm_tools.tool_uvm.main -i ALU_env.yaml -d generated/ --skip
 | `seq_body` | sequence / virtual_base_seq 类体 | 自定义序列 task |
 | `run_logic` | test / virtual seq run 阶段 | 附加激励逻辑（objection 期间） |
 
-YAML 注入（每次生成覆盖区域）：
+回填优先级：merge 源手改内容 > 模板默认。
 
-```yaml
-custom_code:
-  drive_logic: |
-    // 自定义协议时序
-    repeat (2) @(vif.master_cb);
-    vif.master_cb.penable <= 1'b1;
-```
-
-回填优先级：YAML `custom_code`（非空）> merge 源手改内容 > 模板默认。
-旧字段 `custom_drive_logic` / `custom_collect_logic` 等价于 `custom_code` 同名槽的缺省值。
+YAML 注入已下线：`custom_code`（以及更早的标量字段 `custom_drive_logic` /
+`custom_sample_logic` / `custom_collect_logic`）不再被 schema 接受，写了会报未知键。
+要保留自定义逻辑，直接在生成文件的 `pragma custom` 区域内手改，再用
+`-m/--merge_source` 重新生成即可把改动带过去。
 
 ### UVM Harness（bind 式自连接，参考 CSDN hemlok/132674401）
 
@@ -126,7 +120,7 @@ harness:
 ### YAML Schema 语法检查
 
 生成流程 **Phase 0**（渲染前、语义校验前）自动执行：schema error 阻断生成，
-warning 落盘 `schema_report.txt`（不阻断），`--skip-schema-check` 可关闭。
+报告落盘 `schema_report.txt`，`--skip-schema-check` 可关闭。
 也可用独立命令单独校验（不生成，依赖 `jsonschema`）：
 
 ```bash
@@ -139,9 +133,10 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/ --report schema
 python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/ --schema my_schema.json
 ```
 
-- 严重度：未知键（additionalProperties）→ `warning`；`required`/`type`/`enum`/文档类型 → `error`
-- 生成流程：error 阻断（SystemExit），warning 落盘 `schema_report.txt` 不阻断；
-  独立命令退出码：存在 error → 1；仅 warning → 0（与 semantic_check 的阻断语义一致）
+- 严重度：**全部违规 → `error`**，含未知键/多余字段（`unknown_property`，如拼错的键、
+  已下线的 interface 级 `is_active`）——这类键会被 normalizer 静默吞掉，故不放行
+- 生成流程：error 阻断（SystemExit），报告落盘 `schema_report.txt`；
+  独立命令退出码：存在 error → 1；无 error → 0
 - schema 文件：`schema/uvm_config.schema.json`（Draft 2020-12，含全部旧键名别名，可被编辑器/IDE 复用）
 - 与 `semantic_check.py` 的分工：schema 检查「原始 YAML 的键/类型/枚举」（如缺 name/type 的
   harness interface 条目会被 normalizer 静默丢弃），semantic_check 检查「归一化后的跨字段语义」
@@ -152,10 +147,10 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/ --schema my_sch
 generated/
 ├── agents/<name>_agent/        # AXI-VIP 风格编号分层
 │   ├── 1_interface/  <name>_if.sv / <name>_system_if.sv
-│   ├── 2_config/     <name>_port_config.sv（单类，is_master_side 区分角色）
+│   ├── 2_config/     <name>_port_config.sv（单类，port_kind 区分 MASTER/SLAVE）
 │   ├── 3_transaction_sequencer/  seq_item + sequencer（slave 带 req_fifo）
-│   ├── 4_driver_monitor/  driver + port_monitor（单类，slave 侧 → slave_mon_ap + req_fifo）
-│   ├── 5_agent/      agent + system_config + system_env
+│   ├── 4_driver_monitor/  driver + port_monitor（单类，SLAVE 侧 → slave_mon_ap + req_fifo）
+│   ├── 5_agent/      agent + system_config + system_monitor + system_env
 │   ├── 7_sequence/   master/slave sequence
 │   ├── 8_ral/        reg_adapter
 │   ├── <name>_pkg.sv / filelist.f / Makefile

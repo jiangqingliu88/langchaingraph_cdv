@@ -4,8 +4,8 @@
 键名 / 类型 / 必填 / 枚举。很多错误会被 normalizer 静默吞掉
 （如缺 name/type 的 harness interface 条目被直接丢弃），schema 层先拦一道。
 
-严重度映射：unknown key（additionalProperties）→ warning，其余 → error。
-退出码：存在 error → 1；仅 warning → 0（与 semantic_check 的阻断语义一致）。
+严重度映射：所有违规（含 unknown key / additionalProperties）→ error。
+退出码：存在 error → 1；无 error → 0（与 semantic_check 的阻断语义一致）。
 
 用法:
     python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/*.yaml
@@ -46,8 +46,10 @@ SCHEMA_PATH = Path(__file__).resolve().parent / "schema" / "uvm_config.schema.js
 # ── jsonschema validator → (severity, rule_id, 中文前缀) ──
 #   严重度不在 schema 里编码，保持 schema 可被编辑器/IDE 直接复用
 _VALIDATOR_INFO: Dict[str, tuple] = {
-    "additionalProperties":   ("warning", "unknown_property", "未知键"),
-    "unevaluatedProperties":  ("warning", "unknown_property", "未知键"),
+    # 未知键一律 error：拼错的键会被 normalizer 静默吞掉（配置看似生效实则失效），
+    # 与「可复现·可审计」定位不符，直接在 schema 层阻断。
+    "additionalProperties":   ("error",   "unknown_property", "未知键"),
+    "unevaluatedProperties":  ("error",   "unknown_property", "未知键"),
     "required":               ("error",   "missing_required", "必填字段缺失"),
     "type":                   ("error",   "type_mismatch", "类型不匹配"),
     "enum":                   ("error",   "invalid_enum", "非法枚举值"),
@@ -56,6 +58,8 @@ _VALIDATOR_INFO: Dict[str, tuple] = {
     "oneOf":                  ("error",   "ambiguous_value", "取值无法归类"),
     "minLength":              ("error",   "empty_value", "空值"),
     "minItems":               ("error",   "too_few_items", "条目数不足"),
+    # not: 显式拒绝已下线字段（如 interface.config.is_active）
+    "not":                    ("error",   "removed_field", "已下线字段"),
 }
 _DEFAULT_INFO = ("error", "schema_violation", "schema 违规")
 
@@ -233,8 +237,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="schema_check.py",
         description="Validate tool_uvm YAML configs against the JSON Schema "
-                    "(schema/uvm_config.schema.json). Unknown keys are warnings; "
-                    "type/required/enum violations are errors.",
+                    "(schema/uvm_config.schema.json). All violations are errors, "
+                    "including unknown/extra keys.",
     )
     parser.add_argument(
         "--version", action="version",

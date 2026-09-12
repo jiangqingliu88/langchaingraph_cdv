@@ -6,11 +6,20 @@
 > 依赖：Python ≥3.10 <3.13、pyyaml、jinja2、jsonschema。
 > 完整字段说明见 [readme.md](readme.md)，示例在 `examples/`（APB 全链路）。
 
+## 重要变更（2026-09）
+
+1. **scb_pkg 结构重组**：`scb_pkg.sv` 现为顶层组装文件，组件分片（`.svh`）通过
+   `+incdir` 引用，不再在 filelist 中列出。生成代码编译时只需编译 `scb_pkg.sv`。
+2. **algorithm_scoreboard 虚类化**：按 UVM LRM 8.21 规范，算法计分板声明为
+   `virtual class`，不可直接实例化，必须子类化后使用。
+3. **新增 rtl_sc 功能**：提供监控器（mon_ex）和产生器（prod）模板，用于
+   Scoreboard Predictor 机制，生成轻量级寄存器级预测组件。
+
 ## 0. 校验链（生成流程的执行顺序）
 
 ```
 YAML 输入
-  → Phase 0  schema 语法检查   （键名/类型/必填/枚举；error 阻断，warning 落盘不阻断）
+  → Phase 0  schema 语法检查   （键名/类型/必填/枚举/未知键；error 阻断）
   → Phase A  语义校验           （跨字段引用/TLM/覆盖率等；error 阻断，warning 落盘不阻断）
   → 渲染生成（agents/env/bench/cons/utils）
   → 门禁 --gate（可选，编译+仿真）
@@ -40,15 +49,19 @@ python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb_interface.yaml \
 generated/
 ├── agents/APB_agent/
 │   ├── 1_interface/   APB_if.sv / APB_system_if.sv
-│   ├── 2_config/      port_config（单类，is_master_side 区分角色）
+│   ├── 2_config/      port_config（单类，port_kind 区分 MASTER/SLAVE）
 │   ├── 3_transaction_sequencer/  seq_item + sequencer
 │   ├── 4_driver_monitor/  driver + port_monitor（单类）
-│   ├── 5_agent/       agent + system_config + system_env
+│   ├── 5_agent/       agent + system_config + system_monitor + system_env
 │   ├── 7_sequence/    master/slave sequence
 │   ├── 8_ral/         reg_adapter
 │   ├── APB_pkg.sv / filelist.f / Makefile
 │   └── loopback/      自闭环自检（master-drive → slave-monitor）
 ├── env/     config / env / coverage / pkg / tests / seqs / cons / utils
+│   ├── rtl_sc/        # Scoreboard Predictor（监控器 + 产生器 + 环境类）
+│   │   ├── APB_env_rtl_sc.sv
+│   │   ├── {{point}}_mon_ex.sv
+│   │   └── {{point}}_prod.sv
 ├── bench/   tb_top + harness
 ├── Makefile  整环境双后端编译/仿真入口（env + agents + bench）
 ├── schema_report.txt / validation_report.txt / generation_report.json
@@ -109,8 +122,12 @@ interfaces:
       - { name: prdata, dir: input,  width: DATA_WIDTH }
     transaction_vars:        # 事务字段：isrand 驱动 / iscompare 参与自检比对 / is_master 角色
       - { name: paddr, type: "bit [ADDR_WIDTH-1:0]", iscompare: "True", isrand: "True", is_master: "True" }
-    is_active: { master: True, slave: True }   # 标量 / "UVM_ACTIVE" / {master,slave} 均可
 ```
+
+> 激活模式（UVM_ACTIVE / UVM_PASSIVE）**不在 interface 级配置**：interface 只描述协议与端口，
+> 激活由 env 级 `agents[].is_active` 决定（缺省 UVM_ACTIVE）；loopback 自检套件固定
+> master-ACTIVE / slave-PASSIVE。写 interface 级的 `is_active`（含旧路径
+> `config.is_active`）会被 schema 判为未知键 / 已下线字段而报错。
 
 ```bash
 python -m src.tools.uvm_tools.tool_uvm.main -i apb_interface.yaml -d generated/
@@ -148,6 +165,167 @@ environment:
 ```
 
 多文件输入：`-i apb_interface.yaml apb_env.yaml -d generated/`（跨文件自动关联）。
+
+### scoreboards 的两种接法
+
+| 接法 | YAML 要点 | 产物 |
+|------|-----------|------|
+| 外部类（UVMF 风格） | `sb_type` + `trans_type` | 不生成文件，env 直接例化 `sb_type` 指定的类（VIP 自带或用户自建） |
+| 生成式 | `mode` + `expected_from` / `actual_from` | `env/scb/{name}.sv` 自包含计分板（imp/FIFO/比对/check 裁决齐全） |
+
+```yaml
+scoreboards:
+  # 外部类：sb_type 须为工厂可注册的具名类（有 uvm_component_utils）
+  - name: apb_scb
+    sb_type: uvmf_in_order_scoreboard
+    trans_type: apb_master_seq_item
+  # 生成式：按端口表达式自动推断 item_type，产物 env/scb/apb_scb_gen.sv
+  - name: apb_scb_gen
+    mode: inorder            # inorder | outoforder
+    expected_from: apb_pred  # 预期侧来源（predictor / agent 名）
+    actual_from: apb_slave   # 实际侧来源（monitor 所在 agent 名）
+    key_field: req_id        # outoforder 的 ID 关联字段
+```
+
+### 内置计分板组件族（base_pkg/scb → scb_pkg）
+
+整环境编译链自动包含 `base_pkg/` 两个基础包（filelist/Makefile 只编译包文件，
+分片经 `+incdir` 解析，与 `clk_and_rst_pkg` 同构）：`clk_and_rst_pkg`（时钟复位
+VIP）与 `scb_pkg`（计分板组件族）。`scb_pkg` 是自定义计分板的开发基座：
+
+**重要**：`scb_pkg.sv` 是顶层组装文件，只编译一个文件；各组件分片（`.svh`）通过
+`+incdir` 引用，无需在 filelist 中列出所有分片。
+
+| 组件 | 参数 | 用途 |
+|------|------|------|
+| `comparator` / `default_comparator` | `#(T)` | 比较器虚接口 + 默认实现（可注入自定义比较器） |
+| `in_order_scoreboard` | `#(REQ_T, RSP_T, CMP_T)` | 顺序计分板基座：expected/actual 双 imp，严格/非严格比对 |
+| `out_of_order_scoreboard` | `#(T, ID_T, CMP_T)` | 乱序计分板：按事务 ID 关联匹配（重载 `get_id()`） |
+| `multi_channel_scoreboard` | `#(T, CMP_T, N)` | 多通道顺序：通道 0 = 预期，1..N-1 = 实际 |
+| `multi_channel_out_of_order_scoreboard` | `#(T, ID_T, CMP_T, N)` | 多通道乱序（ID 关联） |
+| `typed_scoreboard` | `#(T)` | 单类型便捷类（REQ_T = RSP_T = T） |
+| `algorithm_scoreboard` | `#(REQ_T, RESP_T)` | 算法计分板（**虚类**）：实现 `predict()` 即内嵌参考模型 |
+
+全部组件自带统计与 `check_phase` 裁决（mismatch / missing / extra > 0 →
+`uvm_error`，仿真判 FAIL）。
+
+**消费方式**：参数化类不能直接当 `sb_type` 用（无工厂注册），先特化出具名类——
+放在自有 VIP 包或生成代码的手改区域均可（缺省不覆盖已存在文件，见场景 7/8）：
+
+```systemverilog
+import scb_pkg::*;
+
+// 方式 1：一行宏特化（typedef + 子类工厂注册），之后 YAML 可 sb_type: apb_in_order_scb
+`DEFINE_TYPED_SCOREBOARD(apb_in_order_scb, apb_master_seq_item,
+                         apb_master_seq_item, default_comparator#(apb_master_seq_item))
+
+// 方式 2：算法计分板——实现纯虚 predict()（请求 → 期望即时计算）
+// 注意：algorithm_scoreboard 必须声明为 virtual class（按 LRM 8.21 规范）
+class alu_algorithm_scb extends algorithm_scoreboard#(alu_seq_item, alu_seq_item);
+  `uvm_component_utils(alu_algorithm_scb)
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+  virtual function alu_seq_item predict(alu_seq_item req);
+    alu_seq_item exp = alu_seq_item::type_id::create("exp");
+    exp.copy(req);
+    exp.result = req.a + req.b;
+    return exp;
+  endfunction
+endclass
+```
+
+**连接约定**（`tlm_connections` 的 `driver` / `receiver` 路径）：
+
+| 组件 | 预期侧端口 | 实际侧端口 |
+|------|-----------|-----------|
+| in_order / typed / out_of_order | `expected_export` | `actual_export` |
+| algorithm | `req_export`（请求侧） | `resp_export`（响应侧） |
+| multi_channel* | `channel_export[0]` | `channel_export[1..N-1]` |
+
+**实例级配置**（`uvm_config_db`，作用于 scb 实例）：
+
+| 字段 | 缺省 | 含义 |
+|------|------|------|
+| `enable_prediction` | 1 | 是否接收预期侧事务 |
+| `strict_ordering` | 1 | 严格比对（队首一对一）；0 = 任意位置匹配（乱序容忍） |
+| `max_queue_depth` | 1024 | 队列上限，溢出刷最旧并计 missing / extra |
+
+---
+
+## 3.5 场景：rtl_sc（Scoreboard Predictor，监控器 + 产生器 + 计分板预测）
+
+**目标**：生成监控器（mon_ex）和产生器（prod），自动配置 Scoreboard Predictor 机制，
+用于实时监控与预测寄存器级别的状态。
+
+`rtl_sc` 是一种轻量级的计分板预测机制，通过模板生成监控器、产生器和集成环境类。
+
+### 3.5.1 模板文件
+
+生成目录会包含：
+- `env/utils/{{name}}_sc_pred_env.sv` — 环境类，管理监控器和产生器
+- `env/utils/{{point}}_mon_ex.sv` — 监控器模板（每个检查点）
+- `env/utils/{{point}}_prod.sv` — 产生器模板（每个产生点）
+
+### 3.5.2 使用方式
+
+在环境 YAML 中添加 `rtl_sc_components` 字段：
+
+```yaml
+environment:
+  name: APB_env
+  rtl_sc_components:
+    - name: apb_rtl_sc
+      # 检查点：需要监控的输出端口
+      check_points:
+        - { point_name: apb_data, channel_num: 2, width: 32 }
+      # 产生点：需要产生信号的端口（可选）
+      prod_points:
+        - { point_name: apb_addr, channel_num: 2, width: 32 }
+      # 环境配置
+      config:
+        ut_id: 1
+        has_prod: 1
+```
+
+### 3.5.3 生成流程
+
+1. 生成监控器和产生器类模板
+2. 生成环境包装类（包含生产者和消费者数组）
+3. 自动配置 `reg_{{point}}_t`（寄存器抽象层）
+4. 在 `build_phase` 中实例化并连接组件
+
+### 3.5.4 组件说明
+
+| 组件 | 类名 | 功能 |
+|------|------|------|
+| 环境类 | `{{name}}_sc_pred_env` | 管理 mon_ex 和 prod 数组，配置连接 |
+| 监控器 | `{{point}}_mon_ex` | 采样接口信号，输出到 analysis_port |
+| 产生器 | `{{point}}_prod` | 产生预测信号，输入到 Scoreboard Predictor |
+
+### 3.5.5 工作流程
+
+```
+DUT 信号
+  → vif（虚拟接口）
+    → {{point}}_mon_ex（采样） → mon_ex_port（analysis_port）
+      → sc_pred_env（注册检查点） → rtl_sc_register（状态追踪）
+    → {{point}}_prod（产生预测） → prod_port（analysis_port）
+      → sc_pred_env（注册产生点） → rtl_sc_predict（预测逻辑）
+        → Scoreboard Predictor（比较预期/实际）
+```
+
+### 3.5.6 配置项
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `name` | string | 必填 | 环境类前缀 |
+| `check_points` | array | 必填 | 检查点列表（监控点） |
+| `prod_points` | array | 空 | 产生点列表（可选） |
+| `channel_num` | int | 1 | 通道数量（多路监控） |
+| `width` | int | 必填 | 位宽（匹配 DUT 端口） |
+| `ut_id` | int | 0 | 用户 ID（用于区分实例） |
+| `has_prod` | bit | 1 | 是否启用产生器 |
 
 ---
 
@@ -272,28 +450,28 @@ python -m src.tools.uvm_tools.tool_uvm.main -i apb_env.yaml -d generated/ -m han
     --merge_no_backup --merge_debug --merge_verbose
 ```
 
-回填优先级：YAML `custom_code`（非空）> merge 源手改内容 > 模板默认。
+回填优先级：merge 源手改内容 > 模板默认。
 
 ---
 
-## 9. 场景：pragma custom 注入（协议时序自定义）
+## 9. 场景：pragma custom 区域（协议时序自定义）
 
-**目标**：不手改生成文件，用 YAML 注入自定义协议时序。
+**目标**：在生成文件的 `pragma custom` 区域内手写自定义逻辑，重新生成时用
+`-m/--merge_source` 带过来。
 
-```yaml
-interfaces:
-  - name: APB
-    custom_code:
-      drive_logic: |
-        // 自定义协议驱动时序
-        repeat (2) @(vif.master_cb);
-        vif.master_cb.penable <= 1'b1;
+```systemverilog
+    // pragma custom drive_logic begin
+    // 自定义协议驱动时序
+    repeat (2) @(vif.master_cb);
+    vif.master_cb.penable <= 1'b1;
+    // pragma custom drive_logic end
 ```
 
 常用槽位：`field_decl` / `build_logic` / `connect_logic` / `drive_logic` /
 `collect_logic` / `seq_body` / `run_logic`（详见 readme）。
-旧字段 `custom_drive_logic` / `custom_sample_logic` / `custom_collect_logic`
-等价于 `custom_code` 同名槽的缺省值。
+
+YAML 注入已下线：`custom_code`（以及更早的标量字段 `custom_drive_logic` /
+`custom_sample_logic` / `custom_collect_logic`）不再被 schema 接受，写了会报未知键。
 
 ---
 
@@ -305,12 +483,10 @@ interfaces:
 ### 10.1 生成流程内置（Phase 0，缺省开启）
 
 ```bash
-# schema error → 阻断生成，报告落盘 schema_report.txt
+# 任意 schema 违规（含拼错键 / 多余字段）→ 阻断生成，报告落盘 schema_report.txt
 python -m src.tools.uvm_tools.tool_uvm.main -i my.yaml -d generated/
-#  → Schema validation failed: 2 error(s), 1 warning(s) — see .../schema_report.txt
-
-# warning（拼错键等）→ 不阻断，仅提示 + 落盘
-#  → Schema check: 1 warning(s) — see .../schema_report.txt
+#  → Schema validation failed: 2 error(s), 0 warning(s) — see .../schema_report.txt
+#  → [ERROR] unknown_property @ my.yaml::interfaces[0].reset_active_loww: 未知键 ...
 
 # 逃生舱：旧 YAML 触发 schema error 又需继续生成时跳过 Phase 0
 python -m src.tools.uvm_tools.tool_uvm.main -i my.yaml -d generated/ --skip-schema-check
@@ -328,8 +504,9 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/ --report /tmp/s
 python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/ --schema my_schema.json
 ```
 
-- 严重度：未知键 → `warning`；`required`/`type`/`enum`/文档类型 → `error`
-- 退出码：有 error → 1；仅 warning → 0（CI 可直接用）
+- 严重度：**全部违规 → `error`**，包括未知键/多余字段（`unknown_property`）——
+  拼错的键会被 normalizer 静默吞掉，故不做「仅警告」放行
+- 退出码：有 error → 1；无 error → 0（CI 可直接用）
 - 报错定位到路径：`my.yaml::interfaces[0].ports[0].dir` 形式
 - schema 契约文件：`schema/uvm_config.schema.json`（Draft 2020-12，含全部旧键名别名，
   可被编辑器/IDE 直接复用做实时校验）
@@ -443,12 +620,16 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check --version
 |------|-----------|
 | `No YAML files were found in the input paths.` | 输入路径下没有 `*.yaml/*.yml`；检查 `-i` 路径 |
 | `No supported YAML definitions were found.` | YAML 解析后没有任何有效组件（如缺 name 被静默丢弃）；先跑 schema_check 定位 |
-| `Schema validation failed: N error(s) ...` | YAML 违反 schema（必填/类型/枚举）；按报告修 YAML，或 `--skip-schema-check` 临时绕过 |
+| `Schema validation failed: N error(s) ...` | YAML 违反 schema（必填/类型/枚举/未知键）；按报告修 YAML，或 `--skip-schema-check` 临时绕过 |
 | `Schema check skipped (jsonschema not available)` | 缺依赖：`pip install jsonschema` |
+| `[ERROR] unknown_property ... 'xxx'` | 键名拼错或字段已下线（如 interface 级 `is_active`）；删掉或改成正确键名 |
+| `[ERROR] removed_field ... interfaces[N].config` | 旧路径 `config.is_active` 已下线；激活改由 env 级 `agents[].is_active` 配置 |
 | 生成文件没有更新 | 缺省跳过已存在文件；用 `-o` 覆盖，或确认文件带生成签名（手改文件不会被覆盖） |
 | `[SKIP] ... no UVM simulator` | 未装 vlog/vcs；门禁仅报告不阻断 |
-| 警告不阻断但想去哪看 | `generated/schema_report.txt`（schema）与 `generated/validation_report.txt`（语义） |
-| 独立检查 exit=0 但打印 warning | 设计如此：仅 warning → exit 0（CI 门禁可只卡 error） |
+| 想看去哪看校验报告 | `generated/schema_report.txt`（schema）与 `generated/validation_report.txt`（语义） |
+| `sb_type` 填参数化类（如 `in_order_scoreboard`）编译报错 | 参数化类无工厂注册；先用 `DEFINE_TYPED_SCOREBOARD` 特化或手写子类成具名类（见场景 3） |
+| `algorithm_scoreboard` 实例化报错 "instantiation of abstract class" | algorithm_scoreboard 必须声明为 virtual class（按 LRM 8.21），不能直接实例化；必须子类化后实例化（见场景 3） |
+| `scb_pkg.sv` 未找到或编译错误 | 检查 filelist.f 或 Makefile 中是否正确引用 `$(BASE_PKG)/scb/scb_pkg.sv`；`scb_pkg` 是顶层组装文件，不包含分片 |
 
 ---
 
@@ -456,5 +637,7 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check --version
 
 - [readme.md](readme.md) — 功能清单 / 字段全解 / 模板结构 / 输出说明
 - [examples/](examples/) — APB 全链路示例（5 个 YAML + 测试点 xlsx）
+- `base_pkg/` — 内置基础包：`clk_and_rst`（时钟复位 VIP）+ `scb`（计分板组件族 `scb_pkg`）
 - [schema/uvm_config.schema.json](schema/uvm_config.schema.json) — YAML 配置契约（JSON Schema）
 - `prompt.md` — Agent 集成说明
+- `templates/sc_pred_templates/` — rtl_sc 监控器/产生器模板（监控器模板 mon_ex、产生器模板 prod、环境类模板 sc_pred_env）

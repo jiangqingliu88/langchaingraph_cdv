@@ -24,7 +24,6 @@ class {{ agent.name }}_master_seq_item extends uvm_sequence_item;
   `uvm_object_utils_end
 
   typedef enum {READ, WRITE} xact_type_e;
-
   rand xact_type_e xact_type;
 
   // ── master 字段（is_master=True：master 驱动/生成）──

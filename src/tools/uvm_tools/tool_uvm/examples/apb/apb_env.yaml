@@ -105,8 +105,3 @@ environment:
       receiver: apb_scb.expected_analysis_export
     - driver: apb_slave_agent_ap
       receiver: apb_scb.actual_analysis_export
-
-  # pragma custom 区域注入（{slot: 代码}），示例:
-  # custom_code:
-  #   connect_logic: |
-  #     // 附加连接逻辑

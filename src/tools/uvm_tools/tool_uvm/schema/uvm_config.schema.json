@@ -11,6 +11,8 @@
     "environment": { "$ref": "#/$defs/environment" },
     "bench": { "$ref": "#/$defs/bench" },
     "constraint": { "$ref": "#/$defs/constraintDoc" },
+    "sc_pred": { "$ref": "#/$defs/scPred" },
+    "rtl_sc_components": { "$ref": "#/$defs/scPred" },
     "transactions": { "$ref": "#/$defs/transactions" },
     "policies": { "$ref": "#/$defs/policies" },
     "combinator": { "$ref": "#/$defs/combinator" },
@@ -28,6 +30,8 @@
     { "required": ["environment"] },
     { "required": ["bench"] },
     { "required": ["constraint"] },
+    { "required": ["sc_pred"] },
+    { "required": ["rtl_sc_components"] },
     { "required": ["harness"] },
     { "required": ["util_components"] }
   ],
@@ -43,7 +47,7 @@
       "type": ["boolean", "string"]
     },
     "isActive": {
-      "$comment": "标量或 {master, slave} dict（_normalize_is_active, gen_uvm.py:485）；dict 缺省项 = UVM_ACTIVE，故 master/slave 不强制",
+      "$comment": "env 级 agent 实例的激活模式（_opt_bool → AgentModel.active，gen_uvm.py）；缺省 UVM_ACTIVE。interface 级已不再接受该键。",
       "oneOf": [
         { "$ref": "#/$defs/boolLike" },
         {
@@ -55,6 +59,29 @@
           "additionalProperties": false
         }
       ]
+    },
+    "scPred": {
+      "$comment": "SC Pred 文档（gen_uvm.py parse_sc_pred_model；rtl_sc_components 为旧别名）。只列解析器实际读取的键，其余键报错而非静默忽略。",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "id": { "type": ["string", "integer"] },
+        "prod_points": { "type": "array", "items": { "$ref": "#/$defs/scPredPoint" } },
+        "chck_points": { "type": "array", "items": { "$ref": "#/$defs/scPredPoint" } }
+      },
+      "additionalProperties": false
+    },
+    "scPredPoint": {
+      "$comment": "SC Pred 观测点；缺 point_name 会被解析器丢弃",
+      "type": "object",
+      "required": ["point_name"],
+      "properties": {
+        "point_name": { "type": "string" },
+        "width": { "type": ["integer", "string"] },
+        "channel_num": { "type": ["integer", "string"] },
+        "ports": { "type": "array", "items": { "$ref": "#/$defs/port" } }
+      },
+      "additionalProperties": false
     },
     "interface": {
       "$comment": "interface 级 agent 定义（含旧别名 agent_name/interface_name/clk）",
@@ -73,7 +100,6 @@
         "reset": { "type": "string" },
         "protocol": { "$comment": "协议名不做 enum（semantic_check 只特判 apb，新协议合法）", "type": "string" },
         "reset_active_low": { "$ref": "#/$defs/boolLike" },
-        "is_active": { "$ref": "#/$defs/isActive" },
         "type": { "$comment": "→ agent_type", "type": "string" },
         "parameters": {
           "type": "array",
@@ -116,17 +142,9 @@
         "config_constraints": { "type": "array" },
         "response_info": { "type": "object" },
         "config": {
-          "$comment": "旧读取路径 config.is_active（gen_uvm.py:546-553）；其余键自由透传",
+          "$comment": "自由透传的配置包（AgentModel.config，gen_uvm.py）；is_active 已下线，写在这里会被显式报错而非静默忽略",
           "type": "object",
-          "properties": { "is_active": { "$ref": "#/$defs/isActive" } }
-        },
-        "custom_drive_logic": { "type": "string" },
-        "custom_sample_logic": { "type": "string" },
-        "custom_collect_logic": { "type": "string" },
-        "custom_code": {
-          "$comment": "pragma custom 区域槽 {slot: 代码}，槽名自由",
-          "type": "object",
-          "additionalProperties": { "type": "string" }
+          "not": { "required": ["is_active"] }
         }
       },
       "additionalProperties": false
@@ -256,10 +274,6 @@
         "clk_rst": { "$comment": "旧别名：缺 enabled，被包装为 clk_rst_vip（gen_uvm.py:2010-2016）", "$ref": "#/$defs/clkRst" },
         "register_model": { "$ref": "#/$defs/registerModel" },
         "reg_adapter": { "$comment": "旧别名（gen_uvm.py:2020）", "$ref": "#/$defs/registerModel" },
-        "custom_code": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
         "harness_connect": {
           "$comment": "缺 path 时 set_vifs 无法渲染（semantic_check:152 同条件）",
           "type": "object",

@@ -1,0 +1,228 @@
+
+================================================================================
+                    RTL-SC Auto Comparator Architecture
+================================================================================
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                           SV / UVM Side                                     │
+  │                                                                             │
+  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐                    │
+  │  │ RTL Monitor  │   │ RTL Monitor  │   │ RTL Monitor  │   (user impl)      │
+  │  │  "dma_0"     │   │  "pcie_0"    │   │  "hbm_0"     │                    │
+  │  │  (256b)      │   │  (128b)      │   │  (512b)      │                    │
+  │  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘                    │
+  │         │ ap                │ ap                │ ap                         │
+  │         │                   │                   │                            │
+  │  ┌──────▼───────────────────▼───────────────────▼───────┐                   │
+  │  │              rtl_sc_registry (static)                 │                   │
+  │  │                                                       │                   │
+  │  │  register_rtl("dma_0", mon.ap)   ← one line          │                   │
+  │  │  register_sc("dma_0")            ← one line          │                   │
+  │  │  register_cfg("dma_cfg")         ← one line          │                   │
+  │  │  send_cfg("dma_cfg", bytes[])    ← struct as bytes   │                   │
+  │  │  connect_all()                                        │                   │
+  │  └──┬──────────┬──────────┬──────────┬──────────┬───────┘                   │
+  │     │          │          │          │          │                            │
+  │     │          │          │          │          │                            │
+  │  ┌──▼───┐  ┌──▼───┐  ┌──▼───┐  ┌───▼────┐ ┌───▼────┐                      │
+  │  │ ch   │  │ ch   │  │ ch   │  │cfg_send│ │cfg_send│   ...                 │
+  │  │channel│  │channel│  │channel│  │"dma_  │ │"pcie_  │                      │
+  │  │"dma_0"│  │"pcie_0"│ │"hbm_0"│  │ cfg"  │ │ cfg"   │                      │
+  │  │       │  │       │  │       │  └───┬────┘ └───┬────┘                      │
+  │  │rtl_imp│  │rtl_imp│  │rtl_imp│      │          │                           │
+  │  │sc_imp │  │sc_imp │  │sc_imp │      │          │                           │
+  │  │       │  │       │  │       │      │          │                           │
+  │  │compare│  │compare│  │compare│      │          │                           │
+  │  │ loop  │  │ loop  │  │ loop  │      │          │                           │
+  │  └──▲────┘  └──▲────┘  └──▲────┘      │          │                           │
+  │     │          │          │            │          │                           │
+  │  ┌──┴───┐  ┌──┴───┐  ┌──┴───┐        │          │                           │
+  │  │sc_   │  │sc_   │  │sc_   │        │          │                           │
+  │  │recvr │  │recvr │  │recvr │        │          │                           │
+  │  │target│  │target│  │target│        │          │                           │
+  │  │socket│  │socket│  │socket│        │          │                           │
+  │  └──┬───┘  └──┬───┘  └──┬───┘        │          │                           │
+  │     │          │          │            │          │                           │
+  └─────┼──────────┼──────────┼────────────┼──────────┼───────────────────────────┘
+        │          │          │            │          │
+  ══════╪══════════╪══════════╪════════════╪══════════╪═══════  UVMC Bridge (DPI)
+        │          │          │            │          │
+  lookup│          │          │            │          │
+  strings:         │          │            │          │
+  "rtl_sc_dma_0"   │          │   "rtl_sc_cfg_       │
+        │  "rtl_sc_pcie_0"    │      dma_cfg"  "rtl_sc_cfg_
+        │          │  "rtl_sc_hbm_0"         │    pcie_cfg"
+        │          │          │            │          │
+  ══════╪══════════╪══════════╪════════════╪══════════╪═══════
+        │          │          │            │          │
+  ┌─────┼──────────┼──────────┼────────────┼──────────┼───────────────────────────┐
+  │     │          │          │            │          │                            │
+  │  ┌──▼───┐  ┌──▼───┐  ┌──▼───┐  ┌─────▼──┐  ┌───▼────┐                      │
+  │  │init  │  │init  │  │init  │  │target │  │target │                          │
+  │  │socket│  │socket│  │socket│  │socket │  │socket │                          │
+  │  └──┬───┘  └──┬───┘  └──┬───┘  └───┬────┘  └───┬────┘                       │
+  │     │          │          │          │            │                            │
+  │  ┌──┴──────────┴──────────┴──┐  ┌───┴────┐  ┌───┴────┐                       │
+  │  │      User SC Module       │  │  DMA   │  │  PCIe  │                       │
+  │  │                           │  │ Module │  │ Module │                       │
+  │  │  - Owns initiator_sockets │  │cfg_b_  │  │cfg_b_  │                       │
+  │  │  - Builds GP (addr/data/  │  │transport│  │transport│                      │
+  │  │    streaming_width=seq)   │  │        │  │        │                       │
+  │  │  - Calls b_transport      │  │memcpy  │  │memcpy  │                       │
+  │  │                           │  │→struct │  │→struct │                       │
+  │  └───────────────────────────┘  └────────┘  └────────┘                       │
+  │                                                                              │
+  │                           SC / SystemC Side                                  │
+  │                                                                              │
+  │  ┌───────────────────────────────────────────────────────────────────────┐   │
+  │  │                    sc_registry (static)                               │   │
+  │  │                                                                       │   │
+  │  │  sc_registry::reg("dma_0", module.sock_0);       ← one line           │   │
+  │  │  sc_registry::reg_cfg("dma_cfg", module.cfg_socket);  ← one line      │   │
+  │  │  sc_registry::connect_all();                                          │   │
+  │  └───────────────────────────────────────────────────────────────────────┘   │
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                         Data Flow (per channel)
+================================================================================
+
+  RTL Side:                                          SC Side:
+  ─────────                                          ────────
+
+  RTL DUT output                                     SC Model
+       │                                                  │
+       ▼                                                  ▼
+  ┌─────────────┐                                   ┌──────────┐
+  │ RTL Monitor │                                   │b_transport│
+  │ (user impl) │                                   │(GP: addr,│
+  │             │                                   │ data,    │
+  │ send_txn()  │                                   │ sw=seq)  │
+  └──────┬──────┘                                   └─────┬────┘
+         │ analysis_port.write(txn)                       │
+         │                                                │ UVMC
+         ▼                                                ▼
+  ┌──────────────────────────────────────────────────────────────┐
+  │                     rtl_sc_channel                            │
+  │                                                              │
+  │   rtl_queue[$]                           sc_queue[$]         │
+  │   ┌────┬────┬────┐                      ┌────┬────┬────┐    │
+  │   │seq0│seq1│seq2│ ...                   │seq0│seq1│seq2│    │
+  │   └──┬─┴────┴────┘                      └──┬─┴────┴────┘    │
+  │      │                                      │                │
+  │      └──────────────┬───────────────────────┘                │
+  │                     ▼                                        │
+  │              ┌─────────────┐                                 │
+  │              │ compare_loop│                                  │
+  │              │             │                                  │
+  │              │ seq match → │──→ MATCH / MISMATCH             │
+  │              └─────────────┘                                 │
+  │                                                              │
+  │              ┌───────────────┐                               │
+  │              │timeout_watchdog│──→ TIMEOUT                   │
+  │              └───────────────┘                               │
+  └──────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                        Config Flow (struct-based)
+================================================================================
+
+  SV side:                                           SC side:
+  ────────                                           ────────
+
+  typedef struct packed {                            #pragma pack(push, 1)
+      bit [63:0] base_addr;                         struct hbm_cfg_t {
+      bit [31:0] burst_len;                             uint64_t base_addr;
+      bit [31:0] channel_mode;                          uint32_t burst_len;
+  } hbm_cfg_t;                                         uint32_t channel_mode;
+                                                    };
+  hbm_cfg_t s;                                      #pragma pack(pop)
+  s.base_addr = 64'hF000;
+  s.burst_len = 64;                                 void cfg_b_transport(gp, delay) {
+  s.channel_mode = 1;                                   memcpy(&cfg, gp.get_data_ptr(),
+                                                               sizeof(hbm_cfg_t));
+  byte unsigned bytes[];                                cfg_event.notify();
+  bytes = new[$bits(hbm_cfg_t)/8];                  }
+  { >> {bytes}} = s;
+                                                    void run() {
+  reg512_t::send_cfg("hbm_cfg", bytes);                 wait(cfg_event);
+       │                                                uint64_t base = bswap64(cfg.base_addr);
+       │      UVMC "rtl_sc_cfg_hbm_cfg"                 ...
+       └────────────────────────────────────────────→  }
+
+
+================================================================================
+                      Supported Data Widths
+================================================================================
+
+  ┌─────────┬────────────┬───────────────────────────────────────┐
+  │  Width  │  Bytes/beat │  Usage Example                       │
+  ├─────────┼────────────┼───────────────────────────────────────┤
+  │   64b   │     8      │  Control registers, narrow bus       │
+  │  128b   │    16      │  PCIe TLP, cache line (half)         │
+  │  256b   │    32      │  DMA, NoC flit                       │
+  │  512b   │    64      │  HBM, wide memory interface          │
+  └─────────┴────────────┴───────────────────────────────────────┘
+
+  Each width uses its own registry specialization:
+    rtl_sc_registry #(64)
+    rtl_sc_registry #(128)
+    rtl_sc_registry #(256)
+    rtl_sc_registry #(512)
+
+
+================================================================================
+                      Registration Summary
+================================================================================
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  SV Side (in UVM test)                                                  │
+  │                                                                         │
+  │  reg_t::init(this, cfg);                    // once                     │
+  │  reg_t::register_rtl("dma_0", mon.ap);      // one line per RTL ch      │
+  │  reg_t::register_sc("dma_0");               // one line per SC ch       │
+  │  reg_t::register_cfg("dma_cfg");            // one line per cfg ch      │
+  │  reg_t::connect_all();                      // once in connect_phase    │
+  │  reg_t::send_cfg("dma_cfg", bytes);         // struct config send       │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  SC Side (in sc_main)                                                   │
+  │                                                                         │
+  │  sc_registry::reg("dma_0", module.sock);            // data socket      │
+  │  sc_registry::reg_cfg("dma_cfg", module.cfg_sock);  // cfg socket       │
+  │  sc_registry::connect_all();                        // once             │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                      File Structure
+================================================================================
+
+  rtl_sc/
+  ├── src/                        SV core (compiled as package)
+  │   ├── rtl_sc_pkg.sv           Package entry point
+  │   ├── rtl_sc_cfg.sv           Platform config (timeout, max_errors)
+  │   ├── rtl_sc_txn.sv           Internal transaction (parameterized DW)
+  │   ├── rtl_sc_channel.sv       Comparison engine (queue + watchdog)
+  │   ├── rtl_sc_monitor_base.sv  RTL monitor base class
+  │   ├── sc_receiver.sv          TLM2.0 target (receives SC data via UVMC)
+  │   ├── cfg_sender.sv           Config sender (sends struct bytes to SC)
+  │   └── rtl_sc_registry.sv      Unified SV registration API
+  │
+  ├── sc/                         SC side
+  │   └── sc_registry.h           Unified SC registration API
+  │
+  └── example/                    Test examples
+      ├── rtl_data_if.sv          RTL signal interface
+      ├── rtl_monitor_ex.sv       RTL monitor example
+      ├── tb_top.sv               Single-channel testbench
+      ├── tb_multi_channel.sv     Multi-width testbench (64/128/256/512)
+      ├── tb_multi_socket.sv      Multi-socket + struct config testbench
+      ├── sc_model.cpp            SC single-channel model
+      ├── sc_model_multi.cpp      SC multi-width model
+      └── sc_model_multi_socket.cpp  SC multi-socket + struct config model
+

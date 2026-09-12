@@ -1,0 +1,128 @@
+{% include "base_templates/base_template.sv.j2" %}
+{% import "base_templates/field_macros.j2" as fm %}
+
+// ============================================================
+// System Monitor: {{ agent.name }}_system_monitor
+// ============================================================
+// 系统级嗅探器：直接观察 {{ agent.name }}_system_if 上的全部端口实例，
+//   不经过 agent —— 所有 agent 均 PASSIVE 时依然能观测整个系统。
+//   sys_vif.master_if[i] → kind = MASTER, index = i
+//   sys_vif.slave_if[i]  → kind = SLAVE,  index = i
+// 由 {{ agent.name }}_system_config.system_monitor_enable 门控（0 = 不构建采集进程）
+
+// ── 系统级事务：一次协议访问 + 来源标签 {kind, index} ──
+class {{ agent.name }}_system_txn extends uvm_object;
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
+  `uvm_object_utils_begin({{ agent.name }}_system_txn)
+    `uvm_field_enum(port_kind_enum, kind, UVM_DEFAULT)
+    `uvm_field_int(index, UVM_DEFAULT)
+{%- for var in transaction_vars %}
+    {{ fm.uvm_field(var) }}
+{%- endfor %}
+  `uvm_object_utils_end
+
+  port_kind_enum kind = MASTER;  // 来源端口类型
+  int            index;          // 端口实例下标
+  time           timestamp;      // 采样时刻
+{%- for var in transaction_vars %}
+  {{ var.type }} {{ var.name }};
+{%- endfor %}
+
+  function new(string name = "{{ agent.name }}_system_txn");
+    super.new(name);
+  endfunction
+
+  function string convert2string();
+    string s = super.convert2string();
+    s = {s, $sformatf("\n  port: %s[%0d]", kind.name(), index)};
+    s = {s, $sformatf("\n  timestamp: %0t", timestamp)};
+{%- for var in transaction_vars %}
+    s = {s, $sformatf("\n  {{ var.name }}: %0h", {{ var.name }})};
+{%- endfor %}
+    return s;
+  endfunction
+endclass : {{ agent.name }}_system_txn
+
+class {{ agent.name }}_system_monitor extends uvm_monitor;
+  `uvm_component_utils({{ agent.name }}_system_monitor)
+
+  virtual {{ agent.name }}_system_if sys_vif;
+  {{ agent.name }}_system_config  cfg;
+
+  // 统一分析端口：系统内所有端口实例的采样结果（带 {kind, index} 标签）
+  uvm_analysis_port #({{ agent.name }}_system_txn) sys_ap;
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+    sys_ap = new("sys_ap", this);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual {{ agent.name }}_system_if)::get(this, "", "sys_vif", sys_vif))
+      `uvm_fatal("NOVIF", "System interface not set")
+    if (!uvm_config_db#({{ agent.name }}_system_config)::get(this, "", "cfg", cfg))
+      `uvm_fatal("CFG", "System config not set")
+  endfunction
+
+  task main_phase(uvm_phase phase);
+    super.main_phase(phase);
+    if (!cfg.system_monitor_enable) begin
+      `uvm_info(get_type_name(), "system_monitor_enable = 0, system monitor idle", UVM_LOW)
+      return;
+    end
+    `uvm_info(get_type_name(), $sformatf("main_phase: sniff m%0d + s%0d ports",
+              cfg.num_masters, cfg.num_slaves), UVM_MEDIUM)
+    // 每个端口实例一个独立采集进程（各自等待自己的复位释放，互不阻塞）
+    // monitor 的 forever 循环不 raise objection（避免悬挂）
+    for (int i = 0; i < cfg.num_masters && i < sys_vif.master_if.size(); i++) begin
+      automatic int idx = i;
+      fork
+        collect_port(sys_vif.master_if[idx], MASTER, idx);
+      join_none
+    end
+    for (int i = 0; i < cfg.num_slaves && i < sys_vif.slave_if.size(); i++) begin
+      automatic int idx = i;
+      fork
+        collect_port(sys_vif.slave_if[idx], SLAVE, idx);
+      join_none
+    end
+  endtask
+
+  // 单个端口实例的采集循环：复位释放 → 采一次 → 打标签 → 写 sys_ap
+  protected virtual task collect_port(virtual {{ agent.name }}_if vif,
+                                      port_kind_enum kind, int index);
+    wait (vif.{{ agent.reset }} == 1'b{{ 1 if agent.reset_active_low else 0 }});
+    forever begin
+      {{ agent.name }}_system_txn txn;
+      txn = {{ agent.name }}_system_txn::type_id::create("txn");
+      collect_transaction(vif, txn);
+      txn.kind  = kind;
+      txn.index = index;
+      sys_ap.write(txn);
+    end
+  endtask
+
+  // 一次完整访问的采样时序（协议相关；默认单拍）
+  protected virtual task collect_transaction(virtual {{ agent.name }}_if vif,
+                                             {{ agent.name }}_system_txn txn);
+    // pragma custom collect_logic begin
+{%- if agent.protocol == 'apb' %}
+    // APB: 仅采样完整访问（penable && pready 拍）
+    do @(vif.mon_cb); while (!(vif.mon_cb.psel && vif.mon_cb.penable && vif.mon_cb.pready));
+{%- else %}
+    @(vif.mon_cb);
+{%- endif %}
+    txn.timestamp = $time;
+{%- for var in transaction_vars %}
+{%-   set port_in_ports = namespace(found=false) %}
+{%-   for port in ports %}
+{%-     if port.name == var.name %}{% set port_in_ports.found = true %}{% endif %}
+{%-   endfor %}
+{%-   if port_in_ports.found %}
+    txn.{{ var.name }} = vif.{{ var.name }};
+{%-   endif %}
+{%- endfor %}
+    // pragma custom collect_logic end
+  endtask
+endclass : {{ agent.name }}_system_monitor

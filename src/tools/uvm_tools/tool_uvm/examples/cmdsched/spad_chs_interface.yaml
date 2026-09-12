@@ -31,15 +31,6 @@ interfaces:
     protocol: apb            # 协议名 → 渲染协议正确的默认驱动/采样时序（两拍 setup+access）
     reset_active_low: True   # 复位极性（缺省 True = 低有效，驱动/监控复位门控用）
 
-    # ── agent 激活模式（可选，缺省 master/slave 均为 UVM_ACTIVE）──
-    #   True/"UVM_ACTIVE"  → 构建 driver+sequencer（主动驱动）
-    #   False/"UVM_PASSIVE"→ 仅构建 monitor（被动采样）
-    #   渲染进: <name>_master_config / <name>_slave_config 缺省值、system_config.init_config
-    #   注: loopback 自检套件固定 master-ACTIVE / slave-PASSIVE 拓扑，不受此处影响
-    is_active:
-      master: True
-      slave: True
-
     # ── 接口参数（渲染进 interface #(...)）──
     parameters:
       - { type: int, name: ADDR_WIDTH, value: 32 }
@@ -88,9 +79,3 @@ interfaces:
 
     # ── 响应信息（可选，供后续乱序/关联使用）──
     response_info: {}
-
-    # ── LLM 注入点（协议时序逻辑，可选；留空走默认单拍驱动/采样）──
-    #   custom_drive_logic:    master driver 的协议时序（task）
-    #   custom_collect_logic:  monitor 的任务级帧采集（串行协议用）
-    custom_drive_logic: ""
-    custom_collect_logic: ""

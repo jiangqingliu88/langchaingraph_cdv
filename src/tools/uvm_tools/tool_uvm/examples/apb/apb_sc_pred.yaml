@@ -1,0 +1,45 @@
+sc_pred:
+  # 模块名字
+  name: apb
+  # 模块id
+  id: 0
+  prod_points:
+    - point_name: cmd_cfg
+      width: 512
+      channel_num: 1
+      ports:
+        - { name: clk,   dir: input,  width: 1 }
+        - { name: rst,   dir: input,  width: 1 }
+        - { name: valid, dir: output, width: 1 }
+        - { name: ready, dir: input,  width: 1 }
+        - { name: cmd,   dir: input,  width: 32 }
+  chck_points:
+    - point_name: rd0_align
+      width: 512
+      channel_num: 1
+      ports:
+        - { name: clk,   dir: input,  width: 1 }
+        - { name: rst,   dir: input,  width: 1 }
+        - { name: valid, dir: output, width: 1 }
+        - { name: ready, dir: input,  width: 1 }
+        - { name: result,dir: input,  width: 512 }
+    - point_name: rd1_align
+      width: 512
+      channel_num: 1
+      ports:
+        - { name: clk,   dir: input,  width: 1 }
+        - { name: rst,   dir: input,  width: 1 }
+        - { name: valid, dir: output, width: 1 }
+        - { name: ready, dir: input,  width: 1 }
+        - { name: result,dir: input,  width: 512 }
+    - point_name: rd2_align
+      width: 512
+      channel_num: 1
+      ports:
+        - { name: clk,   dir: input,  width: 1 }
+        - { name: rst,   dir: input,  width: 1 }
+        - { name: valid, dir: output, width: 1 }
+        - { name: ready, dir: input,  width: 1 }
+        - { name: result,dir: input,  width: 512 }
+
+ 

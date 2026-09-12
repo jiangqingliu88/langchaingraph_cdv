@@ -35,7 +35,7 @@ class {{ environment.env_name }}_config extends uvm_object;
     super.new(name);
 {%- for agent in agents %}
     {{ agent.name }}_cfg = {{ agent.config_type }}::type_id::create("{{ agent.name }}_cfg");
-    {{ agent.name }}_cfg.is_master_side = {{ 1 if agent.is_master is not false else 0 }};
+    {{ agent.name }}_cfg.port_kind = {{ 'MASTER' if agent.is_master is not false else 'SLAVE' }};
 {%- endfor %}
   endfunction
 

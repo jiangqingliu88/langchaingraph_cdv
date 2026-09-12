@@ -1,8 +1,19 @@
+"""Konlpy text splitter."""
+
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any
+
+from typing_extensions import override
 
 from langchain_text_splitters.base import TextSplitter
+
+try:
+    import konlpy
+
+    _HAS_KONLPY = True
+except ImportError:
+    _HAS_KONLPY = False
 
 
 class KonlpyTextSplitter(TextSplitter):
@@ -16,21 +27,25 @@ class KonlpyTextSplitter(TextSplitter):
         separator: str = "\n\n",
         **kwargs: Any,
     ) -> None:
-        """Initialize the Konlpy text splitter."""
+        """Initialize the Konlpy text splitter.
+
+        Args:
+            separator: The separator to use when combining splits.
+
+        Raises:
+            ImportError: If Konlpy is not installed.
+        """
         super().__init__(**kwargs)
         self._separator = separator
-        try:
-            from konlpy.tag import Kkma
-        except ImportError:
-            raise ImportError(
-                """
-                Konlpy is not installed, please install it with 
+        if not _HAS_KONLPY:
+            msg = """
+                Konlpy is not installed, please install it with
                 `pip install konlpy`
                 """
-            )
-        self.kkma = Kkma()
+            raise ImportError(msg)
+        self.kkma = konlpy.tag.Kkma()
 
-    def split_text(self, text: str) -> List[str]:
-        """Split incoming text and return chunks."""
+    @override
+    def split_text(self, text: str) -> list[str]:
         splits = self.kkma.sentences(text)
         return self._merge_splits(splits, self._separator)

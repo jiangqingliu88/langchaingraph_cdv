@@ -58,7 +58,8 @@ DEFAULT_META = {
 #  pragma custom 自定义代码区域（细粒度语义槽，无粗区）
 # ============================================================
 # 槽位在单文件内必须唯一、不嵌套、begin/end 成对；回填优先级:
-#   YAML custom_code.<slot>（非空）> merge_source 旧文件内容 > 模板默认内容
+#   merge_source 旧文件内容 > 模板默认内容
+# （YAML custom_code 注入已下线；区域内容只能靠 -m/--merge_source 手改保留）
 # 生成文件带 BANNER 签名；-c/--clean 只删除带签名的文件，绝不碰手写文件。
 
 def _make_banner(prefix: str = "// ") -> str:
@@ -175,7 +176,8 @@ class RegionInjector:
                banner_prefix: str = "// ") -> Tuple[str, MergeFileReport]:
         """渲染产物 → 注入后文本。
 
-        defaults = YAML custom_code（键存在且内容非空 → "yaml" 源，每次生成覆盖）。
+        defaults = 外部提供的区域内容（非空 → "yaml" 源，每次生成覆盖）。
+        生成流程已不再从 YAML 取值（custom_code 下线），该形参仅保留给程序化调用。
         模板区域内已有的默认内容作为最后兜底（"default" 源）。
         """
         report = MergeFileReport(relpath=relpath)
@@ -333,6 +335,7 @@ INTERFACE_TEMPLATES = [
     ("interface_templates/agent_master.sv.j2", "5_agent/{agent_name}_master_agent.sv"),
     ("interface_templates/agent_slave.sv.j2",  "5_agent/{agent_name}_slave_agent.sv"),
     ("interface_templates/config_system.sv.j2", "5_agent/{agent_name}_system_config.sv"),
+    ("interface_templates/interface_system_monitor.sv.j2", "5_agent/{agent_name}_system_monitor.sv"),
     ("interface_templates/interface_system_env.j2", "5_agent/{agent_name}_system_env.sv"),
 
     ("interface_templates/sequence_master.sv.j2", "7_sequence/{agent_name}_master_sequence.sv"),
@@ -495,29 +498,6 @@ def _run_gate(output_root: Path) -> List[Dict[str, str]]:
 # 环境级 Predictor（SV 行为参考模型）模板
 PREDICTOR_TEMPLATE = "environment_templates/predictor.sv.j2"
 
-def _normalize_is_active(raw: Any) -> Dict[str, str]:
-    """归一化 is_active 输入 → {"master": <enum>, "slave": <enum>}。
-
-    支持:
-      - dict:  {master: <bool|str>, slave: <bool|str>}（缺省项 = UVM_ACTIVE）
-      - 标量:  True/False/"UVM_ACTIVE"/"UVM_PASSIVE"/"active"/"passive" → 两角色同值
-    """
-    def _to_enum(value: Any) -> str:
-        if isinstance(value, bool):
-            return "UVM_ACTIVE" if value else "UVM_PASSIVE"
-        s = str(value or "").upper()
-        if "PASSIVE" in s or s == "FALSE":
-            return "UVM_PASSIVE"
-        return "UVM_ACTIVE"
-
-    if isinstance(raw, dict):
-        return {
-            "master": _to_enum(raw.get("master", "UVM_ACTIVE")),
-            "slave": _to_enum(raw.get("slave", "UVM_ACTIVE")),
-        }
-    return {"master": _to_enum(raw), "slave": _to_enum(raw)}
-
-
 @dataclass
 class AgentModel:
     name: str
@@ -535,10 +515,7 @@ class AgentModel:
     config_vars: List[Dict[str, Any]] = field(default_factory=list)
     config_constraints: List[Dict[str, Any]] = field(default_factory=list)
     response_info: Dict[str, Any] = field(default_factory=dict)
-    config: Dict[str, Any] = field(default_factory=lambda: {"is_active": "UVM_ACTIVE"})
-    # 归一化后的激活模式：{"master": "UVM_ACTIVE"|"UVM_PASSIVE", "slave": ...}
-    # 输入（YAML）可为标量或 {master: ..., slave: ...}，见 _normalize_is_active
-    is_active: Optional[Dict[str, str]] = None
+    config: Dict[str, Any] = field(default_factory=dict)
     agent_type: str = ""   # 从 YAML "type" 映射（如 "mem"）
     # 协议名（如 "apb"）→ 模板渲染协议正确的默认驱动/采样时序；空 = 通用单拍
     protocol: str = ""
@@ -547,23 +524,12 @@ class AgentModel:
     # env 级 agents 列表项的角色标记（interface 级不用）：
     is_master: Optional[bool] = None  # True=master 实例 / False=slave 实例 / None=未指定
     active: Optional[bool] = None     # 该实例 is_active（None → 模板走缺省 ACTIVE）
-    # LLM-generated protocol-specific timing logic placeholders
-    custom_drive_logic: str = ""   # 旧字段：等价 custom_code.drive_logic（区域缺省值）
-    custom_sample_logic: str = ""  # 旧字段：等价 custom_code.sample_logic
-    custom_collect_logic: str = ""  # 旧字段：等价 custom_code.collect_logic（task 级帧采集）
-    # pragma custom 区域注入内容: {slot: 代码}，如 {"drive_logic": "...", "field_decl": "..."}
-    custom_code: Dict[str, str] = field(default_factory=dict)
+    # 注：pragma custom 区域不再从 YAML 回填（custom_code 已下线）——
+    # 区域留空由模板默认值兜底，手改内容用 -m/--merge_source 保留。
 
     def __post_init__(self) -> None:
-        # is_active 归一化：显式字段 > config.is_active > 缺省 ACTIVE
-        raw = self.is_active
-        if raw is None and isinstance(self.config, dict):
-            raw = self.config.get("is_active")
-        elif raw is None:
-            raw = self.config
-        self.is_active = _normalize_is_active(raw)
-        if isinstance(self.config, dict):
-            self.config["is_active"] = self.is_active  # 旧读取路径兼容
+        # 注：interface 级不再提供 is_active —— 激活模式由 env 级 agents[].is_active
+        # （→ AgentModel.active，见 _normalize_agents_list）决定；loopback 套件固定拓扑。
         if not self.interface:
             self.interface = self.name
         # Normalize: strip _interface suffix (may come from env/bench YAML)
@@ -591,16 +557,8 @@ class AgentModel:
         self.transaction_constraints.setdefault("slave", [])
 
     def to_context(self) -> Dict[str, Any]:
-        context = asdict(self)
-        # 旧字段（custom_drive_logic 等）→ 对应区域槽的缺省值（custom_code 显式优先）
-        custom_code = dict(self.custom_code or {})
-        for slot, val in (("drive_logic", self.custom_drive_logic),
-                          ("sample_logic", self.custom_sample_logic),
-                          ("collect_logic", self.custom_collect_logic)):
-            if val and not custom_code.get(slot):
-                custom_code[slot] = val
-        context["custom_code"] = custom_code
-        return context
+        # pragma custom 区域内容不再来自 YAML（custom_code 已下线）；asdict 即完整上下文
+        return asdict(self)
 
     # ── 派生类型名（env 层用）：从 agent_type（类名）推导 seq_item/config 类型 ──
     # 例：agent_type="apb_master_agent" → base="apb_master" →
@@ -648,8 +606,6 @@ class EnvironmentModel:
     virtual_sequencer: Dict[str, Any] = field(default_factory=lambda: {"enabled": False})
     clk_rst_vip: Dict[str, Any] = field(default_factory=dict)
     register_model: Dict[str, Any] = field(default_factory=dict)
-    # pragma custom 区域注入内容: {slot: 代码}（如 build_logic/connect_logic）
-    custom_code: Dict[str, str] = field(default_factory=dict)
     # 可选：测试侧 harness 连接 {path: 层级路径, env_suffix: ".sub_env0"}
     harness_connect: Dict[str, str] = field(default_factory=dict)
     # 语义 cross（P1-2）：[[字段A, 字段B], ...] → env_cov 生成 cross coverpoint
@@ -693,6 +649,38 @@ class ConstraintModel:
             "policies": self.policies,
             "combinator": self.combinator,
         }
+
+
+@dataclass
+class ScPredPoint:
+    """Sc_pred 检查点或产生点"""
+    point_name: str
+    width: int
+    channel_num: int
+    ports: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_context(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ScPredModel:
+    """Scoreboard Predictor（监控器 + 产生器 + 环境类）"""
+    name: str
+    id: str = "0"
+    prod_points: List[ScPredPoint] = field(default_factory=list)
+    chck_points: List[ScPredPoint] = field(default_factory=list)
+
+    def to_context(self) -> Dict[str, Any]:
+        ctx = {
+            "sc_pred": {
+                "name": self.name,
+                "id": self.id,
+                "prod_points": [p.to_context() for p in self.prod_points],
+                "chck_points": [p.to_context() for p in self.chck_points],
+            }
+        }
+        return ctx
 
 @dataclass
 class HarnessModel:
@@ -1001,11 +989,10 @@ class RenderTask:
         context.setdefault("meta", self.meta)
         context.setdefault("file_name", target_path.name)
         content = self.renderer.render(template_path, context)
-        defaults = context.get("custom_code") or {}
         relpath = str(target_path.relative_to(self.output_dir))
         # Makefile 用 # 注释（banner 与 pragma 区域均如此）
         banner_prefix = "# " if target_path.name == "Makefile" else "// "
-        content, _report = self.injector.inject(content, defaults, relpath,
+        content, _report = self.injector.inject(content, {}, relpath,
                                                 banner_prefix=banner_prefix)
         # 原子写入：先写 .tmp 再 rename，防止生成中断截断旧文件（旧文件可能是 merge 源）
         tmp_path = target_path.with_suffix(target_path.suffix + ".tmp")
@@ -1079,10 +1066,6 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
     iface = agent.interface_name or agent.interface or name
     clk = agent.clock or "clk"
     rst = agent.reset or "rst"
-    m_mode = agent.is_active.get("master", "UVM_ACTIVE")
-    s_mode = agent.is_active.get("slave", "UVM_ACTIVE")
-    m_emoji = "🟢" if "ACTIVE" in str(m_mode) else "🔵"
-    s_emoji = "🟢" if "ACTIVE" in str(s_mode) else "🔵"
 
     lines.append(f"# Agent: `{name}`")
     lines.append("")
@@ -1091,7 +1074,8 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
     lines.append(f"| Interface | `{iface}` |")
     lines.append(f"| Clock | `{clk}` |")
     lines.append(f"| Reset | `{rst}` |")
-    lines.append(f"| Mode | master {m_emoji} `{m_mode}` · slave {s_emoji} `{s_mode}` |")
+    lines.append("| Activation | 由 env 级 `agents[].is_active` 决定（缺省 `UVM_ACTIVE`）；"
+                 "loopback 套件固定 master-ACTIVE / slave-PASSIVE |")
     lines.append("")
 
     # ── Interface Ports ──
@@ -1210,17 +1194,18 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
     lines.append("|---|------|------|")
     file_entries = [
         (f"1_interface/{name}_if.sv", "Interface: internal logic + master/slave/monitor clocking + modport"),
-        (f"2_config/{name}_port_config.sv", "Port config: drive/response 统一（is_master_side 区分角色）"),
-        (f"2_config/{name}_system_config.sv", "System config: aggregates master_cfgs[] / slave_cfgs[]"),
+        (f"2_config/{name}_port_config.sv", "Port config: drive/response 统一（port_kind 区分端口类型）"),
+        (f"5_agent/{name}_system_config.sv", "System config: aggregates master_cfgs[] / slave_cfgs[]"),
         (f"3_transaction_sequencer/{name}_master_seq_item.sv", "Master transaction"),
         (f"3_transaction_sequencer/{name}_slave_seq_item.sv", "Slave transaction (request + response control)"),
         (f"3_transaction_sequencer/{name}_master_sequencer.sv", "Master sequencer"),
         (f"3_transaction_sequencer/{name}_slave_sequencer.sv", "Slave sequencer (+ req_fifo, event-driven)"),
         (f"4_driver_monitor/{name}_master_driver.sv", "Master driver"),
         (f"4_driver_monitor/{name}_slave_driver.sv", "Slave driver (responds)"),
-        (f"4_driver_monitor/{name}_port_monitor.sv", "Port monitor: is_master_side 分支（slave 侧 → slave_mon_ap + req_fifo）"),
+        (f"4_driver_monitor/{name}_port_monitor.sv", "Port monitor: port_kind 分支（SLAVE 侧 → slave_mon_ap + req_fifo）"),
         (f"5_agent/{name}_master_agent.sv", "Master agent"),
         (f"5_agent/{name}_slave_agent.sv", "Slave agent"),
+        (f"5_agent/{name}_system_monitor.sv", "System monitor: 直接嗅探 system_if 全端口（{kind, index} 标签）"),
         (f"7_sequence/{name}_master_sequence.sv", "Master sequence"),
         (f"7_sequence/{name}_slave_sequence.sv", "Slave sequence (memory model)"),
         (f"8_ral/{name}_reg_adapter.sv", "RAL reg adapter"),
@@ -1249,7 +1234,8 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
 def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
                             environments: List["EnvironmentModel"] = None,
                             benches: List["BenchModel"] = None,
-                            harnesses: List["HarnessModel"] = None) -> Path:
+                            harnesses: List["HarnessModel"] = None,
+                            sc_preds: List["ScPredModel"] = None) -> Path:
     """Generate an overall README.md at the output root indexing all agents."""
     readme_path = output_dir / "README.md"
     lines: List[str] = []
@@ -1276,6 +1262,7 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
             lines.append(f"│   │   ├── {a.name}_*.sv  ← UVM components")
             lines.append(f"│   │   └── loopback/      ← self-test testbench")
     lines.append("├── env/                    ← environment + tests + sequences")
+    lines.append("├── env/rtl_sc/             ← Scoreboard Predictor (monitor + prod + env wrapper)")
     lines.append("├── bench/                  ← top-level testbench")
     lines.append("├── inputs/                 ← tool input files")
     lines.append("│   ├── yaml/")
@@ -1297,18 +1284,15 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
     if agents:
         lines.append("## 🤖 Agents")
         lines.append("")
-        lines.append("| Agent | Interface | Mode | Ports | Transaction Fields | Constraints |")
-        lines.append("|-------|-----------|------|-------|--------------------|-------------|")
+        lines.append("| Agent | Interface | Ports | Transaction Fields | Constraints |")
+        lines.append("|-------|-----------|-------|--------------------|-------------|")
         for a in agents:
             iface = a.interface_name or a.interface or a.name
-            _m = "A" if "ACTIVE" in str(a.is_active.get("master", "")) else "P"
-            _s = "A" if "ACTIVE" in str(a.is_active.get("slave", "")) else "P"
-            mode = f"M:{_m} / S:{_s}"
             n_ports = len(a.ports) if a.ports else 0
             n_txn = len(a.transaction_vars) if a.transaction_vars else 0
             _tc = a.transaction_constraints or {}
             n_cons = (len(_tc.get("master", [])) + len(_tc.get("slave", []))) if isinstance(_tc, dict) else 0
-            lines.append(f"| [{a.name}](agents/{a.name}_agent/summary.md) | `{iface}` | {mode} | {n_ports} | {n_txn} | {n_cons} |")
+            lines.append(f"| [{a.name}](agents/{a.name}_agent/summary.md) | `{iface}` | {n_ports} | {n_txn} | {n_cons} |")
         lines.append("")
 
     # ── Per-Agent Detail ──
@@ -1320,7 +1304,8 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
             lines.append("")
             lines.append(f"- **Interface**: `{a.interface_name or a.interface or a.name}`")
             lines.append(f"- **Clock**: `{a.clock or 'clk'}`  |  **Reset**: `{a.reset or 'rst'}`")
-            lines.append(f"- **Mode**: master `{a.is_active.get('master', 'UVM_ACTIVE')}` / slave `{a.is_active.get('slave', 'UVM_ACTIVE')}`")
+            lines.append("- **Activation**: env 级 `agents[].is_active` 决定（缺省 `UVM_ACTIVE`）；"
+                         "loopback 固定 master-ACTIVE / slave-PASSIVE")
 
             if a.ports:
                 port_list = ", ".join(
@@ -1995,12 +1980,7 @@ class YAMLLoader:
             config_vars=data.get("config_vars", []),
             config_constraints=data.get("config_constraints", []),
             response_info=data.get("response_info", {}),
-            custom_drive_logic=data.get("custom_drive_logic", ""),
-            custom_sample_logic=data.get("custom_sample_logic", ""),
-            custom_collect_logic=data.get("custom_collect_logic", ""),
-            custom_code=dict(data.get("custom_code") or {}),
-            config=data.get("config", {"is_active": "UVM_ACTIVE"}),
-            is_active=data.get("is_active"),
+            config=dict(data.get("config") or {}),
         )
 
     @staticmethod
@@ -2053,7 +2033,6 @@ class YAMLLoader:
             virtual_sequencer=data.get("virtual_sequencer", {"enabled": False}),
             clk_rst_vip=clk_rst_vip,
             register_model=register_model,
-            custom_code=dict(data.get("custom_code") or {}),
             harness_connect=dict(data.get("harness_connect") or {}),
             coverage_crosses=[
                 [str(f) for f in c] for c in (data.get("coverage_crosses") or [])
@@ -2095,6 +2074,57 @@ class YAMLLoader:
             uvm_config=data.get("uvm_config", {}),
             wave_dump=data.get("wave_dump", {}),
             simulation=data.get("simulation", {}),
+        )
+
+    @staticmethod
+    def parse_sc_pred_model(data: Dict[str, Any]) -> Optional[ScPredModel]:
+        """解析 sc_pred 配置为 ScPredModel。
+
+        配置格式：
+          sc_pred:
+            name: "apb"
+            id: "0"
+            prod_points:
+              - { point_name: "cmd_cfg", width: 512, channel_num: 1, ports: [...] }
+            chck_points:
+              - { point_name: "rd0_align", width: 512, channel_num: 1, ports: [...] }
+        """
+        if not isinstance(data, dict):
+            return None
+
+        sc_pred = data.get("sc_pred") or data.get("rtl_sc_components")
+        if not sc_pred:
+            return None
+
+        # 解析 prod_points
+        prod_points = []
+        for pt in sc_pred.get("prod_points", []):
+            if not isinstance(pt, dict) or not pt.get("point_name"):
+                continue
+            prod_points.append(ScPredPoint(
+                point_name=pt["point_name"],
+                width=pt.get("width", 32),
+                channel_num=pt.get("channel_num", 1),
+                ports=pt.get("ports", []),
+            ))
+
+        # 解析 chck_points
+        chck_points = []
+        for pt in sc_pred.get("chck_points", []):
+            if not isinstance(pt, dict) or not pt.get("point_name"):
+                continue
+            chck_points.append(ScPredPoint(
+                point_name=pt["point_name"],
+                width=pt.get("width", 32),
+                channel_num=pt.get("channel_num", 1),
+                ports=pt.get("ports", []),
+            ))
+
+        return ScPredModel(
+            name=sc_pred.get("name", "sc_pred"),
+            id=str(sc_pred.get("id", "0")),
+            prod_points=prod_points,
+            chck_points=chck_points,
         )
 
     @staticmethod
@@ -2239,6 +2269,8 @@ class YAMLLoader:
             "constraints": constraints,
             "harnesses": harnesses,
             "utils": utils,
+            "sc_preds": [pred for pred in [YAMLLoader.parse_sc_pred_model(data) for data in [data]] if pred is not None],
+
             "meta": meta,
         }
 
@@ -2363,6 +2395,184 @@ class UVMGenerator:
                     pass
         return generated
 
+    def generate_scpreds(self, sc_preds: Iterable[ScPredModel]) -> List[Path]:
+        """生成 Scoreboard Predictor（监控器 + 产生器 + 环境类）。
+
+        生成目录结构：
+          env/rtl_sc/
+            ├── {name}_sc_pred_env.sv    # 环境包装类
+            ├── {{point}}_mon_ex.sv      # 监控器模板（每个检查点）
+            └── {{point}}_prod.sv        # 产生器模板（每个产生点）
+          env/rtl_sc/interfaces/        # 接口文件
+          env/rtl_sc/prods/             # 产生器组件
+          env/rtl_sc/mon_ex/            # 监控器组件
+        """
+        generated: List[Path] = []
+
+        # 创建所有需要的目录结构
+        rtl_sc_dir = self.output_root / "env" / "rtl_sc"
+        interfaces_dir = rtl_sc_dir / "interfaces"
+        prods_dir = rtl_sc_dir / "prods"
+        mon_ex_dir = rtl_sc_dir / "mon_ex"
+        for dir_path in [rtl_sc_dir, interfaces_dir, prods_dir, mon_ex_dir]:
+            dir_path.mkdir(parents=True, exist_ok=True)
+
+        # 使用 tool_sc_red 的模板路径（相对路径）
+        sc_pred_templates = [
+            ("sc_pred_templates/sc_pred_env.sv.j2", "{name}_sc_pred_env.sv"),
+            ("sc_pred_templates/mon_ex.sv.j2", "{point_name}_mon_ex.sv"),
+            ("sc_pred_templates/prod.sv.j2", "{point_name}_prod.sv"),
+            ("sc_pred_templates/prod_point_if.sv.j2", "{point_name}_prod_if.sv"),
+            ("sc_pred_templates/prod_point_if.sv.j2", "{point_name}_mon_if.sv"),
+        ]
+
+        # 辅助函数：生成 prod 的打印字段
+        def generate_prod_print_fields(point):
+            fields = []
+            for port in point.ports:
+                if port['name'] not in ['clk', 'rst'] and port['dir'] == 'input':
+                    if port['width'] > 1:
+                        fields.append(f", {port['name']}=0x%0h")
+                    else:
+                        fields.append(f", {port['name']}=%0d")
+            return ''.join(fields)
+
+        # 辅助函数：生成 prod 的转换字段
+        def generate_prod_convert_fields(point):
+            fields = []
+            for port in point.ports:
+                if port['name'] not in ['clk', 'rst'] and port['dir'] == 'input':
+                    field_name = port['name']
+                    if port['width'] > 1:
+                        fields.append(f", {field_name}=0x%0h")
+                    else:
+                        fields.append(f", {field_name}=%0d")
+            return ''.join(fields)
+
+        # 辅助函数：生成 monitor 的打印字段
+        def generate_mon_print_fields(point):
+            fields = []
+            for port in point.ports:
+                if port['name'] not in ['clk', 'rst'] and port['dir'] == 'output':
+                    if port['width'] > 1:
+                        fields.append(f", {port['name']}=0x%0h")
+                    else:
+                        fields.append(f", {port['name']}=%0d")
+            return ''.join(fields)
+
+        # 辅助函数：生成 monitor 的转换字段
+        def generate_mon_convert_fields(point):
+            fields = []
+            for port in point.ports:
+                if port['name'] not in ['clk', 'rst'] and port['dir'] == 'output':
+                    field_name = port['name']
+                    if port['width'] > 1:
+                        fields.append(f", {field_name}=0x%0h")
+                    else:
+                        fields.append(f", {field_name}=%0d")
+            return ''.join(fields)
+
+        for sc_pred in sc_preds:
+            # 生成环境包装类
+            ctx = sc_pred.to_context()
+            # 将 sc_pred 内容提升到顶层
+            ctx_top = ctx["sc_pred"]
+            ctx_top["name"] = sc_pred.name  # 确保顶层有 name
+
+            env_tpl_path, env_target_pat = sc_pred_templates[0]
+            env_target_path = rtl_sc_dir / env_target_pat.format(name=sc_pred.name)
+            if not self._should_skip(env_target_path):
+                print(f"DEBUG: 生成 sc_pred_env.sv: {env_target_path}")
+                print(f"DEBUG: 模板路径: {env_tpl_path}")
+                try:
+                    content = self.renderer.render(env_tpl_path, ctx_top)
+                    content, _ = self.injector.inject(
+                        content, {},
+                        f"env/rtl_sc/{env_target_path.name}", banner_prefix="// "
+                    )
+                    env_target_path.write_text(content, encoding="utf-8")
+                    generated.append(env_target_path)
+                    print(f"SUCCESS: 生成 {env_target_path}")
+                except Exception as e:
+                    print(f"ERROR: 生成 {env_target_path} 失败: {e}")
+
+            # 生成接口和组件文件
+            # 生成 prod_points 的接口和组件
+            for point in sc_pred.prod_points:
+                ctx_point = point.to_context()
+                # 提升到顶层
+                ctx_top = ctx_point
+                ctx_top.update({"name": sc_pred.name, "point": point})
+
+                # 生成 prod interface
+                prod_tpl_path, prod_target_pat = sc_pred_templates[3]
+                prod_target_path = interfaces_dir / prod_target_pat.format(point_name=point.point_name)
+                if not self._should_skip(prod_target_path):
+                    try:
+                        # 为 prod interface 添加额外的上下文
+                        prod_ctx = {**ctx_point, "print_fields": generate_prod_print_fields(point),
+                                  "convert_fields": generate_prod_convert_fields(point)}
+                        content = self.renderer.render(prod_tpl_path, prod_ctx)
+                        prod_target_path.write_text(content, encoding="utf-8")
+                        generated.append(prod_target_path)
+                        print(f"SUCCESS: 生成 {prod_target_path}")
+                    except Exception as e:
+                        print(f"ERROR: 生成 {prod_target_path} 失败: {e}")
+
+                # 生成 prod 组件
+                prod_tpl_path, prod_target_pat = sc_pred_templates[2]
+                prod_target_path = prods_dir / prod_target_pat.format(point_name=point.point_name)
+                if not self._should_skip(prod_target_path):
+                    try:
+                        # 为 prod 组件添加额外的上下文
+                        prod_ctx = {**ctx_point, "print_fields": generate_prod_print_fields(point),
+                                  "convert_fields": generate_prod_convert_fields(point)}
+                        content = self.renderer.render(prod_tpl_path, prod_ctx)
+                        prod_target_path.write_text(content, encoding="utf-8")
+                        generated.append(prod_target_path)
+                        print(f"SUCCESS: 生成 {prod_target_path}")
+                    except Exception as e:
+                        print(f"ERROR: 生成 {prod_target_path} 失败: {e}")
+
+            # 生成 chck_points 的接口和组件
+            for point in sc_pred.chck_points:
+                ctx_point = point.to_context()
+                # 提升到顶层
+                ctx_top = ctx_point
+                ctx_top.update({"name": sc_pred.name, "point": point})
+
+                # 生成 mon interface
+                mon_tpl_path, mon_target_pat = sc_pred_templates[4]
+                mon_target_path = interfaces_dir / mon_target_pat.format(point_name=point.point_name)
+                if not self._should_skip(mon_target_path):
+                    try:
+                        # 为 mon interface 添加额外的上下文
+                        mon_ctx = {**ctx_point, "print_fields": generate_mon_print_fields(point),
+                                  "convert_fields": generate_mon_convert_fields(point)}
+                        content = self.renderer.render(mon_tpl_path, mon_ctx)
+                        mon_target_path.write_text(content, encoding="utf-8")
+                        generated.append(mon_target_path)
+                        print(f"SUCCESS: 生成 {mon_target_path}")
+                    except Exception as e:
+                        print(f"ERROR: 生成 {mon_target_path} 失败: {e}")
+
+                # 生成 mon_ex 组件
+                mon_tpl_path, mon_target_pat = sc_pred_templates[1]
+                mon_target_path = mon_ex_dir / mon_target_pat.format(point_name=point.point_name)
+                if not self._should_skip(mon_target_path):
+                    try:
+                        # 为 mon_ex 组件添加额外的上下文
+                        mon_ctx = {**ctx_point, "print_fields": generate_mon_print_fields(point),
+                                  "convert_fields": generate_mon_convert_fields(point)}
+                        content = self.renderer.render(mon_tpl_path, mon_ctx)
+                        mon_target_path.write_text(content, encoding="utf-8")
+                        generated.append(mon_target_path)
+                        print(f"SUCCESS: 生成 {mon_target_path}")
+                    except Exception as e:
+                        print(f"ERROR: 生成 {mon_target_path} 失败: {e}")
+
+        return generated
+
     def _run_schema_check(self, yaml_files: Iterable[Path]) -> List[Any]:
         """Phase 0: 原始 YAML 层 schema 语法检查（jsonschema 缺失时跳过并提示）。"""
         try:
@@ -2411,6 +2621,7 @@ class UVMGenerator:
         constraints = data["constraints"]
         harnesses = data["harnesses"]
         utils = data["utils"]
+        sc_preds = data["sc_preds"]
 
         # ── Phase A: 渲染前语义校验（error 阻断生成，warning 不阻断）──
         issues = SemanticValidator.validate(data)
@@ -2469,6 +2680,8 @@ class UVMGenerator:
             generated_files.extend(self.generate_harnesses(harnesses))
         if utils:
             generated_files.extend(self.generate_utils(utils))
+        if sc_preds:
+            generated_files.extend(self.generate_scpreds(sc_preds))
 
         # ── ③ 整环境编译 filelist + Makefile（闭环：env + bench + tc_pkg 一键编译入口）──
         if environments:
@@ -2485,6 +2698,7 @@ class UVMGenerator:
                     list(environments) if environments else [],
                     list(benches) if benches else [],
                     list(harnesses) if harnesses else [],
+                    list(sc_preds) if sc_preds else [],
                 ))
             except Exception:
                 pass  # README is optional, don't fail generation
@@ -2538,8 +2752,7 @@ class UVMGenerator:
                 content = self.renderer.render(
                     "bench_templates/bench_makefile.j2", mk_ctx)
                 content, _ = self.injector.inject(
-                    content, ctx.get("custom_code") or {}, "Makefile",
-                    banner_prefix="# ")
+                    content, {}, "Makefile", banner_prefix="# ")
                 mk_target.write_text(content, encoding="utf-8")
                 rendered.append(mk_target)
             else:
@@ -2614,9 +2827,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
                 config_vars=item.get("config_vars", []),
                 config_constraints=item.get("config_constraints", []),
                 response_info=item.get("response_info", {}),
-                config=item.get("config", {"is_active": "UVM_ACTIVE"}),
-                is_active=item.get("is_active"),
-                custom_code=dict(item.get("custom_code") or {}),
+                config=dict(item.get("config") or {}),
             )
             ctx = {"agent": agent, **agent.to_context()}
             files = []
@@ -2671,7 +2882,6 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             register_model=_normalize_register_model(
                 payload.get("register_model") or payload.get("reg_adapter"),
                 list(agents)),
-            custom_code=dict(payload.get("custom_code") or {}),
             harness_connect=dict(payload.get("harness_connect") or {}),
             coverage_crosses=[
                 [str(f) for f in c] for c in (payload.get("coverage_crosses") or [])

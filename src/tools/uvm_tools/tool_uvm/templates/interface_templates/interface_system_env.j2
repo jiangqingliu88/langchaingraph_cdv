@@ -16,6 +16,9 @@ class {{ agent.name }}_system_env extends uvm_env;
   {{ agent.name }}_system_config sys_cfg;
   virtual {{ agent.name }}_system_if sys_vif;
 
+  // 系统级嗅探器（sys_cfg.system_monitor_enable = 1 时才构建）
+  {{ agent.name }}_system_monitor sys_monitor;
+
   function new(string name = "{{ agent.name }}_system_env", uvm_component parent = null);
     super.new(name, parent);
   endfunction
@@ -43,6 +46,13 @@ class {{ agent.name }}_system_env extends uvm_env;
       if (sys_vif.slave_if.size() > i) begin
         uvm_config_db#(virtual {{ agent.name }}_if)::set(this, $sformatf("s_agent[%0d]", i), "vif", sys_vif.slave_if[i]);
       end
+    end
+
+    // 系统级 monitor：直接嗅探 sys_vif 全端口，与各 agent 的 monitor 并行
+    if (sys_cfg.system_monitor_enable) begin
+      uvm_config_db#({{ agent.name }}_system_config)::set(this, "sys_monitor", "cfg", sys_cfg);
+      uvm_config_db#(virtual {{ agent.name }}_system_if)::set(this, "sys_monitor", "sys_vif", sys_vif);
+      sys_monitor = {{ agent.name }}_system_monitor::type_id::create("sys_monitor", this);
     end
   endfunction
 

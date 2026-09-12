@@ -7,11 +7,7 @@
 //   dir: 'input'  => slave 驱动、master 采样
 // ============================================================
 
-interface {{ agent.name }}_if #(
-{%- for param in parameters %}
-  parameter {{ param.type }} {{ param.name }} = {{ param.value }}{% if not loop.last %},{% endif %}
-{%- endfor %}
-) (input logic {{ clock }}, input logic {{ reset }});
+interface {{ agent.name }}_if  (input logic {{ clock }}, input logic {{ reset }});
 
 {%- for port in ports %}
 {%-   if port.name != clock and port.name != reset %}
@@ -63,4 +59,17 @@ interface {{ agent.name }}_if #(
   modport SLAVE   (clocking slave_cb,  input {{ reset }});
   modport MONITOR (clocking mon_cb,    input {{ reset }});
 
+
+    // 接口内部获取配置对象（非常高级但合法的用法）
+    //{{ agent.name }}_port_config cfg;
+    //initial begin
+    //    if (!uvm_config_db#({{ agent.name }}_port_config)::get(null, "*.env.*", "cfg", cfg)) begin
+    //        cfg = {{ agent.name }}_port_config::type_id::create("cfg");
+    //    end
+    //end
+
+    // 宽松模式：高位不能是未知态（X/Z），但允许 0/1（不推荐，通常用于调试）
+    //property p_addr_valid;
+    //    @(posedge clk) valid |-> ($isunknown(addr[`{{ agent.name | upper }}_MAX_ADDR_WIDTH-1:cfg.addr_width]));
+    //endproperty
 endinterface : {{ agent.name }}_if

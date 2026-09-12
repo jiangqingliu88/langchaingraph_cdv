@@ -4,9 +4,12 @@
 // ============================================================
 // Port Config: {{ agent.name }}_port_config
 // ============================================================
-// 单类配置（不区分 master/slave）：角色由 is_master_side 区分，
-//   master 实例 = 驱动侧参数，slave 实例 = 响应/内存模型参数
-//   system_config.init_config / env_config 按实例侧赋值
+// 单类配置（不区分 master/slave）：端口类型由 port_kind 区分，
+//   MASTER 实例 = 驱动侧参数，SLAVE 实例 = 响应/内存模型参数
+//   system_config.create_sub_cfgs / env_config 按实例侧赋值
+
+// 端口类型（package 作用域声明：pkg 内各组件可直接引用 MASTER / SLAVE）
+typedef enum bit { MASTER, SLAVE } port_kind_enum;
 
 class {{ agent.name }}_port_config extends uvm_object;
   // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
@@ -15,7 +18,7 @@ class {{ agent.name }}_port_config extends uvm_object;
     `uvm_field_int(data_width, UVM_DEFAULT)
     `uvm_field_int(id_width, UVM_DEFAULT)
     `uvm_field_enum(uvm_active_passive_enum, is_active, UVM_DEFAULT)
-    `uvm_field_int(is_master_side, UVM_DEFAULT)
+    `uvm_field_enum(port_kind_enum, port_kind, UVM_DEFAULT)
     `uvm_field_int(error_injection_rate, UVM_DEFAULT)
     // vif: virtual interface，UVM field 宏不支持注册（由 config_db 传递）
     `uvm_field_int(drive_delay_min, UVM_DEFAULT)
@@ -42,16 +45,17 @@ class {{ agent.name }}_port_config extends uvm_object;
 {%- endfor %}
   `uvm_object_utils_end
 
-  // 公共协议参数
+  // 公共协议参数,driver mask, // 核心：运行期动态截断，只驱动有效位宽
+  // 工业界的标准做法就是：接口（vif）和事务（Transaction）的物理位宽，agent parameters 都统一取整个系统所支持的最大位宽（MAX_WIDTH）。
   int addr_width = 32;
   int data_width = 32;
   int id_width   = 4;
 
-  // 模式控制（由 interface YAML is_active 决定；system_config.init_config 按侧赋值）
+  // 模式控制（缺省 UVM_ACTIVE；由 env 级 agents[].is_active / loopback 套件按实例赋值）
   uvm_active_passive_enum is_active = UVM_ACTIVE;
 
-  // 角色（1 = master 侧实例，0 = slave 侧实例；monitor/scoreboard 按此分支）
-  bit is_master_side = 1;
+  // 端口类型（MASTER = 驱动侧实例，SLAVE = 响应侧实例；monitor/scoreboard 按此分支）
+  port_kind_enum port_kind = MASTER;
 
   // 错误注入公共开关
   int error_injection_rate = 0; // 0~100
@@ -111,15 +115,6 @@ class {{ agent.name }}_port_config extends uvm_object;
     super.new(name);
   endfunction
 
-  function string convert2string();
-    string s = super.convert2string();
-    s = {s, $sformatf("\n  port: %s", is_master_side ? "MASTER" : "SLAVE")};
-    s = {s, $sformatf("\n  active: %s", is_active.name())};
-    s = {s, $sformatf("\n  addr_width: %0d", addr_width)};
-    s = {s, $sformatf("\n  data_width: %0d", data_width)};
-    s = {s, $sformatf("\n  error_injection_rate: %0d%%", error_injection_rate)};
-    return s;
-  endfunction
 
   function bit is_addr_in_error_window(bit [31:0] addr);
     if (error_addr_start == 0 && error_addr_end == 0) return 0;

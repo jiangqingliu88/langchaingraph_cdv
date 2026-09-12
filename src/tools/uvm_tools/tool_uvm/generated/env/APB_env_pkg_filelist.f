@@ -27,10 +27,7 @@
 +incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/clk_and_rst
 C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/clk_and_rst/clk_and_rst_pkg.sv
 +incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/in_order_scoreboard.svh
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/out_of_order_scoreboard.svh
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/typed_scoreboard.svh
-C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/algorithm_scoreboard.svh
+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\base_pkg/scb/scb_pkg.sv
 
 // ─── Interface & Agent Package（interface 级 agent 目录）───
 +incdir+C:\Users\liujiangqing\Desktop\cdv_advanced\src\tools\uvm_tools\tool_uvm\generated\agents/APB_agent
