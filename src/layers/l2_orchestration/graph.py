@@ -562,9 +562,12 @@ async def n_approval(state: PipelineState, config) -> Dict[str, Any]:
             return {"approval_outcome": "reject",
                     "phases": [{"name": "approval", "status": "rejected",
                                 "action": action.action_type}]}
-        if _d == ApprovalDecision.SKIP:
+        if _d in (ApprovalDecision.SKIP, ApprovalDecision.REVIEW):
+            # SKIP 与 REVIEW 对闭环的效果相同：本次不执行该动作、继续迭代。
+            # 区别只在审计语义——REVIEW 表示「待人工线下复核」。
+            _st = "skipped" if _d == ApprovalDecision.SKIP else "review"
             return {"approval_outcome": "skip",
-                    "phases": [{"name": "approval", "status": "skipped",
+                    "phases": [{"name": "approval", "status": _st,
                                 "action": action.action_type}]}
     except Exception as e:
         # 保持原有的 fail-open 语义（审批故障不阻断闭环）
@@ -801,22 +804,50 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
     rt = _rt(config)
     output_root = Path(state.output_root)
 
-    # ── 审计证据链：落盘 + 完整性校验 ──
-    evidence_path, manifest_path, chain_valid, total_changes = "", "", False, 0
+    # ── 文件级变更链（谁改了什么、为什么）──
+    docs = output_root / "docs"
+    docs.mkdir(parents=True, exist_ok=True)
+    file_chain_path = ""
+    chain_valid, total_changes = False, 0
     if rt.file_audit is not None:
         try:
             chain = rt.file_audit.to_dict()
-            chain["chain_valid"] = rt.file_audit.verify()
-            chain_valid = chain["chain_valid"]
+            chain_valid = rt.file_audit.verify()
+            chain["chain_valid"] = chain_valid
             total_changes = chain.get("total_changes", 0)
-            docs = output_root / "docs"
-            docs.mkdir(parents=True, exist_ok=True)
-            evidence_path = str(docs / "evidence_chain.json")
-            Path(evidence_path).write_text(
+            file_chain_path = str(docs / "file_change_chain.json")
+            Path(file_chain_path).write_text(
                 json.dumps(chain, indent=2, ensure_ascii=False, default=str),
                 encoding="utf-8")
+            # 回读磁盘复核：内存 verify() 等于「自己验自己」，尾部被裁发现不了
+            from src.layers.l2_orchestration.evidence.file_audit import FileAuditTrail
+            persisted = FileAuditTrail.verify_persisted(file_chain_path)
+            if not persisted["valid"]:
+                logger.warning(f"文件变更链落盘后复核未通过: {persisted['issues']}")
+                chain_valid = False
         except Exception as e:
-            logger.warning(f"证据链落盘失败: {e}")
+            logger.warning(f"文件变更链落盘失败: {e}")
+
+    # ── 五层领域证据（L1 需求 / L2 设计 / L3 验证 / L4 执行 / L4.5 功能覆盖 / L5 签核）──
+    # 落在 docs/evidence_chain.json —— CLI 的 _print_evidence_chain 读的就是这个结构，
+    # 此前没有任何东西产出它，那段打印因此永远显示 0/0 与 NO。
+    evidence_path = ""
+    try:
+        from src.layers.l2_orchestration.evidence.five_layer import FiveLayerEvidence
+        ev = FiveLayerEvidence(output_root).build(
+            spec=state.spec, design_arch=state.design_arch, tests=state.tests,
+            regression=state.regression, coverage=state.coverage,
+            final_coverage=state.final_coverage, target=state.target,
+            exclude_effect=state.exclude_effect, phases=state.phases,
+            evidence_chain_valid=chain_valid)
+        evidence_path = str(docs / "evidence_chain.json")
+        Path(evidence_path).write_text(
+            json.dumps(ev, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"五层证据落盘失败: {e}")
+
+    manifest_path = ""
 
     # ── Manifest：运行清单 ──
     try:
@@ -851,7 +882,8 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
             "llm_audit": _collect_llm_audit(),
             "evidence": {"total_changes": total_changes,
                          "chain_valid": chain_valid,
-                         "evidence_path": evidence_path},
+                         "evidence_path": evidence_path,
+                         "file_change_chain_path": file_chain_path},
         }
         manifest_path = str(docs / "manifest.json")
         Path(manifest_path).write_text(
@@ -890,7 +922,8 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
                    else ("CONVERGED" if state.effective_coverage >= state.target
                          else "COMPLETED")),
         "evidence": {"total_changes": total_changes, "chain_valid": chain_valid,
-                     "evidence_path": evidence_path, "manifest_path": manifest_path},
+                     "evidence_path": evidence_path, "manifest_path": manifest_path,
+                     "file_change_chain_path": file_chain_path},
     }
     return {"result": result}
 

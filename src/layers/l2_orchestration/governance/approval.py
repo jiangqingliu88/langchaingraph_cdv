@@ -65,7 +65,7 @@ class ApprovalGate:
 
     def __init__(
         self,
-        mode: ApprovalMode = ApprovalMode.AUTO,
+        mode: ApprovalMode = ApprovalMode.THRESHOLD,
         risk_threshold: str = "high",
         input_func: Callable = input,
         output_func: Callable = print,
@@ -108,7 +108,8 @@ class ApprovalGate:
         while True:
             choice = self._input(
                 f"  确认通过并继续？\n"
-                f"  [y] 通过  [n] 拒绝(终止)  [s] 跳过此阶段  [d] 查看详情  [q] 退出\n"
+                f"  [y] 通过  [n] 拒绝(终止)  [s] 跳过此阶段  [d] 查看详情\n"
+                f"  [r] 转人工复核(本次不执行该动作)  [q] 退出\n"
                 f"  选择: "
             ).strip().lower()
 
@@ -121,6 +122,12 @@ class ApprovalGate:
             elif choice == 's':
                 decision = ApprovalDecision.SKIP
                 break
+            elif choice == 'r':
+                # REVIEW：本次不执行该动作，交给人工线下复核。
+                # 此前该枚举值声明了却没有任何产生路径（ask() 永不返回它）。
+                decision = ApprovalDecision.REVIEW
+                self._output("  ⏸️ 已标记待人工复核；本次不执行该动作，闭环继续但跳过它。")
+                break
             elif choice == 'd':
                 self._output(f"  📋 完整上下文: {summary}")
                 continue
@@ -128,7 +135,7 @@ class ApprovalGate:
                 self._output("🛑 用户退出流程")
                 sys.exit(0)
             else:
-                self._output("  请输入 y/n/s/d/q")
+                self._output("  请输入 y/n/s/d/r/q")
 
         record = ApprovalRecord(
             stage=stage_name,
@@ -190,4 +197,5 @@ def create_approval_gate(mode: str) -> ApprovalGate:
         "auto": ApprovalMode.AUTO,
         "threshold": ApprovalMode.THRESHOLD,
     }
-    return ApprovalGate(mode=mode_map.get(mode, ApprovalMode.AUTO))
+    # 未知取值回落到 THRESHOLD 而非 AUTO：宁可多问一次，也不要静默全放行
+    return ApprovalGate(mode=mode_map.get(mode, ApprovalMode.THRESHOLD))

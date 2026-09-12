@@ -159,9 +159,9 @@ def init(json_output, quiet, verbose, output_dir):
 @click.option("--design-style", default="baseline", help="设计风格（baseline/pipeline/low_power）")
 @click.option("--target", type=float, default=None, help="覆盖率目标（默认从配置读）")
 @click.option("--max-rounds", type=int, default=5, help="最大闭环轮次")
-@click.option("--approval", default="auto",
+@click.option("--approval", default="threshold",
               type=click.Choice(["interactive", "auto", "threshold"]),
-              help="审批模式")
+              help="审批模式（默认 threshold：仅高危动作询问；无人值守请显式指定 auto）")
 @click.option("--full-regression", is_flag=True, help="全量回归（跑所有 case，默认增量只跑未 passed）")
 @click.option("--verify-only", is_flag=True, help="验证专注模式：bypass design/model，直接 UVM 验证（预置 RTL + 黄金模型）")
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
@@ -449,7 +449,9 @@ def plan(ctx_obj, spec, output, design_style, target, max_rounds, dry_run, json_
     ctx_obj.invoke(
         verify,
         spec_file=spec, output=output, design_style=design_style,
-        target=target, max_rounds=max_rounds, approval="auto",
+        # 不再硬编码 auto：plan 之前强行全放行，且 plan 自身没有 --approval 开关，
+        # 用户无从覆盖。现在沿用 verify 的默认档（threshold）。
+        target=target, max_rounds=max_rounds,
         json_output=json_output, summary=False, quiet=False,
     )
 
