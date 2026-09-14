@@ -233,9 +233,11 @@ def test_env_agents_is_master_and_is_active(tmp_path):
     test_base 按 is_active 渲染模式、slave 不启动序列。"""
     import yaml
     src = yaml.safe_load((EXAMPLES / "apb_env.yaml").read_text(encoding="utf-8"))
+    # type 不再从 YAML 读：由 interface + is_master 推导
+    #   (apb, True) → apb_master_agent / (apb, False) → apb_slave_agent
     src["environment"]["agents"] = [
-        {"type": "apb_master_agent", "is_active": True, "is_master": True},
-        {"type": "apb_slave_agent", "is_active": False, "is_master": False},
+        {"name": "apb_master", "interface": "apb", "is_active": True, "is_master": True},
+        {"name": "apb_slave", "interface": "apb", "is_active": False, "is_master": False},
     ]
     tmp_yaml = tmp_path / "env_slave.yaml"
     tmp_yaml.write_text(yaml.safe_dump(src, allow_unicode=True, sort_keys=False),

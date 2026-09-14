@@ -6,14 +6,49 @@
 > 依赖：Python ≥3.10 <3.13、pyyaml、jinja2、jsonschema。
 > 完整字段说明见 [readme.md](readme.md)，示例在 `examples/`（APB 全链路）。
 
-## 重要变更（2026-09）
+## 重要变更
+
+### 2026-09（续）
+
+4. **`base_transaction_vars` / `base_transaction_constraints`（新增）**：master/slave
+   共用的事务字段与约束，渲染进新的基类 `<name>_base_seq_item`，两侧 seq_item 继承它。
+   见 §3.6。
+5. **driver / monitor 支持 UVM callback**：`pre_drive` / `post_drive`（两个 driver）、
+   `post_sample` / `post_sample_slave`（monitor）。见 §12.5。
+6. **filelist 改用 `$WORK_PATH`**：不再写生成时刻的绝对路径，整目录可搬迁；同时
+   自动生成 `Sourceme`（定义 `WORK_PATH`）。见 §1.1。
+7. **`scb_pkg` 精简（破坏性）**：下线 `multich_in_order_scoreboard` /
+   `multich_out_of_order_scoreboard` / `typed_scoreboard`（含
+   `DEFINE_TYPED_SCOREBOARD` 宏）/ `algorithm_scoreboard` 四个分片——它们无任何
+   模板消费方。`scb_pkg` 现只提供 `comparator` / `default_comparator` /
+   `in_order_scoreboard` / `out_of_order_scoreboard`。旧代码若引用被下线组件，
+   编译会报找不到类型；改用保留的两个计分板，或按 §3 手写子类扩展。
+8. **`typedefs` 改为映射（破坏性）**：`typedefs` 由 `- { type, name }` 列表改为
+   名字 → 类型的映射（`byte_t: "bit [7:0]"`），渲染进独立的 `<name>_typedefs_pkg`；
+   旧的 `hdl_typedefs` / `hvl_typedefs` 两个键已下线。同时参数包由 `_parameter_pkg`
+   改名为 `_parameters_pkg`。类型别名可互相引用，但被引用者须先声明；顺序写反会被
+   Phase A 的 `typedef_forward_ref` 拦下（新增 error 规则）。见 §2。
+
+### 本轮清理（破坏性，旧 YAML 需同步）
+
+| 已下线 | 位置 | 替代 |
+|---|---|---|
+| `interface:` | **interface 文档**里（与 `name` 冗余，曾因此漂出 `isnt_disp` 拼写错误） | 删掉即可，自动取 `name` |
+| `type:` | **env `agents[]` / `subenvs[]`** | 由 `interface` + `is_master` 推导 |
+| `predictors:` | env 顶层 | 无（该机制从未被 env 模板例化，只产出孤立文件） |
+
+三者都已在 schema 中移除，再写会**直接报 `unknown_property` 阻断生成**，不会静默忽略。
+
+> 注：env 里的 `agents[].interface` **不受影响** —— 它正是 `type` 推导的依据。
+
+### 2026-09
 
 1. **scb_pkg 结构重组**：`scb_pkg.sv` 现为顶层组装文件，组件分片（`.svh`）通过
    `+incdir` 引用，不再在 filelist 中列出。生成代码编译时只需编译 `scb_pkg.sv`。
-2. **algorithm_scoreboard 虚类化**：按 UVM LRM 8.21 规范，算法计分板声明为
-   `virtual class`，不可直接实例化，必须子类化后使用。
-3. **新增 rtl_sc 功能**：提供监控器（mon_ex）和产生器（prod）模板，用于
+2. **新增 rtl_sc 功能**：提供监控器（mon_ex）和产生器（prod）模板，用于
    Scoreboard Predictor 机制，生成轻量级寄存器级预测组件。
+3. **新增系统级虚拟 sequencer**：`<name>_system_vsqr`，持有同一协议下全部
+   master/slave 子 sequencer 句柄。见 §3.7。
 
 ## 0. 校验链（生成流程的执行顺序）
 
@@ -50,9 +85,9 @@ generated/
 ├── agents/APB_agent/
 │   ├── 1_interface/   APB_if.sv / APB_system_if.sv
 │   ├── 2_config/      port_config（单类，port_kind 区分 MASTER/SLAVE）
-│   ├── 3_transaction_sequencer/  seq_item + sequencer
-│   ├── 4_driver_monitor/  driver + port_monitor（单类）
-│   ├── 5_agent/       agent + system_config + system_monitor + system_env
+│   ├── 3_transaction_sequencer/  base_seq_item + master/slave seq_item + sequencer
+│   ├── 4_driver_monitor/  driver + port_monitor（单类，均带 UVM callback 钩子）
+│   ├── 5_agent/       agent + system_config + system_vsqr + system_monitor + system_env
 │   ├── 7_sequence/    master/slave sequence
 │   ├── 8_ral/         reg_adapter
 │   ├── APB_pkg.sv / filelist.f / Makefile
@@ -67,6 +102,41 @@ generated/
 ├── schema_report.txt / validation_report.txt / generation_report.json
 └── README.md
 ```
+
+### 1.1 路径基准：`Sourceme` 与 `$WORK_PATH`
+
+整环境 filelist（`env/<env>_pkg_filelist.f`）**不写生成时刻的绝对路径**，一律以
+`$WORK_PATH` 为根 —— 这样生成目录可以整体搬到别的机器/路径，不必重新生成。
+
+`Sourceme` 与 filelist 一并生成在输出目录根：
+
+```bash
+setenv WORK_PATH  `pwd`
+```
+
+用法：
+
+```bash
+cd generated/          # 或任意 run 输出目录
+source Sourceme        # 定义 $WORK_PATH = 当前目录
+vlog -sv -f env/APB_env_pkg_filelist.f
+```
+
+生成产物长这样：
+
+```
++incdir+$WORK_PATH/../base_pkg/scb
+$WORK_PATH/../base_pkg/scb/scb_pkg.sv
++incdir+$WORK_PATH/agents/APB_agent
+$WORK_PATH/agents/APB_agent/APB_pkg.sv
+$WORK_PATH/env/APB_env_pkg.sv
+```
+
+`$WORK_PATH/..` 指向仓库内的 `base_pkg`；生成目录在仓库内时前缀很短，在仓库外
+时 `relpath` 会自动补够 `../`（仍然可解析）。
+
+> agent 级的 `agents/<X>_agent/filelist.f` 与 `loopback/filelist.f` 是**相对于各自
+> 目录**的，从该目录直接 `vlog -f filelist.f` 即可，不依赖 `$WORK_PATH`。
 
 ### Agent Makefile 双后端（Questa / VCS）
 
@@ -117,12 +187,18 @@ interfaces:
     reset_active_low: True
     parameters:              # 渲染进 interface #(...)
       - { type: int, name: ADDR_WIDTH, value: 32 }
+    typedefs:                # 类型别名：名字 → 类型，渲染进 <name>_typedefs_pkg
+      byte_t: "bit [7:0]"
     ports:                   # dir: output=master驱动 / input=slave驱动
       - { name: paddr, dir: output, width: ADDR_WIDTH }
       - { name: prdata, dir: input,  width: DATA_WIDTH }
     transaction_vars:        # 事务字段：isrand 驱动 / iscompare 参与自检比对 / is_master 角色
       - { name: paddr, type: "bit [ADDR_WIDTH-1:0]", iscompare: "True", isrand: "True", is_master: "True" }
 ```
+
+> **typedefs 顺序即声明顺序**：类型别名可互相引用（`tyname: "byte_t"`），但被引用的名字
+> 必须写在前面 —— 生成的 `<name>_typedefs_pkg` 按 YAML 顺序逐条 `typedef`。写反了
+> Phase A 会报 `typedef_forward_ref` error 并阻断生成，不会产出编译不过的代码。
 
 > 激活模式（UVM_ACTIVE / UVM_PASSIVE）**不在 interface 级配置**：interface 只描述协议与端口，
 > 激活由 env 级 `agents[].is_active` 决定（缺省 UVM_ACTIVE）；loopback 自检套件固定
@@ -145,10 +221,16 @@ python -m src.tools.uvm_tools.tool_uvm.main -i apb_interface.yaml -d generated/
 environment:
   name: APB_env
   agents:                       # 每项 = 一个 agent 实例（引用 interface 级定义）
-    - name: apb_master
-      type: "apb_master_agent"
+    - name: apb_master          # 类名由 interface + is_master 推导 → apb_master_agent
       is_active: True
       is_master: True
+      interface: apb
+    - name: apb_slave           # is_master: False → apb_slave_agent
+      is_active: False
+      is_master: False
+      interface: apb
+  subenvs:                      # 类名由 interface 推导 → apb_system_env
+    - name: apb_sys_env
       interface: apb
   scoreboards:
     - name: apb_scb
@@ -201,36 +283,24 @@ VIP）与 `scb_pkg`（计分板组件族）。`scb_pkg` 是自定义计分板的
 | `comparator` / `default_comparator` | `#(T)` | 比较器虚接口 + 默认实现（可注入自定义比较器） |
 | `in_order_scoreboard` | `#(REQ_T, RSP_T, CMP_T)` | 顺序计分板基座：expected/actual 双 imp，严格/非严格比对 |
 | `out_of_order_scoreboard` | `#(T, ID_T, CMP_T)` | 乱序计分板：按事务 ID 关联匹配（重载 `get_id()`） |
-| `multi_channel_scoreboard` | `#(T, CMP_T, N)` | 多通道顺序：通道 0 = 预期，1..N-1 = 实际 |
-| `multi_channel_out_of_order_scoreboard` | `#(T, ID_T, CMP_T, N)` | 多通道乱序（ID 关联） |
-| `typed_scoreboard` | `#(T)` | 单类型便捷类（REQ_T = RSP_T = T） |
-| `algorithm_scoreboard` | `#(REQ_T, RESP_T)` | 算法计分板（**虚类**）：实现 `predict()` 即内嵌参考模型 |
 
 全部组件自带统计与 `check_phase` 裁决（mismatch / missing / extra > 0 →
 `uvm_error`，仿真判 FAIL）。
 
-**消费方式**：参数化类不能直接当 `sb_type` 用（无工厂注册），先特化出具名类——
-放在自有 VIP 包或生成代码的手改区域均可（缺省不覆盖已存在文件，见场景 7/8）：
+**消费方式**：参数化类不能直接当 `sb_type` 用（无工厂注册），须手写一个
+具名子类——放在自有 VIP 包或生成代码的手改区域均可（缺省不覆盖已存在文件，
+见场景 7/8）：
 
 ```systemverilog
 import scb_pkg::*;
 
-// 方式 1：一行宏特化（typedef + 子类工厂注册），之后 YAML 可 sb_type: apb_in_order_scb
-`DEFINE_TYPED_SCOREBOARD(apb_in_order_scb, apb_master_seq_item,
-                         apb_master_seq_item, default_comparator#(apb_master_seq_item))
-
-// 方式 2：算法计分板——实现纯虚 predict()（请求 → 期望即时计算）
-// 注意：algorithm_scoreboard 必须声明为 virtual class（按 LRM 8.21 规范）
-class alu_algorithm_scb extends algorithm_scoreboard#(alu_seq_item, alu_seq_item);
-  `uvm_component_utils(alu_algorithm_scb)
+// 具名特化：子类带 uvm_component_utils 注册后，YAML 即可 sb_type: apb_in_order_scb
+class apb_in_order_scb extends in_order_scoreboard#(
+    apb_master_seq_item, apb_master_seq_item,
+    default_comparator#(apb_master_seq_item));
+  `uvm_component_utils(apb_in_order_scb)
   function new(string name, uvm_component parent);
     super.new(name, parent);
-  endfunction
-  virtual function alu_seq_item predict(alu_seq_item req);
-    alu_seq_item exp = alu_seq_item::type_id::create("exp");
-    exp.copy(req);
-    exp.result = req.a + req.b;
-    return exp;
   endfunction
 endclass
 ```
@@ -239,9 +309,7 @@ endclass
 
 | 组件 | 预期侧端口 | 实际侧端口 |
 |------|-----------|-----------|
-| in_order / typed / out_of_order | `expected_export` | `actual_export` |
-| algorithm | `req_export`（请求侧） | `resp_export`（响应侧） |
-| multi_channel* | `channel_export[0]` | `channel_export[1..N-1]` |
+| in_order / out_of_order | `expected_export` | `actual_export` |
 
 **实例级配置**（`uvm_config_db`，作用于 scb 实例）：
 
@@ -328,6 +396,84 @@ DUT 信号
 | `has_prod` | bit | 1 | 是否启用产生器 |
 
 ---
+
+## 3.6 场景：base_transaction（master/slave 共用基类）
+
+**目标**：把两侧都有的字段与约束收进一个基类，避免在 master/slave 里各写一遍。
+
+```yaml
+interfaces:
+  - name: APB
+    base_transaction_vars:          # 两侧共用 → 渲染进 APB_base_seq_item
+      - { name: addr, type: "bit [ADDR_WIDTH-1:0]", iscompare: "True", isrand: "True" }
+      - { name: data, type: "bit [ADDR_WIDTH-1:0]", iscompare: "True", isrand: "True" }
+    base_transaction_constraints:
+      - { name: c_addr_align, value: "{ addr[1:0] == 2'b00; }" }
+    transaction_vars:               # 按 is_master 划分给各侧
+      - { name: paddr, ..., is_master: "True"  }   # → master_seq_item
+      - { name: prdata, ..., is_master: "False" }  # → slave_seq_item
+    transaction_constraints:
+      master:
+        - { name: c_paddr_align, value: "{ paddr[1:0] == 2'b00; }" }
+```
+
+产物结构：
+
+```
+APB_base_seq_item        ← extends uvm_sequence_item
+  ├─ typedef enum {READ, WRITE} xact_type_e;   ← 两侧共用的方向
+  ├─ rand xact_type_e xact_type;
+  ├─ addr / data                               ← base_transaction_vars
+  └─ c_addr_align                              ← base_transaction_constraints
+       ▲                                        ▲
+APB_master_seq_item ──┘   APB_slave_seq_item ──┘   （extends APB_base_seq_item）
+  paddr / pwrite / pwdata      prdata / pslverr + 响应控制
+```
+
+**两条必须遵守的规则**（`base_*` 渲染进基类，不是派生类）：
+
+| 规则 | 原因 |
+|---|---|
+| `base_transaction_constraints` **只能引用 `base_transaction_vars` 里的字段** | 基类看不到派生类成员。写 `paddr` 会**编译不过**（`paddr` 只在 master_seq_item 里） |
+| 约束名**不要**与 `transaction_constraints` 重名 | 派生类同名约束会覆盖基类那份，看代码时极易看走眼 |
+
+> `xact_type` / `xact_type_e` 已上移到基类 —— master/slave 里**不再重复声明**，
+> 派生类只注册自己的字段（基类字段由基类的 `uvm_object_utils_begin/end` 注册，
+> UVM 的 `do_*` 会沿继承链调 `super`，不会漏）。
+
+## 3.7 场景：系统级虚拟 sequencer（`_system_vsqr`）
+
+**目标**：给**同一协议下的多个实例**（`num_masters` / `num_slaves` 决定）一个统一的
+协调入口 —— 在虚拟序列里跨端口发激励。
+
+与 env 级 `<env>_virtual_sequencer` 的分工：那个跨**不同协议**（apb/uart/intr…），
+句柄是具名成员；这个跨**同协议多实例**，实例数编译期未知，故句柄用动态数组。
+
+产物（每个 interface 一份，自动生成并接进 `system_env`）：
+
+```systemverilog
+APB_system_vsqr
+  ├─ APB_master_sequencer master_sqr[];   // 由 system_env.connect_phase 赋值
+  ├─ APB_slave_sequencer  slave_sqr[];
+  ├─ get_master_sqr(i) / get_slave_sqr(i) // 越界 uvm_fatal
+  ├─ num_masters() / num_slaves() / is_bound()
+  ├─ wait_bound(timeout_ns)               // 发 sequence 前先等绑定完成
+  └─ broadcast_master_cfg(cfg) / broadcast_slave_cfg(cfg)
+```
+
+用法（虚拟序列里）：
+
+```systemverilog
+class my_vseq extends uvm_sequence;
+  `uvm_declare_p_sequencer(APB_env_virtual_sequencer)
+  APB_system_vsqr sys_vsqr;
+  task body();
+    APB_master_sequence seq;
+    seq = APB_master_sequence::type_id::create("seq");
+    seq.start(sys_vsqr.get_master_sqr(1));   // 只对第 1 号 master 发激励
+  endtask
+endclass
+```
 
 ## 4. 场景：bench + harness（bind 式自连接）
 
@@ -536,6 +682,43 @@ python -m src.tools.uvm_tools.tool_uvm.main -i examples/ -d generated/ --gate
 
 ---
 
+## 12.5 场景：driver / monitor 的 UVM callback
+
+**目标**：在不改动生成代码的前提下，于驱动前后、采样后插入测试自己的行为
+（改激励、注入错误、时序记录、协议检查）。
+
+各组件提供一对钩子：
+
+| 组件 | 钩子 | 时机 |
+|---|---|---|
+| `<name>_master_driver` | `pre_drive` / `post_drive` | 驱动一笔 transaction 前 / 后 |
+| `<name>_slave_driver`  | `pre_drive` / `post_drive` | 响应一笔 transaction 前 / 后 |
+| `<name>_port_monitor`  | `post_sample` / `post_sample_slave` | master / slave 侧采样完成后 |
+
+派生 + 注册：
+
+```systemverilog
+class my_err_cb extends APB_master_driver_cb;
+  `uvm_object_utils(my_err_cb)
+  function new(string name = "my_err_cb"); super.new(name); endfunction
+
+  virtual task pre_drive(APB_master_driver drv, APB_master_seq_item req);
+    if ($urandom_range(0, 9) == 0) req.paddr = '1;   // 5% 概率打错误地址
+  endtask
+endclass
+
+// test 的 build_phase：
+my_err_cb cb = my_err_cb::type_id::create("cb");
+uvm_callbacks#(APB_master_driver, APB_master_driver_cb)::add(drv_h, cb);
+```
+
+实现要点（若你要改模板）：callback 类必须定义在**同一个 .sv 文件、driver/monitor
+之前**，并用 `typedef class <driver>;` 前置声明 —— 钩子的方法签名要传 driver 句柄，
+而 driver 定义在下方，SystemVerilog 要求先声明后使用。
+
+> monitor 只提供 `post_sample`：两条 collect 路径都是「等到一次完整访问 → 逐字段采样」，
+> 在「等到」之前 transaction 尚不存在，没有有意义的 pre 点。
+
 ## 13. 场景：签核证据包（--report-json）
 
 **目标**：结构化生成报告供 Agent 决策 / 签核证据包引用（`generation_report.json`）。
@@ -627,8 +810,8 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check --version
 | 生成文件没有更新 | 缺省跳过已存在文件；用 `-o` 覆盖，或确认文件带生成签名（手改文件不会被覆盖） |
 | `[SKIP] ... no UVM simulator` | 未装 vlog/vcs；门禁仅报告不阻断 |
 | 想看去哪看校验报告 | `generated/schema_report.txt`（schema）与 `generated/validation_report.txt`（语义） |
-| `sb_type` 填参数化类（如 `in_order_scoreboard`）编译报错 | 参数化类无工厂注册；先用 `DEFINE_TYPED_SCOREBOARD` 特化或手写子类成具名类（见场景 3） |
-| `algorithm_scoreboard` 实例化报错 "instantiation of abstract class" | algorithm_scoreboard 必须声明为 virtual class（按 LRM 8.21），不能直接实例化；必须子类化后实例化（见场景 3） |
+| `sb_type` 填参数化类（如 `in_order_scoreboard`）编译报错 | 参数化类无工厂注册；手写子类特化成具名类（见场景 3） |
+| 代码里用了 `algorithm_scoreboard` / `typed_scoreboard` / `multi_channel*` 编译报错 | 这些分片已从 `scb_pkg` 下线；改用 `in_order_scoreboard` / `out_of_order_scoreboard`，或按场景 3 手写子类扩展 |
 | `scb_pkg.sv` 未找到或编译错误 | 检查 filelist.f 或 Makefile 中是否正确引用 `$(BASE_PKG)/scb/scb_pkg.sv`；`scb_pkg` 是顶层组装文件，不包含分片 |
 
 ---

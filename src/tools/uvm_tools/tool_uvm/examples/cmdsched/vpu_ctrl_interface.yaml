@@ -25,7 +25,6 @@
 
 interfaces:
   - name: vpu_ctrl                # 协议/agent 名（生成类前缀 apb_）
-    interface: vpu_ctrl           # 接口名（缺省 = name）
     clock: pclk
     reset: presetn
     protocol: apb            # 协议名 → 渲染协议正确的默认驱动/采样时序（两拍 setup+access）
@@ -35,10 +34,6 @@ interfaces:
     parameters:
       - { type: int, name: ADDR_WIDTH, value: 32 }
       - { type: int, name: DATA_WIDTH, value: 32 }
-
-    # ── HDL 类型（渲染进 interface 与 pkg，可选）──
-    hdl_typedefs: []
-    hvl_typedefs: []
 
     # ── 端口 ──
     #   name:  信号名

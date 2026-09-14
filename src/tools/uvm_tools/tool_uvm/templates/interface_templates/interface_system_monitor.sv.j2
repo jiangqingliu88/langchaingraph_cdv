@@ -32,15 +32,6 @@ class {{ agent.name }}_system_txn extends uvm_object;
     super.new(name);
   endfunction
 
-  function string convert2string();
-    string s = super.convert2string();
-    s = {s, $sformatf("\n  port: %s[%0d]", kind.name(), index)};
-    s = {s, $sformatf("\n  timestamp: %0t", timestamp)};
-{%- for var in transaction_vars %}
-    s = {s, $sformatf("\n  {{ var.name }}: %0h", {{ var.name }})};
-{%- endfor %}
-    return s;
-  endfunction
 endclass : {{ agent.name }}_system_txn
 
 class {{ agent.name }}_system_monitor extends uvm_monitor;

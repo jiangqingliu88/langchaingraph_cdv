@@ -93,7 +93,6 @@
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "agent_name": { "type": "string" },
-        "interface": { "type": "string" },
         "interface_name": { "type": "string" },
         "clock": { "type": "string" },
         "clk": { "type": "string" },
@@ -114,8 +113,11 @@
             "additionalProperties": false
           }
         },
-        "hdl_typedefs": { "type": "array" },
-        "hvl_typedefs": { "type": "array" },
+        "typedefs": {
+          "$comment": "类型别名映射 名字→类型（如 byte_t: \"bit [7:0]\"），渲染进 <name>_typedefs_pkg",
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
         "ports": {
           "type": "array",
           "items": { "$ref": "#/$defs/port" }
@@ -214,7 +216,7 @@
               "items": {
                 "allOf": [
                   { "$ref": "#/$defs/envAgentEntry" },
-                  { "anyOf": [{ "required": ["name"] }, { "required": ["type"] }] }
+                  { "$comment": "type 由 interface + is_master 推导（gen_uvm._normalize_agents_list），故只需 name", "required": ["name"] }
                 ]
               }
             },
@@ -310,11 +312,10 @@
       "additionalProperties": false
     },
     "envAgentEntry": {
-      "$comment": "env 级 agent 实例条目（list 格式需 name 或 type 之一，见调用处 allOf）",
+      "$comment": "env 级 agent 实例条目。type 不从这里读——由 interface + is_master 推导（apb + master → apb_master_agent）",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
-        "type": { "type": "string" },
         "interface": { "type": "string" },
         "clock": { "type": "string" },
         "reset": { "type": "string" },

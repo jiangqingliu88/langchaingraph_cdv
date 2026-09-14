@@ -6,7 +6,7 @@
 
 interface {{ agent.name }}_system_if #();
 
-{{ agent.name }}_if   master_if[16];
-{{ agent.name }}_if   slave_if[16];
+virtual {{ agent.name }}_if   master_if[15:0];
+virtual {{ agent.name }}_if   slave_if[15:0];
 
 endinterface : {{ agent.name }}_system_if

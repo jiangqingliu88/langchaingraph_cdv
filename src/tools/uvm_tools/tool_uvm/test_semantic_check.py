@@ -68,6 +68,50 @@ def test_agent_dup_name_errors():
     assert _by_rule(_issues("interfaces", a2), "txn_var_dup_name")
 
 
+# ── typedefs（名字 → 类型映射）──
+
+def test_typedef_forward_ref_error():
+    # 顺序正确（被引用的在前）→ 无 error
+    ok = _agent(typedefs={"byte_t": "bit [7:0]", "tyname": "byte_t"})
+    assert not _by_rule(_issues("interfaces", ok), "typedef_forward_ref")
+    # 写反 → error（生成的 pkg 里 byte_t 尚未声明）
+    bad = _agent(typedefs={"tyname": "byte_t", "byte_t": "bit [7:0]"})
+    issues = _by_rule(_issues("interfaces", bad), "typedef_forward_ref")
+    assert issues
+    assert issues[0].severity == "error"
+    assert "byte_t" in issues[0].message
+
+
+def test_typedef_self_ref_error():
+    a = _agent(typedefs={"byte_t": "byte_t"})
+    assert _by_rule(_issues("interfaces", a), "typedef_self_ref")
+
+
+def test_typedef_unknown_ref_warning():
+    a = _agent(parameters=[{"name": "W", "value": 8}],
+               typedefs={"word_t": "bit [W-1:0]", "bad_t": "nonexistent_t"})
+    issues = _by_rule(_issues("interfaces", a), "typedef_unknown_ref")
+    assert issues
+    assert all(i.severity == "warning" for i in issues)
+    assert any("nonexistent_t" in i.message for i in issues)
+    # 参数/内建类型不算未知
+    assert not any("word_t" in i.message for i in issues)
+
+
+def test_typedef_unknown_ref_struct_members_not_flagged():
+    # struct/enum 成员名不是类型引用，不应误报
+    a = _agent(typedefs={"pt_t": "struct packed { logic a; logic b; }",
+                         "st_t": "enum { IDLE, RUN }"})
+    assert not _by_rule(_issues("interfaces", a), "typedef_unknown_ref")
+
+
+def test_typedef_ok_when_no_typedefs():
+    a = _agent()
+    issues = _issues("interfaces", a)
+    for rid in ("typedef_forward_ref", "typedef_self_ref", "typedef_unknown_ref"):
+        assert not _by_rule(issues, rid)
+
+
 # ── env 级 ──
 
 def test_analysis_port_dup_name_error():

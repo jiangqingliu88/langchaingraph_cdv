@@ -6,7 +6,9 @@
 // 注意：{{ agent.name }}_if.sv（interface）须在 package 之前单独编译（见 filelist）
 package {{ agent.name }}_pkg;
   import uvm_pkg::*;
-  import {{ agent.name }}_parameter_pkg::*;
+  import {{ agent.name }}_parameters_pkg::*;
+  import {{ agent.name }}_typedefs_pkg::*;
+  import common_typedefs_pkg::*;
   `include "uvm_macros.svh"
   // 最大物理位宽（编译期固定）
   `define {{ agent.name | default('', true) | upper }}_MAX_ADDR_WIDTH 512

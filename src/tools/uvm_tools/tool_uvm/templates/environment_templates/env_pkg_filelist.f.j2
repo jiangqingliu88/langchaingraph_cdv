@@ -10,18 +10,21 @@
 // DUT (项目源码)
 {{ dut_path }}
 
-// ─── Base PKG: Clock & Reset VIP + Scoreboard 组件族 ───
+// ─── Base PKG: Clock & Reset VIP + Scoreboard 组件族 + 公共类型 ───
 +incdir+{{ base_pkg_dir }}/clk_and_rst
 {{ base_pkg_dir }}/clk_and_rst/clk_and_rst_pkg.sv
 +incdir+{{ base_pkg_dir }}/scb
 {{ base_pkg_dir }}/scb/scb_pkg.sv
++incdir+{{ base_pkg_dir }}/common_typedefs
+{{ base_pkg_dir }}/common_typedefs/common_typedefs_pkg.sv
 
 // ─── Interface & Agent Package（interface 级 agent 目录）───
 {%- for ia in interface_agents %}
 +incdir+{{ agent_dir }}/{{ ia.name }}_agent
 {{ agent_dir }}/{{ ia.name }}_agent/1_interface/{{ ia.name }}_if.sv
 {{ agent_dir }}/{{ ia.name }}_agent/1_interface/{{ ia.name }}_system_if.sv
-{{ agent_dir }}/{{ ia.name }}_agent/{{ ia.name }}_parameter_pkg.sv
+{{ agent_dir }}/{{ ia.name }}_agent/{{ ia.name }}_parameters_pkg.sv
+{{ agent_dir }}/{{ ia.name }}_agent/{{ ia.name }}_typedefs_pkg.sv
 {{ agent_dir }}/{{ ia.name }}_agent/{{ ia.name }}_pkg.sv
 {%- endfor %}
 

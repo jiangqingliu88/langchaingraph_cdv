@@ -42,11 +42,14 @@ SRC = \
   $(BASE_PKG)/clk_and_rst/clk_and_rst_pkg.sv \
   +incdir+$(BASE_PKG)/scb \
   $(BASE_PKG)/scb/scb_pkg.sv \
+  +incdir+$(BASE_PKG)/common_typedefs \
+  $(BASE_PKG)/common_typedefs/common_typedefs_pkg.sv \
 {%- for ia in interface_agents %}
   +incdir+agents/{{ ia.name }}_agent \
   agents/{{ ia.name }}_agent/1_interface/{{ ia.name }}_if.sv \
   agents/{{ ia.name }}_agent/1_interface/{{ ia.name }}_system_if.sv \
-  agents/{{ ia.name }}_agent/{{ ia.name }}_parameter_pkg.sv \
+  agents/{{ ia.name }}_agent/{{ ia.name }}_parameters_pkg.sv \
+  agents/{{ ia.name }}_agent/{{ ia.name }}_typedefs_pkg.sv \
   agents/{{ ia.name }}_agent/{{ ia.name }}_pkg.sv \
 {%- endfor %}
 {%- for h in harnesses %}

@@ -18,17 +18,17 @@ meta:
 # ============================================================
 # 类命名约定: <name>_<kind>
 #   单类:   <name>_port_config / <name>_port_monitor / <name>_system_config
-#   共享:   <name>_if / <name>_system_if / <name>_pkg / <name>_parameter_pkg
+#   共享:   <name>_if / <name>_system_if / <name>_pkg
+#           <name>_parameters_pkg / <name>_typedefs_pkg
 #   角色:   <name>_master_seq_item/driver/sequencer/sequence/agent
 #           <name>_slave_seq_item/driver/sequencer/sequence/agent
 # ============================================================
 
 interfaces:
   - name: APB                # 协议/agent 名（生成类前缀 apb_）
-    interface: APB           # 接口名（缺省 = name）
     clock: pclk
     reset: presetn
-    protocol: apb            # 协议名 → 渲染协议正确的默认驱动/采样时序（两拍 setup+access）
+    #protocol: apb            # 协议名 → 渲染协议正确的默认驱动/采样时序（两拍 setup+access）
     reset_active_low: True   # 复位极性（缺省 True = 低有效，驱动/监控复位门控用）
 
 
@@ -37,13 +37,10 @@ interfaces:
       - { type: int, name: ADDR_WIDTH, value: 32 }
       - { type: int, name: DATA_WIDTH, value: 32 }
 
-    # ── HDL 类型（渲染进 interface）──
-    hdl_typedefs:
-      - { type: "bit [7:0]", name: byte_t }
-    # ── HVL 类型（渲染进 agent_parametes_pkg）──
-    hvl_typedefs:
-      - { type: "bit [ADDR_WIDTH-1:0]", name: addr_t }
-
+    # ── 类型别名（渲染进 <name>_typedefs_pkg，名字 → 类型）──
+    typedefs:
+      byte_t: "bit [7:0]"
+      tyname: "byte_t"
     # ── 端口 ──
     #   name:  信号名
     #   dir:   output=master驱动 / input=slave驱动

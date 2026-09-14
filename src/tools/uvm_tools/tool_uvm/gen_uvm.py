@@ -349,7 +349,8 @@ INTERFACE_TEMPLATES = [
 
     ("interface_templates/reg_adapter.sv.j2", "8_ral/{agent_name}_reg_adapter.sv"),
 
-    ("interface_templates/agent_parameter_pkg.sv.j2", "{agent_name}_parameter_pkg.sv"),
+    ("interface_templates/agent_parameters_pkg.sv.j2", "{agent_name}_parameters_pkg.sv"),
+    ("interface_templates/agent_typedefs_pkg.sv.j2", "{agent_name}_typedefs_pkg.sv"),
     ("interface_templates/agent_pkg.sv.j2", "{agent_name}_pkg.sv"),
     ("interface_templates/agent_filelist.sv.j2", "filelist.f"),
     ("interface_templates/agent_Makefile.sv.j2", "Makefile"),
@@ -510,8 +511,9 @@ class AgentModel:
     clock: Optional[str] = None
     reset: Optional[str] = None
     parameters: List[Dict[str, Any]] = field(default_factory=list)
-    hdl_typedefs: List[Dict[str, Any]] = field(default_factory=list)
-    hvl_typedefs: List[Dict[str, Any]] = field(default_factory=list)
+    # typedefs: 名字 → 类型（如 byte_t: "bit [7:0]"），渲染进 <name>_typedefs_pkg。
+    # 用映射而非 list[{name,type}]：类型定义天然是「一个名字对一个类型」。
+    typedefs: Dict[str, str] = field(default_factory=dict)
     ports: List[Dict[str, Any]] = field(default_factory=list)
     # master/slave 共用的事务字段/约束 → 渲染进 <name>_base_seq_item，两侧 seq_item 继承它。
     # 与 transaction_vars 的分工：这里放「两侧都有」的（如 addr/data），
@@ -1017,7 +1019,14 @@ class AgentRenderTask(RenderTask):
     def generate(self, agent: AgentModel) -> List[Path]:
         rendered: List[Path] = []
         base_dir = self.output_dir / "agents" / f"{agent.name}_agent"
-        context = {"agent": agent, **agent.to_context()}
+        # filelist.f 是「在 agent 目录里单独用」的（cd agents/<X>_agent && vlog -f filelist.f），
+        # 故 base_pkg 走相对 agent 目录的路径，不依赖 $WORK_PATH（env 级 filelist 才用 $WORK_PATH）。
+        _base_pkg = Path(TEMPLATES_DIR).resolve().parent / "base_pkg"
+        context = {
+            "agent": agent,
+            "base_pkg_dir": os.path.relpath(_base_pkg, base_dir).replace("\\", "/"),
+            **agent.to_context(),
+        }
         for entry in INTERFACE_TEMPLATES:
             template_path, target_pattern, extra_ctx = _split_template_entry(entry)
             ctx = {**context, **extra_ctx}
@@ -1125,25 +1134,12 @@ def _generate_agent_markdown(agent: "AgentModel", base_dir: Path) -> Path:
             lines.append(f"| `{pn}` | `{pt}` | `{pv}` |")
         lines.append("")
 
-    # ── HDL Typedefs ──
-    hdl_typedefs = agent.hdl_typedefs
-    if hdl_typedefs:
-        lines.append("## 🏷️ HDL Type Definitions")
+    # ── Typedefs（名字 → 类型映射）──
+    typedefs = agent.typedefs or {}
+    if typedefs:
+        lines.append("## 🏷️ Type Definitions")
         lines.append("")
-        for td in hdl_typedefs:
-            tn = td.get("name", "?")
-            tv = td.get("value", td.get("type", "?"))
-            lines.append(f"- `{tn}` = `{tv}`")
-        lines.append("")
-
-    # ── HVL Typedefs ──
-    hvl_typedefs = agent.hvl_typedefs
-    if hvl_typedefs:
-        lines.append("## 🏷️ HVL Type Definitions")
-        lines.append("")
-        for td in hvl_typedefs:
-            tn = td.get("name", "?")
-            tv = td.get("value", td.get("type", "?"))
+        for tn, tv in typedefs.items():
             lines.append(f"- `{tn}` = `{tv}`")
         lines.append("")
 
@@ -1670,11 +1666,20 @@ def _normalize_agents_list(agents):
         for a in agents:
             if not isinstance(a, dict):
                 continue
+            a = dict(a)
             if not a.get("name"):
                 # name 缺省从 type 推导："apb_master_agent" → "apb_master"
                 t = a.get("type", "")
-                a = dict(a)
                 a["name"] = t[:-len("_agent")] if t.endswith("_agent") else t
+            # type 由 interface + is_master 推导（不再从 YAML 读）：
+            #   interface=apb, is_master=True  → apb_master_agent
+            #   interface=apb, is_master=False → apb_slave_agent
+            # 未写 is_master 时按 master 处理（与 AgentModel.is_master 缺省一致）。
+            if not a.get("type"):
+                iface = a.get("interface") or ""
+                if iface:
+                    kind = "slave" if _opt_bool(a.get("is_master")) is False else "master"
+                    a["type"] = f"{iface}_{kind}_agent"
             result.append(a)
         return result
     return []
@@ -1735,7 +1740,10 @@ def _normalize_subenvs(subenvs):
 
     subenvs:
       - name: "apb_sys_env"        # 实例名
-        type: "apb_system_env"     # 环境类名（缺省 = name）
+        interface: apb             # → type 由 interface 推导 = apb_system_env
+
+    注：不再从 YAML 读 type —— 类名由 interface 唯一决定，写两遍只会写不一致。
+    interface 缺失时退回 name（兼容旧 YAML）。
     """
     result = []
     for se in subenvs or []:
@@ -1744,9 +1752,10 @@ def _normalize_subenvs(subenvs):
         name = se.get("name")
         if not name:
             continue
+        iface = se.get("interface") or ""
         result.append({
             "name": name,
-            "type": se.get("type", name),
+            "type": f"{iface}_system_env" if iface else se.get("type", name),
         })
     return result
 
@@ -1952,8 +1961,7 @@ class YAMLLoader:
             protocol=data.get("protocol", ""),
             reset_active_low=_opt_bool(data.get("reset_active_low", True)) is not False,
             parameters=data.get("parameters", []),
-            hdl_typedefs=data.get("hdl_typedefs", []),
-            hvl_typedefs=data.get("hvl_typedefs", []),
+            typedefs=dict(data.get("typedefs") or {}),
             ports=data.get("ports", []),
             base_transaction_vars=data.get("base_transaction_vars", []),
             base_transaction_constraints=data.get("base_transaction_constraints", []),
@@ -2816,8 +2824,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
                 reset=item.get("reset"),
                 protocol=item.get("protocol", ""),
                 parameters=item.get("parameters", []),
-                hdl_typedefs=item.get("hdl_typedefs", []),
-                hvl_typedefs=item.get("hvl_typedefs", []),
+                typedefs=dict(item.get("typedefs") or {}),
                 ports=item.get("ports", []),
                 transaction_vars=item.get("transaction_vars", []),
                 transaction_constraints=item.get("transaction_constraints", []),

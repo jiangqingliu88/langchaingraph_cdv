@@ -4,8 +4,11 @@
 # {{ agent.name }} 编译 filelist
 # ============================================================
 # 编译顺序：interface → system_if → pkg（pkg 内按依赖顺序 include 所有 class）
-+incdir+.
++incdir+{{ base_pkg_dir }}/common_typedefs
+{{ base_pkg_dir }}/common_typedefs/common_typedefs_pkg.sv
+{{ agent.name }}_parameters_pkg.sv
+{{ agent.name }}_typedefs_pkg.sv
 1_interface/{{ agent.name }}_if.sv
 1_interface/{{ agent.name }}_system_if.sv
-{{ agent.name }}_parameter_pkg.sv
++incdir+.
 {{ agent.name }}_pkg.sv

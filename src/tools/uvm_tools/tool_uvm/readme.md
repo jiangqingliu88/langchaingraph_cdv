@@ -43,6 +43,7 @@
 ## YAML Config Files
 示例见 `examples/`（APB 全链路）：
 - `apb_interface.yaml` — 接口定义（name/clock/reset/protocol/reset_active_low/ports/
+  parameters/typedefs(名字→类型，渲染进 <name>_typedefs_pkg)/
   transaction_vars(带 is_master,iscompare,isrand)/transaction_constraints(master/slave)）
 - `apb_env.yaml` — 环境定义（agents(list)/subenvs/scoreboards(sb_type,trans_type)/
   analysis_components/analysis_exports/analysis_ports/register_model/harness_connect/

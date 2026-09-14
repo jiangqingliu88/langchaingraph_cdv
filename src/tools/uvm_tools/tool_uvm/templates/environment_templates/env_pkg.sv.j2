@@ -4,6 +4,7 @@
 package {{ environment.env_name }}_pkg;
   import uvm_pkg::*;
   import {{ environment.env_name }}_parameters_pkg::*;
+  import {{ environment.env_name }}_typedefs_pkg::*;
   `include "uvm_macros.svh"
   // 导入所有 Agent 包
 {%- for agent in agents %}

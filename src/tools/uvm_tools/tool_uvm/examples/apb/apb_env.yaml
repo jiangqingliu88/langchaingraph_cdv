@@ -10,19 +10,16 @@ environment:
   #   slave 置 is_active: False —— 真实 DUT（apb_slave_dut）负责响应，slave agent 只采样
   agents:
     - name: apb_master
-      type: "apb_master_agent"
       is_active: True
       is_master: True
       interface: apb
     - name: apb_slave
-      type: "apb_slave_agent"
       is_active: False
       is_master: False
       interface: apb
 
   subenvs:
     - name: "apb_sys_env"
-      type: "apb_system_env"
       interface: apb
   # 外部 VIP 集成（axi_system_env 类需外部提供，示例默认注释掉）
   # vipenvs:

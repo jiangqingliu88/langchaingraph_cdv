@@ -7,7 +7,7 @@
 package {{ environment.env_name }}_parameters_pkg;
   import uvm_pkg::*;
 {%- for agent in agents %}
-  import {{ agent.name }}_parameter_pkg::*;
+  import {{ agent.name }}_parameters_pkg::*;
 {%- endfor %}
 {%- for var in config_vars %}
   localparam {{ var.type }} {{ var.name }} = {{ var.default | default('0') }};

@@ -9,6 +9,8 @@ Phase B 约定（持续）：
 """
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -78,6 +80,74 @@ def _txn_var_port_mismatch(agent) -> List[str]:
     return [f"transaction var '{v.get('name')}' has no matching port"
             for v in (agent.transaction_vars or [])
             if isinstance(v, dict) and v.get("name") not in port_names]
+
+
+# ── typedefs：类型别名映射（名字 → 类型），渲染进 <name>_typedefs_pkg ──
+
+# SystemVerilog 内建类型 / 关键字：不算「引用了用户定义的名字」
+_SV_BUILTIN_TYPES = {
+    "bit", "logic", "reg", "wire", "byte", "shortint", "int", "longint",
+    "integer", "time", "real", "shortreal", "realtime", "string", "chandle",
+    "event", "void", "signed", "unsigned", "struct", "union", "packed",
+    "enum", "typedef", "var", "tri", "wand", "triand", "wor", "tri0", "tri1",
+    "supply0", "supply1", "scalared", "vectored", "automatic", "static",
+    "const", "localparam", "parameter", "ref", "input", "output", "inout",
+    "uvm_sequence_item", "uvm_object",
+}
+
+
+def _sv_identifiers(text: str) -> List[str]:
+    """从类型表达式里抽出标识符，仅用于识别「对其它名字的引用」。
+
+    先剥掉 struct / enum 的成员体（{...}）与尺寸字面量（8'hFF 里的 hFF），
+    否则成员名会被当成类型引用而误报。
+    """
+    t = re.sub(r"\{[^}]*\}", " ", text or "")
+    return re.findall(r"(?<!')[A-Za-z_][A-Za-z0-9_$]*", t)
+
+
+@rule("agent", "typedef_forward_ref", "error",
+      "typedef 引用了同一 typedefs 映射里「后面才声明」的名字 —— YAML 顺序即声明顺序，"
+      "写反了生成的 pkg 里该名字尚未声明，编译不过")
+def _typedef_forward_ref(agent) -> List[str]:
+    td = getattr(agent, "typedefs", None) or {}
+    if not isinstance(td, dict):
+        return []
+    order = {name: i for i, name in enumerate(td.keys())}
+    msgs = []
+    for i, (name, ty) in enumerate(td.items()):
+        for ref in _sv_identifiers(str(ty)):
+            j = order.get(ref)
+            if j is not None and j > i:
+                msgs.append(f"typedef '{name}' references '{ref}', which is declared "
+                            f"later — 把 '{ref}' 移到 '{name}' 之前")
+    return msgs
+
+
+@rule("agent", "typedef_self_ref", "error",
+      "typedef 的类型引用了它自己（无限递归，编译不过）")
+def _typedef_self_ref(agent) -> List[str]:
+    td = getattr(agent, "typedefs", None) or {}
+    if not isinstance(td, dict):
+        return []
+    return [f"typedef '{name}' references itself"
+            for name, ty in td.items()
+            if name in _sv_identifiers(str(ty))]
+
+
+@rule("agent", "typedef_unknown_ref", "warning",
+      "typedef 的类型里出现既非内建类型、也非 parameters/typedefs 里的名字"
+      "（可能是外部包的类型；无法确证，故只警告不阻断）")
+def _typedef_unknown_ref(agent) -> List[str]:
+    td = getattr(agent, "typedefs", None) or {}
+    if not isinstance(td, dict):
+        return []
+    params = {p.get("name") for p in (agent.parameters or []) if isinstance(p, dict)}
+    known = set(td.keys()) | params | _SV_BUILTIN_TYPES
+    return [f"typedef '{name}' type '{ty}' references unknown name '{ref}'"
+            for name, ty in td.items()
+            for ref in _sv_identifiers(str(ty))
+            if ref not in known]
 
 
 # 协议控制端口（由协议默认驱动/采样逻辑直接处理，不要求有事务字段）

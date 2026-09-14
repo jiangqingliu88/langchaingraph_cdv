@@ -4,13 +4,6 @@
 // ============================================================
 // Port Config: {{ agent.name }}_port_config
 // ============================================================
-// 单类配置（不区分 master/slave）：端口类型由 port_kind 区分，
-//   MASTER 实例 = 驱动侧参数，SLAVE 实例 = 响应/内存模型参数
-//   system_config.create_sub_cfgs / env_config 按实例侧赋值
-
-// 端口类型（package 作用域声明：pkg 内各组件可直接引用 MASTER / SLAVE）
-typedef enum bit { MASTER, SLAVE } port_kind_enum;
-
 class {{ agent.name }}_port_config extends uvm_object;
   // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
   `uvm_object_utils_begin({{ agent.name }}_port_config)
@@ -76,9 +69,7 @@ class {{ agent.name }}_port_config extends uvm_object;
   int response_timeout   = 100;
   bit timeout_raise_error = 1;
 
-  // ── Slave 侧（响应侧）──
-  // 响应模式
-  typedef enum {AUTO_MEMORY, SEQUENCER_DRIVEN, ERROR_INJECTION} response_mode_e;
+
   response_mode_e response_mode = SEQUENCER_DRIVEN;
 
   // 内存模型参数
@@ -100,7 +91,6 @@ class {{ agent.name }}_port_config extends uvm_object;
   // 错误注入（特定地址窗口）
   bit [31:0] error_addr_start = 32'h0000_0000;
   bit [31:0] error_addr_end   = 32'h0000_0000;
-  typedef enum {RESP_RANDOM=0, RESP_OKAY=1, RESP_ERROR=2, RESP_DECERR=3} resp_type_e;
   resp_type_e force_resp_type = RESP_RANDOM;
 
 {%- for var in config_vars %}
