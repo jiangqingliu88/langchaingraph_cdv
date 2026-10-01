@@ -63,8 +63,8 @@ def test_legacy_aliases_accepted(tmp_path):
         "a1.yaml": {"interface": [{"agent_name": "A", "interface_name": "A_if",
                                    "clk": "clk", "ports": [
                                        {"name": "p", "dir": "output"}]}]},
-        # env 仅 env_name；agents dict-of-dict / dict-of-string 两种旧格式
-        "a2.yaml": {"environment": {"env_name": "E",
+        # agents dict-of-dict / dict-of-string 两种旧格式（env_name 已下线，改用 name）
+        "a2.yaml": {"environment": {"name": "E",
                                     "agents": {"m": {"interface": "A"},
                                                "s": "A_if"}}},
         # bench_name 别名 + clk_rst 裸字符串列表
@@ -185,6 +185,44 @@ def test_util_component_missing_name_error(tmp_path):
     issues = _check({"util_components": [{"type": "uvm_component"}]}, tmp_path)
     errs = _errors(issues)
     assert len(errs) == 1 and errs[0].rule == "missing_required"
+
+
+def test_env_name_rejected_everywhere(tmp_path):
+    """env_name 已从 schema 全部下线（env / bench / constraint 三处）。"""
+    for i, doc in enumerate((
+            {"environment": {"name": "E", "env_name": "E"}},
+            {"bench": {"name": "B", "env_name": "E"}},
+            {"constraint": {"name": "c", "env_name": "E"}})):
+        issues = _check(doc, tmp_path, name=f"en{i}.yaml")
+        errs = _errors(issues)
+        assert errs, f"env_name 未被拒: {doc}"
+        assert any("env_name" in e.target for e in errs), doc
+
+
+def test_bench_without_env_name_ok(tmp_path):
+    """bench 不写 env_name 合法：env 名由本次解析出的 environment 回填。"""
+    issues = _check({"bench": {"name": "B", "dut_instance": "u_dut"}},
+                    tmp_path, name="nb.yaml")
+    assert not _errors(issues)
+
+
+def test_scoreboard_generative_keys_rejected(tmp_path):
+    """生成式计分板已下线：mode/expected_from/actual_from 等键应被拒（不再是静默接受）。"""
+    issues = _check({"environment": {"name": "E", "scoreboards": [
+        {"name": "scb_gen", "mode": "inorder", "expected_from": "pred",
+         "actual_from": "slave", "key_field": "req_id"}]}}, tmp_path)
+    errs = _errors(issues)
+    assert errs and all(e.rule == "unknown_property" for e in errs)
+    for key in ("mode", "expected_from", "actual_from", "key_field"):
+        assert any(key in e.target for e in errs), f"{key} 未被拒"
+
+
+def test_scoreboard_sb_type_accepted(tmp_path):
+    """sb_type 接法是唯一保留的写法。"""
+    issues = _check({"environment": {"name": "E", "scoreboards": [
+        {"name": "apb_scb", "sb_type": "in_order_scoreboard",
+         "trans_type": "apb_master_seq_item"}]}}, tmp_path)
+    assert not _errors(issues)
 
 
 def test_combinator_bad_enum_error(tmp_path):

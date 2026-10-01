@@ -3,8 +3,7 @@
 # ============================================================
 
 environment:
-  name: APB_env
-  env_name: APB_env
+  name: apb_env
 
   # ── Agent 实例（每项 = 一个 interface → master/slave agent）──
   #   slave 置 is_active: False —— 真实 DUT（apb_slave_dut）负责响应，slave agent 只采样
@@ -12,16 +11,19 @@ environment:
     - name: apb_master
       is_active: True
       is_master: True
-      interface: apb
+      type: apb_master_agent
+
     - name: apb_slave
       is_active: False
       is_master: False
-      interface: apb
+      type: apb_slave_agent
 
   subenvs:
     - name: "apb_sys_env"
-      interface: apb
+      type: apb_system_env
+
   # 外部 VIP 集成（axi_system_env 类需外部提供，示例默认注释掉）
+
   # vipenvs:
   #   - name: "axi_sys_env"
   #     type: "axi_system_env"
@@ -43,14 +45,9 @@ environment:
 
   scoreboards:
     - name: apb_scb
-      sb_type: in_order_scoreboard
+      sb_type: in_order_scoreboard        # scb_pkg 的参数化类
       trans_type: apb_master_seq_item
-    # 旧格式（生成式 scoreboard，按端口表达式推断 item_type）
-    # - name: apb_scb_gen
-    #   mode: inorder
-    #   expected_from: apb_pred
-    #   actual_from: apb_slave
-    #   key_field: req_id
+      params: [apb_master_seq_item, apb_master_seq_item]   # → typedef in_order_scoreboard#(...) apb_scb_t;
 
   # ── Analysis 组件（predictor 等）──
   #   type: 组件类名
@@ -71,9 +68,6 @@ environment:
     - predictor_name: "apb_reg_predictor"
       type: "uvm_reg_predictor"
       trans_type: "apb_master_seq_item"
-
-  # ── 虚拟序列器 ──
-  virtual_sequencer: { enabled: true }
 
   config_vars: []
   config_constraints: []

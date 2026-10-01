@@ -20,7 +20,6 @@
 
 constraint:
   name: apb_cons
-  env_name: APB_env
 
 transactions:
   # 当前 APB env 只有一个 agent；多端口项目在此列出每个端口:

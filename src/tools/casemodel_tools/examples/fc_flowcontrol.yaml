@@ -1,0 +1,194 @@
+# ════════════════════════════════════════════════════════════
+# case 属性模型示例 —— 流控 FlowControl
+# 对应 readem.md 第十一节「一个完整 case 的属性实例」
+#
+#   L1 对象      流控
+#   L2 子对象    接收侧 / 发射侧 / 跨端口 / 恢复
+#   L3 维度      指令长度 / 反压模式 / 反压比例 / 反压持续时间 / 反压接口 / 与资源联动
+#   L4 字段      维度下的取值单元
+#   L5 方法      D / RND / G / RPLY / SPCL
+#   L6 检查      功能 / 白盒 / 性能
+#
+# 用法:
+#   python -m src.tools.casemodel_tools.main check    examples/fc_flowcontrol.yaml
+#   python -m src.tools.casemodel_tools.main analyze  examples/fc_flowcontrol.yaml
+#   python -m src.tools.casemodel_tools.main gui      examples/fc_flowcontrol.yaml
+# ════════════════════════════════════════════════════════════
+
+version: "1.0"
+
+# ── L1 对象：能否用外部行为描述、是否是验证主体 ──
+object: FlowControl
+object_cn: 流控
+object_code: FC
+description: 流控对象 —— 外部可观察的流控行为类别
+
+# ── L2 子对象：对象的能力点 ──
+sub_objects:
+  - id: FC-01
+    name: 接收侧流控
+    code: RECV
+    description: 接收方向的反压与信用流控
+  - id: FC-02
+    name: 发射侧流控
+    code: SEND
+    description: 发射方向的流控
+  - id: FC-03
+    name: 跨端口流控
+    code: XPRT
+    description: 端口之间的流控耦合
+  - id: FC-04
+    name: 流控恢复
+    code: RCVR
+    description: 反压解除后的恢复行为
+
+# ── L3 维度 / L4 字段：维度只归类，字段才取值 ──
+dimensions:
+
+  - id: D_length
+    name: 指令长度
+    description: 一次事务的指令长度
+    fields:
+      - name: 指令长度
+        type: set
+        unit: 拍
+        values: [1, 8, MAX]
+        boundary: ["1", "MAX"]
+        cover_bins: [cp_len_1, cp_len_8, cp_len_max]
+
+  - id: D_mode
+    name: 反压模式
+    description: 何时施加反压
+    relation:
+      指令长度: 联动        # 长指令更容易触发长时反压
+      反压比例: 互斥        # 无反压 与 比例=100% 互斥
+      反压持续时间: 联动
+    fields:
+      - name: 反压模式
+        type: enum
+        values: [无, 首拍, 尾拍, 持续]
+        cover_bins: [cp_bp_none, cp_bp_head, cp_bp_tail, cp_bp_sustained]
+
+  - id: D_ratio
+    name: 反压比例
+    fields:
+      - name: 反压比例
+        type: range
+        unit: "%"
+        min: 0
+        max: 100
+        boundary: ["0", "10", "50", "100"]
+        cover_bins: [cp_ratio_0, cp_ratio_10, cp_ratio_50, cp_ratio_100]
+
+  - id: D_dur
+    name: 反压持续时间
+    fields:
+      - name: 反压持续时间
+        type: enum
+        unit: 拍
+        values: ["1拍", "持续", "超阈值"]
+
+  - id: D_if
+    name: 反压接口
+    fields:
+      - name: 反压接口
+        type: enum
+        values: [ld0, ld1, 两者独立]
+        cover_bins: [cp_if_ld0, cp_if_ld1, cp_if_both]
+
+  - id: D_res
+    name: 与资源联动
+    fields:
+      - name: 并发数
+        type: weighted
+        values:
+          - {value: 1, weight: 5}
+          - {value: 4, weight: 3}
+          - {value: 8, weight: 1}
+      - name: 总元素数
+        type: linkage
+        linked_to: 指令长度
+        description: 总元素数随指令长度联动，不独立取值
+
+# ── L5 方法：生成方式，独立于对象与维度 ──
+methods: [D, RND, G, RPLY, SPCL]
+
+# ── L6 检查：一个 case 可以同时挂多个检查 ──
+checks:
+  - id: CHECK-FUNC
+    name: 功能检查
+    description: 指令是否完整、有无丢失
+  - id: CHECK-WBOX
+    name: 白盒检查
+    description: 队列深度、资源计数是否平衡
+  - id: CHECK-PERF
+    name: 性能检查
+    description: 反压解除后吞吐是否恢复
+
+# ── 维度交叉矩阵：★ 必需 / ✓ 可选 / ✗ 禁止 ──
+# 键可以用 × * x , / 作分隔符，维度名支持简称（长度 → 指令长度）
+cross_matrix:
+  指令长度×反压模式: required
+  指令长度×反压持续时间: required
+  指令长度×与资源联动: required
+  指令长度×反压比例: optional
+  指令长度×反压接口: optional
+  反压模式×反压比例: required
+  反压模式×反压持续时间: required
+  反压模式×反压接口: optional
+  反压模式×与资源联动: optional
+  反压比例×反压持续时间: forbidden
+
+# ── 交叉组：一组必须一起组合的维度 ──
+cross_groups:
+  - id: XG-01
+    name: 长度×模式×时长
+    dimensions: [指令长度, 反压模式, 反压持续时间]
+    level: required
+    method: G
+    sub_objects: [FC-01, FC-02]
+    checks: [CHECK-FUNC, CHECK-WBOX]
+    expected_result: 不死锁、不丢数、可恢复
+    description: 主交叉组，覆盖反压时序的核心组合
+
+  - id: XG-02
+    name: 比例×模式
+    dimensions: [反压比例, 反压模式]
+    level: required
+    method: G
+    sub_objects: [FC-01]
+    checks: [CHECK-WBOX, CHECK-PERF]
+    expected_result: 反压解除后吞吐恢复达标
+
+  - id: XG-03
+    name: 长度×资源
+    dimensions: [指令长度, 与资源联动]
+    level: required          # 与 cross_matrix 的「指令长度×与资源联动: required」保持一致
+    method: RND
+    sub_objects: [FC-03, FC-04]
+    checks: [CHECK-WBOX]
+
+# ── 环境指纹：case 不以它为主体，但执行时必须带上，失败才能复现 ──
+environment:
+  required: [tool_version, rtl_version, constraint_version, seed]
+  defaults:
+    tool_version: VCS_2024.03-SP2
+    rtl_version: dut_v1.2.0
+    constraint_version: fc_v1.0
+    interface_version: ifc_v2.1
+    config_profile: default
+    seed: 12345
+    compile_options: "-ntb_opts uvm-1.2 +define+FC_DEBUG"
+
+# ── 生成参数 ──
+generation:
+  methods: [G, RND]
+  seed: 42
+  repeat: 8
+  max_cases: 300
+
+# ── case 缺省属性 ──
+case_defaults:
+  id_prefix: TC
+  expected_result: 不死锁、不丢数、可恢复
+  checks: [CHECK-FUNC, CHECK-WBOX]

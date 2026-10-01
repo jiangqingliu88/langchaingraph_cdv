@@ -14,6 +14,7 @@ from src.tools.uvm_tools.tool_uvm.gen_uvm import (
     HarnessModel,
     YAMLLoader,
     _normalize_harness,
+    _normalize_typedefs,
     main,
 )
 from src.tools.uvm_tools.tool_uvm.semantic_check import Issue, SemanticValidator
@@ -87,29 +88,49 @@ def test_typedef_self_ref_error():
     assert _by_rule(_issues("interfaces", a), "typedef_self_ref")
 
 
-def test_typedef_unknown_ref_warning():
-    a = _agent(parameters=[{"name": "W", "value": 8}],
-               typedefs={"word_t": "bit [W-1:0]", "bad_t": "nonexistent_t"})
-    issues = _by_rule(_issues("interfaces", a), "typedef_unknown_ref")
-    assert issues
-    assert all(i.severity == "warning" for i in issues)
-    assert any("nonexistent_t" in i.message for i in issues)
-    # 参数/内建类型不算未知
-    assert not any("word_t" in i.message for i in issues)
-
-
-def test_typedef_unknown_ref_struct_members_not_flagged():
-    # struct/enum 成员名不是类型引用，不应误报
-    a = _agent(typedefs={"pt_t": "struct packed { logic a; logic b; }",
-                         "st_t": "enum { IDLE, RUN }"})
-    assert not _by_rule(_issues("interfaces", a), "typedef_unknown_ref")
+def test_typedef_unknown_name_is_not_checked():
+    # 类型名是否「在别处有定义」不查 —— 校验器看不到 common_typedefs_pkg /
+    # uvm_pkg / 手写包 / 别的 VIP，查了必然误伤，交编译期兜底。
+    a = _agent(typedefs={"type_t": "bit [7:0]", "type_name": "byte_t"})
+    issues = _issues("interfaces", a)
+    for rid in ("typedef_unknown_ref", "typedef_forward_ref", "typedef_self_ref"):
+        assert not _by_rule(issues, rid)
 
 
 def test_typedef_ok_when_no_typedefs():
     a = _agent()
     issues = _issues("interfaces", a)
-    for rid in ("typedef_forward_ref", "typedef_self_ref", "typedef_unknown_ref"):
+    for rid in ("typedef_forward_ref", "typedef_self_ref"):
         assert not _by_rule(issues, rid)
+
+
+# ── typedefs 归一化（list[{type_t, type_name}] → 保序 Dict[名字, 类型]）──
+
+def test_normalize_typedefs_key_roles():
+    # type_t = 类型表达式（右边），type_name = 新类型名（左边）
+    raw = [{"type_t": "bit [7:0]", "type_name": "byte_t"},
+           {"type_t": "byte_t",    "type_name": "word_t"}]
+    assert list(_normalize_typedefs(raw).items()) == [
+        ("byte_t", "bit [7:0]"), ("word_t", "byte_t")]
+
+
+def test_normalize_typedefs_junk_is_ignored():
+    assert _normalize_typedefs(None) == {}
+    assert _normalize_typedefs([]) == {}
+    assert _normalize_typedefs([None, 5, "x"]) == {}
+    assert _normalize_typedefs([{"type_t": "bit"}]) == {}          # 缺 type_name
+    assert _normalize_typedefs([{"type_name": "a", "type_t": "bit"}]) == {"a": "bit"}
+
+
+def test_typedefs_list_flows_into_model_and_forward_ref():
+    # 归一化后仍是保序 Dict，顺序校验照常生效
+    td = _normalize_typedefs([{"type_t": "bit [7:0]", "type_name": "byte_t"},
+                              {"type_t": "byte_t", "type_name": "word_t"}])
+    assert not _by_rule(_issues("interfaces", _agent(typedefs=td)), "typedef_forward_ref")
+    # 写反：引用者排在被引用者前面
+    rev = _normalize_typedefs([{"type_t": "byte_t", "type_name": "word_t"},
+                               {"type_t": "bit [7:0]", "type_name": "byte_t"}])
+    assert _by_rule(_issues("interfaces", _agent(typedefs=rev)), "typedef_forward_ref")
 
 
 # ── env 级 ──

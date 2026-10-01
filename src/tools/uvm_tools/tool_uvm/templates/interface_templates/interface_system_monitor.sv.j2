@@ -66,13 +66,13 @@ class {{ agent.name }}_system_monitor extends uvm_monitor;
               cfg.num_masters, cfg.num_slaves), UVM_MEDIUM)
     // 每个端口实例一个独立采集进程（各自等待自己的复位释放，互不阻塞）
     // monitor 的 forever 循环不 raise objection（避免悬挂）
-    for (int i = 0; i < cfg.num_masters && i < sys_vif.master_if.size(); i++) begin
+    for (int i = 0; i < cfg.num_masters && i < $size(sys_vif.master_if); i++) begin
       automatic int idx = i;
       fork
         collect_port(sys_vif.master_if[idx], MASTER, idx);
       join_none
     end
-    for (int i = 0; i < cfg.num_slaves && i < sys_vif.slave_if.size(); i++) begin
+    for (int i = 0; i < cfg.num_slaves && i < $size(sys_vif.slave_if); i++) begin
       automatic int idx = i;
       fork
         collect_port(sys_vif.slave_if[idx], SLAVE, idx);

@@ -29,7 +29,7 @@ class {{ agent.name }}_base_seq_item extends uvm_sequence_item;
   `uvm_object_utils_end
 
   // ── 事务方向（两侧共用）──
-  typedef enum {READ, WRITE} xact_type_e;
+  //typedef enum {READ, WRITE} xact_type_e;
   // 注：声明为 rand。master 侧需要随机化它；slave 侧由 monitor 显式赋值，
   //     rand 不阻碍显式赋值，故两侧共用一个声明是安全的。
   rand xact_type_e xact_type;

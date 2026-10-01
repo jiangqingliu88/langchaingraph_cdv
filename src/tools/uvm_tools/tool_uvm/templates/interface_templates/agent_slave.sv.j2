@@ -11,13 +11,14 @@ class {{ agent.name }}_slave_agent extends uvm_agent;
   {{ agent.name }}_slave_driver    driver;
   {{ agent.name }}_port_monitor   monitor;
   {{ agent.name }}_port_config    cfg;
-
+  uvm_analysis_port #({{ agent.name }}_slave_seq_item) {{ agent.name }}_slave_agent_ap;  // slave 侧抓包
   function new(string name, uvm_component parent);
     super.new(name, parent);
   endfunction
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
+    {{ agent.name }}_slave_agent_ap= monitor.slave_mon_ap;
     uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg);
     if (cfg == null)
       cfg = {{ agent.name }}_port_config::type_id::create("cfg", this);

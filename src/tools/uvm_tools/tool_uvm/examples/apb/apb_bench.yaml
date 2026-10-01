@@ -3,14 +3,11 @@
 # ============================================================
 
 bench:
-  name: APB_bench
-  env_name: APB_env
-  timeout: 10ms
+  name: apb_bench
   include_assertions: false
 
-  # ── 时钟复位（bench 级，tb_top 按此实例化 clk_rst_if；
-  #   周期/释放时机在 apb_env.yaml 的 clk_rst_vip 里配置，由 clk_rst_agent 驱动）──
-  clk_rst:
+  #clk_rst_vip 里配置，由 clk_rst_agent 驱动）──
+  clk_rst_if:
     clocks:
       - { name: pclk }
     resets:
@@ -18,36 +15,6 @@ bench:
 
   dut_instance: u_dut          # DUT 实例名（tb_top 按 harness.bind_to 例化 DUT）
 
-  # ── 波形转储（tb_top initial 块；+DUMP_WAVES 开启）──
-  wave_dump:
-    enabled: true
-    format: FST                # FST（缺省）/ FSDB / VCD
-    plusargs: DUMP_WAVES
-    file_name: APB_bench_tb_top.fst
-    levels: 0
-
-  # ── 仿真结束控制：由 env 级 {env}_sim_end 组件负责（tb_top 不再内嵌）──
-  #   自动结束：run_phase 全部 objection 清零 → 报告完成后 $finish（+SIM_NO_AUTO_FINISH 关闭）
-  #   看门狗：  +SIM_WATCHDOG_NS=1000000 （ns，0/缺省 = 关闭）
-
-  # ── UVM 配置（预留透传，模板暂不消费）──
-  uvm_config: {}
-
-  # ── classic 风格（无 harness 时使用）：接口信号手工接线 ──
-  # wire_decls:
-  #   - { name: paddr, width: 32 }
-  # assignments:
-  #   - { lhs: paddr, rhs: u_dut.paddr }
-  # agents:
-  #   apb_master:
-  #     interface: apb
-  #     clock: pclk
-  #     reset: presetn
-  #     connections:
-  #       - { port: paddr, wire: paddr }
-
-  # ── Harness（bind 式自连接）──
-  #   bind 各 interface 到 DUT module（按 module 名，所有实例生效）；
   harness:
     name: apb_harness
     bind_to: apb_slave_dut
@@ -71,6 +38,7 @@ bench:
           prdata: prdata
           pready: pready
           pslverr: pslverr
+
     # 可选：virtual harness 批量连接
     # sub_harnesses:
     #   - { path: "chip_module.math.harness", env_path: ".math_env" }

@@ -1,0 +1,30 @@
+"""casemodel_tools —— case 属性完备性建模。
+
+按「功能组织树 + P0/P1/P2 专题 + 维度约束组合」把 case 的六层属性显式建模，
+case 由属性组合**生成**而不是手写。文档见 readem.md。
+
+分层（依赖只能从上往下）：
+
+    domain/       数据与不变式，不依赖任何 IO。OrgNode（Composite）/
+                  Field（Strategy 五种类型化）/ Dimension / Theme / CaseModel
+    repository/   取数与落盘。loader（YAML→模型）/ case_list（真实 case 列表）
+                  / exporters（属性表→四种格式），都用 Strategy/Repository 模式
+    generation/   唯一会造 case 的地方。strategies（五种方法 Strategy）
+                  + builder（文档十七节的六步流水线，Builder 模式）
+    analysis/     只读判断。specifications（规则可插拔）+ rules/（按分类分模块）
+                  + matrix / score / external / facade（Facade 模式）
+    view/         只渲染。text（CLI）+ gui/（tkinter，每页一个组件）
+    agent/        三个接入面的适配器（Adapter 模式）
+
+对外入口：
+    cli.py                        命令行（check/analyze/generate/tree/matrix/rules/gui）
+    analysis.analyze()            分析门面
+    repository.load_model()       模型加载
+    agent                        Agent 接入面
+
+用法见 readme.md。
+"""
+from __future__ import annotations
+
+__version__ = "2.0"
+__all__ = ["__version__"]

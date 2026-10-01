@@ -430,12 +430,6 @@ CMODEL_TEMPLATES = [
     ("environment_templates/cmodel_dpi.cpp.j2", "{module_name}_dpi_wrapper.cpp"),
 ]
 
-# 环境级 Scoreboard 模板：mode → 模板路径
-SCOREBOARD_TEMPLATES = {
-    "inorder": "environment_templates/scoreboard_inorder.sv.j2",
-    "outoforder": "environment_templates/scoreboard_outoforder.sv.j2",
-}
-
 # ── P0-4: 编译仿真门禁（--gate）──
 _GATE_SIMULATORS = ("vlog", "vcs")   # 支持 UVM 的仿真器（iverilog/verilator 不支持 UVM 类）
 
@@ -617,7 +611,6 @@ class EnvironmentModel:
     analysis_components: List[Dict[str, Any]] = field(default_factory=list)
     analysis_exports: List[Dict[str, Any]] = field(default_factory=list)
     analysis_ports: List[Dict[str, Any]] = field(default_factory=list)
-    virtual_sequencer: Dict[str, Any] = field(default_factory=lambda: {"enabled": False})
     clk_rst_vip: Dict[str, Any] = field(default_factory=dict)
     register_model: Dict[str, Any] = field(default_factory=dict)
     # 可选：测试侧 harness 连接 {path: 层级路径, env_suffix: ".sub_env0"}
@@ -1450,19 +1443,7 @@ class EnvironmentRenderTask(RenderTask):
             if result is not None:
                 rendered.append(result)
 
-        # 生成 Scoreboard（仅旧格式 mode/item_type；新格式 sb_type 为外部类，不生成）
-        scb_dir = env_dir / "scb"
-        for sb in environment.scoreboards:
-            if not isinstance(sb, dict) or not sb.get("name"):
-                continue
-            if sb.get("sb_type") and not sb.get("generated"):
-                # 新格式（UVMF）：scoreboard 由 sb_type 指定外部类，不在此生成
-                continue
-            template_path = SCOREBOARD_TEMPLATES.get(sb.get("mode", "inorder"))
-            if not template_path:
-                continue
-            target_path = scb_dir / f"{sb['name']}.sv"
-            rendered.append(self.render_file(template_path, target_path, {"scb": sb}))
+        # scoreboard 一律由 sb_type 指向外部类，本工具不生成 scb 文件
 
         return rendered
 
@@ -1570,77 +1551,65 @@ def _type_to_pkg(type_name):
     return ""
 
 
-def _import_pkgs_for_types(*types):
-    """根据事务类型集合，推导需要 import 的 agent package 列表（去重）。"""
-    pkgs = []
-    for t in types:
-        pkg = _type_to_pkg(t)
-        if pkg and pkg not in pkgs:
-            pkgs.append(pkg)
-    return pkgs
+def _normalize_scoreboards(scoreboards):
+    """归一化 scoreboards → list[{name, sb_type, trans_type, params, handle_type, typedef_decl}]。
 
+    scoreboards:
+      - name: apb_scb
+        sb_type: uvmf_in_order_scoreboard   # 工厂可注册的具名类
+        trans_type: apb_master_seq_item
+      # 参数化类（如 scb_pkg 的 in_order_scoreboard#(REQ_T, RSP_T, CMP_T)）：
+      # 给 params 传实参，句柄走 typedef 出来的别名
+      - name: apb_scb_param
+        sb_type: in_order_scoreboard
+        trans_type: apb_master_seq_item
+        params: [apb_master_seq_item, apb_master_seq_item]
 
-def _resolve_port(name, agent_names):
-    """把来源名解析为 SystemVerilog 端口表达式（旧 scoreboard 格式用）。
-
-    - agent 名  → `<name>_agent_h.monitor.mon_ap`（monitor 输出）
-    - 空 / 未知 → ""（不接线）
+    注：生成式（mode/expected_from/actual_from 自造计分板）已下线 ——
+    scb 文件不再由本工具生成，一律由 sb_type 指向外部类。
     """
-    if not name:
-        return ""
-    if name in agent_names:
-        return f"{name}_agent_h.monitor.mon_ap"
-    return ""
-
-
-def _normalize_scoreboards(scoreboards, agent_names=None):
-    """归一化 scoreboards。兼容 UVMF 新格式与旧格式。
-
-    新格式（UVMF）: {name, sb_type, trans_type}
-       sb_type    scoreboard 类名（如 uvmf_in_order_scoreboard）
-       trans_type 事务类型（如 ALU_out_transaction）
-    旧格式:        {name, mode, item_type, key_field, expected_from, actual_from}
-    """
-    agent_names = set(agent_names or [])
     normalized = []
     for sb in scoreboards or []:
         if not isinstance(sb, dict) or not sb.get("name"):
             continue
+        name = sb["name"]
         sb_type = sb.get("sb_type", "")
-        trans_type = sb.get("trans_type", "")
-        if sb_type or trans_type:
-            # 新格式：直接透传 sb_type / trans_type
-            normalized.append({
-                "name": sb["name"],
-                "sb_type": sb_type,
-                "trans_type": trans_type,
-            })
-            continue
-        # 旧格式：推断 item_type + 端口表达式
-        mode = str(sb.get("mode", "inorder")).lower()
-        if mode not in ("inorder", "outoforder"):
-            mode = "inorder"
-        actual_from = sb.get("actual_from", "")
-        expected_from = sb.get("expected_from", "")
-        item_type = sb.get("item_type", "")
-        if not item_type:
-            src = actual_from or expected_from
-            item_type = f"{src}_master_seq_item" if src else "uvm_sequence_item"
+        params = [str(p) for p in (sb.get("params") or [])]
+        # 参数化类不能直接当类型名用（`in_order_scoreboard apb_scb;` 编译不过），
+        # 故先 `typedef <类>#(<实参>) <name>_t;` 出别名，再用别名声明/例化句柄。
+        typedef_decl = (f"typedef {sb_type}#({', '.join(params)}) {name}_t;"
+                        if params and sb_type else "")
         normalized.append({
-            "name": sb["name"],
-            "sb_type": sb["name"],   # 生成式 scoreboard：类名 = name（P1-1 接线）
-            "generated": True,       # 标记为生成式（RenderTask 据此生成 scb 文件）
-            "trans_type": item_type,
-            "mode": mode,
-            "item_type": item_type,
-            "key_field": sb.get("key_field", "req_id"),
-            "expected_from": expected_from,
-            "actual_from": actual_from,
-            "expected_port": _resolve_port(expected_from, agent_names),
-            "actual_port": _resolve_port(actual_from, agent_names),
-            "import_pkgs": _import_pkgs_for_types(item_type),
+            "name": name,
+            "sb_type": sb_type,
+            "trans_type": sb.get("trans_type", ""),
+            "params": params,
+            "handle_type": f"{name}_t" if params else sb_type,
+            "typedef_decl": typedef_decl,
         })
     return normalized
+
+
+def _normalize_typedefs(raw) -> Dict[str, str]:
+    """typedefs → 保序 Dict[类型名, 类型表达式]。
+
+    每项一个 object，两个字段：
+        type_t    类型表达式（typedef 右边）
+        type_name 新类型名  （typedef 左边）
+        - { type_t: "bit [7:0]", type_name: "byte_t" }  →  typedef bit [7:0] byte_t;
+
+    保序：写在前面的先声明，故后面的 typedef 可以引用它。
+    """
+    out: Dict[str, str] = {}
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("type_name")
+        if name is None or str(name) == "":
+            continue
+        ty = item.get("type_t")
+        out[str(name)] = "" if ty is None else str(ty)
+    return out
 
 
 def _normalize_agents_list(agents):
@@ -1671,15 +1640,6 @@ def _normalize_agents_list(agents):
                 # name 缺省从 type 推导："apb_master_agent" → "apb_master"
                 t = a.get("type", "")
                 a["name"] = t[:-len("_agent")] if t.endswith("_agent") else t
-            # type 由 interface + is_master 推导（不再从 YAML 读）：
-            #   interface=apb, is_master=True  → apb_master_agent
-            #   interface=apb, is_master=False → apb_slave_agent
-            # 未写 is_master 时按 master 处理（与 AgentModel.is_master 缺省一致）。
-            if not a.get("type"):
-                iface = a.get("interface") or ""
-                if iface:
-                    kind = "slave" if _opt_bool(a.get("is_master")) is False else "master"
-                    a["type"] = f"{iface}_{kind}_agent"
             result.append(a)
         return result
     return []
@@ -1740,10 +1700,7 @@ def _normalize_subenvs(subenvs):
 
     subenvs:
       - name: "apb_sys_env"        # 实例名
-        interface: apb             # → type 由 interface 推导 = apb_system_env
-
-    注：不再从 YAML 读 type —— 类名由 interface 唯一决定，写两遍只会写不一致。
-    interface 缺失时退回 name（兼容旧 YAML）。
+        type: "apb_system_env"     # 环境类名（缺省 = name）
     """
     result = []
     for se in subenvs or []:
@@ -1752,10 +1709,9 @@ def _normalize_subenvs(subenvs):
         name = se.get("name")
         if not name:
             continue
-        iface = se.get("interface") or ""
         result.append({
             "name": name,
-            "type": f"{iface}_system_env" if iface else se.get("type", name),
+            "type": se.get("type", name),
         })
     return result
 
@@ -1930,17 +1886,50 @@ def _normalize_register_model(raw: Any, agents: List[Any]) -> Dict[str, Any]:
 
 class YAMLLoader:
     SUPPORTED_SUFFIXES = {".yml", ".yaml"}
+    LISTFILE_SUFFIXES = {".f"}   # 清单文件：一行一个 YAML 路径
+
+    @staticmethod
+    def _expand_listfile(path: Path) -> List[Path]:
+        """把 .f 清单文件展开成路径列表。
+
+        一行一个路径；`#` 或 `//` 起注释；空行跳过；`+incdir+`、`-f` 之类
+        编译选项行忽略（直接从 vlog filelist 搬过来也不会报错）。
+        相对路径先按当前工作目录解析，找不到再相对清单文件所在目录解析。
+        """
+        out: List[Path] = []
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.split("#", 1)[0].split("//", 1)[0].strip()
+            if not line or line.startswith(("+", "-")):
+                continue
+            p = Path(line)
+            if not p.is_absolute() and not p.exists():
+                p = path.parent / line
+            out.append(p)
+        return out
 
     @staticmethod
     def collect_paths(inputs: Iterable[Path]) -> List[Path]:
         files: List[Path] = []
+        seen: set = set()
         for input_path in inputs:
+            # .f 清单文件：展开后当作新的输入（也允许里面写目录）
+            if input_path.is_file() and input_path.suffix.lower() in YAMLLoader.LISTFILE_SUFFIXES:
+                expanded = YAMLLoader.collect_paths(YAMLLoader._expand_listfile(input_path))
+                for p in expanded:
+                    if p not in seen:
+                        seen.add(p)
+                        files.append(p)
+                continue
             if input_path.is_dir():
                 for path in sorted(input_path.rglob("*")):
                     if path.suffix.lower() in YAMLLoader.SUPPORTED_SUFFIXES and path.is_file():
-                        files.append(path)
+                        if path not in seen:
+                            seen.add(path)
+                            files.append(path)
             elif input_path.is_file() and input_path.suffix.lower() in YAMLLoader.SUPPORTED_SUFFIXES:
-                files.append(input_path)
+                if input_path not in seen:
+                    seen.add(input_path)
+                    files.append(input_path)
         return files
 
     @staticmethod
@@ -1961,7 +1950,7 @@ class YAMLLoader:
             protocol=data.get("protocol", ""),
             reset_active_low=_opt_bool(data.get("reset_active_low", True)) is not False,
             parameters=data.get("parameters", []),
-            typedefs=dict(data.get("typedefs") or {}),
+            typedefs=_normalize_typedefs(data.get("typedefs")),
             ports=data.get("ports", []),
             base_transaction_vars=data.get("base_transaction_vars", []),
             base_transaction_constraints=data.get("base_transaction_constraints", []),
@@ -1975,8 +1964,8 @@ class YAMLLoader:
 
     @staticmethod
     def parse_environment_model(data: Dict[str, Any]) -> EnvironmentModel:
-        name = data.get("name") or data.get("env_name")
-        env_name = data.get("env_name") or name
+        name = data.get("name")
+        env_name = name      # env_name 已从 YAML 下线：生成前缀一律取 name
         agents = AgentCollection()
         for agent_config in _normalize_agents_list(data.get("agents")):
             agent_name = agent_config.get("name") or agent_config.get("agent_name")
@@ -2012,11 +2001,10 @@ class YAMLLoader:
             agents=agents,
             subenvs=_normalize_subenvs(data.get("subenvs", [])),
             vipenvs=_normalize_vipenvs(data.get("vipenvs", [])),
-            scoreboards=_normalize_scoreboards(data.get("scoreboards", []), agent_names),
+            scoreboards=_normalize_scoreboards(data.get("scoreboards", [])),
             analysis_components=_normalize_analysis_components(data.get("analysis_components", [])),
             analysis_exports=_normalize_analysis_ports(data.get("analysis_exports", [])),
             analysis_ports=_normalize_analysis_ports(data.get("analysis_ports", [])),
-            virtual_sequencer=data.get("virtual_sequencer", {"enabled": False}),
             clk_rst_vip=clk_rst_vip,
             register_model=register_model,
             harness_connect=dict(data.get("harness_connect") or {}),
@@ -2048,10 +2036,12 @@ class YAMLLoader:
             )
         return BenchModel(
             name=data.get("name") or data.get("bench_name", "bench"),
-            env_name=data.get("env_name", ""),
+            # env_name 已从 YAML 下线：由 run() 按已解析的 environment 回填
+            env_name="",
             timeout=data.get("timeout", "10ms"),
             include_assertions=data.get("include_assertions", False),
-            clk_rst=data.get("clk_rst", {}),
+            # 时钟复位：新名 clk_rst_if 优先，兼容旧名 clk_rst
+            clk_rst=data.get("clk_rst_if") or data.get("clk_rst") or {},
             wire_decls=data.get("wire_decls", []),
             assignments=data.get("assignments", []),
             agents=agents,
@@ -2117,7 +2107,7 @@ class YAMLLoader:
     def parse_constraint_model(data: Dict[str, Any]) -> ConstraintModel:
         project = data.get("constraint") or {}
         name = project.get("name") or project.get("constraint_name") or "constraint"
-        env_name = project.get("env_name") or project.get("env") or ""
+        env_name = project.get("env") or ""      # env_name 已下线，改用 env
         return ConstraintModel(
             name=name,
             env_name=env_name,
@@ -2633,7 +2623,7 @@ class UVMGenerator:
         # ── -g/--generate 名称过滤 ──
         if self.generate_names:
             interfaces = self._filter_named(interfaces, "name")
-            environments = self._filter_named(environments, "name", "env_name")
+            environments = self._filter_named(environments, "name")
             benches = self._filter_named(benches, "name")
             constraints = self._filter_named(constraints, "name")
             harnesses = self._filter_named(harnesses, "name")
@@ -2658,9 +2648,18 @@ class UVMGenerator:
             generated_files.extend(self.generate_agents(interfaces))
         if environments:
             generated_files.extend(self.generate_environments(environments))
+        # env_name 已从 YAML 下线：bench / constraint 的 env 名从本次解析出的
+        # environment 回填（都没写时取第一个 environment）
+        default_env = environments[0].env_name if environments else ""
         if benches:
+            for b in benches:
+                if not b.env_name:
+                    b.env_name = default_env
             generated_files.extend(self.generate_benches(benches))
         if constraints:
+            for c in constraints:
+                if not c.env_name:
+                    c.env_name = default_env
             generated_files.extend(self.generate_constraints(constraints))
         if harnesses:
             generated_files.extend(self.generate_harnesses(harnesses))
@@ -2824,7 +2823,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
                 reset=item.get("reset"),
                 protocol=item.get("protocol", ""),
                 parameters=item.get("parameters", []),
-                typedefs=dict(item.get("typedefs") or {}),
+                typedefs=_normalize_typedefs(item.get("typedefs")),
                 ports=item.get("ports", []),
                 transaction_vars=item.get("transaction_vars", []),
                 transaction_constraints=item.get("transaction_constraints", []),
@@ -2850,8 +2849,8 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
         payload = data.get("environment")
         if payload is None or not isinstance(payload, dict):
             return "// Error: YAML must contain 'environment' dict"
-        name = payload.get("name") or payload.get("env_name", "env")
-        env_name = payload.get("env_name") or name
+        name = payload.get("name") or "env"
+        env_name = name      # env_name 已从 YAML 下线：生成前缀一律取 name
         agents = AgentCollection()
         for acfg in _normalize_agents_list(payload.get("agents")):
             aname = acfg.get("name") or acfg.get("agent_name")
@@ -2881,7 +2880,6 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             analysis_components=_normalize_analysis_components(payload.get("analysis_components", [])),
             analysis_exports=_normalize_analysis_ports(payload.get("analysis_exports", [])),
             analysis_ports=_normalize_analysis_ports(payload.get("analysis_ports", [])),
-            virtual_sequencer=payload.get("virtual_sequencer", {"enabled": False}),
             clk_rst_vip=clk_rst_vip,
             register_model=_normalize_register_model(
                 payload.get("register_model") or payload.get("reg_adapter"),
@@ -2941,10 +2939,10 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             )
         bench = BenchModel(
             name=payload.get("name") or payload.get("bench_name", "bench"),
-            env_name=payload.get("env_name", ""),
+            env_name="",     # env_name 已从 YAML 下线（下游按 environment 回填）
             timeout=payload.get("timeout", "10ms"),
             include_assertions=payload.get("include_assertions", False),
-            clk_rst=payload.get("clk_rst", {}),
+            clk_rst=payload.get("clk_rst_if") or payload.get("clk_rst") or {},
             wire_decls=payload.get("wire_decls", []),
             assignments=payload.get("assignments", []),
             agents=agents_b,
@@ -2963,7 +2961,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
     if tool_type == "constraint":
         proj = data.get("constraint") or {}
         cname = proj.get("name") or proj.get("constraint_name") or "constraint"
-        cenv = proj.get("env_name") or proj.get("env") or ""
+        cenv = proj.get("env") or ""     # env_name 已下线，改用 env
         constraint = ConstraintModel(
             name=cname, env_name=cenv,
             transactions=data.get("transactions", []),
@@ -3033,11 +3031,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument(
         "-i", "--input", nargs="+", default=["."],
-        help="Input YAML file(s) or directories containing YAML files.",
+        help="Input YAML file(s) or directories containing YAML files. "
+             "A .f list file is also accepted and expanded into the paths it lists.",
     )
     parser.add_argument(
         "-f", "--file", dest="input", nargs="+",
-        help="Specify a list of YAML configuration files (same as -i/--input).",
+        help="Same as -i/--input: YAML files / directories, or a .f list file "
+             "(one path per line; '#' and '//' start comments).",
     )
     parser.add_argument(
         "-d", "--dest_dir", "--output", dest="dest_dir", default="generated",

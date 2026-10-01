@@ -114,9 +114,17 @@
           }
         },
         "typedefs": {
-          "$comment": "类型别名映射 名字→类型（如 byte_t: \"bit [7:0]\"），渲染进 <name>_typedefs_pkg",
-          "type": "object",
-          "additionalProperties": { "type": "string" }
+          "$comment": "类型别名 list：每项 { type_t: 类型表达式, type_name: 新类型名 }，渲染进 <name>_typedefs_pkg",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type_t", "type_name"],
+            "properties": {
+              "type_t": { "type": "string" },
+              "type_name": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
         },
         "ports": {
           "type": "array",
@@ -201,13 +209,9 @@
     },
     "environment": {
       "type": "object",
-      "anyOf": [
-        { "required": ["name"] },
-        { "required": ["env_name"] }
-      ],
+      "required": ["name"],
       "properties": {
         "name": { "type": "string" },
-        "env_name": { "type": "string" },
         "agents": {
           "$comment": "list / dict-of-dict / dict-of-string（_normalize_agents_list, gen_uvm.py:1667）",
           "oneOf": [
@@ -216,7 +220,7 @@
               "items": {
                 "allOf": [
                   { "$ref": "#/$defs/envAgentEntry" },
-                  { "$comment": "type 由 interface + is_master 推导（gen_uvm._normalize_agents_list），故只需 name", "required": ["name"] }
+                  { "$comment": "list 格式：name 或 type 至少写一个（另一个可推导）", "anyOf": [{ "required": ["name"] }, { "required": ["type"] }] }
                 ]
               }
             },
@@ -273,11 +277,6 @@
           "type": "array",
           "items": { "$ref": "#/$defs/analysisPortEntry" }
         },
-        "virtual_sequencer": {
-          "type": "object",
-          "properties": { "enabled": { "type": "boolean" } },
-          "additionalProperties": false
-        },
         "clk_rst_vip": { "$ref": "#/$defs/clkRstVip" },
         "clk_rst": { "$comment": "旧别名：缺 enabled，被包装为 clk_rst_vip（gen_uvm.py:2010-2016）", "$ref": "#/$defs/clkRst" },
         "register_model": { "$ref": "#/$defs/registerModel" },
@@ -312,10 +311,11 @@
       "additionalProperties": false
     },
     "envAgentEntry": {
-      "$comment": "env 级 agent 实例条目。type 不从这里读——由 interface + is_master 推导（apb + master → apb_master_agent）",
+      "$comment": "env 级 agent 实例条目（list 格式需 name 或 type 之一，见调用处 allOf）。type = agent 类名，从 YAML 显式读，不由 interface 拼接",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
+        "type": { "type": "string" },
         "interface": { "type": "string" },
         "clock": { "type": "string" },
         "reset": { "type": "string" },
@@ -331,18 +331,18 @@
       "additionalProperties": false
     },
     "scoreboardEntry": {
-      "$comment": "UVMF 新格式（sb_type/trans_type）与旧格式（mode/item_type/...）并集；mode 非法值被静默回退 inorder（gen_uvm.py:1641-1643），enum 拦截",
+      "$comment": "scoreboard 条目：sb_type 指向外部类（生成式 mode/expected_from/actual_from 已下线）。sb_type 是参数化类时用 params 传实参，模板会 typedef 出别名再声明句柄",
       "type": "object",
       "required": ["name"],
       "properties": {
         "name": { "type": "string" },
         "sb_type": { "type": "string" },
         "trans_type": { "type": "string" },
-        "mode": { "enum": ["inorder", "outoforder"] },
-        "item_type": { "type": "string" },
-        "key_field": { "type": "string" },
-        "expected_from": { "type": "string" },
-        "actual_from": { "type": "string" }
+        "params": {
+          "$comment": "参数化类的实参列表，渲染成 typedef <sb_type>#(<params>) <name>_t;",
+          "type": "array",
+          "items": { "type": "string" }
+        }
       },
       "additionalProperties": false
     },
@@ -509,11 +509,11 @@
       "properties": {
         "name": { "type": "string" },
         "bench_name": { "type": "string" },
-        "env_name": { "type": "string" },
         "timeout": { "type": "string" },
         "include_assertions": { "$ref": "#/$defs/boolLike" },
         "dut_instance": { "type": "string" },
-        "clk_rst": { "$ref": "#/$defs/clkRst" },
+        "clk_rst_if": { "$comment": "时钟复位（bench 级，tb_top 按此实例化 clk_rst_if）；gen_uvm 优先读它，旧名 clk_rst 兼容", "$ref": "#/$defs/clkRst" },
+        "clk_rst": { "$comment": "旧名，等价 clk_rst_if", "$ref": "#/$defs/clkRst" },
         "wire_decls": {
           "type": "array",
           "items": {
@@ -617,7 +617,6 @@
       "properties": {
         "name": { "type": "string" },
         "constraint_name": { "type": "string" },
-        "env_name": { "type": "string" },
         "env": { "type": "string" }
       },
       "additionalProperties": false

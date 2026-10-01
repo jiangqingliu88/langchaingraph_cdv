@@ -82,18 +82,11 @@ def _txn_var_port_mismatch(agent) -> List[str]:
             if isinstance(v, dict) and v.get("name") not in port_names]
 
 
-# ── typedefs：类型别名映射（名字 → 类型），渲染进 <name>_typedefs_pkg ──
-
-# SystemVerilog 内建类型 / 关键字：不算「引用了用户定义的名字」
-_SV_BUILTIN_TYPES = {
-    "bit", "logic", "reg", "wire", "byte", "shortint", "int", "longint",
-    "integer", "time", "real", "shortreal", "realtime", "string", "chandle",
-    "event", "void", "signed", "unsigned", "struct", "union", "packed",
-    "enum", "typedef", "var", "tri", "wand", "triand", "wor", "tri0", "tri1",
-    "supply0", "supply1", "scalared", "vectored", "automatic", "static",
-    "const", "localparam", "parameter", "ref", "input", "output", "inout",
-    "uvm_sequence_item", "uvm_object",
-}
+# ── typedefs：类型别名（YAML 为 list，归一化后是保序 名字→类型 映射）──
+#
+# 只查「同一个 map 内部」的顺序问题（视野完整，不会误报）。
+# 刻意不查「这个名字在别处有没有定义」—— 校验器看不到 common_typedefs_pkg、
+# uvm_pkg、手写包、其它 VIP 的类型，那个视野天生残缺，查了必然误伤。
 
 
 def _sv_identifiers(text: str) -> List[str]:
@@ -133,21 +126,6 @@ def _typedef_self_ref(agent) -> List[str]:
     return [f"typedef '{name}' references itself"
             for name, ty in td.items()
             if name in _sv_identifiers(str(ty))]
-
-
-@rule("agent", "typedef_unknown_ref", "warning",
-      "typedef 的类型里出现既非内建类型、也非 parameters/typedefs 里的名字"
-      "（可能是外部包的类型；无法确证，故只警告不阻断）")
-def _typedef_unknown_ref(agent) -> List[str]:
-    td = getattr(agent, "typedefs", None) or {}
-    if not isinstance(td, dict):
-        return []
-    params = {p.get("name") for p in (agent.parameters or []) if isinstance(p, dict)}
-    known = set(td.keys()) | params | _SV_BUILTIN_TYPES
-    return [f"typedef '{name}' type '{ty}' references unknown name '{ref}'"
-            for name, ty in td.items()
-            for ref in _sv_identifiers(str(ty))
-            if ref not in known]
 
 
 # 协议控制端口（由协议默认驱动/采样逻辑直接处理，不要求有事务字段）

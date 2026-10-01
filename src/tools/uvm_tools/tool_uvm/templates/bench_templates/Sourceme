@@ -1,1 +1,41 @@
-setenv WORK_PATH  `pwd`
+source /cad/tools/module/installed/init/tcsh
+
+setenv DESIGNWARE_HOME /project/common/vip/vip-2023.12
+setenv HVL_TOP_PATH `pwd`
+setenv HM056_HW_PATH $HVL_TOP_PATH/../..
+setenv HDL_TOP_PATH $HVL_TOP_PATH/../../DE/rtl
+source $HM056_HW_PATH/DE/tools/setup.csh
+setenv POST_NETLIST /work/project/HM056/COMMON/backend/SDF_netlist_20260701
+
+setenv WORK_PATH `pwd`
+setenv PROJ_NAME n900_tb
+setenv PROJ_SRC_ROOT $WORK_PATH
+setenv SNPS_VIP $DESIGNWARE_HOME/vip/dv_vip
+
+setenv DRAM_MODEL_PATH /project/common/ncc/foundry/tsmc/TSMC_22nm_ULL/sourceFiles/IP/third_party/dram_die/file/vip/20260129/cacheram_vip/cacheram_src/VCS/MODEL/STD
+
+setenv PATH $WORK_PATH/script:$PATH
+
+#set dir = "$HVL_TOP_PATH/uvm/tb/mem_init/local_mem_init_data"
+#if (`ls -A $dir | wc -l` != 0) then
+#    echo "mem init data exist"
+#else
+#    gen_local_mem_data
+#endif
+#set dir = "$HVL_TOP_PATH/uvm/tb/tb_dram_ctrl/dram_die_init_data/dl4t1_init_data"
+#if (`ls -A $dir | wc -l` != 0) then
+#    echo "dram init data exist"
+#else
+#    generate_mem_txt
+#endif
+module load synopsys/vcs_vQ-2020.03-SP1
+module load synopsys/verdi_vR-2020.12-SP1
+set path = ($path $PROJ_SRC_ROOT/n900_tb/testbench/script)
+
+alias go "cd $HVL_TOP_PATH"
+setenv SYNOPSYS_SIM_SETUP $HVL_TOP_PATH/script/synopsys_sim.setup
+
+set path = (/cad/tools/local/gcc-7.3.0/bin $path)
+setenv LD_LIBRARY_PATH /cad/tools/local/mpc-0.8.1/lib/:$LD_LIBRARY_PATH
+setenv LD_LIBRARY_PATH /cad/tools/local/gcc-7.3.0/lib64/:$LD_LIBRARY_PATH
+################################################################

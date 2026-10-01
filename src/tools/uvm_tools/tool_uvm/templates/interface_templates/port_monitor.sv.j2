@@ -43,7 +43,7 @@ endclass : {{ agent.name }}_port_monitor_cb
 // Port Monitor: {{ agent.name }}_port_monitor
 // ============================================================
 // 单类 monitor（不区分 master/slave）：按 cfg.port_kind 分支
-//   master 侧 → mon_ap 抓 master_seq_item（expected/参考模型流）
+//   master 侧 → master_mon_ap 抓 master_seq_item（expected/参考模型流）
 //   slave 侧 → slave_mon_ap 抓 slave_seq_item（actual/比对流），
 //     ACTIVE 时同时 clone 写入 slave sequencer 的 req_fifo（事件驱动响应）
 
@@ -54,7 +54,7 @@ class {{ agent.name }}_port_monitor extends uvm_monitor;
 
   virtual {{ agent.name }}_if vif;
   {{ agent.name }}_port_config cfg;
-  uvm_analysis_port #({{ agent.name }}_master_seq_item) mon_ap;       // master 侧抓包
+  uvm_analysis_port #({{ agent.name }}_master_seq_item) master_mon_ap;       // master 侧抓包
   uvm_analysis_port #({{ agent.name }}_slave_seq_item) slave_mon_ap;  // slave 侧抓包
   {{ agent.name }}_slave_sequencer sqr;  // ★ slave 侧 Sequencer 句柄（ACTIVE 时连接）
   // pragma custom field_decl begin
@@ -62,7 +62,7 @@ class {{ agent.name }}_port_monitor extends uvm_monitor;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
-    mon_ap = new("mon_ap", this);
+    master_mon_ap = new("master_mon_ap", this);
     slave_mon_ap = new("slave_mon_ap", this);
   endfunction
 
@@ -94,7 +94,7 @@ class {{ agent.name }}_port_monitor extends uvm_monitor;
         {{ agent.name }}_master_seq_item tx;
         tx = {{ agent.name }}_master_seq_item::type_id::create("tx");
         collect_transaction(tx);
-        mon_ap.write(tx);
+        master_mon_ap.write(tx);
       end else begin
         {{ agent.name }}_slave_seq_item tx;
         tx = {{ agent.name }}_slave_seq_item::type_id::create("tx");

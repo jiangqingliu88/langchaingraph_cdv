@@ -11,7 +11,7 @@ class {{ agent.name }}_master_agent extends uvm_agent;
   {{ agent.name }}_master_driver    driver;
   {{ agent.name }}_port_monitor   monitor;
   {{ agent.name }}_port_config    cfg;
-
+  uvm_analysis_port #({{ agent.name }}_master_seq_item) {{ agent.name }}_master_agent_ap;         // master 侧抓包
   function new(string name, uvm_component parent);
     super.new(name, parent);
   endfunction
@@ -32,6 +32,7 @@ class {{ agent.name }}_master_agent extends uvm_agent;
 
   function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
+     {{ agent.name }}_maser_agent_ap= monitor.master_mon_ap;
     if (cfg.is_active == UVM_ACTIVE)
       driver.seq_item_port.connect(sequencer.seq_item_export);
     uvm_config_db#(virtual {{ agent.name }}_if)::set(this, "monitor", "vif", cfg.vif);

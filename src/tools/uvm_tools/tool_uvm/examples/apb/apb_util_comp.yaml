@@ -15,11 +15,4 @@ util_components:
     analysis_ports:
       - { name: out_port, type: apb_master_seq_item }
 
-  - name: apb_monitor_sink
-    type: uvm_component
-    description: "APB 监控汇聚点（多输入 → 单输出）"
-    analysis_exports:
-      - { name: master_export, type: apb_master_seq_item }
-      - { name: slave_export,  type: apb_slave_seq_item }
-    analysis_ports:
-      - { name: merged_out, type: apb_master_seq_item }
+

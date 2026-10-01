@@ -3,56 +3,49 @@
 从 YAML 描述符生成完整 UVM SystemVerilog 验证环境。本指南按「场景」组织：
 每个场景给出目标、YAML 要点、命令、预期产物。CLI 参数速查见文末表格。
 
-> 本文件是 userguide.md 的飞书专用版：只调整飞书不认的 Markdown 写法
+> 本文件是 userguide.md 的飞书专用版：只调整了飞书不认的 Markdown 写法
 > （`$` 会被当公式、标题内的反引号会被吞、裸露的 `<` 会被当 HTML 标签、
-> 相对链接会变成死链），正文内容与原文完全一致。全选复制粘贴进飞书文档即可。
+> 相对链接会变成死链），正文内容与原文一致。由 `md2feishu` 自动生成，
+> 请勿直接编辑 —— 改 userguide.md 后重新跑一次即可。
 
 > 依赖：Python 3.10 ~ 3.12、pyyaml、jinja2、jsonschema。
-> 完整字段说明见同目录的 readme.md，示例在 `examples/`（APB 全链路）。
+> 完整字段说明见 `readme.md`，示例在 `examples/`（APB 全链路）。
 
 ## 重要变更
 
-### 2026-09（续）
+### 本轮（破坏性，旧 YAML 需同步）
 
-1. **`base_transaction_vars` / `base_transaction_constraints`（新增）**：master/slave
-   共用的事务字段与约束，渲染进新的基类 `<name>_base_seq_item`，两侧 seq_item 继承它。
-   见 §3.6。
-2. **driver / monitor 支持 UVM callback**：`pre_drive` / `post_drive`（两个 driver）、
-   `post_sample` / `post_sample_slave`（monitor）。见 §12.5。
-3. **filelist 改用 `$WORK_PATH`**：不再写生成时刻的绝对路径，整目录可搬迁；同时
-   自动生成 `Sourceme`（定义 `WORK_PATH`）。见 §1.1。
-4. **`scb_pkg` 精简（破坏性）**：下线 `multich_in_order_scoreboard` /
-   `multich_out_of_order_scoreboard` / `typed_scoreboard`（含
-   `DEFINE_TYPED_SCOREBOARD` 宏）/ `algorithm_scoreboard` 四个分片——它们无任何
-   模板消费方。`scb_pkg` 现只提供 `comparator` / `default_comparator` /
-   `in_order_scoreboard` / `out_of_order_scoreboard`。旧代码若引用被下线组件，
-   编译会报找不到类型；改用保留的两个计分板，或按 §3 手写子类扩展。
-5. **`typedefs` 改为映射（破坏性）**：`typedefs` 由 `- { type, name }` 列表改为
-   名字 → 类型的映射（`byte_t: "bit [7:0]"`），渲染进独立的 `<name>_typedefs_pkg`；
-   旧的 `hdl_typedefs` / `hvl_typedefs` 两个键已下线。同时参数包由 `_parameter_pkg`
-   改名为 `_parameters_pkg`。类型别名可互相引用，但被引用者须先声明；顺序写反会被
-   Phase A 的 `typedef_forward_ref` 拦下（新增 error 规则）。见 §2。
+| 项 | 旧 | 新 |
+|---|---|---|
+| `typedefs` | `- { type, name }` 列表 | **list，每项 `{ type_t: 类型, type_name: 新名 }`** |
+| `hdl_typedefs` / `hvl_typedefs` | interface 级两个键 | **已下线**，统一走 `typedefs` |
+| env `agents[]` / `subenvs[]` 类名 | 由 `interface` + `is_master` 拼 `{iface}_{master\|slave}_agent` | **读 YAML 显式写的 `type`** |
+| env 顶层 `virtual_sequencer:` | 一个 `enabled` 开关 | **已下线**（该开关从未被任何模板读取） |
+| bench 时钟复位 | `clk_rst:` | **`clk_rst_if:`**（旧名仍兼容） |
+| 参数包 / 类型包 | `<name>_parameter_pkg` | **`<name>_parameters_pkg` / `<name>_typedefs_pkg`** |
 
-### 本轮清理（破坏性，旧 YAML 需同步）
+### 已下线的键（写它会直接报 unknown_property 阻断生成）
 
-| 已下线 | 位置 | 替代 |
+| 已下线 | 位置 | 替代 / 原因 |
 |---|---|---|
 | `interface:` | **interface 文档**里（与 `name` 冗余，曾因此漂出 `isnt_disp` 拼写错误） | 删掉即可，自动取 `name` |
-| `type:` | **env `agents[]` / `subenvs[]`** | 由 `interface` + `is_master` 推导 |
+| `env_name:` | env / bench / constraint 顶层 | 无（生成前缀一律取 `name`；bench 的 env 名由 `environment` 自动回填，constraint 改用 `env`） |
 | `predictors:` | env 顶层 | 无（该机制从未被 env 模板例化，只产出孤立文件） |
+| `virtual_sequencer:` | env 顶层 | 无（vsqr 恒定生成，删掉行为不变） |
+| `mode:` / `expected_from:` / `actual_from:` / `key_field:` / `item_type:` | env `scoreboards[]` | 无（生成式计分板已下线）；改用 `sb_type` 指向具名类 |
+| `hdl_typedefs:` / `hvl_typedefs:` | interface 级 | `typedefs` |
+| `is_active` | interface 级（含旧路径 `config.is_active`） | env 级 `agents[].is_active` |
+| `custom_code` 等 | interface 级 | `pragma custom` 区域 + `-m` 合并（见场景 9） |
 
-三者都已在 schema 中移除，再写会**直接报 `unknown_property` 阻断生成**，不会静默忽略。
+> 注：env 里的 `agents[].interface` **保留但不再参与类名推导** —— 类名一律看显式 `type`。
 
-> 注：env 里的 `agents[].interface` **不受影响** —— 它正是 `type` 推导的依据。
+### 计分板组件族精简（破坏性）
 
-### 2026-09
-
-1. **scb_pkg 结构重组**：`scb_pkg.sv` 现为顶层组装文件，组件分片（`.svh`）通过
-   `+incdir` 引用，不再在 filelist 中列出。生成代码编译时只需编译 `scb_pkg.sv`。
-2. **新增 rtl_sc 功能**：提供监控器（mon_ex）和产生器（prod）模板，用于
-   Scoreboard Predictor 机制，生成轻量级寄存器级预测组件。
-3. **新增系统级虚拟 sequencer**：`<name>_system_vsqr`，持有同一协议下全部
-   master/slave 子 sequencer 句柄。见 §3.7。
+`scb_pkg` 下线了 `multich_in_order_scoreboard` / `multich_out_of_order_scoreboard` /
+`typed_scoreboard`（含 `DEFINE_TYPED_SCOREBOARD` 宏）/ `algorithm_scoreboard` 四个分片
+——它们无任何模板消费方。现只提供 `comparator` / `default_comparator` /
+`in_order_scoreboard` / `out_of_order_scoreboard`。旧代码若引用被下线组件，编译会报
+找不到类型；改用保留的两个计分板，或按场景 3 手写子类扩展。
 
 ## 0. 校验链（生成流程的执行顺序）
 
@@ -74,12 +67,15 @@ Phase 0 可用 `--skip-schema-check` 关闭；两个校验的报告分别落盘
 
 ```bash
 # 目录形式输入（递归收集目录下所有 *.yaml/*.yml，多文件自动合并）
-python -m src.tools.uvm_tools.tool_uvm.main -i examples/ -d generated/
+python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb/ -d generated/
+
+# .f 清单文件（一行一个 YAML 路径；-f 与 -i 同义）
+python -m src.tools.uvm_tools.tool_uvm.main -f examples/apb_yamlist.f -d generated/
 
 # 等价：显式列文件
-python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb_interface.yaml \
-    examples/apb_env.yaml examples/apb_bench.yaml examples/apb_constraint.yaml \
-    examples/apb_util_comp.yaml -d generated/
+python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb/apb_interface.yaml \
+    examples/apb/apb_env.yaml examples/apb/apb_bench.yaml \
+    examples/apb/apb_constraint.yaml examples/apb/apb_util_comp.yaml -d generated/
 ```
 
 预期输出（AXI-VIP 风格编号分层）：
@@ -88,26 +84,30 @@ python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb_interface.yaml \
 generated/
 ├── agents/APB_agent/
 │   ├── 1_interface/   APB_if.sv / APB_system_if.sv
-│   ├── 2_config/      port_config（单类，port_kind 区分 MASTER/SLAVE）
+│   ├── 2_config/      APB_port_config.sv（单类，port_kind 区分 MASTER/SLAVE）
 │   ├── 3_transaction_sequencer/  base_seq_item + master/slave seq_item + sequencer
-│   ├── 4_driver_monitor/  driver + port_monitor（单类，均带 UVM callback 钩子）
-│   ├── 5_agent/       agent + system_config + system_vsqr + system_monitor + system_env
+│   ├── 4_driver_monitor/  master/slave driver + port_monitor（均带 UVM callback 钩子）
+│   ├── 5_agent/       master/slave agent + system_config + system_vsqr
+│   │                  + system_monitor + system_env
 │   ├── 7_sequence/    master/slave sequence
 │   ├── 8_ral/         reg_adapter
-│   ├── APB_pkg.sv / filelist.f / Makefile
-│   └── loopback/      自闭环自检（master-drive → slave-monitor）
-├── env/     config / env / coverage / pkg / tests / seqs / cons / utils
-│   ├── rtl_sc/        # Scoreboard Predictor（监控器 + 产生器 + 环境类）
-│   │   ├── APB_env_rtl_sc.sv
-│   │   ├── {{point}}_mon_ex.sv
-│   │   └── {{point}}_prod.sv
-├── bench/   tb_top + harness
+│   ├── APB_parameters_pkg.sv / APB_typedefs_pkg.sv / APB_pkg.sv
+│   ├── filelist.f / Makefile / summary.md
+│   └── loopback/      自闭环自检（master-drive → slave-monitor）+ 独立 filelist.f
+├── env/     APB_env.sv / _config / _coverage / _parameters_pkg / _pkg
+│           / _sim_end / <env>_pkg_filelist.f
+│   ├── seqs/  virtual_sequencer + virtual_base_seq + seq_pkg
+│   ├── tests/ test_pkg + base_test + direct_test + gen_test
+│   ├── cons/  约束策略产物（见场景 5）
+│   └── utils/ predictor 等通用组件（见场景 6）
+├── bench/   APB_bench_tb_top.sv + apb_harness.sv
 ├── Makefile  整环境双后端编译/仿真入口（env + agents + bench）
+├── Sourceme  定义 $WORK_PATH
 ├── schema_report.txt / validation_report.txt / generation_report.json
 └── README.md
 ```
 
-### 1.1 路径基准：Sourceme 与 WORK_PATH 变量
+### 1.1 路径基准：Sourceme 与 WORK_PATH 环境变量
 
 整环境 filelist（`env/<env>_pkg_filelist.f`）**不写生成时刻的绝对路径**，一律以
 `$WORK_PATH` 为根 —— 这样生成目录可以整体搬到别的机器/路径，不必重新生成。
@@ -124,16 +124,6 @@ setenv WORK_PATH  `pwd`
 cd generated/          # 或任意 run 输出目录
 source Sourceme        # 定义 $WORK_PATH = 当前目录
 vlog -sv -f env/APB_env_pkg_filelist.f
-```
-
-生成产物长这样：
-
-```
-+incdir+$WORK_PATH/../base_pkg/scb
-$WORK_PATH/../base_pkg/scb/scb_pkg.sv
-+incdir+$WORK_PATH/agents/APB_agent
-$WORK_PATH/agents/APB_agent/APB_pkg.sv
-$WORK_PATH/env/APB_env_pkg.sv
 ```
 
 `$WORK_PATH/..` 指向仓库内的 `base_pkg`；生成目录在仓库内时前缀很短，在仓库外
@@ -182,27 +172,35 @@ make run COV=1                    # 覆盖率（Questa +cover/ucdb，VCS -cm/vdb
 
 **目标**：一个接口 → master/slave 两个 agent，含协议正确的默认时序。
 
-`apb_interface.yaml` 要点：
-
 ```yaml
 interfaces:
-  - name: APB                # 类前缀 apb_
+  - name: APB                # 协议/agent 名（生成类前缀 apb_）
+    clock: pclk
+    reset: presetn
     protocol: apb            # 协议名 → 渲染两拍 setup+access 默认时序（可留空=单拍）
-    reset_active_low: True
+    reset_active_low: True   # 复位极性（缺省 True = 低有效）
     parameters:              # 渲染进 interface #(...)
       - { type: int, name: ADDR_WIDTH, value: 32 }
-    typedefs:                # 类型别名：名字 → 类型，渲染进 <name>_typedefs_pkg
-      byte_t: "bit [7:0]"
+    typedefs:                # 类型别名，渲染进 <name>_typedefs_pkg
+      - { type_t: "bit [7:0]", type_name: "byte_t" }   # → typedef bit [7:0] byte_t;
     ports:                   # dir: output=master驱动 / input=slave驱动
-      - { name: paddr, dir: output, width: ADDR_WIDTH }
+      - { name: paddr,  dir: output, width: ADDR_WIDTH }
       - { name: prdata, dir: input,  width: DATA_WIDTH }
     transaction_vars:        # 事务字段：isrand 驱动 / iscompare 参与自检比对 / is_master 角色
       - { name: paddr, type: "bit [ADDR_WIDTH-1:0]", iscompare: "True", isrand: "True", is_master: "True" }
 ```
 
-> **typedefs 顺序即声明顺序**：类型别名可互相引用（`tyname: "byte_t"`），但被引用的名字
-> 必须写在前面 —— 生成的 `<name>_typedefs_pkg` 按 YAML 顺序逐条 `typedef`。写反了
-> Phase A 会报 `typedef_forward_ref` error 并阻断生成，不会产出编译不过的代码。
+**`typedefs` 的三个要点**：
+
+- 每项是 `{ type_t: 类型表达式, type_name: 新类型名 }`，渲染成 `typedef <type_t> <type_name>;`
+- 你写多长列表就按 YAML 顺序逐条声明，**被引用的 typedef 必须写在前面**（写反了
+  Phase A 会报 `typedef_forward_ref` error 并阻断生成）
+- 生成的 `<name>_typedefs_pkg` 会 `import <name>_parameters_pkg::*`，所以 `type_t`
+  里可以直接引用 `parameters`（如 `bit [ADDR_WIDTH-1:0]`）。**类型名是否在别处有
+  定义不做检查** —— 校验器看不到外部包 / 手写包里的类型，查了必然误伤，交编译期兜底
+
+**`protocol: apb` 的额外约束**：缺 `psel` / `penable` / `pready` / `paddr` /
+`pwrite` / `pwdata` / `prdata` 任一端口，Phase A 会报 `protocol_apb_ports_missing`。
 
 > 激活模式（UVM_ACTIVE / UVM_PASSIVE）**不在 interface 级配置**：interface 只描述协议与端口，
 > 激活由 env 级 `agents[].is_active` 决定（缺省 UVM_ACTIVE）；loopback 自检套件固定
@@ -219,23 +217,21 @@ python -m src.tools.uvm_tools.tool_uvm.main -i apb_interface.yaml -d generated/
 
 **目标**：聚合多个 agent 实例 + 参考模型 + 计分板 + 显式 TLM 连接。
 
-`apb_env.yaml` 要点：
-
 ```yaml
 environment:
   name: APB_env
-  agents:                       # 每项 = 一个 agent 实例（引用 interface 级定义）
-    - name: apb_master          # 类名由 interface + is_master 推导 → apb_master_agent
+  agents:                       # 每项 = 一个 agent 实例
+    - name: apb_master          # 实例名
+      type: apb_master_agent    # agent 类名，显式写（不由 interface 拼接）
       is_active: True
       is_master: True
-      interface: apb
-    - name: apb_slave           # is_master: False → apb_slave_agent
+    - name: apb_slave
+      type: apb_slave_agent
       is_active: False
       is_master: False
-      interface: apb
-  subenvs:                      # 类名由 interface 推导 → apb_system_env
+  subenvs:                      # 子环境
     - name: apb_sys_env
-      interface: apb
+      type: apb_system_env      # 环境类名（缺省 = name）
   scoreboards:
     - name: apb_scb
       sb_type: uvmf_in_order_scoreboard
@@ -250,36 +246,56 @@ environment:
     path: "APB_bench_tb_top.u_dut.harness"
 ```
 
+> `agents[].type` 里要写**完整的 agent 类名**（`apb_master_agent`），不是 interface 名。
+> `name` 与 `type` 至少写一个：只写 `type` 时 `name` 取 `type` 去掉 `_agent` 后缀。
+
 多文件输入：`-i apb_interface.yaml apb_env.yaml -d generated/`（跨文件自动关联）。
 
-### scoreboards 的两种接法
+### scoreboards 的接法
 
-| 接法 | YAML 要点 | 产物 |
-|------|-----------|------|
-| 外部类（UVMF 风格） | `sb_type` + `trans_type` | 不生成文件，env 直接例化 `sb_type` 指定的类（VIP 自带或用户自建） |
-| 生成式 | `mode` + `expected_from` / `actual_from` | `env/scb/{name}.sv` 自包含计分板（imp/FIFO/比对/check 裁决齐全） |
+**本工具不生成计分板文件** —— `sb_type` 指向一个工厂可注册的类
+（VIP 自带、`base_pkg/scb` 的组件、或你手写的），env 直接例化它。
 
 ```yaml
 scoreboards:
-  # 外部类：sb_type 须为工厂可注册的具名类（有 uvm_component_utils）
+  # 具名类：直接用
   - name: apb_scb
     sb_type: uvmf_in_order_scoreboard
     trans_type: apb_master_seq_item
-  # 生成式：按端口表达式自动推断 item_type，产物 env/scb/apb_scb_gen.sv
-  - name: apb_scb_gen
-    mode: inorder            # inorder | outoforder
-    expected_from: apb_pred  # 预期侧来源（predictor / agent 名）
-    actual_from: apb_slave   # 实际侧来源（monitor 所在 agent 名）
-    key_field: req_id        # outoforder 的 ID 关联字段
+
+  # 参数化类：给 params 传实参
+  - name: apb_scb_param
+    sb_type: in_order_scoreboard
+    trans_type: apb_master_seq_item
+    params: [apb_master_seq_item, apb_master_seq_item]
 ```
+
+**参数化类必须给 `params`。** `in_order_scoreboard apb_scb;` 这种写法在 SV 里
+编译不过（参数化类不能裸用），给了 `params` 后模板会先生成特化别名再声明句柄：
+
+```systemverilog
+typedef in_order_scoreboard#(apb_master_seq_item, apb_master_seq_item) apb_scb_param_t;
+apb_scb_param_t apb_scb_param;
+...
+apb_scb_param = apb_scb_param_t::type_id::create("apb_scb_param", this);
+```
+
+不给 `params` 时按具名类处理，句柄类型 = `sb_type` 本身（用于 `uvmf_in_order_scoreboard`
+这类已注册的具名类）。
+
+> 生成式计分板（`mode` + `expected_from` / `actual_from`，产物 `env/scb/{name}.sv`）
+> **已下线**。要自包含计分板，用 `base_pkg/scb` 的 `in_order_scoreboard` /
+> `out_of_order_scoreboard`（配 `params`，或手写具名子类），再用 `sb_type` 指过去。
 
 ### 内置计分板组件族（base_pkg/scb → scb_pkg）
 
 整环境编译链自动包含 `base_pkg/` 两个基础包（filelist/Makefile 只编译包文件，
-分片经 `+incdir` 解析，与 `clk_and_rst_pkg` 同构）：`clk_and_rst_pkg`（时钟复位
-VIP）与 `scb_pkg`（计分板组件族）。`scb_pkg` 是自定义计分板的开发基座：
+分片经 `+incdir` 解析）：`clk_and_rst_pkg`（时钟复位 VIP）与 `scb_pkg`（计分板组件族）。
+另外 `base_pkg/common_typedefs/common_typedefs_pkg.sv` 提供公共类型
+（`port_kind_enum` 的 `MASTER`/`SLAVE`、`response_mode_e`、`resp_type_e` 等），
+每个 agent 的 `_pkg.sv` 都会 `import common_typedefs_pkg::*`。
 
-**重要**：`scb_pkg.sv` 是顶层组装文件，只编译一个文件；各组件分片（`.svh`）通过
+`scb_pkg.sv` 是顶层组装文件，只编译一个文件；各组件分片（`.svh`）通过
 `+incdir` 引用，无需在 filelist 中列出所有分片。
 
 | 组件 | 参数 | 用途 |
@@ -291,9 +307,21 @@ VIP）与 `scb_pkg`（计分板组件族）。`scb_pkg` 是自定义计分板的
 全部组件自带统计与 `check_phase` 裁决（mismatch / missing / extra > 0 →
 `uvm_error`，仿真判 FAIL）。
 
-**消费方式**：参数化类不能直接当 `sb_type` 用（无工厂注册），须手写一个
-具名子类——放在自有 VIP 包或生成代码的手改区域均可（缺省不覆盖已存在文件，
-见场景 7/8）：
+**消费方式**：这些组件都是参数化类，**不能裸当 `sb_type` 用**
+（`in_order_scoreboard apb_scb;` 编译不过）。两条路：
+
+**方式 1（推荐）：YAML 里给 `params`**，模板自动 typedef 特化：
+
+```yaml
+scoreboards:
+  - name: apb_scb
+    sb_type: in_order_scoreboard
+    trans_type: apb_master_seq_item
+    params: [apb_master_seq_item, apb_master_seq_item]
+```
+
+**方式 2：手写具名子类**（要额外行为、重载 `get_id()` 等时用），放在自有 VIP 包
+或生成代码的手改区域均可：
 
 ```systemverilog
 import scb_pkg::*;
@@ -330,44 +358,22 @@ endclass
 **目标**：生成监控器（mon_ex）和产生器（prod），自动配置 Scoreboard Predictor 机制，
 用于实时监控与预测寄存器级别的状态。
 
-`rtl_sc` 是一种轻量级的计分板预测机制，通过模板生成监控器、产生器和集成环境类。
-
-### 3.5.1 模板文件
-
-生成目录会包含：
-- `env/utils/{{name}}_sc_pred_env.sv` — 环境类，管理监控器和产生器
-- `env/utils/{{point}}_mon_ex.sv` — 监控器模板（每个检查点）
-- `env/utils/{{point}}_prod.sv` — 产生器模板（每个产生点）
-
-### 3.5.2 使用方式
-
-在环境 YAML 中添加 `rtl_sc_components` 字段：
+生成目录会包含 `env/utils/{{name}}_sc_pred_env.sv`、`{{point}}_mon_ex.sv`、
+`{{point}}_prod.sv`。在环境 YAML 中添加 `rtl_sc_components` 字段：
 
 ```yaml
 environment:
   name: APB_env
   rtl_sc_components:
     - name: apb_rtl_sc
-      # 检查点：需要监控的输出端口
-      check_points:
+      check_points:                  # 检查点：需要监控的输出端口
         - { point_name: apb_data, channel_num: 2, width: 32 }
-      # 产生点：需要产生信号的端口（可选）
-      prod_points:
+      prod_points:                   # 产生点：需要产生信号的端口（可选）
         - { point_name: apb_addr, channel_num: 2, width: 32 }
-      # 环境配置
       config:
         ut_id: 1
         has_prod: 1
 ```
-
-### 3.5.3 生成流程
-
-1. 生成监控器和产生器类模板
-2. 生成环境包装类（包含生产者和消费者数组）
-3. 自动配置 `reg_{{point}}_t`（寄存器抽象层）
-4. 在 `build_phase` 中实例化并连接组件
-
-### 3.5.4 组件说明
 
 | 组件 | 类名 | 功能 |
 |------|------|------|
@@ -375,7 +381,7 @@ environment:
 | 监控器 | `{{point}}_mon_ex` | 采样接口信号，输出到 analysis_port |
 | 产生器 | `{{point}}_prod` | 产生预测信号，输入到 Scoreboard Predictor |
 
-### 3.5.5 工作流程
+工作流程：
 
 ```
 DUT 信号
@@ -387,9 +393,7 @@ DUT 信号
         → Scoreboard Predictor（比较预期/实际）
 ```
 
-### 3.5.6 配置项
-
-| 字段 | 类型 | 默认值 | 说明 |
+| 配置项 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `name` | string | 必填 | 环境类前缀 |
 | `check_points` | array | 必填 | 检查点列表（监控点） |
@@ -445,7 +449,7 @@ APB_master_seq_item ──┘   APB_slave_seq_item ──┘   （extends APB_ba
 > 派生类只注册自己的字段（基类字段由基类的 `uvm_object_utils_begin/end` 注册，
 > UVM 的 `do_*` 会沿继承链调 `super`，不会漏）。
 
-## 3.7 场景：系统级虚拟 sequencer（system_vsqr）
+## 3.7 场景：系统级虚拟 sequencer（_system_vsqr）
 
 **目标**：给**同一协议下的多个实例**（`num_masters` / `num_slaves` 决定）一个统一的
 协调入口 —— 在虚拟序列里跨端口发激励。
@@ -479,23 +483,20 @@ class my_vseq extends uvm_sequence;
 endclass
 ```
 
+---
+
 ## 4. 场景：bench + harness（bind 式自连接）
 
-**目标**：tb_top 例化 clk_rst + DUT，harness 以 bind 方式把 interface 连到 DUT。
-
-```bash
-python -m src.tools.uvm_tools.tool_uvm.main -i apb_bench.yaml -d generated/
-```
-
-`apb_bench.yaml` 要点（harness 推荐写在 bench 内，存在时 tb_top 自动跳过接口实例化）：
+**目标**：tb_top 例化 clk_rst_if + DUT，harness 以 bind 方式把 interface 连到 DUT。
 
 ```yaml
 bench:
-  name: APB_bench
-  timeout: 10ms
-  clk_rst:
+  name: apb_bench
+  include_assertions: false        # env 名自动取本次解析出的 environment.name
+  clk_rst_if:                       # 时钟复位（旧名 clk_rst 仍兼容）
     clocks: [{ name: pclk }]        # 也可裸字符串 ["pclk"]
     resets: [{ name: presetn }]
+  dut_instance: u_dut               # DUT 实例名（tb_top 按 harness.bind_to 例化）
   harness:
     name: apb_harness
     bind_to: apb_slave_dut          # bind 目标 module（所有实例生效）
@@ -503,12 +504,15 @@ bench:
       - name: apb_if
         type: apb_interface
         agent_path: "apb_master_agent_h"
-        connections: { pclk: pclk, paddr: paddr }   # 端口 → DUT 信号
+        connections: { pclk: pclk, paddr: paddr }
 ```
+
+`clk_rst_if` 里的 `pclk` / `presetn` 会渲染成 tb_top 的
+`clk_rst_if pclk_vif();` + DUT 端口 `.pclk(pclk_vif.clk[0])` / `.presetn(pclk_vif.rst_n[0])`。
 
 测试侧通过 `harness_connect.path` 调 `<path>.set_vifs()`。
 
-### 仿真自动结束（env 级 sim_end 组件）
+### 仿真自动结束（env 级 {env}_sim_end 组件）
 
 tb_top 不内嵌仿真控制块，由 env 自动例化的 `{env}_sim_end` 组件负责：
 
@@ -528,12 +532,10 @@ vsim -c -do "run -all; quit -f" tb +SIM_WATCHDOG_NS=10000000
 
 **目标**：多端口事务组合场景——策略 + 组合器 + 协调序列（5 个文件到 `env/cons/`）。
 
-`apb_constraint.yaml` 要点：
-
 ```yaml
 constraint:
   name: apb_cons
-  env_name: APB_env
+  env: apb_env                   # 可选：env 名（缺省取本次解析出的 environment）
 transactions:                    # 每端口一项，name 与 env agents 名一致
   - { name: apb_master, type: APB_master_seq_item }
 policies:
@@ -570,16 +572,16 @@ util_components:
 
 ```bash
 # 默认跳过已存在文件（UVMF 风格）——重复生成不会覆盖手改代码
-python -m src.tools.uvm_tools.tool_uvm.main -i examples/ -d generated/
+python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb/ -d generated/
 
-# 强制覆盖
-python -m src.tools.uvm_tools.tool_uvm.main -i examples/ -d generated/ -o
+# 强制覆盖（改了 YAML 后重跑用这个）
+python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb/ -d generated/ -o
 
 # 只生成指定组件（按 name 过滤）
-python -m src.tools.uvm_tools.tool_uvm.main -i examples/ -d generated/ -g APB
+python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb/ -d generated/ -g APB
 
 # 静默（CI 用）
-python -m src.tools.uvm_tools.tool_uvm.main -i examples/ -d generated/ -q
+python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb/ -d generated/ -q
 ```
 
 ---
@@ -647,19 +649,19 @@ python -m src.tools.uvm_tools.tool_uvm.main -i my.yaml -d generated/ --skip-sche
 ```bash
 # 单文件 / 目录 / 多个文件（位置参数或 -i）
 python -m src.tools.uvm_tools.tool_uvm.schema_check my.yaml
-python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/ -q
+python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/apb/ -q
 
 # 报告落盘 / 自定义 schema 文件
-python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/ --report /tmp/schema_report.txt
-python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/ --schema my_schema.json
+python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/apb/ --report /tmp/schema_report.txt
+python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/apb/ --schema my_schema.json
 ```
 
 - 严重度：**全部违规 → `error`**，包括未知键/多余字段（`unknown_property`）——
   拼错的键会被 normalizer 静默吞掉，故不做「仅警告」放行
 - 退出码：有 error → 1；无 error → 0（CI 可直接用）
 - 报错定位到路径：`my.yaml::interfaces[0].ports[0].dir` 形式
-- schema 契约文件：`schema/uvm_config.schema.json`（Draft 2020-12，含全部旧键名别名，
-  可被编辑器/IDE 直接复用做实时校验）
+- schema 契约文件：`schema/uvm_config.schema.json`（Draft 2020-12，可被编辑器/IDE
+  直接复用做实时校验）
 
 ---
 
@@ -669,8 +671,27 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/ --schema my_sch
 覆盖率 cross 字段等）。
 
 - error → 阻断生成；warning → 不阻断，继续生成
-- 报告落盘 `generated/validation_report.txt`，规则清单可用 `SemanticValidator.rules_doc()` 导出
+- 报告落盘 `generated/validation_report.txt`，规则清单可用
+  `SemanticValidator.rules_doc()` 导出
 - 无需额外参数，生成时自动执行（Phase A）
+
+当前规则（error 阻断 / warning 仅提示）：
+
+| 规则 | 级别 | 检查 |
+|---|---|---|
+| `param_width_undefined` | error | 端口 width 引用的参数未在 parameters 中定义 |
+| `port_dup_name` | error | 端口重名 |
+| `txn_var_dup_name` | error | 事务字段重名 |
+| `typedef_forward_ref` | error | typedef 引用了同一列表里后面才声明的名字 |
+| `typedef_self_ref` | error | typedef 的类型引用了它自己 |
+| `protocol_apb_ports_missing` | error | protocol=apb 时缺必需的协议端口 |
+| `txn_var_port_mismatch` | warning | 事务字段没有同名端口（该字段不被驱动/采样） |
+| `port_not_in_txn` | warning | 端口没有对应事务字段（控制类端口属正常） |
+
+env/bench/constraint 级另有 `analysis_port_dup_name` / `tlm_connection_unknown_ref` /
+`register_model_bus_unmatched` / `harness_connect_path_missing` / `coverage_cross_unknown` /
+`agent_wire_undefined` / `bind_to_missing` / `if_empty_connections` / `txn_dup_name` /
+`policy_dup_name` / `policy_applies_to_unknown` / `policy_unknown_name` 等。
 
 ---
 
@@ -679,10 +700,12 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check -i examples/ --schema my_sch
 **目标**：生成后对每个 agent 的 loopback 自检跑编译 + 仿真，快速确认生成代码可编译。
 
 ```bash
-python -m src.tools.uvm_tools.tool_uvm.main -i examples/ -d generated/ --gate
+python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb/ -d generated/ --gate
 #  [PASS] APB_agent (sim=0)     ← 检测到 vlog/vsim 或 vcs
 #  [SKIP] APB_agent — no UVM simulator (vlog/vcs) found   ← 无仿真器仅跳过，不阻断
 ```
+
+只认 `vlog`/`vcs`（iverilog/verilator 不支持 UVM 类，不参与门禁）。
 
 ---
 
@@ -728,7 +751,7 @@ uvm_callbacks#(APB_master_driver, APB_master_driver_cb)::add(drv_h, cb);
 **目标**：结构化生成报告供 Agent 决策 / 签核证据包引用（`generation_report.json`）。
 
 ```bash
-python -m src.tools.uvm_tools.tool_uvm.main -i examples/ -d generated/ --report-json --gate
+python -m src.tools.uvm_tools.tool_uvm.main -i examples/apb/ -d generated/ --report-json --gate
 #  → Report: generated/generation_report.json
 ```
 
@@ -775,8 +798,8 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check --version
 
 | 参数 | 说明 |
 |------|------|
-| `-i/--input PATH...` | 输入 YAML 文件或目录（缺省 `.`）；`-f/--file` 同义 |
-| `-d/--dest_dir DIR` | 输出目录（缺省 `generated`） |
+| `-i/--input PATH...` | 输入 YAML 文件或目录（缺省 `.`）；`-f/--file` 同义；也可传 **`.f` 清单文件**（一行一个路径，`#`/`//` 注释，`+incdir+` 等选项行忽略） |
+| `-d/--dest_dir DIR` | 输出目录（缺省 `generated`）；`--output` 同义 |
 | `-o/--overwrite` | 覆盖已存在文件（缺省跳过） |
 | `-g/--generate NAME` | 只生成指定组件 |
 | `-t/--template_dir DIR` | 覆盖模板目录 |
@@ -809,14 +832,17 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check --version
 | `No supported YAML definitions were found.` | YAML 解析后没有任何有效组件（如缺 name 被静默丢弃）；先跑 schema_check 定位 |
 | `Schema validation failed: N error(s) ...` | YAML 违反 schema（必填/类型/枚举/未知键）；按报告修 YAML，或 `--skip-schema-check` 临时绕过 |
 | `Schema check skipped (jsonschema not available)` | 缺依赖：`pip install jsonschema` |
-| `[ERROR] unknown_property ... 'xxx'` | 键名拼错或字段已下线（如 interface 级 `is_active`）；删掉或改成正确键名 |
-| `[ERROR] removed_field ... interfaces[N].config` | 旧路径 `config.is_active` 已下线；激活改由 env 级 `agents[].is_active` 配置 |
+| `[ERROR] unknown_property ... 'xxx'` | 键名拼错，或写了已下线的键（见「已下线的键」表）；删掉或改成正确键名 |
+| `[ERROR] unknown_property ... 'type'`（env agents） | 说明 schema 版本旧；当前 `agents[].type` 是**合法且推荐**的写法 |
+| `[ERROR] typedef_forward_ref ... declared later` | typedefs 里引用了后面才声明的类型名；把被引用者挪到前面 |
+| `[ERROR] typedef_self_ref` | typedef 的类型写成了它自己（无限递归） |
 | 生成文件没有更新 | 缺省跳过已存在文件；用 `-o` 覆盖，或确认文件带生成签名（手改文件不会被覆盖） |
 | `[SKIP] ... no UVM simulator` | 未装 vlog/vcs；门禁仅报告不阻断 |
 | 想看去哪看校验报告 | `generated/schema_report.txt`（schema）与 `generated/validation_report.txt`（语义） |
 | `sb_type` 填参数化类（如 `in_order_scoreboard`）编译报错 | 参数化类无工厂注册；手写子类特化成具名类（见场景 3） |
-| 代码里用了 `algorithm_scoreboard` / `typed_scoreboard` / `multi_channel*` 编译报错 | 这些分片已从 `scb_pkg` 下线；改用 `in_order_scoreboard` / `out_of_order_scoreboard`，或按场景 3 手写子类扩展 |
+| 代码里用了 `algorithm_scoreboard` / `typed_scoreboard` / `multich_*` 编译报错 | 这些分片已从 `scb_pkg` 下线；改用 `in_order_scoreboard` / `out_of_order_scoreboard`，或手写子类扩展 |
 | `scb_pkg.sv` 未找到或编译错误 | 检查 filelist.f 或 Makefile 中是否正确引用 `$(BASE_PKG)/scb/scb_pkg.sv`；`scb_pkg` 是顶层组装文件，不包含分片 |
+| `_typedefs_pkg.sv` 找不到 | 检查 filelist：`common_typedefs_pkg.sv` → `<name>_parameters_pkg.sv` → `<name>_typedefs_pkg.sv` 顺序必须成立（typedefs pkg 会 import 参数包） |
 
 ---
 
@@ -825,8 +851,9 @@ python -m src.tools.uvm_tools.tool_uvm.schema_check --version
 - `readme.md` — 功能清单 / 字段全解 / 模板结构 / 输出说明
 - `examples/` — APB 全链路示例（5 个 YAML + 测试点 xlsx）
 - `base_pkg/` — 内置基础包：`clk_and_rst`（时钟复位 VIP）+ `scb`（计分板组件族 `scb_pkg`）
+  + `common_typedefs`（公共类型 `common_typedefs_pkg`）
 - `schema/uvm_config.schema.json` — YAML 配置契约（JSON Schema）
 - `prompt.md` — Agent 集成说明
-- `templates/sc_pred_templates/` — rtl_sc 监控器/产生器模板（监控器模板 mon_ex、产生器模板 prod、环境类模板 sc_pred_env）
+- `templates/sc_pred_templates/` — rtl_sc 监控器/产生器模板（mon_ex、prod、sc_pred_env）
 
 以上路径均相对于 tool_uvm 目录（本文件所在目录）。

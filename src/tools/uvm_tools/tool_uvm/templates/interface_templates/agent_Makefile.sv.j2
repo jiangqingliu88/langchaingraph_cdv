@@ -70,7 +70,7 @@ run_questa: compile_questa
 
 run_vcs:
 	@mkdir -p $(OUTDIR)
-	$(VCS) -sverilog +v2k -timescale=1ns/1ps \
+	$(VCS) -full64 -sverilog +v2k -timescale=1ns/1ps \
 		-debug_access+all -ntb_opts uvm-1.2 \
 		+incdir+. +incdir+loopback -f filelist.f $(LB_SRC) \
 		-top $(LB_TOP) -o $(SIMV) -l $(OUTDIR)/comp.log

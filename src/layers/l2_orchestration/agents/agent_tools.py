@@ -23,6 +23,19 @@ def register_all_tools() -> ToolRegistry:
         registry.register(t)
 
     # ═══════════════════════════════════════════════════
+    # case 属性建模 (3 tools) — delegated to casemodel_tools
+    #   casemodel_validate  Schema 校验
+    #   casemodel_gaps      全量完备性分析（可带真实 case 列表反向核对）
+    #   casemodel_generate  按属性组合生成 case 属性表
+    # ═══════════════════════════════════════════════════
+    from src.tools.casemodel_tools.agent.registry import (
+        ensure_casemodel_tool_registry,
+    )
+    casemodel_reg = ensure_casemodel_tool_registry()
+    for t in casemodel_reg._tools.values():
+        registry.register(t)
+
+    # ═══════════════════════════════════════════════════
     # model_agent (3 tools)
     # ═══════════════════════════════════════════════════
     registry.register_many([

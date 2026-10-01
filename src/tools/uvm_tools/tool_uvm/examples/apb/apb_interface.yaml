@@ -25,7 +25,7 @@ meta:
 # ============================================================
 
 interfaces:
-  - name: APB                # 协议/agent 名（生成类前缀 apb_）
+  - name: apb                # 协议/agent 名（生成类前缀 apb_）
     clock: pclk
     reset: presetn
     #protocol: apb            # 协议名 → 渲染协议正确的默认驱动/采样时序（两拍 setup+access）
@@ -37,10 +37,11 @@ interfaces:
       - { type: int, name: ADDR_WIDTH, value: 32 }
       - { type: int, name: DATA_WIDTH, value: 32 }
 
-    # ── 类型别名（渲染进 <name>_typedefs_pkg，名字 → 类型）──
+    # ── 类型别名（渲染进 <name>_typedefs_pkg）──
+    #   list：每项 { type_t: 类型表达式, type_name: 新类型名 }
+    #   声明顺序 = 书写顺序，被引用的 typedef 须写在前面
     typedefs:
-      byte_t: "bit [7:0]"
-      tyname: "byte_t"
+      - { type_t: "bit [7:0]" ,type_name: "byte_t"}       
     # ── 端口 ──
     #   name:  信号名
     #   dir:   output=master驱动 / input=slave驱动
@@ -86,9 +87,9 @@ interfaces:
 
     # ── 通用配置字段（渲染进 <name>_port_config：rand 字段 + factory 注册）──
     config_vars:
-      - { type: int, name: priority, value: 0 }
+      - { type: int, name: priority_a, value: 0 }
     config_constraints:
-      - { name: c_priority_range, value: "{ priority inside {[0:15]}; }" }
+      - { name: c_priority_range, value: "{ priority_a inside {[0:15]}; }" }
 
     # ── 响应信息（可选，供后续乱序/关联使用）──
     response_info:

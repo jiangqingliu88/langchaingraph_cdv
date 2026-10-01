@@ -1,0 +1,547 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signoffai.local/schemas/case_model.schema.json",
+  "title": "SignOffAI Case Model — case 属性完备性模型",
+  "description": "case 六层属性模型：L1 对象 / L2 子对象 / L3 维度 / L4 字段 / L5 方法 / L6 检查，外加维度交叉矩阵与环境指纹。文档见 src/tools/casemodel_tools/readem.md。schema 只做「语法 + 类型 + 引用形状」的硬校验；「引用是否指向已存在的维度/字段」「层级是否错位」等语义问题由 completeness.py 报告。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["object", "dimensions"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "模型版本号（用于证据链/复现）"
+    },
+    "object": {
+      "type": "string",
+      "minLength": 1,
+      "description": "L1 对象 —— 验证主体。必须能用外部可观察行为描述（功能组织树(比如类似cpu流水 p0: 指令、控制请求数据/结构仲裁发射解析和启动、读数据、计算、写数据)/调度/地址/错误/复位/配置/性能）。"
+    },
+    "object_cn": {
+      "type": "string",
+      "minLength": 1,
+      "description": "对象中文名"
+    },
+    "object_code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]{1,7}$",
+      "description": "case_id 中的对象代号（TC-<对象>-<子对象>-<方法>-<NN>）。缺省时由 object 自动推导（FlowControl → FC）。"
+    },
+    "description": {
+      "type": "string",
+      "description": "模型说明"
+    },
+    "sub_objects": {
+      "type": "array",
+      "minItems": 1,
+      "description": "L2 功能组织树 —— 对象的层级分解（如 CPU 流水：指令 → 控制请求数据/结构仲裁、发射解析和启动 → 读数据 → 计算 → 写数据）。扁平列表是它的特例；只有叶子节点会生成 case。",
+      "items": { "$ref": "#/$defs/sub_object" }
+    },
+    "themes": {
+      "type": "array",
+      "minItems": 1,
+      "description": "专题 —— 横切在功能组织树上的验证关注点，按 P0/P1/P2 优先级分层。结构类专题用 applies_to 指定打树上的哪些节点；错误和异常 / 性能常稳这类不作用树的专题把 applies_to 留空；随机专题把 dimensions 留空表示各维度随机组合。",
+      "items": { "$ref": "#/$defs/theme" }
+    },
+    "dimensions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "L3 维度 —— 会变化的条件。一组语义相关、通常一起随机、彼此可互相约束的字段集合。",
+      "items": { "$ref": "#/$defs/dimension" }
+    },
+    "methods": {
+      "type": "array",
+      "minItems": 1,
+      "description": "L5 方法 —— 生成方式。D 定向 / RND 随机 / G 组合 / RPLY 重放 / SPCL 专项。",
+      "items": { "$ref": "#/$defs/method" }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "description": "L6 检查 —— 验证目标。CHECK-FUNC 功能 / CHECK-WBOX 白盒 / CHECK-PERF 性能。",
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "cross_matrix": {
+      "description": "维度交叉矩阵。两种等价写法：映射式 {\"指令长度×反压模式\": required}，或列表式 [{pair: [指令长度, 反压模式], level: required}]。",
+      "$ref": "#/$defs/cross_matrix"
+    },
+    "cross_groups": {
+      "type": "array",
+      "minItems": 1,
+      "description": "交叉组 —— 一组必须一起组合的维度（矩阵里每个 ★ 对应一个交叉组）",
+      "items": { "$ref": "#/$defs/cross_group" }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "环境指纹声明。case 不以此为主体，但执行时必须带指纹，失败才可复现。",
+      "properties": {
+        "required": {
+          "type": "array",
+          "minItems": 1,
+          "description": "本模型强制要求记录的环境键",
+          "items": { "$ref": "#/$defs/env_key" }
+        },
+        "defaults": {
+          "type": "object",
+          "description": "环境键的缺省值（会被生成的 case 继承）",
+          "propertyNames": {
+            "enum": [
+              "tool_version",
+              "rtl_version",
+              "constraint_version",
+              "interface_version",
+              "config_profile",
+              "seed",
+              "compile_options"
+            ]
+          },
+          "additionalProperties": {
+            "type": ["string", "number", "boolean"]
+          }
+        },
+        "description": { "type": "string" }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "case 组合生成参数（文档十七节：选对象 → 选维度 → 取取值 → 选方法 → 笛卡尔积 → 属性表）",
+      "properties": {
+        "themes": {
+          "type": "array",
+          "minItems": 1,
+          "description": "参与生成的专题 id；缺省 = 模型声明的全部 themes（按优先级排序）",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "priorities": {
+          "type": "array",
+          "minItems": 1,
+          "description": "只跑这些优先级的专题（如 [P0, P1]）；缺省 = 全部",
+          "items": { "$ref": "#/$defs/priority" }
+        },
+        "methods": {
+          "type": "array",
+          "minItems": 1,
+          "description": "参与生成的方法；缺省 = 模型声明的 methods",
+          "items": { "$ref": "#/$defs/method_code" }
+        },
+        "groups": {
+          "type": "array",
+          "minItems": 1,
+          "description": "参与生成的交叉组 id（仅在没有 themes 时生效）；缺省 = 模型声明的全部 cross_groups，再退化为 cross_matrix 的必需对，最后退化为「全部维度一个组」",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "description": "限定参与生成的维度（名字或 id）",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "sub_objects": {
+          "type": "array",
+          "minItems": 1,
+          "description": "限定生成的子对象（id 或 name）",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "seed": {
+          "type": "integer",
+          "description": "随机种子。RND 方法据此采样，保证同一模型两次生成结果完全一致（可复现）。"
+        },
+        "repeat": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "RND 方法的采样轮数，缺省 8"
+        },
+        "max_cases": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "生成上限。超出时截断并在报告中显式记录被丢弃的数量（不静默截断）。"
+        }
+      }
+    },
+    "case_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "生成 case 的缺省属性",
+      "properties": {
+        "id_prefix": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]*$",
+          "description": "case_id 前缀，缺省 TC"
+        },
+        "expected_result": {
+          "type": "string",
+          "minLength": 1,
+          "description": "预期结果（如「不死锁、不丢数、可恢复」）"
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "description": "缺省检查项；交叉组未声明 checks 时继承",
+          "items": { "$ref": "#/$defs/check_code" }
+        },
+        "environment": {
+          "type": "object",
+          "description": "缺省环境指纹；与 environment.defaults 合并，case_defaults 优先",
+          "propertyNames": {
+            "enum": [
+              "tool_version",
+              "rtl_version",
+              "constraint_version",
+              "interface_version",
+              "config_profile",
+              "seed",
+              "compile_options"
+            ]
+          },
+          "additionalProperties": {
+            "type": ["string", "number", "boolean"]
+          }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+
+    "sub_object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "description": "功能组织树的一个节点。带 children 就是分支，不带就是叶子；只有叶子生成 case。",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+          "description": "节点标识（如 FC-01）"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "节点名（如 接收侧流控）"
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{1,7}$",
+          "description": "case_id 中的节点代号（如 RECV）。中文名无法自动推导，建议显式声明；缺省按 id 推导，再退化 S01。同一个树里叶子代号必须唯一，否则 case_id 会撞车。"
+        },
+        "description": { "type": "string" },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "description": "下级节点。专题的 applies_to 指向分支时会展开到它的全部叶子。",
+          "items": { "$ref": "#/$defs/sub_object" }
+        }
+      }
+    },
+
+    "priority": {
+      "type": "string",
+      "pattern": "^P[0-9]$",
+      "description": "专题优先级。P0 先跑，收敛后再上 P1、P2。不关心分层时全部写 P0 即可。"
+    },
+
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "priority"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+          "description": "专题标识（如 TH-P0-CFG）"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "专题名（如 配置和参数专题）"
+        },
+        "priority": { "$ref": "#/$defs/priority" },
+        "applies_to": {
+          "type": "array",
+          "description": "作用于功能组织树的哪些节点（名字或 id）。[\"*\"] = 全树；留空或省略 = 不作用于树（正交专题，如 错误和异常 / 性能常稳）。指向分支节点时展开到它的叶子。",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "dimensions": {
+          "type": "array",
+          "description": "本专题使用哪些维度（名字或 id）。[\"*\"] 或省略 = 全部维度（即「各维度随机组合」）。",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "method": {
+          "description": "本专题的生成方法；省略则用 generation.methods。",
+          "$ref": "#/$defs/method_code"
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "description": "本专题的检查项；省略则继承 case_defaults.checks",
+          "items": { "$ref": "#/$defs/check_code" }
+        },
+        "repeat": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "本专题 RND 方法的采样轮数；省略则用 generation.repeat"
+        },
+        "expected_result": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      }
+    },
+
+    "method_code": {
+      "type": "string",
+      "enum": ["D", "RND", "G", "RPLY", "SPCL"]
+    },
+
+    "method": {
+      "oneOf": [
+        { "$ref": "#/$defs/method_code" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {
+            "id": { "$ref": "#/$defs/method_code" },
+            "name": { "type": "string", "minLength": 1 },
+            "description": { "type": "string" }
+          }
+        }
+      ]
+    },
+
+    "check_code": {
+      "type": "string",
+      "pattern": "^CHECK-[A-Z][A-Z0-9_]*$"
+    },
+
+    "check": {
+      "oneOf": [
+        { "$ref": "#/$defs/check_code" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {
+            "id": { "$ref": "#/$defs/check_code" },
+            "name": { "type": "string", "minLength": 1 },
+            "description": { "type": "string" }
+          }
+        }
+      ]
+    },
+
+    "relation_kind": {
+      "enum": ["independent", "linkage", "exclusive", "并列", "联动", "互斥"],
+      "description": "并列 independent / 联动 linkage / 互斥 exclusive"
+    },
+
+    "value": {
+      "oneOf": [
+        { "type": ["string", "number", "boolean"] },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "weight"],
+          "description": "加权型取值",
+          "properties": {
+            "value": { "type": ["string", "number", "boolean"] },
+            "weight": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        }
+      ]
+    },
+
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type"],
+      "description": "L4 字段 —— 唯一承载取值的层级（维度只负责归类）",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type": {
+          "enum": ["enum", "range", "set", "weighted", "linkage"],
+          "description": "枚举型 enum / 范围型 range / 集合型 set / 加权型 weighted / 联动型 linkage"
+        },
+        "description": { "type": "string" },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "description": "enum/set/weighted 的取值表；weighted 的元素必须是 {value, weight}",
+          "items": { "$ref": "#/$defs/value" }
+        },
+        "min": { "type": "number", "description": "range 下界" },
+        "max": { "type": "number", "description": "range 上界" },
+        "step": { "type": "number", "exclusiveMinimum": 0, "description": "range 步长" },
+        "boundary": {
+          "type": "array",
+          "minItems": 1,
+          "description": "边界取值点（range 的覆盖分母；不填则用 min/max）",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "linked_to": {
+          "type": "string",
+          "minLength": 1,
+          "description": "linkage 型字段联动的另一个字段名"
+        },
+        "cover_bins": {
+          "type": "array",
+          "minItems": 1,
+          "description": "覆盖仓映射（字段取值 → covergroup bin）",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "unit": { "type": "string", "description": "单位（如 拍 / % / 字节）" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["type"],
+            "properties": { "type": { "enum": ["enum", "set", "weighted"] } }
+          },
+          "then": {
+            "required": ["values"],
+            "not": { "anyOf": [{ "required": ["min"] }, { "required": ["max"] }] }
+          }
+        },
+        {
+          "if": {
+            "required": ["type"],
+            "properties": { "type": { "const": "range" } }
+          },
+          "then": {
+            "required": ["min", "max"],
+            "not": { "required": ["values"] }
+          }
+        },
+        {
+          "if": {
+            "required": ["type"],
+            "properties": { "type": { "const": "linkage" } }
+          },
+          "then": { "required": ["linked_to"] }
+        }
+      ]
+    },
+
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "fields"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+          "description": "维度标识（如 D_mode）；缺省用 name 作为坐标"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "维度名（如 反压模式）。只归类，不承载取值。"
+        },
+        "description": { "type": "string" },
+        "sub_objects": {
+          "type": "array",
+          "minItems": 1,
+          "description": "该维度适用的子对象（id 或 name）；缺省 = 全部子对象",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "relation": {
+          "type": "object",
+          "description": "字段关系表：键为另一个字段名（同维度或跨维度），值为 并列/联动/互斥",
+          "additionalProperties": { "$ref": "#/$defs/relation_kind" }
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/field" }
+        }
+      }
+    },
+
+    "cross_level": {
+      "enum": ["required", "optional", "forbidden"],
+      "description": "必需交叉 ★ / 可选交叉 ✓ / 禁止交叉 ✗"
+    },
+
+    "cross_pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pair", "level"],
+      "properties": {
+        "pair": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "level": { "$ref": "#/$defs/cross_level" },
+        "reason": { "type": "string", "description": "判定理由" }
+      }
+    },
+
+    "cross_matrix": {
+      "oneOf": [
+        {
+          "type": "object",
+          "minProperties": 1,
+          "description": "映射式：键为「A×B」（× * x , / 均可作分隔符）",
+          "additionalProperties": { "$ref": "#/$defs/cross_level" }
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/cross_pair" }
+        }
+      ]
+    },
+
+    "cross_group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimensions"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+          "description": "交叉组标识（如 XG-01）"
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "dimensions": {
+          "type": "array",
+          "minItems": 2,
+          "description": "必须一起组合的维度（名字或 id）；至少两个",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "level": { "$ref": "#/$defs/cross_level" },
+        "method": { "$ref": "#/$defs/method_code" },
+        "sub_objects": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/check_code" }
+        },
+        "expected_result": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      }
+    },
+
+    "env_key": {
+      "enum": [
+        "tool_version",
+        "rtl_version",
+        "constraint_version",
+        "interface_version",
+        "config_profile",
+        "seed",
+        "compile_options"
+      ]
+    }
+  }
+}

@@ -97,7 +97,7 @@ compile_questa:
 # ── VCS: 单步编译（vcs 直接出 simv）──
 compile_vcs:
 	@mkdir -p $(OUTDIR)
-	$(VCS) -sverilog +v2k -timescale=1ns/1ps \
+	$(VCS) -full64 -sverilog +v2k -timescale=1ns/1ps \
 		-debug_access+all -ntb_opts uvm-1.2 \
 		$(COV_FLAG_V) \
 		$(SRC) \

@@ -25,7 +25,7 @@ class {{ agent.name }}_port_config extends uvm_object;
     `uvm_field_int(memory_start_addr, UVM_DEFAULT)
     `uvm_field_int(memory_end_addr, UVM_DEFAULT)
     `uvm_field_int(default_read_data, UVM_DEFAULT)
-    `uvm_field_aa_int_int(memory, UVM_DEFAULT)
+    `uvm_field_aa_int_int_unsigned(memory, UVM_DEFAULT)
     `uvm_field_int(response_delay_min, UVM_DEFAULT)
     `uvm_field_int(response_delay_max, UVM_DEFAULT)
     `uvm_field_int(enable_out_of_order, UVM_DEFAULT)

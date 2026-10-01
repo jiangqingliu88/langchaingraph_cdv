@@ -1,0 +1,151 @@
+# casemodel_tools — Tool Schema 契约
+#
+# 工具名的唯一来源是 agent/registry.py 的 tool_specs()，这份文件是它的
+# 可读镜像（给人看、给 BaseAgent.validate_output 兜底）。
+# 三处不一致时以 agent/registry.py 为准 —— 有测试固定这一点
+# （tests/test_surfaces.py::test_tool_specs_have_one_source_of_truth）。
+#
+# 风险等级一律 safe：三个工具都是纯计算，不写盘、不起子进程。
+
+tools:
+  casemodel_validate:
+    description: "case 属性模型 YAML → JSON Schema 校验（语法/类型/必填/取值表形状）"
+    input:
+      yaml_text:
+        type: string
+        required: true
+        description: "case 模型 YAML 全文"
+    output:
+      type: json
+      schema:
+        valid: bool
+        error_count: int
+        warning_count: int
+        issues:
+          - severity: string (error|warning)
+            category: string
+            rule: string
+            target: string
+            message: string
+    risk_level: safe
+
+  casemodel_gaps:
+    description: "全量完备性分析：功能组织树 / 专题 / 正交性 / 交叉矩阵 / 取值覆盖 / 环境与检查"
+    input:
+      yaml_text:
+        type: string
+        required: true
+        description: "case 模型 YAML 全文"
+      max_cases:
+        type: int
+        required: false
+        description: "生成上限，覆盖模型里的 generation.max_cases"
+      cases_text:
+        type: string
+        required: false
+        description: "外部真实 case 列表 YAML 全文；给出时追加「模型 vs 实现」反向核对"
+    output:
+      type: json
+      schema:
+        object: string
+        score: float
+        score_breakdown:
+          - item: string
+            sub: float
+            weighted: float
+        summary: {case_count, theme_count, org_leaf_count, error_count, score, coverage_ratio}
+        org_tree:
+          - id: string
+            name: string
+            code: string
+            depth: int
+            path: string
+            is_leaf: bool
+            themes: list
+            case_count: int
+            covered: bool
+        themes:
+          - id: string
+            name: string
+            priority: string (P0|P1|P2)
+            kind: string (structural|orthogonal)
+            kind_name: string
+            target: string
+            target_count: int
+            dimensions: string
+            method: string
+            case_count: int
+            actual_node_count: int
+        coverage:
+          - dimension: string
+            hit: int
+            total: int
+            ratio: float
+            missing: dict
+        external:
+          case_count: int
+          coverage_ratio: float
+          generated_ratio: float
+          generated_only: list
+          duplicates: list
+          unknown_fields: list
+          undeclared_values: list
+          unknown_themes: list
+          unknown_nodes: list
+          invalid_ids: list
+          node_coverage: dict
+          theme_coverage: dict
+          cases_without_environment: int
+        issues:
+          - severity: string (error|warning|info)
+            category: string
+            rule: string
+            target: string
+            message: string
+    risk_level: safe
+
+  casemodel_generate:
+    description: "按属性组合生成 case 属性表（专题 → 树节点 → 维度 → 方法 → 组合）"
+    input:
+      yaml_text:
+        type: string
+        required: true
+        description: "case 模型 YAML 全文"
+      max_cases:
+        type: int
+        required: false
+        description: "生成上限，覆盖模型里的 generation.max_cases"
+      seed:
+        type: int
+        required: false
+        description: "随机种子，覆盖模型里的 generation.seed；同 seed 结果一致"
+    output:
+      type: json
+      schema:
+        count: int
+        seed: int
+        driver: string (themes|groups)
+        truncated: bool
+        dropped: int
+        themes_used: list
+        priorities_used: list
+        methods_used: list
+        notes: list
+        cases:
+          - case_id: string (TC-<对象>-<节点>-<方法>-<NN>)
+            object: string
+            sub_object: string
+            sub_object_id: string
+            theme: string
+            priority: string
+            tree_path: string
+            dimensions: list
+            fields: dict
+            method: string (D|RND|G|RPLY|SPCL)
+            cross_group: string
+            checks: list
+            cover_bins: list
+            environment: dict
+            expected_result: string
+            seed: int
+    risk_level: safe

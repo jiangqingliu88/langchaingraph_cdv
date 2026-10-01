@@ -1,0 +1,86 @@
+# ════════════════════════════════════════════════════════════
+# 反面示例 —— 传统写法：属性塞进名字里，层级错位
+#
+# 这份模型的每一处都在踩 readem.md 十九节列的坑，用来验证
+# completeness.py 能把它们逐条抓出来。不要照抄。
+#
+#   python -m src.tools.casemodel_tools.main analyze examples/fc_flawed.yaml
+# ════════════════════════════════════════════════════════════
+
+version: "0.9"
+
+# ✗ 把方法当对象（'随机' 是 L5 生成属性）
+# ✗ 把检查当对象（'白盒检查' 是 L6 属性，不是验证主体）
+object: 随机反压
+object_cn: 白盒检查流控
+
+sub_objects:
+  - id: FC-01
+    name: 接收侧流控          # ✗ 未声明 code 且中文名无法推导 ASCII 代号
+
+dimensions:
+
+  # ✗ 把方法当维度：'随机' 应作为 method=RND 表达
+  - id: D_mode
+    name: 随机反压
+    relation:
+      不存在的字段: 联动      # ✗ 关系表引用了不存在的字段
+    fields:
+      - name: 反压模式
+        type: enum
+        # ✗ '随机' 既是取值又是 L5 方法名（十八节点名的正交性破坏）
+        values: [无, 首拍, 尾拍, 持续, 随机]
+
+  # ✗ 把字段当维度：维度名以字段取值 '尾拍' 开头
+  - name: 尾拍反压
+    fields:
+      - name: 尾拍反压
+        type: enum
+        values: [是]          # ✗ 只有一个取值点，没有「会变化的条件」
+
+  # ✗ 把检查当维度：'白盒' 是 L6 检查属性
+  - name: 白盒检查
+    fields:
+      - name: 队列深度
+        type: range
+        min: 0
+        max: 64              # 未声明 boundary，覆盖点退化为 min/max
+      - name: 资源计数
+        type: linkage
+        linked_to: 不存在的字段   # ✗ 联动目标不存在，取值无法回填
+
+  # 这个维度本身没问题，但没参与任何交叉组 → 覆盖率为 0
+  - id: D_if
+    name: 反压接口
+    fields:
+      - name: 反压接口
+        type: enum
+        values: [ld0, ld1, 两者独立]
+
+# ✗ 只声明了一种方法，且 checks 缺 CHECK-WBOX（模型里有队列/资源字段）
+methods: [D]
+checks: [CHECK-FUNC]
+
+cross_matrix:
+  随机反压×尾拍反压: required
+  随机反压×不存在的维度: required    # ✗ 引用了不存在的维度
+
+cross_groups:
+  - id: XG-01
+    name: 错位组合
+    dimensions: [随机反压, 尾拍反压]
+    method: G
+    sub_objects: [FC-99]             # ✗ 子对象不存在
+  - id: XG-02
+    name: 悬空组
+    dimensions: [随机反压, 不存在的维度]   # ✗ 维度不存在，组内只剩一个有效维度
+    method: G
+
+# ✗ 声明了必需环境键，却没有提供任何缺省值
+environment:
+  required: [tool_version, rtl_version, constraint_version, seed]
+
+generation:
+  methods: [G]
+  seed: 7
+  max_cases: 6                       # 组合规模远超上限 → 截断

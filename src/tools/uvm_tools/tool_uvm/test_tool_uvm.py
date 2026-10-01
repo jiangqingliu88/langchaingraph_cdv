@@ -14,11 +14,38 @@ from src.tools.uvm_tools.tool_uvm.gen_uvm import (
     RegionInjector,
     TEMPLATES_DIR as _TEMPLATES_DIR,
     __version__,
+    _normalize_agents_list,
     _normalize_harness,
+    _normalize_scoreboards,
+    _normalize_subenvs,
     main,
 )
 
 EXAMPLES = Path(__file__).parent / "examples" / "apb"
+
+
+def _iface_name() -> str:
+    """apb_interface.yaml 的 agent 名（= 生成类/目录前缀）。
+
+    测试一律从这里取名字，不硬编码 —— 示例改大小写（APB ↔ apb）时测试不用动。
+    """
+    import yaml
+    doc = yaml.safe_load((EXAMPLES / "apb_interface.yaml").read_text(encoding="utf-8"))
+    return doc["interfaces"][0]["name"]
+
+
+def _env_name() -> str:
+    """apb_env.yaml 的 environment 名（= env 产物前缀）。"""
+    import yaml
+    doc = yaml.safe_load((EXAMPLES / "apb_env.yaml").read_text(encoding="utf-8"))
+    return doc["environment"]["name"]
+
+
+def _bench_name() -> str:
+    """apb_bench.yaml 的 bench 名（= tb_top 文件名前缀）。"""
+    import yaml
+    doc = yaml.safe_load((EXAMPLES / "apb_bench.yaml").read_text(encoding="utf-8"))
+    return doc["bench"]["name"]
 
 RENDERED = """// ============================================================
 class apb_master_driver extends uvm_driver;
@@ -233,11 +260,12 @@ def test_env_agents_is_master_and_is_active(tmp_path):
     test_base 按 is_active 渲染模式、slave 不启动序列。"""
     import yaml
     src = yaml.safe_load((EXAMPLES / "apb_env.yaml").read_text(encoding="utf-8"))
-    # type 不再从 YAML 读：由 interface + is_master 推导
-    #   (apb, True) → apb_master_agent / (apb, False) → apb_slave_agent
+    # agent 类名走 type 显式声明（不由 interface + is_master 拼接）
     src["environment"]["agents"] = [
-        {"name": "apb_master", "interface": "apb", "is_active": True, "is_master": True},
-        {"name": "apb_slave", "interface": "apb", "is_active": False, "is_master": False},
+        {"name": "apb_master", "type": "apb_master_agent",
+         "is_active": True, "is_master": True},
+        {"name": "apb_slave", "type": "apb_slave_agent",
+         "is_active": False, "is_master": False},
     ]
     tmp_yaml = tmp_path / "env_slave.yaml"
     tmp_yaml.write_text(yaml.safe_dump(src, allow_unicode=True, sort_keys=False),
@@ -252,6 +280,71 @@ def test_env_agents_is_master_and_is_active(tmp_path):
     assert "cfg.apb_slave_cfg.is_active = UVM_PASSIVE;" in base
     assert "apb_master_seq.start(env.apb_master_agent_h.sequencer);" in base
     assert "apb_slave_seq.start" not in base
+
+
+def test_env_agent_type_not_derived_from_interface():
+    """agent 类名只认 YAML 的 type；不由 interface + is_master 拼 {iface}_{master|slave}_agent。"""
+    out = _normalize_agents_list(
+        [{"name": "apb_master", "interface": "apb", "is_master": True}])
+    assert "type" not in out[0]
+    out2 = _normalize_agents_list(
+        [{"name": "apb_master", "type": "my_agent", "interface": "apb", "is_master": True}])
+    assert out2[0]["type"] == "my_agent"   # 显式 type 原样保留，不被拼接覆盖
+
+
+def test_subenv_type_not_derived_from_interface():
+    """subenv 类名只认 YAML 的 type；不由 interface 拼 {iface}_system_env。"""
+    out = _normalize_subenvs([{"name": "apb_sys_env", "interface": "apb"}])
+    assert out[0]["type"] == "apb_sys_env"        # 退回 name，而非 apb_system_env
+    out2 = _normalize_subenvs([{"name": "e", "type": "foo_system_env", "interface": "apb"}])
+    assert out2[0]["type"] == "foo_system_env"
+
+
+def test_explicit_agent_type_wins_in_generation(tmp_path):
+    """端到端：显式 type 渲染进 env.sv 的句柄与实例化。"""
+    import yaml
+    src = yaml.safe_load((EXAMPLES / "apb_env.yaml").read_text(encoding="utf-8"))
+    src["environment"]["agents"] = [
+        {"name": "apb_master", "type": "apb_master_agent",
+         "is_active": True, "is_master": True},
+    ]
+    tmp_yaml = tmp_path / "env_type.yaml"
+    tmp_yaml.write_text(yaml.safe_dump(src, allow_unicode=True, sort_keys=False),
+                        encoding="utf-8")
+    dest = tmp_path / "out"
+    assert main(["-i", str(tmp_yaml), "-d", str(dest), "-q"]) == 0
+    env = (dest / "env" / "APB_env.sv").read_text(encoding="utf-8")
+    assert "apb_master_agent apb_master_agent_h;" in env
+
+
+def test_input_listfile_expands(tmp_path):
+    """.f 清单文件（-f）展开成里面列的 YAML：注释/空行/编译选项行忽略。"""
+    (tmp_path / "a.yaml").write_text("interfaces:\n  - {name: A}\n", encoding="utf-8")
+    (tmp_path / "b.yaml").write_text("interfaces:\n  - {name: B}\n", encoding="utf-8")
+    lf = tmp_path / "list.f"
+    lf.write_text(
+        "# 注释行\n"
+        "a.yaml\n"            # 相对路径 → 按清单文件所在目录解析
+        f"{tmp_path / 'b.yaml'}\n"   # 绝对路径原样
+        "\n"
+        "+incdir+somewhere\n"        # 编译选项行忽略
+        "-timescale 1ns/1ps\n",
+        encoding="utf-8")
+    got = YAMLLoader.collect_paths([lf])
+    assert [p.name for p in got] == ["a.yaml", "b.yaml"]
+    assert all(p.exists() for p in got)
+
+
+def test_input_listfile_end_to_end(tmp_path):
+    """端到端：-f 传 .f 能真的生成（不再报 No YAML files were found）。"""
+    src = EXAMPLES
+    lf = tmp_path / "apb.f"
+    lf.write_text("\n".join(str(src / n) for n in (
+        "apb_interface.yaml", "apb_env.yaml", "apb_bench.yaml")) + "\n",
+        encoding="utf-8")
+    dest = tmp_path / "out"
+    assert main(["-f", str(lf), "-d", str(dest), "-q"]) == 0
+    assert (dest / "env" / "APB_env.sv").exists()
 
 
 def test_bench_with_harness_skips_tb_top_interface(tmp_path):
@@ -274,6 +367,65 @@ def test_bench_with_harness_skips_tb_top_interface(tmp_path):
     assert "function void set_vifs" in harness
 
 
+def test_normalize_scoreboards_parameterized_class():
+    """参数化类给 params：推导 typedef 别名，句柄改用别名。"""
+    out = _normalize_scoreboards([{
+        "name": "apb_scb", "sb_type": "in_order_scoreboard",
+        "trans_type": "apb_master_seq_item",
+        "params": ["apb_master_seq_item", "apb_master_seq_item"]}])
+    assert out[0]["handle_type"] == "apb_scb_t"
+    assert out[0]["typedef_decl"] == (
+        "typedef in_order_scoreboard#(apb_master_seq_item, apb_master_seq_item) apb_scb_t;")
+    # 非参数化：句柄直接用 sb_type，不产生 typedef
+    out2 = _normalize_scoreboards([{"name": "s", "sb_type": "uvmf_in_order_scoreboard"}])
+    assert out2[0]["handle_type"] == "uvmf_in_order_scoreboard"
+    assert out2[0]["typedef_decl"] == ""
+    # 没给 sb_type 时不硬造 typedef
+    out3 = _normalize_scoreboards([{"name": "s2", "params": ["T"]}])
+    assert out3[0]["typedef_decl"] == ""
+
+
+def test_parameterized_scoreboard_typedef_in_env(tmp_path):
+    """端到端：参数化 scoreboard 在 env.sv 里先 typedef 再声明句柄。"""
+    import yaml
+    cfg = yaml.safe_load((EXAMPLES / "apb_env.yaml").read_text(encoding="utf-8"))
+    cfg["environment"]["scoreboards"] = [{
+        "name": "apb_scb", "sb_type": "in_order_scoreboard",
+        "trans_type": "apb_master_seq_item",
+        "params": ["apb_master_seq_item", "apb_master_seq_item"]}]
+    p = tmp_path / "env_scb.yaml"
+    p.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False),
+                 encoding="utf-8")
+    dest = tmp_path / "out"
+    # 需要 interface 提供 seq_item 类型名，故与 interface 一起喂
+    assert main(["-i", str(EXAMPLES / "apb_interface.yaml"), str(p),
+                 "-d", str(dest), "-q"]) == 0
+    env = (dest / "env" / "APB_env.sv").read_text(encoding="utf-8")
+    assert ("typedef in_order_scoreboard#(apb_master_seq_item, apb_master_seq_item) "
+            "apb_scb_t;") in env
+    assert "apb_scb_t apb_scb;" in env
+    assert "apb_scb_t::type_id::create" in env
+    # 参数化类名不再被当类型直接用
+    assert "\n  in_order_scoreboard apb_scb;" not in env
+
+
+def test_bench_clk_rst_legacy_alias(tmp_path):
+    """bench 时钟复位：旧名 clk_rst 与 clk_rst_if 等价（照样接进 tb_top）。"""
+    import yaml
+    cfg = yaml.safe_load((EXAMPLES / "apb_bench.yaml").read_text(encoding="utf-8"))
+    bench = dict(cfg["bench"])
+    bench["clk_rst"] = bench.pop("clk_rst_if")      # 换回旧名
+    cfg["bench"] = bench
+    p = tmp_path / "legacy_clk.yaml"
+    p.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False),
+                 encoding="utf-8")
+    dest = tmp_path / "out"
+    assert main(["-i", str(p), "-d", str(dest), "-q"]) == 0
+    tb = (dest / "bench" / "APB_bench_tb_top.sv").read_text(encoding="utf-8")
+    assert ".pclk(pclk_vif.clk[0])" in tb
+    assert ".presetn(pclk_vif.rst_n[0])" in tb
+
+
 def test_meta_header_default_and_yaml_override(tmp_path):
     """所有生成文件继承 base_template.sv.j2 文件头；YAML meta 可覆盖。"""
     import yaml
@@ -286,12 +438,13 @@ def test_meta_header_default_and_yaml_override(tmp_path):
                             encoding="utf-8")
     dest1 = tmp_path / "o1"
     assert main(["-i", str(default_yaml), "-d", str(dest1), "-q"]) == 0
-    sv = (dest1 / "agents" / "APB_agent" / "1_interface" / "APB_if.sv").read_text(encoding="utf-8")
+    a = _iface_name()
+    sv = (dest1 / "agents" / f"{a}_agent" / "1_interface" / f"{a}_if.sv").read_text(encoding="utf-8")
     assert "SignOffAI（功能签核） — 商标与权利声明" in sv
-    assert "文件:     APB_if.sv" in sv
+    assert f"文件:     {a}_if.sv" in sv
     assert "创建时间:" in sv and "修改时间:" in sv and "联系邮箱:" in sv and "描述:" in sv
     # Makefile 用 # 注释
-    mk = (dest1 / "agents" / "APB_agent" / "Makefile").read_text(encoding="utf-8")
+    mk = (dest1 / "agents" / f"{a}_agent" / "Makefile").read_text(encoding="utf-8")
     assert "\n#   SignOffAI" in mk
     assert "//   SignOffAI" not in mk
     # YAML meta 覆盖
@@ -302,7 +455,7 @@ def test_meta_header_default_and_yaml_override(tmp_path):
                         encoding="utf-8")
     dest2 = tmp_path / "o2"
     assert main(["-i", str(tmp_yaml), "-d", str(dest2), "-q"]) == 0
-    sv2 = (dest2 / "agents" / "APB_agent" / "1_interface" / "APB_if.sv").read_text(encoding="utf-8")
+    sv2 = (dest2 / "agents" / f"{a}_agent" / "1_interface" / f"{a}_if.sv").read_text(encoding="utf-8")
     assert "作者:     张三" in sv2
     assert "联系邮箱: zhangsan@example.com" in sv2
     assert "创建时间: 2026-09-01" in sv2
@@ -328,7 +481,7 @@ def test_config_field_registration_all_configs(tmp_path):
     assert "// vif: virtual interface，UVM field 宏不支持注册" in port
     # 单类 port_config：master 侧与 slave 侧字段注册并存
     assert "`uvm_field_enum(response_mode_e, response_mode, UVM_DEFAULT)" in port
-    assert "`uvm_field_aa_int_int(memory, UVM_DEFAULT)" in port
+    assert "`uvm_field_aa_int_int_unsigned(memory, UVM_DEFAULT)" in port
     assert "`uvm_field_aa_int_string(id_delay_map, UVM_DEFAULT)" in port
     assert "`uvm_field_int(drive_delay_min, UVM_DEFAULT)" in port
     # system：uvm_object 动态数组
@@ -339,11 +492,27 @@ def test_env_config_field_registration(tmp_path):
     """env config 注册 config_vars + has_scoreboard + agent cfg 句柄。"""
     dest = tmp_path / "out"
     assert main(["-i", str(EXAMPLES / "apb_env.yaml"), "-d", str(dest), "-q"]) == 0
-    cfg = (dest / "env" / "APB_env_config.sv").read_text(encoding="utf-8")
-    assert "`uvm_object_utils_begin(APB_env_config)" in cfg
+    e = _env_name()
+    cfg = (dest / "env" / f"{e}_config.sv").read_text(encoding="utf-8")
+    assert f"`uvm_object_utils_begin({e}_config)" in cfg
     assert "`uvm_field_int(has_scoreboard, UVM_DEFAULT)" in cfg
     assert "`uvm_field_object(apb_master_cfg, UVM_DEFAULT)" in cfg
     assert "`uvm_field_object(apb_slave_cfg, UVM_DEFAULT)" in cfg
+
+
+def test_constraint_and_bench_env_name_backfilled(tmp_path):
+    """env_name 下线的连带影响：bench / constraint 不写 env 名时，
+    由本次解析出的 environment 回填 —— 产物前缀不能是空的。"""
+    dest = tmp_path / "out"
+    assert main(["-i", str(EXAMPLES / "apb_interface.yaml"),
+                 str(EXAMPLES / "apb_env.yaml"),
+                 str(EXAMPLES / "apb_bench.yaml"),
+                 str(EXAMPLES / "apb_constraint.yaml"),
+                 "-d", str(dest), "-q"]) == 0
+    e = _env_name()
+    assert (dest / "env" / "cons" / f"{e}_constraint_policy.sv").exists()
+    tb = (dest / "bench" / f"{_bench_name()}_tb_top.sv").read_text(encoding="utf-8")
+    assert f"import {e}_test_pkg::*;" in tb
 
 
 def test_seq_item_field_registration(tmp_path):
@@ -351,22 +520,23 @@ def test_seq_item_field_registration(tmp_path):
     base_transaction_vars）落在基类 APB_base_seq_item，master/slave 继承它。"""
     dest = tmp_path / "out"
     assert main(["-i", str(EXAMPLES / "apb_interface.yaml"), "-d", str(dest), "-q"]) == 0
-    tx_dir = dest / "agents" / "APB_agent" / "3_transaction_sequencer"
-    base = (tx_dir / "APB_base_seq_item.sv").read_text(encoding="utf-8")
-    master = (tx_dir / "APB_master_seq_item.sv").read_text(encoding="utf-8")
-    slave = (tx_dir / "APB_slave_seq_item.sv").read_text(encoding="utf-8")
+    a = _iface_name()
+    tx_dir = dest / "agents" / f"{a}_agent" / "3_transaction_sequencer"
+    base = (tx_dir / f"{a}_base_seq_item.sv").read_text(encoding="utf-8")
+    master = (tx_dir / f"{a}_master_seq_item.sv").read_text(encoding="utf-8")
+    slave = (tx_dir / f"{a}_slave_seq_item.sv").read_text(encoding="utf-8")
     for out in (base, master, slave):
         assert "`uvm_object_utils_begin" in out
         assert "`uvm_object_utils_end" in out
         assert "`uvm_object_utils(" not in out
     # base：xact_type enum + base_transaction_vars（两侧共用），且直接继承 uvm_sequence_item
-    assert "class APB_base_seq_item extends uvm_sequence_item;" in base
+    assert f"class {a}_base_seq_item extends uvm_sequence_item;" in base
     assert "`uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)" in base
     assert "`uvm_field_int(addr, UVM_DEFAULT)" in base
     assert "`uvm_field_int(data, UVM_DEFAULT)" in base
     # master/slave 继承基类，只注册各自专有字段
-    assert "class APB_master_seq_item extends APB_base_seq_item;" in master
-    assert "class APB_slave_seq_item extends APB_base_seq_item;" in slave
+    assert f"class {a}_master_seq_item extends {a}_base_seq_item;" in master
+    assert f"class {a}_slave_seq_item extends {a}_base_seq_item;" in slave
     # xact_type 已上移到基类，派生类里不应再重复声明/注册
     for out in (master, slave):
         assert "`uvm_field_enum(xact_type_e, xact_type" not in out

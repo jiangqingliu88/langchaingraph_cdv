@@ -48,7 +48,7 @@
 - `apb_env.yaml` — 环境定义（agents(list)/subenvs/scoreboards(sb_type,trans_type)/
   analysis_components/analysis_exports/analysis_ports/register_model/harness_connect/
   coverage_crosses/tlm_connections）
-- `apb_bench.yaml` — Bench 定义（clk_rst/dut_instance/harness/uvm_config/wave_dump）
+- `apb_bench.yaml` — Bench 定义（clk_rst_if/dut_instance/harness/uvm_config/wave_dump）
 - `apb_constraint.yaml` — 约束策略定义
 - `apb_util_comp.yaml` — 工具组件（analysis 端口）
 - `testpoint_apb.xlsx` — 测试点（`tool_uvmtestgen` 输入）

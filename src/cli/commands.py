@@ -4443,6 +4443,181 @@ def exclude_effective(coverage, total, json_output):
 
 
 # ═══════════════════════════════════════════════════════════════
+# vagent case-model — case 属性完备性建模
+# ═══════════════════════════════════════════════════════════════
+
+@cli.group("case-model")
+def case_model():
+    """case 属性完备性建模（功能组织树 + P0/P1/P2 专题 + 维度约束组合）"""
+    pass
+
+
+@case_model.command("check")
+@click.argument("models", nargs=-1, required=True, type=click.Path(exists=True))
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def case_model_check(models, json_output):
+    """按 JSON Schema 校验 case 模型 YAML（语法 / 类型 / 必填 / 取值表形状）
+
+    \b
+    示例:
+      vagent case-model check model.yaml            # 单文件
+      vagent case-model check examples/             # 目录递归
+    """
+    out = get_output_adapter(json_output)
+    from src.tools.casemodel_tools.cli import build_parser, cmd_check
+
+    argv = ["check", *models] + (["--json"] if json_output else [])
+    rc = cmd_check(build_parser().parse_args(argv))
+    if rc and not json_output:
+        out.print_error("schema check failed", code=rc)
+    sys.exit(rc)
+
+
+@case_model.command("analyze")
+@click.argument("model", type=click.Path(exists=True))
+@click.option("--cases", "-c", "cases_file", type=click.Path(exists=True),
+              help="外部真实 case 列表（.yaml/.yml/.json/.csv），做反向核对")
+@click.option("--report", "-o", "report_path", type=click.Path(),
+              help="把完整文本报告写到文件")
+@click.option("--seed", type=int, default=None, help="覆盖模型里的 generation.seed")
+@click.option("--max-cases", type=int, default=None, help="覆盖 generation.max_cases")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def case_model_analyze(model, cases_file, report_path, seed, max_cases, json_output):
+    """全量完备性分析：组织树 / 专题 / 正交性 / 交叉矩阵 / 取值覆盖 / 环境与检查
+
+    \b
+    示例:
+      vagent case-model analyze model.yaml
+      vagent case-model analyze model.yaml --cases real_cases.yaml
+      vagent case-model analyze model.yaml --json -o report.txt
+    """
+    out = get_output_adapter(json_output)
+    from src.tools.casemodel_tools.analysis import analyze_file
+    from src.tools.casemodel_tools.cli import payload as _payload
+    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
+    from src.tools.casemodel_tools.view import text as _text
+
+    try:
+        result = analyze_file(model, cases=cases_file, seed=seed,
+                              max_cases=max_cases)
+
+        if json_output:
+            payload = _payload(result)
+            if result.external is not None:
+                payload["external"] = result.external.to_dict()
+            out.print_result(payload, title="case 属性完备性分析")
+        else:
+            text = _text.report(result)
+            click.echo(text)
+            if report_path:
+                Path(report_path).parent.mkdir(parents=True, exist_ok=True)
+                Path(report_path).write_text(text + "\n", encoding="utf-8")
+                out.print_success(f"报告已写出: {report_path}")
+
+        # 有 error → 退出码 1，warning 不阻断（与独立 CLI 一致）
+        sys.exit(1 if result.errors else 0)
+    except _CaseModelError as exc:
+        out.print_error(f"模型无法构建: {exc}", code=2)
+        sys.exit(2)
+    except Exception as exc:                      # noqa: BLE001
+        out.print_error(f"分析失败: {exc}", code=2)
+        sys.exit(2)
+
+
+@case_model.command("tree")
+@click.argument("model", type=click.Path(exists=True))
+@click.option("--seed", type=int, default=None, help="覆盖模型里的 generation.seed")
+@click.option("--max-cases", type=int, default=None, help="覆盖 generation.max_cases")
+def case_model_tree(model, seed, max_cases):
+    """只看功能组织树与专题
+
+    \b
+    示例:
+      vagent case-model tree model.yaml
+    """
+    out = get_output_adapter(False)
+    try:
+        from src.tools.casemodel_tools.cli import build_parser, cmd_tree
+        argv = ["tree", model]
+        if seed is not None:
+            argv += ["--seed", str(seed)]
+        if max_cases is not None:
+            argv += ["--max-cases", str(max_cases)]
+        sys.exit(cmd_tree(build_parser().parse_args(argv)))
+    except Exception as exc:                      # noqa: BLE001
+        out.print_error(f"分析失败: {exc}", code=2)
+        sys.exit(2)
+
+
+@case_model.command("rules")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def case_model_rules(json_output):
+    """列出全部校验规则
+
+    \b
+    示例:
+      vagent case-model rules
+      vagent case-model rules --json
+    """
+    from src.tools.casemodel_tools.cli import build_parser, cmd_rules
+    argv = ["rules"] + (["--json"] if json_output else [])
+    sys.exit(cmd_rules(build_parser().parse_args(argv)))
+
+
+@case_model.command("generate")
+@click.argument("model", type=click.Path(exists=True))
+@click.option("--format", "-f", "fmt", default="table",
+              type=click.Choice(["table", "yaml", "json", "csv"]), help="输出格式")
+@click.option("--output", "-o", "output_path", type=click.Path(),
+              help="输出文件（缺省打到 stdout）")
+@click.option("--seed", type=int, default=None, help="覆盖模型里的 generation.seed")
+@click.option("--max-cases", type=int, default=None, help="覆盖 generation.max_cases")
+def case_model_generate(model, fmt, output_path, seed, max_cases):
+    """按属性组合生成 case 属性表（专题 → 树节点 → 维度 → 方法 → 组合）
+
+    \b
+    示例:
+      vagent case-model generate model.yaml -f yaml -o cases.yaml
+      vagent case-model generate model.yaml -f csv  -o cases.csv
+    """
+    out = get_output_adapter(False)
+    from src.tools.casemodel_tools.cli import build_parser, cmd_generate
+    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
+
+    try:
+        argv = ["generate", model, "--format", fmt, "--out", output_path or ""]
+        if seed is not None:
+            argv += ["--seed", str(seed)]
+        if max_cases is not None:
+            argv += ["--max-cases", str(max_cases)]
+        sys.exit(cmd_generate(build_parser().parse_args(argv)))
+    except _CaseModelError as exc:
+        out.print_error(f"模型无法构建: {exc}", code=2)
+        sys.exit(2)
+    except Exception as exc:                      # noqa: BLE001
+        out.print_error(f"生成失败: {exc}", code=2)
+        sys.exit(2)
+
+
+@case_model.command("gui")
+@click.argument("model", required=False, type=click.Path(exists=True))
+def case_model_gui(model):
+    """打开 tkinter 分析界面（不传模型则加载内置示例）
+
+    \b
+    示例:
+      vagent case-model gui
+      vagent case-model gui model.yaml
+    """
+    try:
+        from src.tools.casemodel_tools.view.gui.app import main as gui_main
+    except ImportError as exc:                    # tkinter 缺失（无 GUI 的 Linux）
+        console.print(f"[red]无法加载 GUI: {exc}[/red]")
+        sys.exit(2)
+    sys.exit(gui_main([model] if model else []))
+
+
+# ═══════════════════════════════════════════════════════════════
 # 主入口
 # ═══════════════════════════════════════════════════════════════
 

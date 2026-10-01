@@ -17,8 +17,8 @@ class {{ agent.name }}_reg_adapter extends uvm_reg_adapter;
 
   function uvm_sequence_item reg2bus(const ref uvm_reg_bus_op rw);
     {{ agent.name }}_master_seq_item req = {{ agent.name }}_master_seq_item::type_id::create("reg_req");
-    req.xact_type = (rw.kind == UVM_READ) ? {{ agent.name }}_master_seq_item::READ
-                                          : {{ agent.name }}_master_seq_item::WRITE;
+    req.xact_type = (rw.kind == UVM_READ) ? READ
+                                          : WRITE;
 {%- set has_addr = namespace(found=false) %}
 {%- for var in transaction_vars %}{% if var.name == 'addr' %}{% set has_addr.found = true %}{% endif %}{% endfor %}
 {%- if has_addr.found %}
@@ -30,7 +30,7 @@ class {{ agent.name }}_reg_adapter extends uvm_reg_adapter;
   function void bus2reg(uvm_sequence_item bus_item, ref uvm_reg_bus_op rw);
     {{ agent.name }}_master_seq_item rsp;
     if (!$cast(rsp, bus_item)) return;
-    rw.kind = (rsp.xact_type == {{ agent.name }}_master_seq_item::READ) ? UVM_READ : UVM_WRITE;
+    rw.kind = (rsp.xact_type == READ) ? UVM_READ : UVM_WRITE;
 {%- if has_addr.found %}
     rw.addr = rsp.addr;
 {%- endif %}

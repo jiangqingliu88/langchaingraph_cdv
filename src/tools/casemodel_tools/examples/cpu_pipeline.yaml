@@ -1,0 +1,243 @@
+# ════════════════════════════════════════════════════════════
+# case 属性模型示例 —— CPU 流水
+#
+# 演示三件事怎么串起来：
+#   1. L2 用**功能组织树**描述验证主体（不是扁平的能力点列表）
+#   2. **专题**按 P0/P1/P2 横切在功能组织树上
+#        · 结构类：applies_to 指定打树上的哪些节点（指向分支时展开到叶子）
+#        · 非结构类：applies_to 留空 —— 错误和异常 / 性能常稳不作用树
+#        · 组合类：dimensions 留空 —— 随机专题就是「各维度随机组合」
+#   3. **然后是维度的约束组合**：cross_matrix 去约束这些维度怎么配
+#
+# 用法:
+#   python -m src.tools.casemodel_tools.main analyze examples/cpu_pipeline.yaml
+#   python -m src.tools.casemodel_tools.main gui     examples/cpu_pipeline.yaml
+#   vagent case-model analyze examples/cpu_pipeline.yaml
+# ════════════════════════════════════════════════════════════
+
+version: "1.0"
+
+# ── L1 对象：验证主体 ──
+object: CpuPipeline
+object_cn: CPU 流水
+object_code: CPU
+description: 五段顺序流水 —— 用功能组织树描述验证主体
+
+# ── L2 功能组织树 ──
+# 带 children 的是分支，只有叶子生成 case。
+# 「指令」是分支，它的 case 由下面两个叶子承担。
+sub_objects:
+  - id: STG-01
+    name: 指令
+    code: INST
+    description: 取指与译码段
+    children:
+      - id: STG-01a
+        name: 控制请求数据/结构仲裁
+        code: ARB
+        description: 请求与数据通路的仲裁
+      - id: STG-01b
+        name: 发射解析和启动
+        code: DISP
+        description: 发射端解析与启动握手
+
+  - id: STG-02
+    name: 读数据
+    code: RD
+  - id: STG-03
+    name: 计算
+    code: ALU
+  - id: STG-04
+    name: 写数据
+    code: WR
+
+# ── 专题：横切在功能组织树上的验证关注点，按优先级分层 ──
+themes:
+
+  # 结构类：作用于功能组织树。指向分支「指令」会展开成 ARB + DISP 两个叶子。
+  - id: TH-P0-CFG
+    name: 配置和参数专题
+    priority: P0
+    applies_to: [指令, 读数据, 计算, 写数据]
+    dimensions: [指令长度, 配置档位]
+    method: D
+    checks: [CHECK-FUNC]
+    expected_result: 各配置档位下流水行为符合规格
+    description: 第一轮：先把配置空间与基本功能打通
+
+  - id: TH-P1-FC
+    name: 流控和接口反压 cross 专题
+    priority: P1
+    applies_to: [发射解析和启动, 写数据]
+    dimensions: [反压模式, 反压比例, 反压持续时间]
+    method: G
+    checks: [CHECK-FUNC, CHECK-WBOX]
+    expected_result: 反压施加与解除均不丢数、不死锁
+    description: 第二轮：反压与流控的横向组合
+
+  - id: TH-P2-BND
+    name: 各维度边界 cross 专题
+    priority: P2
+    applies_to: ["*"]
+    dimensions: [指令长度, 反压比例]
+    method: SPCL
+    checks: [CHECK-FUNC, CHECK-WBOX]
+    expected_result: 边界取值下无越界、无溢出
+    description: 第三轮：把边界取值推到端点
+
+  # 非结构类：applies_to 留空 —— 不作用于功能组织树，是全局正交的关注点
+  - id: TH-ERR
+    name: 错误和异常专题
+    priority: P1
+    applies_to: []
+    dimensions: [异常类型, 指令长度]
+    method: SPCL
+    checks: [CHECK-FUNC]
+    expected_result: 异常被正确识别并上报，流水可恢复
+    description: 与流水阶段无关的全局异常注入
+
+  - id: TH-PERF
+    name: 性能常稳专题
+    priority: P1
+    applies_to: []
+    dimensions: [负载, 反压比例]
+    method: RND
+    repeat: 12
+    checks: [CHECK-PERF]
+    expected_result: 长时间运行吞吐稳定，无缓慢劣化
+    description: 不碰树的横切关注点：常稳压测
+
+  # 组合类：dimensions 留空 = 各维度随机组合
+  - id: TH-RND
+    name: 随机专题
+    priority: P2
+    applies_to: ["*"]
+    method: RND
+    repeat: 16
+    checks: [CHECK-FUNC]
+    expected_result: 随机组合下不出现新的失败模式
+    description: 各维度随机组合，用来兜住交叉组之外的空隙
+
+# ── L3 维度 / L4 字段 ──
+dimensions:
+
+  - id: D_length
+    name: 指令长度
+    fields:
+      - name: 指令长度
+        type: set
+        unit: 拍
+        values: [1, 8, 64, MAX]
+        boundary: ["1", "MAX"]
+        cover_bins: [cp_len_1, cp_len_8, cp_len_64, cp_len_max]
+
+  - id: D_cfg
+    name: 配置档位
+    fields:
+      - name: 配置档位
+        type: enum
+        values: [默认, 高性能, 低功耗]
+
+  - id: D_mode
+    name: 反压模式
+    relation:
+      指令长度: 联动
+      反压比例: 互斥
+    fields:
+      - name: 反压模式
+        type: enum
+        values: [无, 首拍, 尾拍, 持续]
+        cover_bins: [cp_bp_none, cp_bp_head, cp_bp_tail, cp_bp_sustained]
+
+  - id: D_ratio
+    name: 反压比例
+    fields:
+      - name: 反压比例
+        type: range
+        unit: "%"
+        min: 0
+        max: 100
+        boundary: ["0", "10", "50", "100"]
+
+  - id: D_dur
+    name: 反压持续时间
+    fields:
+      - name: 反压持续时间
+        type: enum
+        unit: 拍
+        values: ["1拍", "持续", "超阈值"]
+
+  - id: D_err
+    name: 异常类型
+    fields:
+      - name: 异常类型
+        type: enum
+        values: [无, 非法指令, 权限违例, 超时]
+        # SPCL 专项只推边界取值，所以边缘取值要显式标出来，否则推不到
+        boundary: [非法指令, 超时]
+
+  - id: D_load
+    name: 负载
+    fields:
+      - name: 并发数
+        type: weighted
+        values:
+          - {value: 1, weight: 5}
+          - {value: 4, weight: 3}
+          - {value: 8, weight: 1}
+
+# ── L5 方法 ──
+methods: [D, RND, G, RPLY, SPCL]
+
+# ── L6 检查 ──
+checks:
+  - id: CHECK-FUNC
+    name: 功能检查
+    description: 结果是否符合规格
+  - id: CHECK-WBOX
+    name: 白盒检查
+    description: 队列深度、资源计数是否平衡
+  - id: CHECK-PERF
+    name: 性能检查
+    description: 吞吐 / 延迟是否达标且稳定
+
+# ── 维度约束组合：专题选定范围之后，这张矩阵再去约束它们怎么配 ──
+cross_matrix:
+  指令长度×反压模式: required
+  指令长度×反压比例: optional
+  指令长度×异常类型: required
+  反压模式×反压比例: required
+  反压模式×反压持续时间: required
+  反压比例×反压持续时间: optional
+  负载×反压比例: optional
+  配置档位×指令长度: optional
+
+cross_groups:
+  - id: XG-01
+    name: 长度×模式
+    dimensions: [指令长度, 反压模式]
+    level: required
+    method: G
+    checks: [CHECK-FUNC]
+
+# ── 环境指纹 ──
+environment:
+  required: [tool_version, rtl_version, constraint_version, seed]
+  defaults:
+    tool_version: VCS_2024.03-SP2
+    rtl_version: cpu_v0.9.1
+    constraint_version: cpu_tp_v1.0
+    interface_version: ifc_v1.3
+    config_profile: default
+    seed: 20260930
+    compile_options: "-ntb_opts uvm-1.2 +define+CPU_DEBUG"
+
+generation:
+  seed: 42
+  repeat: 8
+  max_cases: 400
+
+case_defaults:
+  id_prefix: TC
+  expected_result: 无功能错误、无死锁、可恢复
+  checks: [CHECK-FUNC]

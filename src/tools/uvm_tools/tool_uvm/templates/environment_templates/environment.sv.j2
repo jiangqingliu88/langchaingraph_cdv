@@ -52,7 +52,10 @@ class {{ environment.env_name }} extends uvm_env;
 
   // Scoreboard
 {%- for sb in scoreboards %}
-  {{ sb.sb_type }} {{ sb.name }};
+{%- if sb.typedef_decl %}
+  {{ sb.typedef_decl }}     // 参数化类特化：<类>#(<params>) 的别名
+{%- endif %}
+  {{ sb.handle_type }} {{ sb.name }};
 {%- endfor %}
 
   // 功能覆盖率模型（env 级，跨 agent covergroup）
@@ -163,7 +166,7 @@ class {{ environment.env_name }} extends uvm_env;
 
     // 创建 Scoreboard
 {%- for sb in scoreboards %}
-    {{ sb.name }} = {{ sb.sb_type }}::type_id::create("{{ sb.name }}", this);
+    {{ sb.name }} = {{ sb.handle_type }}::type_id::create("{{ sb.name }}", this);
 {%- endfor %}
 
     // 创建功能覆盖率模型（env_cov）

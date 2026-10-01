@@ -38,7 +38,7 @@ class {{ agent.name }}_system_env extends uvm_env;
     foreach (m_agents[i]) begin
       m_agents[i] = {{ agent.name }}_master_agent::type_id::create($sformatf("m_agent[%0d]", i), this);
       uvm_config_db#({{ agent.name }}_port_config)::set(this, $sformatf("m_agent[%0d]", i), "cfg", sys_cfg.master_cfgs[i]);
-      if (sys_vif.master_if.size() > i) begin
+      if ($size(sys_vif.master_if) > i) begin
         uvm_config_db#(virtual {{ agent.name }}_if)::set(this, $sformatf("m_agent[%0d]", i), "vif", sys_vif.master_if[i]);
       end
     end
@@ -47,7 +47,7 @@ class {{ agent.name }}_system_env extends uvm_env;
     foreach (s_agents[i]) begin
       s_agents[i] = {{ agent.name }}_slave_agent::type_id::create($sformatf("s_agent[%0d]", i), this);
       uvm_config_db#({{ agent.name }}_port_config)::set(this, $sformatf("s_agent[%0d]", i), "cfg", sys_cfg.slave_cfgs[i]);
-      if (sys_vif.slave_if.size() > i) begin
+      if ($size(sys_vif.slave_if) > i) begin
         uvm_config_db#(virtual {{ agent.name }}_if)::set(this, $sformatf("s_agent[%0d]", i), "vif", sys_vif.slave_if[i]);
       end
     end
