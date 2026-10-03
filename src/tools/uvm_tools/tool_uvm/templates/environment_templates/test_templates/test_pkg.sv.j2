@@ -17,6 +17,11 @@ package {{ environment.env_name }}_test_pkg;
   `include "{{ environment.env_name }}_base_test.sv"
   `include "{{ environment.env_name }}_direct_test.sv"
   `include "{{ environment.env_name }}_gen_test.sv"
+{%- if tests %}
+
+  // 属性测试（一条 environment.tests = 一个 UVM_TEST = 一个属性取值）
+  `include "{{ environment.env_name }}_attr_test.sv"
+{%- endif %}
 
 
 endpackage : {{ environment.env_name }}_test_pkg

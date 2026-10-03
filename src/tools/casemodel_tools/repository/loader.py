@@ -233,6 +233,66 @@ def model_from_dict(data: Any, source: str = "<dict>") -> CaseModel:
     return model.resolve()
 
 
+def models_from_dict(data: Any, source: str = "<dict>") -> List[CaseModel]:
+    """dict → **一组** CaseModel。
+
+    两种写法都能读，且是等价的：
+
+        # 写法一：顶层 object —— 只测一个对象（旧写法，一直有效）
+        object: FlowControl
+        sub_objects: [...]
+
+        # 写法二：顶层 tests 列表 —— 一份模型测多个对象
+        tests:
+          - {object: FlowControl, object_code: FC, sub_objects: [...]}
+          - {object: Arbiter, object_code: ARB, sub_objects: [...]}
+
+    写法二里，下面的 dimensions / methods / checks / cross_* / environment /
+    generation / case_defaults 是**共享的属性空间**，被每个对象共用 —— 这正是
+    这个写法存在的理由：一套维度空间，测多个对象。
+
+    单独写一个函数而不是改 `model_from_dict`：那个函数是「一个对象」的
+    **逐字段实现**，387 个测试挂在它上面。这里只做**扇出**，每个对象仍然走
+    原来那条路 —— 多对象不需要知道任何单对象内部的细节。
+    """
+    if not isinstance(data, dict):
+        raise CaseModelError(f"顶层必须是 mapping，当前为 {type(data).__name__}")
+
+    entries = data.get("tests")
+    if entries is None:
+        return [model_from_dict(data, source=source)]     # 写法一
+
+    if not isinstance(entries, list) or not entries:
+        raise CaseModelError("'tests' 必须是非空列表（每个条目 = 一个被测对象）")
+
+    # 共享段 = 顶层去掉 tests 之后的全部内容；每个条目覆盖上去
+    shared = {k: v for k, v in data.items() if k != "tests"}
+    models: List[CaseModel] = []
+    for index, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise CaseModelError(f"tests[{index - 1}] 必须是 mapping")
+        merged = {**shared, **entry}
+        name = str(entry.get("object") or f"#{index}")
+        models.append(model_from_dict(merged, source=f"{source}·{name}"))
+
+    duplicate = _duplicate_object_codes(models)
+    if duplicate:
+        # 代号会进 case_id 的 TC-<代号>-…，撞了就会产出重名的 case
+        raise CaseModelError(
+            f"tests 里有两个对象用了同一个 object_code：{duplicate}"
+            "（case_id 会撞车，给其中一个显式写 object_code）")
+    return models
+
+
+def _duplicate_object_codes(models: List[CaseModel]) -> str:
+    seen = set()
+    for model in models:
+        if model.object_code in seen:
+            return model.object_code
+        seen.add(model.object_code)
+    return ""
+
+
 # ════════════════════════════════════════════════════════════
 # Repository 门面
 # ════════════════════════════════════════════════════════════
@@ -259,3 +319,27 @@ def load_model_from_text(text: str, source: str = "<text>") -> CaseModel:
     except yaml.YAMLError as exc:
         raise CaseModelError(f"YAML 解析失败: {exc}") from exc
     return model_from_dict(data, source=source)
+
+
+def load_models(path: str | Path) -> List[CaseModel]:
+    """读 YAML → **一组** CaseModel（写法二会给出多个）。
+
+    单对象写法下长度恒为 1。调用方要「不管哪种写法都能跑」就用这个，
+    只想要那一个对象时用 `load_model`。
+    """
+    p = Path(path)
+    try:
+        text = p.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise
+    except OSError as exc:
+        raise CaseModelError(f"读取失败 {p}: {exc}") from exc
+    return load_models_from_text(text, source=str(p))
+
+
+def load_models_from_text(text: str, source: str = "<text>") -> List[CaseModel]:
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise CaseModelError(f"YAML 解析失败: {exc}") from exc
+    return models_from_dict(data, source=source)

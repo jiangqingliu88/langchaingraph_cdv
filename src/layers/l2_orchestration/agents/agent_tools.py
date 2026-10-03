@@ -23,12 +23,13 @@ def register_all_tools() -> ToolRegistry:
         registry.register(t)
 
     # ═══════════════════════════════════════════════════
-    # case 属性建模 (3 tools) — delegated to casemodel_tools
+    # case 属性建模 (3 tools) — verify 角色的工具适配器
     #   casemodel_validate  Schema 校验
     #   casemodel_gaps      全量完备性分析（可带真实 case 列表反向核对）
     #   casemodel_generate  按属性组合生成 case 属性表
+    # 适配器归 verify 角色；工具本体在 src/tools/casemodel_tools/
     # ═══════════════════════════════════════════════════
-    from src.tools.casemodel_tools.agent.registry import (
+    from src.agents.verify.casemodel.registry import (
         ensure_casemodel_tool_registry,
     )
     casemodel_reg = ensure_casemodel_tool_registry()

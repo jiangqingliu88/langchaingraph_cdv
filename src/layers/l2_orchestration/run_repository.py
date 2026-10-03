@@ -20,6 +20,17 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
+#: 终局事件 → 运行状态。**没有映射到的都算"还在跑"** —— 日志的最后一条是
+#: 阶段事件（stage.finished 之类）时就该是这个答案。
+_STATE_BY_KIND = {
+    "run.finished": "completed",
+    "run.failed": "failed",
+    "run.cancelled": "cancelled",
+    # 停在检查点上等人：这次 astream 结束了，但运行没结束
+    "run.interrupted": "waiting",
+}
+
+
 class RunRepository:
     """从 output 目录扫描 run 数据。"""
 
@@ -30,14 +41,39 @@ class RunRepository:
     # 扫描
     # ═══════════════════════════════════════════════════════════
 
+    def run_dirs(self) -> List[Path]:
+        """所有可能的 run 目录，新的在前。
+
+        **两种布局都要认**，因为仓库里两种都在用：
+
+            output/<运行名>/             —— 本模块文档与 `-o output` 的意图
+            output_<用户>_<时间戳>/       —— `make_output_root()` 实际产出的形状
+
+        `make_output_root("output")` 给的是**前缀式**名字（`output_用户_时间戳`），
+        落在 CWD 下当兄弟目录，不是 `output/` 的子目录。此前本模块只扫
+        `output/*/`，于是 `vagent runs` 对真实产物恒为空 —— 不是没接线，
+        是两边对"output 是父目录还是前缀"这个问题的答案不一致。
+
+        与其改掉落盘约定（会让已有的输出目录全部失联），不如让读取侧两种都认。
+        """
+        found: List[Path] = []
+        base = self.output_base
+        if base.is_dir():
+            found.extend(p for p in base.iterdir()
+                         if p.is_dir() and not p.name.startswith("."))
+        # 前缀式兄弟目录：output_<...> 与 output 同位于父目录下
+        parent = base.parent if str(base.parent) else Path(".")
+        try:
+            found.extend(p for p in parent.glob(f"{base.name}_*")
+                         if p.is_dir() and not p.name.startswith("."))
+        except OSError:
+            pass
+        return sorted(set(found), key=lambda p: p.name, reverse=True)
+
     def list_runs(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """扫描 output/*/，返回 run 摘要列表（按目录名倒序，即新 run 在前）。"""
-        if not self.output_base.exists():
-            return []
+        """扫描所有 run 目录，返回摘要列表（按目录名倒序，即新 run 在前）。"""
         runs = []
-        for d in sorted(self.output_base.iterdir(), reverse=True):
-            if not d.is_dir() or d.name.startswith("."):
-                continue
+        for d in self.run_dirs():
             manifest = d / "docs" / "manifest.json"
             if not manifest.exists():
                 continue
@@ -126,19 +162,108 @@ class RunRepository:
         return failed
 
     # ═══════════════════════════════════════════════════════════
+    # 运行日志（见 run_journal 模块头）
+    # ═══════════════════════════════════════════════════════════
+
+    def journal(self, run_id: str, after_seq: int = 0) -> List[Dict[str, Any]]:
+        """读某 run 的过程日志 —— **历史运行与实时运行走同一条读取路径**。
+
+        这是本仓库"界面不该为跑着的 run 和跑完的 run 写两套渲染"那条设计的落点：
+        数据都在 `docs/run_events.jsonl`，界面只是读它。
+
+        返回 dict 而不是 RunEvent：本层的调用方（CLI / 界面 / bridge）是 JSON 世界，
+        在这一层就转好，免得每个调用方各自 `to_dict()`。
+        """
+        run_dir = self._resolve(run_id)
+        if not run_dir:
+            return []
+        from src.layers.l2_orchestration.run_journal import read_journal
+        return [e.to_dict() for e in read_journal(run_dir, after_seq=after_seq)]
+
+    def journal_summary(self, run_id: str) -> Dict[str, Any]:
+        """日志的**概览** —— 界面上的运行列表用它显示"到哪一步了"。
+
+        与 `_summary` 的区别：那个读最终产物（要跑完才有），这个读过程日志
+        （跑着就有）。两者合起来才既能列"跑完的"又能列"正在跑的"。
+        """
+        events = self.journal(run_id)
+        if not events:
+            return {}
+        stages = [e for e in events if e.get("stage")]
+        finished = [e for e in events if e.get("kind") == "stage.finished"]
+        failed = [e for e in events if e.get("kind") == "stage.failed"]
+        last = events[-1]
+        # 注意这里要的是"这次 astream 结束了没有"（含暂停），不是"运行结束没有"：
+        # 暂停的运行不需要继续轮询，但它的状态是 waiting 而不是 completed。
+        idle = last.get("kind") in ("run.finished", "run.failed", "run.cancelled",
+                                    "run.interrupted")
+        return {
+            "run_id": last.get("run_id") or run_id,
+            "event_count": len(events),
+            "stage_count": len(finished),
+            "failed_count": len(failed),
+            "current_stage": last.get("stage", ""),
+            "current_title": last.get("title", ""),
+            "round": last.get("round", 0),
+            # 五种收束方式，别混：跑完 / 失败 / 取消 / **等人** / 还在跑。
+            # "等人"单独一档是必须的 —— 界面靠它决定显示审批条还是终态，
+            # 归进 running 的话，一次暂停的运行看起来就像卡住了。
+            "state": _STATE_BY_KIND.get(last.get("kind"), "running"),
+            "started_at": events[0].get("ts", ""),
+            "updated_at": last.get("ts", ""),
+            "stages": [{"stage": e.get("stage", ""), "title": e.get("title", ""),
+                        "round": e.get("round", 0), "status": e.get("status", ""),
+                        "duration_s": e.get("duration_s", 0.0)}
+                       for e in finished + failed],
+            "last": last,
+        }
+
+    def discover_runs(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """**含未完成**的运行列表。
+
+        `list_runs` 只认 `docs/manifest.json` —— 那是跑完才写的，所以正在跑的、
+        或者跑挂了的 run 根本不出现在列表里。界面需要一个"现在有什么在跑"的视图，
+        判据换成 `docs/run_events.jsonl` 存在。
+        """
+        out: List[Dict[str, Any]] = []
+        for d in self.run_dirs():
+            has_manifest = (d / "docs" / "manifest.json").exists()
+            has_journal = (d / "docs" / "run_events.jsonl").exists()
+            if not (has_manifest or has_journal):
+                continue
+            entry: Dict[str, Any] = {"run_id": d.name, "dir": str(d),
+                                     "artifacts": has_manifest}
+            if has_manifest:
+                entry.update(self._summary(d, d / "docs" / "manifest.json"))
+            entry.update(self.journal_summary(d.name))
+            # `finished` 与 `artifacts` 是两件事：前者是"运行结束了"（日志里有终态事件），
+            # 后者是"产物齐了"。跑挂的 run 有日志没产物；早期没有日志的 run 则相反 ——
+            # 所以取两者的并，谁都不能单独回答"这个东西还活着吗"。
+            entry["finished"] = bool(
+                entry.get("state") in ("completed", "failed", "cancelled")
+                or has_manifest)
+            entry["run_id"] = d.name
+            out.append(entry)
+            if len(out) >= limit:
+                break
+        return out
+
+    # ═══════════════════════════════════════════════════════════
     # 辅助
     # ═══════════════════════════════════════════════════════════
+
+    def run_dir(self, run_id: str) -> Optional[Path]:
+        """`_resolve` 的公开版 —— 别处要拿"这次运行的目录"时用这个。"""
+        return self._resolve(run_id)
 
     def _resolve(self, run_id: str) -> Optional[Path]:
         """解析 run_id → 目录（支持完整目录名或前缀匹配）。"""
         d = self.output_base / run_id
         if d.is_dir():
             return d
-        # 前缀匹配
-        if self.output_base.exists():
-            for candidate in self.output_base.iterdir():
-                if candidate.is_dir() and candidate.name.startswith(run_id):
-                    return candidate
+        for candidate in self.run_dirs():
+            if candidate.name.startswith(run_id):
+                return candidate
         return None
 
     @staticmethod

@@ -11,7 +11,13 @@ import re
 from datetime import datetime
 
 # 匹配已含时间戳的路径：..._用户名_YYYYMMDD_HHMMSS
-_TIMESTAMPED = re.compile(r"_[a-z]+\d*_\d{8}_\d{6}$")
+#
+# 末尾那个可选 `_\d+` 是给"同一秒内的第二次运行"留的：时间戳只到秒，
+# 串行启动两次很容易落在同一秒，`RunService` 于是给第二次加一个 `_2` 后缀。
+# 不加这一项的话，`_2` 会让正则匹配不上，后续任何一次 `make_output_root`
+# 都会**再追加一个时间戳**，目录名变成
+# `output_x_20261002_120000_2_x_20261002_120000` —— 幂等承诺在改名的那一刻失效。
+_TIMESTAMPED = re.compile(r"_[a-z]+\d*_\d{8}_\d{6}(_\d+)?$")
 
 
 def make_output_root(base: str | None = None) -> str:

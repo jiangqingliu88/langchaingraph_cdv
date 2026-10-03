@@ -1,0 +1,161 @@
+# ════════════════════════════════════════════════════════════
+# 反面示例 —— 功能组织树与专题层的常见坑
+#
+# cpu_pipeline.yaml 是「写对了」的样子；这一份每处都在踩坑，
+# 用来验证 analysis/rules/org_tree.py 与 themes.py 能逐条抓出来。
+# 不要照抄。
+#
+# 完整诊断:
+#   python -m src.tools.casemodel_tools.cli analyze config/casemodel/examples/cpu_pipeline_flawed.yaml
+# ════════════════════════════════════════════════════════════
+
+version: "0.9"
+
+tests:
+  # ── L1 对象 / L2 功能组织树 ── 每个条目 = 一个被测对象
+  #   下面的 dimensions / methods / checks / cross_* 是它们**共享**的属性空间
+  - object: CpuPipeline
+    object_cn: CPU 流水（反面示例）
+    object_code: CPU
+
+    # ── L2 功能组织树 ──
+    sub_objects:
+      - id: STG-01
+        name: 指令
+        code: INST
+        children:
+          - {id: STG-01a, name: 控制请求数据/结构仲裁, code: ARB}
+          # ✗ 代号与上一个叶子重复 —— 两个不同的 case 会落成同一个名字
+          - {id: STG-01b, name: 发射解析和启动, code: ARB}
+
+      - {id: STG-02, name: 读数据, code: RD}
+
+      # ✗ 整棵子树没有任何专题打到 —— 死结构
+      - id: STG-03
+        name: 旁路
+        code: BYP
+        children:
+          - {id: STG-03a, name: 旁路校验, code: BYPC}
+
+      - {id: STG-04, name: 写数据}          # ✗ 未声明 code，中文名推导不出 ASCII
+
+themes:
+
+  - id: TH-P0-CFG
+    name: 配置和参数专题
+    priority: P0
+    applies_to: [指令, 读数据]          # 指向分支「指令」会展开到它的两个叶子
+    dimensions: [指令长度, 配置档位]
+    method: D
+    checks: [CHECK-FUNC]
+
+  # ✗ 与 TH-P0-CFG 的「目标 + 维度 + 方法」完全相同 → 生成字段取值一样的重复 case
+  - id: TH-DUP
+    name: 重复的配置专题
+    priority: P0
+    applies_to: [指令, 读数据]
+    dimensions: [指令长度, 配置档位]
+    method: D
+
+  # ✗ 优先级空洞：只有 P0 和 P2，缺 P1
+  - id: TH-P2-BND
+    name: 各维度边界专题
+    priority: P2
+    applies_to: [写数据]
+    # ✗ 这两个维度被 cross_matrix 标为禁止交叉 —— 专题自相矛盾
+    dimensions: [反压比例, 反压持续时间]
+    # ✗ 反压持续时间 没声明 boundary，SPCL 推不动它
+    method: SPCL
+
+  # ✗ applies_to 引用了不存在的组织树节点
+  - id: TH-BAD-NODE
+    name: 引用错节点的专题
+    priority: P0
+    applies_to: [不存在的节点]
+    dimensions: [指令长度]
+    method: D
+
+  # ✗ dimensions 全部悬空 → 这个专题生成不出任何 case
+  - id: TH-BAD-DIM
+    name: 维度全悬空的专题
+    priority: P2
+    applies_to: [读数据]
+    dimensions: [不存在的维度]
+    method: G
+
+# ── L3 维度 / L4 字段 ──
+dimensions:
+
+  - id: D_length
+    name: 指令长度
+    fields:
+      - name: 指令长度
+        type: set
+        values: [1, 8, MAX]
+        boundary: ["1", "MAX"]
+
+  - id: D_cfg
+    name: 配置档位
+    fields:
+      - name: 配置档位
+        type: enum
+        values: [默认, 高性能]
+
+  - id: D_ratio
+    name: 反压比例
+    fields:
+      - name: 反压比例
+        type: range
+        min: 0
+        max: 100
+        boundary: ["0", "100"]
+
+  - id: D_dur
+    name: 反压持续时间
+    fields:
+      - name: 反压持续时间
+        type: enum
+        # ✗ 没声明 boundary，SPCL 专项推不到它
+        values: ["1拍", "持续", "超阈值"]
+
+  # ✗ 异常类型 / 负载 这两个维度没有被任何专题选中 —— 取值永远不会被覆盖
+  - id: D_err
+    name: 异常类型
+    fields:
+      - name: 异常类型
+        type: enum
+        values: [无, 非法指令, 超时]
+
+  - id: D_load
+    name: 负载
+    fields:
+      - name: 并发数
+        type: weighted
+        values:
+          - {value: 1, weight: 5}
+          - {value: 8, weight: 1}
+
+methods: [D, RND, G, SPCL]
+checks: [CHECK-FUNC, CHECK-WBOX]
+
+# ── 维度约束组合 ──
+cross_matrix:
+  反压比例×反压持续时间: forbidden     # 与 TH-P2-BND 的维度选择冲突
+  指令长度×配置档位: required
+
+generation:
+  # ✗ 引用了不存在的专题
+  themes: [TH-P0-CFG, TH-DUP, 不存在的专题]
+  seed: 7
+  repeat: 4
+  max_cases: 25                        # 组合规模远超上限 → 截断
+
+environment:
+  required: [rtl_version, seed]
+  defaults:
+    rtl_version: cpu_v0.9.0
+    seed: 7
+
+case_defaults:
+  id_prefix: TC
+  checks: [CHECK-FUNC]

@@ -1,0 +1,40 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// Attribute Tests: {{ environment.env_name }}_attr_test
+//
+// **一条 tests: 条目 = 一个 UVM_TEST = 一个属性取值**（维度 × 取值）。
+// 属性经 uvm_config_db 传递，键 <key>_int 是机器可读的整型通道 ——
+// **取值的中文只出现在注释里，不进 SV 字面量**（字面量会被比较、被打印，
+// 掺进非 ASCII 是 locale 隐患；注释没有这个问题）。
+//
+// 消费方（env / sequence / driver）读 <key>_int 之后按自己的语义解释 ——
+// 本模板不知道也不该知道「0/10/50/100 分别代表什么」。
+
+// 生成一条属性 test。两条注意：
+//   1. 宏体内**只能用 /* */ 注释** —— `//` 会把行尾的反斜杠一起吃掉，
+//      宏定义当场断在那一行（SV 宏的经典坑，别改回去）。
+//   2. 宏**不收中文取值**：可读的取值由上面那行 `// ── 属性 test N：… ──`
+//      注释承载。把中文当宏参数传，源码里就会出现非 ASCII 的字符串字面量 ——
+//      那正是这套设计要避开的。
+`define GEN_ATTR_TC(tc_name, tc_base, tc_key, tc_int) \
+class tc_name extends tc_base; \
+    `uvm_component_utils(tc_name) \
+    function new(string name, uvm_component parent); \
+        super.new(name, parent); \
+    endfunction \
+    virtual function void build_phase(uvm_phase phase); \
+        super.build_phase(phase); \
+        /* 本 test 的属性取值见上方注释；机器通道是下面这个 int */ \
+        uvm_config_db#(int)::set(this, "*", {tc_key, "_int"}, tc_int); \
+    endfunction \
+endclass
+
+{% for t in tests %}
+// ── 属性 test {{ loop.index }}：{{ t.dimension }} = {{ t.value }} ──
+// 消费示例（env / sequence 侧按需打开，键名与下面 set 的同一个）：
+//   int attr_{{ t | attr_key }};  /* 取值：{{ t.value }} */
+//   if (!uvm_config_db#(int)::get(this, "", "{{ t | attr_key }}_int", attr_{{ t | attr_key }}))
+//     `uvm_fatal("ATTR", "{{ t | attr_key }}_int 没设上")
+// 类名 {{ environment.env_name }}_{{ t | attr_class_slug }}_test
+`GEN_ATTR_TC({{ environment.env_name }}_{{ t | attr_class_slug }}_test, {{ t.base or (environment.env_name ~ "_gen_test") }}, "{{ t | attr_key }}", {{ t | attr_int_value }})
+{% endfor %}

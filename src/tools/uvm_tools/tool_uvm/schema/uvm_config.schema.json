@@ -306,7 +306,25 @@
           "type": "array",
           "items": { "$ref": "#/$defs/tlmConnection" }
         },
-        "bench": { "$comment": "旧透传（示例为显式空对象）", "type": "object" }
+        "bench": { "$comment": "旧透传（示例为显式空对象）", "type": "object" },
+        "tests": {
+          "$comment": "属性测试：**一条 = 一个 UVM_TEST = 一个属性取值**（维度×取值）。渲染在 test_attr.sv.j2；内容为空时不产该文件",
+          "type": "array",
+          "items": { "$ref": "#/$defs/envTest" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "envTest": {
+      "$comment": "一个属性测试。dimension/value 必填；key（uvm_config_db 通道名，ASCII）与 int_value（机器可读镜像）缺省时由模板过滤器推；base 缺省 {env_name}_gen_test。取值 token 可以是中文——它只进注释与类名投影，不进 SV 字面量",
+      "type": "object",
+      "required": ["dimension", "value"],
+      "properties": {
+        "dimension": { "type": "string" },
+        "value": { "type": ["string", "number"] },
+        "key": { "$comment": "config_db 键前缀；实际键是 <key>_int / <key>_str", "type": "string" },
+        "int_value": { "type": "integer" },
+        "base": { "$comment": "被继承的测试基类", "type": "string" }
       },
       "additionalProperties": false
     },

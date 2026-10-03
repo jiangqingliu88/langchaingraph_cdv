@@ -1,0 +1,160 @@
+# ════════════════════════════════════════════════════════════════
+# 验证工作台 —— 界面清单
+#
+# 这份文件就是「界面长什么样」的**唯一真相**：有哪些模块、属于哪条业务线、
+# 停靠在哪儿、绑定哪个工具。改这里就能改界面，不用动 python。
+#
+# 启动：  python -m src.workbench                 # 读本文件
+#         python -m src.workbench 别的清单.yaml    # 用别的清单
+# 契约：  src/workbench/spec.py（字段说明在那里，不在这份文件的注释里）
+#
+# 键名写错会**启动就报错**（不是静默忽略）—— 报错消息会点名是哪个字段，
+# 照着改即可。
+# ════════════════════════════════════════════════════════════════
+
+version: 1
+
+window:
+  title: "SignOffAI · 验证工作台"
+  size: [1520, 940]
+  min_size: [1080, 680]
+  # 留空 = 用平台默认主题。可选值见 src/workbench/ui/theme.py 的 PALETTES
+  theme: ""
+  # 关窗口时保存位置与 Dock 布局，"视图 → 重置布局" 可以清掉
+  restore_layout: true
+
+# ── 三条业务线 ──
+# 每条生成一个同名菜单；模块在菜单里的分组就按 group 走。
+# order 同时决定中央标签页的先后（业务线 order 优先于模块 order）。
+groups:
+  - {id: debug, title: 调试技术,     order: 10, menu: true}
+  - {id: ide,   title: 集成设计环境, order: 20, menu: true}
+  - {id: vms,   title: 验证管理系统, order: 30, menu: true}
+
+# ── 模块 ──
+# area: center = 中央工作区标签页；left/right/bottom = 停靠区。
+#       同一停靠区的模块会被 tabify 成一组（像 Verdi 底部那一排页签）。
+# tool: 主绑定，名字取自 src/workbench/bridge/catalog.py 的 BINDINGS。
+modules:
+
+  # ══ 调试技术 ════════════════════════════════════════════════
+
+  - id: debug.sim_log
+    title: 仿真日志
+    group: debug
+    factory: src.workbench.modules.debug.sim_log:SimLogModule
+    area: center
+    order: 10
+    tool: {name: debug.collect_sim_log, kind: json}
+
+  - id: debug.fingerprint
+    title: 错误指纹
+    group: debug
+    factory: src.workbench.modules.debug.fingerprint:FingerprintModule
+    area: bottom
+    order: 10
+    tool: {name: debug.fingerprint_error, kind: json}
+
+  # ══ 验证管理系统 ════════════════════════════════════════════
+
+  # case 属性完备性建模 —— 11 个页面嵌在模块内部一个 QTabWidget 里。
+  # 它是唯一一个「界面能力本身就是核心」的模块：正交属性怎么 cross、
+  # 覆盖率怎么收敛，都在这 11 页里回答。
+  - id: vms.casemodel
+    title: Case 建模
+    group: vms
+    factory: src.workbench.modules.vms.casemodel:CasemodelModule
+    area: center
+    order: 20
+    # 相对本清单所在目录解析 —— config/casemodel/examples/cpu_pipeline.yaml
+    input: casemodel/examples/cpu_pipeline.yaml
+    tool: {name: casemodel.gaps, kind: json}
+
+  # 验证流程 —— 把闭环搬上界面。
+  #
+  # 注意清单里**没有流程的拓扑**：有哪些阶段、谁是谁的前驱属于领域
+  # （src/layers/l2_orchestration/graph.py + stages.py）。清单只描述**视图**：
+  # 停在哪、轮询多快、有哪些预设。把阶段写进 YAML 会让流程有第二份真相。
+  - id: vms.pipeline
+    title: 验证流程
+    group: vms
+    factory: src.workbench.modules.vms.pipeline:PipelineModule
+    area: center
+    order: 10
+    tool: {name: pipeline.status, kind: json}
+    params:
+      poll_ms: 500
+      # 预设 = 参数集合，不是控制流（改预设不会让流程走出图之外）
+      presets:
+        - {id: smoke,  title: "冒烟（1 轮）",    max_rounds: 1, target: 60.0, approval: auto}
+        - {id: full,   title: "全流程（5 轮）",  max_rounds: 5, target: 95.0, approval: threshold}
+        - {id: cover,  title: "只收敛覆盖率",    max_rounds: 8, target: 95.0, approval: threshold, bypass_design_model: true}
+
+  # 运行历史 —— 左窗格。选中即广播 run.selected，其余两个视图跟着切。
+  # 放在左窗格而不是中央：它是**导航**（"我要看哪一次"），不是工作区。
+  - id: vms.runs
+    title: 运行历史
+    group: vms
+    factory: src.workbench.modules.vms.runs:RunsModule
+    area: left
+    order: 10
+    tool: {name: pipeline.runs, kind: json}
+
+  # 证据 / 产物 —— 右窗格。订阅 run.selected。
+  - id: vms.evidence
+    title: 证据 / 产物
+    group: vms
+    factory: src.workbench.modules.vms.evidence:EvidenceModule
+    area: right
+    order: 10
+    tool: {name: pipeline.detail, kind: json}
+    params:
+      subscribe: run.selected
+
+  # ══ 待接入（第二轮）══════════════════════════════════════════
+  # 放在这里而不是删掉：它们说明这套清单能表达什么，也免得下一个人
+  # 重新设计一遍。取消注释前先确认对应的模块文件已经写出来。
+  #
+  # - id: debug.waveform            # 真实数据源：debug.collect_waveform
+  #   title: 波形查看               # （扫 output/**/*.wlf，经 wlf2log 解析）
+  #   group: debug
+  #   factory: src.workbench.modules.debug.waveform:WaveformModule
+  #   area: bottom
+  #   order: 20
+  #   tool: {name: debug.collect_waveform, kind: json}
+  #
+  # - id: debug.bisect              # 真实数据源：debug.bisect_test
+  #   title: 失败用例二分
+  #   group: debug
+  #   factory: src.workbench.modules.debug.bisect:BisectModule
+  #   area: bottom
+  #   order: 30
+  #   tool: {name: debug.bisect_test, kind: json}
+  #
+  # - id: vms.coverage              # 真实数据源：coverage.collect
+  #   title: 覆盖率
+  #   group: vms
+  #   factory: src.workbench.modules.vms.coverage:CoverageModule
+  #   area: right
+  #   order: 10
+  #   tool: {name: coverage.collect, kind: json}
+  #
+  # ── 以下两个**没有真实数据源**，按约定必须 placeholder: true ──
+  # 仓库里既没有网表/原理图读取器，也没有状态机提取器，所以它们只能画
+  # 演示数据，界面上会常驻一条琥珀色横幅说明这一点。
+  #
+  # - id: ide.schematic
+  #   title: 电路图视图
+  #   group: ide
+  #   factory: src.workbench.modules.ide.schematic:SchematicModule
+  #   area: right
+  #   order: 50
+  #   placeholder: true
+  #
+  # - id: vms.state_machine
+  #   title: 状态机视图
+  #   group: vms
+  #   factory: src.workbench.modules.vms.state_machine:StateMachineModule
+  #   area: right
+  #   order: 60
+  #   placeholder: true

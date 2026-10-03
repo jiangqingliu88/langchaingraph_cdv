@@ -17,7 +17,7 @@ from src.tools.casemodel_tools.analysis.issues import CATEGORY_EXTERNAL
 from src.tools.casemodel_tools.repository import load_model_from_text
 from src.tools.casemodel_tools.repository.case_list import load_cases
 
-from .conftest import CPU, FC, FC_REAL, issues_of, rules_of
+from .conftest import CPU, FC, issues_of, rules_of
 
 
 # ════════════════════════════════════════════════════════════
@@ -248,9 +248,9 @@ def test_cross_check_flags_unknown_theme(tmp_path):
         "    theme: TH-NOT-EXIST\n    fields: {指令长度: '1'}\n"
         "    environment: {seed: 1}\n    checks: [CHECK-FUNC]\n",
         encoding="utf-8")
-    from src.tools.casemodel_tools.repository import load_model as _load
+    from .conftest import one_model
     cases = load_cases(spec)
-    model = _load(CPU)
+    model = one_model(CPU)
     report = cross_check(model, cases)
     assert any(i.rule == "external_unknown_theme" for i in report.issues)
     # 真实 case 报的专题在模型里一个都不存在 —— 模型自己的专题自然零覆盖，
@@ -276,3 +276,38 @@ def test_analysis_result_summary_includes_external(cpu_roundtrip):
     assert s["external_case_count"] > 0
     assert "external_coverage_ratio" in s
     assert "model_error_count" in s
+
+
+# ════════════════════════════════════════════════════════════
+# 文本入口 vs 文件入口
+#
+# 这三条原先住在 GUI 的编辑器测试里（那个文件随旧界面一起删了），但它们
+# 测的其实是**工具层**：界面只是「从编辑器文本分析」的第一个消费者。
+# 放在这里之后，删掉任何界面都不会带走它们 —— 这正是把界面与工具分开的收益。
+# ════════════════════════════════════════════════════════════
+
+def test_check_text_reports_parse_and_schema_errors():
+    from src.tools.casemodel_tools.analysis.schema_check import SchemaChecker
+    checker = SchemaChecker()
+    assert checker.check_text("a: [b")[0].rule == "yaml_parse_error"
+    assert any(i.rule == "missing_required" for i in checker.check_text("object: X"))
+    assert checker.check_text(CPU.read_text(encoding="utf-8")) == []
+
+
+def test_analyze_text_supports_external_cases():
+    from src.tools.casemodel_tools.analysis import analyze_text
+    from .conftest import FC, FC_REAL
+    result = analyze_text(FC.read_text(encoding="utf-8"), cases=str(FC_REAL))
+    assert result.external is not None
+    assert result.external.case_count == 45
+
+
+def test_analyze_text_matches_analyze_file():
+    """同一份内容，从文本分析 vs 从文件分析，结论必须一致。
+
+    这条是界面「改一行马上看效果」的前提：编辑器分析的是**内存里的文本**，
+    它得和「存盘再分析」给同一个答案，否则未保存时看到的结果就不可信。
+    """
+    from src.tools.casemodel_tools.analysis import analyze_text
+    assert analyze_text(CPU.read_text(encoding="utf-8")).score.total == \
+        analyze_file(str(CPU)).score.total

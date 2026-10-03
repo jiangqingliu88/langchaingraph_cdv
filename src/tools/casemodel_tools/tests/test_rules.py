@@ -13,13 +13,15 @@ from src.tools.casemodel_tools.analysis.issues import (CATEGORY_CROSS,
                                                        CATEGORY_ORTHOGONAL,
                                                        CATEGORY_REFERENCE,
                                                        CATEGORY_THEME)
-from src.tools.casemodel_tools.repository import load_model_from_text
+from src.tools.casemodel_tools.analysis.multi import analyze_many
+from src.tools.casemodel_tools.repository import (load_model_from_text,
+                                                  load_models_from_text)
 
 from .conftest import CPU, FC, FC_FLAWED, issues_of, rules_of
 
 
 def build(spec: dict):
-    return analyze(load_model_from_text(yaml.safe_dump(spec, allow_unicode=True)))
+    return analyze_many(load_models_from_text(yaml.safe_dump(spec, allow_unicode=True)))
 
 
 def rules_in(spec: dict, category: str = "") -> set:
@@ -79,7 +81,7 @@ def test_rules_are_pure_reads():
 
 def test_clean_examples_have_no_reference_errors():
     for path in (CPU, FC):
-        result = analyze(load_model_from_text(path.read_text(encoding="utf-8")))
+        result = analyze_many(load_models_from_text(path.read_text(encoding="utf-8")))
         assert not [i for i in result.issues if i.category == CATEGORY_REFERENCE
                     and i.is_error]
 
@@ -281,7 +283,7 @@ def test_flat_model_reports_but_does_not_error_on_themes(fc_result):
 
 @pytest.mark.parametrize("path", (CPU, FC), ids=lambda p: p.name)
 def test_clean_examples_have_no_orthogonality_issues(path):
-    result = analyze(load_model_from_text(path.read_text(encoding="utf-8")))
+    result = analyze_many(load_models_from_text(path.read_text(encoding="utf-8")))
     assert not rules_of(result, CATEGORY_ORTHOGONAL)
 
 
@@ -391,7 +393,7 @@ def test_forbidden_pair_inside_required_group_is_error():
 
 def test_group_with_one_resolved_dimension_is_error():
     """fc_flawed 的 XG-02 = [随机反压, 不存在的维度] —— 解析后只剩一个维度。"""
-    result = analyze(load_model_from_text(
+    result = analyze_many(load_models_from_text(
         FC_FLAWED.read_text(encoding="utf-8")))
     assert issues_of(result, "cross_group_too_small")
 
@@ -510,7 +512,7 @@ def test_check_suggestion_silent_when_already_declared():
 
 @pytest.mark.parametrize("path", (CPU, FC), ids=lambda p: p.name)
 def test_clean_examples_have_no_errors(path):
-    result = analyze(load_model_from_text(path.read_text(encoding="utf-8")))
+    result = analyze_many(load_models_from_text(path.read_text(encoding="utf-8")))
     assert not [i for i in result.model_issues if i.is_error], \
         [str(i) for i in result.model_issues if i.is_error]
 
@@ -526,7 +528,7 @@ def test_flawed_examples_trigger_the_expected_tree_and_theme_rules(cpu_flawed_re
 
 
 def test_flawed_examples_trigger_the_expected_dimension_rules():
-    result = analyze(load_model_from_text(FC_FLAWED.read_text(encoding="utf-8")))
+    result = analyze_many(load_models_from_text(FC_FLAWED.read_text(encoding="utf-8")))
     expected = {"field_as_dimension", "method_as_dimension", "check_as_dimension",
                 "method_as_object", "check_as_object", "dimension_as_object",
                 "method_token_in_field_values", "unknown_dimension_ref",

@@ -584,3 +584,173 @@ def test_cli_generate_filter_and_skip(tmp_path, capsys):
     # -g 不存在 → SystemExit 报错
     with pytest.raises(SystemExit):
         main(["-i", str(yaml_file), "-d", str(dest), "-g", "NOPE", "-q"])
+
+
+# ════════════════════════════════════════════════════════════
+# 属性测试：一条 environment.tests = 一个 UVM_TEST = 一个属性取值
+# ════════════════════════════════════════════════════════════
+
+from src.tools.uvm_tools.tool_uvm.gen_uvm import (   # noqa: E402
+    EnvironmentModel, _normalize_tests, attr_class_slug, attr_int_value, attr_key,
+)
+
+RATIO_TESTS = [
+    {"dimension": "D_ratio", "value": "0", "key": "fc_ratio", "int_value": 0},
+    {"dimension": "D_ratio", "value": "10", "key": "fc_ratio", "int_value": 10},
+    {"dimension": "D_ratio", "value": "50", "key": "fc_ratio", "int_value": 50},
+    {"dimension": "D_mode", "value": "首拍", "key": "fc_mode", "int_value": 1},
+]
+
+
+def _env_spec_with_tests(tests):
+    """apb_env.yaml 加一段 tests: —— 其余原样，保证只测新东西。"""
+    import yaml
+    doc = yaml.safe_load((EXAMPLES / "apb_env.yaml").read_text(encoding="utf-8"))
+    doc["environment"]["tests"] = tests
+    return doc
+
+
+def _generate(tmp_path, tests, name="env_tests.yaml"):
+    import yaml
+    src = tmp_path / name
+    src.write_text(yaml.safe_dump(_env_spec_with_tests(tests), allow_unicode=True,
+                                  sort_keys=False), encoding="utf-8")
+    dest = tmp_path / f"out_{src.stem}"
+    assert main(["-i", str(src), "-d", str(dest), "-q"]) == 0
+    return dest
+
+
+class TestNormalizeTests:
+    def test_empty_shapes(self):
+        for raw in (None, "", [], "x", {}):
+            assert _normalize_tests(raw) == []
+
+    def test_drops_entries_missing_dimension_or_value(self):
+        assert _normalize_tests([
+            {"dimension": "D"},
+            {"value": "1"},
+            "not-a-dict",
+            {"dimension": "D", "value": "1"},
+        ]) == [{"dimension": "D", "value": "1", "key": "", "int_value": None, "base": ""}]
+
+    def test_keeps_int_zero_distinct_from_absent(self):
+        """`int_value: 0` 和「没给」是两回事 —— 前者是给定的值，后者要推导。"""
+        kept = _normalize_tests([{"dimension": "D", "value": "0", "int_value": 0}])
+        assert kept[0]["int_value"] == 0
+        assert _normalize_tests([{"dimension": "D", "value": "0"}])[0]["int_value"] is None
+
+    def test_environment_model_exposes_it(self):
+        env = EnvironmentModel(name="e", env_name="e", tests=_normalize_tests(RATIO_TESTS))
+        assert env.to_context()["tests"][0]["dimension"] == "D_ratio"
+
+    def test_default_is_empty(self):
+        assert EnvironmentModel(name="e", env_name="e").to_context()["tests"] == []
+
+
+class TestAttrFilters:
+    def test_explicit_key_wins_verbatim(self):
+        assert attr_key({"dimension": "D_ratio", "key": "FC_Ratio"}) == "FC_Ratio"
+
+    def test_key_derived_from_dimension_is_ascii(self):
+        key = attr_key({"dimension": "反压比例"})
+        assert key.isascii() and key
+
+    def test_int_value_prefers_explicit(self):
+        assert attr_int_value({"value": "x", "int_value": 7}) == 7
+
+    def test_int_value_parses_numeric_token(self):
+        assert attr_int_value({"value": "50"}) == 50
+
+    def test_int_value_falls_back_to_zero(self):
+        assert attr_int_value({"value": "首拍"}) == 0
+
+    def test_ascii_value_keeps_its_own_slug(self):
+        assert attr_class_slug({"dimension": "D_ratio", "value": "50"}) == "d_ratio_p50"
+
+    def test_non_ascii_value_projects_through_int_value(self):
+        slug = attr_class_slug({"dimension": "D_mode", "value": "首拍", "int_value": 1})
+        assert slug == "d_mode_p1"
+
+    def test_slug_is_always_a_valid_identifier(self):
+        import re
+        for entry in ({"dimension": "D_ratio", "value": "50"},
+                      {"dimension": "反压模式", "value": "首拍", "int_value": 2},
+                      {"dimension": "反压模式", "value": "尾拍"}):
+            assert re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*",
+                                attr_class_slug(entry)), entry
+
+    def test_two_non_ascii_values_without_int_do_not_collide(self):
+        """两个中文取值都没给 int_value 时不能撞成同一个类名 —— 那是编译错误。"""
+        a = attr_class_slug({"dimension": "m", "value": "首拍"})
+        b = attr_class_slug({"dimension": "m", "value": "尾拍"})
+        assert a != b
+
+
+class TestRenderedAttrTests:
+    def test_one_class_per_attribute_value(self, tmp_path):
+        dest = _generate(tmp_path, RATIO_TESTS)
+        text = (dest / "env" / "tests" / f"{_iface_name()}_env_attr_test.sv") \
+            .read_text(encoding="utf-8") if False else None
+        attr_files = list(dest.rglob("*_env_attr_test.sv"))
+        assert len(attr_files) == 1
+        body = attr_files[0].read_text(encoding="utf-8")
+        invocations = [l for l in body.splitlines() if l.strip().startswith("`GEN_ATTR_TC(")]
+        assert len(invocations) == len(RATIO_TESTS)
+
+    def test_class_names_and_config_db_keys(self, tmp_path):
+        dest = _generate(tmp_path, RATIO_TESTS)
+        body = list(dest.rglob("*_env_attr_test.sv"))[0].read_text(encoding="utf-8")
+        assert "_d_ratio_p50_test" in body
+        assert "_d_mode_p1_test" in body
+        assert '"fc_ratio"' in body and "50" in body
+
+    def test_non_ascii_value_stays_out_of_sv_literals(self, tmp_path):
+        """中文取值只进注释 —— 进字面量就是 locale 隐患。"""
+        dest = _generate(tmp_path, RATIO_TESTS)
+        body = list(dest.rglob("*_env_attr_test.sv"))[0].read_text(encoding="utf-8")
+        for line in body.splitlines():
+            code = line.split("//")[0]
+            if 'uvm_config_db' in code or code.strip().startswith("`GEN_ATTR_TC("):
+                assert "首拍" not in code, line
+
+    def test_macro_body_uses_block_comments(self, tmp_path):
+        """宏体内必须是 /* */：`//` 会把行尾的反斜杠一起吃掉，宏定义当场断掉。"""
+        dest = _generate(tmp_path, RATIO_TESTS)
+        body = list(dest.rglob("*_env_attr_test.sv"))[0].read_text(encoding="utf-8")
+        macro = body[body.index("`define GEN_ATTR_TC"):body.index("endclass", body.index("`define GEN_ATTR_TC"))]
+        for line in macro.splitlines():
+            if line.rstrip().endswith("\\"):
+                assert "//" not in line, f"宏体内出现 // 注释：{line}"
+
+    def test_test_pkg_includes_the_attr_file(self, tmp_path):
+        dest = _generate(tmp_path, RATIO_TESTS)
+        pkg = list(dest.rglob("*_test_pkg.sv"))[0].read_text(encoding="utf-8")
+        assert "_env_attr_test.sv" in pkg
+
+    def test_get_pattern_is_documented(self, tmp_path):
+        """消费方拿不到键名就没法用 —— 生成的类里必须带着精确的 ::get 示例。"""
+        dest = _generate(tmp_path, RATIO_TESTS)
+        body = list(dest.rglob("*_env_attr_test.sv"))[0].read_text(encoding="utf-8")
+        assert 'uvm_config_db#(int)::get(this, "", "fc_ratio_int"' in body
+
+
+class TestNoTestsRegression:
+    """没有 tests: 的工程（apb）产物必须和以前一模一样。"""
+
+    def test_no_attr_file_is_emitted(self, tmp_path):
+        dest = tmp_path / "plain"
+        assert main(["-i", str(EXAMPLES / "apb_env.yaml"), "-d", str(dest), "-q"]) == 0
+        assert list(dest.rglob("*_attr_test.sv")) == []
+
+    def test_test_pkg_does_not_mention_attr(self, tmp_path):
+        dest = tmp_path / "plain2"
+        assert main(["-i", str(EXAMPLES / "apb_env.yaml"), "-d", str(dest), "-q"]) == 0
+        pkg = list(dest.rglob("*_test_pkg.sv"))[0].read_text(encoding="utf-8")
+        assert "_attr_test" not in pkg
+
+    def test_gen_test_still_carries_the_original_macro(self, tmp_path):
+        """`GEN_TOP_TC` 是字符串宏，改它签名会打断所有既有调用 —— 钉住。"""
+        dest = tmp_path / "plain3"
+        assert main(["-i", str(EXAMPLES / "apb_env.yaml"), "-d", str(dest), "-q"]) == 0
+        gen = list(dest.rglob("*_gen_test.sv"))[0].read_text(encoding="utf-8")
+        assert "`define GEN_TOP_TC(tc_name, tc_com, tc_reg, tc_seq)" in gen

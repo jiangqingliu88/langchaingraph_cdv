@@ -24,7 +24,7 @@ from typing import Dict, List, Optional
 from src.tools._lc_tool_compat import tool
 import structlog
 
-from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner
+from src.tools.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
 
 logger = structlog.get_logger()
 

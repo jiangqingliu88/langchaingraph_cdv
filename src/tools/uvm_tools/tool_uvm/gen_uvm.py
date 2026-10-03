@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import zlib
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -388,6 +389,13 @@ ENVIRONMENT_TEST_TEMPLATES = [
     ("environment_templates/test_templates/gen_test_sv.j2", "{env_name}_gen_test.sv"),
 ]
 
+#: 属性测试（**一条 environment.tests = 一个 UVM_TEST = 一个属性取值**）。
+#: 单独一张表而不是并进上面那张：那张是「无条件产出的四个文件」，
+#: 它被既有测试逐字钉着；这张**只在 tests 非空时渲染**，产物也只有一个文件。
+ENVIRONMENT_ATTR_TEST_TEMPLATES = [
+    ("environment_templates/test_templates/test_attr.sv.j2", "{env_name}_attr_test.sv"),
+]
+
 ENVIRONMENT_SEQ_TEMPLATES = [
     ("environment_templates/virtual_sequencer.sv.j2", "{env_name}_virtual_sequencer.sv"),
     ("environment_templates/seq_templates/virtual_sequence_base.sv.j2", "{env_name}_virtual_base_seq.sv"),
@@ -621,6 +629,10 @@ class EnvironmentModel:
     config_constraints: List[Dict[str, Any]] = field(default_factory=list)
     tlm_connections: List[Dict[str, Any]] = field(default_factory=list)
     bench: Dict[str, Any] = field(default_factory=dict)
+    # 属性测试：**一条 = 一个 UVM_TEST = 一个属性取值**（维度×取值）。
+    # 内容由 YAML environment.tests 归一化而来（_normalize_tests）；
+    # 渲染在 test_attr.sv.j2，为空时不产那个文件。
+    tests: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_context(self) -> Dict[str, Any]:
         context = asdict(self)
@@ -936,6 +948,59 @@ class BenchModel:
     def __repr__(self) -> str:
         return f"BenchModel(name={self.name!r}, env_name={self.env_name!r}, agents={list(self.agents.keys())!r})"
 
+def _attr_slug(text: Any) -> str:
+    """一段文本 → ASCII 标识符片段（非 [A-Za-z0-9] 一律折成 `_`）。
+
+    中文维度名/取值都过这一道：它们能出现在注释里，但**不能出现在类名里**。
+    """
+    return re.sub(r"[^A-Za-z0-9]+", "_", str(text)).strip("_").lower()
+
+
+def attr_key(entry: Dict[str, Any]) -> str:
+    """config_db 的键前缀。
+
+    显式给的 `key` **原样用**（那是作者的命名选择，不该被我们小写化）；没给才由
+    维度名推导。推导结果保证 ASCII —— config_db 的键会进 SV 字面量。
+    """
+    explicit = str(entry.get("key") or "").strip()
+    if explicit:
+        return explicit
+    return _attr_slug(entry.get("dimension", "")) or "attr"
+
+
+def attr_int_value(entry: Dict[str, Any]) -> int:
+    """机器可读的整型取值 —— 这是**唯一进 SV 字面量的东西**。
+
+    优先级：显式 `int_value` → 取值本身是数字 → 0。
+    落到 0 意味着取值是中文且作者没给 `int_value`；类名那边会用 crc32 兜底保证
+    不重名（见 `attr_class_slug`），而原取值仍以注释形式留在文件里。
+    """
+    explicit = entry.get("int_value")
+    if isinstance(explicit, int) and not isinstance(explicit, bool):
+        return explicit
+    text = str(entry.get("value", "")).strip()
+    try:
+        return int(text)
+    except ValueError:
+        return 0
+
+
+def attr_class_slug(entry: Dict[str, Any]) -> str:
+    """类名里的 `<维度>_p<取值>` 片段，**保证全 ASCII**。
+
+    取值是 ASCII 就直接用（`D_ratio` + `50` → `ratio_p50`）；是中文就投影到
+    `int_value`（`D_mode` + 首拍 + 1 → `mode_p1`）。既非 ASCII 又没给 int_value
+    时用 crc32 —— 硬编码成 `p0` 会让多个中文取值**撞成同一个类名**，那是编译错误。
+    """
+    dim = _attr_slug(entry.get("dimension", "")) or "attr"
+    text = str(entry.get("value", "")).strip()
+    if re.fullmatch(r"[A-Za-z0-9_]+", text):
+        return f"{dim}_p{text}"
+    if isinstance(entry.get("int_value"), int):
+        return f"{dim}_p{attr_int_value(entry)}"
+    return f"{dim}_p{zlib.crc32(text.encode('utf-8')) & 0xFFFF:04x}"
+
+
 class JinjaRenderer:
     def __init__(self, templates_dir: Path) -> None:
         self.environment = Environment(
@@ -949,6 +1014,10 @@ class JinjaRenderer:
         self.environment.globals["trademark"] = COMPANY_TRADEMARK
         self.environment.globals["copyright_year"] = COPYRIGHT_YEAR
         self.environment.filters["nl2br"] = lambda value: str(value).replace("\n", "\\n")
+        # 属性测试用的三个过滤器 —— 纯函数，能脱离 Jinja 单测
+        self.environment.filters["attr_key"] = attr_key
+        self.environment.filters["attr_int_value"] = attr_int_value
+        self.environment.filters["attr_class_slug"] = attr_class_slug
         self.environment.globals["get_clock_index"] = lambda name, clocks: clocks.index(name) if name in clocks else 0
         self.environment.globals["get_reset_index"] = lambda name, resets: resets.index(name) if name in resets else 0
         self.environment.globals["get_transaction_type"] = self._get_transaction_type
@@ -1428,6 +1497,15 @@ class EnvironmentRenderTask(RenderTask):
             target_path = tests_dir / target_name
             rendered.append(self.render_file(template_path, target_path, context))
 
+        # 属性测试：只在清单里真的写了 tests 时才产那个文件。
+        # 空列表还产一个空壳文件的话，apb 那类没有属性的工程会多出一个
+        # 「看着像有东西其实什么都没有」的文件。
+        if environment.tests:
+            for template_path, target_pattern in ENVIRONMENT_ATTR_TEST_TEMPLATES:
+                target_name = target_pattern.format(env_name=environment.env_name)
+                rendered.append(self.render_file(template_path,
+                                                 tests_dir / target_name, context))
+
         seqs_dir = env_dir / "seqs"
         for template_path, target_pattern in ENVIRONMENT_SEQ_TEMPLATES:
             target_name = target_pattern.format(env_name=environment.env_name)
@@ -1549,6 +1627,39 @@ def _type_to_pkg(type_name):
         if type_name.endswith(suffix):
             return type_name[: -len(suffix)] + "_pkg"
     return ""
+
+
+def _normalize_tests(raw) -> List[Dict[str, Any]]:
+    """归一化 `environment.tests` → `[{dimension, value, key, int_value, base}]`。
+
+    **一条 = 一个 UVM_TEST = 一个属性取值**。这里只做「类型净化 + 丢坏条目」，
+    不做取值展开 —— 展开（哪个维度有哪些取值）是 case 属性模型那边的事，
+    由它导出成这份清单；渲染器不认识那些语义。
+
+    必填 `dimension` / `value`，缺一个就丢掉（宁可不产这个 test，也不要产一个
+    没有属性、名字还重复的类）。`key` / `int_value` / `base` 缺省时留给模板
+    过滤器推导（见 `attr_key` / `attr_int_value` / `attr_class_slug`）。
+    """
+    if not isinstance(raw, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        dimension = str(item.get("dimension") or "").strip()
+        value = item.get("value")
+        if not dimension or value is None or str(value).strip() == "":
+            continue
+        int_value = item.get("int_value")
+        out.append({
+            "dimension": dimension,
+            "value": str(value),
+            "key": str(item.get("key") or "").strip(),
+            # 保持 None：「没给」和「给了 0」是两回事，模板过滤器区分处理
+            "int_value": int_value if isinstance(int_value, int) else None,
+            "base": str(item.get("base") or "").strip(),
+        })
+    return out
 
 
 def _normalize_scoreboards(scoreboards):
@@ -2015,6 +2126,7 @@ class YAMLLoader:
             config_constraints=data.get("config_constraints", []),
             tlm_connections=data.get("tlm_connections", []),
             bench=data.get("bench", {}),
+            tests=_normalize_tests(data.get("tests", [])),
         )
 
     @staticmethod
@@ -2892,10 +3004,17 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             config_constraints=payload.get("config_constraints", []),
             tlm_connections=payload.get("tlm_connections", []),
             bench=payload.get("bench", {}),
+            tests=_normalize_tests(payload.get("tests", [])),
         )
         ctx = {"environment": env, **env.to_context()}
         files = []
-        for tpl, pat in (ENVIRONMENT_ROOT_TEMPLATES + ENVIRONMENT_TEST_TEMPLATES + ENVIRONMENT_SEQ_TEMPLATES):
+        templates = list(ENVIRONMENT_ROOT_TEMPLATES + ENVIRONMENT_TEST_TEMPLATES
+                         + ENVIRONMENT_SEQ_TEMPLATES)
+        # 属性测试与上面那条路径同一条件 —— 两条都得管，否则 CLI 与这条
+        # 字符串入口会给出不一样的产物
+        if env.tests:
+            templates += ENVIRONMENT_ATTR_TEST_TEMPLATES
+        for tpl, pat in templates:
             try:
                 c = renderer.render(tpl, ctx)
                 files.append(f"  {pat.format(env_name=env_name)}: {len(c)} chars")

@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
-from .loader import (load_model, load_model_from_text, model_from_dict)
+from .loader import (load_model, load_model_from_text, load_models,
+                     load_models_from_text, model_from_dict, models_from_dict)
 
-__all__ = ["load_model", "load_model_from_text", "model_from_dict"]
+__all__ = ["load_model", "load_model_from_text", "model_from_dict",
+           "load_models", "load_models_from_text", "models_from_dict"]

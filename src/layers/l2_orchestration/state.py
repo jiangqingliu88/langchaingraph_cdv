@@ -141,6 +141,17 @@ class PipelineState(BaseModel):
     human_escalation: Optional[str] = None
     terminal_reason: Optional[str] = None
 
+    # ── E. 终态结果包 ──
+    # finalize 节点整体写入，run_closed_loop 原样返回给调用方（CLI / GUI / 服务层）。
+    #
+    # **为什么必须显式声明**：PipelineState 是 extra="forbid" 的 pydantic 模型，
+    # 而 LangGraph 对**未声明**的键是**静默丢弃**——不报错、不警告。在补上这个
+    # 字段之前，`n_finalize` 的 `return {"result": ...}` 一直没进状态，
+    # 于是 `run_closed_loop` 恒返回 `{}`：CLI 的 run_id / coverage / converged
+    # 全是 None / 0 / NO，`--json` 吐一堆 null。
+    # （tests/test_run_streaming.py::TestResultSurvives 钉住这条。）
+    result: Optional[Dict[str, Any]] = None
+
     # ── D. 不进状态（仅在此声明，供 init 节点重建）──
     #   registry / 7 个 agent 实例 / governor / infra / testcase_reg / exclude_reg
     #   / decision_reactor / planner / file_audit  → 走 config["configurable"]["rt"]

@@ -17,7 +17,8 @@ from src.tools.uvm_tools.tool_uvmtestgen.main import (
     validate,
 )
 
-EXAMPLES = Path(__file__).parent.parent / "tool_uvm" / "examples"
+#: apb 例子已挪进 `examples/apb/` 子目录 —— 指向 `examples/` 本身会 FileNotFound
+EXAMPLES = Path(__file__).parent.parent / "tool_uvm" / "examples" / "apb"
 
 
 def _make_xlsx(path: Path):
@@ -76,7 +77,7 @@ def test_make_template_and_generate(tmp_path):
 def test_cli_flow_with_yaml(tmp_path, capsys):
     xlsx = tmp_path / "tp.xlsx"
     _make_xlsx(xlsx)
-    yaml_file = Path(__file__).parent.parent / "tool_uvm" / "examples" / "apb_interface.yaml"
+    yaml_file = EXAMPLES / "apb_interface.yaml"
     assert main(["-i", str(xlsx), "-y", str(yaml_file),
                  "-d", str(tmp_path / "out"), "-q"]) == 0
     assert (tmp_path / "out" / "APB_env_tc_pkg.sv").is_file()

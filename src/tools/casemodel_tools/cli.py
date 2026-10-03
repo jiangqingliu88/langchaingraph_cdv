@@ -6,17 +6,31 @@
     python -m src.tools.casemodel_tools.cli matrix   <模型.yaml>
     python -m src.tools.casemodel_tools.cli tree     <模型.yaml>
     python -m src.tools.casemodel_tools.cli rules
-    python -m src.tools.casemodel_tools.cli gui      [<模型.yaml>]
+    python -m src.tools.casemodel_tools.cli uvm-tests <模型.yaml> [-d 维度] [--max-tests N]
 
 退出码：有 error → 1；模型结构非法 / 文件不存在 → 2；正常 → 0。
+
+**本包是纯工具，没有界面。** 界面在验证工作台里
+（`src/workbench/modules/vms/casemodel/`），入口是 `vagent gui run -m vms.casemodel`
+或 `vagent case-model gui` —— 那两条在主 CLI 里，不在这里。
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# ── UTF-8 强制编码 ──
+# 报告里有 ✓ / ✗ / ★ / █ 这些字符，而 Windows 控制台默认是 GBK：不转的话
+# `analyze` / `tree` 会在 print 那一步抛 UnicodeEncodeError（用户看到的是
+# 一段 traceback，而不是报告）。主 CLI 里也有同样的一段（`src/cli/commands.py`）。
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
 from .analysis import AnalysisResult, analyze_file, rule_docs
 from .analysis.schema_check import SchemaChecker, collect_yaml_paths
@@ -25,12 +39,16 @@ from .domain.errors import CaseListError
 from .generation import generate
 from .repository import load_model
 from .repository.exporters import EXPORT_FORMATS, export_cases
-from .view import text as T
+from . import text as T
 
 __version__ = "2.0"
 
-EXAMPLES_DIR = Path(__file__).resolve().parent / "examples"
-DEFAULT_EXAMPLE = EXAMPLES_DIR / "cpu_pipeline.yaml"
+#: 示例模型放在 **`config/casemodel/examples/`**，不放在本包内。
+#: 理由：这些 YAML 同时被本工具的命令行与验证工作台（`src/workbench`）使用，
+#: 而两边**谁都不该依赖对方** —— 工具包要能在不装 Qt、不装工作台的环境里单独
+#: 用。数据放在包外，两边都只往上指一层，谁也不用 import 谁。
+#: （`config*` 已在 pyproject 的打包规则里，随包一起走。）
+EXAMPLES_DIR = Path(__file__).resolve().parents[3] / "config" / "casemodel" / "examples"
 
 
 # ════════════════════════════════════════════════════════════
@@ -189,8 +207,12 @@ def cmd_rules(args: argparse.Namespace) -> int:
 # ════════════════════════════════════════════════════════════
 
 def cmd_generate(args: argparse.Namespace) -> int:
-    model = load_model(args.model)
-    gen = generate(model, seed=args.seed, max_cases=args.max_cases)
+    # 多对象（tests: 列表）时每个对象各生成一套，case_id 前缀各自独立
+    from .analysis.multi import generate_many
+    from .repository import load_models
+
+    gen = generate_many(load_models(args.model), seed=args.seed,
+                        max_cases=args.max_cases)
     body = export_cases(gen.cases, args.format, seed=gen.seed,
                         truncated=gen.truncated, dropped=gen.dropped,
                         notes=gen.notes, driver=gen.driver,
@@ -208,16 +230,36 @@ def cmd_generate(args: argparse.Namespace) -> int:
 
 
 # ════════════════════════════════════════════════════════════
-# gui
+# uvm-tests —— 把属性取值摊平成 UVM 的 environment.tests 片段
 # ════════════════════════════════════════════════════════════
 
-def cmd_gui(args: argparse.Namespace) -> int:
-    from .view.gui.app import main as gui_main
-    target = args.model
-    if not target and DEFAULT_EXAMPLE.exists():
-        target = str(DEFAULT_EXAMPLE)
-        print(f"未指定模型，加载示例: {target}")
-    return gui_main([target] if target else [])
+def cmd_uvm_tests(args: argparse.Namespace) -> int:
+    """导出 `tool_uvm` 认的 `tests:` 片段（**一条 = 一个 UVM_TEST = 一个属性取值**）。
+
+    产出的是一段 YAML 文本，贴进 env 清单的 `environment:` 下即可 ——
+    本工具与 `uvm_tools` 之间**只是文件格式契约**，互不 import。
+    """
+    from .api import run_uvm_tests
+
+    # run_uvm_tests 吃的是文本，这里就给它文本 —— 不要再 load 一遍模型，
+    # 那等于同一个文件读两次、两条路径两处真相
+    payload = run_uvm_tests(Path(args.model).read_text(encoding="utf-8"),
+                            dimensions=args.dimension or None,
+                            max_tests=args.max_tests)
+    if payload.get("error"):
+        print(f"模型无法构建: {payload['error']}", file=sys.stderr)
+        return 2
+
+    if args.out:
+        Path(args.out).write_text(payload["tests_yaml"], encoding="utf-8")
+        print(f"已写出 {payload['count']} 条属性测试 → {args.out}")
+    else:
+        print(f"# {payload['count']} 条属性测试"
+              f"（维度：{'、'.join(payload['dimensions_used']) or '无'}）")
+        print(payload["tests_yaml"], end="")
+    for note in payload["notes"]:
+        print(f"  注意: {note}", file=sys.stderr)
+    return 0
 
 
 # ════════════════════════════════════════════════════════════
@@ -273,9 +315,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", "-o", help="输出文件（缺省打到 stdout）")
     p.set_defaults(func=cmd_generate)
 
-    p = sub.add_parser("gui", help="打开 tkinter 分析界面")
-    p.add_argument("model", nargs="?", default=None, help="case 模型 YAML（可省略）")
-    p.set_defaults(func=cmd_gui)
+    p = sub.add_parser("uvm-tests",
+                       help="导出 UVM 的 environment.tests 片段（一条 = 一个 UVM_TEST）")
+    p.add_argument("model", help="case 模型 YAML")
+    p.add_argument("--dimension", "-d", action="append", metavar="ID",
+                   help="只要这些维度（按 id / 名称 / key 匹配）；可重复")
+    p.add_argument("--max-tests", type=int, default=32, dest="max_tests",
+                   help="最多导出多少条（默认 32；优先保留边界取值，截断会记账）")
+    p.add_argument("--out", "-o", help="输出文件（缺省打到 stdout）")
+    p.set_defaults(func=cmd_uvm_tests)
 
     return parser
 

@@ -33,6 +33,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# GUI 走 PySide6（桌面窗口，不是 Web 前端 —— 见 CLAUDE.md）。
+# 做成可选：纯 CLI 用法（check / analyze / generate）不需要它，
+# 没必要让每次安装都拖上 Qt。
+gui = [
+    "PySide6>=6.5",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23.0",

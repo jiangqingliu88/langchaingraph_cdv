@@ -311,7 +311,7 @@ def _do_compile_check(result: dict):
     out_dir = ctx.get("env", {}).get("output_dir", "") if hasattr(ctx, "get") else ""
     if fl and Path(fl).exists():
         try:
-            from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner
+            from src.tools.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
             runner = RegressionRunner(
                 env_output_dir=out_dir,
                 filelist=fl,
@@ -4495,7 +4495,7 @@ def case_model_analyze(model, cases_file, report_path, seed, max_cases, json_out
     from src.tools.casemodel_tools.analysis import analyze_file
     from src.tools.casemodel_tools.cli import payload as _payload
     from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
-    from src.tools.casemodel_tools.view import text as _text
+    from src.tools.casemodel_tools import text as _text
 
     try:
         result = analyze_file(model, cases=cases_file, seed=seed,
@@ -4599,22 +4599,116 @@ def case_model_generate(model, fmt, output_path, seed, max_cases):
         sys.exit(2)
 
 
+@case_model.command("uvm-tests")
+@click.argument("model", type=click.Path(exists=True))
+@click.option("--dimension", "-d", "dimensions", multiple=True,
+              help="只要这些维度（按 id / 名称 / key 匹配）；可重复")
+@click.option("--max-tests", type=int, default=32,
+              help="最多导出多少条（默认 32；优先保留边界取值，截断会记账）")
+@click.option("--output", "-o", "output_path", type=click.Path(),
+              help="输出文件（缺省打到 stdout）")
+def case_model_uvm_tests(model, dimensions, max_tests, output_path):
+    """把属性取值摊平成 UVM 的 environment.tests 片段（一条 = 一个 UVM_TEST）
+
+    产出的是一段 YAML 文本，贴进 env 清单的 `environment:` 下即可 ——
+    本工具与 uvm_tools 之间只是**文件格式契约**，互不 import。
+
+    \b
+    示例:
+      vagent case-model uvm-tests model.yaml -d D_ratio
+      vagent case-model uvm-tests model.yaml -o tests.yaml
+    """
+    out = get_output_adapter(False)
+    from src.tools.casemodel_tools.cli import build_parser, cmd_uvm_tests
+    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
+
+    try:
+        argv = ["uvm-tests", model, "--max-tests", str(max_tests)]
+        for name in dimensions:
+            argv += ["--dimension", name]
+        if output_path:
+            argv += ["--out", output_path]
+        sys.exit(cmd_uvm_tests(build_parser().parse_args(argv)))
+    except _CaseModelError as exc:
+        out.print_error(f"模型无法构建: {exc}", code=2)
+        sys.exit(2)
+
+
 @case_model.command("gui")
 @click.argument("model", required=False, type=click.Path(exists=True))
 def case_model_gui(model):
-    """打开 tkinter 分析界面（不传模型则加载内置示例）
+    """打开验证工作台并落在 case 建模模块上（不传模型则加载内置示例）
 
     \b
     示例:
       vagent case-model gui
-      vagent case-model gui model.yaml
+      vagent case-model gui config/casemodel/examples/cpu_pipeline.yaml
     """
     try:
-        from src.tools.casemodel_tools.view.gui.app import main as gui_main
-    except ImportError as exc:                    # tkinter 缺失（无 GUI 的 Linux）
-        console.print(f"[red]无法加载 GUI: {exc}[/red]")
+        from src.workbench.app import main as workbench_main
+    except ImportError as exc:                    # PySide6 没装
+        click.echo(
+            "GUI 需要 PySide6，当前环境没有装：\n"
+            f"  {exc}\n\n"
+            "装法：pip install -e .[gui]　　或　　pip install PySide6\n"
+            "（纯 CLI 用法 check / analyze / generate 不需要它）",
+            err=True)
         sys.exit(2)
-    sys.exit(gui_main([model] if model else []))
+    argv = ["--module", "vms.casemodel"]
+    if model:
+        argv += ["--input", str(model)]
+    sys.exit(workbench_main(argv))
+
+
+# ═══════════════════════════════════════════════════════════════
+# 验证工作台（PySide6 桌面窗口）
+# ═══════════════════════════════════════════════════════════════
+
+@cli.group("gui")
+def gui_group():
+    """打开验证工作台（PySide6 桌面窗口，界面由 YAML 清单驱动）"""
+    pass
+
+
+@gui_group.command("run")
+@click.argument("manifest", required=False, type=click.Path(exists=True))
+@click.option("--module", "-m", default=None,
+              help="启动后聚焦到这个模块 id（写在清单里的 id）")
+@click.option("--input", "-i", default=None,
+              help="覆盖指定模块的业务输入路径")
+@click.option("--theme", default=None, help="主题名，留空用清单里的设置")
+@click.option("--reset-layout", is_flag=True, help="忽略上次保存的窗口布局")
+def gui_run(manifest, module, input, theme, reset_layout):
+    """启动工作台。
+
+    \b
+    示例:
+      vagent gui run                          # 用默认清单 config/workbench.yaml
+      vagent gui run my.yaml                  # 用别的清单
+      vagent gui run -m debug.sim_log         # 直接聚焦某个模块
+    """
+    args = [a for a in [manifest] if a]
+    if module:
+        args += ["--module", module]
+    if input:
+        args += ["--input", input]
+    if theme:
+        args += ["--theme", theme]
+    if reset_layout:
+        args += ["--reset-layout"]
+
+    # PySide6 是可选依赖 —— 缺失时给装法而不是 traceback（约定：stderr + 退出码 2）
+    try:
+        from src.workbench.app import main as workbench_main
+    except ImportError as exc:
+        click.echo(
+            "GUI 需要 PySide6，当前环境没有装：\n"
+            f"  {exc}\n\n"
+            "装法：pip install -e .[gui]　　或　　pip install PySide6\n"
+            "（纯 CLI 用法 check / analyze / generate 不需要它）",
+            err=True)
+        sys.exit(2)
+    sys.exit(workbench_main(args))
 
 
 # ═══════════════════════════════════════════════════════════════

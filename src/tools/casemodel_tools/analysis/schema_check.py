@@ -16,7 +16,7 @@ severity 映射：本工具所有违规都是 error（模型是生成 case 的�
 
 用法:
     python -m src.tools.casemodel_tools.analysis.schema_check model.yaml
-    python -m src.tools.casemodel_tools.analysis.schema_check -i examples/ --json
+    python -m src.tools.casemodel_tools.analysis.schema_check -i config/casemodel/examples/ --json
 """
 from __future__ import annotations
 
@@ -281,6 +281,15 @@ class SchemaChecker:
             return [Issue("error", "read_error", path.name,
                           f"读取失败: {exc}", CATEGORY_SCHEMA)]
         return self.check_data(data, path)
+
+    def check_text(self, text: str, name: str = "<编辑器>") -> List[Issue]:
+        """从文本校验 —— 编辑器在保存前用它，不必先落盘。"""
+        try:
+            data = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            return [Issue("error", "yaml_parse_error", name,
+                          f"YAML 解析失败: {exc}", CATEGORY_SCHEMA)]
+        return self.check_data(data, Path(name))
 
     def check(self, inputs: Iterable[Path]) -> List[Issue]:
         issues: List[Issue] = []

@@ -119,21 +119,27 @@ casemodel_tools/
 │   ├─ result.py        AnalysisResult
 │   ├─ schema_check.py  JSON Schema 门禁
 │   └─ facade.py        analyze() 门面            ← Facade
-├─ view/            只渲染
-│   ├─ text.py          纯文本（CLI）
-│   └─ gui/             tkinter
-│       ├─ widgets.py   IssueTable / MatrixCanvas / TreeTable
-│       ├─ app.py       主窗口（遍历 TABS 建页）
-│       └─ tabs/        每个标签页一个组件
-├─ agent/           三个接入面                     ← Adapter
-│   ├─ adapters.py      语义（吃 YAML 文本、吐 dict）
-│   ├─ registry.py      声明式 ToolRegistry + ToolHub 的 ITool
-│   └─ langchain_tools.py  @tool 外壳
+├─ text.py          只渲染。纯文本报告（CLI 与界面导出共用）
+├─ api.py           程序化接口（run_validate/run_gaps/run_generate，零 LLM 依赖）
 └─ cli.py           命令行入口
 ```
 
+> `text.py` 原先在 `view/text.py`。界面搬去工作台之后，「表现层」只剩这一个
+> 文件，那一层已经没有存在理由 —— 文件上提到包根，与 `api.py` / `cli.py` 平级。
+
+**本包是纯工具，不含任何面向 LLM 的代码，也不含界面。** 前者在
+`src/agents/verify/casemodel/`（见下节），后者在验证工作台
+（`src/workbench/modules/vms/casemodel/`，见「界面」一节）—— 分开是为了让工具能在
+不装 langchain、**也不装 Qt** 的环境里直接用（`from src.tools.casemodel_tools import api`
+就够了）。
+
+依赖只能从上往下：`domain ← repository ← generation ← analysis ← text / cli`。
+`text` 不 import `repository`，`domain` 不 import 本包任何其它层。
+**反过来也不成立**：本包不 import 工作台，也不 import Qt（有测试用子进程固定
+这一点 —— 导入 `cli.py` 与 `api.py` 之后 `sys.modules` 里不许出现 `PySide6`）。
+
 **规则可插拔**是这套结构的主要收益：新增一条校验 = 在 `analysis/rules/` 下写一个
-`Rule` 子类并 `@register` —— 报告、GUI 规则页、`rules` 命令三处都从注册表读，
+`Rule` 子类并 `@register` —— 报告、界面里的规则页、`rules` 命令三处都从注册表读，
 一行都不用改。
 
 ## 命令
@@ -143,29 +149,72 @@ casemodel_tools/
 
 ```bash
 # ── 独立入口 ──
-python -m src.tools.casemodel_tools.cli check    examples/cpu_pipeline.yaml
-python -m src.tools.casemodel_tools.cli analyze  examples/cpu_pipeline.yaml
-python -m src.tools.casemodel_tools.cli analyze  examples/cpu_pipeline.yaml \
-    --cases examples/fc_real_cases.yaml
-python -m src.tools.casemodel_tools.cli tree     examples/cpu_pipeline.yaml   # 组织树 + 专题
-python -m src.tools.casemodel_tools.cli matrix   examples/cpu_pipeline.yaml
+python -m src.tools.casemodel_tools.cli check    config/casemodel/examples/cpu_pipeline.yaml
+python -m src.tools.casemodel_tools.cli analyze  config/casemodel/examples/cpu_pipeline.yaml
+python -m src.tools.casemodel_tools.cli analyze  config/casemodel/examples/cpu_pipeline.yaml \
+    --cases config/casemodel/examples/fc_real_cases.yaml
+python -m src.tools.casemodel_tools.cli tree     config/casemodel/examples/cpu_pipeline.yaml   # 组织树 + 专题
+python -m src.tools.casemodel_tools.cli matrix   config/casemodel/examples/cpu_pipeline.yaml
 python -m src.tools.casemodel_tools.cli rules                                # 规则清单
-python -m src.tools.casemodel_tools.cli generate examples/cpu_pipeline.yaml \
+python -m src.tools.casemodel_tools.cli generate config/casemodel/examples/cpu_pipeline.yaml \
     --format yaml --out cases.yaml
-python -m src.tools.casemodel_tools.cli gui                                  # tkinter 界面
+python -m src.tools.casemodel_tools.cli uvm-tests config/casemodel/examples/fc_flowcontrol.yaml \
+    --dimension D_ratio --out tests.yaml
 
 # ── 主 CLI ──
-vagent case-model check    examples/cpu_pipeline.yaml
-vagent case-model analyze  examples/cpu_pipeline.yaml --cases real.yaml --json
-vagent case-model tree     examples/cpu_pipeline.yaml
+vagent case-model check    config/casemodel/examples/cpu_pipeline.yaml
+vagent case-model analyze  config/casemodel/examples/cpu_pipeline.yaml --cases real.yaml --json
+vagent case-model tree     config/casemodel/examples/cpu_pipeline.yaml
 vagent case-model rules
-vagent case-model generate examples/cpu_pipeline.yaml -f csv -o cases.csv
+vagent case-model generate config/casemodel/examples/cpu_pipeline.yaml -f csv -o cases.csv
+vagent case-model uvm-tests config/casemodel/examples/fc_flowcontrol.yaml -d D_ratio
 vagent case-model gui
 ```
 
 退出码：有 error → `1`，模型结构非法 / 文件不存在 → `2`，正常 → `0`。
-`check <目录>` 会递归展开 —— 所以 `check examples/` 也会校验到 `fc_real_cases.yaml`，
+`check <目录>` 会递归展开 —— 所以 `check config/casemodel/examples/` 也会校验到 `fc_real_cases.yaml`，
 那是一份 case 列表而不是模型，报 error 是**正确**行为。
+
+## 一份清单，一个或多个被测对象
+
+顶层有**两种写法**，都能读，且是等价的：
+
+```yaml
+object: FlowControl          # 写法一：一份清单 = 一个对象
+sub_objects: [...]
+dimensions: [...]
+
+tests:                       # 写法二：一份清单 = N 个对象，共享下面那套属性空间
+  - {object: FlowControl, object_cn: 流控, object_code: FC, sub_objects: [...]}
+  - {object: Arbiter,     object_cn: 仲裁, object_code: ARB, sub_objects: [...]}
+dimensions: [...]            # ← 共享的：维度 / 方法 / 检查 / 交叉 / 环境 / 生成参数
+themes: [...]
+```
+
+写法二的 `dimensions` / `themes` / `methods` / `checks` / `cross_*` / `environment` /
+`generation` / `case_defaults` 是**共享属性空间**，被每个对象共用 —— 这正是这个写法
+存在的理由：**一套维度空间，测多个对象**（流控、仲裁共用同一批反压属性）。条目里
+写了同名键就覆盖共享值。
+
+**合并语义**（产物怎么来）：
+
+| 产物 | 怎么办 | 为什么 |
+|---|---|---|
+| 交叉矩阵 / 取值覆盖 / 维度级规则 | **算一次** | 只依赖共享的维度空间，对每个对象都一样 |
+| 功能组织树 / case / 组织树规则 | **每个对象各一份** | 树是各对象的 |
+| 完备性评分 | **一个数** | 评分是**属性空间**的属性，不是某个对象的 |
+
+case 必须在各对象的上下文里生成（`case_id` 是 `TC-<对象代号>-…`，合成一棵树之后
+就再也分不出哪个节点属于哪个对象了）。所以 `--max-cases` 是**每个对象各自**的上限，
+不是全局的 —— 全局上限会让排在后面的对象被前面的挤光。
+
+`object_code` 撞车**直接报错**（不是警告）：代号进 `case_id`，撞了就会产出重名 case，
+而重名 case 在回归结果里是分不开的。
+
+实现落在 `analysis/multi.py`（`merge_models` / `generate_many` / `analyze_many`）与
+`repository/loader.py` 的 `models_from_dict`。合并体走原来的 `analyze()` ——
+所以矩阵 / 覆盖 / 评分那一路**一行都没改**，变化被吸收在「模型长什么样」这一层，
+没有渗进判定逻辑。单对象时 `merge_models` 是恒等，旧写法行为一个字节都没变。
 
 ## 示例
 
@@ -173,7 +222,7 @@ vagent case-model gui
 |------|------|------|
 | `cpu_pipeline.yaml` | 五段流水组织树 + 6 个专题（P0/P1/P2，含非结构类与随机），218 个 case | **93.8** |
 | `cpu_pipeline_flawed.yaml` | 组织树 / 专题层的坑：叶子代号重复、子树死结构、优先级空洞、专题重叠、SPCL 推不动边界、专题选了互斥维度 | **46.7** |
-| `fc_flowcontrol.yaml` | 流控，扁平子对象 + 交叉组（老写法）。因为缺整个专题层，分数明显低于 cpu_pipeline | **77.8** |
+| `fc_flowcontrol.yaml` | 流控，扁平子对象 + 交叉组（**没有专题层**）。用 `tests:` 写法列对象（当前只有一个）。因为缺整个专题层，分数明显低于 cpu_pipeline | **77.8** |
 | `fc_flawed.yaml` | 维度层的坑：把字段当维度、把方法当维度、把检查当对象… | **22.6** |
 | `fc_real_cases.yaml` | 外部真实 case 列表，注入 7 类缺陷供 `--cases` 演示 | — |
 
@@ -207,7 +256,7 @@ python -m src.tools.casemodel_tools.cli rules          # 全部列出
 拿**真实存在的 case 列表**去量模型，回答四个问题。
 
 ```
-真实 case 核对 —— 源 examples/fc_real_cases.yaml
+真实 case 核对 —— 源 config/casemodel/examples/fc_real_cases.yaml
 ──────────────────────────────────────────────────────────────────────────────
   真实 case 数     : 45
   真实取值覆盖     : 43.5%     （模型生成覆盖 87.0%）
@@ -246,37 +295,130 @@ python -m src.tools.casemodel_tools.cli rules          # 全部列出
 **每一项扣分都带理由**（`score.row_reasons()`）—— 分数如果不能解释就没法行动。
 有测试固定「扣了分必须给理由」。
 
-## GUI（tkinter）
+## 界面（验证工作台）
+
+界面**不在这个包里** —— 它搬进了验证工作台，成了 `vms.casemodel` 模块
+（`src/workbench/modules/vms/casemodel/`）。工作台自带主题、Dock、控制台、
+状态栏与其它业务线，界面待在那边才不用把这些各写一遍。
 
 ```bash
-python -m src.tools.casemodel_tools.cli gui examples/cpu_pipeline.yaml
+vagent case-model gui                              # 打开工作台，落在 case 建模模块上
+vagent case-model gui config/casemodel/examples/cpu_pipeline.yaml   # 直接打开某份模型
+vagent gui run -m vms.casemodel                    # 等价写法
+# 不传模型 → 清单里的 input（config/casemodel/examples/cpu_pipeline.yaml）会被自动载入
 ```
 
-十个标签页：概览、组织树 / 专题、层级正交性、维度交叉矩阵、取值覆盖、
-环境与检查、Case 属性表、真实 case 核对、Schema 校验、规则清单。
+十一个页面嵌在模块内部的**一个 QTabWidget** 里，第一页是**编辑 YAML**：编辑 YAML、
+概览、组织树 / 专题、层级正交性、维度交叉矩阵、取值覆盖、环境与检查、Case 属性表、
+真实 case 核对、Schema 校验、规则清单。快捷键 **Ctrl+O** 打开、**Ctrl+S** 保存、
+**Ctrl+R** 重新分析 —— 由模块自己的 `QAction` 绑，所以跟焦点在哪个控件无关。
 
-界面不含任何分析逻辑 —— 它只是 `AnalysisResult` 的一层视图，所以能脱离 GUI 单独
-测试，导出报告也直接复用 CLI 的渲染器（两处不会各说各话）。
+搬走之后本包**完全不依赖 Qt**：纯 CLI 用法（`check` / `analyze` / `generate`）的
+安装里不会出现 PySide6，工具自己的测试也不再有「没装 Qt 就跳过」的用例。
+本包的 CLI **没有** `gui` 子命令 —— 工具只有 check / analyze / matrix / tree /
+rules / generate 六个。`vagent case-model gui` 仍在，但那属于主 CLI
+（`src/cli/commands.py`），它直接调工作台，不经过本包。
 
-> **为什么是 tkinter**：`CLAUDE.md` 明确禁止 Web 前端开发。tkinter 是标准库、
-> 零新增依赖，符合「个人级 CLI 工具」的定位。
+### 这个模块在回答什么
+
+case 建模的出发点是「**case 由属性组合生成，而不是手写**」：传统写法把属性塞进
+case 名（`tc_fc_recv_max_len_tail_bp_full_rnd_01`），信息密度高但无法检索、无法
+组合、层级错位后必然重复。属性显式建模之后，两个最核心的问题变成可操作的：
+
+| 问题 | 在哪一页 |
+|------|----------|
+| **正交属性怎么 cross** | 「维度交叉矩阵」—— 专题先选范围，`cross_matrix` 再约束这些维度哪些必须一起变（★）、哪些可选（○）、哪些互斥（✗）；下面那张表估这一轮会跑出多少 case |
+| **覆盖率怎么收敛** | 「取值覆盖」—— 分母是字段声明的取值点，分子是被 case 命中的；缺口按维度列出，联动派生字段单独标灰（它不是真缺口） |
+
+### 编辑 YAML
+
+**为什么是文本编辑器而不是表单编辑器**：分析管线是 `YAML → CaseModel`，归一化是
+**有损的** —— 注释、键顺序、别名写法都会变（`RANDOM` 会被改写成 `RND`）。若从解析
+后的模型重新生成 YAML 再写盘，你写的注释就没了。所以编辑的是**原文**，保存时原样
+写回。有测试固定这一点：`test_save_preserves_raw_aliases` 断言保存后磁盘上仍是
+`RANDOM` 而不是 `RND`。
+
+> 顺带一条一致性约定：**别名（`随机` / `RANDOM`）在 schema 层也是合法的**。
+> 归一化层认它们，schema 若判它们非法，「这个模型合法吗」就会有两个答案 ——
+> 这正是本项目一直在避免的「两处真相」。
+
+**真相只有一个，就是这段文本**；其它页面都是它的只读视图。由此推出三条行为：
+
+| 行为 | 为什么 |
+|------|--------|
+| 「重新分析」分析的是**编辑器里的文本**，不重读文件 | 改一行就能立刻知道坏了哪条规则，不必先保存 |
+| 保存后**自动**重新分析并刷新全部页面 | 保存即校验、保存即生效 |
+| 文本构不出模型时，**保留上一次的结果** + 挂红条说明 | 改到一半看到一片空白，会让人以为工具坏了 |
+
+保存前会跑 schema 校验；有 error 时先弹窗问「仍然保存吗」，答「取消」就不写盘
+（`test_save_asks_before_writing_schema_errors` 固定）。有未保存改动时，打开别的
+文件或关窗口都会先问一句 —— 关窗口那条走平台的 `can_close()`，标题上的 ● 挂在
+**模块自己的标签页**上（同时开着几个模块时，得看得出是哪一个没存）。
+
+> **为什么是桌面 GUI 而不是 Web**：`CLAUDE.md` 明确禁止 Web 前端开发。
+> PySide6 是桌面窗口（Qt），不是前端页面 —— 与那条约束不冲突。
 
 ## Agent 接入面
 
-三个面**共用 `agent/adapters.py` 的实现与同一批工具名**，所以不会各给一个答案
-（有测试固定）：
+在 **`src/agents/verify/casemodel/`** —— 归 verify 角色，因为 casemodel 产出的是
+测试计划 / case 属性表，消费它的是会生成 UVM + 测试 + 断言的 verify 角色
+（该角色已经在 import `testcase_tools`）。
+
+```
+src/agents/verify/
+├─ main.py              VerifyAgent
+└─ casemodel/           ← 本工具的 Agent 适配器
+    ├─ langchain_tools.py
+    └─ registry.py
+```
 
 | 接入面 | 位置 | 用途 |
 |--------|------|------|
-| LangChain `@tool` | `agent/langchain_tools.py` | 用 `_lc_tool_compat.tool`，langchain-core 1.x 下仍可直接调用 |
-| 声明式 `ToolRegistry` | `agent/registry.ensure_casemodel_tool_registry()` | 由 `agents/agent_tools.py` 汇总，BaseAgent 据此 wrap + 校验 |
-| `ToolHub` 的 `ITool` | `agent/registry.register_casemodel_tools(hub)` | 带 manifest / 风险等级 / 审计追踪 |
+| LangChain `@tool` | `casemodel/langchain_tools.py` | 用 `_lc_tool_compat.tool`，langchain-core 1.x 下仍可直接调用 |
+| 声明式 `ToolRegistry` | `casemodel/registry.ensure_casemodel_tool_registry()` | 由 `layers/.../agents/agent_tools.py` 汇总，BaseAgent 据此 wrap + 校验 |
+| `ToolHub` 的 `ITool` | `casemodel/registry.register_casemodel_tools(hub)` | 带 manifest / 风险等级 / 审计追踪 |
+
+三个面**共用 `casemodel_tools.api` 的实现与 `tool_specs()` 的工具名**，
+所以不会各给一个答案（有测试固定）。
+
+**为什么把适配器移出工具目录**：仓库里旧的做法是「工具的 LLM 代码就放在工具文件夹里」
+（`uvm_tools/agent_tools.py`、`testcase_tools/tools.py`），结果是「49 个 `@tool` 只注册了
+29 个」（见 `docs/design/full_project_refactoring_plan.md`）。工具与接入面分开之后：
+
+- `src/tools/casemodel_tools/` 零 LLM 依赖，脚本 / 测试 / 别的工具可以直接 import
+- LLM 包装集中在 `src/agents/`，与项目「Agent 按角色分」的结构一致
 
 | 工具 | 用途 |
 |------|------|
 | `casemodel_validate(yaml_text)` | Schema 校验结果 |
 | `casemodel_gaps(yaml_text, max_cases=None, cases_text=None)` | 全量完备性分析；给 `cases_text` 时追加反向核对 |
 | `casemodel_generate(yaml_text, max_cases=None, seed=None)` | case 属性表 |
+| `casemodel_uvm_tests(yaml_text, dimensions=None, max_tests=None)` | UVM 的 `environment.tests` 片段（见下） |
+
+## 属性 → UVM TEST（`uvm-tests`）
+
+**一条 = 一个 UVM_TEST = 一个属性取值**。这个命令把模型里每个维度的取值点摊平成
+`tool_uvm` 的 `environment.tests` 片段，贴进 env 清单的 `environment:` 下，
+生成的 test class 里就有 `uvm_config_db#(int)::set(..., "<key>_int", <取值>)`。
+
+```bash
+python -m src.tools.casemodel_tools.cli uvm-tests \
+    config/casemodel/examples/fc_flowcontrol.yaml --dimension D_ratio
+# → 4 条（0/10/50/100），key=d_ratio
+```
+
+**与 `uvm_tools` 之间只有「文件格式契约」，没有 import**（本仓库的规矩是工具互不
+依赖；有测试用子进程钉住）。所以换个 UVM 模板不用改这个工具。
+
+两处设计取舍：
+
+- **机器通道是 `int`，中文取值只进注释**。维度 id 是 ASCII（`D_mode`）但取值
+  token 常是中文（`首拍`）。把非 ASCII 塞进**会被比较、被打印**的 SV 字面量是
+  locale 隐患，所以取值投影成 int（数字本身，非数字用下标），中文值作为注释保留
+  —— 类名也走同一投影（`d_mode_p1`），保证全 ASCII。
+- **截断不静默**：`--max-tests` 超限时 `truncated` / `dropped` / `notes` 都记账，
+  且优先保留**边界取值**。注意边界是跨维度按声明顺序挑的，想只要某一个维度的
+  边界值要同时给 `--dimension`。
 
 风险等级一律 `safe`（纯计算，不写盘、不起子进程）。按 ADR-3 的凭证约定，
 `verified_by` 是 `"none"` —— 确定性工具本身无「外部验证」概念，但结论由输入 YAML
@@ -289,7 +431,9 @@ function-calling 的 `function.name`，那是非法字符（有测试固定）�
 pytest src/tools/casemodel_tools/tests/ -v
 ```
 
-274 个用例，按层组织：
+297 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
+工具自己的测试按层组织在 `src/tools/casemodel_tools/tests/`，
+跨层的 Agent 集成测试在仓库根的 `tests/test_casemodel_agent.py`：
 
 | 文件 | 覆盖 |
 |------|------|
@@ -297,14 +441,22 @@ pytest src/tools/casemodel_tools/tests/ -v
 | `test_repository.py` | loader 归一化与结构错误、schema 门禁（含递归 children）、case_list 四种输入形状、exporters 三格式往返无损 |
 | `test_generation.py` | 五个方法策略各自语义、加权采样、可复现、联动不参与笛卡尔积、互斥剔除、去重、截断计数、专题驱动与交叉组退路 |
 | `test_rules.py` | 51 条规则**逐条正反用例**（触发 + 不误报），示例模型的干净/有坑双向断言 |
-| `test_analysis.py` | 门面组装、评分不变式（换 case 列表分数不变）、矩阵对称与声明优先、外部核对四方向、闭环无话可说 |
-| `test_surfaces.py` | 三面答案一致、ITool manifest 合法与失败语义、独立 CLI 与 `vagent` 的退出码/格式 |
-| `test_view.py` | 显示宽度对齐（中文占 2 列）、各段渲染、GUI 十页构建与交互 |
+| `test_analysis.py` | 门面组装、评分不变式（换 case 列表分数不变）、矩阵对称与声明优先、外部核对四方向、闭环无话可说、**文本入口 vs 文件入口结论一致** |
+| `test_multi.py` | 两种写法的扇出与覆盖、重复 `object_code` 报错、合并语义（评分算一次 / 树与 case 每对象一份）、`--max-cases` 是每对象上限、单对象时是恒等 |
+| `test_uvm_tests.py` | 一条 = 一个取值、维度过滤、边界优先截断、产物形状正好是 `tool_uvm` 认的那个、**不 import `uvm_tools`** |
+| `test_cli.py` | 工具自带 CLI 与 `vagent case-model` 的退出码 / 四种格式 / 目录展开 |
+| `test_text.py` | 显示宽度对齐（中文占 2 列）、各段文本渲染 |
+| `tests/test_casemodel_agent.py`（仓库根） | 三面答案一致、ITool manifest 合法与失败语义、ToolHub 注册与调用 |
+
+界面相关的测试（原 `test_gui.py` / `test_editor.py`）随界面迁到了
+`src/workbench/tests/test_casemodel_module.py` 与 `test_casemodel_editor.py` ——
+**本包的测试现在一条都不需要 Qt**。那两条最要紧的不变式（保存不改原文、
+刷新不碰文本）跟着搬了过去，一条没少。
 
 ## 已知边界
 
-- **`check <目录>` 会把 case 列表文件报错**。`examples/` 同时有两类文件，
-  `check examples/` 会因 `fc_real_cases.yaml` 有 `cases:` 而无 `object`/`dimensions`
+- **`check <目录>` 会把 case 列表文件报错**。`config/casemodel/examples/` 同时有两类文件，
+  `check config/casemodel/examples/` 会因 `fc_real_cases.yaml` 有 `cases:` 而无 `object`/`dimensions`
   报 error。这是刻意的（`check` 的职责就是判断「这份 YAML 是不是合法模型」），
   但批量校验时要指向模型文件。
 - **正交性检测靠启发式词表**（`analysis/rules/orthogonality.py` 顶部），换领域要补词。
@@ -314,4 +466,9 @@ pytest src/tools/casemodel_tools/tests/ -v
   核对的是「case 写没写」，不是「仿真跑出来的覆盖率命中没命中」。
 - **`cross_group` 与 `themes` 是两条生成路径**。有 `themes` 时按专题驱动，
   否则退化为按交叉组（老模型不用迁移）；两条路不会同时生效。
-- **GUI 只读不写**。改模型要在 YAML 里改，界面不做编辑（避免两处真相）。
+- **界面的编辑是「原文编辑」，不是结构化编辑**。不提供在表格里改维度/字段的
+  表单 —— 那需要从模型反向生成 YAML，会丢掉注释与格式（见「编辑 YAML」一节）。
+  要结构化地看，看其它页面；要改，改原文。
+- **编辑器只有语法高亮，没有自动补全**。高亮是启发式的正则（`ui/highlighter.py`），
+  认不出多行标量、也分不清引号里的冒号；补全没做 —— 靠 schema 校验脚注 + 保存前
+  提示兜底。

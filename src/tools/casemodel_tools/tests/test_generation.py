@@ -18,7 +18,6 @@ from src.tools.casemodel_tools.generation import (CartesianStrategy, DirectedStr
                                                   theme_estimates)
 from src.tools.casemodel_tools.repository import load_model_from_text
 
-from .conftest import CPU
 
 
 def model_of(text: str):

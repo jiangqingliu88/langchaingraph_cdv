@@ -175,12 +175,12 @@ class InfrastructureManager:
                 logger.warning(f"filelist 生成失败: {e}")
 
             # ── 1. ConfigBuilder 解析 regression.yaml（builds + tests）──
-            from src.tools.regression_tools.regression_framwork.src.regression_framework.core.config import ConfigBuilder
+            from src.tools.regression_tools.regression_framework.core.config import ConfigBuilder
             builder = ConfigBuilder(reg_yaml)
             config = builder.build()
 
             # ── 2. ShellGenerator 生成 build_*/test_* 目录 + 脚本 ──
-            from src.tools.regression_tools.regression_framwork.src.regression_framework.generators.shell import ShellGenerator
+            from src.tools.regression_tools.regression_framework.generators.shell import ShellGenerator
             root_dir = str(self.output_root / "regression_run")
             # 清理上一次回归残留（state_file 会导致断点续跑跳过所有已完成任务）
             import shutil as _shutil
@@ -189,9 +189,9 @@ class InfrastructureManager:
             ShellGenerator().generate(config, root_dir, mode)
 
             # ── 3. Scheduler 批量跑 build + test（扫描生成目录）──
-            from src.tools.regression_tools.regression_framwork.src.regression_framework.models.scheduler import Scheduler
-            from src.tools.regression_tools.regression_framwork.src.regression_framework.execution.strategy import LocalStrategy, MockStrategy
-            from src.tools.regression_tools.regression_framwork.src.regression_framework.models.task import TaskFactory
+            from src.tools.regression_tools.regression_framework.models.scheduler import Scheduler
+            from src.tools.regression_tools.regression_framework.execution.strategy import LocalStrategy, MockStrategy
+            from src.tools.regression_tools.regression_framework.models.task import TaskFactory
             import re as _re
 
             strategy = LocalStrategy() if mode == "local" else MockStrategy()

@@ -349,3 +349,45 @@ def test_gen_skip_schema_check_bypasses(tmp_path):
     assert gen_main(["-i", str(tmp_yaml), "-d", str(dest2),
                      "--skip-schema-check", "-q"]) == 0
     assert not (dest2 / "schema_report.txt").exists()
+
+
+# ── 属性测试（environment.tests）：一条 = 一个 UVM_TEST = 一个属性取值 ──
+
+def _env_with_tests(tests):
+    return {"environment": {"name": "FC_env", "agents": [], "tests": tests}}
+
+
+def test_env_tests_accepted(tmp_path):
+    """带 tests: 的 env 必须是干净的 —— 这是整条属性链的入口。"""
+    doc = _env_with_tests([
+        {"dimension": "D_ratio", "value": "0", "key": "fc_ratio", "int_value": 0},
+        {"dimension": "D_mode", "value": "首拍", "key": "fc_mode", "int_value": 1},
+    ])
+    assert _errors(_check(doc, tmp_path)) == []
+
+
+def test_env_test_entry_value_may_be_number(tmp_path):
+    """取值写数字也认（YAML 里 `value: 50` 不带引号是常态）。"""
+    doc = _env_with_tests([{"dimension": "D_ratio", "value": 50}])
+    assert _errors(_check(doc, tmp_path)) == []
+
+
+def test_env_test_entry_requires_dimension_and_value(tmp_path):
+    doc = _env_with_tests([{"dimension": "D_ratio"}])
+    assert any(i.rule == "missing_required" for i in _errors(_check(doc, tmp_path)))
+
+
+def test_env_test_entry_rejects_unknown_key(tmp_path):
+    """条目里写错键名要报错，不能静默忽略 —— 静默忽略会让属性悄悄失效。"""
+    doc = _env_with_tests([{"dimension": "D_ratio", "value": "0", "dimension_id": "D_ratio"}])
+    assert [i.rule for i in _errors(_check(doc, tmp_path))] == ["unknown_property"]
+
+
+def test_env_test_int_value_must_be_integer(tmp_path):
+    doc = _env_with_tests([{"dimension": "D_ratio", "value": "0", "int_value": "五十"}])
+    assert [i.rule for i in _errors(_check(doc, tmp_path))] == ["type_mismatch"]
+
+
+def test_env_tests_must_be_a_list(tmp_path):
+    doc = {"environment": {"name": "FC_env", "agents": [], "tests": {"dimension": "D"}}}
+    assert [i.rule for i in _errors(_check(doc, tmp_path))] == ["type_mismatch"]

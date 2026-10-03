@@ -94,16 +94,33 @@ def analyze(model: CaseModel, *, generation: Optional[GenerationResult] = None,
 
 def analyze_file(path: str, *, cases: Optional[str] = None,
                  **kwargs: Any) -> AnalysisResult:
-    """从 YAML 文件分析；cases 给出外部真实 case 列表路径。"""
-    from ..repository import load_model
+    """从 YAML 文件分析；cases 给出外部真实 case 列表路径。
+
+    清单里写 `tests:` 列了多个被测对象时也走这里 —— 合并语义见 `multi.py`。
+    """
+    # multi 反过来要 import 本模块的 analyze —— 放函数体里避开循环 import
+    from ..repository import load_models
+    from .multi import analyze_many
     if cases:
         from ..repository.case_list import load_cases
         kwargs.setdefault("external", load_cases(cases))
         kwargs.setdefault("external_source", str(cases))
-    return analyze(load_model(path), **kwargs)
+    return analyze_many(load_models(path), **kwargs)
 
 
-def analyze_text(text: str, *, source: str = "<text>", **kwargs: Any) -> AnalysisResult:
-    from ..repository import load_model_from_text
-    return analyze(load_model_from_text(text, source=source), **kwargs)
+def analyze_text(text: str, *, source: str = "<text>",
+                 cases: Optional[str] = None,
+                 **kwargs: Any) -> AnalysisResult:
+    """从 YAML 文本分析；cases 给出外部真实 case 列表路径。
+
+    与 analyze_file 对称，但吃的是文本不是路径 —— 编辑器靠它分析「尚未保存的
+    改动」，不必先写盘。
+    """
+    from ..repository import load_models_from_text
+    from .multi import analyze_many
+    if cases:
+        from ..repository.case_list import load_cases
+        kwargs.setdefault("external", load_cases(cases))
+        kwargs.setdefault("external_source", str(cases))
+    return analyze_many(load_models_from_text(text, source=source), **kwargs)
 

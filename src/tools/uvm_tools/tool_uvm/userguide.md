@@ -8,6 +8,12 @@
 
 ## 重要变更
 
+### 本轮（新增，向后兼容）
+
+`environment.tests:` —— 一条 = 一个 UVM_TEST = 一个属性取值，属性经
+`uvm_config_db#(int)` 传进环境。**不写它时产物与今天逐字节一致**（不产
+`_attr_test.sv`）。见场景 16。
+
 ### 本轮（破坏性，旧 YAML 需同步）
 
 | 项 | 旧 | 新 |
@@ -783,6 +789,63 @@ python -m src.tools.uvm_tools.tool_uvm.main --list-templates
 # 版本
 python -m src.tools.uvm_tools.tool_uvm.main --version
 python -m src.tools.uvm_tools.tool_uvm.schema_check --version
+```
+
+---
+
+## 16. 场景：属性测试（`environment.tests`）
+
+**目标**：让「case 由哪些属性组成」这件事直接落到 UVM —— **一条 `tests:` 条目
+= 一个 UVM_TEST = 一个属性取值**（维度 × 取值）。属性经 `uvm_config_db` 传进
+环境，消费方（env / sequence / driver）读出来按自己的语义解释。
+
+### 清单里怎么写
+
+在 `environment:` 下加一段 `tests:`（`dimension` / `value` 必填）：
+
+```yaml
+environment:
+  name: FC_env
+  agents: [ ... ]
+
+  # 一条 = 一个 UVM_TEST = 一个属性取值
+  tests:
+    - {dimension: D_ratio, value: "0",   key: fc_ratio, int_value: 0}
+    - {dimension: D_ratio, value: "50",  key: fc_ratio, int_value: 50}
+    - {dimension: D_ratio, value: "100", key: fc_ratio, int_value: 100}
+```
+
+`key` / `int_value` / `base` 可选：`base` 缺省 `{env_name}_gen_test`。
+
+### 生成的产物
+
+`tests:` 非空时才产 `<env>_attr_test.sv`（并条件 `include` 进 `<env>_test_pkg.sv`）：
+
+```systemverilog
+// ── 属性 test 2：D_ratio = 50 ──
+`GEN_ATTR_TC(FC_env_d_ratio_p50_test, FC_env_gen_test, "fc_ratio", 50)
+```
+
+类名 = `{env}_<维度slug>_p<取值>_test`，**全 ASCII**。
+
+### 两条设计取舍
+
+- **机器通道是 `int`（键 `<key>_int`），不做中文字符串字面量**。维度 id 是 ASCII
+  但取值 token 常是中文；把非 ASCII 塞进会被比较、被打印的 SV 字面量是 locale
+  隐患。所以取值投影成 int（数字本身，非数字用下标），中文值只留注释。
+  **`tool_uvm` 不知道 `0/10/50/100` 分别代表什么** —— 那是消费方的语义，
+  和它不该知道 casemodel 的语义是同一个道理。模板里附了精确的 `::get` 示例注释。
+- **`tool_uvm` 不截断**：`tests:` 写几条就渲染几条，静默丢 test 是不可接受的。
+  条数上限由上游（`casemodel_tools` 的 `--max-tests`）管，且截断会记账。
+
+### 清单从哪来
+
+属性取值来自 `casemodel_tools`，**粘过来**即可（两个工具之间只有文件格式契约，
+互不 import）：
+
+```bash
+python -m src.tools.casemodel_tools.cli uvm-tests model.yaml -d D_ratio
+# → 4 条 tests: 片段，贴进上面 environment: 下
 ```
 
 ---

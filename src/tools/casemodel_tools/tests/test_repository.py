@@ -18,7 +18,7 @@ from src.tools.casemodel_tools.repository.case_list import (cases_from_text,
 from src.tools.casemodel_tools.repository.exporters import (EXPORT_FORMATS,
                                                             export_cases)
 
-from .conftest import CLEAN, FC_REAL
+from .conftest import CLEAN, CPU, FC_REAL
 
 
 def check(checker, data, name="t.yaml"):
@@ -42,7 +42,11 @@ def one_dim():
 
 @pytest.mark.parametrize("path", CLEAN, ids=lambda p: p.name)
 def test_clean_examples_load_and_resolve(path):
-    model = load_model(path)
+    # 示例里 fc_flowcontrol 用的是「tests: 列多个对象」写法 —— 合并体是它的
+    # 「一个模型」视图
+    from src.tools.casemodel_tools.analysis.multi import merge_models
+    from src.tools.casemodel_tools.repository import load_models
+    model = merge_models(load_models(path))
     assert model.object and model.dimensions
     assert not model.resolve_report.any
 
@@ -308,3 +312,61 @@ def test_table_export_groups_by_theme(cpu):
 def test_unknown_format_falls_back_to_table(cpu):
     gen = generate(cpu, max_cases=2)
     assert "case 属性表" in export_cases(gen.cases, "nope")
+
+
+# ════════════════════════════════════════════════════════════
+# 分层边界：本包是纯工具，不许有 LLM 依赖
+# ════════════════════════════════════════════════════════════
+
+def test_tool_package_has_no_llm_dependency():
+    """工具目录必须能在不装 langchain 的环境里用。
+
+    Agent / LangChain / ToolHub 的包装在 src/agents/verify/casemodel/ ——
+    一旦工具里偷偷 import 了 langchain，脚本和别的工具就用不了它了。
+    这条靠源码扫描固定，比运行时更难绕过。
+    """
+    root = Path(__file__).resolve().parent.parent
+    offenders = []
+    for path in root.rglob("*.py"):
+        if "__pycache__" in str(path):
+            continue
+        text = path.read_text(encoding="utf-8")
+        for lineno, line in enumerate(text.splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith(("import ", "from ")) and "langchain" in stripped:
+                offenders.append(f"{path.relative_to(root)}:{lineno}: {stripped}")
+    assert not offenders, "工具包不该依赖 langchain：\n" + "\n".join(offenders)
+
+
+def test_tool_package_does_not_import_the_agent_layer():
+    """反向依赖也不行：工具不能 import src/agents 或 ToolHub。"""
+    root = Path(__file__).resolve().parent.parent
+    offenders = []
+    for path in root.rglob("*.py"):
+        if "__pycache__" in str(path):
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith(("import ", "from ")) and (
+                    "src.agents" in stripped or "tool_hub" in stripped
+                    or "tool_protocol" in stripped):
+                offenders.append(f"{path.relative_to(root)}:{lineno}: {stripped}")
+    assert not offenders, "工具包不该反向依赖 Agent 层：\n" + "\n".join(offenders)
+
+
+def test_api_is_importable_without_langchain(monkeypatch):
+    """运行时验证：api 只吃 YAML 文本、吐 dict，全程不需要 langchain。"""
+    import builtins
+    real_import = builtins.__import__
+
+    def guard(name, *args, **kwargs):
+        if name.split(".")[0].startswith("langchain"):
+            raise ImportError(f"api 不该依赖 {name}")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guard)
+    from src.tools.casemodel_tools import api
+    text = CPU.read_text(encoding="utf-8")
+    assert api.run_validate(text)["valid"] is True
+    assert api.run_gaps(text)["score"] > 0
+    assert api.run_generate(text, max_cases=2)["count"] == 2

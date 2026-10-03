@@ -61,7 +61,7 @@ class QuestaEdaBackend(EdaBackend):
 
     def compile(self, output_dir: Path, filelist: str,
                 coverage: bool = True) -> dict:
-        from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner
+        from src.tools.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
         runner = RegressionRunner(
             env_output_dir=str(output_dir), filelist=str(filelist), coverage=coverage)
         return runner.compile()
@@ -74,7 +74,7 @@ class QuestaEdaBackend(EdaBackend):
             from src.tools.lib.collect_real_coverage import simulate_with_coverage
             return simulate_with_coverage(output_dir, top_module, uvm_test, seed)
         # 不收集覆盖率的纯功能回归：vsim 不带 -coverage，检查 UVM 测试 pass/fail
-        from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner
+        from src.tools.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
         runner = RegressionRunner(
             env_output_dir=str(output_dir), top_module=top_module, coverage=False)
         return runner.collect_coverage(uvm_test=uvm_test)

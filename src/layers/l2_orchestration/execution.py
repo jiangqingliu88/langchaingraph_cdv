@@ -5,6 +5,7 @@ Pipeline 执行服务 —— CLI 和 Web API 共享的验证流水线引擎
 """
 from __future__ import annotations
 import time, json, uuid, asyncio
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -52,6 +53,225 @@ def _collect_llm_audit() -> dict:
     except Exception as e:
         logger.warning(f"LLM 审计收集失败: {e}")
         return {"call_count": 0, "error": str(e)[:100]}
+
+# ═══════════════════════════════════════════════════════════════
+# 图流 → 运行日志的翻译
+# ═══════════════════════════════════════════════════════════════
+# 这三个函数的全部意义是：**把 LangGraph 的流翻译成日志，而不是往节点里插埋点**。
+# `stream_mode="debug"` 给的 task / task_result 正好就是阶段的开始与结束，
+# 所以「加一个节点要记得加观测」这件事根本不存在。
+
+def _field(state: Any, name: str, default: Any = None) -> Any:
+    """从 PipelineState 或它的 dict 投影里取字段 —— 两种形态都要能读。"""
+    if state is None:
+        return default
+    if isinstance(state, dict):
+        return state.get(name, default)
+    return getattr(state, name, default)
+
+
+def _round_of(state: Any) -> Optional[int]:
+    value = _field(state, "round_num")
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _coverage_of(state: Any) -> Dict[str, Any]:
+    """有覆盖率就返回一行摘要，没有就返回空 dict（空 dict 是 falsy，调用方据此跳过）。
+
+    注意取的是 `effective_coverage` / `final_coverage` 两个**浮点**字段，
+    不是 `coverage` —— 后者在 PipelineState 里是 `Dict[str, Any]`
+    （各维度的明细），拿它当百分比会 float() 失败并静默吞掉整条覆盖率事件。
+    """
+    total = _field(state, "effective_coverage") or _field(state, "final_coverage") or 0
+    functional = _field(state, "functional_coverage") or 0
+    if not total and not functional:
+        return {}
+    try:
+        return {"total": float(total), "functional": float(functional)}
+    except (TypeError, ValueError):
+        return {}
+
+
+def _result_of(state: Any) -> dict:
+    """终态的 result 字段 —— 与 run_closed_loop 的取法保持一致。"""
+    if state is None:
+        return {}
+    result = (_field(state, "result") if not isinstance(state, dict)
+              else state.get("result"))
+    return result or {}
+
+
+def _translate_debug(chunk: Any, started_at: Dict[str, float], journal) -> List[Any]:
+    """`stream_mode="debug"` 的一段 → 阶段开始/结束事件。
+
+    task       → stage.started（记下墙钟，结束时算耗时）
+    task_result → stage.finished / stage.failed（payload 里带 error 字段）
+    """
+    if not isinstance(chunk, dict):
+        return []
+    kind = chunk.get("type")
+    payload = chunk.get("payload") or {}
+    name = str(payload.get("name") or "")
+    if not name:
+        return []
+    task_id = str(payload.get("id") or name)
+
+    if kind == "task":
+        started_at[task_id] = time.monotonic()
+        return [journal.stage_started(name)]
+
+    if kind == "task_result":
+        t0 = started_at.pop(task_id, None)
+        duration = (time.monotonic() - t0) if t0 is not None else 0.0
+        error = payload.get("error")
+        if error:
+            return [journal.stage_failed(name, duration, str(error)[:500])]
+        delta = payload.get("result")
+        return [journal.stage_finished(name, duration,
+                                       delta if isinstance(delta, dict) else None)]
+    return []
+
+
+def _wire_approval_events(gate: Any, journal: Any, emit: Any) -> None:
+    """把审批的「问了」与「答了」接进运行日志。
+
+    审批是**过程**的一部分：一次 REFACTOR_RTL 问过谁、等了多久、谁批的，
+    都是签核时要能回答的问题。只留在内存的 records 里，进程一退就没了。
+
+    用链式挂接而不是覆盖 —— 调用方可能已经挂了更适合的观察者。
+    """
+    if gate is None:
+        return
+    prev_request, prev_decision = gate.on_request, gate.on_decision
+
+    def on_request(request):
+        emit(journal.approval_requested(request.stage, request.risk_level,
+                                        request.summary, request.token))
+        if prev_request is not None:
+            prev_request(request)
+
+    def on_decision(record):
+        emit(journal.approval_decided(record.decision.value, token=record.token,
+                                      reason=record.reason))
+        if prev_decision is not None:
+            prev_decision(record)
+
+    gate.on_request = on_request
+    gate.on_decision = on_decision
+
+
+def _translate_custom(chunk: Any, journal) -> List[Any]:
+    """`stream_mode="custom"`：节点自己用 `get_stream_writer()` 推的细粒度进度。
+
+    约定形状是 `{"stage": ..., "message": ...}`；不符合约定也照样记下来 ——
+    丢掉一条看不懂的进度，比丢掉一条**本该看到**的进度更糟。
+    """
+    if isinstance(chunk, dict):
+        stage = str(chunk.get("stage") or "")
+        message = chunk.get("message") or chunk.get("msg")
+        if message:
+            extra = {k: v for k, v in chunk.items()
+                     if k not in ("stage", "message", "msg")}
+            return [journal.progress(stage, str(message), **extra)]
+        from src.layers.l2_orchestration.run_journal import KIND_PROGRESS
+        return [journal.record(KIND_PROGRESS, stage=stage, payload={"data": chunk})]
+    return [journal.progress("", str(chunk)[:500])]
+
+
+# ── 检查点 ─────────────────────────────────────────────────────
+
+#: 检查点文件名。与 `run_events.jsonl` 同处 `docs/` —— 它是这次运行的**证据**
+#: 的一部分（"当时停在哪个节点、为什么停"），不是临时缓存。
+CHECKPOINT_FILE = "checkpoints.sqlite"
+
+
+def _resolve_run_dir(output_base: str, run_id: str) -> str:
+    """run_id → 那次运行的目录（找不到就原样返回基准目录）。"""
+    from src.layers.l2_orchestration.run_repository import RunRepository
+    found = RunRepository(output_base).run_dir(run_id)
+    return str(found) if found else output_base
+
+
+def _safe_checkpointer(output_root: Any):
+    """`_checkpointer` 的"宁可没有也别炸"版本：开不起来就返回 None。
+
+    检查点失效的后果是**退回通道模式**（审批阻塞等答案），而不是跑不起来 ——
+    所以依赖缺失、路径不可写都吞掉，只留一条 warning。
+
+    注意探测必须在这里做：`_checkpointer` 是 async 上下文管理器，它的函数体要
+    到 `async with` 那一刻才执行，import 与 mkdir 的异常在那时才会冒出来 ——
+    拿不到就来不及降级了。
+    """
+    try:
+        import aiosqlite                                  # noqa: F401
+        from langgraph.checkpoint.sqlite.aio import (     # noqa: F401
+            AsyncSqliteSaver,
+        )
+        (Path(output_root) / "docs").mkdir(parents=True, exist_ok=True)
+    except Exception as exc:                              # noqa: BLE001
+        logger.warning(f"检查点不可用（运行照跑，审批退回通道模式）: {exc}")
+        return None
+    return _checkpointer(output_root)
+
+
+@asynccontextmanager
+async def _checkpointer(output_root: Any):
+    """开一个运行级检查点（`docs/checkpoints.sqlite`，thread_id = run_id）。
+
+    **必须是异步上下文管理器**：`AsyncSqliteSaver` 底下是 aiosqlite，连接绑定在
+    创建它的那条 loop 上。想用"另开一个 loop 把它推起来"的办法把它塞进同步的
+    `try/finally`，连接一跨 loop 就失效 —— 而且是**静默**失效（写入无声无息），
+    排查起来极难。所以开合只能嵌在 async 里。
+
+    **缺依赖时降级不阻断**：没装 `aiosqlite` 就没有检查点（审批退回通道模式），
+    但验证照跑。一个可选能力不该让主流程起不来。
+    """
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    path = Path(output_root) / "docs" / CHECKPOINT_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    async with AsyncSqliteSaver.from_conn_string(str(path)) as saver:
+        await saver.setup()
+        yield saver
+
+
+def _state_of(snapshot: Any) -> Optional[Any]:
+    """检查点快照 → `PipelineState`。读不出来（或不是这次运行）返回 None。
+
+    快照的 `values` 是 dict，理论上可以直接 `model_validate`；但检查点里可能
+    混着框架自己塞的键，所以先按声明过的字段筛一遍 —— `extra="forbid"` 会把
+    多余的键当错误抛出来，而那不该是"重入失败"的理由。
+    """
+    from src.layers.l2_orchestration.state import PipelineState
+    values = getattr(snapshot, "values", None)
+    if not values:
+        return None
+    known = {k: v for k, v in dict(values).items()
+             if k in PipelineState.model_fields}
+    if not known.get("run_id"):
+        return None
+    try:
+        return PipelineState.model_validate(known)
+    except Exception as exc:                       # noqa: BLE001
+        logger.warning(f"检查点状态读不回来: {exc}")
+        return None
+
+
+def _interrupt_payload(snapshot: Any) -> Dict[str, Any]:
+    """快照里挂着的那个 interrupt（没有就是空 dict）。
+
+    LangGraph 把 `interrupt()` 的内容放在 `snapshot.tasks[*].interrupts[*].value`。
+    界面靠它显示"卡在哪个动作上、为什么"。
+    """
+    for task in getattr(snapshot, "tasks", ()) or ():
+        for item in getattr(task, "interrupts", ()) or ():
+            value = getattr(item, "value", None)
+            if isinstance(value, dict):
+                return value
+    return {}
+
 
 class PipelineExecutionService:
     """流水线执行服务（单例）"""
@@ -298,11 +518,205 @@ class PipelineExecutionService:
             # LangGraph 数的是 superstep 而非轮次，一轮约 6-10 步
             "recursion_limit": recursion_limit(int(max_rounds)),
         }
-        final = await graph.ainvoke(initial, config)
-        # LangGraph 对 pydantic 状态返回模型实例；defensive 地兼容 dict
-        result = (final.get("result") if isinstance(final, dict)
-                  else getattr(final, "result", None))
-        return result or {}
+        self._register_run(initial.run_id, output_root, spec_text)
+        try:
+            final = await graph.ainvoke(initial, config)
+            # LangGraph 对 pydantic 状态返回模型实例；defensive 地兼容 dict
+            result = (final.get("result") if isinstance(final, dict)
+                      else getattr(final, "result", None))
+            self._close_run(initial.run_id, result or {})
+            return result or {}
+        except Exception as exc:              # noqa: BLE001
+            self._close_run(initial.run_id, {}, error=exc)
+            raise
+
+    async def run_closed_loop_streaming(
+        self, spec_text: str, output_root: str = "output",
+        target: Optional[float] = None, max_rounds: int = 5,
+        design_style: str = "baseline", bypass_design_model: bool = False,
+        approval_gate=None, on_event=None, cancel_event=None,
+        run_id: str = "", checkpointing: bool = True,
+        resume: Optional[str] = None,
+    ) -> dict:
+        """`run_closed_loop` 的可观测版本：过程写进 `docs/run_events.jsonl`。
+
+        与 `run_closed_loop` 的差别只有一处：它用 `graph.astream(...)` 而不是
+        `ainvoke`，把每个节点的开始/结束翻译成日志记录。**图与节点一行未改**
+        —— 阶段边界是 LangGraph 白送的（`stream_mode="debug"` 的 task /
+        task_result），不是往 23 个节点里插埋点。
+
+        返回结构与 `run_closed_loop` 完全一致，所以调用方可以按需替换。
+
+        on_event: 可选回调，进程内的快路径（界面直接收信号）；不传就只落盘。
+        cancel_event: 可选 `threading.Event`；置位后在**下一个节点边界**退出。
+            图没有检查点，所以只能停在边界上 —— 这也正是为什么取消是协作式的。
+
+        checkpointing: 落检查点（`docs/checkpoints.sqlite`，thread_id = run_id）。
+            打开之后高风险动作的审批从"阻塞等答案"变成"停下来等人"：
+            `astream` 结束、运行**没有结束**，可以在另一个进程里用 `resume` 接着跑。
+            缺 `aiosqlite` 时**降级为不落检查点**并告警，不阻断运行。
+        resume: 重入时给出的**审批答案**（approve / reject / skip）；None = 首次跑。
+            "从哪次运行继续"由 `run_id` 表达，不由这个参数表达 —— 两者混在一个
+            形参里会让 `Command(resume=<run_id>)` 把 run_id 当答案喂回去。
+            重入时 `output_root` 等参数以检查点里的为准。
+        """
+        from src.layers.l2_orchestration.run_journal import RunJournal
+        from src.layers.l2_orchestration.state import PipelineState
+
+        run_dir = _resolve_run_dir(output_root, run_id) if resume else output_root
+        ctx = _safe_checkpointer(run_dir) if checkpointing else None
+        if ctx is None:
+            return await self._stream_run(
+                spec_text=spec_text, output_root=output_root, target=target,
+                max_rounds=max_rounds, design_style=design_style,
+                bypass_design_model=bypass_design_model,
+                approval_gate=approval_gate, on_event=on_event,
+                cancel_event=cancel_event, run_id=run_id, saver=None,
+                resume=resume)
+        async with ctx as saver:
+            return await self._stream_run(
+                spec_text=spec_text, output_root=output_root, target=target,
+                max_rounds=max_rounds, design_style=design_style,
+                bypass_design_model=bypass_design_model,
+                approval_gate=approval_gate, on_event=on_event,
+                cancel_event=cancel_event, run_id=run_id, saver=saver,
+                resume=resume)
+
+    async def _stream_run(self, *, spec_text, output_root, target, max_rounds,
+                          design_style, bypass_design_model, approval_gate,
+                          on_event, cancel_event, run_id, saver, resume):
+        """`run_closed_loop_streaming` 的身体 —— 拆出来只为把检查点的开合
+        收进 `with`，免得流循环被 try/finally 包住看不出重点。"""
+        output_root = make_output_root(output_root)
+        if target is None:
+            from src.layers.l2_orchestration.planning import get_coverage_target
+            target = get_coverage_target()
+
+        if not self._initialized:
+            await self.initialize_agents()
+
+        from langgraph.types import Command
+
+        from src.layers.l2_orchestration.graph import (
+            Runtime, build_closed_loop_graph, hydrate_runtime, recursion_limit)
+        from src.layers.l2_orchestration.run_journal import RunJournal
+        from src.layers.l2_orchestration.state import PipelineState
+
+        resumed = resume is not None
+        rt = Runtime(self, spec_text, approval_gate=approval_gate,
+                     interrupt_mode=saver is not None)
+        graph = build_closed_loop_graph(checkpointer=saver)
+
+        config: Dict[str, Any] = {"configurable": {"rt": rt}}
+        payload: Any = None
+        if resumed:
+            # 重入：状态从检查点来，LangGraph 会忽略本次传进去的输入
+            config["configurable"]["thread_id"] = run_id
+            snapshot = await graph.aget_state(config)
+            initial = _state_of(snapshot)
+            if initial is None:
+                raise ValueError(f"检查点里没有 {run_id} 的状态，无法重入")
+            # Runtime 里的运行期对象**必须重建**：新进程里 n_init 不会再跑，
+            # 而它建的东西（engine / planner / infra / 两个注册表 / 审计链）
+            # 后面每个节点都要用 —— 少了不是"退化"，是 AttributeError。
+            hydrate_runtime(rt, initial)
+            output_root = initial.output_root
+            max_rounds = initial.max_rounds
+            payload = Command(resume=resume)
+        else:
+            initial = PipelineState(
+                run_id=run_id or Path(output_root).name,
+                output_root=str(output_root),
+                target=float(target),
+                max_rounds=int(max_rounds),
+                design_style=design_style,
+                bypass_design_model=bool(bypass_design_model),
+            )
+            if saver is not None:
+                config["configurable"]["thread_id"] = initial.run_id
+        config["recursion_limit"] = recursion_limit(int(max_rounds))
+
+        journal = RunJournal(output_root, run_id=initial.run_id)
+        if not resumed:
+            self._register_run(initial.run_id, output_root, spec_text)
+
+        def _emit(event) -> None:
+            if on_event is not None:
+                try:
+                    on_event(event)
+                except Exception as exc:      # noqa: BLE001
+                    # 观察者坏了不能把运行带崩 —— 它是观测手段，不是流程的一部分
+                    logger.warning(f"on_event 回调失败（忽略）: {exc}")
+
+        _wire_approval_events(approval_gate, journal, _emit)
+
+        result: dict = {}
+        final_state: Any = None
+        started_at: Dict[str, float] = {}
+        last_cov: Dict[str, Any] = {}
+        try:
+            _emit(journal.run_resumed(resume) if resumed else journal.run_started(
+                spec=Path(str(spec_text)).name[:80] or "<inline>",
+                target=float(target), max_rounds=int(max_rounds),
+                design_style=design_style,
+                bypass_design_model=bool(bypass_design_model),
+                output_root=str(output_root)))
+
+            cancelled = False
+            # 重入时传的是 `Command(resume=...)` 而不是初始状态 —— 状态已经在
+            # 检查点里了，LangGraph 会忽略输入、从停下那个节点往下走。
+            async for mode, chunk in graph.astream(
+                    payload if resumed else initial, config,
+                    stream_mode=["debug", "custom", "values"]):
+                if cancel_event is not None and cancel_event.is_set():
+                    _emit(journal.run_cancelled())
+                    cancelled = True
+                    break
+
+                if mode == "debug":
+                    for event in _translate_debug(chunk, started_at, journal):
+                        _emit(event)
+                elif mode == "custom":
+                    for event in _translate_custom(chunk, journal):
+                        _emit(event)
+                else:                          # values —— 全量状态
+                    final_state = chunk
+                    rn = _round_of(chunk)
+                    if rn is not None:
+                        journal.round_num = rn
+                    # values 每个节点都推一次；只在覆盖率真的变了时才记一行，
+                    # 否则日志会被 80 条重复的 coverage.updated 淹掉
+                    cov = _coverage_of(chunk)
+                    if cov and cov != last_cov:
+                        last_cov = cov
+                        _emit(journal.coverage_updated(**cov))
+
+            # 停机原因有三种，别混：
+            #   收到 interrupt  → **暂停**，运行没结束，等人来答（检查点上有它）
+            #   被要求取消      → 停在节点边界，就此结束
+            #   正常跑完        → 出结果
+            interrupted = False
+            if not cancelled and saver is not None:
+                snapshot = await graph.aget_state(config)
+                if getattr(snapshot, "next", ()):
+                    interrupted = True
+                    pending = _interrupt_payload(snapshot)
+                    _emit(journal.run_interrupted(
+                        str(pending.get("stage", "approval")), pending))
+                    result = {"interrupted": True, "pending": pending,
+                              "run_id": initial.run_id}
+            if not cancelled and not interrupted:
+                result = _result_of(final_state)
+                _emit(journal.run_finished(result))
+            self._close_run(initial.run_id, result, cancelled=cancelled,
+                            interrupted=interrupted)
+            return result
+        except Exception as exc:                # noqa: BLE001
+            _emit(journal.run_failed(exc))
+            self._close_run(initial.run_id, {}, error=exc)
+            raise
+        finally:
+            journal.close()
 
     async def run_multi_module(self, module_specs: List[dict], output_root: str = "output",
                                target: Optional[float] = None, max_rounds: int = 5,
@@ -355,6 +769,57 @@ class PipelineExecutionService:
         return await sched.waterfall(tasks)
 
     # ── 运行状态查询 ──
+
+    def _register_run(self, run_id: str, output_root: str, spec_text: str = "") -> None:
+        """把一次运行登记进内存表 —— 让 `watch` / `history` 的实时分支活过来。
+
+        此前 `_runs` **从未被任何执行路径填充**（`get_run_status` 因此恒返回
+        None），CLI 的 `watch` 只能退化到读 DB。内存表只是**加速**：
+        唯一可靠来源仍然是 output 目录（见 run_repository 模块头）。
+        """
+        self._runs[run_id] = {
+            "run_id": run_id,
+            "workflow": "closed_loop_7agents",
+            "state": "running",
+            "current_phase": "",
+            "phases": [],
+            "spec": (spec_text or "")[:200],
+            "output_root": str(output_root),
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "completed_at": "",
+        }
+
+    def _touch_run(self, run_id: str, phase: str = "") -> None:
+        run = self._runs.get(run_id)
+        if run and phase:
+            run["current_phase"] = phase
+
+    def _close_run(self, run_id: str, result: dict,
+                   error: Optional[BaseException] = None,
+                   cancelled: bool = False,
+                   interrupted: bool = False) -> None:
+        """收尾内存表。失败 / 取消 / **暂停**都要落地 —— 状态停在 running 是误导。"""
+        run = self._runs.get(run_id)
+        if run is None:
+            return
+        if error is not None:
+            run["state"] = "failed"
+        elif cancelled:
+            run["state"] = "cancelled"
+        elif interrupted:
+            # "等人" 不是"跑完了"：界面据此显示审批条而不是终态
+            run["state"] = "waiting"
+        else:
+            run["state"] = "completed"
+        run["completed_at"] = datetime.now().isoformat(timespec="seconds")
+        run["phases"] = list(result.get("phases", []) or [])
+        run["passed"] = result.get("passed", 0)
+        run["total"] = result.get("total", 0)
+        run["overall_score"] = result.get("overall_score", 0)
+        run["scores"] = result.get("scores", {}) or {}
+        run["governance"] = result.get("governance", {}) or {}
+        if result.get("final_coverage") is not None:
+            run["final_coverage"] = result.get("final_coverage")
 
     def get_run_status(self, run_id: str) -> Optional[dict]:
         """获取运行状态（供 SSE 轮询 / 前端查询）。优先内存，其次 DB。"""

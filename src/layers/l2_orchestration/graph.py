@@ -52,10 +52,15 @@ class Runtime:
     agent 实例、文件句柄放进去，checkpoint 就存不下来，--resume 也就无从谈起。
     """
 
-    def __init__(self, service, spec_text: str, approval_gate=None):
+    def __init__(self, service, spec_text: str, approval_gate=None,
+                 interrupt_mode: bool = False):
         self.service = service
         self.spec_text = spec_text
         self.approval_gate = approval_gate
+        #: True = 审批走 `interrupt()`：停下来落检查点，可以关掉进程过后来答。
+        #: False = 审批走 `ApprovalGate` 的通道（终端问一句 / 界面弹框等待）。
+        #: 由调用方按"这次运行有没有检查点"决定 —— 没有检查点就 interrupt 不了。
+        self.interrupt_mode = interrupt_mode
 
         self.registry = service.registry
         self.engine: Optional[CoverageDrivenDecisionEngine] = None
@@ -144,11 +149,18 @@ async def _run_agent(rt: Runtime, state: PipelineState, role: str, label: str,
 # 节点
 # ═══════════════════════════════════════════════════════════════
 
-async def n_init(state: PipelineState, config) -> Dict[str, Any]:
-    """重建所有运行期对象。也是 --resume 时唯一需要重新执行的前置节点。"""
-    rt = _rt(config)
-    svc = rt.service
+def hydrate_runtime(rt: "Runtime", state: PipelineState) -> None:
+    """按状态把 Runtime 里那些**不可序列化**的对象造出来。
 
+    为什么是独立函数而不是留在 `n_init` 里：接上检查点之后，一次被中断的运行可以
+    在**另一个进程**里续跑。那时 LangGraph 从检查点恢复，`n_init` **不会再执行**
+    —— 而它建的那些东西（决策引擎、规划器、基础设施、治理器、两个注册表、
+    审计链）后面每个节点都要用。少了它们不是"退化"，是 AttributeError。
+
+    所以这里定义的是「Runtime 的构造契约」：给定 `state` 与 `rt.service`，
+    运行期对象必须能被完整重建。`n_init` 调它，重入路径也调它 —— 一份实现，
+    两处调用，不会漂移。
+    """
     rt.engine = CoverageDrivenDecisionEngine(target=state.target)
 
     # 跨 run 成长（L5 蒸馏）：把已固化的动作权重读进本次 run。
@@ -207,6 +219,11 @@ async def n_init(state: PipelineState, config) -> Dict[str, Any]:
     except Exception:
         rt.file_audit = None
 
+
+async def n_init(state: PipelineState, config) -> Dict[str, Any]:
+    """重建所有运行期对象 —— 直接跑时的入口（重入时走 `hydrate_runtime`）。"""
+    rt = _rt(config)
+    hydrate_runtime(rt, state)
     return {"phases": [{"name": "planning", "status": "planned",
                         "target": state.target,
                         "milestones": rt.planner.milestones}]}
@@ -564,6 +581,46 @@ async def n_governor_retry(state: PipelineState, config) -> Dict[str, Any]:
     return {}
 
 
+def _interrupt_approval(rt, action):
+    """停下来等人批 —— 返回一个 `ApprovalRecord`（与通道模式同形）。
+
+    `interrupt()` 的第一次调用会**抛出** `GraphInterrupt`，由 LangGraph 接住并
+    把当前状态写进检查点；恢复时同一个 `interrupt()` 调用会**返回**传进来的
+    resume 值。所以这个函数在两条时间线上各跑一次，代码却只有一份。
+
+    传进去的 payload 要**自包含**：恢复的人（可能是另一个进程、另一台机器）
+    手上只有检查点，看不到内存里的任何东西。
+    """
+    from langgraph.types import interrupt
+    from src.layers.l2_orchestration.governance.approval import (
+        ApprovalDecision, ApprovalRecord,
+    )
+
+    token = f"ap-{len(rt.approval_gate.records) + 1}" if rt.approval_gate else "ap-1"
+    answer = interrupt({
+        "kind": "approval",
+        "stage": action.action_type,
+        "risk_level": "high",
+        "reason": action.reason,
+        "token": token,
+    })
+
+    # 恢复后 answer 是 `Command(resume=...)` 传进来的那个值。
+    # 认不出来的答案一律按 SKIP —— 与超时同一条规矩：**没人明确说"批"就不放行**。
+    try:
+        decision = ApprovalDecision(str(answer).strip().lower())
+    except (ValueError, TypeError):
+        decision = ApprovalDecision.SKIP
+
+    record = ApprovalRecord(stage=action.action_type, decision=decision,
+                            reason=f"人工审批（检查点重入）: {decision.value}",
+                            token=token)
+    if rt.approval_gate is not None:
+        rt.approval_gate.records.append(record)
+        rt.approval_gate._notify_decision(record)      # noqa: SLF001
+    return record
+
+
 async def n_approval(state: PipelineState, config) -> Dict[str, Any]:
     """高风险动作（重构/改模型）前人工审批。"""
     rt = _rt(config)
@@ -572,23 +629,46 @@ async def n_approval(state: PipelineState, config) -> Dict[str, Any]:
         return {"approval_outcome": "proceed"}
     try:
         from src.layers.l2_orchestration.governance.approval import ApprovalDecision
-        _d = rt.approval_gate.ask(action.action_type, action.reason, risk_level="high")
+        if rt.interrupt_mode:
+            # 有检查点 → 走 interrupt()：本节点**抛出**，图把状态存进检查点然后
+            # 结束这次 astream。等人来答（可能是另一个进程、另一天），
+            # 恢复时 interrupt() 直接**返回**答案，从这里往下继续。
+            # 这才叫"暂停"—— 而通道模式的"阻塞等答案"其实一直占着一个线程。
+            record = _interrupt_approval(rt, action)
+        else:
+            # **取 .decision**：ask() 返回的是 ApprovalRecord。此前这里直接拿 record
+            # 与枚举比较，dataclass 的 __eq__ 对非同类返回 NotImplemented → 恒为 False，
+            # 于是拒绝/跳过两条分支是死代码，「用户拒绝」根本不生效。
+            record = rt.approval_gate.ask(action.action_type, action.reason,
+                                          risk_level="high")
+        _d = record.decision
         if _d == ApprovalDecision.REJECT:
             logger.warning(f"人工审批拒绝: {action.action_type}")
             return {"approval_outcome": "reject",
                     "phases": [{"name": "approval", "status": "rejected",
-                                "action": action.action_type}]}
+                                "action": action.action_type,
+                                "token": record.token}]}
         if _d in (ApprovalDecision.SKIP, ApprovalDecision.REVIEW):
             # SKIP 与 REVIEW 对闭环的效果相同：本次不执行该动作、继续迭代。
             # 区别只在审计语义——REVIEW 表示「待人工线下复核」。
             _st = "skipped" if _d == ApprovalDecision.SKIP else "review"
             return {"approval_outcome": "skip",
                     "phases": [{"name": "approval", "status": _st,
-                                "action": action.action_type}]}
+                                "action": action.action_type,
+                                "token": record.token}]}
+        return {"approval_outcome": "proceed",
+                "phases": [{"name": "approval", "status": "passed",
+                            "action": action.action_type,
+                            "token": record.token}]}
     except Exception as e:
-        # 保持原有的 fail-open 语义（审批故障不阻断闭环）
-        logger.warning(f"审批检查失败: {e}")
-    return {"approval_outcome": "proceed"}
+        # fail-closed：审批**故障**不是"没人反对"。原先是 proceed（全放行），
+        # 那意味着治理一坏就静默失去作用 —— 与"可治理"的定位直接冲突。
+        # 现在的语义是「问不出来就不做这个动作」，闭环继续但跳过它。
+        logger.warning(f"审批检查失败，按跳过处理: {e}")
+        return {"approval_outcome": "skip",
+                "phases": [{"name": "approval", "status": "error",
+                            "action": action.action_type,
+                            "error": str(e)[:200]}]}
 
 
 def r_approval(state: PipelineState) -> str:
@@ -956,6 +1036,28 @@ def _collect_llm_audit() -> Any:
 # 构图
 # ═══════════════════════════════════════════════════════════════
 
+#: 节点注册表 —— (节点名, 节点函数)。
+#: 抽成模块级常量的理由：`stages.py` 要给每个节点配一份显示元数据（中文名 /
+#: 分组 / 归属 agent），而「有哪些节点」必须只有一份。`tests/test_stages.py`
+#: 断言两张表一一对应 —— 加了节点却忘了加元数据，那条测试会红。
+NODE_FUNCS = (
+    ("init", n_init), ("design", n_design), ("model", n_model), ("verify", n_verify),
+    ("env_arch_check", n_env_arch_check), ("round_bump", n_round_bump),
+    ("ops", n_ops), ("coverage", n_coverage), ("debug_functional", n_debug_functional),
+    ("decide", n_decide), ("governor", n_governor),
+    ("governor_retry", n_governor_retry), ("approval", n_approval),
+    ("record_decision", n_record_decision),
+    ("apply_converge", n_apply_converge),
+    ("apply_compile_retry", n_apply_compile_retry),
+    ("refactor_rtl", n_refactor_rtl), ("apply_update_model", n_apply_update_model),
+    ("apply_directed_test", n_apply_directed_test), ("apply_relax", n_apply_relax),
+    ("apply_expand_seeds", n_apply_expand_seeds),
+    ("audit", n_audit), ("finalize", n_finalize),
+)
+
+NODE_NAMES = tuple(name for name, _ in NODE_FUNCS)
+
+
 def build_closed_loop_graph(checkpointer=None, store=None):
     """构建七 Agent 闭环图。
 
@@ -970,20 +1072,7 @@ def build_closed_loop_graph(checkpointer=None, store=None):
     """
     g = StateGraph(PipelineState)
 
-    for name, fn in (
-        ("init", n_init), ("design", n_design), ("model", n_model), ("verify", n_verify),
-        ("env_arch_check", n_env_arch_check), ("round_bump", n_round_bump),
-        ("ops", n_ops), ("coverage", n_coverage), ("debug_functional", n_debug_functional),
-        ("decide", n_decide), ("governor", n_governor),
-        ("governor_retry", n_governor_retry), ("approval", n_approval),
-        ("record_decision", n_record_decision),
-        ("apply_converge", n_apply_converge),
-        ("apply_compile_retry", n_apply_compile_retry),
-        ("refactor_rtl", n_refactor_rtl), ("apply_update_model", n_apply_update_model),
-        ("apply_directed_test", n_apply_directed_test), ("apply_relax", n_apply_relax),
-        ("apply_expand_seeds", n_apply_expand_seeds),
-        ("audit", n_audit), ("finalize", n_finalize),
-    ):
+    for name, fn in NODE_FUNCS:
         g.add_node(name, fn)
 
     g.add_edge(START, "init")

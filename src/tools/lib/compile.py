@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from src.tools.lib.filelist import build_filelist_for_tb
-from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner
+from src.tools.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
 
 
 def run_compile_check(output_dir: Path, agents: list, env_name: str,

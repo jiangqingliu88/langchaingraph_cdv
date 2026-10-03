@@ -12,7 +12,7 @@ from pathlib import Path
 from src.tools.lib.uvm_context import ctx
 from src.tools.lib.filelist import build_loopback_filelist
 from src.tools.lib.sim_log import parse_sim_log
-from src.tools.regression_tools.regression_framwork.src.regression_framework.adapters.regression_runner import RegressionRunner
+from src.tools.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
 
 
 def _try_autofix_loopback(output_dir: Path, agent_name: str, compile_log: str) -> bool:

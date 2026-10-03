@@ -15,7 +15,8 @@ from src.tools.casemodel_tools.domain import CaseModel
 from src.tools.casemodel_tools.generation import GenerationResult, generate
 from src.tools.casemodel_tools.repository import load_model
 
-EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
+#: 示例模型已迁到 `config/casemodel/examples/`（CLI 与工作台共用，见 cli.py 的说明）
+EXAMPLES = Path(__file__).resolve().parents[4] / "config" / "casemodel" / "examples"
 
 CPU = EXAMPLES / "cpu_pipeline.yaml"                 # 组织树 + 专题，写对了
 CPU_FLAWED = EXAMPLES / "cpu_pipeline_flawed.yaml"   # 组织树 / 专题的坑
@@ -29,19 +30,30 @@ FLAWED = (CPU_FLAWED, FC_FLAWED)
 
 # ── 模型 ──
 
+def one_model(path):
+    """读一份示例 → 一个 CaseModel。
+
+    示例用的是「tests: 列被测对象」写法（一个文件 = 共享属性空间 + N 个对象）。
+    夹具要的是「一个模型」的视图，所以取合并体：单对象时它就是那个对象本身。
+    """
+    from src.tools.casemodel_tools.analysis.multi import merge_models
+    from src.tools.casemodel_tools.repository import load_models
+    return merge_models(load_models(path))
+
+
 @pytest.fixture(scope="module")
 def cpu() -> CaseModel:
-    return load_model(CPU)
+    return one_model(CPU)
 
 
 @pytest.fixture(scope="module")
 def cpu_flawed() -> CaseModel:
-    return load_model(CPU_FLAWED)
+    return one_model(CPU_FLAWED)
 
 
 @pytest.fixture(scope="module")
 def fc() -> CaseModel:
-    return load_model(FC)
+    return one_model(FC)
 
 
 # ── 生成 ──
@@ -80,7 +92,7 @@ def cpu_roundtrip() -> AnalysisResult:
     from src.tools.casemodel_tools.repository.case_list import cases_from_text
     from src.tools.casemodel_tools.repository.exporters import export_cases
 
-    model = load_model(CPU)
+    model = one_model(CPU)
     gen = generate(model)
     text = export_cases(gen.cases, "yaml", seed=gen.seed)
     external = cases_from_text(text, hint=".yaml", source="<roundtrip>")
@@ -105,3 +117,8 @@ def rules_of(result: AnalysisResult, category: str = "") -> set:
 
 def issues_of(result: AnalysisResult, rule: str) -> list:
     return [i for i in result.issues if i.rule == rule]
+
+
+# 界面相关的夹具（qt_app / gui / loaded_gui / type_into / load_into）随旧界面
+# 一起搬到 `src/workbench/tests/` 了 —— 本包现在是纯工具，测试不需要 Qt。
+# 想让工具自己的测试不依赖 Qt，就别在这里把它们加回来。

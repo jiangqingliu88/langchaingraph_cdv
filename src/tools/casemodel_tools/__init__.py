@@ -13,14 +13,18 @@ case 由属性组合**生成**而不是手写。文档见 readem.md。
                   + builder（文档十七节的六步流水线，Builder 模式）
     analysis/     只读判断。specifications（规则可插拔）+ rules/（按分类分模块）
                   + matrix / score / external / facade（Facade 模式）
-    view/         只渲染。text（CLI）+ gui/（tkinter，每页一个组件）
-    agent/        三个接入面的适配器（Adapter 模式）
+    text.py       只渲染。纯文本报告（CLI 与界面导出共用）
+
+**本包是纯工具：不含任何面向 LLM 的代码，也没有界面。** 前者在
+`src/agents/verify/casemodel/`，后者在验证工作台
+（`src/workbench/modules/vms/casemodel/`）—— 分开是为了让工具能在不装 langchain、
+**也不装 Qt** 的环境里直接用。
 
 对外入口：
-    cli.py                        命令行（check/analyze/generate/tree/matrix/rules/gui）
+    api.py                        程序化接口（run_validate / run_gaps / run_generate）
+    cli.py                        命令行（check / analyze / generate / tree / matrix / rules）
     analysis.analyze()            分析门面
     repository.load_model()       模型加载
-    agent                        Agent 接入面
 
 用法见 readme.md。
 """
