@@ -138,7 +138,7 @@ class in_order_scoreboard #(
     m_expected_queue.push_back(expected);
     m_num_expected++;
     `uvm_info(get_name(), $sformatf("expected +1 [%0d] %s",
-               m_expected_queue.size(), convert2string(expected)), UVM_HIGH)
+               m_expected_queue.size(), req2string(expected)), UVM_HIGH)
 
     if (!m_strict_ordering)
       try_compare();
@@ -158,7 +158,7 @@ class in_order_scoreboard #(
     m_actual_queue.push_back(item);
     m_num_actual++;
     `uvm_info(get_name(), $sformatf("actual +1 [%0d] %s",
-               m_actual_queue.size(), convert2string(item)), UVM_HIGH)
+               m_actual_queue.size(), req2string(item)), UVM_HIGH)
 
     if (m_strict_ordering)
       compare_strict();
@@ -178,7 +178,7 @@ class in_order_scoreboard #(
       if (!compare_items(expected, actual)) begin
         m_num_mismatches++;
         `uvm_error(get_name(), $sformatf("mismatch\n  expected: %s\n  actual: %s",
-                   convert2string(expected), convert2string(actual)))
+                   req2string(expected), req2string(actual)))
         void'(m_expected_queue.pop_front());
         void'(m_actual_queue.pop_front());
         continue;
@@ -216,7 +216,7 @@ class in_order_scoreboard #(
     return m_comparator.compare(expected, actual);
   endfunction
 
-  protected virtual function string convert2string(REQ_T t);
+  protected virtual function string req2string(REQ_T t);
     return m_comparator.convert2string(t);
   endfunction
 
@@ -229,10 +229,10 @@ class in_order_scoreboard #(
 
     foreach (m_expected_queue[i])
       `uvm_info(get_name(), $sformatf("missing: %s",
-                 convert2string(m_expected_queue[i])), UVM_LOW)
+                 req2string(m_expected_queue[i])), UVM_LOW)
     foreach (m_actual_queue[i])
       `uvm_info(get_name(), $sformatf("extra: %s",
-                 convert2string(m_actual_queue[i])), UVM_LOW)
+                 req2string(m_actual_queue[i])), UVM_LOW)
 
     m_expected_queue.delete();
     m_actual_queue.delete();
@@ -245,7 +245,10 @@ class in_order_scoreboard #(
     super.check_phase(phase);
     flush();
 
-    `uvm_info(get_name(), "\n" + get_report_string(), UVM_NONE)
+    // 注：这里原来是 `"\n" + get_report_string()` —— Questa 判
+    // 「Illegal operation on unpacked type」（`+` 作用在它眼里的非标量上）。
+    // 换成 `$sformatf` 的写法，与下面那句 `` `uvm_error `` 一个形状。
+    `uvm_info(get_name(), $sformatf("\n%s", get_report_string()), UVM_NONE)
 
     if (m_num_mismatches > 0 || m_num_missing > 0 || m_num_extra > 0)
       `uvm_error(get_name(), $sformatf("scoreboard FAILED: mismatches=%0d missing=%0d extra=%0d",
@@ -275,13 +278,20 @@ class in_order_scoreboard #(
   //--------------------------------------------------------------------------
   // 统计读取（线程安全快照）
   //--------------------------------------------------------------------------
+  // 注：这个出参原来叫 `matches` —— 那是 **SystemVerilog 关键字**（`matches`
+  // 运算符，IEEE 1800-2012），vlog 直接判语法错：
+  //     in_order_scoreboard.svh(279): near "matches": syntax error,
+  //     unexpected SystemVerilog keyword 'matches'
+  // 而这个文件在 `scb_pkg` 里，是**每个** UVM 环境都要编的公共包 ——
+  // 一处端口名就把整条编译链挡死。改名 `match_count`（形参名不进接口契约，
+  // 调用方用的都是位置参数）。
   virtual function void get_stats(output int expected, output int actual,
-                                  output int matches, output int mismatches,
+                                  output int match_count, output int mismatches,
                                   output int extra, output int missing);
-    expected   = m_num_expected;
-    actual     = m_num_actual;
-    matches    = m_num_matches;
-    mismatches = m_num_mismatches;
+    expected    = m_num_expected;
+    actual      = m_num_actual;
+    match_count = m_num_matches;
+    mismatches  = m_num_mismatches;
     extra      = m_num_extra;
     missing    = m_num_missing;
   endfunction

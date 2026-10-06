@@ -82,7 +82,14 @@ class {{ environment.env_name }}_gen_test extends uvm_test;
 
 endclass : {{ environment.env_name }}_gen_test
 
-// SLPLIT SEQ
+// SPLIT SEQ（tc_reg / tc_seq 由调用者传入具体的 reg/seq 类名）
+//
+// **宏体里绝不能用 `//` 行注释**：`//` 会一直吃到行尾、**把续行符 `\` 一起吞掉**
+//（LRM 里 `\` 是注释的最后一个字符），于是宏在那一行**提前结束**，后面几行变成
+// 真实代码 → "near '(': syntax error, unexpected '('"。
+// 要用注释就写 `/* ... */`，它不吃续行符。
+//
+// 另：`uvm_config_db #(T):set(...)` 少了一个冒号，必须是 `::set`。
 `define GEN_TOP_TC(tc_name, tc_com, tc_reg, tc_seq) \
 class tc_name extends {{ environment.env_name }}_gen_test; \
     `uvm_component_utils(tc_name) \
@@ -91,10 +98,10 @@ class tc_name extends {{ environment.env_name }}_gen_test; \
 endfunction \
 virtual function void build_phase(uvm_phase phase); \
     super.build_phase(phase); \
-    //different env_config_var var, cons BLOCK
-    set_type_override_by_type({{ environment.env_name }}_config::get_type(),tc_com::get_type()); \
-    //time driver split to DUT WORK
-    uvm_config_db #(uvm_object_wrapper):set(this,"env.vsqr.configure_phase","default_sequence",tc_reg::type_id::get()); \
-    uvm_config_db #(uvm_object_wrapper):set(this,"env.vsqr.main_phase","default_sequence",tc_seq::type_id::get()); \
+    /* 替换 env_config 类型，把 BLOCK 约束换掉 */ \
+    uvm_component::set_type_override_by_type({{ environment.env_name }}_config::get_type(),tc_com::get_type()); \
+    /* 把驱动时序拆到 DUT 侧 */ \
+    uvm_config_db#(uvm_object_wrapper)::set(this,"env.vsqr.configure_phase","default_sequence",tc_reg::type_id::get()); \
+    uvm_config_db#(uvm_object_wrapper)::set(this,"env.vsqr.main_phase","default_sequence",tc_seq::type_id::get()); \
 endfunction \
 endclass

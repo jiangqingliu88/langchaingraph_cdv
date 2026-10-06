@@ -247,8 +247,16 @@ async def test_model_agent_golden_hit(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_model_agent_golden_hit_unverified(tmp_path):
-    """未验证黄金模型（verified=false）→ placeholder=True + 诚实原因，audit 据此拒绝签核。"""
+async def test_model_agent_golden_hit_unverified(tmp_path, monkeypatch):
+    """未验证黄金模型（verified=false）→ placeholder=True + 诚实原因，audit 据此拒绝签核。
+
+    **把"未验证"打在测里，而不是指望库里恰好有那么一个**：库里的 `verified`
+    会被 `scripts/model_library_verify.py` 改 —— 靠真实库状态断言"它是未验证的"
+    迟早会莫名其妙地红（真踩过：验完 apb_slave 之后这条就失败了）。
+    这里显式让 `verify_manifest` 报 false，测的是**逻辑**。
+    """
+    monkeypatch.setattr("src.tools.lib.golden_library.verify_manifest",
+                        lambda ip, ver: {"verified": False})
     agent = ModelAgent()
     await agent.initialize()
     result = await agent.execute_task({

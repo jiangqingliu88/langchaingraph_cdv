@@ -36,6 +36,52 @@ class PolicyPack:
     assertion_templates: List[Dict] = field(default_factory=list)  # [{name, desc}]
     compile_options: List[str] = field(default_factory=list)
 
+    def prompt_hint_items(self) -> List[Dict[str, str]]:
+        """`prompt_hints` → **带 id 的条目**：`[{id, text}]`。
+
+        为什么要有 id：一整串文本注入进 prompt 之后，"哪条 hint 有用"就永远
+        统计不出来 —— 效果只能算到整块头上。有 id 才谈得上回填与淘汰
+        （见 `hint_ids` 落盘那条路）。
+
+        **两种写法都认**：
+
+            prompt_hints: |                  # 旧写法（整块文本）→ 按编号/空行拆条
+              1. 基本功能……
+              2. 边界值……
+
+            prompt_hints:                    # 新写法（显式 id）→ 原样用
+              - {id: hp_functional, text: "基本功能……"}
+
+        拆不出条目就返回一条 `id = <design_style>_all` —— **不编造粒度**：
+        一块文本就当一个条目，好过假装它有三条。
+        """
+        import re
+
+        raw = self.prompt_hints
+        if isinstance(raw, list):
+            items = []
+            for i, entry in enumerate(raw):
+                if isinstance(entry, dict) and entry.get("text"):
+                    items.append({"id": str(entry.get("id") or f"{self.design_style}_{i + 1}"),
+                                  "text": str(entry["text"])})
+                elif isinstance(entry, str) and entry.strip():
+                    items.append({"id": f"{self.design_style}_{i + 1}", "text": entry.strip()})
+            if items:
+                return items
+        text = str(raw or "").strip()
+        if not text:
+            return []
+        # 旧写法：按"行首编号"或空行切段；切不出多段就当整块一条
+        parts = [p.strip() for p in re.split(r"\n\s*(?=\d+[.、)]\s)", text) if p.strip()]
+        if len(parts) <= 1:
+            parts = [p.strip() for p in text.split("\n\n") if p.strip()] or [text]
+        out = []
+        for i, part in enumerate(parts):
+            slug = re.sub(r"[^a-z0-9]+", "_", part[:24].lower()).strip("_")
+            head = f"{self.design_style}_{i + 1}" + (f"_{slug}" if slug else "")
+            out.append({"id": head[:48], "text": part})
+        return out
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "design_style": self.design_style,

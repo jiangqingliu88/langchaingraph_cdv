@@ -37,7 +37,13 @@ class {{ environment.env_name }}_virtual_base_seq extends uvm_sequence;
   protected task send_{{ agent.name }}_random(int count = 1);
     {{ agent.sequence_type }} _rs;
     _rs = {{ agent.sequence_type }}::type_id::create("_rs");
+{#- 只有**驱动侧**（master）序列有 `num_transactions` 这个"发多少笔"的旋钮；
+    slave 序列是事件驱动（从 req_fifo 取请求、持续响应），没有这个概念。
+    无条件写这行的话，slave 侧 vopt 阶段直接报 "Failed to find
+    'num_transactions'"，**整个设计加载不了**。 #}
+{%- if agent.is_master is not false %}
     _rs.num_transactions = count;
+{%- endif %}
     start_{{ agent.name }}_sequence(_rs);
   endtask
 

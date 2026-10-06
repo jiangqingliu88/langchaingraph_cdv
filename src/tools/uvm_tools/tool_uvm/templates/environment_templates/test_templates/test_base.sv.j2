@@ -67,22 +67,34 @@ class {{ environment.env_name }}_base_test extends uvm_test;
   endtask
 
   task main_phase(uvm_phase phase);
-    super.main_phase(phase);
-    `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
+{#- 只有 **active 的 master 侧** agent 才有 sequencer 可挂序列：
+    `is_master` 排掉响应侧，`is_active` 排掉 passive —— agent 模板里 `sequencer`
+    只在 `cfg.is_active == UVM_ACTIVE` 时 create。只看 is_master 的话，
+    passive agent 的 `sequencer` 是 null，`_seq.start(null)` 永远卡住，
+    main_phase 的 objection 不释放，一直到 UVM 的 PH_TIMEOUT。
+    （声明必须排在**块内所有语句之前** —— super.main_phase() 和
+    `uvm_info(...)` 都是语句 —— 声明写在它们后面就是
+    "Illegal declaration after the statement"，所以提到任务开头。 #}
 {%- for agent in agents %}
-{%- if agent.is_master is not false %}
+{%- if agent.is_master is not false and agent.active is not false %}
     {{ agent.sequence_type }} {{ agent.name }}_seq;
 {%- endif %}
 {%- endfor %}
     // 随机种子管理（+SEED=<n> 复现回归）
     int seed;
+    super.main_phase(phase);
+    `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
     if ($value$plusargs("SEED=%0d", seed)) begin
-      uvm_root::get().set_seed(seed);
+      // UVM 1.2 的 `uvm_root` **没有** `set_seed()`（那是别的版本/公司内部扩展），
+      // 调它报 "Field/method name (set_seed) not found"。用 SV 原生的
+      // `$urandom(seed)`：带初值调用 = 给全局随机数发生器重新播种。
+      // （Makefile 里本来也传了 `+ntb_random_seed`，两者并存不冲突。）
+      void'($urandom(seed));
       `uvm_info(get_type_name(), $sformatf("SEED=%0d", seed), UVM_LOW)
     end
     phase.raise_objection(this);
 {%- for agent in agents %}
-{%- if agent.is_master is not false %}
+{%- if agent.is_master is not false and agent.active is not false %}
     {{ agent.name }}_seq = {{ agent.sequence_type }}::type_id::create("{{ agent.name }}_seq");
     {{ agent.name }}_seq.start(env.{{ agent.name }}_agent_h.sequencer);
 {%- endif %}

@@ -8,6 +8,10 @@
 //   master monitor 的抓包 = expected，slave monitor 的抓包 = actual
 import uvm_pkg::*;
 import {{ agent.name }}_pkg::*;
+// `MASTER` / `SLAVE`（port_kind_enum）住在公共包里；SV 的 import **不传递**，
+// `{{ agent.name }}_pkg` 带不进来 —— 不显式 import 就是
+// "Undefined variable: 'MASTER'"（见下面的 mcfg.port_kind 赋值）。
+import common_typedefs_pkg::*;
 `include "uvm_macros.svh"
 
 class {{ agent.name }}_loopback_env extends uvm_env;
@@ -22,23 +26,36 @@ class {{ agent.name }}_loopback_env extends uvm_env;
   endfunction
 
   function void build_phase(uvm_phase phase);
-    super.build_phase(phase);
+    // ⚠️ 声明必须排在**块内所有语句之前**（SV 规则）：`super.build_phase(phase);`
+    // 已经是语句，声明写在它后面就是
+    // "Illegal declaration after the statement ... Declarations must precede statements"。
     {{ agent.name }}_port_config mcfg;
     {{ agent.name }}_port_config  scfg;
-    virtual {{ agent.name }}_if vif;
+    virtual {{ agent.name }}_if mvif;
+    virtual {{ agent.name }}_if svif;
 
-    if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "", "vif", vif))
-      `uvm_fatal("NOVIF", "Virtual interface not set")
+    super.build_phase(phase);
+
+    // ── vif **按 agent 各取各的** ──
+    // tb 把接口 set 到**每个 agent 的路径**上（`*.master_agent_h*` / `*.slave_agent_h*`），
+    // 所以这里也按同样的路径各取一次，而不是自己 get 一个笼统的 `""`。
+    // 用笼统路径的话，tb 那边按 agent 分发的 set 一个都匹配不到 env →
+    // 0 时刻 `[NOVIF] Virtual interface not set` 直接挂。
+    // master / slave 各拿哪个接口，在这两行上是**看得见的**。
+    if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "master_agent_h", "vif", mvif))
+      `uvm_fatal("NOVIF", "master_agent_h 的 virtual interface 没设")
+    if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "slave_agent_h", "vif", svif))
+      `uvm_fatal("NOVIF", "slave_agent_h 的 virtual interface 没设")
 
     // loopback 自检拓扑固定（master 驱动 → slave 监控），不随 env 配置变化：
     // master 必须 ACTIVE 才能注入激励；slave 保持 PASSIVE 避免驱动响应端口干扰比对
     mcfg = {{ agent.name }}_port_config::type_id::create("mcfg");
-    mcfg.vif = vif;
+    mcfg.vif = mvif;
     mcfg.is_active = UVM_ACTIVE;
     mcfg.port_kind = MASTER;
 
     scfg = {{ agent.name }}_port_config::type_id::create("scfg");
-    scfg.vif = vif;
+    scfg.vif = svif;
     scfg.is_active = UVM_PASSIVE;  // slave 仅监控，不响应
     scfg.port_kind = SLAVE;
 
@@ -52,7 +69,9 @@ class {{ agent.name }}_loopback_env extends uvm_env;
 
   function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
-    master_agent_h.monitor.mon_ap.connect(scb_h.expected_export);
+    // monitor 的抓包端口分 master/slave 两个名字（`master_mon_ap` / `slave_mon_ap`），
+    // 没有笼统的 `mon_ap` —— 写错就是 "Could not find field/method name (mon_ap)"。
+    master_agent_h.monitor.master_mon_ap.connect(scb_h.expected_export);
     slave_agent_h.monitor.slave_mon_ap.connect(scb_h.actual_export);
   endfunction
 

@@ -1,0 +1,75 @@
+{% include "base_templates/base_template.sv.j2" %}
+{%- if register_model and register_model.reg_block %}
+// ============================================================
+// CSR Test: {{ environment.env_name }}_reg_access_test
+//   访问一致性 —— 前门（走总线序列）与后门（直接探 DUT 内部信号）读到的值
+//   必须一致。它抓的是**总线适配器 / 地址映射**这类错：寄存器模型本身对，
+//   但经 bus 走过去走错了地址、或者 adapter 转换错了。
+//
+//   跑的是 UVM 自带的 `uvm_reg_access_seq`（`uvm-1.2/src/reg/sequences/`）——
+//   不自己写遍历：UVM 已经交付了，抄一遍只会得到一份不会跟着 UVM 修 bug 的副本。
+//
+//   **前提比另外两个测试多一条**：寄存器要**登记了 HDL 后门路径**
+//   （`uvm_reg::add_hdl_path` / `uvm_reg_block::add_hdl_path_slice`），
+//   否则后门读不到东西，这个测试跑不出有效结论。
+//
+// 前提: env 配了 register_model（reg_block / adapter / bus_agent）。
+//       没配的环境**不会生成这个文件**。
+// ============================================================
+
+class {{ environment.env_name }}_reg_access_test extends {{ environment.env_name }}_base_test;
+  `uvm_component_utils({{ environment.env_name }}_reg_access_test)
+
+  uvm_reg_block reg_model;
+
+  function new(string name = "{{ environment.env_name }}_reg_access_test",
+               uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  // 取模型的时机是 **connect_phase**，不是 build_phase：UVM 的 build_phase
+  // 自顶向下跑，本测试 build 的时候环境的 build 还没跑，模型成员还是 null。
+  //
+  // 直接取句柄、不走 config_db：环境是用 `set(this, "*", "reg_model", …)` 发布的，
+  // 那个作用域覆盖的是**环境的子节点**（agent/sequencer），而本测试与它是**兄弟**，
+  // 通配符对不上。
+  virtual function void connect_phase(uvm_phase phase);
+    super.connect_phase(phase);
+    reg_model = env.{{ register_model.reg_block.name }};
+    if (reg_model == null)
+      `uvm_fatal("REG_TEST", "环境里没有寄存器模型 —— register_model 没配？")
+    // pragma custom build_logic begin
+    // pragma custom build_logic end
+  endfunction
+
+  virtual task main_phase(uvm_phase phase);
+    // ⚠️ 声明必须在**块内所有语句之前**（SV 规则）。原来这句声明写在
+    // `raise_objection` / `uvm_info` 之后 → vlog 直接
+    // "Illegal declaration after the statement"，而且连带整个 test_pkg 作废。
+    uvm_reg_access_seq seq;
+    // **刻意不调 `super.main_phase()`**：基类的 main_phase 会起一路**随机总线序列**
+    //（每个 agent 发 num_transactions 笔随机读写），那些随机写会落进寄存器地址空间、
+    // 把寄存器内容改掉，与本次逐位遍历互相干扰。寄存器测试要的是**空闲总线**。
+    // 环境在 build_phase 里已经建好，不依赖基类的 main_phase。
+    `uvm_info(get_type_name(), "main_phase: 前门/后门访问一致性检查开始", UVM_LOW)
+    phase.raise_objection(this);
+
+    // **`start(null)` 是官方惯例**：寄存器序列不走 sequencer，读写经
+    // `reg_block.default_map`（它的 sequencer 已由 env 的 set_sequencer 配好）。
+    // UVM 的组合器内部启动子序列时用的也是 `seq.start(null, this)`。
+    seq = uvm_reg_access_seq::type_id::create("seq");
+    seq.model = reg_model;
+    seq.start(null);
+
+    // 跳过个别寄存器 / 整块：往 REG:: 命名空间放资源位
+    //   uvm_resource_db#(bit)::set({"REG::", reg_model.get_full_name(), ".*"},
+    //                              "NO_REG_ACCESS_TEST", 1, this);
+
+    // pragma custom run_logic begin
+    // pragma custom run_logic end
+
+    phase.drop_objection(this);
+  endtask
+
+endclass : {{ environment.env_name }}_reg_access_test
+{%- endif %}

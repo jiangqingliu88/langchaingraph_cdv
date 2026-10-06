@@ -90,20 +90,23 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
     // pragma custom drive_logic begin
 {%- if agent.protocol == 'apb' %}
     // === APB slave 响应: 等 setup+access 拍 → pready + 数据/错误 ===
+{%- set _drv = 'vif.slave_cb' %}
+    // 驱动口是时钟块的 output，而它指向的是**从端影子变量 `<sig>_slv`**
+    //（见 interface.sv.j2：对外的 `<sig>` 是 wire，要留给 DUT 直连）。
     do @(vif.slave_cb); while (!(vif.slave_cb.psel && vif.slave_cb.penable));
     if (cfg.response_mode == AUTO_MEMORY) begin
       if (vif.slave_cb.pwrite)
         cfg.memory[vif.slave_cb.paddr] = vif.slave_cb.pwdata;
       else
-        vif.slave_cb.prdata <= (cfg.memory.exists(vif.slave_cb.paddr))
-                               ? cfg.memory[vif.slave_cb.paddr] : cfg.default_read_data;
+        {{ _drv }}.prdata_slv <= (cfg.memory.exists(vif.slave_cb.paddr))
+                                 ? cfg.memory[vif.slave_cb.paddr] : cfg.default_read_data;
     end else begin
-      vif.slave_cb.prdata  <= rsp.prdata;
-      vif.slave_cb.pslverr <= rsp.pslverr;
+      {{ _drv }}.prdata_slv  <= rsp.prdata;
+      {{ _drv }}.pslverr_slv <= rsp.pslverr;
     end
-    vif.slave_cb.pready <= 1'b1;
+    {{ _drv }}.pready_slv <= 1'b1;
     @(vif.slave_cb);
-    vif.slave_cb.pready <= 1'b0;
+    {{ _drv }}.pready_slv <= 1'b0;
 {%- else %}
     // 响应延迟（由 slave sequence 决定）
     repeat (rsp.delay_cycles) @(vif.slave_cb);
@@ -121,7 +124,7 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
 {%-         if var.name == port.name %}{% set port_in_txn.found = true %}{% endif %}
 {%-       endfor %}
 {%-       if port_in_txn.found %}
-    vif.slave_cb.{{ port.name }} <= rsp.{{ port.name }};
+    vif.slave_cb.{{ port.name }}_slv <= rsp.{{ port.name }};   // 驱动的是从端影子变量
 {%-       endif %}
 {%-     endif %}
 {%-   endfor %}

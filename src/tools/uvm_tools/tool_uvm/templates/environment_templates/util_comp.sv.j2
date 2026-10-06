@@ -5,6 +5,16 @@
 // 自动生成 - 通过 YAML 配置端口
 // ============================================================
 
+{#- 每个输入端口要一个**具名**的 analysis imp（好让 write_<名> 各自独立）。
+    那个类名不是 UVM 现成的 —— 得先用 `uvm_analysis_imp_decl(_<名>)` 声明出来，
+    下面才能 `uvm_analysis_imp_<名> #(...)` 用它。原来**漏了这一步**，
+    于是渲染出 `uvm_analysis_imp_in_export #(apb_master_seq_item, apb_predictor)`
+    这种句子：那个标识符没定义，紧跟的 `#` 直接变成语法错
+    （"near '#': syntax error"）—— 报的是 `#`，根因是少了一行声明。 #}
+{%- for port in analysis_exports %}
+`uvm_analysis_imp_decl(_{{ port.name }})
+{%- endfor %}
+
 class {{ name }} extends uvm_component;
   `uvm_component_utils({{ name }})
 
@@ -40,6 +50,12 @@ class {{ name }} extends uvm_component;
 {%- for port in analysis_ports %}
     {{ port.name }} = new("{{ port.name }}", this);
 {%- endfor %}
+{%- if ref_model %}
+    // 镜像是动态数组，且 `logic` 未赋值时是 **X** —— 不显式清零，第一次读就会
+    // 期望出一个 X，和 DUT 的 0 一比就是一条假 mismatch。
+    m_regs = new[{{ ref_model.nregs }}];
+    foreach (m_regs[i]) m_regs[i] = '0;
+{%- endif %}
   endfunction
 
   // ═══════════════════════════════════════════
@@ -62,8 +78,49 @@ class {{ name }} extends uvm_component;
   // ═══════════════════════════════════════════
 
 {%- for port in analysis_exports %}
+{%- if ref_model %}
+  // ── 参考模型镜像（**不是空壳**）────────────────────────────────
+  //
+  // 这里按 `apb_slave` 黄金模型的语义实现一份寄存器镜像，与 model agent 生成到
+  // `model/<版本>/` 下的 `*_ref_model.sv` **同一套语义**：
+  //
+  //     写：psel && penable && pwrite → regs[paddr] = pwdata
+  //     读：psel && !pwrite           → prdata = regs[paddr]
+  //     复位：全部清零
+  //
+  // 为什么写成**类**而不是去实例化那个 SV module：`process_<port>` 是**零时间**
+  // 的 function（analysis imp 的 write 语义），而 module 里是 `@(posedge clk)` 的
+  // 时序块 —— 在零时间里驱动它、再等一个时钟沿读回，只能 fork 出去，那就在
+  // 事务流里引入了竞态。镜像成类则完全组合、可复现：给定同样的事务序列，结果
+  // 一定一样。代价是同一套语义被编码了两遍（module 一份、class 一份），由
+  // `ref_model.source` 在文件头标明出处，改语义时两处要一起改。
+  //
+  // 字段名（pwrite/paddr/pwdata/prdata）是 APB 约定，与 `{{ port.type }}` 对齐 ——
+  // 所以这条只在设计命中 APB 黄金模型时才会被生成（见 find_spec_yaml 的门禁）。
+{%- if ref_model.source %}
+  // 出处：{{ ref_model.source }}
+{%- endif %}
+
+  protected logic [{{ ref_model.data_w - 1 }}:0] m_regs [];
+
+{%- endif %}
   virtual function void process_{{ port.name }}({{ port.type }} tr);
+{%- if ref_model %}
+    unique case (1'b1)
+      tr.pwrite: begin
+        if (tr.paddr < {{ ref_model.nregs }}) m_regs[tr.paddr] = tr.pwdata;
+      end
+      default: begin
+        // 读：给出**期望**的 prdata（写回事务自身，交给 out_port 送到 scoreboard）
+        tr.prdata = (tr.paddr < {{ ref_model.nregs }}) ? m_regs[tr.paddr] : '0;
+      end
+    endcase
+{%- if analysis_ports|length == 1 %}
+    send_output(tr);
+{%- endif %}
+{%- else %}
     // TODO: override in derived class
+{%- endif %}
   endfunction
 
 {%- endfor %}
@@ -108,4 +165,3 @@ class {{ name }} extends uvm_component;
   endfunction
 
 endclass : {{ name }}
-```

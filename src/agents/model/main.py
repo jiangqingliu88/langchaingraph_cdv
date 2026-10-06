@@ -104,19 +104,32 @@ def _render_sv(module: str, ops: list, regs: list, interfaces: list = None) -> d
 endmodule
 """
     else:
-        # 无寄存器表：诚实占位（真实模型需寄存器映射 + 协议逻辑，见 README 路线）
-        body = f"""  // ── 占位参考模型：spec 无寄存器表/接口表，无法生成真实语义 ──
+        # 无寄存器表：诚实占位（真实模型需寄存器映射 + 协议逻辑，见 README 路线）。
+        #
+        # **输出按实际端口派生、统一驱动为 0** —— 别写死信号名。这里原来是一段
+        # 写死 `clk/rst_n/result` 的 always_ff：那些是 ALU 回退端口的名字，一旦
+        # 端口是从 spec 接口生成的（pclk/preset_n/…），就成了未定义变量、vlog 直接
+        # 报错。占位模型的本意是"**编得过但不做事**"，写死名字会让它连编都编不过
+        # （2026-10-04 编译门禁上线后才暴露出来）。
+        out_names = [str(i["name"]).split("[")[0] for i in interfaces
+                     if isinstance(i, dict) and i.get("name")
+                     and str(i.get("direction", "")).upper() == "OUTPUT"]
+        if not has_spec_ports:
+            out_names = ["result"]              # 回退 ALU 端口的输出
+        if out_names:
+            drives = "\n".join(f"    {n} = '0;" for n in out_names)
+            body = f"""  // ── 占位参考模型：spec 无寄存器表，无法生成真实语义 ──
   // 真实参考模型需 spec.registers（寄存器映射）+ 协议逻辑（UART TX/RX 等）定向验证。
-  // 仅作编译占位；audit 门禁 model_real 会拒绝签核（见 report.json gates）。
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) result <= '0;
-    else result <= '0;
+  // 输出统一驱动为 0：编得过、但不做事；audit 门禁 model_real 会拒绝签核。
+  always_comb begin
+{drives}
   end
 endmodule
 """
-        if not has_spec_ports:
-            # 无接口也无寄存器：完全无法建模
-            body = "  // 占位：spec 无接口表也无寄存器表，无法生成参考模型。\nendmodule\n"
+        else:
+            # 无接口也无寄存器：完全无法建模，空模块（编得过，什么都不声明）
+            body = ("  // 占位：spec 无接口表也无寄存器表，无法生成参考模型。\n"
+                    "endmodule\n")
 
     code = f"module {module}_ref_model(\n{ports}\n);\n{body}"
     return {
@@ -310,8 +323,18 @@ class ModelAgent(BaseAgent):
         else:
             fpath.write_text(rendered["source_code"], encoding="utf-8")
 
-        # 更新稳定版本指针
-        self._mark_stable(model_dir, module, version)
+        # ── 本地闭环：过 EDA 才写稳定指针（与 design 的 vlog 门禁对称）──
+        # 说不行的产物**不进稳定指针** —— `{module}_stable.txt` 自然停在上一版，
+        # scoreboard 就不会拿一份编不过的模型去比。没装 EDA 时判不了，
+        # 如实标 BLOCKED 照常推进（不冒充通过，也不冤枉一份可能没问题的模型）。
+        compile_info = self._verify_model(model_dir, module, model_type,
+                                          rendered["source_code"])
+        compile_failed = compile_info["status"] == "FAIL"
+        if compile_failed:
+            logger.warning(f"参考模型 {module} v{version} 未过编译门禁，不进稳定指针："
+                           f"{compile_info['detail']}")
+        else:
+            self._mark_stable(model_dir, module, version)
 
         model_data = {
             "module": module, "model_type": model_type,
@@ -340,7 +363,77 @@ class ModelAgent(BaseAgent):
             model_data["placeholder_reason"] = ""
         model_data["spec_interfaces"] = len(interfaces)
         model_data["score"] = min(50 + len(ops) * 5, 85)
+        # 编译门禁的结果**进 data** —— 界面（agent 产出总览）与 audit 都看得到
+        model_data["compile"] = compile_info
+
+        if compile_failed:
+            # 编不过的模型不该拿"看起来还行"的分 —— 分数跟着门禁走
+            model_data["status"] = "compile_failed"
+            model_data["score"] = min(model_data["score"], 30)
+            # 失败响亮：EDA 说这份模型用不了 → 这一步就是失败的（不许粉饰）。
+            # data 照常带回去（含 placeholder_reason 与 compile 详情），audit 仍能看到。
+            return AgentResult(success=False,
+                               data={"model": model_data, "score": model_data["score"]},
+                               error=f"参考模型未过编译门禁：{compile_info['detail']}")
         return AgentResult(success=True, data={"model": model_data, "score": model_data["score"]})
+
+    # ── 本地闭环：编译门禁 ──
+
+    @staticmethod
+    def _verify_model(model_dir: Path, module: str, model_type: str,
+                      source_code: str) -> Dict[str, Any]:
+        """参考模型能不能真的被用上 —— 本地闭环（铁律一）。
+
+        design 用 vlog 门禁决定"这份 RTL 留不留"；参考模型与之对称：**先过 EDA，
+        过了才写稳定指针**。此前这一步是"生成完就走"，对不对要到 audit 的
+        `model_real` 门禁才知道 —— 那是**延迟判定**，不是闭环。
+
+        三种结果分得很清（混起来会误杀）：
+            PASS                 编译通过 → 可以进稳定指针
+            FAIL                 编译不过 → 这一步失败，产物不进稳定指针
+            BLOCKED_EDA_MISSING  环境里没有 vlog → **判不了**：如实标注、照常推进。
+                                 既不冒充通过，也不冤枉一份可能没问题的模型。
+            SKIPPED              非 HDL 模型（cpp）没有可用的本地编译门禁
+
+        非 SV/Verilog 的模型：python 用 stdlib `compile()` 做语法检查；cpp 只能标
+        SKIPPED —— 环境里没有保证存在的 C++ 编译器，编不出来就不许说编过了。
+        """
+        if model_type == "python":
+            try:
+                compile(source_code, f"{module}_ref_model.py", "exec")
+                return {"status": "PASS", "errors": 0, "detail": "Python 语法检查通过"}
+            except SyntaxError as exc:
+                return {"status": "FAIL", "errors": 1,
+                        "detail": f"Python 语法错误（第 {exc.lineno} 行）：{exc.msg}"}
+
+        if model_type not in ("systemverilog", "verilog"):
+            return {"status": "SKIPPED", "errors": 0,
+                    "detail": f"{model_type} 模型没有可用的本地编译门禁（不冒充通过）"}
+
+        import shutil
+        import tempfile
+
+        if shutil.which("vlog") is None:
+            return {"status": "BLOCKED_EDA_MISSING", "errors": 0,
+                    "detail": "环境里没有 vlog（QuestaSim 未安装或不在 PATH）—— "
+                              "无法判定这位参考模型，不冒充通过；装好后重跑这一步。"}
+        try:
+            from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
+
+            suffix = ".sv" if model_type == "systemverilog" else ".v"
+            tmp_dir = Path(tempfile.mkdtemp(prefix="model_verify_"))
+            target = tmp_dir / f"{module}_ref_model{suffix}"
+            target.write_text(source_code, encoding="utf-8")
+            fl = tmp_dir / "filelist.f"
+            fl.write_text(str(target), encoding="utf-8")
+
+            result = InfrastructureManager(tmp_dir).compile(str(fl), coverage=False)
+            errors = int(result.get("errors", 0) or 0)
+            passed = result.get("status") == "PASS" and errors == 0
+            return {"status": "PASS" if passed else "FAIL", "errors": errors,
+                    "detail": "vlog 编译通过" if passed else f"vlog 编译失败（{errors} 处错误）"}
+        except Exception as exc:                      # noqa: BLE001
+            return {"status": "FAIL", "errors": 1, "detail": f"编译校验异常：{exc}"}
 
     # ── 版本管理辅助 ──
 

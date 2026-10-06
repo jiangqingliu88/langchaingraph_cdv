@@ -84,6 +84,11 @@ class PipelineState(BaseModel):
     target: float = 95.0
     design_style: str = "baseline"
     bypass_design_model: bool = False
+    #: 这次运行要开的**仿真业务**（`cov` / `wave` / `debug_all` / …，
+    #: 见 `src/tools/regression_tools/sim_modes.py`）。
+    #: 是**运行输入**、不是全局开关 —— 记在状态里，复现/审计时能回答
+    #: "这一轮的波形是怎么来的"。默认 `["cov"]`：覆盖率是闭环的主指标。
+    sim_modes: List[str] = Field(default_factory=lambda: ["cov"])
 
     phases: Annotated[List[Dict[str, Any]], _add] = Field(default_factory=list)
     coverage_history: Annotated[List[float], _add] = Field(default_factory=list)

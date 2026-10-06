@@ -69,10 +69,10 @@ class TestWindowMenu:
         entry = next(a for a in menu_by_title(window, "窗口").actions()
                      if "底部甲" in a.text())
         entry.setChecked(False)
-        assert not window.manager.pane_of("stub.dock_a").contains("stub.dock_a")
+        assert not window.workspace.contains("stub.dock_a")
 
         entry.setChecked(True)
-        assert window.manager.pane_of("stub.dock_a").contains("stub.dock_a")
+        assert window.workspace.contains("stub.dock_a")
 
     def test_failed_modules_are_disabled_in_the_window_menu(self, qt_app, ctx):
         ctx.manifest = load_manifest_text(BROKEN_MANIFEST, source="<broken>")
@@ -125,20 +125,20 @@ class TestViewMenu:
         for name in theme.PALETTES:
             assert name in texts
 
-    def test_hiding_the_nav_collapses_the_left_pane(self, window):
-        """导航树是左窗格唯一的常驻页签 —— 收起它，左窗格就该消失。"""
-        assert not window.panes.pane("left").is_collapsed()
+    def test_hiding_the_nav_hides_the_nav_dock(self, window):
+        """导航树是左 dock 上的常驻面板 —— 收起它，左 dock 就收起来。"""
+        assert window.workspace.dock_of("__nav__").isVisibleTo(window)
         window.act_toggle_nav.setChecked(False)
-        assert window.panes.pane("left").is_collapsed()
+        assert not window.workspace.dock_of("__nav__").isVisibleTo(window)
 
         window.act_toggle_nav.setChecked(True)
-        assert not window.panes.pane("left").is_collapsed()
+        assert window.workspace.dock_of("__nav__").isVisibleTo(window)
 
-    def test_hiding_the_console_keeps_the_bottom_pane_for_modules(self, window):
-        """底窗格还有模块页签，控制台关掉不该把整块窗格也收走。"""
+    def test_hiding_the_console_keeps_the_bottom_dock_for_modules(self, window):
+        """底 dock 上还有模块面板，控制台关掉不该把整块 dock 也收走。"""
         window.act_toggle_console.setChecked(False)
-        assert not window.panes.pane("bottom").contains("__console__")
-        assert not window.panes.pane("bottom").is_collapsed()
+        assert not window.workspace.contains("__console__")
+        assert window.workspace.contains("stub.dock_a")     # 底 dock 还活着
 
 
 class TestFileAndHelp:

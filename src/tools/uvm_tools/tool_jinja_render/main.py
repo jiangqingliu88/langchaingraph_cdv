@@ -34,11 +34,16 @@ def run(output_dir: str = "") -> str:
 
     renderer = JinjaRenderer(TEMPLATES_DIR)
     generator = UVMGenerator(renderer, od)
-    all_files = []
-    for yp in yaml_files:
-        generated = generator.run([yp])
-        all_files.extend(generated)
-        print(f"    {yp.name} -> {len(generated)} files", flush=True)
+    # **一次把全部 YAML 交给生成器**，不要逐个文件调。
+    #
+    # 逐个调会切断**跨文件**的推导：`env_name` 已从 YAML 下线，bench / constraint 的
+    # 环境名由「**本次调用**解析出的 environment」回填（见 `gen_uvm.run` 的
+    # `default_env = environments[0].env_name if environments else ""`）。逐个文件调时
+    # 处理 `bench.yaml` 的那一次里根本没有 environments —— 于是 `bench.env_name`
+    # 停在空串，渲染出来的 tb_top 里就是 `import _test_pkg::*`（`_test_pkg` 这个包
+    # 不存在，vlog 报 `Could not find the package`）。
+    all_files = list(generator.run(yaml_files))
+    print(f"    {len(yaml_files)} 个 YAML -> {len(all_files)} 个文件", flush=True)
 
     # 更新 ctx
     agent_names = set()

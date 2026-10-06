@@ -16,7 +16,7 @@ class DatabaseSettings(BaseSettings):
 class LLMSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LLM_", env_file=".env", env_file_encoding="utf-8", extra="allow")
     provider: str = "deepseek"
-    model: str = "deepseek-chat"
+    model: str = "deepseek-flash"
     temperature: float = 0.0
     max_tokens: int = 4096
     api_key: str = ""           # 生产环境必须显式设置
@@ -49,6 +49,11 @@ class PlatformSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PLATFORM_", extra="allow")
     # 环境标识: dev / test / prod
     env: str = "production"
+    # 人工操作者署名 —— 写进证据链的"谁改的 / 谁批的"。留空则回落到系统登录名。
+    # 单独留一个可配置的名字（像 git 的 user.name）而不是直接用登录名：这个名字
+    # 是审计答案的一部分，跟着"当前登录的是谁"漂移的话，换台机器同一个人就成了
+    # 两个作者。环境变量：PLATFORM_USER_NAME
+    user_name: str = ""
     # 产品等级: personal / community / enterprise
     tier: str = "personal"
     # 安全

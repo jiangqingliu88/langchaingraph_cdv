@@ -308,6 +308,36 @@ class ExecutionContext:
 # ITool Protocol
 # ═══════════════════════════════════════════════════════════════
 
+def validate_by_schema(schema: Dict[str, Any], args: Dict[str, Any]) -> tuple:
+    """按 manifest.input_schema 校验 args。返回 (pass, error_msg)。
+
+    抽成模块级函数是因为 **Protocol 的默认实现不会被实现方继承** —— `ITool`
+    上的 `validate_args_by_schema` 只是给显式 subclass 用的，几个 adapter 各自
+    漏掉了它，`ToolHub.invoke` 又无条件调用，结果 28 个工具一调就 AttributeError。
+    单一实现 + `_ensure_itool` 补默认值，这类问题才不会再冒出来。
+    """
+    if not schema:
+        return True, ""
+    props = schema.get("properties", {})
+    required = schema.get("required", [])
+    for r in required:
+        if r not in args:
+            return False, f"Missing required field: '{r}'"
+    for key, val in args.items():
+        if key not in props:
+            continue
+        expected_type = props[key].get("type", "string")
+        if expected_type == "string" and not isinstance(val, str):
+            return False, f"Field '{key}' expected string, got {type(val).__name__}"
+        if expected_type == "integer" and not isinstance(val, int):
+            return False, f"Field '{key}' expected int, got {type(val).__name__}"
+        if expected_type == "number" and not isinstance(val, (int, float)):
+            return False, f"Field '{key}' expected number, got {type(val).__name__}"
+        if "enum" in props[key] and val not in props[key]["enum"]:
+            return False, f"Field '{key}'={val} not in {props[key]['enum']}"
+    return True, ""
+
+
 @runtime_checkable
 class ITool(Protocol):
     """标准工具协议 —— 所有工具（内置/第三方/外部CLI）必须实现
@@ -363,27 +393,7 @@ class ITool(Protocol):
 
     def validate_args_by_schema(self, args: Dict[str, Any]) -> tuple[bool, str]:
         """按 manifest.input_schema 验证 args。返回 (pass, error_msg)。"""
-        schema = self.manifest.input_schema
-        if not schema:
-            return True, ""
-        props = schema.get("properties", {})
-        required = schema.get("required", [])
-        for r in required:
-            if r not in args:
-                return False, f"Missing required field: '{r}'"
-        for key, val in args.items():
-            if key not in props:
-                continue
-            expected_type = props[key].get("type", "string")
-            if expected_type == "string" and not isinstance(val, str):
-                return False, f"Field '{key}' expected string, got {type(val).__name__}"
-            if expected_type == "integer" and not isinstance(val, int):
-                return False, f"Field '{key}' expected int, got {type(val).__name__}"
-            if expected_type == "number" and not isinstance(val, (int, float)):
-                return False, f"Field '{key}' expected number, got {type(val).__name__}"
-            if "enum" in props[key] and val not in props[key]["enum"]:
-                return False, f"Field '{key}'={val} not in {props[key]['enum']}"
-        return True, ""
+        return validate_by_schema(self.manifest.input_schema, args)
 
 
 # ═══════════════════════════════════════════════════════════════

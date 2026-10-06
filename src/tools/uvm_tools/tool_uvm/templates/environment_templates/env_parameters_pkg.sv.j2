@@ -7,7 +7,12 @@
 package {{ environment.env_name }}_parameters_pkg;
   import uvm_pkg::*;
 {%- for agent in agents %}
-  import {{ agent.name }}_parameters_pkg::*;
+  {#- 用 `agent.interface`（协议名，如 apb），不是 `agent.name`（实例名，如 apb_master）——
+     真实的参数包叫 `apb_parameters_pkg`。写成 agent.name 会生成
+     `import apb_master_parameters_pkg::*`：一个不存在的包，本包随之编不过，
+     而它又是 env_pkg 的第一句 import —— 一处错，整条 env / tests / seqs
+     全链失效，报出来却只是一句 "Could not find the package"。 #}
+  import {{ agent.interface }}_parameters_pkg::*;
 {%- endfor %}
 {%- for var in config_vars %}
   localparam {{ var.type }} {{ var.name }} = {{ var.default | default('0') }};

@@ -347,24 +347,33 @@ def test_input_listfile_end_to_end(tmp_path):
     assert (dest / "env" / "APB_env.sv").exists()
 
 
-def test_bench_with_harness_skips_tb_top_interface(tmp_path):
-    """bench.harness 存在时：tb_top 不实例化接口/config_db set，harness 文件生成。"""
+def test_bench_tb_top_instantiates_interface_and_dut(tmp_path):
+    """bench.interfaces + dut_module：tb_top 例化接口与 DUT，端口同名直连。"""  # noqa: E501
     yaml_file = EXAMPLES / "apb_bench.yaml"
     dest = tmp_path / "out"
     assert main(["-i", str(yaml_file), "-d", str(dest), "-q"]) == 0
     tb = (dest / "bench" / "APB_bench_tb_top.sv").read_text(encoding="utf-8")
-    assert "apb_interface apb_if" not in tb
-    assert "uvm_config_db#(virtual" not in tb
-    # DUT 在 tb_top 里例化（模块名 harness.bind_to，实例名 bench.dut_instance）
+    # 接口由 tb_top **直接例化**（bind 式 harness 已退役，模板里不再有 harness 分支）
+    assert "apb_if apb_if_inst(" in tb
+    # DUT 也由 tb_top 例化：模块名 bench.dut_module，实例名 bench.dut_instance，
+    # 端口**按同名**直连接口实例
     assert "apb_slave_dut u_dut (" in tb
+    assert ".paddr(apb_if_inst.paddr)" in tb
+    assert ".prdata(apb_if_inst.prdata)" in tb
     # clk/rst 由 clk_rst_if 接口承载（环境 clk_rst_agent 驱动），DUT 端口直接接 vif
     assert ".pclk(pclk_vif.clk[0])" in tb
     assert ".presetn(pclk_vif.rst_n[0])" in tb
     assert "clk_rst_if pclk_vif();" in tb
     assert "always #" not in tb
-    harness = (dest / "bench" / "apb_harness.sv").read_text(encoding="utf-8")
-    assert "apb_interface apb_if(" in harness
-    assert "function void set_vifs" in harness
+    # vif 广播给各 agent（路径带通配，env 挂哪层都找得到）
+    assert 'uvm_config_db#(virtual apb_if)::set(null, "*.apb_master_agent_h*", "vif"' in tb
+    assert 'uvm_config_db#(virtual clk_rst_if)::set(null, "*", "pclk_vif"' in tb
+    # 系统接口必须**实例化**：agent 包的 *_system_env / *_system_monitor 里
+    # 引用 `virtual apb_system_if`，设计里没有它的实例时 Questa load 阶段报
+    # vsim-8451，整个设计加载不了
+    assert "apb_system_if apb_if_sys_if_inst();" in tb
+    # 不再产 harness 文件
+    assert not (dest / "bench" / "apb_harness.sv").exists()
 
 
 def test_normalize_scoreboards_parameterized_class():
@@ -754,3 +763,70 @@ class TestNoTestsRegression:
         assert main(["-i", str(EXAMPLES / "apb_env.yaml"), "-d", str(dest), "-q"]) == 0
         gen = list(dest.rglob("*_gen_test.sv"))[0].read_text(encoding="utf-8")
         assert "`define GEN_TOP_TC(tc_name, tc_com, tc_reg, tc_seq)" in gen
+
+
+# ════════════════════════════════════════════════════════════
+# interface 从端信号：对外 wire + TB 影子变量
+# ════════════════════════════════════════════════════════════
+#
+# 从端驱动的信号（dir: input）在接口里是**两个名字**：
+#   `<name>`     : 对外 wire（DUT 直连在这里，master monitor 采样它）
+#   `<name>_slv` : TB 从端变量（缺省 'z），**slave_cb 的 output 驱动它**
+#   `assign <name> = <name>_slv;`
+#
+# 这样每个变量只有一个驱动源：DUT 直连 `<name>` 时，`<name>_slv` 保持 'z、
+# 让位给 DUT 的强驱动（wire 语义）。否则就回到老写法：从端时钟块直接 output
+# `<name>`，只要 DUT 也直连它，vopt 就判 "multiply driven"，设计加载不了。
+#
+# slave_cb 的方向**永远**与 master_cb 相反（这是「反向驱动」），有没有 DUT 都一样。
+
+_IFACE_PORTS = [
+    {"name": "paddr", "dir": "output", "width": "8"},
+    {"name": "prdata", "dir": "input", "width": "8"},
+    {"name": "pslverr", "dir": "input", "width": "1"},
+]
+
+
+def _render_interface() -> str:
+    ctx = {
+        "agent": {"name": "apb", "clock": "pclk", "reset": "presetn",
+                  "protocol": "apb"},
+        "clock": "pclk",
+        "reset": "presetn",
+        "ports": _IFACE_PORTS,
+    }
+    return _JinjaRenderer(_TEMPLATES_DIR).render(
+        "interface_templates/interface.sv.j2", ctx)
+
+
+def _cb_body(text: str, name: str) -> str:
+    return text.split(f"clocking {name}", 1)[1].split("endclocking", 1)[0]
+
+
+def test_slave_clocking_block_drives_the_tb_shadow_variable():
+    """slave_cb 方向与 master_cb 相反，驱动的是从端影子变量 `<sig>_slv`。"""
+    cb = _cb_body(_render_interface(), "slave_cb")
+    assert "output prdata_slv;" in cb
+    assert "output pslverr_slv;" in cb
+    assert "input  paddr;" in cb
+
+
+def test_master_clocking_block_unchanged():
+    cb = _cb_body(_render_interface(), "master_cb")
+    assert "output paddr;" in cb
+    assert "input  prdata;" in cb
+    assert "input  pslverr;" in cb
+
+
+def test_slave_side_signals_are_wire_with_z_default_shadow():
+    """对外是 wire、影子变量缺省 'z，中间一条 assign —— 每变量单驱动源。"""
+    text = _render_interface()
+    assert "wire  [8-1:0] prdata;" in text
+    assert "logic [8-1:0] prdata_slv = 'z;" in text
+    assert "assign prdata = prdata_slv;" in text
+    assert "wire  pslverr;" in text
+    assert "logic pslverr_slv = 'z;" in text
+    assert "assign pslverr = pslverr_slv;" in text
+    # master 驱动的信号保持普通 logic（不需要影子变量）
+    assert "logic [8-1:0] paddr;" in text
+    assert "paddr_slv" not in text

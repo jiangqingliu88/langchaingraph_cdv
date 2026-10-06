@@ -76,27 +76,23 @@ class LLMFactory:
     """
 
     # DeepSeek模型配置
+    #
+    # 这里列的是**端点真的提供的**模型 —— 2026-10 从 `GET {base_url}/models`
+    # 拉回来的就这两个。此前写的 deepseek-chat / deepseek-coder 已经下架，
+    # 留着只会让人照着抄一个调不通的名字（那张清单的全部用处就是"能调什么"）。
     DEEPSEEK_MODELS = {
-        "deepseek-chat": {
-            "description": "通用对话模型，适合分析、规划、调试任务",
-            "max_tokens": 4096,
-            "context_window": 32768,
-            "strengths": ["规格分析", "测试规划", "调试分析", "质量审查"],
-            "recommended_tasks": [
-                "spec_analysis", "test_planning", "debug_analysis", 
-                "quality_review", "report_generation"
-            ]
+        "deepseek-flash": {
+            "description": "DeepSeek-V4.1-Flash，快、上下文 1M，全流程默认模型",
+            "max_tokens": 393216,
+            "context_window": 1048576,
+            "strengths": ["规格分析", "测试规划", "代码生成", "调试分析", "质量审查"],
         },
-        "deepseek-coder": {
-            "description": "代码专用模型，适合UVM/SystemVerilog代码生成",
-            "max_tokens": 8192,
-            "context_window": 16384,
-            "strengths": ["UVM组件生成", "SVA断言生成", "测试序列生成"],
-            "recommended_tasks": [
-                "code_generation", "assertion_generation", "sequence_generation",
-                "coverage_model_generation"
-            ]
-        }
+        "deepseek-v4-pro": {
+            "description": "DeepSeek-V4-Pro，同上下文，推理更强、更慢更贵",
+            "max_tokens": 393216,
+            "context_window": 1048576,
+            "strengths": ["复杂架构设计", "疑难调试", "多轮收敛决策"],
+        },
     }
     
     # Anthropic Claude 模型配置
@@ -137,51 +133,51 @@ class LLMFactory:
     # 任务类型与模型映射
     TASK_MODEL_MAPPING = {
         "spec_analysis": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-4-turbo", "temperature": 0.0},
         },
         "test_planning": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.1},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.1},
             "openai": {"model": "gpt-4-turbo", "temperature": 0.1},
         },
         "architecture_design": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-4-turbo", "temperature": 0.0},
         },
         "code_generation": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-4-turbo", "temperature": 0.0},
         },
         "sequence_generation": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-4-turbo", "temperature": 0.0},
         },
         "assertion_generation": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-4-turbo", "temperature": 0.0},
         },
         "coverage_analysis": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-4-turbo", "temperature": 0.0},
         },
         "regression_management": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-3.5-turbo", "temperature": 0.0},
         },
         "debug_analysis": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-4-turbo", "temperature": 0.0},
         },
         "quality_review": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-4-turbo", "temperature": 0.0},
         },
         "report_generation": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-3.5-turbo", "temperature": 0.0},
         },
         "orchestration": {
-            "deepseek": {"model": "deepseek-chat", "temperature": 0.0},
+            "deepseek": {"model": "deepseek-flash", "temperature": 0.0},
             "openai": {"model": "gpt-4-turbo", "temperature": 0.0},
         },
     }

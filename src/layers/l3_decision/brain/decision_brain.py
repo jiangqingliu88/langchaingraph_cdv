@@ -99,6 +99,11 @@ class DecisionBrain:
             # GENERATE_DIRECTED_TEST 带着**空 gaps** 到达执行层——
             # 「放宽约束」实际什么都没放宽，「定向补测」也没指定目标。
             # RL 只学「选哪个动作」，参数必须由我们补齐。
+            #
+            # **标签也一样要由证据定**：RL 选的是"要不要动设计"，它没有证据能
+            # 区分复位/协议/CDC —— 让它挑标签就是猜，而标签会顺着验证计划把
+            # 验证带偏（实测一轮里 RL 选出 FIX_RESET_bug，证据里毫无复位线索）。
+            action_type = self._fix_label(action_type, obs)
             return Action(
                 action_type=action_type,
                 params=self._params_for(action_type, obs, rule_action),
@@ -147,6 +152,20 @@ class DecisionBrain:
             return None
         return max(candidates, key=lambda a: self.distilled_weights.get(a, 1.0))
 
+    @staticmethod
+    def _fix_label(action_type: str, obs: Any) -> str:
+        """"改 RTL"那一族的标签**以证据为准**，不采纳 RL 选的那个。
+
+        RL 的动作空间里那一族已经折叠成一个条目（`rl_action`），所以它给出的名字
+        只是"我要动设计"的表达。具体是哪一类 bug（复位/协议/CDC/死代码/功能）
+        必须从 `obs` 的证据里判 —— 见 `classify_fix_bug`。判不出来就是功能类
+        （诚实的默认值，验证计划也是最保守的那条）。
+        """
+        from ..decision_engine import FIX_FAMILY, classify_fix_bug, canonical_action
+
+        name = canonical_action(action_type)
+        return classify_fix_bug(obs) if name in FIX_FAMILY else name
+
     def _params_for(self, action_type: str, obs: Any, rule_action: Action) -> Dict[str, Any]:
         """为 RL 选中的动作补齐参数。
 
@@ -160,8 +179,19 @@ class DecisionBrain:
         gaps = getattr(obs, "gaps", None) or []
         if action_type in ("RELAX_CONSTRAINT", "GENERATE_DIRECTED_TEST"):
             return {"gaps": list(gaps)}
-        if action_type == "REFACTOR_RTL":
-            return {"failed_tests": list(getattr(obs, "failed_tests", None) or [])}
+        from ..decision_engine import FIX_FAMILY, canonical_action
+        if canonical_action(action_type) in FIX_FAMILY:
+            # 改 RTL 的动作要把"为什么改"的证据带下去：失败用例（功能/协议/复位类）
+            # 或不可达 gap（死代码类）。两样都没有就空着 —— 下游据此判"没证据"。
+            params: Dict[str, Any] = {}
+            failed = list(getattr(obs, "failed_tests", None) or [])
+            if failed:
+                params["failed_tests"] = failed
+            unreachable = [g for g in (getattr(obs, "gaps", None) or [])
+                           if isinstance(g, dict) and g.get("reason") == "unreachable"]
+            if unreachable:
+                params["gaps"] = unreachable
+            return params
         if action_type == "EXPAND_SEEDS":
             # 扩种数量取规则引擎的缺省，与 decide() 的 seed_expand_count 保持一致
             return {"count": getattr(self.rule_engine, "seed_expand_count", 1000)}

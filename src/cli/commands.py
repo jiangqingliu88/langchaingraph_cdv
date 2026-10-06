@@ -164,11 +164,14 @@ def init(json_output, quiet, verbose, output_dir):
               help="审批模式（默认 threshold：仅高危动作询问；无人值守请显式指定 auto）")
 @click.option("--full-regression", is_flag=True, help="全量回归（跑所有 case，默认增量只跑未 passed）")
 @click.option("--verify-only", is_flag=True, help="验证专注模式：bypass design/model，直接 UVM 验证（预置 RTL + 黄金模型）")
+@click.option("--sim-mode", "sim_modes", default=None, multiple=True,
+              help="回归的仿真业务（可重复：--sim-mode wave --sim-mode cov）；"
+                   "默认 cov（覆盖率）。可用词条见 src/tools/regression_tools/sim_modes.py")
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 @click.option("--summary", is_flag=True, help="仅输出最终摘要")
 @click.option("--quiet", "-q", is_flag=True, help="只打印错误")
 def verify(spec_file, output, design_style, target, max_rounds,
-           approval, full_regression, verify_only, json_output, summary, quiet):
+           approval, full_regression, verify_only, sim_modes, json_output, summary, quiet):
     """AI 驱动的芯片验证闭环（覆盖率驱动：case 回归 → coverage → 决策迭代）
 
     
@@ -199,6 +202,8 @@ def verify(spec_file, output, design_style, target, max_rounds,
             target=target, max_rounds=max_rounds,
             design_style=design_style, approval_gate=approval_gate,
             bypass_design_model=verify_only,
+            # `multiple=True` 给的是 tuple；空则交默认（cov）
+            sim_modes=list(sim_modes) or None,
         )
 
     result = asyncio.run(run())
@@ -2069,7 +2074,7 @@ def config_set(key, value):
 
     \b
     示例:
-      vagent config set llm.model deepseek-chat
+      vagent config set llm.model deepseek-flash
       vagent config set llm.temperature 0.3
       vagent config set agent.max_iterations 10
 
@@ -2119,7 +2124,7 @@ def config_init():
 
 # LLM Provider
 LLM_PROVIDER=deepseek
-LLM_MODEL=deepseek-chat
+LLM_MODEL=deepseek-flash
 LLM_TEMPERATURE=0.0
 LLM_MAX_TOKENS=4096
 LLM_API_KEY=
@@ -2870,6 +2875,72 @@ def regression_compare(run_a, run_b, json_output):
 
     except Exception as e:
         out.print_error(str(e))
+
+
+@regression.command("reference-finder")
+@click.option("--repo", "-r", default=".", help="git 仓库路径（默认当前目录）")
+@click.option("--good", required=True, help="已知通过的提交（起点）")
+@click.option("--bad", default="HEAD", help="已知失败的提交（终点，默认 HEAD）")
+@click.option("--config", "-c", "reg_yaml", required=True, type=click.Path(exists=True),
+              help="回归配置 yaml（版本间保持同一份）")
+@click.option("--test", "-t", "test_pattern", required=True, help="要复现的用例名/正则")
+@click.option("--work-root", default=None, help="工作目录（worktree 与结论落这里）")
+@click.option("--mode", type=click.Choice(["mock", "local"]), default="mock",
+              help="执行模式（mock 只走流程不真跑 EDA）")
+@click.option("--paths", default=None, help="逗号分隔，只考虑这些路径下的提交")
+@click.option("--keep-worktrees", is_flag=True, help="保留各版本的 worktree（排查用，默认删）")
+@click.option("--no-cache", is_flag=True, help="忽略结论缓存，强制重跑所有版本")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def regression_reference_finder(repo, good, bad, reg_yaml, test_pattern, work_root,
+                                mode, paths, keep_worktrees, no_cache, json_output):
+    """溯源定位：哪个提交引入了这个失败
+
+    在 good..bad 区间内二分，每个版本用独立 worktree 隔离后跑指定用例，
+    收敛到第一个失败的提交。结论连同环境快照落盘，可审计。
+
+    \b
+    示例:
+      vagent regression reference-finder \\
+        --good v1.0 --bad HEAD --config regression.yaml --test smoke_basic
+    """
+    out = get_output_adapter(json_output)
+    work_root = work_root or str(Path(repo) / "reference_finder_work")
+    path_list = [p.strip() for p in paths.split(",") if p.strip()] if paths else None
+
+    console.print(f"[dim]逐版本编译+仿真，请耐心；已跑过的版本会命中缓存。[/dim]")
+    try:
+        from src.layers.l1_infrastructure.reference_finder import ReferenceFinder
+        finder = ReferenceFinder(
+            repo_path=repo, work_root=work_root, reg_yaml=reg_yaml,
+            test_pattern=test_pattern, mode=mode,
+            keep_worktrees=keep_worktrees, use_cache=not no_cache, verbose=True)
+        report = finder.find_first_bad(good, bad, paths=path_list)
+    except Exception as e:
+        out.print_error(str(e))
+        return
+
+    if json_output:
+        out.print_result(report, title="Reference Finder")
+        return
+
+    if report.get("culprit"):
+        console.print(f"\n[bold]引入提交[/bold]: [cyan]{report.get('culprit_short')}[/cyan] "
+                      f"{report.get('subject', '')}")
+        console.print(f"  最后一个好版本: {report.get('last_good_short')}")
+        console.print(f"  置信度: [bold]{report.get('confidence')}[/bold]")
+        if report.get("changed_files"):
+            console.print("  改动文件: " + ", ".join(report["changed_files"][:8]))
+    else:
+        console.print(f"\n[yellow]未能定位[/yellow]: {report.get('reason', '')}")
+
+    for c in report.get("caveats", []) or []:
+        console.print(f"  [yellow]![/yellow] {c}")
+    for x in report.get("inconclusive_revisions", []) or []:
+        console.print(f"  [yellow]?[/yellow] {x['short']} inconclusive: {x['detail']}")
+
+    console.print(f"\n[dim]结论: {work_root}/reference_finder_summary.md[/dim]")
+    console.print(f"[dim]实测 {len(report.get('results', []))} 个版本，"
+                  f"耗时 {report.get('elapsed_s')}s[/dim]")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -4658,6 +4729,141 @@ def case_model_gui(model):
     if model:
         argv += ["--input", str(model)]
     sys.exit(workbench_main(argv))
+
+
+# ═══════════════════════════════════════════════════════════════
+# 人工变更证据链 —— 无 GUI 的那一半
+# ═══════════════════════════════════════════════════════════════
+#
+# 界面上的「保存」会自动记账；在终端里用编辑器改文件**没有那个钩子**，所以
+# 无 GUI 时这套东西等于不存在。这一组就是补那一半。
+#
+# 三条命令里 `check` 才是最要紧的：一条只在"你记得记账时才记账"的链，读的人
+# 分不清"没人改"和"改了没记"——两者在链上都是一片空白。**没记的能被发现，
+# 链才可信。**
+
+@cli.group("evidence")
+def evidence_group():
+    """人工变更证据链（项目级，跨运行累积）
+
+    \b
+    记录的是"人在界面上/终端里改了哪个文件、为什么"。与某次运行的关系靠
+    运行日志里的 human.edit 锚点，链本身不属于任何一次运行。
+
+    \b
+    示例:
+      vagent evidence record rtl/dut.sv -m "修正握手时序"
+      vagent evidence log
+      vagent evidence check
+    """
+    pass
+
+
+@evidence_group.command("record")
+@click.argument("file_path", metavar="FILE")
+@click.option("--message", "-m", "reason", default="",
+              help="为什么改（会记进证据链；留空记为「未填理由」，不编理由）")
+@click.option("--author", default="", help="署名（默认 PLATFORM_USER_NAME 或系统登录名）")
+@click.option("--run-id", default="", help="同时往这次运行的日志写一条锚点")
+@click.option("--root", "repo_root", default=".", help="仓库根（默认当前目录）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def evidence_record(file_path, reason, author, run_id, repo_root, json_output):
+    """记录一次人工编辑（改完文件跑一下）
+
+    \b
+    示例:
+      vagent evidence record config/ide/manual_nodes.yaml -m "超时 600 → 900"
+    """
+    out = get_output_adapter(json_output)
+    from src.layers.l2_orchestration.evidence.human_edit import record_human_edit
+
+    info = record_human_edit(file_path, reason, author=author, run_id=run_id,
+                             repo_root=repo_root)
+    if not info.get("recorded"):
+        out.print_result({"recorded": False, "error": info.get("error", "记账失败")},
+                         title="Evidence")
+        sys.exit(1)
+
+    if json_output:
+        out.print_result(info, title="Evidence")
+        return
+    console.print(f"已记账 [bold]#{info['seq']}[/bold]　{info['file']}")
+    console.print(f"  署名：{info['author']}　　理由：{info['reason']}")
+    console.print(f"  内容哈希：{(info.get('content_hash') or '')[:16]}…")
+    console.print(f"  链：{info['chain']}（共 {info['total_changes']} 条）")
+    if run_id and not info.get("journal"):
+        console.print(f"  [yellow]注意：没写进运行 {run_id} 的日志"
+                      f"（找不到那次运行）[/yellow]")
+
+
+@evidence_group.command("log")
+@click.option("--limit", "-n", default=20, show_default=True, help="最多显示几条")
+@click.option("--root", "repo_root", default=".", help="仓库根（默认当前目录）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def evidence_log(limit, repo_root, json_output):
+    """看人工变更链 + 完整性自校验
+
+    \b
+    示例:
+      vagent evidence log -n 5
+    """
+    out = get_output_adapter(json_output)
+    from src.layers.l2_orchestration.evidence.human_edit import read_human_edits
+
+    chain = read_human_edits(repo_root)
+    if not chain["exists"]:
+        out.print_result({"exists": False, "total_changes": 0, "path": chain["path"]},
+                         title="Evidence")
+        if not json_output:
+            console.print(f"还没有人工变更记录。（会写到 {chain['path']}）")
+        return
+
+    records = list(reversed(chain["records"]))[:max(1, int(limit))]
+    rows = [[str(r.get("seq", "")), str(r.get("timestamp", ""))[:19],
+             str(r.get("file_path", "")), str(r.get("agent", "")),
+             str(r.get("reason", ""))[:48]] for r in records]
+    out.print_table(["#", "时间", "文件", "谁", "理由"], rows,
+                    title=f"人工变更（共 {chain['total_changes']} 条）")
+    if not json_output:
+        state = "[green]完整[/green]" if chain["chain_valid"] else "[red]已断[/red]"
+        console.print(f"链完整性：{state}　{chain['path']}")
+        for issue in chain.get("issues", []):
+            console.print(f"  [red]{issue.get('type')}[/red] {issue}")
+
+
+@evidence_group.command("check")
+@click.option("--root", "repo_root", default=".", help="仓库根（默认当前目录）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def evidence_check(repo_root, json_output):
+    """对账：工作区改过、证据链里没有的文件
+
+    \b
+    链的价值不在「记了的有痕迹」，而在「没记的能被发现」—— 否则读链的人分不清
+    「这段时间没人改」和「有人改了但没记账」。
+    有未记账的改动时退出码为 1，可以直接拿去卡 CI。
+    """
+    out = get_output_adapter(json_output)
+    from src.layers.l2_orchestration.evidence.human_edit import reconcile
+
+    report = reconcile(repo_root)
+    if json_output:
+        out.print_result(report, title="Evidence check")
+    elif not report["checked"]:
+        console.print(f"[yellow]跳过：{report['reason']}[/yellow]")
+    else:
+        console.print(f"改动 {report['total_changed']} 个文件　"
+                      f"已记账 {len(report['recorded'])}　"
+                      f"未记账 {len(report['unrecorded'])}")
+        for path in report["unrecorded"]:
+            console.print(f"  [red]✗[/red] {path}")
+        if report["ok"]:
+            console.print("[green]✓ 改动都有痕迹。[/green]")
+        else:
+            console.print("[yellow]上面这些改过但没记账 —— 补上：[/yellow]")
+            console.print("  vagent evidence record <文件> -m \"为什么改\"")
+    # 不在 git 仓库里谈不上"对账"，不算失败；在仓库里且链断了 = 失败
+    if report["checked"] and not report["ok"]:
+        sys.exit(1)
 
 
 # ═══════════════════════════════════════════════════════════════

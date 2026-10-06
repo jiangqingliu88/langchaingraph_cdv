@@ -14,6 +14,10 @@ class {{ environment.env_name }} extends uvm_env;
 {%- if clk_rst_vip and clk_rst_vip.enabled %}
   {%- for clk in clk_rst_vip.clocks %}
   clk_rst_agent {{ clk.name }}_clk_rst_agent_h;
+  // vif 句柄：tb_top 是唯一能实例化接口的地方，它把 virtual clk_rst_if 放进
+  // config_db，本 env 取出来再转发给 clk_rst agent（见 build_phase）。
+  // 不声明这个成员、直接写 `{{ clk.name }}_vif` 的话是 "Undefined variable"。
+  virtual clk_rst_if {{ clk.name }}_vif;
   {%- endfor %}
 {%- endif %}
   // 配置对象
@@ -22,10 +26,14 @@ class {{ environment.env_name }} extends uvm_env;
   // ── Register Model（RAL，可选，由 YAML register_model 列表决定）──
 {%- if register_model %}
 {%- for comp in register_model.components %}
+{#- 成员名与类名可能**同名**（adapter 的 name/type 都是 apb_reg_adapter）——
+    那样写出 `X X;` 之后，`X::type_id` 会解析到**成员**而不是类，
+    报 "Class or package 'X' not found"。给成员加 _h 后缀避开。 #}
+{%-   set mn = (comp.name ~ '_h') if comp.role == 'adapter' else comp.name %}
 {%- if comp.role == 'predictor' %}
-  uvm_reg_predictor #({{ comp.trans_type }}) {{ comp.name }};  // 预测器需要指定总线事务类型
+  uvm_reg_predictor #({{ comp.trans_type }}) {{ mn }};  // 预测器需要指定总线事务类型
 {%- else %}
-  {{ comp.type }} {{ comp.name }};
+  {{ comp.type }} {{ mn }};
 {%- endif %}
 {%- endfor %}
 {%- endif %}
@@ -47,7 +55,8 @@ class {{ environment.env_name }} extends uvm_env;
 
   // Analysis 组件（predictor 等）
 {%- for comp in analysis_components %}
-  {{ comp.type }} {{ comp.name }};
+{%-   set mn = comp.name %}   {#- 这里的成员名与类名不同名，加 _h 只是多余 #}
+  {{ comp.type }} {{ mn }};
 {%- endfor %}
 
   // Scoreboard
@@ -87,6 +96,12 @@ class {{ environment.env_name }} extends uvm_env;
     // 获取环境配置
     if (!uvm_config_db#({{ environment.env_name }}_config)::get(this, "", "cfg", cfg))
       `uvm_fatal("CFG", "Environment configuration not set")
+{%- if clk_rst_vip and clk_rst_vip.enabled %}
+{%-   for clk in clk_rst_vip.clocks %}
+    if (!uvm_config_db#(virtual clk_rst_if)::get(this, "", "{{ clk.name }}_vif", {{ clk.name }}_vif))
+      `uvm_fatal("NOVIF", "clk_rst_if {{ clk.name }}_vif 没从 config_db 传进来（tb_top 负责 set）")
+{%-   endfor %}
+{%- endif %}
   `ifdef USE_SC_MODEL_CHECK
     {{ name }}_sc_pred={{ name }}_sc_pred_env::type_id::create("{{ name }}_sc_pred", this);
   `endif
@@ -109,14 +124,27 @@ class {{ environment.env_name }} extends uvm_env;
       // 为 {{ clk.name }} 配置复位（使用第一个复位作为默认）
       {{ clk.name }}_clk_cfg.rst_assert_cycles = {{ reset.assert_cycles | default(10) }};
       {{ clk.name }}_clk_cfg.rst_recover_cycles = {{ reset.recover_cycles | default(5) }};
-      {{ clk.name }}_clk_cfg.rst_active_low = {{ reset.active_low | lower }};
-      {{ clk.name }}_clk_cfg.reset_type = {{ reset.reset_type | default('ASYNC_SYNC_DEASSERT') }};
+      // 注：原为 `{{ reset.active_low | lower }}` —— 渲染出小写的 true/false，
+      // 而**那不是合法的 SystemVerilog**（SV 没有 true/false 字面量），
+      // vlog 报 "Undefined variable: 'true'"。要用 1'b1 / 1'b0。
+      {{ clk.name }}_clk_cfg.rst_active_low = {{ "1'b1" if reset.active_low else "1'b0" }};
+      // 注：这里原来还有一行 `rst_cfg.reset_type = ASYNC_SYNC_DEASSERT;` —— **两边都不存在**：
+      //   · `clk_rst_config` 里没有 `reset_type` 这个字段（只有 rst_active_low /
+      //     rst_assert_cycles / rst_recover_cycles / rst_start_value）
+      //   · `ASYNC_SYNC_DEASSERT` 也不是任何地方的枚举值，裸标识符 → "Undefined variable"
+      // YAML 里写了 `reset_type:` 的话目前**是被忽略的** —— 要支持它，得先在
+      // `clk_rst_config.svh` 里加字段与枚举，那是公共库的改动，不在这里顺手做。
         {%- endif %}
       {%- endfor %}
       
       {{ clk.name }}_clk_rst_agent_h = clk_rst_agent::type_id::create("{{ clk.name }}_clk_rst_agent_h", this);
+      // cfg 走**精确路径**（agent 自己在 build_phase 里 get 这一份）。
       uvm_config_db#(clk_rst_config)::set(this, "{{ clk.name }}_clk_rst_agent_h", "cfg", {{ clk.name }}_clk_cfg);
-      uvm_config_db#(virtual clk_rst_if)::set(this, "{{ clk.name }}_clk_rst_agent_h", "vif", {{ clk.name }}_vif);
+      // vif 必须走**带 `.*` 的通配路径**：真正要 vif 的是 agent 底下的 drv / rst_drv / mon，
+      // 它们的查找路径是 `..._clk_rst_agent_h.drv`。uvm_config_db 的 set 路径是当
+      // **正则**用的（`*` → `.*`），写死 `"{{ clk.name }}_clk_rst_agent_h"` 只匹配**本级**，
+      // 子组件一路 get 不到 → `uvm_fatal("[VIF] Clock interface not set")`。
+      uvm_config_db#(virtual clk_rst_if)::set(this, "{{ clk.name }}_clk_rst_agent_h.*", "vif", {{ clk.name }}_vif);
     end
   {%- endfor %}
 {%- endif %}
@@ -129,17 +157,21 @@ class {{ environment.env_name }} extends uvm_env;
     // ─── Register Model（RAL）创建 ───
 {%- if register_model %}
 {%- for comp in register_model.components %}
+{#- 成员名与类名可能**同名**（adapter 的 name/type 都是 apb_reg_adapter）——
+    那样写出 `X X;` 之后，`X::type_id` 会解析到**成员**而不是类，
+    报 "Class or package 'X' not found"。给成员加 _h 后缀避开。 #}
+{%-   set mn = (comp.name ~ '_h') if comp.role == 'adapter' else comp.name %}
 {%- if comp.role == 'reg_block' %}
-    {{ comp.name }} = {{ comp.type }}::type_id::create("{{ comp.name }}", this);
-    {{ comp.name }}.build();       // 显式调用 build()
-    {{ comp.name }}.lock_model();  // 锁定模型，防止后续修改
+    {{ mn }} = {{ comp.type }}::type_id::create("{{ mn }}", this);
+    {{ mn }}.build();       // 显式调用 build()
+    {{ mn }}.lock_model();  // 锁定模型，防止后续修改
 {%- elif comp.role == 'adapter' %}
-    {{ comp.name }} = {{ comp.type }}::type_id::create("{{ comp.name }}", this);
+    {{ mn }} = {{ comp.type }}::type_id::create("{{ mn }}", this);
 {%- elif comp.role == 'predictor' %}
 {%- if comp.type == 'uvm_reg_predictor' %}
-    {{ comp.name }} = uvm_reg_predictor #({{ comp.trans_type }})::type_id::create("{{ comp.name }}", this);
+    {{ mn }} = uvm_reg_predictor #({{ comp.trans_type }})::type_id::create("{{ mn }}", this);
 {%- else %}
-    {{ comp.name }} = {{ comp.type }}::type_id::create("{{ comp.name }}", this);
+    {{ mn }} = {{ comp.type }}::type_id::create("{{ mn }}", this);
 {%- endif %}
 {%- endif %}
 {%- endfor %}
@@ -161,7 +193,8 @@ class {{ environment.env_name }} extends uvm_env;
 
     // 创建 Analysis 组件
 {%- for comp in analysis_components %}
-    {{ comp.name }} = {{ comp.type }}::type_id::create("{{ comp.name }}", this);
+{%-   set mn = comp.name %}
+    {{ mn }} = {{ comp.type }}::type_id::create("{{ mn }}", this);
 {%- endfor %}
 
     // 创建 Scoreboard
@@ -207,7 +240,7 @@ class {{ environment.env_name }} extends uvm_env;
     // 连接 Agent Monitor 到 Analysis Ports
 {%- for agent in agents %}
 {%-   if agent.is_master is not false %}
-    {{ agent.name }}_agent_h.monitor.mon_ap.connect({{ agent.name }}_agent_ap);
+    {{ agent.name }}_agent_h.monitor.master_mon_ap.connect({{ agent.name }}_agent_ap);
 {%-   else %}
     {{ agent.name }}_agent_h.monitor.slave_mon_ap.connect({{ agent.name }}_agent_ap);
 {%-   endif %}
@@ -221,14 +254,14 @@ class {{ environment.env_name }} extends uvm_env;
     // ─── Register Model（RAL）连接 ───
 {%- if register_model and register_model.reg_block and register_model.bus_agent %}
     // 1. 将寄存器模型的地址映射（default_map）连接到序列器和适配器
-    {{ register_model.reg_block.name }}.default_map.set_sequencer({{ register_model.bus_agent }}_agent_h.sequencer{% if register_model.adapter %}, {{ register_model.adapter.name }}{% endif %});
+    {{ register_model.reg_block.name }}.default_map.set_sequencer({{ register_model.bus_agent }}_agent_h.sequencer{% if register_model.adapter %}, {{ register_model.adapter.name }}_h{% endif %});
     {{ register_model.reg_block.name }}.default_map.set_auto_predict({{ 0 if register_model.predictor else 1 }});
 {%- endif %}
 {%- if register_model.predictor and register_model.reg_block and register_model.bus_agent %}
     // 2. 配置预测器（显式预测模式）
     {{ register_model.predictor.name }}.map = {{ register_model.reg_block.name }}.default_map;
 {%- if register_model.adapter %}
-    {{ register_model.predictor.name }}.adapter = {{ register_model.adapter.name }};
+    {{ register_model.predictor.name }}.adapter = {{ register_model.adapter.name }}_h;
 {%- endif %}
     {{ register_model.bus_agent }}_agent_ap.connect({{ register_model.predictor.name }}.bus_in);
 {%- endif %}
@@ -363,12 +396,19 @@ class {{ environment.env_name }} extends uvm_env;
       `uvm_info(get_name(), "\n", UVM_NONE)
       
   endfunction
-  
+
   //========================================================================
-  // TEST_PASS / TEST_FAIL 图案（include 片段，见 _report_patterns.sv.j2）
+  // TEST_PASS / TEST_FAIL 图案
+  //
+  // `_report_patterns.sv.j2` 里是**两个函数定义**（print_test_pass /
+  // print_test_fail），所以它属于**类作用域** —— 放在 report_phase 的
+  // `endfunction` **之后**才对。（别挪进 report_phase 里面：那会变成函数套函数。）
+  //
+  // 这里原来在 include 之后**还多跟了一个 `endfunction`** —— 渲染出来就是
+  // 「类里凭空多一个 endfunction」，vlog 判 "near 'endfunction': syntax error"，
+  // 而报错位置会指到几百行之外，很难往这儿联想。
   //========================================================================
 {% include "environment_templates/_report_patterns.sv.j2" %}
-  endfunction
   function void final_phase(uvm_phase phase);
       super.final_phase(phase);
       `uvm_info(get_name(), "final_phase", UVM_LOW)

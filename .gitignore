@@ -29,8 +29,10 @@ logs/
 .env_bak
 
 # Generated regression output
-regression_*/
-.build_cache/
+# 锚到仓库根：不加 `/` 的话 `regression_*/` 会连 `src/tools/regression_tools/`
+# 一起吞掉（它同样匹配 `regression_*`+`/`），整个回归框架源码因此长期不在版本控制里。
+/regression_*/
+/.build_cache/
 
 # Generated output directories
 output/

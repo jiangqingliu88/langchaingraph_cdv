@@ -4,34 +4,56 @@
 """
 from __future__ import annotations
 
-from PySide6.QtWidgets import QPlainTextEdit
+from PySide6.QtWidgets import QMdiArea, QPlainTextEdit
 
 from ..manifest import load_manifest_text
 from .conftest import (BROKEN_MANIFEST, DIRTY_MANIFEST, STUB_MANIFEST,
                        SUBSCRIBER_MANIFEST, make_window, window_menu_entry)
 
 
+def expected_center_order(window) -> list:
+    """清单里 center 模块的顺序 —— 懒加载下"点开的顺序"应当照它来。"""
+    from ..ui.containers.workspace import PANE_AREAS  # noqa: F401  （契约来源，留个引用）
+
+    return [spec.id for spec in window.ctx.manifest.modules_in("center")]
+
+
 class TestBuild:
-    def test_center_tabs_follow_group_order_then_module_order(self, window):
-        """桩清单里 vms 那页的模块 order 更小，但 debug 业务线排在前面。"""
-        titles = [window.center_tabs.tabText(i)
-                  for i in range(window.center_tabs.count())]
-        assert titles == ["中央页", "第二个中央页"]
+    def test_mdi_is_empty_until_you_open_something(self, window):
+        """**工作区默认是空的** —— 不在启动时把中心模块都铺出来。
 
-    def test_same_area_modules_share_one_pane(self, window):
-        """同区的模块是**同一块窗格**里的页签 —— 一个窗格本身就是 QTabWidget，
-        所以不再需要以前那种「把两个 dock tabify 起来」的动作。"""
-        pane = window.manager.pane_of("stub.dock_a")
-        assert pane is not None
-        assert pane is window.manager.pane_of("stub.dock_b")
-        assert pane.area == "bottom"
-        assert {"stub.dock_a", "stub.dock_b"} <= set(pane.module_ids())
+        模块实例是建好的（它们的菜单动作要靠它），但控件留在 manager 手里
+        没进工作区；点一下才"加载视图"（见 `ModuleManager.open`）。
+        """
+        assert window.workspace.subwindow_count() == 0
+        assert window.manager.module("stub.center") is not None   # 实例在
+        assert not window.manager.is_open("stub.center")          # 视图没加载
 
-    def test_tab_widget_carries_the_module_id(self, window):
-        """页签控件身上带着 module_id —— 平台靠它认人（标题、聚焦、显隐）。"""
-        pane = window.manager.pane_of("stub.dock_b")
-        index = pane.index_of("stub.dock_b")
-        assert pane.tabs.widget(index).property("module_id") == "stub.dock_b"
+    def test_opening_loads_the_view_and_repeat_click_does_not_duplicate(self, window):
+        assert window.manager.open("stub.center") is True
+        assert window.workspace.subwindow_count("stub.center") == 1
+        assert window.manager.open("stub.center") is True
+        assert window.workspace.subwindow_count("stub.center") == 1  # 不重复建
+
+    def test_center_subwindows_follow_the_order_you_open_them(self, window):
+        """桩清单里 vms 那页的模块 order 更小，但 debug 业务线排在前面 ——
+        这个顺序在清单里；工作区里出现的顺序则跟着**你点的顺序**。
+        """
+        for mid in ("stub.center", "stub.center2"):
+            window.manager.open(mid)
+        assert window.workspace.ordered_module_ids() == ["stub.center", "stub.center2"]
+
+    def test_same_area_modules_land_in_the_same_dock_area(self, window):
+        """同区模块共享一块 dock 区 —— Qt 会把它们叠成一组页签。"""
+        assert window.manager.pane_of("stub.dock_a") == "bottom"
+        assert window.manager.pane_of("stub.dock_b") == "bottom"
+        assert {"stub.dock_a", "stub.dock_b"} <= set(
+            window.workspace.modules_in("bottom"))
+
+    def test_dock_widget_carries_the_module_id(self, window):
+        """dock 控件身上带着 module_id —— 平台靠它认人（标题、聚焦、显隐）。"""
+        dock = window.workspace.dock_of("stub.dock_b")
+        assert dock.widget().property("module_id") == "stub.dock_b"
 
     def test_every_module_is_reachable_by_id(self, window):
         assert window.manager.module("stub.center").title == "中央页"
@@ -44,21 +66,51 @@ class TestBuild:
             "stub.center", "stub.dock_a", "stub.dock_b"}
         assert window.manager.modules("nope") == []
 
-    def test_module_actions_reach_the_toolbar(self, window, qt_app):
+    def test_module_actions_are_not_all_dumped_on_the_toolbar(self, window, qt_app):
+        """**模块动作不在启动时全挂上工具栏** —— 那是按上下文挂的（见下一条）。
+
+        全挂上去的后果实测过：25 个模块里有 5 个带动作，其中两个各有一套
+        「保存 / 另存为 / 立即校验」，于是工具栏上出现两组同名按钮，总长还超出
+        窗口被截断（1520 宽也放不下，右边挂一个溢出箭头）。
+        """
         toolbar_texts = [a.text() for a in window.toolbar.actions()]
-        assert "假动作" in toolbar_texts
+        assert "假动作" not in toolbar_texts
+        assert "载入清单…" in toolbar_texts          # 全局那几条常驻
+
+    def test_module_actions_follow_the_active_module(self, window, qt_app):
+        """激活哪个模块，工具栏才挂哪个模块的动作；切走就换掉。
+
+        带动作的是 `stub.center2`（清单里那条），别拿 `stub.center` 试 ——
+        它没有动作，断言会一直假过。
+        """
+        window.show()
+        assert window.manager.focus("stub.center2")
+        qt_app.processEvents()
+        assert "假动作" in [a.text() for a in window.toolbar.actions()]
+
+        assert window.manager.focus("stub.center")
+        qt_app.processEvents()
+        texts = [a.text() for a in window.toolbar.actions()]
+        assert "假动作" not in texts
+        assert "载入清单…" in texts               # 全局那几条不受影响
+        assert "载入清单…" in [a.text() for a in window.toolbar.actions()]
 
 
 class TestFocus:
-    def test_focus_switches_the_center_tab(self, window):
+    def test_focus_activates_the_center_subwindow(self, window, qt_app):
+        # 标签页模式下 Qt 要靠真实布局才有"当前标签" —— 不 show 的话
+        # `activeSubWindow()` 拿不到东西（窗口都没显示，谈何激活）
+        window.show()
         assert window.manager.focus("stub.center2")
-        assert window.center_tabs.tabText(window.center_tabs.currentIndex()) == "第二个中央页"
+        qt_app.processEvents()
+        assert window.workspace.active_module_id() == "stub.center2"
 
-    def test_focus_switches_the_tab_inside_the_pane(self, window):
-        """不光要返回 True —— 得真的切过去。只断言返回值的话，实现改成
+    def test_focus_raises_the_dock(self, window):
+        """不光要返回 True —— 得真的把它抬起来。只断言返回值的话，实现改成
         「找到了但没切」也照样通过。"""
         assert window.manager.focus("stub.dock_a")
-        assert window.manager.pane_of("stub.dock_a").current_module_id() == "stub.dock_a"
+        dock = window.workspace.dock_of("stub.dock_a")
+        assert dock is not None and not dock.isHidden()
 
     def test_focus_unknown_module_returns_false(self, window):
         assert not window.manager.focus("nope")
@@ -84,10 +136,11 @@ class TestFailureIsolation:
     def test_other_modules_still_build(self, qt_app, ctx):
         window = self._broken(qt_app, ctx)
         try:
-            titles = [window.center_tabs.tabText(i)
-                      for i in range(window.center_tabs.count())]
+            window.manager.open("stub.center")
+            window.manager.open("stub.broken")
+            titles = [s.windowTitle() for s in window.mdi.subWindowList()]
             assert "中央页" in titles
-            assert "坏模块" in titles          # 占位页仍然出现，让人看见它坏了
+            assert "坏模块" in titles          # 占位窗口仍然出现，让人看见它坏了
         finally:
             window.manager.mark_all_clean()
             window.close()
@@ -95,9 +148,10 @@ class TestFailureIsolation:
     def test_the_broken_tab_shows_the_traceback(self, qt_app, ctx):
         window = self._broken(qt_app, ctx)
         try:
-            index = next(i for i in range(window.center_tabs.count())
-                         if window.center_tabs.tabText(i) == "坏模块")
-            widget = window.center_tabs.widget(index)
+            window.manager.open("stub.broken")
+            sub = next(s for s in window.mdi.subWindowList()
+                       if s.windowTitle() == "坏模块")
+            widget = sub.widget()
             assert isinstance(widget, QPlainTextEdit)
             assert "NoSuchModuleAnywhere" in widget.toPlainText()
             assert "其余模块不受影响" in widget.toPlainText()
@@ -119,8 +173,7 @@ class TestFailureIsolation:
         别让人以为点一下就能修好。"""
         window = self._broken(qt_app, ctx)
         try:
-            pane = window.manager.pane_of("stub.broken_dock")
-            assert pane is not None and pane.contains("stub.broken_dock")
+            assert window.workspace.contains("stub.broken_dock")
             entry = window_menu_entry(window, "坏的底部")
             assert "加载失败" in entry.text()
             assert not entry.isEnabled()
@@ -229,7 +282,7 @@ modules: []
         first = make_window(qt_app, ctx)
         first.resize(500, 400)               # 比默认 600x500 小，但高于最小 320x240
         first.move(30, 40)
-        first.ctx.settings.save_window(first, theme="探针", center_tab=0)
+        first.ctx.settings.save_window(first, theme="探针")
         first.manager.mark_all_clean()
         first.close()
 
@@ -241,75 +294,168 @@ modules: []
             second.manager.mark_all_clean()
             second.close()
 
-    def test_pane_sizes_round_trip(self, qt_app, ctx):
-        """窗格尺寸存得下、贴得回。
+    def test_subwindow_geometry_round_trips(self, qt_app, ctx):
+        """子窗口的位置与大小存得下、贴得回。
 
-        （Dock 时代这条测的是 `saveState` 那个二进制块；改三窗格之后
-        `saveState` 什么也不认了，所以换成尺寸数组的往返。）
+        （分割条时代这条测的是 splitter 尺寸数组；`QMdiArea` **没有**
+        `saveState()` —— 那份快照是 `Workspace` 自己拼的，所以这里也换成
+        手工存的几何往返。）
         """
         ctx.manifest = self._manifest()
         first = make_window(qt_app, ctx)
-        # 必须 show 过才谈得上尺寸：没显示的 splitter 还没算过布局，
-        # `setSizes` 给的数会被下一次布局改写。
+        # **标签页模式下 Qt 会把子窗口铺满整块区域，几何没有意义** ——
+        # 要测"位置存得下贴得回"得先切到子窗口模式。
+        first.workspace.set_view_mode(False)
+        first.manager.open("stub.center")          # 懒加载：先点开才谈得上几何
         first.show()
         qt_app.processEvents()
-        first.panes.outer.setSizes([500, 300])
+        first.workspace.subwindows_of("stub.center")[0].setGeometry(60, 70, 520, 430)
         qt_app.processEvents()
-        # 记**归一化之后**的尺寸：Qt 会按各页的最小尺寸把请求值调一调，
-        # 断言「等于我设的值」会跟 Qt 的约束较劲，断言「贴回来的和当初看着
-        # 一样」才是真正要保的东西。
-        want = first.panes.outer.sizes()
-        first.ctx.settings.save_window(first, theme="探针", center_tab=0,
-                                       panes=first.panes.state())
+        docks, subs = first.workspace.save_layout()
+        first.ctx.settings.save_dock_state(docks)
+        first.ctx.settings.save_mdi_state(subs)
         first.manager.mark_all_clean()
         first.close()
 
         second = make_window(qt_app, ctx)
         try:
+            second.workspace.set_view_mode(False)
+            second.manager.open("stub.center")
             second.show()
             qt_app.processEvents()
-            assert second.panes.outer.sizes() == want
+            geo = second.workspace.subwindows_of("stub.center")[0].geometry()
+            assert (geo.x(), geo.y(), geo.width(), geo.height()) == (60, 70, 520, 430)
         finally:
             second.manager.mark_all_clean()
             second.close()
 
-    def test_collapsed_pane_round_trips(self, qt_app, ctx):
-        """收起的窗格重启后还得是收起的 —— 否则空的左窗格每次都会重新占位。"""
+    def test_hidden_module_round_trips(self, qt_app, ctx):
+        """关掉的模块重启后还是关的 —— 否则每次启动都得手动再关一遍。"""
         ctx.manifest = self._manifest()
         first = make_window(qt_app, ctx)
-        first.panes.pane("right").set_collapsed(True)
-        first.ctx.settings.save_window(first, theme="探针", center_tab=0,
-                                       panes=first.panes.state())
+        second_module = [m for m in ctx.manifest.modules_in("center")
+                         if m.id != "stub.center"][0].id
+        first.manager.set_visible(second_module, False)
+        assert not first.workspace.contains(second_module)
+        docks, subs = first.workspace.save_layout()
+        first.ctx.settings.save_dock_state(docks)
+        first.ctx.settings.save_mdi_state(subs)
         first.manager.mark_all_clean()
         first.close()
 
         second = make_window(qt_app, ctx)
         try:
-            assert second.panes.pane("right").is_collapsed()
-            assert not second.panes.pane("bottom").is_collapsed()
+            assert not second.workspace.contains(second_module)
         finally:
             second.manager.mark_all_clean()
             second.close()
 
-    def test_corrupt_pane_state_does_not_break_startup(self, qt_app, ctx):
+    def test_corrupt_layout_state_does_not_break_startup(self, qt_app, ctx):
+        """布局存坏了不该让界面起不来 —— dock 的二进制与子窗口的 JSON 都试一遍。"""
         ctx.manifest = self._manifest()
-        ctx.settings.set_value("window/panes", "{这不是 json")
+        ctx.settings.set_value("window/mdi", "{这不是 json")
+        ctx.settings.set_value("window/docks", "垃圾字节")
         window = make_window(qt_app, ctx)
         try:
-            assert window.panes.pane("center") is not None
+            assert window.manager.open("stub.center") is True
         finally:
             window.manager.mark_all_clean()
             window.close()
+
+    def test_stale_layout_is_ignored(self, qt_app, ctx):
+        """**换了外壳形状之后，旧布局必须作废。**
+
+        踩过的坑：MDI/dock 改造后，注册表里那份"两个 dock 并排"的旧布局被
+        无条件贴回，把新壳的同区 tabify 覆盖掉 —— 用户看不到切换标签条，
+        还以为是功能没做。修法是布局版本号：旧壳没写过这个 key，于是判为过时。
+        """
+        ctx.manifest = self._manifest()
+        saver = make_window(qt_app, ctx)
+        saver.ctx.settings.save_dock_state(saver.workspace.save_layout()[0])
+        saver.manager.mark_all_clean()
+        saver.close()
+        # 模拟"旧版本留下的状态"：把版本号抹掉
+        ctx.settings._settings.remove("window/layout_version")   # noqa: SLF001
+        ctx.settings.sync()
+        assert not ctx.settings.layout_is_current()
+
+        window = make_window(qt_app, ctx)
+        try:
+            # 这份桩清单的底区有控制台 + 两个 stub dock —— 它们该叠成一组
+            bottom = window.workspace.modules_in("bottom")
+            assert len(bottom) >= 2, bottom
+            first, second = (window.workspace.dock_of(m) for m in bottom[:2])
+            assert second in window.tabifiedDockWidgets(first)
+            assert first in window.tabifiedDockWidgets(second)
+        finally:
+            window.manager.mark_all_clean()
+            window.close()
+
+    def test_current_layout_is_restored(self, qt_app, ctx):
+        """版本号对得上就照贴 —— 用户自己摆的布局当然要记住。"""
+        ctx.manifest = self._manifest()
+        saver = make_window(qt_app, ctx)
+        saver.ctx.settings.save_dock_state(saver.workspace.save_layout()[0])
+        saver.ctx.settings.mark_layout_version()
+        saver.manager.mark_all_clean()
+        saver.close()
+
+        assert ctx.settings.layout_is_current()
+
+    def test_startup_is_always_empty(self, qt_app, ctx):
+        """**启动就是空的** —— 上次开着的视图也不自动开回来。
+
+        恢复的只有**布局**（dock 停靠与显隐、各视图的位置尺寸），不是
+        "打开了哪些"。一个都没点就自己冒出一堆标签，反而不知道哪些是要看的。
+        """
+        ctx.manifest = self._manifest()
+        first = make_window(qt_app, ctx)
+        first.workspace.set_view_mode(True)          # 连视图模式都改一下
+        for mid in ("stub.center", "stub.center2"):
+            first.manager.open(mid)
+        assert first.workspace.subwindow_count() == 2
+        first.manager.mark_all_clean()
+        first.close()
+
+        second = make_window(qt_app, ctx)
+        try:
+            assert second.workspace.subwindow_count() == 0        # 空的
+            assert second.workspace.ordered_module_ids() == []
+        finally:
+            second.manager.mark_all_clean()
+            second.close()
+
+    def test_closing_the_window_re_docks_floating_panels(self, qt_app, ctx):
+        """浮出来的面板是**独立的顶层窗口** —— 主窗口关掉时它不会自己跟着关。
+
+        不收回来的话：关掉主程序后它还留在桌面上，进程也退不干净
+        （实测：`win.close()` 之后仍有一个可见的顶层窗口）。
+        """
+        ctx.manifest = self._manifest()
+        window = make_window(qt_app, ctx)
+        window.show()
+        dock = window.workspace.dock_of("stub.dock_a")
+        dock.setFloating(True)
+        qt_app.processEvents()
+        assert dock.isFloating()
+
+        window.close()
+        qt_app.processEvents()
+        assert not dock.isFloating()
+        assert not dock.isVisible()
 
     def test_reset_layout_clears_what_was_saved(self, qt_app, ctx):
         ctx.manifest = self._manifest()
         window = make_window(qt_app, ctx)
         try:
-            window.ctx.settings.save_window(window, theme="探针", center_tab=1,
-                                            panes=window.panes.state())
+            docks, subs = window.workspace.save_layout()
+            window.ctx.settings.save_window(window, theme="探针")
+            window.ctx.settings.save_dock_state(docks)
+            window.ctx.settings.save_mdi_state(subs)
             window.on_reset_layout()
             assert window.ctx.settings.value("window/geometry") in (None, "")
-            assert window.ctx.settings.restore_panes() == {}
+            assert window.ctx.settings.restore_dock_state() is None
+            assert window.ctx.settings.restore_mdi_state() == ""
             assert window.ctx.settings.value("window/state") in (None, "")
             # 主题不是布局的一部分，重置布局不该把它一起抹掉
             assert window.ctx.settings.saved_theme() == "探针"
@@ -334,7 +480,7 @@ modules: []
         ctx.manifest = self._manifest()              # 会恢复的那份
         saver = make_window(qt_app, ctx)
         saver.resize(700, 600)
-        saver.ctx.settings.save_window(saver, theme="探针", center_tab=0)
+        saver.ctx.settings.save_window(saver, theme="探针")
         saver.manager.mark_all_clean()
         saver.close()
 
@@ -389,15 +535,40 @@ class TestRealManifestBuilds:
         window = make_window(qt_app, ctx)
         try:
             assert window.manager.failures() == {}
-            assert {m.module_id for m in window.modules} == {
-                "debug.sim_log", "debug.fingerprint", "vms.casemodel",
-                "vms.pipeline", "vms.runs", "vms.evidence"}
-            assert window.center_tabs.count() == 3      # 仿真日志 + 验证流程 + Case 建模
-            titles = [window.center_tabs.tabText(i)
-                      for i in range(window.center_tabs.count())]
-            # 中央页顺序：业务线 order 优先（debug 10 < vms 30），
-            # 同一条线里才轮到模块 order（pipeline 10 < casemodel 20）
-            assert titles == ["仿真日志", "验证流程", "Case 建模"]
+            assert len(window.modules) == 30
+            assert {m.module_id for m in window.modules} >= {
+                "design.output", "model.output", "ops.output", "ops.regression_status",
+                "ops.regression_wave", "ops.regression_coverage",
+                "coverage.output",
+                "audit.output", "ide.manual_nodes", "flow.compare", "debug.sim_log",
+                "debug.fingerprint", "debug.output", "verify.output",
+                "verify.casemodel", "coverage.excludes",
+                "flow.pipeline", "flow.todo", "flow.drafts", "flow.runs", "flow.evidence",
+                "flow.task", "flow.diagram", "flow.artifacts", "flow.tracking", "flow.signoff",
+                "flow.trend", "flow.decision", "flow.manifest"}
+            # **工作区默认是空的**：实例都建好了，但没一个进 MDI
+            assert window.workspace.subwindow_count() == 0
+
+            # 按清单顺序逐个点开 —— 打开的顺序就是清单顺序（业务线 order 优先，
+            # 同一条线里才轮到模块 order：design 10 < model 20 < verify 30
+            # < ops 40 < coverage 50 < debug 60 < audit 70 < ide 80 < flow 90）
+            want = ["IP 规格", "人工节点",
+                    # 贯穿层（order 8）排在运行时之前 —— 它是入口。
+                    # 线内顺序按"用法"：起（验证流程）→ 选（运行历史，左窗格）→
+                    # 看（任务总览/流程视图/运行对比）→ 材料（产物审查/证据）→
+                    # 判（签核判定/运行清单）→ 回头查（决策轨迹/进度趋势/跟踪表）
+                    "验证流程", "待办 / 卡点", "任务总览", "流程视图", "运行对比",
+                    "产物审查", "签核判定", "运行清单", "规则草案",
+                    "决策轨迹", "进度趋势", "测试点 / 资产",
+                    "设计产出", "模型产出", "验证产出",
+                    "Case 建模", "回归产出", "回归状态", "回归波形", "回归覆盖率",
+                    "覆盖率产出", "覆盖率豁免",
+                    "仿真日志", "调试产出", "签核产出"]
+            for module_id in expected_center_order(window):
+                window.manager.open(module_id)
+            titles = [s.windowTitle() for s in window.mdi.subWindowList(
+                QMdiArea.WindowOrder.CreationOrder)]
+            assert titles == want
         finally:
             window.manager.mark_all_clean()
             window.close()
@@ -419,7 +590,7 @@ class TestRealManifestBuilds:
 
         window = make_window(qt_app, ctx)
         try:
-            module = window.manager.module("vms.casemodel")
+            module = window.manager.module("verify.casemodel")
             assert module.path is not None and module.path.name == "cpu_pipeline.yaml"
             assert module.result is not None
             assert module.result.score.total > 0

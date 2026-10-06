@@ -13,7 +13,7 @@ import pytest
 from ...layers.l2_orchestration import graph as graph_mod
 from ...layers.l2_orchestration.state import PipelineState
 
-MODULES = ("vms.pipeline", "vms.runs", "vms.evidence")
+MODULES = ("flow.pipeline", "flow.runs", "flow.evidence")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -80,6 +80,9 @@ def window(qt_app, settings, service, tmp_path):
 
     manifest, manifest_path = shipped_manifest()
     win = make_window(qt_app, make_ctx(manifest, manifest_path, settings))
+    # center 模块懒加载（工作区默认空）—— 本文件测的是它们，替用户"点"一遍
+    for module_id in MODULES:
+        win.manager.open(module_id)
     yield win
     win.manager.mark_all_clean()
     win.close()
@@ -123,14 +126,11 @@ class TestManifestWiring:
         assert window.manager.failures() == {}
 
     def test_they_land_in_the_expected_panes(self, window):
-        def area_of(module_id: str) -> str:
-            host = window.panes.pane_of(module_id)
-            return next(a for a in ("center", "left", "right", "bottom")
-                        if window.panes.pane(a) is host)
+        area_of = window.manager.pane_of
 
-        assert area_of("vms.runs") == "left"
-        assert area_of("vms.pipeline") == "center"
-        assert area_of("vms.evidence") == "right"
+        assert area_of("flow.runs") == "left"
+        assert area_of("flow.pipeline") == "center"
+        assert area_of("flow.evidence") == "right"
 
     def test_evidence_subscribes_to_run_selection(self, window):
         """清单里的 `params.subscribe` 要真的接上总线。"""
@@ -152,21 +152,21 @@ class TestManifestWiring:
 
 class TestRunsModule:
     def test_empty_by_default(self, window):
-        module = module_of(window, "vms.runs")
+        module = module_of(window, "flow.runs")
         module.refresh()
         assert module.tree.topLevelItemCount() == 0
         assert "0 次运行" in module.count_label.text()
 
     def test_lists_a_finished_run(self, window, service, tmp_path):
         run_id = _run_once(service, tmp_path)
-        module = module_of(window, "vms.runs")
+        module = module_of(window, "flow.runs")
         module.refresh()
         assert module.tree.topLevelItemCount() == 1
         assert run_id in module.tree.topLevelItem(0).text(0)
 
     def test_stages_hang_under_the_run(self, window, service, tmp_path):
         _run_once(service, tmp_path)
-        module = module_of(window, "vms.runs")
+        module = module_of(window, "flow.runs")
         module.refresh()
         labels = [module.tree.topLevelItem(0).child(i).text(0).strip()
                   for i in range(module.tree.topLevelItem(0).childCount())]
@@ -176,7 +176,7 @@ class TestRunsModule:
         run_id = _run_once(service, tmp_path)
         seen = []
         window.ctx.bus.subscribe("run.selected", seen.append)
-        module = module_of(window, "vms.runs")
+        module = module_of(window, "flow.runs")
         module.refresh()
         assert module.selected_run_id() == run_id
         assert seen and seen[-1] == run_id
@@ -184,7 +184,7 @@ class TestRunsModule:
     def test_follow_latest_picks_the_newest(self, window, service, tmp_path):
         _run_once(service, tmp_path)
         second = _run_once(service, tmp_path)
-        module = module_of(window, "vms.runs")
+        module = module_of(window, "flow.runs")
         module.btn_latest.setChecked(True)
         module.refresh()
         assert module.selected_run_id() == second
@@ -197,7 +197,7 @@ class TestRunsModule:
 class TestPipelineModule:
     def test_follows_a_selected_run(self, window, service, tmp_path):
         run_id = _run_once(service, tmp_path)
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         module.on_refresh(run_id)
         assert module.run_id == run_id
         assert module.timeline.topLevelItemCount() >= 1
@@ -205,7 +205,7 @@ class TestPipelineModule:
     def test_poll_is_incremental(self, window, service, tmp_path):
         """轮询只取新增 —— 否则每 500ms 把整份日志重读一遍并重复追加。"""
         run_id = _run_once(service, tmp_path)
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         module.on_refresh(run_id)
         first = len(module._events)
         module.poll()
@@ -214,7 +214,7 @@ class TestPipelineModule:
 
     def test_timeline_groups_by_round(self, window, service, tmp_path):
         run_id = _run_once(service, tmp_path)
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         module.on_refresh(run_id)
         groups = [module.timeline.topLevelItem(i).text(0)
                   for i in range(module.timeline.topLevelItemCount())]
@@ -222,7 +222,7 @@ class TestPipelineModule:
 
     def test_selecting_a_stage_shows_its_payload(self, window, service, tmp_path):
         run_id = _run_once(service, tmp_path)
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         module.on_refresh(run_id)
         stage_item = module.timeline.topLevelItem(0).child(0)
         stage_item.setSelected(True)
@@ -230,14 +230,14 @@ class TestPipelineModule:
 
     def test_the_log_view_shows_the_event_stream(self, window, service, tmp_path):
         run_id = _run_once(service, tmp_path)
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         module.on_refresh(run_id)
         text = module.log_view.toPlainText()
         assert "编译与仿真回归" in text
 
     def test_start_and_cancel_are_reachable_from_the_module(self, window, tmp_path):
         """按钮的处理器真的会把运行启起来 —— 不是只有 bridge 那一层能调。"""
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         module.spec_edit.setText("")
         module.start_run()
         assert module.run_id
@@ -249,7 +249,7 @@ class TestPipelineModule:
         module.poll()
 
     def test_preset_fills_the_controls(self, window):
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         index = module.preset_box.findData(
             next(p for p in module._presets() if p["id"] == "smoke"))
         module.preset_box.setCurrentIndex(index)
@@ -259,7 +259,7 @@ class TestPipelineModule:
 
     def test_state_label_reflects_a_finished_run(self, window, service, tmp_path):
         run_id = _run_once(service, tmp_path)
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         module.on_refresh(run_id)
         module.poll()
         assert "已完成" in module.state_label.text()
@@ -274,10 +274,45 @@ class TestPipelineModule:
                                           target=95.0, max_rounds=1))
         with pytest.raises(Exception):
             service.wait(run_id, timeout=20)
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         module.on_refresh(run_id)
         assert "失败" in module.state_label.text()
         assert "失败" in module.log_view.toPlainText()
+
+
+# ═══════════════════════════════════════════════════════════════
+# 审批
+class TestStartAnnouncesTheRun:
+    """点「启动」之后，**别的页要跟着切过去**。
+
+    此前 `pipeline.start` 只管自己：新运行的 run_id 从不广播，而全工作台只有
+    `运行历史` 会发 `run.selected`（还得等用户点一下）。于是启动之后，订阅了
+    `run.selected` 的那些页 —— 流程视图 / 证据 / 签核判定 / 决策轨迹 / 运行清单 /
+    七条 agent 产出 —— 全都还停在**上一次**运行上。表现就是"点了启动，别的页不刷新"。
+    """
+
+    def test_start_run_publishes_run_selected(self, window, monkeypatch):
+        module = module_of(window, "flow.pipeline")
+        monkeypatch.setattr(module, "run_tool",
+                            lambda *a, **kw: {"run_id": "run-fresh"})
+        seen = []
+        window.ctx.bus.subscribe("run.selected", seen.append)
+
+        module.start_run()
+
+        assert seen == ["run-fresh"], f"新运行没有广播出去：{seen}"
+
+    def test_the_broadcast_does_not_loop_back(self, window, monkeypatch):
+        """自己也订阅着这个话题 —— 守卫（run_id 没变就不重载）必须挡住回声。"""
+        module = module_of(window, "flow.pipeline")
+        monkeypatch.setattr(module, "run_tool",
+                            lambda *a, **kw: {"run_id": "run-fresh"})
+        calls = []
+        monkeypatch.setattr(module, "follow", lambda rid: calls.append(rid))
+
+        module.start_run()
+
+        assert calls == [], "广播绕回了自己，会重复加载同一个运行"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -287,7 +322,7 @@ class TestPipelineModule:
 class TestApprovalDialog:
     def test_confirm_approval_maps_buttons(self, window, monkeypatch):
         """默认实现弹模态框；这里换掉它，验证的是**答案的映射**。"""
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         monkeypatch.setattr(module, "confirm_approval", lambda req: "reject")
 
         class _Request:
@@ -301,7 +336,7 @@ class TestApprovalDialog:
 
     def test_a_late_answer_is_reported_not_swallowed(self, window, monkeypatch):
         """超时已经降级为 SKIP —— 用户再点一下不能静默当作没发生。"""
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         monkeypatch.setattr(module, "confirm_approval", lambda req: "approve")
         monkeypatch.setattr(module, "run_tool",
                             lambda *a, **kw: {"answered": False})
@@ -347,7 +382,7 @@ class TestApprovalBar:
 
     def test_hidden_when_nothing_is_pending(self, window, service, tmp_path):
         _run_once(service, tmp_path)
-        module = module_of(window, "vms.pipeline")
+        module = module_of(window, "flow.pipeline")
         module.poll()
         assert self._shown(module) is False
 
@@ -395,6 +430,81 @@ class TestApprovalBar:
         assert decided and decided[0].payload["decision"] == "reject"
 
 
+class TestApprovalArtifacts:
+    """审批条要说出"你在批准**什么文件**"。
+
+    在此之前审批条上只有一句引擎理由（"功能覆盖 62%"）—— 人根本不知道自己要批的
+    是哪几份产物。而卡住运行的恰恰是这些中间 YAML（实测一次 `bench.yaml` 的 schema
+    不符让整次运行挂在 verify）。
+
+    payload 里的产物清单是**裁剪过**的（只有 path/group/exists/errors/warnings）：
+    它要进检查点和运行日志，带 sha256 与逐条诊断会把它们撑肥。所以这里只回答
+    「哪几份有问题、几处」，详情去「产物审查」页看。
+    """
+
+    @staticmethod
+    def _status(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """伪造界面读的那一份 —— 与 journal 的 `run.interrupted` 同形。"""
+        return {"last": {"payload": payload}}
+
+    def test_the_broken_artifacts_are_named(self, window):
+        module = module_of(window, "flow.pipeline")
+        module._sync_approval_bar("waiting", self._status({
+            "stage": "REFACTOR_RTL", "summary": "看覆盖率缺口再决定", "token": "ap-3",
+            "artifacts": [
+                {"path": "inputs/yaml/uvm/bench.yaml", "group": "验证·UVM",
+                 "exists": True, "errors": 4, "warnings": 0},
+                {"path": "inputs/yaml/uvm/env.yaml", "group": "验证·UVM",
+                 "exists": True, "errors": 2, "warnings": 0},
+                {"path": "spec.json", "group": "设计",
+                 "exists": True, "errors": 0, "warnings": 0},
+            ]}))
+        text = module.approval_label.text()
+        assert "bench.yaml ✗4 处" in text
+        assert "env.yaml ✗2 处" in text
+        assert "spec.json" not in text          # 好的那份不占版面
+
+    def test_the_declared_prompt_wins_over_the_engine_reason(self, window):
+        module = module_of(window, "flow.pipeline")
+        module._sync_approval_bar("waiting", self._status({
+            "stage": "REFACTOR_RTL", "summary": "看覆盖率缺口再决定",
+            "reason": "功能覆盖 62%", "token": "ap-3"}))
+        assert "看覆盖率缺口再决定" in module.approval_label.text()
+
+    def test_a_clean_run_says_so(self, window):
+        module = module_of(window, "flow.pipeline")
+        module._sync_approval_bar("waiting", self._status({
+            "stage": "REFACTOR_RTL", "token": "ap-1",
+            "artifacts": [{"path": "a.yaml", "exists": True, "errors": 0,
+                           "warnings": 0}]}))
+        assert "schema 都过" in module.approval_label.text()
+
+    def test_missing_artifacts_are_counted_not_hidden(self, window):
+        module = module_of(window, "flow.pipeline")
+        module._sync_approval_bar("waiting", self._status({
+            "stage": "REFACTOR_RTL", "token": "ap-1",
+            "artifacts": [{"path": "a.yaml", "exists": False, "errors": 0,
+                           "warnings": 0},
+                          {"path": "b.yaml", "exists": True, "errors": 0,
+                           "warnings": 0}]}))
+        assert "1 份还没生成" in module.approval_label.text()
+
+    def test_a_payload_without_artifacts_still_renders(self, window):
+        """老 payload（没有 artifacts 键）不能让审批条空白 —— 它还得说判什么。"""
+        module = module_of(window, "flow.pipeline")
+        module._sync_approval_bar("waiting", self._status({
+            "stage": "REFACTOR_RTL", "reason": "时序改了", "token": "ap-1"}))
+        text = module.approval_label.text()
+        assert "REFACTOR_RTL" in text and "时序改了" in text
+
+    @pytest.mark.parametrize("value", [None, [], "不是列表", {}])
+    def test_a_malformed_artifact_value_does_not_crash(self, window, value):
+        module = module_of(window, "flow.pipeline")
+        module._sync_approval_bar("waiting", self._status({
+            "stage": "REFACTOR_RTL", "token": "ap-1", "artifacts": value}))
+        assert "REFACTOR_RTL" in module.approval_label.text()
+
+
 def _gated_graph(checkpointer=None, store=None, **kw):
     """design → approval(interrupt) → finalize —— 检查点模式的暂停/重入。"""
     from langgraph.graph import END, START, StateGraph
@@ -431,7 +541,7 @@ def _gated_graph(checkpointer=None, store=None, **kw):
 def _pause_a_run(window, service, tmp_path):
     """起一次会暂停的运行，并让界面跟上它。返回 pipeline 模块。"""
     run_id = _run_once(service, tmp_path, approval="interactive")
-    module = module_of(window, "vms.pipeline")
+    module = module_of(window, "flow.pipeline")
     module.on_refresh(run_id)
     module.poll()
     return module
@@ -449,7 +559,7 @@ def _poll_until_done(module) -> bool:
 class TestEvidenceModule:
     def test_shows_the_journal_file(self, window, service, tmp_path):
         run_id = _run_once(service, tmp_path)
-        module = module_of(window, "vms.evidence")
+        module = module_of(window, "flow.evidence")
         module.load(run_id)
         names = _tree_text(module.tree)
         assert "run_events.jsonl" in names
@@ -457,25 +567,25 @@ class TestEvidenceModule:
 
     def test_coverage_rows_come_from_the_journal(self, window, service, tmp_path):
         run_id = _run_once(service, tmp_path)
-        module = module_of(window, "vms.evidence")
+        module = module_of(window, "flow.evidence")
         module.load(run_id)
         rows = module.coverage_model.rows          # 是个 property，不是方法
         assert rows and rows[0]["功能覆盖率"] == "82.0%"
 
     def test_follows_run_selection(self, window, service, tmp_path):
         run_id = _run_once(service, tmp_path)
-        module = module_of(window, "vms.evidence")
+        module = module_of(window, "flow.evidence")
         window.ctx.bus.publish("run.selected", run_id)
         assert module.run_id == run_id
 
     def test_a_missing_directory_says_so(self, window):
-        module = module_of(window, "vms.evidence")
+        module = module_of(window, "flow.evidence")
         module._fill_files("definitely-not-here")
         assert "找不到产物目录" in _tree_text(module.tree)
 
     def test_preview_refuses_binary_files(self, window, tmp_path):
         (tmp_path / "wave.vcd").write_bytes(b"\x00\x01\x02")
-        module = module_of(window, "vms.evidence")
+        module = module_of(window, "flow.evidence")
         module._fill_files(str(tmp_path))
         item = module.tree.topLevelItem(0)
         item.setSelected(True)
@@ -483,10 +593,98 @@ class TestEvidenceModule:
 
     def test_preview_shows_text_files(self, window, tmp_path):
         (tmp_path / "manifest.json").write_text('{"a": 1}', encoding="utf-8")
-        module = module_of(window, "vms.evidence")
+        module = module_of(window, "flow.evidence")
         module._fill_files(str(tmp_path))
         module.tree.topLevelItem(0).setSelected(True)
         assert '"a": 1' in module.preview.toPlainText()
+
+
+# ═══════════════════════════════════════════════════════════════
+# 仿真业务（工具栏下拉 → 这次运行）
+# ═══════════════════════════════════════════════════════════════
+
+class TestSimModeReachesTheRun:
+    """「仿真业务」是**这次运行的输入**，不是只写了个文件。
+
+    链子长：工具栏下拉 → `.signoffai/sim_modes.json`（项目级记忆）→
+    `pipeline.start(sim_modes=…)` → `RunRequest` → 回归框架的 `MODE_OPTS`。
+    这里钉的是中间那一跳 —— 前面写好了、最后一步没接上，表现就是
+    "下拉换了，回归还是照旧跑"，而且什么都不报。
+    """
+
+    def _capture(self, window, monkeypatch):
+        module = module_of(window, "flow.pipeline")
+        seen = {}
+
+        def _fake(name, *a, **kw):
+            seen.update(kw)
+            return {"run_id": "run-sim"}
+
+        monkeypatch.setattr(module, "run_tool", _fake)
+        return module, seen
+
+    def test_start_run_sends_the_stored_mode(self, window, monkeypatch, tmp_path):
+        from .. import sim_modes as ui
+
+        monkeypatch.setattr(ui, "STORE", tmp_path / "sim_modes.json")
+        ui.save("wave")
+        module, seen = self._capture(window, monkeypatch)
+
+        module.start_run()
+
+        assert seen.get("sim_modes") == ["wave"]
+
+    def test_no_mode_is_sent_as_an_empty_list(self, window, monkeypatch, tmp_path):
+        """选了「无」要传**空表** —— 传下去的是默认值就变成覆盖率了，那不是人的意思。"""
+        from .. import sim_modes as ui
+
+        monkeypatch.setattr(ui, "STORE", tmp_path / "sim_modes.json")
+        ui.save(ui.NONE_MODE)
+        module, seen = self._capture(window, monkeypatch)
+
+        module.start_run()
+
+        assert seen.get("sim_modes") == []
+
+
+class TestSimModePicker:
+    """工具栏上那个下拉本身 —— 条目来自工具层的表，默认覆盖率。"""
+
+    def test_lives_on_the_window_toolbar(self, window):
+        assert window.sim_mode_box is not None
+        data = [window.sim_mode_box.itemData(i)
+                for i in range(window.sim_mode_box.count())]
+        from .. import sim_modes as ui
+        assert data == [i["mode"] for i in ui.mode_items()]
+        assert "cov" in data          # 覆盖率在列表里（默认也是它）
+
+    def test_picking_remembers(self, window, monkeypatch, tmp_path):
+        """选中就落盘 —— 不落盘的话下次开工作台又回到覆盖率（静默丢选择）。"""
+        from .. import sim_modes as ui
+
+        store = tmp_path / "sim_modes.json"
+        monkeypatch.setattr(ui, "STORE", store)
+        index = window.sim_mode_box.findData("wave")
+        window.sim_mode_box.setCurrentIndex(index)
+
+        assert ui.load() == "wave"
+
+    def test_switching_mode_does_not_touch_a_running_run(self, window, monkeypatch,
+                                                        tmp_path):
+        """换下拉**不该**去改已经在跑的那一轮 —— 它是运行的输入，要记账。
+
+        这条是"刻意不做的事"，钉住它免得以后有人顺手加个"立即生效"。
+        """
+        from .. import sim_modes as ui
+
+        monkeypatch.setattr(ui, "STORE", tmp_path / "sim_modes.json")
+        module = module_of(window, "flow.pipeline")
+        module.run_id = "run-already-going"
+        calls = []
+        monkeypatch.setattr(module, "run_tool",
+                            lambda *a, **kw: calls.append(kw) or {})
+        window.sim_mode_box.setCurrentIndex(window.sim_mode_box.findData("wave"))
+        assert calls == []
 
 
 def _tree_text(tree) -> str:

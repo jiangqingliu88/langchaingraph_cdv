@@ -1,0 +1,6 @@
+[settings] WARNING: PLATFORM_JWT_SECRET 未设置
+rows: 27
+有覆盖率库的行数: 27
+显示: D:\SignOffAI\_scratch_cov\regression_run\build_build_apb_uart_dut\test_apb_uart_gen_stimulus\cov\apb_uart_gen_stimulus\questa.db
+绝对: True  存在: True
+点击后打开: ['OPEN::D:\\SignOffAI\\_scratch_cov\\regression_run\\build_build_apb_uart_dut\\test_apb_uart_gen_stimulus\\cov\\apb_uart_gen_stimulus\\_vcover_html\\index.html']

@@ -42,6 +42,9 @@ class OpsAgent(BaseAgent):
 
         params = task.get("params", {}) or {}
         design_style = params.get("design_style", "baseline") if isinstance(params, dict) else "baseline"
+        # 这一轮要开的**仿真业务**（cov / wave / debug_all …，见 sim_modes.py）。
+        # None = 交给默认（`_normalize_sim_modes` 会给覆盖率），不是"什么都不开"。
+        sim_modes = params.get("sim_modes") if isinstance(params, dict) else None
 
         # ── EDA 可用性前置检查（失败响亮：没有 EDA 就不假装跑回归）──
         # 确定性检测 vlog/vsim 是否在 PATH；缺失 → EDA_MISSING（score 0，success=False），
@@ -60,19 +63,29 @@ class OpsAgent(BaseAgent):
                 "score": 0,
             })
 
-        # ── 回归执行：直接走 L1 InfrastructureManager.run_regression（真实回归框架）──
+        # ── 回归执行：直接走 L1 InfrastructureManager（真实回归框架）──
         # 不走 MCP 子进程工具（regression.run）：tool_worker 引用的 regression_tool 模块
         # 已不存在（断链），且子进程隔离会丢失 EDA 失败细节。L1 是同一回归框架的统一封装。
+        #
+        # **走分级门控那一条**（loopback → p0 → p1 → p2 → p3）：agent loopback 不过
+        # 就不进 P0 —— 环境自身都没自洽（SCB 不 match）时，后面几级的失败会全是
+        # 同一个环境问题刷屏，把真正的 DUT 缺陷埋掉。`blocked_at` 说明卡在哪一级。
         try:
             from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
             infra = InfrastructureManager(output_dir)
-            reg_data = infra.run_regression(mode="local")
+            reg_data = infra.run_regression_staged(mode="local",
+                                                   enabled_modes=sim_modes)
             if not isinstance(reg_data, dict):
                 reg_data = {}
         except Exception as e:
             logger.warning(f"回归执行失败: {e}")
             reg_data = {"status": "FAIL", "passed": 0, "failed": 1, "total": 1,
                         "error": str(e)[:300], "design_style": design_style}
+
+        # 分级门控：把"卡在哪一级"摊到顶层，好让 debug / decision 一眼看到
+        if isinstance(reg_data, dict) and reg_data.get("blocked_at"):
+            logger.warning(f"分级回归卡在 {reg_data['blocked_at']}："
+                           f"{reg_data.get('blocked_reason', '')}")
 
         if not reg_data.get("status"):
             # 工具失败 → 兜底 FAIL（含错误信息，供 debug/decision 分析）
@@ -84,6 +97,9 @@ class OpsAgent(BaseAgent):
             }
         else:
             reg_data.setdefault("design_style", design_style)
+            # 记下这一轮开的仿真业务 —— 审计/复现要能回答"这份波形/覆盖率
+            # 是哪几门业务跑出来的"，而不是回头去猜当时的界面状态。
+            reg_data.setdefault("sim_modes", list(sim_modes or []))
             # 即使回归跑起来了，内部报 EDA 缺失（如 stderr 含 vlog/vsim 找不到）也要标记
             _err = str(reg_data.get("error", "") or reg_data.get("stderr", ""))
             if not reg_data.get("eda_missing"):

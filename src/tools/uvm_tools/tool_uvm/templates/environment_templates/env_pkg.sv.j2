@@ -4,11 +4,28 @@
 package {{ environment.env_name }}_pkg;
   import uvm_pkg::*;
   import {{ environment.env_name }}_parameters_pkg::*;
-  import {{ environment.env_name }}_typedefs_pkg::*;
+  // 注：这里原来还有一句 `import {{ environment.env_name }}_typedefs_pkg::*;` ——
+  // 而**没有任何模板生成这个包**。一句解析不了的 import 会让**整个 package 作废**，
+  // 于是 env / tests / seqs / tb_top 全链报 "Could not find the package"，
+  // 一屏连带错误，根因只是这一行。要真需要 env 级 typedef，得先补模板。
+  // 公共件（base_pkg）—— 环境里用到的 `clk_rst_agent` / `in_order_scoreboard`
+  // 这些类型住在这儿。不 import 的话它们全是 "Invalid type"。
+  import clk_and_rst_pkg::*;
+  import scb_pkg::*;
+  // 公共类型别名：`MASTER` / `SLAVE` / `RESP_*` / `READ` / `WRITE` 这些枚举
+  // 定义在 common_typedefs_pkg 里，env_config 直接拿它们赋 port_kind —— 不 import
+  // 就是一片 "Undefined variable: 'MASTER'"。
+  import common_typedefs_pkg::*;
   `include "uvm_macros.svh"
   // 导入所有 Agent 包
+  //
+  // **SV 的 import 不传递**：`import apb_pkg::*` 不会把 apb_typedefs_pkg 的内容
+  // 一并带进来，所以 agent 的子包要各 import 一遍 —— 否则 `MASTER` / `SLAVE`
+  //（port_kind_enum）、`ADDR_WIDTH` 这些在 env_config 里全是 "Undefined variable"。
 {%- for agent in agents %}
   import {{ agent.interface }}_pkg::*;
+  import {{ agent.interface }}_typedefs_pkg::*;
+  import {{ agent.interface }}_parameters_pkg::*;
 {%- endfor %}
   // 导入 Sub-env 包
 {%- for subenv in subenvs %}
@@ -27,9 +44,15 @@ package {{ environment.env_name }}_pkg;
 `ifdef USE_SC_MODEL_CHECK
   import {{ environment.env_name }}_sc_pred_env_pkg::*;
 `endif
+  // 工具组件（predictor 这些）—— 它们是**裸 class，不在任何包里**，
+  // 所以只能 `include` 进来、import 不了。必须排在 config 之前：
+  // env_config / env 里会声明 `apb_predictor apb_pred;` 这类成员，类型要先可见。
+{%- for uc in (utils or []) %}
+  `include "utils/{{ uc.name }}_util.sv"
+{%- endfor %}
+
   // 包含环境组件文件（依赖顺序：config → virtual_sequencer → coverage → sim_end → env）
-  // 注意：scoreboard（sb_type 指定）/ analysis 组件不在此 include，通过 import
-  // 对应 package 引入。
+  // 注意：scoreboard（sb_type 指定）不在此 include，通过 import 对应 package 引入。
   `include "{{ environment.env_name }}_config.sv"
   `include "seqs/{{ environment.env_name }}_virtual_sequencer.sv"
   `include "{{ environment.env_name }}_coverage.sv"

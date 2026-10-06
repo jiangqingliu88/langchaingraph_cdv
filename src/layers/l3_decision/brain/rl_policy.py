@@ -36,11 +36,15 @@ from typing import Dict, List, Optional, Tuple
 #   - HARD_ACTIONS（编译失败/比对失败）由规则引擎确定性处理，RL 不参与
 #   - TERMINAL_ACTIONS（CONVERGE）是达标终态，不属于 RL 动作空间
 from src.layers.l3_decision.decision_engine import (
-    ALL_ACTIONS, HARD_ACTIONS, TERMINAL_ACTIONS,
+    ALL_ACTIONS, HARD_ACTIONS, TERMINAL_ACTIONS, rl_action,
 )
 
-SOFT_ACTIONS = [a for a in ALL_ACTIONS
-                if a not in HARD_ACTIONS and a not in TERMINAL_ACTIONS]
+#: RL 的动作空间。**「改 RTL」那一族折叠成一个条目**（`rl_action`）——
+#: RL 学的是"这个状态下该不该动设计"，不是"这是哪一类 bug"（那一类由证据定，
+#: 见 `classify_fix_bug`）。不折叠的话五个名字互相抢经验，还会让 RL 去**挑标签**。
+SOFT_ACTIONS = list(dict.fromkeys(
+    rl_action(a) for a in ALL_ACTIONS
+    if a not in HARD_ACTIONS and a not in TERMINAL_ACTIONS))
 
 
 class QLearningPolicy:
@@ -81,11 +85,25 @@ class QLearningPolicy:
 
     # ── 持久化 ──
     def _load(self):
+        """读 Q 表 —— **动作名要归一**。
+
+        动作改名之后（`REFACTOR_RTL` → `FIX_FUNCTIONAL_bug` 之类），老策略文件里
+        存的是老名字。不归一的话那些经验既选不中（动作空间里没有老名字）、
+        也永远读不回来 —— 而且 `stats()` 还会把它们算进"有经验"，看着有、用不上。
+        """
         try:
             p = Path(self.json_path)
             if p.exists():
+                from ..decision_engine import rl_action
+
                 data = json.loads(p.read_text(encoding="utf-8"))
-                self.q = {tuple(k.split("::")): v for k, v in data.get("q", {}).items()}
+                self.q = {}
+                for k, v in data.get("q", {}).items():
+                    state, _, action = k.partition("::")
+                    # `rl_action` = 归一 + 把"改 RTL 家族"折叠成一个名字 ——
+                    # 老表里的 `REFACTOR_RTL`、以及曾经写进去的 `FIX_CDC_bug`
+                    # 之类，都落回同一条经验（不然它们读不回来，等于白学）
+                    self.q[(state, rl_action(action))] = v
         except Exception:
             pass
 

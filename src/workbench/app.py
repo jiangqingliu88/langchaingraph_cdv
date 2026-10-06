@@ -28,8 +28,8 @@ from .manifest import ManifestError, builtin_manifest, describe, load_manifest
 from .registry import ModuleManager
 from .settings_store import SettingsStore
 from .ui import theme
-from .ui.banner import Banner
-from .ui.console import ConsolePanel
+from .ui.widgets.banner import Banner
+from .ui.widgets.console import ConsolePanel
 
 APP_TITLE = "SignOffAI · 验证工作台"
 CONSOLE_TITLE = "控制台"
@@ -38,6 +38,9 @@ CONSOLE_TITLE = "控制台"
 #: 不能跟模块 id 撞车。
 CONSOLE_PIN = "__console__"
 NAV_PIN = "__nav__"
+
+#: 项目下拉里那条"就地登记"的哨兵值（不是项目 id）
+REGISTER_ACTION = "__register__"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,7 +57,40 @@ def build_parser() -> argparse.ArgumentParser:
                         help=f"主题名（可选：{'、'.join(theme.PALETTES)}）")
     parser.add_argument("--reset-layout", action="store_true",
                         help="忽略上次保存的窗口布局")
+    parser.add_argument("--project", default=None,
+                        help="项目 id（登记表 ~/.signoffai/projects.yaml）—— "
+                             "切到那个项目的工作目录与清单")
     return parser
+
+
+def apply_project(args) -> None:
+    """`--project` → 换工作目录 + 换清单。**必须在建窗口之前调**。
+
+    为什么是"换目录"就等于"换项目"：产物（`output/`）与记忆
+    （`.signoffai/*.db`）都是相对工作目录解析的，换了目录，两者天然互不可见
+    —— 隔离不用新造机制（见 `projects.py` 的说明）。
+
+    清单没显式给就用项目根下那份；项目目录不存在 → **报错退出**，不静默退化成
+    "在当前目录跑另一个项目"（那会往错的目录里写产物）。
+    """
+    from . import projects as projects_mod
+
+    project = projects_mod.find(str(args.project))
+    if project is None:
+        raise SystemExit(f"登记表里没有项目 {args.project!r}"
+                         f"（找过 {projects_mod.registry_path()}）")
+    if not project.exists:
+        raise SystemExit(f"项目 {project.id} 的工作目录不存在：{project.root}")
+    import os
+
+    os.chdir(project.root)
+    if not args.manifest:
+        manifest = project.manifest_path
+        if manifest is None:
+            raise SystemExit(
+                f"项目 {project.id} 下找不到界面清单"
+                f"（{project.root}/config/workbench.yaml）—— 在登记表里写 manifest: 指一份")
+        args.manifest = str(manifest)
 
 
 def _build_window_class():
@@ -68,9 +104,9 @@ def _build_window_class():
     from PySide6.QtWidgets import (QApplication, QMainWindow, QMenu, QMessageBox,
                                    QVBoxLayout, QWidget)
 
-    from .ui import icons
-    from .ui.nav_pane import NavPane
-    from .ui.panes import PaneLayout
+    from .ui.theme import icons
+    from .ui.nav.tree import NavPane
+    from .ui.containers.workspace import Workspace
 
     class WorkbenchWindowImpl(QMainWindow):
         def __init__(self, app: QApplication, ctx: AppContext) -> None:
@@ -93,8 +129,57 @@ def _build_window_class():
             # 七个菜单先建好，模块的动作再往里填（调试 / 工具 / 窗口）
             self.manager.build(ctx.manifest)
 
-            self._restore_layout()
+            self._apply_pane_defaults()     # 首次布局给停靠区一个合理尺寸
+            self._restore_layout()          # 有存过布局的话，它覆盖上面的默认值
             self._report_after_build()
+
+        #: 首次布局的停靠区尺寸（左 / 右 / 下）。放在这里而不是各模块里 ——
+        #: 尺寸是**窗口级**的取舍，模块不该关心自己有多宽。
+        PANE_DEFAULTS = {"left": 280, "right": 320, "bottom": 200}
+
+        def _apply_pane_defaults(self) -> None:
+            """给停靠区一个不抢戏的初始尺寸。
+
+            不设的话 Qt 按各控件 `sizeHint` 分：底部那两个（控制台 + 错误指纹）
+            的 sizeHint 加起来把屏幕吃掉三分之一 —— 实测 940 高的窗口里底部占
+            ~320px，而中央工作区空着。**主次颠倒**：工作区该最大，工具面板该够用就好。
+
+            **必须在窗口 `show()` 之后调**：`resizeDocks` 在布局铺开之前是空操作
+            （各 dock 还没进布局）。所以这里只负责"排进事件循环"，见 `showEvent`。
+            """
+            from PySide6.QtCore import QTimer
+
+            QTimer.singleShot(0, self._resize_panes)
+
+        def _resize_panes(self) -> None:
+            if getattr(self, "_layout_restored", False):
+                return          # 用户存过布局 —— 那是他的排法，不动
+            from PySide6.QtCore import Qt as _Qt
+            from PySide6.QtWidgets import QDockWidget
+
+            by_area = {
+                _Qt.DockWidgetArea.LeftDockWidgetArea: (_Qt.Orientation.Horizontal,
+                                                        self.PANE_DEFAULTS["left"]),
+                _Qt.DockWidgetArea.RightDockWidgetArea: (_Qt.Orientation.Horizontal,
+                                                         self.PANE_DEFAULTS["right"]),
+                _Qt.DockWidgetArea.BottomDockWidgetArea: (_Qt.Orientation.Vertical,
+                                                          self.PANE_DEFAULTS["bottom"]),
+            }
+            for area, (orientation, size) in by_area.items():
+                docks = [d for d in self.findChildren(QDockWidget)
+                         if self.dockWidgetArea(d) == area]
+                if docks:
+                    self.resizeDocks(docks, [size] * len(docks), orientation)
+            # 底部默认显示**控制台**。
+            # `Workspace._add_dock` 里那句 `existing.raise_()`（"保留先来的那个
+            # 在最前"）在这里不生效：模块 dock 是最后一批建的，Qt 把新 tabify 的
+            # 那个置了顶 —— 启动看到的是「错误指纹」这个模块页而不是控制台。
+            # 控制台是"发生了什么"的时间线，被一个具体模块盖住是本末倒置。
+            # **必须在这儿（show 之后）raise** —— 和 `resizeDocks` 一样，
+            # 窗口没铺开之前这句是空操作。
+            dock = getattr(self, "console_dock", None)
+            if dock is not None:
+                dock.raise_()
 
         # ════════════════════════════════════════════════════
         # 布局
@@ -137,10 +222,12 @@ def _build_window_class():
             self.resize(width, height)
 
         def _build_central(self) -> None:
-            """三窗格 —— Verdi 的形状：左导航 / 中工作区 / 下消息。
+            """MDI 中央 + Dock 侧栏 —— IDE 形状。
 
-            不再用 QDockWidget：dock 的标题栏、浮动、拖拽停靠是 IDE 的形状，
-            而 Verdi 的窗格之间只有一条可拖的分割条。
+            **这是对先前「固定四窗格、不用 QDockWidget」决定的反转**（旧理由记在
+            已删除的 `ui/panes.py` 里）。现在 center 模块是 QMdiArea 里的子窗口
+            （可浮动 / 平铺 / 层叠 / 多开），其余三个区是 QDockWidget（可拖拽停靠）。
+            见 `ui/workspace.py` 的模块说明。
             """
             central = QWidget(self)
             layout = QVBoxLayout(central)
@@ -150,18 +237,29 @@ def _build_window_class():
             self.banner = Banner(central)
             layout.addWidget(self.banner)
 
-            self.panes = PaneLayout(central)
-            layout.addWidget(self.panes.outer, 1)
+            self.workspace = Workspace(self, central,
+                                       close_guard=self._module_can_close)
+            layout.addWidget(self.workspace.mdi, 1)
             self.setCentralWidget(central)
 
-            # 左窗格 0 号页签 = 模块导航树。平台自带、关不掉、双击切模块。
-            self.nav = NavPane(self._focus_module)
-            self.panes.pane("left").add_pinned(self.nav, "模块", NAV_PIN)
+            # **`mdi` 这个名字对外保留** —— 它就是中心工作区，模块与测试找它。
+            self.mdi = self.workspace.mdi
+            self.workspace.on_activated = self._on_subwindow_activated
 
-            # **`center_tabs` 这个名字保留** —— 它就是中心窗格的标签页容器，
-            # 模块与测试都按这个名字找它。
-            self.center_tabs = self.panes.pane("center").tabs
-            self.center_tabs.currentChanged.connect(self._on_tab_changed)
+            # 左 dock = 模块导航树。平台自带、关不掉、双击切模块。
+            self.nav = NavPane(self._focus_module)
+            self.workspace.add_pinned(self.nav, "模块", NAV_PIN, "left")
+
+        def _module_can_close(self, module_id: str) -> bool:
+            """子窗口关闭守卫 —— 模块说有未保存改动就先问一句。"""
+            return self.manager.can_close(module_id)
+
+        def _on_subwindow_activated(self, module_id: str) -> None:
+            """聚焦的子窗口变了 —— 跑模块的 `on_activated`、加粗导航树、换工具栏。"""
+            self.manager.notify_activated(module_id)
+            self.nav.set_active(module_id)
+            # 工具栏跟着当前模块换（动作本来只对它有含义）
+            self.set_toolbar_actions(module_id)
 
         def _build_console(self) -> None:
             """内置控制台 —— 底部窗格的 0 号页签，**pin 住关不掉**。
@@ -171,8 +269,8 @@ def _build_window_class():
             """
             self.console = ConsolePanel()
             self.ctx.console = self.console
-            self.panes.pane("bottom").add_pinned(self.console, CONSOLE_TITLE,
-                                                 CONSOLE_PIN)
+            self.console_dock = self.workspace.add_pinned(
+                self.console, CONSOLE_TITLE, CONSOLE_PIN, "bottom")
             self._wire_tasks()
 
         def _wire_tasks(self) -> None:
@@ -226,6 +324,17 @@ def _build_window_class():
             self.act_reset_layout.setIcon(icons.icon("layout-reset"))
             self.act_reset_layout.triggered.connect(self.on_reset_layout)
 
+            # 工作区两种视图：
+            #   子窗口（默认）—— 每个模块一个可拖的窗口，真正的 MDI 手感
+            #   标签页        —— 子窗口铺成一条标签栏，点标签切（VMware/浏览器的样子）
+            # 两种 Qt 都原生支持，切换只是 `setViewMode`，不需要两套代码。
+            self.act_workspace_tabs = QAction("工作区标签页模式", self, checkable=True)
+            self.act_workspace_tabs.setChecked(self.workspace.is_tiled_view())
+            self.act_workspace_tabs.setStatusTip(
+                "开：模块铺成一条标签栏，点标签切换（默认）；"
+                "关：每个模块一个独立窗口，可并排比较 / 平铺 / 层叠")
+            self.act_workspace_tabs.toggled.connect(self.workspace.set_view_mode)
+
             self.act_quit = QAction("退出", self)
             self.act_quit.setShortcut(QKeySequence.StandardKey.Quit)
             self.act_quit.setIcon(icons.icon("quit"))
@@ -235,14 +344,14 @@ def _build_window_class():
             self.act_toggle_console.setChecked(True)
             self.act_toggle_console.setIcon(icons.icon("terminal"))
             self.act_toggle_console.toggled.connect(
-                lambda visible: self.panes.set_pinned_visible(
+                lambda visible: self.workspace.set_pinned_visible(
                     CONSOLE_PIN, bool(visible)))
 
             self.act_toggle_nav = QAction("模块导航树", self, checkable=True)
             self.act_toggle_nav.setChecked(True)
             self.act_toggle_nav.setIcon(icons.icon("tree"))
             self.act_toggle_nav.toggled.connect(
-                lambda visible: self.panes.set_pinned_visible(
+                lambda visible: self.workspace.set_pinned_visible(
                     NAV_PIN, bool(visible)))
 
             self.act_copy = QAction("复制", self)
@@ -276,10 +385,194 @@ def _build_window_class():
             self.toolbar.setMovable(False)
             self.toolbar.setToolButtonStyle(
                 Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            # ── 项目切换器（工具栏最左）──
+            # 切项目 = **换工作目录重开一个进程**（产物与记忆都相对工作目录，
+            # 见 projects.py）。不热切换的理由也在那儿写着了。
+            self.project_box = None
+            self._build_project_picker()
+            # ── 仿真业务下拉（工具栏，紧跟项目切换器）──
+            # 回归"跑哪门业务"（覆盖率 / 波形 / 调试…）。默认覆盖率。
+            self.sim_mode_box = None
+            self._build_sim_mode_picker()
             self.toolbar.addAction(self.act_open_manifest)
             self.toolbar.addAction(self.act_reload)
             self.toolbar.addSeparator()
             self.toolbar.addAction(self.act_reset_layout)
+            #: 工具栏上**常驻的那几条**（与当前模块无关）—— 重挂模块动作时要留着。
+            self._toolbar_global_actions = list(self.toolbar.actions())
+            #: 每个模块自己的动作，按模块 id 存着，激活谁挂谁（见 `set_toolbar_actions`）。
+            self._toolbar_actions: Dict[str, List[QAction]] = {}
+            #: 当前挂在工具栏上的模块段（含那条分隔线），换模块时整段摘掉。
+            self._toolbar_module_actions: List[QAction] = []
+
+        def _build_project_picker(self) -> None:
+            """工具栏最左的项目下拉 —— **永远显示**。
+
+            第一版在"登记表为空"时直接不画这个控件（当时的理由是"不占地方"），
+            结果第一个用户（就是你）在界面上**一根毛都看不到**：登记表是用户级
+            文件，本来就不存在，于是功能在、入口不在。这不是"省地方"，是把功能
+            藏起来了。所以现在：哪怕一个项目都没登记，也显示当前目录 + 一条
+            「登记当前目录为项目…」——功能得先被人发现，才谈得上好不好用。
+            """
+            from PySide6.QtWidgets import QComboBox, QLabel
+
+            from . import projects as projects_mod
+
+            self._projects = projects_mod.load_projects()
+            current = projects_mod.current()
+            self.project_box = QComboBox(self)
+            self.project_box.setToolTip(
+                "切项目 = 换工作目录重开工作台（产物 output/ 与记忆 .signoffai/*.db "
+                "都按工作目录隔离）" + chr(10) +
+                f"登记表：{projects_mod.registry_path()}")
+            if current is None:
+                # 没登记也照用 —— 如实标"未登记"，别假装是个项目
+                self.project_box.addItem(
+                    f"（未登记：{Path.cwd().name}）", "")
+            for project in self._projects:
+                label = project.name if project.exists else f"{project.name}（目录不存在）"
+                self.project_box.addItem(label, project.id)
+            if current is not None:
+                index = self.project_box.findData(current.id)
+                if index >= 0:
+                    self.project_box.setCurrentIndex(index)
+            # 永远留一个"就地登记"的出口 —— 不然新人不知道登记表在哪
+            self.project_box.insertSeparator(self.project_box.count())
+            self.project_box.addItem("＋ 登记当前目录为项目…", REGISTER_ACTION)
+            self.project_box.currentIndexChanged.connect(self._on_project_picked)
+            self.toolbar.addWidget(QLabel("项目：", self))
+            self.toolbar.addWidget(self.project_box)
+            self.toolbar.addSeparator()
+
+        def _build_sim_mode_picker(self) -> None:
+            """「仿真业务」下拉 —— 这次回归跑哪门业务（默认覆盖率）。
+
+            **它只是"下次启动运行带什么"**，不是运行中的开关：已经跑起来的那一轮
+            不会追溯生效。这不是偷懒 —— 仿真业务决定命令怎么拼，属于**运行的
+            输入**（`RunRequest.sim_modes` → `PipelineState` → 回归框架的
+            `MODE_OPTS`），跑完要能回答"这份波形是哪门业务跑出来的"。中途改一个
+            界面控件去动已经在跑的命令，那份记录就成了假的。
+
+            词条来自工具层的表（`src/tools/regression_tools/sim_modes.py`），
+            这里不另抄一份；选择记在项目级 `.signoffai/sim_modes.json`。
+            """
+            from PySide6.QtWidgets import QComboBox, QLabel
+
+            from . import sim_modes as sim_modes_ui
+
+            self.sim_mode_box = QComboBox(self)
+            for item in sim_modes_ui.mode_items():
+                self.sim_mode_box.addItem(item["label"], item["mode"])
+                if item.get("note"):
+                    self.sim_mode_box.setItemData(
+                        self.sim_mode_box.count() - 1, item["note"],
+                        Qt.ItemDataRole.ToolTipRole)
+            self.sim_mode_box.setToolTip(
+                "回归的仿真业务：选中哪门就只跑哪门（默认覆盖率）。" + chr(10) +
+                "词条与取值见 src/tools/regression_tools/sim_modes.py；" + chr(10) +
+                "标「本后端无开关」的项在当前 EDA 后端没有对应参数，"
+                "选中会被告警忽略（不会把不存在的选项塞进命令行）。")
+            # 先把选中项摆好、**再接信号** —— 反过来的话，这个"回到上次选择"的
+            # 初始化动作会被当成用户改选，白白往磁盘上回写一遍（值虽然一样）。
+            index = self.sim_mode_box.findData(sim_modes_ui.load())
+            self.sim_mode_box.setCurrentIndex(max(0, index))
+            self.sim_mode_box.currentIndexChanged.connect(self._on_sim_mode_picked)
+            self.toolbar.addWidget(QLabel("仿真业务：", self))
+            self.toolbar.addWidget(self.sim_mode_box)
+
+        def _on_sim_mode_picked(self, index: int) -> None:
+            """选中即记住（**下次启动运行生效**，见 `_build_sim_mode_picker`）。"""
+            from . import sim_modes as sim_modes_ui
+
+            mode = str(self.sim_mode_box.itemData(index) or "")
+            sim_modes_ui.save(mode)
+            self.set_status(f"仿真业务：{self.sim_mode_box.currentText()}"
+                            "（下次启动运行生效）")
+
+        def _on_project_picked(self, index: int) -> None:
+            """选中另一个项目 → 确认 → 用那个目录重开进程，自己退出。"""
+            from PySide6.QtCore import QProcess
+            from PySide6.QtWidgets import QInputDialog, QMessageBox
+
+            from . import projects as projects_mod
+
+            project_id = self.project_box.itemData(index)
+            if project_id == REGISTER_ACTION:
+                self._register_current_dir()
+                return
+            current = projects_mod.current()
+            if not project_id or (current is not None and project_id == current.id):
+                return
+            project = projects_mod.find(project_id, self._projects)
+            if project is None or not project.exists:
+                QMessageBox.warning(self, "切不了项目",
+                                    f"项目 {project_id} 的工作目录不存在："
+                                    f"{getattr(project, 'root', '?')}")
+                return
+            pivot = QMessageBox.question
+            if pivot(
+                    self, "切换项目",
+                    f"切到「{project.name}」会重开工作台（工作目录 "
+                    f"{project.root}）。" + chr(10) + chr(10) +
+                    "未保存的改动请先处理。继续吗？",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                # 选回来了 —— 不然下拉停在新项目上，看着像已经切了
+                if current is not None:
+                    self.project_box.setCurrentIndex(
+                        max(0, self.project_box.findData(current.id)))
+                return
+            argv = projects_mod.relaunch_command(project)
+            QProcess.startDetached(argv[0], argv[1:], project.root)
+            self.close()
+
+        def _register_current_dir(self) -> None:
+            """把当前工作目录登记成项目（就地写登记表，不用去改 YAML）。"""
+            from PySide6.QtWidgets import QInputDialog, QMessageBox
+
+            from . import projects as projects_mod
+
+            here = Path.cwd()
+            name, ok = QInputDialog.getText(
+                self, "登记当前目录为项目",
+                f"给 {here} 起个项目名（写进 {projects_mod.registry_path()}）：",
+                text=here.name)
+            # 下拉要退回去，不然它停在"＋ 登记…"那一行上
+            self.project_box.setCurrentIndex(0)
+            if not ok or not name.strip():
+                return
+            try:
+                project = projects_mod.register(name.strip(), str(here))
+            except Exception as exc:                       # noqa: BLE001
+                QMessageBox.warning(self, "登记失败", str(exc))
+                return
+            self._rebuild_project_picker(select=project.id)
+            self.set_status(f"已登记项目「{project.name}」→ {project.root}")
+
+        def _rebuild_project_picker(self, select: str = "") -> None:
+            """重挂下拉里的项目条目（登记完不用重启就看得见）。"""
+            from . import projects as projects_mod
+
+            self.project_box.blockSignals(True)
+            keep = [self.project_box.itemData(i) for i in range(self.project_box.count())]
+            self._projects = projects_mod.load_projects()
+            while self.project_box.count():
+                self.project_box.removeItem(0)
+            current = projects_mod.current() or projects_mod.find(select, self._projects)
+            if current is None:
+                self.project_box.addItem(f"（未登记：{Path.cwd().name}）", "")
+            for project in self._projects:
+                label = project.name if project.exists else f"{project.name}（目录不存在）"
+                self.project_box.addItem(label, project.id)
+            pick = projects_mod.find(select, self._projects) or current
+            if pick is not None:
+                index = self.project_box.findData(pick.id)
+                if index >= 0:
+                    self.project_box.setCurrentIndex(index)
+            self.project_box.insertSeparator(self.project_box.count())
+            self.project_box.addItem("＋ 登记当前目录为项目…", REGISTER_ACTION)
+            self.project_box.blockSignals(False)
+            del keep
 
         def _build_menus(self) -> None:
             """Verdi 形的七个菜单。
@@ -317,6 +610,7 @@ def _build_window_class():
             view_menu.addAction(self.act_toggle_nav)
             view_menu.addAction(self.act_toggle_console)
             view_menu.addSeparator()
+            view_menu.addAction(self.act_workspace_tabs)
             view_menu.addAction(self.act_reset_layout)
             view_menu.addSeparator()
             for action in self._theme_actions:
@@ -325,6 +619,26 @@ def _build_window_class():
             self.debug_menu = add("调试(&D)")
             self.tools_menu = add("工具(&T)")
             self.window_menu = add("窗口(&W)")
+            # MDI 编排动作放在**最前**：它们是"窗口"这个词最直接的意思，
+            # 模块清单（业务线小标题那一段）从下一节开始
+            self.act_new_window = QAction("在新窗口打开当前模块", self)
+            self.act_new_window.setShortcut("Ctrl+Shift+O")
+            self.act_new_window.setStatusTip("把这个模块再开一个窗口（多开，各编各的）")
+            self.act_new_window.triggered.connect(
+                lambda: self.manager.open_new_for_active())
+            self.act_tile = QAction("平铺窗口", self)
+            self.act_tile.triggered.connect(self.workspace.tile)
+            self.act_cascade = QAction("层叠窗口", self)
+            self.act_cascade.triggered.connect(self.workspace.cascade)
+            self.act_next_window = QAction("下一个窗口", self)
+            self.act_next_window.setShortcut("Ctrl+Tab")
+            self.act_next_window.triggered.connect(self.workspace.activate_next)
+
+            for action in (self.act_new_window, self.act_tile,
+                           self.act_cascade, self.act_next_window):
+                self.window_menu.addAction(action)
+            self.window_menu.addSeparator()
+
             #: 已经在窗口菜单里开过小标题的业务线（见 `add_window_section`）
             self._window_sections: set = set()
 
@@ -402,24 +716,51 @@ def _build_window_class():
             让窗格自己找页签、自己记原名：窗口这边不存副本，省得两处不同步
             （踩过：注册表改走窗格之后，窗口那份副本再也没人填，后缀就一直是空的）。
             """
-            self.panes.set_suffix(module_id, suffix)
+            self.workspace.set_suffix(module_id, suffix)
 
         def focus_center(self, module_id: str) -> bool:
-            """兼容名 —— 现在所有窗格都能聚焦，见 `PaneLayout.focus`。"""
-            return self.panes.focus(module_id)
+            """兼容名 —— 子窗口与 dock 都能聚焦，见 `Workspace.focus`。"""
+            return self.workspace.focus(module_id)
 
         def _focus_module(self, module_id: str) -> bool:
-            """导航树双击的落点。"""
-            found = self.panes.focus(module_id)
+            """导航树双击的落点 —— **没开过的模块在这里才建**（工作区默认是空的）。"""
+            found = self.manager.open(module_id)
             if not found:
-                self.set_status(f"切不过去：{module_id} 不在界面上")
+                self.set_status(f"打不开：{module_id} 不在界面上")
             return found
 
-        def add_toolbar_actions(self, actions: Sequence[QAction]) -> None:
+        def add_toolbar_actions(self, actions: Sequence[QAction],
+                                module_id: str = "") -> None:
+            """登记**某个模块**的动作 —— 工具栏不立刻挂，等它被激活时再挂。
+
+            原来是把所有模块的动作一股脑加到全局工具栏：25 个模块里有 5 个带
+            动作，其中"IP 规格"和"人工节点"各有一套「保存 / 另存为 / 立即校验」
+            —— 工具栏上就出现两条同名的三段，而且总长超出窗口被截断（实测
+            1520 宽也放不下，右边挂一个溢出箭头）。
+            动作本来就只对**当前这个模块**有意义，所以按上下文挂。
+            """
+            if not actions:
+                return
+            self._toolbar_actions[module_id] = list(actions)
+
+        def set_toolbar_actions(self, module_id: str) -> None:
+            """只挂**当前激活模块**的动作（工具栏的模块段整段替换）。
+
+            **不能用 `QToolBar.clear()`** —— 它连 `QAction` 一起销毁，而全局那几条
+            是窗口自己的（菜单里也挂着），下一轮 `addAction` 就会撞上
+            `RuntimeError: Internal C++ object (QAction) already deleted`（实测）。
+            所以走 `removeAction`：只从工具栏上摘下来，动作本身留着。
+            """
+            for action in self._toolbar_module_actions:
+                self.toolbar.removeAction(action)
+            self._toolbar_module_actions = []
+            actions = self._toolbar_actions.get(module_id) or []
             if actions:
-                self.toolbar.addSeparator()
+                separator = self.toolbar.addSeparator()
+                self._toolbar_module_actions.append(separator)
                 for action in actions:
                     self.toolbar.addAction(action)
+                    self._toolbar_module_actions.append(action)
 
         def _reapply_icons(self) -> None:
             """换主题后重挂平台动作的图标，并通知各模块重挂自己的。
@@ -454,6 +795,9 @@ def _build_window_class():
             for action in self._theme_actions:
                 action.setChecked(action.text() == palette.name)
             self._style_permanent(self.stat_modules)
+            # 工作区底色与空态文字色走的是**显式设色**那条路，不在样式表里 ——
+            # 换主题时它俩不会自己跟上，得点名喊一声（理由见 `WorkspaceArea.apply_theme`）。
+            self.mdi.apply_theme()
             # 图标是按「当前主题的正文色」渲染出来的，换了主题要重画一遍 ——
             # 否则深色主题下会留着上一套黑色的线描图标，糊在深底上。
             icons.clear_cache()
@@ -462,17 +806,12 @@ def _build_window_class():
             self.console.view.setFont(theme.mono_font())
             for module in self.manager.modules():
                 _refresh_fonts(module)
-            for index in range(self.center_tabs.count()):
-                self.center_tabs.widget(index).update()
+            for sub in self.mdi.subWindowList():
+                widget = sub.widget()
+                if widget is not None:
+                    widget.update()
             self.ctx.settings.set_value("window/theme", palette.name)
             self.set_status(f"主题：{palette.name}")
-
-        def _on_tab_changed(self, index: int) -> None:
-            widget = self.center_tabs.widget(index)
-            if widget is not None:
-                module_id = str(widget.property("module_id") or "")
-                self.manager.notify_activated(module_id)
-                self.nav.set_active(module_id)
 
         def on_open_manifest(self) -> None:
             from PySide6.QtWidgets import QFileDialog
@@ -528,10 +867,19 @@ def _build_window_class():
                 return
             self.ctx.settings.restore_window(self)
             self._clamp_to_screen()
-            self.panes.apply_state(self.ctx.settings.restore_panes())
-            index = self.ctx.settings.saved_center_tab()
-            if 0 <= index < self.center_tabs.count():
-                self.center_tabs.setCurrentIndex(index)
+            # **先看布局版本**：换了外壳形状之后，注册表里那份旧布局是照旧壳
+            # 排的，贴上去会把新壳的默认排布整个覆盖（踩过：同区 dock 的 tabify
+            # 被旧布局覆盖，用户看不到切换标签条）。版本对不上就走默认排布。
+            if self.ctx.settings.layout_is_current():
+                self.workspace.restore_layout(
+                    self.ctx.settings.restore_dock_state(),
+                    self.ctx.settings.restore_mdi_state())
+                # 存过布局 → 停靠区尺寸的默认值让位（见 `_resize_panes`）
+                self._layout_restored = True
+                # **不恢复上次开着的视图** —— 启动就是空的，视图一律等左树点开。
+                # 恢复的只有**布局**（dock 停靠与显隐、各视图的位置尺寸），
+                # 不是"打开了哪些"。这是刻意的：一个都没点就自己冒出一堆标签，
+                # 反而不知道哪些是自己要看的。
 
         def _clamp_to_screen(self) -> None:
             """把窗口夹回当前屏幕的可用区域 —— **恢复之后**再夹一次。
@@ -569,7 +917,7 @@ def _build_window_class():
             self.nav.populate(manifest)
             failures = self.manager.failures()
             self.nav.set_failed(failures)
-            self.nav.set_active(self.panes.pane("center").current_module_id())
+            self.nav.set_active(self.workspace.active_module_id())
 
             if failures:
                 detail = "；".join(f"{k}（{v}）" for k, v in failures.items())
@@ -595,11 +943,14 @@ def _build_window_class():
                     event.ignore()
                     return
             if self.ctx.manifest.window.restore_layout:
-                self.panes.remember_sizes()
-                self.ctx.settings.save_window(
-                    self, theme=theme.current().name,
-                    center_tab=self.center_tabs.currentIndex(),
-                    panes=self.panes.state())
+                # 先把浮出来的面板收回停靠位 —— 不收的话它们是独立顶层窗口，
+                # 主窗口关了它们还在桌面上，进程也退不干净
+                self.workspace.dock_all_floating()
+                docks, mdi = self.workspace.save_layout()
+                self.ctx.settings.save_window(self, theme=theme.current().name)
+                self.ctx.settings.save_dock_state(docks)
+                self.ctx.settings.save_mdi_state(mdi)
+                self.ctx.settings.mark_layout_version()
             event.accept()
 
         @property
@@ -640,6 +991,11 @@ def build_workbench(argv: Optional[Sequence[str]] = None):
     from .tasks import TaskRunner
 
     args = build_parser().parse_args(list(argv) if argv is not None else None)
+    # `--project` 要**在解析清单路径之前**落地：它换的是工作目录 + 清单
+    # （见 `apply_project`）。chdir 也必须早于建窗口 —— 之后起的 agent、记忆库、
+    # 运行目录全都按当时的工作目录解析。
+    if args.project:
+        apply_project(args)
     app = QApplication.instance() or QApplication(list(sys.argv[:1]))
 
     manifest_path = resolve_manifest_path(args.manifest)

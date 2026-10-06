@@ -146,15 +146,21 @@ class ExcludeRegistry:
         return True
 
     def reject_exclude(self, exclude_id: str, approver: str = "") -> bool:
-        """拒绝 Exclude。"""
+        """拒绝 Exclude。返回**是否真的改到了**一条。
+
+        原来这里无条件 `return True`：UPDATE 命中 0 行也报成功，于是界面上会出现
+        「已拒绝 EXC-9999」而库里根本没有这条 —— 一个撒谎的成功。`approve_exclude`
+        一直是先查后改的，两边口径要一致（全仓库的"失败响亮"纪律）。
+        """
         with self._lock:
             conn = self._connect()
-            conn.execute(
+            cur = conn.execute(
                 "UPDATE exclude_registry SET status=?, approver=?, updated_at=? "
                 "WHERE exclude_id=?",
                 (STATUS_REJECTED, approver, self._now(), exclude_id))
             conn.commit()
-        return True
+            changed = cur.rowcount > 0
+        return changed
 
     # ═══════════════════════════════════════════════════════════
     # 3. 查询
@@ -223,7 +229,9 @@ class ExcludeRegistry:
         covered = map_data.get("covered", 0)
         raw_coverage = map_data.get("coverage", 0.0)
         excluded_points = self.get_excluded_points()
-        excluded = sum(1 for b in map_data.get("bins", [])
+        # `total`/`covered` 是 **bin 数**（见 `CoverageMap.build`），所以被豁免的条目
+        # 要按它**自己的 bin 数**从分母里扣 —— 扣"条目个数"会和分母不同量纲。
+        excluded = sum(int(b.get("bins", 1) or 0) for b in map_data.get("bins", [])
                        if b.get("location") in excluded_points) if excluded_points else 0
         effective_total = max(total - excluded, 1)
         effective_coverage = round(covered / effective_total * 100, 1) if total else 0.0

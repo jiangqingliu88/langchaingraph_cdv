@@ -98,23 +98,24 @@ def _minimal_bench(ref_model: dict) -> dict:
     }
 
 
-def test_tb_top_renders_ref_model_compare():
-    """黄金命中 → tb_top 渲染 u_ref_model 实例化 + 逐拍比对块。"""
+def test_tb_top_never_instantiates_a_ref_model():
+    """tb_top **不复刻**参考模型 —— 比对不在这一层做。
+
+    这里原先钉的是「tb_top 渲染 `u_ref_model` + 逐拍比对块」。那条路已经**退役**：
+    harness 被删掉（commit `88a27ae4` "udpdate harness" 把 tb_top 改成直连式接口，
+    顺带删了那段 ref_model 块），而 `bench` 的 schema 是 `additionalProperties:
+    false`、`ref_model` 根本不在允许键里 —— 当初那次删除是对的。
+
+    参考模型比对现在落在 **env 级**：`find_spec_yaml` 在门禁通过时往 env.yaml 写
+    `analysis_components` + `scoreboards` + `tlm_connections`，由 `util_comp.sv.j2`
+    渲染出的 predictor 镜像算出期望值喂给 scoreboard 的 expected 侧。
+
+    这条测试钉的是**退役状态**（免得有人又往 tb_top 里塞一份），真正的比对链在
+    `tests/test_ref_model_wiring.py`。
+    """
     cfg = build_ref_model_config("apb_uart", APB_INTERFACES, [])
-    assert cfg is not None
+    assert cfg is not None, "黄金仍然命中（配置本身还在用，见 _ref_mirror_gate）"
     sv = _render_tb_top(_minimal_bench(cfg), agents=[])
-    assert "apb_uart_ref_model u_ref_model" in sv
-    assert ".clk(pclk)" in sv
-    assert ".rst_n(preset_n)" in sv
-    assert "u_ref_model.prdata" in sv
-    assert 'mismatch prdata: expected=0x%0h actual=0x%0h' in sv
-    # 触发时钟是 bench 的实际时钟（pclk），不是硬编码 clk
-    assert "@(posedge pclk)" in sv
-
-
-def test_tb_top_no_ref_model_when_not_matched():
-    """黄金未命中 → 模板不渲染 ref_model 块（诚实：不假装比对）。"""
-    sv = _render_tb_top(_minimal_bench({"enabled": False}), agents=[])
     assert "u_ref_model" not in sv
     assert "REF_CMP" not in sv
 

@@ -1,0 +1,9 @@
+=== ops.regression_wave rows=25
+   opened: ['D:/SignOffAI/output_jiang_20261007_014901/regression_run/build_build_apb_uart_dut/test_apb_uart_gen_stimulus/vsim.wlf']
+   status: (no _status)
+=== ops.regression_coverage rows=25
+   opened: []
+   status: (no _status)
+=== ops.regression_status rows=25
+   opened: []
+   status: (no _status)

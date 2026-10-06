@@ -18,15 +18,27 @@ class {{ agent.name }}_slave_agent extends uvm_agent;
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    {{ agent.name }}_slave_agent_ap= monitor.slave_mon_ap;
-    uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg);
+    void'(uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg));
     if (cfg == null)
       cfg = {{ agent.name }}_port_config::type_id::create("cfg", this);
 
+    // 虚拟接口：tb_top 用 `*.<agent 实例路径>*` 塞进 config_db，这里取出存 cfg.vif
+    if (cfg.vif == null)
+      void'(uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "", "vif", cfg.vif));
+
+    // ⚠️ 子组件的 cfg / vif 必须在 **create 之前** set（UVM 的 build 自上而下，
+    // 子组件 build_phase 紧接父组件之后执行；放 connect_phase 就太晚了，
+    // driver 会 `uvm_fatal("[CFG] Config not set")`）。
+    uvm_config_db#({{ agent.name }}_port_config)::set(this, "monitor", "cfg", cfg);
+    uvm_config_db#(virtual {{ agent.name }}_if)::set(this, "monitor", "vif", cfg.vif);
+
     monitor = {{ agent.name }}_port_monitor::type_id::create("monitor", this);
+    {{ agent.name }}_slave_agent_ap= monitor.slave_mon_ap;
     if (cfg.is_active == UVM_ACTIVE) begin
       uvm_config_db#({{ agent.name }}_port_config)::set(this, "sequencer", "cfg", cfg);
       sequencer = {{ agent.name }}_slave_sequencer::type_id::create("sequencer", this);
+      uvm_config_db#({{ agent.name }}_port_config)::set(this, "driver", "cfg", cfg);
+      uvm_config_db#(virtual {{ agent.name }}_if)::set(this, "driver", "vif", cfg.vif);
       driver    = {{ agent.name }}_slave_driver::type_id::create("driver", this);
     end
   endfunction
@@ -37,12 +49,6 @@ class {{ agent.name }}_slave_agent extends uvm_agent;
       driver.seq_item_port.connect(sequencer.seq_item_export);
       // ★ 将 Sequencer 句柄传给 Monitor（事件驱动）
       uvm_config_db#({{ agent.name }}_slave_sequencer)::set(this, "monitor", "sqr", sequencer);
-    end
-    uvm_config_db#(virtual {{ agent.name }}_if)::set(this, "monitor", "vif", cfg.vif);
-    uvm_config_db#({{ agent.name }}_port_config)::set(this, "monitor", "cfg", cfg);
-    if (driver != null) begin
-      uvm_config_db#(virtual {{ agent.name }}_if)::set(this, "driver", "vif", cfg.vif);
-      uvm_config_db#({{ agent.name }}_port_config)::set(this, "driver", "cfg", cfg);
     end
   endfunction
 endclass : {{ agent.name }}_slave_agent

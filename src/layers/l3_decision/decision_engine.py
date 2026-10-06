@@ -42,7 +42,9 @@ class Observation:
 class Action:
     """决策层下发给执行层的动作"""
     # 动作全集：与 decide() 实际产出、execution.py 的动作分支一一对应
-    action_type: str          # COMPILE_RETRY | UPDATE_MODEL | REFACTOR_RTL | EXPAND_SEEDS |
+    # 改设计/改模型的动作用 `FIX_<类别>_bug` —— 名字本身就说明修的哪一类问题
+    action_type: str          # FIX_COMPILE_bug | FIX_MODEL_bug | FIX_FUNCTIONAL_bug |
+                              # FIX_PROTOCOL_bug | FIX_DEADCODE_bug | EXPAND_SEEDS |
                               # RELAX_CONSTRAINT | GENERATE_DIRECTED_TEST | CONVERGE
     params: Dict[str, Any] = field(default_factory=dict)
     priority: str = "MEDIUM"
@@ -83,7 +85,7 @@ class CoverageDrivenDecisionEngine:
         # ── -1. 编译失败 → 自愈/重试（最高优先级，编译不过后面全废）──
         if compile_err:
             return Action(
-                action_type="COMPILE_RETRY",
+                action_type=FIX_COMPILE,
                 params={"compile_error": compile_err},
                 priority="HIGH",
                 reason=f"编译失败({compile_err.get('error_type','unknown')})，触发自愈",
@@ -92,19 +94,21 @@ class CoverageDrivenDecisionEngine:
         # ── 0. 比对失败 → 更新参考模型 ──
         if mismatch:
             return Action(
-                action_type="UPDATE_MODEL",
+                action_type=FIX_MODEL,
                 params={"mismatch_info": mismatch},
                 priority="HIGH",
                 reason=f"比对失败 {len(mismatch)} 处，疑似模型过时，更新参考模型",
             )
 
-        # ── 1. 功能回归失败 → 重构 RTL（scoreboard mismatch 说明 DUT 功能错，重试环境无意义）──
+        # ── 1. 功能回归失败 → 改 RTL（scoreboard mismatch 说明 DUT 功能错，重试环境无意义）──
+        #     动作名带上**哪一类 bug**（功能 / 协议时序），见 `classify_fix_bug`
         if failed:
+            kind = classify_fix_bug(observation)
             return Action(
-                action_type="REFACTOR_RTL",
+                action_type=kind,
                 params={"failed_tests": failed},
                 priority="HIGH",
-                reason=f"{len(failed)} 个测试失败（功能错），重构 RTL",
+                reason=f"{len(failed)} 个测试失败（{kind}），改 RTL",
             )
 
         # ── 2. 覆盖率停滞 → 随机种子扩增 ──
@@ -125,14 +129,14 @@ class CoverageDrivenDecisionEngine:
                 if semantic:
                     return semantic
             gaps = observation.gaps or []
-            # 3a. 不可达/死代码 → 重构 RTL（最高，因为不是"补测"能解决的）
+            # 3a. 不可达/死代码 → 改 RTL（最高，因为不是"补测"能解决的）
             unreachable = [g for g in gaps if g.get("reason") == "unreachable"]
             if unreachable:
                 return Action(
-                    action_type="REFACTOR_RTL",
+                    action_type=FIX_DEADCODE,
                     params={"gaps": unreachable},
                     priority="HIGH",
-                    reason=f"发现 {len(unreachable)} 处不可达/死代码，需重构 RTL",
+                    reason=f"发现 {len(unreachable)} 处不可达/死代码，需改 RTL",
                 )
             # 3b. 约束型缺口 → 放宽约束（约束是人为限制，放宽即提升）
             constraint = [g for g in gaps if g.get("reason") == "constraint"]
@@ -170,10 +174,10 @@ class CoverageDrivenDecisionEngine:
                     reason=f"覆盖率 {functional}% < {self.target}%，存在 {len(uncovered)} 个未覆盖 bin",
                 )
 
-        # ── 4. 死代码（旧接口 dead_code_modules）→ 设计回滚/重构 ──
+        # ── 4. 死代码（旧接口 dead_code_modules）→ 改 RTL ──
         if dead:
             return Action(
-                action_type="REFACTOR_RTL",
+                action_type=FIX_DEADCODE,
                 params={"modules": dead},
                 priority="MEDIUM",
                 reason=f"发现死代码模块: {dead}",
@@ -331,37 +335,194 @@ class ActionDispatcher:
         return {"status": "dispatched", "rerun_phase": "verify",
                 "params": action.params, "reason": action.reason}
 
+#: **改设计的动作都要说清"修的是哪一类 bug"**。
+#:
+#: 原来三种完全不同的情况都叫 `REFACTOR_RTL`：编译不过、功能不符、死代码 ——
+#: 于是在决策轨迹、证据链、界面上长得一模一样，复盘时读不出"这一轮为什么动
+#: 设计、动的是哪一类问题"。分类之后 `fix_*` 名字本身就是结论：
+#:
+#:   FIX_COMPILE_bug    编译/elaboration 不过（改某个编译不过的文件）
+#:   FIX_MODEL_bug      参考模型过时（改的是模型，**没动 RTL**）
+#:   FIX_FUNCTIONAL_bug 功能不符：测试挂 / scoreboard 比对失败
+#:   FIX_PROTOCOL_bug   协议/时序：握手、反压、时钟复位类失败
+#:   FIX_DEADCODE_bug   死代码 / 不可达
+FIX_COMPILE = "FIX_COMPILE_bug"
+FIX_MODEL = "FIX_MODEL_bug"
+FIX_FUNCTIONAL = "FIX_FUNCTIONAL_bug"
+FIX_PROTOCOL = "FIX_PROTOCOL_bug"
+FIX_DEADCODE = "FIX_DEADCODE_bug"
+FIX_CDC = "FIX_CDC_bug"
+FIX_RESET = "FIX_RESET_bug"
+
+#: **根因 → 验证计划**。第三维（验证方式）是这三轴里唯一**能驱动行为**的一轴 ——
+#: 它决定"这次改动要跑多少、还要补什么验证"，而不是只留个标签。
+#:
+#: 依据是各类 bug 的**破坏面**与**该有的证据**：
+#:   · CDC 破坏面最广（跨时钟信号谁都在用）→ 强制全量重跑
+#:   · 协议/复位类有现成的定向用例（tag）→ 必须带上，否则"修没修好"无从判断
+#:   · 编译/编码类只需要编译门禁 → 不必全仿真
+#:   · 功能类按改动面决定（默认路径）
+#: `needs_human` 留给"机器判不了"的场合：CDC 有没有同步器，得人看一眼。
+VERIFICATION_PLANS = {
+    FIX_CDC: {"scope": "full", "tags": "", "extra": ["cdc_review"],
+              "needs_human": True,
+              "why": "CDC 破坏面最广（跨时钟信号谁都在用），且同步器是否正确机器判不了"},
+    FIX_RESET: {"scope": "tagged", "tags": "reset,rst", "extra": [],
+                "needs_human": False,
+                "why": "复位类必须带上复位定向用例，否则修没修好无从判断"},
+    FIX_PROTOCOL: {"scope": "tagged", "tags": "handshake,backpressure,protocol",
+                   "extra": ["sva"], "needs_human": False,
+                   "why": "协议类要有握手/背压定向用例 + 时序断言"},
+    FIX_COMPILE: {"scope": "compile", "tags": "", "extra": [], "needs_human": False,
+                  "why": "编译/编码类只需编译门禁，不必全仿真"},
+    FIX_DEADCODE: {"scope": "human", "tags": "", "extra": [], "needs_human": True,
+                   "why": "死代码/不可达是否真不可达是设计知识，机器判不了"},
+    FIX_FUNCTIONAL: {"scope": "by_change", "tags": "", "extra": [],
+                     "needs_human": False,
+                     "why": "功能类按改动面决定重跑范围（默认路径）"},
+}
+
+
+#: **「改 RTL」这一族** —— 对决策（尤其对 RL）来说它们是**同一件事**：
+#: "要不要动设计"。至于"是哪一类 bug"，必须由**证据**定（`classify_fix_bug`）。
+#:
+#: 为什么单独拎出来：这五个名字一旦各自进 RL 的动作空间，RL 就会**挑标签** ——
+#: 而它没有任何证据能区分复位/协议/CDC，挑出来的是猜的。标签又顺着验证计划
+#: 决定"跑哪些 tag、要不要全量"，猜错就把验证带偏（实测：一轮里 RL 选出
+#: `FIX_RESET_bug`，而那轮的证据里一个复位线索都没有）。
+FIX_FAMILY = (FIX_FUNCTIONAL, FIX_PROTOCOL, FIX_RESET, FIX_CDC, FIX_DEADCODE)
+
+
+def rl_action(name: str) -> str:
+    """动作名 → **RL 记账用的名字**：改 RTL 那一族折叠成一个代表。
+
+    RL 学的是"这个状态下该不该动设计"，不是"这是哪一类 bug"。折叠之后：
+    Q 表里一族只有一条经验（而不是五条互相抢），老名字 `REFACTOR_RTL`
+    经 `canonical_action` 也落进同一条。
+    """
+    name = canonical_action(name)
+    return FIX_FUNCTIONAL if name in FIX_FAMILY else name
+
+
+def verification_plan(action_type: str) -> Dict[str, Any]:
+    """根因 → 验证计划。未知根因按功能类（最保守的默认路径）。
+
+    返回 `{scope, tags, extra, needs_human, why}`：
+      scope      `full` 全量 / `tagged` 只跑这些 tag / `by_change` 按改动面 /
+                 `compile` 只编译 / `human` 交人
+      extra      还要补的验证（`sva` 时序断言 / `cdc_review` 人工审同步器）
+      needs_human 这一步机器给不出可信结论
+    """
+    plan = VERIFICATION_PLANS.get(canonical_action(action_type))
+    if plan is None:
+        plan = VERIFICATION_PLANS[FIX_FUNCTIONAL]
+    return dict(plan)
+
+#: 老名字 → 新名字。**读的时候必须认**：RL 策略文件（`.signoffai/rl_policy.json`）
+#: 里存的是老名字，历史运行的轨迹、还有测试里都还在用。
+LEGACY_ACTIONS = {
+    "REFACTOR_RTL": FIX_FUNCTIONAL,   # 老名字分不出类别，按最常见的功能错归类
+    "COMPILE_RETRY": FIX_COMPILE,
+    "UPDATE_MODEL": FIX_MODEL,
+}
+
+
+def canonical_action(name: str) -> str:
+    """动作名归一 —— 老名字映射到分类名，新名字原样返回。"""
+    return LEGACY_ACTIONS.get(name, name)
+
+
+#: 各类失败的**点击词** —— 用例名与失败证据里出现就算。顺序即优先级：
+#: CDC 先于协议（`async_fifo_handshake` 两个词都有，但它首先是跨时钟问题），
+#: 复位先于协议（`reset_handshake` 同理）。
+#:
+#: 宁可归到 `FIX_FUNCTIONAL_bug`（默认类）也不要乱归：分类影响**命名与验证计划**
+#: （跑多少、补什么验证），判错了会让验证计划偏。
+_CDC_TOKENS = ("cdc", "async_fifo", "asyncfifo", "gray", "cross_clock", "跨时钟",
+               "同步器", "synchronizer", "two_flop", "双拍")
+_RESET_TOKENS = ("reset", "rst", "复位")
+_PROTOCOL_TOKENS = ("handshake", "protocol", "握手", "时序", "timing",
+                    "backpressure", "反压", "ready", "valid", "timeout", "超时")
+
+
+def classify_fix_bug(observation: "Observation") -> str:
+    """「这次改 RTL 修的是哪一类 bug」—— **从已有证据分类，不猜**。
+
+    顺序从确定到不确定：
+
+      编译错误 → 可综合/编码类（有 `CompileErrorAnalyzer` 的错误类型，是确认的）
+      不可达/死代码 → 死代码类（有覆盖率 0% 的 metric/bin，也是确认的）
+      点击词（CDC > 复位 > 协议）→ 对应类
+      其余 → 功能类（默认，也是最不需要额外证据的一类）
+
+    **判不出来的不硬塞**：功能类是诚实的默认值，不是垃圾桶 —— 它的验证计划
+    （按改动面决定重跑范围）本来就是最保守的那条路。
+    """
+    if observation.compile_error:
+        return FIX_COMPILE
+    if observation.dead_code_modules:
+        return FIX_DEADCODE
+    for gap in observation.gaps or []:
+        if isinstance(gap, dict) and gap.get("reason") == "unreachable":
+            return FIX_DEADCODE
+
+    evidence = " ".join(str(t) for t in (observation.failed_tests or [])).lower()
+    evidence += " " + str(observation.model_mismatch or "")[:200].lower()
+    for tokens, kind in ((_CDC_TOKENS, FIX_CDC),
+                         (_RESET_TOKENS, FIX_RESET),
+                         (_PROTOCOL_TOKENS, FIX_PROTOCOL)):
+        if any(tok in evidence for tok in tokens):
+            return kind
+    return FIX_FUNCTIONAL
+
+
+
+# ═══════════════════════════════════════════════════════════════
+# 便捷函数
+# ═══════════════════════════════════════════════════════════════
+
+
 
 # 动作全集 —— 全项目唯一来源。
 # 此前有三份互不同步的动作清单：本文件的 ACTION_HANDLERS、rl_policy 的
 # SOFT_ACTIONS（4 个）、以及 execution 里的 if/elif 分支。任何一份漏改都会
 # 造成「决策层发出了执行层不认的动作」这类只在运行期暴露的问题。
 ALL_ACTIONS = (
-    "COMPILE_RETRY",          # 编译失败 → 自愈
-    "UPDATE_MODEL",           # 比对失败 → 更新参考模型
-    "REFACTOR_RTL",           # 死代码/不可达 → 改设计
+    FIX_COMPILE,              # 编译/elaboration 不过 → 自愈
+    FIX_MODEL,                # 比对失败 → 更新参考模型
+    FIX_FUNCTIONAL,           # 功能不符（测试挂 / 比对不一致）→ 改 RTL
+    FIX_PROTOCOL,             # 协议/时序类失败 → 改 RTL
+    FIX_RESET,                # 复位类失败 → 改 RTL
+    FIX_CDC,                  # 跨时钟/CDC → 改 RTL（破坏面最广，强制全量重跑）
+    FIX_DEADCODE,             # 死代码 / 不可达 → 改 RTL
     "EXPAND_SEEDS",           # 覆盖率停滞 → 扩种
     "RELAX_CONSTRAINT",       # 约束过紧 → 放宽
     "GENERATE_DIRECTED_TEST", # 激励不足 → 定向补测
     "CONVERGE",               # 达标 → 收敛（确定性终态）
 )
-# 硬失败类：由规则引擎确定性处理，RL 不参与
-HARD_ACTIONS = ("COMPILE_RETRY", "UPDATE_MODEL")
-# 终态：达标收敛，不属于 RL 的动作空间
-TERMINAL_ACTIONS = ("CONVERGE",)
-
 # 注：原 "RETRY_ENV" 条目已移除——decide() 从不产生该动作（编译失败走
 # COMPILE_RETRY，见 infrastructure.py:244 "而非 RETRY_ENV"），execution.py
 # 的动作分支里也没有它，保留只会让动作全集看起来比实际多一个。
 ACTION_HANDLERS = {
-    "COMPILE_RETRY":         ActionDispatcher._compile_retry,
-    "UPDATE_MODEL":          ActionDispatcher._update_model,
+    FIX_COMPILE:             ActionDispatcher._compile_retry,
+    FIX_MODEL:               ActionDispatcher._update_model,
     "GENERATE_DIRECTED_TEST": ActionDispatcher._generate_directed_test,
     "EXPAND_SEEDS":          ActionDispatcher._expand_seeds,
-    "REFACTOR_RTL":          ActionDispatcher._refactor_rtl,
+    # 改 RTL 的三类走同一个分发器 —— 分类只影响**命名与重跑范围**，
+    # 不改变"谁去改、怎么改"（都在 design agent 的 `fix_agent=rtl` 那条路）
+    FIX_FUNCTIONAL:          ActionDispatcher._refactor_rtl,
+    FIX_PROTOCOL:            ActionDispatcher._refactor_rtl,
+    FIX_RESET:               ActionDispatcher._refactor_rtl,
+    FIX_CDC:                 ActionDispatcher._refactor_rtl,
+    FIX_DEADCODE:            ActionDispatcher._refactor_rtl,
     "RELAX_CONSTRAINT":      ActionDispatcher._relax_constraint,
     "CONVERGE":              ActionDispatcher._converge,
 }
+
+# 硬失败类：由规则引擎确定性处理，RL 不参与
+HARD_ACTIONS = (FIX_COMPILE, FIX_MODEL)
+# 终态：达标收敛，不属于 RL 的动作空间
+TERMINAL_ACTIONS = ("CONVERGE",)
 
 # 构图期自检：handler 表必须与动作全集一一对应
 if set(ACTION_HANDLERS) != set(ALL_ACTIONS):
@@ -371,10 +532,6 @@ if set(ACTION_HANDLERS) != set(ALL_ACTIONS):
         f"仅后者有 {sorted(set(ALL_ACTIONS) - set(ACTION_HANDLERS))}"
     )
 
-
-# ═══════════════════════════════════════════════════════════════
-# 便捷函数
-# ═══════════════════════════════════════════════════════════════
 
 def decide_next(observation: dict, target: float = 95.0) -> dict:
     """便捷入口：dict 入 dict 出。"""

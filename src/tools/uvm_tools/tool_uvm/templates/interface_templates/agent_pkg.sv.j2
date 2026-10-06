@@ -26,10 +26,22 @@ package {{ agent.name }}_pkg;
   `include "4_driver_monitor/{{ agent.name }}_port_monitor.sv"
   `include "5_agent/{{ agent.name }}_master_agent.sv"
   `include "5_agent/{{ agent.name }}_slave_agent.sv"
+
+  // ── 系统（sub）env 只在**有 subenv** 的构建里编 ──
+  // loopback 构建没有 subenv，却因为这一段无条件 include，被 Questa 在 load 阶段
+  // 要求实例化 `virtual {{ agent.name }}_system_if`：
+  //   "(vsim-8451) Virtual interface resolution cannot find a matching instance"
+  // → "Error loading design"（实测删掉 tb 里那个实例就是 4 条这个错）。
+  // 所以由 filelist 的 `+define+{{ agent.name }}_loop_back_test`
+  // （`src/tools/lib/filelist.py:build_loopback_filelist` 加的）作开关：
+  // loopback 不编这几个类 → 类型都不存在 → tb 里也就不需要那个空实例。
+  `ifndef {{ agent.name }}_loop_back_test
   `include "5_agent/{{ agent.name }}_system_config.sv"
   `include "5_agent/{{ agent.name }}_system_vsqr.sv"
   `include "5_agent/{{ agent.name }}_system_monitor.sv"
   `include "5_agent/{{ agent.name }}_system_env.sv"
+  `endif
+
   `include "7_sequence/{{ agent.name }}_master_sequence.sv"
   `include "7_sequence/{{ agent.name }}_slave_sequence.sv"
   `include "8_ral/{{ agent.name }}_reg_adapter.sv"

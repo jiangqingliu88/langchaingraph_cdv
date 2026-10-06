@@ -29,7 +29,7 @@ class {{ agent.name }}_system_env extends uvm_env;
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    uvm_config_db#({{ agent.name }}_system_config)::get(this, "", "sys_cfg", sys_cfg);
+    void'(uvm_config_db#({{ agent.name }}_system_config)::get(this, "", "sys_cfg", sys_cfg));
     if (sys_cfg == null) `uvm_fatal("ENV", "sys_cfg not found")
     if (!uvm_config_db#(virtual {{ agent.name }}_system_if)::get(this, "", "sys_vif", sys_vif))
       `uvm_fatal("NOVIF", "system interface not set")

@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from ..bridge.binding import ToolError, payload_error
 from ..context import AppContext
 from ..spec import ModuleSpec
-from ..ui.banner import Banner, PermanentNote
+from ..ui.widgets.banner import Banner, PermanentNote
 
 #: 占位模块的常驻说明 —— 文案统一在这里，改口径只改一处
 PLACEHOLDER_NOTE = ("演示占位 —— 本视图没有接真实数据源，画面上的内容是示意，"
@@ -171,6 +171,34 @@ class ModuleBase(IModule):
                 self.show_error(f"工具调用失败：{exc.cause}")
             self.ctx.status(f"{self.title}：工具调用失败")
             return None
+
+    def record_human_edit(self, path, reason: str = "",
+                          run_id: str = "") -> Optional[Dict[str, Any]]:
+        """人在这个模块里改了一个文件 —— 记进证据链。
+
+        这是**每个能写盘的模块的共同义务**，不是某个模块的偏好：写盘之后不调它，
+        那次编辑在哈希链、运行日志、五层证据里一条痕迹都没有 —— 而"可审计、可
+        追溯"是这个产品的第一承诺。放在基类里，是想漏也漏不掉。
+
+        `run_id` 可选：**改的是某次运行的产物时传它**，那次运行的日志里会多一条
+        `human.edit` 锚点（时间线上看得出"这轮回归之前人改了什么"）。改静态配置
+        （如 `manual_nodes.yaml`）时没有运行可挂，留空即可 —— 链照样记。
+
+        返回记账自陈（含 seq / author / hash），失败返回 None。
+
+        **记账失败要说出来。** 文件已经落地，回滚只会更乱，所以不回滚；但"改了没
+        痕迹"正是这一刀要堵的洞，静默失败等于洞还在。所以走警告横幅，不走控制台。
+        """
+        result = self.run_tool("evidence.record_human_edit", force=True,
+                               path=str(path), reason=reason, run_id=run_id)
+        if isinstance(result, dict) and result.get("recorded"):
+            self.log(f"人工编辑已记账：{path}（第 {result['seq']} 条，"
+                     f"{result['author']}）")
+            return result
+        detail = result.get("error") if isinstance(result, dict) else "工具调用失败"
+        self.show_warning(f"已保存 {path}，但**没有记进证据链**（{detail}）"
+                          f"—— 这次编辑在审计上没有痕迹。")
+        return None
 
     def show_error(self, text: str) -> None:
         if self.banner is not None:

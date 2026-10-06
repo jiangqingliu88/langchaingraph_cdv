@@ -34,5 +34,37 @@ def json_input(fn: Callable[..., Any]) -> Callable[..., Any]:
 #: 波形收集 —— 原签名 `collect_waveform(input_json)`
 collect_waveform = json_input(_debug_main.collect_waveform)
 
-#: 失败用例二分 —— 原签名 `bisect_test(input_json)`
-bisect_test = json_input(_debug_main.bisect_test)
+#: 失败用例集合分批缩小 —— 原签名 `bisect_failed_tests(input_json)`
+#: （原名 bisect_test，易被误读成 git bisect 那样的版本溯源；见工具 docstring）
+bisect_failed_tests = json_input(_debug_main.bisect_failed_tests)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 流程结构 —— 读领域自己的阶段模型
+# ═══════════════════════════════════════════════════════════════
+
+def stage_flow() -> dict:
+    """闭环流程的**结构**：7 个阶段组 + 各自成员节点 + 那条回边。
+
+    **为什么放在这里而不是 `src/tools/`**：工具层不许 import 层代码
+    （见 `tool_layer_architecture.md` §4.1 的三层职责）。`src/workbench/` 是
+    唯一允许同时 import 两边的例外，所以"把领域阶段模型翻译成界面吃得下的
+    dict"这件事落在 bridge 里。
+
+    数据来自 `stages.py` 的 `grouped()` —— 那份表本来就是"按概念顺序排、供界面
+    建树"的。**别在界面侧再抄一份阶段清单**：抄了就是第二份真相，改了图没改界面
+    就没人发现。
+    """
+    from src.layers.l2_orchestration import stages
+
+    groups = [{"id": gid, "title": gtitle,
+               "nodes": [{"id": s.id, "title": s.title, "agent": s.agent,
+                          "round_scoped": s.round_scoped} for s in specs]}
+              for gid, gtitle, specs in stages.grouped()]
+    return {
+        "groups": groups,
+        #: 每轮跑完不达标就回边的位置 —— `graph.py` 里是
+        #: `action → round_bump → ops`，即「决策与收敛」转回「编译与仿真」。
+        #: 拓扑的权威定义在 `graph.py`；这里只标出**给界面画回边用**的那一条。
+        "loop": {"from": "converge", "to": "exec"},
+    }

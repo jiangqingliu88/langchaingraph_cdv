@@ -98,6 +98,15 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
     @(vif.master_cb);
     vif.master_cb.penable <= 1'b1;
     do @(vif.master_cb); while (vif.master_cb.pready !== 1'b1);
+    // **采样读数据 / 错误响应。** 这是**寄存器模型（RAL）唯一的数据来源**：
+    // 适配器的 `bus2reg` 从**同一条 req** 上取 `prdata` / `pslverr`
+    //（`provides_responses=0`，driver 不 put_response，就地写回）。
+    // 不采的话，每一次寄存器读拿到的都是 seq_item 里那个未驱动的初值 ——
+    // 复位值检查、bit_bash 全部失真，而且是"假通过 / 假失败"，不报错。
+    if (!req.pwrite) begin
+      req.prdata  = vif.master_cb.prdata;
+      req.pslverr = vif.master_cb.pslverr;
+    end
     vif.master_cb.penable <= 1'b0;
     vif.master_cb.psel    <= 1'b0;
 {%- else %}

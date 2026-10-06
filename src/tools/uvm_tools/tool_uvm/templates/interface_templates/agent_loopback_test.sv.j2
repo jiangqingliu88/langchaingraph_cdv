@@ -53,9 +53,10 @@ class {{ agent.name }}_loopback_test extends uvm_test;
   endtask
 
   task main_phase(uvm_phase phase);
+    // ⚠️ 声明在最前：SV 要求块内声明先于语句（super.main_phase() 也算语句）
+    {{ agent.name }}_loopback_seq seq;
     super.main_phase(phase);
     `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
-    {{ agent.name }}_loopback_seq seq;
 
     phase.raise_objection(this);
 

@@ -29,6 +29,74 @@ _DUT_INPUT = "output"
 _DUT_OUTPUT = "input"
 _CLK_RST = {"clock", "reset", "clk", "rst"}
 
+# ── scoreboard 结算报告的解析 ──
+#
+# 报告是 `in_order_scoreboard.get_report_string()` 打的（base_pkg/scb/），形如：
+#
+#     ===========================================================
+#     Scoreboard: <实例名>
+#     ===========================================================
+#       Expected items : N
+#       Actual items   : N
+#       Matches        : N
+#       Mismatches     : N
+#       Missing        : N
+#       Extra          : N
+#       Match Rate     : X%
+#
+# 这里**按它真的打的格式解析**。原先只认一句
+# `Scoreboard: total=N matched=M mismatched=K` —— 全仓没有任何 scoreboard 打过这个
+# 形状（`grep total=` 在 base_pkg 里一个都搜不到），于是正则永远不命中，
+# `env_arch_check` 每一轮都报「未找到 scoreboard 结果（仿真可能超时/崩溃）」：
+# 把**解析不上**说成了**仿真崩了**，是最难查的那种误导。
+#
+# 旧形状仍然认（放前面）—— 外部/自定义 scoreboard 可能按那句打，不能修了这边坏了那边。
+_LEGACY_SCB_RE = re.compile(
+    r"Scoreboard:\s*total=(\d+)\s*matched=(\d+)\s*mismatched=(\d+)")
+
+#: 报告里的整行字段：`  <标签> : <数字>`。**行首锚定**，否则 `Matches` 会
+#: 命中 `Mismatches` 里的那段（`Matches\s*:` 在 "Mismatches     : 0" 上不匹配是
+#: 因为大小写，靠大小写挡住太脆 —— 锚行首是把它从"碰巧"变成"构造上不可能"）。
+def _report_int(text: str, label: str):
+    m = re.search(rf"^[ \t]*{re.escape(label)}[ \t]*:[ \t]*(\d+)[ \t]*$",
+                  text, re.MULTILINE)
+    return int(m.group(1)) if m else None
+
+
+def _parse_scoreboard_report(out: str):
+    """仿真输出 → `(total, matched, mismatched)`；解析不上给 `None`。
+
+    `matched`/`mismatched` 的口径**照 scoreboard 自己的判据**
+    （`in_order_scoreboard.svh`：`mismatches>0 || missing>0 || extra>0` 即 FAILED）：
+    少了（missing）和多了（extra）都是比对失败，不能只数 mismatch —— 否则
+    "一条都没对上、全被当成 missing" 会被读成 0 mismatch 的满分。
+    """
+    m = _LEGACY_SCB_RE.search(out)
+    if m:
+        return int(m.group(1)), int(m.group(2)), int(m.group(3))
+
+    matches = _report_int(out, "Matches")
+    if matches is None:                      # 连报告都没打出来
+        return None
+    mismatches = _report_int(out, "Mismatches") or 0
+    missing = _report_int(out, "Missing") or 0
+    extra = _report_int(out, "Extra") or 0
+    expected = _report_int(out, "Expected items") or 0
+    actual = _report_int(out, "Actual items") or 0
+    # total 取两侧的**大者**：expected 少一条、actual 多一条时，拿 expected 当
+    # 分母会把"实际上比对过更多"这件事藏掉；判"有没有比过"用大者更诚实。
+    return max(expected, actual), matches, mismatches + missing + extra
+
+
+def _scoreboard_passed(total: int, matched: int, mismatched: int) -> bool:
+    """判据与 `in_order_scoreboard` 自己的 FAILED 条件对齐（见其 `check_phase`）。
+
+    `total > 0` 那条不能省：一条都没比过（用例没产生事务 / scoreboard 没接上）
+    不是"零 mismatch 的满分"，是**没比** —— 报 PASS 等于把"什么都没检查"说成
+    "检查通过"，正是这类门禁最容易骗过人的地方。
+    """
+    return mismatched == 0 and matched == total and total > 0
+
 
 def _load_spec(output_dir: Path) -> Dict:
     p = output_dir / "spec.json"
@@ -200,13 +268,14 @@ def check_scoreboard(output_dir: str, test_name: str = None,
                        encoding="utf-8", errors="replace", cwd=str(od), timeout=180)
     out = r.stdout + r.stderr
 
-    # 解析 scoreboard 结果: InOrder Scoreboard: total=N matched=M mismatched=K
-    m = re.search(r"Scoreboard:\s*total=(\d+)\s*matched=(\d+)\s*mismatched=(\d+)", out)
-    if not m:
+    # 解析 scoreboard 结算报告（格式见 `_parse_scoreboard_report` 的注释）
+    parsed = _parse_scoreboard_report(out)
+    if parsed is None:
         return {"check": "scoreboard", "status": "FAIL",
-                "message": "未找到 scoreboard 结果（仿真可能超时/崩溃）"}
-    total, matched, mismatched = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    passed = (mismatched == 0 and matched == total and total > 0)
+                "message": "仿真跑完但没有 scoreboard 结算报告（用例没接 scoreboard，"
+                           "或仿真中途崩了）—— 注意这与「比对失败」不是一回事"}
+    total, matched, mismatched = parsed
+    passed = _scoreboard_passed(total, matched, mismatched)
     return {
         "check": "scoreboard",
         "test_name": test_name,

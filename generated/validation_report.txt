@@ -1,4 +1,0 @@
-Semantic check report (tool_uvm)
-[WARNING] port_not_in_txn @ apb: port 'psel' not covered by any transaction var
-[WARNING] port_not_in_txn @ apb: port 'penable' not covered by any transaction var
-[WARNING] port_not_in_txn @ apb: port 'pready' not covered by any transaction var

@@ -1,0 +1,1 @@
+notes: 一条都没有 —— 这轮回归的仿真业务里没开「覆盖率」（工具栏「仿真业务」下拉可切）　·　这轮没有任何覆盖率库 —— 说明仿真业务里没开 `cov`。　·　运行级覆盖率库：D:\SignOffAI\output_jiang_20261007_014901\sim\coverage\merged.ucdb

@@ -139,7 +139,11 @@ def compute_score(ctx: RuleContext, model_issues: Sequence[Issue]) -> ScoreBreak
     tree_errors = sum(1 for i in by_cat.get(CATEGORY_ORG_TREE, []) if i.is_error)
     if tree_errors:
         sb.org_tree = max(0.0, sb.org_tree - 0.4 * tree_errors)
-        sb.reasons["org_tree"].append(f"{tree_errors} 条组织树硬错误（如叶子代号重复）")
+        # setdefault：上面那条只在**有叶子没被专题覆盖**时才建这个 key，
+        # 于是"每个叶子都覆盖到了、但叶子代号重复"会在这里 KeyError ——
+        # 而那恰恰是更接近正确的一份模型（实测：spec 合成的模型就是这么崩的）。
+        sb.reasons.setdefault("org_tree", []).append(
+            f"{tree_errors} 条组织树硬错误（如叶子代号重复）")
 
     # ── 专题：维度被专题选中的比例 + 优先级阶梯 + 专题自身问题 ──
     if model.themes:

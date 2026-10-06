@@ -126,7 +126,7 @@ GUI 的活是最后 20%：给这条通道画三个视图。
 | `EventBus` 有 5 个 topic 常量，`ModuleManager` 会按 YAML 的 `params.subscribe` 订阅，但**没有任何生产代码 publish** | `bus.py:19-27`；`registry.py:117` |
 | `ConsolePanel.begin_task/end_task`（任务进度行）已实现，**无调用者** | `console.py:122,126` |
 | 没有任何 `QProgressBar`；状态栏只有一行文本 + "模块 N" | `app.py:344-352` |
-| 四窗格：左(导航)/中(工作区)/右(详情)/底(控制台) | `panes.py:35`；`app.py:139-163` |
+| ~~四窗格~~ **MDI 中央 + Dock 侧栏** | `ui/workspace.py`；`app.py:_build_central` |
 | 三个模块：`debug.sim_log`、`debug.fingerprint`、`vms.casemodel` | `config/workbench.yaml` |
 
 **一句话**：GUI 的所有异步/事件机制都**造好了但没接上**。它现在是一个"调用一次工具、
@@ -279,8 +279,10 @@ output/{run}/docs/run_events.jsonl
 
 **不该动：**
 
-- **`workbench/` 的核心**（`app.py` / `panes.py` / `registry.py` / `manifest.py`）——
-  它已经是对的。新增能力以**模块**形式进来，不改平台。这正是"模块失败不影响平台"
+> ⚠️ **2026-10-04 已反转**：外壳改成了 **QMdiArea 中央子窗口 + QDockWidget 侧栏**（可浮动 / 拖停 / 平铺 / 层叠，center 模块可多开）。当时的理由「dock 是 IDE 形状、不像 Verdi」被用户明确推翻 —— 要的就是 IDE 形状。实现见 [`agent_gui_business_architecture.md`](agent_gui_business_architecture.md) 与 `src/workbench/ui/workspace.py`（旧的 `panes.py` 已删除）。**下面这几处「不改平台 / 不新造窗格 / 不用 QDockWidget」的表述已过时，保留只为留痕。**
+>
+- ~~**`workbench/` 的核心**（`app.py` / `panes.py` / `registry.py` / `manifest.py`）——
+  它已经是对的。新增能力以**模块**形式进来，不改平台。~~这正是"模块失败不影响平台"
   那条纪律（`registry.py:11-15`）的兑现。
 - **`TaskRunner` 的定位** —— 它服务"短、一次性、可丢弃"的工具调用，不服务运行（§4 GADR-6）。
 
@@ -461,7 +463,7 @@ from langgraph.types import interrupt, Command     # ✓ 本环境可用
 
 ## 5. 界面怎么摆（映射到现有四窗格）
 
-**总原则：不新造窗格。** 现有四窗格（左导航/中工作区/右详情/底控制台）正好够，
+**总原则：~~不新造窗格。~~**（已反转，见本节顶部注记） 现有四窗格（左导航/中工作区/右详情/底控制台）正好够，
 而且左窗格的 `NavPane`（`app.py:159`）本来就是一个树。
 
 ```

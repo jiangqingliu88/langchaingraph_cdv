@@ -54,6 +54,10 @@ class RunRequest:
     max_rounds: int = 5
     design_style: str = "baseline"
     bypass_design_model: bool = False
+    #: 回归要开的仿真业务（`cov` / `wave` / …）。**属于这次运行的输入**：
+    #: 它决定仿真命令拼哪些选项（`MODE_OPTS`），不写进 RunRequest 的话
+    #: "这一轮为什么没有波形"就只能靠猜。默认 `["cov"]`。
+    sim_modes: List[str] = field(default_factory=lambda: ["cov"])
     approval: str = "threshold"
     approval_timeout_s: float = 0.0
     run_id: str = ""
@@ -155,7 +159,7 @@ class RunService:
         with self._lock:
             if self._loop is None:
                 loop = asyncio.new_event_loop()
-                thread = threading.Thread(target=loop.run_forever,
+                thread = threading.Thread(target=self._loop_forever, args=(loop,),
                                           name="run-service-loop", daemon=True)
                 thread.start()
                 self._loop, self._thread = loop, thread
@@ -164,6 +168,50 @@ class RunService:
                                                 daemon=True)
                 self._worker.start()
         return self._loop
+
+    #: 循环被 SystemExit 打断后最多重开几次 —— 防止「每次都抛」变成死转
+    _LOOP_RESTART_LIMIT = 5
+
+    @classmethod
+    def _loop_forever(cls, loop: asyncio.AbstractEventLoop) -> None:
+        """loop 线程的入口 —— 它**必须扛住 SystemExit**。
+
+        这一层是不得不做的兜底，起因是一次实测事故：`src/tools/uvm_tools/` 下的
+        `gen_uvm` 是照着独立 CLI 写的，schema 校验不过就 `raise SystemExit`。
+        它被进程内调用时跑在这个循环上，于是：
+
+            `Task.__step` 捕获 SystemExit 后会 **原样重新抛出**（asyncio 刻意保留
+            KeyboardInterrupt / SystemExit 的"终止"语义）—— 它**不经过 await 链**，
+            所以 `_run` 里的 `try/except` 根本拦不到，异常直奔 `run_forever` 之外；
+            `threading` 又把线程里的 SystemExit **静默吞掉**（不打印、不回调
+            excepthook）。结果：循环线程无声无息地消失，`run_coroutine_threadsafe`
+            的 future 永不完成，worker 卡死在 `fut.result()`，而 `self._loop` 还是
+            非 None —— **此后每一次启动都照样卡死**。
+
+        症状就是「点了启动没反应」，一条错误都看不到（见 `_execute` 与 `_run` 的
+        注释）。一个工具写成了 CLI 形状，不该让整个运行服务报废，所以这里把
+        SystemExit 吞掉并**重开循环**：出错的那个 Task 异常已经记在自己身上，
+        重开后 await 它的那边会正常收到异常、这次运行如实记成失败。
+
+        正常停机（`shutdown()` 调的 `loop.stop()`）会让 `run_forever` 正常返回，
+        于是跳出循环 —— 这条路径不受影响。
+        """
+        for attempt in range(cls._LOOP_RESTART_LIMIT):
+            try:
+                loop.run_forever()
+                logger.warning("run-service loop 已停止 —— 之后启动的运行都不会跑")
+                return
+            except SystemExit as exc:
+                logger.error(
+                    "有工具在运行中调了 sys.exit，运行服务的 loop 被它打断；"
+                    "已重开循环（工具应当抛异常而不是退出进程）",
+                    error=repr(exc), attempt=attempt + 1)
+                continue
+            except BaseException as exc:          # noqa: BLE001
+                logger.error("run-service loop 线程异常退出", error=repr(exc))
+                raise
+        logger.error(f"loop 连续 {cls._LOOP_RESTART_LIMIT} 次被 SystemExit 打断，放弃；"
+                     f"运行服务已不可用，需要重启程序")
 
     def shutdown(self, timeout: float = 5.0) -> None:
         self._stop.set()
@@ -343,6 +391,16 @@ class RunService:
         loop = self._loop
         if loop is None:
             return
+        # 循环线程要是已经死了，`run_coroutine_threadsafe` 照样返回一个 future，
+        # 但它**永远不会完成** —— worker 会卡死在 `fut.result()` 上，界面看到的是
+        # 「点了启动没反应」。这里先探一下，宁可立刻报错也不要挂在那儿。
+        if not loop.is_running():
+            handle.error = RuntimeError(
+                "运行服务的 loop 线程已经不在了（见日志里的 'run-service-loop'）"
+                "—— 需要重启程序")
+            handle.done.set()
+            logger.error(f"运行 {handle.run_id} 无法开始：run-service loop 线程已死")
+            return
         fut = asyncio.run_coroutine_threadsafe(self._run(handle), loop)
         try:
             handle.result = fut.result()
@@ -353,6 +411,32 @@ class RunService:
             handle.done.set()
 
     async def _run(self, handle: _RunHandle) -> Dict[str, Any]:
+        """跑完一次运行 —— **这一层是 `SystemExit` 的防火墙**。
+
+        `src/tools/uvm_tools/` 下那些件是照着独立 CLI 写的（`main.py` 里
+        `sys.exit(main())`），schema 校验不过就 `raise SystemExit(...)`。当 CLI
+        用没问题；可它在进程内被调用时是跑在**子线程的 asyncio 循环**上的，而
+        `threading` 对 SystemExit 是**静默吞掉**的（不打印、不回调 excepthook）：
+
+            loop 线程当场消失
+            → `run_coroutine_threadsafe` 的 future 永不完成
+            → worker 卡死在 `fut.result()`（run_service.py 的 `_execute`）
+            → `self._loop` 还是非 None，于是**此后每一次启动都照样卡死**
+
+        症状就是「点了启动没反应」，而且一条错误都看不到 —— 实测复现过一次，
+        进程级瘫痪，只能重启。转成普通异常，这些后果全部消失：循环活着、future
+        拿到异常、这次运行如实记成失败。工具该改的是别再 `sys.exit`，但**这里
+        必须兜住**：界面不该因为某个工具写成了 CLI 形状就整个废掉。
+        """
+        try:
+            return await self._run_impl(handle)
+        except SystemExit as exc:                 # noqa: BLE001
+            raise RuntimeError(
+                f"运行 {handle.run_id} 被 SystemExit 中断：有工具把 CLI 的 "
+                f"sys.exit 传上来了（{exc!r}）。工具在进程内被调用时应当抛异常，"
+                f"而不是退出进程。") from exc
+
+    async def _run_impl(self, handle: _RunHandle) -> Dict[str, Any]:
         from src.layers.l2_orchestration.execution import PipelineExecutionService
         from src.layers.l2_orchestration.governance.approval import (
             create_approval_gate,
@@ -375,6 +459,7 @@ class RunService:
             max_rounds=req.max_rounds,
             design_style=req.design_style,
             bypass_design_model=req.bypass_design_model,
+            sim_modes=list(req.sim_modes or []),
             approval_gate=gate,
             on_event=self._on_event,
             cancel_event=handle.cancel_event,
@@ -415,21 +500,61 @@ def get_run_service(output_base: str = "output") -> RunService:
 # 为什么不直接绑类方法：`workbench/bridge` 只认 `pkg.mod:函数名` 这种可解析路径。
 # 这几个壳子只做参数归一与"永远返回 dict"这两件事，不含语义。
 
+def _normalize_sim_modes(sim_modes) -> List[str]:
+    """仿真业务词条归一：`"cov,wave"` / `["cov", "wave"]` / None → 干净的词条表。
+
+    **剔除不认识的词条并告警**，不原样透传：`apply_modes` 那边也会挡一次，但
+    挡在运行请求这一层时错误还带着"是谁给的"这个上下文（界面下拉 / CLI 参数）。
+    留空 → 默认覆盖率（闭环的主指标）。
+    """
+    from src.tools.regression_tools import sim_modes as sm
+
+    if sim_modes is None:
+        return [sm.DEFAULT_MODE]
+    if isinstance(sim_modes, str):
+        sim_modes = [s.strip() for s in sim_modes.split(",")]
+    out: List[str] = []
+    for mode in sim_modes or []:
+        mode = str(mode).strip()
+        if not mode:
+            continue
+        if not sm.is_known(mode):
+            logger.warning(f"未知的仿真业务 {mode!r}，已忽略"
+                           f"（可用：{', '.join(m.mode for m in sm.all_modes())}）")
+            continue
+        if mode not in out:
+            out.append(mode)
+    unknown_biz = sm.unsupported(out)
+    if unknown_biz:
+        logger.warning(f"仿真业务 {', '.join(unknown_biz)} 在当前 EDA 后端（Questa）"
+                       f"没有对应开关，取值是空的 —— 会被 apply_modes 告警忽略，"
+                       f"不会往命令行里塞不存在的参数")
+    return out
+
+
 def start_run(spec_file: str = "", spec_text: str = "",
               output_root: str = "", target: Optional[float] = None,
               max_rounds: int = 5, design_style: str = "baseline",
               bypass_design_model: bool = False, approval: str = "threshold",
-              approval_timeout_s: float = 0.0) -> Dict[str, Any]:
+              approval_timeout_s: float = 0.0,
+              sim_modes=None) -> Dict[str, Any]:
     """启动一次闭环运行，**立即**返回 run_id（不等它跑完）。
 
     `output_root` 留空 = 用服务自己的 output_base（默认 `output`）。
+
+    `sim_modes`：回归要开的仿真业务（`cov` / `wave` / `debug_all` …）。收 `"a,b"` 或
+    `["a","b"]`；留空用默认（覆盖率）。**不认识的词条会被剔除并告警**（见
+    `sim_modes.unsupported`）—— 界面/CLI 都可能手滑，不能让一个错词条悄悄变成
+    "这门业务没生效但也没人说"。
     """
+    modes = _normalize_sim_modes(sim_modes)
     service = get_run_service(output_root or "output")
     request = RunRequest(
         spec_file=spec_file, spec_text=spec_text, output_root=output_root,
         target=target, max_rounds=int(max_rounds), design_style=design_style,
         bypass_design_model=bool(bypass_design_model), approval=approval,
         approval_timeout_s=float(approval_timeout_s or 0.0),
+        sim_modes=modes,
     )
     run_id = service.start(request)
     return {"run_id": run_id, **service.status()}

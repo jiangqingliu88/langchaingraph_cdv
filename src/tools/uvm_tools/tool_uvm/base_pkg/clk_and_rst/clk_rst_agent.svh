@@ -19,7 +19,12 @@ class clk_rst_agent extends uvm_agent;
   endfunction
   virtual function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    cfg = clk_rst_config::type_id::create("cfg");
+    // 优先用环境传进来的配置（env 按 YAML 的 period / duty / 复位拍数建好后，
+    // set 在本 agent 的精确路径上）。拿不到才自建一份默认值 ——
+    // 原实现无条件 `create`，会把 env 配的时钟周期**悄悄丢掉**（不报错，
+    // 只是跑在默认 10ns 上）。
+    if (!uvm_config_db #(clk_rst_config)::get(this, "", "cfg", cfg))
+      cfg = clk_rst_config::type_id::create("cfg");
     uvm_config_db #(clk_rst_config)::set(this, "*", "cfg", cfg);
     drv    = clk_driver::type_id::create("drv", this);
     rst_drv = rst_driver::type_id::create("rst_drv", this);

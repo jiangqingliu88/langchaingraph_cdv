@@ -12,14 +12,6 @@
 
 // ── 系统级事务：一次协议访问 + 来源标签 {kind, index} ──
 class {{ agent.name }}_system_txn extends uvm_object;
-  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
-  `uvm_object_utils_begin({{ agent.name }}_system_txn)
-    `uvm_field_enum(port_kind_enum, kind, UVM_DEFAULT)
-    `uvm_field_int(index, UVM_DEFAULT)
-{%- for var in transaction_vars %}
-    {{ fm.uvm_field(var) }}
-{%- endfor %}
-  `uvm_object_utils_end
 
   port_kind_enum kind = MASTER;  // 来源端口类型
   int            index;          // 端口实例下标
@@ -27,6 +19,17 @@ class {{ agent.name }}_system_txn extends uvm_object;
 {%- for var in transaction_vars %}
   {{ var.type }} {{ var.name }};
 {%- endfor %}
+
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
+  // **必须放在字段声明之后**：这些宏展开成引用各字段的方法体，放在声明之前
+  // Questa 判「Undefined variable」（实测：port_config / seq_item 都栽在这儿）。
+  `uvm_object_utils_begin({{ agent.name }}_system_txn)
+    `uvm_field_enum(port_kind_enum, kind, UVM_DEFAULT)
+    `uvm_field_int(index, UVM_DEFAULT)
+{%- for var in transaction_vars %}
+    {{ fm.uvm_field(var) }}
+{%- endfor %}
+  `uvm_object_utils_end
 
   function new(string name = "{{ agent.name }}_system_txn");
     super.new(name);

@@ -33,9 +33,18 @@ class {{ environment.env_name }}_directed_test extends {{ environment.env_name }
     `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
     phase.raise_objection(this);
 
-    // 在所有 Agent Sequencer 上启动定向序列（is_master: False 的 slave 实例跳过）
+    // 在**有 sequencer 的** Agent 上启动定向序列。
+    //
+    // 两个条件都要：
+    //   · `is_master` —— slave 实例是响应侧，没有自己的激励序列
+    //   · `is_active` —— **passive 实例根本不创建 sequencer**
+    //     （agent 模板里 `sequencer` 只在 `cfg.is_active == UVM_ACTIVE` 时 create）。
+    // 光看 is_master 会在 passive agent 上 `_seq.start(null)` —— sequencer 是 null，
+    // 序列永远等不到 `start_item` 的授权，main_phase 的 objection 永不释放，
+    // 一路挂到 UVM 的 PH_TIMEOUT（9200 秒仿真时间）。
+    // 实测：intr 是 passive，整条定向测试就此超时，回归 23 条全红。
 {%- for agent in agents %}
-{%- if agent.is_master is not false %}
+{%- if agent.is_master is not false and agent.active is not false %}
     begin
       {{ agent.sequence_type }} _seq;
       _seq = {{ agent.sequence_type }}::type_id::create("_seq");

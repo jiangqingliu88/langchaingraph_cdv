@@ -10,17 +10,19 @@ from pathlib import Path
 
 import pytest
 
-from ..ui import icons, theme
+from ..ui import theme
+from ..ui.theme import icons
 
 
 def _app_source() -> str:
-    return Path(icons.__file__).resolve().parents[1].joinpath("app.py").read_text(
-        encoding="utf-8")
+    """`app.py` 的源码 —— 它引用的图标名要与 `icons.names()` 对得上。
 
-
-def _module_source() -> str:
-    return (Path(icons.__file__).resolve().parents[1]
-            / "modules" / "vms" / "casemodel" / "module.py").read_text(encoding="utf-8")
+    路径从 `ui` 包往上数一层（`ui/` 的父是 `workbench/`）—— 别从 `icons.__file__`
+    数：那个搬进 `ui/theme/` 之后，数出来的位置就不对了。
+    """
+    from .. import ui as ui_pkg
+    app = Path(ui_pkg.__file__).resolve().parent.parent / "app.py"
+    return app.read_text(encoding="utf-8")
 
 
 class TestRender:
@@ -97,7 +99,7 @@ class TestReferences:
         assert used <= set(icons.names()), f"app.py 引用了不存在的图标：{used - set(icons.names())}"
 
     def test_casemodel_action_icons_all_exist(self):
-        from src.workbench.modules.vms.casemodel.module import CasemodelModule
+        from src.workbench.modules.verify.casemodel.module import CasemodelModule
         wanted = set(CasemodelModule.ACTION_ICONS.values())
         assert wanted <= set(icons.names()), \
             f"case 建模引用了不存在的图标：{wanted - set(icons.names())}"

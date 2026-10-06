@@ -4,28 +4,61 @@
 // Loopback Testbench: {{ agent.name }}_loopback_tb
 // ============================================================
 // interface 内部 logic + modport，无需外部端口连接
-`include "uvm_macros.svh"
-import uvm_pkg::*;
-import {{ agent.name }}_pkg::*;
-
+//
+// **`import` / `` `include `` 必须写在 module 内部**：写在外面是 $unit 作用域，
+// 而 $unit 里的 import **不会**进到 module 里 —— `uvm_config_db#(...)` 会报
+// "Undefined variable: 'uvm_config_db'" + "near \"#\": syntax error"。
 module {{ agent.name }}_loopback_tb;
+  `include "uvm_macros.svh"
+  import uvm_pkg::*;
+  import {{ agent.name }}_pkg::*;
+
   logic clk   = 0;
   logic rst_n = 0;
 
   // 接口实例
-  {{ agent.name }}_if #(
-{%- for param in parameters %}
-    .{{ param.name }}({{ param.value }}){% if not loop.last %},{% endif %}
-{%- endfor %}
-  ) {{ agent.name }}_if_inst (
+  //
+  // **不要在这里传 `#(.ADDR_WIDTH(...))`**：生成出来的 `{{ agent.name }}_if` 是
+  // `interface {{ agent.name }}_if (input logic ...);` —— **没有参数列表**，
+  // 宽度是从 `{{ agent.name }}_parameters_pkg` import 进来的 localparam。
+  // 对 localparam 做参数覆盖，vopt 直接报
+  //   "(vopt-3013) A parameter override is not allowed for localparam 'ADDR_WIDTH'"
+  // 整个设计加载不了。
+  {{ agent.name }}_if {{ agent.name }}_if_inst (
     .{{ agent.clock }}(clk),
     .{{ agent.reset }}(rst_n)
   );
 
+  // ── 这里**不再**实例化 `{{ agent.name }}_system_if` ──
+  // 原先是留着躲 "(vsim-8451) Virtual interface resolution cannot find a matching
+  // instance"：`{{ agent.name }}_pkg` 无条件 include 了 system_env/monitor，Questa
+  // 在 load 阶段就要求有这个类型的实例。现在**没有 subenv 的构建（loopback）
+  // 根本不编那几个类**（`{{ agent.name }}_pkg` 里用
+  // `` `ifndef {{ agent.name }}_loop_back_test `` 挡掉，开关由 loopback 的 filelist
+  // 给），类型不存在 → 这个空实例也就不需要了。
+
   always #5 clk = ~clk;
 
   initial begin
-    uvm_config_db#(virtual {{ agent.name }}_if)::set(null, "*", "vif", {{ agent.name }}_if_inst);
+    // ── vif **按 agent 分发到 agent 级** ──
+    // 不再用一句 `set(null, "*", ...)` 广播：那会把同一个句柄撒给所有层级，
+    // 谁都取得到、也说不清谁该拿哪个。这里显式写死两个 agent 的路径 ——
+    // 「哪个 agent 拿哪个接口」在 tb 上就是**看得见的一行**。
+    //
+    // **为什么两个 agent 仍共用一个接口实例**：`{{ agent.name }}_if` 把 master /
+    // slave 两半打包在一起（`master_cb` 驱动、`slave_cb` 采样并驱动 `<sig>_slv`，
+    // 接口内部 `assign <sig> = <sig>_slv`）。想给 master / slave 各例一个实例、
+    // 再在外部把两个实例连起来 —— vopt 直接拒：
+    //   "(vopt-12003) Variable '<sig>_slv' written by continuous and procedural
+    //    assignments" → Error loading design
+    // 因为每个实例的 `slave_cb`（clocking output）都在**过程性**驱动它，外部再
+    // `assign` 就是连续+过程双驱动。要拆成两个实例，必须先把接口拆成 master/slave
+    // 两个**类型**（`vif` 的类型写在 `{{ agent.name }}_port_config` 里，会级联到
+    // agents / env / system_if）。
+    uvm_config_db#(virtual {{ agent.name }}_if)::set(
+        null, "*.master_agent_h*", "vif", {{ agent.name }}_if_inst);
+    uvm_config_db#(virtual {{ agent.name }}_if)::set(
+        null, "*.slave_agent_h*",  "vif", {{ agent.name }}_if_inst);
     run_test("{{ agent.name }}_loopback_test");
   end
 

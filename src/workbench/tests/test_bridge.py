@@ -34,16 +34,25 @@ class TestCatalog:
         assert by_name("debug.fingerprint_error") is not None
         assert by_name("nope") is None
 
-    def test_the_impure_bindings_are_exactly_the_expensive_ones(self):
+    def test_the_impure_bindings_are_exactly_the_vetted_ones(self):
         """非纯的那几条必须**逐个说得出来**。
 
         这条原来写的是「目前全部是纯的，哪天登记了非纯的会提醒改测试」—— 它确实
         提醒了（加 pipeline.start / cancel 时红的）。现在的形态要求：非纯的清单
         被显式写下来，多一条少一条都得先改这里，等于强迫人回答
-        「这个新工具凭什么不算长任务」。
+        「这个新工具凭什么可以因为切个标签页就跑」。
+
+        口径是**「有副作用或有成本」**，不只是「贵」——`evidence.record_human_edit`
+        就是加进来之后才发现这条名字该改的：它很快，但它**写盘**。切个标签页顺手
+        往证据链里写一条，比跑一次慢查询更糟，因为它是**不可逆**的。
         """
         impure = sorted(b.name for b in BINDINGS if not b.pure)
-        assert impure == ["pipeline.answer_approval", "pipeline.approval_handler",
+        assert impure == ["coverage.approve_exclude", "coverage.reject_exclude",
+                          "evidence.record_human_edit",
+                          # 生成覆盖率报告：**写盘**（报告落在覆盖率库旁边），
+                          # 而且要起一个 vcover 子进程。它总是由"点那一格"显式触发。
+                          "flow.coverage_report",
+                          "pipeline.answer_approval", "pipeline.approval_handler",
                           "pipeline.cancel", "pipeline.resume", "pipeline.start"]
 
     def test_every_non_pure_binding_is_documented(self):

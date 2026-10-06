@@ -46,9 +46,21 @@ class VerificationOS:
         return self._infra.compile(filelist, coverage)
 
     def run_regression(self, reg_yaml: str = None, mode: str = "local",
-                       tests: str = None) -> dict:
-        """RegressionManager：吃 regression.yaml 批量跑 case。"""
-        return self._infra.run_regression(reg_yaml, mode, tests)
+                       tests: str = None, tags: str = None,
+                       exclude_tags: str = None, **kwargs) -> dict:
+        """RegressionManager：吃 regression.yaml 批量跑 case。
+
+        薄门面，参数原样转发给 `InfrastructureManager.run_regression`。除了列出来的
+        常用参数，其余（`overrides` / `reference_mode` / `debug_mode`）走 `**kwargs`
+        转发 —— 底下的签名再扩展，这个门面也不会悄悄掉队。
+
+        此前它是**写死参数列表**的，于是 `tags` / `exclude_tags` 之后新增的
+        `overrides`、`reference_mode`、`debug_mode` 三项它一个都没跟上。签名漂移
+        比「少个参数」更糟：有人照着这个自称「上层统一门面」的类去用，会**静默**
+        拿不到溯源/调试跑法这些新能力，而且不报错。
+        """
+        return self._infra.run_regression(reg_yaml, mode, tests, tags,
+                                          exclude_tags, **kwargs)
 
     def simulate(self, top_module: str, uvm_test: str = "", seed: int = 0,
                  coverage: bool = True) -> dict:
@@ -65,8 +77,9 @@ class VerificationOS:
         """WaveManager：波形收集（复用 EdaScheduler，返回波形路径）。"""
         result = self._infra.simulate(top_module, uvm_test, seed, coverage=False)
         sim_dir = self._infra.output_root / "sim"
-        waves = list(sim_dir.rglob("*.wlf")) + list(sim_dir.rglob("*.fsdb")) + \
-                list(sim_dir.rglob("*.vcd"))
+        # `.db` = qwave.db（波形业务现在的产物）；`.wlf` 旧产物；vcd/fsdb 别路
+        waves = (list(sim_dir.rglob("*.db")) + list(sim_dir.rglob("*.wlf"))
+                 + list(sim_dir.rglob("*.fsdb")) + list(sim_dir.rglob("*.vcd")))
         result["waveforms"] = [str(w) for w in waves[:10]]
         return result
 

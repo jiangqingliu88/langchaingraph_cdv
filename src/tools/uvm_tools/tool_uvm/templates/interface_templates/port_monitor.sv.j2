@@ -72,7 +72,7 @@ class {{ agent.name }}_port_monitor extends uvm_monitor;
       `uvm_fatal("NOVIF", "Virtual interface not set")
     if (!uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg))
       `uvm_fatal("CFG", "Config not set")
-    uvm_config_db#({{ agent.name }}_slave_sequencer)::get(this, "", "sqr", sqr);
+    void'(uvm_config_db#({{ agent.name }}_slave_sequencer)::get(this, "", "sqr", sqr));
     // pragma custom build_logic begin
     // pragma custom build_logic end
   endfunction

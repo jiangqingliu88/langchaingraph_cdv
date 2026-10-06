@@ -10,28 +10,56 @@ python -m src.workbench -m debug.sim_log             # 启动后聚焦某个模�
 vagent gui run                                       # 等价入口
 ```
 
-PySide6 是**可选依赖**（`pip install -e .[gui]`）：纯 CLI 用法不需要它，没装时
+PySide6 与 QDarkStyle 是**可选依赖**（`pip install -e .[gui]`）：纯 CLI 用法不需要它，没装时
 给出装法提示并退出码 2，而不是甩 traceback。
 
 > GUI 走 PySide6 桌面窗口，**不是 Web 前端** —— 与 `CLAUDE.md` 那条禁止 Web
 > 前端的约束不冲突（`pyproject.toml` 的 `gui` extra 注释里也写了）。
 
-## 三条业务线
+## 业务线
 
 平台按业务线组织界面，清单里的 `groups` 就是它们。业务线**不占顶层菜单** ——
 它们出现在左窗格的导航树、「窗口」菜单的分段里，以及模块动作归到哪个菜单
 （`debug` → 调试，其余 → 工具）：
 
+它们分三层 —— **业务域 → 业务线 → 模块**（导航树就这么摊开）：
+
+```
+业务域（section）        业务线（group）                    这一段是什么
+────────────────────────────────────────────────────────────────────────
+设计时                   ide                                跑之前把输入写对
+运行时                   design model verify ops            七个领域 agent，
+                         coverage debug audit               按流水线顺序
+贯穿层                   flow                               横切：编排 / 运行 /
+                                                            证据 / 签核 / 跟踪 / 趋势
+```
+
+- **域的顺序由「域内最小 order」决定** —— 所以 `ide` 的 `order` 比 `design` 小
+  （它是流程的上游），三个域自然按业务流排成"设计时 → 运行时 → 贯穿层"。
+- **不写 `section` 的业务线直接挂树根** —— 树退化成两级，老清单照旧能用。
+- 一条业务线 = `modules/<id>/` 一个目录。
+
 | 业务线 | `group` | 现在的模块 | 规划中的 |
 |--------|---------|-----------|----------|
+| 设计构建 | `design` | （暂无） | RTL 与门禁、IP 拆解 / 接口 / 寄存器总览、单 agent 触发 |
+| 参考模型 | `model` | （暂无） | 版本列表 / golden_ref / 占位标记 / 回滚 |
+| 验证构建 | `verify` | **Case 建模**（11 个页面） | UVM 环境、用例清单、SVA 断言 |
+| 编译与回归 | `ops` | （暂无） | 回归结果 / 趋势、失败用例、重跑 |
+| 覆盖率 | `coverage` | （暂无） | gap 归因、覆盖率地图、exclude 审批 |
 | 调试技术 | `debug` | 仿真日志、错误指纹 | 波形、失败用例二分 |
-| 集成设计环境 | `ide` | （暂无） | 源码编辑 + 静态检查、规格→测试计划、UVM 渲染、断言、电路图占位 |
-| 验证管理系统 | `vms` | **Case 建模**（11 个页面） | 覆盖率、回归调度、状态机占位 |
+| 签核审查 | `audit` | （暂无） | 四道门禁 + verdict、signoff 事件 |
+| 集成设计环境 | `ide` | **人工节点**（YAML 编辑 + schema 校验） | 源码编辑 + 静态检查、规格→测试计划、UVM 渲染、断言、电路图占位 |
+| 流程与证据 | `flow` | **验证流程**、**运行历史**、**证据 / 产物**、**测试点 / 资产**、**签核判定**（门禁 + 证据链）、**进度趋势** | 证据包导出、治理状态、决策轨迹 |
 
-交付分两轮：第一轮是平台本身（清单契约、插件接口、工具绑定、通用控件）加一条
+> 为什么是「七条 agent 线 + 横切线」而不是纯七条：证据 / 治理 / 记忆 / 进化不属于
+> 任何单个 agent，却贯穿全部 —— 只按 agent 分，这些能力**无边可挂**。完整论证见
+> [`docs/design/agent_gui_business_architecture.md`](../../docs/design/agent_gui_business_architecture.md)。
+
+交付分三轮：第一轮是平台本身（清单契约、插件接口、工具绑定、通用控件）加一条
 垂直切片；第二轮把 **case 属性完备性建模**从 `casemodel_tools` 的旧界面整体搬进来，
-成了 `vms.casemodel` 模块 —— 它是目前唯一一个「界面能力本身就是核心」的模块
-（见下节）。其余模块在清单里以注释形式留了位。
+成了 `verify.casemodel` 模块 —— 它是目前唯一一个「界面能力本身就是核心」的模块
+（见下节）；第三轮按 agent 角色重构业务线，并补上只读的证据链 / 签核 / 跟踪 / 趋势视图。
+其余模块在清单里以注释形式留了位。
 
 ## 清单怎么写
 
@@ -44,7 +72,7 @@ version: 1
 window:
   title: "SignOffAI · 验证工作台"
   size: [1520, 940]
-  theme: ""              # 留空用平台默认主题（经典 Verdi 浅灰）
+  theme: ""              # 留空用平台默认主题（浅色）
   restore_layout: true   # 关窗口时记住窗格尺寸与折叠状态
 
 groups:                  # 业务线（分组用，不占顶层菜单）
@@ -165,14 +193,14 @@ ctx.console.begin_task("扫描 output")
 刻意**没有**取消、优先级、进度百分比：跑起来的仿真停不掉（那是 EDA 工具自己的
 事），给一个点不动的「取消」按钮比没有更糟。
 
-## Case 建模模块（`vms.casemodel`）
+## Case 建模模块（`verify.casemodel`）
 
 目前唯一一个「界面能力本身就是核心」的模块，也是这套插件化最实的一次检验 ——
 它原本是 `casemodel_tools` 包里一个 3142 行的独立窗口（`view/gui/`），第二轮
 整体搬进来成了普通模块，**没有为它改动平台一行**。
 
 ```bash
-vagent gui run -m vms.casemodel
+vagent gui run -m verify.casemodel
 vagent case-model gui [模型.yaml]        # 同一扇门的别名
 ```
 
@@ -209,22 +237,24 @@ src/workbench/
 ├─ bus.py            事件总线（模块之间只通过话题通信）
 ├─ tasks.py          后台任务
 ├─ settings_store.py QSettings 包装（几何 / 窗格尺寸与折叠 / 主题）
-├─ ui/               通用控件（不含任何业务词汇）
-│   ├─ theme.py          配色与全局 QSS（两套调色板）
-│   ├─ panes.py          三窗格分割（PaneHost / PaneLayout）
-│   ├─ nav_pane.py       左窗格的模块导航树（按业务线分组）
-│   ├─ icons.py          图标：Qt 标准图标 + 内联 SVG，跟着主题上色
-│   ├─ models.py  table_helpers.py             行表模型 / 表格观感
-│   ├─ severity_model.py  panels.py            诊断表 / 「提示 + 一张表」
-│   ├─ yaml_editor.py  highlighter.py          带行号的编辑器 / YAML 高亮
-│   ├─ matrix_view.py  coverage_view.py        自绘交叉矩阵 / 覆盖条
-│   └─ console.py  banner.py  placeholder.py
+├─ ui/               通用件 —— 按组件类别分目录（不含任何业务词汇）
+│   ├─ theme/            配色（palette.py）+ 图标（icons.py）
+│   ├─ models/           Qt 模型：行表（rows.py）/ 诊断（issues.py）
+│   ├─ widgets/          通用控件：横幅 / 面板 / 控制台 / 占位
+│   ├─ views/            自绘视图：覆盖条 / 交叉矩阵 / 折线
+│   ├─ editors/          YAML 编辑器 + 语法高亮
+│   ├─ nav/              左窗格那棵导航树
+│   ├─ containers/       容器：工作区（MDI 子窗口 + 停靠面板）
+│   └─ helpers/          装配助手：表格该长什么样（tables.py）
 ├─ bridge/           工具绑定：binding / catalog / adapters（不 import Qt）
 │   └─ adapters.py   把「吃 JSON 字符串」的工具包成「吃关键字参数」的
 └─ modules/          业务模块（目录名与清单的 group 一致）
     ├─ debug/        仿真日志、错误指纹
-    └─ vms/
-        └─ casemodel/  module.py / page.py / pages/（11 页）/ models.py / vocabulary.py
+    ├─ verify/       casemodel/  module.py / page.py / pages/（11 页）/ models.py / vocabulary.py
+    ├─ ide/          manual_nodes/  人工节点 YAML 编辑
+    ├─ flow/         pipeline / runs / evidence / signoff / tracking / trend + run_common.py
+    ├─ agent_output.py   跨线共享：各 agent 的「这次运行产出了什么」视图
+    └─ design/ model/ ops/ coverage/ audit/   （每条 agent 线一个目录，待填）
 ```
 
 依赖只能从上往下：`ui ← bridge ← modules ← registry ← app`。
@@ -250,10 +280,68 @@ QSplitter(竖直)   objectName="pane.outer"
 代价与对策：`window.saveState()` 只认 QDockWidget，所以布局改成自己存
 **每个分割条的尺寸 + 各窗格是否折叠**（`SettingsStore.save_panes/restore_panes`）。
 
-**配色是「经典 Verdi 浅灰」并作为默认**：灰底（`#d4d0c8`）、深蓝高亮
-（`#0a246a`）、2px 立体边框、文件夹式页签、凹陷的状态栏分区。另有一套
-「深色（现代）」可在「视图」里切 —— 早先那套深色叫「深色（Verdi 风）」是个
-误称，Verdi 本身是浅色的，没有深色主题。
+**配色与控件外观交给 [QDarkStyleSheet](https://github.com/ColinDuquesnoy/QDarkStyleSheet)**，
+默认「浅色」，另一套「深色」在「视图」里切。它不是"抄了一份 QSS 进来"，而是
+一个依赖：`pyproject` 的 `gui` extra 里跟 PySide6 并排。
+
+**整套界面是新思紫**（品牌紫 `#573885` 那一族），不是库默认的灰 + 蓝。
+
+颜色分两张表（都在 [`ui/theme/palette.py`](ui/theme/palette.py)），**都只换颜色、
+不换档位** —— 所以"哪块比哪块深"这层关系还是库定的，换色换不出对比度问题：
+
+| 表 | 管什么 |
+|----|--------|
+| `_SURFACE_SWAP` | 底：菜单栏 / 工具栏 / 状态栏 / 停靠窗标题 / 窗格标题 / 边框 / 表头 / 交替行 / 正文与次要文字 |
+| `_ACCENT_SWAP` | 强调：选中底 / 当前行 / 悬停 / 焦点框 / 链接 / 那批强调色图标 |
+
+而颜色在界面上有**四条独立的路**要走到，只改一条就是"一半紫一半灰"：
+
+| 谁 | 管什么 |
+|----|--------|
+| **QDarkStyle** | 标准控件的样子：按钮 / 表格 / 页签 / 滚动条 / 菜单 / 工具栏 / 输入框… |
+| **本项目的 `Palette`** | 只有两类 —— ①**自绘控件**要的底与线（交叉矩阵、覆盖条、折线、源码高亮、导航树着色都是 `QPainter` 画的，QSS 管不到）；②**领域语义**（error/warning/ok、语法高亮九档、矩阵三档底色）—— 后者任何通用主题库都不可能提供，也不跟着品牌走 |
+| **`_rebrand()`** | 把库那份 QSS 里**编译死的 hex**（灰阶 + 强调色）换掉，并把引用的强调色图标换成换过色的副本（`_brand_icons`，副本缓存在临时目录，见下） |
+| **`apply()` 里的 `QPalette`** | 样式表管不到的那几处取色。库只刷了 `Link`，**选中的 `Highlight` 一直是 Qt 默认的蓝**、`LinkVisited` 是品红 —— 留着它们，界面里就藏着一处非品牌色 |
+| **`_app_overlay()`** | 几条以**本工作台自己的 `objectName`** 开头的补充（`#paneHeader` / `#paneHost` / `#mdiArea`），因为库里不可能有这些名字 |
+
+`Palette` 的**档位**（panel/text/border/accent/selection…）是从 QDarkStyle 的
+色阶里**读出来的**（`_from_qdarkstyle`）—— 读的是"`COLOR_BACKGROUND_1` 是主背景"
+这层语义，颜色过品牌表。库升级重排色阶时，档位名不变，自绘控件与 QSS 仍然对得上。
+所以这个类从 60 多个字段砍到了 40 个：原先一半的字段是在手写那套已经不存在的 QSS。
+
+**为什么换色要"替换"而不是"覆盖"**：`qdarkstyle 3.2.3` 的
+`load_stylesheet(palette=…)` **只拿 `palette.ID` 选深浅** —— 传进去的类会被换成
+它自己的，颜色是 SCSS 编译进 qss 资源的。所以在 `_app_overlay` 里重写
+`QTableView::item:selected`、`QToolBar`、`QDockWidget::title` 这一大堆规则，就又是
+"一处按钮两处描述"。替换表是**按档位**列的（库的 `Gray.B120` → 我们的
+`#e0d6f2`、`Blue.B100` → `#c9aaf6`），两张表加起来十几对，一眼看得全。
+
+**唯一不能靠替换表的地方**是"同一个灰、两种用处"：`::item:selected:!active`
+（选中但没焦点）在库里退回中性灰，而同一个灰在交替行、表头、悬停上也在用 ——
+全局替换会把它们一起变成选中色。那条按选择器单独改（`_brand_inactive_selection`），
+而且**两档合一**：选中了就是紫的，跟焦点在不在无关（点一下导航树，焦点立刻被
+中央标签页拿走，按库的规矩那行会当场变灰 —— 品牌色就只在按下的那一瞬看得见）。
+
+三处**必须记着**：
+
+- **`_app_overlay()` 里只准写 `#objectName` 选择器**。一旦写 `QPushButton { … }`，
+  就又是"两处各描述一遍按钮"，跟库打架 —— 谁后加载谁赢，升级库时表现会变得
+  莫名其妙。有测试钉着这条（`test_overlay_only_touches_our_own_object_names`）。
+- **`QPalette` 的角色要自己收编**：富文本链接、少数按调色板取色的控件都不吃
+  样式表，而库只刷了 `Link`（还是它那族蓝）—— `Highlight` 一直是 **Qt 默认的
+  蓝 `#308cc6`**、`LinkVisited` 是品红。`apply()` 里按品牌色一次设齐
+  `Highlight` / `HighlightedText` / `Link` / `LinkVisited`。
+- **`QMdiArea`（中央工作区）的底色仍然要显式设**：它抓的是构造时
+  `QPalette::Dark` 的一份**快照**，样式表改不动。所以 `WorkspaceArea` 显式
+  `setBackground`，换主题时由窗口喊一声 `apply_theme()`。库里那条通用的
+  `QAbstractScrollArea { border: 1px; padding: 2px }` 还会顺手给 MDI 加 6px
+  内缩，overlay 里也一并抵掉。
+
+换过色的**图标副本**落在临时目录：`<临时目录>/signoffai-theme-icons/<浅色|深色>-<指纹>/`，
+连"哪张图带强调色、哪张不带"的清单（`manifest.json`）一起存。指纹含色表 +
+认亲容差 + qdarkstyle 版本，所以改了品牌色自然落到新目录，不会读到上一版的旧色图。
+它是缓存，随时可以删 —— 删了下次重算：首次约 150ms（要逐像素扫几十张小图），
+之后读一次清单即可。
 
 **菜单栏是 Verdi 形的七项**：文件 / 编辑 / 视图 / 调试 / 工具 / 窗口 / 帮助。
 业务线**不占顶层菜单**（否则每加一条线菜单栏就长一节），它们的落点是：
@@ -300,7 +388,7 @@ pytest src/workbench/tests -q
 | `test_panes.py` | 空窗格塌陷、页签/标题条互斥、隐藏后再显示回到原位、尺寸与折叠的往返 | 是 |
 | `test_nav_pane.py` | 按业务线分组、双击切换、当前模块加粗、失败标灰 | 是 |
 | `test_menu_structure.py` | 七个顶层菜单及顺序、模块动作进调试/工具、窗口菜单平铺、窗格开关 | 是 |
-| `test_theme.py` | 调色板字段合法、选中色对比度、QSS 无 dock 规则、**没有没人用的字段**、横幅跟主题 | 是 |
+| `test_theme.py` | 调色板字段合法、选中色对比度、**样式表 = 库 + 只碰 objectName 的补充**、没有没人用的字段、横幅跟主题 | 是 |
 | `test_icons.py` | 图标都渲染得出、缓存按颜色区分、引用的名字都存在 | 是 |
 | `test_tasks.py` | 结果回主线程、任务体在别的线程、不阻塞提交方 | 是 |
 | `test_casemodel_module.py` | case 建模：领域 Qt 模型、自绘控件、11 个页面都填上、报告与 CLI 一致 | 是 |

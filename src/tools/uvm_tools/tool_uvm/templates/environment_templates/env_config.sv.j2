@@ -5,16 +5,6 @@
 // 自动生成，不要手动修改
 
 class {{ environment.env_name }}_config extends uvm_object;
-  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
-  `uvm_object_utils_begin({{ environment.env_name }}_config)
-{%- for var in config_vars %}
-    {{ fm.uvm_field(var) }}
-{%- endfor %}
-    `uvm_field_int(has_scoreboard, UVM_DEFAULT)
-{%- for agent in agents %}
-    `uvm_field_object({{ agent.name }}_cfg, UVM_DEFAULT)
-{%- endfor %}
-  `uvm_object_utils_end
 {%- for var in config_vars %}
   rand {{ var.type }} {{ var.name }};
 {%- endfor %}
@@ -30,6 +20,19 @@ class {{ environment.env_name }}_config extends uvm_object;
 {%- for agent in agents %}
   {{ agent.config_type }} {{ agent.name }}_cfg;
 {%- endfor %}
+
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
+  // **必须放在字段声明之后**：这些宏展开成引用各字段的方法体，放在声明之前
+  // Questa 判「Undefined variable」（实测：port_config / seq_item 都栽在这儿）。
+  `uvm_object_utils_begin({{ environment.env_name }}_config)
+{%- for var in config_vars %}
+    {{ fm.uvm_field(var) }}
+{%- endfor %}
+    `uvm_field_int(has_scoreboard, UVM_DEFAULT)
+{%- for agent in agents %}
+    `uvm_field_object({{ agent.name }}_cfg, UVM_DEFAULT)
+{%- endfor %}
+  `uvm_object_utils_end
 
   function new(string name = "{{ environment.env_name }}_config");
     super.new(name);

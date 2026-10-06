@@ -1,0 +1,11 @@
+[settings] WARNING: PLATFORM_JWT_SECRET 未设置
+Failed to load plugin from slack_notifier.py: attempted relative import with no known parent package
+2026-10-07 04:54:35 [info     ] 仿真业务模式: ['cov'] → MODE_OPTS=-coverage -coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME} -testname ${EMAN_TEST_NAME}
+2026-10-07 04:54:35 [debug    ] 跳过无 test 声明的 build: apb_uart_apb_agent_loopback
+2026-10-07 04:54:35 [debug    ] 跳过无 test 声明的 build: apb_uart_intr_agent_loopback
+2026-10-07 04:54:35 [debug    ] 跳过无 test 声明的 build: apb_uart_uart_agent_loopback
+2026-10-07 04:54:35 [debug    ] 跳过无 test 声明的 build: multi_step_build
+2026-10-07 04:54:35 [debug    ] 跳过无 test 声明的 build: sc_three_step_build
+2026-10-07 04:54:35 [debug    ] 跳过无 test 声明的 build: sig_step_build
+2026-10-07 04:54:35 [debug    ] 跳过无 test 声明的 build: vpu_multi_step_build
+RESULT: {'status': 'FAIL', 'passed': 0, 'failed': 0, 'total': 0, 'total_tests': 0, 'error': None}

@@ -4,9 +4,9 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
-from ..ui.banner import Banner, PermanentNote
+from ..ui.widgets.banner import Banner, PermanentNote
 from ..ui.models import CENTER, LEFT, RIGHT, RowsModel, SortProxy
-from ..ui import table_helpers
+from ..ui.helpers import tables as table_helpers
 
 COLUMNS = (("name", "名字", 100, LEFT), ("count", "数量", 60, RIGHT))
 
@@ -150,7 +150,7 @@ class TestBanner:
 class TestConsole:
     def test_level_filter_replays_existing_lines(self, qt_app):
         """切到「只看 error」时要能回看刚才那屏里的红行，而不是只对以后生效。"""
-        from ..ui.console import ConsolePanel
+        from ..ui.widgets.console import ConsolePanel
 
         console = ConsolePanel()
         console.append("普通信息", "info")
@@ -161,7 +161,7 @@ class TestConsole:
         assert "普通信息" not in visible
 
     def test_clear_drops_the_kept_lines(self, qt_app):
-        from ..ui.console import ConsolePanel
+        from ..ui.widgets.console import ConsolePanel
 
         console = ConsolePanel()
         console.append("x", "info")
@@ -170,7 +170,7 @@ class TestConsole:
         assert console.view.toPlainText() == ""
 
     def test_appending_a_multiline_block_keeps_every_line(self, qt_app):
-        from ..ui.console import ConsolePanel
+        from ..ui.widgets.console import ConsolePanel
 
         console = ConsolePanel()
         console.append("第一行\n第二行", "error")

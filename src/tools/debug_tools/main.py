@@ -5,7 +5,7 @@
   collect_compile_log  解析 vlog 编译错误 → 文件:行号:消息
   collect_waveform     解析 WLF 波形 → 关键信号时间线
   fingerprint_error    错误去重指纹
-  bisect_test          二分法定位失败测试
+  bisect_failed_tests  失败**用例集合**分批缩小（不是代码版本溯源）
   auto_fix             模板匹配 → 自动修复 → 应用 patch
   rerun_failed_test    重跑失败 case 验证修复
 """
@@ -377,17 +377,21 @@ def collect_waveform(input_json: str = "") -> str:
     if not od.exists():
         return json.dumps({"error": f"output_dir not found: {od}", "signals": []}, ensure_ascii=False)
 
-    wlf_files = list(od.rglob("*.wlf"))
+    # 波形后缀：`.db` = qwave.db（本仓库波形业务现在的产物）；`.wlf` 是旧产物；
+    # `.vcd`/`.fsdb` 是别路留下的 —— 都收，别只认自家那一种。
+    wave_files = [p for ext in ("*.db", "*.wlf", "*.vcd", "*.fsdb")
+                  for p in od.rglob(ext)]
 
-    if not wlf_files:
+    if not wave_files:
         return json.dumps({"waveforms_found": 0, "signals": [],
-                          "note": "No WLF files found"}, ensure_ascii=False)
+                          "note": "No wave files found (looked for .db/.wlf/.vcd/.fsdb)"},
+                          ensure_ascii=False)
 
     signal_list = [s.strip() for s in signals_str.split(",") if s.strip()] if signals_str else []
 
     from src.tools.debug_tools.waveform import extract_signal_trace
     results = []
-    for wlf in wlf_files[:5]:  # 最多分析 5 个波形文件
+    for wlf in wave_files[:5]:  # 最多分析 5 个波形文件
         traces = extract_signal_trace(wlf, signal_list) if signal_list else {}
         results.append({
             "waveform": str(wlf),
@@ -396,7 +400,7 @@ def collect_waveform(input_json: str = "") -> str:
         })
 
     return json.dumps({
-        "waveforms_found": len(wlf_files),
+        "waveforms_found": len(wave_files),
         "analyzed": results,
     }, indent=2, ensure_ascii=False, default=str)
 
@@ -426,15 +430,29 @@ def fingerprint_error(error_text: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
-# Tool 5: bisect_test — 二分法定位失败测试
+# Tool 5: bisect_failed_tests — 失败用例集合分批缩小
 # ═══════════════════════════════════════════════════════════════
+#
+# 原名 `bisect_test`。在 EDA 语境里 "bisect" 极易被读成 **git bisect 那样的
+# 版本溯源**（"哪个提交引入的 bug"），但这个工具**完全不碰版本** —— 全文件
+# git/commit/change-list/checkout/revision 出现 0 次。它只是在**已经失败的那批
+# 用例**里挑一半先跑，再按错误指纹归组、提示是否同根因。
+#
+# 名字误导的代价是实打实的：看名字会以为框架有 Reference Finder 级的溯源能力。
+# 故改名点明作用域（failed tests），并在下面写明它不做版本二分。
 
-@tool("bisect_test")
-def bisect_test(input_json: str = "") -> str:
-    """二分法定位失败测试的最小集合。
+@tool("bisect_failed_tests")
+def bisect_failed_tests(input_json: str = "") -> str:
+    """在**失败用例集合**里分批缩小范围，并判断是否同根因。
+
+    **不是代码版本溯源**：本工具不碰 git / change-list / revision，不会回答
+    「哪个提交引入了这个 bug」。它只做两件事：
+      1. 失败用例 >2 个时，给出「先跑这一半」的计划，供调用方自己重跑；
+      2. 按错误指纹把失败用例归组，提示是否共享同一根因（`shared_root_cause`）。
+    只出计划，**不真跑仿真** —— 重跑由调用方（debug agent）负责。
 
     输入: {"output_dir": "...", "failed_tests": ["test_a", "test_b"]}
-    返回: 最小失败集合 + 建议隔离方向
+    返回: 失败集合 + 指纹归组 + 分批计划
     """
     try:
         data = json.loads(input_json)
@@ -840,7 +858,7 @@ class DebugTools:
             collect_compile_log,
             collect_waveform,
             fingerprint_error,
-            bisect_test,
+            bisect_failed_tests,
             auto_fix,
             rerun_failed_test,
         ]

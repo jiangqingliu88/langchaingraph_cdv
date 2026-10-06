@@ -1,0 +1,78 @@
+config_name: demo
+include: [common_base.yaml]
+
+variables:
+  SEED1: 1
+  SEED2: 2
+  SEED: 3
+
+builds:
+  - name: build_base1
+    # per-build variables（模板变量：进 jinja 上下文，用 `{{ }}` 在命令里取。
+    # 注意它**不会**被导出成环境变量 —— 要 export 的写 `env:` 块）
+    variables:
+      SEED1: "{{ SEED1 }}"
+      SEED2: "{{ SEED2 }}"
+    # run_cmd：完整 compile 命令，支持 {{ }} jinja 与 $shell 变数
+    run_cmd: 'echo "[COMPILE] vcs -full64 -sverilog {{ SEED }} {{debug_args}} +define+DEMO -timescale=1ns/1ps rtl/dut.sv tb/demo_tb_top.sv"'
+    top: demo_tb_top
+    # per-build hooks: pre_build -> build -> post_build
+    hooks:
+      pre_build: 'echo "[HOOK] build_base1 pre_build"'
+      post_build: 'echo "[HOOK] build_base1 post_build"'
+
+  - name: build_base2
+    variables:
+      SEED1: "{{ SEED }}"
+    run_cmd: 'echo "[COMPILE] vcs -full64 -sverilog {{ SEED }} {{debug_args}} +define+DEMO2 rtl/dut.sv tb/demo_tb_top.sv"'
+    top: demo_tb_top
+
+  # depends：只做执行依赖（父 build 全跑完才跑此 build，不继承设定）
+  - name: build_xrun
+    depends: ["build_base1", "build_base2"]
+    variables:
+      SEED: "{{ SEED }}"
+    run_cmd: 'echo "[COMPILE] xrun {{ SEED }} +define+DEMO rtl/dut.sv tb/demo_tb_top.sv"'
+
+tests:
+  # plusargs 展开成 2 个用例，各自带 {{ plusarg }}
+  - name: smoke_basic
+    build: build_base1
+    run_cmd: 'echo "[SIM] ./simv +UVM_TESTNAME=smoke_basic +UVM_VERBOSITY=LOW {{ plusarg }} +TOP={{ TB_TOP }}"'
+    plusargs: ["+pb=1", "+pb=2"]
+    tags: ["smoke", "bp"]
+    # per-test hooks: pre_sim -> sim -> post_sim
+    hooks:
+      pre_sim: 'echo "[HOOK] smoke_basic pre_sim"'
+      post_sim: 'echo "[HOOK] smoke_basic post_sim"'
+
+  # count/SEED 展开成多个 run
+  - name: smoke_multi_seed
+    build: build_base1
+    count: 3
+    variables:
+      SEED: "{{ SEED }}"
+    run_cmd: 'echo "[SIM] ./simv +UVM_TESTNAME=smoke_multi_seed +SEED={{ SEED }} +TOP={{ TB_TOP }}"'
+    tags: ["smoke", "bp"]
+    # file pattern 只在 --incremental (git 变更过滤) 使用
+    file_pattern: ["rtl/"]
+
+  # 使用第二个 build (build_base2)
+  - name: smoke_base2
+    build: build_base2
+    run_cmd: 'echo "[SIM] ./simv +UVM_TESTNAME=smoke_base2 +TOP={{ TB_TOP }}"'
+    tags: ["smoke"]
+
+  # 使用 depends 的子 build (build_xrun, 依赖 base1+base2)
+  - name: smoke_xrun
+    build: build_xrun
+    run_cmd: 'echo "[SIM] xrun +UVM_TESTNAME=smoke_xrun +TOP={{ TB_TOP }}"'
+    tags: ["smoke", "bp"]
+
+  # inline build: build 直接写成 dict
+  - name: smoke_inline
+    build:
+      name: build_inline
+      run_cmd: 'echo "[COMPILE] inline build for smoke_inline"'
+    run_cmd: 'echo "[SIM] smoke_inline run"'
+    tags: ["inline"]

@@ -28,7 +28,15 @@ interfaces:
   - name: apb                # 协议/agent 名（生成类前缀 apb_）
     clock: pclk
     reset: presetn
-    #protocol: apb            # 协议名 → 渲染协议正确的默认驱动/采样时序（两拍 setup+access）
+    # **这一行必须开着**：它决定 driver / monitor 走不走协议专属时序。
+    # 注释掉的话两个模板都会退到"通用单拍"分支 —— 而通用分支**根本不驱动
+    # psel / penable**（只按名字把 output 字段拍一拍），DUT 的 `access = psel &&
+    # penable` 恒为未初始化值 X，寄存器写读全是碰运气；monitor 也会**每个时钟沿
+    # 都凭空造一条事务**（psel/penable 不看），把 scoreboard 的 actual 灌成几百条、
+    # 还给 RAL 的 predictor 喂一堆 paddr=0 的假读。
+    protocol: apb            # 协议名 → 渲染协议正确的默认驱动/采样时序（两拍 setup+access）
+
+
     reset_active_low: True   # 复位极性（缺省 True = 低有效，驱动/监控复位门控用）
 
 
@@ -40,12 +48,27 @@ interfaces:
     # ── 类型别名（渲染进 <name>_typedefs_pkg）──
     #   list：每项 { type_t: 类型表达式, type_name: 新类型名 }
     #   声明顺序 = 书写顺序，被引用的 typedef 须写在前面
+    #   声明顺序 = 书写顺序，被引用的 typedef 须写在前面。
+    #
+    # **这里只放本接口特有的 typedef。** `port_kind_enum` / `response_mode_e` /
+    # `resp_type_e` / `xact_type_e` 这些**公共库已经有了**
+    #（`base_pkg/common_typedefs/common_typedefs_pkg.sv`），agent 包会 import 它。
+    # 在这里重定义一遍会**撞车**：apb_pkg 同时通配 import 了两个包，
+    # `MASTER` 变成"不直接可见"（ambiguous），port_config 里所有枚举引用全废。
     typedefs:
-      - { type_t: "bit [7:0]" ,type_name: "byte_t"}       
+      - { type_t: "bit [7:0]", type_name: "byte_t"}
     # ── 端口 ──
     #   name:  信号名
     #   dir:   output=master驱动 / input=slave驱动
     #   width: 位宽（1 = 单比特 logic；>1 = logic [width-1:0]；参数名 = 引用）
+    # **扁平形状**：每项直接是 `{name, dir, width}`。
+    #
+    # 这里原来是按 `port_type` 分组嵌套的（`- port_type: master` / `ports:`），
+    # 而生成器读的是扁平列表 —— 结果渲染出的 `apb_if` 里端口**全是空名**
+    # （`logic [-1:0] ;`），一个信号都没接上。schema 的 `$defs.port` 也是扁平的，
+    # 所以嵌套那份从来就对不上，是旧写法。
+    #
+    # dir 的语义（AXI-VIP 风格，见文件头）：output = master 驱动，input = slave 驱动。
     ports:
       - { name: paddr,   dir: output, width: ADDR_WIDTH }   # master → slave（引用参数）
       - { name: pwrite,  dir: output, width: 1           }   # master → slave
@@ -61,9 +84,18 @@ interfaces:
     #               "False" → slave 字段（slave 生成响应，master 采样）
     #   iscompare: "True"  → 参与 loopback scoreboard 比对（仅 is_master="True" 字段参与）
     #   isrand:    "True"  → master driver 默认驱动该字段（映射到同名 output 端口）
+    #   base 字段渲染进 <name>_base_seq_item，**master / slave 两侧都有**。
+    #
+    # `prdata` / `pslverr` 刻意放 base、不放 transaction_vars：它们原先是
+    # `is_master: "False"`（只进 slave seq_item），于是 **master 侧根本没有这两个成员** ——
+    # 而寄存器模型（RAL）的读回要靠 master 侧 driver 把 prdata 写回同一条 req，
+    # 适配器 `bus2reg` 再从那条 req 取。少了它们，任何寄存器读都是假的。
+    # 响应字段本来就该两侧可见（slave 驱动它、master 采样它）。
     base_transaction_vars:
-      - { name: addr,   type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True"}
-      - { name: data,   type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True"}
+      - { name: addr,    type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True"}
+      - { name: data,    type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True"}
+      - { name: prdata,  type: "bit [DATA_WIDTH-1:0]", iscompare: "True",  isrand: "False"}
+      - { name: pslverr, type: "bit",                  iscompare: "True",  isrand: "False"}
     transaction_vars:
       - { name: paddr,   type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True",  is_master: "True"  }
       - { name: pwrite,  type: "bit",                  iscompare: "True",  isrand: "True",  is_master: "True"  }

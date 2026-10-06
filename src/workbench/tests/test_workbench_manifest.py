@@ -13,10 +13,59 @@ from ..manifest import (ManifestError, builtin_manifest, describe, load_manifest
 def test_shipped_manifest_parses():
     manifest = load_manifest(default_manifest_path())
     assert [m.id for m in manifest.enabled_modules()] == [
-        "debug.sim_log", "debug.fingerprint", "vms.casemodel",
-        # 流程三件套：中窗格看运行、左窗格挑运行、右窗格看证据
-        "vms.pipeline", "vms.runs", "vms.evidence"]
-    assert [g.id for g in manifest.sorted_groups()] == ["debug", "ide", "vms"]
+        # 七条 agent 线的产出总览（清单里的书写顺序）
+        "design.output", "model.output", "ops.output",
+        "ops.regression_status", "ops.regression_wave", "ops.regression_coverage",
+        "coverage.output", "audit.output",
+        "ide.ip_spec", "ide.manual_nodes",
+        "coverage.excludes",
+        "debug.sim_log", "debug.fingerprint", "debug.output",
+        "verify.output", "verify.casemodel",
+        # 流程与证据线：流程视图 + 编排 + 运行历史 + 证据 + 跟踪 + 对比 + 签核 + 趋势 + 决策 + 清单
+        "flow.task", "flow.diagram", "flow.artifacts", "flow.pipeline", "flow.runs", "flow.evidence",
+        "flow.tracking", "flow.todo", "flow.drafts", "flow.compare", "flow.signoff", "flow.trend",
+        "flow.decision", "flow.manifest"]
+    # flow 排在设计时之后、运行时之前（`order: 8`）—— 贯穿层是入口，不是附录
+    assert [g.id for g in manifest.sorted_groups()] == [
+        "ide", "flow", "design", "model", "verify", "ops",
+        "coverage", "debug", "audit"]
+
+
+def test_shipped_manifest_is_grouped_into_three_sections():
+    """业务域 → 业务线 的三段：设计时 / 贯穿层 / 运行时。
+
+    域的顺序由**域内最小 order** 决定 —— `ide`(5) 是流程上游排最前；
+    贯穿层 `flow`(8) 排在运行时(10) **前面**：那一条线装的是任务总览、验证流程、
+    运行历史、运行对比、签核判定 —— 一进界面就要用的**入口**，不是附录。
+    """
+    manifest = load_manifest(default_manifest_path())
+    assert [(section, [g.id for g in groups]) for section, groups in manifest.sections()] == [
+        ("设计时", ["ide"]),
+        ("贯穿层", ["flow"]),
+        ("运行时", ["design", "model", "verify", "ops",
+                      "coverage", "debug", "audit"]),
+    ]
+
+
+def test_manifest_without_section_is_flat():
+    """没写 `section` 的清单只得到一个空域 —— 导航树据此走平铺的老路。"""
+    manifest = load_manifest_text(
+        "groups:\n"
+        "  - {id: a, title: A, order: 1}\n"
+        "  - {id: b, title: B, order: 2}\n"
+        "modules: []", source="<flat>")
+    assert [(section, [g.id for g in groups]) for section, groups in manifest.sections()] == [
+        ("", ["a", "b"])]
+
+
+def test_unset_section_sorts_last():
+    """没归类的域压在最后 —— 它是「还没归类」，不该插在真域前面。"""
+    manifest = load_manifest_text(
+        "groups:\n"
+        "  - {id: loose, title: 散装, order: 1}\n"
+        "  - {id: real, title: 有域, order: 2, section: 甲域}\n"
+        "modules: []", source="<mixed>")
+    assert [section for section, _ in manifest.sections()] == ["甲域", ""]
 
 
 def test_shipped_manifest_module_inputs_point_at_real_files():
@@ -104,7 +153,7 @@ def test_builtin_manifest_has_groups_but_no_modules():
 
 def test_describe_counts_enabled_modules():
     manifest = load_manifest(default_manifest_path())
-    assert "6 个模块" in describe(manifest)
+    assert "30 个模块" in describe(manifest)
     assert describe(None) == "清单：无"
 
 

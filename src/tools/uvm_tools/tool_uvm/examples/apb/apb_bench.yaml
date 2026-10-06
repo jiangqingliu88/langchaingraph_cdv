@@ -6,6 +6,12 @@ bench:
   name: apb_bench
   include_assertions: false
 
+  # DUT / 寄存器模型的源文件 —— 编译清单要收它们（相对本文件所在目录）
+  dut_filelist:
+    - ../apb_slave_dut.sv
+  ral_filelist:
+    - ../apb_ral_pkg.sv
+
   #clk_rst_vip 里配置，由 clk_rst_agent 驱动）──
   clk_rst_if:
     clocks:
@@ -13,32 +19,19 @@ bench:
     resets:
       - { name: presetn }
 
-  dut_instance: u_dut          # DUT 实例名（tb_top 按 harness.bind_to 例化 DUT）
+  dut_module: apb_slave_dut     # DUT **模块名**（tb_top 例化用）
+  dut_instance: u_dut           # DUT **实例名**（与模块名两回事，别混）
 
-  harness:
-    name: apb_harness
-    bind_to: apb_slave_dut
-    # parameter: NUM_CLIENTS    # 可选：scalable harness（自适应 module parameter）
-    # connect_path: "harness.U_X.harness"   # 可选：测试侧调用路径
-    interfaces:
-      - name: apb_if
-        type: apb_interface
-        agent_path: "apb_master_agent_h"
-        # bind_to: apb_slave_dut    # 覆盖目标 module（缺省 = harness.bind_to）
-        # source_path: ""           # 多实例层级路径（如 cache.memory）
-        # count: 5 或参数名         # interface 数组 + virtual if 数组 + foreach set
-        connections:
-          pclk: pclk
-          presetn: presetn
-          paddr: paddr
-          pwrite: pwrite
-          psel: psel
-          penable: penable
-          pwdata: pwdata
-          prdata: prdata
-          pready: pready
-          pslverr: pslverr
+  wave_dump:
+    enabled: true
+    format: FST
+    file_name: "apb_bench_tb_top.fsdb"
 
-    # 可选：virtual harness 批量连接
-    # sub_harnesses:
-    #   - { path: "chip_module.math.harness", env_path: ".math_env" }
+  interfaces:
+    - name: apb_if                     # interface 实例名
+      type_name: apb_if                # interface 类型
+      clock: pclk                      # interface 的 clock 输入口名
+      reset: presetn                   # interface 的 reset 输入口名
+      agent_path: [apb_master_agent_h, apb_slave_agent_h]
+      # 协议信号（interface 与 DUT 同名，tb_top 直接 port 连接）
+      ports: [paddr, pwrite, psel, penable, pwdata, prdata, pready, pslverr]

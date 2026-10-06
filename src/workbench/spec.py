@@ -57,7 +57,7 @@ class ToolSpec(BaseModel):
 
 
 class GroupSpec(BaseModel):
-    """一条业务线。目前的作用是「菜单分组」+「排序权重」。"""
+    """一条业务线。作用是「菜单分组」+「排序权重」+「归属哪个业务域」。"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -66,6 +66,12 @@ class GroupSpec(BaseModel):
     order: int = 100
     #: 是否在菜单栏生成一个同名菜单
     menu: bool = True
+    #: **业务域** —— 业务线之上的一层，导航树据此建三级树（域 → 业务线 → 模块）。
+    #: 空串 = 不分组，业务线直接摊在树根（写清单时可以不写这个字段）。
+    #:
+    #: 域的顺序由**域内最小 order** 决定（业务线本来就有先后，域跟着走）；
+    #: 没写 section 的那些统一压到最后 —— 它们是"还没归类"，不该插在真域前面。
+    section: str = ""
 
 
 class ModuleSpec(BaseModel):
@@ -143,6 +149,22 @@ class WorkbenchManifest(BaseModel):
 
     def sorted_groups(self) -> List[GroupSpec]:
         return sorted(self.groups, key=lambda g: (g.order, g.id))
+
+    def sections(self) -> List[Tuple[str, List[GroupSpec]]]:
+        """业务域 → 该域下的业务线（已按 order 排好）。
+
+        域的顺序 = **域内最小 order 首次出现的顺序**（`sorted_groups()` 是
+        order 升序的，所以按它扫一遍、dict 记住首次出现即可）。没写 section 的
+        统一压到最后。
+
+        **向后兼容**：不写 `section` 的清单只会得到 `[("", [全部业务线])]` ——
+        调用方（导航树）据此走"平铺"那条老路，行为与加这个字段之前完全一致。
+        """
+        buckets: Dict[str, List[GroupSpec]] = {}
+        for group in self.sorted_groups():
+            buckets.setdefault(group.section, []).append(group)
+        # 稳定排序：只按"是不是空域"分两类，同类保持插入顺序（= 域内最小 order）
+        return sorted(buckets.items(), key=lambda item: item[0] == "")
 
     def modules_of(self, group_id: str, area: Optional[str] = None) -> List[ModuleSpec]:
         """某业务线（可选再按区域过滤）的模块，按 (order, id) 升序。"""

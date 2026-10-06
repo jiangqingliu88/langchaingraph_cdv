@@ -9,21 +9,6 @@
 // 本类只声明按 is_master 划分给 master/slave 的专有字段。
 class {{ agent.name }}_master_seq_item extends {{ agent.name }}_base_seq_item;
   // ── file 注册机制：字段注册进 factory（copy/compare/print/pack 自动化）──
-  //   基类字段由基类的 utils 块注册（do_* 会沿继承链调 super），这里只注册新增字段
-  `uvm_object_utils_begin({{ agent.name }}_master_seq_item)
-    // master 字段
-{%- for var in transaction_vars %}
-{%-   if var.is_master != 'False' %}
-    {{ fm.uvm_field(var) }}
-{%-   endif %}
-{%- endfor %}
-    // slave 响应字段
-{%- for var in transaction_vars %}
-{%-   if var.is_master == 'False' %}
-    {{ fm.uvm_field(var) }}
-{%-   endif %}
-{%- endfor %}
-  `uvm_object_utils_end
 
   // ── master 字段（is_master=True：master 驱动/生成）──
 {%- for var in transaction_vars %}
@@ -45,6 +30,22 @@ class {{ agent.name }}_master_seq_item extends {{ agent.name }}_base_seq_item;
 {%- for cons in transaction_constraints.master %}
   constraint {{ cons.name }} {{ cons.value | safe }}
 {%- endfor %}
+
+  //   基类字段由基类的 utils 块注册（do_* 会沿继承链调 super），这里只注册新增字段
+  `uvm_object_utils_begin({{ agent.name }}_master_seq_item)
+    // master 字段
+{%- for var in transaction_vars %}
+{%-   if var.is_master != 'False' %}
+    {{ fm.uvm_field(var) }}
+{%-   endif %}
+{%- endfor %}
+    // slave 响应字段
+{%- for var in transaction_vars %}
+{%-   if var.is_master == 'False' %}
+    {{ fm.uvm_field(var) }}
+{%-   endif %}
+{%- endfor %}
+  `uvm_object_utils_end
 
   function new(string name = "{{ agent.name }}_master_seq_item");
     super.new(name);

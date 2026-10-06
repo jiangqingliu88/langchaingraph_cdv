@@ -26,12 +26,16 @@ def run_compile_check(output_dir: Path, agents: list, env_name: str,
     top = f"{env_name}_bench_tb_top"
 
     t0 = time.time()
+    # **按 `RegressionRunner` 的真实签名调。** 这里原来还传了 `compile_dir=...`，
+    # 而那个参数在 runner 上不存在（`regression_framework` 现在只剩 sourceless 的
+    # `.pyc`，签名是 `(env_output_dir, filelist, top_module, coverage)`）——
+    # 于是这个函数每次都是 `TypeError`，编译检查从来没跑起来过。
+    # `eda_backend.QuestaEdaBackend.compile` 是同一套调用，它传的就是对的。
     runner = RegressionRunner(
         env_output_dir=str(output_dir),
         filelist=str(fl.resolve()),
         top_module=top,
         coverage=False,
-        compile_dir=compile_dir,
     )
     result = runner.compile()
     elapsed = round(time.time() - t0, 1)

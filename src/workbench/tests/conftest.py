@@ -116,6 +116,46 @@ def qt_app():
     yield app
 
 
+@pytest.fixture(autouse=True)
+def _isolate_cwd(tmp_path, monkeypatch):
+    """把工作目录隔离到临时目录 —— 否则测试会往**真实项目**的审计记录里写。
+
+    人工编辑记账的链是**项目级**的，按 cwd 解析到 `.signoffai/human_edits.json`
+    （与 `.signoffai/` 下那几个 db、`rl_policy.json` 同一个成长目录）。不隔离的话，
+    测试里任何一次"保存 YAML"都会往仓库自己的证据链里加一条 —— 跑一次测试污染
+    一次项目审计记录，而且**不会有人发现**（链只会一直往后长，自校验还照样通过）。
+    实测跑完整套留下了 16 条 pytest 临时目录的记录。
+
+    与 `_drain_deferred_deletes` 同一类处置：放在这里一处修好，好过在每个会保存
+    文件的测试里各打一次补丁 —— 后者总会漏。
+    """
+    monkeypatch.chdir(tmp_path)
+
+
+@pytest.fixture(autouse=True)
+def _drain_deferred_deletes(qt_app):
+    """每个用例收尾时**真正销毁** `deleteLater()` 排队的控件。
+
+    这是个 Qt 的坑，不是可有可无的清理：`deleteLater()` 只把删除**排进事件
+    队列**，而 `processEvents()` **不处理 `DeferredDelete`** —— 得显式
+    `sendPostedEvents(None, DeferredDelete)`。只调 `processEvents()` 的话控件
+    会一直活着（实测：建了 case 建模窗口后 `close + deleteLater +
+    processEvents`，窗口仍在）。
+
+    代价是**全局换主题**：`theme.apply()` 会把样式表刷到每一个活着的控件上，
+    case 建模那个 11 页窗口一个就 0.7s；泄漏的窗口堆起来，`test_icons` 里的
+    主题切换用例会被拖到分钟级、看起来像卡死。
+
+    放在这里而不是逐个改调用点：一处修好全部 25 个 `deleteLater()` 点，
+    也免得下一个人再踩。
+    """
+    yield
+    from PySide6.QtCore import QEvent
+
+    qt_app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qt_app.processEvents()
+
+
 @pytest.fixture
 def manifest():
     return load_manifest_text(STUB_MANIFEST, source="<conftest>")
@@ -173,10 +213,13 @@ def _casemodel_window(qt_app, settings, *, with_input: bool):
         # 而不是伪造一份清单（那份清单会跟真清单漂移）。
         manifest = manifest.model_copy(deep=True)
         for spec in manifest.modules:
-            if spec.id == "vms.casemodel":
+            if spec.id == "verify.casemodel":
                 spec.input = ""
     window = make_window(qt_app, make_ctx(manifest, manifest_path, settings))
-    return window, window.manager.module("vms.casemodel")
+    # **center 模块是懒加载的**：工作区默认空，要点一下才建。
+    # 这个夹具测的就是 casemodel 本身，所以替它"点"一下。
+    window.manager.open("verify.casemodel")
+    return window, window.manager.module("verify.casemodel")
 
 
 @pytest.fixture
@@ -198,7 +241,7 @@ def casemodel(casemodel_window):
     `save_model` / `reanalyze` / `load` / `pages` / `editor` 都在模块上，
     状态栏与标签页标题要经 `casemodel_window` 看。
     """
-    return casemodel_window.manager.module("vms.casemodel")
+    return casemodel_window.manager.module("verify.casemodel")
 
 
 @pytest.fixture

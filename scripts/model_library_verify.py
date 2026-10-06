@@ -281,13 +281,21 @@ def main() -> int:
         (td / f"{ip}.sv").write_text(model_path.read_text(encoding="utf-8"), encoding="utf-8")
         tb_name = f"tb_{ip}"
         (td / f"{tb_name}.sv").write_text(_TBS[ip], encoding="utf-8")
+        # **路径一律 `.as_posix()`**：Questa 的参数解析把反斜杠当转义，`-work`
+        # 收到 Windows 路径时会把库路径和后面的顶层模块名粘成一个参数 ——
+        # 实测报 `(vopt-2253) No module name found in command-line argument
+        # "...\work.tb_apb_slave"`，于是五个黄金模型一个都验不过（全卡在
+        # `verified=false`，`model_real` 门谁都过不了）。
+        # 仓库里能跑通的几处（`filelist.py`、`tool_check_env_arch`）本来就是
+        # 全程 `.as_posix()`，这里跟上。
         (td / "filelist.f").write_text(
-            f"{td / (ip + '.sv')}\n{td / (tb_name + '.sv')}\n", encoding="utf-8")
+            f"{(td / (ip + '.sv')).as_posix()}\n"
+            f"{(td / (tb_name + '.sv')).as_posix()}\n", encoding="utf-8")
 
         work = td / "work"
         work.mkdir()
         r = subprocess.run(
-            ["vlog", "-work", str(work), "-sv", "-f", str(td / "filelist.f")],
+            ["vlog", "-work", work.as_posix(), "-sv", "-f", (td / "filelist.f").as_posix()],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             cwd=str(td), timeout=180)
         if r.returncode != 0:
@@ -295,7 +303,7 @@ def main() -> int:
             return 1
 
         r = subprocess.run(
-            ["vsim", "-c", "-work", str(work), tb_name, "-do", "run -all; quit -f"],
+            ["vsim", "-c", "-work", work.as_posix(), tb_name, "-do", "run -all; quit -f"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             cwd=str(td), timeout=180)
         out = r.stdout + r.stderr
@@ -306,7 +314,8 @@ def main() -> int:
             return 1
         total, matched, mismatched = int(m.group(1)), int(m.group(2)), int(m.group(3))
         passed = total > 0 and matched == total and mismatched == 0
-        print(f"[{'PASS' if passed else 'FAIL'}] {ip} v{version}: "
+        # 版本号本身就带 `v`（清单里是 `v1`），别再拼一个 —— 原来打出来是 `vv1`
+        print(f"[{'PASS' if passed else 'FAIL'}] {ip} {version}: "
               f"total={total} matched={matched} mismatched={mismatched}")
 
         if not passed:

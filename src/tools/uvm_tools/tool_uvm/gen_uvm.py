@@ -46,6 +46,36 @@ __version__ = "0.1.0"
 COMPANY_TRADEMARK = "SignOffAI（功能签核）"   # ← 替换成你的公司/组织名
 COPYRIGHT_YEAR = "2026"
 
+
+def reproducible_now() -> str:
+    """模板里 `now()` 的实现 —— **确定性**，不再取墙上时钟。
+
+    为什么必须确定：这个值会写进**每个**生成文件的头注释
+    （`base_templates/base_template.sv.j2` 的「创建时间 / 修改时间」）。
+    取墙上时钟的话，同一份输入跑两次得到不同的字节 —— 实测 86 个生成文件里
+    76 个内容哈希不同。而证据链/产物比对正是靠内容哈希判断「这个产物有没有被
+    动过」，假差异会让它失去意义；「可复现」这个卖点也就落不了地。
+
+    规则对齐 reproducible-builds 的 `SOURCE_DATE_EPOCH` 约定：
+
+      · 设了 `SOURCE_DATE_EPOCH`（Unix 秒）→ 用它格式化。CI 想钉死时间、
+        或想要真实时间，都通过这个变量显式给。
+      · 没设 → 返回**空串**，模板里那两行整行不输出（见模板改动）。
+        默认就是可复现的，而不是默认不可复现、要用户自己去关。
+
+    想做「确定性但带时间」，用 YAML 的 `meta.created` / `meta.modified` ——
+    模板已经支持这两个键优先于 `now()`（`meta.created | default('') or now()`）。
+    """
+    epoch = os.environ.get("SOURCE_DATE_EPOCH", "").strip()
+    if not epoch:
+        return ""
+    try:
+        return datetime.fromtimestamp(int(epoch)).strftime("%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError, OSError):
+        # 值给错了不该让生成失败 —— 退回不可复现也要比炸掉好，但要出声
+        print(f"[warn] SOURCE_DATE_EPOCH 不是合法 Unix 秒: {epoch!r}，本次不写时间戳")
+        return ""
+
 # ── 文件头元数据（base_templates/base_template.sv.j2 渲染用）──
 DEFAULT_META = {
     "company": COMPANY_TRADEMARK,
@@ -396,6 +426,20 @@ ENVIRONMENT_ATTR_TEST_TEMPLATES = [
     ("environment_templates/test_templates/test_attr.sv.j2", "{env_name}_attr_test.sv"),
 ]
 
+#: 寄存器（CSR）自带序列测试 —— 每个都是**薄薄一层**：实例化一个 UVM 官方
+#: 寄存器序列（hw_reset / bit_bash / access）并 start。
+#: **只在环境配了 register_model（且有 reg_block）时才产**：没配的环境连寄存器
+#: 模型都没有，产出来就是一堆编译不过的文件。
+ENVIRONMENT_REG_TEST_TEMPLATES = [
+    ("environment_templates/test_templates/csr_hw_reset_test.sv.j2",
+     "{env_name}_reg_hw_reset_test.sv"),
+    ("environment_templates/test_templates/csr_bit_bash_test.sv.j2",
+     "{env_name}_reg_bit_bash_test.sv"),
+    ("environment_templates/test_templates/csr_access_test.sv.j2",
+     "{env_name}_reg_access_test.sv"),
+]
+
+
 ENVIRONMENT_SEQ_TEMPLATES = [
     ("environment_templates/virtual_sequencer.sv.j2", "{env_name}_virtual_sequencer.sv"),
     ("environment_templates/seq_templates/virtual_sequence_base.sv.j2", "{env_name}_virtual_base_seq.sv"),
@@ -629,6 +673,10 @@ class EnvironmentModel:
     config_constraints: List[Dict[str, Any]] = field(default_factory=list)
     tlm_connections: List[Dict[str, Any]] = field(default_factory=list)
     bench: Dict[str, Any] = field(default_factory=dict)
+    #: 工具组件（predictor 等）。它们是**裸 class**，env_pkg 只能 `include`
+    #: 进来（import 不了不在包里的东西）—— 而 env / env_config 里会声明
+    #: 这些类型的成员，所以 include 要排在它们之前。
+    utils: List[Dict[str, Any]] = field(default_factory=list)
     # 属性测试：**一条 = 一个 UVM_TEST = 一个属性取值**（维度×取值）。
     # 内容由 YAML environment.tests 归一化而来（_normalize_tests）；
     # 渲染在 test_attr.sv.j2，为空时不产那个文件。
@@ -896,7 +944,20 @@ class BenchModel:
     # 可选：bind 式 harness（存在时 tb_top 跳过接口实例化与 config_db set，
     # 由 harness.set_vifs() 在测试侧接管 vif 配置；DUT 实例化由 harness.bind_to 推导）
     harness: Dict[str, Any] = field(default_factory=dict)
-    dut_instance: str = "u_dut"     # DUT 实例名（tb_top 按 harness.bind_to 例化）
+    dut_instance: str = "u_dut"     # DUT **实例名**
+    #: DUT **模块名**（tb_top 例化用）。
+    #:
+    #: 与 `dut_instance` 是两回事：一个是 `apb_slave_dut`，一个是 `u_dut`。
+    #: 以前模块名只存在于 `harness.bind_to` 里 —— harness 一撤就没地方放了，
+    #: 于是 tb_top 例化不出 DUT。现在它是 bench 自己的一等字段。
+    dut_module: str = ""
+    #: 要例化进 tb_top 的接口实例（替代 harness 的 bind 式自连接）。
+    #: 每项：{name, type_name, clock, reset, agent_path, ports}
+    #: tb_top 据此例化接口、按**同名端口**直连 DUT、再把 vif set 到 agent 路径。
+    interfaces: List[Dict[str, Any]] = field(default_factory=list)
+    #: DUT / 寄存器模型的源文件 —— 编译清单要收它们
+    dut_filelist: List[str] = field(default_factory=list)
+    ral_filelist: List[str] = field(default_factory=list)
     uvm_config: Dict[str, Any] = field(default_factory=dict)
     wave_dump: Dict[str, Any] = field(default_factory=dict)
     simulation: Dict[str, Any] = field(default_factory=dict)
@@ -1009,8 +1070,13 @@ class JinjaRenderer:
             autoescape=False,
         )
         # 文件头元数据（创建/修改时间 + 商标变量，base_template 兜底用）
-        self.environment.globals["now"] = (
-            lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        #
+        # **`now` 必须是确定性的，否则生成物不可复现。**
+        # 它落在每个生成文件的头注释里（base_template.sv.j2 的「创建/修改时间」）。
+        # 取墙上时钟的话：同一份输入跑两次，实测 86 个文件里 76 个内容哈希不同 ——
+        # 而证据链正是靠**内容哈希**判断「这个产物有没有被动过」。假差异会让比对
+        # 失去意义，「可复现」也就无从谈起。
+        self.environment.globals["now"] = reproducible_now
         self.environment.globals["trademark"] = COMPANY_TRADEMARK
         self.environment.globals["copyright_year"] = COPYRIGHT_YEAR
         self.environment.filters["nl2br"] = lambda value: str(value).replace("\n", "\\n")
@@ -1086,7 +1152,7 @@ class AgentRenderTask(RenderTask):
         _base_pkg = Path(TEMPLATES_DIR).resolve().parent / "base_pkg"
         context = {
             "agent": agent,
-            "base_pkg_dir": os.path.relpath(_base_pkg, base_dir).replace("\\", "/"),
+            "base_pkg_dir": _rel_or_abs(_base_pkg, base_dir),
             **agent.to_context(),
         }
         for entry in INTERFACE_TEMPLATES:
@@ -1315,7 +1381,10 @@ def _generate_output_readme(output_dir: Path, agents: List["AgentModel"],
 
     lines.append("# UVM Verification Environment — Generated Output")
     lines.append("")
-    lines.append(f"**Generated**: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    # 与文件头时间戳同源：`reproducible_now()`（见其说明）。README 也在生成物树里，
+    # 用墙上时钟的话它同样会让「同一输入两次跑」的内容哈希对不上。
+    _gen_ts = reproducible_now()
+    lines.append(f"**Generated**: {_gen_ts}" if _gen_ts else "**Generated**: (未钉时间戳；设 SOURCE_DATE_EPOCH 可写入)")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -1506,6 +1575,14 @@ class EnvironmentRenderTask(RenderTask):
                 rendered.append(self.render_file(template_path,
                                                  tests_dir / target_name, context))
 
+        # 寄存器（CSR）测试：只在配了寄存器模型时才产（模板自身也有 `{% if %}` 兜底，
+        # 但这里先判一次，避免产出一堆空文件）。
+        if context.get("register_model") and context["register_model"].get("reg_block"):
+            for template_path, target_pattern in ENVIRONMENT_REG_TEST_TEMPLATES:
+                target_name = target_pattern.format(env_name=environment.env_name)
+                rendered.append(self.render_file(template_path,
+                                                 tests_dir / target_name, context))
+
         seqs_dir = env_dir / "seqs"
         for template_path, target_pattern in ENVIRONMENT_SEQ_TEMPLATES:
             target_name = target_pattern.format(env_name=environment.env_name)
@@ -1546,24 +1623,37 @@ class EnvironmentRenderTask(RenderTask):
                 continue
             try:
                 data = _yaml.safe_load(agent_yaml.read_text(encoding="utf-8", errors="replace")) or {}
-                txn_vars = data.get("transaction_vars", [])
+                # **transaction_vars 住在 `interfaces:` 里面**：`tool_find_spec_yaml`
+                # 生成的 agent yaml 是 `interfaces: {name, clock, ports, transaction_vars}`。
+                # 原来只读文档顶层的 `data.get("transaction_vars")` —— 恒为 None，
+                # 于是 env 里每个 `covergroup cg_<agent>` 都是**空壳**
+                #（渲染成 `covergroup cg_apb; endgroup`），功能覆盖率永远是 0%。
+                # 顶层那份是手写 agent yaml 的写法，一并兼容。
+                _iface_doc = data.get("interfaces")
+                if isinstance(_iface_doc, dict):
+                    txn_vars = _iface_doc.get("transaction_vars") or []
+                else:
+                    txn_vars = data.get("transaction_vars") or []
                 if hasattr(agent, "transaction_vars"):
                     agent.transaction_vars = txn_vars
                 elif isinstance(agent, dict):
                     agent["transaction_vars"] = txn_vars
             except Exception:
                 pass
-        # 读策略包的 coverage_bins（verify agent 落盘的 env_cov_bins.yaml）
+        # 读策略包的语义 bin（verify agent 落盘的 env_cov_bins.yaml）。
+        # **两个键名都认**：`cov_bins` 是现在写的（与 schema 的文档类型一致），
+        # `coverage_bins` 是老的运行目录里留下的 —— 老的照样能渲染。
         bins_path = yaml_dir / "env_cov_bins.yaml"
+        context["coverage_bins"] = []
         if bins_path.exists():
             try:
                 import json as _json
                 data = _json.loads(bins_path.read_text(encoding="utf-8", errors="replace"))
-                context["coverage_bins"] = data.get("coverage_bins", [])
+                if isinstance(data, dict):
+                    context["coverage_bins"] = data.get("cov_bins") \
+                        or data.get("coverage_bins") or []
             except Exception:
                 context["coverage_bins"] = []
-        else:
-            context["coverage_bins"] = []
 
 
 class ConstraintRenderTask(RenderTask):
@@ -1751,6 +1841,20 @@ def _normalize_agents_list(agents):
                 # name 缺省从 type 推导："apb_master_agent" → "apb_master"
                 t = a.get("type", "")
                 a["name"] = t[:-len("_agent")] if t.endswith("_agent") else t
+            # `interface` 缺省从 name 推导：**一个接口出 master/slave 两个 agent**
+            #（见 interface yaml 的头注释），所以接口名 = agent 名去掉 `_master`/`_slave`。
+            #
+            # 这一步不做的话，env 模板里的 `import {{ agent.interface }}_pkg::*`
+            # 会退化成 agent 自己的名字 —— 生成 `import apb_master_pkg::*`，
+            # 而真实的包叫 `apb_pkg`。于是 env/cfg 里**每一个**跨包类型都变成
+            # "Invalid type"，一屏连带错误，根因却只是这一处。
+            if not a.get("interface"):
+                _n = str(a.get("name", ""))
+                for _suffix in ("_master", "_slave"):
+                    if _n.endswith(_suffix):
+                        _n = _n[: -len(_suffix)]
+                        break
+                a["interface"] = _n
             result.append(a)
         return result
     return []
@@ -1995,6 +2099,43 @@ def _normalize_register_model(raw: Any, agents: List[Any]) -> Dict[str, Any]:
     return {}
 
 
+def _rel_or_abs(target: Path, start: Path) -> str:
+    """`os.path.relpath` 的跨盘安全版（结果一律正斜杠）。
+
+    Windows 上 `os.path.relpath(r"D:\\repo\\base_pkg", r"C:\\tmp\\out")` 直接抛
+    `ValueError: path is on mount 'D:', start on mount 'C:'` —— 只要**生成目录和
+    仓库不在同一个盘**就炸（pytest 的 tmp_path 在 C:，仓库在 D:，一跑就是一片红）。
+    相对路径只是为了让生成物自包含；跨盘时根本表达不了，退回绝对路径即可，
+    vlog / make 都吃得下。
+    """
+    try:
+        return os.path.relpath(target, start).replace("\\", "/")
+    except ValueError:
+        return str(target).replace("\\", "/")
+
+
+def _with_system_type_name(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """bench.interfaces[] 的一项 → 补齐 `system_type_name`。
+
+    每个接口都有个配套的"系统接口" `<x>_system_if`（agent 包里的
+    `interface_system.j2` 生成：里面是 `virtual <x>_if master_if[15:0]` 这类
+    句柄数组，供 system env 把接口分发给多个 agent 实例）。
+
+    **它必须被实例化**：agent 包的 `<x>_system_env.sv` / `<x>_system_monitor.sv`
+    里写着 `uvm_config_db#(virtual <x>_system_if)::get(...)`。Questa 在
+    **load 阶段**会对设计中出现过的 virtual interface 类型做解析，设计里找不到
+    该接口的**任何实例**就报
+      "(vsim-8451) Virtual interface resolution cannot find a matching instance"
+    —— **整个设计加载不了**，哪怕那两个组件根本没被例化过。
+    所以 tb_top 会实例化它并向 master_if/slave_if 数组挂上真实句柄。
+    """
+    entry = dict(raw)
+    type_name = str(entry.get("type_name") or "")
+    if type_name.endswith("_if") and not entry.get("system_type_name"):
+        entry["system_type_name"] = type_name[: -len("_if")] + "_system_if"
+    return entry
+
+
 class YAMLLoader:
     SUPPORTED_SUFFIXES = {".yml", ".yaml"}
     LISTFILE_SUFFIXES = {".f"}   # 清单文件：一行一个 YAML 路径
@@ -2126,6 +2267,9 @@ class YAMLLoader:
             config_constraints=data.get("config_constraints", []),
             tlm_connections=data.get("tlm_connections", []),
             bench=data.get("bench", {}),
+            # util_components 与 environment 在**同一份文档**里，所以这里读得到
+            utils=[{"name": u.get("name")} for u in (data.get("util_components") or [])
+                   if isinstance(u, dict) and u.get("name")],
             tests=_normalize_tests(data.get("tests", [])),
         )
 
@@ -2159,6 +2303,14 @@ class YAMLLoader:
             agents=agents,
             harness=dict(data.get("harness") or {}),
             dut_instance=data.get("dut_instance", "u_dut"),
+            dut_module=data.get("dut_module", ""),
+            # 接口实例清单（替代 harness）。只收形状完整的项 —— 缺 name/type_name
+            # 的条目渲染不出东西，留着只会在 tb_top 里变成一行空声明。
+            interfaces=[_with_system_type_name(i)
+                        for i in (data.get("interfaces") or [])
+                        if isinstance(i, dict) and i.get("name") and i.get("type_name")],
+            dut_filelist=list(data.get("dut_filelist") or []),
+            ral_filelist=list(data.get("ral_filelist") or []),
             uvm_config=data.get("uvm_config", {}),
             wave_dump=data.get("wave_dump", {}),
             simulation=data.get("simulation", {}),
@@ -2302,7 +2454,20 @@ class YAMLLoader:
             if "bench" in data:
                 payload = data["bench"]
                 if isinstance(payload, dict):
-                    benches.append(YAMLLoader.parse_bench_model(payload))
+                    bmodel = YAMLLoader.parse_bench_model(payload)
+                    # DUT / RAL 清单在 YAML 里是**相对该 YAML 的路径**（习惯写法，
+                    # 如 `../apb_slave_dut.sv`），而 Makefile 是在**生成目录**里跑的
+                    # —— 原样渲染就会 "Failed to open design unit file
+                    # ../apb_slave_dut.sv"。这里就地解析成绝对路径，生成目录放哪都能编。
+                    base = path.parent
+                    for attr in ("dut_filelist", "ral_filelist"):
+                        files = getattr(bmodel, attr) or []
+                        if files:
+                            setattr(bmodel, attr, [
+                                f if os.path.isabs(f)
+                                else str((base / f).resolve()).replace("\\", "/")
+                                for f in files])
+                    benches.append(bmodel)
 
             if "constraint" in data:
                 constraints.append(YAMLLoader.parse_constraint_model(data))
@@ -2467,6 +2632,10 @@ class UVMGenerator:
                 "description": comp.get("description", ""),
                 "analysis_exports": comp.get("analysis_exports", []),
                 "analysis_ports": comp.get("analysis_ports", []),
+                # 带这一项 → util 模板把 `process_<port>` 的 TODO 空壳换成真的
+                # 参考模型镜像（见模板与 schema 的 `refModelMirror`）。缺省 None
+                # 保持原样 —— 不带镜像的 util 组件行为逐字节不变。
+                "ref_model": comp.get("ref_model"),
             }
             for tpl_path, target_pattern in _util_templates:
                 target_name = target_pattern.format(name=name)
@@ -2714,6 +2883,18 @@ class UVMGenerator:
         # ── Phase A: 渲染前语义校验（error 阻断生成，warning 不阻断）──
         issues = SemanticValidator.validate(data)
         self.validation_issues = issues
+        # **规则命中落库**：没有这一刻，规则库就只会越加越多 ——
+        # "从来没命中的规则"和"真在干活的规则"在源码里长得一模一样，
+        # 于是没人敢删、也没人知道该调哪条阈值（见 l4_memory/rule_stats.py）。
+        # 旁路：统计失败不影响生成。
+        try:
+            from src.layers.l4_memory.rule_stats import record_rule_hits
+
+            _n = record_rule_hits(issues, run_id=Path(self.output_root).name)
+            if _n:
+                self._log(f"规则命中已记账：{_n} 条（{self.output_root}/.signoffai）")
+        except Exception as _e:                        # noqa: BLE001
+            self._log(f"规则命中记账失败（不影响生成）: {_e}")
         if issues:
             report_path = self.output_root / "validation_report.txt"
             report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2759,6 +2940,14 @@ class UVMGenerator:
         if interfaces:
             generated_files.extend(self.generate_agents(interfaces))
         if environments:
+            # 把**文档级**收集的 util_components 注入每个环境 —— 它们通常写在
+            # 另一个 YAML 里（如 apb_util_comp.yaml），`parse_environment_model`
+            # 看的是自己那份文档，拿不到。env_pkg 要靠它 `include` 那些裸 class
+            #（predictor 等），否则 env / env_config 里 `apb_predictor apb_pred;`
+            # 全是 "Invalid type"。
+            for _env in environments:
+                _env.utils = [{"name": u.get("name")} for u in utils
+                              if isinstance(u, dict) and u.get("name")]
             generated_files.extend(self.generate_environments(environments))
         # env_name 已从 YAML 下线：bench / constraint 的 env 名从本次解析出的
         # environment 回填（都没写时取第一个 environment）
@@ -2821,7 +3010,7 @@ class UVMGenerator:
         # WORK_PATH 由 output_root/Sourceme（`setenv WORK_PATH \`pwd\``）定义，
         # 故整份 filelist 可随目录整体搬迁/换机器，不必重新生成。
         # 相对基准 = output_root（源码 Sourceme 时 pwd 即此处）。
-        _base_rel = os.path.relpath(base_pkg_dir, self.output_root).replace("\\", "/")
+        _base_rel = _rel_or_abs(base_pkg_dir, self.output_root)
         for env in environments:
             ctx = {"environment": env, **env.to_context()}
             ctx["file_name"] = f"{env.env_name}_pkg_filelist.f"
@@ -2862,9 +3051,13 @@ class UVMGenerator:
             mk_target = self.output_root / "Makefile"
             if not self._should_skip(mk_target):
                 mk_ctx = dict(ctx)
+                # Makefile 要读 bench 自己的字段（`dut_filelist` / `ral_filelist`），
+                # 而 mk_ctx 原来只带了 `bench_name` 这个名字 —— 那两个清单因此在
+                # 模板里恒为 undefined，DUT/RAL 一句都进不了编译命令。
+                mk_ctx["bench"] = benches[0] if benches else None
                 mk_ctx["file_name"] = "Makefile"
-                mk_ctx["base_pkg_rel"] = os.path.relpath(
-                    base_pkg_dir, self.output_root).replace("\\", "/")
+                mk_ctx["base_pkg_rel"] = _rel_or_abs(
+                    base_pkg_dir, self.output_root)
                 content = self.renderer.render(
                     "bench_templates/bench_makefile.j2", mk_ctx)
                 content, _ = self.injector.inject(
@@ -3004,6 +3197,8 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             config_constraints=payload.get("config_constraints", []),
             tlm_connections=payload.get("tlm_connections", []),
             bench=payload.get("bench", {}),
+            utils=[{"name": u.get("name")} for u in (payload.get("util_components") or [])
+                   if isinstance(u, dict) and u.get("name")],
             tests=_normalize_tests(payload.get("tests", [])),
         )
         ctx = {"environment": env, **env.to_context()}

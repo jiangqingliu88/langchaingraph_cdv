@@ -233,6 +233,27 @@ def format_issues(issues: List[Issue]) -> str:
     return "\n".join(str(i) for i in issues)
 
 
+_checker_cache: Dict[Path, "SchemaChecker"] = {}
+
+
+def get_checker(schema_path: Path = SCHEMA_PATH) -> "SchemaChecker":
+    """带缓存的校验器 —— **进程内复用同一个实例**。
+
+    给"界面上一张审查台要连着校验好几份 YAML"这种用法：`SchemaChecker.__init__`
+    每次都要读盘 + `json.loads` + 建 `Draft202012Validator`，而 schema 是仓库里的
+    静态文件，一个进程里 parse 一次就够。逐个文件新建实例纯属浪费。
+
+    （`load_schema` 里那句"坏 schema 直接 SystemExit"照旧：坏 schema 是仓库级事故，
+    不该被缓存悄悄吞掉。）
+    """
+    key = Path(schema_path)
+    checker = _checker_cache.get(key)
+    if checker is None:
+        checker = SchemaChecker(key)
+        _checker_cache[key] = checker
+    return checker
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="schema_check.py",

@@ -59,6 +59,11 @@ KIND_COVERAGE_UPDATED = "coverage.updated"
 KIND_DECISION = "decision"
 KIND_APPROVAL_REQUESTED = "approval.requested"
 KIND_APPROVAL_DECIDED = "approval.decided"
+#: 人在界面上改了一个文件（配置或运行产物）。事件落在**运行时间线的正确位置**上
+#: —— 因为日志是追加写的，不会被谁覆盖。与它配对的是**项目级**的人工变更链
+#: `.signoffai/human_edits.json`（见 evidence/human_edit.py 为什么不能塞进
+#: 某次运行的 `file_change_chain.json`）。
+KIND_HUMAN_EDIT = "human.edit"
 
 KIND_PROGRESS = "progress"      # 节点内推的细粒度进度（stream_mode="custom"）
 KIND_NOTE = "note"              # 任意给人看的一句话

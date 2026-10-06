@@ -49,8 +49,9 @@ class DesignAgent(BaseAgent):
         spec = spec_data
         if not isinstance(spec, dict) or not spec.get("design_name"):
             try:
-                from src.tools.spec_tools.main import analyze_specification
-                raw = analyze_specification(spec_text or str(spec_data))
+                from src.layers.l2_orchestration.communication.tool_hub import call_tool
+                raw = call_tool("analyze_specification",
+                                {"spec_text": spec_text or str(spec_data)})
                 spec = json.loads(raw) if isinstance(raw, str) and raw.strip().startswith('{') else {}
             except Exception as e:
                 logger.warning(f"spec 分析失败: {e}")
@@ -64,6 +65,8 @@ class DesignAgent(BaseAgent):
         #     fix_agent=rtl（REFACTOR_RTL）→ 强制重新生成，绕过 IP 缓存（缓存的是功能错的 RTL）
         _params = task.get("params", {}) if isinstance(task.get("params"), dict) else {}
         _force_regen = _params.get("fix_agent") == "rtl"
+        # 修复路径要能回答"我到底改了什么"—— 改前记指纹，改完比对
+        _rtl_before = self._rtl_fingerprint(output_dir) if _force_regen else {}
         ips = self._decompose_ips(spec, module_name, force_regen=_force_regen)
 
         # ── 3. LLM 写手：只对新 IP（reused=False）生成 RTL，复用的直接带库 RTL ──
@@ -124,7 +127,42 @@ class DesignAgent(BaseAgent):
         score = min(50 + len(rtl_files) * 15 + len(spec.get("registers", [])) * 2, 90) \
             if rtl_files else 30
         result["score"] = score
+
+        # ── 修复路径：**"没改动任何 RTL"要如实失败** ──
+        # 实测：一轮 `design_fix` 报 PASS 90、只用了 9.5 秒，而 RTL 与改前逐字节
+        # 相同（守卫那边的 `changed: []` 是准的）。文件写了、内容没变 —— 对"修 bug"
+        # 等于什么都没做，却占掉了这一轮的修复额度，界面上还是一片绿。
+        # 所以这一路自己也要能回答"我改了什么"；没改就说没改。
+        if _force_regen:
+            result["rtl_changed"] = self._rtl_diff(
+                _rtl_before, self._rtl_fingerprint(output_dir))
+            if not result["rtl_changed"]:
+                logger.warning("设计修复没有产生任何 RTL 变化 —— 如实记失败，不当作修复成功")
+                result["score"] = 20
+                return AgentResult(success=False, data=result, error=(
+                    "这次设计修复没有改动任何 RTL（产出与改动前一致）—— "
+                    "要么 LLM 没改，要么改回去了"))
         return AgentResult(success=bool(rtl_files), data=result)
+
+    @staticmethod
+    def _rtl_fingerprint(output_dir: Path) -> dict:
+        """`{文件名: sha256}` —— 修复路径用它回答"我到底改了什么"。"""
+        import hashlib
+
+        out = {}
+        rtl_dir = Path(output_dir) / "rtl"
+        if not rtl_dir.is_dir():
+            return out
+        for f in sorted(rtl_dir.rglob("*.sv")):
+            out[str(f.relative_to(rtl_dir)).replace("\\", "/")] =                 hashlib.sha256(f.read_bytes()).hexdigest()
+        return out
+
+    @staticmethod
+    def _rtl_diff(before: dict, after: dict) -> list:
+        """内容变了的文件（含新增与删除）—— 与 `RefactorGuard.changed_files` 同口径。"""
+        changed = [name for name, digest in after.items() if before.get(name) != digest]
+        changed += [name for name in before if name not in after]
+        return sorted(set(changed))
 
     # ═══════════════════════════════════════════════════════════
     # 架构拆 IP → LLM 写手 → 集成连线

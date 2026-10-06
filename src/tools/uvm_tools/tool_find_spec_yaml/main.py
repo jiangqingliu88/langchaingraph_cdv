@@ -10,6 +10,7 @@ Tool: find_spec_yaml — 从 spec 文本查找已有 YAML 或构造新的 YAML
 import sys, json, re
 import builtins
 from pathlib import Path
+from typing import List
 import shutil as _shutil
 import yaml as _yaml
 
@@ -306,13 +307,125 @@ def _group_agents_by_protocol(spec: dict, rtl_data: dict, module_name: str) -> l
     return agents_spec
 
 
-def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
-                  clock_port: str, reset_port: str, registers: list = None) -> str:
-    """生成 env.yaml：agents + 按协议自动带 predictor/scoreboard 闭环。
+def _iface_name_of(ag_name: str) -> str:
+    """agent 名 → 接口名。**一个接口出 master/slave 两个 agent**（见 interface yaml
+    的头注释），所以接口名 = agent 名去掉 `_master`/`_slave` 后缀。"""
+    n = str(ag_name or "")
+    for suffix in ("_master", "_slave"):
+        if n.endswith(suffix):
+            return n[: -len(suffix)]
+    return n
 
-    只生成 environment.agents（含 env 级 is_active）。原先还会生成
-    predictors + 依赖它的 scoreboards，但 predictors 已下线（见文末注释），
-    故此处不再生成任何参考模型/比对组件。
+
+def _spec_agent_of(agents_spec: list, ag_name: str) -> dict:
+    """从 spec 的 `agents[]` 里取该 agent 原始定义（取不到返回 {}）。"""
+    for ag, _iface in agents_spec or []:
+        if isinstance(ag, dict) and ag.get("name") == ag_name:
+            return ag
+    return {}
+
+
+def _is_active_type(value: str) -> bool:
+    """spec 的 `type` 是不是"激活模式"而不是类名。
+
+    按协议分组那条路会把 `UVM_ACTIVE`/`UVM_PASSIVE` 塞在 `type` 里
+    （见 `_group_agents_by_protocol`）—— 那种值不能原样写进 env.yaml 的 `type:`，
+    否则 env 模板渲染出 `UVM_ACTIVE apb_agent_h;`。
+    """
+    return str(value or "").upper() in ("", "UVM_ACTIVE", "ACTIVE",
+                                        "UVM_PASSIVE", "PASSIVE")
+
+
+def _ref_mirror_gate(module_name: str, interfaces: list, registers: list):
+    """能不能给这个设计接「寄存器镜像」参考模型？能则返回接线参数，不能返回 None。
+
+    ## 为什么不能只凭「黄金命中」就接
+
+    `match_golden()` 是**按协议/信号名关键词**匹配的（`golden_library.py:74-80`），
+    它**没有任何语义证据**。于是只要有 `paddr/pwdata/prdata` 这几个 APB 名字，就会
+    命中 `apb_slave` —— 哪怕这个 DUT 的 `prdata` 根本不来自寄存器堆。
+
+    本仓库自己的 `apb_uart` 就是这种：生成物里 `assign prdata = fifo_rdata;`
+    （FIFO 直出），而 spec 的 `registers` 是**空的**。给它接一个"写啥读啥"的寄存器
+    镜像，每一条读事务都会 mismatch —— 那不是发现了 bug，是**我们自己造了一批
+    假失败**，而且会污染整条回归的结论（`examples/apb/apb_env.yaml` 记的正是
+    这个坑：expected 恒 0、actual 一堆真事务 → "scoreboard FAILED: extras=N"）。
+
+    ## 所以判据是「有证据说明它就是个寄存器文件」
+
+    三条同时成立才接：
+
+      1. 黄金命中 `apb_slave`（只有这一份的语义被镜像实现了）；
+      2. `registers` **非空** —— 空表说明设计根本没声明寄存器语义，没证据；
+      3. 每条寄存器的 `access` 都是 **RW** —— 只要有 RO/WO，镜像的读期望值就与
+         DUT 的真实行为（状态位、只读数据）对不上，必然假失败。
+
+    条件不满足就**不接**，而不是接一个"将就"的。少一个比对是缺功能；接错一个
+    比对是把整套回归的结论弄脏 —— 后者贵得多。
+    """
+    regs = [r for r in (registers or []) if isinstance(r, dict) and r.get("name")]
+    if not regs:
+        return None
+    not_rw = [str(r.get("name")) for r in regs
+              if str(r.get("access", "")).upper() not in ("RW", "")]
+    if not_rw:
+        return None
+
+    try:
+        from src.tools.lib.golden_library import build_ref_model_config
+
+        cfg = build_ref_model_config(module_name, interfaces, registers)
+    except Exception:                                  # noqa: BLE001 命中不了就当没有
+        return None
+    if not cfg or (cfg.get("golden") or {}).get("ip") != "apb_slave":
+        return None
+    if "prdata" not in (cfg.get("compare_outputs") or []):
+        return None
+
+    def _width(sig_names, default):
+        """从 `paddr[7:0]` / `prdata[7:0]` 这类型里取位宽；取不到给默认。"""
+        for i in interfaces:
+            nm = str(i.get("name", ""))
+            if any(k in nm.lower() for k in sig_names) and "[" in nm:
+                rng = nm[nm.index("[") + 1:nm.index("]")]
+                hi, _, lo = rng.partition(":")
+                try:
+                    return abs(int(hi) - int(lo or 0)) + 1
+                except ValueError:
+                    pass
+        return default
+
+    addr_w = _width(("paddr",), 8)
+    data_w = _width(("prdata", "pwdata"), 8)
+    goldie = cfg["golden"]
+    return {
+        "addr_w": addr_w,
+        "data_w": data_w,
+        "nregs": 1 << addr_w,
+        "source": f"golden {goldie.get('ip')} {goldie.get('version', '')}".strip(),
+    }
+
+
+def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
+                  clock_port: str, reset_port: str, registers: list = None,
+                  interfaces: list = None) -> str:
+    """生成 env.yaml：environment.agents（每个 agent 一条）。
+
+    ── `interface` 是**从上层（spec 的 agents[]）传下来的**，不是 agent 名 ──
+
+    spec 里的 agent 长这样：
+        { "name": "apb_master", "interface": "apb", "type": ..., "is_master": true }
+        { "name": "apb_slave",  "interface": "apb", "type": ..., "is_master": false }
+    —— 两个 agent **共用**同一个接口 `apb`。
+
+    这里原来写的是 `interface: {ag_name}`，即拿 agent 名冒充接口名，写出
+    `interface: apb_master`。后果不是"多写了一个字段"，而是**整条 env 链作废**：
+    env 模板渲染 `import {{ agent.interface }}_pkg::*` → `import apb_master_pkg::*`，
+    而真实的包叫 `apb_pkg` —— 于是 env / env_config 里每一个跨包类型都变成
+    "Invalid type"，一屏连带错误，根因却只是这一处的字段来源错了。
+
+    字段语义的参考样本见 `examples/apb/apb_env.yaml`（那边是 list 形式，
+    `_normalize_agents_list` 两种形式都收）。
     """
     # 激活模式落在 env 级 agents[].is_active（interface 级不再携带）：
     #   有 DUT input 端口（需驱动）→ active；纯 output（仅监控）→ passive。
@@ -325,21 +438,119 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
 
     agent_lines = []
     for ag_name in agent_names:
-        is_active = "true" if active_by_name.get(ag_name, True) else "false"
-        agent_lines.append(f"    {ag_name}:\n      interface: {ag_name}\n"
-                           f"      clock: {clock_port}\n      reset: {reset_port}\n"
-                           f"      is_active: {is_active}")
+        spec_ag = _spec_agent_of(agents_spec, ag_name)
+        is_active = active_by_name.get(ag_name, True)
+        # **接口名从上层传下来**（spec 的 agents[].interface），不是 agent 名。
+        iface_name = str(spec_ag.get("interface") or "") or _iface_name_of(ag_name)
+        # master/slave：spec 显式给了就用，否则按名字后缀推
+        is_master = spec_ag.get("is_master")
+        if is_master is None:
+            is_master = not str(ag_name).endswith("_slave")
+        # **`type` 必须写对**：env 模板靠它推 seq_item / config / sequence 类型名
+        #（`base_name = type 去掉 _agent`）。不写或写成 `UVM_ACTIVE` 时，
+        # env 渲染出 `apb_seq_item` / `apb_config` 这些**不存在的类** →
+        # 生成物一片 "near \"::\": syntax error"。
+        type_name = str(spec_ag.get("type") or "")
+        if _is_active_type(type_name):
+            type_name = f"{iface_name}_{'master' if is_master else 'slave'}_agent"
+        agent_lines.append(
+            f"    - name: {ag_name}\n"
+            f"      is_active: {'true' if is_active else 'false'}\n"
+            f"      is_master: {'True' if is_master else 'False'}\n"
+            f"      interface: {iface_name}\n"
+            f"      type: {type_name}\n"
+            f"      clock: {clock_port}\n"
+            f"      reset: {reset_port}")
 
-    lines = [f"environment:\n  name: {module_name}_env\n  agents:\n" + "\n".join(agent_lines)]
+    # ── clk_rst_vip：**必须有**，否则整条闭环是死的 ──
+    #
+    # 环境里的时钟/复位由 `clk_rst_agent` 驱动（tb_top 只实例化 `clk_rst_if`，
+    # env 从 config_db 取出来转给 agent）。这段不写，env 模板就一个 clk_rst agent
+    # 都不建 —— `pclk` 永远是 0，driver 里的 `@(posedge pclk)` 永远等不到，
+    # 所有测试挂到 UVM 的 PH_TIMEOUT（9200 秒仿真时间），**覆盖率恒为 0**。
+    # 实测踩过：回归"25/25 全过"其实是测试名不存在（UVM_FATAL INVTST）导致的假过；
+    # 把名字修对之后 23 条全红，日志停在 "main_phase: start" 之后再无任何活动。
+    #
+    # 复位极性按**端口名**判断：`preset_n` / `rst_n` / `rstn` 这类以 n 结尾的是低有效。
+    _rst = str(reset_port or "rst")
+    _rst_low = _rst.lower().endswith("_n") or _rst.lower().endswith("n")
 
-    # 注：原先这里还会生成 predictors + 依赖它的 scoreboards。predictors 已下线
-    # （schema 不再接受该字段，且 env 模板从不例化它——声明了只是个孤立文件），
-    # 故一并移除。scoreboards 也必须一起去掉：它的 expected_from 唯一来源就是
-    # predictor，留着会得到一个「永远收不到 expected」的空 scoreboard —— 它不会
-    # 报错，只会永远不报 mismatch，比没有更危险。
-    # 需要参考模型时走 analysis_components（见 examples/apb/apb_env.yaml）。
+    lines = [
+        f"environment:\n  name: {module_name}_env\n  agents:\n" + "\n".join(agent_lines),
+        "  clk_rst_vip:",
+        "    enabled: true",
+        "    clocks:",
+        f"      - {{ name: {clock_port}, period_ps: 10000, duty_cycle: 50, initial_value: 0, jitter_ps: 0 }}",
+        "    resets:",
+        f"      - {{ name: {_rst}, active_low: {'True' if _rst_low else 'False'}, assert_cycles: 10, recover_cycles: 5 }}",
+    ]
 
-    return "\n".join(lines) + "\n"
+    # ── 参考模型比对：analysis_components + scoreboards + tlm_connections ──
+    #
+    # 原先这里生成过 predictors + scoreboards，后来整段删了 —— 理由是当时那个
+    # predictor 的 `process_<port>` 是个 **TODO 空壳**（`util_comp.sv.j2`），它永不写
+    # `out_port`，于是接上去的 scoreboard expected 侧恒为 0、actual 是一堆真事务，
+    # 每条用例都报假失败（`examples/apb/apb_env.yaml` 记的正是这一条）。
+    #
+    # 空壳那一半已经补上了：带 `ref_model` 的 util 组件会渲染出**真的**寄存器镜像
+    # （见模板与 `#/$defs/refModelMirror`）。所以这里可以重新接 —— 但只在
+    # `_ref_mirror_gate()` 认得出"这个设计确实是个寄存器文件"时才接（判据与理由
+    # 都写在那儿的文档串里）。接不动就什么都不加：**没有 scoreboard** 的 env 至少
+    # 是诚实的，假失败的 scoreboard 会让整条回归的结论不可信。
+    mirror = _ref_mirror_gate(module_name, interfaces or [], registers or [])
+    util_blocks: List[str] = []
+    if mirror:
+        # 找一个 **master** 的 APB agent：expected 侧要跟 actual 侧同一条事务流。
+        bus = None
+        for ag_name in agent_names:
+            spec_ag = _spec_agent_of(agents_spec, ag_name)
+            is_master = spec_ag.get("is_master")
+            if is_master is None:
+                is_master = not str(ag_name).endswith("_slave")
+            iface = str(spec_ag.get("interface") or "") or _iface_name_of(ag_name)
+            if is_master and iface:
+                bus = (ag_name, iface)
+                break
+        if bus:
+            ag_name, iface = bus
+            item_t = f"{iface}_master_seq_item"
+            pred_cls = f"{iface}_ref_predictor"
+            pred_h = f"{iface}_ref_pred"
+            scb_h = f"{module_name}_scb"
+
+            lines += [
+                # env 级组件：predictor 由 `util_components` 生成（env_pkg 会 include 它），
+                # 这里只声明/例化 —— 类型名 = 那个生成类的类名。
+                "  analysis_components:",
+                f"    - name: {pred_h}",
+                f"      type: {pred_cls}",
+                "  scoreboards:",
+                f"    - name: {scb_h}",
+                "      sb_type: in_order_scoreboard",
+                f"      trans_type: {item_t}",
+                f"      params: [{item_t}, {item_t}]",
+                "  tlm_connections:",
+                # actual：DUT 侧 monitor 出来的事务（`<agent>_agent_ap` 由 env 模板建）
+                f"    - {{ driver: {ag_name}_agent_ap, receiver: {scb_h}.actual_export }}",
+                # expected：参考模型镜像算出来的那份
+                f"    - {{ driver: {pred_h}.out_port, receiver: {scb_h}.expected_export }}",
+            ]
+            util_blocks.append(
+                "util_components:\n"
+                f"  - name: {pred_cls}\n"
+                "    type: uvm_component\n"
+                "    description: \"参考模型镜像（APB 寄存器文件）—— 读事务给出期望 prdata\"\n"
+                "    analysis_exports:\n"
+                f"      - {{ name: in_export, type: {item_t} }}\n"
+                "    analysis_ports:\n"
+                f"      - {{ name: out_port, type: {item_t} }}\n"
+                "    ref_model:\n"
+                f"      nregs: {mirror['nregs']}\n"
+                f"      addr_w: {mirror['addr_w']}\n"
+                f"      data_w: {mirror['data_w']}\n"
+                f"      source: '{mirror['source']}'")
+
+    return "\n".join(lines + util_blocks) + "\n"
 
 
 def _gen_uart_serial_logic() -> str:
@@ -389,6 +600,7 @@ def _gen_uart_deserialize_logic() -> str:
 def _generate_uart_yaml(agent: dict, interface: dict, module_name: str) -> str:
     """生成 UART 帧级 agent YAML：事务 = data 字节 + irq，driver 串行化 rx。
 
+
     tx/rx 是物理串行线（端口），不进事务；tx 反串行化（monitor 侧）需
     task 级采样，当前 monitor 是 function 采样，暂不接（见 _gen_uart_serial_logic 注释）。
     """
@@ -430,12 +642,19 @@ def _generate_uart_yaml(agent: dict, interface: dict, module_name: str) -> str:
                      + ", width: " + str(p.get('width', 1)) + " }")
     lines.append("  transaction_vars:")
     lines.append("    - { name: data, type: \"bit [7:0]\", iscompare: 'True', isrand: 'True' }")
-    lines.append("  custom_drive_logic: |")
-    for ln in _gen_uart_serial_logic().split("\n"):
-        lines.append("    " + ln)
-    lines.append("  custom_collect_logic: |")
-    for ln in _gen_uart_deserialize_logic().split("\n"):
-        lines.append("    " + ln)
+    # 注：这里原来还会写 `custom_drive_logic` / `custom_collect_logic`（UART 的
+    # 串行化/反串行化 SV 代码）。**已删除**，因为那是 `custom_code` 功能的残骸，而
+    # 那个功能下线了：`gen_uvm.py:539` 明写「pragma custom 区域不再从 YAML 回填
+    # （custom_code 已下线）」。没有任何模板读这两个键（模板走的是 `// pragma custom
+    # ... begin/end` 那套**人工**注入约定），`gen_uvm` 也不读。
+    #
+    # 后果不只是"写了没用"：`interface` 的 schema 是 `additionalProperties: false`，
+    # 这两个键必然校验失败 → `gen_uvm` 抛 SystemExit → **UART 这条路整条跑不通**。
+    # 与之前 bench 里那段 `ref_model:` 是同一个形状。
+    #
+    # `_gen_uart_serial_logic` / `_gen_uart_deserialize_logic` 两个函数**保留**：
+    # 内容是能用的 SV，只是暂时没接线。要复活这个功能，正确的入口是
+    # `gen_uvm` 的 PragmaCustomInjector（往 pragma 槽里注），而不是回填 YAML。
     return "\n".join(lines) + "\n"
 
 
@@ -623,6 +842,9 @@ def run(spec_text: str) -> str:
             # 按协议边界分组（spec.protocol 优先；缺失时 LLM/命名约定分类）
             agents_spec = _group_agents_by_protocol(spec, rtl_data, module_name)
 
+        #: 回退路径**自己写过** YAML 的 agent —— 主循环别再生成一遍把内容覆盖掉
+        prewritten: set = set()
+
         if not agents_spec:
             # 回退：从 RTL 端口构造 in/out agents（无 protocol 信息时的最后手段，带告警）
             if rtl_data and rtl_data.get("ports"):
@@ -663,6 +885,17 @@ def run(spec_text: str) -> str:
                 yaml_path = uvm_yaml_archive / f"{agent_name}.yaml"
                 yaml_path.write_text(yaml_str, encoding="utf-8", errors="replace")
                 yaml_files.append(str(yaml_path))
+                # **也要登记进 agents_spec**：此前这里只写文件、不登记，于是
+                # agent_names 是空的 —— env.yaml 写出 `agents:` 空值（schema 判
+                # "None 不是 array"）、bench 的 harness 一个 interface 都没有。
+                # 文件已经写过了，所以记进 prewritten，免得主循环再生成一遍覆盖掉。
+                agents_spec.append((
+                    {"name": agent_name,
+                     "type": "UVM_ACTIVE" if direction == "in" else "UVM_PASSIVE",
+                     "ports": [{"name": n} for n in ("clk", "rst", "data", "valid", "ready")]},
+                    {"name": agent_name},
+                ))
+                prewritten.add(agent_name)
             print(f"  [find_yaml] Using generic data/valid/ready template (no spec/RTL data)", flush=True)
 
         # ── 5. 从 spec/RTL 数据生成 agent YAML ──
@@ -678,6 +911,8 @@ def run(spec_text: str) -> str:
             clock_port = ag["clock"]
             reset_port = ag["reset"]
 
+            if ag_name in prewritten:          # 回退路径自己写过，别覆盖
+                continue
             if ag_name.lower() == "uart":
                 yaml_str = _generate_uart_yaml(ag, iface, module_name)
             else:
@@ -688,10 +923,11 @@ def run(spec_text: str) -> str:
             print(f"  [find_yaml] Generated {ag_name}.yaml (from spec interfaces)" if spec else
                   f"  [find_yaml] Generated {ag_name}.yaml (from RTL ports)", flush=True)
 
-        # ── 6. 生成 env YAML（agents + predictors + scoreboards 闭环）──
+        # ── 6. 生成 env YAML（agents + 参考模型比对闭环）──
         registers = (spec or {}).get("registers", []) if isinstance(spec, dict) else []
+        ifaces = (spec or {}).get("interfaces", []) if isinstance(spec, dict) else []
         env_str = _gen_env_yaml(module_name, agent_names, agents_spec,
-                                clock_port, reset_port, registers)
+                                clock_port, reset_port, registers, ifaces)
         env_path = uvm_yaml_archive / "env.yaml"
         env_path.write_text(env_str, encoding="utf-8", errors="replace")
         yaml_files.append(str(env_path))
@@ -738,137 +974,90 @@ def run(spec_text: str) -> str:
         if _rst:
             reset_port = _rst
 
-        # Wire declarations（排除 clock/reset，它们已在 bench 模板中声明为 reg）
-        wire_lines = []
-        for p in all_ports:
-            if _is_clock_port(p["name"]) or _is_reset_port(p["name"]):
-                continue
-            w = p.get("width", 1)
-            wire_lines.append(
-                f"    - {{ name: {p['name']}, width: {w} }}"
-                if w > 1 else
-                f"    - {{ name: {p['name']}, width: 1 }}"
-            )
+        # ── 接口实例清单（**bind 式 harness 已退役**）──
+        #
+        # 形状照着 `examples/apb/apb_bench.yaml`：tb_top 直接例化每个接口，再把 DUT
+        # 的**同名端口**接上去（`.paddr(apb_if_inst.paddr)`），并把接口广播给 agent。
+        # 三个字段挨着消费侧对：
+        #   · `dut_module` + `dut_instance` —— tb_top 靠它例化 DUT
+        #     （`harness.bind_to` 是退役的写法，tb_top 只在没有 `dut_module` 时才回退到它）
+        #   · `interfaces[].type_name` = `{agent}_if` —— interface 模板生成的 SV
+        #     接口**类型名**（interface_templates/interface.sv.j2）
+        #   · `interfaces[].agent_path` = `[{agent}_agent_h]` —— env 里 agent 的
+        #     **实例路径**（env.yaml 的 `agents[].name` + `_agent_h`），
+        #     tb_top 用它做 `uvm_config_db#(virtual ...)::set(null, "*.<path>*", "vif", ...)`
+        #
+        # `ports` 是**接口与 DUT 同名直连**的信号名：接口端口必须真的存在、且 DUT
+        # 里也得有同名端口，两个条件同时满足才写进来（不同名的宁可不连 —— 悬空端口在
+        # SV 里合法，连到不存在的信号直接编译不过）。
+        dut_port_names = {p["name"] for p in all_ports}
 
-        # DUT ports
-        dut_port_lines = []
-        for p in all_ports:
-            dut_port_lines.append(f"      - {{ name: {p['name']}, connection: {p['name']} }}")
+        def _port_names(ag_name: str) -> List[str]:
+            """这个 agent 的接口有哪些端口 —— **与 `_generate_interface_yaml` 同源**。
 
-        # DUT parameters（从 RTL 实际 parameter 列表，不从端口宽度推断）
-        dut_params_lines = []
-        if rtl_data and rtl_data.get("params"):
-            for param in rtl_data["params"]:
-                dut_params_lines.append(
-                    f"      - {{ name: {param['name']}, value: {param['value']} }}"
-                )
+            两处必须一致：tb_top 直连的是接口的端口，接口的端口写错了名字，
+            这里连的就不是同一个东西。所以取法照抄那边：先看 agent 自带的
+            `ports`，没有就用 spec 接口的 `signals`（嵌套写法）。
+            """
+            ag_data, iface = next(
+                ((ag, i) for ag, i in agents_spec if ag.get("name") == ag_name),
+                (None, None))
+            names = [p.get("name") for p in ((ag_data or {}).get("ports") or [])
+                     if isinstance(p, dict)]
+            if not any(names) and isinstance(iface, dict):
+                sigs = iface.get("signals")
+                if isinstance(sigs, dict):
+                    names = list(sigs)
+                else:
+                    names = [p.get("name") for p in (iface.get("ports") or [])
+                             if isinstance(p, dict)]
+            return [str(n) for n in names if n]
 
-        # Agent connections (connect each agent's ports to corresponding wires)
-        agent_bench_lines = []
+        bench_if_lines = []
         for ag_name in agent_names:
-            ag_data = None
-            for ag, _ in agents_spec:
-                if ag.get("name") == ag_name:
-                    ag_data = ag
-                    break
-            ag_ports = ag_data.get("ports", []) if ag_data else []
-            # 找对应的 clock/reset
-            ag_clock = ag_data.get("clock", clock_port) if ag_data else clock_port
-            ag_reset = ag_data.get("reset", reset_port) if ag_data else reset_port
+            # **时钟/复位不进 `ports`**：tb_top 已经把它们从 `clk_rst_if` 接到 DUT 上了
+            #（`.pclk(pclk_vif.clk[0])`），再按接口同名接一遍会渲染出**重复的端口连接**
+            #（`.pclk` 出现三次）→ vlog 判重名端口。所以这里只留数据信号。
+            names = [n for n in _port_names(ag_name)
+                     if n in dut_port_names and n not in (clock_port, reset_port)]
+            ordered = [n for n in names if n not in (clock_port, reset_port)]
+            block = [
+                f"    - name: {ag_name}_if",          # interface **实例名**
+                f"      type_name: {ag_name}_if",     # interface **类型名**
+                f"      clock: {clock_port}",
+                f"      reset: {reset_port}",
+                # agent_path = env 里 agent 的**实例路径**（env.yaml 的 agents[].name + _agent_h）
+                f"      agent_path: [{ag_name}_agent_h]",
+            ]
+            if ordered:
+                block.append(f"      ports: [{', '.join(ordered)}]")
+            bench_if_lines.append("\n".join(block))
 
-            conn_lines = []
-            for p in ag_ports:
-                conn_lines.append(f"        - {{ port: {p['name']}, wire: {p['name']} }}")
-            # 确保 clock 和 reset 连接
-            if not any(c for c in conn_lines if f"port: {ag_clock}" in c):
-                conn_lines.insert(0, f"        - {{ port: {ag_clock}, wire: {ag_clock} }}")
-            if not any(c for c in conn_lines if f"port: {ag_reset}" in c):
-                conn_lines.insert(1, f"        - {{ port: {ag_reset}, wire: {ag_reset} }}")
-
-            agent_bench_lines.append(
-                f"    {ag_name}:\n"
-                f"      interface: {ag_name}\n"
-                f"      clock: {ag_clock}\n"
-                f"      reset: {ag_reset}\n"
-                f"      instance: {ag_name}_if\n"
-                f"      connections:\n"
-                + "\n".join(conn_lines)
-            )
+        # 没有 agent 时 `interfaces:` 不能留空 —— 空值不是 array，schema 会判 None
+        interfaces_block = ("\n" + "\n".join(bench_if_lines)) if bench_if_lines else " []"
 
         bench_str = f"""bench:
   name: {module_name}_bench
-  env_name: {module_name}_env
-  timeout: 10ms
-  clk_rst:
+  include_assertions: false
+  clk_rst_if:
     clocks:
       - {{ name: {clock_port}, period: 10ns, init: 0 }}
     resets:
       - {{ name: {reset_port}, init: 0, release_delay: 10 }}
-  wire_decls:
-{chr(10).join(wire_lines)}
-  assignments: []
-  agents:
-{chr(10).join(agent_bench_lines)}
-  dut:
-    module: {dut_module}
-    instance: u_{dut_module}
-    parameters:
-{chr(10).join(dut_params_lines) if dut_params_lines else '      []'}
-    ports:
-{chr(10).join(dut_port_lines)}
+  dut_module: {dut_module}
+  dut_instance: u_{dut_module}
+  interfaces:{interfaces_block}
 """
         # ── 参考模型接入（黄金模型命中时）：tb_top 真实实例化 DUT vs 参考模型比对 ──
         # 修复历史缺口：ref_model_enabled 默认 false → "参考模型比对"从未真正发生。
         # 现在按 spec 接口匹配黄金库（apb_slave 等），生成端口映射 + 比对输出。
-        try:
-            from src.tools.lib.golden_library import build_ref_model_config
-            _norm_ifaces = []
-            for _iface in (spec.get("interfaces", []) if isinstance(spec, dict) else []) or []:
-                if not isinstance(_iface, dict):
-                    continue
-                if _iface.get("signals"):
-                    # 嵌套格式 {signals: {sig: {direction, width}}}
-                    for _sig, _s in _iface["signals"].items():
-                        _norm_ifaces.append({
-                            "name": _sig,
-                            "direction": (_s or {}).get("direction", "input"),
-                            "protocol": _iface.get("protocol", ""),
-                        })
-                else:
-                    # 扁平格式 {name, direction, protocol}
-                    _norm_ifaces.append({
-                        "name": _iface.get("name", ""),
-                        "direction": _iface.get("direction", "input"),
-                        "protocol": _iface.get("protocol", ""),
-                    })
-            _ref_cfg = build_ref_model_config(
-                module_name, _norm_ifaces,
-                (spec.get("registers") if isinstance(spec, dict) else None) or [])
-            if _ref_cfg:
-                _g = _ref_cfg.get("golden", {})
-                _g_str = f"{{ ip: {_g.get('ip', '')}"
-                if _g.get("version"):
-                    _g_str += f", version: {_g['version']}"
-                if _g.get("parts"):
-                    _g_str += f", parts: [{', '.join(_g['parts'])}]"
-                _g_str += " }"
-                _ref_lines = [
-                    "  ref_model:",
-                    f"    enabled: {str(_ref_cfg['enabled']).lower()}",
-                    f"    module: {_ref_cfg['module']}",
-                    f"    golden: {_g_str}",
-                    "    port_map:",
-                ]
-                for _m in _ref_cfg["port_map"]:
-                    _ref_lines.append(
-                        f"      - {{ ref_port: {_m['ref_port']}, dut_port: {_m['dut_port']} }}")
-                _ref_lines.append(
-                    f"    compare_outputs: [{', '.join(_ref_cfg['compare_outputs'])}]")
-                bench_str += "\n".join(_ref_lines) + "\n"
-                print(f"  [find_yaml] 参考模型接入: {_ref_cfg['module']} "
-                      f"({_ref_cfg['golden']['ip']} {_ref_cfg['golden']['version']})")
-        except Exception as e:
-            print(f"  [find_yaml] 参考模型接入失败: {e}")
+        # 注：这里原先还会往 bench 里塞一段 `ref_model:`（黄金参考模型接入）。已删除：
+        #   · `bench` 的 schema 是 `additionalProperties: false`，而 `ref_model` **不在**
+        #     允许键里 —— 写了必然校验失败（这正是「点了启动就卡死」的触发源之一）
+        #   · 没有任何模板读它（bench_templates 只用到 clk_rst / dut_instance /
+        #     env_name / harness / name / wave_dump），也没有任何 python 读它
+        # 也就是说它既进不去、又没人用。参考模型的正当归宿是 env 级的
+        # `analysis_components`（见 examples/apb/apb_env.yaml），那是另一件事。
 
         bench_path = uvm_yaml_archive / "bench.yaml"
         bench_path.write_text(bench_str, encoding="utf-8", errors="replace")
@@ -919,6 +1108,36 @@ def _is_agent_active(output_dir: Path, agent_name: str) -> bool:
     return True
 
 
+def _dedupe_loopback_tests(test_lines: list, lb_names: set) -> list:
+    """重名 test 只保留**最后一次**出现的那条（带独立 loopback build + 正确顶层）。
+
+    为什么必须"留最后一条"而不是"遇到重名就全删"：loopback 用例由**两处**产生 ——
+      · case 库里那条：绑在 DUT build 上、顶层是 `<m>_bench_tb_top`（**错**）；
+      · 本函数上面刚生成的那条：绑 `build_<m>_<ag>_loopback`、顶层 `<ag>_loopback_tb`（**对**）。
+    后者排在后面。原先的写法把**所有**同名的都删了 —— 把对的那条也删掉，只剩绑错
+    build 的那条；那目录里是给别的 top 用的脚本，一跑就是 "Error loading design"，
+    记成 `unknown`，还会让闭环绕开覆盖率阶段。
+    """
+    if not lb_names:
+        return list(test_lines)
+    last: dict = {}
+    for i, line in enumerate(test_lines):
+        if line.startswith("  - name: "):
+            name = line[len("  - name: "):].strip()
+            if name in lb_names:
+                last[name] = i
+    kept: list = []
+    skip = False
+    for i, line in enumerate(test_lines):
+        if line.startswith("  - name: "):
+            name = line[len("  - name: "):].strip()
+            # 只在**不是最后一次**出现时丢弃（即丢掉重复的早期那条）
+            skip = name in lb_names and i != last.get(name)
+        if not skip:
+            kept.append(line)
+    return kept
+
+
 def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
                                module_name: str, env_name: str,
                                top_module: str,
@@ -966,6 +1185,36 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     except Exception:
         cases = []
 
+    dut_build = f"build_{module_name}_dut"
+    dut_top = f"{top_module}_bench_tb_top"
+
+    def _sim_run_cmd(top: str, uvm_test: str) -> str:
+        """一条完整的仿真命令（demo.yaml 的 `run_cmd` 写法）。
+
+        比旧的 `run_opts` + 全局 `settings.simulators.<sim>.run` 模板强在：
+        顶层模块名、日志文件、**跑完怎么判成败**都能直接写进来，不必挤占
+        `run_opts`，也不必再管"框架会在命令尾巴追加 `> sim.log 2>&1`"。
+
+        末尾那句 `! grep ...` 是**唯一的失败判据**：回归框架只看退出码，而 vsim
+        无论跑出多少 UVM_ERROR / UVM_FATAL，只要最后 `quit -f` 了就是 exit 0 ——
+        实测 `+UVM_TESTNAME=不存在的测试` 这种 UVM_FATAL(INVTST) 也是 0，
+        于是"一条都没跑"被记成 PASS。**只匹配计数非 0 的那行**
+        （`UVM_ERROR :    3`）；匹配裸 `UVM_ERROR :` 会连 `UVM_ERROR :    0` 一起命中。
+        日志走 `-l sim_vsim.log`，避免和框架那句收尾重定向抢同一个文件。
+
+        `{{ MODE_OPTS }}` 是**仿真业务的落点**（波形 / 覆盖率 / 调试…）：里面装的是
+        本次启用的那几门业务的选项串，由回归框架的 `apply_modes()` 按 `modes:` 表
+        拼好（表见 `src/tools/regression_tools/common_base.yaml`，取值见 `sim_modes.py`）。
+        没启用任何业务时它是未定义的，所以必须 `| default("")` —— 渲染走的是
+        `StrictUndefined`，裸 `{{ MODE_OPTS }}` 会在"什么都不开"的那次直接报错。
+        """
+        return (
+            "vsim -c -sv_lib {{ UVM_DPI }} -onfinish stop -work {{ WORK }} "
+            f"{top} +UVM_TESTNAME={uvm_test} -l sim_vsim.log "
+            '-do "log -r /*; run -all; quit -f" {{ MODE_OPTS | default("") }} ; '
+            '! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]" sim_vsim.log'
+        )
+
     # 构建测试列表
     test_lines = []
     if cases:
@@ -977,10 +1226,10 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             test_lines.append(f"  - name: {cname}")
             test_lines.append(f"    build: build_{module_name}_dut")
             test_lines.append(f"    count: 1")
-            test_lines.append(f"    run_opts:")
-            test_lines.append(f'      - "+UVM_TESTNAME={env_name}_random_test"')
-            test_lines.append(f"    expect:")
-            test_lines.append(f"      errors: 0")
+            # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
+            # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
+            _run_cmd = _sim_run_cmd(dut_top, f"{env_name}_directed_test")
+            test_lines.append(f"    run_cmd: '{_run_cmd}'")
             test_lines.append(f"    tags: [\"{priority.lower()}\", \"{scenario}\"]")
             test_lines.append("")
     elif test_points:
@@ -992,26 +1241,49 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             test_lines.append(f"  - name: {tname}")
             test_lines.append(f"    build: build_{module_name}_dut")
             test_lines.append(f"    count: 1")
-            test_lines.append(f"    run_opts:")
-            test_lines.append(f'      - "+UVM_TESTNAME={env_name}_base_test"')
-            test_lines.append(f"    expect:")
-            test_lines.append(f"      errors: 0")
+            # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
+            # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
+            _run_cmd = _sim_run_cmd(dut_top, f"{env_name}_base_test")
+            test_lines.append(f"    run_cmd: '{_run_cmd}'")
             test_lines.append(f"    tags: [\"{priority.lower()}\", \"{tid}\"]")
             if desc:
                 test_lines.append(f"    desc: \"{desc[:80]}\"")
             test_lines.append("")
     else:
         # 回退：环境级测试（base/directed/random）—— env/tests 里真正生成的 test 类
-        for _tname in (f"{env_name}_base_test", f"{env_name}_directed_test", f"{env_name}_random_test"):
+        # 同上：这三个都真实存在（`_random_test` 不在其列，删掉）。
+        for _tname in (f"{env_name}_base_test", f"{env_name}_directed_test"):
             test_lines.append(f"  - name: test_{_tname}")
             test_lines.append(f"    build: build_{module_name}_dut")
             test_lines.append(f"    count: 1")
-            test_lines.append(f"    run_opts:")
-            test_lines.append(f'      - "+UVM_TESTNAME={_tname}"')
-            test_lines.append(f"    expect:")
-            test_lines.append(f"      errors: 0")
+            # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
+            # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
+            _run_cmd = _sim_run_cmd(dut_top, _tname)
+            test_lines.append(f"    run_cmd: '{_run_cmd}'")
             test_lines.append(f"    tags: [\"smoke\"]")
             test_lines.append("")
+
+    # ── 生成测试（随机 + 覆盖率缺口定向激励）──
+    #
+    # 上面每条 case 跑的都是**定向测试**。定向测试按剧本发固定几笔事务，多一笔
+    # scoreboard 就对不上账（实测：往定向测试里注入额外激励，24 个 case 挂 21 个）。
+    # 而覆盖率缺口补出来的定向激励**正是额外激励** —— 它只该落在能容忍它的
+    # `*_gen_test` 上。
+    #
+    # 没有这条 case 会怎样：补出来的序列生成、注册、编译全过，但**没有任何 case
+    # 执行它** —— 表现为"补了测试但覆盖率一动不动"（实测 5 轮 88.0%，一分没涨）。
+    # 这条 case 就是让那段激励真正跑起来的地方（顺带每次回归都多一份随机激励，
+    # 那本来就是随机测试该干的事）。
+    #
+    # 名字不取自 case 库（它是环境自带的测试，不是某个验证用例）：case 库回写
+    # 状态时对不在册的名字会直接跳过（`TestcaseRegistry.update_status` 查不到就 return），
+    # 不会污染用例库。
+    test_lines.append(f"  - name: {module_name}_gen_stimulus")
+    test_lines.append(f"    build: build_{module_name}_dut")
+    test_lines.append("    count: 1")
+    test_lines.append(f"    run_cmd: '{_sim_run_cmd(dut_top, f'{env_name}_gen_test')}'")
+    test_lines.append('    tags: ["smoke", "random", "gap"]')
+    test_lines.append("")
 
     # ── loopback 测试（每个 active agent 一个，独立 build + 独立顶层 {ag}_loopback_tb）──
     # 同时把 loopback 用例注册进 case 库（用例真相源），跨 run 沉淀。
@@ -1029,56 +1301,114 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         test_lines.append(f"  - name: test_{ag}_loopback")
         test_lines.append(f"    build: build_{module_name}_{ag}_loopback")
         test_lines.append(f"    count: 1")
-        test_lines.append(f"    run_opts:")
-        test_lines.append(f'      - "+UVM_TESTNAME={ag}_loopback_test"')
-        test_lines.append(f"    expect:")
-        test_lines.append(f"      errors: 0")
+        # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
+        # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
+        _run_cmd = _sim_run_cmd(f"{ag}_loopback_tb", f"{ag}_loopback_test")
+        test_lines.append(f"    run_cmd: '{_run_cmd}'")
         test_lines.append(f"    tags: [\"smoke\", \"loopback\"]")
         test_lines.append("")
 
+    # ── 去掉重名 test ──
+    #
+    # case 库里也有叫 `apb_loopback` / `uart_loopback` 的用例，而上面 loopback 那一轮
+    # 又会注册 `test_<ag>_loopback` —— 两条同名 test 会让 ShellGenerator 生成**同名
+    # 目录**（`test_test_apb_loopback`），其中一个被排到另一个的 build 上跑：
+    # 那目录里是给别的 top 用的脚本，一跑就是 "Error loading design"，记成 `unknown`，
+    # 而且 `is_elab_failure_line` 会据此把每一格 sim 日志都读一遍 → 闭环绕开覆盖率阶段。
+    # 保留后面那条（带独立 loopback build 和正确的 top），前面的整块删掉。
+    _lb_names = {f"test_{ag}_loopback" for ag in agents if _is_agent_active(output_dir, ag)}
+    test_lines = _dedupe_loopback_tests(test_lines, _lb_names)
+
     tests_section = "\n".join(test_lines)
 
-    # 构建 builds 段：DUT build（top={module}_bench_tb_top）+ per-agent loopback build（top={ag}_loopback_tb）。
-    # 每个 build 指定自己的 top（顶层模块）和 files（filelist），shell 生成器按 {top}/{files} 填充。
+    # ── builds 段：每个 build 一条**完整编译命令**（run_cmd）──
+    #
+    # 与 demo.yaml 同一套契约：`run_cmd` 里可以用 `{{ VAR }}` 取 `variables`，
+    # 也可以直接写 shell 的 `${VAR}`。比旧的 `compile_opts` + `files` 表达力强，
+    # 也不必再迁就 `settings.simulators.<sim>.compile` 模板的 `{opts}` / `{files}`。
+    #
+    # filelist 名是 `filelist_<agent 目录名>_lb.f`（`build_loopback_filelist` 由
+    # L1.run_regression 拿 `agents/` 下的**目录名**生成，即 `{ag}_agent`）——
+    # 写成协议名会 "Failed to open -f file .../filelist_uart_lb.f"。
+    # 覆盖率是**编译期**使能的（vlog +cover），仿真期那句 `-coverage` 只是"允许保留
+    # 已使能的统计"。所以"默认开覆盖率"这件事必须落在**编译命令**上，否则 vsim 那边
+    # 挂了一串覆盖率开关，却没有任何被插桩的代码可采。
+    #
+    # 用 `cov_enabled`（`apply_modes` 给启用中的 mode 设的标记）而不是每次编译都加：
+    # 不选覆盖率业务时命令与从前**逐字节一致**，不去动已经跑通的那条路。
+    # `| default(false)` 不能省 —— 渲染走 StrictUndefined，裸 `{% if cov_enabled %}`
+    # 在"没启用"的那次直接抛 UndefinedError。
+    _cov_build_flag = " {% if cov_enabled | default(false) %}+cover{% endif %}"
+
     builds_lines = [
         f"  - name: build_{module_name}_dut",
-        f"    simulator: questa",
         f"    top: {top_module}_bench_tb_top",
-        f'    compile_opts: ["-sv", "-mfcu"]',
-        f"    files:",
-        f"      - {filelist_ref}",   # env + DUT 全在 filelist.f
+        f"    run_cmd: 'vlog -work {{{{ WORK }}}} -sv -mfcu +incdir+{{{{ UVM_SRC }}}}"
+        f" {{{{ UVM_SRC }}}}/uvm_pkg.sv -f {filelist_ref}{_cov_build_flag}'",
     ]
     for ag in agents:
         if not _is_agent_active(output_dir, ag):
             continue
-        lb_ref = str((fl_dir / f"filelist_{ag}_lb.f").resolve()).replace("\\", "/")
+        lb_ref = str((fl_dir / f"filelist_{ag}_agent_lb.f").resolve()).replace("\\", "/")
         builds_lines.append(f"  - name: build_{module_name}_{ag}_loopback")
-        builds_lines.append(f"    simulator: questa")
         builds_lines.append(f"    top: {ag}_loopback_tb")
-        builds_lines.append(f'    compile_opts: ["-sv", "-mfcu"]')
-        builds_lines.append(f"    files:")
-        builds_lines.append(f"      - {lb_ref}")
+        builds_lines.append(
+            f"    run_cmd: 'vlog -work {{{{ WORK }}}} -sv -mfcu +incdir+{{{{ UVM_SRC }}}}"
+            f" {{{{ UVM_SRC }}}}/uvm_pkg.sv -f {lb_ref}{_cov_build_flag}'")
     builds_section = "\n".join(builds_lines)
 
     from config.settings import questa_home
     _questa_root = questa_home().replace("\\", "/")
 
+    # ── 仿真业务模式：include common_base.yaml（`modes:` 表的来源）+ 本后端取值 ──
+    #
+    # `include:` 把 `common_base.yaml` 当**基底**合并（框架 `_merge_config`：本地优先）。
+    # 要的是它那张 `modes:` 表 —— 业务词条（wave/cov/upf…）→ 选项变量 的映射是**一份
+    # 语义来源**，另起一套名字迟早两边对不上。
+    #
+    # **但它的值是 VCS 语义**（`-cm line+cond+…`、`+DUMP_FILE=…fsdb`），而本文件的
+    # builds/tests 是 Questa（vlog/vsim）：把 VCS 参数原样拼进 vsim，vsim 判"未知选项"、
+    # 整轮回归全崩。所以下面把同名变量**就地覆盖**成 Questa 取值（见 `sim_modes.py`，
+    # 每条都在本机 `vsim -help` 里核过）。合并规则是本地优先，覆盖是有效的。
+    #
+    # 另一处要注意的：common_base 自己的 4 个 build（multi_step_build 等）会一起被
+    # 合并进来，它们跑的是 `VCS …`。它们**没有任何 test 挂在上面**，而 L1 调度只跑
+    # "yaml 里声明给该 build 的 test"（见 InfrastructureManager.run_regression 的
+    # `tests_by_build`），所以永远不会被排进去。这条不变量有测试钉着
+    # （tests/test_sim_modes.py::test_common_base_builds_are_never_scheduled）。
+    from src.tools.regression_tools.sim_modes import (common_base_path,
+                                                     yaml_variables)
+    _mode_vars = "\n".join(f"  {k}: '{v}'" for k, v in yaml_variables().items())
+    _common_base = common_base_path().as_posix()
+
     yaml_content = f"""# 回归测试配置 — 由 find_spec_yaml 自动生成
 # 用法: python regression.py --config {reg_path.as_posix()} --action all --mode local
+#
+# ── 用的是 demo.yaml 那套契约（variables + 每 build/test 自带 run_cmd）──
+# 旧写法（`global_vars` + `settings.simulators.<sim>.compile/run` 模板）留给
+# 回归框架的模板只有 `{{files}}` / `{{run_opts}}` 两个占位符，想表达"顶层模块名"
+# "日志路径""跑完怎么判成败"都只能往 run_opts 里硬塞，还得记住框架会在命令尾巴上
+# 追加 `> sim.log 2>&1`。写成完整 `run_cmd` 就都不用绕了。
+#
+# ── 仿真业务模式（波形 / 覆盖率 / 调试…）──
+# `modes:` 表与聚合变量机制来自 include 的 common_base.yaml；下面同名变量按本后端
+# （Questa）**覆盖**了它的 VCS 取值。启用哪几门业务由上层给（CLI `--enable` /
+# 工作台工具栏下拉，默认覆盖率），框架的 apply_modes() 把它们拼进 MODE_OPTS，
+# 仿真命令里写 `{{{{ MODE_OPTS | default("") }}}}` 取用。
+# 值给空串的那些（xprop/tprop/upf）是本后端**没有对应开关**的：选中会被告警忽略，
+# 不会把一个不存在的参数塞进命令行。
 
-global_vars:
+include:
+  - {_common_base}
+
+variables:
   SEED: 12345
-  WAVES: 0
-
-settings:
-  default_build: build_{module_name}_dut
-  default_count: 1
-  default_simulator: questa
-  build_cache: False
-  simulators:
-    questa:
-      compile: "vlog -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} -sv -mfcu +incdir+{_questa_root}/verilog_src/uvm-1.2/src {_questa_root}/verilog_src/uvm-1.2/src/uvm_pkg.sv -f {{files}}"
-      run: "vsim -c -sv_lib {_questa_root}/uvm-1.2/win64/uvm_dpi -onfinish stop -work {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')} {{top}} {{run_opts}} -do 'log -r /*; run -all; quit -f'"
+  QUESTA: {_questa_root}
+  UVM_SRC: {_questa_root}/verilog_src/uvm-1.2/src
+  UVM_DPI: {_questa_root}/uvm-1.2/win64/uvm_dpi
+  WORK: {str((output_dir / 'build' / 'work').resolve()).replace(chr(92), '/')}
+  BENCH_TOP: {top_module}_bench_tb_top
+{_mode_vars}
 
 builds:
 {builds_section}
@@ -1086,7 +1416,6 @@ builds:
 tests:
 {tests_section}
 """
-
     reg_path.write_text(yaml_content, encoding="utf-8", errors="replace")
     return reg_path
 

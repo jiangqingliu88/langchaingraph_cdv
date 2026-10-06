@@ -271,6 +271,12 @@ class TestFactory:
 # ═══════════════════════════════════════════════════════════════
 
 def _approval_node(gate, action_type="REFACTOR_RTL"):
+    """本文件只验「拒绝/跳过真的生效」这条线；**触发条件**（读声明、兜底）
+    由 `tests/test_manual_node_gate.py` 覆盖。
+
+    这里的假 Runtime 没有 `manual_nodes` 属性 —— 于是走的是兜底名单那条路，
+    正好也是这些用例要的语义（REFACTOR_RTL 本来就在兜底名单里）。
+    """
     from src.layers.l2_orchestration.graph import n_approval
     from src.layers.l2_orchestration.state import PipelineState
 

@@ -8,6 +8,15 @@
 
 // ── 2) dummy interface: set_vifs() 把每个 vif 配置进环境 agent ──
 interface {{ harness.name }}{% if harness.parameter %}#(parameter int {{ harness.parameter }} = 1){% endif %}();
+  // **必须在这里 import UVM**：`set_vifs()` 里用了 `uvm_config_db`，而 interface
+  // 不是 UVM 组件、不继承 uvm_pkg —— 不 import 的话 vlog 报
+  //     harness.sv(37): Undefined variable: 'uvm_config_db'
+  //     harness.sv(37): near "#": syntax error, unexpected '#'
+  // （`uvm_config_db#(...)` 里的 `#` 因为标识符没解析出来而变成语法错，
+  //  看着像别的问题，其实根因就是这一句。）
+  import uvm_pkg::*;
+  `include "uvm_macros.svh"
+
 // ── 1) 各 interface 实例化在 harness 内（信号在 harness bind 的 DUT 作用域里解析）──
 {%- for i in harness.interfaces %}
 {%-   set cnt = i.count | string %}

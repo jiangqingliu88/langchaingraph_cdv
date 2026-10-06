@@ -17,7 +17,8 @@ from src.layers.l2_orchestration.run_service import (
 from src.layers.l2_orchestration.state import PipelineState
 
 
-def _graph(checkpointer=None, store=None, *, delay: float = 0.0, fail: bool = False):
+def _graph(checkpointer=None, store=None, *, delay: float = 0.0, fail: bool = False,
+           system_exit: bool = False):
     from langgraph.graph import END, START, StateGraph
 
     g = StateGraph(PipelineState)
@@ -28,6 +29,10 @@ def _graph(checkpointer=None, store=None, *, delay: float = 0.0, fail: bool = Fa
         return {"spec": {"n": 1}, "phases": [{"name": "design", "status": "passed"}]}
 
     def n_ops(state):
+        if system_exit:
+            # 复刻真实事故：`uvm_tools/gen_uvm` 是照着独立 CLI 写的，
+            # schema 校验不过就 `raise SystemExit`。
+            raise SystemExit("Schema validation failed: 4 error(s), 0 warning(s)")
         if fail:
             raise RuntimeError("仿真炸了")
         return {"regression": {"passed": 3}}
@@ -265,6 +270,83 @@ class TestFailure:
 
 
 # ═══════════════════════════════════════════════════════════════
+# 工具调了 sys.exit —— 服务的自保
+# ═══════════════════════════════════════════════════════════════
+#
+# 这是一次实测事故的回归测试：`uvm_tools/gen_uvm` 是照着独立 CLI 写的，
+# schema 校验不过就 `raise SystemExit`。它在进程内跑在运行服务的 loop 线程上，
+# 而 asyncio 的 `Task.__step` 对 SystemExit 是**捕获后原样重抛**的（刻意保留
+# "终止"语义，不经过 await 链），`threading` 又把线程里的 SystemExit 静默吞掉。
+# 于是 loop 线程无声消失、future 永不完成、worker 卡死在 `fut.result()` 上 ——
+# 症状是「点了启动没反应」，而且**此后每一次启动都照样卡死**，只能重启程序。
+#
+# 这几条钉住的是：一个工具写成了 CLI 形状，不能让整个运行服务报废。
+
+class TestToolCallingSysExit:
+    """"点了启动没反应"那次事故的回归测试。
+
+    `wait()` 而不是轮询 `busy`：**`busy` 在工人线程捡起任务之前就是 False**，
+    拿它当"跑完了"会立刻为真，测出来的东西是假的。
+    """
+
+    @staticmethod
+    def _boom(monkeypatch):
+        monkeypatch.setattr(graph_mod, "build_closed_loop_graph",
+                            lambda **kw: _graph(system_exit=True, **kw))
+
+    def test_the_loop_survives(self, svc, tmp_path, monkeypatch):
+        self._boom(monkeypatch)
+        run_id = svc.start(_req(tmp_path))
+        with pytest.raises(Exception):          # SystemExit 被转成了普通异常
+            svc.wait(run_id, timeout=20)
+        assert svc._thread.is_alive(), "loop 线程被 SystemExit 打死了"
+        assert svc._loop.is_running(), "loop 停了，之后的启动都会卡住"
+
+    def test_the_failure_is_recorded_not_swallowed(self, svc, tmp_path, monkeypatch):
+        """失败要如实记账 —— 否则界面上它永远是「运行中」，比报错更难查。"""
+        self._boom(monkeypatch)
+        run_id = svc.start(_req(tmp_path))
+        with pytest.raises(Exception):
+            svc.wait(run_id, timeout=20)
+        kinds = [e["kind"] for e in svc.journal(run_id)]
+        assert "run.failed" in kinds or "stage.failed" in kinds, \
+            f"SystemExit 被吞了，日志里什么都没留下：{kinds}"
+
+    def test_the_next_run_still_works(self, svc, tmp_path, monkeypatch):
+        """**这条才是那次事故的要害**：一个工具把服务废掉之后，后面全卡死。"""
+        self._boom(monkeypatch)
+        boom = svc.start(_req(tmp_path, run_id="boom"))
+        with pytest.raises(Exception):
+            svc.wait(boom, timeout=20)
+
+        monkeypatch.setattr(graph_mod, "build_closed_loop_graph",
+                            lambda **kw: _graph(**kw))
+        good = svc.start(_req(tmp_path, run_id="good"))
+        assert svc.wait(good, timeout=20).get("status") == "PASS"
+
+    def test_a_dead_loop_fails_fast_instead_of_hanging(self, svc, tmp_path):
+        """循环线程要是真没了，宁可立刻报错也不要挂在 `fut.result()` 上。
+
+        （上面几条是"不让它死"；这条是"万一还是死了"的兜底 —— 界面无声卡住
+        比报错难查得多。）
+        """
+        import asyncio
+
+        original = svc._ensure_loop()
+        # 一个从没跑起来、也永远不会跑的循环 —— 相当于 loop 线程已经没了。
+        # 换回来是必须的：夹具收尾的 `shutdown()` 要拿原循环去 stop。
+        svc._loop = asyncio.new_event_loop()
+        try:
+            run_id = svc.start(_req(tmp_path))
+            with pytest.raises(Exception, match="loop") as info:
+                svc.wait(run_id, timeout=10)
+            assert "loop" in str(info.value)
+        finally:
+            dead, svc._loop = svc._loop, original
+            dead.close()
+
+
+# ═══════════════════════════════════════════════════════════════
 # 分层守卫
 # ═══════════════════════════════════════════════════════════════
 
@@ -288,6 +370,35 @@ def test_no_qt_in_the_service_layer():
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "[]"
+
+
+def test_no_qt_anywhere_in_the_layers():
+    """**整个 `src/layers/` 都不许 import Qt。**
+
+    `run_service.py` 的模块头写着这条规矩（"`grep PySide6 src/layers/` 必须为空"），
+    但上面那个守卫只 import 了一个模块 —— 别处新加一份 Qt 依赖没人拦。证据层
+    刚加了新文件，正好撞上这个缺口，所以补成**整层扫描**。
+
+    用 AST 而不是 grep：文件里出现 "PySide6" 这个词不代表它 import 了它 ——
+    `run_service` 的文档字符串本身就写着这个词，grep 会自己把自己判成违规。
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "src" / "layers"
+    offenders = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                names = [node.module or ""]
+            else:
+                continue
+            if any(n.split(".")[0] == "PySide6" for n in names):
+                offenders.append(f"{path.relative_to(root.parent.parent)}:{node.lineno}")
+    assert offenders == [], f"layers 里出现了 Qt 依赖：{offenders}"
 
 
 def test_get_run_service_is_a_singleton():

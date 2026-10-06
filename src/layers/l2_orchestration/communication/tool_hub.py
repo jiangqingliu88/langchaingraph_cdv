@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import types
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Type
@@ -31,6 +32,80 @@ from src.layers.l2_orchestration.communication.tool_protocol import (
 )
 
 logger = structlog.get_logger()
+
+
+def _run_sync(coro):
+    """在同步代码里跑一个协程，**已在事件循环中也安全**。
+
+    直接 `asyncio.run(coro)` 在已有循环里会
+    `RuntimeError: asyncio.run() cannot be called from a running event loop`
+    —— 实测 5 个 LC 工具就栽在这上面（它们内部自己 `asyncio.run`）。
+    所以这里判断一下：没循环就直接跑，有循环就丢到另一个线程里建新循环。
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        return ex.submit(lambda: asyncio.run(coro)).result()
+
+
+class ToolCallError(RuntimeError):
+    """`call_tool` 调用失败（工具不存在 / schema 不过 / 执行报错）。"""
+
+
+_UNSET = object()
+
+
+def call_tool(name: str, args: Dict[str, Any] = None, *, context=None,
+              default=_UNSET):
+    """agent 调工具的统一入口 —— 走完整校验 + 审计链路，返回工具原始结果。
+
+    为什么需要它：`src/agents/*` 原本是直接 import 工具函数调用，例如
+
+        from src.tools.assertion_tools.main import generate_sva_assertions
+        sva = generate_sva_assertions(json.dumps(spec))
+
+    **完全绕开 ToolHub** —— 于是 schema 校验、风险分级、超时、审计回执在真正
+    干活的那条路上一条都不生效；它们只在 `vagent tool call` 那条没人走的路上
+    生效（而那条路此前还是一调就崩）。实测 `docs/tool_receipts.jsonl` 常年 0 行，
+    就是这个原因。
+
+    用法（返回值与直接调函数一致，调用点形态基本不变）：
+
+        sva = call_tool("generate_sva_assertions", {"specs": json.dumps(spec)})
+
+    **失败时抛 `ToolCallError`**，不返回 None —— 保持「直接调函数出错会抛」的
+    原语义，agent 现有的 try/except 与编排层的兜底都能照常接住。返回 None 的话
+    调用点会变成 `json.loads(None)` 这种更难懂的崩法。
+    确实想让失败静默的，显式传 `default=<值>`。
+
+    参数名必须与工具的 schema 一致（`args_schema` 推导而来）。**类型也要对**：
+    schema 声明 `string` 的字段传 `Path` 会被 schema 校验拒绝，所以路径要 `str()`。
+    """
+    hub = ToolHub.get_instance()
+    if not hub._initialized:
+        hub.bootstrap()
+    try:
+        result = _run_sync(hub.invoke(name, args or {}, context))
+    except Exception as e:                       # invoke 内部已尽量兜底，这里防漏
+        if default is not _UNSET:
+            logger.warning(f"call_tool('{name}') 异常，用 default: {e}")
+            return default
+        raise ToolCallError(f"call_tool('{name}') 异常: {type(e).__name__}: {e}") from e
+
+    if result is None or not result.success:
+        err = "工具未返回结果" if result is None else str(result.error)[:300]
+        if default is not _UNSET:
+            logger.warning(f"call_tool('{name}') 失败，用 default: {err}")
+            return default
+        raise ToolCallError(f"call_tool('{name}') 失败: {err}")
+
+    # LC adapter 把输出包在 {"result": ...} 里；Old adapter 直接给 dict。
+    if isinstance(result.data, dict) and set(result.data.keys()) == {"result"}:
+        return result.data["result"]
+    return result.data
 
 
 class ToolHub:
@@ -68,6 +143,9 @@ class ToolHub:
         Returns:
           注册是否成功（重名返回 False）
         """
+        # 注册前把 ITool 的默认方法补齐 —— 见 `_ensure_itool`：Protocol 的默认
+        # 实现不会被实现方继承，漏一个方法就会让 invoke 在运行时 AttributeError。
+        tool = _ensure_itool(tool)
         manifest = tool.manifest
 
         # 验证 manifest
@@ -102,6 +180,17 @@ class ToolHub:
         logger.info(f"Tool registered: {manifest.name} v{manifest.version} "
                      f"[{manifest.risk_level.value}] tags={manifest.tags}")
         return True
+
+    def set_auditor(self, auditor) -> None:
+        """替换工具调用审计器（用于把回执落到具体 run 的输出目录）。
+
+        hub 是进程级单例，构造时还不知道 output_root；而只有
+        `ToolAuditor.with_receipts(output_root)` 那个实例带落盘路径。
+        `graph.hydrate_runtime` 建好它之后调这里装上，工具调用回执才会真的
+        写进 `<output>/docs/tool_receipts.jsonl`。
+        """
+        if auditor is not None:
+            self._auditor = auditor
 
     def register_many(self, tools: List[Tuple[ITool, Optional[List[str]]]]) -> int:
         """批量注册工具。每项为 (tool, agent_roles)。返回成功注册数。"""
@@ -411,6 +500,20 @@ class ToolHub:
         """加载内置工具（从 agent_tools.py 迁移）"""
         count = 0
 
+        # 注册回归工具族的**原生 ITool**（regression.run / coverage.collect /
+        # regression.reference_finder）。它们 manifest 完整、确实是 ITool，
+        # 但此前**只在 tool_subprocess 的子进程 worker 里懒注册** —— 正式清单里
+        # 查不到，`vagent tool list/show` 也就看不见，更不会被审计覆盖。
+        # 与 read_file 那批「定义了却注册不上」是同一类问题。
+        try:
+            from src.tools.regression_tools.regression_tool import (
+                RegressionRunTool, CoverageCollectTool, ReferenceFinderTool)
+            for t in (RegressionRunTool(), CoverageCollectTool(), ReferenceFinderTool()):
+                if self.register(t, ["ops"]):
+                    count += 1
+        except Exception as e:
+            logger.warning(f"Failed to load regression tools: {e}")
+
         # 注册 uvm_tools
         try:
             from src.tools.uvm_tools.agent_tools import ensure_uvm_tool_registry
@@ -452,8 +555,20 @@ class ToolHub:
         ("src.tools.coverage_tools.main", "coverage"),
         ("src.tools.debug_tools.main", "debug"),
         ("src.tools.doc_tools.main", "doc"),
-        ("src.tools.reuse_tools.main", "reuse"),
+        # `src.tools.reuse_tools.main` **不存在** —— 这个条目每次 bootstrap 都报
+        # "No module named 'src.tools.reuse_tools'" 再被 except 吞掉，只在启动
+        # 日志里留一条假错误。去掉。
         ("src.tools.spec_tools.main", "spec"),
+        # **uvm 的 9 个工具此前从未被注册**：真实实现是
+        # `src/tools/uvm_tools/agent_tools.py` 里的 @tool（read_file / write_file /
+        # find_spec_yaml / jinja_render / check_static / check_compile /
+        # check_loopback / check_health / quality_report），但这份扫描列表漏了它。
+        # 于是 hub 里这些名字留的是 `agents/agent_tools.py` 中那批**没有 handler
+        # 的空声明** —— 实测 read_file 等 9 个全是 handler=None，经 ToolHub 必失败，
+        # 也让 `call_tool` 无法在 agent 里安全替换直调。
+        # 本函数在 register_all_tools 之后跑，注册的真实实现会覆盖空声明
+        # （register 遇重名会 replace）。
+        ("src.tools.uvm_tools.agent_tools", "uvm"),
     )
 
     def _load_langchain_tools(self) -> int:
@@ -474,7 +589,9 @@ class ToolHub:
                 obj = getattr(mod, attr, None)
                 if not isinstance(obj, BaseTool):
                     continue
-                if obj.name in self._tools:
+                # 已注册的是**空声明**时让真实现覆盖它（见 _is_dead_declaration）；
+                # 已注册的是真实现才跳过，避免两个实现互相覆盖。
+                if obj.name in self._tools and not _is_dead_declaration(self._tools[obj.name]):
                     continue
                 risk = ToolRisk.WRITE if attr in _LC_WRITE_TOOLS else ToolRisk.SAFE
                 if self.register(_LangChainToolAdapter(obj, risk), [role]):
@@ -496,6 +613,71 @@ _LC_WRITE_TOOLS = {
     "backup_to_library", "generate_integration_code", "generate_reuse_report",
     "compile_cmodel_dpi", "scan_environment",
 }
+
+
+def _is_dead_declaration(tool: Any) -> bool:
+    """注册项是不是「只有 schema、没有实现」的空声明。
+
+    `agents/agent_tools.py` 里那批 `Tool("analyze_design_arch", ...)` 不带
+    handler，注册后 `_OldToolAdapter.execute` 只会 `fail("has no handler")`。
+
+    这个判断是给**注册优先级**用的：同一个名字既有空声明、又有真实实现时
+    （如 `read_file`：声明在 agents/agent_tools.py，实现在
+    uvm_tools/agent_tools.py 的 @tool），必须让实现覆盖声明。否则谁先注册谁
+    说了算，先注册的空声明会把真实现永久挡在门外。
+    """
+    old = getattr(tool, "_old", None)
+    return old is not None and getattr(old, "handler", None) is None
+
+
+def _ensure_itool(tool: Any) -> Any:
+    """给注册的工具补齐 ITool 里**有默认实现**的那几个方法。
+
+    `ITool` 是 `Protocol` —— Python **不会**把它的默认实现
+    （`check_health` / `validate_input` / `validate_args_by_schema`）继承给实现方，
+    只有显式 `class X(ITool)` 才有。于是本仓三个 adapter 各漏一两个方法，而
+    `ToolHub.invoke` 无条件调用它们：
+
+      · `_LangChainToolAdapter` 缺 validate_args_by_schema → 28 个 LC 工具一调就崩
+      · `_OldToolAdapter`      缺 validate_input        → 26 个旧工具**参数合法时**才崩
+                                                            （参数不合法时先被 schema 拒了，所以更隐蔽）
+
+    实测 55 个注册工具里 54 个 invocable 即 AttributeError，只有示例插件
+    `vcs_compile` 能用。这里统一补默认值，把这一类问题一次性堵死。
+
+    `manifest` / `execute` 是**真缺就得报错**的（那是工具本身没实现），不补。
+    """
+    from src.layers.l2_orchestration.communication.tool_protocol import (
+        ITool, validate_by_schema)
+    defaults = {
+        # 只补 Protocol 上确实给了默认实现的方法
+        "check_health": lambda self: _async_true(),
+        "validate_input": lambda self, args: _async_empty_list(),
+        "validate_args_by_schema": lambda self, args: validate_by_schema(
+            self.manifest.input_schema, args),
+    }
+    missing = []
+    for name, impl in defaults.items():
+        if not hasattr(tool, name):
+            setattr(tool, name, types.MethodType(impl, tool))
+            missing.append(name)
+    if missing:
+        name = getattr(getattr(tool, "manifest", None), "name", type(tool).__name__)
+        logger.debug(f"Tool '{name}' 补齐了 ITool 默认方法: {', '.join(missing)}")
+
+    # 仍然缺 manifest / execute 的，是真没实现，必须响亮
+    if not isinstance(tool, ITool):
+        logger.error(f"Tool '{getattr(tool, 'name', type(tool).__name__)}' 不满足 ITool 协议"
+                     f"（manifest/execute 缺失），invoke 会失败")
+    return tool
+
+
+async def _async_true() -> bool:
+    return True
+
+
+async def _async_empty_list() -> list:
+    return []
 
 
 class _LangChainToolAdapter:
@@ -522,6 +704,18 @@ class _LangChainToolAdapter:
     @property
     def manifest(self) -> ToolManifest:
         return self._manifest
+
+    def validate_args_by_schema(self, args: Dict[str, Any]) -> tuple:
+        """按自身 manifest 的 schema 校验 —— 与 ITool 的默认实现同一份逻辑。"""
+        from src.layers.l2_orchestration.communication.tool_protocol import validate_by_schema
+        return validate_by_schema(self._manifest.input_schema, args)
+
+    async def validate_input(self, args: Dict[str, Any]) -> list:
+        """LangChain 工具没有额外语义校验，交给 schema 那一层。"""
+        return []
+
+    async def check_health(self) -> bool:
+        return True
 
     async def execute(self, args: Dict[str, Any], context) -> ToolResult:
         import time as _time
@@ -583,3 +777,13 @@ class _OldToolAdapter:
 
     def validate_args_by_schema(self, args: Dict[str, Any]) -> tuple:
         return self._old.validate_args(args)
+
+    async def validate_input(self, args: Dict[str, Any]) -> list:
+        """旧 Tool 没有语义校验这一层（它的 validate_args 是 schema 级的，
+        已在 validate_args_by_schema 里用过）。返回空表示无额外问题。
+
+        缺了这个方法，`ToolHub.invoke` 里的 `await tool.validate_input(args)`
+        会在**参数合法**时抛 AttributeError —— 参数不合法时先被 schema 挡掉，
+        所以这个坑平时看不见，一用真参数就炸。
+        """
+        return []

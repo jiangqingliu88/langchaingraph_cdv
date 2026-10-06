@@ -86,8 +86,8 @@ tools:
         normalized: string
     risk_level: safe
 
-  bisect_test:
-    description: "二分法定位失败测试的最小集合"
+  bisect_failed_tests:
+    description: "在失败用例集合内分批缩小范围 + 错误指纹归组（不做代码版本溯源）"
     input:
       input_json:
         type: string

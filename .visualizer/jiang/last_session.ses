@@ -1,0 +1,69 @@
+<!-- THIS IS TOOL GENERATED SESSION FILE. PLEASE DO NOT MODIFY THIS -->
+<!DOCTYPE visualizer_session>
+<session version="3" skip_do_file="0">
+ <app argc="5">
+  <argv pos="0" value="visualizer"/>
+  <argv pos="1" value="+wavefile+D:\SignOffAI\output_wavetest_jiang_20261007_053044\regression_run\build_build_apb_uart_dut\test_test_apb_master_loopback\waves\test_apb_master_loopback.db"/>
+  <argv pos="2" value="+viswave"/>
+  <argv pos="3" value="+read_viswave_info"/>
+  <argv pos="4" value="+genDesignOMFromWave"/>
+ </app>
+ <window_config>
+  <dockareas bottom="266" right="593" top="0" left="593"/>
+  <taborder bottom="transcript+" right="variables+" left="structure+"/>
+  <activetab bottom="transcript" activewindow="structure" right="variables" left="structure"/>
+  <window visible="1" dock_location="left" x="0" undocked="0" type="structure" y="0"/>
+  <window visible="1" dock_location="right" x="0" undocked="0" type="variables" y="0"/>
+  <window visible="1" dock_location="bottom" x="0" undocked="0" type="transcript" y="0"/>
+  <window visible="1" height="800" x="50" width="1200" undocked="0" type="rtl" y="50"/>
+  <window visible="1" dock_location="bottom" height="616" x="150" width="1076" undocked="1" type="wave" y="171"/>
+ </window_config>
+ <wave_file_mgr>
+  <waveFile tagName="F0" waveType="0" fileName="D:\SignOffAI\output_wavetest_jiang_20261007_053044\regression_run\build_build_apb_uart_dut\test_test_apb_master_loopback\waves\test_apb_master_loopback.db"/>
+ </wave_file_mgr>
+ <gui>
+  <main_window visible="1"/>
+  <watchTower_cur_setting curDisplayTimeUnitStr="1ps" curActiveWaveFile="F0" curRadix="8" curDisplayTimeUnit="-12" customDisplayTimeUnitListStr="">
+   <curTime hightime="0" lowtime="0"/>
+  </watchTower_cur_setting>
+  <structure selection="apb_uart_bench_tb_top"/>
+  <variables VA="0" UPF="0" CA="0"/>
+  <transcript/>
+  <wave name="Wave0">
+   <timeunit value="14"/>
+   <frequnit value="2"/>
+   <showdiff value="0"/>
+  </wave>
+ </gui>
+ <wave_mgr sync_time_range="0">
+  <waveWindow displayFileTag="1" wintype="4" showMarkers="1" nameWidth="216" value_tooltip="0" justifySignalPath="Right" displayRadixWithValue="1" displayLeadingZeros="0" secNudge="1" snapToEdge="1" valueWidth="83" displayScopeName="1" displayGlobalView="1" displayTimeUnit="-12" primNudge="1" alignBaseName="0" displayTimeUnitStr="1ps" swapRepresentationOfX="0" trackViewToTime="1" waveWidth="729" signalHeight="21" showSecCursor="0" displayGrid="0">
+   <window name="Wave0">
+    <timeunit value="14"/>
+    <frequnit value="2"/>
+    <showdiff value="0"/>
+   </window>
+   <viewPort>
+    <beginTime hightime="0" lowtime="0"/>
+    <endTime hightime="0" lowtime="1785000"/>
+    <beginViewTime hightime="0" lowtime="0"/>
+    <endViewTime hightime="0" lowtime="178500"/>
+    <beginLastViewTime hightime="0" lowtime="0"/>
+    <endLastViewTime hightime="0" lowtime="178500"/>
+   </viewPort>
+   <primCursor hightime="0" lowtime="0"/>
+   <wavetclcommands>
+    <tcl command="wave update off"/>
+    <tcl command="wave clearselection"/>
+    <tcl commandblock="custom radix definitions"></tcl>
+    <tcl command="wave update off"/>
+    <tcl command="wave zoom range 0 178500"/>
+    <tcl command="wave update on"/>
+    <tcl command="wave top 0"/>
+    <tcl command=""/>
+   </wavetclcommands>
+  </waveWindow>
+ </wave_mgr>
+ <mem_mgr/>
+ <windows/>
+ <dut selection="apb_uart_bench_tb_top"/>
+</session>

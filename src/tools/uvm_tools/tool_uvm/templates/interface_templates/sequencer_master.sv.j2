@@ -17,7 +17,7 @@ class {{ agent.name }}_master_sequencer extends uvm_sequencer #({{ agent.name }}
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg);
+    void'(uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg));
   endfunction
 
   // ★ 向序列提供配置（sequence 侧: p_sequencer.get_cfg(cfg)）

@@ -5,8 +5,14 @@ package {{ environment.env_name }}_seq_pkg;
   import uvm_pkg::*;
   `include "uvm_macros.svh"
     // 直接导入 Agent 包（SV import 不可传递）
+    //
+    // 用 `agent.interface`（协议名，如 apb）而**不是** `agent.name`
+    //（实例名，如 apb_master）—— 真实的包叫 `apb_pkg`。这里原来写的是 agent.name，
+    // 于是生成 `import apb_master_pkg::*`：一个不存在的包，seq 全编不过。
 {%- for agent in agents %}
-  import {{ agent.name }}_pkg::*;
+  import {{ agent.interface }}_pkg::*;
+  import {{ agent.interface }}_typedefs_pkg::*;
+  import {{ agent.interface }}_parameters_pkg::*;
 {%- endfor %}
   // 导入 env 包
   import {{ environment.env_name }}_pkg::*;

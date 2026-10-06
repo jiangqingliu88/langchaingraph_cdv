@@ -2,6 +2,18 @@
 
 // Env Coverage: {{ environment.env_name }}_coverage
 // 环境级功能覆盖率模型（跨 agent 的语义级 covergroup，自动生成）
+//
+// ── 为什么**每个 agent 一个 covergroup**，而不是揉成一个 ──
+// 揉成一个 `cg_env` 时，每个 coverpoint 都写成 `<某 agent>_item.<字段>`，
+// 而 `write_<agent>` 里无条件 `cg_env.sample()` —— 采样会把**所有** coverpoint
+// 都求值一遍，包括**另一个 agent 尚未产生过事务**的那个句柄。
+// 那个句柄此时是 null，求值 `<null>.<字段>` 就是 Questa 的
+//   ** Fatal: (SIGSEGV) Bad handle or reference.
+// 实测：只跑 master 侧、slave 还没抓到任何事务时，master 的第一笔就崩。
+// 拆开之后，`cg_<agent>` 只引用本 agent 的 item，天然不会互相牵连。
+//
+// 另外 `*_item` 一律在 new() 里建好**非空占位对象**：万一某个 covergroup 在
+// item 还是 null 的时候被 sample（比如跨 agent 的 cross），也不会解引用空句柄。
 
 // 为每个 agent 声明独立的 analysis_imp（不同 seq_item 类型）
 {%- for agent in agents %}
@@ -21,73 +33,148 @@ class {{ environment.env_name }}_coverage extends uvm_component;
   {{ agent.seq_item_type }} {{ agent.name }}_item;
 {%- endfor %}
 
-  // 功能覆盖率 covergroup（从 agent transaction 字段生成）
-  covergroup cg_env;
 {%- for agent in agents %}
+{%-   set rv = namespace(names=[], bits=[]) %}
 {%-   for var in agent.transaction_vars %}
 {%-     if var.isrand == 'True' %}
-    // coverpoint: {{ agent.name }}.{{ var.name }}
-    cp_{{ agent.name }}_{{ var.name }}: coverpoint {{ agent.name }}_item.{{ var.name }};
+{%-       set rv.names = rv.names + [var.name] %}
+{#-      位宽从声明的类型里读：`bit [7:0]` → 8；`bit` → 1 #}
+{%-       set msb = (var.type.split('[')[1].split(']')[0].split(':')[0]|int) if '[' in var.type else 0 %}
+{%-       set rv.bits = rv.bits + [msb + 1] %}
 {%-     endif %}
 {%-   endfor %}
-{%- endfor %}
-{%- for agent in agents %}
-{%-   set rand_vars = [] %}
-{%-   for var in agent.transaction_vars %}
-{%-     if var.isrand == 'True' %}
-{%-       set _ = rand_vars.append(var.name) %}
+
+  // ── {{ agent.name }} 的功能覆盖率 ──
+  //
+  // **多位字段只分三个值类（0 / 1 / 其余），这不是省事，是必须**：
+  // 不给 coverpoint 写 bins，仿真器会把整个取值空间自动分箱 —— 8 位就是 256 个
+  // bin，下面那句 `cross_all` 再把两个这样的 coverpoint 一乘就是几万个 bin。
+  // 那种模型随机激励永远填不满：实测 4360 个 bin 只命中 64 个（1.46%），
+  // 于是"功能覆盖率"这个数字常年趴在地上，既收敛不了、也看不出该往哪使劲。
+  // 分箱后同一个 cross 是 3×3 —— 是定向激励能收敛的粒度。
+  // 真正的领域粒度在策略包的 `coverage_bins`（语义化 cross）里，不靠自动分箱。
+  covergroup cg_{{ agent.name }};
+{%-   for name in rv.names %}
+{%-     set w = rv.bits[loop.index0] %}
+{%-     if w >= 2 %}
+    cp_{{ name }}: coverpoint {{ agent.name }}_item.{{ name }} {   // 值类：0 / 1 / 其余
+      bins v_zero = {0};
+      bins v_one  = {1};
+      bins v_rest = {[2:{{ 2 ** w - 1 }}]};
+    }
+{%-     else %}
+    cp_{{ name }}: coverpoint {{ agent.name }}_item.{{ name }};
 {%-     endif %}
 {%-   endfor %}
-{%-   if rand_vars|length >= 2 %}
+{%-   if rv.names|length >= 2 %}
     // cross: {{ agent.name }} 的关键信号组合（语义级）
-    cross_{{ agent.name }}: cross cp_{{ agent.name }}_{{ rand_vars[0] }}, cp_{{ agent.name }}_{{ rand_vars[1] }};
+    cross_all: cross cp_{{ rv.names[0] }}, cp_{{ rv.names[1] }};
 {%-   endif %}
-{%- endfor %}
-{%- for bin in coverage_bins %}
-{%-   if bin.signals and bin.signals|length >= 2 %}
-{%-     set ns = namespace(sigs=[]) %}
+{%-   if loop.first %}
+{%-     for cross in coverage_crosses %}
+    // 语义 cross（env YAML coverage_crosses: [{{ cross|join(', ') }}]）
+    cr_yaml_{{ loop.index0 }}: cross cp_{{ cross[0] }}, cp_{{ cross[1] }};
+{%-     endfor %}
+{%-   endif %}
+{%-   for bin in coverage_bins %}
+{%-     set ns = namespace(sigs=[], foreign=0) %}
 {%-     for sig in bin.signals %}
-{%-       for agent in agents %}
-{%-         for var in agent.transaction_vars %}
+{%-       for a2 in agents %}
+{%-         for var in a2.transaction_vars %}
 {%-           if var.isrand == 'True' and var.name == sig %}
-{%-             set ns.sigs = ns.sigs + ['cp_' ~ agent.name ~ '_' ~ sig] %}
+{%-             if a2.name == agent.name %}
+{%-               if ('cp_' ~ sig) not in ns.sigs %}{% set ns.sigs = ns.sigs + ['cp_' ~ sig] %}{% endif %}
+{%-             else %}
+{%-               set ns.foreign = ns.foreign + 1 %}
+{%-             endif %}
 {%-           endif %}
 {%-         endfor %}
 {%-       endfor %}
 {%-     endfor %}
-{%-     if ns.sigs|length >= 2 %}
+{%-     if ns.foreign == 0 and ns.sigs|length >= 2 %}
     // 语义化 cross: {{ bin.name }}（策略包 coverage_bins）
     cross_{{ bin.name }}: cross {{ ns.sigs|join(', ') }};
 {%-     endif %}
-{%-   endif %}
+{%-   endfor %}
+  endgroup : cg_{{ agent.name }}
 {%- endfor %}
-{%- for cross in coverage_crosses %}
-{%-   set ag0 = agents[0].name %}
-    // 语义 cross（env YAML coverage_crosses: [{{ cross|join(', ') }}]）
-    cr_yaml_{{ loop.index0 }}: cross cp_{{ ag0 }}_{{ cross[0] }}, cp_{{ ag0 }}_{{ cross[1] }};
+
+{%- set mixed = namespace(bins=[]) %}
+{%- for bin in coverage_bins %}
+{%-   set ns = namespace(ag=[], foreign=0) %}
+{%-   for sig in bin.signals %}
+{%-     for a2 in agents %}
+{%-       for var in a2.transaction_vars %}
+{%-         if var.isrand == 'True' and var.name == sig %}
+{%-           if a2.name not in ns.ag %}{% set ns.ag = ns.ag + [a2.name] %}{% endif %}
+{%-         endif %}
+{%-       endfor %}
+{%-     endfor %}
+{%-   endfor %}
+{%-   if ns.ag|length > 1 %}{% set mixed.bins = mixed.bins + [bin] %}{% endif %}
 {%- endfor %}
-  endgroup : cg_env
+{%- if mixed.bins|length > 0 %}
+
+  // ── 跨 agent 的语义化 cross ──
+  // 一个 cross 只能引用**同一 covergroup 内**声明的 coverpoint，跨 agent 的组合
+  // 没法塞进上面任一 `cg_<agent>`，只能单开一组，把各 agent 的 coverpoint
+  // **按 `<agent>_<字段>` 再声明一遍**。这一组由每个 write_* 触发 sample，
+  // 句柄靠 new() 里的非空占位对象兜底。
+  covergroup cg_mixed;
+{%- for bin in mixed.bins %}
+{%-   set ns = namespace(refs=[]) %}
+{%-   for sig in bin.signals %}
+{%-     for a2 in agents %}
+{%-       for var in a2.transaction_vars %}
+{%-         if var.isrand == 'True' and var.name == sig %}
+{%-           if ('cp_' ~ a2.name ~ '_' ~ sig) not in ns.refs %}
+{%-             set ns.refs = ns.refs + ['cp_' ~ a2.name ~ '_' ~ sig] %}
+    cp_{{ a2.name }}_{{ sig }}: coverpoint {{ a2.name }}_item.{{ sig }};
+{%-           endif %}
+{%-         endif %}
+{%-       endfor %}
+{%-     endfor %}
+{%-   endfor %}
+    cross_{{ bin.name }}: cross {{ ns.refs|join(', ') }};
+{%- endfor %}
+  endgroup : cg_mixed
+{%- endif %}
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
 {%- for agent in agents %}
     {{ agent.name }}_export = new("{{ agent.name }}_export", this);
+    // 非空占位：防止 covergroup 在首个事务到来前解引用空句柄（SIGSEGV）
+    {{ agent.name }}_item = {{ agent.seq_item_type }}::type_id::create("{{ agent.name }}_item");
 {%- endfor %}
-    cg_env = new();
+{%- for agent in agents %}
+    cg_{{ agent.name }} = new();
+{%- endfor %}
+{%- if mixed.bins|length > 0 %}
+    cg_mixed = new();
+{%- endif %}
   endfunction
 
-  // write 函数：每个 agent 的 monitor 采样触发 covergroup 采样
+  // write 函数：每个 agent 的 monitor 采样触发**本 agent** 的 covergroup 采样
 {%- for agent in agents %}
   function void write_{{ agent.name }}({{ agent.seq_item_type }} t);
     {{ agent.name }}_item = t;
-    cg_env.sample();
+    cg_{{ agent.name }}.sample();
+{%-   if mixed.bins|length > 0 %}
+    cg_mixed.sample();
+{%-   endif %}
   endfunction
 {%- endfor %}
 
   // 报告功能覆盖率
   function void report_phase(uvm_phase phase);
     super.report_phase(phase);
-    `uvm_info("ENV_COV", $sformatf("功能覆盖率: %.1f%%", cg_env.get_inst_coverage()), UVM_NONE)
+{%- for agent in agents %}
+    `uvm_info("ENV_COV", $sformatf("功能覆盖率[{{ agent.name }}]: %.1f%%", cg_{{ agent.name }}.get_inst_coverage()), UVM_NONE)
+{%- endfor %}
+{%- if mixed.bins|length > 0 %}
+    `uvm_info("ENV_COV", $sformatf("功能覆盖率[mixed]: %.1f%%", cg_mixed.get_inst_coverage()), UVM_NONE)
+{%- endif %}
   endfunction
 
 endclass : {{ environment.env_name }}_coverage

@@ -5,38 +5,6 @@
 // Port Config: {{ agent.name }}_port_config
 // ============================================================
 class {{ agent.name }}_port_config extends uvm_object;
-  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
-  `uvm_object_utils_begin({{ agent.name }}_port_config)
-    `uvm_field_int(addr_width, UVM_DEFAULT)
-    `uvm_field_int(data_width, UVM_DEFAULT)
-    `uvm_field_int(id_width, UVM_DEFAULT)
-    `uvm_field_enum(uvm_active_passive_enum, is_active, UVM_DEFAULT)
-    `uvm_field_enum(port_kind_enum, port_kind, UVM_DEFAULT)
-    `uvm_field_int(error_injection_rate, UVM_DEFAULT)
-    // vif: virtual interface，UVM field 宏不支持注册（由 config_db 传递）
-    `uvm_field_int(drive_delay_min, UVM_DEFAULT)
-    `uvm_field_int(drive_delay_max, UVM_DEFAULT)
-    `uvm_field_int(max_outstanding, UVM_DEFAULT)
-    `uvm_field_int(enable_out_of_order_resp, UVM_DEFAULT)
-    `uvm_field_int(response_timeout, UVM_DEFAULT)
-    `uvm_field_int(timeout_raise_error, UVM_DEFAULT)
-    `uvm_field_enum(response_mode_e, response_mode, UVM_DEFAULT)
-    `uvm_field_int(memory_size, UVM_DEFAULT)
-    `uvm_field_int(memory_start_addr, UVM_DEFAULT)
-    `uvm_field_int(memory_end_addr, UVM_DEFAULT)
-    `uvm_field_int(default_read_data, UVM_DEFAULT)
-    `uvm_field_aa_int_int_unsigned(memory, UVM_DEFAULT)
-    `uvm_field_int(response_delay_min, UVM_DEFAULT)
-    `uvm_field_int(response_delay_max, UVM_DEFAULT)
-    `uvm_field_int(enable_out_of_order, UVM_DEFAULT)
-    `uvm_field_aa_int_string(id_delay_map, UVM_DEFAULT)
-    `uvm_field_int(error_addr_start, UVM_DEFAULT)
-    `uvm_field_int(error_addr_end, UVM_DEFAULT)
-    `uvm_field_enum(resp_type_e, force_resp_type, UVM_DEFAULT)
-{%- for var in config_vars %}
-    {{ fm.uvm_field(var) }}
-{%- endfor %}
-  `uvm_object_utils_end
 
   // 公共协议参数,driver mask, // 核心：运行期动态截断，只驱动有效位宽
   // 工业界的标准做法就是：接口（vif）和事务（Transaction）的物理位宽，agent parameters 都统一取整个系统所支持的最大位宽（MAX_WIDTH）。
@@ -46,6 +14,12 @@ class {{ agent.name }}_port_config extends uvm_object;
 
   // 模式控制（缺省 UVM_ACTIVE；由 env 级 agents[].is_active / loopback 套件按实例赋值）
   uvm_active_passive_enum is_active = UVM_ACTIVE;
+
+  // 覆盖率开关（缺省开）。定向测试会把它置 0 —— 定向激励是已知场景，
+  // 计入功能覆盖率只会稀释分母。`test_directed.sv.j2` 里 `cfg.<agent>_cfg.has_coverage = 1'b0`
+  // 就是干这个的；字段必须在这里存在，否则报
+  // "Could not find field/method name (has_coverage)"。
+  bit has_coverage = 1;
 
   // 端口类型（MASTER = 驱动侧实例，SLAVE = 响应侧实例；monitor/scoreboard 按此分支）
   port_kind_enum port_kind = MASTER;
@@ -100,6 +74,42 @@ class {{ agent.name }}_port_config extends uvm_object;
 {%- for cons in config_constraints %}
   constraint {{ cons.name }} {{ cons.value | safe }}
 {%- endfor %}
+
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack/config_db 自动化）──
+  // **必须放在字段声明之后**：这些宏会展开成引用各字段的方法体，
+  // 放在声明之前 Questa 会判「Undefined variable」（实测）。
+  `uvm_object_utils_begin({{ agent.name }}_port_config)
+    `uvm_field_int(addr_width, UVM_DEFAULT)
+    `uvm_field_int(data_width, UVM_DEFAULT)
+    `uvm_field_int(id_width, UVM_DEFAULT)
+    `uvm_field_enum(uvm_active_passive_enum, is_active, UVM_DEFAULT)
+    `uvm_field_int(has_coverage, UVM_DEFAULT)
+    `uvm_field_enum(port_kind_enum, port_kind, UVM_DEFAULT)
+    `uvm_field_int(error_injection_rate, UVM_DEFAULT)
+    // vif: virtual interface，UVM field 宏不支持注册（由 config_db 传递）
+    `uvm_field_int(drive_delay_min, UVM_DEFAULT)
+    `uvm_field_int(drive_delay_max, UVM_DEFAULT)
+    `uvm_field_int(max_outstanding, UVM_DEFAULT)
+    `uvm_field_int(enable_out_of_order_resp, UVM_DEFAULT)
+    `uvm_field_int(response_timeout, UVM_DEFAULT)
+    `uvm_field_int(timeout_raise_error, UVM_DEFAULT)
+    `uvm_field_enum(response_mode_e, response_mode, UVM_DEFAULT)
+    `uvm_field_int(memory_size, UVM_DEFAULT)
+    `uvm_field_int(memory_start_addr, UVM_DEFAULT)
+    `uvm_field_int(memory_end_addr, UVM_DEFAULT)
+    `uvm_field_int(default_read_data, UVM_DEFAULT)
+    `uvm_field_aa_int_int_unsigned(memory, UVM_DEFAULT)
+    `uvm_field_int(response_delay_min, UVM_DEFAULT)
+    `uvm_field_int(response_delay_max, UVM_DEFAULT)
+    `uvm_field_int(enable_out_of_order, UVM_DEFAULT)
+    `uvm_field_aa_int_string(id_delay_map, UVM_DEFAULT)
+    `uvm_field_int(error_addr_start, UVM_DEFAULT)
+    `uvm_field_int(error_addr_end, UVM_DEFAULT)
+    `uvm_field_enum(resp_type_e, force_resp_type, UVM_DEFAULT)
+{%- for var in config_vars %}
+    {{ fm.uvm_field(var) }}
+{%- endfor %}
+  `uvm_object_utils_end
 
   function new(string name = "{{ agent.name }}_port_config");
     super.new(name);

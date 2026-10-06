@@ -60,68 +60,32 @@ def _build_llm_summary(raw: str, limit: int = _LLM_SUMMARY_LIMIT) -> str:
 
 
 def build_rtl_filelist(output_dir: Path) -> Path:
-    """构建包含 RTL + UVM bench + env 的编译 filelist"""
-    fl_dir = output_dir / "inputs" / "filelists"
-    fl_dir.mkdir(parents=True, exist_ok=True)
-    fl = fl_dir / "filelist_coverage.f"
+    """覆盖率编译用的 filelist —— **就用回归那份**（`inputs/filelists/filelist.f`）。
 
-    lines = []
-    # RTL files
-    rtl_dir = output_dir / "rtl"
-    if rtl_dir.exists():
-        for sv in sorted(rtl_dir.glob("*.sv")):
-            lines.append(str(sv.resolve()))
-    # SystemVerilog 参考模型（DUT vs ref_model compare）
-    model_dir = output_dir / "model"
-    if model_dir.exists():
-        for sv in sorted(model_dir.rglob("*_ref_model.sv")):
-            lines.append(str(sv.resolve()))
+    这里原来自己拼一份（RTL + agents + env + bench），**漏了 UVM 库本身**
+    （`uvm_pkg.sv` + `+incdir+.../uvm-1.2/src`）。实测后果：覆盖率编译的第一句就是
 
-    # UVM agents
+        ** Error: Cannot find `include file "uvm_macros.svh" in directories:
+           ... env, env\\seqs, env\\tests, bench, F:/questasim64_2024.1/.../ovm-2.1.2/src
+
+    （那串里出现的是 **OVM**，vlog 自己的兜底路径），接着 `uvm_object_utils`
+    之类全部未定义、9 个语法错，收集直接失败。而失败又被上层吞成"覆盖率 0%"，
+    在界面上看着像"跑完了但确实没覆盖"，与真正的 0% 无从区分。
+
+    回归那条路用的是 `filelist.build_filelist_for_tb`（顺序即依赖：公共包 → UVM
+    → agents → RTL → env → bench），一直是好的 —— 所以这里不再自己拼第二份。
+    两份清单内容本来就该一模一样，各写一份只会漂。
+    """
+    fl = output_dir / "inputs" / "filelists" / "filelist.f"
+    if fl.exists():
+        return fl                              # 回归已经建好了，直接用
+    from src.tools.lib.filelist import build_filelist_for_tb, derive_env_name
+
     agents_dir = output_dir / "agents"
-    if agents_dir.exists():
-        for agent_dir in sorted(agents_dir.iterdir()):
-            if not agent_dir.is_dir():
-                continue
-            name = agent_dir.name
-            pkg = agent_dir / f"{name}_pkg.sv"
-            iface = agent_dir / f"{name}_interface.sv"
-            if iface.exists():
-                lines.append(str(iface.resolve()))
-            lines.append(f"+incdir+{agent_dir.resolve()}")
-            if pkg.exists():
-                lines.append(str(pkg.resolve()))
-
-    # UVM env
-    env_dir = output_dir / "env"
-    if env_dir.exists():
-        lines.append(f"+incdir+{env_dir.resolve()}")
-        for sv in sorted(env_dir.glob("*_pkg.sv")):
-            lines.append(str(sv.resolve()))
-        seqs_dir = env_dir / "seqs"
-        if seqs_dir.exists():
-            lines.append(f"+incdir+{seqs_dir.resolve()}")
-            for sv in sorted(seqs_dir.glob("*_pkg.sv")):
-                lines.append(str(sv.resolve()))
-        tests_dir = env_dir / "tests"
-        if tests_dir.exists():
-            lines.append(f"+incdir+{tests_dir.resolve()}")
-            for sv in sorted(tests_dir.glob("*_pkg.sv")):
-                lines.append(str(sv.resolve()))
-
-    # Bench
-    bench_dir = output_dir / "bench"
-    if bench_dir.exists():
-        lines.append(f"+incdir+{bench_dir.resolve()}")
-        for sv in sorted(bench_dir.glob("*_tb_top.sv")):
-            lines.append(str(sv.resolve()))
-        # 若无 _tb_top，则添加所有 bench 下的 sv
-        if not list(bench_dir.glob("*_tb_top.sv")):
-            for sv in sorted(bench_dir.glob("*.sv")):
-                lines.append(str(sv.resolve()))
-
-    fl.write_text("\n".join(lines), encoding="utf-8", errors="replace")
-    return fl
+    agents = [{"name": d.name} for d in agents_dir.iterdir() if d.is_dir()] \
+        if agents_dir.exists() else []
+    return build_filelist_for_tb(output_dir, agents, derive_env_name(output_dir),
+                                 "filelist.f")
 
 
 def compile_with_coverage(output_dir: Path, filelist: Path) -> dict:
@@ -318,22 +282,58 @@ def _discover_dut_name(output_dir: Path) -> str:
 
 
 def _parse_cvg_text(text: str) -> dict:
-    """解析 vcover -cvg 输出，提取功能覆盖率（covergroup bin 命中）。
+    """解析 `vcover report -cvg` 输出，提取功能覆盖率。
 
-    功能覆盖率 = 语义验证目标（covergroup bin 命中），与代码覆盖率（line/branch/toggle）
-    并列。vcover -cvg 输出 covergroup 实例的总体覆盖率（Overall 列）。
+    输出长这样（实测）：
 
-    返回 {functional_pct, covergroup_count, raw_pcts}。
+        Enabled Coverage              Bins      Hits    Misses  Coverage
+        Covergroups                      3        na        na    34.24%
+            Coverpoints/Crosses          9        na        na        na
+                Covergroup Bins       4360        64      4296     1.46%
+        TOTAL COVERGROUP COVERAGE: 34.24%  COVERGROUP TYPES: 3
+
+    两行两个数，含义不同、都要：
+      · `Covergroups … 34.24%` —— **covergroup 级**：有多少个 covergroup 被完整覆盖；
+      · `Covergroup Bins … 1.46%` —— **bin 级**：4360 个 bin 只命中 64 个。
+
+    `functional_pct` 取**后者**（bin 命中率）—— 那才是"功能盖了多少"，前者只要
+    covergroup 里有一个 bin 没中就掉到很低，粗到没有指导意义。
+
+    **不能"把所有百分比抓出来求平均"**（原来是这么写的）：那段文本里同一个数字
+    出现三次（Covergroups 行、TOTAL 行、Total By Instance 行），平均下来正好把
+    1.46% 那条冲淡 —— 实测报出 26.0%，而真值是 1.46%。`covergroup_count` 同理，
+    原来数的是"出现了几个百分号"。
     """
-    result = {"functional_pct": 0.0, "covergroup_count": 0, "raw_pcts": []}
+    result = {"functional_pct": 0.0, "covergroup_count": 0, "raw_pcts": [],
+              "covergroup_pct": 0.0, "bin_hits": 0, "bin_total": 0}
     if not text:
         return result
-    # 找 Covergroup 总体覆盖率：优先 "Overall" 附近的百分比，退化为所有百分比取平均
-    pcts = [float(m) for m in re.findall(r"(\d+\.?\d*)%", text)]
-    if pcts:
-        result["raw_pcts"] = pcts
-        result["covergroup_count"] = len(pcts)
-        result["functional_pct"] = round(sum(pcts) / len(pcts), 1)
+
+    def _counts(label: str):
+        """`<label> <bins> <hits> <misses> <pct>%` —— 前三个是计数（可能带千分位逗号，
+        也可能是 `na`），最后一个是百分比字符串。"""
+        m = re.search(label + r"\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+(\d+\.?\d*)%", text)
+        if not m:
+            return None
+        return (int(m.group(1).replace(",", "")), int(m.group(2).replace(",", "")),
+                int(m.group(3).replace(",", "")), float(m.group(4)))
+
+    bins_row = _counts("Covergroup Bins")
+    if bins_row:
+        total, hits, _misses, pct = bins_row
+        result.update(bin_total=total, bin_hits=hits, functional_pct=pct)
+
+    # `Covergroups  3  na  na  34.24%` —— 这行的中间两列是 `na`（没有"bin 数"一说）
+    cg_row = re.search(r"Covergroups\s+([\d,]+)\s+\S+\s+\S+\s+(\d+\.?\d*)%", text)
+    if cg_row:
+        result["covergroup_pct"] = float(cg_row.group(2))
+    types = re.search(r"COVERGROUP TYPES:\s*(\d+)", text)
+    if types:
+        result["covergroup_count"] = int(types.group(1))
+    elif cg_row:
+        result["covergroup_count"] = int(cg_row.group(1).replace(",", ""))
+
+    result["raw_pcts"] = [float(m) for m in re.findall(r"(\d+\.?\d*)%", text)]
     return result
 
 

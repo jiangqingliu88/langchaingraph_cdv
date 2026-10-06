@@ -19,14 +19,24 @@ BENCH  ?= {{ bench_name }}
 TEST   ?= {{ environment.env_name }}_base_test
 SEED   ?= 1
 OUTDIR ?= build
-DUT    ?=
+# DUT / 寄存器模型 —— 默认取 bench YAML 的 `dut_filelist` / `ral_filelist`，
+# 命令行仍可覆盖（`make compile DUT=xxx.sv RAL=yyy.sv`）。
+# **注意**：这里是 YAML 里的原样路径，相对**运行 make 的目录**。
+DUT    ?= {{ (bench.dut_filelist or []) | join(' ') }}
+RAL    ?= {{ (bench.ral_filelist or []) | join(' ') }}
 COV    ?= 0
 
 # ── Questa 后端 ──
-QUESTA   ?= f:/questasim64_2024.1/win64
+# MTI_HOME = 安装根。vsim/vlog 在 <MTI_HOME>/win64/ 下；
+# UVM 源码在 <MTI_HOME>/verilog_src/uvm-1.2/src/ 下；
+# 而 **UVM 的预编译 DPI 库在 <MTI_HOME>/uvm-1.2/win64/ 下**（不在 verilog_src 里，
+# 那儿只有源码）。把 UVM_DPI 指到 verilog_src/.../win64/uvm_dpi 会报
+# "SystemVerilog DPI cannot access file ... uvm_dpi.dll" → "Error loading design"。
+MTI_HOME ?= f:/questasim64_2024.1
+QUESTA   ?= $(MTI_HOME)/win64
 WORK      = $(OUTDIR)/work
-UVM_HOME ?= f:/questasim64_2024.1/verilog_src/uvm-1.2/src
-UVM_DPI  ?= f:/questasim64_2024.1/verilog_src/uvm-1.2/win64/uvm_dpi
+UVM_HOME ?= $(MTI_HOME)/verilog_src/uvm-1.2/src
+UVM_DPI  ?= $(MTI_HOME)/uvm-1.2/win64/uvm_dpi
 
 # ── VCS 后端 ──
 VCS  ?= vcs
@@ -46,24 +56,32 @@ SRC = \
   $(BASE_PKG)/common_typedefs/common_typedefs_pkg.sv \
 {%- for ia in interface_agents %}
   +incdir+agents/{{ ia.name }}_agent \
-  agents/{{ ia.name }}_agent/1_interface/{{ ia.name }}_if.sv \
-  agents/{{ ia.name }}_agent/1_interface/{{ ia.name }}_system_if.sv \
+  {#- **顺序要紧**：`<if>_if.sv` 里写着 `import <if>_parameters_pkg::*;`
+      并直接用 ADDR_WIDTH / DATA_WIDTH，所以 **parameters_pkg 必须先编**。
+      之前把 interface 排在前面 → "Could not find the package
+      (apb_parameters_pkg)" + 一串 "Undefined variable: 'ADDR_WIDTH'"。 #}
   agents/{{ ia.name }}_agent/{{ ia.name }}_parameters_pkg.sv \
   agents/{{ ia.name }}_agent/{{ ia.name }}_typedefs_pkg.sv \
+  agents/{{ ia.name }}_agent/1_interface/{{ ia.name }}_if.sv \
+  agents/{{ ia.name }}_agent/1_interface/{{ ia.name }}_system_if.sv \
   agents/{{ ia.name }}_agent/{{ ia.name }}_pkg.sv \
 {%- endfor %}
 {%- for h in harnesses %}
   bench/{{ h.name }}.sv \
 {%- endfor %}
+{#- DUT 与 RAL 都排在 env 之前：RTL 要先于 tb_top；**寄存器模型（RAL）要先于 env**
+    —— env 的 register_model 直接引用 apb_ral_pkg::apb_reg_block，
+    而 RAL 自己 import apb_pkg::*，所以它又在 agents 之后。 #}
+  $(DUT) \
+  $(RAL) \
   +incdir+env \
   env/$(ENV)_parameters_pkg.sv \
   env/$(ENV)_pkg.sv \
-  +incdir+env/tests \
-  env/tests/$(ENV)_test_pkg.sv \
   +incdir+env/seqs \
   env/seqs/$(ENV)_seq_pkg.sv \
-  bench/$(BENCH)_tb_top.sv \
-  $(DUT)
+  +incdir+env/tests \
+  env/tests/$(ENV)_test_pkg.sv \
+  bench/$(BENCH)_tb_top.sv
 
 # ── 覆盖率选项 ──
 COV_FLAG_Q =

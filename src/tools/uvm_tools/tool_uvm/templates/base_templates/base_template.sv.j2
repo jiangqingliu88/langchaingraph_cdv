@@ -1,13 +1,20 @@
 {% set meta = meta | default({}) %}
 {% set comment_prefix = comment_prefix | default('// ') %}
+{% set _created = meta.created | default('') or now() %}
+{% set _modified = meta.modified | default('') or now() %}
 {{ comment_prefix }}════════════════════════════════════════════════════════════════
 {{ comment_prefix }}  {{ meta.company | default(trademark) }} — 商标与权利声明
 {{ comment_prefix }}  {{ meta.rights | default('Copyright © ' ~ copyright_year ~ ' ' ~ trademark ~ '. All rights reserved. 未经书面许可，禁止复制、修改、分发或用于商业用途。') }}
 {{ comment_prefix }}
 {{ comment_prefix }}  文件:     {{ file_name | default('(unknown)') }}
 {{ comment_prefix }}  作者:     {{ meta.author | default('-') }}
-{{ comment_prefix }}  创建时间: {{ meta.created | default('') or now() }}
-{{ comment_prefix }}  修改时间: {{ meta.modified | default('') or now() }}
+{# 时间戳为空（没钉 SOURCE_DATE_EPOCH、也没给 meta.created）时**整行不输出** ——
+   否则会留下 `创建时间: ` 这种带尾随空格的空行，既是噪音又会让「有没有时间戳」
+   在 diff 里看不出来。生成时间是**元数据**，本该记在 run manifest 里，
+   写进每个产物文件只会让产物不可复现（见 gen_uvm.reproducible_now）。 #}
+{% if _created %}{{ comment_prefix }}  创建时间: {{ _created }}
+{% endif %}{% if _modified %}{{ comment_prefix }}  修改时间: {{ _modified }}
+{% endif %}{{ comment_prefix }}  联系邮箱: {{ meta.email | default('-') }}
 {{ comment_prefix }}  联系邮箱: {{ meta.email | default('-') }}
 {{ comment_prefix }}  描述:     {{ description | default('tool_uvm 自动生成') }}
 {{ comment_prefix }}

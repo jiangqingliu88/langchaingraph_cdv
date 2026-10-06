@@ -23,7 +23,8 @@ from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QLineEdit,
                                QPlainTextEdit, QPushButton, QSplitter,
                                QTabWidget, QVBoxLayout, QWidget)
 
-from ...ui import table_helpers, theme
+from ...ui import theme
+from ...ui.helpers import tables as table_helpers
 from ...ui.models import LEFT, RowsModel
 from ..base import ModuleBase
 

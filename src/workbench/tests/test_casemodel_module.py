@@ -8,13 +8,13 @@
 from __future__ import annotations
 
 from src.tools.casemodel_tools.analysis import CATEGORY_ORTHOGONAL
-from src.workbench.modules.vms.casemodel.models import (CaseTableModel,
+from src.workbench.modules.verify.casemodel.models import (CaseTableModel,
                                                         OrgTreeModel)
-from src.workbench.modules.vms.casemodel.pages import PAGES
-from src.workbench.ui.coverage_view import CoverageView
-from src.workbench.ui.matrix_view import MatrixView
-from src.workbench.ui.panels import IssuePanel
-from src.workbench.ui.severity_model import IssueTableModel
+from src.workbench.modules.verify.casemodel.pages import PAGES
+from src.workbench.ui.views.coverage import CoverageView
+from src.workbench.ui.views.matrix import MatrixView
+from src.workbench.ui.widgets.panels import IssuePanel
+from src.workbench.ui.models.issues import IssueTableModel
 
 from .conftest import CPU_FLAWED, FC, FC_FLAWED, FC_REAL
 
@@ -36,7 +36,7 @@ def test_issue_model_colors_by_severity(casemodel):
 
 
 def test_issue_filter_model_filters_without_touching_source(casemodel):
-    from src.workbench.ui.severity_model import IssueFilterModel
+    from src.workbench.ui.models.issues import IssueFilterModel
     issues = casemodel.result.model_issues
     source = IssueTableModel()
     source.set_issues(issues)
@@ -89,7 +89,7 @@ def test_tree_model_exposes_hierarchy(casemodel):
 
 def test_tree_model_marks_uncovered_leaves_red(casemodel):
     from PySide6.QtCore import QModelIndex, Qt
-    from src.workbench.modules.vms.casemodel import models as cm_models
+    from src.workbench.modules.verify.casemodel import models as cm_models
     model = OrgTreeModel()
     model.set_result(casemodel.result)
     branch = model.index(0, 0, QModelIndex())
@@ -122,7 +122,7 @@ def test_matrix_view_paints_and_hits(qt_app, casemodel):
     view.cellPicked.connect(lambda a, b, c: picked.append((a, b, c)))
     from PySide6.QtCore import QEvent, QPointF, Qt
     from PySide6.QtGui import QMouseEvent
-    from src.workbench.ui.matrix_view import HEADER_H, HEADER_W
+    from src.workbench.ui.views.matrix import HEADER_H, HEADER_W
     view._recompute_cell()
     cell = view._cell
     pos = QPointF(HEADER_W + 2, HEADER_H + cell + 2)     # 第 (1,0) 个格子
@@ -177,12 +177,9 @@ def test_editor_is_first_page(casemodel):
 
 def test_module_titles_its_tab_with_the_open_file(casemodel, casemodel_window):
     """标签页标题挂上文件名 —— 同时开着几个模块时要看得出这是哪一份模型。"""
-    for index in range(casemodel_window.center_tabs.count()):
-        widget = casemodel_window.center_tabs.widget(index)
-        if widget.property("module_id") == "vms.casemodel":
-            assert "cpu_pipeline.yaml" in casemodel_window.center_tabs.tabText(index)
-            return
-    raise AssertionError("中央标签页里没有 Case 建模")
+    subs = casemodel_window.workspace.subwindows_of("verify.casemodel")
+    assert subs, "中央工作区里没有 Case 建模"
+    assert "cpu_pipeline.yaml" in subs[0].windowTitle()
 
 
 def test_opening_a_model_populates_every_page(casemodel):
@@ -280,7 +277,7 @@ def test_broken_model_shows_banner_and_keeps_text(casemodel_empty, tmp_path):
 
 
 def test_missing_file_reports_error(casemodel_empty, tmp_path, monkeypatch):
-    from src.workbench.modules.vms.casemodel import module as module_module
+    from src.workbench.modules.verify.casemodel import module as module_module
     calls = []
     monkeypatch.setattr(module_module.QMessageBox, "critical",
                         staticmethod(lambda *a, **k: calls.append(a)))
@@ -308,3 +305,43 @@ def test_actions_carry_the_usual_shortcuts(casemodel):
     assert shortcuts["打开模型…"] == "Ctrl+O"
     assert shortcuts["保存模型"] == "Ctrl+S"
     assert shortcuts["重新分析"] == "Ctrl+R"
+
+
+# ════════════════════════════════════════════════════════════
+# 跟着选中的运行走
+# ════════════════════════════════════════════════════════════
+
+def test_follows_the_selected_runs_case_model(casemodel, monkeypatch, tmp_path):
+    """选了运行就切到**那次运行自己的** case 模型，而不是清单里那份示例。
+
+    清单里的 `input: casemodel/examples/cpu_pipeline.yaml` 是**示例**（属于另一个
+    设计）。闭环每次运行会在自己目录里产出一份 case 模型
+    （`<运行目录>/inputs/casemodel.yaml`）—— 那才是"这次 apb_uart 的 case 模型"。
+    不订阅的话，界面对着的永远是 CPU 流水那个示例（用户一眼就看出不对）。
+    """
+    run_dir = tmp_path / "output_run_1"
+    (run_dir / "inputs").mkdir(parents=True)
+    model_yaml = run_dir / "inputs" / "casemodel.yaml"
+    model_yaml.write_text(
+        'version: "1.0"\ntests:\n- object: apb_uart\n  sub_objects:\n'
+        '  - {id: F1, name: 读写, code: RW}\ndimensions: []\n', encoding="utf-8")
+
+    # `pipeline.detail` 走工具桥（要真跑运行目录扫描）—— 这里只验订阅逻辑，
+    # 直接把它换成一个带 `dir` 的载荷
+    monkeypatch.setattr(casemodel, "run_tool",
+                        lambda *a, **kw: {"dir": str(run_dir)})
+    casemodel.on_refresh("output_run_1")
+
+    assert casemodel.path == model_yaml
+    assert "apb_uart" in casemodel.editor.get_text()
+
+
+def test_run_without_case_model_keeps_the_current_file(casemodel, monkeypatch, tmp_path):
+    """这次运行没产过 case 模型 → 保持当前文件，并如实说一声（不装作切了）。"""
+    empty_run = tmp_path / "output_run_2"
+    empty_run.mkdir()
+    before = casemodel.path
+    monkeypatch.setattr(casemodel, "run_tool",
+                        lambda *a, **kw: {"dir": str(empty_run)})
+    casemodel.on_refresh("output_run_2")
+    assert casemodel.path == before

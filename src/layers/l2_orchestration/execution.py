@@ -389,11 +389,18 @@ class PipelineExecutionService:
         # 参数里的 reason（如比对失败、死代码）
         if isinstance(params, dict):
             reason = params.get("reason", "")
+        recorded = 0
         for fpath in files[:10]:  # 最多记录 10 个文件
             try:
                 file_audit.record(str(fpath), reason or f"{role} 产出", role)
+                recorded += 1
             except Exception:
                 pass
+        # **增量落盘**：每跑完一个 agent 就把链刷到磁盘。原先只在最后
+        # （n_finalize）落一次，中途失败/中断的 run 在 docs/ 下没有任何审计证据
+        # —— 而失败时才是审计最有用的时刻。见 FileAuditTrail.save_default。
+        if recorded:
+            file_audit.save_default()
 
     @staticmethod
     def _discover_excludes(exclude_reg, gaps: list, calibration: dict = None) -> int:
@@ -472,6 +479,7 @@ class PipelineExecutionService:
                               target: Optional[float] = None, max_rounds: int = 5,
                               design_style: str = "baseline",
                               bypass_design_model: bool = False,
+                              sim_modes=None,
                               approval_gate=None) -> dict:
         """七 Agent 闭环：design → model → verify → ops → coverage → [decision] → audit。
 
@@ -512,6 +520,7 @@ class PipelineExecutionService:
             max_rounds=int(max_rounds),
             design_style=design_style,
             bypass_design_model=bool(bypass_design_model),
+            sim_modes=list(sim_modes) if sim_modes else ["cov"],
         )
         config = {
             "configurable": {"rt": rt},
@@ -534,7 +543,7 @@ class PipelineExecutionService:
         self, spec_text: str, output_root: str = "output",
         target: Optional[float] = None, max_rounds: int = 5,
         design_style: str = "baseline", bypass_design_model: bool = False,
-        approval_gate=None, on_event=None, cancel_event=None,
+        sim_modes=None, approval_gate=None, on_event=None, cancel_event=None,
         run_id: str = "", checkpointing: bool = True,
         resume: Optional[str] = None,
     ) -> dict:
@@ -569,7 +578,7 @@ class PipelineExecutionService:
             return await self._stream_run(
                 spec_text=spec_text, output_root=output_root, target=target,
                 max_rounds=max_rounds, design_style=design_style,
-                bypass_design_model=bypass_design_model,
+                bypass_design_model=bypass_design_model, sim_modes=sim_modes,
                 approval_gate=approval_gate, on_event=on_event,
                 cancel_event=cancel_event, run_id=run_id, saver=None,
                 resume=resume)
@@ -577,14 +586,15 @@ class PipelineExecutionService:
             return await self._stream_run(
                 spec_text=spec_text, output_root=output_root, target=target,
                 max_rounds=max_rounds, design_style=design_style,
-                bypass_design_model=bypass_design_model,
+                bypass_design_model=bypass_design_model, sim_modes=sim_modes,
                 approval_gate=approval_gate, on_event=on_event,
                 cancel_event=cancel_event, run_id=run_id, saver=saver,
                 resume=resume)
 
     async def _stream_run(self, *, spec_text, output_root, target, max_rounds,
                           design_style, bypass_design_model, approval_gate,
-                          on_event, cancel_event, run_id, saver, resume):
+                          on_event, cancel_event, run_id, saver, resume,
+                          sim_modes=None):
         """`run_closed_loop_streaming` 的身体 —— 拆出来只为把检查点的开合
         收进 `with`，免得流循环被 try/finally 包住看不出重点。"""
         output_root = make_output_root(output_root)
@@ -631,6 +641,7 @@ class PipelineExecutionService:
                 max_rounds=int(max_rounds),
                 design_style=design_style,
                 bypass_design_model=bool(bypass_design_model),
+                sim_modes=list(sim_modes) if sim_modes else ["cov"],
             )
             if saver is not None:
                 config["configurable"]["thread_id"] = initial.run_id

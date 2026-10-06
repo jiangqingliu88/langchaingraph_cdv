@@ -12,11 +12,11 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from src.layers.l2_orchestration.agents.base import BaseAgent, AgentResult
 from src.layers.l2_orchestration.agents.registry import register_agent
+# 工具统一入口：走 ToolHub 的 schema 校验 + 审计回执，
+# 而不是绕过 hub 直接 import 工具函数（见 call_tool 的 docstring）
+from src.layers.l2_orchestration.communication.tool_hub import call_tool
 from src.tools.debug_tools.main import (
-    DebugTools, _classify_error, _fingerprint,
-    collect_sim_log, collect_compile_log,
-    bisect_test, auto_fix, rerun_failed_test,
-    fingerprint_error,
+    DebugTools, _classify_error, _fingerprint, fingerprint_error,
 )
 import structlog, json, re
 from pathlib import Path
@@ -116,12 +116,19 @@ class DebugAgent(BaseAgent):
             })
 
         # ── Phase 1: Collect ──
-        sim_result = json.loads(collect_sim_log(output_dir))
-        compile_result = json.loads(collect_compile_log(output_dir))
+        # 经 `call_tool` 调（而不是直接 import 函数）：走 ToolHub 的 schema 校验 +
+        # 审计回执。注意 schema 声明 output_dir 是 string，传 Path 会被拒，故 str()。
+        sim_result = json.loads(call_tool("collect_sim_log", {"output_dir": str(output_dir)}))
+        compile_result = json.loads(call_tool("collect_compile_log", {"output_dir": str(output_dir)}))
 
         all_errors = []
         for log_entry in sim_result.get("errors", []):
-            all_errors.extend(log_entry.get("errors", []))
+            # **带上 log_file**：它是"这条错误属于哪条用例"的唯一线索 —— 靠它才能
+            # 反查到那条用例目录、进而找到它的波形（见 `_find_case_wave`）。
+            # 摊平时丢掉它，下面的波形诊断就无从下手。
+            log_file = log_entry.get("log_file", "")
+            for e in log_entry.get("errors", []):
+                all_errors.append({**e, "log_file": log_file})
         for entry in compile_result.get("errors", []):
             all_errors.append({
                 "message": entry.get("message", ""),
@@ -177,7 +184,9 @@ class DebugAgent(BaseAgent):
             output_dir, [e for e in unique.values()
                          if e["classification"]["category"] in ("model_mismatch", "unknown")])
 
-        # ── Phase 3: Locate (bisect if multiple unique failures) ──
+        # ── Phase 3: Locate（多个独立失败时，缩小失败用例范围）──
+        # 注意 `bisect_failed_tests` 只在**失败用例集合**里分批，不做代码版本
+        # 溯源（不碰 git/change-list）—— 见该工具 docstring。
         by_category = {}
         for fp, err in unique.items():
             cat = err["classification"]["category"]
@@ -186,9 +195,9 @@ class DebugAgent(BaseAgent):
         bisect_data = {}
         if len(unique) > 2:
             failed_names = [f"{e.get('file', '')}:{e.get('line', 0)}" for e in unique.values()]
-            bisect_data = json.loads(
-                bisect_test(json.dumps({"output_dir": output_dir, "failed_tests": failed_names}))
-            )
+            bisect_data = json.loads(call_tool("bisect_failed_tests", {
+                "input_json": json.dumps({"output_dir": str(output_dir),
+                                          "failed_tests": failed_names})}))
 
         # ── Phase 3.5: 经验库命中（debug 成长：记忆复用 + 教训升级）──
         from src.layers.l4_memory.debug_experience import get_debug_experience_store
@@ -220,9 +229,9 @@ class DebugAgent(BaseAgent):
 
             # ── 成长: 已验证通过的修复 → 复用（仍走 EDA 重验，跳过分析）──
             _source = "experience_reuse" if fp in _reused_fps else "template"
-            fix_result = json.loads(
-                auto_fix(json.dumps({"error_text": msg, "output_dir": output_dir}))
-            )
+            fix_result = json.loads(call_tool("auto_fix", {
+                "input_json": json.dumps({"error_text": msg,
+                                          "output_dir": str(output_dir)})}))
             if fix_result.get("matched"):
                 # 记忆: 记录 fingerprint → fix_name（供下次命中复用）
                 experience.record(
@@ -263,9 +272,9 @@ class DebugAgent(BaseAgent):
                 for e in log_entry.get("errors", []):
                     if e.get("fingerprint") == fix_entry["fingerprint"]:
                         test_name = log_entry["log_file"].replace("sim_", "").replace(".log", "")
-                        rerun = json.loads(
-                            rerun_failed_test(json.dumps({"output_dir": output_dir, "test_name": test_name}))
-                        )
+                        rerun = json.loads(call_tool("rerun_failed_test", {
+                            "input_json": json.dumps({"output_dir": str(output_dir),
+                                                      "test_name": test_name})}))
                         passed = rerun.get("status") == "PASS"
                         # ── 成长: 把 PASS/FAIL 写回经验库，校准 confidence ──
                         experience.record_result(fix_entry["fingerprint"], passed)
@@ -335,8 +344,14 @@ class DebugAgent(BaseAgent):
             },
         }
 
-        # ── Phase 6: LLM 深度分析（可选） ──
-        need_llm = (fix_summary["applied"] == 0 and error_summary["unique_errors"] > 0)
+        # ── Phase 6: LLM 深度分析 ──
+        # **只要还有错误就必须叫 LLM** —— 不能用"自动修复模板一个都没应用"当开关。
+        # 模板命中只说明"这条错误的**表象**见过"（套一个通用补丁），**不等于根因查清**；
+        # 用 `applied == 0` 当条件，会让"模板一命中就再也没有 LLM 分析" ——
+        # 而恰恰是这些命中得最顺手的错误最需要 LLM 说清根因。
+        # 实测：loopback 的 SCB mismatch 走 `auto_fix` 命中后 `llm_analysis` 恒为空，
+        # 于是根因分析整个缺位（不是 LLM 没能力，是根本没调它）。
+        need_llm = error_summary["unique_errors"] > 0
         llm_analysis = {}
 
         if need_llm:
@@ -405,17 +420,23 @@ class DebugAgent(BaseAgent):
                 continue
 
             dut_val, model_val, exp_val = self._extract_mismatch_values(msg)
-            if dut_val is None and model_val is None and exp_val is None:
-                # 日志里没有可提取的信号值 → 记录"证据不足"，不强行分类
+            # 波形补位：日志只给**单点**数值（`expected=0xA5 actual=0x00`），
+            # 波形给**时间线** —— 而 `analyze_timing`（时序错位）要的正是时间线。
+            # 取不到就当没有，绝不硬凑一条假时间线。
+            wave_trace, wave_src = self._waveform_evidence(err, msg)
+
+            if dut_val is None and model_val is None and exp_val is None and not wave_trace:
+                # 日志与波形都没有可提取的信号值 → 记录"证据不足"，不强行分类
                 results.append({
                     "fingerprint": fp,
                     "message": msg[:150],
                     "verdict": {"root_cause": "unknown",
-                                "reason": "日志无信号值，无法做三方对比（需波形/参考模型数据）"},
+                                "reason": "日志无信号值、用例也没有可比对的波形，"
+                                          "无法做三方对比"},
                 })
                 continue
             diag = diagnose(
-                dut={0: dut_val} if dut_val is not None else {},
+                dut=wave_trace or ({0: dut_val} if dut_val is not None else {}),
                 model={0: model_val} if model_val is not None else {},
                 expected={0: exp_val} if exp_val is not None else {},
             )
@@ -426,12 +447,16 @@ class DebugAgent(BaseAgent):
                 self._record_debug_experience(output_dir, err, diag)
             if cross_project:
                 diag["cross_project"] = cross_project
-            results.append({
+            entry = {
                 "fingerprint": fp,
                 "message": msg[:150],
                 "evidence": diag["evidence"],
                 "verdict": diag["verdict"],
-            })
+            }
+            if wave_src:
+                # 说明 DUT 时间线**来自哪条波形的哪个信号** —— 证据要可回溯
+                entry["waveform"] = wave_src
+            results.append(entry)
         return results
 
     @staticmethod
@@ -478,6 +503,78 @@ class DebugAgent(BaseAgent):
                 fix_name=v.get("reason", ""))
         except Exception:
             pass
+
+    # ── 波形证据（log + 波形诊断的另一半）────────────────────────
+
+    @staticmethod
+    def _find_case_wave(log_file: str) -> str:
+        """失败用例的波形文件（`.db` 优先 → `.wlf` → 用例目录下的 `vsim.wlf`）。
+
+        `log_file` 是 `<用例目录>/sim_*.log`，所以用例目录 = 它的父目录 ——
+        波形落点 `<用例目录>/waves/<test>.db` 由此得到。没有就给空串。
+        """
+        if not log_file:
+            return ""
+        case = Path(log_file).parent
+        if not case.is_dir():
+            return ""
+        for pat in ("waves/*.db", "waves/*.wlf", "waves/*.vcd",
+                    "*.db", "*.wlf", "vsim.wlf"):
+            hits = [p for p in case.glob(pat) if p.is_file()]
+            if hits:
+                return str(max(hits, key=lambda p: p.stat().st_mtime))
+        return ""
+
+    @staticmethod
+    def _signal_names_in(msg: str) -> List[str]:
+        """从错误消息里挑出**可能是信号/寄存器名**的标识符。
+
+        不追求精确 —— 真正的过滤在波形侧：`extract_signal_trace` 只返回波形里
+        **确实存在**的同名信号，所以这里多挑几个噪声词也无所谓。
+        ```
+        reg CTRL mismatch: w=0xA5 r=0x00   → ["CTRL", ...]
+        ```
+        """
+        stop = {"reg", "mismatch", "expected", "actual", "got", "want", "dut",
+                "model", "error", "fail", "failed", "uvm_error", "uvm_fatal",
+                "scb", "loop", "and", "the", "for", "with", "not", "when"}
+        out: List[str] = []
+        for tok in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", msg):
+            if len(tok) < 2 or tok.lower() in stop or tok in out:
+                continue
+            # `0xA5` 会被切成 `xA5` —— 那是数值不是信号名，扔掉
+            if re.fullmatch(r"[xX][0-9a-fA-F]+", tok):
+                continue
+            out.append(tok)
+        return out[:8]
+
+    @staticmethod
+    def _waveform_evidence(err: Dict[str, Any], msg: str):
+        """失败用例的波形 → `(dut_trace, source)`；取不到给 `({}, "")`。
+
+        `source` 形如 `<波形路径>#<信号名>` —— 证据可回溯（这条时间线是从哪来的）。
+        多个同名信号命中时，`extract_signal_trace` 取采样最多的那条；
+        这里再取采样最多的**信号**当作 DUT 时间线。
+        """
+        wave = DebugAgent._find_case_wave(err.get("log_file", ""))
+        if not wave:
+            return {}, ""
+        names = DebugAgent._signal_names_in(msg)
+        if not names:
+            return {}, ""
+        try:
+            from src.tools.debug_tools.waveform import extract_signal_trace
+
+            traces = extract_signal_trace(wave, names)
+        except Exception:                              # noqa: BLE001 波形是旁路证据
+            return {}, ""
+        # 按**消息里出现的先后**取第一个真存在的信号 —— 越靠前越可能是这条消息的
+        # 主语（`reg CTRL mismatch: …` 的 CTRL）。取"采样最多"会把顺带被提一嘴的
+        # 信号（`… penable=1`）当成主体，拿它的时间线去比对期望，结论就偏了。
+        for name in names:
+            if traces.get(name):
+                return traces[name], f"{wave}#{name}"
+        return {}, ""
 
     @staticmethod
     def _extract_mismatch_values(msg: str):

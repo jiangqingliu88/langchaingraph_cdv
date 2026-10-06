@@ -18,7 +18,7 @@ from .conftest import CPU, FC, FC_REAL, load_into, type_into
 
 def _module_module():
     """模块所在的 python 模块 —— 弹窗/文件对话框都从它上面拦。"""
-    from src.workbench.modules.vms.casemodel import module as module_module
+    from src.workbench.modules.verify.casemodel import module as module_module
     return module_module
 
 
@@ -97,12 +97,10 @@ def test_typing_marks_dirty_on_the_tab_title(casemodel_empty, sandbox):
 
 
 def _module_tab_title(casemodel) -> str:
-    """本模块所在标签页的标题 —— 走它自己的窗口，别借别的夹具的。"""
+    """本模块所在子窗口的标题 —— 走它自己的窗口，别借别的夹具的。"""
     window = casemodel.ctx.window
-    for index in range(window.center_tabs.count()):
-        widget = window.center_tabs.widget(index)
-        if widget.property("module_id") == casemodel.module_id:
-            return window.center_tabs.tabText(index)
+    for sub in window.workspace.subwindows_of(casemodel.module_id):
+        return sub.windowTitle()
     return ""
 
 
@@ -127,7 +125,7 @@ def test_set_text_does_not_count_as_user_edit(casemodel_empty, sandbox):
 
 def test_editor_widget_dirty_flag(qt_app):
     """控件层：Qt 的 document().isModified() 够可靠，不必自己记标志。"""
-    from src.workbench.ui.yaml_editor import YamlEditor
+    from src.workbench.ui.editors.yaml import YamlEditor
     editor = YamlEditor()
     editor.set_text("object: X\ndimensions: []\n")
     assert editor.text() == "object: X\ndimensions: []\n"   # 不多不少一个换行
@@ -144,7 +142,7 @@ def test_editor_tab_inserts_spaces(qt_app):
     from PySide6.QtCore import QEvent, Qt
     from PySide6.QtGui import QKeyEvent
 
-    from src.workbench.ui.yaml_editor import YamlEditor
+    from src.workbench.ui.editors.yaml import YamlEditor
     editor = YamlEditor()
     editor.set_text("a: 1")
     editor.moveCursor(editor.textCursor().MoveOperation.End)   # 像用户那样在末尾敲

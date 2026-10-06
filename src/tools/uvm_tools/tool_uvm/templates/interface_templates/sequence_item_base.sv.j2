@@ -20,13 +20,6 @@
 // 故基类字段不会漏。
 
 class {{ agent.name }}_base_seq_item extends uvm_sequence_item;
-  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack 自动化）──
-  `uvm_object_utils_begin({{ agent.name }}_base_seq_item)
-    `uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)
-{%- for var in base_transaction_vars %}
-    {{ fm.uvm_field(var) }}
-{%- endfor %}
-  `uvm_object_utils_end
 
   // ── 事务方向（两侧共用）──
   //typedef enum {READ, WRITE} xact_type_e;
@@ -51,6 +44,14 @@ class {{ agent.name }}_base_seq_item extends uvm_sequence_item;
 {%- for cons in base_transaction_constraints %}
   constraint {{ cons.name }} {{ cons.value | safe }}
 {%- endfor %}
+
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack 自动化）──
+  `uvm_object_utils_begin({{ agent.name }}_base_seq_item)
+    `uvm_field_enum(xact_type_e, xact_type, UVM_DEFAULT)
+{%- for var in base_transaction_vars %}
+    {{ fm.uvm_field(var) }}
+{%- endfor %}
+  `uvm_object_utils_end
 
   function new(string name = "{{ agent.name }}_base_seq_item");
     super.new(name);

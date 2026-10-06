@@ -78,6 +78,7 @@ class CoverageAgent(BaseAgent):
         # 模块已不存在（断链）。L1 InfrastructureManager.collect_coverage 是同一后端
         # 的统一封装（含 ucdb 归档 + SHA256 固化），返回 {coverage, simulation, ...}。
         coverage_data = {}
+        collection_error = ""
         try:
             from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
             infra = InfrastructureManager(output_dir)
@@ -86,12 +87,32 @@ class CoverageAgent(BaseAgent):
                 coverage_data = {}
         except Exception as e:
             logger.warning(f"覆盖率收集失败: {e}")
+            collection_error = str(e)[:300]
 
         # collect_real_coverage 返回 {compile, simulation, coverage:{...}, status}
         # 真正的覆盖率指标在 result["coverage"] 里
         nested_cov = coverage_data.get("coverage", {}) if isinstance(coverage_data, dict) else {}
         if not isinstance(nested_cov, dict):
             nested_cov = {}
+
+        # ── 收集失败 ≠ 覆盖率是 0 ──
+        # 这两个在报告里长得一样（都是 0%），但一个是"工具/环境没跑起来"，
+        # 一个是"跑了确实没覆盖"。原来这里把前者的原因直接丢掉，界面上只剩一个
+        # 0.0%，排查时得手工去翻运行目录的日志才知道是编译挂了（实测踩过：
+        # 覆盖率编译的 filelist 漏了 UVM 库，报 9 个错，最后呈现的就是"覆盖率 0%"）。
+        # 所以：**原因留进结果与日志**，哪怕结论仍然是 0%。
+        if not collection_error and coverage_data.get("status") not in (None, "PASS"):
+            _compile = coverage_data.get("compile") or {}
+            _sim = coverage_data.get("simulation") or {}
+            collection_error = str(
+                coverage_data.get("error")
+                or (isinstance(_compile, dict) and _compile.get("stderr", ""))
+                or (isinstance(_sim, dict) and _sim.get("error", ""))
+                or "coverage collection not PASS"
+            )[:300]
+        if collection_error:
+            logger.error(f"覆盖率收集未成功（结果按 0% 记，原因如下，不是「确实没覆盖」）: "
+                         f"{collection_error[:200]}")
         # 原始证据（仿真 log + VCD 波形），供证据链归档 + 人工检查
         _simulation = coverage_data.get("simulation", {}) if isinstance(coverage_data, dict) else {}
         log_path = _simulation.get("log_path", "") if isinstance(_simulation, dict) else ""
@@ -211,6 +232,7 @@ class CoverageAgent(BaseAgent):
             "coverage_summary": summary_path,
             "log_path": log_path,
             "vcd_path": vcd_path,
+            "collection_error": collection_error,
             "calibration": calibration,
             "functional_coverage": func_cov,
             "coverage_map": coverage_map,
