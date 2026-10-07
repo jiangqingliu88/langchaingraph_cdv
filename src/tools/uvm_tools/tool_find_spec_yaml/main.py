@@ -826,7 +826,15 @@ def run(spec_text: str) -> str:
 
     uvm_yaml_archive = output_dir / "inputs" / "yaml" / "uvm"
     uvm_yaml_archive.mkdir(parents=True, exist_ok=True)
-    # 清理旧 YAML，避免残留 dut_* 文件
+    # 清理旧 YAML，避免残留 dut_* 文件。
+    #
+    # ⚠️ **这个目录是本工具的私有产物目录 —— 这里会清空它。**
+    # 任何**比本工具更早**的阶段写进这个目录的东西都会在这里被删掉，而本工具
+    # 后面还可能要读它（实测：front 写的 `casemodel.yaml` 就是这么被删的，
+    # 而接下来 `_casemodel_test_lines` 正要去读 —— 于是 `environment.tests`
+    # 永远注入不进去，`env/tests` 里生成不出属性 test 类）。
+    # 要跨阶段存活的东西**不要放这里**：casemodel 走
+    # `layout.casemodel_path()`（`<run>/inputs/casemodel.yaml`）。
     for old in uvm_yaml_archive.glob("*.yaml"):
         try:
             old.unlink()
@@ -943,6 +951,17 @@ def run(spec_text: str) -> str:
         ifaces = (spec or {}).get("interfaces", []) if isinstance(spec, dict) else []
         env_str = _gen_env_yaml(module_name, agent_names, agents_spec,
                                 clock_port, reset_port, registers, ifaces)
+        # ── casemodel 产的属性测试 → `environment.tests` ──
+        # `casemodel.yaml` 由 front 从 spec 跑出来（测试点分解 + 维度组合），
+        # `run_uvm_tests` 把每个维度取值摊平成一条 UVM_TEST。**接在这里**：
+        # 缺这一段，casemodel 产的东西就永远停在 casemodel.yaml 里 ——
+        # 生成不出 test 类，也进不了回归（实测：env/tests/ 只有手写模板那三个）。
+        _cm = _casemodel_test_lines(output_dir)
+        if _cm:
+            env_str = env_str.replace("  clk_rst_vip:",
+                                      chr(10).join(_cm) + chr(10) + "  clk_rst_vip:", 1)
+            print(f"  [find_yaml] env.yaml 注入 {len(_cm)} 行 casemodel tests", flush=True)
+
         env_path = uvm_yaml_archive / "env.yaml"
         env_path.write_text(env_str, encoding="utf-8", errors="replace")
         yaml_files.append(str(env_path))
@@ -1594,3 +1613,35 @@ def _util_component_yaml(uc: dict) -> str:
         out.append("    body: |")
         out.append(ind)
     return "\n".join(out)
+
+
+def _casemodel_test_lines(output_dir) -> List[str]:
+    """`casemodel.yaml` → `environment.tests:` 那几行；没有就给空。
+
+    没有就**空着**（不编、不猜）—— 这份 yaml 是 front 从 spec 跑出来的，
+    spec 里没料时它本来就不该存在。
+
+    **路径走 `layout.casemodel_path`，不许自己拼**：以前这里找
+    `inputs/yaml/uvm/casemodel.yaml`（front 当时也写那儿），而那个目录是本工具
+    的私有产物目录、**每次跑先被清空** —— 于是"删它的和读它的是同一趟运行的
+    同一个工具"，`tests:` 永远注入不进去（实测：`env/tests` 里没有属性 test）。
+    """
+    try:
+        from src.layers.l1_infrastructure.layout import casemodel_path
+        cm = casemodel_path(output_dir)
+        if not cm.exists():
+            return []
+        from src.tools.casemodel_tools.api import run_uvm_tests
+        t = run_uvm_tests(cm.read_text(encoding="utf-8"), max_tests=200)
+        tests = t.get("tests") or []
+        if not tests:
+            return []
+        out = ["  tests:"]
+        for x in tests:
+            out.append("    - { dimension: %s, value: '%s', key: %s, int_value: %s }"
+                       % (x.get("dimension"), x.get("value"), x.get("key"),
+                          x.get("int_value")))
+        return out
+    except Exception as e:
+        print(f"  [find_yaml] casemodel tests 未注入: {e}", flush=True)
+        return []

@@ -159,21 +159,113 @@ RULES:
 No markdown, no explanations — only code."""
 
 
+#: 生成物签名 —— 由 `gen_uvm` 的 banner 模板写出（`base_template.sv.j2`）。
+#: **与 gen_uvm 的 `REGION_MARKER` 同源**：那个是正则的真相源，这里只复刻一份
+#: 供本模块自用（不 import gen_uvm —— 那会把整个生成器拖进来）。两者一致性由
+#: `tests/test_llm_fix_write_gate.py` 钉住，改一边漏一边会红。
+_GENERATED_BANNER = "自动生成 (tool_uvm"
+_CUSTOM_MARKER = re.compile(r"^\s*//\s*pragma\s+custom\s+(\w+)\s+(begin|end)\s*$")
+
+
+def _is_generated_file(text: str) -> bool:
+    """文件头是否带 `gen_uvm` 的生成 banner（只看前几行，别被正文里的字样骗到）。"""
+    return any(_GENERATED_BANNER in ln for ln in text.lstrip().splitlines()[:3])
+
+
+def _skeleton(text: str) -> str:
+    """**骨架** = 抹掉所有 `pragma custom` 区域**内容**后的文本（标记行保留）。
+
+    生成物的骨架是模板说了算的，**不属于**可以自由改写的部分；`pragma custom`
+    区域才是留给人的。改写后骨架应当逐字节不变 —— 这就是判据。
+    """
+    out, inside = [], False
+    for ln in text.splitlines():
+        m = _CUSTOM_MARKER.match(ln)
+        if m:
+            inside = m.group(2) == "begin"
+            out.append(ln)
+            continue
+        if not inside:
+            out.append(ln)
+    return "\n".join(out)
+
+
+def gated_write(fpath: Path, code: str) -> bool:
+    """**唯一的写盘出口** —— 生成物只许改 `pragma custom`，越界重写一律拒绝。
+
+    ## 为什么必须是"唯一出口"
+
+    这里原来有**两条**各自 `write_text` 的路径：
+
+      · `apply_llm_fixes`（**仿真**失败的修复）
+      · `llm_refine_compile_errors`（**编译**失败的修复）  ← 它自己的 `write_text`
+
+    第一版只闸了前者。实测立刻复现：编译失败 → 后者把 `apb_loopback_scb.sv`
+    **整份重写**（写出模板里根本不存在的 `compare_one`/`pstrb`），于是文件成了
+    模板与 LLM 输出的**混合体** → 编译报 `act.pstrb` 找不到 → `-mfcu` 连带整个
+    work 库的注册塌掉 → `[INVTST]` → loopback 挂 → 分级回归第一道门就断。
+
+    **教训**：闸门写在"某条路径里"等于没写 —— 漏一条就前功尽弃。所以收成这一个
+    函数，两条路径都调它；谁再直接 `write_text` 就是又开了一条暗路。
+
+    返回是否真的写了（False = 被拒绝，原文件未动）。
+    """
+    old = (fpath.read_text(encoding="utf-8", errors="replace")
+           if fpath.exists() else "")
+    if old and _is_generated_file(old) and _skeleton(old) != _skeleton(code):
+        logger.warning(
+            f"[LLM-fix] 拒绝整份重写生成物 {fpath.name}（骨架与模板不一致）"
+            f" —— 只允许改 pragma custom 区域；已保留原文")
+        return False
+    fpath.write_text(code, encoding="utf-8")
+    logger.info(f"[LLM-fix] wrote {fpath.name} ({len(code)} bytes)")
+    return True
+
+
 def apply_llm_fixes(llm_output: str, files_to_fix: dict) -> int:
-    """解析 LLM 输出中的 ===FILE:xxx=== 标记并写入文件。"""
+    """解析 LLM 输出中的 `===FILE:xxx===` 标记并写入文件。
+
+    ## 为什么要拒绝"整份重写生成物"（实测踩过，代价很大）
+
+    这个函数原来是无条件 `fpath.write_text(code)`。而 loopback 的
+    `<ag>_loopback_scb.sv` **是 `gen_uvm` 从模板生成的**，LLM 每次拿到 500 字
+    sim log 就把**整份**重写一遍 —— 于是同一个模板，三轮运行产出三份**各不
+    相同**的文件（实测行数 131 / 182 / 156，且一份都不含模板自带的
+    `SCB_LOOP_PASS` 标记）。后果按运气分三种：
+
+      · 恰好能编能过        → loopback 7/7（假象：以为好了）
+      · 写出非法覆盖        → `do_compare` 签名不符 → 编译塌 → `[INVTST]`
+      · 能编但比较逻辑错     → 满屏 `loopback mismatch`
+
+    loopback 是分级回归的**第一道门**，它挂了后面 p0–p3 / 覆盖率 / 签核**全不跑**。
+    表现就是"每轮死在不同地方、怎么都跑不通" —— **跑通与否由那一轮 LLM 写了什么
+    决定，而不是由代码决定**。
+
+    ## 判据
+
+    目标是生成物时，**骨架（`pragma custom` 之外）必须逐字节不变**：
+
+      · 只动 `pragma custom` 区域 → 放行（那是它被允许改的地方）
+      · 骨架对不上（= 整份重写）→ **拒绝，保留原文**，并把这次拒绝记进日志与计数
+
+    拒绝不是"静默跳过"：调用方拿 `refused` 单独报，别和"LLM 没输出"混为一谈。
+    """
     fixed = 0
+    refused = 0
     pattern = r'===FILE:(\w+)===\s*\n(.*?)(?=\n===FILE:|\Z)'
     matches = re.findall(pattern, llm_output, re.DOTALL)
     for tag, code in matches:
         tag = tag.strip()
         code = code.strip()
-        if tag in files_to_fix and len(code) > 50:
-            fpath = files_to_fix[tag]
-            fpath.write_text(code, encoding="utf-8")
-            logger.info(f"[LLM-fix] wrote {fpath.name} ({len(code)} bytes)")
+        if tag not in files_to_fix or len(code) <= 50:
+            logger.warning(f"[LLM-fix] unknown/short tag: {tag} ({len(code)} bytes)")
+            continue
+        fpath = files_to_fix[tag]
+        if gated_write(fpath, code):
             fixed += 1
         else:
-            logger.warning(f"[LLM-fix] unknown/short tag: {tag} ({len(code)} bytes)")
+            refused += 1
+    apply_llm_fixes.refused = refused          # noqa: SLF001 调用方取用
     return fixed
 
 
@@ -212,7 +304,10 @@ def llm_refine_compile_errors(output_dir: Path, agents: list) -> int:
             prompt = f"Fix compile errors in this UVM SystemVerilog file. Errors:\n{errors[:2000]}"
             refined = call_llm(prompt, code, errors)
             if refined and len(refined) > 50:
-                fpath.write_text(refined, encoding="utf-8")
+                # **这条也是写盘的** —— 第一版只闸了 `apply_llm_fixes`，漏了这里，
+                # 实测立刻复现：编译失败 → 这里整份重写 SCB → `[INVTST]`。
+                if not gated_write(fpath, refined):
+                    continue
                 fixed_count += 1
                 fl = build_loopback_filelist(output_dir, name)
                 runner = RegressionRunner(
@@ -290,8 +385,19 @@ def llm_refine_sim_timing(output_dir: Path, agents: list, env_name: str) -> dict
                 break
 
             fixed_count = apply_llm_fixes(refined, files_to_fix)
+            refused = getattr(apply_llm_fixes, "refused", 0)
+            if refused:
+                # **拒绝不是"没解析出来"** —— 是 LLM 想去改生成物的骨架，被挡了。
+                # 混成一句 "parse failed" 会让人往 prompt 上找原因（实测会白查一轮）。
+                result["details"].append(
+                    f"{name}: 拒绝 LLM 整份重写生成物 {refused} 个文件"
+                    f"（只允许改 pragma custom 区域）")
+                logger.warning(f"[LLM-loopback] {name}: refused {refused} wholesale "
+                               f"rewrite(s) of generated files")
             if fixed_count == 0:
-                result["details"].append(f"{name}: LLM parse failed")
+                result["details"].append(
+                    f"{name}: LLM parse failed" if not refused else
+                    f"{name}: 没有可应用的修改（全部被生成物闸门拦下）")
                 break
 
             result["fixed"] += fixed_count

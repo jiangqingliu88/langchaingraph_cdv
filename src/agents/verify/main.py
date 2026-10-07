@@ -511,9 +511,12 @@ def _synthesize_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
         yaml_text = case_model_yaml(spec if isinstance(spec, dict) else {})
         if not yaml_text:
             return None
-        path = Path(output_dir) / "inputs" / "casemodel.yaml"
+        from src.layers.l1_infrastructure.layout import casemodel_path
+        path = casemodel_path(output_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
-        if not path.exists():                 # 人已经放了一份就不覆盖
+        # 已经有一份就不覆盖 —— 优先级：**人放的 / front 从 spec 出的** > 这里合成的。
+        # front 比本步更早跑，所以这一步在正常情况下就是"不覆盖"。
+        if not path.exists():
             path.write_text(yaml_text, encoding="utf-8")
         logger.info(f"case 模型由 spec 合成并落盘（{path.name}）—— "
                     f"想换一份就改这个文件，下次运行优先用它")
@@ -547,7 +550,8 @@ def _find_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
         module = str(spec.get("design_name") or "").strip()
         if module:
             candidates.append(Path("config") / "casemodel" / f"{module}.yaml")
-    candidates.append(Path(output_dir) / "inputs" / "casemodel.yaml")
+    from src.layers.l1_infrastructure.layout import casemodel_path
+    candidates.append(casemodel_path(output_dir))
 
     for path in candidates:
         try:

@@ -259,8 +259,8 @@ class TestcaseRegistry:
             weights = STAGE_PURPOSE_WEIGHTS[stage_idx]
         with self._lock:
             rows = self._connect().execute(
-                "SELECT name, purpose, scenario, priority, status, coverage_bin, "
-                "sim_time, fail_rate, effectiveness, run_count "
+                "SELECT name, purpose, scenario, priority, status, constraints, "
+                "coverage_bin, sim_time, fail_rate, effectiveness, run_count "
                 "FROM testcase_registry").fetchall()
 
         # 状态排序权重：planned 最优先，deprecated 最后
@@ -270,11 +270,19 @@ class TestcaseRegistry:
 
         items = []
         for r in rows:
-            (name, purpose, scenario, priority, status, bin_name,
+            (name, purpose, scenario, priority, status, raw_constraints, bin_name,
              sim_time, fail_rate, eff, run_count) = r
+            # `constraints` 是**属性组合**（维度/字段/取值）—— 以前这一列没人写、
+            # 这里也没人读，于是"建模声明的覆盖点"和"回归跑的用例"之间少一条线。
+            # 与 `_row_to_dict` 同一口径解码（坏值当空表，不抛）。
+            try:
+                constraints = json.loads(raw_constraints or "[]")
+            except (ValueError, TypeError):
+                constraints = []
             items.append({
                 "name": name, "purpose": purpose, "scenario": scenario,
-                "priority": priority, "status": status, "coverage_bin": bin_name,
+                "priority": priority, "status": status, "constraints": constraints,
+                "coverage_bin": bin_name,
                 "sim_time": sim_time, "fail_rate": fail_rate,
                 "effectiveness": eff, "run_count": run_count,
                 # 排序键：purpose 权重（高优先）+ priority（P0 优先）+ 状态（planned 优先）
@@ -406,6 +414,17 @@ class TestcaseRegistry:
     # ═══════════════════════════════════════════════════════════
     # 查询 / 统计
     # ═══════════════════════════════════════════════════════════
+
+    def get_all(self) -> List[Dict[str, Any]]:
+        """**全库原样列出**（含 `constraints`，`_row_to_dict` 解码）。
+
+        与 `get_priority_order` 的区别：那个是**排序后的待跑清单**、还带截断；
+        这个是"库里到底有什么"。`constraints` 只有这条路径完整给出 —— 审计
+        "建模声明的覆盖点有没有真的进库"要的就是它。
+        """
+        with self._lock:
+            rows = self._connect().execute("SELECT * FROM testcase_registry").fetchall()
+        return [self._row_to_dict(r) for r in rows]
 
     def get_by_purpose(self, purpose: str, status: str = None) -> List[Dict[str, Any]]:
         with self._lock:

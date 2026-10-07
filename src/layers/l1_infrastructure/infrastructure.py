@@ -35,6 +35,10 @@ from typing import Any, Dict, List, Optional
 
 import structlog
 
+# 运行目录布局 —— **写端的落点也走契约**（`regression_run` 那一层叫什么、在哪）。
+# 这里以前拼 `self.output_root / "regression_run"`，读端另拼一份，改一处漏一处。
+from src.layers.l1_infrastructure import layout
+
 logger = structlog.get_logger()
 
 
@@ -401,7 +405,7 @@ class InfrastructureManager:
             # 覆盖率全没了（实测：28 个用例目录里只有 3 个有 sim.log）。
             # 分级回归的意义就是**每级的证据**，不能互相冲掉。
             # 非分级调用（`_stage_tag` 未设）路径与从前逐字节一致。
-            root_dir = self.output_root / "regression_run"
+            root_dir = layout.regression_root(self.output_root)
             if getattr(self, "_stage_tag", ""):
                 root_dir = root_dir / self._stage_tag
             root_dir = str(root_dir)

@@ -1115,10 +1115,32 @@ class RenderTask:
         self.skipped = 0
 
     def should_skip(self, target_path: Path) -> bool:
-        """默认跳过已存在文件（UVMF 语义）；-o/--overwrite 或合并流程例外。"""
+        """默认跳过已存在文件（UVMF 语义）；-o/--overwrite 或合并流程例外。
+
+        **但"跳过"分两种，不能一视同仁**：
+
+          · 目标存在，**且带生成签名**（`_is_generated_file`）—— 那是**我们自己的
+            产物**（上一轮的输出），跳过它等于**永远不刷新**：模板改了、生成物
+            却停在旧版本上，而且不报一声。实测踩过：一份更老版本模板产的
+            `apb_loopback_scb.sv`（带着当前 `apb.yaml` 产不出的 `pstrb`/`pprot`）
+            在"全新"的 run 里被编译，于是 SCB 引用了 seq_item 里没有的字段 →
+            `(vlog-13276)` → 类没编成 → `[INVTST] apb_loopback_test not found`。
+            **时好时坏**（取决于那一轮用的是旧文件还是新生成的），最难查的那种。
+            所以：**自己生成的，照常重生**（刷新是对的，那也是它的来源）。
+
+          · 目标存在，**但不是生成物** —— 那是人手写的/别处来的，**不动它是对的**，
+            但要**说出来**。静默跳过是"把生成物悄悄换掉的暗路"：谁都不知道
+            模板这次没生效。日志一行，是这条暗路上唯一的灯。
+        """
         if self.overwrite or self.injector.merge_source is not None:
             return False
-        return target_path.exists()
+        if not target_path.exists():
+            return False
+        if _is_generated_file(target_path):
+            return False           # 自己的产物 → 重生（别让旧版本顶着）
+        print(f"  [gen_uvm] 跳过非生成文件（不是 tool_uvm 产的，不动它）：{target_path}"
+              f" —— 模板这次没往这儿写；若期望它被生成，请先移走该文件")
+        return True
 
     def render_file(self, template_path: str, target_path: Path,
                     context: Dict[str, Any]) -> Optional[Path]:

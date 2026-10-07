@@ -31,6 +31,11 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# 运行目录布局 —— **契约只有一处**（`regression_run` 那一层在哪、分几级、
+# 读的时候怎么认）。这里只许调它的函数，不许再拼一次字符串。
+from src.layers.l1_infrastructure.layout import regression_root as _layout_regression_root
+from src.layers.l1_infrastructure.layout import latest_root as _layout_latest_root
+
 #: 门禁 id → 中文名。顺序即**显示顺序**（audit agent 的 gates 是 dict，无序）。
 #: 这些是 audit 的布尔门禁；`rtl_files` / `model_placeholder_reason` 是附注不是门禁，
 #: 单独取出来当说明用。
@@ -538,23 +543,15 @@ def run_regression_status(run_dir: str = "") -> Dict[str, Any]:
     if error:
         return error
 
-    # 回归产物可能在 run 根下，也可能传进来的就是回归目录本身
-    reg_root = root / "regression_run"
-    # ⚠️ **两种磁盘布局都要认**：
-    #   平的   `<run>/regression_run/build_*/test_*/`        ← 老布局
-    #   分级的 `<run>/regression_run/<stage>/build_*/...`   ← 分级回归每级一个子目录
-    # 分级那一层是后来加的（每级各占一个子目录，免得下一级 rmtree 掉上一级的证据）。
-    # 第一版忘了改这里 —— GUI 的「回归状态」于是**整页空白**、波形也空：扫描在
-    # `regression_run/` 下直接找 `build_*`，一个都找不到。
-    if reg_root.is_dir() and not any(reg_root.glob("build_*")):
-        _stages = [d for d in sorted(reg_root.glob("*/")) if any(d.glob("build_*"))]
-        if _stages:
-            reg_root = _stages[-1]          # 取最后一级（盘上最新最完整的那份）
-    if not reg_root.is_dir() or not any(reg_root.glob("build_*")):
-        if any(root.glob("build_*")):
-            reg_root = root
-        else:
-            return {"error": f"这个运行目录里没有回归产物（找过 {reg_root} 和 {root}）"}
+    # 回归产物在**哪一层** —— 判据只有一处（`layout.latest_root`）。
+    #
+    # 它认三种入参，**这是实测补上的**：一开始这里只当"运行根"处理，而调用方
+    # （含 workbench 夹具）实际会传**回归目录本身**；收口那版直接扫到 0 行、
+    # 17 个用例变红。容忍进 `layout` 之后，两个读端共用同一套判据。
+    reg_root = _layout_latest_root(root)
+    if reg_root is None:
+        return {"error": f"这个运行目录里没有回归产物"
+                         f"（找过 {_layout_regression_root(root)} 和 {root}）"}
 
     report = _read_json(reg_root / "report.json") or {}
     report_tasks = {str(t.get("name", "")): t
