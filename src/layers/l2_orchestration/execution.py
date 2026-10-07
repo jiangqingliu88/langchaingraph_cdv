@@ -16,6 +16,7 @@ from src.layers.l1_infrastructure.output_config import make_output_root
 
 from src.layers.l2_orchestration.agents.registry import AgentRegistry
 from src.agents.design import DesignAgent
+from src.agents.front import FrontAgent
 from src.agents.model import ModelAgent
 from src.agents.verify import VerifyAgent
 from src.agents.ops import OpsAgent
@@ -298,6 +299,7 @@ class PipelineExecutionService:
             return
 
         agents = [
+            ("front",    FrontAgent()),   # 前置分析：rtl/spec/doc → 结构化设计信息
             ("design",   DesignAgent()),
             ("model",    ModelAgent()),
             ("verify",   VerifyAgent()),
@@ -479,7 +481,7 @@ class PipelineExecutionService:
                               target: Optional[float] = None, max_rounds: int = 5,
                               design_style: str = "baseline",
                               bypass_design_model: bool = False,
-                              sim_modes=None,
+                              sim_modes=None, manual_gate: bool = True, rtl_dir: str = "",
                               approval_gate=None) -> dict:
         """七 Agent 闭环：design → model → verify → ops → coverage → [decision] → audit。
 
@@ -513,6 +515,27 @@ class PipelineExecutionService:
         rt = Runtime(self, spec_text, approval_gate=approval_gate)
         graph = build_closed_loop_graph()
 
+        # ── 外部 RTL（`--rtl <dir>`）：**两条入口都要做** ──
+        # `run_closed_loop`（CLI 走这条）与 `_stream_run`（GUI/服务走那条）是两份
+        # 独立实现。第一版只补了 `_stream_run` —— 于是 CLI 上 `--rtl` 被整个忽略，
+        # design agent 照样生成 RTL（实测：rtl/ 里是设计产的 2 个文件、不是我给的
+        # 6 个，且日志里没有「外部 RTL 已纳入」）。
+        _bypass_design = False
+        if rtl_dir:
+            _src = Path(rtl_dir)
+            if not _src.is_dir():
+                logger.error(f"--rtl 指的不是目录：{rtl_dir}（按无外部 RTL 处理）")
+            else:
+                _dst = Path(output_root) / "rtl"
+                _dst.mkdir(parents=True, exist_ok=True)
+                _n = 0
+                for _f in sorted(_src.rglob("*")):
+                    if _f.is_file() and _f.suffix.lower() in (".sv", ".v", ".svh", ".vh"):
+                        (_dst / _f.name).write_bytes(_f.read_bytes())
+                        _n += 1
+                logger.info(f"外部 RTL 已纳入：{_n} 个文件 ← {rtl_dir}")
+                _bypass_design = True   # 只跳 design；model 照跑（它是比对的那一半）
+
         initial = PipelineState(
             run_id=Path(output_root).name,
             output_root=str(output_root),
@@ -520,7 +543,9 @@ class PipelineExecutionService:
             max_rounds=int(max_rounds),
             design_style=design_style,
             bypass_design_model=bool(bypass_design_model),
+            bypass_design=bool(_bypass_design),
             sim_modes=list(sim_modes) if sim_modes else ["cov"],
+            manual_gate=bool(manual_gate),
         )
         config = {
             "configurable": {"rt": rt},
@@ -543,7 +568,7 @@ class PipelineExecutionService:
         self, spec_text: str, output_root: str = "output",
         target: Optional[float] = None, max_rounds: int = 5,
         design_style: str = "baseline", bypass_design_model: bool = False,
-        sim_modes=None, approval_gate=None, on_event=None, cancel_event=None,
+        sim_modes=None, manual_gate: bool = True, rtl_dir: str = "", approval_gate=None, on_event=None, cancel_event=None,
         run_id: str = "", checkpointing: bool = True,
         resume: Optional[str] = None,
     ) -> dict:
@@ -579,7 +604,7 @@ class PipelineExecutionService:
                 spec_text=spec_text, output_root=output_root, target=target,
                 max_rounds=max_rounds, design_style=design_style,
                 bypass_design_model=bypass_design_model, sim_modes=sim_modes,
-                approval_gate=approval_gate, on_event=on_event,
+                manual_gate=manual_gate, rtl_dir=rtl_dir, approval_gate=approval_gate, on_event=on_event,
                 cancel_event=cancel_event, run_id=run_id, saver=None,
                 resume=resume)
         async with ctx as saver:
@@ -587,14 +612,14 @@ class PipelineExecutionService:
                 spec_text=spec_text, output_root=output_root, target=target,
                 max_rounds=max_rounds, design_style=design_style,
                 bypass_design_model=bypass_design_model, sim_modes=sim_modes,
-                approval_gate=approval_gate, on_event=on_event,
+                manual_gate=manual_gate, rtl_dir=rtl_dir, approval_gate=approval_gate, on_event=on_event,
                 cancel_event=cancel_event, run_id=run_id, saver=saver,
                 resume=resume)
 
     async def _stream_run(self, *, spec_text, output_root, target, max_rounds,
                           design_style, bypass_design_model, approval_gate,
                           on_event, cancel_event, run_id, saver, resume,
-                          sim_modes=None):
+                          sim_modes=None, manual_gate: bool = True, rtl_dir: str = ""):
         """`run_closed_loop_streaming` 的身体 —— 拆出来只为把检查点的开合
         收进 `with`，免得流循环被 try/finally 包住看不出重点。"""
         output_root = make_output_root(output_root)
@@ -634,6 +659,30 @@ class PipelineExecutionService:
             max_rounds = initial.max_rounds
             payload = Command(resume=resume)
         else:
+            # ── 外部 RTL（`--rtl <dir>`）：用现成的，**跳过 design/model** ──
+            # 验开源 IP 就走这条：把「这份 RTL 对不对」与「design agent 会不会
+            # 生成 RTL」两个变量隔开。拷贝而不是就地引用 —— run 目录要能**自洽**
+            # 打包（审计/复现时拿着 run 目录就能重跑，不依赖外部路径还在不在）。
+            _bypass_design = False   # 未给 --rtl 时必须先有值（否则 UnboundLocalError）
+            if rtl_dir:
+                src = Path(rtl_dir)
+                if not src.is_dir():
+                    logger.error(f"--rtl 指的不是目录：{rtl_dir}（按无外部 RTL 处理）")
+                else:
+                    dst = Path(output_root) / "rtl"
+                    dst.mkdir(parents=True, exist_ok=True)
+                    _copied = 0
+                    for f in sorted(src.rglob("*")):
+                        if f.is_file() and f.suffix.lower() in (".sv", ".v", ".svh", ".vh"):
+                            target = dst / f.name
+                            target.write_bytes(f.read_bytes())
+                            _copied += 1
+                    logger.info(f"外部 RTL 已纳入：{_copied} 个文件 ← {rtl_dir}")
+                    # **只跳 design，不跳 model**：外部 RTL 只省掉「生成 RTL」
+                    # 那一半；参考模型（util_components 装配单）照样要生成 ——
+                    # 那是比对的 expected 侧，跳了就等于什么都不验。
+                    _bypass_design = True
+
             initial = PipelineState(
                 run_id=run_id or Path(output_root).name,
                 output_root=str(output_root),
@@ -641,7 +690,9 @@ class PipelineExecutionService:
                 max_rounds=int(max_rounds),
                 design_style=design_style,
                 bypass_design_model=bool(bypass_design_model),
+                bypass_design=bool(_bypass_design),
                 sim_modes=list(sim_modes) if sim_modes else ["cov"],
+                manual_gate=bool(manual_gate),
             )
             if saver is not None:
                 config["configurable"]["thread_id"] = initial.run_id

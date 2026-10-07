@@ -394,6 +394,10 @@ def _build_window_class():
             # 回归"跑哪门业务"（覆盖率 / 波形 / 调试…）。默认覆盖率。
             self.sim_mode_box = None
             self._build_sim_mode_picker()
+            # ── 人工节点开关（工具栏，紧跟仿真业务）──
+            # 分级回归在 loopback 全过之后要不要**停下等人放行**。
+            self.manual_gate_box = None
+            self._build_manual_gate_toggle()
             self.toolbar.addAction(self.act_open_manifest)
             self.toolbar.addAction(self.act_reload)
             self.toolbar.addSeparator()
@@ -479,6 +483,49 @@ def _build_window_class():
             self.sim_mode_box.currentIndexChanged.connect(self._on_sim_mode_picked)
             self.toolbar.addWidget(QLabel("仿真业务：", self))
             self.toolbar.addWidget(self.sim_mode_box)
+
+        def _build_manual_gate_toggle(self) -> None:
+            """「人工节点」开关 —— 分级回归在 **loopback 全过之后**要不要停车等人放行。
+
+            开 = 拦截：那一级证的是"TB 自身自洽"（driver 发出的 == slave monitor
+            看到的），要不要接着烧 P0 的机时由人拍；停下后 `status=WAITING_APPROVAL`，
+            放行用 `vagent regression approve`（也可在「回归」页看到停在哪儿）。
+            关 = 放行：不拦，一口气跑完（`run_regression_staged(auto_approve=True)`）。
+
+            **它和「仿真业务」一样只是"下次启动运行带什么"**，不是运行中的开关 ——
+            它决定闭环跑不跑得过那道放行点，属运行的输入，跑完要能回答"这一轮为什么
+            没停"。选择记在项目级 `.signoffai/manual_gate.json`。
+
+            默认**开**：门是默认该在的，默认关等于这个机制默认不存在。
+            """
+            from PySide6.QtWidgets import QCheckBox
+
+            from . import manual_gate as ui
+
+            self.manual_gate_box = QCheckBox(ui.ON_LABEL, self)
+            self.manual_gate_box.setToolTip(
+                "分级回归的人工节点：loopback 全过之后要不要停下等人放行。" + chr(10) +
+                "开（拦截）：停下，用 `vagent regression approve` 放行；" + chr(10) +
+                "关（放行）：不拦，一口气跑完。" + chr(10) +
+                f"选择记在 {ui.STORE}（**用户级**：换项目也是同一个答案 ——"
+                "要不要被拦是操作者的事，不是项目的事）。改动下次启动生效。")
+            # 先摆好选中态、**再接信号** —— 同 `_build_sim_mode_picker`：反过来的话
+            # 这个"回到上次选择"的初始化动作会被当成用户改选，白白回写一遍磁盘。
+            enabled = ui.load()
+            self.manual_gate_box.setChecked(enabled)
+            self.manual_gate_box.setText(ui.label(enabled))
+            self.manual_gate_box.toggled.connect(self._on_manual_gate_toggled)
+            self.toolbar.addWidget(self.manual_gate_box)
+            self.toolbar.addSeparator()
+
+        def _on_manual_gate_toggled(self, checked: bool) -> None:
+            """改了即记住（**下次启动运行生效**，见 `_build_manual_gate_toggle`）。"""
+            from . import manual_gate as ui
+
+            ui.save(checked)
+            self.manual_gate_box.setText(ui.label(checked))
+            self.set_status(f"{self.manual_gate_box.text()}"
+                            "（下次启动运行生效）")
 
         def _on_sim_mode_picked(self, index: int) -> None:
             """选中即记住（**下次启动运行生效**，见 `_build_sim_mode_picker`）。"""

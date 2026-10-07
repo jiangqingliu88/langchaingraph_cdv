@@ -48,22 +48,29 @@ class TestShape:
 
     def test_series_split_by_kind(self, tmp_path):
         result = run_trend(_write(tmp_path, GOOD))
-        assert [s["id"] for s in result["build_series"]] == ["compile_agent"]
-        assert [s["id"] for s in result["test_series"]] == ["sim_loop", "p0", "p3"]
+        # 横坐标 = 阶段，一条线 = 一个量
+        assert [s["id"] for s in result["build_series"]] == ["builds", "cases"]
+        # sim_loop 只有 coverage（没有 iterations）→ 次数面板里没有它；
+        # 各档通过率才是百分比面板
+        assert [s["id"] for s in result["test_series"]] == ["p0", "p3"]
 
     def test_build_points_are_raw_counts(self, tmp_path):
+        """x = 阶段序号（compile_agent 是第 1 个），y = 累计 build 数。"""
         result = run_trend(_write(tmp_path, GOOD))
-        assert result["build_series"][0]["points"] == [[1, 3.0], [2, 5.0]]
+        assert result["build_series"][0]["points"] == [[1, 5]]
 
-    def test_loop_points_are_coverage(self, tmp_path):
+    def test_loop_without_iterations_is_not_plotted(self, tmp_path):
+        """次数面板画的是 loop 的**迭代数**；GOOD 里 sim_loop 只给了 coverage
+        （百分比），所以它既不在次数面板、也不再进百分比面板。"""
         result = run_trend(_write(tmp_path, GOOD))
-        loop = next(s for s in result["test_series"] if s["id"] == "sim_loop")
-        assert loop["points"] == [[1, 62.0], [2, 74.0]]
+        assert "loop" not in [s["id"] for s in result["build_series"]]
+        assert "sim_loop" not in [s["id"] for s in result["test_series"]]
 
     def test_test_points_are_pass_rate(self, tmp_path):
+        """x = 该档在 stages 里的次序（p0 是第 3 个），y = 通过率 %。"""
         result = run_trend(_write(tmp_path, GOOD))
         p0 = next(s for s in result["test_series"] if s["id"] == "p0")
-        assert p0["points"] == [[1, 33.3], [2, 83.3]]
+        assert p0["points"] == [[3, 83.3]]
 
 
 class TestLateStart:
@@ -71,7 +78,7 @@ class TestLateStart:
         """p3 第 1 轮没数据 —— 它的线只有第 2 轮那一个点，不是从 0 起。"""
         result = run_trend(_write(tmp_path, GOOD))
         p3 = next(s for s in result["test_series"] if s["id"] == "p3")
-        assert p3["points"] == [[2, 33.3]]
+        assert p3["points"] == [[4, 33.3]]
 
     def test_summary_keeps_stageless_rows(self, tmp_path):
         """汇总表按 stages 顺序出行，没数据的阶段也在（value 空）。"""
@@ -140,6 +147,6 @@ def test_shipped_example_loads():
     assert "error" not in result, result
     assert result["counts"]["rounds"] == 4
     assert result["counts"]["builds_total"] > 0
-    # 八条阶段的线都画得出来
-    assert len(result["build_series"]) == 2
-    assert len(result["test_series"]) == 6
+    # 次数面板（build/case/loop）+ 百分比面板（各档通过率）
+    assert [s["id"] for s in result["build_series"]] == ["builds", "cases", "loop"]
+    assert [s["id"] for s in result["test_series"]] == ["base", "p0", "p1", "p2", "p3"]

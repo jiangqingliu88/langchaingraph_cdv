@@ -78,11 +78,28 @@ MODES: List[SimMode] = [
             note="vsim 保留覆盖率统计并落一份覆盖率库（编译侧由 cov_enabled 追加 vlog +cover）"),
     SimMode("wave", "波形", "wave_opt",
             "-voptargs=+acc"
-            " -qwavedb=+signal+class+wavefile=${EMAN_RUN_DIR}/waves/${EMAN_TEST_NAME}.db",
+            " -qwavedb=+signal+class+wavefile=${EMAN_RUN_DIR}/waves/${EMAN_TEST_NAME}.db"
+            # `+SCB_OFF`：波形模式是**看波形**的，不是判对错的 —— 这一轮要的是 db
+            # 文件，不是判决书。有这个参数时 scoreboard 不结算、不报 mismatch
+            # （见 `base_pkg/scb/in_order_scoreboard.svh` 的 check_phase），
+            # `env_arch_check` 的 scoreboard 那半也随之一并关掉。
+            " +SCB_OFF",
             note="每条用例一份 qwave.db（Visualizer 原生波形库，`visualizer -wavefile` 直接开）。"
                  "两处缺一不可：`-voptargs=+acc` 保 DUT 可见性 —— 不加则 vsim 默认把 DUT "
                  "优化掉，波形库里根本没有 DUT，hier 找不到、信号拉不出来；"
-                 "`+signal+class` 连信号与 UVM 类一起记。**-qwavedb 会禁用 WLF**，见 glitch/delta。"),
+                 "`+signal+class` 连信号与 UVM 类一起记。**-qwavedb 会禁用 WLF**，见 glitch/delta。"
+                 "另外带 `+SCB_OFF`：波形模式下 scoreboard 不结算（要波形，不要判决）。"),
+    # 「覆盖率 + 波形」—— 一轮里两样都要。
+    # **不带 `+SCB_OFF`**：这一轮仍然是覆盖率那一轮，判决书得留着。波形只是顺带
+    # 落一份 db（`+SCB_OFF` 是给纯波形模式用的 —— 那是"只看波形、不判对错"）。
+    # 代价要说清：`-qwavedb` 写 db 比 WLF 慢，一轮里两样都开最费机时。
+    SimMode("cov+wave", "覆盖率 + 波形", "cov_wave_opt",
+            "-coverage -coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME}"
+            " -voptargs=+acc"
+            " -qwavedb=+signal+class+wavefile=${EMAN_RUN_DIR}/waves/${EMAN_TEST_NAME}.db",
+            note="一轮同时收覆盖率与波形（qwave.db）。**不带 +SCB_OFF**："
+                 "这一轮是覆盖率轮，scoreboard 照常结算、照常判对错；"
+                 "纯看图不判对错请选「波形」。两样都开比单开慢。"),
     SimMode("debug_all", "调试（全量）", "debug_all", "-debugdb",
             note="生成 vsim.dbg，供交互式/Schematic 调试；对性能有影响"),
     SimMode("glitch", "毛刺", "glitch_opt", "+glitch",

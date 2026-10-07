@@ -46,11 +46,19 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
 
   virtual {{ agent.name }}_if vif;
   {{ agent.name }}_port_config cfg;
+  // ── 「我发了什么」：驱动出去的事务 ──
+  // loopback 自检的 expected 取这里（见 `<ag>_loopback_env.sv` 的 connect_phase）：
+  // **driver 驱动出去的事务** vs slave monitor 在总线上看到的 actual，才是真正的闭环。
+  // 取 master monitor 的话，loopback 里两个 agent 拿的是同一个接口实例
+  //（见 `<ag>_loopback_tb.sv`），那就成了"同一个接口读两遍"，恒真。
+  // 真实 env 里没有人接这个口，不产生任何影响。
+  uvm_analysis_port #({{ agent.name }}_master_seq_item) driven_ap;
   // pragma custom field_decl begin
   // pragma custom field_decl end
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
+    driven_ap = new("driven_ap", this);
   endfunction
 
   function void build_phase(uvm_phase phase);
@@ -79,6 +87,10 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
       {{ agent.name }}_master_seq_item req;
       seq_item_port.get_next_item(req);
       drive_transaction(req);
+      // 广播「这一拍驱动了什么」——必须紧跟在 drive_transaction 之后：
+      // 它是在**第二个** `@(vif.master_cb)` 之后返回的，也就是 slave monitor
+      // 采到这一拍的那个边沿。SCB 按 `$time` 配对，所以这三者同拍。
+      driven_ap.write(req);
       seq_item_port.item_done();
     end
   endtask
@@ -111,6 +123,14 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
     vif.master_cb.psel    <= 1'b0;
 {%- else %}
     // === Default: 将 is_rand=True 且映射到 output 端口的字段单拍驱动 ===
+    //
+    // ⚠️ **必须先对齐到时钟沿再驱动**（下面这个 `@(vif.master_cb);` 不能省）：
+    // 时钟块的 output 驱动**只在时钟事件上生效**。若进任务就立刻写，而进来的时刻
+    // 落在沿与沿之间（sequence 刚 `start()` 时就是这样），这笔要等到下一个沿才上
+    // 总线；偏偏本任务末尾那个 `@(vif.master_cb)` 也正好在那个沿返回 —— 于是下一笔
+    // 驱动跟它**在同一时刻**覆盖掉它，**第一笔被吃掉**（实测 loopback 首笔：
+    // driver 说发了 `paddr=cc`、slave monitor 总线上看到的是 `x`；此后每一笔都对）。
+    @(vif.master_cb);
     repeat (cfg.drive_delay_max > 0 ? $urandom_range(cfg.drive_delay_min, cfg.drive_delay_max) : 0)
       @(vif.master_cb);
 {%- for port in ports %}

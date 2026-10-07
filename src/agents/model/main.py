@@ -233,6 +233,23 @@ class ModelAgent(BaseAgent):
     async def _execute(self, input_text: str):
         return {"output": ""}
 
+    @staticmethod
+    def _agent_names(ctx: Dict[str, Any]) -> list:
+        """从 ctx 里取 agent 名列表 —— 供模型库按事务类型选模型。
+
+        取不到就返回空列表：`_generate_models_yaml` 拿不到事务类型时会**不写装配单**
+        （没有参考模型是诚实的），而不是拿一个瞎猜的类型去凑一份必然假失败的。
+        """
+        if not isinstance(ctx, dict):
+            return []
+        agents = ctx.get("agents") or []
+        out = []
+        for a in agents:
+            n = a if isinstance(a, str) else (a or {}).get("name", "")
+            if n:
+                out.append(n)
+        return out
+
     async def execute_task(self, task: Dict[str, Any]) -> AgentResult:
         from src.layers.l1_infrastructure.output_config import make_output_root
         output_dir = Path(make_output_root(task.get("output_dir") or None))
@@ -264,47 +281,61 @@ class ModelAgent(BaseAgent):
         rendered = None
         golden_ref = {}
         unverified_golden = None  # 未验证黄金模型 (ip, version)，用于诚实占位原因
-        # 优先黄金模型库（真实、可验证、可追溯）；LLM/模板只做选择与参数化
+        # ── 参考模型 = **DUT 级的 TLM 1.0 事务级组件**，从 SQL 库选 ──
+        #
+        # 老路子（已作废，别再建回来）：
+        #   · `build_composite_ref_model` 拼 `apb_slave+uart_tx+uart_rx+irq_gen`
+        #     —— 那是**子模块建模**；建模建的是 DUT，子模块没有自己的事务接口；
+        #   · `match_golden` 按 `paddr/pwdata` 关键词命中 `apb_slave`
+        #     —— 那是**通用协议件**，对 UART 行为零断言；
+        #   · `parameterize` 改 parameter 默认值 —— TLM 组件不走参数替换；
+        #   · 产出的 `input clk, rst_n, paddr...` 是**信号级 RTL**，不是参考模型。
+        # 现在：库里选**这个 DUT** 的模型，写成**装配单**（`util_components`），
+        # 组件本体由 `util_comp.sv.j2` 从 `body` 渲染（见该模板的 body 分支）。
         if model_type == "systemverilog":
             try:
-                from src.tools.lib.golden_library import (
-                    match_golden, load_golden, parameterize,
-                    build_composite_ref_model)
-                # 1) 复合参考模型：APB+UART 且寄存器表可接线 → 多黄金 IP 实例化
-                composite_sv = build_composite_ref_model(module, interfaces, regs_all)
-                if composite_sv:
-                    golden_ref = {"ip": "composite",
-                                  "parts": ["apb_slave", "uart_tx", "uart_rx", "irq_gen"],
-                                  "sha256": hashlib.sha256(
-                                      composite_sv.encode("utf-8")).hexdigest()}
-                    rendered = {"model_type": "systemverilog", "source_code": composite_sv,
-                                "file": f"{module}_ref_model.sv",
-                                "placeholder": False, "golden_ref": golden_ref}
-                    logger.info(f"复合参考模型生成: {module}_ref_model.sv "
-                                f"(apb_slave+uart_tx+uart_rx, sha256={golden_ref['sha256'][:12]})")
+                from src.tools.uvm_tools.tool_find_spec_yaml.main import (
+                    _generate_models_yaml)
+                yaml_dir = output_dir / "inputs" / "yaml" / "uvm"
+                # 用 DUT 名 + 各 agent 的事务类型去库里选（`select()` 只挑 verified，
+                # 没有 verified 的会退一步用最新版，但**把状态如实写在文件里**）
+                yaml_path = _generate_models_yaml(output_dir=output_dir,
+                                                  yaml_dir=yaml_dir,
+                                                  module_name=module,
+                                                  agents=self._agent_names(ctx))
+                if yaml_path:
+                    rendered = {"model_type": "tlm10_model", "source_code": "",
+                                "file": yaml_path.name,
+                                "path": str(yaml_path),
+                                "placeholder": False,
+                                "golden_ref": {"source": "model_registry",
+                                               "path": str(yaml_path)}}
+                    logger.info(f"参考模型组件（TLM 1.0）写入装配单: {yaml_path.name}")
                 else:
-                    # 2) 单黄金模型：按 spec 接口匹配
-                    hit = match_golden(design_arch)
-                    if hit and hit.get("verified"):
-                        sv = parameterize(load_golden(hit["ip"], hit["version"]),
-                                          module, hit["params"])
-                        golden_ref = {"ip": hit["ip"], "version": hit["version"],
-                                      "sha256": hit["sha256"], "params": hit["params"],
-                                      "verified": True}
-                        rendered = {"model_type": "systemverilog", "source_code": sv,
-                                    "file": f"{module}_ref_model.sv",
-                                    "placeholder": False, "golden_ref": golden_ref}
-                        logger.info(f"黄金模型命中: {hit['ip']} {hit['version']} "
-                                    f"(sha256={hit['sha256'][:12]}) → {module}_ref_model.sv")
-                    elif hit:
-                        # 未验证黄金模型：诚实占位（audit 拒绝签核），不静默降级为"真实"
-                        unverified_golden = (hit["ip"], hit["version"])
-                        logger.warning(f"黄金模型 {hit['ip']} {hit['version']} 未验证"
-                                       f"（verified=false），按占位处理；"
-                                       f"待 scripts/model_library_verify.py 入库验证")
-            except Exception as e:
-                logger.warning(f"黄金模型匹配失败: {e}")
+                    logger.warning("模型库里没有可用模型 —— 不写装配单"
+                                   "（没有参考模型是诚实的，硬凑一份必然假失败）")
+            except Exception as e:                     # noqa: BLE001 模型库不该拖垮流程
+                logger.warning(f"参考模型组件生成失败: {e}")
         if rendered is None:
+            if model_type == "systemverilog":
+                # ⚠️ **绝不在 systemverilog 上退回 `_render()`**。
+                # 那是**信号级** RTL：`module <m>_ref_model(input logic clk,
+                # rst_n, paddr, ... tx, rx, irq)` —— 不是参考模型，是引脚级的壳子。
+                # 组件本体该由 **tool_uvm 从 `util_components` 渲染**（TLM 1.0，
+                # 走 util_comp.sv.j2 的 body 分支）。
+                # 库里没有可用模型 → **什么都不写**：没有参考模型是诚实的，
+                # 扔一份信号级 `.sv` 进 model/ 只会让人以为"参考模型有了"。
+                logger.warning("模型库里没有可用模型 —— 不产出参考模型"
+                               "（组件本体由 tool_uvm 从 util_components 渲染，"
+                               "这里不退回信号级 _render）")
+                return AgentResult(
+                    success=True,
+                    data={"module": module, "model_type": "tlm10_model",
+                          "version": "", "files": [],
+                          "status": "skipped",
+                          "reason": "模型库无可用模型；参考模型组件由 tool_uvm "
+                                    "从 util_components 渲染，不生成信号级 .sv"},
+                    metadata={"no_reference_model": True})
             rendered = _render(model_type, module, ops, regs_all, interfaces)
 
         # 版本管理: 读取当前版本号，+1 生成新版本
@@ -315,8 +346,12 @@ class ModelAgent(BaseAgent):
         ver_dir.mkdir(parents=True, exist_ok=True)
 
         # 写文件到版本目录（旧版本并存，不覆盖）
-        fpath = ver_dir / rendered["file"]
-        if model_type == "cpp":
+        # TLM 装配单已由 `_generate_models_yaml` 写进 `inputs/yaml/uvm/`（生成器读的是
+        # 那一份），这里只记路径，**不要把 YAML 当 SV 再写一遍**。
+        fpath = Path(rendered.get("path") or (ver_dir / rendered["file"]))
+        if rendered.get("model_type") == "tlm10_model":
+            pass
+        elif model_type == "cpp":
             hpath = ver_dir / f"{module}_ref_model.h"
             hpath.write_text(rendered["header_code"], encoding="utf-8")
             fpath.write_text(rendered["source_code"], encoding="utf-8")

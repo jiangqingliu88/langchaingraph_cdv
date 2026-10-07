@@ -187,9 +187,16 @@ class TestcaseRegistry:
                               purpose="protocol", scenario="handshake", priority="P1")
                 count += 1
         # 4. 默认补 performance / corner 通用用例（若还没有）
+        #
+        # 优先级 = 分级回归的 tier（`regression.yaml` 的 tag 直接取 priority.lower()，
+        # 见 tool_find_spec_yaml::_generate_regression_yaml）。口径：
+        #   P0 功能 / P1 次功能（边界 + corner）/ P2 压力 / P3 错误 + 随机
+        # **throughput 与 error_injection 原先都是 P1** —— 于是 p2/p3 两级一条用例都
+        # 匹配不到，分级回归跑到 p1 就被 p2 EMPTY 拦下（实测）。压力/错误不是"次功能"，
+        # 它们是更晚才该烧机时的两级。
         defaults = [
-            ("performance", "throughput", "P1", f"test_{module_name}_throughput"),
-            ("corner", "error_injection", "P1", f"test_{module_name}_error_injection"),
+            ("performance", "throughput", "P2", f"test_{module_name}_throughput"),
+            ("corner", "error_injection", "P3", f"test_{module_name}_error_injection"),
             ("corner", "reset", "P0", f"test_{module_name}_reset"),
         ]
         for purpose, scenario, priority, name in defaults:

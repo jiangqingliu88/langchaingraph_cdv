@@ -169,7 +169,15 @@ def make_tag_matcher(config: dict, tags=None, exclude_tags=None):
             continue
         if exclude and (test_tags & exclude):
             continue
-        allowed.add(str(name))
+        # **两种形态都收**：配置里的 test 名带 `test_` 前缀（`test_apb_loopback`），
+        # 而调用方送进来判定的常常是**目录名剥掉前缀**之后的（`apb_loopback` ——
+        # 见 `infrastructure.py` 的 `test_dir.replace("test_", "")`）。
+        # 只收一种，另一边的 include 明明命中了、名字却对不上 → **整批被静默筛空**
+        # （实测：`tags='loopback'` 命中 8 条配置用例，运行时一条都没跑，五级全 total=0）。
+        text = str(name)
+        allowed.add(text)
+        if text.startswith("test_"):
+            allowed.add(text[len("test_"):])
     logger.debug(f"Tag filter: {len(allowed)} tests matched (include={include}, exclude={exclude})")
 
     def _match(dir_test_name: str) -> bool:

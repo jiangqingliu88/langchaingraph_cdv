@@ -73,8 +73,14 @@ class OpsAgent(BaseAgent):
         try:
             from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
             infra = InfrastructureManager(output_dir)
+            # 人工节点开关（工具栏「人工节点」，`RunRequest.manual_gate`）：
+            # **关掉 = auto_approve**，loopback 全过也直接往下跑，不停车等人。
+            # 缺省（没传）按**开**处理 —— 门是默认该在的。
+            manual_gate = (params.get("manual_gate", True)
+                           if isinstance(params, dict) else True)
             reg_data = infra.run_regression_staged(mode="local",
-                                                   enabled_modes=sim_modes)
+                                                   enabled_modes=sim_modes,
+                                                   auto_approve=not manual_gate)
             if not isinstance(reg_data, dict):
                 reg_data = {}
         except Exception as e:
@@ -86,6 +92,17 @@ class OpsAgent(BaseAgent):
         if isinstance(reg_data, dict) and reg_data.get("blocked_at"):
             logger.warning(f"分级回归卡在 {reg_data['blocked_at']}："
                            f"{reg_data.get('blocked_reason', '')}")
+
+        # 人工节点：**既不是失败，也不是可以往下走** —— 回归停在 loopback 之后等人
+        # 放行。必须和 PASS / FAIL 分开：按下面 `failed == 0 and passed > 0` 的口径，
+        # 它会**被判成成功**，流程就带着一个没放行的门继续往下跑了。
+        awaiting = (isinstance(reg_data, dict)
+                    and reg_data.get("status") == "WAITING_APPROVAL")
+        if awaiting:
+            aw = reg_data.get("awaiting") or {}
+            logger.warning(
+                f"分级回归停在人工节点：{aw.get('after')} 已全过，"
+                f"进 {aw.get('next')} 前需人工放行（{aw.get('hint', '')}）")
 
         if not reg_data.get("status"):
             # 工具失败 → 兜底 FAIL（含错误信息，供 debug/decision 分析）
@@ -100,6 +117,9 @@ class OpsAgent(BaseAgent):
             # 记下这一轮开的仿真业务 —— 审计/复现要能回答"这份波形/覆盖率
             # 是哪几门业务跑出来的"，而不是回头去猜当时的界面状态。
             reg_data.setdefault("sim_modes", list(sim_modes or []))
+            # 记下这一轮人工节点开没开 —— 和 sim_modes 同理：跑完要能回答
+            # "这一轮为什么没停在 loopback"，而不是回头去猜当时的开关状态。
+            reg_data.setdefault("manual_gate", manual_gate)
             # 即使回归跑起来了，内部报 EDA 缺失（如 stderr 含 vlog/vsim 找不到）也要标记
             _err = str(reg_data.get("error", "") or reg_data.get("stderr", ""))
             if not reg_data.get("eda_missing"):
@@ -107,10 +127,21 @@ class OpsAgent(BaseAgent):
 
         passed = reg_data.get("passed", 0)
         failed = reg_data.get("failed", 0)
-        success = (reg_data.get("status") == "PASS" or (failed == 0 and passed > 0))
+        # 等人放行时 `failed == 0 and passed > 0` 也成立 —— 显式排除，别让它算成功
+        success = (not awaiting
+                   and (reg_data.get("status") == "PASS"
+                        or (failed == 0 and passed > 0)))
         score = 60 if success else 20
-        return AgentResult(success=success,
-                          data={"regression": reg_data, "score": score})
+        data = {"regression": reg_data, "score": score}
+        if awaiting:
+            # 让上层（人 / 报告 / 决策）能把"停下来等放行"和"跑挂了"分开
+            data["awaiting_approval"] = reg_data.get("awaiting") or {}
+        return AgentResult(
+            success=success,
+            data=data,
+            error=(reg_data.get("blocked_reason") or None) if awaiting else None,
+            metadata={"awaiting_approval": True} if awaiting else {},
+        )
 
     # ── 文件系统发现辅助 ──
 

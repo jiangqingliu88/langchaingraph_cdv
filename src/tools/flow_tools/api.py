@@ -540,6 +540,16 @@ def run_regression_status(run_dir: str = "") -> Dict[str, Any]:
 
     # 回归产物可能在 run 根下，也可能传进来的就是回归目录本身
     reg_root = root / "regression_run"
+    # ⚠️ **两种磁盘布局都要认**：
+    #   平的   `<run>/regression_run/build_*/test_*/`        ← 老布局
+    #   分级的 `<run>/regression_run/<stage>/build_*/...`   ← 分级回归每级一个子目录
+    # 分级那一层是后来加的（每级各占一个子目录，免得下一级 rmtree 掉上一级的证据）。
+    # 第一版忘了改这里 —— GUI 的「回归状态」于是**整页空白**、波形也空：扫描在
+    # `regression_run/` 下直接找 `build_*`，一个都找不到。
+    if reg_root.is_dir() and not any(reg_root.glob("build_*")):
+        _stages = [d for d in sorted(reg_root.glob("*/")) if any(d.glob("build_*"))]
+        if _stages:
+            reg_root = _stages[-1]          # 取最后一级（盘上最新最完整的那份）
     if not reg_root.is_dir() or not any(reg_root.glob("build_*")):
         if any(root.glob("build_*")):
             reg_root = root

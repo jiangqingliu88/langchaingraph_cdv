@@ -154,7 +154,7 @@ def init(json_output, quiet, verbose, output_dir):
 # ═══════════════════════════════════════════════════════════════
 
 @cli.command()
-@click.argument("spec_file", type=click.Path(exists=True))
+@click.argument("spec_file", required=False, type=click.Path(exists=True))
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.option("--design-style", default="baseline", help="设计风格（baseline/pipeline/low_power）")
 @click.option("--target", type=float, default=None, help="覆盖率目标（默认从配置读）")
@@ -167,11 +167,39 @@ def init(json_output, quiet, verbose, output_dir):
 @click.option("--sim-mode", "sim_modes", default=None, multiple=True,
               help="回归的仿真业务（可重复：--sim-mode wave --sim-mode cov）；"
                    "默认 cov（覆盖率）。可用词条见 src/tools/regression_tools/sim_modes.py")
+@click.option("--no-manual-gate", "manual_gate", flag_value=False, default=True,
+              help="关闭分级回归的**人工节点**（loopback 全过也不停车等人放行）。"
+                   "默认开启：门是默认该在的。工作台工具栏上也有同一个开关")
+@click.option("--rtl", "rtl_dir", type=click.Path(exists=True),
+              help="外部 RTL 目录（验开源 IP 用）：拿这份现成 RTL 当 DUT，"
+                   "**自动跳过 design/model**，不再由 design agent 生成")
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 @click.option("--summary", is_flag=True, help="仅输出最终摘要")
 @click.option("--quiet", "-q", is_flag=True, help="只打印错误")
 def verify(spec_file, output, design_style, target, max_rounds,
-           approval, full_regression, verify_only, sim_modes, json_output, summary, quiet):
+           approval, full_regression, verify_only, sim_modes, json_output, summary,
+           quiet, manual_gate, rtl_dir):
+    # **spec 与 --rtl 二选一、互斥**：
+    #   给 spec  → 走原来的路（design agent 生成 RTL）
+    #   给 --rtl  → RTL 是唯一输入，**规格从 DUT 分析出来**（不指向 spec）
+    # 两个都给会互相打脸（spec 说的和 RTL 实现的不一致时听谁的？），
+    # 一个都不给则没有输入 —— 两种都当场拒掉，别让它跑到下游才含糊地失败。
+    # **默认 spec**：不给 spec、也不给 --rtl 时用它 —— 省得每次敲全路径。
+    # 只在 `--rtl` 缺席时套用：`--rtl` 是"RTL 唯一输入"，那时候默认值一填
+    # 就变成"两个都给"，被下面的互斥挡掉（那是正确行为，不是 bug）。
+    if not spec_file and not rtl_dir:
+        _default = Path("specs/apb_uart/apb_uart_spec.md")
+        if _default.exists():
+            spec_file = str(_default)
+            console.print(f"[dim]未指定 spec，用默认：{spec_file}[/dim]")
+        else:
+            raise click.UsageError(
+                f"没给 spec，默认的 {_default} 也不存在（工作目录下找不到）。"
+                "请显式给 spec，或用 --rtl 给 RTL")
+    if bool(spec_file) == bool(rtl_dir):
+        raise click.UsageError(
+            "spec 与 --rtl 二选一：给了 --rtl 就不用 spec "
+            "（规格会从 DUT 分析生成）；没给 --rtl 就必须给 spec")
     """AI 驱动的芯片验证闭环（覆盖率驱动：case 回归 → coverage → 决策迭代）
 
     
@@ -196,7 +224,8 @@ def verify(spec_file, output, design_style, target, max_rounds,
 
     async def run():
         service = PipelineExecutionService.get_instance()
-        spec = Path(spec_file).read_text(encoding="utf-8")
+        spec = (Path(spec_file).read_text(encoding="utf-8")
+                if spec_file else "")   # --rtl 模式下无 spec：由 DUT 分析生成
         return await service.run_closed_loop(
             spec_text=spec, output_root=output_root,
             target=target, max_rounds=max_rounds,
@@ -204,6 +233,9 @@ def verify(spec_file, output, design_style, target, max_rounds,
             bypass_design_model=verify_only,
             # `multiple=True` 给的是 tuple；空则交默认（cov）
             sim_modes=list(sim_modes) or None,
+            # 分级回归的人工节点（loopback 全过后停下等人放行）。默认开。
+            manual_gate=manual_gate,
+            rtl_dir=str(rtl_dir or ""),
         )
 
     result = asyncio.run(run())
@@ -2773,6 +2805,106 @@ def ci_precheck(spec_file, json_output):
 def regression():
     """回归管理"""
     pass
+
+
+# ── 分级回归：看各级状态 / 人工放行 ─────────────────────────────
+#
+# 分级回归（loopback → p0 → p1 → p2 → p3）在 loopback 全过之后有**人工节点**：
+# 那级证的是"TB 自身自洽"（driver 发出的 == slave monitor 看到的），要不要接着
+# 烧 P0 的机时由人拍。下面两个子命令就是那个人拍板的入口。
+
+def _staged_doc(output_dir: str) -> dict:
+    """读 run 目录下的分级结果 + 放行记录（都不存在就返回空）。"""
+    root = Path(output_dir)
+    doc: dict = {"stages": [], "approvals": []}
+    for key, fname in (("stages", "regression_stages.json"),
+                       ("approvals", "regression_approvals.json")):
+        p = root / fname
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except Exception as exc:                       # noqa: BLE001 坏文件当没有
+            console.print(f"[yellow]⚠ 解析 {fname} 失败：{exc}[/yellow]")
+            continue
+        # 放行记录的数组键也叫 `approvals`，分级结果的叫 `stages` —— 用同一个 key 取
+        doc[key] = data.get(key) or []
+        if key == "stages":
+            for k in ("status", "blocked_at", "blocked_reason", "awaiting"):
+                if k in data:
+                    doc[k] = data[k]
+    return doc
+
+
+@regression.command("stages")
+@click.option("--output", "-o", "output_dir", type=click.Path(), help="输出目录（run 目录）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def regression_stages(output_dir, json_output):
+    """看分级回归跑到哪一级、卡在哪、人工节点放行了没有。"""
+    if not output_dir:
+        console.print("[red]需要 --output 指定 run 目录，如 -o output_xxx[/red]")
+        return
+    doc = _staged_doc(output_dir)
+    if json_output:
+        click.echo(json.dumps(doc, ensure_ascii=False, indent=2))
+        return
+    if not doc["stages"]:
+        console.print("[yellow]没找到分级结果（"
+                      f"{Path(output_dir) / 'regression_stages.json'}）[/yellow]")
+        return
+    style = {"PASS": "[green]PASS[/green]", "FAIL": "[red]FAIL[/red]",
+             "EMPTY": "[yellow]EMPTY[/yellow]",
+             "WAITING_APPROVAL": "[cyan]待放行[/cyan]"}
+    done = {a.get("after") for a in doc["approvals"]}
+    console.print(f"\n[bold]分级回归[/bold]  "
+                  f"status={style.get(doc.get('status', ''), doc.get('status'))}")
+    for s in doc["stages"]:
+        mark = "[cyan]✔已放行[/cyan]" if s["name"] in done else ""
+        console.print(f"  {s['name']:<9} {style.get(s['status'], s['status']):<32}"
+                      f" passed={s.get('passed', 0)} failed={s.get('failed', 0)}"
+                      f" unknown={s.get('unknown', 0)}  {mark}")
+    if doc.get("status") == "WAITING_APPROVAL" and doc.get("awaiting"):
+        aw = doc["awaiting"]
+        if aw["after"] in done:
+            console.print(f"\n[green]{aw['after']} 已放行[/green] —— 重跑分级回归即从 "
+                          f"{aw['next']} 继续（已过的级会重跑一遍）")
+        else:
+            console.print(f"\n[cyan]停在人工节点：{aw['after']} 已全过，"
+                          f"进 {aw['next']} 前需人工放行[/cyan]")
+            console.print(f"  {aw.get('hint', '')}")
+
+
+@regression.command("approve")
+@click.option("--output", "-o", "output_dir", type=click.Path(), help="输出目录（run 目录）")
+@click.option("--after", "after", default="loopback", show_default=True,
+              help="放行哪一级")
+@click.option("--by", "approver", default="", help="审批人（必填，写进审计记录）")
+@click.option("--note", default="", help="审批意见")
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def regression_approve(output_dir, after, approver, note, json_output):
+    """人工放行某一级，之后重跑分级回归即可进下一级。
+
+    放行记录**绑定证据**（那一级的 total/passed/failed）—— 结果变了要重新批，
+    批的永远是"你当时看到的那一份结果"。
+    """
+    if not output_dir or not approver:
+        console.print("[red]需要 --output 指定 run 目录、--by 指定审批人[/red]")
+        return
+    from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
+    infra = InfrastructureManager(output_dir)
+    try:
+        entry = infra.approve_stage(after, approver=approver, note=note)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return
+    if json_output:
+        click.echo(json.dumps(entry, ensure_ascii=False, indent=2))
+        return
+    console.print(f"[green]✔ 已放行 {after}[/green] → 下一步可进 "
+                  f"{entry.get('next') or '（无）'}")
+    console.print(f"  审批人 {entry['approver']} @ {entry['at']}"
+                  + (f"　意见：{entry['note']}" if entry["note"] else ""))
+    console.print(f"  记录：{Path(output_dir) / 'regression_approvals.json'}")
 
 
 @regression.command("run")

@@ -262,6 +262,9 @@ class PipelineModule(ModuleBase):
         # （工具层那张表是唯一真相源，见 workbench/sim_modes.py）。
         # 空表 = 选了"无"，**必须原样传**：交给 `start_run` 的默认会变成覆盖率，
         # 那不是人的意思。
+        # 人工节点开关（工具栏那个勾选）：同样读**磁盘上的选择**而不是控件 ——
+        # 控件在 `app.py` 里，这一页够不着它（见 workbench/manual_gate.py）。
+        from .... import manual_gate as manual_gate_ui
         from .... import sim_modes as sim_modes_ui
 
         args: Dict[str, Any] = {
@@ -272,6 +275,7 @@ class PipelineModule(ModuleBase):
             # 这里再读一次是为了"预设带了但下拉没跟上"的情况）
             "approval": preset.get("approval") or self.approval_box.currentData(),
             "sim_modes": sim_modes_ui.selected_modes(),
+            "manual_gate": manual_gate_ui.load(),
         }
         if preset.get("bypass_design_model"):
             args["bypass_design_model"] = True
@@ -288,6 +292,10 @@ class PipelineModule(ModuleBase):
         self.log(f"已启动运行 {self.run_id}")
         self.log(f"仿真业务：{args['sim_modes'] or ['无']}"
                  "（工具栏下拉可切，改动下次启动生效）")
+        self.log("人工节点："
+                 + ("拦截（loopback 全过后停下等人放行）" if args["manual_gate"]
+                    else "放行（不停车）")
+                 + "（工具栏可切，改动下次启动生效）")
         self.set_status(f"运行中：{self.run_id}")
         self._refresh_state()
         # **广播出去**：新起的运行要立刻成为"当前运行"，否则订阅 `run.selected`

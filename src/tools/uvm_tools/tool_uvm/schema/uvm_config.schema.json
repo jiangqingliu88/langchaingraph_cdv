@@ -67,6 +67,28 @@
           }
         }
       ]
+    },
+    "source": {
+      "type": "object",
+      "$comment": "文书出处：这份 yaml 是从哪个库/哪一行抽出来的。**不参与生成**，给人看与审计用；`status` 是诚实标记（draft = 该版模型还没验证过）。",
+      "properties": {
+        "registry": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
     }
   },
   "anyOf": [
@@ -1432,6 +1454,14 @@
         "ref_model": {
           "$comment": "参考模型镜像：带这一项时，util 模板把 process_<port> 的 TODO 空壳换成**真的**寄存器镜像（写更新镜像、读给出期望 prdata）。形状见 #/$defs/refModelMirror。",
           "$ref": "#/$defs/refModelMirror"
+        },
+        "body": {
+          "type": "string",
+          "$comment": "TLM 1.0 事务级语义（无 clk / 无引脚）。有这一项时 util 模板把 process_<port> 换成它；形状见 src/layers/l4_memory/model_registry.py。**不是** ref_model 那种寄存器镜像。"
+        },
+        "source_version": {
+          "type": "string",
+          "$comment": "模型出处 `name/vN`，来自 model_registry.db 的 (name, version) 主键"
         }
       },
       "additionalProperties": false

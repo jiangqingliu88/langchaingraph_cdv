@@ -360,7 +360,17 @@ class RegressionStatusModule(ModuleBase):
             self._open_case_wave(row)
             return
         if cov:
-            self._open_case_coverage(row)
+            # 只有覆盖率时**也弹菜单** —— 以前这里直接开文本报告，Visualizer 那条
+            # 路压根没有入口（"点击界面不是 Visualizer 打开"就是这么来的）。
+            # 报告好读、Visualizer 能下钻到 bin，两个都该够得着。
+            menu = QMenu(self.table)
+            menu.addAction("打开覆盖率报告", lambda: self._open_case_coverage(row))
+            menu.addAction("在 Visualizer 看覆盖率",
+                           lambda: self._open_case_coverage_visualizer(row))
+            menu.addSeparator()
+            menu.addAction("打开仿真日志", lambda: self._open_case_log(row))
+            anchor = pos or self.table.viewport().rect().center()
+            menu.exec(self.table.viewport().mapToGlobal(anchor))
             return
         # 两门业务都没产物：把"为什么"说清楚，别让人以为是这一页坏了
         self.set_status(f"{row.get('name', '这条用例')}：这轮没产出波形也没产出覆盖率"

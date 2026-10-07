@@ -1,14 +1,29 @@
 # ════════════════════════════════════════════════════════════════
 # 流程人工节点 —— 声明式配置
 #
-# 这份文件声明「在闭环流程的哪个阶段之后，插一个人工干预点」。它是
-# **声明/规划**性质的：编辑它、校验它；等闭环真有了节点注入机制再把这份
-# 声明喂进去（当前 graph.py 的节点是写死的，不读本文件 —— 见
-# docs/design/gui_pipeline_architecture.md §8）。
+# 这份文件声明「在闭环流程的哪个阶段之后，插一个人工干预点」。
+#
+# **这份声明是主源**：`graph.py::n_approval` 读它（经运行时的 `manual_nodes`），
+# 写进去的动作就门控。只有那两个已知高危动作（改 RTL / 改模型）留了硬编码兜底，
+# 防的是"声明文件丢了/写坏了 → 治理静默失效"。
 #
 # 读取入口：src/tools/ide_tools/api.py::run_manual_nodes
 # 界面模块：src/workbench/modules/ide/manual_nodes/module.py
 # schema：  src/tools/ide_tools/schema/manual_nodes.schema.json
+#
+# ── ⚠️ 闭环里还有**另一层**人工节点，刻意不放进这份声明 ──
+#   分级回归（loopback → p0 → p1 → p2 → p3）在 **loopback 全过之后**会停下等人
+#   放行。它声明不了在这儿 —— 本文件的 `after` 是**图节点名**（decide / verify /
+#   ops / …），而分级住在 `ops` **内部**。
+#   它声明在 `InfrastructureManager.REGRESSION_STAGES` 的第 4 位；
+#   放行用 `vagent regression approve`，工作台工具栏也有开关。
+#
+#   两层闸的东西不同，别合并：
+#     · 这份声明 = 机器**将要做的动作**（REFACTOR_RTL…）→ 进程内 `ApprovalGate` 作答；
+#     · 分级那道 = 一级**已出的证据**（loopback 的 SCB 全 match）→ 跑结束、
+#       另起命令放行、再重跑（带绑证据的审计记录）。
+#   硬合成一套，就得让回归在进程内阻塞等答案 —— 那会把 `vagent verify` 挂死，
+#   而它正是被无人值守/agent 调用的那条路。
 #
 # ── 字段约定 ──
 # version           文档版本号（可省，默认 1）

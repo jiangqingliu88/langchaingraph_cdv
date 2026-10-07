@@ -58,6 +58,15 @@ class RunRequest:
     #: 它决定仿真命令拼哪些选项（`MODE_OPTS`），不写进 RunRequest 的话
     #: "这一轮为什么没有波形"就只能靠猜。默认 `["cov"]`。
     sim_modes: List[str] = field(default_factory=lambda: ["cov"])
+    #: 分级回归的**人工节点**是否拦截（loopback 全过后停下等人放行）。
+    #: **属于这次运行的输入**：它决定闭环跑不跑得过那道放行点，不写进 RunRequest
+    #: 的话"这一轮为什么没停"就只能靠猜。默认 `True` —— 门是默认该在的。
+    manual_gate: bool = True
+    #: **外部 RTL 目录**：非空 = 用这份现成 RTL 当 DUT，**跳过 design/model**。
+    #: 验开源 IP（Forencich 的 apb_uart、OpenCores 16550…）走的就是这条路 ——
+    #: 把「这份 RTL 对不对」与「design agent 会不会生成 RTL」两个变量隔开，
+    #: 免得 LLM 抽一次风就把整轮拖垮。
+    rtl_dir: str = ""
     approval: str = "threshold"
     approval_timeout_s: float = 0.0
     run_id: str = ""
@@ -73,10 +82,13 @@ class RunRequest:
         if self.spec_text:
             return self.spec_text
         if self.spec_file:
+            # **多格式入口** —— 不再只认纯文本。`.md`/`.txt`/`.xlsx`/`.docx`/`.pdf`
+            # 都从这里进（读不了的格式会**响亮报错并说清装什么**，见 doc_intake）。
+            # 静默返回空串是更坏的：下游会一路走到 `design_name: dut`。
             try:
-                return Path(self.spec_file).read_text(encoding="utf-8",
-                                                      errors="replace")
-            except OSError as exc:
+                from src.tools.lib.doc_intake import read_document
+                return read_document(self.spec_file)
+            except Exception as exc:                   # noqa: BLE001
                 logger.warning(f"规格读取失败 {self.spec_file}: {exc}")
         return ""
 
@@ -460,6 +472,8 @@ class RunService:
             design_style=req.design_style,
             bypass_design_model=req.bypass_design_model,
             sim_modes=list(req.sim_modes or []),
+            manual_gate=bool(req.manual_gate),
+            rtl_dir=str(req.rtl_dir or ""),
             approval_gate=gate,
             on_event=self._on_event,
             cancel_event=handle.cancel_event,
@@ -537,7 +551,8 @@ def start_run(spec_file: str = "", spec_text: str = "",
               max_rounds: int = 5, design_style: str = "baseline",
               bypass_design_model: bool = False, approval: str = "threshold",
               approval_timeout_s: float = 0.0,
-              sim_modes=None) -> Dict[str, Any]:
+              sim_modes=None, manual_gate: bool = True,
+              rtl_dir: str = "") -> Dict[str, Any]:
     """启动一次闭环运行，**立即**返回 run_id（不等它跑完）。
 
     `output_root` 留空 = 用服务自己的 output_base（默认 `output`）。
@@ -555,6 +570,10 @@ def start_run(spec_file: str = "", spec_text: str = "",
         bypass_design_model=bool(bypass_design_model), approval=approval,
         approval_timeout_s=float(approval_timeout_s or 0.0),
         sim_modes=modes,
+        # 注意 `bool(...)` 不能省：`manual_gate=""` / `None` 想表达的也是"关"，
+        # 但 `RunRequest` 的缺省是 True —— 不显式转布尔会让"关"悄悄变成"开"。
+        manual_gate=bool(manual_gate),
+        rtl_dir=str(rtl_dir or ""),
     )
     run_id = service.start(request)
     return {"run_id": run_id, **service.status()}

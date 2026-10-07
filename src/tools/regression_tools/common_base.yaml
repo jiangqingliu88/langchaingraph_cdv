@@ -47,6 +47,9 @@ modes:
   tprop: tprop
   wave: wave_opt
   cov: cov_opt
+  # 「覆盖率 + 波形」：一轮里两样都要。**不带 SCB_OFF** —— 这一轮是覆盖率轮，
+  # scoreboard 照常结算（见 `sim_modes.py` 里该词条的 note）。
+  cov+wave: cov_wave_opt
   upf: upf_opt
   glitch: glitch_opt
   delta: delta_opt

@@ -98,11 +98,7 @@ def run_trend(path: str = "") -> Dict[str, Any]:
             points[key].append([round_no, value])
             latest[key] = cell
 
-    build_series = [{"id": s["id"], "title": s["title"], "points": points[s["id"]]}
-                    for s in stages if s["kind"] == KIND_BUILD and points[s["id"]]]
-    test_series = [{"id": s["id"], "title": s["title"], "points": points[s["id"]]}
-                   for s in stages if s["kind"] in (KIND_LOOP, KIND_TEST)
-                   and points[s["id"]]]
+    build_series, test_series = _metric_series(stages, latest)
 
     return {
         "project": str(data.get("project", "") or ""),
@@ -118,6 +114,64 @@ def run_trend(path: str = "") -> Dict[str, Any]:
                                 for s in stages if s["kind"] == KIND_BUILD),
         },
     }
+
+
+# ════════════════════════════════════════════════════════════════
+# 序列构造：**横坐标 = 回归阶段与动作**，每条线 = 一个度量
+# ════════════════════════════════════════════════════════════════
+
+def _metric_series(stages: List[Dict[str, str]],
+                   latest: Dict[str, Any]) -> tuple:
+    """按**度量**分组成序列，横坐标是阶段在 `stages` 里的次序。
+
+    与旧口径的区别：旧的是"一条线一个阶段、横坐标是轮次"；这里是
+    "一条线一个度量（build 数 / case 数 / loop / 各档通过率）、
+    横坐标是阶段"。要问的问题也变了 —— 从"第几轮进展到哪"变成
+    "**哪个阶段/动作**上，各类量分别是多少"。
+
+    两个面板仍按量纲分：
+      · `build_series` —— 次数/个数（build 数、case 数、loop 迭代数）
+      · `test_series`  —— 百分比（各档通过率），和百分比同轴才可比
+    """
+    #: 横坐标 = 阶段序号（1 起），标签用阶段 title
+    x_of = {s["id"]: i + 1 for i, s in enumerate(stages)}
+    titles = {s["id"]: s["title"] for s in stages}
+
+    build_pts, case_pts, loop_pts = [], [], []
+    rate_pts: Dict[str, List[List[Any]]] = {}
+    cat_titles: Dict[str, str] = {}
+
+    for s in stages:
+        sid, kind = s["id"], s["kind"]
+        cell = latest.get(sid) or {}
+        if not isinstance(cell, dict) or not cell:
+            continue                                   # 这阶段还没数据 —— 不画 0
+        x = x_of[sid]
+        if kind == KIND_BUILD:
+            v = cell.get("build")
+            if v is not None:
+                build_pts.append([x, _as_int(v)])
+        elif kind == KIND_LOOP:
+            v = cell.get("iterations")
+            if v is not None:
+                loop_pts.append([x, _as_int(v)])
+        elif kind == KIND_TEST:
+            total = _as_int(cell.get("total"))
+            if cell.get("total") is not None:
+                case_pts.append([x, total])
+            passed = _as_int(cell.get("passed"))
+            if total > 0:
+                rate_pts.setdefault(sid, []).append([x, round(passed * 100.0 / total, 1)])
+                cat_titles[sid] = titles[sid]
+
+    build_series = [s for s in (
+        {"id": "builds", "title": "build 数量", "points": build_pts},
+        {"id": "cases", "title": "case 数量", "points": case_pts},
+        {"id": "loop", "title": "loop 迭代数", "points": loop_pts},
+    ) if s["points"]]
+    test_series = [{"id": sid, "title": cat_titles[sid], "points": pts}
+                   for sid, pts in rate_pts.items() if pts]
+    return build_series, test_series
 
 
 # ════════════════════════════════════════════════════════════════

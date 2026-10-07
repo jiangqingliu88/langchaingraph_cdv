@@ -72,6 +72,7 @@ class StageSpec:
 #: 按概念顺序排列（与 graph.py 的拓扑一致，不是按字母）。
 STAGES: Tuple[StageSpec, ...] = (
     StageSpec("init", "初始化", "control"),
+    StageSpec("front", "前置分析", "design", agent="front", summary_key="spec"),
     StageSpec("design", "规格与设计", "design", agent="design",
               summary_key="design_arch"),
     StageSpec("model", "参考模型", "design", agent="model", summary_key="model"),

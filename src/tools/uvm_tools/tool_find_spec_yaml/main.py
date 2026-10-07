@@ -497,9 +497,13 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
     # `_ref_mirror_gate()` 认得出"这个设计确实是个寄存器文件"时才接（判据与理由
     # 都写在那儿的文档串里）。接不动就什么都不加：**没有 scoreboard** 的 env 至少
     # 是诚实的，假失败的 scoreboard 会让整条回归的结论不可信。
+    # 参考模型来自 **SQL 库**（`ModelRegistry`）—— 不再是从 spec 的寄存器表推出来的
+    # "写什么读什么"镜像。`_ref_mirror_gate`（registers 非空 + 全 RW）随之作废，
+    # 这里只作**过渡兜底**（库里没有可用模型时才走它）。
+    reg_model = _registry_model(module_name, agent_names, agents_spec)
     mirror = _ref_mirror_gate(module_name, interfaces or [], registers or [])
     util_blocks: List[str] = []
-    if mirror:
+    if reg_model or mirror:
         # 找一个 **master** 的 APB agent：expected 侧要跟 actual 侧同一条事务流。
         bus = None
         for ag_name in agent_names:
@@ -513,8 +517,13 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
                 break
         if bus:
             ag_name, iface = bus
-            item_t = f"{iface}_master_seq_item"
-            pred_cls = f"{iface}_ref_predictor"
+            # 有库模型就用**它的**事务类型与类名：这是"SQL 是库、yaml 是装配单"的
+            # 落点。TLM 1.0 组件两侧类型**可以不同**（DUT 级：APB 进 / UART 出）。
+            item_t = (reg_model["trans_in"] if reg_model
+                      else f"{iface}_master_seq_item")
+            api_t = (reg_model["trans_out"] if reg_model
+                     else f"{iface}_master_seq_item")
+            pred_cls = reg_model["name"] if reg_model else f"{iface}_ref_predictor"
             pred_h = f"{iface}_ref_pred"
             scb_h = f"{module_name}_scb"
 
@@ -528,7 +537,7 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
                 f"    - name: {scb_h}",
                 "      sb_type: in_order_scoreboard",
                 f"      trans_type: {item_t}",
-                f"      params: [{item_t}, {item_t}]",
+                f"      params: [{item_t}, {api_t}]",
                 "  tlm_connections:",
                 # actual：DUT 侧 monitor 出来的事务（`<agent>_agent_ap` 由 env 模板建）
                 f"    - {{ driver: {ag_name}_agent_ap, receiver: {scb_h}.actual_export }}",
@@ -549,6 +558,12 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
                 f"      addr_w: {mirror['addr_w']}\n"
                 f"      data_w: {mirror['data_w']}\n"
                 f"      source: '{mirror['source']}'")
+
+    if reg_model:
+        # 库里有模型 → 它**取代**上面那版镜像 util_components。组件本体由
+        # `util_comp.sv.j2` 从 `body` 渲染（TLM 1.0 事务级）；出处与状态如实带上
+        # （`draft` = 该版还没验证过），别让人以为验证过了。
+        util_blocks = [_util_component_yaml(reg_model)]
 
     return "\n".join(lines + util_blocks) + "\n"
 
@@ -1076,6 +1091,21 @@ def run(spec_text: str) -> str:
     yaml_files.append(str(reg_yaml_path))
     print(f"  [find_yaml] Generated regression.yaml", flush=True)
 
+    # ── 9. 生成参考模型组件注册（TLM 1.0）──
+    # 库在 `.signoffai/model_registry.db`，这里只把**选中那版**写成装配单。
+    # 「SQL 是库（有哪些、验证过没有、哪一版），yaml 是这一轮的装配单」——
+    # 缺这一步，库里存的东西就永远只是个文档，`tool_uvm` 拿不到它。
+    try:
+        models_path = _generate_models_yaml(output_dir=output_dir,
+                                            yaml_dir=uvm_yaml_archive,
+                                            module_name=module_name,
+                                            agents=agent_names)
+        if models_path:
+            yaml_files.append(str(models_path))
+            print(f"  [find_yaml] Generated {models_path.name}", flush=True)
+    except Exception as e:                             # noqa: BLE001 模型库不该拖垮生成
+        print(f"  [find_yaml] 模型组件注册未生成（不影响其它产物）: {e}", flush=True)
+
     return json.dumps({
         "status": "ok",
         "module_name": module_name,
@@ -1282,7 +1312,9 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     test_lines.append(f"    build: build_{module_name}_dut")
     test_lines.append("    count: 1")
     test_lines.append(f"    run_cmd: '{_sim_run_cmd(dut_top, f'{env_name}_gen_test')}'")
-    test_lines.append('    tags: ["smoke", "random", "gap"]')
+    # `p3` = 错误 + 随机。原先只有 `smoke/random/gap` —— **没有任何 pN tag**，
+    # 于是这条随机用例哪个分级都进不去（分级回归按 p0..p3 筛，见 REGRESSION_STAGES）。
+    test_lines.append('    tags: ["p3", "smoke", "random", "gap"]')
     test_lines.append("")
 
     # ── loopback 测试（每个 active agent 一个，独立 build + 独立顶层 {ag}_loopback_tb）──
@@ -1440,3 +1472,125 @@ def _name_match_rtl(target: str, rtl_dir: Path) -> str | None:
 if __name__ == "__main__":
     spec = sys.argv[1] if len(sys.argv) > 1 else "module dut(input clk);"
     print(run(spec))
+
+
+def _generate_models_yaml(output_dir: Path, yaml_dir: Path, module_name: str,
+                          agents: list) -> Path | None:
+    """把**选中的参考模型**写成 `models.yaml`（`util_components:` 一节）。
+
+    **SQL 是库，yaml 是这一轮的装配单** —— 库在 `.signoffai/model_registry.db`
+    （`ModelRegistry`），这里从库里读出**已验证**的那一版，落成 `tool_uvm` 吃得下
+    的形状（见 `examples/apb/apb_util_comp.yaml`）。
+
+    为什么不是"生成一份 TLM 组件的 .sv 塞进目录"：组件本体由**模板**从
+    `util_components` 渲染（`util_comp.sv.j2` 的 `body` 分支），这里只出装配单。
+    库里没有可用的模型（或都还没 verified）→ **不生成**，让下游按"没有参考模型"
+    走（诚实降级），而不是拿 `draft` 硬凑一个必然假失败的。
+
+    返回写出的路径；没有可用模型时返回 `None`。
+    """
+    import yaml as _yaml
+    from src.layers.l4_memory.model_registry import ModelRegistry
+
+    reg = ModelRegistry()
+    try:
+        # 设计里第一个非 slave 的 agent 的事务类型 —— 参考模型挂在它上面
+        item = ""
+        for a in agents or []:
+            n = a if isinstance(a, str) else (a or {}).get("name", "")
+            if n and not str(n).endswith("_slave"):
+                item = f"{n}_master_seq_item"
+                break
+        chosen = reg.select(trans_in=item) if item else None
+        if chosen is None and item:
+            # 没有 `verified` 的 → 退一步用最新一版，但**把状态如实写进文件**
+            #（`source.status`），并在下面标警示。**不冒充已验证** —— 那是伪造
+            # 证据；把"这一版还没验过"写在装配单上，人才看得见。
+            for m in reg.all():
+                if m["trans_in"] == item:
+                    chosen = m
+                    break
+        if chosen is None:
+            return None
+        uc = reg.to_util_component(chosen["name"], version=chosen["version"])
+        doc = {"util_components": [uc],
+               # 出处：审计要能回答"这一份模型是哪一版、验证过没有"
+               "source": {"registry": str(reg.db_path),
+                          "name": chosen["name"], "version": chosen["version"],
+                          "status": chosen["status"]}}
+    finally:
+        reg.close()
+
+    yaml_dir.mkdir(parents=True, exist_ok=True)
+    path = yaml_dir / "models.yaml"
+    path.write_text(
+        "# 参考模型组件注册 —— 由 ModelRegistry 按本轮 agents 选出（TLM 1.0 事务级）\n"
+        "# 库：.signoffai/model_registry.db；本文件是**装配单**，不是库。\n"
+        + _yaml.safe_dump(doc, allow_unicode=True, sort_keys=False),
+        encoding="utf-8")
+    return path
+
+
+def _registry_model(module_name: str, agent_names: list, agents_spec=None):
+    """从 **SQL 模型库**（`ModelRegistry`）选这个 DUT 的参考模型；没有返回 None。
+
+    这是"**SQL 是库，yaml 是装配单**"的落点 —— 库里是什么，env.yaml 就写什么。
+    取代的是 `_ref_mirror_gate` 那条老路：从 spec 的 `registers` 表推"写什么读什么"
+    的寄存器镜像（`registers` 为空就推不出，`apb_uart` 正是这种）。
+
+    选法（按优先级）：
+      1. **DUT 名精确命中**（库里 name == module_name）—— 最准；
+      2. 按第一个 master agent 的事务类型选（`<iface>_master_seq_item`）。
+    只挑 `verified`（`ModelRegistry.select()` 的口径）；没有 verified 的不自动接
+    —— 拿没验证过的当 expected 就是自造假失败。
+    """
+    try:
+        from src.layers.l4_memory.model_registry import ModelRegistry
+        reg = ModelRegistry()
+        try:
+            hit = reg.get(module_name)                 # 1) DUT 名
+            if hit and hit.get("status") != "verified":
+                hit = None
+            if hit is None and agent_names:            # 2) 按事务类型
+                for ag in agent_names:
+                    n = ag if isinstance(ag, str) else (ag or {}).get("name", "")
+                    if not n or str(n).endswith("_slave"):
+                        continue
+                    m = reg.select(trans_in=f"{n}_master_seq_item")
+                    if m:
+                        hit = m
+                        break
+            return reg.to_util_component(hit["name"], hit["version"]) if hit else None
+        finally:
+            reg.close()
+    except Exception as e:                             # noqa: BLE001 库坏了不该拖垮生成
+        print(f"  [find_yaml] 模型库不可用（按无参考模型处理）: {e}", flush=True)
+        return None
+
+
+def _util_component_yaml(uc: dict) -> str:
+    """`util_components` 一节 —— 直接喂 `util_comp.sv.j2` 的形状。
+
+    `body` 由模板渲染进 `process_<port>`（TLM 1.0 事务级，**无 clk、无引脚**）；
+    `source_version` 会作为出处注释落进生成的 SV。
+    """
+    def _ports(items):
+        return "\n".join(f"      - {{ name: {p['name']}, type: {p['type']} }}"
+                         for p in (items or []))
+
+    out = ["util_components:", f"  - name: {uc['name']}",
+           f"    type: {uc.get('type', 'tlm10_component')}"]
+    if uc.get("description"):
+        out.append(f"    description: \"{str(uc['description']).replace(chr(34), chr(39))}\"")
+    out.append("    analysis_exports:")
+    out.append(_ports(uc.get("analysis_exports")))
+    out.append("    analysis_ports:")
+    out.append(_ports(uc.get("analysis_ports")))
+    if uc.get("source_version"):
+        out.append(f"    source_version: {uc['source_version']}")
+    body = uc.get("body")
+    if body:
+        ind = "\n".join("      " + ln for ln in str(body).split("\n"))
+        out.append("    body: |")
+        out.append(ind)
+    return "\n".join(out)

@@ -199,11 +199,19 @@ class TestStructureFromDomain:
         module.refresh()
         assert module.chart._loop == {"from": "converge", "to": "exec"}
 
-    def test_structure_has_all_23_nodes(self, module):
-        """界面**不另抄一份阶段清单** —— 数出来就该是领域的那 23 个。"""
+    def test_structure_matches_the_domain_stage_table(self, module):
+        """界面**不另抄一份阶段清单** —— 数出来就该是领域那张表的条数。
+
+        **不从外面抄数字**：原来这里写死 `== 23`，加一个节点（`front`）就红 ——
+        而它想验的恰恰是"界面没有自己的清单"。所以改成**跟领域表比**，
+        领域加节点时这条自动跟上，不需要人记得回来改。
+        """
+        from src.layers.l2_orchestration.stages import STAGES
         module.refresh()
         total = sum(len(g["nodes"]) for g in module.chart._groups)
-        assert total == 23
+        assert total == len(STAGES), (
+            f"流程图节点数 {total} 与领域阶段表 {len(STAGES)} 不一致 —— "
+            f"要么界面漏画了节点，要么领域加了节点没同步到图的 NODE_FUNCS")
 
 
 class TestStatusIsNotFabricated:

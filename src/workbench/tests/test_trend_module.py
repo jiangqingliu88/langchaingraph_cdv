@@ -43,15 +43,17 @@ class TestManifestData:
         assert module.test_chart._series             # 收敛面板有序列
         assert module.summary_model.rowCount() == 8  # 八个阶段一行一条
 
-    def test_build_panel_has_two_stages(self, module):
+    def test_build_panel_has_the_count_metrics(self, module):
+        """横坐标是**回归阶段与动作**，所以一条线 = 一个量，不是一条线 = 一个阶段。"""
         module.refresh()
         ids = [s["id"] for s in module.build_chart._series]
-        assert ids == ["compile_agent", "compile_env"]
+        assert ids == ["builds", "cases", "loop"]
 
-    def test_convergence_panel_covers_loop_and_tiers(self, module):
+    def test_convergence_panel_covers_the_tiers(self, module):
+        """百分比面板 = 各档通过率（loop 是迭代数，归到次数面板去）。"""
         module.refresh()
         ids = [s["id"] for s in module.test_chart._series]
-        assert ids == ["sim_loop", "base", "p0", "p1", "p2", "p3"]
+        assert ids == ["base", "p0", "p1", "p2", "p3"]
 
     def test_convergence_panel_pins_y_axis_to_100(self, module):
         """百分比同轴 —— y 轴必须钉在 100，否则两条线的高低会被自动缩放骗了。"""

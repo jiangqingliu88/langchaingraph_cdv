@@ -395,8 +395,17 @@ class InfrastructureManager:
 
             # ── 2. ShellGenerator 生成 build_*/test_* 目录 + 脚本 ──
             from src.tools.regression_tools.regression_framework.generators.shell import ShellGenerator
-            root_dir = str(self.output_root / "regression_run")
-            # 清理上一次回归残留（state_file 会导致断点续跑跳过所有已完成任务）
+            # 分级回归时每级各占一个子目录（`run_regression_staged` 会设
+            # `self._stage_tag`）。**否则每级都会 rmtree 掉整个 regression_run** ——
+            # 全绿之后盘上只剩最后一级（p3）的 4 条，p0/p1/p2 跑过的日志/波形/
+            # 覆盖率全没了（实测：28 个用例目录里只有 3 个有 sim.log）。
+            # 分级回归的意义就是**每级的证据**，不能互相冲掉。
+            # 非分级调用（`_stage_tag` 未设）路径与从前逐字节一致。
+            root_dir = self.output_root / "regression_run"
+            if getattr(self, "_stage_tag", ""):
+                root_dir = root_dir / self._stage_tag
+            root_dir = str(root_dir)
+            # 清理**本级**上一次回归残留（state_file 会导致断点续跑跳过所有已完成任务）
             import shutil as _shutil
             if os.path.isdir(root_dir):
                 _shutil.rmtree(root_dir, ignore_errors=True)
@@ -473,6 +482,10 @@ class InfrastructureManager:
                     continue
                 test_dirs = sorted([d for d in os.listdir(build_path)
                                     if d.startswith("test_") and os.path.isdir(os.path.join(build_path, d))])
+                # 诊断：三道门（模式 / tag / 声明归属）逐个筛之前，先把"声明了什么、
+                # 目录里实际有什么"摊开 —— 全被筛空时，这一行直接指出是哪边对不上。
+                logger.info(f"[挑用例] build={build_name} declared={sorted(declared)} "
+                            f"dirs={[d.replace('test_', '') for d in test_dirs]}")
                 for test_dir in test_dirs:
                     test_name = test_dir.replace("test_", "")
                     if test_patterns and not any(p.search(test_name) for p in test_patterns):
@@ -613,17 +626,55 @@ class InfrastructureManager:
     #: agent loopback 先证"环境自身自洽"（SCB 全 match），环境都不对就不该往下跑
     #: —— 后面几级的失败会全是同一个环境问题刷屏，把真正的 DUT 缺陷埋掉。
     #: `tags` 里的优先级标记（p0/p1…）就是分级的**唯一真相源**（生成用例时打好的）。
+    #:
+    #: 第 4 位 = **人工节点**：这一级全过之后、进下一级之前，必须有人放行。
+    #: 为什么写在**这里**而不是另开一张 `{name: next_name}` 的表：那种表靠字符串
+    #: 跟这张表对齐，把 `p0` 改个名它不会报错，只会**静默失配** —— 门看着还在、
+    #: 其实已经没人拦了。门是这一级的属性，就跟着这一级写。
+    #: 为什么卡在 loopback 之后：那一级证的是"TB 自身自洽"（driver 发出的 ==
+    #: slave monitor 看到的）。这是**能不能信这套环境**的分水岭 —— 机时该花在
+    #: 信得过的环境上，所以停下来让人看一眼再往下烧 P0。
+    #:
+    #: ⚠️ 与 `config/ide/manual_nodes.yaml` 是**两层**，刻意不合并：那份声明闸的是
+    #: **图节点上将要做的动作**（`after: decide` + `action: REFACTOR_RTL`），走
+    #: 进程内 `ApprovalGate`；这里闸的是**一级已出的证据**，跑结束、另起
+    #: `vagent regression approve` 放行、再重跑。合成一套就得让回归在进程内阻塞
+    #: 等答案（`vagent verify` 会挂死），或让 yaml 长出形状完全不同的第二种节点。
     REGRESSION_STAGES = (
-        ("loopback", "agent loopback 自检（SCB 必须全 match）", "loopback"),
-        ("p0", "P0 功能", "p0"),
-        ("p1", "P1 次功能（边界 + corner）", "p1"),
-        ("p2", "P2 压力", "p2"),
-        ("p3", "P3 错误 + 随机", "p3"),
+        ("loopback", "agent loopback 自检（SCB 必须全 match）", "loopback", True),
+        ("p0", "P0 功能", "p0", False),
+        ("p1", "P1 次功能（边界 + corner）", "p1", False),
+        ("p2", "P2 压力", "p2", False),
+        ("p3", "P3 错误 + 随机", "p3", False),
     )
+
+    @staticmethod
+    def _stage_parts(stage):
+        """一级的元组 → `(name, label, tags, gate)`。
+
+        第 4 位（人工节点）**可省**：老调用方与测试传三元组 `(name,label,tags)`
+        仍然合法，缺省 = 不设人工节点。兼容不是为了省事 —— `run_regression_staged`
+        的 `stages` 参数是公开的，收窄了就是静默改契约。
+        """
+        name, label, tags = stage[0], stage[1], stage[2]
+        gate = bool(stage[3]) if len(stage) > 3 else False
+        return name, label, tags, gate
+
+    @classmethod
+    def regression_manual_gates(cls, stages=None) -> Dict[str, str]:
+        """`{某级: 被它挡住的下一级}` —— **从 `REGRESSION_STAGES` 推出来**，不是另写一份。
+
+        保留这个名字是因为它有用（审计记录里要记 `next`），但它是**派生的**：
+        改 `REGRESSION_STAGES` 就跟着变，不可能与之失配。
+        """
+        seq = [cls._stage_parts(s) for s in (stages or cls.REGRESSION_STAGES)]
+        return {seq[i][0]: seq[i + 1][0]
+                for i in range(len(seq) - 1) if seq[i][3]}
 
     def run_regression_staged(self, stages=None, reg_yaml: str = None,
                               mode: str = "local", enabled_modes=None,
-                              overrides: list = None) -> dict:
+                              overrides: list = None,
+                              auto_approve: bool = False) -> dict:
         """分级门控回归：按 tier 顺序跑，**前一级不过就不进下一级**。
 
         ## 门控判据（为什么 `unknown` 也拦）
@@ -639,6 +690,17 @@ class InfrastructureManager:
         它的报告就在盘上 —— 出问题时人要看的就是那一份。全部通过时盘上是最后一级的
         结果；每一级的 passed/failed/unknown 都在返回值的 `stages` 里，不丢。
 
+        ## 人工节点（`REGRESSION_STAGES` 第 4 位）
+
+        某级 PASS 之后，若它是人工节点的**前一级**，且没有对应的放行记录 → 停，
+        `status="WAITING_APPROVAL"`，`awaiting` 里写明停在哪、下一步是什么。
+        放行用 `vagent regression approve`（写 `regression_approvals.json`，带审批人 /
+        时间 / 意见），**且绑定证据**（那一级的 total/passed/failed 记进记录，
+        对不上就当没批过）。再调一次本方法即可从下一级继续；已过的级会重跑一遍
+        （不额外维护断点状态，`run_regression` 本来就会 rmtree 重建运行目录）。
+
+        `auto_approve=True` 跳过全部人工节点（测试 / 无人值守用）——默认**不跳**。
+
         返回：
             {"status", "blocked_at", "blocked_reason",
              "stages": [{"name","label","tags","status","passed","failed","unknown"}...]}
@@ -646,7 +708,12 @@ class InfrastructureManager:
         """
         stages = tuple(stages or self.REGRESSION_STAGES)
         results = []
-        for name, label, tags in stages:
+        # 人工节点的判定只认**这一级自带的第 4 位** —— 不再另查一张表（见
+        # `REGRESSION_STAGES` 上面那段：那张表会静默失配）
+        for idx, raw in enumerate(stages):
+            name, label, tags, gate = self._stage_parts(raw)
+            # 每级各占一个运行子目录，互不 rmtree（见 `run_regression` 里那段）
+            self._stage_tag = name
             logger.info(f"分级回归：进入 {name}（{label}）tags={tags}")
             r = self.run_regression(reg_yaml=reg_yaml, mode=mode, tags=tags,
                                     overrides=overrides,
@@ -655,13 +722,26 @@ class InfrastructureManager:
             unknown = int(r.get("unknown") or 0)
             # `total == 0`（这一级没有用例）不算失败，但要说出来 —— 静默跳过会让人
             # 以为"这一级跑过了、过了"。`error` 是真错（配置读不到之类），照传。
+            total = int(r.get("total") or 0)
+            if r.get("error"):
+                status = "FAIL"
+            elif total == 0:
+                # **一条用例都没匹配到 → 绝不能判 PASS（假绿）。**
+                # 实测踩过：`tags=loopback` 一级都没匹配上，五级全返回 total=0，
+                # 门看着在、其实什么都没拦，整轮报"每级都过"。这比报错还坏 ——
+                # 它把"过滤条件写错了"伪装成"全都通过了"。所以这里单列 EMPTY，
+                # 且**同样拦下**（没跑过的级不能当作过了往下走）。
+                status = "EMPTY"
+            elif failed == 0 and unknown == 0:
+                status = "PASS"
+            else:
+                status = "FAIL"
             stage = {
                 "name": name, "label": label, "tags": tags,
-                "status": "PASS" if (failed == 0 and unknown == 0 and not r.get("error"))
-                          else "FAIL",
+                "status": status,
                 "passed": int(r.get("passed") or 0),
                 "failed": failed, "unknown": unknown,
-                "total": int(r.get("total") or 0),
+                "total": total,
             }
             for k in ("error", "report_path"):
                 if r.get(k):
@@ -669,13 +749,145 @@ class InfrastructureManager:
             results.append(stage)
 
             if stage["status"] != "PASS":
-                reason = (r.get("error")
-                          or f"{name}: failed={failed} unknown={unknown}"
-                             f"（未出结论的不放行）")
+                if stage["status"] == "EMPTY":
+                    reason = (f"{name}: 没有任何用例匹配 tag={tags!r} —— "
+                              "分级筛选没生效（不是「都过了」，是「一条都没跑」）")
+                else:
+                    reason = (r.get("error")
+                              or f"{name}: failed={failed} unknown={unknown}"
+                                 f"（未出结论的不放行）")
                 logger.warning(f"分级回归：{name} 未通过 → 不进下一级（{reason}）")
-                return self._staged_summary("FAIL", name, reason, results)
+                summary = self._staged_summary("FAIL", name, reason, results)
+                self._write_staged_summary(summary)
+                return summary
 
-        return self._staged_summary("PASS", "", "", results)
+            # ── 人工节点：这一级过了，但要不要往下烧机时由人说了算 ──
+            nxt = self._stage_parts(stages[idx + 1]) if idx + 1 < len(stages) else None
+            if not auto_approve and nxt is not None and gate:
+                approval = self.read_stage_approval(name, stage)
+                if approval is None:
+                    reason = (f"{name} 已全过，但进 {nxt[0]} 前需要人工放行 —— "
+                              f"确认后执行：vagent regression approve -o <run目录> "
+                              f"--after {name} --by <你的名字>")
+                    logger.warning(f"分级回归：停在人工节点 {name} → {nxt[0]}")
+                    summary = self._staged_summary("WAITING_APPROVAL", name,
+                                                   reason, results)
+                    summary["awaiting"] = {
+                        "after": name, "next": nxt[0], "next_label": nxt[1],
+                        "hint": (f"vagent regression approve -o <run目录> "
+                                 f"--after {name} --by <你的名字>"),
+                    }
+                    self._write_staged_summary(summary)
+                    return summary
+                logger.info(f"分级回归：人工节点 {name} → {nxt[0]} 已放行"
+                            f"（by {approval.get('approver', '?')}"
+                            f" @ {approval.get('at', '?')}）")
+
+        summary = self._staged_summary("PASS", "", "", results)
+        self._write_staged_summary(summary)
+        return summary
+
+    # ── 人工放行（分级回归的人工节点）────────────────────────────
+    #
+    # 落盘位置：`<output_root>/regression_approvals.json`。
+    # 为什么不放数据库：这是**审计证据**，要能跟 run 目录一起打包、一起被 hash、
+    # 一起被人拿文本工具翻开看 —— 和 `regression_stages.json` 同级最自然。
+
+    #: 绑进放行记录的字段：这一级的**结论**（哪些字段变了就该重新批）。
+    #: 不含 `label/tags` 这类静态描述，也不含时间戳 —— 否则每次重跑都对不上。
+    _APPROVAL_EVIDENCE_FIELDS = ("name", "status", "total", "passed", "failed", "unknown")
+
+    def _approvals_path(self) -> Path:
+        return Path(self.output_root) / "regression_approvals.json"
+
+    @classmethod
+    def _evidence_of(cls, stage: dict) -> Dict[str, Any]:
+        """抽出一级的"结论指纹"：放行绑的就是它。"""
+        return {k: stage.get(k) for k in cls._APPROVAL_EVIDENCE_FIELDS}
+
+    def read_stage_approval(self, after: str,
+                            stage: dict | None = None) -> Optional[Dict[str, Any]]:
+        """读 `after` 这一级的放行记录；没有 / 对不上证据 → None。
+
+        传 `stage` 时会**比对证据**：记录里那一级的 total/passed/failed 若与当前
+        结果不一致，视为未放行（批的是"这一份结果"，结果变了就得重新批）。
+        """
+        try:
+            if not self._approvals_path().exists():
+                return None
+            data = json.loads(self._approvals_path().read_text(encoding="utf-8"))
+        except Exception as exc:                       # noqa: BLE001 读不到＝没批过
+            logger.warning(f"读分级放行记录失败（当作没批过）：{exc}")
+            return None
+        entries = [e for e in (data.get("approvals") or []) if e.get("after") == after]
+        if not entries:
+            return None
+        latest = entries[-1]
+        if stage is not None and latest.get("evidence") != self._evidence_of(stage):
+            logger.warning(
+                f"分级放行记录里的 {after} 证据与本次结果不一致 → 需重新放行"
+                f"（记录 {latest.get('evidence')} vs 本次 {self._evidence_of(stage)}）")
+            return None
+        return latest
+
+    def approve_stage(self, after: str, approver: str, note: str = "") -> Dict[str, Any]:
+        """人工放行 `after` 这一级：下次分级回归即可进下一级。
+
+        `approver` 是必填的——没有审批人的"已审批"不算审计证据。
+        该级当前结果从 `regression_stages.json` 里取，绑进记录。
+        """
+        if not approver or not str(approver).strip():
+            raise ValueError("approve_stage 需要审批人（--by），否则这条记录没有审计意义")
+        stage = None
+        stages_path = Path(self.output_root) / "regression_stages.json"
+        try:
+            if stages_path.exists():
+                doc = json.loads(stages_path.read_text(encoding="utf-8"))
+                for s in doc.get("stages") or []:
+                    if s.get("name") == after:
+                        stage = s
+                        break
+        except Exception as exc:                       # noqa: BLE001 取不到就记空证据
+            logger.warning(f"读 regression_stages.json 失败（放行记录不带证据）：{exc}")
+
+        entry = {
+            "after": after,
+            "next": self.regression_manual_gates().get(after, ""),
+            "approver": str(approver).strip(),
+            "note": note or "",
+            "at": datetime.now().isoformat(timespec="seconds"),
+            "evidence": self._evidence_of(stage) if stage else {},
+        }
+        path = self._approvals_path()
+        doc = {"approvals": []}
+        try:
+            if path.exists():
+                doc = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(doc, dict):
+                    doc = {"approvals": []}
+        except Exception:                              # noqa: BLE001 坏了就重起一份
+            doc = {"approvals": []}
+        doc.setdefault("approvals", []).append(entry)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info(f"分级回归：{after} 已人工放行（by {entry['approver']}）")
+        return entry
+
+    def _write_staged_summary(self, summary: dict) -> None:
+        """把分级结果**落盘**。
+
+        为什么必须持久化：`run_regression` 每级都会 `rmtree` 掉 `regression_run`，
+        盘上**只剩最后一级**的状态 —— loopback 到底跑没跑、过了没有，事后无处可查
+        （实测就是这么丢的：想复查 loopback 那级，发现它的目录只剩一个 `sim.sh`）。
+        这份 JSON 是"每级各跑了几条、过没过"的唯一事后证据。
+        """
+        try:
+            import json
+            path = Path(self.output_root) / "regression_stages.json"
+            path.write_text(json.dumps(summary, ensure_ascii=False, indent=2),
+                            encoding="utf-8")
+        except Exception as exc:                       # noqa: BLE001 落盘失败不该拖垮回归
+            logger.warning(f"分级回归结果落盘失败（不影响回归本身）：{exc}")
 
     @staticmethod
     def _staged_summary(status: str, blocked_at: str, reason: str,

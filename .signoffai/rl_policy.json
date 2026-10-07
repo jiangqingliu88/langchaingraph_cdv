@@ -2,15 +2,18 @@
   "q": {
     "cov:below_80|reason:none|sugg:none::RETRY_ENV": 7.601161500000002,
     "cov:below_80|reason:none|sugg:none::FIX_COMPILE_bug": 7.247012228012076,
-    "cov:below_80|reason:none|sugg:none::GENERATE_DIRECTED_TEST": 8.859240660707407,
-    "cov:below_80|reason:none|sugg:none::FIX_FUNCTIONAL_bug": 1.5429155014029003,
+    "cov:below_80|reason:none|sugg:none::GENERATE_DIRECTED_TEST": 1.7609634408861856,
+    "cov:below_80|reason:none|sugg:none::FIX_FUNCTIONAL_bug": 6.244754339408419,
     "cov:80_target|reason:none|sugg:none::EXPAND_SEEDS": -26.4,
-    "cov:80_target|reason:none|sugg:none::RELAX_CONSTRAINT": -6.61040015635299,
-    "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::GENERATE_DIRECTED_TEST": -11.106581999261733,
-    "cov:80_target|reason:none|sugg:none::GENERATE_DIRECTED_TEST": -29.89860775038,
-    "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::RELAX_CONSTRAINT": -0.20755011838168658,
-    "cov:80_target|reason:none|sugg:none::FIX_FUNCTIONAL_bug": -5.554949999999998,
-    "cov:at_target|reason:none|sugg:none::CONVERGE": -6.265338445648734,
-    "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::EXPAND_SEEDS": -0.531264837093296
+    "cov:80_target|reason:none|sugg:none::RELAX_CONSTRAINT": 2.6741702062853054,
+    "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::GENERATE_DIRECTED_TEST": -9.04132488190319,
+    "cov:80_target|reason:none|sugg:none::GENERATE_DIRECTED_TEST": -21.2589213128125,
+    "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::RELAX_CONSTRAINT": -3.0963952869704974,
+    "cov:80_target|reason:none|sugg:none::FIX_FUNCTIONAL_bug": -12.131439390337677,
+    "cov:at_target|reason:none|sugg:none::CONVERGE": -11.10669403789586,
+    "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::EXPAND_SEEDS": -3.177202036233335,
+    "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::FIX_FUNCTIONAL_bug": -4.072848291729102,
+    "cov:80_target|reason:unstimulated|sugg:INVESTIGATE::GENERATE_DIRECTED_TEST": -10.432235191783416,
+    "cov:80_target|reason:unstimulated|sugg:INVESTIGATE::EXPAND_SEEDS": 0.0
   }
 }

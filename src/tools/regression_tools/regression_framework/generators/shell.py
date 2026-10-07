@@ -112,6 +112,16 @@ class ShellGenerator:
         # 却报未定义"。严格渲染下这一点更要紧。
         eman_build = self._eman_env(build_name, build_dir)
         b_context.update(eman_build)
+        # ── 每个 build 用**自己的 work 库** ──
+        # 共用一个库会把**别的 build 的类**带进来：DUT build 编的是全部 agent
+        # （apb+uart+intr），loopback build 只该有 apb —— 但共用库时 loopback 的 tb
+        # 加载会撞上 uart 的类，于是被迫解析 `virtual uart_if` 而报
+        #   (vsim-8451) uart_port_monitor.sv: 'virtual uart_if' cannot find a matching instance
+        #   → Error loading design（实测 apb_loopback 就是这么挂的）。
+        # Questa 在 load 阶段解析设计里出现过的**每个** virtual interface 类型，
+        # 跟"有没有例化"无关 —— 所以根治办法是别让不属于本 build 的类进这个库。
+        # 编译与仿真必须用**同一个** WORK，故这里连同 test 上下文一起覆盖（见下）。
+        b_context['WORK'] = f"{eman_build['EMAN_COMPILE_DIR']}/work"
         # 只导 `env:` 和框架的 EMAN_*；variables / local_vars 走 jinja 上下文
         build_exports = self._export_lines(self.cfg_env, eman_build)
 
@@ -166,6 +176,10 @@ class ShellGenerator:
             eman_test = self._eman_env(build_name, build_dir, test_name=test_name,
                                        test_dir=test_dir, seed=seed, testcase=testcase)
             t_context.update(eman_test)
+            # 仿真必须加载**本 build 编出来的那个库** —— 上面把 WORK 覆盖成了
+            # 每 build 独立，这里不跟着覆盖，vsim 就会去加载全局那个（含别的
+            # build 的类）→ 又回到 8451。两边必须同一个值。
+            t_context['WORK'] = b_context['WORK']
             test_exports = self._export_lines(self.cfg_env, eman_test)
 
             pre_sim_cmd = test.get('hooks', {}).get('pre_sim') or self.hooks_global.get('pre_sim')

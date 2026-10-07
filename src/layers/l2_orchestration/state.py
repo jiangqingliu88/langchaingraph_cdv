@@ -84,11 +84,21 @@ class PipelineState(BaseModel):
     target: float = 95.0
     design_style: str = "baseline"
     bypass_design_model: bool = False
+    #: **只跳 design、不跳 model**：外部给了 RTL（`--rtl`）时用。
+    #: 与 `bypass_design_model` 的区别就在这里 —— 那个把 model 也跳了，
+    #: 而给现成 RTL 时**参考模型仍然必须生成**（它是比对的那一半）。
+    #: 跳过它 = 拿一份没有 expected 的环境去比，等于什么都不验。
+    bypass_design: bool = False
     #: 这次运行要开的**仿真业务**（`cov` / `wave` / `debug_all` / …，
     #: 见 `src/tools/regression_tools/sim_modes.py`）。
     #: 是**运行输入**、不是全局开关 —— 记在状态里，复现/审计时能回答
     #: "这一轮的波形是怎么来的"。默认 `["cov"]`：覆盖率是闭环的主指标。
     sim_modes: List[str] = Field(default_factory=lambda: ["cov"])
+    #: 分级回归的**人工节点**是否拦截（loopback 全过后停下等人放行）。
+    #: `True` = 停（`REGRESSION_MANUAL_GATES`）；`False` = 不拦、一口气跑完
+    #: （`run_regression_staged(auto_approve=True)`）。**属于这次运行的输入**：
+    #: 跑完要能回答"这一轮为什么没停"。默认 `True` —— 门是默认该在的。
+    manual_gate: bool = True
 
     phases: Annotated[List[Dict[str, Any]], _add] = Field(default_factory=list)
     coverage_history: Annotated[List[float], _add] = Field(default_factory=list)
@@ -98,6 +108,10 @@ class PipelineState(BaseModel):
 
     eda_blocked: Annotated[bool, operator.or_] = False
     interrupted: Annotated[bool, operator.or_] = False
+    #: 分级回归停在人工节点（loopback 全过、等人放行）。**不是失败**，是"机器该让位
+    #: 给人类"。必须能让闭环停 —— 否则每轮都卡在放行点、被判成 ops 失败，白烧
+    #: `max_rounds` 轮（实测 5 轮 loopback 跑完才发现 5 次都是同一件事）。
+    awaiting_approval: Annotated[bool, operator.or_] = False
 
     # ── B. 各阶段产物（单写者，exclusive）──
 

@@ -203,18 +203,57 @@ def _resolve_test(output_dir: Path) -> str | None:
     return None
 
 
+def _env_has_scoreboard(od: Path) -> bool:
+    """生成的 env 到底接没接 scoreboard（读 `inputs/yaml/uvm/env.yaml` 的
+    `scoreboards:` —— 生成器按 `_ref_mirror_gate` 写进去的那一节）。
+
+    读不到一律按"没有"处理：这一节只用来决定 SKIP 还是 FAIL，判重了不划算。
+    """
+    p = od / "inputs" / "yaml" / "uvm" / "env.yaml"
+    try:
+        doc = yaml.safe_load(p.read_text(encoding="utf-8", errors="replace")) or {}
+    except Exception:                                  # noqa: BLE001
+        return False
+    env = (doc or {}).get("env") or doc
+    return bool((env or {}).get("scoreboards"))
+
+
 def check_scoreboard(output_dir: str, test_name: str = None,
-                     questasim_uvm: str = None) -> Dict[str, Any]:
+                     questasim_uvm: str = None,
+                     sim_modes=None) -> Dict[str, Any]:
     """仿真检查：跑一个定向 case，断言 scoreboard 全部 match（matched==N && mismatched==0）。
 
     这是「逻辑闭环」的通用验收——适用于所有 DUT（物理回环只是其中一种 test）。
     test_name 为空时自动解析：loopback_test > directed_test > base_test。
     questasim_uvm 为空时由 config.settings.questa_home() 解析。
+
+    ## 两种"不判"（都是 SKIP，不是 FAIL）
+
+    1. **波形模式**（`sim_modes` 含 `wave`）—— 那一轮要的是 qwave.db 而不是判决书，
+       仿真侧也已带 `+SCB_OFF`（scoreboard 自己不结算）。这里跟着关，免得同一件事
+       在两边给出两种口径。
+    2. **这个 env 压根没接 scoreboard** —— 生成器按 `_ref_mirror_gate` **有意**不加
+       （判据：这设计得看上去真是个寄存器文件；`apb_uart` 这种 `prdata` 直出 FIFO、
+       `registers` 为空的，接上去只会造一批假失败）。没有 scoreboard 是**诚实的**，
+       拿"没得比"判 FAIL，等于逼生成器去接一个必然假失败的东西 —— 两害相权，SKIP。
     """
     if not questasim_uvm:
         from config.settings import questa_home
         questasim_uvm = questa_home()
     od = Path(output_dir).resolve()  # 绝对路径：vlog/vsim 以 cwd=od 运行时，相对路径会翻倍
+
+    # ── 波形模式：关掉（见 docstring 的两条"不判"）──
+    if any(str(m).lower() == "wave" for m in (sim_modes or [])):
+        return {"check": "scoreboard", "status": "SKIP",
+                "message": "波形模式：scoreboard 检查关闭（这一轮要的是波形，不是判决）"}
+
+    # ── 这 env 没接 scoreboard：没得比，不是失败 ──
+    if not _env_has_scoreboard(od):
+        return {"check": "scoreboard", "status": "SKIP",
+                "message": "这个 env 没接 scoreboard（生成器按 ref_mirror_gate 有意不加："
+                           "设计看不出是寄存器文件时，接上去只会造假失败）—— 没得比，"
+                           "不是「比对失败」"}
+
     if test_name is None:
         test_name = _resolve_test(od)
     if not test_name:
@@ -291,18 +330,25 @@ def check_env_loopback(output_dir: str, **kw) -> Dict[str, Any]:
     return check_scoreboard(output_dir, test_name="loopback_test", **kw)
 
 
-def check_env_arch(output_dir: str, test_name: str = None) -> Dict[str, Any]:
+def check_env_arch(output_dir: str, test_name: str = None,
+                   sim_modes=None) -> Dict[str, Any]:
     """env 架构验收：端口归属（通用）+ scoreboard 定向 case（通用）。
 
     test_name 为空时自动解析（loopback > directed > base）。
     任一子检查 EDA_MISSING → 整体 EDA_MISSING（失败响亮，语义化而非 WinError）。
+
+    `SKIP` **不是失败**：那表示"这一项没得判/不适用"（波形模式、或这 env 本就没接
+    scoreboard —— 见 `check_scoreboard` 的两条"不判"）。把它当成 FAIL，等于逼着
+    生成器去接一个必然假失败的 scoreboard，或者逼着波形模式给出判决书。
     """
     ownership = check_port_ownership(output_dir)
-    scoreboard = check_scoreboard(output_dir, test_name)
+    scoreboard = check_scoreboard(output_dir, test_name, sim_modes=sim_modes)
+    _sts = ("PASS", "SKIP")
     if ownership.get("status") == "EDA_MISSING" or scoreboard.get("status") == "EDA_MISSING":
         status = "EDA_MISSING"
     else:
-        status = "PASS" if (ownership["status"] == "PASS" and scoreboard["status"] == "PASS") else "FAIL"
+        status = "PASS" if (ownership["status"] in _sts
+                            and scoreboard["status"] in _sts) else "FAIL"
     return {"status": status, "port_ownership": ownership, "scoreboard": scoreboard}
 
 

@@ -105,7 +105,20 @@ class {{ name }} extends uvm_component;
 
 {%- endif %}
   virtual function void process_{{ port.name }}({{ port.type }} tr);
-{%- if ref_model %}
+{#- `body` 由 `ModelRegistry.to_util_component()` 提供：TLM 1.0 事务级语义。
+    必须写成 `is defined and` —— 渲染器是 StrictUndefined，没提供 `body` 时
+    直接 `{%- if body %}` 会**抛异常**而不是走 else（实测踩过：17 个用例崩）。 #}
+{%- if body is defined and body %}
+    // ── 模型语义：来自 `model_registry.db`（`ModelRegistry.to_util_component()`）──
+    // TLM 1.0 **事务级**：给一条事务，算出它应该得到什么。这里**没有 clk、也没有
+    // 引脚** —— 旧 `model_library/*_golden.sv` 那种 `always_ff @(posedge clk)` 是
+    // 信号级 RTL，不是参考模型（见 `src/layers/l4_memory/model_registry.py`）。
+    // 出处：{{ source_version | default('model_registry') }}
+{{ body }}
+{%- if analysis_ports|length == 1 %}
+    send_output(tr);
+{%- endif %}
+{%- elif ref_model %}
     unique case (1'b1)
       tr.pwrite: begin
         if (tr.paddr < {{ ref_model.nregs }}) m_regs[tr.paddr] = tr.pwdata;

@@ -408,15 +408,79 @@ async def n_init(state: PipelineState, config) -> Dict[str, Any]:
                         "milestones": rt.planner.milestones}]}
 
 
+async def n_front(state: PipelineState, config) -> Dict[str, Any]:
+    """前置分析：输入（RTL / spec / doc）→ 结构化设计信息（`spec` / `design_arch`）。
+
+    这是一条链的**入口**：文档/RTL 进来，front 解出设计信息，后面所有人吃它。
+    两个 yaml 家族（环境 / 模型 / 用例建模）都是**下游**从它产的东西生成的 ——
+    顺序上必须如此（`bench.yaml` 要知道 DUT 顶层与端口，那是这一步定的）。
+
+    `--rtl` 时它读 RTL（顶层 module 名 → design_name、端口表 → interfaces），
+    **不让 design 再生成 RTL**（`bypass_design` 已置）。RTL 与 spec 互斥，
+    两个都没有 → 它响亮失败，不往下走。
+    """
+    rt = _rt(config)
+    data, phase = await _run_agent(rt, state, "front", "front")
+    updates: Dict[str, Any] = {"phases": [phase]}
+    if isinstance(data.get("spec"), dict) and data["spec"]:
+        updates["spec"] = data["spec"]
+    if isinstance(data.get("design_arch"), dict) and data["design_arch"]:
+        updates["design_arch"] = data["design_arch"]
+    # 没有输入：**在这里停**，别让 design 在一个不存在的设计上跑
+    if phase.get("status") not in ("passed", "skipped"):
+        logger.error("前置分析未通过（没有输入 / 解不出 design_name）→ 终止闭环")
+        updates.update({"interrupted": True, "terminal_reason": "no_input"})
+    return updates
+
+
 async def n_design(state: PipelineState, config) -> Dict[str, Any]:
     """design（或 bypass 模式下从 spec 直接解析）。"""
     rt = _rt(config)
-    if state.bypass_design_model:
+    if state.bypass_design or state.bypass_design_model:
         logger.info("验证专注模式：bypass design/model，直接进入 verify（预置 RTL + 黄金模型）")
         spec, arch = {}, {}
+        # ── RTL 是**唯一输入**时：规格从 DUT 分析出来 ──
+        # `--rtl` 与 spec 互斥（CLI 已挡），所以这里 spec_text 是空的 —— 再走
+        # `analyze_specification("")` 只会解出 `design_name: dut` 这种假名字。
+        # 改成读 RTL：顶层 module 名 → design_name，端口表 → interfaces。
+        _rtl_dir = Path(state.output_root) / "rtl"
+        _rtl_mods = sorted(_rtl_dir.glob("*.sv")) if _rtl_dir.is_dir() else []
+        if _rtl_mods and not (rt.spec_text or "").strip():
+            try:
+                from src.tools.uvm_tools.tool_find_spec_yaml.main import _parse_rtl_module
+                _rtl = _parse_rtl_module(_rtl_dir, "") or {}
+                _m = _rtl.get("module_name") or ""
+                if not _m:
+                    # 没指名就先按第一个文件里的 module 名兜（`_parse_rtl_module`
+                    # 有四级回退，通常已能给出一个）
+                    import re as _re
+                    _m = (_re.search(r"module\s+(\w+)", _rtl_mods[0].read_text(
+                        encoding="utf-8", errors="replace")) or [None, ""])[1]
+                spec = {
+                    "design_name": _m or "dut",
+                    "interfaces": [{"name": q.get("name", ""),
+                                    "direction": q.get("direction", "input"),
+                                    "data_width": q.get("width", 1)}
+                                   for q in (_rtl.get("ports") or [])],
+                    # ⚠️ **不从 RTL 猜寄存器**：地址译码有 `case (paddr[1:0])` 直连、
+                    # 有 `paddr[7:2]==0` 区间判定、有 `regs[paddr]` 数组索引、还有
+                    # DLAB 那种地址重载 —— 猜错就是"spec 说 16 个、RTL 里 4 个"
+                    # （实测亲手犯过）。推不出就**如实留空**，宁可少生成用例，
+                    # 也不给一份假的寄存器表当规格。
+                    "registers": [],
+                    "_source": "rtl_analysis",
+                    "_note": "本规格由 RTL 分析生成（端口来自 module 声明）；"
+                             "registers 未从 RTL 推断，如需寄存器用例请补 spec",
+                }
+                logger.info(f"RTL 分析：design_name={spec['design_name']} "
+                            f"ports={len(spec['interfaces'])}（registers 未推断）")
+            except Exception as e:                     # noqa: BLE001 分析失败不该炸
+                logger.warning(f"RTL 分析失败，回退最小 spec: {e}")
+                spec = {}
         try:
             from src.tools.spec_tools.main import analyze_specification
-            _raw = analyze_specification(rt.spec_text)
+            _raw = (analyze_specification(rt.spec_text) if not spec
+                    else json.dumps(spec, ensure_ascii=False))
             spec = (json.loads(_raw)
                     if isinstance(_raw, str) and _raw.strip().startswith("{") else {})
             if not isinstance(spec, dict) or not spec.get("design_name"):
@@ -432,9 +496,12 @@ async def n_design(state: PipelineState, config) -> Dict[str, Any]:
             spec = {"design_name": "dut"}
             arch = {"module_name": "dut", "interfaces": [],
                     "registers": [], "function_hier": {"children": []}}
-        return {"spec": spec, "design_arch": arch,
-                "phases": [{"name": "design", "status": "skipped", "score": 0},
-                           {"name": "model", "status": "skipped", "score": 0}]}
+        _phases = [{"name": "design", "status": "skipped", "score": 0}]
+        # 只有**连 model 一起跳**时才记 model 跳过。`--rtl`（bypass_design）
+        # 不跳 model —— 记成 skipped 会让人以为参考模型没生成。
+        if state.bypass_design_model:
+            _phases.append({"name": "model", "status": "skipped", "score": 0})
+        return {"spec": spec, "design_arch": arch, "phases": _phases}
 
     data, phase = await _run_agent(rt, state, "design", "design")
     # 用例注册：design 之后 spec 就绪，用真实 design_name（而非硬编码 "dut"）
@@ -451,7 +518,30 @@ async def n_design(state: PipelineState, config) -> Dict[str, Any]:
         updates["spec"] = data["spec"]
     if isinstance(data.get("design_arch"), dict):
         updates["design_arch"] = data["design_arch"]
+
+    # ── RTL 门禁：**没有可验的 RTL 就响亮停下** ──
+    # design 的每条失败路径都是 `warning + continue`（LLM 产出残缺 / vlog 不过 /
+    # 写手异常）。全丢光时 `rtl/` 是空的，而流程原来照常往下跑 —— 最后在编译期
+    # 报一屏 `Module 'xxx' is not defined`，失败原因只剩日志里一行 warning。
+    # 实测就是这么塌的（加了寄存器表之后 design 没产出任何 RTL）。
+    # 与其拿一个空 `rtl/` 走完整条闭环，不如**在这里停下、把原因说清**。
+    _arch = updates.get("design_arch") or {}
+    _rtl_files = list((Path(state.output_root) / "rtl").glob("*.sv"))         if (Path(state.output_root) / "rtl").is_dir() else []
+    if not _rtl_files:
+        _why = _arch.get("rtl_discarded") or []
+        _detail = "；".join(f"{d.get('ip')}: {d.get('why')}" for d in _why) or "无 IP 产出"
+        logger.error(f"design 没产出任何 RTL（rtl/ 是空的）→ 终止闭环。丢弃原因：{_detail}")
+        updates.update({"interrupted": True, "terminal_reason": "rtl_missing"})
+        updates["phases"] = [phase, {
+            "name": "rtl_gate", "status": "failed",
+            "reason": f"design 没产出任何 RTL —— 没有可验的 DUT，后面全都会连锁失败。"
+                      f"丢弃详情：{_detail}"}]
     return updates
+
+
+def r_after_design(state: PipelineState) -> str:
+    """design 之后的分流：没 RTL 就直接去 audit（同 `eda_missing` 的出口）。"""
+    return "abort" if state.interrupted else "ok"
 
 
 async def n_model(state: PipelineState, config) -> Dict[str, Any]:
@@ -498,7 +588,10 @@ async def n_env_arch_check(state: PipelineState, config) -> Dict[str, Any]:
                 if _adir.exists() else []
             build_filelist_for_tb(output_root, _agents, _env_name, "filelist.f")
 
-        _arch = await asyncio.to_thread(_check, str(output_root))
+        # 把这一轮的仿真业务带下去：波形模式下 scoreboard 那半**关闭**
+        #（要波形不要判决，见 `check_scoreboard` 的 docstring）
+        _arch = await asyncio.to_thread(_check, str(output_root),
+                                       sim_modes=list(state.sim_modes or []))
         _po = _arch.get("port_ownership", {}) or {}
         _sb = _arch.get("scoreboard", {}) or {}
         _status = _arch.get("status", "FAIL")
@@ -569,7 +662,10 @@ async def n_ops(state: PipelineState, config) -> Dict[str, Any]:
     # `sim_modes` 与 `design_style` 同位：都是"这次运行怎么跑"的输入，不是全局开关。
     data, phase = await _run_agent(rt, state, "ops", f"ops_r{state.round_num}",
                                    {"design_style": state.design_style,
-                                    "sim_modes": list(state.sim_modes or [])})
+                                    "sim_modes": list(state.sim_modes or []),
+                                    # 分级回归的人工节点开不开（工具栏那个开关）。
+                                    # 不开 = `run_regression_staged(auto_approve=True)`。
+                                    "manual_gate": bool(state.manual_gate)})
     regression = data.get("regression", {}) if isinstance(data, dict) else {}
 
     # ── EDA 缺失检测（优先级最高：环境问题不是代码问题，终止闭环）──
@@ -581,6 +677,23 @@ async def n_ops(state: PipelineState, config) -> Dict[str, Any]:
                 "terminal_reason": "eda_missing",
                 "phases": [phase, {"name": "eda_check", "status": "failed",
                                    "reason": f"EDA 工具缺失: {_err}"}]}
+
+    # ── 人工节点检测：回归停在 loopback 等人放行 → 终止闭环 ──
+    # **不是失败**，机器也不该空转：不拦的话每轮都停在同一个放行点、每轮都被判成
+    # ops 失败，白烧 `max_rounds` 轮才收场（实测 5 轮跑完发现 5 次都是同一件事，
+    # 而 P0 一次都没跑过）。放行是人的动作 —— 机器在这里该做的是**停下来交棒**。
+    if isinstance(data, dict) and data.get("awaiting_approval"):
+        aw = data.get("awaiting_approval") or {}
+        logger.warning(f"分级回归停在人工节点 {aw.get('after')} → {aw.get('next')}，"
+                       f"终止闭环等人放行（{aw.get('hint', '')}）")
+        return {"regression": regression, "regression_failed_count": 0,
+                "awaiting_approval": True, "interrupted": True,
+                "terminal_reason": "awaiting_approval",
+                "phases": [phase, {"name": "manual_gate",
+                                   "status": "waiting_approval",
+                                   "reason": (f"{aw.get('after')} 已全过，进 "
+                                              f"{aw.get('next')} 前需人工放行："
+                                              f"{aw.get('hint', '')}")}]}
 
     # ── 编译失败检测 ──
     compile_error = None
@@ -1326,9 +1439,13 @@ def _round_or_abort(state: PipelineState) -> str:
 
 
 def r_coverage(state: PipelineState) -> str:
-    """ops 之后的分流：EDA 缺失 / 编译失败 / 功能回归失败 / 正常收覆盖率。"""
+    """ops 之后的分流：EDA 缺失 / 人工节点 / 编译失败 / 功能回归失败 / 正常收覆盖率。"""
     if state.eda_blocked:
         return "eda_missing"
+    if state.awaiting_approval:
+        # 回归停在 loopback 等人放行 —— 和人有关的事，机器别空转。
+        # 与 `eda_missing` 同一个出口：直接去 audit 收尾，不跑 coverage/decide。
+        return "awaiting_approval"
     if state.regression_failed_count and not state.compile_error:
         return "functional_fail"
     if state.compile_error:
@@ -1480,8 +1597,9 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
         "iterations": state.iterations,
         "exclude": {"stats": exclude_stats, "effect": state.exclude_effect},
         "status": ("BLOCKED_EDA_MISSING" if state.eda_blocked
-                   else ("CONVERGED" if state.effective_coverage >= state.target
-                         else "COMPLETED")),
+                   else ("WAITING_APPROVAL" if state.awaiting_approval
+                         else ("CONVERGED" if state.effective_coverage >= state.target
+                               else "COMPLETED"))),
         "evidence": {"total_changes": total_changes, "chain_valid": chain_valid,
                      "evidence_path": evidence_path, "manifest_path": manifest_path,
                      "file_change_chain_path": file_chain_path},
@@ -1512,7 +1630,7 @@ def _collect_llm_audit() -> Any:
 #: 分组 / 归属 agent），而「有哪些节点」必须只有一份。`tests/test_stages.py`
 #: 断言两张表一一对应 —— 加了节点却忘了加元数据，那条测试会红。
 NODE_FUNCS = (
-    ("init", n_init), ("design", n_design), ("model", n_model), ("verify", n_verify),
+    ("init", n_init), ("front", n_front), ("design", n_design), ("model", n_model), ("verify", n_verify),
     ("env_arch_check", n_env_arch_check), ("round_bump", n_round_bump),
     ("ops", n_ops), ("coverage", n_coverage), ("debug_functional", n_debug_functional),
     ("decide", n_decide), ("governor", n_governor),
@@ -1547,8 +1665,13 @@ def build_closed_loop_graph(checkpointer=None, store=None):
         g.add_node(name, fn)
 
     g.add_edge(START, "init")
-    g.add_edge("init", "design")
-    g.add_edge("design", "model")          # bypass 时 n_model 自行跳过
+    g.add_edge("init", "front")
+    g.add_edge("front", "design")   # front 不通过时由 interrupted 送 audit
+    # design 之后加一道**RTL 门禁**：没产出 RTL 就走 audit，不带病往下跑
+    g.add_conditional_edges("design", r_after_design, {
+        "ok": "model",      # bypass 时 n_model 自行跳过
+        "abort": "audit",
+    })
     g.add_edge("model", "verify")
     g.add_edge("verify", "env_arch_check")
     g.add_edge("env_arch_check", "round_bump")
@@ -1560,6 +1683,7 @@ def build_closed_loop_graph(checkpointer=None, store=None):
 
     g.add_conditional_edges("ops", r_coverage, {
         "eda_missing": "audit",
+        "awaiting_approval": "audit",
         "compile_fail": "decide",
         "functional_fail": "debug_functional",
         "run_coverage": "coverage",

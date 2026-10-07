@@ -72,26 +72,50 @@ class DesignAgent(BaseAgent):
         # ── 3. LLM 写手：只对新 IP（reused=False）生成 RTL，复用的直接带库 RTL ──
         rtl_dir = output_dir / "rtl"
         rtl_dir.mkdir(parents=True, exist_ok=True)
+        # 每个 IP 的产出结局都要**记下来**，不能只留一行 warning。
+        # 三条失败路径原先都是 `warning + continue` —— 全丢光时 `rtl/` 是空的，
+        # 流程却照常往下跑，最后在编译期报一屏 `Module 'xxx' is not defined`
+        #（实测：加了寄存器表之后 design 没产出任何 RTL，整轮就是这么塌的，
+        #  而失败原因只留在日志里一行 warning）。**要能"兜住"它。**
+        rtl_reused: List[str] = []
+        rtl_discarded: List[Dict[str, str]] = []
         for ip in ips:
             if ip.get("reused"):
+                rtl_reused.append(ip["ip_name"])
                 continue  # 查库复用：RTL 已在 ip["rtl_code"]，不再 LLM 生成
-            try:
-                rtl = self._llm_write_ip(ip, spec)
-                # RTL 完整性校验：module + 端口闭合 + endmodule（LLM 可能截断/残缺）
-                if not self._is_valid_rtl(rtl):
-                    logger.warning(f"IP {ip['ip_name']} RTL 残缺（缺端口闭合/endmodule），丢弃")
-                    continue
-                # 铁律一：走 L1 基础设施做 vlog 编译校验（EDA 是唯一真理）
-                if not self._verify_ip_rtl(rtl_dir, ip["ip_name"], rtl):
-                    logger.warning(f"IP {ip['ip_name']} vlog 编译失败，丢弃")
-                    continue
-                from src.layers.l4_memory.ip_registry import IpRegistry
-                _reg = IpRegistry()
-                _reg.update_rtl(ip["ip_name"], rtl)
-                ip["rtl_code"] = rtl
-                _reg.close()
-            except Exception as e:
-                logger.warning(f"IP {ip['ip_name']} LLM 写手失败: {e}")
+            # **重试再丢**：LLM 产出残缺是随机事件（长文件被截断尤其常见），
+            # 一次不成不代表这个 IP 写不出来。原先 `warning + continue` 一次就扔，
+            # 全丢光 `rtl/` 就空了（实测：加了寄存器表之后整轮就是这么塌的）。
+            # 重试**不改变"验不过就不收"**这条 —— 只是多给它两次机会；
+            # 三次都不成，照旧丢弃并记明原因（由 RTL 门禁响亮收口）。
+            _last_why = "未尝试"
+            for _attempt in range(1, 4):
+                try:
+                    rtl = self._llm_write_ip(ip, spec)
+                    # RTL 完整性校验：module + 端口闭合 + endmodule（LLM 可能截断/残缺）
+                    if not self._is_valid_rtl(rtl):
+                        _last_why = "RTL 残缺（缺端口闭合/endmodule）"
+                        logger.warning(f"IP {ip['ip_name']} 第 {_attempt}/3 次 RTL 残缺，重试")
+                        continue
+                    # 铁律一：走 L1 基础设施做 vlog 编译校验（EDA 是唯一真理）
+                    if not self._verify_ip_rtl(rtl_dir, ip["ip_name"], rtl):
+                        _last_why = "vlog 编译失败"
+                        logger.warning(f"IP {ip['ip_name']} 第 {_attempt}/3 次 vlog 不过，重试")
+                        continue
+                    from src.layers.l4_memory.ip_registry import IpRegistry
+                    _reg = IpRegistry()
+                    _reg.update_rtl(ip["ip_name"], rtl)
+                    ip["rtl_code"] = rtl
+                    _reg.close()
+                    _last_why = ""
+                    break
+                except Exception as e:
+                    _last_why = f"LLM 写手失败: {e}"
+                    logger.warning(f"IP {ip['ip_name']} 第 {_attempt}/3 次写手异常: {e}")
+            if not ip.get("rtl_code"):
+                logger.warning(f"IP {ip['ip_name']} 三次都没产出可用 RTL（{_last_why}），丢弃")
+                rtl_discarded.append({"ip": ip["ip_name"],
+                                      "why": f"{_last_why}（已重试 3 次）"})
 
         # ── 4. 集成连线：各 IP RTL 集成为顶层 module ──
         rtl_files, top_used_fallback = self._integrate_top(ips, module_name, spec, rtl_dir)
@@ -106,6 +130,12 @@ class DesignAgent(BaseAgent):
             # 说真话：LLM 顶层连线失败 → 回退确定性骨架（只有 clk/rst 直连，无真实互连逻辑）
             # audit 门禁 rtl_real 据此拒绝签核（见 audit agent gate）
             "rtl_placeholder": top_used_fallback,
+            # ── RTL 产出的**实况**（不是日志里的一句话）──
+            # `rtl_discarded` 非空 / `rtl_generated` 为空 = 这个设计**没有可验的 RTL**，
+            # 闭环必须据此**响亮地停下**，不能拿一个空 `rtl/` 往下跑。
+            "rtl_generated": [i["ip_name"] for i in ips if i.get("rtl_code")],
+            "rtl_reused": rtl_reused,
+            "rtl_discarded": rtl_discarded,
         }
 
         # V2 Knowledge Graph：设计时子图落库（跨 run 沉淀，供决策层语义溯源）

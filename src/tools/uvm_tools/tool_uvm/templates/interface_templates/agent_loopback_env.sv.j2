@@ -5,7 +5,14 @@
 // ============================================================
 // master-drive → slave-monitor 闭环自检：
 //   master driver 驱动事务 → interface 内部信号回环 → slave monitor 观察
-//   master monitor 的抓包 = expected，slave monitor 的抓包 = actual
+//   **master driver 驱动出去的事务 = expected**，slave monitor 的抓包 = actual
+//
+// 为什么 expected 取 **driver** 而不是 master monitor：
+//   loopback 里 tb 把**同一个**接口实例发给 master / slave 两个 agent
+//   （见 `<ag>_loopback_tb.sv` 的注释：两个独立实例会被 vopt-12003 拒掉），
+//   于是 master monitor 和 slave monitor 在采**同一组信号** ——
+//   拿它们互比就是"同一个接口读两遍"，恒真，driver 一个信号都不驱动也照样 PASS。
+//   换成 driver 驱动出去的事务，"发出去的 vs 总线上看到的"才是真正的自检。
 import uvm_pkg::*;
 import {{ agent.name }}_pkg::*;
 // `MASTER` / `SLAVE`（port_kind_enum）住在公共包里；SV 的 import **不传递**，
@@ -69,9 +76,13 @@ class {{ agent.name }}_loopback_env extends uvm_env;
 
   function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
-    // monitor 的抓包端口分 master/slave 两个名字（`master_mon_ap` / `slave_mon_ap`），
-    // 没有笼统的 `mon_ap` —— 写错就是 "Could not find field/method name (mon_ap)"。
-    master_agent_h.monitor.master_mon_ap.connect(scb_h.expected_export);
+    // expected ← **master driver 驱动出去的事务**（`driver.driven_ap`）
+    // actual   ← slave monitor 的抓包（`slave_mon_ap`）
+    //
+    // 注：monitor 的抓包端口分 `master_mon_ap` / `slave_mon_ap` 两个名字，没有笼统的
+    // `mon_ap` —— 写错就是 "Could not find field/method name (mon_ap)"。
+    // 这里**故意**不用 `master_mon_ap`：那也是 monitor 的抓包（见文件头说明）。
+    master_agent_h.driver.driven_ap.connect(scb_h.expected_export);
     slave_agent_h.monitor.slave_mon_ap.connect(scb_h.actual_export);
   endfunction
 
