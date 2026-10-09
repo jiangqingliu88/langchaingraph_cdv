@@ -1,0 +1,24 @@
+# reg-init.txt —— 寄存器初值映射（供 ISS）
+# 由 isa_gen 的编码器生成；TB/DUT 侧不消费（DUT 内无 RV register file）
+# case: npu_gemm_smoke   seed: 12345
+#
+# reg   value
+x1    0x0000000F
+x2    0x00004000
+x3    0x00006000
+x4    0x00002000
+x5    0x00020000
+x6    0x00000000
+#
+# 以下为结果寄存器（xd=1），初值由执行决定，不预置：
+#   x7 x8 x9 x10
+#
+# ⚠ 以下操作数槽**没有填出来**，对应指令字里那一槽是 0：
+#   [2] tld_drv_xn.rs2val (xs2=1) — IR 里没有这个操作数（生成侧的 operand_gap）
+#   [17] tld_drv_xn.rs2val (xs2=1) — IR 里没有这个操作数（生成侧的 operand_gap）
+#   [21] tld_drv_xn.rs2val (xs2=1) — IR 里没有这个操作数（生成侧的 operand_gap）
+#   [27] tld_drv_xn.rs2val (xs2=1) — IR 里没有这个操作数（生成侧的 operand_gap）
+#   [30] tld_drv_xn.rs2val (xs2=1) — IR 里没有这个操作数（生成侧的 operand_gap）
+#   [33] npu_cfg_drv_xn.rs1val (xs1=1) — IR 里没有这个操作数（生成侧的 operand_gap）
+#   [33] npu_cfg_drv_xn.rs2val (xs2=1) — IR 里没有这个操作数（生成侧的 operand_gap）
+#   0 是个合法操作数（x0=0），所以**仿真不会在这里报错**。

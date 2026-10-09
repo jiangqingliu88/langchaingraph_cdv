@@ -1,0 +1,55 @@
+{
+  "name": "img",
+  "ref": "$t.img",
+  "content_hash": "da053ef6b76ffe29",
+  "shape": [
+    1,
+    64,
+    128
+  ],
+  "dtype": "fp16",
+  "layout": {
+    "shape": [
+      1,
+      64,
+      128
+    ],
+    "stride_dim1": 8,
+    "stride_dim2": 512,
+    "rem_dim0": 0,
+    "bc_only": false,
+    "storage": "dram.share",
+    "base_addr": "0x0",
+    "align": 32
+  },
+  "fp_split": null,
+  "pattern": "gauss",
+  "value_range": [
+    -4.502412240534016,
+    3.6836955548655608
+  ],
+  "exp_range": {
+    "declared": [
+      -6.0,
+      6.0
+    ],
+    "scaled": true
+  },
+  "special_values": {
+    "mode": "allow",
+    "ratio": 0.0,
+    "note": "E2：FP 特殊值默认允许，含特殊值的指令期望强制交 ISS"
+  },
+  "index_of": null,
+  "seed": {
+    "parent_case_seed": 12345,
+    "stream": "tensor:img"
+  },
+  "parent_case_seed": 12345,
+  "tool_version": "0.1",
+  "memmap_version": "v1",
+  "_pending": [
+    "E3 CIMC FP 分区 EXP Shadow（需硬件规则）",
+    "E8 dtype×区域×指令类合法性（需 Prec 总表）"
+  ]
+}
