@@ -16,7 +16,7 @@ import tarfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -90,11 +90,28 @@ def save_golden_baseline(output_dir: Path, coverage: Dict[str, float],
 # ═══════════════════════════════════════════════════════════════
 
 class GuardianAgent:
-    """回归守卫：改设计前强制跑 golden 用例集，<100% 拒绝。"""
+    """回归守卫：改设计前强制跑 golden 用例集，<100% 拒绝。
 
-    def __init__(self, output_dir: Path):
+    `run_tool` 为什么是**注入**的，不是这里 import 的
+        跑 golden 用例集走的是「工具子进程」那条通路，而它属于**编排层**
+        （`l2_orchestration.communication.tool_subprocess`）。
+
+        本模块在 **L1**（零 AI 的确定性层）—— 直接 import 就是 L1 反向依赖 L2。
+        反了的话，L1 就没法脱离编排层单独跑，也就没法单独测（而 L1 恰恰是最
+        该能单独测的那一层：它不该拖进 langgraph / agent 注册表任何东西）。
+
+        所以由调用方（L2）把 runner 传进来：
+            run_tool(tool_name: str, args: dict) -> {"success", "data", "error"}
+
+    **不注入时不假装"跑过了"** —— `pre_refactor_check` 返回 `allowed=False`
+    并说明原因。守卫最不能做的事就是"验证不了却放行"。
+    """
+
+    def __init__(self, output_dir: Path,
+                 run_tool: Optional[Callable[..., Dict[str, Any]]] = None):
         self.output_dir = Path(output_dir)
         self.golden_dir = self.output_dir / "golden"
+        self._run_tool = run_tool
 
     def has_golden(self) -> bool:
         """是否有黄金基线。"""
@@ -124,7 +141,16 @@ class GuardianAgent:
             # RTL 没变，无需守卫
             return {"allowed": True, "reason": "RTL 未变更", "baseline": baseline}
 
-        # RTL 已变 → 强制跑 golden 用例集
+        # RTL 已变 → 强制跑 golden 用例集。
+        # 没有 runner 就**不能放行** —— 守卫最不该做的就是"验证不了却放行"。
+        if self._run_tool is None:
+            return {
+                "allowed": False,
+                "reason": "没有注入 golden 运行器 —— RTL 已变更但无法验证是否破坏基线。"
+                          "（L1 不 import 编排层，runner 由调用方传入）",
+                "baseline": baseline,
+            }
+
         golden_pass = await self._run_golden_tests()
 
         if golden_pass < 100.0:
@@ -140,15 +166,17 @@ class GuardianAgent:
     async def _run_golden_tests(self) -> float:
         """跑 golden 用例集，返回通过率。
 
-        通过独立子进程（Stdio 进程隔离）执行 regression.run_golden 工具，
-        由真实 EDA（vlog 编译 + vsim 仿真）返回 0/1 作为唯一真理。
-        子进程崩溃不拖垮主流程。
+        跑的方式由调用方注入的 `run_tool` 决定 —— 默认那条走独立子进程
+        （Stdio 进程隔离），由真实 EDA（vlog 编译 + vsim 仿真）返回 0/1
+        作为唯一真理。子进程崩溃不拖垮主流程。
+
+        **失败一律返回 0.0 而不是抛**：调用方拿它跟 100% 比，0 就是"拒绝
+        本次改动"—— 那正是崩溃时该有的结论。
         """
         import asyncio
         try:
-            from src.layers.l2_orchestration.communication.tool_subprocess import run_tool_in_subprocess
             result = await asyncio.to_thread(
-                run_tool_in_subprocess, "regression.run_golden",
+                self._run_tool, "regression.run_golden",
                 {"output_dir": str(self.output_dir)})
             if isinstance(result, dict) and result.get("success"):
                 return float(result.get("data", {}).get("pass_rate", 0.0))

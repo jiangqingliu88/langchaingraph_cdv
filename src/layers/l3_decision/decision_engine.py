@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -59,6 +59,26 @@ class Action:
 # 决策引擎
 # ═══════════════════════════════════════════════════════════════
 
+class ExperienceProvider(Protocol):
+    """动作经验查询 —— **L3 定义接口，L5 提供实现，L2 负责装配**。
+
+    为什么要有这层接口，而不是直接 `from ...l5_evolution.growth import ...`：
+        `l5_evolution` 在 L3 **之上**。L3 直接 import 它就是**越级反向依赖**
+        （原来是靠函数体内延迟 import 遮着的）。反了的话，决策引擎就没法脱离
+        进化层单独跑 —— 而它全是确定性规则，是最该能单独测的那一块。
+
+    实现方：`src/layers/l5_evolution/growth.py` 的 `experience_provider`。
+    """
+
+    def note(self, action_type: str) -> str:
+        """这个动作的历史效果说明（没有就返回空串）。"""
+        ...
+
+    def ineffective(self, action_type: str) -> bool:
+        """历史是否证明这个动作无效（用于降级到 fallback）。"""
+        ...
+
+
 class CoverageDrivenDecisionEngine:
     """覆盖率驱动决策状态机。
 
@@ -66,11 +86,16 @@ class CoverageDrivenDecisionEngine:
     """
 
     def __init__(self, target: float = 95.0, stall_threshold: float = 1.0,
-                 stall_rounds: int = 2, seed_expand_count: int = 1000):
+                 stall_rounds: int = 2, seed_expand_count: int = 1000,
+                 experience: "ExperienceProvider" = None):
         self.target = target
         self.stall_threshold = stall_threshold     # 多轮增长 < 此值视为停滞
         self.stall_rounds = stall_rounds           # 连续 N 轮停滞才触发扩种
         self.seed_expand_count = seed_expand_count
+        #: 动作经验查询 —— **不 import L5**，由 L2 装配时注入（见 `ExperienceProvider`）。
+        #: 不注入就是"没有经验可参考"，决策照常走规则 —— 那是合法的降级，
+        #: 不是错误（决策引擎本来就是规则先行，经验只做增强）。
+        self._experience = experience
 
     def decide(self, observation: Observation) -> Action:
         """根据观测决定下一步动作。先规则，后可换 LLM。"""
@@ -238,17 +263,21 @@ class CoverageDrivenDecisionEngine:
         return "；".join(parts) if parts else "（未映射）"
 
     def _with_experience(self, action: Action, fallback: Action = None) -> Action:
-        """L4 记忆：附加动作历史效果说明；若历史证明无效且有 fallback，降级。
+        """记忆：附加动作历史效果说明；若历史证明无效且有 fallback，降级。
 
         决策逻辑保持确定性（规则先行），经验只做"增强"——无效动作降级，
         而不是让 LLM/经验直接拍板。
+
+        经验从哪来是**注入**的（`ExperienceProvider`）—— 本模块不 import
+        `l5_evolution`（那是越级反向依赖）。没注入就跳过，决策照常。
         """
+        if self._experience is None:
+            return action
         try:
-            from src.layers.l5_evolution.growth import get_action_experience_note, is_action_proven_ineffective
-            note = get_action_experience_note(action.action_type)
+            note = self._experience.note(action.action_type)
             if note:
                 action.reason += note
-            if fallback is not None and is_action_proven_ineffective(action.action_type):
+            if fallback is not None and self._experience.ineffective(action.action_type):
                 fallback.reason += f" [经验: {action.action_type} 历史证明无效，降级]"
                 return fallback
         except Exception:

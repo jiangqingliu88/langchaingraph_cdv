@@ -312,29 +312,29 @@ class TestDesignFixReportsNoChange:
     """
 
     def test_fingerprint_and_diff_agree_with_the_guard(self, tmp_path):
-        from src.agents.design.main import DesignAgent
+        from src.executors.design.main import DesignExecutor
 
         rtl = tmp_path / "rtl"
         rtl.mkdir()
         (rtl / "top.sv").write_text("// v1", encoding="utf-8")
-        before = DesignAgent._rtl_fingerprint(tmp_path)
+        before = DesignExecutor._rtl_fingerprint(tmp_path)
 
         # 没改 → 空；改了 → 有；删了 → 也算改动
-        assert DesignAgent._rtl_diff(before, DesignAgent._rtl_fingerprint(tmp_path)) == []
+        assert DesignExecutor._rtl_diff(before, DesignExecutor._rtl_fingerprint(tmp_path)) == []
         (rtl / "top.sv").write_text("// v2", encoding="utf-8")
-        assert DesignAgent._rtl_diff(before, DesignAgent._rtl_fingerprint(tmp_path)) == ["top.sv"]
+        assert DesignExecutor._rtl_diff(before, DesignExecutor._rtl_fingerprint(tmp_path)) == ["top.sv"]
         (rtl / "new.sv").write_text("// new", encoding="utf-8")
         (rtl / "top.sv").unlink()
-        changed = DesignAgent._rtl_diff(before, DesignAgent._rtl_fingerprint(tmp_path))
+        changed = DesignExecutor._rtl_diff(before, DesignExecutor._rtl_fingerprint(tmp_path))
         assert changed == ["new.sv", "top.sv"]
 
     def test_rerun_with_identical_output_counts_as_no_change(self, tmp_path):
         """LLM 原样重写一遍（内容相同）—— 字节一样就不算改动。"""
-        from src.agents.design.main import DesignAgent
+        from src.executors.design.main import DesignExecutor
 
         rtl = tmp_path / "rtl"
         rtl.mkdir()
         (rtl / "top.sv").write_text("// same", encoding="utf-8")
-        before = DesignAgent._rtl_fingerprint(tmp_path)
+        before = DesignExecutor._rtl_fingerprint(tmp_path)
         (rtl / "top.sv").write_text("// same", encoding="utf-8")   # 重写同样内容
-        assert DesignAgent._rtl_diff(before, DesignAgent._rtl_fingerprint(tmp_path)) == []
+        assert DesignExecutor._rtl_diff(before, DesignExecutor._rtl_fingerprint(tmp_path)) == []

@@ -478,7 +478,7 @@ class ToolRegistryAdapter:
       registry = ToolRegistry()
       registry.register(Tool("gen_test_sv", input_schema={...}, handler=fn))
       adapter = ToolRegistryAdapter(registry)
-      # 在 BaseAgent 中:
+      # 在 BaseExecutor 中:
       #   validated_tools = adapter.wrap(agent.tools)
     """
 
@@ -505,7 +505,9 @@ class ToolRegistryAdapter:
 
     def _create_validated_tool(self, lc_tool, tool_def: Tool):
         """创建带 Schema 验证的 tool wrapper"""
-        from langchain.tools import tool as lc_tool_decorator
+        # `langchain.tools` 在 1.x 只是指向 `langchain_core.tools` 的转发 shim
+        # （它随 `langchain` 元包提供，而本仓并不需要那个元包）。直接引核心包。
+        from langchain_core.tools import tool as lc_tool_decorator
         import functools
 
         # 保留原 tool 的函数
@@ -589,33 +591,16 @@ def get_tool_hub() -> "ToolHub":
     return ToolHub.get_instance()
 
 
-def wrap_agent_tools(agent, registry: ToolRegistry = None, sandbox: Sandbox = None) -> None:
-    """为 Agent 的工具添加 Schema 验证层。在 agent.initialize() 之后调用。
-
-    用法:
-      agent = UvmAgent()
-      await agent.initialize()
-      registry = ToolRegistry()
-      register_builtin_tools(registry)
-      # 注册 agent 特有的 tools
-      registry.register(Tool("generate_uvm_from_spec", input_schema={...}, handler=fn))
-      wrap_agent_tools(agent, registry)
-    """
-    if not registry:
-        return
-    adapter = ToolRegistryAdapter(registry, sandbox)
-    agent.tools = adapter.wrap(agent.tools)
-    # 重建 executor（如果存在）
-    if hasattr(agent, '_executor') and agent._executor:
-        from langchain_classic.agents import create_openai_tools_agent, AgentExecutor
-        agent_instance = create_openai_tools_agent(
-            llm=agent.llm, tools=agent.tools,
-            prompt=agent._get_prompt_template_sync()
-        )
-        agent._executor = AgentExecutor(
-            agent=agent_instance, tools=agent.tools,
-            verbose=getattr(agent.settings, 'agent', None) and agent.settings.agent.verbose or False,
-            max_iterations=getattr(agent.settings, 'agent', None) and agent.settings.agent.max_iterations or 10,
-            handle_parsing_errors=True,
-            return_intermediate_steps=True,
-        )
+# [已移除] 模块级 `wrap_agent_tools(agent, registry, sandbox)`。
+#
+# 它做两件事：给 agent.tools 套 Schema 校验层，然后**重建 langchain_classic
+# 的 AgentExecutor**。第二件事是 `langchain_classic` 的最后两个引用点之一。
+#
+# 删除依据（实测 2026-10-09）：8 个 agent 全部覆写 `execute_task` 且不再调
+# `super()`，AgentExecutor 从不参与执行；该函数本身也**没有任何调用者**
+# —— 全仓只在该文件的 docstring 示例里出现过。
+#
+# 仍然有效的是上面的 `ToolRegistryAdapter`（`Tool` / `ToolRegistry` /
+# `ToolRegistryAdapter` 被 agent_tools / uvm_tools / ToolHub 等 8+ 处引用，
+# 未受影响）。注意与 `ToolHub.wrap_agent_tools`（tool_hub.py:385）区分：
+# 那个是活的，被 `base.py:231` 调用。

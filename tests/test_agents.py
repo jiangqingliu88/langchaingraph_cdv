@@ -5,29 +5,29 @@
 """
 import pytest
 
-from src.layers.l2_orchestration.agents.registry import AgentRegistry
-from src.agents.design import DesignAgent
-from src.agents.model import ModelAgent
-from src.agents.verify import VerifyAgent
-from src.agents.ops import OpsAgent
-from src.agents.coverage import CoverageAgent
-from src.agents.debug import DebugAgent
-from src.agents.audit import AuditAgent
+from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
+from src.executors.design import DesignExecutor
+from src.executors.model import ModelExecutor
+from src.executors.verify import VerifyExecutor
+from src.executors.ops import OpsExecutor
+from src.executors.coverage import CoverageExecutor
+from src.executors.debug import DebugExecutor
+from src.executors.audit import AuditExecutor
 
 CURRENT_AGENTS = [
-    ("design", DesignAgent),
-    ("model", ModelAgent),
-    ("verify", VerifyAgent),
-    ("ops", OpsAgent),
-    ("coverage", CoverageAgent),
-    ("debug", DebugAgent),
-    ("audit", AuditAgent),
+    ("design", DesignExecutor),
+    ("model", ModelExecutor),
+    ("verify", VerifyExecutor),
+    ("ops", OpsExecutor),
+    ("coverage", CoverageExecutor),
+    ("debug", DebugExecutor),
+    ("audit", AuditExecutor),
 ]
 
 
 def test_registry_has_seven_agents():
-    """7 个领域 Agent 全部注册进注册中心（@register_agent 装饰器生效）。"""
-    registry = AgentRegistry.get_instance()
+    """7 个领域 Agent 全部注册进注册中心（@register_executor 装饰器生效）。"""
+    registry = ExecutorRegistry.get_instance()
     for role, _cls in CURRENT_AGENTS:
         assert role in registry.list_agents(), f"Agent '{role}' 未注册"
         assert registry.get_agent_class(role) is not None
@@ -49,7 +49,7 @@ async def test_debug_agent_no_evidence_fails_loudly(tmp_path):
     这是审计修复的回归测试——历史 bug 是"无日志 = No errors found = 95 分"。
     现在：不存在输出目录 → 无任何诊断证据 → success=False 且 score=0。
     """
-    agent = DebugAgent()
+    agent = DebugExecutor()
     await agent.initialize()
     result = await agent.execute_task({
         "input": "",
@@ -67,7 +67,7 @@ async def test_debug_agent_no_evidence_fails_loudly(tmp_path):
 
 def test_model_sv_render_real_registers():
     """有 spec.registers → SV 模型含真实寄存器语义，placeholder=False。"""
-    from src.agents.model.main import _render_sv
+    from src.executors.model.main import _render_sv
     regs = [
         {"offset": "0x00", "name": "CTRL", "width": 8, "access": "RW", "description": "控制字"},
         {"offset": "0x04", "name": "STATUS", "width": 8, "access": "RO", "description": "状态字"},
@@ -93,7 +93,7 @@ def test_model_sv_render_real_registers():
 
 def test_model_sv_render_placeholder_without_registers():
     """无 spec.registers → 占位模型（placeholder=True），audit 门禁据此拒绝。"""
-    from src.agents.model.main import _render_sv
+    from src.executors.model.main import _render_sv
     interfaces = [
         {"name": "clk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
         {"name": "rst_n", "data_width": 1, "direction": "INPUT", "protocol": "Reset"},
@@ -109,7 +109,7 @@ def test_model_sv_render_placeholder_without_registers():
 @pytest.mark.asyncio
 async def test_model_agent_placeholder_flag_in_result(tmp_path):
     """model agent 结果带 placeholder 标记（audit 门禁 model_real 的数据源）。"""
-    agent = ModelAgent()
+    agent = ModelExecutor()
     await agent.initialize()
     result = await agent.execute_task({
         "ctx": {"design_arch": {"module_name": "apb_uart", "interfaces": [
@@ -224,7 +224,7 @@ async def test_model_agent_golden_hit(tmp_path, monkeypatch):
     """APB 设计 → model agent 命中【已验证】黄金模型：placeholder=False + golden_ref 可追溯。"""
     import src.tools.lib.golden_library as gl
     monkeypatch.setattr(gl, "verify_manifest", lambda ip, ver: {"verified": True})
-    agent = ModelAgent()
+    agent = ModelExecutor()
     await agent.initialize()
     result = await agent.execute_task({
         "ctx": {"design_arch": APB_SPEC_ARCH},
@@ -257,7 +257,7 @@ async def test_model_agent_golden_hit_unverified(tmp_path, monkeypatch):
     """
     monkeypatch.setattr("src.tools.lib.golden_library.verify_manifest",
                         lambda ip, ver: {"verified": False})
-    agent = ModelAgent()
+    agent = ModelExecutor()
     await agent.initialize()
     result = await agent.execute_task({
         "ctx": {"design_arch": APB_SPEC_ARCH},

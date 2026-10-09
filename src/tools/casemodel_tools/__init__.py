@@ -16,7 +16,7 @@ case 由属性组合**生成**而不是手写。文档见 readem.md。
     text.py       只渲染。纯文本报告（CLI 与界面导出共用）
 
 **本包是纯工具：不含任何面向 LLM 的代码，也没有界面。** 前者在
-`src/agents/verify/casemodel/`，后者在验证工作台
+`src/executors/verify/casemodel/`，后者在验证工作台
 （`src/workbench/modules/vms/casemodel/`）—— 分开是为了让工具能在不装 langchain、
 **也不装 Qt** 的环境里直接用。
 

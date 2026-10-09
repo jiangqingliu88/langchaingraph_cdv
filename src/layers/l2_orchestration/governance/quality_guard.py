@@ -82,10 +82,10 @@ def validate_spec(output: dict) -> ValidationResult:
     )
 
 
-# ── DesignAgent 校验 ──
+# ── DesignExecutor 校验 ──
 
 def validate_design(output: dict) -> ValidationResult:
-    """校验 DesignAgent 输出: 必须有 function_hier 和 registers"""
+    """校验 DesignExecutor 输出: 必须有 function_hier 和 registers"""
     issues = []
     module = str(output.get("module_name", "")).strip()
     if module.lower() in _DESIGN_NAME_PLACEHOLDERS or not module:

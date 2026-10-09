@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import structlog  # noqa: E402
 structlog.configure(logger_factory=structlog.WriteLoggerFactory(sys.stderr))
 
-from src.layers.l2_orchestration.agents.registry import AgentRegistry
+from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
 from src.layers.l2_orchestration.execution import PipelineExecutionService
 from src.layers.l2_orchestration.governance.approval import create_approval_gate, ApprovalDecision, PipelineTerminatedError
 from src.cli.output import OutputAdapter, common_options, get_output_adapter
@@ -63,19 +63,19 @@ class VerificationCLI:
 
     def __init__(self):
         self.settings = None
-        self.registry = AgentRegistry.get_instance()
+        self.registry = ExecutorRegistry.get_instance()
         self.agent_config = {}
 
     async def initialize(self):
-        from src.agents import DesignAgent, ModelAgent, VerifyAgent, OpsAgent, CoverageAgent, DebugAgent, AuditAgent
+        from src.executors import DesignExecutor, ModelExecutor, VerifyExecutor, OpsExecutor, CoverageExecutor, DebugExecutor, AuditExecutor
         agents = [
-            ("design", DesignAgent()),
-            ("model", ModelAgent()),
-            ("verify", VerifyAgent()),
-            ("ops", OpsAgent()),
-            ("coverage", CoverageAgent()),
-            ("debug", DebugAgent()),
-            ("audit", AuditAgent()),
+            ("design", DesignExecutor()),
+            ("model", ModelExecutor()),
+            ("verify", VerifyExecutor()),
+            ("ops", OpsExecutor()),
+            ("coverage", CoverageExecutor()),
+            ("debug", DebugExecutor()),
+            ("audit", AuditExecutor()),
         ]
         for role, agent in agents:
             await agent.initialize()
@@ -2251,7 +2251,7 @@ def project_init(name, template):
     dirs = [
         "specs", project_output, "logs",
         f"{project_output}/docs/de", f"{project_output}/docs/dv",
-        "src/rtl", "src/tb", "src/agents",
+        "src/rtl", "src/tb", "src/executors",
     ]
     for d in dirs:
         (project_dir / d).mkdir(parents=True, exist_ok=True)

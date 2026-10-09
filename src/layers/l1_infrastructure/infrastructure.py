@@ -251,10 +251,21 @@ def declared_tests_by_build(config: dict) -> Dict[str, set]:
 class InfrastructureManager:
     """L1 基础设施层统一入口。"""
 
-    def __init__(self, output_root: str | Path, repo_root: str | Path = None):
+    def __init__(self, output_root: str | Path, repo_root: str | Path = None,
+                 case_library=None):
+        """`case_library` —— 回归结果回写的目标（L4 的 `TestcaseRegistry`）。
+
+        为什么是**注入**的：本模块在 L1，而 `TestcaseRegistry` 在 L4。
+        直接 import 就是 L1 反向依赖 L4 —— 反了的话 L1 没法脱离记忆层单独跑，
+        而 L1 恰恰是最该能单独测的那一层。
+
+        所以由调用方（L2 的 `hydrate_runtime`）传进来。**不传就不回写，
+        并记一条 warning** —— 回归结果默默不落库，比报错难查得多。
+        """
         self.output_root = Path(output_root)
         # 仓库根目录（git tag 打在这里，通常 = 项目根）
         self.repo_root = Path(repo_root) if repo_root else Path.cwd()
+        self._case_library = case_library
 
         # 归档区（持久，不随 output 丢弃）
         self.meta_dir = self.output_root / ".signoffai"
@@ -527,25 +538,31 @@ class InfrastructureManager:
                         unknown = int(line.split(":")[1].strip())
 
             # ── case 库回写：回归结果 → 更新用例状态（planned → passed/failed）──
-            # case 库跨 run 共享，在项目根 .signoffai/（而非 run 目录）
-            try:
-                from src.layers.l4_memory.testcase_registry import TestcaseRegistry
-                case_reg = TestcaseRegistry()
-                import re as _re
-                for line in report_text.splitlines():
-                    m = _re.match(r"(pass|fail|unknown)\s*:\s*(\S+)", line.strip())
-                    if not m:
-                        continue
-                    st, tname = m.group(1), m.group(2)
-                    # task.name 丢了 test_ 前缀（Scheduler 用 replace 去掉了），补回以匹配 case 库用例名
-                    cname = tname if tname.startswith("test_") else f"test_{tname}"
-                    if st == "pass":
-                        case_reg.update_status(cname, "passed", result={"new_coverage": 0})
-                    elif st == "fail":
-                        case_reg.update_status(cname, "failed")
-                case_reg.close()
-            except Exception as _e:
-                logger.warning(f"case 库回写失败: {_e}")
+            # case 库跨 run 共享，在项目根 .signoffai/（而非 run 目录）。
+            #
+            # 库对象是**注入**进来的（L1 不 import L4，见 `__init__`）。没注入
+            # 就不回写 —— 但要说出来：回归结果默默不落库，比报错难查得多。
+            if self._case_library is None:
+                logger.warning("没有注入 case 库 —— 回归结果不会回写用例状态"
+                               "（由 L2 的 hydrate_runtime 传入）")
+            else:
+                try:
+                    import re as _re
+                    for line in report_text.splitlines():
+                        m = _re.match(r"(pass|fail|unknown)\s*:\s*(\S+)", line.strip())
+                        if not m:
+                            continue
+                        st, tname = m.group(1), m.group(2)
+                        # task.name 丢了 test_ 前缀（Scheduler 用 replace 去掉了），
+                        # 补回以匹配 case 库用例名
+                        cname = tname if tname.startswith("test_") else f"test_{tname}"
+                        if st == "pass":
+                            self._case_library.update_status(
+                                cname, "passed", result={"new_coverage": 0})
+                        elif st == "fail":
+                            self._case_library.update_status(cname, "failed")
+                except Exception as _e:
+                    logger.warning(f"case 库回写失败: {_e}")
 
             # ── 5. elaboration/load 失败检测：vopt 多驱动等错误在 test 任务 load 阶段失败 ──
             # 这类是「编译级」失败（RTL 有问题），不是「测试」失败——必须标记 compile=FAIL，

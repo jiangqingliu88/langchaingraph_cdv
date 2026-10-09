@@ -7,7 +7,7 @@ ToolHub）：任何 Python 调用方、脚本、或 Agent 适配器都可以直�
     run_gaps(yaml_text, max_cases, cases_text)  → 完备性分析（可选反向核对）
     run_generate(yaml_text, max_cases, seed)    → case 属性表
 
-CLI（cli.py）与 Agent 适配器（src/agents/verify/casemodel/）都走这里 ——
+CLI（cli.py）与 Agent 适配器（src/executors/verify/casemodel/）都走这里 ——
 语义只此一份，包装各写各的。这也是「工具目录保持纯净」的落点：
 本包不含任何面向 LLM 的代码。
 
@@ -39,7 +39,7 @@ TOOL_GENERATE = "casemodel_generate"
 TOOL_UVM_TESTS = "casemodel_uvm_tests"
 
 #: 三面（LangChain / ToolRegistry / ToolHub）共用的名单。
-#: **`run_uvm_tests` 暂时不在里面**：进这个名单就得在 `src/agents/verify/casemodel/`
+#: **`run_uvm_tests` 暂时不在里面**：进这个名单就得在 `src/executors/verify/casemodel/`
 #: 的 `tool_specs()` 与 langchain 包装里各补一份，否则 `build_casemodel_tools()`
 #: 会在 `classes[name]` 上 KeyError（踩过）。它是给人用的（`cli uvm-tests` /
 #: `api.run_uvm_tests`），不是给 Agent 用的 —— 要接进 Agent 时再把它加进来，

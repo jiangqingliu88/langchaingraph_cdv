@@ -14,15 +14,15 @@ import structlog
 
 from src.layers.l1_infrastructure.output_config import make_output_root
 
-from src.layers.l2_orchestration.agents.registry import AgentRegistry
-from src.agents.design import DesignAgent
-from src.agents.front import FrontAgent
-from src.agents.model import ModelAgent
-from src.agents.verify import VerifyAgent
-from src.agents.ops import OpsAgent
-from src.agents.coverage import CoverageAgent
-from src.agents.debug import DebugAgent
-from src.agents.audit import AuditAgent
+from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
+from src.executors.design import DesignExecutor
+from src.executors.front import FrontExecutor
+from src.executors.model import ModelExecutor
+from src.executors.verify import VerifyExecutor
+from src.executors.ops import OpsExecutor
+from src.executors.coverage import CoverageExecutor
+from src.executors.debug import DebugExecutor
+from src.executors.audit import AuditExecutor
 from config.settings import Settings
 
 logger = structlog.get_logger()
@@ -281,7 +281,7 @@ class PipelineExecutionService:
 
     def __init__(self):
         self.settings = Settings.get_instance()
-        self.registry = AgentRegistry.get_instance()
+        self.registry = ExecutorRegistry.get_instance()
         self._initialized = False
         self._runs: Dict[str, dict] = {}  # run_id → {state, phases, results, ctx}
 
@@ -299,14 +299,14 @@ class PipelineExecutionService:
             return
 
         agents = [
-            ("front",    FrontAgent()),   # 前置分析：rtl/spec/doc → 结构化设计信息
-            ("design",   DesignAgent()),
-            ("model",    ModelAgent()),
-            ("verify",   VerifyAgent()),
-            ("ops",      OpsAgent()),
-            ("coverage", CoverageAgent()),
-            ("debug",    DebugAgent()),
-            ("audit",    AuditAgent()),
+            ("front",    FrontExecutor()),   # 前置分析：rtl/spec/doc → 结构化设计信息
+            ("design",   DesignExecutor()),
+            ("model",    ModelExecutor()),
+            ("verify",   VerifyExecutor()),
+            ("ops",      OpsExecutor()),
+            ("coverage", CoverageExecutor()),
+            ("debug",    DebugExecutor()),
+            ("audit",    AuditExecutor()),
         ]
         for role, agent in agents:
             await agent.initialize()
@@ -470,7 +470,15 @@ class PipelineExecutionService:
             if not fixed or "module" not in fixed or "endmodule" not in fixed:
                 logger.warning(f"LLM 兜底：返回无效代码，未写回 {fname}")
                 return False
-            fpath.write_text(fixed, encoding="utf-8")
+            # **走全项目唯一的写盘出口** —— 生成物只许改 `pragma custom` 区域。
+            # 这里原来是无条件 `write_text`：LLM 被要求"输出完整修正后的 module"，
+            # 等于给了它对生成物**整份重写**的权限（见 `generated_files` 的 docstring：
+            # 实测同一个模板被写出三种不同结果，loopback 7/7 → 4/7 → 5/7）。
+            from src.layers.l1_infrastructure.generated_files import gated_write
+            if not gated_write(fpath, fixed, logger=logger):
+                logger.warning(f"LLM 兜底：拒绝整份重写生成物 {fname}"
+                               f" —— 只允许改 pragma custom 区域")
+                return False
             logger.info(f"LLM 兜底：已重写 {fname}")
             return True
         except Exception as e:

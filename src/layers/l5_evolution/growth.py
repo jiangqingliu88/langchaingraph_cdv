@@ -110,3 +110,29 @@ def lookup_experience_by_category(category: str, min_confidence: float = 0.5) ->
                 and e.get("confidence", 0) >= min_confidence]
     except Exception:
         return []
+
+# ═══════════════════════════════════════════════════════════════
+# 交给 L2 装配的经验查询对象
+# ═══════════════════════════════════════════════════════════════
+
+class _GrowthExperienceProvider:
+    """`ExperienceProvider` 的实现 —— 接口在 L3、实现在这里、装配在 L2。
+
+    三方**互不 import**：
+      · `l3_decision.decision_engine` 定义 `ExperienceProvider`（它不该知道 L5）
+      · 本模块实现那个形状（它当然可以知道自己的函数）
+      · `l2_orchestration.runtime` 在 `hydrate_runtime` 里把两者接起来
+
+    在这之前，L3 是在 `_with_experience` 的函数体里延迟 import 本模块 ——
+    那是**越级反向依赖**，只是被延迟 import 遮住了。
+    """
+
+    def note(self, action_type: str) -> str:
+        return get_action_experience_note(action_type)
+
+    def ineffective(self, action_type: str) -> bool:
+        return is_action_proven_ineffective(action_type)
+
+
+#: 单例 —— 无状态，装配处直接用。
+experience_provider = _GrowthExperienceProvider()

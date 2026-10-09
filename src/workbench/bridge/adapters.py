@@ -58,7 +58,7 @@ def stage_flow() -> dict:
     from src.layers.l2_orchestration import stages
 
     groups = [{"id": gid, "title": gtitle,
-               "nodes": [{"id": s.id, "title": s.title, "agent": s.agent,
+               "nodes": [{"id": s.id, "title": s.title, "executor": s.executor,
                           "round_scoped": s.round_scoped} for s in specs]}
               for gid, gtitle, specs in stages.grouped()]
     return {

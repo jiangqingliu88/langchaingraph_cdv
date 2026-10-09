@@ -395,7 +395,7 @@ class TestBinding:
             "control", "design", "verify", "exec", "analysis", "converge", "signoff"]
         assert model["loop"] == {"from": "converge", "to": "exec"}
         first = model["groups"][0]["nodes"][0]
-        assert set(first) >= {"id", "title", "agent", "round_scoped"}
+        assert set(first) >= {"id", "title", "executor", "round_scoped"}
 
 
 # ═══════════════════════════════════════════════════════════════

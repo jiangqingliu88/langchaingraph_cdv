@@ -210,7 +210,7 @@ def test_the_ops_agent_turns_the_switch_into_auto_approve(monkeypatch):
     """
     import asyncio
 
-    from src.agents.ops import main as ops_main
+    from src.executors.ops import main as ops_main
 
     seen = {}
 
@@ -223,7 +223,7 @@ def test_the_ops_agent_turns_the_switch_into_auto_approve(monkeypatch):
 
     def run(manual_gate):
         seen.clear()
-        agent = ops_main.OpsAgent() if hasattr(ops_main, "OpsAgent") else None
+        agent = ops_main.OpsExecutor() if hasattr(ops_main, "OpsExecutor") else None
         assert agent is not None, "ops agent 类名变了，改这条测试"
         asyncio.run(agent.execute_task(
             {"output_dir": "out_x", "params": {"manual_gate": manual_gate}}))

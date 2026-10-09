@@ -62,7 +62,7 @@ def call_tool(name: str, args: Dict[str, Any] = None, *, context=None,
               default=_UNSET):
     """agent 调工具的统一入口 —— 走完整校验 + 审计链路，返回工具原始结果。
 
-    为什么需要它：`src/agents/*` 原本是直接 import 工具函数调用，例如
+    为什么需要它：`src/executors/*` 原本是直接 import 工具函数调用，例如
 
         from src.tools.assertion_tools.main import generate_sva_assertions
         sva = generate_sva_assertions(json.dumps(spec))
@@ -368,7 +368,16 @@ class ToolHub:
         if agent_role:
             manifests = self.list_by_agent(agent_role)
             if not manifests:
-                # 如果没有为 agent 绑定特定工具，返回所有
+                # **回退到全部工具，但要出声。**
+                # 静默回退等于白名单形同虚设：agent 没声明工具，却拿到了全部
+                # —— 包括写盘和跑 EDA 的那些。保留回退是因为现有 agent 大多
+                # 还没显式绑定（一刀切成"没有就是没有"会让它们全部拿不到工具），
+                # 但每次回退都留一条 warning，"谁还没声明"才看得见。
+                logger.warning(
+                    f"agent {agent_role!r} 没有绑定工具 —— 回退到全部 "
+                    f"{len(self._manifests)} 个（含 WRITE/DANGER）。"
+                    f"要收紧就给它显式绑定。"
+                )
                 manifests = list(self._manifests.values())
         else:
             manifests = list(self._manifests.values())
@@ -384,14 +393,31 @@ class ToolHub:
 
     def wrap_agent_tools(self, agent_role: str, existing_tools: list = None,
                          sandbox=None, context: ExecutionContext = None) -> list:
-        """为 Agent 包装所有已注册工具为 LangChain tools。
+        """为 Agent 包装工具为 LangChain tools。
 
         如果 Agent 已有 @tool 装饰的工具（existing_tools），也会一并包装。
+
+        **角色没绑定时回退到全部工具，但要出声** —— 静默回退等于"白名单"
+        根本不生效：agent 没声明，却拿到了 hub 里的每一个工具。
+
+        这个回退现在**几乎总是走到的**：工具注册时绑的角色是模块名
+        （`assert` / `doc` / `spec` / `uvm`），而 executor 的角色是
+        （`front` / `design` / `verify` / `ops` / `audit` / `model`），
+        8 个里只有 `coverage` / `debug` 两个对得上。所以每次回退都留一条
+        warning，"谁还没声明"才看得见。
         """
         wrapped = []
 
         # 包装 ITool 注册的工具
-        for name in self._by_agent.get(agent_role, list(self._tools.keys())):
+        bound = self._by_agent.get(agent_role)
+        if not bound:
+            logger.warning(
+                f"executor {agent_role!r} 没有绑定工具 —— 回退到 hub 里全部 "
+                f"{len(self._tools)} 个。绑定时用的是模块名"
+                f"（assert/doc/spec/uvm…），与 executor 角色对不上是**已知问题**。"
+            )
+            bound = list(self._tools.keys())
+        for name in bound:
             tool = self._tools.get(name)
             if tool and tool.manifest.status == ToolStatus.ACTIVE:
                 wrapper = ToolWrapper(tool, sandbox, context)
@@ -527,7 +553,7 @@ class ToolHub:
 
         # 注册 agent_tools 中的工具 (agent_tools.py 的工具)
         try:
-            from src.layers.l2_orchestration.agents.agent_tools import register_all_tools
+            from src.layers.l2_orchestration.executors.builtin_tools import register_all_tools
             old_registry = register_all_tools()
             # 跳过 uvm tools（已注册），注册其他
             uvm_names = {"find_spec_yaml", "jinja_render", "quality_report",
@@ -593,7 +619,7 @@ class ToolHub:
                 # 已注册的是真实现才跳过，避免两个实现互相覆盖。
                 if obj.name in self._tools and not _is_dead_declaration(self._tools[obj.name]):
                     continue
-                risk = ToolRisk.WRITE if attr in _LC_WRITE_TOOLS else ToolRisk.SAFE
+                risk = ToolRisk.SAFE if attr in _LC_SAFE_TOOLS else ToolRisk.WRITE
                 if self.register(_LangChainToolAdapter(obj, risk), [role]):
                     count += 1
         return count
@@ -603,15 +629,28 @@ class ToolHub:
 # 向后兼容适配器
 # ═══════════════════════════════════════════════════════════════
 
-# 会写盘 / 跑 EDA 的 @tool：风险等级按 WRITE 计（会走终端确认）
-_LC_WRITE_TOOLS = {
-    "generate_sva_assertions", "generate_immediate_assertions",
-    "generate_concurrent_assertions", "generate_formal_properties",
-    "generate_cdc_assertions", "generate_cover_properties",
-    "generate_assertion_package", "collect_coverage", "collect_sim_log",
-    "collect_compile_log", "collect_waveform", "auto_fix", "rerun_failed_test",
-    "backup_to_library", "generate_integration_code", "generate_reuse_report",
-    "compile_cmodel_dpi", "scan_environment",
+#: 只读 / 无副作用的 `@tool` —— **必须显式列出**。
+#:
+#: 默认方向是 **fail-safe**：不在这个集合里的一律按 `WRITE` 计。
+#:
+#: 为什么不是反过来（默认 SAFE + 列 WRITE）—— 那样漏登记一个写盘工具，
+#: 后果是它**静默变成"自动通过"**。而那正是这里真实发生过的 bug：
+#: 原来的 `_LC_WRITE_TOOLS` 列了 18 个名字，而实际有 **32** 个 `@tool`
+#: （清单里还有 5 个是已经不存在的幽灵条目），于是 `write_file`（名字
+#: 就叫写文件）、`jinja_render`、`quality_report`、`check_compile` 全都
+#: 没被分类，按 SAFE 放行。
+#:
+#: 两种漏登记的代价**不对称**，所以默认值要往安全那边倒：
+#:   · 漏了只读工具 → 多一次确认（烦，但无害）
+#:   · 漏了写盘工具 → 静默自动通过（危险）
+#:
+#: 完备性由 `tests/test_tool_risk.py` 钉住 —— 新增 `@tool` 忘了归类会红。
+_LC_SAFE_TOOLS = {
+    # 读文件
+    "read_file",
+    # 纯解析 / 纯计算：只吃文本或已落盘的数据，不写盘、不起子进程
+    "analyze_specification", "analyze_coverage_gaps", "analyze_assertion_coverage",
+    "extract_features", "fingerprint_error", "assess_risk",
 }
 
 

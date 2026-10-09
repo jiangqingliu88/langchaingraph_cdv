@@ -113,8 +113,8 @@ class A2ADispatcher:
     """
 
     def __init__(self, registry=None):
-        from src.layers.l2_orchestration.agents.registry import AgentRegistry
-        self.registry = registry or AgentRegistry.get_instance()
+        from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
+        self.registry = registry or ExecutorRegistry.get_instance()
         self._task_status: Dict[str, TaskStatus] = {}
 
     # ── Agent 能力卡片注册表 ──

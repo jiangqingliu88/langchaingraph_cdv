@@ -32,7 +32,7 @@ from typing import Any, Dict, Iterator, List, Optional, Union
 
 import structlog
 
-from src.layers.l2_orchestration.stages import agent_of, title_of
+from src.layers.l2_orchestration.stages import executor_of, title_of
 
 logger = structlog.get_logger()
 
@@ -243,7 +243,7 @@ class RunJournal:
             run_id=self.run_id,
             round=int(self.round_num if round_num is None else round_num),
             stage=stage,
-            agent=agent or (agent_of(stage) if stage else ""),
+            agent=agent or (executor_of(stage) if stage else ""),
             title=title_of(stage) if stage else "",
             status=status,
             duration_s=round(float(duration_s), 3),

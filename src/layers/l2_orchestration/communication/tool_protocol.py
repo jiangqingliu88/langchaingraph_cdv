@@ -426,7 +426,9 @@ class ToolWrapper:
 
     def to_langchain_tool(self):
         """将 ITool 转为 LangChain BaseTool（保留原有 @tool 装饰器语义）"""
-        from langchain.tools import tool as lc_tool_decorator
+        # `langchain.tools` 在 1.x 只是指向 `langchain_core.tools` 的转发 shim
+        # （它随 `langchain` 元包提供，而本仓并不需要那个元包）。直接引核心包。
+        from langchain_core.tools import tool as lc_tool_decorator
         import functools
         import json as _json
 

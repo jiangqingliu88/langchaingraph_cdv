@@ -79,6 +79,6 @@ class TestLookups:
         assert stages.is_round_scoped("ops")
         assert not stages.is_round_scoped("design")
 
-    def test_agent_of(self):
-        assert stages.agent_of("coverage") == "coverage"
-        assert stages.agent_of("init") == ""
+    def test_executor_of(self):
+        assert stages.executor_of("coverage") == "coverage"
+        assert stages.executor_of("init") == ""

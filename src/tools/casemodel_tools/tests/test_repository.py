@@ -321,7 +321,7 @@ def test_unknown_format_falls_back_to_table(cpu):
 def test_tool_package_has_no_llm_dependency():
     """工具目录必须能在不装 langchain 的环境里用。
 
-    Agent / LangChain / ToolHub 的包装在 src/agents/verify/casemodel/ ——
+    Agent / LangChain / ToolHub 的包装在 src/executors/verify/casemodel/ ——
     一旦工具里偷偷 import 了 langchain，脚本和别的工具就用不了它了。
     这条靠源码扫描固定，比运行时更难绕过。
     """
@@ -339,7 +339,7 @@ def test_tool_package_has_no_llm_dependency():
 
 
 def test_tool_package_does_not_import_the_agent_layer():
-    """反向依赖也不行：工具不能 import src/agents 或 ToolHub。"""
+    """反向依赖也不行：工具不能 import src/executors 或 ToolHub。"""
     root = Path(__file__).resolve().parent.parent
     offenders = []
     for path in root.rglob("*.py"):
@@ -348,7 +348,7 @@ def test_tool_package_does_not_import_the_agent_layer():
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             stripped = line.strip()
             if stripped.startswith(("import ", "from ")) and (
-                    "src.agents" in stripped or "tool_hub" in stripped
+                    "src.executors" in stripped or "tool_hub" in stripped
                     or "tool_protocol" in stripped):
                 offenders.append(f"{path.relative_to(root)}:{lineno}: {stripped}")
     assert not offenders, "工具包不该反向依赖 Agent 层：\n" + "\n".join(offenders)

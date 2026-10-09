@@ -31,7 +31,7 @@ class TestSurfaces:
     def test_is_human_facing_not_an_agent_tool(self):
         """它给人用（CLI `uvm-tests` / `api.run_uvm_tests`），不进 Agent 那三面。
 
-        进 `RUNNERS` / `TOOL_NAMES` 就得在 `src/agents/verify/casemodel/` 的
+        进 `RUNNERS` / `TOOL_NAMES` 就得在 `src/executors/verify/casemodel/` 的
         `tool_specs()` 与 langchain 包装里各补一份，否则 `build_casemodel_tools()`
         会在 `classes[name]` 上 KeyError（踩过）。所以暂不接。
 

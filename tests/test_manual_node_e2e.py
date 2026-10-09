@@ -17,6 +17,7 @@ from __future__ import annotations
 import pytest
 
 from src.layers.l2_orchestration import graph as graph_mod
+from src.layers.l2_orchestration import runtime as runtime_mod
 from src.layers.l2_orchestration.execution import PipelineExecutionService
 from src.layers.l2_orchestration.run_journal import read_journal
 from src.layers.l2_orchestration.run_repository import RunRepository
@@ -75,7 +76,11 @@ def svc(tmp_path, monkeypatch):
                         _graph_with_real_approval)
     # 声明是 `Runtime.__init__` 里读的（读的是仓库那份配置）—— 这里换成
     # 测试自己的那一条，免得测试依赖 `config/ide/manual_nodes.yaml` 的内容。
-    monkeypatch.setattr(graph_mod, "_load_manual_nodes", lambda: DECLARATION)
+    #
+    # **patch 的是 `runtime_mod` 而不是 `graph_mod`**：调用点在
+    # `Runtime.__init__`（runtime.py:83），名字在 runtime 模块里解析 ——
+    # 从 graph 上 patch 打不着（graph 只是把它 re-export 出来）。
+    monkeypatch.setattr(runtime_mod, "_load_manual_nodes", lambda: DECLARATION)
     from src.layers.l2_orchestration.governance import approval as approval_mod
     monkeypatch.setattr(approval_mod, "create_approval_gate", _auto_gate)
     PipelineExecutionService.get_instance()._initialized = True
@@ -162,7 +167,7 @@ class TestNoGateWithoutADeclaration:
 
     def test_an_undeclared_action_runs_straight_through(self, svc, tmp_path,
                                                         monkeypatch):
-        monkeypatch.setattr(graph_mod, "_load_manual_nodes",
+        monkeypatch.setattr(runtime_mod, "_load_manual_nodes",
                             lambda: [{"id": "other", "after": "decide",
                                       "action": "EXPAND_SEEDS"}])
         run_id = svc.start(_req(tmp_path))

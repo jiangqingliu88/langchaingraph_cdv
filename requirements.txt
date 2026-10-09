@@ -1,7 +1,13 @@
-langchain==1.4.3
+# LangChain 只保留「跟 API 说话」的客户端 + 工具 schema 声明的核心包。
+# 移除（2026-10-09）：
+#   langchain            元包 —— 1.x 里主要是指向 langchain_core 的转发 shim，全仓 0 引用
+#   langchain-community  全仓 0 引用
+#   langchain_classic    它从未被声明，却被 base.py 顶层 import —— 是隐性依赖（现已解除）
+# 依据：AgentExecutor 唯一调用点（debug 的 Phase 6）已改为直连 LLM；实测 8 个
+# agent 里只有 debug 的 _executor 会被构造。详见
+# docs/design/architecture_optimization_plan.md 的 P0-4。
 langchain-core==1.6.6
 langchain-openai==1.6.7
-langchain-community==0.4.2
 langgraph==1.2.12
 langgraph-checkpoint-sqlite==3.1.1
 jinja2>=3.1.0

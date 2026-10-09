@@ -133,7 +133,14 @@ class DecisionReactor:
         from src.layers.l3_decision.decision_engine import CoverageDrivenDecisionEngine
         from src.layers.l3_decision.brain.decision_brain import DecisionBrain
         from src.layers.l3_decision.brain.rl_policy import QLearningPolicy
-        rule_engine = CoverageDrivenDecisionEngine(target=target)
+        # L5 的经验查询由**本层**装配 —— L3 不 import L5（见 `ExperienceProvider`）
+        try:
+            from src.layers.l5_evolution.growth import experience_provider
+            _experience = experience_provider
+        except Exception:
+            _experience = None
+        rule_engine = CoverageDrivenDecisionEngine(target=target,
+                                                   experience=_experience)
         rl_policy = QLearningPolicy(json_path=rl_json_path)
         self.brain = DecisionBrain(rule_engine, rl_policy, target=target,
                                    distilled_weights=distilled_weights)

@@ -8,7 +8,7 @@
       · 界面要给阶段配一个中文名，只能自己再写一张表（第三份真相）；
       · 运行日志里只有 `"ops"` 这种 id，人读起来要靠猜。
 
-    这个文件把「节点 → 显示名 / 分组 / 归属 agent / 写哪些状态字段」显式成一张表。
+    这个文件把「节点 → 显示名 / 分组 / 归属 executor / 写哪些状态字段」显式成一张表。
     **它不含任何逻辑**：谁读它谁负责渲染。
 
 与另外两张表的关系（不要在这里重复定义）
@@ -60,7 +60,7 @@ class StageSpec:
     id: str                      # 与 graph.py 的节点名一一对应
     title: str                   # 中文显示名
     group: str                   # STAGE_GROUPS 的键
-    agent: str = ""              # 归属的 agent role（""=框架/控制节点）
+    executor: str = ""           # 归属的 executor role（""=框架/控制节点）
     round_scoped: bool = False   # 是否每轮都会重跑（界面上按轮分组时用）
     summary_key: str = ""        # 从状态增量里取哪一行做摘要（界面上的一行说明）
 
@@ -72,23 +72,23 @@ class StageSpec:
 #: 按概念顺序排列（与 graph.py 的拓扑一致，不是按字母）。
 STAGES: Tuple[StageSpec, ...] = (
     StageSpec("init", "初始化", "control"),
-    StageSpec("front", "前置分析", "design", agent="front", summary_key="spec"),
-    StageSpec("design", "规格与设计", "design", agent="design",
+    StageSpec("front", "前置分析", "design", executor="front", summary_key="spec"),
+    StageSpec("design", "规格与设计", "design", executor="design",
               summary_key="design_arch"),
-    StageSpec("model", "参考模型", "design", agent="model", summary_key="model"),
-    StageSpec("verify", "验证计划与 UVM", "verify", agent="verify",
+    StageSpec("model", "参考模型", "design", executor="model", summary_key="model"),
+    StageSpec("verify", "验证计划与 UVM", "verify", executor="verify",
               summary_key="tests"),
-    StageSpec("env_arch_check", "环境架构自检", "verify", agent="verify"),
+    StageSpec("env_arch_check", "环境架构自检", "verify", executor="verify"),
     StageSpec("round_bump", "轮次推进", "control", round_scoped=True),
 
-    StageSpec("ops", "编译与仿真回归", "exec", agent="ops", round_scoped=True,
+    StageSpec("ops", "编译与仿真回归", "exec", executor="ops", round_scoped=True,
               summary_key="regression"),
-    StageSpec("coverage", "覆盖率收集", "analysis", agent="coverage",
+    StageSpec("coverage", "覆盖率收集", "analysis", executor="coverage",
               round_scoped=True, summary_key="functional_coverage"),
-    StageSpec("debug_functional", "功能失败调试", "analysis", agent="debug",
+    StageSpec("debug_functional", "功能失败调试", "analysis", executor="debug",
               round_scoped=True, summary_key="debug"),
 
-    StageSpec("decide", "决策", "converge", agent="coverage", round_scoped=True,
+    StageSpec("decide", "决策", "converge", executor="coverage", round_scoped=True,
               summary_key="last_action"),
     StageSpec("governor", "治理门控", "converge", round_scoped=True,
               summary_key="governance_outcome"),
@@ -106,7 +106,7 @@ STAGES: Tuple[StageSpec, ...] = (
     StageSpec("apply_relax", "放宽约束", "converge", round_scoped=True),
     StageSpec("apply_expand_seeds", "扩大随机种子", "converge", round_scoped=True),
 
-    StageSpec("audit", "质量审查", "signoff", agent="audit", summary_key="audit"),
+    StageSpec("audit", "质量审查", "signoff", executor="audit", summary_key="audit"),
     StageSpec("finalize", "签核与证据", "signoff"),
 )
 
@@ -129,9 +129,9 @@ def title_of(stage_id: str) -> str:
     return spec.title if spec else stage_id
 
 
-def agent_of(stage_id: str) -> str:
+def executor_of(stage_id: str) -> str:
     spec = _BY_ID.get(stage_id)
-    return spec.agent if spec else ""
+    return spec.executor if spec else ""
 
 
 def group_of(stage_id: str) -> str:

@@ -272,7 +272,7 @@ class DocRequirement(Base):
 # ═══════════════════════════════════════════════════════════
 
 class DesignModule(Base):
-    """设计模块 — DesignAgent 输出"""
+    """设计模块 — DesignExecutor 输出"""
     __tablename__ = 'design_modules'
     id = Column(Integer, primary_key=True, autoincrement=True)
     project_id = Column(Integer, ForeignKey('projects.id'), nullable=True)

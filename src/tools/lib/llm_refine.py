@@ -159,67 +159,24 @@ RULES:
 No markdown, no explanations — only code."""
 
 
-#: 生成物签名 —— 由 `gen_uvm` 的 banner 模板写出（`base_template.sv.j2`）。
-#: **与 gen_uvm 的 `REGION_MARKER` 同源**：那个是正则的真相源，这里只复刻一份
-#: 供本模块自用（不 import gen_uvm —— 那会把整个生成器拖进来）。两者一致性由
-#: `tests/test_llm_fix_write_gate.py` 钉住，改一边漏一边会红。
-_GENERATED_BANNER = "自动生成 (tool_uvm"
-_CUSTOM_MARKER = re.compile(r"^\s*//\s*pragma\s+custom\s+(\w+)\s+(begin|end)\s*$")
+# 写盘边界 —— **判据只有一处**（`generated_files`，L1）。
+#
+# 这里原来是**本模块私有的第二份实现**（`_GENERATED_BANNER` / `_CUSTOM_MARKER` /
+# `_skeleton` / `gated_write` 各写一遍）。而"同一件事有两份实现"正是这个会话里
+# 反复踩的那个病 —— 上一版只闸了本模块的一条写盘路径、漏了另一条，就是因为
+# 闸门被认为"是这里的东西"而不是"全项目的东西"。现在判据归 L1，这里只是别名，
+# 保证老调用点与既有测试的名字仍然可用。
+from src.layers.l1_infrastructure.generated_files import (  # noqa: E402
+    gated_write as _l1_gated_write,
+    is_generated as _is_generated_file,
+    REGION_MARKER as _CUSTOM_MARKER,
+    skeleton as _skeleton,
+)
 
 
-def _is_generated_file(text: str) -> bool:
-    """文件头是否带 `gen_uvm` 的生成 banner（只看前几行，别被正文里的字样骗到）。"""
-    return any(_GENERATED_BANNER in ln for ln in text.lstrip().splitlines()[:3])
-
-
-def _skeleton(text: str) -> str:
-    """**骨架** = 抹掉所有 `pragma custom` 区域**内容**后的文本（标记行保留）。
-
-    生成物的骨架是模板说了算的，**不属于**可以自由改写的部分；`pragma custom`
-    区域才是留给人的。改写后骨架应当逐字节不变 —— 这就是判据。
-    """
-    out, inside = [], False
-    for ln in text.splitlines():
-        m = _CUSTOM_MARKER.match(ln)
-        if m:
-            inside = m.group(2) == "begin"
-            out.append(ln)
-            continue
-        if not inside:
-            out.append(ln)
-    return "\n".join(out)
-
-
-def gated_write(fpath: Path, code: str) -> bool:
-    """**唯一的写盘出口** —— 生成物只许改 `pragma custom`，越界重写一律拒绝。
-
-    ## 为什么必须是"唯一出口"
-
-    这里原来有**两条**各自 `write_text` 的路径：
-
-      · `apply_llm_fixes`（**仿真**失败的修复）
-      · `llm_refine_compile_errors`（**编译**失败的修复）  ← 它自己的 `write_text`
-
-    第一版只闸了前者。实测立刻复现：编译失败 → 后者把 `apb_loopback_scb.sv`
-    **整份重写**（写出模板里根本不存在的 `compare_one`/`pstrb`），于是文件成了
-    模板与 LLM 输出的**混合体** → 编译报 `act.pstrb` 找不到 → `-mfcu` 连带整个
-    work 库的注册塌掉 → `[INVTST]` → loopback 挂 → 分级回归第一道门就断。
-
-    **教训**：闸门写在"某条路径里"等于没写 —— 漏一条就前功尽弃。所以收成这一个
-    函数，两条路径都调它；谁再直接 `write_text` 就是又开了一条暗路。
-
-    返回是否真的写了（False = 被拒绝，原文件未动）。
-    """
-    old = (fpath.read_text(encoding="utf-8", errors="replace")
-           if fpath.exists() else "")
-    if old and _is_generated_file(old) and _skeleton(old) != _skeleton(code):
-        logger.warning(
-            f"[LLM-fix] 拒绝整份重写生成物 {fpath.name}（骨架与模板不一致）"
-            f" —— 只允许改 pragma custom 区域；已保留原文")
-        return False
-    fpath.write_text(code, encoding="utf-8")
-    logger.info(f"[LLM-fix] wrote {fpath.name} ({len(code)} bytes)")
-    return True
+def gated_write(fpath, code: str) -> bool:
+    """本模块的写盘出口 —— **转调 L1 的唯一实现**（别再在这里写第二份判据）。"""
+    return _l1_gated_write(fpath, code, logger=logger)
 
 
 def apply_llm_fixes(llm_output: str, files_to_fix: dict) -> int:

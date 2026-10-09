@@ -1,6 +1,6 @@
 """casemodel 工具的 Agent 接入面 —— 三层包装（LangChain / ToolRegistry / ToolHub）。
 
-适配层在 `src/agents/verify/casemodel/`，工具本体在 `src/tools/casemodel_tools/`。
+适配层在 `src/executors/verify/casemodel/`，工具本体在 `src/tools/casemodel_tools/`。
 跨层集成测试放在仓库根的 tests/，工具自己的测试留在
 `src/tools/casemodel_tools/tests/`。
 
@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from src.agents.verify.casemodel import (RUNNERS, TOOL_GAPS, TOOL_GENERATE,
+from src.executors.verify.casemodel import (RUNNERS, TOOL_GAPS, TOOL_GENERATE,
                                          TOOL_NAMES, TOOL_VALIDATE,
                                          build_casemodel_tools,
                                          register_casemodel_tools, run_gaps,
                                          run_generate, run_validate, tool_specs)
-from src.agents.verify.casemodel.registry import ensure_casemodel_tool_registry
+from src.executors.verify.casemodel.registry import ensure_casemodel_tool_registry
 
 EXAMPLES = (Path(__file__).resolve().parent.parent / "config"
             / "casemodel" / "examples")
@@ -85,7 +85,7 @@ def test_runners_registry_covers_the_tool_names():
 # ════════════════════════════════════════════════════════════
 
 def test_langchain_tools_return_json_strings():
-    from src.agents.verify.casemodel.langchain_tools import (casemodel_gaps,
+    from src.executors.verify.casemodel.langchain_tools import (casemodel_gaps,
                                                                  casemodel_generate,
                                                                  casemodel_validate)
     assert json.loads(casemodel_validate(CPU_TEXT))["valid"] is True
@@ -95,13 +95,13 @@ def test_langchain_tools_return_json_strings():
 
 def test_langchain_tool_objects_are_callable():
     """垫片保证 langchain-core 1.x 下工具对象仍可直接调用。"""
-    from src.agents.verify.casemodel.langchain_tools import casemodel_validate
+    from src.executors.verify.casemodel.langchain_tools import casemodel_validate
     assert json.loads(casemodel_validate(CPU_TEXT))["valid"] is True
 
 
 def test_three_surfaces_agree():
     """同一个问题，三个面必须给同一个答案。"""
-    from src.agents.verify.casemodel.langchain_tools import (casemodel_gaps,
+    from src.executors.verify.casemodel.langchain_tools import (casemodel_gaps,
                                                                  casemodel_generate,
                                                                  casemodel_validate)
 
@@ -131,7 +131,7 @@ def test_declarative_registry_is_a_singleton():
 
 
 def test_agent_tools_registry_includes_casemodel():
-    from src.layers.l2_orchestration.agents.agent_tools import register_all_tools
+    from src.layers.l2_orchestration.executors.builtin_tools import register_all_tools
     reg = register_all_tools()
     assert {TOOL_VALIDATE, TOOL_GAPS, TOOL_GENERATE} <= set(reg._tools)
 
