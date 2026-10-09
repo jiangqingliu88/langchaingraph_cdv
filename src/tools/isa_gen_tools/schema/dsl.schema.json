@@ -1,0 +1,418 @@
+{
+  "$defs": {
+    "DslAlloc": {
+      "additionalProperties": false,
+      "description": "§3.12.7 的 `alloc` 条目 —— 本 case 必须驻留的一个对象。\n\n`exp_range` 是**指数安全域**（E1）：超限要自动缩放并重生成，\n所以它在这里声明，由 tensor_gen 消费（本工具只把它带进 `preload.json`）。",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "pool": {
+          "default": "",
+          "title": "Pool",
+          "type": "string"
+        },
+        "shape": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Shape",
+          "type": "array"
+        },
+        "dtype": {
+          "default": "",
+          "title": "Dtype",
+          "type": "string"
+        },
+        "pattern": {
+          "default": "",
+          "title": "Pattern",
+          "type": "string"
+        },
+        "exp_range": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exp Range"
+        },
+        "value_range": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Range"
+        },
+        "region": {
+          "default": "",
+          "title": "Region",
+          "type": "string"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "DslAlloc",
+      "type": "object"
+    },
+    "DslDram": {
+      "additionalProperties": false,
+      "description": "`resources.dram` —— 本 case 限定的 DRAM 范围。\n\n两种写法都认：`share: auto` 与 `share: [auto]`。文档的例子里\n`common: auto` 是标量、`share: [...]` 是列表 —— 同一段里两种形态并存，\n所以这里显式地把标量收成单元素列表，而不是让它俩分叉。",
+      "properties": {
+        "share": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Share",
+          "type": "array"
+        },
+        "common": {
+          "default": "auto",
+          "title": "Common",
+          "type": "string"
+        }
+      },
+      "title": "DslDram",
+      "type": "object"
+    },
+    "DslHarness": {
+      "additionalProperties": false,
+      "description": "第七段 —— 节奏参数（可选；回归时以 nightly 的配置为准）。",
+      "properties": {
+        "inst_agent": {
+          "$ref": "#/$defs/DslInstAgent"
+        }
+      },
+      "title": "DslHarness",
+      "type": "object"
+    },
+    "DslInstAgent": {
+      "additionalProperties": false,
+      "properties": {
+        "gap_mode": {
+          "default": "random",
+          "title": "Gap Mode",
+          "type": "string"
+        },
+        "gap_range": {
+          "default": [
+            0,
+            0
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "title": "Gap Range",
+          "type": "array"
+        },
+        "ready_throttle": {
+          "default": 0.0,
+          "title": "Ready Throttle",
+          "type": "number"
+        }
+      },
+      "title": "DslInstAgent",
+      "type": "object"
+    },
+    "DslIntent": {
+      "additionalProperties": false,
+      "description": "第五段 —— **L2 意图层**的旋钮（§3.9 的 L2 / §3.15）。\n\n这一层刻意只有这些\"软\"参数：缺口回灌只允许改这里，\n**不允许碰 L0（编码合法性、配对、对齐）**。所以它的字段都是比例/密度，\n没有任何一个能改变\"什么是一条合法指令\"。",
+      "properties": {
+        "hazard_density": {
+          "default": 0.0,
+          "title": "Hazard Density",
+          "type": "number"
+        },
+        "tile_contention": {
+          "default": 0.0,
+          "title": "Tile Contention",
+          "type": "number"
+        },
+        "mcast_mix": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Mcast Mix",
+          "type": "object"
+        },
+        "fence_every_n_epochs": {
+          "default": 0,
+          "title": "Fence Every N Epochs",
+          "type": "integer"
+        },
+        "illegal_ratio": {
+          "default": 0.0,
+          "title": "Illegal Ratio",
+          "type": "number"
+        }
+      },
+      "title": "DslIntent",
+      "type": "object"
+    },
+    "DslMeta": {
+      "additionalProperties": false,
+      "description": "第一段 —— 这份 case 是谁、用什么 seed、打哪个目标。",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seed"
+        },
+        "isa_rev": {
+          "default": "V0.8",
+          "title": "Isa Rev",
+          "type": "string"
+        },
+        "target": {
+          "default": "npu_subsystem_top",
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "DslMeta",
+      "type": "object"
+    },
+    "DslOrchestration": {
+      "additionalProperties": false,
+      "description": "第六段 —— L3 的时间窗编排。",
+      "properties": {
+        "epochs": {
+          "default": 1,
+          "title": "Epochs",
+          "type": "integer"
+        },
+        "epoch_boundary_sync": {
+          "default": "random",
+          "title": "Epoch Boundary Sync",
+          "type": "string"
+        }
+      },
+      "title": "DslOrchestration",
+      "type": "object"
+    },
+    "DslRegionPool": {
+      "additionalProperties": false,
+      "description": "§3.12.7 的可玩池定义 —— 从 memmap 的全局合法域里再切一块本 case 能用的。",
+      "properties": {
+        "regions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "domains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "tiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tiles"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        }
+      },
+      "title": "DslRegionPool",
+      "type": "object"
+    },
+    "DslResources": {
+      "additionalProperties": false,
+      "description": "第二段 —— 参与随机的资源。\n\n`cores` 限定 `6b_grp_mask` 的随机域（文档字段约定第 2 条）。",
+      "properties": {
+        "cores": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Cores",
+          "type": "array"
+        },
+        "spad_tiles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spad Tiles"
+        },
+        "cimc_pages": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cimc Pages"
+        },
+        "dram": {
+          "$ref": "#/$defs/DslDram"
+        },
+        "region_pools": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DslRegionPool"
+          },
+          "title": "Region Pools",
+          "type": "object"
+        },
+        "exclude": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclude",
+          "type": "array"
+        },
+        "overlap_ratio": {
+          "default": 0.0,
+          "title": "Overlap Ratio",
+          "type": "number"
+        }
+      },
+      "title": "DslResources",
+      "type": "object"
+    },
+    "DslTxnPool": {
+      "additionalProperties": false,
+      "description": "第三段 —— 事务池。**随机化的最小单元是事务**（§3.9），所以这里是事务名。",
+      "properties": {
+        "include": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Include",
+          "type": "array"
+        },
+        "weights": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Weights",
+          "type": "object"
+        }
+      },
+      "title": "DslTxnPool",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "一份完整的场景 DSL。",
+  "properties": {
+    "meta": {
+      "$ref": "#/$defs/DslMeta"
+    },
+    "resources": {
+      "$ref": "#/$defs/DslResources"
+    },
+    "txn_pool": {
+      "$ref": "#/$defs/DslTxnPool"
+    },
+    "shape_space": {
+      "additionalProperties": {
+        "items": {
+          "type": "integer"
+        },
+        "type": "array"
+      },
+      "title": "Shape Space",
+      "type": "object"
+    },
+    "precision_mix": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Precision Mix",
+      "type": "object"
+    },
+    "intent": {
+      "$ref": "#/$defs/DslIntent"
+    },
+    "orchestration": {
+      "$ref": "#/$defs/DslOrchestration"
+    },
+    "harness": {
+      "$ref": "#/$defs/DslHarness"
+    },
+    "alloc": {
+      "items": {
+        "$ref": "#/$defs/DslAlloc"
+      },
+      "title": "Alloc",
+      "type": "array"
+    }
+  },
+  "required": [
+    "meta"
+  ],
+  "title": "DslDocument",
+  "type": "object",
+  "$comment": "**由 domain/dsl.py 的 pydantic 模型生成，不要手改。** 改了模型跑 `python -m src.tools.isa_gen_tools.schema.gen_dsl_schema`；tests/test_schema.py 会断言这份文件与模型一致。"
+}

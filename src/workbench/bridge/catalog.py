@@ -131,6 +131,41 @@ BINDINGS: List[ToolBinding] = [
         doc="YAML → UVM 的 environment.tests 片段（一条 = 一个 UVM_TEST）",
     ),
 
+    # ══ 验证管理系统：ISA 激励生成 ═══════════════════════════════
+    # 场景 DSL → ISA 事务层 IR。前四个都是**纯的**（进 dict 出 dict，
+    # 不写盘不起子进程），所以界面上反复点也没代价；落盘那条单独标非纯。
+
+    ToolBinding(
+        name="isa_gen.validate",
+        target="src.tools.isa_gen_tools.api:run_validate",
+        kind="json",
+        doc="场景 DSL → schema 校验结果",
+    ),
+    ToolBinding(
+        name="isa_gen.compile",
+        target="src.tools.isa_gen_tools.api:run_compile",
+        kind="json",
+        doc="场景 DSL → IR（含地址分配 / preload / expect / 编译报告）",
+    ),
+    ToolBinding(
+        name="isa_gen.explain",
+        target="src.tools.isa_gen_tools.api:run_explain",
+        kind="json",
+        doc="注册表解读（同码碰撞 / 类前缀不符 / 文档与编码表的分歧）",
+    ),
+    ToolBinding(
+        name="isa_gen.ops",
+        target="src.tools.isa_gen_tools.api:run_ops",
+        kind="json",
+        doc="op 注册表清单",
+    ),
+    ToolBinding(
+        name="isa_gen.export",
+        target="src.tools.isa_gen_tools.export:write_artifacts",
+        kind="json", pure=False,
+        doc="按文档 §3.6 的布局落盘编译产物（**写盘**，必须显式触发）",
+    ),
+
     # ══ 覆盖率豁免（Exclude）══════════════════════════════════════
     # 提议由覆盖率阶段的"自动发现"在跑（`graph.py` 那句「已提议（待审批）」），
     # 但在此之前**只有 CLI** 能批（`vagent exclude approve`）—— 工作台里没有任何

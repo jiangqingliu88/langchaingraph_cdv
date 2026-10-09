@@ -1,0 +1,2718 @@
+{
+  "version": 1,
+  "source": "HM056_V2_ISA_Pre_Drv (1).xlsx",
+  "ops": [
+    {
+      "name": "group_mask_drv_xn",
+      "op_class": "control",
+      "isa_family": "nice",
+      "funct7": "000_0000",
+      "flags": [
+        0,
+        1,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{16_reseved, core_mask}",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "npu_cfg_drv_xn",
+      "op_class": "control",
+      "isa_family": "nice",
+      "funct7": "000_0001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "rs1val[31:16]: address of cfg_reg\nrs1val[15:0]: bits_val of cfg_reg",
+        "rs2val": "bits_valof cfg_reg"
+      },
+      "notes": ""
+    },
+    {
+      "name": "wr_lmem_drv_xn",
+      "op_class": "control",
+      "isa_family": "nice",
+      "funct7": "000_0010",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "【本核】 {14b_reseved, base_addr_lmem[17:0]}",
+        "rs2val": "Write_value"
+      },
+      "notes": ""
+    },
+    {
+      "name": "rd_lmem_drv_xn",
+      "op_class": "control",
+      "isa_family": "nice",
+      "funct7": "000_0011",
+      "flags": [
+        1,
+        1,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "read_value",
+        "rs1val": "【本核】 {14b_reseved, base_addr_lmem[17:0]}",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "fast_sync_drv_xn",
+      "op_class": "control",
+      "isa_family": "nice",
+      "funct7": "000_0100",
+      "flags": [
+        0,
+        0,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "/",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "sync_drv_xn",
+      "op_class": "control",
+      "isa_family": "nice",
+      "funct7": "000_0100",
+      "flags": [
+        1,
+        0,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "default:1",
+        "rs1val": "/",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "wr_lmem_drv_vn01",
+      "op_class": "control",
+      "isa_family": "vnice",
+      "funct7": "000_1000",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "【本核】   {6b_grp_mask, 8b_reseved, base_addr_lmem[17:0]}",
+        "rs2val": "【Write_value】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "wr_lmem_drv_vn11",
+      "op_class": "control",
+      "isa_family": "vnice",
+      "funct7": "000_1001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "【本核】 【{6b_grp_mask, 8b_reseved, base_addr_lmem[17:0]}】",
+        "rs2val": "【Write_value】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "rd_lmem_drv_vn01",
+      "op_class": "control",
+      "isa_family": "vnice",
+      "funct7": "000_1010",
+      "flags": [
+        1,
+        1,
+        0
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "【read_value】",
+        "rs1val": "【本核】   {6b_grp_mask, 8b_reseved, base_addr_lmem[17:0]}",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "rd_lmem_drv_vn11",
+      "op_class": "control",
+      "isa_family": "vnice",
+      "funct7": "000_1011",
+      "flags": [
+        1,
+        1,
+        0
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "【read_value】",
+        "rs1val": "【本核】 【{6b_grp_mask, 8b_reseved, base_addr_lmem[17:0]}】",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtld_drv_vn01",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "001_0100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核  {6b_grp_mask, 8b_reserved, base_addr_lmem[17:0]}",
+        "rs2val": "全局【base_addr_gdram[35:4]】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtld_drv_vn11",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "001_0101",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核【{6b_grp_mask, 8b_reserved, base_addr_lmem[17:0]}】",
+        "rs2val": "全局【base_addr_gdram[35:4]】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtst_drv_vn01",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "001_0110",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tst_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核  {6b_grp_mask, 8b_reserved, base_addr_lmem[17:0]}",
+        "rs2val": "全局【base_addr_gdram[35:4]】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtst_drv_vn11",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "001_0111",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tst_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核【{6b_grp_mask, 8b_reserved, base_addr_lmem[17:0]}】",
+        "rs2val": "全局【base_addr_gdram[35:4]】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtld_dram_drv_vn01",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "001_1000",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核  {6b_grp_mask, 1b_reserved, base_addr_ldram[28:4]}",
+        "rs2val": "全局【base_addr_gdram[35:4]】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtld_dram_drv_vn11",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "001_1001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核【{6b_grp_mask, 1b_reserved, base_addr_ldram[28:4]}】",
+        "rs2val": "全局【base_addr_gdram[35:4]】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtst_dram_drv_vn01",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "001_1010",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tst_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核  {6b_grp_mask, 1b_reserved, base_addr_ldram[28:4]}",
+        "rs2val": "全局【base_addr_gdram[35:4]】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtst_dram_drv_vn11",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "001_1011",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tst_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核【{6b_grp_mask, 1b_reserved, base_addr_ldram[28:4]}】",
+        "rs2val": "全局【base_addr_gdram[35:4]】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "ggat_d2d_drv_vn01",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "001_1100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "全局  {6b_grp_mask, 1b_reserved, base_addr_dst_dram[28:4]}",
+        "rs2val": "本核【{3b_reserved, base_addr_index_dram[28:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "ggat_d2d_drv_vn11",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "001_1101",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "全局【{6b_grp_mask, 1b_reserved, base_addr_dst_dram[28:4]}】",
+        "rs2val": "本核【{3b_reserved, base_addr_index_dram[28:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "die_cluster_pre_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0000",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "全局 {28b_reserved, base_addr_rs1[43:40]}",
+        "rs2val": "全局 {28b_reserved, base_addr_rs2[43:40]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtld_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {14b_reserved, base_addr_lmem[17:0]}",
+        "rs2val": "全局 base_addr_gdram[35:4]"
+      },
+      "notes": ""
+    },
+    {
+      "name": "tld_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {14b_reserved, base_addr_lmem[17:0]}",
+        "rs2val": "本核 {3b_reserved, base_addr_gmem[28:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gttld_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0010",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {14b_reserved, base_addr_lmem[17:0]}",
+        "rs2val": "全局 base_addr_gdram[35:4]"
+      },
+      "notes": ""
+    },
+    {
+      "name": "ttld_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0010",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {14b_reserved, base_addr_lmem[17:0]}",
+        "rs2val": "本核 {3b_reserved, base_addr_gmem[28:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtst_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0011",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tst_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {14b_reserved, base_addr_lmem[17:0]}",
+        "rs2val": "全局 base_addr_gdram[35:4]"
+      },
+      "notes": ""
+    },
+    {
+      "name": "tst_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0011",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tst_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {14b_reserved, base_addr_lmem[17:0]}",
+        "rs2val": "本核 {3b_reserved, base_addr_gmem[28:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gat_d2s_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {14b_reserved, base_addr_dst_spad[17:0]}",
+        "rs2val": "本核 {3b_reserved, base_addr_index_dram[28:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtld_dram_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "pre_drv",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {3b_reserved,  base_addr_ldram[28:0]}",
+        "rs2val": "全局 base_addr_gdram[35:4]"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gat_d2d_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0101",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {3b_reserved,  base_addr_dst_dram[28:0]}",
+        "rs2val": "本核 {3b_reserved, base_addr_index_dram[28:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gtst_dram_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0101",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tst_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {3b_reserved,  base_addr_ldram[28:0]}",
+        "rs2val": "全局 base_addr_gdram[35:4]"
+      },
+      "notes": ""
+    },
+    {
+      "name": "ggat_d2d_drv_xn",
+      "op_class": "glsu",
+      "isa_family": "nice",
+      "funct7": "010_0110",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "全局  base_addr_dst_dram[35:4]",
+        "rs2val": "本核 {3b_reserved, base_addr_index_dram[28:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "die_cluster_pre_vn11",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "010_0111",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "全局 【{6b_grp_mask, 14b_reserved，base_addr_rs1[35:29],\n       4b_reserved，base_addr_rs1[43:40]}】",
+        "rs2val": "全局【{28b_reserved, base_addr_rs2[43:40]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "tld_drv_vn01",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "010_1000",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核 {6b_grp_mask, 8b_reserved, base_addr_lmem[17:0]}",
+        "rs2val": "本核【{3b_reserved, base_addr_gmem[28:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "tld_drv_vn11",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "010_1001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核【{6b_grp_mask, 8b_reserved, base_addr_lmem[17:0]}】",
+        "rs2val": "本核【{3b_reserved, base_addr_gmem[28:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "tst_drv_vn01",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "010_1010",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tst_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核  {6b_grp_mask, 8b_reserved, base_addr_lmem[17:0]}",
+        "rs2val": "本核【{3b_reserved, base_addr_gmem[28:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "tst_drv_vn11",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "010_1011",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tst_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核【{6b_grp_mask, 8b_reserved, base_addr_lmem[17:0]}】",
+        "rs2val": "本核【{3b_reserved, base_addr_gmem[28:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gat_d2s_drv_vn01",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "010_1100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核  {6b_grp_mask, 8b_reserved, base_addr_dst_spad[17:0]}",
+        "rs2val": "本核【{3b_reserved, base_addr_index_dram[28:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gat_d2s_drv_vn11",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "010_1101",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核【{6b_grp_mask, 8b_reserved, base_addr_dst_spad[17:0]}】",
+        "rs2val": "本核【{3b_reserved, base_addr_index_dram[28:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gat_d2d_drv_vn01",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "010_1110",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核  {6b_grp_mask, 1b_reserved, base_addr_dst_dram[28:4]}",
+        "rs2val": "本核【{3b_reserved, base_addr_index_dram[28:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gat_d2d_drv_vn11",
+      "op_class": "glsu",
+      "isa_family": "vnice",
+      "funct7": "010_1111",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tld_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "本核【{6b_grp_mask, 1b_reserved, base_addr_dst_dram[28:4]}】",
+        "rs2val": "本核【{3b_reserved, base_addr_index_dram[28:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gemm_out_org_pre_xn",
+      "op_class": "mpu",
+      "isa_family": "nice",
+      "funct7": "100_0000",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "mpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "{6b_reseved,base_addr_orig[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gemm_out_sc_pre_xn",
+      "op_class": "mpu",
+      "isa_family": "nice",
+      "funct7": "100_0001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "mpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "{6b_reseved,base_addr_scale[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gemm_mx_sc_pre_xn",
+      "op_class": "mpu",
+      "isa_family": "nice",
+      "funct7": "100_0010",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "mpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_mx_in[17:0]}",
+        "rs2val": "{6b_reseved,base_addr_scale[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gemm_drv_xn",
+      "op_class": "mpu",
+      "isa_family": "nice",
+      "funct7": "100_0100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "pre_drv",
+      "cfg_required": "mpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_in[17:0]}",
+        "rs2val": "{6b_reseved,base_addr_wt[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gemm_acc_drv_xn",
+      "op_class": "mpu",
+      "isa_family": "nice",
+      "funct7": "100_0101",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "pre_drv",
+      "cfg_required": "mpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_in[17:0]}",
+        "rs2val": "{6b_reseved,base_addr_wt[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gemm_dq_drv_xn",
+      "op_class": "mpu",
+      "isa_family": "nice",
+      "funct7": "100_0110",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "pre_drv",
+      "cfg_required": "mpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_in[17:0]}",
+        "rs2val": "{6b_reseved,base_addr_wt[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "gemm_dq_acc_drv_xn",
+      "op_class": "mpu",
+      "isa_family": "nice",
+      "funct7": "100_0111",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "pre_drv",
+      "cfg_required": "mpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_in[17:0]}",
+        "rs2val": "{6b_reseved,base_addr_wt[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "noc_drv_dst_xn",
+      "op_class": "noc",
+      "isa_family": "nice",
+      "funct7": "001_0000",
+      "flags": [
+        0,
+        0,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "dst_src",
+      "cfg_required": "noc_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "/",
+        "rs2val": "{6b_reserved, base_addr_dst[43:40], base_addr_dst[21:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "noc_drv_src_xn",
+      "op_class": "noc",
+      "isa_family": "nice",
+      "funct7": "001_0000",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "noc_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{10b_reserved,            base_addr_src[43:40], base_addr_src[17:0]}",
+        "rs2val": "{6b_reserved, base_addr_dst[43:40], base_addr_dst[21:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "noc_drv_xn",
+      "op_class": "noc",
+      "isa_family": "nice",
+      "funct7": "001_0001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "noc_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{6b_reserved, 4b_src_core_id, base_addr[43:40], base_addr_src[17:0]}",
+        "rs2val": "{10b_reserved,                      base_addr_dst[21:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "fast_noc_fence_drv_xn",
+      "op_class": "noc",
+      "isa_family": "nice",
+      "funct7": "001_0010",
+      "flags": [
+        0,
+        0,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "/",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "noc_fence_drv_xn",
+      "op_class": "noc",
+      "isa_family": "nice",
+      "funct7": "001_0010",
+      "flags": [
+        1,
+        0,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "noc_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "defaut:1",
+        "rs1val": "/",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "noc_drv_vn11",
+      "op_class": "noc",
+      "isa_family": "vnice",
+      "funct7": "001_0011",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "noc_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "【{6b_grp_mask, base_addr_src[43:40], base_addr_src[17:0]}】",
+        "rs2val": "【{1b_src_dst_flag, base_addr_dst[43:40], base_addr_dst[21:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "noc_drv_vn01",
+      "op_class": "noc",
+      "isa_family": "vnice",
+      "funct7": "001_0100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "noc_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{6b_grp_mask, base_addr_src[43:40], base_addr_src[17:0]}",
+        "rs2val": "【{1b_src_dst_flag, base_addr_dst[43:40], base_addr_dst[21:0]}】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "batch_begin",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "concurrency",
+      "deferred": false,
+      "fields": {},
+      "notes": "同拍竞争窗口开始"
+    },
+    {
+      "name": "batch_end",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "concurrency",
+      "deferred": false,
+      "fields": {},
+      "notes": "同拍竞争窗口结束"
+    },
+    {
+      "name": "checkpoint",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "observe",
+      "deferred": false,
+      "fields": {},
+      "notes": "显式中态对拍点（快照动作，非判定）"
+    },
+    {
+      "name": "csr_read",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "config",
+      "deferred": false,
+      "fields": {},
+      "notes": "CSR 读"
+    },
+    {
+      "name": "csr_write",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "config",
+      "deferred": false,
+      "fields": {},
+      "notes": "CSR 写；dword 对齐"
+    },
+    {
+      "name": "dram_cfg",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "config",
+      "deferred": false,
+      "fields": {},
+      "notes": "DRAM 模型延迟与拥塞注入参数，运行期可调"
+    },
+    {
+      "name": "expect_idle",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "observe",
+      "deferred": false,
+      "fields": {},
+      "notes": "teardown 门禁：DUT 全部 master / 通道空闲"
+    },
+    {
+      "name": "expect_intr",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "observe",
+      "deferred": false,
+      "fields": {},
+      "notes": "中断断言：来源、时间窗、次数"
+    },
+    {
+      "name": "expect_perf",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "observe",
+      "deferred": false,
+      "fields": {},
+      "notes": "性能断言"
+    },
+    {
+      "name": "expect_rd",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "observe",
+      "deferred": false,
+      "fields": {},
+      "notes": "xd=1 返回值检查（rsp 口）"
+    },
+    {
+      "name": "expect_region",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "observe",
+      "deferred": false,
+      "fields": {},
+      "notes": "区域级中间态比对；**依赖 ISS 中途快照 A10**"
+    },
+    {
+      "name": "expect_write",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "observe",
+      "deferred": false,
+      "fields": {},
+      "notes": "binds/writes 允许写集合的在线核对"
+    },
+    {
+      "name": "intr_ack",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "config",
+      "deferred": false,
+      "fields": {},
+      "notes": "W1C 清中断；语义独立于普通写"
+    },
+    {
+      "name": "mem_init",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "data",
+      "deferred": false,
+      "fields": {},
+      "notes": "装载双通路：instr / backdoor"
+    },
+    {
+      "name": "mem_scrub",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "data",
+      "deferred": false,
+      "fields": {},
+      "notes": "强制 SRAM 清零或 pattern 填充，防 X 传播"
+    },
+    {
+      "name": "nop",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "timing",
+      "deferred": false,
+      "fields": {},
+      "notes": "序列级占位 / 对齐"
+    },
+    {
+      "name": "peer_cfg",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "config",
+      "deferred": false,
+      "fields": {},
+      "notes": "NoC Peer 参数（bresp_policy / err_inject / skew），运行期可调"
+    },
+    {
+      "name": "perf_window",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "observe",
+      "deferred": false,
+      "fields": {},
+      "notes": "性能统计窗口"
+    },
+    {
+      "name": "pwr_ctl",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "reserved",
+      "deferred": false,
+      "fields": {},
+      "notes": "上下电 / ICG；**A14 规格缺失，现阶段不允许进入回归**"
+    },
+    {
+      "name": "raw_cmd",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "escape",
+      "deferred": false,
+      "fields": {},
+      "notes": "直驱 CMD_SCH 口；仅负例，必须同轨配 expect_intr"
+    },
+    {
+      "name": "reset",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "reserved",
+      "deferred": false,
+      "fields": {},
+      "notes": "中程复位恢复；行为依赖 ISS-01"
+    },
+    {
+      "name": "signal_event",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "timing",
+      "deferred": false,
+      "fields": {},
+      "notes": "向事件池发信号"
+    },
+    {
+      "name": "spawn_async",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "concurrency",
+      "deferred": false,
+      "fields": {},
+      "notes": "后台长窗口活动"
+    },
+    {
+      "name": "wait_cycles",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "timing",
+      "deferred": false,
+      "fields": {},
+      "notes": "推进 N 拍；与 nop 不等价"
+    },
+    {
+      "name": "wait_done",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "timing",
+      "deferred": false,
+      "fields": {},
+      "notes": "等某个 tag 完成"
+    },
+    {
+      "name": "wait_event",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "timing",
+      "deferred": false,
+      "fields": {},
+      "notes": "等事件池里的信号"
+    },
+    {
+      "name": "watchdog",
+      "op_class": "op",
+      "isa_family": "nice",
+      "funct7": "",
+      "flags": null,
+      "opcode": "",
+      "role": "lone",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "timing",
+      "deferred": false,
+      "fields": {},
+      "notes": "分段超时，后随直至标签；超时判失败"
+    },
+    {
+      "name": "bc_drv_xn",
+      "op_class": "tmv",
+      "isa_family": "nice",
+      "funct7": "011_0000",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tmu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved, base_addr_out[17:0]}",
+        "rs2val": "scalar_in"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vbc_drv_xn",
+      "op_class": "tmv",
+      "isa_family": "nice",
+      "funct7": "011_0001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tmu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved, base_addr_out[17:0]}",
+        "rs2val": "{14b_reseved, base_addr_in[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "trans_vbc_drv_xn",
+      "op_class": "tmv",
+      "isa_family": "nice",
+      "funct7": "011_0010",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved, base_addr_out[17:0]}",
+        "rs2val": "{14b_reseved, base_addr_in[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "tmov_drv_xn",
+      "op_class": "tmv",
+      "isa_family": "nice",
+      "funct7": "011_0011",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tmu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved, base_addr_out[17:0]}",
+        "rs2val": "{14b_reseved, base_addr_in[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "ttmov_drv_xn",
+      "op_class": "tmv",
+      "isa_family": "nice",
+      "funct7": "011_0100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved, base_addr_out[17:0]}",
+        "rs2val": "{14b_reseved, base_addr_in[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "setCIMExp_xn",
+      "op_class": "tmv",
+      "isa_family": "nice",
+      "funct7": "011_0101",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tmu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved, base_addr_cim_out[17:0]}",
+        "rs2val": "{14b_reseved, base_addr_spad_in[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "getCIMExp_xn",
+      "op_class": "tmv",
+      "isa_family": "nice",
+      "funct7": "011_0110",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tmu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved, base_addr_spad_out[17:0]}",
+        "rs2val": "{14b_reseved, base_addr_cim_in[17:0]}"
+      },
+      "notes": ""
+    },
+    {
+      "name": "bc_drv_vn01",
+      "op_class": "tmv",
+      "isa_family": "vnice",
+      "funct7": "011_1000",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tmu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "6b_grp_mask, 8b_reseved,  base_addr_out[17:0]",
+        "rs2val": "【scalar_in】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "bc_drv_vn11",
+      "op_class": "tmv",
+      "isa_family": "vnice",
+      "funct7": "011_1001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "tmu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "【6b_grp_mask, 8b_reseved,  base_addr_out[17:0]】",
+        "rs2val": "【scalar_in】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vv_v_drv_vn01",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "100_1000",
+      "flags": [
+        0,
+        1,
+        0
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "VV_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "6b_grp_mask, 8b_reseved, base_addr_out[17:0]",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vv_v_drv_vn11",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "100_1001",
+      "flags": [
+        0,
+        1,
+        0
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "VV_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "【6b_grp_mask, 8b_reseved, base_addr_out[17:0]】",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vs_v_drv_vn01",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "100_1010",
+      "flags": [
+        0,
+        1,
+        0
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "VS_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "6b_grp_mask, 8b_reseved, base_addr_out[17:0]",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vs_v_drv_vn11",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "100_1011",
+      "flags": [
+        0,
+        1,
+        0
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "VS_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "【6b_grp_mask, 8b_reseved, base_addr_out[17:0]】",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vss_v_drv_vn01",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "100_1100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "VS_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "6b_grp_mask, 8b_reseved, base_addr_out[17:0]",
+        "rs2val": "【scalar_in2】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vss_v_drv_vn11",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "100_1101",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "VS_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "【6b_grp_mask, 8b_reseved, base_addr_out[17:0]】",
+        "rs2val": "【scalar_in2】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v1v2_pre_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_0000",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_in1[17:0]}",
+        "rs2val": "base_addr_in2[17:0]"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v1s1_pre_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_0001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_in1[17:0]}",
+        "rs2val": "scalar_in1"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v2s2_pre_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_0010",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_in2[17:0]}",
+        "rs2val": "scalar_in2"
+      },
+      "notes": ""
+    },
+    {
+      "name": "f2m_pre_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_0011",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out2[17:0]}",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v1v2_pre_vn01",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "101_0100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "6b_grp_mask, 8b_reseved, base_addr_in1[17:0]",
+        "rs2val": "【base_addr_in2[17:0]】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v1v2_pre_vn11",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "101_0101",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "【6b_grp_mask, 8b_reseved, base_addr_in1[17:0]】",
+        "rs2val": "【base_addr_in2[17:0]】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v1s1_pre_vn01",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "101_0110",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "6b_grp_mask, 8b_reseved, base_addr_in1[17:0]",
+        "rs2val": "【scalar_in1】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v1s1_pre_vn11",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "101_0111",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "101011",
+      "role": "pre",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "【6b_grp_mask, 8b_reseved, base_addr_in1[17:0]】",
+        "rs2val": "【scalar_in1】"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vv_v_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1000",
+      "flags": [
+        0,
+        1,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "pre_drv",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "VV_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vvv_v_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1000",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "pre_drv",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "VV_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "base_addr_in3[17:0]"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vs_v_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1001",
+      "flags": [
+        0,
+        1,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "pre_drv",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "VS_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vvs_v_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1001",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "VS_V",
+      "deferred": true,
+      "fields": {
+        "rdval": "",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "scalar_in1"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vssv_v_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1010",
+      "flags": [
+        0,
+        1,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "VS_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vss_v_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1010",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "pre_drv",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "VS_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "scalar_in2"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v_s_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1010",
+      "flags": [
+        1,
+        1,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "pre_drv",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "V_S",
+      "deferred": false,
+      "fields": {
+        "rdval": "scalar_out",
+        "rs1val": "{14b_reseved,base_addr_in1[17:0]}",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "vs_vv_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1011",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "VS_V",
+      "deferred": true,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "base_addr_out2[17:0]"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v_ss2_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1011",
+      "flags": [
+        1,
+        0,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "V_S",
+      "deferred": true,
+      "fields": {
+        "rdval": "scalar_out2",
+        "rs1val": "/",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v_ss1_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1011",
+      "flags": [
+        1,
+        1,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "V_S",
+      "deferred": true,
+      "fields": {
+        "rdval": "scalar_out",
+        "rs1val": "base_addr_in1[17:0]",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v_v_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1100",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "global",
+      "sub_family": "V_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "base_addr_in1[17:0]"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v_s_drv_vn01",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "101_1100",
+      "flags": [
+        1,
+        1,
+        0
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "V_S",
+      "deferred": false,
+      "fields": {
+        "rdval": "scalar_out",
+        "rs1val": "6b_grp_mask, 8b_reseved, base_addr_in1[17:0]",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "mv_m_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1101",
+      "flags": [
+        0,
+        1,
+        0
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "MV_M",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "m_v_drv_xn",
+      "op_class": "vpu",
+      "isa_family": "nice",
+      "funct7": "101_1101",
+      "flags": [
+        0,
+        1,
+        1
+      ],
+      "opcode": "1011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "",
+      "mask_semantics": "global",
+      "sub_family": "M_V",
+      "deferred": false,
+      "fields": {
+        "rdval": "/",
+        "rs1val": "{14b_reseved,base_addr_out[17:0]}",
+        "rs2val": "base_addr_in1[17:0]"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v_s_drv_vn11",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "101_1101",
+      "flags": [
+        1,
+        1,
+        0
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "V_S",
+      "deferred": false,
+      "fields": {
+        "rdval": "scalar_out",
+        "rs1val": "【6b_grp_mask, 8b_reseved, base_addr_in1[17:0]】",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v_ss1_drv_vn01",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "101_1110",
+      "flags": [
+        1,
+        1,
+        0
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "V_S",
+      "deferred": true,
+      "fields": {
+        "rdval": "scalar_out",
+        "rs1val": "6b_grp_mask, 8b_reseved, base_addr_in1[17:0]",
+        "rs2val": "/"
+      },
+      "notes": ""
+    },
+    {
+      "name": "v_ss1_drv_vn11",
+      "op_class": "vpu",
+      "isa_family": "vnice",
+      "funct7": "101_1111",
+      "flags": [
+        1,
+        1,
+        0
+      ],
+      "opcode": "101011",
+      "role": "drv",
+      "pairing": "none",
+      "cfg_required": "vpu_cfg",
+      "mask_semantics": "inline",
+      "sub_family": "V_S",
+      "deferred": true,
+      "fields": {
+        "rdval": "scalar_out",
+        "rs1val": "【6b_grp_mask, 8b_reseved, base_addr_in1[17:0]】",
+        "rs2val": "/"
+      },
+      "notes": ""
+    }
+  ]
+}

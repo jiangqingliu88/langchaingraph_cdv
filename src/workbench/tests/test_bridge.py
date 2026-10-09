@@ -52,6 +52,8 @@ class TestCatalog:
                           # 生成覆盖率报告：**写盘**（报告落在覆盖率库旁边），
                           # 而且要起一个 vcover 子进程。它总是由"点那一格"显式触发。
                           "flow.coverage_report",
+                          # ISA 产物落盘：**写盘**，必须显式触发
+                          "isa_gen.export",
                           "pipeline.answer_approval", "pipeline.approval_handler",
                           "pipeline.cancel", "pipeline.resume", "pipeline.start"]
 
