@@ -2,8 +2,8 @@
   "q": {
     "cov:below_80|reason:none|sugg:none::RETRY_ENV": 7.601161500000002,
     "cov:below_80|reason:none|sugg:none::FIX_COMPILE_bug": 7.247012228012076,
-    "cov:below_80|reason:none|sugg:none::GENERATE_DIRECTED_TEST": 1.7609634408861856,
-    "cov:below_80|reason:none|sugg:none::FIX_FUNCTIONAL_bug": 4.2028888418508945,
+    "cov:below_80|reason:none|sugg:none::GENERATE_DIRECTED_TEST": 2.300388898670657,
+    "cov:below_80|reason:none|sugg:none::FIX_FUNCTIONAL_bug": 3.3958620827375543,
     "cov:80_target|reason:none|sugg:none::EXPAND_SEEDS": -26.4,
     "cov:80_target|reason:none|sugg:none::RELAX_CONSTRAINT": 2.6741702062853054,
     "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::GENERATE_DIRECTED_TEST": -8.634954144814268,

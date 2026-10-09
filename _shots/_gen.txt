@@ -1,9 +1,0 @@
-[settings] WARNING: PLATFORM_JWT_SECRET Œ¥…Ë÷√
-Failed to load plugin from slack_notifier.py: attempted relative import with no known parent package
-Failed to load plugin from slack_notifier.py: attempted relative import with no known parent package
-Failed to load plugin from slack_notifier.py: attempted relative import with no known parent package
-regenerated: D:\SignOffAI\_scratch_cov\inputs\yaml\regression.yaml
-modes=None MODE_OPTS=None cov_enabled=None
-modes=['cov'] MODE_OPTS='-coverage -coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME} -testname ${EMAN_TEST_NAME}' cov_enabled=1
-modes=['wave'] MODE_OPTS='-wlf ${EMAN_RUN_DIR}/waves/${EMAN_TEST_NAME}.wlf' cov_enabled=None
-tests: ['test_apb_uart_APB_basic', 'test_apb_uart_UART_basic', 'test_apb_uart_FIFO_basic', 'test_apb_uart_case_basic', 'test_dut_throughput', 'test_apb_uart_throughput'] ... 27

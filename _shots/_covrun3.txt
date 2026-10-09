@@ -1,401 +1,0 @@
-[settings] WARNING: PLATFORM_JWT_SECRET 未设置
-Failed to load plugin from slack_notifier.py: attempted relative import with no known parent package
-2026-10-07 04:55:21 [info     ] 仿真业务模式: ['cov'] → MODE_OPTS=-coverage -coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME} -testname ${EMAN_TEST_NAME}
-2026-10-07 04:55:21 [debug    ] 跳过无 test 声明的 build: apb_uart_apb_agent_loopback
-2026-10-07 04:55:21 [debug    ] 跳过无 test 声明的 build: apb_uart_intr_agent_loopback
-2026-10-07 04:55:21 [debug    ] 跳过无 test 声明的 build: apb_uart_uart_agent_loopback
-2026-10-07 04:55:21 [debug    ] 跳过无 test 声明的 build: multi_step_build
-2026-10-07 04:55:21 [debug    ] 跳过无 test 声明的 build: sc_three_step_build
-2026-10-07 04:55:21 [debug    ] 跳过无 test 声明的 build: sig_step_build
-2026-10-07 04:55:21 [debug    ] 跳过无 test 声明的 build: vpu_multi_step_build
-Building:   0%|          | 0/1 [00:00<?, ?build/s]QuestaSim-64 vlog 2024.1 Compiler 2024.02 Feb  1 2024
-Start time: 04:55:21 on Oct 07,2026
-vlog -work D:/SignOffAI/_scratch_cov/build/work -sv -mfcu "+incdir+f:/questasim64_2024.1/verilog_src/uvm-1.2/src" f:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv -f D:/SignOffAI/_scratch_cov/inputs/filelists/filelist.f "+cover" 
-** Error: (vlog-66) Execution of vlib.exe failed.
-** Error: (vlib-35) Failed to create directory "D:/SignOffAI/_scratch_cov/build/work".
-No such file or directory. (errno = ENOENT)
-Errors: 1, Warnings: 0
-End time: 04:55:22 on Oct 07,2026, Elapsed time: 0:00:01
-Errors: 1, Warnings: 0
-Script failed with exit code 5
-Building:   0%|          | 0/1 [00:00<?, ?build/s, pass=0, fail=1, unknown=0]Building: 100%|██████████| 1/1 [00:00<00:00,  1.94build/s, pass=0, fail=1, unknown=0]Building: 100%|██████████| 1/1 [00:00<00:00,  1.94build/s, pass=0, fail=1, unknown=0]
-Testing:   0%|          | 0/27 [00:00<?, ?test/s]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_gen_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_apb_uart_gen_stimulus/cov/apb_uart_gen_stimulus -testname apb_uart_gen_stimulus 
-# Start time: 04:55:26 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_apb_uart_gen_stimulus/cov/apb_uart_gen_stimulus ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_apb_uart_gen_stimulus/cov/apb_uart_gen_stimulus ...
-# End time: 04:55:26 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:   0%|          | 0/27 [00:04<?, ?test/s, pass=1, fail=0, unknown=0]Testing:   4%|▎         | 1/27 [00:04<02:01,  4.67s/test, pass=1, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_loopback/cov/test_apb_loopback -testname test_apb_loopback 
-# Start time: 04:55:27 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_loopback/cov/test_apb_loopback ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_loopback/cov/test_apb_loopback ...
-# End time: 04:55:27 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:   4%|▎         | 1/27 [00:05<02:01,  4.67s/test, pass=2, fail=0, unknown=0]Testing:   7%|▋         | 2/27 [00:05<01:06,  2.65s/test, pass=2, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_master_loopback/cov/test_apb_master_loopback -testname test_apb_master_loopback 
-# Start time: 04:55:28 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_master_loopback/cov/test_apb_master_loopback ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_master_loopback/cov/test_apb_master_loopback ...
-# End time: 04:55:28 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:   7%|▋         | 2/27 [00:07<01:06,  2.65s/test, pass=3, fail=0, unknown=0]Testing:  11%|█         | 3/27 [00:07<00:48,  2.03s/test, pass=3, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_APB_basic/cov/test_apb_uart_APB_basic -testname test_apb_uart_APB_basic 
-# Start time: 04:55:29 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_APB_basic/cov/test_apb_uart_APB_basic ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_APB_basic/cov/test_apb_uart_APB_basic ...
-# End time: 04:55:30 on Oct 07,2026, Elapsed time: 0:00:01
-# Errors: 1, Warnings: 0
-Testing:  11%|█         | 3/27 [00:08<00:48,  2.03s/test, pass=4, fail=0, unknown=0]Testing:  15%|█▍        | 4/27 [00:08<00:39,  1.70s/test, pass=4, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_FIFO_basic/cov/test_apb_uart_FIFO_basic -testname test_apb_uart_FIFO_basic 
-# Start time: 04:55:31 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_FIFO_basic/cov/test_apb_uart_FIFO_basic ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_FIFO_basic/cov/test_apb_uart_FIFO_basic ...
-# End time: 04:55:31 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  15%|█▍        | 4/27 [00:09<00:39,  1.70s/test, pass=5, fail=0, unknown=0]Testing:  19%|█▊        | 5/27 [00:09<00:33,  1.53s/test, pass=5, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_UART_basic/cov/test_apb_uart_UART_basic -testname test_apb_uart_UART_basic 
-# Start time: 04:55:32 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_UART_basic/cov/test_apb_uart_UART_basic ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_UART_basic/cov/test_apb_uart_UART_basic ...
-# End time: 04:55:32 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  19%|█▊        | 5/27 [00:10<00:33,  1.53s/test, pass=6, fail=0, unknown=0]Testing:  22%|██▏       | 6/27 [00:10<00:29,  1.41s/test, pass=6, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_case_basic/cov/test_apb_uart_case_basic -testname test_apb_uart_case_basic 
-# Start time: 04:55:33 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_case_basic/cov/test_apb_uart_case_basic ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_case_basic/cov/test_apb_uart_case_basic ...
-# End time: 04:55:33 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  22%|██▏       | 6/27 [00:11<00:29,  1.41s/test, pass=7, fail=0, unknown=0]Testing:  26%|██▌       | 7/27 [00:11<00:26,  1.31s/test, pass=7, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_error_injection/cov/test_apb_uart_error_injection -testname test_apb_uart_error_injection 
-# Start time: 04:55:34 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_error_injection/cov/test_apb_uart_error_injection ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_error_injection/cov/test_apb_uart_error_injection ...
-# End time: 04:55:34 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  26%|██▌       | 7/27 [00:13<00:26,  1.31s/test, pass=8, fail=0, unknown=0]Testing:  30%|██▉       | 8/27 [00:13<00:24,  1.28s/test, pass=8, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_irq_handshake/cov/test_apb_uart_irq_handshake -testname test_apb_uart_irq_handshake 
-# Start time: 04:55:35 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_irq_handshake/cov/test_apb_uart_irq_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_irq_handshake/cov/test_apb_uart_irq_handshake ...
-# End time: 04:55:35 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  30%|██▉       | 8/27 [00:14<00:24,  1.28s/test, pass=9, fail=0, unknown=0]Testing:  33%|███▎      | 9/27 [00:14<00:22,  1.26s/test, pass=9, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_paddr_handshake/cov/test_apb_uart_paddr_handshake -testname test_apb_uart_paddr_handshake 
-# Start time: 04:55:36 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_paddr_handshake/cov/test_apb_uart_paddr_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_paddr_handshake/cov/test_apb_uart_paddr_handshake ...
-# End time: 04:55:37 on Oct 07,2026, Elapsed time: 0:00:01
-# Errors: 1, Warnings: 0
-Testing:  33%|███▎      | 9/27 [00:15<00:22,  1.26s/test, pass=10, fail=0, unknown=0]Testing:  37%|███▋      | 10/27 [00:15<00:20,  1.23s/test, pass=10, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_pclk_handshake/cov/test_apb_uart_pclk_handshake -testname test_apb_uart_pclk_handshake 
-# Start time: 04:55:38 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_pclk_handshake/cov/test_apb_uart_pclk_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_pclk_handshake/cov/test_apb_uart_pclk_handshake ...
-# End time: 04:55:38 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  37%|███▋      | 10/27 [00:16<00:20,  1.23s/test, pass=11, fail=0, unknown=0]Testing:  41%|████      | 11/27 [00:16<00:19,  1.22s/test, pass=11, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_penable_handshake/cov/test_apb_uart_penable_handshake -testname test_apb_uart_penable_handshake 
-# Start time: 04:55:39 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_penable_handshake/cov/test_apb_uart_penable_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_penable_handshake/cov/test_apb_uart_penable_handshake ...
-# End time: 04:55:39 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  41%|████      | 11/27 [00:17<00:19,  1.22s/test, pass=12, fail=0, unknown=0]Testing:  44%|████▍     | 12/27 [00:17<00:17,  1.20s/test, pass=12, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_prdata_handshake/cov/test_apb_uart_prdata_handshake -testname test_apb_uart_prdata_handshake 
-# Start time: 04:55:40 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_prdata_handshake/cov/test_apb_uart_prdata_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_prdata_handshake/cov/test_apb_uart_prdata_handshake ...
-# End time: 04:55:40 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  44%|████▍     | 12/27 [00:19<00:17,  1.20s/test, pass=13, fail=0, unknown=0]Testing:  48%|████▊     | 13/27 [00:19<00:16,  1.20s/test, pass=13, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_preset_n_handshake/cov/test_apb_uart_preset_n_handshake -testname test_apb_uart_preset_n_handshake 
-# Start time: 04:55:41 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_preset_n_handshake/cov/test_apb_uart_preset_n_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_preset_n_handshake/cov/test_apb_uart_preset_n_handshake ...
-# End time: 04:55:41 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  48%|████▊     | 13/27 [00:20<00:16,  1.20s/test, pass=14, fail=0, unknown=0]Testing:  52%|█████▏    | 14/27 [00:20<00:15,  1.21s/test, pass=14, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_psel_handshake/cov/test_apb_uart_psel_handshake -testname test_apb_uart_psel_handshake 
-# Start time: 04:55:42 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_psel_handshake/cov/test_apb_uart_psel_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_psel_handshake/cov/test_apb_uart_psel_handshake ...
-# End time: 04:55:43 on Oct 07,2026, Elapsed time: 0:00:01
-# Errors: 1, Warnings: 0
-Testing:  52%|█████▏    | 14/27 [00:21<00:15,  1.21s/test, pass=15, fail=0, unknown=0]Testing:  56%|█████▌    | 15/27 [00:21<00:14,  1.20s/test, pass=15, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_pwdata_handshake/cov/test_apb_uart_pwdata_handshake -testname test_apb_uart_pwdata_handshake 
-# Start time: 04:55:44 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_pwdata_handshake/cov/test_apb_uart_pwdata_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_pwdata_handshake/cov/test_apb_uart_pwdata_handshake ...
-# End time: 04:55:44 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  56%|█████▌    | 15/27 [00:22<00:14,  1.20s/test, pass=16, fail=0, unknown=0]Testing:  59%|█████▉    | 16/27 [00:22<00:13,  1.20s/test, pass=16, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_pwrite_handshake/cov/test_apb_uart_pwrite_handshake -testname test_apb_uart_pwrite_handshake 
-# Start time: 04:55:45 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_pwrite_handshake/cov/test_apb_uart_pwrite_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_pwrite_handshake/cov/test_apb_uart_pwrite_handshake ...
-# End time: 04:55:45 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  59%|█████▉    | 16/27 [00:23<00:13,  1.20s/test, pass=17, fail=0, unknown=0]Testing:  63%|██████▎   | 17/27 [00:23<00:11,  1.20s/test, pass=17, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_reset/cov/test_apb_uart_reset -testname test_apb_uart_reset 
-# Start time: 04:55:46 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_reset/cov/test_apb_uart_reset ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_reset/cov/test_apb_uart_reset ...
-# End time: 04:55:46 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  63%|██████▎   | 17/27 [00:25<00:11,  1.20s/test, pass=18, fail=0, unknown=0]Testing:  67%|██████▋   | 18/27 [00:25<00:10,  1.20s/test, pass=18, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_rx_handshake/cov/test_apb_uart_rx_handshake -testname test_apb_uart_rx_handshake 
-# Start time: 04:55:47 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_rx_handshake/cov/test_apb_uart_rx_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_rx_handshake/cov/test_apb_uart_rx_handshake ...
-# End time: 04:55:47 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  67%|██████▋   | 18/27 [00:26<00:10,  1.20s/test, pass=19, fail=0, unknown=0]Testing:  70%|███████   | 19/27 [00:26<00:09,  1.22s/test, pass=19, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_throughput/cov/test_apb_uart_throughput -testname test_apb_uart_throughput 
-# Start time: 04:55:48 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_throughput/cov/test_apb_uart_throughput ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_throughput/cov/test_apb_uart_throughput ...
-# End time: 04:55:49 on Oct 07,2026, Elapsed time: 0:00:01
-# Errors: 1, Warnings: 0
-Testing:  70%|███████   | 19/27 [00:27<00:09,  1.22s/test, pass=20, fail=0, unknown=0]Testing:  74%|███████▍  | 20/27 [00:27<00:08,  1.22s/test, pass=20, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_tx_handshake/cov/test_apb_uart_tx_handshake -testname test_apb_uart_tx_handshake 
-# Start time: 04:55:50 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_tx_handshake/cov/test_apb_uart_tx_handshake ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_apb_uart_tx_handshake/cov/test_apb_uart_tx_handshake ...
-# End time: 04:55:50 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  74%|███████▍  | 20/27 [00:28<00:08,  1.22s/test, pass=21, fail=0, unknown=0]Testing:  78%|███████▊  | 21/27 [00:28<00:07,  1.21s/test, pass=21, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_demo_in_loopback/cov/test_demo_in_loopback -testname test_demo_in_loopback 
-# Start time: 04:55:51 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_demo_in_loopback/cov/test_demo_in_loopback ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_demo_in_loopback/cov/test_demo_in_loopback ...
-# End time: 04:55:51 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  78%|███████▊  | 21/27 [00:29<00:07,  1.21s/test, pass=22, fail=0, unknown=0]Testing:  81%|████████▏ | 22/27 [00:29<00:05,  1.19s/test, pass=22, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_error_injection/cov/test_dut_error_injection -testname test_dut_error_injection 
-# Start time: 04:55:52 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_error_injection/cov/test_dut_error_injection ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_error_injection/cov/test_dut_error_injection ...
-# End time: 04:55:52 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  81%|████████▏ | 22/27 [00:31<00:05,  1.19s/test, pass=23, fail=0, unknown=0]Testing:  85%|████████▌ | 23/27 [00:31<00:04,  1.19s/test, pass=23, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_in_loopback/cov/test_dut_in_loopback -testname test_dut_in_loopback 
-# Start time: 04:55:53 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_in_loopback/cov/test_dut_in_loopback ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_in_loopback/cov/test_dut_in_loopback ...
-# End time: 04:55:53 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  85%|████████▌ | 23/27 [00:32<00:04,  1.19s/test, pass=24, fail=0, unknown=0]Testing:  89%|████████▉ | 24/27 [00:32<00:03,  1.20s/test, pass=24, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_reset/cov/test_dut_reset -testname test_dut_reset 
-# Start time: 04:55:54 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_reset/cov/test_dut_reset ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_reset/cov/test_dut_reset ...
-# End time: 04:55:55 on Oct 07,2026, Elapsed time: 0:00:01
-# Errors: 1, Warnings: 0
-Testing:  89%|████████▉ | 24/27 [00:33<00:03,  1.20s/test, pass=25, fail=0, unknown=0]Testing:  93%|█████████▎| 25/27 [00:33<00:02,  1.18s/test, pass=25, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_throughput/cov/test_dut_throughput -testname test_dut_throughput 
-# Start time: 04:55:56 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_throughput/cov/test_dut_throughput ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_dut_throughput/cov/test_dut_throughput ...
-# End time: 04:55:56 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  93%|█████████▎| 25/27 [00:34<00:02,  1.18s/test, pass=26, fail=0, unknown=0]Testing:  96%|█████████▋| 26/27 [00:34<00:01,  1.18s/test, pass=26, fail=0, unknown=0]Reading pref.tcl
-
-# 2024.1
-
-# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/_scratch_cov/build/work apb_uart_bench_bench_tb_top "+UVM_TESTNAME=apb_uart_env_directed_test" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_uart_loopback/cov/test_uart_loopback -testname test_uart_loopback 
-# Start time: 04:55:57 on Oct 07,2026
-# ** Error (suppressible): (vsim-19) Failed to access library 'D:/SignOffAI/_scratch_cov/build/work' at "D:/SignOffAI/_scratch_cov/build/work".
-# No such file or directory. (errno = ENOENT)
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_uart_loopback/cov/test_uart_loopback ...
-# Error loading design
-Error loading design
-# Saving coverage data in D:/SignOffAI/_scratch_cov/regression_run/build_build_apb_uart_dut/test_test_uart_loopback/cov/test_uart_loopback ...
-# End time: 04:55:57 on Oct 07,2026, Elapsed time: 0:00:00
-# Errors: 1, Warnings: 0
-Testing:  96%|█████████▋| 26/27 [00:35<00:01,  1.18s/test, pass=27, fail=0, unknown=0]Testing: 100%|██████████| 27/27 [00:35<00:00,  1.17s/test, pass=27, fail=0, unknown=0]Testing: 100%|██████████| 27/27 [00:35<00:00,  1.32s/test, pass=27, fail=0, unknown=0]
-RESULT: {'status': 'FAIL', 'passed': 27, 'failed': 1, 'unknown': 0, 'total': 28, 'total_tests': 27, 'error': None}

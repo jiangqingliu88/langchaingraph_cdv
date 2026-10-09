@@ -1,7 +1,0 @@
-[settings] WARNING: PLATFORM_JWT_SECRET 未设置
-Failed to load plugin from slack_notifier.py: attempted relative import with no known parent package
---enable cov: modes 里没有登记，且不存在同名变量，忽略（可用的 mode: 无）
-2026-10-07 04:54:24 [info     ] 仿真业务模式: ['cov'] → MODE_OPTS=
-2026-10-07 04:54:24 [debug    ] 跳过无 test 声明的 build: apb_uart_apb_loopback
-2026-10-07 04:54:24 [debug    ] 跳过无 test 声明的 build: apb_uart_uart_loopback
-RESULT: {'status': 'FAIL', 'passed': 0, 'failed': 0, 'total': 0, 'total_tests': 0, 'error': None}
