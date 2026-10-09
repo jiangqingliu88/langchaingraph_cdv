@@ -102,6 +102,9 @@ def _spec_from_dict(entry: Dict[str, Any], source: Any) -> OpSpec:
             sub_family=str(entry.get("sub_family", "") or ""),
             deferred=bool(entry.get("deferred", False)),
             notes=str(entry.get("notes", "") or ""),
+            # 编码表 rdval/rs1val/rs2val 三列的原文 —— 原样带过。
+            # **结构化解读不在这里**：仓储层只读文件，解释归 `domain/operands.py`
+            fields={k: str(v) for k, v in (entry.get("fields") or {}).items()},
         )
     except ValueError as exc:
         raise RegistryError(f"{name} 的字段取值不认识：{exc}", target=name,

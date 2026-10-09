@@ -21,9 +21,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from ..domain import (IrInstruction, OpRegistry, Operands, Flags, Transaction,
-                      UnresolvedRefError,
-                      TransactionRegistry, TxnSpec, build_transaction)
+from ..domain import (AllocError, IrInstruction, OpRegistry, OperandUnsupportedError,
+                      Operands, Flags, Transaction, UnresolvedRefError,
+                      TransactionRegistry, TxnSpec, build_transaction,
+                      parse_operands)
 from .allocator import AllocationPlan
 from .sequencer import Draw
 
@@ -53,9 +54,11 @@ def instantiate(spec: TxnSpec, *, registry: OpRegistry, mask: str = "",
     没有用到任何对象的事务（sync / mask 这类）传 None 即可。
     """
     binds, writes = _data_flow(spec, plan)
+    roles = _role_index(plan) if plan is not None else {}
     instructions = [
         _instruction(op_name, registry, mask=mask, plan=plan, draw=draw,
-                     extra_operands=extra_operands)
+                     extra_operands=extra_operands, roles=roles, mask_text=mask,
+                     bindings=spec.operands.get(op_name, {}))
         for op_name in spec.ops
     ]
 
@@ -222,32 +225,162 @@ def _cfg_from_ops(spec: TxnSpec, registry: OpRegistry) -> str:
 
 def _instruction(op_name: str, registry: OpRegistry, *, mask: str,
                  plan: Optional[AllocationPlan], draw: Optional[Draw],
-                 extra_operands: Optional[Dict[str, Any]]) -> IrInstruction:
+                 extra_operands: Optional[Dict[str, Any]],
+                 roles: Optional[Dict[str, str]] = None,
+                 bindings: Optional[Dict[str, str]] = None,
+                 mask_text: str = "") -> IrInstruction:
     """按注册表给一条指令填字段。
 
     **flags 来自注册表，不是这里写死的** —— 它是指令身份的一部分
     （同一 funct7 下靠它区分多条指令，见 `domain/opcode.py` 模块头）。
     模板里出现十六进制字面量会被 `test_layering` 的守卫抓出来。
+
+    **操作数按编码表的语义填**（`_resolve_operands`）—— 不是"从地址计划里
+    随便挑一个对象塞进 rs1val"。历史版本就是那么干的：34 条指令里 24 条
+    声明了 xs2=1 却没有 rs2val，编出来的字会读 x0（=0）当第二个操作数，
+    在仿真里表现为算错且不报错。
     """
     spec = registry.get(op_name)
     operands = Operands(**(extra_operands or {}))
     src: Dict[str, Any] = {}
     addr_bits: Dict[str, Any] = {}
+    gaps: List[Dict[str, str]] = []
 
-    # 地址类字段：事务里引用的对象，从分配计划里取全局地址
-    if plan is not None and draw is not None:
-        bound = plan.bindings
-        if bound:
-            chosen = draw.choice(sorted(bound))
-            addr_bits["src_addr"] = f"0x{bound[chosen]:X}"
-            src["ref"] = ref(chosen)
-            operands = Operands(rs1val=f"0x{bound[chosen]:X}",
-                                rs2val=operands.rs2val)
+    if plan is not None:
+        operands, addr_bits, src, gaps = _resolve_operands(
+            op_name, spec, plan, roles or {}, operands, addr_bits, src,
+            bindings=bindings or {}, mask_text=mask_text)
 
+    # **不带下划线** —— `_` 打头的键会被 `IrInstruction.to_dict` 挡在 IR 之外
+    # （那是给内部提示用的）。gap 必须落在 IR 里看得见：它是"这一槽没填出来"
+    # 的唯一痕迹，藏起来就等于静默。
+    extra = {"operand_gap": gaps} if gaps else {}
     return IrInstruction(
         op=op_name, mask=mask,
         flags=Flags.from_tuple(spec.flags) if spec.flags else Flags(),
-        operands=operands, src=src, **addr_bits)
+        operands=operands, src=src, extra=extra, **addr_bits)
+
+
+#: 填不了的形态 → 该去补哪一块。**报错要能指路**，否则只能靠猜。
+_UNSUPPORTED_FIX = {
+    "addr_part": "多段拼接地址（如 `base_addr[43:40]` + `base_addr_src[17:0]`）"
+                 "要按 §3.12.2 T4 把同一个地址的两段摆到不同位置，本版本还没实现",
+    "scalar": "标量操作数（§3.14.1：标量走指令字段）—— DSL 目前没有标量值的来源",
+    "cfg": "cfg 复合字段需要 Cfg 表（§3.12.9 的 cfg.registry.json，尚未接入）",
+    "special": "这种写法 domain/operands.py 认不出 —— 不要把不认识的当认识的处理",
+}
+
+
+def _mask_value(mask_text: str) -> int:
+    """`group_mask_drv_xn` 的 rs1val = `{16b_reserved, core_mask}` —— 从事务的 mask 取。
+
+    §3.2.1 第 2 条：NICE 的目标核集合走**全局 group_mask 寄存器**，这条指令
+    就是去更新它。所以它的操作数不是"某个对象的地址"，而是 mask 本身。
+    """
+    if not mask_text:
+        return 0
+    text = str(mask_text).strip()
+    try:
+        return int(text, 16) if text.lower().startswith("0x") else int(text, 0)
+    except ValueError:
+        raise AllocError(f"mask 不是数字：{mask_text!r}", target="mask",
+                         fix="mask 写成 `0x000F` 这种十六进制字面量") from None
+
+
+def _resolve_operands(op_name: str, spec, plan: "AllocationPlan",
+                      roles: Dict[str, str], operands: "Operands",
+                      addr_bits: Dict[str, Any], src: Dict[str, Any], *,
+                      bindings: Dict[str, str], mask_text: str):
+    """按编码表的**操作数语义**填 rs1val / rs2val。
+
+    三条路子，按优先级：
+      1. **事务显式声明**（`TxnSpec.operands`）—— 最可靠，`orig` 这种
+         推不出来的名字只能靠它
+      2. **从编码表的地址名推**（仅 `addr` 类）—— `base_addr_in[17:0]`
+         里的 `in` 就是一个 DSL 角色，能直接对上
+      3. **`mask` 槽** —— 从事务的 mask 取值，不经对象
+
+    填不了的槽：**省略**（不填一个编出来的值），把原因记进
+    `IrInstruction.extra["_operand_gap"]`。编出来的值会读 x0=0，
+    比"空着"危险得多；空着则编码器那步会响亮拦下。
+
+    **真正属于配置错误的仍然抛** —— 声明了一个 alloc 里不存在的角色、
+    对象没有地址分配，这些是使用者该改的，不是"本版本还没实现"。
+    """
+    os_specs = parse_operands(spec.fields)
+    bound = plan.bindings
+    resolved: Dict[str, Any] = {}
+    gaps: List[Dict[str, str]] = []
+    first_obj: Optional[str] = None
+    first_addr: Optional[int] = None
+
+    for slot in ("rs1val", "rs2val"):
+        os_ = os_specs[slot]
+        if os_.kind == "none":
+            continue
+        if os_.kind == "mask":
+            resolved[slot] = f"0x{_mask_value(mask_text):X}"
+            continue
+
+        if not os_.fillable:
+            gaps.append({"slot": slot, "kind": os_.kind,
+                         "why": _UNSUPPORTED_FIX.get(os_.kind, "认不出的写法"),
+                         "raw": os_.raw})
+            continue
+
+        # 声明优先；`addr` 类还允许从编码表的地址名推（名字恰好是 DSL 角色）
+        role = bindings.get(slot)
+        if role is None and os_.kind == "addr":
+            role = os_.role
+        if role is None:
+            gaps.append({
+                "slot": slot, "kind": "undeclared",
+                "why": f"编码表要 `base_addr_{os_.name}[…]`，但事务没声明它绑哪个角色",
+                "raw": os_.raw,
+            })
+            continue
+
+        obj = roles.get(role)
+        if obj is None:
+            # 使用者声明了一个 alloc 里没有的角色 —— 配置错误，不是"没实现"
+            raise UnresolvedRefError(
+                f"{op_name} 的 {slot} 声明绑角色 {role!r}，但 alloc 里没有这个角色",
+                target=f"{op_name}.{slot}",
+                fix=f"给对应的 alloc 条目加 `role: {role}`；"
+                    f"当前已有角色：{sorted(roles) or '（无）'}",
+            )
+        if obj not in bound:
+            raise UnresolvedRefError(
+                f"{op_name} 的 {slot} 指向 {obj!r}，但它没有地址分配",
+                target=f"{op_name}.{slot}",
+                fix="检查 alloc 的 pool 是否在 memmap 的可玩池里（§3.12.7）",
+            )
+
+        address = bound[obj]
+        try:
+            resolved[slot] = f"0x{os_.field(address):X}"
+        except ValueError as exc:
+            gaps.append({"slot": slot, "kind": "overflow",
+                         "why": str(exc), "raw": os_.raw})
+            continue
+        if first_obj is None:
+            first_obj, first_addr = obj, address
+
+    merged = {"rs1val": operands.rs1val, "rs2val": operands.rs2val}
+    merged.update(resolved)
+    new_ops = Operands(**merged)
+
+    # `src` / `src_addr` —— 第一个解析到的地址对象。执行器按它们找源；
+    # 有了上面的规则，"第一个"是**确定的**（rs1val 优先），不再是随便挑一个。
+    if first_obj is not None:
+        addr_bits["src_addr"] = f"0x{first_addr:X}"
+        src["ref"] = ref(first_obj)
+    elif gaps:
+        # 一个地址都解不出来时，保留旧行为会让 `src_addr` 变成"随便挑的"——
+        # 那比没有更糟。宁可不给。
+        pass
+
+    return new_ops, addr_bits, src, gaps
 
 
 def instantiate_all(specs: Sequence[TxnSpec], *, registry: OpRegistry,

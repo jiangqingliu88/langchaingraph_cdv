@@ -51,11 +51,48 @@ ALLOC_COLUMNS = (
 )
 NOTE_COLUMNS = (("kind", "类型", 120, LEFT), ("text", "说明", 520, LEFT))
 
+#: 编码后的指令流（`payload["encode"]["items"]`）—— **单位是 32bit 字，不是 IR 条目**。
+#: 与 IR 那张表的区别：IR 是"要求做什么"，这张是"真的编成了什么位模式"。
+ENCODE_COLUMNS = (
+    ("off", "off", 62, RIGHT),
+    ("word", "word", 84, LEFT),
+    ("isa", "isa", 58, LEFT),
+    ("op", "指令", 186, LEFT),
+    ("tag", "tag", 52, LEFT),
+    ("mask", "mask", 74, LEFT),
+    ("flags", "xd/xs1/xs2", 84, LEFT),
+    ("rs1", "rs1", 116, LEFT),
+    ("rs2", "rs2", 116, LEFT),
+    ("rd", "rd", 64, LEFT),
+    ("note", "备注", 150, LEFT),
+)
+
+#: 张量（tensor_gen 的产物）—— 每行一个对象。
+TENSOR_COLUMNS = (
+    ("name", "对象", 78, LEFT),
+    ("ref", "ref", 90, LEFT),
+    ("shape", "形状", 116, LEFT),
+    ("dtype", "dtype", 62, LEFT),
+    ("size", "字节", 80, RIGHT),
+    ("layout", "布局", 190, LEFT),
+    ("pattern", "模式", 74, LEFT),
+    ("hash", "content_hash", 150, LEFT),
+)
+
+#: 页签下标 —— 与 `build_content` 里的 addTab 顺序一一对应。
+(TAB_INSTRUCTION, TAB_ENCODE, TAB_TENSOR, TAB_REPORT,
+ TAB_ALLOC, TAB_NOTES, TAB_RAW) = range(7)
+
 #: 兜底示例 —— 与 `config/isa_gen/examples/npu_gemm.yaml` 同一份的极简版。
 #: 清单里配了 `input` 时用那份文件；没有才用这个，保证打开就有东西可跑。
+#:
+#: **`role: origin` 不能省**：`gemm_txn` 的 `gemm_out_org_pre_xn` 第二个操作数
+#: 在编码表里是 `base_addr_orig`（原累加器），`txn.registry.json` 把它声明成
+#: 角色 `origin`。少了它，编译期会以 `UnresolvedRefError` 停下 —— 这是对的
+#: （它在说"你声明要的东西不存在"），但示例不该是个跑不起来的东西。
 SAMPLE = """meta: {name: quick, seed: 4242}
 resources: {cores: [0..3]}
-txn_pool: {include: [mask_txn, cfg_txn, tld_txn, gemm_txn, sync_txn]}
+txn_pool: {include: [mask_txn, tld_txn, gemm_txn, sync_txn]}
 orchestration: {epochs: 2, epoch_boundary_sync: always}
 alloc:
   - {name: img, pool: dram.share,     shape: [64,128], dtype: fp16, role: src}
@@ -63,6 +100,7 @@ alloc:
   - {name: wgt, pool: lmem.core.cimc, shape: [64,64],  dtype: fp16, role: wgt}
   - {name: act, pool: lmem.core.spad, shape: [64,64],  dtype: fp16, role: in}
   - {name: res, pool: lmem.core.spad, shape: [64,64],  dtype: fp16, role: out}
+  - {name: org, pool: lmem.core.spad, shape: [64,64],  dtype: fp16, role: origin}
 """
 
 
@@ -99,9 +137,14 @@ class IsaGenModule(ModuleBase):
         self.editor.setPlainText(SAMPLE)
         splitter.addWidget(self.editor)
 
+        # 页签顺序与下面的 TAB_* 常量一一对应 —— 别用字面量下标，
+        # 中间插一页就会把"跳到 notes"那几处静默指错地方。
         self.tabs = QTabWidget(splitter)
         self.tabs.addTab(self._build_table_page(INSTRUCTION_COLUMNS, "instruction"),
-                         "指令流")
+                         "指令流（IR）")
+        self.tabs.addTab(self._build_table_page(ENCODE_COLUMNS, "encode"),
+                         "编码清单")
+        self.tabs.addTab(self._build_table_page(TENSOR_COLUMNS, "tensor"), "张量")
         self.tabs.addTab(self._build_table_page(REPORT_COLUMNS, "report"), "编译报告")
         self.tabs.addTab(self._build_table_page(ALLOC_COLUMNS, "alloc"), "地址分配")
         self.tabs.addTab(self._build_table_page(NOTE_COLUMNS, "notes"),
@@ -254,7 +297,7 @@ class IsaGenModule(ModuleBase):
                         "切到「注意 / 疑点」页看逐条")
         self.notes_model.set_rows(
             [{"kind": i.get("rule", ""), "text": _issue_text(i)} for i in errors])
-        self.tabs.setCurrentIndex(3)
+        self.tabs.setCurrentIndex(TAB_NOTES)
 
     def compile_dsl(self) -> None:
         text = self.editor.toPlainText()
@@ -287,10 +330,25 @@ class IsaGenModule(ModuleBase):
             return
         names = result.get("written", [])
         self.log(f"已写出 {len(names)} 份产物 → {target}")
+
+        tail = ""
+        gaps = result.get("operand_gaps") or []
+        if gaps:
+            # **不静默**：这些字里有一槽是 0（读 x0），0 是合法操作数，
+            # 仿真不会在那里报错 —— 所以落盘这一步就得说出来。
+            tail = (f"\n\n⚠ {len(gaps)} 个操作数槽没有填出来"
+                    f"（对应字里那一槽是 0）：\n  " + "、".join(gaps[:6])
+                    + ("…" if len(gaps) > 6 else ""))
+        notes = result.get("tensor_notes") or []
+        if notes:
+            tail += "\n\n张量：" + "；".join(notes[:3])
+        missing = result.get("not_produced") or []
+        if missing:
+            tail += "\n\n未产出：" + "、".join(m.get("file", "") for m in missing)
+
         QMessageBox.information(
             self.content, "已落盘",
-            f"写出到\n{target}\n\n" + "\n".join(names)
-            + "\n\n（seq.hex 要编码器、tensors/ 要 tensor_gen —— 都不在本工具）")
+            f"写出到\n{target}\n\n" + "\n".join(names) + tail)
 
     # ════════════════════════════════════════════════════════
     # 渲染
@@ -298,22 +356,39 @@ class IsaGenModule(ModuleBase):
 
     def _render(self, payload: Dict[str, Any]) -> None:
         self.instruction_model.set_rows(_instruction_rows(payload))
+        self.encode_model.set_rows(_encode_rows(payload))
+        self.tensor_model.set_rows(_tensor_rows(payload))
         self.report_model.set_rows(_report_rows(payload))
         self.alloc_model.set_rows(_alloc_rows(payload))
         self.notes_model.set_rows(_note_rows(payload))
         self.raw.setPlainText(json.dumps(payload, ensure_ascii=False, indent=2,
                                          default=str))
 
+        encode = payload.get("encode") or {}
+        tensors = payload.get("tensors") or {}
         summary = (f"{payload['name']}　seed={payload['seed']}　"
                    f"事务 {payload['txn_count']}　指令 {payload['instruction_count']}　"
                    f"epoch {payload['epoch_count']}")
+        if encode.get("words") is not None and not encode.get("error"):
+            stats = encode.get("stats") or {}
+            summary += (f"　编码 {len(encode['words'])} 字"
+                        f"（合成 {stats.get('synthesized', 0)}）")
+            if encode.get("gaps"):
+                summary += f"　⚠ 空操作数 {len(encode['gaps'])} 处"
+        if tensors.get("entries"):
+            total = sum(e.get("n_bytes", 0) for e in tensors["entries"])
+            summary += f"　张量 {len(tensors['entries'])} 个 / {total} 字节"
         self.summary.setText(summary)
         self.set_status(summary + f"　（{payload.get('elapsed_ms', 0)}ms）")
-        # 有 note 就把标签页顶到那儿 —— 那是需要人看一眼的东西
+
+        # 顶到"需要人看一眼"的那一页：有 note → notes；
+        # 有空洞的操作数 → 编码清单（那里当场标着 ⚠）；否则回第一页
         if payload.get("notes"):
-            self.tabs.setCurrentIndex(3)
+            self.tabs.setCurrentIndex(TAB_NOTES)
+        elif encode.get("gaps"):
+            self.tabs.setCurrentIndex(TAB_ENCODE)
         elif payload.get("allocations", {}).get("objects"):
-            self.tabs.setCurrentIndex(0)
+            self.tabs.setCurrentIndex(TAB_INSTRUCTION)
 
 
 # ════════════════════════════════════════════════════════════
@@ -337,6 +412,92 @@ def _instruction_rows(payload: Dict[str, Any]) -> List[Dict[str, str]]:
             "flags": (f"{flags.get('xd', 0)}/{flags.get('xs1', 0)}/"
                       f"{flags.get('xs2', 0)}" if flags else "—"),
             "ref": "　".join(refs),
+        })
+    return rows
+
+
+def _encode_rows(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    """编码后的指令流 —— 与 `seq.lst` 同一份内容，单位是 **32bit 字**。
+
+    与「指令流（IR）」那张表的区别：IR 是"要求做什么"，这张是"真的编成了
+    什么位模式"。`off` 就是那个字在流里的字节偏移，对着 ISS 的 PC 能直接找。
+
+    这里**不自己按 bit 位置解 flags** —— `payload["encode"]["items"]` 已经把
+    `flags` 摊平给出来了。界面按位布局自己解，就是把位布局抄了第二份，
+    而两份迟早对不上（这个仓库里已经有过一次同类教训）。
+    """
+    encode = payload.get("encode") or {}
+    if encode.get("error"):
+        return [{"off": "—", "word": "编码失败", "isa": "",
+                 "op": str(encode.get("error", "")), "tag": "", "mask": "",
+                 "flags": "", "rs1": "", "rs2": "", "rd": "",
+                 "note": str(encode.get("fix", ""))}]
+
+    registers = {int(k): v for k, v in (encode.get("registers") or {}).items()}
+    gaps = {(g.get("index"), g.get("slot")) for g in (encode.get("gaps") or [])}
+
+    def cell(enabled: Any, index: Any) -> str:
+        """`x2 = 0x4000` / `—`（使能位没置位时那个字段没有意义）。"""
+        if not enabled:
+            return "—"
+        value = registers.get(int(index))
+        return f"x{index}" if value is None else f"x{index} = 0x{value:X}"
+
+    rows: List[Dict[str, str]] = []
+    word_idx = 0
+    for it in encode.get("items") or []:
+        if not it.get("encoded"):
+            continue
+        off = f"0x{word_idx * 4:x}"
+        word_idx += 1
+        f = it.get("flags") or {}
+        notes = []
+        if it.get("synthesized"):
+            notes.append("mask 变化→自动补")
+        if (it.get("index"), "rs1val") in gaps:
+            notes.append("⚠rs1val 未填")
+        if (it.get("index"), "rs2val") in gaps:
+            notes.append("⚠rs2val 未填")
+        rows.append({
+            "off": off, "word": it.get("word_hex", ""),
+            "isa": it.get("isa", ""), "op": it.get("op", ""),
+            "tag": it.get("tag", ""), "mask": it.get("mask", ""),
+            "flags": f"{f.get('xd', '—')}/{f.get('xs1', '—')}/{f.get('xs2', '—')}",
+            "rs1": cell(f.get("xs1"), it.get("rs1")),
+            "rs2": cell(f.get("xs2"), it.get("rs2")),
+            "rd": cell(f.get("xd"), it.get("rd")),
+            "note": "　".join(notes),
+        })
+    return rows
+
+
+def _tensor_rows(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    """tensor_gen 的产物 —— 每行一个对象（数据 + manifest 摘要）。"""
+    tensors = payload.get("tensors") or {}
+    if tensors.get("error"):
+        return [{"name": "—", "ref": "", "shape": "tensor_gen 失败", "dtype": "",
+                 "size": "", "layout": str(tensors.get("error", "")),
+                 "pattern": "", "hash": ""}]
+    rows: List[Dict[str, str]] = []
+    for entry in tensors.get("entries") or []:
+        manifest = entry.get("manifest") or {}
+        layout = manifest.get("layout") or {}
+        exp = manifest.get("exp_range") or {}
+        bits = [f"stride1={layout.get('stride_dim1')}",
+                f"rem0={layout.get('rem_dim0')}"]
+        if layout.get("bc_only"):
+            bits.append("bc_only")
+        # 缩放过 = E1 真的出手了，值得看见（不然只会以为"生成得很顺"）
+        if exp.get("scaled"):
+            bits.append("exp 已缩放")
+        rows.append({
+            "name": entry.get("name", ""), "ref": entry.get("ref", ""),
+            "shape": "×".join(str(x) for x in (manifest.get("shape") or [])),
+            "dtype": manifest.get("dtype", ""),
+            "size": str(entry.get("n_bytes", "")),
+            "layout": "　".join(bits),
+            "pattern": manifest.get("pattern", ""),
+            "hash": entry.get("content_hash", ""),
         })
     return rows
 

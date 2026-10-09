@@ -30,6 +30,7 @@ alloc:
   - {name: wgt, pool: lmem.core.cimc, shape: [64,64],  dtype: fp16, role: wgt}
   - {name: act, pool: lmem.core.spad, shape: [64,64],  dtype: fp16, role: in}
   - {name: res, pool: lmem.core.spad, shape: [64,64],  dtype: fp16, role: out}
+  - {name: org, pool: lmem.core.spad, shape: [64,64],  dtype: fp16, role: origin}
 """
 
 
@@ -72,7 +73,9 @@ class TestEndToEnd:
         """本工具**不产张量数据**（那是 tensor_gen 的活），只留句柄。"""
         out = compile_text(BASE, max_txns=3)
         refs = {e["ref"] for e in out.preload["entries"]}
-        assert refs == {"$t.img", "$t.out", "$t.wgt", "$t.act", "$t.res"}
+        # `org`（role=origin）是 `gemm_out_org_pre_xn` 的 rs2val 要的对象 ——
+        # 编码表写的是 `base_addr_orig`，见 txn.registry.json 的 operands 声明
+        assert refs == {"$t.img", "$t.out", "$t.wgt", "$t.act", "$t.res", "$t.org"}
         assert all("pattern" in e or "dtype" in e for e in out.preload["entries"])
 
     def test_expect_anchors_point_at_readback_tags(self):

@@ -28,6 +28,8 @@ from typing import Any, Dict, List, Optional
 from .analysis import check_dsl_text, load_dsl
 from .compile import compile_dsl
 from .domain import COMPILE_ERROR_KINDS, CompileError, IsaGenError
+from .encode import encode_ir
+from .tensors import build_tensors
 from .repository import (load_memmap, load_ops_registry, load_txn_registry,
                          registry_provenance)
 
@@ -113,6 +115,39 @@ def run_compile(dsl_text: str, *, seed: Optional[int] = None,
         return _error(exc)
 
     report = output.report.to_dict()
+
+    # ── L3 编码（§3.1）：IR → seq.hex + reg-init.txt ──
+    # `allow_inconsistent_flags=True`：有些槽本版本还填不出来（多段拼接地址 /
+    # 标量 / cfg），原因已记在 IR 的 `extra.operand_gap` 里。这里**照编不误**，
+    # 但把每一条"这个字里有个槽是空的"收进 notes —— 免得 seq.hex 看起来像完整的。
+    # **不静默**是这条链上唯一不能让的事。
+    encode_out: Dict[str, Any] = {}
+    try:
+        encoded = encode_ir(output.program.to_dict(), ops,
+                            allow_inconsistent_flags=True)
+        encode_out = encoded.to_dict()
+    except IsaGenError as exc:
+        # 编码失败不让整次编译失败 —— IR 已经是完整产物，只是这一层编不出来。
+        encode_out = {"error": str(exc), "kind": getattr(exc, "kind", "encode_error"),
+                      "fix": getattr(exc, "fix", "")}
+
+    # ── tensor_gen（§3.12.9）：preload 的句柄 → 真的张量数据 ──
+    # 确定性（同样的 case_seed + 同样的 preload → 逐字节相同），所以它在
+    # `run_compile` 里跑不引入不确定性。
+    tensor_out: Dict[str, Any] = {}
+    try:
+        bundle = build_tensors(output.preload, output.case)
+        tensor_out = {
+            "entries": [{"name": e.name, "ref": e.ref, "hex": e.hex_text,
+                         "manifest": e.manifest, "n_bytes": e.n_bytes,
+                         "content_hash": e.content_hash}
+                        for e in bundle.entries],
+            "registry": bundle.registry,
+            "notes": bundle.notes,
+        }
+    except (IsaGenError, ValueError) as exc:
+        tensor_out = {"error": str(exc), "kind": "tensor_gen"}
+
     return {
         "seed": report["seed"],
         "name": report["name"],
@@ -122,6 +157,10 @@ def run_compile(dsl_text: str, *, seed: Optional[int] = None,
         "epoch_count": report["epoch_count"],
         "case": output.case,
         "ir": output.program.to_dict(),
+        # seq.hex / reg-init.txt 的内容 —— `export.py` 按它落盘
+        "encode": encode_out,
+        # tensors/*.hex + manifest/*.json + registry.json 的内容 —— 同上
+        "tensors": tensor_out,
         "preload": output.preload,
         "expect": output.expect,
         "allocations": report["allocations"],

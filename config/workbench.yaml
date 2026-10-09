@@ -240,6 +240,23 @@ modules:
     tool: {name: casemodel.gaps, kind: json}
     params: {subscribe: run.selected}
 
+  # ISA 激励 —— 场景 DSL → ISA 事务层 IR（+ L3 编码 + 张量数据）。
+  #
+  # 归 `verify`：它产出的是**激励**，和 Case 建模一样属于"先把要测什么
+  # 说清楚"这一环，是验证构建的输入。
+  #
+  # 放在 Case 建模**下面**（order 30 > 20）：先声明要测什么（case 模型），
+  # 再把它铺成具体的指令流。两页是同一条线的两个层次。
+  - id: verify.isa_gen
+    title: ISA 激励
+    group: verify
+    factory: src.workbench.modules.verify.isa_gen:IsaGenModule
+    area: center
+    order: 30
+    # 相对本清单所在目录解析 —— config/isa_gen/examples/npu_gemm.yaml
+    input: isa_gen/examples/npu_gemm.yaml
+    tool: {name: isa_gen.compile, kind: json}
+
   # ══ 流程与证据 ══════════════════════════════════════════════
   # 横切全部 agent 的那条线：任务总览、编排、运行、证据、签核、跟踪、趋势、决策。
   # 它们不属于任何单个 agent，却贯穿全部 —— 所以单独成线。
@@ -334,20 +351,6 @@ modules:
     area: left
     order: 6
     tool: {name: pipeline.runs, kind: json}
-
-  # ISA 激励 —— 场景 DSL → ISA 事务层 IR。
-  #
-  # 归 `verify`：它产出的是**激励**，和 Case 建模一样属于"先把要测什么
-  # 说清楚"这一环，是验证构建的输入。
-  - id: verify.isa_gen
-    title: ISA 激励
-    group: verify
-    factory: src.workbench.modules.verify.isa_gen:IsaGenModule
-    area: center
-    order: 30
-    # 相对本清单所在目录解析 —— config/isa_gen/examples/npu_gemm.yaml
-    input: isa_gen/examples/npu_gemm.yaml
-    tool: {name: isa_gen.compile, kind: json}
 
   # 证据 / 产物 —— 右窗格。订阅 run.selected。
   - id: flow.evidence

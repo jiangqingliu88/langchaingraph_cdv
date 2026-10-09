@@ -337,6 +337,21 @@ class TxnSpec:
     #: 形如 `{"binds": ["wgt", "in"], "writes": ["out"]}`。
     #: 文档 §3.14.4 要求计算类必须带 binds/writes，却没说怎么找对象 —— 靠这个。
     roles: Dict[str, List[str]] = field(default_factory=dict)
+    #: **哪个槽绑哪个角色** —— 形如
+    #: `{"gemm_drv_xn": {"rs1val": "in", "rs2val": "wgt"}}`。
+    #:
+    #: 为什么写死在数据里，而不是推
+    #:     编码表只说 rs1val 是 `base_addr_in[17:0]`（**一个地址名**），
+    #:     但"`in` 该对应 alloc 里的哪个对象"是场景知识，推不出来 ——
+    #:     比如 `gemm_out_org_pre_xn` 的 rs2 是 `base_addr_orig`，而 `orig`
+    #:     在本 DSL 的角色词表里根本没有对应词。硬推就是猜，而猜错的代价是
+    #:     "把错误的地址当操作数送进仿真，**且不报错**"。
+    #:
+    #:     所以由事务**显式声明**一次，之后永远可追溯（git diff 里看得见）——
+    #:     与 `alloc[].role`、`ops.registry.json` 同一种做法。生成器再拿
+    #:     `domain/operands.py` 的语义去**校验**这份声明（位宽够不够、
+    #:     这一槽到底要不要地址）。
+    operands: Dict[str, Dict[str, str]] = field(default_factory=dict)
     note: str = ""
     #: 文档列了但**编码表里没有**（或标了暂不做）的 —— 生成器不选它。
     #: 留着而不是删掉：文档与编码表的分歧本身就是要让人看见的信息。

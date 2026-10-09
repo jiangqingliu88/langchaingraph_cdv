@@ -23,13 +23,15 @@
 from .address import (ADDR_BITS, FIELD_BITS, FIELD_SHIFTS, OFFSET_BITS, GlobalAddr,
                       McastMode, MemFlag)
 from .errors import (COMPILE_ERROR_KINDS, AllocError, CompileError, DataPathError,
-                     DeterminismError, IsaGenError, LintError, PairingError,
-                     RegistryError, SchemaError, SolverError, UnresolvedRefError,
-                     WhitelistError)
+                     DeterminismError, IsaGenError, LintError,
+                     OperandUnsupportedError, PairingError, RegistryError,
+                     SchemaError, SolverError, UnresolvedRefError, WhitelistError)
 from .instruction import IR_KEYS, Flags, IrInstruction, Operands
 from .opcode import (Collision, IsaFamily, MaskSemantics, OpClass, OpRegistry,
                      OpRole, OpSpec, PairingKind, format_funct7, parse_flags,
                      parse_funct7)
+from .operands import (ADDR_PART_NAMES, ROLE_ALIASES, OperandSpec, parse_operand,
+                       parse_operands)
 from .program import IrProgram
 from .transaction import (Effect, HardConstraint, Pairing, PreStep, Transaction,
                           TransactionRegistry, TxnSpec, build_transaction)
@@ -42,12 +44,15 @@ __all__ = [
     "IsaGenError", "CompileError", "COMPILE_ERROR_KINDS", "SchemaError",
     "RegistryError", "LintError", "UnresolvedRefError", "AllocError",
     "SolverError", "WhitelistError", "PairingError", "DataPathError",
-    "DeterminismError",
+    "DeterminismError", "OperandUnsupportedError",
     # instruction
     "Flags", "Operands", "IrInstruction", "IR_KEYS",
     # opcode
     "OpClass", "OpRole", "OpSpec", "OpRegistry", "IsaFamily", "MaskSemantics",
     "PairingKind", "Collision", "parse_funct7", "format_funct7", "parse_flags",
+    # operands
+    "OperandSpec", "parse_operand", "parse_operands", "ROLE_ALIASES",
+    "ADDR_PART_NAMES",
     # transaction
     "Transaction", "Pairing", "PreStep", "HardConstraint", "Effect",
     "build_transaction", "TxnSpec", "TransactionRegistry",

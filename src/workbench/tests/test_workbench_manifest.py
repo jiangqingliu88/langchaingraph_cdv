@@ -20,7 +20,7 @@ def test_shipped_manifest_parses():
         "ide.ip_spec", "ide.manual_nodes",
         "coverage.excludes",
         "debug.sim_log", "debug.fingerprint", "debug.output",
-        "verify.output", "verify.casemodel",
+        "verify.output", "verify.casemodel", "verify.isa_gen",
         # 流程与证据线：流程视图 + 编排 + 运行历史 + 证据 + 跟踪 + 对比 + 签核 + 趋势 + 决策 + 清单
         "flow.task", "flow.diagram", "flow.artifacts", "flow.pipeline", "flow.runs", "flow.evidence",
         "flow.tracking", "flow.todo", "flow.drafts", "flow.compare", "flow.signoff", "flow.trend",
@@ -153,7 +153,7 @@ def test_builtin_manifest_has_groups_but_no_modules():
 
 def test_describe_counts_enabled_modules():
     manifest = load_manifest(default_manifest_path())
-    assert "30 个模块" in describe(manifest)
+    assert "31 个模块" in describe(manifest)
     assert describe(None) == "清单：无"
 
 

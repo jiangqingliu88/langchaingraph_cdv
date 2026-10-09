@@ -24,6 +24,7 @@ alloc:
   - {name: wgt, pool: lmem.core.cimc, shape: [64,64],  dtype: fp16, role: wgt}
   - {name: act, pool: lmem.core.spad, shape: [64,64],  dtype: fp16, role: in}
   - {name: res, pool: lmem.core.spad, shape: [64,64],  dtype: fp16, role: out}
+  - {name: org, pool: lmem.core.spad, shape: [64,64],  dtype: fp16, role: origin}
 """
 
 
@@ -174,14 +175,24 @@ class TestCli:
         assert cli_main(["validate", str(write(tmp_path, "meta: [1]"))]) == 1
 
     def test_compile_writes_the_documented_artifacts(self, tmp_path, capsys):
-        """按 §3.6 落盘 —— 缺失的那两份（seq.hex / tensors）**不写占位文件**：
-        一个空的 seq.hex 比没有它更容易让人以为"生成过了"。"""
+        """按 §3.6 落盘 —— 六件套现在齐了。
+
+        `seq.hex` / `reg-init.txt` 由 `encode/`（L3）产，`tensors/` 与
+        `manifest/` 由 `tensors/`（tensor_gen）产。**都不写空占位文件** ——
+        一个空的 `seq.hex` 比没有它更容易让人以为"生成过了"。
+        """
         out = tmp_path / "out"
         rc = cli_main(["compile", str(write(tmp_path, GOOD)),
                        "-o", str(out), "--max-txns", "4"])
         assert rc == 0
-        assert {p.name for p in out.iterdir()} == {
-            "case.json", "seq.ir.json", "preload.json", "expect.json"}
+        names = {p.name for p in out.iterdir()}
+        assert {"case.json", "seq.ir.json", "preload.json", "expect.json",
+                "seq.hex", "reg-init.txt", "registry.json"} <= names
+        # 张量产物按对象分目录 —— 有多少个 alloc 对象就有多少份
+        assert (out / "tensors").is_dir() and any((out / "tensors").iterdir())
+        assert (out / "manifest").is_dir() and any((out / "manifest").iterdir())
+        # 空文件是**禁止**的：宁可不写，也不留一个看起来"生成过了"的壳
+        assert all(p.stat().st_size > 0 for p in out.rglob("*") if p.is_file())
 
     def test_compile_json_is_parseable(self, tmp_path, capsys):
         assert cli_main(["compile", str(write(tmp_path, GOOD)),

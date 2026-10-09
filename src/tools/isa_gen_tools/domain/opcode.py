@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from .errors import RegistryError
 
@@ -181,6 +181,10 @@ class OpSpec:
     variants: Tuple[str, ...] = ()    # 兄弟形态（vn01/vn11、xn…）
     deferred: bool = False            # 编码表标了"暂时不做"
     notes: str = ""                   # 文档 ⚠ 的疑点原样带过来
+    #: 编码表 `rdval` / `rs1val` / `rs2val` 三列的**原文**（位串联写法）。
+    #: 结构化解读见 `domain/operands.py` —— 这里保持原样，是为了让
+    #: 「表里到底怎么写的」永远可回溯（`explain` 要能原样吐出来）。
+    fields: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def identity(self) -> Tuple[Optional[int], Optional[Flags3]]:
@@ -233,6 +237,7 @@ class OpSpec:
             "variants": list(self.variants),
             "deferred": self.deferred,
             "notes": self.notes,
+            "fields": dict(self.fields),
         }
 
 

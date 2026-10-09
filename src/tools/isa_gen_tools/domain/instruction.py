@@ -217,7 +217,9 @@ class IrInstruction:
             out["cfg"] = self.cfg
         if self.fault:
             out["fault"] = dict(self.fault)
-        # `_` 打头的是内部键，不进 IR（见 funct7_hint）
+        # `_` 打头的是内部键，不进 IR（见 funct7_hint）。
+        # 例外是 `operand_gap`：它**必须**看得见 —— 那正是"这一槽没填出来"
+        # 的唯一痕迹，藏起来就等于静默（见 compile/templates.py 的说明）。
         public_extra = {k: v for k, v in self.extra.items()
                         if not str(k).startswith("_")}
         if public_extra:

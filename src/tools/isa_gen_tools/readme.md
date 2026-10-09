@@ -20,8 +20,7 @@ DSL(YAML) ──求解器──► IR(JSON) ──编码器──► 32bit(seq.h
 ```bash
 # 示例在 config/isa_gen/examples/
 python -m src.tools.isa_gen_tools.cli validate config/isa_gen/examples/npu_gemm.yaml
-python -m src.tools.isa_gen_tools.cli compile  config/isa_gen/examples/npu_gemm.yaml \
-    -o out/ --max-txns 16
+python -m src.tools.isa_gen_tools.cli compile  config/isa_gen/examples/npu_gemm.yaml -o out/ --max-txns 16
 python -m src.tools.isa_gen_tools.cli explain  --txn gemm_txn     # 注册表解读
 python -m src.tools.isa_gen_tools.cli ops                        # 列出 op 注册表
 
@@ -45,18 +44,46 @@ python -m src.tools.isa_gen_tools.cli compile config/isa_gen/examples/minimal.ya
 `tests/test_pipeline.py::TestExampleFiles` 会**逐份校验 + 逐份编译** —— 一份跑不
 起来的示例比没有示例更糟：它教人写错的东西。
 
-`compile -o <dir>` 按文档 §3.6 的布局落盘：
+### 落盘布局 —— §3.6 的六件套
 
-```
-<dir>/
-├── case.json        seed、策略、旋钮参数（**seed 已回填**）
-├── seq.ir.json      IR（含语义标注）
-├── preload.json     后门装载清单（**只有句柄，没有张量数据**）
-└── expect.json      比对锚点（**期望值待 ISS 覆盖**）
-```
+`compile -o <dir>` 按文档 §3.6 的布局落盘。**六件套分三层产**，但都由
+`compile -o` 一次写完（三段都是确定性的，分开跑反而更容易忘）：
 
-`seq.hex` 与 `tensors/` **不写** —— 前者要编码器、后者要 tensor_gen。
-不写空占位文件：一个空的 `seq.hex` 比没有它更容易让人以为"生成过了"。
+| 文件 | 谁写 | 层 |
+|---|---|---|
+| `case.json` | **isa_gen** | L1→L2 |
+| `seq.ir.json` | **isa_gen** | L1→L2 |
+| `preload.json` | **isa_gen** | L1→L2 |
+| `expect.json` | **isa_gen** | L1→L2 |
+| `seq.hex` + `reg-init.txt` | **`encode/`** | **L3 二进制编码**（§3.1） |
+| `seq.lst` | **`encode/`** | 上一条的**人可读视图** —— NICE/VNICE 指令流逐条列出 |
+| `tensors/*.hex` | **`tensors/`**（tensor_gen） | §3.12.9 |
+| `manifest/*.json` + `registry.json` | **`tensors/`** | §3.12.9 |
+
+`registry.json` 是 isa_gen 的 ref 解析 / CMI preload / scoreboard 共用的
+**唯一枢纽**（§3.14.4）—— 所以由 tensor_gen 写、三方读。
+
+**约定**：三个组件必须往**同一个 `tests/cases/<case_name>/`** 写，
+各自只写自己那几份、**不覆盖别人的**。两条判据：
+
+- `expect.json` 先由本工具写**锚点**、后由 ISS **覆盖期望值** —— 这是唯一允许的
+  原地更新（文件头的 `"$comment"` 已声明这件事）
+- 其余文件「谁写谁负责」，跨组件不重写
+
+> `seq.hex + reg-init` 的措辞出自 §3.0 的产物图；§3.6 的布局只列了 `seq.hex`。
+
+#### 为什么本工具不写那两份
+
+| 缺什么 | 归属 | 依据 |
+|---|---|---|
+| `seq.hex` | **编码器** | §3.1 把 L3（二进制编码）划成独立层，理由之一是**编码表变更只影响编码器模块**。若本工具直产二进制，改一次 funct7 就得重跑全部用例 —— 而现在 IR 一个字节都不用动 |
+| `tensors/` | **tensor_gen** | §3.14.1 的契约是「**标量走指令字段、张量走内存**」，IR 里只放 `$t.xxx` 句柄；§3.14.4 又立了 registry 为**唯一枢纽**，工具之间**不允许再传数据文件** |
+
+#### 不写空占位文件
+
+一个空的 `seq.hex` 比没有它**更容易让人以为"生成过了"**。缺就是缺，
+让下游一眼看出来 —— 和本工具其它地方的「fail loud」是同一条纪律
+（`illegal_ratio > 0` 记成 note、EDA 缺失报 `EDA_MISSING`、无输入时不静默填 `dut`）。
 
 ---
 
@@ -222,8 +249,11 @@ src/tools/isa_gen_tools/
 
 ## 与别的工具的关系
 
-**没有 import 关系。** 本仓库的规矩是工具之间只有**文件格式契约**：
+**没有 import 关系。** 本仓库的规矩是工具之间只有**文件格式契约**
+（谁往同一个用例目录写哪几份，见上文「落盘布局」）：
 
+- 与 **编码器**（§3.1 的 L3）：`seq.ir.json`。本工具产 L2，编码器读它产
+  `seq.hex`；两者分层是因为**编码表变更只影响编码器模块**
 - 与 `tensor_gen`：`preload.json` 里的 `ref` 句柄（本工具只给句柄与 `exp_range`，
   张量数据由 tensor_gen 生成）
 - 与 `tool_uvm`：无（IR 不产 UVM 代码）

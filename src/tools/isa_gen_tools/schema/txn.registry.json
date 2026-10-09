@@ -122,6 +122,11 @@
           "src"
         ],
         "writes": []
+      },
+      "operands": {
+        "rd_lmem_drv_xn": {
+          "rs1val": "src"
+        }
       }
     },
     {
@@ -340,6 +345,12 @@
         "writes": [
           "dst"
         ]
+      },
+      "operands": {
+        "tld_drv_xn": {
+          "rs1val": "dst",
+          "rs2val": "src"
+        }
       }
     },
     {
@@ -761,6 +772,16 @@
         "writes": [
           "out"
         ]
+      },
+      "operands": {
+        "gemm_out_org_pre_xn": {
+          "rs1val": "out",
+          "rs2val": "origin"
+        },
+        "gemm_drv_xn": {
+          "rs1val": "in",
+          "rs2val": "wgt"
+        }
       }
     },
     {
@@ -800,6 +821,16 @@
         "writes": [
           "out"
         ]
+      },
+      "operands": {
+        "gemm_out_org_pre_xn": {
+          "rs1val": "out",
+          "rs2val": "origin"
+        },
+        "gemm_acc_drv_xn": {
+          "rs1val": "in",
+          "rs2val": "wgt"
+        }
       }
     },
     {
@@ -840,6 +871,16 @@
         "writes": [
           "out"
         ]
+      },
+      "operands": {
+        "gemm_out_sc_pre_xn": {
+          "rs1val": "out",
+          "rs2val": "scale"
+        },
+        "gemm_dq_drv_xn": {
+          "rs1val": "in",
+          "rs2val": "wgt"
+        }
       }
     },
     {
@@ -875,6 +916,16 @@
         "writes": [
           "out"
         ]
+      },
+      "operands": {
+        "gemm_out_sc_pre_xn": {
+          "rs1val": "out",
+          "rs2val": "scale"
+        },
+        "gemm_dq_acc_drv_xn": {
+          "rs1val": "in",
+          "rs2val": "wgt"
+        }
       }
     },
     {

@@ -8,9 +8,11 @@
     两处各写一遍落盘逻辑，迟早有一处先改 —— 而"落盘布局"是文档规定的契约
     （§3.6），不是各人的实现细节。
 
-**缺什么就少写什么**：`seq.hex` 要编码器（v0 没有）、`tensors/` 要 tensor_gen
-（独立工具）。不写空占位文件 —— 一个空的 `seq.hex` 比没有它更容易让人
-以为"生成过了"。
+**缺什么就少写什么**：`tensors/` 要 tensor_gen（独立工具）。不写空占位文件
+—— 一个空的 `seq.hex` 比没有它更容易让人以为"生成过了"。
+
+`seq.hex` / `reg-init.txt` 由 `encode/` 那层产（§3.1 的 L3）。它们**不是 JSON**
+（ISS 要按行读 32bit 字），所以走单独一条写入路径。
 """
 from __future__ import annotations
 
@@ -26,11 +28,20 @@ ARTIFACTS: Tuple[Tuple[str, Any], ...] = (
     ("expect.json", "expect"),
 )
 
-#: 本工具**不产**的那两份，以及为什么 —— 一起给出去，省得人找
-NOT_PRODUCED = (
-    ("seq.hex", "要编码器（IR → 32bit），不在本工具"),
-    ("tensors/*.hex", "要 tensor_gen（独立工具），本工具只给 ref 句柄"),
+#: L3 编码产物 —— 文本，不是 JSON。`(文件名, encode dict 里的键)`。
+#: `seq.lst` 是**人读的**：`seq.hex` 只有裸 32bit 字，看不出是哪条指令。
+#: 两者逐行对应（第 n 个字的 off = n*4），可对着 ISS 的 PC 找。
+TEXT_ARTIFACTS: Tuple[Tuple[str, str], ...] = (
+    ("seq.hex", "seq_hex"),
+    ("seq.lst", "listing"),
+    ("reg-init.txt", "reg_init"),
 )
+
+#: 本工具**不产**的那些，以及为什么 —— 一起给出去，省得人找。
+#: 现在是**空的**：§3.6 的六件套已经全了（`seq.hex` 由 `encode/` 产、
+#: `tensors/` 由 `tensors/` 产）。留着这个常量是为了下次再有缺口时
+#: 有个明确的落点 —— 而不是让调用方去猜"少的那份是漏了还是本来就没有"。
+NOT_PRODUCED: Tuple[Tuple[str, str], ...] = ()
 
 
 def write_artifacts(out_dir: str | Path, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -53,6 +64,61 @@ def write_artifacts(out_dir: str | Path, payload: Dict[str, Any]) -> Dict[str, A
             json.dumps(body, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8")
         written.append(filename)
+
+    # ── L3 编码产物（§3.1）—— 文本 ──
+    # 编码失败时 `encode` 里是 `{"error", "kind"}`，那就**不写** ——
+    # 不写空文件（同一条纪律：空的 seq.hex 比没有它更容易让人以为生成过了）。
+    encode = payload.get("encode") or {}
+    warnings: List[str] = []
+    for filename, key in TEXT_ARTIFACTS:
+        body = encode.get(key)
+        if not body:
+            continue
+        (out / filename).write_text(body, encoding="utf-8")
+        written.append(filename)
+    if encode.get("gaps"):
+        warnings = [f"{g.get('op')}.{g.get('slot')}（{g.get('enable')}=1）"
+                    for g in encode["gaps"]]
+
+    # ── tensor_gen 产物（§3.12.9）──
+    # 每个张量两份：数据（`tensors/<name>.hex`）与自述（`manifest/<name>.json`）。
+    # 再加一份 `registry.json` —— 它是 isa_gen 的 ref 解析 / CMI preload /
+    # scoreboard 共用的**唯一枢纽**（§3.14.4）。
+    tensors = payload.get("tensors") or {}
+    for entry in (tensors.get("entries") or []):
+        name = str(entry.get("name") or "")
+        if not name:
+            continue
+        tdir = out / "tensors"
+        tdir.mkdir(exist_ok=True)
+        (tdir / f"{name}.hex").write_text(entry.get("hex") or "", encoding="utf-8")
+        written.append(f"tensors/{name}.hex")
+
+        mdir = out / "manifest"
+        mdir.mkdir(exist_ok=True)
+        (mdir / f"{name}.json").write_text(
+            json.dumps(entry.get("manifest") or {}, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8")
+        written.append(f"manifest/{name}.json")
+
+    if tensors.get("registry"):
+        (out / "registry.json").write_text(
+            json.dumps(tensors["registry"], ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8")
+        written.append("registry.json")
+
+    not_produced: List[Dict[str, str]] = [
+        {"file": name, "reason": why} for name, why in NOT_PRODUCED]
+    if encode.get("error"):
+        not_produced.append({"file": "seq.hex / reg-init.txt",
+                             "reason": f"编码失败：{encode['error']}"})
+    if tensors.get("error"):
+        not_produced.append({"file": "tensors/ · manifest/ · registry.json",
+                             "reason": f"tensor_gen 失败：{tensors['error']}"})
+
     return {"out_dir": str(out), "written": written,
-            "not_produced": [{"file": name, "reason": why}
-                             for name, why in NOT_PRODUCED]}
+            # 有 gap = 某些指令字里那一槽是 0（读 x0）。**必须让调用方看见** ——
+            # 0 是合法操作数，仿真不会在那里报错。
+            "operand_gaps": warnings,
+            "tensor_notes": list(tensors.get("notes") or []),
+            "not_produced": not_produced}

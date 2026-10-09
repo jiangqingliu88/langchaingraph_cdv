@@ -63,12 +63,50 @@ class TestCompile:
         """清单里配了 `input` —— 打开就该有东西可编译，不是空编辑框。"""
         assert "npu_gemm_smoke" in module.editor.toPlainText()
 
-    def test_compiling_fills_all_four_tables(self, module):
+    def test_compiling_fills_all_six_tables(self, module):
         module.compile_dsl()
-        assert module.instruction_model.rowCount() > 0
+        assert module.instruction_model.rowCount() > 0     # IR
+        assert module.encode_model.rowCount() > 0          # L3 编码后的字
+        assert module.tensor_model.rowCount() > 0          # tensor_gen 的产物
         assert module.report_model.rowCount() > 0
         assert module.alloc_model.rowCount() > 0
         assert module.payload is not None
+
+    def test_the_encode_tab_shows_words_isa_and_register_values(self, module):
+        """编码清单要能回答"这个字是哪条指令、读的哪个寄存器、里面是什么值"。
+
+        三样缺一都得回去翻别的文件：word 缺了没法对着 ISS 找、
+        `isa` 缺了分不出 nice/vnice（opcode 不同）、寄存器值缺了还得开 reg-init。
+        """
+        module.compile_dsl()
+        rows = module.encode_model.rows
+        assert all(len(r["word"]) == 8 for r in rows), "word 应是 8 位 hex"
+        assert {r["isa"] for r in rows} <= {"nice", "vnice"}
+        # `rs1` 那一格带值（`x2 = 0x4000`），不是光一个号
+        assert any("= 0x" in r["rs1"] for r in rows), [r["rs1"] for r in rows][:4]
+        # 使能位没置位的槽显示 `—`，而不是骗人的 `x0`
+        assert any(r["rs2"] == "—" for r in rows)
+
+    def test_gaps_are_marked_on_the_row_not_only_in_a_footnote(self, module):
+        """没填出来的操作数槽**当场标在那一行**。
+
+        不标的话，它看起来就像"故意读 x0" —— 而 0 是合法操作数，
+        仿真不会在那里报错。这正是这个工具最该防的那类静默。
+        """
+        module.compile_dsl()
+        encode = module.payload["encode"]
+        if not encode.get("gaps"):
+            pytest.skip("这份示例没有空操作数槽")
+        notes = "　".join(r["note"] for r in module.encode_model.rows)
+        assert "未填" in notes, [r["note"] for r in module.encode_model.rows]
+
+    def test_the_tensor_tab_shows_layout_and_content_hash(self, module):
+        """张量那一页要能看出"这块数据是怎么摆的"，不只是"有多大"。"""
+        module.compile_dsl()
+        rows = module.tensor_model.rows
+        assert all(r["name"] and r["dtype"] for r in rows)
+        assert all(r["hash"] for r in rows), "content_hash 是 E7 缓存键，不能空"
+        assert all("stride1=" in r["layout"] for r in rows)
 
     def test_the_summary_reports_the_shape(self, module):
         module.compile_dsl()
@@ -137,9 +175,16 @@ class TestExport:
         monkeypatch.setattr(module, "export_artifacts", module.export_artifacts)
         result = module.run_tool("isa_gen.export", force=True,
                                  out_dir=str(target), payload=module.payload)
-        assert result["written"] == ["case.json", "seq.ir.json",
-                                     "preload.json", "expect.json"]
-        assert {p.name for p in target.iterdir()} == set(result["written"])
+        # §3.6 的六件套全在 —— 编码器（seq.hex / seq.lst / reg-init）
+        # 与 tensor_gen（tensors/ · manifest/ · registry.json）都由这里落盘
+        written = result["written"]
+        assert {"case.json", "seq.ir.json", "preload.json", "expect.json",
+                "seq.hex", "seq.lst", "reg-init.txt", "registry.json"} <= set(written)
+        assert any(w.startswith("tensors/") for w in written)
+        assert any(w.startswith("manifest/") for w in written)
+        # 顶层文件与 `written` 对得上（子目录里的另算）
+        top = {p.name for p in target.iterdir() if p.is_file()}
+        assert top == {w for w in written if "/" not in w}
 
     def test_export_is_refused_without_force(self, module, tmp_path):
         """写盘的那条不许被顺手调用 —— 切个标签页就往磁盘写东西是不可逆的。"""

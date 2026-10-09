@@ -56,6 +56,11 @@ def _spec_from_dict(entry: Dict[str, Any], source: Any) -> TxnSpec:
         cfg=str(entry.get("cfg") or ""),
         roles={str(k): [str(x) for x in v]
                for k, v in (entry.get("roles") or {}).items()},
+        # 槽位 → 角色。`{"gemm_drv_xn": {"rs1val": "in", "rs2val": "wgt"}}`。
+        # 结构原样带过；**语义校验交给生成器**（仓储层只读文件）
+        operands={str(op): {str(slot): str(role)
+                            for slot, role in (slots or {}).items()}
+                  for op, slots in (entry.get("operands") or {}).items()},
         note=str(entry.get("note") or ""),
         deferred=bool(entry.get("deferred", False)),
     )

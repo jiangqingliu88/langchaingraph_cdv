@@ -535,7 +535,8 @@ class TestRealManifestBuilds:
         window = make_window(qt_app, ctx)
         try:
             assert window.manager.failures() == {}
-            assert len(window.modules) == 30
+            # 31 = 30 + `verify.isa_gen`（2026-10 新增的「ISA 激励」页）
+            assert len(window.modules) == 31
             assert {m.module_id for m in window.modules} >= {
                 "design.output", "model.output", "ops.output", "ops.regression_status",
                 "ops.regression_wave", "ops.regression_coverage",
@@ -561,7 +562,10 @@ class TestRealManifestBuilds:
                     "产物审查", "签核判定", "运行清单", "规则草案",
                     "决策轨迹", "进度趋势", "测试点 / 资产",
                     "设计产出", "模型产出", "验证产出",
-                    "Case 建模", "回归产出", "回归状态", "回归波形", "回归覆盖率",
+                    # ISA 激励归 verify 线（order 30 > Case 建模 20）：先声明测什么，
+                    # 再把它铺成指令流。清单里的位置已与 `group: verify` 对齐。
+                    "Case 建模", "ISA 激励",
+                    "回归产出", "回归状态", "回归波形", "回归覆盖率",
                     "覆盖率产出", "覆盖率豁免",
                     "仿真日志", "调试产出", "签核产出"]
             for module_id in expected_center_order(window):

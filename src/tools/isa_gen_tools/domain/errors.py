@@ -151,8 +151,27 @@ class DeterminismError(CompileError):
     kind = "determinism"
 
 
+class OperandUnsupportedError(CompileError):
+    """编码表里的操作数形态本版本还生成不了。
+
+    实测 95 条指令里 **63 条**落在这里（`domain/operands.py` 的分类）：
+      · `addr_part` —— 一个 44bit 地址拆成两半（tld / gspe 一族，§3.12.2 T4）
+      · `scalar`    —— 地址 + 标量（bc / v1s1 等，DSL 还没有标量来源）
+      · `mask` / `cfg` / `special` —— `core_mask`、`addr of cfg_reg` 等复合字段
+
+    为什么要单独一个类、而不是笼统报"格式不认识"：
+    这三种形态**各自要补的东西不一样**（T4 拆地址 / DSL 标量来源 / Cfg 表），
+    报 `kind` 才能让人知道该去补哪一块。
+
+    **绝不用"差不多的解释"糊过去** —— 漏读一段位域就是把错误的高位送进仿真，
+    表现是数据搬到别处且不报错。
+    """
+    kind = "operand_unsupported"
+
+
 #: 具名类清单 —— 测试按它逐类造反例；`api` 按它判断哪些异常转成 dict。
 COMPILE_ERROR_KINDS = (
     SchemaError, RegistryError, LintError, UnresolvedRefError, AllocError,
     SolverError, WhitelistError, PairingError, DataPathError, DeterminismError,
+    OperandUnsupportedError,
 )
