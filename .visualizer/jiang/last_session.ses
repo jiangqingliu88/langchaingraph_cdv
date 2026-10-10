@@ -1,33 +1,33 @@
 <!-- THIS IS TOOL GENERATED SESSION FILE. PLEASE DO NOT MODIFY THIS -->
 <!DOCTYPE visualizer_session>
-<session skip_do_file="0" version="3">
+<session version="3" skip_do_file="0">
  <app argc="5">
-  <argv value="visualizer" pos="0"/>
-  <argv value="+wavefile+D:\SignOffAI\output_e2e_fix2_jiang_20261011_004653\regression_run\p0\build_build_apb_uart_dut\test_apb_uart_D_ADDR_0\waves\apb_uart_D_ADDR_0.db" pos="1"/>
-  <argv value="+viswave" pos="2"/>
-  <argv value="+read_viswave_info" pos="3"/>
-  <argv value="+genDesignOMFromWave" pos="4"/>
+  <argv pos="0" value="visualizer"/>
+  <argv pos="1" value="+wavefile+D:\SignOffAI\output_e2e_fix2_jiang_20261011_004653\regression_run\p0\build_build_apb_uart_dut\test_apb_uart_D_DATA_0_2\waves\apb_uart_D_DATA_0_2.db"/>
+  <argv pos="2" value="+viswave"/>
+  <argv pos="3" value="+read_viswave_info"/>
+  <argv pos="4" value="+genDesignOMFromWave"/>
  </app>
  <window_config>
-  <dockareas top="0" left="593" bottom="266" right="593"/>
-  <taborder left="structure+" bottom="transcript+" right="variables+"/>
-  <activetab left="structure" bottom="transcript" activewindow="structure" right="variables"/>
-  <window x="0" type="structure" y="0" dock_location="left" visible="1" undocked="0"/>
-  <window x="0" type="variables" y="0" dock_location="right" visible="1" undocked="0"/>
-  <window x="0" type="transcript" y="0" dock_location="bottom" visible="1" undocked="0"/>
-  <window height="800" x="50" type="rtl" y="50" visible="1" width="1200" undocked="0"/>
-  <window height="616" x="150" type="wave" y="171" dock_location="bottom" visible="1" width="1076" undocked="1"/>
+  <dockareas left="593" right="593" top="0" bottom="266"/>
+  <taborder left="structure+" right="variables+" bottom="transcript+"/>
+  <activetab left="structure" right="variables" activewindow="structure" bottom="transcript"/>
+  <window visible="1" dock_location="left" type="structure" x="0" y="0" undocked="0"/>
+  <window visible="1" dock_location="right" type="variables" x="0" y="0" undocked="0"/>
+  <window visible="1" dock_location="bottom" type="transcript" x="0" y="0" undocked="0"/>
+  <window width="1200" visible="1" height="800" type="rtl" x="50" y="50" undocked="0"/>
+  <window width="1076" visible="1" height="616" dock_location="bottom" type="wave" x="150" y="171" undocked="1"/>
  </window_config>
  <wave_file_mgr>
-  <waveFile fileName="D:\SignOffAI\output_e2e_fix2_jiang_20261011_004653\regression_run\p0\build_build_apb_uart_dut\test_apb_uart_D_ADDR_0\waves\apb_uart_D_ADDR_0.db" tagName="F0" waveType="0"/>
+  <waveFile waveType="0" tagName="F0" fileName="D:\SignOffAI\output_e2e_fix2_jiang_20261011_004653\regression_run\p0\build_build_apb_uart_dut\test_apb_uart_D_DATA_0_2\waves\apb_uart_D_DATA_0_2.db"/>
  </wave_file_mgr>
  <gui>
   <main_window visible="1"/>
-  <watchTower_cur_setting curRadix="8" curActiveWaveFile="F0" curDisplayTimeUnitStr="1ps" customDisplayTimeUnitListStr="" curDisplayTimeUnit="-12">
+  <watchTower_cur_setting curActiveWaveFile="F0" curRadix="8" customDisplayTimeUnitListStr="" curDisplayTimeUnit="-12" curDisplayTimeUnitStr="1ps">
    <curTime hightime="0" lowtime="0"/>
   </watchTower_cur_setting>
   <structure selection="apb_uart_bench_tb_top"/>
-  <variables UPF="0" VA="0" CA="0"/>
+  <variables CA="0" VA="0" UPF="0"/>
   <transcript/>
   <wave name="Wave0">
    <timeunit value="14"/>
@@ -36,7 +36,7 @@
   </wave>
  </gui>
  <wave_mgr sync_time_range="0">
-  <waveWindow displayScopeName="1" valueWidth="83" primNudge="1" justifySignalPath="Right" displayTimeUnit="-12" nameWidth="216" snapToEdge="1" displayRadixWithValue="1" alignBaseName="0" displayGrid="0" displayTimeUnitStr="1ps" value_tooltip="0" secNudge="1" showSecCursor="0" displayGlobalView="1" swapRepresentationOfX="0" displayLeadingZeros="0" signalHeight="21" displayFileTag="1" wintype="4" trackViewToTime="1" showMarkers="1" waveWidth="729">
+  <waveWindow displayScopeName="1" justifySignalPath="Right" wintype="4" showMarkers="1" nameWidth="216" primNudge="1" displayGlobalView="1" snapToEdge="1" secNudge="1" trackViewToTime="1" displayTimeUnitStr="1ps" signalHeight="21" displayGrid="0" alignBaseName="0" showSecCursor="0" displayLeadingZeros="0" displayRadixWithValue="1" valueWidth="83" value_tooltip="0" waveWidth="729" displayFileTag="1" displayTimeUnit="-12" swapRepresentationOfX="0">
    <window name="Wave0">
     <timeunit value="14"/>
     <frequnit value="2"/>

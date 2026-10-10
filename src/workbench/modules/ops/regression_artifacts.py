@@ -335,9 +335,10 @@ class RegressionWaveModule(_ArtifactPage):
     ARTIFACT_KEY = "wave"
     ARTIFACT_NOUN = "波形"
     OPEN_LABEL = "打开波形"
-    HINT = ("一条用例一行。**点一行就直接打开那条用例的波形**（WLF，装了 Questa "
-            "就是它的波形窗）。缺波形的也列出来 —— 那多半是没跑到底的用例，"
-            "少了波形本身就是要看的东西。总覆盖率的入口在「回归状态」页。")
+    HINT = ("一条用例一行。**点一行就直接用 Questa Visualizer 打开那条用例的波形**"
+            "（波形业务产的 `qwave.db`，走 `visualizer -wavefile`；老产物 `.wlf` 则用 "
+            "`vsim -view`，按扩展名自动选）。缺波形的也列出来 —— 那多半是没跑到底的"
+            "用例，少了波形本身就是要看的东西。总覆盖率的入口在「回归状态」页。")
 
     def _open(self, row: Dict[str, Any]) -> None:
         if not row:
@@ -347,15 +348,16 @@ class RegressionWaveModule(_ArtifactPage):
 
 
 class RegressionCoverageModule(_ArtifactPage):
-    """回归覆盖率 —— 逐条用例的覆盖率报告 + 页头的总覆盖率。"""
+    """回归覆盖率 —— 逐条用例的覆盖率库 + 页头的总覆盖率。"""
 
     ARTIFACT_KEY = "cov"
     ARTIFACT_NOUN = "覆盖率库"
-    OPEN_LABEL = "打开覆盖率报告"
-    HINT = ("一条用例一行。**点一行打开那条用例的覆盖率报告**（HTML，库里是二进制，"
-            "人看不了 —— 报告是现生成/复用的）；右键还能**「在 Visualizer 看覆盖率」**"
-            "（可下钻，点 0 覆盖的 bin 跳源码）。页头两个按钮开的是**整个环境**的"
-            "总覆盖率：报告看「整份结论」、Visualizer 看「缺口在哪」；"
+    OPEN_LABEL = "在 Visualizer 看覆盖率"
+    HINT = ("一条用例一行。**点一行直接用 Questa Visualizer 打开那条用例的覆盖率库**"
+            "（`visualizer -ucdbfile`，可下钻：点 0 覆盖的 bin 跳源码，看得到"
+            "「这条用例到底漏了哪个 bin」）。右键另有**「打开覆盖率报告（HTML）」**"
+            "—— 库里是二进制，人看不了，报告是拿它现生成/复用的，适合整份结论。"
+            "页头两个按钮同理，开的是**整个环境**的总覆盖率。"
             "「每条都挺高、总的就是上不去」和「某一条特别低」是两种完全不同的结论，"
             "两边都要看得见。")
 
@@ -426,18 +428,18 @@ class RegressionCoverageModule(_ArtifactPage):
         cov_actions.open_total_coverage_visualizer(self, self.run_dir)
 
     def _extra_menu_actions(self, menu, row: Dict[str, Any], path: str) -> None:
-        action = menu.addAction("在 Visualizer 看覆盖率",
-                                lambda: self._open_visualizer(row))
+        action = menu.addAction("打开覆盖率报告（HTML）",
+                                lambda: self._open_report(row))
         action.setEnabled(bool(path))
         if not path:
             action.setToolTip("这轮回归的仿真业务里没有开 `cov`")
 
-    def _open_visualizer(self, row: Dict[str, Any]) -> None:
+    def _open_report(self, row: Dict[str, Any]) -> None:
         if not row:
             return
-        cov_actions.open_case_coverage_visualizer(self, self._artifact_path(row))
+        cov_actions.open_case_coverage(self, self._artifact_path(row))
 
     def _open(self, row: Dict[str, Any]) -> None:
         if not row:
             return
-        cov_actions.open_case_coverage(self, self._artifact_path(row))
+        cov_actions.open_case_coverage_visualizer(self, self._artifact_path(row))

@@ -272,13 +272,28 @@ class TestCoveragePage:
         assert cov_page.btn_total.text() == "打开总覆盖率报告"
         assert cov_page.btn_total.isEnabled()
 
-    def test_click_opens_that_cases_report(self, cov_page, monkeypatch):
+    def test_click_opens_that_cases_coverage_in_visualizer(self, cov_page, monkeypatch):
+        """点一行 → Visualizer（`-ucdbfile`），**不是**先摊成 HTML。
+
+        覆盖率库是二进制，HTML 报告是拿它现生成的；而"这条用例到底漏了哪个 bin"
+        要的是可下钻的交互视图，所以左键这条主路直接进 Visualizer。
+        """
+        from ..modules.ops import cov_actions
+
+        opened = []
+        monkeypatch.setattr(cov_actions, "open_case_coverage_visualizer",
+                            lambda module, db: opened.append(db))
+        cov_page._on_cell_clicked(_row_of(cov_page, "t_both"))
+        assert opened and opened[0].endswith("questa.db")
+
+    def test_the_report_is_still_one_menu_click_away(self, cov_page, monkeypatch):
+        """HTML 报告没被拿掉，只是挪到右键 —— 整份结论那条路还得在。"""
         from ..modules.ops import cov_actions
 
         opened = []
         monkeypatch.setattr(cov_actions, "open_case_coverage",
                             lambda module, db: opened.append(db))
-        cov_page._on_cell_clicked(_row_of(cov_page, "t_both"))
+        cov_page._open_report(cov_page._row_at(_row_of(cov_page, "t_both")))
         assert opened and opened[0].endswith("questa.db")
 
     def test_total_button_goes_through_the_shared_action(self, cov_page, monkeypatch):
