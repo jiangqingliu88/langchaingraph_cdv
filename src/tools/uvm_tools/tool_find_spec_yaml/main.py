@@ -1251,6 +1251,13 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         （`UVM_ERROR :    3`）；匹配裸 `UVM_ERROR :` 会连 `UVM_ERROR :    0` 一起命中。
         日志走 `-l sim_vsim.log`，避免和框架那句收尾重定向抢同一个文件。
 
+        **为什么还要匹配 `FATAL ERROR` / `Errors: *[1-9]`**：UVM 那两条计数管不到
+        "仿真根本没起来"——实测 8 条用例挂在 `vsim-3772 Failed to load DPI auto
+        compile shared library`，vsim 直接 `FATAL ERROR while loading design` 退出，
+        日志里一条 `UVM_ERROR :` 都没有，于是**全部记成 PASS**（波形、覆盖率自然
+        也没有）。末尾那行 `# Errors: 2, Warnings: 0` 是 vsim 自己的结算，按它判
+        才盖得住这一类。
+
         `{{ MODE_OPTS }}` 是**仿真业务的落点**（波形 / 覆盖率 / 调试…）：里面装的是
         本次启用的那几门业务的选项串，由回归框架的 `apply_modes()` 按 `modes:` 表
         拼好（表见 `src/tools/regression_tools/common_base.yaml`，取值见 `sim_modes.py`）。
@@ -1261,7 +1268,8 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             "vsim -c -sv_lib {{ UVM_DPI }} -onfinish stop -work {{ WORK }} "
             f"{top} +UVM_TESTNAME={uvm_test} -l sim_vsim.log "
             '-do "log -r /*; run -all; quit -f" {{ MODE_OPTS | default("") }} ; '
-            '! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]" sim_vsim.log'
+            '! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]|FATAL ERROR|Errors: *[1-9]"'
+            ' sim_vsim.log'
         )
 
     # 构建测试列表

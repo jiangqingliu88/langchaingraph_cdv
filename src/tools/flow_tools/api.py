@@ -35,6 +35,7 @@ from typing import Any, Dict, List, Optional
 # 读的时候怎么认）。这里只许调它的函数，不许再拼一次字符串。
 from src.layers.l1_infrastructure.layout import regression_root as _layout_regression_root
 from src.layers.l1_infrastructure.layout import latest_root as _layout_latest_root
+from src.layers.l1_infrastructure.layout import stage_roots as _layout_stage_roots
 from src.layers.l1_infrastructure.layout import test_dirs as _layout_test_dirs
 
 #: 门禁 id → 中文名。顺序即**显示顺序**（audit agent 的 gates 是 dict，无序）。
@@ -395,16 +396,25 @@ def _read_sim_time(test_dir: Path) -> Optional[float]:
 
 #: 「日志里出现了非零的 UVM 错误计数」的判别式 —— 与配置里那条判定规则同源：
 #: 生产 `regression.yaml` 的 run_cmd 结尾就是
-#: `! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]"`。
+#: `! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]|FATAL ERROR|Errors: *[1-9]"`
+#: （见 `tool_find_spec_yaml._sim_run_cmd`）。删减这里的分支就是让"推断"与
+#: "框架判的"两套判据分家 —— 那条 grep 是**唯一**的失败判据，读者要跟它一致。
 _UVM_TALLY_RE = re.compile(r"UVM_(?:ERROR|FATAL)\s*:\s*([1-9]\d*)")
+
+#: 「仿真根本没起来」的判别式 —— UVM 那两条计数盖不住这一类。
+#: 实测：8 条用例挂在 `vsim-3772 Failed to load DPI auto compile shared library`，
+#: vsim 直接 `FATAL ERROR while loading design` 退出，日志里一条 `UVM_ERROR :`
+#: 都没有，于是被记成 PASS（波形、覆盖率自然也没有）。末尾 `# Errors: 2, Warnings: 0`
+#: 是 vsim 自己的结算，按它判才盖得住。
+_SIM_FATAL_RE = re.compile(r"FATAL ERROR|Errors:\s*[1-9]")
 
 
 def _derive_status(counts: Dict[str, Any], log_path: Optional[Path]) -> str:
     """**从日志推断**结论 —— 只在没有权威记录时才用。
 
     这不是「猜」：它用的正是配置里那条判定规则（日志里有没有非零的 UVM 错误
-    计数 / 断言失败）。但它是**推断**，与框架判完落盘的 `status.env` 不是一回事，
-    所以调用方必须把它标成 `derived_from_log`，不能冒充权威结论。
+    计数 / 断言失败 / 仿真致命错）。但它是**推断**，与框架判完落盘的 `status.env`
+    不是一回事，所以调用方必须把它标成 `derived_from_log`，不能冒充权威结论。
 
     返回 "pass" / "fail" / ""（推不出来就别推）。
     """
@@ -416,7 +426,7 @@ def _derive_status(counts: Dict[str, Any], log_path: Optional[Path]) -> str:
         text = log_path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return ""
-    if _UVM_TALLY_RE.search(text):
+    if _UVM_TALLY_RE.search(text) or _SIM_FATAL_RE.search(text):
         return "fail"
     return "pass"
 
@@ -500,33 +510,64 @@ def _dir_has_artifact(test_dir: Path) -> bool:
     return bool(_find_wave(test_dir)[0] or _find_coverage(test_dir)[0])
 
 
-def _case_dirs(run_root: Path) -> List[Path]:
-    """run 根 → **一个用例一个目录**，分级布局也不例外。
+def _dir_has_evidence(test_dir: Path) -> bool:
+    """这一级的这个目录**跑过没有** —— 判据是框架判完落的 `status.env` 或仿真日志。
+
+    空壳（`ShellGenerator` 铺了目录但这一级没跑它）两样都没有。
+    """
+    if (test_dir / "status.env").is_file():
+        return True
+    try:
+        return any(p.is_file() and p.stat().st_size > 0
+                   for p in test_dir.glob("*.log"))
+    except OSError:
+        return False
+
+
+def _case_dirs(run_root: Path) -> Dict[str, List[Path]]:
+    """run 根 → **{用例名: 它在每一级的目录}**（旧 → 新），分级布局也不例外。
 
     `layout.test_dirs()` 会把每一级的 `build_*/test_*` 全扫出来 —— 那是"证据"该有
     的样子（见它的 docstring）。但分级回归**给每个用例在每一级都建了目录**：实测
-    一轮里 265 个目录只对应 53 个用例，真正跑过那条用例的那一级才有产物，其余是空壳。
-    所以这里按**用例名**收口，并挑**真的落了产物的那一份**（都没产物时挑最新的）——
-    否则打开的一定是壳，页面上永远是"没有波形 / 没有覆盖率"。
+    一轮里 265 个目录只对应 53 个用例，真跑过那条用例的那一级才有 `status.env` /
+    日志 / 波形，其余是空壳。
 
     **为什么不能用 `latest_root`（最后一级）枚举用例**：那是读 `report.json` 该用的
     层，不是"用例全集"该用的层。分级回归把用例分给各级去跑，最后一级往往只剩
-    "随机/通用"那批（跑完什么都不落），于是整页看着像坏了 —— 而产物明明在 p0/p1/p2。
+    "随机/通用"那批（跑完什么都不落），于是整页看着像坏了 —— 而证据明明在 p0/p1/p2。
+
+    **为什么要留全每一级、而不是挑一个**：一条用例的状态和它的产物未必在同一级 ——
+    状态取"跑过它的那一级"，波形/覆盖率取"落了产物的那一级"，两者可能不是同一个。
+    收成一个目录就得二选一，实测立刻错：`test_apb_slave_throughput` 在 p2 跑过
+    （有 status.env）但那一级没落波形，而 p3 有个空壳更新 —— 挑"最新"就挑到空壳，
+    页面上那条成了 `unknown`、波形也没有。
     """
-    by_name: Dict[str, Path] = {}
+    by_name: Dict[str, List[Path]] = {}
     for d in _layout_test_dirs(run_root):
-        name = d.name[len("test_"):]
-        cur = by_name.get(name)
-        if cur is None:
-            by_name[name] = d
-            continue
-        fresh, best = _dir_has_artifact(d), _dir_has_artifact(cur)
-        if fresh != best:
-            by_name[name] = d if fresh else cur
-        elif _newest_mtime(d) > _newest_mtime(cur):
-            by_name[name] = d
-    return [by_name[n] for n in sorted(by_name,
-                                       key=lambda n: (by_name[n].parent.name, n))]
+        by_name.setdefault(d.name[len("test_"):], []).append(d)
+    for dirs in by_name.values():
+        dirs.sort(key=_newest_mtime)                 # 旧 → 新：末尾是最后跑的那一级
+    return by_name
+
+
+def _primary_dir(dirs: List[Path]) -> Path:
+    """这条用例的**状态 / 日志**取哪一级的目录。
+
+    优先"真跑过"的那一级（有 `status.env` / 日志），同样跑过的取**最新**的那次 ——
+    重跑会覆盖 `status.env`，最新的那个才是现在的结论。一个都没跑过时才退到最新的
+    空壳（那时 `unknown` 就是实话：声明了但哪一级都没跑）。
+    """
+    ran = [d for d in dirs if _dir_has_evidence(d)]
+    return (ran or dirs)[-1]
+
+
+def _first_artifact(dirs: List[Path], finder) -> tuple:
+    """这条用例的产物：**从最新一级往回找**，第一个有的就算它。"""
+    for d in reversed(dirs):
+        hit = finder(d)
+        if hit[0]:
+            return hit
+    return "", "none"
 
 
 def _artifact_facts(path: str) -> tuple:
@@ -596,17 +637,27 @@ def run_regression_status(run_dir: str = "") -> Dict[str, Any]:
                          f"（找过 {_layout_regression_root(root)} 和 {root}）"}
 
     report = _read_json(reg_root / "report.json") or {}
-    report_tasks = {str(t.get("name", "")): t
-                    for t in (report.get("tasks") or []) if isinstance(t, dict)}
+    # `report.json` 是**每一级各一份**（框架只写本级）。只读最后一级的那份，
+    # 前面几级跑过的用例在"状态回退到报告值"这条路上就查无此人。按级合并，
+    # 后面的级覆盖前面的（同一条用例重跑，最新那次才是现在的结论）。
+    report_tasks: Dict[str, Dict[str, Any]] = {}
+    for stage_dir in _layout_stage_roots(root):
+        for t in (_read_json(stage_dir / "report.json") or {}).get("tasks") or []:
+            if isinstance(t, dict) and t.get("name"):
+                report_tasks[str(t["name"])] = t
     comments = _read_json(reg_root / "test_comments.json") or {}
 
     rows: List[Dict[str, Any]] = []
     host = platform.node()
     # 用例枚举**看全每一级**（`layout.test_dirs` 的口径），按用例名收口 ——
-    # 只扫 `reg_root`（最后一级）会漏掉前面几级跑出来的全部产物。见 `_case_dirs`。
-    test_dirs = _case_dirs(root)
-    for test_dir in test_dirs:
-        name = test_dir.name[len("test_"):]
+    # 只扫 `reg_root`（最后一级）会漏掉前面几级跑出来的全部证据。见 `_case_dirs`。
+    cases = _case_dirs(root)
+    test_dirs = [d for dirs in cases.values() for d in dirs]
+    for name, dirs in sorted(cases.items(),
+                             key=lambda kv: (kv[1][-1].parent.name, kv[0])):
+        # 状态/日志取"真跑过的那一级"，波形/覆盖率各自从最新一级往回找 ——
+        # 两者未必在同一级（见 `_case_dirs` 的 docstring）。
+        test_dir = _primary_dir(dirs)
         reported = report_tasks.get(name) or {}
         # 状态来源三级：框架判完的 status.env（一手）> report.json > 从日志推断。
         # 前两者是**记录**，第三者是**推断** —— 分开标注，别让推断冒充权威结论。
@@ -628,8 +679,9 @@ def run_regression_status(run_dir: str = "") -> Dict[str, Any]:
             sim_time = reported.get("sim_time")
         uvm_err = counts["uvm_error"]
         assert_err = counts["assert_error"]
-        wave_path, wave_source = _find_wave(test_dir, reported.get("wave_path") or "")
-        cov_path, cov_source = _find_coverage(test_dir)
+        wave_path, wave_source = _first_artifact(
+            dirs, lambda d: _find_wave(d, reported.get("wave_path") or ""))
+        cov_path, cov_source = _first_artifact(dirs, _find_coverage)
         wave_kb, wave_time = _artifact_facts(wave_path)
         cov_kb, cov_time = _artifact_facts(cov_path)
 

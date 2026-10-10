@@ -1,51 +1,69 @@
 <!-- THIS IS TOOL GENERATED SESSION FILE. PLEASE DO NOT MODIFY THIS -->
 <!DOCTYPE visualizer_session>
 <session skip_do_file="0" version="3">
- <app argc="3">
+ <app argc="5">
   <argv value="visualizer" pos="0"/>
-  <argv value="-ucdbfile" pos="1"/>
-  <argv value="D:\SignOffAI\output_e2e_fix_jiang_20261011_003125\sim\coverage\merged.ucdb" pos="2"/>
+  <argv value="+wavefile+D:\SignOffAI\output_e2e_fix2_jiang_20261011_004653\regression_run\p0\build_build_apb_uart_dut\test_apb_uart_D_ADDR_0\waves\apb_uart_D_ADDR_0.db" pos="1"/>
+  <argv value="+viswave" pos="2"/>
+  <argv value="+read_viswave_info" pos="3"/>
+  <argv value="+genDesignOMFromWave" pos="4"/>
  </app>
  <window_config>
-  <dockareas right="300" left="1366" top="0" bottom="398"/>
-  <taborder left="structure+" bottom="transcript+coveragesummary+"/>
-  <activetab left="structure" activewindow="structure" bottom="transcript"/>
-  <window visible="1" type="structure" x="0" y="0" undocked="0" dock_location="left"/>
-  <window visible="1" type="transcript" x="0" y="0" undocked="0" dock_location="bottom"/>
-  <window visible="1" type="coveragesummary" x="0" y="0" undocked="0" dock_location="bottom"/>
-  <window visible="1" height="991" type="rtl" width="1920" x="-1" y="-9" undocked="0"/>
-  <window visible="0" path="D:/SignOffAI/output_e2e_fix_jiang_20261011_003125/bench/apb_uart_bench_tb_top.sv" type="source" x="0" y="0" firstVisibleLine="28" undocked="0" dock_location="center"/>
-  <window visible="0" path="D:/SignOffAI/output_e2e_fix_jiang_20261011_003125/agents/intr_agent/1_interface/intr_if.sv" type="source" x="0" y="0" firstVisibleLine="51" undocked="0" id="1" dock_location="center"/>
-  <window visible="1" path="D:/SignOffAI/output_e2e_fix_jiang_20261011_003125/rtl/uart_rx.sv" type="source" x="0" y="0" firstVisibleLine="1" undocked="0" id="2" dock_location="center"/>
+  <dockareas top="0" left="593" bottom="266" right="593"/>
+  <taborder left="structure+" bottom="transcript+" right="variables+"/>
+  <activetab left="structure" bottom="transcript" activewindow="structure" right="variables"/>
+  <window x="0" type="structure" y="0" dock_location="left" visible="1" undocked="0"/>
+  <window x="0" type="variables" y="0" dock_location="right" visible="1" undocked="0"/>
+  <window x="0" type="transcript" y="0" dock_location="bottom" visible="1" undocked="0"/>
+  <window height="800" x="50" type="rtl" y="50" visible="1" width="1200" undocked="0"/>
+  <window height="616" x="150" type="wave" y="171" dock_location="bottom" visible="1" width="1076" undocked="1"/>
  </window_config>
- <wave_file_mgr/>
+ <wave_file_mgr>
+  <waveFile fileName="D:\SignOffAI\output_e2e_fix2_jiang_20261011_004653\regression_run\p0\build_build_apb_uart_dut\test_apb_uart_D_ADDR_0\waves\apb_uart_D_ADDR_0.db" tagName="F0" waveType="0"/>
+ </wave_file_mgr>
  <gui>
-  <main_window visible="1">
-   <srcbrowser instancename="apb_uart_bench_tb_top" filepath="D:/SignOffAI/output_e2e_fix_jiang_20261011_003125/bench/apb_uart_bench_tb_top.sv"/>
-   <sourcetclcommands>
-    <tcl command="src activate source"/>
-    <tcl command="src top 29"/>
-   </sourcetclcommands>
-   <srcbrowser instancename="apb_uart_bench_tb_top.intr_if_inst" filepath="D:/SignOffAI/output_e2e_fix_jiang_20261011_003125/agents/intr_agent/1_interface/intr_if.sv"/>
-   <sourcetclcommands>
-    <tcl command="src activate source1"/>
-    <tcl command="src top 52"/>
-   </sourcetclcommands>
-   <srcbrowser instancename="apb_uart_bench_tb_top.u_apb_uart.u_uart_rx" filepath="D:/SignOffAI/output_e2e_fix_jiang_20261011_003125/rtl/uart_rx.sv" primary="true"/>
-   <sourcetclcommands>
-    <tcl command="src activate source2"/>
-    <tcl command="src top 2"/>
-   </sourcetclcommands>
-  </main_window>
-  <watchTower_cur_setting curRadix="8" curDisplayTimeUnit="0" customDisplayTimeUnitListStr="">
+  <main_window visible="1"/>
+  <watchTower_cur_setting curRadix="8" curActiveWaveFile="F0" curDisplayTimeUnitStr="1ps" customDisplayTimeUnitListStr="" curDisplayTimeUnit="-12">
    <curTime hightime="0" lowtime="0"/>
   </watchTower_cur_setting>
-  <structure selection="apb_uart_bench_tb_top.u_apb_uart.u_uart_rx"/>
+  <structure selection="apb_uart_bench_tb_top"/>
+  <variables UPF="0" VA="0" CA="0"/>
   <transcript/>
-  <coveragesummary/>
+  <wave name="Wave0">
+   <timeunit value="14"/>
+   <frequnit value="2"/>
+   <showdiff value="0"/>
+  </wave>
  </gui>
- <wave_mgr sync_time_range="0"/>
+ <wave_mgr sync_time_range="0">
+  <waveWindow displayScopeName="1" valueWidth="83" primNudge="1" justifySignalPath="Right" displayTimeUnit="-12" nameWidth="216" snapToEdge="1" displayRadixWithValue="1" alignBaseName="0" displayGrid="0" displayTimeUnitStr="1ps" value_tooltip="0" secNudge="1" showSecCursor="0" displayGlobalView="1" swapRepresentationOfX="0" displayLeadingZeros="0" signalHeight="21" displayFileTag="1" wintype="4" trackViewToTime="1" showMarkers="1" waveWidth="729">
+   <window name="Wave0">
+    <timeunit value="14"/>
+    <frequnit value="2"/>
+    <showdiff value="0"/>
+   </window>
+   <viewPort>
+    <beginTime hightime="0" lowtime="0"/>
+    <endTime hightime="0" lowtime="2185000"/>
+    <beginViewTime hightime="0" lowtime="0"/>
+    <endViewTime hightime="0" lowtime="218500"/>
+    <beginLastViewTime hightime="0" lowtime="0"/>
+    <endLastViewTime hightime="0" lowtime="218500"/>
+   </viewPort>
+   <primCursor hightime="0" lowtime="0"/>
+   <wavetclcommands>
+    <tcl command="wave update off"/>
+    <tcl command="wave clearselection"/>
+    <tcl commandblock="custom radix definitions"></tcl>
+    <tcl command="wave update off"/>
+    <tcl command="wave zoom range 0 218500"/>
+    <tcl command="wave update on"/>
+    <tcl command="wave top 0"/>
+    <tcl command=""/>
+   </wavetclcommands>
+  </waveWindow>
+ </wave_mgr>
  <mem_mgr/>
  <windows/>
- <dut selection="apb_uart_bench_tb_top.u_apb_uart.u_uart_rx"/>
+ <dut selection="apb_uart_bench_tb_top"/>
 </session>

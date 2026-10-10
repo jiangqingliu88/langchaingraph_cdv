@@ -116,6 +116,17 @@ def latest_root(run_root: str | Path) -> Optional[Path]:
     return roots[-1] if roots else None
 
 
+def stage_roots(run_root: str | Path) -> List[Path]:
+    """每一级的 root 路径，**按旧到新**（平布局就是 `regression_run` 自己那一个）。
+
+    `latest_root` 的全量版：它取末尾一个（读 `report.json` 用），这里要**全要**
+    （每一级各有一份 `report.json`，合并起来才是这次回归的全貌）。
+    与 `latest_root` / `test_dirs` 共用同一套判据（`_candidate_roots`），
+    不另写一份"哪几层算一级"。
+    """
+    return _candidate_roots(run_root)
+
+
 def test_dirs(run_root: str | Path) -> List[Path]:
     """run 根下**所有**用例目录（`test_*`），两种布局都认。
 
