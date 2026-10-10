@@ -43,7 +43,7 @@ class OpsExecutor(BaseExecutor):
         params = task.get("params", {}) or {}
         design_style = params.get("design_style", "baseline") if isinstance(params, dict) else "baseline"
         # 这一轮要开的**仿真业务**（cov / wave / debug_all …，见 sim_modes.py）。
-        # None = 交给默认（`_normalize_sim_modes` 会给覆盖率），不是"什么都不开"。
+        # None = 交给默认（`_normalize_sim_modes` 给 `cov+wave`），不是"什么都不开"。
         sim_modes = params.get("sim_modes") if isinstance(params, dict) else None
 
         # ── EDA 可用性前置检查（失败响亮：没有 EDA 就不假装跑回归）──

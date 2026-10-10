@@ -31,6 +31,13 @@ from typing import Annotated, Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# 默认仿真业务（`cov+wave`）**只有一份定义** —— 在工具层的 `sim_modes.py`。
+# 这里 import 而不是写 `["cov+wave"]`：默认值散成字面量之后，改一处漏一处
+# 就会变成"CLI 默认开了波形、界面默认没开"这种查不出来的不一致。
+from src.tools.regression_tools.sim_modes import (
+    DEFAULT_MODE as _DEFAULT_SIM_MODE,
+)
+
 
 # ═══════════════════════════════════════════════════════════════
 # reducer
@@ -92,8 +99,10 @@ class PipelineState(BaseModel):
     #: 这次运行要开的**仿真业务**（`cov` / `wave` / `debug_all` / …，
     #: 见 `src/tools/regression_tools/sim_modes.py`）。
     #: 是**运行输入**、不是全局开关 —— 记在状态里，复现/审计时能回答
-    #: "这一轮的波形是怎么来的"。默认 `["cov"]`：覆盖率是闭环的主指标。
-    sim_modes: List[str] = Field(default_factory=lambda: ["cov"])
+    #: "这一轮的波形是怎么来的"。默认 `cov+wave`：覆盖率是主指标、波形是事后现场 ——
+    #: 只开覆盖率的话，事后想看信号只能回去重跑（而重跑出来的未必是当时那个现场）。
+    sim_modes: List[str] = Field(
+        default_factory=lambda: [_DEFAULT_SIM_MODE])
     #: 分级回归的**人工节点**是否拦截（loopback 全过后停下等人放行）。
     #: `True` = 停（`REGRESSION_MANUAL_GATES`）；`False` = 不拦、一口气跑完
     #: （`run_regression_staged(auto_approve=True)`）。**属于这次运行的输入**：

@@ -1,42 +1,23 @@
 """
 LLM 驱动修复 —— 编译错误 + 仿真失败的诊断和 LLM 修复
 
+本模块只做**修复的编排**（找文件、判有效性、走闸门写回）；
+真正调 LLM 的那一下在 `llm_call.call_llm` —— 全项目唯一的出口。
+
 用法:
-    from src.tools.lib.llm_refine import call_llm, llm_refine_sim_timing
+    from src.tools.lib.llm_call import call_llm
+    from src.tools.lib.llm_refine import llm_refine_sim_timing
 """
 import re
 from pathlib import Path
 import structlog
 
 from src.tools.lib.filelist import build_loopback_filelist
+from src.tools.lib.llm_call import call_llm
 from src.tools.lib.loopback import run_agent_loopback, _extract_method_body
 from src.tools.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
 
 logger = structlog.get_logger()
-
-
-def call_llm(prompt: str, code: str, errors: str) -> str:
-    """通过 LLMFactory 调用 LLM 修复代码。"""
-    try:
-        from src.layers.l2_orchestration.context.llm_factory import LLMFactory
-        llm = LLMFactory.create_for_task("code_generation")
-        user_msg = f"CODE:\n{code[:3000]}\n\nERRORS:\n{errors[:1000]}\n\nOutput ONLY the fixed complete code, no explanation."
-        resp = llm.invoke([
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_msg},
-        ])
-        content = resp.content if hasattr(resp, 'content') else str(resp)
-        if not content:
-            return ""
-        if "```" in content:
-            block = content.split("```")[1]
-            if block.startswith("systemverilog") or block.startswith("sv"):
-                block = block.split("\n", 1)[1] if "\n" in block else block
-            return block.strip()
-        return content.strip()
-    except Exception as e:
-        logger.warning(f"LLM refine failed: {e}")
-    return ""
 
 
 def diagnose_compile_error(compile_log: str, agent_name: str) -> str:
@@ -224,56 +205,6 @@ def apply_llm_fixes(llm_output: str, files_to_fix: dict) -> int:
             refused += 1
     apply_llm_fixes.refused = refused          # noqa: SLF001 调用方取用
     return fixed
-
-
-def llm_refine_compile_errors(output_dir: Path, agents: list) -> int:
-    """LLM 读取生成文件 + 编译错误，修复代码。"""
-    fixed_count = 0
-    for a in agents:
-        name = a.get("name", a) if isinstance(a, dict) else a
-        agent_dir = output_dir / "agents" / name
-        if not agent_dir.exists():
-            continue
-
-        fl = build_loopback_filelist(output_dir, name)
-        runner = RegressionRunner(
-            env_output_dir=str(output_dir), filelist=str(fl.resolve()),
-            top_module=f"{name}_loopback_tb", coverage=False)
-        compile_result = runner.compile()
-        if compile_result["status"] == "PASS":
-            continue
-
-        errors = compile_result.get("stderr", "")
-        error_files = set()
-        for line in errors.split("\n"):
-            if "** Error" in line:
-                m = re.search(r'([\w_]+\.sv)\s*\)', line)
-                if m:
-                    error_files.add(m.group(1))
-
-        for fname in error_files:
-            fpath = agent_dir / fname
-            if not fpath.exists():
-                fpath = agent_dir / "loopback" / fname
-            if not fpath.exists():
-                continue
-            code = fpath.read_text(encoding="utf-8", errors="replace")
-            prompt = f"Fix compile errors in this UVM SystemVerilog file. Errors:\n{errors[:2000]}"
-            refined = call_llm(prompt, code, errors)
-            if refined and len(refined) > 50:
-                # **这条也是写盘的** —— 第一版只闸了 `apply_llm_fixes`，漏了这里，
-                # 实测立刻复现：编译失败 → 这里整份重写 SCB → `[INVTST]`。
-                if not gated_write(fpath, refined):
-                    continue
-                fixed_count += 1
-                fl = build_loopback_filelist(output_dir, name)
-                runner = RegressionRunner(
-                    env_output_dir=str(output_dir), filelist=str(fl.resolve()),
-                    top_module=f"{name}_loopback_tb", coverage=False)
-                r2 = runner.compile()
-                if r2["status"] == "PASS":
-                    break
-    return fixed_count
 
 
 def llm_refine_sim_timing(output_dir: Path, agents: list, env_name: str) -> dict:

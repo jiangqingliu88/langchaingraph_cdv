@@ -133,6 +133,34 @@ def run_gaps(yaml_text: str, max_cases: Optional[int] = None,
     return payload
 
 
+#: 「结构身份」类规则 —— 维度 id / 字段名这类**全局坐标**撞车的错。
+#:
+#: 为什么单列一份：JSON Schema 看不见它们（那是**语义**问题，schema 只管
+#: 字段类型），只有 `run_gaps` 的规则层能报。而草稿里还有**已知且合理**的
+#: error（`case_without_check`：草稿只出骨架，检查项由下游补）—— 把
+#: `run_gaps` 的全部 error 都当门槛，草稿就永远写不出去。所以只挑这几条
+#: **必须拦住**的。
+#:
+#: 实测代价：`pwdata` 与 `prdata` 各落一个 `D_DATA` 时 schema 全绿，下游却按
+#: (维度, 取值) 展开出**重复测试点**、撞成**同一个 SV 类名** —— 编译期
+#: Typedef 重定义 → work 库空 → `vsim` 找不到 top → 覆盖率归零。
+IDENTITY_RULE_IDS = ("duplicate_dimension_id", "duplicate_field_name",
+                     "unknown_dimension_ref", "unknown_field_ref",
+                     "unknown_linkage_ref", "unknown_tree_node_ref",
+                     "unknown_theme_ref", "unknown_cross_group_ref")
+
+
+def blocking_issues(yaml_text: str) -> List[Dict[str, str]]:
+    """结构身份类的 error 清单 —— 空列表 = 这份模型可以写盘。
+
+    给「先出草稿、过不了就不写盘」那道闸用（见 front 的 casemodel 段）：
+    schema 绿了不代表模型立得住，坐标撞车要到下游才炸，那时已经离现场很远了。
+    """
+    issues = run_gaps(yaml_text).get("issues") or []
+    return [i for i in issues
+            if i.get("severity") == "error" and i.get("rule") in IDENTITY_RULE_IDS]
+
+
 # ════════════════════════════════════════════════════════════
 # generate
 # ════════════════════════════════════════════════════════════

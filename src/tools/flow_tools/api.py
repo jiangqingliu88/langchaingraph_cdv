@@ -35,6 +35,7 @@ from typing import Any, Dict, List, Optional
 # 读的时候怎么认）。这里只许调它的函数，不许再拼一次字符串。
 from src.layers.l1_infrastructure.layout import regression_root as _layout_regression_root
 from src.layers.l1_infrastructure.layout import latest_root as _layout_latest_root
+from src.layers.l1_infrastructure.layout import test_dirs as _layout_test_dirs
 
 #: 门禁 id → 中文名。顺序即**显示顺序**（audit agent 的 gates 是 dict，无序）。
 #: 这些是 audit 的布尔门禁；`rtl_files` / `model_placeholder_reason` 是附注不是门禁，
@@ -487,6 +488,47 @@ def _find_wave(test_dir: Path, reported: str = "") -> tuple:
     return "", "none"
 
 
+def _newest_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _dir_has_artifact(test_dir: Path) -> bool:
+    """这个用例目录里有没有波形或覆盖率库。"""
+    return bool(_find_wave(test_dir)[0] or _find_coverage(test_dir)[0])
+
+
+def _case_dirs(run_root: Path) -> List[Path]:
+    """run 根 → **一个用例一个目录**，分级布局也不例外。
+
+    `layout.test_dirs()` 会把每一级的 `build_*/test_*` 全扫出来 —— 那是"证据"该有
+    的样子（见它的 docstring）。但分级回归**给每个用例在每一级都建了目录**：实测
+    一轮里 265 个目录只对应 53 个用例，真正跑过那条用例的那一级才有产物，其余是空壳。
+    所以这里按**用例名**收口，并挑**真的落了产物的那一份**（都没产物时挑最新的）——
+    否则打开的一定是壳，页面上永远是"没有波形 / 没有覆盖率"。
+
+    **为什么不能用 `latest_root`（最后一级）枚举用例**：那是读 `report.json` 该用的
+    层，不是"用例全集"该用的层。分级回归把用例分给各级去跑，最后一级往往只剩
+    "随机/通用"那批（跑完什么都不落），于是整页看着像坏了 —— 而产物明明在 p0/p1/p2。
+    """
+    by_name: Dict[str, Path] = {}
+    for d in _layout_test_dirs(run_root):
+        name = d.name[len("test_"):]
+        cur = by_name.get(name)
+        if cur is None:
+            by_name[name] = d
+            continue
+        fresh, best = _dir_has_artifact(d), _dir_has_artifact(cur)
+        if fresh != best:
+            by_name[name] = d if fresh else cur
+        elif _newest_mtime(d) > _newest_mtime(cur):
+            by_name[name] = d
+    return [by_name[n] for n in sorted(by_name,
+                                       key=lambda n: (by_name[n].parent.name, n))]
+
+
 def _artifact_facts(path: str) -> tuple:
     """`(大小 KB, 修改时间)` —— 给波形/覆盖率那几列用；没有就给 `(None, "")`。
 
@@ -560,8 +602,9 @@ def run_regression_status(run_dir: str = "") -> Dict[str, Any]:
 
     rows: List[Dict[str, Any]] = []
     host = platform.node()
-    test_dirs = [p for b in sorted(reg_root.glob("build_*")) if b.is_dir()
-                 for p in sorted(b.glob("test_*")) if p.is_dir()]
+    # 用例枚举**看全每一级**（`layout.test_dirs` 的口径），按用例名收口 ——
+    # 只扫 `reg_root`（最后一级）会漏掉前面几级跑出来的全部产物。见 `_case_dirs`。
+    test_dirs = _case_dirs(root)
     for test_dir in test_dirs:
         name = test_dir.name[len("test_"):]
         reported = report_tasks.get(name) or {}

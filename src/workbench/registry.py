@@ -249,6 +249,12 @@ class ModuleManager:
                 window_menu.addAction(action)
                 if action.isCheckable():        # 侧栏的显隐开关 —— 要跟着 dock 实际状态走
                     self._menu_actions[spec.id] = action
+                # 清单说"这块也是一个窗格"（`pin_to_view: true`）→ 同一个 QAction
+                # 再挂一份到「视图」菜单。**平台不知道哪个模块会被 pin** ——
+                # 它只读 `spec.pin_to_view`，这就是 `IModule` 那句"平台只认接口、
+                # 不认识任何具体模块"在菜单上的落点。
+                if spec.pin_to_view:
+                    self.window.add_view_toggle(action)              # type: ignore[attr-defined]
                 module = self.module(spec.id)
                 if module is None:
                     continue

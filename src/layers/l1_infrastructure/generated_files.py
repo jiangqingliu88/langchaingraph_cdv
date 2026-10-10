@@ -11,6 +11,8 @@
 llm_refine.apply_llm_fixes()           整份重写 SCB → 非法 do_compare → 编译塌
 llm_refine.llm_refine_compile_errors() 另一条路径、也有自己的 write_text
                                        （第一版只闸了前一条，立刻复发）
+                                       —— 该路径后来被删除（零调用者），
+                                       现在两条都走本模块的 `gated_write`
 ```
 
 于是同一个模板，三轮运行产出三份**各不相同**的 `apb_loopback_scb.sv`

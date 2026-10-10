@@ -229,6 +229,15 @@ def apply_modes(config: dict, enabled_modes) -> list:
     if opts:
         variables['MODE_OPTS'] = ' '.join(opts)
     for name in applied:
+        # 组合模式（`cov+wave`）**同时是它的每个分量** —— run_cmd 里写
+        # `{% if cov_enabled %}+cover{% endif %}` 的分支，不该因为人选的是
+        # 组合词就沉默。实测：只设 `cov+wave_enabled` 时 DUT 编译少了 `+cover`，
+        # vsim 报 (vsim-8634)「Code was not compiled with coverage options」，
+        # 覆盖率**恒为 0** —— 而 MODE_OPTS 是对的，所以从命令行上看不出问题。
+        for part in str(name).split('+'):
+            part = part.strip()
+            if part:
+                variables[f'{part}_enabled'] = '1'
         variables[f'{name}_enabled'] = '1'
     logger.info(f"Enabled modes: {', '.join(applied)}" if applied else "Enabled modes: (none)")
     return applied

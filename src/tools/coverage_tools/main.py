@@ -213,8 +213,8 @@ DUT RTL:
 
 只输出代码片段，无 markdown 代码块、无解释。"""
     try:
-        from src.tools.lib.llm_custom_logic import _call_llm_raw
-        return _call_llm_raw(prompt, "", "")
+        from src.tools.lib.llm_call import call_llm
+        return call_llm(prompt, "", "")
     except Exception:
         return ""
 

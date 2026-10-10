@@ -10,7 +10,6 @@ import asyncio
 import json
 from pydantic import BaseModel, Field
 from langchain_core.tools import BaseTool
-from langchain_core.language_models import BaseChatModel
 import structlog
 
 from src.layers.l2_orchestration.context.llm_factory import LLMFactory
@@ -154,10 +153,20 @@ class BaseExecutor(ABC, ExecutorSubject):
             "total_time": 0.0
         }
         
-        # LLM 与工具。**没有 executor 属性** —— 历史上有一个 LangChain
-        # `AgentExecutor`，实测（2026-10-09）8 个 agent 里只有 debug 的会被构造，
-        # 已随 langchain_classic 依赖一并移除。
-        self.llm: Optional[BaseChatModel] = None
+        # LLM 可用性 —— **一个布尔，不是一个客户端**。
+        #
+        # 全项目真正调 LLM 的地方只有 `lib/llm_call.call_llm`（经 `LLMQueryEngine`），
+        # 执行器自己不持有客户端。它只需要知道"能不能用 LLM"，来决定走不走那条
+        # 可选的增强路径（目前只有 debug 的 Phase 6）。
+        #
+        # 这里原来存的是 `self.llm = LLMFactory.create_for_task(...)` —— 为了判一个
+        # 布尔值构造了一个完整的 `ChatOpenAI`（pydantic 校验 + 取 key + 挂 token
+        # 回调），而它一次 `invoke` 都不会有。已换成静态探测。
+        #
+        # 顺带：**也没有 executor 属性** —— 历史上有一个 LangChain `AgentExecutor`，
+        # 实测（2026-10-09）8 个执行器里只有 debug 的会被构造，已随
+        # `langchain_classic` 依赖一并移除。
+        self.llm_available: bool = False
         self.tools: List[BaseTool] = []
         
         # 设置
@@ -175,21 +184,6 @@ class BaseExecutor(ABC, ExecutorSubject):
 
         logger.info(f"Agent初始化", role=self.role, name=self.display_name)
     
-    def _create_llm(
-        self,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None
-    ) -> BaseChatModel:
-        """
-        创建LLM实例
-        
-        使用LLM工厂根据任务类型自动选择最优模型
-        """
-        return LLMFactory.create_for_task(
-            task_type=self.task_type,
-            settings=self.settings
-        )
-    
     async def initialize(self):
         """
         初始化Agent
@@ -204,14 +198,18 @@ class BaseExecutor(ABC, ExecutorSubject):
         """
         logger.info(f"正在初始化Agent: {self.display_name}")
 
-        # 1. 创建LLM
+        # 1. LLM 可用性 —— **静态探测，不构造客户端**（见 `__init__` 里的说明）
         self._llm_unavailable = False
         try:
-            self.llm = self._create_llm()
-        except (ValueError, Exception) as e:
-            logger.warning(f"LLM创建失败", error=str(e))
-            self.llm = None
+            self.llm_available = LLMFactory.is_available(settings=self.settings)
+        except Exception as e:                  # noqa: BLE001
+            logger.warning(f"LLM 可用性探测失败", error=str(e))
+            self.llm_available = False
+        if not self.llm_available:
             self._llm_unavailable = True
+            logger.warning(
+                f"{self.display_name}: 没有可用的 LLM provider —— "
+                f"依赖 LLM 的增强路径会跳过（确定性路径照跑）")
 
         # 2. 获取工具
         self.tools = await self._get_tools()

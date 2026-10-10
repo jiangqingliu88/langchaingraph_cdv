@@ -7,7 +7,11 @@ from __future__ import annotations
 
 import structlog
 
+# `r_after_round_bump` 与 `n_round_bump` 判的是**同一件事**（还有没有轮次预算）——
+# 判据只能有一份，所以从节点那边 import，而不是在这里再写一遍 `state.round_num < max_rounds`。
+from src.layers.l2_orchestration.nodes.pure.rounds import _have_rounds_left
 from src.layers.l2_orchestration.state import PipelineState
+from src.layers.l3_decision.decision_engine import Action
 
 logger = structlog.get_logger()
 

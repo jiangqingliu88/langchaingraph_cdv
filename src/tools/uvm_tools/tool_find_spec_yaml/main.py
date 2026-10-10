@@ -208,7 +208,7 @@ def _llm_classify_protocols(names: list) -> dict:
     if not names:
         return {}
     try:
-        from src.tools.lib.llm_custom_logic import _call_llm_raw
+        from src.tools.lib.llm_call import call_llm
     except Exception:
         return {}
     prompt = (
@@ -221,7 +221,7 @@ def _llm_classify_protocols(names: list) -> dict:
         "只输出 JSON 对象 {\"端口名\": \"protocol\", ...}，不要任何解释或代码块。"
     )
     try:
-        raw = (_call_llm_raw(prompt, "", "") or "").strip()
+        raw = (call_llm(prompt, "", "") or "").strip()
     except Exception:
         return {}
     if not raw:
@@ -1444,7 +1444,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
 # ── 仿真业务模式（波形 / 覆盖率 / 调试…）──
 # `modes:` 表与聚合变量机制来自 include 的 common_base.yaml；下面同名变量按本后端
 # （Questa）**覆盖**了它的 VCS 取值。启用哪几门业务由上层给（CLI `--enable` /
-# 工作台工具栏下拉，默认覆盖率），框架的 apply_modes() 把它们拼进 MODE_OPTS，
+# 工作台工具栏下拉，默认 cov+wave），框架的 apply_modes() 把它们拼进 MODE_OPTS，
 # 仿真命令里写 `{{{{ MODE_OPTS | default("") }}}}` 取用。
 # 值给空串的那些（xprop/tprop/upf）是本后端**没有对应开关**的：选中会被告警忽略，
 # 不会把一个不存在的参数塞进命令行。

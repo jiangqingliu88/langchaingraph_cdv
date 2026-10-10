@@ -33,6 +33,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 import structlog
 
+from src.tools.regression_tools.sim_modes import (
+    DEFAULT_MODE as _DEFAULT_SIM_MODE,
+)
+
 logger = structlog.get_logger()
 
 
@@ -56,8 +60,9 @@ class RunRequest:
     bypass_design_model: bool = False
     #: 回归要开的仿真业务（`cov` / `wave` / …）。**属于这次运行的输入**：
     #: 它决定仿真命令拼哪些选项（`MODE_OPTS`），不写进 RunRequest 的话
-    #: "这一轮为什么没有波形"就只能靠猜。默认 `["cov"]`。
-    sim_modes: List[str] = field(default_factory=lambda: ["cov"])
+    #: "这一轮为什么没有波形"就只能靠猜。默认 `cov+wave`。
+    sim_modes: List[str] = field(
+        default_factory=lambda: [_DEFAULT_SIM_MODE])
     #: 分级回归的**人工节点**是否拦截（loopback 全过后停下等人放行）。
     #: **属于这次运行的输入**：它决定闭环跑不跑得过那道放行点，不写进 RunRequest
     #: 的话"这一轮为什么没停"就只能靠猜。默认 `True` —— 门是默认该在的。
@@ -519,7 +524,7 @@ def _normalize_sim_modes(sim_modes) -> List[str]:
 
     **剔除不认识的词条并告警**，不原样透传：`apply_modes` 那边也会挡一次，但
     挡在运行请求这一层时错误还带着"是谁给的"这个上下文（界面下拉 / CLI 参数）。
-    留空 → 默认覆盖率（闭环的主指标）。
+    留空 → 默认 `cov+wave`（覆盖率是主指标，波形是事后现场）。
     """
     from src.tools.regression_tools import sim_modes as sm
 

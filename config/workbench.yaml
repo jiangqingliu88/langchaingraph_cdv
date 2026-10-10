@@ -200,6 +200,10 @@ modules:
     factory: src.workbench.modules.debug.fingerprint:FingerprintModule
     area: bottom
     order: 10
+    # 它本质是一个**窗格**（贴一段报错、看一眼、切走），所以显隐开关除了
+    # 「窗口」菜单里那份，再挂一份到「视图」菜单 —— 想收起它的人会去视图里
+    # 找（那儿的邻居是「模块导航树」「控制台」）。同一份 QAction，状态同步。
+    pin_to_view: true
     tool: {name: debug.fingerprint_error, kind: json}
 
   - id: debug.output

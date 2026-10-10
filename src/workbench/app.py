@@ -391,7 +391,7 @@ def _build_window_class():
             self.project_box = None
             self._build_project_picker()
             # ── 仿真业务下拉（工具栏，紧跟项目切换器）──
-            # 回归"跑哪门业务"（覆盖率 / 波形 / 调试…）。默认覆盖率。
+            # 回归"跑哪门业务"（覆盖率 / 波形 / 调试…）。默认取工具层的 `DEFAULT_MODE`（`cov+wave`）。
             self.sim_mode_box = None
             self._build_sim_mode_picker()
             # ── 人工节点开关（工具栏，紧跟仿真业务）──
@@ -449,7 +449,7 @@ def _build_window_class():
             self.toolbar.addSeparator()
 
         def _build_sim_mode_picker(self) -> None:
-            """「仿真业务」下拉 —— 这次回归跑哪门业务（默认覆盖率）。
+            """「仿真业务」下拉 —— 这次回归跑哪门业务（默认 `cov+wave`）。
 
             **它只是"下次启动运行带什么"**，不是运行中的开关：已经跑起来的那一轮
             不会追溯生效。这不是偷懒 —— 仿真业务决定命令怎么拼，属于**运行的
@@ -472,7 +472,7 @@ def _build_window_class():
                         self.sim_mode_box.count() - 1, item["note"],
                         Qt.ItemDataRole.ToolTipRole)
             self.sim_mode_box.setToolTip(
-                "回归的仿真业务：选中哪门就只跑哪门（默认覆盖率）。" + chr(10) +
+                "回归的仿真业务：选中哪门就只跑哪门（默认 cov+wave）。" + chr(10) +
                 "词条与取值见 src/tools/regression_tools/sim_modes.py；" + chr(10) +
                 "标「本后端无开关」的项在当前 EDA 后端没有对应参数，"
                 "选中会被告警忽略（不会把不存在的选项塞进命令行）。")
@@ -653,15 +653,18 @@ def _build_window_class():
             edit_menu.addSeparator()
             edit_menu.addAction(self.act_clear_console)
 
-            view_menu = add("视图(&V)")
-            view_menu.addAction(self.act_toggle_nav)
-            view_menu.addAction(self.act_toggle_console)
-            view_menu.addSeparator()
-            view_menu.addAction(self.act_workspace_tabs)
-            view_menu.addAction(self.act_reset_layout)
-            view_menu.addSeparator()
+            # 持有引用：清单里 `pin_to_view: true` 的模块，它的显隐开关
+            # 会在 `manager.build()` 之后插进这个菜单（见 `add_view_toggle`）。
+            self.view_menu = add("视图(&V)")
+            self._view_toggles: List[QAction] = []
+            self.view_menu.addAction(self.act_toggle_nav)
+            self.view_menu.addAction(self.act_toggle_console)
+            self.view_menu.addSeparator()
+            self.view_menu.addAction(self.act_workspace_tabs)
+            self.view_menu.addAction(self.act_reset_layout)
+            self.view_menu.addSeparator()
             for action in self._theme_actions:
-                view_menu.addAction(action)
+                self.view_menu.addAction(action)
 
             self.debug_menu = add("调试(&D)")
             self.tools_menu = add("工具(&T)")
@@ -703,6 +706,26 @@ def _build_window_class():
             工具。这样菜单栏的项数**不随业务线数量增长**。
             """
             return self.debug_menu if group_id == "debug" else self.tools_menu
+
+        def add_view_toggle(self, action: QAction) -> None:
+            """把一个模块的显隐开关也挂到「视图」菜单（清单里 `pin_to_view: true`）。
+
+            为什么要有这条：**视图菜单列的是窗格**（导航树 / 控制台 / 布局 / 主题）。
+            「错误指纹」这类模块本质就是一个底部窗格 —— 用户想收起它时会来视图里
+            找，而不是去「窗口」那份"模块清单"里翻。两边挂的是同一个 QAction，
+            勾选状态由 Qt 同步，不会打架。
+
+            插在**窗格那一组**（导航树 / 控制台）后面，追加到末尾 ——
+            视图菜单末尾是主题，把模块开关塞到主题后面就分不清它属于哪一类。
+            所以插在「工作区标签页」之前；分隔线只在第一条时补，
+            否则多个模块会出现一串连续的分隔线。
+            """
+            if not self._view_toggles:
+                self.view_menu.insertAction(self.act_workspace_tabs, action)
+                self.view_menu.insertSeparator(self.act_workspace_tabs)
+            else:
+                self.view_menu.insertAction(self.act_workspace_tabs, action)
+            self._view_toggles.append(action)
 
         def add_window_section(self, group_id: str, title: str) -> QMenu:
             """在「窗口」菜单里开一段业务线的小标题（每个业务线只开一次）。

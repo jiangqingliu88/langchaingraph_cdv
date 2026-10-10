@@ -279,8 +279,8 @@ IP 名: {ip['ip_name']}
 5. 只输出 SystemVerilog 代码，无 markdown 代码块、无解释
 """
         try:
-            from src.tools.lib.llm_custom_logic import _call_llm_raw
-            return _call_llm_raw(prompt, "", "")
+            from src.tools.lib.llm_call import call_llm
+            return call_llm(prompt, "", "")
         except Exception:
             return ""
 
@@ -391,8 +391,8 @@ IP 名: {ip['ip_name']}
 4. 只输出 SystemVerilog 代码，无 markdown 代码块、无解释
 """
         try:
-            from src.tools.lib.llm_custom_logic import _call_llm_raw
-            return _call_llm_raw(prompt, "", "")
+            from src.tools.lib.llm_call import call_llm
+            return call_llm(prompt, "", "")
         except Exception:
             return ""
 

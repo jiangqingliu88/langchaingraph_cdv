@@ -70,8 +70,10 @@ class TestModeTable:
             assert mode.value != base_vars.get(mode.var), (
                 f"{mode.mode} 的值和 common_base.yaml 的 VCS 取值一样：{mode.value!r}")
 
-    def test_default_is_coverage(self):
-        assert sm.DEFAULT_MODE == "cov"
+    def test_default_is_coverage_plus_wave(self):
+        # 默认从 `cov` 改成 `cov+wave`：只开覆盖率的话，事后想看信号
+        # 只能回去重跑一轮 —— 而重跑出来的未必是当时那个现场。
+        assert sm.DEFAULT_MODE == "cov+wave"
 
     def test_unsupported_are_reported(self):
         assert set(sm.unsupported(["wave", "xprop", "upf"])) == {"xprop", "upf"}
@@ -195,6 +197,21 @@ class TestRenderedScripts:
         assert "-coverage" in sim_sh
         assert "+cover" in build_sh
 
+    def test_combined_mode_still_instruments_the_compile(self, generated_yaml, tmp_path):
+        """组合模式（默认的 `cov+wave`）**也要**给 vlog 加 `+cover`。
+
+        这条是实测踩出来的：`apply_modes` 只设 `<mode>_enabled`，于是
+        `cov+wave` 设的是 `cov+wave_enabled`，而 build 的 run_cmd 判的是
+        `cov_enabled` —— DUT 编译少了 `+cover`，vsim 报 (vsim-8634)
+        「Code was not compiled with coverage options」，**覆盖率恒为 0**。
+        而 `MODE_OPTS` 是对的，命令行看上去完全正常，从日志里极难发现。
+        """
+        _config, sim_sh, build_sh = self._render(generated_yaml, tmp_path, ["cov+wave"])
+        assert "-coverage" in sim_sh          # 运行时收覆盖率
+        assert "-qwavedb" in sim_sh           # 顺带落波形
+        assert "+cover" in build_sh           # 编译侧必须被使能（本条的要点）
+        assert "+SCB_OFF" not in sim_sh       # 覆盖率轮 scoreboard 照常结算
+
     def test_no_mode_leaves_the_command_alone(self, generated_yaml, tmp_path):
         """什么都不开时命令里不该多出任何选项（`MODE_OPTS` 未定义 → default 空串）。
 
@@ -252,10 +269,16 @@ class TestForeignBuildsStayOut:
 # ════════════════════════════════════════════════════════════
 
 class TestRunRequestNormalisation:
-    def test_default_is_coverage(self):
-        from src.layers.l2_orchestration.run_service import _normalize_sim_modes
+    def test_default_is_coverage_plus_wave(self):
+        """不选 → 工具层的 `DEFAULT_MODE`（`cov+wave`）。
 
-        assert _normalize_sim_modes(None) == ["cov"]
+        **断言的是常量而不是字面量** —— 默认值只有一份定义，改它不该
+        让这条测试跟着改（那说明默认值散成了两份）。
+        """
+        from src.layers.l2_orchestration.run_service import _normalize_sim_modes
+        from src.tools.regression_tools import sim_modes as sm
+
+        assert _normalize_sim_modes(None) == [sm.DEFAULT_MODE]
 
     def test_accepts_string_and_list(self):
         from src.layers.l2_orchestration.run_service import _normalize_sim_modes
@@ -430,12 +453,14 @@ class TestWorkbenchSelection:
         assert items[0]["mode"] == ui.NONE_MODE            # 「无」排在最前
         assert [i["mode"] for i in items[1:]] == [m.mode for m in sm.all_modes()]
 
-    def test_missing_store_falls_back_to_coverage(self, monkeypatch, tmp_path):
+    def test_missing_store_falls_back_to_the_tool_default(self, monkeypatch, tmp_path):
+        """界面侧没存过 → 跟工具层的默认走（不自己定一份）。"""
+        from src.tools.regression_tools import sim_modes as tool_modes
         from src.workbench import sim_modes as ui
 
         monkeypatch.setattr(ui, "STORE", tmp_path / "nope.json")
-        assert ui.load() == "cov"
-        assert ui.selected_modes() == ["cov"]
+        assert ui.load() == tool_modes.DEFAULT_MODE
+        assert ui.selected_modes() == [tool_modes.DEFAULT_MODE]
 
     def test_saved_none_stays_none(self, monkeypatch, tmp_path):
         """选过「无」之后要**保持无** —— 不能因为存储里是空的就又跳回覆盖率。

@@ -260,6 +260,46 @@ class LLMFactory:
         raise ValueError(f"All providers failed. Last error: {last_error}")
 
     @classmethod
+    def is_available(cls, settings: Optional[Settings] = None) -> bool:
+        """配置里有没有一个**能用**的 provider —— **不构造客户端**。
+
+        给"要不要走那条依赖 LLM 的可选路径"这种判断用（目前只有 debug 的
+        Phase 6）。判据与 `create_llm` 的降级链**同源**（主 provider → fallback），
+        但只做静态检查：
+
+          · `api_key` 有没有 —— `create_llm` 在进 provider 循环**之前**就查它
+          · `custom` 有没有 `base_url` —— `_create_for_provider` 里它缺就抛
+          · `anthropic` 那个额外包装没装 —— 没装的话必然 ImportError
+
+        **别改成"试着建一个客户端"** —— 那正是这次要替掉的东西：为了判一个布尔值，
+        构造了一个完整的 `ChatOpenAI`（pydantic 校验 + 取 key + 挂 token 回调），
+        而它一次 `invoke` 都不会有（真正的调用全走 `lib/llm_call.call_llm`）。
+        """
+        import importlib.util
+
+        cfg = (settings or Settings.get_instance()).llm
+        if not cfg.api_key:
+            return False
+
+        providers = [cfg.provider]
+        fallback = getattr(cfg, "fallback_provider", None)
+        if fallback and fallback != cfg.provider:
+            providers.append(fallback)
+
+        for provider in providers:
+            if provider in (PROVIDER_DEEPSEEK, PROVIDER_OPENAI):
+                return True
+            if provider == PROVIDER_ANTHROPIC:
+                try:
+                    if importlib.util.find_spec("langchain_anthropic") is not None:
+                        return True
+                except (ImportError, ValueError):
+                    pass                      # 包不存在 —— find_spec 也可能抛
+            if provider == PROVIDER_CUSTOM and cfg.base_url:
+                return True
+        return False
+
+    @classmethod
     def _create_for_provider(
         cls, provider: str, api_key: str, model: str,
         temperature: float, max_tokens: int, request_timeout: int,

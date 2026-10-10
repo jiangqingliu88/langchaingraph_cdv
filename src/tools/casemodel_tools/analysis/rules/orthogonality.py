@@ -240,6 +240,31 @@ class DuplicateFieldName(Rule):
 
 
 @register
+class DuplicateDimensionId(Rule):
+    id = "duplicate_dimension_id"
+    severity = "error"
+    category = CATEGORY_ORTHOGONAL
+    description = "维度 id 重复 —— 维度 id 是全局坐标，重复会让派生名字撞车"
+
+    def check(self, ctx: RuleContext) -> List[Issue]:
+        dims = list(ctx.model.dimensions)
+        counts = Counter(d.key for d in dims)
+        out: List[Issue] = []
+        for key, n in counts.items():
+            if n > 1:
+                labels = "、".join(d.label for d in dims if d.key == key)
+                out.append(self.issue(
+                    f"dimension::{key}",
+                    f"维度 id '{key}' 有 {n} 个（{labels}）—— "
+                    f"维度 id 是全局坐标（`build_dimension` 拿它当 key）。"
+                    f"同 id 的维度会让下游按 (维度, 取值) 展开出**重复测试点**，"
+                    f"再撞成**同一个 SV 类名**（`attr_class_slug` 只看维度 + 取值）"
+                    f"—— 编译期 Typedef 重定义，整轮回归跑不起来。"
+                    f"多个接口落成同一维度时请**合成一个**（激励胜过响应）。"))
+        return out
+
+
+@register
 class DuplicateFieldValue(Rule):
     id = "duplicate_field_value"
     severity = "warning"

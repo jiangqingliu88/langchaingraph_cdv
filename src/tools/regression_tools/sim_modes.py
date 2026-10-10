@@ -40,8 +40,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-#: 不选任何业务时用哪个 —— 「默认开覆盖率」（覆盖率是闭环的主指标）
-DEFAULT_MODE = "cov"
+#: 不选任何业务时用哪个 —— **默认 `cov+wave`（覆盖率 + 波形）**。
+#:
+#: 为什么两个都要：**覆盖率是闭环的主指标**（决策引擎靠它判收敛、判停滞），
+#: **波形是出事后唯一的现场**。只开覆盖率，事后想看一眼信号只能回去重跑一轮 ——
+#: 而重跑出来的波形未必是当时那个现场（时序、种子、DUT 都可能已经变了）。
+#:
+#: **代价说清**：`-qwavedb` 写库比 WLF 慢（见下表 `wave` 那条的 note），
+#: 一轮里两样都开最费机时。要省机时就显式 `--sim-mode cov` 把波形关掉。
+#:
+#: 用 `cov+wave` 这一个词而不是 `["cov", "wave"]` 两个词，是因为界面那层是
+#: **单选**下拉（`src/workbench/sim_modes.py` 的模块头解释了为什么单选）——
+#: 一个词，两边都能表达同一个默认值。
+DEFAULT_MODE = "cov+wave"
 
 
 class SimMode:

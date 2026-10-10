@@ -18,7 +18,7 @@ from src.layers.l2_orchestration.communication.tool_hub import call_tool
 from src.tools.debug_tools.main import (
     DebugTools, _classify_error, _fingerprint, fingerprint_error,
 )
-import structlog, json, re
+import asyncio, structlog, json, re
 from pathlib import Path
 
 logger = structlog.get_logger()
@@ -73,16 +73,21 @@ class DebugExecutor(BaseExecutor):
         return {"output": await self._llm_analyze(input_text)}
 
     async def _llm_analyze(self, input_text: str) -> str:
-        """直接调 LLM 做根因分析（不经 Agent Executor）。
+        """调 LLM 做根因分析 —— **经集中式 Query Engine**。
 
         原先 Phase 6 走 `BaseExecutor.execute_task` 的 AgentExecutor 分支 —— 那是
-        全仓唯一一处 AgentExecutor 用法（实测 2026-10-09：8 个 agent 里只有
+        全仓唯一一处 AgentExecutor 用法（实测 2026-10-09：8 个 executor 里只有
         debug 的 `_executor` 被构造过）。但它挂的 7 个工具与本 agent 的五阶段
         管线**重复**：管线里已经用 `call_tool` 调过 collect_sim_log、
         fingerprint_error、bisect_failed_tests；而 prompt 只要求输出 JSON、
         不要求调工具。直连更简单，也不再依赖 langchain_classic。
+
+        **为什么走 query_engine 而不是直接 `self.llm.ainvoke`**：
+        直连时这次调用的 token 不计预算、不进审计 —— 而它正是"每轮只要还有
+        未归类的错误就调一次"的那条路径，最容易在收敛不了时反复触发。
+        `_llm_analyze` 是 async 而 engine 的 `query` 是同步的，所以过一层线程。
         """
-        if self.llm is None:
+        if not self.llm_available:
             return ""
         prompt = await self._get_prompt_template()
         if prompt is None:
@@ -90,11 +95,20 @@ class DebugExecutor(BaseExecutor):
         try:
             msgs = await prompt.aformat_messages(
                 chat_history=[], input=input_text, agent_scratchpad=[])
-            resp = await self.llm.ainvoke(msgs)
+            # LangChain 的 role 名（human/ai）→ OpenAI 报文里的（user/assistant）
+            _role = {"human": "user", "ai": "assistant"}
+            payload = [{"role": _role.get(m.type, m.type),
+                        "content": str(m.content)} for m in msgs]
+
+            from src.layers.l2_orchestration.context.query_engine import (
+                LLMQueryEngine,
+            )
+            return await asyncio.to_thread(
+                LLMQueryEngine.get_instance().query,
+                self.task_type, payload, input_text) or ""
         except Exception as e:                      # noqa: BLE001
             logger.warning(f"LLM 根因分析失败: {e}")
             return ""
-        return getattr(resp, "content", "") or ""
 
     # ═══════════════════════════════════════════════════════════
     # 主执行入口
@@ -639,7 +653,7 @@ class DebugExecutor(BaseExecutor):
         virtual interface 参数化等）由 LLM 重写出错文件，而非只记录假设。
         """
         try:
-            from src.tools.lib.llm_refine import call_llm
+            from src.tools.lib.llm_call import call_llm
             od = Path(output_dir)
             fpath = od / fname
             if not fpath.exists():

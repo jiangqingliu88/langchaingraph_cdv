@@ -144,14 +144,41 @@ class TestThereIsExactlyOneWriteExit:
             "`llm_refine` 里出现了 `gated_write` 之外的写盘出口 —— "
             f"闸门会被绕过：{offenders}")
 
-    def test_both_known_paths_go_through_it(self):
-        """两条已知路径都必须调 `gated_write`（漏一条就是实测踩过的那次）。"""
+    def test_the_set_of_write_paths_is_exactly_what_we_expect(self):
+        """**本模块会写盘的函数，恰好是这些** —— 多一个少一个都要红。
+
+        为什么不是简单地"对每个已知路径断言它调了 gated_write"：
+        原来这里是 `for fn in (apply_llm_fixes, llm_refine_compile_errors)` ——
+        而后者后来被删了（零调用者，见 LLM 出口收口那次改动），于是断言变成
+        `AttributeError`。**但那种写法本身就有病**：它管得住"名单上的"，管不住
+        "新加进来却没进名单的"。
+
+        改成比集合：新增一个写盘函数而忘了确认它过闸 → 这里会红，并且告诉你
+        该把它加进 `EXPECTED_WRITERS`（加的那一刻你就必须想一次"它过闸了吗"）。
+
+        与上面那条 `test_only_gated_write_writes_files` 的分工：那条是**静态扫
+        全文**（更严，但只在本模块内）；这条是**按函数点名**（能跨模块看待会儿
+        谁会写，也更容易看懂"为什么是这几个"）。
+        """
         import inspect
         from src.tools.lib import llm_refine as m
 
-        for fn in (m.apply_llm_fixes, m.llm_refine_compile_errors):
-            body = inspect.getsource(fn)
-            assert "gated_write(" in body, f"{fn.__name__} 绕过了写盘闸门"
+        #: 本模块里**预期会写盘**的函数。
+        #: 原来有两条：`apply_llm_fixes` 与 `llm_refine_compile_errors` ——
+        #: 实测踩过的正是"第一版只闸了前一条、漏了后一条，立刻复发"。
+        EXPECTED_WRITERS = {"apply_llm_fixes"}
+
+        actual = {
+            name for name, obj in vars(m).items()
+            if inspect.isfunction(obj) and obj.__module__ == m.__name__
+            # 闸门自己不算"写盘路径" —— 它函数体里当然含这个名字
+            and name != "gated_write"
+            and "gated_write(" in inspect.getsource(obj)
+        }
+        assert actual == EXPECTED_WRITERS, (
+            f"本模块的写盘路径变了：{sorted(actual)} ≠ {sorted(EXPECTED_WRITERS)}\n"
+            f"新增写盘函数 → 确认它调 `gated_write` 之后，把它加进 EXPECTED_WRITERS。"
+        )
 
 
 class TestTheBannerMarkerStaysInStepWithGenUvm:

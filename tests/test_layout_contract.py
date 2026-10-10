@@ -18,7 +18,8 @@ from __future__ import annotations
 import pytest
 
 
-def _write_run_dir(output_root, *, stages=(), flat=False):
+def _write_run_dir(output_root, *, stages=(), flat=False, shared_case="",
+                   artifact_stage=""):
     """按**写端的公式**造一份回归产物，不是在测试里另发明一种形状。
 
     写端（`infrastructure.run_regression`）：
@@ -26,21 +27,33 @@ def _write_run_dir(output_root, *, stages=(), flat=False):
         root_dir = layout.regression_root(output_root)      # <out>/regression_run
         if self._stage_tag: root_dir = root_dir / stage     # 分级时每级一层
         ShellGenerator().generate(config, root_dir, ...)    # 其下 build_*/test_*/
+
+    **`ShellGenerator` 在每一级的目录里都铺出全部用例目录**，只有那一级要跑的
+    子集才真跑出产物 —— 给 `shared_case` 时每一级都会有它的目录，产物只落在
+    `artifact_stage` 那一级。这正是读端要处理的现实形状。
     """
     from src.layers.l1_infrastructure.layout import regression_root
 
-    def emit(root_dir, case, status="pass"):
+    def emit(root_dir, case, status="pass", artifact=False):
         d = root_dir / "build_b1" / f"test_{case}"
         d.mkdir(parents=True, exist_ok=True)
         (d / "status.env").write_text(f"EMAN_BASE_STATUS={status}\n", encoding="utf-8")
         (d / "sim_vsim.log").write_text("# UVM_INFO x @ 0: y [T] ok\n", encoding="utf-8")
+        if artifact:
+            (d / "waves").mkdir(exist_ok=True)
+            (d / "waves" / f"{case}.db").write_bytes(b"x" * 64)
+            (d / "cov" / case).mkdir(parents=True, exist_ok=True)
+            (d / "cov" / case / "questa.db").write_bytes(b"x" * 64)
         return d
 
     made = {}
     if flat:
         made[""] = emit(regression_root(output_root), "t_flat")
     for st in stages:
-        made[st] = emit(regression_root(output_root) / st, f"t_{st}")
+        stage_root = regression_root(output_root) / st
+        made[st] = emit(stage_root, f"t_{st}")
+        if shared_case:
+            emit(stage_root, shared_case, artifact=(st == artifact_stage))
     return made
 
 
@@ -85,6 +98,13 @@ class TestReaderRecognisesTheWrittenLayout:
     """读端认得**写端写出来的**布局 —— 这是那个整页空白的直接回归测试。"""
 
     def test_staged_layout_is_read(self, tmp_path):
+        """**每一级**的用例都要看得见 —— 分级回归的意义就是每级的证据。
+
+        写端只 `rmtree` **本级**目录（见 `run_regression` 里那段），所以每一级
+        都躺着自己跑过的那批用例与产物。读端以前只扫最后一级（`latest_root`）——
+        而最后一级往往只剩"随机/通用"那批，跑完什么都不落，于是
+        「回归波形」「回归覆盖率」两页**整页空白**：产物明明在 p0/p1/p2。
+        """
         from src.tools.flow_tools.api import run_regression_status
 
         _write_run_dir(tmp_path, stages=("loopback", "p0", "p1"))
@@ -92,9 +112,28 @@ class TestReaderRecognisesTheWrittenLayout:
 
         assert "error" not in payload, payload.get("error")
         names = {r["name"] for r in payload["rows"]}
-        # 读端取"最新那一级"（最后一级）—— 与写端 rmtree 语义配套
-        assert names == {"t_p1"}, f"读端没认到分级布局，拿到 {names}"
-        assert payload["stats"]["total"] == 1
+        assert names == {"t_loopback", "t_p0", "t_p1"}, f"读端漏了分级用例，拿到 {names}"
+        assert payload["stats"]["total"] == 3
+
+    def test_a_case_points_at_the_stage_that_actually_ran_it(self, tmp_path):
+        """同一个用例在每一级都有目录，**只有跑过它的那一级有产物**。
+
+        读端必须挑**有产物的那一份**，不能挑最后一级那个空壳 —— 否则页面上
+        永远是"这条没有波形"，而波形就在旁边那一级的目录里。
+        """
+        from pathlib import Path
+
+        from src.tools.flow_tools.api import run_regression_status
+
+        _write_run_dir(tmp_path, stages=("p0", "p1"), shared_case="t_shared",
+                       artifact_stage="p0")
+        payload = run_regression_status(str(tmp_path))
+        rows = [r for r in payload["rows"] if r["name"] == "t_shared"]
+
+        assert len(rows) == 1, "同一个用例出现在几级也只该占一行"
+        assert rows[0]["wave"], "波形在 p0，读端却挑到了 p1 的空壳"
+        assert rows[0]["cov"], "覆盖率库同上"
+        assert "p0" in Path(rows[0]["wave"]).parts
 
     def test_flat_layout_still_reads(self, tmp_path):
         """老布局**不能因为支持分级就废掉** —— 存量运行目录都是平的。"""

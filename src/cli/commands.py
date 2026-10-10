@@ -166,7 +166,8 @@ def init(json_output, quiet, verbose, output_dir):
 @click.option("--verify-only", is_flag=True, help="验证专注模式：bypass design/model，直接 UVM 验证（预置 RTL + 黄金模型）")
 @click.option("--sim-mode", "sim_modes", default=None, multiple=True,
               help="回归的仿真业务（可重复：--sim-mode wave --sim-mode cov）；"
-                   "默认 cov（覆盖率）。可用词条见 src/tools/regression_tools/sim_modes.py")
+                   "默认 cov+wave（覆盖率 + 波形）—— 要省机时就显式只给 cov。"
+                   "可用词条见 src/tools/regression_tools/sim_modes.py")
 @click.option("--no-manual-gate", "manual_gate", flag_value=False, default=True,
               help="关闭分级回归的**人工节点**（loopback 全过也不停车等人放行）。"
                    "默认开启：门是默认该在的。工作台工具栏上也有同一个开关")

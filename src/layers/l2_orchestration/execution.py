@@ -13,6 +13,7 @@ from datetime import datetime
 import structlog
 
 from src.layers.l1_infrastructure.output_config import make_output_root
+from src.tools.regression_tools import sim_modes as _sim_modes
 
 from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
 from src.executors.design import DesignExecutor
@@ -440,51 +441,6 @@ class PipelineExecutionService:
             logger.warning(f"Exclude 自动发现失败: {e}")
             return 0
 
-    @staticmethod
-    def _llm_repair_compile_error(output_root: str, compile_error: dict) -> bool:
-        """LLM 兜底修复编译错误（确定性自愈失败时调用）。
-
-        读出错文件 → LLM 产出修正版 → 写回。仅 LLM 改写 RTL，不改接口结构。
-        返回是否实际写回。
-        """
-        try:
-            from src.tools.lib.llm_refine import call_llm
-            fname = (compile_error or {}).get("file", "")
-            if not fname:
-                logger.warning("LLM 兜底：无文件名，跳过")
-                return False
-            fpath = Path(output_root) / fname
-            if not fpath.exists():
-                cands = list(Path(output_root).rglob(fname))
-                fpath = cands[0] if cands else None
-            if fpath is None:
-                logger.warning(f"LLM 兜底：找不到文件 {fname}")
-                return False
-            code = fpath.read_text(encoding="utf-8", errors="replace")
-            msg = (compile_error or {}).get("message", "")
-            prompt = (
-                "你是 IC 设计工程师。下面 SystemVerilog 模块有编译/elaboration 错误。\n"
-                "只修复报错点，保留模块接口与整体结构，输出完整修正后的 module（含 module/endmodule）。"
-            )
-            fixed = call_llm(prompt, code, msg)
-            if not fixed or "module" not in fixed or "endmodule" not in fixed:
-                logger.warning(f"LLM 兜底：返回无效代码，未写回 {fname}")
-                return False
-            # **走全项目唯一的写盘出口** —— 生成物只许改 `pragma custom` 区域。
-            # 这里原来是无条件 `write_text`：LLM 被要求"输出完整修正后的 module"，
-            # 等于给了它对生成物**整份重写**的权限（见 `generated_files` 的 docstring：
-            # 实测同一个模板被写出三种不同结果，loopback 7/7 → 4/7 → 5/7）。
-            from src.layers.l1_infrastructure.generated_files import gated_write
-            if not gated_write(fpath, fixed, logger=logger):
-                logger.warning(f"LLM 兜底：拒绝整份重写生成物 {fname}"
-                               f" —— 只允许改 pragma custom 区域")
-                return False
-            logger.info(f"LLM 兜底：已重写 {fname}")
-            return True
-        except Exception as e:
-            logger.warning(f"LLM 兜底修复失败: {e}")
-            return False
-
     async def run_closed_loop(self, spec_text: str, output_root: str = "output",
                               target: Optional[float] = None, max_rounds: int = 5,
                               design_style: str = "baseline",
@@ -552,7 +508,8 @@ class PipelineExecutionService:
             design_style=design_style,
             bypass_design_model=bool(bypass_design_model),
             bypass_design=bool(_bypass_design),
-            sim_modes=list(sim_modes) if sim_modes else ["cov"],
+            sim_modes=list(sim_modes) if sim_modes else [
+                _sim_modes.DEFAULT_MODE],
             manual_gate=bool(manual_gate),
         )
         config = {
@@ -699,7 +656,8 @@ class PipelineExecutionService:
                 design_style=design_style,
                 bypass_design_model=bool(bypass_design_model),
                 bypass_design=bool(_bypass_design),
-                sim_modes=list(sim_modes) if sim_modes else ["cov"],
+                sim_modes=list(sim_modes) if sim_modes else [
+                _sim_modes.DEFAULT_MODE],
                 manual_gate=bool(manual_gate),
             )
             if saver is not None:

@@ -164,13 +164,20 @@ class FrontExecutor(BaseExecutor):
         casemodel_path = ""
         try:
             import yaml as _yaml
-            from src.tools.casemodel_tools.api import run_validate, run_uvm_tests
+            from src.tools.casemodel_tools.api import (blocking_issues,
+                                                       run_validate, run_uvm_tests)
 
             model = self._draft_casemodel(info)
             if model:
                 text = _yaml.safe_dump(model, allow_unicode=True, sort_keys=False)
                 errs = [i for i in (run_validate(text).get("issues") or [])
                         if i.get("severity") == "error"]
+                # schema 绿了不等于模型立得住：维度 id / 字段名这类**全局坐标**
+                # 撞车 schema 看不见，要到下游才炸（重复测试点 → 同一个 SV 类名
+                # → Typedef 重定义 → 覆盖率归零）。这道闸只拦「身份类」的错，
+                # 不拦 `case_without_check` 那种已知且合理的（见 blocking_issues）。
+                if not errs:
+                    errs = blocking_issues(text)
                 if errs:
                     # 草稿自己没写对 —— 如实记下来，**不写盘**（写下去就是给下游埋雷）
                     logger.warning(f"front：casemodel 草稿没过校验（{len(errs)} 条），不写盘；"
@@ -262,7 +269,29 @@ class FrontExecutor(BaseExecutor):
             subs = [{"id": "OBJ-01", "name": name, "code": "DUT"}]
 
         # 维度：从 spec 的接口表取**真的信号**（不编），只有能落成维度的才收
-        dims, addr_w, data_w = [], 8, 8
+        #
+        # **按 id 收，不按接口条数收。** 一份 spec 里 `pwdata` 与 `prdata` 会双双
+        # 落进下面同一个分支 —— 直接 append 就得到**两个 `D_DATA`**。维度 id 是
+        # 全局坐标（`build_dimension` 拿它当 key），两个同 id 的维度会让下游按
+        # `(dimension, value)` 展开出**重复测试点**，再撞成**同一个 SV 类名**
+        # （`attr_class_slug` 只看 dimension + value）—— 编译期 Typedef 重定义，
+        # work 库空掉、覆盖率归零。实测就是这么炸的。
+        #
+        # 同 id 撞车时**激励胜过响应**：`wdata` > `rdata`。测试点扫的是能驱动的
+        # 那一路取值，读数据是响应，不是这一维该扫的东西。
+        dims_by_id: Dict[str, Dict[str, Any]] = {}
+        _rank_of = {"wdata": 2, "rdata": 1}      # 只有 D_DATA 有第二来源
+        _chosen_rank: Dict[str, int] = {}
+
+        def _put(dim: Dict[str, Any], source: str = "") -> None:
+            rid = dim["id"]
+            rank = _rank_of.get(source, 1)
+            if _chosen_rank.get(rid, -1) >= rank:
+                return                            # 已有同级或更优的来源，不覆盖
+            dims_by_id[rid] = dim
+            _chosen_rank[rid] = rank
+
+        addr_w, data_w = 8, 8
         for it in (spec.get("interfaces") or []):
             if not isinstance(it, dict):
                 continue
@@ -270,21 +299,23 @@ class FrontExecutor(BaseExecutor):
             w = int(it.get("data_width", 1) or 1)
             if "addr" in n:
                 addr_w = w
-                dims.append({"id": "D_ADDR", "name": "地址",
-                             "fields": [{"name": n, "type": "range", "min": 0,
-                                         "max": (1 << w) - 1,
-                                         "boundary": ["0", "3", "4",
-                                                      str((1 << w) - 1)]}]})
+                _put({"id": "D_ADDR", "name": "地址",
+                      "fields": [{"name": n, "type": "range", "min": 0,
+                                  "max": (1 << w) - 1,
+                                  "boundary": ["0", "3", "4",
+                                               str((1 << w) - 1)]}]})
             elif "wdata" in n or "rdata" in n:
                 data_w = max(data_w, w)
-                dims.append({"id": "D_DATA", "name": "写数据",
-                             "fields": [{"name": n, "type": "range", "min": 0,
-                                         "max": (1 << w) - 1,
-                                         "boundary": ["0", str((1 << w) - 1)]}]})
+                _put({"id": "D_DATA", "name": "写数据",
+                      "fields": [{"name": n, "type": "range", "min": 0,
+                                  "max": (1 << w) - 1,
+                                  "boundary": ["0", str((1 << w) - 1)]}]},
+                     source="wdata" if "wdata" in n else "rdata")
             elif n in ("pwrite", "wr", "we"):
-                dims.append({"id": "D_DIR", "name": "读写方向",
-                             "fields": [{"name": n, "type": "enum",
-                                         "values": [0, 1]}]})
+                _put({"id": "D_DIR", "name": "读写方向",
+                      "fields": [{"name": n, "type": "enum",
+                                  "values": [0, 1]}]})
+        dims = list(dims_by_id.values())           # dict 保序 → 维持首次出现的顺序
         if not dims:
             # 一个维度都没有 → 模型立不起来（`dimensions` 是 schema 唯一的 required）
             return {}

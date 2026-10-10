@@ -97,6 +97,15 @@ class ModuleSpec(BaseModel):
     enabled: bool = True
     #: true = 该视图没有真实数据源，界面上必须常驻「演示数据」横幅
     placeholder: bool = False
+    #: 它的显隐开关**同时**挂到「视图」菜单。只给"本质是一个窗格"的模块用。
+    #:
+    #: 默认 false：绝大多数模块的开关在「窗口」菜单里就够了（那是"哪个模块
+    #: 开着"的完整清单）。但像「错误指纹」这种底部工具面板，用户的用法是
+    #: "这块窗格我收起来"，而"窗格显隐"是**视图**菜单在管的事 —— 他会去那里找。
+    #:
+    #: 两处挂的是**同一个 QAction**（Qt 允许一个 action 出现在多个菜单里），
+    #: 所以勾选状态天然同步，不会出现"视图里开着、窗口里关着"。
+    pin_to_view: bool = False
 
 
 class WorkbenchManifest(BaseModel):

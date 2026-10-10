@@ -13,6 +13,7 @@ import json
 from typing import Any, List
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
                                QSplitter, QVBoxLayout, QWidget)
 
@@ -87,6 +88,26 @@ class FingerprintModule(ModuleBase):
         return root
 
     # ── 动作 ──
+
+    def create_actions(self) -> List[QAction]:
+        """菜单与工具栏里的动作 —— 让「错误指纹」出现在**调试菜单**下。
+
+        没有这个方法时，本模块只在「窗口」菜单里有一个显隐开关，
+        调试菜单里什么都没有（`registry.py` 只把模块 `create_actions()`
+        的结果挂到业务线菜单）。
+
+        文案不写"取指纹"而写"错误指纹"：菜单里这一条是**这个模块的入口**
+        （上面已经有模块标题作分隔行），叫"取指纹"会和旁边那些动词混在一起
+        看不出是谁的。hint 里再补一句它到底做什么。
+        """
+        take = QAction("错误指纹", self.content)
+        take.setStatusTip("把当前输入框里的报错文本压成指纹（去掉行号/地址后可比对）")
+        take.triggered.connect(self.take_fingerprint)
+
+        sample = QAction("填入示例", self.content)
+        sample.setStatusTip("把输入框换成本模块自带的示例报错")
+        sample.triggered.connect(lambda: self.editor.setPlainText(SAMPLE))
+        return [take, sample]
 
     def take_fingerprint(self) -> None:
         text = self.editor.toPlainText().strip()
