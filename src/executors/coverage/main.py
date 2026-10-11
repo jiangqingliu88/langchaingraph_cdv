@@ -45,23 +45,28 @@ class CoverageExecutor(BaseExecutor):
         seed = params.get("seed", 0) if isinstance(params, dict) else 0
         round_num = params.get("round_num", 0) if isinstance(params, dict) else 0
 
-        # ── 功能覆盖率点生成（从 spec 提取功能点，生成语义 covergroup）──
-        func_cov = {}
+        # ── 功能覆盖率点生成 ──
+        #
+        # **优先从 case 模型来**（`inputs/casemodel.yaml`，front 在更早的阶段写的）：
+        # 那是这条链路唯一的"该测什么"的声明 —— 维度、取值点、维度之间要不要
+        # 一起组合，都在里面。由它派生的 covergroup（`casemodel_tools.coverage`）
+        # 与 `run_uvm_tests` 是**同一份分母的两面**：激励撒的取值 = 覆盖率收的 bin，
+        # 对不上就说明有东西漏了 —— 这正是闭环要能看出来的。
+        #
+        # 没有 case 模型时才退回 spec 骨架生成器（`FunctionalCoveragePointGenerator`，
+        # 只给 opcode 枚举 bin）—— 它不认识模型，但总好过一个都没有。
+        ctx = task.get("ctx", {})
+        spec = ctx.get("spec", {}) if hasattr(ctx, "get") else {}
+        if not isinstance(spec, dict):
+            spec = {}
+        module_name = spec.get("design_name", "dut") or "dut"
+
+        func_cov: Dict[str, Any] = {}
         try:
-            from src.executors.coverage.functional_coverage import FunctionalCoveragePointGenerator
-            ctx = task.get("ctx", {})
-            spec = ctx.get("spec", {}) if hasattr(ctx, 'get') else {}
-            if not isinstance(spec, dict):
-                spec = {}
-            module_name = spec.get("design_name", "dut") or "dut"
-            gen = FunctionalCoveragePointGenerator()
-            func_cov = gen.generate(spec, module_name)
-            # 落盘 covergroup（首次生成；已存在则跳过，避免覆盖人工修改）
-            _cg_path = Path(output_dir) / "coverage" / f"{module_name}_cg.sv"
-            if not _cg_path.exists() and func_cov.get("covergroup_code"):
-                gen.emit_sv_file(output_dir, module_name, func_cov["covergroup_code"])
+            func_cov = self._build_functional_coverage(output_dir, module_name, spec)
         except Exception as e:
             logger.warning(f"功能覆盖率点生成失败: {e}")
+            func_cov = {}
 
         # ── EDA 可用性前置检查（失败响亮：没有 vsim 就不假装收集覆盖率）──
         import shutil
@@ -237,6 +242,66 @@ class CoverageExecutor(BaseExecutor):
             "functional_coverage": func_cov,
             "coverage_map": coverage_map,
         })
+
+    # ── 功能覆盖率点：case 模型优先，spec 骨架兜底 ──
+
+    @staticmethod
+    def _build_functional_coverage(output_dir: Path, module_name: str,
+                                   spec: Dict[str, Any]) -> Dict[str, Any]:
+        """产出 `coverage/coverage_points.json` —— 功能覆盖点的**声明**。
+
+        ## 这里**不写** `coverage/<module>_cg.sv`（与从前不一样）
+
+        那份文件从来**没有进过编译清单**（全仓库没有一处把它加进 filelist），
+        所以它永远不被编译、不被采样、不被 `vcover` 统计 —— 一个看着像功能覆盖率
+        模型、其实一个 bin 都没测的文件。**那比没有更坏**：人对着它调覆盖率，
+        调的是个死物。
+
+        真正被测量的是 `env_cov.sv.j2` 里那几个 `cg_<agent>`（monitor 每笔事务
+        触发 `write_<agent>` → `sample()`）。模型的边界 bin 由 **verify 阶段**
+        经 `inputs/yaml/uvm/env_cov_bins.yaml` 的 `field_bins` 注入那条通道
+        （见 `src/executors/verify/main.py::_case_model_field_bins`），那里才是
+        "模型声明的扫描点"真正变成 bin 的地方。
+
+        本函数只落**声明**（`coverage_points.json`），供 workbench 那页与审计读；
+        要一段独立可编译的 covergroup 文本走 `vagent case-model covergroups`。
+        """
+        from src.layers.l1_infrastructure.layout import casemodel_path
+
+        cm_file = casemodel_path(output_dir)
+        cov_dir = output_dir / "coverage"
+        cov_dir.mkdir(parents=True, exist_ok=True)
+        points: Dict[str, Any] = {}
+        if cm_file.is_file():
+            from src.tools.casemodel_tools.api import run_covergroups
+
+            points = run_covergroups(cm_file.read_text(encoding="utf-8"), module_name)
+            if points.get("error"):
+                points = {}
+
+        if not points:
+            # 退回 spec 骨架 —— 明说一句，别让人以为模型生效了。
+            from src.executors.coverage.functional_coverage import (
+                FunctionalCoveragePointGenerator)
+
+            gen = FunctionalCoveragePointGenerator()
+            legacy = gen.generate(spec, module_name)
+            logger.info(f"没有可用的 case 模型（{cm_file}）—— 功能覆盖率退回 spec 骨架")
+            return {**legacy, "source": "spec_fallback",
+                    "notes": [f"没读到 case 模型（{cm_file}）—— 覆盖点从 spec 骨架出，"
+                              f"只含 feature 枚举 bin"]}
+
+        # 声明落盘（workbench 那页与审计读这一份，不重算）。
+        # **每次覆盖**：它是机器读的声明，不是给人改的产物 —— 留旧的反而对不上现场。
+        (cov_dir / "coverage_points.json").write_text(
+            json.dumps({**points, "module": module_name, "source": "casemodel"},
+                       ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        logger.info(
+            f"功能覆盖率点（来自 case 模型）：{points.get('coverpoint_count')} 覆盖点 / "
+            f"{points.get('bin_count')} bin / {points.get('cross_count')} cross → "
+            f"coverage_points.json（bin 由 env_cov 承采，见 verify 的 field_bins）")
+        return {**points, "source": "casemodel"}
 
     @staticmethod
     def _extract_constraints(output_dir: Path) -> list:

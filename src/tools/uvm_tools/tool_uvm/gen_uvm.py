@@ -1667,6 +1667,10 @@ class EnvironmentRenderTask(RenderTask):
         # `coverage_bins` 是老的运行目录里留下的 —— 老的照样能渲染。
         bins_path = yaml_dir / "env_cov_bins.yaml"
         context["coverage_bins"] = []
+        # `field_bins`: 字段名 → 显式 bin 表（`[{name, value}]`），来自 **case 模型**
+        # （verify 阶段注入，见 `src/executors/verify/main.py`）。有了它就按模型声明
+        # 的边界值分箱，没有就退回模板里那套"值类自动分箱"（0/1/其余）。
+        context["coverage_field_bins"] = {}
         if bins_path.exists():
             try:
                 import json as _json
@@ -1674,8 +1678,12 @@ class EnvironmentRenderTask(RenderTask):
                 if isinstance(data, dict):
                     context["coverage_bins"] = data.get("cov_bins") \
                         or data.get("coverage_bins") or []
+                    _fb = data.get("field_bins")
+                    if isinstance(_fb, dict):
+                        context["coverage_field_bins"] = _fb
             except Exception:
                 context["coverage_bins"] = []
+                context["coverage_field_bins"] = {}
 
 
 class ConstraintRenderTask(RenderTask):

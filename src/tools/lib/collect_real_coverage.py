@@ -244,10 +244,15 @@ def parse_coverage_report(output_dir: Path) -> dict:
     except subprocess.TimeoutExpired:
         raw_text = ""
 
-    # 功能覆盖率（-cvg 输出 covergroup bin 命中）
+    # 功能覆盖率（-cvg **-details** 输出逐 covergroup/coverpoint/cross 的覆盖率）
+    #
+    # **`-details` 不能省**：只给 `-cvg` 的话输出是一份**只有汇总行**的报表
+    # （`Covergroups 3 na na 51.58%`），拿不到任何一个 covergroup 的名字 ——
+    # 而证据链的功能覆盖层要的正是逐条的 `{name, goal, actual}`。少了它就只能
+    # 产出一个标量计数，`five_layer` 读不到列表，于是永远报「0 covergroups」。
     cvg_txt = report_dir / "coverage_cvg.txt"
     cvg_raw = ""
-    cmd3 = [vcover, "report", "-cvg", str(ucdb.resolve())]
+    cmd3 = [vcover, "report", "-cvg", "-details", str(ucdb.resolve())]
     try:
         r3 = subprocess.run(cmd3, capture_output=True, text=True,
                             encoding="utf-8", errors="replace", timeout=60,
@@ -334,7 +339,76 @@ def _parse_cvg_text(text: str) -> dict:
         result["covergroup_count"] = int(cg_row.group(1).replace(",", ""))
 
     result["raw_pcts"] = [float(m) for m in re.findall(r"(\d+\.?\d*)%", text)]
+    result["covergroups"] = _parse_cvg_details(text)
     return result
+
+
+#: `-cvg -details` 里的三行结构（`Coverpoint` / `Cross` 缩进更深，但都靠行首词认）。
+_CG_TYPE_RE = re.compile(r"^\s*TYPE\s+(\S+)\s*$", re.M)
+_CG_CP_RE = re.compile(r"^\s*Coverpoint\s+(\S+)\s+(\d+\.?\d*)%", re.M)
+_CG_CROSS_RE = re.compile(r"^\s*Cross\s+(\S+)\s+(\d+\.?\d*)%", re.M)
+_CG_PCT_RE = re.compile(r"^\s*(\d+\.?\d*)%")
+
+
+def _parse_cvg_details(text: str) -> list:
+    """`vcover report -cvg -details` → `[{name, path, goal, actual, coverpoints,
+    crosses, cross_actual}]`。
+
+    形状对齐 `config/evidence_schema.yaml` 的 `functional_coverage_layer`
+    `evidence_fields.covergroups`（`name` / `goal` / `actual` / `coverpoints` /
+    `crosses`）—— 证据链那边读的就是这几个键，键名对不上就等于没有。
+
+    实测输出长这样（`-cvg` 单独用时**没有**这一段，见上面 cmd3 的注释）：
+
+        TYPE /apb_uart_env_pkg/apb_uart_env_coverage/cg_apb
+                                                       71.42%        100          -    Uncovered
+            Coverpoint cp_paddr                                66.66%        100 ...
+            Cross cross_all                                    33.33%        100 ...
+
+    `TYPE` 那一行给全路径（**末段才是 covergroup 名**），百分比在**下一行**的首列 ——
+    这是 vcover 的排版，不是我们选的。
+    """
+    if not text:
+        return []
+    # 只看 `COVERGROUP COVERAGE:` 那一段。`-details` 的输出有**两段**：
+    #   ① "Coverage Report by instance with details"  —— 逐实例（含每个 bin 的命中数）
+    #   ② "COVERGROUP COVERAGE:"                      —— 逐 **type**
+    # 两段的 `TYPE` 行一模一样，照全文抓会把每个 covergroup 收两遍（实测 3 个变 6 个），
+    # 而证据链要的是"有几个 covergroup 类型、各自多少" —— 那就是第 ② 段。
+    head = text.find("COVERGROUP COVERAGE:")
+    seg_text = text[head:] if head >= 0 else text
+
+    out: list = []
+    matches = list(_CG_TYPE_RE.finditer(seg_text))
+    for i, m in enumerate(matches):
+        # 本 covergroup 的段落：从这一行的结尾到下一个 TYPE 的开头
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(seg_text)
+        seg = seg_text[m.end():end]
+        path = m.group(1)
+        pct_m = _CG_PCT_RE.search(seg)
+        actual = float(pct_m.group(1)) if pct_m else 0.0
+        coverpoints = [{"name": n, "actual": float(p)}
+                       for n, p in _CG_CP_RE.findall(seg)]
+        crosses = [{"name": n, "actual": float(p)}
+                   for n, p in _CG_CROSS_RE.findall(seg)]
+        # `five_layer` 的 `func_cov_cross` 读的是 `cross_actual`（不是 crosses 列表）。
+        # **不给就是默认 100 分**——那会让"一个 cross 都没跑"悄悄通过门禁，
+        # 所以这里按最差的那个 cross 如实给。
+        cross_actual = min((c["actual"] for c in crosses), default=100.0)
+        out.append({
+            "name": path.rsplit("/", 1)[-1],
+            "path": path,
+            "goal": 100.0,
+            "actual": actual,
+            "coverpoints": coverpoints,
+            "crosses": crosses,
+            "cross_actual": cross_actual,
+        })
+
+    # 兜底去重：没有 `COVERGROUP COVERAGE:` 标记时（格式变了）仍按全路径收一遍，
+    # 同一个路径只留第一次 —— 宁可少几行，也不要把同一个 covergroup 报两次。
+    seen: set = set()
+    return [c for c in out if not (c["path"] in seen or seen.add(c["path"]))]
 
 
 def _parse_vcover_text(text: str, dut_name: str = "") -> dict:

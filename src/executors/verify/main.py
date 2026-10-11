@@ -1,5 +1,5 @@
 """验证开发智能体 —— UVM环境 + 测试用例 + 断言（真实工具链）"""
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 import json
 from pathlib import Path
 
@@ -75,9 +75,31 @@ class VerifyExecutor(BaseExecutor):
                 _bins_dir = output_dir / "inputs" / "yaml" / "uvm"
                 _bins_dir.mkdir(parents=True, exist_ok=True)
                 _bins_path = _bins_dir / "env_cov_bins.yaml"
+                _bins_payload = {"cov_bins": pack.coverage_bins}
+                # ── case 模型的覆盖点 → env_cov 的 bin ──
+                #
+                # 这是「功能覆盖率方法学」真正落地的地方。**为什么不另生成一个
+                # `coverage/<module>_cg.sv`**：那份文件从来**没有进过编译清单**
+                # （全仓库没有一处把它加进 filelist），于是它永远不被采样 ——
+                # 一个看着像覆盖率模型、其实一个 bin 都没测的文件，比没有更坏。
+                #
+                # 真正被编译、被采样、被 `vcover` 统计的是 `env_cov.sv.j2` 里那几个
+                # `cg_<agent>`（monitor 的每笔事务触发 `write_<agent>` → `sample()`）。
+                # 所以把模型的边界 bin 喂进那条已跑通的通道：coverpoint 名就是事务字段名
+                # （= spec 的接口信号名），模型里声明的边界值直接变成 bin。
+                #
+                # 拿不到模型就不写这个键 —— 模板会退回"值类自动分箱"（0/1/其余），
+                # 那是**降级**不是失败，所以只记一条日志。
+                _field_bins = self._case_model_field_bins(output_dir)
+                if _field_bins:
+                    _bins_payload["field_bins"] = _field_bins
+                    logger.info(
+                        f"功能覆盖率点（case 模型）：{len(_field_bins)} 个字段的边界 "
+                        f"bin 已注入 env_cov → 会被真编译、真采样")
+                else:
+                    logger.info("没有可用的 case 模型覆盖点 —— env_cov 退回值类自动分箱")
                 _bins_path.write_text(
-                    json.dumps({"cov_bins": pack.coverage_bins}, ensure_ascii=False),
-                    encoding="utf-8")
+                    json.dumps(_bins_payload, ensure_ascii=False), encoding="utf-8")
             else:
                 # 不静默：策略包没加载出来 = 语义 cross 不会生成，覆盖率模型会退化成
                 # 只有按字段自动分箱的那几个 coverpoint
@@ -207,6 +229,46 @@ class VerifyExecutor(BaseExecutor):
         }
         score = min(50 + len(files) * 2, 90) if files else 20
         return ExecutorResult(success=bool(files), data={"tests": tests_data, "score": score})
+
+    # ── 功能覆盖率点：case 模型 → env_cov 的 bin ──
+
+    @staticmethod
+    def _case_model_field_bins(output_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
+        """`inputs/casemodel.yaml` → `{字段名: [{name, value}, …]}`（给 `env_cov` 用）。
+
+        键是**字段名**（`paddr` / `pwdata` / `pwrite`）—— case 模型的字段名就是
+        spec 的接口信号名，而 `env_cov` 的 coverpoint 挂在 `agent_item.<字段>` 上，
+        两边是同一个命名空间，所以能直接对上。对不上的字段由模板忽略（它按事务字段
+        遍历），不会生成引用不到信号的 bin。
+
+        拿不到模型（文件不在 / 解析失败）就返回空 —— 调用方据此退回自动分箱，
+        **不静默假装有模型**。
+        """
+        from src.layers.l1_infrastructure.layout import casemodel_path
+
+        cm_file = casemodel_path(output_dir)
+        if not cm_file.is_file():
+            return {}
+        try:
+            from src.tools.casemodel_tools.api import run_covergroups
+
+            points = run_covergroups(cm_file.read_text(encoding="utf-8"),
+                                     output_dir.name[:0] or "dut")
+        except Exception as e:                       # noqa: BLE001 旁路，别拦生成
+            logger.warning(f"读 case 模型失败（env_cov 退回自动分箱）: {e}")
+            return {}
+        if points.get("error"):
+            logger.warning(f"case 模型构建失败（env_cov 退回自动分箱）: "
+                           f"{points['error']}")
+            return {}
+
+        out: Dict[str, List[Dict[str, Any]]] = {}
+        for cp in points.get("coverpoints") or []:
+            bins = [{"name": b["name"], "value": b["value"]}
+                    for b in cp.get("bins") or []]
+            if bins:
+                out[cp["signal"]] = bins
+        return out
 
     # ── gap 定向激励生成辅助 ──
 

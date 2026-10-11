@@ -56,7 +56,21 @@ class {{ environment.env_name }}_coverage extends uvm_component;
   covergroup cg_{{ agent.name }};
 {%-   for name in rv.names %}
 {%-     set w = rv.bits[loop.index0] %}
-{%-     if w >= 2 %}
+{#-       **case 模型声明了覆盖点就用模型的**：那些边界值是"这一维该扫哪些点"的
+        建模结论（0 / 3 / 4 / 31 / 32 / 255 …），比"0/1/其余"精确得多 ——
+        而覆盖率的意义就在于"扫描点有没有被打到"：分母不对，结论就是错的。
+        模型没覆盖到的字段才退回值类分箱。 #}
+{#-      `| default({})` 不能省：渲染走 StrictUndefined，裸引用一个没给的键
+        会在 `if coverage_field_bins` 上直接抛（真路径总会给，但测试夹具与
+        别的调用方不一定 —— 少一个键就整份渲染失败，代价太大）。 #}
+{%-     set model_bins = (coverage_field_bins | default({})).get(name) %}
+{%-     if model_bins %}
+    cp_{{ name }}: coverpoint {{ agent.name }}_item.{{ name }} {   // 取自 case 模型
+{%-       for b in model_bins %}
+      bins {{ b.name }} = { {{- b.value -}} };
+{%-       endfor %}
+    }
+{%-     elif w >= 2 %}
     cp_{{ name }}: coverpoint {{ agent.name }}_item.{{ name }} {   // 值类：0 / 1 / 其余
       bins v_zero = {0};
       bins v_one  = {1};
