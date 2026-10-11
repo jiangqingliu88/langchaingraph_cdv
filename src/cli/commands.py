@@ -4838,6 +4838,40 @@ def case_model_uvm_tests(model, dimensions, max_tests, output_path):
         sys.exit(2)
 
 
+@case_model.command("covergroups")
+@click.argument("model", type=click.Path(exists=True))
+@click.option("--module", "-m", default="dut",
+              help="covergroup 名字里的模块名（默认 dut）")
+@click.option("--output", "-o", "output_path", type=click.Path(),
+              help="把 covergroup 写到文件（缺省打到 stdout）")
+def case_model_covergroups(model, module, output_path):
+    """覆盖点 → SystemVerilog covergroup（功能覆盖率方法学）
+
+    维度 → covergroup、字段 → coverpoint、取值点 → bin、可组合的 cross_pair →
+    cross。规则见 src/tools/casemodel_tools/coverage.py 的模块头。
+
+    与 `uvm-tests` 是同一份分母的两面：那边说"这些取值点各跑一条用例"（激励），
+    这边说"这些取值点各收一个 bin"（度量）—— 两边的数对得上，闭环才成立。
+
+    \b
+    示例:
+      vagent case-model covergroups model.yaml -m apb_uart
+      vagent case-model covergroups model.yaml -o coverage/apb_uart_cg.sv
+    """
+    out = get_output_adapter(False)
+    from src.tools.casemodel_tools.cli import build_parser, cmd_covergroups
+    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
+
+    try:
+        argv = ["covergroups", model, "--module", module]
+        if output_path:
+            argv += ["--out", output_path]
+        sys.exit(cmd_covergroups(build_parser().parse_args(argv)))
+    except _CaseModelError as exc:
+        out.print_error(f"模型无法构建: {exc}", code=2)
+        sys.exit(2)
+
+
 @case_model.command("gui")
 @click.argument("model", required=False, type=click.Path(exists=True))
 def case_model_gui(model):

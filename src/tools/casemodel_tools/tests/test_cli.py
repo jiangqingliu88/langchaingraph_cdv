@@ -15,7 +15,7 @@ from .conftest import CPU, CPU_FLAWED, EXAMPLES, FC, FC_REAL
 
 
 SUBCOMMANDS = ("check", "analyze", "matrix", "tree", "rules", "generate",
-               "uvm-tests")
+               "uvm-tests", "covergroups")
 
 
 def test_cli_help_lists_every_subcommand(capsys):

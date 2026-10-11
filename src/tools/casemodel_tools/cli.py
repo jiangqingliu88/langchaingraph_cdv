@@ -263,6 +263,38 @@ def cmd_uvm_tests(args: argparse.Namespace) -> int:
 
 
 # ════════════════════════════════════════════════════════════
+# covergroups —— 覆盖点 → SystemVerilog covergroup
+# ════════════════════════════════════════════════════════════
+
+def cmd_covergroups(args: argparse.Namespace) -> int:
+    """功能覆盖率方法学：模型的覆盖点 → 能编译的 covergroup。
+
+    维度 → covergroup、字段 → coverpoint、取值点 → bin、可组合的 cross_pair →
+    cross。规则与取舍见 `coverage.py` 的模块头（方法学的唯一出处）。
+    """
+    from .api import run_covergroups
+
+    payload = run_covergroups(Path(args.model).read_text(encoding="utf-8"),
+                              args.module)
+    if payload.get("error"):
+        print(f"模型无法构建: {payload['error']}", file=sys.stderr)
+        return 2
+
+    if args.out:
+        Path(args.out).write_text(payload["covergroup_code"], encoding="utf-8")
+        print(f"已写出 covergroup → {args.out}"
+              f"（{payload['coverpoint_count']} 覆盖点 / {payload['bin_count']} bin"
+              f" / {payload['cross_count']} cross）")
+    else:
+        print(f"// {payload['coverpoint_count']} 覆盖点 / {payload['bin_count']} bin"
+              f" / {payload['cross_count']} cross", file=sys.stderr)
+        print(payload["covergroup_code"], end="")
+    for note in payload["notes"]:
+        print(f"  注意: {note}", file=sys.stderr)
+    return 0
+
+
+# ════════════════════════════════════════════════════════════
 # 参数
 # ════════════════════════════════════════════════════════════
 
@@ -324,6 +356,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="最多导出多少条（默认 32；优先保留边界取值，截断会记账）")
     p.add_argument("--out", "-o", help="输出文件（缺省打到 stdout）")
     p.set_defaults(func=cmd_uvm_tests)
+
+    p = sub.add_parser("covergroups",
+                       help="覆盖点 → SystemVerilog covergroup（功能覆盖率方法学）")
+    p.add_argument("model", help="case 模型 YAML")
+    p.add_argument("--module", "-m", default="dut",
+                   help="covergroup 名字里的模块名（默认 dut）")
+    p.add_argument("--out", "-o", help="把 covergroup 写到文件（缺省打到 stdout）")
+    p.set_defaults(func=cmd_covergroups)
 
     return parser
 

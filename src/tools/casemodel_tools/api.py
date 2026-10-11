@@ -37,6 +37,9 @@ TOOL_GENERATE = "casemodel_generate"
 #: 把属性取值摊平成 UVM 能吃的 tests 片段（**一条 = 一个 UVM_TEST**）。
 #: 产物是**文本契约**，本工具不 import uvm_tools —— 见 `run_uvm_tests`
 TOOL_UVM_TESTS = "casemodel_uvm_tests"
+#: 把模型的覆盖点渲染成 SystemVerilog covergroup —— 见 `run_covergroups`。
+#: 同样**不进 `TOOL_NAMES`**（那是给 Agent 的三面名单，见上面那段）。
+TOOL_COVERGROUPS = "casemodel_covergroups"
 
 #: 三面（LangChain / ToolRegistry / ToolHub）共用的名单。
 #: **`run_uvm_tests` 暂时不在里面**：进这个名单就得在 `src/executors/verify/casemodel/`
@@ -278,6 +281,37 @@ def run_uvm_tests(yaml_text: str, *, dimensions: Optional[List[str]] = None,
         "tests_yaml": yaml.safe_dump({"tests": tests}, allow_unicode=True,
                                      sort_keys=False),
     }
+
+
+def run_covergroups(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
+    """YAML 文本 → 功能覆盖率模型 + 可编译的 SystemVerilog covergroup。
+
+    **一条 = 一个覆盖点**：维度归类、字段承载取值、取值点是一个 bin、声明了可
+    组合的 `cross_pair` 是一条 `cross`。规则与"为什么这么定"见
+    `src/tools/casemodel_tools/coverage.py` 的模块头 —— 那是方法学的唯一出处。
+
+    与 `run_uvm_tests` 是**同一份分母的两面**：
+      · `run_uvm_tests` 说"这些取值点各跑一条用例"（激励侧）；
+      · 本函数说"这些取值点各收一个 bin"（度量侧）。
+    两边都从 `field.value_points()` 派生，所以条数与 bin 数天然对得上 ——
+    **对不上就说明有东西漏了**，这正是要能看出来的。
+
+    产物是**文本**（一段 SV），本工具不写盘、不 import 任何 UVM/EDA 工具。
+    """
+    try:
+        models = load_models_from_text(yaml_text, source="<inline>")
+    except CaseModelError as exc:
+        return {"error": str(exc)}
+
+    from .coverage import coverage_model, render_covergroup
+
+    # `resolve()` 才回填 `cross_pair.dim_a/dim_b` 与联动取值 —— 不解析就少
+    # cross、少 bin，而且是**静默**少（见 coverage.py 的 `coverage_model`）。
+    model = models[0].resolve()
+    cm = coverage_model(model, module_name)
+    payload = cm.as_dict()
+    payload["covergroup_code"] = render_covergroup(cm)
+    return payload
 
 
 #: 工具名 → 实现，供适配器一次性遍历。

@@ -1,0 +1,78 @@
+<!-- THIS IS TOOL GENERATED SESSION FILE. PLEASE DO NOT MODIFY THIS -->
+<!DOCTYPE visualizer_session>
+<session skip_do_file="0" version="3">
+ <app argc="5">
+  <argv pos="0" value="visualizer"/>
+  <argv pos="1" value="+wavefile+D:\SignOffAI\output_e2e_fix2_jiang_20261011_004653\regression_run\p0\build_build_apb_uart_dut\test_test_apb_agent_loopback\waves\test_apb_agent_loopback.db"/>
+  <argv pos="2" value="+viswave"/>
+  <argv pos="3" value="+read_viswave_info"/>
+  <argv pos="4" value="+genDesignOMFromWave"/>
+ </app>
+ <window_config>
+  <dockareas left="593" bottom="266" right="593" top="0"/>
+  <taborder left="structure+" bottom="transcript+" right="variables+"/>
+  <activetab left="structure" bottom="transcript" right="variables"/>
+  <window undocked="0" y="0" dock_location="left" visible="1" x="0" type="structure"/>
+  <window undocked="0" y="0" dock_location="right" visible="1" x="0" type="variables"/>
+  <window undocked="0" y="0" dock_location="bottom" visible="1" x="0" type="transcript"/>
+  <window undocked="0" y="50" width="1200" height="800" visible="1" x="50" type="rtl"/>
+  <window undocked="1" y="171" dock_location="bottom" width="1076" height="616" visible="1" x="150" type="wave"/>
+ </window_config>
+ <wave_file_mgr>
+  <waveFile waveType="0" tagName="F0" fileName="D:\SignOffAI\output_e2e_fix2_jiang_20261011_004653\regression_run\p0\build_build_apb_uart_dut\test_test_apb_agent_loopback\waves\test_apb_agent_loopback.db"/>
+ </wave_file_mgr>
+ <gui>
+  <main_window visible="1"/>
+  <watchTower_cur_setting curDisplayTimeUnit="-12" customDisplayTimeUnitListStr="" curRadix="8" curActiveWaveFile="F0" curDisplayTimeUnitStr="1ps">
+   <curTime lowtime="485000" hightime="0"/>
+  </watchTower_cur_setting>
+  <structure selection="apb_uart_bench_tb_top.apb_if_inst"/>
+  <variables CA="0" VA="0" UPF="0"/>
+  <transcript/>
+  <wave name="Wave0">
+   <timeunit value="14"/>
+   <frequnit value="2"/>
+   <showdiff value="0"/>
+  </wave>
+ </gui>
+ <wave_mgr sync_time_range="0">
+  <waveWindow displayTimeUnitStr="1ps" value_tooltip="0" signalHeight="21" waveWidth="620" displayGrid="0" primNudge="1" showMarkers="1" displayLeadingZeros="0" nameWidth="325" displayFileTag="1" valueWidth="83" justifySignalPath="Right" swapRepresentationOfX="0" displayGlobalView="1" alignBaseName="0" snapToEdge="1" wintype="4" secNudge="1" displayRadixWithValue="1" displayScopeName="1" displayTimeUnit="-12" trackViewToTime="1" showSecCursor="0">
+   <window name="Wave0">
+    <timeunit value="14"/>
+    <frequnit value="2"/>
+    <showdiff value="0"/>
+   </window>
+   <viewPort>
+    <beginTime lowtime="0" hightime="0"/>
+    <endTime lowtime="2185000" hightime="0"/>
+    <beginViewTime lowtime="216862" hightime="0"/>
+    <endViewTime lowtime="750438" hightime="0"/>
+    <beginLastViewTime lowtime="216862" hightime="0"/>
+    <endLastViewTime lowtime="750438" hightime="0"/>
+   </viewPort>
+   <primCursor lowtime="485000" hightime="0"/>
+   <wavetclcommands>
+    <tcl command="wave update off"/>
+    <tcl command="wave clearselection"/>
+    <tcl commandblock="custom radix definitions"></tcl>
+    <tcl command="wave update off"/>
+    <tcl command="wave zoom range 216862 750438"/>
+    <tcl command="wave add apb_uart_bench_tb_top.apb_if_inst.pclk -tag F0 -radix hexadecimal"/>
+    <tcl command="wave add apb_uart_bench_tb_top.apb_if_inst.preset_n -tag F0 -radix hexadecimal"/>
+    <tcl command="wave add apb_uart_bench_tb_top.apb_if_inst.psel -tag F0 -radix hexadecimal"/>
+    <tcl command="wave add apb_uart_bench_tb_top.apb_if_inst.penable -tag F0 -radix hexadecimal"/>
+    <tcl command="wave add apb_uart_bench_tb_top.apb_if_inst.pwrite -tag F0 -radix hexadecimal"/>
+    <tcl command="wave add apb_uart_bench_tb_top.apb_if_inst.paddr -tag F0 -radix hexadecimal"/>
+    <tcl command="wave add apb_uart_bench_tb_top.apb_if_inst.pwdata -tag F0 -radix hexadecimal"/>
+    <tcl command="wave add apb_uart_bench_tb_top.apb_if_inst.prdata -tag F0 -radix hexadecimal"/>
+    <tcl command="wave add apb_uart_bench_tb_top.apb_if_inst.prdata_slv -tag F0 -radix hexadecimal -select"/>
+    <tcl command="wave update on"/>
+    <tcl command="wave top 0"/>
+    <tcl command=""/>
+   </wavetclcommands>
+  </waveWindow>
+ </wave_mgr>
+ <mem_mgr/>
+ <windows/>
+ <dut selection="apb_uart_bench_tb_top.apb_if_inst"/>
+</session>
