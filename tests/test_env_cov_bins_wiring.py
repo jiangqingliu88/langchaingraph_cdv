@@ -106,6 +106,46 @@ class TestWhatGetsWritten:
         self._executor()._write_env_cov_bins(tmp_path, [])   # 不抛即通过
 
 
+class TestTheSchemaAcceptsBothKeys:
+    """写下去的键必须过 `uvm_config.schema.json` —— 不过就是 **SystemExit**。
+
+    那份 schema 是 `additionalProperties: false`：多一个没登记的键，`UVMGenerator.run()`
+    的 schema 检查就报 error 并 `SystemExit`，**之后任何一次渲染都被它挡住**。
+    实测：加 `field_bins` 时正是撞在这里，端到端直接挂在 `jinja_render` 之前
+    （`schema_report.txt: unknown_property @ env_cov_bins.yaml::field_bins`）。
+
+    所以"写端加了键"必须与"schema 登记了它"同一次提交 —— 这条测试就是那个约束。
+    """
+
+    def _check(self, tmp_path, payload):
+        import shutil
+
+        from src.tools.uvm_tools.tool_uvm.schema_check import SchemaChecker
+
+        (tmp_path / "inputs" / "yaml" / "uvm").mkdir(parents=True)
+        shutil.copy(Path("specs/apb_uart/casemodel.yaml"),
+                    tmp_path / "inputs" / "casemodel.yaml")
+        from src.executors.verify.main import VerifyExecutor
+
+        VerifyExecutor()._write_env_cov_bins(tmp_path, payload)
+        return SchemaChecker().check(
+            [tmp_path / "inputs" / "yaml" / "uvm" / "env_cov_bins.yaml"])
+
+    def test_the_full_payload_passes_the_schema(self, tmp_path):
+        issues = self._check(tmp_path, [{"name": "cr_x", "signals": ["paddr"]}])
+        assert not issues, f"schema 不认这几个键（渲染会被 SystemExit 挡住）：{issues}"
+
+    def test_the_schema_registers_the_new_key(self):
+        """直接查 schema —— 光看"这次过了"挡不住以后有人删掉那段定义。"""
+        import json
+
+        schema = json.loads(Path(
+            "src/tools/uvm_tools/tool_uvm/schema/uvm_config.schema.json"
+        ).read_text(encoding="utf-8"))
+        assert "field_bins" in schema["properties"]
+        assert "coverFieldBin" in schema["$defs"]
+
+
 class TestTheTemplateStillReadsBothKeys:
     def test_field_bins_key_is_read_by_gen_uvm(self):
         """写端与读端**两个键名**要对得上 —— 对不上就是"写了但没人读"。"""

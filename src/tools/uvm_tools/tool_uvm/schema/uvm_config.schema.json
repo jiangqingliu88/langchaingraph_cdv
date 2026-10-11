@@ -68,6 +68,16 @@
         }
       ]
     },
+    "field_bins": {
+      "$comment": "env_cov_bins.yaml —— **case 模型**的边界 bin：字段名 → 显式 bin 表。gen_uvm 渲染 env_cov 时用它替换「值类自动分箱（0/1/其余）」。字段名就是事务字段名（= spec 接口信号名），所以能直接挂到 `cp_<字段>` 上。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/coverFieldBin"
+        }
+      }
+    },
     "source": {
       "type": "object",
       "$comment": "文书出处：这份 yaml 是从哪个库/哪一行抽出来的。**不参与生成**，给人看与审计用；`status` 是诚实标记（draft = 该版模型还没验证过）。",
@@ -1556,6 +1566,24 @@
           "items": {
             "type": "string"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "coverFieldBin": {
+      "$comment": "一个字段取值 bin：名字 + 整型字面量。值是**整数**（不是字符串）—— 非 ASCII 取值由生成端投影成下标（见 casemodel_tools/coverage.py 的 sv_value）；中文直接进 `bins x = {首拍}` 是编译错误。名字必须是合法 SV 标识符（生成端已 ASCII 化并去重）。",
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "value": {
+          "type": "integer"
         }
       },
       "additionalProperties": false
