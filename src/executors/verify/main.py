@@ -51,6 +51,8 @@ class VerifyExecutor(BaseExecutor):
         gaps = params.get("gaps", []) if isinstance(params, dict) else []
         design_style = params.get("design_style", "baseline")
         files = []
+        #: 策略包的语义 bin —— 攒着，等 `find_spec_yaml` 跑完再落盘（理由见下面那段）
+        cov_bins_for_render: List[Any] = []
 
         # ── 策略包：按 design-style 加载设计风格验证知识，注入 spec 供测试生成 ──
         try:
@@ -65,48 +67,14 @@ class VerifyExecutor(BaseExecutor):
                     "test_scenarios": pack.test_scenarios,
                     "coverage_bins": pack.coverage_bins,
                 }
-                # 把语义 bin 落盘，供 gen_uvm 渲染 env_cov 时生成语义化 cross。
-                #
-                # **键名是 `cov_bins`，与 schema 的文档类型一致**：原来写的是
-                # `coverage_bins`，而 schema 里没有这个文档类型 —— 那份文件会让
-                # `UVMGenerator.run()` 的 schema 检查报 error 并 `SystemExit`，
-                # 于是**之后任何一次渲染都会被它挡住**（实测：手工重渲染直接挂）。
-                # 消费端（gen_uvm）两个键名都认，老的运行目录不受影响。
-                _bins_dir = output_dir / "inputs" / "yaml" / "uvm"
-                _bins_dir.mkdir(parents=True, exist_ok=True)
-                _bins_path = _bins_dir / "env_cov_bins.yaml"
-                _bins_payload = {"cov_bins": pack.coverage_bins}
-                # ── case 模型的覆盖点 → env_cov 的 bin ──
-                #
-                # 这是「功能覆盖率方法学」真正落地的地方。**为什么不另生成一个
-                # `coverage/<module>_cg.sv`**：那份文件从来**没有进过编译清单**
-                # （全仓库没有一处把它加进 filelist），于是它永远不被采样 ——
-                # 一个看着像覆盖率模型、其实一个 bin 都没测的文件，比没有更坏。
-                #
-                # 真正被编译、被采样、被 `vcover` 统计的是 `env_cov.sv.j2` 里那几个
-                # `cg_<agent>`（monitor 的每笔事务触发 `write_<agent>` → `sample()`）。
-                # 所以把模型的边界 bin 喂进那条已跑通的通道：coverpoint 名就是事务字段名
-                # （= spec 的接口信号名），模型里声明的边界值直接变成 bin。
-                #
-                # 拿不到模型就不写这个键 —— 模板会退回"值类自动分箱"（0/1/其余），
-                # 那是**降级**不是失败，所以只记一条日志。
-                _field_bins = self._case_model_field_bins(output_dir)
-                if _field_bins:
-                    _bins_payload["field_bins"] = _field_bins
-                    logger.info(
-                        f"功能覆盖率点（case 模型）：{len(_field_bins)} 个字段的边界 "
-                        f"bin 已注入 env_cov → 会被真编译、真采样")
-                else:
-                    logger.info("没有可用的 case 模型覆盖点 —— env_cov 退回值类自动分箱")
-                _bins_path.write_text(
-                    json.dumps(_bins_payload, ensure_ascii=False), encoding="utf-8")
+                cov_bins_for_render = list(pack.coverage_bins or [])
             else:
                 # 不静默：策略包没加载出来 = 语义 cross 不会生成，覆盖率模型会退化成
                 # 只有按字段自动分箱的那几个 coverpoint
                 logger.warning(f"策略包未加载（design_style={design_style}），"
                                f"本次不会生成语义化 cross")
         except Exception as e:
-            logger.warning(f"策略包加载/落盘失败（语义化 cross 将缺失）: {e}")
+            logger.warning(f"策略包加载失败（语义化 cross 将缺失）: {e}")
 
         # ── supplement 模式：只生成 gap 定向激励，不重新生成 env（避免覆盖已放宽的约束）──
         if supplement and gaps:
@@ -140,6 +108,17 @@ class VerifyExecutor(BaseExecutor):
             # 保存 spec 供 find_spec_yaml 读取
             (output_dir / "spec.json").write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
             call_tool("find_spec_yaml", {"spec_text": json.dumps(spec, ensure_ascii=False)})
+            # ⚠️ **落盘必须在这里，不能更早。**
+            #
+            # `find_spec_yaml` 第一步就把 `inputs/yaml/uvm/*.yaml` **清空**（那是它的
+            # 私有产物目录，见那个函数的注释）。在它之前写进去的东西，等 `jinja_render`
+            # 去渲染 env_cov 时已经不在了 —— 实测：这一句原来在策略包那一段（本函数
+            # 开头），于是 `cov_bins`（语义 cross）**从来没有进过 env_cov**，而
+            # `field_bins`（case 模型的边界 bin）同样会在渲染前被删掉。表现是覆盖率
+            # 模型静默退回"值类自动分箱"，命令行与日志看上去一切正常。
+            #
+            # 顺序必须是：find_spec_yaml（清空 + 重建）→ **写 bins** → jinja_render（读）。
+            self._write_env_cov_bins(output_dir, cov_bins_for_render)
             call_tool("jinja_render", {"output_dir": str(output_dir)})
             env_files = [str(p) for p in (output_dir / "agents").rglob("*.sv")] \
                 if (output_dir / "agents").exists() else []
@@ -231,6 +210,46 @@ class VerifyExecutor(BaseExecutor):
         return ExecutorResult(success=bool(files), data={"tests": tests_data, "score": score})
 
     # ── 功能覆盖率点：case 模型 → env_cov 的 bin ──
+
+    def _write_env_cov_bins(self, output_dir: Path, cov_bins: List[Any]) -> None:
+        """把 `env_cov_bins.yaml` 落到 `find_spec_yaml` 之后、`jinja_render` 之前。
+
+        两个键：
+
+          · `cov_bins`   —— 策略包的语义 cross（`env_cov.sv.j2` 渲染成 `cross_<name>`）
+          · `field_bins` —— **case 模型**的边界 bin（渲染成 `cp_<字段>` 的 bins）
+
+        **键名是 `cov_bins`**（不是 `coverage_bins`）：与 schema 的文档类型一致 ——
+        用错的名字会让 `UVMGenerator.run()` 的 schema 检查报 error 并 `SystemExit`，
+        于是之后任何一次渲染都被它挡住（实测）。消费端两个键名都认，老的运行目录
+        不受影响。
+
+        `field_bins` 是「功能覆盖率方法学」真正落地的地方。**为什么不另生成一个
+        `coverage/<module>_cg.sv`**：那份文件从来**没有进过编译清单**（全仓库没有
+        一处把它加进 filelist），于是它永远不被采样 —— 一个看着像覆盖率模型、
+        其实一个 bin 都没测的文件，比没有更坏。真正被编译/采样/统计的是
+        `env_cov.sv.j2` 里那几个 `cg_<agent>`（monitor 每笔事务触发
+        `write_<agent>` → `sample()`），所以把模型的边界 bin 喂进那条已跑通的通道：
+        coverpoint 名就是事务字段名（= spec 的接口信号名）。
+
+        拿不到模型就不写 `field_bins` —— 模板会退回"值类自动分箱"（0/1/其余），
+        那是**降级**不是失败，所以只记一条日志。
+        """
+        try:
+            bins_dir = output_dir / "inputs" / "yaml" / "uvm"
+            bins_dir.mkdir(parents=True, exist_ok=True)
+            payload: Dict[str, Any] = {"cov_bins": list(cov_bins or [])}
+            field_bins = self._case_model_field_bins(output_dir)
+            if field_bins:
+                payload["field_bins"] = field_bins
+                logger.info(f"功能覆盖率点（case 模型）：{len(field_bins)} 个字段的边界 "
+                            f"bin 已注入 env_cov → 会被真编译、真采样")
+            else:
+                logger.info("没有可用的 case 模型覆盖点 —— env_cov 退回值类自动分箱")
+            (bins_dir / "env_cov_bins.yaml").write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:                       # noqa: BLE001 旁路，别拦 env 生成
+            logger.warning(f"env_cov bin 落盘失败（覆盖率模型将退回自动分箱）: {e}")
 
     @staticmethod
     def _case_model_field_bins(output_dir: Path) -> Dict[str, List[Dict[str, Any]]]:

@@ -3,7 +3,7 @@
     "cov:below_80|reason:none|sugg:none::RETRY_ENV": 7.601161500000002,
     "cov:below_80|reason:none|sugg:none::FIX_COMPILE_bug": 7.247012228012076,
     "cov:below_80|reason:none|sugg:none::GENERATE_DIRECTED_TEST": 16.43027222906946,
-    "cov:below_80|reason:none|sugg:none::FIX_FUNCTIONAL_bug": 3.099311634638332,
+    "cov:below_80|reason:none|sugg:none::FIX_FUNCTIONAL_bug": 6.605691646095586,
     "cov:80_target|reason:none|sugg:none::EXPAND_SEEDS": -26.4,
     "cov:80_target|reason:none|sugg:none::RELAX_CONSTRAINT": -5.114902035639661,
     "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::GENERATE_DIRECTED_TEST": -6.890676948802215,
