@@ -124,7 +124,9 @@ class TestDeclarationGate:
         result = svc.wait(run_id, timeout=30)
         artifacts = result["pending"]["artifacts"]
         assert [a["path"] for a in artifacts] == [
-            "spec.json", "inputs/yaml/uvm/bench.yaml", "inputs/yaml/regression.yaml"]
+            "spec.json", "inputs/yaml/uvm/bench.yaml", "inputs/yaml/regression.yaml",
+            "inputs/casemodel.yaml", "coverage/coverage_points.json",
+            "inputs/yaml/uvm/env_cov_bins.yaml"]
         bench = [a for a in artifacts if a["path"].endswith("bench.yaml")][0]
         assert bench["errors"] > 0
 

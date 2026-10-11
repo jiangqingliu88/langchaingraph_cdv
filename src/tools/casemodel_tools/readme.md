@@ -119,8 +119,9 @@ casemodel_tools/
 │   ├─ result.py        AnalysisResult
 │   ├─ schema_check.py  JSON Schema 门禁
 │   └─ facade.py        analyze() 门面            ← Facade
+├─ coverage.py      功能覆盖率方法学（覆盖点 → SystemVerilog covergroup）
 ├─ text.py          只渲染。纯文本报告（CLI 与界面导出共用）
-├─ api.py           程序化接口（run_validate/run_gaps/run_generate，零 LLM 依赖）
+├─ api.py           程序化接口（run_validate/run_gaps/run_generate/run_covergroups）
 └─ cli.py           命令行入口
 ```
 
@@ -160,6 +161,7 @@ python -m src.tools.casemodel_tools.cli generate config/casemodel/examples/cpu_p
     --format yaml --out cases.yaml
 python -m src.tools.casemodel_tools.cli uvm-tests config/casemodel/examples/fc_flowcontrol.yaml \
     --dimension D_ratio --out tests.yaml
+python -m src.tools.casemodel_tools.cli covergroups specs/apb_uart/casemodel.yaml -m apb_uart
 
 # ── 主 CLI ──
 vagent case-model check    config/casemodel/examples/cpu_pipeline.yaml
@@ -167,7 +169,8 @@ vagent case-model analyze  config/casemodel/examples/cpu_pipeline.yaml --cases r
 vagent case-model tree     config/casemodel/examples/cpu_pipeline.yaml
 vagent case-model rules
 vagent case-model generate config/casemodel/examples/cpu_pipeline.yaml -f csv -o cases.csv
-vagent case-model uvm-tests config/casemodel/examples/fc_flowcontrol.yaml -d D_ratio
+vagent case-model uvm-tests  config/casemodel/examples/fc_flowcontrol.yaml -d D_ratio
+vagent case-model covergroups config/casemodel/examples/fc_flowcontrol.yaml -m fc
 vagent case-model gui
 ```
 
@@ -425,13 +428,82 @@ python -m src.tools.casemodel_tools.cli uvm-tests \
 唯一决定，所以可复现。工具名用下划线而非 `a.b` 点号：点号会被带进 OpenAI
 function-calling 的 `function.name`，那是非法字符（有测试固定）。
 
+## 功能覆盖率方法学（`covergroups`）
+
+模型建的是"该测什么"，回归跑的是"用例"，而**签名要看的是"打到了没有"**。
+这三件事之间原来缺一段：模型里的覆盖点从来没变成过一条真的 SystemVerilog
+covergroup。这一节是那段转换的规则，实现只有一处 ——
+`src/tools/casemodel_tools/coverage.py`（模块头与本节同源）。
+
+### 规则
+
+| 模型里的东西 | 变成 | 为什么 |
+|---|---|---|
+| 一个 `CaseModel` | **一个** `covergroup cg_<module>` | `cross` 要求两个 coverpoint 同作用域，所以合一个而不是每维度一个 |
+| `Dimension` | 一组 coverpoint（它的每个字段一个） | 维度只归类、不承载取值 |
+| `Field` | `coverpoint <field.name>` | **字段名就是接口信号名**（`front` 从 spec 的 interfaces 取） |
+| `ValuePoint` | 一个 `bins` | 取值点就是覆盖分母的刻度，一比一 |
+| `Field.cover_bins` | bin 的**名字** | 作者能命名就让作者命名 |
+| `CrossPair`（`required`/`optional`） | `cross cp_a, cp_b;` | 声明了要一起组合就该有 cross；`forbidden` 是**禁止**组合，不生成 |
+
+### 两条纪律
+
+**一、生成的 SV 必须能编译。** 取值的字面量走**整型投影**（与 `uvm-tests` 的
+`int_value` 同一套）：取值本身是数字就用它，否则用下标。中文取值直接写进
+`bins x = {首拍};` 是语法错误；投影成下标则合法，原取值以注释留在旁边
+(`bins b_0 = {0}; // 首拍`)—— 语义没丢，编译器也没炸。bin 名同理走 ASCII 化，
+全非 ASCII 的取值退到 `b_<下标>`（折成空串会得到 `bins b_ = {0};`，那是个
+**非法标识符**，要到 `vlog` 才炸 —— 实测踩过）。
+
+**二、算不出来就说出来。** 字段一个取值点都没有、`cross` 引用的维度解不出来、
+取值点超过 `MAX_BINS_PER_POINT` —— 都进 `notes` 记账，**不静默跳过**。
+一个"看着生成了、其实少了一半 bin"的 covergroup 比一个报错的更坏。
+
+### 命令
+
+```bash
+python -m src.tools.casemodel_tools.cli covergroups \
+    specs/apb_uart/casemodel.yaml -m apb_uart
+# 3 覆盖点 / 10 bin / 0 cross
+```
+
+主 CLI 同形：`vagent case-model covergroups model.yaml -m apb_uart`。
+
+### 在流水线里，它被谁收走
+
+**这一段最容易想当然**：本工具能产出一段可编译的 covergroup，但**那段文本如果
+没人编译、没人采样，就等于没有**。所以链路的落点要说清：
+
+```
+front   写 inputs/casemodel.yaml（模型）
+verify  读模型 → inputs/yaml/uvm/env_cov_bins.yaml 的 field_bins
+gen_uvm 读 field_bins → env_cov.sv.j2 里 cp_<字段> 用模型的边界 bin
+        （字段名 = 事务字段名 = spec 接口信号名，两边同一个命名空间）
+coverage  读 coverage/coverage_points.json 记**声明**；
+          vcover -cvg -details 收**实测**，证据链的功能覆盖层读它
+```
+
+**为什么不另生成一个 `coverage/<module>_cg.sv` 再塞进 filelist**：那条路要动
+filelist 与 `tb_top` 的例化与采样时钟，侵入大；而 `env_cov` 那条通道**已经跑通**
+（monitor 每笔事务触发 `write_<agent>` → `sample()`），把模型的 bin 喂进去就行。
+实测：`paddr` 的 6 个边界值（0/3/4/31/32/255）渲染成 6 个 bin，`vlog` 编译
+`Errors: 0`。
+
+### 两个数字不要混
+
+- `analysis/coverage.py` 的**覆盖率**：模型 vs case 表 —— "**用例写全了没有**"。
+- `vcover` 的**覆盖率**：仿真打到的 bin / 声明的 bin —— "**仿真打到了没有**"。
+
+前者的 100% 丝毫不保证后者。工作台的「功能覆盖率」页把两者**分列**（声明一列、
+实测一列），不合成一个数 —— 合成之后就再也分不出"该测的没测"和"测了的没打中"。
+
 ## 测试
 
 ```bash
 pytest src/tools/casemodel_tools/tests/ -v
 ```
 
-297 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
+352 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
 工具自己的测试按层组织在 `src/tools/casemodel_tools/tests/`，
 跨层的 Agent 集成测试在仓库根的 `tests/test_casemodel_agent.py`：
 
@@ -444,6 +516,7 @@ pytest src/tools/casemodel_tools/tests/ -v
 | `test_analysis.py` | 门面组装、评分不变式（换 case 列表分数不变）、矩阵对称与声明优先、外部核对四方向、闭环无话可说、**文本入口 vs 文件入口结论一致** |
 | `test_multi.py` | 两种写法的扇出与覆盖、重复 `object_code` 报错、合并语义（评分算一次 / 树与 case 每对象一份）、`--max-cases` 是每对象上限、单对象时是恒等 |
 | `test_uvm_tests.py` | 一条 = 一个取值、维度过滤、边界优先截断、产物形状正好是 `tool_uvm` 认的那个、**不 import `uvm_tools`** |
+| `test_coverage.py` | 功能覆盖率方法学：维度→covergroup / 字段→coverpoint / 取值→bin / cross_pair→cross；中文取值投影后**真跑 vlog 编译**；对不上就进 notes |
 | `test_cli.py` | 工具自带 CLI 与 `vagent case-model` 的退出码 / 四种格式 / 目录展开 |
 | `test_text.py` | 显示宽度对齐（中文占 2 列）、各段文本渲染 |
 | `tests/test_casemodel_agent.py`（仓库根） | 三面答案一致、ITool manifest 合法与失败语义、ToolHub 注册与调用 |
@@ -464,6 +537,8 @@ pytest src/tools/casemodel_tools/tests/ -v
   而 `反压持续时间` 里的 `持续` 只是构词成分，用 `in` 会误报。
 - **真实 case 核对是单向差集**，不校验 `cover_bins` 与真实仿真覆盖率数据的对应 ——
   核对的是「case 写没写」，不是「仿真跑出来的覆盖率命中没命中」。
+  （后者现在有了，但**不在这个工具里**：见「功能覆盖率方法学」一节 —— 实测来自
+  `vcover`，本工具只管声明。`cover_bins` 与实测 bin 的**自动对账**仍未做。）
 - **`cross_group` 与 `themes` 是两条生成路径**。有 `themes` 时按专题驱动，
   否则退化为按交叉组（老模型不用迁移）；两条路不会同时生效。
 - **界面的编辑是「原文编辑」，不是结构化编辑**。不提供在表格里改维度/字段的

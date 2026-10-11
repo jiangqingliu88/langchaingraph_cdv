@@ -267,6 +267,14 @@ BINDINGS: List[ToolBinding] = [
     # 覆盖率库是二进制，人看不了 —— 这个绑定把它摊成 HTML 报告（`vcover report
     # -html`）再打开，人才能真去校对。它**会写盘**（报告落在库旁边），所以不是
     # pure：得由人点一下显式触发（`force=True`），顺带也挡住"切个标签页就编报告"。
+    # 功能覆盖率：case 模型声明的覆盖点 / 摊平出来的测试点 / 这条链上的资产。
+    # 纯读盘（模型 + 覆盖率文本 + 几个文件），不重跑生成器、不重跑 vcover。
+    ToolBinding(
+        name="flow.fcov",
+        target="src.tools.flow_tools.api:run_fcov",
+        kind="json",
+        doc="一次运行目录 → 功能覆盖率三表（覆盖点 / 测试点 / 资产）",
+    ),
     ToolBinding(
         name="flow.coverage_report",
         target="src.tools.coverage_tools.cov_api:build_coverage_report",

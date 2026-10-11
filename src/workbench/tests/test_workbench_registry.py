@@ -536,7 +536,7 @@ class TestRealManifestBuilds:
         try:
             assert window.manager.failures() == {}
             # 31 = 30 + `verify.isa_gen`（2026-10 新增的「ISA 激励」页）
-            assert len(window.modules) == 31
+            assert len(window.modules) == 32
             assert {m.module_id for m in window.modules} >= {
                 "design.output", "model.output", "ops.output", "ops.regression_status",
                 "ops.regression_wave", "ops.regression_coverage",
@@ -545,7 +545,7 @@ class TestRealManifestBuilds:
                 "debug.fingerprint", "debug.output", "verify.output",
                 "verify.casemodel", "coverage.excludes",
                 "flow.pipeline", "flow.todo", "flow.drafts", "flow.runs", "flow.evidence",
-                "flow.task", "flow.diagram", "flow.artifacts", "flow.tracking", "flow.signoff",
+                "flow.task", "flow.diagram", "flow.artifacts", "flow.fcov", "flow.tracking", "flow.signoff",
                 "flow.trend", "flow.decision", "flow.manifest"}
             # **工作区默认是空的**：实例都建好了，但没一个进 MDI
             assert window.workspace.subwindow_count() == 0
@@ -559,7 +559,7 @@ class TestRealManifestBuilds:
                     # 看（任务总览/流程视图/运行对比）→ 材料（产物审查/证据）→
                     # 判（签核判定/运行清单）→ 回头查（决策轨迹/进度趋势/跟踪表）
                     "验证流程", "待办 / 卡点", "任务总览", "流程视图", "运行对比",
-                    "产物审查", "签核判定", "运行清单", "规则草案",
+                    "产物审查", "签核判定", "运行清单", "规则草案", "功能覆盖率",
                     "决策轨迹", "进度趋势", "测试点 / 资产",
                     "设计产出", "模型产出", "验证产出",
                     # ISA 激励归 verify 线（order 30 > Case 建模 20）：先声明测什么，

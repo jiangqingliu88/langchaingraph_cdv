@@ -240,7 +240,12 @@ class TestArtifactCollection:
         items = _approval_artifacts(PipelineState(run_id="r", output_root=str(run)))
         assert [i["path"] for i in items] == ["spec.json",
                                               "inputs/yaml/uvm/bench.yaml",
-                                              "inputs/yaml/regression.yaml"]
+                                              "inputs/yaml/regression.yaml",
+                                              # 功能覆盖那一组：同样是"卡住运行的
+                                              # 中间产物"，审批时也该看得见
+                                              "inputs/casemodel.yaml",
+                                              "coverage/coverage_points.json",
+                                              "inputs/yaml/uvm/env_cov_bins.yaml"]
         bench = [i for i in items if i["path"].endswith("bench.yaml")][0]
         assert bench["errors"] > 0
 

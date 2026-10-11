@@ -107,12 +107,15 @@ def _retype(module, text: str) -> None:
 class TestCatalog:
     def test_lists_what_the_run_produced(self, module):
         assert [i["path"] for i in module.items] == [
-            "spec.json", "inputs/yaml/uvm/bench.yaml", "inputs/yaml/regression.yaml"]
+            "spec.json", "inputs/yaml/uvm/bench.yaml", "inputs/yaml/regression.yaml",
+            # 功能覆盖那一组：模型 / 声明 / env_cov 注入（都是"输入侧"的产物）
+            "inputs/casemodel.yaml", "coverage/coverage_points.json",
+            "inputs/yaml/uvm/env_cov_bins.yaml"]
 
     def test_the_tree_is_grouped_by_stage(self, module):
         roots = [module.tree.topLevelItem(i).text(0)
                  for i in range(module.tree.topLevelItemCount())]
-        assert roots == ["设计", "验证·UVM", "回归"]
+        assert roots == ["设计", "验证·UVM", "回归", "功能覆盖"]
 
     def test_the_header_reports_the_run_and_the_summary(self, module):
         assert "output_test_20260101_000000" in module.summary.text()

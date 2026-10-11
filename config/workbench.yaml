@@ -391,6 +391,21 @@ modules:
     tool: {name: flow.todo, kind: json}
     params: {subscribe: run.selected}
 
+  # 功能覆盖率 —— 「建模声明的覆盖点 → 实测命中了没有」。
+  #
+  # 与「回归覆盖率」是**两个问题**：那一页答"哪条用例跑了、它的库在哪"（粒度=用例），
+  # 这一页答"模型声明的那些覆盖点打到了没有"（粒度=覆盖点）。都叫"覆盖率"才最容易
+  # 混为一谈 —— 而 `analysis/coverage.py` 的"用例写全了没有"与 vcover 的"仿真打到了
+  # 没有"是两回事，前者的 100% 不保证后者。所以本页把**声明与实测分列**，不合成一个数。
+  - id: flow.fcov
+    title: 功能覆盖率
+    group: flow
+    factory: src.workbench.modules.flow.fcov:FunctionalCoverageModule
+    area: center
+    order: 36
+    tool: {name: flow.fcov, kind: json}
+    params: {subscribe: run.selected}
+
   # 规则草案 —— 从真实失败里起草出来的校验规则，等人拍板（只提议，不自动生效）。
   # 它是「规则库能长大」那条链的最后一环：发现（指纹）→ 记录（命中统计）→
   # 归纳成规则（本页）→ 人写进 semantic_check。

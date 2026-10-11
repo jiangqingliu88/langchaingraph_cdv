@@ -23,7 +23,7 @@ def test_shipped_manifest_parses():
         "verify.output", "verify.casemodel", "verify.isa_gen",
         # 流程与证据线：流程视图 + 编排 + 运行历史 + 证据 + 跟踪 + 对比 + 签核 + 趋势 + 决策 + 清单
         "flow.task", "flow.diagram", "flow.artifacts", "flow.pipeline", "flow.runs", "flow.evidence",
-        "flow.tracking", "flow.todo", "flow.drafts", "flow.compare", "flow.signoff", "flow.trend",
+        "flow.tracking", "flow.todo", "flow.fcov", "flow.drafts", "flow.compare", "flow.signoff", "flow.trend",
         "flow.decision", "flow.manifest"]
     # flow 排在设计时之后、运行时之前（`order: 8`）—— 贯穿层是入口，不是附录
     assert [g.id for g in manifest.sorted_groups()] == [
@@ -153,7 +153,7 @@ def test_builtin_manifest_has_groups_but_no_modules():
 
 def test_describe_counts_enabled_modules():
     manifest = load_manifest(default_manifest_path())
-    assert "31 个模块" in describe(manifest)
+    assert "32 个模块" in describe(manifest)
     assert describe(None) == "清单：无"
 
 

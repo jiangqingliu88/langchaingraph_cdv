@@ -81,6 +81,31 @@ def find_run_coverage(run_dir: Any) -> Dict[str, Any]:
             "report": file_facts(cov_dir / "reports" / "index.html")}
 
 
+def functional_coverage_details(run_dir: Any) -> Tuple[list, str]:
+    """逐 covergroup/coverpoint 的**实测**覆盖率 → `(covergroups, 文本路径)`。
+
+    读的是覆盖率阶段留下的那份文本（`sim/coverage/reports/coverage_cvg.txt`，
+    `vcover report -cvg -details` 的原始输出）—— **不重跑 vcover**：那要几分钟，
+    而这份文件就是当时判定用的那一份，两边不一致才是问题。
+
+    解析在 `src/tools/lib/collect_real_coverage._parse_cvg_details`（**一处实现**）：
+    覆盖率工具这边只负责"文件在哪、读出来"，语法是那条链路自己的领域知识 ——
+    抄一份到这里就是第二份真相。
+
+    文件不在就返回 `([], "")`：这轮没跑到覆盖率收集，不是一个错误。
+    """
+    path = Path(run_dir) / "sim" / "coverage" / "reports" / "coverage_cvg.txt"
+    if not path.is_file():
+        return [], ""
+    try:
+        from src.tools.lib.collect_real_coverage import _parse_cvg_details
+
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return [], ""
+    return _parse_cvg_details(text), str(path)
+
+
 def _newest(paths: Iterable[Path]) -> Path | None:
     """候选里挑**最新写的**那个文件。
 

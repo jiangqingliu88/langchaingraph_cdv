@@ -309,6 +309,11 @@ class ManifestBuilder:
             manifest.output_file_count = len(files)
             # 聚合 hash
             manifest.evidence_hash = self._compute_aggregate_hash(output_path, files)
+            # 功能覆盖点作为**运行级资产**进证据链（声明 + 文件哈希）——
+            # 下面 `output_files` 已经把所有文件都哈希进去了，但"这份 JSON 里
+            # 声明的 N 个覆盖点分别是什么"是**语义**，哈希答不了。签核时要能回答
+            # 「这次签的是哪几个覆盖点」，所以把声明摘一份进来。
+            self._attach_functional_coverage(manifest, output_path)
 
         # ── 汇总计算 ──
         if not manifest.total_phases:
@@ -325,6 +330,46 @@ class ManifestBuilder:
         manifest.manifest_hash = hash_json(self._manifest_to_dict(manifest))
 
         return manifest
+
+    # ── 功能覆盖点 → 运行级资产 ──
+
+    @staticmethod
+    def _attach_functional_coverage(manifest: "RunManifest", output_path: Path) -> None:
+        """把 `coverage/coverage_points.json`（case 模型派生的覆盖点声明）摘进 metadata。
+
+        **为什么单摘一份**：`output_files` + `evidence_hash` 已经覆盖了"哪些文件、
+        各自的哈希"，答的是"东西没被换过"。但签核要回答的是另一件事 ——
+        「这次签的是**哪几个覆盖点**」。一个 hash 答不了那个问题，所以把声明本身
+        （覆盖点名、bin、cross，连同那份文件的 sha256）放进证据包。
+
+        读不到就**什么都不放**（键都不出现），不写一个空壳 ——"没有覆盖点声明"
+        与"声明的覆盖点是空的"是两件事，后者是模型的问题、要能分辨。
+        """
+        points = output_path / "coverage" / "coverage_points.json"
+        if not points.is_file():
+            return
+        try:
+            import json as _json
+
+            data = _json.loads(points.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, ValueError):
+            return
+        if not isinstance(data, dict):
+            return
+        from src.layers.l1_infrastructure.infrastructure import sha256_file
+
+        manifest.metadata["functional_coverage"] = {
+            "points_file": "coverage/coverage_points.json",
+            "points_file_sha256": sha256_file(points),
+            "source": str(data.get("source") or ""),
+            "module": str(data.get("module") or ""),
+            "covergroup": str(data.get("covergroup") or ""),
+            "coverpoints": data.get("coverpoints") or [],
+            "crosses": data.get("crosses") or [],
+            "counts": {k: data.get(k) for k in
+                       ("coverpoint_count", "bin_count", "cross_count")},
+            "notes": data.get("notes") or [],
+        }
 
     # ── 读取 trace ──
 

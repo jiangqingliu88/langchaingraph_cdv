@@ -1272,6 +1272,173 @@ def _num(value: Any) -> Optional[float]:
 UVM_SCHEMA = "uvm_config"
 
 
+def run_fcov(run_dir: str = "") -> Dict[str, Any]:
+    """一次运行 → **功能覆盖率**三张表（覆盖点 / 测试点 / 资产）。
+
+    「case 建模到底变成了什么、跑了没有、测到了没有」这三个问题各一张表 ——
+    揉成一张的话，三件事会互相稀释（覆盖点的**声明**、用例的**名单**、
+    文件的**存在性**，粒度根本不同）。
+
+      · `coverpoints` —— 模型声明了哪些覆盖点、每个点有哪些 bin（**声明**），
+        以及实测命中的百分比（来自覆盖率阶段的 `coverage_cvg.txt`，没有就留空）。
+        **声明与命中分列**：一个是"该测什么"（模型），一个是"打到了没有"（仿真），
+        把两者混成一个数字正是这一页要避免的。
+      · `testpoints`  —— 模型摊平出来的用例（维度 / 字段 / 取值 / 优先级）。
+      · `assets`      —— 这条链上的文件（模型 / 声明 / env_cov bin / 实测文本）。
+
+    只读已落盘的东西，不重跑生成器、不重跑 vcover。
+    """
+    if not run_dir:
+        return {"error": "没有指定运行目录（先在「运行历史」里选一次运行）"}
+    root = Path(run_dir)
+    if not root.is_dir():
+        return {"error": f"run_dir not found: {run_dir}"}
+
+    from src.layers.l1_infrastructure.layout import casemodel_path
+
+    cm_file = casemodel_path(root)
+    notes: List[str] = []
+    cm_text = ""
+    if cm_file.is_file():
+        try:
+            cm_text = cm_file.read_text(encoding="utf-8")
+        except OSError:
+            cm_text = ""
+
+    # 模块名取模型的 `object`（`apb_uart`），**不是运行目录名** ——
+    # 目录名会进用例名（`test_apb_uart_D_ADDR_0` vs
+    # `test_output_e2e_fix2_jiang_..._D_ADDR_0`），那是两只手都数不过来的噪音。
+    module_name = root.name
+    if cm_text:
+        import yaml as _yaml
+
+        try:
+            module_name = str((_yaml.safe_load(cm_text) or {}).get("object")
+                              or root.name).strip() or root.name
+        except Exception:                           # noqa: BLE001 解析失败就退回目录名
+            pass
+
+    # ── ① 覆盖点：模型的声明 + 实测的命中 ──
+    points: Dict[str, Any] = {}
+    if cm_text:
+        try:
+            from src.tools.casemodel_tools.api import run_covergroups
+
+            points = run_covergroups(cm_text, module_name)
+            if points.get("error"):
+                notes.append(f"case 模型构建失败：{points['error']}")
+                points = {}
+        except Exception as exc:                    # noqa: BLE001 旁路，别让页面挂
+            notes.append(f"读 case 模型失败：{exc}")
+    else:
+        notes.append(f"没有 case 模型（{cm_file} 不在）—— 覆盖点无从列起"
+                     f"（front 阶段没产出它？）")
+
+    measured, measured_path = {}, ""
+    try:
+        from src.tools.coverage_tools.cov_api import functional_coverage_details
+
+        cgs, measured_path = functional_coverage_details(root)
+        for cg in cgs:
+            for cp in cg.get("coverpoints") or []:
+                measured.setdefault(cp["name"], cp["actual"])
+            for cx in cg.get("crosses") or []:
+                measured.setdefault(cx["name"], cx["actual"])
+    except Exception as exc:                        # noqa: BLE001
+        notes.append(f"读实测覆盖失败：{exc}")
+    if points and not measured:
+        # **两种"没有命中数据"要说清是哪一种**：文件根本没落盘（没跑到覆盖率
+        # 收集）vs 文件在、但是旧格式（那一版只给了汇总行，没有逐 covergroup 的段）。
+        # 说成同一句的话，人会对着一个存在的文件去找"为什么说文件不在"。
+        if measured_path:
+            notes.append(f"实测文本在（{measured_path}）但里面没有逐 covergroup 的段"
+                         f"—— 那是**旧格式**（那一版 `vcover` 没带 `-details`）；"
+                         f"重跑一轮覆盖率就有命中列了")
+        else:
+            notes.append("还没有实测的覆盖率文本"
+                         "（`sim/coverage/reports/coverage_cvg.txt`）—— 这轮还没跑到"
+                         "覆盖率收集，命中的那一列会是空的")
+
+    coverpoint_rows: List[Dict[str, Any]] = []
+    for cp in points.get("coverpoints") or []:
+        # 实测里 coverpoint 的名字带 `cp_` 前缀（env_cov 生成时就那么叫），声明里
+        # 是信号名。**两边都要能对上**：对不上就说明声明和被测的不是同一批，
+        # 那正是这一页要看的，不能悄悄显示成"没命中"。
+        actual = measured.get(f"cp_{cp['signal']}", measured.get(cp["signal"]))
+        coverpoint_rows.append({
+            "dimension": cp.get("dimension", ""),
+            "signal": cp.get("signal", ""),
+            "type": cp.get("type", ""),
+            "bin_count": cp.get("bin_count", 0),
+            "bins": "、".join(b["name"] for b in cp.get("bins") or []),
+            "actual": "" if actual is None else actual,
+            "measured": actual is not None,
+        })
+    for cx in points.get("crosses") or []:
+        actual = measured.get(cx.get("name", ""))
+        coverpoint_rows.append({
+            "dimension": "×".join(cx.get("dimensions") or []),
+            "signal": cx.get("name", ""),
+            "type": f"cross（{cx.get('level', '')}）",
+            "bin_count": "",
+            "bins": "、".join(cx.get("signals") or []),
+            "actual": "" if actual is None else actual,
+            "measured": actual is not None,
+        })
+
+    # ── ② 测试点：模型摊平出来的用例（与 run_uvm_tests / 用例库同一份分母）──
+    testpoint_rows: List[Dict[str, Any]] = []
+    if cm_text:
+        try:
+            from src.tools.casemodel_tools.registry_bridge import case_rows
+
+            rows = case_rows(cm_text, module_name)
+            for c in rows.get("cases") or []:
+                cons = (c.get("constraints") or [{}])[0]
+                testpoint_rows.append({
+                    "name": c.get("name", ""),
+                    "dimension": cons.get("dimension", ""),
+                    "field": cons.get("field", ""),
+                    "value": cons.get("value", ""),
+                    "priority": c.get("priority", ""),
+                    "coverage_bin": c.get("coverage_bin", ""),
+                })
+            notes.extend(rows.get("notes") or [])
+        except Exception as exc:                    # noqa: BLE001
+            notes.append(f"摊平测试点失败：{exc}")
+
+    # ── ③ 资产：这条链上的文件 ──
+    assets: List[Dict[str, Any]] = []
+    for label, rel in (
+            ("case 模型（声明来源）", cm_file.relative_to(root)
+             if cm_file.is_file() else Path("inputs/casemodel.yaml")),
+            ("功能覆盖点声明", Path("coverage/coverage_points.json")),
+            ("env_cov bin 注入", Path("inputs/yaml/uvm/env_cov_bins.yaml")),
+            ("实测覆盖率文本", Path("sim/coverage/reports/coverage_cvg.txt"))):
+        assets.append(_artifact(root, rel, "功能覆盖", None) | {"label": label})
+
+    return {
+        "run_id": root.name,
+        "run_dir": str(root),
+        "coverpoints": coverpoint_rows,
+        "testpoints": testpoint_rows,
+        "assets": assets,
+        "measured_path": measured_path,
+        "counts": {
+            "coverpoints": len(coverpoint_rows),
+            "bins": points.get("bin_count", 0),
+            "crosses": len(points.get("crosses") or []),
+            "testpoints": len(testpoint_rows),
+            "measured": sum(1 for r in coverpoint_rows if r["measured"]),
+        },
+        "source": points.get("source", "") or ("casemodel" if points else ""),
+        "notes": list(dict.fromkeys(notes)),
+        "summary": (f"{len(coverpoint_rows)} 个覆盖点 / {len(testpoint_rows)} 条测试点"
+                    + (f"　·　实测 {sum(1 for r in coverpoint_rows if r['measured'])} 个"
+                       if measured else "　·　（还没有实测数据）")),
+    }
+
+
 def run_artifacts(run_dir: str = "") -> Dict[str, Any]:
     """一次运行的中间产物目录 + 每份的 schema 体检结果。
 
@@ -1296,6 +1463,16 @@ def run_artifacts(run_dir: str = "") -> Dict[str, Any]:
         items.append(_artifact(root, path.relative_to(root), "验证·UVM", UVM_SCHEMA))
 
     items.append(_artifact(root, Path("inputs/yaml/regression.yaml"), "回归", None))
+
+    # ── 功能覆盖：case 模型的**声明** + 它派生的语义 cross ──
+    #
+    # `coverage_points.json` 是「功能覆盖率方法学」的落点：模型声明了哪些覆盖点、
+    # 每个点有哪些 bin、哪些维度要交叉。它**不是**命中数据（命中在 ucdb 里，见
+    # 覆盖率页），所以单列一组、和 uvmd 配置那组一样是"输入侧"的产物。
+    items.append(_artifact(root, Path("inputs/casemodel.yaml"), "功能覆盖", None))
+    items.append(_artifact(root, Path("coverage/coverage_points.json"), "功能覆盖", None))
+    items.append(_artifact(root, Path("inputs/yaml/uvm/env_cov_bins.yaml"),
+                           "功能覆盖", None))
 
     present = [i for i in items if i["exists"]]
     with_schema = [i for i in present if i["schema"]]
