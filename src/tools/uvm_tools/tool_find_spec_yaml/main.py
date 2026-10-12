@@ -784,9 +784,18 @@ def run(spec_text: str) -> str:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # ── 1. 确定模块名 ──
-    module_match = re.search(r'module:\s*(\w+)', spec_text, re.IGNORECASE)
+    #
+    # **标识符必须是 ASCII**（`[A-Za-z_][A-Za-z0-9_]*`），不能图省事写 `\w+`：
+    # Python 的 `\w` **匹配中文**，于是散文里一句"端口来自 module 声明"会被下面
+    # 那条回退式当成一次模块声明，模块名解成 `声明` —— 整套产物落成
+    # `声明_env_*.sv` / `声明_in_agent/`，而**不报任何错**。实测踩过：`--rtl`
+    # 模式跑一遍，env 名就是 spec 里那句中文注记的第一个词。
+    # SV 的模块名本来就只能是 ASCII，收紧是**更对**而不是更严。
+    _ident = r'[A-Za-z_][A-Za-z0-9_]*'
+    module_match = re.search(rf'module:\s*({_ident})', spec_text, re.IGNORECASE)
     if not module_match:
-        module_match = re.search(r'(?:#|module\s+)\s*(\w+)', spec_text, re.IGNORECASE)
+        module_match = re.search(rf'(?:#|module\s+)\s*({_ident})', spec_text,
+                                 re.IGNORECASE)
     module_name = module_match.group(1) if module_match else ""
     if not module_name or module_name.lower() in ("dut", "dut_top"):
         env = ctx.env_name or ""
@@ -1726,15 +1735,24 @@ def _casemodel_test_lines(output_dir) -> List[str]:
     没有就**空着**（不编、不猜）—— 这份 yaml 是 front 从 spec 跑出来的，
     spec 里没料时它本来就不该存在。
 
-    **路径走 `layout.casemodel_path`，不许自己拼**：以前这里找
-    `inputs/yaml/uvm/casemodel.yaml`（front 当时也写那儿），而那个目录是本工具
-    的私有产物目录、**每次跑先被清空** —— 于是"删它的和读它的是同一趟运行的
-    同一个工具"，`tests:` 永远注入不进去（实测：`env/tests` 里没有属性 test）。
+    **路径走 `layout.find_case_model`，不许自己拼、也不许只认 `casemodel_path`**：
+
+      · 以前找 `inputs/yaml/uvm/casemodel.yaml`（front 当时也写那儿），而那个目录
+        是本工具的私有产物目录、**每次跑先被清空** —— "删它的和读它的是同一趟运行
+        的同一个工具"，`tests:` 永远注入不进去（实测：`env/tests` 里没有属性 test）。
+      · 后来改成只认 `casemodel_path()`（= front 的草稿落点）—— 又错在**人写的
+        模型被绕过**：`specs/<模块>/casemodel.yaml` 优先级更高，而这里拿到的是草稿。
+        实测：NPU 那份 12 维度的手写模型被跳过，注入的是草稿的 4 条，而日志只说
+        "注入 5 行"，**看不出少了什么**。
     """
     try:
-        from src.layers.l1_infrastructure.layout import casemodel_path
-        cm = casemodel_path(output_dir)
-        if not cm.exists():
+        # **走统一判据**，别自己认 `casemodel_path()`：那是 front 的草稿落点，
+        # 而人写的模型（`specs/<模块>/casemodel.yaml`）优先级更高。
+        # 直接读草稿的后果实测过：NPU 那份 12 维度的手写模型被绕过，
+        # 注入进来的是草稿的 4 条 —— 而**日志只说"注入 5 行"，看不出少了什么**。
+        from src.layers.l1_infrastructure.layout import find_case_model
+        cm = find_case_model(_load_spec(output_dir) or {}, output_dir)
+        if cm is None or not cm.exists():
             return []
         from src.tools.casemodel_tools.api import run_uvm_tests
         t = run_uvm_tests(cm.read_text(encoding="utf-8"), max_tests=200)

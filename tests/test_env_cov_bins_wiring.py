@@ -444,14 +444,21 @@ class TestSeedsReachTheRegression:
 class TestThePlanIsWrittenWithTheCaseModel:
     """计划必须**与 case 模型同批**落盘 —— 回归在 ops 阶段就读它。"""
 
-    def test_verify_writes_it_next_to_the_probe(self):
+    def test_the_plan_is_written_before_the_regression_is_generated(self):
+        """计划要**早于 `find_spec_yaml`** —— 回归的 `count`/`SEED` 就在那一步铺开。
+
+        晚一步的话回归已经生成完了、批次一条都不在里面，而日志看不出任何异常
+        （实测：`env/tests` 里批次 test 类都生成了，regression.yaml 里却 0 条）。
+
+        **与 `env_cov_bins` 的方向相反**，别一起搬：那个落在 find_spec_yaml
+        会清空的目录里，只能晚于它。
+        """
         src = VERIFY_MAIN.read_text(encoding="utf-8")
-        assert "self._write_coverage_plan(output_dir)" in src
-        # 与另两条覆盖率产物同一段（都在 find_spec_yaml 之后、jinja_render 之前）
         find = _line_of('call_tool("find_spec_yaml"')
         plan = _line_of("self._write_coverage_plan(output_dir")
-        render = _line_of('call_tool("jinja_render"')
-        assert find < plan < render
+        assert plan < find, (
+            f"计划@{plan} 必须早于 find_spec_yaml@{find} —— "
+            f"不然回归生成时读不到种子，批次一条都不进 regression.yaml")
 
     def test_it_lands_as_coverage_plan_yaml(self, tmp_path):
         import shutil
@@ -535,3 +542,45 @@ class TestBatchTestsAreRunnable:
         assert "_sim_run_cmd(dut_top, bname)" in block, \
             "+UVM_TESTNAME 必须是**批次名**，否则对不上生成的类"
         assert "_seed_lines(bname, seed_plan)" in block
+
+
+class TestModuleNameIsAlwaysAcii:
+    """模块名只能从 **ASCII 标识符** 里取 —— `\w` 会吃中文，然后**不报错**。
+
+    实测踩过：`--rtl` 模式的 spec 里有一句注记「端口来自 module 声明；registers
+    未从 RTL 推断」，而取模块名的回退式是 `(?:#|module\s+)\s*(\w+)` ——
+    Python 的 `\w` **匹配中文**，于是 `module 声明` 被当成一次模块声明，
+    模块名解成 `声明`。后果是整套产物落成 `声明_env_*.sv` / `声明_in_agent/`：
+    生成器一切正常、日志一切正常，只有目录名是错的。
+    """
+
+    _IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
+
+    def _extract(self, text: str) -> str:
+        import re
+
+        m = re.search(rf"module:\s*({self._IDENT})", text, re.IGNORECASE) or \
+            re.search(rf"(?:#|module\s+)\s*({self._IDENT})", text, re.IGNORECASE)
+        return m.group(1) if m else ""
+
+    def test_a_chinese_word_after_module_is_not_a_module_name(self):
+        assert self._extract("端口来自 module 声明；registers 未推断") == ""
+
+    @pytest.mark.parametrize("text,want", [
+        ("module npu_sched (input logic clk);", "npu_sched"),
+        ("module: apb_uart\nlevel: BT", "apb_uart"),
+        ("# apb_uart 模块", "apb_uart"),
+    ])
+    def test_real_declarations_still_work(self, text, want):
+        assert self._extract(text) == want
+
+    def test_the_source_uses_an_ascii_identifier_class(self):
+        """钉住源码里的写法 —— 改回 `\w+` 就红。"""
+        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(
+            encoding="utf-8")
+        start = src.index("# ── 1. 确定模块名 ──")
+        block = src[start:start + 1400]
+        assert "[A-Za-z_][A-Za-z0-9_]*" in block
+        assert "\w+)" not in block, (
+            "取模块名的正则里又出现 `\w+` 了 —— 它匹配中文，"
+            "一句散文就能把模块名带偏且不报错")

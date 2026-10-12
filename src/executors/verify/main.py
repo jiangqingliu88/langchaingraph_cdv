@@ -107,6 +107,12 @@ class VerifyExecutor(BaseExecutor):
             _uvm_ctx.set(output_dir=output_dir, agents=[], env_name=f"{module_name}_env")
             # 保存 spec 供 find_spec_yaml 读取
             (output_dir / "spec.json").write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+            # ⚠️ **计划必须早于 `find_spec_yaml`**：回归的 `count`/`SEED` 就在这一步
+            # 由它铺开（`_seed_plan` 读 `coverage/coverage_plan.yaml`）。晚一步的话
+            # 回归已经生成完了，批次一条都不在里面 —— 而日志看不出任何异常
+            # （`env_cov_bins` 是反过来：那个落在 find_spec_yaml 会清空的目录里，
+            # 只能晚于它。两件事的方向相反，别一起搬）。
+            self._write_coverage_plan(output_dir)
             call_tool("find_spec_yaml", {"spec_text": json.dumps(spec, ensure_ascii=False)})
             # ⚠️ **落盘必须在这里，不能更早。**
             #
@@ -121,9 +127,6 @@ class VerifyExecutor(BaseExecutor):
             self._write_env_cov_bins(output_dir, cov_bins_for_render)
             # 第二条通道：`sample: dut` 的字段 → bind 探针（也要在 filelist 生成前落盘）
             self._write_coverage_probe(output_dir)
-            # 功能覆盖率计划（覆盖点 + 批次 + 种子管理 + 需求追溯）——
-            # **与 case 模型同批**：同一份来源、同一时刻，回归那边按它取种子
-            self._write_coverage_plan(output_dir)
             call_tool("jinja_render", {"output_dir": str(output_dir)})
             env_files = [str(p) for p in (output_dir / "agents").rglob("*.sv")] \
                 if (output_dir / "agents").exists() else []
