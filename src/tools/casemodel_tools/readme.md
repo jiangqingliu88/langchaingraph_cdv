@@ -546,6 +546,73 @@ python -m src.tools.casemodel_tools.cli covergroups \
 **不进模型的**：§4 的约束、§6 的种子基线、§7 手写的 covergroup —— 那是激励层与
 实现层，不是"该测什么"。
 
+### 两条采样通道：`sample: stimulus` / `sample: dut`
+
+**先问一个问题：这个信号从哪看得见？** 答案决定了它走哪条通道 —— 分不清就会给
+一堆**采不到**的信号生成一份永远不命中的覆盖率模型。
+
+| | `stimulus`（默认） | `dut` |
+|---|---|---|
+| 信号在哪 | agent 的**事务对象**上 | DUT 里**按名字可见**：输入端口 / 输出端口 / **内部寄存器** |
+| 谁采 | `env_cov.sv.j2` 的 `cg_<agent>`（monitor 每笔事务 → `sample()`） | `bind` 进 DUT 的探针（时钟沿 + 复位屏蔽） |
+| 产物 | `env_cov_bins.yaml` 的 `field_bins` | `coverage/dut_probe.sv` |
+| 看得到什么 | **只有激励侧** | 内部状态、输出端口 —— monitor 一个都采不到 |
+| bin 语法 | `{v}` / `{[a:b]}` | 全量（含 `illegal_bins`） |
+
+```yaml
+sampling:                     # sample: dut 的字段靠它生成 bind 语句
+  dut_module: npu_sched       # bind 的目标 —— **模块名**，不是实例路径
+  clock: clk                  # 默认 clk
+  reset: rst_n                # 默认 rst_n；给 null 就不加复位屏蔽
+
+dimensions:
+  - id: D_queue
+    fields:
+      - name: queue_level     # DUT 内部状态
+        type: range
+        sample: dut           # ← 走 bind 探针
+        width: 6              # 探针端口的位宽；不给按类型推（会记账）
+        cover_bins: [...]     # 区间仓 / illegal 只在探针那份里生效
+```
+
+生成出来的探针长这样（`coverage/dut_probe.sv`）：
+
+```systemverilog
+module cg_npu_sched_dut_probe (
+  input logic clk,
+  input logic rst_n,
+  input logic [5:0] queue_level,   // 内部信号，直接连
+  ...
+);
+  covergroup cg_npu_sched_dut;
+    cp_queue_level: coverpoint queue_level { bins low = {[1:7]}; ... }
+    cx_queue_level_issue_decision: cross cp_queue_level, cp_issue_decision { ... }
+  endgroup
+  cg_npu_sched_dut cg = new();
+  always @(posedge clk) if (rst_n) cg.sample();
+endmodule
+
+bind npu_sched cg_npu_sched_dut_probe u_cg_probe(.clk(clk), .queue_level(queue_level), ...);
+```
+
+**为什么是 `bind`**：
+
+- monitor 的事务通道**只看得到激励侧** —— 队列水位、依赖类型、发射决策这些内部状态
+  与输出端口，它一个都采不到。
+- 层次引用（`u_dut.u_sched.queue_level`）要把 tb_top 的实例名写死，换个 bench 就断。
+- `bind` 两个问题都没有：挂**模块**上（每个实例自动带一份），端口连接表达式在
+  **目标模块作用域**里求值，所以内部名直接就能连（实测 `vlog` 编译通过）。
+
+探针文件会被 `build_filelist_for_tb` 收进编译清单（排在 RTL 之后 —— `bind` 要求目标
+模块已声明），所以它是**真编译、真采样、真被 `vcover` 统计**的。
+
+**交叉的两边必须在同一个 covergroup 里**，所以一个 cross 的两侧来源必须一致；
+一边 `stimulus` 一边 `dut` 是**表达不了**的，会记账跳过（并提示把另一侧也标成
+`sample: dut`）。
+
+**派生信号**（如"相邻两条指令的 opcode 组合"）既不是端口也不是寄存器 —— 用
+`sample_expr` 写它对应的表达式，或者让 DUT 自己暴露这个信号（那就不写，采同名）。
+
 ### 在流水线里，它被谁收走
 
 **这一段最容易想当然**：本工具能产出一段可编译的 covergroup，但**那段文本如果
@@ -553,18 +620,25 @@ python -m src.tools.casemodel_tools.cli covergroups \
 
 ```
 front   写 inputs/casemodel.yaml（模型）
-verify  读模型 → inputs/yaml/uvm/env_cov_bins.yaml 的 field_bins
+verify  读模型 → inputs/yaml/uvm/env_cov_bins.yaml 的 field_bins（stimulus 那批）
+        读模型 → coverage/dut_probe.sv（dut 那批，**落在 filelist 生成之前**）
 gen_uvm 读 field_bins → env_cov.sv.j2 里 cp_<字段> 用模型的边界 bin
         （字段名 = 事务字段名 = spec 接口信号名，两边同一个命名空间）
+ops     build_filelist_for_tb 收 coverage/*_probe.sv（排在 RTL 之后）
+        → vlog 编译 → bind 把探针挂进 DUT → 时钟沿采样
 coverage  读 coverage/coverage_points.json 记**声明**；
-          vcover -cvg -details 收**实测**，证据链的功能覆盖层读它
+          vcover -cvg -details 收**实测**（两条通道的 covergroup 在同一份报告里）
 ```
 
-**为什么不另生成一个 `coverage/<module>_cg.sv` 再塞进 filelist**：那条路要动
-filelist 与 `tb_top` 的例化与采样时钟，侵入大；而 `env_cov` 那条通道**已经跑通**
-（monitor 每笔事务触发 `write_<agent>` → `sample()`），把模型的 bin 喂进去就行。
-实测：`paddr` 的 6 个边界值（0/3/4/31/32/255）渲染成 6 个 bin，`vlog` 编译
-`Errors: 0`。
+**两条通道为什么不能合并**：`stimulus` 那条**已经跑通**（monitor 每笔事务触发
+`write_<agent>` → `sample()`），但它**只看得到激励侧** —— 内部状态与输出端口
+它一个都采不到。那部分只能走 bind 探针（见上一节）。实测 `paddr` 的 6 个边界值
+渲染成 6 个 bin、编译 `Errors: 0`；NPU 那 12 个信号渲染成带 13 个端口的探针、
+编译 `Errors: 0`。
+
+**为什么探针落在 verify 而不是 coverage 阶段**：它**要被编译**，而 filelist 是
+ops 阶段生成的。写在覆盖率阶段就永远赶不上这一轮 —— 那就是又造一个"看着有、
+从没编译过"的产物（这个会话踩过一次）。
 
 ### 两个数字不要混
 
@@ -580,7 +654,7 @@ filelist 与 `tb_top` 的例化与采样时钟，侵入大；而 `env_cov` 那�
 pytest src/tools/casemodel_tools/tests/ -v
 ```
 
-379 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
+396 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
 工具自己的测试按层组织在 `src/tools/casemodel_tools/tests/`，
 跨层的 Agent 集成测试在仓库根的 `tests/test_casemodel_agent.py`：
 
@@ -593,7 +667,7 @@ pytest src/tools/casemodel_tools/tests/ -v
 | `test_analysis.py` | 门面组装、评分不变式（换 case 列表分数不变）、矩阵对称与声明优先、外部核对四方向、闭环无话可说、**文本入口 vs 文件入口结论一致** |
 | `test_multi.py` | 两种写法的扇出与覆盖、重复 `object_code` 报错、合并语义（评分算一次 / 树与 case 每对象一份）、`--max-cases` 是每对象上限、单对象时是恒等 |
 | `test_uvm_tests.py` | 一条 = 一个取值、维度过滤、边界优先截断、产物形状正好是 `tool_uvm` 认的那个、**不 import `uvm_tools`** |
-| `test_coverage.py` | 功能覆盖率方法学：维度→covergroup / 字段→coverpoint / 取值→bin / 显式区间仓 / 两级 illegal / binsof 过滤交叉；中文取值投影后**真跑 vlog 编译**；对不上就进 notes |
+| `test_coverage.py` | 功能覆盖率方法学：维度→covergroup / 字段→coverpoint / 取值→bin / 显式区间仓 / 两级 illegal / binsof 过滤交叉 / **两条采样通道（stimulus 与 bind 探针）**；两处都**真跑 vlog 编译**；对不上就进 notes |
 | `test_cli.py` | 工具自带 CLI 与 `vagent case-model` 的退出码 / 四种格式 / 目录展开 |
 | `test_text.py` | 显示宽度对齐（中文占 2 列）、各段文本渲染 |
 | `tests/test_casemodel_agent.py`（仓库根） | 三面答案一致、ITool manifest 合法与失败语义、ToolHub 注册与调用 |

@@ -303,14 +303,27 @@ def run_covergroups(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
     except CaseModelError as exc:
         return {"error": str(exc)}
 
-    from .coverage import coverage_model, render_covergroup
+    from .coverage import (coverage_model, probe_ports, render_covergroup,
+                           render_probe)
 
     # `resolve()` 才回填 `cross_pair.dim_a/dim_b` 与联动取值 —— 不解析就少
     # cross、少 bin，而且是**静默**少（见 coverage.py 的 `coverage_model`）。
     model = models[0].resolve()
     cm = coverage_model(model, module_name)
     payload = cm.as_dict()
+    # **两条采样通道，两份产物**：事务字段那份给 env_cov 通道（monitor 采），
+    # DUT 信号那份给 bind 探针（内部/端口都能采）。模型里没有 `sample: dut`
+    # 的字段时 `probe_code` 是空串 —— 那是"不需要"，不是"生成失败"。
     payload["covergroup_code"] = render_covergroup(cm)
+    payload["probe_code"] = render_probe(cm, model.sampling)
+    payload["probe_ports"] = [cp.signal for cp in probe_ports(cm)]
+    payload["sampling"] = dict(model.sampling)
+    if probe_ports(cm) and not payload["probe_code"]:
+        payload["notes"].append(
+            "模型里有 `sample: dut` 的字段，但没有 `sampling.dut_module` —— "
+            "生成不出 bind 探针（不知道挂到哪个模块上）。补一段：\n"
+            "    sampling:\n      dut_module: <DUT 的模块名>\n"
+            "      clock: clk\n      reset: rst_n")
     return payload
 
 

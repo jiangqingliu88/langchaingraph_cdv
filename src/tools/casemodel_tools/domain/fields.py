@@ -181,6 +181,32 @@ class Field:
     #: **需求编号** —— `REQ-NPU-001`。签核要回答"每条需求被谁验了"，
     #: 这条链就是 `需求 → 覆盖点 → 用例 → 实测命中`。
     requirement: str = ""
+    #: **这个信号从哪采** —— 决定它走哪条采样通道。两条通道的可见性完全不同：
+    #:
+    #:   · `stimulus`（默认）—— **事务字段**。monitor 采到的事务对象上的字段，
+    #:     由 `env_cov.sv.j2` 的 `cg_<agent>` 采（monitor 每笔事务触发 `sample()`）。
+    #:     **只看得到激励侧**：DUT 内部的队列水位、依赖类型、输出端口，一个都采不到。
+    #:   · `dut` —— **DUT 里按名字可见的信号**：输入端口、输出端口、以及**内部寄存器**。
+    #:     对一个 `bind` 进 DUT 的探针模块来说，这三者没有区别 —— 端口连接表达式
+    #:     是在**目标模块作用域**里求值的（实测）。
+    #:
+    #: 默认给 `stimulus` 是**为了不动已经跑通的那条路**（apb_uart 的属性测试点走
+    #: env_cov 通道）。一个计划文档里大量采内部状态的模型（NPU 调度器就是）
+    #: 应当逐字段写 `sample: dut`。
+    sample: str = "stimulus"
+    #: 采样信号的**位宽**（`dut` 通道要它来声明探针端口）。
+    #:
+    #: 不给就按类型推导：`range` 取容纳 `max` 的位数，`enum` 取容纳取值下标的位数。
+    #: 推出来的可能与 DUT 实际宽度不同（枚举 4 个取值推 2 位，而端口是 3 位）——
+    #: 值域仍在推出来的宽度里，所以**采到的值是对的**，但会有截断告警。
+    #: 想要零告警就显式写。
+    width: Optional[int] = None
+    #: **采样表达式** —— 不写就采同名信号；写了就采这个表达式（`dut` 通道专用）。
+    #:
+    #: 给**派生信号**用：`instr_seq`（相邻两条 opcode 的组合）既不是端口也不是
+    #: 寄存器，得有人算出来。要么 DUT 自己暴露它（那就同名，不用写这个），
+    #: 要么在探针的作用域里能写成表达式。
+    sample_expr: str = ""
     unit: str = ""
     dim_key: str = ""               # 所属维度 key，由 Dimension 构建时回填
 
@@ -265,6 +291,10 @@ def build_field(item: Any, dim_key: str) -> Field:
         cover_illegal=list(as_list(item.get("cover_illegal"))),
         cover_id=str(item.get("cover_id") or "").strip(),
         requirement=str(item.get("requirement") or "").strip(),
+        sample=str(item.get("sample") or "stimulus").strip().lower(),
+        width=(int(item["width"]) if str(item.get("width") or "").strip().isdigit()
+               else None),
+        sample_expr=str(item.get("sample_expr") or "").strip(),
         unit=str(item.get("unit") or ""),
         dim_key=dim_key,
     )

@@ -23,6 +23,17 @@ object_cn: NPU 指令调度器
 object_code: NPUSCH
 description: NPU 硬件指令调度器（队列 / 指令类型 / 数据类型 / 依赖 / 执行单元 / 簇 / 屏障）
 
+# 采样配置 —— `sample: dut` 的字段靠它生成 bind 探针
+#
+# 为什么这 12 个信号全走 `dut` 而不是事务通道：`instr_seq`/`queue_level` 这类是
+# **内部状态**，`issue_unit`/`issue_decision` 是**输出端口** —— monitor 只看得到
+# 激励侧，一个都采不到。而 bind 进 DUT 之后，输入端口 / 输出端口 / 内部寄存器
+# 对探针来说没有区别（端口表达式在目标模块作用域求值）。
+sampling:
+  dut_module: npu_sched      # bind 的目标**模块名**（不是实例路径）
+  clock: clk
+  reset: rst_n
+
 sub_objects:
   - {id: OBJ-01, name: 指令队列管理,   code: QUEUE}
   - {id: OBJ-02, name: 指令发射,       code: ISSUE}
@@ -42,9 +53,11 @@ dimensions:
     fields:
       - name: queue_level
         type: range
+        width: 6
         min: 0
         max: 32
         description: 队列水位 —— 六档划分 + 越界非法
+        sample: dut
         cover_id: CP_NPU_QUEUE_001
         requirement: REQ-NPU-001
         boundary: ["0", "1", "7", "8", "15", "16", "24", "25", "31", "32"]
@@ -66,7 +79,9 @@ dimensions:
     fields:
       - name: instr_type
         type: enum
+        width: 3
         description: 硬件指令类型
+        sample: dut
         cover_id: CP_NPU_TYPE_002
         requirement: REQ-NPU-002
         values: ["MAC", "VECTOR", "SCALAR", "DMA"]
@@ -80,7 +95,9 @@ dimensions:
     fields:
       - name: instr_dtype
         type: enum
+        width: 3
         description: 指令数据类型
+        sample: dut
         cover_id: CP_NPU_DTYPE_003
         requirement: REQ-NPU-003
         values: ["INT8", "FP16", "BF16", "FP32"]
@@ -94,7 +111,9 @@ dimensions:
     fields:
       - name: dep_type
         type: enum
+        width: 2
         description: 与相邻指令的依赖类型
+        sample: dut
         cover_id: CP_NPU_DEP_004
         requirement: REQ-NPU-004
         values: ["NONE", "RAW", "WAW", "WAR"]
@@ -108,7 +127,9 @@ dimensions:
     fields:
       - name: issue_unit
         type: enum
+        width: 3
         description: 指令被发到的执行单元
+        sample: dut
         cover_id: CP_NPU_UNIT_005
         requirement: REQ-NPU-005
         values: ["MAC", "VECTOR", "SCALAR", "DMA"]
@@ -122,7 +143,9 @@ dimensions:
     fields:
       - name: issue_decision
         type: enum
+        width: 2
         description: 本拍对该指令的发射决策
+        sample: dut
         cover_id: CP_NPU_DECISION_006
         requirement: REQ-NPU-006
         values: ["ISSUED", "STALLED", "BLOCKED", "FLUSHED"]
@@ -136,9 +159,11 @@ dimensions:
     fields:
       - name: cluster_id
         type: range
+        width: 2
         min: 0
         max: 3
         description: 指令归属的簇
+        sample: dut
         cover_id: CP_NPU_CLUSTER_007
         requirement: REQ-NPU-007
         cover_bins:
@@ -157,7 +182,9 @@ dimensions:
     fields:
       - name: instr_opcode
         type: enum
+        width: 4
         description: 硬件指令操作码
+        sample: dut
         cover_id: CP_NPU_OPCODE_008
         requirement: REQ-NPU-008
         values: ["MAC_INT8", "MAC_FP16", "MAC_BF16", "VEC_ADD", "VEC_MUL",
@@ -173,7 +200,9 @@ dimensions:
     fields:
       - name: instr_seq
         type: enum
+        width: 8
         description: 相邻两条指令的 opcode 组合
+        sample: dut
         cover_id: CP_NPU_INSTR_SEQ_009
         requirement: REQ-NPU-009
         values: ["MAC_MAC", "LOAD_MAC", "MAC_STORE", "DMA_MAC", "VEC_MAC",
@@ -188,7 +217,9 @@ dimensions:
     fields:
       - name: pipeline_state
         type: enum
+        width: 3
         description: 当前流水重叠状态
+        sample: dut
         cover_id: CP_NPU_PIPELINE_010
         requirement: REQ-NPU-010
         values: ["NONE", "MAC_MAC", "MAC_DMA", "VEC_MAC", "MULTI_OP"]
@@ -203,7 +234,9 @@ dimensions:
     fields:
       - name: op_priority
         type: enum
+        width: 2
         description: 本拍的优先级策略
+        sample: dut
         cover_id: CP_NPU_PRIORITY_011
         requirement: REQ-NPU-011
         values: ["HIGH_FIRST", "LOW_FIRST", "SAME_PRIO", "ROUND_ROBIN"]
@@ -217,7 +250,9 @@ dimensions:
     fields:
       - name: barrier_type
         type: enum
+        width: 2
         description: 屏障类型
+        sample: dut
         cover_id: CP_NPU_BARRIER_012
         requirement: REQ-NPU-012
         values: ["NONE", "TILE_BARRIER", "OP_BARRIER", "CLUSTER_BARRIER"]

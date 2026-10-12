@@ -159,3 +159,138 @@ class TestTheTemplateStillReadsBothKeys:
         assert "coverage_field_bins" in tpl
         # `| default({})` 不能少：渲染走 StrictUndefined，缺键会让整份渲染失败
         assert "coverage_field_bins | default({})" in tpl
+
+
+class TestTheTwoSamplingChannelsSplit:
+    """两条采样通道各写各的产物 —— 分不清就会给采不到的信号生成覆盖率。
+
+    monitor 的事务通道只看得到**激励侧**；DUT 的内部状态与输出端口只有 bind
+    进 DUT 才看得见。`sample: stimulus` 的走 `env_cov_bins.yaml`，
+    `sample: dut` 的走 `coverage/dut_probe.sv`。
+    """
+
+    NPU = Path("specs/npu_sched/casemodel.yaml")
+    APB = Path("specs/apb_uart/casemodel.yaml")
+
+    def _executor(self):
+        from src.executors.verify.main import VerifyExecutor
+
+        return VerifyExecutor()
+
+    def test_stimulus_only_goes_to_env_cov_bins(self, tmp_path):
+        import shutil
+
+        (tmp_path / "inputs").mkdir(parents=True)
+        shutil.copy(self.APB, tmp_path / "inputs" / "casemodel.yaml")
+        ex = self._executor()
+        fb = ex._case_model_field_bins(tmp_path)
+        assert set(fb) == {"paddr", "pwrite", "pwdata"}   # apb 全走事务通道
+
+        ex._write_coverage_probe(tmp_path)
+        assert not (tmp_path / "coverage" / "dut_probe.sv").exists()
+
+    def test_dut_sourced_goes_to_the_probe_not_field_bins(self, tmp_path):
+        """NPU 那 12 个信号在 env_cov 里**一个都不可见** —— 塞进 field_bins
+        只会让模板生成一堆引用不到信号的 bin。"""
+        import shutil
+
+        (tmp_path / "inputs").mkdir(parents=True)
+        shutil.copy(self.NPU, tmp_path / "inputs" / "casemodel.yaml")
+        ex = self._executor()
+        assert ex._case_model_field_bins(tmp_path) == {}
+
+        ex._write_coverage_probe(tmp_path)
+        probe = tmp_path / "coverage" / "dut_probe.sv"
+        assert probe.is_file()
+        text = probe.read_text(encoding="utf-8")
+        assert "bind npu_sched" in text and "queue_level" in text
+        assert "input logic clk," in text and "input logic rst_n," in text
+
+    def test_range_and_illegal_bins_never_reach_env_cov(self, tmp_path):
+        """`env_cov.sv.j2` 的 bin 语法只支持 `{v}` / `{[a:b]}`，**没有 illegal 的位置**。
+
+        区间仓与非法仓留给探针那份 —— 那份才是完整的覆盖group。
+        """
+        import shutil
+
+        (tmp_path / "inputs").mkdir(parents=True)
+        shutil.copy(self.NPU, tmp_path / "inputs" / "casemodel.yaml")
+        assert self._executor()._case_model_field_bins(tmp_path) == {}
+
+    def test_no_case_model_writes_nothing(self, tmp_path):
+        ex = self._executor()
+        assert ex._case_model_field_bins(tmp_path) == {}
+        ex._write_coverage_probe(tmp_path)
+        assert not (tmp_path / "coverage").exists()
+
+
+class TestTheProbeGetsCompiled:
+    """探针必须**进得了 filelist** —— 不进就是又一份"看着有、从没编译过"的产物。"""
+
+    def test_the_filelist_collects_it_after_the_rtl(self, tmp_path):
+        from src.tools.lib.filelist import build_filelist_for_tb
+
+        out = tmp_path / "output_x"
+        (out / "rtl").mkdir(parents=True)
+        (out / "rtl" / "dut.sv").write_text("module dut; endmodule\n", encoding="utf-8")
+        (out / "coverage").mkdir()
+        (out / "coverage" / "dut_probe.sv").write_text("// probe\n", encoding="utf-8")
+        (out / "coverage" / "coverage_points.json").write_text("{}", encoding="utf-8")
+
+        fl = build_filelist_for_tb(out, [], "dut_env").read_text(encoding="utf-8")
+        assert "dut_probe.sv" in fl
+        # `bind <dut_module>` 要求目标模块已声明 —— 探针必须排在 RTL 之后
+        assert fl.index("dut.sv") < fl.index("dut_probe.sv")
+
+    def test_non_sv_files_in_coverage_are_not_collected(self, tmp_path):
+        """`coverage/` 里还躺着 json —— 一股脑收进来是给 vlog 塞垃圾。"""
+        from src.tools.lib.filelist import build_filelist_for_tb
+
+        out = tmp_path / "output_y"
+        (out / "coverage").mkdir(parents=True)
+        (out / "coverage" / "coverage_points.json").write_text("{}", encoding="utf-8")
+        fl = build_filelist_for_tb(out, [], "dut_env").read_text(encoding="utf-8")
+        assert "coverage_points.json" not in fl
+
+
+class TestASimThatNeverRanIsNotAPass:
+    """`sim_vsim.log` **不存在**时，判据必须判 FAIL —— 不能反过来判成通过。
+
+    原来的判据是 `! grep -qE "<错>" sim_vsim.log`：日志不在时 `grep` 自己报错退出
+    （非零），`!` 一取反就成了**通过**。于是"vsim 压根没起来"被记成 pass。
+
+    实测踩过：环境里 vsim 崩了（连 `sim_vsim.log` 都没生成），一整轮回归全绿、
+    覆盖率 0%，而每条用例的 `status.env` 都是 pass —— 看起来一切正常。
+
+    修法是在 grep 之前加一句 `[ -s sim_vsim.log ] &&`：**先要求日志非空**，
+    再谈里面有没有错。
+    """
+
+    RUN_CMD = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py")
+
+    def test_the_verdict_requires_a_nonempty_log_first(self):
+        src = self.RUN_CMD.read_text(encoding="utf-8")
+        grep_at = src.index('! grep -qE "UVM_ERROR')
+        guard = src.rindex("[ -s sim_vsim.log ]", 0, grep_at)
+        assert guard > 0, "判据前没有 `[ -s sim_vsim.log ] &&` —— 日志缺失会被判成 pass"
+
+    @pytest.mark.parametrize("content,expect_fail", [
+        (None, True),        # 文件不存在
+        ("", True),          # 空文件
+        ("# 一切正常\n", False),
+        ("# Errors: 2, Warnings: 0\n", True),
+        ("# FATAL ERROR while loading design\n", True),
+    ])
+    def test_the_shell_predicate_matches_intent(self, tmp_path, content, expect_fail):
+        import subprocess
+
+        log = tmp_path / "sim_vsim.log"
+        if content is not None:
+            log.write_text(content, encoding="utf-8")
+        # 与生成器里那句同形（`[ -s ] &&` 是这一条的全部要点）
+        cmd = ('[ -s sim_vsim.log ] && '
+               '! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]'
+               '|FATAL ERROR|Errors: *[1-9]" sim_vsim.log')
+        r = subprocess.run(["sh", "-c", cmd], cwd=str(tmp_path),
+                           capture_output=True, text=True)
+        assert (r.returncode != 0) is expect_fail, (content, r.returncode)

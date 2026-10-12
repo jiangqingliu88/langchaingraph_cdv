@@ -119,6 +119,8 @@ class VerifyExecutor(BaseExecutor):
             #
             # 顺序必须是：find_spec_yaml（清空 + 重建）→ **写 bins** → jinja_render（读）。
             self._write_env_cov_bins(output_dir, cov_bins_for_render)
+            # 第二条通道：`sample: dut` 的字段 → bind 探针（也要在 filelist 生成前落盘）
+            self._write_coverage_probe(output_dir)
             call_tool("jinja_render", {"output_dir": str(output_dir)})
             env_files = [str(p) for p in (output_dir / "agents").rglob("*.sv")] \
                 if (output_dir / "agents").exists() else []
@@ -251,6 +253,49 @@ class VerifyExecutor(BaseExecutor):
         except Exception as e:                       # noqa: BLE001 旁路，别拦 env 生成
             logger.warning(f"env_cov bin 落盘失败（覆盖率模型将退回自动分箱）: {e}")
 
+    def _write_coverage_probe(self, output_dir: Path) -> None:
+        """`sample: dut` 的字段 → `coverage/dut_probe.sv`（bind 探针）。
+
+        **第二条采样通道**。monitor 的事务通道只看得到**激励侧** —— 队列水位、
+        依赖类型、发射决策这些内部状态与输出端口，它一个都采不到。而 `bind` 进
+        DUT 的探针模块对输入端口/输出端口/内部寄存器**没有区别**：端口连接表达式
+        在目标模块作用域里求值，内部名直接连得过去（实测 vlog 编译通过）。
+
+        落在这里而不是覆盖率阶段，是因为**它要被编译**：回归的 filelist 在 ops
+        阶段生成，探针必须先于它存在。写在覆盖率阶段就永远赶不上这一轮 ——
+        那就又是一份"看着有、从没编译过"的产物（本会话踩过这个坑）。
+        """
+        from src.layers.l1_infrastructure.layout import casemodel_path
+
+        cm_file = casemodel_path(output_dir)
+        if not cm_file.is_file():
+            return
+        try:
+            from src.tools.casemodel_tools.api import run_covergroups
+
+            payload = run_covergroups(cm_file.read_text(encoding="utf-8"), "dut")
+        except Exception as e:                       # noqa: BLE001 旁路
+            logger.warning(f"读 case 模型失败（不生成 DUT 探针）: {e}")
+            return
+        if not payload.get("probe_ports"):
+            return                                   # 模型里没有 sample: dut 的字段
+        code = payload.get("probe_code") or ""
+        if not code:
+            # 有 `sample: dut` 的字段却没给 `dut_module` —— 原因与写法已经在
+            # `run_covergroups` 的 notes 里写好了，照抄一句，别让人对着"没生成"猜
+            for note in payload.get("notes") or []:
+                if "dut_module" in note:
+                    logger.warning(f"DUT 探针生成不了：{note}")
+                    break
+            return
+        cov_dir = output_dir / "coverage"
+        cov_dir.mkdir(parents=True, exist_ok=True)
+        path = cov_dir / "dut_probe.sv"
+        path.write_text(code, encoding="utf-8")
+        logger.info(f"功能覆盖率点（DUT 探针）：{len(payload['probe_ports'])} 个信号 "
+                    f"→ {path.name}（bind 到 "
+                    f"{payload['sampling'].get('dut_module')}，会被真编译、真采样）")
+
     @staticmethod
     def _case_model_field_bins(output_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
         """`inputs/casemodel.yaml` → `{字段名: [{name, value}, …]}`（给 `env_cov` 用）。
@@ -283,8 +328,17 @@ class VerifyExecutor(BaseExecutor):
 
         out: Dict[str, List[Dict[str, Any]]] = {}
         for cp in points.get("coverpoints") or []:
+            # **只收 `sample: stimulus` 的**：`sample: dut` 的那些信号在 env_cov
+            # 里根本不可见（那是 DUT 内部状态与输出端口，monitor 采不到），塞进
+            # `field_bins` 只会让模板生成一堆引用不到信号的 bin。它们走探针那条路。
+            #
+            # **只收离散值**：`env_cov.sv.j2` 的 bin 语法只支持 `{v}` 与 `{[a:b]}`，
+            # 没有 `illegal_bins` 的位置 —— 区间仓与非法仓都留给探针（DUT 侧那份
+            # covergroup 才是完整的）。
+            if cp.get("source") != "stimulus":
+                continue
             bins = [{"name": b["name"], "value": b["value"]}
-                    for b in cp.get("bins") or []]
+                    for b in cp.get("bins") or [] if "value" in b]
             if bins:
                 out[cp["signal"]] = bins
         return out

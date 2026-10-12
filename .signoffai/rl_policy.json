@@ -2,7 +2,7 @@
   "q": {
     "cov:below_80|reason:none|sugg:none::RETRY_ENV": 7.601161500000002,
     "cov:below_80|reason:none|sugg:none::FIX_COMPILE_bug": 7.247012228012076,
-    "cov:below_80|reason:none|sugg:none::GENERATE_DIRECTED_TEST": 16.43027222906946,
+    "cov:below_80|reason:none|sugg:none::GENERATE_DIRECTED_TEST": 14.99546584612151,
     "cov:below_80|reason:none|sugg:none::FIX_FUNCTIONAL_bug": 6.605691646095586,
     "cov:80_target|reason:none|sugg:none::EXPAND_SEEDS": -26.4,
     "cov:80_target|reason:none|sugg:none::RELAX_CONSTRAINT": -10.116458152429797,

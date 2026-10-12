@@ -106,6 +106,12 @@ class CaseModel:
     cross_groups: List[CrossGroup] = _field(default_factory=list)
     env_required: List[str] = _field(default_factory=list)
     env_defaults: Dict[str, Any] = _field(default_factory=dict)
+    #: **DUT 探针的采样配置**（`sampling:` 块）—— `sample: dut` 的字段靠它生成
+    #: `bind` 语句。键：`dut_module`（bind 的目标**模块名**）/ `clock` / `reset`。
+    #:
+    #: 空 dict = 模型里没有 `sample: dut` 的字段，或者没声明这套配置 ——
+    #: 后者是**要记账**的（写了 `sample: dut` 却没给 dut_module，生成不出探针）。
+    sampling: Dict[str, Any] = _field(default_factory=dict)
     env_unknown_keys: List[str] = _field(default_factory=list)
     generation: Generation = _field(default_factory=Generation)
     case_defaults: CaseDefaults = _field(default_factory=CaseDefaults)

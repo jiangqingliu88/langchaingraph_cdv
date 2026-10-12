@@ -111,6 +111,10 @@ class CoverPoint:
     type: str
     cover_id: str = ""             # 文档里的覆盖点编号（CP_xxx），给人对账用
     requirement: str = ""          # 需求编号（REQ-xxx）—— 追溯矩阵的另一头
+    #: `stimulus`（事务字段，走 env_cov 通道）/ `dut`（DUT 信号，走 bind 探针）
+    source: str = "stimulus"
+    width: int = 0                 # dut 通道声明探针端口用；0 = 没声明
+    expr: str = ""                 # 采样表达式（dut 通道）；空 = 采同名信号
     bins: List[CoverBin] = _field(default_factory=list)
     illegal_bins: List[CoverBin] = _field(default_factory=list)
 
@@ -118,6 +122,7 @@ class CoverPoint:
         return {"signal": self.signal, "field": self.field,
                 "dimension": self.dimension, "type": self.type,
                 "cover_id": self.cover_id, "requirement": self.requirement,
+                "source": self.source, "width": self.width, "expr": self.expr,
                 "bins": [b.as_dict() for b in self.bins],
                 "illegal_bins": [b.as_dict() for b in self.illegal_bins],
                 "bin_count": len(self.bins),
@@ -146,10 +151,12 @@ class CrossPoint:
     level: str
     dimensions: List[str]
     bins: List[CrossBin] = _field(default_factory=list)
+    source: str = "stimulus"       # 两边共同的采样来源（同作用域才建得起来）
 
     def as_dict(self) -> Dict[str, Any]:
         return {"name": self.name, "signals": list(self.signals),
                 "level": self.level, "dimensions": list(self.dimensions),
+                "source": self.source,
                 "bins": [b.as_dict() for b in self.bins],
                 "bin_count": len(self.bins)}
 
@@ -162,6 +169,9 @@ class CoverageModel:
     coverpoints: List[CoverPoint] = _field(default_factory=list)
     crosses: List[CrossPoint] = _field(default_factory=list)
     notes: List[str] = _field(default_factory=list)
+
+    def by_source(self, source: str) -> List[CoverPoint]:
+        return [cp for cp in self.coverpoints if cp.source == source]
 
     @property
     def bin_count(self) -> int:
@@ -176,6 +186,8 @@ class CoverageModel:
             "coverpoint_count": len(self.coverpoints),
             "bin_count": self.bin_count,
             "cross_count": len(self.crosses),
+            "stimulus_coverpoint_count": len(self.by_source("stimulus")),
+            "dut_coverpoint_count": len(self.by_source("dut")),
             "notes": list(self.notes),
         }
 
@@ -393,10 +405,42 @@ def _coverpoint(dim_key: str, fld: Field, notes: List[str]) -> Optional[CoverPoi
         notes.append(f"{where} 既有显式覆盖仓又有 {len(points)} 个取值点 —— "
                      f"**以显式仓为准**（取值点仍参与用例生成，只是不各自成仓）")
 
+    width = fld.width or _derive_width(fld, bins)
+    if fld.sample == "dut" and not fld.width:
+        notes.append(f"{where} 走 DUT 探针但没写 `width` —— 按类型推成 {width} 位"
+                     f"（与端口实际宽度不一致时会有截断告警；要零告警就显式写）")
     return CoverPoint(signal=sv_ident(fld.name, "sig"), field=fld.name,
                       dimension=dim_key, type=fld.type, bins=bins,
                       illegal_bins=illegal, cover_id=fld.cover_id,
-                      requirement=fld.requirement)
+                      requirement=fld.requirement, source=fld.sample,
+                      width=width, expr=fld.sample_expr)
+
+
+#: 推不出位宽时的兜底 —— **要记账**，不能让一个 32 位的端口悄悄截掉高位。
+DEFAULT_WIDTH = 32
+
+
+def _derive_width(fld: Field, bins: List[CoverBin]) -> int:
+    """采样信号的位宽 —— 从字段类型与仓内容推。
+
+    优先级：显式 `width`（调用方处理）→ `range` 的 `max` → 仓里出现过的最大数
+    → 1。**不猜"32 位反正够大"**：端口宽度不符会截断，而截断的覆盖点是错的
+    数据，编译告警是唯一的提示。
+    """
+    if fld.max is not None:
+        try:
+            return max(1, int(float(fld.max)).bit_length())
+        except (TypeError, ValueError):
+            pass
+    hi = 0
+    for b in bins:
+        for v in ([b.value] if b.value is not None else []) + list(b.values) + \
+                 ([b.hi] if b.hi is not None else []):
+            if v is not None:
+                hi = max(hi, int(v))
+    if hi:
+        return max(1, hi.bit_length())
+    return 1
 
 
 def _attach_crosses(model: CaseModel, cm: CoverageModel) -> None:
@@ -418,11 +462,21 @@ def _attach_crosses(model: CaseModel, cm: CoverageModel) -> None:
                 f"{'、'.join(missing)} —— 跳过（那一维没有字段，或者模型没 resolve）")
             continue
         name = f"cx_{cp_a.signal}_{cp_b.signal}"
+        # **交叉的两边必须在同一个 covergroup 里**（cross 要求两个 coverpoint
+        # 同作用域）。所以先看两边各从哪采：都在 DUT 里就走探针，都在事务里就
+        # 走 env_cov 那条；**一边一边不是同一个作用域，表达不了** —— 记账。
+        if cp_a.source != cp_b.source:
+            cm.notes.append(
+                f"cross {pair.a}×{pair.b} 的两边采样来源不同"
+                f"（{cp_a.signal}={cp_a.source} / {cp_b.signal}={cp_b.source}）—— "
+                f"跳过：cross 要求两个 coverpoint 同作用域。"
+                f"若 {cp_b.signal} 在 DUT 里也按名字可见，把它也标成 `sample: dut`")
+            continue
         bins = _cross_bins(pair, [cp_a, cp_b], cm.notes, name)
         cm.crosses.append(CrossPoint(
             name=name, signals=[cp_a.signal, cp_b.signal],
             level=pair.level, dimensions=[cp_a.dimension, cp_b.dimension],
-            bins=bins))
+            bins=bins, source=cp_a.source))
 
 
 def _cross_bins(pair: Any, cps: List[CoverPoint], notes: List[str],
@@ -526,3 +580,140 @@ def render_covergroup(cm: CoverageModel) -> str:
         lines.append("    }")
     lines.append("endgroup")
     return "\n".join(lines) + "\n"
+
+
+# ════════════════════════════════════════════════════════════
+# DUT 探针：采内部/端口信号（第二条采样通道）
+# ════════════════════════════════════════════════════════════
+
+#: `sampling:` 块的默认值 —— 与 `config/uvm_templates` 里 bench 的命名一致。
+DEFAULT_CLOCK = "clk"
+DEFAULT_RESET = "rst_n"
+DEFAULT_INSTANCE = "u_cg_probe"
+
+
+def probe_ports(cm: CoverageModel) -> List[CoverPoint]:
+    """探针要声明的端口 —— 就是 `sample: dut` 的那些覆盖点。"""
+    return cm.by_source("dut")
+
+
+def render_probe(cm: CoverageModel, sampling: Dict[str, Any] = None) -> str:
+    """`CoverageModel` → 一个 **bind 进 DUT 的探针模块**（含 bind 语句）。
+
+    ## 为什么必须是 bind
+
+    DUT 的**输入端口、输出端口、内部寄存器**，对一个 `bind` 进去的模块来说
+    **没有区别** —— 差别只在于"从哪看得见"。而：
+
+      · monitor 的事务通道**只看得到激励侧**：队列水位、依赖类型、发射决策这些
+        内部状态与输出端口，它一个都采不到。
+      · 层次引用（`u_dut.u_sched.queue_level`）要把 tb_top 的实例名写死，
+        换个 bench 就断。
+
+    `bind` 不带这两个问题：挂到**模块**上，每个实例自动带一份；端口连接表达式
+    在**目标模块作用域**里求值，所以 `queue_level` 这类内部名直接就能连（实测）。
+
+    ## 采样
+
+    covergroup **不自带事件**，由一句显式的采样驱动：
+
+        always @(posedge clk) if (rst_n) cg.sample();
+
+    复位周期不采（`reset` 给空就不加这个 `if`）—— 复位期间的水位/决策是
+    无意义值，采进去只会把 bin 命中率弄脏。
+
+    ## 生成不出探针的两种情形（都记账，由调用方决定）
+
+      · 模型里没有 `sample: dut` 的字段 → 空串（不需要探针）
+      · 没有 `sampling.dut_module` → 空串（**bind 的目标都不知道**）
+    """
+    sampling = sampling or {}
+    cps = probe_ports(cm)
+    if not cps:
+        return ""
+    dut_module = sv_ident(sampling.get("dut_module"), "")
+    if not dut_module:
+        return ""
+
+    clock = sv_ident(sampling.get("clock") or DEFAULT_CLOCK, DEFAULT_CLOCK)
+    # 复位给 `null` / 空串 = **不加屏蔽**（有的 DUT 用高有效复位，或者压根不采复位）
+    reset = _slug(sampling.get("reset", DEFAULT_RESET)) or ""
+    instance = sv_ident(sampling.get("instance") or DEFAULT_INSTANCE,
+                        DEFAULT_INSTANCE)
+    guard = f"if ({reset}) " if reset else ""
+
+    # 探针的端口 = 时钟 + 复位 + 每个采样信号。**复位也得是端口** ——
+    # 它同样活在 DUT 的作用域里，裸写在 `if` 里 probe.sv 当场报
+    # `Undefined variable: 'rst_n'`（实测）。
+    extra_ports = [clock] + ([reset] if reset else [])
+
+    cg_name = f"{cm.covergroup}_dut"
+    guard_macro = f"{cg_name.upper()}_SV"
+
+    out: List[str] = [
+        f"`ifndef {guard_macro}",
+        f"`define {guard_macro}",
+        "",
+        "// DUT 信号的功能覆盖率 —— 由 case 模型生成（casemodel_tools.coverage）",
+        f"// 用 `bind` 挂到 `{dut_module}` 上：该模块的**每个实例**都会带一份探针。",
+        "//",
+        "// 为什么走 bind 而不是从 monitor 采：monitor 只看得到**激励侧**，而",
+        "// 队列水位 / 依赖类型 / 发射决策这些是内部状态与输出端口 —— 只有从 DUT",
+        "// 内部才看得见。端口连接表达式在**目标模块作用域**里求值，所以内部名",
+        "// 直接连过来即可。",
+        "",
+        f"module {cg_name}_probe (",
+    ]
+    for name in extra_ports:
+        out.append(f"  input logic {name},")
+    for i, cp in enumerate(cps):
+        decl = f"[{cp.width - 1}:0] " if cp.width > 1 else ""
+        sep = "," if i < len(cps) - 1 else ""
+        src = cp.expr or cp.signal
+        note = f"  // {cp.field}" + (f" ← {src}" if cp.expr else "")
+        out.append(f"  input logic {decl}{cp.signal}{sep}{note}")
+    out += [
+        ");",
+        "",
+        f"  covergroup {cg_name};",
+        "    option.per_instance = 1;",
+    ]
+    for cp in cps:
+        out.append(f"    cp_{cp.signal}: coverpoint {cp.signal} {{")
+        for b in cp.bins + cp.illegal_bins:
+            kind = "illegal_bins" if b.illegal else "bins"
+            note = f"  // {b.token}" if b.token else ""
+            out.append(f"        {kind} {b.name} = {{{b.literal()}}};{note}")
+        out.append("    }")
+    for cx in cm.crosses:
+        if cx.source != "dut":
+            continue
+        left, right = cx.signals
+        if not cx.bins:
+            out.append(f"    {cx.name}: cross cp_{left}, cp_{right};")
+            continue
+        out.append(f"    {cx.name}: cross cp_{left}, cp_{right} {{")
+        for b in sorted(cx.bins, key=lambda x: x.illegal):
+            terms = " && ".join(f"binsof(cp_{sig}.{name})"
+                                for sig, name in b.when.items())
+            kind = "illegal_bins" if b.illegal else "bins"
+            out.append(f"        {kind} {b.name} = {terms};")
+        out.append("    }")
+    out += [
+        f"  endgroup",
+        "",
+        f"  {cg_name} cg = new();",
+        "",
+        "  // 采样：时钟沿，且**不在复位周期**（复位期间的水位/决策是无意义值）",
+        f"  always @(posedge {clock}) {guard}cg.sample();",
+        "endmodule",
+        "",
+        f"bind {dut_module} {cg_name}_probe {instance}(",
+    ]
+    # 连接表**不能有尾逗号**（`..., )` 是语法错误 —— 实测 vlog 报
+    # `near ")": syntax error, expecting .* or '.'`）。所以攒完再 join。
+    conns = [f"  .{n}({n})" for n in extra_ports]
+    conns += [f"  .{cp.signal}({cp.expr or cp.signal})" for cp in cps]
+    out.append(",\n".join(conns))
+    out += [");", "", f"`endif  // {guard_macro}", ""]
+    return "\n".join(out)

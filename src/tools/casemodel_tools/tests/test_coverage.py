@@ -584,3 +584,217 @@ class TestTheNpuSchedulerModel:
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=180)
         assert "Errors: 0" in f"{r.stdout}\n{r.stderr}", (r.stdout or "")[-2000:]
+
+
+# ════════════════════════════════════════════════════════════
+# DUT 探针：第二条采样通道
+# ════════════════════════════════════════════════════════════
+
+SAMPLING = '''
+version: "1"
+object: dut
+object_code: DUT
+sampling: {dut_module: dut_mod, clock: clk, reset: rst_n}
+sub_objects: [{id: OBJ-01, name: x, code: X}]
+dimensions:
+  - id: D_stim
+    name: 激励
+    fields:
+      - name: instr_type
+        type: enum
+        values: ["MAC", "DMA"]
+        cover_bins: [mac, dma]
+  - id: D_state
+    name: 内部状态
+    fields:
+      - name: queue_level
+        type: range
+        min: 0
+        max: 32
+        cut_width: 6
+        sample: dut
+        cover_bins:
+          - {name: empty, at: 0}
+          - {name: low, range: [1, 7]}
+        cover_illegal:
+          - {name: over, from: 33}
+themes: [{id: TH-P0, name: f, priority: P0, dimensions: [D_stim, D_state]}]
+'''.replace("cut_width", "width")
+
+
+def _sampling_model(**over) -> str:
+    import re
+
+    text = SAMPLING
+    for k, v in over.items():
+        text = re.sub(rf"({k}: )[^,\}}]+", rf"\g<1>{v}", text, count=1)
+    return text
+
+
+class TestSamplingSources:
+    """`sample: stimulus | dut` —— 两条通道的**可见性完全不同**。
+
+    monitor 的事务通道只看得到激励侧；队列水位、依赖类型、输出端口这些**只有
+    从 DUT 内部才看得见**。分不清这一点，就会给一堆采不到的信号生成一份永远
+    不命中的覆盖率模型。
+    """
+
+    def test_default_is_stimulus(self):
+        text = _model(dimensions=[
+            {"id": "D_a", "name": "A",
+             "fields": [{"name": "sig", "type": "enum", "values": [0, 1]}]}])
+        assert run_covergroups(text, "dut")["coverpoints"][0]["source"] == "stimulus"
+
+    def test_source_is_carried_and_split(self):
+        p = run_covergroups(SAMPLING, "dut")
+        assert p["stimulus_coverpoint_count"] == 1
+        assert p["dut_coverpoint_count"] == 1
+        assert p["probe_ports"] == ["queue_level"]
+
+
+class TestProbeRendering:
+    """bind 探针的形态 —— 端口、bind 语句、复位屏蔽。"""
+
+    @pytest.fixture(scope="class")
+    def code(self):
+        return run_covergroups(SAMPLING, "dut")["probe_code"]
+
+    def test_one_port_per_dut_coverpoint(self, code):
+        assert "input logic [5:0] queue_level" in code
+
+    def test_clock_and_reset_are_ports_too(self, code):
+        """**复位也得是端口** —— 它同样活在 DUT 作用域里。
+
+        裸写在 `if (rst_n)` 里，probe.sv 当场报 `Undefined variable: 'rst_n'`
+        （实测踩过）。时钟同理。
+        """
+        assert "input logic clk," in code
+        assert "input logic rst_n," in code
+        assert ".rst_n(rst_n)" in code
+
+    def test_reset_guards_the_sampling(self, code):
+        assert "always @(posedge clk) if (rst_n) cg.sample();" in code
+
+    def test_the_bind_targets_the_module_not_an_instance(self, code):
+        """挂**模块**上 —— 每个实例自动带一份；挂实例名换个 bench 就断。"""
+        assert "bind dut_mod cg_dut_dut_probe u_cg_probe(" in code
+
+    def test_no_trailing_comma_in_the_bind_list(self, code):
+        """`..., )` 是语法错误 —— vlog 报 `near ")": expecting .* or '.'`（实测）。"""
+        import re
+
+        conns = code[code.index("bind dut_mod"):]
+        assert not re.search(r",\s*\)\s*;", conns)
+
+    def test_illegal_bins_go_with_the_probe(self, code):
+        """区间仓与 illegal 只进探针那份 —— env_cov 的模板没有它们的写法。"""
+        assert "bins low = {[1:7]};" in code
+        assert "illegal_bins over = {[33:$]};" in code
+
+    def test_a_stimulus_only_model_produces_no_probe(self):
+        text = _model(dimensions=[
+            {"id": "D_a", "name": "A",
+             "fields": [{"name": "sig", "type": "enum", "values": [0, 1]}]}])
+        assert run_covergroups(text, "dut")["probe_code"] == ""
+
+    def test_omitting_the_reset_drops_the_guard(self):
+        """复位给 `null` = 不屏蔽（有的 DUT 高有效，或者压根不想屏蔽）。"""
+        text = SAMPLING.replace("reset: rst_n", "reset: null")
+        code = run_covergroups(text, "dut")["probe_code"]
+        assert "if (rst_n)" not in code
+        assert "always @(posedge clk) cg.sample();" in code
+
+
+class TestProbeNeedsABindTarget:
+    def test_missing_dut_module_is_noted_with_the_fix(self):
+        """有 `sample: dut` 的字段却没给 `dut_module` —— **说清楚怎么写**。
+
+        生成不出探针是"缺一句配置"，不是"模型写错了"。这两种提示差很远。
+        """
+        text = SAMPLING.replace("sampling: {dut_module: dut_mod, clock: clk, reset: rst_n}",
+                                "sampling: {clock: clk}")
+        out = run_covergroups(text, "dut")
+        assert out["probe_code"] == ""
+        assert out["probe_ports"] == ["queue_level"]      # 字段还在，只是生成不出
+        assert any("dut_module" in n and "sampling:" in n for n in out["notes"])
+
+
+class TestMixedSourceCrossIsRefused:
+    """交叉的两边必须在**同一个 covergroup** 里 —— 一边一边表达不了。"""
+
+    def test_it_is_noted_not_silently_dropped(self):
+        text = _model(
+            dimensions=[
+                {"id": "D_a", "name": "A",
+                 "fields": [{"name": "sig_a", "type": "enum", "values": [0, 1]}]},
+                {"id": "D_b", "name": "B",
+                 "fields": [{"name": "sig_b", "type": "enum", "values": [0, 1],
+                             "sample": "dut"}]},
+            ],
+            cross_matrix={"D_a×D_b": "required"})
+        out = run_covergroups(text, "dut")
+        assert out["cross_count"] == 0
+        assert any("采样来源不同" in n for n in out["notes"])
+
+
+class TestWidthDerivation:
+    def test_range_width_comes_from_max(self):
+        text = _model(dimensions=[{"id": "D_q", "name": "Q", "fields": [
+            {"name": "q", "type": "range", "min": 0, "max": 32, "sample": "dut"}]}])
+        # 32 需要 6 位（0..63）
+        assert run_covergroups(text, "dut")["coverpoints"][0]["width"] == 6
+
+    def test_enum_width_comes_from_the_bin_values(self):
+        text = _model(dimensions=[{"id": "D_e", "name": "E", "fields": [
+            {"name": "e", "type": "enum", "values": [0, 1, 2, 3], "sample": "dut"}]}])
+        assert run_covergroups(text, "dut")["coverpoints"][0]["width"] == 2
+
+    def test_a_derived_width_is_noted(self):
+        """推出来的宽度可能与端口不一致（枚举 4 个取值推 2 位、端口 3 位）——
+        **记账**，因为不一致就是截断告警，而截断的覆盖点是错的数据。"""
+        text = _model(dimensions=[{"id": "D_e", "name": "E", "fields": [
+            {"name": "e", "type": "enum", "values": [0, 1, 2, 3], "sample": "dut"}]}])
+        assert any("width" in n for n in run_covergroups(text, "dut")["notes"])
+
+
+class TestTheNpuProbeCompiles:
+    """NPU 那份模型的探针 —— **必须真过 vlog**（bind 的端口连接尤其容易错）。"""
+
+    NPU = (Path(__file__).resolve().parents[4]
+           / "specs" / "npu_sched" / "casemodel.yaml")
+
+    def test_all_twelve_signals_are_dut_sourced(self):
+        out = run_covergroups(self.NPU.read_text(encoding="utf-8"), "npu_sched")
+        assert out["stimulus_coverpoint_count"] == 0
+        assert out["dut_coverpoint_count"] == 12
+
+    def test_it_compiles_against_a_stub_dut(self, tmp_path):
+        import shutil
+        import subprocess
+
+        from config.settings import questa_home
+
+        vlog = Path(questa_home()) / "win64" / "vlog.exe"
+        if not vlog.exists():
+            vlog = Path(shutil.which("vlog") or "")
+        if not vlog or not vlog.exists():
+            pytest.skip("没装 Questa（vlog 找不到）—— 编译验证跳过")
+
+        out = run_covergroups(self.NPU.read_text(encoding="utf-8"), "npu_sched")
+        (tmp_path / "probe.sv").write_text(out["probe_code"], encoding="utf-8")
+        (tmp_path / "dut.sv").write_text(
+            "module npu_sched (input logic clk, input logic rst_n,\n"
+            "  input logic [2:0] instr_type, input logic [2:0] instr_dtype,\n"
+            "  input logic [3:0] instr_opcode, input logic [1:0] barrier_type,\n"
+            "  input logic [1:0] cluster_id, input logic [2:0] op_priority,\n"
+            "  output logic [2:0] issue_unit, output logic [1:0] issue_decision);\n"
+            "  logic [5:0] queue_level; logic [1:0] dep_type;\n"
+            "  logic [7:0] instr_seq; logic [2:0] pipeline_state;\n"
+            "endmodule\n", encoding="utf-8")
+        r = subprocess.run(
+            [str(vlog), "-sv", "-mfcu", "-cuname", "npu_sched_cu",
+             "-work", str(tmp_path / "work"),
+             str(tmp_path / "dut.sv"), str(tmp_path / "probe.sv")],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=180)
+        assert "Errors: 0" in f"{r.stdout}\n{r.stderr}", (r.stdout or "")[-2000:]

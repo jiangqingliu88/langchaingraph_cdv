@@ -216,6 +216,8 @@ def model_from_dict(data: Any, source: str = "<dict>") -> CaseModel:
                                   for i, x in enumerate(
                                       as_list(data.get("cross_groups")), start=1))
                       if g is not None],
+        sampling=(dict(data.get("sampling") or {})
+                  if isinstance(data.get("sampling"), dict) else {}),
         env_required=env_required,
         env_defaults=env_defaults,
         env_unknown_keys=list(dict.fromkeys(env_unknown + defaults_unknown)),

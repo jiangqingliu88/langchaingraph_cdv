@@ -1264,10 +1264,16 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         没启用任何业务时它是未定义的，所以必须 `| default("")` —— 渲染走的是
         `StrictUndefined`，裸 `{{ MODE_OPTS }}` 会在"什么都不开"的那次直接报错。
         """
+        # `[ -s sim_vsim.log ] &&` **不能省**：日志**不存在或为空**时，`grep` 自己
+        # 报错退出（非零），而 `!` 一取反就成了**通过** —— 于是"vsim 压根没起来"
+        # 被记成 pass。实测踩过：环境里 vsim 崩了（连 `sim_vsim.log` 都没生成），
+        # 一整轮回归全绿、覆盖率 0%，而各用例的 status.env 都是 pass。
+        # 先要求日志非空，再谈里面有没有错。
         return (
             "vsim -c -sv_lib {{ UVM_DPI }} -onfinish stop -work {{ WORK }} "
             f"{top} +UVM_TESTNAME={uvm_test} -l sim_vsim.log "
             '-do "log -r /*; run -all; quit -f" {{ MODE_OPTS | default("") }} ; '
+            "[ -s sim_vsim.log ] && "
             '! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]|FATAL ERROR|Errors: *[1-9]"'
             ' sim_vsim.log'
         )

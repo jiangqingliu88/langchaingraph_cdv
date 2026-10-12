@@ -250,6 +250,16 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
     if model_dir.is_dir():
         lines.extend(sv.as_posix() for sv in sorted(model_dir.rglob("*_ref_model.sv")))
 
+    # 功能覆盖率探针（`bind` 进 DUT）—— **必须排在 RTL 之后**：`bind <dut_module>`
+    # 要求目标模块已经声明。采的是 `sample: dut` 的那些信号（内部状态 / 输出端口），
+    # monitor 的事务通道一个都采不到，只有 bind 进去才看得见。
+    #
+    # 收 `*_probe.sv` 而不是整个 `coverage/` 目录：那里还躺着 `coverage_points.json`
+    # 之类的非 SV 产物，一股脑收进来是给 vlog 塞垃圾。
+    cov_dir = output_dir / "coverage"
+    if cov_dir.is_dir():
+        lines.extend(sv.as_posix() for sv in sorted(cov_dir.glob("*_probe.sv")))
+
     lines.extend(_env_lines(output_dir, env_name))
     lines.extend(_bench_lines(output_dir))
 

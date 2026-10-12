@@ -266,6 +266,36 @@
       "items": {
         "$ref": "#/$defs/testObject"
       }
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dut_module"
+      ],
+      "description": "DUT 探针配置 —— `sample: dut` 的字段靠它生成 bind 语句",
+      "properties": {
+        "dut_module": {
+          "type": "string",
+          "minLength": 1,
+          "description": "bind 的目标**模块名**（不是实例路径）"
+        },
+        "clock": {
+          "type": "string",
+          "minLength": 1,
+          "description": "采样时钟（默认 clk）"
+        },
+        "reset": {
+          "type": "string",
+          "minLength": 1,
+          "description": "复位信号，低有效（默认 rst_n）；采样时屏蔽复位周期"
+        },
+        "instance": {
+          "type": "string",
+          "minLength": 1,
+          "description": "探针实例名（默认 u_cg_probe）"
+        }
+      }
     }
   },
   "$defs": {
@@ -660,6 +690,23 @@
           "type": "string",
           "minLength": 1,
           "description": "需求编号（REQ-xxx）—— 需求追溯矩阵的另一头"
+        },
+        "sample": {
+          "enum": [
+            "stimulus",
+            "dut"
+          ],
+          "description": "这个信号从哪采。stimulus = 事务字段（monitor 采，走 env_cov 通道，**只看得到激励侧**）；dut = DUT 里按名字可见的信号（输入/输出端口 + 内部寄存器，走 bind 探针）。默认 stimulus。"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "采样信号位宽（dut 通道声明探针端口用）。不给按类型推导。"
+        },
+        "sample_expr": {
+          "type": "string",
+          "minLength": 1,
+          "description": "采样表达式（dut 通道）：派生信号写它，不写就采同名信号"
         }
       },
       "allOf": [
