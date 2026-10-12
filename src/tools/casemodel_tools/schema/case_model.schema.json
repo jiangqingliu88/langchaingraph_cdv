@@ -626,15 +626,40 @@
         "cover_bins": {
           "type": "array",
           "minItems": 1,
-          "description": "覆盖仓映射（字段取值 → covergroup bin）",
+          "description": "覆盖仓。字符串 = 给第 i 个取值点命名（下标对齐）；对象 = 显式定义一个仓（值域划分只能这么写）",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/cover_bin_spec"
+              }
+            ]
           }
         },
         "unit": {
           "type": "string",
           "description": "单位（如 拍 / % / 字节）"
+        },
+        "cover_illegal": {
+          "type": "array",
+          "minItems": 1,
+          "description": "非法仓（命中即报错）：illegal_bins x = {[33:$]};",
+          "items": {
+            "$ref": "#/$defs/cover_bin_spec"
+          }
+        },
+        "cover_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "覆盖点编号（CP_xxx）—— 文档里的那个，给人对账"
+        },
+        "requirement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "需求编号（REQ-xxx）—— 需求追溯矩阵的另一头"
         }
       },
       "allOf": [
@@ -803,7 +828,14 @@
           "minProperties": 1,
           "description": "映射式：键为「A×B」（× * x , / 均可作分隔符）",
           "additionalProperties": {
-            "$ref": "#/$defs/cross_level"
+            "oneOf": [
+              {
+                "$ref": "#/$defs/cross_level"
+              },
+              {
+                "$ref": "#/$defs/cross_decl"
+              }
+            ]
           }
         },
         {
@@ -881,6 +913,110 @@
         "seed",
         "compile_options"
       ]
+    },
+    "cover_bin_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "description": "显式覆盖仓：仓不必是取值点 —— 「0-32 分六档」这种**值域划分**只能这么写",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "仓名，必须能折成合法 SV 标识符"
+        },
+        "at": {
+          "type": "integer",
+          "description": "单值仓：bins x = {32};"
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer"
+          },
+          "description": "集合仓：bins x = {0,7,8};"
+        },
+        "range": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "description": "区间仓：bins x = {[lo:hi]};  hi 省略/null ⇒ $（无上界）"
+        },
+        "from": {
+          "type": "integer",
+          "description": "range 的另一种写法（下界）"
+        },
+        "to": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "省略 ⇒ $"
+        }
+      }
+    },
+    "cross_bin_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "when"
+      ],
+      "description": "交叉仓：只交叉有意义的那几对；illegal 的那几对钉成 illegal_bins",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "when": {
+          "type": "object",
+          "minProperties": 2,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "覆盖点名（信号名）→ 仓名。**bin 名与取值 token 都认**"
+        }
+      }
+    },
+    "cross_decl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level"
+      ],
+      "description": "交叉的富声明：级别 + 显式仓（不给 bins 就是全交叉）",
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/cross_level"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "bins": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/cross_bin_spec"
+          }
+        },
+        "illegal": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/cross_bin_spec"
+          }
+        }
+      }
     }
   }
 }

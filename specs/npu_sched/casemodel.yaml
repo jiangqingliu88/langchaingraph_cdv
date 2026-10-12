@@ -1,0 +1,410 @@
+# ════════════════════════════════════════════════════════════════
+# NPU 指令调度器 —— case 属性模型
+#
+# 来源：《NPU 指令调度器功能覆盖率计划文档 v2.0》§3（覆盖点）+ §5（批次）。
+# 落法见 `src/tools/casemodel_tools/readme.md` 的「功能覆盖率方法学」一节：
+#
+#   §3.1 的 12 个 CP        → 12 个 dimensions（一个 CP 一个维度）
+#   §3.2 的 bins             → fields 的 cover_bins（显式仓，支持区间）
+#   §3.2 的 illegal_bins     → fields 的 cover_illegal
+#   §3.3 的 X_* 交叉         → cross_matrix（binsof 过滤 + illegal）
+#   §5.1 的 11 个批次        → themes（priority 是分级回归的那四级）
+#   §8 的 CP/REQ 编号        → fields 的 cover_id / requirement
+#
+# **不进本模型的**（那是激励层与回归层，不是"该测什么"）：
+#   §4 的约束（3 层）、§6 的种子基线、§7 手写的 covergroup、§5.1 的种子数。
+#
+# 验的是**硬件指令调度器**，输入是硬件指令 —— 算子（Conv/MatMul/ReLU）是
+# 软件/编译器概念，其调度不在本模型范围内。
+# ════════════════════════════════════════════════════════════════
+version: "1"
+object: npu_sched
+object_cn: NPU 指令调度器
+object_code: NPUSCH
+description: NPU 硬件指令调度器（队列 / 指令类型 / 数据类型 / 依赖 / 执行单元 / 簇 / 屏障）
+
+sub_objects:
+  - {id: OBJ-01, name: 指令队列管理,   code: QUEUE}
+  - {id: OBJ-02, name: 指令发射,       code: ISSUE}
+  - {id: OBJ-03, name: 多簇同步,       code: CLUSTER}
+
+dimensions:
+
+  # ── §3.2 CP_NPU_QUEUE_001 ──
+  #
+  # 这一条是**为什么覆盖仓不能等于取值点**的活例子：0–32 要分六档，
+  # 那是**值域的一个划分**，不是"取了哪几个点"。用 boundary 表达不出来，
+  # 只能写显式仓（对象形式的 cover_bins）。
+  - id: D_queue
+    name: 指令队列水位
+    description: "REQ-NPU-001：调度器支持 0-32 条指令的队列深度"
+    sub_objects: [指令队列管理]
+    fields:
+      - name: queue_level
+        type: range
+        min: 0
+        max: 32
+        description: 队列水位 —— 六档划分 + 越界非法
+        cover_id: CP_NPU_QUEUE_001
+        requirement: REQ-NPU-001
+        boundary: ["0", "1", "7", "8", "15", "16", "24", "25", "31", "32"]
+        cover_bins:
+          - {name: empty,     at: 0}
+          - {name: low,       range: [1, 7]}
+          - {name: mid,       range: [8, 15]}
+          - {name: high,      range: [16, 24]}
+          - {name: near_full, range: [25, 31]}
+          - {name: full,      at: 32}
+        cover_illegal:
+          - {name: illegal_over, from: 33}
+
+  # ── §3.2 CP_NPU_TYPE_002 / CP_NPU_UNIT_005 ──
+  - id: D_type
+    name: 指令类型
+    description: "REQ-NPU-002：支持 4 类指令（MAC / Vector / Scalar / DMA）"
+    sub_objects: [指令发射]
+    fields:
+      - name: instr_type
+        type: enum
+        description: 硬件指令类型
+        cover_id: CP_NPU_TYPE_002
+        requirement: REQ-NPU-002
+        values: ["MAC", "VECTOR", "SCALAR", "DMA"]
+        cover_bins: [mac, vector, scalar, dma]
+
+  # ── §3.2 CP_NPU_DTYPE_003 ──
+  - id: D_dtype
+    name: 数据类型
+    description: "REQ-NPU-003：支持 4 种数据类型（INT8 / FP16 / BF16 / FP32）"
+    sub_objects: [指令发射]
+    fields:
+      - name: instr_dtype
+        type: enum
+        description: 指令数据类型
+        cover_id: CP_NPU_DTYPE_003
+        requirement: REQ-NPU-003
+        values: ["INT8", "FP16", "BF16", "FP32"]
+        cover_bins: [int8, fp16, bf16, fp32]
+
+  # ── §3.2 CP_NPU_DEP_004 ──
+  - id: D_dep
+    name: 数据依赖
+    description: "REQ-NPU-004：正确处理 RAW / WAW / WAR 依赖"
+    sub_objects: [指令队列管理]
+    fields:
+      - name: dep_type
+        type: enum
+        description: 与相邻指令的依赖类型
+        cover_id: CP_NPU_DEP_004
+        requirement: REQ-NPU-004
+        values: ["NONE", "RAW", "WAW", "WAR"]
+        cover_bins: [no_dep, raw, waw, war]
+
+  # ── §3.2 CP_NPU_UNIT_005 ──
+  - id: D_unit
+    name: 执行单元
+    description: "REQ-NPU-005：支持 4 个执行单元"
+    sub_objects: [指令发射]
+    fields:
+      - name: issue_unit
+        type: enum
+        description: 指令被发到的执行单元
+        cover_id: CP_NPU_UNIT_005
+        requirement: REQ-NPU-005
+        values: ["MAC", "VECTOR", "SCALAR", "DMA"]
+        cover_bins: [mac, vector, scalar, dma]
+
+  # ── §3.2 CP_NPU_DECISION_006 ──
+  - id: D_decision
+    name: 发射决策
+    description: "REQ-NPU-006：正确做出发射决策（发射 / 停顿 / 阻塞 / 冲刷）"
+    sub_objects: [指令发射]
+    fields:
+      - name: issue_decision
+        type: enum
+        description: 本拍对该指令的发射决策
+        cover_id: CP_NPU_DECISION_006
+        requirement: REQ-NPU-006
+        values: ["ISSUED", "STALLED", "BLOCKED", "FLUSHED"]
+        cover_bins: [issued, stalled, blocked, flushed]
+
+  # ── §3.2 CP_NPU_CLUSTER_007 ──
+  - id: D_cluster
+    name: 簇 ID
+    description: "REQ-NPU-007：支持 4 个簇"
+    sub_objects: [多簇同步]
+    fields:
+      - name: cluster_id
+        type: range
+        min: 0
+        max: 3
+        description: 指令归属的簇
+        cover_id: CP_NPU_CLUSTER_007
+        requirement: REQ-NPU-007
+        cover_bins:
+          - {name: c0, at: 0}
+          - {name: c1, at: 1}
+          - {name: c2, at: 2}
+          - {name: c3, at: 3}
+        cover_illegal:
+          - {name: illegal_cluster, from: 4}
+
+  # ── §3.2 CP_NPU_OPCODE_008 ──
+  - id: D_opcode
+    name: 硬件指令操作码
+    description: "REQ-NPU-008：支持硬件指令集（10 条）"
+    sub_objects: [指令发射]
+    fields:
+      - name: instr_opcode
+        type: enum
+        description: 硬件指令操作码
+        cover_id: CP_NPU_OPCODE_008
+        requirement: REQ-NPU-008
+        values: ["MAC_INT8", "MAC_FP16", "MAC_BF16", "VEC_ADD", "VEC_MUL",
+                 "VEC_RELU", "LOAD", "STORE", "DMA_READ", "DMA_WRITE"]
+        cover_bins: [mac_i8, mac_fp16, mac_bf16, vec_add, vec_mul,
+                     vec_relu, load, store, dma_rd, dma_wr]
+
+  # ── §3.2 CP_NPU_INSTR_SEQ_009 ──
+  - id: D_seq
+    name: 指令序列模式
+    description: "REQ-NPU-009：正确处理相邻指令的 opcode 组合"
+    sub_objects: [指令队列管理]
+    fields:
+      - name: instr_seq
+        type: enum
+        description: 相邻两条指令的 opcode 组合
+        cover_id: CP_NPU_INSTR_SEQ_009
+        requirement: REQ-NPU-009
+        values: ["MAC_MAC", "LOAD_MAC", "MAC_STORE", "DMA_MAC", "VEC_MAC",
+                 "SCALAR_MAC"]
+        cover_bins: [mac_mac, load_mac, mac_store, dma_mac, vec_mac, scalar_mac]
+
+  # ── §3.2 CP_NPU_PIPELINE_010 ──
+  - id: D_pipeline
+    name: 流水重叠
+    description: "REQ-NPU-010：支持指令流水重叠"
+    sub_objects: [指令发射]
+    fields:
+      - name: pipeline_state
+        type: enum
+        description: 当前流水重叠状态
+        cover_id: CP_NPU_PIPELINE_010
+        requirement: REQ-NPU-010
+        values: ["NONE", "MAC_MAC", "MAC_DMA", "VEC_MAC", "MULTI_OP"]
+        cover_bins: [no_overlap, mac_mac_overlap, mac_dma_overlap,
+                     vec_mac_overlap, multi_op_overlap]
+
+  # ── §3.2 CP_NPU_PRIORITY_011 ──
+  - id: D_priority
+    name: 优先级调度
+    description: "REQ-NPU-011：支持优先级调度"
+    sub_objects: [指令发射]
+    fields:
+      - name: op_priority
+        type: enum
+        description: 本拍的优先级策略
+        cover_id: CP_NPU_PRIORITY_011
+        requirement: REQ-NPU-011
+        values: ["HIGH_FIRST", "LOW_FIRST", "SAME_PRIO", "ROUND_ROBIN"]
+        cover_bins: [high_first, low_first, same_priority, round_robin]
+
+  # ── §3.2 CP_NPU_BARRIER_012 ──
+  - id: D_barrier
+    name: 硬件同步屏障
+    description: "REQ-NPU-012：支持硬件同步屏障"
+    sub_objects: [多簇同步]
+    fields:
+      - name: barrier_type
+        type: enum
+        description: 屏障类型
+        cover_id: CP_NPU_BARRIER_012
+        requirement: REQ-NPU-012
+        values: ["NONE", "TILE_BARRIER", "OP_BARRIER", "CLUSTER_BARRIER"]
+        cover_bins: [no_barrier, tile_barrier, op_barrier, cluster_barrier]
+
+# ════════════════════════════════════════════════════════════════
+# §3.3 交叉覆盖
+#
+# **过滤交叉**（给了 bins）只出列出来的那几对 —— 全交叉是乘积，4×4 就是 16 个
+# 仓，而关心的往往四五个；更要紧的是**非法组合**：不写 illegal 的话，
+# `mac` 指令发到 `dma` 单元会被全交叉当成一个正常状态统计，等于在说它合法。
+# ════════════════════════════════════════════════════════════════
+cross_matrix:
+
+  # §3.3 X_NPU_TYPE_UNIT_001
+  D_type×D_unit:
+    level: required
+    reason: "REQ-NPU-002/005：指令类型应发到对应执行单元"
+    bins:
+      - {name: mac_to_mac,       when: {instr_type: mac,    issue_unit: mac}}
+      - {name: vec_to_vec,       when: {instr_type: vector, issue_unit: vector}}
+      - {name: scalar_to_scalar, when: {instr_type: scalar, issue_unit: scalar}}
+      - {name: dma_to_dma,       when: {instr_type: dma,    issue_unit: dma}}
+    illegal:
+      - {name: mac_to_dma,       when: {instr_type: mac,    issue_unit: dma}}
+
+  # §3.3 X_NPU_DTYPE_UNIT_002
+  D_dtype×D_unit:
+    level: required
+    reason: "REQ-NPU-003/005：数据类型与执行单元的匹配"
+    bins:
+      - {name: int8_mac,    when: {instr_dtype: int8, issue_unit: mac}}
+      - {name: fp16_mac,    when: {instr_dtype: fp16, issue_unit: mac}}
+      - {name: bf16_mac,    when: {instr_dtype: bf16, issue_unit: mac}}
+      - {name: fp32_vector, when: {instr_dtype: fp32, issue_unit: vector}}
+    illegal:
+      - {name: int8_vector, when: {instr_dtype: int8, issue_unit: vector}}
+
+  # §3.3 X_NPU_DEP_DEC_003
+  D_dep×D_decision:
+    level: required
+    reason: "REQ-NPU-004/006：依赖与发射决策的对应"
+    bins:
+      - {name: raw_stalled,    when: {dep_type: raw,    issue_decision: stalled}}
+      - {name: raw_issued,     when: {dep_type: raw,    issue_decision: issued}}
+      - {name: waw_stalled,    when: {dep_type: waw,    issue_decision: stalled}}
+      - {name: war_stalled,    when: {dep_type: war,    issue_decision: stalled}}
+      - {name: no_dep_issued,  when: {dep_type: no_dep, issue_decision: issued}}
+      - {name: no_dep_blocked, when: {dep_type: no_dep, issue_decision: blocked}}
+
+  # §3.3 X_NPU_LEVEL_DEC_004
+  D_queue×D_decision:
+    level: required
+    reason: "REQ-NPU-001/006：水位与发射决策的对应"
+    bins:
+      - {name: full_blocked,      when: {queue_level: full,      issue_decision: blocked}}
+      - {name: near_full_stalled, when: {queue_level: near_full, issue_decision: stalled}}
+      - {name: empty_issued,      when: {queue_level: empty,     issue_decision: issued}}
+      - {name: low_issued,        when: {queue_level: low,       issue_decision: issued}}
+
+  # §3.3 X_NPU_CLUSTER_UNIT_005 —— 全交叉（文档没给过滤名单）
+  D_cluster×D_unit: required
+
+  # §3.3 X_NPU_OPCODE_UNIT_006
+  D_opcode×D_unit:
+    level: required
+    reason: "REQ-NPU-008/005：操作码与执行单元的对应"
+    bins:
+      - {name: mac_i8_mac,  when: {instr_opcode: mac_i8,   issue_unit: mac}}
+      - {name: mac_fp16_mac,when: {instr_opcode: mac_fp16, issue_unit: mac}}
+      - {name: vec_add_vec, when: {instr_opcode: vec_add,  issue_unit: vector}}
+      - {name: load_scalar, when: {instr_opcode: load,     issue_unit: scalar}}
+      - {name: dma_rd_dma,  when: {instr_opcode: dma_rd,   issue_unit: dma}}
+    illegal:
+      - {name: mac_vec,     when: {instr_opcode: mac_i8,   issue_unit: vector}}
+
+  # §3.3 X_NPU_SEQ_DEC_007
+  D_seq×D_decision:
+    level: required
+    reason: "REQ-NPU-009/006：指令序列与发射决策的对应"
+    bins:
+      - {name: mac_mac_stalled,    when: {instr_seq: mac_mac,    issue_decision: stalled}}
+      - {name: load_mac_issued,    when: {instr_seq: load_mac,   issue_decision: issued}}
+      - {name: mac_store_issued,   when: {instr_seq: mac_store,  issue_decision: issued}}
+      - {name: dma_mac_blocked,    when: {instr_seq: dma_mac,    issue_decision: blocked}}
+      - {name: vec_mac_issued,     when: {instr_seq: vec_mac,    issue_decision: issued}}
+      - {name: scalar_mac_stalled, when: {instr_seq: scalar_mac, issue_decision: stalled}}
+
+# ════════════════════════════════════════════════════════════════
+# §5.1 批次规划 —— 一个批次一个专题
+#
+# `priority` 用的是**分级回归那四级**（p0/p1/p2/p3），不是文档里的批次号：
+# 批次是回归的执行顺序，优先级是"哪一级该先跑"。两者的关系写在 description 里。
+#
+# **取值点只归覆盖它的最高优先级专题**（`registry_bridge._dim_priority`），
+# 所以一个维度被 P0 和 P3 两个专题同时点名时，落到 P0。
+# ════════════════════════════════════════════════════════════════
+themes:
+
+  - id: TH-B01
+    name: 批次1 基础发射
+    priority: P0
+    description: "§5.1 批次 1（npu_basic_test，5 种子）：先把 issued 这条主路跑通"
+    dimensions: [D_decision]
+    method: D
+    checks: [CHECK-FUNC]
+
+  - id: TH-B02
+    name: 批次2 指令类型
+    priority: P0
+    description: "§5.1 批次 2（npu_type_test，30 种子）：指令类型全覆盖"
+    dimensions: [D_type]
+    method: RND
+    checks: [CHECK-FUNC]
+
+  - id: TH-B03
+    name: 批次3 数据类型
+    priority: P0
+    description: "§5.1 批次 3（npu_dtype_test，30 种子）：数据类型全覆盖"
+    dimensions: [D_dtype]
+    method: RND
+    checks: [CHECK-FUNC]
+
+  - id: TH-B04
+    name: 批次4 依赖探索
+    priority: P1
+    description: "§5.1 批次 4（npu_dep_test，50 种子）：RAW/WAW/WAR 与发射决策的对应"
+    dimensions: [D_dep, D_decision]
+    method: G
+    checks: [CHECK-FUNC]
+
+  - id: TH-B05
+    name: 批次5 RAW 停顿
+    priority: P1
+    description: "§5.1 批次 5（npu_raw_stall_test，20 种子）：专打 raw_stalled"
+    dimensions: [D_dep]
+    method: SPCL
+    checks: [CHECK-FUNC]
+
+  - id: TH-B06
+    name: 批次6 队列压力
+    priority: P1
+    description: "§5.1 批次 6（npu_full_queue_test，30 种子）：专打 full_blocked 与水位六档"
+    dimensions: [D_queue, D_decision]
+    method: SPCL
+    checks: [CHECK-FUNC, CHECK-WBOX]
+
+  - id: TH-B07
+    name: 批次7 多簇并发
+    priority: P2
+    description: "§5.1 批次 7（npu_cluster_test，20 种子）：簇 × 执行单元全交叉"
+    dimensions: [D_cluster, D_unit]
+    method: G
+    checks: [CHECK-FUNC]
+
+  - id: TH-B08
+    name: 批次8 操作码覆盖
+    priority: P2
+    description: "§5.1 批次 8（npu_opcode_test，20 种子）：10 条硬件指令全覆盖"
+    dimensions: [D_opcode, D_unit]
+    method: D
+    checks: [CHECK-FUNC]
+
+  - id: TH-B09
+    name: 批次9 DMA 与计算并发
+    priority: P3
+    description: "§5.1 批次 9（npu_dma_compute_test，20 种子）：DMA 与 MAC/Vector 并发"
+    dimensions: [D_type, D_unit]
+    method: RND
+    checks: [CHECK-FUNC]
+
+  - id: TH-B10
+    name: 批次10 流水重叠
+    priority: P3
+    description: "§5.1 批次 10（npu_pipeline_test，20 种子）：MAC 与 Vector 交替发射"
+    dimensions: [D_pipeline]
+    method: RND
+    checks: [CHECK-FUNC]
+
+  - id: TH-B11
+    name: 批次11 随机混合
+    priority: P3
+    description: "§5.1 批次 11（npu_random_mix_test，100 种子）：防过拟合的探索性混合"
+    dimensions: ["*"]
+    method: RND
+    checks: [CHECK-FUNC]
+
+generation:
+  seed: 12345
+  max_cases: 400

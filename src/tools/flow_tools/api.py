@@ -1366,6 +1366,10 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
         # 那正是这一页要看的，不能悄悄显示成"没命中"。
         actual = measured.get(f"cp_{cp['signal']}", measured.get(cp["signal"]))
         coverpoint_rows.append({
+            # 编号是**文档里的那个**（`CP_NPU_QUEUE_001`），`signal` 是生成器给
+            # 编译器用的名字（`queue_level`）。两个都摆出来，人对账时不用换算。
+            "cover_id": cp.get("cover_id", ""),
+            "requirement": cp.get("requirement", ""),
             "dimension": cp.get("dimension", ""),
             "signal": cp.get("signal", ""),
             "type": cp.get("type", ""),
@@ -1377,10 +1381,11 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
     for cx in points.get("crosses") or []:
         actual = measured.get(cx.get("name", ""))
         coverpoint_rows.append({
+            "cover_id": "", "requirement": "",
             "dimension": "×".join(cx.get("dimensions") or []),
             "signal": cx.get("name", ""),
             "type": f"cross（{cx.get('level', '')}）",
-            "bin_count": "",
+            "bin_count": len(cx.get("bins") or []),
             "bins": "、".join(cx.get("signals") or []),
             "actual": "" if actual is None else actual,
             "measured": actual is not None,

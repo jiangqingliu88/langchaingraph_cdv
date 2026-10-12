@@ -65,6 +65,17 @@ class CrossPair:
     level: str = "optional"
     reason: str = ""
     source: str = "declared"        # declared | group
+    #: **显式交叉仓**（可选）：`[{name, when: {维度: 仓名}}]`。
+    #:
+    #: 不给就是**全交叉**（`cross cp_a, cp_b;`，两边的仓两两相乘）；给了就只出
+    #: 列出来的那几个（`bins x = binsof(cp_a.ba) && binsof(cp_b.bb);`）。
+    #:
+    #: 为什么需要它：全交叉的仓数按乘积涨 —— 4×4 就是 16 个，而关心的往往只有
+    #: 四五个。更糟的是**非法组合**：`mac` 指令发到 `dma` 单元这种，全交叉会
+    #: 给它一个正常的仓，等于在说"这是个合法状态"。见 `illegal`。
+    bins: List[Any] = _field(default_factory=list)
+    #: **非法交叉仓** —— 命中即报错。形状同 `bins`。
+    illegal: List[Any] = _field(default_factory=list)
     dim_a: Optional[Dimension] = _field(default=None, repr=False, compare=False)
     dim_b: Optional[Dimension] = _field(default=None, repr=False, compare=False)
 
@@ -138,12 +149,43 @@ def build_dimension(item: Any) -> Optional[Dimension]:
 
 
 def build_cross_pair(key: str, level_raw: Any) -> Optional[CrossPair]:
+    """`cross_matrix` 的一个格子 → `CrossPair`。
+
+    值有两种写法：
+
+      · **字符串** —— 只声明级别：`指令长度×反压模式: required`
+      · **对象** —— 连仓一起声明：
+        ```yaml
+        指令类型×执行单元:
+          level: required
+          bins:
+            - {name: mac_to_mac, when: {指令类型: mac, 执行单元: mac}}
+          illegal:
+            - {name: mac_to_dma, when: {指令类型: mac, 执行单元: dma}}
+        ```
+    对象形式是"只交叉有意义的那几对 + 把非法的那几对钉成 illegal"的写法 ——
+    全交叉在 4×4 上就是 16 个仓，而真正关心的往往四五个，**非法组合更是会被
+    当成正常状态统计**（见 `CrossPair.bins` 的注释）。
+    """
     from .vocab import CROSS_LEVEL_ALIASES, split_cross_key
     split = split_cross_key(str(key))
     if not split:
         return None
+
+    if isinstance(level_raw, dict):
+        level = canon(str(level_raw.get("level") or ""), CROSS_LEVEL_ALIASES) or "optional"
+        return CrossPair(a=split[0], b=split[1], level=level, source="declared",
+                         bins=_as_dicts(level_raw.get("bins")),
+                         illegal=_as_dicts(level_raw.get("illegal")))
+
     level = canon(str(level_raw), CROSS_LEVEL_ALIASES) or "optional"
     return CrossPair(a=split[0], b=split[1], level=level, source="declared")
+
+
+def _as_dicts(raw: Any) -> list:
+    """过滤出 mapping 条目 —— 列表里混进字符串/数字不该让整个交叉解不出来。"""
+    return [x for x in (raw if isinstance(raw, list) else ([] if raw is None else [raw]))
+            if isinstance(x, dict)]
 
 
 def build_cross_group(item: Any, index: int) -> Optional[CrossGroup]:

@@ -65,15 +65,41 @@ MAX_BINS_PER_POINT = 64
 
 @dataclass
 class CoverBin:
-    """一个覆盖仓（`bins <name> = {<value>};`）。"""
+    """一个覆盖仓（`bins <name> = {…};` / `illegal_bins <name> = {…};`）。
+
+    三种"内容"（互斥，按下面的顺序渲染）：
+
+      · `lo` 有值  → **区间**：`{[lo:hi]}`（`hi` 为 None 就是 `{[lo:$]}`）
+      · `values` 非空 → **集合**：`{0,7,8}`
+      · 否则 `value` → **单值**：`{32}`
+    """
     name: str
-    value: int                     # 整型投影后的字面量（唯一能进 SV 的东西）
-    token: str                     # 模型里的原始取值（进注释，不丢语义）
+    value: Optional[int] = None    # 整型投影后的单值字面量
+    values: List[int] = _field(default_factory=list)   # 多值集合
+    lo: Optional[int] = None       # 区间下界
+    hi: Optional[int] = None       # 区间上界；None + lo 有值 ⇒ `$`
+    token: str = ""                # 模型里的原始写法（进注释，不丢语义）
     boundary: bool = False
+    illegal: bool = False
+
+    def literal(self) -> str:
+        """`bins` 右边那对花括号里的东西 —— **唯一进 SV 的部分**。"""
+        if self.lo is not None:
+            return f"[{self.lo}:{'$' if self.hi is None else self.hi}]"
+        if self.values:
+            return ",".join(str(v) for v in self.values)
+        return str(self.value if self.value is not None else 0)
 
     def as_dict(self) -> Dict[str, Any]:
-        return {"name": self.name, "value": self.value, "token": self.token,
-                "boundary": self.boundary}
+        out = {"name": self.name, "token": self.token, "boundary": self.boundary,
+               "illegal": self.illegal, "literal": self.literal()}
+        if self.lo is not None:
+            out.update(lo=self.lo, hi=self.hi)
+        elif self.values:
+            out["values"] = list(self.values)
+        else:
+            out["value"] = self.value
+        return out
 
 
 @dataclass
@@ -83,26 +109,49 @@ class CoverPoint:
     field: str
     dimension: str
     type: str
+    cover_id: str = ""             # 文档里的覆盖点编号（CP_xxx），给人对账用
+    requirement: str = ""          # 需求编号（REQ-xxx）—— 追溯矩阵的另一头
     bins: List[CoverBin] = _field(default_factory=list)
+    illegal_bins: List[CoverBin] = _field(default_factory=list)
 
     def as_dict(self) -> Dict[str, Any]:
         return {"signal": self.signal, "field": self.field,
                 "dimension": self.dimension, "type": self.type,
+                "cover_id": self.cover_id, "requirement": self.requirement,
                 "bins": [b.as_dict() for b in self.bins],
-                "bin_count": len(self.bins)}
+                "illegal_bins": [b.as_dict() for b in self.illegal_bins],
+                "bin_count": len(self.bins),
+                "illegal_bin_count": len(self.illegal_bins)}
+
+
+@dataclass
+class CrossBin:
+    """交叉里的一个仓：`bins <name> = binsof(cp_a.<ba>) && binsof(cp_b.<bb>);`
+
+    `when` 是 `{覆盖点名: bin 名}` —— 不用去记它是 a 还是 b，写名字就行。
+    """
+    name: str
+    when: Dict[str, str] = _field(default_factory=dict)
+    illegal: bool = False
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {"name": self.name, "when": dict(self.when), "illegal": self.illegal}
 
 
 @dataclass
 class CrossPoint:
-    """一个交叉（`cross cp_a, cp_b;`）—— 两个维度一起组合。"""
+    """一个交叉 —— 全交叉（`cross cp_a, cp_b;`）或过滤交叉（带 `binsof`）。"""
     name: str
     signals: List[str]
     level: str
     dimensions: List[str]
+    bins: List[CrossBin] = _field(default_factory=list)
 
     def as_dict(self) -> Dict[str, Any]:
         return {"name": self.name, "signals": list(self.signals),
-                "level": self.level, "dimensions": list(self.dimensions)}
+                "level": self.level, "dimensions": list(self.dimensions),
+                "bins": [b.as_dict() for b in self.bins],
+                "bin_count": len(self.bins)}
 
 
 @dataclass
@@ -223,35 +272,131 @@ def coverage_model(model: CaseModel, module_name: str = "dut") -> CoverageModel:
     return cm
 
 
+def _explicit_bins(raw: Any, used: set, notes: List[str], where: str,
+                   illegal: bool = False) -> List[CoverBin]:
+    """`cover_bins` / `cover_illegal` 里的**对象条目** → `CoverBin`。
+
+    认识的键：
+      `name`     仓名（必填）
+      `range`    `[lo, hi]` → `{[lo:hi]}`；`hi` 省略或给 `null` → `{[lo:$]}`
+      `from`/`to`  同 `range` 的两种写法（`to` 省略 → `$`）
+      `at`       等价于 `values: [at]`
+      `values`   显式值集合
+
+    认不出的条目**记账跳过**，不静默 —— 一个"看着写了、其实没生成"的仓，
+    要到覆盖率对不上时才会被发现。
+    """
+    out: List[CoverBin] = []
+    for item in (raw if isinstance(raw, list) else [raw]):
+        if not isinstance(item, dict):
+            continue
+        name = sv_ident(item.get("name"), "")
+        if not name:
+            notes.append(f"{where}：有个{'非法' if illegal else ''}仓没有合法的 name "
+                         f"—— 跳过（{item!r}）")
+            continue
+        if name in used:
+            notes.append(f"{where}：仓名 {name} 重复 —— 跳过重复的那个"
+                         f"（bins 重定义编译不过）")
+            continue
+        used.add(name)
+
+        bin_ = CoverBin(name=name, illegal=illegal)
+        rng = item.get("range")
+        lo, hi = None, None
+        if isinstance(rng, (list, tuple)) and rng:
+            lo, hi = _opt_int(rng[0]), (_opt_int(rng[1]) if len(rng) > 1 else None)
+        elif item.get("from") is not None:
+            lo, hi = _opt_int(item.get("from")), _opt_int(item.get("to"))
+        if lo is not None:
+            bin_.lo, bin_.hi = lo, hi
+            bin_.token = f"{lo}:{'$' if hi is None else hi}"
+        elif item.get("values") is not None:
+            bin_.values = [_as_int(v) for v in
+                           (item["values"] if isinstance(item["values"], list)
+                            else [item["values"]])]
+            bin_.token = ",".join(str(v) for v in bin_.values)
+        elif item.get("at") is not None:
+            bin_.value = _as_int(item.get("at"))
+            bin_.token = str(bin_.value)
+        else:
+            used.discard(name)
+            notes.append(f"{where}：仓 {name} 既没有 range/from/at 也没有 values "
+                         f"—— 跳过（没法生成一个空的 bins）")
+            continue
+        out.append(bin_)
+    return out
+
+
+def _as_int(v: Any) -> int:
+    """任意标量 → int。**解不出就给 0 并留给调用方** —— 这里不抛，因为
+    `coverage_model` 的契约是"尽力产出 + 记账"，不是"一处不合法就整份没有"。"""
+    try:
+        return int(str(v).strip())
+    except (TypeError, ValueError):
+        return 0
+
+
+def _opt_int(v: Any) -> Optional[int]:
+    """同上，但 `None` / 空串 → `None`（**不是 0**）。
+
+    区间上界省略是**有意义**的（`{[33:$]}` 表示"33 及以上"），错当成 0 会写成
+    `{[33:0]}` —— 一个空区间，编译能过但永远不命中，非法仓就成了摆设。
+    """
+    if v is None or str(v).strip() == "":
+        return None
+    return _as_int(v)
+
+
 def _coverpoint(dim_key: str, fld: Field, notes: List[str]) -> Optional[CoverPoint]:
-    """一个字段 → 一个覆盖点。取值点为空时**不产**（产了就是空 coverpoint）。"""
+    """一个字段 → 一个覆盖点。
+
+    两条路：
+
+      · **显式仓**（`cover_bins` 里有对象条目）—— 仓由作者定义，取值点只用来
+        给字符串条目命名。`queue_level` 的 0-32 分六档走这条。
+      · **取值点** —— 一个取值点一个仓（现有语义）。取值点为空且没有显式仓
+        时**不产**（产了就是空 coverpoint）。
+    """
     if not fld.name:
         notes.append(f"维度 {dim_key} 下有个字段没有名字 —— 跳过（信号名都没有，"
                      f"生成不出合法的 coverpoint）")
         return None
 
-    points = fld.value_points()
-    if not points:
-        notes.append(
-            f"字段 {fld.qualified} 一个取值点都没有 —— 不出 coverpoint。"
-            f"（range 型要给 boundary，enum 型要给 values；不给就无从覆盖）")
-        return None
-
-    truncated = len(points) > MAX_BINS_PER_POINT
-    if truncated:
-        notes.append(
-            f"字段 {fld.qualified} 有 {len(points)} 个取值点，超过 "
-            f"{MAX_BINS_PER_POINT} 已截断 —— bin 太多会把 vcover 的"
-            f"「bin 命中率」稀释到没有指导意义（覆盖分母请按边界声明）")
-        points = points[:MAX_BINS_PER_POINT]
-
+    where = f"字段 {fld.qualified}"
     used: set = set()
-    bins = [CoverBin(name=_bin_name(fld, p.token, i, used),
-                     value=sv_value(p.token, i), token=str(p.token),
-                     boundary=bool(p.boundary))
-            for i, p in enumerate(points)]
+    bins = _explicit_bins(fld.explicit_bins(), used, notes, where)
+    illegal = _explicit_bins(fld.cover_illegal, used, notes, where, illegal=True)
+
+    points = fld.value_points()
+    if not bins:
+        # 没有显式仓才走取值点 —— 两者都有时以显式仓为准（作者写得更具体），
+        # 但**要说出来**，不能默默丢掉另一半
+        if fld.explicit_bins():
+            notes.append(f"{where} 声明了显式仓但一条都没解析出来 —— 退回按取值点分箱")
+        if not points:
+            notes.append(
+                f"{where} 一个取值点都没有、也没有显式覆盖仓 —— 不出 coverpoint。"
+                f"（range 型要给 boundary 或 cover_bins，enum 型要给 values）")
+            return None
+        if len(points) > MAX_BINS_PER_POINT:
+            notes.append(
+                f"{where} 有 {len(points)} 个取值点，超过 {MAX_BINS_PER_POINT} "
+                f"已截断 —— bin 太多会把 vcover 的「bin 命中率」稀释到没有指导意义"
+                f"（覆盖分母请按边界声明）")
+            points = points[:MAX_BINS_PER_POINT]
+        bins = [CoverBin(name=_bin_name(fld, p.token, i, used),
+                         value=sv_value(p.token, i), token=str(p.token),
+                         boundary=bool(p.boundary))
+                for i, p in enumerate(points)]
+    elif points:
+        notes.append(f"{where} 既有显式覆盖仓又有 {len(points)} 个取值点 —— "
+                     f"**以显式仓为准**（取值点仍参与用例生成，只是不各自成仓）")
+
     return CoverPoint(signal=sv_ident(fld.name, "sig"), field=fld.name,
-                      dimension=dim_key, type=fld.type, bins=bins)
+                      dimension=dim_key, type=fld.type, bins=bins,
+                      illegal_bins=illegal, cover_id=fld.cover_id,
+                      requirement=fld.requirement)
 
 
 def _attach_crosses(model: CaseModel, cm: CoverageModel) -> None:
@@ -272,9 +417,65 @@ def _attach_crosses(model: CaseModel, cm: CoverageModel) -> None:
                 f"cross {pair.a}×{pair.b} 引用了解不出覆盖点的维度 "
                 f"{'、'.join(missing)} —— 跳过（那一维没有字段，或者模型没 resolve）")
             continue
+        name = f"cx_{cp_a.signal}_{cp_b.signal}"
+        bins = _cross_bins(pair, [cp_a, cp_b], cm.notes, name)
         cm.crosses.append(CrossPoint(
-            name=f"cx_{cp_a.signal}_{cp_b.signal}", signals=[cp_a.signal, cp_b.signal],
-            level=pair.level, dimensions=[cp_a.dimension, cp_b.dimension]))
+            name=name, signals=[cp_a.signal, cp_b.signal],
+            level=pair.level, dimensions=[cp_a.dimension, cp_b.dimension],
+            bins=bins))
+
+
+def _cross_bins(pair: Any, cps: List[CoverPoint], notes: List[str],
+                cx_name: str) -> List[CrossBin]:
+    """交叉的显式仓 → `CrossBin`。
+
+    `when` 里写**覆盖点名**（信号名），值写**仓名**。两侧都做一次"名字 → 实际仓名"
+    的解析：作者可能写 bin 名（`mac`），也可能直接写取值 token（`MAC`）——
+    两个都认，认不出就记账跳过。**不能默默生成一个 `binsof(cp.nope)`**：
+    那要么编译不过，要么（更糟）被当合法语法收下却永远不命中。
+    """
+    raw = list(pair.bins or []) + [
+        {**b, "illegal": True} if isinstance(b, dict) else b
+        for b in (pair.illegal or [])]
+    out: List[CrossBin] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        item_name = sv_ident(item.get("name"), "")
+        when = item.get("when")
+        if not item_name or not isinstance(when, dict):
+            notes.append(f"{cx_name}：交叉仓条目缺 name 或 when —— 跳过（{item!r}）")
+            continue
+        resolved: Dict[str, str] = {}
+        bad = False
+        for cp in cps:
+            want = when.get(cp.signal, when.get(cp.field, when.get(cp.dimension)))
+            if want is None:
+                notes.append(f"{cx_name}：交叉仓 {item_name} 没给 "
+                             f"{cp.signal} 那一侧 —— 跳过")
+                bad = True
+                break
+            found = _match_bin(cp, want)
+            if found is None:
+                notes.append(
+                    f"{cx_name}：交叉仓 {item_name} 在 {cp.signal} 里找不到仓 "
+                    f"{want!r}（现有仓：{'、'.join(b.name for b in cp.bins)}）—— 跳过")
+                bad = True
+                break
+            resolved[cp.signal] = found
+        if not bad:
+            out.append(CrossBin(name=item_name, when=resolved,
+                                illegal=bool(item.get("illegal"))))
+    return out
+
+
+def _match_bin(cp: CoverPoint, want: Any) -> Optional[str]:
+    """`want` → 这个覆盖点里实际存在的仓名。**bin 名与取值 token 都认。**"""
+    w = str(want).strip()
+    for b in cp.bins:
+        if b.name == w or b.token == w:
+            return b.name
+    return None
 
 
 # ════════════════════════════════════════════════════════════
@@ -304,12 +505,24 @@ def render_covergroup(cm: CoverageModel) -> str:
         lines.append("    // 模型里没有任何可取值的字段 —— 这个 covergroup 是空的")
     for cp in cm.coverpoints:
         lines.append(f"    cp_{cp.signal}: coverpoint {cp.signal} {{")
-        for b in cp.bins:
-            note = f"{b.token}（边界）" if b.boundary else b.token
-            lines.append(f"        bins {b.name} = {{{b.value}}};  // {note}")
+        for b in cp.bins + cp.illegal_bins:
+            kind = "illegal_bins" if b.illegal else "bins"
+            note = f"  // {b.token}" if b.token else ""
+            if b.boundary and not b.illegal:
+                note = f"  // {b.token}（边界）"
+            lines.append(f"        {kind} {b.name} = {{{b.literal()}}};{note}")
         lines.append("    }")
     for cx in cm.crosses:
         left, right = cx.signals
-        lines.append(f"    {cx.name}: cross cp_{left}, cp_{right};  // {cx.level}")
+        if not cx.bins:
+            lines.append(f"    {cx.name}: cross cp_{left}, cp_{right};  // {cx.level}")
+            continue
+        lines.append(f"    {cx.name}: cross cp_{left}, cp_{right} {{  // {cx.level}")
+        for b in sorted(cx.bins, key=lambda x: x.illegal):
+            terms = " && ".join(f"binsof(cp_{sig}.{name})"
+                                for sig, name in b.when.items())
+            kind = "illegal_bins" if b.illegal else "bins"
+            lines.append(f"        {kind} {b.name} = {terms};")
+        lines.append("    }")
     lines.append("endgroup")
     return "\n".join(lines) + "\n"

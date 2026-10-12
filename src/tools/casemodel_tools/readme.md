@@ -445,6 +445,9 @@ covergroup。这一节是那段转换的规则，实现只有一处 ——
 | `ValuePoint` | 一个 `bins` | 取值点就是覆盖分母的刻度，一比一 |
 | `Field.cover_bins` | bin 的**名字** | 作者能命名就让作者命名 |
 | `CrossPair`（`required`/`optional`） | `cross cp_a, cp_b;` | 声明了要一起组合就该有 cross；`forbidden` 是**禁止**组合，不生成 |
+| `CrossPair.bins` / `.illegal` | `binsof(...)` 过滤交叉 / `illegal_bins` | 全交叉是乘积（4×4 = 16），关心的往往四五个；非法组合不写就该**报错**而不是被统计成合法状态 |
+| `Field.cover_id` / `.requirement` | （不进 SV） | 追溯矩阵的两端：`CP_NPU_xxx` 给人对账，`cp_<信号>` 给编译器 |
+| `Field.cover_illegal` | `illegal_bins x = {[33:$]};` | 命中即报错 |
 
 ### 两条纪律
 
@@ -459,15 +462,89 @@ covergroup。这一节是那段转换的规则，实现只有一处 ——
 取值点超过 `MAX_BINS_PER_POINT` —— 都进 `notes` 记账，**不静默跳过**。
 一个"看着生成了、其实少了一半 bin"的 covergroup 比一个报错的更坏。
 
+### 写法：取值点、显式仓、非法仓
+
+三条路，从粗到细（**同一条覆盖点只能选一种**，都写时以显式仓为准并记账）：
+
+```yaml
+# ① 取值点 —— 一个取值点一个仓（默认）
+- name: instr_type
+  type: enum
+  values: ["MAC", "VECTOR", "SCALAR", "DMA"]
+  cover_bins: [mac, vector, scalar, dma]     # 字符串 = 给第 i 个取值点命名
+
+# ② 显式仓 —— 仓**不必**是取值点。值域的一个划分只能这么写
+- name: queue_level
+  type: range
+  min: 0
+  max: 32
+  cover_bins:                                 # 对象 = 定义一个仓
+    - {name: empty,     at: 0}                #   bins empty = {0};
+    - {name: low,       range: [1, 7]}        #   bins low = {[1:7]};
+    - {name: full,      at: 32}
+  cover_illegal:
+    - {name: illegal_over, from: 33}          #   illegal_bins illegal_over = {[33:$]};
+
+# ③ 过滤交叉 —— 只交叉有意义的那几对
+cross_matrix:
+  D_type×D_unit:
+    level: required
+    bins:
+      - {name: mac_to_mac, when: {instr_type: mac, issue_unit: mac}}
+    illegal:
+      - {name: mac_to_dma, when: {instr_type: mac, issue_unit: dma}}
+```
+
+**为什么需要 ②**：`queue_level` 的 0–32 要分六档，其中三档是**区间** ——
+"值域的一个划分"用取值点表达不出来。**为什么需要 ③**：全交叉的仓数按乘积涨
+（4×4 = 16，而关心的往往四五个）；更要紧的是**非法组合** —— 不写 `illegal` 的话，
+`mac` 指令发到 `dma` 单元会被全交叉当成一个**正常状态**统计，那等于在说它合法。
+
+`when` 里的值**写 bin 名或取值 token 都认**（`mac` 与 `MAC` 等价）；写了个
+两边都对不上的名字会**记账跳过**，不会默默生成一个 `binsof(cp.nope)`
+（那要么编译不过，要么被当合法语法收下却永远不命中）。
+
+### 需求追溯
+
+```yaml
+- name: queue_level
+  cover_id: CP_NPU_QUEUE_001      # 文档里的覆盖点编号（给人）
+  requirement: REQ-NPU-001        # 需求编号（追溯矩阵的另一头）
+```
+
+生成器派生的名字是 `cp_<信号名>`（给编译器），编号是**文档里的那个**（给人对账）。
+两者都进 `coverage_points.json` 与运行级 manifest，所以「哪条需求被谁验了」这条链
+（需求 → 覆盖点 → 用例 → 实测命中）是机器可读的。
+
 ### 命令
 
 ```bash
 python -m src.tools.casemodel_tools.cli covergroups \
     specs/apb_uart/casemodel.yaml -m apb_uart
 # 3 覆盖点 / 10 bin / 0 cross
+
+python -m src.tools.casemodel_tools.cli covergroups \
+    specs/npu_sched/casemodel.yaml -m npu_sched
+# 12 覆盖点 / 59 bin / 7 cross（含 binsof 过滤交叉与两级 illegal_bins）
 ```
 
 主 CLI 同形：`vagent case-model covergroups model.yaml -m apb_uart`。
+
+### 真模型：`specs/npu_sched/casemodel.yaml`
+
+把一份《NPU 指令调度器功能覆盖率计划文档》落成模型的样板，也是**唯一**同时用上
+上面全部写法的那份。逐节对应：
+
+| 文档 | 落成 |
+|---|---|
+| §3.1 的 12 个 CP | 12 个 `dimensions`（一个 CP 一个维度） |
+| §3.2 的 `bins` / `illegal_bins` | `cover_bins`（显式仓）/ `cover_illegal` |
+| §3.3 的 `X_*` 交叉 | `cross_matrix`（`binsof` 过滤 + `illegal`） |
+| §5.1 的 11 个批次 | `themes`（`priority` 是分级回归那四级，批次号写进 `name`） |
+| §8 的 CP / REQ 编号 | `cover_id` / `requirement` |
+
+**不进模型的**：§4 的约束、§6 的种子基线、§7 手写的 covergroup —— 那是激励层与
+实现层，不是"该测什么"。
 
 ### 在流水线里，它被谁收走
 
@@ -503,7 +580,7 @@ filelist 与 `tb_top` 的例化与采样时钟，侵入大；而 `env_cov` 那�
 pytest src/tools/casemodel_tools/tests/ -v
 ```
 
-352 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
+379 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
 工具自己的测试按层组织在 `src/tools/casemodel_tools/tests/`，
 跨层的 Agent 集成测试在仓库根的 `tests/test_casemodel_agent.py`：
 
@@ -516,7 +593,7 @@ pytest src/tools/casemodel_tools/tests/ -v
 | `test_analysis.py` | 门面组装、评分不变式（换 case 列表分数不变）、矩阵对称与声明优先、外部核对四方向、闭环无话可说、**文本入口 vs 文件入口结论一致** |
 | `test_multi.py` | 两种写法的扇出与覆盖、重复 `object_code` 报错、合并语义（评分算一次 / 树与 case 每对象一份）、`--max-cases` 是每对象上限、单对象时是恒等 |
 | `test_uvm_tests.py` | 一条 = 一个取值、维度过滤、边界优先截断、产物形状正好是 `tool_uvm` 认的那个、**不 import `uvm_tools`** |
-| `test_coverage.py` | 功能覆盖率方法学：维度→covergroup / 字段→coverpoint / 取值→bin / cross_pair→cross；中文取值投影后**真跑 vlog 编译**；对不上就进 notes |
+| `test_coverage.py` | 功能覆盖率方法学：维度→covergroup / 字段→coverpoint / 取值→bin / 显式区间仓 / 两级 illegal / binsof 过滤交叉；中文取值投影后**真跑 vlog 编译**；对不上就进 notes |
 | `test_cli.py` | 工具自带 CLI 与 `vagent case-model` 的退出码 / 四种格式 / 目录展开 |
 | `test_text.py` | 显示宽度对齐（中文占 2 列）、各段文本渲染 |
 | `tests/test_casemodel_agent.py`（仓库根） | 三面答案一致、ITool manifest 合法与失败语义、ToolHub 注册与调用 |

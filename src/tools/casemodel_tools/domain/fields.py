@@ -153,7 +153,34 @@ class Field:
     step: Optional[float] = None
     linked_to: str = ""
     boundary: List[str] = _field(default_factory=list)
-    cover_bins: List[str] = _field(default_factory=list)
+    #: **覆盖仓**。两种写法（可混用）：
+    #:
+    #:   · 字符串 —— 给**第 i 个取值点**命名（下标对齐）。`["mac","vector"]`
+    #:     配上 `values: [0,1]` 就是"取值 0 叫 mac、取值 1 叫 vector"。
+    #:   · 对象 —— **显式定义一个仓**，内容自己做主：
+    #:       `{name: low,  range: [1, 7]}`      → `bins low = {[1:7]};`
+    #:       `{name: full, at: 32}`             → `bins full = {32};`
+    #:       `{name: set,  values: [0, 7, 8]}`  → `bins set = {0,7,8};`
+    #:
+    #: 为什么需要对象形式：**仓不必是取值点**。`queue_level` 的 0-32 要分
+    #: `empty/low/mid/high/near_full/full` 六档 —— 那是**值域的一个划分**，
+    #: 不是"取了哪几个点"，用取值点表达不出来。
+    cover_bins: List[Any] = _field(default_factory=list)
+    #: **非法仓** —— 命中即报错（SV 的 `illegal_bins`）。形状同 `cover_bins` 的
+    #: 对象形式。`{name: illegal_over, from: 33}` → `illegal_bins illegal_over = {[33:$]};`
+    #:
+    #: 这是"约束与覆盖点脱节"那条坑的解药：与其指望激励永不产生非法组合，
+    #: 不如把它**声明出来**，一旦真出现，仿真当场报，而不是等覆盖率对不上再回查。
+    cover_illegal: List[Any] = _field(default_factory=list)
+    #: **覆盖点编号** —— 人给的稳定标识（`CP_NPU_QUEUE_001`）。
+    #:
+    #: 生成器派生的名字是 `cp_<信号名>`，那是给 SV 用的；而"覆盖点总览""需求
+    #: 追溯矩阵"里引用的编号是**文档里的那个**。两者都要有：一个给编译器、
+    #: 一个给人对账。不填就是没有编号（不编一个出来）。
+    cover_id: str = ""
+    #: **需求编号** —— `REQ-NPU-001`。签核要回答"每条需求被谁验了"，
+    #: 这条链就是 `需求 → 覆盖点 → 用例 → 实测命中`。
+    requirement: str = ""
     unit: str = ""
     dim_key: str = ""               # 所属维度 key，由 Dimension 构建时回填
 
@@ -182,20 +209,33 @@ class Field:
     def value_labels(self) -> List[str]:
         return [p.label for p in self.value_points()]
 
-    def bins_for(self, token: str) -> List[str]:
-        """取值 → 覆盖仓。
+    def named_bins(self) -> List[str]:
+        """`cover_bins` 里**字符串**那些 —— 它们才对取值点做下标对齐。
 
-        cover_bins 与取值点等长时按下标对齐（推荐写法）；否则整体挂上 ——
+        对象条目是"显式定义一个仓"，与取值点没有一一对应关系，掺进对齐里
+        会把下标错位（第 2 个取值点拿到第 3 个仓的名字）。所以先滤出来。
+        """
+        return [b for b in self.cover_bins if isinstance(b, str)]
+
+    def explicit_bins(self) -> List[Any]:
+        """`cover_bins` 里**对象**那些 —— 它们自己定义仓，不靠取值点。"""
+        return [b for b in self.cover_bins if isinstance(b, dict)]
+
+    def bins_for(self, token: str) -> List[str]:
+        """取值 → 覆盖仓（**只认字符串形式的名字**）。
+
+        名字与取值点等长时按下标对齐（推荐写法）；否则整体挂上 ——
         宁可多报几个仓，也不要因为长度不齐就静默丢掉映射。
         """
-        if not self.cover_bins:
+        named = self.named_bins()
+        if not named:
             return []
         points = self.value_points()
-        if len(self.cover_bins) == len(points):
-            for p, b in zip(points, self.cover_bins):
+        if len(named) == len(points):
+            for p, b in zip(points, named):
                 if p.token == token:
                     return [b]
-        return list(self.cover_bins)
+        return list(named)
 
 
 def build_field(item: Any, dim_key: str) -> Field:
@@ -218,7 +258,13 @@ def build_field(item: Any, dim_key: str) -> Field:
         step=num(item.get("step")),
         linked_to=str(item.get("linked_to") or "").strip(),
         boundary=[str(b) for b in as_list(item.get("boundary"))],
-        cover_bins=[str(c) for c in as_list(item.get("cover_bins"))],
+        # 字符串原样留、**对象原样留** —— 后者是显式仓定义，`str()` 一下就成了
+        # `"{'name': 'low', ...}"` 这种废字符串，静默丢掉一个仓
+        cover_bins=[c if isinstance(c, dict) else str(c)
+                    for c in as_list(item.get("cover_bins"))],
+        cover_illegal=list(as_list(item.get("cover_illegal"))),
+        cover_id=str(item.get("cover_id") or "").strip(),
+        requirement=str(item.get("requirement") or "").strip(),
         unit=str(item.get("unit") or ""),
         dim_key=dim_key,
     )

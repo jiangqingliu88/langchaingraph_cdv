@@ -43,12 +43,18 @@ from ....ui.models import CENTER, LEFT, RowsModel
 from ...base import ModuleBase
 
 #: 覆盖点表 —— (键, 表头, 列宽, 对齐)。
+#:
+#: 前两列是**追溯**那一对：`cover_id` 是文档里的编号（`CP_NPU_QUEUE_001`），
+#: `requirement` 是需求编号（`REQ-NPU-001`）。「哪条需求被谁验了」要能一眼串起来 ——
+#: 生成器派生的 `cp_<信号>` 是给编译器的，拿它跟人对账要换算一次，所以两列都摆。
 COVERPOINT_COLUMNS = (
-    ("dimension", "维度", 150, LEFT),
-    ("signal", "覆盖点", 150, LEFT),
-    ("type", "类型", 90, CENTER),
+    ("cover_id", "覆盖点编号", 150, LEFT),
+    ("requirement", "需求", 110, LEFT),
+    ("dimension", "维度", 130, LEFT),
+    ("signal", "覆盖点", 140, LEFT),
+    ("type", "类型", 80, CENTER),
     ("bin_count", "bin 数", 70, CENTER),
-    ("bins", "bin（取自模型声明）", 380, LEFT),
+    ("bins", "bin（取自模型声明）", 320, LEFT),
     ("actual", "实测 %", 80, CENTER),
 )
 

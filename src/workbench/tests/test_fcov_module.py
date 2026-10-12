@@ -86,7 +86,7 @@ def module(qt_app, settings, run_dir):
 
 
 #: 覆盖点表里「实测 %」那一列的下标（与 `COVERPOINT_COLUMNS` 的顺序同源）
-ACTUAL_COL = 5
+ACTUAL_COL = 7
 
 
 def _fg(model, row: int, col: int):
@@ -201,5 +201,52 @@ class TestDegradesHonestly:
             mod.load(run_dir.name)
             note = mod.notes_label.text()
             assert "旧格式" in note and "还没有实测" not in note
+        finally:
+            widget.deleteLater()
+
+
+class TestTraceability:
+    """编号那一对 —— 「哪条需求被谁验了」要能一眼串起来。
+
+    生成器派生的 `cp_<信号>` 是给编译器的；文档里引用的是 `CP_NPU_xxx`。
+    拿后者跟人对账才是日常动作，所以两列都得在表上。
+    """
+
+    def test_ids_are_on_the_coverpoint_table(self, module):
+        from ..modules.flow.fcov.module import COVERPOINT_COLUMNS
+
+        names = [c[0] for c in COVERPOINT_COLUMNS]
+        assert "cover_id" in names and "requirement" in names
+
+    def test_a_model_without_ids_leaves_the_cells_empty(self, module):
+        """没有编号就是空 —— **不编一个出来**（编了就看不出"这份模型没写编号"）。"""
+        assert all(r["cover_id"] == "" for r in module._coverpoints)
+
+
+class TestTheNpuModelEndToEnd:
+    """把 NPU 那份模型喂进这一页 —— 12 个覆盖点 / 7 条交叉都要在表上。"""
+
+    @pytest.fixture
+    def npu_run(self, tmp_path):
+        import shutil
+        from pathlib import Path
+
+        root = tmp_path / "output_npu_20260101_000000"
+        (root / "inputs").mkdir(parents=True)
+        shutil.copy(Path(__file__).resolve().parents[3]
+                    / "specs" / "npu_sched" / "casemodel.yaml",
+                    root / "inputs" / "casemodel.yaml")
+        return root
+
+    def test_twelve_coverpoints_and_seven_crosses_land(self, npu_run, qt_app, settings):
+        mod, widget = _module(qt_app, settings, run_id=npu_run.name)
+        try:
+            mod.load(npu_run.name)
+            assert mod.cp_model.rowCount() == 19        # 12 个覆盖点 + 7 条交叉
+            ids = [r["cover_id"] for r in mod.cp_model.rows if r["cover_id"]]
+            assert len(ids) == 12
+            assert "CP_NPU_QUEUE_001" in ids
+            reqs = {r["requirement"] for r in mod.cp_model.rows if r["requirement"]}
+            assert "REQ-NPU-008" in reqs
         finally:
             widget.deleteLater()

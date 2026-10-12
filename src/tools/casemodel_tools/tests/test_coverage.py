@@ -282,3 +282,305 @@ class TestAgainstTheShippedModel:
         assert r.returncode == 0, r.stderr
         assert out.is_file()
         assert "covergroup cg_apb_uart;" in out.read_text(encoding="utf-8")
+
+
+# ════════════════════════════════════════════════════════════
+# 显式覆盖仓：仓不必是取值点
+# ════════════════════════════════════════════════════════════
+
+def _one_field(field: dict, dim_id: str = "D_x") -> str:
+    return _model(dimensions=[{"id": dim_id, "name": "X", "fields": [field]}])
+
+
+class TestExplicitBins:
+    """`cover_bins` 的对象形式 —— 一批真实模型逼出来的能力。
+
+    `queue_level` 的 0-32 要分 `empty/low/mid/high/near_full/full` 六档，那是
+    **值域的一个划分**，不是"取了哪几个点"。用取值点（`boundary`）表达不出来：
+    六个档里三个是区间。
+    """
+
+    def _bins(self, cover_bins: list) -> list:
+        text = _one_field({"name": "q", "type": "range", "min": 0, "max": 32,
+                           "cover_bins": cover_bins})
+        return run_covergroups(text, "dut")["coverpoints"][0]["bins"]
+
+    def test_range_bin(self):
+        assert self._bins([{"name": "low", "range": [1, 7]}])[0]["literal"] == "[1:7]"
+
+    def test_at_is_a_single_value(self):
+        assert self._bins([{"name": "empty", "at": 0}])[0]["literal"] == "0"
+
+    def test_values_is_a_set(self):
+        assert self._bins([{"name": "s", "values": [0, 7, 8]}])[0]["literal"] == "0,7,8"
+
+    def test_from_without_to_is_open_ended(self):
+        """`{[33:$]}` —— 上界省略是**有意义的**（33 及以上）。
+
+        错当成 0 会写成 `{[33:0]}`：一个空区间，**编译能过但永远不命中** ——
+        非法仓就成了摆设。这是实测踩出来的。
+        """
+        assert self._bins([{"name": "over", "from": 33}])[0]["literal"] == "[33:$]"
+
+    def test_from_to_is_a_closed_range(self):
+        assert self._bins([{"name": "r", "from": 2, "to": 9}])[0]["literal"] == "[2:9]"
+
+    def test_explicit_bins_win_over_value_points(self):
+        """两者都有时以显式仓为准，但**要说出来**（不能默默丢掉另一半）。"""
+        text = _one_field({"name": "q", "type": "range", "min": 0, "max": 32,
+                           "boundary": ["0", "32"],
+                           "cover_bins": [{"name": "low", "range": [1, 7]}]})
+        out = run_covergroups(text, "dut")
+        assert [b["name"] for b in out["coverpoints"][0]["bins"]] == ["low"]
+        assert any("以显式仓为准" in n for n in out["notes"])
+
+    def test_a_bin_without_content_is_noted_not_silently_dropped(self):
+        """写了个仓但没说是哪些值 —— **记账**，不能静默丢掉那一条。
+
+        这里字段本身也没有取值点（range 不给 min/max/boundary；否则会退化成
+        "min/max 两个端点"），于是两边都空 ⇒ 干脆不出覆盖点。**要能看出是为什么**。
+        """
+        text = _one_field({"name": "q", "type": "range",
+                           "cover_bins": [{"name": "nowhere"}]})
+        out = run_covergroups(text, "dut")
+        assert out["coverpoint_count"] == 0
+        assert any("nowhere" in n for n in out["notes"])
+        assert any("一条都没解析出来" in n for n in out["notes"])
+
+    def test_duplicate_bin_names_are_dropped_with_a_note(self):
+        """`bins` 重定义编译不过 —— 重复的丢掉并记账，不能两个都写出去。"""
+        text = _one_field({"name": "q", "type": "range", "min": 0, "max": 32,
+                           "cover_bins": [{"name": "a", "at": 1},
+                                          {"name": "a", "at": 2}]})
+        out = run_covergroups(text, "dut")
+        assert out["coverpoints"][0]["bin_count"] == 1
+        assert any("重复" in n for n in out["notes"])
+
+
+class TestIllegalBins:
+    """非法仓 —— 命中即报错。这是"约束与覆盖点脱节"那条坑的解药。"""
+
+    def test_field_level_illegal_bin(self):
+        text = _one_field({"name": "q", "type": "range", "min": 0, "max": 32,
+                           "cover_bins": [{"name": "full", "at": 32}],
+                           "cover_illegal": [{"name": "illegal_over", "from": 33}]})
+        cp = run_covergroups(text, "dut")["coverpoints"][0]
+        assert [b["name"] for b in cp["illegal_bins"]] == ["illegal_over"]
+        assert cp["illegal_bins"][0]["illegal"] is True
+
+    def test_it_renders_as_illegal_bins(self):
+        text = _one_field({"name": "q", "type": "range", "min": 0, "max": 32,
+                           "cover_illegal": [{"name": "bad", "from": 33}]})
+        code = run_covergroups(text, "dut")["covergroup_code"]
+        assert "illegal_bins bad = {[33:$]};" in code
+
+    def test_illegal_and_normal_bins_share_one_namespace(self):
+        """同名的非法仓与正常仓在一个 coverpoint 里重名 —— 也是编译错误。"""
+        text = _one_field({"name": "q", "type": "range", "min": 0, "max": 32,
+                           "cover_bins": [{"name": "same", "at": 1}],
+                           "cover_illegal": [{"name": "same", "from": 33}]})
+        out = run_covergroups(text, "dut")
+        cp = out["coverpoints"][0]
+        assert cp["bin_count"] == 1 and cp["illegal_bin_count"] == 0
+        assert any("重复" in n for n in out["notes"])
+
+
+# ════════════════════════════════════════════════════════════
+# 过滤交叉（binsof）与交叉级 illegal
+# ════════════════════════════════════════════════════════════
+
+TWO_DIMS = [
+    {"id": "D_type", "name": "类型",
+     "fields": [{"name": "instr_type", "type": "enum",
+                 "values": ["MAC", "VECTOR", "SCALAR", "DMA"],
+                 "cover_bins": ["mac", "vector", "scalar", "dma"]}]},
+    {"id": "D_unit", "name": "单元",
+     "fields": [{"name": "issue_unit", "type": "enum",
+                 "values": ["MAC", "VECTOR", "SCALAR", "DMA"],
+                 "cover_bins": ["mac", "vector", "scalar", "dma"]}]},
+]
+
+
+class TestFilteredCrosses:
+    """`cross_matrix` 的对象形式 —— 只交叉有意义的那几对。
+
+    全交叉的仓数按乘积涨（4×4 = 16），而关心的往往四五个。更要紧的是**非法组合**：
+    不写 `illegal` 的话，`mac` 指令发到 `dma` 单元会被当成一个正常状态统计 ——
+    那等于在说它合法。
+    """
+
+    def _cross(self, decl):
+        text = _model(dimensions=TWO_DIMS, cross_matrix={"D_type×D_unit": decl})
+        out = run_covergroups(text, "dut")
+        return (out["crosses"][0] if out["crosses"] else {}), out
+
+    def test_bare_level_declaration_is_still_a_full_cross(self):
+        cx, _ = self._cross("required")
+        assert cx["bin_count"] == 0            # 没有 bins ⇒ 渲染成裸 cross
+
+    def test_filtered_bins_are_kept_in_order(self):
+        cx, _ = self._cross({
+            "level": "required",
+            "bins": [{"name": "mac_to_mac", "when": {"instr_type": "mac",
+                                                     "issue_unit": "mac"}},
+                     {"name": "vec_to_vec", "when": {"instr_type": "vector",
+                                                     "issue_unit": "vector"}}]})
+        assert [b["name"] for b in cx["bins"]] == ["mac_to_mac", "vec_to_vec"]
+
+    def test_illegal_cross_bin_is_marked(self):
+        cx, _ = self._cross({
+            "level": "required",
+            "illegal": [{"name": "mac_to_dma", "when": {"instr_type": "mac",
+                                                        "issue_unit": "dma"}}]})
+        assert cx["bins"][0]["illegal"] is True
+
+    def test_it_renders_with_binsof(self):
+        text = _model(dimensions=TWO_DIMS, cross_matrix={"D_type×D_unit": {
+            "level": "required",
+            "bins": [{"name": "mac_to_mac", "when": {"instr_type": "mac",
+                                                     "issue_unit": "mac"}}],
+            "illegal": [{"name": "mac_to_dma", "when": {"instr_type": "mac",
+                                                        "issue_unit": "dma"}}]}})
+        code = run_covergroups(text, "dut")["covergroup_code"]
+        assert ("bins mac_to_mac = binsof(cp_instr_type.mac) "
+                "&& binsof(cp_issue_unit.mac);") in code
+        assert ("illegal_bins mac_to_dma = binsof(cp_instr_type.mac) "
+                "&& binsof(cp_issue_unit.dma);") in code
+        # illegal 排在正常仓之后 —— 读起来顺，且与文档的写法一致
+        assert code.index("mac_to_mac") < code.index("mac_to_dma")
+
+    def test_the_value_token_works_too_not_only_the_bin_name(self):
+        """作者可能写 bin 名（`mac`）也可能直接写取值（`MAC`）—— 两个都认。"""
+        cx, _ = self._cross({
+            "level": "required",
+            "bins": [{"name": "x", "when": {"instr_type": "MAC",
+                                            "issue_unit": "mac"}}]})
+        assert cx["bins"][0]["when"] == {"instr_type": "mac", "issue_unit": "mac"}
+
+    def test_an_unknown_bin_name_is_noted_and_skipped(self):
+        """**不能默默生成一个 `binsof(cp.nope)`** —— 要么编译不过，要么（更糟）
+        被当合法语法收下却永远不命中。"""
+        cx, out = self._cross({
+            "level": "required",
+            "bins": [{"name": "x", "when": {"instr_type": "nope",
+                                            "issue_unit": "mac"}}]})
+        assert cx["bins"] == []
+        assert any("nope" in n for n in out["notes"])
+
+    def test_a_missing_side_is_noted(self):
+        cx, out = self._cross({
+            "level": "required",
+            "bins": [{"name": "x", "when": {"instr_type": "mac"}}]})
+        assert cx["bins"] == []
+        assert any("那一侧" in n for n in out["notes"])
+
+
+class TestTraceabilityIds:
+    """`cover_id` / `requirement` —— 需求追溯矩阵的两个端点。
+
+    生成器派生的名字是 `cp_<信号名>`（给编译器），文档里引用的是 `CP_NPU_xxx`
+    （给人）。两者都要有，不能拿一个当另一个。
+    """
+
+    def test_both_ids_ride_along_in_the_declaration(self):
+        text = _one_field({"name": "q", "type": "range", "min": 0, "max": 32,
+                           "cover_id": "CP_NPU_QUEUE_001",
+                           "requirement": "REQ-NPU-001",
+                           "cover_bins": [{"name": "full", "at": 32}]})
+        cp = run_covergroups(text, "dut")["coverpoints"][0]
+        assert cp["cover_id"] == "CP_NPU_QUEUE_001"
+        assert cp["requirement"] == "REQ-NPU-001"
+
+    def test_absent_ids_stay_empty_not_invented(self):
+        text = _one_field({"name": "q", "type": "range", "min": 0, "max": 32,
+                           "cover_bins": [{"name": "full", "at": 32}]})
+        cp = run_covergroups(text, "dut")["coverpoints"][0]
+        assert cp["cover_id"] == "" and cp["requirement"] == ""
+
+
+class TestTheNpuSchedulerModel:
+    """仓库里那份真实模型（`specs/npu_sched/casemodel.yaml`）。
+
+    它是**唯一**同时用上显式区间仓、字段级 illegal、binsof 过滤交叉、
+    交叉级 illegal、需求编号这五样的模型 —— 上面那些合成用例各自只盖一角，
+    合在一起能不能编译只有它知道。
+    """
+
+    NPU = (Path(__file__).resolve().parents[4]
+           / "specs" / "npu_sched" / "casemodel.yaml")
+
+    @pytest.fixture(scope="class")
+    def payload(self):
+        return run_covergroups(self.NPU.read_text(encoding="utf-8"), "npu_sched")
+
+    def test_twelve_coverpoints_one_per_cp(self, payload):
+        assert payload["coverpoint_count"] == 12
+
+    def test_the_queue_coverpoint_uses_range_bins(self, payload):
+        q = next(c for c in payload["coverpoints"] if c["signal"] == "queue_level")
+        assert [(b["name"], b["literal"]) for b in q["bins"]] == [
+            ("empty", "0"), ("low", "[1:7]"), ("mid", "[8:15]"),
+            ("high", "[16:24]"), ("near_full", "[25:31]"), ("full", "32")]
+        assert q["illegal_bins"][0]["literal"] == "[33:$]"
+
+    def test_seven_crosses_as_in_the_plan(self, payload):
+        assert payload["cross_count"] == 7
+
+    def test_six_of_them_are_filtered_and_one_is_not(self, payload):
+        assert len([c for c in payload["crosses"] if c["bin_count"]]) == 6
+        # 唯一没给过滤名单的那条（§3.3 X_NPU_CLUSTER_UNIT_005）走全交叉
+        unfiltered = [c for c in payload["crosses"] if not c["bin_count"]]
+        assert [c["dimensions"] for c in unfiltered] == [["D_cluster", "D_unit"]]
+
+    def test_every_cross_illegal_from_the_plan_is_there(self, payload):
+        illegal = {b["name"] for c in payload["crosses"] for b in c["bins"]
+                   if b["illegal"]}
+        assert illegal == {"mac_to_dma", "int8_vector", "mac_vec"}
+
+    def test_cp_and_req_ids_cover_all_twelve(self, payload):
+        """十二个覆盖点各有编号，且与需求一一对上 —— 追溯矩阵的两头都齐。"""
+        ids = [c["cover_id"] for c in payload["coverpoints"]]
+        reqs = [c["requirement"] for c in payload["coverpoints"]]
+        assert len(set(ids)) == len(set(reqs)) == 12
+        assert all(i.startswith("CP_NPU_") for i in ids)
+        assert set(reqs) == {f"REQ-NPU-{n:03d}" for n in range(1, 13)}
+
+    def test_it_compiles(self, tmp_path):
+        """这套写法（区间仓 / binsof / 两级 illegal）**必须真过 vlog**。
+
+        合成用例的断言挡不住语法问题 —— 实测 `{[33:0]}`（空区间）就是这样
+        漏过去的：看着对、编译也过，只是永远不命中。所以这条真调编译器。
+        """
+        import shutil
+        import subprocess
+
+        from config.settings import questa_home
+
+        vlog = Path(questa_home()) / "win64" / "vlog.exe"
+        if not vlog.exists():
+            vlog = Path(shutil.which("vlog") or "")
+        if not vlog or not vlog.exists():
+            pytest.skip("没装 Questa（vlog 找不到）—— 编译验证跳过")
+
+        code = run_covergroups(self.NPU.read_text(encoding="utf-8"),
+                               "npu_sched")["covergroup_code"]
+        frag = code[code.index("covergroup "):
+                    code.index("endgroup") + len("endgroup")]
+        (tmp_path / "cg.sv").write_text(frag + "\n", encoding="utf-8")
+        (tmp_path / "stub.sv").write_text(
+            "module cg_stub;\n"
+            "  bit [7:0] queue_level;\n"
+            "  bit [2:0] instr_type, instr_dtype, dep_type, issue_unit,\n"
+            "            instr_seq, pipeline_state, op_priority, barrier_type;\n"
+            "  bit [1:0] issue_decision, cluster_id;\n"
+            "  bit [3:0] instr_opcode;\n"
+            '  `include "cg.sv"\n'
+            "  cg_npu_sched cg;\n"
+            "  initial begin cg = new(); cg.sample(); end\n"
+            "endmodule\n", encoding="utf-8")
+        r = subprocess.run(
+            [str(vlog), "-sv", "-work", str(tmp_path / "work"),
+             f"+incdir+{tmp_path}", str(tmp_path / "stub.sv")],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=180)
+        assert "Errors: 0" in f"{r.stdout}\n{r.stderr}", (r.stdout or "")[-2000:]
