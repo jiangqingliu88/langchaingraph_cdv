@@ -591,6 +591,17 @@ themes:
     seeds: {base: 2001, count: 15, explore: 3}   # 跑 15 条基线 + 3 条探索
 ```
 
+**批次也要有 test 类**（`environment.batches` → `{env}_batch_test.sv`）：
+
+```systemverilog
+`GEN_BATCH_TC(npu_type_test, npu_sched_env_gen_test, "TH-B02", "D_type", "RND", "P0")
+// 类体只把"这一批打哪几个维度、用什么方法"挂上 config_db —— 消费方（sequence）读它
+```
+
+与 `_attr_test.sv` 是**两条平行的路**：那边一条 = 一个属性取值，这边一条 = 一个批次。
+**没有这个类，回归里 `+UVM_TESTNAME=npu_type_test` 会撞 `UVM_FATAL (INVTST)`，
+而 vsim 仍然 exit 0** —— 跑不起来反而看不出来（`_sim_run_cmd` 的注释记着这个坑）。
+
 **为什么种子声明在模型里**：它不是"怎么跑"的细节，是"**这一批要跑够几条才算数**"
 的验证完备性声明 —— 和覆盖点一样属于"该测得够不够"。回归那一侧只是把它铺开成
 runtime 参数：`count` 展开成 N 条、各拿 `base + i - 1`、`{{ SEED }}` 落进

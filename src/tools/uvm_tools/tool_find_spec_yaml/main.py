@@ -10,7 +10,7 @@ Tool: find_spec_yaml — 从 spec 文本查找已有 YAML 或构造新的 YAML
 import sys, json, re
 import builtins
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 import shutil as _shutil
 import yaml as _yaml
 
@@ -1210,9 +1210,20 @@ def _seed_plan(output_dir: Path) -> Dict[str, Dict[str, int]]:
         if not isinstance(b, dict):
             continue
         test, seeds = str(b.get("test") or "").strip(), b.get("seeds") or {}
-        if test and isinstance(seeds, dict) and seeds:
-            out[test] = {k: int(v) for k, v in seeds.items()
-                         if isinstance(v, int)}
+        if not test:
+            continue
+        # `dimensions` **两种形状都认**：计划里是列表，env 注入那份是逗号串
+        # （注入走 YAML 流式一行，列表要另写缩进）。`str(list)` 会得到
+        # `"['D_type']"` —— 那既是噪音又会在 desc 里露出来。
+        dims = b.get("dimensions")
+        dims = ",".join(str(x) for x in dims) if isinstance(dims, list) else str(dims or "")
+        entry: Dict[str, Any] = {"theme": str(b.get("theme") or ""),
+                                 "priority": str(b.get("priority") or ""),
+                                 "dimensions": dims}
+        if isinstance(seeds, dict):
+            entry.update({k: int(v) for k, v in seeds.items()
+                          if isinstance(v, int)})
+        out[test] = entry
     return out
 
 
@@ -1406,6 +1417,29 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     # 于是这条随机用例哪个分级都进不去（分级回归按 p0..p3 筛，见 REGRESSION_STAGES）。
     test_lines.append('    tags: ["p3", "smoke", "random", "gap"]')
     test_lines.append("")
+
+    # ── 批次测试（**一条 = 一个 UVM_TEST = 一个批次/专题**）──
+    #
+    # 与用例库那一批**并存**：那边一条一个属性取值（粒度细，追状态与用例库），
+    # 这边一条一个批次（粒度粗，挂**种子管理**）。两侧的名字不同、用途不同，
+    # 合并不了 —— 合并了"这一批一共跑了多少次"就又说不清了。
+    #
+    # `+UVM_TESTNAME` 用**批次名**，对应 `test_batch.sv.j2` 生成的类
+    # （`environment.batches` → `{env}_batch_test.sv`）。类不存在的话 UVM 报
+    # INVTST 而 vsim 仍然 exit 0 —— **跑不起来反而看不出来**。
+    if seed_plan:
+        for bname, meta in seed_plan.items():
+            test_lines.append(f"  - name: {bname}")
+            test_lines.append(f"    build: build_{module_name}_dut")
+            test_lines.extend(_seed_lines(bname, seed_plan))
+            test_lines.append(f"    run_cmd: '{_sim_run_cmd(dut_top, bname)}'")
+            prio = (meta.get("priority") or "P1").lower()
+            theme = meta.get("theme") or ""
+            # tag 用**分级回归那四级**（p0..p3）—— 分级就是按它筛的
+            test_lines.append(f'    tags: ["{prio}", "batch", "{theme}"]')
+            if meta.get("dimensions"):
+                test_lines.append(f'    desc: "批次 {theme}：打 {meta["dimensions"]}"')
+            test_lines.append("")
 
     # ── loopback 测试（每个 active agent 一个，独立 build + 独立顶层 {ag}_loopback_tb）──
     # 同时把 loopback 用例注册进 case 库（用例真相源），跨 run 沉淀。
@@ -1712,6 +1746,20 @@ def _casemodel_test_lines(output_dir) -> List[str]:
             out.append("    - { dimension: %s, value: '%s', key: %s, int_value: %s }"
                        % (x.get("dimension"), x.get("value"), x.get("key"),
                           x.get("int_value")))
+
+        # 批次 test 类（**一条 = 一个批次/专题**）—— 与属性 test 平行的另一条路。
+        # 没有它，回归里 `+UVM_TESTNAME=<批次名>` 会撞 UVM_FATAL(INVTST)，
+        # 而那条路径被记成 pass（vsim 遇到未知 testname 仍然 exit 0）。
+        from src.tools.casemodel_tools.api import run_uvm_batches
+        batches = run_uvm_batches(cm.read_text(encoding="utf-8")).get("batches") or []
+        if batches:
+            out.append("  batches:")
+            for b in batches:
+                out.append("    - { name: %s, theme: %s, dimensions: '%s',"
+                           " method: %s, priority: %s, checks: '%s' }"
+                           % (b["name"], b["theme"], b["dimensions"],
+                              b["method"] or "''", b["priority"] or "''",
+                              b["checks"]))
         return out
     except Exception as e:
         print(f"  [find_yaml] casemodel tests 未注入: {e}", flush=True)

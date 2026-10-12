@@ -1,0 +1,50 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// Batch Tests: {{ environment.env_name }}_batch_test
+//
+// **一条 batches: 条目 = 一个 UVM_TEST = 一个批次（专题）**。
+//
+// 与 `_attr_test.sv` 是两条平行的路：
+//   attr  —— 一条 = 一个属性取值（`D_type = VECTOR`），名字由维度+取值推出来
+//   batch —— 一条 = 一个批次（`TH-B02 指令类型`），名字由 case 模型的
+//            `themes[].test` 给定（`npu_type_test`）
+//
+// ## 为什么批次也要有 test 类
+//
+// 回归里跑的是 `+UVM_TESTNAME=<批次名>`。没有这个类，UVM 直接
+// `UVM_FATAL (INVTST) test 'npu_type_test' not found` —— 而**那条路径会被记成
+// pass**（vsim 遇到未知 testname 仍然 exit 0，见 `_sim_run_cmd` 的注释）。
+// 也就是说：批次跑不起来，反而看不出来。
+//
+// ## 类体里为什么不铺激励
+//
+// 约束在 sequence 里，**本模板看不见也不该看见**（工具的边界：它只认
+// `environment.batches` 这份契约）。这里只把"这一批打哪几个维度、用什么方法"
+// 挂上 config_db —— 消费方（sequence）读它决定怎么激励。这跟 attr test 只
+// `set` 一个 `_int` 是同一种克制：**传参数，不传行为**。
+
+// 生成一条批次 test。宏体内**只能用 /* */ 注释** —— `//` 会把行尾的反斜杠
+// 一起吃掉，宏定义当场断在那一行（SV 宏的经典坑，别改回去）。
+`define GEN_BATCH_TC(tc_name, tc_base, tc_theme, tc_dims, tc_method, tc_prio) \
+class tc_name extends tc_base; \
+    `uvm_component_utils(tc_name) \
+    function new(string name, uvm_component parent); \
+        super.new(name, parent); \
+    endfunction \
+    virtual function void build_phase(uvm_phase phase); \
+        super.build_phase(phase); \
+        uvm_config_db#(string)::set(this, "*", "batch_theme", tc_theme); \
+        uvm_config_db#(string)::set(this, "*", "batch_dimensions", tc_dims); \
+        uvm_config_db#(string)::set(this, "*", "batch_method", tc_method); \
+        uvm_config_db#(string)::set(this, "*", "batch_priority", tc_prio); \
+    endfunction \
+endclass
+
+{% for b in batches %}
+// ── 批次 test {{ loop.index }}：{{ b.theme }}（{{ b.dimensions }}，方法 {{ b.method }}）──
+// 消费示例（sequence 侧按需打开，键名与下面 set 的同一个）：
+//   string dims, method;  /* {{ b.dimensions }} / {{ b.method }} */
+//   uvm_config_db#(string)::get(this, "", "batch_dimensions", dims);
+//   uvm_config_db#(string)::get(this, "", "batch_method", method);
+`GEN_BATCH_TC({{ b.name }}, {{ environment.env_name }}_gen_test, "{{ b.theme }}", "{{ b.dimensions }}", "{{ b.method }}", "{{ b.priority }}")
+{% endfor %}

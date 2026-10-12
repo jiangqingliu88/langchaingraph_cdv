@@ -426,6 +426,15 @@ ENVIRONMENT_ATTR_TEST_TEMPLATES = [
     ("environment_templates/test_templates/test_attr.sv.j2", "{env_name}_attr_test.sv"),
 ]
 
+#: 批次测试（**一条 environment.batches = 一个 UVM_TEST = 一个批次/专题**）。
+#: 与属性测试同形（都在 `tests`/`batches` 非空时才产），但产物不同 ——
+#: 这一份出的是"这一批打哪几个维度、用什么方法"的 test 类，名字由 case 模型的
+#: `themes[].test` 给定。**没有它，回归里 `+UVM_TESTNAME=<批次>` 会撞
+#: UVM_FATAL(INVTST)，而那条路径被记成 pass**（见 `_sim_run_cmd` 的注释）。
+ENVIRONMENT_BATCH_TEST_TEMPLATES = [
+    ("environment_templates/test_templates/test_batch.sv.j2", "{env_name}_batch_test.sv"),
+]
+
 #: 寄存器（CSR）自带序列测试 —— 每个都是**薄薄一层**：实例化一个 UVM 官方
 #: 寄存器序列（hw_reset / bit_bash / access）并 start。
 #: **只在环境配了 register_model（且有 reg_block）时才产**：没配的环境连寄存器
@@ -681,6 +690,12 @@ class EnvironmentModel:
     # 内容由 YAML environment.tests 归一化而来（_normalize_tests）；
     # 渲染在 test_attr.sv.j2，为空时不产那个文件。
     tests: List[Dict[str, Any]] = field(default_factory=list)
+    # 批次测试：**一条 = 一个 UVM_TEST = 一个批次/专题**。
+    # 内容由 YAML environment.batches 归一化而来（_normalize_batches）；
+    # 渲染在 test_batch.sv.j2，为空时不产那个文件。
+    #
+    # 与 `tests` 是**两条平行的路**：那边一条一个属性取值，这边一条一个批次。
+    batches: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_context(self) -> Dict[str, Any]:
         context = asdict(self)
@@ -1596,6 +1611,11 @@ class EnvironmentRenderTask(RenderTask):
                 target_name = target_pattern.format(env_name=environment.env_name)
                 rendered.append(self.render_file(template_path,
                                                  tests_dir / target_name, context))
+        if environment.batches:
+            for template_path, target_pattern in ENVIRONMENT_BATCH_TEST_TEMPLATES:
+                target_name = target_pattern.format(env_name=environment.env_name)
+                rendered.append(self.render_file(template_path,
+                                                 tests_dir / target_name, context))
 
         # 寄存器（CSR）测试：只在配了寄存器模型时才产（模板自身也有 `{% if %}` 兜底，
         # 但这里先判一次，避免产出一堆空文件）。
@@ -1778,6 +1798,35 @@ def _normalize_tests(raw) -> List[Dict[str, Any]]:
             # 保持 None：「没给」和「给了 0」是两回事，模板过滤器区分处理
             "int_value": int_value if isinstance(int_value, int) else None,
             "base": str(item.get("base") or "").strip(),
+        })
+    return out
+
+
+def _normalize_batches(raw) -> List[Dict[str, Any]]:
+    """`environment.batches` → `[{name, theme, dimensions, method, priority, checks}]`。
+
+    必填 `name`（= test 类名），缺了就丢掉 —— 一个没名字的 test 类生成不出来。
+    其余键缺省给空串（模板按空串渲染，不炸）。
+
+    与 `_normalize_tests` 同一套纪律：**只做类型净化，不做语义展开** ——
+    "哪个批次打哪几个维度"是 case 模型那边的事，这里不认识。
+    """
+    if not isinstance(raw, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        out.append({
+            "name": name,
+            "theme": str(item.get("theme") or "").strip(),
+            "dimensions": str(item.get("dimensions") or "").strip(),
+            "method": str(item.get("method") or "").strip(),
+            "priority": str(item.get("priority") or "").strip(),
+            "checks": str(item.get("checks") or "").strip(),
         })
     return out
 
@@ -2301,6 +2350,7 @@ class YAMLLoader:
             utils=[{"name": u.get("name")} for u in (data.get("util_components") or [])
                    if isinstance(u, dict) and u.get("name")],
             tests=_normalize_tests(data.get("tests", [])),
+            batches=_normalize_batches(data.get("batches", [])),
         )
 
     @staticmethod
@@ -3230,6 +3280,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             utils=[{"name": u.get("name")} for u in (payload.get("util_components") or [])
                    if isinstance(u, dict) and u.get("name")],
             tests=_normalize_tests(payload.get("tests", [])),
+            batches=_normalize_batches(payload.get("batches", [])),
         )
         ctx = {"environment": env, **env.to_context()}
         files = []

@@ -676,6 +676,14 @@
           "items": {
             "$ref": "#/$defs/envTest"
           }
+        },
+        "batches": {
+          "$comment": "env.yaml —— 批次测试：**一条 = 一个 UVM_TEST = 一个批次/专题**。与 `tests` 平行：那边一条一个属性取值，这边一条一个批次。`name` 就是 UVM 类名，回归的 +UVM_TESTNAME 靠它对齐。",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/batchTest"
+          }
         }
       },
       "additionalProperties": false
@@ -1587,6 +1595,34 @@
         }
       },
       "additionalProperties": false
+    },
+    "batchTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "theme": {
+          "type": "string"
+        },
+        "dimensions": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "string"
+        }
+      }
     }
   }
 }

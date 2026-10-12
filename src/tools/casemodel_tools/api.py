@@ -365,3 +365,64 @@ RUNNERS = {
     TOOL_GAPS: run_gaps,
     TOOL_GENERATE: run_generate,
 }
+
+
+def run_uvm_batches(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
+    """YAML 文本 → `tool_uvm` 的 `environment.batches` 片段（**一条 = 一个批次**）。
+
+    与 `run_uvm_tests` 是**两条平行的路**：
+
+        run_uvm_tests    一条 = 一个**属性取值**（`D_type = VECTOR`）→ `{env}_<dim>_p<val>_test`
+        run_uvm_batches  一条 = 一个**批次 / 专题**（`TH-B02 指令类型`）→ `npu_type_test`
+
+    **为什么批次也要有 test 类**：没有它，回归里 `+UVM_TESTNAME=npu_type_test`
+    会撞 UVM_FATAL(INVTST) —— 而那条路径被记成 pass（"测试名不存在"也是 exit 0，
+    见 `_sim_run_cmd` 的注释）。也就是说：**批次跑不起来，反而看不出来**。
+
+    类体里不铺激励（约束在 sequence 里，本工具看不见），只把"这一批打哪几个
+    维度、用什么方法"挂上 config_db —— 消费方（sequence）读它决定怎么激励。
+    名字取自 `themes[].test`；**改了名字会记账**（回归的 `+UVM_TESTNAME` 靠它对齐）。
+    """
+    try:
+        models = load_models_from_text(yaml_text, source="<inline>")
+    except CaseModelError as exc:
+        return {"error": str(exc)}
+
+    from .coverage import sv_ident
+
+    model = models[0].resolve()
+    batches: List[Dict[str, Any]] = []
+    notes: List[str] = []
+    for th in model.themes:
+        raw = str(th.test or "").strip()
+        if not raw:
+            notes.append(f"专题 {th.key} 没写 `test` —— 出不了 test 类，"
+                         f"回归里这一批跑不了")
+            continue
+        name = sv_ident(raw, "")
+        if not name:
+            notes.append(f"专题 {th.key} 的 test 名 {raw!r} 折不成合法标识符 —— 跳过")
+            continue
+        if name != raw:
+            notes.append(f"专题 {th.key} 的 test 名 {raw!r} 含非标识符字符，"
+                         f"已折成 {name}（回归的 +UVM_TESTNAME 要用折后的）")
+        batches.append({
+            "name": name,
+            "theme": th.key,
+            "dimensions": ",".join(d.id or d.name or d.key for d in (th.dims or [])),
+            "method": th.method or "",
+            "priority": th.priority or "",
+            "checks": ",".join(th.checks or []),
+        })
+
+    if not batches:
+        return {"error": "模型里没有任何带 `test` 的专题"} if not model.themes else {
+            "count": 0, "batches": [], "batches_yaml": "", "notes": notes}
+
+    return {
+        "count": len(batches),
+        "batches": batches,
+        "batches_yaml": yaml.safe_dump({"batches": batches}, allow_unicode=True,
+                                       sort_keys=False),
+        "notes": notes,
+    }

@@ -393,8 +393,12 @@ class TestSeedsReachTheRegression:
         from src.tools.uvm_tools.tool_find_spec_yaml.main import _seed_plan
 
         sp = _seed_plan(self._plan_dir(tmp_path))
-        assert sp["npu_type_test"] == {"base": 2001, "count": 15, "explore": 3}
         assert len(sp) == 11
+        # 种子 + 批次元数据（回归铺 test 时两样都要：种子给 count/SEED，
+        # theme/priority 给 tags —— 分级回归就是按 p0..p3 筛的）
+        assert {k: sp["npu_type_test"][k] for k in ("base", "count", "explore")} ==             {"base": 2001, "count": 15, "explore": 3}
+        assert sp["npu_type_test"]["theme"] == "TH-B02"
+        assert sp["npu_type_test"]["priority"] == "P0"
 
     def test_count_is_baseline_plus_explore(self, tmp_path):
         """探索种子**并进总次数** —— 跑法一样，只是目的不同。"""
@@ -464,3 +468,70 @@ class TestThePlanIsWrittenWithTheCaseModel:
         plan = yaml.safe_load(out.read_text(encoding="utf-8"))
         assert plan["summary"]["coverpoint_count"] == 12
         assert len(plan["batches"]) == 11
+
+
+class TestBatchTestsAreRunnable:
+    """批次要能在回归里**真跑起来** —— 光有种子不够，还得有个同名的 test 类。
+
+    没有 `npu_type_test` 这个 UVM 类，`+UVM_TESTNAME=npu_type_test` 会撞
+    `UVM_FATAL (INVTST) test not found`，而 **vsim 仍然 exit 0** ——
+    于是"这一批跑不起来"被记成 pass，看不出来。
+    """
+
+    NPU = Path("specs/npu_sched/casemodel.yaml")
+
+    def test_the_model_yields_one_class_per_batch(self):
+        from src.tools.casemodel_tools.api import run_uvm_batches
+
+        p = run_uvm_batches(self.NPU.read_text(encoding="utf-8"), "npu_sched")
+        assert p["count"] == 11
+        assert p["batches"][1]["name"] == "npu_type_test"
+        assert p["batches"][1]["theme"] == "TH-B02"
+
+    def test_a_batch_without_a_test_name_is_noted(self):
+        from src.tools.casemodel_tools.api import run_uvm_batches
+        import yaml
+
+        model = yaml.safe_load(self.NPU.read_text(encoding="utf-8"))
+        del model["themes"][0]["test"]
+        out = run_uvm_batches(yaml.safe_dump(model, allow_unicode=True))
+        assert out["count"] == 10
+        assert any("没写 `test`" in n for n in out["notes"])
+
+    def test_the_template_renders_one_class_per_batch(self):
+        """与 `_attr_test` 同形的宏 —— **类名必须取自 `batches[].name`**。"""
+        tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+                   "/test_templates/test_batch.sv.j2")
+        assert tpl.is_file(), "批次 test 模板不在 —— `environment.batches` 没人渲染"
+        text = tpl.read_text(encoding="utf-8")
+        assert "`define GEN_BATCH_TC" in text
+        assert "`GEN_BATCH_TC({{ b.name }}" in text
+        # 宏体内只能有 /* */ 注释（`//` 会吃掉行尾反斜杠，宏当场断掉）
+        macro = text[text.index("`define GEN_BATCH_TC"):text.index("{% for")]
+        assert "//" not in macro.replace("/*", "").replace("*/", "")
+
+    def test_the_render_task_produces_it(self):
+        src = Path("src/tools/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
+        assert "ENVIRONMENT_BATCH_TEST_TEMPLATES" in src
+        assert "if environment.batches:" in src
+        assert "_normalize_batches" in src
+
+    def test_the_injection_carries_batches_into_env_yaml(self, tmp_path):
+        import shutil
+
+        from src.layers.l1_infrastructure.layout import casemodel_path
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
+
+        (tmp_path / "inputs").mkdir(parents=True)
+        shutil.copy(self.NPU, casemodel_path(tmp_path))
+        lines = _casemodel_test_lines(tmp_path)
+        assert "  batches:" in lines
+        assert any("npu_type_test" in ln for ln in lines)
+
+    def test_the_regression_emits_one_test_per_batch(self):
+        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(encoding="utf-8")
+        block = src[src.index("批次测试（**一条 = 一个 UVM_TEST = 一个批次/专题**）"):]
+        block = block[:block.index("loopback 测试")]
+        assert "_sim_run_cmd(dut_top, bname)" in block, \
+            "+UVM_TESTNAME 必须是**批次名**，否则对不上生成的类"
+        assert "_seed_lines(bname, seed_plan)" in block
