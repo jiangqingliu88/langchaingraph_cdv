@@ -58,7 +58,7 @@ regression_run 布局 写的改了、读的没改          → GUI 整页空白
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 #: 回归运行目录名（相对 run 根）。**唯一一处**。
 REGRESSION_RUN = "regression_run"
@@ -102,6 +102,53 @@ def casemodel_path(run_root: str | Path) -> Path:
     / `_find_case_model`）本来就在这儿找，收过来还顺带把"两派路径"合成一派。
     """
     return Path(run_root) / "inputs" / "casemodel.yaml"
+
+
+def find_case_model(spec: Any, run_root: str | Path) -> Optional[Path]:
+    """这次运行**该用哪份 case 模型** —— 判据只有这一处。
+
+    四个来源，按「离这次运行由近到远」：
+
+      1. `spec["case_model"]`     —— 设计阶段若产出了就把路径写在这儿；
+      2. `<specs>/<模块>/casemodel.yaml` —— **和 spec 放在一起的手写模型**。
+         这是人写模型最自然的位置（模型是"这份规格该测什么"的产物），
+         所以它的优先级高于项目级默认值；
+      3. `config/casemodel/<模块>.yaml`  —— 项目级常备的那一份；
+      4. `<run>/inputs/casemodel.yaml`   —— **front 的草稿**（自动生成的那份）。
+
+    ## 为什么收成一处
+
+    这条链上原来有**两个读法**：verify 分解测试点走 `_find_case_model`
+    （认识 `config/` 与 `specs/`），而覆盖率侧生成覆盖点、写 DUT 探针直接读
+    `casemodel_path()`（**只认 `inputs/`**）。于是同一个 run 里：
+
+        verify 拿 `config/casemodel/npu_sched.yaml` 分解测试点
+        coverage 拿 front 的草稿 `inputs/casemodel.yaml` 生成覆盖点
+
+    两份模型的覆盖点不一样，而**两边都觉得自己对**。收成一处之后，"用哪份"
+    只有一个答案。front 的草稿仍然会被写出来（它是链路自己产的那份），
+    只是**人写了模型时它不再是首选**。
+
+    找不到返回 `None` —— **不编一份出来**（"这件事没做"要在日志里说没做）。
+    """
+    candidates: list[Path] = []
+    if isinstance(spec, dict):
+        declared = spec.get("case_model")
+        if isinstance(declared, str) and declared.strip():
+            candidates.append(Path(declared))
+        module = str(spec.get("design_name") or "").strip()
+        if module:
+            candidates.append(Path("specs") / module / "casemodel.yaml")
+            candidates.append(Path("config") / "casemodel" / f"{module}.yaml")
+    candidates.append(casemodel_path(run_root))
+
+    for path in candidates:
+        try:
+            if path.is_file():
+                return path
+        except OSError:
+            continue
+    return None
 
 
 def latest_root(run_root: str | Path) -> Optional[Path]:

@@ -266,13 +266,16 @@ class CoverageExecutor(BaseExecutor):
         本函数只落**声明**（`coverage_points.json`），供 workbench 那页与审计读；
         要一段独立可编译的 covergroup 文本走 `vagent case-model covergroups`。
         """
-        from src.layers.l1_infrastructure.layout import casemodel_path
+        # **统一判据**：与 verify 分解测试点用的是同一处解析 —— 两个读法会在
+        # 同一个 run 里各拿一份模型（verify 认 config/、coverage 只认 inputs/），
+        # 于是"分解出来的测试点"和"生成的覆盖点"来自两份不同的模型。
+        from src.layers.l1_infrastructure.layout import find_case_model
 
-        cm_file = casemodel_path(output_dir)
+        cm_file = find_case_model(spec, output_dir)
         cov_dir = output_dir / "coverage"
         cov_dir.mkdir(parents=True, exist_ok=True)
         points: Dict[str, Any] = {}
-        if cm_file.is_file():
+        if cm_file is not None:
             from src.tools.casemodel_tools.api import run_covergroups
 
             points = run_covergroups(cm_file.read_text(encoding="utf-8"), module_name)

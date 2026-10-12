@@ -160,6 +160,10 @@ class VerifyExecutor(BaseExecutor):
         if case_model is None:
             logger.info("这次运行没有 case 模型 —— 跳过测试点分解（casemodel）")
         else:
+            # **把"用了哪一份"说出来**：人写的模型优先于 front 的草稿，而这件事
+            # 从运行结果上看不出来（都是"有一份模型"）。一份手写模型悄悄接管了
+            # 整轮回归的测试点，却没有任何一行日志提到它 —— 排查时会很痛苦。
+            logger.info(f"case 模型：{case_model}（人写的优先于 front 的草稿）")
             try:
                 from src.tools.casemodel_tools.api import run_gaps, run_generate
 
@@ -265,10 +269,8 @@ class VerifyExecutor(BaseExecutor):
         阶段生成，探针必须先于它存在。写在覆盖率阶段就永远赶不上这一轮 ——
         那就又是一份"看着有、从没编译过"的产物（本会话踩过这个坑）。
         """
-        from src.layers.l1_infrastructure.layout import casemodel_path
-
-        cm_file = casemodel_path(output_dir)
-        if not cm_file.is_file():
+        cm_file = _find_case_model(_spec_of(output_dir), output_dir)
+        if cm_file is None:
             return
         try:
             from src.tools.casemodel_tools.api import run_covergroups
@@ -308,16 +310,13 @@ class VerifyExecutor(BaseExecutor):
         拿不到模型（文件不在 / 解析失败）就返回空 —— 调用方据此退回自动分箱，
         **不静默假装有模型**。
         """
-        from src.layers.l1_infrastructure.layout import casemodel_path
-
-        cm_file = casemodel_path(output_dir)
-        if not cm_file.is_file():
+        cm_file = _find_case_model(_spec_of(output_dir), output_dir)
+        if cm_file is None:
             return {}
         try:
             from src.tools.casemodel_tools.api import run_covergroups
 
-            points = run_covergroups(cm_file.read_text(encoding="utf-8"),
-                                     output_dir.name[:0] or "dut")
+            points = run_covergroups(cm_file.read_text(encoding="utf-8"), "dut")
         except Exception as e:                       # noqa: BLE001 旁路，别拦生成
             logger.warning(f"读 case 模型失败（env_cov 退回自动分箱）: {e}")
             return {}
@@ -633,10 +632,13 @@ def _synthesize_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
     这是原来缺的那座桥：闭环里没有任何一步产 case 模型，于是测试点分解常年
     「跳过」—— 覆盖率的收敛只能靠随机激励。
 
-    落盘到 `inputs/casemodel.yaml`（`_find_case_model` 的来源 2）是**有意的**：
-    这份文件人看得见、改得动，改完下次运行用的就是**人给的那一份**（来源 2 的
-    优先级高于合成）。数据本身不编：功能点/接口/中断都是 spec 里已经有的字段，
-    机械映射成 case 模型的结构（几个功能点就几个叶子，几个数据信号就几个维度）。
+    落盘到 `inputs/casemodel.yaml`（`layout.find_case_model` 的**最后一个**来源）
+    是**有意的**：这份文件人看得见、改得动。但它是**兜底**那一档 —— 人想长期
+    用自己那份，写到 `specs/<模块>/casemodel.yaml` 或 `config/casemodel/<模块>.yaml`
+    更合适（那两个来源的优先级高于这里）。
+
+    数据本身不编：功能点/接口/中断都是 spec 里已经有的字段，机械映射成 case 模型
+    的结构（几个功能点就几个叶子，几个数据信号就几个维度）。
 
     spec 里既没功能点也没信号 → 返回 None（不编一份空模型假装做过）。
     """
@@ -661,37 +663,31 @@ def _synthesize_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
         return None
 
 
-def _find_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
-    """找这次运行要用的 **case 模型**（casemodel 的输入）。找不到返回 None。
+def _spec_of(output_dir: Path) -> Dict[str, Any]:
+    """这次运行的 spec —— 从 `<run>/spec.json` 读（verify 自己在 UVM 生成前落的那份）。
 
-    **找不到就不编一份出来。** 分解测试点这件事没做，就要在日志里说没做 ——
-    编一份空模型让它"看起来做了"比不做更糟。
-
-    三个来源，按「离这次运行由近到远」排：
-
-      1. `spec["case_model"]` —— 设计阶段若产出了就把路径写在这儿，优先它；
-      2. `<运行目录>/inputs/casemodel.yaml` —— **人手工放一份**（模型还没写完时
-         这是最现实的用法）；
-      3. `config/casemodel/<模块名>.yaml` —— 项目级常备的那一份。
-
-    闭环里目前**没有** spec → case 模型的桥（设计阶段不产出它），所以第 1 条现在
-    通常不会命中；这条线是"有条件生效"的，等设计阶段补上就自然通。
+    写盘器（field_bins / DUT 探针）拿不到调用栈里的 `spec` 变量，而
+    `_find_case_model` 需要它来认 `specs/<模块>/casemodel.yaml` 这类候选。
+    `spec.json` 就是"这次运行的 spec"的落点，读它比把 spec 一路透传干净。
     """
-    candidates = []
-    if isinstance(spec, dict):
-        declared = spec.get("case_model")
-        if isinstance(declared, str) and declared.strip():
-            candidates.append(Path(declared))
-        module = str(spec.get("design_name") or "").strip()
-        if module:
-            candidates.append(Path("config") / "casemodel" / f"{module}.yaml")
-    from src.layers.l1_infrastructure.layout import casemodel_path
-    candidates.append(casemodel_path(output_dir))
+    try:
+        return json.loads((output_dir / "spec.json").read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError):
+        return {}
 
-    for path in candidates:
-        try:
-            if path.is_file():
-                return path
-        except OSError:
-            continue
-    return None
+
+def _find_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
+    """转发到 `layout.find_case_model` —— **"用哪份模型"的判据只有那一处**。
+
+    原来这里自己实现了一份（认识 `config/`），而**覆盖率侧**读的是
+    `casemodel_path()`（只认 `inputs/`）。同一个 run 里于是：
+
+        verify   拿 `config/casemodel/<模块>.yaml` 分解测试点
+        coverage 拿 front 的草稿 `inputs/casemodel.yaml` 生成覆盖点
+
+    两份模型的覆盖点不一样，而两边都觉得自己对。收成一处之后只有一个答案；
+    `specs/<模块>/casemodel.yaml`（手写模型最自然的位置）也一并被认了。
+    """
+    from src.layers.l1_infrastructure.layout import find_case_model
+
+    return find_case_model(spec, output_dir)

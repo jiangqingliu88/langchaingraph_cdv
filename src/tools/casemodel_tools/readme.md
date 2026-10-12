@@ -530,6 +530,21 @@ python -m src.tools.casemodel_tools.cli covergroups \
 
 主 CLI 同形：`vagent case-model covergroups model.yaml -m apb_uart`。
 
+### 放哪一份、谁优先
+
+`layout.find_case_model` 是**唯一**的判据（原来 verify 与覆盖率侧各读一份，
+同一个 run 里两次拿到不同的模型而都不报错）：
+
+| 优先级 | 位置 | 谁写的 |
+|---|---|---|
+| 1 | `spec["case_model"]` | 设计阶段产出时给的路径 |
+| 2 | `specs/<模块>/casemodel.yaml` | **人写的**（放在 spec 旁边，最自然的位置） |
+| 3 | `config/casemodel/<模块>.yaml` | 人写的（项目级常备） |
+| 4 | `<run>/inputs/casemodel.yaml` | **front 的草稿**（自动生成，兜底） |
+
+**人写的优先于草稿** —— 手写模型是对这份规格的建模结论，草稿只是"没有模型时的
+起点"。选了哪一份会打进日志（`case 模型：<路径>`），因为它从运行结果上看不出来。
+
 ### 真模型：`specs/npu_sched/casemodel.yaml`
 
 把一份《NPU 指令调度器功能覆盖率计划文档》落成模型的样板，也是**唯一**同时用上

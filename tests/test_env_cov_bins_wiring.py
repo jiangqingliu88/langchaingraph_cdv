@@ -294,3 +294,77 @@ class TestASimThatNeverRanIsNotAPass:
         r = subprocess.run(["sh", "-c", cmd], cwd=str(tmp_path),
                            capture_output=True, text=True)
         assert (r.returncode != 0) is expect_fail, (content, r.returncode)
+
+
+class TestOneAnswerForWhichCaseModel:
+    """「这次运行用哪份 case 模型」**只能有一个判据**。
+
+    原来这条链上有两个读法：verify 分解测试点走 `_find_case_model`（认识
+    `config/`），覆盖率侧生成覆盖点走 `casemodel_path()`（**只认 `inputs/`**）。
+    于是同一个 run 里两件事拿的是两份不同的模型，而**两边都觉得自己对** ——
+    分解出来的测试点与生成的覆盖点对不上，却没有任何一处报错。
+    """
+
+    def _layout(self):
+        from src.layers.l1_infrastructure import layout
+
+        return layout
+
+    def test_specs_adjacent_model_wins_over_the_front_draft(self, tmp_path, monkeypatch):
+        """`specs/<模块>/casemodel.yaml`（人写模型最自然的位置）优先于 front 的草稿。"""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "specs" / "npu_sched").mkdir(parents=True)
+        hand = tmp_path / "specs" / "npu_sched" / "casemodel.yaml"
+        hand.write_text("version: '1'\n", encoding="utf-8")
+        run = tmp_path / "output_x"
+        (run / "inputs").mkdir(parents=True)
+        (run / "inputs" / "casemodel.yaml").write_text("version: '1'\n", encoding="utf-8")
+
+        got = self._layout().find_case_model({"design_name": "npu_sched"}, run)
+        assert got == Path("specs") / "npu_sched" / "casemodel.yaml"
+
+    def test_config_is_the_project_level_fallback(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "config" / "casemodel").mkdir(parents=True)
+        (tmp_path / "config" / "casemodel" / "dut.yaml").write_text(
+            "version: '1'\n", encoding="utf-8")
+        run = tmp_path / "output_x"
+        (run / "inputs").mkdir(parents=True)
+        (run / "inputs" / "casemodel.yaml").write_text("version: '1'\n", encoding="utf-8")
+
+        got = self._layout().find_case_model({"design_name": "dut"}, run)
+        assert got == Path("config") / "casemodel" / "dut.yaml"
+
+    def test_the_front_draft_is_the_last_resort(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        run = tmp_path / "output_x"
+        (run / "inputs").mkdir(parents=True)
+        (run / "inputs" / "casemodel.yaml").write_text("version: '1'\n", encoding="utf-8")
+        assert self._layout().find_case_model({"design_name": "dut"}, run) == \
+            self._layout().casemodel_path(run)
+
+    def test_nothing_anywhere_returns_none_not_an_invented_path(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        assert self._layout().find_case_model({"design_name": "ghost"},
+                                              tmp_path / "output_x") is None
+
+    def test_all_three_readers_go_through_it(self):
+        """verify 的两个写盘器 + coverage 的生成器，**都不许自己拼路径**。"""
+        verify = Path("src/executors/verify/main.py").read_text(encoding="utf-8")
+        coverage = Path("src/executors/coverage/main.py").read_text(encoding="utf-8")
+
+        # verify：写 field_bins 的、写 DUT 探针的，都得走统一判据
+        assert verify.count("_find_case_model(_spec_of(output_dir), output_dir)") == 2
+        # coverage：不再直接读 casemodel_path
+        assert "casemodel_path(output_dir)" not in coverage.replace(
+            "from src.layers.l1_infrastructure.layout import casemodel_path", "")
+        assert "find_case_model(spec, output_dir)" in coverage
+
+    def test_verify_has_no_local_copy_of_the_rule(self):
+        """verify 那份**转发**到 layout —— 本地再实现一份就又是两个判据了。"""
+        src = Path("src/executors/verify/main.py").read_text(encoding="utf-8")
+        start = src.index("def _find_case_model(")
+        body = src[start:start + 900]
+        assert "from src.layers.l1_infrastructure.layout import find_case_model" in body
+        # 本地不许再挑候选（`candidates.append` 是旧实现的标志）
+        assert "candidates.append" not in body
