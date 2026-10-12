@@ -160,7 +160,9 @@ def vagent(args):
 def test_vagent_group_has_all_subcommands():
     res = vagent(["case-model", "--help"])
     assert res.exit_code == 0
-    for sub in ("check", "analyze", "generate", "uvm-tests", "gui", "tree", "rules"):
+    # **两个入口能力等价** —— 这里列的是契约，漏一个就是"工具 CLI 有、主 CLI 没有"
+    for sub in ("check", "analyze", "generate", "uvm-tests", "gui", "tree", "rules",
+                "covergroups", "coverage-plan"):
         assert sub in res.output
 
 

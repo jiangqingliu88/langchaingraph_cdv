@@ -4872,6 +4872,37 @@ def case_model_covergroups(model, module, output_path):
         sys.exit(2)
 
 
+@case_model.command("coverage-plan")
+@click.argument("model", type=click.Path(exists=True))
+@click.option("--module", "-m", default="dut", help="模块名（默认 dut）")
+@click.option("--output", "-o", "output_path", type=click.Path(),
+              help="把计划写到文件（缺省打到 stdout）")
+def case_model_coverage_plan(model, module, output_path):
+    """功能覆盖率计划：覆盖点 + 批次 + 种子管理 + 需求追溯
+
+    与 `covergroups` 的分工：那个出的是**给编译器**的 SV；这个出的是**给人看、
+    给回归吃**的计划书 —— §3 覆盖点 / §5 批次 / §6 种子 / §8 需求追溯四张表摆
+    在一起，"声明了 12 个覆盖点、回归里只跑 8 条"这种事才看得出来。
+
+    
+    示例:
+      vagent case-model coverage-plan model.yaml -m npu_sched
+      vagent case-model coverage-plan model.yaml -o coverage_plan.yaml
+    """
+    out = get_output_adapter(False)
+    from src.tools.casemodel_tools.cli import build_parser, cmd_coverage_plan
+    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
+
+    try:
+        argv = ["coverage-plan", model, "--module", module]
+        if output_path:
+            argv += ["--out", output_path]
+        sys.exit(cmd_coverage_plan(build_parser().parse_args(argv)))
+    except _CaseModelError as exc:
+        out.print_error(f"模型无法构建: {exc}", code=2)
+        sys.exit(2)
+
+
 @case_model.command("gui")
 @click.argument("model", required=False, type=click.Path(exists=True))
 def case_model_gui(model):
