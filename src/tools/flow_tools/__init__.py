@@ -7,7 +7,7 @@
     docs/evidence_chain.json（n_finalize 写）→ 六层领域证据链 + signoff_ready
 
 > 为什么放在 `src/tools/` 而不是 `src/layers/`：它不调用任何引擎，只做
-> 「磁盘 JSON → 结构化 dict」这一件事 —— 与 `tracking_tools` / `trend_tools`
+> 「磁盘 JSON → 结构化 dict」这一件事 —— 与 `trend_tools`
 > 同一条纪律（工具层只放纯函数）。界面（`src/workbench/modules/vms/signoff/`）
 > 是它的只读视图。
 

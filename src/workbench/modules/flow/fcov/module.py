@@ -21,7 +21,11 @@
 
   · 功能覆盖点 —— 一个覆盖点一行：维度 / 信号 / 类型 / bin 数 / bin 名单 / 实测%
   · 测试点     —— 模型摊平出来的用例（与回归里跑的那份**同一分母**）
-  · 资产       —— 这条链上的四份文件（模型 / 声明 / env_cov bin / 实测文本）
+  · 链上文件   —— 这条链上的四份文件（模型 / 声明 / env_cov bin / 实测文本）
+
+第三张表叫「链上文件」而**不叫「资产」**：它们是这条链落在盘上的四份文件，不是
+「验证资产」（RTL / UVM 环境 / 参考模型那类设计产物）—— 两个词混用会让人以为
+这里是资产台账。
 
 三张表**只看不写**：数据源是运行目录里已落盘的东西，`flow.fcov` 不重跑生成器、
 不重跑 `vcover`（那要几分钟，而那份文本就是当时判定用的那一份）。
@@ -58,7 +62,7 @@ TESTPOINT_COLUMNS = (
 )
 
 ASSET_COLUMNS = (
-    ("label", "资产", 170, LEFT),
+    ("label", "文件", 170, LEFT),
     ("path", "路径", 320, LEFT),
     ("exists", "在", 50, CENTER),
     ("size_kb", "大小 KB", 90, CENTER),
@@ -67,7 +71,7 @@ ASSET_COLUMNS = (
 
 
 class FunctionalCoverageModule(ModuleBase):
-    """case 建模对应的功能覆盖率 —— 覆盖点 / 测试点 / 资产。"""
+    """case 建模对应的功能覆盖率 —— 覆盖点 / 测试点 / 链上文件。"""
 
     HINT = ("数据源是**本次运行目录里已落盘**的文件（case 模型、覆盖点声明、"
             "env_cov 注入、vcover 实测文本）—— 不重跑生成器、不重跑 vcover。"
@@ -103,7 +107,7 @@ class FunctionalCoverageModule(ModuleBase):
         self.tabs.setDocumentMode(True)
         self.tabs.addTab(self._build_page(COVERPOINT_COLUMNS, "cp"), "功能覆盖点")
         self.tabs.addTab(self._build_page(TESTPOINT_COLUMNS, "tp"), "测试点")
-        self.tabs.addTab(self._build_page(ASSET_COLUMNS, "asset"), "资产")
+        self.tabs.addTab(self._build_page(ASSET_COLUMNS, "asset"), "链上文件")
         layout.addWidget(self.tabs, 1)
         return root
 

@@ -367,17 +367,6 @@ modules:
     params:
       subscribe: run.selected
 
-  # 测试点 / 验证资产跟踪表 —— 两个页签，只读。数据源是 YAML（清单的 input），
-  # 界面不做写回：改 YAML → 点「刷新」。绑定 flow.tracking 读那份 YAML。
-  - id: flow.tracking
-    title: 测试点 / 资产
-    group: flow
-    factory: src.workbench.modules.flow.tracking:TrackingModule
-    area: center
-    order: 50
-    input: tracking/tracking.yaml
-    tool: {name: flow.tracking, kind: json}
-
   # 待办 / 卡点 —— 「现在该干什么」：把要人做的事聚成一页（要你动手的排前面）。
   # 它不在"看情况"那一族里，它在**让你别漏**那一族：原本待审批在验证流程、
   # 待签豁免在覆盖率豁免、要人工确认在决策轨迹、卡住的运行在运行历史 —— 靠人记

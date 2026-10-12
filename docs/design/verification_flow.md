@@ -119,7 +119,7 @@ apply_expand_seeds      扩大随机种子
 |---|---|
 | `config/workbench.yaml` | **工作台界面清单**（GUI 有哪些页），不是一次运行的输入 |
 | `config/regression/*.yaml` | **独立的回归工具**（`python regression.py --config ...`），闭环不走它 |
-| `config/tracking/tracking.yaml`、`config/trend/trend.yaml` | 界面只读展示用的数据源 |
+| `config/trend/trend.yaml` | 界面只读展示用的数据源 |
 | `config/ide/manual_nodes.yaml`（编辑界面） | 文件本身是闭环输入，但「人工节点」页只是它的编辑器 |
 
 ---

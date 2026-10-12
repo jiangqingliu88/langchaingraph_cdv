@@ -2,7 +2,7 @@
 
 本包**零 Qt 依赖**：它把 `trend.yaml` 归一化成「哪些阶段、每轮的值是多少」，
 界面（`src/workbench/modules/vms/trend/`）只负责把它们画成折线。判定与建模
-在工具层，界面是只读视图 —— 与 `casemodel_tools` / `tracking_tools` 同一条纪律。
+在工具层，界面是只读视图 —— 与 `casemodel_tools` 同一条纪律。
 
 为什么是 YAML 而不是从 pipeline 现采：build 数量与 P0–P3 分层通过数**当前
 pipeline 里没有采集**（journal 只有覆盖率与阶段状态）。一份可 diff 的进度

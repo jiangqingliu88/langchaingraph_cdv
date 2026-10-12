@@ -28,7 +28,7 @@
 ─────────────────────────────────────────────────────────────────────────────────────
 调试技术    debug   order 10   ──▶  debug.sim_log / debug.fingerprint      ── debug（2/5 个面）
 集成设计环境 ide     order 20   ──▶  ide.manual_nodes                      ── —（声明性 YAML）
-验证管理系统 vms     order 30   ──▶  vms.casemodel / vms.tracking /        ── verify（仅 casemodel 面）
+验证管理系统 vms     order 30   ──▶  vms.casemodel /                     ── verify（仅 casemodel 面）
                                     vms.trend / vms.pipeline /                 （全 7 agent，但是不可见的黑盒）
                                     vms.runs / vms.evidence
 ```
@@ -306,7 +306,7 @@ GUI 到引擎的**唯一通道**是白名单绑定表 `src/workbench/bridge/cata
 
 ### P1 · 七条 agent 线落地（只读，5–8 天）　【基本已实现】
 - ✅ **业务线重构**：`groups` 改 9 条（7 agent + `ide` + `flow`）；`modules/` 目录随之重建
-  （`vms.{pipeline,runs,evidence,tracking,trend,signoff}` → `flow.*`，`vms.casemodel` → `verify.casemodel`）。
+  （`vms.{pipeline,runs,evidence,trend,signoff}` → `flow.*`，`vms.casemodel` → `verify.casemodel`）。
 - ✅ **每条 agent 线一个"产出总览"**：`<line>.output` × 7，共用跨线视图
   `modules/agent_output.py` + 一个绑定 `agent.outputs`（role 作参数）。
   它给的是**这次运行里该 agent 跑了哪些阶段、产出了哪些文件** —— 数据来自运行日志
@@ -375,7 +375,6 @@ GUI 到引擎的**唯一通道**是白名单绑定表 `src/workbench/bridge/cata
 | `debug.fingerprint` | debug | `debug` | 不动 |
 | `ide.manual_nodes` | ide | `design`（或保留 `ide`） | 见 AADR-4 灰区 |
 | `vms.casemodel` | vms | `verify` | 它就是 verify 的 casemodel 面 |
-| `vms.tracking` | vms | `flow`（或 `audit`） | 测试点/资产跟踪，偏签核 |
 | `vms.trend` | vms | `flow` | 进度趋势属横切 |
 | `vms.pipeline` | vms | `flow` | 闭环编排 |
 | `vms.runs` | vms | `flow` | 运行历史 |
@@ -396,9 +395,10 @@ GUI 到引擎的**唯一通道**是白名单绑定表 `src/workbench/bridge/cata
          └─ TaskRecord  ← 每个 agent 的一次调用日志（DB 里有表，闭环里没人写）
 ```
 
-外加一个**没接进来**的：**测试点**。`config/tracking/tracking.yaml` 是手工维护的声明，
-闭环不读它；闭环跑出来的覆盖率也不回填。DB 里的 `feature_testpoint_map` 又从知识图谱
-另写一份 —— 三处互不认识。
+**测试点**这条线**已经接上了**：`inputs/casemodel.yaml`（front 产出）→ verify 摊平成
+测试点 → 回归跑它们 → `vcover` 收命中，链路上的每一步都落盘，工作台「功能覆盖率」页
+把声明与实测分列。原先那份手工维护的 `config/tracking/tracking.yaml` 是张**死表**
+（7 条资产路径全部不存在、闭环不读、没人维护），已随本页一并删除。
 
 ### C.2 逐步核：6/7 真闭环，`model` 是缺口
 
@@ -439,5 +439,6 @@ GUI 到引擎的**唯一通道**是白名单绑定表 `src/workbench/bridge/cata
 
 - **业务线结构（9 条）✅ 不动** —— 它是能力维度，与颗粒度无关
 - **业务流 ✅ 已补一条** —— `flow.task` 就是缺的那条纵向流
-- **仍缺**：测点与闭环尚未接起来（`config/tracking/tracking.yaml` 还是死表）；
+- ✅ **测点与闭环已接起来**（`inputs/casemodel.yaml` → 测试点 → 回归 → vcover 命中；
+  见工作台「功能覆盖率」页）。原先那张手工 tracking.yaml 死表已删；
   步骤级驱动（只重跑某一步）仍是 P2

@@ -192,15 +192,7 @@ BINDINGS: List[ToolBinding] = [
         doc="拒绝一条豁免 —— 该点仍需覆盖",
     ),
 
-    # 测试点 / 验证资产跟踪表 —— 读一份 YAML，纯读、无子进程，所以是 pure。
-    ToolBinding(
-        name="flow.tracking",
-        target="src.tools.tracking_tools.api:run_tracking",
-        kind="json",
-        doc="tracking.yaml → 测试点与验证资产跟踪表（JSON）",
-    ),
-
-    # 进度趋势 —— 同样是读一份 YAML 的纯读绑定，切标签页不弹确认。
+    # 进度趋势 —— 读一份 YAML 的纯读绑定，切标签页不弹确认。
     ToolBinding(
         name="flow.trend",
         target="src.tools.trend_tools.api:run_trend",
