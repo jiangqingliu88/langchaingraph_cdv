@@ -1272,6 +1272,26 @@ def _num(value: Any) -> Optional[float]:
 UVM_SCHEMA = "uvm_config"
 
 
+def _spec_of_run(root: Path) -> Dict[str, Any]:
+    """运行目录里的 `spec.json` —— `find_case_model` 认 `specs/<模块>/` 时要用它。"""
+    return _read_json(root / "spec.json") or {}
+
+
+def _rel_to(path, root: Path, fallback: str = "") -> Path:
+    """展示用：能相对化就相对化，不能就原样；**`None` 退回 `fallback`**。
+
+    `path` 会是 `None`（模型没找到），而调用方那边是 `root / rel` —— 直接把
+    `None` 传下去就是 `TypeError`，而那个异常会**把前面攒的 notes 一起带走**
+    （实测：页面上一句解释都没有，只剩一张空表）。
+    """
+    if path is None:
+        return Path(fallback) if fallback else Path(".")
+    try:
+        return path.relative_to(root)
+    except ValueError:
+        return path
+
+
 def run_fcov(run_dir: str = "") -> Dict[str, Any]:
     """一次运行 → **功能覆盖率**三张表（覆盖点 / 测试点 / 资产）。
 
@@ -1294,12 +1314,15 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
     if not root.is_dir():
         return {"error": f"run_dir not found: {run_dir}"}
 
-    from src.layers.l1_infrastructure.layout import casemodel_path
+    # **走统一判据**：`casemodel_path()` 只是 front 的草稿落点，人写的模型
+    # （`specs/<模块>/casemodel.yaml`）优先级更高。直接读草稿的后果实测过 ——
+    # NPU 那份 12 维度的手写模型被绕过，页面显示"1 覆盖点 / 4 测试点"。
+    from src.layers.l1_infrastructure.layout import find_case_model
 
-    cm_file = casemodel_path(root)
+    cm_file = find_case_model(_spec_of_run(root), root)
     notes: List[str] = []
     cm_text = ""
-    if cm_file.is_file():
+    if cm_file is not None and cm_file.is_file():
         try:
             cm_text = cm_file.read_text(encoding="utf-8")
         except OSError:
@@ -1331,7 +1354,11 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
         except Exception as exc:                    # noqa: BLE001 旁路，别让页面挂
             notes.append(f"读 case 模型失败：{exc}")
     else:
-        notes.append(f"没有 case 模型（{cm_file} 不在）—— 覆盖点无从列起"
+        tried = "、".join(str(x) for x in
+                         [Path("specs") / "<模块>" / "casemodel.yaml",
+                          Path("config") / "casemodel" / "<模块>.yaml"]
+                         + ([cm_file] if cm_file else []))
+        notes.append(f"没有 case 模型（找过 {tried}）—— 覆盖点无从列起"
                      f"（front 阶段没产出它？）")
 
     measured, measured_path = {}, ""
@@ -1412,11 +1439,55 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
         except Exception as exc:                    # noqa: BLE001
             notes.append(f"摊平测试点失败：{exc}")
 
-    # ── ③ 资产：这条链上的文件 ──
+    # ── ③ 批次 / 种子管理 + 需求追溯：从**计划**读（与 case 模型同批落盘的那份）──
+    #
+    # 覆盖点表回答"该测什么"，这两张表回答"**打算怎么测够**"与"**谁验了哪条需求**"。
+    # 不读计划的话，页面上"声明了 12 个覆盖点"和"回归里只跑 8 条"永远对不上账
+    # —— 而它们本来就摆在同一份文件里。
+    batches: List[Dict[str, Any]] = []
+    trace: List[Dict[str, Any]] = []
+    plan_path = root / "coverage" / "coverage_plan.yaml"
+    if plan_path.is_file():
+        try:
+            import yaml as _yaml
+
+            plan = _yaml.safe_load(plan_path.read_text(encoding="utf-8")) or {}
+        except (OSError, ValueError, _yaml.YAMLError):
+            plan = {}
+        for b in (plan.get("batches") or []):
+            if not isinstance(b, dict):
+                continue
+            seeds = b.get("seeds") or {}
+            batches.append({
+                "theme": b.get("theme", ""),
+                "name": b.get("name", ""),
+                "priority": b.get("priority", ""),
+                "test": b.get("test", ""),
+                "method": b.get("method", ""),
+                "dimensions": ",".join(b.get("dimensions") or [])
+                              if isinstance(b.get("dimensions"), list)
+                              else str(b.get("dimensions") or ""),
+                # 种子管理的三列拆开展示 —— "跑够没有"要一眼看出基线/探索各多少
+                "base": seeds.get("base", ""),
+                "count": seeds.get("count", ""),
+                "explore": seeds.get("explore", ""),
+                "total_runs": b.get("total_runs", ""),
+            })
+        for r in (plan.get("traceability") or []):
+            if not isinstance(r, dict):
+                continue
+            trace.append({
+                "requirement": r.get("requirement", ""),
+                "coverpoints": "、".join(r.get("coverpoints") or []),
+                "crosses": "、".join(r.get("crosses") or []),
+                "batches": "、".join(r.get("batches") or []),
+                "covered": bool(r.get("coverpoints") or r.get("crosses")),
+            })
+    # ── ④ 资产：这条链上的文件 ──
     assets: List[Dict[str, Any]] = []
     for label, rel in (
-            ("case 模型（声明来源）", cm_file.relative_to(root)
-             if cm_file.is_file() else Path("inputs/casemodel.yaml")),
+            ("case 模型（声明来源）",
+             _rel_to(cm_file, root, "inputs/casemodel.yaml")),
             ("功能覆盖点声明", Path("coverage/coverage_points.json")),
             ("env_cov bin 注入", Path("inputs/yaml/uvm/env_cov_bins.yaml")),
             ("实测覆盖率文本", Path("sim/coverage/reports/coverage_cvg.txt"))):
@@ -1427,6 +1498,8 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
         "run_dir": str(root),
         "coverpoints": coverpoint_rows,
         "testpoints": testpoint_rows,
+        "batches": batches,
+        "traceability": trace,
         "assets": assets,
         "measured_path": measured_path,
         "counts": {
@@ -1434,6 +1507,9 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
             "bins": points.get("bin_count", 0),
             "crosses": len(points.get("crosses") or []),
             "testpoints": len(testpoint_rows),
+            "batches": len(batches),
+            "total_runs": sum(int(b.get("total_runs") or 0) for b in batches),
+            "requirements": len(trace),
             "measured": sum(1 for r in coverpoint_rows if r["measured"]),
         },
         "source": points.get("source", "") or ("casemodel" if points else ""),

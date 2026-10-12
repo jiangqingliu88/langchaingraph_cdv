@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -248,5 +249,85 @@ class TestTheNpuModelEndToEnd:
             assert "CP_NPU_QUEUE_001" in ids
             reqs = {r["requirement"] for r in mod.cp_model.rows if r["requirement"]}
             assert "REQ-NPU-008" in reqs
+        finally:
+            widget.deleteLater()
+
+
+class TestBatchesAndTraceability:
+    """批次 / 种子与需求追溯两张表 —— 「打算怎么测够」与「哪条需求被谁验了」。
+
+    它们和覆盖点表**同源**（都从 case 模型派生、落在一份计划里），分开摆是因为
+    读者不同：覆盖点表给"生成 covergroup 的人"，这两张给"回归"和"签核的人"。
+    """
+
+    NPU = (Path(__file__).resolve().parents[3]
+           / "specs" / "npu_sched" / "casemodel.yaml")
+
+    @pytest.fixture
+    def npu_run(self, tmp_path):
+        import shutil
+
+        from src.tools.casemodel_tools.api import run_coverage_plan
+
+        root = tmp_path / "output_npu_20260101_000000"
+        (root / "inputs").mkdir(parents=True)
+        (root / "coverage").mkdir(parents=True)
+        shutil.copy(self.NPU, root / "inputs" / "casemodel.yaml")
+        plan = run_coverage_plan(self.NPU.read_text(encoding="utf-8"), "npu_sched")
+        (root / "coverage" / "coverage_plan.yaml").write_text(
+            plan["plan_yaml"], encoding="utf-8")
+        return root
+
+    def _load(self, npu_run, qt_app, settings):
+        mod, widget = _module(qt_app, settings, run_id=npu_run.name)
+        mod.load(npu_run.name)
+        return mod, widget
+
+    def test_the_batch_table_carries_the_seed_management(self, npu_run, qt_app, settings):
+        mod, widget = self._load(npu_run, qt_app, settings)
+        try:
+            rows = {r["theme"]: r for r in mod.batch_model.rows}
+            assert len(rows) == 11
+            b = rows["TH-B02"]
+            assert b["test"] == "npu_type_test"
+            assert (b["base"], b["count"], b["explore"]) == (2001, 15, 3)
+            assert b["total_runs"] == 18
+        finally:
+            widget.deleteLater()
+
+    def test_the_trace_table_links_requirement_to_coverpoint_and_cross(
+            self, npu_run, qt_app, settings):
+        mod, widget = self._load(npu_run, qt_app, settings)
+        try:
+            rows = {r["requirement"]: r for r in mod.trace_model.rows}
+            assert len(rows) == 12
+            r = rows["REQ-NPU-001"]
+            assert r["coverpoints"] == "CP_NPU_QUEUE_001"
+            assert r["crosses"] == "X_NPU_LEVEL_DEC_004"
+            assert r["covered"] is True
+        finally:
+            widget.deleteLater()
+
+    def test_an_orphan_requirement_is_not_marked_covered(self, npu_run, qt_app, settings):
+        """§9.1 的「无孤立需求」看的就是这个标记 —— 不能一律 True。"""
+        # 把覆盖点与交叉上的 requirement 都摘掉，只留一条没人认领的
+        import yaml
+
+        plan_path = npu_run / "coverage" / "coverage_plan.yaml"
+        plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
+        plan["traceability"].append({"requirement": "REQ-GHOST", "coverpoints": [],
+                                     "crosses": [], "batches": []})
+        plan_path.write_text(yaml.safe_dump(plan, allow_unicode=True), encoding="utf-8")
+
+        mod, widget = self._load(npu_run, qt_app, settings)
+        try:
+            ghost = next(r for r in mod.trace_model.rows
+                         if r["requirement"] == "REQ-GHOST")
+            assert ghost["covered"] is False
+            row = [i for i, r in enumerate(mod.trace_model.rows)
+                   if r["requirement"] == "REQ-GHOST"][0]
+            from PySide6.QtCore import Qt
+            assert mod.trace_model.data(mod.trace_model.index(row, 0),
+                                        Qt.ItemDataRole.ForegroundRole) is not None
         finally:
             widget.deleteLater()

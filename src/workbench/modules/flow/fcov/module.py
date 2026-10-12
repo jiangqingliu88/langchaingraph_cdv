@@ -17,11 +17,13 @@
 
 合成一个数就再也分不出"该测的没测"和"测了的没打中"—— 那正是要分的。
 
-## 三张表
+## 五张表
 
   · 功能覆盖点 —— 一个覆盖点一行：维度 / 信号 / 类型 / bin 数 / bin 名单 / 实测%
   · 测试点     —— 模型摊平出来的用例（与回归里跑的那份**同一分母**）
-  · 链上文件   —— 这条链上的四份文件（模型 / 声明 / env_cov bin / 实测文本）
+  · 批次 / 种子 —— 打算怎么测够（每批的 test、种子基线、探索条数、合计）
+  · 需求追溯   —— 哪条需求被谁验了（覆盖点 / 交叉 / 批次）
+  · 链上文件   —— 这条链上的四份文件（模型 / 计划 / 探针 / 实测文本）
 
 第三张表叫「链上文件」而**不叫「资产」**：它们是这条链落在盘上的四份文件，不是
 「验证资产」（RTL / UVM 环境 / 参考模型那类设计产物）—— 两个词混用会让人以为
@@ -67,6 +69,31 @@ TESTPOINT_COLUMNS = (
     ("coverage_bin", "覆盖点", 200, LEFT),
 )
 
+#: 批次 / 种子管理表 —— 回答"**打算怎么测够**"。
+#:
+#: `base/count/explore` 三列拆开展示，是因为"这一批跑够没有"要一眼看出基线几条、
+#: 探索几条 —— 合成一个 `total_runs` 就分不出"基线不足"和"探索补的"。
+BATCH_COLUMNS = (
+    ("theme", "批次", 90, LEFT),
+    ("name", "名称", 170, LEFT),
+    ("test", "测试", 170, LEFT),
+    ("priority", "级别", 60, CENTER),
+    ("method", "方法", 60, CENTER),
+    ("base", "种子起点", 80, CENTER),
+    ("count", "基线", 60, CENTER),
+    ("explore", "探索", 60, CENTER),
+    ("total_runs", "合计", 60, CENTER),
+    ("dimensions", "打的维度", 260, LEFT),
+)
+
+#: 需求追溯表 —— 回答"**哪条需求被谁验了**"（§9.1 的"无孤立需求/覆盖点"就看它）。
+TRACE_COLUMNS = (
+    ("requirement", "需求", 120, LEFT),
+    ("coverpoints", "覆盖点", 200, LEFT),
+    ("crosses", "交叉覆盖", 200, LEFT),
+    ("batches", "批次", 200, LEFT),
+)
+
 ASSET_COLUMNS = (
     ("label", "文件", 170, LEFT),
     ("path", "路径", 320, LEFT),
@@ -77,9 +104,9 @@ ASSET_COLUMNS = (
 
 
 class FunctionalCoverageModule(ModuleBase):
-    """case 建模对应的功能覆盖率 —— 覆盖点 / 测试点 / 链上文件。"""
+    """case 建模对应的功能覆盖率 —— 覆盖点 / 测试点 / 批次 / 追溯 / 链上文件。"""
 
-    HINT = ("数据源是**本次运行目录里已落盘**的文件（case 模型、覆盖点声明、"
+    HINT = ("数据源是**本次运行目录里已落盘**的文件（case 模型、功能覆盖率计划、"
             "env_cov 注入、vcover 实测文本）—— 不重跑生成器、不重跑 vcover。"
             "「实测 %」为空 = 那一列还没有数据（旧格式的覆盖率文本，或还没跑到"
             "覆盖率收集），**不是 0**。")
@@ -113,6 +140,8 @@ class FunctionalCoverageModule(ModuleBase):
         self.tabs.setDocumentMode(True)
         self.tabs.addTab(self._build_page(COVERPOINT_COLUMNS, "cp"), "功能覆盖点")
         self.tabs.addTab(self._build_page(TESTPOINT_COLUMNS, "tp"), "测试点")
+        self.tabs.addTab(self._build_page(BATCH_COLUMNS, "batch"), "批次 / 种子")
+        self.tabs.addTab(self._build_page(TRACE_COLUMNS, "trace"), "需求追溯")
         self.tabs.addTab(self._build_page(ASSET_COLUMNS, "asset"), "链上文件")
         layout.addWidget(self.tabs, 1)
         return root
@@ -177,9 +206,15 @@ class FunctionalCoverageModule(ModuleBase):
         self.cp_model.set_rows([self._display_cp(r) for r in self._coverpoints],
                                cell_colors=self._unmeasured_colors())
         self.tp_model.set_rows(list(payload.get("testpoints") or []))
+        self.batch_model.set_rows(list(payload.get("batches") or []))
+        # 没有覆盖点/交叉认领的需求标灰 —— "孤立需求"是签核要拦的，得看得见
+        trace = list(payload.get("traceability") or [])
+        self.trace_model.set_rows(trace, cell_colors=self._orphan_colors(trace))
         self.asset_model.set_rows(list(payload.get("assets") or []))
         for model, table in ((self.cp_model, self.cp_table),
                              (self.tp_model, self.tp_table),
+                             (self.batch_model, self.batch_table),
+                             (self.trace_model, self.trace_table),
                              (self.asset_model, self.asset_table)):
             model.apply_column_widths(table)
 
@@ -203,9 +238,15 @@ class FunctionalCoverageModule(ModuleBase):
         return {(i, col["actual"]): muted
                 for i, r in enumerate(self._coverpoints) if not r.get("measured")}
 
+    def _orphan_colors(self, trace: list) -> Dict[tuple, QColor]:
+        """孤立需求整行标灰 —— §9.1 的「无孤立需求」过不了，页面上要当场看出来。"""
+        muted = QColor(theme.current().muted)
+        return {(i, 0): muted for i, r in enumerate(trace) if not r.get("covered")}
+
     def _clear(self) -> None:
         self._coverpoints = []
-        for attr in ("cp_model", "tp_model", "asset_model"):
+        for attr in ("cp_model", "tp_model", "batch_model", "trace_model",
+                     "asset_model"):
             model = getattr(self, attr, None)
             if model is not None:
                 model.set_rows([])
