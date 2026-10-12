@@ -20,7 +20,8 @@ import pytest
 import yaml
 
 from src.tools.casemodel_tools.api import (TOOL_COVERGROUPS, TOOL_NAMES, RUNNERS,
-                                           run_covergroups, run_uvm_tests)
+                                           run_coverage_plan, run_covergroups,
+                                           run_uvm_tests)
 from src.tools.casemodel_tools.coverage import (MAX_BINS_PER_POINT, sv_ident,
                                                 sv_value)
 
@@ -798,3 +799,162 @@ class TestTheNpuProbeCompiles:
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=180)
         assert "Errors: 0" in f"{r.stdout}\n{r.stderr}", (r.stdout or "")[-2000:]
+
+
+# ════════════════════════════════════════════════════════════
+# 功能覆盖率计划：覆盖点 + 批次 + 种子管理 + 需求追溯
+# ════════════════════════════════════════════════════════════
+
+def _plan_model(**over) -> str:
+    base = {
+        "version": "1", "object": "dut", "object_code": "DUT",
+        "sub_objects": [{"id": "OBJ-01", "name": "F", "code": "F1"}],
+        "dimensions": [
+            {"id": "D_a", "name": "A", "fields": [
+                {"name": "sig_a", "type": "enum", "values": [0, 1],
+                 "cover_id": "CP_A", "requirement": "REQ-001"}]},
+            {"id": "D_b", "name": "B", "fields": [
+                {"name": "sig_b", "type": "enum", "values": [0, 1],
+                 "cover_id": "CP_B", "requirement": "REQ-002"}]},
+        ],
+        "cross_matrix": {"D_a×D_b": {
+            "level": "required", "cover_id": "X_AB", "requirement": "REQ-001/002"}},
+        "themes": [
+            {"id": "TH-T1", "name": "批一", "priority": "P0", "dimensions": ["D_a"],
+             "test": "t1_test", "seeds": {"base": 1001, "count": 5, "explore": 2}},
+        ],
+    }
+    base.update(over)
+    return yaml.safe_dump(base, allow_unicode=True)
+
+
+class TestCoveragePlan:
+    """一份计划里摆四张表：覆盖点 / 批次 / 种子 / 追溯。
+
+    **为什么要一起生成**：它们同源（都从同一份 case 模型派生），分散在三四个
+    文件里对账很痛苦 —— 尤其"声明了 N 个覆盖点、回归里只跑 M 条"这种事，
+    只有把两边摆在一张表上才看得出来。
+    """
+
+    @pytest.fixture(scope="class")
+    def plan(self):
+        return run_coverage_plan(_plan_model(), "dut")["plan"]
+
+    def test_coverpoints_carry_their_ids(self, plan):
+        assert [c["cover_id"] for c in plan["coverpoints"]] == ["CP_A", "CP_B"]
+
+    def test_crosses_carry_their_ids(self, plan):
+        assert plan["crosses"][0]["cover_id"] == "X_AB"
+
+    def test_batches_carry_test_and_seeds(self, plan):
+        b = plan["batches"][0]
+        assert b["test"] == "t1_test"
+        assert b["seeds"] == {"base": 1001, "count": 5, "explore": 2}
+
+    def test_total_runs_is_count_plus_explore(self, plan):
+        """探索种子**并进**总次数 —— 它们跑法一样，只是目的不同；
+        分成两条反而让"这一批一共跑了多少次"说不清。"""
+        assert plan["batches"][0]["total_runs"] == 7
+        assert plan["summary"]["total_runs"] == 7
+
+    def test_covered_by_links_a_coverpoint_to_its_batches(self, plan):
+        cp_a = next(c for c in plan["coverpoints"] if c["signal"] == "sig_a")
+        assert cp_a["covered_by"] == ["TH-T1"]
+
+    def test_a_compound_requirement_is_split_not_left_whole(self, plan):
+        """`REQ-001/002` 是"这两条"，**不是一条叫 REQ-001/002 的需求**。
+
+        不拆的话追溯矩阵正好在**最该串起来的地方**断掉：那条交叉自己成一行，
+        而 REQ-002 那一行没有交叉。
+        """
+        by = {t["requirement"]: t for t in plan["traceability"]}
+        assert "REQ-001/002" not in by
+        assert by["REQ-001"]["crosses"] == ["X_AB"]
+        assert by["REQ-002"]["crosses"] == ["X_AB"]
+
+    def test_the_shorthand_half_gets_the_prefix_back(self, plan):
+        """`REQ-NPU-002/005` 的后半段是 **`REQ-NPU-005` 的简写**。
+
+        照 `/` 硬拆会得到一条叫 `005` 的"需求" —— 矩阵上凭空多一条，而真正的
+        REQ-NPU-005 仍然没有交叉。
+        """
+        text = _plan_model()
+        text = text.replace("REQ-001/002", "REQ-NPU-002/005")
+        text = text.replace('requirement: REQ-001\n', 'requirement: REQ-NPU-001\n')
+        reqs = {t["requirement"] for t in
+                run_coverage_plan(text, "dut")["plan"]["traceability"]}
+        assert "005" not in reqs
+        assert "REQ-NPU-005" in reqs
+
+    def test_orphan_coverpoints_are_noted(self):
+        """签核要的「无孤立覆盖点」过不了 —— 得在计划里说出来，不能只在表上留空。"""
+        model = yaml.safe_load(_plan_model())
+        del model["dimensions"][0]["fields"][0]["requirement"]   # A 没需求编号
+        out = run_coverage_plan(yaml.safe_dump(model, allow_unicode=True), "dut")
+        assert out.get("error") is None, out
+        assert any("没有需求编号" in n for n in out["plan"]["notes"])
+
+    def test_a_requirement_covered_only_by_a_cross_is_not_orphan(self):
+        """**只看覆盖点是错的**：一条需求由交叉覆盖完全正当。
+
+        按"有没有覆盖点"算，`X_AB` 认领的 REQ-001/002 会被全判成孤立需求 ——
+        而它俩明明被那条交叉盖着。判据必须是"覆盖点**和**交叉都没有"。
+        """
+        model = yaml.safe_load(_plan_model())
+        for d in model["dimensions"]:
+            del d["fields"][0]["requirement"]          # 两个覆盖点都摘掉编号
+        out = run_coverage_plan(yaml.safe_dump(model, allow_unicode=True), "dut")
+        assert out.get("error") is None, out
+        assert not any("既没有覆盖点也没有交叉" in n for n in out["plan"]["notes"]),             "被交叉认领的需求不该判成孤立需求"
+
+    def test_a_batch_without_a_test_is_noted(self):
+        text = _plan_model(themes=[{"id": "TH-T1", "name": "批一", "priority": "P0",
+                                    "dimensions": ["D_a"]}])
+        out = run_coverage_plan(text, "dut")
+        assert any("没有 test 名" in n for n in out["plan"]["notes"])
+
+    def test_a_batch_without_seeds_is_noted(self):
+        text = _plan_model(themes=[{"id": "TH-T1", "name": "批一", "priority": "P0",
+                                    "dimensions": ["D_a"], "test": "t1_test"}])
+        out = run_coverage_plan(text, "dut")
+        assert any("没有声明 seeds" in n for n in out["plan"]["notes"])
+
+
+class TestTheNpuCoveragePlan:
+    """NPU 那份模型的计划 —— 与文档 §3/§5/§6/§8 逐项对。"""
+
+    NPU = (Path(__file__).resolve().parents[4]
+           / "specs" / "npu_sched" / "casemodel.yaml")
+
+    @pytest.fixture(scope="class")
+    def plan(self):
+        return run_coverage_plan(self.NPU.read_text(encoding="utf-8"),
+                                 "npu_sched")["plan"]
+
+    def test_twelve_coverpoints_and_seven_crosses(self, plan):
+        assert plan["summary"]["coverpoint_count"] == 12
+        assert plan["summary"]["cross_count"] == 7
+
+    def test_eleven_batches_each_with_a_test_and_seeds(self, plan):
+        assert len(plan["batches"]) == 11
+        assert all(b["test"] and b["seeds"] for b in plan["batches"])
+
+    def test_total_runs_matches_the_plans_seed_table(self, plan):
+        """§6.1 的总运行次数逐条加起来 = 195。"""
+        assert [b["total_runs"] for b in plan["batches"]] == \
+            [1, 18, 18, 30, 12, 18, 12, 10, 14, 14, 48]
+        assert plan["summary"]["total_runs"] == 195
+
+    def test_the_traceability_matrix_has_no_orphans(self, plan):
+        """§9.1 的签核条件之一：「无孤立需求，无孤立覆盖点」。"""
+        assert plan["summary"]["requirement_count"] == 12
+        assert all(t["coverpoints"] for t in plan["traceability"])
+        assert all(c["requirement"] for c in plan["coverpoints"])
+
+    def test_requirement_001_sees_both_its_coverpoint_and_its_cross(self, plan):
+        """§8 那一行：REQ-NPU-001 → CP_NPU_QUEUE_001 + X_NPU_LEVEL_DEC_004。"""
+        row = next(t for t in plan["traceability"]
+                   if t["requirement"] == "REQ-NPU-001")
+        assert row["coverpoints"] == ["CP_NPU_QUEUE_001"]
+        assert row["crosses"] == ["X_NPU_LEVEL_DEC_004"]
+        assert row["batches"] == ["TH-B06", "TH-B11"]

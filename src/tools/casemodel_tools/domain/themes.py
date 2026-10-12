@@ -40,6 +40,22 @@ class Theme:
     repeat: Optional[int] = None
     expected_result: str = ""
     description: str = ""
+    #: **这个批次跑哪个 test** —— 回归里那条 test 的名字（`npu_type_test`）。
+    #:
+    #: 为什么放在专题上：专题就是**批次**（`TH-B02 批次2 指令类型`），
+    #: "这一批跑哪个 test"是它的一部分。回归生成时按它命名，`scenario`
+    #: 那一列也存的是专题 key —— 两边靠这个字段对上。
+    test: str = ""
+    #: **种子管理** —— `{base, count, explore}`：
+    #:
+    #:   `base`    基线种子起点（回归框架的 `expand_count` 从这里逐条 +1）
+    #:   `count`   基线跑几条（= §6.1 那张表的「基线长度」）
+    #:   `explore` 额外的探索种子条数（防过拟合那一批）
+    #:
+    #: **为什么声明在模型里而不是回归那边**：种子不是"怎么跑"的细节，是
+    #: "这一批要跑够几条才算数"的**验证完备性声明** —— 和覆盖点一样属于
+    #: "该测得够不够"的问题。回归那一侧只是把它铺开成 runtime 参数。
+    seeds: Dict[str, int] = _field(default_factory=dict)
     # ── resolve() 之后回填 ──
     nodes: List[OrgNode] = _field(default_factory=list)      # 已展开到叶子
     dims: List[Dimension] = _field(default_factory=list)
@@ -133,6 +149,25 @@ class Theme:
         return (self.rank, self.id)
 
 
+def _parse_seeds(raw: Any) -> Dict[str, int]:
+    """`seeds: {base: 2001, count: 15, explore: 3}` → 只留认识的整型键。
+
+    认不出的键丢掉、不是整数的丢掉 —— **不报错**：种子是回归的调参，写错一个
+    不该让整份模型建不起来。但一个都没有时会退化成"不声明种子"（回归按默认
+    跑一条），所以调用方看得出区别（空 dict vs 有值）。
+    """
+    if not isinstance(raw, dict):
+        return {}
+    out: Dict[str, int] = {}
+    for key in ("base", "count", "explore"):
+        try:
+            if raw.get(key) is not None:
+                out[key] = max(0, int(raw[key]))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def build_theme(item: Any, index: int) -> Optional[Theme]:
     from .vocab import CHECK_ALIASES, METHOD_ALIASES
     if not isinstance(item, dict):
@@ -159,6 +194,8 @@ def build_theme(item: Any, index: int) -> Optional[Theme]:
         repeat=repeat,
         expected_result=str(item.get("expected_result") or ""),
         description=str(item.get("description") or ""),
+        test=str(item.get("test") or "").strip(),
+        seeds=_parse_seeds(item.get("seeds")),
     )
 
 

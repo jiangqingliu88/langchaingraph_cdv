@@ -121,6 +121,9 @@ class VerifyExecutor(BaseExecutor):
             self._write_env_cov_bins(output_dir, cov_bins_for_render)
             # 第二条通道：`sample: dut` 的字段 → bind 探针（也要在 filelist 生成前落盘）
             self._write_coverage_probe(output_dir)
+            # 功能覆盖率计划（覆盖点 + 批次 + 种子管理 + 需求追溯）——
+            # **与 case 模型同批**：同一份来源、同一时刻，回归那边按它取种子
+            self._write_coverage_plan(output_dir)
             call_tool("jinja_render", {"output_dir": str(output_dir)})
             env_files = [str(p) for p in (output_dir / "agents").rglob("*.sv")] \
                 if (output_dir / "agents").exists() else []
@@ -256,6 +259,41 @@ class VerifyExecutor(BaseExecutor):
                 json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         except Exception as e:                       # noqa: BLE001 旁路，别拦 env 生成
             logger.warning(f"env_cov bin 落盘失败（覆盖率模型将退回自动分箱）: {e}")
+
+    def _write_coverage_plan(self, output_dir: Path) -> None:
+        """`coverage/coverage_plan.yaml` —— 功能覆盖率计划（**与 case 模型同批**）。
+
+        四张表摆在一份文件里：§3 覆盖点 / §5 批次 / §6 种子管理 / §8 需求追溯。
+
+        **为什么要落盘而不是回归那边现算**：回归只关心其中两列（批次 → test →
+        种子），而签核关心另外两列（覆盖点 → 需求）。两边各算一遍就会漂 ——
+        实测的教训是"声明了 N 个覆盖点、回归里跑 M 条"没人发现得了。一份文件，
+        三处读它：回归取种子、覆盖率页取覆盖点、审计取追溯。
+        """
+        cm_file = _find_case_model(_spec_of(output_dir), output_dir)
+        if cm_file is None:
+            return
+        try:
+            from src.tools.casemodel_tools.api import run_coverage_plan
+
+            payload = run_coverage_plan(cm_file.read_text(encoding="utf-8"), "dut")
+        except Exception as e:                       # noqa: BLE001 旁路
+            logger.warning(f"生成功能覆盖率计划失败: {e}")
+            return
+        if payload.get("error"):
+            logger.warning(f"功能覆盖率计划生成不了：{payload['error']}")
+            return
+        cov_dir = output_dir / "coverage"
+        cov_dir.mkdir(parents=True, exist_ok=True)
+        path = cov_dir / "coverage_plan.yaml"
+        path.write_text(payload["plan_yaml"], encoding="utf-8")
+        logger.info(
+            f"功能覆盖率计划：{payload['coverpoint_count']} 覆盖点 / "
+            f"{payload['bin_count']} bin / {payload['cross_count']} cross / "
+            f"{payload['batch_count']} 批次 / 共 {payload['total_runs']} 次运行 → "
+            f"{path.name}")
+        for note in payload["plan"].get("notes") or []:
+            logger.warning(f"覆盖率计划: {note}")
 
     def _write_coverage_probe(self, output_dir: Path) -> None:
         """`sample: dut` 的字段 → `coverage/dut_probe.sv`（bind 探针）。

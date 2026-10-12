@@ -152,11 +152,14 @@ class CrossPoint:
     dimensions: List[str]
     bins: List[CrossBin] = _field(default_factory=list)
     source: str = "stimulus"       # 两边共同的采样来源（同作用域才建得起来）
+    cover_id: str = ""             # 文档里的交叉编号（X_xxx）—— 追溯用
+    requirement: str = ""          # 需求编号（可能是复合的 `REQ-A/B`）
 
     def as_dict(self) -> Dict[str, Any]:
         return {"name": self.name, "signals": list(self.signals),
                 "level": self.level, "dimensions": list(self.dimensions),
-                "source": self.source,
+                "source": self.source, "cover_id": self.cover_id,
+                "requirement": self.requirement,
                 "bins": [b.as_dict() for b in self.bins],
                 "bin_count": len(self.bins)}
 
@@ -476,7 +479,8 @@ def _attach_crosses(model: CaseModel, cm: CoverageModel) -> None:
         cm.crosses.append(CrossPoint(
             name=name, signals=[cp_a.signal, cp_b.signal],
             level=pair.level, dimensions=[cp_a.dimension, cp_b.dimension],
-            bins=bins, source=cp_a.source))
+            bins=bins, source=cp_a.source,
+            cover_id=pair.cover_id, requirement=pair.requirement))
 
 
 def _cross_bins(pair: Any, cps: List[CoverPoint], notes: List[str],
@@ -717,3 +721,189 @@ def render_probe(cm: CoverageModel, sampling: Dict[str, Any] = None) -> str:
     out.append(",\n".join(conns))
     out += [");", "", f"`endif  // {guard_macro}", ""]
     return "\n".join(out)
+
+
+# ════════════════════════════════════════════════════════════
+# 功能覆盖率计划（一份 yaml，与 case 模型同批产出）
+# ════════════════════════════════════════════════════════════
+
+def coverage_plan(model: CaseModel, cm: CoverageModel,
+                  module_name: str = "dut") -> Dict[str, Any]:
+    """case 模型 + 覆盖点模型 → **一份完整的功能覆盖率计划**（dict，可 yaml 化）。
+
+    ## 为什么单独一份，而不是散在几处
+
+    覆盖这件事有四张脸，各有各的读者：
+
+        §3 覆盖点     谁在采、采什么、bin 是什么   → 生成 covergroup 的人
+        §5 批次       这一批打哪个专题、跑哪个 test → 回归
+        §6 种子管理   这一批跑几条才算数            → 回归
+        §8 需求追溯   哪条需求被谁验了              → 签核的人
+
+    它们**同源**（都从同一份 case 模型派生），但分散在三四个文件里对账会很痛苦
+    ——尤其是"覆盖点声明了 12 个、回归里只跑了 8 条"这种事，只有把两边摆在一张
+    表上才看得出来。所以**一起生成**：与 case 模型同批落盘，谁都不许自己算一遍。
+
+    ## 里面有什么是"推"出来的、什么是"抄"的
+
+      · `coverpoints` / `crosses` —— 从模型**推**（bin 明细、来源通道、宽度）
+      · `batch.seeds`             —— 模型里**抄**的（作者声明"这一批要跑够几条"）
+      · `total_runs`              —— 推：`count + explore`（这才是要跑的总条数）
+      · `traceability`            —— 推：按 `requirement` 把覆盖点/交叉/批次串起来
+      · `covered_by`              —— 推：**哪个批次覆盖了这个覆盖点**（按专题的
+        `dimensions` 反查）。这替代了文档 §4.5 那张"约束 → 覆盖点"表：约束在
+        UVM sequence 里，模型看不见；但"哪个批次负责它"是模型能答的。
+
+    ## 说得出来的与说不出来的
+
+    覆盖点没有 `requirement`、批次没有 `test`/`seeds`、交叉没有 `cover_id` ——
+    这些**留空并进 `notes`**，不编一个出来。签核表上引用的编号必须是文档里
+    那个，编出来的编号比没有更坏。
+    """
+    notes: List[str] = []
+    by_dim: Dict[str, List[str]] = {}
+    for th in model.themes:
+        for dim in (th.dims or []):
+            by_dim.setdefault(dim.key, []).append(th.key)
+
+    coverpoints: List[Dict[str, Any]] = []
+    for cp in cm.coverpoints:
+        coverpoints.append({
+            "cover_id": cp.cover_id,
+            "requirement": cp.requirement,
+            "dimension": cp.dimension,
+            "signal": cp.signal,
+            "type": cp.type,
+            "source": cp.source,
+            "width": cp.width,
+            "expr": cp.expr,
+            "bins": [b.name for b in cp.bins],
+            "illegal_bins": [b.name for b in cp.illegal_bins],
+            "bin_count": len(cp.bins),
+            "target": 100,
+            "covered_by": by_dim.get(cp.dimension, []),
+        })
+        if not cp.cover_id:
+            notes.append(f"覆盖点 {cp.signal} 没有 cover_id —— 追溯矩阵里引用不到它")
+
+    crosses: List[Dict[str, Any]] = []
+    for cx in cm.crosses:
+        crosses.append({
+            "cover_id": cx.cover_id,
+            "requirement": cx.requirement,
+            "name": cx.name,
+            "dimensions": list(cx.dimensions),
+            "level": cx.level,
+            "source": cx.source,
+            "bins": [b.name for b in cx.bins],
+            "illegal_bins": [b.name for b in cx.bins if b.illegal],
+            "bin_count": len(cx.bins),
+            "target": 100,
+            "covered_by": sorted({*by_dim.get(cx.dimensions[0], []),
+                                  *by_dim.get(cx.dimensions[1], [])}),
+        })
+
+    batches: List[Dict[str, Any]] = []
+    for th in model.themes:
+        seeds = dict(th.seeds or {})
+        total = int(seeds.get("count", 0)) + int(seeds.get("explore", 0))
+        batches.append({
+            "theme": th.key,
+            "name": th.label,
+            "priority": th.priority,
+            "test": th.test,
+            "method": th.method,
+            "checks": list(th.checks),
+            "dimensions": [d.key for d in (th.dims or [])],
+            "seeds": seeds,
+            "total_runs": total,
+        })
+        if not th.test:
+            notes.append(f"批次 {th.key} 没有 test 名 —— 回归里铺不成一条 test")
+        elif not seeds:
+            notes.append(f"批次 {th.key}（{th.test}）没有声明 seeds —— "
+                         f"回归按默认跑一条，覆盖强度没被声明过")
+
+    # ── §8 需求追溯：把三张表按 requirement 串起来 ──
+    #
+    # **编号要拆**：一条交叉常同时对应两条需求（`REQ-NPU-002/005` 表示"这两条"）。
+    # 不拆的话它自己成一条"需求 REQ-NPU-002/005"，而 REQ-NPU-002 那一行没有
+    # 交叉 —— 追溯矩阵正好在**最该串起来的地方**断掉。
+    reqs: Dict[str, Dict[str, Any]] = {}
+
+    def _refs(raw: str) -> List[str]:
+        """`REQ-NPU-002/005` → `["REQ-NPU-002", "REQ-NPU-005"]`。
+
+        **后半段是省略前缀的写法**（`/005` 是 `/REQ-NPU-005` 的简写），照 `/`
+        硬拆会得到一条叫 `005` 的"需求" —— 追溯矩阵上凭空多出一条，而真正的
+        `REQ-NPU-005` 那一行仍然没有交叉。所以：**第一段的前缀补回给后面那些
+        没有分隔符的段**。
+        """
+        parts = [x.strip() for x in re.split(r"[/、,，;；]", str(raw or ""))
+                 if x.strip()]
+        if not parts:
+            return []
+        m = re.match(r"^(.*[-_])", parts[0])       # 贪心 → 取到最后一个分隔符
+        prefix = m.group(1) if m else ""
+        return [parts[0]] + [x if re.search(r"[-_]", x) else prefix + x
+                             for x in parts[1:]]
+
+    def _slot(req: str) -> Dict[str, Any]:
+        return reqs.setdefault(req, {"requirement": req, "coverpoints": [],
+                                     "crosses": [], "batches": []})
+    for cp in coverpoints:
+        for r in _refs(cp["requirement"]):
+            _slot(r)["coverpoints"].append(cp["cover_id"] or cp["signal"])
+    for cx in crosses:
+        for r in _refs(cx["requirement"]):
+            _slot(r)["crosses"].append(cx["cover_id"] or cx["name"])
+    for b in batches:
+        for dim in b["dimensions"]:
+            for cp in coverpoints:
+                if cp["dimension"] != dim:
+                    continue
+                for r in _refs(cp["requirement"]):
+                    slot = _slot(r)
+                    if b["theme"] not in slot["batches"]:
+                        slot["batches"].append(b["theme"])
+
+    # 「孤立需求」= 既没有覆盖点、也没有交叉认领它。
+    # **只看 coverpoints 是错的**：一条需求由交叉覆盖（而不是某个覆盖点）完全
+    # 正当 —— 按前者算会把 X_NPU_* 认领的那几条需求全判成孤立。
+    #
+    # 现在这份模型里它**不可能命中**（需求只从字段/交叉上"长"出来，没有独立的
+    # `requirements:` 声明块）。留着是为了 §9.1 那个措辞不落空：等模型能单独
+    # 声明需求时，这里自动开始生效。
+    orphan_reqs = [r["requirement"] for r in reqs.values()
+                   if not r["coverpoints"] and not r["crosses"]]
+    orphan_cps = [cp["signal"] for cp in coverpoints if not cp["requirement"]]
+    if orphan_reqs:
+        notes.append(f"有需求既没有覆盖点也没有交叉：{'、'.join(sorted(orphan_reqs))} "
+                     f"—— 签核要的「无孤立需求」过不了")
+    if orphan_cps:
+        notes.append(f"有覆盖点没有需求编号：{'、'.join(sorted(orphan_cps))} "
+                     f"—— 签核要的「无孤立覆盖点」过不了")
+
+    return {
+        "object": model.object,
+        "object_cn": model.object_cn,
+        "module": cm.module,
+        "covergroup": cm.covergroup,
+        "sampling": dict(model.sampling or {}),
+        "coverpoints": coverpoints,
+        "crosses": crosses,
+        "batches": batches,
+        "traceability": [reqs[k] for k in sorted(reqs)],
+        "summary": {
+            "coverpoint_count": len(coverpoints),
+            "bin_count": sum(c["bin_count"] for c in coverpoints),
+            "cross_count": len(crosses),
+            "cross_bin_count": sum(c["bin_count"] for c in crosses),
+            "illegal_bin_count": (sum(len(c["illegal_bins"]) for c in coverpoints)
+                                  + sum(len(c["illegal_bins"]) for c in crosses)),
+            "batch_count": len(batches),
+            "requirement_count": len(reqs),
+            "total_runs": sum(b["total_runs"] for b in batches),
+        },
+        "notes": list(dict.fromkeys(notes + list(cm.notes))),
+    }

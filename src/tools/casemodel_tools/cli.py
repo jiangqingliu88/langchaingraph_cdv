@@ -295,6 +295,36 @@ def cmd_covergroups(args: argparse.Namespace) -> int:
 
 
 # ════════════════════════════════════════════════════════════
+# coverage-plan —— 一份完整的功能覆盖率计划
+# ════════════════════════════════════════════════════════════
+
+def cmd_coverage_plan(args: argparse.Namespace) -> int:
+    """功能覆盖率计划：覆盖点 + 批次 + **种子管理** + 需求追溯，一份 yaml。
+
+    与 `covergroups` 的区别：那个出的是**给编译器**的 SV；这个出的是**给人看、
+    给回归吃**的计划书 —— §3 覆盖点、§5 批次、§6 种子、§8 追溯四张表摆在一起，
+    "声明了 12 个覆盖点、回归里只跑 8 条"这种事才看得出来。
+    """
+    from .api import run_coverage_plan
+
+    payload = run_coverage_plan(Path(args.model).read_text(encoding="utf-8"),
+                                args.module)
+    if payload.get("error"):
+        print(f"模型无法构建: {payload['error']}", file=sys.stderr)
+        return 2
+
+    if args.out:
+        Path(args.out).write_text(payload["plan_yaml"], encoding="utf-8")
+        print(f"已写出覆盖率计划 → {args.out}")
+    else:
+        print(payload["plan_yaml"], end="")
+    notes = payload["plan"]["notes"]
+    for note in notes:
+        print(f"  注意: {note}", file=sys.stderr)
+    return 0
+
+
+# ════════════════════════════════════════════════════════════
 # 参数
 # ════════════════════════════════════════════════════════════
 
@@ -364,6 +394,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="covergroup 名字里的模块名（默认 dut）")
     p.add_argument("--out", "-o", help="把 covergroup 写到文件（缺省打到 stdout）")
     p.set_defaults(func=cmd_covergroups)
+
+    p = sub.add_parser("coverage-plan",
+                       help="功能覆盖率计划：覆盖点 + 批次 + 种子管理 + 需求追溯")
+    p.add_argument("model", help="case 模型 YAML")
+    p.add_argument("--module", "-m", default="dut", help="模块名（默认 dut）")
+    p.add_argument("--out", "-o", help="把计划写到文件（缺省打到 stdout）")
+    p.set_defaults(func=cmd_coverage_plan)
 
     return parser
 

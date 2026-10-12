@@ -439,6 +439,33 @@
         },
         "description": {
           "type": "string"
+        },
+        "test": {
+          "type": "string",
+          "minLength": 1,
+          "description": "这个批次跑哪个 test（回归里那条 test 的名字）"
+        },
+        "seeds": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "种子管理：这一批跑几条才算数（不是'怎么跑'的细节，是验证完备性的声明）",
+          "properties": {
+            "base": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "基线种子起点"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "基线跑几条"
+            },
+            "explore": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "额外探索种子条数"
+            }
+          }
         }
       }
     },
@@ -1062,6 +1089,16 @@
           "items": {
             "$ref": "#/$defs/cross_bin_spec"
           }
+        },
+        "cover_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "交叉编号（X_xxx）—— 文档里的那个，给人对账"
+        },
+        "requirement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "需求编号（REQ-xxx）—— 追溯矩阵的另一头"
         }
       }
     }

@@ -10,7 +10,7 @@ Tool: find_spec_yaml — 从 spec 文本查找已有 YAML 或构造新的 YAML
 import sys, json, re
 import builtins
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 import shutil as _shutil
 import yaml as _yaml
 
@@ -1187,6 +1187,55 @@ def _dedupe_loopback_tests(test_lines: list, lb_names: set) -> list:
     return kept
 
 
+def _seed_plan(output_dir: Path) -> Dict[str, Dict[str, int]]:
+    """`coverage/coverage_plan.yaml` → `{test 名: {base, count, explore}}`。
+
+    计划是 **verify 阶段与 case 模型同批**落盘的（见
+    `executors/verify/main.py::_write_coverage_plan`），这里只读不算 ——
+    种子是**验证完备性的声明**（这一批要跑够几条），不是回归自己拍的参数。
+
+    读不到就给空 dict（回归按默认 `count: 1` 跑）—— **不编一个种子出来**：
+    编出来的种子会让"这一批到底跑够没有"变得无法回答。
+    """
+    path = output_dir / "coverage" / "coverage_plan.yaml"
+    if not path.is_file():
+        return {}
+    try:
+        import yaml as _yaml
+        plan = _yaml.safe_load(path.read_text(encoding="utf-8", errors="replace")) or {}
+    except Exception:
+        return {}
+    out: Dict[str, Dict[str, int]] = {}
+    for b in (plan.get("batches") or []):
+        if not isinstance(b, dict):
+            continue
+        test, seeds = str(b.get("test") or "").strip(), b.get("seeds") or {}
+        if test and isinstance(seeds, dict) and seeds:
+            out[test] = {k: int(v) for k, v in seeds.items()
+                         if isinstance(v, int)}
+    return out
+
+
+def _seed_lines(name: str, plan: Dict[str, Dict[str, int]]) -> List[str]:
+    """这条 test 的 `count` / `SEED` 两行（计划里没有就 `count: 1`）。
+
+    **`count` 展开的种子是"基准 + 逐条递增"**（回归框架 `expand_count`）——
+    所以这里只给**基准**，`count` 条各自拿 `base + i - 1`。`{{ SEED }}` 的
+    落点是 `run_cmd`（`_sim_run_cmd` 里的 `+ntb_random_seed`）。
+
+    `explore`（探索种子）**并进 count**：它是"防过拟合那几条"，跑法一样、只是
+    目的不同；分成两条 test 反而让"这一批一共跑了多少次"说不清。
+    """
+    s = plan.get(name)
+    if not s:
+        return ["    count: 1"]
+    total = int(s.get("count", 0)) + int(s.get("explore", 0))
+    if total <= 0:
+        return ["    count: 1"]
+    return [f"    count: {total}",
+            f"    variables: {{SEED: {int(s.get('base', 0))}}}"]
+
+
 def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
                                module_name: str, env_name: str,
                                top_module: str,
@@ -1204,6 +1253,9 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     fl_dir = output_dir / "inputs" / "filelists"
     fl_path = fl_dir / filelist_name
     filelist_ref = str(fl_path.resolve()).replace("\\", "/")
+
+    # 种子管理：从**与 case 模型同批落盘**的功能覆盖率计划里读（只读不算）
+    seed_plan = _seed_plan(output_dir)
 
     # 从 spec.json 提取测试点
     test_points = []
@@ -1270,8 +1322,13 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         # 一整轮回归全绿、覆盖率 0%，而各用例的 status.env 都是 pass。
         # 先要求日志非空，再谈里面有没有错。
         return (
+            # `+ntb_random_seed={{ SEED }}`：**每条 test 的种子落点**。`count`
+            # 展开时回归框架给每条塞 `local_vars.SEED = base + i - 1`，不给这个
+            # plusarg 的话展开出来的 N 条**跑的是同一组随机数** —— 名字变了、
+            # 跑的东西没变（那正是 `_seed_base` 的注释里记着的坑）。
             "vsim -c -sv_lib {{ UVM_DPI }} -onfinish stop -work {{ WORK }} "
-            f"{top} +UVM_TESTNAME={uvm_test} -l sim_vsim.log "
+            f"{top} +UVM_TESTNAME={uvm_test} +ntb_random_seed={{{{ SEED }}}} "
+            "-l sim_vsim.log "
             '-do "log -r /*; run -all; quit -f" {{ MODE_OPTS | default("") }} ; '
             "[ -s sim_vsim.log ] && "
             '! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]|FATAL ERROR|Errors: *[1-9]"'
@@ -1288,7 +1345,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             scenario = c.get("scenario", "")
             test_lines.append(f"  - name: {cname}")
             test_lines.append(f"    build: build_{module_name}_dut")
-            test_lines.append(f"    count: 1")
+            test_lines.extend(_seed_lines(cname, seed_plan))
             # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
             # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
             _run_cmd = _sim_run_cmd(dut_top, f"{env_name}_directed_test")
@@ -1303,7 +1360,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             priority = tp.get("priority", "P1")
             test_lines.append(f"  - name: {tname}")
             test_lines.append(f"    build: build_{module_name}_dut")
-            test_lines.append(f"    count: 1")
+            test_lines.extend(_seed_lines(tname, seed_plan))
             # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
             # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
             _run_cmd = _sim_run_cmd(dut_top, f"{env_name}_base_test")
@@ -1318,7 +1375,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         for _tname in (f"{env_name}_base_test", f"{env_name}_directed_test"):
             test_lines.append(f"  - name: test_{_tname}")
             test_lines.append(f"    build: build_{module_name}_dut")
-            test_lines.append(f"    count: 1")
+            test_lines.extend(_seed_lines(f"test_{_tname}", seed_plan))
             # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
             # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
             _run_cmd = _sim_run_cmd(dut_top, _tname)
@@ -1343,7 +1400,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     # 不会污染用例库。
     test_lines.append(f"  - name: {module_name}_gen_stimulus")
     test_lines.append(f"    build: build_{module_name}_dut")
-    test_lines.append("    count: 1")
+    test_lines.extend(_seed_lines(f"{module_name}_gen_stimulus", seed_plan))
     test_lines.append(f"    run_cmd: '{_sim_run_cmd(dut_top, f'{env_name}_gen_test')}'")
     # `p3` = 错误 + 随机。原先只有 `smoke/random/gap` —— **没有任何 pN tag**，
     # 于是这条随机用例哪个分级都进不去（分级回归按 p0..p3 筛，见 REGRESSION_STAGES）。
@@ -1365,7 +1422,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             pass
         test_lines.append(f"  - name: test_{ag}_loopback")
         test_lines.append(f"    build: build_{module_name}_{ag}_loopback")
-        test_lines.append(f"    count: 1")
+        test_lines.extend(_seed_lines(f"test_{ag}_loopback", seed_plan))
         # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
         # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
         _run_cmd = _sim_run_cmd(f"{ag}_loopback_tb", f"{ag}_loopback_test")

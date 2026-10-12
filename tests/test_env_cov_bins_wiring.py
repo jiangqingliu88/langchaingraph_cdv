@@ -353,8 +353,8 @@ class TestOneAnswerForWhichCaseModel:
         verify = Path("src/executors/verify/main.py").read_text(encoding="utf-8")
         coverage = Path("src/executors/coverage/main.py").read_text(encoding="utf-8")
 
-        # verify：写 field_bins 的、写 DUT 探针的，都得走统一判据
-        assert verify.count("_find_case_model(_spec_of(output_dir), output_dir)") == 2
+        # verify：写 field_bins 的、写 DUT 探针的、写覆盖率计划的，都得走统一判据
+        assert verify.count("_find_case_model(_spec_of(output_dir), output_dir)") == 3
         # coverage：不再直接读 casemodel_path
         assert "casemodel_path(output_dir)" not in coverage.replace(
             "from src.layers.l1_infrastructure.layout import casemodel_path", "")
@@ -368,3 +368,99 @@ class TestOneAnswerForWhichCaseModel:
         assert "from src.layers.l1_infrastructure.layout import find_case_model" in body
         # 本地不许再挑候选（`candidates.append` 是旧实现的标志）
         assert "candidates.append" not in body
+
+
+class TestSeedsReachTheRegression:
+    """种子管理：**声明在模型里 → 计划里 → 回归的 count/SEED**。
+
+    回归框架早就会按 `count` 展开、每条塞 `local_vars.SEED = base + i - 1`
+    （`config.expand_count`）—— 缺的从来不是机制，而是"种子从哪来"。现在它来自
+    **与 case 模型同批落盘的覆盖率计划**，回归只读不算。
+    """
+
+    NPU = Path("specs/npu_sched/casemodel.yaml")
+
+    def _plan_dir(self, tmp_path):
+        from src.tools.casemodel_tools.api import run_coverage_plan
+
+        (tmp_path / "coverage").mkdir(parents=True, exist_ok=True)
+        plan = run_coverage_plan(self.NPU.read_text(encoding="utf-8"), "npu_sched")
+        (tmp_path / "coverage" / "coverage_plan.yaml").write_text(
+            plan["plan_yaml"], encoding="utf-8")
+        return tmp_path
+
+    def test_the_plan_is_read_into_a_test_keyed_map(self, tmp_path):
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import _seed_plan
+
+        sp = _seed_plan(self._plan_dir(tmp_path))
+        assert sp["npu_type_test"] == {"base": 2001, "count": 15, "explore": 3}
+        assert len(sp) == 11
+
+    def test_count_is_baseline_plus_explore(self, tmp_path):
+        """探索种子**并进总次数** —— 跑法一样，只是目的不同。"""
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
+                                                                  _seed_plan)
+
+        lines = _seed_lines("npu_type_test", _seed_plan(self._plan_dir(tmp_path)))
+        assert "    count: 18" in lines          # 15 基线 + 3 探索
+        assert "    variables: {SEED: 2001}" in lines
+
+    def test_a_test_the_plan_does_not_know_keeps_count_one(self, tmp_path):
+        """**不编一个种子出来** —— 没声明就照旧跑一条。"""
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
+                                                                  _seed_plan)
+
+        assert _seed_lines("apb_uart_D_ADDR_0", _seed_plan(self._plan_dir(tmp_path))) \
+            == ["    count: 1"]
+
+    def test_no_plan_at_all_degrades_quietly(self, tmp_path):
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
+                                                                  _seed_plan)
+
+        assert _seed_plan(tmp_path) == {}
+        assert _seed_lines("anything", {}) == ["    count: 1"]
+
+    def test_the_seed_reaches_the_simulator(self):
+        """`count` 展开出来的 N 条若不把 SEED 送进 vsim，跑的是**同一组随机数** ——
+        名字变了、跑的东西没变（`_seed_base` 的注释记着这个坑）。"""
+        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(
+            encoding="utf-8")
+        assert "+ntb_random_seed={{ SEED }}" in src
+
+    def test_the_regression_generator_actually_consults_the_plan(self):
+        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(
+            encoding="utf-8")
+        assert "seed_plan = _seed_plan(output_dir)" in src
+        # 每条 test 都得过 `_seed_lines`，不能有一条自己写死 count: 1
+        assert "count: 1" not in src.replace("return [\"    count: 1\"]", "") \
+            .replace('回归按默认 `count: 1` 跑', "") \
+            .replace('计划里没有就 `count: 1`', "")
+
+
+class TestThePlanIsWrittenWithTheCaseModel:
+    """计划必须**与 case 模型同批**落盘 —— 回归在 ops 阶段就读它。"""
+
+    def test_verify_writes_it_next_to_the_probe(self):
+        src = VERIFY_MAIN.read_text(encoding="utf-8")
+        assert "self._write_coverage_plan(output_dir)" in src
+        # 与另两条覆盖率产物同一段（都在 find_spec_yaml 之后、jinja_render 之前）
+        find = _line_of('call_tool("find_spec_yaml"')
+        plan = _line_of("self._write_coverage_plan(output_dir")
+        render = _line_of('call_tool("jinja_render"')
+        assert find < plan < render
+
+    def test_it_lands_as_coverage_plan_yaml(self, tmp_path):
+        import shutil
+
+        from src.executors.verify.main import VerifyExecutor
+
+        (tmp_path / "inputs").mkdir(parents=True)
+        shutil.copy("specs/npu_sched/casemodel.yaml",
+                    tmp_path / "inputs" / "casemodel.yaml")
+        VerifyExecutor()._write_coverage_plan(tmp_path)
+        out = tmp_path / "coverage" / "coverage_plan.yaml"
+        assert out.is_file()
+        import yaml
+        plan = yaml.safe_load(out.read_text(encoding="utf-8"))
+        assert plan["summary"]["coverpoint_count"] == 12
+        assert len(plan["batches"]) == 11

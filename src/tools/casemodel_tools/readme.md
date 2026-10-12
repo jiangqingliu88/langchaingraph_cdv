@@ -561,6 +561,45 @@ python -m src.tools.casemodel_tools.cli covergroups \
 **不进模型的**：§4 的约束、§6 的种子基线、§7 手写的 covergroup —— 那是激励层与
 实现层，不是"该测什么"。
 
+### 功能覆盖率计划（`coverage-plan`）
+
+**一份 yaml，与 case 模型同批生成**，把覆盖这件事的四张脸摆在一起：
+
+| | 内容 | 谁读 |
+|---|---|---|
+| §3 覆盖点 | 谁在采、采什么、bin 是什么、非法仓有哪些 | 生成 covergroup 的人 |
+| §5 批次 | 这一批打哪个专题、跑哪个 **test** | 回归 |
+| §6 种子管理 | 每一批跑几条才算数（`base` / `count` / `explore`） | 回归 |
+| §8 需求追溯 | `REQ-xxx ↔ CP_xxx / X_xxx ↔ 批次` | 签核的人 |
+
+```bash
+python -m src.tools.casemodel_tools.cli coverage-plan specs/npu_sched/casemodel.yaml -m npu_sched
+# 12 覆盖点 / 59 bin / 7 cross / 11 批次 / 共 195 次运行
+```
+
+**为什么要一起生成**：它们同源（都从同一份 case 模型派生），分散在三四个文件里
+对账很痛苦 —— 尤其「声明了 12 个覆盖点、回归里只跑了 8 条」这种事，只有把两边
+摆在一张表上才看得出来。落盘在 `<run>/coverage/coverage_plan.yaml`（verify 阶段，
+与 DUT 探针同一批）。
+
+**种子管理写在专题上**（批次就是专题）：
+
+```yaml
+themes:
+  - id: TH-B02
+    test: npu_type_test
+    seeds: {base: 2001, count: 15, explore: 3}   # 跑 15 条基线 + 3 条探索
+```
+
+**为什么种子声明在模型里**：它不是"怎么跑"的细节，是"**这一批要跑够几条才算数**"
+的验证完备性声明 —— 和覆盖点一样属于"该测得够不够"。回归那一侧只是把它铺开成
+runtime 参数：`count` 展开成 N 条、各拿 `base + i - 1`、`{{ SEED }}` 落进
+`+ntb_random_seed`。实测 `npu_type_test` → `count: 18` + `SEED: 2001`。
+
+追溯矩阵里**复合编号要拆**：`REQ-NPU-002/005` 是"这两条"，后半段是省略前缀的
+简写 —— 照 `/` 硬拆会得到一条叫 `005` 的需求，而真正的 `REQ-NPU-005` 仍然没有
+交叉。
+
 ### 两条采样通道：`sample: stimulus` / `sample: dut`
 
 **先问一个问题：这个信号从哪看得见？** 答案决定了它走哪条通道 —— 分不清就会给
@@ -669,7 +708,7 @@ ops 阶段生成的。写在覆盖率阶段就永远赶不上这一轮 —— �
 pytest src/tools/casemodel_tools/tests/ -v
 ```
 
-396 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
+412 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
 工具自己的测试按层组织在 `src/tools/casemodel_tools/tests/`，
 跨层的 Agent 集成测试在仓库根的 `tests/test_casemodel_agent.py`：
 

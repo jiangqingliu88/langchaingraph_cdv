@@ -40,6 +40,8 @@ TOOL_UVM_TESTS = "casemodel_uvm_tests"
 #: 把模型的覆盖点渲染成 SystemVerilog covergroup —— 见 `run_covergroups`。
 #: 同样**不进 `TOOL_NAMES`**（那是给 Agent 的三面名单，见上面那段）。
 TOOL_COVERGROUPS = "casemodel_covergroups"
+#: 生成**一份完整的功能覆盖率计划**（覆盖点 + 批次 + 种子管理 + 需求追溯）。
+TOOL_COVERAGE_PLAN = "casemodel_coverage_plan"
 
 #: 三面（LangChain / ToolRegistry / ToolHub）共用的名单。
 #: **`run_uvm_tests` 暂时不在里面**：进这个名单就得在 `src/executors/verify/casemodel/`
@@ -325,6 +327,34 @@ def run_covergroups(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
             "    sampling:\n      dut_module: <DUT 的模块名>\n"
             "      clock: clk\n      reset: rst_n")
     return payload
+
+
+def run_coverage_plan(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
+    """YAML 文本 → **一份完整的功能覆盖率计划**（`plan` dict + `plan_yaml` 文本）。
+
+    **与 case 模型同批产出**：同一个来源、同一时刻生成，所以"覆盖点声明了 12 个、
+    回归里只跑了 8 条"这种事能在一张表上直接看出来。
+
+    四张脸各归各的读者（见 `coverage.coverage_plan` 的 docstring）：
+
+        §3 覆盖点      谁在采、采什么、bin 是什么       → 生成 covergroup 的人
+        §5 批次        这一批打哪个专题、跑哪个 test    → 回归
+        §6 种子管理    这一批跑几条才算数               → 回归
+        §8 需求追溯    哪条需求被谁验了                 → 签核的人
+    """
+    try:
+        models = load_models_from_text(yaml_text, source="<inline>")
+    except CaseModelError as exc:
+        return {"error": str(exc)}
+
+    from .coverage import coverage_model, coverage_plan
+
+    model = models[0].resolve()
+    cm = coverage_model(model, module_name)
+    plan = coverage_plan(model, cm, module_name)
+    return {"plan": plan,
+            "plan_yaml": yaml.safe_dump(plan, allow_unicode=True, sort_keys=False),
+            **plan["summary"]}
 
 
 #: 工具名 → 实现，供适配器一次性遍历。

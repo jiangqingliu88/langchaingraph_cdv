@@ -269,6 +269,8 @@ cross_matrix:
 
   # §3.3 X_NPU_TYPE_UNIT_001
   D_type×D_unit:
+    cover_id: X_NPU_TYPE_UNIT_001
+    requirement: REQ-NPU-002/005
     level: required
     reason: "REQ-NPU-002/005：指令类型应发到对应执行单元"
     bins:
@@ -281,6 +283,8 @@ cross_matrix:
 
   # §3.3 X_NPU_DTYPE_UNIT_002
   D_dtype×D_unit:
+    cover_id: X_NPU_DTYPE_UNIT_002
+    requirement: REQ-NPU-003/005
     level: required
     reason: "REQ-NPU-003/005：数据类型与执行单元的匹配"
     bins:
@@ -293,6 +297,8 @@ cross_matrix:
 
   # §3.3 X_NPU_DEP_DEC_003
   D_dep×D_decision:
+    cover_id: X_NPU_DEP_DEC_003
+    requirement: REQ-NPU-004/006
     level: required
     reason: "REQ-NPU-004/006：依赖与发射决策的对应"
     bins:
@@ -305,6 +311,8 @@ cross_matrix:
 
   # §3.3 X_NPU_LEVEL_DEC_004
   D_queue×D_decision:
+    cover_id: X_NPU_LEVEL_DEC_004
+    requirement: REQ-NPU-001/006
     level: required
     reason: "REQ-NPU-001/006：水位与发射决策的对应"
     bins:
@@ -314,10 +322,15 @@ cross_matrix:
       - {name: low_issued,        when: {queue_level: low,       issue_decision: issued}}
 
   # §3.3 X_NPU_CLUSTER_UNIT_005 —— 全交叉（文档没给过滤名单）
-  D_cluster×D_unit: required
+  D_cluster×D_unit:
+    cover_id: X_NPU_CLUSTER_UNIT_005
+    requirement: REQ-NPU-005/007
+    level: required
 
   # §3.3 X_NPU_OPCODE_UNIT_006
   D_opcode×D_unit:
+    cover_id: X_NPU_OPCODE_UNIT_006
+    requirement: REQ-NPU-008/005
     level: required
     reason: "REQ-NPU-008/005：操作码与执行单元的对应"
     bins:
@@ -331,6 +344,8 @@ cross_matrix:
 
   # §3.3 X_NPU_SEQ_DEC_007
   D_seq×D_decision:
+    cover_id: X_NPU_SEQ_DEC_007
+    requirement: REQ-NPU-009/006
     level: required
     reason: "REQ-NPU-009/006：指令序列与发射决策的对应"
     bins:
@@ -353,6 +368,8 @@ cross_matrix:
 themes:
 
   - id: TH-B01
+    test: npu_basic_test
+    seeds: {base: 1001, count: 1, explore: 0}
     name: 批次1 基础发射
     priority: P0
     description: "§5.1 批次 1（npu_basic_test，5 种子）：先把 issued 这条主路跑通"
@@ -361,6 +378,8 @@ themes:
     checks: [CHECK-FUNC]
 
   - id: TH-B02
+    test: npu_type_test
+    seeds: {base: 2001, count: 15, explore: 3}
     name: 批次2 指令类型
     priority: P0
     description: "§5.1 批次 2（npu_type_test，30 种子）：指令类型全覆盖"
@@ -369,6 +388,8 @@ themes:
     checks: [CHECK-FUNC]
 
   - id: TH-B03
+    test: npu_dtype_test
+    seeds: {base: 3001, count: 15, explore: 3}
     name: 批次3 数据类型
     priority: P0
     description: "§5.1 批次 3（npu_dtype_test，30 种子）：数据类型全覆盖"
@@ -377,6 +398,8 @@ themes:
     checks: [CHECK-FUNC]
 
   - id: TH-B04
+    test: npu_dep_test
+    seeds: {base: 4001, count: 25, explore: 5}
     name: 批次4 依赖探索
     priority: P1
     description: "§5.1 批次 4（npu_dep_test，50 种子）：RAW/WAW/WAR 与发射决策的对应"
@@ -385,6 +408,8 @@ themes:
     checks: [CHECK-FUNC]
 
   - id: TH-B05
+    test: npu_raw_stall_test
+    seeds: {base: 5001, count: 10, explore: 2}
     name: 批次5 RAW 停顿
     priority: P1
     description: "§5.1 批次 5（npu_raw_stall_test，20 种子）：专打 raw_stalled"
@@ -393,6 +418,8 @@ themes:
     checks: [CHECK-FUNC]
 
   - id: TH-B06
+    test: npu_full_queue_test
+    seeds: {base: 6001, count: 15, explore: 3}
     name: 批次6 队列压力
     priority: P1
     description: "§5.1 批次 6（npu_full_queue_test，30 种子）：专打 full_blocked 与水位六档"
@@ -401,6 +428,8 @@ themes:
     checks: [CHECK-FUNC, CHECK-WBOX]
 
   - id: TH-B07
+    test: npu_cluster_test
+    seeds: {base: 7001, count: 10, explore: 2}
     name: 批次7 多簇并发
     priority: P2
     description: "§5.1 批次 7（npu_cluster_test，20 种子）：簇 × 执行单元全交叉"
@@ -409,6 +438,8 @@ themes:
     checks: [CHECK-FUNC]
 
   - id: TH-B08
+    test: npu_opcode_test
+    seeds: {base: 8001, count: 8, explore: 2}
     name: 批次8 操作码覆盖
     priority: P2
     description: "§5.1 批次 8（npu_opcode_test，20 种子）：10 条硬件指令全覆盖"
@@ -417,6 +448,8 @@ themes:
     checks: [CHECK-FUNC]
 
   - id: TH-B09
+    test: npu_dma_compute_test
+    seeds: {base: 9001, count: 12, explore: 2}
     name: 批次9 DMA 与计算并发
     priority: P3
     description: "§5.1 批次 9（npu_dma_compute_test，20 种子）：DMA 与 MAC/Vector 并发"
@@ -425,6 +458,8 @@ themes:
     checks: [CHECK-FUNC]
 
   - id: TH-B10
+    test: npu_pipeline_test
+    seeds: {base: 9501, count: 12, explore: 2}
     name: 批次10 流水重叠
     priority: P3
     description: "§5.1 批次 10（npu_pipeline_test，20 种子）：MAC 与 Vector 交替发射"
@@ -433,6 +468,8 @@ themes:
     checks: [CHECK-FUNC]
 
   - id: TH-B11
+    test: npu_random_mix_test
+    seeds: {base: 10001, count: 40, explore: 8}
     name: 批次11 随机混合
     priority: P3
     description: "§5.1 批次 11（npu_random_mix_test，100 种子）：防过拟合的探索性混合"

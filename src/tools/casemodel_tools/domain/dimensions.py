@@ -76,6 +76,11 @@ class CrossPair:
     bins: List[Any] = _field(default_factory=list)
     #: **非法交叉仓** —— 命中即报错。形状同 `bins`。
     illegal: List[Any] = _field(default_factory=list)
+    #: **交叉编号 / 需求编号** —— 追溯矩阵的另一头（与 `Field.cover_id` 对称）。
+    #: 生成器派生的名字是 `cx_<a>_<b>`（给 SV），文档里引用的是
+    #: `X_NPU_TYPE_UNIT_001`。两者都要有，不能拿一个当另一个。
+    cover_id: str = ""
+    requirement: str = ""
     dim_a: Optional[Dimension] = _field(default=None, repr=False, compare=False)
     dim_b: Optional[Dimension] = _field(default=None, repr=False, compare=False)
 
@@ -176,7 +181,9 @@ def build_cross_pair(key: str, level_raw: Any) -> Optional[CrossPair]:
         level = canon(str(level_raw.get("level") or ""), CROSS_LEVEL_ALIASES) or "optional"
         return CrossPair(a=split[0], b=split[1], level=level, source="declared",
                          bins=_as_dicts(level_raw.get("bins")),
-                         illegal=_as_dicts(level_raw.get("illegal")))
+                         illegal=_as_dicts(level_raw.get("illegal")),
+                         cover_id=str(level_raw.get("cover_id") or "").strip(),
+                         requirement=str(level_raw.get("requirement") or "").strip())
 
     level = canon(str(level_raw), CROSS_LEVEL_ALIASES) or "optional"
     return CrossPair(a=split[0], b=split[1], level=level, source="declared")
