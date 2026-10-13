@@ -44,19 +44,28 @@ async def n_front(state: PipelineState, config) -> Dict[str, Any]:
     return updates
 
 
+def _rtl_version_no(state: PipelineState, module: str):
+    """这一轮 RTL 的版本号（没有 RTL 就是 `None`）—— 注册用例时一起写上。
+
+    用例是有版本的：RTL 换了版，"旧用例是在哪版上定的"就答不上来了。
+
+    **`module` 必须由调用方显式给**：这里（design 节点）跑在 `spec.json` 落盘
+    **之前** —— 让 `run_rtl_version_no` 自己去读 spec.json 兜底会读不到，然后落
+    `"dut"`，于是同一份 RTL 在库里有两条版本记录（一条挂 `npu_sched`、一条挂
+    `dut`），而**哪一条都不报错**（实测就是这么发现的）。模块名在这一步是已知的，
+    就不要让下游去猜。
+    """
+    try:
+        from src.layers.l4_memory.lineage import run_rtl_version_no
+        return run_rtl_version_no(state.output_root, module=module)
+    except Exception as e:                                 # noqa: BLE001
+        logger.warning(f"血缘：RTL 版本取不到（用例将不带版本）: {e}")
+        return None
+
+
 async def n_design(state: PipelineState, config) -> Dict[str, Any]:
     """design（或 bypass 模式下从 spec 直接解析）。"""
     rt = _rt(config)
-    # 血缘：这一轮跑的是 RTL 的哪一版 —— 注册用例时要一起写上（用例是有版本的：
-    # RTL 换了版，"旧用例是在哪版上定的"就答不上来了）。取不到是 None，不编一个 0。
-    # **两处 register_from_spec 都用这个变量**：front agent 与这里（图上）是两条
-    # 注册路径，只改一处就会让同一个模块的用例一半带版本、一半不带。
-    try:
-        from src.layers.l4_memory.lineage import run_rtl_version_no
-        _rtl_version_no = run_rtl_version_no(state.output_root)
-    except Exception as e:                                 # noqa: BLE001
-        logger.warning(f"血缘：RTL 版本取不到（用例将不带版本）: {e}")
-        _rtl_version_no = None
     if state.bypass_design or state.bypass_design_model:
         logger.info("验证专注模式：bypass design/model，直接进入 verify（预置 RTL + 黄金模型）")
         spec, arch = {}, {}
@@ -112,7 +121,7 @@ async def n_design(state: PipelineState, config) -> Dict[str, Any]:
                     "registers": spec.get("registers", []),
                     "function_hier": {"children": []}}
             rt.testcase_reg.register_from_spec(spec, _module,
-                                               rtl_version_no=_rtl_version_no)
+                                               rtl_version_no=_rtl_version_no(state, _module))
         except Exception as e:
             logger.warning(f"验证专注模式 spec 解析失败（回退最小 spec）: {e}")
             spec = {"design_name": "dut"}
@@ -130,8 +139,10 @@ async def n_design(state: PipelineState, config) -> Dict[str, Any]:
     try:
         _spec = data.get("spec", {})
         if isinstance(_spec, dict):
-            rt.testcase_reg.register_from_spec(_spec, _spec.get("design_name", "dut") or "dut",
-                                               rtl_version_no=_rtl_version_no)
+            rt.testcase_reg.register_from_spec(
+                _spec, _spec.get("design_name", "dut") or "dut",
+                rtl_version_no=_rtl_version_no(
+                    state, _spec.get("design_name", "dut") or "dut"))
     except Exception:
         pass
 
