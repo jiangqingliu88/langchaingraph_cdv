@@ -4872,6 +4872,46 @@ def case_model_covergroups(model, module, output_path):
         sys.exit(2)
 
 
+@case_model.command("associate")
+@click.argument("cases", type=click.Path(exists=True))
+@click.argument("coverage", type=click.Path(exists=True))
+@click.option("--constraint", "-c", "constraint_path", type=click.Path(exists=True),
+              help="约束模型 YAML（可选；给了才查边 ③④）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def case_model_associate(cases, coverage, constraint_path, json_output):
+    """三层模型的关联校验：case / 功能覆盖率 / 约束
+
+    三条边都靠**名字**对齐（不是位置、不是复制）：
+
+    \b
+      1  case.field.cover_bins  ->  coverage.coverpoints[].bins[].name
+      2  case.cross_matrix 键   ->  coverage.crosses[].matrix_ref
+      3/4 专题方法与约束层的策略 / 组合器
+
+    有 error 时退出码 1 —— "关联断了"不是警告：这组模型渲染不出可信的 SV
+    （取值投影不出来时给个 0 让 bin 照生成，收的是**错的数**，比生成不了更坏）。
+
+    \b
+    示例:
+      vagent case-model associate cases.yaml coverage.yaml
+      vagent case-model associate cases.yaml coverage.yaml -c constraint.yaml --json
+    """
+    out = get_output_adapter(json_output)
+    from src.tools.casemodel_tools.cli import build_parser, cmd_associate
+    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
+
+    try:
+        argv = ["associate", cases, coverage]
+        if constraint_path:
+            argv += ["--constraint", constraint_path]
+        if json_output:
+            argv.append("--json")
+        sys.exit(cmd_associate(build_parser().parse_args(argv)))
+    except _CaseModelError as exc:
+        out.print_error(f"模型无法构建: {exc}", code=2)
+        sys.exit(2)
+
+
 @case_model.command("coverage-plan")
 @click.argument("model", type=click.Path(exists=True))
 @click.option("--module", "-m", default="dut", help="模块名（默认 dut）")

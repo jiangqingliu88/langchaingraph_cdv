@@ -325,6 +325,60 @@ def cmd_coverage_plan(args: argparse.Namespace) -> int:
 
 
 # ════════════════════════════════════════════════════════════
+# associate —— 三层模型的关联校验
+# ════════════════════════════════════════════════════════════
+
+def cmd_associate(args: argparse.Namespace) -> int:
+    """case / 覆盖率 / 约束 三份 yaml 的**关联**：连上了什么、哪里断了。
+
+    四条边都靠**名字**对齐（见 `associate.py` 的模块头）。有 error 时退出码 1 ——
+    "关联断了"不是警告，是这组模型渲染不出可信的 SV。
+    """
+    from .associate import associate
+
+    payload = associate(
+        Path(args.cases).read_text(encoding="utf-8"),
+        Path(args.coverage).read_text(encoding="utf-8"),
+        Path(args.constraint).read_text(encoding="utf-8") if args.constraint else "")
+    if payload.get("error"):
+        print(f"关联失败: {payload['error']}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        _print_association(payload)
+    for note in payload["notes"]:
+        print(f"  注意: {note}", file=sys.stderr)
+    return 1 if payload["counts"]["error"] else 0
+
+
+def _print_association(payload: dict) -> None:
+    print(f"关联：{payload['summary']}")
+    c = payload["counts"]
+    print(f"  case 字段（有 cover_bins）{c['case_fields_with_bins']} / "
+          f"覆盖点 {c['coverage_coverpoints']} / bin {c['coverage_bins']} / "
+          f"矩阵键 {c['matrix_keys']} / 交叉 {c['crosses']}")
+    links = payload["links"]["coverpoints"]
+    if links:
+        print()
+        print("覆盖点 → case 字段：")
+        for l in links:
+            print(f"  {l['coverpoint']:22s} ← {l['case_field'] or '（没关联上）'}")
+    if payload["links"]["methods"]:
+        print()
+        print("专题 → 约束形态：")
+        for m in payload["links"]["methods"]:
+            print(f"  {m['theme']:14s} method={m['method']:5s} → {m['constraint_form']}")
+    if payload["issues"]:
+        print()
+        print(f"关联问题 {len(payload['issues'])} 处：")
+        for i in payload["issues"]:
+            print(f"  [{i['severity']:7s}] 边{i['edge']} {i['subject']}")
+            print(f"            {i['message']}")
+
+
+# ════════════════════════════════════════════════════════════
 # 参数
 # ════════════════════════════════════════════════════════════
 
@@ -394,6 +448,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="covergroup 名字里的模块名（默认 dut）")
     p.add_argument("--out", "-o", help="把 covergroup 写到文件（缺省打到 stdout）")
     p.set_defaults(func=cmd_covergroups)
+
+    p = sub.add_parser("associate",
+                       help="case / 覆盖率 / 约束 三份 yaml 的关联校验（四条边）")
+    p.add_argument("cases", help="case 模型 YAML")
+    p.add_argument("coverage", help="功能覆盖率模型 YAML")
+    p.add_argument("--constraint", "-c", help="约束模型 YAML（可选）")
+    p.add_argument("--json", "-j", action="store_true", dest="json")
+    p.set_defaults(func=cmd_associate)
 
     p = sub.add_parser("coverage-plan",
                        help="功能覆盖率计划：覆盖点 + 批次 + 种子管理 + 需求追溯")

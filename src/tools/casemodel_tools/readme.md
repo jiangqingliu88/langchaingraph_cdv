@@ -577,6 +577,51 @@ python -m src.tools.casemodel_tools.cli covergroups \
 **不进模型的**：§4 的约束、§6 的种子基线、§7 手写的 covergroup —— 那是激励层与
 实现层，不是"该测什么"。
 
+### 三层模型 + 分散引用关联（`associate`）
+
+case / 功能覆盖率 / 约束是**三份 yaml**，各答一个问题：
+
+| 文件 | 答什么 |
+|---|---|
+| **case 模型** `cases.yaml` | **该测什么**：dimensions/values（取值空间）、themes（专题＝批次＋种子）、cross_matrix、`cover_bins`（bin 名**引用**） |
+| **覆盖率模型** `coverage.yaml` | **怎么量**：coverpoints（signal + bins）、crosses（`matrix_ref`） |
+| **约束模型** `constraint.yaml` | **怎么驱动**：transactions（端口→seq_item）、policies、combinator |
+
+**关联靠名字，不靠位置**（也没加第四份"关联表"—— 那是第四份真相，改了名没人报）：
+
+```
+① case.field.cover_bins  ──bin 名──►  coverage.coverpoints[].bins[].name
+② case.cross_matrix 键   ──矩阵键──►  coverage.crosses[].matrix_ref
+③ 约束.policies[].applies_to ──端口──► 约束.transactions[].name
+④ case.themes[].method   ──映射──►   约束.combinator / policies
+```
+
+①② 是**硬边**（error）—— 断了就是"声明的测试点没落成覆盖仓"/"组合关系没被覆盖"；
+③④ 是**软边**（warning）。
+
+```bash
+python -m src.tools.casemodel_tools.cli associate cases.yaml coverage.yaml [-c constraint.yaml]
+# 主 CLI 同形：vagent case-model associate
+```
+
+**为什么边 ① 靠 bin 名而不是字段名**：
+
+```
+case 模型： fields[].name: 指令类型      ← 建模概念（人可以写中文）
+coverage ： signal: instr_type          ← 实现名字（DUT 的端口）
+```
+
+它们**本来就不该同名**。实测踩过：按名字找字段 → 全落空 → 取值全投影成 0，
+而编译不报错（每个 bin 收的都是 0）。真正的桥是 `cover_bins` 的名字。
+
+**两条纪律**：
+
+- **查"作者声明了什么"要读原始 yaml**，不读解析后的产物 —— 解析会把坏条目丢掉
+  （取值解析不了、交叉引用了不存在的 coverpoint），从产物上看不见它们，会让别的边
+  报一串**级联误报**（实测：3 个交叉被丢，边 ② 一口气报 6 条"没人引用"）。
+- **有 error 就不许渲染 SV**（`renderable: false`）—— 取值投影不出来时给个 0 让 bin
+  照生成，收的是**错的数**，比生成不了更坏。
+
 ### 功能覆盖率计划（`coverage-plan`）
 
 **一份 yaml，与 case 模型同批生成**，把覆盖这件事的四张脸摆在一起：

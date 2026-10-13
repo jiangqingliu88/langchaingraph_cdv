@@ -127,12 +127,26 @@ class CoverPoint:
     source: str = "stimulus"
     width: int = 0                 # dut 通道声明探针端口用；0 = 没声明
     expr: str = ""                 # 采样表达式（dut 通道）；空 = 采同名信号
+    #: **SV 里那个 coverpoint 的名字**（空 → 按 `cp_<signal>` 推）。
+    #:
+    #: 为什么要有独立的一份：**交叉引用的是 coverpoint 名，不是信号名**。
+    #: 独立覆盖率模型（`parse_coverage_model`）里作者写
+    #: `name: cp_instr_type` + `signal: instr_type`，交叉写
+    #: `cross: [cp_dep_type, cp_issue_decision]` —— 引用的是**名字**。
+    #: 靠"名字恰好等于 `cp_<signal>`"来对齐是巧合，不是契约。
+    cp_name: str = ""
     bins: List[CoverBin] = _field(default_factory=list)
     illegal_bins: List[CoverBin] = _field(default_factory=list)
+
+    @property
+    def sv_name(self) -> str:
+        """SV 里那个 coverpoint 名（作者给了就用作者的）。"""
+        return self.cp_name or f"cp_{self.signal}"
 
     def as_dict(self) -> Dict[str, Any]:
         return {"signal": self.signal, "field": self.field,
                 "dimension": self.dimension, "type": self.type,
+                "cp_name": self.sv_name,
                 "cover_id": self.cover_id, "requirement": self.requirement,
                 "source": self.source, "width": self.width, "expr": self.expr,
                 "bins": [b.as_dict() for b in self.bins],
@@ -166,9 +180,20 @@ class CrossPoint:
     source: str = "stimulus"       # 两边共同的采样来源（同作用域才建得起来）
     cover_id: str = ""             # 文档里的交叉编号（X_xxx）—— 追溯用
     requirement: str = ""          # 需求编号（可能是复合的 `REQ-A/B`）
+    #: **参与交叉的 coverpoint 名**（空 → 按 `cp_<signal>` 推）。见 `CoverPoint.cp_name`。
+    cp_refs: List[str] = _field(default_factory=list)
+    #: **关联到 case 模型的 `cross_matrix` 键**（`指令类型×数据类型`）——
+    #: 这是三层模型之间那条"组合关系对组合关系"的引用（`run_associate` 用它查 dangling）。
+    matrix_ref: str = ""
+
+    @property
+    def refs(self) -> List[str]:
+        """SV 里 `cross` 那句引用的 coverpoint 名（作者给了就用作者的）。"""
+        return list(self.cp_refs) or [f"cp_{s}" for s in self.signals]
 
     def as_dict(self) -> Dict[str, Any]:
         return {"name": self.name, "signals": list(self.signals),
+                "cp_refs": self.refs, "matrix_ref": self.matrix_ref,
                 "level": self.level, "dimensions": list(self.dimensions),
                 "source": self.source, "cover_id": self.cover_id,
                 "requirement": self.requirement,
@@ -181,9 +206,23 @@ class CoverageModel:
     """一个 module 的功能覆盖率模型 —— 覆盖点的**声明**，不是命中。"""
     module: str
     covergroup: str
+    #: **关联到 case 模型的 L1 对象**（`object_ref: NpuScheduler`）——
+    #: 独立覆盖率模型里显式声明它属于哪个对象。
+    object_ref: str = ""
     coverpoints: List[CoverPoint] = _field(default_factory=list)
     crosses: List[CrossPoint] = _field(default_factory=list)
     notes: List[str] = _field(default_factory=list)
+    #: **硬错** —— 关联断了、取值投影不了这类。有它就**不许渲染 SV**。
+    #:
+    #: 为什么单独一份而不是混进 `notes`：解析"能读出个东西"和"这东西是对的"是两件事。
+    #: 取值解析不了时给个 0 让 bin 照生成，plot 出来的覆盖率是**错的数**——
+    #: 那比不生成更坏（一个永远不命中的 bin 至少一眼看得出来）。
+    errors: List[str] = _field(default_factory=list)
+
+    @property
+    def renderable(self) -> bool:
+        """能不能拿它渲染 SV —— 有硬错就不行。"""
+        return bool(self.coverpoints) and not self.errors
 
     def by_source(self, source: str) -> List[CoverPoint]:
         return [cp for cp in self.coverpoints if cp.source == source]
@@ -919,3 +958,254 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
         },
         "notes": list(dict.fromkeys(notes + list(cm.notes))),
     }
+
+
+# ════════════════════════════════════════════════════════════
+# 独立覆盖率模型（三层模型里的第二份）
+# ════════════════════════════════════════════════════════════
+
+def parse_coverage_model(coverage_yaml: str, case_model: "CaseModel" = None,
+                         notes: List[str] = None) -> CoverageModel:
+    """**独立的覆盖率模型 yaml** → `CoverageModel`。
+
+    ## 它和 case 模型是两份、不是一份
+
+    case 模型答"该测什么"（维度/取值/专题），覆盖率模型答"**怎么量**"
+    （coverpoint / bin / cross）。分开的好处是改一边不动另一边；代价是
+    **它们之间必须靠引用对齐** —— 见 `run_associate` 的四条关联边。
+
+    ## 为什么这个函数**需要 case 模型**（不是可选装饰）
+
+    `case_model` 那一边的取值是**符号**（`MAC` / `首拍`），而 SV 的 `bins` 只能收
+    **整型字面量**（`bins x = {MAC};` 只在 `MAC` 是该作用域的枚举常量时才合法，
+    而生成器不知道对方的类型）。所以取值要走**下标投影**（与 `api._int_value_of`
+    同一套）—— 而"`MAC` 是第几个"只有 case 模型的 `values:` 说得清。
+
+    **不给 case 模型就投影不了**：那些 bin 会保留符号、`literal()` 给不出合法字面量。
+    这时**记账**（`notes`）并继续 —— 覆盖率模型本身仍然可读、可校验关联，
+    只是暂时渲染不成 SV。这不是"降级"，是"还差一份输入"。
+
+    `cover_bins` / `cross_matrix` 在 case 模型那边是**引用**，在这里是**定义** ——
+    这正是三层模型的核心分工：**引用与定义分开，靠名字对齐**。
+    """
+    import yaml as _yaml
+
+    notes = notes if notes is not None else []
+    try:
+        data = _yaml.safe_load(coverage_yaml) or {}
+    except _yaml.YAMLError as exc:
+        notes.append(f"覆盖率模型 YAML 解析失败: {exc}")
+        return CoverageModel(module="", covergroup="")
+
+    mod = data.get("module") or {}
+    module = sv_ident(mod.get("name") or "dut", "dut")
+    cm = CoverageModel(module=module, covergroup=f"cg_{module}",
+                       object_ref=str(mod.get("object_ref") or "").strip())
+
+    for item in (data.get("coverpoints") or []):
+        if not isinstance(item, dict):
+            continue
+        cp = _parse_coverpoint(item, case_model, notes, cm.errors)
+        if cp is not None:
+            cm.coverpoints.append(cp)
+
+    names = {cp.cp_name or cp.signal for cp in cm.coverpoints}
+    for item in (data.get("crosses") or []):
+        if not isinstance(item, dict):
+            continue
+        cx = _parse_cross(item, cm, names, notes, cm.errors)
+        if cx is not None:
+            cm.crosses.append(cx)
+
+    if not cm.object_ref:
+        notes.append("覆盖率模型没有 `module.object_ref` —— 关联不到 case 模型的 L1 对象"
+                     "（`run_associate` 的第一条边查的就是它）")
+    # **别把 notes 丢了**：解析过程中攒的是本地 list，不回填的话
+    # 「大小写不一致」这类提醒一条都到不了调用方（实测：notes 恒为 0）。
+    cm.notes.extend(notes)
+    return cm
+
+
+def _parse_coverpoint(item: Dict[str, Any], case_model: "CaseModel",
+                      notes: List[str], errors: List[str]) -> Optional[CoverPoint]:
+    signal = sv_ident(item.get("signal"), "")
+    if not signal:
+        notes.append(f"覆盖点条目缺 `signal` —— 跳过（{item!r}）")
+        return None
+    name = str(item.get("name") or "").strip()
+    # 字段靠 **bin 名**关联（不是 signal —— 见 `_find_field` 的 docstring）
+    bin_names = [str(b.get("name") or "") for b in (item.get("bins") or [])
+                 if isinstance(b, dict)]
+    fld = _find_field(case_model, bin_names)
+    dim_key = fld.dim_key if fld is not None else ""
+    if case_model is not None and fld is None:
+        notes.append(f"覆盖点 {name or signal} 的 bin（{'、'.join(bin_names[:3])}"
+                     f"{'…' if len(bin_names) > 3 else ''}）在 case 模型里"
+                     f"**没有任何字段的 cover_bins 认领** —— ① 号关联断了"
+                     f"（取值投影不了，只能给 0）")
+
+    bins: List[CoverBin] = []
+    used: set = set()
+    for b in (item.get("bins") or []):
+        if not isinstance(b, dict):
+            continue
+        cb = _parse_bin(b, fld, notes, name or signal, case_model, used, errors)
+        if cb is not None:
+            bins.append(cb)
+    if not bins:
+        notes.append(f"覆盖点 {name or signal} 一个 bin 都没有 —— 不出 coverpoint")
+        return None
+    return CoverPoint(signal=signal, field=fld.name if fld is not None else signal,
+                      dimension=dim_key, type=fld.type if fld is not None else "",
+                      cp_name=name, bins=bins)
+
+
+def _parse_bin(item: Dict[str, Any], fld, notes: List[str], where: str,
+               case_model, used: set, errors: List[str]) -> Optional[CoverBin]:
+    """一个 bin 条目 → `CoverBin`。三种内容：`values`（一个或多个）/ `ranges`。"""
+    name = sv_ident(item.get("name"), "")
+    if not name:
+        notes.append(f"{where}：有个 bin 没有合法的 name —— 跳过（{item!r}）")
+        return None
+    if name in used:
+        notes.append(f"{where}：bin 名 {name} 重复 —— 跳过（bins 重定义编译不过）")
+        return None
+    used.add(name)
+
+    raw_vals = item.get("values")
+    if raw_vals is None and item.get("value") is not None:
+        raw_vals = [item["value"]]
+    if raw_vals is not None:
+        vals = raw_vals if isinstance(raw_vals, list) else [raw_vals]
+        projected = [_project(v, fld, notes, where, case_model, errors) for v in vals]
+        # **有一个解析不出来就整个 bin 丢掉** —— 半个 bin 收的是错的取值
+        if any(v is None for v in projected):
+            used.discard(name)
+            return None
+        if len(projected) == 1:
+            return CoverBin(name=name, value=projected[0], token=str(vals[0]))
+        return CoverBin(name=name, values=projected,
+                        token=",".join(str(v) for v in vals))
+
+    rngs = item.get("ranges") or ([item["range"]] if item.get("range") else None)
+    if rngs:
+        r = rngs[0]
+        if not isinstance(r, (list, tuple)) or not r:
+            notes.append(f"{where}：bin {name} 的 ranges 形状不对 —— 跳过（{item!r}）")
+            return None
+        lo = _opt_int(r[0])
+        hi = _opt_int(r[1]) if len(r) > 1 else None
+        if lo is None:
+            notes.append(f"{where}：bin {name} 的区间下界不合法 —— 跳过")
+            return None
+        return CoverBin(name=name, lo=lo, hi=hi,
+                        token=f"{lo}:{'$' if hi is None else hi}")
+    notes.append(f"{where}：bin {name} 既没有 values 也没有 ranges —— 跳过")
+    return None
+
+
+def _project(v: Any, fld, notes: List[str], where: str, case_model,
+             errors: List[str]) -> Optional[int]:
+    """取值 → 整型字面量。数字直接用；符号去 case 模型的 `values:` 里查下标。
+
+    三级匹配，**逐级放宽、每级都说出来**：
+
+      1. **原样相等** —— 正常情况。
+      2. **大小写无关** —— `Vector` 与 `VECTOR` 是同一个取值，按它匹配；
+         但**记一条 note**：两份文件对同一个东西拼写不一致，是维护隐患。
+      3. **对不上** —— 进 `errors`，**不默默给 0**。
+
+    第 3 条为什么不能退化成 0：`bins x = {0};` 生成得出来、编译得过、跑得动，
+    但它收的是**另一个取值**。于是覆盖率数字是错的 —— 比"生成不了"坏得多。
+
+    跨语言尤其不能猜：case 模型写 `无依赖`、覆盖模型写 `NONE`，机器无从知道
+    它们是一回事（实测：手写的两份样例就是这样）。**报出来让人显式对齐**。
+    """
+    text = str(v).strip()
+    try:
+        return int(text)
+    except (TypeError, ValueError):
+        pass
+    if fld is not None:
+        tokens = [str(token_of(c)) for c in fld.values]
+        for i, tok in enumerate(tokens):
+            if tok == text:
+                return i
+        low = text.casefold()
+        for i, tok in enumerate(tokens):
+            if tok.casefold() == low:
+                notes.append(f"{where}：case 模型写 {tok!r}、覆盖模型写 {text!r} —— "
+                             f"已按大小写无关匹配（第 {i} 个取值），建议两边统一")
+                return i
+        errors.append(
+            f"{where}：取值 {text!r} 在 case 模型的字段 {fld.qualified!r} 里查不到"
+            f"（那边的取值是 {tokens}）—— **两份模型对不上**。"
+            f"要么把它改成那边的一个取值，要么在 case 模型里补上它")
+        return None
+    if case_model is None:
+        errors.append(f"{where}：取值 {text!r} 是符号，但没有 case 模型可以查它的下标"
+                      f" —— 渲染不了（先做 `run_associate` 把两边的名字对上）")
+        return None
+    errors.append(f"{where}：取值 {text!r} 找不到对应的 case 字段"
+                  f"（覆盖点该关联不上任何字段）")
+    return None
+
+
+def _parse_cross(item: Dict[str, Any], cm: CoverageModel, names: set,
+                 notes: List[str], errors: List[str]) -> Optional[CrossPoint]:
+    refs = [str(x).strip() for x in (item.get("cross") or []) if str(x).strip()]
+    name = str(item.get("name") or "").strip()
+    if len(refs) < 2:
+        notes.append(f"交叉条目 {name or item.get('id')!r} 的 `cross` 少于两项 —— 跳过")
+        return None
+    unknown = [r for r in refs if r not in names]
+    if unknown:
+        errors.append(
+            f"交叉 {name or item.get('id')} 引用了**不存在的 coverpoint**："
+            f"{'、'.join(unknown)}（这份模型里只有 "
+            f"{'、'.join(sorted(names))}）—— 要么补一个同名 coverpoint，要么改引用")
+        return None
+    by_name = {cp.cp_name or cp.signal: cp for cp in cm.coverpoints}
+    cps = [by_name[r] for r in refs]
+    return CrossPoint(
+        name=name or f"cx_{'_'.join(cps[i].signal for i in range(2))}",
+        signals=[cp.signal for cp in cps], cp_refs=refs,
+        level=str(item.get("level") or "required"),
+        dimensions=[cp.dimension for cp in cps],
+        cover_id=str(item.get("id") or "").strip(),
+        matrix_ref=str(item.get("matrix_ref") or "").strip(),
+        source=cps[0].source)
+
+
+def _find_field(case_model: "CaseModel", bin_names: List[str]):
+    """**按 `cover_bins` 的名字**找 case 模型的字段 —— 不是按信号名。
+
+    ## 为什么不能按信号名
+
+    两份模型对**同一件事**用的是不同的名字，而这是**对的**：
+
+        case 模型： fields[].name: 指令类型      ← 建模概念（人可以写中文）
+        coverage ： signal: instr_type          ← **实现名字**（DUT 的端口）
+
+    字段名是"建模里管它叫什么"，`signal` 是"在 DUT 里它叫什么" —— 它们**本来
+    就不该同名**（实测：手写的两份样例一个中文一个英文，按名字找直接全落空，
+    所有取值退化成 0 而**编译不会报错**）。
+
+    ## 真正的桥是 `cover_bins`
+
+    作者在 case 模型的字段上写 `cover_bins: [cp_type_mac, ...]`，在 coverage
+    模型的 bin 上写 `name: cp_type_mac` —— **同一个名字**。这就是三层模型里
+    「引用与定义分开、靠名字对齐」那条分工，① 号关联边。
+
+    所以：哪个字段的 `cover_bins` 与这个覆盖点的 bin 名**有交集**，就是它。
+    """
+    if case_model is None:
+        return None
+    want = {str(n) for n in bin_names if n}
+    if not want:
+        return None
+    for dim in case_model.dimensions:
+        for fld in dim.fields:
+            if want & set(fld.cover_bins or []):
+                return fld
+    return None
