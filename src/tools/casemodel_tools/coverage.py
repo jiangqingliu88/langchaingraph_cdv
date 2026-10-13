@@ -474,6 +474,16 @@ def _coverpoint(dim_key: str, fld: Field, notes: List[str]) -> Optional[CoverPoi
 DEFAULT_WIDTH = 32
 
 
+def _derive_width_from_bins(bins: List[CoverBin]) -> int:
+    """没有 case 字段时，从 bin 内容推位宽（取出现过的最大数需要几位）。"""
+    hi = 0
+    for b in bins:
+        for v in ([b.value] if b.value is not None else []) + list(b.values) +                  ([b.hi] if b.hi is not None else []):
+            if v is not None:
+                hi = max(hi, int(v))
+    return max(1, hi.bit_length())
+
+
 def _derive_width(fld: Field, bins: List[CoverBin]) -> int:
     """采样信号的位宽 —— 从字段类型与仓内容推。
 
@@ -1055,9 +1065,32 @@ def _parse_coverpoint(item: Dict[str, Any], case_model: "CaseModel",
     if not bins:
         notes.append(f"覆盖点 {name or signal} 一个 bin 都没有 —— 不出 coverpoint")
         return None
+    # **默认 `dut`，与 case 模型那条路相反** —— 两个产物的性质不同：
+    #   · case 模型的字段 → 事务字段（agent 采），所以那边默认 `stimulus`
+    #   · 覆盖率模型的 `signal` 是 **DUT 的信号名**（`instr_type` / `queue_level`），
+    #     端口与内部一视同仁地只有从 DUT 里才看得见
+    # 想采事务字段（信号恰好也是 agent 的 transaction var）就显式写 `sample: stimulus`。
+    source = str(item.get("sample") or "dut").strip().lower()
+    if source not in ("dut", "stimulus"):
+        notes.append(f"覆盖点 {name or signal} 的 `sample: {source}` 不认识 —— "
+                     f"按 `dut` 处理（只有 `dut` / `stimulus` 两种）")
+        source = "dut"
+    # 位宽从**关联到的 case 字段**推（`_derive_width` 同一条）—— 覆盖率模型自己
+    # 不写位宽（它写的是"采哪个信号"，位宽是那个信号的事）。推不出来的退到
+    # bin 内容能容纳的位数，再退到 1 位。
+    # 显式 `width` 优先：覆盖率模型认识的信号，位宽是**那个信号的事实**，不是
+    # 从 bin 内容推出来的（`instr_opcode` 有 10 个取值 → 推出 4 位，而 DUT 端口
+    # 是 8 位 —— vopt 报 "Connection width does not match"，而 vlog 不报）。
+    explicit_w = item.get("width")
+    if isinstance(explicit_w, int) and explicit_w > 0:
+        width = explicit_w
+    elif fld is not None:
+        width = _derive_width(fld, bins)
+    else:
+        width = _derive_width_from_bins(bins)
     return CoverPoint(signal=signal, field=fld.name if fld is not None else signal,
                       dimension=dim_key, type=fld.type if fld is not None else "",
-                      cp_name=name, bins=bins)
+                      cp_name=name, bins=bins, source=source, width=width)
 
 
 def _parse_bin(item: Dict[str, Any], fld, notes: List[str], where: str,
@@ -1209,3 +1242,80 @@ def _find_field(case_model: "CaseModel", bin_names: List[str]):
             if want & set(fld.cover_bins or []):
                 return fld
     return None
+
+
+# ════════════════════════════════════════════════════════════
+# 覆盖率接口（bind 进 DUT，把信号引给 env 覆盖率组件）
+# ════════════════════════════════════════════════════════════
+
+def render_cov_interface(cm: CoverageModel, dut_module: str,
+                         if_name: str = "") -> str:
+    """`CoverageModel` → **一个 bind 进 DUT 的接口**（把采样信号引出来）。
+
+    ## 为什么是"接口"而不是"模块"
+
+    `env/<env>_coverage.sv` 被 `include` 进 `env_pkg` —— **那里面只能是 class**
+    （`environment.sv` 把它当 `uvm_component` 例化）。而 class **看不到 DUT 的信号**：
+    输入/输出端口尚可经 `virtual interface` 够到，**内部状态**（队列水位、依赖类型）
+    则连 virtual interface 也够不着 —— 它们不在任何一个接口上。
+
+    所以信号得先被"引出来"：本函数产出的接口 `bind` 进 DUT，**端口连接表达式在
+    目标模块作用域里求值**，于是内部名直接连得过去（实测 vlog 通过）。覆盖率
+    组件持 `virtual <本接口>`，`coverpoint vif.<信号>` —— 端口与内部一视同仁。
+
+    ## 与 `render_probe`（那条 bind **探针**）的分工
+
+      `render_cov_interface` 只**引信号**（接口），采样与收口在组件里 ——
+      走 UVM 那条正规路子（组件 `sample()`），覆盖率与 UVM 报告在一起。
+      `render_probe` 自带 covergroup 与 `always` 采样（一条独立 **模块**）——
+      不依赖 UVM，适合"没有 env 也要收覆盖率"的场合。
+
+    两条都靠 `bind`，都靠"端口表达式在 DUT 作用域求值"这一条 SV 语义。
+
+    `dut_module` 空则返回空串（不知道绑到谁身上）；`if_name` 空则按模块名推。
+    """
+    dut = sv_ident(dut_module, "")
+    if not dut:
+        return ""
+    name = sv_ident(if_name or f"{cm.module}_cov_if", "")
+    cps = [cp for cp in cm.coverpoints if cp.source == "dut"]
+    if not cps:
+        return ""
+
+    macro = f"{name.upper()}_SV"
+    out: List[str] = [
+        f"`ifndef {macro}",
+        f"`define {macro}",
+        "",
+        "// 覆盖率采样接口 —— 由 case/覆盖率模型生成（casemodel_tools.coverage）",
+        f"// `bind` 到 `{dut}`：端口连接表达式在该模块作用域里求值，",
+        "// 所以输入端口 / 输出端口 / **内部寄存器** 一视同仁地连得进来。",
+        "//",
+        "// 它只**引信号**，不采样 —— 采样由 env 的覆盖率组件做（`coverpoint vif.<信号>`），",
+        "// 这样覆盖率跟 UVM 的报告走（见 `coverage/<模块>_probe.sv` 是另一条：",
+        "// 自带 covergroup 的独立探针，不依赖 UVM）。",
+        "",
+        f"interface {name} (",
+    ]
+    # ⚠️ **必须是端口，不能是接口体内的变量**：`bind` 的 `.sig(expr)` 连的是
+    # **被绑模块的端口**。写成 `interface X(); logic sig; endinterface` 时 vlog
+    # **照样报 `Errors: 0`**（它压根不查 bind 的连接），要到 `vopt` 才报
+    #     (vopt-2912) Port 'sig' not found in module 'X'
+    # —— 所以这一层的验证**必须用 vopt，不能用 vlog**（实测踩过）。
+    #
+    # 一律 `input`：接口只**观察** DUT —— 输入端口是被驱动的网、输出端口也是，
+    # 都只读一份值。声明成 `output` 会反过来去驱动 DUT。
+    for i, cp in enumerate(cps):
+        decl = f"[{cp.width - 1}:0] " if cp.width > 1 else ""
+        sep = "," if i < len(cps) - 1 else ""
+        out.append(f"  input logic {decl}{cp.signal}{sep}  // {cp.field}")
+    out += [
+        f");",
+        f"endinterface : {name}",
+        "",
+        f"bind {dut} {name} u_{name}(",
+    ]
+    conns = [f"  .{cp.signal}({cp.expr or cp.signal})" for cp in cps]
+    out.append(",\n".join(conns))
+    out += [");", "", f"`endif  // {macro}", ""]
+    return "\n".join(out)

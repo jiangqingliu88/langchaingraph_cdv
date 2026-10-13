@@ -50,7 +50,7 @@ module npu_sched (
 
   // ── 同步屏障与优先级策略（外部可配）──
   input  logic [1:0]  barrier_type,     // NONE / TILE / OP / CLUSTER
-  input  logic [2:0]  op_priority,      // HIGH_FIRST / LOW_FIRST / SAME_PRIO / ROUND_ROBIN
+  input  logic [1:0]  op_priority,      // HIGH_FIRST / LOW_FIRST / SAME_PRIO / ROUND_ROBIN（4 个取值 → 2 位）
 
   // ── 发射（到执行单元）──
   output logic        issue_valid,

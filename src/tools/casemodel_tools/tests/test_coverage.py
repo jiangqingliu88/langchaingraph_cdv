@@ -958,3 +958,175 @@ class TestTheNpuCoveragePlan:
         assert row["coverpoints"] == ["CP_NPU_QUEUE_001"]
         assert row["crosses"] == ["X_NPU_LEVEL_DEC_004"]
         assert row["batches"] == ["TH-B06", "TH-B11"]
+
+
+# ════════════════════════════════════════════════════════════
+# 覆盖率接口（bind 进 DUT，把信号引给 env 覆盖率组件）
+# ════════════════════════════════════════════════════════════
+
+DUT_STUB = """\
+module npu_sched (input logic clk, input logic rst_n,
+                  input logic [7:0] instr_opcode, input logic [2:0] instr_type,
+                  input logic [1:0] op_priority,
+                  output logic [2:0] issue_unit);
+  logic [5:0] queue_level;
+  logic [1:0] dep_type;
+  always_ff @(posedge clk) if (!rst_n) begin
+    queue_level <= 0; dep_type <= 0;
+  end else begin
+    queue_level <= queue_level + 1;
+    dep_type <= instr_type[1:0];
+  end
+  assign issue_unit = instr_type;
+endmodule
+"""
+
+COV_MODEL = """
+version: "1.0"
+module: {name: @MODULE@, object_ref: X}
+coverpoints:
+  - id: CP_Q
+    name: cp_queue_level
+    signal: queue_level
+    bins: [{name: cp_low, ranges: [[0, 15]]}, {name: cp_high, ranges: [[16, 63]]}]
+  - id: CP_T
+    name: cp_instr_type
+    signal: instr_type
+    bins: [{name: cp_mac, values: [0]}, {name: cp_vec, values: [1]}]
+  - id: CP_OP
+    name: cp_opcode
+    signal: instr_opcode
+    width: 8
+    bins: [{name: cp_op0, values: [0]}]
+crosses:
+  - id: X_QT
+    name: X_qt
+    cross: [cp_instr_type, cp_queue_level]
+"""
+
+
+def _cov_cm(**over):
+    from src.tools.casemodel_tools.coverage import parse_coverage_model
+
+    name = over.pop("name", "npu_sched")
+    # **不能用 `.format()`**：YAML 的流式写法 `{name: ..., object_ref: X}` 里的
+    # 花括号会被当成占位符（KeyError）。用显式记号替换。
+    text = COV_MODEL.replace("@MODULE@", name)
+    for k, v in over.items():
+        text = text.replace(k, v)
+    return parse_coverage_model(text, None)
+
+
+class TestCoverageInterface:
+    """覆盖率接口 = **bind 进 DUT 的接口**，把采样信号（含内部状态）引给 env 组件。
+
+    为什么不直接把 covergroup 写进 `env/<env>_coverage.sv`：那个文件被
+    `include` 进 `env_pkg`（`environment.sv` 把它当 `uvm_component` 例化），
+    **里面只能是 class** —— 而 class 看不到 DUT 的内部状态。信号得先被引出来。
+    """
+
+    def test_signals_are_declared_as_ports_not_variables(self):
+        """**必须是端口**：`bind` 的 `.sig(expr)` 连的是**被绑模块的端口**。
+
+        写成接口体内的变量时 `vlog` 照样 `Errors: 0`（它压根不查 bind 的连接），
+        要到 `vopt` 才报 `(vopt-2912) Port 'sig' not found`。
+        """
+        from src.tools.casemodel_tools.coverage import render_cov_interface
+
+        sv = render_cov_interface(_cov_cm(), "npu_sched")
+        assert "interface npu_sched_cov_if (" in sv
+        assert "input logic [5:0] queue_level" in sv     # 端口，且带位宽
+        assert "logic queue_level;" not in sv            # 不是接口体内的变量
+        assert "bind npu_sched npu_sched_cov_if" in sv
+
+    def test_only_dut_sourced_coverpoints_are_exposed(self):
+        """`sample: stimulus` 的走 env_cov 那条路，不该出现在这个接口里。"""
+        from src.tools.casemodel_tools.coverage import render_cov_interface
+
+        cm = _cov_cm()
+        cm.coverpoints[0].source = "stimulus"
+        sv = render_cov_interface(cm, "npu_sched")
+        assert "queue_level" not in sv
+        assert "instr_type" in sv
+
+    def test_no_dut_module_no_interface(self):
+        from src.tools.casemodel_tools.coverage import render_cov_interface
+
+        assert render_cov_interface(_cov_cm(), "") == ""
+
+    def test_it_elaborates_against_a_real_dut(self, tmp_path):
+        """**用 `vopt` 验，不用 `vlog`** —— 后者对 bind 的连接一言不发。
+
+        实测：故意 bind 一个不存在的信号，`vlog` 仍然 `Errors: 0`；
+        换 `vopt` 才报 `(vopt-2958) Implicit wire ... does not have any driver`。
+        所以"编译过了"这句话，只有 vopt 说过才算数。
+        """
+        import shutil
+        import subprocess
+
+        from config.settings import questa_home
+
+        from src.tools.casemodel_tools.coverage import render_cov_interface
+
+        bindir = Path(questa_home()) / "win64"
+        vlog, vopt = bindir / "vlog.exe", bindir / "vopt.exe"
+        if not vlog.exists() or not vopt.exists():
+            pytest.skip("没装 Questa（vlog/vopt 找不到）—— elaborate 验证跳过")
+
+        (tmp_path / "dut.sv").write_text(DUT_STUB, encoding="utf-8")
+        (tmp_path / "cov_if.sv").write_text(
+            render_cov_interface(_cov_cm(), "npu_sched"), encoding="utf-8")
+        r1 = subprocess.run(
+            [str(vlog), "-sv", "-mfcu", "-cuname", "t_cu",
+             "-work", str(tmp_path / "work"),
+             str(tmp_path / "dut.sv"), str(tmp_path / "cov_if.sv")],
+            cwd=str(tmp_path), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=180)
+        assert "Errors: 0" in f"{r1.stdout}\n{r1.stderr}", (r1.stdout or "")[-1500:]
+        r2 = subprocess.run([str(vopt), "-work", "work", "npu_sched", "-o", "t_opt"],
+                            cwd=str(tmp_path), capture_output=True, text=True,
+                            encoding="utf-8", errors="replace", timeout=180)
+        out = f"{r2.stdout}\n{r2.stderr}"
+        assert "Errors: 0" in out, out[-1500:]
+        # 内部状态（queue_level）也连上了 —— 这正是这条通道存在的理由
+        assert "does not have any driver" not in out, out[-1500:]
+
+    def test_vlog_alone_does_not_catch_a_bogus_bind(self, tmp_path):
+        """**把那个教训本身钉住**：vlog 说"过了"不算过。
+
+        这条不是验证生成器，是验证"我们用的标尺对不对" —— 一条故意连错信号的
+        bind，`vlog` 必须报 `Errors: 0`（说明它不查），`vopt` 必须报错。
+        哪天 vlog 开始查了，这条会红，那时可以把标尺换回 vlog。
+        """
+        import shutil
+        import subprocess
+
+        from config.settings import questa_home
+
+        bindir = Path(questa_home()) / "win64"
+        vlog, vopt = bindir / "vlog.exe", bindir / "vopt.exe"
+        if not vlog.exists() or not vopt.exists():
+            pytest.skip("没装 Questa（vlog/vopt 找不到）")
+
+        (tmp_path / "dut.sv").write_text(DUT_STUB, encoding="utf-8")
+        (tmp_path / "bad.sv").write_text(
+            "interface bad_if (input logic nowhere);\nendinterface\n"
+            "bind npu_sched bad_if u_bad(.nowhere(no_such_signal));\n", encoding="utf-8")
+        r1 = subprocess.run(
+            [str(vlog), "-sv", "-mfcu", "-cuname", "b_cu",
+             "-work", str(tmp_path / "work"),
+             str(tmp_path / "dut.sv"), str(tmp_path / "bad.sv")],
+            cwd=str(tmp_path), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=180)
+        assert "Errors: 0" in f"{r1.stdout}\n{r1.stderr}", \
+            "vlog 开始查 bind 了？那标尺可以简化"
+        r2 = subprocess.run([str(vopt), "-work", "work", "npu_sched", "-o", "b_opt"],
+                            cwd=str(tmp_path), capture_output=True, text=True,
+                            encoding="utf-8", errors="replace", timeout=180)
+        out = f"{r2.stdout}\n{r2.stderr}"
+        # 两种情况 vlog 都不吭声，vopt 才说 —— 而**说法还不一样**：
+        #   接口上没这个**端口**  → vopt **error**（vopt-2912）
+        #   DUT 里没这个**信号**  → vopt **warning**（vopt-2958 隐式线）
+        # 所以"vopt 报了 error"不是这条通道的完整结论，`does not have any driver`
+        # 同样要当回事（上一条测试正是按它断言的）。
+        assert "does not have any driver" in out, out[-800:]
