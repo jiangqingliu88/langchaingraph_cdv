@@ -175,7 +175,8 @@ def _norm_name(name: str) -> str:
 def register_cases(yaml_text: str, module_name: str = "dut", *,
                    registry: Any = None,
                    db_path: Optional[str] = None,
-                   max_cases: Optional[int] = None) -> Dict[str, Any]:
+                   max_cases: Optional[int] = None,
+                   rtl_version_no: Optional[int] = None) -> Dict[str, Any]:
     """把行写进用例库。返回 `case_rows` 的结果 + `registered`。
 
     落点三选一，**优先级 `registry` > `db_path` > 默认库**：
@@ -186,6 +187,9 @@ def register_cases(yaml_text: str, module_name: str = "dut", *,
       · 都不给       用 `TestcaseRegistry` 的默认库（项目根 `.signoffai/` 下的
                      **跨 run 共享库**）—— 与 `_generate_regression_yaml` 读的
                      是同一个库，这样"写的"和"读的"才不会又各开一份真相。
+
+    每条用例都记上 **`module`**（结构化列）与注册时的 **`rtl_version_no`**
+    （`None` = 这一轮没有 RTL / 不知道，不编一个 0 出来）。
     """
     out = case_rows(yaml_text, module_name, max_cases=max_cases)
     if out.get("error"):
@@ -199,7 +203,8 @@ def register_cases(yaml_text: str, module_name: str = "dut", *,
         for c in out["cases"]:
             reg.register(c["name"], purpose=c["purpose"], scenario=c["scenario"],
                          priority=c["priority"], constraints=c["constraints"],
-                         coverage_bin=c["coverage_bin"])
+                         coverage_bin=c["coverage_bin"],
+                         module=module_name, rtl_version_no=rtl_version_no)
     finally:
         if owned:                     # 借来的句柄不许替人关
             reg.close()

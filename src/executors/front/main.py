@@ -151,9 +151,21 @@ class FrontExecutor(BaseExecutor):
                 "function_hier": {"children": []}}
 
         # 用例库登记：design 之后 spec 就绪 —— 这里更早，用例库早一步可查
+        #
+        # 登记时把**这一轮的 RTL 版本**一起写上：用例是有版本的（RTL 换了版，
+        # 旧用例是在哪版上定的就答不上来了）。版本走 `ensure_run_rtl_version`
+        # 这一个入口（与 debug / finalize 共用），拿不到就是 None，不编一个 0。
+        rtl_version_no = None
+        try:
+            from src.layers.l4_memory.lineage import run_rtl_version_no
+            rtl_version_no = run_rtl_version_no(output_dir,
+                                                module=info["design_name"])
+        except Exception as e:                         # noqa: BLE001 血缘不该阻断分解
+            logger.warning(f"血缘：这一轮的 RTL 版本取不到（用例将不带版本）: {e}")
         try:
             if self.ctx_reg is not None:
-                self.ctx_reg.register_from_spec(info, info["design_name"])
+                self.ctx_reg.register_from_spec(info, info["design_name"],
+                                                rtl_version_no=rtl_version_no)
         except Exception:                              # noqa: BLE001 登记失败不阻断
             pass
 
@@ -210,7 +222,8 @@ class FrontExecutor(BaseExecutor):
                     try:
                         from src.tools.casemodel_tools.registry_bridge import register_cases
                         _r = register_cases(text, info.get("design_name", "dut"),
-                                            registry=self.ctx_reg, max_cases=200)
+                                            registry=self.ctx_reg, max_cases=200,
+                                            rtl_version_no=rtl_version_no)
                         logger.info(f"front：用例库登记 {_r.get('registered', 0)} 条"
                                     f"（覆盖点共 {_r.get('total_before_cap', 0)}、"
                                     f"截断丢弃 {_r.get('dropped', 0)}）")

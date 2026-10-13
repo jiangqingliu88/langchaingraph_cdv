@@ -93,6 +93,7 @@ class TestcaseRegistry:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = sqlite3.connect(str(self.db_path))
             self._conn.executescript(_SCHEMA)
+            self._migrate_columns(self._conn)
             # 初始化 portfolio 默认权重（幂等）
             for purpose, cfg in DEFAULT_PORTFOLIO.items():
                 self._conn.execute(
@@ -101,6 +102,33 @@ class TestcaseRegistry:
                     (purpose, cfg["weight"], cfg["min_w"], cfg["max_w"]))
             self._conn.commit()
         return self._conn
+
+    #: 后加的列：`(列名, 列定义)`。**只能加，不能改语义** —— 老库是直接把
+    #: `CREATE TABLE IF NOT EXISTS` 跳过去的，不 ALTER 的话这两列永远不存在，
+    #: 而写入端会报 "no such column"（或者更糟：静默丢字段）。
+    _ADDED_COLUMNS = (
+        #: 用例属于哪个模块 —— 原来只把模块名**文本**拼进 `name`，
+        #: 于是"这个用例是哪个设计的"只能靠解析字符串，没法按模块查/删/对账。
+        ("module", "TEXT NOT NULL DEFAULT ''"),
+        #: 注册时对应的 **RTL 版本号**（`.signoffai/lineage.db` 的 `version_no`）。
+        #: 用例是有版本的：RTL 换了版，之前那批用例是在哪版上定的就没法回答了。
+        #: NULL = 不知道（老记录、或这一轮没有 RTL）—— 不编一个 0 出来。
+        ("rtl_version_no", "INTEGER"),
+    )
+
+    @classmethod
+    def _migrate_columns(cls, conn: sqlite3.Connection) -> None:
+        """给**既有的**库补新列（幂等，`PRAGMA table_info` 守卫）。
+
+        为什么不能只改 `_SCHEMA` 里的 `CREATE TABLE`：那份 DDL 是
+        `CREATE TABLE IF NOT EXISTS` —— 老库已经存在，整条语句被跳过，
+        新列**永远长不出来**。而 `.signoffai/testcase_registry.db` 是跨 run 累积的，
+        现场一定有老库。
+        """
+        have = {r[1] for r in conn.execute("PRAGMA table_info(testcase_registry)")}
+        for col, decl in cls._ADDED_COLUMNS:
+            if col not in have:
+                conn.execute(f"ALTER TABLE testcase_registry ADD COLUMN {col} {decl}")
 
     def close(self):
         if self._conn is not None:
@@ -119,8 +147,14 @@ class TestcaseRegistry:
 
     def register(self, name: str, purpose: str = "functional",
                  scenario: str = "", priority: str = "P1",
-                 constraints: list = None, coverage_bin: str = "") -> None:
-        """注册/更新一个用例（不覆盖已有状态和验证历史）。"""
+                 constraints: list = None, coverage_bin: str = "",
+                 module: str = "", rtl_version_no: Optional[int] = None) -> None:
+        """注册/更新一个用例（不覆盖已有状态和验证历史）。
+
+        `module` / `rtl_version_no` 是**绑定**：这个用例属于哪个设计、注册时对应的
+        RTL 是哪一版。两者都可缺省（老调用方照旧）—— 缺省就是"不知道"，
+        不编一个默认值出来。
+        """
         if not name:
             return
         now = self._now()
@@ -129,20 +163,28 @@ class TestcaseRegistry:
             existing = conn.execute(
                 "SELECT 1 FROM testcase_registry WHERE name = ?", (name,)).fetchone()
             if existing:
+                # `module` / `rtl_version_no` **只在传了的时候**才覆盖：同一批用例
+                # 可能被不同来源重复注册（spec 分解 / case 模型桥），后来那次不一定
+                # 带着版本信息 —— 拿 `''` 把已知的模块名冲掉就是丢证据。
                 conn.execute(
                     "UPDATE testcase_registry SET purpose=?, scenario=?, priority=?, "
-                    "constraints=?, coverage_bin=?, updated_at=? WHERE name=?",
+                    "constraints=?, coverage_bin=?, "
+                    "module=CASE WHEN ?<>'' THEN ? ELSE module END, "
+                    "rtl_version_no=COALESCE(?, rtl_version_no), updated_at=? "
+                    "WHERE name=?",
                     (purpose, scenario, priority,
                      json.dumps(constraints or [], ensure_ascii=False),
-                     coverage_bin, now, name))
+                     coverage_bin, module or "", module or "",
+                     rtl_version_no, now, name))
             else:
                 conn.execute(
                     "INSERT INTO testcase_registry "
                     "(name, purpose, scenario, priority, status, constraints, coverage_bin, "
-                    "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "module, rtl_version_no, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (name, purpose, scenario, priority, STATUS_PLANNED,
                      json.dumps(constraints or [], ensure_ascii=False),
-                     coverage_bin, now, now))
+                     coverage_bin, module or "", rtl_version_no, now, now))
             conn.commit()
 
     @staticmethod
@@ -154,37 +196,46 @@ class TestcaseRegistry:
         s = re.sub(r'[^0-9A-Za-z_]+', '_', s).strip('_')
         return s or "case"
 
-    def register_from_spec(self, spec: Dict[str, Any], module_name: str = "dut") -> int:
+    def register_from_spec(self, spec: Dict[str, Any], module_name: str = "dut",
+                           rtl_version_no: Optional[int] = None) -> int:
         """场景分解：从 spec 提取场景 → 注册用例（L2 场景 → L3 用例）。
 
         分层：features → functional 用例，registers → functional 用例，
         interfaces → protocol 用例，默认补 protocol/performance/corner 通用用例。
         返回注册的用例数。
+
+        全部用例都带上 **module**（结构化列，不再只靠 `name` 里的文本）与
+        `rtl_version_no`（注册时对应的 RTL 版本；缺省 = 不知道）。
         """
         count = 0
         module_name = self._safe_name(module_name)
+
+        def _reg(name: str, **kw) -> None:
+            self.register(name, module=module_name,
+                          rtl_version_no=rtl_version_no, **kw)
+
         # 1. features → functional 用例（每个功能一个基本用例）
         for op in spec.get("features", []) or []:
             name = op if isinstance(op, str) else (op.get("name") or "")
             name = self._safe_name(name)
             if name:
-                self.register(f"test_{module_name}_{name}_basic", purpose="functional",
-                              scenario=name, priority="P0", coverage_bin=name)
+                _reg(f"test_{module_name}_{name}_basic", purpose="functional",
+                     scenario=name, priority="P0", coverage_bin=name)
                 count += 1
         # 2. registers → functional 用例（寄存器读写）
         for r in spec.get("registers", []) or []:
             if isinstance(r, dict) and r.get("name"):
                 rname = self._safe_name(r["name"])
-                self.register(f"test_{module_name}_{rname}_rw", purpose="functional",
-                              scenario="register_rw", priority="P0",
-                              coverage_bin=rname)
+                _reg(f"test_{module_name}_{rname}_rw", purpose="functional",
+                     scenario="register_rw", priority="P0",
+                     coverage_bin=rname)
                 count += 1
         # 3. interfaces → protocol 用例（握手/协议）
         for iface in spec.get("interfaces", []) or []:
             if isinstance(iface, dict) and iface.get("name"):
                 iname = self._safe_name(iface["name"])
-                self.register(f"test_{module_name}_{iname}_handshake",
-                              purpose="protocol", scenario="handshake", priority="P1")
+                _reg(f"test_{module_name}_{iname}_handshake",
+                     purpose="protocol", scenario="handshake", priority="P1")
                 count += 1
         # 4. 默认补 performance / corner 通用用例（若还没有）
         #
@@ -204,7 +255,7 @@ class TestcaseRegistry:
                 exists = self._connect().execute(
                     "SELECT 1 FROM testcase_registry WHERE name=?", (name,)).fetchone()
             if not exists:
-                self.register(name, purpose=purpose, scenario=scenario, priority=priority)
+                _reg(name, purpose=purpose, scenario=scenario, priority=priority)
                 count += 1
         return count
 
@@ -471,7 +522,11 @@ class TestcaseRegistry:
         cols = ["name", "purpose", "scenario", "priority", "status", "constraints",
                 "coverage_bin", "sim_time", "fail_rate", "new_coverage",
                 "unique_coverage", "effectiveness", "run_count", "last_run",
-                "created_at", "updated_at"]
+                "created_at", "updated_at",
+                # 后加的列排在**最后** —— `SELECT *` 的列序是物理列序，而 ALTER
+                # 加的列一律追加在尾部。插在中间就会整体错位一格（每个字段读到
+                # 邻居的值），而且不报错。
+                "module", "rtl_version_no"]
         d = dict(zip(cols, row))
         try:
             d["constraints"] = json.loads(d.get("constraints") or "[]")

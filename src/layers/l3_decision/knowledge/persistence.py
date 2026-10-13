@@ -20,8 +20,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+import structlog
+
 from .schema import NodeType, EdgeType
 from .graph import VerificationGraph
+
+logger = structlog.get_logger()
 
 
 async def save_graph_to_db(graph: VerificationGraph, project_id: Optional[int] = None) -> Dict[str, int]:
@@ -240,12 +244,27 @@ async def record_coverage_bins(bins, run_id: str = "", project_id: Optional[int]
 
 
 async def record_bugs_and_fixes(bugs, fixes, run_id: str = "",
-                                project_id: Optional[int] = None) -> Dict[str, int]:
+                                project_id: Optional[int] = None,
+                                module: str = "",
+                                rtl_version_no: Optional[int] = None) -> Dict[str, int]:
     """记录 debug agent 产出的 bug + fix（跨 run 沉淀）。
 
     bugs:  [{bug_id, description, affected_signal, affected_feature, severity}]
     fixes: [{bug_id, fix_id, description}]
     返回 {"bugs": n, "fixes": n}。
+
+    ## 血缘：bug 挂在**哪个 RTL 版本**上
+
+    `module` + `rtl_version_no` 给出"**在哪个版本发现的**"，会写进
+    `.signoffai/lineage.db` 的 `bug_rtl_links`（bug 本体仍在本库的
+    `VerificationBug` 里，用 `bug_id` 作 join 键）。
+
+    为什么值得单独记：RTL 迭代之后"这个 bug 还成立吗"只能靠版本回答 ——
+    同一段代码的 v1 有这个问题、v2 修掉了，那 v1 上跑出来的历史结论就不该再
+    拿来评价 v2。没有这层关联，跨版本的 bug 清单会一直挂着已经修好的条目。
+
+    `module`/`rtl_version_no` 缺省就**不写链接**（不是写个 0）——
+    "不知道在哪个版本"与"版本 0"是两回事。
     """
     from src.layers.l4_memory.persistence.connection import get_session
     from src.layers.l4_memory.persistence.models import VerificationBug, VerificationFix
@@ -274,6 +293,23 @@ async def record_bugs_and_fixes(bugs, fixes, run_id: str = "",
             ))
             n_fix += 1
         await s.commit()
-        return {"bugs": n_bug, "fixes": n_fix}
     finally:
         await s.close()
+
+    # 血缘链接（另一个库，同步 sqlite）—— 失败只记日志：它不该拖垮 bug 落库
+    if module and rtl_version_no is not None:
+        try:
+            from src.layers.l4_memory.lineage import LineageStore
+
+            store = LineageStore()
+            try:
+                for b in bugs or []:
+                    if isinstance(b, dict) and b.get("bug_id"):
+                        store.link_bug(str(b["bug_id"]), str(module),
+                                       found_version_no=rtl_version_no,
+                                       found_run_id=run_id)
+            finally:
+                store.close()                              # Windows 文件锁
+        except Exception as e:                             # noqa: BLE001
+            logger.warning(f"bug↔RTL 版本链接失败（bug 本体已落库）: {e}")
+    return {"bugs": n_bug, "fixes": n_fix}

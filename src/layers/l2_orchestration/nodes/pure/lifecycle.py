@@ -30,6 +30,39 @@ async def n_init(state: PipelineState, config) -> Dict[str, Any]:
                         "milestones": rt.planner.milestones}]}
 
 
+def _attach_rtl_lineage(state: PipelineState, rtl_dir: Path,
+                        run_id: str) -> Dict[str, Any]:
+    """把「这一轮跑的是哪一版 RTL」记进血缘库，并在首次跑时锚下基准。
+
+    版本号由 `ensure_run_rtl_version` 出（**front / debug / finalize 共用同一个
+    入口**，各算一遍就会同一个 run 三个版本号而都不报错）。这里只多做一件事：
+    **首次 run 锚基准**。
+
+    返回写进 manifest 的 `rtl_version`（`{}` = 这一轮没有 RTL）。**任何失败都只
+    记 warning 并返回 `{}`** —— 血缘是**可加的元数据**，不该因为写不进去就让整个
+    run 的收尾失败（证据链、manifest 那些更要紧）。
+    """
+    try:
+        from src.layers.l4_memory.lineage import ensure_run_rtl_version, LineageStore
+
+        rtl_version = ensure_run_rtl_version(rtl_dir.parent, run_id=run_id)
+        if not rtl_version:
+            return {}
+        store = LineageStore()
+        try:
+            is_new = store.ensure_baseline(rtl_version["module"], run_id,
+                                           rtl_version["version_no"])
+        finally:
+            store.close()                                  # Windows 文件锁
+        logger.info(f"血缘：{rtl_version['module']} {rtl_version['name']}"
+                    f"（run={run_id}，{rtl_version['content_hash'][:12]}）"
+                    + ("—— **首次会话，已锚为基准**" if is_new else ""))
+        return rtl_version
+    except Exception as e:                                 # noqa: BLE001
+        logger.warning(f"血缘落盘失败（RTL 版本未记录）: {e}")
+        return {}
+
+
 async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
     """证据链落盘 + manifest + 释放资源。"""
     rt = _rt(config)
@@ -79,6 +112,7 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
         logger.warning(f"五层证据落盘失败: {e}")
 
     manifest_path = ""
+    rtl_version = {}
 
     # ── Manifest：运行清单 ──
     try:
@@ -90,6 +124,13 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
         if rtl_dir.exists():
             for sv in sorted(rtl_dir.glob("*.sv")):
                 rtl_hashes[sv.name] = sha256_file(sv)[:16]
+
+        # ── 血缘：这一轮跑的是 RTL 的哪一版 + 首次 run 当基准 ──
+        #
+        # `rtl_hashes` 是**给人看的短标识**（`[:16]`、只 `*.sv`），做身份会撞；
+        # 血缘用 `compute_rtl_dir_hash` 的全 64 位聚合（收 `.v/.svh/.vh`）。
+        # 空 RTL 目录 → 空串 → **整条跳过**（没 RTL 与 RTL 是空的，不该长得一样）。
+        rtl_version = _attach_rtl_lineage(state, rtl_dir, str(output_root.name))
 
         manifest = {
             "architecture": "closed_loop_7agents",
@@ -116,6 +157,9 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
                         "effect": state.exclude_effect,
                         "approved_points": sorted(rt.exclude_reg.get_excluded_points())},
             "rtl_hashes": rtl_hashes,
+            # 血缘：`{module, version_no, name, content_hash}` —— 空字典 = 这一轮
+            # 没有 RTL（不是"版本是空的"）。下游（debug/bug 记录、用例句柄）读它。
+            "rtl_version": rtl_version,
             "coverage_db_history": state.coverage_db_history,
             # 跨 run 成长：本次实际生效的蒸馏动作权重（可追溯「为什么这次这样决策」）
             "distilled_weights": rt.distilled_weights,

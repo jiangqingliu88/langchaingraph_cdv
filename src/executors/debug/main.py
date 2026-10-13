@@ -345,8 +345,20 @@ class DebugExecutor(BaseExecutor):
                 })
             _fixes = [{"bug_id": f["fingerprint"], "fix_id": f.get("fix_name", ""),
                        "description": f.get("error", "")[:200]} for f in fixes_applied]
-            await record_bugs_and_fixes(_bugs, _fixes, run_id=str(od.name))
-            logger.info(f"bug/fix 落库: {len(_bugs)} bug, {len(_fixes)} fix")
+            # **血缘**：这批 bug 是在 RTL 的哪一版上发现的。取不到就不带
+            # （`record_bugs_and_fixes` 会跳过链接）—— 不编一个版本号出来。
+            _rtl_mod, _rtl_v = "", None
+            try:
+                from src.layers.l4_memory.lineage import ensure_run_rtl_version
+                _rv = ensure_run_rtl_version(od, run_id=str(od.name))
+                _rtl_mod = _rv.get("module", "")
+                _rtl_v = _rv.get("version_no")
+            except Exception as _e:                    # noqa: BLE001 血缘不该阻断调试
+                logger.warning(f"血缘：RTL 版本取不到（bug 将不带版本）: {_e}")
+            await record_bugs_and_fixes(_bugs, _fixes, run_id=str(od.name),
+                                        module=_rtl_mod, rtl_version_no=_rtl_v)
+            logger.info(f"bug/fix 落库: {len(_bugs)} bug, {len(_fixes)} fix"
+                        + (f"（RTL {_rtl_mod} v{_rtl_v}）" if _rtl_v else ""))
         except Exception as e:
             logger.warning(f"bug/fix 落库失败: {e}")
 

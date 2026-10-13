@@ -5149,6 +5149,162 @@ def evidence_check(repo_root, json_output):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 血缘：RTL 版本 / run 基准 / bug↔版本
+# ═══════════════════════════════════════════════════════════════
+#
+# 四件事一条链：**RTL 内容哈希 → 版本号 → run 挂版本 → 首次 run 当基准 →
+# 用例与 bug 各自挂在版本上**。都是 `.signoffai/lineage.db` 里的可查实体。
+
+@cli.group("lineage")
+def lineage_group():
+    """血缘：这一轮跑的是 RTL 的哪一版、跟谁比、哪些 bug 挂在哪版
+
+    \b
+    版本号由 **RTL 目录内容哈希**自动派生（不依赖 git，`--rtl <dir>` 也能用）：
+    内容变了就是新版。基准 = **每个模块的第一次 run**，写下就不再改 ——
+    "相对最初那版偏了多少"是单调的，"上一轮"会随跑的次数漂。
+
+    \b
+    示例:
+      vagent lineage versions npu_sched
+      vagent lineage baseline npu_sched
+      vagent lineage bugs npu_sched --version 2
+      vagent lineage compare output_x_jiang_20261014_010101
+    """
+    pass
+
+
+@lineage_group.command("versions")
+@click.argument("module", required=False, default="")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def lineage_versions_cmd(module, json_output):
+    """列出 RTL 版本（`module` 省略则全部）
+
+    \b
+      vagent lineage versions            # 全部模块
+      vagent lineage versions npu_sched  # 只看这个模块
+    """
+    out = get_output_adapter(json_output)
+    from src.tools.flow_tools.lineage_api import lineage_versions
+
+    rows = lineage_versions(module)
+    if json_output:
+        out.print_result(rows, title="RTL 版本")
+        return
+    if not rows:
+        console.print("[yellow]还没有版本记录[/yellow]（跑一次 verify 就有了）")
+        return
+    out.print_table(["模块", "版本", "哈希", "首次 run", "记录时间"],
+                    [[r["module"], r["name"], r["hash"],
+                      r["first_seen_run_id"][:32], r["created_at"][:19]]
+                     for r in rows], title="RTL 版本")
+
+
+@lineage_group.command("baseline")
+@click.argument("module", required=False, default="")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def lineage_baseline_cmd(module, json_output):
+    """查看基准锚点（每个模块的**第一次** run）
+
+    \b
+      vagent lineage baseline npu_sched
+    """
+    out = get_output_adapter(json_output)
+    from src.tools.flow_tools.lineage_api import lineage_versions, resolve_baseline_for
+
+    if not module:
+        mods = sorted({r["module"] for r in lineage_versions("")})
+        if json_output:
+            out.print_result({m: resolve_baseline_for(m) for m in mods},
+                             title="基准锚点")
+            return
+        if not mods:
+            console.print("[yellow]还没有模块被锚过基准[/yellow]")
+            return
+        for m in mods:
+            base = resolve_baseline_for(m)
+            console.print(f"{m}：[cyan]{base['name']}[/cyan] @ "
+                          f"{base['run_id']}" if base else f"{m}：[yellow]无锚[/yellow]")
+        return
+
+    base = resolve_baseline_for(module)
+    if json_output:
+        out.print_result(base or {}, title=f"{module} 的基准")
+        return
+    if not base:
+        console.print(f"[yellow]{module} 还没有基准[/yellow]"
+                      f"（这个模块还没成功跑完过一次带 RTL 的 run）")
+        return
+    console.print(f"{module} 的基准：[cyan]{base['name']}[/cyan] "
+                  f"@ {base['run_id']}（{base['created_at'][:19]}）")
+
+
+@lineage_group.command("bugs")
+@click.argument("module", required=False, default="")
+@click.option("--version", "-v", "version_no", type=int, default=None,
+              help="只看这一版上发现或修好的")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def lineage_bugs_cmd(module, version_no, json_output):
+    """列出 bug ↔ RTL 版本的关联
+
+    \b
+      vagent lineage bugs npu_sched
+      vagent lineage bugs npu_sched --version 2
+    """
+    out = get_output_adapter(json_output)
+    from src.tools.flow_tools.lineage_api import lineage_bugs
+
+    rows = lineage_bugs(module, version_no)
+    if json_output:
+        out.print_result(rows, title="bug ↔ RTL 版本")
+        return
+    if not rows:
+        console.print("[yellow]没有关联记录[/yellow]"
+                      "（debug 阶段记 bug 时会自动挂上版本）")
+        return
+    out.print_table(["bug", "模块", "发现于", "修好于", "发现 run"],
+                    [[r["bug_id"], r["module"],
+                      f"v{r['found_version_no']}" if r["found_version_no"] else "-",
+                      f"v{r['fixed_version_no']}" if r["fixed_version_no"] else "-",
+                      (r["found_run_id"] or "")[:32]] for r in rows],
+                    title="bug ↔ RTL 版本")
+
+
+@lineage_group.command("compare")
+@click.argument("current", type=click.Path(exists=True))
+@click.option("--baseline", "-b", "baseline", default="",
+              help="显式指定基准 run 目录（缺省自动用血缘里的锚点）")
+@click.option("--module", "-m", default="", help="锚点查不到时按模块兜")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def lineage_compare_cmd(current, baseline, module, json_output):
+    """与**基准**对比（`compare_runs` 的自动锚点版）
+
+    \b
+      vagent lineage compare output_x_jiang_20261014_010101
+      vagent lineage compare out_x -b output_npu2_jiang_20261012_230152
+    """
+    out = get_output_adapter(json_output)
+    from src.tools.flow_tools.lineage_api import compare_against_baseline
+
+    result = compare_against_baseline(current, baseline=baseline, module=module)
+    if result.get("error"):
+        out.print_error(result["error"], code=2)
+        sys.exit(2)
+    if json_output:
+        out.print_result(result, title="与基准对比")
+        return
+    s = result.get("summary") or {}
+    console.print(f"基准：[cyan]{Path(result['baseline_dir']).name}[/cyan]")
+    console.print(f"当前：[cyan]{result.get('current', '')}[/cyan]")
+    console.print(f"  新失败 {s.get('newly_failing', 0)}　"
+                  f"修好 {s.get('fixed', 0)}　"
+                  f"覆盖率差 {s.get('coverage_delta')}")
+    newly = (result.get("cases") or {}).get("newly_failing") or []
+    for name in newly[:20]:
+        console.print(f"  [red]✗[/red] {name}")
+
+
+# ═══════════════════════════════════════════════════════════════
 # 验证工作台（PySide6 桌面窗口）
 # ═══════════════════════════════════════════════════════════════
 
