@@ -78,6 +78,68 @@
         }
       }
     },
+    "dut_if": {
+      "$comment": "env_cov_bins.yaml —— **DUT 覆盖率接口的身份**（类型名 / bind 实例名 / 时钟 / 复位 / 文件）。`verify` 落盘 `coverage/<name>.sv` 时一起写下，`gen_uvm` 渲染 env_cov（组件持 `virtual <type>`）与 tb_top（`config_db::set(..., <dut 实例>.<instance>)`）**都从这一份读** —— 两边各推一次名字就会漂，而漂了编译不报错、覆盖率恒 0%。缺席时两个模板一个字都不生成。",
+      "type": "object",
+      "required": [
+        "type",
+        "instance",
+        "dut_module"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$comment": "SV 接口类型名（= 文件名主干）",
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "instance": {
+          "$comment": "bind 出来的**实例名** —— tb_top 的层次路径用它（`<dut 实例>.<instance>`）",
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "dut_module": {
+          "$comment": "bind 的**目标模块名**（不是实例路径）",
+          "type": "string"
+        },
+        "clock": {
+          "type": "string"
+        },
+        "reset": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "signals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "coverpoints": {
+          "$comment": "覆盖点表（signal / sv_name / field / width / expr）—— 模板据此出 `cg_dut`",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "dut_bins": {
+      "$comment": "env_cov_bins.yaml —— DUT 侧覆盖点的仓表：信号名 → 显式仓（`cg_dut` 的 `bins`/`illegal_bins`）。与 `field_bins` 是两条通道的两张表（事务字段 / DUT 信号），形状故意一致。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/dutCoverBin"
+        }
+      }
+    },
     "source": {
       "type": "object",
       "$comment": "文书出处：这份 yaml 是从哪个库/哪一行抽出来的。**不参与生成**，给人看与审计用；`status` 是诚实标记（draft = 该版模型还没验证过）。",
@@ -1592,6 +1654,27 @@
         },
         "value": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dutCoverBin": {
+      "$comment": "一个 DUT 信号的覆盖仓：名字 + **字面量文本**。为什么与 `coverFieldBin` 不同（那个是整数）：DUT 侧的仓常是**区间**（`{[1:7]}`、`{[33:$]}`）或**多值集合**（`{0,7,8}`）—— 那是值域的一个划分，用单个整数表达不出来。文本由 casemodel_tools/coverage.py 的 `CoverBin.literal()` 产出，模板原样写进 `bins x = {<文本>};`。",
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "value": {
+          "type": "string"
+        },
+        "illegal": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false

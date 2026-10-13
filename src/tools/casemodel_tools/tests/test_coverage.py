@@ -1033,11 +1033,22 @@ class TestCoverageInterface:
         """
         from src.tools.casemodel_tools.coverage import render_cov_interface
 
-        sv = render_cov_interface(_cov_cm(), "npu_sched")
+        sv = render_cov_interface(_cov_cm(), {"dut_module": "npu_sched"})
         assert "interface npu_sched_cov_if (" in sv
         assert "input logic [5:0] queue_level" in sv     # 端口，且带位宽
         assert "logic queue_level;" not in sv            # 不是接口体内的变量
         assert "bind npu_sched npu_sched_cov_if" in sv
+
+    def test_the_clock_and_reset_are_ports_too(self):
+        """组件靠**端口**时钟沿采样 + 复位屏蔽 —— 时钟/复位同样活在 DUT 作用域里，
+        不引出来组件够不到（探针那边为同一个原因吃过一次 `Undefined variable`）。"""
+        from src.tools.casemodel_tools.coverage import render_cov_interface
+
+        sv = render_cov_interface(
+            _cov_cm(), {"dut_module": "npu_sched", "clock": "clk", "reset": "rst_n"})
+        assert "input logic clk," in sv
+        assert "input logic rst_n," in sv
+        assert ".clk(clk)" in sv and ".rst_n(rst_n)" in sv
 
     def test_only_dut_sourced_coverpoints_are_exposed(self):
         """`sample: stimulus` 的走 env_cov 那条路，不该出现在这个接口里。"""
@@ -1045,14 +1056,35 @@ class TestCoverageInterface:
 
         cm = _cov_cm()
         cm.coverpoints[0].source = "stimulus"
-        sv = render_cov_interface(cm, "npu_sched")
+        sv = render_cov_interface(cm, {"dut_module": "npu_sched"})
         assert "queue_level" not in sv
         assert "instr_type" in sv
 
     def test_no_dut_module_no_interface(self):
         from src.tools.casemodel_tools.coverage import render_cov_interface
 
-        assert render_cov_interface(_cov_cm(), "") == ""
+        assert render_cov_interface(_cov_cm(), {"dut_module": ""}) == ""
+        assert render_cov_interface(_cov_cm(), {}) == ""
+
+    def test_the_name_comes_from_one_place(self):
+        """名字 / 实例 / 时钟 / 复位 / 文件路径**只有一处出处**（`cov_interface_meta`）。
+
+        三处各推一次就是"改了三个漏一个"：生成方按它落盘、env 组件持
+        `virtual <type>`、tb_top 写 `<dut 实例>.u_<name>` —— 有一个推错就对不上，
+        而对不上的表现是**句柄为空、覆盖率 0%**（编译不报错）。
+        """
+        from src.tools.casemodel_tools.coverage import (cov_interface_meta,
+                                                        render_cov_interface)
+
+        sampling = {"dut_module": "npu_sched", "clock": "clk", "reset": "rst_n"}
+        meta = cov_interface_meta(_cov_cm(), sampling)
+        assert meta["type"] == "npu_sched_cov_if"
+        assert meta["instance"] == "u_npu_sched_cov_if"
+        assert meta["file"] == "coverage/npu_sched_cov_if.sv"
+        sv = render_cov_interface(_cov_cm(), sampling)
+        # 渲染出来的东西必须**逐字**对得上 meta —— 否则三处就漂了
+        for key in ("type", "instance", "dut_module", "clock", "reset"):
+            assert meta[key] in sv, key
 
     def test_it_elaborates_against_a_real_dut(self, tmp_path):
         """**用 `vopt` 验，不用 `vlog`** —— 后者对 bind 的连接一言不发。
@@ -1075,7 +1107,8 @@ class TestCoverageInterface:
 
         (tmp_path / "dut.sv").write_text(DUT_STUB, encoding="utf-8")
         (tmp_path / "cov_if.sv").write_text(
-            render_cov_interface(_cov_cm(), "npu_sched"), encoding="utf-8")
+            render_cov_interface(_cov_cm(), {"dut_module": "npu_sched"}),
+            encoding="utf-8")
         r1 = subprocess.run(
             [str(vlog), "-sv", "-mfcu", "-cuname", "t_cu",
              "-work", str(tmp_path / "work"),

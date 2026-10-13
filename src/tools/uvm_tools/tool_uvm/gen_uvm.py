@@ -1117,6 +1117,35 @@ class JinjaRenderer:
         return template.render(**context)
 
 
+def read_env_cov_bins(output_dir: Path) -> Dict[str, Any]:
+    """读 verify 落下的 `inputs/yaml/uvm/env_cov_bins.yaml`。
+
+    **这一个文件喂两个模板**：
+
+        `env_cov.sv.j2`   组件持 `virtual <type>`，把 DUT 信号采进 `cg_dut`
+        `tb_top.sv.j2`    把 bind 出来的接口实例挂进 `config_db`
+
+    两边必须拿到**同一份身份**（类型名 / bind 实例名 / 时钟 / 复位）。各读各的、
+    各推各的名字，漂了的表现是"组件拿到空句柄、覆盖率永远 0%"，而**编译和加载
+    都不报错** —— 正是本仓库最贵的那类 bug。所以这里做成**一个读者**，
+    两个渲染任务都经它取。
+
+    **两个键名都认**：`cov_bins` 是现在写的（与 schema 的文档类型一致），
+    `coverage_bins` 是老的运行目录里留下的 —— 老的照样能渲染。
+    文件不在 / 读坏了就返回空字典：调用方各自退回"没有"的行为（一个字都不生成），
+    而不是猜一个默认值出来。
+    """
+    import json as _json
+    path = Path(output_dir) / "inputs" / "yaml" / "uvm" / "env_cov_bins.yaml"
+    if not path.exists():
+        return {}
+    try:
+        data = _json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 class RenderTask:
     def __init__(self, renderer: JinjaRenderer, output_dir: Path,
                  injector: Optional[RegionInjector] = None,
@@ -1128,6 +1157,25 @@ class RenderTask:
         self.overwrite = overwrite
         self.meta = dict(meta or DEFAULT_META)
         self.skipped = 0
+
+    def _add_coverage_dut_context(self, context: Dict[str, Any]) -> None:
+        """把 **DUT 覆盖率接口**的身份与 bins 塞进 context（env 与 bench 两条路共用）。
+
+        两份模板要的键不一样，但**来源必须是同一个文件**（`read_env_cov_bins`）：
+
+          · `env_cov.sv.j2`  要 `coverage_dut_if`（类型名/时钟/复位）+ `coverage_dut_bins`
+          · `tb_top.sv.j2`   要 `coverage_dut_if` 里的**类型名与 bind 实例名**
+            （去挂 `config_db`），DUT 实例路径则由 bench 自己给
+
+        缺席时一律给空字典：模板据此**一个字都不生成**。**"两边一致地没有"**
+        是有意的 —— 单边有（组件声明了 `virtual <type>` 而 tb_top 没挂）会渲染出
+        一个永远拿到空句柄的组件，覆盖率恒 0%，而编译与加载都不报错。
+        """
+        data = read_env_cov_bins(self.output_dir)
+        _dif = data.get("dut_if")
+        context["coverage_dut_if"] = _dif if isinstance(_dif, dict) else {}
+        _db = data.get("dut_bins")
+        context["coverage_dut_bins"] = _db if isinstance(_db, dict) else {}
 
     def should_skip(self, target_path: Path) -> bool:
         """默认跳过已存在文件（UVMF 语义）；-o/--overwrite 或合并流程例外。
@@ -1683,27 +1731,15 @@ class EnvironmentRenderTask(RenderTask):
             except Exception:
                 pass
         # 读策略包的语义 bin（verify agent 落盘的 env_cov_bins.yaml）。
-        # **两个键名都认**：`cov_bins` 是现在写的（与 schema 的文档类型一致），
-        # `coverage_bins` 是老的运行目录里留下的 —— 老的照样能渲染。
-        bins_path = yaml_dir / "env_cov_bins.yaml"
-        context["coverage_bins"] = []
+        data = read_env_cov_bins(self.output_dir)
+        context["coverage_bins"] = data.get("cov_bins") \
+            or data.get("coverage_bins") or []
         # `field_bins`: 字段名 → 显式 bin 表（`[{name, value}]`），来自 **case 模型**
         # （verify 阶段注入，见 `src/executors/verify/main.py`）。有了它就按模型声明
         # 的边界值分箱，没有就退回模板里那套"值类自动分箱"（0/1/其余）。
-        context["coverage_field_bins"] = {}
-        if bins_path.exists():
-            try:
-                import json as _json
-                data = _json.loads(bins_path.read_text(encoding="utf-8", errors="replace"))
-                if isinstance(data, dict):
-                    context["coverage_bins"] = data.get("cov_bins") \
-                        or data.get("coverage_bins") or []
-                    _fb = data.get("field_bins")
-                    if isinstance(_fb, dict):
-                        context["coverage_field_bins"] = _fb
-            except Exception:
-                context["coverage_bins"] = []
-                context["coverage_field_bins"] = {}
+        _fb = data.get("field_bins")
+        context["coverage_field_bins"] = _fb if isinstance(_fb, dict) else {}
+        self._add_coverage_dut_context(context)
 
 
 class ConstraintRenderTask(RenderTask):
@@ -1731,6 +1767,10 @@ class BenchRenderTask(RenderTask):
             v.to_context() if isinstance(v, BenchAgentEntry) else v
             for v in bench.agents.values()
         ]
+        # DUT 覆盖率接口：tb_top 要把 bind 出来的实例挂进 config_db，组件才拿得到
+        # 句柄。**与 env_cov 读的是同一份契约**（`read_env_cov_bins`）—— 两边各推
+        # 一次名字就会漂，而漂的表现是"覆盖率永远 0%、编译不报错"。
+        self._add_coverage_dut_context(ctx)
         return self.render_file(BENCH_TEMPLATES[0][0], target_path, ctx)
 
 

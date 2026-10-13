@@ -305,7 +305,8 @@ def run_covergroups(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
     except CaseModelError as exc:
         return {"error": str(exc)}
 
-    from .coverage import (coverage_model, probe_ports, render_covergroup,
+    from .coverage import (cov_interface_meta, coverage_model, dut_bins,
+                           probe_ports, render_covergroup, render_cov_interface,
                            render_probe)
 
     # `resolve()` 才回填 `cross_pair.dim_a/dim_b` 与联动取值 —— 不解析就少
@@ -320,6 +321,11 @@ def run_covergroups(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
     payload["probe_code"] = render_probe(cm, model.sampling)
     payload["probe_ports"] = [cp.signal for cp in probe_ports(cm)]
     payload["sampling"] = dict(model.sampling)
+    # DUT 通道的**接口**（env 组件持它采样）与它给组件用的 bins 表。
+    # 名字/实例/时钟/复位都从 `cov_interface_meta` 出 —— 一处，见那里的注释。
+    payload["cov_interface"] = cov_interface_meta(cm, model.sampling) or {}
+    payload["cov_interface_code"] = render_cov_interface(cm, model.sampling)
+    payload["dut_bins"] = dut_bins(cm)
     if probe_ports(cm) and not payload["probe_code"]:
         payload["notes"].append(
             "模型里有 `sample: dut` 的字段，但没有 `sampling.dut_module` —— "

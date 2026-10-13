@@ -154,6 +154,44 @@ class {{ environment.env_name }}_coverage extends uvm_component;
   endgroup : cg_mixed
 {%- endif %}
 
+{%- set _dif = coverage_dut_if | default({}) %}
+{%- if _dif %}
+  // ── DUT 信号的功能覆盖率（**第二条采样通道**）──
+  //
+  // 上面那些 `cg_<agent>` 采的是 **monitor 的事务对象** —— 只看得到**激励侧**。
+  // 队列水位、依赖类型、发射决策这些**内部状态**与输出端口，事务里根本没有，
+  // 也永远不会出现在 monitor 的采样里。
+  //
+  // 所以另有一条：`bind` 进 DUT 的**接口**（`{{ _dif.file }}`）把信号引出来，
+  // 本组件持 `virtual {{ _dif.type }}` 句柄、**时钟沿**采样。`bind` 的端口连接
+  // 表达式在**目标模块作用域**里求值，所以输入端口 / 输出端口 / 内部寄存器
+  // 一视同仁 —— 内部名直接连得过来（vlog + vopt 实测通过）。
+  //
+  // ⚠️ **句柄是 tb_top 挂进来的**（`config_db` 的 "cov_vif"，路径
+  // `{{ _dif.dut_module }}` 的实例下 `{{ _dif.instance }}`）。挂不上就
+  // `uvm_fatal` —— 那是个**接线错误**，不是"这次没覆盖率"：静默跑完会给出一个
+  // 恒 0% 的数字，比停下来更难查。
+  virtual {{ _dif.type }} cov_vif;
+
+  covergroup cg_dut;
+{%- for cp in _dif.coverpoints %}
+{%-   set _bins = (coverage_dut_bins | default({})).get(cp.signal, []) %}
+{%-   if _bins %}
+    {{ cp.sv_name }}: coverpoint cov_vif.{{ cp.signal }} {   // {{ cp.field }}{% if cp.expr %} ← {{ cp.expr }}{% endif %}
+
+{%-     for b in _bins %}
+      {{ 'illegal_bins' if b.illegal else 'bins' }} {{ b.name }} = { {{- b.value -}} };
+{%-     endfor %}
+    }
+{%-   else %}
+    {#- 模型没给 bins 就退回"值类自动分箱"——**不写空的花括号**：
+        `coverpoint x { }` 一个仓都没有，那不叫覆盖率模型。 #}
+    {{ cp.sv_name }}: coverpoint cov_vif.{{ cp.signal }};
+{%-   endif %}
+{%- endfor %}
+  endgroup : cg_dut
+{%- endif %}
+
   function new(string name, uvm_component parent);
     super.new(name, parent);
 {%- for agent in agents %}
@@ -167,7 +205,51 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 {%- if mixed.bins|length > 0 %}
     cg_mixed = new();
 {%- endif %}
+{%- if _dif %}
+    cg_dut = new();
+{%- endif %}
   endfunction
+
+{%- if _dif %}
+  // ── DUT 通道：取句柄 + 时钟沿采样 ──
+  //
+  // `get` 用的是**相对的** `this`/""（而不是 `null`/"*"）：tb_top 那边 `set(null,
+  // "*", ...)` 广播，谁先建谁先取，两边不必知道对方的层次路径。
+  //
+  // 采样的两个条件，缺一不可：
+  //   · **时钟沿** —— DUT 的信号是时序的，组合期间采到的是中间值；
+  //   · **不在复位周期** —— 复位期间的水位/决策是无意义值，采进去只会把命中率
+  //     弄脏（探针那边为同一个理由加了同样的屏蔽）。
+  // 取句柄失败 = **接线错误**，不是"这次没覆盖率"：静默跑完只会给出一个恒 0%
+  // 的数字，比停下来更难查（本仓库反复吃过"0% 与没有无从区分"的亏）。
+  //
+  // 消息先拼进一个 `string` 再交给宏，两个理由：
+  //   · **跨行的字符串字面量在 SV 里不合法**（必须在同一行），拼接才写得下；
+  //   · 宏实参里的逗号有预处理边界，塞进变量最省心。
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual {{ _dif.type }})::get(this, "", "cov_vif", cov_vif)) begin
+      string hint = {
+        "DUT 覆盖率接口没挂进来（config_db 的 'cov_vif' 取不到）—— ",
+        "接口是 verify 落在 {{ _dif.file }}，",
+        "由 tb_top 沿层次路径 <dut 实例>.{{ _dif.instance }} 挂上。",
+        "**这是接线错误，不是'这次没覆盖率'**：",
+        "静默跑完只会给一个恒 0% 的数字，比停下来更难查"};
+      `uvm_fatal("ENV_COV", hint)
+    end
+  endfunction
+
+  task run_phase(uvm_phase phase);   // 只采样，不参与 objection（仿真由 sim_end 收口）
+    forever begin
+      @(posedge cov_vif.{{ _dif.clock }});
+{%- if _dif.reset %}
+      if (cov_vif.{{ _dif.reset }}) cg_dut.sample();   // 复位周期不采
+{%- else %}
+      cg_dut.sample();
+{%- endif %}
+    end
+  endtask
+{%- endif %}
 
   // write 函数：每个 agent 的 monitor 采样触发**本 agent** 的 covergroup 采样
 {%- for agent in agents %}
@@ -188,6 +270,10 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 {%- endfor %}
 {%- if mixed.bins|length > 0 %}
     `uvm_info("ENV_COV", $sformatf("功能覆盖率[mixed]: %.1f%%", cg_mixed.get_inst_coverage()), UVM_NONE)
+{%- endif %}
+{%- if _dif %}
+    // DUT 通道也在这里报 —— 两条通道的数在**同一份报告**里，才不会各看各的
+    `uvm_info("ENV_COV", $sformatf("功能覆盖率[dut]: %.1f%%", cg_dut.get_inst_coverage()), UVM_NONE)
 {%- endif %}
   endfunction
 

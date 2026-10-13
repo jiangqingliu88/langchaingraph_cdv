@@ -1248,7 +1248,72 @@ def _find_field(case_model: "CaseModel", bin_names: List[str]):
 # 覆盖率接口（bind 进 DUT，把信号引给 env 覆盖率组件）
 # ════════════════════════════════════════════════════════════
 
-def render_cov_interface(cm: CoverageModel, dut_module: str,
+def cov_interface_meta(cm: CoverageModel, sampling: Dict[str, Any] = None,
+                       if_name: str = "") -> Optional[Dict[str, Any]]:
+    """覆盖率接口的**全部身份信息** —— 一份，谁都不许自己推。
+
+    三个地方要知道同一个名字：**生成方**（verify 按它落盘）、**消费方**
+    （env 组件持 `virtual <type>`）、**挂载方**（tb_top 的 `config_db::set` 要写
+    `<dut_instance>.u_<name>`）。三处各推一次就是"改了三个漏一个"的经典形状 ——
+    本仓库为这类 bug 已经付过几次账（模块名、bin 名、覆盖点名各一次），所以这里
+    把它做成**一个函数**，由契约文件带着走（`env_cov_bins.yaml` 的 `dut_if`）。
+
+    拿不到就说拿不到（返回 `None`）：模型里没有 `sample: dut` 的字段、或者没写
+    `sampling.dut_module`（**bind 的目标都不知道**）。调用方据此一个字都不生成 ——
+    不生成半个挂不上东西的接口。
+    """
+    cps = probe_ports(cm)
+    if not cps:
+        return None
+    sampling = sampling or {}
+    dut = sv_ident(sampling.get("dut_module"), "")
+    if not dut:
+        return None
+    # 名字**按 bind 的目标模块**取，不按 `cm.module`：管道里 `coverage_model` 的
+    # module 常是占位的 "dut"（`run_covergroups(text, "dut")`），拼出来的
+    # `dut_cov_if` 既没信息量、又会让不同项目撞同一个类型名。`dut_module` 是
+    # 真实存在的那个模块名（没有它连 bind 都写不出来），拿它拼。
+    name = sv_ident(if_name or f"{dut}_cov_if", "")
+    if not name:
+        return None
+    clock = sv_ident(sampling.get("clock") or DEFAULT_CLOCK, DEFAULT_CLOCK)
+    # 复位给 `null` / 空串 = **不屏蔽**（有的 DUT 高有效复位）—— 与探针同一条规矩
+    reset = _slug(sampling.get("reset", DEFAULT_RESET)) or ""
+    return {
+        "name": name,                     # 接口类型名 = 文件名主干
+        "type": name,
+        # bind 那个实例名。**tb_top 挂 config_db 时要用它**：
+        # `bind` 把实例放进**目标模块的作用域**，所以层次路径就是
+        # `<dut 实例>.u_<name>`（实测：这么取到的句柄非空，见 tests）
+        "instance": f"u_{name}",
+        "dut_module": dut,
+        "clock": clock,
+        "reset": reset,
+        "signals": [cp.signal for cp in cps],
+        "coverpoints": [{"signal": cp.signal, "sv_name": cp.sv_name,
+                         "field": cp.field, "width": cp.width,
+                         "expr": cp.expr} for cp in cps],
+        "file": f"coverage/{name}.sv",
+    }
+
+
+def dut_bins(cm: CoverageModel) -> Dict[str, List[Dict[str, Any]]]:
+    """`sample: dut` 的覆盖点 → `{信号: [{name, value, illegal}]}`（给 env 组件用）。
+
+    形状与 `field_bins`（case 模型那条通道）**故意一样** —— 两边都是"显式 bins 表"，
+    模板可以同一套写法渲染，不必分两套。多出来的 `illegal` 是因为 DUT 侧常有
+    `illegal_bins`（越界的水位、非法的决策组合），事务侧那张表暂时没有。
+    """
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for cp in probe_ports(cm):
+        rows = [{"name": b.name, "value": b.literal(), "illegal": bool(b.illegal)}
+                for b in cp.bins + cp.illegal_bins]
+        if rows:
+            out[cp.signal] = rows
+    return out
+
+
+def render_cov_interface(cm: CoverageModel, sampling: Dict[str, Any] = None,
                          if_name: str = "") -> str:
     """`CoverageModel` → **一个 bind 进 DUT 的接口**（把采样信号引出来）。
 
@@ -1272,17 +1337,22 @@ def render_cov_interface(cm: CoverageModel, dut_module: str,
 
     两条都靠 `bind`，都靠"端口表达式在 DUT 作用域求值"这一条 SV 语义。
 
-    `dut_module` 空则返回空串（不知道绑到谁身上）；`if_name` 空则按模块名推。
+    `sampling` 里没写 `dut_module`（或者模型里根本没有 `sample: dut` 的字段）则返回
+    空串 —— **不生成半成品**（一个挂不上东西的接口，编译得过、一个信号都不采）。
     """
-    dut = sv_ident(dut_module, "")
-    if not dut:
+    meta = cov_interface_meta(cm, sampling, if_name)
+    if meta is None:
         return ""
-    name = sv_ident(if_name or f"{cm.module}_cov_if", "")
-    cps = [cp for cp in cm.coverpoints if cp.source == "dut"]
-    if not cps:
-        return ""
-
+    cps = probe_ports(cm)
+    name, dut = meta["name"], meta["dut_module"]
     macro = f"{name.upper()}_SV"
+
+    # 端口 = 时钟 + 复位 + 每个采样信号。**时钟与复位也必须是端口**：
+    # 它们同样活在 DUT 的作用域里，裸写在组件里没人连得过来（探针那边为同一个
+    # 原因吃过一次亏：`if (rst_n)` 直接报 `Undefined variable`）。组件靠这三个
+    # 端口时钟沿采样 + 复位屏蔽。
+    extra_ports = [meta["clock"]] + ([meta["reset"]] if meta["reset"] else [])
+
     out: List[str] = [
         f"`ifndef {macro}",
         f"`define {macro}",
@@ -1291,9 +1361,12 @@ def render_cov_interface(cm: CoverageModel, dut_module: str,
         f"// `bind` 到 `{dut}`：端口连接表达式在该模块作用域里求值，",
         "// 所以输入端口 / 输出端口 / **内部寄存器** 一视同仁地连得进来。",
         "//",
-        "// 它只**引信号**，不采样 —— 采样由 env 的覆盖率组件做（`coverpoint vif.<信号>`），",
-        "// 这样覆盖率跟 UVM 的报告走（见 `coverage/<模块>_probe.sv` 是另一条：",
-        "// 自带 covergroup 的独立探针，不依赖 UVM）。",
+        "// 它只**引信号**，不采样 —— 采样由 env 的覆盖率组件做（`coverpoint vif.<信号>`，",
+        "// 时钟沿 + 复位屏蔽），这样覆盖率跟着 UVM 的报告走。",
+        "//",
+        f"// bind 出来的实例是 `{meta['instance']}`，它在 DUT 的作用域里 —— 所以",
+        f"// tb_top 用层次路径挂给组件：`config_db::set(..., <dut 实例>.",
+        f"// {meta['instance']})`。两边的名字都来自同一份 meta（`cov_interface_meta`）。",
         "",
         f"interface {name} (",
     ]
@@ -1305,17 +1378,23 @@ def render_cov_interface(cm: CoverageModel, dut_module: str,
     #
     # 一律 `input`：接口只**观察** DUT —— 输入端口是被驱动的网、输出端口也是，
     # 都只读一份值。声明成 `output` 会反过来去驱动 DUT。
-    for i, cp in enumerate(cps):
-        decl = f"[{cp.width - 1}:0] " if cp.width > 1 else ""
-        sep = "," if i < len(cps) - 1 else ""
-        out.append(f"  input logic {decl}{cp.signal}{sep}  // {cp.field}")
+    ports = [(n, 0, "") for n in extra_ports] + \
+            [(cp.signal, cp.width, cp.field) for cp in cps]
+    for i, (sig, width, note) in enumerate(ports):
+        decl = f"[{width - 1}:0] " if width > 1 else ""
+        sep = "," if i < len(ports) - 1 else ""
+        # 注释只在"建模里的名字与信号名不同"时才写 —— `// queue_level` 这种
+        # 自己注释自己没有信息量（单模型路径下两者本来就同名）
+        comment = f"  // {note}" if note and note != sig else ""
+        out.append(f"  input logic {decl}{sig}{sep}{comment}")
     out += [
         f");",
         f"endinterface : {name}",
         "",
-        f"bind {dut} {name} u_{name}(",
+        f"bind {dut} {name} {meta['instance']}(",
     ]
-    conns = [f"  .{cp.signal}({cp.expr or cp.signal})" for cp in cps]
+    conns = [f"  .{n}({n})" for n in extra_ports]
+    conns += [f"  .{cp.signal}({cp.expr or cp.signal})" for cp in cps]
     out.append(",\n".join(conns))
     out += [");", "", f"`endif  // {macro}", ""]
     return "\n".join(out)

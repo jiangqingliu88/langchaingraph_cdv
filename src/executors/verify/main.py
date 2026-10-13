@@ -124,9 +124,12 @@ class VerifyExecutor(BaseExecutor):
             # 模型静默退回"值类自动分箱"，命令行与日志看上去一切正常。
             #
             # 顺序必须是：find_spec_yaml（清空 + 重建）→ **写 bins** → jinja_render（读）。
-            self._write_env_cov_bins(output_dir, cov_bins_for_render)
-            # 第二条通道：`sample: dut` 的字段 → bind 探针（也要在 filelist 生成前落盘）
-            self._write_coverage_probe(output_dir)
+            # 第二条通道：`sample: dut` 的字段 → bind 进 DUT 的**覆盖率接口**
+            #（也要在 filelist 生成前落盘）。先做它：它解析出来的身份（接口名/
+            # bind 实例名/时钟/复位）与 bins 要一起进下面那份契约，而 env 组件与
+            # tb_top **都从那一份读** —— 两份各写一次名字就是"改了三个漏一个"。
+            dut_channel = self._write_coverage_dut_channel(output_dir)
+            self._write_env_cov_bins(output_dir, cov_bins_for_render, dut_channel)
             call_tool("jinja_render", {"output_dir": str(output_dir)})
             env_files = [str(p) for p in (output_dir / "agents").rglob("*.sv")] \
                 if (output_dir / "agents").exists() else []
@@ -223,13 +226,23 @@ class VerifyExecutor(BaseExecutor):
 
     # ── 功能覆盖率点：case 模型 → env_cov 的 bin ──
 
-    def _write_env_cov_bins(self, output_dir: Path, cov_bins: List[Any]) -> None:
+    def _write_env_cov_bins(self, output_dir: Path, cov_bins: List[Any],
+                            dut: Dict[str, Any] = None) -> None:
         """把 `env_cov_bins.yaml` 落到 `find_spec_yaml` 之后、`jinja_render` 之前。
 
-        两个键：
+        四个键：
 
           · `cov_bins`   —— 策略包的语义 cross（`env_cov.sv.j2` 渲染成 `cross_<name>`）
           · `field_bins` —— **case 模型**的边界 bin（渲染成 `cp_<字段>` 的 bins）
+          · `dut_if`     —— **DUT 覆盖率接口的身份**（类型名 / bind 实例名 / 时钟 /
+                            复位 / 文件），由 `_write_coverage_dut_channel` 给出
+          · `dut_bins`   —— DUT 侧覆盖点的 bins 表（`cg_dut` 的显式仓）
+
+        **`dut_if` 是给两个模板读的同一份身份**：env 组件按它声明
+        `virtual <type>`，tb_top 按它写 `config_db::set(..., <dut 实例>.<instance>)`。
+        两边都从这一个文件读，所以**不会漂**；没有这个键时两边都不生成任何东西
+        —— 而不是一边生成、一边不生成（那样组件拿到的是空句柄，覆盖率永远 0%，
+        而编译不报错）。
 
         **键名是 `cov_bins`**（不是 `coverage_bins`）：与 schema 的文档类型一致 ——
         用错的名字会让 `UVMGenerator.run()` 的 schema 检查报 error 并 `SystemExit`，
@@ -258,6 +271,8 @@ class VerifyExecutor(BaseExecutor):
                             f"bin 已注入 env_cov → 会被真编译、真采样")
             else:
                 logger.info("没有可用的 case 模型覆盖点 —— env_cov 退回值类自动分箱")
+            if dut:
+                payload.update(dut)
             (bins_dir / "env_cov_bins.yaml").write_text(
                 json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         except Exception as e:                       # noqa: BLE001 旁路，别拦 env 生成
@@ -298,46 +313,79 @@ class VerifyExecutor(BaseExecutor):
         for note in payload["plan"].get("notes") or []:
             logger.warning(f"覆盖率计划: {note}")
 
-    def _write_coverage_probe(self, output_dir: Path) -> None:
-        """`sample: dut` 的字段 → `coverage/dut_probe.sv`（bind 探针）。
+    def _write_coverage_dut_channel(self, output_dir: Path) -> Dict[str, Any]:
+        """`sample: dut` 的字段 → `coverage/<接口>.sv`（bind 进 DUT 的覆盖率接口）。
 
         **第二条采样通道**。monitor 的事务通道只看得到**激励侧** —— 队列水位、
         依赖类型、发射决策这些内部状态与输出端口，它一个都采不到。而 `bind` 进
-        DUT 的探针模块对输入端口/输出端口/内部寄存器**没有区别**：端口连接表达式
-        在目标模块作用域里求值，内部名直接连得过去（实测 vlog 编译通过）。
+        DUT 的接口对输入端口/输出端口/内部寄存器**没有区别**：端口连接表达式在
+        目标模块作用域里求值，内部名直接连得过去（实测 vlog/vopt 通过）。
 
-        落在这里而不是覆盖率阶段，是因为**它要被编译**：回归的 filelist 在 ops
-        阶段生成，探针必须先于它存在。写在覆盖率阶段就永远赶不上这一轮 ——
-        那就又是一份"看着有、从没编译过"的产物（本会话踩过这个坑）。
+        ## 为什么是"接口 + env 组件"，而不是"自带 covergroup 的探针模块"
+
+        两条都靠 `bind`，都能采到同样的信号。**同时发两份就是同一个信号被两个
+        covergroup 各采一遍** —— `vcover` 报表里多一个 covergroup，签核的
+        "功能覆盖率"数字被自己搅浑。而探针那份（`render_probe`）在覆盖率管道里
+        没有任何东西消费它：真正的报表读的是 ucdb，ucdb 里两个 covergroup 都算。
+        所以管道里**只留一条**：接口引信号、env 的 `<env>_coverage` 组件采样 ——
+        覆盖率跟 UVM 的报告走（`功能覆盖率[dut]: x%`）。
+
+        探针那条没有废弃：它是**没有 env 也要收覆盖率**时的独立通道
+        （`vagent case-model covergroups` 出的 `probe_code`）。
+
+        ## 为什么落在这里
+
+        **它要被编译**：回归的 filelist 在 ops 阶段生成，接口必须先于它存在 ——
+        写在覆盖率阶段就永远赶不上这一轮，那就又是一份"看着有、从没编译过"的
+        产物（本会话踩过这个坑）。
+
+        返回给调用方的 `{dut_if, dut_bins}` 会并进 `env_cov_bins.yaml`：env 组件
+        与 tb_top 都从那一份读身份。**没生成就返回空字典** —— 调用方据此不写
+        `dut_if`，于是两个模板一个字都不出（一致地"都没有"，而不是单边有）。
         """
         cm_file = _find_case_model(_spec_of(output_dir), output_dir)
         if cm_file is None:
-            return
+            return {}
         try:
             from src.tools.casemodel_tools.api import run_covergroups
 
             payload = run_covergroups(cm_file.read_text(encoding="utf-8"), "dut")
         except Exception as e:                       # noqa: BLE001 旁路
-            logger.warning(f"读 case 模型失败（不生成 DUT 探针）: {e}")
-            return
+            logger.warning(f"读 case 模型失败（不生成 DUT 覆盖率接口）: {e}")
+            return {}
         if not payload.get("probe_ports"):
-            return                                   # 模型里没有 sample: dut 的字段
-        code = payload.get("probe_code") or ""
-        if not code:
-            # 有 `sample: dut` 的字段却没给 `dut_module` —— 原因与写法已经在
-            # `run_covergroups` 的 notes 里写好了，照抄一句，别让人对着"没生成"猜
+            return {}                                # 模型里没有 sample: dut 的字段
+        code = payload.get("cov_interface_code") or ""
+        meta = payload.get("cov_interface") or {}
+        if not code or not meta.get("type"):
+            # 有 `sample: dut` 的字段却没给 `sampling.dut_module` —— 原因与写法已经
+            # 在 `run_covergroups` 的 notes 里写好了，照抄一句，别让人对着"没生成"猜
             for note in payload.get("notes") or []:
                 if "dut_module" in note:
-                    logger.warning(f"DUT 探针生成不了：{note}")
+                    logger.warning(f"DUT 覆盖率接口生成不了：{note}")
                     break
-            return
-        cov_dir = output_dir / "coverage"
-        cov_dir.mkdir(parents=True, exist_ok=True)
-        path = cov_dir / "dut_probe.sv"
+            else:
+                logger.warning("DUT 覆盖率接口生成不了（模型里有 sample: dut 的字段，"
+                               "但接口身份算不出来）")
+            return {}
+        path = output_dir / meta["file"]
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(code, encoding="utf-8")
-        logger.info(f"功能覆盖率点（DUT 探针）：{len(payload['probe_ports'])} 个信号 "
-                    f"→ {path.name}（bind 到 "
-                    f"{payload['sampling'].get('dut_module')}，会被真编译、真采样）")
+        # **清掉上一版管道留在这里的独立探针**（固定文件名 `dut_probe.sv`）。
+        # 它和这个接口采的是**同一批信号**：两份同时挂在 filelist 里，就是同一个
+        # 信号被两个 covergroup 各采一遍 —— `vcover` 报表里多一个 covergroup，
+        # 签核的"功能覆盖率"被自己搅浑。删的是本管道自己的产物（名字固定、
+        # 随时可重生成），而且**说出来**，不静默动别人的文件。
+        stale = path.parent / "dut_probe.sv"
+        if stale.exists():
+            stale.unlink()
+            logger.info(f"清掉上一版的 DUT 探针 {stale.name}：DUT 通道已改走 "
+                        f"{path.name} + env 覆盖率组件（两个 covergroup 采同一批"
+                        f"信号会重复计量）")
+        logger.info(f"功能覆盖率点（DUT 通道）：{len(payload['probe_ports'])} 个信号 "
+                    f"→ {path.name}（bind 到 {meta['dut_module']}；由 "
+                    f"{meta['type']} 引给 env 覆盖率组件，会被真编译、真采样）")
+        return {"dut_if": meta, "dut_bins": payload.get("dut_bins") or {}}
 
     @staticmethod
     def _case_model_field_bins(output_dir: Path) -> Dict[str, List[Dict[str, Any]]]:

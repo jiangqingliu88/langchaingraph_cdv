@@ -250,15 +250,23 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
     if model_dir.is_dir():
         lines.extend(sv.as_posix() for sv in sorted(model_dir.rglob("*_ref_model.sv")))
 
-    # 功能覆盖率探针（`bind` 进 DUT）—— **必须排在 RTL 之后**：`bind <dut_module>`
+    # 功能覆盖率的两条 `bind` 产物 —— **必须排在 RTL 之后**：`bind <dut_module>`
     # 要求目标模块已经声明。采的是 `sample: dut` 的那些信号（内部状态 / 输出端口），
     # monitor 的事务通道一个都采不到，只有 bind 进去才看得见。
     #
-    # 收 `*_probe.sv` 而不是整个 `coverage/` 目录：那里还躺着 `coverage_points.json`
-    # 之类的非 SV 产物，一股脑收进来是给 vlog 塞垃圾。
+    #   `*_cov_if.sv`  覆盖率**接口** —— 把信号引给 env 的覆盖率组件（管道走这条）
+    #   `*_probe.sv`   自带 covergroup 的**独立探针** —— 没有 env 时的通道
+    #
+    # 两个 glob 都要收。**只收一个会让另一种渠道的产物静默不进编译** ——
+    # 文件躺在磁盘上、人以为它在采，而 vlog 从没见过它（这类"看着有、其实没进
+    # 编译"的产物正是本仓库反复踩的那一类）。
+    #
+    # 收通配而不是整个 `coverage/` 目录：那里还躺着 `coverage_points.json`、
+    # `coverage_plan.yaml` 之类的非 SV 产物，一股脑收进来是给 vlog 塞垃圾。
     cov_dir = output_dir / "coverage"
     if cov_dir.is_dir():
-        lines.extend(sv.as_posix() for sv in sorted(cov_dir.glob("*_probe.sv")))
+        for pattern in ("*_cov_if.sv", "*_probe.sv"):
+            lines.extend(sv.as_posix() for sv in sorted(cov_dir.glob(pattern)))
 
     lines.extend(_env_lines(output_dir, env_name))
     lines.extend(_bench_lines(output_dir))

@@ -165,8 +165,8 @@ class TestTheTwoSamplingChannelsSplit:
     """两条采样通道各写各的产物 —— 分不清就会给采不到的信号生成覆盖率。
 
     monitor 的事务通道只看得到**激励侧**；DUT 的内部状态与输出端口只有 bind
-    进 DUT 才看得见。`sample: stimulus` 的走 `env_cov_bins.yaml`，
-    `sample: dut` 的走 `coverage/dut_probe.sv`。
+    进 DUT 才看得见。`sample: stimulus` 的走 `env_cov_bins.yaml` 的 `field_bins`，
+    `sample: dut` 的走 `coverage/<模块>_cov_if.sv`（bind 的接口）+ `dut_bins`。
     """
 
     NPU = Path("specs/npu_sched/casemodel.yaml")
@@ -186,12 +186,13 @@ class TestTheTwoSamplingChannelsSplit:
         fb = ex._case_model_field_bins(tmp_path)
         assert set(fb) == {"paddr", "pwrite", "pwdata"}   # apb 全走事务通道
 
-        ex._write_coverage_probe(tmp_path)
-        assert not (tmp_path / "coverage" / "dut_probe.sv").exists()
+        assert ex._write_coverage_dut_channel(tmp_path) == {}
+        cov = tmp_path / "coverage"
+        assert not cov.exists() or not list(cov.glob("*.sv"))
 
-    def test_dut_sourced_goes_to_the_probe_not_field_bins(self, tmp_path):
-        """NPU 那 12 个信号在 env_cov 里**一个都不可见** —— 塞进 field_bins
-        只会让模板生成一堆引用不到信号的 bin。"""
+    def test_dut_sourced_goes_to_the_interface_not_field_bins(self, tmp_path):
+        """NPU 那 12 个信号在 env_cov 的事务通道里**一个都不可见** —— 塞进
+        field_bins 只会让模板生成一堆引用不到信号的 bin。"""
         import shutil
 
         (tmp_path / "inputs").mkdir(parents=True)
@@ -199,35 +200,223 @@ class TestTheTwoSamplingChannelsSplit:
         ex = self._executor()
         assert ex._case_model_field_bins(tmp_path) == {}
 
-        ex._write_coverage_probe(tmp_path)
-        probe = tmp_path / "coverage" / "dut_probe.sv"
-        assert probe.is_file()
-        text = probe.read_text(encoding="utf-8")
-        assert "bind npu_sched" in text and "queue_level" in text
+        dut = ex._write_coverage_dut_channel(tmp_path)
+        assert dut["dut_if"]["type"] == "npu_sched_cov_if"
+        iface = tmp_path / "coverage" / "npu_sched_cov_if.sv"
+        assert iface.is_file()
+        text = iface.read_text(encoding="utf-8")
+        assert "bind npu_sched npu_sched_cov_if u_npu_sched_cov_if" in text
+        assert "queue_level" in text
+        # 时钟与复位也是**端口** —— 组件靠它们时钟沿采样 + 复位屏蔽
         assert "input logic clk," in text and "input logic rst_n," in text
+        # bins 表随身份一起交出去（模板出 `cg_dut` 要用）
+        assert set(dut["dut_bins"]) >= {"queue_level", "dep_type"}
 
-    def test_range_and_illegal_bins_never_reach_env_cov(self, tmp_path):
-        """`env_cov.sv.j2` 的 bin 语法只支持 `{v}` / `{[a:b]}`，**没有 illegal 的位置**。
+    def test_dut_bins_carry_ranges_and_illegal_bins(self, tmp_path):
+        """`field_bins` 只表达得了单个整数；DUT 侧需要**区间**与**非法仓**。
 
-        区间仓与非法仓留给探针那份 —— 那份才是完整的覆盖group。
+        区间：水位 0-32 要分档（`{[1:7]}`），一个整数说不出来。
+        非法仓：`illegal_bins` 命中即报错 —— 它必须在 `cg_dut` 里有位置。
         """
         import shutil
 
         (tmp_path / "inputs").mkdir(parents=True)
         shutil.copy(self.NPU, tmp_path / "inputs" / "casemodel.yaml")
-        assert self._executor()._case_model_field_bins(tmp_path) == {}
+        dut = self._executor()._write_coverage_dut_channel(tmp_path)
+
+        lvl = {b["name"]: b for b in dut["dut_bins"]["queue_level"]}
+        assert lvl["low"]["value"] == "[1:7]"          # 区间，不是整数
+        assert lvl["illegal_over"]["illegal"] is True
 
     def test_no_case_model_writes_nothing(self, tmp_path):
         ex = self._executor()
         assert ex._case_model_field_bins(tmp_path) == {}
-        ex._write_coverage_probe(tmp_path)
+        assert ex._write_coverage_dut_channel(tmp_path) == {}
         assert not (tmp_path / "coverage").exists()
 
 
-class TestTheProbeGetsCompiled:
-    """探针必须**进得了 filelist** —— 不进就是又一份"看着有、从没编译过"的产物。"""
+class TestTheDutChannelIsWiredIntoTheEnv:
+    """**同一个信号只能有一个 covergroup 采它。**
 
-    def test_the_filelist_collects_it_after_the_rtl(self, tmp_path):
+    DUT 通道走「bind 的接口 + env 组件」，上一版管道走的是「自带 covergroup 的
+    独立探针」。两个同时挂在 filelist 里 = 同一个信号被采两遍：`vcover` 报表里
+    多一个 covergroup，签核的"功能覆盖率"被自己搅浑。所以切换通道时要把上一版
+    的产物**清掉**，而且要**说出来**。
+    """
+
+    NPU = Path("specs/npu_sched/casemodel.yaml")
+
+    def _run_dir(self, tmp_path):
+        import shutil
+
+        (tmp_path / "inputs").mkdir(parents=True)
+        shutil.copy(self.NPU, tmp_path / "inputs" / "casemodel.yaml")
+        return tmp_path
+
+    def test_a_stale_probe_is_retired(self, tmp_path):
+        from src.executors.verify.main import VerifyExecutor
+
+        run = self._run_dir(tmp_path)
+        (run / "coverage").mkdir()
+        (run / "coverage" / "dut_probe.sv").write_text("// old\n", encoding="utf-8")
+
+        VerifyExecutor()._write_coverage_dut_channel(run)
+        assert not (run / "coverage" / "dut_probe.sv").exists(), \
+            "上一版的探针还在 —— 它和接口采同一批信号，会重复计量"
+        assert (run / "coverage" / "npu_sched_cov_if.sv").is_file()
+
+    def test_the_identity_lands_in_the_contract_file(self, tmp_path):
+        """身份必须并进 `env_cov_bins.yaml` —— env_cov 与 tb_top **都读那一份**。"""
+        import json
+
+        from src.executors.verify.main import VerifyExecutor
+
+        run = self._run_dir(tmp_path)
+        ex = VerifyExecutor()
+        dut = ex._write_coverage_dut_channel(run)
+        ex._write_env_cov_bins(run, [], dut)
+
+        data = json.loads((run / "inputs" / "yaml" / "uvm" / "env_cov_bins.yaml")
+                          .read_text(encoding="utf-8"))
+        assert data["dut_if"]["type"] == "npu_sched_cov_if"
+        assert data["dut_if"]["instance"] == "u_npu_sched_cov_if"
+        assert data["dut_bins"]
+
+    def test_the_schema_registers_the_new_keys(self):
+        """schema 是 `additionalProperties: false` —— 没登记就是 **SystemExit**，
+        之后任何一次渲染都被它挡住。实测加 `dut_if` 时正是撞在这里。"""
+        import json
+
+        schema = json.loads(Path(
+            "src/tools/uvm_tools/tool_uvm/schema/uvm_config.schema.json"
+        ).read_text(encoding="utf-8"))
+        assert {"dut_if", "dut_bins"} <= set(schema["properties"])
+        assert "dutCoverBin" in schema["$defs"]
+
+    def test_both_templates_read_the_one_contract(self):
+        """env_cov 与 tb_top **读同一个键**（`coverage_dut_if`）。
+
+        单边有是有害的：组件声明了 `virtual <type>` 而 tb_top 没挂 →
+        句柄永远为空 → 覆盖率恒 0%，而编译与加载**都不报错**。所以两份模板
+        必须由同一个来源喂，缺席时**两边一致地没有**。
+        """
+        gen = Path("src/tools/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
+        env_tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+                       "/env_cov.sv.j2").read_text(encoding="utf-8")
+        tb_tpl = Path("src/tools/uvm_tools/tool_uvm/templates/bench_templates"
+                      "/tb_top.sv.j2").read_text(encoding="utf-8")
+
+        # 读端只有一个：`read_env_cov_bins`，两个渲染任务都经它取
+        assert "def read_env_cov_bins(" in gen
+        assert gen.count("read_env_cov_bins(self.output_dir)") == 2
+        assert "_add_coverage_dut_context" in gen
+        for tpl in (env_tpl, tb_tpl):
+            assert "coverage_dut_if | default({})" in tpl
+        # tb_top 只做"挂载方"：它写 config_db，不声明组件
+        assert "config_db#(virtual {{ _dif.type }})::set" in tb_tpl
+        assert "cov_vif" in tb_tpl and "cov_vif" in env_tpl
+
+    def test_the_component_fails_loudly_when_the_handle_is_missing(self):
+        """挂不上 = **接线错误**，不是"这次没覆盖率"。
+
+        静默跑完只会给一个恒 0% 的数字，比停下来更难查（本仓库反复吃过
+        "0% 与没有无从区分"的亏）。所以取不到句柄要 `uvm_fatal`。
+        """
+        env_tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+                       "/env_cov.sv.j2").read_text(encoding="utf-8")
+        assert "`uvm_fatal(" in env_tpl
+        assert 'uvm_config_db#(virtual {{ _dif.type }})::get' in env_tpl
+        # 采样必须**时钟沿 + 复位屏蔽**：复位期间的水位/决策是无意义值
+        assert "@(posedge cov_vif.{{ _dif.clock }})" in env_tpl
+        assert "if (cov_vif.{{ _dif.reset }}) cg_dut.sample();" in env_tpl
+
+    def test_the_dut_channel_is_reported_with_the_others(self):
+        """两条通道的数要在**同一份报告**里 —— 各看各的就又要人工对账。"""
+        env_tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+                       "/env_cov.sv.j2").read_text(encoding="utf-8")
+        assert '"功能覆盖率[dut]: %.1f%%"' in env_tpl
+
+
+class TestTheRenderedFilesBothSidesOrNeither:
+    """真的渲染一遍 —— **有 `dut_if` 就两边都出，没有就两边都不出**。
+
+    这条链上唯一的灾难是"单边有"：组件声明了 `virtual <type>` 而 tb_top 没挂，
+    于是句柄为空、覆盖率恒 0%，而**编译与加载都不报错**（`vcover` 只会说
+    0.00%）。所以这里不看源码字符串，看**渲染出来的两个文件**。
+    """
+
+    EXAMPLES = Path("src/tools/uvm_tools/tool_uvm/examples/apb")
+
+    DUT_IF = {
+        "name": "apb_slave_cov_if", "type": "apb_slave_cov_if",
+        "instance": "u_apb_slave_cov_if", "dut_module": "apb_slave_dut",
+        "clock": "pclk", "reset": "presetn",
+        "file": "coverage/apb_slave_cov_if.sv",
+        "signals": ["paddr"],
+        "coverpoints": [{"signal": "paddr", "sv_name": "cp_paddr",
+                         "field": "paddr", "width": 8, "expr": ""}],
+    }
+    DUT_BINS = {"paddr": [
+        {"name": "cp_zero", "value": "0", "illegal": False},
+        {"name": "cp_mid", "value": "[1:127]", "illegal": False},
+        {"name": "cp_over", "value": "[256:$]", "illegal": True},
+    ]}
+
+    def _render(self, tmp_path, with_dut: bool):
+        import json
+        import shutil
+
+        ydir = tmp_path / "inputs" / "yaml" / "uvm"
+        ydir.mkdir(parents=True)
+        for src in self.EXAMPLES.glob("*.yaml"):
+            shutil.copy(src, ydir / src.name)
+        payload = {"cov_bins": []}
+        if with_dut:
+            payload["dut_if"] = self.DUT_IF
+            payload["dut_bins"] = self.DUT_BINS
+        (ydir / "env_cov_bins.yaml").write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+        from src.tools.uvm_tools.tool_jinja_render.main import run
+
+        assert json.loads(run(str(tmp_path)))["status"] == "ok"
+        env = list((tmp_path / "env").glob("*_coverage.sv"))
+        tb = list((tmp_path / "bench").glob("*_tb_top.sv"))
+        assert len(env) == 1 and len(tb) == 1
+        return (env[0].read_text(encoding="utf-8"),
+                tb[0].read_text(encoding="utf-8"))
+
+    def test_without_the_key_neither_file_mentions_the_channel(self, tmp_path):
+        env, tb = self._render(tmp_path, with_dut=False)
+        for text in (env, tb):
+            assert "cov_vif" not in text
+            assert "cg_dut" not in text
+        assert "covergroup cg_" in env          # 事务通道那条照旧
+
+    def test_with_the_key_both_files_carry_it(self, tmp_path):
+        env, tb = self._render(tmp_path, with_dut=True)
+        # 组件侧：句柄 + covergroup（信号走 vif）+ 时钟沿采样 + 取不到就 fatal
+        assert "virtual apb_slave_cov_if cov_vif;" in env
+        assert "coverpoint cov_vif.paddr" in env
+        assert "bins cp_mid = {[1:127]};" in env        # 区间原样落进去
+        assert "illegal_bins cp_over = {[256:$]};" in env
+        assert "@(posedge cov_vif.pclk);" in env
+        assert "if (cov_vif.presetn) cg_dut.sample();" in env
+        assert "`uvm_fatal(" in env
+        # 挂载侧：层次路径 = DUT 实例 + bind 实例名
+        assert 'uvm_config_db#(virtual apb_slave_cov_if)::set(' in tb
+        assert "u_dut.u_apb_slave_cov_if" in tb
+
+
+class TestTheBindArtifactsGetCompiled:
+    """两条 bind 产物都必须**进得了 filelist** —— 不进就是又一份"看着有、
+    从没编译过"的产物（文件躺在磁盘上、人以为它在采，而 vlog 从没见过它）。
+
+    两个 glob 都要收：`*_cov_if.sv` 是管道走的那条（接口 → env 组件），
+    `*_probe.sv` 是没有 env 时的独立通道。
+    """
+
+    def _fl(self, tmp_path):
         from src.tools.lib.filelist import build_filelist_for_tb
 
         out = tmp_path / "output_x"
@@ -235,12 +424,17 @@ class TestTheProbeGetsCompiled:
         (out / "rtl" / "dut.sv").write_text("module dut; endmodule\n", encoding="utf-8")
         (out / "coverage").mkdir()
         (out / "coverage" / "dut_probe.sv").write_text("// probe\n", encoding="utf-8")
+        (out / "coverage" / "dut_cov_if.sv").write_text("// iface\n", encoding="utf-8")
         (out / "coverage" / "coverage_points.json").write_text("{}", encoding="utf-8")
+        return build_filelist_for_tb(out, [], "dut_env").read_text(encoding="utf-8")
 
-        fl = build_filelist_for_tb(out, [], "dut_env").read_text(encoding="utf-8")
+    def test_both_are_collected_after_the_rtl(self, tmp_path):
+        fl = self._fl(tmp_path)
         assert "dut_probe.sv" in fl
-        # `bind <dut_module>` 要求目标模块已声明 —— 探针必须排在 RTL 之后
+        assert "dut_cov_if.sv" in fl
+        # `bind <dut_module>` 要求目标模块已声明 —— 两个都得排在 RTL 之后
         assert fl.index("dut.sv") < fl.index("dut_probe.sv")
+        assert fl.index("dut.sv") < fl.index("dut_cov_if.sv")
 
     def test_non_sv_files_in_coverage_are_not_collected(self, tmp_path):
         """`coverage/` 里还躺着 json —— 一股脑收进来是给 vlog 塞垃圾。"""

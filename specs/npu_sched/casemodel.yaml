@@ -187,7 +187,12 @@ dimensions:
     fields:
       - name: instr_opcode
         type: enum
-        width: 4
+        # **位宽跟 RTL 走，不跟"够不够用"走**：DUT 是 `logic [7:0]`
+        #（`specs/npu_sched/npu_sched.sv`）。10 个取值只需要 4 位，但 bind 的
+        # `.instr_opcode(instr_opcode)` 是把 DUT 的 8 位接到接口端口上 ——
+        # 写 4 就是**悄悄截掉高 4 位**（Questa 不报错，且取值恰好 < 16，
+        # 数字看着还对，只有以后 opcode 变宽才会露出来）。
+        width: 8
         description: 硬件指令操作码
         sample: dut
         cover_id: CP_NPU_OPCODE_008

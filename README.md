@@ -128,12 +128,17 @@ RL 只管 4 个软动作，且经验统计只做"降级建议"不直接拍板（
 | | `sample: stimulus`（默认） | `sample: dut` |
 |---|---|---|
 | 信号在哪 | agent 的**事务对象** | DUT 里**按名字可见**：输入端口 / 输出端口 / **内部寄存器** |
-| 谁采 | `env_cov.sv.j2` 的 `cg_<agent>`（monitor 每笔事务 → `sample()`） | `bind` 进 DUT 的探针，时钟沿 + 复位屏蔽 |
+| 谁采 | `env_cov.sv.j2` 的 `cg_<agent>`（monitor 每笔事务 → `sample()`） | `env_cov.sv.j2` 的 `cg_dut`（`coverpoint vif.<信号>`，时钟沿 + 复位屏蔽） |
 | 看得到什么 | **只有激励侧** | 内部状态、输出端口 —— monitor 一个都采不到 |
 
 **分不清这一点，就会给一堆采不到的信号生成一份永远不命中的覆盖率模型。**
-探针走 `bind`（挂**模块**上、端口表达式在目标模块作用域求值），所以内部名直接连得过去；
-生成的 `coverage/dut_probe.sv` 会被 `build_filelist_for_tb` 收进编译清单（排在 RTL 之后）。
+
+DUT 那条先走 `bind`（挂**模块**上、端口表达式在目标模块作用域求值 → 内部名直接连得
+过去），把信号引成一个**接口**；`env` 的覆盖率组件持 `virtual <接口>` 采样，覆盖率
+因此与事务通道在**同一份报告**里（实测：`cg_dut` 41.5%，内部 `queue_level` 真采到）。
+两个名字（接口类型名 / bind 实例名）只有**一处出处**，写进 `env_cov_bins.yaml` 的
+`dut_if`，env_cov 与 tb_top 都读那一份 —— 漂了就是**句柄为空、覆盖率恒 0%，而编译
+与加载都不报错**。接口文件被 `build_filelist_for_tb` 收进编译清单（排在 RTL 之后）。
 
 ### 三、功能覆盖率计划：一份 yaml，摆四张表
 

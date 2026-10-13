@@ -3,6 +3,12 @@
 // Testbench Top: {{ bench.name }}_tb_top
 // Data-driven generated from bench YAML configuration.
 `timescale 1ns/1ps
+{#- DUT 覆盖率接口的身份（类型名 / bind 实例名）—— **与 env_cov.sv 读的是同一份
+    契约**（`inputs/yaml/uvm/env_cov_bins.yaml` 的 `dut_if`，见 gen_uvm.py 的
+    `read_env_cov_bins`）。这里是"挂载方"：把 bind 出来的接口实例交给覆盖率组件。
+    两边各推一次名字就会漂，而漂了**编译与加载都不报错** —— 组件拿到空句柄、
+    覆盖率恒 0%，最难查的那种。缺席时一个字都不写（组件那边同样不生成）。 -#}
+{%- set _dif = coverage_dut_if | default({}) %}
 module {{ bench.name }}_tb_top;
   import uvm_pkg::*;
   import {{ bench.env_name }}_test_pkg::*;
@@ -103,6 +109,17 @@ module {{ bench.name }}_tb_top;
     uvm_config_db#(virtual {{ i.system_type_name }})::set(null, "*", "sys_vif", {{ i.name }}_sys_if_inst);
 {%-   endif %}
 {%- endfor %}
+{%- if _dif %}
+    // ── DUT 覆盖率接口 ──
+    // 它**不是这里例化的**：`bind {{ _dif.dut_module }} {{ _dif.type }}` 把它放进了
+    // DUT 的作用域（那是唯一能让**内部信号**连进来的地方 —— 内部名在 DUT 里，
+    // tb_top 这一层看不见）。所以层次路径 = `<DUT 实例>.<bind 实例名>`。
+    //
+    // 路径两段都来自 env_cov_bins.yaml 的 `dut_if`（类型名/实例名）与 bench
+    // （DUT 实例名）—— 与覆盖率组件是**同一份来源**，不会各说各话。
+    uvm_config_db#(virtual {{ _dif.type }})::set(
+        null, "*", "cov_vif", {{ bench.dut_instance | default("u_dut") }}.{{ _dif.instance }});
+{%- endif %}
   end
 
   // ── 波形名 + 日志时间单位 ──

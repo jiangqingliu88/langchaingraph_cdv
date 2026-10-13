@@ -724,8 +724,8 @@ runtime 参数：`count` 展开成 N 条、各拿 `base + i - 1`、`{{ SEED }}` 
 | | `stimulus`（默认） | `dut` |
 |---|---|---|
 | 信号在哪 | agent 的**事务对象**上 | DUT 里**按名字可见**：输入端口 / 输出端口 / **内部寄存器** |
-| 谁采 | `env_cov.sv.j2` 的 `cg_<agent>`（monitor 每笔事务 → `sample()`） | `bind` 进 DUT 的探针（时钟沿 + 复位屏蔽） |
-| 产物 | `env_cov_bins.yaml` 的 `field_bins` | `coverage/dut_probe.sv` |
+| 谁采 | `env_cov.sv.j2` 的 `cg_<agent>`（monitor 每笔事务 → `sample()`） | `env_cov.sv.j2` 的 `cg_dut`（`coverpoint vif.<信号>`，时钟沿 + 复位屏蔽） |
+| 产物 | `env_cov_bins.yaml` 的 `field_bins` | `coverage/<模块>_cov_if.sv`（bind 的**接口**）+ 契约文件里的 `dut_if` / `dut_bins` |
 | 看得到什么 | **只有激励侧** | 内部状态、输出端口 —— monitor 一个都采不到 |
 | bin 语法 | `{v}` / `{[a:b]}` | 全量（含 `illegal_bins`） |
 
@@ -740,29 +740,9 @@ dimensions:
     fields:
       - name: queue_level     # DUT 内部状态
         type: range
-        sample: dut           # ← 走 bind 探针
-        width: 6              # 探针端口的位宽；不给按类型推（会记账）
-        cover_bins: [...]     # 区间仓 / illegal 只在探针那份里生效
-```
-
-生成出来的探针长这样（`coverage/dut_probe.sv`）：
-
-```systemverilog
-module cg_npu_sched_dut_probe (
-  input logic clk,
-  input logic rst_n,
-  input logic [5:0] queue_level,   // 内部信号，直接连
-  ...
-);
-  covergroup cg_npu_sched_dut;
-    cp_queue_level: coverpoint queue_level { bins low = {[1:7]}; ... }
-    cx_queue_level_issue_decision: cross cp_queue_level, cp_issue_decision { ... }
-  endgroup
-  cg_npu_sched_dut cg = new();
-  always @(posedge clk) if (rst_n) cg.sample();
-endmodule
-
-bind npu_sched cg_npu_sched_dut_probe u_cg_probe(.clk(clk), .queue_level(queue_level), ...);
+        sample: dut           # ← 走 bind 的接口
+        width: 6              # 接口端口的位宽；不给按类型推（会记账）
+        cover_bins: [...]     # 区间仓 / illegal 在这里同样生效
 ```
 
 **为什么是 `bind`**：
@@ -771,10 +751,55 @@ bind npu_sched cg_npu_sched_dut_probe u_cg_probe(.clk(clk), .queue_level(queue_l
   与输出端口，它一个都采不到。
 - 层次引用（`u_dut.u_sched.queue_level`）要把 tb_top 的实例名写死，换个 bench 就断。
 - `bind` 两个问题都没有：挂**模块**上（每个实例自动带一份），端口连接表达式在
-  **目标模块作用域**里求值，所以内部名直接就能连（实测 `vlog` 编译通过）。
+  **目标模块作用域**里求值，所以内部名直接就能连（实测 `vlog` + `vopt` 通过）。
 
-探针文件会被 `build_filelist_for_tb` 收进编译清单（排在 RTL 之后 —— `bind` 要求目标
-模块已声明），所以它是**真编译、真采样、真被 `vcover` 统计**的。
+**为什么是"接口 + env 组件"，不是"自带 covergroup 的探针模块"**：
+
+`env/<env>_coverage.sv` 被 `include` 进 `env_pkg`，**那里面只能是 class** —— 而 class
+够不到 DUT 的信号。所以信号要先被**引出来**：接口 `bind` 进 DUT（只引信号、不采样），
+组件持 `virtual <接口>`，`coverpoint vif.<信号>` 采样。这样覆盖率跟着 **UVM 的报告**
+走，与事务通道的数在**同一份报告**里。
+
+生成出来的接口长这样（`coverage/npu_sched_cov_if.sv`）：
+
+```systemverilog
+interface npu_sched_cov_if (
+  input logic clk,
+  input logic rst_n,
+  input logic [5:0] queue_level,   // 内部信号，直接连
+  ...
+);
+endinterface
+
+bind npu_sched npu_sched_cov_if u_npu_sched_cov_if(.clk(clk), .queue_level(queue_level), ...);
+```
+
+组件侧（`env/<env>_coverage.sv`）与挂载侧（`bench/<bench>_tb_top.sv`）**读同一份身份**
+（契约文件里的 `dut_if`：类型名 / bind 实例名 / 时钟 / 复位）：
+
+```systemverilog
+// env_cov：句柄 + covergroup + 时钟沿采样；取不到句柄就 uvm_fatal
+virtual npu_sched_cov_if cov_vif;
+covergroup cg_dut; cp_queue_level: coverpoint cov_vif.queue_level { ... } endgroup
+task run_phase(uvm_phase phase);
+  forever begin @(posedge cov_vif.clk); if (cov_vif.rst_n) cg_dut.sample(); end
+endtask
+
+// tb_top：bind 出来的实例在 DUT 作用域里，所以路径 = <DUT 实例>.<bind 实例名>
+uvm_config_db#(virtual npu_sched_cov_if)::set(
+    null, "*", "cov_vif", u_npu_sched.u_npu_sched_cov_if);
+```
+
+两个名字都来自**同一个函数**（`coverage.cov_interface_meta`）并写进同一份契约文件 ——
+三处各推一次名字就是"改了三个漏一个"，而漂了的表现是**句柄为空、覆盖率恒 0%，
+编译与加载都不报错**。契约里没有 `dut_if` 时**两份模板一个字都不生成**（一致地
+"都没有"，而不是单边有）。挂不上则 `uvm_fatal`：**那是接线错误，不是"这次没覆盖率"**。
+
+接口文件会被 `build_filelist_for_tb` 收进编译清单（`coverage/*_cov_if.sv`，排在 RTL
+之后 —— `bind` 要求目标模块已声明），所以它是**真编译、真采样、真被 `vcover` 统计**的。
+（探针模块 `render_probe` / `coverage/*_probe.sv` 仍在：那是**没有 env 也要收覆盖率**
+时的独立通道。管道里只走一条 —— 两个 covergroup 采同一批信号会把签核的数字搅浑，
+所以切换通道时会把上一版的探针清掉并记一笔。）
 
 **交叉的两边必须在同一个 covergroup 里**，所以一个 cross 的两侧来源必须一致；
 一边 `stimulus` 一边 `dut` 是**表达不了**的，会记账跳过（并提示把另一侧也标成
@@ -790,23 +815,32 @@ bind npu_sched cg_npu_sched_dut_probe u_cg_probe(.clk(clk), .queue_level(queue_l
 
 ```
 front   写 inputs/casemodel.yaml（模型）
-verify  读模型 → inputs/yaml/uvm/env_cov_bins.yaml 的 field_bins（stimulus 那批）
-        读模型 → coverage/dut_probe.sv（dut 那批，**落在 filelist 生成之前**）
+verify  读模型 → inputs/yaml/uvm/env_cov_bins.yaml：
+          field_bins（stimulus 那批）/ dut_if + dut_bins（dut 那批的身份与仓）
+        读模型 → coverage/<模块>_cov_if.sv（bind 的接口，**落在 filelist 生成之前**）
 gen_uvm 读 field_bins → env_cov.sv.j2 里 cp_<字段> 用模型的边界 bin
         （字段名 = 事务字段名 = spec 接口信号名，两边同一个命名空间）
-ops     build_filelist_for_tb 收 coverage/*_probe.sv（排在 RTL 之后）
-        → vlog 编译 → bind 把探针挂进 DUT → 时钟沿采样
+        读 dut_if/dut_bins → env_cov.sv.j2 出 cg_dut；tb_top.sv.j2 挂 config_db
+        （**一个读者喂两个模板**，见 gen_uvm.read_env_cov_bins）
+ops     build_filelist_for_tb 收 coverage/*_cov_if.sv（排在 RTL 之后）
+        → vlog 编译 → bind 把接口挂进 DUT → 组件时钟沿采样
 coverage  读 coverage/coverage_points.json 记**声明**；
           vcover -cvg -details 收**实测**（两条通道的 covergroup 在同一份报告里）
 ```
 
+实测（NPU 调度器，`npu_sched_env_directed_test`）：`cg_dut` 在 ucdb 里是
+`/npu_sched_env_pkg/npu_sched_env_coverage/cg_dut`，12 个覆盖点 / 59 个 bin，
+一次 1.8us 的定向跑打到 **41.5%**（`cp_instr_type` 4/4、`cp_dep_type` 1/4），
+内部的 `queue_level` / `pipeline_state` 都真采到了；`illegal_bins illegal_over`
+保持 ZERO（非法仓没被误命中）。
+
 **两条通道为什么不能合并**：`stimulus` 那条**已经跑通**（monitor 每笔事务触发
 `write_<agent>` → `sample()`），但它**只看得到激励侧** —— 内部状态与输出端口
-它一个都采不到。那部分只能走 bind 探针（见上一节）。实测 `paddr` 的 6 个边界值
-渲染成 6 个 bin、编译 `Errors: 0`；NPU 那 12 个信号渲染成带 13 个端口的探针、
-编译 `Errors: 0`。
+它一个都采不到。那部分只能走 bind（见上一节）。实测 `paddr` 的 6 个边界值
+渲染成 6 个 bin、编译 `Errors: 0`；NPU 那 12 个信号渲染成带 14 个端口的接口
+（12 信号 + 时钟 + 复位）、编译 `Errors: 0`。
 
-**为什么探针落在 verify 而不是 coverage 阶段**：它**要被编译**，而 filelist 是
+**为什么接口落在 verify 而不是 coverage 阶段**：它**要被编译**，而 filelist 是
 ops 阶段生成的。写在覆盖率阶段就永远赶不上这一轮 —— 那就是又造一个"看着有、
 从没编译过"的产物（这个会话踩过一次）。
 
