@@ -252,7 +252,30 @@ python -m src.cli.commands case-model {check,analyze,generate,tree,rules,uvm-tes
 python -m src.cli.commands distill  {run,list,rollback}      # 经验蒸馏（L5）
 python -m src.cli.commands govern   {status,override,reset}  # 治理
 python -m src.cli.commands evidence {record,log,check}
+python -m src.cli.commands lineage  {versions,baseline,bugs,compare}   # 血缘：RTL 版本 / 基准
 ```
+
+### 血缘（`vagent lineage`）
+
+把**跨 run 的四个实体**记下来（`.signoffai/lineage.db`）—— 没有它们，"这一轮比
+上一轮差在哪"只能靠人肉记目录名：
+
+| 实体 | 是什么 |
+|---|---|
+| **RTL 版本** | 由**目录内容哈希**自动派生（机器算、不依赖 git，`--rtl <dir>` 也能用）。同哈希幂等（跑一百轮还是 v1），改一字节就是新版 |
+| **run 基准** | 每个模块的**第一次 run**，写下就不再改 —— "相对最初那版偏了多少"是单调的，"上一轮"会随跑的次数漂 |
+| **bug ↔ 版本** | debug 记下的 bug 挂在"发现于哪版"，可查"这版还有哪些没修" |
+| **用例 ↔ 模块/版本** | `testcase_registry` 的 `module` + `rtl_version_no` 两列（不再是 `name` 里的文本） |
+
+```powershell
+python -m src.cli.commands lineage versions            # 有哪些版本、哈希、首次 run
+python -m src.cli.commands lineage baseline npu_sched  # 基准锚在哪一次
+python -m src.cli.commands lineage bugs npu_sched -v 2 # 哪一版发现/修好了什么
+python -m src.cli.commands lineage compare out_x       # 与**基准**比（自动找锚点）
+```
+
+`verify` 收尾时自动落版本与基准；拿不到就说拿不到（空 RTL 目录 → 整条跳过，
+不写一个对应空目录的假 v1）。
 
 **`verify` 的常用开关**（`--help` 里有全部）：
 
