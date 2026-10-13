@@ -538,3 +538,69 @@ def test_flawed_examples_trigger_the_expected_dimension_rules():
 
 def test_flawed_scores_below_clean(cpu_result, cpu_flawed_result):
     assert cpu_flawed_result.score.total < cpu_result.score.total
+
+
+class TestCoverBinUnreachable:
+    """显式覆盖仓 vs 取值点：**某个仓一个取值点都打不到**要拦住。
+
+    这是"激励侧与度量侧同一份分母"的准确说法 —— 不是"一比一"（给了显式仓时
+    天然多对一），而是"**每个仓至少有一个取值点能打到**"。
+
+    多对一无害，空洞致命：某个仓空着 → 声明的覆盖率**永远封顶**，而 covergroup
+    编译通过、回归跑得过、日志一切正常（实测踩过 `cluster_id`）。
+    """
+
+    def _model(self, field: dict) -> dict:
+        return {
+            "version": "1", "object": "dut", "object_code": "DUT",
+            "sub_objects": [{"id": "OBJ-01", "name": "F", "code": "F1"}],
+            "dimensions": [{"id": "D_x", "name": "X", "fields": [field]}],
+            "themes": [{"id": "TH-P0", "name": "f", "priority": "P0",
+                        "dimensions": ["D_x"]}],
+        }
+
+    def test_a_bin_no_value_point_can_reach_is_an_error(self):
+        """**这条就是实测那个 bug**：4 个显式仓却不给 boundary。"""
+        bad = {"name": "c", "type": "range", "min": 0, "max": 3,
+               "cover_bins": [{"name": "c0", "at": 0}, {"name": "c1", "at": 1},
+                              {"name": "c2", "at": 2}, {"name": "c3", "at": 3}]}
+        hits = issues_of(build(self._model(bad)), "cover_bin_unreachable")
+        assert len(hits) == 1
+        assert hits[0].severity == "error"
+        assert "c1" in hits[0].message and "c2" in hits[0].message
+
+    def test_giving_boundary_fixes_it(self):
+        good = {"name": "c", "type": "range", "min": 0, "max": 3,
+                "boundary": ["0", "1", "2", "3"],
+                "cover_bins": [{"name": "c0", "at": 0}, {"name": "c1", "at": 1},
+                               {"name": "c2", "at": 2}, {"name": "c3", "at": 3}]}
+        assert "cover_bin_unreachable" not in rules_in(self._model(good))
+
+    def test_many_to_one_is_not_reported(self):
+        """**多对一无害**：`queue_level` 那种 10 取值点落进 6 个区间仓。
+
+        只按"取值点数 ≠ bin 数"报的话，这一条会被误报 —— 而它恰恰是正常的。
+        """
+        many = {"name": "q", "type": "range", "min": 0, "max": 32,
+                "boundary": ["0", "1", "7", "8", "15", "16", "24", "25", "31", "32"],
+                "cover_bins": [{"name": "empty", "at": 0},
+                               {"name": "low", "range": [1, 7]},
+                               {"name": "mid", "range": [8, 15]},
+                               {"name": "high", "range": [16, 24]},
+                               {"name": "near_full", "range": [25, 31]},
+                               {"name": "full", "at": 32}]}
+        assert "cover_bin_unreachable" not in rules_in(self._model(many))
+
+    def test_a_model_without_explicit_bins_is_never_reported(self):
+        """没写显式仓 → 取值点与 bin 天然一比一，这条规则不该出现。"""
+        plain = {"name": "e", "type": "enum", "values": [0, 1, 2]}
+        assert "cover_bin_unreachable" not in rules_in(self._model(plain))
+
+    def test_the_shipped_npu_model_is_clean(self):
+        """仓库里那份真模型 —— 修完 `cluster_id` 之后不该再有这一条。"""
+        import pathlib
+
+        npu = (pathlib.Path(__file__).resolve().parents[4]
+               / "specs" / "npu_sched" / "casemodel.yaml")
+        ids = rules_of(build(yaml.safe_load(npu.read_text(encoding="utf-8"))))
+        assert "cover_bin_unreachable" not in ids

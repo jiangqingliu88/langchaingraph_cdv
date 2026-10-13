@@ -166,6 +166,11 @@ dimensions:
         sample: dut
         cover_id: CP_NPU_CLUSTER_007
         requirement: REQ-NPU-007
+        # **`boundary` 不能省**：不给的话 `RangeField` 退化到 `[min, max]` 两个取值点，
+        # 而下面声明了 4 个显式仓 —— c1/c2 一个取值点都打不到，覆盖率**封顶 50%**，
+        # 而 covergroup 编译通过、回归跑得过、日志一切正常。
+        # （`run_gaps` 的 `cover_bin_unreachable` 现在会拦住这一类。）
+        boundary: ["0", "1", "2", "3"]
         cover_bins:
           - {name: c0, at: 0}
           - {name: c1, at: 1}

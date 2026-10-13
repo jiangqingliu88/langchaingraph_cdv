@@ -234,7 +234,7 @@ case 必须在各对象的上下文里生成（`case_id` 是 `TC-<对象代号>-
 新模型比旧写法多出来的那层价值。要迁移，把它按流水/能力点加上 `children`、
 再按 P0/P1/P2 补上 `themes` 即可。
 
-## 校验规则（52 条）
+## 校验规则（53 条）
 
 规则清单从注册表生成（`rules` 命令 / GUI 规则页），这里只给分类概览：
 
@@ -449,7 +449,7 @@ covergroup。这一节是那段转换的规则，实现只有一处 ——
 | `Field.cover_id` / `.requirement` | （不进 SV） | 追溯矩阵的两端：`CP_NPU_xxx` 给人对账，`cp_<信号>` 给编译器 |
 | `Field.cover_illegal` | `illegal_bins x = {[33:$]};` | 命中即报错 |
 
-### 两条纪律
+### 三条纪律
 
 **一、生成的 SV 必须能编译。** 取值的字面量走**整型投影**（与 `uvm-tests` 的
 `int_value` 同一套）：取值本身是数字就用它，否则用下标。中文取值直接写进
@@ -503,6 +503,22 @@ cross_matrix:
 `when` 里的值**写 bin 名或取值 token 都认**（`mac` 与 `MAC` 等价）；写了个
 两边都对不上的名字会**记账跳过**，不会默默生成一个 `binsof(cp.nope)`
 （那要么编译不过，要么被当合法语法收下却永远不命中）。
+
+**三、每个 bin 必须至少有一个取值点能打到。** 这是"激励侧与度量侧同一份分母"
+的**准确说法**（不是"一比一"—— 给了显式仓时天然多对一）：
+
+```
+用例按 field.value_points() 生成（一个取值点一条 test）
+覆盖率按 bins 收（一个仓可能盖住好几个取值点）
+```
+
+多对一无害，**空洞致命**：某个仓一个取值点都打不到 → 声明的覆盖率**永远封顶**，
+而 covergroup 编译通过、回归跑得过、日志一切正常。由 `run_gaps` 的
+`cover_bin_unreachable` 拦。
+
+实测踩过：`cluster_id` 写了 4 个显式仓（`c0..c3`）却**没给 `boundary`** ——
+`RangeField` 退化到 `[min, max]` 两个取值点，于是 c1/c2 永远打不到、覆盖率
+封顶 50%，而模型、covergroup、日志看上去全都正常。
 
 ### 需求追溯
 
@@ -728,7 +744,7 @@ pytest src/tools/casemodel_tools/tests/ -v
 | `test_domain.py` | Composite（分支/叶子同一接口）、五种字段类型 Strategy、专题三类的派生、优先级排序与空洞 |
 | `test_repository.py` | loader 归一化与结构错误、schema 门禁（含递归 children）、case_list 四种输入形状、exporters 三格式往返无损 |
 | `test_generation.py` | 五个方法策略各自语义、加权采样、可复现、联动不参与笛卡尔积、互斥剔除、去重、截断计数、专题驱动与交叉组退路 |
-| `test_rules.py` | 52 条规则**逐条正反用例**（触发 + 不误报），示例模型的干净/有坑双向断言 |
+| `test_rules.py` | 53 条规则**逐条正反用例**（触发 + 不误报），示例模型的干净/有坑双向断言 |
 | `test_analysis.py` | 门面组装、评分不变式（换 case 列表分数不变）、矩阵对称与声明优先、外部核对四方向、闭环无话可说、**文本入口 vs 文件入口结论一致** |
 | `test_multi.py` | 两种写法的扇出与覆盖、重复 `object_code` 报错、合并语义（评分算一次 / 树与 case 每对象一份）、`--max-cases` 是每对象上限、单对象时是恒等 |
 | `test_uvm_tests.py` | 一条 = 一个取值、维度过滤、边界优先截断、产物形状正好是 `tool_uvm` 认的那个、**不 import `uvm_tools`** |

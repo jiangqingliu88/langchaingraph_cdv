@@ -22,11 +22,12 @@ case 模型（`domain/`）**已经把功能覆盖点建模出来了**：维度�
 | 一个 `CaseModel` | **一个** `covergroup cg_<module>` | cross 要求两个 coverpoint 同作用域，所以合一个而不是每维度一个 |
 | `Dimension` | 一组 coverpoint（它的每个字段一个） | 维度是归类，不承载取值 |
 | `Field` | `coverpoint <field.name>` | **字段名就是接口信号名**（`front` 从 spec 的 interfaces 取，见 `_draft_casemodel`） |
-| `ValuePoint`（取值点） | 一个 `bins` | 取值点就是覆盖分母的刻度，一比一 |
+| `ValuePoint`（取值点） | 一个 `bins` | 取值点就是覆盖分母的刻度 |
+| ↑ 但**给了显式仓时不是一比一** | 多个取值点落进一个仓 | 值域划分（`{[1:7]}`）天然多对一 —— 用例按取值点生成、覆盖率按仓收 |
 | `Field.cover_bins` | bin 的**名字** | 作者能命名就让作者命名（`bins_for` 已实现对齐规则） |
 | `CrossPair`（required/optional） | `cross cp_a, cp_b;` | 声明了要一起组合的维度就该有 cross；`forbidden` 是禁止组合，不生成 |
 
-## 两条纪律
+## 三条纪律
 
 **一、生成的 SV 必须能编译。** 所以取值的字面量走**整型投影**（与
 `api.run_uvm_tests` 的 `int_value` 同一套）：取值本身是数字就用它，否则用它在
@@ -36,6 +37,17 @@ case 模型（`domain/`）**已经把功能覆盖点建模出来了**：维度�
 **二、算不出来就说出来。** 字段一个取值点都没有、cross 引用的维度解不出来、
 维度没有字段 —— 这些**不静默跳过**，进 `notes` 记账。一个"看起来生成了、
 其实少了一半 bin"的 covergroup 比一个报错的更坏。
+
+**三、每个 bin 必须至少有一个取值点能打到。** 这是"激励侧与度量侧同一份分母"
+的**准确说法**（不是"一比一"—— 给了显式仓时天然多对一）：
+
+    用例按 `value_points()` 生成（一个取值点一条 test）
+    覆盖率按 `bins` 收（一个仓可能盖住好几个取值点）
+
+多对一无害，**空洞致命**：某个仓一个取值点都打不到 → 声明的覆盖率**永远封顶**，
+而 covergroup 编译通过、回归跑得过、日志一切正常。由 `run_gaps` 的
+`cover_bin_unreachable` 拦 —— 实测踩过：`cluster_id` 写了 4 个显式仓却没给
+`boundary`，`RangeField` 退化到 `[min, max]`，c1/c2 永远打不到。
 
 ## 与 `analysis/coverage.py` 的分工
 
