@@ -36,6 +36,84 @@ def _load_spec(output_dir: Path) -> dict | None:
     return None
 
 
+def _strip_comments(text: str) -> str:
+    """去掉 SV 注释（`/* */` 与 `//`）—— 端口表逐段匹配前必须先剥。"""
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.DOTALL)
+    return re.sub(r"//[^\n]*", " ", text)
+
+
+def _match_paren(text: str, start: int) -> int:
+    """`text[start]` 是 `(` → 返回与它配平的 `)` 的下标（没有则 -1）。"""
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def _width_of(rng: str, params: List[Dict[str, Any]] = None) -> int:
+    """`[hi:lo]` → 位宽，**认符号宽度**（`[W-1:0]`，W 在参数表里）。
+
+    为什么必须认：只认数字时，`input logic [W-1:0] data` 的宽度段整段匹配不上，
+    正则就会**回溯**到把类型关键字 `logic` 当成端口名 —— 端口表里凭空多出一个叫
+    `logic` 的信号、真正的 `data` 反而没了（实测）。名字错的危害比宽度错更大：
+    agent 会去驱动一个**不存在**的信号。解不出就不猜（宽度 1），但名字一定是对的。
+    """
+    if not rng or ":" not in rng:
+        return 1
+    known = {p.get("name"): int(p.get("value")) for p in (params or [])}
+    hi_s, lo_s = (t.strip() for t in rng.split(":", 1))
+
+    def _val(expr: str):
+        if expr.isdigit():
+            return int(expr)
+        if expr in known:
+            return known[expr]
+        m = re.fullmatch(r"(\w+)\s*-\s*(\d+)", expr)          # `W-1`
+        if m and m.group(1) in known:
+            return known[m.group(1)] - int(m.group(2))
+        return None
+
+    hi, lo = _val(hi_s), _val(lo_s)
+    if hi is None or lo is None:
+        return 1
+    return max(1, hi - lo + 1)
+
+
+def _port_list_span(text: str, after_name: int):
+    """模块头 → `(参数表文本, 端口表文本)`；抓不到就 None。
+
+    **不能用 `\\(([^)]*)\\)` 抓端口表**：那会在**第一个 `)` 处收尾** ——
+    端口注释里写个 `(async)` 就会把后面**所有端口静默截掉**。它与"注释吃掉端口"
+    是同一类故障：表少了几行、没有任何人报，最后表现为"信号没人驱动 / 覆盖点
+    永远 0%"，离原因很远。所以这里数括号深度，取配平的那一个。
+    """
+    p = text.find("(", after_name)
+    if p < 0:
+        return None
+    param_str = ""
+    if "#" in text[after_name:p]:                 # `#( ... )` 参数表在前
+        end = _match_paren(text, p)
+        if end < 0:
+            return None
+        param_str = text[p:end + 1]
+        p = text.find("(", end + 1)
+        if p < 0:
+            return None
+    end = _match_paren(text, p)
+    if end < 0:
+        return None
+    # 端口表后面应当只剩 `;`（允许中间夹注释）—— 这一条挡的是"在注释里
+    # 提到 module 名字、又把后面某个括号当成端口表"那种误匹配。
+    if not re.match(r"\s*;", _strip_comments(text[end + 1:end + 80])):
+        return None
+    return param_str, text[p + 1:end]
+
+
 def _parse_rtl_module(rtl_dir: Path, module_name: str) -> dict | None:
     """扫描 RTL 目录，找到 module_name 对应的模块定义，返回端口列表"""
     if not rtl_dir.exists():
@@ -47,41 +125,60 @@ def _parse_rtl_module(rtl_dir: Path, module_name: str) -> dict | None:
             text = sv.read_text(encoding="utf-8", errors="replace")
         except Exception:
             continue
-        # 匹配 module X #(...) (...);  或  module X (...);
-        m = re.search(r'module\s+(\w+)\s*(#\s*\([^)]*\))?\s*\(([^)]*)\)\s*;', text, re.DOTALL)
+        m = re.search(r'\bmodule\s+(\w+)', text)
         if not m:
             continue
         mod_name = m.group(1)
-        ports_str = m.group(3) if m.group(3) else ""
+        span = _port_list_span(text, m.end())
+        if span is None:
+            continue
+        param_str, ports_str = span
 
         ports = []
         params = []
         # 解析参数
-        param_str = m.group(2) or ""
         for pm in re.finditer(r'parameter\s+(\w+)\s*=\s*(\d+)', param_str):
             params.append({"name": pm.group(1), "value": pm.group(2)})
 
         # 解析端口: input/output/inout [type] [width] name
         for line in ports_str.split(","):
-            line = line.strip()
+            # ⚠️ **先剥注释再匹配**：下面两句都是 `re.match`（**锚定**的），
+            # 段首若是 `// 说明文字`（上一个端口的**行尾注释**、或一段
+            # `// ── 分组 ──`），整段就匹配不上 —— 那个端口**静默消失**。
+            #
+            # 实测（本仓库自己的 NPU DUT）：`instr_valid` / `barrier_type` /
+            # `op_priority` / `issue_valid` 4 个端口的段首都带着注释，于是
+            # 14 个端口解出 10 个 —— 表现是"这几个 DUT 输入没人驱动、对应的
+            # 覆盖点永远 0%"，而没有一行日志说端口丢了。
+            line = _strip_comments(line).strip()
             if not line:
                 continue
             # 匹配: input/output/inout [可选类型] [可选宽度] name
+            #
+            # 宽度段收 `[^\]]+` 而**不是** `\[\d+(?::\d+)?\]`：后者认不出
+            # `[W-1:0]` 这种符号宽度，于是整段回溯 —— `logic` 被当成端口名，
+            # 真正的信号反而没了（实测）。宽度交给 `_width_of` 解。
             pm = re.match(
-                r'(input|output|inout)\s+(?:logic|wire|reg|bit)?\s*(?:\[(\d+)(?::(\d+))?\])?\s*(\w+)',
-                line.strip()
+                r'(input|output|inout)\s+(?:logic|wire|reg|bit)?\s*'
+                r'(?:\[([^\]]+)\])?\s*(\w+)',
+                line
             )
             if pm:
-                direction = pm.group(1)
-                hi = int(pm.group(2)) if pm.group(2) else 0
-                lo = int(pm.group(3)) if pm.group(3) else 0
-                width = (hi - lo + 1) if pm.group(2) else 1
-                ports.append({"name": pm.group(4), "direction": direction, "width": width})
+                ports.append({"name": pm.group(3), "direction": pm.group(1),
+                              "width": _width_of(pm.group(2), params)})
             else:
                 # 简化匹配: input/output name
-                sm = re.match(r'(input|output|inout)\s+(\w+)', line.strip())
+                sm = re.match(r'(input|output|inout)\s+(\w+)', line)
                 if sm:
                     ports.append({"name": sm.group(2), "direction": sm.group(1), "width": 1})
+
+        if not ports and ports_str.strip():
+            # 非 ANSI 表头（`module x (a, b); input a; ...`）落在这里 ——
+            # 那不是"这个模块没有端口"，是**没解析出来**。说出来，别让它变成
+            # 一份"没有端口"的 spec 悄悄往下走（那种 spec 生成出来的 agent
+            # 一个信号都不驱动，而覆盖率只是低，看不出哪里错了）。
+            print(f"[find_spec_yaml] 警告：{sv.name}::{mod_name} 的端口表解析出 0 个"
+                  f"端口 —— 可能是非 ANSI 风格的表头（当前只认 `input logic [w] name`）")
 
         modules[mod_name] = {"ports": ports, "params": params}
 

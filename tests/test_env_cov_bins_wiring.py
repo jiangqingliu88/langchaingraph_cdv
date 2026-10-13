@@ -796,3 +796,117 @@ class TestModuleNameIsAlwaysAcii:
         assert "\w+)" not in block, (
             "取模块名的正则里又出现 `\w+` 了 —— 它匹配中文，"
             "一句散文就能把模块名带偏且不报错")
+
+
+class TestTheGapStimulusGoesIntoMainPhase:
+    """gap 定向激励要注进 **`main_phase`** —— 注进 `configure_phase` 等于注进
+    一个**永远等不到应答**的地方。
+
+    生成的测试里 `configure_phase` 与 `main_phase` **各有一句**
+    `phase.raise_objection(this);`，而注入原来是 `str.replace(..., 1)` ——
+    取的是文件里第一句，也就是 `configure_phase`。
+
+    实测（端到端 `verify --rtl specs/npu_sched`，p0 挂 1 条）：
+    `configure_phase` 跑在 **run_phase 之前**，而 `start_item/finish_item` 靠
+    **sequencer 的 run_phase** 递送事务 —— 递不出去，于是激励自己那条 20us 超时
+    先报 `[GAPSEQ] 定向激励超时：20000 ns 内对手方未应答`，紧跟着
+    `[SEQ] neither the item's sequencer ... to start item` 把整条测试判失败。
+    看着像"DUT 不应答"，其实是**相位用错了**。
+    """
+
+    _TEST = """\
+class foo_gen_test extends bar_base_test;
+  task configure_phase(uvm_phase phase);
+    super.configure_phase(phase);
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+
+  task main_phase(uvm_phase phase);
+    super.main_phase(phase);
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+endclass
+"""
+
+    def test_the_anchor_is_the_one_inside_main_phase(self):
+        from src.executors.verify.main import _main_phase_objection_at
+
+        at = _main_phase_objection_at(self._TEST)
+        assert at > 0
+        # 锚点必须在 `main_phase` 之后（`configure_phase` 里那句在它之前）
+        assert at > self._TEST.index("task main_phase")
+        assert at > self._TEST.index("configure_phase")
+
+    def test_no_main_phase_is_reported_not_guessed(self):
+        """找不到 `main_phase` 就**不注入**并说一声 —— 退回"注到第一句"正是那个 bug。"""
+        from src.executors.verify.main import _main_phase_objection_at
+
+        assert _main_phase_objection_at("task only_configure(uvm_phase p); endtask") == -1
+
+
+class TestTheRtlPortTableIsParsedWhole:
+    """端口表要**一个不漏** —— 注释不能吃掉端口，注释里的 `)` 不能截断表。
+
+    实测（端到端 `verify --rtl specs/npu_sched` 跑完，两个覆盖点恒 0%）：
+    `instr_valid` / `barrier_type` / `op_priority` / `issue_valid` 这 4 个端口的
+    **段首都带着注释**（上一个端口的行尾注释、或一段 `// ── 分组 ──`），而匹配用的
+    是**锚定**的 `re.match` —— 整段匹配不上 → 端口**静默消失**，14 个解出 10 个。
+
+    后果离原因很远：agent 少了信号 → **没人驱动** → 对应覆盖点永远 0%，
+    而且没有一行日志说端口丢了（是覆盖率通道把这件事报出来的）。
+    """
+
+    NPU = Path("specs/npu_sched")
+
+    def _ports(self, rtl_dir):
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import _parse_rtl_module
+
+        return {p["name"]: p for p in _parse_rtl_module(rtl_dir, "")["ports"]}
+
+    def test_the_ports_behind_comments_are_not_swallowed(self):
+        ports = self._ports(self.NPU)
+        assert len(ports) == 14, f"端口数不对：{sorted(ports)}"
+        for name, width in (("instr_valid", 1), ("barrier_type", 2),
+                            ("op_priority", 2), ("issue_valid", 1)):
+            assert name in ports, f"{name} 又被注释吃掉了"
+            assert ports[name]["width"] == width
+
+    def test_the_parsed_ports_match_the_dut_header(self):
+        """端口表就是 spec 的契约 —— 解出来的必须与 RTL 头逐字对得上。"""
+        import re
+
+        text = (self.NPU / "npu_sched.sv").read_text(encoding="utf-8")
+        head = text[text.index("module npu_sched"):text.index(");")]
+        want = set(re.findall(
+            r"^\s*(?:input|output)\s+logic\s*(?:\[[^\]]*\])?\s*(\w+)", head, re.M))
+        assert set(self._ports(self.NPU)) == want
+
+    def test_a_paren_inside_a_port_comment_does_not_truncate_the_table(self, tmp_path):
+        """`\\(([^)]*)\\)` 会在**第一个** `)` 处收尾 —— 注释里一个 `(async)`
+        就能把后面所有端口截掉。与"注释吃掉端口"是同一类故障（表少了几行，
+        没人报）。"""
+        rtl = tmp_path / "rtl"
+        rtl.mkdir()
+        (rtl / "dut.sv").write_text(
+            "module dut (\n"
+            "  input  logic clk,           // 时钟 (async 说明)\n"
+            "  input  logic [7:0] addr,    // 地址\n"
+            "  output logic [31:0] rdata   // 读数据\n"
+            ");\n"
+            "endmodule\n", encoding="utf-8")
+        assert set(self._ports(rtl)) == {"clk", "addr", "rdata"}
+
+    def test_a_module_with_parameters_still_parses(self, tmp_path):
+        """`#( parameter ... )` 参数表在前 —— 端口表是它**后面**那个括号。"""
+        rtl = tmp_path / "rtl"
+        rtl.mkdir()
+        (rtl / "dut.sv").write_text(
+            "module dut #(parameter W = 8) (\n"
+            "  input logic clk,\n"
+            "  input logic [W-1:0] data\n"
+            ");\n"
+            "endmodule\n", encoding="utf-8")
+        ports = self._ports(rtl)
+        assert set(ports) == {"clk", "data"}

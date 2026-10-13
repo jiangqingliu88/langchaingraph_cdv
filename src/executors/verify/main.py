@@ -668,12 +668,40 @@ class VerifyExecutor(BaseExecutor):
                 )
             inj = "    // Gap-directed stimulation（根据覆盖率 gap 自动生成）\n" + \
                   "\n".join(blocks) + "\n"
-            if "    phase.raise_objection(this);\n" not in text:
-                logger.warning(f"{test_file.name}: 找不到 raise_objection 锚点，未注入")
+            # ⚠️ **锚点必须在 `main_phase` 里**，不能是"文件里第一个
+            # `phase.raise_objection(this);`" —— 生成的测试里 `configure_phase`
+            # 和 `main_phase` **各有一句**，`str.replace(..., 1)` 取到的是前者。
+            #
+            # 后果（实测：端到端 `verify --rtl specs/npu_sched`，p0 挂 1 条）：
+            # `configure_phase` 跑在 **run_phase 之前**，而 `start_item/finish_item`
+            # 靠 **sequencer 的 run_phase** 递送事务 —— 在 configure_phase 里永远
+            # 递不出去，于是激励自己那条 20us 超时先报
+            #   `[GAPSEQ] 定向激励超时：20000 ns 内对手方未应答`
+            # 紧跟着 `[SEQ] neither the item's sequencer ... to start item`
+            # 把整条测试判失败。看起来像"DUT 不应答"，其实是**相位用错了**。
+            anchor_at = _main_phase_objection_at(text)
+            if anchor_at < 0:
+                logger.warning(f"{test_file.name}: 找不到 main_phase 的 "
+                               f"raise_objection 锚点，未注入")
                 continue
-            text = text.replace("    phase.raise_objection(this);\n",
-                                "    phase.raise_objection(this);\n\n" + inj, 1)
+            anchor = "    phase.raise_objection(this);\n"
+            text = text[:anchor_at] + anchor + "\n" + inj + text[anchor_at + len(anchor):]
             test_file.write_text(text, encoding="utf-8", errors="replace")
+
+
+def _main_phase_objection_at(text: str) -> int:
+    """`main_phase` 里那句 `phase.raise_objection(this);` 的**下标**（没有则 -1）。
+
+    为什么要专门找它：`configure_phase` 里有一模一样的一句，而那个相位**拿不到
+    sequencer 的事务递送**（sequencer 的 run_phase 还没开始）—— 把激励注进那里
+    等于注进一个永远等不到应答的地方。见调用处那段注释。
+    """
+    import re
+
+    m = re.search(r"\btask\s+main_phase\s*\(", text)
+    if not m:
+        return -1
+    return text.find("    phase.raise_objection(this);\n", m.end())
 
 
 def _test_files_defining(tests_dir: Path, class_name: str) -> list:
