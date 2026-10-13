@@ -39,7 +39,8 @@ case 里写 `cover_bins`），由本模块做一次三向 join。多出来的引
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
 #: 生成方法 → 它在约束层该长什么样。**是映射建议，不是硬判据** ——
 #: 约束模型里没有"方法"这个字段，所以只能反着看"声明的方法有没有对应的策略/组合器"。
@@ -195,25 +196,36 @@ def _link_row(cp, field_bins: Dict[str, List[str]]) -> Dict[str, Any]:
             "case_field": owner, "dimension": cp.dimension}
 
 
-def _raw_methods(case_text: str) -> Dict[str, str]:
-    """case 模型里每个专题**原样写的** `method`（不经过归一）。
+def _raw_themes(case_text: str) -> List[Dict[str, str]]:
+    """case 模型里每个专题**原样写的**声明（顺序保持 yaml 里的顺序）。
 
     为什么不能读 `theme.method`：`build_theme` 对认不出的方法返回空串 ——
-    `method: NOPE` 与"没写"从模型上看不出区别（实测）。
+    `method: NOPE` 与"没写"从模型上看不出区别（实测）。要问"作者声明了什么"，
+    就得读原始 yaml。这条规矩在 `associate` 边 ④ 已经吃过一次亏。
     """
     import yaml as _yaml
 
     try:
         data = _yaml.safe_load(case_text) or {}
     except _yaml.YAMLError:
-        return {}
+        return []
     if not isinstance(data, dict):
-        return {}
-    out: Dict[str, str] = {}
+        return []
+    out: List[Dict[str, str]] = []
     for t in (data.get("themes") or []):
         if isinstance(t, dict):
-            out[str(t.get("id") or t.get("name") or "?")] =                 str(t.get("method") or "").strip()
+            out.append({
+                "key": str(t.get("id") or t.get("name") or "?"),
+                "name": str(t.get("name") or ""),
+                "method": str(t.get("method") or "").strip(),
+                "priority": str(t.get("priority") or "").strip(),
+            })
     return out
+
+
+def _raw_methods(case_text: str) -> Dict[str, str]:
+    """专题 key → 原样写的 `method`（`associate` 边 ④ 用）。"""
+    return {t["key"]: t["method"] for t in _raw_themes(case_text)}
 
 
 def _raw_coverage(text: str) -> Tuple[set, set]:
@@ -294,3 +306,260 @@ def _summary(issues: List[Dict[str, str]], cov, case) -> str:
                 f"（首条：{errs[0]['message'][:60]}）")
     return (f"{len(cov.coverpoints)} 覆盖点 / {len(cov.crosses)} 交叉 与 case 模型"
             f"关联完整")
+
+
+# ════════════════════════════════════════════════════════════
+# 约束模型生产者 —— 把 case 模型的「生成方法」落成策略 + 组合器
+# ════════════════════════════════════════════════════════════
+#
+# 方法学的第三条腿：
+#
+#     case 模型     说「该测什么」    themes[].method   ← 生成方法（D/G/SPCL/RND/RPLY）
+#     覆盖率模型    说「怎么量」      coverpoints / bins
+#     约束模型      说「怎么驱动」    policies + combinator  ← 本函数产出
+#
+# **为什么必须有生产者**：`gen_uvm` 那套渲染（策略上下文 / 策略实现 / 组合器 /
+# 工厂 / 协调序列）只认约束模型，而约束模型此前只能**手写** —— 手写的那份和 case
+# 模型之间没有任何东西保证"专题声明的方法"真的落成了策略。写了 `method: G`，
+# 约束层可以一条组合策略都没有，而**两边的 yaml 都自洽、都解析得过**。这条边
+# （④）此前只能靠 `associate` 事后报，现在能生成，就能保证它从一开始就接上。
+
+#: 生成方法 → `(策略名后缀, 组合器模式)`。
+#: **键集必须与 `METHOD_TO_CONSTRAINT` 一致** —— 有单测钉住（漏一个，就等于
+#: "这个人读的描述认得它、生产者却映射不出它"）。
+METHOD_TO_POLICY: Dict[str, Tuple[str, str]] = {
+    "D":    ("directed", "APPLY_FIRST_MATCH"),
+    "G":    ("combo",    "APPLY_ALL"),
+    "SPCL": ("special",  "APPLY_SEQUENTIAL"),
+    "RND":  ("random",   "APPLY_WEIGHTED"),
+    "RPLY": ("replay",   "APPLY_SEQUENTIAL"),
+}
+
+#: 组合器的 5 个模式 —— **一个都不能少**。那套渲染拿它当 `enum` 的取值表
+#: （`env_cons_policy_combinator.j2`），而 `apply()` 里的 `case` 分支是**写死的**
+#: 5 个：少任何一个，`case` 就比到未声明的标识符，**vlog 直接报错**（不是"少了
+#: 个选项"，是编译不过）。所以这里全列，不按"有没有策略用它"裁剪。
+COMBINATOR_MODES: List[str] = ["APPLY_ALL", "APPLY_WEIGHTED", "APPLY_FIRST_MATCH",
+                               "APPLY_SEQUENTIAL", "APPLY_CHAIN"]
+
+#: 专题优先级 → 策略 `priority`。不认得的落 `_DEFAULT_PRIORITY`（中间偏后）。
+#:
+#: 注意那套渲染里 `priority` 是**两用的**：`sort_by_priority` 按它**升序**排
+#: （小的先应用 → P0 排最前，对），`select_weighted` 又拿它当**权重**
+#: （大的更容易选中）。两个用途方向相反，但 P0 取小值在这两处都不别扭：先应用、
+#: 且不主导随机 —— 精确用例本来就不该靠随机加权去撞。
+_PRIORITY_OF: Dict[str, int] = {"P0": 10, "P1": 20, "P2": 30,
+                                "P3": 40, "P4": 50, "P5": 60}
+_DEFAULT_PRIORITY = 50
+
+_HEADER = """\
+# ============================================================
+# 约束模型 —— **由 case 模型生成**（`vagent case-model constraints`）
+# ============================================================
+# 来源：case 模型 {source}
+#
+# 这是**结构骨架**，不是最终约束。case 模型知道的是建模语义（专题 / 维度 /
+# 生成方法 / 优先级），不知道协议参数（地址对齐 / 容量 / 握手时序）—— 那些只能
+# 由人补。所以每个策略都是**自定义名**（`gen_uvm` 对自定义名生成空 `apply`
+# 骨架，语义校验层会提示"待填"），`params` 为空。
+#
+# 专题 → 策略：{mapping}
+#
+# **改了 case 模型就重跑本命令**，产物会整体覆盖本文件 —— 所以别在这里手改。
+# 协议逻辑写在策略体里（`env/cons/` 下那几个 sv），不在本文件，覆盖是安全的。
+#
+# 文件放哪：被 `gen_uvm` 扫描的输入路径下都行，**文件名不参与识别** ——
+# 认的是顶层有个 `constraint:` 键（`parse_documents`）。
+# ============================================================
+"""
+
+
+def build_constraint(case_text: str,
+                     ports: Optional[List[Any]] = None) -> Dict[str, Any]:
+    """case 模型 → 约束模型（策略 + 组合器）的**骨架**。
+
+    产出正好是 `gen_uvm.parse_constraint_model` 认的形状（顶层 `constraint` /
+    `transactions` / `policies` / `combinator`），可以直接喂那套渲染。
+
+    `ports` 是**显式输入**，不从 case 模型推 —— 因为两边说的不是一回事：
+
+        case 模型    维度 / 字段名     「指令类型」「队列水位」      ← 建模概念
+        约束模型     transactions     apb_master: APB_master_seq_item ← agent 名 + seq_item 类型
+
+    端口名 ↔ 字段名之间的对应**没有建模**（见模块头「查不到的那一半」），推不出来，
+    只能由调用方给。**没有端口就不生成** —— 那不是"生成一个空壳"，是一个真问题：
+    `transactions` 为空时协调序列会渲染成**看着像有东西的空壳**
+    （`{% for trans in transactions %}` 一次都不进，发送循环体是空的）。
+
+    两种端口写法都收：`{"name": ..., "type": ...}` 与 `"name:type"`。
+    """
+    from .repository import load_models_from_text
+
+    try:
+        models = load_models_from_text(case_text, source="<cases>")
+    except Exception as exc:                        # noqa: BLE001 解析失败要报，不抛
+        return {"error": f"case 模型解析失败: {exc}"}
+    if not models:
+        return {"error": "case 模型里没有任何对象"}
+    case = models[0].resolve()
+
+    norm, bad = _norm_ports(ports)
+    if bad:
+        return {"error": f"端口写法认不出：{'、'.join(bad)} —— 用 "
+                         f"`name:seq_item_type`（例如 `apb_master:APB_master_seq_item`）"}
+    if not norm:
+        return {"error": "没有端口（agent）就不生成约束模型 —— `transactions` 为空时"
+                         "协调序列渲染出来是个空壳。用 `--port <name>:<seq_item_type>` "
+                         "至少给一个端口"}
+    dup = sorted({p["name"] for p in norm
+                  if sum(1 for q in norm if q["name"] == p["name"]) > 1})
+    if dup:
+        return {"error": f"端口名重复：{'、'.join(dup)} —— `transactions` 是模板里"
+                         f"逐项展开的，重复会展开两次（同一个 sequencer 出现两遍）"}
+
+    themes = _raw_themes(case_text)
+    if not themes:
+        return {"error": "case 模型里没有 themes —— 没有专题就没有生成方法，"
+                         "约束层无从映射"}
+
+    unknown = [t for t in themes if t["method"] and t["method"] not in METHOD_TO_POLICY]
+    if unknown:
+        return {"error": "这些专题的生成方法映射不到约束层："
+                         + "、".join(f"{t['key']}(method={t['method']})" for t in unknown)
+                         + f" —— 认得的：{' / '.join(METHOD_TO_POLICY)}。"
+                           "（`case-model associate` 的边 ④ 报的是同一件事："
+                           "case 模型的解析器会把认不出的方法**静默归一成空**，"
+                           "从解析后的模型上看不出来）"}
+
+    # 按优先级排：P0 在前 → 它同时决定下面 `default_mode` 取谁。
+    ordered = sorted((t for t in themes if t["method"]), key=_theme_order)
+
+    used: set = set()
+    policies: List[Dict[str, Any]] = []
+    mapping: List[Tuple[str, str, str]] = []
+    for t in ordered:
+        suffix, mode = METHOD_TO_POLICY[t["method"]]
+        name = _policy_name(t["key"], suffix, used)
+        policies.append({
+            "name": name,
+            "description": f"{t['name'] or t['key']}（{t['method']} → {mode}）"
+                           f" —— case 模型生成，协议参数待填",
+            "priority": _PRIORITY_OF.get(t["priority"], _DEFAULT_PRIORITY),
+            # 空的 `params`：**参数是协议知识，模型里没有** —— 编不出来的就留空，
+            # 不编（编一个 `align: 4` 出来，人会以为它是从模型推出来的）
+            "params": [],
+            "applies_to": [p["name"] for p in norm],
+        })
+        mapping.append((t["key"], name, mode))
+
+    if not policies:
+        return {"error": "case 模型的专题里没有一个声明了生成方法（method）—— "
+                         "约束层无从生成。认得的：D（定向）/ G（组合）/ "
+                         "SPCL（专项）/ RND（随机）/ RPLY（回放）"}
+
+    # 默认模式取**优先级最高那个专题**的方法：出厂行为要跟最该先测的那批一致。
+    # 取最松的（比如一律 APPLY_ALL）会让定向批次在默认配置下不再定向。
+    default_mode = mapping[0][2]
+
+    doc = {
+        "constraint": {"name": f"{_snake(case.object or 'dut')}_cons"},
+        "transactions": norm,
+        "policies": policies,
+        "combinator": {"default_mode": default_mode, "modes": list(COMBINATOR_MODES)},
+    }
+
+    import yaml as _yaml
+    body = _yaml.safe_dump(doc, allow_unicode=True, sort_keys=False, width=100)
+    header = _HEADER.format(
+        source=(case.object or "?"),
+        mapping="、".join(f"{k}→{n}({m})" for k, n, m in mapping))
+
+    skipped = [t["key"] for t in themes if not t["method"]]
+    notes = [
+        "策略是**结构骨架**：case 模型只有建模语义，没有协议参数 —— 所以 `params` "
+        "为空、策略体在 gen_uvm 里落成空 apply 骨架，协议逻辑要人补（补在"
+        "`env/cons/` 的策略里，不在这个 yaml）",
+        f"`combinator.modes` 五个模式**全列**（不按有没有策略用它裁剪）——"
+        f"组合器的 `case` 分支是写死的 5 个，少一个 vlog 就报未声明标识符",
+        f"`default_mode` 取**优先级最高**那个专题的方法（{mapping[0][0]} → {default_mode}）",
+        "端口（agents）是**人给的**，不是从 case 模型推的 —— 端口名 ↔ 字段名的对应"
+        "没有建模，推不出来（`associate` 边 ③ 只查得到约束内部那一半）",
+    ]
+    if skipped:
+        notes.append(f"这些专题没有声明 `method`，不驱动激励、没生成策略："
+                     f"{'、'.join(skipped)}")
+
+    return {
+        "constraint": doc["constraint"],
+        "transactions": norm,
+        "policies": policies,
+        "combinator": doc["combinator"],
+        "constraint_yaml": header + body,
+        "mapping": [{"theme": k, "policy": n, "mode": m} for k, n, m in mapping],
+        "skipped_themes": skipped,
+        "policy_count": len(policies),
+        "default_mode": default_mode,
+        "notes": notes,
+    }
+
+
+def _theme_order(theme: Dict[str, str]) -> int:
+    """按优先级排专题 —— `sorted` 是稳定排序，同优先级的保持 yaml 里的先后。"""
+    return _PRIORITY_OF.get(theme.get("priority") or "", _DEFAULT_PRIORITY)
+
+
+def _norm_ports(ports: Optional[List[Any]]) -> Tuple[List[Dict[str, str]], List[str]]:
+    """端口写法归一 → `([{name, type}], [认不出的原样])`。
+
+    收两种：`{"name": "apb_master", "type": "APB_master_seq_item"}` 与
+    `"apb_master:APB_master_seq_item"`（命令行那条用后者，手打快）。
+    **认不出的原样退回去报** —— 不猜、不跳（跳了就是"给了 3 个端口，生成出来
+    2 个"，而没人会去数）。
+    """
+    out: List[Dict[str, str]] = []
+    bad: List[str] = []
+    for p in (ports or []):
+        if isinstance(p, dict):
+            name = str(p.get("name") or "").strip()
+            if name:
+                out.append({"name": name, "type": str(p.get("type") or "").strip()})
+                continue
+        elif isinstance(p, str) and ":" in p:
+            name, _, typ = p.partition(":")
+            if name.strip():
+                out.append({"name": name.strip(), "type": typ.strip()})
+                continue
+        bad.append(str(p))
+    return out, bad
+
+
+def _policy_name(theme_key: str, suffix: str, used: set) -> str:
+    """专题 key + 方法后缀 → 策略名（唯一、合法 SV 标识符）。
+
+    重名就加序号：两个专题 slug 撞车（`TH-A` 与 `th-a`）时**不合并** ——
+    合并等于悄悄少一个策略。
+    """
+    base = f"p_{_snake(theme_key)}_{suffix}"
+    name, n = base, 1
+    while name in used:
+        n += 1
+        name = f"{base}_{n}"
+    used.add(name)
+    return name
+
+
+def _snake(text: str) -> str:
+    """任意名字 → `[a-z0-9_]` 且不以数字开头 —— 它要当 SV 标识符。
+
+    **只看 ASCII**：`"指".isalnum()` 是 True（Python 的 `isalnum` 对汉字也返回
+    真），放过去就会生成非 ASCII 标识符 —— `gen_uvm` 那边刚为此吃过一次亏
+    （模块名成了 `声明`，而 `vlog` 报的是 "Errors: 0"）。
+    """
+    text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(text))     # NpuScheduler → Npu_Scheduler
+    s = "".join(ch.lower() if (ch.isascii() and ch.isalnum()) else "_" for ch in text)
+    while "__" in s:
+        s = s.replace("__", "_")
+    s = s.strip("_")
+    if not s:
+        return "x"
+    return f"x{s}" if s[0].isdigit() else s

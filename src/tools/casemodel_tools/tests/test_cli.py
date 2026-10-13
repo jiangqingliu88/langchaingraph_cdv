@@ -15,7 +15,8 @@ from .conftest import CPU, CPU_FLAWED, EXAMPLES, FC, FC_REAL
 
 
 SUBCOMMANDS = ("check", "analyze", "matrix", "tree", "rules", "generate",
-               "uvm-tests", "covergroups", "coverage-plan", "associate")
+               "uvm-tests", "covergroups", "coverage-plan", "associate",
+               "constraints")
 
 
 def test_cli_help_lists_every_subcommand(capsys):
@@ -162,7 +163,7 @@ def test_vagent_group_has_all_subcommands():
     assert res.exit_code == 0
     # **两个入口能力等价** —— 这里列的是契约，漏一个就是"工具 CLI 有、主 CLI 没有"
     for sub in ("check", "analyze", "generate", "uvm-tests", "gui", "tree", "rules",
-                "covergroups", "coverage-plan", "associate"):
+                "covergroups", "coverage-plan", "associate", "constraints"):
         assert sub in res.output
 
 

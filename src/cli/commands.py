@@ -4912,6 +4912,50 @@ def case_model_associate(cases, coverage, constraint_path, json_output):
         sys.exit(2)
 
 
+@case_model.command("constraints")
+@click.argument("model", type=click.Path(exists=True))
+@click.option("--port", "-p", "ports", multiple=True, metavar="NAME:TYPE",
+              help="端口（agent 名 : seq_item 类型），如 "
+                   "apb_master:APB_master_seq_item；可重复。**至少给一个**")
+@click.option("--output", "-o", "output_path", type=click.Path(),
+              help="把约束模型写到文件（缺省打到 stdout）")
+def case_model_constraints(model, ports, output_path):
+    """由 case 模型生成约束模型：专题的生成方法 → 策略 + 组合器（骨架）
+
+    方法学的第三条腿：case 说「该测什么」、覆盖率说「怎么量」、**约束说
+    「怎么驱动」**。这里把 `themes[].method`（D/G/SPCL/RND/RPLY）落成
+    `policies` + `combinator`，产出正好是 `gen_uvm` 认的约束模型形状。
+
+    出的是**骨架**：case 模型有建模语义（专题/维度/方法/优先级），没有协议参数
+    （地址对齐/容量/握手时序）—— 所以策略体在 gen_uvm 里落成空 apply，逻辑由
+    人补在 `env/cons/` 的策略里。
+
+    端口要**显式给**：case 说字段名、约束说 agent 名 + seq_item 类型，端口名 ↔
+    字段名的对应没有建模 —— 推不出来。不给端口就不生成（空 `transactions` 会渲
+    染出一个空壳协调序列）。
+
+    \b
+    示例:
+      vagent case-model constraints model.yaml -p apb_master:APB_master_seq_item
+      vagent case-model constraints model.yaml -p cpu_master:CPU_seq_item \\
+              -p dma_master:DMA_seq_item -o constraint.yaml
+    """
+    out = get_output_adapter(False)
+    from src.tools.casemodel_tools.cli import build_parser, cmd_constraints
+    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
+
+    try:
+        argv = ["constraints", model]
+        for spec in ports:
+            argv += ["--port", spec]
+        if output_path:
+            argv += ["--out", output_path]
+        sys.exit(cmd_constraints(build_parser().parse_args(argv)))
+    except _CaseModelError as exc:
+        out.print_error(f"模型无法构建: {exc}", code=2)
+        sys.exit(2)
+
+
 @case_model.command("coverage-plan")
 @click.argument("model", type=click.Path(exists=True))
 @click.option("--module", "-m", default="dut", help="模块名（默认 dut）")

@@ -353,6 +353,46 @@ def cmd_associate(args: argparse.Namespace) -> int:
     return 1 if payload["counts"]["error"] else 0
 
 
+# ════════════════════════════════════════════════════════════
+# constraints —— 由 case 模型生成约束模型（策略 + 组合器）
+# ════════════════════════════════════════════════════════════
+
+def cmd_constraints(args: argparse.Namespace) -> int:
+    """case 模型的「生成方法」 → 约束模型（策略 + 组合器）的骨架。
+
+    产出正好是 `gen_uvm` 认的约束模型形状（顶层 `constraint` / `transactions` /
+    `policies` / `combinator`），直接丢进它扫描的输入路径即可渲染出
+    `env/cons/` 那几个文件。
+
+    **端口必须显式给**：case 模型说维度/字段名（「指令类型」），约束模型说 agent
+    名 + seq_item 类型（`apb_master: APB_master_seq_item`）—— 两边不是一回事，
+    而端口名 ↔ 字段名的对应**没有建模**，推不出来。没给端口就**不生成**（空
+    `transactions` 会渲染出一个空壳协调序列）。
+    """
+    from .associate import build_constraint
+
+    payload = build_constraint(Path(args.model).read_text(encoding="utf-8"),
+                               ports=list(args.port or []))
+    if payload.get("error"):
+        print(f"生成失败: {payload['error']}", file=sys.stderr)
+        return 2
+
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(payload["constraint_yaml"], encoding="utf-8")
+        print(f"已写出约束模型 → {out}"
+              f"（{payload['policy_count']} 条策略 / 默认组合模式 "
+              f"{payload['default_mode']}）")
+    else:
+        print(payload["constraint_yaml"], end="")
+        print(f"# {payload['policy_count']} 条策略 / 默认组合模式 "
+              f"{payload['default_mode']}", file=sys.stderr)
+    for note in payload["notes"]:
+        print(f"  注意: {note}", file=sys.stderr)
+    return 0
+
+
 def _print_association(payload: dict) -> None:
     print(f"关联：{payload['summary']}")
     c = payload["counts"]
@@ -456,6 +496,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--constraint", "-c", help="约束模型 YAML（可选）")
     p.add_argument("--json", "-j", action="store_true", dest="json")
     p.set_defaults(func=cmd_associate)
+
+    p = sub.add_parser("constraints",
+                       help="由 case 模型生成约束模型（策略 + 组合器的骨架）")
+    p.add_argument("model", help="case 模型 YAML")
+    p.add_argument("--port", "-p", action="append", metavar="NAME:TYPE",
+                   help="端口（agent 名 : seq_item 类型），如 "
+                        "apb_master:APB_master_seq_item；可重复。**至少给一个**")
+    p.add_argument("--out", "-o", help="把约束模型写到文件（缺省打到 stdout）")
+    p.set_defaults(func=cmd_constraints)
 
     p = sub.add_parser("coverage-plan",
                        help="功能覆盖率计划：覆盖点 + 批次 + 种子管理 + 需求追溯")

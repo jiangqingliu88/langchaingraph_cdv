@@ -622,6 +622,50 @@ coverage ： signal: instr_type          ← 实现名字（DUT 的端口）
 - **有 error 就不许渲染 SV**（`renderable: false`）—— 取值投影不出来时给个 0 让 bin
   照生成，收的是**错的数**，比生成不了更坏。
 
+### 约束模型生产者（`constraints`）
+
+`associate` 只**报**边 ④（"专题声明的方法没有对应的约束层形态"）—— 报完还得人去手写
+约束模型。这个命令把链路补上：`themes[].method` → `policies` + `combinator`。
+
+```bash
+python -m src.tools.casemodel_tools.cli constraints cases.yaml \
+    -p apb_master:APB_master_seq_item -o constraint.yaml
+# 主 CLI 同形：vagent case-model constraints cases.yaml -p apb_master:APB_master_seq_item
+```
+
+产物正好是 `gen_uvm.parse_constraint_model` 认的形状（顶层 `constraint` /
+`transactions` / `policies` / `combinator`）—— 丢进它扫描的输入路径就渲染出
+`env/cons/` 那 5 个文件（**文件名不参与识别**，认的是顶层那个 `constraint:` 键）。
+
+| 方法 | 策略名后缀 | 组合器模式 |
+|---|---|---|
+| `D` 定向 | `_directed` | `APPLY_FIRST_MATCH` |
+| `G` 组合 | `_combo` | `APPLY_ALL` |
+| `SPCL` 专项 | `_special` | `APPLY_SEQUENTIAL` |
+| `RND` 随机 | `_random` | `APPLY_WEIGHTED` |
+| `RPLY` 回放 | `_replay` | `APPLY_SEQUENTIAL` |
+
+`default_mode` 取**优先级最高那个专题**的方法（P0 在前）—— 出厂行为要跟最该先测的那批
+一致，取最松的（一律 `APPLY_ALL`）会让定向批次在默认配置下不再定向。`priority` 在那套
+渲染里是**两用的**（`sort_by_priority` 升序 → 小的先应用；`select_weighted` 又拿它当权重
+→ 大的更容易选中），P0 取小值在两处都合理。
+
+**它是骨架，不是最终约束**：case 模型有建模语义（专题/维度/方法/优先级），没有协议参数
+（地址对齐/容量/握手时序）—— 所以 `params` 为空、策略体是空 `apply`，`gen_uvm` 的语义
+校验会逐条提示 `policy 'xxx' has no built-in apply body（自定义逻辑需手填）`。
+**结构由工具给，协议由人给**；逻辑补在 `env/cons/` 的策略里（不在这个 yaml，所以重跑
+覆盖它是安全的）。
+
+**端口必须显式给**（`-p name:type`，可重复）：case 说字段名、约束说 agent 名 + seq_item
+类型，端口名 ↔ 字段名的对应**没有建模**（就是边 ③ 只查得到一半的那半个），推不出来。
+**没给端口就不生成** —— 空的 `transactions` 渲染出来的协调序列是个**空壳**（`{% for
+trans in transactions %}` 一次都不进，发送循环体是空的），那正是这个仓库最贵的一类 bug。
+
+**失败响亮**：认不出的端口写法、重复端口、认不出的 `method` —— 一律报错拒绝生成，不跳
+不猜（跳过就是"给了 3 个端口、生成出 2 个"，而没人会去数）。`METHOD_TO_POLICY`（机器用）
+与 `METHOD_TO_CONSTRAINT`（人读）的键集由单测钉住：漏一个的后果很具体 —— `associate`
+认得那个方法（不报警），生产者却映射不出策略（拒绝生成）。
+
 ### 功能覆盖率计划（`coverage-plan`）
 
 **一份 yaml，与 case 模型同批生成**，把覆盖这件事的四张脸摆在一起：

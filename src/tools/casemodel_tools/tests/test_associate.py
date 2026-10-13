@@ -18,7 +18,13 @@ from __future__ import annotations
 
 import yaml
 
-from src.tools.casemodel_tools.associate import associate
+from src.tools.casemodel_tools.associate import (
+    COMBINATOR_MODES,
+    METHOD_TO_CONSTRAINT,
+    METHOD_TO_POLICY,
+    associate,
+    build_constraint,
+)
 
 CASES = """
 version: "1.0"
@@ -245,3 +251,106 @@ class TestFailureIsLoud:
     def test_an_empty_coverage_model_is_not_renderable(self):
         p = _assoc(cov="version: '1.0'\n")
         assert p["renderable"] is False
+
+
+# ══════════════════════════════════════════════════════════════
+# 约束模型生产者 —— 方法学的第三条腿
+# ══════════════════════════════════════════════════════════════
+#
+# 要钉住的就一件事：**它不生成空壳**。这个仓库里最贵的一类 bug 是
+# "生成得出来、编译得过、东西是空的/错的" —— 一个空的 `transactions` 渲染出来
+# 的协调序列正是那个形状（发送循环一次都不进），所以宁可不生成。
+
+class TestTheConstraintProducer:
+    PORTS = [{"name": "apb_master", "type": "APB_master_seq_item"}]
+
+    def test_no_ports_is_an_error_not_an_empty_skeleton(self):
+        p = build_constraint(CASES, [])
+        assert "error" in p
+        assert "空壳" in p["error"]
+
+    def test_one_policy_per_theme_that_declares_a_method(self):
+        p = build_constraint(CASES, self.PORTS)
+        assert p["policy_count"] == 1
+        # 定向（D）→ 自定义名策略 + 最严的组合模式
+        assert p["policies"][0]["name"] == "p_th_p0_directed"
+        assert p["default_mode"] == "APPLY_FIRST_MATCH"
+
+    def test_the_ports_are_carried_verbatim(self):
+        p = build_constraint(CASES, self.PORTS)
+        assert p["transactions"] == [{"name": "apb_master",
+                                      "type": "APB_master_seq_item"}]
+        assert p["policies"][0]["applies_to"] == ["apb_master"]
+
+    def test_a_port_written_name_colon_type_is_accepted(self):
+        """命令行那条写法（手打快）与 dict 写法必须等价。"""
+        assert (build_constraint(CASES, ["apb_master:APB_master_seq_item"])
+                ["transactions"] == self.PORTS)
+
+    def test_a_port_the_tool_cannot_read_is_refused_not_skipped(self):
+        """**不跳、不猜** —— 跳过就是"给了 3 个端口、生成出 2 个"，而没人会去数。"""
+        p = build_constraint(CASES, ["apb_master"])          # 缺 `:类型`
+        assert "error" in p
+
+    def test_duplicate_ports_are_refused(self):
+        p = build_constraint(CASES, ["a:T", "a:T"])
+        assert "error" in p and "重复" in p["error"]
+
+    def test_an_unknown_method_is_an_error_not_a_silent_skip(self):
+        """`build_theme` 把认不出的方法**静默归一成空** —— 这里必须拦住。"""
+        p = build_constraint(CASES.replace("method: D", "method: NOPE"), self.PORTS)
+        assert "error" in p and "NOPE" in p["error"]
+
+    def test_no_method_at_all_is_an_error(self):
+        p = build_constraint(CASES.replace(", method: D", ""), self.PORTS)
+        assert "error" in p
+
+    def test_the_default_mode_follows_the_top_priority_theme(self):
+        """出厂行为跟 **P0** 那批一致 —— 取最松的会让定向批次不再定向。"""
+        cases = CASES.replace(
+            "  - {id: TH-P0, name: 基础, priority: P0, dimensions: [指令类型], method: D}",
+            "  - {id: TH-P2, name: 随机, priority: P2, method: RND}\n"
+            "  - {id: TH-P0, name: 基础, priority: P0, dimensions: [指令类型], method: G}")
+        p = build_constraint(cases, self.PORTS)
+        assert p["default_mode"] == "APPLY_ALL"          # P0 是 G，不是 P2 的加权随机
+        assert [m["theme"] for m in p["mapping"]] == ["TH-P0", "TH-P2"]
+
+    def test_every_mode_the_renderer_needs_is_emitted(self):
+        """五个模式**全列**：组合器的 `case` 分支写死了 5 个，少一个 vlog 就报错。"""
+        modes = build_constraint(CASES, self.PORTS)["combinator"]["modes"]
+        assert modes == COMBINATOR_MODES
+        assert len(modes) == 5
+
+    def test_the_yaml_round_trips_and_keeps_the_parser_contract(self):
+        """键名是**和 gen_uvm 之间的文件格式契约** —— 钉在这里，改坏了立刻红。"""
+        p = build_constraint(CASES, self.PORTS)
+        doc = yaml.safe_load(p["constraint_yaml"])
+        assert set(doc) == {"constraint", "transactions", "policies", "combinator"}
+        assert set(doc["policies"][0]) == {"name", "description", "priority",
+                                           "params", "applies_to"}
+        assert doc["combinator"] == p["combinator"]
+        # 策略名要能进 SV：ASCII
+        assert doc["policies"][0]["name"].isascii()
+        assert doc["constraint"]["name"].endswith("_cons")
+        assert doc["constraint"]["name"].isascii()
+
+    def test_the_generated_yaml_passes_the_association_edges(self):
+        """**闭环**：生产者的产物喂回校验器，③④ 一条都不该报。"""
+        payload = build_constraint(CASES, self.PORTS)
+        a = associate(CASES, COVERAGE, payload["constraint_yaml"])
+        assert not [i for i in a["issues"] if i["edge"] in ("③", "④")], a["issues"]
+
+
+class TestTheTwoMethodTablesAgree:
+    """`METHOD_TO_CONSTRAINT` 给人看、`METHOD_TO_POLICY` 给机器用 —— 键集必须一致。
+
+    漏一个的后果很具体：`associate` 边 ④ 认得那个方法（不报警），生产者却映射不出
+    策略（拒绝生成）—— 同一个方法，两个工具的答案不一样。
+    """
+
+    def test_the_key_sets_match(self):
+        assert set(METHOD_TO_CONSTRAINT) == set(METHOD_TO_POLICY)
+
+    def test_every_mapped_mode_is_one_the_renderer_knows(self):
+        for suffix, mode in METHOD_TO_POLICY.values():
+            assert mode in COMBINATOR_MODES, f"{suffix} → {mode} 不在组合器模式表里"

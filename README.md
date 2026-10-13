@@ -175,7 +175,35 @@ python -m src.tools.casemodel_tools.cli coverage-plan  specs\npu_sched\casemodel
 # 主 CLI 同形：vagent case-model {covergroups,coverage-plan}
 ```
 
-### 六、一份能跑的样板：`specs/npu_sched/`
+### 六、三层模型（case / 覆盖率 / 约束）靠名字关联
+
+三份 yaml 各答一个问题，**关联靠名字不靠位置** —— 也不加第四个"关联表"文件，
+那是第四份真相，改了名没人报。
+
+| 文件 | 答什么 | 它的引用字段 |
+|---|---|---|
+| `cases.yaml` | **该测什么**（取值空间 / 专题 / 组合矩阵） | `cover_bins`、`cross_matrix`、`themes[].method` |
+| `coverage.yaml` | **怎么量**（coverpoint + bins + cross） | `bins[].name`、`crosses[].matrix_ref` |
+| `constraint.yaml` | **怎么驱动**（policies + combinator） | `transactions[].name`、`policies[].applies_to` |
+
+四条边：`cover_bins ↔ bins[].name`、`cross_matrix ↔ matrix_ref`、`applies_to ↔
+transactions[].name`、`themes[].method ↔ combinator/policies`。
+
+```powershell
+python -m src.tools.casemodel_tools.cli associate   cases.yaml coverage.yaml [-c constraint.yaml]
+python -m src.tools.casemodel_tools.cli constraints cases.yaml -p apb_master:APB_master_seq_item -o constraint.yaml
+# 主 CLI 同形：vagent case-model {associate,constraints}
+```
+
+- **`associate`** 只**报**断点：①② 是硬边（`error` —— "声明的测试点没落成覆盖仓"），
+  ③④ 是软边（`warning`）。有 error 就不许渲染 SV：取值投影不出来时给个 0 让 bin 照
+  生成，收的是**错的数**，比生成不了更坏。
+- **`constraints`** 把 `themes[].method`（`D/G/SPCL/RND/RPLY`）**生成**成策略 + 组合器，
+  产物正好是 `gen_uvm` 认的约束模型形状 —— 边 ④ 从"事后报断"变成"从一开始就接上"。
+  端口要显式给（case 说字段名、约束说 agent 名 + seq_item 类型，两边推不出来），
+  **没给端口就不生成**（空 `transactions` 渲染出来是个空壳协调序列）。
+
+### 七、一份能跑的样板：`specs/npu_sched/`
 
 `npu_sched.sv` 是《NPU 指令调度器功能覆盖率计划文档》§2.2 接口表的实现（12 个采样信号
 + 5 个内部信号），`casemodel.yaml` 是它的覆盖点模型（12 覆盖点 / 7 交叉 / 11 批次 / 195 次运行）。
