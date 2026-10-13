@@ -346,6 +346,8 @@ def generate_gap_directed_seq(agent_name: str, gaps: list,
     lines.append(f"")
     lines.append(f"  virtual task body();")
     lines.append(f"    {item} req;")
+    # 超时与否要**记下来**：日志末尾那句 "completed" 得说实话（见下面）
+    lines.append(f"    bit timed_out = 0;")
     lines.append(f"    `uvm_info(\"GAPSEQ\", \"Directed gap stimulation\", UVM_MEDIUM)")
     lines.append(f"")
     lines.append(f"    // **激励自己带超时**，不指望全局看门狗。")
@@ -362,7 +364,13 @@ def generate_gap_directed_seq(agent_name: str, gaps: list,
         lines.append(ln)
     lines.append(f"      end")
     lines.append(f"      begin")
-    lines.append(f"        #(GAP_TXN_TIMEOUT_NS);")
+    # ⚠️ **延时必须带单位**。这个文件没有 `` `timescale ``，时间单位跟着**编译单元**
+    # 走（`-mfcu` 下是所有被编文件共用的那个）—— 实测它是 1ps，于是 `#(20000)`
+    # 只等 **20ns**：定向激励刚发第一笔就"超时"，每一轮都误报
+    # `[GAPSEQ] 定向激励超时：20000 ns 内对手方未应答`。写 `* 1ns` 就与
+    # 编译单元无关了（那也正是"20000"这个数的含义）。
+    lines.append(f"        #(GAP_TXN_TIMEOUT_NS * 1ns);")
+    lines.append(f"        timed_out = 1;")
     lines.append(f"        `uvm_error(\"GAPSEQ\", "
                  f"$sformatf(\"定向激励超时：%0d ns 内对手方未应答（bench/激励侧问题，"
                  f"不是 DUT 功能错）\", GAP_TXN_TIMEOUT_NS))")
@@ -370,7 +378,10 @@ def generate_gap_directed_seq(agent_name: str, gaps: list,
     lines.append(f"    join_any")
     lines.append(f"    disable fork;")
     lines.append(f"")
-    lines.append(f"    `uvm_info(\"GAPSEQ\", \"Gap stimulation completed\", UVM_MEDIUM)")
+    # 超时了就**别再说"完成"**：原来无条件打这句，日志里"超时"和"completed"
+    # 挨着出现，读的人分不清到底跑完没有。
+    lines.append(f"    if (!timed_out)")
+    lines.append(f"      `uvm_info(\"GAPSEQ\", \"Gap stimulation completed\", UVM_MEDIUM)")
     lines.append(f"  endtask")
     lines.append(f"endclass : {agent_name}_gap_seq")
     return "\n".join(lines) + "\n"

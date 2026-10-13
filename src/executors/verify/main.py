@@ -444,12 +444,22 @@ class VerifyExecutor(BaseExecutor):
         import re
         from src.tools.coverage_tools.main import generate_gap_directed_seq
         from src.tools.lib.env_introspect import (binding_for_agent,
+                                                 env_active_agents,
                                                  env_agent_bindings)
         from src.tools.lib.filelist import agent_layout
 
         agents_dir = output_dir / "agents"
         if not agents_dir.exists() or not gaps:
             return
+
+        # 哪些 agent 真的能收激励 —— 问**模型**（`env.yaml` 的 `is_active`）。
+        # passive agent 的 sequencer 压根没建出来，注给它就是 `start_item` 当场
+        # fatal（详见 `env_active_agents` 的注释）。下面那个"接口里有没有 output"
+        # 的文本判据只在模型读不到时兜底用。
+        active = env_active_agents(output_dir)
+        if not active:
+            logger.warning("读不到 env 模型（inputs/yaml/uvm/env.yaml）的 is_active —— "
+                           "无法判断哪些 agent 能收激励，本次跳过定向激励注入")
 
         # 读 DUT RTL 供 LLM 因果反推（output signal 的缺口需要理解 DUT 逻辑）
         dut_rtl = ""
@@ -484,6 +494,10 @@ class VerifyExecutor(BaseExecutor):
             if not agent_dir.is_dir():
                 continue
             agent_dir_name = agent_dir.name
+            if agent_dir_name in active and not active[agent_dir_name]:
+                logger.info(f"{agent_dir_name}: passive agent（env 模型 is_active=false）"
+                            f"—— 它没有 sequencer，注激励进去只会 start_item 报错，跳过")
+                continue
             prefix = agent_dir_name[:-len("_agent")] \
                 if agent_dir_name.endswith("_agent") else agent_dir_name
             binding = binding_for_agent(bindings, agent_dir_name)

@@ -846,6 +846,77 @@ endclass
         assert _main_phase_objection_at("task only_configure(uvm_phase p); endtask") == -1
 
 
+class TestTheGapSequenceIsRunnable:
+    """gap 激励还要**跑得起来**：延时带单位、只注能收激励的 agent。
+
+    两条都是实测撞出来的（端到端 `verify --rtl specs/npu_sched`，p0 卡在一条上）：
+
+      · `#(GAP_TXN_TIMEOUT_NS)` 解析成 **20ns**（那个文件没有 `` `timescale ``，
+        时间单位跟着编译单元走，实测是 1ps）—— 每轮都假报"定向激励超时"。
+      · 给 **passive** agent 也注一条 —— 它的 `sequencer` 根本没建出来（模板里
+        是 `if (cfg.is_active == UVM_ACTIVE)` 里建的），`start_item` 当场
+        `UVM_FATAL [SEQ] neither the item's sequencer ...`。
+    """
+
+    GAPS = [{"dimension": "toggle", "location": "queue_level[5:4]", "reason": "toggle"}]
+
+    def _seq(self):
+        from src.tools.coverage_tools.main import generate_gap_directed_seq
+
+        return generate_gap_directed_seq("npu_sched_in", self.GAPS,
+                                         {"queue_level": 6},
+                                         item_class="npu_sched_in_master_item")
+
+    def test_the_timeout_delay_carries_its_unit(self):
+        code = self._seq()
+        assert "#(GAP_TXN_TIMEOUT_NS * 1ns);" in code, "延时又变成裸数字了"
+        assert "#(GAP_TXN_TIMEOUT_NS);" not in code, (
+            "裸 `#(GAP_TXN_TIMEOUT_NS)` 会跟着编译单元的时间单位走 —— 实测是 1ps，"
+            "于是 20000 只等 20ns，每轮都假报超时")
+
+    def test_a_timeout_is_not_reported_as_completed(self):
+        code = self._seq()
+        assert "bit timed_out = 0;" in code
+        assert "timed_out = 1;" in code
+        # "completed" 必须在 `if (!timed_out)` 之下 —— 超时了还打"完成"是假日志
+        assert "if (!timed_out)" in code
+        assert code.index("if (!timed_out)") < code.index("Gap stimulation completed")
+
+    def test_passive_agents_are_read_from_the_model(self, tmp_path):
+        """活性**问模型**（`env.yaml` 的 `is_active`），不从生成物里猜。"""
+        from src.tools.lib.env_introspect import env_active_agents
+
+        ydir = tmp_path / "inputs" / "yaml" / "uvm"
+        ydir.mkdir(parents=True)
+        (ydir / "env.yaml").write_text(
+            "environment:\n"
+            "  name: x_env\n"
+            "  agents:\n"
+            "    - {name: x_in, is_active: true}\n"
+            "    - {name: x_out, is_active: false}\n"
+            "    - {name: x_default}\n", encoding="utf-8")
+        assert env_active_agents(tmp_path) == {"x_in_agent": True,
+                                               "x_out_agent": False,
+                                               "x_default_agent": True}
+
+    def test_an_unreadable_model_is_empty_not_optimistic(self, tmp_path):
+        """读不到模型 → **空字典**（不是"全都 active"）。
+
+        注错是**必然** fatal（passive agent 没有 sequencer），不注只是少一段激励
+        —— 所以读不到时宁可一个都不注，并记日志。
+        """
+        from src.tools.lib.env_introspect import env_active_agents
+
+        assert env_active_agents(tmp_path) == {}
+
+    def test_the_injector_consults_it(self):
+        src = Path("src/executors/verify/main.py").read_text(encoding="utf-8")
+        assert "env_active_agents(output_dir)" in src
+        assert "passive agent" in src
+        # 判断必须发生在**写文件之前**：注了再发现不该注，文件已经落盘了
+        assert src.index("env_active_agents(output_dir)") < src.rindex("_gap_seq.sv")
+
+
 class TestTheRtlPortTableIsParsedWhole:
     """端口表要**一个不漏** —— 注释不能吃掉端口，注释里的 `)` 不能截断表。
 

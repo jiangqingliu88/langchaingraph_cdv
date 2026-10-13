@@ -104,6 +104,54 @@ def env_agent_bindings(output_dir: Path) -> List[Dict[str, str]]:
     return bindings
 
 
+def env_active_agents(output_dir: Path) -> Dict[str, bool]:
+    """`{agents/ 下的目录名: 是不是 active}` —— 从 **env 模型**（`env.yaml`）读。
+
+    ## 为什么这件事必须问模型，不能从生成物里"看出来"
+
+    **passive agent 根本没有 sequencer。** 模板里它是这样建的：
+
+        if (cfg.is_active == UVM_ACTIVE) begin
+          sequencer = <ty>_sequencer::type_id::create("sequencer", this);
+          ...
+        end
+
+    所以给一个 passive agent 注激励序列，`start()` 拿到的 `m_sequencer` 是 null，
+    `start_item` 当场报
+
+        UVM_FATAL [SEQ] neither the item's sequencer nor dedicated sequencer
+                       has been supplied to start item in _gseq
+
+    整条测试判失败（实测：`npu_sched_out` 是 `is_active: false` 的纯观察者，
+    p0 就卡在这一条上，而它看起来像"DUT 挂了"）。
+
+    原来这里用的是"接口文件里有没有 `output`"这个**文本启发式** —— 它与"sequencer
+    会不会被建出来"根本不是一回事：观察者 agent 的接口里同样有 `output` 字样，
+    于是照样被判成"会驱动 DUT"。**能算出来的东西不要猜。**
+
+    读不到 `env.yaml` 的场合返回**空字典**（不是"全都 active"）—— 调用方据此
+    一个都不注并记日志：注错是**必然** fatal，不注只是少一段激励。
+    """
+    import yaml as _yaml
+
+    path = Path(output_dir) / "inputs" / "yaml" / "uvm" / "env.yaml"
+    try:
+        data = _yaml.safe_load(_read(path)) or {}
+    except Exception:                                  # noqa: BLE001 读坏了当没有
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    env = data.get("environment")
+    if not isinstance(env, dict):
+        return {}
+    out: Dict[str, bool] = {}
+    for a in (env.get("agents") or []):
+        if isinstance(a, dict) and a.get("name"):
+            # `name: apb_master` → 目录名 `apb_master_agent`（模板拼名字的约定）
+            out[f"{a['name']}_agent"] = bool(a.get("is_active", True))
+    return out
+
+
 def binding_for_agent(bindings: List[Dict[str, str]], agent_dir_name: str) -> Optional[Dict[str, str]]:
     """把 `agents/` 下的目录名（`apb_agent`）对上一条接线（`apb_agent_h`）。
 
