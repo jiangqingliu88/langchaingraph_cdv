@@ -717,6 +717,24 @@ class TestBatchTestsAreRunnable:
         assert "if environment.batches:" in src
         assert "_normalize_batches" in src
 
+    def test_the_test_package_includes_the_batch_file(self):
+        """**产出来还不够，得有人 `include` 它** —— 不然那些类从没被编译过。
+
+        实测（端到端 `verify --rtl specs/npu_sched`）：`_batch_test.sv` 文件在磁盘上、
+        `GEN_BATCH_TC` 宏也在里面，但 `test_pkg.sv` 只 include 了 base/direct/gen/attr
+        —— 于是 `+UVM_TESTNAME=npu_basic_test` 撞
+        `UVM_FATAL (INVTST) test not found`，p0 卡在那一条上。
+
+        filelist 只收 `env/tests/` 下的 **package**（`_packages_in`），`_batch_test.sv`
+        不在那儿被单独编译 —— 这个 include 是它**唯一**进编译的路径。
+        """
+        tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+                   "/test_templates/test_pkg.sv.j2").read_text(encoding="utf-8")
+        assert "{%- if environment.batches %}" in tpl
+        assert '`include "{{ environment.env_name }}_batch_test.sv"' in tpl
+        # 批次类 extends `_gen_test` —— include 顺序必须在它之后
+        assert tpl.index("_gen_test.sv") < tpl.index("_batch_test.sv")
+
     def test_the_injection_carries_batches_into_env_yaml(self, tmp_path):
         import shutil
 

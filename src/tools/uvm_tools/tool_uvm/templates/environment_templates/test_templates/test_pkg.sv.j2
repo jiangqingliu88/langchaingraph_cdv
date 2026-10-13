@@ -31,6 +31,17 @@ package {{ environment.env_name }}_test_pkg;
   // 属性测试（一条 environment.tests = 一个 UVM_TEST = 一个属性取值）
   `include "{{ environment.env_name }}_attr_test.sv"
 {%- endif %}
+{%- if environment.batches %}
+
+  // 批次测试（一条 environment.batches = 一个 UVM_TEST = 一个批次/专题）。
+  //
+  // ⚠️ **必须 include 进来**：`_batch_test.sv` 不产在这个包里，包外也没人单独编它
+  //（filelist 只收 `env/tests/` 下的 **package**，不是每个 .sv）——漏掉这一句，
+  // 那些类就**根本没被编译过**，而回归里 `+UVM_TESTNAME=npu_basic_test` 撞
+  // `UVM_FATAL (INVTST) not found`（实测：p0 里 1 条批次测试挂在这）。
+  // 类体 extends 的是 `_gen_test`（上面已 include），所以这句要排在它之后。
+  `include "{{ environment.env_name }}_batch_test.sv"
+{%- endif %}
 {%- if register_model and register_model.reg_block %}
 
   // 寄存器（CSR）自带序列测试：hw_reset（复位值）/ bit_bash（逐位翻）/ access（前后门一致）。
