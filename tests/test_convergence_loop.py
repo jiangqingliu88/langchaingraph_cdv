@@ -304,6 +304,56 @@ class TestTheSignoffReportShowsBothNumbers:
         assert rep["gates"]["target"] == 95.0
 
 
+class TestAnActionProvenIneffectiveIsActuallyAvoided:
+    """**算出来了、写出来了、就是没人据此做决定** —— 这条缺的是"据此"。
+
+    `l5_evolution.growth.is_action_proven_ineffective()` 早就写好了，L5 的模块头
+    也写明用途是"历史证明无效的动作，**决策层降级/避开**"，但它**零调用者**：同一份
+    数据被打印进决策理由（`[经验: 该动作历史 79 次尝试，改善率 4%]`），然后照选不误。
+
+    实测：闭环六轮每轮都选 `GENERATE_DIRECTED_TEST`（当时 83 次尝试 / 改善率 3.6% /
+    平均 Δ+1.1%），覆盖率每轮钉在 56.2 不动。
+    """
+
+    def _alt(self, action, monkeypatch, proven):
+        from src.layers.l3_decision.brain.decision_brain import DecisionBrain
+
+        monkeypatch.setattr("src.layers.l5_evolution.growth.is_action_proven_ineffective",
+                            lambda *a, **k: proven)
+        return DecisionBrain._ineffective_alternative(action)
+
+    def test_a_proven_bad_action_gets_swapped(self, monkeypatch):
+        assert self._alt("GENERATE_DIRECTED_TEST", monkeypatch, True) == "EXPAND_SEEDS"
+
+    def test_a_fine_action_is_left_alone(self, monkeypatch):
+        assert self._alt("GENERATE_DIRECTED_TEST", monkeypatch, False) is None
+
+    def test_the_alternative_is_never_itself(self, monkeypatch):
+        """扩种无效时**不返回它自己**（否则等于原地打转），也没有替代就照原样走。"""
+        assert self._alt("EXPAND_SEEDS", monkeypatch, True) is None
+
+    def test_both_paths_consult_it(self):
+        """RL 覆盖路径与规则路径**都要过这道闸门** —— 只堵一条，另一条照样把
+        无效动作选出来。"""
+        src = Path("src/layers/l3_decision/brain/decision_brain.py").read_text(
+            encoding="utf-8")
+        assert src.count("_ineffective_alternative(") >= 3, \
+            "定义 1 处 + 两条路径各 1 处：少一处就是有条路绕过它"
+
+    def test_the_real_store_backs_the_judgement(self):
+        """这条不是构造出来的：真实经验库里那个动作**确实**越界了。
+
+        真实值随跑的次数变，所以只钉"接口在、字段在"，不钉具体数字 ——
+        钉死数字会在下一次跑之后变成假失败。
+        """
+        from src.layers.l5_evolution.growth import get_action_experience
+
+        exp = get_action_experience("GENERATE_DIRECTED_TEST")
+        if exp is None:
+            pytest.skip("经验库里还没有这个动作的记录")
+        assert {"trials", "improve_rate"} <= set(exp)
+
+
 class TestExpandSeedsActuallyReachesTheSimulator:
     """扩种动作必须**真的换掉随机流** —— 否则它是个静默空转。
 
