@@ -53,6 +53,59 @@ def baseline_of_run(run_dir) -> Optional[Dict[str, Any]]:
         store.close()
 
 
+def module_candidates(repo_root=".") -> list:
+    """仓库里能枚举出来的**模块名**集合 —— 给老用例归位用。
+
+    三个来源，都是"这个设计确实存在过"的证据：
+
+      · `specs/<模块>/` 目录名
+      · 各 run 的 `spec.json` 里 `design_name`
+      · 用例库里**已有的**非空 `module` 值（新写入的行）
+
+    为什么要枚举而不是按名字猜：归位要判"这个名字属于哪个模块"，而
+    `test_apb_uart_case_basic` 同时命中 `apb` 与 `apb_uart`。有了一份真模块名
+    清单，就能**取最长匹配**（`apb_uart` 赢），不会把 A 的用例算到 B 头上。
+    """
+    root = Path(repo_root)
+    mods = {p.name for p in (root / "specs").glob("*") if p.is_dir()}
+    for sp in root.glob("output_*/spec.json"):
+        try:
+            import json as _json
+            dn = (_json.loads(sp.read_text(encoding="utf-8",
+                                            errors="replace")) or {}).get("design_name")
+            if dn:
+                mods.add(str(dn))
+        except Exception:                                  # noqa: BLE001
+            continue
+    store = LineageStore()
+    try:
+        mods |= {v["module"] for v in store.list_versions("")}
+    finally:
+        store.close()
+    mods.discard("")
+    mods.discard("dut")            # 兜底名，不是模块身份
+    return sorted(mods)
+
+
+def bind_testcase_modules(candidates=None, db_path: Optional[str] = None,
+                          apply: bool = False) -> Dict[str, Any]:
+    """把用例库里的老行归位（`TestcaseRegistry.bind_modules` 的入口）。
+
+    `candidates` 缺省时现枚举（`module_candidates()`）。干跑（`apply=False`）
+    也返回完整归属表 —— 让人先看一眼再写。
+    """
+    from src.layers.l4_memory.testcase_registry import TestcaseRegistry
+
+    cands = list(candidates) if candidates else module_candidates()
+    reg = TestcaseRegistry(db_path)
+    try:
+        out = reg.bind_modules(cands, apply=apply)
+    finally:
+        reg.close()
+    out["candidates"] = sorted(cands)
+    return out
+
+
 def lineage_versions(module: str = "") -> list:
     """版本表（`module` 空则全部）。"""
     store = LineageStore()

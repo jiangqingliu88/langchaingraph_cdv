@@ -347,6 +347,132 @@ class TestEveryRegistrationSiteCarriesTheVersion:
             f"而两边都不报错：{offenders}")
 
 
+class TestTheCaseLibraryIsScopedToTheModule:
+    """用例库是**项目级**的（躺着所有跑过的模块）—— 取用例时必须按模块划边界。
+
+    实测：一次 NPU 的 p0 跑了 20 条，**14 条是 `apb_uart` / `apb_slave` 的名字**，
+    而且全部用本地的 `npu_sched_env_directed_test` 兜底执行 —— 同一个仿真被数了
+    十几遍。"全过"看着漂亮，真属于这个设计的只有 6 条。这类假绿正是本仓库
+    最贵的一类 bug（数字全对、结论是错的）。
+    """
+
+    def _reg(self, tmp_path):
+        from src.layers.l4_memory.testcase_registry import TestcaseRegistry
+
+        reg = TestcaseRegistry(tmp_path / "tc.db")
+        reg.register("test_apb_uart_D_ADDR_0", priority="P0", module="apb_uart")
+        reg.register("test_npu_sched_D_ADDR_0", priority="P0", module="npu_sched")
+        reg.register("test_dut_throughput", priority="P2")          # 归属未知
+        return reg
+
+    def test_only_this_module_is_returned(self, tmp_path):
+        reg = self._reg(tmp_path)
+        try:
+            names = [c["name"] for c in reg.get_priority_order(module="npu_sched")]
+            assert names == ["test_npu_sched_D_ADDR_0"], names
+            assert "test_apb_uart_D_ADDR_0" not in names
+        finally:
+            reg.close()
+
+    def test_without_module_it_still_sees_everything(self, tmp_path):
+        """缺省**不过滤** —— "看全库"（审计、`get_stats`）那些调用方靠它。"""
+        reg = self._reg(tmp_path)
+        try:
+            assert len(reg.get_priority_order()) == 3
+        finally:
+            reg.close()
+
+    def test_unattributed_rows_are_not_smuggled_in(self, tmp_path):
+        """`module=''` 的老行**不兜底放行** —— 读侧按名字猜就是把别的项目的用例
+        放进来（正是要修的病）。归属只由一次性回填写，之后读侧只有一条规则。"""
+        reg = self._reg(tmp_path)
+        try:
+            names = [c["name"] for c in reg.get_priority_order(module="npu_sched")]
+            assert "test_dut_throughput" not in names
+        finally:
+            reg.close()
+
+    def test_the_regression_generator_passes_the_module(self):
+        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(
+            encoding="utf-8")
+        assert "get_priority_order(stage=0, limit=50, module=module_name)" in src, \
+            "生成 regression.yaml 时没按模块筛 —— 跨项目用例会混进来"
+
+
+class TestTheLegacyModuleBackfill:
+    """老行归位：按命名约定取**最长匹配**，agent 自检与兜底名不归属。"""
+
+    def _reg(self, tmp_path):
+        from src.layers.l4_memory.testcase_registry import TestcaseRegistry
+
+        return TestcaseRegistry(tmp_path / "tc.db")
+
+    def _seed(self, reg):
+        for n in ("test_apb_uart_case_basic", "apb_uart_D_ADDR_0",
+                  "test_apb_master_paddr_handshake", "test_apb_loopback",
+                  "test_npu_sched_in_loopback", "test_dut_reset"):
+            reg.register(n, priority="P0")
+
+    def test_the_longest_match_wins(self, tmp_path):
+        """`test_apb_uart_case_basic` 同时命中 `apb` 与 `apb_uart` —— 取长的那个，
+        否则 A 的用例会被算到 B 头上（而两边都不报错）。"""
+        reg = self._reg(tmp_path)
+        try:
+            self._seed(reg)
+            plan = reg.bind_modules(["apb", "apb_uart", "apb_master"])
+            assert plan["attributed"] == {"apb_master": 1, "apb_uart": 2}
+        finally:
+            reg.close()
+
+    def test_loopback_and_the_fallback_name_are_never_attributed(self, tmp_path):
+        """`*_loopback` 是 **agent 自检**；`test_dut_*` 的模块名是兜底值。
+        两者都不属于任何模块 —— 不让它们进来，回归里那份重复**从源头就没了**。"""
+        reg = self._reg(tmp_path)
+        try:
+            self._seed(reg)
+            plan = reg.bind_modules(["apb", "apb_uart", "apb_master", "npu_sched"])
+            assert "test_apb_loopback" in plan["unmatched"]
+            assert "test_npu_sched_in_loopback" in plan["unmatched"]
+            assert "test_dut_reset" in plan["unmatched"]
+        finally:
+            reg.close()
+
+    def test_dry_run_writes_nothing(self, tmp_path):
+        reg = self._reg(tmp_path)
+        try:
+            self._seed(reg)
+            plan = reg.bind_modules(["apb_uart"])
+            assert plan["applied"] is False and plan["backup"] == ""
+            assert all(r["module"] == "" for r in reg.get_all()
+                       if r["name"].startswith("test_apb_uart"))
+        finally:
+            reg.close()
+
+    def test_apply_writes_and_backs_up_first(self, tmp_path):
+        reg = self._reg(tmp_path)
+        try:
+            self._seed(reg)
+            out = reg.bind_modules(["apb_uart", "apb_master"], apply=True)
+            assert out["applied"] is True and out["backup"].endswith(".bak")
+            assert Path(out["backup"]).is_file(), "写库前必须先备份"
+            got = {r["name"]: r["module"] for r in reg.get_all()}
+            assert got["test_apb_uart_case_basic"] == "apb_uart"
+            assert got["test_dut_reset"] == ""          # 归不上就保持空
+        finally:
+            reg.close()
+
+    def test_it_only_touches_rows_without_a_module(self, tmp_path):
+        """已经有归属的行**不许被改** —— 回填只补空，不覆盖已知。"""
+        reg = self._reg(tmp_path)
+        try:
+            reg.register("test_apb_uart_case_basic", module="already_known")
+            reg.bind_modules(["apb_uart"], apply=True)
+            got = {r["name"]: r["module"] for r in reg.get_all()}
+            assert got["test_apb_uart_case_basic"] == "already_known"
+        finally:
+            reg.close()
+
+
 class TestBaselineAwareCompare:
     """「跟谁比」不再靠人肉记目录名 —— 从血缘里反查。"""
 

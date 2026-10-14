@@ -1390,7 +1390,10 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     try:
         from src.layers.l4_memory.testcase_registry import TestcaseRegistry
         case_reg = TestcaseRegistry()
-        cases = case_reg.get_priority_order(stage=0, limit=50)
+        # **按模块筛**：这个库是项目级的，躺着所有跑过的模块 —— 不筛就会把
+        # 别的项目的用例写进本项目的 regression.yaml（实测：NPU 的 p0 里跑了
+        # 14 条 apb_uart 的名字，全用本地 test 兜底执行，同一个仿真数了十几遍）。
+        cases = case_reg.get_priority_order(stage=0, limit=50, module=module_name)
         # 回归模式开关：增量（默认，只跑未 passed）/ 全量（跑所有用例）
         try:
             from config.settings import Settings

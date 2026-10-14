@@ -5270,6 +5270,54 @@ def lineage_bugs_cmd(module, version_no, json_output):
                     title="bug ↔ RTL 版本")
 
 
+@lineage_group.command("bind-modules")
+@click.option("--apply", "apply_", is_flag=True,
+              help="真的写库（缺省只干跑，打印归属表）")
+@click.option("--candidate", "-c", "candidates", multiple=True,
+              help="补充候选模块名（可重复；缺省自动枚举 specs/ 与各 run 的 spec.json）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def lineage_bind_modules_cmd(apply_, candidates, json_output):
+    """把用例库里**没有模块归属的老行**归位（一次性）
+
+    \b
+    `module` 列是后加的，之前的行没有归属；而回归按模块筛是**严格按列**筛的
+    （读侧不猜 —— 猜错就是把别的项目的用例放进本项目）。所以老行要显式归位。
+
+    \b
+    归属按命名约定取**最长匹配**；agent 自检（`*_loopback`）与兜底名（`dut`）
+    一律不归属 —— 它们本来就不属于任何模块。**先干跑看一眼，再 --apply。**
+
+    \b
+    示例:
+      vagent lineage bind-modules              # 只看归属表
+      vagent lineage bind-modules --apply      # 写库（先备份 .bak）
+    """
+    out = get_output_adapter(json_output)
+    from src.tools.flow_tools.lineage_api import bind_testcase_modules
+
+    result = bind_testcase_modules(candidates=candidates or None, apply=apply_)
+    if json_output:
+        out.print_result(result, title="用例库模块归位")
+        return
+    console.print(f"候选模块：{', '.join(result['candidates']) or '（无）'}")
+    console.print(f"待归位的行：{result['total_legacy']}")
+    if result["attributed"]:
+        out.print_table(["归到模块", "行数"],
+                        [[m, str(n)] for m, n in result["attributed"].items()],
+                        title="归属结果")
+    if result["unmatched"]:
+        console.print(f"不归属的 {len(result['unmatched'])} 行"
+                      f"（agent 自检 / 兜底名）—— 按模块筛时自然落选：")
+        for n in result["unmatched"][:8]:
+            console.print(f"  [dim]{n}[/dim]")
+        if len(result["unmatched"]) > 8:
+            console.print(f"  [dim]…还有 {len(result['unmatched']) - 8} 行[/dim]")
+    if result["applied"]:
+        console.print(f"[green]✓ 已写库[/green]　备份：{result['backup']}")
+    else:
+        console.print("[yellow]干跑，没写库。[/yellow]确认无误后加 `--apply`")
+
+
 @lineage_group.command("compare")
 @click.argument("current", type=click.Path(exists=True))
 @click.option("--baseline", "-b", "baseline", default="",

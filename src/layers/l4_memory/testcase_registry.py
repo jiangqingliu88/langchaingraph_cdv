@@ -259,6 +259,88 @@ class TestcaseRegistry:
                 count += 1
         return count
 
+    def bind_modules(self, candidates, apply: bool = False) -> Dict[str, Any]:
+        """把 `module=''` 的**老行**按命名约定归到真模块（一次性回填）。
+
+        ## 为什么需要它
+
+        `module` 这一列是后加的，之前的行没有归属。而 `get_priority_order(module=)`
+        是**严格按列**筛的（读侧不猜 —— 猜错就是把别的项目的用例放进本项目，
+        正是要修的病）。所以老行必须先**显式**归位，之后读侧就只剩一条规则。
+
+        ## 归属怎么定
+
+        名字是写侧拼的，约定就两条：`test_<模块>_…`（`register_from_spec` /
+        `registry_bridge`）与 `<模块>_…`（spec 派生的 `<模块>_D_ADDR_0` 那类）。
+        所以把候选模块名逐个去比，**取最长匹配**：
+        `test_apb_uart_case_basic` 同时命中 `apb` 与 `apb_uart` —— 取长的那个，
+        否则会把 `apb_uart` 的用例算到 `apb` 头上。
+
+        **`*_loopback` 一律不归属**：那些是 **agent 自检**（`test_<agent>_loopback`），
+        不是模块用例。而且它们在回归里有**两条来源** —— 库里这条绑在 DUT build 上
+        （错的），生成器自己产的那条绑 `<agent>_loopback_tb`（对的），
+        `_dedupe_loopback_tests` 专门在收拾这个重复。不让库里的进来的话，
+        这个重复**从源头就没了**。
+
+        **归不上的保持空**（loopback、以及模块名就是兜底 `"dut"` 的 `test_dut_*`）
+        —— 它们本来就不属于任何模块，编一个归属出来只是把噪音换个地方藏。
+        按模块筛时它们自然落选。
+
+        `apply=False`（缺省）**只算不写**；`apply=True` 先备份库再写。
+        """
+        cands = sorted({str(c).strip() for c in (candidates or []) if str(c).strip()},
+                       key=len, reverse=True)
+        conn = self._connect()
+        with self._lock:
+            rows = conn.execute(
+                "SELECT name FROM testcase_registry WHERE module IS NULL OR module=''"
+            ).fetchall()
+
+        plan: Dict[str, List[str]] = {}
+        unmatched: List[str] = []
+        for (name,) in rows:
+            stem = name[5:] if name.startswith("test_") else name
+            if stem.endswith("_loopback"):
+                unmatched.append(name)          # agent 自检，不属于任何模块
+                continue
+            hit = ""
+            for m in cands:
+                if stem == m or stem.startswith(m + "_"):
+                    hit = m
+                    break                       # cands 已按长度降序 → 第一个就是最长
+            if hit:
+                plan.setdefault(hit, []).append(name)
+            else:
+                unmatched.append(name)
+
+        out: Dict[str, Any] = {
+            "total_legacy": len(rows),
+            "attributed": {m: len(v) for m, v in sorted(plan.items())},
+            "unmatched": sorted(unmatched),
+            "applied": False,
+            "backup": "",
+        }
+        if not apply or not plan:
+            return out
+
+        import shutil
+        backup = str(self.db_path) + ".bak"
+        try:
+            self.close()                        # Windows 文件锁：先放连接再拷
+            shutil.copy2(self.db_path, backup)
+        finally:
+            conn = self._connect()
+        with self._lock:
+            for module, names in plan.items():
+                conn.executemany(
+                    "UPDATE testcase_registry SET module=?, updated_at=? "
+                    "WHERE name=? AND (module IS NULL OR module='')",
+                    [(module, self._now(), n) for n in names])
+            conn.commit()
+        out["applied"] = True
+        out["backup"] = backup
+        return out
+
     def update_status(self, name: str, status: str, result: Dict = None) -> None:
         """更新用例状态 + 结果（sim_time/fail_rate/new_coverage），并重算有效性。"""
         if not name:
@@ -294,7 +376,8 @@ class TestcaseRegistry:
     # 优先级规划（不同规划目标，优先做什么用例）
     # ═══════════════════════════════════════════════════════════
 
-    def get_priority_order(self, stage: int = 0, limit: int = None) -> List[Dict[str, Any]]:
+    def get_priority_order(self, stage: int = 0, limit: int = None,
+                           module: str = "") -> List[Dict[str, Any]]:
         """按规划目标（stage）排序，返回优先执行的用例列表。
 
         排序规则：
@@ -302,17 +385,34 @@ class TestcaseRegistry:
           2. 优先级（P0 > P1 > P2）
           3. 状态（planned 优先，passed 次之，failed/deprecated 最后）
           4. 有效性（高分的优先）
+
+        ## `module`：**这是哪个设计的用例**
+
+        这个库是**项目级**的（项目根 `.signoffai/`，跨 run 累积），里面躺着所有跑过的
+        模块。不按模块筛的后果实测过：一次 NPU 的 p0 里跑了 20 条，**14 条是
+        `apb_uart` / `apb_slave` 的名字**，而且它们全都用本地的
+        `npu_sched_env_directed_test` 兜底执行 —— 于是同一个仿真被数了十几遍，
+        "全过"看着很漂亮，其实只有 6 条是这个设计的。
+
+        `module=""`（缺省）＝ **不过滤**（老调用方与"看全库"的场合照旧）。
         """
         stage_idx = min(max(stage, 0), len(STAGE_PURPOSE_WEIGHTS) - 1)
         # 优先用动态 portfolio 权重（optimize_portfolio 更新），未优化则用 stage 静态权重
         weights = self._get_portfolio_weights()
         if not weights:
             weights = STAGE_PURPOSE_WEIGHTS[stage_idx]
+        sql = ("SELECT name, purpose, scenario, priority, status, constraints, "
+               "coverage_bin, sim_time, fail_rate, effectiveness, run_count "
+               "FROM testcase_registry")
+        args: tuple = ()
+        if module:
+            # 老行（`module=''`）**不在这里兜底**：按名字猜模块是读侧的启发式，
+            # 猜错会把别的项目的用例放进来（正是要修的病）。归属由
+            # `vagent lineage bind-modules` 一次性回填，之后这里就只剩一条规则。
+            sql += " WHERE module=?"
+            args = (str(module).strip(),)
         with self._lock:
-            rows = self._connect().execute(
-                "SELECT name, purpose, scenario, priority, status, constraints, "
-                "coverage_bin, sim_time, fail_rate, effectiveness, run_count "
-                "FROM testcase_registry").fetchall()
+            rows = self._connect().execute(sql, args).fetchall()
 
         # 状态排序权重：planned 最优先，deprecated 最后
         status_rank = {STATUS_PLANNED: 0, STATUS_GENERATED: 1, STATUS_RUNNING: 2,
