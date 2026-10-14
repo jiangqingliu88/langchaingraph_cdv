@@ -304,6 +304,84 @@ class TestTheSignoffReportShowsBothNumbers:
         assert rep["gates"]["target"] == 95.0
 
 
+class TestExpandSeedsActuallyReachesTheSimulator:
+    """扩种动作必须**真的换掉随机流** —— 否则它是个静默空转。
+
+    实测：`n_apply_expand_seeds` 只写 `state.seed`，而那个字段**只被当覆盖 agent
+    的输入**用（`{"seed": state.seed}`），回归的 `SEED` 一直是写死的 `12345` +
+    case 模型声明的 `base`。于是账上记着"扩了种"、仿真跑的是同一批激励 ——
+    **闭环六轮覆盖率每轮钉在 56.2，而每轮 ucdb 的 sha256 各不相同**
+    （数据在采，采的是同一批）。
+    """
+
+    def _st(self, tmp_path, rnd):
+        from src.layers.l3_decision.decision_engine import Action
+
+        class _St:
+            output_root = str(tmp_path)
+            round_num = rnd
+
+            def action(self):
+                return Action(action_type="EXPAND_SEEDS",
+                              params={"count": 1000}, reason="覆盖率停滞")
+        return _St()
+
+    def test_the_offset_accumulates_across_rounds(self, tmp_path):
+        from src.layers.l2_orchestration.nodes.pure.apply import n_apply_expand_seeds
+
+        got = [asyncio.run(n_apply_expand_seeds(self._st(tmp_path, r), {}))["seed"]
+               for r in (1, 2, 3)]
+        assert got == [1000, 2000, 3000], "偏移要**累加**（单调），不是每轮覆盖同一个值"
+
+    def test_the_regression_reader_shifts_the_base_seed(self, tmp_path):
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
+                                                                  _seed_offset)
+
+        (tmp_path / "coverage").mkdir()
+        (tmp_path / "coverage" / "seed_expand.json").write_text(
+            '{"round": 2, "offset": 2000}', encoding="utf-8")
+        plan = {"npu_type_test": {"base": 2001, "count": 15, "explore": 3}}
+
+        before = _seed_lines("npu_type_test", plan)
+        after = _seed_lines("npu_type_test", plan, _seed_offset(tmp_path))
+        assert before[-1] == "    variables: {SEED: 2001}"
+        assert after[-1] == "    variables: {SEED: 4001}"
+        # **count 不动**：要的是"没跑过的种子"，不是"多跑几遍同一条"
+        assert before[0] == after[0] == "    count: 18"
+
+    def test_no_offset_file_means_no_shift(self, tmp_path):
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import _seed_offset
+
+        assert _seed_offset(tmp_path) == 0
+
+    def test_every_seed_line_call_site_passes_the_offset(self):
+        """**一处漏了就是一条测试永远跑老种子** —— 这个仓库的经典坑（改了三个漏一个）。
+
+        用负向断言排掉**函数定义**那一行（它的形参里也有 `offset`，按
+        `[^)]*` 抓会连签名一起抓进来 —— 第一版就是这么误报的）。
+        """
+        import re
+
+        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(
+            encoding="utf-8")
+        calls = re.findall(r"_seed_lines\((?!name: str)[^)]*\)", src)
+        assert calls, "一条调用都没匹配到 —— 正则又写歪了"
+        missing = [c for c in calls if "seed_offset" not in c]
+        assert not missing, f"这些调用没带种子偏移：{missing}"
+
+    def test_the_generated_yaml_carries_the_shifted_seed(self, tmp_path):
+        """整条链：写偏移 → 生成 regression.yaml → 里面是顺移后的 SEED。"""
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import _seed_lines
+
+        (tmp_path / "coverage").mkdir()
+        (tmp_path / "coverage" / "seed_expand.json").write_text(
+            '{"offset": 500}', encoding="utf-8")
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import _seed_offset
+
+        lines = _seed_lines("t", {"t": {"base": 100, "count": 2}}, _seed_offset(tmp_path))
+        assert "SEED: 600" in "".join(lines)
+
+
 class TestTheBreakerCountsExecutionFailuresNotDispleasingVerdicts:
     """熔断计**动作执行失败**，不计"结论不合意"。
 

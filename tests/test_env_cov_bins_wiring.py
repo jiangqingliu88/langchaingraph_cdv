@@ -753,7 +753,10 @@ class TestBatchTestsAreRunnable:
         block = block[:block.index("loopback 测试")]
         assert "_sim_run_cmd(dut_top, bname)" in block, \
             "+UVM_TESTNAME 必须是**批次名**，否则对不上生成的类"
-        assert "_seed_lines(bname, seed_plan)" in block
+        assert "_seed_lines(bname, seed_plan" in block
+        # 末位那个是闭环"扩种"的种子偏移（`seed_expand.json`）—— 不带它，扩种
+        # 动作就落不到回归上（见 tests/test_convergence_loop.py 那组）
+        assert "seed_offset" in block
 
 
 class TestModuleNameIsAlwaysAcii:

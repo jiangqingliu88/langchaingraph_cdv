@@ -1333,7 +1333,35 @@ def _seed_plan(output_dir: Path) -> Dict[str, Dict[str, int]]:
     return out
 
 
-def _seed_lines(name: str, plan: Dict[str, Dict[str, int]]) -> List[str]:
+def _seed_offset(output_dir: Path) -> int:
+    """闭环"扩种"动作留下的**种子偏移**（`coverage/seed_expand.json`）。
+
+    ## 为什么需要这条线
+
+    决策层选 `EXPAND_SEEDS` 时会把 `{"count": N}` 交给 `n_apply_expand_seeds`，
+    那边写进 `state.seed` 并记一行"扩种 → seed += N" —— **但那个 state 只被当
+    覆盖 agent 的输入用**，回归的 `SEED` 一直是写死的 `12345` + case 模型声明的
+    `base`。于是这个动作是个**静默空转**：账上记着"扩了种"，仿真跑的却是同一批
+    随机流，覆盖率每轮钉在同一个数（实测六轮 56.2 不动，而每轮 ucdb 的 sha256
+    都不一样 —— 数据在采，只是采的是同一批激励）。
+
+    约定：`n_apply_expand_seeds` 每轮把偏移**累加**着写进这个文件（单调递增，
+    不覆盖历史），回归生成时把偏移加到每条 test 的基准种子上。
+    读不到就是 `0`（没扩过种）—— 不编一个偏移出来。
+    """
+    path = Path(output_dir) / "coverage" / "seed_expand.json"
+    if not path.is_file():
+        return 0
+    try:
+        import json as _json
+        return int((_json.loads(path.read_text(encoding="utf-8",
+                                                 errors="replace")) or {}).get("offset", 0))
+    except Exception:                                      # noqa: BLE001
+        return 0
+
+
+def _seed_lines(name: str, plan: Dict[str, Dict[str, int]],
+                offset: int = 0) -> List[str]:
     """这条 test 的 `count` / `SEED` 两行（计划里没有就 `count: 1`）。
 
     **`count` 展开的种子是"基准 + 逐条递增"**（回归框架 `expand_count`）——
@@ -1342,6 +1370,10 @@ def _seed_lines(name: str, plan: Dict[str, Dict[str, int]]) -> List[str]:
 
     `explore`（探索种子）**并进 count**：它是"防过拟合那几条"，跑法一样、只是
     目的不同；分成两条 test 反而让"这一批一共跑了多少次"说不清。
+
+    `offset` 是闭环"扩种"动作累加出来的偏移（见 `_seed_offset`）—— 加到**基准**
+    上，于是整段的随机流换一条（不是把 count 撑大：多跑几条同样的种子没有意义，
+    要的是**没跑过的**那些）。
     """
     s = plan.get(name)
     if not s:
@@ -1350,7 +1382,7 @@ def _seed_lines(name: str, plan: Dict[str, Dict[str, int]]) -> List[str]:
     if total <= 0:
         return ["    count: 1"]
     return [f"    count: {total}",
-            f"    variables: {{SEED: {int(s.get('base', 0))}}}"]
+            f"    variables: {{SEED: {int(s.get('base', 0)) + int(offset or 0)}}}"]
 
 
 def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
@@ -1373,6 +1405,13 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
 
     # 种子管理：从**与 case 模型同批落盘**的功能覆盖率计划里读（只读不算）
     seed_plan = _seed_plan(output_dir)
+    # 闭环"扩种"动作的偏移（`coverage/seed_expand.json`，由 apply 阶段写入）。
+    # **不加这一条，扩种就是个静默空转**：决策记着"seed += N"，回归照旧跑
+    # 写死的 12345 + 计划的 base，每轮同一批随机流（实测覆盖率六轮不动）。
+    seed_offset = _seed_offset(output_dir)
+    if seed_offset:
+        print(f"  [find_yaml] 扩种偏移 +{seed_offset}：每条 test 的基准种子已顺移"
+              f"（闭环扩种动作的落点）", flush=True)
 
     # 从 spec.json 提取测试点
     test_points = []
@@ -1465,7 +1504,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             scenario = c.get("scenario", "")
             test_lines.append(f"  - name: {cname}")
             test_lines.append(f"    build: build_{module_name}_dut")
-            test_lines.extend(_seed_lines(cname, seed_plan))
+            test_lines.extend(_seed_lines(cname, seed_plan, seed_offset))
             # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
             # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
             _run_cmd = _sim_run_cmd(dut_top, f"{env_name}_directed_test")
@@ -1480,7 +1519,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             priority = tp.get("priority", "P1")
             test_lines.append(f"  - name: {tname}")
             test_lines.append(f"    build: build_{module_name}_dut")
-            test_lines.extend(_seed_lines(tname, seed_plan))
+            test_lines.extend(_seed_lines(tname, seed_plan, seed_offset))
             # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
             # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
             _run_cmd = _sim_run_cmd(dut_top, f"{env_name}_base_test")
@@ -1495,7 +1534,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         for _tname in (f"{env_name}_base_test", f"{env_name}_directed_test"):
             test_lines.append(f"  - name: test_{_tname}")
             test_lines.append(f"    build: build_{module_name}_dut")
-            test_lines.extend(_seed_lines(f"test_{_tname}", seed_plan))
+            test_lines.extend(_seed_lines(f"test_{_tname}", seed_plan, seed_offset))
             # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
             # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
             _run_cmd = _sim_run_cmd(dut_top, _tname)
@@ -1520,7 +1559,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     # 不会污染用例库。
     test_lines.append(f"  - name: {module_name}_gen_stimulus")
     test_lines.append(f"    build: build_{module_name}_dut")
-    test_lines.extend(_seed_lines(f"{module_name}_gen_stimulus", seed_plan))
+    test_lines.extend(_seed_lines(f"{module_name}_gen_stimulus", seed_plan, seed_offset))
     test_lines.append(f"    run_cmd: '{_sim_run_cmd(dut_top, f'{env_name}_gen_test')}'")
     # `p3` = 错误 + 随机。原先只有 `smoke/random/gap` —— **没有任何 pN tag**，
     # 于是这条随机用例哪个分级都进不去（分级回归按 p0..p3 筛，见 REGRESSION_STAGES）。
@@ -1540,7 +1579,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         for bname, meta in seed_plan.items():
             test_lines.append(f"  - name: {bname}")
             test_lines.append(f"    build: build_{module_name}_dut")
-            test_lines.extend(_seed_lines(bname, seed_plan))
+            test_lines.extend(_seed_lines(bname, seed_plan, seed_offset))
             test_lines.append(f"    run_cmd: '{_sim_run_cmd(dut_top, bname)}'")
             prio = (meta.get("priority") or "P1").lower()
             theme = meta.get("theme") or ""
@@ -1565,7 +1604,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             pass
         test_lines.append(f"  - name: test_{ag}_loopback")
         test_lines.append(f"    build: build_{module_name}_{ag}_loopback")
-        test_lines.extend(_seed_lines(f"test_{ag}_loopback", seed_plan))
+        test_lines.extend(_seed_lines(f"test_{ag}_loopback", seed_plan, seed_offset))
         # 完整仿真命令（demo.yaml 的 `run_cmd` 写法）：顶层模块名、日志路径、
         # 跑完的成败判定都写在这一条里，不再往 `run_opts` 里挤。
         _run_cmd = _sim_run_cmd(f"{ag}_loopback_tb", f"{ag}_loopback_test")
@@ -1667,7 +1706,9 @@ include:
   - {_common_base}
 
 variables:
-  SEED: 12345
+  # 闭环"扩种"动作的偏移加在基准上（见 `_seed_offset`）—— 加到**每一条**上，
+  # 否则没有批次计划的那些 test（loopback / 手写用例）永远跑同一批随机流。
+  SEED: {12345 + int(seed_offset or 0)}
   QUESTA: {_questa_root}
   UVM_SRC: {_questa_root}/verilog_src/uvm-1.2/src
   UVM_DPI: {_questa_root}/uvm-1.2/win64/uvm_dpi
