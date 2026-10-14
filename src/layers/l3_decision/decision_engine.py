@@ -184,12 +184,16 @@ class CoverageDrivenDecisionEngine:
             # 3c. 未激励缺口 → 定向测试生成
             unstimulated = [g for g in gaps if g.get("reason") == "unstimulated"]
             if unstimulated:
+                # ⚠️ **必须给 fallback**：`_with_experience` 的"无效就降级"是
+                # **有 fallback 才生效**的，而这里原来没给 —— 于是"该动作历史
+                # 79 次尝试、改善率 4%"被算出来、写进 reason，然后**照选不误**。
+                # 实测：闭环六轮每轮都选它，覆盖率每轮钉在 56.2。
                 return self._with_experience(Action(
                     action_type="GENERATE_DIRECTED_TEST",
                     params={"gaps": unstimulated},
                     priority="HIGH",
                     reason=f"覆盖率 {functional}% < {self.target}%，存在 {len(unstimulated)} 处未激励缺口，生成定向测试",
-                ))
+                ), self.expand_seeds_action())
             # 3d. 旧接口 uncovered_bins → 定向测试
             if uncovered:
                 return Action(
@@ -261,6 +265,29 @@ class CoverageDrivenDecisionEngine:
             if feat and target:
                 parts.append(f"{feat}.{target}")
         return "；".join(parts) if parts else "（未映射）"
+
+    def expand_seeds_action(self) -> Action:
+        """**无效动作的替代**：扩种（换随机流）。
+
+        为什么固定是它：扩种与"补定向"是**不同手段**（换随机流 vs 补特定组合），
+        且无前置条件（任何时候都做得了）。被降级的动作本身就是扩种时，
+        `_with_experience` 不会再往下降（见那里的判断），所以不会自指。
+        """
+        return Action(
+            action_type="EXPAND_SEEDS",
+            params={"count": self.seed_expand_count},
+            priority="MEDIUM",
+            reason="扩种：换一批随机流（覆盖率停滞，且原动作历史已证明无效）",
+        )
+
+    def with_experience(self, action: Action, fallback: Action = None) -> Action:
+        """公开入口 —— **决策层两条路径共用这一个降级机制**。
+
+        brain 的 RL 覆盖路径原来自己重写了一遍同样的判断，而那条路顺手
+        `import l5_evolution`（越级反向依赖，被层向测试抓到）。机制只有这一处，
+        装配（谁提供经验）由 L2 注入。
+        """
+        return self._with_experience(action, fallback)
 
     def _with_experience(self, action: Action, fallback: Action = None) -> Action:
         """记忆：附加动作历史效果说明；若历史证明无效且有 fallback，降级。

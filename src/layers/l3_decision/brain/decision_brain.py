@@ -115,24 +115,18 @@ class DecisionBrain:
                     f"（RL 选了 {action_type}，但当前观测不支持它"
                     f"—— 退回规则动作；RL 只学'选哪个'，判不了'做不做得成'）")
                 return rule_action
-            # **历史已证明无效的动作，有替代就别选它**（见 `_ineffective_alternative`）
-            _alt = self._ineffective_alternative(action_type)
-            if _alt:
-                from src.layers.l5_evolution.growth import get_action_experience_note
-                return Action(
-                    action_type=_alt,
-                    params=self._params_for(_alt, obs, rule_action),
+            # **历史已证明无效的动作，有替代就别选它** —— 走规则引擎那一个机制
+            # （`with_experience`），不在这里另写一份：另写的那份顺手 import 了
+            # `l5_evolution`，而 L3 越级到 L5 是**被层向测试拦下**的（实测抓到）。
+            return self.rule_engine.with_experience(
+                Action(
+                    action_type=action_type,
+                    params=self._params_for(action_type, obs, rule_action),
                     priority="MEDIUM",
-                    reason=(f"RL 选了 {action_type}，但它历史已证明无效"
-                            f"{get_action_experience_note(action_type)}"
-                            f" → 改选 {_alt}"),
-                )
-            return Action(
-                action_type=action_type,
-                params=self._params_for(action_type, obs, rule_action),
-                priority="MEDIUM",
-                reason=(f"RL 覆盖规则：{rule_action.action_type} → {action_type}"
-                        f"（状态 {state}，已学习 {self.rl_policy.q_entries_for(state)} 条）"),
+                    reason=(f"RL 覆盖规则：{rule_action.action_type} → {action_type}"
+                            f"（状态 {state}，已学习 {self.rl_policy.q_entries_for(state)} 条）"),
+                ),
+                self.rule_engine.expand_seeds_action(),
             )
 
         # 冷启动（RL 无经验）：先看有没有跨 run 蒸馏出的动作权重
@@ -147,43 +141,8 @@ class DecisionBrain:
                         f"{self.distilled_weights.get(pick, 1.0):.2f}）"),
             )
         # 规则引擎选的动作也可能**历史已证明无效** —— 同一道闸门
-        _alt = self._ineffective_alternative(rule_action.action_type)
-        if _alt:
-            from src.layers.l5_evolution.growth import get_action_experience_note
-            return Action(
-                action_type=_alt,
-                params=self._params_for(_alt, obs, rule_action),
-                priority="MEDIUM",
-                reason=(f"规则选了 {rule_action.action_type}，但它历史已证明无效"
-                        f"{get_action_experience_note(rule_action.action_type)}"
-                        f" → 改选 {_alt}"),
-            )
-        return rule_action
-
-    @staticmethod
-    def _ineffective_alternative(action_type: str) -> Optional[str]:
-        """动作用过很多次、几乎不涨覆盖率 → 换一个**手段不同**的。
-
-        ## 为什么这条必须有
-
-        `l5_evolution.growth.is_action_proven_ineffective()` 早就写好了，L5 的模块头
-        也写明它的用途是"历史证明无效的动作，**决策层降级/避开**" —— 但它**零调用者**：
-        同一份数据被打印在决策理由里（`[经验: 该动作历史 79 次尝试，改善率 4%]`），
-        然后**照选不误**。实测：闭环六轮，每轮都选 `GENERATE_DIRECTED_TEST`
-        （该动作当时 79 次尝试、改善率 4%、平均 Δ+1.2%），覆盖率每轮钉在 56.2 不动。
-        **算出来了、写出来了、就是没人据此做决定。**
-
-        替代固定选 `EXPAND_SEEDS`：它与"补定向"是**不同手段**（换随机流 vs 补特定
-        组合），且无前置条件。动作本身就是那个无效的、或没有替代时返回 `None`
-        （宁可照原样走，也不要在这里编一个动作）。
-        """
-        try:
-            from src.layers.l5_evolution.growth import is_action_proven_ineffective
-        except Exception:                                      # noqa: BLE001
-            return None
-        if not is_action_proven_ineffective(action_type):
-            return None
-        return "EXPAND_SEEDS" if action_type != "EXPAND_SEEDS" else None
+        return self.rule_engine.with_experience(
+            rule_action, self.rule_engine.expand_seeds_action())
 
     @staticmethod
     def _supported_by_observation(action_type: str, obs: Any) -> bool:

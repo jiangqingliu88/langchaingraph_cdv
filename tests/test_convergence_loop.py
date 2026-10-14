@@ -305,47 +305,79 @@ class TestTheSignoffReportShowsBothNumbers:
 
 
 class TestAnActionProvenIneffectiveIsActuallyAvoided:
-    """**算出来了、写出来了、就是没人据此做决定** —— 这条缺的是"据此"。
+    """**算出来了、写出来了、就是没人据此做决定**。
 
-    `l5_evolution.growth.is_action_proven_ineffective()` 早就写好了，L5 的模块头
-    也写明用途是"历史证明无效的动作，**决策层降级/避开**"，但它**零调用者**：同一份
-    数据被打印进决策理由（`[经验: 该动作历史 79 次尝试，改善率 4%]`），然后照选不误。
+    `l5_evolution.growth.is_action_proven_ineffective()` 早就写好，L5 的模块头也
+    写明用途是"历史证明无效的动作，**决策层降级/避开**"。而规则引擎里那个降级
+    （`_with_experience`）是**有 fallback 才生效**的 —— 而唯一的调用点没给 fallback，
+    于是判断被算出来、写进 reason（`[经验: 该动作历史 83 次尝试，改善率 4%]`）、
+    然后**照选不误**：闭环六轮每轮都选它，覆盖率每轮钉在 56.2。
 
-    实测：闭环六轮每轮都选 `GENERATE_DIRECTED_TEST`（当时 83 次尝试 / 改善率 3.6% /
-    平均 Δ+1.1%），覆盖率每轮钉在 56.2 不动。
+    修法是**用它那一个机制**（而不是在别处另写一份 —— 另写的那份顺手 import 了
+    `l5_evolution`，被层向测试拦下）。
     """
 
-    def _alt(self, action, monkeypatch, proven):
-        from src.layers.l3_decision.brain.decision_brain import DecisionBrain
+    class _Provider:
+        def __init__(self, bad): self.bad = bad
+        def note(self, a): return f" [经验: {a} 历史 {a in self.bad}]"
+        def ineffective(self, a): return a in self.bad
 
-        monkeypatch.setattr("src.layers.l5_evolution.growth.is_action_proven_ineffective",
-                            lambda *a, **k: proven)
-        return DecisionBrain._ineffective_alternative(action)
+    def _engine(self, bad):
+        from src.layers.l3_decision.decision_engine import CoverageDrivenDecisionEngine
 
-    def test_a_proven_bad_action_gets_swapped(self, monkeypatch):
-        assert self._alt("GENERATE_DIRECTED_TEST", monkeypatch, True) == "EXPAND_SEEDS"
+        return CoverageDrivenDecisionEngine(target=95.0,
+                                            experience=self._Provider(bad))
 
-    def test_a_fine_action_is_left_alone(self, monkeypatch):
-        assert self._alt("GENERATE_DIRECTED_TEST", monkeypatch, False) is None
+    def _act(self, action_type):
+        from src.layers.l3_decision.decision_engine import Action
 
-    def test_the_alternative_is_never_itself(self, monkeypatch):
-        """扩种无效时**不返回它自己**（否则等于原地打转），也没有替代就照原样走。"""
-        assert self._alt("EXPAND_SEEDS", monkeypatch, True) is None
+        return Action(action_type=action_type, reason="原始理由")
 
-    def test_both_paths_consult_it(self):
-        """RL 覆盖路径与规则路径**都要过这道闸门** —— 只堵一条，另一条照样把
-        无效动作选出来。"""
+    def test_a_proven_bad_action_is_demoted(self):
+        e = self._engine({"GENERATE_DIRECTED_TEST"})
+        got = e.with_experience(self._act("GENERATE_DIRECTED_TEST"),
+                                e.expand_seeds_action())
+        assert got.action_type == "EXPAND_SEEDS"
+        assert "历史证明无效" in got.reason
+
+    def test_a_fine_action_is_left_alone(self):
+        e = self._engine(set())
+        got = e.with_experience(self._act("GENERATE_DIRECTED_TEST"),
+                                e.expand_seeds_action())
+        assert got.action_type == "GENERATE_DIRECTED_TEST"
+
+    def test_the_generate_branch_actually_passes_the_fallback(self):
+        """**没有 fallback 这道降级就不生效** —— 这正是它六轮空转的原因。
+
+        按"未激励缺口"那条分支的**专属文案**定位（文件里有好几处
+        `GENERATE_DIRECTED_TEST`，按第一次出现取会取到别的分支）。
+        """
+        src = Path("src/layers/l3_decision/decision_engine.py").read_text(
+            encoding="utf-8")
+        i = src.index("处未激励缺口，生成定向测试")
+        assert "expand_seeds_action()" in src[i:i + 400], \
+            "定向测试那条分支又没给 fallback —— 经验判断会被算出来却没人用"
+
+    def test_both_brain_paths_go_through_the_same_mechanism(self):
+        """RL 覆盖路径与规则路径**共用**规则引擎那一个机制（不各写一份）。"""
         src = Path("src/layers/l3_decision/brain/decision_brain.py").read_text(
             encoding="utf-8")
-        assert src.count("_ineffective_alternative(") >= 3, \
-            "定义 1 处 + 两条路径各 1 处：少一处就是有条路绕过它"
+        assert src.count("with_experience(") >= 2, \
+            "两条路径都要过闸门：只堵一条，另一条照样把无效动作选出来"
+
+    def test_the_brain_does_not_reach_up_to_the_evolution_layer(self):
+        """L3 不得 import L5 —— 经验查询走**注入**（层向测试也拦这条，
+        但那条测试在 `tests/test_layer_direction.py`，这里就近再钉一次）。"""
+        import re
+
+        src = Path("src/layers/l3_decision/brain/decision_brain.py").read_text(
+            encoding="utf-8")
+        # 只禁**真 import**，不禁注释里提到这个名字（注释里提到"别这么干"是好事）
+        bad = re.findall(r"^\s*(?:from|import)\s+\S*l5_evolution", src, re.M)
+        assert not bad, f"决策层越级 import 了进化层：{bad}"
 
     def test_the_real_store_backs_the_judgement(self):
-        """这条不是构造出来的：真实经验库里那个动作**确实**越界了。
-
-        真实值随跑的次数变，所以只钉"接口在、字段在"，不钉具体数字 ——
-        钉死数字会在下一次跑之后变成假失败。
-        """
+        """真实经验库里那个动作**确实**越界了（值随跑的次数变，只钉接口形状）。"""
         from src.layers.l5_evolution.growth import get_action_experience
 
         exp = get_action_experience("GENERATE_DIRECTED_TEST")
