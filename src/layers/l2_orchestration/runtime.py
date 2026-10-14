@@ -167,10 +167,21 @@ async def _run_agent(rt: Runtime, state: PipelineState, role: str, label: str,
         data = result.data if isinstance(result.data, dict) else {}
         score = data.get("score", 0)
         status = "passed" if result.success else "failed"
-        rt.governor.after_action(role, success=result.success, eda=_eda,
-                                 tokens=_token_delta(rt))
+        # 熔断计的是**动作执行失败**（这一步真出错了），不是"结论不合意"。
+        #
+        # `audit` 是**报告者**：它 `success=False` 的意思是"这次不达标"
+        #（NEEDS_FIX）—— 那恰恰是闭环**要**的输入，不是执行错误。把它计进熔断，
+        # 等于闭环用自己的方向盘把自己掐停：实测 `audit` 连挂 3 轮 →
+        # `GENERATE_DIRECTED_TEST` 熔断 → 升级人工 → 闭环停在 32.5%，
+        # 而它本该继续迭代到 `max_rounds`。真正的执行失败是下面 `except` 那条。
+        _countable = role != "audit"
+        rt.governor.after_action(role, success=(result.success or not _countable),
+                                 eda=_eda, tokens=_token_delta(rt))
         if not result.success:
-            logger.warning(f"agent '{role}' 执行失败，已反馈驾驭层（熔断计数 +1）")
+            logger.warning(
+                f"agent '{role}' 执行失败，已反馈驾驭层（熔断计数 +1）" if _countable
+                else f"agent '{role}' 结论不合意（未达标）—— **不计熔断**："
+                     f"这是闭环要的输入，不是执行失败")
     except Exception as e:
         logger.warning(f"{role} 执行失败: {e}")
         data, score, status = {}, 0, "error"

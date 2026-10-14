@@ -90,8 +90,21 @@ class AuditExecutor(BaseExecutor):
             gates["model_placeholder_reason"] = "无法读取模型状态"
 
         # 判定
+        #
+        # 门槛用**本次 run 的目标**（`ctx["target"]`，来自 `--target` / 配置），
+        # 不是写死的 95。写死 95 的后果实测过：目标 80 的项目跑出 32.5%，
+        # 判定当然还是 NEEDS_FIX —— 数字看着"有门槛"，其实门槛与实际目标无关，
+        # 而闭环拿它当"动作失败"计数（见 runtime.py 的熔断那一段）。
         pass_rate_ok = gates["regression_passed"]
-        coverage_ok = isinstance(overall, (int, float)) and overall >= 95
+        try:
+            _target = float(ctx.get("target") or 0) if hasattr(ctx, "get") else 0.0
+        except (TypeError, ValueError):
+            _target = 0.0
+        # 目标没给（0/缺失）就不假装有门槛：如实说"判不了"，不让它静默通过
+        coverage_ok = (isinstance(overall, (int, float)) and _target > 0
+                       and overall >= _target)
+        gates["target"] = _target
+        gates["coverage_ok"] = bool(coverage_ok)
         verdict = "READY" if (pass_rate_ok and coverage_ok and gates.get("rtl_real", False)
                               and gates["model_real"]) else "NEEDS_FIX"
 

@@ -255,15 +255,15 @@ def _indent(text: str, n: int = 2) -> str:
 
 
 def _is_clock_port(name: str) -> bool:
-    """检测是否为时钟端口"""
-    n = name.lower()
-    return "clk" in n or "clock" in n
+    """检测是否为时钟端口 —— **判定口径在 `src/tools/lib/ports.py`**（共用）。"""
+    from src.tools.lib.ports import is_clock_port
+    return is_clock_port(name)
 
 
 def _is_reset_port(name: str) -> bool:
-    """检测是否为复位端口"""
-    n = name.lower()
-    return "rst" in n or "reset" in n
+    """检测是否为复位端口 —— 同上，别在这里另写一份（两份会漂）。"""
+    from src.tools.lib.ports import is_reset_port
+    return is_reset_port(name)
 
 
 def _spec_iface_to_port(iface: dict) -> dict:

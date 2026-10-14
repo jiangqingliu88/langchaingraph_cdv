@@ -165,8 +165,13 @@ def check_port_ownership(output_dir: str) -> Dict[str, Any]:
         name = str(p.get("name", "")).split("[")[0].strip()
         proto = str(p.get("protocol", "")).lower()
         direction = str(p.get("direction", "")).upper()
-        if not name or proto in _CLK_RST:
-            continue  # 跳过 clock/reset
+        # 跳过 clock/reset —— **必须按名字也判一遍**：`protocol` 这个字段在
+        # `--rtl` 路径生成的 spec 里根本不存在，只认它的话 `clk`/`rst_n` 会被
+        # 当成"孤儿端口：无 agent 驱动"（它们本由 base 包的 `clk_rst_agent` 驱动），
+        # 于是 env 架构验收每轮 0 分。共用判定见 `src/tools/lib/ports.py`。
+        from src.tools.lib.ports import is_clock_or_reset
+        if not name or proto in _CLK_RST or is_clock_or_reset(name):
+            continue
         checked += 1
         expected_dir = _DUT_INPUT if direction == "INPUT" else _DUT_OUTPUT
         matches = [a for a in agent_ports.get(name, []) if a["dir"] == expected_dir]

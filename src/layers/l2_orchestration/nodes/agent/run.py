@@ -167,8 +167,17 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
             get_coverage_experience_store().record_round(
                 state.round_num, rt.last_action[0], rt.last_action[1],
                 rt.last_action[2], rt.prev_coverage, final_coverage, rt.last_action[3])
-            rt.governor.after_action(rt.last_action[0],
-                                     success=(final_coverage > rt.prev_coverage),
+            # ⚠️ 这里原来把「覆盖率没涨」记成**动作失败**，于是熔断计的是
+            # "这一轮没长进" —— 而覆盖率**平台期是正常的**（边际收益递减、
+            # 覆盖点本来就打不到、这一轮补的是行为不是数字）。实测后果：
+            # 闭环每轮都判 `GENERATE_DIRECTED_TEST` 失败 → 连续 3 轮 → 熔断 →
+            # 升级人工 → **闭环在 32.5% 处停住**，而 max_rounds 还有余量。
+            #
+            # 动作是否"执行成功"由执行层回答（`runtime.py` 里按 agent 的成功/异常
+            # 计），覆盖率增量是**归因信号**：上面 `record_round(...)` 已经把它
+            # 连同 delta 记进经验库了 —— 该用它去学"哪个动作有效"，不是用它去
+            # 掐断闭环。收敛与否由 `converged` / `max_rounds` 判。
+            rt.governor.after_action(rt.last_action[0], success=True,
                                      tokens=_token_delta(rt))
         except Exception as e:
             logger.warning(f"归因校准记录失败: {e}")

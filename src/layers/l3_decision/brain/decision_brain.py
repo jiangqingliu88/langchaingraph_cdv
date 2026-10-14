@@ -104,6 +104,17 @@ class DecisionBrain:
             # 区分复位/协议/CDC —— 让它挑标签就是猜，而标签会顺着验证计划把
             # 验证带偏（实测一轮里 RL 选出 FIX_RESET_bug，证据里毫无复位线索）。
             action_type = self._fix_label(action_type, obs)
+            # ⚠️ **RL 只学"选哪个动作"，没有证据判断这个动作此刻做不做得了** ——
+            # 与 `_pick_by_weight` 里那条守卫同一个道理（那边写着"只在观测确实
+            # 支持该动作时才采纳权重"）。RL 路径原来没有这道守卫，于是"**空 gaps
+            # 的定向补测**"照样被选中：动作执行了、什么也没补到、覆盖率不动 ——
+            # 而这一轮被判成"失败"，攒够 3 次就把闭环熔断。
+            # 观测不支持 → 退回规则动作（并在 reason 里说清楚为什么）。
+            if not self._supported_by_observation(action_type, obs):
+                rule_action.reason += (
+                    f"（RL 选了 {action_type}，但当前观测不支持它"
+                    f"—— 退回规则动作；RL 只学'选哪个'，判不了'做不做得成'）")
+                return rule_action
             return Action(
                 action_type=action_type,
                 params=self._params_for(action_type, obs, rule_action),
@@ -124,6 +135,29 @@ class DecisionBrain:
                         f"{self.distilled_weights.get(pick, 1.0):.2f}）"),
             )
         return rule_action
+
+    @staticmethod
+    def _supported_by_observation(action_type: str, obs: Any) -> bool:
+        """**这个动作此刻有东西可做吗** —— 观测说了算，不靠动作名字好听。
+
+        与 `_pick_by_weight` 里那段 `supported` 同一口径，抽出来是因为 RL 那条
+        路径也要用：RL 学的是"选哪个动作"（状态 → 动作），它**没有**证据判断
+        "现在有没有 gap 可补" —— 让它自己选就会出现
+        **空 gaps 的 `GENERATE_DIRECTED_TEST`**：执行了、没补到、覆盖率不动，
+        然后被当成失败去熔断闭环（实测就是这条把闭环掐在 32.5%）。
+
+        认不出/无前置条件的动作一律放行（`EXPAND_SEEDS` 就是这种：扩种永远可做）。
+        """
+        gaps = [g for g in (getattr(obs, "gaps", None) or []) if isinstance(g, dict)]
+        reasons = {g.get("reason") for g in gaps}
+        if action_type == "GENERATE_DIRECTED_TEST":
+            return bool(gaps)                 # 没有 gap 就没有可定向的目标
+        if action_type == "RELAX_CONSTRAINT":
+            return bool(gaps) and "constraint" in reasons
+        if action_type == "REFACTOR_RTL":
+            return bool(getattr(obs, "failed_tests", None)
+                        or getattr(obs, "dead_code_modules", None))
+        return True                           # 其余（扩种 / 无前置）总是可做
 
     def _pick_by_weight(self, obs: Any) -> Optional[str]:
         """按蒸馏权重挑一个**观测支持**的动作；无权重或无适用动作时返回 None。

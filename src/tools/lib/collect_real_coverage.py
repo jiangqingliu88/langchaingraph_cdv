@@ -446,16 +446,31 @@ def _parse_vcover_text(text: str, dut_name: str = "") -> dict:
             dm = re.search(r"Design Unit:\s*work\.([\w.]+)", blk)
             if not dm or dm.group(1) != dut_name:
                 continue
+            found = set()
             for m in re.finditer(
                 r"(Branches|Statements|Toggles|Conditions|Lines|FSM)"
                 r"\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)%", blk):
                 base = metric_base.get(m.group(1))
                 if not base:
                     continue
+                found.add(base)
                 result[f"{base}_bins"] = int(m.group(2))
                 result[f"{base}_misses"] = int(m.group(4))
                 result[f"{base}_pct"] = float(m.group(5))
-            vals = [v for k, v in result.items() if k.endswith("_pct") and v > 0]
+            # ⚠️ **只在报告里真出现过的指标上求平均**（`found`），不是"值 > 0 的"。
+            #
+            # 原来过滤的是 `v > 0`：于是"这次**压根没采**的指标"（编译没开 `-cover l`
+            # 就没有 Lines、没采 toggle 就没有 Toggles，它们都是 0）与"采了但确实低"
+            # 的指标被一视同仁 —— 前者被排除出分母、后者拉低平均。数字于是变成
+            # "碰巧采到的那些指标的均值"，而闭环拿它当收敛目标。
+            #
+            # 实测：一份只有 Statements/Branches/Conditions 的报告给出 **32.5%**，
+            # 同一轮的**功能覆盖率是 64.81%**；两个数都不是"覆盖率"，却都在被当覆盖率用。
+            # 现在把"哪些采了/哪些没采"如实报出来（`metrics_present` / `metrics_absent`），
+            # 没采的不进分母，也**不该让闭环去补一个量不到的洞**。
+            result["metrics_present"] = sorted(found)
+            result["metrics_absent"] = sorted(set(metric_base.values()) - found)
+            vals = [result[f"{b}_pct"] for b in sorted(found)]
             if vals:
                 result["overall_pct"] = round(sum(vals) / len(vals), 1)
                 return result
