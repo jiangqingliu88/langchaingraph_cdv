@@ -268,6 +268,14 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
         for pattern in ("*_cov_if.sv", "*_probe.sv"):
             lines.extend(sv.as_posix() for sv in sorted(cov_dir.glob(pattern)))
 
+    # SVA 断言（`bind` 进 DUT）—— **同样必须排在 RTL 之后**，而且**必须收进来**：
+    # 实测全 run 搜一遍，没有任何 `.f`/`.sv`/`.yaml` 引用过 `assertions/*.sv` ——
+    # 也就是说断言**一行都没编进去**，"assertion 不报错"这件事从来没被检验过
+    # （它不是"没有违规"，是"没有断言"）。
+    sva_dir = output_dir / "assertions"
+    if sva_dir.is_dir():
+        lines.extend(sv.as_posix() for sv in sorted(sva_dir.glob("*.sv")))
+
     lines.extend(_env_lines(output_dir, env_name))
     lines.extend(_bench_lines(output_dir))
 

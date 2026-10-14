@@ -203,15 +203,44 @@ class VerifyExecutor(BaseExecutor):
                 logger.warning(f"测试点分解失败（casemodel）: {e}")
 
         # ── 3. 断言生成（真实工具 assertion_tools）──
+        #
+        # 产出的是**可编译、且真会报错**的断言模块：包成 module + `bind` 进 DUT
+        # （`property` / `assert property` 不能待在 $unit 作用域，原来生成的就是
+        # 一份编不过的文件）。**bind 的目标由 `sampling.dut_module` 给** ——
+        # 它写在 **case 模型**里，不在 spec.json 里，所以要合并进来（与 DUT 探针
+        # 同源）；给不出就**不生成**，并在日志里说清楚（不写一份挂不上对象的文件）。
         try:
             from src.layers.l2_orchestration.communication.tool_hub import call_tool
-            # 参数名是 `specs`（不是 spec_json）—— 以 manifest 的 schema 为准
+
+            sva_spec = dict(spec) if isinstance(spec, dict) else {}
+            # 与覆盖率接口共用**同一个** binding 来源（`sampling.dut_module`），
+            # 不各读一份 —— 两处算出不同的模块名，断言会绑到不存在的地方
+            _meta = {}
+            try:
+                from src.tools.casemodel_tools.api import run_covergroups
+                _cm = _find_case_model(_spec_of(output_dir), output_dir)
+                if _cm is not None:
+                    _p = run_covergroups(_cm.read_text(encoding="utf-8"), "dut")
+                    _meta = _p.get("cov_interface") or {}
+            except Exception:                              # noqa: BLE001
+                _meta = {}
+            if _meta.get("dut_module"):
+                sva_spec["sampling"] = {"dut_module": _meta["dut_module"],
+                                        "clock": _meta.get("clock", "clk"),
+                                        "reset": _meta.get("reset", "rst_n")}
             sva = call_tool("generate_sva_assertions",
-                            {"specs": json.dumps(spec, ensure_ascii=False)})
-            asrt_dir = output_dir / "assertions"
-            asrt_dir.mkdir(parents=True, exist_ok=True)
-            (asrt_dir / f"{module_name}_assertions.sv").write_text(sva, encoding="utf-8")
-            files.append(str(asrt_dir / f"{module_name}_assertions.sv"))
+                            {"specs": json.dumps(sva_spec, ensure_ascii=False)})
+            if not (sva or "").strip():
+                logger.warning("断言生成不了：模型里没给 `sampling.dut_module`"
+                               "（bind 的目标都不知道）—— 本轮**没有断言在生效**，"
+                               "用例的 pass 只代表'没报错'，不代表'验过了'")
+            else:
+                asrt_dir = output_dir / "assertions"
+                asrt_dir.mkdir(parents=True, exist_ok=True)
+                (asrt_dir / f"{module_name}_assertions.sv").write_text(sva, encoding="utf-8")
+                files.append(str(asrt_dir / f"{module_name}_assertions.sv"))
+                logger.info(f"断言：{module_name}_assertions.sv（bind 到 "
+                            f"{sva_spec['sampling']['dut_module']}，会被真编译、真报错）")
         except Exception as e:
             logger.warning(f"断言生成失败: {e}")
 

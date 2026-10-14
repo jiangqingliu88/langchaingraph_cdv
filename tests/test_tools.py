@@ -51,10 +51,28 @@ def test_uvm_generate_uvm():
 
 
 def test_sva_assertions():
-    """generate_sva_assertions 返回 SystemVerilog 文本（不是 JSON）。"""
-    result = generate_sva_assertions("{}")
-    assert isinstance(result, str) and len(result) > 0
-    assert "property" in result or "assert" in result
+    """有可断言特征时，返回的必须是**能编译的 module + bind**（不是散着的 property）。
+
+    原来只要求"返回非空文本"，于是"把 `property` 平铺在 $unit 作用域"也算通过 ——
+    而那种文件**编不过**（`property` 不能待在 $unit），而且没人把它放进编译清单。
+    "有文本"和"真的在断言"是两件事。
+    """
+    import json as _json
+
+    code = generate_sva_assertions(_json.dumps({
+        "sampling": {"dut_module": "apb_dut"},
+        "interfaces": [{"name": "APB", "signals": {"psel": {}, "penable": {},
+                                                   "paddr": {"width": 8}, "pwrite": {}}}]}))
+    assert "module apb_dut_sva" in code          # 包成 module（$unit 里放不了 property）
+    assert "bind apb_dut apb_dut_sva" in code    # 挂进 DUT
+    assert "assert property" in code             # **真的断言**（只声明 property 不 assert 等于没断言）
+    assert "input logic psel" in code            # 引用到的信号是**端口**（否则 vlog 报未定义）
+
+
+def test_sva_assertions_without_a_bind_target_are_not_fabricated():
+    """挂不到对象上就**不出** —— 一份绑不上任何模块的断言，只是又一个"看着有"的产物。"""
+    assert generate_sva_assertions("{}") == ""
+    assert generate_sva_assertions('{"interfaces": [{"name": "APB"}]}') == ""
 
 
 def test_collect_sim_log_no_output_dir(tmp_path):

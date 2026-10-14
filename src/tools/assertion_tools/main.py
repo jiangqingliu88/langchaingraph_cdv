@@ -37,16 +37,75 @@ def _extract_interfaces(spec: dict) -> list:
     return interfaces
 
 
+def _ident(text, fallback: str = "") -> str:
+    """任意名字 → SV 标识符（只看 ASCII —— `"指".isalnum()` 也是 True，放过去会
+    生成非 ASCII 标识符，而 vlog 报的是 "Errors: 0"）。"""
+    s = "".join(ch if (ch.isascii() and (ch.isalnum() or ch == "_")) else "_"
+                for ch in str(text or ""))
+    s = s.strip("_")
+    while "__" in s:
+        s = s.replace("__", "_")
+    if not s:
+        return fallback
+    return ("x" + s) if s[0].isdigit() else s
+
+
 @tool("generate_sva_assertions")
 def generate_sva_assertions(specs: str = "") -> str:
-    """根据设计规格生成 SVA 断言（即时 + 并发 + 形式属性）。"""
+    """根据设计规格生成 SVA 断言 —— **可编译、且真的会报错的**一份。
+
+    ## 为什么必须包成 module + bind
+
+    原来这个函数直接把 `property ... endproperty` 与 `assert property(...)` 平铺在
+    文件的 **$unit 作用域**：
+
+      · `property` / `assert property` **不能**待在 $unit（必须在 module / interface /
+        checker / program 里）—— 那样生成的文件**编不过**；
+      · 而且它生成出来之后**没有人把它放进编译清单**（全 run 搜一遍，没有任何
+        `.f`/`.sv`/`.yaml` 引用过 `assertions/<模块>_assertions.sv`）。
+
+    两层加起来的结果：**断言一行都没编进去**，"assertion 不报错"这件事从来没有被
+    检验过 —— 它不是"没有违规"，是"没有断言"。
+
+    与基准探针同一条路子（见 `casemodel_tools.coverage.render_probe`）：包成一个
+    **module**，用 `bind` 挂进 DUT —— 端口连接表达式在**目标模块作用域**里求值，
+    所以 `clk`/`rst_n` 以及断言的信号直接按名字连得过去，不必知道层次路径。
+
+    `dut_module` 由 `sampling.dut_module`（case 模型的 `sampling:` 块）给出；
+    **给不出就不生成**（`""`）—— 一份挂不到任何模块上的断言，只会又是一个
+    "看着有、从没编过"的产物。
+    """
     spec = _parse_spec(specs)
     clk, rst_n = _extract_clock_reset(spec)
     interfaces = _extract_interfaces(spec)
     features = spec.get("features", []) or []
     features_text = " ".join(str(f) for f in features)
 
-    sv_lines = [f"// SVA Assertions — auto-generated", f"// Clock: {clk}, Reset: {rst_n}", ""]
+    dut_module = _ident((spec.get("sampling") or {}).get("dut_module", ""))
+    if not dut_module:
+        return ""            # 挂不到对象上 —— 宁可不生成（调用方据此如实记账）
+
+    clk, rst_n = _ident(clk, "clk"), _ident(rst_n, "rst_n")
+    props: list = []         # 每项 = (注释, property 名, 属性体, 违规消息)
+    #: 断言体里**引用到的**信号 → 位宽。它们必须是 module 的**端口**（bind 靠端口
+    #: 连接把 DUT 的信号接进来）—— 只声明 clk/rst_n 的话，`psel` 这类名字在
+    #: module 里就是未定义变量，**vlog 直接报 `Undefined variable`**（实测）。
+    #: 只收**引用到的**，不是"该协议的全体信号"：多声明一个 DUT 里没有的名字，
+    #: 就变成绑不上的端口（vopt 报错），那同样是"生成得出来、编译不过"。
+    used_sigs: dict = {}
+
+    def _note_signals(body: str, sigs: dict) -> None:
+        for s in (sigs or {}):
+            if re.search(rf"\b{re.escape(str(s))}\b", body):
+                w = 1
+                if isinstance(sigs.get(s), dict):
+                    try:
+                        w = max(1, int(sigs[s].get("width", 1) or 1))
+                    except (TypeError, ValueError):
+                        w = 1
+                used_sigs[str(s)] = w
+
+    sv_lines: list = []
 
     for iface in interfaces:
         name = iface.get("name", "?")
@@ -55,49 +114,86 @@ def generate_sva_assertions(specs: str = "") -> str:
 
         # APB protocol assertions
         if name == "APB" or "APB" in str(sig_names):
-            sv_lines.append("// ── APB Protocol ──")
-            sv_lines.append("property apb_setup_check;")
-            sv_lines.append(f"    @(posedge {clk}) disable iff (!{rst_n})")
-            sv_lines.append("    $rose(psel) |-> psel && !penable;")
-            sv_lines.append("endproperty")
-            sv_lines.append("apb_setup_assert: assert property(apb_setup_check) else $error(\"APB setup violation\");")
-            sv_lines.append("")
-
-            sv_lines.append("property apb_stable_check;")
-            sv_lines.append(f"    @(posedge {clk}) disable iff (!{rst_n})")
-            sv_lines.append("    psel && penable |-> $stable(paddr) && $stable(pwrite);")
-            sv_lines.append("endproperty")
-            sv_lines.append("apb_stable_assert: assert property(apb_stable_check) else $error(\"APB address/write unstable\");")
-            sv_lines.append("")
+            props += [
+                ("APB Protocol", "apb_setup_check",
+                 "$rose(psel) |-> psel && !penable", "APB setup violation"),
+                ("APB Protocol", "apb_stable_check",
+                 "psel && penable |-> $stable(paddr) && $stable(pwrite)",
+                 "APB address/write unstable"),
+            ]
+            for _l, _p, _b, _m in props[-2:]:
+                _note_signals(_b, sigs)
 
         # UART assertions
         if name == "UART" or "UART" in str(sig_names):
-            sv_lines.append("// ── UART Protocol ──")
-            sv_lines.append("property tx_start_stop;")
-            sv_lines.append(f"    @(posedge {clk}) disable iff (!{rst_n})")
-            sv_lines.append("    $fell(tx) |-> ##9 $rose(tx);  // 1 start + 8 data + 1 stop")
-            sv_lines.append("endproperty")
-            sv_lines.append("tx_frame_assert: assert property(tx_start_stop) else $error(\"UART TX frame error\");")
-            sv_lines.append("")
+            props.append(
+                ("UART Protocol", "tx_start_stop",
+                 "$fell(tx) |-> ##9 $rose(tx)  // 1 start + 8 data + 1 stop",
+                 "UART TX frame error"))
+            _note_signals("$fell(tx) $rose(tx)", sigs)
 
         # Handshake assertions
         if any(kw in features_text for kw in ["handshake", "握手", "valid", "ready"]):
-            sv_lines.append("// ── Handshake ──")
-            sv_lines.append("property handshake_stable;")
-            sv_lines.append(f"    @(posedge {clk}) disable iff (!{rst_n})")
-            sv_lines.append("    valid && !ready |=> $stable(data) && valid;")
-            sv_lines.append("endproperty")
-            sv_lines.append("handshake_assert: assert property(handshake_stable) else $error(\"Data changed before ready\");")
-            sv_lines.append("")
+            props.append(
+                ("Handshake", "handshake_stable",
+                 "valid && !ready |=> $stable(data) && valid",
+                 "Data changed before ready"))
+            _note_signals("valid ready data", sigs)
 
-    # Reset assertion
-    sv_lines.append("// ── Reset Check ──")
-    sv_lines.append(f"property reset_initial;")
-    sv_lines.append(f"    @(posedge {clk}) !{rst_n} |-> ##1 {rst_n} [*2] ##1 !{rst_n};")
-    sv_lines.append("endproperty")
-    sv_lines.append("")
+    # ⚠️ 原来这里还有一条 reset 断言：
+    #
+    #     !rst_n |-> ##1 rst_n [*2] ##1 !rst_n
+    #
+    # **它是错的，已删**。那条说的是"复位有效之后，rst_n 必须高两拍、然后再拉低一步"
+    # —— 而任何正常设计的复位释放后 rst_n 就一直为高。发出去的结果不是"报了真错"，
+    # 是**每条用例都误报一次**（造假的失败：比不报还坏，因为人很快会学会忽略断言）。
+    # 断言必须**对正确设计恒真**才谈得上"不报错 = 没问题"。
+    #
+    # 所以：没有可断言的协议特征时**不出断言**（返回空串），由调用方如实记账 ——
+    # 编一条恒假的断言出来，只会把"没有断言"伪装成"断言在跑"。
 
-    return "\n".join(sv_lines) if len(sv_lines) > 4 else json.dumps({"assertions": ["prop1", "prop2"]})
+    if not props:
+        return ""            # 无可断言特征 → 不生成（调用方据此记一笔）
+
+    # ── 包成可 bind 的 module ──
+    mod = f"{dut_module}_sva"
+    guard = f"{mod.upper()}_SV"
+    out = [
+        f"`ifndef {guard}",
+        f"`define {guard}",
+        "",
+        "// SVA 断言 —— 由 `generate_sva_assertions` 生成，**bind 进 DUT**。",
+        "//",
+        "// 为什么必须是 module + bind：`property` / `assert property` **不能**待在 $unit",
+        "// 作用域（原来就是这么生成的 → 一份编不过的文件，而且没人把它放进编译清单）。",
+        "// bind 的端口连接表达式在**目标模块作用域**里求值，所以 clk/rst_n 与断言里引用的",
+        "// 信号按名字直接连得过来，不必知道层次路径。",
+        "",
+        f"module {mod} (",
+        f"  input logic {clk},",
+        f"  input logic {rst_n},",
+    ]
+    for _n, _w in sorted(used_sigs.items()):
+        out.append(f"  input logic [{_w - 1}:0] {_ident(_n)}," if _w > 1
+                   else f"  input logic {_ident(_n)},")
+    out[-1] = out[-1].rstrip(",")          # 端口表尾不许留逗号
+    out.append(");")
+    for label, pname, body, msg in props:
+        out += [
+            f"  // ── {label} ──",
+            f"  property {pname};",
+            f"    @(posedge {clk}) disable iff (!{rst_n}) {body};",
+            "  endproperty",
+            f'  {pname}_a: assert property({pname}) else $error("{msg}");',
+            "",
+        ]
+    # 连接表**不带尾逗号**，统一由 join 加分隔符（`...,)` 是语法错误；两个来源
+    # 各带一个逗号就会连成 `...),,`，而那是**编不过**的）
+    conns = [f"  .{clk}({clk})", f"  .{rst_n}({rst_n})"]
+    conns += [f"  .{_ident(_n)}({_ident(_n)})" for _n in sorted(used_sigs)]
+    out += ["endmodule", "", f"bind {dut_module} {mod} u_{mod}(",
+            ",\n".join(conns), ");", "", f"`endif  // {guard}", ""]
+    return "\n".join(out)
 
 
 @tool("generate_immediate_assertions")

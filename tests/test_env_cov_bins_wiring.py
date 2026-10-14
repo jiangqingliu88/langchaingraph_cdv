@@ -548,7 +548,15 @@ class TestOneAnswerForWhichCaseModel:
         coverage = Path("src/executors/coverage/main.py").read_text(encoding="utf-8")
 
         # verify：写 field_bins 的、写 DUT 探针的、写覆盖率计划的，都得走统一判据
-        assert verify.count("_find_case_model(_spec_of(output_dir), output_dir)") == 3
+        # **不钉死数字**：这条的意图是"每个读模型的落点都走统一判据"，而落点会随
+        # 功能增加（写计划 / 写 bins / 写 DUT 接口 / 给断言找 bind 目标 …）。原来钉
+        # `== 3`，加第 4 个合法落点时它就成了绊脚石 —— 绊住的不是"有人自己拼路径"，
+        # 而是"又多了一个读模型的地方"。真正的守卫是下面那条"别再本地实现一份"。
+        # `>= 3` 而不是 `== 3`：意图是"读模型的地方都走统一判据"，而落点会随功能
+        # 增加（写计划 / 写 bins / 写 DUT 接口 / 给断言找 bind 目标 …）。钉死数字
+        # 绊住的是**又一个合法落点**，不是"有人自己拼路径"—— 后者由下面那条
+        # `test_verify_has_no_local_copy_of_the_rule` 管（`candidates.append` 的禁令）。
+        assert verify.count("_find_case_model(_spec_of(output_dir), output_dir)") >= 3
         # coverage：不再直接读 casemodel_path
         assert "casemodel_path(output_dir)" not in coverage.replace(
             "from src.layers.l1_infrastructure.layout import casemodel_path", "")
