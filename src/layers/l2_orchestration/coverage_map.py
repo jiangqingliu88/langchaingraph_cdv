@@ -17,6 +17,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+import structlog
+
+logger = structlog.get_logger()
+
 
 # metric → purpose 映射（对应 L0 验证目标）
 _METRIC_PURPOSE = {
@@ -66,7 +70,26 @@ class CoverageMap:
             })
 
         # 2. toggle 明细 bin（signal 级精确位置）
-        for td in (toggle_details or []):
+        #
+        # ⚠️ **没采到 toggle 就不该把它算进分母**。
+        #
+        # 这段无条件按 `toggle_details` 造 bin，而 toggle_details 是从 ucdb 里
+        # **声明过的信号**里读的 —— 与"这次编译有没有采 toggle"无关。于是
+        # toggle 没采的那些 run 里，这些 bin 全是 miss，把总分母撑大、
+        # 把 `coverage`（= Σcovered/Σbins）压下去。
+        #
+        # 后果实测：`effective_coverage` 47.3%，而同一轮的**功能覆盖率是 56.2%** ——
+        # 而 `converged` 正是拿 `effective_coverage >= target` 判的（lifecycle.py），
+        # 于是收敛**永远达不到**。这与上面注释里记的那次"拿 metric 干净数去比 95%"
+        # 是同一类病：**把"没测"当成"没覆盖"**。
+        # 判据用覆盖率解析自己报出来的 `metrics_absent`（见 collect_real_coverage）。
+        _absent = {str(x) for x in (nested_cov.get("metrics_absent") or [])}
+        _toggle_collected = "toggle" not in _absent
+        if not _toggle_collected and toggle_details:
+            logger.info(f"toggle 覆盖率本次未采集（metrics_absent 里有 toggle）—— "
+                        f"{len(toggle_details)} 条 toggle bin **不计入分母**："
+                        f"「没测」不是「没覆盖」")
+        for td in (toggle_details or []) if _toggle_collected else []:
             signal = td.get("signal", "")
             hi, lo = td.get("high", 0), td.get("low", 0)
             misses = td.get("misses", 0) or 0

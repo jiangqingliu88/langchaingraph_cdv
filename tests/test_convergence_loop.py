@@ -196,6 +196,40 @@ class TestTheAuditGateUsesThisRunsTarget:
         assert rep["verdict"] == "NEEDS_FIX"
 
 
+class TestUncollectedMetricsStayOutOfTheDenominator:
+    """**没测 ≠ 没覆盖** —— 没采到的指标不许进分母。
+
+    覆盖地图（`coverage_map`）无条件按 `toggle_details` 造 toggle bin，而那份明细
+    是从 ucdb 里**声明过的信号**读的、与"这次编译有没有采 toggle"无关。于是没采
+    toggle 的 run 里这些 bin 全是 miss，把 `coverage = Σcovered/Σbins` 压低 ——
+    而 `converged` 正是拿它比目标的（`lifecycle.py`：`effective_coverage >= target`），
+    于是**收敛永远达不到**（实测 47.3%，而功能覆盖率同期 56.2%）。
+
+    这与 `_parse_vcover_text` 那边"按 > 0 过滤"是同一类病的两处：都是把
+    "没测"当成了"没覆盖"。
+    """
+
+    def _map(self, absent):
+        from src.layers.l2_orchestration.coverage_map import CoverageMap
+
+        cov = {"functional_pct": 50.0, "branch_bins": 100, "branch_misses": 50,
+               "metrics_absent": absent}
+        toggle = [{"signal": "sig", "high": 3, "low": 0, "misses": 40, "total": 40}]
+        return CoverageMap().build(cov, toggle, {"bin_total": 10, "bin_hits": 5})
+
+    def test_toggle_bins_are_dropped_when_toggle_was_not_collected(self):
+        with_toggle = self._map([])                                  # 采了 → 计入
+        without = self._map(["fsm", "line", "toggle"])               # 没采 → 不计
+        assert without["total"] < with_toggle["total"]
+        assert all(b["type"] != "toggle" for b in without["bins"])
+        assert without["coverage"] > with_toggle["coverage"], \
+            "没采到的 toggle 被算成 miss 时，分母虚大、比值虚低"
+
+    def test_a_collected_toggle_still_counts(self):
+        with_toggle = self._map([])
+        assert any(b["type"] == "toggle" for b in with_toggle["bins"])
+
+
 class TestTheLoopSteersByAConfiguredMetric:
     """闭环盯哪个覆盖率是**配置项**，不是写死的代码覆盖率。
 
