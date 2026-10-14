@@ -34,6 +34,39 @@ sampling:
   clock: clk
   reset: rst_n
 
+# ── 断言：**"真 pass" 的另一半判据** ──────────────────────────────────────
+#
+# 用户定的口径：**真 pass = SCB 报 mismatched=0 + 断言不报错**（warning 可忽略）。
+# 覆盖率高只说明"激励扫到了"，不等于"设计是对的" —— 断言才是判断对错的那一半。
+#
+# 这些是 DUT 自己的**决策规则**（npu_sched.sv 里那三个 always_comb），写成断言之后：
+#   · 对正确设计**恒真**（不会误报 —— 恒假的断言比没有断言更坏，人很快会学会忽略它）
+#   · 对错的设计**会报**（这正是要的信号）
+#
+# `signals` 显式给**名字 + 位宽**：它们要当 bind 模块的端口，而端口宽度错了会静默截断
+# （`dep_type[1:0]` 写成一维就是只比最低位 —— 那种错编译不报、断言恒真）。
+assertions:
+  - name: queue_level_within_depth
+    expr: "queue_level <= 6'd32"
+    message: "队列水位超过深度 32（计数器越界）"
+    signals: [{name: queue_level, width: 6}]
+
+  - name: raw_never_issues
+    expr: "dep_type == 2'd1 |-> issue_valid == 1'b0"
+    message: "存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）"
+    signals: [{name: dep_type, width: 2}, {name: issue_valid, width: 1}]
+
+  - name: barrier_flushes
+    expr: "barrier_type != 2'd0 |-> issue_decision == 2'd3"
+    message: "屏障命中时必须冲刷（barrier_type!=NONE → issue_decision==FLUSHED）"
+    signals: [{name: barrier_type, width: 2}, {name: issue_decision, width: 2}]
+
+  - name: issued_needs_no_blocker
+    expr: "issue_decision == 2'd0 |-> queue_level != 6'd0 && barrier_type == 2'd0 && dep_type != 2'd1"
+    message: "发射的三个前提：队列非空、无屏障、无 RAW 真依赖"
+    signals: [{name: issue_decision, width: 2}, {name: queue_level, width: 6},
+              {name: barrier_type, width: 2}, {name: dep_type, width: 2}]
+
 sub_objects:
   - {id: OBJ-01, name: 指令队列管理,   code: QUEUE}
   - {id: OBJ-02, name: 指令发射,       code: ISSUE}

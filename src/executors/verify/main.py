@@ -215,19 +215,29 @@ class VerifyExecutor(BaseExecutor):
             sva_spec = dict(spec) if isinstance(spec, dict) else {}
             # 与覆盖率接口共用**同一个** binding 来源（`sampling.dut_module`），
             # 不各读一份 —— 两处算出不同的模块名，断言会绑到不存在的地方
-            _meta = {}
+            _meta, _sva_decl = {}, []
             try:
                 from src.tools.casemodel_tools.api import run_covergroups
                 _cm = _find_case_model(_spec_of(output_dir), output_dir)
                 if _cm is not None:
-                    _p = run_covergroups(_cm.read_text(encoding="utf-8"), "dut")
+                    _text = _cm.read_text(encoding="utf-8")
+                    _p = run_covergroups(_text, "dut")
                     _meta = _p.get("cov_interface") or {}
+                    # 模型声明的断言（`assertions:` 块）—— 设计者写的"这条规则必须
+                    # 恒成立"，比自动生成认得出的协议特征精确得多。**它是"真 pass"
+                    # 的另一半判据**（用户口径：SCB 报 mismatched=0 + 断言不报错）。
+                    import yaml as _yaml
+                    _sva_decl = ((_yaml.safe_load(_text) or {}).get("assertions") or [])
             except Exception:                              # noqa: BLE001
-                _meta = {}
+                _meta, _sva_decl = {}, []
             if _meta.get("dut_module"):
                 sva_spec["sampling"] = {"dut_module": _meta["dut_module"],
                                         "clock": _meta.get("clock", "clk"),
                                         "reset": _meta.get("reset", "rst_n")}
+            if _sva_decl:
+                sva_spec["assertions"] = _sva_decl
+                logger.info(f"断言：模型声明了 {len(_sva_decl)} 条（会 render 成 SVA "
+                            f"并 bind 进 {_meta.get('dut_module') or '?'}）")
             sva = call_tool("generate_sva_assertions",
                             {"specs": json.dumps(sva_spec, ensure_ascii=False)})
             if not (sva or "").strip():

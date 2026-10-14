@@ -107,6 +107,30 @@ def generate_sva_assertions(specs: str = "") -> str:
 
     sv_lines: list = []
 
+    # ── 模型声明的断言**优先** ──
+    #
+    # `casemodel.yaml` 的 `assertions:` 是设计者写的（"这条规则必须恒成立"），
+    # 比自动生成认得出的协议特征**精确得多** —— 自动那套只认 APB/UART/handshake
+    # 这类通用特征，对调度器/仲裁器这种自定义逻辑一个都认不出来（实测：给
+    # npu_sched 生成出来的是空串）。模型给了就用模型的，自动那套是兜底。
+    for a in (spec.get("assertions") or []):
+        if not isinstance(a, dict):
+            continue
+        expr = str(a.get("expr") or "").strip()
+        nm = _ident(a.get("name") or "", "")
+        if not (expr and nm):
+            continue
+        props.append((str(a.get("group") or "模型声明"),
+                      _ident(a.get("name"), "prop"),
+                      expr, str(a.get("message") or nm)))
+        for s in (a.get("signals") or []):
+            if isinstance(s, dict) and s.get("name"):
+                try:
+                    w = max(1, int(s.get("width", 1) or 1))
+                except (TypeError, ValueError):
+                    w = 1
+                used_sigs[_ident(s["name"], "")] = w
+
     for iface in interfaces:
         name = iface.get("name", "?")
         sigs = iface.get("signals", {}) or {}

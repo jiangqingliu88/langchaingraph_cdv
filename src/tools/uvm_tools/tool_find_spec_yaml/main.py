@@ -1480,6 +1480,19 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         # 被记成 pass。实测踩过：环境里 vsim 崩了（连 `sim_vsim.log` 都没生成），
         # 一整轮回归全绿、覆盖率 0%，而各用例的 status.env 都是 pass。
         # 先要求日志非空，再谈里面有没有错。
+        #
+        # ── 第三段：**"没报错"不等于"验过了"** ──
+        #
+        # 用户定的口径：**真 pass = SCB 报 `mismatched=0`（真有比对） + 断言不报错**。
+        # 前两段只查了"没有错"，那对一条**压根没有判据**的用例同样成立 —— 实测：
+        # p0/p1 的 env 测试既没例化 scoreboard、也没断言，20 条照样全绿，而
+        # `test_npu_basic_test` 覆盖率 0.0%/0.0% 也是 pass。
+        #
+        # 所以再要求一条**比对结论**：日志里得有 `mismatched=0`（SCB 的结算行）。
+        # 没有 → 判失败并**写明原因**（`NO_CHECKER_EVIDENCE`），而不是冒充通过。
+        # 断言那半不需要额外条件：断言违规走 `$error` → Questa 打 `** Error:` →
+        # 第二段的 `Errors: *[1-9]` 已经拦住（实测：把 RTL 的 RAW 守卫删掉，
+        # 断言立刻报错、退出码非零）。
         return (
             # `+ntb_random_seed={{ SEED }}`：**每条 test 的种子落点**。`count`
             # 展开时回归框架给每条塞 `local_vars.SEED = base + i - 1`，不给这个
@@ -1491,7 +1504,10 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             '-do "log -r /*; run -all; quit -f" {{ MODE_OPTS | default("") }} ; '
             "[ -s sim_vsim.log ] && "
             '! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]|FATAL ERROR|Errors: *[1-9]"'
-            ' sim_vsim.log'
+            ' sim_vsim.log && { '
+            'grep -qE "mismatched=0" sim_vsim.log '
+            '|| { echo "NO_CHECKER_EVIDENCE: 没有比对结论（真 pass 要求 SCB 报 mismatched=0）"; '
+            'exit 1; }; }'
         )
 
     # 构建测试列表
