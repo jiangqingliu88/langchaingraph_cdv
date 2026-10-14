@@ -146,7 +146,11 @@ class TestTheAuditGateUsesThisRunsTarget:
                                             encoding="utf-8")
         task = {"output_dir": str(run),
                 "ctx": {"regression": {"passed": 3, "failed": 0, "total": 3},
-                        "coverage": {"overall_pct": overall},
+                        # 口径默认是 **functional** —— 所以要给 `functional_pct`，
+                        # 只给 `overall_pct`（代码覆盖率）的话门槛会读到"缺失→0"
+                        # 而判 NEEDS_FIX（那是**对**的行为，见下面那条测试）
+                        "coverage": {"functional_pct": overall,
+                                     "overall_pct": overall},
                         "target": target,
                         "model": {"placeholder": False}}}
         return asyncio.run(AuditExecutor().execute_task(task))
@@ -170,6 +174,100 @@ class TestTheAuditGateUsesThisRunsTarget:
         res = self._run(tmp_path, 0, 99.0)
         assert res.data["report"]["verdict"] == "NEEDS_FIX"
         assert res.data["report"]["gates"]["target"] == 0.0
+
+    def test_a_missing_metric_does_not_fall_back_to_the_other_one(self, tmp_path):
+        """只给代码覆盖率、口径却是 functional → **判不达标**，不是"换个数看看"。
+
+        换口径的后果是目标在无声中变掉：报告里写着 95% 达标，而它其实是另一个
+        口径的数 —— 读的人没有任何线索。
+        """
+        from src.executors.audit.main import AuditExecutor
+
+        run = tmp_path / "output_dut_20260101_000000"
+        (run / "rtl").mkdir(parents=True)
+        (run / "rtl" / "dut.sv").write_text("module dut; endmodule\n", encoding="utf-8")
+        task = {"output_dir": str(run),
+                "ctx": {"regression": {"passed": 3, "failed": 0, "total": 3},
+                        "coverage": {"overall_pct": 99.0},       # 只有代码覆盖率
+                        "target": 80.0, "model": {"placeholder": False}}}
+        rep = asyncio.run(AuditExecutor().execute_task(task)).data["report"]
+        assert rep["coverage_metric"] == "functional"
+        assert rep["coverage"] == 0.0
+        assert rep["verdict"] == "NEEDS_FIX"
+
+
+class TestTheLoopSteersByAConfiguredMetric:
+    """闭环盯哪个覆盖率是**配置项**，不是写死的代码覆盖率。
+
+    写死代码覆盖率的后果实测过：闭环的动作（按覆盖点 gap 生成定向激励）主要动
+    **功能覆盖率**，而收敛信号盯代码覆盖率 —— "补了但数字不动"连续六轮，
+    `convergence_forecast` 报 `rounds_to_target: Infinity`，而功能覆盖率同期 64.81%。
+    **闭环在盯一个它的动作推不动的数。**
+    """
+
+    COV = {"overall_pct": 32.5, "functional_pct": 64.81}
+
+    def test_the_default_metric_is_functional(self):
+        from src.layers.l2_orchestration.planning import get_coverage_metric
+
+        assert get_coverage_metric() == "functional"
+
+    def test_the_picker_returns_the_configured_metric(self):
+        from src.layers.l2_orchestration.planning import pick_coverage_value
+
+        assert pick_coverage_value(self.COV, "functional")["value"] == 64.81
+        assert pick_coverage_value(self.COV, "code")["value"] == 32.5
+        assert pick_coverage_value(self.COV)["metric"] == "functional"
+
+    def test_a_missing_metric_is_reported_not_silently_swapped(self):
+        """缺就**说缺** —— 悄悄换另一个口径会让目标在无声中换掉，
+        而"数字变了"和"口径变了"在报告里长得一样。"""
+        from src.layers.l2_orchestration.planning import pick_coverage_value
+
+        got = pick_coverage_value({"overall_pct": 32.5}, "functional")
+        assert got["present"] is False and got["value"] == 0.0
+        assert got["key"] == "functional_pct"
+
+    def test_the_loop_and_the_audit_share_one_source(self):
+        """闭环的收敛信号与审计的达标门槛**必须同源** —— 否则会出现
+        "闭环在追功能覆盖率、审计在判代码覆盖率"这种错位。"""
+        for p in ("src/layers/l2_orchestration/nodes/agent/run.py",
+                  "src/executors/audit/main.py"):
+            src = Path(p).read_text(encoding="utf-8")
+            assert "pick_coverage_value(" in src, f"{p} 没走统一口径"
+
+
+class TestTheSignoffReportShowsBothNumbers:
+    """报告里**两个覆盖率都要有**，并标出哪个是判定口径。
+
+    只留一个数的话，读的人分不清"32.5%"是代码还是功能 —— 而在同一份 run 里
+    这两个数可以差一倍（32.5% vs 64.81%），"差在哪"正是要回答的问题。
+    """
+
+    def _report(self, tmp_path):
+        from src.executors.audit.main import AuditExecutor
+
+        run = tmp_path / "output_dut_20260101_000000"
+        (run / "rtl").mkdir(parents=True)
+        (run / "rtl" / "dut.sv").write_text("module dut; endmodule\n", encoding="utf-8")
+        task = {"output_dir": str(run),
+                "ctx": {"regression": {"passed": 3, "failed": 0, "total": 3},
+                        "coverage": {"functional_pct": 64.81, "overall_pct": 32.5},
+                        "target": 95.0, "model": {"placeholder": False}}}
+        return asyncio.run(AuditExecutor().execute_task(task)).data["report"]
+
+    def test_it_names_the_metric_and_keeps_both(self, tmp_path):
+        rep = self._report(tmp_path)
+        assert rep["coverage_metric"] == "functional"
+        assert rep["coverage"] == 64.81
+        assert rep["coverage_detail"]["code_overall_pct"] == 32.5
+        assert rep["coverage_detail"]["functional_pct"] == 64.81
+        assert rep["summary"]["code_coverage"] == 32.5
+
+    def test_the_gate_is_on_the_same_number_it_reports(self, tmp_path):
+        rep = self._report(tmp_path)
+        assert rep["gates"]["coverage_ok"] is False          # 64.81 < 95
+        assert rep["gates"]["target"] == 95.0
 
 
 class TestTheBreakerCountsExecutionFailuresNotDispleasingVerdicts:

@@ -36,6 +36,21 @@ class VerificationSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="VERIFY_", extra="allow")
     regression_timeout: int = 3600
     coverage_target: float = 95.0
+    #: **闭环按哪个覆盖率收敛** —— `functional`（默认）或 `code`。
+    #:
+    #: 它决定 `state.final_coverage`（收敛信号）、审计的达标门槛、以及"这一轮
+    #: 有没有长进"的判断全部盯哪个数。
+    #:
+    #:   · `functional` —— **功能覆盖率**（covergroup 的 bin 命中）。它是本项目的
+    #:     方法学落点，也是闭环**动作推得动**的那个数：定向补测补的是覆盖点/bins，
+    #:     "补了 → 涨了"这条因果链是通的。
+    #:   · `code` —— 代码覆盖率（statement/branch/condition…）。它对定向补测不
+    #:     敏感（把一条激励从"没走到"变成"走到了"通常只动个位数 branch），拿它当
+    #:     闭环目标实测会**长期卡死在同一个数**（六轮不动，32.5%）。
+    #:
+    #: 两个数都留在报告里（`report.json` 的 `coverage` / `code_coverage`），
+    #: 换口径只影响"闭环盯哪个"，不影响"人能看到什么"。
+    coverage_metric: str = "functional"
     max_retries: int = 3
     # 回归模式：True=增量（只跑 planned/generated）；False=全量（每次跑所有用例，含已 passed，默认）
     incremental_regression: bool = False

@@ -52,7 +52,11 @@ class AuditExecutor(BaseExecutor):
         passed = regression.get("passed", 0)
         failed = regression.get("failed", 0)
         total = regression.get("total", 0)
-        overall = coverage.get("overall_pct", coverage.get("coverage_pct", 0))
+        # **按口径取**（与闭环同一个来源）—— 门槛挂在哪个数上，必须与闭环盯的那个
+        # 数一致；否则会出现"闭环在追功能覆盖率、审计在判代码覆盖率"这种错位。
+        from src.layers.l2_orchestration.planning import pick_coverage_value
+        _pick = pick_coverage_value(coverage)
+        overall = _pick["value"]
 
         # ── 签核前置门禁（历史 bug：audit 永远 success=True，0% 覆盖率也"通过"）──
         # 任一门禁不满足 → NEEDS_FIX 且 success=False（失败响亮，禁止粉饰）
@@ -109,14 +113,30 @@ class AuditExecutor(BaseExecutor):
                               and gates["model_real"]) else "NEEDS_FIX"
 
         # ── 签核报告（证据链）──
+        #
+        # **两个覆盖率都写进去，并标出哪个是本次判定的口径**。只留一个数的话，
+        # 读报告的人分不清"32.5%"是代码覆盖率还是功能覆盖率 —— 而这两个数在
+        # 同一份 run 里可以差一倍（32.5% vs 64.81%），"差在哪"正是要回答的问题。
         signoff = {
             "verdict": verdict,
             "pass_rate": f"{passed}/{total}",
             "coverage": overall,
+            "coverage_metric": _pick["metric"],
+            "coverage_detail": {
+                "metric": _pick["metric"],
+                "target": gates.get("target"),
+                "functional_pct": coverage.get("functional_pct"),
+                "code_overall_pct": coverage.get("overall_pct"),
+                "code_metrics_present": coverage.get("metrics_present"),
+                "code_metrics_absent": coverage.get("metrics_absent"),
+            },
             "gates": gates,
             "summary": {
                 "total_tests": total, "passed": passed, "failed": failed,
                 "overall_coverage": overall,
+                "coverage_metric": _pick["metric"],
+                "functional_coverage": coverage.get("functional_pct"),
+                "code_coverage": coverage.get("overall_pct"),
                 "rtl_present": gates["rtl_present"],
                 "coverage_collected": gates["coverage_collected"],
             },

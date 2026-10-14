@@ -30,6 +30,46 @@ def get_coverage_target() -> float:
         return 95.0
 
 
+def get_coverage_metric() -> str:
+    """统一**口径**来源：`functional`（默认）或 `code`。
+
+    与 `get_coverage_target` 是一对：目标说"要到多少"，口径说"盯着哪一个数"。
+    分开是因为它们会各自被改（目标按项目调、口径按方法学定），而**口径不能是
+    隐式的** —— 它原来是隐式的（永远看代码覆盖率），于是闭环一直拿一个它的动作
+    推不动的数当收敛目标，六轮不动、还以为是"再跑跑就好了"。
+    """
+    try:
+        from config.settings import Settings
+        m = str(Settings.get_instance().verification.coverage_metric or "").strip().lower()
+    except Exception:
+        m = ""
+    return m if m in ("functional", "code") else "functional"
+
+
+#: 口径 → 覆盖率 dict 里的键。
+#: `functional_pct` 来自 `vcover report -cvg`（covergroup 的 bin 命中），
+#: `overall_pct` 来自代码覆盖率的解析（statement/branch/…）。
+METRIC_KEYS = {"functional": "functional_pct", "code": "overall_pct"}
+
+
+def pick_coverage_value(cov: dict, metric: str = "") -> Dict[str, Any]:
+    """按口径从覆盖率 dict 里取"这次是多少" → `{value, key, metric, present}`。
+
+    **缺就说缺**（`present=False`）：选定的口径没采到时不悄悄换另一个口径 ——
+    那会让闭环的目标在无声中换掉，而"数字变了"和"口径变了"在报告里长得一样。
+    调用方据此**响亮地**记一笔，再决定拿什么数值往下走。
+    """
+    metric = (metric or get_coverage_metric())
+    key = METRIC_KEYS.get(metric, "functional_pct")
+    raw = (cov or {}).get(key)
+    if raw is None:
+        return {"value": 0.0, "key": key, "metric": metric, "present": False}
+    try:
+        return {"value": float(raw), "key": key, "metric": metric, "present": True}
+    except (TypeError, ValueError):
+        return {"value": 0.0, "key": key, "metric": metric, "present": False}
+
+
 class CoveragePlanner:
     """长周期任务规划器：目标分解 + 里程碑 + 进度跟踪 + 收敛预测。"""
 

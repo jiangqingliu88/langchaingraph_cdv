@@ -128,8 +128,26 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
     gaps = data.get("gaps", []) if isinstance(data, dict) else []
     final_coverage = state.final_coverage
     if isinstance(coverage, dict):
-        final_coverage = _as_float(coverage.get("overall_pct",
-                                                coverage.get("coverage_pct", 0)))
+        # **按口径取**（默认功能覆盖率）—— 收敛信号盯哪个数由
+        # `Settings.verification.coverage_metric` 决定，不是写死代码覆盖率。
+        #
+        # 写死代码覆盖率的后果实测过：闭环的动作（按覆盖点 gap 生成定向激励）
+        # 主要动功能覆盖率，而收敛信号盯的是代码覆盖率 —— 于是"补了但数字不动"
+        # 连续六轮，`convergence_forecast` 报 `rounds_to_target: Infinity`，
+        # 而真正的功能覆盖率同期是 64.81%。**闭环在盯一个它的动作推不动的数。**
+        from src.layers.l2_orchestration.planning import pick_coverage_value
+        _pick = pick_coverage_value(coverage)
+        final_coverage = round(_pick["value"], 1)
+        if not _pick["present"]:
+            # 缺就**说出来**，不悄悄换另一个口径（那会让目标在无声中换掉）
+            logger.warning(f"口径 {_pick['metric']} 的覆盖率没采到"
+                           f"（缺 {_pick['key']}）—— 本轮收敛信号按 0 计；"
+                           f"两个口径的现值：{ {k: coverage.get(k) for k in ('overall_pct','functional_pct')} }")
+        else:
+            logger.info(f"覆盖率口径={_pick['metric']} → {final_coverage}%"
+                        f"（另一个口径："
+                        f"{'code' if _pick['metric'] == 'functional' else 'functional'}"
+                        f"={coverage.get('overall_pct' if _pick['metric'] == 'functional' else 'functional_pct')}%）")
 
     # ── Exclude 四步闭环：自动发现 → 提议；已批准 → 有效覆盖率调规 ──
     coverage_map = data.get("coverage_map", {}) if isinstance(data, dict) else {}
