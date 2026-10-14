@@ -328,7 +328,10 @@ class TestTheDutChannelIsWiredIntoTheEnv:
         assert 'uvm_config_db#(virtual {{ _dif.type }})::get' in env_tpl
         # 采样必须**时钟沿 + 复位屏蔽**：复位期间的水位/决策是无意义值
         assert "@(posedge cov_vif.{{ _dif.clock }})" in env_tpl
-        assert "if (cov_vif.{{ _dif.reset }}) cg_dut.sample();" in env_tpl
+        # 复位屏蔽 + 时钟沿采样。判据块（`chk_dut_one()`）跟采样在**同一个**
+        # 复位屏蔽之下 —— 复位期间的值无意义，拿它判会造出一堆假违规
+        assert "if (cov_vif.{{ _dif.reset }}) begin" in env_tpl
+        assert "cg_dut.sample();" in env_tpl
 
     def test_the_dut_channel_is_reported_with_the_others(self):
         """两条通道的数要在**同一份报告**里 —— 各看各的就又要人工对账。"""
@@ -401,7 +404,8 @@ class TestTheRenderedFilesBothSidesOrNeither:
         assert "bins cp_mid = {[1:127]};" in env        # 区间原样落进去
         assert "illegal_bins cp_over = {[256:$]};" in env
         assert "@(posedge cov_vif.pclk);" in env
-        assert "if (cov_vif.presetn) cg_dut.sample();" in env
+        assert "if (cov_vif.presetn) begin" in env       # 复位周期不采、也不判
+        assert "cg_dut.sample();" in env
         assert "`uvm_fatal(" in env
         # 挂载侧：层次路径 = DUT 实例 + bind 实例名
         assert 'uvm_config_db#(virtual apb_slave_cov_if)::set(' in tb

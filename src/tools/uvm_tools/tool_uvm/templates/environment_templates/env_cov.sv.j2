@@ -210,6 +210,44 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 {%- endif %}
   endfunction
 
+{%- set _dc = coverage_dut_checker | default({}) %}
+{%- if _dc and _dc.rules %}
+
+  // ── DUT 检查（**真 pass 的"比对"那一半**）──
+  //
+  // 判据：真 pass = **SCB 报 `mismatched=0`** + 断言不报错。断言那半由 SVA 承担
+  //（bind 进 DUT）；这一半在 env 里逐拍求值**同一组规则**，把结论收口成一行
+  // `matched=…  mismatched=…` 打出来。
+  //
+  // 规则来自 case 模型（设计者写的"这条必须恒成立"），**一份规则两个执行点** ——
+  // 设计侧（SVA）与验证侧（这里）各写一份必然漂，而对不上时没人看得出来。
+  //
+  // 采样的两个条件与 `cg_dut` 一致：**时钟沿 + 不在复位周期**（复位期间的值无意义，
+  // 拿它判会造出一堆假违规）。
+  int unsigned chk_total = 0;
+  int unsigned chk_matched = 0;
+  int unsigned chk_mismatched = 0;
+  string chk_first_fail = "";
+{%- for r in _dc.rules %}
+  int unsigned chk_bad_{{ r.name }} = 0;
+{%- endfor %}
+
+  function void chk_dut_one();
+{%- for r in _dc.rules %}
+    if (!({{ r.expr }})) begin
+      chk_mismatched++;
+      chk_bad_{{ r.name }}++;
+      if (chk_first_fail == "")
+        chk_first_fail = "{{ r.name }}: {{ r.message }}";
+    end else begin
+      chk_matched++;
+    end
+    chk_total++;
+{%- endfor %}
+  endfunction
+{%- endif %}
+
+
 {%- if _dif %}
   // ── DUT 通道：取句柄 + 时钟沿采样 ──
   //
@@ -243,9 +281,17 @@ class {{ environment.env_name }}_coverage extends uvm_component;
     forever begin
       @(posedge cov_vif.{{ _dif.clock }});
 {%- if _dif.reset %}
-      if (cov_vif.{{ _dif.reset }}) cg_dut.sample();   // 复位周期不采
+      if (cov_vif.{{ _dif.reset }}) begin              // 复位周期不采、也不判
+        cg_dut.sample();
+{%- if _dc and _dc.rules %}
+        chk_dut_one();
+{%- endif %}
+      end
 {%- else %}
       cg_dut.sample();
+{%- if _dc and _dc.rules %}
+      chk_dut_one();
+{%- endif %}
 {%- endif %}
     end
   endtask
@@ -274,6 +320,24 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 {%- if _dif %}
     // DUT 通道也在这里报 —— 两条通道的数在**同一份报告**里，才不会各看各的
     `uvm_info("ENV_COV", $sformatf("功能覆盖率[dut]: %.1f%%", cg_dut.get_inst_coverage()), UVM_NONE)
+{%- endif %}
+{%- if _dc and _dc.rules %}
+    // ── 比对结论（**判据读的就是这一行**）──
+    // 回归的判据要求出现 `mismatched=0`；没有这一行就没有比对结论，用例会判
+    // `NO_CHECKER_EVIDENCE` 而不是"通过"（"没报错"不等于"验过了"）。
+    if (chk_mismatched == 0)
+      `uvm_info("DUT_CHK", $sformatf(
+        "[SCB_DUT] total=%0d matched=%0d mismatched=0", chk_total, chk_matched), UVM_NONE)
+    else begin
+{%- for r in _dc.rules %}
+      if (chk_bad_{{ r.name }})
+        `uvm_error("DUT_CHK", $sformatf("规则 %s 违规 %0d 次：{{ r.message }}",
+                   "{{ r.name }}", chk_bad_{{ r.name }}))
+{%- endfor %}
+      `uvm_info("DUT_CHK", $sformatf(
+        "[SCB_DUT] total=%0d matched=%0d mismatched=%0d  首条：%s",
+        chk_total, chk_matched, chk_mismatched, chk_first_fail), UVM_NONE)
+    end
 {%- endif %}
   endfunction
 

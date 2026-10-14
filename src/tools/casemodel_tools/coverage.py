@@ -1313,6 +1313,53 @@ def dut_bins(cm: CoverageModel) -> Dict[str, List[Dict[str, Any]]]:
     return out
 
 
+def checker_rules(decls: List[Dict[str, Any]],
+                  available: List[str] = None) -> Dict[str, Any]:
+    """模型声明的规则 → env 检查组件的**逐拍可求值**形式。
+
+    ## 为什么要转一层
+
+    SVA 的 `a |-> b` 是**时序蕴含**，直接写进 `if` 里不是合法表达式。但在"每个时钟沿
+    各求值一次"的检查里，同拍蕴含等价于 `!a || b`（没有 `##` 延迟的规则都成立）——
+    这是把同一条规则同时喂给 **SVA（bind 进 DUT）** 与 **env 检查组（UVM 收口）**
+    的关键：**一份规则，两个执行点**，数出来的东西才对得上。
+
+    带 `##` / `[*` 的时序规则**不转**（它们表达的是跨拍性质，逐拍 IF 表达不出来）——
+    跳过并列出来，不假装检查了。
+
+    `available` 是 env 那边**真能读到**的信号（覆盖率接口的端口）。规则里引用到
+    接口没有的信号 → 同样跳过并列出来：**说"这条没查"比假装查了强**（用户口径里
+    "没查"不该算过）。
+    """
+    have = set(available or [])
+    rules: List[Dict[str, str]] = []
+    skipped: List[str] = []
+    for d in (decls or []):
+        if not isinstance(d, dict):
+            continue
+        name = str(d.get("name") or "").strip()
+        expr = str(d.get("expr") or "").strip()
+        if not (name and expr):
+            continue
+        if any(t in expr for t in ("##", "[*", "[=", "throughout", "until")):
+            skipped.append(f"{name}（时序规则：`##`/重复算子在逐拍检查里表达不出来）")
+            continue
+        sigs = [str(s.get("name")) for s in (d.get("signals") or [])
+                if isinstance(s, dict) and s.get("name")]
+        missing = [s for s in sigs if have and s not in have]
+        if missing:
+            skipped.append(f"{name}（引用到接口上没有的信号：{'、'.join(missing)}）")
+            continue
+        if "|->" in expr:
+            left, _, right = expr.partition("|->")
+            sv = f"!({left.strip()}) || ({right.strip()})"
+        else:
+            sv = f"({expr})"
+        rules.append({"name": sv_ident(name, "chk"), "expr": sv,
+                      "message": str(d.get("message") or name)})
+    return {"rules": rules, "skipped": skipped}
+
+
 def render_cov_interface(cm: CoverageModel, sampling: Dict[str, Any] = None,
                          if_name: str = "") -> str:
     """`CoverageModel` → **一个 bind 进 DUT 的接口**（把采样信号引出来）。

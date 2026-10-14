@@ -410,7 +410,32 @@ class VerifyExecutor(BaseExecutor):
         path = output_dir / meta["file"]
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(code, encoding="utf-8")
-        # **清掉上一版管道留在这里的独立探针**（固定文件名 `dut_probe.sv`）。
+        # ── DUT 检查规则：**真 pass 的"比对"那一半** ──
+        #
+        # 用户口径：真 pass = SCB 报 `mismatched=0` + 断言不报错。断言那半由 SVA
+        # 承担（bind 进 DUT），而 `mismatched=0` 需要一个**收口**——env 的检查组件
+        # 逐拍求值同一组规则、数出 matched/mismatched 并打印。
+        #
+        # **同一份规则、两个执行点**：模型里那几条 `assertions` 既渲染成 SVA
+        # （设计侧，bind 进 DUT），也翻译成逐拍布尔喂给 env 组件（验证侧，UVM 收口）。
+        # 一套规则两处生效，数出来的东西才对得上；各写一份必然漂。
+        dut_checker: Dict[str, Any] = {}
+        try:
+            import yaml as _yaml
+            from src.tools.casemodel_tools.coverage import checker_rules
+            decls = (_yaml.safe_load(cm_file.read_text(encoding="utf-8",
+                                                        errors="replace")) or {})
+            got = checker_rules(decls.get("assertions"), meta.get("signals") or [])
+            if got["rules"]:
+                dut_checker = {"rules": got["rules"], "skipped": got["skipped"],
+                               "clock": meta.get("clock", "clk"),
+                               "reset": meta.get("reset", "rst_n")}
+                logger.info(f"DUT 检查：{len(got['rules'])} 条规则由 env 组件逐拍求值"
+                            f"（收口打印 matched/mismatched → 真 pass 的比对半边）")
+            for _s in got["skipped"]:
+                logger.warning(f"DUT 检查跳过：{_s}")
+        except Exception as e:                             # noqa: BLE001 旁路
+            logger.warning(f"DUT 检查规则生成失败（本轮没有比对收口）: {e}")
         # 它和这个接口采的是**同一批信号**：两份同时挂在 filelist 里，就是同一个
         # 信号被两个 covergroup 各采一遍 —— `vcover` 报表里多一个 covergroup，
         # 签核的"功能覆盖率"被自己搅浑。删的是本管道自己的产物（名字固定、
@@ -424,7 +449,8 @@ class VerifyExecutor(BaseExecutor):
         logger.info(f"功能覆盖率点（DUT 通道）：{len(payload['probe_ports'])} 个信号 "
                     f"→ {path.name}（bind 到 {meta['dut_module']}；由 "
                     f"{meta['type']} 引给 env 覆盖率组件，会被真编译、真采样）")
-        return {"dut_if": meta, "dut_bins": payload.get("dut_bins") or {}}
+        return {"dut_if": meta, "dut_bins": payload.get("dut_bins") or {},
+                **({"dut_checker": dut_checker} if dut_checker else {})}
 
     @staticmethod
     def _case_model_field_bins(output_dir: Path) -> Dict[str, List[Dict[str, Any]]]:

@@ -1176,6 +1176,11 @@ class RenderTask:
         context["coverage_dut_if"] = _dif if isinstance(_dif, dict) else {}
         _db = data.get("dut_bins")
         context["coverage_dut_bins"] = _db if isinstance(_db, dict) else {}
+        # DUT 检查规则：env 组件逐拍求值 → 收口打印 `matched=N mismatched=K`。
+        # **这是"真 pass"的比对那一半**（判据要求日志里有 `mismatched=0`）——
+        # 缺了它，一条用例再干净也只是"没报错"，不是"验过了"。
+        _dc = data.get("dut_checker")
+        context["coverage_dut_checker"] = _dc if isinstance(_dc, dict) else {}
 
     def should_skip(self, target_path: Path) -> bool:
         """默认跳过已存在文件（UVMF 语义）；-o/--overwrite 或合并流程例外。

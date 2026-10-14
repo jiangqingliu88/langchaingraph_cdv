@@ -304,6 +304,68 @@ class TestTheSignoffReportShowsBothNumbers:
         assert rep["gates"]["target"] == 95.0
 
 
+class TestTheModelRulesFeedBothTheAssertionAndTheChecker:
+    """**一份规则、两个执行点** —— SVA（bind 进 DUT）与 env 检查组件（UVM 收口）。
+
+    用户口径：真 pass = **SCB 报 `mismatched=0`** + 断言不报错。断言那半是 SVA；
+    `mismatched=0` 那半得有人在 env 里逐拍求值、数出来、打印出来。两处必须用
+    **同一组规则**（各写一份必然漂，而漂了没人看得出来）。
+    """
+
+    DECLS = [
+        {"name": "a_implies_b", "expr": "x == 2'd1 |-> y == 1'b0",
+         "message": "x 为 1 时 y 必须为 0", "signals": [{"name": "x"}, {"name": "y"}]},
+        {"name": "plain", "expr": "z <= 6'd32", "message": "水位不越界",
+         "signals": [{"name": "z"}]},
+        {"name": "temporal", "expr": "x |-> ##2 y", "message": "跨拍",
+         "signals": [{"name": "x"}, {"name": "y"}]},
+        {"name": "needs_absent", "expr": "w |-> y == 0", "message": "引用了接口没有的信号",
+         "signals": [{"name": "w"}, {"name": "y"}]},
+    ]
+
+    def _rules(self, available):
+        from src.tools.casemodel_tools.coverage import checker_rules
+
+        return checker_rules(self.DECLS, available)
+
+    def test_an_implication_becomes_a_per_cycle_boolean(self):
+        """`a |-> b` 在"每拍求值一次"里等价于 `!(a) || (b)` ——
+        直接写进 `if` 里不是合法表达式。"""
+        got = {r["name"]: r["expr"] for r in self._rules(["x", "y", "z"])["rules"]}
+        assert got["a_implies_b"] == "!(x == 2'd1) || (y == 1'b0)"
+
+    def test_a_plain_expression_passes_through(self):
+        got = {r["name"]: r["expr"] for r in self._rules(["x", "y", "z"])["rules"]}
+        assert got["plain"] == "(z <= 6'd32)"
+
+    def test_temporal_rules_are_skipped_not_faked(self):
+        """带 `##` 的跨拍性质，逐拍 `if` 表达不出来 —— **跳过并说明**，
+        不假装检查过（"没查"不该算过）。"""
+        skipped = " ".join(self._rules(["x", "y", "z"])["skipped"])
+        assert "temporal" in skipped and "时序" in skipped
+
+    def test_rules_referencing_missing_signals_are_skipped_with_a_reason(self):
+        skipped = " ".join(self._rules(["x", "y", "z"])["skipped"])
+        assert "needs_absent" in skipped and "w" in skipped
+
+    def test_the_model_rules_really_produce_a_checker(self):
+        """真模型（`specs/npu_sched/casemodel.yaml`）能产出可逐拍检查的规则 ——
+        不是构造出来的样例。"""
+        import yaml as _yaml
+
+        from src.tools.casemodel_tools.coverage import checker_rules
+
+        cm = _yaml.safe_load(Path("specs/npu_sched/casemodel.yaml").read_text(
+            encoding="utf-8"))
+        got = checker_rules(cm.get("assertions"), [
+            "queue_level", "instr_type", "instr_dtype", "dep_type", "issue_unit",
+            "issue_decision", "cluster_id", "instr_opcode", "instr_seq",
+            "pipeline_state", "op_priority", "barrier_type"])
+        assert len(got["rules"]) >= 3
+        # `issue_valid` 不在覆盖率接口上 → 那条如实进 skipped（不硬编一个信号）
+        assert any("issue_valid" in s for s in got["skipped"])
+
+
 class TestAnActionProvenIneffectiveIsActuallyAvoided:
     """**算出来了、写出来了、就是没人据此做决定**。
 
