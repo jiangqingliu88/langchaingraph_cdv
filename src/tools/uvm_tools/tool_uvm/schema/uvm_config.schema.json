@@ -140,6 +140,32 @@
         }
       }
     },
+    "dut_checker": {
+      "$comment": "env_cov_bins.yaml —— **DUT 检查规则**：env 覆盖率组件逐拍求值，收口打印 `matched=… mismatched=…`。这是「真 pass」的**比对半边**（判据要求日志里出现 `mismatched=0`），规则与 SVA **同源**（case 模型的 `assertions:` 块，一份规则两个执行点）。`|->` 已在生成端翻成逐拍布尔（`!(a) || (b)`），跨拍规则不进这里。",
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/checkerRule"
+          }
+        },
+        "skipped": {
+          "$comment": "生成端如实列出的「这条没查」——不假装检查过",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "clock": {
+          "type": "string"
+        },
+        "reset": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "source": {
       "type": "object",
       "$comment": "文书出处：这份 yaml 是从哪个库/哪一行抽出来的。**不参与生成**，给人看与审计用；`status` 是诚实标记（draft = 该版模型还没验证过）。",
@@ -1675,6 +1701,27 @@
         },
         "illegal": {
           "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "checkerRule": {
+      "$comment": "DUT 检查里的一条规则：名字 + **逐拍可求值的 SV 布尔**（`!(a) || (b)` 这种形式，由 casemodel_tools.coverage.checker_rules 从模型的 `a |-> b` 翻过来）+ 违规时给人看的消息。",
+      "type": "object",
+      "required": [
+        "name",
+        "expr"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "expr": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
         }
       },
       "additionalProperties": false

@@ -1,37 +1,39 @@
 <!-- THIS IS TOOL GENERATED SESSION FILE. PLEASE DO NOT MODIFY THIS -->
 <!DOCTYPE visualizer_session>
 <session version="3" skip_do_file="0">
- <app argc="5">
+ <app argc="3">
   <argv value="visualizer" pos="0"/>
-  <argv value="+wavefile+D:\SignOffAI\output_e2e_fix2_jiang_20261011_004653\regression_run\loopback\build_build_apb_uart_apb_loopback\test_test_apb_loopback\waves\test_apb_loopback.db" pos="1"/>
-  <argv value="+viswave" pos="2"/>
-  <argv value="+read_viswave_info" pos="3"/>
-  <argv value="+genDesignOMFromWave" pos="4"/>
+  <argv value="-ucdbfile" pos="1"/>
+  <argv value="D:\SignOffAI\output_e2e_cov_jiang_20261013_230812\sim\coverage\merged.ucdb" pos="2"/>
  </app>
  <window_config>
-  <dockareas top="0" left="593" bottom="266" right="593"/>
-  <taborder left="structure+" bottom="transcript+" right="variables+"/>
-  <activetab activewindow="structure" left="structure" bottom="transcript" right="variables"/>
-  <window type="structure" undocked="0" dock_location="left" y="0" visible="1" x="0"/>
-  <window type="variables" undocked="0" dock_location="right" y="0" visible="1" x="0"/>
-  <window type="transcript" undocked="0" dock_location="bottom" y="0" visible="1" x="0"/>
-  <window type="rtl" undocked="0" height="800" y="50" width="1200" visible="1" x="50"/>
-  <window type="wave" undocked="1" dock_location="bottom" height="616" y="171" width="1076" visible="0" x="150"/>
+  <dockareas right="300" top="0" left="1366" bottom="398"/>
+  <taborder left="structure+" bottom="transcript+coveragesummary+"/>
+  <activetab activewindow="structure" left="structure" bottom="transcript"/>
+  <window x="0" dock_location="left" undocked="0" type="structure" y="0" visible="1"/>
+  <window x="0" dock_location="bottom" undocked="0" type="transcript" y="0" visible="1"/>
+  <window x="0" dock_location="bottom" undocked="0" type="coveragesummary" y="0" visible="1"/>
+  <window x="-1" width="1920" undocked="0" type="rtl" y="-9" visible="1" height="991"/>
+  <window x="0" dock_location="center" undocked="0" type="source" y="0" path="D:/SignOffAI/output_e2e_cov_jiang_20261013_230812/bench/npu_sched_bench_tb_top.sv" visible="1" firstVisibleLine="27"/>
  </window_config>
- <wave_file_mgr>
-  <waveFile waveType="0" tagName="F0" fileName="D:\SignOffAI\output_e2e_fix2_jiang_20261011_004653\regression_run\loopback\build_build_apb_uart_apb_loopback\test_test_apb_loopback\waves\test_apb_loopback.db"/>
- </wave_file_mgr>
+ <wave_file_mgr/>
  <gui>
-  <main_window visible="1"/>
-  <watchTower_cur_setting curDisplayTimeUnitStr="1ns" curDisplayTimeUnit="-9" curActiveWaveFile="F0" customDisplayTimeUnitListStr="" curRadix="8">
-   <curTime hightime="0" lowtime="0"/>
+  <main_window visible="1">
+   <srcbrowser instancename="npu_sched_bench_tb_top" primary="true" filepath="D:/SignOffAI/output_e2e_cov_jiang_20261013_230812/bench/npu_sched_bench_tb_top.sv"/>
+   <sourcetclcommands>
+    <tcl command="src activate source"/>
+    <tcl command="src top 28"/>
+   </sourcetclcommands>
+  </main_window>
+  <watchTower_cur_setting curRadix="8" curDisplayTimeUnit="0" customDisplayTimeUnitListStr="">
+   <curTime lowtime="0" hightime="0"/>
   </watchTower_cur_setting>
-  <structure selection="apb_loopback_tb"/>
-  <variables UPF="0" CA="0" VA="0"/>
+  <structure selection="npu_sched_bench_tb_top"/>
   <transcript/>
+  <coveragesummary/>
  </gui>
  <wave_mgr sync_time_range="0"/>
  <mem_mgr/>
  <windows/>
- <dut selection="apb_loopback_tb"/>
+ <dut selection="npu_sched_bench_tb_top"/>
 </session>

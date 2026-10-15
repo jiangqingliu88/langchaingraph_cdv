@@ -56,33 +56,33 @@ modes:
 
 # ================= 构建流程 =================
 # Build：定义完整 vcs run_cmd，子 build 用 extends 继承 run_cmd，仅 override BUILD_OPTS 追加指令
-builds:
-  # 基础构建
-  - name: multi_step_build
-    variables:
-      BUILD_OPTS: ''
-    # `{{ BUILD_OPTS }}` 是子 build 唯一的差异点：它们 extends 本 build 拿到整条
-    # run_cmd，只把 BUILD_OPTS 换成自己要加的编译宏。不引用它的话，子 build 里
-    # override 的 BUILD_OPTS 就没有任何效果。
-    run_cmd: 'VCS -full64 -sverilog -timescale=1ns/1ps {{ BUILD_OPTS }} +vcs+lic+wait +lint=TFIPC-L +notimingcheck -kdb -lca +vcs+lic+wait -cm line+cond+fsm+tgl+branch+assert -cm_dir ${EMAN_CM_DIR} -f {{ FILES_F }} -l ${EMAN_COMPILE_DIR}/build.log -o ${EMAN_SIMV}'
-    # run_cmd 里两种写法各管一路：
-    #   `{{ }}`  = 模板变量（variables / local_vars），生成脚本时就替换掉
-    #   `${}`    = 环境变量，留给 shell 运行时展开 —— `${EMAN_*}` 是框架注入的
-    #              （见 env 之外的那套运行时变量），`${HVL_TOP_PATH}` 之类则由
-    #              外部环境提供
+# builds:
+#   # 基础构建
+#   - name: multi_step_build
+#     variables:
+#       BUILD_OPTS: ''
+#     # `{{ BUILD_OPTS }}` 是子 build 唯一的差异点：它们 extends 本 build 拿到整条
+#     # run_cmd，只把 BUILD_OPTS 换成自己要加的编译宏。不引用它的话，子 build 里
+#     # override 的 BUILD_OPTS 就没有任何效果。
+#     run_cmd: 'VCS -full64 -sverilog -timescale=1ns/1ps {{ BUILD_OPTS }} +vcs+lic+wait +lint=TFIPC-L +notimingcheck -kdb -lca +vcs+lic+wait -cm line+cond+fsm+tgl+branch+assert -cm_dir ${EMAN_CM_DIR} -f {{ FILES_F }} -l ${EMAN_COMPILE_DIR}/build.log -o ${EMAN_SIMV}'
+#     # run_cmd 里两种写法各管一路：
+#     #   `{{ }}`  = 模板变量（variables / local_vars），生成脚本时就替换掉
+#     #   `${}`    = 环境变量，留给 shell 运行时展开 —— `${EMAN_*}` 是框架注入的
+#     #              （见 env 之外的那套运行时变量），`${HVL_TOP_PATH}` 之类则由
+#     #              外部环境提供
 
-  # 继承基础构建，通过覆盖 BUILD_OPTS 追加编译宏
-  - name: sc_three_step_build
-    extends: multi_step_build
-    variables:
-      BUILD_OPTS: '+define+SC_THREE_STEP'
+#   # 继承基础构建，通过覆盖 BUILD_OPTS 追加编译宏
+#   - name: sc_three_step_build
+#     extends: multi_step_build
+#     variables:
+#       BUILD_OPTS: '+define+SC_THREE_STEP'
 
-  - name: sig_step_build
-    extends: multi_step_build
-    variables:
-      BUILD_OPTS: '+define+SIG_STEP'
+#   - name: sig_step_build
+#     extends: multi_step_build
+#     variables:
+#       BUILD_OPTS: '+define+SIG_STEP'
 
-  - name: vpu_multi_step_build
-    extends: multi_step_build
-    variables:
-      BUILD_OPTS: '+define+VPU_MULTI_STEP'
+#   - name: vpu_multi_step_build
+#     extends: multi_step_build
+#     variables:
+#       BUILD_OPTS: '+define+VPU_MULTI_STEP'

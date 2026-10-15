@@ -12,7 +12,4 @@
 # // of the Customer's facilities without the express written permission of SISW,
 # // and may not be used in any way not expressly authorized by SISW.
 # //
-# D:\SignOffAI\output_e2e_jiang_20261011_000144\regression_run\loopback\build_build_apb_uart_uart_loopback\test_test_uart_loopback\vsim.wlf opened as dataset "vsim"
-# couldn't load library "F:/questasim64_2024.1/win64/ScintillaTk/ScintillaTk114.dll": this library or a dependent library could not be found in library path
-# couldn't load library "F:/questasim64_2024.1/win64/ScintillaTk/ScintillaTk114.dll": this library or a dependent library could not be found in library path
-# couldn't load library "F:/questasim64_2024.1/win64/ScintillaTk/ScintillaTk114.dll": this library or a dependent library could not be found in library path
+# D:\SignOffAI\output_e2e_cov_jiang_20261013_230812\regression_run\p1\build_build_npu_sched_dut\test_test_apb_master_paddr_handshake\vsim.wlf opened as dataset "vsim"

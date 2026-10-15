@@ -284,14 +284,19 @@ class TestTheDutChannelIsWiredIntoTheEnv:
 
     def test_the_schema_registers_the_new_keys(self):
         """schema 是 `additionalProperties: false` —— 没登记就是 **SystemExit**，
-        之后任何一次渲染都被它挡住。实测加 `dut_if` 时正是撞在这里。"""
+        之后任何一次渲染都被它挡住。
+
+        实测撞过**两次**：加 `dut_if`/`dut_bins` 一次，加 `dut_checker` 又一次
+        （同一个坑，因为第一次只把这几个键补进了 schema、没把"新键必须登记"变成
+        一条会被下次提醒的规则）。所以这里**一次列全** —— 往契约文件里加键时，
+        这条测试就是那个提醒。"""
         import json
 
         schema = json.loads(Path(
             "src/tools/uvm_tools/tool_uvm/schema/uvm_config.schema.json"
         ).read_text(encoding="utf-8"))
-        assert {"dut_if", "dut_bins"} <= set(schema["properties"])
-        assert "dutCoverBin" in schema["$defs"]
+        assert {"dut_if", "dut_bins", "dut_checker"} <= set(schema["properties"])
+        assert {"dutCoverBin", "checkerRule"} <= set(schema["$defs"])
 
     def test_both_templates_read_the_one_contract(self):
         """env_cov 与 tb_top **读同一个键**（`coverage_dut_if`）。

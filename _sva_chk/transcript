@@ -1,0 +1,380 @@
+# vsim -c -work workb tb_bad -do "run -all; quit -f" 
+# Start time: 02:26:20 on Oct 15,2026
+# //  Questa Sim-64
+# //  Version 2024.1 win64 Feb  1 2024
+# //
+# // Unpublished work. Copyright 2024 Siemens
+# //
+# // This material contains trade secrets or otherwise confidential information
+# // owned by Siemens Industry Software Inc. or its affiliates (collectively,
+# // "SISW"), or its licensors. Access to and use of this information is strictly
+# // limited as set forth in the Customer's applicable agreements with SISW.
+# //
+# // This material may not be copied, distributed, or otherwise disclosed outside
+# // of the Customer's facilities without the express written permission of SISW,
+# // and may not be used in any way not expressly authorized by SISW.
+# //
+# Loading sv_std.std
+# Loading work.cu2(fast)
+# Loading work.tb(fast)
+# run -all
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 115 ns Started: 115 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 115 ns Started: 115 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 135 ns Started: 135 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 135 ns Started: 135 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 205 ns Started: 205 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 205 ns Started: 205 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 225 ns Started: 225 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 225 ns Started: 225 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 235 ns Started: 235 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 235 ns Started: 235 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 305 ns Started: 305 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 305 ns Started: 305 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 315 ns Started: 315 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 315 ns Started: 315 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 335 ns Started: 335 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 335 ns Started: 335 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 345 ns Started: 345 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 345 ns Started: 345 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 405 ns Started: 405 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 405 ns Started: 405 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 435 ns Started: 435 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 435 ns Started: 435 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 445 ns Started: 445 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 445 ns Started: 445 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 515 ns Started: 515 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 515 ns Started: 515 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 525 ns Started: 525 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 525 ns Started: 525 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 535 ns Started: 535 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 535 ns Started: 535 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 545 ns Started: 545 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 545 ns Started: 545 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 615 ns Started: 615 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 615 ns Started: 615 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 635 ns Started: 635 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 635 ns Started: 635 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 705 ns Started: 705 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 705 ns Started: 705 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 715 ns Started: 715 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 715 ns Started: 715 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 725 ns Started: 725 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 725 ns Started: 725 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 735 ns Started: 735 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 735 ns Started: 735 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 745 ns Started: 745 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 745 ns Started: 745 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 805 ns Started: 805 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 805 ns Started: 805 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 835 ns Started: 835 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 835 ns Started: 835 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 845 ns Started: 845 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 845 ns Started: 845 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 905 ns Started: 905 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 905 ns Started: 905 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 935 ns Started: 935 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 935 ns Started: 935 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 945 ns Started: 945 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 945 ns Started: 945 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1005 ns Started: 1005 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1005 ns Started: 1005 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1015 ns Started: 1015 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1015 ns Started: 1015 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1035 ns Started: 1035 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1035 ns Started: 1035 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1105 ns Started: 1105 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1105 ns Started: 1105 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1115 ns Started: 1115 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1115 ns Started: 1115 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1125 ns Started: 1125 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1125 ns Started: 1125 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1145 ns Started: 1145 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1145 ns Started: 1145 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1205 ns Started: 1205 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1205 ns Started: 1205 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1215 ns Started: 1215 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1215 ns Started: 1215 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1225 ns Started: 1225 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1225 ns Started: 1225 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1235 ns Started: 1235 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1235 ns Started: 1235 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1335 ns Started: 1335 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1335 ns Started: 1335 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1525 ns Started: 1525 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1525 ns Started: 1525 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1545 ns Started: 1545 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1545 ns Started: 1545 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1625 ns Started: 1625 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1625 ns Started: 1625 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1635 ns Started: 1635 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1635 ns Started: 1635 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1705 ns Started: 1705 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1705 ns Started: 1705 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1725 ns Started: 1725 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1725 ns Started: 1725 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1735 ns Started: 1735 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1735 ns Started: 1735 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1745 ns Started: 1745 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1745 ns Started: 1745 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 1845 ns Started: 1845 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 1845 ns Started: 1845 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2005 ns Started: 2005 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2005 ns Started: 2005 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2015 ns Started: 2015 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2015 ns Started: 2015 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2025 ns Started: 2025 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2025 ns Started: 2025 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2105 ns Started: 2105 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2105 ns Started: 2105 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2115 ns Started: 2115 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2115 ns Started: 2115 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2125 ns Started: 2125 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2125 ns Started: 2125 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2135 ns Started: 2135 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2135 ns Started: 2135 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2215 ns Started: 2215 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2215 ns Started: 2215 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2225 ns Started: 2225 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2225 ns Started: 2225 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2235 ns Started: 2235 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2235 ns Started: 2235 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2245 ns Started: 2245 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2245 ns Started: 2245 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2345 ns Started: 2345 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2345 ns Started: 2345 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2415 ns Started: 2415 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2415 ns Started: 2415 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2525 ns Started: 2525 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2525 ns Started: 2525 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2535 ns Started: 2535 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2535 ns Started: 2535 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2635 ns Started: 2635 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2635 ns Started: 2635 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2645 ns Started: 2645 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2645 ns Started: 2645 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2705 ns Started: 2705 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2705 ns Started: 2705 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2715 ns Started: 2715 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2715 ns Started: 2715 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2815 ns Started: 2815 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2815 ns Started: 2815 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2825 ns Started: 2825 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2825 ns Started: 2825 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 2845 ns Started: 2845 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 2845 ns Started: 2845 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3025 ns Started: 3025 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3025 ns Started: 3025 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3035 ns Started: 3035 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3035 ns Started: 3035 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3125 ns Started: 3125 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3125 ns Started: 3125 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3135 ns Started: 3135 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3135 ns Started: 3135 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3325 ns Started: 3325 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3325 ns Started: 3325 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3335 ns Started: 3335 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3335 ns Started: 3335 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3345 ns Started: 3345 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3345 ns Started: 3345 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3415 ns Started: 3415 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3415 ns Started: 3415 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3435 ns Started: 3435 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3435 ns Started: 3435 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3445 ns Started: 3445 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3445 ns Started: 3445 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3535 ns Started: 3535 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3535 ns Started: 3535 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3635 ns Started: 3635 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3635 ns Started: 3635 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3645 ns Started: 3645 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3645 ns Started: 3645 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3725 ns Started: 3725 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3725 ns Started: 3725 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3745 ns Started: 3745 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3745 ns Started: 3745 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3925 ns Started: 3925 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3925 ns Started: 3925 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Error: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+#    Time: 3935 ns Started: 3935 ns  Scope: tb.u_dut.u_npu_sched_sva.issued_needs_no_blocker_a File: sva_npu.sv Line: 42
+# ** Error: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+#    Time: 3935 ns Started: 3935 ns  Scope: tb.u_dut.u_npu_sched_sva.raw_never_issues_a File: sva_npu.sv Line: 30
+# ** Note: $finish    : tb.sv(38)
+#    Time: 4055 ns  Iteration: 0  Instance: /tb
+# End time: 02:26:21 on Oct 15,2026, Elapsed time: 0:00:01
+# Errors: 178, Warnings: 0
