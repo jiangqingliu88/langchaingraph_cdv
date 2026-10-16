@@ -169,8 +169,14 @@ DUT 那条先走 `bind`（挂**模块**上、端口表达式在目标模块作�
 
 批次还要有**同名的 UVM test 类**（`environment.batches` → `{env}_batch_test.sv`）：
 没有它，`+UVM_TESTNAME=npu_type_test` 会撞 `UVM_FATAL (INVTST)`，而 **vsim 仍然 exit 0**
-—— 跑不起来反而看不出来。类体里**不铺激励**（约束在 sequence 里，模板看不见也不该看见），
-只把"这一批打哪几个维度、用什么方法"挂上 config_db。
+—— 跑不起来反而看不出来。类体里**不铺激励**（传参数不传行为），把"这一批打哪几个维度、
+用什么方法、**用哪条约束策略**"挂上 config_db。
+
+**约束策略名走全局通道**（`set(null, "*", "batch_policy", …)`，与 tb_top 挂 vif 同一个
+写法）：sequence 的父链未必挂在 test 底下（`seq.start(sqr)` 建出来的可以不挂 parent），
+用 `this` 作上下文会取不到 —— 而**取不到的表现是"约束静默没生效、回归照样全绿"**。
+名字与 `constraint.yaml` 的 `policies[].name` **同一出处**（`theme_policy_map`），
+两份各推一次就会漂。
 
 ### 五、命令
 
@@ -187,12 +193,30 @@ python -m src.tools.casemodel_tools.cli coverage-plan  specs\npu_sched\casemodel
 
 | 文件 | 答什么 | 它的引用字段 |
 |---|---|---|
-| `cases.yaml` | **该测什么**（取值空间 / 专题 / 组合矩阵） | `cover_bins`、`cross_matrix`、`themes[].method` |
-| `coverage.yaml` | **怎么量**（coverpoint + bins + cross） | `bins[].name`、`crosses[].matrix_ref` |
-| `constraint.yaml` | **怎么驱动**（policies + combinator） | `transactions[].name`、`policies[].applies_to` |
+| `cases.yaml` | **该测什么**（取值空间 / 专题 / 组合矩阵） | `cover_bins`、`cross_matrix`、`themes[].method`、`themes[].dimensions` |
+| `coverage.yaml` | **怎么量**（coverpoint + bins + cross） | `bins[].name`、`crosses[].matrix_ref`、`dimension` |
+| `constraint.yaml` | **怎么驱动**（policies + combinator） | `transactions[].name`、`policies[].applies_to`、`policies[].dimensions` |
 
-四条边：`cover_bins ↔ bins[].name`、`cross_matrix ↔ matrix_ref`、`applies_to ↔
-transactions[].name`、`themes[].method ↔ combinator/policies`。
+**五条边**，连成一个闭合的三角形（前四条只连成 "V"）：
+
+```
+① case.field.cover_bins  ──bin 名──►  coverage.coverpoints[].bins[].name
+② case.cross_matrix 键   ──矩阵键──►  coverage.crosses[].matrix_ref
+③ 约束.policies[].applies_to ──端口──► 约束.transactions[].name
+④ case.themes[].method   ──映射──►   约束.combinator / policies
+⑤ 约束.policies[].dimensions ──维度 ID──► coverage.coverpoints[].dimension
+```
+
+**①② 是硬边**（`error` —— "声明的测试点没落成覆盖仓"/"组合关系没被覆盖"）；
+**③④⑤ 是软边**（`warning`）。有 error 就不许渲染 SV：取值投影不出来时给个 0 让 bin 照
+生成，收的是**错的数**，比生成不了更坏。
+
+**边 ⑤ 补的是三角形缺的那一边。** "这条策略驱动的维度到底有没有人量它" —— ③ 查不了
+（端口名↔信号名的对应没有建模，代码里如实记着这条），⑤ 改追 **dimension ID**：
+`dimensions[].id` 是两边共用的命名空间（覆盖率侧 `coverpoint.dimension`、约束侧
+`policy.dimensions`）。两处必须归一，都是实测踩出来的：专题的 `dimensions` 写的是
+**原始引用**（`指令类型` 这种 name 也行）而覆盖率侧是 `D_type`，得归到 canonical key；
+`dimensions: ["*"]` 的语义是**全部维度**，得展开 —— 否则所有维度都被报成"没人驱动"。
 
 ```powershell
 python -m src.tools.casemodel_tools.cli associate   cases.yaml coverage.yaml [-c constraint.yaml]
@@ -200,13 +224,27 @@ python -m src.tools.casemodel_tools.cli constraints cases.yaml -p apb_master:APB
 # 主 CLI 同形：vagent case-model {associate,constraints}
 ```
 
-- **`associate`** 只**报**断点：①② 是硬边（`error` —— "声明的测试点没落成覆盖仓"），
-  ③④ 是软边（`warning`）。有 error 就不许渲染 SV：取值投影不出来时给个 0 让 bin 照
-  生成，收的是**错的数**，比生成不了更坏。
+- **`associate`** 只**报**断点，五条边各自报自己的。
 - **`constraints`** 把 `themes[].method`（`D/G/SPCL/RND/RPLY`）**生成**成策略 + 组合器，
   产物正好是 `gen_uvm` 认的约束模型形状 —— 边 ④ 从"事后报断"变成"从一开始就接上"。
   端口要显式给（case 说字段名、约束说 agent 名 + seq_item 类型，两边推不出来），
   **没给端口就不生成**（空 `transactions` 渲染出来是个空壳协调序列）。
+
+**流水线里它是自动生成的**：verify 阶段在 `find_spec_yaml` 之后、`jinja_render` 之前落
+`inputs/yaml/uvm/constraint.yaml`（早一步会被 `find_spec_yaml` 清空，晚一步这一轮渲染
+不到 —— 两种都是"文件没生成、日志一片正常"），与 `env.yaml` 在同一次 `run()` 里被读到，
+`default_env` 才回填得上。端口从 env.yaml 的 agents 推，**从 `type` 推不是从 `name`**
+（`npu_sched_in_master_agent` → `npu_sched_in_master_seq_item`；照 name 拼出来的类
+不存在，而那个错要到 vlog 才报）。产物渲染出 `env/cons/` 五个文件。
+
+> ⚠️ **策略体目前是空的**：`env_cons_policies.sv.j2` 的 `case (policy_name)` 分支来自
+> 内置名单（8 个**主题名**：`precision_consistency` / `mem_capacity` / …），与
+> `build_constraint` 推出来的 `p_th_b02_random`（专题 + 方法）**一个都对不上** ——
+> `case` 一个分支都没有。而空 `case` 不是"什么都不做"，是 `vlog-13302` **编译错误**
+> （实测 11 策略 = 11 条 error），所以模板留了一个 `default:` 兜底。
+> **要让约束真生效，得把那 8 个内置分支补成按 method 派生的五类**
+> （`directed` / `combo` / `special` / `random` / `replay`）—— method 是 case 模型
+> 建模得的，主题名不是。**这一步还没做。**
 
 ### 七、一份能跑的样板：`specs/npu_sched/`
 
@@ -373,11 +411,22 @@ python -m src.tools.isa_gen_tools.cli ops                          # 列 122 条
 
 ## 已知问题与路线
 
-### 参考模型层（重构中，占当前 17 个失败测试的全部）
+### 参考模型层（重构中，占当前 18 个失败测试的全部）
 
-`tests/test_agents.py` / `test_golden_bench.py` / `test_ref_model_wiring.py` 共 **17 个失败**。
-方向是**参考模型改为 TLM1.0 + SQL 库**（现有实现是信号级 RTL），顺序**先替后删**。
-**在替换完成前，这 17 个失败是已知状态，不是回归。**
+`tests/test_agents.py` / `test_golden_bench.py` / `test_ref_model_wiring.py` 共 **18 个失败**
+（另有 `test_sim_modes.py` 一条）。根因是**唯一一条**：`model_library/` 目录已从磁盘删除
+（那是"先替后删"的第一步），于是 `match_golden()` 恒 None → `build_ref_model_config()` 恒
+None → `_ref_mirror_gate()` 恒 None → env.yaml 里不写 `scoreboards`。替代品
+`ModelRegistry`（SQL）里只有 `apb_slave` 一个且状态是 `draft`，而 `_registry_model` 只认
+`verified` —— 两条路都空。
+
+方向是**参考模型改为 TLM1.0 + SQL 库**（原实现是信号级 RTL）。
+**在替换完成前，这 18 个失败是已知状态，不是回归。**
+
+> 顺带修掉的一个**真口子**：`generate_utils`（`gen_uvm.py`）的 ctx 里有 `ref_model`
+> 却**没有 `body`** —— 于是模板里 `{% if body %}` 那个分支永远不进，SQL 库里存的
+> TLM 1.0 语义一路白存、渲染出来还是 TODO 空壳。模板单测**直接喂 ctx**，所以它测不到
+> 生成器（那组测试全绿）。已补，并加了走真生成器的回归测试。
 
 ### 其他
 
@@ -386,25 +435,36 @@ python -m src.tools.isa_gen_tools.cli ops                          # 列 122 条
 - [x] **点状 LLM 收敛到唯一漏斗**：`tools/lib/llm_call.py:call_llm`（token 预算 / 缓存 /
   重试+回退 / 审计一处实现）；可用性探测换成便宜探针（`llm_factory.is_available`），
   **不再为了"能不能用"真发一次请求**。
-- [ ] **CLI 的人工审批是真断链**：`interrupt()` + checkpointer 只有 GUI 路径启用，
-      `vagent approve/reject` 只写一个 `approval.json` **不驱动图恢复**。
-      （`docs/design/architecture_optimization_plan.md` 的 P0 —— 这是"可治理"支柱的缺口）
+- [x] **CLI 的人工审批断链已修**：`verify` 改走 `run_closed_loop_streaming`（落检查点，
+      `thread_id = run_id`），`interrupt()` 因此真会触发；新增 `vagent resume`，
+      `approve`/`reject` 除记审计外**真的把图推下去**（恢复走 `Command(resume=…)`，
+      不是 `update_state` —— 那个全仓库零调用且语义不对）。
+      原先 `approval.json` 是**只写不读**的，现在它是审计记录、图由检查点恢复。
+      没有检查点时 `approve` 仍然只记审计（**那不是错误** —— 审批记录是"人何时为何签了"
+      的凭证，与"这次签核有没有推着图走"是两件事）。
 - [ ] 工具白名单的角色对不上：工具绑 `assert/doc/spec/uvm`，执行器是 `front/design/verify/…`，
       **8 个里只有 2 个凑得上交集**，所以每次都回退到全部工具（现在会 warning，不再静默）。
 - [ ] **`async_fifo` RTL 生成被 `max_tokens=8192` 截断丢弃**（三次都没产出完整端口闭合）。
 - [ ] **批次 test 类的实测没验过**：生成侧 / 编译侧 / 回归声明都验了，但"跑起来是不是真影响
       随机数、探针是不是真收到命中"要等 `vsim` 可用（见「功能覆盖率方法学」末的说明）。
-- [ ] **各批次的约束还没生成**：`npu_type_test` 等类目前只把"打哪几个维度、用什么方法"
-      挂上 config_db，**约束本身仍在 sequence 侧**（那是另一个量级的活）。
+- [x] **批次约束已从 sequence 收回到模型**：`theme_policy_map` 是策略名的**唯一出处**
+      （`build_constraint` 的 `policies[].name` 与 `batches[].policy` 同名，实测 11/11
+      逐字一致 —— 两份各推一次就会漂，而漂了的表现是"约束没生效但回归全绿"）；
+      批次 test 类挂全局 `batch_policy`，协调序列按 `create_from_batch()` 建策略
+      （plusargs 保留为回退）。**且已接进 verify**（见上一节）。
+- [ ] **约束策略体还是空的**：链条全通了、`env/cons/*` 也真生成了，但策略的
+      `apply()` 落到 `default:` 分支、什么都不做 —— 内置分支是主题名，对不上按 method
+      派生的策略名。**要真生效得补那五类按 method 的分支**（见上一节的 ⚠️）。
+      也就是说：**管道通了 ≠ 约束生效**，别把"env/cons 生成了"读成"约束起作用了"。
 
 ---
 
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q                            # 主套件：729 passed / 17 failed（见上）/ 2 skipped
+python -m pytest tests/ -q                            # 主套件：850 passed / 18 failed（见上）/ 2 skipped
 python -m pytest src/workbench/tests -q               # 工作台：707 passed
-python -m pytest src/tools/casemodel_tools/tests -q   # case 建模 + 覆盖率方法学：412 passed
+python -m pytest src/tools/casemodel_tools/tests -q   # case 建模 + 覆盖率方法学：464 passed
 python -m pytest src/tools/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
 ```
 
@@ -415,10 +475,13 @@ python -m pytest src/tools/isa_gen_tools/tests -q     # ISA 工具：290 passed 
 | `tests/test_layer_direction.py` | 分层依赖方向 + 「L1 能脱离上层单独 import」（AST 扫，不被字符串骗到） |
 | `tests/test_tool_risk.py` | 每个 `@tool` 的风险分级完备；有副作用的工具不许被标成 SAFE |
 | `tests/test_no_undefined_names.py` | 拆文件后**漏 import** —— 单元测试构造图不碰函数体，要等图真跑到那个节点才 `NameError` |
-| `tests/test_env_cov_bins_wiring.py` | 落盘**时机**（`find_spec_yaml` 会清空那个目录）、四个读点是否走同一判据、批次 test 的 plusarg 对不对 |
+| `tests/test_env_cov_bins_wiring.py` | 落盘**时机**（`find_spec_yaml` 会清空那个目录）、四个读点是否走同一判据、批次 test 的 plusarg 对不对；**批次策略名与 `build_constraint` 逐字同名**；约束在同一个落盘窗口里 |
+| `tests/test_checkpoint.py` | 检查点 + `Command(resume=…)` 重入；**CLI 的 `approve`/`resume` 真把图推下去**（拿 journal 里出现 `run.finished` 当判据，不是"文件写没写"） |
+| `tests/test_manifest.py` | 覆盖率库 / 波形**带哈希进证据包**（不是文件表里的一行匿名记录）；相对 `output_root` 不许把路径拼两次 |
+| `tests/test_ref_model_wiring.py` | predictor **不是空壳** —— 且**走真生成器**（直接喂 ctx 的测试测不到"生成器把键丢了"） |
 | `casemodel_tools/tests/test_coverage.py` | 生成的 SV **真调 `vlog` 编译**（合成模型的断言挡不住 `bins b_ = {0};` 这类非法标识符） |
 
-**"跑测试"在这里的定位**：主套件那 17 个失败是**已知基线**（参考模型层重构中），
+**"跑测试"在这里的定位**：主套件那 18 个失败是**已知基线**（参考模型层重构中），
 其余全绿才算没退化。守卫型测试的价值不在通过率，而在**把本次踩过的坑固化成断言** ——
 每一条失败信息里都写着"当时是怎么错的"。
 

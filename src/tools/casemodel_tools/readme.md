@@ -888,7 +888,7 @@ ops 阶段生成的。写在覆盖率阶段就永远赶不上这一轮 —— �
 pytest src/tools/casemodel_tools/tests/ -v
 ```
 
-412 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
+464 个用例（界面测试搬去工作台之后少了一些，但一条断言都没丢 —— 见下）。
 工具自己的测试按层组织在 `src/tools/casemodel_tools/tests/`，
 跨层的 Agent 集成测试在仓库根的 `tests/test_casemodel_agent.py`：
 
@@ -913,6 +913,12 @@ pytest src/tools/casemodel_tools/tests/ -v
 
 ## 已知边界
 
+- **约束策略体是空的 —— 管道通了，约束还没生效**。`constraints` 生成的是**结构骨架**
+  （策略名 / 组合器模式 / 优先级），`apply()` 落到 `default:` 分支什么都不做。
+  原因很具体：`env_cons_policies.sv.j2` 的 8 个内置分支按**主题名**（`mem_capacity` …）
+  写死，与本工具按**专题 + 方法**推的 `p_th_b02_random` 对不上。要真生效得把那 8 个
+  换成按 method 派生的五类 —— **没做**。详见「约束模型生产者」一节的 ⚠️。
+  别把"`env/cons/*` 生成了"读成"约束起作用了"。
 - **`check <目录>` 会把 case 列表文件报错**。`config/casemodel/examples/` 同时有两类文件，
   `check config/casemodel/examples/` 会因 `fc_real_cases.yaml` 有 `cases:` 而无 `object`/`dimensions`
   报 error。这是刻意的（`check` 的职责就是判断「这份 YAML 是不是合法模型」），
