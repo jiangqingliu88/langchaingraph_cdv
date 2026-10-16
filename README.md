@@ -73,9 +73,9 @@ LLM 只在具体位置被**点状**调用（符合"LLM 只做完形填空"的定
 | `front` | 前置分析：读 spec / RTL，解出模块名与端口 | spec 摘要 + case 模型草稿 |
 | `design` | spec 分析 → IP 拆解 → RTL 生成（LLM 写小 IP + `vlog` 门禁）→ 顶层集成 | `rtl/*.sv` + design_arch |
 | `model` | 参考模型（模板 + 版本管理 + 回滚） | `model/` |
-| `verify` | UVM 环境（Jinja2 模板）+ 用例 YAML + SVA 断言 + gap 定向激励<br>**+ 功能覆盖率三件套**（覆盖率计划 / DUT 探针 / 批次 test 类） | `env/ agents/ assertions/ coverage/` |
-| `ops` | 编译 + 仿真 + 回归 | `regression.json` |
-| `coverage` | 覆盖率收集（`vsim -coverage` → ucdb）+ gap 归因 | `coverage.json` + gaps |
+| `verify` | UVM 环境（Jinja2 模板）+ 用例 YAML + SVA 断言 + gap 定向激励<br>**+ 功能覆盖率四件套**（覆盖率计划 / DUT 探针 / 批次 test 类 / **约束模型**） | `env/ agents/ assertions/ coverage/ env/cons/` |
+| `ops` | 编译 + 仿真 + 回归 | `regression_stages.json`（分级状态；回归结果本身是内存数据） |
+| `coverage` | 覆盖率收集（`vsim -coverage` → ucdb）+ gap 归因 | `sim/coverage/coverage_result.json` + `coverage/coverage_points.json` + gaps |
 | `debug` | 日志收集 → 分类 → 指纹去重 → 模板修复 → LLM 兜底重写 → EDA 重验 | debug report |
 | `audit` | 签核门禁 + 签核报告 | `report.json` + 证据链 |
 
@@ -255,10 +255,23 @@ python -m src.tools.casemodel_tools.cli constraints cases.yaml -p apb_master:APB
 python -m src.cli.commands verify --rtl specs\npu_sched -o output_npu
 ```
 
-> ⚠️ **实测尚未验过**：本仓库最后一次改动时，本机 `vsim` 起不来（`vlog` 正常、license 未过期），
-> 所以"批次 test 真跑起来、种子真影响随机数、探针真收到命中"这三件事**只在生成侧与编译侧验过**
-> （生成的探针与真 DUT 一起 `vlog` 编译通过、回归里 `count`/`SEED`/plusarg 都对）。
-> 等 `vsim` 恢复后用上面那条命令跑一轮即可确认。
+> **`vsim` 是好用的 —— "起不来"曾经是一次误判。** 当时把 `Error loading design` 读成
+> "仿真器起不来"，真相是**设计侧**的 load 失败（`vsim-8451 Virtual interface resolution
+> cannot find a matching instance` / `vopt-13130 Failed to find design unit`）。
+> 本机 Questa 2024.1 的 `vlog` / `vopt` / `vsim` / `vcover` 全都能跑，不需要额外
+> license 配置。别再用"验不了"当理由把仿真侧停在生成侧。
+
+实测过的那一轮（`output_e2e_cov_jiang_20261013_230812`）：
+
+| 验到的 | 证据 |
+|---|---|
+| 分级回归跑到底 | `regression_stages.json`：五级全 PASS，**58/58**，`status=PASS` |
+| **批次 test 真跑起来** | `regression_run/p0/.../test_npu_basic_test/sim_vsim.log`：`Errors: 0`、`$finish @ 400ns`、`Saving coverage data` |
+| 种子逐条不同 | 用例目录按种子命名（`..._run_10_seed_10010`、`_10011`…），`sim.sh` 里 `+UVM_TESTNAME=<批次名> +ntb_random_seed=<base+i-1>` |
+| DUT 探针真采到 | `cg_dut` 落在 `/<env>_pkg/<env>_coverage/cg_dut`，内部信号 `queue_level` / `pipeline_state` 有 bin 命中（见上一节） |
+
+**仍未验的**：种子是否真的**改变了激励分布**（那是"随机化有没有真起作用"，要拿
+各批次的 ucdb 逐 bin 比对才知道，不是"种子进了命令行"就能算数）。
 
 ---
 
@@ -276,21 +289,22 @@ python -m src.cli.commands runs                      # 运行历史
 python -m src.cli.commands show <run_id>
 python -m src.cli.commands dump <run_id>             # 复现 / 导出证据包
 
-# 人工介入（可治理）
-python -m src.cli.commands approve <run_id> --reason "..."
-python -m src.cli.commands reject  <run_id> --reason "..."
+# 人工介入（可治理）—— run_id 走 --run（不是位置参数）
+python -m src.cli.commands approve --run <run_id> --reason "..."   # 记审计 + 推图
+python -m src.cli.commands reject  --run <run_id> --reason "..."   # 记审计 + 按驳回继续
+python -m src.cli.commands resume  --run <run_id> --decision {approve,reject,skip}
 
 # 分组命令
 python -m src.cli.commands signoff  {generate,export,verify,checklist,diff}
 python -m src.cli.commands coverage {report,gaps,exclude,trend,merge}
 python -m src.cli.commands env      {generate,validate,compile,template}
-python -m src.cli.commands regression {stages,approve,run,report,trend,compare}
+python -m src.cli.commands regression {stages,approve,run,report,trend,compare,reference-finder}
 python -m src.cli.commands case-model {check,analyze,generate,tree,rules,uvm-tests,
-                                       covergroups,coverage-plan,gui}
+                                       covergroups,coverage-plan,associate,constraints,gui}
 python -m src.cli.commands distill  {run,list,rollback}      # 经验蒸馏（L5）
 python -m src.cli.commands govern   {status,override,reset}  # 治理
 python -m src.cli.commands evidence {record,log,check}
-python -m src.cli.commands lineage  {versions,baseline,bugs,compare}   # 血缘：RTL 版本 / 基准
+python -m src.cli.commands lineage  {versions,baseline,bugs,compare,bind-modules}  # 血缘：RTL 版本 / 基准
 ```
 
 ### 血缘（`vagent lineage`）
@@ -323,6 +337,11 @@ python -m src.cli.commands lineage compare out_x       # 与**基准**比（自�
 | `--sim-mode {cov,wave,cov+wave,…}` | 仿真业务，**默认 `cov+wave`**（覆盖率是闭环主指标，波形是唯一现场） |
 | `--no-manual-gate` | 关掉分级回归的人工节点（loopback 全过也不停车等人放行） |
 | `--approval {interactive,auto,threshold}` | 审批模式；无人值守请显式 `auto` |
+| `--checkpoint / --no-checkpoint` | **默认开**：落检查点（`docs/checkpoints.sqlite`），高危动作的审批从"进程内阻塞等答案"变成"停下来、关掉进程、过后来答"（`vagent resume`）。关掉就只能守着终端 |
+
+**审批：挂起不是失败。** 图停在人工节点上时 `verify` 打印一张面板（含 run_id 与继续命令）
+并以 **exit code 3** 退出 —— 不是 0 也不是失败。JSON 模式同理（`interrupted: true`）——
+CI 不会把"等人答话"读成"跑完了"。
 
 ---
 
@@ -445,8 +464,13 @@ None → `_ref_mirror_gate()` 恒 None → env.yaml 里不写 `scoreboards`。�
 - [ ] 工具白名单的角色对不上：工具绑 `assert/doc/spec/uvm`，执行器是 `front/design/verify/…`，
       **8 个里只有 2 个凑得上交集**，所以每次都回退到全部工具（现在会 warning，不再静默）。
 - [ ] **`async_fifo` RTL 生成被 `max_tokens=8192` 截断丢弃**（三次都没产出完整端口闭合）。
-- [ ] **批次 test 类的实测没验过**：生成侧 / 编译侧 / 回归声明都验了，但"跑起来是不是真影响
-      随机数、探针是不是真收到命中"要等 `vsim` 可用（见「功能覆盖率方法学」末的说明）。
+- [x] **批次 test 类跑起来了**（原来这条写的是"要等 `vsim` 可用" —— 那是**误判**，
+      仿真器一直是好的，`Error loading design` 是设计侧 load 失败）：
+      分级回归五级全 PASS（58/58），`npu_basic_test` 真执行（`Errors: 0`、覆盖率落库），
+      用例目录按种子逐条展开（`_seed_10010` / `_10011`…），`sim.sh` 里
+      `+UVM_TESTNAME=<批次名> +ntb_random_seed=<base+i-1>`。证据见「功能覆盖率方法学」末那节。
+- [ ] **种子有没有真改变激励分布**没验：种子进了命令行是事实，但"随机化真起作用"
+      要拿各批次的 ucdb 逐 bin 比 —— 前者不等于后者。
 - [x] **批次约束已从 sequence 收回到模型**：`theme_policy_map` 是策略名的**唯一出处**
       （`build_constraint` 的 `policies[].name` 与 `batches[].policy` 同名，实测 11/11
       逐字一致 —— 两份各推一次就会漂，而漂了的表现是"约束没生效但回归全绿"）；
