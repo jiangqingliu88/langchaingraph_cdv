@@ -605,6 +605,18 @@ def run(output_dir: str, top_module: str = "", seed: int = 0) -> dict:
     else:
         result["status"] = sim_result.get("status", "FAIL")
 
+    # ── 制品清单：覆盖率库与波形的**路径 + 哈希** ──
+    #
+    # 这两个文件本来就落盘了（`sim/coverage/merged.ucdb`、`wave_<seed>.vcd`），
+    # 但**只以"某个目录里有个文件"的形式存在**：`ucdb_path` 埋在
+    # `result["coverage"]` 里，哈希算在 `coverage` 执行器的内存返回里
+    #（`coverage/main.py` 的 `coverage_db.sha256`）—— 落进 JSON 的一个都没有。
+    #
+    # 后果是"签核证据包"里这两样是**匿名文件**：人和工具都说不清这一轮的覆盖率
+    # 数字对应的是哪一份库，也没法核"后来有没有被换过"。所以显式记下来，
+    # 与 `infrastructure.archive_coverage()` 的 `{sha256, size}` 同一套形状。
+    result["artifacts"] = _artifact_manifest(sim_result)
+
     # 保存结果
     cov_json = od / "sim" / "coverage" / "coverage_result.json"
     cov_json.parent.mkdir(parents=True, exist_ok=True)
@@ -612,6 +624,33 @@ def run(output_dir: str, top_module: str = "", seed: int = 0) -> dict:
                         encoding="utf-8", errors="replace")
     print(f"[coverage] Results saved to {cov_json}")
     return result
+
+
+def _artifact_manifest(sim_result: dict) -> dict:
+    """覆盖率库 / 波形 → `{ucdb: {...}, waveform: {...}}`（路径 + 哈希 + 大小）。
+
+    **哈希不是装饰**：覆盖率数字的意义完全取决于"它出自哪一份库"。一份能被悄悄
+    换掉的 ucdb 会让签核回溯失去意义 —— 而 `sim/coverage/` 是回归会反复写的目录，
+    换掉它太容易了。记哈希是让"这一轮的数字 = 这一个文件"可核对。
+
+    文件不在就给空串（不伪造）—— 比如这次仿真没落波形，那是事实，不是错误。
+    """
+    from src.layers.l1_infrastructure.infrastructure import sha256_file
+
+    def _entry(path_str: str, kind: str) -> dict:
+        p = Path(path_str) if path_str else None
+        if not p or not p.exists():
+            return {"path": "", "sha256": "", "size": 0, "kind": kind}
+        return {"path": str(p), "sha256": sha256_file(p),
+                "size": p.stat().st_size, "kind": kind}
+
+    return {
+        "ucdb": _entry(sim_result.get("ucdb_path", ""), "coverage_db"),
+        # `.vcd` 是覆盖率后端自己 dump 的那份（`simulate_with_coverage` 的
+        # `vcd file ...`），**不是** `sim_modes` 那条 `-qwavedb` 的波形 ——
+        # 是两条互不相干的 vsim 命令（见 `sim_modes.py` 与那里的说明）。
+        "waveform": _entry(sim_result.get("vcd_path", ""), "waveform"),
+    }
 
 
 if __name__ == "__main__":

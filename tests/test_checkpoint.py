@@ -269,6 +269,128 @@ class TestWithoutCheckpointing:
         assert result.get("status") == "PASS"
 
 
+# ═══════════════════════════════════════════════════════════════
+# CLI 审批 —— 断链的那一半
+# ═══════════════════════════════════════════════════════════════
+
+class TestCliApprovalDrivesTheGraph:
+    """`vagent approve` / `resume` 必须**真的**把挂起的图推下去。
+
+    ## 断在哪（这组测试的由来）
+
+    这两个命令原来只往 `<run>/approval.json` 写一条 JSON，而全仓库**没有任何
+    读者**（`Read` 侧零命中）。人签了字：记录有了、运行还停在原地、也没人知道。
+    "可治理"那一支柱因此是空的 —— 审批动作发生了，但它**不驱动任何东西**。
+
+    所以这组不测"文件写没写"（那半边一直是对的），测**图有没有继续走**：
+    签完之后 journal 必须出现 `run.finished`，否则就是回到了断链状态。
+    """
+
+    def _interrupted(self, svc, tmp_path, monkeypatch):
+        """造一次**真的停在审批上**的运行，返回 (run_id, run_dir)。
+
+        `output_root` 特意放在 `output` 前缀下：CLI 的 `_repo()` 是
+        `RunRepository("output")`，它既认 `output/` 也认同级的 `output_*`
+        （见 `run_dirs` 的注释）。放别处 CLI 找不到这次运行 —— 那是另一件事。
+        """
+        monkeypatch.chdir(tmp_path)
+        rid = svc.start(_req(tmp_path, output_root=str(tmp_path / "output")))
+        result = svc.wait(rid, timeout=30)
+        assert result.get("interrupted") is True, "这轮没停在审批上，后面的验收不成立"
+        return rid, _run_dir(tmp_path, rid)
+
+    def test_approve_resumes_the_run_and_keeps_the_audit_record(self, svc, tmp_path,
+                                                                monkeypatch):
+        import json
+
+        from click.testing import CliRunner
+
+        from src.cli.commands import cli
+
+        rid, run_dir = self._interrupted(svc, tmp_path, monkeypatch)
+        res = CliRunner().invoke(cli, ["approve", "--run", rid, "--reason", "看过波形了"])
+        assert res.exit_code == 0, res.output
+
+        kinds = [e.kind for e in read_journal(run_dir)]
+        assert KIND_RUN_FINISHED in kinds, (
+            "签完之后运行没有继续 —— 又回到了「只写 approval.json、不驱动图」的断链")
+        # 审计那一半不能因为接线而丢掉：理由仍在记录里
+        rec = json.loads((run_dir / "approval.json").read_text(encoding="utf-8"))
+        assert rec["action"] == "approve"
+        assert rec["reason"] == "看过波形了"
+
+    def test_resume_subcommand_drives_it_too(self, svc, tmp_path, monkeypatch):
+        """`resume --decision skip` 这条路 —— `approve`/`reject` 不覆盖的答案。"""
+        from click.testing import CliRunner
+
+        from src.cli.commands import cli
+
+        rid, run_dir = self._interrupted(svc, tmp_path, monkeypatch)
+        res = CliRunner().invoke(cli, ["resume", "--run", rid, "--decision", "skip"])
+        assert res.exit_code == 0, res.output
+        assert KIND_RUN_FINISHED in [e.kind for e in read_journal(run_dir)]
+
+    def test_resume_works_outside_the_output_namespace(self, svc, tmp_path, monkeypatch):
+        """`-o /别处/xx` 跑出来的运行也要能恢复 —— 用 `--output-base` 指过去。
+
+        这条盯的是"基准目录写死 `output`"那个坑：写死的话，运行落在
+        `elsewhere_*/` 下就永远恢复不了 —— 而且报错是"找不到 run"，
+        让人以为是 run 不存在，而不是"我看错了地方"。
+        """
+        from click.testing import CliRunner
+
+        from src.cli.commands import cli
+
+        monkeypatch.chdir(tmp_path)
+        rid = svc.start(_req(tmp_path, output_root=str(tmp_path / "elsewhere")))
+        assert svc.wait(rid, timeout=30).get("interrupted") is True
+        runs = sorted(tmp_path.glob("elsewhere_*"))
+        assert runs, "run 目录没建出来"
+        run_dir = runs[0]
+        assert run_dir.name == rid
+
+        res = CliRunner().invoke(cli, [
+            "resume", "--run", run_dir.name, "--decision", "approve",
+            "--output-base", str(tmp_path / "elsewhere")])
+        assert res.exit_code == 0, res.output
+        assert KIND_RUN_FINISHED in [e.kind for e in read_journal(run_dir)]
+
+    def test_resume_reports_clearly_when_there_is_nothing_to_resume(self, tmp_path,
+                                                                   monkeypatch):
+        """没有检查点 = 没有挂起的审批：**说清楚**，不是堆一个 traceback。"""
+        from click.testing import CliRunner
+
+        from src.cli.commands import cli
+
+        monkeypatch.chdir(tmp_path)
+        run_dir = tmp_path / "output" / "fake_run_1"
+        run_dir.mkdir(parents=True)
+        res = CliRunner().invoke(cli, ["resume", "--run", "fake_run_1"])
+        assert res.exit_code == 0, res.output
+        assert "没有检查点" in res.output
+
+    def test_approve_without_a_checkpoint_still_records(self, tmp_path, monkeypatch):
+        """没挂起的图时 `approve` 仍然记审计 —— **不报错**。
+
+        审批记录是"人何时为何签了"的凭证，与"这次签核有没有推着图走"是两件事。
+        把前者绑死在后者上，等于"没东西可推时连记录都不留"。
+        """
+        import json
+
+        from click.testing import CliRunner
+
+        from src.cli.commands import cli
+
+        monkeypatch.chdir(tmp_path)
+        run_dir = tmp_path / "output" / "fake_run_2"
+        run_dir.mkdir(parents=True)
+        res = CliRunner().invoke(cli, ["approve", "--run", "fake_run_2", "--reason", "留档"])
+        assert res.exit_code == 0, res.output
+        rec = json.loads((run_dir / "approval.json").read_text(encoding="utf-8"))
+        assert rec["action"] == "approve" and rec["reason"] == "留档"
+        assert not (run_dir / "docs").exists(), "没有检查点却去建 docs/ 了"
+
+
 class TestStateRoundTrip:
     def test_state_of_filters_unknown_keys(self):
         """检查点里可能混着框架塞的键，`extra="forbid"` 会把它们当错误。"""

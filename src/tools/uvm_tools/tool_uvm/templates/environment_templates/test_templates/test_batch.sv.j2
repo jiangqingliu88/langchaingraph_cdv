@@ -18,14 +18,33 @@
 //
 // ## 类体里为什么不铺激励
 //
-// 约束在 sequence 里，**本模板看不见也不该看见**（工具的边界：它只认
-// `environment.batches` 这份契约）。这里只把"这一批打哪几个维度、用什么方法"
-// 挂上 config_db —— 消费方（sequence）读它决定怎么激励。这跟 attr test 只
-// `set` 一个 `_int` 是同一种克制：**传参数，不传行为**。
+// 类体里只 `set` 参数，不写约束逻辑本身 —— **传参数，不传行为**（跟 attr test
+// 只 `set` 一个 `_int` 是同一种克制）。
+//
+// ## 约束是哪一侧的
+//
+// `batch_policy` 是**模型给的约束策略类名**（`theme_policy_map` 从 case 模型的
+// `themes[].method` 推，与 `build_constraint` 生成的 `policies[].name` 同名）。
+// sequence 拿这个名字去策略工厂查表建策略 —— 于是"这一批用哪条约束"**由模型
+// 说了算**，而不是由回归命令行上的 plusargs 说了算。
+//
+// 空串 = 这一批没有模型给的约束（`policy` 键缺失或 method 认不出）：sequence
+// 会退回默认组合器。**不报错** —— 那是"模型没声明"，不是"生成错了"。
 
 // 生成一条批次 test。宏体内**只能用 /* */ 注释** —— `//` 会把行尾的反斜杠
 // 一起吃掉，宏定义当场断在那一行（SV 宏的经典坑，别改回去）。
-`define GEN_BATCH_TC(tc_name, tc_base, tc_theme, tc_dims, tc_method, tc_prio) \
+//
+// **跟一句**：`/* */` 注释也只能**单行**、且**每个物理行都要以 `\` 结尾**。
+// 宏体是靠行尾反斜杠粘成"逻辑一行"的，跨行的块注释中间那几行没有 `\`，
+// 宏定义就在那里断掉了 —— 而且报的错在下游（`tc_name` 未声明），不在这一行。
+// 长解释写在宏**外面**（就是上面这段），宏里只留代码。
+//
+// `batch_policy` 为什么要走**全局**通道（`set(null, "*", ...)`）而不是
+// `set(this, "*", ...)`：sequence 的父链未必挂在 test 底下 —— `seq.start(sqr)`
+// 建出来的 sequence 可以不挂 parent，那样 `this` 上下文的 set 它取不到；而
+// **取不到的表现是"约束静默没生效、回归照样全绿"**，正是最难发现的那种。
+// 全局通道与 tb_top 挂 vif 用的是同一个写法（`tb_top.sv.j2`）。
+`define GEN_BATCH_TC(tc_name, tc_base, tc_theme, tc_dims, tc_method, tc_policy, tc_prio) \
 class tc_name extends tc_base; \
     `uvm_component_utils(tc_name) \
     function new(string name, uvm_component parent); \
@@ -36,15 +55,16 @@ class tc_name extends tc_base; \
         uvm_config_db#(string)::set(this, "*", "batch_theme", tc_theme); \
         uvm_config_db#(string)::set(this, "*", "batch_dimensions", tc_dims); \
         uvm_config_db#(string)::set(this, "*", "batch_method", tc_method); \
+        uvm_config_db#(string)::set(null, "*", "batch_policy", tc_policy); \
         uvm_config_db#(string)::set(this, "*", "batch_priority", tc_prio); \
     endfunction \
 endclass
 
 {% for b in batches %}
 // ── 批次 test {{ loop.index }}：{{ b.theme }}（{{ b.dimensions }}，方法 {{ b.method }}）──
-// 消费示例（sequence 侧按需打开，键名与下面 set 的同一个）：
-//   string dims, method;  /* {{ b.dimensions }} / {{ b.method }} */
-//   uvm_config_db#(string)::get(this, "", "batch_dimensions", dims);
-//   uvm_config_db#(string)::get(this, "", "batch_method", method);
-`GEN_BATCH_TC({{ b.name }}, {{ environment.env_name }}_gen_test, "{{ b.theme }}", "{{ b.dimensions }}", "{{ b.method }}", "{{ b.priority }}")
+// 约束策略：{{ b.policy or '（模型没声明 —— 走默认组合器）' }}
+// 消费方（sequence）按 `batch_policy` 去策略工厂查表：
+//   string policy;  /* {{ b.policy }} */
+//   uvm_config_db#(string)::get(null, "", "batch_policy", policy);
+`GEN_BATCH_TC({{ b.name }}, {{ environment.env_name }}_gen_test, "{{ b.theme }}", "{{ b.dimensions }}", "{{ b.method }}", "{{ b.policy }}", "{{ b.priority }}")
 {% endfor %}

@@ -26,7 +26,11 @@ class {{ project.env_name }}_coordinated_sequence extends uvm_virtual_sequence;
   
   function new(string name = "{{ project.name }}_coordinated_sequence");
     super.new(name);
-    policy_combo = {{ project.env_name }}_policy_factory::create_from_plusargs();
+    // 约束策略**优先取模型给的批次策略**（batch test 挂的 `batch_policy`），
+    // 没有才退回 plusargs（`+POLICY_LIST`）。见 factory 里
+    // `create_from_batch` / `create_from_plusargs` 的注释 —— 前者是"模型说了算"，
+    // 后者是"回归命令行说了算"。
+    policy_combo = {{ project.env_name }}_policy_factory::create_from_batch();
   endfunction
   
   virtual task body();

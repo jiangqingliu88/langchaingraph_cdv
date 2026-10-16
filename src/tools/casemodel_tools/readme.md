@@ -594,10 +594,23 @@ case / 功能覆盖率 / 约束是**三份 yaml**，各答一个问题：
 ② case.cross_matrix 键   ──矩阵键──►  coverage.crosses[].matrix_ref
 ③ 约束.policies[].applies_to ──端口──► 约束.transactions[].name
 ④ case.themes[].method   ──映射──►   约束.combinator / policies
+⑤ 约束.policies[].dimensions ──维度 ID──► coverage.coverpoints[].dimension
 ```
 
 ①② 是**硬边**（error）—— 断了就是"声明的测试点没落成覆盖仓"/"组合关系没被覆盖"；
-③④ 是**软边**（warning）。
+③④⑤ 是**软边**（warning）。
+
+**为什么要有 ⑤**：前四条只连成一个 "V"（case↔coverage、case↔约束），
+**coverage↔约束之间一条边都没有** —— 于是"这条策略驱动的维度到底有没有人量它"
+没人答得了。⑤ 用 **dimension ID** 把三角形闭合：case 模型的 `dimensions[].id`
+是两边共用的命名空间（覆盖率侧 `coverpoint.dimension`、约束侧
+`policy.dimensions`）。**它不追端口名，改追维度 ID** —— 端口↔信号的对应没有
+建模（见下），追不了；维度 ID 有。
+
+两处必须归一（实测都踩过）：专题的 `dimensions` 写的是**原始引用**（`指令类型`
+这种 name 也行）而覆盖率侧是 `D_type`，得归到 canonical key；
+`dimensions: ["*"]` 的语义是**全部维度**，得展开 —— 否则所有维度都会被报成
+"没人驱动"。
 
 ```bash
 python -m src.tools.casemodel_tools.cli associate cases.yaml coverage.yaml [-c constraint.yaml]
@@ -655,6 +668,23 @@ python -m src.tools.casemodel_tools.cli constraints cases.yaml \
 校验会逐条提示 `policy 'xxx' has no built-in apply body（自定义逻辑需手填）`。
 **结构由工具给，协议由人给**；逻辑补在 `env/cons/` 的策略里（不在这个 yaml，所以重跑
 覆盖它是安全的）。
+
+**策略带 `dimensions`**（它驱动哪些维度）—— 那是 `associate` 边 ⑤ 的桥墩，
+归一到 canonical key 并把通配 `"*"` 展开（见上一节）。
+
+**在流水线里它是自动生成的**（`verify` 阶段）：`find_spec_yaml` 之后、
+`jinja_render` 之前，verify 从 env.yaml 的 agents 推端口 → `build_constraint` →
+落 `inputs/yaml/uvm/constraint.yaml`，与 env.yaml 在同一次 `run()` 里渲染出
+`env/cons/`。**端口从 `type` 推、不是从 `name`**（`npu_sched_in_master_agent`
+→ `npu_sched_in_master_seq_item`；照 `name` 拼出来的类不存在，而错要到 vlog 才报）。
+CLI 手跑那条路仍在，两条同一份实现。
+
+⚠️ **策略体目前是空的**：`env_cons_policies.sv.j2` 的 `case (policy_name)` 分支来自
+内置名单（`semantic_check.BUILTIN_POLICIES`，8 个**主题名**），与本工具推出来的
+`p_th_b02_random`（专题 + 方法）**一个都对不上** —— 于是那个 `case` 一个分支都没有。
+**空 `case` 不是"什么都不做"，是 `vlog-13302` 编译错误**（实测 11 策略 = 11 条 error），
+所以模板留了一个 `default:`。要让约束真生效，得把内置分支补成按 method 派生的那五类
+（`directed` / `combo` / `special` / `random` / `replay`）——**这一条还没做**。
 
 **端口必须显式给**（`-p name:type`，可重复）：case 说字段名、约束说 agent 名 + seq_item
 类型，端口名 ↔ 字段名的对应**没有建模**（就是边 ③ 只查得到一半的那半个），推不出来。

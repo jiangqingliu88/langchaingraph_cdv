@@ -1479,6 +1479,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "dimensions": {
+            "$comment": "constraint 文件的 policies 项 —— **这条策略驱动哪些维度**（case 模型的 `dimensions[].id`，如 `D_queue`）。它是 coverage↔constraint 那条关联边的桥墩：覆盖率侧 coverpoint 也声明 `dimension`，两边同一个 ID 空间。生成端由 `build_constraint` 从 `themes[].dimensions` 推来，**渲染不用它**（只用于关联校验，见 `associate` 边 ⑤）。",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false
@@ -1744,6 +1751,10 @@
           "type": "string"
         },
         "method": {
+          "type": "string"
+        },
+        "policy": {
+          "$comment": "env.yaml —— **约束策略类名**（`theme_policy_map` 从 case 模型推，与 `build_constraint` 的 `policies[].name` 同名）。批次 test 类把它 set 进 config_db（`batch_policy`），协调序列据此建策略 —— 约束因此**由模型指定**，不再只靠运行时 plusargs。空串 = 这一批没有模型给的约束，sequence 退回默认组合器。",
           "type": "string"
         },
         "priority": {

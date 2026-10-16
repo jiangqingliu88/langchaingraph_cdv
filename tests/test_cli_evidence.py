@@ -182,3 +182,67 @@ class TestHelp:
         assert result.exit_code == 0
         for word in ("record", "log", "check"):
             assert word in result.output
+
+
+class TestArchiveCarriesThePhysicalEvidence:
+    """`vagent archive` 要把**结论的物证**一起收进包，且缺了什么要说。
+
+    ## 为什么
+
+    原来白名单只有四个 JSON：`manifest` / `evidence_chain` / `report` /
+    `coverage_result`。而 `coverage_result.json` 里那句"覆盖率 93.5%"对应的
+    `merged.ucdb`、以及现场波形，**都不在包里** —— 拿到证据包的人只有指纹、
+    没有实物，回溯不了"这个数字出自哪一份库"。
+
+    静默跳过同样要不得：包里没有波形，究竟是我漏收了、还是这次本来就没跑波形？
+    这两件事长得一模一样，而一件要修、一件要接受。
+    """
+
+    def _run_dir(self, tmp_path, name="output_x", with_ucdb=True, with_vcd=True,
+                 with_stages=True):
+        import json
+
+        d = tmp_path / name
+        (d / "docs").mkdir(parents=True)
+        (d / "sim" / "coverage").mkdir(parents=True)
+        (d / "docs" / "manifest.json").write_text(json.dumps({"run_id": name}),
+                                                  encoding="utf-8")
+        (d / "sim" / "coverage" / "coverage_result.json").write_text(
+            json.dumps({"status": "PASS"}), encoding="utf-8")
+        if with_ucdb:
+            (d / "sim" / "coverage" / "merged.ucdb").write_bytes(b"ucdb")
+        if with_vcd:
+            (d / "sim" / "coverage" / "wave_seed_default.vcd").write_bytes(b"$dumpvars")
+            (d / "sim" / "coverage" / "wave_seed_42.vcd").write_bytes(b"$dumpvars2")
+        if with_stages:
+            (d / "regression_stages.json").write_text(json.dumps({"stages": []}),
+                                                      encoding="utf-8")
+        return d
+
+    def test_the_ucdb_and_every_waveform_land_in_the_zip(self, tmp_path, runner,
+                                                          monkeypatch):
+        import zipfile
+
+        monkeypatch.chdir(tmp_path)
+        self._run_dir(tmp_path)
+        result = runner.invoke(cli, ["archive", "--run", "output_x",
+                                     "--output", "ev.zip"])
+        assert result.exit_code == 0, result.output
+
+        with zipfile.ZipFile(tmp_path / "ev.zip") as zf:
+            names = [n.replace("\\", "/") for n in zf.namelist()]
+        assert any(n.endswith("merged.ucdb") for n in names), "覆盖率库没进包"
+        vcds = [n for n in names if n.endswith(".vcd")]
+        assert len(vcds) == 2, f"波形没收全（带种子命名的那些）：{vcds}"
+        assert any(n.endswith("regression_stages.json") for n in names)
+
+    def test_what_is_absent_is_reported_not_silently_skipped(self, tmp_path, runner,
+                                                             monkeypatch):
+        """没有波形时必须**说出来** —— "我漏收了"与"这次没跑"要分得开。"""
+        monkeypatch.chdir(tmp_path)
+        self._run_dir(tmp_path, with_ucdb=False, with_vcd=False, with_stages=False)
+        result = runner.invoke(cli, ["archive", "--run", "output_x",
+                                     "--output", "ev.zip"])
+        assert result.exit_code == 0, result.output
+        assert "merged.ucdb" in result.output
+        assert "未打包" in result.output

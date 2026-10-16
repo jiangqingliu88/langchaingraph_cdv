@@ -224,6 +224,122 @@ class TestFunctionalCoverageIsARunAsset:
         assert "functional_coverage" not in m.metadata
 
 
+class TestSimulationArtifactsLandInTheManifest:
+    """覆盖率库与波形要**带身份**进证据包 —— 不能只是文件表里的一行匿名记录。
+
+    ## 为什么
+
+    `output_files` + `evidence_hash` 答的是"文件没被换过"，答不了"这一轮的
+    覆盖率数字**出自哪一份 ucdb**"。而 `sim/coverage/` 是回归反复重写的目录：
+    没有哈希，"覆盖率 93.5%"这句话事后无法核对，也无法证明它没被换过。
+
+    与覆盖点声明（`_attach_functional_coverage`）是同一套做法、同一套纪律。
+    """
+
+    def _cov_dir(self, tmp_path, with_result=True, **artifacts):
+        """造一个 `sim/coverage/` —— 一个真的 ucdb + 一份 `coverage_result.json`。"""
+        import json
+
+        d = tmp_path / "sim" / "coverage"
+        d.mkdir(parents=True, exist_ok=True)
+        ucdb = d / "merged.ucdb"
+        ucdb.write_bytes(b"ucdb-bytes")
+        if with_result:
+            self._rewrite_result(d, {"ucdb": {"path": str(ucdb), "kind": "coverage_db"}})
+        return d, ucdb
+
+    @staticmethod
+    def _rewrite_result(cov_dir, artifacts):
+        """改写 `coverage_result.json` 的 `artifacts` 段（其余字段无所谓）。"""
+        import json
+
+        (cov_dir / "coverage_result.json").write_text(
+            json.dumps({"artifacts": artifacts}, ensure_ascii=False), encoding="utf-8")
+
+    def test_the_ucdb_is_registered_with_its_hash(self, tmp_path):
+        d, ucdb = self._cov_dir(tmp_path)
+        self._rewrite_result(d, {"ucdb": {"path": str(ucdb), "kind": "coverage_db"}})
+        m = RunManifest(run_id="r1")
+        ManifestBuilder._attach_simulation_artifacts(m, tmp_path)
+        arts = m.metadata["simulation_artifacts"]["artifacts"]
+        # 相对路径（分隔符按平台，与 `output_files` 同一约定）—— 别把出机器带进去
+        assert Path(arts["ucdb"]["path"]) == Path("sim/coverage/merged.ucdb")
+        assert len(arts["ucdb"]["sha256"]) == 64
+        assert arts["ucdb"]["size"] == len(b"ucdb-bytes")
+
+    def test_a_waveform_entry_is_carried_too(self, tmp_path):
+        import json
+
+        d, ucdb = self._cov_dir(tmp_path)
+        vcd = d / "wave_seed_default.vcd"
+        vcd.write_bytes(b"$dumpvars")
+        self._rewrite_result(d, {"ucdb": {"path": str(ucdb), "kind": "coverage_db"},
+                                 "waveform": {"path": str(vcd), "kind": "waveform"}})
+        m = RunManifest(run_id="r1")
+        ManifestBuilder._attach_simulation_artifacts(m, tmp_path)
+        arts = m.metadata["simulation_artifacts"]["artifacts"]
+        assert Path(arts["waveform"]["path"]) == Path("sim/coverage/wave_seed_default.vcd")
+        assert len(arts["waveform"]["sha256"]) == 64
+        assert arts["waveform"]["size"] == len(b"$dumpvars")
+        json.loads(json.dumps(m.metadata))   # 必须可 JSON 化（证据包要序列化）
+
+    def test_a_missing_waveform_is_not_fabricated(self, tmp_path):
+        """没落波形就是没落 —— 记空路径，**不编一个哈希出来**。"""
+        self._cov_dir(tmp_path)
+        m = RunManifest(run_id="r1")
+        ManifestBuilder._attach_simulation_artifacts(m, tmp_path)
+        arts = m.metadata["simulation_artifacts"]["artifacts"]
+        assert "waveform" not in arts
+
+    def test_an_old_run_without_the_artifacts_block_still_finds_the_ucdb(self, tmp_path):
+        """老 run 目录没有 `artifacts` 段 —— 按文件名回落扫描，别白丢。"""
+        self._cov_dir(tmp_path)
+        m = RunManifest(run_id="r1")
+        ManifestBuilder._attach_simulation_artifacts(m, tmp_path)
+        arts = m.metadata["simulation_artifacts"]["artifacts"]
+        assert Path(arts["ucdb"]["path"]) == Path("sim/coverage/merged.ucdb")
+
+    def test_a_relative_output_path_does_not_double_the_prefix(self, tmp_path,
+                                                              monkeypatch):
+        """`output_root` 是**相对路径**时也要登记得到。
+
+        真实调用里 `output_root` 就是相对的（`output_<用户>_<时间戳>`）。此时本地
+        扫描拿到的路径也随之为相对，若一律 `output_path / p` 就会**再拼一次**，
+        拼出一个不存在的文件 —— 结果是"文件明明在、却什么都没登记"。
+        单测原先全用绝对 `tmp_path`，正好绕过这一格（实测在真 run 目录上才暴露）。
+        """
+        import json
+
+        d = tmp_path / "output_x" / "sim" / "coverage"
+        d.mkdir(parents=True)
+        (d / "merged.ucdb").write_bytes(b"ucdb-bytes")
+        (d / "coverage_result.json").write_text(json.dumps({"artifacts": {}}),
+                                                encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        m = RunManifest(run_id="r1")
+        ManifestBuilder._attach_simulation_artifacts(m, Path("output_x"))
+        arts = m.metadata["simulation_artifacts"]["artifacts"]
+        assert arts["ucdb"]["size"] == len(b"ucdb-bytes")
+        assert Path(arts["ucdb"]["path"]) == Path("sim/coverage/merged.ucdb")
+
+    def test_no_coverage_at_all_means_no_key(self, tmp_path):
+        """这次没跑覆盖率 → **键都不出现**（与"跑了但哈希为空"分得开）。"""
+        m = RunManifest(run_id="r1")
+        ManifestBuilder._attach_simulation_artifacts(m, tmp_path)
+        assert "simulation_artifacts" not in m.metadata
+
+    def test_a_corrupt_coverage_result_does_not_break_the_manifest(self, tmp_path):
+        d = tmp_path / "sim" / "coverage"
+        d.mkdir(parents=True)
+        (d / "merged.ucdb").write_bytes(b"x")
+        (d / "coverage_result.json").write_text("{ not json", encoding="utf-8")
+        m = RunManifest(run_id="r1")
+        ManifestBuilder._attach_simulation_artifacts(m, tmp_path)
+        assert "simulation_artifacts" in m.metadata   # 回落扫描仍然找得到 ucdb
+        assert m.metadata["simulation_artifacts"]["coverage_result"] == \
+            "sim/coverage/coverage_result.json"
+
+
 class TestArtifactReviewListsFunctionalCoverage:
     """产物审查台要看得见功能覆盖那三份 —— 否则"生成了没有"无从查起。"""
 

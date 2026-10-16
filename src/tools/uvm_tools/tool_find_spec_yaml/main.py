@@ -1930,11 +1930,16 @@ def _casemodel_test_lines(output_dir) -> List[str]:
         if batches:
             out.append("  batches:")
             for b in batches:
+                # `policy` = **模型给的约束策略类名** —— 批次 test 类把它 set 进
+                # config_db（`batch_policy`），协调序列据此建策略。**这一行漏了它，
+                # 上面整条改动就白做**（`run_uvm_batches` 算出来了、这里不写，
+                # 模板拿到空串 → 退回默认组合器 → 约束静默不生效）。手拼 YAML 的
+                # 坏处就在这里：加一个字段要在两个地方各改一次。
                 out.append("    - { name: %s, theme: %s, dimensions: '%s',"
-                           " method: %s, priority: %s, checks: '%s' }"
+                           " method: %s, policy: %s, priority: %s, checks: '%s' }"
                            % (b["name"], b["theme"], b["dimensions"],
-                              b["method"] or "''", b["priority"] or "''",
-                              b["checks"]))
+                              b["method"] or "''", b.get("policy") or "''",
+                              b["priority"] or "''", b["checks"]))
         return out
     except Exception as e:
         print(f"  [find_yaml] casemodel tests 未注入: {e}", flush=True)

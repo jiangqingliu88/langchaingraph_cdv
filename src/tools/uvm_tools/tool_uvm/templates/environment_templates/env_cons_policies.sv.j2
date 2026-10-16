@@ -244,6 +244,23 @@ class {{ policy.name }}_policy extends {{ project.env_name }}_constraint_policy;
       end
       
 {% endif %}
+      // **这个 `default` 不能省。** 上面那 8 个分支是**内置策略名**（按验证主题
+      // 命名：`precision_consistency` / `mem_capacity` / …，见
+      // `semantic_check.BUILTIN_POLICIES`）；而 `build_constraint` 从 case 模型
+      // 推出来的名字是**按专题 + 方法**命名的（`p_th_b02_random`）—— 两套一个都
+      // 对不上，于是这里的 `case` 会**一个分支都没有**。
+      //
+      // 而空 `case` 不是"什么都不做"，是**编译错误**：
+      //     vlog-13302  Empty case statement. SystemVerilog syntax requires at least one branch.
+      // （实测：11 个策略 = 11 条 error，整个 env_pkg 连带编不过。）
+      // 所以留一个 default，把"没有约束体"这件事从**编译期**挪到**运行期**，
+      // 并且在生成物里说清楚 —— 见 `build_constraint` 的 notes：策略是**结构骨架**，
+      // 协议参数是领域知识，模型里没有，只能人补。
+      default: begin
+        `uvm_info(get_name(),
+                  "apply(): 该策略无内置约束体 —— 协议约束待人补（模板只给骨架）",
+                  UVM_HIGH)
+      end
     endcase
   endfunction
   

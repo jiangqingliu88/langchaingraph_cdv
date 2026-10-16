@@ -172,3 +172,49 @@ class TestPredictorIsNotAHollowStub:
         sv = self._render(with_mirror=False)
         assert "TODO: override in derived class" in sv
         assert "m_regs" not in sv
+
+
+class TestGeneratorForwardsTheModelBody:
+    """**生成器**那一侧也必须转发 `body` —— 模板支持、生成器丢掉，等于白写。
+
+    上面那组测试**直接喂 ctx**，所以它测不到生成器。曾经就是这样：模板的
+    `{% if body %}` 分支写好了、单测全绿，而 `generate_utils` 的 ctx 里根本没有
+    `body` 这个键 —— 于是 SQL 模型库里的 TLM 1.0 语义一路白存，渲染出来的还是
+    空壳。这条走**真生成器**，把「模板支持」升级成「端到端真的进得去」。
+    """
+
+    def test_body_from_the_registry_reaches_the_generated_file(self, tmp_path):
+        from src.tools.uvm_tools.tool_uvm.gen_uvm import UVMGenerator
+
+        gen = UVMGenerator(JinjaRenderer(TEMPLATES_DIR), output_root=tmp_path)
+        body = "tr.prdata = m_regs[tr.paddr];\n// 事务级语义\n"
+        out = gen.generate_utils([{
+            "name": "apb_uart_ref",
+            "type": "tlm10_component",
+            "description": "事务级参考模型",
+            "analysis_exports": [{"name": "in_export",
+                                  "type": "apb_master_seq_item"}],
+            "analysis_ports": [{"name": "out_port",
+                                "type": "apb_master_seq_item"}],
+            "body": body,
+        }])
+        assert out, "util 组件没生成出来"
+        sv = out[0].read_text(encoding="utf-8")
+        assert "m_regs[tr.paddr]" in sv, \
+            "模型语义没进生成物 —— 生成器的 ctx 把 `body` 丢了"
+        assert "TODO: override in derived class" not in sv
+        # 出处要带上：人得能看出这段语义是哪一版模型给的
+        assert "model_registry" in sv
+
+    def test_without_body_the_stub_is_still_the_stub(self, tmp_path):
+        """没给 `body` 又没给 `ref_model`：仍是空壳（行为不变）。"""
+        from src.tools.uvm_tools.tool_uvm.gen_uvm import UVMGenerator
+
+        gen = UVMGenerator(JinjaRenderer(TEMPLATES_DIR), output_root=tmp_path)
+        out = gen.generate_utils([{
+            "name": "plain_util",
+            "analysis_exports": [{"name": "in_export", "type": "seq_item"}],
+            "analysis_ports": [{"name": "out_port", "type": "seq_item"}],
+        }])
+        sv = out[0].read_text(encoding="utf-8")
+        assert "TODO: override in derived class" in sv

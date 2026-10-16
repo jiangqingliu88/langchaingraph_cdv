@@ -331,7 +331,8 @@ def cmd_coverage_plan(args: argparse.Namespace) -> int:
 def cmd_associate(args: argparse.Namespace) -> int:
     """case / 覆盖率 / 约束 三份 yaml 的**关联**：连上了什么、哪里断了。
 
-    四条边都靠**名字**对齐（见 `associate.py` 的模块头）。有 error 时退出码 1 ——
+    五条边都靠**名字**对齐（见 `associate.py` 的模块头：①② case↔coverage、
+    ③④ case↔约束、⑤ coverage↔约束靠 dimension ID）。有 error 时退出码 1 ——
     "关联断了"不是警告，是这组模型渲染不出可信的 SV。
     """
     from .associate import associate
@@ -490,7 +491,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_covergroups)
 
     p = sub.add_parser("associate",
-                       help="case / 覆盖率 / 约束 三份 yaml 的关联校验（四条边）")
+                       help="case / 覆盖率 / 约束 三份 yaml 的关联校验（五条边）")
     p.add_argument("cases", help="case 模型 YAML")
     p.add_argument("coverage", help="功能覆盖率模型 YAML")
     p.add_argument("--constraint", "-c", help="约束模型 YAML（可选）")

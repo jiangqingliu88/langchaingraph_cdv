@@ -43,6 +43,12 @@
 // ─── Environment ───
 +incdir+{{ env_dir }}
 {{ env_dir }}/{{ environment.env_name }}_parameters_pkg.sv
+// env_pkg 里 `include "utils/<name>_util.sv"`（工具组件/参考模型）**不需要**
+// `+incdir+{{ env_dir }}/utils` —— `include` 是**相对 include**：先按"包含这条
+// 指令的文件所在目录"解析，而 env_pkg.sv 就在 `{{ env_dir }}/` 下，于是
+// `utils/x_util.sv` 直接落到 `{{ env_dir }}/utils/x_util.sv`。实测 vlog 通过
+// （真不存在的路径会响亮报 "Cannot open include file"）。**别好心加一句
+// `+incdir+env/utils`** —— 它不解决问题，只会让"哪条路径才是权威"多一个来源。
 {{ env_dir }}/{{ environment.env_name }}_pkg.sv
 +incdir+{{ env_dir }}/tests
 {{ env_dir }}/tests/{{ environment.env_name }}_test_pkg.sv

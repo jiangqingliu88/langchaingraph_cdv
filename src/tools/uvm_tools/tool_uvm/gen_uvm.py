@@ -1848,10 +1848,13 @@ def _normalize_tests(raw) -> List[Dict[str, Any]]:
 
 
 def _normalize_batches(raw) -> List[Dict[str, Any]]:
-    """`environment.batches` → `[{name, theme, dimensions, method, priority, checks}]`。
+    """`environment.batches` → `[{name, theme, dimensions, method, policy, priority, checks}]`。
 
     必填 `name`（= test 类名），缺了就丢掉 —— 一个没名字的 test 类生成不出来。
     其余键缺省给空串（模板按空串渲染，不炸）。
+
+    `policy` 是**约束策略类名**（由 case 模型推出来的那个），批次 test 类把它
+    set 进 config_db 给 sequence 用。缺省空串 = 这一批没有模型给的约束。
 
     与 `_normalize_tests` 同一套纪律：**只做类型净化，不做语义展开** ——
     "哪个批次打哪几个维度"是 case 模型那边的事，这里不认识。
@@ -1870,6 +1873,7 @@ def _normalize_batches(raw) -> List[Dict[str, Any]]:
             "theme": str(item.get("theme") or "").strip(),
             "dimensions": str(item.get("dimensions") or "").strip(),
             "method": str(item.get("method") or "").strip(),
+            "policy": str(item.get("policy") or "").strip(),
             "priority": str(item.get("priority") or "").strip(),
             "checks": str(item.get("checks") or "").strip(),
         })
@@ -2757,6 +2761,13 @@ class UVMGenerator:
                 "description": comp.get("description", ""),
                 "analysis_exports": comp.get("analysis_exports", []),
                 "analysis_ports": comp.get("analysis_ports", []),
+                # 带这一项 → util 模板把 `process_<port>` 的 TODO 空壳换成**事务级**
+                # 语义（TLM 1.0，无 clk、无引脚）。它由 SQL 模型库给出
+                #（`ModelRegistry` 的 `body`，经 `_util_component_yaml` 落进
+                # `util_components`）。**原先这里没转发** —— 于是模板里那个
+                # `{% if body %}` 分支永远不会进，库里存的模型语义一路白存，
+                # 渲染出来的还是空壳。模板分支在 `util_comp.sv.j2:111-120`。
+                "body": comp.get("body"),
                 # 带这一项 → util 模板把 `process_<port>` 的 TODO 空壳换成真的
                 # 参考模型镜像（见模板与 schema 的 `refModelMirror`）。缺省 None
                 # 保持原样 —— 不带镜像的 util 组件行为逐字节不变。
@@ -3435,12 +3446,17 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
             if not isinstance(comp, dict):
                 continue
             uname = comp.get("name", "util")
+            # 与 `generate_utils` 的 ctx **逐键对齐** —— 这是同两个模板的两个入口
+            # （一个是真生成、一个是预览），少传一个键就会让预览的字符数与真产物对不上，
+            # 而"预览说生成了、真产物是空壳"正是这一类 bug 最难查的形态。
             ctx = {
                 "name": uname,
                 "type": comp.get("type", "uvm_component"),
                 "description": comp.get("description", ""),
                 "analysis_exports": comp.get("analysis_exports", []),
                 "analysis_ports": comp.get("analysis_ports", []),
+                "body": comp.get("body"),
+                "ref_model": comp.get("ref_model"),
             }
             files = []
             for tpl, pat in _util_templates:

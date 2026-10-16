@@ -10,16 +10,28 @@ case 里写 `cover_bins`），由本模块做一次三向 join。多出来的引
 `cover_bins` / `matrix_ref` / `object_ref` / `applies_to` —— **都是作者本来就要写的**
 （写 `cover_bins` 的时候他脑子里已经有一个 bin 名了），所以不是额外负担。
 
-## 四条边（都靠名字，不靠位置）
+## 五条边（都靠名字，不靠位置）
 
     ① case.field.cover_bins  ──bin 名──►  coverage.coverpoints[].bins[].name
     ② case.cross_matrix 键   ──矩阵键──►  coverage.crosses[].matrix_ref
     ③ 约束.policies[].applies_to ──端口──► 约束.transactions[].name
     ④ case.themes[].method   ──映射──►   约束.combinator / policies
+    ⑤ 约束.policies[].dimensions ──维度 ID──► coverage.coverpoints[].dimension
 
-**① 和 ② 是硬边**（断了就是"声明的测试点没落成覆盖仓"/"组合关系没被覆盖"）——
-`error`。**③ 和 ④ 是软边**（激励层没接上）—— `warning`，而且**只能查到一半**，
-见下面「查不到的那一半」。
+**①② 是硬边**（断了就是"声明的测试点没落成覆盖仓"/"组合关系没被覆盖"）—— `error`。
+**③④⑤ 是软边**（激励层没接上）—— `warning`。
+
+## 为什么要有 ⑤（三角形缺的那一边）
+
+前四条只连成一个 **"V"**：case↔coverage（①②）、case↔约束（③④）——
+**coverage↔约束之间一条边都没有**。于是"这条策略驱动的维度到底有没有人量它"
+没人答得了（③ 只查约束内部，见下面「查不到的那一半」）。
+
+⑤ 用 **dimension ID** 对齐：case 模型的 `dimensions[].id` 是两边共用的命名空间 ——
+覆盖率侧写在 `coverpoint.dimension`，约束侧写在 `policy.dimensions`
+（由 `build_constraint` 从 `themes[].dimensions` 推，并归一成 canonical key、
+把通配 `"*"` 展开成全部维度）。**它不追端口名，改追维度 ID** ——
+端口↔信号的对应没有建模，追不了；维度 ID 有。
 
 ## 为什么字段名与信号名**不该**一样
 
@@ -155,9 +167,41 @@ def associate(case_text: str, coverage_text: str,
                      f"（认得的：{'、'.join(METHOD_TO_CONSTRAINT)}）—— "
                      f"注意 case 模型的解析器会把认不出的方法**静默归一成空**，"
                      f"所以模型上看不出来")
+        # ── ⑤ 覆盖率 ↔ 约束（**靠 dimension 对齐**）──
+        #
+        # 前四条边把三份模型连成一个 "V"：case↔coverage（①②）、case↔约束（④）。
+        # **coverage↔约束之间一条边都没有** —— 于是"这条策略驱动的那个维度，
+        # 到底有没有人量它"没人答得了（原来的 ③ 只查约束内部，`notes` 里也承认了）。
+        #
+        # 桥墩是现成的：`class 模型` 的 `dimensions[].id` 两边都在用 ——
+        # 覆盖率侧 `coverpoint.dimension`、约束侧 `policy.dimensions`（本文件
+        # `build_constraint` 从 `themes[].dimensions` 推的）。同一个 ID 空间。
+        #
+        # 强度是 **warning**（软边，与 ③④ 同级）：约束是**激励层**，"驱动了没量"
+        # 不阻断覆盖率渲染 —— 但要让人知道，否则那条策略就是白写的。
+        cov_dims = {cp.dimension for cp in cov.coverpoints if cp.dimension}
+        driven: set = set()
+        for pol in cons.get("policies", []):
+            for dim in (pol.get("dimensions") or []):
+                driven.add(dim)
+                if dim not in cov_dims:
+                    _add("warning", "⑤", str(pol.get("name")),
+                         f"策略 {pol.get('name')} 驱动维度 {dim!r}，但覆盖率模型里"
+                         f"**没有 dimension 是它的 coverpoint** —— 这条约束驱动的东西"
+                         f"没人量（覆盖率里有的："
+                         f"{'、'.join(sorted(cov_dims)) or '无'}）")
+        # 反向（"有人量、没人驱动"）：只在**给了约束模型**时才查 ——
+        # 不给约束模型 = 这一层本来就缺，刷一片警告只会把人练成忽略它。
+        for dim in sorted(cov_dims - driven):
+            _add("warning", "⑤", dim,
+                 f"维度 {dim!r} 有 coverpoint（有人量），但**没有任何策略驱动它** —— "
+                 f"随机激励下这个覆盖点大概率扫不到（策略声明在专题的 `dimensions` 上）")
         notes.append("③ 只查了**约束内部**（applies_to 是否引用已声明的 transactions）——"
                      "端口名↔信号名的对应关系没有建模，所以'策略压的端口有没有对应"
                      "coverpoint'这半查不到")
+        notes.append("⑤ 是上面那半的**替代问法**：不追端口名（那个没有建模），"
+                     "改追 **dimension ID** —— 覆盖率侧 `coverpoint.dimension` 与"
+                     "约束侧 `policy.dimensions` 是同一个 ID 空间。")
 
     return {
         "links": {
@@ -214,11 +258,21 @@ def _raw_themes(case_text: str) -> List[Dict[str, str]]:
     out: List[Dict[str, str]] = []
     for t in (data.get("themes") or []):
         if isinstance(t, dict):
+            dims = t.get("dimensions")
+            if isinstance(dims, str):
+                dims = [dims]
             out.append({
                 "key": str(t.get("id") or t.get("name") or "?"),
                 "name": str(t.get("name") or ""),
                 "method": str(t.get("method") or "").strip(),
                 "priority": str(t.get("priority") or "").strip(),
+                # **策略要驱动的维度**（`D_queue` 这些 ID）。它是
+                # coverage↔constraint 那条边（`associate` 边 ⑤）的**桥墩**：
+                # 覆盖率侧 coverpoint 也声明 `dimension`，两边同一个 ID 空间。
+                # 读原始 yaml（与 method 同一条规矩）—— 解析后的 `Theme.dimensions`
+                # 会丢掉解不出来的引用，而"作者声明了什么"才是要查的。
+                "dimensions": [str(d) for d in
+                               (dims if isinstance(dims, list) else []) if d],
             })
     return out
 
@@ -374,6 +428,37 @@ _HEADER = """\
 """
 
 
+def theme_policy_map(themes: List[Dict[str, str]]) -> Dict[str, str]:
+    """专题 → 策略名（**与 `build_constraint` 逐字同名**）。
+
+    抽出来是因为有两个读者：`build_constraint` 生成 `policies[]` 本体，
+    `run_uvm_batches` 把策略名挂进 `batches[]`（批次 test 类 set 给 sequence）。
+    **两份各推一次名字就会漂** —— 而漂了的表现最难查：config_db 里那个名字查不到
+    策略，factory 静默回退默认组合器，回归照样跑绿，只是约束没生效。
+
+    输入必须是 `_raw_themes` 的产物（作者**原样写的**声明），不是解析后的模型：
+    认不出的 `method` 会被 `build_theme` 归一成空串，两者对不上（见 `_raw_themes`）。
+
+    只有**认得的** method 才有条目；没写 method 的专题不在表里 —— 调用方据此
+    知道"这一批没有模型给的约束"，而不是拿到一个编出来的名字。
+
+    **查找别名**：另把 `name` 也登记为别名。`build_theme` 在专题没写 `id` 时把
+    `id` 填成 `TH-{序号}`，而本表按原样写的 key（=`id or name`）建表 —— 只有
+    `name` 的专题两边对不上，别名正好补上那一格。
+    """
+    ordered = sorted((t for t in themes if t["method"] in METHOD_TO_POLICY),
+                     key=_theme_order)
+    used: set = set()
+    out: Dict[str, str] = {}
+    for t in ordered:
+        suffix, _mode = METHOD_TO_POLICY[t["method"]]
+        name = _policy_name(t["key"], suffix, used)
+        out[t["key"]] = name
+        if t.get("name"):
+            out.setdefault(t["name"], name)
+    return out
+
+
 def build_constraint(case_text: str,
                      ports: Optional[List[Any]] = None) -> Dict[str, Any]:
     """case 模型 → 约束模型（策略 + 组合器）的**骨架**。
@@ -402,6 +487,46 @@ def build_constraint(case_text: str,
     if not models:
         return {"error": "case 模型里没有任何对象"}
     case = models[0].resolve()
+
+    # 维度引用 → **canonical key**（`D_type`）。
+    #
+    # 专题里的 `dimensions: [指令类型]` 写的是**原始引用**（name 或 id 都行），
+    # 而覆盖率侧的 `coverpoint.dimension` 是 `dim.key`（= `id or name`）。
+    # 不归一就对不上 —— 实测：专题写 `指令类型`、coverpoint 写 `D_type`，
+    # 于是 `associate` 边 ⑤ 把一条明明连上的边报成"没人驱动这个维度"。
+    dim_alias: Dict[str, str] = {}
+    _all_dims: List[str] = []
+    for _d in getattr(case, "dimensions", []) or []:
+        _all_dims.append(_d.key)
+        for _alias in (_d.key, _d.id, _d.name):
+            if _alias:
+                dim_alias.setdefault(str(_alias), _d.key)
+
+    def _dim_key(raw: str) -> str:
+        """原始引用 → canonical key；**解不出来就原样留着** —— 那样边 ⑤ 会如实
+        报"驱动了一个没有 coverpoint 的维度"，比悄悄丢掉它强。"""
+        return dim_alias.get(str(raw), str(raw))
+
+    from .domain.vocab import is_wildcard
+
+    def _dim_keys(raw_dims: List[str]) -> List[str]:
+        """专题的 `dimensions` → canonical key 列表（**通配要展开**）。
+
+        `dimensions: ["*"]` 在 case 模型里的语义是"**全部维度**"（见
+        `Theme.covers_all_dimensions` / `vocab.is_wildcard`）—— 照原样把 `'*'`
+        带出去，`associate` 边 ⑤ 就会把所有维度都报成"没人驱动"
+        （实测：npu_sched 的 TH-B11 是通配，于是 D_seq/D_priority/D_barrier
+        三个维度被误报）。
+        """
+        out: List[str] = []
+        for r in (raw_dims or []):
+            out.extend(_all_dims if is_wildcard(r) else [_dim_key(r)])
+        seen, uniq = set(), []
+        for k in out:
+            if k and k not in seen:
+                seen.add(k)
+                uniq.append(k)
+        return uniq
 
     norm, bad = _norm_ports(ports)
     if bad:
@@ -434,12 +559,14 @@ def build_constraint(case_text: str,
     # 按优先级排：P0 在前 → 它同时决定下面 `default_mode` 取谁。
     ordered = sorted((t for t in themes if t["method"]), key=_theme_order)
 
-    used: set = set()
+    # 名字**只从 `theme_policy_map` 来** —— 它同时被 `run_uvm_batches` 用
+    #（批次 test 类 set 给 sequence 的就是这个串）。这里再推一次就会漂。
+    policy_names = theme_policy_map(themes)
     policies: List[Dict[str, Any]] = []
     mapping: List[Tuple[str, str, str]] = []
     for t in ordered:
-        suffix, mode = METHOD_TO_POLICY[t["method"]]
-        name = _policy_name(t["key"], suffix, used)
+        mode = METHOD_TO_POLICY[t["method"]][1]
+        name = policy_names[t["key"]]
         policies.append({
             "name": name,
             "description": f"{t['name'] or t['key']}（{t['method']} → {mode}）"
@@ -449,6 +576,12 @@ def build_constraint(case_text: str,
             # 不编（编一个 `align: 4` 出来，人会以为它是从模型推出来的）
             "params": [],
             "applies_to": [p["name"] for p in norm],
+            # **这条策略驱动哪些维度** —— 三模型强关联里 coverage↔constraint
+            # 那条边的桥墩（`associate` 边 ⑤ 按 dimension 对齐）。它是模型**推得出来**的
+            # （专题本来就声明了 dimensions），所以照实带上，不是编的。
+            # **归一成 canonical key**：专题写的是原始引用（`指令类型` 也行），
+            # 而覆盖率侧 `coverpoint.dimension` 是 `D_type` —— 不归一两条边对不上。
+            "dimensions": _dim_keys(t["dimensions"]),
         })
         mapping.append((t["key"], name, mode))
 

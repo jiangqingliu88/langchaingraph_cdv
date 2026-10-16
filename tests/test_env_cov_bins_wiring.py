@@ -764,6 +764,31 @@ class TestBatchTestsAreRunnable:
         assert "  batches:" in lines
         assert any("npu_type_test" in ln for ln in lines)
 
+    def test_the_injected_batch_line_carries_the_policy(self, tmp_path):
+        """`policy` 必须**跟着进 env.yaml** —— 这一行漏了它，前面全白做。
+
+        `run_uvm_batches` 算出策略名是一回事，env.yaml 里有没有是另一回事：
+        `_casemodel_test_lines` 是**手拼** YAML 的（不是 safe_dump），加字段要在
+        那里再改一次。漏了的表现：模板拿到空串 → 退回默认组合器 → 约束静默
+        不生效，而**生成、编译、回归全都正常**。
+        """
+        import shutil
+
+        import yaml
+
+        from src.layers.l1_infrastructure.layout import casemodel_path
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
+
+        (tmp_path / "inputs").mkdir(parents=True)
+        shutil.copy(self.NPU, casemodel_path(tmp_path))
+        lines = _casemodel_test_lines(tmp_path)
+        doc = yaml.safe_load("\n".join(["environment:"] + ["  name: e"] + lines))
+        batches = doc["environment"]["batches"]
+        assert batches, "批次没进 env.yaml"
+        # TH-B02（npu_type_test）在模型里 method=RND → 有策略名
+        by_theme = {b["theme"]: b for b in batches}
+        assert by_theme["TH-B02"]["policy"] == "p_th_b02_random"
+
     def test_the_regression_emits_one_test_per_batch(self):
         src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(encoding="utf-8")
         block = src[src.index("批次测试（**一条 = 一个 UVM_TEST = 一个批次/专题**）"):]
@@ -1001,3 +1026,208 @@ class TestTheRtlPortTableIsParsedWhole:
             "endmodule\n", encoding="utf-8")
         ports = self._ports(rtl)
         assert set(ports) == {"clk", "data"}
+
+
+class TestBatchConstraintComesFromTheModel:
+    """批次 test 类挂的**约束策略名**，必须与 `build_constraint` 逐字同名。
+
+    ## 为什么单独钉这条
+
+    约束这件事有两个读者，名字各推一次就会漂：
+
+        build_constraint   → policies[].name        （策略类本体，gen_uvm 渲染）
+        run_uvm_batches    → batches[].policy       （批次 test set 给 sequence）
+
+    漂了的表现是**最难查的一类**：config_db 里那个名字查不到策略，工厂静默回退
+    默认组合器，回归照样跑绿 —— 只是"约束没生效"。所以这里不测"有没有那个键"，
+    测**两份名字一模一样**（`theme_policy_map` 是唯一出处）。
+    """
+
+    NPU = Path("specs/npu_sched/casemodel.yaml")
+
+    def _both(self):
+        from src.tools.casemodel_tools.api import run_uvm_batches
+        from src.tools.casemodel_tools.associate import build_constraint
+
+        text = self.NPU.read_text(encoding="utf-8")
+        bc = build_constraint(text, ports=[{"name": "npu_sched_in",
+                                            "type": "npu_sched_in_master_seq_item"}])
+        assert not bc.get("error"), bc.get("error")
+        return bc, run_uvm_batches(text, "npu_sched")
+
+    def test_every_batch_policy_matches_build_constraint(self):
+        bc, ub = self._both()
+        by_theme = {m["theme"]: m["policy"] for m in bc["mapping"]}
+        assert by_theme, "build_constraint 一条策略都没出"
+        for b in ub["batches"]:
+            assert b["policy"] == by_theme.get(b["theme"]), \
+                f"{b['theme']}：批次挂的 {b['policy']!r} 与策略表里的漂了"
+
+    def test_a_theme_without_a_method_gets_no_policy_and_no_complaint(self):
+        """没写 method 的专题：`policy` 留空，且**不记账** —— 没什么可报的。
+
+        编一个名字出来才是坏的：它在策略表里不存在，sequence 查不到就静默回退，
+        于是"看着有约束、其实没有"。
+        """
+        import yaml
+
+        from src.tools.casemodel_tools.api import run_uvm_batches
+
+        model = yaml.safe_load(self.NPU.read_text(encoding="utf-8"))
+        model["themes"][0].pop("method", None)
+        out = run_uvm_batches(yaml.safe_dump(model, allow_unicode=True))
+        first = out["batches"][0]
+        assert first["theme"] == "TH-B01"
+        assert first["policy"] == ""
+        assert not any("method" in n and "约束策略" in n for n in out["notes"]), \
+            "没声明 method 不该报'对不上策略'"
+
+    def test_an_unmappable_method_is_reported_not_swallowed(self):
+        """**声明了**认不出的 method：`policy` 为空，但必须**说出来**。
+
+        这条是 `_raw_themes` 存在的理由：解析器会把认不出的 method 归一成空串，
+        于是从解析后的模型上 `method: NOPE` 和"没写"长得一模一样。拿解析后的
+        值判这件事，这条测试就永远测不到 —— 而它恰恰是"约束静默没生效"的入口。
+        """
+        import yaml
+
+        from src.tools.casemodel_tools.api import run_uvm_batches
+
+        model = yaml.safe_load(self.NPU.read_text(encoding="utf-8"))
+        model["themes"][0]["method"] = "NOPE"
+        out = run_uvm_batches(yaml.safe_dump(model, allow_unicode=True))
+        first = out["batches"][0]
+        assert first["policy"] == ""
+        assert any("NOPE" in n for n in out["notes"]), \
+            "声明了 method 却对不上策略，一句都没说 —— 静默正是要防的"
+
+    def test_the_macro_carries_the_policy_into_config_db(self):
+        """宏要有 `tc_policy` 形参，且 set 到 config_db（**全局**通道）。"""
+        tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+                   "/test_templates/test_batch.sv.j2").read_text(encoding="utf-8")
+        assert "tc_policy" in tpl
+        assert 'uvm_config_db#(string)::set(null, "*", "batch_policy", tc_policy)' in tpl, \
+            "必须走 null 上下文 —— sequence 的父链未必挂在 test 底下"
+
+    def test_every_macro_line_keeps_its_continuation(self):
+        """宏体里**除最后一行外每行都要以 `\\` 结尾**。
+
+        宏是靠行尾反斜杠粘成"逻辑一行"的。跨行的 `/* */` 注释、或漏一个 `\\`，
+        都会让宏定义在那里断掉 —— 而报的错在下游（`tc_name` 未声明），不在那一行。
+        这条不变量没有别的守卫，且**静默**炸编译。
+        """
+        from src.tools.uvm_tools.tool_uvm.gen_uvm import (
+            TEMPLATES_DIR, JinjaRenderer, _normalize_batches,
+        )
+
+        batches = _normalize_batches([{"name": "t1", "theme": "TH-B01",
+                                       "dimensions": "D_x", "method": "RND",
+                                       "policy": "p_th_b01_random", "priority": "P0"}])
+        sv = JinjaRenderer(TEMPLATES_DIR).render(
+            "environment_templates/test_templates/test_batch.sv.j2",
+            {"environment": {"env_name": "e_env"}, "batches": batches,
+             "project": {"name": "e", "env_name": "e_env"}})
+        lines = sv.splitlines()
+        start = next(i for i, l in enumerate(lines) if l.startswith("`define GEN_BATCH_TC"))
+        end = next(i for i in range(start, len(lines)) if lines[i].strip() == "endclass")
+        body = lines[start:end + 1]
+        broken = [l for l in body[:-1] if not l.rstrip().endswith("\\")]
+        assert not broken, f"这些行没接上（宏会断在这里）：{broken}"
+
+
+class TestTheConstraintModelIsWrittenInTheSameWindow:
+    """约束模型（`env/cons/*` 的输入）与 `env_cov_bins` **同一个落盘窗口**。
+
+    ## 为什么这条线值得单独钉
+
+    在这之前 `build_constraint` **只有 CLI 调**（`vagent case-model constraints`）——
+    流水线里从来没有生成过约束模型，于是 `env/cons/*` 在任何真实 run 里都不存在，
+    "批次 test 挂策略名 → 协调序列按策略建约束"那条链一直**空转**。
+    接上之后落盘时机就成了新的静默点：早一步被 `find_spec_yaml` 清掉，
+    晚一步这一轮渲染不到 —— 两种都是"文件没生成、日志一片正常"。
+    """
+
+    def test_constraint_is_written_between_the_two_tool_calls(self):
+        find = _line_of('call_tool("find_spec_yaml"')
+        write = _line_of("self._write_constraint_yaml(output_dir")
+        render = _line_of('call_tool("jinja_render"')
+
+        assert find < write < render, (
+            f"顺序不对：find_spec_yaml@{find} / 写约束@{write} / jinja_render@{render}。"
+            f"find_spec_yaml 会清空 inputs/yaml/uvm/*.yaml（写在它之前会被删掉）；"
+            f"jinja_render 要在同一次 run() 里读到 env.yaml + constraint.yaml，"
+            f"default_env 才回填得上。")
+
+    def test_the_seq_item_type_comes_from_agent_type_not_name(self):
+        """**从 `type` 推，不是从 `name`** —— 这是个编译期才炸的坑。
+
+        env.yaml 里 `name: npu_sched_in` / `type: npu_sched_in_master_agent`，
+        真实生成的事务类是 `npu_sched_in_master_seq_item`。照 `name` 拼会得到
+        `npu_sched_in_seq_item` —— 那个类不存在，而错要到 vlog 才报。
+        """
+        from src.executors.verify.main import _seq_item_type
+
+        assert _seq_item_type({"name": "npu_sched_in",
+                               "type": "npu_sched_in_master_agent"}) \
+            == "npu_sched_in_master_seq_item"
+        assert _seq_item_type({"name": "x", "type": "x_slave_agent"}) == "x_slave_seq_item"
+        assert _seq_item_type({"name": "only_name"}) == ""
+
+    def test_ports_come_from_the_env_yaml_agents(self, tmp_path):
+        from src.executors.verify.main import _constraint_ports
+
+        d = tmp_path / "inputs" / "yaml" / "uvm"
+        d.mkdir(parents=True)
+        (d / "env.yaml").write_text(
+            "environment:\n"
+            "  name: e_env\n"
+            "  agents:\n"
+            "    - {name: bus_in, type: bus_in_master_agent}\n"
+            "    - {name: bus_out, type: bus_out_slave_agent}\n"
+            "    - {name: bus_in, type: bus_in_master_agent}\n"   # 重复要去掉
+            "    - {name: nameless}\n",                           # 没 type → 跳过
+            encoding="utf-8")
+        assert _constraint_ports(tmp_path) == [
+            {"name": "bus_in", "type": "bus_in_master_seq_item"},
+            {"name": "bus_out", "type": "bus_out_slave_seq_item"},
+        ]
+
+    def test_no_env_yaml_means_no_ports(self, tmp_path):
+        from src.executors.verify.main import _constraint_ports
+
+        assert _constraint_ports(tmp_path) == []
+
+    def test_the_written_constraint_renders_env_cons(self, tmp_path):
+        """**端到端**：写下去的 yaml 丢进渲染器，真出 `env/cons/` 五个文件。"""
+        import shutil
+
+        from src.executors.verify.main import VerifyExecutor
+        from src.tools.uvm_tools.tool_uvm.gen_uvm import (
+            TEMPLATES_DIR, UVMGenerator, JinjaRenderer,
+        )
+
+        ydir = tmp_path / "inputs" / "yaml" / "uvm"
+        ydir.mkdir(parents=True)
+        shutil.copy(Path("specs/npu_sched/casemodel.yaml"),
+                    tmp_path / "inputs" / "casemodel.yaml")
+        (ydir / "env.yaml").write_text(
+            "environment:\n  name: npu_sched_env\n  agents:\n"
+            "    - {name: npu_sched_in, type: npu_sched_in_master_agent}\n",
+            encoding="utf-8")
+
+        VerifyExecutor()._write_constraint_yaml(tmp_path)
+        written = ydir / "constraint.yaml"
+        assert written.is_file(), "约束模型没落盘"
+        assert "p_th_b01_directed" in written.read_text(encoding="utf-8")
+
+        # 与 env.yaml 同一次 run() —— default_env 才回填得上
+        UVMGenerator(JinjaRenderer(TEMPLATES_DIR), output_root=tmp_path).run(
+            [ydir / "env.yaml", written])
+        cons = sorted((tmp_path / "env" / "cons").glob("*.sv"))
+        assert len(cons) == 5, [p.name for p in cons]
+        # 环境名回填成功（没有就叫 `_constraint_policy`，那个基类名解析不了）
+        assert any(p.name.startswith("npu_sched_env") for p in cons), \
+            [p.name for p in cons]
+        seq = (tmp_path / "env" / "cons"
+               / "npu_sched_cons_coordinated_sequence.sv").read_text(encoding="utf-8")
+        assert "create_from_batch()" in seq

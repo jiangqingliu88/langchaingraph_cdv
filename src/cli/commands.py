@@ -171,6 +171,10 @@ def init(json_output, quiet, verbose, output_dir):
 @click.option("--no-manual-gate", "manual_gate", flag_value=False, default=True,
               help="关闭分级回归的**人工节点**（loopback 全过也不停车等人放行）。"
                    "默认开启：门是默认该在的。工作台工具栏上也有同一个开关")
+@click.option("--checkpoint/--no-checkpoint", "checkpoint", default=True,
+              help="落检查点（docs/checkpoints.sqlite）：高危动作的审批从"
+                   "「进程内阻塞等答案」变成「停下来、关掉进程、过后来答」。"
+                   "**默认开** —— 关掉就只能守着终端；无人值守请配 `--approval auto`")
 @click.option("--rtl", "rtl_dir", type=click.Path(exists=True),
               help="外部 RTL 目录（验开源 IP 用）：拿这份现成 RTL 当 DUT，"
                    "**自动跳过 design/model**，不再由 design agent 生成")
@@ -179,7 +183,7 @@ def init(json_output, quiet, verbose, output_dir):
 @click.option("--quiet", "-q", is_flag=True, help="只打印错误")
 def verify(spec_file, output, design_style, target, max_rounds,
            approval, full_regression, verify_only, sim_modes, json_output, summary,
-           quiet, manual_gate, rtl_dir):
+           quiet, manual_gate, checkpoint, rtl_dir):
     # **spec 与 --rtl 二选一、互斥**：
     #   给 spec  → 走原来的路（design agent 生成 RTL）
     #   给 --rtl  → RTL 是唯一输入，**规格从 DUT 分析出来**（不指向 spec）
@@ -227,7 +231,14 @@ def verify(spec_file, output, design_style, target, max_rounds,
         service = PipelineExecutionService.get_instance()
         spec = (Path(spec_file).read_text(encoding="utf-8")
                 if spec_file else "")   # --rtl 模式下无 spec：由 DUT 分析生成
-        return await service.run_closed_loop(
+        # **走 streaming 而不是 `run_closed_loop`** —— 返回结构完全一致，区别是
+        # 它落检查点（`docs/checkpoints.sqlite`，thread_id = run_id）。有了检查点
+        # 才谈得上"停下来等人"：`run_closed_loop` 既不落检查点也没有 thread_id，
+        # 于是 `n_approval` 里的 `interrupt()` **永不触发**，退化成在当前进程里
+        # 阻塞等终端输入 —— 人不在场就卡死，且进程一退那个现场就没了。
+        # 顺带把过程写进 `docs/run_events.jsonl`（`astream` 白送，没有埋点）。
+        # `--no-checkpoint` 可退回旧行为（阻塞等答案）。
+        return await service.run_closed_loop_streaming(
             spec_text=spec, output_root=output_root,
             target=target, max_rounds=max_rounds,
             design_style=design_style, approval_gate=approval_gate,
@@ -237,9 +248,35 @@ def verify(spec_file, output, design_style, target, max_rounds,
             # 分级回归的人工节点（loopback 全过后停下等人放行）。默认开。
             manual_gate=manual_gate,
             rtl_dir=str(rtl_dir or ""),
+            checkpointing=checkpoint,
         )
 
     result = asyncio.run(run())
+
+    # **挂起不是失败**：图停在人工节点上，运行没结束、状态在检查点里。
+    # 这一步要显式说出来，并给出继续的那条命令 —— 否则人看到的就是"跑完了、
+    # 什么都没发生"，而真相是"它停在半路等人答话"。
+    if result.get("interrupted"):
+        pending = result.get("pending") or {}
+        rid = result.get("run_id", "")
+        if json_output:
+            click.echo(json.dumps({
+                "run_id": rid, "interrupted": True,
+                "pending_stage": pending.get("stage", "approval"),
+                "pending": pending,
+                "resume_hint": f"vagent resume --run {rid} --decision approve",
+            }, indent=2, ensure_ascii=False, default=str))
+            sys.exit(3)
+        console.print()
+        console.print(Panel.fit(
+            f"运行**停在人工节点**上：{pending.get('stage', 'approval')}\n"
+            f"运行没有结束 —— 状态落在检查点里，随时可以接着答。\n\n"
+            f"  继续：vagent resume --run {rid} --decision approve\n"
+            f"  驳回：vagent resume --run {rid} --decision reject\n"
+            f"  或：  vagent approve --run {rid} --reason \"...\"\n\n"
+            f"理由：{pending.get('reason', '（未给）')}",
+            title="[yellow]等待人工审批[/yellow]", border_style="yellow"))
+        sys.exit(3)
 
     if json_output:
         click.echo(json.dumps({
@@ -4037,9 +4074,16 @@ def docs_preview(tool_name):
 # 业务 CLI 命令（RunRepository 磁盘扫描，面向工程师日常使用）
 # ═══════════════════════════════════════════════════════════════
 
-def _repo():
+def _repo(output_base: str = "output"):
+    """run 目录的读取侧。
+
+    `output_base` 默认 `"output"`，与 `RunService` 的默认基准一致。它认两种布局：
+    `output/` 与同级的 `output_*`（`make_output_root` 产出的是后者）。但
+    **`vagent verify -o /别处/xx` 跑出来的运行不在这个命名空间里** —— 那时要用
+    `--output-base` 指过去，否则命令只会说"找不到 run"（而它确实找不到）。
+    """
     from src.layers.l2_orchestration.run_repository import RunRepository
-    return RunRepository("output")
+    return RunRepository(output_base)
 
 
 def _resolve_run(repo, run_id):
@@ -4115,40 +4159,155 @@ def show(run_id, fmt):
 
 # ── 人工介入与修复类 ──
 
+def _checkpoint_db(run_dir: Path) -> Path:
+    """这次运行的检查点库 —— 它在不在，决定"有没有挂起的审批可恢复"。"""
+    return run_dir / "docs" / "checkpoints.sqlite"
+
+
+def _resume_closed_loop(run_dir: Path, decision: str) -> dict:
+    """把审批答案喂回**被 interrupt 挂起**的运行，并等它跑完。
+
+    ## 为什么是"检查点模式"，不是 `answer_approval`
+
+    两条路的分工（见 `run_service.resume` 的注释）：
+
+        answer_approval   运行**还活着**，挂在某个线程上同步等答案 —— 那个进程
+                          必须还在。CLI 的 `verify` 早就退出了，没有活着的图可答。
+        resume（本函数）   运行**已经结束在这次 astream 上**，状态落在检查点里，
+                          另一个进程（就是这里）用 `Command(resume=...)` 接着跑。
+
+    CLI 只能走后一条：`verify` 进程退出后，唯一的现场就是 `docs/checkpoints.sqlite`。
+    这也是"暂停"这个词在 CLI 上的准确含义 —— 运行没结束，只是没有进程在跑它。
+
+    ## 为什么用 `run_dir.parent` + `run_dir.name` 当参数
+
+    `run_closed_loop_streaming` 重入时要靠 `output_root` **基准目录** + `run_id`
+    去定位这次运行（`_resolve_run_dir`）。写死基准目录 `"output"` 就只有
+    `output/` 与 `output_*` 两种布局找得到 —— 而 `-o /别处/xx` 跑出来的运行
+    就永远恢复不了，报的还是"找不到状态"。
+
+    拿**目录名**当 run_id、拿**父目录**当基准，`_resolve` 第一条就命中
+    （`父/名字` 就是这个目录本身），与布局无关。真实输出目录最终以检查点里的
+    为准（`run_closed_loop_streaming` 里 `output_root = initial.output_root`）。
+    """
+    async def _run() -> dict:
+        service = PipelineExecutionService.get_instance()
+        return await service.run_closed_loop_streaming(
+            spec_text="", output_root=str(run_dir.parent),
+            run_id=run_dir.name, resume=decision, checkpointing=True)
+
+    return asyncio.run(_run())
+
+
+def _report_resume(result: dict, rid: str) -> None:
+    """把恢复后的结局说清楚 —— 它可能又停在下一个人工节点上（图里不止一个）。"""
+    if result.get("interrupted"):
+        pending = result.get("pending") or {}
+        console.print(f"[yellow]又停在一个待审批的节点上："
+                      f"{pending.get('stage', 'approval')}[/yellow]")
+        console.print(f"  继续：vagent resume --run {rid[:32]} --decision approve")
+        return
+    console.print(f"[green]运行已继续并结束：{rid[:32]}"
+                  f"（状态 {result.get('status', '?')}）[/green]")
+
+
+def _write_approval_record(run_dir: Path, rid: str, action: str, reason: str) -> None:
+    """审计记录 —— **无论有没有挂起的图都写**。
+
+    它是"人在什么时候为什么签了/驳了"的凭证，与"这次签核有没有真的推着图走"
+    是两件事。原来只有这一半（所以才叫断链）：记录写了，没人读、也不驱动任何事。
+    """
+    (run_dir / "approval.json").write_text(
+        json.dumps({"action": action, "reason": reason,
+                    "at": datetime.now().isoformat(), "run": rid},
+                   indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _decide(rid: str, action: str, reason: str, colour: str, verb: str, repo) -> None:
+    """`approve` / `reject` 的公共身体：**记审计 + 驱动恢复**。"""
+    run_dir = repo._resolve(rid)
+    if run_dir is None:
+        console.print(f"[yellow]找不到 {rid[:32]} 的目录[/yellow]")
+        return
+    run_dir = Path(run_dir)
+    _write_approval_record(run_dir, rid, action, reason)
+    console.print(f"[{colour}]已{verb} {rid[:32]}（理由: {reason or '无'}）[/{colour}]")
+
+    # 没有检查点 = 这次运行从来没挂起过（比如它跑完了、或压根没开检查点）。
+    # **这不是错误** —— 审批记录照样是有效的审计凭证，只是没有图可推进。
+    if not _checkpoint_db(run_dir).exists():
+        console.print("[dim]这次运行没有检查点（没有挂起的审批）—— 只记了审批记录[/dim]")
+        return
+
+    console.print("[dim]正在把审批答案喂回挂起的运行…[/dim]")
+    try:
+        _report_resume(_resume_closed_loop(run_dir, action), rid)
+    except Exception as exc:                          # noqa: BLE001 恢复失败要说清
+        console.print(f"[red]恢复失败：{exc}[/red]")
+        console.print("[dim]审批记录已保留；运行仍停在检查点上，可再试一次[/dim]")
+
+
 @cli.command("approve")
 @click.option("--run", "run_id", default="", help="run ID 或前缀")
 @click.option("--reason", default="", help="审批理由（审计用）")
-def approve(run_id, reason):
-    """人工审批签核（记录理由，用于审计）"""
-    repo = _repo()
+@click.option("--output-base", default="output",
+              help="run 目录所在基准（默认 output）。`verify -o /别处/xx` 跑出来的运行要用它指过去")
+def approve(run_id, reason, output_base):
+    """人工审批签核：记审计记录，**并让挂起的运行继续跑**"""
+    repo = _repo(output_base)
     rid = _resolve_run(repo, run_id)
     if not rid:
         console.print("[yellow]无 run[/yellow]")
         return
-    run_dir = Path(repo._resolve(rid))
-    approval = {"action": "approve", "reason": reason,
-                "at": datetime.now().isoformat(), "run": rid}
-    (run_dir / "approval.json").write_text(
-        json.dumps(approval, indent=2, ensure_ascii=False), encoding="utf-8")
-    console.print(f"[green]已审批 {rid[:32]}（理由: {reason or '无'}）[/green]")
+    _decide(rid, "approve", reason, "green", "审批", repo)
 
 
 @cli.command("reject")
 @click.option("--run", "run_id", default="", help="run ID 或前缀")
 @click.option("--reason", default="", help="驳回理由（审计用）")
-def reject(run_id, reason):
-    """人工驳回签核（记录理由，用于审计）"""
-    repo = _repo()
+@click.option("--output-base", default="output",
+              help="run 目录所在基准（默认 output）")
+def reject(run_id, reason, output_base):
+    """人工驳回签核：记审计记录，**并让挂起的运行按驳回继续**"""
+    repo = _repo(output_base)
     rid = _resolve_run(repo, run_id)
     if not rid:
         console.print("[yellow]无 run[/yellow]")
         return
-    run_dir = Path(repo._resolve(rid))
-    approval = {"action": "reject", "reason": reason,
-                "at": datetime.now().isoformat(), "run": rid}
-    (run_dir / "approval.json").write_text(
-        json.dumps(approval, indent=2, ensure_ascii=False), encoding="utf-8")
-    console.print(f"[red]已驳回 {rid[:32]}（理由: {reason or '无'}）[/red]")
+    _decide(rid, "reject", reason, "red", "驳回", repo)
+
+
+@cli.command("resume")
+@click.option("--run", "run_id", default="", help="run ID 或前缀")
+@click.option("--decision", default="approve",
+              type=click.Choice(["approve", "reject", "skip"]),
+              help="审批答案（喂回挂起的 interrupt）")
+@click.option("--output-base", default="output",
+              help="run 目录所在基准（默认 output）")
+def resume(run_id, decision, output_base):
+    """恢复一次被审批挂起的运行（检查点模式；也可答 approve/reject/skip）
+
+    与 `approve` / `reject` 的差别只有一点：那两个**顺带记一条审计记录**，
+    这个纯恢复（例如答案要记成 `skip`，或只是想把图推下去）。
+    """
+    repo = _repo(output_base)
+    rid = _resolve_run(repo, run_id)
+    if not rid:
+        console.print("[yellow]无 run[/yellow]")
+        return
+    run_dir = repo._resolve(rid)
+    if run_dir is None:
+        console.print(f"[yellow]找不到 {rid[:32]} 的目录[/yellow]")
+        return
+    if not _checkpoint_db(Path(run_dir)).exists():
+        console.print(f"[red]{rid[:32]} 没有检查点 —— 这次运行没有可恢复的挂起[/red]")
+        console.print("[dim]检查点要 `verify --checkpoint`（默认开）才会落[/dim]")
+        return
+    console.print(f"[dim]以 {decision} 恢复 {rid[:32]}…[/dim]")
+    try:
+        _report_resume(_resume_closed_loop(Path(run_dir), decision), rid)
+    except Exception as exc:                          # noqa: BLE001
+        console.print(f"[red]恢复失败：{exc}[/red]")
 
 
 @cli.command("patch")
@@ -4178,7 +4337,7 @@ def patch(run_id, stage, file_path):
 @click.option("--run", "run_id", default="", help="run ID 或前缀")
 @click.option("--output", "output_zip", default="evidence.zip", help="输出 zip 路径")
 def archive(run_id, output_zip):
-    """打包 run 的签核证据（manifest + report + 覆盖率 + 证据链）"""
+    """打包 run 的签核证据（manifest + report + 覆盖率 + **覆盖率库/波形** + 证据链）"""
     import zipfile
     repo = _repo()
     rid = _resolve_run(repo, run_id)
@@ -4187,12 +4346,35 @@ def archive(run_id, output_zip):
         return
     run_dir = Path(repo._resolve(rid))
     evidence_files = ["docs/manifest.json", "docs/evidence_chain.json",
-                      "report.json", "sim/coverage/coverage_result.json"]
+                      "report.json", "sim/coverage/coverage_result.json",
+                      # **结论的物证**：没有它们，包里的"覆盖率 93.5%"与波形
+                      # 就无从核对 —— 而这两样恰恰是回归会反复重写的。上面的
+                      # `coverage_result.json` 记了它们的路径与 sha256
+                      #（`collect_real_coverage._artifact_manifest`），
+                      # 但记哈希的文件本身不进来，等于只有指纹没有实物。
+                      "sim/coverage/merged.ucdb",
+                      "sim/coverage/wave_seed_default.vcd",
+                      # 分级回归走到了哪一级、哪些级等人放行 —— 签核要看这个
+                      "regression_stages.json"]
+    # 波形文件名带种子（`wave_<seed_tag>.vcd`），清单里那一个名字只覆盖默认那条。
+    # 扫一遍把其余种子的一起收 —— 不然"归档了波形"是句半真的话。
+    for f in sorted((run_dir / "sim" / "coverage").glob("wave_*.vcd")):
+        rel = str(f.relative_to(run_dir)).replace("\\", "/")
+        if rel not in evidence_files:
+            evidence_files.append(rel)
+
+    missing = []
     with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zf:
         for rel in evidence_files:
             f = run_dir / rel
             if f.exists():
                 zf.write(f, arcname=f"{rid[:20]}/{rel}")
+            else:
+                missing.append(rel)
+    # **缺了什么要说**：静默跳过会让"包里没有波形"与"这次本来就没跑波形"
+    # 长得一模一样 —— 前者是归档漏了（要修），后者是事实（要接受）。
+    if missing:
+        console.print(f"[dim]以下证据不在这次 run 里（未打包）：{'、'.join(missing)}[/dim]")
     console.print(f"[green]证据包已打包: {output_zip}[/green]")
 
 

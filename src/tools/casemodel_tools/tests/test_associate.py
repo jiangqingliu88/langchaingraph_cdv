@@ -327,7 +327,7 @@ class TestTheConstraintProducer:
         doc = yaml.safe_load(p["constraint_yaml"])
         assert set(doc) == {"constraint", "transactions", "policies", "combinator"}
         assert set(doc["policies"][0]) == {"name", "description", "priority",
-                                           "params", "applies_to"}
+                                           "params", "applies_to", "dimensions"}
         assert doc["combinator"] == p["combinator"]
         # 策略名要能进 SV：ASCII
         assert doc["policies"][0]["name"].isascii()
@@ -339,6 +339,104 @@ class TestTheConstraintProducer:
         payload = build_constraint(CASES, self.PORTS)
         a = associate(CASES, COVERAGE, payload["constraint_yaml"])
         assert not [i for i in a["issues"] if i["edge"] in ("③", "④")], a["issues"]
+
+
+class TestThePolicyCarriesTheDimensionsItDrives:
+    """策略要带 `dimensions` —— 它是 coverage↔constraint 那条边（⑤）的桥墩。
+
+    ## 为什么这个字段值钱
+
+    没有它，三份模型只连成 "V"：case↔coverage（①②）、case↔约束（④），
+    **coverage↔约束之间一条边都没有** —— "这条策略驱动的维度到底有没有人量它"
+    没人答得了。`dimensions` 一加，两条边就闭合了。
+
+    ## 两个必须归一的地方（都实测踩过）
+
+      · **别名 → canonical key**：专题写 `dimensions: [指令类型]`（name），
+        而覆盖率侧是 `coverpoint.dimension == D_type`（id）—— 不归一，
+        一条明明连上的边会被报成"没人驱动这个维度"。
+      · **通配要展开**：`dimensions: ["*"]` 的语义是"全部维度"
+        （`Theme.covers_all_dimensions`）—— 照原样带个 `'*'` 出去，
+        所有维度都会被报成没人驱动（npu_sched 的 TH-B11 正是通配）。
+    """
+
+    PORTS = [{"name": "apb_master", "type": "APB_master_seq_item"}]
+
+    def test_the_theme_dimension_is_carried_as_a_canonical_key(self):
+        p = build_constraint(CASES, self.PORTS)
+        # CASES 的专题写 `dimensions: [指令类型]`（name），维度 id 是 D_type
+        assert p["policies"][0]["dimensions"] == ["D_type"]
+
+    def test_a_wildcard_theme_drives_every_dimension(self):
+        cases = CASES.replace("dimensions: [指令类型]", 'dimensions: ["*"]')
+        p = build_constraint(cases, self.PORTS)
+        assert set(p["policies"][0]["dimensions"]) == {"D_type", "D_level"}
+        assert "*" not in p["policies"][0]["dimensions"], \
+            "通配没展开 —— 边 ⑤ 会把所有维度都报成没人驱动"
+
+    def test_an_unresolvable_dimension_reference_is_kept_verbatim(self):
+        """解不出来的引用**原样留着** —— 边 ⑤ 会如实报它，比悄悄丢掉强。"""
+        cases = CASES.replace("dimensions: [指令类型]", "dimensions: [D_NO_SUCH]")
+        p = build_constraint(cases, self.PORTS)
+        assert p["policies"][0]["dimensions"] == ["D_NO_SUCH"]
+
+
+class TestTheCoverageConstraintEdge:
+    """边 ⑤：**覆盖率 ↔ 约束**，按 dimension 对齐。
+
+    这条边补的是三角形缺的那一边 —— 前四条只连成 "V"。它答的问题很具体：
+    「这条策略驱动的那个维度，有没有人量它」（反向：这个覆盖点有没有人驱动）。
+    """
+
+    PORTS = [{"name": "apb_master", "type": "APB_master_seq_item"}]
+
+    #: 专题驱动**两个**维度 —— 与 `COVERAGE` 的两个 coverpoint 一一对上。
+    #: 基线 `CASES` 只驱动 `指令类型`（D_type），于是 `D_level` 天生没人驱动
+    #: —— 那本身是一条**真的** ⑤ 发现（见下面那条测试），不是"干净的基线"。
+    CASES_CLEAN = CASES.replace("dimensions: [指令类型]",
+                                "dimensions: [指令类型, 队列水位]")
+
+    def _cons(self, cases: str = CASES) -> str:
+        return build_constraint(cases, self.PORTS)["constraint_yaml"]
+
+    def test_a_self_consistent_triple_has_no_edge_five_issues(self):
+        """两边都连上时**一条都不该报** —— 否则工具会被当噪音关掉。"""
+        p = associate(self.CASES_CLEAN, COVERAGE, self._cons(self.CASES_CLEAN))
+        assert not [i for i in p["issues"] if i["edge"] == "⑤"], p["issues"]
+
+    def test_a_driven_dimension_nobody_measures_is_reported(self):
+        """策略驱动的维度在覆盖率里没有 coverpoint —— 这条约束白写了。"""
+        cons = self._cons(self.CASES_CLEAN.replace(
+            "dimensions: [指令类型, 队列水位]", "dimensions: [D_TYPE_TYPO]"))
+        p = associate(self.CASES_CLEAN, COVERAGE, cons)
+        msgs = [i["message"] for i in p["issues"] if i["edge"] == "⑤"]
+        assert any("D_TYPE_TYPO" in m for m in msgs), msgs
+
+    def test_a_measured_dimension_nobody_drives_is_reported(self):
+        """反向：有人量的维度没有任何策略驱动 —— 随机激励下大概率扫不到。
+
+        基线 `CASES` 正是这个样子（只驱动 D_type，而 COVERAGE 量了 D_level），
+        所以这里直接用基线，不用造特例。
+        """
+        p = associate(CASES, COVERAGE, self._cons(CASES))
+        msgs = [i["message"] for i in p["issues"] if i["edge"] == "⑤"]
+        assert any("D_level" in m for m in msgs), msgs
+        assert not any("D_type" in m for m in msgs), \
+            "D_type 有策略驱动（专题声明了它）—— 不该报"
+
+    def test_no_constraint_model_means_no_edge_five_noise(self):
+        """没给约束模型 = 激励层本来就缺，**不该**刷一片 ⑤ 警告。"""
+        p = associate(CASES, COVERAGE, "")
+        assert not [i for i in p["issues"] if i["edge"] == "⑤"]
+
+    def test_edge_five_is_a_warning_not_an_error(self):
+        """软边：约束是**激励层**，"驱动了没量"不该阻断覆盖率渲染。"""
+        cases = self.CASES_CLEAN.replace("dimensions: [指令类型, 队列水位]",
+                                         "dimensions: [D_NOPE]")
+        p = associate(cases, COVERAGE, self._cons(cases))
+        five = [i for i in p["issues"] if i["edge"] == "⑤"]
+        assert five and all(i["severity"] == "warning" for i in five)
+        assert p["renderable"] is True
 
 
 class TestTheTwoMethodTablesAgree:

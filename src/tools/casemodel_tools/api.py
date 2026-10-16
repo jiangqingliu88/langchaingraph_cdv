@@ -385,18 +385,37 @@ def run_uvm_batches(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
     会撞 UVM_FATAL(INVTST) —— 而那条路径被记成 pass（"测试名不存在"也是 exit 0，
     见 `_sim_run_cmd` 的注释）。也就是说：**批次跑不起来，反而看不出来**。
 
-    类体里不铺激励（约束在 sequence 里，本工具看不见），只把"这一批打哪几个
-    维度、用什么方法"挂上 config_db —— 消费方（sequence）读它决定怎么激励。
-    名字取自 `themes[].test`；**改了名字会记账**（回归的 `+UVM_TESTNAME` 靠它对齐）。
+    类体里不铺激励（约束由**模型**给的策略类名指定，本工具只转述），只把"这一批
+    打哪几个维度、用什么方法、**用哪个约束策略**"挂上 config_db —— 消费方
+    （sequence）读它决定怎么激励。名字取自 `themes[].test`；**改了名字会记账**
+    （回归的 `+UVM_TESTNAME` 靠它对齐）。
+
+    `policy` 是从 `theme_policy_map`（`associate`）来的**策略类名**，与
+    `build_constraint` 生成的 `policies[].name` 同名 —— 它就是"约束"这件事
+    从模型走到 sequence 的那根线。**没有它就退回 plusargs**（`+POLICY_LIST`），
+    所以空串不是错误，是"这一批没有模型给的约束"。
     """
     try:
         models = load_models_from_text(yaml_text, source="<inline>")
     except CaseModelError as exc:
         return {"error": str(exc)}
 
+    from .associate import _raw_themes, theme_policy_map
     from .coverage import sv_ident
 
     model = models[0].resolve()
+    # 按**原样写的**声明建表（认不出的 method 会被解析器归一成空，两者对不上）。
+    raw_themes = _raw_themes(yaml_text)
+    policy_names = theme_policy_map(raw_themes)
+    # 作者**声明过的** method（原样）。要拿它判断"说了却没对上策略" ——
+    # 解析后的 `th.method` 会把认不出的 method 归一成空串，用那个判就永远判不出来
+    # （`method: NOPE` 与"没写"从模型上看不出区别，见 `_raw_themes` 的 docstring）。
+    declared: Dict[str, str] = {}
+    for _t in raw_themes:
+        if _t["method"]:
+            declared[_t["key"]] = _t["method"]
+            if _t.get("name"):
+                declared.setdefault(_t["name"], _t["method"])
     batches: List[Dict[str, Any]] = []
     notes: List[str] = []
     for th in model.themes:
@@ -412,11 +431,21 @@ def run_uvm_batches(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
         if name != raw:
             notes.append(f"专题 {th.key} 的 test 名 {raw!r} 含非标识符字符，"
                          f"已折成 {name}（回归的 +UVM_TESTNAME 要用折后的）")
+        policy = policy_names.get(th.key) or policy_names.get(th.name, "")
+        said = declared.get(th.key) or declared.get(th.name, "")
+        if said and not policy:
+            # **声明了 method 却对不上策略** —— 这一批的约束不会生效。说出来，别静默：
+            # 静默的表现正是"约束没生效、但回归全绿"。`build_constraint` 那边对同一
+            # 件事是直接报错（认不出的 method 拒绝生成），这里只记账不拦 —— 批次 test
+            # 本身仍然可跑，只是不带模型给的约束。
+            notes.append(f"专题 {th.key} 声明了 method={said!r}，但它没有对应的约束策略"
+                         f" —— 这一批的批次 test 不 set 策略名，sequence 会退回默认组合器")
         batches.append({
             "name": name,
             "theme": th.key,
             "dimensions": ",".join(d.id or d.name or d.key for d in (th.dims or [])),
             "method": th.method or "",
+            "policy": policy,
             "priority": th.priority or "",
             "checks": ",".join(th.checks or []),
         })

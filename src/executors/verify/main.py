@@ -130,6 +130,13 @@ class VerifyExecutor(BaseExecutor):
             # tb_top **都从那一份读** —— 两份各写一次名字就是"改了三个漏一个"。
             dut_channel = self._write_coverage_dut_channel(output_dir)
             self._write_env_cov_bins(output_dir, cov_bins_for_render, dut_channel)
+            # 约束模型（`env/cons/*` 的输入）—— 同样落在 find_spec_yaml 之后、
+            # jinja_render 之前。落在这里有两个**都必须**成立的理由：
+            #   · 早于 find_spec_yaml → 被它清空（同上）；
+            #   · 晚于 jinja_render → 这一轮渲染不到，`env/cons/` 不生成。
+            # 它还要与 env.yaml **在同一次 `run()` 里**被读到，`default_env`
+            # 才回填得上（约束 yaml 自己不写 `env`，见 `gen_uvm.run` 的回填）。
+            self._write_constraint_yaml(output_dir)
             call_tool("jinja_render", {"output_dir": str(output_dir)})
             env_files = [str(p) for p in (output_dir / "agents").rglob("*.sv")] \
                 if (output_dir / "agents").exists() else []
@@ -316,6 +323,63 @@ class VerifyExecutor(BaseExecutor):
                 json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         except Exception as e:                       # noqa: BLE001 旁路，别拦 env 生成
             logger.warning(f"env_cov bin 落盘失败（覆盖率模型将退回自动分箱）: {e}")
+
+    def _write_constraint_yaml(self, output_dir: Path) -> None:
+        """`inputs/yaml/uvm/constraint.yaml` —— case 模型 → 约束模型（`env/cons/*` 的输入）。
+
+        ## 这一步补的是"方法学的第三条腿"
+
+            case 模型     说「该测什么」   themes[].method
+            覆盖率模型    说「怎么量」     coverpoints / bins
+            约束模型      说「怎么驱动」   policies + combinator   ← 这里产出
+
+        在这之前 `build_constraint` **只有 CLI 调**（`vagent case-model constraints`），
+        流水线里从来没生成过 —— 于是 `env/cons/*` 在任何真实 run 里都不存在，
+        "批次 test 挂策略名" 那条链（`batch_policy` → `create_from_batch`）一直是空转。
+        产物丢进同一个 `inputs/yaml/uvm/` 目录即可，`gen_uvm` 按**顶层 `constraint:` 键**
+        识别（文件名不参与）。
+
+        ## 端口从 env.yaml 推（不写进 case 模型）
+
+        约束要 `transactions`（agent 名 + seq_item 类型）才能生成协调序列 —— 而
+        case 模型是**建模概念**（中文维度名），不该混进实现名。所以从 `find_spec_yaml`
+        刚写下的 env.yaml 反读 agents。
+
+        **类型名从 `type` 推，不是从 `name`**：env.yaml 里
+        `name: npu_sched_in` / `type: npu_sched_in_master_agent`，而生成的
+        seq_item 类是 `npu_sched_in_master_seq_item` —— 照 `name` 拼会得到
+        `npu_sched_in_seq_item`，那个类**不存在**（编译期才报）。推导规则与
+        `gen_uvm.AgentModel.seq_item_type` 逐字一致（去掉 `_agent` 再加 `_seq_item`）。
+
+        没有 case 模型 / 没有 agent / `build_constraint` 报错 —— 一律**记日志不写**：
+        一个空的 `transactions` 渲染出来的协调序列是个空壳（发送循环一次都不进），
+        不生成比生成空壳诚实。
+        """
+        cm_file = _find_case_model(_spec_of(output_dir), output_dir)
+        if cm_file is None:
+            logger.info("没有 case 模型 —— 跳过约束模型生成（env/cons 不会出现）")
+            return
+        ports = _constraint_ports(output_dir)
+        if not ports:
+            logger.info("env.yaml 里没有 agent —— 跳过约束模型生成"
+                        "（没有端口就不生成，见 build_constraint）")
+            return
+        try:
+            from src.tools.casemodel_tools.associate import build_constraint
+
+            payload = build_constraint(cm_file.read_text(encoding="utf-8"), ports=ports)
+            if payload.get("error"):
+                logger.warning(f"约束模型生成不了，跳过: {payload['error']}")
+                return
+            (output_dir / "inputs" / "yaml" / "uvm" / "constraint.yaml").write_text(
+                payload["constraint_yaml"], encoding="utf-8")
+            logger.info(f"约束模型：{payload['policy_count']} 条策略 / "
+                        f"default_mode={payload['default_mode']} / "
+                        f"{len(ports)} 个端口 → constraint.yaml（渲染出 env/cons/）")
+            for note in payload.get("notes") or []:
+                logger.warning(f"约束模型: {note}")
+        except Exception as e:                       # noqa: BLE001 旁路，别拦 env 生成
+            logger.warning(f"约束模型落盘失败（env/cons 将不生成）: {e}")
 
     def _write_coverage_plan(self, output_dir: Path) -> None:
         """`coverage/coverage_plan.yaml` —— 功能覆盖率计划（**与 case 模型同批**）。
@@ -887,3 +951,53 @@ def _find_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
     from src.layers.l1_infrastructure.layout import find_case_model
 
     return find_case_model(spec, output_dir)
+
+
+#: agent 类名的后缀 —— 去掉它再加 `_seq_item` 就是事务类型名。
+_AGENT_SUFFIX = "_agent"
+
+
+def _seq_item_type(agent: Dict[str, Any]) -> str:
+    """env.yaml 的一个 agent → 它的 seq_item 类型名。
+
+    **从 `type` 推，不是从 `name`**：env.yaml 里 `name: npu_sched_in` 而
+    `type: npu_sched_in_master_agent`，生成的事务类是
+    `npu_sched_in_master_seq_item` —— 照 `name` 拼出来的
+    `npu_sched_in_seq_item` **不存在**（而那个错只会在 vlog 编译时才冒出来）。
+
+    规则与 `gen_uvm.AgentModel.seq_item_type` 逐字一致（那边也是去 `_agent`
+    再加 `_seq_item`）；`master` / `slave` 的区别已经编码在 `type` 里，不用再判
+    `is_master`。
+    """
+    typ = str(agent.get("type") or "").strip()
+    base = typ[:-len(_AGENT_SUFFIX)] if typ.endswith(_AGENT_SUFFIX) else typ
+    return f"{base}_seq_item" if base else ""
+
+
+def _constraint_ports(output_dir: Path) -> List[Dict[str, str]]:
+    """`find_spec_yaml` 写下的 env.yaml → `build_constraint` 要的 ports。
+
+    端口**从 env.yaml 推**，不写进 case 模型：case 模型说的是建模概念
+    （中文维度名），端口名/事务类型是**实现名** —— 两边的对应没有建模，
+    混在一起只会让"改名"变成两处都要改。
+    """
+    import yaml as _yaml
+
+    path = output_dir / "inputs" / "yaml" / "uvm" / "env.yaml"
+    try:
+        doc = _yaml.safe_load(path.read_text(encoding="utf-8", errors="replace")) or {}
+    except (OSError, ValueError):
+        return []
+    env = (doc or {}).get("environment") or {}
+    ports: List[Dict[str, str]] = []
+    seen: set = set()
+    for agent in (env.get("agents") or []):
+        if not isinstance(agent, dict):
+            continue
+        name = str(agent.get("name") or "").strip()
+        item = _seq_item_type(agent)
+        if not name or not item or name in seen:
+            continue
+        seen.add(name)
+        ports.append({"name": name, "type": item})
+    return ports

@@ -70,6 +70,45 @@ class {{ project.env_name }}_policy_factory;
     return combo;
   endfunction
   
+  // 从**批次**创建组合器（模型给的约束策略名）
+  //
+  // 名字由批次 test 类在 build_phase 里 `set(null, "*", "batch_policy", ...)`
+  // 挂进来（那个名字是 `theme_policy_map` 从 case 模型的 `themes[].method` 推的，
+  // 与 `build_constraint` 的 `policies[].name` 同名）。**约束因此由模型说了算** ——
+  // 而 `create_from_plusargs()` 那条路是"由回归命令行说了算"。
+  //
+  // 三种情况，**都不是错误**：
+  //   · 取不到 `batch_policy`（根本不在批次 test 下跑）→ 默认组合器；
+  //   · 取到空串（这一批的模型没声明 method）→ 默认组合器；
+  //   · 取到名字但表里没有（模型与策略生成不同步）→ 默认组合器 + 一句 `uvm_info`。
+  // 不报 `uvm_error`：那是"模型没声明"，不是"生成错了"。真要抓不同步，
+  // 看生成物里 `batch_policy` 那个名字在 `register_all_policies()` 里有没有。
+  static function {{ project.env_name }}_policy_combinator create_from_batch();
+    {{ project.env_name }}_policy_combinator combo = new("combo");
+    string policy_name = "";
+
+    if (!uvm_config_db#(string)::get(null, "", "batch_policy", policy_name) ||
+        policy_name == "") begin
+      // 没有模型给的约束 —— 退回默认组合器（全部策略）。
+      combo = create_default_combinator();
+    end else begin
+      {{ project.env_name }}_constraint_policy p = get_policy(policy_name);
+      if (p != null) begin
+        {{ project.env_name }}_constraint_policy new_p;
+        $cast(new_p, p.clone());
+        combo.add_policy(new_p);
+      end else begin
+        `uvm_info("CONS_FACTORY",
+                  $sformatf("batch_policy=%s 在策略表里没有 —— 退回默认组合器", policy_name),
+                  UVM_LOW)
+        combo = create_default_combinator();
+      end
+    end
+
+    combo.configure_from_plusargs();
+    return combo;
+  endfunction
+
   // 从 YAML 创建组合器
   static function {{ project.env_name }}_policy_combinator create_from_yaml(string yaml_file);
     {{ project.env_name }}_policy_combinator combo = new("combo");

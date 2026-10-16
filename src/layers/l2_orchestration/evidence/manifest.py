@@ -314,6 +314,9 @@ class ManifestBuilder:
             # 声明的 N 个覆盖点分别是什么"是**语义**，哈希答不了。签核时要能回答
             # 「这次签的是哪几个覆盖点」，所以把声明摘一份进来。
             self._attach_functional_coverage(manifest, output_path)
+            # 覆盖率库与波形同一条理由：它们是**这一轮结论的物证**，
+            # 不能只做文件表里的一行匿名记录。见那个函数的 docstring。
+            self._attach_simulation_artifacts(manifest, output_path)
 
         # ── 汇总计算 ──
         if not manifest.total_phases:
@@ -369,6 +372,98 @@ class ManifestBuilder:
             "counts": {k: data.get(k) for k in
                        ("coverpoint_count", "bin_count", "cross_count")},
             "notes": data.get("notes") or [],
+        }
+
+    # ── 覆盖率库 / 波形 → 运行级资产 ──
+
+    @staticmethod
+    def _attach_simulation_artifacts(manifest: "RunManifest",
+                                     output_path: Path) -> None:
+        """`merged.ucdb` 与波形 → metadata（**路径 + sha256 + 大小**）。
+
+        ## 为什么不能只做匿名文件
+
+        `output_files` + `evidence_hash` 已经答了"文件没被换过"，但签核要回答的
+        是另一件事：**这一轮的覆盖率数字出自哪一份 ucdb、现场波形是哪一个**。
+        而 `sim/coverage/` 恰恰是回归会反复重写的目录 —— 一份能被悄悄覆盖掉、
+        且事后无从核对的库，会让"覆盖率 93.5%"这句话失去可追溯性。记哈希就是
+        让"这个数字 = 这个文件"可核对。
+
+        注意这与 `archive_coverage()`（L1 的 `{sha256, size}` 硬链接归档）不重复：
+        那里归档的是**当时那一刻**的副本，这里登记的是**证据包里**这一份的身份。
+
+        ## 出处
+
+        优先读 `sim/coverage/coverage_result.json` 的 `artifacts`（覆盖率后端
+        落盘时自己算的哈希 —— 采集端算的比事后补算可信）。缺了才按文件名回落扫描。
+
+        读不到**什么都不放**（键都不出现）—— 与 `_attach_functional_coverage`
+        同一条纪律："这次没跑覆盖率"与"跑了但哈希是空的"是两件事。
+        """
+        import json as _json
+
+        from src.layers.l1_infrastructure.infrastructure import sha256_file
+
+        def _entry(raw_path: str) -> Optional[dict]:
+            """绝对/相对路径 → `{path, sha256, size}`；文件不在就 None（不伪造）。
+
+            **相对路径有两种来路**，都要认：`coverage_result.json` 里记的可能是
+            相对路径，本地扫描（`glob`）拿到的也随 `output_path` 是相对而相对
+            （`output_path` 本身可能是相对的 —— 真实 run 就是）。直接
+            `output_path / p` 会把第二种**再拼一次**，拼出一个不存在的路径，
+            于是"文件明明在、却什么都没登记"（实测踩过，而单测因为用的是绝对
+            `tmp_path` 全绿）。
+            """
+            if not raw_path:
+                return None
+            p = Path(raw_path)
+            if not p.is_absolute():
+                # 先当作"相对 output_path"，再当作"相对 CWD"（原样）。
+                cand = output_path / p
+                p = cand if cand.is_file() else p
+            if not p.is_file():
+                return None
+            try:
+                rel = str(p.relative_to(output_path))
+            except ValueError:
+                rel = str(p)          # run 目录之外：留着绝对路径，别假装可移植
+            return {"path": rel, "sha256": sha256_file(p), "size": p.stat().st_size}
+
+        arts: Dict[str, Any] = {}
+        cov_json = output_path / "sim" / "coverage" / "coverage_result.json"
+        declared: Dict[str, Any] = {}
+        if cov_json.is_file():
+            try:
+                doc = _json.loads(cov_json.read_text(encoding="utf-8", errors="replace"))
+                declared = (doc or {}).get("artifacts") or {}
+            except (OSError, ValueError):
+                declared = {}
+
+        for name, entry in declared.items():
+            if isinstance(entry, dict):
+                got = _entry(str(entry.get("path") or ""))
+                if got:
+                    got["kind"] = str(entry.get("kind") or name)
+                    arts[name] = got
+        # 回落：覆盖率后端没记（老 run 目录）时按文件名扫。
+        cov_dir = output_path / "sim" / "coverage"
+        if "ucdb" not in arts and cov_dir.is_dir():
+            for f in sorted(cov_dir.glob("*.ucdb")):
+                got = _entry(str(f))
+                if got:
+                    arts.setdefault("ucdb", {**got, "kind": "coverage_db"})
+        if "waveform" not in arts and cov_dir.is_dir():
+            for f in sorted(cov_dir.glob("*.vcd")):
+                got = _entry(str(f))
+                if got:
+                    arts.setdefault("waveform", {**got, "kind": "waveform"})
+
+        if not arts:
+            return
+        manifest.metadata["simulation_artifacts"] = {
+            "coverage_result": "sim/coverage/coverage_result.json"
+            if cov_json.is_file() else "",
+            "artifacts": arts,
         }
 
     # ── 读取 trace ──

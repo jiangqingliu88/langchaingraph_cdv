@@ -982,7 +982,8 @@ def parse_coverage_model(coverage_yaml: str, case_model: "CaseModel" = None,
 
     case 模型答"该测什么"（维度/取值/专题），覆盖率模型答"**怎么量**"
     （coverpoint / bin / cross）。分开的好处是改一边不动另一边；代价是
-    **它们之间必须靠引用对齐** —— 见 `run_associate` 的四条关联边。
+    **它们之间必须靠引用对齐** —— 见 `run_associate` 的五条关联边
+    （①②③④ 走 bin 名/矩阵键/端口/方法，⑤ 走 dimension ID）。
 
     ## 为什么这个函数**需要 case 模型**（不是可选装饰）
 
