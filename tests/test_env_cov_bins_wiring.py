@@ -1158,6 +1158,50 @@ class TestTheConstraintModelIsWrittenInTheSameWindow:
             f"jinja_render 要在同一次 run() 里读到 env.yaml + constraint.yaml，"
             f"default_env 才回填得上。")
 
+    def test_the_association_report_lands_in_the_same_window(self):
+        """关联报告也落在那一窗口里 —— 它要读刚写下的 `constraint.yaml`。"""
+        cons = _line_of("self._write_constraint_yaml(output_dir")
+        assoc = _line_of("self._write_association_report(output_dir")
+        render = _line_of('call_tool("jinja_render"')
+
+        assert cons < assoc < render, (
+            f"顺序不对：写约束@{cons} / 写关联报告@{assoc} / jinja_render@{render}。"
+            f"关联报告要读 constraint.yaml（判边③⑤），必须晚于它。")
+
+    def test_the_two_signoff_artifacts_are_written(self, tmp_path):
+        """`coverage/constraint_status.json` 与 `coverage/association_report.json`
+        都要真落盘 —— 它们是 audit 判 `PASS_WITH_CAVEAT` 的两个输入。"""
+        import shutil
+
+        from src.executors.verify.main import VerifyExecutor
+
+        ydir = tmp_path / "inputs" / "yaml" / "uvm"
+        ydir.mkdir(parents=True)
+        shutil.copy(Path("specs/npu_sched/casemodel.yaml"),
+                    tmp_path / "inputs" / "casemodel.yaml")
+        (tmp_path / "spec.json").write_text(
+            json.dumps({"design_name": "npu_sched"}), encoding="utf-8")
+        (ydir / "env.yaml").write_text(
+            "environment:\n  name: npu_sched_env\n  agents:\n"
+            "    - {name: npu_sched_in, type: npu_sched_in_master_agent}\n",
+            encoding="utf-8")
+
+        ex = VerifyExecutor()
+        ex._write_constraint_yaml(tmp_path)
+        ex._write_association_report(tmp_path)
+
+        status = json.loads((tmp_path / "coverage" / "constraint_status.json")
+                            .read_text(encoding="utf-8"))
+        # 约束**生成出来了**，但策略体是空骨架 —— 两个事实都要如实
+        assert status["constraint_generated"] is True
+        assert status["constraint_policy_applied"] is False
+        assert status["unbacked_policy_count"] > 0
+
+        report = json.loads((tmp_path / "coverage" / "association_report.json")
+                            .read_text(encoding="utf-8"))
+        assert report["hard_edge_broken"] == 0
+        assert report["renderable"] is True
+
     def test_the_seq_item_type_comes_from_agent_type_not_name(self):
         """**从 `type` 推，不是从 `name`** —— 这是个编译期才炸的坑。
 
@@ -1225,9 +1269,14 @@ class TestTheConstraintModelIsWrittenInTheSameWindow:
             [ydir / "env.yaml", written])
         cons = sorted((tmp_path / "env" / "cons").glob("*.sv"))
         assert len(cons) == 5, [p.name for p in cons]
-        # 环境名回填成功（没有就叫 `_constraint_policy`，那个基类名解析不了）
-        assert any(p.name.startswith("npu_sched_env") for p in cons), \
+        # 文件名与类名**全部**按 `env_name` 走（与 `{env_name}_config.sv` 那一批同一个
+        # 命名空间）—— 不再是"约束模型自己一份 `project.name`"。约束名叫
+        # `npu_sched_cons`、环境叫 `npu_sched_env`，这里断言后者、且前者**一个都不许出现**。
+        assert all(p.name.startswith("npu_sched_env") for p in cons), \
             [p.name for p in cons]
         seq = (tmp_path / "env" / "cons"
-               / "npu_sched_cons_coordinated_sequence.sv").read_text(encoding="utf-8")
+               / "npu_sched_env_coordinated_sequence.sv").read_text(encoding="utf-8")
+        assert "class npu_sched_env_coordinated_sequence" in seq
+        assert "npu_sched_cons" not in seq, \
+            "还有 `project.name`（约束名）漏在模板里 —— 那会与环境名落在两个命名空间"
         assert "create_from_batch()" in seq

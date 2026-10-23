@@ -1,19 +1,22 @@
 {% include "base_templates/base_template.sv.j2" %}
 
-// {{ project.name }}_coordinated_sequence.sv
+// {{ environment.env_name }}_coordinated_sequence.sv
 // 自动生成的协调序列
 
-`include "{{ project.env_name }}_policy_factory.sv"
+`include "{{ environment.env_name }}_policy_factory.sv"
 
-class {{ project.env_name }}_coordinated_sequence extends uvm_virtual_sequence;
-  `uvm_object_utils({{ project.env_name }}_coordinated_sequence)
-  `uvm_declare_p_sequencer({{ project.env_name }}_virtual_sequencer)
+// **不是 `uvm_virtual_sequence`** —— UVM 里没有这个基类（那个名字在
+// base_pkg 里也不存在）。写了它的后果是：这些文件一旦被 include 就
+// "Undefined type"，而在此之前它们从没被 include 过，所以一直没暴露。
+class {{ environment.env_name }}_coordinated_sequence extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils({{ environment.env_name }}_coordinated_sequence)
+  `uvm_declare_p_sequencer({{ environment.env_name }}_virtual_sequencer)
   
   // 策略组合器
-  {{ project.env_name }}_policy_combinator policy_combo;
+  {{ environment.env_name }}_policy_combinator policy_combo;
   
   // 事务队列
-  {{ project.env_name }}_policy_context queue[$];
+  {{ environment.env_name }}_policy_context queue[$];
   
   // 配置
   int num_transactions = 100;
@@ -24,13 +27,13 @@ class {{ project.env_name }}_coordinated_sequence extends uvm_virtual_sequence;
   int generated_count = 0;
   int processed_count = 0;
   
-  function new(string name = "{{ project.name }}_coordinated_sequence");
+  function new(string name = "{{ environment.env_name }}_coordinated_sequence");
     super.new(name);
     // 约束策略**优先取模型给的批次策略**（batch test 挂的 `batch_policy`），
     // 没有才退回 plusargs（`+POLICY_LIST`）。见 factory 里
     // `create_from_batch` / `create_from_plusargs` 的注释 —— 前者是"模型说了算"，
     // 后者是"回归命令行说了算"。
-    policy_combo = {{ project.env_name }}_policy_factory::create_from_batch();
+    policy_combo = {{ environment.env_name }}_policy_factory::create_from_batch();
   endfunction
   
   virtual task body();
@@ -49,7 +52,7 @@ class {{ project.env_name }}_coordinated_sequence extends uvm_virtual_sequence;
   
   virtual task generate_transactions();
     for (int i = 0; i < num_transactions; i++) begin
-      {{ project.env_name }}_policy_context ctx = new();
+      {{ environment.env_name }}_policy_context ctx = new();
       
       // 设置元数据
       ctx.scenario_name = get_name();
@@ -73,17 +76,27 @@ class {{ project.env_name }}_coordinated_sequence extends uvm_virtual_sequence;
       generated_count++;
       
       // 队列流控
-      while (queue.size() > queue_size) #1;
+      // **写成 `begin #1; end`**：`while (cond) #1;` 在 vlog 里报
+      // "near #: syntax error, unexpected #, expecting ;"（这些文件以前
+      // 从没进过编译，所以一直没暴露）。
+      while (queue.size() > queue_size) begin
+        #1;
+      end
     end
-    
+
     // 等待处理完成
-    while (processed_count < generated_count) #1;
+    while (processed_count < generated_count) begin
+      #1;
+    end
   endtask
   
   virtual task process_transactions();
-    while (1) begin
+    // **不能 `while (1)`**：body() 用 `fork generate / process ... join` 等两边
+    // 都结束；process 永不返回 → body 永不返回 → objection 永不释放 →
+    // 一路挂到 UVM 的 PH_TIMEOUT。生成完、且全部处理完就退出。
+    while (!(generated_count > 0 && processed_count >= generated_count)) begin
       if (queue.size() > 0) begin
-        {{ project.env_name }}_policy_context ctx = queue.pop_front();
+        {{ environment.env_name }}_policy_context ctx = queue.pop_front();
         
         fork
           begin
@@ -106,25 +119,36 @@ class {{ project.env_name }}_coordinated_sequence extends uvm_virtual_sequence;
   endtask
   
   // 创建基础事务（可被继承重写）
-  virtual function void create_base_transactions(ref {{ project.env_name }}_policy_context ctx);
+  virtual function void create_base_transactions(ref {{ environment.env_name }}_policy_context ctx);
     // 创建并随机化各个事务
+    // **声明全部前置**：SV 不允许在语句之后再声明（多个事务时第二个就会报
+    // "Illegal declaration after the statement"）。
 {% for trans in transactions %}
-    {{ trans.type }} {{ trans.name }}_trans = {{ trans.type }}::type_id::create("{{ trans.name }}_trans");
+    {{ trans.type }} {{ trans.name }}_trans;
+{% endfor %}
+{% for trans in transactions %}
+    {{ trans.name }}_trans = {{ trans.type }}::type_id::create("{{ trans.name }}_trans");
     assert({{ trans.name }}_trans.randomize());
     ctx.set_transaction("{{ trans.name }}", {{ trans.name }}_trans);
 {% endfor %}
   endfunction
   
   // 发送事务（可被继承重写）
-  virtual task send_transactions(ref {{ project.env_name }}_policy_context ctx);
+  virtual task send_transactions(ref {{ environment.env_name }}_policy_context ctx);
     // 发送到对应的 sequencer
 {% for trans in transactions %}
     begin
       {{ trans.type }} {{ trans.name }}_trans;
       $cast({{ trans.name }}_trans, ctx.get_transaction("{{ trans.name }}"));
       if ({{ trans.name }}_trans != null && p_sequencer.{{ trans.name }}_sqr != null) begin
-        start_item({{ trans.name }}_trans, p_sequencer.{{ trans.name }}_sqr);
-        finish_item({{ trans.name }}_trans, p_sequencer.{{ trans.name }}_sqr);
+        // **第二个参数是 `set_priority`（int），不是 sequencer** ——
+        // `start_item(item, sqr)` 会把 sequencer 塞进 int 形参，vsim 报
+        // "Actual input arg ... for formal 'set_priority' ... is not compatible
+        //  with 'int'"。签名是 `(item, set_priority = -1, sequencer = null)`。
+        start_item({{ trans.name }}_trans, -1, p_sequencer.{{ trans.name }}_sqr);
+        // `finish_item` **只有两个形参**（item, set_priority）：sequencer 由
+        // 上一条 `start_item` 记住。给三个 vlog/vsim 报 "Too many arguments"。
+        finish_item({{ trans.name }}_trans, -1);
       end
     end
 {% endfor %}
@@ -133,11 +157,11 @@ class {{ project.env_name }}_coordinated_sequence extends uvm_virtual_sequence;
   // 配置
   function void configure_from_plusargs();
     int num;
-    if ($value$plusargs("{{ project.env_name | upper }}_NUM_TRANS=%0d", num))
+    if ($value$plusargs("{{ environment.env_name | upper }}_NUM_TRANS=%0d", num))
       num_transactions = num;
-    if ($value$plusargs("{{ project.env_name | upper }}_QUEUE_SIZE=%0d", num))
+    if ($value$plusargs("{{ environment.env_name | upper }}_QUEUE_SIZE=%0d", num))
       queue_size = num;
-    if ($value$plusargs("{{ project.env_name | upper }}_TIMEOUT_MS=%0d", num))
+    if ($value$plusargs("{{ environment.env_name | upper }}_TIMEOUT_MS=%0d", num))
       transaction_timeout_ms = num;
   endfunction
   

@@ -4,6 +4,12 @@
 // Master Sequence: {{ agent.name }}_master_sequence
 // ============================================================
 
+{%- set drive_vars = [] %}
+{%- for v in agent.transaction_vars %}
+{%-   if v.isrand == 'True' and v.is_master != 'False' %}
+{%-     set _ = drive_vars.append(v) %}
+{%-   endif %}
+{%- endfor %}
 class {{ agent.name }}_master_sequence extends uvm_sequence #({{ agent.name }}_master_seq_item);
   `uvm_object_utils({{ agent.name }}_master_sequence)
   `uvm_declare_p_sequencer({{ agent.name }}_master_sequencer)
@@ -14,10 +20,37 @@ class {{ agent.name }}_master_sequence extends uvm_sequence #({{ agent.name }}_m
   // 在 vopt 阶段就报 "Failed to find 'num_transactions'" —— **整个设计加载不了**。
   rand int unsigned num_transactions = 10;
 
+{%- if drive_vars %}
+
+  // ── 属性 test 的激励通道（模型 `stimulus.field` 那一半）──
+  //
+  // 属性 test 在 build_phase 里 `set("<字段>_int", <取值>)`；这里逐字段读回来，
+  // 读到了就把它**钉死**在事务上。没设的（`has_* = 0`）保持自由随机 ——
+  // 所以普通 test / 批次 test 的行为一字不变。
+  //
+  // 为什么放在序列里而不是 test 里：事务对象是序列创建的，只有这里能对它
+  // `randomize() with {...}`；test 那层根本碰不到 req。
+  //
+  // 只列**事务上真实存在**的 rand 字段（模板从 agent 的事务定义生成）：
+  // 模型里的 `queue_level` / `issue_unit` 这类 DUT 内部量没有对应字段，
+  // 永远不会出现在这里 —— 它们由覆盖仓（bind 探针）采，不靠激励。
+{%- for v in drive_vars %}
+  bit has_{{ v.name }} = 1'b0;
+  int attr_{{ v.name }} = 0;
+{%- endfor %}
+{%- endif %}
+
   function new(string name = "{{ agent.name }}_master_sequence");
     super.new(name);
   endfunction
   virtual task pre_body();
+{%- if drive_vars %}
+    // 用 sequencer 作上下文：属性 test 是 `set(this, "*", ...)` 设的，
+    // 从这里沿父作用域向上找得到（标准 config_db 作用域解析）。
+{%-   for v in drive_vars %}
+    has_{{ v.name }} = uvm_config_db#(int)::get(get_sequencer(), "", "{{ v.name }}_int", attr_{{ v.name }});
+{%-   endfor %}
+{%- endif %}
   endtask
 
   virtual task body();
@@ -42,14 +75,26 @@ class {{ agent.name }}_master_sequence extends uvm_sequence #({{ agent.name }}_m
   task do_write();
     {{ agent.name }}_master_seq_item req = {{ agent.name }}_master_seq_item::type_id::create("req");
     start_item(req);
-    assert(req.randomize() with { xact_type == WRITE; });
+    // `has_<字段> -> 字段 == 取值`：只有属性 test 设过这个字段时才加约束，
+    // 否则前件为假、约束恒真 —— 普通 test 的随机分布不受影响。
+    assert(req.randomize() with {
+      xact_type == WRITE;
+{%- for v in drive_vars %}
+      has_{{ v.name }} -> {{ v.name }} == attr_{{ v.name }};
+{%- endfor %}
+    });
     finish_item(req);
   endtask
 
   task do_read();
     {{ agent.name }}_master_seq_item req = {{ agent.name }}_master_seq_item::type_id::create("req");
     start_item(req);
-    assert(req.randomize() with { xact_type == READ; });
+    assert(req.randomize() with {
+      xact_type == READ;
+{%- for v in drive_vars %}
+      has_{{ v.name }} -> {{ v.name }} == attr_{{ v.name }};
+{%- endfor %}
+    });
     finish_item(req);
   endtask
 

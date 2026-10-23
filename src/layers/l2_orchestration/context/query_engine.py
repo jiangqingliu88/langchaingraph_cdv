@@ -48,7 +48,7 @@ class LLMQueryEngine:
 
     def query(self, task_type: str, messages: List[Dict[str, str]],
               cache_key: str = "", max_retries: int = 2,
-              timeout_s: int = 120) -> str:
+              timeout_s: int = 120, site: str = "") -> str:
         """统一查询：预算检查 → 缓存 → 调用（重试/降级）→ 审计。
 
         Args:
@@ -68,12 +68,13 @@ class LLMQueryEngine:
         current_tokens = self._current_tokens()
         if current_tokens >= self.token_budget:
             logger.warning(f"LLM token 预算超限: {current_tokens}/{self.token_budget}，拒绝调用")
-            self._audit(task_type, key, "", "budget_exceeded", 0.0)
+            self._audit(task_type, key, "", "budget_exceeded", 0.0, site=site)
             return ""
 
         # 2. 响应缓存
         if self.cache_enabled and key in self.cache:
-            self._audit(task_type, key, self.cache[key][:100], "cache_hit", 0.0)
+            self._audit(task_type, key, self.cache[key][:100], "cache_hit", 0.0,
+                        site=site)
             return self.cache[key]
 
         # 3. LLM 调用（重试 + provider 降级）
@@ -86,7 +87,7 @@ class LLMQueryEngine:
         if content and self.cache_enabled:
             self.cache[key] = content
         self._audit(task_type, key, content[:100] if content else "", "ok" if content else "failed",
-                    elapsed, response_sha=response_sha)
+                    elapsed, response_sha=response_sha, site=site)
         return content
 
     # ═══════════════════════════════════════════════════════════
@@ -138,17 +139,56 @@ class LLMQueryEngine:
             return self.tokens_used
 
     def _audit(self, task_type: str, key: str, resp_preview: str,
-               status: str, elapsed: float, response_sha: str = ""):
-        self.audit_log.append({
+               status: str, elapsed: float, response_sha: str = "",
+               site: str = ""):
+        """记一次调用。**内存只留最近 500 条，磁盘是权威**。
+
+        `site` / `node_id` / `round` / `prompt_hash` 是**出处** —— 回答
+        "这一行 RTL 是谁在哪一轮催出来的"。那是**事后**才问的问题，所以光留
+        内存里没用（进程一退就没了）。有 run 目录时**追加写**
+        `<run>/docs/llm_audit.jsonl`（`docs/` 已被证据包 `dump` 全量收走）；
+        不在图里跑（CLI 单跑工具）就没有目录可写，如实只进内存。
+        """
+        from src.layers.l2_orchestration.context.llm_origin import current as _origin
+
+        org = _origin()
+        record = {
             "task_type": task_type, "cache_key": key,
             "status": status, "elapsed_s": elapsed,
             "resp_preview": resp_preview,
             "response_sha": response_sha,   # 响应内容 SHA256 前缀（可复现性）
             "tokens_used_so_far": self.tokens_used,
-        })
-        # 只保留最近 500 条
+            # ── 出处 ──
+            "prompt_hash": self._hash(str(key))[:12],
+            "site": site,
+            "node_id": org.node_id if org else "",
+            "round": org.round if org else 0,
+        }
+        self.audit_log.append(record)
+        # 只保留最近 500 条（内存里的**快视图**；落盘那份是全量）
         if len(self.audit_log) > 500:
             self.audit_log = self.audit_log[-500:]
+        if org and org.audit_dir:
+            self._append_audit_file(org.audit_dir, record)
+
+    @staticmethod
+    def _append_audit_file(run_dir: str, record: dict) -> None:
+        """追加一行到 `<run>/docs/llm_audit.jsonl`。
+
+        **追加**不是重写：这个文件要能回放"这次 run 里每次 LLM 调用"，
+        重写会把同一 run 前后两段（重入 / 多轮）的记录抹掉。
+
+        写失败**只告警不抛** —— 审计是旁路，不该因为它写不进去就把一次正常的
+        LLM 调用变成异常。
+        """
+        try:
+            from pathlib import Path
+            docs = Path(run_dir) / "docs"
+            docs.mkdir(parents=True, exist_ok=True)
+            with (docs / "llm_audit.jsonl").open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        except Exception as e:                          # noqa: BLE001
+            logger.warning(f"LLM 审计落盘失败（不影响调用）: {e}")
 
     def get_budget_status(self) -> dict:
         return {"tokens_used": self.tokens_used, "budget": self.token_budget,

@@ -1,7 +1,7 @@
-"""case 建模模块的 11 个页面。
+"""case 建模模块的 12 个页面。
 
 **页面清单硬编码在这里，而不是从 YAML 清单读** —— 与平台的其他模块不同，
-这 11 个页面不是「可插拔的界面」，而是**同一份文档的 11 个视图**：它们共享
+这 12 个页面不是「可插拔的界面」，而是**同一份文档的 12 个视图**：它们共享
 模块的编辑器、共享 `AnalysisResult`、点诊断要跳到同一个编辑器里的行。
 把它们外置成清单只会制造「有人删掉一页导致跳转断掉」的机会。
 
@@ -23,6 +23,7 @@ from .orthogonality import OrthogonalityPage
 from .overview import OverviewPage
 from .rules import RulesPage
 from .schema_tab import SchemaPage
+from .testpoints import TestPointsPage
 
 #: 编辑器页的标题 —— 模块用它取回编辑器（唯一的真相所在）
 EDITOR_TITLE = EditorPage.TITLE
@@ -37,6 +38,7 @@ PAGES: List[Type[Page]] = [
     CoveragePage,
     EnvironmentPage,
     CasesPage,
+    TestPointsPage,
     ExternalPage,
     SchemaPage,
     RulesPage,

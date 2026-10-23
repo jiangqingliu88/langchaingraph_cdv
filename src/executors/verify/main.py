@@ -137,6 +137,10 @@ class VerifyExecutor(BaseExecutor):
             # 它还要与 env.yaml **在同一次 `run()` 里**被读到，`default_env`
             # 才回填得上（约束 yaml 自己不写 `env`，见 `gen_uvm.run` 的回填）。
             self._write_constraint_yaml(output_dir)
+            # 三模型关联的断点清单 —— 也落在这一步（它要读刚写下的
+            # constraint.yaml，所以必须晚于 `_write_constraint_yaml`）。
+            # 落在 `coverage/`：那份报告与覆盖率报告同性质，都是签核材料。
+            self._write_association_report(output_dir)
             call_tool("jinja_render", {"output_dir": str(output_dir)})
             env_files = [str(p) for p in (output_dir / "agents").rglob("*.sv")] \
                 if (output_dir / "agents").exists() else []
@@ -206,60 +210,37 @@ class VerifyExecutor(BaseExecutor):
                         files.append(str(yaml_dir / "case_table.json"))
                         logger.info(f"测试点分解完成: {result.get('count')} 条 case"
                                     f"（源：{case_model.name}）")
+
+                        # ── 测试点 IR：case 表只是"分解出了什么"，这一份是
+                        #    "**每条测试点怎么实现、打哪个仓、跑哪一级**"。
+                        #    没有它，下游各自的产物（test / 覆盖 / 回归 / 报告）
+                        #    仍然只能靠命名碰巧对齐。
+                        tp_files = self._write_testpoints(output_dir, case_model,
+                                                          module_name)
+                        files.extend(tp_files)
             except Exception as e:
                 logger.warning(f"测试点分解失败（casemodel）: {e}")
 
-        # ── 3. 断言生成（真实工具 assertion_tools）──
+        # ── 3. SVA 断言：**本轮不再生成**（2026-10-17 撤掉）──
         #
-        # 产出的是**可编译、且真会报错**的断言模块：包成 module + `bind` 进 DUT
-        # （`property` / `assert property` 不能待在 $unit 作用域，原来生成的就是
-        # 一份编不过的文件）。**bind 的目标由 `sampling.dut_module` 给** ——
-        # 它写在 **case 模型**里，不在 spec.json 里，所以要合并进来（与 DUT 探针
-        # 同源）；给不出就**不生成**，并在日志里说清楚（不写一份挂不上对象的文件）。
-        try:
-            from src.layers.l2_orchestration.communication.tool_hub import call_tool
-
-            sva_spec = dict(spec) if isinstance(spec, dict) else {}
-            # 与覆盖率接口共用**同一个** binding 来源（`sampling.dut_module`），
-            # 不各读一份 —— 两处算出不同的模块名，断言会绑到不存在的地方
-            _meta, _sva_decl = {}, []
-            try:
-                from src.tools.casemodel_tools.api import run_covergroups
-                _cm = _find_case_model(_spec_of(output_dir), output_dir)
-                if _cm is not None:
-                    _text = _cm.read_text(encoding="utf-8")
-                    _p = run_covergroups(_text, "dut")
-                    _meta = _p.get("cov_interface") or {}
-                    # 模型声明的断言（`assertions:` 块）—— 设计者写的"这条规则必须
-                    # 恒成立"，比自动生成认得出的协议特征精确得多。**它是"真 pass"
-                    # 的另一半判据**（用户口径：SCB 报 mismatched=0 + 断言不报错）。
-                    import yaml as _yaml
-                    _sva_decl = ((_yaml.safe_load(_text) or {}).get("assertions") or [])
-            except Exception:                              # noqa: BLE001
-                _meta, _sva_decl = {}, []
-            if _meta.get("dut_module"):
-                sva_spec["sampling"] = {"dut_module": _meta["dut_module"],
-                                        "clock": _meta.get("clock", "clk"),
-                                        "reset": _meta.get("reset", "rst_n")}
-            if _sva_decl:
-                sva_spec["assertions"] = _sva_decl
-                logger.info(f"断言：模型声明了 {len(_sva_decl)} 条（会 render 成 SVA "
-                            f"并 bind 进 {_meta.get('dut_module') or '?'}）")
-            sva = call_tool("generate_sva_assertions",
-                            {"specs": json.dumps(sva_spec, ensure_ascii=False)})
-            if not (sva or "").strip():
-                logger.warning("断言生成不了：模型里没给 `sampling.dut_module`"
-                               "（bind 的目标都不知道）—— 本轮**没有断言在生效**，"
-                               "用例的 pass 只代表'没报错'，不代表'验过了'")
-            else:
-                asrt_dir = output_dir / "assertions"
-                asrt_dir.mkdir(parents=True, exist_ok=True)
-                (asrt_dir / f"{module_name}_assertions.sv").write_text(sva, encoding="utf-8")
-                files.append(str(asrt_dir / f"{module_name}_assertions.sv"))
-                logger.info(f"断言：{module_name}_assertions.sv（bind 到 "
-                            f"{sva_spec['sampling']['dut_module']}，会被真编译、真报错）")
-        except Exception as e:
-            logger.warning(f"断言生成失败: {e}")
+        # 原来这里把 case 模型的 `assertions:` 块 render 成 SVA、包成 module
+        # `bind` 进 DUT。撤掉它的理由是**它报的是采样时序产生的 X，不是设计缺陷**：
+        #
+        #   · DUT 的输入在复位释放后的**第一个时钟沿**仍是 X（驱动器的第一笔写
+        #     要等那个沿才生效，而 DUT 在同沿读的是沿前值）——`queue_level`
+        #     一旦被锁成 X，`X + 1 = X` **再也回不来**；
+        #   · SVA 的语义是"表达式为 X 即失败"，于是它**每一拍**都报（实测
+        #     115ns→385ns 共 30 条），把整轮回归判成 fail，而根因是一条驱动时序；
+        #   · 同一组规则的**另一个执行点**（env 检查组件）留着，见
+        #     `_write_coverage_dut_channel` 那段的 `dut_checker` —— 它把结论收口成
+        #     一行 `matched=… mismatched=…`，且**已经把"求值为 X"单列成
+        #     `unverified`**（不再把 X 记成命中）。
+        #
+        # **撤的是"这一半执行点"，不是"这套规则"** —— 规则仍然逐拍求值，只是收口
+        # 在 env 那一侧。要恢复 SVA：把这段接回去即可（`generate_sva_assertions` +
+        # `assertions/<module>_assertions.sv`），但**先把那条驱动时序修掉**，
+        # 否则它会立刻重新变成一片噪音。
+        logger.info("断言：本轮不生成 SVA（已撤）—— 规则由 env 检查组件逐拍求值收口")
 
         tests_data = {
             "module": module_name,
@@ -324,6 +305,119 @@ class VerifyExecutor(BaseExecutor):
         except Exception as e:                       # noqa: BLE001 旁路，别拦 env 生成
             logger.warning(f"env_cov bin 落盘失败（覆盖率模型将退回自动分箱）: {e}")
 
+    @staticmethod
+    def _agent_transaction_fields(output_dir: Path) -> Dict[str, List[str]]:
+        """`{agent 名: [事务字段名]}` —— 只收 **master 且 rand** 的字段。
+
+        `realization.kind=stimulus` 的测试点要落到具体 agent 上；字段名对不上
+        就是"set 了一个没人读的键"（本仓库刚踩过：61 个属性 test 全是死标签）。
+        数据来自 `find_spec_yaml` 写下的 agent yaml（`interfaces.transaction_vars`）。
+        """
+        import yaml as _yaml
+
+        yaml_dir = output_dir / "inputs" / "yaml" / "uvm"
+        env_path = yaml_dir / "env.yaml"
+        try:
+            env = (_yaml.safe_load(env_path.read_text(encoding="utf-8",
+                                                       errors="replace")) or {}
+                   ).get("environment") or {}
+        except (OSError, ValueError):
+            return {}
+        out: Dict[str, List[str]] = {}
+        for agent in (env.get("agents") or []):
+            if not isinstance(agent, dict):
+                continue
+            name = str(agent.get("name") or "").strip()
+            # **passive agent 没有 sequencer**：把它的字段当成激励通道，
+            # 生成的约束会挂在一个根本不存在的驱动路径上（`_seq.start(null)`
+            # 那一类问题的变体）。`is_active` 缺省当作 active。
+            if not name or agent.get("is_master") is False:
+                continue
+            if agent.get("is_active") is False:
+                continue
+            try:
+                doc = _yaml.safe_load(
+                    (yaml_dir / f"{name}.yaml").read_text(
+                        encoding="utf-8", errors="replace")) or {}
+            except (OSError, ValueError):
+                continue
+            iface = doc.get("interfaces")
+            tvars = (iface.get("transaction_vars") if isinstance(iface, dict)
+                     else doc.get("transaction_vars")) or []
+            fields = []
+            for v in tvars:
+                if not isinstance(v, dict) or not v.get("name"):
+                    continue
+                if str(v.get("isrand", "False")) != "True":
+                    continue
+                if str(v.get("is_master", "True")) == "False":
+                    continue
+                fields.append(str(v["name"]))
+            if fields:
+                out[name] = fields
+        return out
+
+    def _write_testpoints(self, output_dir: Path, case_model: Path,
+                          module_name: str) -> List[str]:
+        """落 `coverage/testpoints.yaml` + `.json` —— 测试点 IR 的唯一落点。
+
+        **为什么落在 `coverage/`**：它与覆盖报告同性质（都是签核材料），而且
+        `inputs/yaml/uvm/` 会被 `find_spec_yaml` 清空（见 `layout.casemodel_path`
+        的注释）。放在 coverage 下，证据包 `dump` 会连同覆盖率一起收走。
+        """
+        try:
+            from src.tools.casemodel_tools.api import run_testpoints
+
+            # **与 `_casemodel_test_lines` 的 200 条上限同一口径**：那边截断后
+            # 不会生成更多属性 test 类，TP 这边若还列着"有 test 名但没类"的
+            # 条目，报告就会出现永远 NOT_RUN 的幽灵测试点。
+            payload = run_testpoints(
+                case_model.read_text(encoding="utf-8", errors="replace"),
+                env_name=f"{module_name}_env",
+                agents=self._agent_transaction_fields(output_dir) or None,
+                module_name=module_name,
+                max_tests=200)
+            if payload.get("error"):
+                logger.warning(f"测试点 IR 生成失败: {payload['error']}")
+                return []
+            cov_dir = output_dir / "coverage"
+            cov_dir.mkdir(parents=True, exist_ok=True)
+            # **必须 `newline="\n"`**：Windows 的文本模式会把 `\n` 翻成 `\r\n`，
+            # 而 manifest 里的 sha256 算的是 LF 那份 —— 不锁换行符，哈希与实际
+            # 落盘文件永远对不上（实测），证据链就成了摆设。
+            (cov_dir / "testpoints.yaml").write_text(
+                payload["testpoints_yaml"], encoding="utf-8", newline="\n")
+            (cov_dir / "testpoints.json").write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            # **自证**：manifest 说这份 IR 的哈希是 X，落盘字节就得是 X。
+            # 哈希对不上时证据链是假的 —— 宁可日志里响一声，也不让它静默过去。
+            _want = ((payload.get("methodology") or {}).get("artifacts") or {}) \
+                .get("testpoints_yaml", {}).get("sha256", "")
+            if _want:
+                import hashlib
+                _got = hashlib.sha256(
+                    (cov_dir / "testpoints.yaml").read_bytes()).hexdigest()
+                if _got != _want:
+                    logger.warning(
+                        f"测试点 IR 哈希与 manifest 不一致：文件 {_got[:12]}… / "
+                        f"manifest {_want[:12]}…（落盘编码/换行被改过？）")
+            # 框架清单：阶段、计数、输入、IR 哈希 —— 与证据链同一纪律。
+            if payload.get("methodology"):
+                (cov_dir / "methodology.json").write_text(
+                    json.dumps(payload["methodology"], ensure_ascii=False, indent=2),
+                    encoding="utf-8")
+        except Exception as e:                       # noqa: BLE001 旁路，别拦主流程
+            logger.warning(f"测试点 IR 落盘失败: {e}")
+            return []
+        kinds = "、".join(f"{k}={v}" for k, v in sorted(payload["by_kind"].items()))
+        logger.info(f"测试点 IR：{payload['count']} 条（{kinds}；"
+                    f"观测型 {payload['observe_only']} 条）→ coverage/testpoints.yaml")
+        for note in payload.get("notes") or []:
+            logger.info(f"  测试点注意: {note}")
+        return [str(output_dir / "coverage" / "testpoints.yaml"),
+                str(output_dir / "coverage" / "testpoints.json"),
+                str(output_dir / "coverage" / "methodology.json")]
+
     def _write_constraint_yaml(self, output_dir: Path) -> None:
         """`inputs/yaml/uvm/constraint.yaml` —— case 模型 → 约束模型（`env/cons/*` 的输入）。
 
@@ -367,19 +461,140 @@ class VerifyExecutor(BaseExecutor):
         try:
             from src.tools.casemodel_tools.associate import build_constraint
 
-            payload = build_constraint(cm_file.read_text(encoding="utf-8"), ports=ports)
+            # `agent_fields` 决定"这个字段该约束哪个 agent" —— 没有它，可驱动
+            # 维度只能在一端口时才敢落，多 agent 时全部退化成骨架。
+            payload = build_constraint(
+                cm_file.read_text(encoding="utf-8"), ports=ports,
+                agent_fields=self._agent_transaction_fields(output_dir) or None)
             if payload.get("error"):
                 logger.warning(f"约束模型生成不了，跳过: {payload['error']}")
                 return
             (output_dir / "inputs" / "yaml" / "uvm" / "constraint.yaml").write_text(
                 payload["constraint_yaml"], encoding="utf-8")
-            logger.info(f"约束模型：{payload['policy_count']} 条策略 / "
-                        f"default_mode={payload['default_mode']} / "
-                        f"{len(ports)} 个端口 → constraint.yaml（渲染出 env/cons/）")
-            for note in payload.get("notes") or []:
-                logger.warning(f"约束模型: {note}")
+            self._write_constraint_status(output_dir, payload)
         except Exception as e:                       # noqa: BLE001 旁路，别拦 env 生成
             logger.warning(f"约束模型落盘失败（env/cons 将不生成）: {e}")
+            return
+        # **日志放在 try 之外**：打日志本身可能失败（Windows 控制台是 GBK，
+        # 而 `notes` 里那个 `↔` 不在 GBK 里 —— 实测撞过），而那时文件**已经写成了**。
+        # 把它圈在同一个 try 里，except 就会把"日志没打出来"报成"落盘失败"，
+        # 让排查的人去找一个并不存在的写入问题。**日志失败不该冒充落盘失败。**
+        logger.info(f"约束模型：{payload['policy_count']} 条策略 / "
+                    f"default_mode={payload['default_mode']} / "
+                    f"{len(ports)} 个端口 → constraint.yaml（渲染出 env/cons/）")
+        for note in payload.get("notes") or []:
+            logger.warning(f"约束模型: {note}")
+
+    @staticmethod
+    def _write_constraint_status(output_dir: Path, payload: Dict[str, Any]) -> None:
+        """`coverage/constraint_status.json` —— **约束到底有没有在约束**。
+
+        与 `constraint.yaml` 一起落盘，供覆盖率阶段拼进 `semantic_validations`、
+        再由 audit 门禁读（`PASS_WITH_CAVEAT` 就挂在这个字段上）。
+
+        **为什么在生成期判、不去抓仿真日志**：`env_cons_policies.sv.j2` 里策略体
+        落到 `default:` 是**运行期**的分支，而那条 `uvm_info` 是 `UVM_HIGH` ——
+        默认 verbosity（`UVM_MEDIUM`）下**根本不打**，`sim.sh` 里也没有
+        `+UVM_VERBOSITY`。所以"从日志 grep `default:`"那条路是死的（实测）。
+        而这件事**生成期就确定**（`build_constraint` 声明 `policies_are_skeletons`），
+        不必等仿真、也不必改 verbosity。
+        """
+        cov_dir = output_dir / "coverage"
+        try:
+            cov_dir.mkdir(parents=True, exist_ok=True)
+            total = int(payload.get("policy_count") or 0)
+            backed = int(payload.get("backed_policy_count") or 0)
+            unbacked = int(payload.get("unbacked_policy_count")
+                           if payload.get("unbacked_policy_count") is not None
+                           else (total - backed))
+            skeletons = bool(payload.get("policies_are_skeletons"))
+            if skeletons:
+                note = ("策略体全是空骨架：apply() 落到 `default:` 分支，不做任何事"
+                        "（可驱动维度一个都没有 —— 检查模型里的 `stimulus.field`）")
+            elif unbacked:
+                note = (f"{backed}/{total} 条策略由模型编译出真实赋值；"
+                        f"其余 {unbacked} 条仍是骨架 —— 它们的维度不可驱动"
+                        f"（没有 `stimulus.field`，通常是 DUT 内部量/输出端口）")
+            else:
+                note = ""
+            status = {
+                "constraint_generated": True,
+                # **"约束有没有在约束"按逐条策略算**，不是一个二值开关：
+                # 只有全部策略都有真实赋值才算完全生效；部分生效会连同
+                # 计数一起报出来，audit 据此挂 caveat。
+                "constraint_policy_applied": (not skeletons) and unbacked == 0,
+                "policy_count": total,
+                "backed_policy_count": backed,
+                "unbacked_policy_count": unbacked,
+                "note": note,
+            }
+            (cov_dir / "constraint_status.json").write_text(
+                json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as e:                       # noqa: BLE001 旁路
+            logger.warning(f"约束状态落盘失败（audit 将看不到约束是否生效）: {e}")
+
+    def _write_association_report(self, output_dir: Path) -> None:
+        """`coverage/association_report.json` —— 三模型关联的**断点清单**。
+
+        `vagent case-model associate` 一直只把断点打到终端上。但关联断点和覆盖率
+        报告一样是**签核材料**："声明要测的"与"实际在量的"对不上，签核的人得看得见，
+        而且得是机器可读的（audit 门禁要认它，CI 要能拦）。
+
+        ## 覆盖率模型文本从哪来
+
+        流水线里的覆盖率模型是**从 case 模型推出来的对象**
+        （`coverage_model()`），没有一份人写的 `coverage.yaml`。而 `associate`
+        吃文本 —— 所以用 `coverage_model_to_dict()` 序列化一份（JSON 是合法 YAML）。
+        那两个函数在 `coverage.py` 里紧挨着，互为逆。
+
+        **不硬崩**：任何一步出问题只记日志。关联校验是**旁路**，不该因为它
+        跑不起来就把 verify 变成失败 —— 该失败的是"关联真断了"，不是"校验没跑成"。
+        """
+        cm_file = _find_case_model(_spec_of(output_dir), output_dir)
+        if cm_file is None:
+            return
+        cons_path = output_dir / "inputs" / "yaml" / "uvm" / "constraint.yaml"
+        try:
+            from src.tools.casemodel_tools.associate import associate
+            from src.tools.casemodel_tools.coverage import (
+                coverage_model, coverage_model_to_dict,
+            )
+            from src.tools.casemodel_tools.repository import load_models_from_text
+
+            case_text = cm_file.read_text(encoding="utf-8")
+            model = load_models_from_text(case_text, source=str(cm_file))[0].resolve()
+            module_name = str(_spec_of(output_dir).get("design_name") or "dut")
+            cm = coverage_model(model, module_name)
+            coverage_text = json.dumps(coverage_model_to_dict(cm), ensure_ascii=False)
+            constraint_text = (cons_path.read_text(encoding="utf-8")
+                               if cons_path.is_file() else "")
+
+            a = associate(case_text, coverage_text, constraint_text)
+            if a.get("error"):
+                logger.warning(f"关联校验跑不了，跳过: {a['error']}")
+                return
+            # **硬边** = ①②（case↔coverage）。断了意味着"声明要测的没落成覆盖仓"，
+            # 那是签核必须知道的事 —— audit 据此挂 PASS_WITH_CAVEAT。
+            hard = [i for i in (a.get("issues") or [])
+                    if i.get("edge") in ("①", "②") and i.get("severity") == "error"]
+            report = {
+                "hard_edge_broken": len(hard),
+                "error_count": a.get("counts", {}).get("error", 0),
+                "warning_count": a.get("counts", {}).get("warning", 0),
+                "renderable": a.get("renderable", False),
+                "summary": a.get("summary", ""),
+                "issues": a.get("issues") or [],
+                "notes": a.get("notes") or [],
+            }
+            cov_dir = output_dir / "coverage"
+            cov_dir.mkdir(parents=True, exist_ok=True)
+            (cov_dir / "association_report.json").write_text(
+                json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+            logger.info(f"三模型关联：{report['error_count']} 断 / "
+                        f"{report['warning_count']} 提示"
+                        f"（硬边断 {len(hard)} 条）→ coverage/association_report.json")
+        except Exception as e:                       # noqa: BLE001 旁路，别拦 env 生成
+            logger.warning(f"关联校验失败（不影响生成）: {e}")
 
     def _write_coverage_plan(self, output_dir: Path) -> None:
         """`coverage/coverage_plan.yaml` —— 功能覆盖率计划（**与 case 模型同批**）。

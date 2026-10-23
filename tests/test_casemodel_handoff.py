@@ -97,6 +97,32 @@ class TestTheHandoffActuallyWorks:
         assert lines[0].strip() == "tests:"
         assert all("dimension" in ln for ln in lines[1:])
 
+    def test_stimulus_binding_reaches_the_env_lines(self, tmp_path):
+        """模型里的 `stimulus.field` 必须一路走到注入的 `tests:` 行。
+
+        走不到的话，属性 test 仍然只会 set 一个没人读的 `<维度>_int` ——
+        类名不同、激励相同，也就是"取值只进了目录名"的现代版。
+        """
+        import yaml
+        from src.layers.l1_infrastructure.layout import casemodel_path
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
+
+        doc = yaml.safe_load(_casemodel_yaml(tmp_path).read_text(encoding="utf-8"))
+        for dim in doc.get("dimensions") or []:
+            if dim.get("id") == "D_ratio":
+                dim["stimulus"] = {"field": "credit"}
+        p = casemodel_path(tmp_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False),
+                     encoding="utf-8")
+
+        lines = _casemodel_test_lines(tmp_path)
+        bound = [ln for ln in lines if "field:" in ln]
+        assert bound, "激励绑定在交接处丢了 —— 属性 test 会退回死标签"
+        assert all("field: credit" in ln for ln in bound)
+        # 没绑定的维度不能凭空多出 field（空串会被下游当成已绑定）
+        assert any("dimension:" in ln and "field:" not in ln for ln in lines[1:])
+
     def test_no_model_means_no_injection_not_a_fake_one(self, tmp_path):
         """没有模型就**空着** —— 不编一份假装做过。"""
         from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
@@ -127,6 +153,51 @@ class TestTheHandoffActuallyWorks:
 
         assert p.exists(), "模型没躲过私有目录的清理"
         assert _casemodel_test_lines(tmp_path), "清空私有目录后模型读不到了"
+
+
+class TestTestPointsReachTheRegression:
+    """测试点 → 回归任务：**生成了但从不被执行**等于没测。"""
+
+    def _model_with_stimulus(self, tmp_path, dim_id="D_ratio", field="credit"):
+        import yaml
+        from src.layers.l1_infrastructure.layout import casemodel_path
+
+        doc = yaml.safe_load(_casemodel_yaml(tmp_path).read_text(encoding="utf-8"))
+        for dim in doc.get("dimensions") or []:
+            if dim.get("id") == dim_id:
+                dim["stimulus"] = {"field": field}
+        p = casemodel_path(tmp_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False),
+                     encoding="utf-8")
+        return p
+
+    def test_stimulus_tp_becomes_a_regression_task(self, tmp_path):
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import _tp_regression_lines
+
+        self._model_with_stimulus(tmp_path)
+        lines = _tp_regression_lines(
+            tmp_path, "zz_mod", "zz_mod_env", "zz_mod_bench_tb_top", 0,
+            lambda top, test: f"vsim {top} +UVM_TESTNAME={test}")
+        body = "\n".join(lines)
+        assert lines, "可激励测试点没有变成回归任务 —— 属性 test 又成了孤儿"
+        assert "+UVM_TESTNAME=zz_mod_env_d_ratio_p50_test" in body
+        assert "tags: [\"p" in body, "分级标签没带上（分级回归筛不到它）"
+
+    def test_observe_only_tp_does_not_take_a_regression_slot(self, tmp_path):
+        """观测型没有激励差异 —— 单独跑一遍与批次测试等价，不该占槽。"""
+        from src.layers.l1_infrastructure.layout import casemodel_path
+        from src.tools.uvm_tools.tool_find_spec_yaml.main import _tp_regression_lines
+
+        # 原样模型：FC 没有任何 stimulus 声明 → 全部是观测型
+        p = casemodel_path(tmp_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(_casemodel_yaml(tmp_path).read_text(encoding="utf-8"),
+                     encoding="utf-8")
+        lines = _tp_regression_lines(
+            tmp_path, "zz_mod", "zz_mod_env", "zz_mod_bench_tb_top", 0,
+            lambda top, test: f"vsim {top} +UVM_TESTNAME={test}")
+        assert lines == []
 
 
 class TestItReachesTheGeneratedEnv:

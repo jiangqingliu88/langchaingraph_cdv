@@ -41,10 +41,23 @@ import {{ agent.name }}_parameters_pkg::*;
   logic [{{ port.width }}-1:0] {{ port.name }}_slv = 'z;   // TB 从端（slave_cb 驱动）
 {%-       endif %}
 {%-     else %}
+{#- **master 驱动的信号必须给"空闲初值"。**
+    裸 `logic` 的默认值是 **X**，而在驱动器开口之前（复位期间、以及复位释放后
+    到第一笔事务之间）这些信号就一直是 X。DUT 是**连续**读这根线的，`always_ff`
+    在复位释放后的**第一个沿**就把它采进寄存器：
+
+        queue_level <= queue_level + (instr_valid && !full ? 1 : 0) - …
+
+    `instr_valid` 为 X → 寄存器被锁成 X，此后 `X + 1 = X` **再也回不来**。
+    实测：整轮 p0 6/7 红、覆盖率恒 0%，而日志上看不出"没人驱动"。
+
+    语义上也该如此：**一个 agent 的输出信号，在它开口之前是"空闲"，不是"未知"**。
+    X 是仿真器的默认，不是设计意图。给初值之后，驱动器**照样**在时钟块上驱动
+    （`logic` 的初值与时钟块驱动不冲突），只是那之前线上是 0 而不是 X。 #}
 {%-       if width_str == '1' %}
-  logic {{ port.name }};                          // master 驱动
+  logic {{ port.name }} = 1'b0;                   // master 驱动（初值 = 空闲值）
 {%-       else %}
-  logic [{{ port.width }}-1:0] {{ port.name }};   // master 驱动
+  logic [{{ port.width }}-1:0] {{ port.name }} = '0;   // master 驱动（初值 = 空闲值）
 {%-       endif %}
 {%-     endif %}
 {%-   endif %}

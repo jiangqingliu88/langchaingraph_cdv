@@ -325,8 +325,28 @@ class {{ environment.env_name }} extends uvm_env;
       super.reset_phase(phase);
       `uvm_info(get_name(), "reset_phase", UVM_HIGH)
       phase.raise_objection(this);
-      // 施加复位
-      #200ns;
+      // **等真实的复位释放，不睡写死的时长。**
+      //
+      // 原来是 `#200ns;`（注释写着"施加复位"，其实复位是 clk_rst agent 驱动的，
+      // 这里什么都没做，只是在拖时间）。而 `assert_cycles: 10` 的复位在
+      // **100ns 就释放了** —— 于是 `reset_phase` 比真实复位晚结束 ~100ns，而
+      // UVM 的运行子相位是**顺序**的（reset → configure → main）：`main_phase`
+      // 因此被推迟到复位释放之后才开始。
+      //
+      // 那段窗口里复位已释放、却**没有任何人在驱动** DUT 的输入 —— 而 DUT 的
+      // 寄存器是 `always_ff @(posedge clk)`：
+      //
+      //     queue_level <= queue_level + (instr_valid && !full ? 1 : 0) - …
+      //
+      // `instr_valid` 还是 X → `queue_level` **被锁成 X**，此后 `X + 1 = X`
+      // **再也回不来**（异步复位早已结束）。表现是：仿真正常跑完、UVM 报告正常
+      // 打印、vsim 退出码 0，而覆盖率恒 0%、断言因 X 全部报错 ——
+      // 从日志上看不出"没人驱动"，只有把信号 `examine` 出来才看得到满屏的 x。
+      //
+      // 驱动器那边的约定是"复位释放之后才驱动"（`main_phase` 里的
+      // `wait (vif.rst_n == …)`），所以这里要做的不是提前驱动，而是**别拖**：
+      // 复位一释放就让相位往下走，驱动器随即接管。
+      wait (clk_vif.rst_active[0] == 0);
       phase.drop_objection(this);
   endtask
   

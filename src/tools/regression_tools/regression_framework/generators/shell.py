@@ -25,9 +25,22 @@ class ShellGenerator:
         self.error_pattern = ERROR_PATTERN
         self.reference_mode = False
         self.debug_mode = False
+        #: 分级裁剪判定（吃用例名 → 是否生成本级目录）；None = 生成全量。
+        self.test_filter = None
 
     def generate(self, config: dict, root_dir: str, mode: str,
-                 reference_mode: bool = False, debug_mode: bool = False):
+                 reference_mode: bool = False, debug_mode: bool = False,
+                 test_filter=None):
+        """生成 build/test 目录与脚本。
+
+        `test_filter` 是**可选的用例裁剪判定**（吃一调用例名，返回 bool）。
+        分级回归传 `make_tag_matcher(...)`，于是每一级的 build 目录里只出现
+        **本级 tag** 的用例目录 —— 不再铺全量。
+
+        不传 = 与从前逐字节一致（生成全部 test 目录，之后可用不同 `--tags`
+        复跑同一棵树）。这是有意的：全量树便于人工反复筛选，而分级目录的
+        意义是"这一级的证据"，两者不该互相绑架。
+        """
         # 与 ConfigBuilder 保持一致：variables 是唯一的全局模板变量源
         self.context = {}
         self.context.update(config.get('variables', {}) or {})
@@ -51,6 +64,8 @@ class ShellGenerator:
         self.reference_mode = bool(reference_mode)
         # debug 模式：用 debug_run_cmd / ref_debug_run_cmd（开波形、放详细日志）
         self.debug_mode = bool(debug_mode)
+        # 分级裁剪：吃用例名、返回是否生成本级目录（见 `_generate_build`）
+        self.test_filter = test_filter
         self.settings = config.get('settings', {})
         self.simulators = self.settings.get('simulators', {})
         self.default_sim = self.settings.get('default_simulator', 'vcs')
@@ -158,7 +173,11 @@ class ShellGenerator:
             self._write_script(os.path.join(build_dir, 'post_build.sh'), post_build_cmd, "post_build",
                                mode, exports=build_exports)
 
-        build_tests = [t for t in config.get('tests', []) if t.get('build') == build_name]
+        build_tests = [
+            t for t in config.get('tests', [])
+            if t.get('build') == build_name
+            and (self.test_filter is None or self.test_filter(t.get('name', '')))
+        ]
         for test in build_tests:
             test_name = test['name']
             seed = test.get('local_vars', {}).get('SEED', None)

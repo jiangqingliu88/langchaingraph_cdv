@@ -71,12 +71,21 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
     // pragma custom build_logic end
   endfunction
 
-  task configure_phase(uvm_phase phase);
-    super.configure_phase(phase);
-    `uvm_info(get_type_name(), "configure_phase: start", UVM_MEDIUM)
-    phase.raise_objection(this);
-    phase.drop_objection(this);
-  endtask
+  // ⚠️ **刻意不写 `configure_phase` / `reset_phase`。**
+  //
+  // 驱动器**只在复位释放之后才驱动**，这是设计意图（见下面 main_phase 的
+  // `wait (vif.rst_n == …)`）—— 复位期间 DUT 的输入是什么它不关心。
+  //
+  // 曾经在这里加过一个 `reset_phase` 去"提前压空闲值"，那**是错的**：
+  // ① 它违背上面那条时序约定；② 用时钟块写时，值要等时钟事件才生效，
+  // 实测落在复位释放后的**第一个沿**上 —— 与 DUT 采样那一拍**同拍**，
+  // 谁先谁后取决于调度，等于把一处确定行为换成一处竞态；
+  // ③ 想"立刻生效"改成直接 `vif.<sig> = '0;` 更糟：接口信号已被时钟块驱动，
+  // 再叠一个直接赋值成两个驱动源，信号变成 **`z`**，比 X 更难查。
+  //
+  // 输入在复位期间是 X 本身没问题（DUT 那时在被复位）。真正要保证的是
+  // **复位一释放就有人在驱动** —— 那件事由 `main_phase` 往下那段负责，
+  // 而它能不能及时开始，取决于相位与复位释放的先后（见 `main_phase` 的注释）。
 
   task main_phase(uvm_phase phase);
     super.main_phase(phase);

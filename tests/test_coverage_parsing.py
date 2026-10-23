@@ -299,3 +299,85 @@ class TestCaseModelBinsReachEnvCov:
         for bins in self._field_bins(tmp_path).values():
             for b in bins:
                 assert re.fullmatch(r"[A-Za-z_$][\w$]*", b["name"]), b
+
+
+# ════════════════════════════════════════════════════════════
+# 测试点 × 覆盖仓 矩阵 —— 缺口归因到 tp_id
+# ════════════════════════════════════════════════════════════
+
+#: `-cvg -details` 第一段的真实排版：TYPE 行下逐 coverpoint、逐 bin 的命中数
+VCOVER_BIN_HITS = """\
+Coverage Report by instance with details
+
+ TYPE /p/npu_sched_env_pkg/npu_sched_env_coverage/cg_dut
+                                                       72.63%        100          -    Uncovered
+    covered/total bins:                                    39         59          -                      
+    Coverpoint cp_queue_level                         100.00%        100          -    Covered
+        covered/total bins:                                 6          6          -                      
+        illegal_bin illegal_over                            0                     -    ZERO                 
+        bin empty                                           8          1          -    Covered              
+        bin low                                             7          1          -    Covered              
+    Coverpoint cp_instr_type                           75.00%        100          -    Uncovered
+        bin mac                                            12          1          -    Covered              
+        bin vector                                          0          1          -    ZERO                 
+COVERGROUP COVERAGE:
+ TYPE /p/npu_sched_env_pkg/npu_sched_env_coverage/cg_dut
+                                                       72.63%        100          -    Uncovered
+"""
+
+
+class TestTpMatrix:
+    def _write_tp(self, tmp_path, rows):
+        import yaml
+        p = tmp_path / "coverage" / "testpoints.yaml"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(yaml.safe_dump({"testpoints": rows}, allow_unicode=True),
+                     encoding="utf-8")
+        rep = tmp_path / "sim" / "coverage" / "reports"
+        rep.mkdir(parents=True, exist_ok=True)
+        (rep / "coverage_cvg.txt").write_text(VCOVER_BIN_HITS, encoding="utf-8")
+        return {"report_dir": str(rep)}
+
+    def test_bin_hits_are_parsed_per_coverpoint(self):
+        from src.tools.lib.collect_real_coverage import _parse_cvg_bin_hits
+
+        hits = _parse_cvg_bin_hits(VCOVER_BIN_HITS)
+        assert hits["cg_dut"]["cp_queue_level"] == {"illegal_over": 0,
+                                                    "empty": 8, "low": 7}
+        assert hits["cg_dut"]["cp_instr_type"]["mac"] == 12
+
+    def test_four_states_keep_observe_apart(self, tmp_path):
+        from src.tools.lib.collect_real_coverage import _tp_matrix
+
+        cov = self._write_tp(tmp_path, [
+            {"tp_id": "TP-1", "coverpoint": "cp_queue_level", "bin": "empty",
+             "observe_only": True},
+            {"tp_id": "TP-2", "coverpoint": "cp_instr_type", "bin": "mac",
+             "observe_only": False},
+            {"tp_id": "TP-3", "coverpoint": "cp_instr_type", "bin": "vector",
+             "observe_only": False},
+            {"tp_id": "TP-4", "coverpoint": "cp_queue_level", "bin": "low",
+             "observe_only": False},
+        ])
+        m = _tp_matrix(tmp_path, cov)
+        assert m["counts"] == {"HIT": 2, "MISS": 1, "OBSERVED": 1,
+                               "UNOBSERVED": 0, "BACKDOOR_HIT": 0,
+                               "BACKDOOR_MISS": 0, "UNMAPPED": 0}
+        assert m["drivable"] == 3 and m["drivable_hit"] == 2
+        assert [r["tp_id"] for r in m["missed"]] == ["TP-3"]
+
+    def test_unknown_bin_is_unmapped_not_a_silent_miss(self, tmp_path):
+        """模型与生成漂了 → UNMAPPED，**不冒充"没命中"**（那样会去补错用例）。"""
+        from src.tools.lib.collect_real_coverage import _tp_matrix
+
+        cov = self._write_tp(tmp_path, [
+            {"tp_id": "TP-X", "coverpoint": "cp_queue_level", "bin": "nope"},
+        ])
+        m = _tp_matrix(tmp_path, cov)
+        assert m["counts"]["UNMAPPED"] == 1
+        assert m["unmapped"][0]["tp_id"] == "TP-X"
+
+    def test_no_testpoints_means_no_matrix(self, tmp_path):
+        from src.tools.lib.collect_real_coverage import _tp_matrix
+
+        assert _tp_matrix(tmp_path, {}) == {}

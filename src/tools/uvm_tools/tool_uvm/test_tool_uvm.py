@@ -640,7 +640,20 @@ class TestNormalizeTests:
             {"value": "1"},
             "not-a-dict",
             {"dimension": "D", "value": "1"},
-        ]) == [{"dimension": "D", "value": "1", "key": "", "int_value": None, "base": ""}]
+        ]) == [{"dimension": "D", "value": "1", "key": "", "int_value": None,
+               "base": "", "field": "", "tp_id": "", "backdoor_path": ""}]
+
+    def test_stimulus_field_is_passed_through(self):
+        """模型声明的激励绑定必须原样到模板 —— 丢了它就退回「死标签」。"""
+        kept = _normalize_tests([{"dimension": "D_type", "value": "MAC",
+                                  "field": "instr_type"}])
+        assert kept[0]["field"] == "instr_type"
+
+    def test_tp_id_is_passed_through(self):
+        """测试点主键要活到模板 —— 它是 test → TP → 需求的唯一线索。"""
+        kept = _normalize_tests([{"dimension": "D_type", "value": "MAC",
+                                  "tp_id": "TP-NPU-D_TYPE-MAC"}])
+        assert kept[0]["tp_id"] == "TP-NPU-D_TYPE-MAC"
 
     def test_keeps_int_zero_distinct_from_absent(self):
         """`int_value: 0` 和「没给」是两回事 —— 前者是给定的值，后者要推导。"""
@@ -742,6 +755,137 @@ class TestRenderedAttrTests:
         body = list(dest.rglob("*_env_attr_test.sv"))[0].read_text(encoding="utf-8")
         assert 'uvm_config_db#(int)::get(this, "", "fc_ratio_int"' in body
 
+    def test_bound_dimension_drives_a_transaction_field(self, tmp_path):
+        """`stimulus.field` 要落成第二条 config_db 通道，且宏调用里带着字段名。
+
+        这条是「属性 test 不再是死标签」的生成侧证据：只有 `d_type_int`
+        没人读时，61 个 test 的激励完全相同；带上 `instr_type_int` 之后，
+        master sequence 才有东西可约束。
+        """
+        tests = [{"dimension": "D_type", "value": "MAC", "key": "d_type",
+                  "int_value": 0, "field": "instr_type"}]
+        dest = _generate(tmp_path, tests)
+        body = list(dest.rglob("*_env_attr_test.sv"))[0].read_text(encoding="utf-8")
+        call = [ln for ln in body.splitlines()
+                if ln.strip().startswith("`GEN_ATTR_TC(")][0]
+        assert call.rstrip().endswith('"instr_type")')
+        assert 'if (tc_field != "")' in body
+        assert '{tc_field, "_int"}' in body
+
+    def test_tp_id_reaches_the_generated_class_comment(self, tmp_path):
+        """生成的类必须自证身份：拿一个 test 类能反查到测试点。"""
+        tests = [{"dimension": "D_type", "value": "MAC", "key": "d_type",
+                  "int_value": 0, "field": "instr_type",
+                  "tp_id": "TP-NPU-D_TYPE-MAC"}]
+        dest = _generate(tmp_path, tests)
+        body = list(dest.rglob("*_env_attr_test.sv"))[0].read_text(encoding="utf-8")
+        assert "测试点：TP-NPU-D_TYPE-MAC" in body
+
+    def test_observation_only_dimension_is_marked(self, tmp_path):
+        """没声明 `stimulus.field` 的维度必须**说清楚**它不建立激励差异。"""
+        tests = [{"dimension": "D_queue", "value": "0", "key": "d_queue",
+                  "int_value": 0}]
+        dest = _generate(tmp_path, tests)
+        body = list(dest.rglob("*_env_attr_test.sv"))[0].read_text(encoding="utf-8")
+        assert "观测型维度" in body
+        assert "stimulus:" in body
+        call = [ln for ln in body.splitlines()
+                if ln.strip().startswith("`GEN_ATTR_TC(")][0]
+        assert call.rstrip().endswith('"")')
+
+
+class TestStimulusBindingValidation:
+    """绑错了字段必须**出声** —— 否则又是一个编译通过、激励全同的死标签。"""
+
+    def _check(self, tests, *, transaction_vars):
+        from src.tools.uvm_tools.tool_uvm.gen_uvm import EnvironmentRenderTask
+
+        class _Probe(EnvironmentRenderTask):
+            def __init__(self):  # 不建 renderer，只调校验
+                pass
+
+        env = EnvironmentModel(name="e", env_name="e",
+                               tests=_normalize_tests(tests))
+        ctx = {"agents": [{"name": "a", "transaction_vars": transaction_vars}]}
+        _Probe()._check_stimulus_bindings(env, ctx)
+
+    def test_unknown_field_is_reported(self, capsys):
+        self._check(
+            [{"dimension": "D_type", "value": "MAC", "field": "instr_typ"}],
+            transaction_vars=[{"name": "instr_type", "is_master": "True"}])
+        out = capsys.readouterr().out
+        assert "instr_typ" in out and "instr_type" in out
+
+    def test_bound_field_is_silent(self, capsys):
+        self._check(
+            [{"dimension": "D_type", "value": "MAC", "field": "instr_type"}],
+            transaction_vars=[{"name": "instr_type", "is_master": "True"}])
+        assert capsys.readouterr().out == ""
+
+    def test_slave_field_is_not_drivable(self, capsys):
+        """slave 字段由从端写回，master sequence 约束不上 —— 绑它同样要报。"""
+        self._check(
+            [{"dimension": "D_rsp", "value": "OK", "field": "rsp_code"}],
+            transaction_vars=[{"name": "rsp_code", "is_master": "False"}])
+        assert "rsp_code" in capsys.readouterr().out
+
+
+class TestConstraintLayerIsWired:
+    """约束层必须**进编译、有人执行** —— 以前 `env/cons/*` 生成了但从未被 include。"""
+
+    CONSTRAINT = """\
+constraint: {name: apb_cons}
+transactions:
+  - {name: apb_master, type: APB_master_seq_item}
+policies:
+  - name: p_backed
+    description: 测试用
+    priority: 10
+    params: []
+    applies_to: [apb_master]
+    dimensions: []
+    assignments:
+      - {trans: apb_master, field: paddr, values: [0, 1], mode: cycle}
+    backed: true
+combinator:
+  default_mode: APPLY_ALL
+  modes: [APPLY_ALL, APPLY_WEIGHTED, APPLY_FIRST_MATCH, APPLY_SEQUENTIAL, APPLY_CHAIN]
+"""
+
+    def _copy_example(self, tmp_path):
+        import shutil
+        src = tmp_path / "in"
+        shutil.copytree(EXAMPLES, src)
+        (src / "constraint.yaml").write_text(self.CONSTRAINT, encoding="utf-8")
+        return src
+
+    def test_without_constraint_there_is_no_cons_include(self, tmp_path):
+        dest = tmp_path / "plain"
+        assert main(["-i", str(EXAMPLES / "apb_env.yaml"), "-d", str(dest), "-q"]) == 0
+        pkg = list(dest.rglob("*_env_pkg.sv"))[0].read_text(encoding="utf-8")
+        assert "cons/" not in pkg
+
+    def test_with_constraint_the_env_pkg_includes_cons(self, tmp_path):
+        src = self._copy_example(tmp_path)
+        dest = tmp_path / "out"
+        assert main(["-i", str(src), "-d", str(dest), "-q"]) == 0
+        pkg = list(dest.rglob("*_env_pkg.sv"))[0].read_text(encoding="utf-8")
+        assert "cons/" in pkg and "_coordinated_sequence.sv" in pkg
+
+    def test_gen_test_executes_the_coordinated_sequence(self, tmp_path):
+        """批次 test set 了 `batch_policy` —— 得有人真的按它跑协调序列。"""
+        src = self._copy_example(tmp_path)
+        dest = tmp_path / "out2"
+        assert main(["-i", str(src), "-d", str(dest), "-q"]) == 0
+        gen = list(dest.rglob("*_gen_test.sv"))[0].read_text(encoding="utf-8")
+        assert "batch_policy" in gen and "_coordinated_sequence" in gen
+
+    def test_models_without_constraints_keep_the_old_gen_test(self, tmp_path):
+        dest = tmp_path / "plain2"
+        assert main(["-i", str(EXAMPLES / "apb_env.yaml"), "-d", str(dest), "-q"]) == 0
+        gen = list(dest.rglob("*_gen_test.sv"))[0].read_text(encoding="utf-8")
+        assert "_coordinated_sequence" not in gen
+
 
 class TestNoTestsRegression:
     """没有 tests: 的工程（apb）产物必须和以前一模一样。"""
@@ -827,6 +971,64 @@ def test_slave_side_signals_are_wire_with_z_default_shadow():
     assert "wire  pslverr;" in text
     assert "logic pslverr_slv = 'z;" in text
     assert "assign pslverr = pslverr_slv;" in text
-    # master 驱动的信号保持普通 logic（不需要影子变量）
-    assert "logic [8-1:0] paddr;" in text
+    # master 驱动的信号保持普通 logic（不需要影子变量），但**要带空闲初值** ——
+    # 见 `test_master_driven_signals_start_at_idle_not_x`：裸 logic 是 X，而 DUT
+    # 在复位释放后的第一个沿就会把它采进寄存器。
+    assert "logic [8-1:0] paddr = '0;" in text
     assert "paddr_slv" not in text
+
+
+def test_master_driven_signals_start_at_idle_not_x():
+    """master 驱动的接口信号**初值必须是空闲值**，不能是 X。
+
+    ## 这条是怎么来的（整轮端到端没跑通的根因）
+
+    裸 `logic` 默认 X。在驱动器开口之前（复位期间、以及复位释放后到第一笔事务
+    之间）这些信号一直是 X，而 DUT 是**连续**读这根线的：
+
+        always_ff @(posedge clk) queue_level <= queue_level + (instr_valid ? 1 : 0) …
+
+    复位释放后的**第一个沿** `instr_valid` 还是 X → 寄存器被锁成 X，此后
+    `X + 1 = X` **再也回不来**（异步复位早已结束）。
+
+    表现：仿真正常跑完、UVM 报告正常打印、vsim 退出码 0，而回归 6/7 红、覆盖率
+    恒 0% —— **从日志上看不出"没人驱动"**，只有把信号 `examine` 出来才看得到
+    满屏的 x。补上初值之后同一轮：回归 29/29、覆盖率 75.2%。
+
+    语义上也该如此：**一个 agent 的输出信号，在它开口之前是"空闲"，不是"未知"**。
+    给初值不与时钟块驱动冲突 —— `logic` 的初值只是上电那一刻的值。
+    """
+    sv = _render_interface()
+    # master 驱动的那条（dir == output）必须有空闲初值
+    assert "logic [8-1:0] paddr = '0;" in sv, \
+        f"paddr（master 驱动）没有空闲初值 —— 它在驱动器开口前是 X：\n{sv[:400]}"
+    # 从端信号仍然是 wire + `_slv = 'z`（那条路径**不能**跟着改：`wire` 要留给
+    # DUT 直连，'z 让位给强驱动，改成初值就把 DUT 的驱动挡住了）
+    assert "wire  [8-1:0] prdata;" in sv
+    assert "logic [8-1:0] prdata_slv = 'z;" in sv
+
+
+class TestRenderedBackdoorTests:
+    """`backdoor_path` 的属性 test 用 `uvm_hdl_force` 采内部状态。"""
+
+    def test_backdoor_test_forces_and_releases_the_path(self, tmp_path):
+        tests = [{"dimension": "D_queue", "value": "7", "key": "d_queue",
+                  "int_value": 7, "tp_id": "TP-NPU-D_QUEUE-7",
+                  "backdoor_path": "tb.dut.queue_level"}]
+        dest = _generate(tmp_path, tests)
+        body = list(dest.rglob("*_env_attr_test.sv"))[0].read_text(encoding="utf-8")
+        assert 'uvm_hdl_force("tb.dut.queue_level", 7)' in body
+        assert 'uvm_hdl_release("tb.dut.queue_level")' in body
+        assert "virtual task main_phase" in body
+        # 不再走普通属性 test 宏（那条只 set config_db）
+        call = [ln for ln in body.splitlines()
+                if ln.strip().startswith("`GEN_ATTR_TC(")]
+        assert call == []
+
+    def test_a_normal_entry_still_uses_the_macro(self, tmp_path):
+        tests = [{"dimension": "D_queue", "value": "7", "key": "d_queue",
+                  "int_value": 7}]
+        dest = _generate(tmp_path, tests)
+        body = list(dest.rglob("*_env_attr_test.sv"))[0].read_text(encoding="utf-8")
+        assert "`GEN_ATTR_TC(" in body
+        assert "uvm_hdl_force" not in body

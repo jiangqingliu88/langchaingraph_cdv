@@ -99,6 +99,19 @@ class SignoffModule(ModuleBase):
         splitter.setStretchFactor(1, 2)
         layout.addWidget(splitter, 1)
 
+        # 测试点口径：**签核按测试点说话，不只看百分比**。
+        # 「可激励命中 / 观测到达 / 未命中」三栏分开 —— 观测型不是缺口。
+        self.tp_label = QLabel("", root)
+        self.tp_label.setWordWrap(True)
+        self.tp_label.setStyleSheet(f"color: {theme.current().muted};")
+        layout.addWidget(self.tp_label)
+
+        # 软缺口：硬门禁过了、但"绿得不够实在"的地方（约束部分生效、TP 未命中等）
+        self.caveat_label = QLabel("", root)
+        self.caveat_label.setWordWrap(True)
+        self.caveat_label.setStyleSheet(f"color: {theme.current().warning};")
+        layout.addWidget(self.caveat_label)
+
         self.count_label = QLabel("", root)
         self.count_label.setStyleSheet(f"color: {theme.current().muted};")
         layout.addWidget(self.count_label)
@@ -170,6 +183,25 @@ class SignoffModule(ModuleBase):
             f"{self.run_id}　verdict={verdict}　"
             f"signoff_status={payload.get('signoff_status') or '?'}　"
             f"回归 {rate}　覆盖率 {cov_text}")
+        self._fill_testpoints(payload.get("testpoints") or {},
+                              payload.get("caveats") or [])
+
+    def _fill_testpoints(self, tp: Dict[str, Any], caveats: List[str]) -> None:
+        """测试点口径 + 软缺口。
+
+        `drivable_hit / drivable` 是**可激励**命中率；观测型单列
+        `observed / observe_only` —— 混在一起会让"不可激励"看起来像"没测"。
+        """
+        if tp:
+            self.tp_label.setText(
+                f"测试点：可激励 {tp.get('drivable_hit', 0)}/{tp.get('drivable', 0)}"
+                f"（{tp.get('drivable_pct', 0)}%）· "
+                f"观测 {tp.get('observed', 0)}/{tp.get('observe_only', 0)} · "
+                f"未命中 {tp.get('missed', 0)}")
+        else:
+            self.tp_label.setText("测试点：这一轮没有 TP IR（没有 case 模型或没跑覆盖率）")
+        self.caveat_label.setText(
+            "；".join(str(c) for c in caveats[:6]) if caveats else "")
 
     def _fill_gates(self, gates: Dict[str, Any]) -> None:
         if not gates.get("available"):
@@ -211,6 +243,8 @@ class SignoffModule(ModuleBase):
         self.verdict_label.setStyleSheet("")
         self.gate_model.set_rows([])
         self.chain_model.set_rows([])
+        self.tp_label.setText("")
+        self.caveat_label.setText("")
         self.count_label.setText("")
 
 

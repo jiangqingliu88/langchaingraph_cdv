@@ -71,7 +71,7 @@ class DecisionBrain:
     def _decide_inner(self, obs, state: str) -> Action:
         # 1. 硬失败 → 规则引擎（确定性）
         if obs.compile_error or obs.model_mismatch or obs.failed_tests:
-            return self.rule_engine.decide(obs)
+            return self._tag(self.rule_engine.decide(obs), "rule_hard")
 
         # 2. 达标 → CONVERGE（规则，非 RL——收敛是确定性的终态）
         cov = obs.coverage or {}
@@ -85,6 +85,7 @@ class DecisionBrain:
                 params={"final_coverage": functional},
                 priority="LOW",
                 reason=f"覆盖率 {functional}% ≥ {self.target}%，收敛",
+                source="terminal",
             )
 
         # 3. 软决策 → RL（有经验）或规则（冷启动）
@@ -94,7 +95,7 @@ class DecisionBrain:
             if action_type == rule_action.action_type:
                 # RL 与规则选到同一个动作：直接用规则的结果，params 是它算好的
                 rule_action.reason += f"（RL 与规则一致，状态 {state}）"
-                return rule_action
+                return self._tag(rule_action, "rule")
             # RL 覆盖规则。此前这里 params={}，导致 RELAX_CONSTRAINT /
             # GENERATE_DIRECTED_TEST 带着**空 gaps** 到达执行层——
             # 「放宽约束」实际什么都没放宽，「定向补测」也没指定目标。
@@ -114,11 +115,11 @@ class DecisionBrain:
                 rule_action.reason += (
                     f"（RL 选了 {action_type}，但当前观测不支持它"
                     f"—— 退回规则动作；RL 只学'选哪个'，判不了'做不做得成'）")
-                return rule_action
+                return self._tag(rule_action, "rl_overridden")
             # **历史已证明无效的动作，有替代就别选它** —— 走规则引擎那一个机制
             # （`with_experience`），不在这里另写一份：另写的那份顺手 import 了
             # `l5_evolution`，而 L3 越级到 L5 是**被层向测试拦下**的（实测抓到）。
-            return self.rule_engine.with_experience(
+            return self._tag(self.rule_engine.with_experience(
                 Action(
                     action_type=action_type,
                     params=self._params_for(action_type, obs, rule_action),
@@ -127,7 +128,7 @@ class DecisionBrain:
                             f"（状态 {state}，已学习 {self.rl_policy.q_entries_for(state)} 条）"),
                 ),
                 self.rule_engine.expand_seeds_action(),
-            )
+            ), "rl_suggested")
 
         # 冷启动（RL 无经验）：先看有没有跨 run 蒸馏出的动作权重
         pick = self._pick_by_weight(obs)
@@ -139,10 +140,26 @@ class DecisionBrain:
                 reason=(f"蒸馏权重优先：{rule_action.action_type} → {pick}"
                         f"（跨 run 学习：该动作历史改善率高，权重 "
                         f"{self.distilled_weights.get(pick, 1.0):.2f}）"),
+                source="rule",
             )
         # 规则引擎选的动作也可能**历史已证明无效** —— 同一道闸门
-        return self.rule_engine.with_experience(
-            rule_action, self.rule_engine.expand_seeds_action())
+        return self._tag(self.rule_engine.with_experience(
+            rule_action, self.rule_engine.expand_seeds_action()), "rule")
+
+    @staticmethod
+    def _tag(action: Any, source: str) -> Any:
+        """给动作**盖上来源** —— 供 L4 按 `(动作, 来源)` 分桶统计。
+
+        `Action` 是不可变语义的 dataclass（可变，但这里就地改一个字段即可）。
+        动作可能为 `None`（规则引擎在某些观测下不产出动作）—— 那时原样返回，
+        调用方照旧判空。
+        """
+        if action is not None:
+            try:
+                action.source = source
+            except Exception:                       # noqa: BLE001 非 Action 就跳过
+                pass
+        return action
 
     @staticmethod
     def _supported_by_observation(action_type: str, obs: Any) -> bool:

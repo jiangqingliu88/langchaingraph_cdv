@@ -83,6 +83,13 @@ dimensions:
     name: 指令队列水位
     description: "REQ-NPU-001：调度器支持 0-32 条指令的队列深度"
     sub_objects: [指令队列管理]
+    # **后门到达**：队列水位是 DUT 内部寄存器，没有输入引脚。靠激励"撞"到
+    # near_full/full 既低效又不保证；用 uvm_hdl_force 把内部状态摆到目标值、
+    # 采完覆盖再 release。签核里单列为 BACKDOOR_HIT，**不冒充激励覆盖**。
+    # 路径 = <bench top>.<DUT 实例>.<内部寄存器>（见 bench/npu_sched_bench_tb_top.sv）。
+    realization:
+      kind: backdoor
+      path: npu_sched_bench_tb_top.u_npu_sched.queue_level
     fields:
       - name: queue_level
         type: range
@@ -119,6 +126,10 @@ dimensions:
         requirement: REQ-NPU-002
         values: ["MAC", "VECTOR", "SCALAR", "DMA"]
         cover_bins: [mac, vector, scalar, dma]
+    # 激励绑定：本维度的取值由事务字段 `instr_type` 承载（seq_item 上的 rand 成员，
+    # 与 RTL 输入端口同名）。没有它，属性 test 只 set 一个没人读的 config_db 键，
+    # 61 个 test 的激励完全相同 —— 历史问题，见 `test_attr.sv.j2` 的注释。
+    stimulus: {field: instr_type}
 
   # ── §3.2 CP_NPU_DTYPE_003 ──
   - id: D_dtype
@@ -135,6 +146,7 @@ dimensions:
         requirement: REQ-NPU-003
         values: ["INT8", "FP16", "BF16", "FP32"]
         cover_bins: [int8, fp16, bf16, fp32]
+    stimulus: {field: instr_dtype}
 
   # ── §3.2 CP_NPU_DEP_004 ──
   - id: D_dep
@@ -234,6 +246,7 @@ dimensions:
                  "VEC_RELU", "LOAD", "STORE", "DMA_READ", "DMA_WRITE"]
         cover_bins: [mac_i8, mac_fp16, mac_bf16, vec_add, vec_mul,
                      vec_relu, load, store, dma_rd, dma_wr]
+    stimulus: {field: instr_opcode}
 
   # ── §3.2 CP_NPU_INSTR_SEQ_009 ──
   - id: D_seq
@@ -284,6 +297,7 @@ dimensions:
         requirement: REQ-NPU-011
         values: ["HIGH_FIRST", "LOW_FIRST", "SAME_PRIO", "ROUND_ROBIN"]
         cover_bins: [high_first, low_first, same_priority, round_robin]
+    stimulus: {field: op_priority}
 
   # ── §3.2 CP_NPU_BARRIER_012 ──
   - id: D_barrier
@@ -300,6 +314,7 @@ dimensions:
         requirement: REQ-NPU-012
         values: ["NONE", "TILE_BARRIER", "OP_BARRIER", "CLUSTER_BARRIER"]
         cover_bins: [no_barrier, tile_barrier, op_barrier, cluster_barrier]
+    stimulus: {field: barrier_type}
 
 # ════════════════════════════════════════════════════════════════
 # §3.3 交叉覆盖

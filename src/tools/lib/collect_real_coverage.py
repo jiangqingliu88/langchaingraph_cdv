@@ -6,6 +6,7 @@
 """
 import os, subprocess, json, sys, re
 import builtins
+from typing import Optional
 from pathlib import Path
 
 from config.settings import questa_exe, questa_home
@@ -272,6 +273,139 @@ def parse_coverage_report(output_dir: Path) -> dict:
     coverage["ucdb_path"] = str(ucdb)
     coverage["report_dir"] = str(report_dir)
     return coverage
+
+
+def merge_regression_coverage(od: Path) -> dict:
+    """把**回归逐用例覆盖率库**合并成一份「计划覆盖率」。
+
+    ## 为什么需要它（这是签核口径的问题，不是工具细节）
+
+    原来的签核覆盖率来自覆盖率阶段**单独跑的一条 test**；而回归实际跑了 244 条
+    用例，每条都 `-coverstore` 落了一份库。两个数字对不上时，签核用的是"另一条
+    测试的覆盖率"—— 既不诚实，也让"补测试"对签核数字没有直接作用。
+
+    这里把 `regression_run/**/cov/*/questa.db` 合并成 `plan_merged.ucdb`，
+    并产出一份 `coverage_cvg_plan.txt` 供解析。签核与 TP 矩阵都改用它。
+
+    ## coverstore 的读法（实测）
+
+    - 有 `<test>.data`：`vcover merge "cov/<store>:<test>"`（cwd=用例目录）；
+    - 只有 `(null).data`（历史 `-testname` 漏传）：`vcover merge "cov/<store>"`
+      —— 带 `:test` 会让 vcover 崩溃。
+    - **spec 必须带一层目录**（`cov/...`）；只写 `<store>:<test>` 会被当成目录名。
+
+    合并是增量的（`-append`），244 条约 20 秒。失败**不抛**：返回 `errors`，
+    调用方保留单测覆盖率并如实记账。
+    """
+    # **全部用绝对路径**：`cwd` + `-inputs` 的相对路径混用时，vcover 会把它
+    # 当成另一份文件（实测 usage error）；绝对路径与手工验证过的命令一致。
+    od = Path(od).resolve()
+    reg_root = od / "regression_run"
+    if not reg_root.is_dir():
+        return {}
+    stores = sorted(reg_root.rglob("cov/*/questa.db"))
+    if not stores:
+        return {}
+    out_dir = od / "sim" / "coverage"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / "plan_merged.ucdb"
+    report_txt = out_dir / "reports" / "coverage_cvg_plan.txt"
+    try:
+        newest = max(p.stat().st_mtime for p in stores)
+        if (out.is_file() and out.stat().st_mtime >= newest
+                and report_txt.is_file()):
+            # **缓存也要把解析结果带回来** —— 只给路径的话调用方拿不到
+            # functional_pct，会误以为"计划覆盖率没生成"。
+            detail = _parse_cvg_text(
+                report_txt.read_text(encoding="utf-8", errors="replace"))
+            return {"ucdb": str(out), "report": str(report_txt),
+                    "stores": len(stores), "merged": len(stores),
+                    "functional_pct": detail.get("functional_pct", 0.0),
+                    "functional_detail": detail, "cached": True,
+                    "errors": [], "warnings": []}
+    except OSError:
+        pass
+
+    vcover = questa_exe("vcover.exe")
+    if not os.path.exists(vcover):
+        return {"error": f"vcover not found: {vcover}", "stores": len(stores)}
+
+    # **一条命令合并全部输入**（而不是逐条 `-append`）。
+    #
+    # 逐条 append 时 vcover 会在同一个输出文件上反复建/删锁；前一次锁没释放，
+    # 下一条就报 "DB file ... in write mode"（实测）。一次给全量输入没有这个问题，
+    # 也快得多（244 条约 20 秒）。
+    #
+    # spec 用**相对运行根**的路径（`regression_run/.../cov/<test>[:<test>]`）：
+    # 绝对路径里的盘符冒号会和 coverstore 的 `store:test` 分隔符冲突。
+    tmp = out.with_name("plan_merged_build.ucdb")
+    # 清掉上一次中断留下的临时库 / 锁（vcover 对残留锁会拒绝写）
+    for junk in (tmp, Path(str(tmp) + "._lock"),
+                 Path(str(tmp) + ".questatmp")):
+        try:
+            junk.unlink()
+        except OSError:
+            pass
+    specs = []
+    for db in stores:
+        store = db.parent
+        data = sorted(store.glob("*.data"))
+        stem = (data[0].stem if len(data) == 1
+                else (store.name if not data else
+                      max(data, key=lambda x: x.stat().st_mtime).stem))
+        null_test = (not stem) or stem in ("(null)", "null")
+        try:
+            rel = store.relative_to(od).as_posix()
+        except ValueError:
+            continue
+        specs.append(rel if null_test else f"{rel}:{stem}")
+    errors = []
+    warnings = []
+    merged = 0
+    if specs:
+        # **用 `-inputs <cmdfile>`**：244 条 spec 直接上命令行会超过 Windows 的
+        # 命令行长度上限（实测 `[WinError 206] 文件名或扩展名太长`）。
+        cmdfile = out_dir / "plan_merge_inputs.txt"
+        try:
+            cmdfile.write_text("\n".join(specs) + "\n", encoding="utf-8")
+            proc = subprocess.run([vcover, "merge", "-inputs", str(cmdfile), str(tmp)],
+                                  cwd=str(od), capture_output=True, text=True,
+                                  errors="replace", timeout=600)
+        except (OSError, subprocess.SubprocessError) as e:
+            errors.append(str(e))
+            proc = None
+        if proc is not None:
+            if proc.returncode != 0 or not tmp.is_file():
+                errors.append(((proc.stdout or "") + (proc.stderr or "")).strip()[-300:])
+            else:
+                merged = len(specs)
+                # "Design hierarchy mismatch" 是**代码覆盖率**的合并告警
+                # （loopback TB 与 DUT TB 的层次不同，属正常）；功能覆盖照样合并。
+                # 不当错误处理，只留在 warnings 里供报告引用。
+                tail = ((proc.stdout or "") + (proc.stderr or "")).strip()
+                if "Design hierarchy mismatch" in tail:
+                    warnings.append("部分用例的代码覆盖层次不同（loopback vs DUT），"
+                                    "功能覆盖已合并；代码覆盖按层次跳过")
+
+    if not tmp.is_file():
+        return {"stores": len(stores), "merged": merged, "errors": errors}
+    tmp.replace(out)
+
+    detail = {}
+    try:
+        r = subprocess.run([vcover, "report", "-cvg", "-details", str(out)],
+                           capture_output=True, text=True, errors="replace",
+                           timeout=180)
+        report_txt.parent.mkdir(parents=True, exist_ok=True)
+        report_txt.write_text(r.stdout or "", encoding="utf-8", errors="replace")
+        detail = _parse_cvg_text(r.stdout or "")
+    except (OSError, subprocess.SubprocessError) as e:
+        errors.append(f"report: {e}")
+    return {"ucdb": str(out), "report": str(report_txt),
+            "stores": len(stores), "merged": merged,
+            "functional_pct": detail.get("functional_pct", 0.0),
+            "functional_detail": detail, "errors": errors,
+            "warnings": warnings}
 
 
 def _discover_dut_name(output_dir: Path) -> str:
@@ -602,6 +736,42 @@ def run(output_dir: str, top_module: str = "", seed: int = 0) -> dict:
         coverage = parse_coverage_report(od)
         result["coverage"] = coverage
         result["status"] = "PASS"
+
+        # ── 签核口径：**计划覆盖率**（回归逐用例库合并）──
+        #
+        # 上面那份是"覆盖率阶段单独跑的一条 test"；签核实际该看的是**回归计划
+        # 跑过的全部用例**。两件事必须分开记，不能悄悄换掉：
+        #   functional_pct            ← 计划覆盖率（签核门禁用这个）
+        #   single_test_functional_pct ← 单测覆盖率（对照用）
+        plan = merge_regression_coverage(od)
+        if plan.get("ucdb") and plan.get("functional_detail"):
+            coverage["single_test_functional_pct"] = coverage.get("functional_pct")
+            coverage["single_test_detail"] = coverage.get("functional_detail")
+            coverage["functional_pct"] = plan.get("functional_pct", 0.0)
+            coverage["functional_detail"] = plan.get("functional_detail") or {}
+            coverage["plan_ucdb"] = plan["ucdb"]
+            coverage["plan_stores"] = plan.get("stores", 0)
+            coverage["plan_merge_errors"] = plan.get("errors") or []
+            coverage["tp_report"] = plan.get("report", "")
+            result["plan_coverage"] = {
+                "functional_pct": plan.get("functional_pct", 0.0),
+                "stores": plan.get("stores", 0),
+                "merged": plan.get("merged", 0),
+                "ucdb": plan["ucdb"],
+                "report": plan.get("report", ""),
+                "errors": plan.get("errors") or [],
+                "warnings": plan.get("warnings") or [],
+                "single_test_pct": coverage["single_test_functional_pct"],
+            }
+            print(f"[coverage] 计划覆盖率（{plan.get('merged', 0)}/"
+                  f"{plan.get('stores', 0)} 条用例库合并）："
+                  f"{plan.get('functional_pct', 0.0):.2f}%"
+                  f"（单测 {coverage['single_test_functional_pct']}%）")
+        else:
+            coverage["plan_merge_errors"] = plan.get("errors") or plan.get("error") or []
+            if plan:
+                print(f"[coverage] 计划覆盖率合并未完成："
+                      f"{coverage['plan_merge_errors'][:2] or plan}")
     else:
         result["status"] = sim_result.get("status", "FAIL")
 
@@ -617,6 +787,27 @@ def run(output_dir: str, top_module: str = "", seed: int = 0) -> dict:
     # 与 `infrastructure.archive_coverage()` 的 `{sha256, size}` 同一套形状。
     result["artifacts"] = _artifact_manifest(sim_result)
 
+    result["artifacts"] = _artifact_manifest(sim_result)
+
+    # ── 测试点矩阵：**覆盖缺口归因到测试点** ──
+    #
+    # 有 `coverage/testpoints.yaml` 才产（verify 从 case 模型生成）。矩阵回答的
+    # 是以前答不出的那个问题："这个 bin 没打中，是哪条测试点没被激励/没跑到？"
+    # 没有它时，缺口只按 coverpoint 百分比列出来 —— 而一个 coverpoint 可能对应
+    # 十几个测试点，人得自己去猜。
+    tp = _tp_matrix(od, result.get("coverage") or {})
+    if tp:
+        result["tp_matrix"] = tp
+        _write_tp_matrix(od, tp)
+
+    # ── 语义自述：把"绿但空"的中间态写成结构化字段 ──
+    #
+    # 覆盖率数字好看**不等于**量到了该量的东西：ucdb 落了库而 bin 一个没命中、
+    # 约束生成了而策略体是空壳 —— 这些都是"PASS 但没生效"。以前它们只散落在
+    # 日志与人的记忆里，audit 门禁看不见。这个块把结论显式化，供门禁判
+    # `PASS_WITH_CAVEAT`。见下面那个函数的 docstring。
+    result["semantic_validations"] = _semantic_validations(od, result)
+
     # 保存结果
     cov_json = od / "sim" / "coverage" / "coverage_result.json"
     cov_json.parent.mkdir(parents=True, exist_ok=True)
@@ -624,6 +815,276 @@ def run(output_dir: str, top_module: str = "", seed: int = 0) -> dict:
                         encoding="utf-8", errors="replace")
     print(f"[coverage] Results saved to {cov_json}")
     return result
+
+
+# ════════════════════════════════════════════════════════════
+# 测试点 × 覆盖仓 矩阵
+# ════════════════════════════════════════════════════════════
+
+def _parse_cvg_bin_hits(text: str) -> dict:
+    """`vcover -cvg -details` → `{covergroup: {coverpoint: {bin: hits}}}`。
+
+    只扫**第一段**（`COVERGROUP COVERAGE:` 之前）—— 那段的 `TYPE` 行下带着
+    逐 bin 的命中数；第二段只有 covergroup 级百分比。两段都扫会把同一个 bin
+    收两遍（见 `_parse_cvg_details` 的注释）。
+    """
+    out: dict = {}
+    head = text.find("COVERGROUP COVERAGE:")
+    seg = text[:head] if head >= 0 else text
+    cg = cp = ""
+    for ln in seg.splitlines():
+        m = re.match(r"\s*TYPE\s+(\S+)\s*$", ln)
+        if m:
+            cg = m.group(1).rstrip("/").split("/")[-1]
+            out.setdefault(cg, {})
+            cp = ""
+            continue
+        m = re.match(r"\s*Coverpoint\s+(\S+)\s+", ln)
+        if m:
+            cp = m.group(1)
+            if cg:
+                out[cg].setdefault(cp, {})
+            continue
+        m = re.match(r"\s*(?:illegal_)?bin\s+(\S+)\s+(\d+)", ln)
+        if m and cg and cp:
+            name, hits = m.group(1), int(m.group(2))
+            bins = out[cg][cp]
+            # 同一 bin 在段内只出现一次；重复时取最大（防御性，不累加）
+            bins[name] = max(bins.get(name, 0), hits)
+    return out
+
+
+def _read_testpoints(od: Path) -> list:
+    """读 `coverage/testpoints.yaml`（verify 落的测试点 IR）。没有就空。"""
+    p = od / "coverage" / "testpoints.yaml"
+    try:
+        import yaml as _yaml
+        doc = _yaml.safe_load(p.read_text(encoding="utf-8", errors="replace")) or {}
+    except (OSError, ValueError):
+        return []
+    tps = doc.get("testpoints") if isinstance(doc, dict) else None
+    return tps if isinstance(tps, list) else []
+
+
+def _lookup_hits(hits: dict, cp_name: str, bin_name: str) -> Optional[int]:
+    """`(coverpoint, bin)` → 命中数；**报告里根本没有这一格时返回 `None`**。
+
+    `None` 与 `0` 是两件事：
+      · `0`      —— 仓声明了、这次没命中（该补激励）；
+      · `None`   —— 报告里压根没有这个仓（模型/生成漂了，该修模型或生成器）。
+    把后者记成 0 会让人去补一条**打不中**的用例。
+
+    **优先 DUT 探针那个 covergroup**：`cg_dut` 用的是模型声明的仓名；env_cov 的
+    事务通道用的是 `v_zero/v_one/v_rest` 这类自动仓。同一个 `cp_<字段>` 两边都有，
+    但只有探针那边的 bin 名能和测试点对上 —— 所以先找 `cg_dut`，再全找。
+    """
+    if not cp_name or not bin_name:
+        return None
+    order = sorted(hits, key=lambda g: (not g.startswith("cg_dut"), g))
+    for cg in order:
+        v = (hits[cg].get(cp_name) or {}).get(bin_name)
+        if v is not None:
+            return v
+    return None
+
+
+def _tp_matrix(od: Path, coverage: dict) -> dict:
+    """测试点 × 覆盖仓 → 命中/缺口矩阵。
+
+    状态（**四态，不把"没激励"混进"没覆盖"**）：
+
+        HIT         激励型测试点，它的仓命中了
+        MISS        激励型测试点，仓一个都没中
+        OBSERVED    观测型测试点，仓命中了（没有激励差异，但状态确实到达过）
+        UNOBSERVED  观测型测试点，仓没命中
+        UNMAPPED    模型给的 `coverpoint.bin` 在报告里找不到（模型/生成漂了）
+    """
+    tps = _read_testpoints(od)
+    if not tps:
+        return {}
+
+    # **优先用计划覆盖率报告**（回归全量用例合并）—— 单测报告只代表一条 test，
+    # 拿它给 63 条测试点判命中会把"没跑过的仓"报成 MISS（其实只是那条 test 没打到）。
+    report = (Path(str(coverage["tp_report"]))
+              if coverage.get("tp_report")
+              else Path(str(coverage.get("report_dir") or "")) / "coverage_cvg.txt")
+    try:
+        text = report.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {"error": f"读不到 {report}", "total": len(tps)}
+
+    hits = _parse_cvg_bin_hits(text)
+    rows, counts = [], {"HIT": 0, "MISS": 0, "OBSERVED": 0, "UNOBSERVED": 0,
+                        "BACKDOOR_HIT": 0, "BACKDOOR_MISS": 0, "UNMAPPED": 0}
+    for tp in tps:
+        if not isinstance(tp, dict):
+            continue
+        cp_name = str(tp.get("coverpoint") or "")
+        bin_name = str(tp.get("bin") or "")
+        observe = bool(tp.get("observe_only"))
+        kind = str((tp.get("realization") or {}).get("kind") or "")
+        if not kind:
+            kind = "observe" if observe else "stimulus"
+        is_backdoor = kind == "backdoor"
+        n = _lookup_hits(hits, cp_name, bin_name)
+        if n is None:
+            # 报告里没有这一格：**判不了**，不是"没命中"
+            status, n = "UNMAPPED", 0
+        elif n > 0:
+            status = "BACKDOOR_HIT" if is_backdoor else ("OBSERVED" if observe else "HIT")
+        else:
+            status = "BACKDOOR_MISS" if is_backdoor else ("UNOBSERVED" if observe else "MISS")
+        counts[status] = counts.get(status, 0) + 1
+        rows.append({
+            "tp_id": tp.get("tp_id"),
+            "dimension": tp.get("dimension"),
+            "value": tp.get("value"),
+            "coverpoint": cp_name,
+            "bin": bin_name,
+            "hits": n,
+            "kind": kind,
+            "observe_only": observe,
+            "status": status,
+            "requirement": tp.get("requirement"),
+            "stage": ((tp.get("execution") or {}).get("stage") or ""),
+        })
+
+    # **三类分开算**：激励 / 后门 / 观测。后门命中不能冒充"激励覆盖"。
+    drivable = sum(1 for r in rows if r["kind"] in ("stimulus", "sequence"))
+    drivable_hit = sum(1 for r in rows
+                       if r["kind"] in ("stimulus", "sequence") and r["hits"] > 0)
+    backdoor = sum(1 for r in rows if r["kind"] == "backdoor")
+    backdoor_hit = sum(1 for r in rows if r["kind"] == "backdoor" and r["hits"] > 0)
+    observed = sum(1 for r in rows if r["kind"] == "observe" and r["hits"] > 0)
+    return {
+        "total": len(rows),
+        "counts": counts,
+        "drivable": drivable,
+        "drivable_hit": drivable_hit,
+        "drivable_pct": round(100.0 * drivable_hit / drivable, 2) if drivable else 0.0,
+        "backdoor": backdoor,
+        "backdoor_hit": backdoor_hit,
+        "backdoor_pct": round(100.0 * backdoor_hit / backdoor, 2) if backdoor else 0.0,
+        "observe_only": sum(1 for r in rows if r["kind"] == "observe"),
+        "observed": observed,
+        "missed": [r for r in rows
+                   if r["status"] in ("MISS", "UNOBSERVED", "BACKDOOR_MISS")],
+        "unmapped": [r for r in rows if r["status"] == "UNMAPPED"],
+        "rows": rows,
+    }
+
+
+def _write_tp_matrix(od: Path, matrix: dict) -> None:
+    """把矩阵落到 `coverage/tp_matrix.json` —— 签核材料的一部分。"""
+    p = od / "coverage" / "tp_matrix.json"
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(matrix, ensure_ascii=False, indent=2),
+                     encoding="utf-8")
+    except OSError as e:
+        print(f"[coverage] 测试点矩阵落盘失败: {e}")
+
+
+def _semantic_validations(od: Path, result: dict) -> dict:
+    """`semantic_validations` —— 「这一步产出的数字到底有没有意义」。
+
+    回答三个此前没人回答的问题，每个都对应一类**看着绿、其实空**的中间态：
+
+        ucdb_nonzero_bins        库落了，可有一个 bin 被命中吗？
+        cg_dut_hit_gt_zero       DUT 侧的 covergroup（内部信号/输出端口）真采到了吗？
+        constraint_policy_applied 约束生成了，可 `apply()` 真的做事吗？
+
+    ## 三值而不是两值
+
+    `None` = **没测/测不了**，与 `False` = 测了、结论是"没生效"**必须分开**。
+    混成一个的话，"这次没跑覆盖率"会被读成"覆盖率是空的"，而前者不是问题、
+    后者是。整块读不到时整个键不出现（与 `_artifact_manifest` 同一条纪律）。
+
+    `constraint_policy_applied` **读生成期落下的 `coverage/constraint_status.json`**，
+    不去抓仿真日志 —— 策略体落 `default:` 是运行期分支，而那条 `uvm_info` 是
+    `UVM_HIGH`，默认 verbosity 下根本不打（`sim.sh` 里也没有 `+UVM_VERBOSITY`）。
+    生成期本来就知道答案，抓日志是舍近求远且抓不到。
+    """
+    notes: list = []
+    cov = result.get("coverage") or {}
+    cvg = cov.get("functional_detail") or {}
+
+    bin_hits = int(cvg.get("bin_hits") or 0)
+    bin_total = int(cvg.get("bin_total") or 0)
+    ucdb_nonzero = (bin_hits > 0) if bin_total else None
+    if ucdb_nonzero is False:
+        notes.append(f"ucdb 落了库但**一个 bin 都没命中**（0/{bin_total}）—— "
+                     f"覆盖率数字没有意义，检查仿真是否真跑到 DUT")
+    elif ucdb_nonzero is None:
+        notes.append("没拿到 bin 命中数（没跑覆盖率或解析失败）—— 判不了")
+
+    # DUT 侧那个 covergroup 单独看：它采的是**内部状态与输出端口**，
+    # 事务通道（`cg_<agent>`）采不到那些。它零命中而事务侧有命中，说明
+    # bind 探针没接上（覆盖率数字会虚高）。
+    cg_dut_actual = None
+    for g in (cvg.get("covergroups") or []):
+        if "cg_dut" in str(g.get("name") or ""):
+            cg_dut_actual = float(g.get("actual") or 0.0)
+            break
+    if cg_dut_actual is None:
+        notes.append("没有 `cg_dut`（这次没用 `sample: dut` 的覆盖点）")
+    elif cg_dut_actual <= 0:
+        notes.append("`cg_dut` 零命中 —— DUT 探针可能没挂上"
+                     "（bind 接口 / config_db 句柄），内部状态与输出端口一个都没采到")
+
+    # 约束：**生成期**的结论，读 verify 落下的状态文件
+    cpa = None
+    status_file = od / "coverage" / "constraint_status.json"
+    if status_file.is_file():
+        try:
+            st = json.loads(status_file.read_text(encoding="utf-8", errors="replace"))
+            cpa = bool(st.get("constraint_policy_applied"))
+            if not cpa:
+                _backed = st.get("backed_policy_count")
+                _total = st.get("policy_count")
+                if isinstance(_backed, int) and isinstance(_total, int) and _backed:
+                    notes.append(
+                        f"约束只部分生效：{_backed}/{_total} 条策略由模型编译出"
+                        f"真实赋值，其余 {st.get('unbacked_policy_count', _total - _backed)} "
+                        f"条仍落在 `default:` 分支（维度不可驱动）")
+                else:
+                    notes.append(
+                        f"约束未激活：{st.get('unbacked_policy_count', 0)} 条策略的 "
+                        f"apply() 落在 `default:` 分支、不做任何事"
+                        f"（{st.get('note') or '策略体是空骨架'}）")
+        except (OSError, ValueError):
+            notes.append("约束状态文件读不出来 —— 判不了")
+    else:
+        notes.append("没有约束状态文件（这一轮没生成约束模型）")
+
+    # 测试点：**每一个覆盖缺口都能归因到一条 tp_id** 才算"量到了该量的东西"。
+    # 没有 TP IR 时是 `None`（这一轮没建模），不是 `False`（建模了但有断点）。
+    tp_matrix = result.get("tp_matrix") or {}
+    tp_traced = None
+    if tp_matrix:
+        tp_traced = not bool(tp_matrix.get("unmapped"))
+        if tp_matrix.get("unmapped"):
+            notes.append(
+                f"{len(tp_matrix['unmapped'])} 条测试点的覆盖仓在报告里找不到 —— "
+                f"模型与生成的覆盖率模型漂了（见 coverage/tp_matrix.json 的 unmapped）")
+        missed = tp_matrix.get("missed") or []
+        if missed:
+            notes.append(
+                f"{len(missed)} 条测试点的仓未命中"
+                f"（激励型 {tp_matrix.get('drivable', 0)} 条中命中 "
+                f"{tp_matrix.get('drivable_hit', 0)} 条，"
+                f"{tp_matrix.get('drivable_pct', 0)}%）—— 逐条见 tp_matrix.json")
+
+    return {
+        "ucdb_nonzero_bins": ucdb_nonzero,
+        "cg_dut_hit_gt_zero": (cg_dut_actual > 0) if cg_dut_actual is not None else None,
+        "constraint_policy_applied": cpa,
+        "testpoints_traced": tp_traced,
+        # **`None` 不是 `False`**：种子有没有真的改变激励分布，要拿各批次的 ucdb
+        # 逐 bin 比对才知道 —— 那是另一件事，没做就是没做，不能默认成"已验证"。
+        "seed_diversity_verified": None,
+        "notes": notes,
+    }
 
 
 def _artifact_manifest(sim_result: dict) -> dict:

@@ -1,4 +1,4 @@
-"""case 建模模块 —— Qt 模型、自绘控件、11 个页面的构建与填充。
+"""case 建模模块 —— Qt 模型、自绘控件、12 个页面的构建与填充。
 
 原在 `src/tools/casemodel_tools/tests/test_gui.py`。第二轮把界面搬进工作台时
 一并迁过来：**工具包现在是纯工具，测试不需要 Qt**；界面测试归界面。
@@ -165,7 +165,7 @@ def test_issue_panel_shows_summary(qt_app):
 # ════════════════════════════════════════════════════════════
 
 def test_module_has_one_page_per_registered_page(casemodel):
-    assert casemodel.tabs.count() == len(PAGES) == 11
+    assert casemodel.tabs.count() == len(PAGES) == 12
     for i, page_cls in enumerate(PAGES):
         assert casemodel.tabs.tabText(i) == page_cls.TITLE
         assert page_cls.TITLE in casemodel.pages
@@ -173,6 +173,38 @@ def test_module_has_one_page_per_registered_page(casemodel):
 
 def test_editor_is_first_page(casemodel):
     assert casemodel.tabs.tabText(0) == "编辑 YAML"
+
+
+def test_testpoints_page_renders_the_framework_ir(casemodel):
+    """测试点页 = 框架 IR 的只读视图：一条取值点一行，带实现方式与覆盖仓。"""
+    page = casemodel.pages["测试点"]
+    assert page.model.rowCount() > 0
+    assert page.model.rowCount() == len(page._tps)
+    assert "signoff-methodology" in page.summary.text()
+    first = page.model.row_at(0)
+    assert first["tp_id"].startswith("TP-")
+    assert first["realization"]          # observe / stimulus / sequence 至少有一个
+    assert first["stage"] in ("p0", "p1", "p2", "p3")
+
+
+def test_testpoints_page_merges_the_selected_run_matrix(casemodel, tmp_path):
+    """选中运行后，状态列来自 `coverage/tp_matrix.json` —— 不是编的。"""
+    import json
+
+    page = casemodel.pages["测试点"]
+    tp = page._tps[0]
+    run = tmp_path / "run"
+    (run / "coverage").mkdir(parents=True)
+    (run / "coverage" / "tp_matrix.json").write_text(json.dumps({
+        "rows": [{"tp_id": tp.tp_id, "status": "HIT", "hits": 3}],
+    }, ensure_ascii=False), encoding="utf-8")
+
+    casemodel._run_dir = str(run)
+    page.refresh(casemodel.result)
+
+    row = page.model.row_at(0)
+    assert row["status"] == "HIT" and row["hits"] == 3
+    assert "本次运行" in page.summary.text()
 
 
 def test_module_titles_its_tab_with_the_open_file(casemodel, casemodel_window):

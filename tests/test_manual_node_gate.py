@@ -268,3 +268,68 @@ class TestArtifactCollection:
 
         assert _approval_artifacts(
             PipelineState(run_id="r", output_root=str(tmp_path / "nope"))) == []
+
+
+class TestAutoApprovalBeatsTheInterruptMechanism:
+    """`--approval auto` 必须**赢过** interrupt 机制 —— 否则 CI 会被自己的审批拦住。
+
+    ## 这是实测踩出来的
+
+    `verify` 改走 `run_closed_loop_streaming`（为落检查点）之后，
+    `--checkpoint` 默认开 → `rt.interrupt_mode` 为真。而 `n_approval` 原来
+    **只判 `interrupt_mode`**，于是**每一个**高危动作都会停下来等人 ——
+    包括 CI 显式写 `--approval auto`（无人值守）的那些。
+
+    实测：`verify --rtl specs/npu_sched --no-manual-gate --approval auto`
+    跑到 `FIX_FUNCTIONAL_bug` 停住，`auto` 等于没写。**无人值守模式被人为打断，
+    是"可治理"那一支柱里最不该出现的一种失败**。
+
+    判据交给门控自己的 `requires_approval`（AUTO → `False`）：**该不该问**是
+    门控的事，节点只决定"问"用哪种机制。
+    """
+
+    def _state(self):
+        from src.layers.l2_orchestration.state import PipelineState
+
+        state = PipelineState(run_id="r", output_root="")
+        state.pending_action = {"action_type": "FIX_FUNCTIONAL_bug", "reason": "改了 RTL"}
+        return state
+
+    def test_auto_mode_does_not_interrupt_even_with_checkpointing(self, monkeypatch):
+        from src.layers.l2_orchestration.graph import n_approval
+        from src.layers.l2_orchestration.governance.approval import (
+            ApprovalMode, ApprovalGate, AutoChannel,
+        )
+
+        rt = _RT(ApprovalGate(mode=ApprovalMode.AUTO,
+                              channel=AutoChannel(ApprovalDecision.APPROVE)))
+        rt.interrupt_mode = True          # 有检查点（verify 的默认）
+        # 真去 interrupt 的话这里会抛 —— 那条路径在测试里没有 checkpointer
+        monkeypatch.setattr("langgraph.types.interrupt",
+                            lambda payload: pytest.fail(
+                                f"auto 模式下不该停下来等人：{payload}"))
+        out = asyncio.run(n_approval(self._state(), {"configurable": {"rt": rt}}))
+        assert out["approval_outcome"] == "proceed", (
+            "auto 模式没放行 —— 无人值守的 CI 会被自己的审批拦住")
+
+    def test_threshold_mode_still_interrupts_a_high_risk_action(self, monkeypatch):
+        """反过来：**该问的还得问** —— 修 auto 不等于把审批一起关掉。"""
+        from src.layers.l2_orchestration.graph import n_approval
+        from src.layers.l2_orchestration.governance.approval import (
+            ApprovalMode, ApprovalGate, CallbackChannel,
+        )
+
+        rt = _RT(ApprovalGate(mode=ApprovalMode.THRESHOLD,
+                              channel=CallbackChannel(lambda r: ApprovalDecision.APPROVE)))
+        rt.interrupt_mode = True
+        called = {}
+
+        def _fake_interrupt(payload):
+            called["payload"] = payload
+            return "approve"          # 模拟"人来答了"
+
+        monkeypatch.setattr("langgraph.types.interrupt", _fake_interrupt)
+        out = asyncio.run(n_approval(self._state(), {"configurable": {"rt": rt}}))
+        assert "payload" in called, "高危动作在 threshold 模式下没停下来问"
+        assert called["payload"]["stage"] == "FIX_FUNCTIONAL_bug"
+        assert out["approval_outcome"] == "proceed"

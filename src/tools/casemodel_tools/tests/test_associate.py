@@ -327,12 +327,50 @@ class TestTheConstraintProducer:
         doc = yaml.safe_load(p["constraint_yaml"])
         assert set(doc) == {"constraint", "transactions", "policies", "combinator"}
         assert set(doc["policies"][0]) == {"name", "description", "priority",
-                                           "params", "applies_to", "dimensions"}
+                                           "params", "applies_to", "dimensions",
+                                           "assignments", "backed"}
         assert doc["combinator"] == p["combinator"]
         # 策略名要能进 SV：ASCII
         assert doc["policies"][0]["name"].isascii()
         assert doc["constraint"]["name"].endswith("_cons")
         assert doc["constraint"]["name"].isascii()
+
+    def test_an_observe_only_model_has_no_assignments(self):
+        """没有 `stimulus.field` 的维度驱动不了 —— 策略如实标成骨架。"""
+        p = build_constraint(CASES, self.PORTS)
+        assert p["backed_policy_count"] == 0
+        assert p["unbacked_policy_count"] == p["policy_count"]
+        assert p["policies"][0]["assignments"] == []
+        assert p["policies_are_skeletons"] is True
+
+    def test_a_drivable_dimension_compiles_into_assignments(self):
+        """`stimulus.field` + agent 字段 → `apply()` 里的真实赋值。
+
+        这是"约束有没有在约束"从布尔声明变成**可执行代码**的那一步。
+        """
+        cases = CASES.replace(
+            "        cover_bins: [cp_mac, cp_vec, cp_scl, cp_dma]",
+            "        cover_bins: [cp_mac, cp_vec, cp_scl, cp_dma]\n"
+            "    stimulus: {field: instr_type}")
+        p = build_constraint(cases, self.PORTS,
+                             agent_fields={"apb_master": ["instr_type"]})
+        pol = p["policies"][0]
+        assert pol["backed"] is True
+        assert pol["assignments"] == [{
+            "trans": "apb_master", "field": "instr_type",
+            "values": [0, 1, 2, 3], "mode": "cycle"}]
+        assert p["backed_policy_count"] == 1
+        assert p["policies_are_skeletons"] is False
+
+    def test_a_field_that_belongs_to_no_agent_is_reported_not_guessed(self):
+        cases = CASES.replace(
+            "        cover_bins: [cp_mac, cp_vec, cp_scl, cp_dma]",
+            "        cover_bins: [cp_mac, cp_vec, cp_scl, cp_dma]\n"
+            "    stimulus: {field: instr_typo}")
+        p = build_constraint(cases, self.PORTS,
+                             agent_fields={"apb_master": ["instr_type"]})
+        assert p["policies"][0]["assignments"] == []
+        assert any("instr_typo" in n for n in p["notes"])
 
     def test_the_generated_yaml_passes_the_association_edges(self):
         """**闭环**：生产者的产物喂回校验器，③④ 一条都不该报。"""

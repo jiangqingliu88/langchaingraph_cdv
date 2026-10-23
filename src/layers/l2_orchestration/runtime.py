@@ -162,7 +162,14 @@ async def _run_agent(rt: Runtime, state: PipelineState, role: str, label: str,
 
     _eda = 1 if role in ("ops", "coverage") else 0
     try:
-        result = await agent.execute_task(task)
+        # **LLM 出处埋点**：这里是整条链上**唯一同时看得见 `state` 与 `task`**
+        # 的地方（`call_llm` 在下面四层，只有三个 str 参数）。把 label / 轮次 /
+        # run 目录钉进 contextvar，`call_llm` 沿调用链读回来，审计就能答
+        # "这一行 RTL 是哪一轮、哪个节点催出来的"。
+        from src.layers.l2_orchestration.context.llm_origin import origin_scope
+
+        with origin_scope(label, state.round_num, state.output_root):
+            result = await agent.execute_task(task)
         # 失败时也保留 data（含 regression 的 failed 详情），供回归门控决策
         data = result.data if isinstance(result.data, dict) else {}
         score = data.get("score", 0)

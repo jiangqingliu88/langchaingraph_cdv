@@ -168,3 +168,30 @@ class TestFailureIsLoud:
     def test_never_raises(self):
         for bad in ("", "nope", "\x00"):
             assert isinstance(run_signoff(bad), dict)
+
+
+class TestTestpointsSummary:
+    """签核页的测试点口径 —— 由 audit 写进 `report.json`，这里只透传。"""
+
+    def _with_tp(self, tmp_path: Path) -> str:
+        report = dict(REPORT)
+        report["testpoints"] = {"total": 63, "drivable": 26, "drivable_hit": 16,
+                                "drivable_pct": 61.54, "observe_only": 37,
+                                "observed": 25, "missed": 22, "unmapped": 0}
+        report["caveats"] = ["约束只部分生效：5/11 条策略有真实赋值"]
+        root = Path(_run_dir(tmp_path, chain=False))
+        (root / "report.json").write_text(json.dumps(report, ensure_ascii=False),
+                                          encoding="utf-8")
+        return str(root)
+
+    def test_summary_and_caveats_are_passed_through(self, tmp_path):
+        result = run_signoff(self._with_tp(tmp_path))
+        assert result["testpoints"]["drivable_hit"] == 16
+        assert result["testpoints"]["drivable_pct"] == 61.54
+        assert result["caveats"] == ["约束只部分生效：5/11 条策略有真实赋值"]
+
+    def test_an_old_report_has_empty_summary_not_a_fake_one(self, tmp_path):
+        """老 run 没有这个字段 —— 如实给空，不编一个"全过"。"""
+        result = run_signoff(_run_dir(tmp_path))
+        assert result["testpoints"] == {}
+        assert result["caveats"] == []

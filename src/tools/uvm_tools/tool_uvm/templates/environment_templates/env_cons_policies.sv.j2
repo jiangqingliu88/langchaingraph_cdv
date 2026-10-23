@@ -1,15 +1,15 @@
 {% include "base_templates/base_template.sv.j2" %}
 
-// {{ project.name }}_constraint_policies.sv
+// {{ environment.env_name }}_constraint_policies.sv
 // 自动生成的具体策略实现
 
-`include "{{ project.env_name }}_constraint_policy.sv"
+`include "{{ environment.env_name }}_constraint_policy.sv"
 
 {% for policy in policies %}
 // ============================================================
 // {{ policy.name }}: {{ policy.description }}
 // ============================================================
-class {{ policy.name }}_policy extends {{ project.env_name }}_constraint_policy;
+class {{ policy.name }}_policy extends {{ environment.env_name }}_constraint_policy;
   `uvm_object_utils({{ policy.name }}_policy)
   
 {% for param in policy.params %}
@@ -35,7 +35,7 @@ class {{ policy.name }}_policy extends {{ project.env_name }}_constraint_policy;
   function new(string name = "{{ policy.name }}_policy");
     super.new(name);
     policy_name = "{{ policy.name }}";
-    priority = {{ policy.priority }};
+    policy_priority = {{ policy.priority }};
     
 {% for param in policy.params %}
     // 初始化参数
@@ -53,7 +53,7 @@ class {{ policy.name }}_policy extends {{ project.env_name }}_constraint_policy;
 {% endfor %}
   endfunction
   
-  virtual function void apply(ref {{ project.env_name }}_policy_context ctx);
+  virtual function void apply(ref {{ environment.env_name }}_policy_context ctx);
     if (!enabled) return;
     
 {% for trans in policy.applies_to %}
@@ -112,7 +112,7 @@ class {{ policy.name }}_policy extends {{ project.env_name }}_constraint_policy;
       
 {% elif policy.name == "data_dependency" %}
       "data_dependency": begin
-        static {{ project.env_name }}_policy_context last_ctx[$];
+        static {{ environment.env_name }}_policy_context last_ctx[$];
         
         // 数据依赖约束
         case (dep_type)
@@ -135,7 +135,7 @@ class {{ policy.name }}_policy extends {{ project.env_name }}_constraint_policy;
         
         // 流水线依赖
         if (pipeline_depth > 0 && last_ctx.size() >= pipeline_depth) begin
-          {{ project.env_name }}_policy_context prev_ctx = last_ctx[0];
+          {{ environment.env_name }}_policy_context prev_ctx = last_ctx[0];
           // 从上次输出获取依赖数据
           // input_trans.data[0] = prev_ctx.output_trans.data[prev_ctx.output_trans.count-1];
         end
@@ -243,6 +243,28 @@ class {{ policy.name }}_policy extends {{ project.env_name }}_constraint_policy;
         // output_trans.compute_from_input(input_trans, weight_trans);
       end
       
+{% elif policy.assignments %}
+      // **模型编译出来的约束**（`build_constraint` 的 `assignments`）：
+      // 只对声明了 `stimulus.field` 的维度生成 —— 观测型维度没有输入引脚，
+      // 给它们编约束就是造假。`cycle` 让每个合法取值都轮到；`random` 用于 RND。
+      "{{ policy.name }}": begin
+{% for a in policy.assignments %}
+        // {{ a.trans }}.{{ a.field }} ← {{ a.mode }}
+        //（合法取值：{{ a['values'] | join(', ') }}）
+        if ({{ a.trans }}_trans != null) begin
+{% if a.mode == 'random' %}
+          case ($urandom_range(0, {{ a['values'] | length - 1 }}))
+{% else %}
+          case (ctx.iteration % {{ a['values'] | length }})
+{% endif %}
+{% for v in a['values'] %}
+            {{ loop.index0 }}: {{ a.trans }}_trans.{{ a.field }} = {{ v }};
+{% endfor %}
+          endcase
+        end
+{% endfor %}
+      end
+
 {% endif %}
       // **这个 `default` 不能省。** 上面那 8 个分支是**内置策略名**（按验证主题
       // 命名：`precision_consistency` / `mem_capacity` / …，见
@@ -264,7 +286,7 @@ class {{ policy.name }}_policy extends {{ project.env_name }}_constraint_policy;
     endcase
   endfunction
   
-  virtual function bit verify(ref {{ project.env_name }}_policy_context ctx);
+  virtual function bit verify(ref {{ environment.env_name }}_policy_context ctx);
     // 验证一致性
     return 1;
   endfunction

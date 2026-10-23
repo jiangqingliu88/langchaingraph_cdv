@@ -182,9 +182,14 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
     if rt.last_action is not None and rt.prev_coverage is not None:
         try:
             from src.layers.l4_memory.coverage_experience import get_coverage_experience_store
+            # 按**名字**取（`last_action` 是具名字典，见 `converge.py` 的注释）——
+            # 加字段不再需要同步改下标，也就不会有"漏改一处、静默取错位"。
+            # `source` 一起落库：L5 蒸馏只拿 `rl_suggested` 那批学。
             get_coverage_experience_store().record_round(
-                state.round_num, rt.last_action[0], rt.last_action[1],
-                rt.last_action[2], rt.prev_coverage, final_coverage, rt.last_action[3])
+                state.round_num, rt.last_action["action"], rt.last_action["reason"],
+                rt.last_action["gap_reasons"], rt.prev_coverage, final_coverage,
+                rt.last_action["unreachable_dims"],
+                source=rt.last_action.get("source", "rule"))
             # ⚠️ 这里原来把「覆盖率没涨」记成**动作失败**，于是熔断计的是
             # "这一轮没长进" —— 而覆盖率**平台期是正常的**（边际收益递减、
             # 覆盖点本来就打不到、这一轮补的是行为不是数字）。实测后果：
@@ -195,7 +200,7 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
             # 计），覆盖率增量是**归因信号**：上面 `record_round(...)` 已经把它
             # 连同 delta 记进经验库了 —— 该用它去学"哪个动作有效"，不是用它去
             # 掐断闭环。收敛与否由 `converged` / `max_rounds` 判。
-            rt.governor.after_action(rt.last_action[0], success=True,
+            rt.governor.after_action(rt.last_action["action"], success=True,
                                      tokens=_token_delta(rt))
         except Exception as e:
             logger.warning(f"归因校准记录失败: {e}")

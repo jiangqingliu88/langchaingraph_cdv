@@ -12,7 +12,8 @@ import logging
 # 不再依赖 `regression_framwork/src` 那层历史布局的 sys.path 拼接）。
 # 用法：`python -m src.tools.regression_tools.regression --config <yaml> ...`
 from src.tools.regression_tools.regression_framework.core.config import (
-    ConfigBuilder, make_tag_matcher, collect_tags, build_dependency_map)
+    ConfigBuilder, make_tag_matcher, collect_tags, build_dependency_map,
+    strip_test_prefix)
 from src.tools.regression_tools.regression_framework.core.exceptions import ConfigError
 from src.tools.regression_tools.regression_framework.core.logging_config import setup_logging, get_logger
 from src.tools.regression_tools.regression_framework.models.scheduler import Scheduler
@@ -137,6 +138,9 @@ def main():
     parser.add_argument('--tag', '--tags', dest='tags',
                         help='Comma-separated tags to include (test kept if it has ANY of them)')
     parser.add_argument('--exclude-tags', help='Comma-separated tags to exclude (takes precedence over --tags)')
+    parser.add_argument('--prune-tests', action='store_true',
+                        help='Generate only the test directories matching --tags/--exclude-tags '
+                             '(分级回归的 L1 路径默认这么做；手工调用需要显式打开)')
     parser.add_argument('--show-tags', action='store_true',
                         help='List all tags defined in the configuration file, then exit')
     parser.add_argument('--show-tests', action='store_true',
@@ -302,8 +306,22 @@ def main():
                                    enabled_modes=args.enable_modes)
             # `run_cmd` 是延迟到生成器里渲染的（那里才有 local_vars），所以未定义
             # 变量的报错会从 generate 里抛出来 —— 两个阶段一起包。
-            generator.generate(config, root_dir, args.mode,
-                               debug_mode=args.debug_run)
+            #
+            # `--prune-tests`：按 tag 裁剪**生成的目录**（默认不裁，保留全量树；
+            # 分级回归走 L1 时默认裁剪，见 `infrastructure.run_regression`）。
+            gen_filter = None
+            if args.prune_tests and (args.tags or args.exclude_tags):
+                if args.backend != 'shell':
+                    logger.warning("--prune-tests 只支持 shell 后端；"
+                                   "makefile 后端仍生成全量 test 目录。")
+                else:
+                    gen_filter = make_tag_matcher(config, args.tags, args.exclude_tags)
+            if gen_filter is not None:
+                generator.generate(config, root_dir, args.mode,
+                                   debug_mode=args.debug_run, test_filter=gen_filter)
+            else:
+                generator.generate(config, root_dir, args.mode,
+                                   debug_mode=args.debug_run)
         except ConfigError as e:
             # 配置本身有问题（变量引用未定义 / 模板语法错误 / schema 不合法）——
             # 这是给人看的错误，一条消息 + 退出码 1，不要甩 jsonschema/jinja 的栈。
@@ -311,9 +329,13 @@ def main():
             sys.exit(1)
         logger.info(f"Generation completed. Output: {root_dir}")
         if args.action == 'generate' and (args.tags or args.exclude_tags):
-            # generate 不按 tag 裁剪目录：留着全部 test 目录，之后能用不同 --tags
-            # 复跑同一份树（`--action run --input-dir <root>`）。过滤在 run 阶段做。
-            logger.info("--tags/--exclude-tags 只在 run 阶段生效；本次 generate 仍生成全部 test 目录。")
+            if args.prune_tests:
+                logger.info("已按 --tags 裁剪生成的 test 目录（--prune-tests）。")
+            else:
+                # 默认不裁剪：留着全部 test 目录，之后能用不同 --tags 复跑同一份
+                # 树（`--action run --input-dir <root>`）。过滤在 run 阶段做。
+                logger.info("--tags/--exclude-tags 只在 run 阶段生效；本次 generate 仍生成"
+                            "全部 test 目录（要裁剪加 --prune-tests）。")
         generated_dir = root_dir
         if args.action == 'generate':
             return
@@ -383,7 +405,7 @@ def main():
             test_dirs.sort()
             filtered_tests = []
             for test_dir in test_dirs:
-                test_name = test_dir.replace('test_', '')
+                test_name = strip_test_prefix(test_dir)
                 if tag_match and not tag_match(test_name):
                     continue
                 if test_patterns:
@@ -402,7 +424,7 @@ def main():
                     scheduler.add_task(build_task)
                     added_builds.add(build_name)
                 for test_dir in filtered_tests:
-                    test_name = test_dir.replace('test_', '')
+                    test_name = strip_test_prefix(test_dir)
                     test_path = os.path.join(build_path, test_dir)
                     test_task = TaskFactory.create_test_task(test_name, test_path, build_name)
                     scheduler.add_task(test_task)

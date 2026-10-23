@@ -26,6 +26,11 @@ python -m src.tools.isa_gen_tools.cli ops                        # 列出 op 注
 
 # 不带 -o 就只打到 stdout，不落盘
 python -m src.tools.isa_gen_tools.cli compile config/isa_gen/examples/minimal.yaml
+
+# 随工具走的干净示例（零 operand gap；产物六件套 + tensors/manifest/registry）
+python -m src.tools.isa_gen_tools.cli validate src/tools/isa_gen_tools/examples/npu_sched_issue_mix.yaml
+python -m src.tools.isa_gen_tools.cli compile  src/tools/isa_gen_tools/examples/npu_sched_issue_mix.yaml \
+    -o output_isa_gen_npu_sched --max-txns 12 --seed 20261023
 ```
 
 `--seed` 是**覆盖**（不给则用 `meta.seed`，再没有才取时间戳）；
@@ -40,6 +45,11 @@ python -m src.tools.isa_gen_tools.cli compile config/isa_gen/examples/minimal.ya
 | `minimal.yaml` | **七段里只有 `meta` 是必填的** —— 多小才能跑。没有 `alloc` 时池子自动缩到"不需要动数据"的那几条事务 |
 | `npu_gemm.yaml` | GEMM 为主的一轮活动：`gemm_out_org_pre_xn → gemm_drv_xn` 的强配对、CIMC 里的权重、5 个对象的地址分配 |
 | `npu_noc.yaml` | 跨核搬运为主：`noc_pair_txn` 的 **dst/src 强配对且 `adjacency="strict"`**、两核反复搬同一块地方（地址复用） |
+| **`src/tools/isa_gen_tools/examples/npu_sched_issue_mix.yaml`** | **随工具走的干净示例**：mask / gemm / sync，**零 operand gap**；注释里写明与 NPU case 模型维度（`D_type/D_dtype/D_dep/D_barrier`）的对应关系，以及 tld/cfg/noc 三条已知缺口 |
+
+> 示例有两个落点：`config/isa_gen/examples/`（项目级场景）和
+> `src/tools/isa_gen_tools/examples/`（**自包含**、随工具分发的示例）。
+> `tests/test_pipeline.py::TestExampleFiles` 会**两处都逐份校验 + 逐份编译**。
 
 `tests/test_pipeline.py::TestExampleFiles` 会**逐份校验 + 逐份编译** —— 一份跑不
 起来的示例比没有示例更糟：它教人写错的东西。

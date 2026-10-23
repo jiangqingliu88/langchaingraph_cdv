@@ -41,12 +41,59 @@ import structlog
 logger = structlog.get_logger()
 
 
+def caller_site() -> str:
+    """**自动**取调用点 `相对路径:行号` —— 不手写字符串。
+
+    **公开**：不经过 `call_llm` 的调用点（`debug` 的根因分析是直连
+    `LLMQueryEngine.query` 的，见那边的注释）也要能填 `site` ——
+    否则那些记录的出处恒为空，事后问"这次是谁催的"就答不上来（实测：
+    15 条审计里 5 条是空的，全是直连那条路）。
+
+    手写的话，七处调用点各写一个 `site="design._generate_ip"`，改名/挪文件之后
+    没人会去改它，审计里就会出现指向不存在函数的名字（比没有还坏：查的人会
+    顺着它去找一个早就没有的东西）。
+
+    跳过本模块自己的帧，取**第一个不在 `tools/lib/` 里的**调用者 —— 这样
+    `llm_refine` 那类转手封装也不会把出处全记成 `llm_refine`。
+    """
+    import inspect
+    import os
+
+    this_file = os.path.abspath(__file__)
+    stack = inspect.stack()[1:]
+    fallback = None
+    for frame_info in stack:
+        fname = os.path.abspath(frame_info.filename)
+        if fname == this_file or fname.endswith("llm_refine.py"):
+            # 转手封装不算出处 —— 但要**留一个兜底**：栈里只有它的话
+            # （实测有一条记录 `site` 成了空串），指向它也比空着强。
+            fallback = fallback or frame_info
+            continue
+        try:
+            rel = os.path.relpath(fname)
+        except ValueError:                     # 跨盘符（Windows）
+            rel = fname
+        return f"{rel.replace(os.sep, '/')}:{frame_info.lineno}"
+    chosen = fallback or (stack[-1] if stack else None)
+    if chosen is None:
+        return ""
+    try:
+        rel = os.path.relpath(os.path.abspath(chosen.filename))
+    except ValueError:
+        rel = chosen.filename
+    return f"{rel.replace(os.sep, '/')}:{chosen.lineno}"
+
+
 def call_llm(prompt: str, code: str, errors: str) -> str:
     """`prompt` → LLM 文本（经集中式 Query Engine：预算 + 缓存 + 降级 + 审计）。
 
     失败一律返回**空串**、不抛 —— 调用方拿它判"LLM 没给出东西"并走确定性回退
     （例如 design 的 `_is_valid_rtl` 会因此丢弃这次生成）。抛异常会把
     "LLM 挂了"升级成"流水线挂了"，那不是这一层该做的判断。
+
+    审计记录里带上**出处**：`site`（调用点，自动取）+ `node_id` / `round`
+    （由 `_run_agent` 经 contextvar 钉进来，见 `context/llm_origin.py`）。
+    没有它们，"这一行 RTL 是谁在哪一轮催出来的"只能靠翻日志猜。
     """
     try:
         from src.layers.l2_orchestration.context.query_engine import (
@@ -59,7 +106,7 @@ def call_llm(prompt: str, code: str, errors: str) -> str:
             {"role": "user", "content": user_msg},
         ]
         content = LLMQueryEngine.get_instance().query(
-            "code_generation", messages, cache_key=prompt)
+            "code_generation", messages, cache_key=prompt, site=caller_site())
         if not content:
             return ""
         # 模型偶尔还是会把代码包在 ``` 里 —— 剥掉，顺手认一下语言标记

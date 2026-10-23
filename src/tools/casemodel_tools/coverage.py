@@ -541,7 +541,14 @@ def _attach_crosses(model: CaseModel, cm: CoverageModel) -> None:
             name=name, signals=[cp_a.signal, cp_b.signal],
             level=pair.level, dimensions=[cp_a.dimension, cp_b.dimension],
             bins=bins, source=cp_a.source,
-            cover_id=pair.cover_id, requirement=pair.requirement))
+            cover_id=pair.cover_id, requirement=pair.requirement,
+            # **回填 `cross_matrix` 键**：`<a>×<b>` 就是 case 模型里那个键
+            # （`D_type×D_unit`）—— 边 ② 靠它对账。**原来这里没传，恒为空串**：
+            # 派生出来的模型每条交叉的 `matrix_ref` 都是 `''`，于是
+            # `associate` 边 ② 对所有 case 矩阵键都报"没有任何交叉引用它"
+            #（实测 npu_sched：7 条全报），而真相是"这一侧根本没填"。
+            # 手写覆盖率模型的作者会自己填这一项；派生路径得替作者填上。
+            matrix_ref=f"{pair.a}×{pair.b}"))
 
 
 def _cross_bins(pair: Any, cps: List[CoverPoint], notes: List[str],
@@ -1037,6 +1044,50 @@ def parse_coverage_model(coverage_yaml: str, case_model: "CaseModel" = None,
     return cm
 
 
+def coverage_model_to_dict(cm: "CoverageModel") -> Dict[str, Any]:
+    """`CoverageModel` → `parse_coverage_model` 认的形状（**互为逆**）。
+
+    ## 为什么需要它
+
+    覆盖率模型有两条来路：
+
+        CLI / 人写    coverage.yaml 文本  → `parse_coverage_model`
+        流水线        case 模型 → `coverage_model()` 直接得到对象（**没有文本**）
+
+    而 `associate`（三模型关联校验）吃的是**文本**。流水线里因此跑不了关联校验 ——
+    于是 `env/cons/` 与覆盖点之间的断点只活在终端上，进不了签核材料。
+    本函数给那条路补上"对象 → 文本"这一步。
+
+    ## 与解析侧**必须一一对应**
+
+    字段名对不上就是静默丢东西（解析方 `item.get("name")` 拿到 `None` → 跳过该条，
+    而调用方以为"关联通过"）。所以两个函数**放在同一个文件里紧挨着** —— 改一边
+    时另一边就在眼前。有测试钉住往返（`test_coverage.py`）。
+    """
+    return {
+        # 解析侧读 `data["module"]["name"]` —— **dict 不是字符串**（实测踩过：
+        # 直接喂 `as_dict()` 的 `module` 字符串会 AttributeError）
+        "module": {"name": cm.module, "object_ref": cm.object_ref},
+        "coverpoints": [
+            # 解析侧取 `name`（覆盖点名），而 `as_dict()` 那边叫 `cp_name`
+            {"name": cp.sv_name, "signal": cp.signal, "dimension": cp.dimension,
+             "cover_id": cp.cover_id, "requirement": cp.requirement,
+             "bins": [b.as_dict() for b in cp.bins],
+             "illegal_bins": [b.as_dict() for b in cp.illegal_bins]}
+            for cp in cm.coverpoints],
+        "crosses": [
+            # 解析侧读 `cross`（**覆盖点名列表**）来定位交叉的两侧 ——
+            # 少这一项的话 `_parse_cross` 直接判"少于两项"跳过，
+            # 往返回来 crosses 从 7 变成 0（实测），而调用方看到的是
+            # "交叉一条都没有"这种像是模型问题、其实是序列化漏字段的现象。
+            {"name": cx.name, "cross": list(cx.refs),
+             "matrix_ref": cx.matrix_ref,
+             "cover_id": cx.cover_id, "requirement": cx.requirement,
+             "dimensions": list(cx.dimensions), "level": cx.level}
+            for cx in cm.crosses],
+    }
+
+
 def _parse_coverpoint(item: Dict[str, Any], case_model: "CaseModel",
                       notes: List[str], errors: List[str]) -> Optional[CoverPoint]:
     signal = sv_ident(item.get("signal"), "")
@@ -1048,7 +1099,17 @@ def _parse_coverpoint(item: Dict[str, Any], case_model: "CaseModel",
     bin_names = [str(b.get("name") or "") for b in (item.get("bins") or [])
                  if isinstance(b, dict)]
     fld = _find_field(case_model, bin_names)
-    dim_key = fld.dim_key if fld is not None else ""
+    # **显式写了 `dimension:` 就以它为准**，按 bin 名查到的只是兜底。
+    #
+    # 为什么必须这样：**不同维度的 bin 名可以完全相同** —— npu_sched 里
+    # `D_type.instr_type` 与 `D_unit.issue_unit` 的 `cover_bins` 都是
+    # `[mac, vector, scalar, dma]`，而 `_find_field` 按名字交集只返回**第一个**
+    # 匹配。于是 `issue_unit` 这个覆盖点被判成 `D_type`（实测），
+    # 而后果是 `associate` 边 ⑤ 报"`D_unit` 没有 coverpoint"——那是一条
+    # 指向错误方向的告警（它让作者去查覆盖率模型，真凶是这里的歧义）。
+    # 作者在 yaml 里写下的 `dimension` 是**权威声明**，优先级必须高于猜。
+    explicit_dim = str(item.get("dimension") or "").strip()
+    dim_key = explicit_dim or (fld.dim_key if fld is not None else "")
     if case_model is not None and fld is None:
         notes.append(f"覆盖点 {name or signal} 的 bin（{'、'.join(bin_names[:3])}"
                      f"{'…' if len(bin_names) > 3 else ''}）在 case 模型里"
@@ -1240,9 +1301,32 @@ def _find_field(case_model: "CaseModel", bin_names: List[str]):
         return None
     for dim in case_model.dimensions:
         for fld in dim.fields:
-            if want & set(fld.cover_bins or []):
+            if want & declared_bin_names(fld):
                 return fld
     return None
+
+
+def declared_bin_names(fld) -> set:
+    """字段声明的**全部仓名** —— 字符串形式与对象形式都认。
+
+    `cover_bins` 有两种写法（见 `Field.named_bins` / `Field.explicit_bins`）：
+
+        cover_bins: [cp_mac, cp_vec]              ← 裸名字
+        cover_bins:
+          - {name: empty,   at: 0}                ← 对象（自带区间/取值）
+          - {name: low,     range: [1, 7]}
+
+    按名字找字段时**两边都得收**。原来这里直接 `set(fld.cover_bins)`：
+    对象形式的 `dict` 不可哈希 → `TypeError` 当场崩（npu_sched 那种整份用
+    对象形式声明的模型必踩）；就算侥幸不崩，只认字符串也会让这些字段
+    **一个覆盖点都匹配不上**，而表现是"关联悄悄少了"。
+    """
+    out = {str(n) for n in (fld.named_bins() or []) if n}
+    for b in (fld.explicit_bins() or []):
+        name = b.get("name") if isinstance(b, dict) else None
+        if name:
+            out.add(str(name))
+    return out
 
 
 # ════════════════════════════════════════════════════════════
@@ -1356,6 +1440,21 @@ def checker_rules(decls: List[Dict[str, Any]],
             sv = f"!({left.strip()}) || ({right.strip()})"
         else:
             sv = f"({expr})"
+        # **信号要加虚接口限定** —— 这段表达式最终活在 env 的覆盖率组件里
+        #（`env_cov.sv.j2` 的一个 class），那里 `queue_level` 这种**裸名字是不可见的**：
+        # DUT 的信号只能经虚接口句柄看见（与 `cg_dut` 的 `coverpoint vif.<信号>` 同理）。
+        #
+        # 不加限定的后果不是警告，是**编译不过** —— 实测整轮端到端：
+        #     npu_sched_env_coverage.sv(272): Undefined variable: 'queue_level'
+        #     …共 30 条 → `env_pkg` 整个作废 → `test_pkg` 找不到 env_pkg →
+        #     `bench_tb_top` 找不到 test_pkg → `vopt-13130` → 回归 0/7、覆盖率恒 0%。
+        # 而它**只在真编译时暴露**：生成侧、schema、单测全看不出来。
+        #
+        # 句柄名 `cov_vif` 是模板里那个（`env_cov.sv.j2` 的 build_phase 按它取
+        # config_db）。**写死是有意的**：真改了名，编译会响亮地报
+        # `cov_vif` 未声明，而不是留下一个恒真的检查。
+        for _s in sigs:
+            sv = re.sub(rf"\b{re.escape(_s)}\b", f"cov_vif.{_s}", sv)
         rules.append({"name": sv_ident(name, "chk"), "expr": sv,
                       "message": str(d.get("message") or name)})
     return {"rules": rules, "skipped": skipped}

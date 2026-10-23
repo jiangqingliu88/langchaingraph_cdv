@@ -231,6 +231,15 @@ class CoverageExecutor(BaseExecutor):
 
         return ExecutorResult(success=True, data={
             "coverage": nested_cov,
+            # **语义自述**：`{ucdb_nonzero_bins, cg_dut_hit_gt_zero,
+            # constraint_policy_applied, seed_diversity_verified, notes}` ——
+            # 由 `collect_real_coverage.run()` 算出（见那个函数的 docstring）。
+            # 走顶层键（不是塞进 `coverage`）：audit 的门禁直接读它判
+            # `PASS_WITH_CAVEAT`，与具体的覆盖率数字解耦。
+            "semantic_validations": coverage_data.get("semantic_validations") or {},
+            # 测试点 × 覆盖仓矩阵（含未命中/不可映射的 tp_id）—— 闭环决策与
+            # 签核都读它；没有 TP IR 时是空字典（不是"全过了"）。
+            "tp_matrix": coverage_data.get("tp_matrix") or {},
             "gaps": gaps,
             "score": score,
             "coverage_db": {"ucdb_path": ucdb_path, "sha256": ucdb_hash},

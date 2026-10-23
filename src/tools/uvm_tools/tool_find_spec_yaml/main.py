@@ -1385,6 +1385,90 @@ def _seed_lines(name: str, plan: Dict[str, Dict[str, int]],
             f"    variables: {{SEED: {int(s.get('base', 0)) + int(offset or 0)}}}"]
 
 
+def _tp_regression_lines(output_dir: Path, module_name: str, env_name: str,
+                         dut_top: str, seed_offset: int = 0,
+                         run_cmd_fn=None) -> List[str]:
+    """**可激励测试点 → 回归任务**（一条 TP 一条 test）。
+
+    ## 补的是哪一半
+
+    属性 test 类一直是**生成了、但没有任何回归任务执行它** —— 测试点在模型里
+    说得再清楚，跑不到就等于没有。批次测试覆盖的是"随机打一片"，而每条属性
+    测试点覆盖的是"这个取值**确定**被驱动过"；两者不能互相替代。
+
+    收两类：
+      · `stimulus` —— 属性 test 真驱动事务字段；
+      · `backdoor` —— 属性 test 用 `uvm_hdl_force` 把内部状态摆到目标值
+        （**需要 `-voptargs=+acc`**，否则信号被优化掉、force 失败）。
+    `observe` 没有激励差异、`sequence` 还没有场景生成器，都不占回归槽。
+
+    分级取 TP IR 的 `execution.stage`（由专题优先级派生）—— **不再靠目录名
+    或 tag 手写**："这一条该在哪一级跑"是模型说的。
+    """
+    from src.layers.l1_infrastructure.layout import find_case_model
+
+    cm = find_case_model(_load_spec(output_dir) or {}, output_dir)
+    if cm is None:
+        return []
+    try:
+        from src.tools.casemodel_tools.api import run_testpoints
+
+        payload = run_testpoints(
+            cm.read_text(encoding="utf-8", errors="replace"),
+            env_name=env_name, module_name=module_name, max_tests=200)
+    except Exception as e:                             # noqa: BLE001 旁路，别拦回归生成
+        print(f"  [find_yaml] 测试点回归未生成: {e}", flush=True)
+        return []
+    if payload.get("error"):
+        print(f"  [find_yaml] 测试点回归未生成: {payload['error']}", flush=True)
+        return []
+
+    if run_cmd_fn is None:
+        return []
+
+    lines: List[str] = []
+    for tp in payload.get("testpoints") or []:
+        realization = tp.get("realization") or {}
+        execution = tp.get("execution") or {}
+        kind = str(realization.get("kind") or "")
+        if kind not in ("stimulus", "backdoor"):
+            continue
+        test = str(execution.get("test") or "").strip()
+        if not test:
+            continue
+        seeds = execution.get("seeds") or []
+        seed = (int(seeds[0]) if seeds else 12345) + int(seed_offset or 0)
+        slug = re.sub(r"[^a-z0-9]+", "_",
+                      str(tp.get("tp_id") or "tp").lower()).strip("_")
+        if slug.startswith("tp_"):
+            slug = slug[len("tp_"):]
+        name = f"tp_{slug}"
+        lines.append(f"  - name: {name}")
+        lines.append(f"    build: build_{module_name}_dut")
+        # **仍然走 `_seed_lines`**：测试点是一条定向用例（不是种子批次），
+        # 计划里没有它 → 退回单条 count。但不在这里写死第二个字面量 ——
+        # 那条"所有 test 都过 _seed_lines"的契约测试会抓到（实测）。
+        lines.extend(_seed_lines(name, {}))
+        lines.append(f"    variables: {{SEED: {seed}}}")
+        # `run_cmd` 的成败判据与其它 test **同一份实现**（`_sim_run_cmd` 是
+        # `_generate_regression_yaml` 的嵌套函数）—— 不在这里复制一段，
+        # 否则"真 pass 要 mismatched=0"这条判据就出现了第二个版本。
+        if kind == "backdoor":
+            lines.append(f"    run_cmd: '{run_cmd_fn(dut_top, test, '-voptargs=+acc')}'")
+        else:
+            lines.append(f"    run_cmd: '{run_cmd_fn(dut_top, test)}'")
+        tags = [f'"{execution.get("stage") or "p3"}"', '"tp"']
+        if kind == "backdoor":
+            tags.append('"backdoor"')
+        tags.append(f'"{tp.get("tp_id")}"')
+        lines.append(f"    tags: [{', '.join(tags)}]")
+        lines.append(f'    desc: "{tp.get("tp_id")}：{tp.get("dimension")}='
+                     f'{tp.get("value")}（{tp.get("requirement") or ""}）'
+                     f'{" · 后门到达" if kind == "backdoor" else ""}"')
+        lines.append("")
+    return lines
+
+
 def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
                                module_name: str, env_name: str,
                                top_module: str,
@@ -1448,7 +1532,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     dut_build = f"build_{module_name}_dut"
     dut_top = f"{top_module}_bench_tb_top"
 
-    def _sim_run_cmd(top: str, uvm_test: str) -> str:
+    def _sim_run_cmd(top: str, uvm_test: str, extra_opts: str = "") -> str:
         """一条完整的仿真命令（demo.yaml 的 `run_cmd` 写法）。
 
         比旧的 `run_opts` + 全局 `settings.simulators.<sim>.run` 模板强在：
@@ -1500,7 +1584,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             # 跑的东西没变（那正是 `_seed_base` 的注释里记着的坑）。
             "vsim -c -sv_lib {{ UVM_DPI }} -onfinish stop -work {{ WORK }} "
             f"{top} +UVM_TESTNAME={uvm_test} +ntb_random_seed={{{{ SEED }}}} "
-            "-l sim_vsim.log "
+            f"-l sim_vsim.log {extra_opts} "
             '-do "log -r /*; run -all; quit -f" {{ MODE_OPTS | default("") }} ; '
             "[ -s sim_vsim.log ] && "
             '! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]|FATAL ERROR|Errors: *[1-9]"'
@@ -1604,6 +1688,13 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
             if meta.get("dimensions"):
                 test_lines.append(f'    desc: "批次 {theme}：打 {meta["dimensions"]}"')
             test_lines.append("")
+
+    # ── 测试点回归（**可激励 TP 一条一个任务**）──
+    #
+    # 属性 test 以前生成了却从没被任何回归任务执行 —— 这是"死标签"的第二半。
+    # 分级由 TP IR 的 `execution.stage` 决定（专题优先级派生），不再手写 tag。
+    test_lines.extend(_tp_regression_lines(output_dir, module_name, env_name,
+                                           dut_top, seed_offset, _sim_run_cmd))
 
     # ── loopback 测试（每个 active agent 一个，独立 build + 独立顶层 {ag}_loopback_tb）──
     # 同时把 loopback 用例注册进 case 库（用例真相源），跨 run 沉淀。
@@ -1918,9 +2009,21 @@ def _casemodel_test_lines(output_dir) -> List[str]:
             return []
         out = ["  tests:"]
         for x in tests:
-            out.append("    - { dimension: %s, value: '%s', key: %s, int_value: %s }"
-                       % (x.get("dimension"), x.get("value"), x.get("key"),
-                          x.get("int_value")))
+            # `field` = 模型声明的**激励绑定**（维度取值由哪个事务字段承载）。
+            # 没声明就不写 —— 空串会被下游当成"已绑定但绑了个空名字"。
+            line = ("    - { dimension: %s, value: '%s', key: %s, int_value: %s"
+                    % (x.get("dimension"), x.get("value"), x.get("key"),
+                       x.get("int_value")))
+            if x.get("field"):
+                line += ", field: %s" % x["field"]
+            # 测试点主键：这条属性 test 对应模型里的哪一条 TP。
+            # 回归报告、覆盖率矩阵、签核证据都靠它把三份产物对到一条线上。
+            if x.get("tp_id"):
+                line += ", tp_id: %s" % x["tp_id"]
+            # 后门到达：属性 test 用 uvm_hdl_force 把内部状态摆到目标值。
+            if x.get("backdoor_path"):
+                line += ", backdoor_path: %s" % x["backdoor_path"]
+            out.append(line + " }")
 
         # 批次 test 类（**一条 = 一个批次/专题**）—— 与属性 test 平行的另一条路。
         # 没有它，回归里 `+UVM_TESTNAME=<批次名>` 会撞 UVM_FATAL(INVTST)，

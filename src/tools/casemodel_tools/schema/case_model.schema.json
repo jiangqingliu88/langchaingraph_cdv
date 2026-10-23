@@ -858,6 +858,55 @@
           "items": {
             "$ref": "#/$defs/field"
           }
+        },
+        "stimulus": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "field"
+          ],
+          "description": "激励绑定：本维度的取值由哪个事务字段承载（如 D_type → instr_type）。字段名必须与 <agent>_master_seq_item 上的 rand 成员一致。不写 = 观测型维度（只采覆盖、不建立激励差异）。注意它和 fields[].name 是两回事：后者是可观测信号，通常是 DUT 内部量或输出端口，驱动不了。",
+          "properties": {
+            "field": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "事务字段名（seq_item 的属性名），生成的 sequence 读 <field>_int 并约束它"
+            }
+          }
+        },
+        "realization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "description": "实现方式的显式声明。stimulus = 取值落到事务字段（stimulus.field 是它的简写）；sequence = 取值是多条事务的组合/时序，靠场景序列到达；observe = 只能观测（DUT 内部/输出/派生量），报告里按 OBSERVE_ONLY 统计。不写时由 stimulus.field 推导。",
+          "properties": {
+            "kind": {
+              "enum": [
+                "stimulus",
+                "sequence",
+                "observe",
+                "backdoor"
+              ]
+            },
+            "agent": {
+              "type": "string",
+              "minLength": 1,
+              "description": "承载该维度的 agent（多个 agent 有同名字段时必须写）"
+            },
+            "sequence": {
+              "type": "string",
+              "minLength": 1,
+              "description": "sequence 型维度的场景序列名"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "backdoor 型维度的层次路径（如 npu_sched_bench_tb_top.u_npu_sched.queue_level）；测试里用 uvm_hdl_force 写入、采完覆盖再 release"
+            }
+          }
         }
       }
     },

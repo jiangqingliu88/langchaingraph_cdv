@@ -318,9 +318,13 @@ def _cons_applies_to(model) -> List[str]:
 @rule("constraint", "policy_unknown_name", "warning",
       "policy.name 不在内置分支列表（生成空 apply 骨架，需手填协议逻辑）")
 def _cons_policy_unknown(model) -> List[str]:
+    # **有 `assignments` 的策略不是空骨架**：`build_constraint` 已经把模型里
+    # 可驱动维度的取值编译成了 `apply()` 里的真实赋值，模板会渲染那个分支。
+    # 只对"既不在内置表、也没有赋值"的策略告警。
     return [f"policy '{p.get('name')}' has no built-in apply body（自定义逻辑需手填）"
             for p in (model.policies or [])
-            if isinstance(p, dict) and p.get("name") not in BUILTIN_POLICIES]
+            if isinstance(p, dict) and p.get("name") not in BUILTIN_POLICIES
+            and not p.get("assignments")]
 
 
 # ════════════════════════════════════════════════════════════

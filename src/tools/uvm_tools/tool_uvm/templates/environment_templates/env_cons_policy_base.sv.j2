@@ -1,14 +1,14 @@
 {% include "base_templates/base_template.sv.j2" %}
 
-// {{ project.name }}_constraint_policy.sv
+// {{ environment.env_name }}_constraint_policy.sv
 // 自动生成的约束策略基类
 
-`ifndef {{ project.env_name | upper }}_CONSTRAINT_POLICY_SV
-`define {{ project.env_name | upper }}_CONSTRAINT_POLICY_SV
+`ifndef {{ environment.env_name | upper }}_CONSTRAINT_POLICY_SV
+`define {{ environment.env_name | upper }}_CONSTRAINT_POLICY_SV
 
 // 策略上下文
-class {{ project.env_name }}_policy_context extends uvm_object;
-  `uvm_object_utils({{ project.env_name }}_policy_context)
+class {{ environment.env_name }}_policy_context extends uvm_object;
+  `uvm_object_utils({{ environment.env_name }}_policy_context)
   
   // 事务存储
 {% for trans in transactions %}
@@ -21,7 +21,7 @@ class {{ project.env_name }}_policy_context extends uvm_object;
   int total_iterations;
   int timestamp;
   
-  function new(string name = "{{ project.env_name }}_policy_context");
+  function new(string name = "{{ environment.env_name }}_policy_context");
     super.new(name);
   endfunction
   
@@ -49,7 +49,7 @@ class {{ project.env_name }}_policy_context extends uvm_object;
   endfunction
   
   // 复制上下文
-  function void copy({{ project.env_name }}_policy_context other);
+  function void copy({{ environment.env_name }}_policy_context other);
     this.scenario_name = other.scenario_name;
     this.iteration = other.iteration;
     this.total_iterations = other.total_iterations;
@@ -61,25 +61,26 @@ class {{ project.env_name }}_policy_context extends uvm_object;
 endclass
 
 // 策略基类
-class {{ project.env_name }}_constraint_policy extends uvm_object;
-  `uvm_object_utils({{ project.env_name }}_constraint_policy)
+class {{ environment.env_name }}_constraint_policy extends uvm_object;
+  `uvm_object_utils({{ environment.env_name }}_constraint_policy)
   
   string policy_name;
   bit enabled = 1;
-  int priority = 100;
+  // `priority` 是 SV 关键字 —— 不能当成员名（这些文件以前从没编译过）
+  int policy_priority = 100;
   string params[string];
   
-  function new(string name = "{{ project.env_name }}_constraint_policy");
+  function new(string name = "{{ environment.env_name }}_constraint_policy");
     super.new(name);
   endfunction
   
   // 应用约束
-  virtual function void apply(ref {{ project.env_name }}_policy_context ctx);
+  virtual function void apply(ref {{ environment.env_name }}_policy_context ctx);
     // 子类实现
   endfunction
   
   // 验证一致性
-  virtual function bit verify(ref {{ project.env_name }}_policy_context ctx);
+  virtual function bit verify(ref {{ environment.env_name }}_policy_context ctx);
     return 1;
   endfunction
   
@@ -89,33 +90,58 @@ class {{ project.env_name }}_constraint_policy extends uvm_object;
   endfunction
   
   // 解析参数
+  // **SV 的 string 没有 `index()` 方法**（那是别的语言的写法学来的）——
+  // 只有 len/getc/substr/atoi 这些。这里手写一个查找。
+  static function int index_of(string s, string ch, int from);
+    for (int i = from; i < s.len(); i++)
+      if (s.substr(i, i) == ch)
+        return i;
+    return -1;
+  endfunction
+
   virtual function void parse_params(string param_str);
-    int start = 0, end;
+    // **SV 要求块内声明先于语句**（不像 C++ 可以随处声明）。原来把
+    // `string kv;` / `int eq_pos` 写在语句中间，vlog 直接报
+    // "Illegal declaration after the statement" —— 这些文件以前从没编译过。
+    int start = 0, stop;
+    string kv;
+    int eq_pos;
+    string key;
+    string value;
     do begin
-      end = param_str.index(",", start);
-      string kv;
-      if (end == -1)
+      stop = index_of(param_str, ",", start);
+      if (stop == -1)
         kv = param_str.substr(start, param_str.len()-1);
       else
-        kv = param_str.substr(start, end-1);
-      
-      int eq_pos = kv.index("=");
+        kv = param_str.substr(start, stop-1);
+
+      eq_pos = index_of(kv, "=", 0);
       if (eq_pos != -1) begin
-        string key = kv.substr(0, eq_pos-1);
-        string value = kv.substr(eq_pos+1, kv.len()-1);
+        key = kv.substr(0, eq_pos-1);
+        value = kv.substr(eq_pos+1, kv.len()-1);
         params[key] = value;
       end
-      start = end + 1;
-    end while (end != -1);
+      start = stop + 1;
+    end while (stop != -1);
+  endfunction
+
+  // 子类可覆写；基类默认从 plusargs 的 `<策略名>_PARAMS=` 串解析。
+  // **这个方法以前只在子类里调 `super.parse_plusargs()`，基类根本没有它** ——
+  // 11 个策略类各自报 "Unresolved reference to 'parse_plusargs'"。
+  virtual function void parse_plusargs();
+    string s;
+    if ($value$plusargs({policy_name, "_PARAMS=%s"}, s))
+      parse_params(s);
   endfunction
   
-  function void disable();
+  // `disable` 是 SV 关键字（disable statement）—— 不能当方法名。
+  function void disable_policy();
     enabled = 0;
   endfunction
   
-  function void enable();
+  function void enable_policy();
     enabled = 1;
   endfunction
 endclass
 
-`endif // {{ project.env_name | upper }}_CONSTRAINT_POLICY_SV
+`endif // {{ environment.env_name | upper }}_CONSTRAINT_POLICY_SV

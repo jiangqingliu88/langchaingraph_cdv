@@ -332,11 +332,46 @@ class TestTheModelRulesFeedBothTheAssertionAndTheChecker:
         """`a |-> b` 在"每拍求值一次"里等价于 `!(a) || (b)` ——
         直接写进 `if` 里不是合法表达式。"""
         got = {r["name"]: r["expr"] for r in self._rules(["x", "y", "z"])["rules"]}
-        assert got["a_implies_b"] == "!(x == 2'd1) || (y == 1'b0)"
+        assert got["a_implies_b"] == "!(cov_vif.x == 2'd1) || (cov_vif.y == 1'b0)"
 
     def test_a_plain_expression_passes_through(self):
         got = {r["name"]: r["expr"] for r in self._rules(["x", "y", "z"])["rules"]}
-        assert got["plain"] == "(z <= 6'd32)"
+        assert got["plain"] == "(cov_vif.z <= 6'd32)"
+
+    def test_every_signal_is_qualified_through_the_virtual_interface(self):
+        """**每个信号都要加 `cov_vif.`** —— 这段表达式活在 env 覆盖率组件那个
+        class 里，裸名字在那里**不可见**（DUT 信号只能经虚接口句柄看见）。
+
+        不加限定的后果不是警告，是**编译不过**：实测整轮端到端 30 条
+        `Undefined variable: 'queue_level'` → `env_pkg` 作废 → `test_pkg`
+        找不到 env_pkg → `tb_top` 找不到 test_pkg → `vopt-13130` →
+        回归 0/7、覆盖率恒 0%。
+
+        **而它只在真编译时暴露**：生成侧、schema 校验、单测全都看不见 ——
+        所以这条断言得钉在生成侧，不能指望"跑一遍就知道了"。
+        """
+        import re
+
+        got = self._rules(["x", "y", "z"])["rules"]
+        assert got, "规则一条都没出来"
+        for r in got:
+            # 表达式里出现的每个 `x`/`y`/`z`（作为标识符）都必须带 `cov_vif.` 前缀；
+            # 数字字面量（`2'd1` / `6'd32`）不算标识符，`` 天然放过它们。
+            for sig in ("x", "y", "z"):
+                bare = re.search(rf"(?<!cov_vif\.){sig}", r["expr"])
+                assert bare is None, (
+                    f"规则 {r['name']} 里有裸信号名 {sig!r}：{r['expr']!r} —— "
+                    f"env 组件那个 class 里看不见它，会编译不过")
+
+    def test_a_signal_name_that_is_a_prefix_of_another_is_still_qualified(self):
+        """`valid` 与 `valid_ready` 这种前缀关系不许误伤（`` 边界）。"""
+        from src.tools.casemodel_tools.coverage import checker_rules
+
+        got = checker_rules(
+            [{"name": "r", "expr": "valid && valid_ready", "message": "m",
+              "signals": [{"name": "valid"}, {"name": "valid_ready"}]}],
+            ["valid", "valid_ready"])["rules"]
+        assert got[0]["expr"] == "(cov_vif.valid && cov_vif.valid_ready)"
 
     def test_temporal_rules_are_skipped_not_faked(self):
         """带 `##` 的跨拍性质，逐拍 `if` 表达不出来 —— **跳过并说明**，
@@ -545,3 +580,144 @@ class TestTheBreakerCountsExecutionFailuresNotDispleasingVerdicts:
             "又把'覆盖率没涨'记成动作失败了 —— 平台期是正常的，它该进归因、不该熔断"
         # 归因（覆盖率增量）仍要记 —— 那是"哪个动作有效"的学习信号
         assert "record_round(" in src
+
+
+class TestTheSignoffDistinguishesGreenFromActuallyWorking:
+    """签核三态：`READY` / `PASS_WITH_CAVEAT` / `NEEDS_FIX`。
+
+    ## 为什么需要中间那一个
+
+    硬门禁（RTL 真实 / 回归全过 / 覆盖率收上来了 / 模型不是占位）问的是
+    "**能不能签**"。它们全过了，不代表**量到的东西是真的**：
+
+        ucdb 落库了，4360 个 bin 一个没命中
+        env/cons/ 生成了，11 条策略的 apply() 落在 default 分支什么都不做
+        覆盖率数字好看，而 DUT 探针（cg_dut）零命中
+
+    这些都是"绿但没真生效"。以前 audit 全当没看见、`READY` 照发 ——
+    签完才发现约束从来没起过作用。所以加一档：**能签，但报告里要写清保留了哪些缺口**。
+
+    ## 一条纪律：只有显式的 `False` 才算缺口
+
+    `None` 是"判不了"（这一轮没跑覆盖率 / 没生成约束模型），而"判不了"到处都是 ——
+    把它也算进来的话几乎每个 run 都会挂上 caveat，三态就贬值成"反正总有一条"，
+    没人再去看那几行。所以只有 **明确的 False** 才升格。
+    """
+
+    def _run(self, tmp_path, sv=None, assoc=None):
+        from src.executors.audit.main import AuditExecutor
+
+        run = tmp_path / "output_dut_20260101_000000"
+        (run / "rtl").mkdir(parents=True, exist_ok=True)
+        (run / "rtl" / "dut.sv").write_text("module dut; endmodule\n", encoding="utf-8")
+        ctx = {"regression": {"passed": 3, "failed": 0, "total": 3},
+               "coverage": {"functional_pct": 90.0, "overall_pct": 90.0},
+               "target": 80.0, "model": {"placeholder": False}}
+        if sv is not None:
+            ctx["semantic_validations"] = sv
+        if assoc is not None:
+            # 关联报告是**文件**（verify 写在 `coverage/`），不是 ctx 键 ——
+            # 为一个旁路产物加一条穿过 24 个节点的 ctx 键不划算，audit 自己读盘。
+            d = run / "coverage"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "association_report.json").write_text(
+                json.dumps(assoc), encoding="utf-8")
+        return asyncio.run(AuditExecutor().execute_task(
+            {"output_dir": str(run), "ctx": ctx})).data["report"]
+
+    def test_the_constraint_caveat_survives_a_skipped_coverage_stage(self, tmp_path):
+        """**回归失败 → 闭环跳过 coverage** 时，约束没激活这件事仍要出现在签核报告里。
+
+        `semantic_validations` 是**覆盖率阶段**拼进 `coverage_result.json` 的，
+        而回归失败时那个阶段根本不跑（"功能回归 N 失败 → 跳过 coverage，
+        进入 debug 修复"）—— 于是它恒为 `{}`。**实测跑出来的就是这个**：
+        签核报告里对"`env/cons/` 生成了但 11 条策略全是空壳"一个字都没有。
+
+        而 `constraint_status.json` 是 verify 写的、不依赖覆盖率阶段。audit 直接读它。
+        硬门禁本来就不过时判定仍是 NEEDS_FIX，但 caveat 会如实进报告 ——
+        **签核的人得看得见"约束从来没生效过"**。
+        """
+        import json
+
+        from src.executors.audit.main import AuditExecutor
+
+        run = tmp_path / "output_dut_20260101_000000"
+        (run / "rtl").mkdir(parents=True)
+        (run / "rtl" / "dut.sv").write_text("module dut; endmodule\n",
+                                            encoding="utf-8")
+        (run / "coverage").mkdir()
+        (run / "coverage" / "constraint_status.json").write_text(json.dumps({
+            "constraint_generated": True, "constraint_policy_applied": False,
+            "unbacked_policy_count": 11}), encoding="utf-8")
+
+        rep = asyncio.run(AuditExecutor().execute_task({
+            "output_dir": str(run),
+            "ctx": {"regression": {"passed": 0, "failed": 7, "total": 7},
+                    "coverage": {}, "target": 80.0, "model": {"placeholder": False}},
+        })).data["report"]
+        # 硬门禁没过 → NEEDS_FIX（caveat 不让它变 PASS_WITH_CAVEAT）
+        assert rep["verdict"] == "NEEDS_FIX"
+        # 但**约束没生效这件事必须写进报告** —— 否则签核的人看不到
+        assert any("约束未激活" in c for c in rep["caveats"]), rep["caveats"]
+
+    def test_a_clean_run_is_ready_with_no_caveats(self, tmp_path):
+        r = self._run(tmp_path, sv={"constraint_policy_applied": True,
+                                    "ucdb_nonzero_bins": True,
+                                    "cg_dut_hit_gt_zero": True})
+        assert r["verdict"] == "READY"
+        assert r["caveats"] == []
+        assert r["signoff_status"] == "APPROVED"
+
+    def test_an_inactive_constraint_is_pass_with_caveat(self, tmp_path):
+        """**本轮要的那一条**：硬门禁全过，但约束没在约束东西。"""
+        r = self._run(tmp_path, sv={"constraint_policy_applied": False,
+                                    "ucdb_nonzero_bins": True})
+        assert r["verdict"] == "PASS_WITH_CAVEAT"
+        assert r["signoff_status"] == "CONDITIONAL"
+        assert any("约束未激活" in c for c in r["caveats"])
+        assert r["summary"]["caveat_count"] == 1
+
+    def test_a_zerohit_ucdb_is_a_caveat_and_so_is_a_dead_probe(self, tmp_path):
+        r = self._run(tmp_path, sv={"ucdb_nonzero_bins": False,
+                                    "cg_dut_hit_gt_zero": False})
+        assert r["verdict"] == "PASS_WITH_CAVEAT"
+        assert len(r["caveats"]) == 2
+
+    def test_a_broken_hard_edge_in_the_association_is_a_caveat(self, tmp_path):
+        r = self._run(tmp_path, assoc={"hard_edge_broken": 2})
+        assert r["verdict"] == "PASS_WITH_CAVEAT"
+        assert any("硬边断了 2 条" in c for c in r["caveats"])
+
+    def test_unknown_is_not_a_caveat(self, tmp_path):
+        """`None` = 判不了 —— **不是**缺口。否则每个 run 都挂着 caveat，就没人看了。"""
+        r = self._run(tmp_path, sv={"ucdb_nonzero_bins": None,
+                                    "constraint_policy_applied": None,
+                                    "seed_diversity_verified": None})
+        assert r["verdict"] == "READY"
+        assert r["caveats"] == []
+
+    def test_no_semantic_block_at_all_is_still_ready(self, tmp_path):
+        """整块缺失（老 run / 没跑到覆盖率）→ 不判 —— 与"判了、没过"必须分开。"""
+        r = self._run(tmp_path)
+        assert r["verdict"] == "READY"
+        assert r["caveats"] == []
+
+    def test_a_failed_hard_gate_beats_any_caveat(self, tmp_path):
+        """硬门禁没过就是 NEEDS_FIX —— caveat 是"能签但要写明"，不是"绕过门禁"。"""
+        r = self._run(tmp_path / "x", sv={"constraint_policy_applied": False})
+        # 先造一个硬失败：目标 95 而覆盖率 90
+        from src.executors.audit.main import AuditExecutor
+
+        run = tmp_path / "y" / "output_dut_20260101_000000"
+        (run / "rtl").mkdir(parents=True)
+        (run / "rtl" / "dut.sv").write_text("module dut; endmodule\n", encoding="utf-8")
+        bad = asyncio.run(AuditExecutor().execute_task({
+            "output_dir": str(run),
+            "ctx": {"regression": {"passed": 3, "failed": 0, "total": 3},
+                    "coverage": {"functional_pct": 90.0, "overall_pct": 90.0},
+                    "target": 95.0, "model": {"placeholder": False},
+                    "semantic_validations": {"constraint_policy_applied": False}},
+        })).data["report"]
+        assert bad["verdict"] == "NEEDS_FIX"
+        assert bad["signoff_status"] == "REJECTED", \
+            "NEEDS_FIX 原来标成 CONDITIONAL —— 读起来像'可以签、带条件'，实际是'不能签'"

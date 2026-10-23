@@ -22,7 +22,52 @@ from .conftest import FC
 FC_TEXT = FC.read_text(encoding="utf-8")
 
 #: tool_uvm 的 schema 对键名是 additionalProperties:false —— 多一个键就生成失败
-ALLOWED_KEYS = {"dimension", "value", "key", "int_value", "base"}
+ALLOWED_KEYS = {"dimension", "value", "key", "int_value", "base", "field", "tp_id"}
+
+
+def _with_stimulus(text: str, dim_id: str, field: str) -> str:
+    """给某个维度补一段 `stimulus:` —— 测试用，模拟作者在模型里写激励绑定。"""
+    doc = yaml.safe_load(text)
+    for dim in doc.get("dimensions") or []:
+        if dim.get("id") == dim_id:
+            dim["stimulus"] = {"field": field}
+            break
+    else:  # pragma: no cover - 夹具写错时立刻炸，而不是静默跳过
+        raise AssertionError(f"没有维度 {dim_id}")
+    return yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
+
+
+class TestStimulusBinding:
+    """维度取值 → 事务字段：**没有这一格，属性 test 就是死标签**。
+
+    模型的 `fields[].name` 是可观测信号（多半是 DUT 内部量/输出端口），
+    驱动不了；能把取值灌进 DUT 的只有 seq_item 上的 rand 字段。两者的名字
+    经常不一样（`D_queue` 根本没有对应字段），所以绑定必须显式写。
+    """
+
+    def test_bound_dimension_carries_the_field(self):
+        text = _with_stimulus(FC_TEXT, "D_ratio", "credit")
+        tests = run_uvm_tests(text, dimensions=["D_ratio"])["tests"]
+        assert tests and all(t["field"] == "credit" for t in tests)
+
+    def test_unbound_dimension_has_no_field_key(self):
+        """不写 = 观测型维度。**不补空串** —— 空串会被下游当成已绑定。"""
+        for entry in run_uvm_tests(FC_TEXT, dimensions=["D_ratio"])["tests"]:
+            assert "field" not in entry
+
+    def test_field_rides_into_the_yaml_contract(self):
+        text = _with_stimulus(FC_TEXT, "D_ratio", "credit")
+        body = run_uvm_tests(text, dimensions=["D_ratio"])["tests_yaml"]
+        assert yaml.safe_load(body)["tests"][0]["field"] == "credit"
+
+    def test_bad_field_name_is_rejected_by_schema(self):
+        from jsonschema import Draft202012Validator
+        schema = yaml.safe_load(
+            (Path(__file__).resolve().parents[1] / "schema"
+             / "case_model.schema.json").read_text(encoding="utf-8"))
+        doc = yaml.safe_load(_with_stimulus(FC_TEXT, "D_ratio", "bad-name!"))
+        errs = list(Draft202012Validator(schema).iter_errors(doc))
+        assert any("bad-name!" in str(e.message) for e in errs)
 
 
 class TestSurfaces:

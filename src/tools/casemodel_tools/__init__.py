@@ -13,6 +13,12 @@ case 由属性组合**生成**而不是手写。文档见 readem.md。
                   + builder（文档十七节的六步流水线，Builder 模式）
     analysis/     只读判断。specifications（规则可插拔）+ rules/（按分类分模块）
                   + matrix / score / external / facade（Facade 模式）
+    framework/    **方法学框架**：用例建模 → 测试点 IR 的可组合流水线。
+                  Stage 契约 + realization/constraint 注册表 + manifest。
+                  扩展点见 framework/README.md
+    plan.py       测试点 IR 的**门面**（调 framework，保持稳定产物形状）
+    associate.py  三模型关联 + 约束模型生产者（assignments 走框架注册表）
+    coverage.py   覆盖率模型（coverpoint / bin / cross / bind 探针）
     text.py       只渲染。纯文本报告（CLI 与界面导出共用）
 
 **本包是纯工具：不含任何面向 LLM 的代码，也没有界面。** 前者在
@@ -25,6 +31,8 @@ case 由属性组合**生成**而不是手写。文档见 readem.md。
     cli.py                        命令行（check / analyze / generate / tree / matrix / rules）
     analysis.analyze()            分析门面
     repository.load_model()       模型加载
+    plan.run_testpoints()         测试点 IR（框架的公开门面）
+    framework.MethodologyPipeline 可组合的方法学流水线（扩展用）
 
 用法见 readme.md。
 """

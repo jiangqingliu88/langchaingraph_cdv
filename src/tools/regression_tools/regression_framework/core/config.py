@@ -140,6 +140,42 @@ def _as_tag_set(value) -> Optional[set]:
     return tags or None
 
 
+def strip_test_prefix(name: str) -> str:
+    """目录名/用例名 → 剥掉**前缀** `test_`（只削一次，不是全局替换）。
+
+    ## 为什么不能用 `name.replace("test_", "")`
+
+    那会把**中间**的 `test_` 也吃掉：
+
+        test_npu_type_test_run_1_seed_2001
+          .replace("test_", "")  →  npu_type_run_1_seed_2001   ← 中间那个没了
+
+    而配置里展开出来的名字是 `npu_type_test_run_1` —— 两边对不上，于是这条用例
+    **在 tag 筛选那一步被静默丢掉**。
+
+    `npu_basic_test`（`count == 1`）的目录名是 `test_npu_basic_test`，只有前缀一处
+    `test_`，所以它**照常跑** —— 表现就是"有些用例跑了、有些没跑"，而报告里
+    每一级都 PASS。实测：p0 生成了 218 条用例脚本，只跑了 6 条。
+
+    ## 为什么是"**循环**削前缀"而不是削一次
+
+    配置里的用例名**可能自己就带一个 `test_`**（loopback 那条就叫
+    `test_npu_sched_in_loopback`），而生成器还会再加一个前缀，于是目录名是
+    `test_test_npu_sched_in_loopback`。削一次得到 `test_npu_sched_in_loopback`，
+    而"声明侧"（同样过本函数）得到 `npu_sched_in_loopback` —— **两边对不上，
+    这一级被筛成 EMPTY**（实测：修好种子用例之后，loopback 从 PASS 变 EMPTY）。
+
+    所以规则是：**把所有前导 `test_` 都削掉**。种子用例只在前缀处有一个，
+    中间的 `test_`（`npu_type_test_run_1`）不受影响。
+
+    这个函数是**唯一**的剥离规则；`infrastructure.py` 与 `regression.py` 都调它。
+    """
+    s = str(name or "")
+    while s.startswith("test_"):
+        s = s[len("test_"):]
+    return s
+
+
 def make_tag_matcher(config: dict, tags=None, exclude_tags=None):
     """按 `tests[].tags` 生成「这条 test 该不该跑」的判定函数；不过滤时返回 None。
 
@@ -183,9 +219,85 @@ def make_tag_matcher(config: dict, tags=None, exclude_tags=None):
     def _match(dir_test_name: str) -> bool:
         if dir_test_name in allowed:
             return True
-        return any(dir_test_name.startswith(n + '_seed_') for n in allowed)
+        # 种子展开后的目录有两种形态，**都要认**：
+        #
+        #     <test>_seed_<s>            （老形态）
+        #     <test>_run_<i>_seed_<s>    （`count > 1` 展开，**带 _run_ 段**）
+        #
+        # 原来只认 `_seed_`，于是 `npu_type_test_run_1_seed_2001` **不匹配**
+        # `npu_type_test` —— 而 `count == 1` 的 `npu_basic_test` 目录名恰好就是
+        # 基名，所以它跑、它不跑，看起来像"有些用例过了"。
+        #
+        # 实测：p0 的 build 目录里生成了 218 条用例脚本，其中 **194 条是种子展开的
+        # 批次用例**，全部被静默筛掉；`total=7 > 0` 又让"零用例"那道闸（EMPTY）
+        # 拦不住 —— **分级回归报 PASS，而绝大多数用例一次都没跑**。
+        #
+        # 这是「假绿」里最难查的一类：报告、日志、退出码全都正常，只有去数
+        # `sim_vsim.log` 的个数才发现对不上。
+        return any(dir_test_name.startswith(n + '_run_')
+                   or dir_test_name.startswith(n + '_seed_')
+                   for n in allowed)
 
     return _match
+
+
+def expand_modes(modes: dict, variables: dict, names) -> tuple:
+    """**纯函数**：`modes` 映射 + 当前 `variables` + 要启用的名字 → 该怎么展开。
+
+    返回 `(applied, opts, warnings, flags)`：
+
+        applied    实际生效的 mode 名（去重、保持给出顺序）
+        opts       要拼进聚合变量 `MODE_OPTS` 的值（与 applied 同序）
+        warnings   该告警的话（**不在这里打日志** —— 纯函数不碰 logger）
+        flags      要设成 `'1'` 的 `<x>_enabled` 键（含组合词的分量）
+
+    抽出来的理由与 `apply_modes` 那次实测事故直接相关：展开逻辑（尤其
+    **组合词要同时设它每个分量的 `_enabled`**）曾漏过一次，代价是 DUT 编译少
+    `+cover`、覆盖率恒为 0 而命令行看不出问题。这段逻辑要么能被表驱动单测穷举，
+    要么下次加模式（`prof` / `upf`）还会再踩一次。副作用（就地改 config、打日志）
+    留在 `apply_modes` 里。
+    """
+    ordered: List[str] = []
+    for n in (names or []):
+        n = str(n).strip()
+        if n and n not in ordered:
+            ordered.append(n)
+
+    applied: List[str] = []
+    opts: List[str] = []
+    warnings: List[str] = []
+    for name in ordered:
+        if name not in modes:
+            # 名字没登记时退回「同名变量」，但只在那个变量确实存在时才认。
+            if name in variables:
+                var = name
+            else:
+                warnings.append(
+                    f"--enable {name}: modes 里没有登记，且不存在同名变量，忽略"
+                    f"（可用的 mode: {', '.join(sorted(modes)) or '无'}）")
+                continue
+        else:
+            var = modes[name]
+        value = variables.get(var)
+        if value in (None, ''):
+            warnings.append(f"--enable {name}: 变量 '{var}' 为空或不存在，忽略")
+            continue
+        applied.append(name)
+        opts.append(str(value))
+
+    flags: Dict[str, str] = {}
+    for name in applied:
+        # 组合模式（`cov+wave`）**同时是它的每个分量** —— run_cmd 里写
+        # `{% if cov_enabled %}+cover{% endif %}` 的分支，不该因为人选的是
+        # 组合词就沉默。实测：只设 `cov+wave_enabled` 时 DUT 编译少了 `+cover`，
+        # vsim 报 (vsim-8634)「Code was not compiled with coverage options」，
+        # 覆盖率**恒为 0** —— 而 MODE_OPTS 是对的，所以从命令行上看不出问题。
+        for part in str(name).split('+'):
+            part = part.strip()
+            if part:
+                flags[f'{part}_enabled'] = '1'
+        flags[f'{name}_enabled'] = '1'
+    return applied, opts, warnings, flags
 
 
 def apply_modes(config: dict, enabled_modes) -> list:
@@ -200,45 +312,21 @@ def apply_modes(config: dict, enabled_modes) -> list:
 
     只认 `modes:` 里登记过的名字：没登记的直接告警忽略 —— 打错字时宁可少注入
     一个选项，也不要静默地在命令里塞进一个不存在的变量。
+
+    **决策逻辑在 `expand_modes`（纯函数，可表驱动单测）**；这里只负责副作用：
+    打日志、写 `variables`。
     """
     names = sorted(_as_tag_set(enabled_modes) or ())
     if not names:
         return []
-    modes = config.get('modes') or {}
     variables = config.setdefault('variables', {})
-
-    applied, opts = [], []
-    for name in names:
-        if name not in modes:
-            # 名字没登记时退回「同名变量」，但只在那个变量确实存在时才认。
-            if name in variables:
-                var = name
-            else:
-                logger.warning(f"--enable {name}: modes 里没有登记，且不存在同名变量，忽略"
-                               f"（可用的 mode: {', '.join(sorted(modes)) or '无'}）")
-                continue
-        else:
-            var = modes[name]
-        value = variables.get(var)
-        if value in (None, ''):
-            logger.warning(f"--enable {name}: 变量 '{var}' 为空或不存在，忽略")
-            continue
-        applied.append(name)
-        opts.append(str(value))
-
+    applied, opts, warnings, flags = expand_modes(
+        config.get('modes') or {}, variables, names)
+    for msg in warnings:
+        logger.warning(msg)
     if opts:
         variables['MODE_OPTS'] = ' '.join(opts)
-    for name in applied:
-        # 组合模式（`cov+wave`）**同时是它的每个分量** —— run_cmd 里写
-        # `{% if cov_enabled %}+cover{% endif %}` 的分支，不该因为人选的是
-        # 组合词就沉默。实测：只设 `cov+wave_enabled` 时 DUT 编译少了 `+cover`，
-        # vsim 报 (vsim-8634)「Code was not compiled with coverage options」，
-        # 覆盖率**恒为 0** —— 而 MODE_OPTS 是对的，所以从命令行上看不出问题。
-        for part in str(name).split('+'):
-            part = part.strip()
-            if part:
-                variables[f'{part}_enabled'] = '1'
-        variables[f'{name}_enabled'] = '1'
+    variables.update(flags)
     logger.info(f"Enabled modes: {', '.join(applied)}" if applied else "Enabled modes: (none)")
     return applied
 

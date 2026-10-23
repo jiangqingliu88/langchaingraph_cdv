@@ -105,7 +105,11 @@ MODES: List[SimMode] = [
     # 落一份 db（`+SCB_OFF` 是给纯波形模式用的 —— 那是"只看波形、不判对错"）。
     # 代价要说清：`-qwavedb` 写 db 比 WLF 慢，一轮里两样都开最费机时。
     SimMode("cov+wave", "覆盖率 + 波形", "cov_wave_opt",
+            # **`-testname` 不能漏**：`-coverstore` 要求成对给 test 名，否则
+            # Questa 把数据落成 `(null).data` —— 之后 `vcover merge`/GUI 打开
+            # 单用例覆盖率时找不到 test 名，功能覆盖率静默读不到（实测）。
             "-coverage -coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME}"
+            " -testname ${EMAN_TEST_NAME}"
             " -voptargs=+acc"
             " -qwavedb=+signal+class+wavefile=${EMAN_RUN_DIR}/waves/${EMAN_TEST_NAME}.db",
             note="一轮同时收覆盖率与波形（qwave.db）。**不带 +SCB_OFF**："

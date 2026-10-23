@@ -47,6 +47,56 @@ from src.cli.output import OutputAdapter, common_options, get_output_adapter
 console = Console()
 
 # ═══════════════════════════════════════════════════════════════
+# 退出码 —— **一处定义，别处只许引用**
+# ═══════════════════════════════════════════════════════════════
+#
+# 此前全是散落的字面量：`sys.exit(2)` 在文件里几十处、`sys.exit(3)` 两处、
+# `1` 到处 —— 读的人得去猜"这个 2 是用法错还是别的"。脚本侧更糟：CI 想区分
+# "在等人放行"和"真失败"，只能数着 exit code 的反面猜。
+#
+# **分工**：`EXIT_OK`/`EXIT_FAIL` 是通用成败；`EXIT_USAGE` 与 click 的用法错
+# 一致（2，别改 —— 改了会让 shell 的 `command not found` 检测错位）；
+# `EXIT_WAITING` 是"**没失败，在等人**"（审批挂起 / 分级回归的人工节点）；
+# `EXIT_LAYER_VIOLATION` 是启动期分层守卫拦下的；`EXIT_STRICT` 是
+# `--strict-semantic` 下判为 `PASS_WITH_CAVEAT`（CI 用）。
+EXIT_OK = 0
+EXIT_FAIL = 1
+EXIT_USAGE = 2
+EXIT_WAITING = 3
+EXIT_LAYER_VIOLATION = 4
+EXIT_STRICT = 5
+
+
+def _strict_semantic_gate(run_dir: Path, run_id: str) -> None:
+    """`audit` 判了 `PASS_WITH_CAVEAT` → 按 CI 的口径当失败（exit `EXIT_STRICT`）。
+
+    读 `<run>/report.json` 的 `verdict` / `caveats` —— 那是 audit 的**唯一**结论
+    出处，这里只决定处置。报告不存在（没跑到 audit / 老 run 目录）就**不拦**：
+    门禁拿不到证据时该说"判不了"，而不是把"没报告"当成"有问题"。
+
+    只升格 `PASS_WITH_CAVEAT`：`READY` 放行、`NEEDS_FIX` 本来就会以非零码收场
+    （那是另一条路的事，不在这里抢）。
+    """
+    report = run_dir / "report.json"
+    try:
+        doc = json.loads(report.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        console.print(f"[dim]--strict-semantic：读不到 {report.name}，这一轮没有可判的签核结论"
+                      f"（不拦）[/dim]")
+        return
+    if doc.get("verdict") != "PASS_WITH_CAVEAT":
+        return
+    console.print()
+    console.print(Panel.fit(
+        f"[bold]--strict-semantic：签核判为 PASS_WITH_CAVEAT[/bold]\n"
+        f"硬门禁都过了，但有 {len(doc.get('caveats') or [])} 条**软缺口** —— "
+        f"这些正是「绿但没真生效」的地方：\n\n"
+        + "\n".join(f"  · {c}" for c in (doc.get("caveats") or []))
+        + f"\n\n完整报告：{report}",
+        title=f"[red]严格语义：拒绝[/red]", border_style="red"))
+    sys.exit(EXIT_STRICT)
+
+# ═══════════════════════════════════════════════════════════════
 # Agent 初始化
 # ═══════════════════════════════════════════════════════════════
 
@@ -175,6 +225,10 @@ def init(json_output, quiet, verbose, output_dir):
               help="落检查点（docs/checkpoints.sqlite）：高危动作的审批从"
                    "「进程内阻塞等答案」变成「停下来、关掉进程、过后来答」。"
                    "**默认开** —— 关掉就只能守着终端；无人值守请配 `--approval auto`")
+@click.option("--strict-semantic", is_flag=True,
+              help="严格语义：签核判为 PASS_WITH_CAVEAT（硬门禁过了但有软缺口，"
+                   "如约束未激活 / ucdb 零命中）时以非零码退出。CI 用 —— 人看报告时"
+                   "那几行是提示，上了流水线就得当失败")
 @click.option("--rtl", "rtl_dir", type=click.Path(exists=True),
               help="外部 RTL 目录（验开源 IP 用）：拿这份现成 RTL 当 DUT，"
                    "**自动跳过 design/model**，不再由 design agent 生成")
@@ -183,7 +237,7 @@ def init(json_output, quiet, verbose, output_dir):
 @click.option("--quiet", "-q", is_flag=True, help="只打印错误")
 def verify(spec_file, output, design_style, target, max_rounds,
            approval, full_regression, verify_only, sim_modes, json_output, summary,
-           quiet, manual_gate, checkpoint, rtl_dir):
+           quiet, manual_gate, checkpoint, strict_semantic, rtl_dir):
     # **spec 与 --rtl 二选一、互斥**：
     #   给 spec  → 走原来的路（design agent 生成 RTL）
     #   给 --rtl  → RTL 是唯一输入，**规格从 DUT 分析出来**（不指向 spec）
@@ -266,7 +320,7 @@ def verify(spec_file, output, design_style, target, max_rounds,
                 "pending": pending,
                 "resume_hint": f"vagent resume --run {rid} --decision approve",
             }, indent=2, ensure_ascii=False, default=str))
-            sys.exit(3)
+            sys.exit(EXIT_WAITING)
         console.print()
         console.print(Panel.fit(
             f"运行**停在人工节点**上：{pending.get('stage', 'approval')}\n"
@@ -276,7 +330,16 @@ def verify(spec_file, output, design_style, target, max_rounds,
             f"  或：  vagent approve --run {rid} --reason \"...\"\n\n"
             f"理由：{pending.get('reason', '（未给）')}",
             title="[yellow]等待人工审批[/yellow]", border_style="yellow"))
-        sys.exit(3)
+        sys.exit(EXIT_WAITING)
+
+    # `--strict-semantic`：签核判为 PASS_WITH_CAVEAT 时**当失败**。
+    #
+    # 为什么不把开关穿进图里：audit 判什么、存不存在 `<run>/report.json`，
+    # **跑完就知道了** —— 在 CLI 这层读一次即可，不必为它改 PipelineState、
+    # 也不能为它加一条要穿过 24 个节点的参数。判据只有一处（audit 写的
+    # `verdict`），这里只是换个处置方式。
+    if strict_semantic:
+        _strict_semantic_gate(Path(output_root), result.get("run_id") or "")
 
     if json_output:
         click.echo(json.dumps({
@@ -290,7 +353,7 @@ def verify(spec_file, output, design_style, target, max_rounds,
             "converged": result.get("converged", False),
             "phases": result.get("phases", []),
         }, indent=2, ensure_ascii=False, default=str))
-        sys.exit(0 if result.get("converged") else 1)
+        sys.exit(EXIT_OK if result.get("converged") else EXIT_FAIL)
 
     if summary:
         cov = result.get("final_coverage", 0)
@@ -5534,6 +5597,46 @@ def lineage_compare_cmd(current, baseline, module, json_output):
         console.print(f"  [red]✗[/red] {name}")
 
 
+@lineage_group.command("prune")
+@click.option("--keep-last", default=50, show_default=True,
+              help="每个模块**至少保留**最近这么多版（不管有没有引用）")
+@click.option("--module", "-m", default="", help="只清这个模块（缺省全部）")
+@click.option("--apply", "apply_", is_flag=True,
+              help="真删。**默认只预演**（打印要删什么，不动库）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def lineage_prune_cmd(keep_last, module, apply_, json_output):
+    """清理**孤儿**版本行（没有被任何 run / 基准 / bug 引用的那些）
+
+    \b
+      vagent lineage prune                 # 预演：看会删什么
+      vagent lineage prune --apply         # 真删
+      vagent lineage prune -m npu_sched --keep-last 20 --apply
+
+    三条判据全中才删：没 run 引用、不是基准锚、不是 bug 的 found/fixed 版本。
+    保守到几乎删不掉东西是故意的 —— 真正会涨的是 `run_rtl_bindings`
+    （一行一次 run），而那是**证据**，不在这里删。
+    """
+    out = get_output_adapter(json_output)
+    from src.tools.flow_tools.lineage_api import prune_lineage
+
+    result = prune_lineage(keep_last=keep_last, module=module, dry_run=not apply_)
+    if json_output:
+        out.print_result(result, title="血缘清理")
+        return
+    n = result["pruned"]
+    if not n:
+        console.print(f"[green]没有可清理的孤儿版本[/green]"
+                      f"（每模块保留最近 {result['keep_last']} 版）")
+        return
+    head = "将要删除" if result["dry_run"] else "已删除"
+    console.print(f"[yellow]{head} {n} 个孤儿版本[/yellow]"
+                  f"（保留窗口 {result['keep_last']}）")
+    for v in result["versions"][:30]:
+        console.print(f"  {v}")
+    if result["dry_run"]:
+        console.print("[dim]这是预演。确认无误后加 --apply 真删[/dim]")
+
+
 # ═══════════════════════════════════════════════════════════════
 # 验证工作台（PySide6 桌面窗口）
 # ═══════════════════════════════════════════════════════════════
@@ -5590,7 +5693,28 @@ def gui_run(manifest, module, input, theme, reset_layout):
 # ═══════════════════════════════════════════════════════════════
 
 def main():
+    _layer_guard_or_die()
     cli()
+
+
+def _layer_guard_or_die() -> None:
+    """启动期分层守卫 —— 拆模块时**本地立刻炸**，不必等 CI 跑完全量。
+
+    放在 `main()` 里 `cli()` **之前**，而不是 `cli` 的回调体里：命令是分发式的，
+    回调体只覆盖"进 REPL"那条路，子命令直接执行时根本不经过它。
+
+    代价是每次冷启动扫一遍 `src/layers`（约 122 文件 / 29k 行，`ast.parse`
+    量级，远小于 1 秒）。拿这么久换"依赖方向反了当场知道"，值。
+    """
+    try:
+        from src.layers._bootstrap import ensure_layer_contract
+    except Exception:                                  # noqa: BLE001
+        return          # 拿不到守卫就别拦人 —— 这是护栏，不是功能
+    try:
+        ensure_layer_contract()
+    except Exception as exc:                           # noqa: BLE001
+        console.print(f"[red]分层依赖违规（启动期守卫）：[/red]\n{exc}")
+        sys.exit(EXIT_LAYER_VIOLATION)
 
 
 if __name__ == "__main__":

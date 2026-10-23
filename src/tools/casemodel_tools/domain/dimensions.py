@@ -29,6 +29,38 @@ class Dimension:
     sub_objects: List[str] = _field(default_factory=list)   # 限定的组织树节点
     relation: Dict[str, str] = _field(default_factory=dict)  # 另一字段名 → 关系
     fields: List[Field] = _field(default_factory=list)
+    #: **激励绑定** —— 本维度的取值由哪个事务字段承载（`stimulus: {field: instr_type}`）。
+    #:
+    #: 为什么必须有这一格：`fields[].name` 说的是**观测点**（`queue_level` 是 DUT
+    #: 内部寄存器、`issue_unit` 是输出端口），它只决定覆盖率从哪儿采样。而"属性
+    #: test 要往 DUT 里灌什么"是**另一件事**，两者的名字经常不相等、甚至根本没有
+    #: 对应物（队列水位没有输入引脚，只能靠打一串指令把 DUT 推到那个状态）。
+    #:
+    #: 不写就是**观测型维度**：它照样生成属性 test 与覆盖仓，但该 test 不建立
+    #: 激励差异（数值只落在 config_db 通道上）。写空串与不写同义。
+    #:
+    #: 值必须是一个**事务字段名**（`<agent>_master_seq_item` 上的 rand 成员），
+    #: 由 `run_uvm_tests` 原样传给 UVM 生成器；对不上时生成的约束不生效 ——
+    #: 所以 `associate` / 生成期校验会拿它对比 agent 的事务字段（见测试）。
+    stimulus_field: str = ""
+    #: **实现方式的显式声明**（`realization: {kind: stimulus|sequence|observe}`）。
+    #:
+    #: `stimulus.field` 是它的一个特例（单字段绑定）。显式写 `realization`
+    #: 可以表达另外两类：
+    #:   · `sequence` —— 取值是多条事务的组合/时序，靠场景序列到达（`sequence:` 给名字）
+    #:   · `observe`  —— 明确声明只能观测（DUT 内部/输出/派生量）
+    #:
+    #: 空串 = 由 `stimulus_field` 推导（有就当 stimulus，没有就当 observe）。
+    realization_kind: str = ""
+    realization_agent: str = ""
+    realization_sequence: str = ""
+    #: `backdoor` 型维度的**层次路径**（如
+    #: `npu_sched_bench_tb_top.u_npu_sched.queue_level`）。
+    #:
+    #: 观测型维度没有输入引脚，但内部状态可以**强制写入**（`uvm_hdl_force` →
+    #: 采覆盖 → release）。路径是领域知识（DUT 实例名/信号名），模型里显式写，
+    #: 不猜。
+    realization_path: str = ""
 
     @property
     def field_names(self) -> List[str]:
@@ -144,12 +176,31 @@ def build_dimension(item: Any) -> Optional[Dimension]:
         if level:
             relation[str(ref)] = level
 
+    stimulus = item.get("stimulus")
+    stimulus_field = ""
+    if isinstance(stimulus, dict):
+        stimulus_field = str(stimulus.get("field") or "").strip()
+
+    realization = item.get("realization")
+    realization_kind = realization_agent = realization_sequence = ""
+    realization_path = ""
+    if isinstance(realization, dict):
+        realization_kind = str(realization.get("kind") or "").strip().lower()
+        realization_agent = str(realization.get("agent") or "").strip()
+        realization_sequence = str(realization.get("sequence") or "").strip()
+        realization_path = str(realization.get("path") or "").strip()
+
     return Dimension(
         key=key, id=dim_id, name=name,
         description=str(item.get("description") or ""),
         sub_objects=[str(s) for s in as_list(item.get("sub_objects"))],
         relation=relation,
         fields=[build_field(f, key) for f in as_list(item.get("fields"))],
+        stimulus_field=stimulus_field,
+        realization_kind=realization_kind,
+        realization_agent=realization_agent,
+        realization_sequence=realization_sequence,
+        realization_path=realization_path,
     )
 
 

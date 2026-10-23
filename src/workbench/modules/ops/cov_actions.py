@@ -34,6 +34,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -92,6 +93,69 @@ def vsim_exe() -> str:
     return _questa_bin("vsim.exe")
 
 
+def _ensure_designfile(db_path: str) -> str:
+    """给 Visualizer 准备**设计索引**（`design.db`）—— 波形窗要的 hier + 源码。
+
+    ## 为什么只给 `-wavefile` 不够
+
+    `visualizer -wavefile qwave.db` 只拿到波形数据：**没有设计层次、点信号也
+    跳不到源码**。Visualizer 的完整用法是成对的：
+
+        vopt <top> -o opt +acc -designfile design.db
+        visualizer -designfile design.db -wavefile qwave.db
+
+    `design.db` 由 `vopt` 生成（实测 3.5MB / ~5s）。回归的仿真只跑 `vsim
+    -voptargs=+acc`，不会落这个文件 —— 所以这里**按需生成**、生成后缓存：
+    同一个 build 下所有用例共用一份，只有第一次打开要等几秒。
+
+    失败不抛：返回空串，调用方退回 `visualizer -wavefile`（没 hier，但波形能看）。
+    """
+    db = Path(db_path)
+    # `<build>/test_x/waves/x.db` → build = 上三级；布局不认得就退回两级
+    build = db.parents[2] if db.parent.name.lower() == "waves" else db.parent
+    if not build.is_dir():
+        return ""
+    design = build / "design.db"
+    if design.is_file() and design.stat().st_size > 0:
+        return str(design)
+
+    vopt = _questa_bin("vopt.exe")
+    if not vopt:
+        return ""
+    top = _top_from_sim_scripts(build)
+    if not top:
+        return ""
+    try:
+        # `-o` 只收**设计名**（不是路径）；`-work work` 要求 cwd=build
+        proc = subprocess.run(
+            [vopt, "-work", "work", top, "-o", "vis_opt", "+acc",
+             "-designfile", "design.db"],
+            cwd=str(build), capture_output=True, text=True,
+            errors="replace", timeout=180)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if design.is_file() and design.stat().st_size > 0:
+        return str(design)
+    return ""
+
+
+def _top_from_sim_scripts(build: Path) -> str:
+    """从任意一条用例的 `sim.sh` 里认出顶层模块名。
+
+    `vsim ... -work <work> <top> +UVM_TESTNAME=...` —— `-work` 后面两个 token
+    才是 top（中间那个是库路径）。找不到就给空串，不猜。
+    """
+    for sim in sorted(build.glob("test_*/sim.sh")):
+        try:
+            text = sim.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        m = re.search(r"-work\s+\S+\s+([A-Za-z_][\w$]*)", text)
+        if m:
+            return m.group(1)
+    return ""
+
+
 def open_wave(module, path: str, what: str = "波形") -> None:
     """打开一条用例的波形 —— **按扩展名选对工具**（见模块头 "按格式选工具"）。
 
@@ -102,10 +166,22 @@ def open_wave(module, path: str, what: str = "波形") -> None:
                           "（工具栏「仿真业务」下拉可切）")
         return
 
-    if Path(path).suffix.lower() == ".wlf":
-        exe, args, label = vsim_exe(), ["-view", str(path)], "vsim -view"
+    is_wlf = Path(path).suffix.lower() == ".wlf"
+    if is_wlf:
+        # **`-view` 只打开数据集，不自动把信号加到波形窗** —— 窗口是空的，
+        # 看起来就像"打不开"。`-do "add wave -r /*"` 把 WLF 里记录的信号铺出来。
+        exe, args, label = vsim_exe(), ["-view", str(path),
+                                        "-do", "add wave -r /*"], "vsim -view"
     else:
-        exe, args, label = visualizer_exe(), ["-wavefile", str(path)], "Questa Visualizer"
+        # **成对给 Visualizer 设计索引**：只有 `-wavefile` 时波形能看，但
+        # 没有模块 hier、点信号也跳不到源码。`design.db` 由 vopt 按需生成
+        # （同一 build 共用一份，第一次几秒）。
+        design = _ensure_designfile(str(path))
+        exe = visualizer_exe()
+        if design:
+            args, label = ["-designfile", design, "-wavefile", str(path)], "Questa Visualizer"
+        else:
+            args, label = ["-wavefile", str(path)], "Questa Visualizer（无设计索引）"
 
     if not exe:
         module.set_status(f"找不到打开波形的程序（{label}）—— 装了 QuestaSim 才能开波形："
@@ -115,12 +191,30 @@ def open_wave(module, path: str, what: str = "波形") -> None:
     kwargs: dict[str, Any] = {}
     if os.name == "nt":
         kwargs["creationflags"] = 0x00000008  # DETACHED_PROCESS：GUI 独立存活
+    if is_wlf:
+        # **必须给 vsim 一个不 EOF 的 stdin**：GUI 进程里 Popen 继承到的 stdin
+        # 是关闭的，vsim 跑完 `-do` 后读 stdin 立刻 EOF → **当场退出**（实测：
+        # poll() 立刻返回 0，窗口一闪而过）。PIPE 只要**父进程还持有**就不 EOF；
+        # 所以进程对象要挂在 module 上，别被 GC 掉。
+        kwargs["stdin"] = subprocess.PIPE
     try:
-        subprocess.Popen([exe, *args], **kwargs)
+        proc = subprocess.Popen([exe, *args], **kwargs)
     except OSError as exc:
         module.set_status(f"{what}打开失败（{label}）：{exc}")
         return
-    module.set_status(f"已用 {label} 打开{what}：{path}")
+    if is_wlf:
+        procs = getattr(module, "_wave_procs", None)
+        if procs is None:
+            procs = []
+            module._wave_procs = procs
+        procs[:] = [p for p in procs if p.poll() is None]
+        procs.append(proc)
+    if is_wlf:
+        module.set_status(
+            f"已用 vsim -view 打开{what}（Visualizer 只认 qwavedb；这轮回归没开 "
+            f"wave 业务，所以只有 WLF）：{path}")
+    else:
+        module.set_status(f"已用 {label} 打开{what}：{path}")
 
 
 def _show_report(module, report: Any, cached_note: str = "") -> bool:
@@ -148,7 +242,25 @@ def _launch_visualizer_ucdb(module, db_path: str, what: str) -> None:
     **选项必须是 `-ucdbfile`**：实测 `visualizer -ucdb` 报 `Unknown option: -ucdb`
     然后退出。`questa.db`（`vsim -coverstore` 产物）、单用例 `.ucdb`、`vcover merge`
     后的合并库，三种都能开。
+
+    **`questa.db` 要先转 UCDB**：它是 coverstore 索引，Visualizer 直接读它
+    看不到功能覆盖率（与 `vcover` 同一条坑，见
+    `coverage_tools.cov_api.materialize_ucdb`）。
     """
+    if not db_path or not Path(db_path).exists():
+        module.set_status(f"没有{what}的覆盖率库：{db_path or '(空)'}")
+        return
+    try:
+        from src.tools.coverage_tools.cov_api import materialize_ucdb
+
+        ucdb, why = materialize_ucdb(str(db_path))
+    except Exception as exc:                           # noqa: BLE001 界面不炸
+        ucdb, why = "", str(exc)
+    if why:
+        module.set_status(f"{what}打开失败：{why}")
+        return
+    db_path = ucdb
+
     exe = visualizer_exe()
     if not exe:
         module.set_status(f"找不到 Questa Visualizer（visualizer.exe）—— "

@@ -43,7 +43,7 @@ PySide6 与 QDarkStyle 是**可选依赖**（`pip install -e .[gui]`）：纯 CL
 |--------|---------|-----------|----------|
 | 设计构建 | `design` | （暂无） | RTL 与门禁、IP 拆解 / 接口 / 寄存器总览、单 agent 触发 |
 | 参考模型 | `model` | （暂无） | 版本列表 / golden_ref / 占位标记 / 回滚 |
-| 验证构建 | `verify` | **Case 建模**（11 个页面） | UVM 环境、用例清单、SVA 断言 |
+| 验证构建 | `verify` | **Case 建模**（12 个页面） | UVM 环境、用例清单、SVA 断言 |
 | 编译与回归 | `ops` | （暂无） | 回归结果 / 趋势、失败用例、重跑 |
 | 覆盖率 | `coverage` | （暂无） | gap 归因、覆盖率地图、exclude 审批 |
 | 调试技术 | `debug` | 仿真日志、错误指纹 | 波形、失败用例二分 |
@@ -210,8 +210,9 @@ vagent case-model gui [模型.yaml]        # 同一扇门的别名
 |------|----------|
 | **正交属性怎么 cross** | 「维度交叉矩阵」—— 专题先选范围，`cross_matrix` 再约束这些维度哪些必须一起变（★）、哪些可选（○）、哪些互斥（✗） |
 | **覆盖率怎么收敛** | 「取值覆盖」—— 分母是字段声明的取值点，分子是被 case 命中的；缺口按维度列出，联动派生字段单独标灰 |
+| **测试点怎么落地** | 「测试点」—— 一条取值点一行，带实现方式（stimulus / sequence / observe）、覆盖仓、回归级；选中运行后叠加 `tp_matrix.json` 的命中状态 |
 
-**11 个页面嵌在模块内部的一个 QTabWidget 里**，不摊成平台的中央标签页。理由是
+**12 个页面嵌在模块内部的一个 QTabWidget 里**，不摊成平台的中央标签页。理由是
 它们都是同一份文本的只读视图：摊开之后用户能把「概览」拖到别的标签页去，而它
 跟「编辑 YAML」本来是一体的（点诊断跳源码靠的就是这个关系）。
 
@@ -250,7 +251,7 @@ src/workbench/
 │   └─ adapters.py   把「吃 JSON 字符串」的工具包成「吃关键字参数」的
 └─ modules/          业务模块（目录名与清单的 group 一致）
     ├─ debug/        仿真日志、错误指纹
-    ├─ verify/       casemodel/  module.py / page.py / pages/（11 页）/ models.py / vocabulary.py
+    ├─ verify/       casemodel/  module.py / page.py / pages/（12 页）/ models.py / vocabulary.py
     ├─ ide/          manual_nodes/  人工节点 YAML 编辑
     ├─ flow/         pipeline / runs / evidence / signoff / tracking / trend + run_common.py
     ├─ agent_output.py   跨线共享：各 agent 的「这次运行产出了什么」视图
@@ -391,7 +392,7 @@ pytest src/workbench/tests -q
 | `test_theme.py` | 调色板字段合法、选中色对比度、**样式表 = 库 + 只碰 objectName 的补充**、没有没人用的字段、横幅跟主题 | 是 |
 | `test_icons.py` | 图标都渲染得出、缓存按颜色区分、引用的名字都存在 | 是 |
 | `test_tasks.py` | 结果回主线程、任务体在别的线程、不阻塞提交方 | 是 |
-| `test_casemodel_module.py` | case 建模：领域 Qt 模型、自绘控件、11 个页面都填上、报告与 CLI 一致 | 是 |
+| `test_casemodel_module.py` | case 建模：领域 Qt 模型、自绘控件、12 个页面都填上、报告与 CLI 一致 | 是 |
 | `test_casemodel_editor.py` | YAML 编辑器：**保存不改原文**（`RANDOM` 不被改写成 `RND`）、脏标记、保存前确认、构不出模型时保留上次结果、**刷新不碰文本** | 是 |
 
 后两个是从 `src/tools/casemodel_tools/tests/` 的 `test_gui.py` / `test_editor.py`

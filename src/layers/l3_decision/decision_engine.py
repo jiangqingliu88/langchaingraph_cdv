@@ -50,6 +50,19 @@ class Action:
     priority: str = "MEDIUM"
     max_retries: int = 3
     reason: str = ""
+    #: **这个动作是谁定的** —— 供"哪个动作真的有用"的统计**按来源分桶**。
+    #:
+    #:     rule_hard      硬失败路径（编译错 / 比对失败 / 回归失败）—— 确定性规则
+    #:     rule           软决策走了规则引擎（含跨 run 蒸馏权重的挑选）
+    #:     rl_suggested   RL 选了、且被采纳（观测支持它）
+    #:     rl_overridden  RL 选了、但被退掉（观测不支持 / 经验证明无效）
+    #:     terminal       终态（CONVERGE）
+    #:
+    #: **为什么必须记下来**：L4 的 `action_effectiveness()` 原来按 `action_type`
+    #: 无差别聚合，于是"RL 建议过、但从来没被采纳"的那些也算进"这个动作的网络
+    #: 效果"—— 蒸馏出来的权重会偏向幸存者（被采纳的），而真正没生效过的那批
+    #: 从未被证伪。分桶之后 L5 只拿 `rl_suggested` 的样本学。
+    source: str = "rule"
 
     def to_dict(self) -> dict:
         return asdict(self)

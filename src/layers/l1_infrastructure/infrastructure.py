@@ -42,6 +42,18 @@ from src.layers.l1_infrastructure import layout
 logger = structlog.get_logger()
 
 
+def _strip_test_prefix_local(name):
+    """`strip_test_prefix` 的薄包装 —— 只削前缀 `test_`（**不是** `.replace`）。
+
+    见 `regression_framework.core.config.strip_test_prefix` 的说明：
+    `test_dir.replace('test_','')` 会把 `npu_type_test_run_1_seed_2001` 里的
+    中间那个 `test_` 也吃掉，于是它永远匹配不上配置里的 `npu_type_test_run_1`。
+    """
+    from src.tools.regression_tools.regression_framework.core.config import (
+        strip_test_prefix)
+    return strip_test_prefix(name)
+
+
 def sha256_file(path: str | Path, chunk_size: int = 65536) -> str:
     """分块计算文件 SHA256 —— 覆盖率数据库的唯一哈希实现。
 
@@ -242,7 +254,10 @@ def declared_tests_by_build(config: dict) -> Dict[str, set]:
         if not isinstance(test, dict):
             continue
         build = str(test.get("build", "")).replace("build_", "")
-        name = str(test.get("name", "")).replace("test_", "")
+        # 只削**前缀**（`npu_type_test_run_1` 里中间那个 `test_` 不能被吃掉）
+        from src.tools.regression_tools.regression_framework.core.config import (
+            strip_test_prefix)
+        name = strip_test_prefix(test.get("name", ""))
         if build and name:
             out.setdefault(build, set()).add(name)
     return out
@@ -426,9 +441,18 @@ class InfrastructureManager:
                 _shutil.rmtree(root_dir, ignore_errors=True)
             # reference_mode：跑历史/参考版本时走 `ref_run_cmd`；
             # debug_mode：走 `debug_run_cmd` / `ref_debug_run_cmd`（见 shell.py 的矩阵）
-            ShellGenerator().generate(config, root_dir, mode,
-                                      reference_mode=reference_mode,
-                                      debug_mode=debug_mode)
+            # **分级回归：每级的 build 目录只生成本级 tag 的用例。**
+            #
+            # 不裁剪时每次 build 都会铺全量脚本（实测 p0 目录 244 个 `sim.sh`，
+            # 只跑 50 个），看起来像"大量用例没跑"。裁剪之后 `本级未跑` 与
+            # `其它级预生成` 的歧义从源头消失 —— 目录里就是这一级要跑的。
+            #
+            # **只对分级路径生效**（`_stage_tag` 非空）。非分级调用保存原行为：
+            # 生成全量树，之后可以换不同 `--tags` 复跑同一份目录。
+            ShellGenerator().generate(
+                config, root_dir, mode,
+                reference_mode=reference_mode, debug_mode=debug_mode,
+                test_filter=tag_match if getattr(self, "_stage_tag", "") else None)
 
             # ── 3. Scheduler 批量跑 build + test（扫描生成目录）──
             from src.tools.regression_tools.regression_framework.models.scheduler import Scheduler
@@ -500,9 +524,9 @@ class InfrastructureManager:
                 # 诊断：三道门（模式 / tag / 声明归属）逐个筛之前，先把"声明了什么、
                 # 目录里实际有什么"摊开 —— 全被筛空时，这一行直接指出是哪边对不上。
                 logger.info(f"[挑用例] build={build_name} declared={sorted(declared)} "
-                            f"dirs={[d.replace('test_', '') for d in test_dirs]}")
+                            f"dirs={[_strip_test_prefix_local(d) for d in test_dirs]}")
                 for test_dir in test_dirs:
-                    test_name = test_dir.replace("test_", "")
+                    test_name = _strip_test_prefix_local(test_dir)
                     if test_patterns and not any(p.search(test_name) for p in test_patterns):
                         continue
                     if tag_match and not tag_match(test_name):

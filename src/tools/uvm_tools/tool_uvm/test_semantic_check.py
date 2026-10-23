@@ -214,6 +214,15 @@ def test_constraint_rules():
     # 自定义名 → warning（空 apply 骨架）
     assert ("policy_unknown_name", "warning") in issues
 
+    # **有 assignments 就不是空骨架**：模型编译出来的赋值会渲染进 apply()
+    backed = ConstraintModel(
+        name="c", env_name="E",
+        transactions=[{"name": "w", "type": "T"}],
+        policies=[{"name": "p_backed", "applies_to": ["w"],
+                   "assignments": [{"trans": "w", "field": "x",
+                                    "values": [0, 1], "mode": "cycle"}]}])
+    assert ("policy_unknown_name", "warning") not in _cons_issues(backed)
+
 
 # ── harness 级 ──
 

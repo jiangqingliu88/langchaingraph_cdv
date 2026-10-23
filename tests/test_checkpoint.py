@@ -412,3 +412,98 @@ class TestStateRoundTrip:
             values = {}
 
         assert _state_of(_Snap()) is None
+
+
+class TestTheRtlPathDoesNotShadowTheTarget:
+    """`--rtl` 走 streaming 时，拷贝循环**不许**遮蔽参数 `target`。
+
+    ## 这条是怎么来的（真实事故）
+
+    把 `verify` 从 `run_closed_loop` 换到 `run_closed_loop_streaming`（为了落检查点）
+    之后，`vagent verify --rtl specs/npu_sched` **当场崩**：
+
+        execution.py:_stream_run
+            for f in ...:  target = dst / f.name      ← 把参数 target 遮蔽了
+            ...
+            PipelineState(target=float(target))
+        TypeError: float() argument must be ... not 'WindowsPath'
+
+    而且**100% 复现** —— 不是偶发。另一条路 `run_closed_loop` 里那句写的是就地
+    表达式（`(_dst / _f.name).write_bytes(...)`），没这个坑：**同一个"把外部 RTL
+    拷进 run 目录"的动作，两条路各写了一遍，一边踩了另一边没踩。**
+
+    一条端到端测试本该拦住它 —— 而当时没有：`--rtl` 这条全路径没有任何测试覆盖，
+    测试套件全绿而命令是坏的。
+    """
+
+    def test_the_target_argument_survives_the_rtl_copy(self):
+        """`_stream_run` 里不许对 `target` 赋值 —— 它不是局部变量，是**参数**。
+
+        静态扫一眼源码就能拦（比"真跑一遍全流程"便宜得多）：那是个赋值语句，
+        不是传参。真跑的话要拉 EDA、要几分钟，而这条断言瞬间就红。
+        """
+        import ast
+        from pathlib import Path
+
+        src = Path("src/layers/l2_orchestration/execution.py")
+        tree = ast.parse(src.read_text(encoding="utf-8"))
+
+        offender = None
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.AsyncFunctionDef) or node.name != "_stream_run":
+                continue
+            for sub in ast.walk(node):
+                # `target = ...`（Name 存）—— 参数被当局部变量重新绑定了。
+                #
+                # **一处例外**：`target = get_coverage_target()` 是"没给就用配置
+                # 默认值"的兜底赋值，那是正当的（不这么写就没法区分"没给"和"给了 0"）。
+                # 除了它，任何对 `target` 的赋值都是遮蔽。
+                if not (isinstance(sub, ast.Assign) and sub.targets
+                        and any(isinstance(t, ast.Name) and t.id == "target"
+                                for t in sub.targets)):
+                    continue
+                rhs = sub.value
+                if (isinstance(rhs, ast.Call) and isinstance(rhs.func, ast.Name)
+                        and rhs.func.id == "get_coverage_target"):
+                    continue
+                offender = sub.lineno
+        assert offender is None, (
+            f"`_stream_run` 第 {offender} 行给 `target` 赋值了 —— 它是**覆盖率目标**"
+            f"参数，被当局部变量用会让 `PipelineState(target=float(target))`"
+            f"拿到一个 Path 而当场 TypeError（`--rtl` 上 100% 复现，实测）。")
+
+    def test_the_rtl_dir_is_actually_accepted(self, svc, tmp_path, monkeypatch):
+        """真跑一次带 `rtl_dir` 的 streaming 路径 —— 端到端那条缺的覆盖。
+
+        用 `test_checkpoint` 现有的假图（不碰 EDA），只验"这条路走得通"：
+        修复前它在 `float(target)` 那行就崩，连图都进不去。
+        """
+        import asyncio
+
+        # 造一个像样的外部 RTL 目录
+        ext = tmp_path / "ext_rtl"
+        ext.mkdir()
+        (ext / "dut.sv").write_text("module dut; endmodule\n", encoding="utf-8")
+
+        out = tmp_path / "out_20260101_000000"
+        from src.layers.l2_orchestration.execution import PipelineExecutionService
+
+        PipelineExecutionService.get_instance()._initialized = True
+        result = asyncio.run(
+            PipelineExecutionService.get_instance().run_closed_loop_streaming(
+                spec_text="# 假规格", output_root=str(out), target=95.0,
+                max_rounds=1, rtl_dir=str(ext), checkpointing=False,
+                # 假图里的审批节点会问 `rt.approval_gate` —— 直接调服务时
+                # 得自己给一个，否则它拿到 None（与那组 `svc` 夹具同一套替身）
+                approval_gate=_auto_gate()))
+        assert isinstance(result, dict), "带 rtl_dir 的 streaming 路径没能跑完"
+        # 外部 RTL 被拷进 run 目录（那正是出问题的那段循环的产物）。
+        #
+        # **别猜目录名**：`make_output_root` 的"已带时间戳"判据要求中间有用户段
+        # （`_[a-z]+\d*_\d{8}_\d{6}$`），`out_20260101_000000` 这种**不匹配** ——
+        # 它会再套一层 `_<用户>_<时间戳>`（实测）。所以在 tmp_path 下找那个 run 目录
+        # （假图的 finalize 不返回 run_id，只能按"带 rtl/ 的目录"认）。
+        runs = [p for p in tmp_path.iterdir() if p.is_dir() and (p / "rtl").is_dir()]
+        assert runs, f"没找到 run 目录（{list(tmp_path.iterdir())}）"
+        assert (runs[0] / "rtl" / "dut.sv").is_file(), \
+            f"外部 RTL 没被拷进 run 目录（{runs[0]}）—— 拷贝那段没跑对"

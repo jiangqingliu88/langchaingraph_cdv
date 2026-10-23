@@ -6,10 +6,10 @@
 > 坐落在**五层引擎**（L1 基础设施 / L2 编排 / L3 决策 / L4 记忆 / L5 进化）之上。
 >
 > 关键文档：
-> - `docs/design/architecture_optimization_plan.md` —— 现状诊断与优化路线（含本文档所有结论的出处）
-> - `docs/design/verification_flow.md` —— 闭环拓扑
-> - `docs/design/tool_layer_architecture.md` —— 工具层契约
+> - `src/tools/casemodel_tools/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
 > - `src/tools/casemodel_tools/readme.md` —— **功能覆盖率方法学**（case 模型 → covergroup → 种子 → 回归）
+> - `src/tools/casemodel_tools/plan.py` —— 测试点 IR 的公开门面
+> - `src/tools/casemodel_tools/framework/` —— `contracts / model / naming / realization / stages / pipeline / constraints`
 
 ---
 
@@ -29,6 +29,68 @@
 | **vsim 崩了但没日志** | `vsim-3772` 加载 DPI 失败，日志里一条 `UVM_ERROR :` 都没有 | 判据补 `FATAL ERROR\|Errors: *[1-9]`（与 vsim 自己的结算行同源） |
 | **组合模式不使能编译侧** | `cov+wave` 只设 `cov+wave_enabled`，build 判的是 `cov_enabled` → `vlog` 少 `+cover` | `apply_modes` 把组合词按 `+` 展开 |
 | **产物写了但从没被编译** | `coverage/<module>_cg.sv` 全仓没有一处加进 filelist | 改走**已跑通**的 `env_cov` 通道 + 探针进 filelist |
+
+---
+
+## 测试点 IR —— 整条链的主键（方法学框架）
+
+以前各段是**文件接力**：case 模型、覆盖率、约束、回归各自推导，靠"命名恰好一致"
+对齐；一旦漂了，没有任何一处报错。现在中间立了一根轴：
+
+```text
+case 模型 ──framework 流水线──► TestPoint IR ──► 属性 test / 约束 / 覆盖 / 回归 / 签核
+                                coverage/testpoints.yaml
+                                coverage/methodology.json   （阶段 + 计数 + 输入 + IR sha256）
+```
+
+流水线只有四段（`src/tools/casemodel_tools/framework/`）：
+
+| 阶段 | 回答什么 | 产出 |
+|---|---|---|
+| `decompose` | 一个取值点对应哪条测试点 | `tp_id` / 维度 / 取值 / 专题 / 优先级 |
+| `trace` | 它观测哪个覆盖仓 | `coverpoint.bin` |
+| `realize` | 取值**怎么进仿真** | `stimulus` / `sequence` / `observe`（可注册扩展） |
+| `execute` | 跑哪个 test、哪一级、哪些种子 | test 类名 / `p0..p3` / 种子 / 判据 |
+
+**realization 四分类**（最重要的一刀）：
+
+| 类型 | 判据 | 下游 |
+|---|---|---|
+| `stimulus` | 取值能落到 `seq_item` 的 rand 字段 | 属性 test + 事务约束 |
+| `sequence` | 取值是多条事务的组合/时序 | 场景序列（待实现） |
+| `observe` | DUT 内部/输出/派生量，没有输入引脚 | 只采覆盖，报告按 `OBSERVE_ONLY` 统计 |
+| **`backdoor`** | 观测型维度，但内部状态可**强制写入** | 属性 test 用 `uvm_hdl_force(path, value)` → 采覆盖 → release；签核单列 `BACKDOOR_HIT` |
+
+`queue_level` 这种内部寄存器**没有输入引脚**，硬凑一个激励就是造假；标成 `observe`
+是**诚实状态**，不是缺陷。而 `backdoor` 是"确定到达"的手段：模型里写
+
+```yaml
+realization:
+  kind: backdoor
+  path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+```
+
+生成的属性 test 会把内部状态摆到目标值，覆盖探针采样后 release —— **但签核里
+永远单列，不冒充激励覆盖**。
+
+**扩展方式（核心阶段零改动）**：
+
+```python
+@REALIZATIONS.register("formal")
+class FormalRealization: ...
+
+pipeline.insert(MyStage(), after="trace")
+CONSTRAINT_COMPILERS.register("cross-illegal", MyCompiler())
+```
+
+产物与消费方：
+
+| 产物 | 谁读 |
+|---|---|
+| `coverage/testpoints.yaml` / `.json` | 属性 test（注释带 `tp_id`）、回归编排（每条可激励 TP 一个任务） |
+| `coverage/methodology.json` | 签核 / 复现（阶段、计数、输入、IR sha256；写入时**固定 LF**） |
+| `coverage/tp_matrix.json` | 覆盖率阶段（TP × bin：HIT / MISS / OBSERVED / UNOBSERVED / UNMAPPED） |
+| `coverage/constraint_status.json` | audit（约束是真实赋值还是空骨架） |
 
 ---
 
@@ -66,14 +128,15 @@ LLM 只在具体位置被**点状**调用（符合"LLM 只做完形填空"的定
 
 > 「点状」的含义：**流程、决策、工具选择都是确定性的**，LLM 只在"该写一段代码/该给一个
 > 判断"的那个点上被叫一次。全部调用走唯一漏斗 `tools/lib/llm_call.py:call_llm`
-> （token 预算 / 缓存 / 重试+回退 / 审计一处实现），完整清单见 `docs/design/llm_call_sites.md`。
+> （token 预算 / 缓存 / 重试+回退 / 审计一处实现）；每次调用落
+> `<run>/docs/llm_audit.jsonl`（`site` / `node_id` / `round` / `prompt_hash`）。
 
 | 执行器 | 职责 | 产出 |
 |-------|------|------|
 | `front` | 前置分析：读 spec / RTL，解出模块名与端口 | spec 摘要 + case 模型草稿 |
 | `design` | spec 分析 → IP 拆解 → RTL 生成（LLM 写小 IP + `vlog` 门禁）→ 顶层集成 | `rtl/*.sv` + design_arch |
 | `model` | 参考模型（模板 + 版本管理 + 回滚） | `model/` |
-| `verify` | UVM 环境（Jinja2 模板）+ 用例 YAML + SVA 断言 + gap 定向激励<br>**+ 功能覆盖率四件套**（覆盖率计划 / DUT 探针 / 批次 test 类 / **约束模型**） | `env/ agents/ assertions/ coverage/ env/cons/` |
+| `verify` | UVM 环境（Jinja2 模板）+ 用例 YAML + gap 定向激励<br>**+ 测试点 IR**（框架流水线）+ **功能覆盖率四件套**（覆盖率计划 / DUT 探针 / 批次 test 类 / **约束模型**）<br>注：SVA 生成已于 2026-10 撤掉 —— 规则由 env 检查组件逐拍求值、收口成 `mismatched=…` | `env/ agents/ coverage/ env/cons/` |
 | `ops` | 编译 + 仿真 + 回归 | `regression_stages.json`（分级状态；回归结果本身是内存数据） |
 | `coverage` | 覆盖率收集（`vsim -coverage` → ucdb）+ gap 归因 | `sim/coverage/coverage_result.json` + `coverage/coverage_points.json` + gaps |
 | `debug` | 日志收集 → 分类 → 指纹去重 → 模板修复 → LLM 兜底重写 → EDA 重验 | debug report |
@@ -140,6 +203,34 @@ DUT 那条先走 `bind`（挂**模块**上、端口表达式在目标模块作�
 `dut_if`，env_cov 与 tb_top 都读那一份 —— 漂了就是**句柄为空、覆盖率恒 0%，而编译
 与加载都不报错**。接口文件被 `build_filelist_for_tb` 收进编译清单（排在 RTL 之后）。
 
+### 二·五、激励绑定 —— 属性 test 不能是"死标签"
+
+`fields[].name` 说的是**从哪儿观测**（多为 DUT 内部量 / 输出端口），不是**往哪儿驱动**。
+两者的名字经常不相等，甚至根本没有对应物（`queue_level` 没有输入引脚）。所以模型允许
+在每个维度上显式写：
+
+```yaml
+- id: D_type
+  fields: [...]
+  stimulus: {field: instr_type}     # 这个维度的取值由事务字段 instr_type 承载
+```
+
+链路：
+
+```text
+模型 stimulus.field
+  → 属性 test 额外 set("<field>_int", <取值>)
+  → master sequence 在 pre_body 读回
+  → randomize() with { has_<field> -> <field> == attr_<field> }
+```
+
+没声明 `stimulus` 的维度保持**观测型**：生成物里明确写"本 test 不建立取值差异"，
+而不是假装有区分度。生成期还会对照 agent 的 **master 事务字段**校验 —— 绑了一个不存在
+的字段会**出声**，不会等到回归里才发现"set 了一个没人读的键"。
+
+> 实测：同一 seed 下 `d_type_pMAC` 与 `d_type_pDMA` 的 DUT `instr_type` 分别是 `0` / `3`；
+> 改之前 61 个属性 test 的激励一模一样。
+
 ### 三、功能覆盖率计划：一份 yaml，摆四张表
 
 与 case 模型**同批生成**，落在 `<run>/coverage/coverage_plan.yaml`：
@@ -183,7 +274,18 @@ DUT 那条先走 `bind`（挂**模块**上、端口表达式在目标模块作�
 ```powershell
 python -m src.tools.casemodel_tools.cli covergroups    specs\npu_sched\casemodel.yaml -m npu_sched
 python -m src.tools.casemodel_tools.cli coverage-plan  specs\npu_sched\casemodel.yaml -m npu_sched
-# 主 CLI 同形：vagent case-model {covergroups,coverage-plan}
+
+# 测试点 IR（框架流水线；下游只认 tp_id）
+python -m src.tools.casemodel_tools.cli testpoints specs\npu_sched\casemodel.yaml `
+  --env-name npu_sched_env --module npu_sched `
+  --agent-fields npu_sched_in=instr_type,instr_opcode,instr_dtype,barrier_type,op_priority
+
+# 约束模型（有 --agent-fields 才会把 stimulus 维度编译成真实赋值）
+python -m src.tools.casemodel_tools.cli constraints specs\npu_sched\casemodel.yaml `
+  -p npu_sched_in:npu_sched_in_master_seq_item `
+  --agent-fields npu_sched_in=instr_type,instr_opcode
+
+# 主 CLI 同形：vagent case-model {covergroups,coverage-plan,testpoints,associate,constraints}
 ```
 
 ### 六、三层模型（case / 覆盖率 / 约束）靠名字关联
@@ -237,14 +339,25 @@ python -m src.tools.casemodel_tools.cli constraints cases.yaml -p apb_master:APB
 （`npu_sched_in_master_agent` → `npu_sched_in_master_seq_item`；照 name 拼出来的类
 不存在，而那个错要到 vlog 才报）。产物渲染出 `env/cons/` 五个文件。
 
-> ⚠️ **策略体目前是空的**：`env_cons_policies.sv.j2` 的 `case (policy_name)` 分支来自
-> 内置名单（8 个**主题名**：`precision_consistency` / `mem_capacity` / …），与
-> `build_constraint` 推出来的 `p_th_b02_random`（专题 + 方法）**一个都对不上** ——
-> `case` 一个分支都没有。而空 `case` 不是"什么都不做"，是 `vlog-13302` **编译错误**
-> （实测 11 策略 = 11 条 error），所以模板留了一个 `default:` 兜底。
-> **要让约束真生效，得把那 8 个内置分支补成按 method 派生的五类**
-> （`directed` / `combo` / `special` / `random` / `replay`）—— method 是 case 模型
-> 建模得的，主题名不是。**这一步还没做。**
+**约束层现在是真的在约束（部分）**，不再是整片空骨架：
+
+- `build_constraint` 把声明了 `stimulus.field` 的维度编译成 `assignments`
+  （`trans / field / values / mode`），模板渲染进 `apply()`；
+- `env/cons/*` **真的进了 `env_pkg` 编译**（以前生成了却从没被 include），
+  批次 test 读到 `batch_policy` 时启动**协调序列**，逐迭代应用策略；
+- 用 `backed_policy_count / unbacked_policy_count` 如实报告：NPU 模型是 **5/11**，
+  其余 6 条专题的维度是观测型（没有输入引脚），按定义编不出字段约束。
+
+> 剩下的是**业务缺口**，不是管道缺口：`sequence` 型维度（`D_seq` / `D_pipeline`）
+> 还没有场景序列生成器；非法交叉（需要两侧都可驱动）尚未编译；协议参数（对齐/握手）
+> 模型里没有。`constraint_policy_applied=false` 时 audit 会挂
+> **`PASS_WITH_CAVEAT`**，并在报告里写清"5/11 条有真实赋值"。
+
+> 约束层的另一条实测坑：`vsim`/`vlog` 从没编译过的那几个 `env_cons_*` 文件里有一串
+> 语法错误（`priority` / `disable` / `end` 是 SV 关键字、语句后声明、`string.index()`
+> 不存在、`uvm_virtual_sequence` 不存在、`while(1)` 永不退出、`start_item(item, sqr)`
+> 实参类型错）。这些是在**第一次把它们接进编译**时一次性暴露并修掉的 ——
+> "生成了"与"编译过"之间隔着这一整串。
 
 ### 七、一份能跑的样板：`specs/npu_sched/`
 
@@ -261,17 +374,34 @@ python -m src.cli.commands verify --rtl specs\npu_sched -o output_npu
 > 本机 Questa 2024.1 的 `vlog` / `vopt` / `vsim` / `vcover` 全都能跑，不需要额外
 > license 配置。别再用"验不了"当理由把仿真侧停在生成侧。
 
-实测过的那一轮（`output_e2e_cov_jiang_20261013_230812`）：
+### 八、一轮完整的端到端实测（2026-10-22）
+
+命令（无人值守：关掉分级回归的人工节点）：
+
+```powershell
+python -m src.cli.commands verify --rtl specs\npu_sched -o output_e2e_backdoor `
+  --target 95 --max-rounds 1 --no-manual-gate --summary
+```
+
+Run：`output_e2e_backdoor_20261022_jiang_20261022_232517`（默认 `cov+wave`，含 `backdoor` 测试点）
 
 | 验到的 | 证据 |
 |---|---|
-| 分级回归跑到底 | `regression_stages.json`：五级全 PASS，**58/58**，`status=PASS` |
-| **批次 test 真跑起来** | `regression_run/p0/.../test_npu_basic_test/sim_vsim.log`：`Errors: 0`、`$finish @ 400ns`、`Saving coverage data` |
-| 种子逐条不同 | 用例目录按种子命名（`..._run_10_seed_10010`、`_10011`…），`sim.sh` 里 `+UVM_TESTNAME=<批次名> +ntb_random_seed=<base+i-1>` |
-| DUT 探针真采到 | `cg_dut` 落在 `/<env>_pkg/<env>_coverage/cg_dut`，内部信号 `queue_level` / `pipeline_state` 有 bin 命中（见上一节） |
+| **五级回归全过** | `regression_stages.json`：loopback 2/2、p0 51/51、p1 85/85、p2 34/34、p3 87/87，**259/259 PASS** |
+| **每级只生成自己的用例** | 分级 build 按 tag 裁剪：p0 50/50，p1 84/84（含 10 条 backdoor），p2 33/33，p3 86/86 |
+| **测试点 IR 落盘** | `coverage/testpoints.yaml` 63 条；`methodology.json` 的 IR sha256 与文件**逐字节一致**；`tp_matrix.json`：**可激励 26/26（100%）**、**backdoor 10/10（100%）**、观测 25/27、UNMAPPED 0 |
+| **backdoor 真到位** | 10 条 D_queue 属性 test 用 `uvm_hdl_force(...queue_level, value)` → 采覆盖 → release；签核单列 `BACKDOOR_HIT`，不冒充激励覆盖 |
+| **属性 test 真被约束** | 生成类注释带 `tp_id`；`d_type_pMAC` / `d_type_pDMA` 在同一 seed 下驱动 `instr_type=0/3` |
+| **约束部分生效** | `constraint_status.json`：5/11 条策略有真实赋值；协调序列 `Generated: 100, Processed: 100`，`p_th_b08_directed: apply=100` |
+| **计划覆盖率（签核口径）** | **95.23%**（254 条回归用例库合并）；单条 coverage test 只有 68.57% —— 之前的签核数字**低估了计划** |
+| **签核判定** | **`PASS_WITH_CAVEAT` / `CONDITIONAL`**：覆盖率硬门禁 `coverage_ok=true`；剩余 caveat 是约束 5/11 + 2 条观测型测试点未命中 |
+| **可交换证据包** | `signoff_evidence.json`（`signoff_evidence_v1`）：RTL 哈希 / TP IR sha256 / 计划覆盖率 / TP 矩阵 / caveat + 建议动作 / 不可达嫌疑 / LLM 审计摘要 |
 
-**仍未验的**：种子是否真的**改变了激励分布**（那是"随机化有没有真起作用"，要拿
-各批次的 ucdb 逐 bin 比对才知道，不是"种子进了命令行"就能算数）。
+**剩余缺口（不再是硬门禁）**：
+
+- 11 条约束策略里 6 条仍是骨架（对应观测型维度）；`sequence` 型维度（`D_seq`/`D_pipeline`）还没有场景生成器；
+- 2 条观测型测试点仍 0 命中（`D_dep=WAR`、`D_decision=BLOCKED`）—— 证据包里标为 `SUSPECT`，需要补状态到达手段或模型声明不可达；
+- 种子是否真的**改变激励分布**仍未逐 bin 验证（证据包里 `seed_diversity: null`，不冒充已验证）。
 
 ---
 
@@ -300,11 +430,12 @@ python -m src.cli.commands coverage {report,gaps,exclude,trend,merge}
 python -m src.cli.commands env      {generate,validate,compile,template}
 python -m src.cli.commands regression {stages,approve,run,report,trend,compare,reference-finder}
 python -m src.cli.commands case-model {check,analyze,generate,tree,rules,uvm-tests,
-                                       covergroups,coverage-plan,associate,constraints,gui}
+                                       testpoints,covergroups,coverage-plan,associate,
+                                       constraints,gui}
 python -m src.cli.commands distill  {run,list,rollback}      # 经验蒸馏（L5）
 python -m src.cli.commands govern   {status,override,reset}  # 治理
 python -m src.cli.commands evidence {record,log,check}
-python -m src.cli.commands lineage  {versions,baseline,bugs,compare,bind-modules}  # 血缘：RTL 版本 / 基准
+python -m src.cli.commands lineage  {versions,baseline,bugs,compare,bind-modules,prune}  # 血缘：RTL 版本 / 基准
 ```
 
 ### 血缘（`vagent lineage`）
@@ -337,11 +468,26 @@ python -m src.cli.commands lineage compare out_x       # 与**基准**比（自�
 | `--sim-mode {cov,wave,cov+wave,…}` | 仿真业务，**默认 `cov+wave`**（覆盖率是闭环主指标，波形是唯一现场） |
 | `--no-manual-gate` | 关掉分级回归的人工节点（loopback 全过也不停车等人放行） |
 | `--approval {interactive,auto,threshold}` | 审批模式；无人值守请显式 `auto` |
+| `--strict-semantic` | 把签核判的 `PASS_WITH_CAVEAT` 当失败（exit 5）—— CI 用 |
 | `--checkpoint / --no-checkpoint` | **默认开**：落检查点（`docs/checkpoints.sqlite`），高危动作的审批从"进程内阻塞等答案"变成"停下来、关掉进程、过后来答"（`vagent resume`）。关掉就只能守着终端 |
 
 **审批：挂起不是失败。** 图停在人工节点上时 `verify` 打印一张面板（含 run_id 与继续命令）
 并以 **exit code 3** 退出 —— 不是 0 也不是失败。JSON 模式同理（`interrupted: true`）——
 CI 不会把"等人答话"读成"跑完了"。
+
+---
+
+### 可视化（可选，PySide6 桌面工作台）
+
+```powershell
+python -m src.workbench          # 或 run_gui.bat
+```
+
+| 视图 | 行为 |
+|---|---|
+| **回归波形** | 点一行 → Questa Visualizer（`-designfile design.db -wavefile waves/x.db`）。`design.db` 按需由 `vopt` 生成、同一 build 共用 —— 有模块 hier、点信号能跳源码。只开了 `cov` 的 run 没有 qwavedb，回退 `vsim -view … -do "add wave -r /*"` 并说明原因 |
+| **回归覆盖率** | 逐条用例：`questa.db`（coverstore）先 `vcover merge` 成 UCDB，再进 HTML 报告 / Visualizer —— 直接读 `questa.db` 会**静默丢掉功能覆盖率** |
+| **测试点** | Case 建模模块第 12 页：`tp_id / 维度=取值 / realization / 覆盖仓 / 回归级`；选中运行后叠加 `tp_matrix.json` 的命中状态 |
 
 ---
 
@@ -369,7 +515,7 @@ src/
 │   ├── l4_memory/                 # 持久化 / IP 库 / 用例状态库 / exclude 库 / 调试经验
 │   └── l5_evolution/              # 经验蒸馏
 ├── tools/             # 领域工具（14 个域）+ lib/ 公共库
-│   ├── casemodel_tools/           # case 建模 + **功能覆盖率方法学**（coverage.py）
+│   ├── casemodel_tools/           # case 建模 + **方法学框架**（framework/）+ 功能覆盖率方法学
 │   ├── regression_tools/          # 回归框架（Questa）+ 仿真业务模式表（sim_modes.py）
 │   └── isa_gen_tools/             # NPU ISA 事务序列生成器（见下节）
 ├── cli/               # vagent CLI（commands.py / output.py / repl.py）
@@ -428,12 +574,46 @@ python -m src.tools.isa_gen_tools.cli ops                          # 列 122 条
 
 ---
 
+## 优势与劣势（诚实评估）
+
+### 牛逼之处（真正稀缺的组合）
+
+| 优势 | 为什么稀缺 | 证据 |
+|---|---|---|
+| **测试点 IR 是整条链的主键** | 多数 AI 验证工具停在"生成测试/报告"，没有一条从建模到签核的**可追溯主键** | `tp_id` 贯穿属性 test / 约束 / 回归级 / `tp_matrix` / audit；`methodology.json` 带阶段 + 计数 + IR sha256 |
+| **失败响亮 + 三态签核** | 行业工具擅长报"50x 快"，很少把"没证据"当失败 | `NEEDS_FIX` / `PASS_WITH_CAVEAT` / `READY`；`None ≠ False`；X 记 `unverified`；`mismatched=0` 才算真 pass |
+| **真实 EDA 闭环，不是 demo** | 通用 AI 编程工具进不了 VCS/Questa；多数"Agent 生成 RTL"项目停在生成 | 最新一轮 **259/259** 分级回归、254 条覆盖率库合并、TP 矩阵、`signoff_evidence_v1` 在同一 run 里落地；**计划覆盖率 95.23%，签核 PASS_WITH_CAVEAT** |
+| **确定性编排 + 点状 LLM** | 长链路里 LLM 每步自由发挥 = 不可复现；这里只有 design/debug 调 LLM | `call_llm` 唯一漏斗；`docs/llm_audit.jsonl` 记 site/node/round/prompt_hash |
+| **领域深度** | 不是"套个 LLM 壳"：UVM 模板、bind 探针、双采样通道、种子管理、分级回归、约束编译 | `tool_uvm` / `casemodel_tools` / `regression_framework` |
+| **可扩展框架** | 新增 realization / 阶段 / 约束编译器**核心零改动**，且有测试钉住 | `REALIZATIONS` / `MethodologyPipeline.insert` / `CONSTRAINT_COMPILERS`；`test_framework.py` |
+| **个人级治理** | 巨头服务企业客户，个人/小团队的"可审计签核"是空白 | 项目隔离、token 预算、人工审批、检查点、血缘、证据包 `dump` |
+
+### 劣势（当前真实的天花板）
+
+| 劣势 | 具体表现 | 影响 |
+|---|---|---|
+| **观测型覆盖的最后一公里** | 计划覆盖率已 95.23%，但 2 条观测型 TP（`D_dep=WAR` / `D_decision=BLOCKED`）仍 0 命中 | 签核 `PASS_WITH_CAVEAT`（可签、带条件），不是 `READY`；需要补状态到达或模型声明不可达 |
+| **约束只部分生效** | 5/11 条策略有真实赋值；`sequence` 型维度（`D_seq`/`D_pipeline`）没有场景序列生成器；非法交叉未编译 | 随机批次仍可能"打不到该打的状态" |
+| **参考模型层重构中** | `model_library/` 已删，SQL `ModelRegistry` 只有 draft；18 个测试是已知失败 | `scoreboard`/golden 参考模型链路不完整 |
+| **模型依赖人工** | 高质量 case 模型要人写；front 的草稿弱；spec→model 的桥不健全 | 换一个模块，方法学收益取决于建模质量 |
+| **LLM 作用面窄** | 只有 design/debug 调 LLM；不做 LLM 覆盖率归因（**有意**） | "AI 验证"叙事要收敛成"确定性验证 + 点状 AI" |
+| **规模** | 本地串行回归；244 条 sims 约 14 分钟；单用户；依赖 Questa/license | 不适合大团队/大规模并行；个人级定位要守住 |
+| **界面** | PySide6 桌面工作台，非 Web；部分页面仍是通用产出视图 | 不是核心卖点，但"可视化"体验会拖后腿 |
+| **竞争** | 三大 EDA 已把 agentic verification 做进原生工具（Questa One / ChipStack / AgentEngineer） | 不能拼"AI 更聪明/覆盖率更快"，只能拼**可复现·可审计·可治理**的签核 |
+
+### 一句话定位
+
+> **不和巨头拼"AI 覆盖率收敛速度"；把「可复现 · 可审计 · 可治理的签核证据链」做成个人/小团队的默认答案。**
+> 测试点 IR（`tp_id`）是这条链的主键，`methodology.json` / `tp_matrix.json` / 三态签核是它的证据面。
+
+---
+
 ## 已知问题与路线
 
-### 参考模型层（重构中，占当前 18 个失败测试的全部）
+### 参考模型层（重构中，占当前已知失败的大头）
 
-`tests/test_agents.py` / `test_golden_bench.py` / `test_ref_model_wiring.py` 共 **18 个失败**
-（另有 `test_sim_modes.py` 一条）。根因是**唯一一条**：`model_library/` 目录已从磁盘删除
+`tests/test_agents.py` / `test_golden_bench.py` / `test_ref_model_wiring.py` /
+`test_sim_modes.py` 共 **18 个已知失败**。根因是**唯一一条**：`model_library/` 目录已从磁盘删除
 （那是"先替后删"的第一步），于是 `match_golden()` 恒 None → `build_ref_model_config()` 恒
 None → `_ref_mirror_gate()` 恒 None → env.yaml 里不写 `scoreboards`。替代品
 `ModelRegistry`（SQL）里只有 `apb_slave` 一个且状态是 `draft`，而 `_registry_model` 只认
@@ -461,14 +641,24 @@ None → `_ref_mirror_gate()` 恒 None → env.yaml 里不写 `scoreboards`。�
       原先 `approval.json` 是**只写不读**的，现在它是审计记录、图由检查点恢复。
       没有检查点时 `approve` 仍然只记审计（**那不是错误** —— 审批记录是"人何时为何签了"
       的凭证，与"这次签核有没有推着图走"是两件事）。
-- [ ] 工具白名单的角色对不上：工具绑 `assert/doc/spec/uvm`，执行器是 `front/design/verify/…`，
-      **8 个里只有 2 个凑得上交集**，所以每次都回退到全部工具（现在会 warning，不再静默）。
-- [ ] **`async_fifo` RTL 生成被 `max_tokens=8192` 截断丢弃**（三次都没产出完整端口闭合）。
+- [x] **工具白名单的角色对上了**：`ToolHub.EXECUTOR_TOOL_MODULES` 是一张
+      `executor → 模块` 的映射表（一处维护），替换了两处"对不上就回退到**全部**工具"
+      的逻辑 —— 那个回退让白名单形同虚设（一个只该读 spec 的 `design` 手里握着
+      `write_file` 与 `regression.run`）。表**建在实测用量上**（各 executor 里
+      `call_tool(...)` 的名字落在哪个模块），并由 `tests/test_tool_roles.py` 从
+      `executors/` 目录读角色反查"有没有漏登记"。
+      **空元组 = 声明不用工具**（`_get_tools()` 返回 `[]`），与"没查到"分得开 ——
+      混成一个的话前者会拿到全部工具。注：`ops` 那条是**同名巧合**撑着
+      （模块角色里也有个 `ops`），迁移时按"名字一样所以不用映射"归零会把它的
+      `regression.run` 拿走，有测试钉住。
+- [x] **token 上限已提到 16384**（`config/settings.py`；原 8192/4096 会截断长端口表）。
+      `async_fifo` 这条历史失败**需要复测**，不再用旧上限当理由。
 - [x] **批次 test 类跑起来了**（原来这条写的是"要等 `vsim` 可用" —— 那是**误判**，
       仿真器一直是好的，`Error loading design` 是设计侧 load 失败）：
-      分级回归五级全 PASS（58/58），`npu_basic_test` 真执行（`Errors: 0`、覆盖率落库），
-      用例目录按种子逐条展开（`_seed_10010` / `_10011`…），`sim.sh` 里
-      `+UVM_TESTNAME=<批次名> +ntb_random_seed=<base+i-1>`。证据见「功能覆盖率方法学」末那节。
+      分级回归五级全 PASS（最新一轮 **249/249**），`npu_basic_test` 真执行
+      （`Errors: 0`、`mismatched=0`、覆盖率落库），用例目录按种子逐条展开，
+      `sim.sh` 里 `+UVM_TESTNAME=<批次名> +ntb_random_seed=<base+i-1>`。
+      证据见「一轮完整的端到端实测」那节。
 - [ ] **种子有没有真改变激励分布**没验：种子进了命令行是事实，但"随机化真起作用"
       要拿各批次的 ucdb 逐 bin 比 —— 前者不等于后者。
 - [x] **批次约束已从 sequence 收回到模型**：`theme_policy_map` 是策略名的**唯一出处**
@@ -476,19 +666,69 @@ None → `_ref_mirror_gate()` 恒 None → env.yaml 里不写 `scoreboards`。�
       逐字一致 —— 两份各推一次就会漂，而漂了的表现是"约束没生效但回归全绿"）；
       批次 test 类挂全局 `batch_policy`，协调序列按 `create_from_batch()` 建策略
       （plusargs 保留为回退）。**且已接进 verify**（见上一节）。
-- [ ] **约束策略体还是空的**：链条全通了、`env/cons/*` 也真生成了，但策略的
-      `apply()` 落到 `default:` 分支、什么都不做 —— 内置分支是主题名，对不上按 method
-      派生的策略名。**要真生效得补那五类按 method 的分支**（见上一节的 ⚠️）。
-      也就是说：**管道通了 ≠ 约束生效**，别把"env/cons 生成了"读成"约束起作用了"。
+- [x] **约束层已接通并部分生效**：`env/cons/*` 真进编译；批次 test 触发协调序列；
+      `stimulus` 维度编译成 `apply()` 里的真实赋值（NPU：5/11 条）。
+- [ ] **约束仍有一半是骨架**：6/11 条对应观测型维度（没有 `stimulus.field`），
+      `sequence` 型维度（`D_seq` / `D_pipeline`）还没有场景序列生成器；非法交叉
+      （需要两侧都可驱动）尚未编译成排除约束。
+- [x] **覆盖率硬门禁已过（计划口径）**：签核改用**回归全量用例库合并**的计划覆盖率，
+      最新一轮 **95.23% ≥ 95%**（254 条用例库）；单条 coverage test 的 68.57% 不再
+      作为签核数字。可激励 TP 26/26 命中、backdoor TP 10/10 到位。
+- [ ] **观测型仍有两个缺口**：`D_dep=WAR`、`D_decision=BLOCKED` 在计划覆盖率里 0 命中，
+      证据包标为 `SUSPECT`；需要补状态到达手段，或在模型里显式声明不可达/降级分母。
+- [ ] **种子多样性未验**：证据包 `seed_diversity: null` —— 需要逐 bin 比对同一批次
+      不同种子的命中集合，才能把"可复现"从"种子进了命令行"升级为"分布真的不同"。
+
+---
+
+## 让「半生效状态无处躲藏」
+
+架构已经把最危险的静默路径堵死了（失败响亮 / 覆盖率库固化 / 审批驱动图）。
+剩下的风险换了形态：**管道通了 ≠ 语义生效** —— 每一处都是"看着绿、其实空"。
+
+| 半成品态 | 谁看得见 |
+|---|---|
+| `env/cons/` 生成了，但一部分策略仍落在 `default:` 分支、不做任何事 | `coverage/constraint_status.json` 的 `backed_policy_count / unbacked_policy_count`；`constraint_policy_applied=false` → audit 判 **`PASS_WITH_CAVEAT`** |
+| ucdb 落了库，4360 个 bin 一个没命中 | `semantic_validations.ucdb_nonzero_bins=false` → 同上 |
+| `cg_dut` 零命中（bind 探针没挂上） | `semantic_validations.cg_dut_hit_gt_zero=false` → 同上 |
+| 三模型关联的**硬边**断了（声明要测的没落成覆盖仓） | `coverage/association_report.json` 的 `hard_edge_broken` → 同上 |
+| 测试点与覆盖仓漂了（模型改了、覆盖率模型没跟上） | `coverage/tp_matrix.json` 的 `UNMAPPED`（**不冒充"没命中"**）；`testpoints_traced=false` |
+| 可激励测试点的大量仓没命中 | `tp_matrix.drivable_pct` + `missed[]`（逐条带 `tp_id` / 需求 / 回归级） |
+| 单条 coverage test 的漂亮数字 ≠ 回归计划的覆盖率 | `coverage_result.json` 同时记 `plan_coverage.functional_pct`（签核口径）与 `single_test_pct`；**签核门禁用前者** |
+| 证据散在七八个文件里，无法对外交换 | `<run>/signoff_evidence.json`（`signoff_evidence_v1`）：RTL 哈希 / TP IR sha256 / 计划覆盖率 / TP 矩阵 / caveat + 建议动作 / 不可达嫌疑 / LLM 审计摘要 |
+
+**签核从两态变三态**：`READY` / **`PASS_WITH_CAVEAT`**（硬门禁全过、但有软缺口 ——
+能签，报告里写清保留了什么）/ `NEEDS_FIX`。`signoff_status` 相应是
+`APPROVED` / `CONDITIONAL` / `REJECTED`（`NEEDS_FIX` 原来也标 `CONDITIONAL`，
+读起来像"可以签、带条件"，与"根本不能签"是两回事）。
+
+`vagent verify --strict-semantic` 把 `PASS_WITH_CAVEAT` 升格为失败（exit 5）——
+**人看报告时那几行是提示，上了 CI 就得当失败**。
+
+**一条纪律：只有显式的 `False` 才算缺口。** `None` 是"判不了"（这一轮没跑覆盖率 /
+没生成约束），而"判不了"到处都是 —— 把它也算进来的话几乎每个 run 都挂 caveat，
+三态就贬值成"反正总有一条"，没人再去看那几行。
+
+### 另外两处"溯源"
+
+- **启动期分层守卫**（`src/layers/_bootstrap.py`）：`python -m src.cli.commands …`
+  冷启动就扫一遍 `src/layers` 的 import 方向，违规即 `exit 4`。规则与
+  `tests/test_layer_direction.py` **同一份**（那个测试 import 它）。拆模块时本地
+  立刻炸，不必等 CI 跑完全量。**函数体内的延迟 import 照样算违规**（AST 走整棵树）。
+- **LLM 点状调用的出处**（`<run>/docs/llm_audit.jsonl`）：每次 `call_llm` 记一条，
+  带 `site`（调用点，`inspect` 自动取，不手写）+ `node_id` / `round`（由
+  `_run_agent` 经 contextvar 钉进来，那是唯一同时看得见 `state` 与 `task` 的地方）
+  + `prompt_hash`。**内存只留最近 500 条，磁盘是权威** —— 出处是**事后**才问的
+  问题，进程一退就没了的那种记录等于没有。
 
 ---
 
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q                            # 主套件：850 passed / 18 failed（见上）/ 2 skipped
-python -m pytest src/workbench/tests -q               # 工作台：707 passed
-python -m pytest src/tools/casemodel_tools/tests -q   # case 建模 + 覆盖率方法学：464 passed
+python -m pytest tests/ -q                            # 948 collected；除 18 个已知失败外全绿
+python -m pytest src/workbench/tests -q               # 工作台：713 passed
+python -m pytest src/tools/casemodel_tools/tests -q   # case 建模 + 框架 + 覆盖率方法学：509 passed
 python -m pytest src/tools/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
 ```
 
@@ -504,6 +744,11 @@ python -m pytest src/tools/isa_gen_tools/tests -q     # ISA 工具：290 passed 
 | `tests/test_manifest.py` | 覆盖率库 / 波形**带哈希进证据包**（不是文件表里的一行匿名记录）；相对 `output_root` 不许把路径拼两次 |
 | `tests/test_ref_model_wiring.py` | predictor **不是空壳** —— 且**走真生成器**（直接喂 ctx 的测试测不到"生成器把键丢了"） |
 | `casemodel_tools/tests/test_coverage.py` | 生成的 SV **真调 `vlog` 编译**（合成模型的断言挡不住 `bins b_ = {0};` 这类非法标识符） |
+| `casemodel_tools/tests/test_framework.py` | 阶段依赖前置报错、注册表扩展（新增 realization/constraint **不改核心**）、manifest 哈希与实际落盘文件一致 |
+| `tests/test_stage_filtered_generation.py` | 分级回归只生成**本级 tag** 的用例目录；非分级调用保持全量树 |
+| `tests/test_coverage_coverstore.py` | `questa.db`（coverstore）必须走 `vcover merge "<store>:<test>"`，否则功能覆盖率静默丢失；`(null).data` 走无 test 名的形式 |
+| `tests/test_audit_evidence.py` | `signoff_evidence_v1`：RTL/IR 哈希、计划覆盖率口径、`seed_diversity: null`、不可达只标 `SUSPECT` |
+| `casemodel_tools/tests/test_plan.py::TestBackdoorRealization` | backdoor 维度带 `path`、不进 `observe`；缺 path 回退并记账 |
 
 **"跑测试"在这里的定位**：主套件那 18 个失败是**已知基线**（参考模型层重构中），
 其余全绿才算没退化。守卫型测试的价值不在通过率，而在**把本次踩过的坑固化成断言** ——
@@ -533,3 +778,32 @@ PySide6（可选，仅工作台需要）
 |---|---|---|
 | `vlog` / `vsim` 在不在 PATH | `shutil.which` | `EDA_MISSING` / `BLOCKED_EDA_MISSING`，**不进入假通过路径** |
 | LLM 能不能用 | `llm_factory.is_available`（**静态**探针，不发请求） | 确定性/模板路径，LLM 环节如实失败 |
+
+
+不是“多用户并发请求”，也不是说你不该做性能优化。这句话拆开是两层意思，我上一轮说得太压缩了。
+
+## “不拼 AI 聪明度”
+
+指的是：**不去比“谁的 LLM 更会写 RTL、更会归因覆盖率缺口、更会自主决策”。**
+
+巨头的路线是让 agent 越来越自主——Cadence ChipStack 号称 Level-5 自主性，目标是“你给个自然语言需求，它自己把验证跑完”。它们的护城河是：模型 + 海量内部验证数据 + 与自家 EDA 的深度耦合。你如果也往“让 LLM 更聪明地自主决策”使劲，是在它们的优势战场上用你的短板打。
+
+而你的项目恰恰是**反着设计的**——文档原话：“流程、决策、工具选择都是确定性的，LLM 只在‘该写一段代码/该给一个判断’的那个点上被叫一次”。8 个执行器里只有 `design` 和 `debug` 调 LLM，决策硬动作永远走规则，RL 只做降级建议不拍板。
+
+**这不是能力不足的妥协，是刻意的产品选择。** 你的卖点是“可复现”——同一个 spec 跑两遍结果一样。LLM 每步自由发挥的长链路是不可复现的。所以“不拼聪明度”= 别把确定性编排改成“更多 LLM 自主”，那会毁掉你唯一稀缺的东西。
+
+## “不拼吞吐量”
+
+指的也不是“不做并发”。**个人级 CLI 根本不存在“多用户并发请求”这个问题**——一次就一个用户在本地跑，没有服务端、没有多租户。这跟商用 SaaS 的并发是两回事。
+
+我说“不拼吞吐量”，针对的是巨头叙事里的**规模指标**：比如 Cadence 宣传的“40x 验证加速”“五周压到一天”，那是靠 Xcelium 大规模并行 + 云资源堆出来的。你要去比“谁能更快跑完一万条回归”，比的是机器和 license，不是你的代码。
+
+但这**不等于**我反对你做性能优化。上一轮我明确提了两条：同 build 的 sims 合并成一次 `vsim` 会话、`vsim -batch` 按核数并行。244 条串行 14 分钟压到 3-5 分钟，这完全该做，而且不破坏个人级定位。**“个人级”不等于“串行低效”，这个我同意你。**
+
+区别在于：优化是**为了你自己的闭环转得更快**（跑更多轮、更快看到覆盖率轨迹），不是为了**在“吞吐量”这个指标上跟巨头比高低**。前者是工具体验，后者是军备竞赛。
+
+## 那到底拼什么
+
+拼**“同一个 run 的证据，半年后别人能逐条验证”**。这个维度上，快 40 倍没用——你跑得再快，如果 `sim_vsim.log` 不存在被记成 pass、ucdb 落了 4360 个 bin 零命中还报绿，快就是负资产。
+
+所以那句话的完整意思是：**把工程精力放在“证据链的完整性和诚实度”上，而不是放在“让 agent 更自主”和“跑得更快更多”上。** 后者你赢不了，也不需要赢；前者巨头不做，因为它们的客户有流程和签字兜底，而你的客户（个人、小团队）没有，只能靠工具本身诚实。

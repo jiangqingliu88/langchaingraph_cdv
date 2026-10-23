@@ -97,6 +97,12 @@ def run_signoff(run_dir: str = "") -> Dict[str, Any]:
         "coverage": _num((report or {}).get("coverage")),
         "gates": gates,
         "chain": chain,
+        # 测试点维度的签核口径（audit 写进 report.json）：
+        # `{total, drivable, drivable_hit, drivable_pct, observe_only,
+        #   observed, missed, unmapped}`。空 = 这一轮没有 TP IR，不是全过。
+        "testpoints": (report or {}).get("testpoints") or {},
+        # 软缺口（约束部分生效 / 测试点未命中等）—— 签核时要写清保留了什么。
+        "caveats": list((report or {}).get("caveats") or []),
         "summary": _summary(report, gates, chain),
     }
 

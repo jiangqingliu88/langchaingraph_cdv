@@ -82,6 +82,16 @@ CREATE TABLE IF NOT EXISTS bug_rtl_links (
     created_at       TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (bug_id, module)
 );
+-- 版本号**单调发放**的计数器（每个模块一行）。
+--
+-- 为什么需要它：原来号是 `MAX(version_no) + 1` 算的 —— 一旦删过行（`prune`），
+-- 下一次分配就会**复用**已删掉的号，于是"v3"在不同时间指**不同内容**，
+-- 而"同一个内容跑一百轮还是 v1"正是这个功能存在的理由。用一个只增不减的计数器
+-- 之后，删旧版本不再影响后续编号。
+CREATE TABLE IF NOT EXISTS rtl_module_seq (
+    module  TEXT PRIMARY KEY,
+    next_no INTEGER NOT NULL
+);
 """
 
 
@@ -138,6 +148,13 @@ class LineageStore:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = sqlite3.connect(str(self.db_path))
             self._conn.executescript(_SCHEMA)
+            # **老库补种计数器**：`rtl_module_seq` 是后加的，已有库里的模块
+            # 一行都没有 —— 从当前 `MAX(version_no)+1` 补上，否则那些模块的
+            # 下一个版本号会从 1 重新开始（与已存在的版本撞号）。
+            # `INSERT OR IGNORE` 让这件事幂等：已经种过的模块不动。
+            self._conn.execute(
+                "INSERT OR IGNORE INTO rtl_module_seq (module, next_no) "
+                "SELECT module, MAX(version_no) + 1 FROM rtl_versions GROUP BY module")
             self._conn.commit()
         return self._conn
 
@@ -163,6 +180,10 @@ class LineageStore:
         同哈希**幂等**：同一个内容跑一百轮，版本号都是那个 v1 —— 这正是"版本"
         该有的样子（跑的次数不是版本）。分配与查询在同一把锁 + 同一个事务里，
         并发两个 run 同时首见同一哈希也只会得到一个版本号。
+
+        **号从 `rtl_module_seq` 单调发放，不从 `MAX(version_no)+1` 算** ——
+        后者在 `prune` 删过行之后会复用已删的号（"v3"换个内容还是 v3），
+        而版本号的全部价值就是"它指向唯一一个内容"。
         """
         module = (module or "").strip()
         content_hash = (content_hash or "").strip()
@@ -176,14 +197,22 @@ class LineageStore:
             if row:
                 return int(row[0])
             nxt = conn.execute(
-                "SELECT COALESCE(MAX(version_no), 0) + 1 FROM rtl_versions WHERE module=?",
-                (module,)).fetchone()[0]
+                "SELECT next_no FROM rtl_module_seq WHERE module=?", (module,)).fetchone()
+            if nxt is None:
+                # 本模块第一次出现（新库，或老库里从没有过这个模块）
+                nxt_no = 1
+                conn.execute("INSERT INTO rtl_module_seq (module, next_no) VALUES (?, ?)",
+                             (module, nxt_no + 1))
+            else:
+                nxt_no = int(nxt[0])
+                conn.execute("UPDATE rtl_module_seq SET next_no=? WHERE module=?",
+                             (nxt_no + 1, module))
             conn.execute(
                 "INSERT INTO rtl_versions (module, content_hash, version_no, "
                 "first_seen_run_id, created_at) VALUES (?, ?, ?, ?, ?)",
-                (module, content_hash, int(nxt), run_id or "", self._now()))
+                (module, content_hash, nxt_no, run_id or "", self._now()))
             conn.commit()
-            return int(nxt)
+            return int(nxt_no)
 
     def version_name(self, module: str, version_no: Optional[int]) -> str:
         """`vN` + 12 位哈希前缀 —— 给人看的名字。取不到就 `""`（不编一个）。"""
@@ -208,6 +237,73 @@ class LineageStore:
         return [{"module": r[0], "content_hash": r[1], "version_no": r[2],
                  "hash": r[1][:12], "name": f"v{r[2]}",
                  "first_seen_run_id": r[3], "created_at": r[4]} for r in rows]
+
+    def prune(self, keep_last: int = 50, module: str = "",
+              dry_run: bool = False) -> Dict[str, Any]:
+        """删**孤儿**版本行：既没有任何 run 引用、又不是基准/缺陷锚点、且已超出保留窗口。
+
+        ## 判据（**三条全中才删**，任一不中一律留）
+
+          1. `run_rtl_bindings` 里没有它 —— 有 run 引用 = 它是某次运行的证据
+          2. 不是 `run_baselines` 的锚（"相对最初那版偏了多少"要它才答得了）
+          3. 不是任何 `bug_rtl_links` 的 `found/fixed_version`（修没修靠它）
+          4. 且它是该模块**最老的**那批里、序号小于 `keep_last` 留剩的窗口
+
+        保守到几乎删不掉东西是**故意的**：这张库是签核回溯的锚，删错一条
+        （比如某个基准）会让"这版和最初那版差多少"永久答不出来。真正会涨的是
+        `run_rtl_bindings`（一行一次 run），而那是**证据**，不在这里删。
+
+        ## 为什么删除是安全的（版本号不会被复用）
+
+        `ensure_rtl_version` 的号来自 `rtl_module_seq` 那张只增不减的计数器，
+        不再从 `MAX(version_no)+1` 算 —— 所以删掉 v1/v2 之后，下一个新内容
+        仍然拿 v5，不会有人把 v1 拿去指另一个内容。
+
+        `dry_run=True` 只算不删（CLI 默认先给人看一眼再删）。
+        """
+        conn = self._connect()
+        window = max(0, int(keep_last))
+        with self._lock:
+            rows = conn.execute(
+                "SELECT module, content_hash, version_no FROM rtl_versions"
+                + (" WHERE module=?" if module else "")
+                + " ORDER BY module, version_no", ((module,) if module else ())).fetchall()
+            protected_versions = {
+                (r[0], r[1]) for r in conn.execute(
+                    "SELECT module, version_no FROM run_rtl_bindings").fetchall()}
+            protected_versions |= {
+                (r[0], r[1]) for r in conn.execute(
+                    "SELECT module, baseline_version_no FROM run_baselines").fetchall()}
+            for r in conn.execute(
+                    "SELECT module, found_version_no, fixed_version_no FROM bug_rtl_links"):
+                if r[1] is not None:
+                    protected_versions.add((r[0], int(r[1])))
+                if r[2] is not None:
+                    protected_versions.add((r[0], int(r[2])))
+
+            keep: Dict[str, List[int]] = {}
+            for mod, _h, vno in rows:
+                keep.setdefault(mod, []).append(int(vno))
+
+            victims: List[Dict[str, Any]] = []
+            for mod, content_hash, vno in rows:
+                vno = int(vno)
+                window_start = keep[mod][-window:] if window else []
+                if vno in window_start:
+                    continue                                   # 保留窗口内
+                if (mod, vno) in protected_versions:
+                    continue                                   # 有引用
+                victims.append({"module": mod, "version_no": vno,
+                                "content_hash": content_hash})
+
+            if victims and not dry_run:
+                conn.executemany(
+                    "DELETE FROM rtl_versions WHERE module=? AND content_hash=?",
+                    [(v["module"], v["content_hash"]) for v in victims])
+                conn.commit()
+            return {"pruned": len(victims), "dry_run": bool(dry_run),
+                    "keep_last": window,
+                    "versions": [f"{v['module']} v{v['version_no']}" for v in victims]}
 
     # ═══════════════════════════════════════════════════════════
     # run ↔ 版本

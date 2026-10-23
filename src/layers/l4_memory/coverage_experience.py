@@ -45,6 +45,17 @@ CREATE TABLE IF NOT EXISTS coverage_rounds (
     new_coverage  REAL NOT NULL DEFAULT 0,
     delta         REAL NOT NULL DEFAULT 0,
     improved      INTEGER NOT NULL DEFAULT 0,   -- 0/1: delta > 0
+    -- **这个动作是谁定的**（`Action.source`）：rule_hard / rule /
+    -- rl_suggested / rl_overridden / terminal。
+    --
+    -- 为什么要分桶：`action_effectiveness()` 原来按 `action_type` **无差别**聚合
+    -- —— 于是"RL 建议过、但被规则退掉、从来没真执行"的那些也算进了"这个动作的
+    -- 历史效果"。蒸馏出来的权重因此偏向**被采纳的**那批（幸存者偏差），而真正
+    -- 没生效过的从未被证伪。L5 现在只拿 `rl_suggested` 的样本学"选哪个动作"。
+    --
+    -- 老库补列：`_connect()` 里 ALTER TABLE（SQLite 没有 `ADD COLUMN IF NOT
+    -- EXISTS`），补出来的老行是 `''` = **来源未知**，与"规则"区分得开。
+    source        TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL DEFAULT ''
 );
 
@@ -70,6 +81,19 @@ class CoverageExperienceStore:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = sqlite3.connect(str(self.db_path))
             self._conn.executescript(_SCHEMA)
+            # **老库补 `source` 列**：`CREATE TABLE IF NOT EXISTS` 对已存在的表
+            # 什么都不做，所以后加的列必须在建表语句之外补一次。SQLite 没有
+            # `ADD COLUMN IF NOT EXISTS`，靠"先查 pragma 再 ALTER"。
+            # 补出来的老行是 `''`（来源未知）—— 与"规则决定"**分得开**，
+            # 不会被误当成有来源的样本喂给蒸馏。
+            try:
+                cols = {r[1] for r in self._conn.execute(
+                    "PRAGMA table_info(coverage_rounds)").fetchall()}
+                if "source" not in cols:
+                    self._conn.execute(
+                        "ALTER TABLE coverage_rounds ADD COLUMN source TEXT NOT NULL DEFAULT ''")
+            except sqlite3.Error:
+                pass
             self._conn.commit()
         return self._conn
 
@@ -88,11 +112,16 @@ class CoverageExperienceStore:
 
     def record_round(self, round_num: int, action_type: str, reason: str,
                      gap_reasons: List[str], prev_coverage: float,
-                     new_coverage: float, unreachable_dims: List[str] = None) -> None:
+                     new_coverage: float, unreachable_dims: List[str] = None,
+                     source: str = "") -> None:
         """记录一轮决策动作的覆盖率反馈。
 
         若 REFACTOR_RTL 未改善覆盖率，则对 unreachable 归因的维度记一次 strike；
         若改善了，则清零对应 strike（说明该维度其实是可修的死代码）。
+
+        `source` 是**这个动作是谁定的**（`Action.source`）—— 见表定义里那段注释：
+        不分来源地聚合会让蒸馏出幸存者偏差。缺省 `''` = 来源未知（老调用方 /
+        老数据），**与"规则决定"分得开**。
         """
         delta = round(float(new_coverage) - float(prev_coverage), 3)
         improved = 1 if delta > 0 else 0
@@ -102,11 +131,12 @@ class CoverageExperienceStore:
             conn.execute(
                 "INSERT INTO coverage_rounds "
                 "(round_num, action_type, reason, gap_reasons, prev_coverage, "
-                "new_coverage, delta, improved, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "new_coverage, delta, improved, source, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (round_num, action_type, reason,
                  json.dumps(gap_reasons or [], ensure_ascii=False),
-                 float(prev_coverage), float(new_coverage), delta, improved, now),
+                 float(prev_coverage), float(new_coverage), delta, improved,
+                 str(source or ""), now),
             )
             # unreachable 归因的反馈
             if action_type == "REFACTOR_RTL" and unreachable_dims:
@@ -159,12 +189,25 @@ class CoverageExperienceStore:
             }
         return out
 
-    def action_effectiveness(self) -> Dict[str, Dict[str, Any]]:
-        """聚合各决策动作的改善率与平均 Δ 覆盖率。"""
+    def action_effectiveness(self, source: Optional[str] = None
+                             ) -> Dict[str, Dict[str, Any]]:
+        """聚合各决策动作的改善率与平均 Δ 覆盖率。
+
+        `source` 给了就**只统计那个来源**（`rl_suggested` / `rule` / …）。
+        L5 蒸馏走 `source="rl_suggested"` —— 它要回答的是"**RL 选的动作**里
+        哪些真的有用"，而不是"凡是叫这个名字的动作"。
+
+        不分来源的后果很具体（这就是加这个参数的原因）：RL 建议了 A、被规则
+        退成 B，那一轮照样以 B 的名字记一条 —— 于是 A 的历史"效果"里混进了
+        一堆**它根本没被采用**的轮次。蒸馏据此算出的权重是幸存者偏差。
+        """
+        sql = "SELECT action_type, improved, delta FROM coverage_rounds"
+        params: tuple = ()
+        if source is not None:
+            sql += " WHERE source = ?"
+            params = (str(source),)
         with self._lock:
-            rows = self._connect().execute(
-                "SELECT action_type, improved, delta FROM coverage_rounds"
-            ).fetchall()
+            rows = self._connect().execute(sql, params).fetchall()
         agg: Dict[str, Dict[str, Any]] = {}
         for action_type, improved, delta in rows:
             if not action_type:
@@ -209,7 +252,7 @@ class CoverageExperienceStore:
         with self._lock:
             rows = self._connect().execute(
                 "SELECT round_num, action_type, reason, gap_reasons, prev_coverage, "
-                "new_coverage, delta, improved, created_at "
+                "new_coverage, delta, improved, source, created_at "
                 "FROM coverage_rounds ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
@@ -227,7 +270,7 @@ class CoverageExperienceStore:
     @staticmethod
     def _round_to_dict(row) -> Dict[str, Any]:
         (round_num, action_type, reason, gap_reasons, prev_coverage,
-         new_coverage, delta, improved, created_at) = row
+         new_coverage, delta, improved, source, created_at) = row
         try:
             gap_reasons = json.loads(gap_reasons or "[]")
         except Exception:
@@ -236,7 +279,10 @@ class CoverageExperienceStore:
             "round_num": round_num, "action_type": action_type, "reason": reason,
             "gap_reasons": gap_reasons, "prev_coverage": prev_coverage,
             "new_coverage": new_coverage, "delta": delta,
-            "improved": bool(improved), "created_at": created_at,
+            "improved": bool(improved),
+            # `''` = 来源未知（老数据）—— 与 "rule" 分得开
+            "source": source or "",
+            "created_at": created_at,
         }
 
 

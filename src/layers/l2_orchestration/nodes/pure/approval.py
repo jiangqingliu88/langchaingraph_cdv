@@ -151,7 +151,18 @@ async def n_approval(state: PipelineState, config) -> Dict[str, Any]:
     artifacts = _approval_artifacts(state)
     try:
         from src.layers.l2_orchestration.governance.approval import ApprovalDecision
-        if rt.interrupt_mode:
+        # **`--approval auto` 必须赢过 interrupt 机制。**
+        #
+        # 原来这里只判 `rt.interrupt_mode`，于是打开检查点之后**每一个**高危动作
+        # 都会停下来等人 —— 包括 CI 显式声明 `--approval auto`（无人值守）的那些。
+        # 实测：`verify --checkpoint（默认开）--approval auto` 跑到
+        # `FIX_FUNCTIONAL_bug` 就停住了，`auto` 等于没写。
+        #
+        # 判据用门控自己的 `requires_approval`（AUTO → False），而不是在这里
+        # 再比一次 mode：**该不该问**是门控的事，这里只决定"问"用哪种机制。
+        _must_ask = rt.approval_gate.requires_approval(action.action_type,
+                                                       risk_level="high")
+        if rt.interrupt_mode and _must_ask:
             # 有检查点 → 走 interrupt()：本节点**抛出**，图把状态存进检查点然后
             # 结束这次 astream。等人来答（可能是另一个进程、另一天），
             # 恢复时 interrupt() 直接**返回**答案，从这里往下继续。
@@ -162,6 +173,10 @@ async def n_approval(state: PipelineState, config) -> Dict[str, Any]:
             # **取 .decision**：ask() 返回的是 ApprovalRecord。此前这里直接拿 record
             # 与枚举比较，dataclass 的 __eq__ 对非同类返回 NotImplemented → 恒为 False，
             # 于是拒绝/跳过两条分支是死代码，「用户拒绝」根本不生效。
+            #
+            # 走到这里有两种情况：没检查点（通道模式，阻塞等答案），
+            # 或者**门控说不用问**（`--approval auto`）—— 后者 `ask()` 内部
+            # 直接返回 APPROVE，不会阻塞。
             record = rt.approval_gate.ask(action.action_type, summary,
                                           risk_level="high")
         _d = record.decision

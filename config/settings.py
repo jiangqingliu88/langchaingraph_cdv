@@ -18,7 +18,17 @@ class LLMSettings(BaseSettings):
     provider: str = "deepseek"
     model: str = "deepseek-flash"
     temperature: float = 0.0
-    max_tokens: int = 4096
+    #: 单次生成的**上限**（不是预留量）—— 只约束"最多能写多长"，短输出不多花钱。
+    #:
+    #: 4096 太小：`async_fifo` 这种多端口 IP 的 RTL 稳定超长，被截在 `endmodule`
+    #: 之前 —— 而截断的产物**语法不完整**，`_is_valid_rtl` 拒、`_decompose_ips`
+    #: 重试 3 次又都撞同一个上限，最后整个 IP 被丢（`design_arch.rtl_discarded`）。
+    #: 16384 是给"一个模块的 RTL"留的余量；本机跑 deepseek-flash，模型侧上限远大于此。
+    #:
+    #: 注意 `llm_factory.DEEPSEEK_MODELS` 里那个 `max_tokens` 是**描述性元数据**
+    #: （给 `llm-models` 列表看的），不参与请求 —— 请求用的一直是这个值
+    #: （`create_llm` 的 `selected_max_tokens = max_tokens or llm_config.max_tokens`）。
+    max_tokens: int = 16384
     api_key: str = ""           # 生产环境必须显式设置
     base_url: Optional[str] = "https://api.deepseek.com/v1"
 

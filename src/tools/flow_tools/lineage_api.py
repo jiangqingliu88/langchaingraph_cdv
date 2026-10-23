@@ -115,6 +115,20 @@ def lineage_versions(module: str = "") -> list:
         store.close()
 
 
+def prune_lineage(keep_last: int = 50, module: str = "",
+                  dry_run: bool = False) -> Dict[str, Any]:
+    """清理**孤儿**版本行（见 `LineageStore.prune` 的三条判据）。
+
+    默认 `dry_run=True` —— 先给人看一眼要删什么再动手。这张库是签核回溯的锚，
+    删错一条（比如某个基准）会让"这版和最初那版差多少"永久答不出来。
+    """
+    store = LineageStore()
+    try:
+        return store.prune(keep_last=keep_last, module=module, dry_run=dry_run)
+    finally:
+        store.close()
+
+
 def lineage_bugs(module: str = "", version_no: Optional[int] = None) -> list:
     """bug ↔ RTL 版本（`module`/`version_no` 都可缺省）。"""
     store = LineageStore()

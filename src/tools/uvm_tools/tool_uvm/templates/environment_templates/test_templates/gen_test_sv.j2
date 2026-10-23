@@ -77,6 +77,53 @@ class {{ environment.env_name }}_gen_test extends uvm_test;
     super.main_phase(phase);
     `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
     phase.raise_objection(this);
+
+    // **必须真启动序列** —— 这个类声明了 `<agent>_seq` 这些句柄却从不启动它们，
+    // objection 起来就落，于是**一个激励都不发**。
+    //
+    // 它不是"少跑几条用例"，是**整条验证链静默失效**：DUT 的输入没人驱动 → 全 X
+    // → 内部寄存器被 X 传播（`queue_level <= queue_level + (instr_valid ? 1 : 0)`，
+    // `instr_valid` 是 X 就整个变 X）→ 覆盖率恒 0%、断言因 X 而报错。
+    // 实测：这一条让 p0 6/7 全红，而**日志上看不出"没驱动"**（仿真正常跑完、
+    // UVM 报告正常打印，只有把信号 examine 出来才看得到满屏的 x）。
+    //
+    // 两个条件都要（与 `test_directed.sv.j2` 同一套，那边的注释记着事故）：
+    //   · `is_master` —— slave 实例是响应侧，没有自己的激励序列
+    //   · `is_active` —— **passive 实例根本不创建 sequencer**，
+    //     `_seq.start(null)` 会让序列永远等不到授权、objection 永不释放，
+    //     一路挂到 PH_TIMEOUT（9200 秒仿真时间）。
+{%- if environment.has_constraints %}
+    // **批次 test 走协调序列**：它在每个迭代里先建事务，再按 `batch_policy`
+    // 指定的策略 `apply()`，然后发出。以前批次 test 只 `set` 了一个策略名，
+    // 而 `main_phase` 启动的是 agent 的普通序列 —— **名字挂上了，没人用**。
+    //
+    // 属性 test 不设 `batch_policy`（它走 `<field>_int` 那条通道），所以照旧。
+    begin
+      string _batch_policy = "";
+      if (uvm_config_db#(string)::get(null, "", "batch_policy", _batch_policy)
+          && _batch_policy != "") begin
+        {{ environment.env_name }}_coordinated_sequence _vseq;
+        _vseq = {{ environment.env_name }}_coordinated_sequence::type_id::create("_vseq");
+        _vseq.start(env.virtual_sqr);
+      end else begin
+{%- endif %}
+{%- for agent in agents %}
+{%- if agent.is_master is not false and agent.active is not false %}
+        begin
+          {{ agent.sequence_type }} _seq;
+          _seq = {{ agent.sequence_type }}::type_id::create("_seq");
+          _seq.start(env.{{ agent.name }}_agent_h.sequencer);
+        end
+{%- endif %}
+{%- endfor %}
+{%- if environment.has_constraints %}
+      end
+    end
+{%- endif %}
+
+    // pragma custom run_logic begin
+    // pragma custom run_logic end
+
     phase.drop_objection(this);
   endtask
 

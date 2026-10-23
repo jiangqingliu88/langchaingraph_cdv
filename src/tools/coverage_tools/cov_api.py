@@ -157,6 +157,90 @@ def _vcover_binary() -> str:
     return shutil.which("vcover") or shutil.which("vcover.exe") or ""
 
 
+def materialize_ucdb(db_path: str, *, force: bool = False) -> Tuple[str, str]:
+    """覆盖率库 → **可被 vcover / Visualizer 读取的 UCDB**，失败给 `(路径, 原因)`。
+
+    ## 为什么需要这一步（实测）
+
+    回归的 `-coverstore <store> -testname <test>` 产物是：
+
+        <store>/questa.db        ← 覆盖率**存储索引**
+        <store>/<test>.data      ← 实际数据
+
+    `vcover report -cvg <store>/questa.db` 只报 **"No matching coverage data"**，
+    代码覆盖率（`-codeAll`）却读得到 —— 也就是**功能覆盖率整段丢失**。原因不是
+    没采到（用例日志里 covergroup 明明有命中），而是**读法不对**：
+
+        vcover merge <out.ucdb> "<store>:<test>"
+
+    才是 coverstore 的入口。转换后的 UCDB 同时能给 `vcover report` 和
+    `visualizer -ucdbfile` 用。
+
+    ## 缓存
+
+    结果落在 `<store>/_ucdb/<test>.ucdb`；比 `questa.db` 新就直接复用 ——
+    点第二次不该再等一次 merge。库重跑过（mtime 变新）就重做。
+
+    **Windows 的冒号坑**：`<store>:<test>` 里的 `:` 会和盘符 `D:` 混淆（实测
+    `vcover` 把整串当 UCDB 文件名打开失败）。所以命令在 `store.parent` 下执行，
+    spec 只用**相对目录名**：`npu_basic_test:npu_basic_test`。
+    """
+    p = Path(db_path) if db_path else None
+    if p is None or not p.exists():
+        return "", f"覆盖率库不存在：{db_path or '(空)'}"
+    if p.suffix.lower() == ".ucdb":
+        return str(p), ""                     # 已经是 UCDB，不用转
+    if p.name != QUESTA_DB_NAME:
+        return str(p), ""                     # 其它格式直接交给 vcover 自己判
+
+    store = p.parent
+    data_files = sorted(store.glob("*.data"))
+    test = (data_files[0].stem if len(data_files) == 1
+            else (store.name if not data_files else
+                  max(data_files, key=lambda x: x.stat().st_mtime).stem))
+    # **`(null).data` 是 `-testname` 漏传的产物**（`cov+wave` 曾经的 bug）。
+    # 这种 store 没有 test 名，`vcover merge "store:test"` 会崩（vcover 内部错误）；
+    # 正确写法是只给 store 路径：`vcover merge out "cov/npu_basic_test"`，
+    # 它会自己报 `Merging test cov/npu_basic_test:(null)`。输出名用目录名。
+    null_test = (not test) or test in ("(null)", "null")
+    if null_test:
+        test = store.name
+    out_dir = store / "_ucdb"
+    # **输出必须是绝对路径**：`vcover` 的 `cwd` 被设成 `store.parent`（为了让
+    # `store:test` 保持相对、避开盘符冒号），此时相对输出路径会落到那个 cwd 下
+    # —— 实测 vcover 报 "...ucdb.questatmp: Failed to open in write mode"。
+    out = (out_dir / f"{test}.ucdb").resolve()
+    try:
+        if (not force and out.is_file()
+                and out.stat().st_mtime >= p.stat().st_mtime):
+            return str(out), ""
+    except OSError:
+        pass
+
+    vcover = _vcover_binary()
+    if not vcover:
+        return "", "找不到 vcover（QuestaSim 的覆盖率工具）—— 无法读取 coverstore"
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        # **spec 里必须带一层目录**（`cov/<test>`）：
+        # `cwd=test_dir`，`store` 相对它是 `cov/<test>`；只写 `<test>:<test>`
+        # 会被 vcover 当成一个目录名去找 `.../merged.mdata*`（实测）。
+        # 带 test 名时是 `cov/<test>:<test>`；null test 时只给 `cov/<test>`。
+        cwd = store.parent.parent
+        rel = store.relative_to(cwd).as_posix()
+        spec = rel if null_test else f"{rel}:{test}"
+        proc = subprocess.run(
+            [vcover, "merge", str(out), spec],
+            cwd=str(cwd.resolve()), capture_output=True, text=True,
+            errors="replace", timeout=_TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError) as e:
+        return "", f"vcover merge 跑不起来：{e}"
+    if not out.is_file():
+        tail = ((proc.stdout or "") + (proc.stderr or "")).strip()[-400:]
+        return "", tail or f"vcover merge 没产出 UCDB（退出码 {proc.returncode}）"
+    return str(out), ""
+
+
 def build_coverage_report(db_path: str, output_dir: str = "",
                           force: bool = False) -> Dict[str, Any]:
     """覆盖率库 → HTML 报告。返回 `{status, html, output_dir, cached, error}`。
@@ -164,9 +248,16 @@ def build_coverage_report(db_path: str, output_dir: str = "",
     **失败响亮**：库不在 / vcover 找不到 / vcover 报错，都如实说清是哪一个 ——
     调用方（界面）据此告诉人"为什么点了没反应"。不抛异常。
     """
-    db = Path(db_path) if db_path else None
-    if db is None or not db.exists():
+    raw = Path(db_path) if db_path else None
+    if raw is None or not raw.exists():
         return {"status": "FAIL", "error": f"覆盖率库不存在：{db_path or '(空)'}"}
+
+    # coverstore（`questa.db`）先转成 UCDB —— 否则 `vcover report -cvg` 只能读到
+    # 代码覆盖率，功能覆盖率会**静默丢失**（见 `materialize_ucdb` 的实测说明）。
+    materialized, why = materialize_ucdb(str(raw), force=force)
+    if why:
+        return {"status": "FAIL", "db": str(raw), "error": why}
+    db = Path(materialized)
 
     out = Path(output_dir) if output_dir else db.parent / HTML_DIR_NAME
     index = out / "index.html"

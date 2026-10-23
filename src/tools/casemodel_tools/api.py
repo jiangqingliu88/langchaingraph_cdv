@@ -194,6 +194,25 @@ def run_generate(yaml_text: str, max_cases: Optional[int] = None,
     }
 
 
+def run_testpoints(yaml_text: str, *, env_name: str = "",
+                   agents: Optional[Dict[str, List[str]]] = None,
+                   module_name: str = "",
+                   max_tests: Optional[int] = None) -> Dict[str, Any]:
+    """YAML 文本 → **测试点 IR**（`coverage/testpoints.yaml` 的来源）。
+
+    一条测试点 = 建模 → 激励 → 覆盖仓 → test 类 → 回归级 → 判据的公共主键。
+    `agents` 是 `{agent 名: [事务字段名]}`，用来把 `stimulus` 解析到具体 agent
+    （不给也能出 TP，只是 `realization.agent` 为空）。
+
+    实现在 `plan.py`（纯函数，零 LLM）；这里只做**门面**，与 api 的其它入口
+    放在一起，调用方不用记模块名。
+    """
+    from .plan import run_testpoints as _impl
+
+    return _impl(yaml_text, env_name=env_name, agents=agents,
+                 module_name=module_name, max_tests=max_tests)
+
+
 def _ascii_key(text: str) -> str:
     """一段文本 → ASCII 标识符片段。
 
@@ -239,23 +258,44 @@ def run_uvm_tests(yaml_text: str, *, dimensions: Optional[List[str]] = None,
 
     # `tests:` 列了多个对象时，**维度空间是共享的** —— 属性取值空间只有一个，
     # 所以这个列表与对象数无关，取第一个模型（= 共享空间）即可。
-    model = models[0]
+    # **必须 resolve**：联动字段（`linkage`）在解析时才展开成取值点，而
+    # `plan.build_testpoints` 用的是 resolved 模型。不解析就会两边条数不同，
+    # 于是"测试点 63 条 / 属性 test 20 条"，而没有任何地方报错。
+    model = models[0].resolve()
     wanted = set(dimensions or ())
     picked: List[Dict[str, Any]] = []
-    for dim in model.dimensions:
+
+    # **取值点遍历与测试点编号只走 `plan.py` 一处** —— 两处各推一次就会漂，
+    # 而漂了的表现是"测试点归因到了另一条用例"这种查不出来的错。
+    from .plan import iter_value_points
+
+    for dim, fld, index, point, int_value, tp_id in iter_value_points(model):
         if wanted and not (wanted & {dim.id, dim.name, dim.key}):
             continue
-        key = _ascii_key(dim.id or dim.name)
-        for fld in dim.fields:
-            for index, point in enumerate(fld.value_points()):
-                picked.append({
-                    "dimension": dim.id or dim.name,
-                    "value": point.token,
-                    "key": key,
-                    "int_value": _int_value_of(point.token, index),
-                    # 只用于排序，不进 YAML —— schema 是 additionalProperties: false
-                    "_boundary": bool(point.boundary),
-                })
+        entry = {
+            "dimension": dim.id or dim.name,
+            "value": point.token,
+            "key": _ascii_key(dim.id or dim.name),
+            "int_value": int_value,
+            # 测试点主键 —— 生成的 test 类、覆盖仓、回归报告都靠它对齐
+            "tp_id": tp_id,
+            # 只用于排序，不进 YAML —— schema 是 additionalProperties: false
+            "_boundary": bool(point.boundary),
+        }
+        # 激励通道：维度声明了 `stimulus.field` 就把它一起带出去 —— 生成的
+        # 属性 test 会把该字段钉在 config_db 上，master sequence 读它并约束事务。
+        # 没有声明 = 观测型维度，条目里就没有 `field`（不写空串，免得下游把
+        # 空串当成"已绑定"）。
+        drive_field = getattr(dim, "stimulus_field", "") or ""
+        if drive_field:
+            entry["field"] = drive_field
+        # **后门到达**：观测型维度没有输入引脚，测试里用 uvm_hdl_force 写入
+        # 内部状态、采完覆盖再 release。路径是模型里的领域知识，原样透传。
+        if str(getattr(dim, "realization_kind", "")).lower() == "backdoor":
+            path = str(getattr(dim, "realization_path", "") or "").strip()
+            if path:
+                entry["backdoor_path"] = path
+        picked.append(entry)
 
     total = len(picked)
     truncated = max_tests is not None and 0 <= max_tests < total

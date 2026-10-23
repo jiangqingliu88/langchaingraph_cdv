@@ -234,6 +234,87 @@ class TestRenderedScripts:
         assert "MODE_OPTS" not in sim_sh
 
 
+class TestModeExpansionIsTableDriven:
+    """`expand_modes`（纯函数）逐组合穷举 —— 端到端那条只覆盖默认词。
+
+    分开测的理由：`apply_modes` 那条路要真渲染一份 `regression.yaml` 才能看结果，
+    只跑得起几个组合；而展开逻辑是**最容易再踩一次**的地方（`cov+wave` 漏设分量
+    那次的事故代价是覆盖率恒为 0 而命令行看不出问题）。把决策抽成纯函数之后，
+    组合可以穷举 —— 下次加 `prof` / 三词组合时这张表会立刻红。
+    """
+
+    #: 与 `common_base.yaml` 的 `modes:` 同形（含组合词 `cov+wave`）。
+    MODES = {"cov": "cov_opt", "wave": "wave_opt",
+             "cov+wave": "cov_wave_opt", "upf": "upf_opt"}
+    #: 与 `sim_modes.yaml_variables()` 同形 —— 注意 `upf` 是**空串**（本后端没有）。
+    VARS = {"cov_opt": "-coverage", "wave_opt": "-qwavedb",
+            "cov_wave_opt": "-coverage -qwavedb", "upf_opt": ""}
+
+    def _expand(self, selection):
+        from src.tools.regression_tools.regression_framework.core.config import (
+            expand_modes,
+        )
+        applied, opts, warnings, flags = expand_modes(
+            self.MODES, dict(self.VARS), selection)
+        return applied, opts, warnings, set(flags)
+
+    def test_the_single_modes_each_enable_themselves(self):
+        for name, var in (("cov", "cov_opt"), ("wave", "wave_opt")):
+            applied, opts, warn, flags = self._expand([name])
+            assert applied == [name] and warn == []
+            assert opts == [self.VARS[var]]
+            assert flags == {f"{name}_enabled"}
+
+    def test_a_compound_mode_also_enables_each_of_its_parts(self):
+        """**本组的要点**：`cov+wave` 必须同时设 `cov_enabled` 与 `wave_enabled`。
+
+        只设 `cov+wave_enabled` 时，`{% if cov_enabled %}+cover{% endif %}` 不成立
+        → DUT 编译少 `+cover` → vsim 报 (vsim-8634) → **覆盖率恒为 0**，
+        而 `MODE_OPTS` 是对的，命令行上看不出任何异常。
+        """
+        applied, opts, warn, flags = self._expand(["cov+wave"])
+        assert applied == ["cov+wave"]
+        assert opts == ["-coverage -qwavedb"]
+        assert flags == {"cov+wave_enabled", "cov_enabled", "wave_enabled"}
+
+    def test_naming_parts_separately_is_equivalent_to_the_compound_word(self):
+        """组合词与分开写，**分量使能**必须一致。
+
+        这正是两侧（sim.sh / build.sh）都写 `{% if cov_enabled %}` 的前提：
+        无论人选 `cov+wave` 还是 `cov,wave`，`cov_enabled` 都得在。
+
+        **不等于**整个 flags 集合相等 —— 组合词额外会设一个 `cov+wave_enabled`
+        （它自己也还是个 mode 名）。比的是"分量"那一半。
+        """
+        _a1, _o1, _w1, f1 = self._expand(["cov+wave"])
+        _a2, _o2, _w2, f2 = self._expand(["cov", "wave"])
+        parts = {"cov_enabled", "wave_enabled"}
+        assert parts <= f1 and parts <= f2
+        assert (f1 - {"cov+wave_enabled"}) == f2
+
+    def test_an_unsupported_mode_is_warned_and_changes_nothing(self):
+        """`upf` 登记了但本后端**没有开关**（值是空串）→ 告警 + 不生效。
+
+        "人以为自己开了功耗业务、实际什么都没开"比报错更坏，所以要有一句。
+        """
+        applied, opts, warn, flags = self._expand(["upf"])
+        assert applied == [] and opts == [] and flags == set()
+        assert len(warn) == 1 and "upf" in warn[0]
+
+    def test_an_unknown_mode_is_warned_not_silently_dropped(self):
+        applied, opts, warn, flags = self._expand(["prof"])   # 还没登记的新词
+        assert applied == [] and flags == set()
+        assert len(warn) == 1 and "prof" in warn[0]
+
+    def test_duplicates_collapse_and_order_is_kept(self):
+        applied, _opts, _warn, flags = self._expand(["wave", "cov", "wave"])
+        assert applied == ["wave", "cov"]
+        assert flags == {"wave_enabled", "cov_enabled"}
+
+    def test_an_empty_selection_is_a_no_op(self):
+        assert self._expand([]) == ([], [], [], set())
+
+
 class TestForeignBuildsStayOut:
     """include 带进来的 VCS build **不能**被排进调度。"""
 
@@ -482,3 +563,91 @@ class TestWorkbenchSelection:
         ui.save("wave")
         assert ui.load() == "wave"
         assert ui.selected_modes() == ["wave"]
+
+
+class TestTheTagFilterAcceptsSeedExpandedNames:
+    """分级回归按 tag 挑用例时，**种子展开的名字必须认得出**。
+
+    ## 断在哪（实测）
+
+    配置里的 test 名是 `npu_type_test`（`count: 18`），实际生成的目录名是
+    `npu_type_test_run_1_seed_2001` —— **中间多了 `_run_` 段**。而筛选用的是：
+
+        dir_test_name.startswith(n + '_seed_')
+
+    于是 `npu_type_test_run_1_seed_2001` **不匹配**。`count == 1` 的
+    `npu_basic_test` 目录名恰好就是基名，所以它跑、它不跑 —— 看着像"有些用例过了"。
+
+    后果是**假绿**：p0 的 build 目录里生成了 218 条用例脚本，其中 194 条是种子
+    展开的批次用例，全被静默筛掉；而 `total=7 > 0` 又让"零用例"那道闸（EMPTY）
+    拦不住 —— **分级回归报 PASS，绝大多数用例一次都没跑**。报告、日志、退出码
+    全都正常，只有去数 `sim_vsim.log` 的个数才发现对不上。
+    """
+
+    def _matcher(self):
+        from src.tools.regression_tools.regression_framework.core.config import (
+            make_tag_matcher,
+        )
+
+        cfg = {
+            "tests": [
+                {"name": "npu_basic_test", "tags": ["p0", "batch"]},
+                {"name": "npu_type_test", "tags": ["p0", "batch"]},
+                {"name": "npu_cluster_test", "tags": ["p2", "batch"]},
+            ]
+        }
+        return make_tag_matcher(cfg, tags="p0")
+
+    def test_the_base_name_matches(self):
+        assert self._matcher()("npu_type_test") is True
+
+    def test_the_run_seed_form_matches(self):
+        m = self._matcher()
+        assert m("npu_type_test_run_1_seed_2001") is True
+        assert m("npu_type_test_run_18_seed_2018") is True
+
+    def test_the_plain_seed_form_still_matches(self):
+        assert self._matcher()("npu_type_test_seed_2001") is True
+
+    def test_a_name_that_already_carries_test_prefix_matches(self):
+        """**配置名自己带 `test_` 的情况**（loopback 就是：`test_npu_sched_in_loopback`）。
+
+        生成器还会再加一个前缀 → 目录名 `test_test_npu_sched_in_loopback`。
+        只削一次前缀会得到 `test_npu_sched_in_loopback`，而声明侧削完是
+        `npu_sched_in_loopback` —— 两边对不上，**这一级被筛成 EMPTY**
+        （实测：修好种子用例之后 loopback 从 PASS 变 EMPTY）。
+
+        规则必须是"**把所有前导 `test_` 都削掉**"。
+        """
+        from src.tools.regression_tools.regression_framework.core.config import (
+            strip_test_prefix,
+        )
+
+        assert strip_test_prefix("test_test_npu_sched_in_loopback") == "npu_sched_in_loopback"
+        assert strip_test_prefix("test_npu_sched_in_loopback") == "npu_sched_in_loopback"
+        # 中间的 `test_` 不许动（种子用例名里就有一个）
+        assert strip_test_prefix("test_npu_type_test_run_1_seed_2001") ==             "npu_type_test_run_1_seed_2001"
+
+    def test_a_test_from_another_tier_does_not_match(self):
+        """别为了放宽而放宽 —— `p2` 的批次不能被 `p0` 收进来。"""
+        m = self._matcher()
+        assert m("npu_cluster_test") is False
+        assert m("npu_cluster_test_run_1_seed_7001") is False
+
+    def test_a_different_test_sharing_a_prefix_does_not_match(self):
+        """`npu_type_test_extra_...` 不是同一个用例 —— `_run_`/`_seed_` 是**整段**。"""
+        m = self._matcher()
+        assert m("npu_type_test_extra") is False
+
+
+def test_cov_wave_coverstore_is_test_associated():
+    """`cov+wave` 的 `-coverstore` 必须带 `-testname`。
+
+    少了它 Questa 落成 `(null).data`；之后按用例打开覆盖率时，vcover 找不到
+    对应 test 名 —— 功能覆盖率会**静默读不到**（实测）。
+    """
+    from src.tools.regression_tools import sim_modes
+
+    value = sim_modes.get("cov+wave").value
+    assert "-coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME}" in value
+    assert "-testname ${EMAN_TEST_NAME}" in value

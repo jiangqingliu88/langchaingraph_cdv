@@ -639,8 +639,15 @@ class PipelineExecutionService:
                     _copied = 0
                     for f in sorted(src.rglob("*")):
                         if f.is_file() and f.suffix.lower() in (".sv", ".v", ".svh", ".vh"):
-                            target = dst / f.name
-                            target.write_bytes(f.read_bytes())
+                            # ⚠️ **别把这个局部变量叫 `target`** —— 它是"拷到哪"，
+                            # 而同名参数 `target` 是**覆盖率目标**。原来这里写成
+                            # `target = dst / f.name`，把它**遮蔽**掉，于是十几行后的
+                            # `PipelineState(target=float(target))` 拿到一个 Path，
+                            # 当场 `TypeError`。`--rtl` 这条路上 100% 复现。
+                            # （另一条路 `run_closed_loop` 写的是就地表达式，没这个坑 ——
+                            # 两条路各写一遍，一边踩了另一边没踩。）
+                            _dst_file = dst / f.name
+                            _dst_file.write_bytes(f.read_bytes())
                             _copied += 1
                     logger.info(f"外部 RTL 已纳入：{_copied} 个文件 ← {rtl_dir}")
                     # **只跳 design，不跳 model**：外部 RTL 只省掉「生成 RTL」

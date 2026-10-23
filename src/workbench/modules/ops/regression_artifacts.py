@@ -335,10 +335,11 @@ class RegressionWaveModule(_ArtifactPage):
     ARTIFACT_KEY = "wave"
     ARTIFACT_NOUN = "波形"
     OPEN_LABEL = "打开波形"
-    HINT = ("一条用例一行。**点一行就直接用 Questa Visualizer 打开那条用例的波形**"
-            "（波形业务产的 `qwave.db`，走 `visualizer -wavefile`；老产物 `.wlf` 则用 "
-            "`vsim -view`，按扩展名自动选）。缺波形的也列出来 —— 那多半是没跑到底的"
-            "用例，少了波形本身就是要看的东西。总覆盖率的入口在「回归状态」页。")
+    HINT = ("一条用例一行。**点一行直接用 Questa Visualizer 打开那条用例的波形**"
+            "（需要回归开 `wave` 业务，产 `waves/*.db`，走 `visualizer -wavefile`）；"
+            "**只开了 `cov` 的轮次没有 qwavedb**，只剩 `vsim.wlf` —— 那种情况按扩展名"
+            "回退到 `vsim -view`（Visualizer 不认 WLF）。缺波形的也列出来 —— 那多半是"
+            "没跑到底的用例，少了波形本身就是要看的东西。总覆盖率的入口在「回归状态」页。")
 
     def _open(self, row: Dict[str, Any]) -> None:
         if not row:

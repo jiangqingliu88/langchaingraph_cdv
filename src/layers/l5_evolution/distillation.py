@@ -141,15 +141,33 @@ class DistillationOrchestrator:
     # ═══════════════════════════════════════════════════════════
 
     def _channel_decision_weight(self) -> List[DistillationProposal]:
-        """历史有效的决策动作蒸馏为权重建议（提高该动作优先级）。"""
+        """**RL 建议且被采纳**的那些动作 → 权重建议（提高优先级）。
+
+        ## 三条修正（都指向同一件事：别把没生效过的算成有效）
+
+        1. **只统计 `source == "rl_suggested"` 的轮次**。不分来源的话，RL 提名 A、
+           被规则退成 B 的那一轮会以 B 的名字记一条 —— A 的"历史改善率"里混进
+           一堆它**根本没被采用**的轮次，蒸馏出的权重是幸存者偏差。
+        2. **候选动作从库里取，不手写、也不去 import RL 的动作清单**。
+           原来硬编码四个名字，其中 `REFACTOR_RTL` 在当前动作全集里**已经不存在**
+           —— 那一桶永远是空的（`trials < 2` 直接跳过），而没人看得出来
+           "这里少学了一个动作"。
+           换成 import `SOFT_ACTIONS` 也不行：那会让 **L5 依赖 L3**，而
+           "L5 不得 import L2/L3"是**被层向测试拦下的**（实测当场红）。
+           正确做法是**根本不需要那份清单** —— 库里带 `rl_suggested` 来源的动作，
+           **按构造**就是 RL 选过的（没被 RL 选过的不可能有这个来源）。
+           于是"分发来源"这一步同时解决了"清单从哪来"。
+        3. **一条样本都没有时返回空**，不退回"用全量统计凑一个"：
+           没有可靠样本就说没有，别拿混过来源的数当 RL 的学习依据。
+        """
         try:
-            from src.layers.l5_evolution.growth import get_action_experience
+            from src.layers.l5_evolution.growth import get_action_experience, \
+                rl_suggested_actions
         except Exception:
             return []
         proposals = []
-        for action_type in ("RELAX_CONSTRAINT", "GENERATE_DIRECTED_TEST",
-                            "EXPAND_SEEDS", "REFACTOR_RTL"):
-            exp = get_action_experience(action_type)
+        for action_type in rl_suggested_actions():
+            exp = get_action_experience(action_type, source="rl_suggested")
             if not exp or exp.get("trials", 0) < 2:
                 continue
             if exp.get("improve_rate", 0) < 0.5:
@@ -163,9 +181,11 @@ class DistillationOrchestrator:
                         "weight": round(1.0 + exp.get("improve_rate", 0), 3),
                         "improve_rate": exp.get("improve_rate", 0),
                         "avg_delta": exp.get("avg_delta", 0),
+                        "source": "rl_suggested",
                     }
                 },
-                reasoning=(f"动作 {action_type} 历史改善率 {exp.get('improve_rate', 0):.0%}"
+                reasoning=(f"动作 {action_type} 由 RL 选中并采纳后，"
+                           f"历史改善率 {exp.get('improve_rate', 0):.0%}"
                            f"（{exp.get('trials', 0)} 次），建议提高决策优先级"),
                 confidence=exp.get("improve_rate", 0),
             ))

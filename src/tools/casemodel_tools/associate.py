@@ -72,7 +72,7 @@ def associate(case_text: str, coverage_text: str,
     返回：`{links, issues, counts, notes, renderable, summary}`。
     `renderable` 为假表示"这组模型渲染不出可信的 SV"（有 error）。
     """
-    from .coverage import parse_coverage_model
+    from .coverage import declared_bin_names, parse_coverage_model
     from .repository import load_models_from_text
 
     issues: List[Dict[str, str]] = []
@@ -109,8 +109,12 @@ def associate(case_text: str, coverage_text: str,
     for dim in case.dimensions:
         for fld in dim.fields:
             if fld.cover_bins:
-                field_bins[fld.qualified] = [str(b) for b in fld.cover_bins
-                                             if isinstance(b, str)]
+                # **两种写法都要收**（裸名字 / 对象 `{name: …}`）—— 这里原来
+                # 用 `isinstance(b, str)` 过滤，于是对象形式的声明**全被丢掉**：
+                # `field_bins` 空 → 边 ① 的"字段有没有落成仓"整条查不动，
+                # 而反向那条（"覆盖率里的 bin 没人认领"）会对每个 bin 误报。
+                # 归一逻辑与解析侧共用一处（`coverage.declared_bin_names`）。
+                field_bins[fld.qualified] = sorted(declared_bin_names(fld))
     declared = {b for names in field_bins.values() for b in names}
     got = raw_bins or {b.name for cp in cov.coverpoints for b in cp.bins}
 
@@ -459,8 +463,25 @@ def theme_policy_map(themes: List[Dict[str, str]]) -> Dict[str, str]:
     return out
 
 
+def _policy_assignments(theme_key: str, method: str, dims: List[Any],
+                        ports: List[Dict[str, str]],
+                        agent_fields: Optional[Dict[str, List[str]]],
+                        notes: List[str]) -> List[Dict[str, Any]]:
+    """专题 → **真实约束赋值**（`apply()` 里要执行的那些）。
+
+    实现在框架的 `framework.constraints`（注册表，可扩展更多约束来源）。
+    本函数保留为**兼容入口** —— 旧调用方/测试不用改。
+    """
+    from .framework.constraints import ConstraintRequest, compile_assignments
+
+    return compile_assignments(ConstraintRequest(
+        theme_key=theme_key, method=method, dims=dims, ports=ports,
+        agent_fields=agent_fields, notes=notes))
+
+
 def build_constraint(case_text: str,
-                     ports: Optional[List[Any]] = None) -> Dict[str, Any]:
+                     ports: Optional[List[Any]] = None,
+                     agent_fields: Optional[Dict[str, List[str]]] = None) -> Dict[str, Any]:
     """case 模型 → 约束模型（策略 + 组合器）的**骨架**。
 
     产出正好是 `gen_uvm.parse_constraint_model` 认的形状（顶层 `constraint` /
@@ -564,9 +585,14 @@ def build_constraint(case_text: str,
     policy_names = theme_policy_map(themes)
     policies: List[Dict[str, Any]] = []
     mapping: List[Tuple[str, str, str]] = []
+    notes: List[str] = []
     for t in ordered:
         mode = METHOD_TO_POLICY[t["method"]][1]
         name = policy_names[t["key"]]
+        _dims = [d for d in (case.dimension(k) for k in _dim_keys(t["dimensions"]))
+                 if d is not None]
+        assignments = _policy_assignments(t["key"], t["method"], _dims, norm,
+                                          agent_fields, notes)
         policies.append({
             "name": name,
             "description": f"{t['name'] or t['key']}（{t['method']} → {mode}）"
@@ -582,6 +608,10 @@ def build_constraint(case_text: str,
             # **归一成 canonical key**：专题写的是原始引用（`指令类型` 也行），
             # 而覆盖率侧 `coverpoint.dimension` 是 `D_type` —— 不归一两条边对不上。
             "dimensions": _dim_keys(t["dimensions"]),
+            #: **真实约束** —— `apply()` 要执行的字段赋值。空列表 = 这个专题
+            #: 的维度都不可驱动（观测型），策略仍是骨架。
+            "assignments": assignments,
+            "backed": bool(assignments),
         })
         mapping.append((t["key"], name, mode))
 
@@ -608,21 +638,36 @@ def build_constraint(case_text: str,
         mapping="、".join(f"{k}→{n}({m})" for k, n, m in mapping))
 
     skipped = [t["key"] for t in themes if not t["method"]]
-    notes = [
-        "策略是**结构骨架**：case 模型只有建模语义，没有协议参数 —— 所以 `params` "
-        "为空、策略体在 gen_uvm 里落成空 apply 骨架，协议逻辑要人补（补在"
-        "`env/cons/` 的策略里，不在这个 yaml）",
+    backed = sum(1 for p in policies if p.get("backed"))
+    unbacked = len(policies) - backed
+    notes.extend([
+        # **现在的定位**：可驱动的维度已经编译成真实赋值；不可驱动的维度
+        # （DUT 内部量/输出端口）没有输入引脚，编不出约束 —— 那不是"漏了"，
+        # 是"模型里没有可驱动的那一半"。
+        f"策略体：{backed}/{len(policies)} 条由模型编译出真实字段赋值"
+        f"（`apply()` 里按迭代轮转/随机选合法取值）；其余 {unbacked} 条仍是骨架，"
+        f"因为它们的维度不可驱动（没有 `stimulus.field`）",
+        "协议参数（地址对齐、握手时序等）仍然**没有**从模型推 —— 模型里没有这些"
+        "知识，留空比编一个假参数诚实",
         f"`combinator.modes` 五个模式**全列**（不按有没有策略用它裁剪）——"
         f"组合器的 `case` 分支是写死的 5 个，少一个 vlog 就报未声明标识符",
         f"`default_mode` 取**优先级最高**那个专题的方法（{mapping[0][0]} → {default_mode}）",
         "端口（agents）是**人给的**，不是从 case 模型推的 —— 端口名 ↔ 字段名的对应"
         "没有建模，推不出来（`associate` 边 ③ 只查得到约束内部那一半）",
-    ]
+    ])
     if skipped:
         notes.append(f"这些专题没有声明 `method`，不驱动激励、没生成策略："
                      f"{'、'.join(skipped)}")
 
     return {
+        #: **还有没有"完全空"的策略** —— 一条赋值都没编出来的。
+        #:
+        #: 这不再是一刀切的 `True`：可驱动维度（`stimulus.field`）已经编译成
+        #: `assignments`，模板会把它们渲染进 `apply()`。仍然为 `True` 意味着
+        #: **所有**专题的维度都不可驱动（观测型），那才是"约束层整个是骨架"。
+        #: 下游据此判"约束有没有真的在约束"，免得把"env/cons 生成了"读成
+        #: "约束起作用了"。
+        "policies_are_skeletons": backed == 0,
         "constraint": doc["constraint"],
         "transactions": norm,
         "policies": policies,
@@ -631,6 +676,10 @@ def build_constraint(case_text: str,
         "mapping": [{"theme": k, "policy": n, "mode": m} for k, n, m in mapping],
         "skipped_themes": skipped,
         "policy_count": len(policies),
+        #: 编译出真实赋值的策略数 / 仍是骨架的策略数。审计与 caveat 按这个
+        #: 报"一半有约束、一半是骨架"，而不是一个二值开关。
+        "backed_policy_count": backed,
+        "unbacked_policy_count": unbacked,
         "default_mode": default_mode,
         "notes": notes,
     }

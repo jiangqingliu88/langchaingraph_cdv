@@ -114,7 +114,9 @@ class TestFindRunCoverage:
 
 class TestBuildCoverageReport:
 
-    def _db(self, tmp_path, name="questa.db"):
+    def _db(self, tmp_path, name="case.ucdb"):
+        # 这里测的是**报告生成**，不是 coverstore 转换 —— 用一个真正的 UCDB
+        # （`questa.db` 的转换由 `test_coverage_coverstore.py` 单独钉）。
         db = tmp_path / "cov" / "t1" / name
         db.parent.mkdir(parents=True)
         db.write_bytes(b"db")

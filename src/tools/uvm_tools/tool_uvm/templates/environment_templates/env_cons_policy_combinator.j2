@@ -1,15 +1,15 @@
 {% include "base_templates/base_template.sv.j2" %}
 
-// {{ project.name }}_policy_combinator.sv
+// {{ environment.env_name }}_policy_combinator.sv
 // 自动生成的策略组合器
 
-`include "{{ project.env_name }}_constraint_policies.sv"
+`include "{{ environment.env_name }}_constraint_policies.sv"
 
-class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_constraint_policy;
-  `uvm_object_utils({{ project.env_name }}_policy_combinator)
+class {{ environment.env_name }}_policy_combinator extends {{ environment.env_name }}_constraint_policy;
+  `uvm_object_utils({{ environment.env_name }}_policy_combinator)
   
   // 策略列表
-  {{ project.env_name }}_constraint_policy policies[$];
+  {{ environment.env_name }}_constraint_policy policies[$];
   
   // 组合模式
   typedef enum {
@@ -23,8 +23,15 @@ class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_co
   // 统计
   int apply_count[$];
   int verify_count[$];
-  
-  function void add_policy({{ project.env_name }}_constraint_policy policy);
+
+  // **必须显式声明构造函数**：Questa 下派生类不写 `new` 时，
+  // `uvm_object_utils` 里的 `new(name)` 会报
+  // "Number of actuals and formals does not match"（实测最小复现）。
+  function new(string name = "{{ environment.env_name }}_policy_combinator");
+    super.new(name);
+  endfunction
+
+  function void add_policy({{ environment.env_name }}_constraint_policy policy);
     policies.push_back(policy);
     apply_count.push_back(0);
     verify_count.push_back(0);
@@ -41,7 +48,7 @@ class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_co
     end
   endfunction
   
-  function {{ project.env_name }}_constraint_policy get_policy(string policy_name);
+  function {{ environment.env_name }}_constraint_policy get_policy(string policy_name);
     foreach (policies[i]) begin
       if (policies[i].policy_name == policy_name)
         return policies[i];
@@ -49,7 +56,7 @@ class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_co
     return null;
   endfunction
   
-  virtual function void apply(ref {{ project.env_name }}_policy_context ctx);
+  virtual function void apply(ref {{ environment.env_name }}_policy_context ctx);
     // 按优先级排序
     sort_by_priority();
     
@@ -82,7 +89,7 @@ class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_co
       end
       
       APPLY_SEQUENTIAL: begin
-        {{ project.env_name }}_policy_context temp_ctx = new();
+        {{ environment.env_name }}_policy_context temp_ctx = new();
         temp_ctx.copy(ctx);
         
         for (int i = 0; i < policies.size(); i++) begin
@@ -96,12 +103,12 @@ class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_co
       end
       
       APPLY_CHAIN: begin
-        {{ project.env_name }}_policy_context chain_ctx = new();
+        {{ environment.env_name }}_policy_context chain_ctx = new();
         chain_ctx.copy(ctx);
         
         for (int i = 0; i < policies.size(); i++) begin
           if (policies[i].enabled) begin
-            {{ project.env_name }}_policy_context output_ctx = new();
+            {{ environment.env_name }}_policy_context output_ctx = new();
             output_ctx.copy(chain_ctx);
             policies[i].apply(output_ctx);
             apply_count[i]++;
@@ -114,7 +121,7 @@ class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_co
     endcase
   endfunction
   
-  virtual function bit verify(ref {{ project.env_name }}_policy_context ctx);
+  virtual function bit verify(ref {{ environment.env_name }}_policy_context ctx);
     bit result = 1;
     for (int i = 0; i < policies.size(); i++) begin
       if (policies[i].enabled) begin
@@ -130,19 +137,22 @@ class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_co
   endfunction
   
   function void sort_by_priority();
+    // 声明全部放函数开头（SV：块内声明必须先于语句）
+    {{ environment.env_name }}_constraint_policy temp_p;
+    int temp_c;
     for (int i = 0; i < policies.size() - 1; i++) begin
       for (int j = 0; j < policies.size() - i - 1; j++) begin
-        if (policies[j].priority > policies[j+1].priority) begin
+        if (policies[j].policy_priority > policies[j+1].policy_priority) begin
           // 交换策略
-          {{ project.env_name }}_constraint_policy temp_p = policies[j];
+          temp_p = policies[j];
           policies[j] = policies[j+1];
           policies[j+1] = temp_p;
-          
+
           // 交换统计
-          int temp_c = apply_count[j];
+          temp_c = apply_count[j];
           apply_count[j] = apply_count[j+1];
           apply_count[j+1] = temp_c;
-          
+
           temp_c = verify_count[j];
           verify_count[j] = verify_count[j+1];
           verify_count[j+1] = temp_c;
@@ -153,19 +163,20 @@ class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_co
   
   function int select_weighted();
     int total_weight = 0;
+    int rand_weight;
+    int acc = 0;
     for (int i = 0; i < policies.size(); i++) begin
       if (policies[i].enabled)
-        total_weight += policies[i].priority;
+        total_weight += policies[i].policy_priority;
     end
-    
+
     if (total_weight == 0) return -1;
-    
-    int rand_weight = $urandom_range(0, total_weight - 1);
-    int acc = 0;
-    
+
+    rand_weight = $urandom_range(0, total_weight - 1);
+
     for (int i = 0; i < policies.size(); i++) begin
       if (policies[i].enabled) begin
-        acc += policies[i].priority;
+        acc += policies[i].policy_priority;
         if (rand_weight < acc)
           return i;
       end
@@ -174,14 +185,19 @@ class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_co
     return -1;
   endfunction
   
-  virtual function bit should_apply(int idx, ref {{ project.env_name }}_policy_context ctx);
+  virtual function bit should_apply(int idx, ref {{ environment.env_name }}_policy_context ctx);
     // 可以基于上下文判断是否应用
     return 1;
   endfunction
   
   function void configure_from_plusargs();
     string mode_str;
-    if ($value$plusargs("{{ project.env_name | upper }}_POLICY_MODE=%s", mode_str)) begin
+    // 循环体内要用的变量**全部前置声明**（SV 不允许语句之后再声明）
+    string disable_arg;
+    string enable_arg;
+    string priority_arg;
+    int new_priority;
+    if ($value$plusargs("{{ environment.env_name | upper }}_POLICY_MODE=%s", mode_str)) begin
       case (mode_str)
 {% for mode in combinator.modes %}
         "{{ mode }}": apply_mode = {{ mode }};
@@ -192,18 +208,17 @@ class {{ project.env_name }}_policy_combinator extends {{ project.env_name }}_co
     for (int i = 0; i < policies.size(); i++) begin
       policies[i].parse_plusargs();
       
-      string disable_arg = {"NO_", policies[i].policy_name};
+      disable_arg = {"NO_", policies[i].policy_name};
       if ($test$plusargs(disable_arg))
-        policies[i].disable();
-      
-      string enable_arg = {"ENABLE_", policies[i].policy_name};
+        policies[i].disable_policy();
+
+      enable_arg = {"ENABLE_", policies[i].policy_name};
       if ($test$plusargs(enable_arg))
-        policies[i].enable();
-      
-      string priority_arg = {policies[i].policy_name, "_PRIORITY=%d"};
-      int new_priority;
+        policies[i].enable_policy();
+
+      priority_arg = {policies[i].policy_name, "_PRIORITY=%d"};
       if ($value$plusargs(priority_arg, new_priority))
-        policies[i].priority = new_priority;
+        policies[i].policy_priority = new_priority;
     end
   endfunction
   

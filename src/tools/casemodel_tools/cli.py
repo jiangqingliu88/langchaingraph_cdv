@@ -262,6 +262,49 @@ def cmd_uvm_tests(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_testpoints(args: argparse.Namespace) -> int:
+    """导出**测试点 IR**（建模 → 激励 → 覆盖仓 → test → 回归级 → 判据）。
+
+    与 `uvm-tests` 的区别：那个只导**激励侧**的片段；这个导的是**全链的轴** ——
+    每条测试点带着实现方式（stimulus / sequence / observe）、覆盖仓、回归级
+    和判据。下游（verify / 回归 / 签核）只认 `tp_id`。
+    """
+    from .api import run_testpoints
+
+    agents: dict = {}
+    for spec in (args.agent_fields or []):
+        name, _, fields = spec.partition("=")
+        if not name.strip():
+            print(f"--agent-fields 写法认不出: {spec!r}（用 AGENT=f1,f2）",
+                  file=sys.stderr)
+            return 2
+        agents[name.strip()] = [f.strip() for f in fields.split(",") if f.strip()]
+
+    payload = run_testpoints(Path(args.model).read_text(encoding="utf-8"),
+                             env_name=args.env_name,
+                             agents=agents or None,
+                             module_name=args.module,
+                             max_tests=args.max_tests or None)
+    if payload.get("error"):
+        print(f"模型无法构建: {payload['error']}", file=sys.stderr)
+        return 2
+
+    kinds = "、".join(f"{k}={v}" for k, v in sorted(payload["by_kind"].items()))
+    stages = "、".join(f"{k}={v}" for k, v in sorted(payload["by_stage"].items()))
+    if args.out:
+        # 与 `verify` 同一份字节：manifest 的哈希按 LF 计算
+        Path(args.out).write_text(payload["testpoints_yaml"],
+                                  encoding="utf-8", newline="\n")
+        print(f"已写出 {payload['count']} 条测试点 → {args.out}")
+    else:
+        print(payload["testpoints_yaml"], end="")
+    print(f"# {payload['count']} 条测试点（{kinds}；{stages}；"
+          f"观测型 {payload['observe_only']} 条）", file=sys.stderr)
+    for note in payload["notes"]:
+        print(f"  注意: {note}", file=sys.stderr)
+    return 0
+
+
 # ════════════════════════════════════════════════════════════
 # covergroups —— 覆盖点 → SystemVerilog covergroup
 # ════════════════════════════════════════════════════════════
@@ -345,6 +388,26 @@ def cmd_associate(args: argparse.Namespace) -> int:
         print(f"关联失败: {payload['error']}", file=sys.stderr)
         return 2
 
+    if getattr(args, "out", ""):
+        # 落盘的是**断点清单**（与 verify 写进 `<run>/coverage/` 的那份同形），
+        # 不是终端排版 —— 下游（audit / CI）读这个。
+        hard = [i for i in (payload.get("issues") or [])
+                if i.get("edge") in ("①", "②") and i.get("severity") == "error"]
+        report = {
+            "hard_edge_broken": len(hard),
+            "error_count": payload.get("counts", {}).get("error", 0),
+            "warning_count": payload.get("counts", {}).get("warning", 0),
+            "renderable": payload.get("renderable", False),
+            "summary": payload.get("summary", ""),
+            "issues": payload.get("issues") or [],
+            "notes": payload.get("notes") or [],
+        }
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
+                            encoding="utf-8")
+        print(f"关联报告: {out_path}")
+
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
@@ -359,7 +422,11 @@ def cmd_associate(args: argparse.Namespace) -> int:
 # ════════════════════════════════════════════════════════════
 
 def cmd_constraints(args: argparse.Namespace) -> int:
-    """case 模型的「生成方法」 → 约束模型（策略 + 组合器）的骨架。
+    """case 模型的「生成方法」 → 约束模型（策略 + 组合器 + **真实赋值**）。
+
+    给了 `--agent-fields` 时，声明了 `stimulus.field` 的维度会被编译成
+    `assignments`（`apply()` 里按迭代轮转/随机选合法取值）；没给的维度
+    （观测型）仍是骨架 —— 输出会如实报告 backed/unbacked 计数。
 
     产出正好是 `gen_uvm` 认的约束模型形状（顶层 `constraint` / `transactions` /
     `policies` / `combinator`），直接丢进它扫描的输入路径即可渲染出
@@ -372,8 +439,15 @@ def cmd_constraints(args: argparse.Namespace) -> int:
     """
     from .associate import build_constraint
 
+    agents: dict = {}
+    for spec in (getattr(args, "agent_fields", None) or []):
+        name, _, fields = spec.partition("=")
+        if name.strip():
+            agents[name.strip()] = [f.strip() for f in fields.split(",") if f.strip()]
+
     payload = build_constraint(Path(args.model).read_text(encoding="utf-8"),
-                               ports=list(args.port or []))
+                               ports=list(args.port or []),
+                               agent_fields=agents or None)
     if payload.get("error"):
         print(f"生成失败: {payload['error']}", file=sys.stderr)
         return 2
@@ -383,7 +457,8 @@ def cmd_constraints(args: argparse.Namespace) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(payload["constraint_yaml"], encoding="utf-8")
         print(f"已写出约束模型 → {out}"
-              f"（{payload['policy_count']} 条策略 / 默认组合模式 "
+              f"（{payload['policy_count']} 条策略，其中 "
+              f"{payload['backed_policy_count']} 条有真实赋值 / 默认组合模式 "
               f"{payload['default_mode']}）")
     else:
         print(payload["constraint_yaml"], end="")
@@ -482,6 +557,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", "-o", help="输出文件（缺省打到 stdout）")
     p.set_defaults(func=cmd_uvm_tests)
 
+    p = sub.add_parser("testpoints",
+                       help="导出测试点 IR（建模→激励→覆盖仓→test→回归级→判据）")
+    p.add_argument("model", help="case 模型 YAML")
+    p.add_argument("--env-name", default="", dest="env_name",
+                   help="环境名（决定属性 test 的类名）；缺省按 <object>_env 推")
+    p.add_argument("--module", "-m", default="",
+                   help="模块名（覆盖组名用）；缺省按 object 推")
+    p.add_argument("--agent-fields", action="append", metavar="AGENT=F1,F2",
+                   help="某个 master agent 的事务字段，如 "
+                        "npu_sched_in=instr_type,instr_opcode；可重复")
+    p.add_argument("--max-tests", type=int, default=0, dest="max_tests",
+                   help="最多导出多少条（缺省 0 = 不截断）")
+    p.add_argument("--out", "-o", help="输出文件（缺省打到 stdout）")
+    p.set_defaults(func=cmd_testpoints)
+
     p = sub.add_parser("covergroups",
                        help="覆盖点 → SystemVerilog covergroup（功能覆盖率方法学）")
     p.add_argument("model", help="case 模型 YAML")
@@ -495,6 +585,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("cases", help="case 模型 YAML")
     p.add_argument("coverage", help="功能覆盖率模型 YAML")
     p.add_argument("--constraint", "-c", help="约束模型 YAML（可选）")
+    p.add_argument("--out", "-o", default="",
+                   help="把断点清单落盘成 JSON（签核材料）—— 关联断点不该只活在 stdout 里")
     p.add_argument("--json", "-j", action="store_true", dest="json")
     p.set_defaults(func=cmd_associate)
 
@@ -504,6 +596,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", "-p", action="append", metavar="NAME:TYPE",
                    help="端口（agent 名 : seq_item 类型），如 "
                         "apb_master:APB_master_seq_item；可重复。**至少给一个**")
+    p.add_argument("--agent-fields", action="append", metavar="AGENT=F1,F2",
+                   help="某个 master agent 的事务字段（如 "
+                        "npu_sched_in=instr_type,instr_opcode）。给了才能把"
+                        "`stimulus.field` 编译成真实约束；可重复")
     p.add_argument("--out", "-o", help="把约束模型写到文件（缺省打到 stdout）")
     p.set_defaults(func=cmd_constraints)
 

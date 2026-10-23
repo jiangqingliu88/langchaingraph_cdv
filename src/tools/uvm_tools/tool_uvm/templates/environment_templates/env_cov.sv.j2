@@ -227,6 +227,8 @@ class {{ environment.env_name }}_coverage extends uvm_component;
   int unsigned chk_total = 0;
   int unsigned chk_matched = 0;
   int unsigned chk_mismatched = 0;
+  // **求值为 X 的次数** —— 单列一个计数，因为"没验到"与"验了不过"是两件事。
+  int unsigned chk_unknown = 0;
   string chk_first_fail = "";
 {%- for r in _dc.rules %}
   int unsigned chk_bad_{{ r.name }} = 0;
@@ -234,13 +236,34 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 
   function void chk_dut_one();
 {%- for r in _dc.rules %}
-    if (!({{ r.expr }})) begin
-      chk_mismatched++;
-      chk_bad_{{ r.name }}++;
-      if (chk_first_fail == "")
-        chk_first_fail = "{{ r.name }}: {{ r.message }}";
-    end else begin
-      chk_matched++;
+    begin
+      // **必须 `logic`（四态），不能用 `bit`** —— `bit` 是两态，X 赋进去会被
+      // **静默转成 0**，于是下面那句 `$isunknown` 恒为假："求值为 X" 被读成
+      // "值为 0"，再往下就成了"**违规**"。实测：误报 32 条 mismatched / 0 条
+      // unverified，看着像设计违例，其实是 X 被压成了 0。
+      logic _ok_{{ loop.index }} = 1'b0;
+      _ok_{{ loop.index }} = ({{ r.expr }});
+      // **X 不算命中。**
+      //
+      // 原来直接写 `if (!(expr))`：`expr` 为 X 时 `!(X)` 也是 X，`if (X)` 取
+      // **false** → 落到 `else` → `chk_matched++`。于是"**不知道**"被记成"**通过**"。
+      //
+      // 这不是理论问题：DUT 的输入在复位竞态/悬空时会把它推成 X，而那种情况下
+      // 检查的意义恰恰在于说"这里**没验到**"。实测踩过整条端到端：DUT 输入晚一拍
+      // 被驱动，`queue_level` 锁成 X，而检查组件报了 `total=90 matched=90
+      // mismatched=0` —— 看着全绿，其实一个 bit 都没验。
+      if ($isunknown(_ok_{{ loop.index }})) begin
+        chk_unknown++;
+        if (chk_first_fail == "")
+          chk_first_fail = "{{ r.name }}: 求值为 X（信号未知）—— 不是命中，是没验到";
+      end else if (!_ok_{{ loop.index }}) begin
+        chk_mismatched++;
+        chk_bad_{{ r.name }}++;
+        if (chk_first_fail == "")
+          chk_first_fail = "{{ r.name }}: {{ r.message }}";
+      end else begin
+        chk_matched++;
+      end
     end
     chk_total++;
 {%- endfor %}
@@ -325,18 +348,33 @@ class {{ environment.env_name }}_coverage extends uvm_component;
     // ── 比对结论（**判据读的就是这一行**）──
     // 回归的判据要求出现 `mismatched=0`；没有这一行就没有比对结论，用例会判
     // `NO_CHECKER_EVIDENCE` 而不是"通过"（"没报错"不等于"验过了"）。
-    if (chk_mismatched == 0)
+    if (chk_mismatched == 0 && chk_unknown == 0)
       `uvm_info("DUT_CHK", $sformatf(
         "[SCB_DUT] total=%0d matched=%0d mismatched=0", chk_total, chk_matched), UVM_NONE)
-    else begin
+    else if (chk_mismatched == 0) begin
+      // **有 X、没违规** —— 这一支**故意不打 `mismatched=0`**。
+      //
+      // 回归的判据就是 `grep -qE "mismatched=0"`（子串匹配）——只要这行里出现那个
+      // 串，"**有拍求值为 X**"就会被判成"**验过了**"。所以这里换一个词
+      //（`unverified`），让"没验到"和"验过且没过"都落在**同一个不通过**里。
+      //
+      // 同时报 `uvm_error`：判据的另一半是"日志里不许有 UVM_ERROR"。两条都亮，
+      // 免得只看一处的读法把它读漏。
+      `uvm_error("DUT_CHK", $sformatf(
+        "有 %0d 拍求值为 X —— 那些拍**根本没验**（不是通过）：%s",
+        chk_unknown, chk_first_fail))
+      `uvm_info("DUT_CHK", $sformatf(
+        "[SCB_DUT] total=%0d matched=%0d unverified=%0d（求值为 X 的拍）",
+        chk_total, chk_matched, chk_unknown), UVM_NONE)
+    end else begin
 {%- for r in _dc.rules %}
       if (chk_bad_{{ r.name }})
         `uvm_error("DUT_CHK", $sformatf("规则 %s 违规 %0d 次：{{ r.message }}",
                    "{{ r.name }}", chk_bad_{{ r.name }}))
 {%- endfor %}
       `uvm_info("DUT_CHK", $sformatf(
-        "[SCB_DUT] total=%0d matched=%0d mismatched=%0d  首条：%s",
-        chk_total, chk_matched, chk_mismatched, chk_first_fail), UVM_NONE)
+        "[SCB_DUT] total=%0d matched=%0d mismatched=%0d unverified=%0d  首条：%s",
+        chk_total, chk_matched, chk_mismatched, chk_unknown, chk_first_fail), UVM_NONE)
     end
 {%- endif %}
   endfunction

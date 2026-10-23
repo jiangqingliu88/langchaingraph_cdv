@@ -280,8 +280,10 @@ class TestSolve:
 
 
 class TestExampleFiles:
-    """`config/isa_gen/examples/` 里的每一份都要能跑。
+    """示例目录里的每一份都要能跑。
 
+    两处：`config/isa_gen/examples/`（项目级场景）和本包
+    `src/tools/isa_gen_tools/examples/`（**随工具走**、自包含的示例）。
     示例是**活样本** —— 一份跑不起来的示例比没有示例更糟：它教人写错的东西。
     所以这里逐份断言"校验通过且能编译"。
     """
@@ -289,9 +291,12 @@ class TestExampleFiles:
     @staticmethod
     def examples():
         from pathlib import Path
-        root = (Path(__file__).resolve().parents[4]
-                / "config" / "isa_gen" / "examples")
-        return sorted(root.glob("*.yaml"))
+        root = Path(__file__).resolve().parents[4]
+        found = []
+        for folder in (root / "config" / "isa_gen" / "examples",
+                       root / "src" / "tools" / "isa_gen_tools" / "examples"):
+            found.extend(sorted(folder.glob("*.yaml")))
+        return found
 
     def test_there_are_examples(self):
         assert self.examples(), "示例目录是空的"

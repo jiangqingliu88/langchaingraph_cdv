@@ -103,9 +103,14 @@ class DebugExecutor(BaseExecutor):
             from src.layers.l2_orchestration.context.query_engine import (
                 LLMQueryEngine,
             )
+            # `site` 要自己给：这条**不经过 `lib.llm_call.call_llm`**（直连 engine），
+            # 而那句"唯一漏斗"的算术只在漏斗里自动取调用点。不给的话审计记录的
+            # 出处恒为空 —— 实测 15 条里 5 条是空的，全是这一条路。
+            from src.tools.lib.llm_call import caller_site
+
             return await asyncio.to_thread(
                 LLMQueryEngine.get_instance().query,
-                self.task_type, payload, input_text) or ""
+                self.task_type, payload, input_text, site=caller_site()) or ""
         except Exception as e:                      # noqa: BLE001
             logger.warning(f"LLM 根因分析失败: {e}")
             return ""

@@ -458,7 +458,7 @@ ENVIRONMENT_SEQ_TEMPLATES = [
 ENV_CONSTRAINT_TEMPLATES = [
     (
         "environment_templates/env_cons_coordinated_sequence.j2",
-        "{project_name}_coordinated_sequence.sv",
+        "{env_name}_coordinated_sequence.sv",
     ),
     (
         "environment_templates/env_cons_policy_base.sv.j2",
@@ -466,15 +466,15 @@ ENV_CONSTRAINT_TEMPLATES = [
     ),
     (
         "environment_templates/env_cons_policies.sv.j2",
-        "{project_name}_constraint_policies.sv",
+        "{env_name}_constraint_policies.sv",
     ),
     (
         "environment_templates/env_cons_policy_combinator.j2",
-        "{project_name}_policy_combinator.sv",
+        "{env_name}_policy_combinator.sv",
     ),
     (
         "environment_templates/env_cons_policy_factory.j2",
-        "{project_name}_policy_factory.sv",
+        "{env_name}_policy_factory.sv",
     ),
 ]
 
@@ -696,6 +696,14 @@ class EnvironmentModel:
     #
     # 与 `tests` 是**两条平行的路**：那边一条一个属性取值，这边一条一个批次。
     batches: List[Dict[str, Any]] = field(default_factory=list)
+    #: **本次运行有没有约束模型** —— 决定 env_pkg 是否 include `cons/*`、
+    #: 以及 `gen_test` 是否在 `batch_policy` 非空时启动协调序列。
+    #:
+    #: 以前 `env/cons/*` **生成了但从未被 include**：约束层是一整包孤立的
+    #: SV 文件，连编译都没进过，"策略空壳"之外还有一半是"根本没人执行"。
+    #: 这个标记把两件事接上；由 `UVMGenerator.run()` 在渲染环境**之前**回填
+    #: （约束 yaml 的 env 名也是那时才知道的）。
+    has_constraints: bool = False
 
     def to_context(self) -> Dict[str, Any]:
         context = asdict(self)
@@ -1644,6 +1652,7 @@ class EnvironmentRenderTask(RenderTask):
         context = {"environment": environment, **environment.to_context()}
         # 补充 agent 的 transaction_vars（env 渲染需要，供 env_cov 生成 coverpoint/cross）
         self._enrich_agents_transaction_vars(context)
+        self._check_stimulus_bindings(environment, context)
 
         for template_path, target_pattern in ENVIRONMENT_ROOT_TEMPLATES:
             target_name = target_pattern.format(env_name=environment.env_name)
@@ -1696,6 +1705,42 @@ class EnvironmentRenderTask(RenderTask):
         # scoreboard 一律由 sb_type 指向外部类，本工具不生成 scb 文件
 
         return rendered
+
+    def _check_stimulus_bindings(self, environment: "EnvironmentModel",
+                                 context: Dict[str, Any]) -> None:
+        """`stimulus.field` 必须在某个 master agent 的事务上**真的**存在。
+
+        不查的话，`stimulus: {field: instr_typ}` 这种笔误照样能生成：test 会
+        `set("instr_typ_int", …)`，而**没有任何 sequence 读它** —— 编译通过、
+        回归全绿、每个属性 test 的激励还是一样的。那正是"属性 test 是死标签"
+        这个 bug 的复发方式，所以这里必须出声（只警告，不阻断生成）。
+
+        没有事务定义（例如只给了 interface 清单）时无法判定，不误报。
+        """
+        drivable = set()
+        any_txn = False
+        for agent in context.get("agents") or []:
+            tvars = getattr(agent, "transaction_vars", None)
+            if tvars is None and isinstance(agent, dict):
+                tvars = agent.get("transaction_vars")
+            for v in tvars or []:
+                if not isinstance(v, dict) or not v.get("name"):
+                    continue
+                any_txn = True
+                # slave 字段由 DUT/从端驱动，master sequence 约束不上
+                if str(v.get("is_master", "True")) == "True":
+                    drivable.add(str(v["name"]))
+        # 完全没有事务定义（例如只给了 interface 清单）时无法判定，不误报。
+        # 但"有事务、只是没有 master 字段"要照报 —— 否则绑到 slave 字段上的
+        # 笔误会被这句提前返回吞掉。
+        if not any_txn:
+            return
+        unknown = sorted({t["field"] for t in (environment.tests or [])
+                          if t.get("field") and t["field"] not in drivable})
+        if unknown:
+            print("  [gen_uvm] Warning: stimulus.field 在 master 事务上不存在："
+                  f"{', '.join(unknown)} —— 这些属性 test 的激励不会生效"
+                  f"（可绑定：{', '.join(sorted(drivable))}）", flush=True)
 
     def _enrich_agents_transaction_vars(self, context: Dict[str, Any]):
         """从 agent yaml 读取 transaction_vars + 策略包 coverage_bins，合并进 context。
@@ -1752,11 +1797,16 @@ class ConstraintRenderTask(RenderTask):
         rendered: List[Path] = []
         cons_dir = self.output_dir / "env" / "cons"
         context = constraint.to_context()
+        # **模板统一读 `environment.env_name`**（与 `env_pkg.sv.j2` 同一个变量名）——
+        # 原来这 5 个模板读的是 `project.name` / `project.env_name`，那是**约束模型
+        # 自己那份拷贝**，与真环境名是两个来源。同名的东西有两条出处就会漂，
+        # 而漂了的表现是类名对不上（`_policy_factory` 找不到之类），编译才报。
+        context["environment"] = {"env_name": constraint.env_name}
         for template_path, target_pattern in ENV_CONSTRAINT_TEMPLATES:
-            target_name = target_pattern.format(
-                project_name=constraint.name,
-                env_name=constraint.env_name,
-            )
+            # 文件名也只用 `env_name`（`project_name` 那套已下线）——与其余环境产物
+            # （`{env_name}_config.sv` / `{env_name}_coverage.sv` …）同一个命名空间，
+            # 不再是"约束模型自己一份名字"。
+            target_name = target_pattern.format(env_name=constraint.env_name)
             target_path = cons_dir / target_name
             rendered.append(self.render_file(template_path, target_path, context))
         return rendered
@@ -1843,6 +1893,13 @@ def _normalize_tests(raw) -> List[Dict[str, Any]]:
             # 保持 None：「没给」和「给了 0」是两回事，模板过滤器区分处理
             "int_value": int_value if isinstance(int_value, int) else None,
             "base": str(item.get("base") or "").strip(),
+            # 激励绑定：事务字段名。空串 = 观测型维度（test 只落 config_db 通道，
+            # 不约束事务）。**必须原样透传** —— 下游 sequence 靠它找 `<field>_int`。
+            "field": str(item.get("field") or "").strip(),
+            # 测试点主键 —— 进生成类的注释，把 test 反查到 TP / 需求 / 覆盖仓。
+            "tp_id": str(item.get("tp_id") or "").strip(),
+            # 后门到达：层次路径（`uvm_hdl_force` 用）。空 = 普通属性 test。
+            "backdoor_path": str(item.get("backdoor_path") or "").strip(),
         })
     return out
 
@@ -3075,6 +3132,18 @@ class UVMGenerator:
         generated_files: List[Optional[Path]] = []
         if interfaces:
             generated_files.extend(self.generate_agents(interfaces))
+        # ── 约束模型的 env 名回填**必须早于 env 渲染** ──
+        #
+        # 原来这段在 `generate_environments` 之后 —— 于是 env 渲染时谁也说不清
+        # "这一轮有没有约束"，`env_pkg` 只能不 include `cons/*`（事实也是：
+        # 那些文件从来没进过编译）。现在先回填、再给每个 env 打标记，env_pkg
+        # 与 gen_test 才有条件把约束层接上。
+        default_env = environments[0].env_name if environments else ""
+        for _c in constraints:
+            if not _c.env_name:
+                _c.env_name = default_env
+        for _env in environments:
+            _env.has_constraints = any(c.env_name == _env.env_name for c in constraints)
         if environments:
             # 把**文档级**收集的 util_components 注入每个环境 —— 它们通常写在
             # 另一个 YAML 里（如 apb_util_comp.yaml），`parse_environment_model`
@@ -3085,18 +3154,14 @@ class UVMGenerator:
                 _env.utils = [{"name": u.get("name")} for u in utils
                               if isinstance(u, dict) and u.get("name")]
             generated_files.extend(self.generate_environments(environments))
-        # env_name 已从 YAML 下线：bench / constraint 的 env 名从本次解析出的
-        # environment 回填（都没写时取第一个 environment）
-        default_env = environments[0].env_name if environments else ""
+        # env_name 已从 YAML 下线：bench 的 env 名从本次解析出的 environment
+        # 回填（constraint 的回填已在上文、环境渲染之前完成）。
         if benches:
             for b in benches:
                 if not b.env_name:
                     b.env_name = default_env
             generated_files.extend(self.generate_benches(benches))
         if constraints:
-            for c in constraints:
-                if not c.env_name:
-                    c.env_name = default_env
             generated_files.extend(self.generate_constraints(constraints))
         if harnesses:
             generated_files.extend(self.generate_harnesses(harnesses))

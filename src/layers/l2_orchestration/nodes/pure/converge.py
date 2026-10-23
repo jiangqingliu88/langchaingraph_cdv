@@ -107,7 +107,17 @@ async def n_record_decision(state: PipelineState, config) -> Dict[str, Any]:
            if isinstance(g, dict) and g.get("reason")]
     _ud = [g.get("dimension") for g in state.gaps
            if isinstance(g, dict) and g.get("reason") == "unreachable" and g.get("dimension")]
-    rt.last_action = (action.action_type, action.reason, _gr, _ud)
+    # **具名字典，不是元组**：下面 `run.py` 要取 `action` / `reason` /
+    # `gap_reasons` / `unreachable_dims` / `source` 五项，元组一旦加字段就得
+    # 同步改所有下标 —— 而漏改一处不会报错，只会**静默取错位**。
+    # `source` 见 `Action.source`：它是 L4 按来源分桶统计的依据。
+    rt.last_action = {
+        "action": action.action_type,
+        "reason": action.reason,
+        "gap_reasons": _gr,
+        "unreachable_dims": _ud,
+        "source": getattr(action, "source", "rule") or "rule",
+    }
 
     return {"last_action": action.to_dict(),
             "phases": [{"name": "decision", "status": "decision",

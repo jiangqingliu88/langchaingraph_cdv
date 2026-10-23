@@ -30,13 +30,41 @@ DISTILL_MIN_SUCCESS = 3
 # L4 记忆：决策效果
 # ═══════════════════════════════════════════════════════════════
 
-def get_action_experience(action_type: str) -> Optional[Dict[str, Any]]:
-    """查某决策动作的历史效果（trials / improve_rate / avg_delta）。"""
+def get_action_experience(action_type: str, source: Optional[str] = None
+                          ) -> Optional[Dict[str, Any]]:
+    """查某决策动作的历史效果（trials / improve_rate / avg_delta）。
+
+    `source` 给了就只统计那个来源。**RL 权重的学习必须传 `"rl_suggested"`** ——
+    否则统计里会混进"这个动作被提名过、但当场被规则退掉、根本没执行"的轮次，
+    算出来的改善率是**幸存者偏差**（见 `action_effectiveness` 的注释）。
+    """
     try:
         from src.layers.l4_memory.coverage_experience import get_coverage_experience_store
-        return get_coverage_experience_store().action_effectiveness().get(action_type)
+        return get_coverage_experience_store().action_effectiveness(source=source) \
+            .get(action_type)
     except Exception:
         return None
+
+
+def rl_suggested_actions() -> List[str]:
+    """库里有 `rl_suggested` 记录的动作 —— **按构造**就是 RL 选过的那些。
+
+    ## 为什么用这个替代"RL 的动作清单"
+
+    蒸馏原来手写四个动作名，其中 `REFACTOR_RTL` 早已下线 —— 那一桶永远空着，
+    而"少学了一个动作"从输出上看不出来。改成 `import SOFT_ACTIONS` 又会
+    让 **L5 依赖 L3**，被层向测试当场拦下（实测）。
+
+    而这个函数**根本不需要那份清单**：一条记录带 `rl_suggested` 来源，就意味着
+    那一轮 RL 选了它并被采纳 —— 没进过 RL 动作空间的动名字**不可能**有这种记录。
+    所以"库里有哪些"就是"RL 学得会哪些"的现成答案，既不手写也不跨层。
+    """
+    try:
+        from src.layers.l4_memory.coverage_experience import get_coverage_experience_store
+        return sorted(get_coverage_experience_store()
+                      .action_effectiveness(source="rl_suggested").keys())
+    except Exception:
+        return []
 
 
 def is_action_proven_ineffective(action_type: str,

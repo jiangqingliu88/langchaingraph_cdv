@@ -364,21 +364,23 @@ class ToolHub:
     # ═══════════════════════════════════════════════════════════
 
     def get_llm_tools(self, agent_role: str = None, risk_limit: ToolRisk = None) -> List[dict]:
-        """获取 LLM function-calling 格式的工具列表"""
+        """获取 LLM function-calling 格式的工具列表
+
+        角色解析走 `_tool_names_for`：**认得的 executor 精确取**
+        （`EXECUTOR_TOOL_MODULES`，可能是空 —— 声明了不用工具就是没有）；
+        **不认识的角色**才回退到全部，并留一条 warning。
+        """
         if agent_role:
-            manifests = self.list_by_agent(agent_role)
-            if not manifests:
-                # **回退到全部工具，但要出声。**
-                # 静默回退等于白名单形同虚设：agent 没声明工具，却拿到了全部
-                # —— 包括写盘和跑 EDA 的那些。保留回退是因为现有 agent 大多
-                # 还没显式绑定（一刀切成"没有就是没有"会让它们全部拿不到工具），
-                # 但每次回退都留一条 warning，"谁还没声明"才看得见。
+            names = self._tool_names_for(agent_role)
+            if names is None:
                 logger.warning(
-                    f"agent {agent_role!r} 没有绑定工具 —— 回退到全部 "
+                    f"agent {agent_role!r} 不在 `EXECUTOR_TOOL_MODULES` 里 —— 回退到全部 "
                     f"{len(self._manifests)} 个（含 WRITE/DANGER）。"
-                    f"要收紧就给它显式绑定。"
+                    f"要收紧就把这个角色加进那张映射表。"
                 )
                 manifests = list(self._manifests.values())
+            else:
+                manifests = [self._manifests[n] for n in names if n in self._manifests]
         else:
             manifests = list(self._manifests.values())
 
@@ -397,26 +399,23 @@ class ToolHub:
 
         如果 Agent 已有 @tool 装饰的工具（existing_tools），也会一并包装。
 
-        **角色没绑定时回退到全部工具，但要出声** —— 静默回退等于"白名单"
-        根本不生效：agent 没声明，却拿到了 hub 里的每一个工具。
-
-        这个回退现在**几乎总是走到的**：工具注册时绑的角色是模块名
-        （`assert` / `doc` / `spec` / `uvm`），而 executor 的角色是
-        （`front` / `design` / `verify` / `ops` / `audit` / `model`），
-        8 个里只有 `coverage` / `debug` 两个对得上。所以每次回退都留一条
-        warning，"谁还没声明"才看得见。
+        **角色解析走 `_tool_names_for`**（`EXECUTOR_TOOL_MODULES` 那张表）——
+        原先注册用模块名、调用用 executor 名，两套名字之间没有桥，8 个里只有
+        `coverage` / `debug` 碰巧同名，其余每次回退到全部工具（含 WRITE/DANGER），
+        "白名单"形同虚设。现在认得的 executor 精确取；不认识的角色才回退并出声。
         """
         wrapped = []
 
         # 包装 ITool 注册的工具
-        bound = self._by_agent.get(agent_role)
-        if not bound:
+        names = self._tool_names_for(agent_role)
+        if names is None:
             logger.warning(
-                f"executor {agent_role!r} 没有绑定工具 —— 回退到 hub 里全部 "
-                f"{len(self._tools)} 个。绑定时用的是模块名"
-                f"（assert/doc/spec/uvm…），与 executor 角色对不上是**已知问题**。"
+                f"executor {agent_role!r} 不在 `EXECUTOR_TOOL_MODULES` 里 —— 回退到 "
+                f"hub 里全部 {len(self._tools)} 个。把角色加进那张表即可收紧。"
             )
             bound = list(self._tools.keys())
+        else:
+            bound = [n for n in names if n in self._tools]
         for name in bound:
             tool = self._tools.get(name)
             if tool and tool.manifest.status == ToolStatus.ACTIVE:
@@ -571,6 +570,59 @@ class ToolHub:
         count += self._load_langchain_tools()
 
         return count
+
+    #: **executor 角色 → 它该拿哪些模块的工具**。
+    #:
+    #: 注册时绑的是**模块名**（`assert` / `spec` / `uvm` …），而调用方给的是
+    #: **executor 角色**（`verify` / `design` / `ops` …）。两套名字此前没有桥，
+    #: 于是 8 个 executor 里只有 `coverage` / `debug` 两个碰巧同名 —— 其余每次
+    #: 都走"没有绑定 → 回退到**全部**工具（含 WRITE/DANGER）"。白名单形同虚设。
+    #:
+    #: 表**建在实测用量上**（各 executor 里 `call_tool(...)` 的名字落在哪个模块）：
+    #:
+    #:     design    analyze_specification                    → spec
+    #:     verify    find_spec_yaml / jinja_render            → uvm
+    #:               generate_sva_assertions                  → assert
+    #:     debug     collect_sim_log / auto_fix / …           → debug
+    #:     coverage  （coverage_tools 的 gap 那批）            → coverage
+    #:     ops       regression.run / coverage.collect / …    → ops
+    #:
+    #: **`ops` 那条之前是"巧合生效"的**：模块角色里也有个叫 `ops` 的
+    #: （`regression.run` / `coverage.collect` / `regression.reference_finder`，
+    #: 正是这个 executor 的本职工具），两套名字同名所以直接对上了。把它写成
+    #: `()` 会把那几个工具**拿走** —— 那是缩减不是收紧，迁移时差点踩到。
+    #: 别名不同源的角色千万别想当然按"executor 名 == 模块名"归零。
+    #:
+    #: **空元组 = 这个 executor 声明不用 hub 工具**（`_get_tools()` 返回 `[]`）——
+    #: 它是"就是没有"，不是"没查到"，所以**不回退**。不认识的角色才回退（见
+    #: `_tool_names_for`）并出声。
+    EXECUTOR_TOOL_MODULES: Dict[str, tuple] = {
+        "front":    (),
+        "design":   ("spec",),
+        "model":    (),
+        "verify":   ("uvm", "assert"),
+        "ops":      ("ops",),
+        "coverage": ("coverage",),
+        "debug":    ("debug",),
+        "audit":    (),
+    }
+
+    def _tool_names_for(self, role: str) -> Optional[List[str]]:
+        """executor 角色 → 工具名列表；**不认识的返回 None**（调用方据此决定回退）。
+
+        认得的角色一律按 `EXECUTOR_TOOL_MODULES` 精确取（可能是**空列表** ——
+        那表示"这个 executor 不用工具"，不是"没查到"）。两者必须分得开：
+        混成一个的话，"声明了不用"会被当成"没声明"从而拿到全部工具。
+        """
+        modules = self.EXECUTOR_TOOL_MODULES.get(role)
+        if modules is None:
+            return None
+        names: List[str] = []
+        for m in modules:
+            for n in self._by_agent.get(m, []):
+                if n not in names:
+                    names.append(n)
+        return names
 
     # 此前 ToolHub 只加载 legacy Tool(...) 与 uvm_tools，这些包里的 @tool
     # 函数**从未注册过**——ToolHub 看不见它们，经 ToolHub 调用自然也是零审计。

@@ -31,74 +31,22 @@
 """
 from __future__ import annotations
 
-import ast
 from pathlib import Path
-from typing import Dict, Iterator, List, Tuple
 
 import pytest
 
-LAYERS = Path("src/layers")
-LAYER_RE = "l1_infrastructure", "l2_orchestration", "l3_decision", "l4_memory", "l5_evolution"
+# **规则与扫描只有一份** —— 启动期守卫（`src/layers/_bootstrap.py`）与这里
+# 共用同一套（见那个模块的 docstring）。原来这套逻辑长在本文件里，于是
+# 生产进程没有启动期检查：拆模块时得等 CI 跑完八百多个用例才发现漏了注入。
+from src.layers._bootstrap import (
+    FORBIDDEN,
+    LAYER_NAMES as LAYER_RE,
+    ORDER,
+    default_root,
+    layer_violations as _violations,
+)
 
-#: 层名 → 序号（1 最底）。**序号只用于报错时排序，不表达依赖方向**。
-ORDER: Dict[str, int] = {name: i + 1 for i, name in enumerate(LAYER_RE)}
-
-#: 每个层**不许**import 哪些层（键是"谁"，值是"不许碰谁"）。
-#: 没列出来的层不受限 —— 见模块头。
-FORBIDDEN: Dict[str, Tuple[str, ...]] = {
-    # L1 是底，不能向上伸手
-    "l1_infrastructure": ("l2_orchestration", "l3_decision", "l4_memory", "l5_evolution"),
-    # 记忆层是底座
-    "l4_memory": ("l2_orchestration", "l3_decision", "l5_evolution"),
-    # 决策层不得越级到进化层（经验查询走注入）
-    "l3_decision": ("l5_evolution",),
-    # 进化层读记忆、产权重，不驱动编排
-    "l5_evolution": ("l2_orchestration", "l3_decision"),
-    # l2_orchestration 不限：它是装配者
-}
-
-
-def _layer_of(path: Path) -> str:
-    parts = path.relative_to(LAYERS).parts
-    return parts[0] if parts and parts[0] in ORDER else ""
-
-
-def _imported_layers(tree: ast.AST) -> Iterator[Tuple[int, str]]:
-    """文件里出现的 `src.layers.lX_*` import → (行号, 层名)。
-
-    同时认 `import a.b.c` 与 `from a.b import c`；也认相对 import 之外的
-    绝对形式（本仓库统一用绝对 import）。
-    """
-    for node in ast.walk(tree):
-        mods: List[str] = []
-        if isinstance(node, ast.ImportFrom) and node.module:
-            mods.append(node.module)
-        elif isinstance(node, ast.Import):
-            mods.extend(a.name for a in node.names)
-        for mod in mods:
-            for name in LAYER_RE:
-                if f"src.layers.{name}" in mod:
-                    yield node.lineno, name
-
-
-def _violations() -> List[Tuple[str, int, str, str]]:
-    """[(文件, 行号, 归属层, 被反向依赖的层)]。"""
-    out: List[Tuple[str, int, str, str]] = []
-    for path in sorted(LAYERS.rglob("*.py")):
-        if "__pycache__" in path.parts:
-            continue
-        owner = _layer_of(path)
-        if not owner or owner not in FORBIDDEN:
-            continue
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except SyntaxError:                       # 语法错的文件由别的测试管
-            continue
-        for lineno, target in _imported_layers(tree):
-            if target in FORBIDDEN[owner] and target != owner:
-                rel = path.relative_to(LAYERS).as_posix()
-                out.append((rel, lineno, owner, target))
-    return out
+LAYERS = default_root() / "src" / "layers"
 
 
 def test_layers_exist_as_documented():
@@ -150,3 +98,82 @@ def test_l1_is_importable_on_its_own():
     assert r.returncode == 0, r.stderr
     pulled = r.stdout.strip()
     assert pulled == "[]", f"导入 L1 时拖进了上层模块：{pulled}"
+
+
+class TestTheStartupGuardUsesTheSameRules:
+    """启动期守卫（`src/layers/_bootstrap.py`）与这里的 pytest 检查**同一套规则**。
+
+    ## 为什么要有它
+
+    pytest 那条是**事后**防线：跑测试时能拦，但生产进程 import 成功就起飞了。
+    拆模块时改坏了依赖方向，要等 CI 跑完八百多个用例才发现 —— 那时人早忘了
+    自己动过什么。所以加一道启动期的：`python -m src.cli...` 冷启动就扫一遍。
+
+    ## 这里钉什么
+
+    钉的是**两边真的共用一份逻辑**（不是各写一遍）：`layer_violations` 在
+    `_bootstrap` 里，本文件的 `_violations` 就是它。这条从 import 就能看出来，
+    但更要紧的是下面几条 —— 守卫**真的会拦**，且拦得准。
+    """
+
+    def _fake_repo(self, tmp_path, rel_path: str, body: str):
+        """造一个最小仓库：`<root>/src/layers/l1_infrastructure/…`。"""
+        target = tmp_path / "src" / "layers" / rel_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body, encoding="utf-8")
+        return tmp_path
+
+    def test_the_real_repo_is_clean(self):
+        from src.layers._bootstrap import ensure_layer_contract
+
+        assert ensure_layer_contract() == []
+
+    def test_a_top_level_violation_raises_with_the_file_and_line(self, tmp_path):
+        from src.layers._bootstrap import LayerViolationError, ensure_layer_contract
+
+        root = self._fake_repo(tmp_path, "l1_infrastructure/bad.py",
+                               "from src.layers.l2_orchestration.graph import X\n")
+        with pytest.raises(LayerViolationError) as info:
+            ensure_layer_contract(root)
+        assert "l1_infrastructure/bad.py:1" in str(info.value)
+        assert "l1_infrastructure → l2_orchestration" in str(info.value)
+        assert len(info.value.violations) == 1
+
+    def test_a_lazy_import_inside_a_function_is_still_a_violation(self, tmp_path):
+        """把违规藏进函数体是最常见的规避手法 —— **AST 走整棵树，照样抓**。
+
+        （grep 也抓得到，但 grep 会被注释里的模块名骗到；AST 两头都不吃亏。）
+        """
+        from src.layers._bootstrap import LayerViolationError, ensure_layer_contract
+
+        root = self._fake_repo(
+            tmp_path, "l1_infrastructure/sneaky.py",
+            "def helper():\n"
+            "    # 假装是延迟 import 就没事了\n"
+            "    from src.layers.l4_memory.lineage import LineageStore\n"
+            "    return LineageStore\n")
+        with pytest.raises(LayerViolationError):
+            ensure_layer_contract(root)
+
+    def test_a_mention_in_a_comment_is_not_a_violation(self, tmp_path):
+        """注释里提一句模块名**不算** —— 这个仓库的注释特别爱举例，
+        真去拦就会满屏假违规，然后没人再当它回事。"""
+        from src.layers._bootstrap import ensure_layer_contract
+
+        root = self._fake_repo(
+            tmp_path, "l1_infrastructure/chatty.py",
+            "# 这里**不能** import src.layers.l2_orchestration.state\n"
+            '"""docstring 里也提一句 src.layers.l3_decision.decision_engine。"""\n'
+            "x = 1\n")
+        assert ensure_layer_contract(root) == []
+
+    def test_the_allowed_direction_is_not_flagged(self, tmp_path):
+        """**L2 是装配者**：它调 L3/L4/L5 是结构必需，不是债 —— 别把它当违规。"""
+        from src.layers._bootstrap import ensure_layer_contract
+
+        root = self._fake_repo(
+            tmp_path, "l2_orchestration/assembler.py",
+            "from src.layers.l3_decision.decision_engine import decide\n"
+            "from src.layers.l4_memory.lineage import LineageStore\n"
+            "from src.layers.l5_evolution.distillation import distill\n")
+        assert ensure_layer_contract(root) == []

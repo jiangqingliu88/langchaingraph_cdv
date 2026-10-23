@@ -1,6 +1,6 @@
 """Case 建模模块 —— case 属性完备性建模的全部界面能力。
 
-它做四件事：开文件、**从编辑器文本分析**、保存、把结果发给 11 个页面。
+它做四件事：开文件、**从编辑器文本分析**、保存、把结果发给 12 个页面。
 
 关于「真相在哪」：**编辑器的文本是唯一真相**，其它页面都是它的只读视图。所以
   · 分析走 `analyze_text(编辑器文本)` 而不是重读文件 —— 未保存的改动也能立刻看到效果
@@ -61,6 +61,8 @@ class CasemodelModule(ModuleBase):
         self.checker = SchemaChecker()
         #: 当前跟着哪次运行 —— `run.selected` 的订阅用（见 `on_refresh`）
         self._run_id: str = ""
+        #: 那次运行的目录 —— 测试点页用它读 `coverage/tp_matrix.json` 的命中状态
+        self._run_dir: str = ""
 
     # ════════════════════════════════════════════════════════
     # 跟着选中的运行走
@@ -96,6 +98,11 @@ class CasemodelModule(ModuleBase):
             return
         self._run_id = run_id
         self.load(str(target))
+        # **在 `load()` 之后设置**：`load` 会清掉上一次运行的目录（手动打开
+        # 模型时不该继续显示旧运行的命中状态）。
+        self._run_dir = run_dir
+        # 测试点页的状态列依赖 run_dir —— 重新刷一次，让它读到矩阵
+        self.refresh()
         self.set_status(f"已切到本次运行的 case 模型：{target}")
 
     def build_content(self) -> QWidget:
@@ -229,6 +236,9 @@ class CasemodelModule(ModuleBase):
             self.load(path)
 
     def load(self, path: str) -> None:
+        # 手动打开一份模型 ≠ 仍跟着上一次运行：清掉运行目录，
+        # 否则测试点页会把旧运行的命中状态贴到新模型上。
+        self._run_dir = ""
         """读文件 → 编辑器 → 分析。"""
         target = Path(path)
         try:

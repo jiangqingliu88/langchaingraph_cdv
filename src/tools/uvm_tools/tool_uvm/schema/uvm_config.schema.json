@@ -803,6 +803,20 @@
         "base": {
           "$comment": "被继承的测试基类",
           "type": "string"
+        },
+        "field": {
+          "$comment": "激励绑定：事务字段名。给了就额外 set('<field>_int', int_value)，master sequence 读它并约束该字段；不给 = 观测型维度，test 不建立激励差异",
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "tp_id": {
+          "$comment": "测试点主键（TP-<对象>-<维度>-<取值>）—— 生成类注释里带上，用于把 test 反查到 TP/需求/覆盖仓",
+          "type": "string",
+          "pattern": "^TP-"
+        },
+        "backdoor_path": {
+          "$comment": "backdoor 型测试点的层次路径（如 npu_sched_bench_tb_top.u_npu_sched.queue_level）；生成类用 uvm_hdl_force 写入、采完覆盖再 release",
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -1486,6 +1500,25 @@
             "items": {
               "type": "string"
             }
+          },
+          "assignments": {
+            "$comment": "策略的**真实约束**：apply() 里对事务字段的赋值（按迭代轮转或随机取合法值）。只由声明了 `stimulus.field` 的维度生成；为空 = 该专题的维度都不可驱动（观测型），策略仍是骨架。",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["trans", "field", "values"],
+              "properties": {
+                "trans": {"type": "string"},
+                "field": {"type": "string"},
+                "values": {"type": "array", "items": {"type": "integer"}},
+                "mode": {"enum": ["cycle", "random"]}
+              }
+            }
+          },
+          "backed": {
+            "$comment": "这条策略有没有编译出真实赋值（= assignments 非空）。生成端写、渲染端不用。",
+            "type": "boolean"
           }
         },
         "additionalProperties": false
