@@ -7,6 +7,7 @@
 >
 > 关键文档：
 > - **[`ARCHITECTURE.md`](ARCHITECTURE.md)** —— **当前代码架构**（五层 / 24 节点 / 执行器 / 工具协议 / 证据链 / 扩展点）
+> - **[`ENGINEERING_PROCESS.md`](ENGINEERING_PROCESS.md)** —— **工程落地流程**（知识卡 → RTL Freeze → TP IR → 回归 → 签核 → 审批/复审）
 > - `src/tools/generation/casemodel_tools/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
 > - `src/tools/generation/casemodel_tools/readme.md` —— **功能覆盖率方法学**（case 模型 → covergroup → 种子 → 回归）
 > - `src/tools/generation/casemodel_tools/plan.py` —— 测试点 IR 的公开门面
