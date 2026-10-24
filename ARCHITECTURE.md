@@ -2,7 +2,7 @@
 
 > 基线：2026-10-24  
 > 全量单测：**963 passed / 2 skipped**  
-> 端到端实测：`output_e2e_final_jiang_20261023_223108`，**270/270 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**
+> 端到端实测：`output_e2e_post_refactor2_jiang_20261024_104437`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**
 
 本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
 
@@ -60,7 +60,7 @@ flowchart TB
 | 层 | 职责 | 关键模块 | 依赖方向 |
 |---|---|---|---|
 | **L1 基础设施** | EDA 调用、输出目录、哈希、归档、Reference Finder | `layers/l1_infrastructure/`：`infrastructure.py`、`eda_backend.py`、`coverage_backend.py`、`output_config.py`、`layout.py`、`reference_finder.py` | 最底层，不依赖上层 |
-| **L2 编排** | LangGraph、执行器、ToolHub、状态/运行时、证据、治理 | `layers/l2_orchestration/`：`graph.py`、`execution.py`、`runtime.py`、`state.py`、`routers.py`、`stages.py`、`executors/`、`communication/`、`evidence/`、`governance/` | 依赖 L1 |
+| **L2 编排** | LangGraph、执行器运行时、ToolHub、状态/运行时、证据、治理 | `layers/l2_orchestration/`：`graph.py`、`execution.py`、`runtime.py`、`state.py`、`routers.py`、`stages.py`、`executors/`（base/registry）、`communication/`、`evidence/`、`governance/`；8 个 executor 实现在 `src/executors/` | 依赖 L1 |
 | **L3 决策** | 覆盖率驱动决策、动作选择、知识图谱 | `layers/l3_decision/`：`decision_engine.py`、`brain/`、`knowledge/` | 依赖 L1/L2 的契约 |
 | **L4 记忆** | 用例库、IP 库、模型库、排除规则、血缘、经验统计 | `layers/l4_memory/`：`testcase_registry.py`、`ip_registry.py`、`model_registry.py`、`lineage.py`、`coverage_experience.py`、`debug_experience.py` | 可被 L2/L3/L5 调用 |
 | **L5 进化** | 经验蒸馏、规则生长 | `layers/l5_evolution/`：`distillation.py`、`growth.py` | 依赖 L4 |
@@ -181,24 +181,25 @@ src/tools/integration/   ide_tools
 src/tools/common/        lib
 ```
 
-`uvm_tools` 内部也已把检查工具移到 `uvm_tools/checking/`
+`uvm_tools` 内部也已把检查工具移到
+`generation/uvm_tools/checking/`
 （`tool_check_compile/static/env_arch/loopback/health/quality_report`），
 生成主体留在 `tool_uvm / tool_find_spec_yaml / tool_jinja_render`。
 
 ### 6.4 工具包
 
-| 包 | 职责 |
+| 包（按物理路径） | 职责 |
 |---|---|
-| `spec_tools` | spec 分析、DSL、知识图 |
-| `casemodel_tools` | case 模型 → TP IR → 覆盖率计划 → 约束 |
-| `uvm_tools` | UVM 环境/agent/test/sequence 生成、YAML schema |
-| `regression_tools` | 回归框架、分级、后端档案、sim modes |
-| `coverage_tools` | UCDB/HTML/报告、coverstore materialize |
-| `debug_tools` | 日志分类、指纹、autofix |
-| `assertion_tools` | 断言（当前流水线不生成 SVA） |
-| `isa_gen_tools` | NPU ISA DSL → IR → 32bit 编码 / 张量 / manifest |
-| `flow_tools` | signoff/lineage/compare 等流程 API |
-| `doc_tools` / `trend_tools` / `cmodel_tools` / `scmodel_tools` | 文档、趋势、C/Python 参考模型 |
+| `checking/spec_tools` | spec 分析、DSL、知识图 |
+| `generation/casemodel_tools` | case 模型 → TP IR → 覆盖率计划 → 约束 |
+| `generation/uvm_tools` | UVM 环境/agent/test/sequence 生成、YAML schema |
+| `execution/regression_tools` | 回归框架、分级、后端档案、sim modes |
+| `checking/coverage_tools` | UCDB/HTML/报告、coverstore materialize |
+| `checking/debug_tools` | 日志分类、指纹、autofix |
+| `checking/assertion_tools` | 断言（当前流水线不生成 SVA） |
+| `generation/isa_gen_tools` | NPU ISA DSL → IR → 32bit 编码 / 张量 / manifest |
+| `flow/flow_tools` | signoff/lineage/compare 等流程 API |
+| `generation/doc_tools` / `flow/trend_tools` / `generation/cmodel_tools` / `generation/scmodel_tools` | 文档、趋势、C/Python 参考模型 |
 
 ---
 
@@ -283,7 +284,9 @@ _write_coverage_plan
 
 ### 8.3 regression.yaml：后端特定 + 语义字段
 
-`regression.yaml` 由 `find_spec_yaml` 生成，**每个后端一份**。当前 Questa：
+`regression.yaml` 由
+`generation/uvm_tools/tool_find_spec_yaml/generators/regression_gen.py`
+（`find_spec_yaml` 的一部分）生成，**每个后端一份**。当前 Questa：
 
 ```yaml
 simulator: questa
@@ -331,7 +334,7 @@ src/tools/generation/uvm_tools/generation/
 ```
 
 - `find_spec_yaml/main.py` 已把回归产物整段搬到 `generators/regression_gen.py`
-  （主文件 2059 → 约 1460 行），并保留同名 re-export。
+  （主文件 2059 → 1469 行），并保留同名 re-export。
 - `VerifyExecutor` 的覆盖率计划、约束状态、coverage plan 标注已改调
   `generation.generators`。
 - `render_checked()` 是“模板声明 key、渲染前校验”的结构化守卫，用来替代
@@ -438,10 +441,10 @@ vagent evidence compare <pkg-a> <pkg-b>
 |---|---|
 | 模块签核策略 | `specs/<module>/signoff_policy.yaml` |
 | caveat 机器码 | `caveats.json` / `report.json` |
-| 审批绑定证据哈希 | `<run>/approval.json` + `vagent approval --run` |
-| 血缘基线强制 | `.signoffai/lineage.db` + evidence |
+| 审批绑定证据哈希 | `<run>/approvals.jsonl`（append-only）+ `approval.json` 最新视图 + `vagent approval --run` |
+| 血缘基线强制 | `database/lineage.db` + evidence |
 | 参考模型门禁 | `models.yaml` 的 `source.status == verified` |
-| 仅点状 LLM | `tools/lib/llm_call.py` 唯一漏斗 + `docs/llm_audit.jsonl` |
+| 仅点状 LLM | `src/tools/common/lib/llm_call.py` 唯一漏斗 + `docs/llm_audit.jsonl` |
 
 **Caveat 码：**
 
@@ -451,8 +454,6 @@ vagent evidence compare <pkg-a> <pkg-b>
 
 ## 11. 数据与存储
 
-| 库 | 路径 | 内容 |
-|---|---|---|
 所有运行期 SQLite 统一在 **`database/`**（不进 git，只保留 `.gitkeep`）：
 
 | 库 | 路径 | 内容 |
@@ -491,9 +492,10 @@ vagent evidence compare <pkg-a> <pkg-b>
 | 新 LangGraph 节点 | `nodes/` + `graph.py` 的 `NODE_FUNCS` + 边表 + `stages.py` | executor 内部 |
 | 新 executor | `src/executors/<role>/main.py` + `@register_executor` | 图拓扑（除非要接节点） |
 | 新工具 | 实现 `ITool` + 注册到 ToolHub | 调用方 |
+| 新工具包 | 放对应板块目录（`generation/checking/execution/flow/integration/common`）+ 在 `src/tools/boards.py` 登记 | 其它工具包 |
 | 新 realization | 注册 `RealizationStrategy` | `stages.py` |
 | 新约束来源 | 注册 `ConstraintCompiler` | `build_constraint` |
-| 新 EDA 后端 | `regression_tools/backend_profiles.py` 加字典条目（保留键 + `run_cmd_template`） | 框架类 |
+| 新 EDA 后端 | `execution/regression_tools/backend_profiles.py` 加字典条目（保留键 + `run_cmd_template`） | 框架类 |
 | 新 caveat | audit 里 `_caveat(code, msg)` + 策略文件按码接受 | 三态判定 |
 | 新签核证据字段 | `signoff_package.py` 的 `SECTION_FILES` + audit 的 v2 manifest | 回放脚本（若不需要重算） |
 
@@ -541,8 +543,8 @@ python -m pytest src/workbench/tests -q               # 工作台
 
 ```text
 .
-├─ cli/                         CLI 入口（commands.py 是总入口）
-├─ config/                      设置（settings.py）
+├─ config/                      设置（settings.py）与统一路径（paths.py）
+├─ database/                    运行期 SQLite（不进 git，只留 .gitkeep）
 ├─ specs/<module>/              RTL + casemodel.yaml + signoff_policy.yaml
 ├─ src/
 │  ├─ cli/                      CLI / REPL
@@ -564,7 +566,14 @@ python -m pytest src/workbench/tests -q               # 工作台
 │  │  ├─ l4_memory/             SQLite 注册表 / 血缘 / 经验
 │  │  └─ l5_evolution/          蒸馏 / 生长
 │  ├─ executors/                8 个 executor
-│  ├─ tools/                    领域工具包
+│  ├─ tools/                    领域工具包（按板块物理分目录）
+│  │  ├─ generation/            casemodel / uvm / isa / cmodel / doc
+│  │  ├─ checking/              assertion / debug / coverage / spec
+│  │  ├─ execution/             regression
+│  │  ├─ flow/                  signoff / lineage / trend
+│  │  ├─ integration/           IDE bridge
+│  │  ├─ common/                lib（哈希 / LLM / filelist / doc intake）
+│  │  └─ boards.py              板块单一真相
 │  └─ workbench/                PySide6 桌面工作台（可选）
 ├─ tests/                       主测试套件
 ├─ output_<run>/                一次运行的产物
