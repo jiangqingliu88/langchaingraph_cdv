@@ -77,7 +77,7 @@ async def n_design(state: PipelineState, config) -> Dict[str, Any]:
         _rtl_mods = sorted(_rtl_dir.glob("*.sv")) if _rtl_dir.is_dir() else []
         if _rtl_mods and not (rt.spec_text or "").strip():
             try:
-                from src.tools.uvm_tools.tool_find_spec_yaml.main import _parse_rtl_module
+                from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _parse_rtl_module
                 _rtl = _parse_rtl_module(_rtl_dir, "") or {}
                 _m = _rtl.get("module_name") or ""
                 if not _m:
@@ -108,7 +108,7 @@ async def n_design(state: PipelineState, config) -> Dict[str, Any]:
                 logger.warning(f"RTL 分析失败，回退最小 spec: {e}")
                 spec = {}
         try:
-            from src.tools.spec_tools.main import analyze_specification
+            from src.tools.checking.spec_tools.main import analyze_specification
             _raw = (analyze_specification(rt.spec_text) if not spec
                     else json.dumps(spec, ensure_ascii=False))
             spec = (json.loads(_raw)

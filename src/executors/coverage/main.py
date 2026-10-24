@@ -126,7 +126,7 @@ class CoverageExecutor(BaseExecutor):
         # ── 语义层降维：真实 gap 归因（constraint / unstimulated / unreachable）──
         toggle_details = []
         try:
-            from src.tools.coverage_tools.main import build_coverage_gaps
+            from src.tools.checking.coverage_tools.main import build_coverage_gaps
             from src.layers.l1_infrastructure.coverage_backend import get_coverage_backend
             constraints = self._extract_constraints(output_dir)
             toggle_details = get_coverage_backend().parse_toggle_details(output_dir)
@@ -285,7 +285,7 @@ class CoverageExecutor(BaseExecutor):
         cov_dir.mkdir(parents=True, exist_ok=True)
         points: Dict[str, Any] = {}
         if cm_file is not None:
-            from src.tools.casemodel_tools.api import run_covergroups
+            from src.tools.generation.casemodel_tools.api import run_covergroups
 
             points = run_covergroups(cm_file.read_text(encoding="utf-8"), module_name)
             if points.get("error"):

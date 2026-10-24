@@ -201,8 +201,39 @@ class EvidenceLink(Base):
         {'sqlite_autoincrement': True},
     )
 
+class TrendRun(Base):
+    """回归趋势 —— 每次回归一行（`TrendDatabase` 写的唯一真相）。
+
+    与 `RegressionRecord` 的分工：这里保留**逐任务明细**（`TrendTask`），
+    供历史趋势/调试回看；`RegressionRecord` 是早期项目级摘要，已无写入方。
+    """
+    __tablename__ = 'runs'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(String, nullable=False)
+    total = Column(Integer, default=0)
+    pass_ = Column('pass', Integer, default=0)
+    fail = Column(Integer, default=0)
+    unknown = Column(Integer, default=0)
+    pass_rate = Column(Float, default=0.0)
+    total_time = Column(String)
+    root_dir = Column(String)
+
+
+class TrendTask(Base):
+    """回归趋势的逐任务明细。"""
+    __tablename__ = 'task_details'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(Integer, ForeignKey('runs.id'))
+    task_name = Column(String, nullable=False)
+    status = Column(String, default='unknown')
+    sim_time = Column(Float, default=0.0)
+    wave_path = Column(String)
+    work_dir = Column(String)
+    fingerprint = Column(String)
+
+
 class RegressionRecord(Base):
-    """回归记录"""
+    """**Legacy** 项目级回归摘要 —— 当前无写入方；新代码用 `TrendRun`。"""
     __tablename__ = 'regression_records'
     id = Column(Integer, primary_key=True, autoincrement=True)
     project_id = Column(Integer, ForeignKey('projects.id'), nullable=True)

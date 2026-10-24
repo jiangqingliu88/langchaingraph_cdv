@@ -11,7 +11,7 @@ TOTAL 行、Total By Instance 行），原来那段代码"把所有百分比抓�
 """
 from __future__ import annotations
 
-from src.tools.lib.collect_real_coverage import (_parse_cvg_details,
+from src.tools.common.lib.collect_real_coverage import (_parse_cvg_details,
                                                  _parse_cvg_text)
 
 #: 实测的 vcover 输出（smoke3 那次运行）
@@ -181,7 +181,7 @@ class TestCoverageModelIsBounded:
         """用**项目自己的渲染器**（它挂了 `now` 之类全局）—— 别自己搭一个裸 Jinja。"""
         from pathlib import Path
 
-        from src.tools.uvm_tools.tool_uvm.gen_uvm import JinjaRenderer, TEMPLATES_DIR
+        from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import JinjaRenderer, TEMPLATES_DIR
 
         renderer = JinjaRenderer(Path(TEMPLATES_DIR))
         return renderer.render("environment_templates/env_cov.sv.j2", dict(ctx))
@@ -235,7 +235,7 @@ class TestGapSequenceHasItsOwnTimeout:
     """
 
     def _seq(self) -> str:
-        from src.tools.coverage_tools.main import generate_gap_directed_seq
+        from src.tools.checking.coverage_tools.main import generate_gap_directed_seq
 
         return generate_gap_directed_seq(
             "apb", [{"dimension": "toggle", "location": "paddr[7:0]",
@@ -339,7 +339,7 @@ class TestTpMatrix:
         return {"report_dir": str(rep)}
 
     def test_bin_hits_are_parsed_per_coverpoint(self):
-        from src.tools.lib.collect_real_coverage import _parse_cvg_bin_hits
+        from src.tools.common.lib.collect_real_coverage import _parse_cvg_bin_hits
 
         hits = _parse_cvg_bin_hits(VCOVER_BIN_HITS)
         assert hits["cg_dut"]["cp_queue_level"] == {"illegal_over": 0,
@@ -347,7 +347,7 @@ class TestTpMatrix:
         assert hits["cg_dut"]["cp_instr_type"]["mac"] == 12
 
     def test_four_states_keep_observe_apart(self, tmp_path):
-        from src.tools.lib.collect_real_coverage import _tp_matrix
+        from src.tools.common.lib.collect_real_coverage import _tp_matrix
 
         cov = self._write_tp(tmp_path, [
             {"tp_id": "TP-1", "coverpoint": "cp_queue_level", "bin": "empty",
@@ -368,7 +368,7 @@ class TestTpMatrix:
 
     def test_unknown_bin_is_unmapped_not_a_silent_miss(self, tmp_path):
         """模型与生成漂了 → UNMAPPED，**不冒充"没命中"**（那样会去补错用例）。"""
-        from src.tools.lib.collect_real_coverage import _tp_matrix
+        from src.tools.common.lib.collect_real_coverage import _tp_matrix
 
         cov = self._write_tp(tmp_path, [
             {"tp_id": "TP-X", "coverpoint": "cp_queue_level", "bin": "nope"},
@@ -378,6 +378,6 @@ class TestTpMatrix:
         assert m["unmapped"][0]["tp_id"] == "TP-X"
 
     def test_no_testpoints_means_no_matrix(self, tmp_path):
-        from src.tools.lib.collect_real_coverage import _tp_matrix
+        from src.tools.common.lib.collect_real_coverage import _tp_matrix
 
         assert _tp_matrix(tmp_path, {}) == {}

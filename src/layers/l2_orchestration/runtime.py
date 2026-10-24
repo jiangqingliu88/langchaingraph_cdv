@@ -112,7 +112,7 @@ def _rt(config) -> Runtime:
 def _load_manual_nodes() -> List[Dict[str, Any]]:
     """读人工节点声明。读不到就空列表 —— **不抛**（见 `load_manual_nodes`）。"""
     try:
-        from src.tools.ide_tools.api import load_manual_nodes
+        from src.tools.integration.ide_tools.api import load_manual_nodes
 
         return load_manual_nodes()
     except Exception as exc:                       # pragma: no cover - 环境问题

@@ -2,6 +2,7 @@
 from typing import Dict, Any, List
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 
 from src.layers.l2_orchestration.executors.base import BaseExecutor, ExecutorResult
@@ -54,6 +55,19 @@ def _read_tp_matrix(output_dir: Path) -> Dict[str, Any]:
         return {}
 
 
+def _rel_to_run(path_str: str, output_dir: Path) -> str:
+    """绝对路径 → run 内相对路径；不在 run 内就原样返回（不假装可移植）。"""
+    if not path_str:
+        return ""
+    p = Path(str(path_str))
+    if not p.is_absolute():
+        return p.as_posix()
+    try:
+        return p.resolve().relative_to(output_dir.resolve()).as_posix()
+    except ValueError:
+        return str(p)
+
+
 def _sha256_file(path: Path) -> str:
     try:
         h = hashlib.sha256()
@@ -85,9 +99,170 @@ def _rtl_version_hash(output_dir: Path) -> str:
     return h.hexdigest()
 
 
+def _module_name(output_dir: Path, ctx: Any = None) -> str:
+    """本 run 的模块身份：spec.json 优先，其次 ctx，最后目录名。"""
+    spec = _read_json_file(output_dir / "spec.json")
+    name = str(spec.get("design_name") or "").strip()
+    if not name and hasattr(ctx, "get"):
+        arch = ctx.get("design_arch") or {}
+        if isinstance(arch, dict):
+            name = str(arch.get("module_name") or "").strip()
+    return name or "dut"
+
+
+def _read_yaml_file(path: Path) -> Dict[str, Any]:
+    try:
+        import yaml
+
+        doc = yaml.safe_load(path.read_text(encoding="utf-8", errors="replace"))
+        return doc if isinstance(doc, dict) else {}
+    except Exception:                               # noqa: BLE001
+        return {}
+
+
+def _model_info(output_dir: Path, ctx: Any = None) -> Dict[str, Any]:
+    """这一轮到底有没有**可签核**的参考模型。
+
+    判据是 `models.yaml` 的 `source.status == verified`（生成器只挑 verified）。
+    没有 `models.yaml`、或选中的是 draft/generated —— 都算不可用，并给出原因。
+    **不把"生成了模型文件"读成"有参考模型"**：那正是 18 个假失败的老坑。
+    """
+    doc = _read_yaml_file(output_dir / "inputs" / "yaml" / "uvm" / "models.yaml")
+    source = doc.get("source") or {}
+    utils = doc.get("util_components") or []
+    status = str(source.get("status") or "")
+    available = bool(utils) and status == "verified"
+    if available:
+        reason = ""
+    elif not doc:
+        reason = "没有 models.yaml（模型库未选中任何模型）"
+    elif not utils:
+        reason = "models.yaml 里没有 util_components"
+    else:
+        reason = f"选中的模型状态是 {status or 'unknown'}，不是 verified"
+    registry = []
+    try:
+        from src.layers.l4_memory.model_registry import ModelRegistry
+
+        reg = ModelRegistry()
+        try:
+            registry = [{
+                "name": m.get("name"), "version": m.get("version"),
+                "status": m.get("status"), "protocol": m.get("protocol"),
+                "trans_in": m.get("trans_in"), "trans_out": m.get("trans_out"),
+            } for m in reg.all()]
+        finally:
+            reg.close()
+    except Exception as e:                          # noqa: BLE001
+        registry = [{"error": str(e)[:160]}]
+    placeholder = False
+    if hasattr(ctx, "get"):
+        m = ctx.get("model") or {}
+        if isinstance(m, dict):
+            placeholder = bool(m.get("placeholder"))
+    return {
+        "available": available,
+        # 有没有**尝试过**建模：有 models.yaml 或 ctx 明确标了 placeholder。
+        # 两者都没有 = 这一轮没走参考模型链路，不该凭空挂 caveat。
+        "models_yaml": bool(doc),
+        "status": status,
+        "reason": reason,
+        "source": source,
+        "util_components": [u.get("name") for u in utils if isinstance(u, dict)],
+        "placeholder": placeholder,
+        "registry": registry,
+    }
+
+
+def _lineage_info(output_dir: Path, module: str) -> Dict[str, Any]:
+    """RTL 版本 + 基线锚点（签核必须引用它；缺失时由策略决定是否阻断）。"""
+    try:
+        from src.layers.l4_memory.lineage import LineageStore, ensure_run_rtl_version
+
+        info = ensure_run_rtl_version(output_dir, module=module,
+                                      run_id=output_dir.name)
+        if not info:
+            return {"available": False, "reason": "没有 RTL 内容哈希"}
+        store = LineageStore()
+        try:
+            is_new = store.ensure_baseline(info["module"], output_dir.name,
+                                           info["version_no"])
+            base = store.get_baseline(info["module"])
+        finally:
+            store.close()
+        return {"available": True, **info, "baseline": base,
+                "baseline_is_new": is_new}
+    except Exception as e:                          # noqa: BLE001 血缘不该拦签核
+        return {"available": False, "reason": f"血缘库不可用: {e}"[:200]}
+
+
+def _regression_config_summary(output_dir: Path) -> Dict[str, Any]:
+    """回归配置的**参数通道**统计 —— 签核要看见"有没有绕过结构化字段"。
+
+    后端方言由生成物承载（`run_cmd`），这里只统计三类用户通道：
+    `plusargs`（测试语义透传）、`backend_args`（逃生口）、`plusarg_matrix`
+    （旧的每条用例展开）。`backend_args` 非空是 caveat 的数据源。
+    """
+    path = output_dir / "inputs" / "yaml" / "regression.yaml"
+    doc = _read_yaml_file(path)
+    if not doc:
+        return {"available": False}
+    tests = [t for t in (doc.get("tests") or []) if isinstance(t, dict)]
+    plusargs = sum(len(t.get("plusargs") or []) for t in tests)
+    backend_args = sum(len(t.get("backend_args") or []) for t in tests)
+    matrix = sum(len(t.get("plusarg_matrix") or []) for t in tests)
+    seeds = sum(1 for t in tests if isinstance(t.get("seeds"), dict))
+    structured_test = sum(1 for t in tests if t.get("test"))
+    return {
+        "available": True,
+        "simulator": str(doc.get("simulator") or ""),
+        "tests": len(tests),
+        "run_cmd_tests": sum(1 for t in tests if t.get("run_cmd")),
+        "structured_test": structured_test,
+        "seeds": seeds,
+        "plusargs": plusargs,
+        "backend_args": backend_args,
+        "plusarg_matrix": matrix,
+        "path": "inputs/yaml/regression.yaml",
+    }
+
+
+def _tool_receipt_summary(output_dir: Path) -> Dict[str, Any]:
+    """工具回执的 `verified_by` 覆盖度 —— 有多少结论是 EDA 说的。"""
+    path = output_dir / "docs" / "tool_receipts.jsonl"
+    counts: Dict[str, int] = {}
+    total = 0
+    try:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            total += 1
+            key = str(rec.get("verified_by") or "unknown")
+            counts[key] = counts.get(key, 0) + 1
+    except OSError:
+        return {"available": False, "total": 0, "by_verified_by": {}}
+    return {
+        "available": total > 0,
+        "total": total,
+        "by_verified_by": counts,
+        "eda_pct": round(100.0 * counts.get("eda", 0) / total, 2) if total else 0.0,
+    }
+
+
 def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
                             tp: Dict[str, Any], sem: Dict[str, Any],
-                            caveats: List[str]) -> Dict[str, Any]:
+                            caveats: List[str], *,
+                            caveat_records: List[Dict[str, str]] = None,
+                            policy: Dict[str, Any] = None,
+                            model_info: Dict[str, Any] = None,
+                            lineage: Dict[str, Any] = None,
+                            versions: Dict[str, Any] = None,
+                            hard_ok: bool = None) -> Dict[str, Any]:
     """**可对外交换的签核证据包**（`signoff_evidence_v1`）。
 
     把散在各处的证据收成一份带 schema 的 JSON：任何工具都能读、能验、能 diff。
@@ -144,22 +319,50 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
         actions.append({"action": "RERUN_COVERAGE", "auto": True,
                         "reason": "ucdb 落了库但 bin 零命中"})
 
+    # 种子多样性：覆盖率阶段写进 `semantic_validations`，同时落盘一份
+    # `coverage/seed_diversity.json`。两处都读，优先语义块。
+    seed_div = sem.get("seed_diversity")
+    if seed_div is None:
+        seed_div = _read_json_file(output_dir / "coverage" / "seed_diversity.json") or None
+    merge_manifest = plan_cov.get("merge_manifest") or ""
+    merge_manifest_path = Path(str(merge_manifest)) if merge_manifest else (
+        output_dir / "coverage" / "plan_merge_manifest.json")
+    merge_manifest_sha = (_sha256_file(merge_manifest_path)
+                          if merge_manifest_path.is_file() else "")
+    from src.layers.l2_orchestration.evidence.verdict import (
+        accepted_codes_from_policy, effective_caveats as _effective)
+
+    policy = policy or {}
+    accepted = accepted_codes_from_policy(policy)
+    effective = _effective(caveat_records, accepted)
+
     llm_log = output_dir / "docs" / "llm_audit.jsonl"
     return {
         "schema": "signoff_evidence_v1",
+        # **v1 是兼容视图**；权威是 signoff_evidence/manifest.json（v2）。
+        # 保留 v1 是因为老消费者/测试仍按这个 schema 读。
+        "deprecated": True,
+        "canonical": "signoff_evidence/manifest.json",
         "run": output_dir.name,
+        "module": signoff.get("module", ""),
         "rtl_version_hash": _rtl_version_hash(output_dir),
         "testpoint_ir_sha256": ((methodology.get("artifacts") or {})
                                 .get("testpoints_yaml") or {}).get("sha256", ""),
         "framework": {"name": methodology.get("framework", ""),
                       "version": methodology.get("version", "")},
+        "versions": versions or {},
         "coverage": {
             "plan_pct": plan_cov.get("functional_pct"),
             "single_test_pct": plan_cov.get("single_test_pct"),
             "gate_pct": signoff.get("coverage"),
             "gate_passed": (signoff.get("gates") or {}).get("coverage_ok"),
             "merged_stores": merged_stores,
+            # 绝对值留给本机排查；相对值是**可迁移**的那一份。
             "merged_ucdb": plan_cov.get("ucdb", ""),
+            "merged_ucdb_rel": _rel_to_run(plan_cov.get("ucdb", ""), output_dir),
+            # 合并输入清单 —— "这个百分比由哪些库算出来"必须可核对
+            "merge_manifest": str(merge_manifest_path) if merge_manifest_sha else "",
+            "merge_manifest_sha256": merge_manifest_sha,
         },
         "tp_matrix": {
             "counts": tp.get("counts") or {},
@@ -169,16 +372,41 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
             "missed_tp_ids": [r.get("tp_id") for r in (tp.get("missed") or [])
                               if isinstance(r, dict)],
         },
-        # **未验证就写 null** —— 不冒充"已验证"。
-        "seed_diversity": None,
-        "no_test_success": "seed_diversity 尚未实现（种子是否改变激励分布未逐 bin 验证）",
+        # **做过就是对象，没做才 null** —— 不再无条件 null。
+        "seed_diversity": seed_div,
+        "seed_diversity_reason": (
+            "" if seed_div and seed_div.get("analyzed")
+            else (seed_div or {}).get("reason", "未分析") if seed_div
+            else "未分析（没有 seed_diversity.json）"),
+        # **兼容字段**：老测试/老证据消费者按这个名字判断"种子多样性还没验"。
+        # 新代码请读 `seed_diversity` / `seed_diversity_reason`。
+        "no_test_success": (
+            ""
+            if seed_div and seed_div.get("analyzed")
+            else "seed_diversity 尚未实现/未分析："
+                 + (str((seed_div or {}).get("reason") or "没有逐 bin 比对结果"))),
+        "reference_models": model_info or {},
+        "lineage": lineage or {},
+        "regression_config": signoff.get("regression_config") or {},
+        "policy": {
+            "schema": policy.get("schema", ""),
+            "source": policy.get("source", ""),
+            "require_ref_model": policy.get("require_ref_model"),
+            "require_baseline": policy.get("require_baseline"),
+            "accepted_codes": sorted(accepted),
+        },
+        "tool_receipts": _tool_receipt_summary(output_dir),
         "semantic_validations": sem,
         "caveats": list(caveats),
+        "caveat_records": list(caveat_records or []),
+        "accepted_caveat_codes": sorted(accepted),
+        "effective_caveat_codes": [c.get("code") for c in effective],
         "caveat_actions": actions,
         "unreachable_justifications": unreachable,
         "llm_audit_digest": _sha256_file(llm_log),
         "verdict": signoff.get("verdict"),
         "signoff_status": signoff.get("signoff_status"),
+        "hard_ok": hard_ok if hard_ok is not None else None,
     }
 
 
@@ -281,8 +509,11 @@ class AuditExecutor(BaseExecutor):
                        and overall >= _target)
         gates["target"] = _target
         gates["coverage_ok"] = bool(coverage_ok)
-        hard_ok = bool(pass_rate_ok and coverage_ok and gates.get("rtl_real", False)
-                       and gates["model_real"])
+        # **参考模型是否作为硬门禁，由模块策略决定**（见下面的 `require_ref_model`）。
+        # 这里先只算与策略无关的硬条件；`model_real` 仍是**事实字段**，
+        # 但默认不再一票否决 —— 否则"没走参考模型链路"的 run（例如 --rtl
+        # 验证专注模式）会永远无法签核，而策略明明允许没有模型。
+        hard_ok = bool(pass_rate_ok and coverage_ok and gates.get("rtl_real", False))
 
         # ── 软缺口（caveats）：硬门禁过了，但"绿得不够实在" ──
         #
@@ -301,6 +532,15 @@ class AuditExecutor(BaseExecutor):
         # 都会挂上 caveat，三态就贬值成"反正总有一条"，没人再去看那几行。
         # 同一条纪律见 `_artifact_manifest`：读不到就什么都不放。
         caveats: List[str] = []
+        #: caveat 的**机器码**与人类可读消息一一对应。
+        #: 策略文件按码接受/拒绝（`accepted_caveats`），签核结论按"未被接受的
+        #: 码"计算 —— 这样"接受某条 caveat"是可审计的决定，不是改文案。
+        caveat_records: List[Dict[str, str]] = []
+
+        def _caveat(code: str, message: str) -> None:
+            caveats.append(message)
+            caveat_records.append({"code": code, "message": message})
+
         # 约束有没有真在约束 —— **优先读 verify 直接写下的那份**，`semantic_validations`
         # 里那份当补充。
         #
@@ -320,19 +560,21 @@ class AuditExecutor(BaseExecutor):
             _backed = _st.get("backed_policy_count")
             _total = _st.get("policy_count")
             if isinstance(_backed, int) and isinstance(_total, int) and _total > 0:
-                caveats.append(
-                    f"约束只部分生效：{_backed}/{_total} 条策略由模型编译出真实赋值，"
-                    f"其余 {_st.get('unbacked_policy_count', _total - _backed)} 条仍是"
-                    f"空骨架（维度不可驱动，没有 `stimulus.field`）—— "
-                    f"见 coverage/constraint_status.json")
+                _caveat("CONSTRAINT_PARTIAL",
+                        f"约束只部分生效：{_backed}/{_total} 条策略由模型编译出真实赋值，"
+                        f"其余 {_st.get('unbacked_policy_count', _total - _backed)} 条仍是"
+                        f"空骨架（维度不可驱动，没有 `stimulus.field`）—— "
+                        f"见 coverage/constraint_status.json")
             else:
-                caveats.append(
-                    "约束未激活：策略体的 apply() 落在 `default:` 分支、不做任何事"
-                    "（`env/cons/` 生成了但约束不约束东西）")
+                _caveat("CONSTRAINT_INACTIVE",
+                        "约束未激活：策略体的 apply() 落在 `default:` 分支、不做任何事"
+                        "（`env/cons/` 生成了但约束不约束东西）")
         if sem.get("ucdb_nonzero_bins") is False:
-            caveats.append("覆盖率库落了但**一个 bin 都没命中** —— 覆盖率的数字没有意义")
+            _caveat("UCDB_NO_BINS",
+                    "覆盖率库落了但**一个 bin 都没命中** —— 覆盖率的数字没有意义")
         if sem.get("cg_dut_hit_gt_zero") is False:
-            caveats.append("`cg_dut` 零命中 —— DUT 探针可能没挂上，内部状态/输出端口没采到")
+            _caveat("CG_DUT_ZERO",
+                    "`cg_dut` 零命中 —— DUT 探针可能没挂上，内部状态/输出端口没采到")
         # 关联硬边断（`associate` 的 ① ②）—— 覆盖率与 case 模型对不上，
         # 那意味着"声明要测的"与"实际在量的"是两回事。
         #
@@ -341,9 +583,9 @@ class AuditExecutor(BaseExecutor):
         # 为一个旁路产物专门加一条穿过 24 个节点的 ctx 键，不划算。
         assoc = _read_association_report(output_dir)
         if assoc.get("hard_edge_broken"):
-            caveats.append(
-                f"三模型关联硬边断了 {assoc['hard_edge_broken']} 条"
-                f"（声明的测试点没落成覆盖仓）—— 见 coverage/association_report.json")
+            _caveat("ASSOCIATION_HARD_EDGE",
+                    f"三模型关联硬边断了 {assoc['hard_edge_broken']} 条"
+                    f"（声明的测试点没落成覆盖仓）—— 见 coverage/association_report.json")
 
         # ── 测试点矩阵：**签核按测试点说话，不按百分比说话** ──
         #
@@ -369,27 +611,85 @@ class AuditExecutor(BaseExecutor):
                 "unmapped": len(tp.get("unmapped") or []),
             }
             if tp_summary["unmapped"]:
-                caveats.append(
-                    f"{tp_summary['unmapped']} 条测试点的覆盖仓在报告里找不到"
-                    f"（模型与生成的覆盖率模型漂了）—— 见 coverage/tp_matrix.json")
+                _caveat("TP_UNMAPPED",
+                        f"{tp_summary['unmapped']} 条测试点的覆盖仓在报告里找不到"
+                        f"（模型与生成的覆盖率模型漂了）—— 见 coverage/tp_matrix.json")
             if sem.get("testpoints_traced") is False and not tp_summary["unmapped"]:
-                caveats.append(
-                    "测试点与覆盖仓的对应关系不完整 —— 见 coverage/tp_matrix.json")
+                _caveat("TP_TRACE_INCOMPLETE",
+                        "测试点与覆盖仓的对应关系不完整 —— 见 coverage/tp_matrix.json")
             if tp_summary["missed"]:
-                caveats.append(
-                    f"{tp_summary['missed']} 条测试点的仓未命中"
-                    f"（可激励 {tp_summary['drivable_hit']}/{tp_summary['drivable']}，"
-                    f"{tp_summary['drivable_pct']}%；后门 "
-                    f"{tp_summary.get('backdoor_hit', 0)}/{tp_summary.get('backdoor', 0)}；"
-                    f"观测型 {tp_summary['observed']}/{tp_summary['observe_only']}）"
-                    f"—— 逐条见 coverage/tp_matrix.json")
+                _caveat("TP_MISSED",
+                        f"{tp_summary['missed']} 条测试点的仓未命中"
+                        f"（可激励 {tp_summary['drivable_hit']}/{tp_summary['drivable']}，"
+                        f"{tp_summary['drivable_pct']}%；后门 "
+                        f"{tp_summary.get('backdoor_hit', 0)}/{tp_summary.get('backdoor', 0)}；"
+                        f"观测型 {tp_summary['observed']}/{tp_summary['observe_only']}）"
+                        f"—— 逐条见 coverage/tp_matrix.json")
 
-        if not hard_ok:
-            verdict = "NEEDS_FIX"
-        elif caveats:
-            verdict = "PASS_WITH_CAVEAT"
-        else:
-            verdict = "READY"
+        # ── 参考模型 / 基线 / 模块策略：签核的"资格条件" ──
+        #
+        # 三条都是**可配置的**，不是写死的：不同模块对证据的要求不同
+        # （一个实验性模块不该因为"没有 verified 参考模型"就永远不能签）。
+        # 策略文件默认保守：不要求参考模型、要求基线、不接受任何 caveat。
+        module = _module_name(output_dir, ctx)
+        from src.layers.l2_orchestration.evidence.signoff_package import (
+            collect_versions, load_policy, write_policy_snapshot)
+        policy, _policy_src = load_policy(output_dir, module, Path.cwd())
+        for _issue in policy.get("issues") or []:
+            logger.warning(f"签核策略: {_issue}")
+        write_policy_snapshot(output_dir, policy)
+        model_info = _model_info(output_dir, ctx)
+        lineage_info = _lineage_info(output_dir, module)
+        versions = collect_versions()
+
+        gates["reference_model_required"] = bool(policy.get("require_ref_model"))
+        gates["reference_model_available"] = bool(model_info.get("available"))
+        # `model_real` 只在策略**要求**参考模型时才是硬门禁；否则它是事实字段 +
+        # `MODEL_UNAVAILABLE` caveat（"签核不含模型比对结论"，不是"不能签"）。
+        gates["model_real_hard"] = bool(policy.get("require_ref_model"))
+        if gates["model_real_hard"] and not gates.get("model_real", False):
+            hard_ok = False
+        gates["baseline_required"] = bool(policy.get("require_baseline"))
+        gates["baseline_present"] = bool(
+            (lineage_info.get("baseline") or {}).get("run_id"))
+
+        if not model_info.get("available"):
+            msg = (f"本轮没有 verified 参考模型（{model_info.get('reason') or '未知原因'}）"
+                   f"—— 签核不含模型比对结论")
+            if policy.get("require_ref_model"):
+                hard_ok = False
+                _caveat("MODEL_UNAVAILABLE",
+                        f"策略要求参考模型，但{msg}")
+            elif model_info.get("models_yaml") or model_info.get("placeholder"):
+                # 只有**真的尝试过**建模却没得到 verified 模型时才挂 caveat。
+                # 从没走过这条链路（没有 models.yaml、也没有 placeholder 标记）
+                # 的 run 不该凭空多一条 —— 那会让三态贬值成"反正总有一条"。
+                _caveat("MODEL_UNAVAILABLE", msg)
+        if (policy.get("require_baseline") and gates["rtl_present"]
+                and not gates["baseline_present"]):
+            hard_ok = False
+            _caveat("BASELINE_MISSING",
+                    "策略要求血缘基线，但本轮没有可引用的 baseline —— "
+                    "见 database/lineage.db 或 `vagent lineage baseline`")
+
+        # 回归参数通道：`backend_args` 是显式逃生口，用了就要让签核的人看见。
+        regression_config = _regression_config_summary(output_dir)
+        if regression_config.get("backend_args"):
+            _caveat("BACKEND_ARGS_USED",
+                    f"{regression_config['backend_args']} 个 backend_args 手写进了"
+                    f"后端命令 —— 这些参数不受结构化字段保护"
+                    f"（见 {regression_config.get('path')}）")
+
+        from src.layers.l2_orchestration.evidence.verdict import (
+            accepted_codes_from_policy, decide_verdict, effective_caveats as _effective,
+            signoff_status as _status)
+
+        accepted_codes = accepted_codes_from_policy(policy)
+        effective_caveats = _effective(caveat_records, accepted_codes)
+        # **唯一判定实现**：audit 与离线 replay 共用，避免两边漂移。
+        verdict = decide_verdict(hard_ok=hard_ok,
+                                 raw_caveats=caveat_records,
+                                 accepted_codes=accepted_codes)
 
         # ── 签核报告（证据链）──
         #
@@ -398,6 +698,7 @@ class AuditExecutor(BaseExecutor):
         # 同一份 run 里可以差一倍（32.5% vs 64.81%），"差在哪"正是要回答的问题。
         signoff = {
             "verdict": verdict,
+            "module": module,
             "pass_rate": f"{passed}/{total}",
             "coverage": overall,
             "coverage_metric": _pick["metric"],
@@ -413,6 +714,20 @@ class AuditExecutor(BaseExecutor):
             # **软缺口**：硬门禁全过、但"绿得不够实在"的地方。空列表 = 没有。
             # 与 `gates` 分开：门禁是"能不能签"，这是"签的时候要写清什么"。
             "caveats": caveats,
+            #: 逐条 caveat 的机器码 —— 策略按码接受，结论按"未被接受的码"算。
+            "caveat_records": caveat_records,
+            "accepted_caveat_codes": sorted(accepted_codes),
+            "effective_caveat_codes": [c["code"] for c in effective_caveats],
+            "policy": {
+                "source": policy.get("source", ""),
+                "require_ref_model": bool(policy.get("require_ref_model")),
+                "require_baseline": bool(policy.get("require_baseline")),
+            },
+            "reference_models": model_info,
+            "lineage": lineage_info,
+            "versions": versions,
+            "regression_config": regression_config,
+            "tool_receipts": _tool_receipt_summary(output_dir),
             "semantic_validations": sem,
             # 测试点维度的签核口径：**可激励 / 已命中 / 只能观测** 三栏分开。
             # 空字典 = 这一轮没有 TP IR（老 run / 没建模），不是"测试点全过"。
@@ -426,15 +741,15 @@ class AuditExecutor(BaseExecutor):
                 "rtl_present": gates["rtl_present"],
                 "coverage_collected": gates["coverage_collected"],
                 "caveat_count": len(caveats),
+                "caveat_effective_count": len(effective_caveats),
+                "caveat_accepted_count": len(caveats) - len(effective_caveats),
                 "testpoint_count": tp_summary.get("total", 0),
                 "testpoint_missed": tp_summary.get("missed", 0),
             },
             # 三态 → 签核状态。**`NEEDS_FIX` 原来是 CONDITIONAL，这是错的** ——
             # "有条件通过"读起来像"可以签了、带着条件"，而 NEEDS_FIX 是
             # "根本不能签"。把两件事标成同一个词，报告读起来会误导。
-            "signoff_status": {"READY": "APPROVED",
-                               "PASS_WITH_CAVEAT": "CONDITIONAL",
-                               "NEEDS_FIX": "REJECTED"}[verdict],
+            "signoff_status": _status(verdict),
         }
 
         # ── 可交换签核证据包（signoff_evidence_v1）──
@@ -442,8 +757,13 @@ class AuditExecutor(BaseExecutor):
         # 与 report.json 并存：report 是人读的签核报告；evidence 是**带 schema、
         # 可被任何工具读取/校验/diff** 的证据包。`dump` 会把它一起打包。
         output_dir.mkdir(parents=True, exist_ok=True)
+        evidence = None
         try:
-            evidence = _build_signoff_evidence(output_dir, signoff, tp, sem, caveats)
+            evidence = _build_signoff_evidence(
+                output_dir, signoff, tp, sem, caveats,
+                caveat_records=caveat_records, policy=policy,
+                model_info=model_info, lineage=lineage_info,
+                versions=versions, hard_ok=hard_ok)
             ev_path = output_dir / "signoff_evidence.json"
             ev_path.write_text(json.dumps(evidence, indent=2, ensure_ascii=False),
                                encoding="utf-8")
@@ -455,7 +775,87 @@ class AuditExecutor(BaseExecutor):
         except Exception as e:                         # noqa: BLE001 证据包别拦签核
             logger.warning(f"签核证据包写入失败: {e}")
 
-        # 写签核报告
+        # ── caveat 明细（机器可读；策略接受/拒绝都按码）──
+        try:
+            (output_dir / "caveats.json").write_text(json.dumps({
+                "schema": "signoff_caveats_v1",
+                "module": module,
+                "raw": caveat_records,
+                "accepted_codes": sorted(accepted_codes),
+                "effective_codes": [c["code"] for c in effective_caveats],
+                "policy_source": policy.get("source", ""),
+            }, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as e:
+            logger.warning(f"caveats.json 写入失败: {e}")
+
+        # ── 合同级证据包 v2：目录布局 + 版本绑定 + 离线回放脚本 ──
+        package_info: Dict[str, Any] = {}
+        if evidence:
+            try:
+                from src.layers.l2_orchestration.evidence.signoff_package import (
+                    write_package)
+                artifacts: Dict[str, Any] = {}
+                for name, entry in ((_read_json_file(
+                        output_dir / "sim" / "coverage" / "coverage_result.json")
+                        .get("artifacts") or {}).items()):
+                    if isinstance(entry, dict) and entry.get("path"):
+                        artifacts[name] = {
+                            # **相对路径**：证据包换机器后仍可定位
+                            "path": _rel_to_run(entry.get("path"), output_dir),
+                            "sha256": entry.get("sha256", ""),
+                            "kind": entry.get("kind", name),
+                        }
+                merged = (evidence.get("coverage") or {}).get("merged_ucdb")
+                if merged and Path(str(merged)).is_file():
+                    artifacts["plan_ucdb"] = {
+                        "path": _rel_to_run(merged, output_dir),
+                        "sha256": _sha256_file(Path(str(merged))),
+                        "kind": "coverage_db",
+                    }
+                cov_ev = dict(evidence.get("coverage") or {})
+                # v2 是**可迁移**的那一份：路径一律相对 run 目录。
+                for _key in ("merged_ucdb", "merge_manifest"):
+                    if cov_ev.get(_key):
+                        cov_ev[_key] = _rel_to_run(cov_ev[_key], output_dir)
+                v2 = {
+                    "run": output_dir.name,
+                    "module": module,
+                    "created_at": datetime.now().isoformat(timespec="seconds"),
+                    "versions": versions,
+                    "rtl_version_hash": evidence.get("rtl_version_hash", ""),
+                    "testpoint_ir_sha256": evidence.get("testpoint_ir_sha256", ""),
+                    "framework": evidence.get("framework") or {},
+                    "reference_models": model_info,
+                    "lineage": lineage_info,
+                    "regression_config": evidence.get("regression_config") or {},
+                    "policy": evidence.get("policy") or {},
+                    "coverage": cov_ev,
+                    "tp_matrix": evidence.get("tp_matrix") or {},
+                    "seed_diversity": evidence.get("seed_diversity"),
+                    "tool_receipts": evidence.get("tool_receipts") or {},
+                    "verdict": {
+                        "hard_ok": bool(hard_ok),
+                        "raw_caveats": caveat_records,
+                        "accepted_codes": sorted(accepted_codes),
+                        "effective_codes": [c["code"] for c in effective_caveats],
+                        "verdict": verdict,
+                        "signoff_status": signoff["signoff_status"],
+                    },
+                    "artifacts": artifacts,
+                    "seeds": (evidence.get("seed_diversity") or {}).get("seeds") or [],
+                }
+                pkg_manifest = write_package(output_dir, v2, project_root=Path.cwd())
+                package_info = {
+                    "schema": pkg_manifest.get("schema"),
+                    "package_dir": pkg_manifest.get("package_dir", ""),
+                    "package_hash": pkg_manifest.get("package_hash", ""),
+                    "manifest_hash": pkg_manifest.get("manifest_hash", ""),
+                }
+                signoff.setdefault("signoff_evidence", {}).update(package_info)
+            except Exception as e:                     # noqa: BLE001 包别拦签核
+                logger.warning(f"签核证据包 v2 写入失败: {e}")
+
+        # 写签核报告（在证据包之后：它要带上 package_hash）
         report_path = output_dir / "report.json"
         try:
             report_path.write_text(json.dumps(signoff, indent=2, ensure_ascii=False), encoding="utf-8")

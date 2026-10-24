@@ -7,9 +7,9 @@
 # 写进去的动作就门控。只有那两个已知高危动作（改 RTL / 改模型）留了硬编码兜底，
 # 防的是"声明文件丢了/写坏了 → 治理静默失效"。
 #
-# 读取入口：src/tools/ide_tools/api.py::run_manual_nodes
+# 读取入口：src/tools/integration/ide_tools/api.py::run_manual_nodes
 # 界面模块：src/workbench/modules/ide/manual_nodes/module.py
-# schema：  src/tools/ide_tools/schema/manual_nodes.schema.json
+# schema：  src/tools/integration/ide_tools/schema/manual_nodes.schema.json
 #
 # ── ⚠️ 闭环里还有**另一层**人工节点，刻意不放进这份声明 ──
 #   分级回归（loopback → p0 → p1 → p2 → p3）在 **loopback 全过之后**会停下等人

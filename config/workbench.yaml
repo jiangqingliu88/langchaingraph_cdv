@@ -160,7 +160,7 @@ modules:
     tool: {name: ide.ip_spec, kind: json}
 
   # 人工节点 —— 编辑「流程人工节点」的声明 YAML（文本 + schema 实时校验）。
-  # **不改闭环拓扑**：这份 YAML 目前是声明/规划性质（见 src/tools/ide_tools/__init__.py）。
+  # **不改闭环拓扑**：这份 YAML 目前是声明/规划性质（见 src/tools/integration/ide_tools/__init__.py）。
   - id: ide.manual_nodes
     title: 人工节点
     group: ide

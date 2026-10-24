@@ -5,7 +5,7 @@
 七条线各自 `output.py` 里几行子类声明即可（模块之间不互相 import，但都可以
 向下依赖这个平台级共享件）。
 
-数据来自 `src/tools/flow_tools.api:run_agent_outputs(run_dir, role)`：
+数据来自 `src/tools/flow/flow_tools.api:run_agent_outputs(run_dir, role)`：
   · **阶段** —— 运行日志里 `agent` 等于本角色的那些阶段事件（状态 / 轮次 / 耗时 / 摘要）
   · **产物** —— 本角色写的目录（RTL / 参考模型 / UVM 组件 / 仿真 / 覆盖率）里的文件
 

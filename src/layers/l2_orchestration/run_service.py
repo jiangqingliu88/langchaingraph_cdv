@@ -33,7 +33,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import structlog
 
-from src.tools.regression_tools.sim_modes import (
+from src.tools.execution.regression_tools.sim_modes import (
     DEFAULT_MODE as _DEFAULT_SIM_MODE,
 )
 
@@ -91,7 +91,7 @@ class RunRequest:
             # 都从这里进（读不了的格式会**响亮报错并说清装什么**，见 doc_intake）。
             # 静默返回空串是更坏的：下游会一路走到 `design_name: dut`。
             try:
-                from src.tools.lib.doc_intake import read_document
+                from src.tools.common.lib.doc_intake import read_document
                 return read_document(self.spec_file)
             except Exception as exc:                   # noqa: BLE001
                 logger.warning(f"规格读取失败 {self.spec_file}: {exc}")
@@ -193,7 +193,7 @@ class RunService:
     def _loop_forever(cls, loop: asyncio.AbstractEventLoop) -> None:
         """loop 线程的入口 —— 它**必须扛住 SystemExit**。
 
-        这一层是不得不做的兜底，起因是一次实测事故：`src/tools/uvm_tools/` 下的
+        这一层是不得不做的兜底，起因是一次实测事故：`src/tools/generation/uvm_tools/` 下的
         `gen_uvm` 是照着独立 CLI 写的，schema 校验不过就 `raise SystemExit`。
         它被进程内调用时跑在这个循环上，于是：
 
@@ -430,7 +430,7 @@ class RunService:
     async def _run(self, handle: _RunHandle) -> Dict[str, Any]:
         """跑完一次运行 —— **这一层是 `SystemExit` 的防火墙**。
 
-        `src/tools/uvm_tools/` 下那些件是照着独立 CLI 写的（`main.py` 里
+        `src/tools/generation/uvm_tools/` 下那些件是照着独立 CLI 写的（`main.py` 里
         `sys.exit(main())`），schema 校验不过就 `raise SystemExit(...)`。当 CLI
         用没问题；可它在进程内被调用时是跑在**子线程的 asyncio 循环**上的，而
         `threading` 对 SystemExit 是**静默吞掉**的（不打印、不回调 excepthook）：
@@ -526,7 +526,7 @@ def _normalize_sim_modes(sim_modes) -> List[str]:
     挡在运行请求这一层时错误还带着"是谁给的"这个上下文（界面下拉 / CLI 参数）。
     留空 → 默认 `cov+wave`（覆盖率是主指标，波形是事后现场）。
     """
-    from src.tools.regression_tools import sim_modes as sm
+    from src.tools.execution.regression_tools import sim_modes as sm
 
     if sim_modes is None:
         return [sm.DEFAULT_MODE]

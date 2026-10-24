@@ -6,6 +6,12 @@
 import hashlib
 import os
 
+import pytest
+
+# auth 属于**可选 API 面**（CLI 不 import 它）；依赖没装时整组跳过。
+pytest.importorskip("fastapi")
+pytest.importorskip("jwt")
+
 from src.layers.l2_orchestration.auth import hash_password, password_needs_rehash, verify_password
 
 

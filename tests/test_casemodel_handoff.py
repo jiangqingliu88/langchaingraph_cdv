@@ -29,7 +29,7 @@ from pathlib import Path
 
 def _casemodel_yaml(tmp_run: Path) -> Path:
     """一份最小但真实的 casemodel（两个维度、若干取值）。"""
-    from src.tools.casemodel_tools.tests.conftest import FC
+    from src.tools.generation.casemodel_tools.tests.conftest import FC
     return FC
 
 
@@ -69,7 +69,7 @@ class TestThePathIsOneContract:
         就是又开了一份真相（原来那版拼的正是 `_P(yaml_dir) / "casemodel.yaml"`）。
         """
         import inspect
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
 
         body = inspect.getsource(_casemodel_test_lines)
         code = "\n".join(ln for ln in body.splitlines()
@@ -85,7 +85,7 @@ class TestTheHandoffActuallyWorks:
     def test_a_placed_casemodel_yields_test_lines(self, tmp_path):
         """有模型 → 有 `tests:` 行。断在交接上时这里返回 `[]`。"""
         from src.layers.l1_infrastructure.layout import casemodel_path
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
 
         p = casemodel_path(tmp_path)
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -105,7 +105,7 @@ class TestTheHandoffActuallyWorks:
         """
         import yaml
         from src.layers.l1_infrastructure.layout import casemodel_path
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
 
         doc = yaml.safe_load(_casemodel_yaml(tmp_path).read_text(encoding="utf-8"))
         for dim in doc.get("dimensions") or []:
@@ -125,7 +125,7 @@ class TestTheHandoffActuallyWorks:
 
     def test_no_model_means_no_injection_not_a_fake_one(self, tmp_path):
         """没有模型就**空着** —— 不编一份假装做过。"""
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
 
         assert _casemodel_test_lines(tmp_path) == []
 
@@ -137,7 +137,7 @@ class TestTheHandoffActuallyWorks:
         这条断言把这个位置性质钉死，谁把落点挪回去，这里就红。
         """
         from src.layers.l1_infrastructure.layout import casemodel_path
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
 
         p = casemodel_path(tmp_path)
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -173,7 +173,7 @@ class TestTestPointsReachTheRegression:
         return p
 
     def test_stimulus_tp_becomes_a_regression_task(self, tmp_path):
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _tp_regression_lines
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _tp_regression_lines
 
         self._model_with_stimulus(tmp_path)
         lines = _tp_regression_lines(
@@ -187,7 +187,7 @@ class TestTestPointsReachTheRegression:
     def test_observe_only_tp_does_not_take_a_regression_slot(self, tmp_path):
         """观测型没有激励差异 —— 单独跑一遍与批次测试等价，不该占槽。"""
         from src.layers.l1_infrastructure.layout import casemodel_path
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _tp_regression_lines
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _tp_regression_lines
 
         # 原样模型：FC 没有任何 stimulus 声明 → 全部是观测型
         p = casemodel_path(tmp_path)
@@ -210,7 +210,7 @@ class TestItReachesTheGeneratedEnv:
     def test_nonempty_tests_renders_the_attr_test_file(self):
         """`env.tests` 非空 ⇒ 属性 test 模板进渲染清单。"""
         import inspect
-        import src.tools.uvm_tools.tool_uvm.gen_uvm as g
+        import src.tools.generation.uvm_tools.tool_uvm.gen_uvm as g
 
         src = inspect.getsource(g)
         # 那条 if 是整条链的闸门：`environment.tests` 为空时属性 test 根本不渲染

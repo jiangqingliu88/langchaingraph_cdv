@@ -294,7 +294,7 @@ class ModelExecutor(BaseExecutor):
         # 组件本体由 `util_comp.sv.j2` 从 `body` 渲染（见该模板的 body 分支）。
         if model_type == "systemverilog":
             try:
-                from src.tools.uvm_tools.tool_find_spec_yaml.main import (
+                from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import (
                     _generate_models_yaml)
                 yaml_dir = output_dir / "inputs" / "yaml" / "uvm"
                 # 用 DUT 名 + 各 agent 的事务类型去库里选（`select()` 只挑 verified，
@@ -318,25 +318,43 @@ class ModelExecutor(BaseExecutor):
                 logger.warning(f"参考模型组件生成失败: {e}")
         if rendered is None:
             if model_type == "systemverilog":
-                # ⚠️ **绝不在 systemverilog 上退回 `_render()`**。
-                # 那是**信号级** RTL：`module <m>_ref_model(input logic clk,
-                # rst_n, paddr, ... tx, rx, irq)` —— 不是参考模型，是引脚级的壳子。
-                # 组件本体该由 **tool_uvm 从 `util_components` 渲染**（TLM 1.0，
-                # 走 util_comp.sv.j2 的 body 分支）。
-                # 库里没有可用模型 → **什么都不写**：没有参考模型是诚实的，
-                # 扔一份信号级 `.sv` 进 model/ 只会让人以为"参考模型有了"。
-                logger.warning("模型库里没有可用模型 —— 不产出参考模型"
-                               "（组件本体由 tool_uvm 从 util_components 渲染，"
-                               "这里不退回信号级 _render）")
-                return ExecutorResult(
-                    success=True,
-                    data={"module": module, "model_type": "tlm10_model",
-                          "version": "", "files": [],
-                          "status": "skipped",
-                          "reason": "模型库无可用模型；参考模型组件由 tool_uvm "
-                                    "从 util_components 渲染，不生成信号级 .sv"},
-                    metadata={"no_reference_model": True})
-            rendered = _render(model_type, module, ops, regs_all, interfaces)
+                # 库（SQL `ModelRegistry`）没有 verified 模型时，**先看兼容层**：
+                # `golden_library` 的磁盘库 / 内置模板。它只有 `verified=True`
+                # 才能当真实模型写盘；未验证的只记下原因（placeholder=True）。
+                #
+                # 为什么保留这条老路：bench 接线（`build_ref_model_config`）与
+                # 一批历史回归仍以 signal-level golden 为契约；在 TLM 1.0 库
+                # 补齐之前，直接删掉会让"没有模型"与"有模型但没接线"混成一件事。
+                # **它不再是签核依据** —— expected 侧只认 `verified`。
+                hit = None
+                try:
+                    from src.tools.common.lib.golden_library import (
+                        load_golden, match_golden, parameterize,
+                    )
+                    hit = match_golden(design_arch)
+                except Exception as exc:               # noqa: BLE001 兼容层不该拖垮流程
+                    logger.warning(f"黄金模型兼容层不可用: {exc}")
+                if hit and hit.get("verified"):
+                    sv = parameterize(load_golden(hit["ip"], hit["version"]),
+                                      module, hit.get("params") or {})
+                    rendered = {
+                        "model_type": "systemverilog", "source_code": sv,
+                        "file": f"{module}_ref_model.sv", "placeholder": False,
+                        "golden_ref": hit,
+                    }
+                    logger.info(f"参考模型命中已验证黄金库: {hit['ip']} {hit['version']}"
+                                f"（兼容层，source={hit.get('source', '?')}）")
+                elif hit:
+                    unverified_golden = (hit["ip"], hit["version"])
+                    rendered = {"model_type": "tlm10_model_placeholder",
+                                "source_code": "", "file": "",
+                                "placeholder": True, "golden_ref": None}
+                else:
+                    rendered = {"model_type": "tlm10_model_placeholder",
+                                "source_code": "", "file": "",
+                                "placeholder": True, "golden_ref": None}
+            else:
+                rendered = _render(model_type, module, ops, regs_all, interfaces)
 
         # 版本管理: 读取当前版本号，+1 生成新版本
         model_dir = output_dir / "model"
@@ -348,14 +366,16 @@ class ModelExecutor(BaseExecutor):
         # 写文件到版本目录（旧版本并存，不覆盖）
         # TLM 装配单已由 `_generate_models_yaml` 写进 `inputs/yaml/uvm/`（生成器读的是
         # 那一份），这里只记路径，**不要把 YAML 当 SV 再写一遍**。
-        fpath = Path(rendered.get("path") or (ver_dir / rendered["file"]))
+        wrote_file = bool(rendered.get("source_code"))
+        fpath = (Path(rendered["path"]) if rendered.get("path")
+                 else ver_dir / (rendered.get("file") or f"{module}_ref_model.sv"))
         if rendered.get("model_type") == "tlm10_model":
-            pass
-        elif model_type == "cpp":
+            wrote_file = False
+        elif model_type == "cpp" and wrote_file:
             hpath = ver_dir / f"{module}_ref_model.h"
             hpath.write_text(rendered["header_code"], encoding="utf-8")
             fpath.write_text(rendered["source_code"], encoding="utf-8")
-        else:
+        elif wrote_file:
             fpath.write_text(rendered["source_code"], encoding="utf-8")
 
         # ── 本地闭环：过 EDA 才写稳定指针（与 design 的 vlog 门禁对称）──
@@ -363,17 +383,17 @@ class ModelExecutor(BaseExecutor):
         # scoreboard 就不会拿一份编不过的模型去比。没装 EDA 时判不了，
         # 如实标 BLOCKED 照常推进（不冒充通过，也不冤枉一份可能没问题的模型）。
         compile_info = self._verify_model(model_dir, module, model_type,
-                                          rendered["source_code"])
+                                          rendered.get("source_code", ""))
         compile_failed = compile_info["status"] == "FAIL"
         if compile_failed:
             logger.warning(f"参考模型 {module} v{version} 未过编译门禁，不进稳定指针："
                            f"{compile_info['detail']}")
-        else:
+        elif wrote_file:
             self._mark_stable(model_dir, module, version)
 
         model_data = {
             "module": module, "model_type": model_type,
-            "version": f"v{version}", "files": [str(fpath)],
+            "version": f"v{version}", "files": [str(fpath)] if wrote_file else [],
             "operation_count": len(ops), "register_count": len(regs),
             "status": "generated", "reason": params.get("reason", ""),
             "all_versions": self._list_versions(model_dir, module),
@@ -433,6 +453,11 @@ class ModelExecutor(BaseExecutor):
         非 SV/Verilog 的模型：python 用 stdlib `compile()` 做语法检查；cpp 只能标
         SKIPPED —— 环境里没有保证存在的 C++ 编译器，编不出来就不许说编过了。
         """
+        if not source_code:
+            return {"status": "SKIPPED", "errors": 0,
+                    "detail": "没有可编译的模型源码（reference model 未生成）—— "
+                              "不冒充通过"}
+
         if model_type == "python":
             try:
                 compile(source_code, f"{module}_ref_model.py", "exec")

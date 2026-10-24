@@ -10,8 +10,11 @@ from src.layers.l4_memory.persistence.models import (
 )
 import hashlib
 import re
-from datetime import datetime
+import sqlite3
+from datetime import datetime, timedelta
 from typing import Any
+
+from config.paths import MAIN_DB
 
 # ── 原有 ──
 
@@ -505,13 +508,52 @@ async def get_evidence_links(object_type: str = None, object_id: int = None, lim
 
 async def save_regression(project_id: int, run_name: str, status: str, passed: int, failed: int,
                           skipped: int, total: int, duration: float, results: dict):
+    """**Legacy / 无调用方** —— 回归趋势现在由 `TrendDatabase` 写主库 `runs`。
+
+    保留函数是为了外部脚本不突然 ImportError；新代码不要调用它。
+    """
     s = await get_session()
     r = RegressionRecord(project_id=project_id, run_name=run_name, status=status,
                          pass_count=passed, fail_count=failed, skip_count=skipped,
                          total_count=total, duration_seconds=duration, results_json=results)
     s.add(r); await s.commit(); await s.close()
 
+def _trend_rows(limit: int = 20):
+    """从主库的 `runs` 表读回归历史（`TrendDatabase` 写的唯一真相）。
+
+    读不到表/库（老库、独立运行）时返回空，让调用方回退到 ORM。
+    """
+    try:
+        conn = sqlite3.connect(str(MAIN_DB))
+        try:
+            return conn.execute(
+                "SELECT id, timestamp, total, pass, fail, unknown, pass_rate,"
+                " total_time, root_dir FROM runs ORDER BY id DESC LIMIT ?",
+                (max(1, int(limit)),)).fetchall()
+        finally:
+            conn.close()
+    except (sqlite3.Error, OSError):
+        return []
+
+
+def _hhmmss_seconds(text: str) -> float:
+    try:
+        h, m, s = str(text or "0:0:0").split(":")
+        return int(h) * 3600 + int(m) * 60 + float(s)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 async def get_regression_history(project_id: int = None, limit: int = 20):
+    # **统一口径**：趋势/历史都读主库 `runs`（TrendDatabase 写的）。
+    rows = _trend_rows(limit)
+    if rows:
+        return [{'id': r[0], 'run_name': r[8] or f"run-{r[0]}",
+                 'status': 'completed', 'pass_count': r[3],
+                 'fail_count': r[4], 'skip_count': r[5],
+                 'total_count': r[2], 'duration_seconds': _hhmmss_seconds(r[7]),
+                 'created_at': r[1], 'pass_rate': r[6]} for r in rows]
+    # 回退：老库只有 ORM `regression_records`
     s = await get_session()
     q = select(RegressionRecord).order_by(desc(RegressionRecord.created_at)).limit(limit)
     if project_id: q = q.where(RegressionRecord.project_id == project_id)
@@ -523,11 +565,26 @@ async def get_regression_history(project_id: int = None, limit: int = 20):
              'duration_seconds': r.duration_seconds, 'created_at': str(r.created_at)} for r in runs]
 
 async def get_regression_trend(project_id: int = None, days: int = 7):
-    """回归通过率趋势"""
+    """回归通过率趋势 —— 统一读主库 `runs`（与 `TrendDatabase` 同源）。"""
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    try:
+        conn = sqlite3.connect(str(MAIN_DB))
+        try:
+            rows = conn.execute(
+                "SELECT timestamp, total, pass, pass_rate FROM runs"
+                " WHERE timestamp >= ? ORDER BY timestamp", (cutoff,)).fetchall()
+        finally:
+            conn.close()
+        if rows:
+            return [{'date': str(r[0])[:10], 'pass_rate': r[3],
+                     'passed': r[2], 'total': r[1]} for r in rows]
+    except (sqlite3.Error, OSError):
+        pass
+    # 回退：老库只有 ORM `regression_records`
     s = await get_session()
-    from datetime import datetime, timedelta
-    cutoff = datetime.now() - timedelta(days=days)
-    q = select(RegressionRecord).where(RegressionRecord.created_at >= cutoff).order_by(RegressionRecord.created_at)
+    q = select(RegressionRecord).where(
+        RegressionRecord.created_at >= datetime.now() - timedelta(days=days)
+    ).order_by(RegressionRecord.created_at)
     if project_id: q = q.where(RegressionRecord.project_id == project_id)
     result = await s.execute(q)
     runs = result.scalars().all(); await s.close()

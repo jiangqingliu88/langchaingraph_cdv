@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QLineEdit,
                                QMessageBox, QPushButton, QSplitter, QVBoxLayout,
                                QWidget)
 
-from src.tools.ide_tools.api import Decl, MANUAL_NODES, load_decl_issues
+from src.tools.integration.ide_tools.api import Decl, MANUAL_NODES, load_decl_issues
 from src.workbench.modules.base import ModuleBase
 from src.workbench.ui import theme
 from src.workbench.ui.editors.yaml import YamlEditor

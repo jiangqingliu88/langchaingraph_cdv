@@ -384,10 +384,10 @@ class BaseExecutor(ABC, ExecutorSubject):
         # FileNotFoundError 而不是"这个角色没有 schema"。删掉即回落到下面那句
         # `if not schema_path: return True, []`（无 schema 则跳过）。
         schema_map = {
-            "spec": "src/tools/spec_tools/schema.yaml",
-            "uvm": "src/tools/uvm_tools/schema.yaml",
-            "assert": "src/tools/assertion_tools/schema.yaml",
-            "debug": "src/tools/debug_tools/schema.yaml",
+            "spec": "src/tools/checking/spec_tools/schema.yaml",
+            "uvm": "src/tools/generation/uvm_tools/schema.yaml",
+            "assert": "src/tools/checking/assertion_tools/schema.yaml",
+            "debug": "src/tools/checking/debug_tools/schema.yaml",
         }
         schema_path = schema_map.get(self.role)
         if not schema_path:

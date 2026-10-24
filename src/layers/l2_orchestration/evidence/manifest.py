@@ -317,6 +317,9 @@ class ManifestBuilder:
             # 覆盖率库与波形同一条理由：它们是**这一轮结论的物证**，
             # 不能只做文件表里的一行匿名记录。见那个函数的 docstring。
             self._attach_simulation_artifacts(manifest, output_path)
+            # 签核证据包 v2 —— `dump` 的 zip 里要有"凭什么签"的那一份，
+            # 而不只是执行轨迹。只摘身份与结论，不重复整包内容。
+            self._attach_signoff_package(manifest, output_path)
 
         # ── 汇总计算 ──
         if not manifest.total_phases:
@@ -464,6 +467,47 @@ class ManifestBuilder:
             "coverage_result": "sim/coverage/coverage_result.json"
             if cov_json.is_file() else "",
             "artifacts": arts,
+        }
+
+    # ── 签核证据包 v2 → 运行级资产 ──
+
+    @staticmethod
+    def _attach_signoff_package(manifest: "RunManifest",
+                                output_path: Path) -> None:
+        """`signoff_evidence/manifest.json` → metadata（身份 + 结论 + 哈希）。
+
+        `output_files` 已经把这些文件哈希进去了，但签核包的价值在**语义**：
+        这一轮判了什么、package_hash 是多少、基线/模型是否被引用。把这几项
+        摘出来，`vagent dump` 的读者不必先解压再读代码。
+        """
+        pkg_manifest = output_path / "signoff_evidence" / "manifest.json"
+        if not pkg_manifest.is_file():
+            return
+        try:
+            import json as _json
+
+            from src.layers.l1_infrastructure.infrastructure import sha256_file
+
+            doc = _json.loads(pkg_manifest.read_text(encoding="utf-8",
+                                                     errors="replace"))
+        except (OSError, ValueError):
+            return
+        if not isinstance(doc, dict):
+            return
+        verdict = doc.get("verdict") or {}
+        manifest.metadata["signoff_evidence"] = {
+            "schema": doc.get("schema"),
+            "module": doc.get("module"),
+            "package_dir": "signoff_evidence",
+            "package_manifest_sha256": sha256_file(pkg_manifest),
+            "package_hash": doc.get("package_hash", ""),
+            "manifest_hash": doc.get("manifest_hash", ""),
+            "verdict": verdict.get("verdict"),
+            "signoff_status": verdict.get("signoff_status"),
+            "hard_ok": verdict.get("hard_ok"),
+            "rtl_version_hash": doc.get("rtl_version_hash", ""),
+            "testpoint_ir_sha256": doc.get("testpoint_ir_sha256", ""),
+            "replay": "python signoff_evidence/replay/replay.py",
         }
 
     # ── 读取 trace ──

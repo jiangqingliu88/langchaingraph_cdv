@@ -15,7 +15,7 @@
 """
 from __future__ import annotations
 
-from src.tools.ide_tools.api import MANUAL_NODES
+from src.tools.integration.ide_tools.api import MANUAL_NODES
 from src.workbench.modules.ide.decl_editor import DeclEditorModule
 
 

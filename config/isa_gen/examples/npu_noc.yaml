@@ -9,7 +9,7 @@
 # —— 中途不允许插入其他指令。
 #
 # 用法:
-#   python -m src.tools.isa_gen_tools.cli compile config/isa_gen/examples/npu_noc.yaml
+#   python -m src.tools.generation.isa_gen_tools.cli compile config/isa_gen/examples/npu_noc.yaml
 # ════════════════════════════════════════════════════════════════
 
 meta:

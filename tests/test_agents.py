@@ -148,7 +148,7 @@ APB_SPEC_ARCH = {
 
 def test_golden_library_match_apb():
     """APB 接口 → 命中 apb_slave 黄金模型（带参数化）。"""
-    from src.tools.lib.golden_library import match_golden
+    from src.tools.common.lib.golden_library import match_golden
     hit = match_golden(APB_SPEC_ARCH)
     assert hit is not None
     assert hit["ip"] == "apb_slave"
@@ -159,7 +159,7 @@ def test_golden_library_match_apb():
 
 def test_golden_library_uart_only_matches_tx():
     """UART-only 设计（无 APB）→ 命中 uart_tx 黄金模型（不再是占位）。"""
-    from src.tools.lib.golden_library import match_golden
+    from src.tools.common.lib.golden_library import match_golden
     arch = {"module_name": "uart", "interfaces": [
         {"name": "clk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
         {"name": "tx", "data_width": 1, "direction": "OUTPUT", "protocol": "UART"},
@@ -170,7 +170,7 @@ def test_golden_library_uart_only_matches_tx():
 
 def test_golden_library_match_uart_tx():
     """UART TX 信号 → 命中 uart_tx 黄金模型。"""
-    from src.tools.lib.golden_library import match_golden
+    from src.tools.common.lib.golden_library import match_golden
     arch = {"module_name": "uart", "interfaces": [
         {"name": "clk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
         {"name": "tx", "data_width": 1, "direction": "OUTPUT", "protocol": "UART"},
@@ -183,7 +183,7 @@ def test_golden_library_match_uart_tx():
 
 def test_golden_library_uart_models_are_verifiable():
     """uart_tx/uart_rx 黄金模型文件存在且 manifest 结构完整（待 EDA 验证盖章）。"""
-    from src.tools.lib.golden_library import load_golden, verify_manifest
+    from src.tools.common.lib.golden_library import load_golden, verify_manifest
     for ip in ("uart_tx", "uart_rx", "fifo16", "irq_gen"):
         sv = load_golden(ip, "v1")
         assert "module" in sv and "endmodule" in sv, f"{ip} 模型不完整"
@@ -194,7 +194,7 @@ def test_golden_library_uart_models_are_verifiable():
 
 def test_golden_library_match_fifo_and_irq():
     """FIFO/中断信号 → 命中 fifo16/irq_gen 黄金模型。"""
-    from src.tools.lib.golden_library import match_golden
+    from src.tools.common.lib.golden_library import match_golden
     fifo_arch = {"module_name": "fifo", "interfaces": [
         {"name": "clk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
         {"name": "wdata", "data_width": 8, "direction": "INPUT", "protocol": "generic"},
@@ -210,7 +210,7 @@ def test_golden_library_match_fifo_and_irq():
 
 def test_golden_model_parameterize_module_name():
     """黄金模型参数化：模块名 → {module}_ref_model，parameter 默认值更新为 spec 推导值。"""
-    from src.tools.lib.golden_library import parameterize
+    from src.tools.common.lib.golden_library import parameterize
     sv = ("module apb_slave_golden #(parameter int NREGS = 16, parameter int ADDR_W = 8, "
           "parameter int DATA_W = 8) (input logic clk); endmodule")
     out = parameterize(sv, "apb_uart", {"NREGS": 256, "ADDR_W": 8, "DATA_W": 8})
@@ -222,7 +222,7 @@ def test_golden_model_parameterize_module_name():
 @pytest.mark.asyncio
 async def test_model_agent_golden_hit(tmp_path, monkeypatch):
     """APB 设计 → model agent 命中【已验证】黄金模型：placeholder=False + golden_ref 可追溯。"""
-    import src.tools.lib.golden_library as gl
+    import src.tools.common.lib.golden_library as gl
     monkeypatch.setattr(gl, "verify_manifest", lambda ip, ver: {"verified": True})
     agent = ModelExecutor()
     await agent.initialize()
@@ -255,7 +255,7 @@ async def test_model_agent_golden_hit_unverified(tmp_path, monkeypatch):
     迟早会莫名其妙地红（真踩过：验完 apb_slave 之后这条就失败了）。
     这里显式让 `verify_manifest` 报 false，测的是**逻辑**。
     """
-    monkeypatch.setattr("src.tools.lib.golden_library.verify_manifest",
+    monkeypatch.setattr("src.tools.common.lib.golden_library.verify_manifest",
                         lambda ip, ver: {"verified": False})
     agent = ModelExecutor()
     await agent.initialize()

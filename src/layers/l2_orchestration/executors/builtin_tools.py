@@ -17,7 +17,7 @@ def register_all_tools() -> ToolRegistry:
     # ═══════════════════════════════════════════════════
     # verification_architect (7 tools) — delegated to uvm_tools
     # ═══════════════════════════════════════════════════
-    from src.tools.uvm_tools.agent_tools import ensure_uvm_tool_registry
+    from src.tools.generation.uvm_tools.agent_tools import ensure_uvm_tool_registry
     uvm_reg = ensure_uvm_tool_registry()
     for t in uvm_reg._tools.values():
         registry.register(t)
@@ -27,7 +27,7 @@ def register_all_tools() -> ToolRegistry:
     #   casemodel_validate  Schema 校验
     #   casemodel_gaps      全量完备性分析（可带真实 case 列表反向核对）
     #   casemodel_generate  按属性组合生成 case 属性表
-    # 适配器归 verify 角色；工具本体在 src/tools/casemodel_tools/
+    # 适配器归 verify 角色；工具本体在 src/tools/generation/casemodel_tools/
     # ═══════════════════════════════════════════════════
     from src.executors.verify.casemodel.registry import (
         ensure_casemodel_tool_registry,

@@ -37,6 +37,8 @@ bug 本体（描述/严重度/状态）仍在 SQLAlchemy 那边（`VerificationB
 """
 from __future__ import annotations
 
+from .sqlite_utils import connect
+
 import hashlib
 import sqlite3
 import threading
@@ -139,14 +141,16 @@ class LineageStore:
     """
 
     def __init__(self, db_path: Optional[str | Path] = None):
-        self.db_path = Path(db_path) if db_path else Path(".signoffai") / "lineage.db"
+        from config.paths import LINEAGE_DB
+
+        self.db_path = Path(db_path) if db_path else LINEAGE_DB
         self._lock = threading.Lock()
         self._conn: Optional[sqlite3.Connection] = None
 
     def _connect(self) -> sqlite3.Connection:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn = connect(self.db_path)
             self._conn.executescript(_SCHEMA)
             # **老库补种计数器**：`rtl_module_seq` 是后加的，已有库里的模块
             # 一行都没有 —— 从当前 `MAX(version_no)+1` 补上，否则那些模块的
@@ -482,7 +486,7 @@ def run_rtl_version_no(output_dir, module: str = "") -> Optional[int]:
 
 
 def get_lineage_store() -> LineageStore:
-    """进程内默认血缘库（`.signoffai/lineage.db`）—— 与其它领域库同款单例。"""
+    """进程内默认血缘库（`database/lineage.db`）—— 与其它领域库同款单例。"""
     global _DEFAULT
     try:
         return _DEFAULT

@@ -67,7 +67,7 @@ def apply_project(args) -> None:
     """`--project` → 换工作目录 + 换清单。**必须在建窗口之前调**。
 
     为什么是"换目录"就等于"换项目"：产物（`output/`）与记忆
-    （`.signoffai/*.db`）都是相对工作目录解析的，换了目录，两者天然互不可见
+    （`database/*.db`）都是相对工作目录解析的，换了目录，两者天然互不可见
     —— 隔离不用新造机制（见 `projects.py` 的说明）。
 
     清单没显式给就用项目根下那份；项目目录不存在 → **报错退出**，不静默退化成
@@ -426,7 +426,7 @@ def _build_window_class():
             current = projects_mod.current()
             self.project_box = QComboBox(self)
             self.project_box.setToolTip(
-                "切项目 = 换工作目录重开工作台（产物 output/ 与记忆 .signoffai/*.db "
+                "切项目 = 换工作目录重开工作台（产物 output/ 与记忆 database/*.db "
                 "都按工作目录隔离）" + chr(10) +
                 f"登记表：{projects_mod.registry_path()}")
             if current is None:
@@ -457,7 +457,7 @@ def _build_window_class():
             `MODE_OPTS`），跑完要能回答"这份波形是哪门业务跑出来的"。中途改一个
             界面控件去动已经在跑的命令，那份记录就成了假的。
 
-            词条来自工具层的表（`src/tools/regression_tools/sim_modes.py`），
+            词条来自工具层的表（`src/tools/execution/regression_tools/sim_modes.py`），
             这里不另抄一份；选择记在项目级 `.signoffai/sim_modes.json`。
             """
             from PySide6.QtWidgets import QComboBox, QLabel
@@ -473,7 +473,7 @@ def _build_window_class():
                         Qt.ItemDataRole.ToolTipRole)
             self.sim_mode_box.setToolTip(
                 "回归的仿真业务：选中哪门就只跑哪门（默认 cov+wave）。" + chr(10) +
-                "词条与取值见 src/tools/regression_tools/sim_modes.py；" + chr(10) +
+                "词条与取值见 src/tools/execution/regression_tools/sim_modes.py；" + chr(10) +
                 "标「本后端无开关」的项在当前 EDA 后端没有对应参数，"
                 "选中会被告警忽略（不会把不存在的选项塞进命令行）。")
             # 先把选中项摆好、**再接信号** —— 反过来的话，这个"回到上次选择"的

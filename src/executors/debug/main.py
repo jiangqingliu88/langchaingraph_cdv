@@ -15,7 +15,7 @@ from src.layers.l2_orchestration.executors.registry import register_executor
 # 工具统一入口：走 ToolHub 的 schema 校验 + 审计回执，
 # 而不是绕过 hub 直接 import 工具函数（见 call_tool 的 docstring）
 from src.layers.l2_orchestration.communication.tool_hub import call_tool
-from src.tools.debug_tools.main import (
+from src.tools.checking.debug_tools.main import (
     DebugTools, _classify_error, _fingerprint, fingerprint_error,
 )
 import asyncio, structlog, json, re
@@ -106,7 +106,7 @@ class DebugExecutor(BaseExecutor):
             # `site` 要自己给：这条**不经过 `lib.llm_call.call_llm`**（直连 engine），
             # 而那句"唯一漏斗"的算术只在漏斗里自动取调用点。不给的话审计记录的
             # 出处恒为空 —— 实测 15 条里 5 条是空的，全是这一条路。
-            from src.tools.lib.llm_call import caller_site
+            from src.tools.common.lib.llm_call import caller_site
 
             return await asyncio.to_thread(
                 LLMQueryEngine.get_instance().query,
@@ -439,6 +439,32 @@ class DebugExecutor(BaseExecutor):
             base += 10
         score = min(base, 95)
 
+        # ── 自动修复统计落盘（签核证据要能回答"修了几条、几条真过了"）──
+        #
+        # 不只看 "applied"：模板命中不等于修好。真正有意义的是
+        # verified/applied 与问题类型的分布 —— 它们也是下一轮经验库校准的输入。
+        try:
+            _od = Path(str(output_dir))
+            _stats = {
+                "schema": "debug_autofix_stats_v1",
+                "run": _od.name,
+                "error_summary": error_summary,
+                "fix_summary": {
+                    **fix_summary,
+                    "verified_pct": round(
+                        100.0 * fix_summary["verified"] / fix_summary["applied"], 2)
+                    if fix_summary["applied"] else 0.0,
+                },
+                "growth": debug_result.get("growth") or {},
+                "llm_analysis_present": bool(llm_analysis),
+                "manual_review": manual_review,
+            }
+            (_od / "docs").mkdir(parents=True, exist_ok=True)
+            (_od / "docs" / "debug_stats.json").write_text(
+                json.dumps(_stats, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as e:
+            logger.warning(f"debug 自动修复统计落盘失败: {e}")
+
         return ExecutorResult(success=True, data={"debug": debug_result, "score": score})
 
     # ═══════════════════════════════════════════════════════════
@@ -451,7 +477,7 @@ class DebugExecutor(BaseExecutor):
         LLM 不直接判断根因，而是基于信号级证据做分类。
         先查跨 run 经验库：命中同类错误则直接复用历史根因，跳过重复诊断。
         """
-        from src.tools.debug_tools.signal_diagnosis import diagnose
+        from src.tools.checking.debug_tools.signal_diagnosis import diagnose
         import hashlib
         results = []
         for err in errors:
@@ -615,7 +641,7 @@ class DebugExecutor(BaseExecutor):
         if not names:
             return {}, ""
         try:
-            from src.tools.debug_tools.waveform import extract_signal_trace
+            from src.tools.checking.debug_tools.waveform import extract_signal_trace
 
             traces = extract_signal_trace(wave, names)
         except Exception:                              # noqa: BLE001 波形是旁路证据
@@ -670,7 +696,7 @@ class DebugExecutor(BaseExecutor):
         virtual interface 参数化等）由 LLM 重写出错文件，而非只记录假设。
         """
         try:
-            from src.tools.lib.llm_call import call_llm
+            from src.tools.common.lib.llm_call import call_llm
             od = Path(output_dir)
             fpath = od / fname
             if not fpath.exists():

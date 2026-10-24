@@ -13,7 +13,7 @@ from typing import List, Optional, Sequence
 from PySide6.QtCore import QAbstractItemModel, QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor
 
-from src.tools.casemodel_tools.domain import CaseAttribute, OrgNode
+from src.tools.generation.casemodel_tools.domain import CaseAttribute, OrgNode
 from src.workbench.ui.models.issues import severity_color
 
 # ════════════════════════════════════════════════════════════

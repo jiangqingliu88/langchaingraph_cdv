@@ -56,7 +56,7 @@ def run_dir(tmp_path):
 
 @pytest.fixture
 def payload(run_dir):
-    from src.tools.flow_tools.api import run_regression_status
+    from src.tools.flow.flow_tools.api import run_regression_status
 
     return run_regression_status(str(run_dir))
 
@@ -221,7 +221,7 @@ class TestBothPages:
 
     def test_notes_explain_when_nothing_has_the_artifact(self, any_page, tmp_path):
         """一条都没有时要说清是"没开这门业务"，不是"这页坏了"。"""
-        from src.tools.flow_tools.api import run_regression_status
+        from src.tools.flow.flow_tools.api import run_regression_status
 
         empty = tmp_path / "no_artifacts"
         case = empty / "regression_run" / "build_b1" / "test_t1"

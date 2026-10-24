@@ -9,7 +9,7 @@ Debug 经验库 —— 错误指纹 → 已验证修复 的持久化记忆（deb
 设计约束:
   - Agent 保持无状态（agent_contract 不变），这里是"外部记忆"，只读只写不侵入 execute_task 契约
   - 同步 stdlib sqlite3（debug 工具链本就是同步 subprocess/文件 IO），不引入 async 耦合
-  - 持久化到 .signoffai/debug_experience.db（对齐 InfrastructureManager 的持久归档区，跨 run 存活）
+  - 持久化到 database/debug_experience.db（对齐 InfrastructureManager 的持久归档区，跨 run 存活）
 
 用法:
     from src.layers.l4_memory.debug_experience import get_debug_experience_store
@@ -20,18 +20,22 @@ Debug 经验库 —— 错误指纹 → 已验证修复 的持久化记忆（deb
 """
 from __future__ import annotations
 
+from .sqlite_utils import connect
+
 import sqlite3
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from config.paths import DEBUG_EXPERIENCE_DB
+
 # 复用门槛：confidence >= 此值才认为"已验证可靠"，直接复用
 REUSE_MIN_CONFIDENCE = 0.8
 # 蒸馏门槛：稳定通过此次数，才认为可沉淀成规则
 DISTILL_MIN_SUCCESS = 3
 
-_DEFAULT_DB = Path(".signoffai") / "debug_experience.db"
+_DEFAULT_DB = DEBUG_EXPERIENCE_DB
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS debug_experience (
@@ -59,7 +63,7 @@ class DebugExperienceStore:
     def _connect(self) -> sqlite3.Connection:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn = connect(self.db_path)
             self._conn.execute(_SCHEMA)
             self._conn.commit()
         return self._conn
@@ -214,7 +218,7 @@ class DebugExperienceStore:
         }
 
 
-# 全局单例（默认路径 .signoffai/debug_experience.db）
+# 全局单例（默认路径 database/debug_experience.db）
 _global_store: Optional[DebugExperienceStore] = None
 
 

@@ -1,6 +1,6 @@
 """case 建模模块的 YAML 编辑器 —— 打开 / 改 / 保存。
 
-原在 `src/tools/casemodel_tools/tests/test_editor.py`，随界面一起迁到工作台。
+原在 `src/tools/generation/casemodel_tools/tests/test_editor.py`，随界面一起迁到工作台。
 
 最要紧的两条不变式：
   1. **保存不改动原文** —— 注释、键顺序、别名写法都原样保留。

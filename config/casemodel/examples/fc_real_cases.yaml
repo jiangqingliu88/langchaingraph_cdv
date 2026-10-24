@@ -13,7 +13,7 @@
 #   子对象不存在     FC-99
 #
 # 用法:
-#   python -m src.tools.casemodel_tools.cli analyze config/casemodel/examples/fc_flowcontrol.yaml #       --cases config/casemodel/examples/fc_real_cases.yaml
+#   python -m src.tools.generation.casemodel_tools.cli analyze config/casemodel/examples/fc_flowcontrol.yaml #       --cases config/casemodel/examples/fc_real_cases.yaml
 # ════════════════════════════════════════════════════════════
 
 cases:

@@ -1,7 +1,7 @@
 """层级正交性 —— 文档十八、十九节的三类错位。"""
 from __future__ import annotations
 
-from src.tools.casemodel_tools.analysis import CATEGORY_ORTHOGONAL
+from src.tools.generation.casemodel_tools.analysis import CATEGORY_ORTHOGONAL
 from src.workbench.ui.widgets.panels import IssuePanel
 
 from ..page import Page

@@ -130,7 +130,7 @@ yaml 就看得清，不用追 import：
 2. 在 `bridge/catalog.py` 里登记它要用的工具（如果还没登记）：
    ```python
    ToolBinding(name="debug.my_tool",
-               target="src.tools.debug_tools.main:collect_sim_log",
+               target="src.tools.checking.debug_tools.main:collect_sim_log",
                kind="json")
    ```
 3. 在清单里加一条 `modules`。
@@ -395,7 +395,7 @@ pytest src/workbench/tests -q
 | `test_casemodel_module.py` | case 建模：领域 Qt 模型、自绘控件、12 个页面都填上、报告与 CLI 一致 | 是 |
 | `test_casemodel_editor.py` | YAML 编辑器：**保存不改原文**（`RANDOM` 不被改写成 `RND`）、脏标记、保存前确认、构不出模型时保留上次结果、**刷新不碰文本** | 是 |
 
-后两个是从 `src/tools/casemodel_tools/tests/` 的 `test_gui.py` / `test_editor.py`
+后两个是从 `src/tools/generation/casemodel_tools/tests/` 的 `test_gui.py` / `test_editor.py`
 迁过来的（界面搬到哪，测试跟到哪）。它们保住的那几条不变式是「原文编辑」这个
 设计的全部理由 —— 迁的时候一条都没丢。工具层那三条（`check_text` / 文本入口 vs
 文件入口）留在原处，进了 `casemodel_tools/tests/test_analysis.py`。

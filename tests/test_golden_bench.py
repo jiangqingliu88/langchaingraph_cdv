@@ -6,8 +6,8 @@ from pathlib import Path
 
 import jinja2
 
-from src.tools.lib.golden_library import build_ref_model_config
-from src.tools.uvm_tools.tool_uvm.gen_uvm import JinjaRenderer, TEMPLATES_DIR
+from src.tools.common.lib.golden_library import build_ref_model_config
+from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import JinjaRenderer, TEMPLATES_DIR
 
 APB_INTERFACES = [
     {"name": "pclk", "direction": "input", "protocol": "Clock"},
@@ -135,7 +135,7 @@ REGS = [
 
 def test_composite_ref_model_generated():
     """寄存器表含 tx_data/rx_data → 生成复合参考模型（多黄金 IP 实例化 + 接线）。"""
-    from src.tools.lib.golden_library import build_composite_ref_model
+    from src.tools.common.lib.golden_library import build_composite_ref_model
     sv = build_composite_ref_model("apb_uart", APB_INTERFACES, REGS)
     assert sv is not None
     assert "module apb_uart_ref_model" in sv
@@ -159,7 +159,7 @@ def test_composite_ref_model_generated():
 
 def test_composite_requires_tx_rx_registers():
     """寄存器表缺 tx/rx 数据寄存器 → 不生成复合（诚实：无法接线，回退单模型）。"""
-    from src.tools.lib.golden_library import build_composite_ref_model
+    from src.tools.common.lib.golden_library import build_composite_ref_model
     partial = [{"offset": "0x00", "name": "CTRL", "width": 8, "access": "RW"}]
     assert build_composite_ref_model("dut", APB_INTERFACES, partial) is None
     assert build_composite_ref_model("dut", APB_INTERFACES, []) is None

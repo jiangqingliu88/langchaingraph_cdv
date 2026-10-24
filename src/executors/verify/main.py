@@ -103,7 +103,7 @@ class VerifyExecutor(BaseExecutor):
             # 这两个工具的 output_dir 来自模块级 `_uvm_ctx`（不是参数），所以
             # 下面那句 set() 仍然必需 —— 它指向的是同一个 ctx 单例。
             from src.layers.l2_orchestration.communication.tool_hub import call_tool
-            from src.tools.uvm_tools.agent_tools import _uvm_ctx
+            from src.tools.generation.uvm_tools.agent_tools import _uvm_ctx
             _uvm_ctx.set(output_dir=output_dir, agents=[], env_name=f"{module_name}_env")
             # 保存 spec 供 find_spec_yaml 读取
             (output_dir / "spec.json").write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
@@ -168,7 +168,7 @@ class VerifyExecutor(BaseExecutor):
         #
         # 现在走 casemodel：它吃一份 **case 模型 YAML**（功能组织树 + P0/P1/P2 专题 +
         # 维度约束组合），吐 case 属性表与 UVM tests 片段。工具本体在
-        # `src/tools/casemodel_tools/`（零 LLM 依赖），Agent 侧的三个包装面在
+        # `src/tools/generation/casemodel_tools/`（零 LLM 依赖），Agent 侧的三个包装面在
         # `src/executors/verify/casemodel/`。
         #
         # **case 模型从哪来**：闭环里目前**没有** spec → case 模型的桥（设计阶段不产出
@@ -185,7 +185,7 @@ class VerifyExecutor(BaseExecutor):
             # 整轮回归的测试点，却没有任何一行日志提到它 —— 排查时会很痛苦。
             logger.info(f"case 模型：{case_model}（人写的优先于 front 的草稿）")
             try:
-                from src.tools.casemodel_tools.api import run_gaps, run_generate
+                from src.tools.generation.casemodel_tools.api import run_gaps, run_generate
 
                 yaml_text = case_model.read_text(encoding="utf-8", errors="replace")
                 gaps = run_gaps(yaml_text)
@@ -366,7 +366,7 @@ class VerifyExecutor(BaseExecutor):
         的注释）。放在 coverage 下，证据包 `dump` 会连同覆盖率一起收走。
         """
         try:
-            from src.tools.casemodel_tools.api import run_testpoints
+            from src.tools.generation.casemodel_tools.api import run_testpoints
 
             # **与 `_casemodel_test_lines` 的 200 条上限同一口径**：那边截断后
             # 不会生成更多属性 test 类，TP 这边若还列着"有 test 名但没类"的
@@ -459,7 +459,7 @@ class VerifyExecutor(BaseExecutor):
                         "（没有端口就不生成，见 build_constraint）")
             return
         try:
-            from src.tools.casemodel_tools.associate import build_constraint
+            from src.tools.generation.casemodel_tools.associate import build_constraint
 
             # `agent_fields` 决定"这个字段该约束哪个 agent" —— 没有它，可驱动
             # 维度只能在一端口时才敢落，多 agent 时全部退化成骨架。
@@ -472,6 +472,10 @@ class VerifyExecutor(BaseExecutor):
             (output_dir / "inputs" / "yaml" / "uvm" / "constraint.yaml").write_text(
                 payload["constraint_yaml"], encoding="utf-8")
             self._write_constraint_status(output_dir, payload)
+            # **同一份生效状态也要能被覆盖率计划读到**：签核的人先看
+            # `coverage_plan.yaml`，再看 `constraint.yaml` 是两步；把
+            # `constraint_backing` 写进计划产物，一步就能回答"哪些策略在约束"。
+            self._annotate_coverage_plan(output_dir, payload)
         except Exception as e:                       # noqa: BLE001 旁路，别拦 env 生成
             logger.warning(f"约束模型落盘失败（env/cons 将不生成）: {e}")
             return
@@ -499,39 +503,25 @@ class VerifyExecutor(BaseExecutor):
         而这件事**生成期就确定**（`build_constraint` 声明 `policies_are_skeletons`），
         不必等仿真、也不必改 verbosity。
         """
-        cov_dir = output_dir / "coverage"
-        try:
-            cov_dir.mkdir(parents=True, exist_ok=True)
-            total = int(payload.get("policy_count") or 0)
-            backed = int(payload.get("backed_policy_count") or 0)
-            unbacked = int(payload.get("unbacked_policy_count")
-                           if payload.get("unbacked_policy_count") is not None
-                           else (total - backed))
-            skeletons = bool(payload.get("policies_are_skeletons"))
-            if skeletons:
-                note = ("策略体全是空骨架：apply() 落到 `default:` 分支，不做任何事"
-                        "（可驱动维度一个都没有 —— 检查模型里的 `stimulus.field`）")
-            elif unbacked:
-                note = (f"{backed}/{total} 条策略由模型编译出真实赋值；"
-                        f"其余 {unbacked} 条仍是骨架 —— 它们的维度不可驱动"
-                        f"（没有 `stimulus.field`，通常是 DUT 内部量/输出端口）")
-            else:
-                note = ""
-            status = {
-                "constraint_generated": True,
-                # **"约束有没有在约束"按逐条策略算**，不是一个二值开关：
-                # 只有全部策略都有真实赋值才算完全生效；部分生效会连同
-                # 计数一起报出来，audit 据此挂 caveat。
-                "constraint_policy_applied": (not skeletons) and unbacked == 0,
-                "policy_count": total,
-                "backed_policy_count": backed,
-                "unbacked_policy_count": unbacked,
-                "note": note,
-            }
-            (cov_dir / "constraint_status.json").write_text(
-                json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
-        except Exception as e:                       # noqa: BLE001 旁路
-            logger.warning(f"约束状态落盘失败（audit 将看不到约束是否生效）: {e}")
+        from src.tools.generation.uvm_tools.generation.generators.constraint_gen import (
+            write_constraint_status)
+        write_constraint_status(output_dir, payload, logger)
+
+    @staticmethod
+    def _annotate_coverage_plan(output_dir: Path, payload: Dict[str, Any]) -> None:
+        """把 `constraint_backing` 追写进 `coverage/coverage_plan.yaml`。
+
+        为什么是"追写"而不是生成时一起写：计划在 `find_spec_yaml` **之前**
+        落盘（回归的种子由它铺开），而约束模型要在 `find_spec_yaml` 之后才
+        知道 agent 端口。两件事有先后，但读的人不该被迫读两份文件。
+        `constraint_backing` 是**只增字段**，不影响既有读者。
+
+        解析失败只记日志：覆盖计划的权威内容已经落盘，标注是增强项，
+        不该因为它把生成流程变成失败。
+        """
+        from src.tools.generation.uvm_tools.generation.generators.constraint_gen import (
+            annotate_coverage_plan)
+        annotate_coverage_plan(output_dir, payload, logger)
 
     def _write_association_report(self, output_dir: Path) -> None:
         """`coverage/association_report.json` —— 三模型关联的**断点清单**。
@@ -555,11 +545,11 @@ class VerifyExecutor(BaseExecutor):
             return
         cons_path = output_dir / "inputs" / "yaml" / "uvm" / "constraint.yaml"
         try:
-            from src.tools.casemodel_tools.associate import associate
-            from src.tools.casemodel_tools.coverage import (
+            from src.tools.generation.casemodel_tools.associate import associate
+            from src.tools.generation.casemodel_tools.coverage import (
                 coverage_model, coverage_model_to_dict,
             )
-            from src.tools.casemodel_tools.repository import load_models_from_text
+            from src.tools.generation.casemodel_tools.repository import load_models_from_text
 
             case_text = cm_file.read_text(encoding="utf-8")
             model = load_models_from_text(case_text, source=str(cm_file))[0].resolve()
@@ -607,29 +597,9 @@ class VerifyExecutor(BaseExecutor):
         三处读它：回归取种子、覆盖率页取覆盖点、审计取追溯。
         """
         cm_file = _find_case_model(_spec_of(output_dir), output_dir)
-        if cm_file is None:
-            return
-        try:
-            from src.tools.casemodel_tools.api import run_coverage_plan
-
-            payload = run_coverage_plan(cm_file.read_text(encoding="utf-8"), "dut")
-        except Exception as e:                       # noqa: BLE001 旁路
-            logger.warning(f"生成功能覆盖率计划失败: {e}")
-            return
-        if payload.get("error"):
-            logger.warning(f"功能覆盖率计划生成不了：{payload['error']}")
-            return
-        cov_dir = output_dir / "coverage"
-        cov_dir.mkdir(parents=True, exist_ok=True)
-        path = cov_dir / "coverage_plan.yaml"
-        path.write_text(payload["plan_yaml"], encoding="utf-8")
-        logger.info(
-            f"功能覆盖率计划：{payload['coverpoint_count']} 覆盖点 / "
-            f"{payload['bin_count']} bin / {payload['cross_count']} cross / "
-            f"{payload['batch_count']} 批次 / 共 {payload['total_runs']} 次运行 → "
-            f"{path.name}")
-        for note in payload["plan"].get("notes") or []:
-            logger.warning(f"覆盖率计划: {note}")
+        from src.tools.generation.uvm_tools.generation.generators.coverage_gen import (
+            write_coverage_plan)
+        write_coverage_plan(output_dir, cm_file, logger, module_name="dut")
 
     def _write_coverage_dut_channel(self, output_dir: Path) -> Dict[str, Any]:
         """`sample: dut` 的字段 → `coverage/<接口>.sv`（bind 进 DUT 的覆盖率接口）。
@@ -665,7 +635,7 @@ class VerifyExecutor(BaseExecutor):
         if cm_file is None:
             return {}
         try:
-            from src.tools.casemodel_tools.api import run_covergroups
+            from src.tools.generation.casemodel_tools.api import run_covergroups
 
             payload = run_covergroups(cm_file.read_text(encoding="utf-8"), "dut")
         except Exception as e:                       # noqa: BLE001 旁路
@@ -701,7 +671,7 @@ class VerifyExecutor(BaseExecutor):
         dut_checker: Dict[str, Any] = {}
         try:
             import yaml as _yaml
-            from src.tools.casemodel_tools.coverage import checker_rules
+            from src.tools.generation.casemodel_tools.coverage import checker_rules
             decls = (_yaml.safe_load(cm_file.read_text(encoding="utf-8",
                                                         errors="replace")) or {})
             got = checker_rules(decls.get("assertions"), meta.get("signals") or [])
@@ -747,7 +717,7 @@ class VerifyExecutor(BaseExecutor):
         if cm_file is None:
             return {}
         try:
-            from src.tools.casemodel_tools.api import run_covergroups
+            from src.tools.generation.casemodel_tools.api import run_covergroups
 
             points = run_covergroups(cm_file.read_text(encoding="utf-8"), "dut")
         except Exception as e:                       # noqa: BLE001 旁路，别拦生成
@@ -786,11 +756,11 @@ class VerifyExecutor(BaseExecutor):
         `verify_supplement` 判 FAIL 20，那个动作等于空转（实测）。
         """
         import re
-        from src.tools.coverage_tools.main import generate_gap_directed_seq
-        from src.tools.lib.env_introspect import (binding_for_agent,
+        from src.tools.checking.coverage_tools.main import generate_gap_directed_seq
+        from src.tools.common.lib.env_introspect import (binding_for_agent,
                                                  env_active_agents,
                                                  env_agent_bindings)
-        from src.tools.lib.filelist import agent_layout
+        from src.tools.common.lib.filelist import agent_layout
 
         agents_dir = output_dir / "agents"
         if not agents_dir.exists() or not gaps:
@@ -922,7 +892,7 @@ class VerifyExecutor(BaseExecutor):
         不靠 AI 自我判断语法/时序，只认 vlog 的 PASS/FAIL。
         """
         try:
-            from src.tools.lib.compile import run_compile_check
+            from src.tools.common.lib.compile import run_compile_check
             env_name = ""
             for p in sorted((output_dir / "env").glob("*_pkg.sv")):
                 env_name = p.name.replace("_pkg.sv", "")
@@ -1118,7 +1088,7 @@ def _synthesize_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
     spec 里既没功能点也没信号 → 返回 None（不编一份空模型假装做过）。
     """
     try:
-        from src.tools.casemodel_tools.spec_bridge import case_model_yaml
+        from src.tools.generation.casemodel_tools.spec_bridge import case_model_yaml
 
         yaml_text = case_model_yaml(spec if isinstance(spec, dict) else {})
         if not yaml_text:

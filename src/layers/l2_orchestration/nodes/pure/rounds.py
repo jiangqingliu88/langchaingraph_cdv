@@ -27,8 +27,8 @@ async def n_env_arch_check(state: PipelineState, config) -> Dict[str, Any]:
     output_root = Path(state.output_root)
     phase = {"name": "env_arch_check", "status": "skipped", "score": 0}
     try:
-        from src.tools.uvm_tools.tool_check_env_arch.main import check_env_arch as _check
-        from src.tools.lib.filelist import build_filelist_for_tb, derive_env_name
+        from src.tools.generation.uvm_tools.checking.tool_check_env_arch.main import check_env_arch as _check
+        from src.tools.common.lib.filelist import build_filelist_for_tb, derive_env_name
 
         _fl = output_root / "inputs" / "filelists" / "filelist.f"
         if not _fl.exists():

@@ -24,17 +24,21 @@
 
 ## 放哪
 
-`.signoffai/rule_stats.db` —— 与其它 L4 记忆库同目录、同口径（相对工作目录，
+`database/rule_stats.db` —— 与其它 L4 记忆库同目录、同口径（相对工作目录，
 所以**项目隔离是现成的**：换个目录跑，统计就换一份）。
 """
 from __future__ import annotations
+
+from .sqlite_utils import connect
 
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-_DEFAULT_DB = Path(".signoffai") / "rule_stats.db"
+from config.paths import RULE_STATS_DB
+
+_DEFAULT_DB = RULE_STATS_DB
 
 
 def _now() -> str:
@@ -49,7 +53,7 @@ def registered_rules() -> List[Dict[str, str]]:
     """
     out: List[Dict[str, str]] = []
     try:
-        from src.tools.uvm_tools.tool_uvm.semantic_check import _RULES
+        from src.tools.generation.uvm_tools.tool_uvm.semantic_check import _RULES
 
         for (kind, rule_id), (severity, _fn) in (_RULES or {}).items():
             out.append({"rule": rule_id, "kind": kind, "severity": severity})
@@ -67,7 +71,7 @@ class RuleStats:
     # ── 连接 ──
     def _connect(self) -> sqlite3.Connection:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self.db_path))
+        conn = connect(self.db_path)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS rule_hits (
                 rule TEXT NOT NULL,

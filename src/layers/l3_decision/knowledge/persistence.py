@@ -256,7 +256,7 @@ async def record_bugs_and_fixes(bugs, fixes, run_id: str = "",
     ## 血缘：bug 挂在**哪个 RTL 版本**上
 
     `module` + `rtl_version_no` 给出"**在哪个版本发现的**"，会写进
-    `.signoffai/lineage.db` 的 `bug_rtl_links`（bug 本体仍在本库的
+    `database/lineage.db` 的 `bug_rtl_links`（bug 本体仍在本库的
     `VerificationBug` 里，用 `bug_id` 作 join 键）。
 
     为什么值得单独记：RTL 迭代之后"这个 bug 还成立吗"只能靠版本回答 ——

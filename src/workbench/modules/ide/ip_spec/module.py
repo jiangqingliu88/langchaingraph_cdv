@@ -19,7 +19,7 @@
 """
 from __future__ import annotations
 
-from src.tools.ide_tools.api import IP_SPEC
+from src.tools.integration.ide_tools.api import IP_SPEC
 from src.workbench.modules.ide.decl_editor import DeclEditorModule
 
 

@@ -13,7 +13,7 @@ from datetime import datetime
 import structlog
 
 from src.layers.l1_infrastructure.output_config import make_output_root
-from src.tools.regression_tools import sim_modes as _sim_modes
+from src.tools.execution.regression_tools import sim_modes as _sim_modes
 
 from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
 from src.executors.design import DesignExecutor

@@ -101,7 +101,7 @@ class CoverageBackend(ABC):
 class QuestaCoverageBackend(CoverageBackend):
     """QuestaSim 后端：vlog / vsim / vcover / .ucdb。
 
-    复用 src.tools.lib.collect_real_coverage 的成熟实现（编译/仿真/报告/解析），
+    复用 src.tools.common.lib.collect_real_coverage 的成熟实现（编译/仿真/报告/解析），
     不重写——只做接口适配。
     """
 
@@ -109,11 +109,11 @@ class QuestaCoverageBackend(CoverageBackend):
     db_extension = ".ucdb"
 
     def collect(self, output_dir: Path, top_module: str = "", seed: int = 0) -> dict:
-        from src.tools.lib.collect_real_coverage import run as _questa_run
+        from src.tools.common.lib.collect_real_coverage import run as _questa_run
         return _questa_run(str(output_dir), top_module, seed)
 
     def parse_toggle_details(self, output_dir: Path) -> list:
-        from src.tools.lib.collect_real_coverage import parse_toggle_details as _ptd
+        from src.tools.common.lib.collect_real_coverage import parse_toggle_details as _ptd
         return _ptd(output_dir)
 
     def get_db_path(self, output_dir: Path) -> Path:

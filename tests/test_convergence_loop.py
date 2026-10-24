@@ -50,7 +50,7 @@ class TestTheCoverageNumberOnlyCountsWhatWasCollected:
 """
 
     def _parse(self):
-        from src.tools.lib.collect_real_coverage import _parse_vcover_text
+        from src.tools.common.lib.collect_real_coverage import _parse_vcover_text
 
         return _parse_vcover_text(self.CODE, "dut")
 
@@ -70,7 +70,7 @@ class TestTheCoverageNumberOnlyCountsWhatWasCollected:
         """
         code = self.CODE.replace("Conditions                    100        10        90   10.00%",
                                  "Conditions                    100         0       100    0.00%")
-        from src.tools.lib.collect_real_coverage import _parse_vcover_text
+        from src.tools.common.lib.collect_real_coverage import _parse_vcover_text
 
         r = _parse_vcover_text(code, "dut")
         assert "condition" in r["metrics_present"]
@@ -324,7 +324,7 @@ class TestTheModelRulesFeedBothTheAssertionAndTheChecker:
     ]
 
     def _rules(self, available):
-        from src.tools.casemodel_tools.coverage import checker_rules
+        from src.tools.generation.casemodel_tools.coverage import checker_rules
 
         return checker_rules(self.DECLS, available)
 
@@ -365,7 +365,7 @@ class TestTheModelRulesFeedBothTheAssertionAndTheChecker:
 
     def test_a_signal_name_that_is_a_prefix_of_another_is_still_qualified(self):
         """`valid` 与 `valid_ready` 这种前缀关系不许误伤（`` 边界）。"""
-        from src.tools.casemodel_tools.coverage import checker_rules
+        from src.tools.generation.casemodel_tools.coverage import checker_rules
 
         got = checker_rules(
             [{"name": "r", "expr": "valid && valid_ready", "message": "m",
@@ -388,7 +388,7 @@ class TestTheModelRulesFeedBothTheAssertionAndTheChecker:
         不是构造出来的样例。"""
         import yaml as _yaml
 
-        from src.tools.casemodel_tools.coverage import checker_rules
+        from src.tools.generation.casemodel_tools.coverage import checker_rules
 
         cm = _yaml.safe_load(Path("specs/npu_sched/casemodel.yaml").read_text(
             encoding="utf-8"))
@@ -513,7 +513,7 @@ class TestExpandSeedsActuallyReachesTheSimulator:
         assert got == [1000, 2000, 3000], "偏移要**累加**（单调），不是每轮覆盖同一个值"
 
     def test_the_regression_reader_shifts_the_base_seed(self, tmp_path):
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
                                                                   _seed_offset)
 
         (tmp_path / "coverage").mkdir()
@@ -529,7 +529,7 @@ class TestExpandSeedsActuallyReachesTheSimulator:
         assert before[0] == after[0] == "    count: 18"
 
     def test_no_offset_file_means_no_shift(self, tmp_path):
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _seed_offset
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _seed_offset
 
         assert _seed_offset(tmp_path) == 0
 
@@ -541,7 +541,7 @@ class TestExpandSeedsActuallyReachesTheSimulator:
         """
         import re
 
-        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(
+        src = Path("src/tools/generation/uvm_tools/tool_find_spec_yaml/generators/regression_gen.py").read_text(
             encoding="utf-8")
         calls = re.findall(r"_seed_lines\((?!name: str)[^)]*\)", src)
         assert calls, "一条调用都没匹配到 —— 正则又写歪了"
@@ -550,12 +550,12 @@ class TestExpandSeedsActuallyReachesTheSimulator:
 
     def test_the_generated_yaml_carries_the_shifted_seed(self, tmp_path):
         """整条链：写偏移 → 生成 regression.yaml → 里面是顺移后的 SEED。"""
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _seed_lines
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _seed_lines
 
         (tmp_path / "coverage").mkdir()
         (tmp_path / "coverage" / "seed_expand.json").write_text(
             '{"offset": 500}', encoding="utf-8")
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _seed_offset
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _seed_offset
 
         lines = _seed_lines("t", {"t": {"base": 100, "count": 2}}, _seed_offset(tmp_path))
         assert "SEED: 600" in "".join(lines)

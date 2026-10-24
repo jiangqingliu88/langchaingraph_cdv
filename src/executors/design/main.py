@@ -61,6 +61,21 @@ class DesignExecutor(BaseExecutor):
         if module_name.lower() in ("dut", "dut_top", ""):
             module_name = "dut"
 
+        # ── 结构预检：在写 RTL 之前暴露"规格本身不够生成可仿真对象" ──
+        # 不阻断（warning 不该让整轮停下），但结果进 design_arch 与证据 ——
+        # 否则"这轮为什么难验"只能靠事后猜。
+        try:
+            from src.tools.common.lib.design_precheck import precheck
+
+            _precheck = precheck(spec)
+            for _i in _precheck.get("issues") or []:
+                _log = logger.error if _i.get("severity") == "error" else logger.warning
+                _log(f"设计预检[{_i.get('code')}]: {_i.get('message')}")
+        except Exception as e:                          # noqa: BLE001 预检不该拖垮设计
+            logger.warning(f"设计预检失败: {e}")
+            _precheck = {"schema": "design_precheck_v1", "ok": False,
+                         "issues": [], "error": str(e)[:200]}
+
         # ── 2. 架构拆 IP：从 spec features 拆解 IP 列表，注册进 IP 库 ──
         #     fix_agent=rtl（REFACTOR_RTL）→ 强制重新生成，绕过 IP 缓存（缓存的是功能错的 RTL）
         _params = task.get("params", {}) if isinstance(task.get("params"), dict) else {}
@@ -136,11 +151,13 @@ class DesignExecutor(BaseExecutor):
             "rtl_generated": [i["ip_name"] for i in ips if i.get("rtl_code")],
             "rtl_reused": rtl_reused,
             "rtl_discarded": rtl_discarded,
+            # 结构预检结果 —— 签核证据可据此解释"为什么这轮这么难验"
+            "precheck": _precheck,
         }
 
         # V2 Knowledge Graph：设计时子图落库（跨 run 沉淀，供决策层语义溯源）
         try:
-            from src.tools.spec_tools.verify_dsl import build_graph_from_spec
+            from src.tools.checking.spec_tools.verify_dsl import build_graph_from_spec
             from src.layers.l3_decision.knowledge.persistence import save_graph_to_db
             _kg = build_graph_from_spec(spec)
             await save_graph_to_db(_kg)
@@ -153,6 +170,7 @@ class DesignExecutor(BaseExecutor):
             "rtl": {"module_name": module_name, "files": rtl_files,
                     "file_count": len(rtl_files)},
             "spec": spec,
+            "design_precheck": _precheck,
         }
         score = min(50 + len(rtl_files) * 15 + len(spec.get("registers", [])) * 2, 90) \
             if rtl_files else 30
@@ -279,7 +297,7 @@ IP 名: {ip['ip_name']}
 5. 只输出 SystemVerilog 代码，无 markdown 代码块、无解释
 """
         try:
-            from src.tools.lib.llm_call import call_llm
+            from src.tools.common.lib.llm_call import call_llm
             return call_llm(prompt, "", "")
         except Exception:
             return ""
@@ -391,7 +409,7 @@ IP 名: {ip['ip_name']}
 4. 只输出 SystemVerilog 代码，无 markdown 代码块、无解释
 """
         try:
-            from src.tools.lib.llm_call import call_llm
+            from src.tools.common.lib.llm_call import call_llm
             return call_llm(prompt, "", "")
         except Exception:
             return ""

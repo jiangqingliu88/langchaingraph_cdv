@@ -4,8 +4,8 @@
 """
 from __future__ import annotations
 
-from src.tools.casemodel_tools.analysis import rule_docs
-from src.tools.casemodel_tools.analysis.issues import CATEGORY_NAMES
+from src.tools.generation.casemodel_tools.analysis import rule_docs
+from src.tools.generation.casemodel_tools.analysis.issues import CATEGORY_NAMES
 from src.workbench.ui import theme
 from src.workbench.ui.models import RowsModel
 

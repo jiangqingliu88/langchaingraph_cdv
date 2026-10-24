@@ -10,7 +10,7 @@ Coverage 归因校准 —— 把"gap 归因 → 决策动作 → Δ覆盖率"的
   2. 经验: 聚合 reason 归因准确率 + 动作成效（改善率 / 平均 Δ 覆盖率）
   3. 能力: unreachable 归因多次 refactor 仍不涨 → 进黑名单，下次不再重复报告
 
-持久化到 .signoffai/coverage_experience.db（全局跨 run，对齐 debug_experience.py）。
+持久化到 database/coverage_experience.db（全局跨 run，对齐 debug_experience.py）。
 
 用法:
     from src.layers.l4_memory.coverage_experience import get_coverage_experience_store
@@ -22,6 +22,8 @@ Coverage 归因校准 —— 把"gap 归因 → 决策动作 → Δ覆盖率"的
 """
 from __future__ import annotations
 
+from .sqlite_utils import connect
+
 import json
 import sqlite3
 import threading
@@ -29,10 +31,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from config.paths import COVERAGE_EXPERIENCE_DB
+
 # unreachable 归因连续 refactor 失败 N 次才进黑名单
 BLACKLIST_MAX_STRIKES = 3
 
-_DEFAULT_DB = Path(".signoffai") / "coverage_experience.db"
+_DEFAULT_DB = COVERAGE_EXPERIENCE_DB
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS coverage_rounds (
@@ -79,7 +83,7 @@ class CoverageExperienceStore:
     def _connect(self) -> sqlite3.Connection:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn = connect(self.db_path)
             self._conn.executescript(_SCHEMA)
             # **老库补 `source` 列**：`CREATE TABLE IF NOT EXISTS` 对已存在的表
             # 什么都不做，所以后加的列必须在建表语句之外补一次。SQLite 没有
@@ -286,7 +290,7 @@ class CoverageExperienceStore:
         }
 
 
-# 全局单例（默认路径 .signoffai/coverage_experience.db）
+# 全局单例（默认路径 database/coverage_experience.db）
 _global_store: Optional[CoverageExperienceStore] = None
 
 

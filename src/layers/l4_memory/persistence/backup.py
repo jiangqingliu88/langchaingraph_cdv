@@ -11,8 +11,10 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent.parent / "ic_verification.db"
-BACKUP_DIR = Path(__file__).parent.parent.parent / "backups"
+from config.paths import DATABASE_DIR, MAIN_DB
+
+DB_PATH = MAIN_DB
+BACKUP_DIR = DATABASE_DIR / "backups"
 
 
 def backup_database(db_path: str = None) -> str:

@@ -12,7 +12,7 @@
 - 纯 C++ 参考模型生成（无 SystemC 依赖）
 - 自测验证向量生成
 - Scoreboard Predictor 桥接
-- 基于 `src/tools/uvm_tools/tool_sc_red/` 工具
+- 基于 `src/tools/generation/uvm_tools/tool_sc_red/` 工具
 
 ## Usage
 ```python

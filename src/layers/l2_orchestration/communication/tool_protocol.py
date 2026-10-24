@@ -582,6 +582,11 @@ class ToolCallRecord:
     run_id: str = ""
     manifest_hash: str = ""
     sandbox_decision: str = "auto"
+    #: 来源凭证 —— 与 `ToolResult` 同一口径。
+    #: 回执里没有它，"EDA 验过"与"LLM 自述"在审计侧就分不开了。
+    verified_by: str = "none"          # eda | llm | none
+    evidence_ref: str = ""
+    returncode: Optional[int] = None
 
 
 class ToolAuditor:
@@ -637,6 +642,10 @@ class ToolAuditor:
                     "timestamp": record.timestamp, "run_id": record.run_id,
                     "manifest_hash": getattr(record, "manifest_hash", ""),
                     "sandbox_decision": getattr(record, "sandbox_decision", ""),
+                    # 来源凭证：签核侧只认 `eda`（见 ToolResult 的 ADR-3）。
+                    "verified_by": getattr(record, "verified_by", "none"),
+                    "evidence_ref": getattr(record, "evidence_ref", ""),
+                    "returncode": getattr(record, "returncode", None),
                 }, ensure_ascii=False, default=str) + "\n")
         except Exception:
             pass

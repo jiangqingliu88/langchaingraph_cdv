@@ -99,7 +99,7 @@ class TestTheAuditRecordCarriesTheOrigin:
     """
 
     def _call(self, run_dir, node_id="design", round_num=3):
-        from src.tools.lib.llm_call import call_llm
+        from src.tools.common.lib.llm_call import call_llm
 
         with origin_scope(node_id, round_num, str(run_dir)):
             call_llm("写一个 fifo", "", "")
@@ -135,7 +135,7 @@ class TestTheAuditRecordCarriesTheOrigin:
 
     def test_outside_a_run_nothing_is_written(self, tmp_path, monkeypatch):
         """没有 run 目录时**不落盘**（也没地方落）—— 只进内存，如实。"""
-        from src.tools.lib.llm_call import call_llm
+        from src.tools.common.lib.llm_call import call_llm
 
         monkeypatch.chdir(tmp_path)
         call_llm("单独跑工具", "", "")

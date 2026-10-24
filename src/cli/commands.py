@@ -34,6 +34,12 @@ from rich.syntax import Syntax
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# `python -m src.cli.commands` 把本文件当 `__main__` 执行；拆出的命令模块
+# 若 `from src.cli.commands import cli` 会再加载一份模块、注册到另一个 cli。
+# 这里把 `__main__` 别名为正式模块名，保证**只有一个 cli 对象**。
+if __name__ == "__main__" and "src.cli.commands" not in sys.modules:
+    sys.modules["src.cli.commands"] = sys.modules["__main__"]
+
 
 # ── structlog 统一写 stderr（stdout 保留给业务输出/--json，不被日志污染）──
 import structlog  # noqa: E402
@@ -182,669 +188,6 @@ def cli(ctx, prompt, continue_mode, resume_id):
 
 # ═══════════════════════════════════════════════════════════════
 # vagent init
-# ═══════════════════════════════════════════════════════════════
-
-@cli.command()
-@common_options
-def init(json_output, quiet, verbose, output_dir):
-    """初始化输出目录结构"""
-    from src.layers.l1_infrastructure.output_config import make_output_root
-    out = get_output_adapter(json_output, quiet)
-    root = make_output_root(output_dir or None)
-    paths = [root, "logs", f"{root}/docs", f"{root}/docs/de", f"{root}/docs/dv"]
-    for p in paths:
-        Path(p).mkdir(parents=True, exist_ok=True)
-    Path(f"{root}/.gitkeep").touch(exist_ok=True)
-    Path("logs/.gitkeep").touch(exist_ok=True)
-    out.print_success(f"Initialized — {root}/ logs/ created")
-
-
-# ═══════════════════════════════════════════════════════════════
-# vagent verify — 覆盖率驱动闭环
-# ═══════════════════════════════════════════════════════════════
-
-@cli.command()
-@click.argument("spec_file", required=False, type=click.Path(exists=True))
-@click.option("--output", "-o", type=click.Path(), help="输出目录")
-@click.option("--design-style", default="baseline", help="设计风格（baseline/pipeline/low_power）")
-@click.option("--target", type=float, default=None, help="覆盖率目标（默认从配置读）")
-@click.option("--max-rounds", type=int, default=5, help="最大闭环轮次")
-@click.option("--approval", default="threshold",
-              type=click.Choice(["interactive", "auto", "threshold"]),
-              help="审批模式（默认 threshold：仅高危动作询问；无人值守请显式指定 auto）")
-@click.option("--full-regression", is_flag=True, help="全量回归（跑所有 case，默认增量只跑未 passed）")
-@click.option("--verify-only", is_flag=True, help="验证专注模式：bypass design/model，直接 UVM 验证（预置 RTL + 黄金模型）")
-@click.option("--sim-mode", "sim_modes", default=None, multiple=True,
-              help="回归的仿真业务（可重复：--sim-mode wave --sim-mode cov）；"
-                   "默认 cov+wave（覆盖率 + 波形）—— 要省机时就显式只给 cov。"
-                   "可用词条见 src/tools/regression_tools/sim_modes.py")
-@click.option("--no-manual-gate", "manual_gate", flag_value=False, default=True,
-              help="关闭分级回归的**人工节点**（loopback 全过也不停车等人放行）。"
-                   "默认开启：门是默认该在的。工作台工具栏上也有同一个开关")
-@click.option("--checkpoint/--no-checkpoint", "checkpoint", default=True,
-              help="落检查点（docs/checkpoints.sqlite）：高危动作的审批从"
-                   "「进程内阻塞等答案」变成「停下来、关掉进程、过后来答」。"
-                   "**默认开** —— 关掉就只能守着终端；无人值守请配 `--approval auto`")
-@click.option("--strict-semantic", is_flag=True,
-              help="严格语义：签核判为 PASS_WITH_CAVEAT（硬门禁过了但有软缺口，"
-                   "如约束未激活 / ucdb 零命中）时以非零码退出。CI 用 —— 人看报告时"
-                   "那几行是提示，上了流水线就得当失败")
-@click.option("--rtl", "rtl_dir", type=click.Path(exists=True),
-              help="外部 RTL 目录（验开源 IP 用）：拿这份现成 RTL 当 DUT，"
-                   "**自动跳过 design/model**，不再由 design agent 生成")
-@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
-@click.option("--summary", is_flag=True, help="仅输出最终摘要")
-@click.option("--quiet", "-q", is_flag=True, help="只打印错误")
-def verify(spec_file, output, design_style, target, max_rounds,
-           approval, full_regression, verify_only, sim_modes, json_output, summary,
-           quiet, manual_gate, checkpoint, strict_semantic, rtl_dir):
-    # **spec 与 --rtl 二选一、互斥**：
-    #   给 spec  → 走原来的路（design agent 生成 RTL）
-    #   给 --rtl  → RTL 是唯一输入，**规格从 DUT 分析出来**（不指向 spec）
-    # 两个都给会互相打脸（spec 说的和 RTL 实现的不一致时听谁的？），
-    # 一个都不给则没有输入 —— 两种都当场拒掉，别让它跑到下游才含糊地失败。
-    # **默认 spec**：不给 spec、也不给 --rtl 时用它 —— 省得每次敲全路径。
-    # 只在 `--rtl` 缺席时套用：`--rtl` 是"RTL 唯一输入"，那时候默认值一填
-    # 就变成"两个都给"，被下面的互斥挡掉（那是正确行为，不是 bug）。
-    if not spec_file and not rtl_dir:
-        _default = Path("specs/apb_uart/apb_uart_spec.md")
-        if _default.exists():
-            spec_file = str(_default)
-            console.print(f"[dim]未指定 spec，用默认：{spec_file}[/dim]")
-        else:
-            raise click.UsageError(
-                f"没给 spec，默认的 {_default} 也不存在（工作目录下找不到）。"
-                "请显式给 spec，或用 --rtl 给 RTL")
-    if bool(spec_file) == bool(rtl_dir):
-        raise click.UsageError(
-            "spec 与 --rtl 二选一：给了 --rtl 就不用 spec "
-            "（规格会从 DUT 分析生成）；没给 --rtl 就必须给 spec")
-    """AI 驱动的芯片验证闭环（覆盖率驱动：case 回归 → coverage → 决策迭代）
-
-    
-    示例:
-      vagent verify spec.md                              # 默认闭环
-      vagent verify spec.md --design-style pipeline      # 指定设计风格
-      vagent verify spec.md --target 90 --max-rounds 8   # 指定覆盖率目标/轮次
-      vagent verify spec.md --json                       # CI JSON 输出
-    """
-    out = get_output_adapter(json_output, quiet)
-    from src.layers.l1_infrastructure.output_config import make_output_root
-    output_root = make_output_root(output)
-    approval_gate = create_approval_gate(approval)
-
-    # 回归模式开关：--full-regression → 全量跑所有 case（覆盖默认增量）
-    if full_regression:
-        from config.settings import Settings
-        Settings.get_instance().verification.incremental_regression = False
-
-    if not quiet and not json_output:
-        console.print(f"[bold cyan]═══ Closed Loop: coverage-driven ═══[/bold cyan]")
-
-    async def run():
-        service = PipelineExecutionService.get_instance()
-        spec = (Path(spec_file).read_text(encoding="utf-8")
-                if spec_file else "")   # --rtl 模式下无 spec：由 DUT 分析生成
-        # **走 streaming 而不是 `run_closed_loop`** —— 返回结构完全一致，区别是
-        # 它落检查点（`docs/checkpoints.sqlite`，thread_id = run_id）。有了检查点
-        # 才谈得上"停下来等人"：`run_closed_loop` 既不落检查点也没有 thread_id，
-        # 于是 `n_approval` 里的 `interrupt()` **永不触发**，退化成在当前进程里
-        # 阻塞等终端输入 —— 人不在场就卡死，且进程一退那个现场就没了。
-        # 顺带把过程写进 `docs/run_events.jsonl`（`astream` 白送，没有埋点）。
-        # `--no-checkpoint` 可退回旧行为（阻塞等答案）。
-        return await service.run_closed_loop_streaming(
-            spec_text=spec, output_root=output_root,
-            target=target, max_rounds=max_rounds,
-            design_style=design_style, approval_gate=approval_gate,
-            bypass_design_model=verify_only,
-            # `multiple=True` 给的是 tuple；空则交默认（cov）
-            sim_modes=list(sim_modes) or None,
-            # 分级回归的人工节点（loopback 全过后停下等人放行）。默认开。
-            manual_gate=manual_gate,
-            rtl_dir=str(rtl_dir or ""),
-            checkpointing=checkpoint,
-        )
-
-    result = asyncio.run(run())
-
-    # **挂起不是失败**：图停在人工节点上，运行没结束、状态在检查点里。
-    # 这一步要显式说出来，并给出继续的那条命令 —— 否则人看到的就是"跑完了、
-    # 什么都没发生"，而真相是"它停在半路等人答话"。
-    if result.get("interrupted"):
-        pending = result.get("pending") or {}
-        rid = result.get("run_id", "")
-        if json_output:
-            click.echo(json.dumps({
-                "run_id": rid, "interrupted": True,
-                "pending_stage": pending.get("stage", "approval"),
-                "pending": pending,
-                "resume_hint": f"vagent resume --run {rid} --decision approve",
-            }, indent=2, ensure_ascii=False, default=str))
-            sys.exit(EXIT_WAITING)
-        console.print()
-        console.print(Panel.fit(
-            f"运行**停在人工节点**上：{pending.get('stage', 'approval')}\n"
-            f"运行没有结束 —— 状态落在检查点里，随时可以接着答。\n\n"
-            f"  继续：vagent resume --run {rid} --decision approve\n"
-            f"  驳回：vagent resume --run {rid} --decision reject\n"
-            f"  或：  vagent approve --run {rid} --reason \"...\"\n\n"
-            f"理由：{pending.get('reason', '（未给）')}",
-            title="[yellow]等待人工审批[/yellow]", border_style="yellow"))
-        sys.exit(EXIT_WAITING)
-
-    # `--strict-semantic`：签核判为 PASS_WITH_CAVEAT 时**当失败**。
-    #
-    # 为什么不把开关穿进图里：audit 判什么、存不存在 `<run>/report.json`，
-    # **跑完就知道了** —— 在 CLI 这层读一次即可，不必为它改 PipelineState、
-    # 也不能为它加一条要穿过 24 个节点的参数。判据只有一处（audit 写的
-    # `verdict`），这里只是换个处置方式。
-    if strict_semantic:
-        _strict_semantic_gate(Path(output_root), result.get("run_id") or "")
-
-    if json_output:
-        click.echo(json.dumps({
-            "run_id": result.get("run_id"),
-            "status": result.get("status"),
-            "passed": result.get("passed", 0),
-            "total": result.get("total", 0),
-            "overall_score": result.get("overall_score", 0),
-            "final_coverage": result.get("final_coverage", 0),
-            "effective_coverage": result.get("effective_coverage", 0),
-            "converged": result.get("converged", False),
-            "phases": result.get("phases", []),
-        }, indent=2, ensure_ascii=False, default=str))
-        sys.exit(EXIT_OK if result.get("converged") else EXIT_FAIL)
-
-    if summary:
-        cov = result.get("final_coverage", 0)
-        eff = result.get("effective_coverage", 0)
-        click.echo(f"Run: {result.get('run_id')} | {result.get('status')} "
-                   f"| coverage={cov}% effective={eff}%")
-        return
-
-    table = Table(title=f"Closed Loop Results — {result.get('run_id')}")
-    table.add_column("Phase")
-    table.add_column("Status")
-    table.add_column("Score")
-    table.add_column("Time")
-    for p in result.get("phases", []):
-        st = p.get("status", "?")
-        icon = {
-            "passed": "[green]PASS[/green]", "failed": "[red]FAIL[/red]",
-            "skipped": "[dim]SKIP[/dim]", "planned": "[dim]PLAN[/dim]",
-            "decision": "[cyan]DECIDE[/cyan]", "blocked": "[yellow]BLOCK[/yellow]",
-            "error": "[red]ERR[/red]",
-        }.get(st, st)
-        sc = str(p.get("score", "")) if p.get("score") is not None else "-"
-        table.add_row(p.get("name", "?"), icon, sc, f"{p.get('time', 0)}s")
-    console.print(table)
-
-    cov = result.get("final_coverage", 0)
-    eff = result.get("effective_coverage", 0)
-    conv = result.get("converged", False)
-    console.print(f"[bold]Coverage: {cov}%  Effective: {eff}%  "
-                  f"Converged: {'[green]YES[/green]' if conv else '[yellow]NO[/yellow]'}[/bold]")
-
-    if result.get("evidence", {}).get("evidence_path"):
-        _print_evidence_chain(result["evidence"]["evidence_path"])
-
-
-def _print_evidence_chain(evidence_path: str):
-    """打印证据链摘要"""
-    try:
-        console.print(f"\n[bold cyan]=== Evidence Chain ===[/bold cyan]")
-        chain = json.loads(Path(evidence_path).read_text(encoding="utf-8"))
-        for name, layer in chain.get("layers", {}).items():
-            pct = round(layer["passed"] / max(layer["total"], 1) * 100)
-            bar = "█" * (pct // 10) + "░" * (10 - pct // 10)
-            console.print(f"  [{bar}] {layer['description']}: {layer['passed']}/{layer['total']} PASS")
-        fc = chain.get("functional_coverage", {})
-        if fc:
-            cgs = fc.get("covergroups", [])
-            fc_pct = fc.get("overall_coverage", 0)
-            fc_bar = "█" * (int(fc_pct) // 10) + "░" * (10 - int(fc_pct) // 10)
-            holes = fc.get("holes_by_priority", {})
-            console.print(f"  [{fc_bar}] Functional Coverage: {fc_pct}% "
-                          f"({len(cgs)} covergroups, P0:{holes.get('P0',0)} P1:{holes.get('P1',0)} holes)")
-            for cg in cgs[:5]:
-                cps = len(cg.get("coverpoints", []))
-                console.print(f"         {cg['name']}: {cg['actual']}% (goal: {cg['goal']}%, {cps} CPs)")
-        console.print(f"\n  Signoff Ready: {'[green]YES[/green]' if chain.get('signoff_ready') else '[red]NO[/red]'}  "
-                      f"|  Overall: {'[green]PASS[/green]' if chain.get('overall_status') == 'PASS' else '[red]FAIL[/red]'}")
-    except Exception:
-        pass
-
-
-@cli.command("check-env-arch")
-@click.option("--output", "-o", "output_dir", type=click.Path(), help="输出目录（run 目录）")
-@click.option("--test", "-t", "test_name", default=None, help="定向测试名（默认自动解析 loopback > directed > base）")
-@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
-def check_env_arch(output_dir, test_name, json_output):
-    """验收 UVM env 架构：端口归属（通用）+ scoreboard 定向 case（通用）。"""
-    from src.tools.uvm_tools.tool_check_env_arch.main import check_env_arch as _check_env_arch
-    if not output_dir:
-        console.print("[red]需要 --output 指定 run 目录，如 vagent check-env-arch -o output/apb_uart_run_xxx[/red]")
-        return
-    result = _check_env_arch(output_dir, test_name=test_name)
-    if json_output:
-        click.echo(json.dumps(result, ensure_ascii=False, indent=2))
-        return
-    po = result.get("port_ownership", {})
-    sb = result.get("scoreboard", {})
-    status = result.get("status", "FAIL")
-    console.print(f"\n[bold]{'[green]✅ PASS[/green]' if status == 'PASS' else '[red]❌ FAIL[/red]'}[/bold] env 架构验收")
-    console.print(f"  [bold]端口归属[/bold]  {po.get('status')} — {po.get('message')}")
-    for w in po.get("warnings", []):
-        console.print(f"    [yellow]⚠ {w}[/yellow]")
-    for v in po.get("violations", []):
-        console.print(f"    [red]✗ {v}[/red]")
-    console.print(f"  [bold]scoreboard[/bold]  {sb.get('status')} — {sb.get('message')}")
-
-
-def _do_compile_check(result: dict):
-    """UVM 后编译检查"""
-    ctx = result["ctx"]
-    console.print("\n[bold cyan]Compile Check[/bold cyan]")
-    fl = ctx.get("env", {}).get("filelist", "") if hasattr(ctx, "get") else ""
-    out_dir = ctx.get("env", {}).get("output_dir", "") if hasattr(ctx, "get") else ""
-    if fl and Path(fl).exists():
-        try:
-            from src.tools.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
-            runner = RegressionRunner(
-                env_output_dir=out_dir,
-                filelist=fl,
-                top_module=ctx.get("env", {}).get("env_name", "dut") + "_bench_tb_top",
-            )
-            rc = runner.compile()
-            if rc["status"] == "PASS":
-                console.print(f"[green]Compile PASS ({rc['time_s']}s, {rc.get('errors', 0)} errors)[/green]")
-            else:
-                console.print(f"[red]Compile FAIL ({rc.get('errors', 0)} errors)[/red]")
-        except Exception as e:
-            console.print(f"[yellow]Compile skipped: {e}[/yellow]")
-    else:
-        console.print(f"[yellow]Filelist not found: {fl}[/yellow]")
-
-
-# ═══════════════════════════════════════════════════════════════
-# vagent multi — 多模块软件流水（并发跑多个规格，EDA 等待不阻塞）
-# ═══════════════════════════════════════════════════════════════
-
-@cli.command("multi")
-@click.option("--spec", "-s", "spec_files", multiple=True, type=click.Path(exists=True),
-              help="规格文件（可多次指定，每个是一个模块）")
-@click.option("--modules", "-m", "modules_file", type=click.Path(exists=True),
-              help="模块列表 JSON/YAML 文件（[{name, spec_file, target, design_style}, ...]）")
-@click.option("--output", "-o", type=click.Path(), help="输出根目录（每模块独立子目录）")
-@click.option("--concurrency", "-n", default=4, type=int, help="并发上限（默认 4）")
-@click.option("--design-style", default="baseline", help="设计风格（baseline/pipeline/low_power）")
-@click.option("--max-rounds", default=5, type=int, help="每模块最大闭环轮次")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def multi(spec_files, modules_file, output, concurrency, design_style, max_rounds, json_output):
-    """多模块软件流水：并发验证多个规格，EDA 等待期间互相推进（不阻塞）
-
-    \b
-    示例:
-      vagent multi -s a.md -s b.md -s c.md                   # 三个模块流水并行
-      vagent multi --modules modules.yaml -n 4               # 从列表文件 + 并发 4
-      vagent multi -s a.md -s b.md --design-style pipeline   # 指定设计风格
-    """
-    out = get_output_adapter(json_output)
-
-    module_specs = []
-    if modules_file:
-        text = Path(modules_file).read_text(encoding="utf-8", errors="replace")
-        try:
-            import yaml
-            module_specs = yaml.safe_load(text) or []
-        except Exception:
-            module_specs = json.loads(text) if text.strip().startswith("[") else []
-        if not isinstance(module_specs, list):
-            out.print_error("模块列表文件必须是 list")
-            return
-    for sf in spec_files:
-        module_specs.append({"name": Path(sf).stem, "spec_file": sf,
-                             "design_style": design_style, "max_rounds": max_rounds})
-
-    if not module_specs:
-        out.print_error("无模块。用 -s <spec> 或 --modules <file> 指定。")
-        return
-
-    console.print(f"[bold cyan]═══ 多模块软件流水：{len(module_specs)} 模块，"
-                  f"并发上限 {concurrency} ═══[/bold cyan]")
-    for i, m in enumerate(module_specs):
-        src = m.get("spec_file") or str(m.get("spec_text", ""))[:40]
-        console.print(f"  [{i+1}] {m.get('name', f'module_{i+1}')} <- {src}")
-
-    service = PipelineExecutionService.get_instance()
-
-    async def run():
-        return await service.run_multi_module(
-            module_specs=module_specs, output_root=output or "output",
-            design_style=design_style, max_rounds=max_rounds, max_concurrency=concurrency,
-        )
-
-    results = asyncio.run(run())
-
-    if json_output:
-        click.echo(json.dumps(results, indent=2, ensure_ascii=False, default=str))
-        return
-
-    table = Table(title=f"Multi-Module Results ({len(results)} modules)")
-    table.add_column("Module")
-    table.add_column("Status")
-    table.add_column("Coverage")
-    table.add_column("Converged")
-    for i, r in enumerate(results):
-        name = module_specs[i].get("name", f"module_{i+1}")
-        if isinstance(r, Exception):
-            table.add_row(name, "[red]ERROR[/red]", "-", "-")
-            continue
-        if not isinstance(r, dict):
-            table.add_row(name, "[dim]?[/dim]", "-", "-")
-            continue
-        cov = r.get("final_coverage", 0)
-        conv = r.get("converged", False)
-        table.add_row(name, "[green]DONE[/green]", f"{cov}%",
-                      "[green]YES[/green]" if conv else "[yellow]NO[/yellow]")
-    console.print(table)
-
-
-# ═══════════════════════════════════════════════════════════════
-# vagent plan — 一站式验证闭环
-# ═══════════════════════════════════════════════════════════════
-
-@cli.command()
-@click.argument("spec", type=click.Path(exists=True))
-@click.option("--output", "-o", type=click.Path(), help="输出目录")
-@click.option("--design-style", default="baseline", help="设计风格（baseline/pipeline/low_power）")
-@click.option("--target", type=float, default=None, help="覆盖率目标（默认从配置读）")
-@click.option("--max-rounds", type=int, default=5, help="最大闭环轮次")
-@click.option("--dry-run", is_flag=True, help="只打印计划，不执行")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-@click.pass_context
-def plan(ctx_obj, spec, output, design_style, target, max_rounds, dry_run, json_output):
-    """一站式验证闭环：从 Spec 到签核报告（覆盖率驱动）"""
-    out = get_output_adapter(json_output)
-
-    click.echo()
-    click.echo("🧠 SignOffAI 验证闭环计划")
-    click.echo(f"   Spec:        {spec}")
-    click.echo(f"   设计风格:    {design_style}")
-    click.echo(f"   覆盖率目标:  {target or '默认(配置)'}")
-    click.echo(f"   最大轮次:    {max_rounds}")
-    click.echo()
-    for i, role in enumerate(AGENT_ALIASES.keys(), 1):
-        click.echo(f"   [{i}/{len(AGENT_ALIASES)}] {role}")
-
-    if dry_run:
-        click.echo()
-        click.echo("📋 Dry-run 模式，不执行。")
-        return
-
-    click.echo()
-    click.echo("▶️ 开始执行...")
-    ctx_obj.invoke(
-        verify,
-        spec_file=spec, output=output, design_style=design_style,
-        # 不再硬编码 auto：plan 之前强行全放行，且 plan 自身没有 --approval 开关，
-        # 用户无从覆盖。现在沿用 verify 的默认档（threshold）。
-        target=target, max_rounds=max_rounds,
-        json_output=json_output, summary=False, quiet=False,
-    )
-
-
-# vagent signoff — 签核命令 (P0)
-# ═══════════════════════════════════════════════════════════════
-
-@cli.group()
-def signoff():
-    """签核报告生成与证据链管理"""
-    pass
-
-
-@signoff.command("generate")
-@click.argument("run_id", required=False)
-@click.option("--type", "-t", "report_type", default="milestone",
-              type=click.Choice(["tapeout", "milestone", "interim", "final"]),
-              help="签核类型")
-@click.option("--title", help="签核标题")
-@click.option("--project-id", type=int, help="项目 ID")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def signoff_generate(run_id, report_type, title, project_id, json_output):
-    """为指定 run 生成签核报告
-
-    \b
-    示例:
-      vagent signoff generate <run_id>                     # 里程碑签核
-      vagent signoff generate <run_id> --type tapeout      # 流片签核
-      vagent signoff generate <run_id> --type final        # 最终签核
-    """
-    out = get_output_adapter(json_output)
-    rid = run_id or _find_run_id()
-    if not rid:
-        out.print_error("No run_id specified and no runs found")
-        sys.exit(1)
-
-    try:
-        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
-        builder = ManifestBuilder()
-        manifest = builder.build(session_id=rid.replace("run_", ""))
-
-        title_text = title or f"Signoff: {report_type} — {rid}"
-        out.print_result({
-            "run_id": rid,
-            "title": title_text,
-            "type": report_type,
-            "state": manifest.state,
-            "overall_score": manifest.overall_score,
-            "passed": manifest.passed,
-            "total": manifest.total_phases,
-            "evidence_hash": manifest.evidence_hash[:16] if manifest.evidence_hash else "N/A",
-            "generated_at": manifest.generated_at,
-        }, title=f"Signoff Report — {report_type}")
-
-        # 持久化到 DB
-        if project_id:
-            try:
-                from src.layers.l4_memory.persistence.repository import create_signoff
-                import asyncio as _a
-                sid = _a.run(create_signoff(
-                    project_id=project_id, title=title_text,
-                    report_type=report_type,
-                    summary={"run_id": rid, "score": manifest.overall_score,
-                             "passed": manifest.passed, "total": manifest.total_phases},
-                    requester_id=1, run_id=rid,
-                    manifest_hash=manifest.manifest_hash,
-                ))
-                out.print_success(f"Signoff saved to DB (id={sid})")
-            except Exception as e:
-                out.print_error(f"DB save failed: {e}")
-
-    except Exception as e:
-        out.print_error(f"Signoff generation failed: {e}")
-        sys.exit(1)
-
-
-@signoff.command("export")
-@click.argument("run_id", required=False)
-@click.option("--output", "-o", default="evidence.zip", help="输出 zip 路径")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def signoff_export(run_id, output, json_output):
-    """导出签核证据包
-
-    \b
-    示例:
-      vagent signoff export <run_id> -o evidence.zip
-    """
-    out = get_output_adapter(json_output)
-    rid = run_id or _find_run_id()
-    if not rid:
-        out.print_error("No run_id specified")
-        sys.exit(1)
-
-    try:
-        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder, EvidencePackager
-        builder = ManifestBuilder()
-        manifest = builder.build(session_id=rid.replace("run_", ""))
-
-        packager = EvidencePackager()
-        zip_path = packager.package(manifest, Path(output))
-
-        # Verify
-        verify_result = packager.verify(zip_path)
-
-        out.print_result({
-            "zip_path": str(zip_path),
-            "size_kb": round(zip_path.stat().st_size / 1024, 1),
-            "valid": verify_result["valid"],
-            "issues": verify_result["issues"],
-            "manifest_hash": manifest.manifest_hash[:16] if manifest.manifest_hash else "N/A",
-        }, title="Evidence Package Exported")
-
-    except Exception as e:
-        out.print_error(f"Export failed: {e}")
-        sys.exit(1)
-
-
-@signoff.command("verify")
-@click.argument("run_id", required=False)
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def signoff_verify(run_id, json_output):
-    """验证证据链完整性
-
-    \b
-    示例:
-      vagent signoff verify <run_id>
-    """
-    out = get_output_adapter(json_output)
-    rid = run_id or _find_run_id()
-    if not rid:
-        out.print_error("No run_id specified")
-        sys.exit(1)
-
-    try:
-        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
-        builder = ManifestBuilder()
-        manifest = builder.build(session_id=rid.replace("run_", ""))
-
-        issues = []
-        if manifest.passed < manifest.total_phases:
-            issues.append(f"{manifest.failed} phases failed")
-        if manifest.overall_score < 50:
-            issues.append(f"Overall score too low: {manifest.overall_score}")
-        if not manifest.evidence_hash:
-            issues.append("No evidence hash — artifacts may be incomplete")
-
-        valid = len(issues) == 0
-        out.print_result({
-            "run_id": rid,
-            "valid": valid,
-            "issues": issues,
-            "overall_score": manifest.overall_score,
-            "passed": manifest.passed,
-            "total": manifest.total_phases,
-        }, title="Evidence Chain Verification")
-
-    except Exception as e:
-        out.print_error(f"Verification failed: {e}")
-        sys.exit(1)
-
-
-@signoff.command("checklist")
-@click.argument("run_id", required=False)
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def signoff_checklist(run_id, json_output):
-    """输出签核检查清单
-
-    \b
-    示例:
-      vagent signoff checklist <run_id>
-    """
-    out = get_output_adapter(json_output)
-    rid = run_id or _find_run_id()
-    if not rid:
-        out.print_error("No run_id specified")
-        sys.exit(1)
-
-    checklist = [
-        {"item": "Specification completeness", "required": True},
-        {"item": "Design architecture review", "required": True},
-        {"item": "UVM environment validation", "required": True},
-        {"item": "Test point coverage ≥ 95%", "required": True},
-        {"item": "Regression pass rate ≥ 99%", "required": False},
-        {"item": "Code coverage ≥ 90%", "required": True},
-        {"item": "Functional coverage ≥ 95%", "required": True},
-        {"item": "Assertion coverage ≥ 80%", "required": False},
-        {"item": "Debug analysis complete", "required": False},
-        {"item": "QA review passed", "required": True},
-        {"item": "Signoff report generated", "required": True},
-    ]
-
-    # ── 动态检查：Exclude 待审批未处理 → 阻断签核（放弃必须闭环：提议→审批）──
-    exclude_pending = 0
-    try:
-        reg = _exclude_registry()
-        exclude_pending = reg.stats().get("pending", 0)
-        reg.close()
-    except Exception:
-        pass
-    if exclude_pending:
-        checklist.append({
-            "item": f"Exclude 待审批未处理（{exclude_pending} 条，阻断）",
-            "required": True, "pending_excludes": exclude_pending,
-        })
-    else:
-        checklist.append({"item": "Exclude 无待审批（放弃已闭环）", "required": False})
-
-    if json_output:
-        click.echo(json.dumps({"run_id": rid, "checklist": checklist}, indent=2, ensure_ascii=False))
-    else:
-        table = Table(title=f"Signoff Checklist — {rid}")
-        table.add_column("#")
-        table.add_column("Item")
-        table.add_column("Required")
-        for i, item in enumerate(checklist, 1):
-            req = "[red]Required[/red]" if item["required"] else "[dim]Optional[/dim]"
-            table.add_row(str(i), item["item"], req)
-        console.print(table)
-
-
-@signoff.command("diff")
-@click.argument("run_a")
-@click.argument("run_b")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def signoff_diff(run_a, run_b, json_output):
-    """两次签核对比
-
-    \b
-    示例:
-      vagent signoff diff <run_id_a> <run_id_b>
-    """
-    out = get_output_adapter(json_output)
-    try:
-        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
-        builder = ManifestBuilder()
-        ma = builder.build(session_id=run_a.replace("run_", ""))
-        mb = builder.build(session_id=run_b.replace("run_", ""))
-
-        diff = {
-            "run_a": {"id": run_a, "score": ma.overall_score, "passed": ma.passed, "total": ma.total_phases},
-            "run_b": {"id": run_b, "score": mb.overall_score, "passed": mb.passed, "total": mb.total_phases},
-            "delta": {
-                "score": mb.overall_score - ma.overall_score,
-                "passed": mb.passed - ma.passed,
-            },
-        }
-        out.print_result(diff, title="Signoff Diff")
-
-    except Exception as e:
-        out.print_error(f"Diff failed: {e}")
-        sys.exit(1)
-
-
-# ═══════════════════════════════════════════════════════════════
-# vagent diff — 版本差异对比 (P0)
 # ═══════════════════════════════════════════════════════════════
 
 @cli.group()
@@ -2138,190 +1481,6 @@ def repl():
 # ═══════════════════════════════════════════════════════════════
 
 @cli.group()
-def config():
-    """配置管理"""
-    pass
-
-
-@config.command("show")
-@click.option("--section", "-s", help="只看某配置段: llm, agent, db, verify, platform")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def config_show(section, json_output):
-    """显示当前配置
-
-    \b
-    示例:
-      vagent config show                   # 全部配置
-      vagent config show --section llm     # LLM 配置
-      vagent config show --section agent   # Agent 配置
-    """
-    out = get_output_adapter(json_output)
-    from config.settings import Settings
-    s = Settings.get_instance()
-
-    all_config = {
-        "llm": {
-            "provider": s.llm.provider,
-            "model": s.llm.model,
-            "temperature": s.llm.temperature,
-            "max_tokens": s.llm.max_tokens,
-            "base_url": s.llm.base_url,
-        },
-        "agent": {
-            "max_agents": s.agent.max_agents,
-            "max_iterations": s.agent.max_iterations,
-            "timeout": s.agent.timeout,
-            "verbose": s.agent.verbose,
-            "fallback_on_llm_error": s.agent.fallback_on_llm_error,
-        },
-        "database": {
-            "url": s.database.url,
-            "echo": s.database.echo,
-        },
-        "verification": {
-            "regression_timeout": s.verification.regression_timeout,
-            "coverage_target": s.verification.coverage_target,
-            "max_retries": s.verification.max_retries,
-        },
-        "platform": {
-            "env": s.platform.env,
-            "demo_enabled": s.platform.demo_enabled,
-            "audit_retention_days": s.platform.audit_retention_days,
-        },
-    }
-
-    if section:
-        if section in all_config:
-            out.print_result({section: all_config[section]}, title=f"Config: {section}")
-        else:
-            out.print_error(f"Unknown section: {section}. Available: {', '.join(all_config.keys())}")
-    else:
-        out.print_result(all_config, title="Current Configuration")
-
-
-@config.command("set")
-@click.argument("key")
-@click.argument("value")
-def config_set(key, value):
-    """修改配置
-
-    \b
-    示例:
-      vagent config set llm.model deepseek-flash
-      vagent config set llm.temperature 0.3
-      vagent config set agent.max_iterations 10
-
-    注意: 此命令修改的是运行时环境变量，持久化需手动编辑 .env 文件。
-    """
-    # Map key → env var
-    env_map = {
-        "llm.model": "LLM_MODEL",
-        "llm.temperature": "LLM_TEMPERATURE",
-        "llm.max_tokens": "LLM_MAX_TOKENS",
-        "llm.api_key": "LLM_API_KEY",
-        "llm.base_url": "LLM_BASE_URL",
-        "agent.max_iterations": "AGENT_MAX_ITERATIONS",
-        "agent.verbose": "AGENT_VERBOSE",
-        "agent.timeout": "AGENT_TIMEOUT",
-        "agent.fallback_on_llm_error": "AGENT_FALLBACK_ON_LLM_ERROR",
-        "verify.coverage_target": "VERIFY_COVERAGE_TARGET",
-        "verify.max_retries": "VERIFY_MAX_RETRIES",
-        "db.url": "DB_URL",
-        "platform.env": "PLATFORM_ENV",
-    }
-
-    env_var = env_map.get(key)
-    if not env_var:
-        console.print(f"[red]Unknown config key: {key}[/red]")
-        console.print(f"[dim]Available: {', '.join(env_map.keys())}[/dim]")
-        return
-
-    os.environ[env_var] = value
-    console.print(f"[green]Set {key} = {value} (env: {env_var})[/green]")
-    console.print(f"[dim]Note: This only affects the current session. Edit .env for persistence.[/dim]")
-
-
-@config.command("init")
-def config_init():
-    """生成默认 .env 文件"""
-    env_path = Path(".env")
-    if env_path.exists():
-        console.print(f"[yellow].env already exists at {env_path.absolute()}[/yellow]")
-        if click.confirm("Overwrite?"):
-            pass
-        else:
-            return
-
-    template = """# SignOffAI Configuration
-# Generated by: vagent config init
-
-# LLM Provider
-LLM_PROVIDER=deepseek
-LLM_MODEL=deepseek-flash
-LLM_TEMPERATURE=0.0
-LLM_MAX_TOKENS=4096
-LLM_API_KEY=
-LLM_BASE_URL=https://api.deepseek.com/v1
-
-# Agent Settings
-AGENT_MAX_ITERATIONS=8
-AGENT_TIMEOUT=300
-AGENT_VERBOSE=true
-AGENT_FALLBACK_ON_LLM_ERROR=true
-
-# Verification
-VERIFY_COVERAGE_TARGET=95.0
-VERIFY_MAX_RETRIES=3
-
-# Database
-DB_URL=sqlite+aiosqlite:///ic_verification.db
-
-# Platform
-PLATFORM_ENV=development
-PLATFORM_DEMO_ENABLED=true
-"""
-    env_path.write_text(template, encoding="utf-8")
-    console.print(f"[green].env file created at {env_path.absolute()}[/green]")
-
-
-@config.command("validate")
-def config_validate():
-    """校验配置完整性"""
-    from config.settings import Settings
-    try:
-        s = Settings.get_instance()
-        issues = []
-
-        if s.is_production:
-            if not s.platform.jwt_secret:
-                issues.append("PLATFORM_JWT_SECRET not set (production)")
-            if not s.llm.api_key:
-                issues.append("LLM_API_KEY not set (production)")
-            if s.platform.demo_enabled:
-                issues.append("PLATFORM_DEMO_ENABLED=true in production")
-
-            prod_issues = s.validate_production()
-            issues.extend(prod_issues)
-
-        if issues:
-            console.print("[red]Configuration issues:[/red]")
-            for i in issues:
-                console.print(f"  [red]✗ {i}[/red]")
-        else:
-            console.print("[green]✓ Configuration is valid[/green]")
-
-        console.print(f"[dim]Environment: {s.platform.env}[/dim]")
-        console.print(f"[dim]LLM Provider: {s.llm.provider} / {s.llm.model}[/dim]")
-
-    except Exception as e:
-        console.print(f"[red]Configuration validation failed: {e}[/red]")
-
-
-# ═══════════════════════════════════════════════════════════════
-# vagent project — 项目管理 (P2)
-# ═══════════════════════════════════════════════════════════════
-
-@cli.group()
 def project():
     """项目管理"""
     pass
@@ -2903,486 +2062,6 @@ def ci_precheck(spec_file, json_output):
 # ═══════════════════════════════════════════════════════════════
 
 @cli.group()
-def regression():
-    """回归管理"""
-    pass
-
-
-# ── 分级回归：看各级状态 / 人工放行 ─────────────────────────────
-#
-# 分级回归（loopback → p0 → p1 → p2 → p3）在 loopback 全过之后有**人工节点**：
-# 那级证的是"TB 自身自洽"（driver 发出的 == slave monitor 看到的），要不要接着
-# 烧 P0 的机时由人拍。下面两个子命令就是那个人拍板的入口。
-
-def _staged_doc(output_dir: str) -> dict:
-    """读 run 目录下的分级结果 + 放行记录（都不存在就返回空）。"""
-    root = Path(output_dir)
-    doc: dict = {"stages": [], "approvals": []}
-    for key, fname in (("stages", "regression_stages.json"),
-                       ("approvals", "regression_approvals.json")):
-        p = root / fname
-        if not p.exists():
-            continue
-        try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-        except Exception as exc:                       # noqa: BLE001 坏文件当没有
-            console.print(f"[yellow]⚠ 解析 {fname} 失败：{exc}[/yellow]")
-            continue
-        # 放行记录的数组键也叫 `approvals`，分级结果的叫 `stages` —— 用同一个 key 取
-        doc[key] = data.get(key) or []
-        if key == "stages":
-            for k in ("status", "blocked_at", "blocked_reason", "awaiting"):
-                if k in data:
-                    doc[k] = data[k]
-    return doc
-
-
-@regression.command("stages")
-@click.option("--output", "-o", "output_dir", type=click.Path(), help="输出目录（run 目录）")
-@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
-def regression_stages(output_dir, json_output):
-    """看分级回归跑到哪一级、卡在哪、人工节点放行了没有。"""
-    if not output_dir:
-        console.print("[red]需要 --output 指定 run 目录，如 -o output_xxx[/red]")
-        return
-    doc = _staged_doc(output_dir)
-    if json_output:
-        click.echo(json.dumps(doc, ensure_ascii=False, indent=2))
-        return
-    if not doc["stages"]:
-        console.print("[yellow]没找到分级结果（"
-                      f"{Path(output_dir) / 'regression_stages.json'}）[/yellow]")
-        return
-    style = {"PASS": "[green]PASS[/green]", "FAIL": "[red]FAIL[/red]",
-             "EMPTY": "[yellow]EMPTY[/yellow]",
-             "WAITING_APPROVAL": "[cyan]待放行[/cyan]"}
-    done = {a.get("after") for a in doc["approvals"]}
-    console.print(f"\n[bold]分级回归[/bold]  "
-                  f"status={style.get(doc.get('status', ''), doc.get('status'))}")
-    for s in doc["stages"]:
-        mark = "[cyan]✔已放行[/cyan]" if s["name"] in done else ""
-        console.print(f"  {s['name']:<9} {style.get(s['status'], s['status']):<32}"
-                      f" passed={s.get('passed', 0)} failed={s.get('failed', 0)}"
-                      f" unknown={s.get('unknown', 0)}  {mark}")
-    if doc.get("status") == "WAITING_APPROVAL" and doc.get("awaiting"):
-        aw = doc["awaiting"]
-        if aw["after"] in done:
-            console.print(f"\n[green]{aw['after']} 已放行[/green] —— 重跑分级回归即从 "
-                          f"{aw['next']} 继续（已过的级会重跑一遍）")
-        else:
-            console.print(f"\n[cyan]停在人工节点：{aw['after']} 已全过，"
-                          f"进 {aw['next']} 前需人工放行[/cyan]")
-            console.print(f"  {aw.get('hint', '')}")
-
-
-@regression.command("approve")
-@click.option("--output", "-o", "output_dir", type=click.Path(), help="输出目录（run 目录）")
-@click.option("--after", "after", default="loopback", show_default=True,
-              help="放行哪一级")
-@click.option("--by", "approver", default="", help="审批人（必填，写进审计记录）")
-@click.option("--note", default="", help="审批意见")
-@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
-def regression_approve(output_dir, after, approver, note, json_output):
-    """人工放行某一级，之后重跑分级回归即可进下一级。
-
-    放行记录**绑定证据**（那一级的 total/passed/failed）—— 结果变了要重新批，
-    批的永远是"你当时看到的那一份结果"。
-    """
-    if not output_dir or not approver:
-        console.print("[red]需要 --output 指定 run 目录、--by 指定审批人[/red]")
-        return
-    from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
-    infra = InfrastructureManager(output_dir)
-    try:
-        entry = infra.approve_stage(after, approver=approver, note=note)
-    except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
-        return
-    if json_output:
-        click.echo(json.dumps(entry, ensure_ascii=False, indent=2))
-        return
-    console.print(f"[green]✔ 已放行 {after}[/green] → 下一步可进 "
-                  f"{entry.get('next') or '（无）'}")
-    console.print(f"  审批人 {entry['approver']} @ {entry['at']}"
-                  + (f"　意见：{entry['note']}" if entry["note"] else ""))
-    console.print(f"  记录：{Path(output_dir) / 'regression_approvals.json'}")
-
-
-@regression.command("run")
-@click.option("--tests", "-t", type=click.Path(exists=True), help="测试 YAML 配置")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def regression_run(tests, json_output):
-    """运行回归测试
-
-    \b
-    示例:
-      vagent regression run --tests regression.yaml
-    """
-    out = get_output_adapter(json_output)
-    if tests:
-        config = Path(tests).read_text(encoding="utf-8")
-        out.print_result({"config_file": tests, "size": len(config)},
-                         title="Regression Config Loaded")
-        console.print("[yellow]Regression execution requires active verification environment.[/yellow]")
-        console.print("[dim]Use 'vagent verify <spec> --step regress' for full regression.[/dim]")
-    else:
-        out.print_error("Use --tests <yaml_file>")
-
-
-@regression.command("report")
-@click.option("--run", "-r", "run_id", help="Run ID")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def regression_report(run_id, json_output):
-    """回归报告
-
-    \b
-    示例:
-      vagent regression report --run <run_id>
-    """
-    out = get_output_adapter(json_output)
-    rid = run_id or _find_run_id()
-    if not rid:
-        out.print_error("No run_id specified")
-        return
-
-    try:
-        from src.layers.l4_memory.persistence.repository import get_regression_history
-        history = asyncio.run(get_regression_history())
-        if history:
-            latest = history[0]
-            out.print_result(latest, title=f"Regression Report — {rid}")
-        else:
-            out.print_success("No regression history in DB")
-    except Exception as e:
-        out.print_error(str(e))
-
-
-@regression.command("trend")
-@click.option("--days", "-d", default=30, help="天数")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def regression_trend(days, json_output):
-    """回归趋势
-
-    \b
-    示例:
-      vagent regression trend --days 30
-    """
-    out = get_output_adapter(json_output)
-    try:
-        from src.layers.l4_memory.persistence.repository import get_regression_trend
-        trend = asyncio.run(get_regression_trend(days=days))
-        if trend:
-            out.print_result({"days": days, "data_points": len(trend), "trend": trend},
-                             title=f"Regression Trend ({days}d)")
-        else:
-            out.print_success("No data for trend analysis")
-    except Exception as e:
-        out.print_error(str(e))
-
-
-@regression.command("compare")
-@click.option("--run-a", required=True, help="Run A ID")
-@click.option("--run-b", required=True, help="Run B ID")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def regression_compare(run_a, run_b, json_output):
-    """两次回归对比
-
-    \b
-    示例:
-      vagent regression compare --run-a <id1> --run-b <id2>
-    """
-    out = get_output_adapter(json_output)
-    try:
-        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
-        builder = ManifestBuilder()
-        ma = builder.build(session_id=run_a.replace("run_", ""))
-        mb = builder.build(session_id=run_b.replace("run_", ""))
-
-        reg_a = ma.metadata.get("regression", {})
-        reg_b = mb.metadata.get("regression", {})
-
-        out.print_result({
-            "run_a": {"id": run_a, "passed": reg_a.get("passed", "?"), "total": reg_a.get("total", "?")},
-            "run_b": {"id": run_b, "passed": reg_b.get("passed", "?"), "total": reg_b.get("total", "?")},
-        }, title="Regression Comparison")
-
-    except Exception as e:
-        out.print_error(str(e))
-
-
-@regression.command("reference-finder")
-@click.option("--repo", "-r", default=".", help="git 仓库路径（默认当前目录）")
-@click.option("--good", required=True, help="已知通过的提交（起点）")
-@click.option("--bad", default="HEAD", help="已知失败的提交（终点，默认 HEAD）")
-@click.option("--config", "-c", "reg_yaml", required=True, type=click.Path(exists=True),
-              help="回归配置 yaml（版本间保持同一份）")
-@click.option("--test", "-t", "test_pattern", required=True, help="要复现的用例名/正则")
-@click.option("--work-root", default=None, help="工作目录（worktree 与结论落这里）")
-@click.option("--mode", type=click.Choice(["mock", "local"]), default="mock",
-              help="执行模式（mock 只走流程不真跑 EDA）")
-@click.option("--paths", default=None, help="逗号分隔，只考虑这些路径下的提交")
-@click.option("--keep-worktrees", is_flag=True, help="保留各版本的 worktree（排查用，默认删）")
-@click.option("--no-cache", is_flag=True, help="忽略结论缓存，强制重跑所有版本")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def regression_reference_finder(repo, good, bad, reg_yaml, test_pattern, work_root,
-                                mode, paths, keep_worktrees, no_cache, json_output):
-    """溯源定位：哪个提交引入了这个失败
-
-    在 good..bad 区间内二分，每个版本用独立 worktree 隔离后跑指定用例，
-    收敛到第一个失败的提交。结论连同环境快照落盘，可审计。
-
-    \b
-    示例:
-      vagent regression reference-finder \\
-        --good v1.0 --bad HEAD --config regression.yaml --test smoke_basic
-    """
-    out = get_output_adapter(json_output)
-    work_root = work_root or str(Path(repo) / "reference_finder_work")
-    path_list = [p.strip() for p in paths.split(",") if p.strip()] if paths else None
-
-    console.print(f"[dim]逐版本编译+仿真，请耐心；已跑过的版本会命中缓存。[/dim]")
-    try:
-        from src.layers.l1_infrastructure.reference_finder import ReferenceFinder
-        finder = ReferenceFinder(
-            repo_path=repo, work_root=work_root, reg_yaml=reg_yaml,
-            test_pattern=test_pattern, mode=mode,
-            keep_worktrees=keep_worktrees, use_cache=not no_cache, verbose=True)
-        report = finder.find_first_bad(good, bad, paths=path_list)
-    except Exception as e:
-        out.print_error(str(e))
-        return
-
-    if json_output:
-        out.print_result(report, title="Reference Finder")
-        return
-
-    if report.get("culprit"):
-        console.print(f"\n[bold]引入提交[/bold]: [cyan]{report.get('culprit_short')}[/cyan] "
-                      f"{report.get('subject', '')}")
-        console.print(f"  最后一个好版本: {report.get('last_good_short')}")
-        console.print(f"  置信度: [bold]{report.get('confidence')}[/bold]")
-        if report.get("changed_files"):
-            console.print("  改动文件: " + ", ".join(report["changed_files"][:8]))
-    else:
-        console.print(f"\n[yellow]未能定位[/yellow]: {report.get('reason', '')}")
-
-    for c in report.get("caveats", []) or []:
-        console.print(f"  [yellow]![/yellow] {c}")
-    for x in report.get("inconclusive_revisions", []) or []:
-        console.print(f"  [yellow]?[/yellow] {x['short']} inconclusive: {x['detail']}")
-
-    console.print(f"\n[dim]结论: {work_root}/reference_finder_summary.md[/dim]")
-    console.print(f"[dim]实测 {len(report.get('results', []))} 个版本，"
-                  f"耗时 {report.get('elapsed_s')}s[/dim]")
-
-
-# ═══════════════════════════════════════════════════════════════
-# vagent coverage — 覆盖率管理 (P3)
-# ═══════════════════════════════════════════════════════════════
-
-@cli.group()
-def coverage():
-    """覆盖率管理"""
-    pass
-
-
-@coverage.command("report")
-@click.option("--run", "-r", "run_id", help="Run ID")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def coverage_report(run_id, json_output):
-    """覆盖率报告
-
-    \b
-    示例:
-      vagent coverage report --run <run_id>
-    """
-    out = get_output_adapter(json_output)
-    rid = run_id or _find_run_id()
-    if not rid:
-        out.print_error("No run_id specified")
-        return
-
-    try:
-        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
-        builder = ManifestBuilder()
-        manifest = builder.build(session_id=rid.replace("run_", ""))
-        cov = manifest.metadata.get("coverage", {})
-
-        if isinstance(cov, dict) and cov:
-            out.print_result({
-                "run_id": rid,
-                "line_coverage": f"{cov.get('line_pct', 0):.1f}%",
-                "branch_coverage": f"{cov.get('branch_pct', 0):.1f}%",
-                "toggle_coverage": f"{cov.get('toggle_pct', 0):.1f}%",
-                "overall": f"{cov.get('coverage_pct', 0):.1f}%",
-            }, title=f"Coverage Report — {rid}")
-        else:
-            out.print_error("Coverage data not available")
-    except Exception as e:
-        out.print_error(str(e))
-
-
-@coverage.command("gaps")
-@click.option("--run", "-r", "run_id", help="Run ID")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def coverage_gaps(run_id, json_output):
-    """覆盖率缺口
-
-    \b
-    示例:
-      vagent coverage gaps --run <run_id>
-    """
-    out = get_output_adapter(json_output)
-    rid = run_id or _find_run_id()
-    if not rid:
-        out.print_error("No run_id specified")
-        return
-
-    try:
-        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
-        builder = ManifestBuilder()
-        manifest = builder.build(session_id=rid.replace("run_", ""))
-        cov = manifest.metadata.get("coverage", {})
-
-        if isinstance(cov, dict):
-            gaps = cov.get("gaps", [])
-            suggestions = cov.get("suggestions", [])
-            out.print_result({
-                "run_id": rid,
-                "gaps": gaps[:20],
-                "suggestions": suggestions[:10],
-                "gap_count": len(gaps),
-            }, title=f"Coverage Gaps — {rid}")
-        else:
-            out.print_error("Coverage data not available")
-    except Exception as e:
-        out.print_error(str(e))
-
-
-@coverage.command("exclude")
-@click.option("--coverage", "-c", type=float, default=None, help="当前覆盖率（%，配合 --total 计算有效覆盖率）")
-@click.option("--total", "-t", type=int, default=None, help="总覆盖点数")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def coverage_exclude(coverage, total, json_output):
-    """覆盖率里的 Exclude 视图：已放弃点 + 待审批 + 有效覆盖率
-
-    \b
-    示例:
-      vagent coverage exclude                              # 已放弃/待审批摘要
-      vagent coverage exclude -c 95 -t 100                 # 附有效覆盖率
-    """
-    out = get_output_adapter(json_output)
-    reg = _exclude_registry()
-    try:
-        approved = reg.get_approved_excludes()
-        pending = reg.list_pending()
-        stats = reg.stats()
-        result = {
-            "stats": stats,
-            "approved_points": sorted(reg.get_excluded_points()),
-            "pending": [{"exclude_id": p["exclude_id"], "coverage_point": p["coverage_point"],
-                         "type": p["exclude_type"], "reason": p["reason"]} for p in pending],
-        }
-        if coverage is not None and total is not None:
-            result["effective"] = {
-                "raw_coverage": coverage, "total_points": total,
-                "excluded": stats["excluded_points"],
-                "effective_total": max(total - stats["excluded_points"], 1),
-                "effective_coverage": reg.effective_coverage(coverage, total),
-            }
-
-        if json_output:
-            click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
-            return
-
-        console.print(f"[bold]覆盖率 Exclude 视图[/bold] — "
-                      f"已放弃 {stats['excluded_points']} 点 | 待审批 {stats['pending']}")
-        if coverage is not None and total is not None:
-            eff = result["effective"]
-            console.print(f"[cyan]有效覆盖率: {eff['raw_coverage']}% → {eff['effective_coverage']}%"
-                          f"（分母 {eff['total_points']} → {eff['effective_total']}）[/cyan]")
-        if approved:
-            console.print(f"\n[yellow]已批准（生效）:[/yellow]")
-            for e in approved:
-                console.print(f"   {e['exclude_id']}  {e['coverage_point']}  ({e['exclude_type']})")
-        if pending:
-            console.print(f"\n[bold red]待审批（阻断签核）:[/bold red]")
-            for p in pending:
-                console.print(f"   {p['exclude_id']}  {p['coverage_point']}  ({p['exclude_type']}) — "
-                              f"vagent exclude approve {p['exclude_id']}")
-        if not approved and not pending:
-            console.print("[dim]暂无 Exclude。闭环会自动发现结构性死代码并提议；也可手动 'vagent exclude propose'。[/dim]")
-    finally:
-        reg.close()
-
-
-@coverage.command("trend")
-@click.option("--days", "-d", default=30, help="天数")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def coverage_trend(days, json_output):
-    """覆盖率趋势
-
-    \b
-    示例:
-      vagent coverage trend --days 30
-    """
-    out = get_output_adapter(json_output)
-    # Use regression trend as proxy
-    try:
-        from src.layers.l4_memory.persistence.repository import get_regression_trend
-        trend = asyncio.run(get_regression_trend(days=days))
-        out.print_result({"days": days, "data_points": len(trend), "trend": trend},
-                         title=f"Coverage Trend ({days}d)")
-    except Exception as e:
-        out.print_error(str(e))
-
-
-@coverage.command("merge")
-@click.option("--runs", required=True, help="逗号分隔的 run IDs")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def coverage_merge(runs, json_output):
-    """合并多次覆盖率
-
-    \b
-    示例:
-      vagent coverage merge --runs run_a,run_b,run_c
-    """
-    out = get_output_adapter(json_output)
-    run_list = [r.strip() for r in runs.split(",")]
-
-    # Aggregate coverage data
-    aggregated = {"line_pct": 0, "branch_pct": 0, "toggle_pct": 0, "coverage_pct": 0}
-    count = 0
-
-    try:
-        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
-        builder = ManifestBuilder()
-        for rid in run_list:
-            manifest = builder.build(session_id=rid.replace("run_", ""))
-            cov = manifest.metadata.get("coverage", {})
-            if isinstance(cov, dict) and cov:
-                for key in aggregated:
-                    aggregated[key] += cov.get(key, 0)
-                count += 1
-
-        if count > 0:
-            for key in aggregated:
-                aggregated[key] = round(aggregated[key] / count, 1)
-
-        out.print_result({
-            "runs": run_list,
-            "run_count": count,
-            "merged_coverage": aggregated,
-        }, title="Merged Coverage")
-    except Exception as e:
-        out.print_error(str(e))
-
-
-# ═══════════════════════════════════════════════════════════════
-# vagent env — UVM 环境操作 (P3)
-# ═══════════════════════════════════════════════════════════════
-
-@cli.group()
 def env():
     """UVM 环境操作"""
     pass
@@ -3458,8 +2137,8 @@ def env_compile(env_dir):
     console.print(f"[cyan]Compiling with filelist: {filelist}[/cyan]")
 
     # 实际运行编译
-    from src.tools.uvm_tools._tools_old import _build_filelist_for_tb, _run_compile_check
-    from src.tools.lib.uvm_context import ctx as _uctx
+    from src.tools.generation.uvm_tools._tools_old import _build_filelist_for_tb, _run_compile_check
+    from src.tools.common.lib.uvm_context import ctx as _uctx
     import json as _json
 
     output_dir = env_path
@@ -4180,6 +2859,61 @@ def runs(limit, json_output):
                         rows, title="Runs（磁盘扫描）")
 
 
+@cli.command("prune")
+@click.option("--keep-last", default=20, show_default=True, type=int,
+              help="保留最近 N 个 run")
+@click.option("--apply", is_flag=True,
+              help="真的删除；默认 dry-run（只列出会删什么）")
+@click.option("--include-approved", is_flag=True,
+              help="连有签核证据/审批记录的 run 也删（默认保护）")
+@click.option("--output-base", default="output", help="run 目录所在基准")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def prune_runs(keep_last, apply, include_approved, output_base, json_output):
+    """清理旧 run 目录（保留最近 N 个；默认保护已签核/已审批的 run）"""
+    import shutil
+
+    out = get_output_adapter(json_output)
+    repo = _repo(output_base)
+    dirs = [p for p in repo.run_dirs() if p.is_dir()]
+    dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    keep = set(dirs[:max(0, keep_last)])
+    candidates = [p for p in dirs if p not in keep]
+
+    deleted, protected = [], []
+    for p in candidates:
+        has_evidence = ((p / "signoff_evidence" / "manifest.json").is_file()
+                        or (p / "approval.json").is_file()
+                        or (p / "signoff_evidence.json").is_file())
+        if has_evidence and not include_approved:
+            protected.append({"run": p.name, "reason": "signed/approved"})
+            continue
+        if apply:
+            try:
+                shutil.rmtree(p)
+                deleted.append({"run": p.name, "path": str(p)})
+            except OSError as e:
+                protected.append({"run": p.name, "reason": f"delete failed: {e}"})
+        else:
+            deleted.append({"run": p.name, "path": str(p), "dry_run": True})
+
+    payload = {"keep_last": keep_last, "kept": [p.name for p in dirs if p in keep],
+               "would_delete": deleted, "protected": protected,
+               "applied": bool(apply)}
+    if json_output:
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        mode = "已删除" if apply else "将删除（dry-run）"
+        out.print_table(["Run", "路径"],
+                        [[d["run"], d.get("path", "")] for d in deleted],
+                        title=f"{mode} {len(deleted)} 个 run")
+        if protected:
+            console.print(f"[yellow]保护 {len(protected)} 个（签核/审批或删除失败）[/yellow]")
+            for p in protected[:10]:
+                console.print(f"  [dim]{p['run']}: {p['reason']}[/dim]")
+        if not apply:
+            console.print("[dim]加 --apply 才会真的删除[/dim]")
+
+
 @cli.command("logs")
 @click.option("--run", "run_id", default="", help="run ID 或前缀（默认最新）")
 @click.option("--stage", default="", help="阶段过滤（compile/sim/coverage）")
@@ -4274,16 +3008,96 @@ def _report_resume(result: dict, rid: str) -> None:
                   f"（状态 {result.get('status', '?')}）[/green]")
 
 
+def _sha256_path(path: Path) -> str:
+    try:
+        import hashlib
+
+        h = hashlib.sha256()
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return ""
+
+
+def _approver_name() -> str:
+    """审批人：git user.name → 环境用户名 → `unknown`（不编一个名字）。"""
+    try:
+        import subprocess
+
+        out = subprocess.run(["git", "config", "user.name"], capture_output=True,
+                             text=True, encoding="utf-8", errors="replace",
+                             timeout=5)
+        name = (out.stdout or "").strip()
+        if name:
+            return name
+    except Exception:                                   # noqa: BLE001
+        pass
+    import getpass
+
+    try:
+        return getpass.getuser()
+    except Exception:                                   # noqa: BLE001
+        return "unknown"
+
+
 def _write_approval_record(run_dir: Path, rid: str, action: str, reason: str) -> None:
     """审计记录 —— **无论有没有挂起的图都写**。
 
     它是"人在什么时候为什么签了/驳了"的凭证，与"这次签核有没有真的推着图走"
     是两件事。原来只有这一半（所以才叫断链）：记录写了，没人读、也不驱动任何事。
+
+    ## 为什么必须绑定证据哈希
+
+    不绑定的审批记录只说明"某人点了通过"，不说明"他签的是哪一份证据"。
+    证据包被替换后，旧审批仍然"有效"——那等于审批可被静默复用。这里把
+    v2 manifest、v1 evidence、tp_matrix 的 sha256 一并记下，`vagent approval`
+    会重新算一遍并指出不一致。
     """
+    import hashlib
+
+    evidence_files = {
+        "package_manifest": run_dir / "signoff_evidence" / "manifest.json",
+        "signoff_evidence": run_dir / "signoff_evidence.json",
+        "tp_matrix": run_dir / "coverage" / "tp_matrix.json",
+        "report": run_dir / "report.json",
+    }
+    evidence = {name: {"path": str(p), "sha256": _sha256_path(p)}
+                for name, p in evidence_files.items() if p.is_file()}
+    history = run_dir / "approvals.jsonl"
+    prev_hash = ""
+    try:
+        if history.is_file():
+            lines = [ln for ln in history.read_text(encoding="utf-8",
+                                                     errors="replace").splitlines()
+                     if ln.strip()]
+            if lines:
+                prev_hash = str((json.loads(lines[-1]) or {}).get("approval_hash") or "")
+    except (OSError, ValueError):
+        prev_hash = ""
+
+    record = {
+        "action": action,
+        "reason": reason,
+        "at": datetime.now().isoformat(),
+        "run": rid,
+        "approver": _approver_name(),
+        "evidence": evidence,
+        # **追加链**：审批历史不被覆盖；prev_hash 让"删中间一条"可被发现。
+        "prev_hash": prev_hash,
+    }
+    # 审批记录自身的哈希：改一个字就能被发现（链外锚点）。
+    record["approval_hash"] = hashlib.sha256(
+        json.dumps(record, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+
+    # 1) append-only 历史（权威）
+    with history.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    # 2) 最新视图（人读 / 旧消费者）
     (run_dir / "approval.json").write_text(
-        json.dumps({"action": action, "reason": reason,
-                    "at": datetime.now().isoformat(), "run": rid},
-                   indent=2, ensure_ascii=False), encoding="utf-8")
+        json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def _decide(rid: str, action: str, reason: str, colour: str, verb: str, repo) -> None:
@@ -4338,6 +3152,102 @@ def reject(run_id, reason, output_base):
         console.print("[yellow]无 run[/yellow]")
         return
     _decide(rid, "reject", reason, "red", "驳回", repo)
+
+
+@cli.command("approval")
+@click.option("--run", "run_id", default="", help="run ID 或前缀")
+@click.option("--output-base", default="output",
+              help="run 目录所在基准（默认 output）")
+@click.option("--json", "json_output", is_flag=True, help="输出机器可读 JSON")
+def approval_show(run_id, output_base, json_output):
+    """查看审批记录，并**重算证据哈希**（审批是否仍然对应同一份证据）
+
+    \b
+    用途:
+      vagent approval --run <id>          # 人读
+      vagent approval --run <id> --json   # CI / 审计脚本
+    """
+    repo = _repo(output_base)
+    rid = _resolve_run(repo, run_id)
+    run_dir = repo._resolve(rid) if rid else None
+    if run_dir is None:
+        console.print("[yellow]找不到 run[/yellow]")
+        return
+    run_dir = Path(run_dir)
+    path = run_dir / "approval.json"
+    if not path.is_file():
+        console.print("[yellow]这个 run 没有审批记录[/yellow]")
+        return
+    try:
+        record = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except ValueError as exc:
+        console.print(f"[red]审批记录读不出来：{exc}[/red]")
+        return
+
+    import hashlib
+
+    # 追加链：检查 prev_hash 是否连续（删中间一条会暴露）
+    history_path = run_dir / "approvals.jsonl"
+    chain_ok = True
+    history_count = 0
+    try:
+        if history_path.is_file():
+            prev = ""
+            for line in history_path.read_text(encoding="utf-8",
+                                               errors="replace").splitlines():
+                if not line.strip():
+                    continue
+                hist = json.loads(line)
+                history_count += 1
+                if str(hist.get("prev_hash") or "") != prev:
+                    chain_ok = False
+                prev = str(hist.get("approval_hash") or "")
+    except (OSError, ValueError):
+        chain_ok = False
+
+    evidence = record.get("evidence") or {}
+    changed = []
+    for name, entry in evidence.items():
+        p = Path(str(entry.get("path") or ""))
+        now = _sha256_path(p) if p.is_file() else ""
+        if not now or now != entry.get("sha256"):
+            changed.append({"name": name, "path": str(p),
+                            "recorded": entry.get("sha256"),
+                            "current": now,
+                            "missing": not p.is_file()})
+    base = {k: v for k, v in record.items() if k != "approval_hash"}
+    recomputed_hash = hashlib.sha256(
+        json.dumps(base, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    result = {"record": record, "evidence_changed": changed,
+              "approval_hash_ok": recomputed_hash == record.get("approval_hash"),
+              "history_count": history_count, "history_chain_ok": chain_ok,
+              "valid": (not changed and chain_ok
+                        and recomputed_hash == record.get("approval_hash"))}
+    if json_output:
+        click.echo(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+    console.print(Panel.fit(
+        f"[bold]{record.get('action', '?')}[/bold] by {record.get('approver', '?')}\n"
+        f"at {record.get('at', '?')}\n"
+        f"reason: {record.get('reason') or '无'}",
+        title="SignOffAI — 审批记录"))
+    if result["valid"]:
+        console.print(f"[green]✓ 审批哈希与证据文件一致（历史 {history_count} 条）[/green]")
+    else:
+        if not chain_ok:
+            console.print("[red]✗ 审批追加链断开（prev_hash 不连续）[/red]")
+        if not result["approval_hash_ok"]:
+            console.print("[red]✗ 审批记录自身哈希不匹配（被改过）[/red]")
+        for ch in changed:
+            state = "缺失" if ch["missing"] else "已变化"
+            console.print(f"[red]✗ 证据{state}: {ch['name']} ({ch['path']})[/red]")
+
+
+# 签核证据包的三条命令（verify / replay / compare）定义在**既有的**
+# `evidence` 组下（文件后半段，人工变更链那一组）。这里不能再定义同名组 ——
+# 后定义的组会覆盖先定义的，命令会静默消失（实测：`evidence verify` 报
+# "No such command"）。
 
 
 @cli.command("resume")
@@ -4895,511 +3805,6 @@ def exclude_effective(coverage, total, json_output):
 # vagent case-model — case 属性完备性建模
 # ═══════════════════════════════════════════════════════════════
 
-@cli.group("case-model")
-def case_model():
-    """case 属性完备性建模（功能组织树 + P0/P1/P2 专题 + 维度约束组合）"""
-    pass
-
-
-@case_model.command("check")
-@click.argument("models", nargs=-1, required=True, type=click.Path(exists=True))
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def case_model_check(models, json_output):
-    """按 JSON Schema 校验 case 模型 YAML（语法 / 类型 / 必填 / 取值表形状）
-
-    \b
-    示例:
-      vagent case-model check model.yaml            # 单文件
-      vagent case-model check examples/             # 目录递归
-    """
-    out = get_output_adapter(json_output)
-    from src.tools.casemodel_tools.cli import build_parser, cmd_check
-
-    argv = ["check", *models] + (["--json"] if json_output else [])
-    rc = cmd_check(build_parser().parse_args(argv))
-    if rc and not json_output:
-        out.print_error("schema check failed", code=rc)
-    sys.exit(rc)
-
-
-@case_model.command("analyze")
-@click.argument("model", type=click.Path(exists=True))
-@click.option("--cases", "-c", "cases_file", type=click.Path(exists=True),
-              help="外部真实 case 列表（.yaml/.yml/.json/.csv），做反向核对")
-@click.option("--report", "-o", "report_path", type=click.Path(),
-              help="把完整文本报告写到文件")
-@click.option("--seed", type=int, default=None, help="覆盖模型里的 generation.seed")
-@click.option("--max-cases", type=int, default=None, help="覆盖 generation.max_cases")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def case_model_analyze(model, cases_file, report_path, seed, max_cases, json_output):
-    """全量完备性分析：组织树 / 专题 / 正交性 / 交叉矩阵 / 取值覆盖 / 环境与检查
-
-    \b
-    示例:
-      vagent case-model analyze model.yaml
-      vagent case-model analyze model.yaml --cases real_cases.yaml
-      vagent case-model analyze model.yaml --json -o report.txt
-    """
-    out = get_output_adapter(json_output)
-    from src.tools.casemodel_tools.analysis import analyze_file
-    from src.tools.casemodel_tools.cli import payload as _payload
-    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
-    from src.tools.casemodel_tools import text as _text
-
-    try:
-        result = analyze_file(model, cases=cases_file, seed=seed,
-                              max_cases=max_cases)
-
-        if json_output:
-            payload = _payload(result)
-            if result.external is not None:
-                payload["external"] = result.external.to_dict()
-            out.print_result(payload, title="case 属性完备性分析")
-        else:
-            text = _text.report(result)
-            click.echo(text)
-            if report_path:
-                Path(report_path).parent.mkdir(parents=True, exist_ok=True)
-                Path(report_path).write_text(text + "\n", encoding="utf-8")
-                out.print_success(f"报告已写出: {report_path}")
-
-        # 有 error → 退出码 1，warning 不阻断（与独立 CLI 一致）
-        sys.exit(1 if result.errors else 0)
-    except _CaseModelError as exc:
-        out.print_error(f"模型无法构建: {exc}", code=2)
-        sys.exit(2)
-    except Exception as exc:                      # noqa: BLE001
-        out.print_error(f"分析失败: {exc}", code=2)
-        sys.exit(2)
-
-
-@case_model.command("tree")
-@click.argument("model", type=click.Path(exists=True))
-@click.option("--seed", type=int, default=None, help="覆盖模型里的 generation.seed")
-@click.option("--max-cases", type=int, default=None, help="覆盖 generation.max_cases")
-def case_model_tree(model, seed, max_cases):
-    """只看功能组织树与专题
-
-    \b
-    示例:
-      vagent case-model tree model.yaml
-    """
-    out = get_output_adapter(False)
-    try:
-        from src.tools.casemodel_tools.cli import build_parser, cmd_tree
-        argv = ["tree", model]
-        if seed is not None:
-            argv += ["--seed", str(seed)]
-        if max_cases is not None:
-            argv += ["--max-cases", str(max_cases)]
-        sys.exit(cmd_tree(build_parser().parse_args(argv)))
-    except Exception as exc:                      # noqa: BLE001
-        out.print_error(f"分析失败: {exc}", code=2)
-        sys.exit(2)
-
-
-@case_model.command("rules")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def case_model_rules(json_output):
-    """列出全部校验规则
-
-    \b
-    示例:
-      vagent case-model rules
-      vagent case-model rules --json
-    """
-    from src.tools.casemodel_tools.cli import build_parser, cmd_rules
-    argv = ["rules"] + (["--json"] if json_output else [])
-    sys.exit(cmd_rules(build_parser().parse_args(argv)))
-
-
-@case_model.command("generate")
-@click.argument("model", type=click.Path(exists=True))
-@click.option("--format", "-f", "fmt", default="table",
-              type=click.Choice(["table", "yaml", "json", "csv"]), help="输出格式")
-@click.option("--output", "-o", "output_path", type=click.Path(),
-              help="输出文件（缺省打到 stdout）")
-@click.option("--seed", type=int, default=None, help="覆盖模型里的 generation.seed")
-@click.option("--max-cases", type=int, default=None, help="覆盖 generation.max_cases")
-def case_model_generate(model, fmt, output_path, seed, max_cases):
-    """按属性组合生成 case 属性表（专题 → 树节点 → 维度 → 方法 → 组合）
-
-    \b
-    示例:
-      vagent case-model generate model.yaml -f yaml -o cases.yaml
-      vagent case-model generate model.yaml -f csv  -o cases.csv
-    """
-    out = get_output_adapter(False)
-    from src.tools.casemodel_tools.cli import build_parser, cmd_generate
-    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
-
-    try:
-        argv = ["generate", model, "--format", fmt, "--out", output_path or ""]
-        if seed is not None:
-            argv += ["--seed", str(seed)]
-        if max_cases is not None:
-            argv += ["--max-cases", str(max_cases)]
-        sys.exit(cmd_generate(build_parser().parse_args(argv)))
-    except _CaseModelError as exc:
-        out.print_error(f"模型无法构建: {exc}", code=2)
-        sys.exit(2)
-    except Exception as exc:                      # noqa: BLE001
-        out.print_error(f"生成失败: {exc}", code=2)
-        sys.exit(2)
-
-
-@case_model.command("uvm-tests")
-@click.argument("model", type=click.Path(exists=True))
-@click.option("--dimension", "-d", "dimensions", multiple=True,
-              help="只要这些维度（按 id / 名称 / key 匹配）；可重复")
-@click.option("--max-tests", type=int, default=32,
-              help="最多导出多少条（默认 32；优先保留边界取值，截断会记账）")
-@click.option("--output", "-o", "output_path", type=click.Path(),
-              help="输出文件（缺省打到 stdout）")
-def case_model_uvm_tests(model, dimensions, max_tests, output_path):
-    """把属性取值摊平成 UVM 的 environment.tests 片段（一条 = 一个 UVM_TEST）
-
-    产出的是一段 YAML 文本，贴进 env 清单的 `environment:` 下即可 ——
-    本工具与 uvm_tools 之间只是**文件格式契约**，互不 import。
-
-    \b
-    示例:
-      vagent case-model uvm-tests model.yaml -d D_ratio
-      vagent case-model uvm-tests model.yaml -o tests.yaml
-    """
-    out = get_output_adapter(False)
-    from src.tools.casemodel_tools.cli import build_parser, cmd_uvm_tests
-    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
-
-    try:
-        argv = ["uvm-tests", model, "--max-tests", str(max_tests)]
-        for name in dimensions:
-            argv += ["--dimension", name]
-        if output_path:
-            argv += ["--out", output_path]
-        sys.exit(cmd_uvm_tests(build_parser().parse_args(argv)))
-    except _CaseModelError as exc:
-        out.print_error(f"模型无法构建: {exc}", code=2)
-        sys.exit(2)
-
-
-@case_model.command("covergroups")
-@click.argument("model", type=click.Path(exists=True))
-@click.option("--module", "-m", default="dut",
-              help="covergroup 名字里的模块名（默认 dut）")
-@click.option("--output", "-o", "output_path", type=click.Path(),
-              help="把 covergroup 写到文件（缺省打到 stdout）")
-def case_model_covergroups(model, module, output_path):
-    """覆盖点 → SystemVerilog covergroup（功能覆盖率方法学）
-
-    维度 → covergroup、字段 → coverpoint、取值点 → bin、可组合的 cross_pair →
-    cross。规则见 src/tools/casemodel_tools/coverage.py 的模块头。
-
-    与 `uvm-tests` 是同一份分母的两面：那边说"这些取值点各跑一条用例"（激励），
-    这边说"这些取值点各收一个 bin"（度量）—— 两边的数对得上，闭环才成立。
-
-    \b
-    示例:
-      vagent case-model covergroups model.yaml -m apb_uart
-      vagent case-model covergroups model.yaml -o coverage/apb_uart_cg.sv
-    """
-    out = get_output_adapter(False)
-    from src.tools.casemodel_tools.cli import build_parser, cmd_covergroups
-    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
-
-    try:
-        argv = ["covergroups", model, "--module", module]
-        if output_path:
-            argv += ["--out", output_path]
-        sys.exit(cmd_covergroups(build_parser().parse_args(argv)))
-    except _CaseModelError as exc:
-        out.print_error(f"模型无法构建: {exc}", code=2)
-        sys.exit(2)
-
-
-@case_model.command("associate")
-@click.argument("cases", type=click.Path(exists=True))
-@click.argument("coverage", type=click.Path(exists=True))
-@click.option("--constraint", "-c", "constraint_path", type=click.Path(exists=True),
-              help="约束模型 YAML（可选；给了才查边 ③④）")
-@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
-def case_model_associate(cases, coverage, constraint_path, json_output):
-    """三层模型的关联校验：case / 功能覆盖率 / 约束
-
-    三条边都靠**名字**对齐（不是位置、不是复制）：
-
-    \b
-      1  case.field.cover_bins  ->  coverage.coverpoints[].bins[].name
-      2  case.cross_matrix 键   ->  coverage.crosses[].matrix_ref
-      3/4 专题方法与约束层的策略 / 组合器
-
-    有 error 时退出码 1 —— "关联断了"不是警告：这组模型渲染不出可信的 SV
-    （取值投影不出来时给个 0 让 bin 照生成，收的是**错的数**，比生成不了更坏）。
-
-    \b
-    示例:
-      vagent case-model associate cases.yaml coverage.yaml
-      vagent case-model associate cases.yaml coverage.yaml -c constraint.yaml --json
-    """
-    out = get_output_adapter(json_output)
-    from src.tools.casemodel_tools.cli import build_parser, cmd_associate
-    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
-
-    try:
-        argv = ["associate", cases, coverage]
-        if constraint_path:
-            argv += ["--constraint", constraint_path]
-        if json_output:
-            argv.append("--json")
-        sys.exit(cmd_associate(build_parser().parse_args(argv)))
-    except _CaseModelError as exc:
-        out.print_error(f"模型无法构建: {exc}", code=2)
-        sys.exit(2)
-
-
-@case_model.command("constraints")
-@click.argument("model", type=click.Path(exists=True))
-@click.option("--port", "-p", "ports", multiple=True, metavar="NAME:TYPE",
-              help="端口（agent 名 : seq_item 类型），如 "
-                   "apb_master:APB_master_seq_item；可重复。**至少给一个**")
-@click.option("--output", "-o", "output_path", type=click.Path(),
-              help="把约束模型写到文件（缺省打到 stdout）")
-def case_model_constraints(model, ports, output_path):
-    """由 case 模型生成约束模型：专题的生成方法 → 策略 + 组合器（骨架）
-
-    方法学的第三条腿：case 说「该测什么」、覆盖率说「怎么量」、**约束说
-    「怎么驱动」**。这里把 `themes[].method`（D/G/SPCL/RND/RPLY）落成
-    `policies` + `combinator`，产出正好是 `gen_uvm` 认的约束模型形状。
-
-    出的是**骨架**：case 模型有建模语义（专题/维度/方法/优先级），没有协议参数
-    （地址对齐/容量/握手时序）—— 所以策略体在 gen_uvm 里落成空 apply，逻辑由
-    人补在 `env/cons/` 的策略里。
-
-    端口要**显式给**：case 说字段名、约束说 agent 名 + seq_item 类型，端口名 ↔
-    字段名的对应没有建模 —— 推不出来。不给端口就不生成（空 `transactions` 会渲
-    染出一个空壳协调序列）。
-
-    \b
-    示例:
-      vagent case-model constraints model.yaml -p apb_master:APB_master_seq_item
-      vagent case-model constraints model.yaml -p cpu_master:CPU_seq_item \\
-              -p dma_master:DMA_seq_item -o constraint.yaml
-    """
-    out = get_output_adapter(False)
-    from src.tools.casemodel_tools.cli import build_parser, cmd_constraints
-    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
-
-    try:
-        argv = ["constraints", model]
-        for spec in ports:
-            argv += ["--port", spec]
-        if output_path:
-            argv += ["--out", output_path]
-        sys.exit(cmd_constraints(build_parser().parse_args(argv)))
-    except _CaseModelError as exc:
-        out.print_error(f"模型无法构建: {exc}", code=2)
-        sys.exit(2)
-
-
-@case_model.command("coverage-plan")
-@click.argument("model", type=click.Path(exists=True))
-@click.option("--module", "-m", default="dut", help="模块名（默认 dut）")
-@click.option("--output", "-o", "output_path", type=click.Path(),
-              help="把计划写到文件（缺省打到 stdout）")
-def case_model_coverage_plan(model, module, output_path):
-    """功能覆盖率计划：覆盖点 + 批次 + 种子管理 + 需求追溯
-
-    与 `covergroups` 的分工：那个出的是**给编译器**的 SV；这个出的是**给人看、
-    给回归吃**的计划书 —— §3 覆盖点 / §5 批次 / §6 种子 / §8 需求追溯四张表摆
-    在一起，"声明了 12 个覆盖点、回归里只跑 8 条"这种事才看得出来。
-
-    
-    示例:
-      vagent case-model coverage-plan model.yaml -m npu_sched
-      vagent case-model coverage-plan model.yaml -o coverage_plan.yaml
-    """
-    out = get_output_adapter(False)
-    from src.tools.casemodel_tools.cli import build_parser, cmd_coverage_plan
-    from src.tools.casemodel_tools.domain import CaseModelError as _CaseModelError
-
-    try:
-        argv = ["coverage-plan", model, "--module", module]
-        if output_path:
-            argv += ["--out", output_path]
-        sys.exit(cmd_coverage_plan(build_parser().parse_args(argv)))
-    except _CaseModelError as exc:
-        out.print_error(f"模型无法构建: {exc}", code=2)
-        sys.exit(2)
-
-
-@case_model.command("gui")
-@click.argument("model", required=False, type=click.Path(exists=True))
-def case_model_gui(model):
-    """打开验证工作台并落在 case 建模模块上（不传模型则加载内置示例）
-
-    \b
-    示例:
-      vagent case-model gui
-      vagent case-model gui config/casemodel/examples/cpu_pipeline.yaml
-    """
-    try:
-        from src.workbench.app import main as workbench_main
-    except ImportError as exc:                    # PySide6 没装
-        click.echo(
-            "GUI 需要 PySide6，当前环境没有装：\n"
-            f"  {exc}\n\n"
-            "装法：pip install -e .[gui]　　或　　pip install PySide6\n"
-            "（纯 CLI 用法 check / analyze / generate 不需要它）",
-            err=True)
-        sys.exit(2)
-    argv = ["--module", "vms.casemodel"]
-    if model:
-        argv += ["--input", str(model)]
-    sys.exit(workbench_main(argv))
-
-
-# ═══════════════════════════════════════════════════════════════
-# 人工变更证据链 —— 无 GUI 的那一半
-# ═══════════════════════════════════════════════════════════════
-#
-# 界面上的「保存」会自动记账；在终端里用编辑器改文件**没有那个钩子**，所以
-# 无 GUI 时这套东西等于不存在。这一组就是补那一半。
-#
-# 三条命令里 `check` 才是最要紧的：一条只在"你记得记账时才记账"的链，读的人
-# 分不清"没人改"和"改了没记"——两者在链上都是一片空白。**没记的能被发现，
-# 链才可信。**
-
-@cli.group("evidence")
-def evidence_group():
-    """人工变更证据链（项目级，跨运行累积）
-
-    \b
-    记录的是"人在界面上/终端里改了哪个文件、为什么"。与某次运行的关系靠
-    运行日志里的 human.edit 锚点，链本身不属于任何一次运行。
-
-    \b
-    示例:
-      vagent evidence record rtl/dut.sv -m "修正握手时序"
-      vagent evidence log
-      vagent evidence check
-    """
-    pass
-
-
-@evidence_group.command("record")
-@click.argument("file_path", metavar="FILE")
-@click.option("--message", "-m", "reason", default="",
-              help="为什么改（会记进证据链；留空记为「未填理由」，不编理由）")
-@click.option("--author", default="", help="署名（默认 PLATFORM_USER_NAME 或系统登录名）")
-@click.option("--run-id", default="", help="同时往这次运行的日志写一条锚点")
-@click.option("--root", "repo_root", default=".", help="仓库根（默认当前目录）")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def evidence_record(file_path, reason, author, run_id, repo_root, json_output):
-    """记录一次人工编辑（改完文件跑一下）
-
-    \b
-    示例:
-      vagent evidence record config/ide/manual_nodes.yaml -m "超时 600 → 900"
-    """
-    out = get_output_adapter(json_output)
-    from src.layers.l2_orchestration.evidence.human_edit import record_human_edit
-
-    info = record_human_edit(file_path, reason, author=author, run_id=run_id,
-                             repo_root=repo_root)
-    if not info.get("recorded"):
-        out.print_result({"recorded": False, "error": info.get("error", "记账失败")},
-                         title="Evidence")
-        sys.exit(1)
-
-    if json_output:
-        out.print_result(info, title="Evidence")
-        return
-    console.print(f"已记账 [bold]#{info['seq']}[/bold]　{info['file']}")
-    console.print(f"  署名：{info['author']}　　理由：{info['reason']}")
-    console.print(f"  内容哈希：{(info.get('content_hash') or '')[:16]}…")
-    console.print(f"  链：{info['chain']}（共 {info['total_changes']} 条）")
-    if run_id and not info.get("journal"):
-        console.print(f"  [yellow]注意：没写进运行 {run_id} 的日志"
-                      f"（找不到那次运行）[/yellow]")
-
-
-@evidence_group.command("log")
-@click.option("--limit", "-n", default=20, show_default=True, help="最多显示几条")
-@click.option("--root", "repo_root", default=".", help="仓库根（默认当前目录）")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def evidence_log(limit, repo_root, json_output):
-    """看人工变更链 + 完整性自校验
-
-    \b
-    示例:
-      vagent evidence log -n 5
-    """
-    out = get_output_adapter(json_output)
-    from src.layers.l2_orchestration.evidence.human_edit import read_human_edits
-
-    chain = read_human_edits(repo_root)
-    if not chain["exists"]:
-        out.print_result({"exists": False, "total_changes": 0, "path": chain["path"]},
-                         title="Evidence")
-        if not json_output:
-            console.print(f"还没有人工变更记录。（会写到 {chain['path']}）")
-        return
-
-    records = list(reversed(chain["records"]))[:max(1, int(limit))]
-    rows = [[str(r.get("seq", "")), str(r.get("timestamp", ""))[:19],
-             str(r.get("file_path", "")), str(r.get("agent", "")),
-             str(r.get("reason", ""))[:48]] for r in records]
-    out.print_table(["#", "时间", "文件", "谁", "理由"], rows,
-                    title=f"人工变更（共 {chain['total_changes']} 条）")
-    if not json_output:
-        state = "[green]完整[/green]" if chain["chain_valid"] else "[red]已断[/red]"
-        console.print(f"链完整性：{state}　{chain['path']}")
-        for issue in chain.get("issues", []):
-            console.print(f"  [red]{issue.get('type')}[/red] {issue}")
-
-
-@evidence_group.command("check")
-@click.option("--root", "repo_root", default=".", help="仓库根（默认当前目录）")
-@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def evidence_check(repo_root, json_output):
-    """对账：工作区改过、证据链里没有的文件
-
-    \b
-    链的价值不在「记了的有痕迹」，而在「没记的能被发现」—— 否则读链的人分不清
-    「这段时间没人改」和「有人改了但没记账」。
-    有未记账的改动时退出码为 1，可以直接拿去卡 CI。
-    """
-    out = get_output_adapter(json_output)
-    from src.layers.l2_orchestration.evidence.human_edit import reconcile
-
-    report = reconcile(repo_root)
-    if json_output:
-        out.print_result(report, title="Evidence check")
-    elif not report["checked"]:
-        console.print(f"[yellow]跳过：{report['reason']}[/yellow]")
-    else:
-        console.print(f"改动 {report['total_changed']} 个文件　"
-                      f"已记账 {len(report['recorded'])}　"
-                      f"未记账 {len(report['unrecorded'])}")
-        for path in report["unrecorded"]:
-            console.print(f"  [red]✗[/red] {path}")
-        if report["ok"]:
-            console.print("[green]✓ 改动都有痕迹。[/green]")
-        else:
-            console.print("[yellow]上面这些改过但没记账 —— 补上：[/yellow]")
-            console.print("  vagent evidence record <文件> -m \"为什么改\"")
-    # 不在 git 仓库里谈不上"对账"，不算失败；在仓库里且链断了 = 失败
-    if report["checked"] and not report["ok"]:
-        sys.exit(1)
-
-
-# ═══════════════════════════════════════════════════════════════
-# 血缘：RTL 版本 / run 基准 / bug↔版本
-# ═══════════════════════════════════════════════════════════════
-#
-# 四件事一条链：**RTL 内容哈希 → 版本号 → run 挂版本 → 首次 run 当基准 →
-# 用例与 bug 各自挂在版本上**。都是 `.signoffai/lineage.db` 里的可查实体。
-
 @cli.group("lineage")
 def lineage_group():
     """血缘：这一轮跑的是 RTL 的哪一版、跟谁比、哪些 bug 挂在哪版
@@ -5430,7 +3835,7 @@ def lineage_versions_cmd(module, json_output):
       vagent lineage versions npu_sched  # 只看这个模块
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow_tools.lineage_api import lineage_versions
+    from src.tools.flow.flow_tools.lineage_api import lineage_versions
 
     rows = lineage_versions(module)
     if json_output:
@@ -5455,7 +3860,7 @@ def lineage_baseline_cmd(module, json_output):
       vagent lineage baseline npu_sched
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow_tools.lineage_api import lineage_versions, resolve_baseline_for
+    from src.tools.flow.flow_tools.lineage_api import lineage_versions, resolve_baseline_for
 
     if not module:
         mods = sorted({r["module"] for r in lineage_versions("")})
@@ -5497,7 +3902,7 @@ def lineage_bugs_cmd(module, version_no, json_output):
       vagent lineage bugs npu_sched --version 2
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow_tools.lineage_api import lineage_bugs
+    from src.tools.flow.flow_tools.lineage_api import lineage_bugs
 
     rows = lineage_bugs(module, version_no)
     if json_output:
@@ -5538,7 +3943,7 @@ def lineage_bind_modules_cmd(apply_, candidates, json_output):
       vagent lineage bind-modules --apply      # 写库（先备份 .bak）
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow_tools.lineage_api import bind_testcase_modules
+    from src.tools.flow.flow_tools.lineage_api import bind_testcase_modules
 
     result = bind_testcase_modules(candidates=candidates or None, apply=apply_)
     if json_output:
@@ -5577,7 +3982,7 @@ def lineage_compare_cmd(current, baseline, module, json_output):
       vagent lineage compare out_x -b output_npu2_jiang_20261012_230152
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow_tools.lineage_api import compare_against_baseline
+    from src.tools.flow.flow_tools.lineage_api import compare_against_baseline
 
     result = compare_against_baseline(current, baseline=baseline, module=module)
     if result.get("error"):
@@ -5617,7 +4022,7 @@ def lineage_prune_cmd(keep_last, module, apply_, json_output):
     （一行一次 run），而那是**证据**，不在这里删。
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow_tools.lineage_api import prune_lineage
+    from src.tools.flow.flow_tools.lineage_api import prune_lineage
 
     result = prune_lineage(keep_last=keep_last, module=module, dry_run=not apply_)
     if json_output:
@@ -5691,6 +4096,14 @@ def gui_run(manifest, module, input, theme, reset_layout):
 # ═══════════════════════════════════════════════════════════════
 # 主入口
 # ═══════════════════════════════════════════════════════════════
+
+# 命令组拆分：**导入即注册**。必须放在所有 helper 定义之后，否则被拆出的
+# 模块 `from src.cli.commands import _repo, ...` 会拿到半成品。
+from . import (  # noqa: E402,F401
+    cmd_casemodel, cmd_config, cmd_coverage, cmd_evidence,
+    cmd_regression, cmd_signoff, cmd_verify,
+)
+
 
 def main():
     _layer_guard_or_die()

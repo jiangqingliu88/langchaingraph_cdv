@@ -64,7 +64,7 @@ def call_tool(name: str, args: Dict[str, Any] = None, *, context=None,
 
     为什么需要它：`src/executors/*` 原本是直接 import 工具函数调用，例如
 
-        from src.tools.assertion_tools.main import generate_sva_assertions
+        from src.tools.checking.assertion_tools.main import generate_sva_assertions
         sva = generate_sva_assertions(json.dumps(spec))
 
     **完全绕开 ToolHub** —— 于是 schema 校验、风险分级、超时、审计回执在真正
@@ -343,6 +343,11 @@ class ToolHub:
                 error=result.error or "", execution_time_s=elapsed,
                 timestamp=datetime.now().isoformat(), run_id=ctx.run_id,
                 manifest_hash=manifest.hash, sandbox_decision=sandbox_decision,
+                # **来源凭证随回执落盘** —— 否则审计只能看到 success=True，
+                # 分不清是 EDA 验过的还是调用方自述的。
+                verified_by=getattr(result, "verified_by", "none"),
+                evidence_ref=getattr(result, "evidence_ref", ""),
+                returncode=getattr(result, "returncode", None),
             )
             self._auditor.record(record)
             return result
@@ -531,7 +536,7 @@ class ToolHub:
         # 查不到，`vagent tool list/show` 也就看不见，更不会被审计覆盖。
         # 与 read_file 那批「定义了却注册不上」是同一类问题。
         try:
-            from src.tools.regression_tools.regression_tool import (
+            from src.tools.execution.regression_tools.regression_tool import (
                 RegressionRunTool, CoverageCollectTool, ReferenceFinderTool)
             for t in (RegressionRunTool(), CoverageCollectTool(), ReferenceFinderTool()):
                 if self.register(t, ["ops"]):
@@ -541,7 +546,7 @@ class ToolHub:
 
         # 注册 uvm_tools
         try:
-            from src.tools.uvm_tools.agent_tools import ensure_uvm_tool_registry
+            from src.tools.generation.uvm_tools.agent_tools import ensure_uvm_tool_registry
             uvm_reg = ensure_uvm_tool_registry()
             for old_tool in uvm_reg._tools.values():
                 itool = _OldToolAdapter(old_tool)
@@ -629,16 +634,16 @@ class ToolHub:
     # 注：cmodel_tools 不在列——它只有普通函数（generate_cmodel / compile_cmodel_dpi），
     # 没有任何 @tool，故无工具可注册。
     _LC_TOOL_MODULES = (
-        ("src.tools.assertion_tools.main", "assert"),
-        ("src.tools.coverage_tools.main", "coverage"),
-        ("src.tools.debug_tools.main", "debug"),
-        ("src.tools.doc_tools.main", "doc"),
+        ("src.tools.checking.assertion_tools.main", "assert"),
+        ("src.tools.checking.coverage_tools.main", "coverage"),
+        ("src.tools.checking.debug_tools.main", "debug"),
+        ("src.tools.generation.doc_tools.main", "doc"),
         # `src.tools.reuse_tools.main` **不存在** —— 这个条目每次 bootstrap 都报
         # "No module named 'src.tools.reuse_tools'" 再被 except 吞掉，只在启动
         # 日志里留一条假错误。去掉。
-        ("src.tools.spec_tools.main", "spec"),
+        ("src.tools.checking.spec_tools.main", "spec"),
         # **uvm 的 9 个工具此前从未被注册**：真实实现是
-        # `src/tools/uvm_tools/agent_tools.py` 里的 @tool（read_file / write_file /
+        # `src/tools/generation/uvm_tools/agent_tools.py` 里的 @tool（read_file / write_file /
         # find_spec_yaml / jinja_render / check_static / check_compile /
         # check_loopback / check_health / quality_report），但这份扫描列表漏了它。
         # 于是 hub 里这些名字留的是 `agents/agent_tools.py` 中那批**没有 handler
@@ -646,7 +651,7 @@ class ToolHub:
         # 也让 `call_tool` 无法在 agent 里安全替换直调。
         # 本函数在 register_all_tools 之后跑，注册的真实实现会覆盖空声明
         # （register 遇重名会 replace）。
-        ("src.tools.uvm_tools.agent_tools", "uvm"),
+        ("src.tools.generation.uvm_tools.agent_tools", "uvm"),
     )
 
     def _load_langchain_tools(self) -> int:

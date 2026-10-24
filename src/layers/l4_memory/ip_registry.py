@@ -16,6 +16,8 @@ LLM 写手逐个生成 IP 的 RTL → 集成连线成顶层"。IP 库是这一�
 """
 from __future__ import annotations
 
+from .sqlite_utils import connect
+
 import json
 import sqlite3
 import threading
@@ -48,14 +50,16 @@ class IpRegistry:
     """IP 库（同步 sqlite，跨 run 持久）。"""
 
     def __init__(self, db_path: Optional[str | Path] = None):
-        self.db_path = Path(db_path) if db_path else Path(".signoffai") / "ip_registry.db"
+        from config.paths import IP_DB
+
+        self.db_path = Path(db_path) if db_path else IP_DB
         self._lock = threading.Lock()
         self._conn: Optional[sqlite3.Connection] = None
 
     def _connect(self) -> sqlite3.Connection:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn = connect(self.db_path)
             self._conn.executescript(_SCHEMA)
             self._conn.commit()
         return self._conn

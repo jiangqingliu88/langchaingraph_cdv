@@ -10,9 +10,9 @@
 #   L6 检查      功能 / 白盒 / 性能
 #
 # 用法:
-#   python -m src.tools.casemodel_tools.cli check    config/casemodel/examples/fc_flowcontrol.yaml
-#   python -m src.tools.casemodel_tools.cli analyze  config/casemodel/examples/fc_flowcontrol.yaml
-#   python -m src.tools.casemodel_tools.cli uvm-tests config/casemodel/examples/fc_flowcontrol.yaml -d D_ratio
+#   python -m src.tools.generation.casemodel_tools.cli check    config/casemodel/examples/fc_flowcontrol.yaml
+#   python -m src.tools.generation.casemodel_tools.cli analyze  config/casemodel/examples/fc_flowcontrol.yaml
+#   python -m src.tools.generation.casemodel_tools.cli uvm-tests config/casemodel/examples/fc_flowcontrol.yaml -d D_ratio
 #
 # 顶层用 `tests:` 列被测对象（当前只有一个）—— 下面的 dimensions / methods /
 # checks / cross_* / environment 是**共享属性空间**，条目多了就是「一套属性

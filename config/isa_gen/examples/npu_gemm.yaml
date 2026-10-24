@@ -6,8 +6,8 @@
 #   orchestration / harness，外加 §3.12.7 的 alloc。
 #
 # 用法:
-#   python -m src.tools.isa_gen_tools.cli validate config/isa_gen/examples/npu_gemm.yaml
-#   python -m src.tools.isa_gen_tools.cli compile  config/isa_gen/examples/npu_gemm.yaml -o out/
+#   python -m src.tools.generation.isa_gen_tools.cli validate config/isa_gen/examples/npu_gemm.yaml
+#   python -m src.tools.generation.isa_gen_tools.cli compile  config/isa_gen/examples/npu_gemm.yaml -o out/
 #   或在工作台的「ISA 激励」页里直接编译
 # ════════════════════════════════════════════════════════════════
 

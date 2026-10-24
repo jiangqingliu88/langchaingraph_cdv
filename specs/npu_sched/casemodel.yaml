@@ -264,6 +264,21 @@ dimensions:
         values: ["MAC_MAC", "LOAD_MAC", "MAC_STORE", "DMA_MAC", "VEC_MAC",
                  "SCALAR_MAC"]
         cover_bins: [mac_mac, load_mac, mac_store, dma_mac, vec_mac, scalar_mac]
+    # 相邻 opcode 组合 = 多条事务的时序，单字段表达不了 → 场景序列。
+    # `sequences` 按取值点给**逐笔 opcode**（0=MAC_INT8, 3=VEC_ADD, 6=LOAD,
+    # 7=STORE, 8=DMA_READ）。生成的 test 把值写进 `<field>_seq_*`，
+    # master sequence 每笔按序约束 instr_opcode。
+    stimulus: {field: instr_opcode}
+    realization:
+      kind: sequence
+      sequence: adjacent_opcode_pair
+      sequences:
+        MAC_MAC:    [0, 0]
+        LOAD_MAC:   [6, 0]
+        MAC_STORE:  [0, 7]
+        DMA_MAC:    [8, 0]
+        VEC_MAC:    [3, 0]
+        SCALAR_MAC: [0, 0]
 
   # ── §3.2 CP_NPU_PIPELINE_010 ──
   - id: D_pipeline
@@ -281,6 +296,17 @@ dimensions:
         values: ["NONE", "MAC_MAC", "MAC_DMA", "VEC_MAC", "MULTI_OP"]
         cover_bins: [no_overlap, mac_mac_overlap, mac_dma_overlap,
                      vec_mac_overlap, multi_op_overlap]
+    # 流水重叠 = 连续发射的 opcode 模式，同样是场景序列。
+    stimulus: {field: instr_opcode}
+    realization:
+      kind: sequence
+      sequence: pipeline_overlap
+      sequences:
+        NONE:     [0]
+        MAC_MAC:  [0, 0]
+        MAC_DMA:  [0, 8]
+        VEC_MAC:  [3, 0]
+        MULTI_OP: [0, 3, 8]
 
   # ── §3.2 CP_NPU_PRIORITY_011 ──
   - id: D_priority

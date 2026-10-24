@@ -101,7 +101,7 @@ class FrontExecutor(BaseExecutor):
         # ① RTL：顶层 module 名 + 端口表（**调工具**，确定性）
         if rtl_files:
             try:
-                from src.tools.uvm_tools.tool_find_spec_yaml.main import _parse_rtl_module
+                from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _parse_rtl_module
                 rtl = _parse_rtl_module(rtl_dir, "") or {}
                 info["design_name"] = rtl.get("module_name") or "dut"
                 info["interfaces"] = [
@@ -124,7 +124,7 @@ class FrontExecutor(BaseExecutor):
         if spec_text.strip():
             try:
                 import json as _json
-                from src.tools.spec_tools.main import analyze_specification
+                from src.tools.checking.spec_tools.main import analyze_specification
                 raw = analyze_specification(spec_text)
                 doc = _json.loads(raw) if isinstance(raw, str) and raw.strip().startswith("{") else {}
                 if isinstance(doc, dict):
@@ -176,7 +176,7 @@ class FrontExecutor(BaseExecutor):
         casemodel_path = ""
         try:
             import yaml as _yaml
-            from src.tools.casemodel_tools.api import (blocking_issues,
+            from src.tools.generation.casemodel_tools.api import (blocking_issues,
                                                        run_validate, run_uvm_tests)
 
             model = self._draft_casemodel(info)
@@ -220,7 +220,7 @@ class FrontExecutor(BaseExecutor):
                     # 上面 `run_uvm_tests` 的条数 **1:1** —— 对不上就说明漏了。
                     # 复用 `ctx_reg`（同一个库句柄），不另开一个连接指向同一个文件。
                     try:
-                        from src.tools.casemodel_tools.registry_bridge import register_cases
+                        from src.tools.generation.casemodel_tools.registry_bridge import register_cases
                         _r = register_cases(text, info.get("design_name", "dut"),
                                             registry=self.ctx_reg, max_cases=200,
                                             rtl_version_no=rtl_version_no)

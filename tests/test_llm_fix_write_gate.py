@@ -43,7 +43,7 @@ def _payload(tag: str, body: str) -> str:
 class TestTheGate:
     def test_a_wholesale_rewrite_of_a_generated_file_is_refused(self, tmp_path):
         """**核心那条**：LLM 整份重写生成物 → 原文件必须一字不改。"""
-        from src.tools.lib.llm_refine import apply_llm_fixes
+        from src.tools.common.lib.llm_refine import apply_llm_fixes
 
         f = tmp_path / "apb_loopback_scb.sv"
         f.write_text(GENERATED, encoding="utf-8")
@@ -62,7 +62,7 @@ class TestTheGate:
 
     def test_a_write_into_a_custom_region_is_allowed(self, tmp_path):
         """**只动 `pragma custom` 区域** → 放行（那是留给人的地方）。"""
-        from src.tools.lib.llm_refine import apply_llm_fixes
+        from src.tools.common.lib.llm_refine import apply_llm_fixes
 
         f = tmp_path / "x_scb.sv"
         f.write_text(GENERATED, encoding="utf-8")
@@ -78,7 +78,7 @@ class TestTheGate:
 
     def test_handwritten_files_are_not_gated(self, tmp_path):
         """**没有 banner 的文件**不受这条闸门约束 —— 它本来就是给人改的。"""
-        from src.tools.lib.llm_refine import apply_llm_fixes
+        from src.tools.common.lib.llm_refine import apply_llm_fixes
 
         f = tmp_path / "my_helper.sv"
         f.write_text(HANDWRITTEN, encoding="utf-8")
@@ -90,7 +90,7 @@ class TestTheGate:
 
     def test_a_new_file_is_written(self, tmp_path):
         """目标还不存在（没有原文可比）→ 照写 —— 闸门管的是"覆盖生成物"。"""
-        from src.tools.lib.llm_refine import apply_llm_fixes
+        from src.tools.common.lib.llm_refine import apply_llm_fixes
 
         f = tmp_path / "brand_new.sv"
         body = "class brand_new;\n" + "  // pad\n" * 12 + "endclass\n"
@@ -98,7 +98,7 @@ class TestTheGate:
 
     def test_refusal_is_reported_apart_from_no_output(self, tmp_path):
         """拒绝**不该**被报成 "LLM parse failed" —— 那会让人去 prompt 上找原因。"""
-        from src.tools.lib import llm_refine
+        from src.tools.common.lib import llm_refine
 
         assert hasattr(llm_refine.apply_llm_fixes, "refused"), \
             "拒绝计数没暴露给调用方 —— 外面只能当成解析失败"
@@ -120,7 +120,7 @@ class TestThereIsExactlyOneWriteExit:
     def test_only_gated_write_writes_files(self):
         import re
         from pathlib import Path as _P
-        import src.tools.lib.llm_refine as m
+        import src.tools.common.lib.llm_refine as m
 
         src = _P(m.__file__).read_text(encoding="utf-8")
         # 去掉三引号块（docstring 里会**讲**这件事，那不是写盘出口 —— 实测误判过）
@@ -161,7 +161,7 @@ class TestThereIsExactlyOneWriteExit:
         谁会写，也更容易看懂"为什么是这几个"）。
         """
         import inspect
-        from src.tools.lib import llm_refine as m
+        from src.tools.common.lib import llm_refine as m
 
         #: 本模块里**预期会写盘**的函数。
         #: 原来有两条：`apply_llm_fixes` 与 `llm_refine_compile_errors` ——
@@ -196,15 +196,15 @@ class TestTheBannerMarkerStaysInStepWithGenUvm:
         if not samples:
             pytest.skip("盘上没有历史 run 的生成物可验")
 
-        from src.tools.lib.llm_refine import _is_generated_file
+        from src.tools.common.lib.llm_refine import _is_generated_file
         for s in samples:
             assert _is_generated_file(s.read_text(encoding="utf-8", errors="replace")), \
                 f"{s} 是生成物，但 banner 没被认出来"
 
     def test_the_custom_marker_matches_gen_uvm(self):
         """`_CUSTOM_MARKER` 与 `gen_uvm.REGION_MARKER` 对同一批样例判定一致。"""
-        from src.tools.lib.llm_refine import _CUSTOM_MARKER
-        from src.tools.uvm_tools.tool_uvm.gen_uvm import REGION_MARKER
+        from src.tools.common.lib.llm_refine import _CUSTOM_MARKER
+        from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import REGION_MARKER
 
         for line in ("  // pragma custom body begin",
                      "// pragma custom template end",

@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.tools.regression_tools.regression_framework.core.config import make_tag_matcher
-from src.tools.regression_tools.regression_framework.generators.shell import ShellGenerator
+from src.tools.execution.regression_tools.regression_framework.core.config import make_tag_matcher
+from src.tools.execution.regression_tools.regression_framework.generators.shell import ShellGenerator
 
 CONFIG = {
     "variables": {"SEED": 1},
@@ -73,7 +73,7 @@ def test_staged_run_passes_the_filter_and_normal_run_does_not(monkeypatch, tmp_p
             captured.update(kw)
 
     monkeypatch.setattr(
-        "src.tools.regression_tools.regression_framework.generators.shell.ShellGenerator",
+        "src.tools.execution.regression_tools.regression_framework.generators.shell.ShellGenerator",
         lambda: FakeGen())
 
     reg = tmp_path / "regression.yaml"

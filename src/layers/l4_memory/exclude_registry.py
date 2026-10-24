@@ -13,12 +13,14 @@ ExcludeRegistry —— "允许放弃"的工程化（与"确保不漏测"同等�
 
 用法:
     from src.layers.l4_memory.exclude_registry import ExcludeRegistry
-    reg = ExcludeRegistry(".signoffai/exclude_registry.db")
+    reg = ExcludeRegistry("database/exclude_registry.db")
     reg.propose_exclude("opcode[31:16]", "结构死代码，tie-off 固定", "unreachable", "波形+RTL追溯")
     reg.approve_exclude("EXC-2026-001", "张三")
     eff = reg.effective_coverage(95.0, 100)  # → 97.9（Exclude 3 个点后）
 """
 from __future__ import annotations
+
+from .sqlite_utils import connect
 
 import hashlib
 import json
@@ -58,14 +60,16 @@ class ExcludeRegistry:
     """Exclude 状态库（同步 sqlite，跨 run 持久，接证据链哈希）。"""
 
     def __init__(self, db_path: Optional[str | Path] = None):
-        self.db_path = Path(db_path) if db_path else Path(".signoffai") / "exclude_registry.db"
+        from config.paths import EXCLUDE_DB
+
+        self.db_path = Path(db_path) if db_path else EXCLUDE_DB
         self._lock = threading.Lock()
         self._conn: Optional[sqlite3.Connection] = None
 
     def _connect(self) -> sqlite3.Connection:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn = connect(self.db_path)
             self._conn.executescript(_SCHEMA)
             self._conn.commit()
         return self._conn

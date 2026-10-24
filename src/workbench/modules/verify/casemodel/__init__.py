@@ -10,7 +10,7 @@ case 名（`tc_fc_recv_max_len_tail_bp_full_rnd_01`），信息密度高但无�
   · **覆盖率怎么收敛** —— 「取值覆盖」页：分母是字段声明的取值点，分子是被
     case 命中的；缺口按维度列出来，联动派生字段单独标灰（它不是真缺口）
 
-底层工具在 `src/tools/casemodel_tools/`（纯计算、零 LLM 依赖），这个包只做界面。
+底层工具在 `src/tools/generation/casemodel_tools/`（纯计算、零 LLM 依赖），这个包只做界面。
 
 ```
 casemodel/

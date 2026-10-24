@@ -6,10 +6,11 @@
 > 坐落在**五层引擎**（L1 基础设施 / L2 编排 / L3 决策 / L4 记忆 / L5 进化）之上。
 >
 > 关键文档：
-> - `src/tools/casemodel_tools/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
-> - `src/tools/casemodel_tools/readme.md` —— **功能覆盖率方法学**（case 模型 → covergroup → 种子 → 回归）
-> - `src/tools/casemodel_tools/plan.py` —— 测试点 IR 的公开门面
-> - `src/tools/casemodel_tools/framework/` —— `contracts / model / naming / realization / stages / pipeline / constraints`
+> - **[`ARCHITECTURE.md`](ARCHITECTURE.md)** —— **当前代码架构**（五层 / 24 节点 / 执行器 / 工具协议 / 证据链 / 扩展点）
+> - `src/tools/generation/casemodel_tools/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
+> - `src/tools/generation/casemodel_tools/readme.md` —— **功能覆盖率方法学**（case 模型 → covergroup → 种子 → 回归）
+> - `src/tools/generation/casemodel_tools/plan.py` —— 测试点 IR 的公开门面
+> - `src/tools/generation/casemodel_tools/framework/` —— `contracts / model / naming / realization / stages / pipeline / constraints`
 
 ---
 
@@ -43,7 +44,7 @@ case 模型 ──framework 流水线──► TestPoint IR ──► 属性 tes
                                 coverage/methodology.json   （阶段 + 计数 + 输入 + IR sha256）
 ```
 
-流水线只有四段（`src/tools/casemodel_tools/framework/`）：
+流水线只有四段（`src/tools/generation/casemodel_tools/framework/`）：
 
 | 阶段 | 回答什么 | 产出 |
 |---|---|---|
@@ -169,7 +170,7 @@ RL 只管 4 个软动作，且经验统计只做"降级建议"不直接拍板（
 ## 功能覆盖率方法学（case 模型 → covergroup → 种子 → 回归）
 
 **这条链是本项目"可度量、可追溯、可签核"那条主张的落点。** 规则只此一份：
-`src/tools/casemodel_tools/coverage.py`（模块头 = 方法学），细节见 `casemodel_tools/readme.md`。
+`src/tools/generation/casemodel_tools/coverage.py`（模块头 = 方法学），细节见 `casemodel_tools/readme.md`。
 
 ### 一、模型里的东西变成 SystemVerilog
 
@@ -272,16 +273,16 @@ DUT 那条先走 `bind`（挂**模块**上、端口表达式在目标模块作�
 ### 五、命令
 
 ```powershell
-python -m src.tools.casemodel_tools.cli covergroups    specs\npu_sched\casemodel.yaml -m npu_sched
-python -m src.tools.casemodel_tools.cli coverage-plan  specs\npu_sched\casemodel.yaml -m npu_sched
+python -m src.tools.generation.casemodel_tools.cli covergroups    specs\npu_sched\casemodel.yaml -m npu_sched
+python -m src.tools.generation.casemodel_tools.cli coverage-plan  specs\npu_sched\casemodel.yaml -m npu_sched
 
 # 测试点 IR（框架流水线；下游只认 tp_id）
-python -m src.tools.casemodel_tools.cli testpoints specs\npu_sched\casemodel.yaml `
+python -m src.tools.generation.casemodel_tools.cli testpoints specs\npu_sched\casemodel.yaml `
   --env-name npu_sched_env --module npu_sched `
   --agent-fields npu_sched_in=instr_type,instr_opcode,instr_dtype,barrier_type,op_priority
 
 # 约束模型（有 --agent-fields 才会把 stimulus 维度编译成真实赋值）
-python -m src.tools.casemodel_tools.cli constraints specs\npu_sched\casemodel.yaml `
+python -m src.tools.generation.casemodel_tools.cli constraints specs\npu_sched\casemodel.yaml `
   -p npu_sched_in:npu_sched_in_master_seq_item `
   --agent-fields npu_sched_in=instr_type,instr_opcode
 
@@ -321,8 +322,8 @@ python -m src.tools.casemodel_tools.cli constraints specs\npu_sched\casemodel.ya
 `dimensions: ["*"]` 的语义是**全部维度**，得展开 —— 否则所有维度都被报成"没人驱动"。
 
 ```powershell
-python -m src.tools.casemodel_tools.cli associate   cases.yaml coverage.yaml [-c constraint.yaml]
-python -m src.tools.casemodel_tools.cli constraints cases.yaml -p apb_master:APB_master_seq_item -o constraint.yaml
+python -m src.tools.generation.casemodel_tools.cli associate   cases.yaml coverage.yaml [-c constraint.yaml]
+python -m src.tools.generation.casemodel_tools.cli constraints cases.yaml -p apb_master:APB_master_seq_item -o constraint.yaml
 # 主 CLI 同形：vagent case-model {associate,constraints}
 ```
 
@@ -374,34 +375,33 @@ python -m src.cli.commands verify --rtl specs\npu_sched -o output_npu
 > 本机 Questa 2024.1 的 `vlog` / `vopt` / `vsim` / `vcover` 全都能跑，不需要额外
 > license 配置。别再用"验不了"当理由把仿真侧停在生成侧。
 
-### 八、一轮完整的端到端实测（2026-10-22）
+### 八、一轮完整的端到端实测（2026-10-24）
 
 命令（无人值守：关掉分级回归的人工节点）：
 
 ```powershell
-python -m src.cli.commands verify --rtl specs\npu_sched -o output_e2e_backdoor `
+python -m src.cli.commands verify --rtl specs\npu_sched -o output_e2e_final `
   --target 95 --max-rounds 1 --no-manual-gate --summary
 ```
 
-Run：`output_e2e_backdoor_20261022_jiang_20261022_232517`（默认 `cov+wave`，含 `backdoor` 测试点）
+Run：`output_e2e_final_jiang_20261023_223108`（默认 `cov+wave`，含 backdoor + sequence 测试点）
 
 | 验到的 | 证据 |
 |---|---|
-| **五级回归全过** | `regression_stages.json`：loopback 2/2、p0 51/51、p1 85/85、p2 34/34、p3 87/87，**259/259 PASS** |
-| **每级只生成自己的用例** | 分级 build 按 tag 裁剪：p0 50/50，p1 84/84（含 10 条 backdoor），p2 33/33，p3 86/86 |
-| **测试点 IR 落盘** | `coverage/testpoints.yaml` 63 条；`methodology.json` 的 IR sha256 与文件**逐字节一致**；`tp_matrix.json`：**可激励 26/26（100%）**、**backdoor 10/10（100%）**、观测 25/27、UNMAPPED 0 |
-| **backdoor 真到位** | 10 条 D_queue 属性 test 用 `uvm_hdl_force(...queue_level, value)` → 采覆盖 → release；签核单列 `BACKDOOR_HIT`，不冒充激励覆盖 |
-| **属性 test 真被约束** | 生成类注释带 `tp_id`；`d_type_pMAC` / `d_type_pDMA` 在同一 seed 下驱动 `instr_type=0/3` |
-| **约束部分生效** | `constraint_status.json`：5/11 条策略有真实赋值；协调序列 `Generated: 100, Processed: 100`，`p_th_b08_directed: apply=100` |
-| **计划覆盖率（签核口径）** | **95.23%**（254 条回归用例库合并）；单条 coverage test 只有 68.57% —— 之前的签核数字**低估了计划** |
-| **签核判定** | **`PASS_WITH_CAVEAT` / `CONDITIONAL`**：覆盖率硬门禁 `coverage_ok=true`；剩余 caveat 是约束 5/11 + 2 条观测型测试点未命中 |
-| **可交换证据包** | `signoff_evidence.json`（`signoff_evidence_v1`）：RTL 哈希 / TP IR sha256 / 计划覆盖率 / TP 矩阵 / caveat + 建议动作 / 不可达嫌疑 / LLM 审计摘要 |
+| **五级回归全过** | `regression_stages.json`：loopback 2/2、p0 51/51、p1 85/85、p2 34/34、p3 98/98，**270/270 PASS** |
+| **测试点 IR 落盘** | `coverage/testpoints.yaml` 63 条；`tp_matrix.json`：**可激励 37/37（100%）**、**backdoor 10/10（100%）**、**sequence 11/11 命中**、观测 14/16、UNMAPPED 0 |
+| **sequence 场景真的进了回归** | `D_seq` / `D_pipeline` 的 11 条 TP 由 `{{ PLUSARGS }}` 之前的场景序列驱动；TP 矩阵逐条 `HIT` |
+| **backdoor 真到位** | 10 条 D_queue 属性 test 用 `uvm_hdl_force(...queue_level, value)` → 采覆盖 → release；签核单列 `BACKDOOR_HIT` |
+| **计划覆盖率（签核口径）** | **95.23%**（265 条回归用例库合并）；单条 coverage test 只有 68.57% |
+| **种子多样性（逐 bin 实测）** | `seed_diversity.json`：`DIVERSE`，5 颗种子、稳定 12 bin / 种子敏感 57 bin / 并集 69 bin |
+| **签核判定** | **`PASS_WITH_CAVEAT` / `CONDITIONAL`**：硬门禁全过（270/270、覆盖率 95.23 ≥ 95、RTL 真实、基线存在）；3 条软缺口见下 |
+| **可交换证据包 v2** | `signoff_evidence/`：目录布局 + `package_hash` + `manifest_hash` + 离线 `replay.py`；`vagent evidence verify/replay` 均通过 |
 
-**剩余缺口（不再是硬门禁）**：
+**剩余缺口（软 caveat，不是硬门禁）**：
 
-- 11 条约束策略里 6 条仍是骨架（对应观测型维度）；`sequence` 型维度（`D_seq`/`D_pipeline`）还没有场景生成器；
-- 2 条观测型测试点仍 0 命中（`D_dep=WAR`、`D_decision=BLOCKED`）—— 证据包里标为 `SUSPECT`，需要补状态到达手段或模型声明不可达；
-- 种子是否真的**改变激励分布**仍未逐 bin 验证（证据包里 `seed_diversity: null`，不冒充已验证）。
+- 11 条约束策略里 6 条有真实赋值，5 条仍是骨架（对应不可驱动维度）—— `CONSTRAINT_PARTIAL`；
+- 2 条观测型测试点仍 0 命中（`D_dep=WAR`、`D_decision=BLOCKED`）—— `TP_MISSED`，证据包里标为 `SUSPECT`；
+- 本轮没有 verified 参考模型（`ModelRegistry` 里 `apb_uart` 仍是 draft）—— `MODEL_UNAVAILABLE`；策略 `require_ref_model: false`，因此不阻断签核。
 
 ---
 
@@ -416,6 +416,7 @@ python -m src.cli.commands ci verify                 # CI 入口
 # 执行器 / 运行
 python -m src.cli.commands agent list
 python -m src.cli.commands runs                      # 运行历史
+python -m src.cli.commands prune --keep-last 20      # 清理旧 run（默认 dry-run，保护已签核）
 python -m src.cli.commands show <run_id>
 python -m src.cli.commands dump <run_id>             # 复现 / 导出证据包
 
@@ -550,15 +551,15 @@ tests/                 # pytest 套件
 
 ---
 
-## NPU ISA 激励生成器（`src/tools/isa_gen_tools/`）
+## NPU ISA 激励生成器（`src/tools/generation/isa_gen_tools/`）
 
 独立工具：吃**场景 DSL**（YAML），吐**ISA 事务层 IR** + 二进制编码 + 张量数据。
 
 ```powershell
-python -m src.tools.isa_gen_tools.cli validate config/isa_gen/examples/npu_gemm.yaml
-python -m src.tools.isa_gen_tools.cli compile  config/isa_gen/examples/npu_gemm.yaml -o out/
-python -m src.tools.isa_gen_tools.cli explain  --txn gemm_txn     # 编码表疑点解读
-python -m src.tools.isa_gen_tools.cli ops                          # 列 122 条 op
+python -m src.tools.generation.isa_gen_tools.cli validate config/isa_gen/examples/npu_gemm.yaml
+python -m src.tools.generation.isa_gen_tools.cli compile  config/isa_gen/examples/npu_gemm.yaml -o out/
+python -m src.tools.generation.isa_gen_tools.cli explain  --txn gemm_txn     # 编码表疑点解读
+python -m src.tools.generation.isa_gen_tools.cli ops                          # 列 122 条 op
 ```
 
 `compile -o <dir>` 一次产齐**六件套**（文档 §3.6）：
@@ -594,7 +595,7 @@ python -m src.tools.isa_gen_tools.cli ops                          # 列 122 条
 |---|---|---|
 | **观测型覆盖的最后一公里** | 计划覆盖率已 95.23%，但 2 条观测型 TP（`D_dep=WAR` / `D_decision=BLOCKED`）仍 0 命中 | 签核 `PASS_WITH_CAVEAT`（可签、带条件），不是 `READY`；需要补状态到达或模型声明不可达 |
 | **约束只部分生效** | 5/11 条策略有真实赋值；`sequence` 型维度（`D_seq`/`D_pipeline`）没有场景序列生成器；非法交叉未编译 | 随机批次仍可能"打不到该打的状态" |
-| **参考模型层重构中** | `model_library/` 已删，SQL `ModelRegistry` 只有 draft；18 个测试是已知失败 | `scoreboard`/golden 参考模型链路不完整 |
+| **参考模型层重构中** | bundled golden 兼容层已恢复（模型相关 17 项已收敛）；SQL `ModelRegistry` 仍只有 draft，缺真实 verified 模型 | 签核会如实挂 `MODEL_UNAVAILABLE`，`reference_model_available=false` |
 | **模型依赖人工** | 高质量 case 模型要人写；front 的草稿弱；spec→model 的桥不健全 | 换一个模块，方法学收益取决于建模质量 |
 | **LLM 作用面窄** | 只有 design/debug 调 LLM；不做 LLM 覆盖率归因（**有意**） | "AI 验证"叙事要收敛成"确定性验证 + 点状 AI" |
 | **规模** | 本地串行回归；244 条 sims 约 14 分钟；单用户；依赖 Questa/license | 不适合大团队/大规模并行；个人级定位要守住 |
@@ -608,19 +609,143 @@ python -m src.tools.isa_gen_tools.cli ops                          # 列 122 条
 
 ---
 
+## 签核证据 v2（合同级）
+
+v1 的 `signoff_evidence.json` 回答"结论是什么"；v2 额外回答**"凭什么、谁签的、能不能离线复核"**。
+
+### 目录即契约
+
+```
+<run>/signoff_evidence/
+├─ manifest.json      # 结论 + 版本绑定 + 每个文件的 sha256 + package_hash
+├─ inputs/            # spec / case 模型 / 约束 / 覆盖计划 / 模型装配单 / 签核策略
+├─ execution/         # 回归报告 / 覆盖率结果 / TP 矩阵 / 合并清单 / 种子多样性 / 回执
+├─ verdict/           # signoff_evidence.json / caveats.json / 文件审计链
+└─ replay/
+   ├─ replay.py       # **不 import SignOffAI**，只用标准库
+   └─ recipe.json     # Tier A / Tier B 的边界
+```
+
+### 三条命令
+
+```bash
+vagent evidence verify  <run>/signoff_evidence   # 逐文件哈希 + package_hash
+vagent evidence replay  <run>/signoff_evidence   # Tier A：不跑 EDA，重算三态判定
+vagent evidence compare <pkg-a> <pkg-b>          # 双环境判定一致性
+```
+
+也可以直接跑包里的脚本（收件人不需要装本项目）：
+
+```bash
+python <run>/signoff_evidence/replay/replay.py
+```
+
+### 治理闭环
+
+| 机制 | 落点 | 作用 |
+|---|---|---|
+| **模块签核策略** | `specs/<module>/signoff_policy.yaml` | 决定是否要求 verified 参考模型 / 血缘基线，以及哪些 caveat 可被**署名接受** |
+| **caveat 机器码** | `caveats.json` / `report.json` | 结论按"未被接受的码"计算，不再按文案 |
+| **审批绑定证据哈希** | `<run>/approval.json` | `vagent approval --run <id>` 会重算哈希，证据被换即报错 |
+| **基线强制** | `lineage.db` + 证据包 | 缺 baseline 时 `NEEDS_FIX`，不是 caveat |
+| **参考模型门禁** | `models.yaml` 的 `source.status == verified` | 缺 verified 模型 → `MODEL_UNAVAILABLE`；策略要求时可阻断 |
+| **种子多样性** | `coverage/seed_diversity.json` | 按 seed 分组合并覆盖率库，逐 bin 比较；`None`/`False`/`True` 三态分开 |
+| **覆盖率合并清单** | `coverage/plan_merge_manifest.json` | 回答"这个百分比由哪些用例库算出来" |
+
+### 当前边界（诚实标注）
+
+- **不可达声明**（模型声明某取值永远到不了）**本轮未实现**：0 命中仍是 `SUSPECT`，不从分母剔除。
+- **参考模型**：磁盘/内置 golden 兼容层已恢复（未验证状态恒为 `verified=False`）；SQL TLM 1.0 库仍需一个真实 verified 模型才能让 `reference_model_available` 为真。
+- **Tier B 回放**（有 EDA 时重跑）只记录 recipe，不自动执行。
+
+---
+
+## 回归 YAML：后端方言 vs 测试语义
+
+`regression.yaml` 是**后端特定**的生成物；但用户参数只有两类，不能一刀切：
+
+| 类别 | 例子 | 落点 |
+|---|---|---|
+| **后端方言** | `+UVM_TESTNAME`、`+ntb_random_seed`、`-cm`、`-qwavedb` | 由 `test` / `seeds` / `modes` 生成，**不许手写** |
+| **测试语义** | `+preload=`、`+tensor_manifest=`、`+cfg_mode=` | `plusargs:` 原样透传 |
+| **逃生口** | `-voptargs=+acc` 等 | `backend_args:`；非空时 audit 记 caveat |
+
+```yaml
+simulator: questa
+tests:
+  - name: npu_type_test
+    test: npu_type_test
+    seeds: {base: 2001, count: 18}
+    modes: [cov, wave]
+    plusargs:
+      - "+preload=preload.hex"
+      - "+cfg_mode=perf"
+    backend_args: []
+    run_cmd: 'vsim ... {{ MODE_OPTS | default("") }} {{ PLUSARGS }} ; ...'
+```
+
+关键规则：
+
+- **`{{ PLUSARGS }}` 是唯一注入点**，必须在判据链 `;` 之前；有用户参数却没有占位符 → 生成期报错。
+- `plusargs` 是**整组透传**；旧的“每个 plusarg 一条用例”改名为 `plusarg_matrix`（旧配置会被识别并告警）。
+- 后端保留键由 `src/tools/execution/regression_tools/backend_profiles.py` 的**数据表**维护；命中即 `ConfigError`。
+- `plusargs` 里不允许 `{{ SEED }}` —— 种子只从 `seeds` 出。
+- 新增 EDA = 在 `backend_profiles.py` 加一个字典条目（保留键 + `run_cmd_template`），不改框架类。
+
+### 旧 `run_cmd` 怎么迁移
+
+| 旧 `run_cmd` 片段 | 新落点 |
+|---|---|
+| `+UVM_TESTNAME=<name>` | `test: <name>` |
+| `+ntb_random_seed={{ SEED }}` | `seeds: {base, count}` |
+| `+cover=...` / `+wave` | `modes: [cov, wave]` |
+| `+preload=...` / `+tensor_manifest=...` / `+cfg_mode=...` | `plusargs:` |
+| `-sv` / `-timescale` / `+define+...` | 后端 `build_args` / `backend_args` |
+| `+voptargs=...` | `backend_args:`（audit 记 caveat） |
+
+`plusarg_matrix:` 保留旧“每个 plusarg 一条用例”的行为；旧配置若仍用
+`plusargs` + `{{ plusarg }}`，加载时会**自动识别并告警**，不会静默改变语义。
+
+### 校验发生在哪
+
+| 阶段 | 守卫 |
+|---|---|
+| `ConfigBuilder.build()` | 保留键、`{{ SEED }}`、重复键、`seeds` 展开 |
+| `ShellGenerator.generate()` | `{{ PLUSARGS }}` 注入点存在性、顺序（后端 → plusargs → backend_args） |
+| `audit` | `backend_args` 非空 → `BACKEND_ARGS_USED` caveat；统计写进 `signoff_evidence` |
+
+### 后端支持状态
+
+| 后端 | 保留键表 | `run_cmd_template` |
+|---|---|---|
+| Questa | ✅ | ✅ |
+| VCS / Verilator / Icarus | ✅ | ⏳ 留空；调用时明确报错，不退回 Questa |
+
+**当前边界**：schema/透传/校验已通，但生成器还没有“测试语义 plusargs 的来源”
+（等 ISA/场景生成侧产出 `+preload` / `+tensor_manifest` 时直接写进 `plusargs`）。
+
+---
+
 ## 已知问题与路线
 
-### 参考模型层（重构中，占当前已知失败的大头）
+### 参考模型层（兼容层已恢复，SQL 库仍待 verified 模型）
 
-`tests/test_agents.py` / `test_golden_bench.py` / `test_ref_model_wiring.py` /
-`test_sim_modes.py` 共 **18 个已知失败**。根因是**唯一一条**：`model_library/` 目录已从磁盘删除
-（那是"先替后删"的第一步），于是 `match_golden()` 恒 None → `build_ref_model_config()` 恒
-None → `_ref_mirror_gate()` 恒 None → env.yaml 里不写 `scoreboards`。替代品
-`ModelRegistry`（SQL）里只有 `apb_slave` 一个且状态是 `draft`，而 `_registry_model` 只认
-`verified` —— 两条路都空。
+原先的 18 个已知失败里，**17 个是 `model_library/` 删除后的连带断链**
+（`match_golden()` 恒 None → `build_ref_model_config()` 恒 None →
+`_ref_mirror_gate()` 恒 None → env.yaml 不写 `scoreboards`）。
 
-方向是**参考模型改为 TLM1.0 + SQL 库**（原实现是信号级 RTL）。
-**在替换完成前，这 18 个失败是已知状态，不是回归。**
+现在 `golden_library.py` 带一层**内置兼容层**（`apb_slave / uart_tx / uart_rx /
+fifo16 / irq_gen` 的 bundled 模板），磁盘库存在时仍优先。它只恢复"函数能返回
+确定结果"，**不冒充已验证**：`verify_manifest()` 对内置层恒返回 `verified=False`，
+`ModelExecutor` 也只把 `verified=True` 的命中写成真实模型。
+
+原先剩的最后 1 项 `test_sim_modes.py::test_common_base_builds_have_no_tests_declared`
+是 **fixture 过时**（`common_base.yaml` 的 builds 已被注释掉，fixture 仍要求
+include 带出外部 build）；fixture 已改为自带一个 `build_foreign_vcs` 的临时
+include，测试恢复其原意。**这 82 个测试现在全绿。**
+
+方向仍是**参考模型改为 TLM1.0 + SQL 库**；在库里有真实 `verified` 模型之前，
+签核证据会如实写 `reference_models.available=false` 并挂 `MODEL_UNAVAILABLE`。
 
 > 顺带修掉的一个**真口子**：`generate_utils`（`gen_uvm.py`）的 ctx 里有 `ref_model`
 > 却**没有 `body`** —— 于是模板里 `{% if body %}` 那个分支永远不进，SQL 库里存的
@@ -726,10 +851,10 @@ None → `_ref_mirror_gate()` 恒 None → env.yaml 里不写 `scoreboards`。�
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q                            # 948 collected；除 18 个已知失败外全绿
+python -m pytest tests/ -q                            # 963 passed / 2 skipped；已知 18 项基线失败已全部收敛
 python -m pytest src/workbench/tests -q               # 工作台：713 passed
-python -m pytest src/tools/casemodel_tools/tests -q   # case 建模 + 框架 + 覆盖率方法学：509 passed
-python -m pytest src/tools/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
+python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架 + 覆盖率方法学：509 passed
+python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
 ```
 
 若干 **守卫型**测试值得单独提 —— 它们防的都是"**不会自动发现的退化**"：
@@ -747,12 +872,14 @@ python -m pytest src/tools/isa_gen_tools/tests -q     # ISA 工具：290 passed 
 | `casemodel_tools/tests/test_framework.py` | 阶段依赖前置报错、注册表扩展（新增 realization/constraint **不改核心**）、manifest 哈希与实际落盘文件一致 |
 | `tests/test_stage_filtered_generation.py` | 分级回归只生成**本级 tag** 的用例目录；非分级调用保持全量树 |
 | `tests/test_coverage_coverstore.py` | `questa.db`（coverstore）必须走 `vcover merge "<store>:<test>"`，否则功能覆盖率静默丢失；`(null).data` 走无 test 名的形式 |
-| `tests/test_audit_evidence.py` | `signoff_evidence_v1`：RTL/IR 哈希、计划覆盖率口径、`seed_diversity: null`、不可达只标 `SUSPECT` |
+| `tests/test_audit_evidence.py` | `signoff_evidence_v1`：RTL/IR 哈希、计划覆盖率口径；`seed_diversity` 三态（没分析才 `null`）；不可达只标 `SUSPECT` |
+| `tests/test_audit_evidence.py` + `signoff_package` 冒烟 | v2：目录布局、逐文件 sha256、`package_hash`、离线 `replay.py`、双环境 `compare` |
 | `casemodel_tools/tests/test_plan.py::TestBackdoorRealization` | backdoor 维度带 `path`、不进 `observe`；缺 path 回退并记账 |
 
-**"跑测试"在这里的定位**：主套件那 18 个失败是**已知基线**（参考模型层重构中），
-其余全绿才算没退化。守卫型测试的价值不在通过率，而在**把本次踩过的坑固化成断言** ——
-每一条失败信息里都写着"当时是怎么错的"。
+**"跑测试"在这里的定位**：已知的 18 项基线失败已全部收敛 —— 模型相关 17 项
+由 bundled golden 兼容层修复，`test_sim_modes` 的 1 项是 fixture 过时（已改为
+自带外部 build 的临时 include）。守卫型测试的价值不在通过率，而在
+**把本次踩过的坑固化成断言** —— 每一条失败信息里都写着"当时是怎么错的"。
 
 ---
 

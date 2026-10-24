@@ -49,7 +49,7 @@ def _strip_test_prefix_local(name):
     `test_dir.replace('test_','')` 会把 `npu_type_test_run_1_seed_2001` 里的
     中间那个 `test_` 也吃掉，于是它永远匹配不上配置里的 `npu_type_test_run_1`。
     """
-    from src.tools.regression_tools.regression_framework.core.config import (
+    from src.tools.execution.regression_tools.regression_framework.core.config import (
         strip_test_prefix)
     return strip_test_prefix(name)
 
@@ -255,7 +255,7 @@ def declared_tests_by_build(config: dict) -> Dict[str, set]:
             continue
         build = str(test.get("build", "")).replace("build_", "")
         # 只削**前缀**（`npu_type_test_run_1` 里中间那个 `test_` 不能被吃掉）
-        from src.tools.regression_tools.regression_framework.core.config import (
+        from src.tools.execution.regression_tools.regression_framework.core.config import (
             strip_test_prefix)
         name = strip_test_prefix(test.get("name", ""))
         if build and name:
@@ -368,7 +368,7 @@ class InfrastructureManager:
         不各自散落调用回归框架。
 
         `enabled_modes`：这一轮要开的**仿真业务**（`cov` / `wave` / `debug_all` …，
-        见 `src/tools/regression_tools/sim_modes.py`）。交给框架的
+        见 `src/tools/execution/regression_tools/sim_modes.py`）。交给框架的
         `ConfigBuilder.build(enabled_modes=…)` → `apply_modes()` 把它落成聚合变量
         `MODE_OPTS`，仿真命令里的 `{{ MODE_OPTS }}` 就有了内容。
         不传 = 一门业务都不开（命令与从前逐字节一致）。
@@ -384,7 +384,7 @@ class InfrastructureManager:
             # regression.yaml 的 compile 命令引用 filelist.f，但 find_spec_yaml 生成
             # regression.yaml 时 agents/env/bench 尚未生成，故这里重新生成完整 filelist。
             try:
-                from src.tools.lib.filelist import (build_filelist_for_tb,
+                from src.tools.common.lib.filelist import (build_filelist_for_tb,
                                                     derive_env_name)
                 # 别在这里手写"取第一个 *_pkg.sv" —— 子包 `_parameters_pkg` 按字母序
                 # 排在环境包前面，会把环境名猜错（见 `derive_env_name` 的说明）。
@@ -396,7 +396,7 @@ class InfrastructureManager:
                 build_filelist_for_tb(self.output_root, agents, env_name, "filelist.f")
                 # loopback filelist：每个 agent 一个 filelist_<ag>_lb.f，供 per-agent loopback build 编译
                 try:
-                    from src.tools.lib.filelist import build_loopback_filelist
+                    from src.tools.common.lib.filelist import build_loopback_filelist
                     for ag in agents:
                         build_loopback_filelist(self.output_root, ag["name"])
                 except Exception as _lb_e:
@@ -405,7 +405,7 @@ class InfrastructureManager:
                 logger.warning(f"filelist 生成失败: {e}")
 
             # ── 1. ConfigBuilder 解析 regression.yaml（builds + tests）──
-            from src.tools.regression_tools.regression_framework.core.config import (
+            from src.tools.execution.regression_tools.regression_framework.core.config import (
                 ConfigBuilder, make_tag_matcher)
             # `overrides` 是 `--set key=value` 那套：Reference Finder 逐版本重跑时，
             # 用它把配置里的绝对路径（WORK / filelist 之类）改写到**该版本自己的**
@@ -424,7 +424,7 @@ class InfrastructureManager:
                 logger.info(f"回归 tag 过滤: include={tags or '-'} exclude={exclude_tags or '-'}")
 
             # ── 2. ShellGenerator 生成 build_*/test_* 目录 + 脚本 ──
-            from src.tools.regression_tools.regression_framework.generators.shell import ShellGenerator
+            from src.tools.execution.regression_tools.regression_framework.generators.shell import ShellGenerator
             # 分级回归时每级各占一个子目录（`run_regression_staged` 会设
             # `self._stage_tag`）。**否则每级都会 rmtree 掉整个 regression_run** ——
             # 全绿之后盘上只剩最后一级（p3）的 4 条，p0/p1/p2 跑过的日志/波形/
@@ -455,9 +455,9 @@ class InfrastructureManager:
                 test_filter=tag_match if getattr(self, "_stage_tag", "") else None)
 
             # ── 3. Scheduler 批量跑 build + test（扫描生成目录）──
-            from src.tools.regression_tools.regression_framework.models.scheduler import Scheduler
-            from src.tools.regression_tools.regression_framework.execution.strategy import LocalStrategy, MockStrategy
-            from src.tools.regression_tools.regression_framework.models.task import TaskFactory
+            from src.tools.execution.regression_tools.regression_framework.models.scheduler import Scheduler
+            from src.tools.execution.regression_tools.regression_framework.execution.strategy import LocalStrategy, MockStrategy
+            from src.tools.execution.regression_tools.regression_framework.models.task import TaskFactory
             import re as _re
 
             strategy = LocalStrategy() if mode == "local" else MockStrategy()
@@ -505,7 +505,7 @@ class InfrastructureManager:
             build_dirs = sorted([d for d in os.listdir(root_dir)
                                  if d.startswith("build_") and os.path.isdir(os.path.join(root_dir, d))])
             # build 依赖：yaml 的 `depends` → 调度器的依赖图（名字已规整成任务名）
-            from src.tools.regression_tools.regression_framework.core.config import (
+            from src.tools.execution.regression_tools.regression_framework.core.config import (
                 build_dependency_map)
             build_deps = build_dependency_map(config)
             added_builds = set()

@@ -178,7 +178,7 @@ class TestFunctionalCoverageIsARunAsset:
     def _points(self, tmp_path, **over):
         import json
 
-        from src.tools.casemodel_tools.api import run_covergroups
+        from src.tools.generation.casemodel_tools.api import run_covergroups
 
         spec = (Path(__file__).resolve().parents[1]
                 / "specs" / "apb_uart" / "casemodel.yaml")
@@ -344,7 +344,7 @@ class TestArtifactReviewListsFunctionalCoverage:
     """产物审查台要看得见功能覆盖那三份 —— 否则"生成了没有"无从查起。"""
 
     def test_the_coverage_declaration_is_listed(self, tmp_path):
-        from src.tools.flow_tools.api import run_artifacts
+        from src.tools.flow.flow_tools.api import run_artifacts
 
         (tmp_path / "coverage").mkdir(parents=True)
         (tmp_path / "coverage" / "coverage_points.json").write_text("{}", encoding="utf-8")
@@ -356,7 +356,7 @@ class TestArtifactReviewListsFunctionalCoverage:
 
     def test_a_missing_one_is_still_listed(self, tmp_path):
         """"还没生成"是有用的信息 —— 照列，标 `exists: false`。"""
-        from src.tools.flow_tools.api import run_artifacts
+        from src.tools.flow.flow_tools.api import run_artifacts
 
         payload = run_artifacts(str(tmp_path))
         by = {a["path"]: a for a in payload["artifacts"]}

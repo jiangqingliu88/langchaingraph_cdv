@@ -7,8 +7,8 @@
 #      多出什么效果
 #
 # 用法:
-#   python -m src.tools.isa_gen_tools.cli validate config/isa_gen/examples/minimal.yaml
-#   python -m src.tools.isa_gen_tools.cli compile  config/isa_gen/examples/minimal.yaml
+#   python -m src.tools.generation.isa_gen_tools.cli validate config/isa_gen/examples/minimal.yaml
+#   python -m src.tools.generation.isa_gen_tools.cli compile  config/isa_gen/examples/minimal.yaml
 # ════════════════════════════════════════════════════════════════
 
 # `meta.name` 是唯一必填项 —— 它是 case 的标识，落盘目录要用它。

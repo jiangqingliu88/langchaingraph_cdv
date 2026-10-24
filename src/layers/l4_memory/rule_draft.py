@@ -53,7 +53,7 @@ def rule_skeleton(draft: Dict[str, Any]) -> str:
     doc = str(draft.get("doc") or "TODO: 一句话说明这条规则拦什么")
     return f'''# 规则草案（{draft.get("run_id", "")} · 指纹 {draft.get("fingerprint", "")[:12]}）
 # 证据：{str(draft.get("note", ""))[:160]}
-# 落到 src/tools/uvm_tools/tool_uvm/semantic_check.py：
+# 落到 src/tools/generation/uvm_tools/tool_uvm/semantic_check.py：
 
 @rule("{kind}", "{rule_id}", "{severity}", "{doc}")
 def _{rule_id}(item) -> List[str]:

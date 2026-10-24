@@ -19,6 +19,10 @@ htmlcov/
 # Databases (local)
 *.db
 *.db-journal
+# 运行期数据库统一放 database/（一份真相，见 config/paths.py）；
+# 只保留目录占位，库本体、备份与归档都不进 git。
+/database/*
+!/database/.gitkeep
 
 # Logs
 *.log

@@ -4,7 +4,7 @@
 `refresh(result)`（填数据）；「什么时候刷新、刷新前先判有没有结果」由模块定。
 
 页面只拿 `AnalysisResult` 与只读的 `model`，不自己算任何东西 —— 判定逻辑全在
-`src/tools/casemodel_tools/analysis/`，所以能脱离窗口单独测。
+`src/tools/generation/casemodel_tools/analysis/`，所以能脱离窗口单独测。
 
 > 这 11 个页面**嵌在模块内部的一个 QTabWidget 里**，不摊成平台的中央标签页。
 > 理由是它们都是同一份文本的只读视图：摊开之后用户能把「概览」拖到别的

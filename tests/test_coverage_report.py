@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import time
 
-from src.tools.coverage_tools import cov_api
+from src.tools.checking.coverage_tools import cov_api
 
 
 class TestFindCoverageDb:

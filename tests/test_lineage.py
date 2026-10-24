@@ -295,7 +295,7 @@ VALUES ('legacy_case', 'protocol', 'opcode[7:0]');
             reg.close()
 
     def test_register_cases_binds_module_and_version(self, tmp_path):
-        from src.tools.casemodel_tools.registry_bridge import register_cases
+        from src.tools.generation.casemodel_tools.registry_bridge import register_cases
 
         yaml_text = Path("specs/npu_sched/casemodel.yaml").read_text(encoding="utf-8")
         out = register_cases(yaml_text, "npu_sched",
@@ -393,7 +393,7 @@ class TestTheCaseLibraryIsScopedToTheModule:
             reg.close()
 
     def test_the_regression_generator_passes_the_module(self):
-        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(
+        src = Path("src/tools/generation/uvm_tools/tool_find_spec_yaml/generators/regression_gen.py").read_text(
             encoding="utf-8")
         assert "get_priority_order(stage=0, limit=50, module=module_name)" in src, \
             "生成 regression.yaml 时没按模块筛 —— 跨项目用例会混进来"
@@ -487,6 +487,10 @@ class TestBaselineAwareCompare:
 
     def test_it_finds_the_first_run_of_the_same_module(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
+        # 血缘库已统一到 database/（绝对路径）；本测试要隔离，显式指到 tmp。
+        import config.paths as _paths
+
+        monkeypatch.setattr(_paths, "LINEAGE_DB", tmp_path / "lineage.db", raising=False)
         a = self._run(tmp_path, "output_a_20260101_000000", "module dut; endmodule\n")
         b = self._run(tmp_path, "output_b_20260102_000000", "module dut; endmodule\n")
         for d in (a, b):
@@ -497,7 +501,7 @@ class TestBaselineAwareCompare:
         finally:
             s.close()
 
-        from src.tools.flow_tools.lineage_api import (baseline_of_run,
+        from src.tools.flow.flow_tools.lineage_api import (baseline_of_run,
                                                       compare_against_baseline)
 
         anchor = baseline_of_run(b)
@@ -511,7 +515,7 @@ class TestBaselineAwareCompare:
         monkeypatch.chdir(tmp_path)
         lonely = self._run(tmp_path, "output_c_20260103_000000",
                            "module dut; endmodule\n")
-        from src.tools.flow_tools.lineage_api import compare_against_baseline
+        from src.tools.flow.flow_tools.lineage_api import compare_against_baseline
 
         result = compare_against_baseline(str(lonely))
         assert "error" in result and "血缘" in result["error"]
@@ -520,7 +524,7 @@ class TestBaselineAwareCompare:
         monkeypatch.chdir(tmp_path)
         a = self._run(tmp_path, "output_a_20260101_000000", "module dut; endmodule\n")
         b = self._run(tmp_path, "output_b_20260102_000000", "module dut; endmodule\n")
-        from src.tools.flow_tools.lineage_api import compare_against_baseline
+        from src.tools.flow.flow_tools.lineage_api import compare_against_baseline
 
         result = compare_against_baseline(str(b), baseline=str(a))
         assert Path(result["baseline_dir"]).name == a.name

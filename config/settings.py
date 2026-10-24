@@ -3,14 +3,36 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+
+from config.paths import DATABASE_DIR, sqlite_url
 
 
 class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DB_", extra="allow")
-    url: str = "sqlite+aiosqlite:///ic_verification.db"
+    # 唯一真相：<repo>/database/ic_verification.db（见 config/paths.py）
+    url: str = sqlite_url()
     echo: bool = False
+
+    @field_validator("url")
+    @classmethod
+    def _absolute_sqlite_path(cls, value: str) -> str:
+        """把相对的 SQLite URL 收口到 database/。
+
+        `.env` 里写 `database/ic_verification.db` 时，如果 CLI 从别的目录启动，
+        相对路径会落到那个目录 —— 又是一份“隐藏的第二库”。这里统一解析。
+        """
+        prefix = "sqlite+aiosqlite:///"
+        if not str(value).startswith(prefix):
+            return value
+        p = str(value)[len(prefix):]
+        if p.startswith("/") or (len(p) > 1 and p[1] == ":"):
+            return value                      # 绝对路径原样保留
+        return sqlite_url(DATABASE_DIR / Path(p).name)
+
 
 
 class LLMSettings(BaseSettings):
@@ -173,8 +195,9 @@ class Settings(BaseSettings):
         if not self.is_production:
             return []
         issues = []
-        if not self.platform.jwt_secret:
-            issues.append("PLATFORM_JWT_SECRET 未设置")
+        # JWT 只服务可选 API / 企业级多用户；personal/CLI 模式不要求它。
+        if self.platform.tier == "enterprise" and not self.platform.jwt_secret:
+            issues.append("PLATFORM_JWT_SECRET 未设置（enterprise 模式必填）")
         if self.platform.demo_enabled:
             issues.append("生产环境不应启用 DEMO_ENABLED")
         if not self.llm.api_key:

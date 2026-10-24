@@ -1,8 +1,8 @@
 """casemodel 工具的 Agent 接入面 —— 三层包装（LangChain / ToolRegistry / ToolHub）。
 
-适配层在 `src/executors/verify/casemodel/`，工具本体在 `src/tools/casemodel_tools/`。
+适配层在 `src/executors/verify/casemodel/`，工具本体在 `src/tools/generation/casemodel_tools/`。
 跨层集成测试放在仓库根的 tests/，工具自己的测试留在
-`src/tools/casemodel_tools/tests/`。
+`src/tools/generation/casemodel_tools/tests/`。
 
 最要紧的一条：三个面必须给出同一个答案 —— 否则同一个问题在
 LangChain / ToolRegistry / ToolHub 上得到三种结论，排查是灾难。

@@ -120,7 +120,7 @@ class TestTheSchemaAcceptsBothKeys:
     def _check(self, tmp_path, payload):
         import shutil
 
-        from src.tools.uvm_tools.tool_uvm.schema_check import SchemaChecker
+        from src.tools.generation.uvm_tools.tool_uvm.schema_check import SchemaChecker
 
         (tmp_path / "inputs" / "yaml" / "uvm").mkdir(parents=True)
         shutil.copy(Path("specs/apb_uart/casemodel.yaml"),
@@ -140,7 +140,7 @@ class TestTheSchemaAcceptsBothKeys:
         import json
 
         schema = json.loads(Path(
-            "src/tools/uvm_tools/tool_uvm/schema/uvm_config.schema.json"
+            "src/tools/generation/uvm_tools/tool_uvm/schema/uvm_config.schema.json"
         ).read_text(encoding="utf-8"))
         assert "field_bins" in schema["properties"]
         assert "coverFieldBin" in schema["$defs"]
@@ -149,12 +149,12 @@ class TestTheSchemaAcceptsBothKeys:
 class TestTheTemplateStillReadsBothKeys:
     def test_field_bins_key_is_read_by_gen_uvm(self):
         """写端与读端**两个键名**要对得上 —— 对不上就是"写了但没人读"。"""
-        src = Path("src/tools/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
+        src = Path("src/tools/generation/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
         assert 'data.get("field_bins")' in src
         assert 'coverage_field_bins' in src
 
     def test_the_template_uses_the_model_bins(self):
-        tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+        tpl = Path("src/tools/generation/uvm_tools/tool_uvm/templates/environment_templates"
                    "/env_cov.sv.j2").read_text(encoding="utf-8")
         assert "coverage_field_bins" in tpl
         # `| default({})` 不能少：渲染走 StrictUndefined，缺键会让整份渲染失败
@@ -293,7 +293,7 @@ class TestTheDutChannelIsWiredIntoTheEnv:
         import json
 
         schema = json.loads(Path(
-            "src/tools/uvm_tools/tool_uvm/schema/uvm_config.schema.json"
+            "src/tools/generation/uvm_tools/tool_uvm/schema/uvm_config.schema.json"
         ).read_text(encoding="utf-8"))
         assert {"dut_if", "dut_bins", "dut_checker"} <= set(schema["properties"])
         assert {"dutCoverBin", "checkerRule"} <= set(schema["$defs"])
@@ -305,10 +305,10 @@ class TestTheDutChannelIsWiredIntoTheEnv:
         句柄永远为空 → 覆盖率恒 0%，而编译与加载**都不报错**。所以两份模板
         必须由同一个来源喂，缺席时**两边一致地没有**。
         """
-        gen = Path("src/tools/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
-        env_tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+        gen = Path("src/tools/generation/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
+        env_tpl = Path("src/tools/generation/uvm_tools/tool_uvm/templates/environment_templates"
                        "/env_cov.sv.j2").read_text(encoding="utf-8")
-        tb_tpl = Path("src/tools/uvm_tools/tool_uvm/templates/bench_templates"
+        tb_tpl = Path("src/tools/generation/uvm_tools/tool_uvm/templates/bench_templates"
                       "/tb_top.sv.j2").read_text(encoding="utf-8")
 
         # 读端只有一个：`read_env_cov_bins`，两个渲染任务都经它取
@@ -327,7 +327,7 @@ class TestTheDutChannelIsWiredIntoTheEnv:
         静默跑完只会给一个恒 0% 的数字，比停下来更难查（本仓库反复吃过
         "0% 与没有无从区分"的亏）。所以取不到句柄要 `uvm_fatal`。
         """
-        env_tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+        env_tpl = Path("src/tools/generation/uvm_tools/tool_uvm/templates/environment_templates"
                        "/env_cov.sv.j2").read_text(encoding="utf-8")
         assert "`uvm_fatal(" in env_tpl
         assert 'uvm_config_db#(virtual {{ _dif.type }})::get' in env_tpl
@@ -340,7 +340,7 @@ class TestTheDutChannelIsWiredIntoTheEnv:
 
     def test_the_dut_channel_is_reported_with_the_others(self):
         """两条通道的数要在**同一份报告**里 —— 各看各的就又要人工对账。"""
-        env_tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+        env_tpl = Path("src/tools/generation/uvm_tools/tool_uvm/templates/environment_templates"
                        "/env_cov.sv.j2").read_text(encoding="utf-8")
         assert '"功能覆盖率[dut]: %.1f%%"' in env_tpl
 
@@ -353,7 +353,7 @@ class TestTheRenderedFilesBothSidesOrNeither:
     0.00%）。所以这里不看源码字符串，看**渲染出来的两个文件**。
     """
 
-    EXAMPLES = Path("src/tools/uvm_tools/tool_uvm/examples/apb")
+    EXAMPLES = Path("src/tools/generation/uvm_tools/tool_uvm/examples/apb")
 
     DUT_IF = {
         "name": "apb_slave_cov_if", "type": "apb_slave_cov_if",
@@ -385,7 +385,7 @@ class TestTheRenderedFilesBothSidesOrNeither:
         (ydir / "env_cov_bins.yaml").write_text(
             json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
-        from src.tools.uvm_tools.tool_jinja_render.main import run
+        from src.tools.generation.uvm_tools.tool_jinja_render.main import run
 
         assert json.loads(run(str(tmp_path)))["status"] == "ok"
         env = list((tmp_path / "env").glob("*_coverage.sv"))
@@ -426,7 +426,7 @@ class TestTheBindArtifactsGetCompiled:
     """
 
     def _fl(self, tmp_path):
-        from src.tools.lib.filelist import build_filelist_for_tb
+        from src.tools.common.lib.filelist import build_filelist_for_tb
 
         out = tmp_path / "output_x"
         (out / "rtl").mkdir(parents=True)
@@ -447,7 +447,7 @@ class TestTheBindArtifactsGetCompiled:
 
     def test_non_sv_files_in_coverage_are_not_collected(self, tmp_path):
         """`coverage/` 里还躺着 json —— 一股脑收进来是给 vlog 塞垃圾。"""
-        from src.tools.lib.filelist import build_filelist_for_tb
+        from src.tools.common.lib.filelist import build_filelist_for_tb
 
         out = tmp_path / "output_y"
         (out / "coverage").mkdir(parents=True)
@@ -469,7 +469,9 @@ class TestASimThatNeverRanIsNotAPass:
     再谈里面有没有错。
     """
 
-    RUN_CMD = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py")
+    # 命令模板已迁到后端档案（`backend_profiles.py`）—— 不同后端生成不同
+    # YAML，但 Questa 的判据链仍只有这一份权威实现。
+    RUN_CMD = Path("src/tools/execution/regression_tools/backend_profiles.py")
 
     def test_the_verdict_requires_a_nonempty_log_first(self):
         src = self.RUN_CMD.read_text(encoding="utf-8")
@@ -592,7 +594,7 @@ class TestSeedsReachTheRegression:
     NPU = Path("specs/npu_sched/casemodel.yaml")
 
     def _plan_dir(self, tmp_path):
-        from src.tools.casemodel_tools.api import run_coverage_plan
+        from src.tools.generation.casemodel_tools.api import run_coverage_plan
 
         (tmp_path / "coverage").mkdir(parents=True, exist_ok=True)
         plan = run_coverage_plan(self.NPU.read_text(encoding="utf-8"), "npu_sched")
@@ -601,7 +603,7 @@ class TestSeedsReachTheRegression:
         return tmp_path
 
     def test_the_plan_is_read_into_a_test_keyed_map(self, tmp_path):
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _seed_plan
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _seed_plan
 
         sp = _seed_plan(self._plan_dir(tmp_path))
         assert len(sp) == 11
@@ -613,7 +615,7 @@ class TestSeedsReachTheRegression:
 
     def test_count_is_baseline_plus_explore(self, tmp_path):
         """探索种子**并进总次数** —— 跑法一样，只是目的不同。"""
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
                                                                   _seed_plan)
 
         lines = _seed_lines("npu_type_test", _seed_plan(self._plan_dir(tmp_path)))
@@ -622,14 +624,14 @@ class TestSeedsReachTheRegression:
 
     def test_a_test_the_plan_does_not_know_keeps_count_one(self, tmp_path):
         """**不编一个种子出来** —— 没声明就照旧跑一条。"""
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
                                                                   _seed_plan)
 
         assert _seed_lines("apb_uart_D_ADDR_0", _seed_plan(self._plan_dir(tmp_path))) \
             == ["    count: 1"]
 
     def test_no_plan_at_all_degrades_quietly(self, tmp_path):
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import (_seed_lines,
                                                                   _seed_plan)
 
         assert _seed_plan(tmp_path) == {}
@@ -637,13 +639,19 @@ class TestSeedsReachTheRegression:
 
     def test_the_seed_reaches_the_simulator(self):
         """`count` 展开出来的 N 条若不把 SEED 送进 vsim，跑的是**同一组随机数** ——
-        名字变了、跑的东西没变（`_seed_base` 的注释记着这个坑）。"""
-        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(
-            encoding="utf-8")
-        assert "+ntb_random_seed={{ SEED }}" in src
+        名字变了、跑的东西没变（`_seed_base` 的注释记着这个坑）。
+
+        模板已按后端拆到 `backend_profiles.py`；断言**渲染出来的命令**，
+        而不是某一处源码字面量 —— 否则换个实现位置就会误报。
+        """
+        from src.tools.execution.regression_tools.backend_profiles import render_sim_command
+
+        cmd = render_sim_command("questa", "top", "t")
+        assert "+ntb_random_seed={{ SEED }}" in cmd
 
     def test_the_regression_generator_actually_consults_the_plan(self):
-        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(
+        # 产物生成已拆到 generators/regression_gen.py
+        src = Path("src/tools/generation/uvm_tools/tool_find_spec_yaml/generators/regression_gen.py").read_text(
             encoding="utf-8")
         assert "seed_plan = _seed_plan(output_dir)" in src
         # 每条 test 都得过 `_seed_lines`，不能有一条自己写死 count: 1
@@ -699,7 +707,7 @@ class TestBatchTestsAreRunnable:
     NPU = Path("specs/npu_sched/casemodel.yaml")
 
     def test_the_model_yields_one_class_per_batch(self):
-        from src.tools.casemodel_tools.api import run_uvm_batches
+        from src.tools.generation.casemodel_tools.api import run_uvm_batches
 
         p = run_uvm_batches(self.NPU.read_text(encoding="utf-8"), "npu_sched")
         assert p["count"] == 11
@@ -707,7 +715,7 @@ class TestBatchTestsAreRunnable:
         assert p["batches"][1]["theme"] == "TH-B02"
 
     def test_a_batch_without_a_test_name_is_noted(self):
-        from src.tools.casemodel_tools.api import run_uvm_batches
+        from src.tools.generation.casemodel_tools.api import run_uvm_batches
         import yaml
 
         model = yaml.safe_load(self.NPU.read_text(encoding="utf-8"))
@@ -718,7 +726,7 @@ class TestBatchTestsAreRunnable:
 
     def test_the_template_renders_one_class_per_batch(self):
         """与 `_attr_test` 同形的宏 —— **类名必须取自 `batches[].name`**。"""
-        tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+        tpl = Path("src/tools/generation/uvm_tools/tool_uvm/templates/environment_templates"
                    "/test_templates/test_batch.sv.j2")
         assert tpl.is_file(), "批次 test 模板不在 —— `environment.batches` 没人渲染"
         text = tpl.read_text(encoding="utf-8")
@@ -729,7 +737,7 @@ class TestBatchTestsAreRunnable:
         assert "//" not in macro.replace("/*", "").replace("*/", "")
 
     def test_the_render_task_produces_it(self):
-        src = Path("src/tools/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
+        src = Path("src/tools/generation/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
         assert "ENVIRONMENT_BATCH_TEST_TEMPLATES" in src
         assert "if environment.batches:" in src
         assert "_normalize_batches" in src
@@ -745,7 +753,7 @@ class TestBatchTestsAreRunnable:
         filelist 只收 `env/tests/` 下的 **package**（`_packages_in`），`_batch_test.sv`
         不在那儿被单独编译 —— 这个 include 是它**唯一**进编译的路径。
         """
-        tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+        tpl = Path("src/tools/generation/uvm_tools/tool_uvm/templates/environment_templates"
                    "/test_templates/test_pkg.sv.j2").read_text(encoding="utf-8")
         assert "{%- if environment.batches %}" in tpl
         assert '`include "{{ environment.env_name }}_batch_test.sv"' in tpl
@@ -756,7 +764,7 @@ class TestBatchTestsAreRunnable:
         import shutil
 
         from src.layers.l1_infrastructure.layout import casemodel_path
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
 
         (tmp_path / "inputs").mkdir(parents=True)
         shutil.copy(self.NPU, casemodel_path(tmp_path))
@@ -777,7 +785,7 @@ class TestBatchTestsAreRunnable:
         import yaml
 
         from src.layers.l1_infrastructure.layout import casemodel_path
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _casemodel_test_lines
 
         (tmp_path / "inputs").mkdir(parents=True)
         shutil.copy(self.NPU, casemodel_path(tmp_path))
@@ -790,7 +798,7 @@ class TestBatchTestsAreRunnable:
         assert by_theme["TH-B02"]["policy"] == "p_th_b02_random"
 
     def test_the_regression_emits_one_test_per_batch(self):
-        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(encoding="utf-8")
+        src = Path("src/tools/generation/uvm_tools/tool_find_spec_yaml/generators/regression_gen.py").read_text(encoding="utf-8")
         block = src[src.index("批次测试（**一条 = 一个 UVM_TEST = 一个批次/专题**）"):]
         block = block[:block.index("loopback 测试")]
         assert "_sim_run_cmd(dut_top, bname)" in block, \
@@ -833,7 +841,7 @@ class TestModuleNameIsAlwaysAcii:
 
     def test_the_source_uses_an_ascii_identifier_class(self):
         """钉住源码里的写法 —— 改回 `\w+` 就红。"""
-        src = Path("src/tools/uvm_tools/tool_find_spec_yaml/main.py").read_text(
+        src = Path("src/tools/generation/uvm_tools/tool_find_spec_yaml/main.py").read_text(
             encoding="utf-8")
         start = src.index("# ── 1. 确定模块名 ──")
         block = src[start:start + 1400]
@@ -906,7 +914,7 @@ class TestTheGapSequenceIsRunnable:
     GAPS = [{"dimension": "toggle", "location": "queue_level[5:4]", "reason": "toggle"}]
 
     def _seq(self):
-        from src.tools.coverage_tools.main import generate_gap_directed_seq
+        from src.tools.checking.coverage_tools.main import generate_gap_directed_seq
 
         return generate_gap_directed_seq("npu_sched_in", self.GAPS,
                                          {"queue_level": 6},
@@ -929,7 +937,7 @@ class TestTheGapSequenceIsRunnable:
 
     def test_passive_agents_are_read_from_the_model(self, tmp_path):
         """活性**问模型**（`env.yaml` 的 `is_active`），不从生成物里猜。"""
-        from src.tools.lib.env_introspect import env_active_agents
+        from src.tools.common.lib.env_introspect import env_active_agents
 
         ydir = tmp_path / "inputs" / "yaml" / "uvm"
         ydir.mkdir(parents=True)
@@ -950,7 +958,7 @@ class TestTheGapSequenceIsRunnable:
         注错是**必然** fatal（passive agent 没有 sequencer），不注只是少一段激励
         —— 所以读不到时宁可一个都不注，并记日志。
         """
-        from src.tools.lib.env_introspect import env_active_agents
+        from src.tools.common.lib.env_introspect import env_active_agents
 
         assert env_active_agents(tmp_path) == {}
 
@@ -977,7 +985,7 @@ class TestTheRtlPortTableIsParsedWhole:
     NPU = Path("specs/npu_sched")
 
     def _ports(self, rtl_dir):
-        from src.tools.uvm_tools.tool_find_spec_yaml.main import _parse_rtl_module
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _parse_rtl_module
 
         return {p["name"]: p for p in _parse_rtl_module(rtl_dir, "")["ports"]}
 
@@ -1046,8 +1054,8 @@ class TestBatchConstraintComesFromTheModel:
     NPU = Path("specs/npu_sched/casemodel.yaml")
 
     def _both(self):
-        from src.tools.casemodel_tools.api import run_uvm_batches
-        from src.tools.casemodel_tools.associate import build_constraint
+        from src.tools.generation.casemodel_tools.api import run_uvm_batches
+        from src.tools.generation.casemodel_tools.associate import build_constraint
 
         text = self.NPU.read_text(encoding="utf-8")
         bc = build_constraint(text, ports=[{"name": "npu_sched_in",
@@ -1071,7 +1079,7 @@ class TestBatchConstraintComesFromTheModel:
         """
         import yaml
 
-        from src.tools.casemodel_tools.api import run_uvm_batches
+        from src.tools.generation.casemodel_tools.api import run_uvm_batches
 
         model = yaml.safe_load(self.NPU.read_text(encoding="utf-8"))
         model["themes"][0].pop("method", None)
@@ -1091,7 +1099,7 @@ class TestBatchConstraintComesFromTheModel:
         """
         import yaml
 
-        from src.tools.casemodel_tools.api import run_uvm_batches
+        from src.tools.generation.casemodel_tools.api import run_uvm_batches
 
         model = yaml.safe_load(self.NPU.read_text(encoding="utf-8"))
         model["themes"][0]["method"] = "NOPE"
@@ -1103,7 +1111,7 @@ class TestBatchConstraintComesFromTheModel:
 
     def test_the_macro_carries_the_policy_into_config_db(self):
         """宏要有 `tc_policy` 形参，且 set 到 config_db（**全局**通道）。"""
-        tpl = Path("src/tools/uvm_tools/tool_uvm/templates/environment_templates"
+        tpl = Path("src/tools/generation/uvm_tools/tool_uvm/templates/environment_templates"
                    "/test_templates/test_batch.sv.j2").read_text(encoding="utf-8")
         assert "tc_policy" in tpl
         assert 'uvm_config_db#(string)::set(null, "*", "batch_policy", tc_policy)' in tpl, \
@@ -1116,7 +1124,7 @@ class TestBatchConstraintComesFromTheModel:
         都会让宏定义在那里断掉 —— 而报的错在下游（`tc_name` 未声明），不在那一行。
         这条不变量没有别的守卫，且**静默**炸编译。
         """
-        from src.tools.uvm_tools.tool_uvm.gen_uvm import (
+        from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import (
             TEMPLATES_DIR, JinjaRenderer, _normalize_batches,
         )
 
@@ -1246,7 +1254,7 @@ class TestTheConstraintModelIsWrittenInTheSameWindow:
         import shutil
 
         from src.executors.verify.main import VerifyExecutor
-        from src.tools.uvm_tools.tool_uvm.gen_uvm import (
+        from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import (
             TEMPLATES_DIR, UVMGenerator, JinjaRenderer,
         )
 

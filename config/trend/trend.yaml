@@ -5,7 +5,7 @@
 # （验证管理系统 → 进度趋势）只读它、画成折线；改这里就能改趋势，
 # 不用重跑闭环（闭环的 journal 目前不采集 build 数量与 P0–P3 分层）。
 #
-# 读取入口：src/tools/trend_tools/api.py::run_trend
+# 读取入口：src/tools/flow/trend_tools/api.py::run_trend
 # 界面模块：src/workbench/modules/vms/trend/module.py
 #
 # ── 阶段（stages）──

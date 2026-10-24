@@ -27,12 +27,16 @@ prompt 库腐烂的路径和规则库一样，但更隐蔽：hint 是**文本**�
 """
 from __future__ import annotations
 
+from .sqlite_utils import connect
+
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-_DEFAULT_DB = Path(".signoffai") / "hint_stats.db"
+from config.paths import HINT_STATS_DB
+
+_DEFAULT_DB = HINT_STATS_DB
 
 #: 试过这么多次仍一次都没编译通过，才算"该淘汰的" —— 一次失败可能是运气
 MIN_TRIALS_TO_JUDGE = 2
@@ -50,7 +54,7 @@ class HintStats:
 
     def _connect(self) -> sqlite3.Connection:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self.db_path))
+        conn = connect(self.db_path)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS hint_outcomes (
                 hint_id TEXT NOT NULL PRIMARY KEY,

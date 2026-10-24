@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.tools.casemodel_tools.spec_bridge import case_model_from_spec, case_model_yaml
+from src.tools.generation.casemodel_tools.spec_bridge import case_model_from_spec, case_model_yaml
 
 SPEC = {
     "design_name": "apb_uart",
@@ -70,7 +70,7 @@ class TestUsableByTheCasemodelTools:
     """合成的模型要真能被 casemodel 工具吃下去 —— 结构合法才算桥接上了。"""
 
     def test_analyze_and_generate_succeed(self):
-        from src.tools.casemodel_tools.api import run_gaps, run_generate
+        from src.tools.generation.casemodel_tools.api import run_gaps, run_generate
 
         yaml_text = case_model_yaml(SPEC)
         gaps = run_gaps(yaml_text)
@@ -83,7 +83,7 @@ class TestUsableByTheCasemodelTools:
 
     def test_every_leaf_is_reached_by_a_theme(self):
         """专题得把每个叶子都打到 —— 否则评分器会报"叶子没有专题覆盖"。"""
-        from src.tools.casemodel_tools.api import run_gaps
+        from src.tools.generation.casemodel_tools.api import run_gaps
 
         gaps = run_gaps(case_model_yaml(SPEC))
         reasons = str(gaps.get("reasons", ""))

@@ -4,7 +4,7 @@
 # 这份模型的每一处都在踩 readem.md 十九节列的坑，用来验证
 # completeness.py 能把它们逐条抓出来。不要照抄。
 #
-#   python -m src.tools.casemodel_tools.cli analyze config/casemodel/examples/fc_flawed.yaml
+#   python -m src.tools.generation.casemodel_tools.cli analyze config/casemodel/examples/fc_flawed.yaml
 # ════════════════════════════════════════════════════════════
 
 version: "0.9"

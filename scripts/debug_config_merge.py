@@ -2,7 +2,7 @@
 import sys, tempfile
 sys.path.insert(0, 'src')
 from pathlib import Path
-from src.tools.uvm_tools.tool_uvm.gen_uvm import UVMGenerator, JinjaRenderer, TEMPLATES_DIR, YAMLLoader
+from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import UVMGenerator, JinjaRenderer, TEMPLATES_DIR, YAMLLoader
 
 od = Path('output_jiang_20260819_211653')
 gen = UVMGenerator(JinjaRenderer(TEMPLATES_DIR), od)

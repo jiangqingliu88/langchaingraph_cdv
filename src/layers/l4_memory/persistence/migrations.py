@@ -12,7 +12,9 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent.parent / "ic_verification.db"
+from config.paths import MAIN_DB
+
+DB_PATH = MAIN_DB
 
 MIGRATIONS = [
     {

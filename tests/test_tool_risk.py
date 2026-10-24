@@ -30,12 +30,12 @@ from src.layers.l2_orchestration.communication.tool_hub import _LC_SAFE_TOOLS
 #: 会注册 LangChain `@tool` 的模块 —— 与 `tool_hub._LC_TOOL_MODULES` 同源。
 #: 那份表是 `(模块名, 标签)`，这里只要文件路径（AST 要读文件）。
 TOOL_MODULES = (
-    "src/tools/assertion_tools/main.py",
-    "src/tools/coverage_tools/main.py",
-    "src/tools/debug_tools/main.py",
-    "src/tools/doc_tools/main.py",
-    "src/tools/spec_tools/main.py",
-    "src/tools/uvm_tools/agent_tools.py",
+    "src/tools/checking/assertion_tools/main.py",
+    "src/tools/checking/coverage_tools/main.py",
+    "src/tools/checking/debug_tools/main.py",
+    "src/tools/generation/doc_tools/main.py",
+    "src/tools/checking/spec_tools/main.py",
+    "src/tools/generation/uvm_tools/agent_tools.py",
 )
 
 #: **一定**有副作用的工具（写盘 / 起子进程 / 跑 EDA）。

@@ -92,7 +92,7 @@ class TodoModule(ModuleBase):
         self._fill(payload)
 
     def _fill(self, payload: Dict[str, Any]) -> None:
-        from src.tools.flow_tools.api import TODO_KINDS
+        from src.tools.flow.flow_tools.api import TODO_KINDS
 
         rows = payload.get("rows") or []
         tones = {}

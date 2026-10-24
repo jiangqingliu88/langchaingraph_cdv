@@ -19,7 +19,7 @@ import json
 import pytest
 
 from src.layers.l1_infrastructure.infrastructure import declared_tests_by_build
-from src.tools.regression_tools import sim_modes as sm
+from src.tools.execution.regression_tools import sim_modes as sm
 
 
 # ════════════════════════════════════════════════════════════
@@ -109,9 +109,23 @@ class _StubRegistry:
 def generated_yaml(tmp_path, monkeypatch) -> str:
     """真跑一遍生成器，返回 regression.yaml 的正文。"""
     from src.layers.l4_memory import testcase_registry as registry_mod
-    from src.tools.uvm_tools.tool_find_spec_yaml import main as gen
+    from src.tools.generation.uvm_tools.tool_find_spec_yaml import main as gen
 
     monkeypatch.setattr(registry_mod, "TestcaseRegistry", _StubRegistry)
+
+    # **fixture 自己的 include**：真实的 `common_base.yaml` 里 builds 段是
+    # 注释掉的（它只提供 variables/modes）。而本文件的第四组测试要验证
+    # "include 带进来的 foreign build 不会被调度" —— 没有 foreign build，
+    # 那条断言恒为空、测试失去意义（实测：common_base 改注释后它就红了）。
+    # 所以这里造一个**只给测试用**的 include：包含真实 common_base + 一个外部 build。
+    foreign_base = tmp_path / "common_base_with_foreign.yaml"
+    foreign_base.write_text(
+        f"include:\n  - {sm.common_base_path().as_posix()}\n"
+        "builds:\n"
+        "  - name: build_foreign_vcs\n"
+        "    run_cmd: 'VCS -full64 -sverilog'\n",
+        encoding="utf-8")
+    monkeypatch.setattr(sm, "common_base_path", lambda: foreign_base)
 
     out = tmp_path / "output_x"
     (out / "inputs" / "filelists").mkdir(parents=True)
@@ -146,6 +160,21 @@ class TestGeneratedManifest:
     def test_sim_command_renders_mode_opts(self, generated_yaml):
         assert '{{ MODE_OPTS | default("") }}' in generated_yaml
 
+    def test_declares_backend_and_plusargs_injection_point(self, generated_yaml):
+        """生成物必须显式声明后端，并给用户 plusargs 留注入点。
+
+        `simulator` 是保留键校验的选表依据；`{{ PLUSARGS }}` 是测试语义参数
+        的唯一落点 —— 少了它，用户参数会被生成期守卫拒绝（而不是静默丢）。
+        """
+        import yaml
+
+        doc = yaml.safe_load(generated_yaml)
+        assert doc.get("simulator") == "questa"
+        cmds = [t.get("run_cmd", "") for t in doc.get("tests", [])]
+        assert cmds
+        assert all("{{ PLUSARGS }}" in c for c in cmds), (
+            "有 run_cmd 的用例必须带 plusargs 注入点")
+
     def test_compile_command_is_coverage_gated(self, generated_yaml):
         """覆盖率是编译期使能的：`+cover` 必须挂在 build 上，且**按开关**。
 
@@ -161,9 +190,9 @@ class TestRenderedScripts:
     def _render(self, generated_yaml, tmp_path, enabled_modes):
         import shutil
 
-        from src.tools.regression_tools.regression_framework.core.config import (
+        from src.tools.execution.regression_tools.regression_framework.core.config import (
             ConfigBuilder)
-        from src.tools.regression_tools.regression_framework.generators.shell import (
+        from src.tools.execution.regression_tools.regression_framework.generators.shell import (
             ShellGenerator)
 
         yml = tmp_path / "inputs" / "yaml"
@@ -251,7 +280,7 @@ class TestModeExpansionIsTableDriven:
             "cov_wave_opt": "-coverage -qwavedb", "upf_opt": ""}
 
     def _expand(self, selection):
-        from src.tools.regression_tools.regression_framework.core.config import (
+        from src.tools.execution.regression_tools.regression_framework.core.config import (
             expand_modes,
         )
         applied, opts, warnings, flags = expand_modes(
@@ -324,7 +353,7 @@ class TestForeignBuildsStayOut:
         这条不变量是 `run_regression` 那道白名单的地基：一旦某个 test 声明到了
         common_base 的 build 上，那条 `VCS …` 命令就会被真跑，整轮回归全崩。
         """
-        from src.tools.regression_tools.regression_framework.core.config import (
+        from src.tools.execution.regression_tools.regression_framework.core.config import (
             ConfigBuilder)
 
         yml = tmp_path / "inputs" / "yaml"
@@ -357,7 +386,7 @@ class TestRunRequestNormalisation:
         让这条测试跟着改（那说明默认值散成了两份）。
         """
         from src.layers.l2_orchestration.run_service import _normalize_sim_modes
-        from src.tools.regression_tools import sim_modes as sm
+        from src.tools.execution.regression_tools import sim_modes as sm
 
         assert _normalize_sim_modes(None) == [sm.DEFAULT_MODE]
 
@@ -391,7 +420,7 @@ class TestRunRequestNormalisation:
 
 class TestWaveColumn:
     def _status(self, root):
-        from src.tools.flow_tools.api import run_regression_status
+        from src.tools.flow.flow_tools.api import run_regression_status
 
         return run_regression_status(str(root))
 
@@ -458,7 +487,7 @@ class TestCoverageColumn:
     """覆盖率列 —— 口径与波形列一致（记录 > 现场，来源标出来）。"""
 
     def _status(self, root):
-        from src.tools.flow_tools.api import run_regression_status
+        from src.tools.flow.flow_tools.api import run_regression_status
 
         return run_regression_status(str(root))
 
@@ -492,7 +521,7 @@ class TestArtifactFacts:
     """每行还带**大小与时间** —— "逐条校对"那两页要拿它判断这份产物新不新。"""
 
     def _status(self, root):
-        from src.tools.flow_tools.api import run_regression_status
+        from src.tools.flow.flow_tools.api import run_regression_status
 
         return run_regression_status(str(root))
 
@@ -536,7 +565,7 @@ class TestWorkbenchSelection:
 
     def test_missing_store_falls_back_to_the_tool_default(self, monkeypatch, tmp_path):
         """界面侧没存过 → 跟工具层的默认走（不自己定一份）。"""
-        from src.tools.regression_tools import sim_modes as tool_modes
+        from src.tools.execution.regression_tools import sim_modes as tool_modes
         from src.workbench import sim_modes as ui
 
         monkeypatch.setattr(ui, "STORE", tmp_path / "nope.json")
@@ -585,7 +614,7 @@ class TestTheTagFilterAcceptsSeedExpandedNames:
     """
 
     def _matcher(self):
-        from src.tools.regression_tools.regression_framework.core.config import (
+        from src.tools.execution.regression_tools.regression_framework.core.config import (
             make_tag_matcher,
         )
 
@@ -619,7 +648,7 @@ class TestTheTagFilterAcceptsSeedExpandedNames:
 
         规则必须是"**把所有前导 `test_` 都削掉**"。
         """
-        from src.tools.regression_tools.regression_framework.core.config import (
+        from src.tools.execution.regression_tools.regression_framework.core.config import (
             strip_test_prefix,
         )
 
@@ -646,7 +675,7 @@ def test_cov_wave_coverstore_is_test_associated():
     少了它 Questa 落成 `(null).data`；之后按用例打开覆盖率时，vcover 找不到
     对应 test 名 —— 功能覆盖率会**静默读不到**（实测）。
     """
-    from src.tools.regression_tools import sim_modes
+    from src.tools.execution.regression_tools import sim_modes
 
     value = sim_modes.get("cov+wave").value
     assert "-coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME}" in value

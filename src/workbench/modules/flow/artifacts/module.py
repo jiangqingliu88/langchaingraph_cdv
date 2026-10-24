@@ -419,7 +419,7 @@ class ArtifactsModule(ModuleBase):
         `SchemaChecker`），所以清单上那个 ✗ 和这里列出来的诊断必然一致 ——
         两处各算一遍迟早会不一致。
         """
-        from src.tools.uvm_tools.tool_uvm.schema_check import get_checker
+        from src.tools.generation.uvm_tools.tool_uvm.schema_check import get_checker
 
         item = self._selected() or {}
         if not item.get("schema"):

@@ -20,13 +20,17 @@
 """
 from __future__ import annotations
 
+from .sqlite_utils import connect
+
 import sqlite3
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-_DEFAULT_DB = Path(".signoffai") / "reference_finder_cache.db"
+from config.paths import REFERENCE_FINDER_CACHE_DB
+
+_DEFAULT_DB = REFERENCE_FINDER_CACHE_DB
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS rev_verdict (
@@ -53,7 +57,7 @@ class ReferenceFinderCache:
         self.db_path = Path(db_path) if db_path else _DEFAULT_DB
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self._conn = connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.executescript(_SCHEMA)

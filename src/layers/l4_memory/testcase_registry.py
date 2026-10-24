@@ -8,13 +8,15 @@ TestCaseRegistry —— 用例状态库（sqlite）：生命周期管理 + 优�
 
 用法:
     from src.layers.l4_memory.testcase_registry import TestcaseRegistry
-    reg = TestcaseRegistry(".signoffai/testcase_registry.db")
+    reg = TestcaseRegistry("database/testcase_registry.db")
     reg.register("test_axi_rd_burst_len_16", purpose="functional", scenario="burst_read",
                  priority="P0", coverage_bin="rd_burst_len[16]")
     reg.update_status("test_axi_rd_burst_len_16", "passed", result={"sim_time": 80, "new_coverage": 3})
     order = reg.get_priority_order(stage=2, limit=10)   # 按规划目标排序
 """
 from __future__ import annotations
+
+from .sqlite_utils import connect
 
 import json
 import sqlite3
@@ -84,14 +86,16 @@ class TestcaseRegistry:
     """用例状态库（同步 sqlite，跨 run 持久）。"""
 
     def __init__(self, db_path: Optional[str | Path] = None):
-        self.db_path = Path(db_path) if db_path else Path(".signoffai") / "testcase_registry.db"
+        from config.paths import TESTCASE_DB
+
+        self.db_path = Path(db_path) if db_path else TESTCASE_DB
         self._lock = threading.Lock()
         self._conn: Optional[sqlite3.Connection] = None
 
     def _connect(self) -> sqlite3.Connection:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn = connect(self.db_path)
             self._conn.executescript(_SCHEMA)
             self._migrate_columns(self._conn)
             # 初始化 portfolio 默认权重（幂等）
@@ -110,7 +114,7 @@ class TestcaseRegistry:
         #: 用例属于哪个模块 —— 原来只把模块名**文本**拼进 `name`，
         #: 于是"这个用例是哪个设计的"只能靠解析字符串，没法按模块查/删/对账。
         ("module", "TEXT NOT NULL DEFAULT ''"),
-        #: 注册时对应的 **RTL 版本号**（`.signoffai/lineage.db` 的 `version_no`）。
+        #: 注册时对应的 **RTL 版本号**（`database/lineage.db` 的 `version_no`）。
         #: 用例是有版本的：RTL 换了版，之前那批用例是在哪版上定的就没法回答了。
         #: NULL = 不知道（老记录、或这一轮没有 RTL）—— 不编一个 0 出来。
         ("rtl_version_no", "INTEGER"),
@@ -122,7 +126,7 @@ class TestcaseRegistry:
 
         为什么不能只改 `_SCHEMA` 里的 `CREATE TABLE`：那份 DDL 是
         `CREATE TABLE IF NOT EXISTS` —— 老库已经存在，整条语句被跳过，
-        新列**永远长不出来**。而 `.signoffai/testcase_registry.db` 是跨 run 累积的，
+        新列**永远长不出来**。而 `database/testcase_registry.db` 是跨 run 累积的，
         现场一定有老库。
         """
         have = {r[1] for r in conn.execute("PRAGMA table_info(testcase_registry)")}

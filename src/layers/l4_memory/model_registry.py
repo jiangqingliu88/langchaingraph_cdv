@@ -36,7 +36,7 @@ ModelRegistry —— **参考模型库**（sqlite）：TLM 1.0 事务级组件�
 
 用法:
     from src.layers.l4_memory.model_registry import ModelRegistry
-    reg = ModelRegistry(".signoffai/model_registry.db")
+    reg = ModelRegistry("database/model_registry.db")
     reg.register("apb_slave", trans_in="apb_master_seq_item",
                  trans_out="apb_master_seq_item", protocol="apb",
                  semantics="写 regs[paddr]=pwdata；读 prdata=regs[paddr]（越界回 0）",
@@ -45,6 +45,8 @@ ModelRegistry —— **参考模型库**（sqlite）：TLM 1.0 事务级组件�
     reg.to_util_component("apb_slave")      # → 直接可写进 env.yaml 的那一节
 """
 from __future__ import annotations
+
+from .sqlite_utils import connect
 
 import json
 import sqlite3
@@ -103,14 +105,16 @@ class ModelRegistry:
     """
 
     def __init__(self, db_path: Optional[str | Path] = None):
-        self.db_path = Path(db_path) if db_path else Path(".signoffai") / "model_registry.db"
+        from config.paths import MODEL_DB
+
+        self.db_path = Path(db_path) if db_path else MODEL_DB
         self._lock = threading.Lock()
         self._conn: Optional[sqlite3.Connection] = None
 
     def _connect(self) -> sqlite3.Connection:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn = connect(self.db_path)
             self._conn.executescript(_SCHEMA)
         return self._conn
 
