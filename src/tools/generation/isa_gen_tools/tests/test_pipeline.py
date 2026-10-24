@@ -294,7 +294,7 @@ class TestExampleFiles:
         root = Path(__file__).resolve().parents[5]
         found = []
         for folder in (root / "config" / "isa_gen" / "examples",
-                       root / "src" / "tools" / "isa_gen_tools" / "examples"):
+                       root / "src" / "tools" / "generation" / "isa_gen_tools" / "examples"):
             found.extend(sorted(folder.glob("*.yaml")))
         return found
 

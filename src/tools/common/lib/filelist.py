@@ -56,7 +56,7 @@ def _base_pkg_lines() -> list:
     而每个 agent 包都 `import common_typedefs_pkg::*`，vlog 于是报一串
     `Could not find the package (common_typedefs_pkg)`。clk_and_rst / scb 同理。
     """
-    base = _repo_root() / "src" / "tools" / "uvm_tools" / "tool_uvm" / "base_pkg"
+    base = _repo_root() / "src" / "tools" / "generation" / "uvm_tools" / "tool_uvm" / "base_pkg"
     out = []
     for sub in ("clk_and_rst", "scb", "common_typedefs"):
         d = base / sub
