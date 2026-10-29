@@ -603,6 +603,26 @@ def replay_tier_a(package_dir: Path) -> Dict[str, Any]:
     }
 
 
+def check_package(package_dir: Path) -> Dict[str, Any]:
+    """一次把证据包讲清楚：完整性 + Tier A 重算 + recipe 可用性。
+
+    纯读（不跑 EDA、不写盘），供工作台“校验证据包”按钮与自动化调用。
+    """
+    pkg = Path(package_dir)
+    if not (pkg / "manifest.json").is_file():
+        return {"available": False, "package_dir": str(pkg),
+                "note": "没有 manifest.json —— 这次运行还没生成证据包"}
+    recipe = load_recipe(pkg)
+    return {
+        "available": True,
+        "package_dir": str(pkg),
+        "verify": verify_package(pkg),
+        "replay": replay_tier_a(pkg),
+        "recipe": recipe,
+        "recipe_issues": validate_recipe(recipe),
+    }
+
+
 def compare_packages(a: Path, b: Path) -> Dict[str, Any]:
     """双环境判定一致性 —— 同一份证据在两种环境各判一次，比较结论。
 

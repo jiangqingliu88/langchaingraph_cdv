@@ -109,3 +109,35 @@ def test_recipe_validation_names_missing_fields():
     assert "schema" in joined
     assert "tier_a" in joined
     assert "tier_b.requires_eda" in joined
+
+
+def test_check_package_summarises_integrity_replay_and_recipe(tmp_path):
+    from src.layers.l2_orchestration.evidence.signoff_package import check_package
+
+    root = _run_dir(tmp_path)
+    write_package(root, _manifest(root))
+    result = check_package(root / "signoff_evidence")
+    assert result["available"] is True
+    assert result["verify"]["ok"] is True
+    assert result["replay"]["ok"] is True
+    assert result["recipe"]["schema"] == "signoff_replay_recipe_v2"
+    assert result["recipe_issues"] == []
+
+
+def test_check_package_is_honest_when_package_is_missing(tmp_path):
+    from src.layers.l2_orchestration.evidence.signoff_package import check_package
+
+    result = check_package(tmp_path / "no_pkg")
+    assert result["available"] is False
+    assert "manifest.json" in result["note"]
+
+
+def test_workbench_binding_points_at_check_package():
+    """GUI 的「校验证据包」按钮经绑定表调用 —— 路径写错要在这里红。"""
+    from src.workbench.bridge.catalog import by_name
+    from src.workbench.loader import resolve
+
+    binding = by_name("evidence.check_package")
+    assert binding is not None and binding.pure
+    target = resolve(binding.target)
+    assert callable(target)

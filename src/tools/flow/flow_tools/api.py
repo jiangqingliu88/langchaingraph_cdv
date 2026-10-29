@@ -829,6 +829,16 @@ def _artifacts_of(root: Path, role: str) -> tuple:
 # 决策轨迹
 # ════════════════════════════════════════════════════════════════
 
+#: 决策来源 → 界面可读标签（`Action.source`，见 decision_engine）。
+_SOURCE_TITLES = {
+    "rule_hard": "硬规则",
+    "rule": "规则",
+    "rl_suggested": "RL 采纳",
+    "rl_overridden": "RL 被退回",
+    "terminal": "终态",
+}
+
+
 def run_decision_trace(run_dir: str = "") -> Dict[str, Any]:
     """每轮的决策与驾驭裁决。
 
@@ -855,12 +865,13 @@ def run_decision_trace(run_dir: str = "") -> Dict[str, Any]:
         stage = str(event.get("stage", ""))
         if event.get("kind") not in ("stage.finished", "stage.failed"):
             continue
-        if stage not in ("decide", "governor"):
+        if stage not in ("decide", "governor", "coverage"):
             continue
         round_no = int(event.get("round", 0) or 0)
         row = by_round.setdefault(round_no, {
             "round": round_no, "action": "", "reason": "", "priority": "",
-            "params": "", "governance": ""})
+            "params": "", "governance": "", "source": "", "source_label": "",
+            "reward": ""})
         delta = (event.get("payload") or {}).get("delta") or {}
         if stage == "decide":
             action = delta.get("pending_action") or {}
@@ -868,11 +879,19 @@ def run_decision_trace(run_dir: str = "") -> Dict[str, Any]:
                 row["action"] = str(action.get("action_type", "") or "")
                 row["reason"] = str(action.get("reason", "") or "")
                 row["priority"] = str(action.get("priority", "") or "")
+                source = str(action.get("source", "") or "")
+                row["source"] = source
+                row["source_label"] = _SOURCE_TITLES.get(source, source)
                 params = action.get("params")
                 row["params"] = ("、".join(f"{k}={v}" for k, v in sorted(params.items()))
                                  if isinstance(params, dict) and params else "")
         elif stage == "governor":
             row["governance"] = str(delta.get("governance_outcome", "") or "")
+        elif stage == "coverage":
+            reward = delta.get("sim_reward") or {}
+            if isinstance(reward, dict) and reward.get("total") is not None:
+                row["reward"] = (f"{reward.get('total'):g}"
+                                 f"（最弱 {reward.get('weakest') or '?'}）")
 
     rounds = [by_round[k] for k in sorted(by_round)]
     note = "" if rounds else ("日志里没有 decide/governor 阶段事件 —— 这次运行可能停在"
@@ -1250,6 +1269,7 @@ def _evidence_v2(root: Path) -> Dict[str, Any]:
     v1 = _read_json(root / "signoff_evidence.json")
     seed = _read_json(root / "coverage" / "seed_diversity.json")
     constraint = _read_json(root / "coverage" / "constraint_status.json")
+    recipe = _read_json(root / "signoff_evidence" / "replay" / "recipe.json")
     approvals = _read_jsonl(root / "approvals.jsonl")
     freeze = root / "freeze.json"
 
@@ -1273,6 +1293,11 @@ def _evidence_v2(root: Path) -> Dict[str, Any]:
                       or _read_json(root / "coverage" / "sim_reward.json") or {},
         "knowledge_graph": (manifest or {}).get("knowledge_graph")
                           or _read_json(root / "coverage" / "knowledge_graph.json") or {},
+        "recipe": {
+            "schema": (recipe or {}).get("schema", ""),
+            "tier_a": (recipe or {}).get("tier_a") or {},
+            "tier_b": (recipe or {}).get("tier_b") or {},
+        } if recipe else {},
         "reference_models": (manifest or {}).get("reference_models") or {},
         "lineage": (manifest or {}).get("lineage") or {},
         "regression_config": (manifest or {}).get("regression_config") or {},

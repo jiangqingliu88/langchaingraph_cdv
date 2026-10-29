@@ -321,6 +321,12 @@ BINDINGS: List[ToolBinding] = [
         kind="json",
         doc="读回项目级人工变更链 + 完整性自校验（只读，pure）",
     ),
+    ToolBinding(
+        name="evidence.check_package",
+        target="src.layers.l2_orchestration.evidence.signoff_package:check_package",
+        kind="json",
+        doc="签核证据包 → 逐文件哈希校验 + Tier A 重算 + replay recipe 校验（纯读）",
+    ),
 
     # ══ 验证流程（闭环运行）═══════════════════════════════════════
     # 界面**不直接 import** graph.py / execution.py —— 只能经这张白名单到 L2。

@@ -2,7 +2,7 @@
 
 > 基线：2026-10-29
 >
-> 全量单测：**1028 passed / 2 skipped**；工作台 **715 passed**
+> 全量单测：**1031 passed / 2 skipped**；工作台 **716 passed**
 >
 > 端到端实测：`output_e2e_guards2_jiang_20261029_232435`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过
 
@@ -607,7 +607,10 @@ vagent evidence compare <pkg-a> <pkg-b>
 
 - `app.py` / `bootstrap.py` / `bus.py`
 - `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`
-- 签核页同时展示：门禁、六层证据链、**证据包 v2**（哈希 / caveat / 计划与单测覆盖率 / 种子多样性 / **粗连续奖励** / **运行时知识图规模** / 参考模型与基线 / 审批 / Freeze / 回放命令）
+- 签核页同时展示：门禁、六层证据链、**证据包 v2**（哈希 / caveat / 计划与单测覆盖率 / 种子多样性 / **粗连续奖励 + 权重** / **运行时知识图规模** / 参考模型与基线 / 审批 / Freeze / **recipe v2 与 Tier B EDA 依赖** / 回放命令）
+- 签核页工具栏新增 **「校验证据包」**：调 `evidence.check_package`（纯读），展示完整性、Tier A 重算、recipe 校验结果
+- 决策轨迹页新增 **「来源」**（硬规则 / 规则 / RL 采纳 / RL 被退回 / 终态）与 **「奖励」**（每轮 `sim_reward.total` + 最弱层）两列
+- GUI 的工具调用走 `bridge/catalog.py` 白名单；工具注册表启动摘要只在 CLI（GUI 不需要 bootstrap 全量工具）
 - 与 CLI/流水线通过文件契约（run 目录、manifest、evidence）解耦，**不共享内存 state**
 - 波形：`.wlf` → `vsim -view`；`qwavedb` → Visualizer + 按需 `vopt -designfile`
 - 覆盖率：先 `materialize_ucdb()` 再开 Visualizer
@@ -622,6 +625,7 @@ vagent evidence compare <pkg-a> <pkg-b>
 | 新 LangGraph 节点 | `nodes/` + `graph.py` 的 `NODE_FUNCS` + 边表 + `stages.py` | executor 内部 |
 | 新 executor | `src/executors/<role>/main.py` + `@register_executor` | 图拓扑（除非要接节点） |
 | 新工具 | 实现 `ITool` + 注册到 ToolHub | 调用方 |
+| 新 GUI 工具 | `src/workbench/bridge/catalog.py` 加 `ToolBinding` + 模块 `tool.name` | CLI / 流水线 |
 | 新工具包 | 放对应板块目录（`generation/checking/execution/flow/integration/common`）+ 在 `src/tools/boards.py` 登记 | 其它工具包 |
 | 新 realization | 注册 `RealizationStrategy` | `stages.py` |
 | 新约束来源 | 注册 `ConstraintCompiler` | `build_constraint` |
@@ -636,10 +640,10 @@ vagent evidence compare <pkg-a> <pkg-b>
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1028 passed / 2 skipped
+python -m pytest tests/ -q                            # 1031 passed / 2 skipped
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
-python -m pytest src/workbench/tests -q               # 715 passed
+python -m pytest src/workbench/tests -q               # 716 passed
 ```
 
 关键守卫：

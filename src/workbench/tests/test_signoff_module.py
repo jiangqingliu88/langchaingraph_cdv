@@ -61,7 +61,10 @@ def _run_dir(tmp_path: Path) -> Path:
         "tp_matrix": {"counts": {"HIT": 37, "MISS": 0}},
         "seed_diversity": {"verdict": "DIVERSE", "seeds": [1, 2],
                            "stable_bins": 12, "variable_bins": 57},
-        "sim_reward": {"total": 0.8125, "weakest": "coverage"},
+        "sim_reward": {"total": 0.8125, "weakest": "coverage",
+                       "weights": {"compile": 0.25, "regression": 0.35,
+                                   "coverage": 0.4},
+                       "weight_issues": []},
         "knowledge_graph": {"path": "coverage/knowledge_graph.json",
                             "sha256": "d" * 64,
                             "summary": {"nodes": 9, "edges": 8},
@@ -77,6 +80,12 @@ def _run_dir(tmp_path: Path) -> Path:
         "action": "approve", "approver": "human:test",
         "approval_hash": "c" * 64,
     }) + "\n", encoding="utf-8")
+    (root / "signoff_evidence" / "replay").mkdir()
+    (root / "signoff_evidence" / "replay" / "recipe.json").write_text(json.dumps({
+        "schema": "signoff_replay_recipe_v2",
+        "tier_a": {"requires_eda": False, "command": "python replay/replay.py"},
+        "tier_b": {"requires_eda": True, "eda_tools": ["vsim", "vcover"]},
+    }, ensure_ascii=False), encoding="utf-8")
     return root
 
 
@@ -96,6 +105,15 @@ def _patch_tools(module, run_dir) -> None:
             return {"dir": str(run_dir)}
         if tool == "flow.signoff":
             return run_signoff(str(run_dir))
+        if tool == "evidence.check_package":
+            return {
+                "available": True,
+                "verify": {"ok": True, "package_hash": "a" * 64},
+                "replay": {"ok": True, "recorded_verdict": "PASS_WITH_CAVEAT",
+                           "recomputed_verdict": "PASS_WITH_CAVEAT"},
+                "recipe": {"schema": "signoff_replay_recipe_v2"},
+                "recipe_issues": [],
+            }
         raise AssertionError(f"没打桩的工具：{tool}")
 
     module.run_tool = fake_run_tool
@@ -171,13 +189,32 @@ class TestEvidencePackage:
         assert "95.23" in text and "68.57" in text
         assert "DIVERSE" in text
         assert "0.8125" in text and "coverage" in text   # 粗连续奖励 + 最弱层
+        assert "compile" in text and "0.25" in text      # 奖励权重
         assert "9 节点 / 8 边" in text                   # 运行时知识图规模
+        assert "signoff_replay_recipe_v2" in text        # recipe v2
+        assert "vsim" in text and "vcover" in text       # Tier B 依赖
         assert "missing" in text.lower()          # 没有 freeze.json
         assert "approve" in text
 
     def test_replay_command_is_available_for_copy(self, loaded):
         assert "replay.py" in loaded.replay_cmd
         assert loaded.evidence_dir.endswith("signoff_evidence")
+
+    def test_evidence_package_can_be_checked_from_gui(self, loaded, monkeypatch):
+        from PySide6.QtWidgets import QMessageBox
+
+        seen = {}
+        monkeypatch.setattr(
+            QMessageBox, "information",
+            staticmethod(lambda parent, title, text: seen.update(title=title, text=text)))
+        actions = [a.text() for a in loaded.create_actions()]
+        assert "校验证据包" in actions
+
+        loaded._check_evidence()
+        assert seen["title"] == "证据包校验"
+        assert "完整性：✓" in seen["text"]
+        assert "Tier A：✓" in seen["text"]
+        assert "signoff_replay_recipe_v2" in seen["text"]
 
 
 class TestColors:

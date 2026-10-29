@@ -10,12 +10,17 @@ from pathlib import Path
 import pytest
 
 EVENTS = [
-    {"seq": 1, "kind": "stage.finished", "stage": "decide", "agent": "coverage",
+    {"seq": 1, "kind": "stage.finished", "stage": "coverage", "agent": "coverage",
+     "title": "覆盖率", "round": 1, "status": "ok", "duration_s": 1.0,
+     "payload": {"delta": {"sim_reward": {
+         "total": 0.8125, "weakest": "coverage"}}}},
+    {"seq": 2, "kind": "stage.finished", "stage": "decide", "agent": "coverage",
      "title": "决策", "round": 1, "status": "ok", "duration_s": 0.3,
      "payload": {"delta": {"pending_action": {
          "action_type": "GENERATE_DIRECTED_TEST", "reason": "功能覆盖 62%",
-         "priority": 2, "params": {"dimension": "D_baud"}}}}},
-    {"seq": 2, "kind": "stage.finished", "stage": "governor", "agent": "",
+         "priority": 2, "params": {"dimension": "D_baud"},
+         "source": "rl_suggested"}}}},
+    {"seq": 3, "kind": "stage.finished", "stage": "governor", "agent": "",
      "title": "驾驭", "round": 1, "status": "ok", "duration_s": 0.1,
      "payload": {"delta": {"governance_outcome": "proceed"}}},
 ]
@@ -101,6 +106,9 @@ class TestDecisionTrace:
         assert row["action"] == "GENERATE_DIRECTED_TEST"
         assert row["governance"] == "proceed"
         assert row["reason"] == "功能覆盖 62%"
+        assert row["source"] == "rl_suggested"
+        assert row["source_label"] == "RL 采纳"
+        assert row["reward"] == "0.8125（最弱 coverage）"
 
     def test_params_are_joined(self, decision):
         assert decision.model.rows[0]["params"] == "dimension=D_baud"

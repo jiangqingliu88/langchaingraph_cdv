@@ -27,8 +27,8 @@ from typing import Any, Dict, List
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor
-from PySide6.QtWidgets import (QApplication, QLabel, QSplitter, QVBoxLayout,
-                               QWidget)
+from PySide6.QtWidgets import (QApplication, QLabel, QMessageBox, QSplitter,
+                               QVBoxLayout, QWidget)
 
 from ....ui import theme
 from ....ui.helpers import tables as table_helpers
@@ -55,7 +55,8 @@ class SignoffModule(ModuleBase):
 
     HINT = ("选一次运行（左边「运行历史」），这里显示它能不能签核："
             "上面是 audit 的门禁，中间是六层证据链，下面是证据包 v2 "
-            "（哈希 / caveat / 覆盖率 / 种子 / 审批 / Freeze / 回放）。")
+            "（哈希 / caveat / 覆盖率 / 种子 / 奖励 / 知识图 / 审批 / Freeze / 回放）。"
+            "工具栏「校验证据包」会重算 Tier A 并检查 replay recipe。")
 
     def __init__(self, ctx, spec) -> None:
         super().__init__(ctx, spec)
@@ -148,7 +149,36 @@ class SignoffModule(ModuleBase):
         copy_replay = QAction("复制回放命令", self.content)
         copy_replay.triggered.connect(
             lambda: QApplication.clipboard().setText(self.replay_cmd))
-        return [action, copy_dir, copy_replay]
+        check = QAction("校验证据包", self.content)
+        check.triggered.connect(self._check_evidence)
+        return [action, copy_dir, copy_replay, check]
+
+    def _check_evidence(self) -> None:
+        """跑一次证据包自校验（Tier A 重算 + recipe schema）。纯读。"""
+        if not self.evidence_dir:
+            QMessageBox.information(self.content, "证据包校验",
+                                    "还没选中运行或这次运行没有证据包。")
+            return
+        payload = self.run_tool("evidence.check_package", quiet=True,
+                                package_dir=self.evidence_dir)
+        if not isinstance(payload, dict):
+            return
+        if not payload.get("available"):
+            QMessageBox.information(self.content, "证据包校验",
+                                    str(payload.get("note") or "没有 manifest.json"))
+            return
+        verify = payload.get("verify") or {}
+        replay = payload.get("replay") or {}
+        issues = payload.get("recipe_issues") or []
+        text = (
+            f"完整性：{'✓' if verify.get('ok') else '✗'}  "
+            f"package_hash {str(verify.get('package_hash') or '')[:16]}…\n"
+            f"Tier A：{'✓' if replay.get('ok') else '✗'}  "
+            f"{replay.get('recorded_verdict')} → {replay.get('recomputed_verdict')}\n"
+            f"recipe：{(payload.get('recipe') or {}).get('schema') or '?'}"
+            + (f"\n配置问题：{len(issues)} 条（{issues[0]}）" if issues else "")
+        )
+        QMessageBox.information(self.content, "证据包校验", text)
 
     # ════════════════════════════════════════════════════════
     # 平台钩子
@@ -245,6 +275,7 @@ class SignoffModule(ModuleBase):
         sd = ev.get("seed_diversity") or {}
         reward = ev.get("sim_reward") or {}
         kg = ev.get("knowledge_graph") or {}
+        recipe = ev.get("recipe") or {}
         rm = ev.get("reference_models") or {}
         lin = ev.get("lineage") or {}
         cst = ev.get("constraint_status") or {}
@@ -269,7 +300,10 @@ class SignoffModule(ModuleBase):
             f"TP {counts or '{}'}",
             f"种子：{sd.get('verdict') or '?'}（{len(seeds)} seeds · "
             f"稳定 {sd.get('stable_bins', '?')} / 种子敏感 {sd.get('variable_bins', '?')}）",
-            f"奖励：{reward.get('total', '?')}（最弱层 {reward.get('weakest') or '?'}）"
+            (f"奖励：{reward.get('total', '?')}（最弱层 {reward.get('weakest') or '?'}）"
+             + (f" · 权重 {reward.get('weights')}" if reward.get("weights") else "")
+             + (f" · 配置问题 {len(reward.get('weight_issues') or [])} 条"
+                if reward.get("weight_issues") else ""))
             if reward else "奖励：未计算（老 run）",
             (f"知识图：{kg.get('summary', {}).get('nodes', '?')} 节点 / "
              f"{kg.get('summary', {}).get('edges', '?')} 边 · "
@@ -282,7 +316,10 @@ class SignoffModule(ModuleBase):
             + (f"（最新 {appr.get('action')} by {appr.get('approver') or '?'}）"
                if appr else "")
             + f" · Freeze：{'present' if freeze.get('present') else 'missing'}",
-            f"回放：{self.replay_cmd or '（无）'}",
+            f"回放：{self.replay_cmd or '（无）'}"
+            + (f" · recipe {recipe.get('schema') or '?'} · Tier B 需 "
+               f"{'、'.join((recipe.get('tier_b') or {}).get('eda_tools') or []) or '?'}"
+               if recipe else " · recipe 未生成（老 run）"),
         ]
         self.evidence_label.setText("\n".join(lines))
         self.evidence_label.setStyleSheet(f"color: {theme.current().muted};")

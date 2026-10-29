@@ -26,6 +26,8 @@ from ...base import ModuleBase
 COLUMNS = (
     ("round", "轮次", 60, CENTER),
     ("action", "决策动作", 180, LEFT),
+    ("source_label", "来源", 90, CENTER),
+    ("reward", "奖励", 140, CENTER),
     ("priority", "优先级", 70, CENTER),
     ("governance", "驾驭裁决", 100, CENTER),
     ("reason", "理由", 300, LEFT),
@@ -36,8 +38,9 @@ COLUMNS = (
 class DecisionTraceModule(ModuleBase):
     """一次运行的逐轮决策轨迹。"""
 
-    HINT = ("选一次运行，这里按轮次列出决策动作与驾驭层裁决。"
-            "来源是运行日志的 decide / governor 阶段事件。")
+    HINT = ("选一次运行，这里按轮次列出决策动作、来源（硬规则 / 规则 / RL 采纳 / "
+            "RL 被退回 / 终态）、粗连续奖励与驾驭层裁决。"
+            "来源是运行日志的 decide / governor / coverage 阶段事件。")
 
     def __init__(self, ctx, spec) -> None:
         super().__init__(ctx, spec)
