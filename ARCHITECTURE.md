@@ -1,8 +1,8 @@
 # SignOffAI 代码架构（当前实现）
 
-> 基线：2026-10-24  
-> 全量单测：**963 passed / 2 skipped**  
-> 端到端实测：`output_e2e_post_refactor2_jiang_20261024_104437`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**
+> 基线：2026-10-29  
+> 全量单测：**982 passed / 2 skipped**；工作台 **715 passed**  
+> 端到端实测：`output_e2e_graph_jiang_20261029_210906`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过
 
 本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
 
@@ -47,7 +47,10 @@ flowchart TB
     EXEC --> TOOLS["ToolHub / ITool<br/>l2_orchestration/communication"]
     TOOLS --> EDA["QuestaSim<br/>vlog / vopt / vsim / vcover"]
     TOOLS --> FS["文件系统<br/>RTL / UVM / regression / coverage"]
-    GRAPH --> DEC["L3 决策<br/>decision_engine / brain"]
+    GRAPH --> DEC["L3 决策<br/>decision_engine / brain / reward"]
+    EXEC --> KG["运行时知识图<br/>knowledge/runtime.py"]
+    KG --> DEC
+    KG --> EVID
     DEC --> MEM["L4 记忆<br/>SQLite 注册表 / 血缘 / 经验"]
     MEM --> EVO["L5 进化<br/>distillation / growth"]
     EXEC --> EVID["证据链<br/>file_audit / manifest / signoff_evidence"]
@@ -61,7 +64,7 @@ flowchart TB
 |---|---|---|---|
 | **L1 基础设施** | EDA 调用、输出目录、哈希、归档、Reference Finder | `layers/l1_infrastructure/`：`infrastructure.py`、`eda_backend.py`、`coverage_backend.py`、`output_config.py`、`layout.py`、`reference_finder.py` | 最底层，不依赖上层 |
 | **L2 编排** | LangGraph、执行器运行时、ToolHub、状态/运行时、证据、治理 | `layers/l2_orchestration/`：`graph.py`、`execution.py`、`runtime.py`、`state.py`、`routers.py`、`stages.py`、`executors/`（base/registry）、`communication/`、`evidence/`、`governance/`；8 个 executor 实现在 `src/executors/` | 依赖 L1 |
-| **L3 决策** | 覆盖率驱动决策、动作选择、知识图谱 | `layers/l3_decision/`：`decision_engine.py`、`brain/`、`knowledge/` | 依赖 L1/L2 的契约 |
+| **L3 决策** | 覆盖率驱动决策、动作选择、粗连续奖励、知识图谱（设计时 + 运行时） | `layers/l3_decision/`：`decision_engine.py`、`reward.py`、`brain/`、`knowledge/`（`schema/graph/query/persistence/runtime`） | 依赖 L1/L2 的契约 |
 | **L4 记忆** | 用例库、IP 库、模型库、排除规则、血缘、经验统计 | `layers/l4_memory/`：`testcase_registry.py`、`ip_registry.py`、`model_registry.py`、`lineage.py`、`coverage_experience.py`、`debug_experience.py` | 可被 L2/L3/L5 调用 |
 | **L5 进化** | 经验蒸馏、规则生长 | `layers/l5_evolution/`：`distillation.py`、`growth.py` | 依赖 L4 |
 
@@ -75,11 +78,27 @@ flowchart TB
 
 ### 4.1 pure（12 个，不烧 token）
 
-`init`、`env_arch_check`、`round_bump`、`decide`、`governor`、`governor_retry`、`approval`、`record_decision`、`apply_converge`、`apply_compile_retry`、`apply_relax`、`apply_expand_seeds`
+```text
+pure/lifecycle.py   init  finalize
+pure/rounds.py      env_arch_check  round_bump
+pure/converge.py    decide  governor  governor_retry  record_decision
+pure/approval.py    approval
+pure/apply.py       apply_converge  apply_relax  apply_expand_seeds
+```
+
+确定性逻辑：决策、治理、审批、轮次、收尾。**这一族里不可能调 LLM。**
 
 ### 4.2 agent（12 个，经 `_run_agent` 调 executor）
 
-`front`、`design`、`model`、`verify`、`ops`、`coverage`、`debug_functional`、`refactor_rtl`、`apply_update_model`、`apply_directed_test`、`audit`、`finalize`
+```text
+agent/build.py      front  design  model  verify
+agent/run.py        ops  coverage  debug_functional
+agent/fix.py        apply_compile_retry  refactor_rtl  apply_update_model  apply_directed_test
+agent/signoff.py    audit
+```
+
+每个节点只做三件事：选哪个 executor、给什么参数、结果怎么落状态；
+质量校验 / 证据链 / 熔断计数统一在 `runtime._run_agent`，不在节点里重复。
 
 ### 4.3 主流程
 
@@ -115,7 +134,7 @@ audit → finalize → END
 | `model` | 参考模型（优先 SQL `ModelRegistry`，兼容 golden） | `models.yaml` / 模型 SV、`placeholder` 标记 |
 | `verify` | UVM 生成、测试点分解、约束、覆盖率计划、回归 YAML | `env/`、`agents/`、`inputs/yaml/`、`coverage/` |
 | `ops` | 分级回归调度、tag 过滤、失败分类 | `regression_run/`、`regression_stages.json` |
-| `coverage` | 编译/仿真/覆盖率收集、计划覆盖率合并、TP 矩阵、种子多样性 | `sim/coverage/`、`tp_matrix.json`、`seed_diversity.json` |
+| `coverage` | 编译/仿真/覆盖率收集、计划覆盖率合并、TP 矩阵、种子多样性、粗连续奖励、运行时知识图 | `sim/coverage/`、`tp_matrix.json`、`seed_diversity.json`、`sim_reward.json`、`knowledge_graph.json` |
 | `debug` | 错误分类、指纹、自动修复、重跑验证、经验回写 | `docs/debug_stats.json`、修复记录 |
 | `audit` | 硬门禁、软 caveat、TP 汇总、签核证据包 | `report.json`、`signoff_evidence.json`、`signoff_evidence/` |
 
@@ -255,6 +274,8 @@ case 模型 → TP IR → 属性 test 类 → 约束 → 回归任务 → 覆盖
 | `coverage/tp_matrix.json` | TP × 覆盖仓 × 命中状态 |
 | `coverage/constraint_status.json` | 约束逐条生效状态 |
 | `coverage/association_report.json` | 三模型关联断点 |
+| `coverage/sim_reward.json` | 编译 / 回归 / 覆盖率三层合成的粗连续奖励 |
+| `coverage/knowledge_graph.json` | 运行时知识图（gap → bin/test/version/fix，带 sha256） |
 
 ---
 
@@ -403,10 +424,14 @@ coverage   0.40   计划覆盖率 + TP 命中率 + 种子多样性（更慢）
 
 `decide` 基于覆盖率/失败分布选择动作：
 
-`FIX_COMPILE`、`FIX_MODEL`、`FIX_FUNCTIONAL`、`FIX_PROTOCOL`、`FIX_RESET`、`FIX_CDC`、`FIX_DEADCODE`、`EXPAND_SEEDS`、`RELAX_CONSTRAINT`、`GENERATE_DIRECTED_TEST`、`CONVERGE`
+`FIX_COMPILE_bug`、`FIX_MODEL_bug`、`FIX_FUNCTIONAL_bug`、`FIX_PROTOCOL_bug`、`FIX_RESET_bug`、`FIX_CDC_bug`、`FIX_DEADCODE_bug`、`EXPAND_SEEDS`、`RELAX_CONSTRAINT`、`GENERATE_DIRECTED_TEST`、`CONVERGE`
 
 动作全集只在 `decision_engine.ALL_ACTIONS` 维护一份。动作经 `guardian/governor`
 检查后进入对应 `apply_*` 节点，再回到 `round_bump`；`CONVERGE` 是确定性终态。
+
+每个动作带 `source`（`rule_hard / rule / rl_suggested / rl_overridden / terminal`），
+L4 `coverage_experience` 按 `(action_type, source)` 分桶；L5 蒸馏只拿
+`rl_suggested` 且真正生效的样本，避免“建议过但没采纳”的幸存者偏差。
 
 ### 9.6 运行时知识图（`l3_decision/knowledge/runtime.py`）
 
@@ -517,8 +542,11 @@ vagent evidence compare <pkg-a> <pkg-b>
 | 经验/统计 | `database/{coverage_experience,debug_experience,rule_stats,hint_stats}.db` | 跨 run 经验与规则命中 |
 | 检查点 | `<run>/docs/checkpoints.sqlite` | LangGraph 中断/恢复 |
 
-路径解析统一走 `config/paths.py`；`SIGNOFFAI_HOME` 可把运行期根目录指到仓库外
-（pip 安装后不会写进 site-packages）。
+- 另有 `database/reference_finder_cache.db`（Reference Finder 缓存）。
+- 连接统一开 **WAL + busy_timeout**：工作台与 CLI 可同时读，写冲突时等待而不是立刻报错。
+- 路径解析统一走 `config/paths.py`；`SIGNOFFAI_HOME` 可把运行期根目录指到仓库外
+  （pip 安装后不会写进 site-packages）。`TREND_DB` 是 `MAIN_DB` 的兼容别名，
+  **趋势不再有第二份库**。
 
 ---
 
@@ -528,7 +556,7 @@ vagent evidence compare <pkg-a> <pkg-b>
 
 - `app.py` / `bootstrap.py` / `bus.py`
 - `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`
-- 签核页同时展示：门禁、六层证据链、**证据包 v2**（哈希 / caveat / 计划与单测覆盖率 / 种子多样性 / 参考模型与基线 / 审批 / Freeze / 回放命令）
+- 签核页同时展示：门禁、六层证据链、**证据包 v2**（哈希 / caveat / 计划与单测覆盖率 / 种子多样性 / **粗连续奖励** / **运行时知识图规模** / 参考模型与基线 / 审批 / Freeze / 回放命令）
 - 与 CLI/流水线通过文件契约（run 目录、manifest、evidence）解耦，**不共享内存 state**
 - 波形：`.wlf` → `vsim -view`；`qwavedb` → Visualizer + 按需 `vopt -designfile`
 - 覆盖率：先 `materialize_ucdb()` 再开 Visualizer
@@ -549,16 +577,18 @@ vagent evidence compare <pkg-a> <pkg-b>
 | 新 EDA 后端 | `execution/regression_tools/backend_profiles.py` 加字典条目（保留键 + `run_cmd_template`） | 框架类 |
 | 新 caveat | audit 里 `_caveat(code, msg)` + 策略文件按码接受 | 三态判定 |
 | 新签核证据字段 | `signoff_package.py` 的 `SECTION_FILES` + audit 的 v2 manifest | 回放脚本（若不需要重算） |
+| 新运行时因果边 | `knowledge/schema.py` 加 `EdgeType` + `runtime.build_runtime_graph()` 建边；需要进决策就补 `trace_gap` | 图存储与证据包 |
+| 新奖励层 | `l3_decision/reward.py` 的权重与分量；同步 `tests/test_sim_reward.py` | 决策动作空间 |
 
 ---
 
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 963 passed / 2 skipped
+python -m pytest tests/ -q                            # 982 passed / 2 skipped
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
-python -m pytest src/workbench/tests -q               # 工作台
+python -m pytest src/workbench/tests -q               # 715 passed
 ```
 
 关键守卫：
@@ -574,6 +604,10 @@ python -m pytest src/workbench/tests -q               # 工作台
 | `test_staged_regression.py` | 分级 tag 过滤 / 每级只生成本级用例 |
 | `test_ref_model_wiring.py` | predictor 不是空壳、走真生成器 |
 | `test_coverage_coverstore.py` | coverstore 必须 `vcover merge store:test` |
+| `test_runtime_graph.py` | 缺口只从 MISS 类状态建；因果边/哈希稳定；决策读到历史；图与奖励进证据包 |
+| `test_sim_reward.py` | 空输入不冒充通过；权重与最弱层口径 |
+| `test_tools_boards.py` | 工具物理目录与板块单一真相一致 |
+| `test_tools_skills.py` | Native Skills（`SKILL.md`）骨架不丢 |
 
 ---
 
@@ -587,6 +621,9 @@ python -m pytest src/workbench/tests -q               # 工作台
 - **不开发 Web UI**：所有交付走 CLI；桌面工作台是可选外壳。
 - **奖励信号是“粗连续”**：没有求解器内部状态（slack/DRC/IR），只能从
   `vlog/vsim/ucdb` 榨近似；不要把它当 Cadence 级的 RL 信号。
+- **知识图是查询层，不是推理层**：`runtime.py` 只把已有产物连成确定性因果链，
+  没有 Neo4j / networkx，也不让 LLM 直接遍历或改写图；LLM 只读 `gap_paths` 的
+  摘要（`_semantic_reason`）。
 - **auth.py 是可选 API 面**：CLI 不 import 它，FastAPI/PyJWT 放在 `api` extra；
   核心安装不再为未使用的认证代码付依赖成本。
 
@@ -615,7 +652,7 @@ python -m pytest src/workbench/tests -q               # 工作台
 │  │  ├─ _bootstrap.py          分层守卫
 │  │  ├─ l1_infrastructure/     EDA / 输出 / 哈希 / Reference Finder
 │  │  ├─ l2_orchestration/      LangGraph / executors / tools / evidence
-│  │  ├─ l3_decision/           决策 / 知识
+│  │  ├─ l3_decision/           决策 / 奖励 / 知识（含 runtime 运行时图）
 │  │  ├─ l4_memory/             SQLite 注册表 / 血缘 / 经验
 │  │  └─ l5_evolution/          蒸馏 / 生长
 │  ├─ executors/                8 个 executor
