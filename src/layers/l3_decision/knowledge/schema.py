@@ -31,6 +31,8 @@ class NodeType(str, Enum):
     TEST = "test"                    # 测试用例（testcase_registry）
     BUG = "bug"                      # 缺陷
     FIX = "fix"                      # 修复
+    GAP = "gap"                      # 运行时覆盖缺口（tp_matrix 的 MISS/UNOBSERVED）
+    RTL_VERSION = "rtl_version"      # RTL 血缘版本（lineage.db）
 
 
 class EdgeType(str, Enum):
@@ -40,8 +42,13 @@ class EdgeType(str, Enum):
     SIGNAL = "signal"                # module → signal（模块包含信号）
     COVERAGE = "coverage"            # signal → coverage_bin（信号被 bin 覆盖）
     TEST = "test"                    # coverage_bin → test（bin 由测试激励）
-    AFFECTS = "affects"              # bug → (signal|feature)（缺陷影响）
+    AFFECTS = "affects"              # bug/gap → (signal|feature)（缺陷/缺口影响）
     RESOLVES = "resolves"            # fix → bug（修复解决）
+    # ── 运行时因果（本轮的 gap 溯源）──
+    COVERED_BY = "covered_by"        # gap → coverage_bin / test（本应由谁覆盖）
+    CAUSES = "causes"                # bug → gap（缺陷导致缺口）
+    FIXED_BY = "fixed_by"            # gap → fix（历史上被谁修过）
+    REGRESSED_IN = "regressed_in"    # gap → rtl_version（在哪版观察到）
 
 
 # 溯源链顺序（从 CoverageBin 一路回溯到 Requirement）

@@ -51,6 +51,15 @@ async def n_decide(state: PipelineState, config) -> Dict[str, Any]:
     except Exception:
         pass
 
+    # 运行时图：给每个 gap_path 挂上“历史版本/修复”的确定性因果链。
+    try:
+        from src.layers.l3_decision.knowledge.runtime import (
+            enrich_observation_history)
+
+        obs = enrich_observation_history(obs, state.output_root)
+    except Exception:
+        pass
+
     # 事件驱动决策：发 COVERAGE_UPDATED → DecisionReactor → 读结果
     if rt.decision_reactor is not None:
         try:

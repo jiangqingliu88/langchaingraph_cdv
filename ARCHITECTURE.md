@@ -408,6 +408,36 @@ coverage   0.40   计划覆盖率 + TP 命中率 + 种子多样性（更慢）
 动作全集只在 `decision_engine.ALL_ACTIONS` 维护一份。动作经 `guardian/governor`
 检查后进入对应 `apply_*` 节点，再回到 `round_bump`；`CONVERGE` 是确定性终态。
 
+### 9.6 运行时知识图（`l3_decision/knowledge/runtime.py`）
+
+设计时子图（`build_graph_from_spec`）回答“需求 → 功能 → 模块 → 信号 → bin →
+测试”。运行时再补**本轮因果**，只读已有产物，不跑 EDA、不调 LLM：
+
+```text
+GAP ──covered_by→ coverage_bin / test
+GAP ──affects→    requirement
+GAP ──regressed_in→ rtl_version   （database/lineage.db）
+GAP ──fixed_by→   fix             （docs/debug_stats.json）
+BUG ──causes→     GAP
+FIX ──resolves→   BUG
+```
+
+- **GAP 的判定**：`coverage/tp_matrix.json` 中 `MISS / UNOBSERVED / BACKDOOR_MISS /
+  UNMAPPED` 且带 `tp_id` 的行；`HIT / OBSERVED` 不建缺口。
+- **落盘**：`coverage/knowledge_graph.json`（`schema` + `sha256` + `summary` +
+  `gaps` + 全图），同一份输入重复构建哈希稳定 —— 证据包用它绑定图身份。
+- **查询**：`trace_gap(graph, tp_id=… | bin=…)` 返回该缺口的
+  test / bin / requirement / rtl_version / fix / bug 六类确定性归因。
+- **决策消费**：`n_decide` 用 `enrich_observation_history()` 把 `history` 挂到
+  `Observation.gap_paths`，`_semantic_reason()` 因此能写出
+  “`op.bin_zero@历史版本v7（曾由 relax_op_zero 修复）`”—— 历史进归因，但不进
+  模型推理。
+- **证据消费**：audit 把图摘要（路径 / sha256 / 节点边数 / 缺口数）写进 v1
+  `signoff_evidence.json` 与 v2 manifest，`coverage/knowledge_graph.json` 随
+  `execution/` 段进包；工作台签核页展示同一组数字。
+
+这是**查询层**，不是新的推理层：没有 Neo4j / networkx，也没有 LLM 直接遍历图。
+
 ---
 
 ## 10. 证据链与治理
@@ -436,7 +466,8 @@ coverage   0.40   计划覆盖率 + TP 命中率 + 种子多样性（更慢）
 <run>/signoff_evidence/
 ├─ manifest.json      # 结论 + 版本绑定 + 逐文件 sha256 + package_hash
 ├─ inputs/            # spec / case 模型 / 约束 / 覆盖计划 / 模型装配单 / 签核策略
-├─ execution/         # 回归报告 / 覆盖率 / TP 矩阵 / 合并清单 / 种子多样性 / 回执
+├─ execution/         # 回归报告 / 覆盖率 / TP 矩阵 / 合并清单 / 种子多样性
+│                     # / 粗连续奖励 / 运行时知识图 / 回执
 ├─ verdict/           # signoff_evidence.json / caveats.json / 文件审计链
 └─ replay/
    ├─ replay.py       # 不 import SignOffAI，仅标准库

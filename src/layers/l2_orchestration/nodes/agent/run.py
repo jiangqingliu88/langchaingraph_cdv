@@ -229,6 +229,23 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
     except Exception as _e:                        # noqa: BLE001 旁路，不拦主流程
         logger.debug(f"粗连续奖励计算跳过: {_e}")
 
+    # ── 运行时知识图：gap → bin/test/version/fix 的确定性因果链 ──
+    #
+    # 只读 tp_matrix / testpoints / debug_stats / lineage；落
+    # `coverage/knowledge_graph.json`，供决策与签核证据引用。
+    knowledge_graph: Dict[str, Any] = {}
+    try:
+        from src.layers.l3_decision.knowledge.runtime import (
+            build_runtime_graph, write_runtime_graph)
+
+        knowledge_graph = write_runtime_graph(
+            build_runtime_graph(state.output_root, state.spec), state.output_root)
+        logger.info(f"运行时知识图：{knowledge_graph.get('nodes', 0)} 节点 / "
+                    f"{knowledge_graph.get('edges', 0)} 边 / "
+                    f"{knowledge_graph.get('gaps', 0)} 个缺口")
+    except Exception as _e:                        # noqa: BLE001 旁路
+        logger.debug(f"运行时知识图构建跳过: {_e}")
+
     # ── Planning：进度对比里程碑 ──
     progress = rt.planner.check_progress(state.round_num, final_coverage)
     if not progress["on_track"]:
@@ -262,6 +279,7 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
         "effective_coverage": effective_coverage,
         "exclude_effect": exclude_effect,
         "sim_reward": sim_reward,
+        "knowledge_graph": knowledge_graph,
         "coverage_db_history": [db_entry],
         "phases": [phase],
     }

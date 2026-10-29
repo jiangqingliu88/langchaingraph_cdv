@@ -279,7 +279,17 @@ class CoverageDrivenDecisionEngine:
             feat = g.get("feature")
             target = g.get("bin") or g.get("signal")
             if feat and target:
-                parts.append(f"{feat}.{target}")
+                part = f"{feat}.{target}"
+                hist = g.get("history") or {}
+                versions = [v.get("name") for v in hist.get("rtl_versions") or []
+                            if isinstance(v, dict) and v.get("name")]
+                fixes = [f.get("name") for f in hist.get("fixes") or []
+                         if isinstance(f, dict) and f.get("name")]
+                if versions:
+                    part += f"@历史版本{','.join(versions[:2])}"
+                if fixes:
+                    part += f"（曾由 {','.join(fixes[:2])} 修复）"
+                parts.append(part)
         return "；".join(parts) if parts else "（未映射）"
 
     def expand_seeds_action(self) -> Action:

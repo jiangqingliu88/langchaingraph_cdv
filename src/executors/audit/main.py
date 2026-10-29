@@ -227,6 +227,21 @@ def _regression_config_summary(output_dir: Path) -> Dict[str, Any]:
     }
 
 
+def _knowledge_graph_summary(output_dir: Path) -> Dict[str, Any]:
+    """运行时知识图的身份摘要（路径 + sha256 + 规模）；没有就是空。"""
+    path = output_dir / "coverage" / "knowledge_graph.json"
+    if not path.is_file():
+        return {}
+    doc = _read_json_file(path)
+    return {
+        "path": "coverage/knowledge_graph.json",
+        "sha256": _sha256_file(path),
+        "schema": doc.get("schema", ""),
+        "summary": doc.get("summary") or {},
+        "gaps": len(doc.get("gaps") or []),
+    }
+
+
 def _tool_receipt_summary(output_dir: Path) -> Dict[str, Any]:
     """工具回执的 `verified_by` 覆盖度 —— 有多少结论是 EDA 说的。"""
     path = output_dir / "docs" / "tool_receipts.jsonl"
@@ -377,6 +392,8 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
         # 粗连续奖励：编译/回归/覆盖率三层合成。没有就是没有（老 run）。
         "sim_reward": (_read_json_file(output_dir / "coverage" / "sim_reward.json")
                        or None),
+        # 运行时知识图：gap → bin/test/version/fix 的因果链（确定性，不含 LLM）。
+        "knowledge_graph": _knowledge_graph_summary(output_dir),
         "seed_diversity_reason": (
             "" if seed_div and seed_div.get("analyzed")
             else (seed_div or {}).get("reason", "未分析") if seed_div
@@ -836,6 +853,7 @@ class AuditExecutor(BaseExecutor):
                     "tp_matrix": evidence.get("tp_matrix") or {},
                     "seed_diversity": evidence.get("seed_diversity"),
                     "sim_reward": evidence.get("sim_reward"),
+                    "knowledge_graph": evidence.get("knowledge_graph") or {},
                     "tool_receipts": evidence.get("tool_receipts") or {},
                     "verdict": {
                         "hard_ok": bool(hard_ok),

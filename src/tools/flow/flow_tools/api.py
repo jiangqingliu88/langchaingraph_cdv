@@ -1271,6 +1271,8 @@ def _evidence_v2(root: Path) -> Dict[str, Any]:
         "seed_diversity": (manifest or {}).get("seed_diversity") or seed or {},
         "sim_reward": (manifest or {}).get("sim_reward")
                       or _read_json(root / "coverage" / "sim_reward.json") or {},
+        "knowledge_graph": (manifest or {}).get("knowledge_graph")
+                          or _read_json(root / "coverage" / "knowledge_graph.json") or {},
         "reference_models": (manifest or {}).get("reference_models") or {},
         "lineage": (manifest or {}).get("lineage") or {},
         "regression_config": (manifest or {}).get("regression_config") or {},

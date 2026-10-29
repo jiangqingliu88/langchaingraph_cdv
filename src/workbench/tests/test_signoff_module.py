@@ -61,6 +61,11 @@ def _run_dir(tmp_path: Path) -> Path:
         "tp_matrix": {"counts": {"HIT": 37, "MISS": 0}},
         "seed_diversity": {"verdict": "DIVERSE", "seeds": [1, 2],
                            "stable_bins": 12, "variable_bins": 57},
+        "sim_reward": {"total": 0.8125, "weakest": "coverage"},
+        "knowledge_graph": {"path": "coverage/knowledge_graph.json",
+                            "sha256": "d" * 64,
+                            "summary": {"nodes": 9, "edges": 8},
+                            "gaps": 2},
         "verdict": {"hard_ok": True,
                     "raw_caveats": [{"code": "TP_MISSED"}],
                     "accepted_codes": [], "effective_codes": ["TP_MISSED"],
@@ -165,6 +170,8 @@ class TestEvidencePackage:
         assert "TP_MISSED" in text
         assert "95.23" in text and "68.57" in text
         assert "DIVERSE" in text
+        assert "0.8125" in text and "coverage" in text   # 粗连续奖励 + 最弱层
+        assert "9 节点 / 8 边" in text                   # 运行时知识图规模
         assert "missing" in text.lower()          # 没有 freeze.json
         assert "approve" in text
 

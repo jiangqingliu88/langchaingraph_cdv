@@ -244,6 +244,7 @@ class SignoffModule(ModuleBase):
         tp = ev.get("tp_matrix") or {}
         sd = ev.get("seed_diversity") or {}
         reward = ev.get("sim_reward") or {}
+        kg = ev.get("knowledge_graph") or {}
         rm = ev.get("reference_models") or {}
         lin = ev.get("lineage") or {}
         cst = ev.get("constraint_status") or {}
@@ -270,6 +271,10 @@ class SignoffModule(ModuleBase):
             f"稳定 {sd.get('stable_bins', '?')} / 种子敏感 {sd.get('variable_bins', '?')}）",
             f"奖励：{reward.get('total', '?')}（最弱层 {reward.get('weakest') or '?'}）"
             if reward else "奖励：未计算（老 run）",
+            (f"知识图：{kg.get('summary', {}).get('nodes', '?')} 节点 / "
+             f"{kg.get('summary', {}).get('edges', '?')} 边 · "
+             f"sha256 {(kg.get('sha256') or '?')[:12]}…")
+            if kg else "知识图：未生成（老 run）",
             f"约束：{cst.get('backed_policy_count', '?')}/{cst.get('policy_count', '?')} backed · "
             f"参考模型：{'unavailable' if not rm.get('available') else 'available'} · "
             f"基线：{lin.get('name') or '?'}",
