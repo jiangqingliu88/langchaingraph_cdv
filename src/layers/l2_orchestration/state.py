@@ -155,6 +155,9 @@ class PipelineState(BaseModel):
     final_coverage: float = 0.0
     effective_coverage: float = 0.0
     exclude_effect: Dict[str, Any] = Field(default_factory=dict)
+    #: 粗连续奖励（`l3_decision/reward.py`）—— 编译/回归/覆盖率三层合成的 0..1。
+    #: 决策层读它判断“最弱的一层”，签核证据也可引用。
+    sim_reward: Dict[str, Any] = Field(default_factory=dict)
 
     # 决策：Action 是 dataclass（decision_engine.py:41），为可序列化存 dict，
     # 用的时候再 Action(**d)。见 _action_from_state()。

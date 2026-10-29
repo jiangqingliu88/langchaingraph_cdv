@@ -35,6 +35,7 @@ async def n_decide(state: PipelineState, config) -> Dict[str, Any]:
         failed_tests=_failed_tests,
         coverage_history=state.coverage_history + [state.effective_coverage],
         compile_error=state.compile_error,
+        sim_reward=state.sim_reward,
     )
 
     # 语义化：用 Verification Knowledge Graph 补 gap_paths（精准归因）

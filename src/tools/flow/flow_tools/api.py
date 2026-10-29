@@ -103,6 +103,8 @@ def run_signoff(run_dir: str = "") -> Dict[str, Any]:
         "testpoints": (report or {}).get("testpoints") or {},
         # 软缺口（约束部分生效 / 测试点未命中等）—— 签核时要写清保留了什么。
         "caveats": list((report or {}).get("caveats") or []),
+        # 证据包 v2（唯一权威）+ 审批/种子/约束/Freeze 的界面视图。
+        "evidence": _evidence_v2(root),
         "summary": _summary(report, gates, chain),
     }
 
@@ -1216,6 +1218,69 @@ def _read_json(path: Path) -> Optional[Dict[str, Any]]:
     except (OSError, json.JSONDecodeError):
         return None
     return data if isinstance(data, dict) else None
+
+
+def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
+    """逐行读 JSONL；坏行跳过（与 `_read_journal` 同一纪律）。"""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    out: List[Dict[str, Any]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            out.append(item)
+    return out
+
+
+def _evidence_v2(root: Path) -> Dict[str, Any]:
+    """签核证据包 v2 → 界面可读的一节。
+
+    读不到就 `available: false`（老 run / 还没跑到 audit），**不编**。
+    v1 `signoff_evidence.json` 只作为兼容视图，界面明确标 deprecated。
+    """
+    manifest = _read_json(root / "signoff_evidence" / "manifest.json")
+    v1 = _read_json(root / "signoff_evidence.json")
+    seed = _read_json(root / "coverage" / "seed_diversity.json")
+    constraint = _read_json(root / "coverage" / "constraint_status.json")
+    approvals = _read_jsonl(root / "approvals.jsonl")
+    freeze = root / "freeze.json"
+
+    verdict = (manifest or {}).get("verdict") or {}
+    raw = [c for c in (verdict.get("raw_caveats") or []) if isinstance(c, dict)]
+    return {
+        "available": isinstance(manifest, dict),
+        "schema": (manifest or {}).get("schema", ""),
+        "package_hash": (manifest or {}).get("package_hash", ""),
+        "manifest_hash": (manifest or {}).get("manifest_hash", ""),
+        "file_count": len((manifest or {}).get("files") or []),
+        "hard_ok": verdict.get("hard_ok"),
+        "verdict": verdict.get("verdict", ""),
+        "raw_caveat_codes": [c.get("code") for c in raw],
+        "accepted_codes": list(verdict.get("accepted_codes") or []),
+        "effective_codes": list(verdict.get("effective_codes") or []),
+        "coverage": (manifest or {}).get("coverage") or {},
+        "tp_matrix": (manifest or {}).get("tp_matrix") or {},
+        "seed_diversity": (manifest or {}).get("seed_diversity") or seed or {},
+        "sim_reward": (manifest or {}).get("sim_reward")
+                      or _read_json(root / "coverage" / "sim_reward.json") or {},
+        "reference_models": (manifest or {}).get("reference_models") or {},
+        "lineage": (manifest or {}).get("lineage") or {},
+        "regression_config": (manifest or {}).get("regression_config") or {},
+        "constraint_status": constraint or {},
+        "approval_count": len(approvals),
+        "latest_approval": approvals[-1] if approvals else {},
+        "freeze": {"present": freeze.is_file(), "path": str(freeze)},
+        "replay_cmd": f'python "{root / "signoff_evidence" / "replay" / "replay.py"}"',
+        "v1_deprecated": bool((v1 or {}).get("deprecated")),
+    }
 
 
 def _read_journal(root: Path) -> List[Dict[str, Any]]:

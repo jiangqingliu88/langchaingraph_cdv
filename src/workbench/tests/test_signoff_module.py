@@ -50,6 +50,28 @@ def _run_dir(tmp_path: Path) -> Path:
         "checks_passed": 3, "checks_total": 6,
         "signoff_ready": False, "overall_status": "FAIL",
     }, ensure_ascii=False), encoding="utf-8")
+
+    # 证据包 v2 + 审批/种子：签核页的“合同级证据”一节
+    (root / "signoff_evidence").mkdir()
+    (root / "signoff_evidence" / "manifest.json").write_text(json.dumps({
+        "schema": "signoff_evidence_v2",
+        "package_hash": "a" * 64, "manifest_hash": "b" * 64,
+        "files": [{"path": "manifest.json"}],
+        "coverage": {"plan_pct": 95.23, "single_test_pct": 68.57},
+        "tp_matrix": {"counts": {"HIT": 37, "MISS": 0}},
+        "seed_diversity": {"verdict": "DIVERSE", "seeds": [1, 2],
+                           "stable_bins": 12, "variable_bins": 57},
+        "verdict": {"hard_ok": True,
+                    "raw_caveats": [{"code": "TP_MISSED"}],
+                    "accepted_codes": [], "effective_codes": ["TP_MISSED"],
+                    "verdict": "PASS_WITH_CAVEAT"},
+        "reference_models": {"available": False},
+        "lineage": {"name": "v1"},
+    }, ensure_ascii=False), encoding="utf-8")
+    (root / "approvals.jsonl").write_text(json.dumps({
+        "action": "approve", "approver": "human:test",
+        "approval_hash": "c" * 64,
+    }) + "\n", encoding="utf-8")
     return root
 
 
@@ -131,6 +153,24 @@ class TestRendering:
         assert "NEEDS_FIX" in loaded.count_label.text()
         assert "5/6" in loaded.count_label.text()
         assert "93%" in loaded.count_label.text()
+
+
+class TestEvidencePackage:
+    """合同级证据包 v2 也要能在界面上看见 —— 不能只埋在 JSON 里。"""
+
+    def test_evidence_panel_filled(self, loaded):
+        text = loaded.evidence_label.text()
+        assert "signoff_evidence_v2" in text
+        assert "PASS_WITH_CAVEAT" in text
+        assert "TP_MISSED" in text
+        assert "95.23" in text and "68.57" in text
+        assert "DIVERSE" in text
+        assert "missing" in text.lower()          # 没有 freeze.json
+        assert "approve" in text
+
+    def test_replay_command_is_available_for_copy(self, loaded):
+        assert "replay.py" in loaded.replay_cmd
+        assert loaded.evidence_dir.endswith("signoff_evidence")
 
 
 class TestColors:

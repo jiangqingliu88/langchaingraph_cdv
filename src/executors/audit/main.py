@@ -374,6 +374,9 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
         },
         # **做过就是对象，没做才 null** —— 不再无条件 null。
         "seed_diversity": seed_div,
+        # 粗连续奖励：编译/回归/覆盖率三层合成。没有就是没有（老 run）。
+        "sim_reward": (_read_json_file(output_dir / "coverage" / "sim_reward.json")
+                       or None),
         "seed_diversity_reason": (
             "" if seed_div and seed_div.get("analyzed")
             else (seed_div or {}).get("reason", "未分析") if seed_div
@@ -832,6 +835,7 @@ class AuditExecutor(BaseExecutor):
                     "coverage": cov_ev,
                     "tp_matrix": evidence.get("tp_matrix") or {},
                     "seed_diversity": evidence.get("seed_diversity"),
+                    "sim_reward": evidence.get("sim_reward"),
                     "tool_receipts": evidence.get("tool_receipts") or {},
                     "verdict": {
                         "hard_ok": bool(hard_ok),

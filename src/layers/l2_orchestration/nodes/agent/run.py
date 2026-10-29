@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Dict
 
 from pathlib import Path
@@ -206,6 +207,28 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
             logger.warning(f"归因校准记录失败: {e}")
     rt.prev_coverage = final_coverage
 
+    # ── 粗连续奖励：把“过/不过”拆成“往好的方向走了多少” ──
+    #
+    # 只读已有产物（回归统计 / 覆盖率 / TP 矩阵 / 种子），不额外跑 EDA。
+    # 决策层用它判断最弱的一层；经验库/证据包也可引用。
+    sim_reward: Dict[str, Any] = {}
+    try:
+        from src.layers.l3_decision.reward import compute_sim_reward
+
+        _sem = data.get("semantic_validations") if isinstance(data, dict) else {}
+        sim_reward = compute_sim_reward(
+            state.regression, coverage if isinstance(coverage, dict) else {},
+            data.get("tp_matrix") if isinstance(data, dict) else {},
+            (_sem or {}).get("seed_diversity") or None)
+        _cov_dir = Path(state.output_root) / "coverage"
+        _cov_dir.mkdir(parents=True, exist_ok=True)
+        (_cov_dir / "sim_reward.json").write_text(
+            json.dumps(sim_reward, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info(f"粗连续奖励：{sim_reward['total']:.3f}"
+                    f"（最弱层 {sim_reward['weakest']}）")
+    except Exception as _e:                        # noqa: BLE001 旁路，不拦主流程
+        logger.debug(f"粗连续奖励计算跳过: {_e}")
+
     # ── Planning：进度对比里程碑 ──
     progress = rt.planner.check_progress(state.round_num, final_coverage)
     if not progress["on_track"]:
@@ -238,6 +261,7 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
         "final_coverage": final_coverage,
         "effective_coverage": effective_coverage,
         "exclude_effect": exclude_effect,
+        "sim_reward": sim_reward,
         "coverage_db_history": [db_entry],
         "phases": [phase],
     }

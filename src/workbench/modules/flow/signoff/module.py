@@ -10,6 +10,10 @@
 **两个都看**：门禁问"跑没跑"，证据链问"闭没闭"。顶部那行大字给总判定——
 **两者都通过才算可签核**；任一缺失都如实说"未知"，不因为文件还没生成就报绿。
 
+第三块是**合同级证据包 v2**（`signoff_evidence/manifest.json`）：哈希、caveat
+码、计划/单测覆盖率、种子多样性、参考模型/基线、审批历史、Freeze 状态与
+离线回放命令。老 run 没有 v2 时如实标"未生成"，不拿 v1 冒充。
+
 订阅 `run.selected`：`runs` 模块里选一次运行，这里跟着切（与 `evidence` 同一机制）。
 
 > 治理状态（预算 / 熔断 / 干预）**刻意不在这里**：`Governor` 是运行线程里
@@ -18,11 +22,13 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor
-from PySide6.QtWidgets import QLabel, QSplitter, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QApplication, QLabel, QSplitter, QVBoxLayout,
+                               QWidget)
 
 from ....ui import theme
 from ....ui.helpers import tables as table_helpers
@@ -48,11 +54,14 @@ class SignoffModule(ModuleBase):
     """一次运行的签核判定（门禁 + 证据链）。"""
 
     HINT = ("选一次运行（左边「运行历史」），这里显示它能不能签核："
-            "上面是 audit 的四道门禁，下面是六层证据链的逐层闭合情况。")
+            "上面是 audit 的门禁，中间是六层证据链，下面是证据包 v2 "
+            "（哈希 / caveat / 覆盖率 / 种子 / 审批 / Freeze / 回放）。")
 
     def __init__(self, ctx, spec) -> None:
         super().__init__(ctx, spec)
         self.run_id: str = ""
+        self.evidence_dir: str = ""
+        self.replay_cmd: str = ""
 
     # ════════════════════════════════════════════════════════
     # 搭界面
@@ -115,6 +124,13 @@ class SignoffModule(ModuleBase):
         self.count_label = QLabel("", root)
         self.count_label.setStyleSheet(f"color: {theme.current().muted};")
         layout.addWidget(self.count_label)
+
+        # 合同级证据包（v2）：哈希 / caveat / 种子 / 基线 / 审批 / Freeze / 回放
+        self.evidence_label = QLabel("", root)
+        self.evidence_label.setWordWrap(True)
+        self.evidence_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.evidence_label.setStyleSheet(f"color: {theme.current().muted};")
+        layout.addWidget(self.evidence_label)
         return root
 
     @staticmethod
@@ -126,7 +142,13 @@ class SignoffModule(ModuleBase):
     def create_actions(self) -> List[QAction]:
         action = QAction("刷新签核判定", self.content)
         action.triggered.connect(lambda: self.load(self.run_id))
-        return [action]
+        copy_dir = QAction("复制证据包路径", self.content)
+        copy_dir.triggered.connect(
+            lambda: QApplication.clipboard().setText(self.evidence_dir))
+        copy_replay = QAction("复制回放命令", self.content)
+        copy_replay.triggered.connect(
+            lambda: QApplication.clipboard().setText(self.replay_cmd))
+        return [action, copy_dir, copy_replay]
 
     # ════════════════════════════════════════════════════════
     # 平台钩子
@@ -185,6 +207,8 @@ class SignoffModule(ModuleBase):
             f"回归 {rate}　覆盖率 {cov_text}")
         self._fill_testpoints(payload.get("testpoints") or {},
                               payload.get("caveats") or [])
+        self._fill_evidence(payload.get("evidence") or {},
+                            payload.get("run_dir") or "")
 
     def _fill_testpoints(self, tp: Dict[str, Any], caveats: List[str]) -> None:
         """测试点口径 + 软缺口。
@@ -202,6 +226,61 @@ class SignoffModule(ModuleBase):
             self.tp_label.setText("测试点：这一轮没有 TP IR（没有 case 模型或没跑覆盖率）")
         self.caveat_label.setText(
             "；".join(str(c) for c in caveats[:6]) if caveats else "")
+
+    def _fill_evidence(self, ev: Dict[str, Any], run_dir: str) -> None:
+        """合同级证据包 v2 视图（哈希 / caveat / 种子 / 基线 / 审批 / Freeze）。
+
+        读不到就如实说"未生成"——老 run 没有 v2 是事实，不拿 v1 冒充。
+        """
+        self.evidence_dir = str(Path(run_dir) / "signoff_evidence") if run_dir else ""
+        self.replay_cmd = str(ev.get("replay_cmd") or "")
+        if not ev.get("available"):
+            self.evidence_label.setText(
+                "证据包 v2：未生成（老 run，或这次还没跑到 audit）")
+            self.evidence_label.setStyleSheet(f"color: {theme.current().muted};")
+            return
+
+        cov = ev.get("coverage") or {}
+        tp = ev.get("tp_matrix") or {}
+        sd = ev.get("seed_diversity") or {}
+        reward = ev.get("sim_reward") or {}
+        rm = ev.get("reference_models") or {}
+        lin = ev.get("lineage") or {}
+        cst = ev.get("constraint_status") or {}
+        freeze = ev.get("freeze") or {}
+        appr = ev.get("latest_approval") or {}
+        pkg = str(ev.get("package_hash") or "")
+        seeds = sd.get("seeds") or []
+        effective = ev.get("effective_codes") or []
+        accepted = ev.get("accepted_codes") or []
+        counts = tp.get("counts") or {}
+
+        def _pct(v):
+            return f"{v:g}%" if isinstance(v, (int, float)) else "?"
+
+        lines = [
+            f"证据包 v2：{ev.get('schema') or '?'} · 文件 {ev.get('file_count', 0)} · "
+            f"package_hash {pkg[:16]}{'…' if len(pkg) > 16 else ''}",
+            f"判定：hard_ok={ev.get('hard_ok')} · verdict={ev.get('verdict') or '?'} · "
+            f"生效 caveat {('、'.join(effective) or '无')}"
+            + (f" · 已接受 {('、'.join(accepted))}" if accepted else ""),
+            f"覆盖率：计划 {_pct(cov.get('plan_pct'))} / 单测 {_pct(cov.get('single_test_pct'))} · "
+            f"TP {counts or '{}'}",
+            f"种子：{sd.get('verdict') or '?'}（{len(seeds)} seeds · "
+            f"稳定 {sd.get('stable_bins', '?')} / 种子敏感 {sd.get('variable_bins', '?')}）",
+            f"奖励：{reward.get('total', '?')}（最弱层 {reward.get('weakest') or '?'}）"
+            if reward else "奖励：未计算（老 run）",
+            f"约束：{cst.get('backed_policy_count', '?')}/{cst.get('policy_count', '?')} backed · "
+            f"参考模型：{'unavailable' if not rm.get('available') else 'available'} · "
+            f"基线：{lin.get('name') or '?'}",
+            f"审批：{ev.get('approval_count', 0)} 条"
+            + (f"（最新 {appr.get('action')} by {appr.get('approver') or '?'}）"
+               if appr else "")
+            + f" · Freeze：{'present' if freeze.get('present') else 'missing'}",
+            f"回放：{self.replay_cmd or '（无）'}",
+        ]
+        self.evidence_label.setText("\n".join(lines))
+        self.evidence_label.setStyleSheet(f"color: {theme.current().muted};")
 
     def _fill_gates(self, gates: Dict[str, Any]) -> None:
         if not gates.get("available"):
@@ -246,6 +325,9 @@ class SignoffModule(ModuleBase):
         self.tp_label.setText("")
         self.caveat_label.setText("")
         self.count_label.setText("")
+        self.evidence_label.setText("")
+        self.evidence_dir = ""
+        self.replay_cmd = ""
 
 
 def _color(passed: bool) -> QColor:

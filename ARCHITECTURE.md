@@ -186,6 +186,10 @@ src/tools/common/        lib
 （`tool_check_compile/static/env_arch/loopback/health/quality_report`），
 生成主体留在 `tool_uvm / tool_find_spec_yaml / tool_jinja_render`。
 
+**Native Skills**：工具知识不只留在代码里。`coverage_tools` 与
+`casemodel_tools` 已提供 `SKILL.md`（何时用 / 不要用 / 正确调用 / 常见错误 /
+日志看什么 / 产物），给 LLM 与人都能直接读；由 `tests/test_tools_skills.py` 钉住骨架。
+
 ### 6.4 工具包
 
 | 包（按物理路径） | 职责 |
@@ -380,7 +384,22 @@ src/tools/generation/uvm_tools/generation/
 - 比较命中 bin 集合：`stable_bins` / `variable_bins` / `union_bins`；
 - `None`（没分析）/ `False`（种子不改变分布）/ `True`（存在种子敏感 bin）。
 
-### 9.4 决策动作
+### 9.4 粗连续奖励（`l3_decision/reward.py`）
+
+EDA 是黑盒：只有 `vlog` 返回码、`vsim` Errors、`ucdb` hitrate。奖励如果只有
+0/1，平台期时策略没有方向。`compute_sim_reward()` 把三层合成 0..1：
+
+```text
+compile    0.25   编译通过 + 错误/警告数（秒级反馈）
+regression 0.35   通过率 + 挂死数（分钟级）
+coverage   0.40   计划覆盖率 + TP 命中率 + 种子多样性（更慢）
+```
+
+- 结果落 `coverage/sim_reward.json`，并进 `Observation.sim_reward`；
+- `weakest` 指出最弱的一层，供决策层判断“往哪使劲”；
+- **不是求解器**，但比二值信号多了方向感。
+
+### 9.5 决策动作
 
 `decide` 基于覆盖率/失败分布选择动作：
 
@@ -478,6 +497,7 @@ vagent evidence compare <pkg-a> <pkg-b>
 
 - `app.py` / `bootstrap.py` / `bus.py`
 - `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`
+- 签核页同时展示：门禁、六层证据链、**证据包 v2**（哈希 / caveat / 计划与单测覆盖率 / 种子多样性 / 参考模型与基线 / 审批 / Freeze / 回放命令）
 - 与 CLI/流水线通过文件契约（run 目录、manifest、evidence）解耦，**不共享内存 state**
 - 波形：`.wlf` → `vsim -view`；`qwavedb` → Visualizer + 按需 `vopt -designfile`
 - 覆盖率：先 `materialize_ucdb()` 再开 Visualizer
@@ -534,6 +554,8 @@ python -m pytest src/workbench/tests -q               # 工作台
 - **测试语义 plusargs 还没有生成源**：schema/透传/校验已通，等 ISA/场景侧产出 `+preload` 等参数。
 - **单机串行回归**：不适合大团队/大规模并行；个人级定位。
 - **不开发 Web UI**：所有交付走 CLI；桌面工作台是可选外壳。
+- **奖励信号是“粗连续”**：没有求解器内部状态（slack/DRC/IR），只能从
+  `vlog/vsim/ucdb` 榨近似；不要把它当 Cadence 级的 RL 信号。
 - **auth.py 是可选 API 面**：CLI 不 import 它，FastAPI/PyJWT 放在 `api` extra；
   核心安装不再为未使用的认证代码付依赖成本。
 

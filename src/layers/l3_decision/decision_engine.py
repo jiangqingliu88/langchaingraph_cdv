@@ -36,6 +36,9 @@ class Observation:
     model_mismatch: List[Dict] = field(default_factory=list)    # 比对失败: [{"test": "...", "suspected": "模型过时"}]
     compile_error: Optional[Dict] = None                         # 编译失败: {"error_type": "...", "message": "...", "file": "...", "line": N}
     gap_paths: List[Dict] = field(default_factory=list)          # 语义路径（Knowledge Graph 溯源）: [{requirement, feature, module, signal, bin, test, suggestion}]
+    #: 粗连续奖励（`l3_decision/reward.py`）：编译/回归/覆盖率三层合成的 0..1。
+    #: `weakest` 给出最弱的一层，供策略选择“往哪使劲”。
+    sim_reward: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
