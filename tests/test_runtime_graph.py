@@ -11,14 +11,16 @@ from pathlib import Path
 import pytest
 
 from src.layers.l3_decision.decision_engine import Observation
+from src.layers.l3_decision.knowledge.persistence import load_runtime_graph
+from src.layers.l3_decision.knowledge.query import (
+    enrich_observation_history,
+    trace_gap,
+)
 from src.layers.l3_decision.knowledge.runtime import (
     MISS_STATUSES,
     SCHEMA,
     build_runtime_graph,
-    enrich_observation_history,
     graph_digest,
-    load_runtime_graph,
-    trace_gap,
     write_runtime_graph,
 )
 from src.layers.l3_decision.knowledge.schema import EdgeType, NodeType
@@ -256,3 +258,22 @@ def test_spec_subgraph_is_merged(run_dir: Path):
     # 运行时缺口连到 spec 里已有的 bin 节点，而不是再造一个同名节点
     assert len([b for b in graph.nodes(NodeType.COVERAGE_BIN)
                 if b.name == "cg_dut.op_zero"]) == 1
+
+
+def test_build_query_persistence_are_separate_modules():
+    """构建 / 查询 / 落盘拆开：query 不再 import runtime（避免职责又耦合回去）。"""
+    import src.layers.l3_decision.knowledge.persistence as persistence
+    import src.layers.l3_decision.knowledge.query as query
+    import src.layers.l3_decision.knowledge.runtime as runtime
+
+    assert runtime.build_runtime_graph.__module__ == runtime.__name__
+    assert query.trace_gap.__module__ == query.__name__
+    assert persistence.load_runtime_graph.__module__ == persistence.__name__
+
+    # 兼容旧导入路径（行为不变）
+    assert runtime.trace_gap is query.trace_gap
+    assert runtime.enrich_observation_history is query.enrich_observation_history
+    assert runtime.load_runtime_graph is persistence.load_runtime_graph
+
+    src = Path(query.__file__).read_text(encoding="utf-8")
+    assert "knowledge.runtime" not in src and "from .runtime" not in src

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from src.layers.l2_orchestration.executors.base import BaseExecutor, ExecutorResult
 from src.layers.l2_orchestration.executors.registry import register_executor
+from src.executors.verify.steps_dag import StepRecorder
 import structlog
 
 logger = structlog.get_logger()
@@ -53,6 +54,9 @@ class VerifyExecutor(BaseExecutor):
         files = []
         #: 策略包的语义 bin —— 攒着，等 `find_spec_yaml` 跑完再落盘（理由见下面那段）
         cov_bins_for_render: List[Any] = []
+        #: 7 步的数据依赖记录器（`steps_dag.py`）—— 前置没跑就当场报错，
+        #: 不靠注释里的“顺序不能乱”提醒下一个人。
+        steps = StepRecorder()
 
         # ── 策略包：按 design-style 加载设计风格验证知识，注入 spec 供测试生成 ──
         try:
@@ -113,7 +117,9 @@ class VerifyExecutor(BaseExecutor):
             # （`env_cov_bins` 是反过来：那个落在 find_spec_yaml 会清空的目录里，
             # 只能晚于它。两件事的方向相反，别一起搬）。
             self._write_coverage_plan(output_dir)
+            steps.mark("coverage_plan")
             call_tool("find_spec_yaml", {"spec_text": json.dumps(spec, ensure_ascii=False)})
+            steps.mark("find_spec_yaml")
             # ⚠️ **落盘必须在这里，不能更早。**
             #
             # `find_spec_yaml` 第一步就把 `inputs/yaml/uvm/*.yaml` **清空**（那是它的
@@ -129,7 +135,9 @@ class VerifyExecutor(BaseExecutor):
             # bind 实例名/时钟/复位）与 bins 要一起进下面那份契约，而 env 组件与
             # tb_top **都从那一份读** —— 两份各写一次名字就是"改了三个漏一个"。
             dut_channel = self._write_coverage_dut_channel(output_dir)
+            steps.mark("dut_channel")
             self._write_env_cov_bins(output_dir, cov_bins_for_render, dut_channel)
+            steps.mark("env_cov_bins")
             # 约束模型（`env/cons/*` 的输入）—— 同样落在 find_spec_yaml 之后、
             # jinja_render 之前。落在这里有两个**都必须**成立的理由：
             #   · 早于 find_spec_yaml → 被它清空（同上）；
@@ -137,11 +145,15 @@ class VerifyExecutor(BaseExecutor):
             # 它还要与 env.yaml **在同一次 `run()` 里**被读到，`default_env`
             # 才回填得上（约束 yaml 自己不写 `env`，见 `gen_uvm.run` 的回填）。
             self._write_constraint_yaml(output_dir)
+            steps.mark("constraint_yaml")
             # 三模型关联的断点清单 —— 也落在这一步（它要读刚写下的
             # constraint.yaml，所以必须晚于 `_write_constraint_yaml`）。
             # 落在 `coverage/`：那份报告与覆盖率报告同性质，都是签核材料。
             self._write_association_report(output_dir)
+            steps.mark("association_report")
             call_tool("jinja_render", {"output_dir": str(output_dir)})
+            steps.mark("jinja_render")
+            steps.finish()
             env_files = [str(p) for p in (output_dir / "agents").rglob("*.sv")] \
                 if (output_dir / "agents").exists() else []
             # 失败响亮：env 骨架没生成出来（agents/ 空）→ 记失败，不得靠断言文件蒙混"passed"

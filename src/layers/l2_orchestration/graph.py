@@ -24,6 +24,7 @@
 """
 from __future__ import annotations
 
+import functools
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -54,7 +55,8 @@ from src.layers.l2_orchestration.routers import (
     r_after_guardian, r_after_round_bump, r_approval, r_coverage, r_governor)
 from src.layers.l2_orchestration.runtime import (Runtime, hydrate_runtime,
                                                  recursion_limit)
-from src.layers.l2_orchestration.state import PipelineState
+from src.layers.l2_orchestration.state import (
+    PipelineState, unexpected_state_writers)
 
 logger = structlog.get_logger()
 
@@ -84,6 +86,37 @@ NODE_FUNCS = (
 
 NODE_NAMES = tuple(name for name, _ in NODE_FUNCS)
 
+#: 已经告警过的 (节点, 字段) —— 同一处只提醒一次，避免每轮刷屏。
+_STATE_WARNED: set = set()
+
+
+def _guarded_node(name: str, fn):
+    """包一层 State 契约检查：写了不属于自己的关键字段 → warning。
+
+    不是事务/失败：LangGraph 的 reducer 仍是合并权威；这里只把**静默覆盖**
+    变成一条可见的告警。包装函数保持 `(state, config)` 签名。
+    """
+    if getattr(fn, "__state_guard__", False):
+        return fn
+
+    @functools.wraps(fn)
+    async def _wrapped(state, config):
+        update = await fn(state, config)
+        if isinstance(update, dict):
+            bad = unexpected_state_writers(name, update)
+            for field in bad:
+                key = (name, field)
+                if key in _STATE_WARNED:
+                    continue
+                _STATE_WARNED.add(key)
+                logger.warning(
+                    f"State 契约告警: 节点 {name!r} 写了不属于它的字段 "
+                    f"{field!r}（写入者见 state.STATE_CONTRACTS）")
+        return update
+
+    _wrapped.__state_guard__ = True
+    return _wrapped
+
 
 def build_closed_loop_graph(checkpointer=None, store=None):
     """构建七 Agent 闭环图。
@@ -100,7 +133,7 @@ def build_closed_loop_graph(checkpointer=None, store=None):
     g = StateGraph(PipelineState)
 
     for name, fn in NODE_FUNCS:
-        g.add_node(name, fn)
+        g.add_node(name, _guarded_node(name, fn))
 
     g.add_edge(START, "init")
     g.add_edge("init", "front")

@@ -51,3 +51,67 @@ def test_empty_inputs_are_safe():
     r = compute_sim_reward({}, {}, {}, {})
     assert r["total"] == 0.0
     assert r["weakest"]
+
+
+def test_custom_weights_are_normalised_and_used():
+    from src.layers.l3_decision.reward import normalize_weights
+
+    weights, issues = normalize_weights(
+        {"compile": 1.0, "regression": 1.0, "coverage": 2.0})
+    assert issues == []
+    assert sum(weights.values()) == 1.0
+    assert weights["coverage"] == 0.5
+
+    r = compute_sim_reward(
+        {"compile": "PASS", "passed": 1, "failed": 0, "total": 1},
+        {"functional_pct": 0.0}, {}, {}, weights=weights)
+    # compile=0.25、regression=0.25 都满分，coverage=0.5 为 0 → 0.5
+    assert r["total"] == 0.5
+
+
+def test_invalid_weights_fall_back_and_say_why():
+    from src.layers.l3_decision.reward import WEIGHTS
+
+    r = compute_sim_reward({}, {}, {}, {},
+                           weights={"compile": -1, "regression": 1, "coverage": 1})
+    assert r["weights"] == WEIGHTS
+    assert any("非负" in i for i in r["weight_issues"])
+
+
+def test_missing_weight_key_uses_default_and_reports():
+    from src.layers.l3_decision.reward import WEIGHTS
+
+    r = compute_sim_reward({}, {}, {}, {}, weights={"compile": 0.5})
+    assert "缺少 regression" in " ".join(r["weight_issues"])
+    # 缺项补默认后**整体归一**（0.5 + 0.35 + 0.40 = 1.25）
+    assert r["weights"]["regression"] == round(WEIGHTS["regression"] / 1.25, 6)
+    assert sum(r["weights"].values()) == 1.0
+
+
+def test_weights_from_policy_accepts_raw_or_loaded_policy():
+    from src.layers.l3_decision.reward import weights_from_policy
+
+    raw = {"reward_weights": {"compile": 1, "regression": 1, "coverage": 2}}
+    assert weights_from_policy(raw) == raw["reward_weights"]
+    assert weights_from_policy({"raw": raw}) == raw["reward_weights"]
+    assert weights_from_policy({}) is None
+
+
+def test_policy_file_reward_weights_are_discovered(tmp_path):
+    """`reward_weights` 落在模块策略文件里就能被读出来（不用改代码）。"""
+    from src.layers.l2_orchestration.evidence.signoff_package import load_policy
+
+    run = tmp_path / "run_w"
+    run.mkdir()
+    (run / "signoff_policy.yaml").write_text(
+        "require_baseline: true\n"
+        "reward_weights:\n"
+        "  compile: 0.2\n"
+        "  regression: 0.3\n"
+        "  coverage: 0.5\n",
+        encoding="utf-8")
+    policy, source = load_policy(run, "whatever")
+    assert source.endswith("signoff_policy.yaml")
+    from src.layers.l3_decision.reward import weights_from_policy
+    assert weights_from_policy(policy) == {
+        "compile": 0.2, "regression": 0.3, "coverage": 0.5}

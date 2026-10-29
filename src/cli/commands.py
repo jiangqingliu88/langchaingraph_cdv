@@ -52,25 +52,13 @@ from src.cli.output import OutputAdapter, common_options, get_output_adapter
 
 console = Console()
 
-# ═══════════════════════════════════════════════════════════════
-# 退出码 —— **一处定义，别处只许引用**
-# ═══════════════════════════════════════════════════════════════
-#
-# 此前全是散落的字面量：`sys.exit(2)` 在文件里几十处、`sys.exit(3)` 两处、
-# `1` 到处 —— 读的人得去猜"这个 2 是用法错还是别的"。脚本侧更糟：CI 想区分
-# "在等人放行"和"真失败"，只能数着 exit code 的反面猜。
-#
-# **分工**：`EXIT_OK`/`EXIT_FAIL` 是通用成败；`EXIT_USAGE` 与 click 的用法错
-# 一致（2，别改 —— 改了会让 shell 的 `command not found` 检测错位）；
-# `EXIT_WAITING` 是"**没失败，在等人**"（审批挂起 / 分级回归的人工节点）；
-# `EXIT_LAYER_VIOLATION` 是启动期分层守卫拦下的；`EXIT_STRICT` 是
-# `--strict-semantic` 下判为 `PASS_WITH_CAVEAT`（CI 用）。
-EXIT_OK = 0
-EXIT_FAIL = 1
-EXIT_USAGE = 2
-EXIT_WAITING = 3
-EXIT_LAYER_VIOLATION = 4
-EXIT_STRICT = 5
+# 退出码与无状态 helper 已搬到 `src/cli/common.py`；这里 re-export，拆出的
+# `cmd_*` 模块继续 `from src.cli.commands import ...`，不用跟着改。
+from src.cli.common import (  # noqa: E402,F401
+    EXIT_FAIL, EXIT_LAYER_VIOLATION, EXIT_OK, EXIT_STRICT, EXIT_USAGE,
+    EXIT_WAITING, _approver_name, _extract_requirements_from_md,
+    _get_git_info, _output_gitlab_ci, _output_junit, _sha256_path,
+)
 
 
 def _strict_semantic_gate(run_dir: Path, run_id: str) -> None:
@@ -392,15 +380,6 @@ def diff_audit(run_a, run_b, fmt):
 
     except Exception as e:
         out.print_error(f"Audit diff failed: {e}")
-
-
-def _extract_requirements_from_md(text: str) -> list:
-    """从 Markdown 提取需求 ID"""
-    import re
-    reqs = []
-    for match in re.finditer(r'\*\*(REQ_\w+)\*\*', text):
-        reqs.append({"id": match.group(1), "line": text[:match.start()].count("\n") + 1})
-    return reqs
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1652,18 +1631,6 @@ def project_clean(clean_all):
         console.print("[dim]No output directories found[/dim]")
 
 
-def _get_git_info(cwd: Path) -> dict:
-    try:
-        import subprocess
-        branch = subprocess.check_output(["git", "branch", "--show-current"], cwd=str(cwd),
-                                         text=True).strip()
-        commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=str(cwd),
-                                         text=True).strip()
-        return {"branch": branch, "commit": commit}
-    except Exception:
-        return {"branch": "N/A", "commit": "N/A"}
-
-
 async def _get_db_stats() -> dict:
     try:
         from src.layers.l4_memory.persistence.repository import get_dashboard_stats
@@ -1937,50 +1904,6 @@ def ci_verify(spec_file, json_output, junit, gitlab, quiet):
         }, indent=2, ensure_ascii=False))
 
     sys.exit(0 if result["passed"] == result["total"] else 1)
-
-
-def _output_junit(result: dict):
-    """生成 JUnit XML"""
-    import xml.etree.ElementTree as ET
-    testsuite = ET.Element("testsuite", {
-        "name": "SignOffAI",
-        "tests": str(result["total"]),
-        "failures": str(result["total"] - result["passed"]),
-        "errors": "0",
-        "time": str(sum(p.get("time", 0) for p in result["phases"])),
-        "timestamp": datetime.now().isoformat(),
-    })
-    for p in result["phases"]:
-        testcase = ET.SubElement(testsuite, "testcase", {
-            "classname": "SignOffAI.phase",
-            "name": p["name"],
-            "time": str(p.get("time", 0)),
-        })
-        if p["status"] in ("failed", "error"):
-            ET.SubElement(testcase, "failure", {
-                "message": f"Phase {p['name']} {p['status']}",
-                "type": p["status"],
-            })
-    click.echo(ET.tostring(testsuite, encoding="unicode"))
-
-
-def _output_gitlab_ci(result: dict):
-    """输出 GitLab CI 格式报告"""
-    passed = result["passed"]
-    total = result["total"]
-    score = result["overall_score"]
-
-    metrics = [
-        f"signoffai_passed {passed}",
-        f"signoffai_total {total}",
-        f"signoffai_score {score}",
-    ]
-    for p in result["phases"]:
-        name = p["name"].lower()
-        metrics.append(f"signoffai_phase_{name}_score {p.get('score', 0)}")
-
-    click.echo("\n".join(metrics))
-    click.echo(f"\n# SignOffAI Report: {passed}/{total} passed, Score: {score}/100")
 
 
 @ci.command("check")
@@ -3006,40 +2929,6 @@ def _report_resume(result: dict, rid: str) -> None:
         return
     console.print(f"[green]运行已继续并结束：{rid[:32]}"
                   f"（状态 {result.get('status', '?')}）[/green]")
-
-
-def _sha256_path(path: Path) -> str:
-    try:
-        import hashlib
-
-        h = hashlib.sha256()
-        with path.open("rb") as f:
-            for chunk in iter(lambda: f.read(1 << 20), b""):
-                h.update(chunk)
-        return h.hexdigest()
-    except OSError:
-        return ""
-
-
-def _approver_name() -> str:
-    """审批人：git user.name → 环境用户名 → `unknown`（不编一个名字）。"""
-    try:
-        import subprocess
-
-        out = subprocess.run(["git", "config", "user.name"], capture_output=True,
-                             text=True, encoding="utf-8", errors="replace",
-                             timeout=5)
-        name = (out.stdout or "").strip()
-        if name:
-            return name
-    except Exception:                                   # noqa: BLE001
-        pass
-    import getpass
-
-    try:
-        return getpass.getuser()
-    except Exception:                                   # noqa: BLE001
-        return "unknown"
 
 
 def _write_approval_record(run_dir: Path, rid: str, action: str, reason: str) -> None:
@@ -4107,7 +3996,28 @@ from . import (  # noqa: E402,F401
 
 def main():
     _layer_guard_or_die()
+    _tool_registry_or_die()
     cli()
+
+
+def _tool_registry_or_die() -> None:
+    """启动期工具注册表守卫 —— 空映射必须显式声明“就是不用工具”。
+
+    `EXECUTOR_TOOL_MODULES` 的空元组语义是“声明不用 hub 工具”，所以**忘配**
+    与**故意不用**长得一模一样。这里把前者变成启动失败，并在 stderr 打一行
+    汇总（stdout 留给 `--json` 业务输出）。
+    """
+    try:
+        from src.layers.l2_orchestration.communication.tool_hub import (
+            ToolHub, ToolRegistryError)
+    except Exception:                                  # noqa: BLE001
+        return          # 拿不到注册表就别拦人 —— 这是护栏，不是功能
+    try:
+        summary = ToolHub.validate_registry()
+    except ToolRegistryError as exc:
+        print(f"工具注册表配置错误（启动期守卫）：\n{exc}", file=sys.stderr)
+        sys.exit(EXIT_USAGE)
+    print(ToolHub.format_registry_summary(summary), file=sys.stderr)
 
 
 def _layer_guard_or_die() -> None:

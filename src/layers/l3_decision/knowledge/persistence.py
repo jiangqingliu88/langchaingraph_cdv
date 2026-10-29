@@ -313,3 +313,23 @@ async def record_bugs_and_fixes(bugs, fixes, run_id: str = "",
         except Exception as e:                             # noqa: BLE001
             logger.warning(f"bug↔RTL 版本链接失败（bug 本体已落库）: {e}")
     return {"bugs": n_bug, "fixes": n_fix}
+
+
+def load_runtime_graph(output_dir) -> VerificationGraph:
+    """从 `<run>/coverage/knowledge_graph.json` 重建运行时图。
+
+    缺失 / 坏 JSON / 空图一律返回空 `VerificationGraph` —— 调用方据此把
+    “没有图”与“图里没有该节点”分开处理，不把读取失败当成空结果。
+    """
+    import json
+    from pathlib import Path
+
+    path = Path(output_dir) / "coverage" / "knowledge_graph.json"
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return VerificationGraph()
+    raw = doc.get("graph") if isinstance(doc, dict) else None
+    if not isinstance(raw, dict) or not raw.get("nodes"):
+        return VerificationGraph()
+    return VerificationGraph.from_dict(raw)

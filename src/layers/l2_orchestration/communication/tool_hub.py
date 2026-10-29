@@ -55,6 +55,10 @@ class ToolCallError(RuntimeError):
     """`call_tool` 调用失败（工具不存在 / schema 不过 / 执行报错）。"""
 
 
+class ToolRegistryError(RuntimeError):
+    """`EXECUTOR_TOOL_MODULES` 声明不完整 —— 启动期就失败，不等运行期静默无工具。"""
+
+
 _UNSET = object()
 
 
@@ -611,6 +615,49 @@ class ToolHub:
         "debug":    ("debug",),
         "audit":    (),
     }
+
+    #: **空映射是合法声明，但必须在这里显式登记。**
+    #: 新增 executor 忘了配工具时，空映射会被当成“不需要工具”而静默通过 ——
+    #: 这正是要防的配置遗漏。登记在这里 = 明确说“它就是不用 hub 工具”。
+    EXECUTORS_WITHOUT_HUB_TOOLS = frozenset({"front", "model", "audit"})
+
+    #: 启动期校验的完整角色表（与 8 个 executor 对齐）。
+    EXPECTED_EXECUTOR_ROLES = frozenset(EXECUTOR_TOOL_MODULES)
+
+    @classmethod
+    def registry_summary(cls) -> Dict[str, tuple]:
+        """角色 → 声明的工具模块（只读快照，供启动日志/测试）。"""
+        return {role: tuple(mods)
+                for role, mods in cls.EXECUTOR_TOOL_MODULES.items()}
+
+    @classmethod
+    def validate_registry(cls) -> Dict[str, tuple]:
+        """校验角色表完整性；返回 summary。
+
+        失败条件是**结构性的**，不看运行期是否 bootstrap 过：
+          · 缺角色（新 executor 没登记）；
+          · 空映射但没在 `EXECUTORS_WITHOUT_HUB_TOOLS` 里声明不用工具。
+        """
+        summary = cls.registry_summary()
+        missing = sorted(cls.EXPECTED_EXECUTOR_ROLES - set(summary))
+        if missing:
+            raise ToolRegistryError(
+                f"EXECUTOR_TOOL_MODULES 缺少 executor 角色: {missing}")
+        empty = {r for r, mods in summary.items() if not mods}
+        undeclared = sorted(empty - cls.EXECUTORS_WITHOUT_HUB_TOOLS)
+        if undeclared:
+            raise ToolRegistryError(
+                f"以下 executor 的工具映射为空，但未登记为“不用 hub 工具”: "
+                f"{undeclared}。请补映射，或加入 EXECUTORS_WITHOUT_HUB_TOOLS。")
+        return summary
+
+    @classmethod
+    def format_registry_summary(cls, summary: Dict[str, tuple] = None) -> str:
+        """一行启动摘要 —— 只写 stderr，不污染 `--json` 的 stdout。"""
+        summary = summary if summary is not None else cls.registry_summary()
+        parts = [f"{role}={'+'.join(mods) if mods else 'none'}"
+                 for role, mods in summary.items()]
+        return "[tool-registry] " + " · ".join(parts)
 
     def _tool_names_for(self, role: str) -> Optional[List[str]]:
         """executor 角色 → 工具名列表；**不认识的返回 None**（调用方据此决定回退）。

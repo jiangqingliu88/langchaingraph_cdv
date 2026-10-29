@@ -114,14 +114,25 @@ class CoverageDrivenDecisionEngine:
         self._experience = experience
 
     def decide(self, observation: Observation) -> Action:
-        """根据观测决定下一步动作。先规则，后可换 LLM。"""
-        cov = observation.coverage
-        functional = cov.get("functional", 0.0)
-        uncovered = observation.uncovered_bins
-        failed = observation.failed_tests
-        dead = observation.dead_code_modules
-        mismatch = observation.model_mismatch
+        """两阶段决策：**硬失败规则**优先，其次**软建议**。
+
+        这个顺序是结构性的，不是注释：
+          · `hard_action()` 只回答“有没有确定性失败”；
+          · `soft_action()` 才允许语义归因 / 经验降级 / 未来的 RL 参与。
+
+        任何新动作都必须先决定自己属于哪一阶段。硬失败永远不能被软策略覆盖。
+        """
+        return self.hard_action(observation) or self.soft_action(observation)
+
+    def hard_action(self, observation: Observation) -> Optional[Action]:
+        """硬失败 → 确定性动作（不经过语义归因，也不交给 RL）。
+
+        编译错 / 比对错 / 功能回归失败：证据是**失败本身**，不存在“要不要
+        学一下”的空间。动作一律标 `source="rule_hard"`，供 L4 分桶。
+        """
         compile_err = observation.compile_error
+        mismatch = observation.model_mismatch
+        failed = observation.failed_tests
 
         # ── -1. 编译失败 → 自愈/重试（最高优先级，编译不过后面全废）──
         if compile_err:
@@ -130,6 +141,7 @@ class CoverageDrivenDecisionEngine:
                 params={"compile_error": compile_err},
                 priority="HIGH",
                 reason=f"编译失败({compile_err.get('error_type','unknown')})，触发自愈",
+                source="rule_hard",
             )
 
         # ── 0. 比对失败 → 更新参考模型 ──
@@ -139,6 +151,7 @@ class CoverageDrivenDecisionEngine:
                 params={"mismatch_info": mismatch},
                 priority="HIGH",
                 reason=f"比对失败 {len(mismatch)} 处，疑似模型过时，更新参考模型",
+                source="rule_hard",
             )
 
         # ── 1. 功能回归失败 → 改 RTL（scoreboard mismatch 说明 DUT 功能错，重试环境无意义）──
@@ -150,7 +163,21 @@ class CoverageDrivenDecisionEngine:
                 params={"failed_tests": failed},
                 priority="HIGH",
                 reason=f"{len(failed)} 个测试失败（{kind}），改 RTL",
+                source="rule_hard",
             )
+        return None
+
+    def soft_action(self, observation: Observation) -> Optional[Action]:
+        """软建议 → 覆盖率停滞 / 空洞 / 死代码 / 收敛 / 扩种。
+
+        语义归因、经验降级都只发生在这一阶段；未来的 RL 也只能在这里参与。
+        返回 `None` 只可能发生在没有覆盖率数据且没有可判条件时（当前实现
+        总会给出兜底扩种）。
+        """
+        cov = observation.coverage
+        functional = cov.get("functional", 0.0)
+        uncovered = observation.uncovered_bins
+        dead = observation.dead_code_modules
 
         # ── 2. 覆盖率停滞 → 随机种子扩增 ──
         if self._is_stalled(observation.coverage_history):
@@ -159,6 +186,7 @@ class CoverageDrivenDecisionEngine:
                 params={"count": self.seed_expand_count},
                 priority="MEDIUM",
                 reason=f"覆盖率连续 {self.stall_rounds} 轮增长 < {self.stall_threshold}%，扩增种子",
+                source="rule",
             )
 
         # ── 3. 覆盖率不达标 → 按 gap reason 分流（语义层降维后的精准决策）──
@@ -178,6 +206,7 @@ class CoverageDrivenDecisionEngine:
                     params={"gaps": unreachable},
                     priority="HIGH",
                     reason=f"发现 {len(unreachable)} 处不可达/死代码，需改 RTL",
+                    source="rule",
                 )
             # 3b. 约束型缺口 → 放宽约束（约束是人为限制，放宽即提升）
             constraint = [g for g in gaps if g.get("reason") == "constraint"]
@@ -188,6 +217,7 @@ class CoverageDrivenDecisionEngine:
                     params={"gaps": constraint},
                     priority="HIGH",
                     reason=f"覆盖率 {functional}% < {self.target}%，存在 {len(constraint)} 处约束型缺口，放宽约束",
+                    source="rule",
                 )
                 # L4 记忆：RELAX_CONSTRAINT 历史无效 → 降级为定向测试
                 fallback = Action(
@@ -195,6 +225,7 @@ class CoverageDrivenDecisionEngine:
                     params={"gaps": unstimulated},
                     priority="HIGH",
                     reason=f"覆盖率 {functional}% < {self.target}%，定向测试补未激励缺口",
+                    source="rule",
                 ) if unstimulated else None
                 return self._with_experience(action, fallback)
             # 3c. 未激励缺口 → 定向测试生成
@@ -209,6 +240,7 @@ class CoverageDrivenDecisionEngine:
                     params={"gaps": unstimulated},
                     priority="HIGH",
                     reason=f"覆盖率 {functional}% < {self.target}%，存在 {len(unstimulated)} 处未激励缺口，生成定向测试",
+                    source="rule",
                 ), self.expand_seeds_action())
             # 3d. 旧接口 uncovered_bins → 定向测试
             if uncovered:
@@ -217,6 +249,7 @@ class CoverageDrivenDecisionEngine:
                     params={"target_bins": uncovered[:20]},
                     priority="HIGH",
                     reason=f"覆盖率 {functional}% < {self.target}%，存在 {len(uncovered)} 个未覆盖 bin",
+                    source="rule",
                 )
 
         # ── 4. 死代码（旧接口 dead_code_modules）→ 改 RTL ──
@@ -226,6 +259,7 @@ class CoverageDrivenDecisionEngine:
                 params={"modules": dead},
                 priority="MEDIUM",
                 reason=f"发现死代码模块: {dead}",
+                source="rule",
             )
 
         # ── 5. 达标 → 收敛签署 ──
@@ -235,6 +269,7 @@ class CoverageDrivenDecisionEngine:
                 params={"final_coverage": functional},
                 priority="LOW",
                 reason=f"覆盖率 {functional}% ≥ {self.target}%，收敛",
+                source="terminal",
             )
 
         # ── 兜底: 不达标但无空洞（rare）→ 继续扩种 ──
@@ -243,6 +278,7 @@ class CoverageDrivenDecisionEngine:
             params={"count": self.seed_expand_count},
             priority="LOW",
             reason=f"覆盖率 {functional}% < {self.target}% 但无明确空洞，扩种",
+            source="rule",
         )
 
     def _decide_from_semantics(self, gap_paths: List[Dict], functional: float) -> Optional[Action]:

@@ -160,3 +160,68 @@ def summarize(graph: VerificationGraph, gaps: List[Dict[str, Any]]) -> Dict[str,
         "by_suggestion": by_suggestion,
         "contexts": contexts,
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# 运行时子图查询 —— gap → bin/test/version/fix
+# ═══════════════════════════════════════════════════════════════
+
+def trace_gap(graph: VerificationGraph, tp_id: str = "",
+              bin: str = "") -> Dict[str, Any]:
+    """GAP 的确定性归因：test / bin / requirement / rtl_version / fix / bug。
+
+    按 `tp_id` 优先、`bin` 兜底；找不到返回 `{}`（不是“没有缺口”）。
+    上游的 `bug --causes--> gap` 也算进来 —— 它回答“谁把缺口挖出来的”。
+    """
+    gap = graph.find(NodeType.GAP, tp_id) if tp_id else None
+    if gap is None and bin:
+        for n in graph.nodes(NodeType.GAP):
+            if n.props.get("bin") == bin:
+                gap = n
+                break
+    if gap is None:
+        return {}
+    out = graph.edges(gap.id, direction="out")
+    upstream_bugs = [e for e in graph.edges(gap.id, direction="in")
+                     if e.type == EdgeType.CAUSES]
+    by_type: Dict[str, List[Dict[str, Any]]] = {}
+    for e, node_id in ([(e, e.dst) for e in out]
+                       + [(e, e.src) for e in upstream_bugs]):
+        node = graph.get_node(node_id)
+        if node is None:
+            continue
+        by_type.setdefault(node.type.value, []).append({
+            "name": node.name, "edge": e.type.value, **node.props})
+    return {
+        "gap": gap.name,
+        "status": gap.props.get("status", ""),
+        "dimension": gap.props.get("dimension", ""),
+        "value": gap.props.get("value", ""),
+        "bin": gap.props.get("bin", ""),
+        "tests": by_type.get(NodeType.TEST.value, []),
+        "bins": by_type.get(NodeType.COVERAGE_BIN.value, []),
+        "requirements": by_type.get(NodeType.REQUIREMENT.value, []),
+        "rtl_versions": by_type.get(NodeType.RTL_VERSION.value, []),
+        "fixes": by_type.get(NodeType.FIX.value, []),
+        "bugs": by_type.get(NodeType.BUG.value, []),
+    }
+
+
+def enrich_observation_history(observation: Any, output_dir) -> Any:
+    """把运行时图的历史（版本 / 修复）挂到 `Observation.gap_paths`。
+
+    只做**确定性查询**：不建图、不推理、不改图。没有图就原样返回。
+    """
+    from .persistence import load_runtime_graph
+
+    graph = load_runtime_graph(output_dir)
+    if len(graph) == 0:
+        return observation
+    for ctx in getattr(observation, "gap_paths", []) or []:
+        if not isinstance(ctx, dict):
+            continue
+        info = trace_gap(graph, tp_id=str(ctx.get("tp_id") or ""),
+                         bin=str(ctx.get("bin") or ""))
+        if info:
+            ctx["history"] = info
+    return observation

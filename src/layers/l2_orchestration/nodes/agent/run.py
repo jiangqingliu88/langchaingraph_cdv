@@ -213,13 +213,31 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
     # 决策层用它判断最弱的一层；经验库/证据包也可引用。
     sim_reward: Dict[str, Any] = {}
     try:
-        from src.layers.l3_decision.reward import compute_sim_reward
+        from src.layers.l3_decision.reward import (
+            compute_sim_reward, weights_from_policy)
+
+        # 权重是**模块级策略**：覆盖率型 IP 与回归型 IP 的“最弱层”不该用同一把尺。
+        # 读不到策略就用 reward.py 的默认值（缺省即合法，不阻断）。
+        _weights = None
+        try:
+            from config.paths import PROJECT_ROOT
+            from src.layers.l2_orchestration.evidence.signoff_package import (
+                load_policy)
+
+            _module = str((state.spec or {}).get("design_name")
+                          or Path(state.output_root).name)
+            _policy, _ = load_policy(Path(state.output_root), _module,
+                                     project_root=PROJECT_ROOT)
+            _weights = weights_from_policy(_policy)
+        except Exception:                          # noqa: BLE001 策略是增强
+            _weights = None
 
         _sem = data.get("semantic_validations") if isinstance(data, dict) else {}
         sim_reward = compute_sim_reward(
             state.regression, coverage if isinstance(coverage, dict) else {},
             data.get("tp_matrix") if isinstance(data, dict) else {},
-            (_sem or {}).get("seed_diversity") or None)
+            (_sem or {}).get("seed_diversity") or None,
+            weights=_weights)
         _cov_dir = Path(state.output_root) / "coverage"
         _cov_dir.mkdir(parents=True, exist_ok=True)
         (_cov_dir / "sim_reward.json").write_text(

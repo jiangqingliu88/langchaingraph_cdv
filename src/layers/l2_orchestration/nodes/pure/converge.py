@@ -53,7 +53,7 @@ async def n_decide(state: PipelineState, config) -> Dict[str, Any]:
 
     # 运行时图：给每个 gap_path 挂上“历史版本/修复”的确定性因果链。
     try:
-        from src.layers.l3_decision.knowledge.runtime import (
+        from src.layers.l3_decision.knowledge.query import (
             enrich_observation_history)
 
         obs = enrich_observation_history(obs, state.output_root)

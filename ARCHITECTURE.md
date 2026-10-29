@@ -1,8 +1,10 @@
 # SignOffAI 代码架构（当前实现）
 
-> 基线：2026-10-29  
-> 全量单测：**982 passed / 2 skipped**；工作台 **715 passed**  
-> 端到端实测：`output_e2e_graph_jiang_20261029_210906`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过
+> 基线：2026-10-29
+>
+> 全量单测：**1028 passed / 2 skipped**；工作台 **715 passed**
+>
+> 端到端实测：`output_e2e_guards2_jiang_20261029_232435`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过
 
 本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
 
@@ -121,6 +123,23 @@ audit → finalize → END
 - **人工节点**：`approval` 通过 LangGraph `interrupt()` + checkpoint 实现；`vagent resume` 用 `Command(resume=...)` 推图，不是 `update_state`。
 - **运行时对象**：`Runtime`（`runtime.py`）持有上下文、客户端、审计链；`PipelineState`（`state.py`）是图状态。
 
+### 4.4 结构护栏（把“人记住的不变量”变成代码检查）
+
+系统跑通后，以下四处最容易因“成功带来的复杂度增长”而变脆；现在都有
+**结构性检查**，不靠注释或记性：
+
+| 不变量 | 实现 | 失败方式 |
+|---|---|---|
+| verify 7 步的数据依赖 | `src/executors/verify/steps_dag.py` | import 期拓扑校验（缺失/成环）；执行期前置未跑 → `StepOrderError` |
+| State 字段归属 | `state.PHASE_OWNERS` + `STATE_CONTRACTS`；`graph._guarded_node` | 启动期字段存在性校验；运行期越权写关键字段 → warning（不改变 reducer 行为） |
+| 硬失败 vs 软建议 | `decision_engine.hard_action()` / `soft_action()`；`DecisionBrain` 显式先调 hard | 硬失败（编译/比对/回归）结构上到不了 RL |
+| 工具角色映射 | `ToolHub.validate_registry()` + CLI 启动一行汇总 | 空映射未在 `EXECUTORS_WITHOUT_HUB_TOOLS` 登记 → 启动 `exit 2` |
+| LLM 协议猜测 | `find_spec_yaml` 对“非规格显式声明的单端口协议组”回退 generic | 一个猜测不会劫持整份 spec（否则生成错误 agent、DUT_CHK 求值 X） |
+| 签核结论可复现 | Tier A + `replay/recipe.json` v2 | `tests/test_signoff_reproducible.py` 重算并与 `report.json` 比对；证据漂移会失败 |
+
+原则：**查询与构建分离、配置与代码分离、硬规则与软策略分离**。这些护栏
+只加检查、不加节点，不改变已跑通的拓扑。
+
 ---
 
 ## 5. 八个 Executor
@@ -174,6 +193,10 @@ audit → finalize → END
 - 统一 `call_tool(name, args)`：schema 校验 → sandbox → execute → 审计回执
 - `EXECUTOR_TOOL_MODULES`：执行器角色的工具白名单（一处维护）
 - **不回退全量工具**：角色映射为空 = 声明不用工具
+- **启动期校验**：`ToolHub.validate_registry()` 要求 8 个 executor 全登记；
+  空映射必须同时出现在 `EXECUTORS_WITHOUT_HUB_TOOLS`（`front/model/audit`），
+  否则 CLI 启动 `exit 2`。启动时 stderr 打一行
+  `[tool-registry] front=none · design=spec · …`，不污染 `--json` 的 stdout。
 
 ### 6.3 工具板块（生成 / 检查分开）
 
@@ -294,6 +317,13 @@ _write_coverage_plan
 ```
 
 顺序错一步的典型表现：env_cov 未生成、约束没进渲染、覆盖率静默退回自动分箱。
+
+**顺序不再是注释约定**：`src/executors/verify/steps_dag.py` 把这 7 步声明成
+`deps/inputs/outputs/why` 的数据 DAG。import 期跑拓扑校验（缺依赖/成环直接
+失败），执行期由 `StepRecorder` 在每步后 `mark()`，前置没跑就抛
+`StepOrderError`。`find_spec_yaml` 会清空 `inputs/yaml/uvm/`，所以
+`dut_channel → env_cov_bins → constraint_yaml → association_report`
+全部显式挂在它下游。
 
 ### 8.2 生成物
 
@@ -418,11 +448,17 @@ coverage   0.40   计划覆盖率 + TP 命中率 + 种子多样性（更慢）
 
 - 结果落 `coverage/sim_reward.json`，并进 `Observation.sim_reward`；
 - `weakest` 指出最弱的一层，供决策层判断“往哪使劲”；
+- **权重可按模块配置**：`signoff_policy.yaml` 的 `reward_weights`
+  （compile / regression / coverage）覆盖默认值；缺项补默认、非法值回退并在
+  `weight_issues` 说明，始终归一化到总和 1（不改变 0..1 量纲）；
 - **不是求解器**，但比二值信号多了方向感。
 
 ### 9.5 决策动作
 
-`decide` 基于覆盖率/失败分布选择动作：
+`decide()` 是**两阶段**：`hard_action()`（编译 / 比对 / 功能回归失败，确定性、
+`source=rule_hard`）→ 没有硬失败才进 `soft_action()`（停滞 / 语义归因 / 约束 /
+死代码 / 收敛，`source=rule|terminal`）。`DecisionBrain` 显式先调 `hard_action`，
+RL 只可能出现在软阶段。动作全集：
 
 `FIX_COMPILE_bug`、`FIX_MODEL_bug`、`FIX_FUNCTIONAL_bug`、`FIX_PROTOCOL_bug`、`FIX_RESET_bug`、`FIX_CDC_bug`、`FIX_DEADCODE_bug`、`EXPAND_SEEDS`、`RELAX_CONSTRAINT`、`GENERATE_DIRECTED_TEST`、`CONVERGE`
 
@@ -510,6 +546,21 @@ vagent evidence compare <pkg-a> <pkg-b>
 - Tier A：不跑 EDA，重算三态判定
 - Tier B：需要 EDA 时重跑（只记录 recipe，不自动执行）
 
+`replay/recipe.json` 是 **v2 结构化 schema**（`validate_recipe()` 校验）：
+
+```json
+{
+  "schema": "signoff_replay_recipe_v2",
+  "tier_a": {"requires_eda": false, "command": "python replay/replay.py",
+              "inputs": [...], "checks": ["file_sha256", "verdict_recompute", ...]},
+  "tier_b": {"requires_eda": true, "eda_tools": ["vsim", "vcover"],
+              "steps": [{"name": "regression", "command_source": "...",
+                         "expected_artifacts": [...]}]}
+}
+```
+
+未来写自动化 replay runner 时直接消费字段，不用反推 Python 实现。
+
 ### 10.4 治理
 
 | 机制 | 落点 |
@@ -585,7 +636,7 @@ vagent evidence compare <pkg-a> <pkg-b>
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 982 passed / 2 skipped
+python -m pytest tests/ -q                            # 1028 passed / 2 skipped
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
 python -m pytest src/workbench/tests -q               # 715 passed
@@ -608,6 +659,13 @@ python -m pytest src/workbench/tests -q               # 715 passed
 | `test_sim_reward.py` | 空输入不冒充通过；权重与最弱层口径 |
 | `test_tools_boards.py` | 工具物理目录与板块单一真相一致 |
 | `test_tools_skills.py` | Native Skills（`SKILL.md`）骨架不丢 |
+| `test_verify_steps_dag.py` | verify 7 步依赖声明 / 拓扑序 / 前置未跑即失败 |
+| `test_decision_phases.py` | 硬失败不被软策略/RL 覆盖；软阶段才允许语义归因 |
+| `test_state_contracts.py` | 关键 State 字段的写入者契约；越权写入留痕 |
+| `test_tool_registry.py` | 空工具映射必须显式登记“不用工具” |
+| `test_signoff_reproducible.py` | Tier A 重算结论 = report；证据漂移必失败 |
+| `test_cli_common.py` | 退出码/helper 只有一处定义且 re-export 一致 |
+| `test_protocol_grouping.py` | 单端口 LLM 猜测不能劫持整份 spec；显式协议仍保留 |
 
 ---
 
@@ -638,7 +696,8 @@ python -m pytest src/workbench/tests -q               # 715 passed
 ├─ specs/<module>/              RTL + casemodel.yaml + signoff_policy.yaml
 ├─ src/
 │  ├─ cli/                      CLI / REPL
-│  │  ├─ commands.py            **入口 + 共享 helper + 剩余命令**
+│  │  ├─ commands.py            **入口 + 子命令组注册 + 剩余命令**
+│  │  ├─ common.py              退出码 + 无状态 helper（唯一定义）
 │  │  ├─ cmd_verify.py          init / verify / multi / plan
 │  │  ├─ cmd_signoff.py         signoff 命令组
 │  │  ├─ cmd_regression.py      regression 命令组
@@ -652,10 +711,12 @@ python -m pytest src/workbench/tests -q               # 715 passed
 │  │  ├─ _bootstrap.py          分层守卫
 │  │  ├─ l1_infrastructure/     EDA / 输出 / 哈希 / Reference Finder
 │  │  ├─ l2_orchestration/      LangGraph / executors / tools / evidence
-│  │  ├─ l3_decision/           决策 / 奖励 / 知识（含 runtime 运行时图）
+│  │  ├─ l3_decision/           决策（hard/soft 两阶段）/ 奖励 / 知识
+│  │  │                         schema / graph / query / persistence / runtime
 │  │  ├─ l4_memory/             SQLite 注册表 / 血缘 / 经验
 │  │  └─ l5_evolution/          蒸馏 / 生长
 │  ├─ executors/                8 个 executor
+│  │  └─ verify/steps_dag.py   verify 7 步依赖声明 + 执行期顺序记录器
 │  ├─ tools/                    领域工具包（按板块物理分目录）
 │  │  ├─ generation/            casemodel / uvm / isa / cmodel / doc
 │  │  ├─ checking/              assertion / debug / coverage / spec

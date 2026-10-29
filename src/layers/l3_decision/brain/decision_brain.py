@@ -69,9 +69,12 @@ class DecisionBrain:
         return action
 
     def _decide_inner(self, obs, state: str) -> Action:
-        # 1. 硬失败 → 规则引擎（确定性）
-        if obs.compile_error or obs.model_mismatch or obs.failed_tests:
-            return self._tag(self.rule_engine.decide(obs), "rule_hard")
+        # 1. 硬失败 → 规则引擎的**硬阶段**（确定性，RL 不可覆盖）
+        #    这里直接调 `hard_action` 而不是 `decide`：结构上就说明了
+        #    "先问有没有确定性失败"，不给软策略留下插手的位置。
+        hard = self.rule_engine.hard_action(obs)
+        if hard is not None:
+            return self._tag(hard, "rule_hard")
 
         # 2. 达标 → CONVERGE（规则，非 RL——收敛是确定性的终态）
         cov = obs.coverage or {}
@@ -89,7 +92,10 @@ class DecisionBrain:
             )
 
         # 3. 软决策 → RL（有经验）或规则（冷启动）
-        rule_action = self.rule_engine.decide(obs)
+        #    `soft_action` 是唯一允许语义归因/经验降级参与的阶段。
+        rule_action = self.rule_engine.soft_action(obs)
+        if rule_action is None:                    # 规则没给建议（当前不会发生）
+            rule_action = self.rule_engine.decide(obs)
         if self.rl_policy.has_experience(state):
             action_type = self.rl_policy.select_action(state)
             if action_type == rule_action.action_type:

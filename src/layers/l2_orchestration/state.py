@@ -228,6 +228,59 @@ PHASE_OWNERS: Dict[str, str] = {
 NON_AGENT_FIELDS = set(PipelineState.model_fields) - set(PHASE_OWNERS)
 
 
+# ═══════════════════════════════════════════════════════════════
+# 字段契约 —— 写入者 / 读者 / 是否进 checkpoint
+# ═══════════════════════════════════════════════════════════════
+#
+# `PHASE_OWNERS` 只覆盖“各阶段产物”且属主名带历史后缀；这里补的是**关键
+# 流转字段**的完整契约（尤其是本轮新增的 sim_reward / knowledge_graph）。
+# 未列出的字段视为“自由字段”，不做运行期告警 —— 先把最贵的几条锁住。
+#
+# 运行期守卫在 `graph.py`：节点返回 update 后，若写了不属于自己的关键字段，
+# 打一条 warning（不是失败：图上仍以 LangGraph 的 reducer 为准）。
+STATE_CONTRACTS: Dict[str, Dict[str, Any]] = {
+    # 阶段产物
+    "spec":              {"writers": ("front", "design"), "readers": ("model", "verify", "coverage"), "checkpoint": True},
+    "design_arch":       {"writers": ("front", "design"), "readers": ("model", "verify"), "checkpoint": True},
+    "model":             {"writers": ("model",), "readers": ("verify", "ops"), "checkpoint": True},
+    "tests":             {"writers": ("verify",), "readers": ("ops",), "checkpoint": True},
+    "env":               {"writers": ("ops",), "readers": ("ops",), "checkpoint": True},
+    "regression":        {"writers": ("ops",), "readers": ("coverage", "decide"), "checkpoint": True},
+    "debug":             {"writers": ("debug_functional",), "readers": ("decide",), "checkpoint": True},
+    "coverage":          {"writers": ("coverage",), "readers": ("decide", "audit"), "checkpoint": True},
+    "gaps":              {"writers": ("coverage",), "readers": ("decide",), "checkpoint": True},
+    "audit":             {"writers": ("audit",), "readers": ("finalize",), "checkpoint": True},
+    # 本轮新增的跨层信号
+    "sim_reward":        {"writers": ("coverage",), "readers": ("decide", "audit", "finalize"), "checkpoint": True},
+    "knowledge_graph":   {"writers": ("coverage",), "readers": ("decide", "audit", "finalize"), "checkpoint": True},
+    # 决策簿记
+    "pending_action":    {"writers": ("decide", "governor"), "readers": ("governor", "record_decision", "action routers"), "checkpoint": True},
+    "last_action":       {"writers": ("record_decision",), "readers": ("coverage", "finalize"), "checkpoint": True},
+    "decision_log":      {"writers": ("record_decision",), "readers": ("finalize",), "checkpoint": True},
+    "governance_outcome": {"writers": ("governor",), "readers": ("routers",), "checkpoint": True},
+    "approval_outcome":  {"writers": ("approval",), "readers": ("routers",), "checkpoint": True},
+    # 终态
+    "result":            {"writers": ("finalize",), "readers": ("CLI", "workbench"), "checkpoint": True},
+}
+
+
+def unexpected_state_writers(node_name: str, update: Dict[str, Any]) -> list:
+    """节点写了不属于它的**关键字段** —— 返回字段名（空 = 正常）。
+
+    只检查 `STATE_CONTRACTS` 里声明的字段；`phases` / 计数器这类多写者字段
+    不在表里，保持自由。`*` 表示任何节点都可写。
+    """
+    bad = []
+    for field in (update or {}):
+        contract = STATE_CONTRACTS.get(field)
+        if not contract:
+            continue
+        writers = contract.get("writers") or ()
+        if "*" not in writers and node_name not in writers:
+            bad.append(field)
+    return bad
+
+
 def validate_phase_owners() -> None:
     """构图期自检：归属表必须是 agent 字段集合的一个划分。
 
@@ -246,6 +299,16 @@ def validate_phase_owners() -> None:
         raise ValueError(
             f"PHASE_OWNERS 引用了 PipelineState 中不存在的字段: {sorted(unknown)}"
         )
+
+    unknown_contract = set(STATE_CONTRACTS) - set(PipelineState.model_fields)
+    if unknown_contract:
+        raise ValueError(
+            f"STATE_CONTRACTS 引用了 PipelineState 中不存在的字段: "
+            f"{sorted(unknown_contract)}"
+        )
+    for field, contract in STATE_CONTRACTS.items():
+        if not contract.get("writers"):
+            raise ValueError(f"STATE_CONTRACTS.{field} 必须声明至少一个写入者")
 
 
 validate_phase_owners()

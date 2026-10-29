@@ -183,59 +183,9 @@ def write_runtime_graph(graph: VerificationGraph, output_dir: str | Path) -> Dic
             "gaps": len(payload["gaps"])}
 
 
-def load_runtime_graph(output_dir: str | Path) -> VerificationGraph:
-    doc = _read_json(Path(output_dir) / "coverage" / "knowledge_graph.json")
-    raw = doc.get("graph") or {}
-    return VerificationGraph.from_dict(raw) if raw else VerificationGraph()
+# ═══════════════════════════════════════════════════════════════
+# 兼容 re-export —— 读取/查询已按职责搬到 persistence / query。
+# ═══════════════════════════════════════════════════════════════
 
-
-def trace_gap(graph: VerificationGraph, tp_id: str = "", bin: str = "") -> Dict[str, Any]:
-    """GAP → 覆盖仓/测试/版本/修复/需求 的确定性溯源。"""
-    gap = graph.find(NodeType.GAP, tp_id) if tp_id else None
-    if gap is None and bin:
-        for n in graph.nodes(NodeType.GAP):
-            if n.props.get("bin") == bin:
-                gap = n
-                break
-    if gap is None:
-        return {}
-    out = graph.edges(gap.id, direction="out")
-    # 上游的 `bug --causes--> gap` 也算缺口溯源的一部分：回答“谁把它挖出来的”。
-    upstream_bugs = [e for e in graph.edges(gap.id, direction="in")
-                     if e.type == EdgeType.CAUSES]
-    by_type: Dict[str, List[Dict[str, Any]]] = {}
-    for e, node_id in ([(e, e.dst) for e in out]
-                       + [(e, e.src) for e in upstream_bugs]):
-        node = graph.get_node(node_id)
-        if node is None:
-            continue
-        by_type.setdefault(node.type.value, []).append({
-            "name": node.name, "edge": e.type.value, **node.props})
-    return {
-        "gap": gap.name,
-        "status": gap.props.get("status", ""),
-        "dimension": gap.props.get("dimension", ""),
-        "value": gap.props.get("value", ""),
-        "bin": gap.props.get("bin", ""),
-        "tests": by_type.get(NodeType.TEST.value, []),
-        "bins": by_type.get(NodeType.COVERAGE_BIN.value, []),
-        "requirements": by_type.get(NodeType.REQUIREMENT.value, []),
-        "rtl_versions": by_type.get(NodeType.RTL_VERSION.value, []),
-        "fixes": by_type.get(NodeType.FIX.value, []),
-        "bugs": by_type.get(NodeType.BUG.value, []),
-    }
-
-
-def enrich_observation_history(observation: Any, output_dir: str | Path) -> Any:
-    """把运行时图的 `history` 挂到 Observation.gap_paths 上（确定性）。"""
-    graph = load_runtime_graph(output_dir)
-    if len(graph) == 0:
-        return observation
-    for ctx in getattr(observation, "gap_paths", []) or []:
-        if not isinstance(ctx, dict):
-            continue
-        info = trace_gap(graph, tp_id=str(ctx.get("tp_id") or ""),
-                         bin=str(ctx.get("bin") or ""))
-        if info:
-            ctx["history"] = info
-    return observation
+from .persistence import load_runtime_graph  # noqa: E402,F401
+from .query import trace_gap, enrich_observation_history  # noqa: E402,F401

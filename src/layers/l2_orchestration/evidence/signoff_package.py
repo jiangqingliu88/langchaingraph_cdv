@@ -295,13 +295,40 @@ def write_package(output_dir: Path, manifest: Dict[str, Any],
     replay_dir.mkdir(parents=True, exist_ok=True)
     (replay_dir / "replay.py").write_text(_REPLAY_SCRIPT, encoding="utf-8")
     recipe = {
-        "schema": "signoff_replay_recipe_v1",
+        "schema": "signoff_replay_recipe_v2",
         "run": manifest.get("run", output_dir.name),
-        "tier_a": "python replay/replay.py",
+        "tier_a": {
+            "description": "不跑 EDA：校验文件哈希并重算三态判定",
+            "command": "python replay/replay.py",
+            "requires_eda": False,
+            "inputs": [
+                "manifest.json",
+                "execution/coverage/tp_matrix.json",
+                "execution/sim/coverage/coverage_result.json",
+            ],
+            "checks": [
+                "file_sha256", "package_hash", "manifest_hash",
+                "verdict_recompute", "tp_matrix_counts", "plan_coverage_pct",
+            ],
+        },
         "tier_b": {
-            "note": "需要 EDA 环境；本包不自动执行（证据复核不应依赖重跑仿真）",
-            "regression_dir": "regression_run",
-            "coverage_cmd": "vcover report -cvg -details sim/coverage/plan_merged.ucdb",
+            "description": "需要 EDA：按回归 YAML 重跑并重新合并覆盖率",
+            "requires_eda": True,
+            "eda_tools": ["vsim", "vcover"],
+            "note": "本包不自动执行 —— 证据复核不应默认依赖重跑仿真",
+            "steps": [
+                {
+                    "name": "regression",
+                    "cwd": "regression_run",
+                    "command_source": "inputs/yaml/regression.yaml 的 tests[*].run_cmd",
+                    "expected_artifacts": ["report.json", "report_summary.txt"],
+                },
+                {
+                    "name": "coverage_merge",
+                    "command": "vcover report -cvg -details sim/coverage/plan_merged.ucdb",
+                    "expected_artifacts": ["coverage/tp_matrix.json"],
+                },
+            ],
         },
         "seeds": manifest.get("seeds") or [],
     }
@@ -424,6 +451,65 @@ if __name__ == "__main__":
 # ═══════════════════════════════════════════════════════════
 # 校验 / 回放 / 双环境比较
 # ═══════════════════════════════════════════════════════════
+
+def load_recipe(package_dir: Path) -> Dict[str, Any]:
+    """读 `replay/recipe.json`；缺失/坏文件返回 `{}`。"""
+    path = Path(package_dir) / "replay" / "recipe.json"
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def validate_recipe(recipe: Dict[str, Any]) -> List[str]:
+    """校验回放 recipe 的最小 schema，供未来自动化 runner 直接消费。
+
+    返回问题列表；空列表 = 可用。**不执行任何命令**。
+    """
+    issues: List[str] = []
+    if not isinstance(recipe, dict):
+        return ["recipe 必须是对象"]
+    if recipe.get("schema") != "signoff_replay_recipe_v2":
+        issues.append(f"recipe.schema 必须是 signoff_replay_recipe_v2，"
+                      f"实际 {recipe.get('schema')!r}")
+    tier_a = recipe.get("tier_a")
+    if not isinstance(tier_a, dict):
+        issues.append("recipe.tier_a 必须是对象")
+    else:
+        if tier_a.get("requires_eda") is not False:
+            issues.append("tier_a.requires_eda 必须是 false")
+        if not isinstance(tier_a.get("command"), str) or not tier_a["command"]:
+            issues.append("tier_a.command 必须是非空字符串")
+        for key in ("inputs", "checks"):
+            if not isinstance(tier_a.get(key), list):
+                issues.append(f"tier_a.{key} 必须是列表")
+    tier_b = recipe.get("tier_b")
+    if not isinstance(tier_b, dict):
+        issues.append("recipe.tier_b 必须是对象")
+    else:
+        if tier_b.get("requires_eda") is not True:
+            issues.append("tier_b.requires_eda 必须是 true")
+        if not isinstance(tier_b.get("eda_tools"), list):
+            issues.append("tier_b.eda_tools 必须是列表")
+        steps = tier_b.get("steps")
+        if not isinstance(steps, list) or not steps:
+            issues.append("tier_b.steps 必须是非空列表")
+        else:
+            for i, step in enumerate(steps):
+                if not isinstance(step, dict):
+                    issues.append(f"tier_b.steps[{i}] 必须是对象")
+                    continue
+                if not step.get("name"):
+                    issues.append(f"tier_b.steps[{i}].name 不能为空")
+                if not (step.get("command") or step.get("command_source")):
+                    issues.append(
+                        f"tier_b.steps[{i}] 需要 command 或 command_source")
+                if not isinstance(step.get("expected_artifacts"), list):
+                    issues.append(
+                        f"tier_b.steps[{i}].expected_artifacts 必须是列表")
+    return issues
+
 
 def _load_manifest(package_dir: Path) -> Dict[str, Any]:
     doc = json.loads((Path(package_dir) / "manifest.json")

@@ -17,13 +17,58 @@ Cadence 能直接从求解器内部读连续信号（slack / DRC / IR drop）。
 """
 from __future__ import annotations
 
+import math
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 _SCHEMA = "sim_reward_v1"
 
 #: 三层权重。编译最快、覆盖率最慢但最接近目标；权重按“目标相关度”给。
 WEIGHTS = {"compile": 0.25, "regression": 0.35, "coverage": 0.40}
+
+
+def normalize_weights(raw: Any = None) -> Tuple[Dict[str, float], list]:
+    """把策略文件里的 `reward_weights` 归一成 0..1 的三项权重。
+
+    - 缺省 / 非映射 / 非数字 / 负数 / 总和为 0 → **回退默认权重**并返回原因；
+    - 缺项用默认值补齐，未知键忽略；
+    - 合法时按总和归一，保证 `total` 仍在 0..1（换权重不改量纲）。
+    """
+    if raw is None:
+        return dict(WEIGHTS), []
+    if not isinstance(raw, dict):
+        return dict(WEIGHTS), ["reward_weights 必须是映射（compile/regression/coverage）"]
+
+    issues: list = []
+    merged: Dict[str, float] = {}
+    for key, default in WEIGHTS.items():
+        if key not in raw:
+            merged[key] = default
+            issues.append(f"reward_weights 缺少 {key}，用默认 {default}")
+            continue
+        try:
+            value = float(raw[key])
+        except (TypeError, ValueError):
+            return dict(WEIGHTS), [f"reward_weights.{key} 不是数字: {raw[key]!r}"]
+        if not math.isfinite(value) or value < 0:
+            return dict(WEIGHTS), [f"reward_weights.{key} 必须是非负有限数: {value!r}"]
+        merged[key] = value
+    for key in raw:
+        if key not in WEIGHTS:
+            issues.append(f"忽略未知的 reward_weights 键: {key}")
+
+    total = sum(merged.values())
+    if total <= 0:
+        return dict(WEIGHTS), issues + ["reward_weights 总和必须大于 0"]
+    return {k: round(v / total, 6) for k, v in merged.items()}, issues
+
+
+def weights_from_policy(policy: Any) -> Optional[Dict[str, Any]]:
+    """从 `load_policy()` 的返回值（或原始策略 dict）取 `reward_weights`。"""
+    raw = policy.get("raw") if isinstance(policy, dict) and "raw" in policy else policy
+    if isinstance(raw, dict):
+        return raw.get("reward_weights")
+    return None
 
 _ERRORS_RE = re.compile(r"Errors:\s*(\d+)", re.IGNORECASE)
 _WARN_RE = re.compile(r"Warnings:\s*(\d+)", re.IGNORECASE)
@@ -108,26 +153,32 @@ def _coverage_component(coverage: Dict[str, Any], tp_matrix: Dict[str, Any],
 def compute_sim_reward(regression: Dict[str, Any] | None,
                        coverage: Dict[str, Any] | None,
                        tp_matrix: Dict[str, Any] | None = None,
-                       seed_diversity: Dict[str, Any] | None = None) -> Dict[str, Any]:
+                       seed_diversity: Dict[str, Any] | None = None,
+                       weights: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """读已有产物 → 粗连续奖励（0..1）。
 
     纯函数：不读文件、不跑 EDA、不写盘。调用方负责把结果落
     `coverage/sim_reward.json` 并喂给决策/经验库。
+
+    `weights` 通常来自模块签核策略的 `reward_weights`；无效配置**回退默认**
+    并在 `weight_issues` 里说明原因（不静默改变量纲）。
     """
     regression = regression if isinstance(regression, dict) else {}
     coverage = coverage if isinstance(coverage, dict) else {}
     tp_matrix = tp_matrix if isinstance(tp_matrix, dict) else {}
 
+    used_weights, weight_issues = normalize_weights(weights)
     comp = {
         "compile": _compile_component(regression),
         "regression": _regression_component(regression),
         "coverage": _coverage_component(coverage, tp_matrix, seed_diversity),
     }
-    total = sum(WEIGHTS[k] * comp[k]["score"] for k in WEIGHTS)
+    total = sum(used_weights[k] * comp[k]["score"] for k in used_weights)
     return {
         "schema": _SCHEMA,
         "total": round(total, 4),
-        "weights": dict(WEIGHTS),
+        "weights": used_weights,
+        "weight_issues": weight_issues,
         "components": comp,
         # 给决策层的直接建议：最弱的一层决定下一步该往哪使劲。
         "weakest": min(comp, key=lambda k: comp[k]["score"]),

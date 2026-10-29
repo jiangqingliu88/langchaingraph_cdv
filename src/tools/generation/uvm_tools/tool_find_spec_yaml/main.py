@@ -358,6 +358,9 @@ def _group_agents_by_protocol(spec: dict, rtl_data: dict, module_name: str) -> l
             if not p["name"]:
                 continue
             p["protocol"] = str(i.get("protocol", "") or "").strip().lower()
+            # 规格里**显式**写了协议：单端口组也可信（人工给的边界）。
+            p["_explicit_protocol"] = bool(p["protocol"]
+                                           and p["protocol"] != "generic")
             ports.append(p)
     elif rtl_data and rtl_data.get("ports"):
         for p in rtl_data["ports"]:
@@ -389,6 +392,24 @@ def _group_agents_by_protocol(spec: dict, rtl_data: dict, module_name: str) -> l
         groups.setdefault(proto, []).append(p)
 
     generic_ports = groups.pop("generic", [])
+
+    # **单端口“协议组”不可信**：LLM 常把个别端口猜成 axi/apb，而同一份
+    # spec 里绝大多数端口仍是 generic。放行会生成一个只含 1 个信号的
+    # `axi_agent`，把真正的 DUT 端口赶进“方向兜底”——实测导致整轮回归
+    # DUT_CHK 求值为 X。规则：非规格显式声明的单端口组，退回 generic。
+    if generic_ports:
+        demoted = []
+        for proto, grp in list(groups.items()):
+            if len(grp) != 1 or grp[0].get("_explicit_protocol"):
+                continue
+            port = grp[0]
+            if _classify_protocol_by_name(port["name"]) != proto:
+                demoted.append((proto, port))
+                generic_ports.extend(groups.pop(proto))
+        for proto, port in demoted:
+            print(f"  [find_yaml] 忽略单端口协议猜测 {port['name']}→{proto}"
+                  f"（无规格依据，走方向兜底）", flush=True)
+
     if generic_ports:
         print(f"  [find_yaml] 警告: {len(generic_ports)} 个端口无法分类协议，"
               f"将走方向兜底: {[p['name'] for p in generic_ports]}", flush=True)
