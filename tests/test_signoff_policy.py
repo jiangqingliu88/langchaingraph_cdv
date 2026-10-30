@@ -74,6 +74,8 @@ def test_module_policy_inherits_global_defaults(tmp_path):
     policy, _ = load_policy(tmp_path, "dut", project_root=root, strict=True)
     assert policy["require_ref_model"] is True
     assert policy["require_baseline"] is True       # 来自 _default.yaml
+    assert policy["effective"]["require_ref_model"]["source"] == "module"
+    assert policy["effective"]["require_baseline"]["source"] == "default"
 
 
 def test_module_policy_overrides_global_default(tmp_path):

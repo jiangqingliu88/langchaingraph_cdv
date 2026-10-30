@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any, Dict, List, Optional
 
-from .schema import NodeType, EdgeType
+from .schema import NodeType, EdgeType, QUERY_CONTRACT
 from .graph import VerificationGraph
 
 
@@ -193,6 +193,7 @@ def trace_gap(graph: VerificationGraph, tp_id: str = "",
         by_type.setdefault(node.type.value, []).append({
             "name": node.name, "edge": e.type.value, **node.props})
     return {
+        "contract": QUERY_CONTRACT,
         "gap": gap.name,
         "status": gap.props.get("status", ""),
         "dimension": gap.props.get("dimension", ""),

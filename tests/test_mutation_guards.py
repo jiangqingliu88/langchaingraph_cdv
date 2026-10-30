@@ -43,4 +43,5 @@ def test_the_mutation_set_covers_the_six_core_guards():
         "decision_hard_overridden", "steps_dag_missing_dependency",
         "plusargs_reserved_allowed", "file_audit_hash_skipped",
         "state_contract_wrong_owner", "tool_registry_empty_allowed",
+        "source_terminal_accepts_anything",
     }

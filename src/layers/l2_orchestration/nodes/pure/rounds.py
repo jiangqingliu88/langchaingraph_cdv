@@ -70,7 +70,18 @@ async def n_round_bump(state: PipelineState, config) -> Dict[str, Any]:
 
     round_num / iterations 用 operator.add，所以返回 1 即自增。
     终止不靠递归上限，由各 router 显式检查轮次（见 _have_rounds_left）。
+
+    进到 round_bump 时，**上一轮**的产物已经齐了（ops/coverage/decision 都跑过）
+    —— 在这里落一轮 per-test 事实（`coverage/round_manifest.json`）。它不替代
+    run manifest，只回答“第几轮、哪条用例、哪个后端、哪份 plan、播放日志哈希”。
     """
+    try:
+        from src.layers.l2_orchestration.evidence.round_facts import (
+            record_round_facts)
+
+        record_round_facts(state.output_root, state.round_num)
+    except Exception as _e:                        # noqa: BLE001 证据旁路
+        logger.warning(f"round 事实表写入失败: {_e}")
     return {"round_num": 1, "iterations": 1}
 
 

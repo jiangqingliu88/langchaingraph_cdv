@@ -70,6 +70,7 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "coverage/association_report.json",
         "coverage/constraint_status.json",
         "signoff_policy.yaml",
+        "effective_policy.yaml",
     ),
     "execution": (
         "regression_run/report.json",
@@ -79,6 +80,8 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "coverage/seed_diversity.json",
         "coverage/sim_reward.json",
         "coverage/knowledge_graph.json",
+        "coverage/plan_consistency.json",
+        "coverage/round_manifest.json",
         "docs/tool_receipts.jsonl",
         "docs/llm_audit.jsonl",
     ),
@@ -248,11 +251,14 @@ def load_policy(output_dir: Path, module: str,
     ]
     # 全局默认 + 模块覆盖：模块文件只写与默认不同的键。
     default_path = root / "config" / "signoff_policy" / "_default.yaml"
-    raw: Dict[str, Any] = dict(_read_policy_doc(default_path) or {})
+    default_raw = dict(_read_policy_doc(default_path) or {})
+    module_raw: Dict[str, Any] = {}
+    raw: Dict[str, Any] = dict(default_raw)
     source = str(default_path) if raw else ""
     for p in candidates:
         doc = _read_policy_doc(p) if p.is_file() else None
         if doc is not None:
+            module_raw = doc
             raw.update(doc)
             source = str(p)
             break
@@ -263,11 +269,19 @@ def load_policy(output_dir: Path, module: str,
     if strict and issues:
         raise PolicyError("签核策略不合 schema: " + "；".join(issues))
 
+    # 生效视图：每个键最终值 + 来源（default / module / implicit）。
+    effective = {}
+    for key, value in raw.items():
+        origin = ("module" if key in module_raw
+                  else "default" if key in default_raw else "implicit")
+        effective[key] = {"value": value, "source": origin}
+
     policy = {
         "schema": POLICY_SCHEMA,
         "module": module,
         "source": source,
-        "policy_hash": sha256_json(raw),
+        "policy_hash": sha256_json({"raw": raw, "effective": effective}),
+        "effective": effective,
         "require_ref_model": bool(raw.get("require_ref_model", False)),
         "require_baseline": bool(raw.get("require_baseline", True)),
         "accepted_caveats": accepted,
@@ -278,8 +292,15 @@ def load_policy(output_dir: Path, module: str,
 
 
 def write_policy_snapshot(output_dir: Path, policy: Dict[str, Any]) -> str:
-    """把实际生效的策略复制进 run 目录（证据包 inputs 会收它）。"""
+    """把实际生效的策略复制进 run 目录（证据包 inputs 会收它）。
+
+    同时写两份：
+      · `signoff_policy.yaml` —— 合并后的原始值（兼容旧读者）；
+      · `effective_policy.yaml` —— 每个键的最终值 + 来源（default/module/implicit），
+        证据包 replay 用它回答“当时到底生效了什么”。
+    """
     path = output_dir / "signoff_policy.yaml"
+    effective_path = output_dir / "effective_policy.yaml"
     try:
         import yaml
 
@@ -289,7 +310,14 @@ def write_policy_snapshot(output_dir: Path, policy: Dict[str, Any]) -> str:
             "accepted_caveats": policy.get("accepted_caveats") or {},
             "_effective_source": policy.get("source") or "default",
         }, allow_unicode=True, sort_keys=False), encoding="utf-8")
-        return str(path)
+        effective_path.write_text(yaml.safe_dump({
+            "schema": POLICY_SCHEMA,
+            "module": policy.get("module", ""),
+            "source": policy.get("source", ""),
+            "policy_hash": policy.get("policy_hash", ""),
+            "effective": policy.get("effective") or {},
+        }, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        return str(effective_path)
     except Exception:                               # noqa: BLE001
         return ""
 
@@ -607,6 +635,68 @@ def verify_package(package_dir: Path) -> Dict[str, Any]:
             "verdict": (manifest.get("verdict") or {}).get("verdict")}
 
 
+def _policy_effective_check(pkg: Path, manifest: Dict[str, Any]):
+    path = pkg / "inputs" / "effective_policy.yaml"
+    if not path.is_file():
+        return None
+    try:
+        import yaml
+
+        doc = yaml.safe_load(
+            path.read_text(encoding="utf-8", errors="replace")) or {}
+        recorded = (manifest.get("policy") or {}).get("policy_hash")
+        return {
+            "check": "policy_effective",
+            "ok": bool(recorded) and doc.get("policy_hash") == recorded,
+            "recorded": recorded,
+            "recomputed": doc.get("policy_hash"),
+            "keys": sorted((doc.get("effective") or {}).keys()),
+        }
+    except Exception as exc:                        # noqa: BLE001
+        return {"check": "policy_effective", "ok": False,
+                "error": str(exc)[:200]}
+
+
+def _fact_problem(fact: Dict[str, Any], tps: set,
+                  entries: Dict[str, Any], plan_sha: str) -> List[Dict[str, Any]]:
+    tp_id = str(fact.get("tp_id") or "")
+    if tp_id not in tps:
+        return [{"type": "tp_missing", "tp_id": tp_id}]
+    problems = []
+    if fact.get("plan_sha256") and fact["plan_sha256"] != plan_sha:
+        problems.append({"type": "plan_drift", "tp_id": tp_id})
+    entry = entries.get(tp_id)
+    if fact.get("entry_sha256") and entry is not None:
+        digest = hashlib.sha256(json.dumps(
+            entry, ensure_ascii=False, sort_keys=True,
+            default=str).encode("utf-8")).hexdigest()
+        if fact["entry_sha256"] != digest:
+            problems.append({"type": "entry_drift", "tp_id": tp_id})
+    return problems
+
+
+def _round_manifest_check(pkg: Path):
+    rm_path = pkg / "execution" / "coverage" / "round_manifest.json"
+    if not rm_path.is_file():
+        return None
+    plan_path = pkg / "inputs" / "coverage" / "stimulus_plan.json"
+    tp_path = pkg / "inputs" / "coverage" / "testpoints.json"
+    plan = (json.loads(plan_path.read_text(encoding="utf-8"))
+            if plan_path.is_file() else {})
+    tps = {str(t.get("tp_id") or "") for t in
+           ((json.loads(tp_path.read_text(encoding="utf-8")).get("testpoints")
+             if tp_path.is_file() else []) or []) if isinstance(t, dict)}
+    entries = {str(e.get("tp_id") or ""): e for e in
+               (plan.get("testpoints") or []) if isinstance(e, dict)}
+    rm = json.loads(rm_path.read_text(encoding="utf-8", errors="replace"))
+    facts = [f for rnd in rm.get("rounds") or []
+             for f in (rnd.get("facts") or [])]
+    problems = [p for f in facts
+                for p in _fact_problem(f, tps, entries, plan.get("sha256"))]
+    return {"check": "round_manifest", "ok": not problems,
+            "facts": len(facts), "problems": problems[:10]}
+
+
 def replay_tier_a(package_dir: Path) -> Dict[str, Any]:
     """离线重算判定（Tier A）—— 与生成的 `replay.py` 同一套规则。"""
     from .verdict import decide_verdict, effective_caveats
@@ -646,6 +736,16 @@ def replay_tier_a(package_dir: Path) -> Dict[str, Any]:
             "recorded": recorded,
             "recomputed": plan.get("functional_pct"),
         })
+
+    # 生效策略快照：replay 不重新 load 当前 policy，只认当时记下的那份。
+    policy_check = _policy_effective_check(pkg, manifest)
+    if policy_check:
+        checks.append(policy_check)
+
+    # 轮次事实表：per-test 的 plan/entry 哈希必须与包里的 plan 一致
+    round_check = _round_manifest_check(pkg)
+    if round_check:
+        checks.append(round_check)
 
     ok = (integrity["ok"] and recomputed == verdict.get("verdict")
           and all(c.get("ok") for c in checks))

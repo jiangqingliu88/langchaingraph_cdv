@@ -63,6 +63,13 @@ class TestCatalog:
             if not binding.pure:
                 assert binding.doc, binding.name
 
+    def test_every_binding_target_still_resolves(self):
+        """工具删了/改名了，GUI 的绑定不能等到运行时才炸。"""
+        from ..loader import resolve
+
+        for binding in BINDINGS:
+            assert callable(resolve(binding.target)), binding.name
+
 
 class TestRegistryBasics:
     def test_call_returns_normalized_dict(self, registry):

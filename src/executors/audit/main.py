@@ -242,6 +242,15 @@ def _knowledge_graph_summary(output_dir: Path) -> Dict[str, Any]:
     }
 
 
+def _plan_consistency_caveat(output_dir: Path, caveat) -> None:
+    doc = _read_json_file(output_dir / "coverage" / "plan_consistency.json")
+    issues = doc.get("issues") if isinstance(doc, dict) else None
+    if issues:
+        caveat("PLAN_INCONSISTENT",
+               f"激励计划与 TP/约束不一致：{len(issues)} 处"
+               f"（见 coverage/plan_consistency.json）")
+
+
 def _tool_receipt_summary(output_dir: Path) -> Dict[str, Any]:
     """工具回执的 `verified_by` 覆盖度 —— 有多少结论是 EDA 说的。"""
     path = output_dir / "docs" / "tool_receipts.jsonl"
@@ -261,10 +270,15 @@ def _tool_receipt_summary(output_dir: Path) -> Dict[str, Any]:
             counts[key] = counts.get(key, 0) + 1
     except OSError:
         return {"available": False, "total": 0, "by_verified_by": {}}
+    from src.layers.l2_orchestration.communication.tool_protocol import (
+        aggregate_verified_by)
+
+    expanded = [k for k, n in counts.items() for _ in range(n)]
     return {
         "available": total > 0,
         "total": total,
         "by_verified_by": counts,
+        "aggregate": aggregate_verified_by(expanded),
         "eda_pct": round(100.0 * counts.get("eda", 0) / total, 2) if total else 0.0,
     }
 
@@ -607,6 +621,8 @@ class AuditExecutor(BaseExecutor):
             _caveat("ASSOCIATION_HARD_EDGE",
                     f"三模型关联硬边断了 {assoc['hard_edge_broken']} 条"
                     f"（声明的测试点没落成覆盖仓）—— 见 coverage/association_report.json")
+        # TP IR / StimulusPlan / constraint_backing 三份真相漂移
+        _plan_consistency_caveat(output_dir, _caveat)
 
         # ── 测试点矩阵：**签核按测试点说话，不按百分比说话** ──
         #

@@ -2,9 +2,9 @@
 
 > 基线：2026-10-29
 >
-> 全量单测：**1067 passed / 2 skipped**；工作台 **716 passed**
+> 全量单测：**1096 passed / 2 skipped**；工作台 **717 passed**
 >
-> 端到端实测：`output_e2e_final_governance_jiang_20261030_193718`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用
+> 端到端实测：`output_e2e_round_manifest2_jiang_20261030_221623`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 
 本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
 
@@ -161,8 +161,9 @@ audit → finalize → END
 | `file_audit_hash_skipped` | 证据链哈希 | `test_human_edit_evidence` |
 | `state_contract_wrong_owner` | State 写入者 | `test_state_contracts` |
 | `tool_registry_empty_allowed` | 工具映射完整性 | `test_tool_registry` |
+| `source_terminal_accepts_anything` | `source` 转移契约 | `test_source_transitions` |
 
-当前 **6/6 killed**。新增守卫必须在 `MUTATIONS` 里有一条“改坏它会红”的
+当前 **7/7 killed**。新增守卫必须在 `MUTATIONS` 里有一条“改坏它会红”的
 mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
 
 ---
@@ -207,6 +208,9 @@ mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
 - `ToolResult`：
   - `success`
   - **`verified_by`：`eda | llm | none`** —— 把“EDA 验过”与“LLM 自述”在类型上分开
+  - 汇总时 `aggregate_verified_by()`：全 EDA → `eda`；EDA+LLM → **`mixed`**；
+    全 LLM → `llm`；全 none → `none`。签核证据的 `tool_receipts.aggregate`
+    用这个结论，不把 LLM 自述混进 EDA 背书
   - `evidence_ref`、`returncode`
 - `ToolRisk`：`safe / write / danger`；未知值 **fail-closed → DANGER**
 - `ToolAuditor`：内存 + `docs/tool_receipts.jsonl` 追加写，回执带 `verified_by`
@@ -325,6 +329,7 @@ case 模型 → TP IR → 属性 test 类 → 约束 → 回归任务 → 覆盖
 | `coverage/sim_reward.json` | 编译 / 回归 / 覆盖率三层合成的粗连续奖励 |
 | `coverage/knowledge_graph.json` | 运行时知识图（gap → bin/test/version/fix，带 sha256） |
 | `coverage/stimulus_plan.json` | StimulusPlan IR（两个激励后端的公共前置层，带 sha256） |
+| `coverage/plan_consistency.json` | TP IR / StimulusPlan / constraint_backing 同源校验（issues / unconstrained） |
 
 ### 7.5 激励后端：generated 与 player 并存
 
@@ -521,6 +526,11 @@ RL 只可能出现在软阶段。动作全集：
 L4 `coverage_experience` 按 `(action_type, source)` 分桶；L5 蒸馏只拿
 `rl_suggested` 且真正生效的样本，避免“建议过但没采纳”的幸存者偏差。
 
+`SOURCE_ACTION_RULES` 钉住 **source ↔ 动作**：`terminal` 只能配 `CONVERGE`，
+`rule_hard` 只能配硬失败/改 RTL 族，RL 不能认领编译/模型或终态动作。
+`record_decision` 记账时校验，非法组合 warning；mutation `source_terminal_*`
+保证这条守卫自身被测到。
+
 ### 9.6 运行时知识图（`l3_decision/knowledge/runtime.py`）
 
 设计时子图（`build_graph_from_spec`）回答“需求 → 功能 → 模块 → 信号 → bin →
@@ -551,6 +561,10 @@ FIX ──resolves→   BUG
 
 这是**查询层**，不是新的推理层：没有 Neo4j / networkx，也没有 LLM 直接遍历图。
 
+**查询契约版本**：`schema.QUERY_CONTRACT = gap_trace_v1`，同时写进
+`knowledge_graph.json` 与 `trace_gap()` 返回值。新增 `EdgeType` 不改变已有
+返回键（测试钉住）；改已有键才升版本。
+
 ---
 
 ## 10. 证据链与治理
@@ -578,9 +592,12 @@ FIX ──resolves→   BUG
 ```text
 <run>/signoff_evidence/
 ├─ manifest.json      # 结论 + 版本绑定 + 逐文件 sha256 + package_hash
-├─ inputs/            # spec / case 模型 / 约束 / 覆盖计划 / 模型装配单 / 签核策略
+├─ inputs/            # spec / case 模型 / 约束 / 覆盖计划 / 模型装配单
+│                     # / 签核策略（含 effective_policy.yaml 生效视图）
+│                     # / StimulusPlan
 ├─ execution/         # 回归报告 / 覆盖率 / TP 矩阵 / 合并清单 / 种子多样性
-│                     # / 粗连续奖励 / 运行时知识图 / 回执
+│                     # / 粗连续奖励 / 运行时知识图 / plan_consistency
+│                     # / round_manifest（轮次 × 用例 × plan 哈希）/ 回执
 ├─ verdict/           # signoff_evidence.json / caveats.json / 文件审计链
 └─ replay/
    ├─ replay.py       # 不 import SignOffAI，仅标准库
@@ -595,8 +612,16 @@ vagent evidence replay  <run>/signoff_evidence
 vagent evidence compare <pkg-a> <pkg-b>
 ```
 
-- Tier A：不跑 EDA，重算三态判定
+- Tier A：不跑 EDA，重算三态判定；同时校验 `effective_policy.policy_hash`
+  与 `round_manifest`（per-test plan/entry 哈希不漂移）
 - Tier B：需要 EDA 时重跑（只记录 recipe，不自动执行）
+
+**轮次事实表**：`coverage/round_manifest.json`（`round_manifest_v1`）由
+`round_bump` / `n_audit` 落盘，逐轮记录
+`{round, backend, test_name, tp_id, status, plan_sha256, entry_sha256,
+playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有哪些
+文件”，round_manifest 回答“第 N 轮第 M 条用例用了哪份 plan”——player 落地后
+两者不能互相替代。
 
 `replay/recipe.json` 是 **v2 结构化 schema**（`validate_recipe()` 校验）：
 
@@ -642,7 +667,7 @@ vagent evidence compare <pkg-a> <pkg-b>
 
 **Caveat 码：**
 
-`CONSTRAINT_PARTIAL / CONSTRAINT_INACTIVE / UCDB_NO_BINS / CG_DUT_ZERO / ASSOCIATION_HARD_EDGE / TP_UNMAPPED / TP_TRACE_INCOMPLETE / TP_MISSED / MODEL_UNAVAILABLE / BASELINE_MISSING / BACKEND_ARGS_USED`
+`CONSTRAINT_PARTIAL / CONSTRAINT_INACTIVE / UCDB_NO_BINS / CG_DUT_ZERO / ASSOCIATION_HARD_EDGE / PLAN_INCONSISTENT / TP_UNMAPPED / TP_TRACE_INCOMPLETE / TP_MISSED / MODEL_UNAVAILABLE / BASELINE_MISSING / BACKEND_ARGS_USED`
 
 ---
 
@@ -708,10 +733,10 @@ vagent evidence compare <pkg-a> <pkg-b>
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1067 passed / 2 skipped
+python -m pytest tests/ -q                            # 1096 passed / 2 skipped
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
-python -m pytest src/workbench/tests -q               # 716 passed
+python -m pytest src/workbench/tests -q               # 717 passed
 python -m config.architecture_guard                   # 行数 / 圈复杂度预算
 python scripts/mutation_guards.py                     # 6 条核心守卫变异测试
 ```
@@ -745,6 +770,11 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 | `test_llm_governance.py` | 无 schema 拒绝、JSON 校验、prompt 版本失效缓存、fail-fast |
 | `test_stimulus_plan.py` | plan sha256 稳定；player 限制与“runtime 未实现”显式报错 |
 | `test_signoff_policy.py` | 策略 schema/未知键/类型/reward_weights 校验与 policy_hash |
+| `test_round_facts.py` | 轮次×用例×plan/entry/播放日志哈希；轮 0 不落盘；漂移可检测 |
+| `test_plan_consistency.py` | TP/plan/constraint_backing 同源；dangling/unconstrained 分类 |
+| `test_source_transitions.py` | `source` ↔ 动作合法组合；terminal/RL 不能乱认领 |
+| `test_interrupt_round_budget.py` | approval proceed 不重入 round_bump；轮次只由 round_bump 收口 |
+| `test_verified_by_propagation.py` | EDA/LLM 汇总规则；混合必须是 `mixed`，不能冒充 EDA |
 
 ---
 
@@ -765,6 +795,9 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
   `ensure_backend_executable("player")` 显式报错；generated 仍是唯一可执行后端。
 - **尚未落地**：产物级 provenance DAG、bin 级 test/seed 溯源、工具 sandbox
   路径/命令白名单、run 生命周期自动清理（`vagent prune` 已有手动入口）。
+- **边界表同源**：`config/known_limitations.py` 是 §15 的代码真相；
+  `test_architecture_invariants.py` 校验文档包含每条，player runtime 落地时
+  必须同步改 `status` 与文档。
 - **auth.py 是可选 API 面**：CLI 不 import 它，FastAPI/PyJWT 放在 `api` extra；
   核心安装不再为未使用的认证代码付依赖成本。
 
@@ -777,7 +810,8 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 ├─ config/                      设置（settings.py）/ 路径（paths.py）
 │  ├─ architecture_budget.yaml  行数预算 + 大文件登记（reason/plan）
 │  ├─ complexity_baseline.json  圈复杂度债务基线
-│  └─ architecture_guard.py     预算检查入口
+│  ├─ architecture_guard.py     预算检查入口
+│  └─ known_limitations.py      §15 边界表的代码真相
 ├─ scripts/
 │  ├─ mutation_guards.py        6 条核心守卫的变异测试
 │  └─ check_architecture.py     （可选 CI 包装）
@@ -800,6 +834,7 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 │  │  ├─ _bootstrap.py          分层守卫
 │  │  ├─ l1_infrastructure/     EDA / 输出 / 哈希 / Reference Finder
 │  │  ├─ l2_orchestration/      LangGraph / executors / tools / evidence
+│  │  │                         （含 round_facts 轮次事实表）
 │  │  ├─ l3_decision/           决策（hard/soft 两阶段）/ 奖励 / 知识
 │  │  │                         schema / graph / query / persistence / runtime
 │  │  ├─ l4_memory/             SQLite 注册表 / 血缘 / 经验
@@ -807,6 +842,10 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 │  ├─ executors/                8 个 executor
 │  │  └─ verify/steps_dag.py   verify 7 步依赖声明 + 执行期顺序记录器
 │  ├─ tools/                    领域工具包（按板块物理分目录）
+│  │  ├─ flow/flow_tools/evidence_summary.py  recipe/StimulusPlan 摘要
+│  │  └─ generation/casemodel_tools/framework/
+│  │       stimulus_plan.py      plan IR + 双后端能力表
+│  │       plan_consistency.py   三份真相同源校验
 │  │  ├─ generation/            casemodel / uvm / isa / cmodel / doc
 │  │  ├─ checking/              assertion / debug / coverage / spec
 │  │  ├─ execution/             regression

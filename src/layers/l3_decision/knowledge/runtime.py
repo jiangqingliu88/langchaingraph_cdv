@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .graph import VerificationGraph
-from .schema import EdgeType, NodeType
+from .schema import EdgeType, NodeType, QUERY_CONTRACT
 
 SCHEMA = "knowledge_graph_runtime_v1"
 MISS_STATUSES = {"MISS", "UNOBSERVED", "BACKDOOR_MISS", "UNMAPPED"}
@@ -169,6 +169,7 @@ def write_runtime_graph(graph: VerificationGraph, output_dir: str | Path) -> Dic
     root = Path(output_dir)
     payload = {
         "schema": SCHEMA,
+        "query_contract": QUERY_CONTRACT,
         "sha256": graph_digest(graph),
         "summary": graph.stats(),
         "gaps": [n.to_dict() for n in graph.nodes(NodeType.GAP)],

@@ -51,6 +51,10 @@ class EdgeType(str, Enum):
     REGRESSED_IN = "regressed_in"    # gap → rtl_version（在哪版观察到）
 
 
+#: 运行时查询契约版本 —— `trace_gap` 返回形状的兼容性承诺。
+#: 加新 EdgeType 不改变已有键；改已有键才升这个版本。
+QUERY_CONTRACT = "gap_trace_v1"
+
 # 溯源链顺序（从 CoverageBin 一路回溯到 Requirement）
 TRACE_CHAIN = [
     (EdgeType.COVERAGE, "in"),   # bin ← signal

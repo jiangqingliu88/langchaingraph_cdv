@@ -141,3 +141,57 @@ def test_workbench_binding_points_at_check_package():
     assert binding is not None and binding.pure
     target = resolve(binding.target)
     assert callable(target)
+
+
+def test_effective_policy_snapshot_is_carried_and_checked(tmp_path):
+    root = _run_dir(tmp_path)
+    (root / "effective_policy.yaml").write_text(
+        "schema: signoff_policy_v1\n"
+        "policy_hash: abc123\n"
+        "effective:\n"
+        "  require_baseline: {value: true, source: default}\n",
+        encoding="utf-8")
+    manifest = _manifest(root)
+    manifest["policy"] = {"policy_hash": "abc123"}
+    write_package(root, manifest)
+    pkg = root / "signoff_evidence"
+    rels = {f["path"] for f in json.loads(
+        (pkg / "manifest.json").read_text(encoding="utf-8"))["files"]}
+    assert "inputs/effective_policy.yaml" in rels
+
+    result = replay_tier_a(pkg)
+    check = next(c for c in result["checks"]
+                 if c["check"] == "policy_effective")
+    assert check["ok"] is True
+    assert "require_baseline" in check["keys"]
+
+
+def test_round_manifest_is_carried_and_checked(tmp_path):
+    root = _run_dir(tmp_path)
+    _write(root / "coverage" / "testpoints.json", {
+        "testpoints": [{"tp_id": "TP1"}]})
+    _write(root / "coverage" / "stimulus_plan.json", {
+        "schema": "stimulus_plan_v1", "backend": "generated",
+        "sha256": "plan-sha",
+        "testpoints": [{"tp_id": "TP1", "kind": "stimulus",
+                        "transactions": [{"field": "f", "value": 0}]}],
+    })
+    entry = {"tp_id": "TP1", "kind": "stimulus",
+             "transactions": [{"field": "f", "value": 0}]}
+    import hashlib
+    entry_sha = hashlib.sha256(json.dumps(
+        entry, ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
+    _write(root / "coverage" / "round_manifest.json", {
+        "schema": "round_manifest_v1", "query_contract": "round_facts_v1",
+        "rounds": [{"round": 1, "facts": [{
+            "round": 1, "backend": "generated", "test_name": "t_a",
+            "tp_id": "TP1", "kind": "stimulus", "status": "HIT",
+            "plan_sha256": "plan-sha", "entry_sha256": entry_sha,
+            "playback_log_sha256": "x", "pass_criteria": "mismatched=0",
+        }]}],
+    })
+    write_package(root, _manifest(root))
+    pkg = root / "signoff_evidence"
+    result = replay_tier_a(pkg)
+    check = next(c for c in result["checks"] if c["check"] == "round_manifest")
+    assert check["ok"] is True and check["facts"] == 1

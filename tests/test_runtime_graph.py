@@ -160,6 +160,7 @@ def test_write_and_load_roundtrip_is_hash_stable(run_dir: Path):
     doc = json.loads((run_dir / "coverage" / "knowledge_graph.json")
                      .read_text(encoding="utf-8"))
     assert doc["schema"] == SCHEMA
+    assert doc["query_contract"] == "gap_trace_v1"
     assert first["sha256"] == doc["sha256"] == graph_digest(graph)
     assert first["schema"] == SCHEMA
     assert first["gaps"] == 1
@@ -177,6 +178,7 @@ def test_write_and_load_roundtrip_is_hash_stable(run_dir: Path):
 def test_trace_gap_by_id_and_by_bin(run_dir: Path):
     graph = build_runtime_graph(run_dir)
     by_id = trace_gap(graph, tp_id="TP1")
+    assert by_id["contract"] == "gap_trace_v1"
     assert by_id["gap"] == "TP1"
     assert by_id["status"] == "MISS"
     assert [t["name"] for t in by_id["tests"]] == ["test_op_zero"]

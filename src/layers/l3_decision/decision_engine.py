@@ -642,6 +642,38 @@ HARD_ACTIONS = (FIX_COMPILE, FIX_MODEL)
 # 终态：达标收敛，不属于 RL 的动作空间
 TERMINAL_ACTIONS = ("CONVERGE",)
 
+# ═══════════════════════════════════════════════════════════════
+# 动作来源契约 —— 防 `source` 标签漂移（L5 蒸馏按它取样本）
+# ═══════════════════════════════════════════════════════════════
+
+SOURCE_VALUES = ("rule_hard", "rule", "rl_suggested", "rl_overridden", "terminal")
+
+#: source → 允许的动作集合。写错标签不会改变执行，但会让 L5 学到错样本，
+#: 所以要在记账处校验（warning），而不是靠 code review。
+SOURCE_ACTION_RULES = {
+    "rule_hard": frozenset(HARD_ACTIONS) | frozenset(FIX_FAMILY),
+    "rule": frozenset(ALL_ACTIONS) - frozenset(TERMINAL_ACTIONS),
+    "rl_suggested": frozenset(ALL_ACTIONS) - frozenset(TERMINAL_ACTIONS)
+                    - frozenset(HARD_ACTIONS),
+    "rl_overridden": frozenset(ALL_ACTIONS) - frozenset(TERMINAL_ACTIONS)
+                     - frozenset(HARD_ACTIONS),
+    "terminal": frozenset(TERMINAL_ACTIONS),
+}
+
+
+def validate_action_source(action: Any) -> List[str]:
+    """返回 `source` 契约问题（空 = 合法）。只检查标签与动作的搭配。"""
+    if action is None:
+        return []
+    source = str(getattr(action, "source", "") or "")
+    action_type = str(getattr(action, "action_type", "") or "")
+    if source not in SOURCE_VALUES:
+        return [f"未知 action.source={source!r}（允许：{SOURCE_VALUES}）"]
+    if action_type not in SOURCE_ACTION_RULES[source]:
+        return [f"source={source!r} 不应产生动作 {action_type!r}"
+                f"（允许：{sorted(SOURCE_ACTION_RULES[source])}）"]
+    return []
+
 # 构图期自检：handler 表必须与动作全集一一对应
 if set(ACTION_HANDLERS) != set(ALL_ACTIONS):
     raise ValueError(

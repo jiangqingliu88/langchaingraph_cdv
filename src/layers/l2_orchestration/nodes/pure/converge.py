@@ -112,6 +112,13 @@ async def n_governor_retry(state: PipelineState, config) -> Dict[str, Any]:
 async def n_record_decision(state: PipelineState, config) -> Dict[str, Any]:
     rt = _rt(config)
     action = state.action()
+    # `source` 标签是 L5 蒸馏的取样本依据；错标不会改变执行，但会让学习偏。
+    try:
+        from src.layers.l3_decision.decision_engine import validate_action_source
+        for _issue in validate_action_source(action):
+            logger.warning(f"决策来源契约: {_issue}")
+    except Exception:
+        pass
     # 记住本轮动作，供下一轮记录成效
     _gr = [g.get("reason") for g in state.gaps
            if isinstance(g, dict) and g.get("reason")]

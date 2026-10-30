@@ -244,6 +244,34 @@ class ToolResult:
         return cls(success=False, error=error, data=data or {}, **kwargs)
 
 
+#: 汇总 `verified_by` 的允许值。单个 ToolResult 仍只有 eda/llm/none；
+#: `mixed` 只在**聚合**时出现（部分 EDA、部分 LLM）。
+VERIFIED_BY_VALUES = ("eda", "llm", "none", "mixed")
+
+
+def aggregate_verified_by(values) -> str:
+    """把多个工具回执的 `verified_by` 合成一个结论。
+
+    规则（不对称，往保守方向倒）：
+      · 全部 eda → eda
+      · 有 eda 也有 llm → mixed（不能把 LLM 自述混进 EDA 背书）
+      · 有 llm、无 eda → llm
+      · 其余（全是 none / 空）→ none
+    """
+    vals = [str(v or "none").lower() for v in (values or []) if v is not None]
+    if not vals:
+        return "none"
+    has_eda = "eda" in vals
+    has_llm = "llm" in vals
+    if has_eda and has_llm:
+        return "mixed"
+    if has_eda:
+        return "eda"
+    if has_llm:
+        return "llm"
+    return "none"
+
+
 @dataclass
 class ExecutionContext:
     """工具执行上下文 —— 隔离全局状态"""

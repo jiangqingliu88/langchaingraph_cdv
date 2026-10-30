@@ -230,6 +230,9 @@ class VerifyExecutor(BaseExecutor):
                         tp_files = self._write_testpoints(output_dir, case_model,
                                                           module_name)
                         files.extend(tp_files)
+                        # 必须在 TP IR + StimulusPlan 落盘之后：它读的就是这两份
+                        # 与 constraint_backing（UVM 生成阶段已写好）。
+                        self._write_plan_consistency(output_dir)
             except Exception as e:
                 logger.warning(f"测试点分解失败（casemodel）: {e}")
 
@@ -551,6 +554,18 @@ class VerifyExecutor(BaseExecutor):
         from src.tools.generation.uvm_tools.generation.generators.constraint_gen import (
             annotate_coverage_plan)
         annotate_coverage_plan(output_dir, payload, logger)
+
+    def _write_plan_consistency(self, output_dir: Path) -> None:
+        """TP IR / StimulusPlan / constraint_backing 的同源校验。"""
+        try:
+            from src.tools.generation.casemodel_tools.framework.plan_consistency import (
+                write_plan_consistency)
+
+            summary = write_plan_consistency(output_dir)
+            if summary["issues"]:
+                logger.warning(f"plan consistency：{summary['issues']} 处不一致")
+        except Exception as e:                     # noqa: BLE001 旁路
+            logger.warning(f"plan consistency 生成失败: {e}")
 
     def _write_association_report(self, output_dir: Path) -> None:
         """`coverage/association_report.json` —— 三模型关联的**断点清单**。

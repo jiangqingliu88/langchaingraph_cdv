@@ -28,7 +28,8 @@ EXPECTED_ACTIONS = (
 
 EXPECTED_CAVEATS = {
     "CONSTRAINT_PARTIAL", "CONSTRAINT_INACTIVE", "UCDB_NO_BINS", "CG_DUT_ZERO",
-    "ASSOCIATION_HARD_EDGE", "TP_UNMAPPED", "TP_TRACE_INCOMPLETE", "TP_MISSED",
+    "ASSOCIATION_HARD_EDGE", "PLAN_INCONSISTENT", "TP_UNMAPPED",
+    "TP_TRACE_INCOMPLETE", "TP_MISSED",
     "MODEL_UNAVAILABLE", "BASELINE_MISSING", "BACKEND_ARGS_USED",
 }
 
@@ -68,7 +69,7 @@ def test_decision_action_universe_is_frozen():
 
 def test_caveat_codes_in_audit_match_the_public_set():
     src = (ROOT / "src/executors/audit/main.py").read_text(encoding="utf-8")
-    found = set(re.findall(r'_caveat\("([A-Z_]+)"', src))
+    found = set(re.findall(r'(?:_caveat|caveat)\("([A-Z_]+)"', src))
     assert found == EXPECTED_CAVEATS
 
 
@@ -122,6 +123,30 @@ def test_architecture_doc_matches_code_facts():
         assert code in doc, f"ARCHITECTURE.md 缺少 caveat：{code}"
     for board in BOARDS:
         assert board in doc, f"ARCHITECTURE.md 缺少工具板块：{board}"
+
+
+def test_known_limitations_match_architecture_doc():
+    from config.known_limitations import KNOWN_LIMITATIONS
+
+    doc = DOC.read_text(encoding="utf-8")
+    ids = [item["id"] for item in KNOWN_LIMITATIONS]
+    assert len(ids) == len(set(ids))
+    for item in KNOWN_LIMITATIONS:
+        assert item["status"] in ("open", "by_design", "done"), item
+        assert item["text"] in doc, f"§15 缺少边界条目：{item['id']}"
+
+
+def test_player_runtime_boundary_matches_code():
+    from config.known_limitations import by_id
+    from src.tools.generation.casemodel_tools.framework.stimulus_plan import BACKENDS
+
+    boundary = by_id("player_runtime")
+    if BACKENDS["player"]["runtime"]:
+        # 实现 runtime 时必须把边界项更新为 done 并改文档，不能悄悄漂
+        assert boundary["status"] == "done", \
+            "player runtime 已实现，但 KNOWN_LIMITATIONS/§15 还写着未实现"
+    else:
+        assert boundary["status"] == "open"
 
 
 def test_doc_test_count_matches_reality():

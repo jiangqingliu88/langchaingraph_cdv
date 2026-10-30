@@ -11,6 +11,7 @@
   · 文件审计链不能跳过哈希
   · State 字段契约不能写错属主
   · 工具空映射不能静默通过
+  · `source` 标签不能乱配动作
 
 用法：
     python scripts/mutation_guards.py            # 全跑，有 survived 则 exit 1
@@ -81,6 +82,13 @@ MUTATIONS: List[Mutation] = [
         old="        undeclared = sorted(empty - cls.EXECUTORS_WITHOUT_HUB_TOOLS)",
         new="        undeclared = []",
         tests="tests/test_tool_registry.py",
+    ),
+    Mutation(
+        name="source_terminal_accepts_anything",
+        path="src/layers/l3_decision/decision_engine.py",
+        old='    "terminal": frozenset(TERMINAL_ACTIONS),',
+        new='    "terminal": frozenset(ALL_ACTIONS),',
+        tests="tests/test_source_transitions.py",
     ),
 ]
 
