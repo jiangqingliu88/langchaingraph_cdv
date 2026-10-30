@@ -242,6 +242,37 @@ def _knowledge_graph_summary(output_dir: Path) -> Dict[str, Any]:
     }
 
 
+def _code_plan_from(plan: Dict[str, Any]) -> Dict[str, Any]:
+    return (plan.get("code_coverage_plan")
+            or (plan.get("coverage") or {}).get("code_plan") or {})
+
+
+def _code_coverage_evidence(plan: Dict[str, Any],
+                            code_plan: Dict[str, Any]) -> Dict[str, Any]:
+    metrics = {}
+    for key in ("branch_pct", "condition_pct", "statement_pct", "toggle_pct"):
+        if code_plan.get(key) is not None:
+            metrics[key] = code_plan.get(key)
+    return {
+        "code_single_pct": (plan.get("coverage") or {}).get("overall_pct"),
+        "code_plan_pct": code_plan.get("overall_pct"),
+        "code_plan_metrics": metrics,
+    }
+
+
+def _coverage_detail(coverage: Dict[str, Any], gates: Dict[str, Any],
+                     pick: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "metric": pick["metric"],
+        "target": gates.get("target"),
+        "functional_pct": coverage.get("functional_pct"),
+        "code_overall_pct": coverage.get("overall_pct"),
+        "code_plan_pct": (coverage.get("code_plan") or {}).get("overall_pct"),
+        "code_metrics_present": coverage.get("metrics_present"),
+        "code_metrics_absent": coverage.get("metrics_absent"),
+    }
+
+
 def _plan_consistency_caveat(output_dir: Path, caveat) -> None:
     doc = _read_json_file(output_dir / "coverage" / "plan_consistency.json")
     issues = doc.get("issues") if isinstance(doc, dict) else None
@@ -306,6 +337,7 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
     methodology = _read_json_file(output_dir / "coverage" / "methodology.json")
     plan = _read_json_file(output_dir / "sim" / "coverage" / "coverage_result.json")
     plan_cov = plan.get("plan_coverage") or {}
+    code_plan = _code_plan_from(plan)
     rows = tp.get("rows") or []
     merged_stores = int(plan_cov.get("stores") or 0)
 
@@ -383,6 +415,9 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
         "coverage": {
             "plan_pct": plan_cov.get("functional_pct"),
             "single_test_pct": plan_cov.get("single_test_pct"),
+            # 代码覆盖率：单测口径 vs DUT 计划（回归合并）口径。
+            # 签核门禁仍是 functional；这两个是**对照事实**，不冒充门禁。
+            **_code_coverage_evidence(plan, code_plan),
             "gate_pct": signoff.get("coverage"),
             "gate_passed": (signoff.get("gates") or {}).get("coverage_ok"),
             "merged_stores": merged_stores,
@@ -740,14 +775,7 @@ class AuditExecutor(BaseExecutor):
             "pass_rate": f"{passed}/{total}",
             "coverage": overall,
             "coverage_metric": _pick["metric"],
-            "coverage_detail": {
-                "metric": _pick["metric"],
-                "target": gates.get("target"),
-                "functional_pct": coverage.get("functional_pct"),
-                "code_overall_pct": coverage.get("overall_pct"),
-                "code_metrics_present": coverage.get("metrics_present"),
-                "code_metrics_absent": coverage.get("metrics_absent"),
-            },
+            "coverage_detail": _coverage_detail(coverage, gates, _pick),
             "gates": gates,
             # **软缺口**：硬门禁全过、但"绿得不够实在"的地方。空列表 = 没有。
             # 与 `gates` 分开：门禁是"能不能签"，这是"签的时候要写清什么"。

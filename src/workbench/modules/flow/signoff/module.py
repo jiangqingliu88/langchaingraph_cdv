@@ -297,7 +297,8 @@ class SignoffModule(ModuleBase):
             f"判定：hard_ok={ev.get('hard_ok')} · verdict={ev.get('verdict') or '?'} · "
             f"生效 caveat {('、'.join(effective) or '无')}"
             + (f" · 已接受 {('、'.join(accepted))}" if accepted else ""),
-            f"覆盖率：计划 {_pct(cov.get('plan_pct'))} / 单测 {_pct(cov.get('single_test_pct'))} · "
+            f"覆盖率：功能 计划 {_pct(cov.get('plan_pct'))} / 单测 {_pct(cov.get('single_test_pct'))} · "
+            f"代码 计划 {_pct(cov.get('code_plan_pct'))} / 单测 {_pct(cov.get('code_single_pct'))} · "
             f"TP {counts or '{}'}",
             f"种子：{sd.get('verdict') or '?'}（{len(seeds)} seeds · "
             f"稳定 {sd.get('stable_bins', '?')} / 种子敏感 {sd.get('variable_bins', '?')}）",

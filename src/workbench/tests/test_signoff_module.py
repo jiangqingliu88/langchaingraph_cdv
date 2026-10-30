@@ -57,7 +57,8 @@ def _run_dir(tmp_path: Path) -> Path:
         "schema": "signoff_evidence_v2",
         "package_hash": "a" * 64, "manifest_hash": "b" * 64,
         "files": [{"path": "manifest.json"}],
-        "coverage": {"plan_pct": 95.23, "single_test_pct": 68.57},
+        "coverage": {"plan_pct": 95.23, "single_test_pct": 68.57,
+                     "code_plan_pct": 75.8, "code_single_pct": 70.9},
         "tp_matrix": {"counts": {"HIT": 37, "MISS": 0}},
         "seed_diversity": {"verdict": "DIVERSE", "seeds": [1, 2],
                            "stable_bins": 12, "variable_bins": 57},
@@ -193,6 +194,7 @@ class TestEvidencePackage:
         assert "PASS_WITH_CAVEAT" in text
         assert "TP_MISSED" in text
         assert "95.23" in text and "68.57" in text
+        assert "代码 计划 75.8" in text and "70.9" in text
         assert "DIVERSE" in text
         assert "0.8125" in text and "coverage" in text   # 粗连续奖励 + 最弱层
         assert "compile" in text and "0.25" in text      # 奖励权重

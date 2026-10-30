@@ -2,9 +2,9 @@
 
 > 基线：2026-10-29
 >
-> 全量单测：**1096 passed / 2 skipped**；工作台 **717 passed**
+> 全量单测：**1099 passed / 2 skipped**；工作台 **717 passed**
 >
-> 端到端实测：`output_e2e_round_manifest2_jiang_20261030_221623`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
+> 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 
 本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
 
@@ -471,7 +471,19 @@ src/tools/generation/uvm_tools/generation/
 | 口径 | 来源 | 用途 |
 |---|---|---|
 | `single_test_pct` | 覆盖率阶段单跑一条 test | 对照 |
-| `plan_pct` | 回归逐用例 `cov/*/questa.db` 合并 | **签核门禁** |
+| `plan_pct` | 回归逐用例 `cov/*/questa.db` 合并 | **签核门禁（功能覆盖率）** |
+
+代码覆盖率另有两个对照口径（都**不是**签核门禁）：
+
+| 口径 | 来源 | 说明 |
+|---|---|---|
+| `code_single_pct` | `sim/coverage/merged.ucdb` | 单条 coverage test 的 DUT 代码覆盖 |
+| `code_plan_pct` | `plan_dut_code.ucdb` | 回归 DUT 用例库合并（排除 loopback 层次），回答“回归实际覆盖了 DUT 多少代码” |
+
+loopback TB 与 DUT TB 层次不同，`vcover merge` 会报 `Design hierarchy mismatch`；
+所以代码覆盖率**按层次分开合并**，功能覆盖率仍按 `plan_merged.ucdb` 合并。
+`line` / `toggle` / `fsm` 是否出现在报告里由编译 `+cover` 决定 —— 缺席记在
+`metrics_absent`，不当作 0% 参与平均。
 
 - 合并：`vcover merge -inputs cmdfile` → `sim/coverage/plan_merged.ucdb`
 - 输入清单：`coverage/plan_merge_manifest.json`（相对路径 + 大小 + mtime + merged ucdb sha256）
@@ -733,7 +745,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1096 passed / 2 skipped
+python -m pytest tests/ -q                            # 1099 passed / 2 skipped
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
 python -m pytest src/workbench/tests -q               # 717 passed
@@ -775,6 +787,7 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 | `test_source_transitions.py` | `source` ↔ 动作合法组合；terminal/RL 不能乱认领 |
 | `test_interrupt_round_budget.py` | approval proceed 不重入 round_bump；轮次只由 round_bump 收口 |
 | `test_verified_by_propagation.py` | EDA/LLM 汇总规则；混合必须是 `mixed`，不能冒充 EDA |
+| `test_code_coverage_plan.py` | DUT 代码覆盖率合并排除 loopback、merge spec 正确 |
 
 ---
 
@@ -842,6 +855,7 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 │  ├─ executors/                8 个 executor
 │  │  └─ verify/steps_dag.py   verify 7 步依赖声明 + 执行期顺序记录器
 │  ├─ tools/                    领域工具包（按板块物理分目录）
+│  │  ├─ common/lib/code_coverage_plan.py  DUT 代码覆盖率回归合并口径
 │  │  ├─ flow/flow_tools/evidence_summary.py  recipe/StimulusPlan 摘要
 │  │  └─ generation/casemodel_tools/framework/
 │  │       stimulus_plan.py      plan IR + 双后端能力表

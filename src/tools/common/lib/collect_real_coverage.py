@@ -939,6 +939,25 @@ def _discover_uvm_test(output_dir: Path, top_module: str) -> str:
         return ""
 
 
+def _attach_code_plan(coverage: dict, result: dict, od: Path) -> None:
+    """把 DUT 计划代码覆盖率挂到结果上；失败只打印，不拦主流程。"""
+    try:
+        from src.tools.common.lib.code_coverage_plan import (
+            merge_dut_code_coverage)
+
+        code_plan = merge_dut_code_coverage(od)
+        if code_plan.get("overall_pct") is None:
+            return
+        coverage["code_plan"] = code_plan
+        result["code_coverage_plan"] = code_plan
+        print(f"[coverage] 计划代码覆盖率（DUT，{code_plan.get('merged', 0)}/"
+              f"{code_plan.get('stores', 0)} 条合并）："
+              f"{code_plan.get('overall_pct')}%"
+              f"（单测 {coverage.get('overall_pct')}%）")
+    except Exception as e:                          # noqa: BLE001 旁路
+        print(f"[coverage] 计划代码覆盖率合并跳过：{e}")
+
+
 def run(output_dir: str, top_module: str = "", seed: int = 0) -> dict:
     """一站式收集覆盖率"""
     od = Path(output_dir).resolve()
@@ -1021,6 +1040,11 @@ def run(output_dir: str, top_module: str = "", seed: int = 0) -> dict:
             if plan:
                 print(f"[coverage] 计划覆盖率合并未完成："
                       f"{coverage['plan_merge_errors'][:2] or plan}")
+
+        # ── 代码覆盖率的计划口径：只合并 DUT 层次（排除 loopback）──
+        # 单测 merged.ucdb 只代表一条 test；回归 266 条库能回答"回归实际覆盖
+        # 了 DUT 多少代码"。它是对照口径，不替代签核的功能覆盖率门禁。
+        _attach_code_plan(coverage, result, od)
     else:
         result["status"] = sim_result.get("status", "FAIL")
 
