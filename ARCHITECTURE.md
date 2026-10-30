@@ -2,9 +2,9 @@
 
 > 基线：2026-10-29
 >
-> 全量单测：**1031 passed / 2 skipped**；工作台 **716 passed**
+> 全量单测：**1067 passed / 2 skipped**；工作台 **716 passed**
 >
-> 端到端实测：`output_e2e_guards2_jiang_20261029_232435`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过
+> 端到端实测：`output_e2e_final_governance_jiang_20261030_193718`，**272/272 PASS**，计划覆盖率 **95.23%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用
 
 本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
 
@@ -139,6 +139,31 @@ audit → finalize → END
 
 原则：**查询与构建分离、配置与代码分离、硬规则与软策略分离**。这些护栏
 只加检查、不加节点，不改变已跑通的拓扑。
+
+### 4.5 复杂度预算与“守卫的守卫”
+
+**文件行数 / 函数圈复杂度**由 `config/architecture_guard.py` 执行：
+
+- `config/architecture_budget.yaml`：> 1500 行必须登记（`reason` + `plan`），
+  > 2000 行失败；登记文件**只能变小不能变大**。
+- `config/complexity_baseline.json`：现有 > 20 的函数进债务清单；
+  新函数超阈值、或已登记函数复杂度增长 → 失败。
+- `python -m config.architecture_guard` 是 CI 入口。
+
+**变异测试** `scripts/mutation_guards.py` 故意改坏 6 条核心守卫，再跑对应
+测试；测试必须失败（mutant killed），否则说明守卫没被测到：
+
+| mutant | 守卫 | 对应测试 |
+|---|---|---|
+| `decision_hard_overridden` | 硬失败优先 | `test_decision_phases` |
+| `steps_dag_missing_dependency` | 7 步依赖 | `test_verify_steps_dag` |
+| `plusargs_reserved_allowed` | 后端保留键 | `test_plusargs_semantics` |
+| `file_audit_hash_skipped` | 证据链哈希 | `test_human_edit_evidence` |
+| `state_contract_wrong_owner` | State 写入者 | `test_state_contracts` |
+| `tool_registry_empty_allowed` | 工具映射完整性 | `test_tool_registry` |
+
+当前 **6/6 killed**。新增守卫必须在 `MUTATIONS` 里有一条“改坏它会红”的
+mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
 
 ---
 
@@ -299,6 +324,33 @@ case 模型 → TP IR → 属性 test 类 → 约束 → 回归任务 → 覆盖
 | `coverage/association_report.json` | 三模型关联断点 |
 | `coverage/sim_reward.json` | 编译 / 回归 / 覆盖率三层合成的粗连续奖励 |
 | `coverage/knowledge_graph.json` | 运行时知识图（gap → bin/test/version/fix，带 sha256） |
+| `coverage/stimulus_plan.json` | StimulusPlan IR（两个激励后端的公共前置层，带 sha256） |
+
+### 7.5 激励后端：generated 与 player 并存
+
+**决策：保持两个后端，不互相替代。**
+
+```text
+TP IR ──► StimulusPlan IR（framework/stimulus_plan.py，确定性 + sha256）
+              ├─ generated（默认、当前唯一可执行）
+              └─ player   （可选、第一版限定 stimulus/sequence、单 agent、静态 plan）
+```
+
+| 后端 | 状态 | 边界 |
+|---|---|---|
+| `generated` | **可用**，默认 | 编译期检查 + 标准 UVM 调试路径；接受 stimulus / sequence / backdoor |
+| `player` | **plan 可生成，runtime 未实现** | 只接受 stimulus / sequence、单 agent；`ensure_backend_executable()` 显式报错，**不静默退回 generated** |
+
+约束（player 落地前必须满足）：
+
+- per-DUT adapter 由**生成器**从 `realization.field` 产出，不让 LLM 手写；
+- 事务计数不符 / 少发 / 多发 / plan 漂移 → `UVM_FATAL`；
+- plan + seed + PlaybackLog 一起进证据包；
+- 同一 TP 的 generated vs player 事务序列（字段/顺序/周期）一致性测试通过后，
+  才允许扩大 player 的使用范围。
+
+当前 verify 会把 plan 落到 `coverage/stimulus_plan.json` 并随证据包收走；
+generated 仍按原路径执行。
 
 ---
 
@@ -565,12 +617,28 @@ vagent evidence compare <pkg-a> <pkg-b>
 
 | 机制 | 落点 |
 |---|---|
-| 模块签核策略 | `specs/<module>/signoff_policy.yaml` |
+| 模块签核策略 | `config/signoff_policy/_default.yaml` 全局默认 + `specs/<module>/signoff_policy.yaml` 模块覆盖；`load_policy(strict=True)` 校验 schema / 未知键 / 类型 / reward_weights，非法即失败；`policy_hash` 进证据包 |
 | caveat 机器码 | `caveats.json` / `report.json` |
 | 审批绑定证据哈希 | `<run>/approvals.jsonl`（append-only）+ `approval.json` 最新视图 + `vagent approval --run` |
 | 血缘基线强制 | `database/lineage.db` + evidence |
 | 参考模型门禁 | `models.yaml` 的 `source.status == verified` |
 | 仅点状 LLM | `src/tools/common/lib/llm_call.py` 唯一漏斗 + `docs/llm_audit.jsonl` |
+
+### 10.5 LLM 输出治理
+
+`tools/common/lib/llm_call.py` 仍是唯一漏斗；现在每次调用**必须显式声明契约**：
+
+| 机制 | 行为 |
+|---|---|
+| `output_schema` | keyword-only 必填。缺失 → `query_engine` 拒绝调用，审计 `schema_missing`，输出不落盘、不进 pipeline |
+| 输出校验 | `output_format="json"` 先解析再过 `jsonschema`；不过 → `schema_invalid`，**不缓存、不返回** |
+| `prompt_version` | 必填，进审计并参与缓存键；prompt 版本变则缓存自动失效 |
+| 缓存 | 只缓存通过 schema 的输出；键 = 消息 + prompt 版本 + schema 哈希 + 输出格式 |
+| `failure_policy` | 显式 `fallback`（返回空串，调用方走确定性回退）或 `fail_fast`（抛 `LLMContractError`）；未知值直接报错 |
+| 审计 | `docs/llm_audit.jsonl` 增 `prompt_version` / `schema_hash` / `failure_policy` / `output_format` / `validation` |
+
+调用点现有四类契约：`TEXT_SCHEMA`（根因分析）、`CODE_SCHEMA`（RTL / sequence /
+修复文件）、`JSON_OBJECT_SCHEMA`（协议分类）。
 
 **Caveat 码：**
 
@@ -640,10 +708,12 @@ vagent evidence compare <pkg-a> <pkg-b>
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1031 passed / 2 skipped
+python -m pytest tests/ -q                            # 1067 passed / 2 skipped
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
 python -m pytest src/workbench/tests -q               # 716 passed
+python -m config.architecture_guard                   # 行数 / 圈复杂度预算
+python scripts/mutation_guards.py                     # 6 条核心守卫变异测试
 ```
 
 关键守卫：
@@ -670,6 +740,11 @@ python -m pytest src/workbench/tests -q               # 716 passed
 | `test_signoff_reproducible.py` | Tier A 重算结论 = report；证据漂移必失败 |
 | `test_cli_common.py` | 退出码/helper 只有一处定义且 re-export 一致 |
 | `test_protocol_grouping.py` | 单端口 LLM 猜测不能劫持整份 spec；显式协议仍保留 |
+| `test_architecture_invariants.py` | 24 节点 / 8 executor / 板块 / 动作 / caveat / 文档计数一致 |
+| `test_mutation_guards.py` | 变异目标片段仍唯一存在（防止变异测试悄悄失效） |
+| `test_llm_governance.py` | 无 schema 拒绝、JSON 校验、prompt 版本失效缓存、fail-fast |
+| `test_stimulus_plan.py` | plan sha256 稳定；player 限制与“runtime 未实现”显式报错 |
+| `test_signoff_policy.py` | 策略 schema/未知键/类型/reward_weights 校验与 policy_hash |
 
 ---
 
@@ -686,6 +761,10 @@ python -m pytest src/workbench/tests -q               # 716 passed
 - **知识图是查询层，不是推理层**：`runtime.py` 只把已有产物连成确定性因果链，
   没有 Neo4j / networkx，也不让 LLM 直接遍历或改写图；LLM 只读 `gap_paths` 的
   摘要（`_semantic_reason`）。
+- **player 激励后端只有 plan，没有 runtime**：`stimulus_plan.json` 可生成，
+  `ensure_backend_executable("player")` 显式报错；generated 仍是唯一可执行后端。
+- **尚未落地**：产物级 provenance DAG、bin 级 test/seed 溯源、工具 sandbox
+  路径/命令白名单、run 生命周期自动清理（`vagent prune` 已有手动入口）。
 - **auth.py 是可选 API 面**：CLI 不 import 它，FastAPI/PyJWT 放在 `api` extra；
   核心安装不再为未使用的认证代码付依赖成本。
 
@@ -695,7 +774,13 @@ python -m pytest src/workbench/tests -q               # 716 passed
 
 ```text
 .
-├─ config/                      设置（settings.py）与统一路径（paths.py）
+├─ config/                      设置（settings.py）/ 路径（paths.py）
+│  ├─ architecture_budget.yaml  行数预算 + 大文件登记（reason/plan）
+│  ├─ complexity_baseline.json  圈复杂度债务基线
+│  └─ architecture_guard.py     预算检查入口
+├─ scripts/
+│  ├─ mutation_guards.py        6 条核心守卫的变异测试
+│  └─ check_architecture.py     （可选 CI 包装）
 ├─ database/                    运行期 SQLite（不进 git，只留 .gitkeep）
 ├─ specs/<module>/              RTL + casemodel.yaml + signoff_policy.yaml
 ├─ src/

@@ -401,6 +401,20 @@ class VerifyExecutor(BaseExecutor):
                 payload["testpoints_yaml"], encoding="utf-8", newline="\n")
             (cov_dir / "testpoints.json").write_text(
                 json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            # ── StimulusPlan IR：generated / player 两个后端的公共前置层 ──
+            # 当前只落 plan（generated 仍是唯一可执行后端）；player runtime 未实现
+            # 时 `ensure_backend_executable` 会显式报错，不静默换后端。
+            try:
+                from src.tools.generation.casemodel_tools.framework.stimulus_plan import (
+                    DEFAULT_BACKEND, build_and_write)
+
+                _plan = build_and_write(
+                    payload.get("testpoints") or [], output_dir,
+                    backend=DEFAULT_BACKEND, module=module_name)
+                logger.info(f"StimulusPlan：{_plan['planned']} 条可激励 / "
+                            f"{_plan['unsupported']} 条不适用（backend={_plan['backend']}）")
+            except Exception as _e:                    # noqa: BLE001 旁路
+                logger.warning(f"StimulusPlan 生成失败: {_e}")
             # **自证**：manifest 说这份 IR 的哈希是 X，落盘字节就得是 X。
             # 哈希对不上时证据链是假的 —— 宁可日志里响一声，也不让它静默过去。
             _want = ((payload.get("methodology") or {}).get("artifacts") or {}) \
@@ -426,9 +440,12 @@ class VerifyExecutor(BaseExecutor):
                     f"观测型 {payload['observe_only']} 条）→ coverage/testpoints.yaml")
         for note in payload.get("notes") or []:
             logger.info(f"  测试点注意: {note}")
-        return [str(output_dir / "coverage" / "testpoints.yaml"),
-                str(output_dir / "coverage" / "testpoints.json"),
-                str(output_dir / "coverage" / "methodology.json")]
+        files = [str(output_dir / "coverage" / "testpoints.yaml"),
+                 str(output_dir / "coverage" / "testpoints.json"),
+                 str(output_dir / "coverage" / "methodology.json")]
+        if (output_dir / "coverage" / "stimulus_plan.json").is_file():
+            files.append(str(output_dir / "coverage" / "stimulus_plan.json"))
+        return files
 
     def _write_constraint_yaml(self, output_dir: Path) -> None:
         """`inputs/yaml/uvm/constraint.yaml` —— case 模型 → 约束模型（`env/cons/*` 的输入）。

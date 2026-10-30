@@ -276,6 +276,7 @@ class SignoffModule(ModuleBase):
         reward = ev.get("sim_reward") or {}
         kg = ev.get("knowledge_graph") or {}
         recipe = ev.get("recipe") or {}
+        stimulus = ev.get("stimulus_plan") or {}
         rm = ev.get("reference_models") or {}
         lin = ev.get("lineage") or {}
         cst = ev.get("constraint_status") or {}
@@ -300,15 +301,12 @@ class SignoffModule(ModuleBase):
             f"TP {counts or '{}'}",
             f"种子：{sd.get('verdict') or '?'}（{len(seeds)} seeds · "
             f"稳定 {sd.get('stable_bins', '?')} / 种子敏感 {sd.get('variable_bins', '?')}）",
-            (f"奖励：{reward.get('total', '?')}（最弱层 {reward.get('weakest') or '?'}）"
-             + (f" · 权重 {reward.get('weights')}" if reward.get("weights") else "")
-             + (f" · 配置问题 {len(reward.get('weight_issues') or [])} 条"
-                if reward.get("weight_issues") else ""))
-            if reward else "奖励：未计算（老 run）",
+            _reward_text(reward),
             (f"知识图：{kg.get('summary', {}).get('nodes', '?')} 节点 / "
              f"{kg.get('summary', {}).get('edges', '?')} 边 · "
              f"sha256 {(kg.get('sha256') or '?')[:12]}…")
             if kg else "知识图：未生成（老 run）",
+            _stimulus_text(stimulus),
             f"约束：{cst.get('backed_policy_count', '?')}/{cst.get('policy_count', '?')} backed · "
             f"参考模型：{'unavailable' if not rm.get('available') else 'available'} · "
             f"基线：{lin.get('name') or '?'}",
@@ -316,10 +314,7 @@ class SignoffModule(ModuleBase):
             + (f"（最新 {appr.get('action')} by {appr.get('approver') or '?'}）"
                if appr else "")
             + f" · Freeze：{'present' if freeze.get('present') else 'missing'}",
-            f"回放：{self.replay_cmd or '（无）'}"
-            + (f" · recipe {recipe.get('schema') or '?'} · Tier B 需 "
-               f"{'、'.join((recipe.get('tier_b') or {}).get('eda_tools') or []) or '?'}"
-               if recipe else " · recipe 未生成（老 run）"),
+            _replay_text(self.replay_cmd, recipe),
         ]
         self.evidence_label.setText("\n".join(lines))
         self.evidence_label.setStyleSheet(f"color: {theme.current().muted};")
@@ -370,6 +365,38 @@ class SignoffModule(ModuleBase):
         self.evidence_label.setText("")
         self.evidence_dir = ""
         self.replay_cmd = ""
+
+
+def _reward_text(reward: Dict[str, Any]) -> str:
+    if not reward:
+        return "奖励：未计算（老 run）"
+    text = (f"奖励：{reward.get('total', '?')}"
+            f"（最弱层 {reward.get('weakest') or '?'}）")
+    if reward.get("weights"):
+        text += f" · 权重 {reward.get('weights')}"
+    issues = reward.get("weight_issues") or []
+    if issues:
+        text += f" · 配置问题 {len(issues)} 条"
+    return text
+
+
+def _stimulus_text(plan: Dict[str, Any]) -> str:
+    if not plan:
+        return "激励计划：未生成（老 run）"
+    stats = plan.get("stats") or {}
+    return (f"激励计划：{stats.get('planned', '?')} 可激励 / "
+            f"{stats.get('unsupported', '?')} 不适用 · "
+            f"backend {plan.get('backend') or '?'} · "
+            f"sha256 {(plan.get('sha256') or '?')[:12]}…")
+
+
+def _replay_text(command: str, recipe: Dict[str, Any]) -> str:
+    text = f"回放：{command or '（无）'}"
+    if not recipe:
+        return text + " · recipe 未生成（老 run）"
+    tools = "、".join((recipe.get("tier_b") or {}).get("eda_tools") or [])
+    return text + (f" · recipe {recipe.get('schema') or '?'}"
+                   f" · Tier B 需 {tools or '?'}")
 
 
 def _color(passed: bool) -> QColor:

@@ -40,6 +40,15 @@ import structlog
 
 logger = structlog.get_logger()
 
+#: 输出契约 —— **每次调用都必须声明**。没有 schema 的 LLM 调用直接失败，
+#: 不落盘、不进 pipeline（见 `query_engine.query`）。
+TEXT_SCHEMA: Dict[str, Any] = {"type": "string", "minLength": 1}
+#: 代码类输出（RTL / sequence body / 修复后的文件）至少是非空字符串。
+#: 不用长度当质量判据 —— 有效性由 `_is_valid_rtl` / `vlog` 等下游检查回答。
+CODE_SCHEMA: Dict[str, Any] = {"type": "string", "minLength": 1}
+#: 分类/结构化输出：JSON 对象（具体字段由调用方再解析）。
+JSON_OBJECT_SCHEMA: Dict[str, Any] = {"type": "object"}
+
 
 def caller_site() -> str:
     """**自动**取调用点 `相对路径:行号` —— 不手写字符串。
@@ -84,38 +93,45 @@ def caller_site() -> str:
     return f"{rel.replace(os.sep, '/')}:{chosen.lineno}"
 
 
-def call_llm(prompt: str, code: str, errors: str) -> str:
-    """`prompt` → LLM 文本（经集中式 Query Engine：预算 + 缓存 + 降级 + 审计）。
+def call_llm(prompt: str, code: str, errors: str, *,
+             output_schema: Dict[str, Any],
+             prompt_version: str,
+             output_format: str = "text",
+             failure_policy: str = "fallback") -> str:
+    """`prompt` → LLM 文本（经集中式 Query Engine：预算 + 缓存 + 契约 + 审计）。
 
-    失败一律返回**空串**、不抛 —— 调用方拿它判"LLM 没给出东西"并走确定性回退
-    （例如 design 的 `_is_valid_rtl` 会因此丢弃这次生成）。抛异常会把
-    "LLM 挂了"升级成"流水线挂了"，那不是这一层该做的判断。
+    **`output_schema` 与 `prompt_version` 是必填的**（keyword-only）：
+      · 没有 schema → `query_engine` 直接拒绝，不落盘、不进 pipeline；
+      · `prompt_version` 进审计并参与缓存键 —— prompt 改了缓存自动失效。
 
-    审计记录里带上**出处**：`site`（调用点，自动取）+ `node_id` / `round`
-    （由 `_run_agent` 经 contextvar 钉进来，见 `context/llm_origin.py`）。
-    没有它们，"这一行 RTL 是谁在哪一轮催出来的"只能靠翻日志猜。
+    `failure_policy` 必须显式：
+      · `fallback`（默认）：失败返回空串，调用方走确定性回退；
+      · `fail_fast`：抛 `LLMContractError`（关键生成路径用）。
+
+    `output_format="json"` 时输出先按 JSON 解析并过 schema，不合法即失败。
     """
+    if not prompt_version:
+        raise ValueError("call_llm 需要显式 prompt_version（缓存键与审计都靠它）")
     try:
         from src.layers.l2_orchestration.context.query_engine import (
-            LLMQueryEngine,
+            LLMContractError, LLMQueryEngine,
         )
-        user_msg = (f"CODE:\n{code[:3000]}\n\nERRORS:\n{errors[:1000]}\n\n"
-                    f"Output ONLY the fixed complete code, no explanation.")
-        messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_msg},
-        ]
-        content = LLMQueryEngine.get_instance().query(
-            "code_generation", messages, cache_key=prompt, site=caller_site())
-        if not content:
-            return ""
-        # 模型偶尔还是会把代码包在 ``` 里 —— 剥掉，顺手认一下语言标记
-        if "```" in content:
-            block = content.split("```")[1]
-            if block.startswith("systemverilog") or block.startswith("sv"):
-                block = block.split("\n", 1)[1] if "\n" in block else block
-            return block.strip()
-        return content.strip()
+    except Exception as e:                          # noqa: BLE001
+        logger.warning(f"LLM 引擎不可用: {e}")
+        return ""
+    user_msg = (f"CODE:\n{code[:3000]}\n\nERRORS:\n{errors[:1000]}\n\n"
+                f"Output ONLY the fixed complete code, no explanation.")
+    messages: List[Dict[str, Any]] = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": user_msg},
+    ]
+    try:
+        return LLMQueryEngine.get_instance().query(
+            "code_generation", messages, site=caller_site(),
+            output_schema=output_schema, output_format=output_format,
+            prompt_version=prompt_version, failure_policy=failure_policy)
+    except LLMContractError:
+        raise                                   # fail-fast 是契约，不吞
     except Exception as e:                          # noqa: BLE001
         logger.warning(f"LLM call failed: {e}")
     return ""

@@ -410,6 +410,7 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
         "regression_config": signoff.get("regression_config") or {},
         "policy": {
             "schema": policy.get("schema", ""),
+            "policy_hash": policy.get("policy_hash", ""),
             "source": policy.get("source", ""),
             "require_ref_model": policy.get("require_ref_model"),
             "require_baseline": policy.get("require_baseline"),
@@ -654,7 +655,8 @@ class AuditExecutor(BaseExecutor):
         module = _module_name(output_dir, ctx)
         from src.layers.l2_orchestration.evidence.signoff_package import (
             collect_versions, load_policy, write_policy_snapshot)
-        policy, _policy_src = load_policy(output_dir, module, Path.cwd())
+        policy, _policy_src = load_policy(output_dir, module, Path.cwd(),
+                                          strict=True)
         for _issue in policy.get("issues") or []:
             logger.warning(f"签核策略: {_issue}")
         write_policy_snapshot(output_dir, policy)
@@ -739,6 +741,8 @@ class AuditExecutor(BaseExecutor):
             "accepted_caveat_codes": sorted(accepted_codes),
             "effective_caveat_codes": [c["code"] for c in effective_caveats],
             "policy": {
+                "schema": policy.get("schema", ""),
+                "policy_hash": policy.get("policy_hash", ""),
                 "source": policy.get("source", ""),
                 "require_ref_model": bool(policy.get("require_ref_model")),
                 "require_baseline": bool(policy.get("require_baseline")),

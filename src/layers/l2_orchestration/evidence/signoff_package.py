@@ -44,6 +44,17 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 SCHEMA = "signoff_evidence_v2"
+POLICY_SCHEMA = "signoff_policy_v1"
+
+#: 策略文件允许的键。未知键 = 拼写错误/过期字段，**不静默忽略**。
+POLICY_KEYS = frozenset({
+    "schema", "module", "require_ref_model", "require_baseline",
+    "accepted_caveats", "caveat_policy", "reward_weights", "_effective_source",
+})
+
+
+class PolicyError(ValueError):
+    """签核策略不合 schema —— strict 模式下直接失败。"""
 
 #: 证据包各段要收的**源文件候选**（相对 run 目录）。
 #: 不存在就跳过 —— 不写空占位：缺了什么是事实，应该能被看见。
@@ -55,6 +66,7 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "inputs/yaml/uvm/models.yaml",
         "coverage/coverage_plan.yaml",
         "coverage/testpoints.json",
+        "coverage/stimulus_plan.json",
         "coverage/association_report.json",
         "coverage/constraint_status.json",
         "signoff_policy.yaml",
@@ -146,8 +158,78 @@ def collect_versions() -> Dict[str, Any]:
 # 模块策略
 # ═══════════════════════════════════════════════════════════
 
+def _normalize_accepted(raw: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """两种写法（accepted_caveats / caveat_policy）归一成 code → detail。"""
+    accepted: Dict[str, Dict[str, Any]] = {}
+    for code, val in (raw.get("accepted_caveats") or {}).items():
+        if isinstance(val, dict):
+            accepted[str(code)] = {
+                "accepted": bool(val.get("accepted")),
+                "approver": str(val.get("approver") or ""),
+                "reason": str(val.get("reason") or ""),
+            }
+        else:
+            accepted[str(code)] = {"accepted": bool(val),
+                                   "approver": "", "reason": ""}
+    for item in (raw.get("caveat_policy") or []):
+        if isinstance(item, dict) and item.get("code"):
+            accepted[str(item["code"])] = {
+                "accepted": bool(item.get("accepted")),
+                "approver": str(item.get("approver") or ""),
+                "reason": str(item.get("reason") or ""),
+            }
+    return accepted
+
+
+def _policy_issues(raw: Dict[str, Any],
+                   accepted: Dict[str, Dict[str, Any]]) -> List[str]:
+    """schema / 未知键 / 类型 / caveat / reward_weights 的静态校验。"""
+    issues: List[str] = []
+    if not raw:
+        return issues
+    if raw.get("schema") not in (None, POLICY_SCHEMA):
+        issues.append(f"schema 必须是 {POLICY_SCHEMA}，实际 {raw.get('schema')!r}")
+    unknown = sorted(set(raw) - POLICY_KEYS)
+    if unknown:
+        issues.append(f"未知策略键（拼写错误/过期字段）: {unknown}")
+    if not isinstance(raw.get("require_ref_model", False), bool):
+        issues.append("require_ref_model 必须是布尔值")
+    if not isinstance(raw.get("require_baseline", True), bool):
+        issues.append("require_baseline 必须是布尔值")
+    if not isinstance(raw.get("accepted_caveats", {}), dict):
+        issues.append("accepted_caveats 必须是 code → {accepted, approver, reason} 的映射")
+    for code, val in accepted.items():
+        if val.get("accepted") and (not val.get("approver") or not val.get("reason")):
+            issues.append(f"accepted_caveats.{code}: 接受 caveat 必须写 approver 与 reason")
+    rw = raw.get("reward_weights")
+    if rw is not None:
+        if not isinstance(rw, dict):
+            issues.append("reward_weights 必须是 compile/regression/coverage 的映射")
+        else:
+            for key, value in rw.items():
+                if key not in ("compile", "regression", "coverage"):
+                    issues.append(f"reward_weights 未知键: {key}")
+                elif not isinstance(value, (int, float)) or value < 0:
+                    issues.append(f"reward_weights.{key} 必须是非负数")
+            if all(isinstance(v, (int, float)) for v in rw.values()) \
+                    and sum(rw.values()) <= 0:
+                issues.append("reward_weights 总和必须大于 0")
+    return issues
+
+
+def _read_policy_doc(path: Path) -> Dict[str, Any] | None:
+    try:
+        import yaml
+
+        doc = yaml.safe_load(path.read_text(encoding="utf-8", errors="replace"))
+    except Exception:                               # noqa: BLE001 坏策略文件不阻断
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
 def load_policy(output_dir: Path, module: str,
-                project_root: Optional[Path] = None) -> Tuple[Dict[str, Any], str]:
+                project_root: Optional[Path] = None,
+                strict: bool = False) -> Tuple[Dict[str, Any], str]:
     """按模块加载签核策略（caveat 接受 / 是否要求参考模型与基线）。
 
     查找顺序（**第一个存在的赢**）：
@@ -164,54 +246,28 @@ def load_policy(output_dir: Path, module: str,
         root / "specs" / str(module) / "signoff_policy.yaml",
         root / "config" / "signoff_policy" / f"{module}.yaml",
     ]
-    source = ""
-    raw: Dict[str, Any] = {}
+    # 全局默认 + 模块覆盖：模块文件只写与默认不同的键。
+    default_path = root / "config" / "signoff_policy" / "_default.yaml"
+    raw: Dict[str, Any] = dict(_read_policy_doc(default_path) or {})
+    source = str(default_path) if raw else ""
     for p in candidates:
-        if p.is_file():
-            try:
-                import yaml
+        doc = _read_policy_doc(p) if p.is_file() else None
+        if doc is not None:
+            raw.update(doc)
+            source = str(p)
+            break
 
-                doc = yaml.safe_load(p.read_text(encoding="utf-8", errors="replace"))
-                if isinstance(doc, dict):
-                    raw, source = doc, str(p)
-                    break
-            except Exception:                       # noqa: BLE001 坏策略文件不阻断
-                continue
+    accepted = _normalize_accepted(raw)
+    issues = _policy_issues(raw, accepted)
 
-    accepted: Dict[str, Dict[str, Any]] = {}
-    for code, val in (raw.get("accepted_caveats") or {}).items():
-        if isinstance(val, dict):
-            accepted[str(code)] = {
-                "accepted": bool(val.get("accepted")),
-                "approver": str(val.get("approver") or ""),
-                "reason": str(val.get("reason") or ""),
-            }
-        else:
-            accepted[str(code)] = {"accepted": bool(val), "approver": "", "reason": ""}
-    for item in (raw.get("caveat_policy") or []):
-        if isinstance(item, dict) and item.get("code"):
-            accepted[str(item["code"])] = {
-                "accepted": bool(item.get("accepted")),
-                "approver": str(item.get("approver") or ""),
-                "reason": str(item.get("reason") or ""),
-            }
-
-    issues: List[str] = []
-    if raw:
-        if not isinstance(raw.get("require_ref_model", False), bool):
-            issues.append("require_ref_model 必须是布尔值")
-        if not isinstance(raw.get("require_baseline", True), bool):
-            issues.append("require_baseline 必须是布尔值")
-        if not isinstance(raw.get("accepted_caveats", {}), dict):
-            issues.append("accepted_caveats 必须是 code → {accepted, approver, reason} 的映射")
-        for code, val in accepted.items():
-            if val.get("accepted") and (not val.get("approver") or not val.get("reason")):
-                issues.append(f"accepted_caveats.{code}: 接受 caveat 必须写 approver 与 reason")
+    if strict and issues:
+        raise PolicyError("签核策略不合 schema: " + "；".join(issues))
 
     policy = {
-        "schema": "signoff_policy_v1",
+        "schema": POLICY_SCHEMA,
         "module": module,
         "source": source,
+        "policy_hash": sha256_json(raw),
         "require_ref_model": bool(raw.get("require_ref_model", False)),
         "require_baseline": bool(raw.get("require_baseline", True)),
         "accepted_caveats": accepted,

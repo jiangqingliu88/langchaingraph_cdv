@@ -106,11 +106,14 @@ class DebugExecutor(BaseExecutor):
             # `site` 要自己给：这条**不经过 `lib.llm_call.call_llm`**（直连 engine），
             # 而那句"唯一漏斗"的算术只在漏斗里自动取调用点。不给的话审计记录的
             # 出处恒为空 —— 实测 15 条里 5 条是空的，全是这一条路。
-            from src.tools.common.lib.llm_call import caller_site
+            from src.tools.common.lib.llm_call import TEXT_SCHEMA, caller_site
 
             return await asyncio.to_thread(
                 LLMQueryEngine.get_instance().query,
-                self.task_type, payload, input_text, site=caller_site()) or ""
+                self.task_type, payload, input_text, site=caller_site(),
+                output_schema=TEXT_SCHEMA, output_format="text",
+                prompt_version="debug-rootcause-v1",
+                failure_policy="fallback") or ""
         except Exception as e:                      # noqa: BLE001
             logger.warning(f"LLM 根因分析失败: {e}")
             return ""
@@ -696,7 +699,7 @@ class DebugExecutor(BaseExecutor):
         virtual interface 参数化等）由 LLM 重写出错文件，而非只记录假设。
         """
         try:
-            from src.tools.common.lib.llm_call import call_llm
+            from src.tools.common.lib.llm_call import CODE_SCHEMA, call_llm
             od = Path(output_dir)
             fpath = od / fname
             if not fpath.exists():
@@ -710,7 +713,9 @@ class DebugExecutor(BaseExecutor):
                 "只修复报错点，保留模块接口与整体结构，输出完整修正后的文件内容"
                 "（含 module/endmodule 或 class/endclass）。"
             )
-            fixed = call_llm(prompt, code, error_msg)
+            fixed = call_llm(prompt, code, error_msg,
+                             output_schema=CODE_SCHEMA,
+                             prompt_version="debug-fix-file-v1")
             if not fixed or ("module" not in fixed and "class" not in fixed):
                 return False
             # **走全项目唯一的写盘出口** —— 生成物（带 `自动生成 (tool_uvm` banner）

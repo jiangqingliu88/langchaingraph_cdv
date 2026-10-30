@@ -86,6 +86,12 @@ def _run_dir(tmp_path: Path) -> Path:
         "tier_a": {"requires_eda": False, "command": "python replay/replay.py"},
         "tier_b": {"requires_eda": True, "eda_tools": ["vsim", "vcover"]},
     }, ensure_ascii=False), encoding="utf-8")
+    (root / "coverage").mkdir(exist_ok=True)
+    (root / "coverage" / "stimulus_plan.json").write_text(json.dumps({
+        "schema": "stimulus_plan_v1", "backend": "generated",
+        "sha256": "e" * 64,
+        "stats": {"planned": 26, "unsupported": 37},
+    }, ensure_ascii=False), encoding="utf-8")
     return root
 
 
@@ -193,6 +199,7 @@ class TestEvidencePackage:
         assert "9 节点 / 8 边" in text                   # 运行时知识图规模
         assert "signoff_replay_recipe_v2" in text        # recipe v2
         assert "vsim" in text and "vcover" in text       # Tier B 依赖
+        assert "26 可激励 / 37 不适用" in text           # StimulusPlan
         assert "missing" in text.lower()          # 没有 freeze.json
         assert "approve" in text
 

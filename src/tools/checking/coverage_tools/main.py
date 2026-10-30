@@ -213,8 +213,9 @@ DUT RTL:
 
 只输出代码片段，无 markdown 代码块、无解释。"""
     try:
-        from src.tools.common.lib.llm_call import call_llm
-        return call_llm(prompt, "", "")
+        from src.tools.common.lib.llm_call import CODE_SCHEMA, call_llm
+        return call_llm(prompt, "", "", output_schema=CODE_SCHEMA,
+                        prompt_version="coverage-gap-stimulus-v1")
     except Exception:
         return ""
 

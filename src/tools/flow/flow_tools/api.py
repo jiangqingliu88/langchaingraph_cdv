@@ -37,6 +37,10 @@ from src.layers.l1_infrastructure.layout import regression_root as _layout_regre
 from src.layers.l1_infrastructure.layout import latest_root as _layout_latest_root
 from src.layers.l1_infrastructure.layout import stage_roots as _layout_stage_roots
 from src.layers.l1_infrastructure.layout import test_dirs as _layout_test_dirs
+from src.tools.flow.flow_tools.evidence_summary import (
+    recipe_summary as _recipe_summary,
+    stimulus_summary as _stimulus_summary,
+)
 
 #: 门禁 id → 中文名。顺序即**显示顺序**（audit agent 的 gates 是 dict，无序）。
 #: 这些是 audit 的布尔门禁；`rtl_files` / `model_placeholder_reason` 是附注不是门禁，
@@ -1270,6 +1274,7 @@ def _evidence_v2(root: Path) -> Dict[str, Any]:
     seed = _read_json(root / "coverage" / "seed_diversity.json")
     constraint = _read_json(root / "coverage" / "constraint_status.json")
     recipe = _read_json(root / "signoff_evidence" / "replay" / "recipe.json")
+    stimulus = _read_json(root / "coverage" / "stimulus_plan.json")
     approvals = _read_jsonl(root / "approvals.jsonl")
     freeze = root / "freeze.json"
 
@@ -1293,11 +1298,8 @@ def _evidence_v2(root: Path) -> Dict[str, Any]:
                       or _read_json(root / "coverage" / "sim_reward.json") or {},
         "knowledge_graph": (manifest or {}).get("knowledge_graph")
                           or _read_json(root / "coverage" / "knowledge_graph.json") or {},
-        "recipe": {
-            "schema": (recipe or {}).get("schema", ""),
-            "tier_a": (recipe or {}).get("tier_a") or {},
-            "tier_b": (recipe or {}).get("tier_b") or {},
-        } if recipe else {},
+        "recipe": _recipe_summary(recipe),
+        "stimulus_plan": _stimulus_summary(stimulus),
         "reference_models": (manifest or {}).get("reference_models") or {},
         "lineage": (manifest or {}).get("lineage") or {},
         "regression_config": (manifest or {}).get("regression_config") or {},

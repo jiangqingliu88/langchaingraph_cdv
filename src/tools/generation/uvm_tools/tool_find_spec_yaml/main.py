@@ -312,7 +312,7 @@ def _llm_classify_protocols(names: list) -> dict:
     if not names:
         return {}
     try:
-        from src.tools.common.lib.llm_call import call_llm
+        from src.tools.common.lib.llm_call import JSON_OBJECT_SCHEMA, call_llm
     except Exception:
         return {}
     prompt = (
@@ -325,7 +325,9 @@ def _llm_classify_protocols(names: list) -> dict:
         "只输出 JSON 对象 {\"端口名\": \"protocol\", ...}，不要任何解释或代码块。"
     )
     try:
-        raw = (call_llm(prompt, "", "") or "").strip()
+        raw = (call_llm(prompt, "", "", output_schema=JSON_OBJECT_SCHEMA,
+                            output_format="json",
+                            prompt_version="protocol-classify-v1") or "").strip()
     except Exception:
         return {}
     if not raw:

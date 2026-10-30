@@ -5,7 +5,7 @@ LLM 驱动修复 —— 编译错误 + 仿真失败的诊断和 LLM 修复
 真正调 LLM 的那一下在 `llm_call.call_llm` —— 全项目唯一的出口。
 
 用法:
-    from src.tools.common.lib.llm_call import call_llm
+    from src.tools.common.lib.llm_call import CODE_SCHEMA, call_llm
     from src.tools.common.lib.llm_refine import llm_refine_sim_timing
 """
 import re
@@ -267,7 +267,9 @@ def llm_refine_sim_timing(output_dir: Path, agents: list, env_name: str) -> dict
             else:
                 prompt = build_sim_fix_prompt(name, issue_type, diagnosis, str(r.get("sim_log", ""))[:1500], file_contents)
 
-            refined = call_llm(prompt, "", str(r.get("sim_log", ""))[:500])
+            refined = call_llm(prompt, "", str(r.get("sim_log", ""))[:500],
+                               output_schema=CODE_SCHEMA,
+                               prompt_version="debug-sim-fix-v1")
             if not refined or len(refined) < 50:
                 result["details"].append(f"{name}: LLM fix failed (empty response)")
                 break
