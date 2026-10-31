@@ -2,6 +2,7 @@
 
 YAML 驱动的 PySide6 桌面平台。**界面清单是 YAML，业务是插件** —— 想知道
 「有哪些界面」不用读代码，读 [`config/workbench.yaml`](../../config/workbench.yaml)。
+结构、契约与扩展点见 [`ARCHITECTURE.md`](ARCHITECTURE.md)（本文偏使用说明）。
 
 ```bash
 python -m src.workbench                              # 用默认清单
@@ -60,6 +61,23 @@ PySide6 与 QDarkStyle 是**可选依赖**（`pip install -e .[gui]`）：纯 CL
 成了 `verify.casemodel` 模块 —— 它是目前唯一一个「界面能力本身就是核心」的模块
 （见下节）；第三轮按 agent 角色重构业务线，并补上只读的证据链 / 签核 / 跟踪 / 趋势视图。
 其余模块在清单里以注释形式留了位。
+
+## 工程服务入口（2026-10）
+
+导航现在分成两层：**客户工程**（面向任务的三个服务入口）与**专业工具**
+（设计时 / 工程工作区 / 运行时 / 平台配置）。服务入口不新造引擎，只做导航与
+编排：
+
+| 入口 | 模块 | 复用的专业视图 |
+|---|---|---|
+| 项目总览 / 项目管理 | `project.overview`、`project.management` | `flow.runs`、`flow.evidence`、`flow.signoff`；项目登记表 |
+| UVM 自动化验证 | `service.uvm` | `ide.ip_spec`、`verify.casemodel`、`verify.isa_gen`、`flow.pipeline`、`verify.output`、`flow.evidence` |
+| 回归效率优化 | `service.regression` | `ops.regression_status`、`debug.*`、`flow.compare`、`flow.trend`、`flow.decision` |
+| Coverage Closure | `service.coverage` | `ops.regression_coverage`、`coverage.excludes`、`flow.artifacts`、`flow.evidence`、`flow.signoff` |
+
+执行仍走 CLI 与同一条流水线：`verify` / `optimize-regression` /
+`coverage-closure`。GUI 只读 run 产物、生成计划、打开已有模块，**不产生
+独立签核结论**。详见 [`ARCHITECTURE.md` §16](ARCHITECTURE.md)。
 
 ## 清单怎么写
 

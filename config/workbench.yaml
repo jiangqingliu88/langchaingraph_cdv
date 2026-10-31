@@ -44,21 +44,76 @@ window:
 # 那一条线装的是"一进界面就要用的"东西 —— 任务总览、验证流程、运行历史、
 # 运行对比、签核判定。它是**入口**，不是附录；沉到列表最底下等于每次都要滚下去。
 groups:
+  # 客户视角：项目入口 → 三条工程服务入口（面向任务，而不是技术领域）。
+  - {id: project,  title: 项目,         order: 0,  menu: true, section: 项目}
+  - {id: service,  title: 工程服务,     order: 1,  menu: true, section: 客户工程}
+  # 专业工具：设计时 / 运行时代 / 工程工作区 / 平台配置。
   - {id: ide,      title: 集成设计环境, order: 5,  menu: true, section: 设计时}
-  - {id: flow,     title: 流程与证据,   order: 8,  menu: true, section: 贯穿层}
+  - {id: flow,     title: 流程与证据,   order: 8,  menu: true, section: 工程工作区}
   - {id: design,   title: 设计构建,     order: 10, menu: true, section: 运行时}
   - {id: model,    title: 参考模型,     order: 20, menu: true, section: 运行时}
   - {id: verify,   title: 验证构建,     order: 30, menu: true, section: 运行时}
-  - {id: ops,      title: 编译与回归,   order: 40, menu: true, section: 运行时}
-  - {id: coverage, title: 覆盖率,       order: 50, menu: true, section: 运行时}
-  - {id: debug,    title: 调试技术,     order: 60, menu: true, section: 运行时}
+  - {id: ops,      title: 编译与回归,   order: 40, menu: true, section: 工程工作区}
+  - {id: coverage, title: 覆盖率,       order: 50, menu: true, section: 工程工作区}
+  - {id: debug,    title: 调试技术,     order: 60, menu: true, section: 工程工作区}
   - {id: audit,    title: 签核审查,     order: 70, menu: true, section: 运行时}
+  - {id: platform, title: 平台配置,     order: 90, menu: true, section: 平台配置}
 
 # ── 模块 ──
 # area: center = 中央工作区标签页；left/right/bottom = 停靠区。
 #       同一停靠区的模块会被 tabify 成一组（像 Verdi 底部那一排页签）。
 # tool: 主绑定，名字取自 src/workbench/bridge/catalog.py 的 BINDINGS。
 modules:
+
+  # ══ 项目入口（客户视角）══════════════════════════════════════
+  - id: project.overview
+    title: 项目总览
+    group: project
+    factory: src.workbench.modules.service.project:ProjectOverviewModule
+    area: center
+    order: 5
+    params: {subscribe: [run.selected]}
+
+  - id: project.management
+    title: 项目管理
+    group: project
+    factory: src.workbench.modules.service.project:ProjectManagementModule
+    area: center
+    order: 6
+
+  # ══ 工程服务入口（客户视角；只做导航/编排，不另造引擎）══════════
+  # 每个入口内部的步骤都跳到下面已有的专业模块；数据来自 run 目录/文件契约。
+  - id: service.uvm
+    title: UVM 自动化验证
+    group: service
+    factory: src.workbench.modules.service.uvm:UVMServiceModule
+    area: center
+    order: 10
+    params: {subscribe: [run.selected]}
+
+  - id: service.regression
+    title: 回归效率优化
+    group: service
+    factory: src.workbench.modules.service.regression:RegressionServiceModule
+    area: center
+    order: 20
+    params: {subscribe: [run.selected]}
+
+  - id: service.coverage
+    title: Coverage Closure
+    group: service
+    factory: src.workbench.modules.service.coverage:CoverageClosureModule
+    area: center
+    order: 30
+    params: {subscribe: [run.selected]}
+
+  # ══ 平台配置 ══════════════════════════════════════════════════
+  - id: platform.settings
+    title: 环境与工具
+    group: platform
+    factory: src.workbench.modules.service.platform:PlatformSettingsModule
+    area: center
+    order: 10
 
   # ══ 七条 agent 线 ════════════════════════════════════════════
   # 每条线一个「产出总览」：这次运行里该 agent 跑了哪些阶段、产出了哪些文件。

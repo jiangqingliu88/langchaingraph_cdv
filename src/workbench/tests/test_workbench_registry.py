@@ -535,9 +535,12 @@ class TestRealManifestBuilds:
         window = make_window(qt_app, ctx)
         try:
             assert window.manager.failures() == {}
-            # 31 = 30 + `verify.isa_gen`（2026-10 新增的「ISA 激励」页）
-            assert len(window.modules) == 31
+            # 37 = 31 个专业模块 + 项目入口 2 + 工程服务 3 + 环境与工具
+            assert len(window.modules) == 37
             assert {m.module_id for m in window.modules} >= {
+                "project.overview", "project.management",
+                "service.uvm", "service.regression", "service.coverage",
+                "platform.settings",
                 "design.output", "model.output", "ops.output", "ops.regression_status",
                 "ops.regression_wave", "ops.regression_coverage",
                 "coverage.output",
@@ -553,8 +556,10 @@ class TestRealManifestBuilds:
             # 按清单顺序逐个点开 —— 打开的顺序就是清单顺序（业务线 order 优先，
             # 同一条线里才轮到模块 order：design 10 < model 20 < verify 30
             # < ops 40 < coverage 50 < debug 60 < audit 70 < ide 80 < flow 90）
-            want = ["IP 规格", "人工节点",
-                    # 贯穿层（order 8）排在运行时之前 —— 它是入口。
+            want = ["项目总览", "项目管理",
+                    "UVM 自动化验证", "回归效率优化", "Coverage Closure",
+                    "IP 规格", "人工节点",
+                    # 工程工作区（order 8）排在运行时之前 —— 它是入口。
                     # 线内顺序按"用法"：起（验证流程）→ 选（运行历史，左窗格）→
                     # 看（任务总览/流程视图/运行对比）→ 材料（产物审查/证据）→
                     # 判（签核判定/运行清单）→ 回头查（决策轨迹/进度趋势/跟踪表）
@@ -567,7 +572,8 @@ class TestRealManifestBuilds:
                     "Case 建模", "ISA 激励",
                     "回归产出", "回归状态", "回归波形", "回归覆盖率",
                     "覆盖率产出", "覆盖率豁免",
-                    "仿真日志", "调试产出", "签核产出"]
+                    "仿真日志", "调试产出", "签核产出",
+                    "环境与工具"]
             for module_id in expected_center_order(window):
                 window.manager.open(module_id)
             titles = [s.windowTitle() for s in window.mdi.subWindowList(

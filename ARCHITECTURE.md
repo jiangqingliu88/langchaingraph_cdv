@@ -926,10 +926,12 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 
 ## 12. 工作台（可选，非 Web）
 
-`src/workbench/` 是 PySide6 桌面应用：
+`src/workbench/` 是 PySide6 桌面应用（详细结构见
+[`src/workbench/ARCHITECTURE.md`](src/workbench/ARCHITECTURE.md)）：
 
 - `app.py` / `bootstrap.py` / `bus.py`
-- `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`
+- `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`、`service`（2026-10 新增的三个工程服务入口）
+- **工程服务入口**：`project.overview` / `project.management` + `service.uvm` / `service.regression` / `service.coverage` 都是普通 `ModuleBase` 模块，只做导航/编排（打开已有模块、调 `pipeline.start`、生成 core 计划），不另造引擎；导航分域为「项目 → 客户工程 → 设计时 → 工程工作区 → 运行时 → 平台配置」
 - 签核页同时展示：门禁、六层证据链、**证据包 v2**（哈希 / caveat / 计划与单测覆盖率 / 种子多样性 / **粗连续奖励 + 权重** / **运行时知识图规模** / 参考模型与基线 / 审批 / Freeze / **recipe v2 与 Tier B EDA 依赖** / 回放命令）
 - 签核页工具栏新增 **「校验证据包」**：调 `evidence.check_package`（纯读），展示完整性、Tier A 重算、recipe 校验结果
 - 决策轨迹页新增 **「来源」**（硬规则 / 规则 / RL 采纳 / RL 被退回 / 终态）与 **「奖励」**（每轮 `sim_reward.total` + 最弱层）两列
@@ -1164,3 +1166,122 @@ Run Diff、四个工程指标、证据包接入、三类 CLI 工程服务工作�
 
 **不要做的事**：为覆盖率收敛速度与 EDA 巨头硬拼；本项目的第一定位是
 **可复现·可审计·可治理的签核证据链 + 个人级治理**（见 `CLAUDE.md` §九）。
+
+
+
+有优势，而且已经有了一定的技术壁垒。但目前的优势主要在工程架构和验证流程整合上，还没有完全转化为客户愿意付费、竞争对手难以复制的商业优势。
+
+我对 SignOffAI 的判断是：它已经不只是一个简单的 AI 生成 UVM 代码的工具，而是在向一个 AI 驱动的 IC 验证工程平台发展。
+
+但要区分三个层次。
+1. 目前已经形成的优势
+维度	你的工程优势	我的判断
+架构	CLI、Workbench、Core、Agent、Executor 分层	较强
+执行体系	Job Runtime、RunContext、ArtifactStore	较强
+可追溯性	EventStore、Provenance DAG、Evidence	较强
+自动化	LangGraph、多个 Executor、ToolHub	有基础
+验证生成	Spec 分析、UVM IR、UVM Generator	待验证
+覆盖率闭环	Coverage Analyzer、StimulusPlan、Coverage Decision	待打通
+商业交付	客户项目、真实芯片验证、长期运行	尚未证明
+
+我认为最值得重视的不是 Agent 数量，也不是 GUI，而是以下三个东西。
+
+第一，验证过程可追溯。
+
+传统 AI 工具通常强调生成代码，而你的架构还考虑了：
+- 每次 Run 的运行上下文；
+- 输入、输出和中间产物；
+- 任务执行事件；
+- 产物之间的来源关系；
+- 决策结果；
+- Evidence 验证和 Replay。
+这意味着未来不仅能回答“AI 生成了什么”，还能回答：
+
+为什么生成、依据是什么、运行结果是什么、结果能否复现。
+
+这对芯片验证非常重要。
+
+第二，你正在构建验证闭环，而不只是代码生成。
+
+真正有价值的流程应该是：
+Spec / RTL 输入
+
+验证计划与 UVM 生成
+
+仿真与回归执行
+
+失败分析与 Coverage 分析
+
+定向测试、覆盖率收敛与 Evidence
+
+这是目标闭环，不代表所有环节目前都已完整实现。
+如果最后能够实现 Coverage 缺口自动分析、定向测试生成、仿真验证和覆盖率提升，这会比单纯的 UVM 生成器更有竞争力。
+
+第三，CLI 和 Workbench 的设计方向正确。
+
+你没有把工程做成一个单纯的聊天界面，而是保留了 CLI 正式执行入口、Workbench 工程操作入口，以及流水线产物作为数据依据。
+
+这更接近真正的 EDA 工程软件，而不是一个 AI Demo。
+2. 目前还没有形成的优势
+这里我反而想给你泼一点冷水。
+
+目前有三个关键问题：
+1. 生成质量还没有被真实项目证明。 能生成 UVM，不等于能在不同客户的 RTL、协议和验证环境中稳定工作。
+2. Coverage Closure 还需要真实闭环证明。 能分析 Coverage，不等于能自动把 Coverage 提升上去。
+3. Evidence 的价值需要客户认可。 有完整证据链是架构优势，但必须证明它能降低调试成本、缩短交付周期或减少验证风险。
+特别是第三点：你的系统内部测试通过率高，不等于客户芯片验证成功率高。
+
+所以我不会现在就把它评价成成熟的 AI Sign-Off 产品。
+3. 我认为真正值得建立的竞争壁垒
+我建议未来不要把核心竞争力定位为：
+- 多 Agent；
+- LangGraph；
+- 自动生成 UVM；
+- GUI 功能丰富；
+- 接入多少 EDA 工具。
+这些都可以被其他团队逐步复制。
+
+应该把核心竞争力定位为：
+
+芯片验证知识 + 自动化执行闭环 + 可复现证据链 + 真实项目数据积累。
+
+其中最难复制的是长期积累的真实验证数据：
+- 什么样的 Spec 缺陷容易导致什么样的验证遗漏；
+- 什么样的 Stimulus 能触发特定功能；
+- 哪类 Coverage Bin 难以覆盖；
+- 哪类仿真失败是真正的 DUT Bug；
+- 哪些修改导致回归结果变化；
+- 哪些证据足以支撑工程签核。
+这些数据和经验逐渐积累起来，才会成为 SignOffAI 长期的壁垒。
+4. 我建议下一阶段只做三件事
+优先级	工作	验收目标
+P0	DMA/AXI 真实项目试点	从输入到仿真报告完整交付
+P1	Coverage Closure 闭环	缺口分析→定向测试→仿真→覆盖率变化
+P2	Evidence 与 Replay	客户能够复现结果并审查证据
+
+尤其建议选择一个 DMA 或 AXI IP，做一个有对照组的 Benchmark：
+- 传统人工验证流程；
+- SignOffAI 辅助验证流程。
+对比生成时间、回归时间、功能覆盖率、Bug 检出数量、失败定位时间和复现能力。
+
+如果 SignOffAI 能在不降低 Bug 检出能力、不牺牲覆盖率的前提下，明显减少验证工程师的工作量，你就有了真正的商业竞争力。
+
+5. 最终判断
+SignOffAI 的当前定位
+有技术优势
+但商业优势仍需真实客户项目验证。
+
+我对它的评价：
+- 架构方向：正确。
+- 技术整合：有一定深度。
+- 工程化程度：明显超过简单的 AI UVM 生成工具。
+- 核心能力：还需要真实项目验证。
+- 商业化：可以开始小型 IP 项目试点。
+
+我还有一个比较重要的建议：
+
+不要再急着增加 Agent，也不要继续大量扩充 GUI。
+
+现在更应该把已有的能力压到一个真实 DMA/AXI 项目上，证明它能够交付。
+
+你现在最需要的不是让 SignOffAI 看起来更强，而是让它在一个真实芯片验证项目中表现得确实更强。

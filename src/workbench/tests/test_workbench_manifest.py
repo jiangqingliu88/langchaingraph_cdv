@@ -13,6 +13,10 @@ from ..manifest import (ManifestError, builtin_manifest, describe, load_manifest
 def test_shipped_manifest_parses():
     manifest = load_manifest(default_manifest_path())
     assert [m.id for m in manifest.enabled_modules()] == [
+        # 项目入口 + 工程服务入口（客户视角，最前）
+        "project.overview", "project.management",
+        "service.uvm", "service.regression", "service.coverage",
+        "platform.settings",
         # 七条 agent 线的产出总览（清单里的书写顺序）
         "design.output", "model.output", "ops.output",
         "ops.regression_status", "ops.regression_wave", "ops.regression_coverage",
@@ -25,25 +29,21 @@ def test_shipped_manifest_parses():
         "flow.task", "flow.diagram", "flow.artifacts", "flow.pipeline", "flow.runs", "flow.evidence",
         "flow.todo", "flow.fcov", "flow.drafts", "flow.compare", "flow.signoff", "flow.trend",
         "flow.decision", "flow.manifest"]
-    # flow 排在设计时之后、运行时之前（`order: 8`）—— 贯穿层是入口，不是附录
     assert [g.id for g in manifest.sorted_groups()] == [
-        "ide", "flow", "design", "model", "verify", "ops",
-        "coverage", "debug", "audit"]
+        "project", "service", "ide", "flow", "design", "model", "verify",
+        "ops", "coverage", "debug", "audit", "platform"]
 
 
-def test_shipped_manifest_is_grouped_into_three_sections():
-    """业务域 → 业务线 的三段：设计时 / 贯穿层 / 运行时。
-
-    域的顺序由**域内最小 order** 决定 —— `ide`(5) 是流程上游排最前；
-    贯穿层 `flow`(8) 排在运行时(10) **前面**：那一条线装的是任务总览、验证流程、
-    运行历史、运行对比、签核判定 —— 一进界面就要用的**入口**，不是附录。
-    """
+def test_shipped_manifest_is_grouped_into_business_sections():
+    """业务域 → 业务线：客户工程 / 设计时 / 工程工作区 / 运行时 / 平台配置。"""
     manifest = load_manifest(default_manifest_path())
     assert [(section, [g.id for g in groups]) for section, groups in manifest.sections()] == [
+        ("项目", ["project"]),
+        ("客户工程", ["service"]),
         ("设计时", ["ide"]),
-        ("贯穿层", ["flow"]),
-        ("运行时", ["design", "model", "verify", "ops",
-                      "coverage", "debug", "audit"]),
+        ("工程工作区", ["flow", "ops", "coverage", "debug"]),
+        ("运行时", ["design", "model", "verify", "audit"]),
+        ("平台配置", ["platform"]),
     ]
 
 
@@ -153,7 +153,7 @@ def test_builtin_manifest_has_groups_but_no_modules():
 
 def test_describe_counts_enabled_modules():
     manifest = load_manifest(default_manifest_path())
-    assert "31 个模块" in describe(manifest)
+    assert "37 个模块" in describe(manifest)
     assert describe(None) == "清单：无"
 
 
