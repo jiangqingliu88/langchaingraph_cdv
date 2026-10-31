@@ -55,7 +55,8 @@ class TestCatalog:
                           # ISA 产物落盘：**写盘**，必须显式触发
                           "isa_gen.export",
                           "pipeline.answer_approval", "pipeline.approval_handler",
-                          "pipeline.cancel", "pipeline.resume", "pipeline.start"]
+                          "pipeline.cancel", "pipeline.resume", "pipeline.start",
+                          "soc.run"]
 
     def test_every_non_pure_binding_is_documented(self):
         """非纯的要写清楚为什么 —— 否则下一个人只会看到"它不许调"。"""

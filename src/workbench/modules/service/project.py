@@ -48,6 +48,7 @@ class ProjectOverviewModule(ModuleBase):
         layout.addWidget(self.summary)
 
         row2 = QHBoxLayout()
+        row2.addWidget(_button("SoC 参考工程", lambda: open_module(self.ctx, "soc.overview")))
         row2.addWidget(_button("UVM 自动化验证", lambda: open_module(self.ctx, "service.uvm")))
         row2.addWidget(_button("回归效率优化", lambda: open_module(self.ctx, "service.regression")))
         row2.addWidget(_button("Coverage Closure", lambda: open_module(self.ctx, "service.coverage")))

@@ -102,6 +102,9 @@ CPU/NICE 命令 → DMA → Banked SRAM → INT8 GEMM → IRQ → golden 比较
 - 常用命令：`soc report <run>`（摘要）、`soc evidence <run>`（24 个文件逐哈希校验）、
   `soc wave <run>`（qwave.db → Visualizer）；`run` 的回归 exit code 仍是
   **唯一 PASS/FAIL 判据**；
+- **Workbench 业务线**：`soc.overview / soc.architecture / soc.verification /
+  soc.signoff` 四页，复用 `soc.*` 只读工具；运行按钮显式调 `soc.run`，
+  不复制回归/波形/证据页面；
 - **边界**：SoC 证据包是工程级事实（输入/RTL/golden/回归/波形），
   **不是 UVM 的 v2 三态签核证据包**；E203 路径需要 RISC-V 工具链和 E203 TB，
   未在本机实跑。
@@ -970,8 +973,8 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 [`src/workbench/ARCHITECTURE.md`](src/workbench/ARCHITECTURE.md)）：
 
 - `app.py` / `bootstrap.py` / `bus.py`
-- `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`、`service`（2026-10 新增的三个工程服务入口）
-- **工程服务入口**：`project.overview` / `project.management` + `service.uvm` / `service.regression` / `service.coverage` 都是普通 `ModuleBase` 模块，只做导航/编排（打开已有模块、调 `pipeline.start`、生成 core 计划），不另造引擎；导航分域为「项目 → 客户工程 → 设计时 → 工程工作区 → 运行时 → 平台配置」
+- `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`、`service`（三个工程服务入口）、`soc`（SoC 参考工程：总览 / 架构 / 验证工作区 / 签核）
+- **工程服务入口**：`project.overview` / `project.management` + `soc.*`（SoC 参考工程）+ `service.uvm` / `service.regression` / `service.coverage` 都是普通 `ModuleBase` 模块，只做导航/编排（打开已有模块、调 `pipeline.start` / `soc.run`、生成 core 计划），不另造引擎；导航分域为「项目 → 客户工程（SoC / 工程服务）→ 设计时 → 工程工作区 → 运行时 → 平台配置」
 - 签核页同时展示：门禁、六层证据链、**证据包 v2**（哈希 / caveat / 计划与单测覆盖率 / 种子多样性 / **粗连续奖励 + 权重** / **运行时知识图规模** / 参考模型与基线 / 审批 / Freeze / **recipe v2 与 Tier B EDA 依赖** / 回放命令）
 - 签核页工具栏新增 **「校验证据包」**：调 `evidence.check_package`（纯读），展示完整性、Tier A 重算、recipe 校验结果
 - 决策轨迹页新增 **「来源」**（硬规则 / 规则 / RL 采纳 / RL 被退回 / 终态）与 **「奖励」**（每轮 `sim_reward.total` + 最弱层）两列

@@ -305,6 +305,37 @@ BINDINGS: List[ToolBinding] = [
         kind="json",
         doc="一次运行目录 → 运行清单 + 文件变更链",
     ),
+    # SoC 参考工程 —— 工程适配层（不是第二套执行引擎）。
+    ToolBinding(
+        name="soc.project",
+        target="src.cli.soc_adapter:project_info",
+        kind="json",
+        doc="SoC 工程目录 → spec/interface/plan/RTL 清单与输入校验（只读）",
+    ),
+    ToolBinding(
+        name="soc.runs",
+        target="src.cli.soc_adapter:list_soc_runs",
+        kind="json",
+        doc="工作目录 → output_soc_* 运行列表（只读）",
+    ),
+    ToolBinding(
+        name="soc.run_summary",
+        target="src.cli.soc_adapter:run_summary",
+        kind="json",
+        doc="SoC run → 回归状态 / 波形 / 证据包摘要（只读）",
+    ),
+    ToolBinding(
+        name="soc.verify_evidence",
+        target="src.cli.soc_adapter:verify_soc_evidence",
+        kind="json",
+        doc="SoC 证据包 → 逐文件哈希校验（只读）",
+    ),
+    ToolBinding(
+        name="soc.run",
+        target="src.cli.soc_adapter:run_soc_project",
+        kind="json", pure=False,
+        doc="跑一次 SoC 回归（需要 EDA；显式点击才执行）",
+    ),
 
     # 人工编辑记账 —— 人在界面上改了文件，往**项目级**人工变更链写一条，
     # 并在给了 run_id 时往那次运行的日志追加一条 `human.edit`。

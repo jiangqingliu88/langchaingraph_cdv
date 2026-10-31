@@ -46,7 +46,8 @@ window:
 groups:
   # 客户视角：项目入口 → 三条工程服务入口（面向任务，而不是技术领域）。
   - {id: project,  title: 项目,         order: 0,  menu: true, section: 项目}
-  - {id: service,  title: 工程服务,     order: 1,  menu: true, section: 客户工程}
+  - {id: soc,      title: SoC 参考工程, order: 1,  menu: true, section: 客户工程}
+  - {id: service,  title: 工程服务,     order: 2,  menu: true, section: 客户工程}
   # 专业工具：设计时 / 运行时代 / 工程工作区 / 平台配置。
   - {id: ide,      title: 集成设计环境, order: 5,  menu: true, section: 设计时}
   - {id: flow,     title: 流程与证据,   order: 8,  menu: true, section: 工程工作区}
@@ -80,6 +81,35 @@ modules:
     factory: src.workbench.modules.service.project:ProjectManagementModule
     area: center
     order: 6
+
+  # ══ SoC 参考工程（客户视角；工程适配层，不另造执行引擎）══════════
+  - id: soc.overview
+    title: SoC 总览
+    group: soc
+    factory: src.workbench.modules.soc.overview:SoCOverviewModule
+    area: center
+    order: 10
+
+  - id: soc.architecture
+    title: SoC 架构
+    group: soc
+    factory: src.workbench.modules.soc.architecture:SoCArchitectureModule
+    area: center
+    order: 20
+
+  - id: soc.verification
+    title: SoC 验证工作区
+    group: soc
+    factory: src.workbench.modules.soc.verification:SoCVerificationModule
+    area: center
+    order: 30
+
+  - id: soc.signoff
+    title: SoC 签核
+    group: soc
+    factory: src.workbench.modules.soc.signoff:SoCSignoffModule
+    area: center
+    order: 40
 
   # ══ 工程服务入口（客户视角；只做导航/编排，不另造引擎）══════════
   # 每个入口内部的步骤都跳到下面已有的专业模块；数据来自 run 目录/文件契约。

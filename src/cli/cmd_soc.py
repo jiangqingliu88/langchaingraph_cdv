@@ -20,8 +20,7 @@ import click
 from src.cli.commands import cli, console
 from src.cli.output import get_output_adapter
 from src.cli.soc_adapter import (
-    SoCRun, find_wave, load_project, load_run_manifest,
-    verify_soc_evidence,
+    find_wave, load_run_manifest, run_soc_project, verify_soc_evidence,
 )
 
 _REQUIRED = (
@@ -106,36 +105,28 @@ def soc_run(project, output, json_output):
     reg = root / "regression" / "regression.yaml"
     if not reg.is_file():
         raise click.ClickException(f"找不到回归配置：{reg}")
-    os.environ["SOC_ROOT"] = str(root)
-
-    from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
-    from src.layers.l1_infrastructure.output_config import make_output_root
-
-    project = load_project(root)
-    out_root = make_output_root(output or f"output_soc_{root.name}")
-    soc_run = SoCRun(project, out_root)
     console.print(f"[cyan]SoC 回归[/cyan] {root}")
-    console.print(f"  输出：{out_root}")
-    infra = InfrastructureManager(out_root)
-    result = infra.run_regression(reg_yaml=str(reg), mode="local")
-    summary = soc_run.finish(result)
+    run = run_soc_project(root, output)
+    result = run.get("result") or {}
+    summary = run.get("summary") or {}
     if json_output:
-        click.echo(json.dumps({**result, "soc_run": summary["path"]},
-                              indent=2, ensure_ascii=False, default=str))
+        click.echo(json.dumps(run, indent=2, ensure_ascii=False, default=str))
     else:
+        console.print(f"  输出：{run.get('output_root', '')}")
         status = result.get("status", "?")
         console.print(f"  status={status} passed={result.get('passed', 0)} "
                       f"failed={result.get('failed', 0)} "
                       f"unknown={result.get('unknown', 0)} total={result.get('total', 0)}")
         if result.get("report_path"):
             console.print(f"  report: {result['report_path']}")
-        console.print(f"  manifest: {summary['path']}")
+        if summary.get("path"):
+            console.print(f"  manifest: {summary['path']}")
         if (summary.get("evidence") or {}).get("path"):
             console.print(f"  evidence: {summary['evidence']['path']}")
         for wave in summary.get("waves") or []:
             console.print(f"  wave: {wave['path']}")
-        if result.get("error"):
-            console.print(f"[red]{result['error']}[/red]")
+        if result.get("error") or run.get("error"):
+            console.print(f"[red]{result.get('error') or run.get('error')}[/red]")
     raise SystemExit(0 if result.get("status") == "PASS" else 1)
 
 

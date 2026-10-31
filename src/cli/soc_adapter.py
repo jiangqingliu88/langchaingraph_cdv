@@ -198,6 +198,73 @@ class SoCRun:
                 "evidence": evidence, "artifacts": self.artifacts}
 
 
+def project_info(root: str | Path) -> Dict[str, Any]:
+    """GUI/自动化用：工程输入的只读摘要（不跑 EDA）。"""
+    project = load_project(root)
+    return {
+        "root": str(project.root),
+        "name": project.name,
+        "spec": project.spec,
+        "interface_spec": project.interface_spec,
+        "verification_plan": project.verification_plan,
+        "regression": _read_yaml(project.root / "regression" / "regression.yaml"),
+        "filelist": project.filelist,
+        "rtl_files": [p.relative_to(project.root).as_posix()
+                      for p in project.rtl_files],
+        "rtl_hash": project.rtl_hash,
+        "validation": project.validate(),
+    }
+
+
+def list_soc_runs(base: str | Path = ".") -> List[Dict[str, Any]]:
+    root = Path(base).resolve()
+    runs = []
+    for p in sorted(root.glob("output_soc_*")):
+        if not p.is_dir():
+            continue
+        doc = load_run_manifest(p)
+        if doc:
+            runs.append({"run": p.name, "dir": str(p),
+                         "status": (doc.get("regression") or {}).get("status"),
+                         "mtime": p.stat().st_mtime})
+    return sorted(runs, key=lambda r: r["mtime"], reverse=True)
+
+
+def run_summary(run_root: str | Path) -> Dict[str, Any]:
+    root = Path(run_root).resolve()
+    doc = load_run_manifest(root)
+    wave = find_wave(root)
+    return {"available": bool(doc), "dir": str(root),
+            "manifest": doc, "wave": str(wave) if wave else "",
+            "evidence": verify_soc_evidence(root)}
+
+
+def run_soc_project(project_root: str | Path,
+                    output: str | Path = None) -> Dict[str, Any]:
+    """执行一次 SoC 回归（CLI 与 Workbench 共用；不是第二套引擎）。"""
+    import os
+
+    from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
+    from src.layers.l1_infrastructure.output_config import make_output_root
+
+    root = Path(project_root).resolve()
+    project = load_project(root)
+    validation = project.validate()
+    if not validation["ok"]:
+        return {"status": "FAIL", "error": "SoC 工程输入不完整",
+                "validation": validation}
+    os.environ["SOC_ROOT"] = str(root)
+    out_root = make_output_root(str(output) if output else
+                                f"output_soc_{root.name}")
+    soc_run = SoCRun(project, out_root)
+    result = InfrastructureManager(out_root).run_regression(
+        reg_yaml=str(root / "regression" / "regression.yaml"), mode="local")
+    summary = soc_run.finish(result)
+    return {"status": result.get("status"), "result": result,
+            "summary": summary, "output_root": str(out_root),
+            "validation": validation}
+
+
 def load_run_manifest(run_root: str | Path) -> Dict[str, Any]:
     return _read_json(Path(run_root) / "soc" / "soc_run.json")
 

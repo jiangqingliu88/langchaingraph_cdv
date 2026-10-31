@@ -15,6 +15,7 @@ def test_shipped_manifest_parses():
     assert [m.id for m in manifest.enabled_modules()] == [
         # 项目入口 + 工程服务入口（客户视角，最前）
         "project.overview", "project.management",
+        "soc.overview", "soc.architecture", "soc.verification", "soc.signoff",
         "service.uvm", "service.regression", "service.coverage",
         "platform.settings",
         # 七条 agent 线的产出总览（清单里的书写顺序）
@@ -30,8 +31,8 @@ def test_shipped_manifest_parses():
         "flow.todo", "flow.fcov", "flow.drafts", "flow.compare", "flow.signoff", "flow.trend",
         "flow.decision", "flow.manifest"]
     assert [g.id for g in manifest.sorted_groups()] == [
-        "project", "service", "ide", "flow", "design", "model", "verify",
-        "ops", "coverage", "debug", "audit", "platform"]
+        "project", "soc", "service", "ide", "flow", "design", "model",
+        "verify", "ops", "coverage", "debug", "audit", "platform"]
 
 
 def test_shipped_manifest_is_grouped_into_business_sections():
@@ -39,7 +40,7 @@ def test_shipped_manifest_is_grouped_into_business_sections():
     manifest = load_manifest(default_manifest_path())
     assert [(section, [g.id for g in groups]) for section, groups in manifest.sections()] == [
         ("项目", ["project"]),
-        ("客户工程", ["service"]),
+        ("客户工程", ["soc", "service"]),
         ("设计时", ["ide"]),
         ("工程工作区", ["flow", "ops", "coverage", "debug"]),
         ("运行时", ["design", "model", "verify", "audit"]),
@@ -153,7 +154,7 @@ def test_builtin_manifest_has_groups_but_no_modules():
 
 def test_describe_counts_enabled_modules():
     manifest = load_manifest(default_manifest_path())
-    assert "37 个模块" in describe(manifest)
+    assert "41 个模块" in describe(manifest)
     assert describe(None) == "清单：无"
 
 
