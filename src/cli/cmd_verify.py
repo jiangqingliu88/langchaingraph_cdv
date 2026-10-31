@@ -47,6 +47,26 @@ def init(json_output, quiet, verbose, output_dir):
 # vagent verify — 覆盖率驱动闭环
 # ═══════════════════════════════════════════════════════════════
 
+def _run_with_incremental(runner, incremental_from):
+    """跑流水线；`--incremental-from` 通过环境变量传给 ops，跑完恢复原值。
+
+    用环境变量而不是加 PipelineState 字段：它天然不进检查点（基线路径只对
+    这一次启动有效），也不会让 `--resume` 拿到过期的另一个基线。
+    """
+    import os
+    prev = os.environ.get("SIGNOFFAI_INCREMENTAL_BASELINE")
+    if incremental_from:
+        os.environ["SIGNOFFAI_INCREMENTAL_BASELINE"] = str(incremental_from)
+    try:
+        return asyncio.run(runner())
+    finally:
+        if incremental_from:
+            if prev is None:
+                os.environ.pop("SIGNOFFAI_INCREMENTAL_BASELINE", None)
+            else:
+                os.environ["SIGNOFFAI_INCREMENTAL_BASELINE"] = prev
+
+
 @cli.command()
 @click.argument("spec_file", required=False, type=click.Path(exists=True))
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
@@ -57,6 +77,9 @@ def init(json_output, quiet, verbose, output_dir):
               type=click.Choice(["interactive", "auto", "threshold"]),
               help="审批模式（默认 threshold：仅高危动作询问；无人值守请显式指定 auto）")
 @click.option("--full-regression", is_flag=True, help="全量回归（跑所有 case，默认增量只跑未 passed）")
+@click.option("--incremental-from", type=click.Path(exists=True, file_okay=False),
+              default=None, help="增量验证基线 run 目录：按 RTL diff + 依赖映射只跑受影响用例"
+                                "（没有依赖映射时保守跑全量，并落 incremental/plan.json）")
 @click.option("--verify-only", is_flag=True, help="验证专注模式：bypass design/model，直接 UVM 验证（预置 RTL + 黄金模型）")
 @click.option("--sim-mode", "sim_modes", default=None, multiple=True,
               help="回归的仿真业务（可重复：--sim-mode wave --sim-mode cov）；"
@@ -80,8 +103,9 @@ def init(json_output, quiet, verbose, output_dir):
 @click.option("--summary", is_flag=True, help="仅输出最终摘要")
 @click.option("--quiet", "-q", is_flag=True, help="只打印错误")
 def verify(spec_file, output, design_style, target, max_rounds,
-           approval, full_regression, verify_only, sim_modes, json_output, summary,
-           quiet, manual_gate, checkpoint, strict_semantic, rtl_dir):
+           approval, full_regression, incremental_from, verify_only, sim_modes,
+           json_output, summary, quiet, manual_gate, checkpoint,
+           strict_semantic, rtl_dir):
     # **spec 与 --rtl 二选一、互斥**：
     #   给 spec  → 走原来的路（design agent 生成 RTL）
     #   给 --rtl  → RTL 是唯一输入，**规格从 DUT 分析出来**（不指向 spec）
@@ -149,7 +173,7 @@ def verify(spec_file, output, design_style, target, max_rounds,
             checkpointing=checkpoint,
         )
 
-    result = asyncio.run(run())
+    result = _run_with_incremental(run, incremental_from)
 
     # **挂起不是失败**：图停在人工节点上，运行没结束、状态在检查点里。
     # 这一步要显式说出来，并给出继续的那条命令 —— 否则人看到的就是"跑完了、

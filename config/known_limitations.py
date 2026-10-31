@@ -33,6 +33,10 @@ KNOWN_LIMITATIONS: Tuple[Dict[str, str], ...] = (
      "text": "命令白名单默认 monitor"},
     {"id": "uvm_ir_migration", "status": "open",
      "text": "UVM 生成器尚未迁到统一 IR"},
+    {"id": "incremental_dependency_map", "status": "open",
+     "text": "增量回归依赖映射尚未自动生成"},
+    {"id": "incremental_compile", "status": "open",
+     "text": "增量编译尚未实现"},
     {"id": "optional_auth_api", "status": "by_design",
      "text": "auth.py 是可选 API 面"},
 )

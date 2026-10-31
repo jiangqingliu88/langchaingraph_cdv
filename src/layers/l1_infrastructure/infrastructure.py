@@ -263,6 +263,11 @@ def declared_tests_by_build(config: dict) -> Dict[str, set]:
     return out
 
 
+def _stage_tests(stage_name: str, tests):
+    """增量过滤只作用于 DUT 级；loopback 环境自检永远跑全。"""
+    return None if stage_name == "loopback" else tests
+
+
 class InfrastructureManager:
     """L1 基础设施层统一入口。"""
 
@@ -719,7 +724,8 @@ class InfrastructureManager:
     def run_regression_staged(self, stages=None, reg_yaml: str = None,
                               mode: str = "local", enabled_modes=None,
                               overrides: list = None,
-                              auto_approve: bool = False) -> dict:
+                              auto_approve: bool = False,
+                              tests: str = None) -> dict:
         """分级门控回归：按 tier 顺序跑，**前一级不过就不进下一级**。
 
         ## 门控判据（为什么 `unknown` 也拦）
@@ -760,7 +766,10 @@ class InfrastructureManager:
             # 每级各占一个运行子目录，互不 rmtree（见 `run_regression` 里那段）
             self._stage_tag = name
             logger.info(f"分级回归：进入 {name}（{label}）tags={tags}")
+            # **loopback 级不吃增量过滤**：它是环境自检（SCB/连接/时钟复位），
+            # 被"受影响用例"筛掉就会 EMPTY → 整轮 FAIL。增量只缩小 DUT 回归。
             r = self.run_regression(reg_yaml=reg_yaml, mode=mode, tags=tags,
+                                    tests=_stage_tests(name, tests),
                                     overrides=overrides,
                                     enabled_modes=enabled_modes)
             failed = int(r.get("failed") or 0)

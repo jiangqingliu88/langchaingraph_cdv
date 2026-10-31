@@ -8,6 +8,21 @@ from ..core.exceptions import LSFError
 
 logger = get_logger(__name__)
 
+#: 由 `Runtime` 在 run 入口注入的 JobSupervisor（`src/core/jobs/`）。
+#: 个人级 CLI 单进程串行，module-global 足够；多 run 并发时应改成 contextvar。
+_JOB_SUPERVISOR = None
+
+
+def set_job_supervisor(supervisor) -> None:
+    """绑定/解绑 EDA Job 运行时。`None` = 退回原始 subprocess 路径。"""
+    global _JOB_SUPERVISOR
+    _JOB_SUPERVISOR = supervisor
+
+
+def get_job_supervisor():
+    return _JOB_SUPERVISOR
+
+
 class ExecutionStrategy(ABC):
     @abstractmethod
     def run_script(self, script_path: str, cwd: str, job_name: str = None, timeout: int = None, retry: int = 0):
@@ -45,6 +60,31 @@ class LocalStrategy(ExecutionStrategy):
             logger.warning(f"Script not found: {script_path}")
             return True
         logger.info(f"[LOCAL] Executing {script_path} in {cwd}")
+
+        # Architecture 2.0：有 JobSupervisor 就走统一进程生命周期（超时/杀树/事件）。
+        # 没绑定（或显式关闭）时**保持原路径逐字节不变** —— 回归是热路径，
+        # 任何行为变化都必须能被关掉。
+        supervisor = get_job_supervisor()
+        if supervisor is not None and os.environ.get(
+                "SIGNOFFAI_JOB_RUNTIME", "on").strip().lower() != "off":
+            try:
+                from src.core.jobs.spec import JobSpec
+
+                result = supervisor.run(JobSpec(
+                    name=job_name or os.path.basename(script_path),
+                    argv=self._shell_argv(script_path, cwd),
+                    cwd=cwd,
+                    purpose="regression",
+                    timeout_s=timeout,
+                ))
+                if result.status == "completed":
+                    return True
+                logger.error(f"Script failed: status={result.status} "
+                             f"exit={result.exit_code} timed_out={result.timed_out}")
+                return False
+            except Exception as e:                      # noqa: BLE001 退回原路径
+                logger.warning(f"JobSupervisor 执行失败，退回 subprocess: {e}")
+
         try:
             subprocess.run(self._shell_argv(script_path, cwd), cwd=cwd, check=True, shell=False)
             return True

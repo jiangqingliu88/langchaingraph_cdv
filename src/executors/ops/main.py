@@ -78,9 +78,10 @@ class OpsExecutor(BaseExecutor):
             # 缺省（没传）按**开**处理 —— 门是默认该在的。
             manual_gate = (params.get("manual_gate", True)
                            if isinstance(params, dict) else True)
-            reg_data = infra.run_regression_staged(mode="local",
-                                                   enabled_modes=sim_modes,
-                                                   auto_approve=not manual_gate)
+            reg_data = infra.run_regression_staged(
+                mode="local", enabled_modes=sim_modes,
+                auto_approve=not manual_gate,
+                tests=self._incremental_filter(output_dir))
             if not isinstance(reg_data, dict):
                 reg_data = {}
         except Exception as e:
@@ -144,6 +145,33 @@ class OpsExecutor(BaseExecutor):
         )
 
     # ── 文件系统发现辅助 ──
+
+    @staticmethod
+    def _incremental_filter(output_dir: Path) -> str:
+        """按 `SIGNOFFAI_INCREMENTAL_BASELINE` 生成回归 test 正则过滤。
+
+        没有基线 / 没有依赖映射 → 返回空串（全量）。**绝不因为"算不出来"
+        就静默缩小范围**：`confidence != mapped` 时明确跑全量。
+        """
+        import os
+        import re
+
+        baseline = os.environ.get("SIGNOFFAI_INCREMENTAL_BASELINE", "").strip()
+        if not baseline or not Path(baseline).is_dir():
+            return ""
+        try:
+            from src.core.incremental.plan import write_plan
+            plan = write_plan(baseline, output_dir)
+        except Exception as e:                         # noqa: BLE001 增量是增强
+            logger.warning(f"增量计划生成失败（按全量跑）: {e}")
+            return ""
+        selected = plan.get("selected_tests") or []
+        if plan.get("confidence") != "mapped" or not selected:
+            logger.info(f"增量计划不缩小范围（confidence={plan.get('confidence')}）")
+            return ""
+        logger.info(f"增量回归：{len(selected)}/{plan.get('all_tests')} 条 "
+                    f"（基线 {plan.get('baseline_run')}）")
+        return "^(?:" + "|".join(re.escape(t) for t in selected) + ")$"
 
     @staticmethod
     def _is_eda_missing(err_text: str) -> bool:

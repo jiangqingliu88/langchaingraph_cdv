@@ -95,12 +95,16 @@ def _build_architecture_v2(output_dir: Path, target: float) -> Dict[str, Any]:
     """
     try:
         from src.core.provenance.graph import write_provenance
+        from src.core.provenance.report import write_attribution_report
+        from src.core.metrics.engineering import write as write_metrics
         from src.core.verification.quality import write as write_quality
 
         prov = write_provenance(output_dir)
+        attribution = write_attribution_report(output_dir)
         quality = write_quality(
             output_dir, target=(target if target and target > 0 else None),
             run_id=output_dir.name)
+        metrics = write_metrics(output_dir)
         return {
             "schema": "architecture_v2_v1",
             "provenance": {
@@ -108,6 +112,21 @@ def _build_architecture_v2(output_dir: Path, target: float) -> Dict[str, Any]:
                 "sha256": prov["jsonl_sha256"],
                 "summary_path": _rel_to_run(prov["summary_path"], output_dir),
                 "summary": prov["summary"],
+            },
+            "attribution": {
+                "path": _rel_to_run(attribution["path"], output_dir),
+                "hit_bins": attribution["hit_bins"],
+                "attribution_rate": attribution["attribution_rate"],
+                "test_seed_rate": attribution["test_seed_rate"],
+                "exact_rate": attribution["exact_rate"],
+                "weak_rate": attribution["weak_rate"],
+            },
+            "engineering_metrics": {
+                "path": _rel_to_run(metrics["path"], output_dir),
+                "regression_seconds": metrics["regression"]["total_seconds"],
+                "incremental": metrics["incremental"].get("estimated_savings_pct"),
+                "attribution_rate": metrics["attribution"]["attribution_rate"],
+                "decision_rate": metrics["decision"]["effectiveness_rate"],
             },
             "verification_quality": {
                 "path": _rel_to_run(quality["path"], output_dir),

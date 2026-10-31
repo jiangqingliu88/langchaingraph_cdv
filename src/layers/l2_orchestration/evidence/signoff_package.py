@@ -88,6 +88,10 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "docs/events.jsonl",
         "docs/provenance.jsonl",
         "docs/provenance_summary.json",
+        "coverage/attribution.json",
+        "docs/engineering_metrics.json",
+        "incremental/plan.json",
+        "docs/run_diff.json",
         "decision/evaluations.jsonl",
     ),
     "verdict": (

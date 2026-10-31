@@ -4,6 +4,7 @@ import json
 
 from src.core.provenance.attribution import classify
 from src.core.provenance.graph import build_provenance, write_provenance
+from src.core.provenance.report import build_attribution_report
 
 
 def _write(path, obj):
@@ -28,6 +29,10 @@ def _run(tmp_path):
     test_dir = tmp_path / "regression_run" / "p0" / "build_x" / "test_alu_test_seed_7"
     test_dir.mkdir(parents=True)
     (test_dir / "sim_vsim.log").write_text("mismatched=0\n", encoding="utf-8")
+    _write(tmp_path / "coverage" / "stimulus_plan.json",
+           {"sha256": "abc123", "testpoints": []})
+    (tmp_path / "rtl").mkdir()
+    (tmp_path / "rtl" / "dut.sv").write_text("module dut; endmodule\n", encoding="utf-8")
     return tmp_path
 
 
@@ -86,3 +91,47 @@ def test_write_provenance_and_summary(tmp_path):
     assert summary["nodes"] > 0
     assert summary["by_confidence"]["weak"] == 1
     assert summary["notes"]
+
+
+def test_execution_chain_reaches_plan_and_rtl(tmp_path):
+    graph = build_provenance(_run(tmp_path))
+    assert graph.has_edge("test:alu_test", "artifact:stimulus_plan:coverage/stimulus_plan.json",
+                          "executed_with")
+    assert graph.has_edge("test:alu_test", "artifact:rtl_dir", "executed_against")
+    assert graph.has_node("artifact:rtl_dir")
+
+
+def test_attribution_report_counts_complete_chain(tmp_path):
+    root = _run(tmp_path)
+    report = build_attribution_report(root)
+    assert report["hit_bins"] == 1
+    assert report["with_tp"] == 1
+    assert report["with_test"] == 1
+    assert report["with_seed"] == 1
+    assert report["with_stimulus_plan"] == 1
+    assert report["with_rtl"] == 1
+    assert report["complete_chain"] == 1
+    assert report["attribution_rate"] == 1.0
+    assert report["test_seed_rate"] == 1.0
+    assert report["weak_rate"] == 1.0
+    assert report["exact_rate"] == 0.0
+
+
+def test_attribution_report_exact_with_sidecar(tmp_path):
+    root = _run(tmp_path)
+    _write(root / "coverage" / "per_test_bins.json",
+           {"tests": {"alu_test": ["cp.b1"]}})
+    report = build_attribution_report(root)
+    assert report["exact_rate"] == 1.0
+    assert report["weak_rate"] == 0.0
+
+
+def test_attribution_report_breaks_when_plan_or_rtl_missing(tmp_path):
+    root = _run(tmp_path)
+    (root / "coverage" / "stimulus_plan.json").unlink()
+    (root / "rtl" / "dut.sv").unlink()
+    report = build_attribution_report(root)
+    assert report["with_stimulus_plan"] == 0
+    assert report["with_rtl"] == 0
+    assert report["complete_chain"] == 0
+    assert report["attribution_rate"] == 0.0

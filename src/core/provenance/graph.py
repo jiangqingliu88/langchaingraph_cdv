@@ -142,12 +142,23 @@ def _add_artifacts(root: Path, graph: ProvenanceGraph) -> Dict[str, str]:
         ids[kind] = node_id
     rtl_dir = root / "rtl"
     if rtl_dir.is_dir():
-        for sv in sorted(rtl_dir.glob("*.sv")):
+        parts = []
+        for sv in sorted(rtl_dir.rglob("*")):
+            if not (sv.is_file() and sv.suffix.lower() in (".v", ".sv", ".svh", ".vh")):
+                continue
             rel = sv.relative_to(root).as_posix()
+            digest = sha256_file(sv)
             node_id = f"artifact:rtl:{rel}"
-            graph.add_node(node_id, "artifact", label=rel,
-                           sha256=sha256_file(sv), producer="design", path=rel)
+            graph.add_node(node_id, "artifact", label=rel, sha256=digest,
+                           producer="design", path=rel)
             ids.setdefault("rtl", node_id)
+            parts.append(f"{rel}:{digest}")
+        if parts:
+            aggregate = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+            graph.add_node("artifact:rtl_dir", "artifact", label="rtl/",
+                           sha256=aggregate, producer="design",
+                           files=len(parts))
+            ids["rtl_dir"] = "artifact:rtl_dir"
     return ids
 
 
@@ -165,6 +176,25 @@ def _add_derivations(graph: ProvenanceGraph, ids: Dict[str, str]) -> None:
         if src_kind in ids and dst_kind in ids:
             graph.add_edge(ids[src_kind], ids[dst_kind], "derived_from",
                            evidence=why, confidence="exact")
+
+
+def _add_execution_chain(graph: ProvenanceGraph, ids: Dict[str, str],
+                         attr: Attribution) -> None:
+    """把 test 接到 StimulusPlan 与 RTL 快照 —— 补齐用户要的完整链。
+
+    证据是「同一轮共用」：run 级 StimulusPlan 与 RTL 快照对所有 test 成立。
+    这是**计划级**关系，不是 per-test 精确输入（那需要编译依赖图）。
+    """
+    plan_id = ids.get("stimulus_plan")
+    rtl_id = ids.get("rtl_dir")
+    for test in sorted(attr.tests):
+        node = test_node_id(test)
+        if plan_id:
+            graph.add_edge(node, plan_id, "executed_with",
+                           evidence="同一 run 的 StimulusPlan", confidence="exact")
+        if rtl_id:
+            graph.add_edge(node, rtl_id, "executed_against",
+                           evidence="同一 run 的 RTL 快照", confidence="exact")
 
 
 def _add_attribution(graph: ProvenanceGraph, attr: Attribution) -> None:
@@ -250,8 +280,10 @@ def build_provenance(run_root: str | Path, *, run_id: str = "",
     root = Path(run_root)
     graph = ProvenanceGraph(run_id=run_id or root.name)
     ids = _add_artifacts(root, graph)
+    attr = attribution or classify(root)
     _add_derivations(graph, ids)
-    _add_attribution(graph, attribution or classify(root))
+    _add_execution_chain(graph, ids, attr)
+    _add_attribution(graph, attr)
     _add_decisions(graph, root)
     return graph
 

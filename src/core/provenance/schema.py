@@ -29,6 +29,8 @@ EDGE_TYPES = (
     "attributed_by",  # bin → test：只有合并 ucdb，按计划映射（weak）
     "seed_derived",   # test → seed：从 test 目录名 `_seed_<n>` 得到
     "executed_by",    # test → job：这一条 test 由哪个 EDA 进程执行
+    "executed_with",  # test → stimulus_plan：这条 test 用的是哪份计划
+    "executed_against",  # test → rtl_snapshot：这条 test 跑的是哪版 RTL
     "verifies",       # evidence/quality → run
     "evaluated",      # decision_obj → 效果事实
 )

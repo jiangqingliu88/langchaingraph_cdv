@@ -281,3 +281,20 @@ def test_closed_loop_stops_at_the_manual_node():
     assert r_coverage(PipelineState(run_id="r", output_root="x",
                                     awaiting_approval=True,
                                     eda_blocked=True)) == "eda_missing"
+
+
+def test_incremental_filter_does_not_skip_loopback_self_check():
+    """增量过滤只作用于 DUT 级；loopback 是环境自检，永远不被筛掉。"""
+    calls = []
+
+    class _S(_Stub):
+        def run_regression(self, **kw):
+            calls.append(kw.get("tests"))
+            return _ok()
+
+    stub = _S([_ok() for _ in range(5)])
+    res = InfrastructureManager.run_regression_staged(
+        stub, auto_approve=True, tests="^(alu_test)$")
+    assert res["status"] == "PASS"
+    assert calls[0] is None                 # loopback
+    assert all(c == "^(alu_test)$" for c in calls[1:])

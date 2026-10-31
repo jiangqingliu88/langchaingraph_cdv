@@ -2,11 +2,11 @@
 
 > 基线：2026-10-31
 >
-> 全量单测：**1147 passed / 5 skipped**；工作台 **717 passed**
+> 全量单测：**1167 passed / 5 skipped**；工作台 **717 passed**
 >
 > 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 >
-> **Architecture 2.0 基线**：`src/core/` 运行事实面（RunContext / ArtifactStore / EventStore / Provenance DAG / Job Runtime / Decision Evaluation / Verification Quality Gate）已落地；新增单测 `tests/core/` 60 条 + UVM IR 5 条 + 合成 run 集成 1 条。
+> **Architecture 2.0 基线**：`src/core/` 运行事实面（RunContext / ArtifactStore / EventStore / Provenance DAG / Job Runtime / Decision Evaluation / Verification Quality Gate）已落地；**Verification Intelligence 第一层**（归因完整率、四个工程指标、增量计划、Run Diff、LocalStrategy→JobSupervisor）已接入。新增单测 `tests/core/` 75 条 + UVM IR 5 条 + Job Runtime 集成 4 条 + 合成 run 集成 1 条。
 
 本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
 
@@ -331,8 +331,9 @@ src/tools/common/        lib
   拦不认识的工具与越界路径；`ToolHub.invoke` 与 `ToolSandbox.check_permission`
   对「参数里夹命令」的调用使用同一规则（`scan_tool_args`）。
 
-本阶段**未**把回归热路径 `LocalStrategy` 改接 JobSupervisor（风险控制），
-该接入是下一阶段；当前 Job Runtime 已可独立使用并有单测覆盖。
+`LocalStrategy` 已接入：`Runtime` 在 run 入口把 `JobSupervisor` 绑到回归框架
+（module-global，单进程串行）；`SIGNOFFAI_JOB_RUNTIME=off` 可退回原始
+`subprocess.run`。没绑定 supervisor 时行为与从前逐字节一致。
 
 ---
 
@@ -660,6 +661,66 @@ Reward 只回答「往哪使劲」，不回答「这次动作到底有没有用�
 - 按 `(run_id, round, action)` 幂等；现有 `CoverageExperienceStore.record_round`
   不变，新记录是**附加事实**。
 
+### 9.8 覆盖率归因链与完整率（`coverage/attribution.json`）
+
+用户要的链：
+
+```text
+Coverage Bin → TP ID → Test Name → Seed → StimulusPlan → RTL Hash
+```
+
+`src/core/provenance/report.py` 把它压成可计量报告（`coverage_attribution_v1`）：
+
+| 字段 | 含义 |
+|---|---|
+| `hit_bins` | 本轮命中的 bin 数（MISS/UNMAPPED 不进） |
+| `with_tp` / `with_test` / `with_seed` / `with_stimulus_plan` / `with_rtl` | 各段存在的 bin 数 |
+| `complete_chain` | 五段齐全的 bin 数 |
+| `attribution_rate` | `complete_chain / hit_bins` |
+| `test_seed_rate` | 同时有 test 与 seed 的比例 |
+| `exact_rate` / `weak_rate` | `hit_by`（有 per-test sidecar）与 `attributed_by`（只有合并 ucdb）的比例 |
+
+Provenance DAG 同时补两条边：`test → stimulus_plan`（`executed_with`）与
+`test → rtl_dir`（`executed_against`，RTL 聚合成一个快照节点）。**weak 不冒充
+exact**：没有 `coverage/per_test_bins.json` 时 `test_seed_rate` 仍可 100%，
+但 `exact_rate` 为 0、`weak_rate` 为 1。
+
+### 9.9 四个工程指标（`docs/engineering_metrics.json`）
+
+不再只数单测；看验证效率真的有没有提升：
+
+| 指标 | 数据来源 | 缺数据时 |
+|---|---|---|
+| 回归总耗时 + 相对基线下降 | `regression_run/**/report.json` 的 `total_time` / `tasks[].elapsed`；基线用 `--baseline` | `null`，不写 0 |
+| 增量预计节省 | `incremental/plan.json` 的 selected/all + 基线每用例耗时 | `available:false` |
+| 归因完整率 | `coverage/attribution.json` | 现场构建（只读） |
+| Agent 决策有效率 | `decision/evaluations.jsonl`：EFFECTIVE / (EFFECTIVE+INEFFECTIVE+REGRESSED) | `null`；UNCERTAIN 不进分母 |
+
+CLI：`vagent metrics show -o <run> [--baseline <run>]`（`--json` 机器读）。
+指标写进 `docs/engineering_metrics.json`，也进签核报告的 `architecture_v2`。
+
+### 9.10 增量验证与 Run Diff（Verification Intelligence）
+
+链路已经打通到**计划**，不是口号：
+
+```text
+RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节省
+```
+
+- `coverage/test_dependencies.json`（`test_dependencies_v1`）声明 test → RTL 文件；
+  也接受 `regression.yaml` 的 `file_pattern`。
+- **没有依赖映射就保守跑全量**，`confidence=conservative_all`、节省为 0 ——
+  绝不因为"算不出来"静默缩小范围。
+- `vagent incremental plan --baseline <run> --current <run>` 写
+  `incremental/plan.json`；`vagent verify --incremental-from <run>` 让 ops 在
+  回归前生成计划并按选中用例过滤（`confidence=mapped` 才过滤）。
+- 质量门 `functional` 维度在"增量只跑 X/Y"时给 `warn`，签核范围不静默缩小。
+- `vagent diff runs --baseline <run> --current <run>` → `docs/run_diff.json`：
+  覆盖率/TP/回归耗时/决策有效率/归因完整率/RTL 变化的并排 delta。
+
+**未实现**：增量**编译**（当前仍走框架的共享 work library 增量编译，不是本层
+控制）、按依赖图做 finer-grained 选择性编译；这些是 P2 路线图。
+
 ---
 
 ## 10. 证据链与治理
@@ -695,6 +756,10 @@ Reward 只回答「往哪使劲」，不回答「这次动作到底有没有用�
 │                     # / round_manifest（轮次 × 用例 × plan 哈希）/ 回执
 │                     # / docs/events.jsonl（执行事实）
 │                     # / docs/provenance.jsonl + provenance_summary.json（血缘 DAG）
+│                     # / coverage/attribution.json（归因完整率）
+│                     # / docs/engineering_metrics.json（四个工程指标）
+│                     # / incremental/plan.json（增量计划，存在才收）
+│                     # / docs/run_diff.json（run diff，存在才收）
 │                     # / decision/evaluations.jsonl（决策成效）
 ├─ verdict/           # signoff_evidence.json / caveats.json / 文件审计链
 │                     # / docs/verification_quality.json（五维质量门）
@@ -780,6 +845,10 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 | `<run>/docs/provenance_summary.json` | — | 规模、置信度分布、未归因 bin、说明 |
 | `<run>/docs/verification_quality.json` | `verification_quality_v1` | 五维质量门（见 §5.2） |
 | `<run>/decision/evaluations.jsonl` | `decision_eval_v1` | 决策期望 vs 实际（见 §9.7） |
+| `<run>/coverage/attribution.json` | `coverage_attribution_v1` | Bin→TP→test→seed→plan→RTL 完整率（见 §9.8） |
+| `<run>/docs/engineering_metrics.json` | `engineering_metrics_v1` | 四个工程指标（见 §9.9） |
+| `<run>/incremental/plan.json` | `incremental_plan_v1` | 增量计划（见 §9.10） |
+| `<run>/docs/run_diff.json` | `run_diff_v1` | 两次运行的验证智能对比 |
 | `<run>/artifacts/artifacts.json` | `artifact_index_v1` | 产物索引；内容寻址对象在 `artifacts/cas/<sha[:2]>/<sha>` |
 
 **血缘的诚实规则**（这是这一层最要紧的设计）：
@@ -795,6 +864,9 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 
 **确定性**：节点/边排序后写入，JSONL 不含时间戳；同一输入重复构建得到同一串字节，
 可被 `round_manifest` 式复现校验。跨 run 的 SQLite 索引是 roadmap，不冒充已实现。
+
+**进包时点**：`docs/events.jsonl` 在 audit 组装证据包时被收走；finalize 之后还会
+追加 `run.finished` 等收尾事实。离线校验以**包内快照**为准，run 目录里的文件更全。
 
 ---
 
@@ -863,14 +935,17 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 | 新质量维度 | `src/core/verification/quality.py` 的 `DIMENSIONS` + 一个 `_dimension()` | 签核三态（本阶段只报告） |
 | 新受控工具 | `src/core/jobs/allowlist.py` 的 `DEFAULT_TOOLS` | JobSupervisor / ToolHub |
 | 新 Job 输出 | `src/core/jobs/outputs.py` 的 `OutputSpec`（name/path/kind/required） | 执行层 |
+| 新依赖映射 | `coverage/test_dependencies.json`（test → RTL files）或 regression.yaml 的 `file_pattern` | 增量引擎 |
+| 新工程指标 | `src/core/metrics/engineering.py` 的 `_collect()` + 一个字段 | CLI / 证据包 |
+| 新 Run Diff 字段 | `src/core/incremental/run_diff.py` 的 `compare_runs()` | 已落盘指标 |
 
 ---
 
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1147 passed / 5 skipped
-python -m pytest tests/core -q                        # Architecture 2.0 核心（60 条）
+python -m pytest tests/ -q                            # 1167 passed / 5 skipped
+python -m pytest tests/core -q                        # Architecture 2.0 核心（75 条）
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
 python -m pytest src/workbench/tests -q               # 717 passed
@@ -920,6 +995,9 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 | `tests/core/test_verification_quality.py` | 五维、unknown 不折算 pass、写文件 |
 | `tests/test_uvm_ir.py` | UVM IR 映射与结构校验 |
 | `tests/test_arch_v2_integration.py` | 合成 run：血缘/质量/决策/证据包一次跑通 |
+| `tests/core/test_incremental.py` | RTL 内容 diff、依赖映射、保守全量、节省估算、run diff |
+| `tests/core/test_engineering_metrics.py` | 四指标、缺数据为 null、基线下降比例 |
+| `tests/test_job_runtime_integration.py` | LocalStrategy→JobSupervisor、关闭开关回退、executor 产物进 ArtifactStore |
 
 ---
 
@@ -948,6 +1026,11 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
   但不拦；要拦得显式设 `SIGNOFFAI_CMD_ALLOWLIST=enforce`。
 - **UVM 生成器尚未迁到统一 IR**：`generation/ir/` 已定义契约与校验，
   `gen_uvm.py` 的解析/渲染仍在原文件；IR 迁移是 P1 路线图。
+- **增量回归依赖映射尚未自动生成**：当前依赖
+  `coverage/test_dependencies.json` 或 regression.yaml 的 `file_pattern`；
+  没有映射时保守跑全量，不会假装省了时间。
+- **增量编译尚未实现**：RTL diff 只决定"跑哪些用例"；编译仍由回归框架的
+  共享 work library 处理，不是本层的选择性编译。
 - **边界表同源**：`config/known_limitations.py` 是 §15 的代码真相；
   `test_architecture_invariants.py` 校验文档包含每条，player runtime 落地时
   必须同步改 `status` 与文档。
@@ -1023,19 +1106,24 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 
 ## 17. Architecture 2.0 路线图（已实现 vs 计划）
 
-**已实现（本次）**：RunContext、ArtifactStore、EventStore、Provenance DAG、
-Decision Evaluation、Verification Quality Gate、Job Runtime + 命令白名单骨架、
-UVM IR 契约与校验、证据包接入。
+**已实现（截至 2026-10-31）**：RunContext、ArtifactStore、EventStore、Provenance DAG、
+Coverage 归因完整率、Decision Evaluation、Verification Quality Gate、
+Job Runtime + 命令白名单、`LocalStrategy` 接入 JobSupervisor、
+UVM IR 契约与校验、增量计划（RTL diff → 依赖 → 受影响用例）、
+Run Diff、四个工程指标、证据包接入。
 
-**下一阶段（按优先级）**：
+**下一阶段（Architecture 2.0 → Verification Intelligence）**：
 
-| 阶段 | 目标 | 前置 |
+| 阶段 | 目标 | 状态 |
 |---|---|---|
-| P1 收口 | `gen_uvm.py` 按 parsing → UVM IR → render → generators 迁移；`LocalStrategy` 接 JobSupervisor | 本文 §8.5 / §6.5 |
-| P2 增量验证 | RTL diff → 依赖分析 → 受影响产物/用例 → 增量编译与回归 | ArtifactStore + Provenance DAG |
-| P3 智能选择 | 基于历史 TP/bin/seed 命中关系选择高价值测试；Unreachable TP Analyzer | bin→test→seed 归因（per-test 覆盖率为前提） |
-| P4 多后端 | VCS / Verilator 适配；跨 run 血缘/事件索引；run 自动清理 | Job Runtime / 存储 |
-| P5 治理升级 | 质量门从"只报告"升级为可配置硬门禁（需新增 caveat code 并同步 `EXPECTED_CAVEATS`） | 五维报告稳定运行 |
+| P1 收口 | `gen_uvm.py` 按 parsing → UVM IR → render → generators 迁移 | **进行中**：IR/校验已落地，主体仍在原文件 |
+| P2 增量验证 | 依赖映射自动生成；增量**编译**；把计划应用到回归（已完成可选 `--incremental-from`） | **部分**：计划/选择/估算已通，自动依赖与增量编译未做 |
+| P3 智能选择 | 基于历史 TP/bin/seed 选择高价值测试；Unreachable TP Analyzer | **地基**：归因链与完整率已通 |
+| P4 多后端 | VCS / Verilator 适配；跨 run 血缘/事件索引；run 自动清理 | 未开始 |
+| P5 治理升级 | 质量门从"只报告"升级为可配置硬门禁（需新增 caveat code 并同步 `EXPECTED_CAVEATS`） | 未开始 |
+
+**工程指标口径**（见 §9.9）：回归总耗时下降、增量节省、归因完整率、
+决策有效率。缺数据写 null / `available:false`，不拿 0 冒充。
 
 **不要做的事**：为覆盖率收敛速度与 EDA 巨头硬拼；本项目的第一定位是
 **可复现·可审计·可治理的签核证据链 + 个人级治理**（见 `CLAUDE.md` §九）。

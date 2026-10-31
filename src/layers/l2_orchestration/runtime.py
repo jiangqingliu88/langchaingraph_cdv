@@ -173,7 +173,11 @@ async def _run_agent(rt: Runtime, state: PipelineState, role: str, label: str,
         return {}, {"name": label, "status": "skipped", "score": 0}
 
     task = {"ctx": _rebuild_ctx(state), "input": rt.spec_text,
-            "output_dir": state.output_root}
+            "output_dir": state.output_root,
+            # 统一 RunContext 的**可序列化视图**：executor 不需要活对象，但应该
+            # 能回答"我这次属于哪个 run / 父 run 是谁"。
+            "run_id": state.run_id,
+            "run_context": (rt.ctx.to_dict() if getattr(rt, "ctx", None) else {})}
     if params:
         task["params"] = params
 
@@ -219,6 +223,9 @@ async def _run_agent(rt: Runtime, state: PipelineState, role: str, label: str,
     # 审计证据链：记录该 agent 产出的文件（git diff + 理由）。
     # `_record_agent_files` 内部会把链增量刷盘 —— 崩在这一步之后的 run 也留得下证据。
     rt.service._record_agent_files(rt.file_audit, role, data, params)
+    # Architecture 2.0：同一批文件进 ArtifactStore（所有 executor 都走这里，
+    # 不再各自维护产物索引）。
+    _register_artifacts(rt, role, data, state)
 
     entry = {"name": label, "status": status, "score": score,
              "time": round(time.time() - t0, 1)}
@@ -226,6 +233,42 @@ async def _run_agent(rt: Runtime, state: PipelineState, role: str, label: str,
         entry["quality"] = quality
     _write_progress(state, entry)
     return data, entry
+
+
+def _artifact_files(data: Dict[str, Any]) -> list:
+    files = []
+    for key in ("design_arch", "model", "tests", "rtl", "regression",
+                "coverage", "env", "debug", "audit"):
+        val = data.get(key) if isinstance(data, dict) else None
+        if not isinstance(val, dict):
+            continue
+        for field in ("files", "written_files", "generated_files"):
+            if isinstance(val.get(field), list):
+                files.extend(val[field])
+        artifacts = val.get("artifacts")
+        if isinstance(artifacts, dict):
+            for entry in artifacts.values():
+                if isinstance(entry, dict) and entry.get("path"):
+                    files.append(entry["path"])
+    out, seen = [], set()
+    for f in files:
+        text = str(f)
+        if text and text not in seen:
+            seen.add(text)
+            out.append(text)
+    return out[:100]
+
+
+def _register_artifacts(rt, role: str, data: Dict[str, Any], state) -> None:
+    store = getattr(rt, "artifacts", None)
+    if store is None:
+        return
+    for path in _artifact_files(data):
+        try:
+            store.register("executor_output", path, producer=role,
+                           round=state.round_num)
+        except Exception:                                  # noqa: BLE001 索引是增量
+            continue
 
 
 def _git_head(start: Path = None) -> str:
@@ -376,6 +419,13 @@ def init_run_core(rt: "Runtime", output_root, run_id: str = "") -> bool:
         rt.jobs = JobSupervisor(run_dir=ctx.output_root, run_id=ctx.run_id,
                                 event_store=rt.event_store,
                                 artifact_store=rt.artifacts)
+        # 回归框架的 LocalStrategy 用 module-global 拿到 supervisor（单进程串行）。
+        try:
+            from src.tools.execution.regression_tools.regression_framework.execution.strategy \
+                import set_job_supervisor
+            set_job_supervisor(rt.jobs)
+        except Exception as _e:                            # noqa: BLE001
+            logger.debug(f"JobSupervisor 未绑定到回归框架: {_e}")
         return True
     except Exception as e:                                 # noqa: BLE001
         logger.warning(f"运行事实面初始化失败（证据链会缺事件/产物索引）: {e}")

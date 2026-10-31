@@ -30,6 +30,8 @@ def _ensure_architecture_v2(output_root: Path, rt, target: float) -> Dict[str, A
     """
     try:
         from src.core.provenance.graph import write_provenance
+        from src.core.provenance.report import write_attribution_report
+        from src.core.metrics.engineering import write as write_metrics
         from src.core.verification.quality import write as write_quality
         from src.core.runtime.events import flush_spool
 
@@ -37,9 +39,11 @@ def _ensure_architecture_v2(output_root: Path, rt, target: float) -> Dict[str, A
         if store is not None:
             flush_spool(store)
         prov = write_provenance(output_root, event_store=store)
+        attribution = write_attribution_report(output_root)
         quality = write_quality(
             output_root, target=(target if target and target > 0 else None),
             run_id=output_root.name, event_store=store)
+        metrics = write_metrics(output_root, event_store=store)
         return {
             "schema": "architecture_v2_v1",
             "provenance": {
@@ -48,6 +52,21 @@ def _ensure_architecture_v2(output_root: Path, rt, target: float) -> Dict[str, A
                 "nodes": prov["summary"]["nodes"],
                 "edges": prov["summary"]["edges"],
                 "by_confidence": prov["summary"]["by_confidence"],
+            },
+            "attribution": {
+                "path": Path(attribution["path"]).relative_to(output_root).as_posix(),
+                "hit_bins": attribution["hit_bins"],
+                "attribution_rate": attribution["attribution_rate"],
+                "test_seed_rate": attribution["test_seed_rate"],
+                "exact_rate": attribution["exact_rate"],
+                "weak_rate": attribution["weak_rate"],
+            },
+            "engineering_metrics": {
+                "path": Path(metrics["path"]).relative_to(output_root).as_posix(),
+                "regression_seconds": metrics["regression"]["total_seconds"],
+                "attribution_rate": metrics["attribution"]["attribution_rate"],
+                "decision_rate": metrics["decision"]["effectiveness_rate"],
+                "incremental": metrics["incremental"],
             },
             "verification_quality": {
                 "path": Path(quality["path"]).relative_to(output_root).as_posix(),

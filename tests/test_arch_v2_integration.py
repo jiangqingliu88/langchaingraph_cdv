@@ -5,7 +5,9 @@ import json
 from pathlib import Path
 
 from src.core.decision.eval import append_record, evaluate_round
+from src.core.metrics.engineering import write as write_metrics
 from src.core.provenance.graph import write_provenance
+from src.core.provenance.report import write_attribution_report
 from src.core.runtime.events import EventStore
 from src.core.verification.quality import write as write_quality
 from src.layers.l2_orchestration.evidence.signoff_package import (
@@ -31,6 +33,9 @@ def _run(tmp_path: Path) -> Path:
     ]})
     _w(root / "coverage" / "per_test_bins.json",
        {"schema": "per_test_bins_v1", "tests": {"alu_test": ["cp.b1"]}})
+    _w(root / "coverage" / "stimulus_plan.json", {"sha256": "plan", "testpoints": []})
+    (root / "rtl").mkdir(parents=True)
+    (root / "rtl" / "dut.sv").write_text("module dut; endmodule\n", encoding="utf-8")
     test_dir = root / "regression_run" / "p0" / "build_x" / "test_alu_test_seed_7"
     test_dir.mkdir(parents=True)
     (test_dir / "sim_vsim.log").write_text("mismatched=0\n", encoding="utf-8")
@@ -52,7 +57,9 @@ def test_provenance_quality_decision_and_package_together(tmp_path):
     events = EventStore(root, run_id=root.name)
 
     prov = write_provenance(root, event_store=events)
+    attribution = write_attribution_report(root)
     quality = write_quality(root, target=95.0, event_store=events)
+    metrics = write_metrics(root, event_store=events)
     record = evaluate_round(
         run_id=root.name, round_num=1,
         action={"action_type": "GENERATE_DIRECTED_TEST", "reason": "gap",
@@ -66,8 +73,11 @@ def test_provenance_quality_decision_and_package_together(tmp_path):
 
     assert prov["summary"]["nodes"] > 0
     assert quality["overall"] in ("pass", "warn")
+    assert attribution["hit_bins"] == 1
+    assert metrics["attribution"]["attribution_rate"] == 1.0
     assert events.read("provenance.built")
     assert events.read("quality.gate")
+    assert events.read("metrics.collected")
 
     manifest = write_package(root, {
         "run": root.name, "verdict": {"verdict": "READY"},
@@ -78,6 +88,8 @@ def test_provenance_quality_decision_and_package_together(tmp_path):
     assert "execution/docs/provenance_summary.json" in rels
     assert "execution/docs/events.jsonl" in rels
     assert "execution/decision/evaluations.jsonl" in rels
+    assert "execution/coverage/attribution.json" in rels
+    assert "execution/docs/engineering_metrics.json" in rels
     assert "verdict/docs/verification_quality.json" in rels
 
     check = verify_package(root / "signoff_evidence")

@@ -51,26 +51,36 @@ def _dim(status: str, *, score: float = 0.0, facts: Optional[Dict] = None,
 # 维度
 # ═══════════════════════════════════════════════════════════════
 
-def _functional(root: Path) -> Dict[str, Any]:
+def _regression_totals(root: Path) -> tuple:
     stages = _read_json(root / "regression_stages.json")
     report = _read_json(root / "regression_run" / "report.json")
-    passed = _num(stages.get("passed")) if stages else None
-    failed = _num(stages.get("failed")) if stages else None
-    total = _num(stages.get("total")) if stages else None
-    if not stages and report:
-        passed = _num(report.get("passed"))
-        failed = _num(report.get("failed"))
-        total = _num(report.get("total"))
+    if stages:
+        return (_num(stages.get("passed")), _num(stages.get("failed")),
+                _num(stages.get("total")))
+    return (_num(report.get("passed")), _num(report.get("failed")),
+            _num(report.get("total")))
+
+
+def _tp_counts(root: Path) -> tuple:
     matrix = _read_json(root / "coverage" / "tp_matrix.json")
-    hit = int((matrix.get("counts") or {}).get("HIT", 0) or 0) if matrix else 0
-    unmapped = int((matrix.get("counts") or {}).get("UNMAPPED", 0) or 0) if matrix else 0
+    counts = matrix.get("counts") or {}
+    return int(counts.get("HIT", 0) or 0), int(counts.get("UNMAPPED", 0) or 0)
+
+
+def _functional(root: Path) -> Dict[str, Any]:
+    passed, failed, total = _regression_totals(root)
+    hit, unmapped = _tp_counts(root)
+    plan = _read_json(root / "incremental" / "plan.json")
+    selected = len(plan.get("selected_tests") or []) if plan else 0
+    all_tests = int(plan.get("all_tests") or 0) if plan else 0
     facts = {"passed": passed, "failed": failed, "total": total,
-             "tp_hit": hit, "tp_unmapped": unmapped}
-    if total is None:
+             "tp_hit": hit, "tp_unmapped": unmapped,
+             "incremental": bool(plan),
+             "incremental_selected": selected,
+             "incremental_all": all_tests}
+    if total is None or failed is None:
         return _dim("unknown", facts=facts,
-                    issues=["没有回归结果（regression_stages.json / report.json）"])
-    if failed is None:
-        return _dim("unknown", facts=facts, issues=["回归结果缺 failed 字段"])
+                    issues=["没有可用的回归结果（regression_stages.json / report.json）"])
     if total <= 0:
         return _dim("fail", score=0.0, facts=facts,
                     issues=["回归一条用例都没跑（total=0）"])
@@ -83,6 +93,10 @@ def _functional(root: Path) -> Dict[str, Any]:
     if hit <= 0:
         return _dim("warn", score=0.6, facts=facts,
                     issues=["回归全过但 TP 命中数为 0"])
+    if plan.get("confidence") == "mapped" and selected < all_tests:
+        return _dim("warn", score=0.8, facts=facts,
+                    issues=[f"增量回归只跑 {selected}/{all_tests} 条用例，"
+                            f"签核范围依赖基线计划（{plan.get('baseline_run', '')}）"])
     return _dim("pass", score=1.0, facts=facts)
 
 
@@ -181,12 +195,14 @@ def _evidence(root: Path) -> Dict[str, Any]:
     receipts = (root / "docs" / "tool_receipts.jsonl").is_file()
     per_test = (root / "coverage" / "per_test_bins.json").is_file()
     artifacts = _read_json(root / "artifacts" / "artifacts.json")
+    attribution = _read_json(root / "coverage" / "attribution.json")
     facts = {
         "provenance": provenance,
         "provenance_confidence": summary.get("by_confidence") or {},
         "events": events,
         "tool_receipts": receipts,
         "per_test_bins": per_test,
+        "attribution_rate": attribution.get("attribution_rate"),
         "artifacts": len(artifacts.get("artifacts") or []),
     }
     issues: List[str] = []

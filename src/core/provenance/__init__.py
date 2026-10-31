@@ -9,9 +9,13 @@ from src.core.provenance.schema import (
     tp_node_id,
 )
 from src.core.provenance.graph import ProvenanceGraph, build_provenance, write_provenance
+from src.core.provenance.report import (
+    build_attribution_report, write_attribution_report,
+)
 
 __all__ = [
     "SCHEMA", "NODE_KINDS", "EDGE_TYPES",
     "bin_node_id", "seed_node_id", "test_node_id", "tp_node_id",
     "ProvenanceGraph", "build_provenance", "write_provenance",
+    "build_attribution_report", "write_attribution_report",
 ]
