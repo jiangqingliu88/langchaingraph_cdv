@@ -54,6 +54,7 @@ class TestCatalog:
                           "flow.coverage_report",
                           # ISA 产物落盘：**写盘**，必须显式触发
                           "isa_gen.export",
+                          "ip.evidence", "ip.run",
                           "pipeline.answer_approval", "pipeline.approval_handler",
                           "pipeline.cancel", "pipeline.resume", "pipeline.start",
                           "soc.run"]

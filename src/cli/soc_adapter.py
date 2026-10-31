@@ -247,6 +247,149 @@ def ip_info(root: str | Path, ip_id: str) -> Dict[str, Any]:
     return {}
 
 
+def ip_plan(root: str | Path, ip_id: str = "") -> Dict[str, Any]:
+    doc = _read_yaml(Path(root).resolve() / "spec" / "ip_verification_plan.yaml")
+    plans = doc.get("ips") or {}
+    if ip_id:
+        return plans.get(str(ip_id)) or {}
+    return plans
+
+
+def latest_soc_run(root: str | Path = ".") -> str:
+    runs = list_soc_runs(root)
+    return str(runs[0]["dir"]) if runs else ""
+
+
+def _tp_status(run_root: Path, tp_ids: List[str]) -> List[Dict[str, Any]]:
+    matrix = _read_json(run_root / "coverage" / "tp_matrix.json")
+    rows = {str(r.get("tp_id") or ""): r for r in (matrix.get("rows") or [])
+            if isinstance(r, dict)}
+    out = []
+    for tp_id in tp_ids:
+        row = rows.get(str(tp_id))
+        out.append({"tp_id": tp_id,
+                    "status": str((row or {}).get("status") or "NOT_IN_MATRIX"),
+                    "test": str((row or {}).get("test") or "")})
+    return out
+
+
+def ip_status(root: str | Path, ip_id: str,
+              run_root: str | Path = "") -> Dict[str, Any]:
+    """IP 的验证/发布状态 —— 从最近 SoC run 的 TP 矩阵推导。"""
+    ip = ip_info(root, ip_id)
+    plan = ip_plan(root, ip_id)
+    source = str(run_root or latest_soc_run(root) or "")
+    if not ip:
+        return {"ip_id": ip_id, "status": "NO_IP", "release_ready": False}
+    if not source:
+        return {"ip": ip, "plan": plan, "source_run": "",
+                "status": "NO_RUN", "release_ready": False,
+                "testpoints": [], "evidence_ok": False}
+    run = Path(source)
+    doc = load_run_manifest(run)
+    reg = (doc.get("regression") or {})
+    tp_ids = [str(x) for x in (plan.get("testpoints") or [])]
+    tps = _tp_status(run, tp_ids)
+    observed = bool(tp_ids) and all(
+        t["status"] in ("HIT", "OBSERVED", "BACKDOOR_HIT") for t in tps)
+    has_tp = any(t["status"] != "NOT_IN_MATRIX" for t in tps)
+    report = _read_json(run / "regression_run" / "report.json")
+    task_status = {str(t.get("name")): str(t.get("status"))
+                   for t in (report.get("tasks") or []) if isinstance(t, dict)}
+    tests = [{"name": t, "status": task_status.get(t, "NOT_RUN")}
+             for t in (plan.get("tests") or [])]
+    tests_pass = bool(tests) and all(t["status"] == "pass" for t in tests)
+    run_pass = str(reg.get("status") or "").upper() == "PASS"
+    evidence = verify_soc_evidence(run)
+    basis = "tp_matrix" if has_tp else "test_result"
+    if not tp_ids:
+        status = "NO_PLAN"
+    elif not run_pass or not tests_pass:
+        status = "FAILED"
+    elif has_tp and observed and evidence.get("ok"):
+        status = "VERIFIED"
+    elif not has_tp and tests_pass and evidence.get("ok"):
+        # v0.1 SoC 路径没有 TP 矩阵；测试通过 + 证据包完整只能说明
+        # “该 IP 的集成 test 通过”，不能冒充逐 TP 命中。
+        status = "TEST_PASS"
+    else:
+        status = "PARTIAL"
+    return {
+        "ip": ip, "plan": plan, "source_run": source,
+        "status": status, "verification_basis": basis,
+        "release_ready": bool(status in ("VERIFIED", "TEST_PASS")
+                              and ip.get("status") == "released"),
+        "testpoints": tps, "tests": tests,
+        "evidence_ok": bool(evidence.get("ok")),
+        "evidence_package_hash": evidence.get("package_hash", ""),
+        "regression": reg,
+    }
+
+
+def write_ip_evidence(root: str | Path, ip_id: str,
+                      run_root: str | Path = "") -> Dict[str, Any]:
+    """把 IP 的 TP 状态 + 来源 run + 证据包身份写成 `ip_evidence/<ip>.json`。"""
+    status = ip_status(root, ip_id, run_root)
+    source = Path(status.get("source_run") or "")
+    if not source.is_dir():
+        return {}
+    out_dir = source / "ip_evidence"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{ip_id}.json"
+    body = {"schema": "ip_evidence_v1", "ip_id": ip_id,
+            "source_run": source.name, **status}
+    body["sha256"] = hashlib.sha256(_canon(body).encode("utf-8")).hexdigest()
+    path.write_text(json.dumps(body, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8")
+    return {"path": str(path), "sha256": body["sha256"],
+            "status": body.get("status"),
+            "release_ready": body.get("release_ready", False)}
+
+
+def soc_ip_release_matrix(root: str | Path,
+                          run_root: str | Path = "") -> List[Dict[str, Any]]:
+    return [ip_status(root, str(ip.get("id") or ""), run_root)
+            for ip in list_ips(root)]
+
+
+def run_ip_regression(project_root: str | Path, ip_id: str,
+                      output: str | Path = None) -> Dict[str, Any]:
+    """按 IP verification plan 的 tests 跑一次回归，并落 IP 证据。"""
+    import os
+
+    from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
+    from src.layers.l1_infrastructure.output_config import make_output_root
+
+    root = Path(project_root).resolve()
+    project = load_project(root)
+    plan = ip_plan(root, ip_id)
+    tests = [str(t) for t in (plan.get("tests") or [])]
+    if not plan:
+        return {"status": "FAIL", "error": f"IP 不在验证计划里: {ip_id}"}
+    if not tests:
+        return {"status": "FAIL", "error": f"IP {ip_id} 没有登记 tests"}
+    os.environ["SOC_ROOT"] = str(root)
+    out_root = make_output_root(str(output) if output else f"output_ip_{ip_id}")
+    soc_run = SoCRun(project, out_root)
+    result = InfrastructureManager(out_root).run_regression(
+        reg_yaml=str(root / "regression" / "regression.yaml"), mode="local",
+        tests=",".join(tests))
+    summary = soc_run.finish(result)
+    evidence = write_ip_evidence(root, ip_id, out_root)
+    # summary 里带 ArtifactStore 活对象（给调用方用的）；落盘前去掉。
+    safe_summary = {k: v for k, v in summary.items() if k != "artifacts"}
+    ip_doc = {"schema": "ip_run_v1", "ip_id": ip_id,
+              "tests": tests, "result": result,
+              "soc_summary": safe_summary, "ip_evidence": evidence}
+    path = Path(out_root) / "ip" / "ip_run.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(ip_doc, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8")
+    return {"status": result.get("status"), "result": result,
+            "output_root": str(out_root), "summary": summary,
+            "ip_evidence": evidence, "ip_run": str(path)}
+
+
 def list_soc_runs(base: str | Path = ".") -> List[Dict[str, Any]]:
     root = Path(base).resolve()
     runs = []

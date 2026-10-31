@@ -325,6 +325,36 @@ BINDINGS: List[ToolBinding] = [
         doc="SoC 工程 + IP id → 单个 IP 的详细输入（只读）",
     ),
     ToolBinding(
+        name="ip.plan",
+        target="src.cli.soc_adapter:ip_plan",
+        kind="json",
+        doc="SoC 工程 + IP id → IP 验证计划（只读）",
+    ),
+    ToolBinding(
+        name="ip.status",
+        target="src.cli.soc_adapter:ip_status",
+        kind="json",
+        doc="IP 的 TP 状态 / 来源 run / 发布就绪度（只读）",
+    ),
+    ToolBinding(
+        name="ip.release",
+        target="src.cli.soc_adapter:soc_ip_release_matrix",
+        kind="json",
+        doc="SoC 团队消费的 IP release matrix（只读）",
+    ),
+    ToolBinding(
+        name="ip.evidence",
+        target="src.cli.soc_adapter:write_ip_evidence",
+        kind="json", pure=False,
+        doc="从来源 SoC run 生成 IP 级证据（写盘，显式触发）",
+    ),
+    ToolBinding(
+        name="ip.run",
+        target="src.cli.soc_adapter:run_ip_regression",
+        kind="json", pure=False,
+        doc="按 IP 验证计划跑一次 IP 回归（需要 EDA，显式触发）",
+    ),
+    ToolBinding(
         name="soc.runs",
         target="src.cli.soc_adapter:list_soc_runs",
         kind="json",

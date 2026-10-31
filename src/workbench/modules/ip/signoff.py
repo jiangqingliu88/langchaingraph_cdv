@@ -34,6 +34,9 @@ class IpSignoffModule(IpModuleBase):
         self.body = QLabel("", root)
         self.body.setWordWrap(True)
         layout.addWidget(self.body)
+        self.status = QLabel("", root)
+        self.status.setWordWrap(True)
+        layout.addWidget(self.status)
 
         links = QHBoxLayout()
         evidence = QPushButton("证据 / 产物", root)
@@ -74,6 +77,14 @@ class IpSignoffModule(IpModuleBase):
         self.body.setText(
             f"{ip.get('id')} · {ip.get('name')} · {ip.get('team') or '?'}\n"
             + "\n".join(f"{'✓' if ok else '✗'} {name}" for name, ok in checks)
-            + "\n\n边界：IP 级自动证据包尚未接入；"
-              "当前证据入口是 run 的 `signoff_evidence/`，不是 IP 发布签核。")
+            + "\n\n边界：IP 级证据来自最近一次 SoC run 的 TP 状态；"
+              "独立 IP TB / 覆盖率拆分仍是 M2。")
         self.body.setStyleSheet(f"color: {theme.current().muted};")
+        st = self.run_tool("ip.status", quiet=True, root=str(self.project_root),
+                           ip_id=ip_id, run_root="")
+        if isinstance(st, dict):
+            self.status.setText(
+                f"验证状态：{st.get('status')} · release_ready={st.get('release_ready')} · "
+                f"来源：{st.get('source_run') or '无'}\n"
+                + "、".join(f"{t.get('tp_id')}={t.get('status')}"
+                            for t in (st.get("testpoints") or [])))

@@ -105,6 +105,22 @@ python -m src.cli.commands soc wave     <run>   # 用 Visualizer 打开 qwave.db
 波形里可以直接看 `start → dma_load → gemm_start → gemm_done → dma_store →
 irq/done` 这条 NICE 命令序列，以及 SRAM/GEMM 的数据变化。
 
+### 3.0 IP 团队视角
+
+`spec/ip_manifest.yaml` 定义 IP 的团队/owner/版本/发布状态；
+`spec/ip_verification_plan.yaml` 定义每个 IP 的 TP 与 tests。
+
+```bash
+python -m src.cli.commands ip list    examples/open_npu_soc
+python -m src.cli.commands ip run     examples/open_npu_soc --ip IP-NPU-GEMM
+python -m src.cli.commands ip status  examples/open_npu_soc --ip IP-NPU-GEMM
+python -m src.cli.commands ip evidence examples/open_npu_soc --ip IP-NPU-GEMM
+python -m src.cli.commands ip release examples/open_npu_soc   # SoC 团队消费的矩阵
+```
+
+IP 证据写 `<run>/ip_evidence/<ip>.json`，引用来源 SoC run 的 TP 状态与证据包哈希；
+独立 IP TB / 覆盖率拆分仍是 M2。
+
 也可以直接跑：
 
 ```bash

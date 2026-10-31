@@ -1,0 +1,28 @@
+# IP 级验证计划 —— IP 团队交付什么、SoC 团队消费什么。
+#
+# testpoints 引用 SoC verification_plan 的 TP id；IP 团队可以先用 SoC 级
+# TB 证明该 IP 在真实集成环境里的行为，后续 M2 再替换为 IP 独立 TB。
+schema: ip_verification_plan_v1
+soc: open_npu_soc
+
+ips:
+  IP-CPU-NICE:
+    tests: [gemm_8x8]
+    testpoints: [TP-NICE-IRQ]
+    acceptance: GEMM 完成后 NICE IRQ 到达
+  IP-DMA:
+    tests: [gemm_8x8]
+    testpoints: [TP-DMA-SRAM]
+    acceptance: A/B 搬入、C 搬回
+  IP-SRAM:
+    tests: [gemm_8x8]
+    testpoints: [TP-DMA-SRAM]
+    acceptance: A/B/C bank 读写正确
+  IP-NPU-GEMM:
+    tests: [gemm_8x8]
+    testpoints: [TP-GEMM-8X8-BASIC]
+    acceptance: INT8 8x8x8 结果与 golden 一致
+  IP-INTERCONNECT:
+    tests: [gemm_8x8]
+    testpoints: [TP-NICE-IRQ, TP-DMA-SRAM]
+    acceptance: 地址映射与 IRQ 路径正确

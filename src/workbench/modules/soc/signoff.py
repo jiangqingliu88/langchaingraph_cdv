@@ -56,11 +56,20 @@ class SoCSignoffModule(SocModuleBase):
         ev = (summary or {}).get("evidence") or {}
         reg = doc.get("regression") or {}
         waves = doc.get("waves") or []
+        release = self.run_tool("ip.release", quiet=True,
+                                root=str(self.project_root),
+                                run_root=summary.get("dir", ""))
+        ip_lines = []
+        for row in release if isinstance(release, list) else []:
+            ip = row.get("ip") or {}
+            ip_lines.append(f"{ip.get('id')}={row.get('status')}"
+                            f"{'/released' if row.get('release_ready') else ''}")
         self.body.setText(
             f"run：{doc.get('run', {}).get('run_id') or summary.get('dir')}\n"
             f"回归：{reg.get('status')} · {reg.get('passed')}/{reg.get('total')}\n"
             f"证据包：{'✓' if ev.get('ok') else '✗'} {ev.get('files', 0)} 个文件 · "
             f"package_hash {str(ev.get('package_hash'))[:16]}…\n"
             f"波形：{waves[0].get('path') if waves else '无'}\n"
+            f"IP release：{' · '.join(ip_lines) or '无 IP 清单'}\n"
             f"目录：{Path(summary.get('dir', '')) / 'signoff_evidence'}")
         self.body.setStyleSheet(f"color: {theme.current().muted};")

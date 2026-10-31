@@ -20,7 +20,9 @@ import click
 from src.cli.commands import cli, console
 from src.cli.output import get_output_adapter
 from src.cli.soc_adapter import (
-    find_wave, load_run_manifest, run_soc_project, verify_soc_evidence,
+    find_wave, ip_plan, ip_status, load_run_manifest, run_ip_regression,
+    run_soc_project, soc_ip_release_matrix, verify_soc_evidence,
+    write_ip_evidence,
 )
 
 _REQUIRED = (
@@ -180,6 +182,91 @@ def soc_evidence(run, json_output):
         for issue in result.get("issues") or []:
             console.print(f"  [red]{issue}[/red]")
     raise SystemExit(0 if result["ok"] else 1)
+
+
+@cli.group("ip")
+def ip_group():
+    """IP 团队：清单 / 验证状态 / 发布检查 / IP 级回归"""
+    pass
+
+
+@ip_group.command("list")
+@click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--json", "json_output", is_flag=True)
+def ip_list(project, json_output):
+    """列出 IP 与 team/owner/status。"""
+    from src.cli.soc_adapter import list_ips
+    ips = list_ips(project)
+    if json_output:
+        click.echo(json.dumps(ips, indent=2, ensure_ascii=False))
+        return
+    for ip in ips:
+        console.print(f"{ip.get('id')} · {ip.get('name')} · {ip.get('team')} · "
+                      f"{ip.get('owner')} · {ip.get('status')}")
+
+
+@ip_group.command("status")
+@click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--ip", "ip_id", required=True, help="IP id")
+@click.option("--run", "run_root", default="", help="SoC run 目录（缺省最新）")
+@click.option("--json", "json_output", is_flag=True)
+def ip_status_cmd(project, ip_id, run_root, json_output):
+    """IP 的 TP 状态与发布就绪度。"""
+    result = ip_status(project, ip_id, run_root)
+    if json_output:
+        click.echo(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+    console.print(f"{ip_id} · {result.get('status')} · release_ready="
+                  f"{result.get('release_ready')} · source={result.get('source_run')}")
+    for tp in result.get("testpoints") or []:
+        console.print(f"  {tp.get('tp_id')}: {tp.get('status')}")
+
+
+@ip_group.command("evidence")
+@click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--ip", "ip_id", required=True)
+@click.option("--run", "run_root", default="")
+def ip_evidence(project, ip_id, run_root):
+    """生成 IP 级证据（引用来源 SoC run）。"""
+    result = write_ip_evidence(project, ip_id, run_root)
+    if not result:
+        raise click.ClickException("没有可用的 SoC run")
+    console.print(f"✓ IP 证据 {result['path']} · {result['status']} · "
+                  f"release_ready={result['release_ready']}")
+
+
+@ip_group.command("release")
+@click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--run", "run_root", default="")
+@click.option("--json", "json_output", is_flag=True)
+def ip_release(project, run_root, json_output):
+    """SoC 团队消费的 IP release matrix。"""
+    rows = soc_ip_release_matrix(project, run_root)
+    if json_output:
+        click.echo(json.dumps(rows, indent=2, ensure_ascii=False))
+        return
+    for row in rows:
+        ip = row.get("ip") or {}
+        console.print(f"{ip.get('id')} · {row.get('status')} · "
+                      f"release={'✓' if row.get('release_ready') else '✗'} · "
+                      f"owner={ip.get('owner')}")
+
+
+@ip_group.command("run")
+@click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--ip", "ip_id", required=True)
+@click.option("--output", "-o", default=None)
+@click.option("--json", "json_output", is_flag=True)
+def ip_run(project, ip_id, output, json_output):
+    """按 IP verification plan 的 tests 跑一次 IP 回归。"""
+    result = run_ip_regression(project, ip_id, output)
+    if json_output:
+        click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+    else:
+        console.print(f"IP {ip_id} · {result.get('status')} · "
+                      f"{result.get('output_root')} · "
+                      f"evidence={(result.get('ip_evidence') or {}).get('path')}")
+    raise SystemExit(0 if result.get("status") == "PASS" else 1)
 
 
 @soc_group.command("wave")

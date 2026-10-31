@@ -78,7 +78,8 @@ class RunRepository:
             if manifest.exists():
                 runs.append(self._summary(d, manifest))
             else:
-                soc = self._soc_summary(d)
+                ip = self._ip_summary(d)
+                soc = ip or self._soc_summary(d)
                 if soc:
                     runs.append({"run_id": d.name, "dir": str(d),
                                  "artifacts": True, "finished": True, **soc})
@@ -112,7 +113,8 @@ class RunRepository:
             summary = self._summary(run_dir, manifest)
         else:
             summary = {"run_id": run_dir.name, "dir": str(run_dir)}
-            summary.update(self._soc_summary(run_dir))
+            summary.update(self._ip_summary(run_dir)
+                           or self._soc_summary(run_dir))
         coverage = self._read_json(run_dir / "sim" / "coverage" / "coverage_result.json")
         coverage_detail = coverage.get("coverage", {}) if isinstance(coverage, dict) else {}
         summary["coverage_detail"] = coverage_detail
@@ -239,27 +241,55 @@ class RunRepository:
             has_manifest = (d / "docs" / "manifest.json").exists()
             has_journal = (d / "docs" / "run_events.jsonl").exists()
             has_soc = (d / "soc" / "soc_run.json").exists()
-            if not (has_manifest or has_journal or has_soc):
+            has_ip = (d / "ip" / "ip_run.json").exists()
+            if not (has_manifest or has_journal or has_soc or has_ip):
                 continue
             entry: Dict[str, Any] = {"run_id": d.name, "dir": str(d),
-                                     "artifacts": has_manifest or has_soc}
+                                     "artifacts": has_manifest or has_soc or has_ip}
             if has_manifest:
                 entry.update(self._summary(d, d / "docs" / "manifest.json"))
             entry.update(self.journal_summary(d.name))
             if has_soc:
                 # 核心事件不是 RunJournal 格式；用 soc_run 的状态覆盖摘要。
                 entry.update(self._soc_summary(d))
+            if has_ip:
+                entry.update(self._ip_summary(d))
             # `finished` 与 `artifacts` 是两件事：前者是"运行结束了"（日志里有终态事件），
             # 后者是"产物齐了"。跑挂的 run 有日志没产物；早期没有日志的 run 则相反 ——
             # 所以取两者的并，谁都不能单独回答"这个东西还活着吗"。
             entry["finished"] = bool(
                 entry.get("state") in ("completed", "failed", "cancelled")
-                or has_manifest or has_soc)
+                or has_manifest or has_soc or has_ip)
             entry["run_id"] = d.name
             out.append(entry)
             if len(out) >= limit:
                 break
         return out
+
+    def _ip_summary(self, run_dir: Path) -> Dict[str, Any]:
+        """IP 级 run（`ip/ip_run.json`）。"""
+        doc = self._read_json(run_dir / "ip" / "ip_run.json")
+        if not doc:
+            return {}
+        result = doc.get("result") or {}
+        status = str(result.get("status") or "")
+        passes = status.upper() == "PASS"
+        return {
+            "kind": "ip",
+            "ip_id": doc.get("ip_id", ""),
+            "state": "completed" if passes else "failed",
+            "verdict": status,
+            "signoff_status": status,
+            "final_coverage": 0,
+            "target": 0,
+            "converged": passes,
+            "iterations": 1,
+            "evidence_valid": bool((doc.get("ip_evidence") or {}).get("path")),
+            "ip_evidence": doc.get("ip_evidence") or {},
+            "soc": doc.get("soc_summary") or {},
+            "stages": [{"stage": "ip", "title": f"IP {doc.get('ip_id', '')}",
+                        "status": "passed" if passes else "failed", "round": 1}],
+        }
 
     def _soc_summary(self, run_dir: Path) -> Dict[str, Any]:
         """SoC 参考工程的 run 摘要（`soc/soc_run.json`，没有 manifest 也认）。"""

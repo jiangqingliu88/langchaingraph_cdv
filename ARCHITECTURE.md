@@ -106,6 +106,9 @@ CPU/NICE 命令 → DMA → Banked SRAM → INT8 GEMM → IRQ → golden 比较
   与 RTL 列成契约；
   - **SoC 团队**：`soc.overview / soc.architecture / soc.verification / soc.signoff`；
   - **IP 团队**：`ip.catalog / ip.workspace / ip.signoff`；
+  - IP 级验证：`ip run` 按 `spec/ip_verification_plan.yaml` 的 tests 跑；
+    `ip status/evidence/release` 从最近 SoC run 的 TP 矩阵 + 证据包推导，
+    `ip_evidence/<ip>.json` 引用来源 run；SoC 签核页展示 IP release matrix；
   - 两套页面共用工程事实与 `soc.*` / `ip.*` 只读工具，不复制回归/波形/证据页面；
 - **运行历史**：`RunRepository.discover_runs()` 在没有
   `docs/manifest.json` 时读 `soc/soc_run.json`，把 SoC run 以
@@ -1198,7 +1201,8 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 │  └─ workbench/                PySide6 桌面工作台（可选）
 │     └─ modules/{soc,ip}/      SoC 团队 / IP 团队业务线
 ├─ examples/open_npu_soc/       SoC 参考工程（RTL / TB / golden / regression）
-│  └─ spec/ip_manifest.yaml     IP 团队 / owner / version / release 契约
+│  ├─ spec/ip_manifest.yaml     IP 团队 / owner / version / release 契约
+│  └─ spec/ip_verification_plan.yaml  IP testpoint / tests / acceptance
 ├─ tests/                       主测试套件
 ├─ output_<run>/                一次运行的产物
 └─ ARCHITECTURE.md              本文
