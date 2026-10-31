@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import pytest
 
@@ -404,3 +405,15 @@ def test_no_qt_anywhere_in_the_layers():
 def test_get_run_service_is_a_singleton():
     """"一次一个 run"这条约束只对单例有意义 —— 两个实例会互相不知道对方在跑。"""
     assert get_run_service() is get_run_service()
+
+
+def test_casemodel_is_copied_into_the_run(svc, tmp_path):
+    """GUI/CLI 传的 case 模型落到流水线约定的 `inputs/casemodel.yaml`。"""
+    cfg = tmp_path / "my_casemodel.yaml"
+    cfg.write_text("name: demo\n", encoding="utf-8")
+    run_id = svc.start(RunRequest(spec_text="# 假规格", casemodel=str(cfg)))
+    svc.wait(run_id, timeout=20)
+    run_root = svc._handles[run_id].root       # noqa: SLF001 测试要看真实落点
+    target = Path(run_root) / "inputs" / "casemodel.yaml"
+    assert target.is_file()
+    assert target.read_text(encoding="utf-8") == "name: demo\n"

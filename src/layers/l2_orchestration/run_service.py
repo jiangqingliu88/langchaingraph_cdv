@@ -72,6 +72,9 @@ class RunRequest:
     #: 把「这份 RTL 对不对」与「design agent 会不会生成 RTL」两个变量隔开，
     #: 免得 LLM 抽一次风就把整轮拖垮。
     rtl_dir: str = ""
+    #: 用户指定的 case 模型 YAML；非空 = 复制到 `<run>/inputs/casemodel.yaml`。
+    #: 流水线仍按固定落点发现它，不在视图层另加一条路径。
+    casemodel: str = ""
     approval: str = "threshold"
     approval_timeout_s: float = 0.0
     run_id: str = ""
@@ -468,6 +471,19 @@ class RunService:
         gate = create_approval_gate(req.approval, channel=channel,
                                     timeout_s=req.approval_timeout_s)
 
+        # `--config` / GUI 的 case 模型：复制到流水线约定的固定落点。
+        # 这不是新入口 —— `front` / `verify` 本来就在 `inputs/casemodel.yaml` 找它。
+        if req.casemodel:
+            from src.layers.l1_infrastructure.layout import casemodel_path
+
+            src = Path(req.casemodel)
+            if not src.is_file():
+                raise FileNotFoundError(f"casemodel 不存在：{src}")
+            dest = casemodel_path(handle.root)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(src.read_text(encoding="utf-8", errors="replace"),
+                            encoding="utf-8")
+
         service = PipelineExecutionService.get_instance()
         return await service.run_closed_loop_streaming(
             spec_text=req.resolved_spec(),
@@ -557,7 +573,7 @@ def start_run(spec_file: str = "", spec_text: str = "",
               bypass_design_model: bool = False, approval: str = "threshold",
               approval_timeout_s: float = 0.0,
               sim_modes=None, manual_gate: bool = True,
-              rtl_dir: str = "") -> Dict[str, Any]:
+              rtl_dir: str = "", casemodel: str = "") -> Dict[str, Any]:
     """启动一次闭环运行，**立即**返回 run_id（不等它跑完）。
 
     `output_root` 留空 = 用服务自己的 output_base（默认 `output`）。
@@ -579,6 +595,7 @@ def start_run(spec_file: str = "", spec_text: str = "",
         # 但 `RunRequest` 的缺省是 True —— 不显式转布尔会让"关"悄悄变成"开"。
         manual_gate=bool(manual_gate),
         rtl_dir=str(rtl_dir or ""),
+        casemodel=str(casemodel or ""),
     )
     run_id = service.start(request)
     return {"run_id": run_id, **service.status()}

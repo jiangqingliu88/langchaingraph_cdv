@@ -383,7 +383,7 @@ src/workbench/
 
 | 步骤 | 入口做的事 | 复用的现有模块 |
 |---|---|---|
-| 项目输入 | 选 RTL 目录 / Spec 文件 | `ide.ip_spec` |
+| 项目输入 | 选 RTL 目录 / Spec 文件 / case 模型 | `ide.ip_spec`；`pipeline.start(casemodel=…)` 复制到 run 的 `inputs/casemodel.yaml` |
 | 验证配置 | 打开 case 模型 / ISA 激励 | `verify.casemodel`、`verify.isa_gen` |
 | 环境生成 | 打开验证流程 | `flow.pipeline` |
 | 仿真 | 目标/轮次/审批 → `pipeline.start` | `flow.pipeline`、`flow.runs` |

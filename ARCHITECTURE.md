@@ -2,7 +2,7 @@
 
 > 基线：2026-10-31
 >
-> 全量单测：**1177 passed / 5 skipped**；工作台 **717 passed**
+> 全量单测：**1178 passed / 5 skipped**；工作台 **721 passed**
 >
 > 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 >
@@ -974,7 +974,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1177 passed / 5 skipped
+python -m pytest tests/ -q                            # 1178 passed / 5 skipped
 python -m pytest tests/core -q                        # Architecture 2.0 核心（83 条）
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
@@ -1030,6 +1030,7 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 | `tests/core/test_optimize.py` | 历史状态/种子分析、flaky/failing、低边际只在精确归因时跳过、前后对比 |
 | `tests/core/test_closure.py` | 缺口/目标差距、动作分类、UNMAPPED 审计、无数据显式说明 |
 | `tests/test_job_runtime_integration.py` | LocalStrategy→JobSupervisor、关闭开关回退、executor 产物进 ArtifactStore |
+| `src/workbench/tests/test_service_modules.py` | 服务入口无输入告警、Coverage 计划落盘、项目总览渲染、`run.selected` 订阅 |
 
 ---
 

@@ -67,9 +67,12 @@ class UVMServiceModule(ModuleBase):
         self.spec_edit = QLineEdit()
         self.spec_edit.setPlaceholderText("./spec.md")
         form.addRow("Spec 文件", self._with_browse(self.spec_edit, "file"))
+        self.config_edit = QLineEdit()
+        self.config_edit.setPlaceholderText("可选：case 模型 YAML（复制到 run 的 inputs/casemodel.yaml）")
+        form.addRow("Case 模型", self._with_browse(self.config_edit, "file"))
         layout.addLayout(form)
-        layout.addWidget(_muted("Case 模型由流水线在 specs/<module>/casemodel.yaml 自动发现；"
-                                "CLI 也可用 --config 指定。"))
+        layout.addWidget(_muted("Case 模型留空时，流水线会找 specs/<module>/casemodel.yaml；"
+                                "填了就以这份为准。"))
         row = QHBoxLayout()
         row.addWidget(_button("打开 IP 规格", lambda: open_module(self.ctx, "ide.ip_spec")))
         row.addWidget(_button("下一步：验证配置", lambda: self.steps.setCurrentRow(1)))
@@ -169,6 +172,7 @@ class UVMServiceModule(ModuleBase):
             return
         payload = self.run_tool(
             "pipeline.start", force=True, spec_file=spec_file, rtl_dir=rtl_dir,
+            casemodel=self.config_edit.text().strip(),
             target=float(self.target_spin.value()),
             max_rounds=int(self.rounds_spin.value()),
             approval=self.approval_combo.currentText())
