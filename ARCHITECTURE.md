@@ -2,7 +2,7 @@
 
 > 基线：2026-10-31
 >
-> 全量单测：**1201 passed / 2 skipped**；工作台 **721 passed**
+> 全量单测：**1204 passed / 2 skipped**；工作台 **721 passed**
 >
 > UVM 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 >
@@ -105,6 +105,9 @@ CPU/NICE 命令 → DMA → Banked SRAM → INT8 GEMM → IRQ → golden 比较
 - **Workbench 业务线**：`soc.overview / soc.architecture / soc.verification /
   soc.signoff` 四页，复用 `soc.*` 只读工具；运行按钮显式调 `soc.run`，
   不复制回归/波形/证据页面；
+- **运行历史**：`RunRepository.discover_runs()` 在没有
+  `docs/manifest.json` 时读 `soc/soc_run.json`，把 SoC run 以
+  `kind=soc`、`state=completed/failed` 列入 `flow.runs`（不再要求 UVM run）；
 - **边界**：SoC 证据包是工程级事实（输入/RTL/golden/回归/波形），
   **不是 UVM 的 v2 三态签核证据包**；E203 路径需要 RISC-V 工具链和 E203 TB，
   未在本机实跑。
@@ -1017,7 +1020,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1201 passed / 2 skipped
+python -m pytest tests/ -q                            # 1204 passed / 2 skipped
 python -m pytest tests/core -q                        # Architecture 2.0 核心（83 条）
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
@@ -1063,6 +1066,7 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 | `test_code_coverage_plan.py` | DUT 代码覆盖率合并排除 loopback、merge spec 正确 |
 | `test_scheduler_build_failure.py` | build 失败时 test 不执行，防止旧 work library 假结果 |
 | `test_soc_adapter.py` | SoC 工程校验；RunContext/Artifact/Event/证据包；波形定位 |
+| `test_soc_run_repository.py` | 无 manifest 的 SoC run 仍进入运行历史；detail 可读 |
 | `tests/core/test_core_is_stdlib_only.py` | `src/core` 不反向依赖 layers/langgraph/pydantic |
 | `tests/core/test_provenance_attribution.py` | weak/exact 血缘规则；MISS/UNMAPPED 不建命中边；确定性重建 |
 | `tests/core/test_jobs_supervisor.py` | 超时杀进程树、非零退出、白名单 deny/monitor |

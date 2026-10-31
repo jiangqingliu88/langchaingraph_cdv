@@ -75,9 +75,13 @@ class RunRepository:
         runs = []
         for d in self.run_dirs():
             manifest = d / "docs" / "manifest.json"
-            if not manifest.exists():
-                continue
-            runs.append(self._summary(d, manifest))
+            if manifest.exists():
+                runs.append(self._summary(d, manifest))
+            else:
+                soc = self._soc_summary(d)
+                if soc:
+                    runs.append({"run_id": d.name, "dir": str(d),
+                                 "artifacts": True, "finished": True, **soc})
             if len(runs) >= limit:
                 break
         return runs
@@ -103,7 +107,12 @@ class RunRepository:
         run_dir = self._resolve(run_id)
         if not run_dir:
             return None
-        summary = self._summary(run_dir, run_dir / "docs" / "manifest.json")
+        manifest = run_dir / "docs" / "manifest.json"
+        if manifest.exists():
+            summary = self._summary(run_dir, manifest)
+        else:
+            summary = {"run_id": run_dir.name, "dir": str(run_dir)}
+            summary.update(self._soc_summary(run_dir))
         coverage = self._read_json(run_dir / "sim" / "coverage" / "coverage_result.json")
         coverage_detail = coverage.get("coverage", {}) if isinstance(coverage, dict) else {}
         summary["coverage_detail"] = coverage_detail
@@ -229,24 +238,54 @@ class RunRepository:
         for d in self.run_dirs():
             has_manifest = (d / "docs" / "manifest.json").exists()
             has_journal = (d / "docs" / "run_events.jsonl").exists()
-            if not (has_manifest or has_journal):
+            has_soc = (d / "soc" / "soc_run.json").exists()
+            if not (has_manifest or has_journal or has_soc):
                 continue
             entry: Dict[str, Any] = {"run_id": d.name, "dir": str(d),
-                                     "artifacts": has_manifest}
+                                     "artifacts": has_manifest or has_soc}
             if has_manifest:
                 entry.update(self._summary(d, d / "docs" / "manifest.json"))
             entry.update(self.journal_summary(d.name))
+            if has_soc:
+                # 核心事件不是 RunJournal 格式；用 soc_run 的状态覆盖摘要。
+                entry.update(self._soc_summary(d))
             # `finished` 与 `artifacts` 是两件事：前者是"运行结束了"（日志里有终态事件），
             # 后者是"产物齐了"。跑挂的 run 有日志没产物；早期没有日志的 run 则相反 ——
             # 所以取两者的并，谁都不能单独回答"这个东西还活着吗"。
             entry["finished"] = bool(
                 entry.get("state") in ("completed", "failed", "cancelled")
-                or has_manifest)
+                or has_manifest or has_soc)
             entry["run_id"] = d.name
             out.append(entry)
             if len(out) >= limit:
                 break
         return out
+
+    def _soc_summary(self, run_dir: Path) -> Dict[str, Any]:
+        """SoC 参考工程的 run 摘要（`soc/soc_run.json`，没有 manifest 也认）。"""
+        doc = self._read_json(run_dir / "soc" / "soc_run.json")
+        if not doc:
+            return {}
+        reg = doc.get("regression") or {}
+        passes = str(reg.get("status") or "").upper() == "PASS"
+        evidence = run_dir / "signoff_evidence" / "manifest.json"
+        return {
+            "kind": "soc",
+            "state": "completed" if passes else "failed",
+            "final_coverage": 0,
+            "target": 0,
+            "converged": passes,
+            "iterations": 1,
+            "verdict": reg.get("status") or "",
+            "signoff_status": reg.get("status") or "",
+            "evidence_valid": evidence.is_file(),
+            "project": (doc.get("project") or {}).get("name", ""),
+            "rtl_hash": (doc.get("project") or {}).get("rtl_hash", ""),
+            "soc": doc,
+            "stages": [{"stage": "soc", "title": "SoC 回归",
+                        "status": "passed" if passes else "failed",
+                        "round": 1}],
+        }
 
     # ═══════════════════════════════════════════════════════════
     # 辅助
