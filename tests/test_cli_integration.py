@@ -282,3 +282,9 @@ class TestEngineeringServiceCommands:
         assert result.exit_code == 0
         assert "--config" in result.output
         assert "--rtl" in result.output
+
+    def test_soc_subcommands_are_registered(self, runner):
+        from src.cli.commands import cli
+        for cmd in ["check", "golden", "run"]:
+            result = runner.invoke(cli, ["soc", cmd, "--help"])
+            assert result.exit_code == 0, f"soc {cmd}: {result.output}"

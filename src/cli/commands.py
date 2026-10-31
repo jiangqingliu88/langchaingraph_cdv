@@ -3990,7 +3990,7 @@ def gui_run(manifest, module, input, theme, reset_layout):
 # 模块 `from src.cli.commands import _repo, ...` 会拿到半成品。
 from . import (  # noqa: E402,F401
     cmd_casemodel, cmd_config, cmd_coverage, cmd_evidence, cmd_metrics,
-    cmd_regression, cmd_services, cmd_signoff, cmd_verify,
+    cmd_regression, cmd_services, cmd_signoff, cmd_soc, cmd_verify,
 )
 
 

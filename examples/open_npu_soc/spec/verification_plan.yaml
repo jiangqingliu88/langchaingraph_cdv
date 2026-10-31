@@ -1,0 +1,28 @@
+schema: verification_plan_v1
+module: open_npu_soc
+target: 95.0
+testpoints:
+  - id: TP-GEMM-8X8-BASIC
+    requirement: F-GEMM-INT8
+    dimension: matrix
+    value: 8x8x8
+    realization: stimulus
+    test: gemm_8x8
+    stage: p0
+  - id: TP-NICE-IRQ
+    requirement: F-NICE-IRQ
+    dimension: irq
+    value: gemm_done
+    realization: observe
+    test: gemm_8x8
+    stage: p0
+  - id: TP-DMA-SRAM
+    requirement: F-DMA-SRAM
+    dimension: dma
+    value: ab_load_c_store
+    realization: observe
+    test: gemm_8x8
+    stage: p0
+notes:
+  - v0.1 先覆盖正常路径；边界/异常矩阵在 M2 扩展
+  - golden model 是 Python，RTL 自检 TB 读取同一组向量

@@ -1,0 +1,23 @@
+config_name: open_npu_soc
+# 由 SoC CLI 适配层/README 设置：export SOC_ROOT=<repo>/examples/open_npu_soc
+variables:
+  SOC_ROOT: "${SOC_ROOT}"
+
+builds:
+  - name: build_soc
+    top: tb_soc_top
+    run_cmd: 'cd ${SOC_ROOT} && vlog -sv -f filelist.f -l ${EMAN_COMPILE_DIR}/build.log'
+
+tests:
+  - name: gemm_8x8
+    build: build_soc
+    tags: ["gemm", "p0"]
+    file_pattern: ["rtl/"]
+    hooks:
+      pre_sim: 'cd ${SOC_ROOT} && python golden/gemm_golden.py --out vectors'
+    run_cmd: >
+      cd ${SOC_ROOT} &&
+      vsim -c work.tb_soc_top -do "run -all; quit" -l sim_vsim.log &&
+      [ -s sim_vsim.log ] &&
+      grep -q "mismatched=0" sim_vsim.log &&
+      grep -q "PASS" sim_vsim.log

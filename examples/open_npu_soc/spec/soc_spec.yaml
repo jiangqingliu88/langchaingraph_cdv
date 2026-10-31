@@ -1,0 +1,40 @@
+schema: soc_spec_v1
+design_name: open_npu_soc
+version: v0.1
+description: >
+  E203 + NICE + DMA + Banked SRAM + INT8 GEMM 的参考 SoC。v0.1 用确定性
+  NICE 命令时序替代 E203 本体，先验证 CPU 命令入口到 NPU 结果中断的完整链路。
+
+modules:
+  - name: cpu
+    role: RV32 CPU / NICE command source
+    rtl: rtl/cpu/nice_cmd_sequencer.sv
+    note: v0.1 为参考时序驱动；集成 E203 时替换为 NICE 适配层
+  - name: dma
+    role: A/B load and C store
+    rtl: rtl/dma/dma_simple.sv
+  - name: sram
+    role: banked A/B/C storage
+    rtl: rtl/sram/sram_banked.sv
+  - name: npu_gemm
+    role: INT8 GEMM C = A x B
+    rtl: rtl/npu/int8_gemm.sv
+
+memory_map:
+  sram_a: 0x0000_A000
+  sram_b: 0x0000_B000
+  sram_c: 0x0000_C000
+  nice_cmd: 0x0000_2000
+  nice_irq: 0x0000_2004
+
+features:
+  - id: F-GEMM-INT8
+    text: INT8 矩阵乘法，32-bit 累加
+  - id: F-NICE-IRQ
+    text: GEMM 完成后通过 NICE 中断通知 CPU
+  - id: F-DMA-SRAM
+    text: DMA 负责 A/B 搬入与 C 搬回
+
+acceptance:
+  - software, RTL and golden model produce identical C
+  - simulation log contains mismatched=0 and PASS

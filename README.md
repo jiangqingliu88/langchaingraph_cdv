@@ -113,6 +113,21 @@ pip install -r requirements.txt
 python -m src.cli.commands verify specs\apb_uart\apb_uart_spec.md --json
 ```
 
+**参考 SoC 工程（Open NPU SoC v0.1）**：
+
+`examples/open_npu_soc/` 是端到端样板：NICE 命令 → DMA → Banked SRAM →
+INT8 GEMM → IRQ → Python golden 比较。v0.1 用确定性命令时序替代 E203 本体，
+先把数据通路和 SignOffAI 的 run/回归/证据链接通。
+
+```bash
+python -m src.cli.commands soc check examples/open_npu_soc
+python -m src.cli.commands soc golden examples/open_npu_soc
+python -m src.cli.commands soc run examples/open_npu_soc --output output_soc_v01
+```
+
+`run` 复用现有 `InfrastructureManager.run_regression`，不是新引擎；需要
+`vlog`/`vsim` 在 PATH。详见 `examples/open_npu_soc/README.md`。
+
 **行为约定（失败响亮 —— 这是全项目最一致的一条纪律）**：
 
 | 情形 | 行为 |

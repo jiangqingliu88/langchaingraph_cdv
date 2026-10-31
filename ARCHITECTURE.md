@@ -2,7 +2,7 @@
 
 > 基线：2026-10-31
 >
-> 全量单测：**1178 passed / 5 skipped**；工作台 **721 passed**
+> 全量单测：**1179 passed / 5 skipped**；工作台 **721 passed**
 >
 > 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 >
@@ -75,6 +75,22 @@ Evidence。**不为三类服务各写一套引擎**；`optimize-regression` / `c
 
 `verify` 同时给 spec 与 `--rtl` 时：RTL 当 DUT、spec 当分析/参考模型输入、
 跳过 design；`--config` 把 case 模型复制到 run 的 `inputs/casemodel.yaml`。
+
+### 1.2 参考 SoC 工程（Open NPU SoC v0.1）
+
+`examples/open_npu_soc/` 是用来证明「SignOffAI 能验证真实 SoC」的样板工程：
+
+```text
+CPU/NICE 命令 → DMA → Banked SRAM → INT8 GEMM → IRQ → golden 比较
+```
+
+- v0.1 用 `rtl/cpu/nice_cmd_sequencer.sv` 固定 NICE 命令时序，真实 E203 在 M1 接入；
+- 现有 `vagent soc check/golden/run` 是薄适配层：`run` 复用
+  `InfrastructureManager.run_regression`，不另造执行引擎；
+- 回归 YAML、golden 向量、自检 TB、spec/verification plan 都在工程内，
+  `run` 的日志/报告继续走现有 run 目录与证据链。
+
+详见 [`examples/open_npu_soc/README.md`](examples/open_npu_soc/README.md)。
 
 ---
 
@@ -979,7 +995,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1178 passed / 5 skipped
+python -m pytest tests/ -q                            # 1179 passed / 5 skipped
 python -m pytest tests/core -q                        # Architecture 2.0 核心（83 条）
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具

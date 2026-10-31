@@ -1,0 +1,16 @@
+schema: interface_spec_v1
+module: open_npu_soc
+interfaces:
+  - name: nice_cmd
+    direction: cpu_to_npu
+    signals: [start, dma_load, gemm_start, dma_store, done]
+    protocol: NICE-like request/response
+  - name: nice_irq
+    direction: npu_to_cpu
+    signals: [irq]
+  - name: sram_tb
+    direction: testbench_to_sram
+    signals: [tb_we, tb_bank, tb_addr, tb_wdata]
+  - name: sram_result
+    direction: sram_to_testbench
+    signals: [c_flat]
