@@ -313,6 +313,18 @@ BINDINGS: List[ToolBinding] = [
         doc="SoC 工程目录 → spec/interface/plan/RTL 清单与输入校验（只读）",
     ),
     ToolBinding(
+        name="ip.list",
+        target="src.cli.soc_adapter:list_ips",
+        kind="json",
+        doc="SoC 工程 → IP 清单（团队 / owner / version / status / RTL 存在性，只读）",
+    ),
+    ToolBinding(
+        name="ip.info",
+        target="src.cli.soc_adapter:ip_info",
+        kind="json",
+        doc="SoC 工程 + IP id → 单个 IP 的详细输入（只读）",
+    ),
+    ToolBinding(
         name="soc.runs",
         target="src.cli.soc_adapter:list_soc_runs",
         kind="json",

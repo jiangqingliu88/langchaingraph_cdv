@@ -208,12 +208,43 @@ def project_info(root: str | Path) -> Dict[str, Any]:
         "interface_spec": project.interface_spec,
         "verification_plan": project.verification_plan,
         "regression": _read_yaml(project.root / "regression" / "regression.yaml"),
+        "ip_manifest": _read_yaml(project.root / "spec" / "ip_manifest.yaml"),
         "filelist": project.filelist,
         "rtl_files": [p.relative_to(project.root).as_posix()
                       for p in project.rtl_files],
         "rtl_hash": project.rtl_hash,
         "validation": project.validate(),
     }
+
+
+def list_ips(root: str | Path) -> List[Dict[str, Any]]:
+    """IP 清单 → 带文件存在性/hash 的列表（只读）。"""
+    base = Path(root).resolve()
+    doc = _read_yaml(base / "spec" / "ip_manifest.yaml")
+    out: List[Dict[str, Any]] = []
+    for ip in doc.get("ips") or []:
+        if not isinstance(ip, dict):
+            continue
+        files = [str(x) for x in (ip.get("rtl") or [])]
+        present = [f for f in files if (base / f).is_file()]
+        missing = [f for f in files if not (base / f).is_file()]
+        out.append({
+            **ip,
+            "rtl_files": files,
+            "rtl_present": present,
+            "rtl_missing": missing,
+            "rtl_hash": hashlib.sha256("".join(
+                _sha(base / f) for f in present).encode("ascii")).hexdigest()
+            if present else "",
+        })
+    return out
+
+
+def ip_info(root: str | Path, ip_id: str) -> Dict[str, Any]:
+    for ip in list_ips(root):
+        if str(ip.get("id") or "") == str(ip_id or ""):
+            return ip
+    return {}
 
 
 def list_soc_runs(base: str | Path = ".") -> List[Dict[str, Any]]:

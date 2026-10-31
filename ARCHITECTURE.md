@@ -2,7 +2,7 @@
 
 > 基线：2026-10-31
 >
-> 全量单测：**1204 passed / 2 skipped**；工作台 **721 passed**
+> 全量单测：**1206 passed / 2 skipped**；工作台 **721 passed**
 >
 > UVM 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 >
@@ -102,9 +102,11 @@ CPU/NICE 命令 → DMA → Banked SRAM → INT8 GEMM → IRQ → golden 比较
 - 常用命令：`soc report <run>`（摘要）、`soc evidence <run>`（24 个文件逐哈希校验）、
   `soc wave <run>`（qwave.db → Visualizer）；`run` 的回归 exit code 仍是
   **唯一 PASS/FAIL 判据**；
-- **Workbench 业务线**：`soc.overview / soc.architecture / soc.verification /
-  soc.signoff` 四页，复用 `soc.*` 只读工具；运行按钮显式调 `soc.run`，
-  不复制回归/波形/证据页面；
+- **团队业务线**：`spec/ip_manifest.yaml` 把 IP 的 team/owner/version/status
+  与 RTL 列成契约；
+  - **SoC 团队**：`soc.overview / soc.architecture / soc.verification / soc.signoff`；
+  - **IP 团队**：`ip.catalog / ip.workspace / ip.signoff`；
+  - 两套页面共用工程事实与 `soc.*` / `ip.*` 只读工具，不复制回归/波形/证据页面；
 - **运行历史**：`RunRepository.discover_runs()` 在没有
   `docs/manifest.json` 时读 `soc/soc_run.json`，把 SoC run 以
   `kind=soc`、`state=completed/failed` 列入 `flow.runs`（不再要求 UVM run）；
@@ -976,8 +978,8 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 [`src/workbench/ARCHITECTURE.md`](src/workbench/ARCHITECTURE.md)）：
 
 - `app.py` / `bootstrap.py` / `bus.py`
-- `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`、`service`（三个工程服务入口）、`soc`（SoC 参考工程：总览 / 架构 / 验证工作区 / 签核）
-- **工程服务入口**：`project.overview` / `project.management` + `soc.*`（SoC 参考工程）+ `service.uvm` / `service.regression` / `service.coverage` 都是普通 `ModuleBase` 模块，只做导航/编排（打开已有模块、调 `pipeline.start` / `soc.run`、生成 core 计划），不另造引擎；导航分域为「项目 → 客户工程（SoC / 工程服务）→ 设计时 → 工程工作区 → 运行时 → 平台配置」
+- `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`、`service`（三个工程服务入口）、`soc`（SoC 团队：总览 / 架构 / 验证 / 签核）、`ip`（IP 团队：目录 / 工作区 / 发布检查）
+- **工程服务入口**：`project.overview` / `project.management` + `soc.*`（SoC 团队）+ `ip.*`（IP 团队）+ `service.uvm` / `service.regression` / `service.coverage` 都是普通 `ModuleBase` 模块，只做导航/编排（打开已有模块、调 `pipeline.start` / `soc.run`、生成 core 计划），不另造引擎；导航分域为「项目 → 客户工程（SoC 团队 / IP 团队 / 工程服务）→ 设计时 → 工程工作区 → 运行时 → 平台配置」
 - 签核页同时展示：门禁、六层证据链、**证据包 v2**（哈希 / caveat / 计划与单测覆盖率 / 种子多样性 / **粗连续奖励 + 权重** / **运行时知识图规模** / 参考模型与基线 / 审批 / Freeze / **recipe v2 与 Tier B EDA 依赖** / 回放命令）
 - 签核页工具栏新增 **「校验证据包」**：调 `evidence.check_package`（纯读），展示完整性、Tier A 重算、recipe 校验结果
 - 决策轨迹页新增 **「来源」**（硬规则 / 规则 / RL 采纳 / RL 被退回 / 终态）与 **「奖励」**（每轮 `sim_reward.total` + 最弱层）两列
@@ -1020,7 +1022,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1204 passed / 2 skipped
+python -m pytest tests/ -q                            # 1206 passed / 2 skipped
 python -m pytest tests/core -q                        # Architecture 2.0 核心（83 条）
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
@@ -1065,7 +1067,7 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 | `test_verified_by_propagation.py` | EDA/LLM 汇总规则；混合必须是 `mixed`，不能冒充 EDA |
 | `test_code_coverage_plan.py` | DUT 代码覆盖率合并排除 loopback、merge spec 正确 |
 | `test_scheduler_build_failure.py` | build 失败时 test 不执行，防止旧 work library 假结果 |
-| `test_soc_adapter.py` | SoC 工程校验；RunContext/Artifact/Event/证据包；波形定位 |
+| `test_soc_adapter.py` | SoC 工程校验；RunContext/Artifact/Event/证据包；IP 清单；波形定位 |
 | `test_soc_run_repository.py` | 无 manifest 的 SoC run 仍进入运行历史；detail 可读 |
 | `tests/core/test_core_is_stdlib_only.py` | `src/core` 不反向依赖 layers/langgraph/pydantic |
 | `tests/core/test_provenance_attribution.py` | weak/exact 血缘规则；MISS/UNMAPPED 不建命中边；确定性重建 |
@@ -1194,7 +1196,9 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 │  │  ├─ common/                lib（哈希 / LLM / filelist / doc intake）
 │  │  └─ boards.py              板块单一真相
 │  └─ workbench/                PySide6 桌面工作台（可选）
+│     └─ modules/{soc,ip}/      SoC 团队 / IP 团队业务线
 ├─ examples/open_npu_soc/       SoC 参考工程（RTL / TB / golden / regression）
+│  └─ spec/ip_manifest.yaml     IP 团队 / owner / version / release 契约
 ├─ tests/                       主测试套件
 ├─ output_<run>/                一次运行的产物
 └─ ARCHITECTURE.md              本文

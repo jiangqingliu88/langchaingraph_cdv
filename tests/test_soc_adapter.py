@@ -62,3 +62,24 @@ def test_soc_run_records_context_artifacts_events_and_evidence(tmp_path: Path):
                           .read_text(encoding="utf-8"))
     sections = {f["section"] for f in manifest["files"]}
     assert sections == {"inputs", "execution"}
+
+
+def test_ip_manifest_lists_teams_and_rtl_presence():
+    from src.cli.soc_adapter import list_ips
+
+    ips = list_ips(ROOT)
+    assert len(ips) >= 4
+    by_id = {ip["id"]: ip for ip in ips}
+    assert "IP-NPU-GEMM" in by_id
+    assert by_id["IP-NPU-GEMM"]["team"] == "NPU IP"
+    assert by_id["IP-NPU-GEMM"]["rtl_present"]
+    assert not by_id["IP-NPU-GEMM"]["rtl_missing"]
+
+
+def test_ip_info_returns_one_ip():
+    from src.cli.soc_adapter import ip_info
+
+    ip = ip_info(ROOT, "IP-DMA")
+    assert ip["name"].startswith("Simple DMA")
+    assert ip["status"] in ("released", "in_progress")
+    assert ip_info(ROOT, "NOPE") == {}
