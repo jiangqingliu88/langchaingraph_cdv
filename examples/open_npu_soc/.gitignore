@@ -2,6 +2,7 @@
 sim_vsim.log
 sim_time.log
 wave.log
+work/
 *.vcd
 *.wlf
 __pycache__/

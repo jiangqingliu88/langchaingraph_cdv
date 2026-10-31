@@ -84,12 +84,34 @@ python -m src.cli.commands soc run examples/open_npu_soc \
 `SOC_ROOT` 会由 CLI 设置为工程目录；回归 YAML 的 build/test 命令都通过它定位
 `filelist.f` / `vectors/`。需要 `vlog`/`vsim` 在 PATH（v0.1 用 Questa）。
 
+`run` 会额外产出（复用 `src/core`，不另造引擎）：
+
+```text
+<run>/docs/run_context.json      # RunContext 身份
+<run>/docs/events.jsonl          # EventStore 执行事实
+<run>/artifacts/artifacts.json   # ArtifactStore（RTL/golden/日志/波形/报告）
+<run>/soc/soc_run.json           # SoC run 摘要（状态/波形/回归）
+<run>/signoff_evidence/          # SoC 证据包（24 个文件，package_hash）
+```
+
+常用命令：
+
+```bash
+python -m src.cli.commands soc report   <run>   # 摘要
+python -m src.cli.commands soc evidence <run>   # 逐文件哈希校验
+python -m src.cli.commands soc wave     <run>   # 用 Visualizer 打开 qwave.db
+```
+
+波形里可以直接看 `start → dma_load → gemm_start → gemm_done → dma_store →
+irq/done` 这条 NICE 命令序列，以及 SRAM/GEMM 的数据变化。
+
 也可以直接跑：
 
 ```bash
 cd examples/open_npu_soc
 vlog -sv -f filelist.f
-vsim -c work.tb_soc_top -do "run -all; quit" -l sim_vsim.log
+vsim -c work.tb_soc_top -do "log -r /*; run -all; quit" -l sim_vsim.log \
+     -qwavedb=+signal+class+wavefile=waves/gemm_8x8.db
 grep mismatched=0 sim_vsim.log
 ```
 

@@ -15,9 +15,9 @@ tests:
     file_pattern: ["rtl/"]
     hooks:
       pre_sim: 'cd ${SOC_ROOT} && python golden/gemm_golden.py --out vectors'
-    run_cmd: >
-      cd ${SOC_ROOT} &&
-      vsim -c work.tb_soc_top -do "run -all; quit" -l sim_vsim.log &&
-      [ -s sim_vsim.log ] &&
-      grep -q "mismatched=0" sim_vsim.log &&
-      grep -q "PASS" sim_vsim.log
+    # **用子 shell 切到 SOC_ROOT**：`cd` 不能污染 sim.sh 的 cwd，否则
+    # `-l sim_vsim.log` 和框架的 `wave.log` 会落到工程根而不是用例目录，
+    # 报告里 `wave_path` 永远是 None。
+    # **必须一行**：run_cmd 会原样写进 sim.sh，YAML 折行会变成多条命令。
+    run_cmd: >-
+      (cd ${SOC_ROOT} && vsim -c work.tb_soc_top -do "log -r /*; run -all; quit" -l ${EMAN_RUN_DIR}/sim_vsim.log -qwavedb=+signal+class+wavefile=${EMAN_RUN_DIR}/waves/gemm_8x8.db && [ -s ${EMAN_RUN_DIR}/sim_vsim.log ] && grep -q "mismatched=0" ${EMAN_RUN_DIR}/sim_vsim.log && grep -q "PASS" ${EMAN_RUN_DIR}/sim_vsim.log)
