@@ -264,3 +264,21 @@ class TestDvsimRemoval:
                         f"{py_file} imports dvsim"
                     assert "from dvsim" not in code, \
                         f"{py_file} imports from dvsim"
+
+
+# ── 9. 三类工程服务工作流（同一条 CLI/执行链路）────────────
+
+class TestEngineeringServiceCommands:
+    def test_workflow_commands_are_registered(self, runner):
+        from src.cli.commands import cli
+        for cmd in ["optimize-regression", "coverage-closure",
+                    "metrics", "incremental"]:
+            result = runner.invoke(cli, [cmd, "--help"])
+            assert result.exit_code == 0, f"{cmd} --help failed: {result.output}"
+
+    def test_verify_accepts_config_and_rtl(self, runner):
+        from src.cli.commands import cli
+        result = runner.invoke(cli, ["verify", "--help"])
+        assert result.exit_code == 0
+        assert "--config" in result.output
+        assert "--rtl" in result.output

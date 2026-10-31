@@ -47,6 +47,22 @@ def init(json_output, quiet, verbose, output_dir):
 # vagent verify — 覆盖率驱动闭环
 # ═══════════════════════════════════════════════════════════════
 
+def _warn_spec_and_rtl(spec_file, rtl_dir) -> None:
+    if spec_file and rtl_dir:
+        console.print("[yellow]spec + --rtl 同时给出：RTL 作为 DUT，spec 作为分析/"
+                      "参考模型输入，跳过 design。[/yellow]")
+
+
+def _copy_casemodel(casemodel, output_root) -> None:
+    """`--config`：把用户 case 模型放到 run 的固定落点（inputs/casemodel.yaml）。"""
+    if not casemodel:
+        return
+    from src.layers.l1_infrastructure.layout import casemodel_path
+    dest = casemodel_path(output_root)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(Path(casemodel).read_text(encoding="utf-8"), encoding="utf-8")
+
+
 def _run_with_incremental(runner, incremental_from):
     """跑流水线；`--incremental-from` 通过环境变量传给 ops，跑完恢复原值。
 
@@ -97,15 +113,18 @@ def _run_with_incremental(runner, incremental_from):
                    "如约束未激活 / ucdb 零命中）时以非零码退出。CI 用 —— 人看报告时"
                    "那几行是提示，上了流水线就得当失败")
 @click.option("--rtl", "rtl_dir", type=click.Path(exists=True),
-              help="外部 RTL 目录（验开源 IP 用）：拿这份现成 RTL 当 DUT，"
-                   "**自动跳过 design/model**，不再由 design agent 生成")
+              help="外部 RTL 目录：拿现成 RTL 当 DUT；给了它自动跳过 design，"
+                   "spec 仍作为分析/建模输入（可同时给 --rtl 和 spec）")
+@click.option("--config", "casemodel", type=click.Path(exists=True, dir_okay=False),
+              default=None, help="case 模型 YAML（复制到 run 的 inputs/casemodel.yaml；"
+                                 "优先于 specs/<module>/casemodel.yaml）")
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 @click.option("--summary", is_flag=True, help="仅输出最终摘要")
 @click.option("--quiet", "-q", is_flag=True, help="只打印错误")
 def verify(spec_file, output, design_style, target, max_rounds,
            approval, full_regression, incremental_from, verify_only, sim_modes,
            json_output, summary, quiet, manual_gate, checkpoint,
-           strict_semantic, rtl_dir):
+           strict_semantic, rtl_dir, casemodel):
     # **spec 与 --rtl 二选一、互斥**：
     #   给 spec  → 走原来的路（design agent 生成 RTL）
     #   给 --rtl  → RTL 是唯一输入，**规格从 DUT 分析出来**（不指向 spec）
@@ -123,10 +142,7 @@ def verify(spec_file, output, design_style, target, max_rounds,
             raise click.UsageError(
                 f"没给 spec，默认的 {_default} 也不存在（工作目录下找不到）。"
                 "请显式给 spec，或用 --rtl 给 RTL")
-    if bool(spec_file) == bool(rtl_dir):
-        raise click.UsageError(
-            "spec 与 --rtl 二选一：给了 --rtl 就不用 spec "
-            "（规格会从 DUT 分析生成）；没给 --rtl 就必须给 spec")
+    _warn_spec_and_rtl(spec_file, rtl_dir)
     """AI 驱动的芯片验证闭环（覆盖率驱动：case 回归 → coverage → 决策迭代）
 
     
@@ -140,6 +156,8 @@ def verify(spec_file, output, design_style, target, max_rounds,
     from src.layers.l1_infrastructure.output_config import make_output_root
     output_root = make_output_root(output)
     approval_gate = create_approval_gate(approval)
+
+    _copy_casemodel(casemodel, output_root)
 
     # 回归模式开关：--full-regression → 全量跑所有 case（覆盖默认增量）
     if full_regression:

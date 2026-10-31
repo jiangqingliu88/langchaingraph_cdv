@@ -2,11 +2,11 @@
 
 > 基线：2026-10-31
 >
-> 全量单测：**1167 passed / 5 skipped**；工作台 **717 passed**
+> 全量单测：**1177 passed / 5 skipped**；工作台 **717 passed**
 >
 > 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 >
-> **Architecture 2.0 基线**：`src/core/` 运行事实面（RunContext / ArtifactStore / EventStore / Provenance DAG / Job Runtime / Decision Evaluation / Verification Quality Gate）已落地；**Verification Intelligence 第一层**（归因完整率、四个工程指标、增量计划、Run Diff、LocalStrategy→JobSupervisor）已接入。新增单测 `tests/core/` 75 条 + UVM IR 5 条 + Job Runtime 集成 4 条 + 合成 run 集成 1 条。
+> **Architecture 2.0 基线**：`src/core/` 运行事实面（RunContext / ArtifactStore / EventStore / Provenance DAG / Job Runtime / Decision Evaluation / Verification Quality Gate）已落地；**Verification Intelligence 第一层**（归因完整率、四个工程指标、增量计划、Run Diff、LocalStrategy→JobSupervisor）已接入。新增单测 `tests/core/` 83 条 + UVM IR 5 条 + Job Runtime 集成 4 条 + 合成 run 集成 1 条。
 
 本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
 
@@ -48,6 +48,33 @@ SignOffAI 是一个**个人级 CLI 验证平台**：
 
 另外两项横向能力：**Job Runtime**（`src/core/jobs/`，EDA 进程生命周期/进程树回收/命令白名单）与
 **Verification Quality Gate + Decision Evaluation**（`src/core/verification/`、`src/core/decision/`）。
+
+### 1.1 三类工程服务 = CLI 工作流，不是三套独立软件
+
+客户看到的三种使用场景，共用**同一个正式入口**与**同一条执行链路**：
+
+```text
+python -m src.cli.commands
+        │
+        ├─ verify                  UVM 自动化验证
+        ├─ optimize-regression     回归效率优化
+        ├─ coverage-closure        Coverage Closure
+        └─ metrics / incremental / diff runs   工程指标与增量/对比
+```
+
+| 场景 | CLI 入口 | 复用链路 | 产物 |
+|---|---|---|---|
+| UVM 自动化验证 | `vagent verify --spec spec.md --rtl ./rtl --config casemodel.yaml` | LangGraph → front/design/model/verify/ops/coverage → EDA → evidence | run 目录 + 证据包 |
+| 回归效率优化 | `vagent optimize-regression --project ./project --history ./runs --policy signoff_policy.yaml [--execute]` | 历史分析（core）→ `InfrastructureManager.run_regression`（已有执行器）→ `compare_reports` | `optimize/plan.json`、`optimize/result.json` |
+| Coverage Closure | `vagent coverage-closure --coverage ./output_x/coverage --target 98 [--execute]` | 缺口分析（core）→ `PipelineExecutionService` 现有闭环 → `run_diff` | `closure/plan.json`、`closure/result.json` |
+
+**架构原则**：CLI 只接任务/参数；编排归 LangGraph；分析决策归 Agent / `src/core`；
+确定性执行归 Executor / `InfrastructureManager`；EDA 归 Job Runtime；所有结果落
+Evidence。**不为三类服务各写一套引擎**；`optimize-regression` / `coverage-closure`
+只是对同一套基础设施的工作流编排。
+
+`verify` 同时给 spec 与 `--rtl` 时：RTL 当 DUT、spec 当分析/参考模型输入、
+跳过 design；`--config` 把 case 模型复制到 run 的 `inputs/casemodel.yaml`。
 
 ---
 
@@ -938,14 +965,15 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 | 新依赖映射 | `coverage/test_dependencies.json`（test → RTL files）或 regression.yaml 的 `file_pattern` | 增量引擎 |
 | 新工程指标 | `src/core/metrics/engineering.py` 的 `_collect()` + 一个字段 | CLI / 证据包 |
 | 新 Run Diff 字段 | `src/core/incremental/run_diff.py` 的 `compare_runs()` | 已落盘指标 |
+| 新工程服务 | `src/cli/cmd_services.py` 加命令 + 复用 `InfrastructureManager` / `PipelineExecutionService` | 已有 Agent/Executor/Core |
 
 ---
 
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1167 passed / 5 skipped
-python -m pytest tests/core -q                        # Architecture 2.0 核心（75 条）
+python -m pytest tests/ -q                            # 1177 passed / 5 skipped
+python -m pytest tests/core -q                        # Architecture 2.0 核心（83 条）
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
 python -m pytest src/workbench/tests -q               # 717 passed
@@ -997,6 +1025,8 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 | `tests/test_arch_v2_integration.py` | 合成 run：血缘/质量/决策/证据包一次跑通 |
 | `tests/core/test_incremental.py` | RTL 内容 diff、依赖映射、保守全量、节省估算、run diff |
 | `tests/core/test_engineering_metrics.py` | 四指标、缺数据为 null、基线下降比例 |
+| `tests/core/test_optimize.py` | 历史状态/种子分析、flaky/failing、低边际只在精确归因时跳过、前后对比 |
+| `tests/core/test_closure.py` | 缺口/目标差距、动作分类、UNMAPPED 审计、无数据显式说明 |
 | `tests/test_job_runtime_integration.py` | LocalStrategy→JobSupervisor、关闭开关回退、executor 产物进 ArtifactStore |
 
 ---
@@ -1031,6 +1061,12 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
   没有映射时保守跑全量，不会假装省了时间。
 - **增量编译尚未实现**：RTL diff 只决定"跑哪些用例"；编译仍由回归框架的
   共享 work library 处理，不是本层的选择性编译。
+- **回归优化未做种子级调度**：`optimize-regression` 给出执行顺序与
+  "精确归因下可跳过"的低边际用例；按 seed 重排/裁剪不在本层（会改生成的
+  regression.yaml，风险更高）。
+- **三类工程服务不是独立引擎**：`optimize-regression` / `coverage-closure`
+  只是 CLI 工作流；执行复用现有 `InfrastructureManager` 与
+  `PipelineExecutionService`，不维护第二套仿真/收敛引擎。
 - **边界表同源**：`config/known_limitations.py` 是 §15 的代码真相；
   `test_architecture_invariants.py` 校验文档包含每条，player runtime 落地时
   必须同步改 `status` 与文档。
@@ -1110,14 +1146,15 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 Coverage 归因完整率、Decision Evaluation、Verification Quality Gate、
 Job Runtime + 命令白名单、`LocalStrategy` 接入 JobSupervisor、
 UVM IR 契约与校验、增量计划（RTL diff → 依赖 → 受影响用例）、
-Run Diff、四个工程指标、证据包接入。
+Run Diff、四个工程指标、证据包接入、三类 CLI 工程服务工作流
+（verify / optimize-regression / coverage-closure）。
 
 **下一阶段（Architecture 2.0 → Verification Intelligence）**：
 
 | 阶段 | 目标 | 状态 |
 |---|---|---|
 | P1 收口 | `gen_uvm.py` 按 parsing → UVM IR → render → generators 迁移 | **进行中**：IR/校验已落地，主体仍在原文件 |
-| P2 增量验证 | 依赖映射自动生成；增量**编译**；把计划应用到回归（已完成可选 `--incremental-from`） | **部分**：计划/选择/估算已通，自动依赖与增量编译未做 |
+| P2 增量验证 | 依赖映射自动生成；增量**编译**；按 seed 级优化调度 | **部分**：计划/选择/估算/`--incremental-from`/`optimize-regression` 已通，自动依赖、增量编译、种子级调度未做 |
 | P3 智能选择 | 基于历史 TP/bin/seed 选择高价值测试；Unreachable TP Analyzer | **地基**：归因链与完整率已通 |
 | P4 多后端 | VCS / Verilator 适配；跨 run 血缘/事件索引；run 自动清理 | 未开始 |
 | P5 治理升级 | 质量门从"只报告"升级为可配置硬门禁（需新增 caveat code 并同步 `EXPECTED_CAVEATS`） | 未开始 |

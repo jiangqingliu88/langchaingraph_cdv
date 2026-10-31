@@ -37,6 +37,8 @@ KNOWN_LIMITATIONS: Tuple[Dict[str, str], ...] = (
      "text": "增量回归依赖映射尚未自动生成"},
     {"id": "incremental_compile", "status": "open",
      "text": "增量编译尚未实现"},
+    {"id": "optimize_seed_level", "status": "open",
+     "text": "回归优化未做种子级调度"},
     {"id": "optional_auth_api", "status": "by_design",
      "text": "auth.py 是可选 API 面"},
 )
