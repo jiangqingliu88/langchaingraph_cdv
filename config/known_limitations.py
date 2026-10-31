@@ -29,6 +29,10 @@ KNOWN_LIMITATIONS: Tuple[Dict[str, str], ...] = (
      "text": "player 激励后端只有 plan，没有 runtime"},
     {"id": "provenance_sandbox_lifecycle", "status": "open",
      "text": "产物级 provenance DAG"},
+    {"id": "cmd_allowlist_monitor", "status": "by_design",
+     "text": "命令白名单默认 monitor"},
+    {"id": "uvm_ir_migration", "status": "open",
+     "text": "UVM 生成器尚未迁到统一 IR"},
     {"id": "optional_auth_api", "status": "by_design",
      "text": "auth.py 是可选 API 面"},
 )

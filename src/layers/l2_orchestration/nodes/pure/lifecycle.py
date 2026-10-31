@@ -21,6 +21,46 @@ from src.layers.l2_orchestration.state import PipelineState
 logger = structlog.get_logger()
 
 
+def _ensure_architecture_v2(output_root: Path, rt, target: float) -> Dict[str, Any]:
+    """收尾时确保血缘/质量门存在，并把 Spool 事件灌进 run 的事实日志。
+
+    audit 通常已经写过这两份文件；这里再做一次是**幂等的**，覆盖两种异常路径：
+    audit 提前失败、或老 run 目录在 --resume 后缺文件。任何失败只 warning ——
+    证据增量不能拦住 finalize。
+    """
+    try:
+        from src.core.provenance.graph import write_provenance
+        from src.core.verification.quality import write as write_quality
+        from src.core.runtime.events import flush_spool
+
+        store = getattr(rt, "event_store", None)
+        if store is not None:
+            flush_spool(store)
+        prov = write_provenance(output_root, event_store=store)
+        quality = write_quality(
+            output_root, target=(target if target and target > 0 else None),
+            run_id=output_root.name, event_store=store)
+        return {
+            "schema": "architecture_v2_v1",
+            "provenance": {
+                "path": Path(prov["path"]).relative_to(output_root).as_posix(),
+                "sha256": prov["jsonl_sha256"],
+                "nodes": prov["summary"]["nodes"],
+                "edges": prov["summary"]["edges"],
+                "by_confidence": prov["summary"]["by_confidence"],
+            },
+            "verification_quality": {
+                "path": Path(quality["path"]).relative_to(output_root).as_posix(),
+                "overall": quality["overall"],
+                "dimensions": {k: v["status"]
+                               for k, v in quality["dimensions"].items()},
+            },
+        }
+    except Exception as e:                             # noqa: BLE001
+        logger.warning(f"Architecture 2.0 证据收尾失败（不影响 finalize）: {e}")
+        return {}
+
+
 async def n_init(state: PipelineState, config) -> Dict[str, Any]:
     """重建所有运行期对象 —— 直接跑时的入口（重入时走 `hydrate_runtime`）。"""
     rt = _rt(config)
@@ -114,6 +154,9 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
     manifest_path = ""
     rtl_version = {}
 
+    # ── Architecture 2.0：血缘 + 五维质量门（幂等；失败只 warning）──
+    architecture_v2 = _ensure_architecture_v2(output_root, rt, state.target)
+
     # ── Manifest：运行清单 ──
     try:
         docs = output_root / "docs"
@@ -167,7 +210,8 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
             "evidence": {"total_changes": total_changes,
                          "chain_valid": chain_valid,
                          "evidence_path": evidence_path,
-                         "file_change_chain_path": file_chain_path},
+                         "file_change_chain_path": file_chain_path,
+                         "architecture_v2": architecture_v2},
         }
         manifest_path = str(docs / "manifest.json")
         Path(manifest_path).write_text(
@@ -208,7 +252,8 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
                                else "COMPLETED"))),
         "evidence": {"total_changes": total_changes, "chain_valid": chain_valid,
                      "evidence_path": evidence_path, "manifest_path": manifest_path,
-                     "file_change_chain_path": file_chain_path},
+                     "file_change_chain_path": file_chain_path,
+                     "architecture_v2": architecture_v2},
         # 预算实况：token 预算刚接上真实用量，把数字暴露出来，
         # 否则「预算耗尽」拦截时没人知道到底用了多少、该把阈值调到哪。
         "budget": (rt.governor.budget.status() if rt.governor else {}),

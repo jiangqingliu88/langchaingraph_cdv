@@ -61,3 +61,8 @@ class EnvSpec:
     batches: List[Dict[str, Any]] = field(default_factory=list)
     util_components: List[Dict[str, Any]] = field(default_factory=list)
     output_root: Optional[Path] = None
+
+    def to_uvm_ir(self):
+        """映射到统一 UVM IR（不渲染、不写文件；见 `generation/ir/`）。"""
+        from .ir.uvm_ir import build_uvm_ir
+        return build_uvm_ir(self)

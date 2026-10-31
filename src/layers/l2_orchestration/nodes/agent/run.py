@@ -117,6 +117,90 @@ async def n_ops(state: PipelineState, config) -> Dict[str, Any]:
             "compile_error": compile_error, "phases": [phase]}
 
 
+_HIT_STATUSES = {"HIT", "OBSERVED", "BACKDOOR_HIT"}
+
+
+def _matrix_rows(state: PipelineState, data: Any) -> list:
+    """优先用本轮 executor 返回的 tp_matrix；没有再从盘上读。"""
+    matrix = data.get("tp_matrix") if isinstance(data, dict) else {}
+    rows = matrix.get("rows") if isinstance(matrix, dict) else None
+    if rows:
+        return [r for r in rows if isinstance(r, dict)]
+    try:
+        doc = json.loads(
+            (Path(state.output_root) / "coverage" / "tp_matrix.json")
+            .read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [r for r in (doc.get("rows") or []) if isinstance(r, dict)]
+
+
+def _bin_key(row: Dict[str, Any]) -> str:
+    return f"{row.get('coverpoint') or ''}.{row.get('bin') or ''}"
+
+
+def _record_decision_effect(rt, state: PipelineState, data: Any,
+                            final_coverage: float) -> None:
+    """上一轮决策的期望 vs 这一轮的实际 —— 写 `decision/evaluations.jsonl`。
+
+    **不把覆盖率上涨直接算作动作有效**：同时看 TP 命中变化、回归失败数与编译
+    状态；分不清就写 UNCERTAIN。节点重跑由 `append_record` 的 (run, round,
+    action) 幂等兜住。
+    """
+    expected = getattr(rt, "_round_expected", None)
+    action = getattr(rt, "last_action", None)
+    if not expected or not action:
+        return
+    rows = _matrix_rows(state, data)
+    current = {_bin_key(r): str(r.get("status") or "") for r in rows}
+    prev = getattr(rt, "_round_tp_snapshot", None) or {}
+    new_hits = sum(1 for k, v in current.items()
+                   if v in _HIT_STATUSES and prev.get(k) not in _HIT_STATUSES)
+    lost_hits = sum(1 for k, v in prev.items()
+                    if v in _HIT_STATUSES and current.get(k) not in _HIT_STATUSES)
+    reg = state.regression if isinstance(state.regression, dict) else {}
+    compile_ok = not bool(state.compile_error)
+    actual = {
+        "prev_coverage": getattr(rt, "_round_prev_coverage", rt.prev_coverage),
+        "coverage": final_coverage,
+        "new_hits": new_hits,
+        "lost_hits": lost_hits,
+        "tests_failed": reg.get("failed"),
+        "tests_failed_prev": getattr(rt, "_round_prev_failed", None),
+        "compile_ok": compile_ok,
+        "compile_ok_prev": getattr(rt, "_round_prev_compile_ok", None),
+        "tp_matrix_available": bool(rows),
+        "evidence": ["coverage/tp_matrix.json", "regression_stages.json"],
+    }
+    from src.core.decision.eval import append_record, evaluate_round
+
+    record = evaluate_round(
+        run_id=state.run_id,
+        round_num=int(expected.get("round") or state.round_num),
+        action=action, expected=expected, actual=actual)
+    append_record(state.output_root, record)
+    if getattr(rt, "event_store", None) is not None:
+        rt.event_store.append(
+            "decision.evaluated", round=record["round"], stage="coverage",
+            status=record["status"], source="node:coverage",
+            payload={"action": record["action"]["action_type"],
+                     "status": record["status"], "reason": record["reason"],
+                     "delta": record["actual"]["delta"],
+                     "new_hits": new_hits, "lost_hits": lost_hits},
+            dedup_key=f"decision.evaluated:{state.run_id}:{record['round']}:"
+                      f"{record['action']['action_type']}")
+    rt._round_expected = None
+    rt._round_tp_snapshot = {}
+
+
+def _safe_record_decision_effect(rt, state: PipelineState, data: Any,
+                                 final_coverage: float) -> None:
+    try:
+        _record_decision_effect(rt, state, data, final_coverage)
+    except Exception as e:                                 # noqa: BLE001
+        logger.warning(f"决策成效评估失败（忽略）: {e}")
+
+
 async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
     """coverage 阶段 —— 原循环里最大的一块（含 Exclude 调规 / 用例配比 / 归因校准）。"""
     rt = _rt(config)
@@ -205,6 +289,8 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
                                      tokens=_token_delta(rt))
         except Exception as e:
             logger.warning(f"归因校准记录失败: {e}")
+    # Architecture 2.0：期望 vs 实际（旁路，失败不影响闭环）
+    _safe_record_decision_effect(rt, state, data, final_coverage)
     rt.prev_coverage = final_coverage
 
     # ── 粗连续奖励：把“过/不过”拆成“往好的方向走了多少” ──

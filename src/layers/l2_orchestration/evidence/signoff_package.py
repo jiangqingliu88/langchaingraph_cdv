@@ -84,6 +84,11 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "coverage/round_manifest.json",
         "docs/tool_receipts.jsonl",
         "docs/llm_audit.jsonl",
+        # Architecture 2.0：事实日志 / 产物血缘 / 决策成效
+        "docs/events.jsonl",
+        "docs/provenance.jsonl",
+        "docs/provenance_summary.json",
+        "decision/evaluations.jsonl",
     ),
     "verdict": (
         # `report.json` 在证据包之后才写（它要带 package_hash），所以不进包；
@@ -91,6 +96,8 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "signoff_evidence.json",
         "docs/file_change_chain.json",
         "caveats.json",
+        # 五维质量门：报告用，不阻断（见 src/core/verification/quality.py）
+        "docs/verification_quality.json",
     ),
 }
 

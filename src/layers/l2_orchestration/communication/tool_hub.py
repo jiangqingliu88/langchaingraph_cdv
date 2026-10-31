@@ -310,8 +310,29 @@ class ToolHub:
         if business_issues:
             logger.warning(f"Tool '{name}' business validation: {business_issues}")
 
+        # 命令白名单（默认 monitor：只记录，不拦）。真正的 EDA 进程由
+        # `src/core/jobs/supervisor.py` 管；这里先把"工具参数里夹了命令"的调用记下来。
+        cmd_decision = ""
+        try:
+            from src.core.jobs.allowlist import scan_tool_args
+            cmd_ok, cmd_reason = scan_tool_args(name, args)
+            if not cmd_ok:
+                record = ToolCallRecord(
+                    tool_name=name, tool_version=manifest.version,
+                    args_summary=str(args)[:200], success=False,
+                    error=f"Command policy: {cmd_reason}",
+                    timestamp=datetime.now().isoformat(), run_id=ctx.run_id,
+                    manifest_hash=manifest.hash, sandbox_decision="cmd_denied",
+                )
+                self._auditor.record(record)
+                return ToolResult.fail(f"Command policy: {cmd_reason}")
+            if cmd_reason:
+                cmd_decision = "cmd_monitor"
+        except Exception:                     # noqa: BLE001 白名单是增强
+            pass
+
         # Sandbox
-        sandbox_decision = "auto"
+        sandbox_decision = cmd_decision or "auto"
         if sandbox:
             try:
                 from src.layers.l2_orchestration.communication.tool_system import Tool as OldTool
@@ -354,6 +375,14 @@ class ToolHub:
                 returncode=getattr(result, "returncode", None),
             )
             self._auditor.record(record)
+            try:
+                from src.core.runtime.events import emit
+                emit("tool.invoked", status="ok", source="toolhub",
+                     payload={"tool": name, "verified_by": record.verified_by,
+                              "evidence_ref": record.evidence_ref,
+                              "sandbox_decision": sandbox_decision})
+            except Exception:                 # noqa: BLE001 事件是观测
+                pass
             return result
 
         except Exception as e:
@@ -366,6 +395,13 @@ class ToolHub:
                 sandbox_decision=sandbox_decision,
             )
             self._auditor.record(record)
+            try:
+                from src.core.runtime.events import emit
+                emit("tool.invoked", status="failed", source="toolhub",
+                     payload={"tool": name, "error": str(e)[:200],
+                              "sandbox_decision": sandbox_decision})
+            except Exception:                 # noqa: BLE001
+                pass
             return ToolResult.fail(str(e)[:500], execution_time_s=round(elapsed, 3))
 
     # ═══════════════════════════════════════════════════════════

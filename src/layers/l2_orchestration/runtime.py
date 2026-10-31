@@ -71,6 +71,23 @@ class Runtime:
         # 跨 run 成长：L5 蒸馏出的动作权重（init 节点载入）
         self.distilled_weights: Dict[str, float] = {}
 
+        # ── Architecture 2.0 运行事实面（不可序列化，故不进状态）──
+        #: 这次 run 的身份/执行环境（`src/core/runtime/run_context.py`）。
+        self.ctx = None
+        #: 执行事实日志（`docs/events.jsonl`）。
+        self.event_store = None
+        #: 产物索引（`artifacts/artifacts.json` + CAS）。
+        self.artifacts = None
+        #: EDA 进程生命周期（命令白名单 / 超时 / 进程树回收）。
+        self.jobs = None
+        #: 本轮决策的期望效果与基线快照（`n_record_decision` 写、
+        #: `n_coverage` 读，用于 decision_eval_v1）。
+        self._round_expected: Optional[Dict[str, Any]] = None
+        self._round_prev_coverage: Optional[float] = None
+        self._round_prev_failed: Optional[int] = None
+        self._round_prev_compile_ok: Optional[bool] = None
+        self._round_tp_snapshot: Dict[str, str] = {}
+
         #: 人工节点声明（`config/ide/manual_nodes.yaml` → 节点 dict 列表）。
         #:
         #: 放在这里而不是 `hydrate_runtime`：它是**可序列化的纯数据**（不是活句柄），
@@ -328,6 +345,43 @@ def _quality_check(rt, role: str, data: dict, state) -> tuple:
 # 节点
 # ═══════════════════════════════════════════════════════════════
 
+def init_run_core(rt: "Runtime", output_root, run_id: str = "") -> bool:
+    """建 RunContext / EventStore / ArtifactStore / JobSupervisor。
+
+    入口在 `run_closed_loop` / `_stream_run`（那里才知道最终 output_root 与
+    run_id），断点重入时由 `hydrate_runtime` 兜底。**失败只 warning**：这些是
+    证据/观测设施，缺了不该让整条流水线起不来；缺失会在 quality gate 的
+    evidence 维度被看见。
+    """
+    try:
+        from src.core.runtime import (
+            ArtifactStore, EventStore, open_run_context, set_active_store,
+        )
+        from src.core.jobs import JobSupervisor
+
+        desired_run_id = run_id or Path(output_root).name
+        if (rt.ctx is not None
+                and rt.ctx.output_root == Path(output_root)
+                and rt.ctx.run_id == desired_run_id):
+            if rt.event_store is not None:
+                set_active_store(rt.event_store)
+            return True
+        ctx = open_run_context(output_root, run_id=run_id or None)
+        ctx.paths.ensure()
+        rt.ctx = ctx
+        rt.event_store = EventStore(ctx.output_root, run_id=ctx.run_id)
+        set_active_store(rt.event_store)
+        rt.artifacts = ArtifactStore(ctx.output_root, run_id=ctx.run_id,
+                                     event_store=rt.event_store)
+        rt.jobs = JobSupervisor(run_dir=ctx.output_root, run_id=ctx.run_id,
+                                event_store=rt.event_store,
+                                artifact_store=rt.artifacts)
+        return True
+    except Exception as e:                                 # noqa: BLE001
+        logger.warning(f"运行事实面初始化失败（证据链会缺事件/产物索引）: {e}")
+        return False
+
+
 def hydrate_runtime(rt: "Runtime", state: PipelineState) -> None:
     """按状态把 Runtime 里那些**不可序列化**的对象造出来。
 
@@ -423,6 +477,10 @@ def hydrate_runtime(rt: "Runtime", state: PipelineState) -> None:
         rt.file_audit = FileAuditTrail(str(state.output_root))
     except Exception:
         rt.file_audit = None
+
+    # Architecture 2.0：入口通常已经建过；重入路径（n_init 不再执行）靠这里兜底。
+    if rt.ctx is None or rt.event_store is None or rt.artifacts is None:
+        init_run_core(rt, state.output_root, state.run_id)
 
 
 def recursion_limit(max_rounds: int) -> int:

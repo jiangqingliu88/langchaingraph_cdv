@@ -87,6 +87,41 @@ def _read_json_file(path: Path) -> Dict[str, Any]:
         return {}
 
 
+def _build_architecture_v2(output_dir: Path, target: float) -> Dict[str, Any]:
+    """产物血缘 + 五维质量门 —— 在签核包**之前**落盘，才能被一起收进包。
+
+    只报告、不阻断：不新增 caveat code，不改 `hard_ok`。缺证据/判不了
+    用 `unknown`，不折算成 pass。
+    """
+    try:
+        from src.core.provenance.graph import write_provenance
+        from src.core.verification.quality import write as write_quality
+
+        prov = write_provenance(output_dir)
+        quality = write_quality(
+            output_dir, target=(target if target and target > 0 else None),
+            run_id=output_dir.name)
+        return {
+            "schema": "architecture_v2_v1",
+            "provenance": {
+                "path": _rel_to_run(prov["path"], output_dir),
+                "sha256": prov["jsonl_sha256"],
+                "summary_path": _rel_to_run(prov["summary_path"], output_dir),
+                "summary": prov["summary"],
+            },
+            "verification_quality": {
+                "path": _rel_to_run(quality["path"], output_dir),
+                "overall": quality["overall"],
+                "dimensions": {k: v["status"]
+                               for k, v in quality["dimensions"].items()},
+                "issues": quality["issues"],
+            },
+        }
+    except Exception as e:                             # noqa: BLE001 证据增量别拦签核
+        logger.warning(f"Architecture 2.0 证据构建失败（签核继续）: {e}")
+        return {}
+
+
 def _rtl_version_hash(output_dir: Path) -> str:
     """RTL 目录内容哈希 —— 与 lineage 同一口径（排序后拼「文件名 + 文件哈希」）。"""
     files = sorted((output_dir / "rtl").glob("*.sv"))
@@ -769,6 +804,10 @@ class AuditExecutor(BaseExecutor):
         # **两个覆盖率都写进去，并标出哪个是本次判定的口径**。只留一个数的话，
         # 读报告的人分不清"32.5%"是代码覆盖率还是功能覆盖率 —— 而这两个数在
         # 同一份 run 里可以差一倍（32.5% vs 64.81%），"差在哪"正是要回答的问题。
+        #
+        # Architecture 2.0：血缘与五维质量门先落盘，再组装签核（否则它们进不了
+        # 下面的 evidence 包）。**只报告、不阻断**。
+        architecture_v2 = _build_architecture_v2(output_dir, _target)
         signoff = {
             "verdict": verdict,
             "module": module,
@@ -800,6 +839,7 @@ class AuditExecutor(BaseExecutor):
             # 测试点维度的签核口径：**可激励 / 已命中 / 只能观测** 三栏分开。
             # 空字典 = 这一轮没有 TP IR（老 run / 没建模），不是"测试点全过"。
             "testpoints": tp_summary,
+            "architecture_v2": architecture_v2,
             "summary": {
                 "total_tests": total, "passed": passed, "failed": failed,
                 "overall_coverage": overall,
@@ -832,6 +872,7 @@ class AuditExecutor(BaseExecutor):
                 caveat_records=caveat_records, policy=policy,
                 model_info=model_info, lineage=lineage_info,
                 versions=versions, hard_ok=hard_ok)
+            evidence["architecture_v2"] = architecture_v2
             ev_path = output_dir / "signoff_evidence.json"
             ev_path.write_text(json.dumps(evidence, indent=2, ensure_ascii=False),
                                encoding="utf-8")
@@ -903,6 +944,7 @@ class AuditExecutor(BaseExecutor):
                     "sim_reward": evidence.get("sim_reward"),
                     "knowledge_graph": evidence.get("knowledge_graph") or {},
                     "tool_receipts": evidence.get("tool_receipts") or {},
+                    "architecture_v2": architecture_v2,
                     "verdict": {
                         "hard_ok": bool(hard_ok),
                         "raw_caveats": caveat_records,

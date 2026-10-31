@@ -109,6 +109,56 @@ async def n_governor_retry(state: PipelineState, config) -> Dict[str, Any]:
     return {}
 
 
+def _tp_snapshot(state: PipelineState) -> tuple:
+    """读上一轮的 tp_matrix → (bin→status 快照, 未命中的 tp_id 列表)。"""
+    try:
+        matrix = json.loads(
+            (Path(state.output_root) / "coverage" / "tp_matrix.json")
+            .read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}, []
+    rows = [r for r in (matrix.get("rows") or []) if isinstance(r, dict)]
+    snapshot = {f"{r.get('coverpoint') or ''}.{r.get('bin') or ''}":
+                str(r.get("status") or "") for r in rows}
+    missed = [str(r.get("tp_id") or "") for r in rows
+              if str(r.get("status") or "") in
+              ("MISS", "UNOBSERVED", "BACKDOOR_MISS", "UNMAPPED")
+              and r.get("tp_id")]
+    return snapshot, missed
+
+
+def _capture_expected_effect(rt, state: PipelineState, action: Action) -> None:
+    """记录动作的期望效果（运行期上下文，不进 checkpoint）。失败只 debug。"""
+    try:
+        from src.layers.l3_decision.decision_engine import verification_plan
+
+        plan = verification_plan(action.action_type)
+        snapshot, missed = _tp_snapshot(state)
+        rt._round_expected = {
+            "round": state.round_num,
+            "plan": plan,
+            "needs_human": bool(plan.get("needs_human")),
+            "must_hit_bins": missed[:50],
+            "action": action.action_type,
+        }
+        rt._round_prev_coverage = rt.prev_coverage
+        _reg = state.regression if isinstance(state.regression, dict) else {}
+        rt._round_prev_failed = _reg.get("failed")
+        rt._round_prev_compile_ok = not bool(state.compile_error)
+        rt._round_tp_snapshot = snapshot
+        if getattr(rt, "event_store", None) is not None:
+            rt.event_store.append(
+                "decision.expected", round=state.round_num, stage="decide",
+                status=action.action_type, source="node:record_decision",
+                payload={"action": action.action_type, "reason": action.reason,
+                         "source": getattr(action, "source", "rule"),
+                         "plan": plan, "must_hit_bins": missed[:50]},
+                dedup_key=f"decision.expected:{state.run_id}:{state.round_num}:"
+                          f"{action.action_type}")
+    except Exception as exc:                           # noqa: BLE001 评估是旁路
+        logger.debug(f"决策期望快照失败（忽略）: {exc}")
+
+
 async def n_record_decision(state: PipelineState, config) -> Dict[str, Any]:
     rt = _rt(config)
     action = state.action()
@@ -135,6 +185,9 @@ async def n_record_decision(state: PipelineState, config) -> Dict[str, Any]:
         "unreachable_dims": _ud,
         "source": getattr(action, "source", "rule") or "rule",
     }
+
+    # Architecture 2.0：把「这个动作期望什么」钉下来，下一轮算实际效果。
+    _capture_expected_effect(rt, state, action)
 
     return {"last_action": action.to_dict(),
             "phases": [{"name": "decision", "status": "decision",

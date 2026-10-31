@@ -142,6 +142,15 @@ class ToolSandbox:
                 if not allowed and not str(p).startswith("/tmp"):
                     return False, f"Path '{val}' not in allowed paths: {self.policy.allowed_paths}"
 
+        # 命令白名单（默认 monitor；`SIGNOFFAI_CMD_ALLOWLIST=enforce` 才拦）
+        try:
+            from src.core.jobs.allowlist import scan_tool_args
+            ok, why = scan_tool_args(manifest.name, args)
+            if not ok:
+                return False, f"Command policy: {why}"
+        except Exception:                     # noqa: BLE001 白名单是增强，不是主流程
+            pass
+
         return True, "ok"
 
     async def execute(self, tool: ITool, args: Dict[str, Any],

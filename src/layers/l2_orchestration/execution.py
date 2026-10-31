@@ -106,6 +106,33 @@ def _result_of(state: Any) -> dict:
     return result or {}
 
 
+def _mirror_event(rt: Any, event: Any) -> None:
+    """把 RunJournal 事件镜像进 EventStore（**唯一的 run/stage 事实写入点**）。
+
+    不在节点里再写一遍 stage.* —— 图里每个节点跑两次重入就会写出重复事实。
+    `_stream_run` 的 `_emit` 是唯一入口，`run_closed_loop` 只发 run.*。
+    """
+    store = getattr(rt, "event_store", None)
+    if store is None:
+        return
+    kind = str(getattr(event, "kind", "") or "")
+    if not kind:
+        return
+    try:
+        store.append(
+            kind,
+            round=int(getattr(event, "round", 0) or 0),
+            stage=str(getattr(event, "stage", "") or ""),
+            agent=str(getattr(event, "agent", "") or ""),
+            status=str(getattr(event, "status", "") or ""),
+            payload=getattr(event, "payload", None) or {},
+            source="journal",
+            dedup_key=f"journal:{getattr(event, 'seq', 0)}",
+        )
+    except Exception as exc:                       # noqa: BLE001 观测不能带崩运行
+        logger.warning(f"事件镜像失败（忽略）: {exc}")
+
+
 def _translate_debug(chunk: Any, started_at: Dict[str, float], journal) -> List[Any]:
     """`stream_mode="debug"` 的一段 → 阶段开始/结束事件。
 
@@ -512,6 +539,18 @@ class PipelineExecutionService:
                 _sim_modes.DEFAULT_MODE],
             manual_gate=bool(manual_gate),
         )
+        # Architecture 2.0：这次 run 的身份 + 事实日志/产物索引/Job 运行时。
+        # 失败只 warning（见 init_run_core）；真缺了会在 quality gate 的 evidence 维度看见。
+        from src.layers.l2_orchestration.runtime import init_run_core
+        init_run_core(rt, initial.output_root, initial.run_id)
+        if rt.event_store is not None:
+            rt.event_store.append(
+                "run.started", status="running", source="execution",
+                payload={"run_id": initial.run_id, "target": initial.target,
+                         "max_rounds": initial.max_rounds,
+                         "output_root": initial.output_root},
+                dedup_key=f"run.started:{initial.run_id}")
+
         config = {
             "configurable": {"rt": rt},
             # LangGraph 数的是 superstep 而非轮次，一轮约 6-10 步
@@ -523,9 +562,21 @@ class PipelineExecutionService:
             # LangGraph 对 pydantic 状态返回模型实例；defensive 地兼容 dict
             result = (final.get("result") if isinstance(final, dict)
                       else getattr(final, "result", None))
+            if rt.event_store is not None:
+                rt.event_store.append(
+                    "run.finished", status="completed", source="execution",
+                    payload={"run_id": initial.run_id,
+                             "converged": (result or {}).get("converged")},
+                    dedup_key=f"run.finished:{initial.run_id}")
             self._close_run(initial.run_id, result or {})
             return result or {}
         except Exception as exc:              # noqa: BLE001
+            if rt.event_store is not None:
+                rt.event_store.append(
+                    "run.failed", status="failed", source="execution",
+                    payload={"run_id": initial.run_id,
+                             "error": f"{type(exc).__name__}: {exc}"[:500]},
+                    dedup_key=f"run.failed:{initial.run_id}")
             self._close_run(initial.run_id, {}, error=exc)
             raise
 
@@ -671,11 +722,19 @@ class PipelineExecutionService:
                 config["configurable"]["thread_id"] = initial.run_id
         config["recursion_limit"] = recursion_limit(int(max_rounds))
 
+        # Architecture 2.0：身份/事实日志在 **resume 之后**建 —— 重入要用检查点
+        # 里的 run_id 与 output_root，而不是本次命令行传进来的。
+        from src.layers.l2_orchestration.runtime import init_run_core
+        init_run_core(rt, initial.output_root, initial.run_id)
+
         journal = RunJournal(output_root, run_id=initial.run_id)
         if not resumed:
             self._register_run(initial.run_id, output_root, spec_text)
 
         def _emit(event) -> None:
+            # 一个事实只写一次：RunJournal 是过程日志，EventStore 是事实日志。
+            # 镜像放在这里，节点里不再重复写 stage.*。
+            _mirror_event(rt, event)
             if on_event is not None:
                 try:
                     on_event(event)

@@ -1,10 +1,12 @@
 # SignOffAI 代码架构（当前实现）
 
-> 基线：2026-10-29
+> 基线：2026-10-31
 >
-> 全量单测：**1099 passed / 2 skipped**；工作台 **717 passed**
+> 全量单测：**1147 passed / 5 skipped**；工作台 **717 passed**
 >
 > 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
+>
+> **Architecture 2.0 基线**：`src/core/` 运行事实面（RunContext / ArtifactStore / EventStore / Provenance DAG / Job Runtime / Decision Evaluation / Verification Quality Gate）已落地；新增单测 `tests/core/` 60 条 + UVM IR 5 条 + 合成 run 集成 1 条。
 
 本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
 
@@ -35,6 +37,18 @@ SignOffAI 是一个**个人级 CLI 验证平台**：
 | 证据可校验 | 文件哈希、manifest、`package_hash`、离线回放 |
 | 不静默降级 | 缺模型/缺模板/缺注入点 → 显式报错或 caveat |
 
+**Architecture 2.0 的四个横向基础能力**（不推翻五层，只补齐底座）：
+
+| 能力 | 解决什么 | 落点 |
+|---|---|---|
+| **RunContext** | 一次 run 的身份/输出根/父 run 只有一处来源；重入不再重新生成 | `src/core/runtime/run_context.py` |
+| **ArtifactStore** | 产物索引与内容寻址分离；SHA256 是内容身份，大文件不复制 | `src/core/runtime/artifacts.py` |
+| **Provenance DAG** | 回答「这个 bin 是哪条 test/seed/哪版 RTL 来的」；缺 per-test 数据只标 weak | `src/core/provenance/` |
+| **EventStore** | 执行事实的单一追加日志；由 RunJournal 镜像，不复制第二套过程日志 | `src/core/runtime/events.py` |
+
+另外两项横向能力：**Job Runtime**（`src/core/jobs/`，EDA 进程生命周期/进程树回收/命令白名单）与
+**Verification Quality Gate + Decision Evaluation**（`src/core/verification/`、`src/core/decision/`）。
+
 ---
 
 ## 2. 总览图
@@ -45,6 +59,10 @@ flowchart TB
     GUI["PySide6 Workbench<br/>src/workbench (可选)"] --> SVC
 
     SVC --> GRAPH["LangGraph 24 节点<br/>l2_orchestration/graph.py"]
+    SVC --> CORE["src/core 运行事实面<br/>RunContext / ArtifactStore / Events<br/>Provenance / Jobs / Quality"]
+    GRAPH --> CORE
+    EXEC --> CORE
+    CORE --> EVID
     GRAPH --> EXEC["8 个 Executor<br/>src/executors/*"]
     EXEC --> TOOLS["ToolHub / ITool<br/>l2_orchestration/communication"]
     TOOLS --> EDA["QuestaSim<br/>vlog / vopt / vsim / vcover"]
@@ -64,6 +82,7 @@ flowchart TB
 
 | 层 | 职责 | 关键模块 | 依赖方向 |
 |---|---|---|---|
+| **core 横切底座** | 运行身份 / 产物索引 / 事件事实 / 血缘 / Job 进程 / 决策评估 / 质量门 | `src/core/`：`runtime/`、`provenance/`、`jobs/`、`decision/`、`verification/` | **只用标准库**，不 import `src.layers`（`tests/core/test_core_is_stdlib_only.py` 守卫） |
 | **L1 基础设施** | EDA 调用、输出目录、哈希、归档、Reference Finder | `layers/l1_infrastructure/`：`infrastructure.py`、`eda_backend.py`、`coverage_backend.py`、`output_config.py`、`layout.py`、`reference_finder.py` | 最底层，不依赖上层 |
 | **L2 编排** | LangGraph、执行器运行时、ToolHub、状态/运行时、证据、治理 | `layers/l2_orchestration/`：`graph.py`、`execution.py`、`runtime.py`、`state.py`、`routers.py`、`stages.py`、`executors/`（base/registry）、`communication/`、`evidence/`、`governance/`；8 个 executor 实现在 `src/executors/` | 依赖 L1 |
 | **L3 决策** | 覆盖率驱动决策、动作选择、粗连续奖励、知识图谱（设计时 + 运行时） | `layers/l3_decision/`：`decision_engine.py`、`reward.py`、`brain/`、`knowledge/`（`schema/graph/query/persistence/runtime`） | 依赖 L1/L2 的契约 |
@@ -122,6 +141,12 @@ audit → finalize → END
 - **所有回边在 `round_bump` 收口**，轮次预算在这里统一判定。
 - **人工节点**：`approval` 通过 LangGraph `interrupt()` + checkpoint 实现；`vagent resume` 用 `Command(resume=...)` 推图，不是 `update_state`。
 - **运行时对象**：`Runtime`（`runtime.py`）持有上下文、客户端、审计链；`PipelineState`（`state.py`）是图状态。
+- **执行事实面**：入口（`run_closed_loop` / `_stream_run`）在确定最终 `output_root` 后建
+  `RunContext` + `EventStore` + `ArtifactStore` + `JobSupervisor`，挂到 `Runtime`；
+  `hydrate_runtime` 在断点重入时兜底重建。`_stream_run` 的 `_emit` 把 RunJournal 事件
+  **镜像一次**进 `docs/events.jsonl` —— 节点里不再重复写 `stage.*`。
+  `n_finalize` 构建/刷新 `docs/provenance.jsonl` 与 `docs/verification_quality.json`，
+  并把 `run.finished`、`provenance.built`、`quality.gate` 落进事实日志。
 
 ### 4.4 结构护栏（把“人记住的不变量”变成代码检查）
 
@@ -194,6 +219,23 @@ mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
 - 硬门禁：回归全过、覆盖率 ≥ target、RTL 真实、基线存在（策略要求时）。
 - 软 caveat：约束只部分生效、TP 未命中、ucdb 零命中、关联硬边断、`backend_args`、无 verified 参考模型等。
 - **参考模型是否硬门禁由 `signoff_policy.yaml` 的 `require_ref_model` 决定**；默认是 caveat，不是阻断。
+
+### 5.2 Verification Quality Gate（`docs/verification_quality.json`）
+
+签核 PASS 可能在五种方式上名不副实，因此 audit 在组装签核/证据包**之前**写一份
+五维报告（`verification_quality_v1`）：
+
+| 维度 | 看什么 | 典型 `warn` |
+|---|---|---|
+| `functional` | 回归 passed/failed/total、TP 命中/UNMAPPED | 全过但 TP 零命中 |
+| `coverage` | `functional_pct` / `overall_pct` / 计划合并清单 / 目标 | 低于目标 10% 以内 |
+| `model` | `models.yaml` 的 `status: verified` / `placeholder` | 占位草稿 |
+| `structural` | `round_manifest`、文件变更链自校验 | 缺文件变更链 |
+| `evidence` | provenance / events / tool receipts / per-test sidecar | 只有 weak 血缘、无 per-test 数据 |
+
+**只报告、不阻断**：不新增 caveat code，不参与 `hard_ok`；`unknown` 绝不折算成
+pass（`None ≠ False`）。报告随证据包 `verdict/` 段收走，并作为 facts 写进
+`signoff_evidence.json` 与 v2 manifest 的 `architecture_v2`。
 
 ---
 
@@ -275,6 +317,22 @@ src/tools/common/        lib
 | `generation/isa_gen_tools` | NPU ISA DSL → IR → 32bit 编码 / 张量 / manifest |
 | `flow/flow_tools` | signoff/lineage/compare 等流程 API |
 | `generation/doc_tools` / `flow/trend_tools` / `generation/cmodel_tools` / `generation/scmodel_tools` | 文档、趋势、C/Python 参考模型 |
+
+### 6.5 Job Runtime 与命令白名单（`src/core/jobs/`）
+
+`ToolHub` 负责工具治理，**不负责长时间 EDA 进程的生命周期**。`JobSupervisor` 单独管：
+
+- `JobSpec` / `JobResult`：命令、cwd、超时、purpose、stdout/stderr 哈希；
+- 超时杀**整棵进程树**：Windows 优先 Job Object（`KILL_ON_JOB_CLOSE`），失败退回
+  `taskkill /F /T`，再退回 `wmic ParentProcessId`；POSIX 用 `killpg(SIGTERM/SIGKILL)`；
+- stdout/stderr 落 `<run>/.signoffai/jobs/`，哈希并可进 CAS（`artifacts/cas/`）；
+- `job.started` / `job.finished` / `job.denied` 进 `docs/events.jsonl`；
+- `CommandPolicy`：`SIGNOFFAI_CMD_ALLOWLIST=monitor|enforce|off`（**默认 monitor**），
+  拦不认识的工具与越界路径；`ToolHub.invoke` 与 `ToolSandbox.check_permission`
+  对「参数里夹命令」的调用使用同一规则（`scan_tool_args`）。
+
+本阶段**未**把回归热路径 `LocalStrategy` 改接 JobSupervisor（风险控制），
+该接入是下一阶段；当前 Job Runtime 已可独立使用并有单测覆盖。
 
 ---
 
@@ -451,8 +509,11 @@ src/tools/generation/uvm_tools/generation/
   `generation.generators`。
 - `render_checked()` 是“模板声明 key、渲染前校验”的结构化守卫，用来替代
   “ctx 缺 key → 静默渲染成 TODO 空壳”。
-- **仍未完成**：`gen_uvm.py`（3780 行）的 agent/env/bench 解析与渲染还留在原文件，
-  `env_gen` 目前只是稳定门面；后续按 parsing → models → render → generators 继续搬。
+- **统一 UVM IR 已定义、迁移未完成**：`generation/ir/uvm_ir.py` 提供
+  `UVMAgentIR / UVMEnvIR / UVMTestIR / UVMConnectionIR` 与 `validate_ir()`，
+  `EnvSpec.to_uvm_ir()` 把已有字段映射进去；**不渲染、不改变现有产物字节**。
+  `gen_uvm.py`（3780 行）的 agent/env/bench 解析与渲染仍留在原文件，`env_gen`
+  目前只是稳定门面；后续按 parsing → IR → render → generators 继续搬。
 
 ### 8.6 真 pass 判据
 
@@ -577,6 +638,28 @@ FIX ──resolves→   BUG
 `knowledge_graph.json` 与 `trace_gap()` 返回值。新增 `EdgeType` 不改变已有
 返回键（测试钉住）；改已有键才升版本。
 
+### 9.7 决策成效评估（`decision/evaluations.jsonl`）
+
+Reward 只回答「往哪使劲」，不回答「这次动作到底有没有用」。`decision_eval_v1`
+把**期望 vs 实际**钉进证据：
+
+```json
+{"schema":"decision_eval_v1","run_id":"…","round":3,
+ "action":{"action_type":"GENERATE_DIRECTED_TEST","reason":"TP_MISSED","source":"rule"},
+ "expected":{"plan":{"scope":"directed","needs_human":false},"must_hit_bins":["TP-…"]},
+ "actual":{"prev_coverage":50.0,"coverage":52.0,"new_hits":1,"lost_hits":0,
+           "tests_failed":0,"tests_failed_prev":0,"compile_ok":true},
+ "status":"EFFECTIVE","reason":"覆盖率 +2.00；新增命中 1 个 TP；无回归",
+ "confidence":"strong","inputs_available":{"coverage":true,"tp_matrix":true}}
+```
+
+- 期望在 `n_record_decision` 捕获（`verification_plan(action_type)` + TP 缺口快照）；
+- 实际在下一轮 `n_coverage` 计算（覆盖率 delta、TP 命中变化、回归失败数、编译状态）；
+- 状态只有四种：`EFFECTIVE / INEFFECTIVE / REGRESSED / UNCERTAIN`；
+  **输入缺失或动作交人工 → UNCERTAIN**，不拿"看起来变好"冒充有效；
+- 按 `(run_id, round, action)` 幂等；现有 `CoverageExperienceStore.record_round`
+  不变，新记录是**附加事实**。
+
 ---
 
 ## 10. 证据链与治理
@@ -610,7 +693,11 @@ FIX ──resolves→   BUG
 ├─ execution/         # 回归报告 / 覆盖率 / TP 矩阵 / 合并清单 / 种子多样性
 │                     # / 粗连续奖励 / 运行时知识图 / plan_consistency
 │                     # / round_manifest（轮次 × 用例 × plan 哈希）/ 回执
+│                     # / docs/events.jsonl（执行事实）
+│                     # / docs/provenance.jsonl + provenance_summary.json（血缘 DAG）
+│                     # / decision/evaluations.jsonl（决策成效）
 ├─ verdict/           # signoff_evidence.json / caveats.json / 文件审计链
+│                     # / docs/verification_quality.json（五维质量门）
 └─ replay/
    ├─ replay.py       # 不 import SignOffAI，仅标准库
    └─ recipe.json     # Tier A / Tier B 边界
@@ -681,6 +768,34 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 
 `CONSTRAINT_PARTIAL / CONSTRAINT_INACTIVE / UCDB_NO_BINS / CG_DUT_ZERO / ASSOCIATION_HARD_EDGE / PLAN_INCONSISTENT / TP_UNMAPPED / TP_TRACE_INCOMPLETE / TP_MISSED / MODEL_UNAVAILABLE / BASELINE_MISSING / BACKEND_ARGS_USED`
 
+### 10.6 Architecture 2.0 运行事实面
+
+这一层不新增节点、不改变三态判定，只把「这次 run 发生过什么、产物从哪来」
+变成可打包、可重算的事实。
+
+| 文件 | schema | 内容 |
+|---|---|---|
+| `<run>/docs/events.jsonl` | `events_v1` | run/stage/decision/approval/coverage 由 RunJournal 镜像；job/tool/artifact/provenance/quality 由产生者各写一次 |
+| `<run>/docs/provenance.jsonl` | `provenance_dag_v1` | 节点（artifact/tp/test/bin/seed/decision_obj）与边（derived_from/realizes/aggregates/hit_by/attributed_by/seed_derived/evaluated） |
+| `<run>/docs/provenance_summary.json` | — | 规模、置信度分布、未归因 bin、说明 |
+| `<run>/docs/verification_quality.json` | `verification_quality_v1` | 五维质量门（见 §5.2） |
+| `<run>/decision/evaluations.jsonl` | `decision_eval_v1` | 决策期望 vs 实际（见 §9.7） |
+| `<run>/artifacts/artifacts.json` | `artifact_index_v1` | 产物索引；内容寻址对象在 `artifacts/cas/<sha[:2]>/<sha>` |
+
+**血缘的诚实规则**（这是这一层最要紧的设计）：
+
+- `bin → test` 只有在存在 per-test 覆盖率 sidecar
+  （`coverage/per_test_bins.json`）时才标 `hit_by`（**exact**）；
+- 只有合并 ucdb 时，按 `round_manifest` 的 TP→test 计划映射标
+  `attributed_by`（**weak**）—— 它表示「计划里这条 test 本该实现它」，
+  **不**表示「它真的命中了」。**不能把合并覆盖率的功劳算到某条 test 上**；
+- `MISS / UNOBSERVED / UNMAPPED` 一律不建命中边；
+- `seed → test` 从回归目录名 `_seed_<n>` 得到；bin→seed 只在 bin→test 为 exact 时有意义，
+  否则 summary 明确写「seed 级归因不可用」。
+
+**确定性**：节点/边排序后写入，JSONL 不含时间戳；同一输入重复构建得到同一串字节，
+可被 `round_manifest` 式复现校验。跨 run 的 SQLite 索引是 roadmap，不冒充已实现。
+
 ---
 
 ## 11. 数据与存储
@@ -703,6 +818,10 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 - 路径解析统一走 `config/paths.py`；`SIGNOFFAI_HOME` 可把运行期根目录指到仓库外
   （pip 安装后不会写进 site-packages）。`TREND_DB` 是 `MAIN_DB` 的兼容别名，
   **趋势不再有第二份库**。
+- **Architecture 2.0 的事实文件是 run-local 的**：`docs/events.jsonl`、
+  `docs/provenance.jsonl`、`decision/evaluations.jsonl`、`artifacts/artifacts.json`
+  都跟着 run 目录走（能打包、能换机器、离线可读），**不新增跨 run SQLite**。
+  跨 run 的血缘/事件索引是 roadmap；目前需要跨 run 对账时按 SHA256 匹配。
 
 ---
 
@@ -739,13 +858,19 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 | 新签核证据字段 | `signoff_package.py` 的 `SECTION_FILES` + audit 的 v2 manifest | 回放脚本（若不需要重算） |
 | 新运行时因果边 | `knowledge/schema.py` 加 `EdgeType` + `runtime.build_runtime_graph()` 建边；需要进决策就补 `trace_gap` | 图存储与证据包 |
 | 新奖励层 | `l3_decision/reward.py` 的权重与分量；同步 `tests/test_sim_reward.py` | 决策动作空间 |
+| 新事件类型 | `src/core/runtime/events.py` 加常量 + 一个产生者；不要在节点里重复写 `stage.*` | RunJournal 镜像路径 |
+| 新血缘边 | `src/core/provenance/schema.py` 的 `EDGE_TYPES` + `graph.py` 建边；改语义才升 `SCHEMA` | 已有节点 id / 查询 |
+| 新质量维度 | `src/core/verification/quality.py` 的 `DIMENSIONS` + 一个 `_dimension()` | 签核三态（本阶段只报告） |
+| 新受控工具 | `src/core/jobs/allowlist.py` 的 `DEFAULT_TOOLS` | JobSupervisor / ToolHub |
+| 新 Job 输出 | `src/core/jobs/outputs.py` 的 `OutputSpec`（name/path/kind/required） | 执行层 |
 
 ---
 
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1099 passed / 2 skipped
+python -m pytest tests/ -q                            # 1147 passed / 5 skipped
+python -m pytest tests/core -q                        # Architecture 2.0 核心（60 条）
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
 python -m pytest src/workbench/tests -q               # 717 passed
@@ -788,6 +913,13 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 | `test_interrupt_round_budget.py` | approval proceed 不重入 round_bump；轮次只由 round_bump 收口 |
 | `test_verified_by_propagation.py` | EDA/LLM 汇总规则；混合必须是 `mixed`，不能冒充 EDA |
 | `test_code_coverage_plan.py` | DUT 代码覆盖率合并排除 loopback、merge spec 正确 |
+| `tests/core/test_core_is_stdlib_only.py` | `src/core` 不反向依赖 layers/langgraph/pydantic |
+| `tests/core/test_provenance_attribution.py` | weak/exact 血缘规则；MISS/UNMAPPED 不建命中边；确定性重建 |
+| `tests/core/test_jobs_supervisor.py` | 超时杀进程树、非零退出、白名单 deny/monitor |
+| `tests/core/test_decision_eval.py` | 四种成效状态、幂等、汇总 |
+| `tests/core/test_verification_quality.py` | 五维、unknown 不折算 pass、写文件 |
+| `tests/test_uvm_ir.py` | UVM IR 映射与结构校验 |
+| `tests/test_arch_v2_integration.py` | 合成 run：血缘/质量/决策/证据包一次跑通 |
 
 ---
 
@@ -806,8 +938,16 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
   摘要（`_semantic_reason`）。
 - **player 激励后端只有 plan，没有 runtime**：`stimulus_plan.json` 可生成，
   `ensure_backend_executable("player")` 显式报错；generated 仍是唯一可执行后端。
-- **尚未落地**：产物级 provenance DAG、bin 级 test/seed 溯源、工具 sandbox
-  路径/命令白名单、run 生命周期自动清理（`vagent prune` 已有手动入口）。
+- **Architecture 2.0 已落地 / 仍开放**：产物级 provenance DAG
+  （`docs/provenance.jsonl`，`provenance_dag_v1`）与五维质量门已落地；
+  bin 级 test/seed 溯源在缺少 per-test 覆盖率时**只标 weak**（`attributed_by`），
+  不冒充精确归因；工具 sandbox 路径/命令白名单已接入，但**默认 monitor**
+  （`SIGNOFFAI_CMD_ALLOWLIST=enforce` 才拦），且尚未覆盖所有生产工具调用；
+  run 生命周期自动清理仍未落地（`vagent prune` 已有手动入口）。
+- **命令白名单默认 monitor**：越界命令会被记进 `job.denied`（status=monitor），
+  但不拦；要拦得显式设 `SIGNOFFAI_CMD_ALLOWLIST=enforce`。
+- **UVM 生成器尚未迁到统一 IR**：`generation/ir/` 已定义契约与校验，
+  `gen_uvm.py` 的解析/渲染仍在原文件；IR 迁移是 P1 路线图。
 - **边界表同源**：`config/known_limitations.py` 是 §15 的代码真相；
   `test_architecture_invariants.py` 校验文档包含每条，player runtime 落地时
   必须同步改 `status` 与文档。
@@ -831,6 +971,12 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 ├─ database/                    运行期 SQLite（不进 git，只留 .gitkeep）
 ├─ specs/<module>/              RTL + casemodel.yaml + signoff_policy.yaml
 ├─ src/
+│  ├─ core/                     **横向底座（标准库，不 import layers）**
+│  │  ├─ runtime/               RunContext / ArtifactStore / EventStore
+│  │  ├─ provenance/            DAG schema / builder / exact-vs-weak attribution
+│  │  ├─ jobs/                  JobSpec / Supervisor / allowlist / outputs
+│  │  ├─ decision/              decision_eval_v1
+│  │  └─ verification/          verification_quality_v1（五维质量门）
 │  ├─ cli/                      CLI / REPL
 │  │  ├─ commands.py            **入口 + 子命令组注册 + 剩余命令**
 │  │  ├─ common.py              退出码 + 无状态 helper（唯一定义）
@@ -872,3 +1018,24 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 ├─ output_<run>/                一次运行的产物
 └─ ARCHITECTURE.md              本文
 ```
+
+---
+
+## 17. Architecture 2.0 路线图（已实现 vs 计划）
+
+**已实现（本次）**：RunContext、ArtifactStore、EventStore、Provenance DAG、
+Decision Evaluation、Verification Quality Gate、Job Runtime + 命令白名单骨架、
+UVM IR 契约与校验、证据包接入。
+
+**下一阶段（按优先级）**：
+
+| 阶段 | 目标 | 前置 |
+|---|---|---|
+| P1 收口 | `gen_uvm.py` 按 parsing → UVM IR → render → generators 迁移；`LocalStrategy` 接 JobSupervisor | 本文 §8.5 / §6.5 |
+| P2 增量验证 | RTL diff → 依赖分析 → 受影响产物/用例 → 增量编译与回归 | ArtifactStore + Provenance DAG |
+| P3 智能选择 | 基于历史 TP/bin/seed 命中关系选择高价值测试；Unreachable TP Analyzer | bin→test→seed 归因（per-test 覆盖率为前提） |
+| P4 多后端 | VCS / Verilator 适配；跨 run 血缘/事件索引；run 自动清理 | Job Runtime / 存储 |
+| P5 治理升级 | 质量门从"只报告"升级为可配置硬门禁（需新增 caveat code 并同步 `EXPECTED_CAVEATS`） | 五维报告稳定运行 |
+
+**不要做的事**：为覆盖率收敛速度与 EDA 巨头硬拼；本项目的第一定位是
+**可复现·可审计·可治理的签核证据链 + 个人级治理**（见 `CLAUDE.md` §九）。
