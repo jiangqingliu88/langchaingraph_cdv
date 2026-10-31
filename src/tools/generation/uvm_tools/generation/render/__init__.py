@@ -24,4 +24,41 @@ def render_checked(renderer: Any, template: str, ctx: Dict[str, Any],
     return renderer.render(template, ctx)
 
 
-__all__ = ["CtxContractError", "render_checked"]
+# pragma custom 区域注入（从 gen_uvm 搬出的渲染件）
+from .region_injector import (  # noqa: E402,F401
+    BANNER, BANNER_MARKER, REGION_MARKER, MergeBlockInfo, MergeFileReport,
+    RegionError, RegionInjector, TOOL_VERSION, _make_banner,
+)
+from .file_ops import (  # noqa: E402,F401
+    _clean_generated, _is_generated_file, _write_report_json,
+    backup_merge_source,
+)
+from .templates import (  # noqa: E402,F401
+    AGENT_LOOPBACK_TEMPLATES, BENCH_TEMPLATES, CMODEL_TEMPLATES,
+    ENVIRONMENT_ATTR_TEST_TEMPLATES, ENVIRONMENT_BATCH_TEST_TEMPLATES,
+    ENVIRONMENT_REG_TEST_TEMPLATES, ENVIRONMENT_ROOT_TEMPLATES,
+    ENVIRONMENT_SEQ_TEMPLATES, ENVIRONMENT_TEST_TEMPLATES,
+    ENV_CONSTRAINT_TEMPLATES, HARNESS_TEMPLATES, INTERFACE_TEMPLATES,
+    _split_template_entry,
+)
+from .jinja_renderer import (  # noqa: E402,F401
+    COMPANY_TRADEMARK, COPYRIGHT_YEAR, JinjaRenderer, _attr_slug,
+    attr_class_slug, attr_int_value, attr_key, reproducible_now,
+)
+
+__all__ = [
+    "CtxContractError", "render_checked",
+    "BANNER", "BANNER_MARKER", "REGION_MARKER", "MergeBlockInfo",
+    "MergeFileReport", "RegionError", "RegionInjector", "TOOL_VERSION",
+    "_make_banner",
+    "_clean_generated", "_is_generated_file", "_write_report_json",
+    "backup_merge_source",
+    "AGENT_LOOPBACK_TEMPLATES", "BENCH_TEMPLATES", "CMODEL_TEMPLATES",
+    "ENVIRONMENT_ATTR_TEST_TEMPLATES", "ENVIRONMENT_BATCH_TEST_TEMPLATES",
+    "ENVIRONMENT_REG_TEST_TEMPLATES", "ENVIRONMENT_ROOT_TEMPLATES",
+    "ENVIRONMENT_SEQ_TEMPLATES", "ENVIRONMENT_TEST_TEMPLATES",
+    "ENV_CONSTRAINT_TEMPLATES", "HARNESS_TEMPLATES", "INTERFACE_TEMPLATES",
+    "_split_template_entry",
+    "COMPANY_TRADEMARK", "COPYRIGHT_YEAR", "JinjaRenderer", "_attr_slug",
+    "attr_class_slug", "attr_int_value", "attr_key", "reproducible_now",
+]

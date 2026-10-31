@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent)).parent
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents if (p / "src").is_dir())))
 from jsonschema import Draft202012Validator
 from src.tools.generation.uvm_tools.tool_uvm.schema_check import (
     SCHEMA_PATH,

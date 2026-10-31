@@ -24,8 +24,8 @@ watched:
     reason: "flow 工具 API 集中了签核/运行/决策/覆盖率多组只读视图；recipe/stimulus 摘要已拆到 evidence_summary.py"
     plan: "按域拆到 signoff_api / run_api / coverage_api（下一次改动前先拆）"
   src/tools/generation/uvm_tools/tool_uvm/gen_uvm.py:
-    registered: 3780
-    reason: "历史生成器主体（agent/env/bench 解析与渲染）"
+    registered: 3305
+    reason: "历史生成器主体（agent/env/bench 解析与渲染）；RegionInjector / 文件操作 / 模板注册表 / JinjaRenderer 已搬到 generation/render/"
     plan: "按 parsing → models → render → generators 继续搬（见 ARCHITECTURE §8.5）"
   src/tools/generation/uvm_tools/_tools_old.py:
     registered: 1753

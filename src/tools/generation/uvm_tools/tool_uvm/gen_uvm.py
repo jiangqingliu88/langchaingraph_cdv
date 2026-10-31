@@ -8,11 +8,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import shutil
-import zlib
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -37,44 +34,45 @@ except ImportError:  # 直接脚本执行（python gen_uvm.py）
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
-__version__ = "0.1.0"
+try:
+    from ..generation.render.region_injector import (
+        BANNER, BANNER_MARKER, REGION_MARKER, MergeBlockInfo, MergeFileReport,
+        RegionError, RegionInjector, TOOL_VERSION, _make_banner,
+    )
+    from ..generation.render.file_ops import (
+        _clean_generated, _is_generated_file, _write_report_json,
+        backup_merge_source,
+    )
+except ImportError:  # 直接脚本执行（python gen_uvm.py）
+    import sys as _sys
+
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from generation.render.region_injector import (  # type: ignore[no-redef]
+        BANNER, BANNER_MARKER, REGION_MARKER, MergeBlockInfo, MergeFileReport,
+        RegionError, RegionInjector, TOOL_VERSION, _make_banner,
+    )
+    from generation.render.file_ops import (  # type: ignore[no-redef]
+        _clean_generated, _is_generated_file, _write_report_json,
+        backup_merge_source,
+    )
+
+__version__ = TOOL_VERSION
+try:
+    from ..generation.render.jinja_renderer import (
+        COMPANY_TRADEMARK, COPYRIGHT_YEAR, JinjaRenderer, _attr_slug,
+        attr_class_slug, attr_int_value, attr_key, reproducible_now,
+    )
+except ImportError:  # 直接脚本执行（python gen_uvm.py）
+    from generation.render.jinja_renderer import (  # type: ignore[no-redef]
+        COMPANY_TRADEMARK, COPYRIGHT_YEAR, JinjaRenderer, _attr_slug,
+        attr_class_slug, attr_int_value, attr_key, reproducible_now,
+    )
 
 # ════════════════════════════════════════════════════════════
 # 商标与版权（只改这里一个变量，全脚本生效）
 # YAML 顶层 meta.company / meta.rights 可覆盖
 # ════════════════════════════════════════════════════════════
-COMPANY_TRADEMARK = "SignOffAI（功能签核）"   # ← 替换成你的公司/组织名
-COPYRIGHT_YEAR = "2026"
 
-
-def reproducible_now() -> str:
-    """模板里 `now()` 的实现 —— **确定性**，不再取墙上时钟。
-
-    为什么必须确定：这个值会写进**每个**生成文件的头注释
-    （`base_templates/base_template.sv.j2` 的「创建时间 / 修改时间」）。
-    取墙上时钟的话，同一份输入跑两次得到不同的字节 —— 实测 86 个生成文件里
-    76 个内容哈希不同。而证据链/产物比对正是靠内容哈希判断「这个产物有没有被
-    动过」，假差异会让它失去意义；「可复现」这个卖点也就落不了地。
-
-    规则对齐 reproducible-builds 的 `SOURCE_DATE_EPOCH` 约定：
-
-      · 设了 `SOURCE_DATE_EPOCH`（Unix 秒）→ 用它格式化。CI 想钉死时间、
-        或想要真实时间，都通过这个变量显式给。
-      · 没设 → 返回**空串**，模板里那两行整行不输出（见模板改动）。
-        默认就是可复现的，而不是默认不可复现、要用户自己去关。
-
-    想做「确定性但带时间」，用 YAML 的 `meta.created` / `meta.modified` ——
-    模板已经支持这两个键优先于 `now()`（`meta.created | default('') or now()`）。
-    """
-    epoch = os.environ.get("SOURCE_DATE_EPOCH", "").strip()
-    if not epoch:
-        return ""
-    try:
-        return datetime.fromtimestamp(int(epoch)).strftime("%Y-%m-%d %H:%M:%S")
-    except (TypeError, ValueError, OSError):
-        # 值给错了不该让生成失败 —— 退回不可复现也要比炸掉好，但要出声
-        print(f"[warn] SOURCE_DATE_EPOCH 不是合法 Unix 秒: {epoch!r}，本次不写时间戳")
-        return ""
 
 # ── 文件头元数据（base_templates/base_template.sv.j2 渲染用）──
 DEFAULT_META = {
@@ -93,404 +91,24 @@ DEFAULT_META = {
 # （YAML custom_code 注入已下线；区域内容只能靠 -m/--merge_source 手改保留）
 # 生成文件带 BANNER 签名；-c/--clean 只删除带签名的文件，绝不碰手写文件。
 
-def _make_banner(prefix: str = "// ") -> str:
-    """生成文件签名 banner（按目标文件类型选注释前缀：SV/filelist 用 //，Makefile 用 #）。"""
-    return "\n".join([
-        f"{prefix}════════════════════════════════════════════════════════════════",
-        f"{prefix}自动生成 (tool_uvm v{__version__}) — 请勿直接修改；"
-        f"自定义代码写入 pragma custom 区域",
-        f"{prefix}════════════════════════════════════════════════════════════════",
-    ]) + "\n"
-
-
-BANNER = _make_banner("// ")
-BANNER_MARKER = "自动生成 (tool_uvm"
-
-REGION_MARKER = re.compile(r"^\s*//\s*pragma\s+custom\s+(\w+)\s+(begin|end)\s*$")
-
-
-class RegionError(Exception):
-    """pragma custom 区域错误（未闭合 / 嵌套 / 同名重复 / 旧源无匹配）。"""
-
-
-@dataclass
-class MergeBlockInfo:
-    slot: str
-    source: str   # "yaml" | "merged" | "default"
-    lines: int
-
-
-@dataclass
-class MergeFileReport:
-    relpath: str
-    blocks: List[MergeBlockInfo] = field(default_factory=list)
-    missing: List[str] = field(default_factory=list)
-
-
-class RegionInjector:
-    """pragma custom 区域注入器。
-
-    模板静态写空区域（slot 文件内唯一）；渲染后按优先级回填。
-    -m/--merge_source 时预提取旧文件区域表，按目标相对路径索引。
-    """
-
-    def __init__(self, merge_source: Optional[Path] = None,
-                 skip_missing: bool = False,
-                 debug_dir: Optional[Path] = None,
-                 report: Optional[List[MergeFileReport]] = None) -> None:
-        self.merge_source = Path(merge_source) if merge_source else None
-        self.skip_missing = skip_missing
-        self.debug_dir = Path(debug_dir) if debug_dir else None
-        self.report: List[MergeFileReport] = report if report is not None else []
-        self.load_errors: List[str] = []   # merge_source 中区域解析失败的文件（不参与合并）
-        self._old_blocks: Dict[str, Dict[str, str]] = {}
-        if self.merge_source:
-            self._load_merge_source(self.merge_source)
-
-    # ── 提取 ──
-    @staticmethod
-    def extract_blocks(text: str) -> Dict[str, str]:
-        """提取 text 中全部 pragma custom 区域 → {slot: 内容}。
-
-        未闭合 / 嵌套 / 同名重复 → RegionError。
-        """
-        blocks: Dict[str, str] = {}
-        current: Optional[str] = None
-        buf: List[str] = []
-        for lineno, line in enumerate(text.splitlines(), 1):
-            m = REGION_MARKER.match(line)
-            if m:
-                slot, kind = m.group(1), m.group(2)
-                if kind == "begin":
-                    if current is not None:
-                        raise RegionError(
-                            f"line {lineno}: region '{slot}' nested inside '{current}'")
-                    if slot in blocks:
-                        raise RegionError(f"line {lineno}: duplicate region '{slot}'")
-                    current = slot
-                    buf = []
-                else:
-                    if current != slot:
-                        raise RegionError(
-                            f"line {lineno}: region end '{slot}' without begin "
-                            f"(open: '{current}')")
-                    blocks[slot] = "\n".join(buf)
-                    current = None
-            elif current is not None:
-                buf.append(line)
-        if current is not None:
-            raise RegionError(f"region '{current}' not closed")
-        return blocks
-
-    def _load_merge_source(self, root: Path) -> None:
-        """扫描 merge_source 目录，提取每个文件的区域表（按目标相对路径索引）。"""
-        if not root.is_dir():
-            raise RegionError(f"merge source directory not found: {root}")
-        for path in sorted(root.rglob("*")):
-            if not path.is_file() or path.suffix not in (".sv", ".svh"):
-                continue
-            try:
-                text = path.read_text(encoding="utf-8", errors="replace")
-            except OSError:
-                continue
-            try:
-                blocks = self.extract_blocks(text)
-            except RegionError as exc:
-                self.load_errors.append(f"[{path.relative_to(root)}] {exc}")
-                continue  # 坏区域文件不参与合并（错误记录进报告）
-            if blocks:
-                self._old_blocks[str(path.relative_to(root))] = blocks
-
-    # ── 注入 ──
-    def inject(self, rendered: str, defaults: Dict[str, str],
-               relpath: str, add_banner: bool = True,
-               banner_prefix: str = "// ") -> Tuple[str, MergeFileReport]:
-        """渲染产物 → 注入后文本。
-
-        defaults = 外部提供的区域内容（非空 → "yaml" 源，每次生成覆盖）。
-        生成流程已不再从 YAML 取值（custom_code 下线），该形参仅保留给程序化调用。
-        模板区域内已有的默认内容作为最后兜底（"default" 源）。
-        """
-        report = MergeFileReport(relpath=relpath)
-        old = self._old_blocks.get(relpath, {})
-        out: List[str] = []
-        current: Optional[str] = None
-        inner: List[str] = []
-        seen: List[str] = []
-
-        for lineno, line in enumerate(rendered.splitlines(), 1):
-            m = REGION_MARKER.match(line)
-            if m:
-                slot, kind = m.group(1), m.group(2)
-                if kind == "begin":
-                    if current is not None:
-                        raise RegionError(
-                            f"line {lineno}: region '{slot}' nested inside '{current}'")
-                    if slot in seen:
-                        raise RegionError(f"line {lineno}: duplicate region '{slot}'")
-                    current = slot
-                    inner = []
-                    out.append(line)
-                else:
-                    if current != slot:
-                        raise RegionError(
-                            f"line {lineno}: region end '{slot}' without begin "
-                            f"(open: '{current}')")
-                    yaml_val = (defaults.get(slot) or "").strip() if defaults else ""
-                    old_val = old.get(slot, "")
-                    if yaml_val:
-                        content, source = yaml_val, "yaml"
-                    elif old_val:
-                        content, source = old_val, "merged"
-                    else:
-                        content, source = "\n".join(inner), "default"
-                    out.extend(content.splitlines())
-                    out.append(line)
-                    report.blocks.append(
-                        MergeBlockInfo(slot, source, len(content.splitlines())))
-                    seen.append(slot)
-                    current = None
-            elif current is not None:
-                inner.append(line)
-            else:
-                out.append(line)
-        if current is not None:
-            raise RegionError(f"region '{current}' not closed")
-
-        # 旧文件多出的区域（新模板没有对应槽）
-        for slot in sorted(old):
-            if slot not in seen:
-                if not self.skip_missing:
-                    raise RegionError(
-                        f"[{relpath}] block '{slot}' found in old source has no "
-                        f"matching region in new output "
-                        f"(use --merge_skip_missing_blocks to continue)")
-                report.missing.append(slot)
-
-        text = "\n".join(out) + "\n"
-        if add_banner and BANNER_MARKER not in text:
-            text = _make_banner(banner_prefix) + "\n" + text
-        if self.debug_dir is not None:
-            debug_path = self.debug_dir / relpath
-            debug_path.parent.mkdir(parents=True, exist_ok=True)
-            debug_path.write_text(rendered + "\n", encoding="utf-8")
-        self.report.append(report)
-        return text, report
-
-
-def backup_merge_source(merge_source: Path) -> Path:
-    """备份 merge_source 目录 → <merge_source>_backup_<时间戳>。"""
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup = merge_source.with_name(f"{merge_source.name}_backup_{ts}")
-    shutil.copytree(merge_source, backup)
-    return backup
-
-
-def _is_generated_file(path: Path) -> bool:
-    """文件是否带生成签名（clean 只删除此类文件）。"""
-    try:
-        head = path.read_text(encoding="utf-8", errors="replace")[:2000]
-    except OSError:
-        return False
-    return BANNER_MARKER in head
-
-
-def _write_report_json(output_root: Path, *, generated: int, skipped: int,
-                       validation_issues: List[Any], merge_reports: List[Any],
-                       load_errors: List[str], gate_results: List[Dict[str, str]],
-                       schema_issues: Optional[List[Any]] = None,
-                       inputs: Optional[List[Path]] = None) -> Path:
-    """P2-4: 结构化生成报告（供 Agent 决策 / 签核证据包引用）。"""
-    report = {
-        "tool": "tool_uvm",
-        "version": __version__,
-        "inputs": [str(p) for p in (inputs or [])],
-        "generated": generated,
-        "skipped": skipped,
-        "schema": {
-            "errors": [i.__dict__ for i in (schema_issues or []) if i.severity == "error"],
-            "warnings": [i.__dict__ for i in (schema_issues or []) if i.severity == "warning"],
-        },
-        "validation": {
-            "errors": [i.__dict__ for i in validation_issues if i.severity == "error"],
-            "warnings": [i.__dict__ for i in validation_issues if i.severity == "warning"],
-        },
-        "merge": {
-            "blocks": [
-                {"file": r.relpath,
-                 "items": [b.__dict__ for b in r.blocks],
-                 "missing": r.missing}
-                for r in merge_reports if r.blocks or r.missing
-            ],
-            "load_errors": load_errors,
-        },
-        "gate": gate_results,
-    }
-    report_path = output_root / "generation_report.json"
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
-                           encoding="utf-8")
-    return report_path
-
-
-def _clean_generated(dest_root: Path) -> int:
-    """-c/--clean：删除 dest_dir 下所有带签名的生成文件，并清理空目录。"""
-    if not dest_root.is_dir():
-        return 0
-    removed = 0
-    for path in sorted(dest_root.rglob("*"), reverse=True):
-        if path.is_file() and _is_generated_file(path):
-            path.unlink()
-            removed += 1
-    for path in sorted(dest_root.rglob("*"), reverse=True):
-        if path.is_dir() and not any(path.iterdir()):
-            path.rmdir()
-    return removed
-
-# AXI-VIP 风格：编号分层目录 + master/slave 完全分离
-INTERFACE_TEMPLATES = [
-    ("interface_templates/interface.sv.j2", "1_interface/{agent_name}_if.sv"),
-    ("interface_templates/interface_system.j2", "1_interface/{agent_name}_system_if.sv"),
-
-    # 单类合并模板（不区分 master/slave）
-    ("interface_templates/port_config.sv.j2", "2_config/{agent_name}_port_config.sv"),
-
-    # base 必须排在 master/slave 之前：派生类要引用基类的 xact_type_e / 字段，
-    # SystemVerilog 要求先声明后使用。
-    ("interface_templates/sequence_item_base.sv.j2", "3_transaction_sequencer/{agent_name}_base_seq_item.sv"),
-    ("interface_templates/seq_item_master.sv.j2", "3_transaction_sequencer/{agent_name}_master_seq_item.sv"),
-    ("interface_templates/seq_item_slave.sv.j2",  "3_transaction_sequencer/{agent_name}_slave_seq_item.sv"),
-    ("interface_templates/sequencer_master.sv.j2", "3_transaction_sequencer/{agent_name}_master_sequencer.sv"),
-    ("interface_templates/sequencer_slave.sv.j2",  "3_transaction_sequencer/{agent_name}_slave_sequencer.sv"),
-
-    ("interface_templates/driver_master.sv.j2", "4_driver_monitor/{agent_name}_master_driver.sv"),
-    ("interface_templates/driver_slave.sv.j2",  "4_driver_monitor/{agent_name}_slave_driver.sv"),
-    ("interface_templates/port_monitor.sv.j2", "4_driver_monitor/{agent_name}_port_monitor.sv"),
-
-    ("interface_templates/agent_master.sv.j2", "5_agent/{agent_name}_master_agent.sv"),
-    ("interface_templates/agent_slave.sv.j2",  "5_agent/{agent_name}_slave_agent.sv"),
-    ("interface_templates/config_system.sv.j2", "5_agent/{agent_name}_system_config.sv"),
-    # vsqr 必须在 system_env 之前：env 持有 vsqr 句柄，vsqr 不引用 env（单向依赖，
-    # 见模板头部说明），故先声明 vsqr 才能让 env 使用它的类型。
-    ("interface_templates/interface_system_vsqr.sv.j2", "5_agent/{agent_name}_system_vsqr.sv"),
-    ("interface_templates/interface_system_monitor.sv.j2", "5_agent/{agent_name}_system_monitor.sv"),
-    ("interface_templates/interface_system_env.j2", "5_agent/{agent_name}_system_env.sv"),
-
-    ("interface_templates/sequence_master.sv.j2", "7_sequence/{agent_name}_master_sequence.sv"),
-    ("interface_templates/sequence_slave.sv.j2",  "7_sequence/{agent_name}_slave_sequence.sv"),
-
-    ("interface_templates/reg_adapter.sv.j2", "8_ral/{agent_name}_reg_adapter.sv"),
-
-    ("interface_templates/agent_parameters_pkg.sv.j2", "{agent_name}_parameters_pkg.sv"),
-    ("interface_templates/agent_typedefs_pkg.sv.j2", "{agent_name}_typedefs_pkg.sv"),
-    ("interface_templates/agent_pkg.sv.j2", "{agent_name}_pkg.sv"),
-    ("interface_templates/agent_filelist.sv.j2", "filelist.f"),
-    ("interface_templates/agent_Makefile.sv.j2", "Makefile"),
-]
-
-def _split_template_entry(entry) -> tuple:
-    """模板注册表条目 → (template_path, target_pattern, context_overrides)。
-
-    兼容 2 元组（无覆盖）与 3 元组（第 3 元素为渲染上下文覆盖，如 {"port": "master"}）。
-    """
-    return entry[0], entry[1], (entry[2] if len(entry) > 2 else {})
-
-
-# Agent 自闭环测试套件（master-drive → slave-monitor 闭环，独立编译运行）
-AGENT_LOOPBACK_TEMPLATES = [
-    ("interface_templates/agent_loopback_env.sv.j2",  "{agent_name}_loopback_env.sv"),
-    ("interface_templates/agent_loopback_scb.sv.j2",  "{agent_name}_loopback_scb.sv"),
-    ("interface_templates/agent_loopback_test.sv.j2", "{agent_name}_loopback_test.sv"),
-    ("interface_templates/agent_loopback_tb.sv.j2",   "{agent_name}_loopback_tb.sv"),
-]
-
-ENVIRONMENT_ROOT_TEMPLATES = [
-    ("environment_templates/env_parameters_pkg.sv.j2", "{env_name}_parameters_pkg.sv"),
-    ("environment_templates/env_config.sv.j2", "{env_name}_config.sv"),
-    ("environment_templates/environment.sv.j2", "{env_name}.sv"),
-    ("environment_templates/env_cov.sv.j2", "{env_name}_coverage.sv"),
-    ("environment_templates/sim_end.sv.j2", "{env_name}_sim_end.sv"),
-    ("environment_templates/env_pkg.sv.j2", "{env_name}_pkg.sv"),
-]
-
-ENVIRONMENT_TEST_TEMPLATES = [
-    ("environment_templates/test_templates/test_pkg.sv.j2", "{env_name}_test_pkg.sv"),
-    ("environment_templates/test_templates/test_base.sv.j2", "{env_name}_base_test.sv"),
-    ("environment_templates/test_templates/test_directed.sv.j2", "{env_name}_direct_test.sv"),
-    ("environment_templates/test_templates/gen_test_sv.j2", "{env_name}_gen_test.sv"),
-]
-
-#: 属性测试（**一条 environment.tests = 一个 UVM_TEST = 一个属性取值**）。
-#: 单独一张表而不是并进上面那张：那张是「无条件产出的四个文件」，
-#: 它被既有测试逐字钉着；这张**只在 tests 非空时渲染**，产物也只有一个文件。
-ENVIRONMENT_ATTR_TEST_TEMPLATES = [
-    ("environment_templates/test_templates/test_attr.sv.j2", "{env_name}_attr_test.sv"),
-]
-
-#: 批次测试（**一条 environment.batches = 一个 UVM_TEST = 一个批次/专题**）。
-#: 与属性测试同形（都在 `tests`/`batches` 非空时才产），但产物不同 ——
-#: 这一份出的是"这一批打哪几个维度、用什么方法"的 test 类，名字由 case 模型的
-#: `themes[].test` 给定。**没有它，回归里 `+UVM_TESTNAME=<批次>` 会撞
-#: UVM_FATAL(INVTST)，而那条路径被记成 pass**（见 `_sim_run_cmd` 的注释）。
-ENVIRONMENT_BATCH_TEST_TEMPLATES = [
-    ("environment_templates/test_templates/test_batch.sv.j2", "{env_name}_batch_test.sv"),
-]
-
-#: 寄存器（CSR）自带序列测试 —— 每个都是**薄薄一层**：实例化一个 UVM 官方
-#: 寄存器序列（hw_reset / bit_bash / access）并 start。
-#: **只在环境配了 register_model（且有 reg_block）时才产**：没配的环境连寄存器
-#: 模型都没有，产出来就是一堆编译不过的文件。
-ENVIRONMENT_REG_TEST_TEMPLATES = [
-    ("environment_templates/test_templates/csr_hw_reset_test.sv.j2",
-     "{env_name}_reg_hw_reset_test.sv"),
-    ("environment_templates/test_templates/csr_bit_bash_test.sv.j2",
-     "{env_name}_reg_bit_bash_test.sv"),
-    ("environment_templates/test_templates/csr_access_test.sv.j2",
-     "{env_name}_reg_access_test.sv"),
-]
-
-
-ENVIRONMENT_SEQ_TEMPLATES = [
-    ("environment_templates/virtual_sequencer.sv.j2", "{env_name}_virtual_sequencer.sv"),
-    ("environment_templates/seq_templates/virtual_sequence_base.sv.j2", "{env_name}_virtual_base_seq.sv"),
-    ("environment_templates/seq_templates/seq_pkg.sv.j2", "{env_name}_seq_pkg.sv"),
-]
-
-ENV_CONSTRAINT_TEMPLATES = [
-    (
-        "environment_templates/env_cons_coordinated_sequence.j2",
-        "{env_name}_coordinated_sequence.sv",
-    ),
-    (
-        "environment_templates/env_cons_policy_base.sv.j2",
-        "{env_name}_constraint_policy.sv",
-    ),
-    (
-        "environment_templates/env_cons_policies.sv.j2",
-        "{env_name}_constraint_policies.sv",
-    ),
-    (
-        "environment_templates/env_cons_policy_combinator.j2",
-        "{env_name}_policy_combinator.sv",
-    ),
-    (
-        "environment_templates/env_cons_policy_factory.j2",
-        "{env_name}_policy_factory.sv",
-    ),
-]
-
-BENCH_TEMPLATES = [
-    ("bench_templates/tb_top.sv.j2", "{bench_name}_tb_top.sv"),
-]
-
-HARNESS_TEMPLATES = [
-    ("bench_templates/harness.sv.j2", "{name}.sv"),
-]
-
-CMODEL_TEMPLATES = [
-    ("environment_templates/cmodel_predictor.sv.j2", "{module_name}_cmodel_predictor.sv"),
-    ("environment_templates/cmodel_dpi.cpp.j2", "{module_name}_dpi_wrapper.cpp"),
-]
-
+try:
+    from ..generation.render.templates import (
+        AGENT_LOOPBACK_TEMPLATES, BENCH_TEMPLATES, CMODEL_TEMPLATES,
+        ENVIRONMENT_ATTR_TEST_TEMPLATES, ENVIRONMENT_BATCH_TEST_TEMPLATES,
+        ENVIRONMENT_REG_TEST_TEMPLATES, ENVIRONMENT_ROOT_TEMPLATES,
+        ENVIRONMENT_SEQ_TEMPLATES, ENVIRONMENT_TEST_TEMPLATES,
+        ENV_CONSTRAINT_TEMPLATES, HARNESS_TEMPLATES, INTERFACE_TEMPLATES,
+        _split_template_entry,
+    )
+except ImportError:  # 直接脚本执行（python gen_uvm.py）
+    from generation.render.templates import (  # type: ignore[no-redef]
+        AGENT_LOOPBACK_TEMPLATES, BENCH_TEMPLATES, CMODEL_TEMPLATES,
+        ENVIRONMENT_ATTR_TEST_TEMPLATES, ENVIRONMENT_BATCH_TEST_TEMPLATES,
+        ENVIRONMENT_REG_TEST_TEMPLATES, ENVIRONMENT_ROOT_TEMPLATES,
+        ENVIRONMENT_SEQ_TEMPLATES, ENVIRONMENT_TEST_TEMPLATES,
+        ENV_CONSTRAINT_TEMPLATES, HARNESS_TEMPLATES, INTERFACE_TEMPLATES,
+        _split_template_entry,
+    )
 # ── P0-4: 编译仿真门禁（--gate）──
 _GATE_SIMULATORS = ("vlog", "vcs")   # 支持 UVM 的仿真器（iverilog/verilator 不支持 UVM 类）
 
@@ -1031,99 +649,6 @@ class BenchModel:
 
     def __repr__(self) -> str:
         return f"BenchModel(name={self.name!r}, env_name={self.env_name!r}, agents={list(self.agents.keys())!r})"
-
-def _attr_slug(text: Any) -> str:
-    """一段文本 → ASCII 标识符片段（非 [A-Za-z0-9] 一律折成 `_`）。
-
-    中文维度名/取值都过这一道：它们能出现在注释里，但**不能出现在类名里**。
-    """
-    return re.sub(r"[^A-Za-z0-9]+", "_", str(text)).strip("_").lower()
-
-
-def attr_key(entry: Dict[str, Any]) -> str:
-    """config_db 的键前缀。
-
-    显式给的 `key` **原样用**（那是作者的命名选择，不该被我们小写化）；没给才由
-    维度名推导。推导结果保证 ASCII —— config_db 的键会进 SV 字面量。
-    """
-    explicit = str(entry.get("key") or "").strip()
-    if explicit:
-        return explicit
-    return _attr_slug(entry.get("dimension", "")) or "attr"
-
-
-def attr_int_value(entry: Dict[str, Any]) -> int:
-    """机器可读的整型取值 —— 这是**唯一进 SV 字面量的东西**。
-
-    优先级：显式 `int_value` → 取值本身是数字 → 0。
-    落到 0 意味着取值是中文且作者没给 `int_value`；类名那边会用 crc32 兜底保证
-    不重名（见 `attr_class_slug`），而原取值仍以注释形式留在文件里。
-    """
-    explicit = entry.get("int_value")
-    if isinstance(explicit, int) and not isinstance(explicit, bool):
-        return explicit
-    text = str(entry.get("value", "")).strip()
-    try:
-        return int(text)
-    except ValueError:
-        return 0
-
-
-def attr_class_slug(entry: Dict[str, Any]) -> str:
-    """类名里的 `<维度>_p<取值>` 片段，**保证全 ASCII**。
-
-    取值是 ASCII 就直接用（`D_ratio` + `50` → `ratio_p50`）；是中文就投影到
-    `int_value`（`D_mode` + 首拍 + 1 → `mode_p1`）。既非 ASCII 又没给 int_value
-    时用 crc32 —— 硬编码成 `p0` 会让多个中文取值**撞成同一个类名**，那是编译错误。
-    """
-    dim = _attr_slug(entry.get("dimension", "")) or "attr"
-    text = str(entry.get("value", "")).strip()
-    if re.fullmatch(r"[A-Za-z0-9_]+", text):
-        return f"{dim}_p{text}"
-    if isinstance(entry.get("int_value"), int):
-        return f"{dim}_p{attr_int_value(entry)}"
-    return f"{dim}_p{zlib.crc32(text.encode('utf-8')) & 0xFFFF:04x}"
-
-
-class JinjaRenderer:
-    def __init__(self, templates_dir: Path) -> None:
-        self.environment = Environment(
-            loader=FileSystemLoader(str(templates_dir)),
-            keep_trailing_newline=True,
-            autoescape=False,
-        )
-        # 文件头元数据（创建/修改时间 + 商标变量，base_template 兜底用）
-        #
-        # **`now` 必须是确定性的，否则生成物不可复现。**
-        # 它落在每个生成文件的头注释里（base_template.sv.j2 的「创建/修改时间」）。
-        # 取墙上时钟的话：同一份输入跑两次，实测 86 个文件里 76 个内容哈希不同 ——
-        # 而证据链正是靠**内容哈希**判断「这个产物有没有被动过」。假差异会让比对
-        # 失去意义，「可复现」也就无从谈起。
-        self.environment.globals["now"] = reproducible_now
-        self.environment.globals["trademark"] = COMPANY_TRADEMARK
-        self.environment.globals["copyright_year"] = COPYRIGHT_YEAR
-        self.environment.filters["nl2br"] = lambda value: str(value).replace("\n", "\\n")
-        # 属性测试用的三个过滤器 —— 纯函数，能脱离 Jinja 单测
-        self.environment.filters["attr_key"] = attr_key
-        self.environment.filters["attr_int_value"] = attr_int_value
-        self.environment.filters["attr_class_slug"] = attr_class_slug
-        self.environment.globals["get_clock_index"] = lambda name, clocks: clocks.index(name) if name in clocks else 0
-        self.environment.globals["get_reset_index"] = lambda name, resets: resets.index(name) if name in resets else 0
-        self.environment.globals["get_transaction_type"] = self._get_transaction_type
-
-    @staticmethod
-    @pass_context
-    def _get_transaction_type(context, transaction_name: str) -> str:
-        transactions = context.get("transactions", [])
-        for transaction in transactions:
-            if transaction.get("name") == transaction_name:
-                return transaction.get("type", f"{transaction_name}_transaction")
-        return f"{transaction_name}_transaction"
-
-    def render(self, template_path: str, context: Dict[str, Any]) -> str:
-        template = self.environment.get_template(template_path)
-        return template.render(**context)
-
 
 def read_env_cov_bins(output_dir: Path) -> Dict[str, Any]:
     """读 verify 落下的 `inputs/yaml/uvm/env_cov_bins.yaml`。

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent)).parent
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents if (p / "src").is_dir())))
 from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import (  # noqa: E402
     _dedupe_loopback_tests,
     _gen_env_yaml,

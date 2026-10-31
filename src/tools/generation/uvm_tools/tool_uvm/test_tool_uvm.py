@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent)).parent
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents if (p / "src").is_dir())))
 from src.tools.generation.uvm_tools.tool_uvm import UVMGenerator, JinjaRenderer, YAMLLoader
 from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import (
     BANNER_MARKER,

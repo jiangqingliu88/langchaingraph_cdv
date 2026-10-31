@@ -540,8 +540,13 @@ src/tools/generation/uvm_tools/generation/
 - **统一 UVM IR 已定义、迁移未完成**：`generation/ir/uvm_ir.py` 提供
   `UVMAgentIR / UVMEnvIR / UVMTestIR / UVMConnectionIR` 与 `validate_ir()`，
   `EnvSpec.to_uvm_ir()` 把已有字段映射进去；**不渲染、不改变现有产物字节**。
-  `gen_uvm.py`（3780 行）的 agent/env/bench 解析与渲染仍留在原文件，`env_gen`
-  目前只是稳定门面；后续按 parsing → IR → render → generators 继续搬。
+  `gen_uvm.py`（~3305 行）的 agent/env/bench 解析与渲染仍留在原文件，
+  `generation/render/region_injector.py`（pragma custom 注入）、
+  `generation/render/file_ops.py`（签名判定 / 清理 / 生成报告 / merge 备份）、
+  `generation/render/templates.py`（模板注册表）与
+  `generation/render/jinja_renderer.py`（Jinja 渲染器 + 属性过滤器）已搬走
+  （`gen_uvm` 继续 re-export）；`env_gen` 目前只是稳定门面。后续按
+  parsing → IR → render → generators 继续搬。
 
 ### 8.6 真 pass 判据
 
