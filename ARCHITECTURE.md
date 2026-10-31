@@ -2,9 +2,11 @@
 
 > 基线：2026-10-31
 >
-> 全量单测：**1179 passed / 5 skipped**；工作台 **721 passed**
+> 全量单测：**1198 passed / 2 skipped**；工作台 **721 passed**
 >
-> 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
+> UVM 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
+>
+> SoC 参考工程实测：`examples/open_npu_soc`，`soc run` **2/2 PASS**（`mismatched=0`，2075 ns），输出 `output_soc_refactor_final_jiang_20261031_190621`
 >
 > **Architecture 2.0 基线**：`src/core/` 运行事实面（RunContext / ArtifactStore / EventStore / Provenance DAG / Job Runtime / Decision Evaluation / Verification Quality Gate）已落地；**Verification Intelligence 第一层**（归因完整率、四个工程指标、增量计划、Run Diff、LocalStrategy→JobSupervisor）已接入。新增单测 `tests/core/` 83 条 + UVM IR 5 条 + Job Runtime 集成 4 条 + 合成 run 集成 1 条。
 
@@ -84,11 +86,16 @@ Evidence。**不为三类服务各写一套引擎**；`optimize-regression` / `c
 CPU/NICE 命令 → DMA → Banked SRAM → INT8 GEMM → IRQ → golden 比较
 ```
 
-- v0.1 用 `rtl/cpu/nice_cmd_sequencer.sv` 固定 NICE 命令时序，真实 E203 在 M1 接入；
+- v0.1 参考 TB 用 `rtl/cpu/nice_cmd_sequencer.sv` 固定 NICE 命令时序；
+  E203 NICE 适配器/固件文件已落地，但 **E203 路径未实跑**（M1）；
 - 现有 `vagent soc check/golden/run` 是薄适配层：`run` 复用
   `InfrastructureManager.run_regression`，不另造执行引擎；
-- 回归 YAML、golden 向量、自检 TB、spec/verification plan 都在工程内，
-  `run` 的日志/报告继续走现有 run 目录与证据链。
+- 回归 YAML、golden 向量、自检 TB、spec/verification plan 都在工程内；
+- **实测（2026-10-31）**：`soc check` 输入齐全；`soc run` **2/2 PASS**，
+  `gemm_8x8` 日志 `mismatched=0` / `PASS`，仿真结束于 2075 ns；
+- **边界**：`soc run` 只产出回归报告（`regression_run/report.json`），
+  还没有接 `RunContext / ArtifactStore / Provenance` 与签核证据包；
+  E203 路径需要 RISC-V 工具链和 E203 TB，未在本机实跑。
 
 详见 [`examples/open_npu_soc/README.md`](examples/open_npu_soc/README.md)。
 
@@ -204,6 +211,7 @@ audit → finalize → END
 | 工具角色映射 | `ToolHub.validate_registry()` + CLI 启动一行汇总 | 空映射未在 `EXECUTORS_WITHOUT_HUB_TOOLS` 登记 → 启动 `exit 2` |
 | LLM 协议猜测 | `find_spec_yaml` 对“非规格显式声明的单端口协议组”回退 generic | 一个猜测不会劫持整份 spec（否则生成错误 agent、DUT_CHK 求值 X） |
 | 签核结论可复现 | Tier A + `replay/recipe.json` v2 | `tests/test_signoff_reproducible.py` 重算并与 `report.json` 比对；证据漂移会失败 |
+| 编译失败不跑 test | `Scheduler` 的 `_run_test_task()` | build 失败时 test 直接标 fail 且不执行，避免旧 work library 跑出假结果（`test_scheduler_build_failure.py`） |
 
 原则：**查询与构建分离、配置与代码分离、硬规则与软策略分离**。这些护栏
 只加检查、不加节点，不改变已跑通的拓扑。
@@ -218,7 +226,7 @@ audit → finalize → END
   新函数超阈值、或已登记函数复杂度增长 → 失败。
 - `python -m config.architecture_guard` 是 CI 入口。
 
-**变异测试** `scripts/mutation_guards.py` 故意改坏 6 条核心守卫，再跑对应
+**变异测试** `scripts/mutation_guards.py` 故意改坏 7 条核心守卫，再跑对应
 测试；测试必须失败（mutant killed），否则说明守卫没被测到：
 
 | mutant | 守卫 | 对应测试 |
@@ -531,6 +539,8 @@ tests:
 - 级：`loopback → p0 → p1 → p2 → p3`
 - 每级按 tag 筛用例；**每级 build 目录只生成本级用例**
 - loopback 全过后可停在人工节点（`WAITING_APPROVAL`）
+- **build 失败 → 依赖它的 test 不执行**：直接标 `fail`，不用旧 work library
+  跑出假 pass/fail；这是 SoC 例子实测暴露后补的守卫
 - 结果：`regression_stages.json`
 
 ### 8.5 生成层拆分（进行中）
@@ -995,13 +1005,13 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1179 passed / 5 skipped
+python -m pytest tests/ -q                            # 1198 passed / 2 skipped
 python -m pytest tests/core -q                        # Architecture 2.0 核心（83 条）
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
-python -m pytest src/workbench/tests -q               # 717 passed
+python -m pytest src/workbench/tests -q               # 721 passed
 python -m config.architecture_guard                   # 行数 / 圈复杂度预算
-python scripts/mutation_guards.py                     # 6 条核心守卫变异测试
+python scripts/mutation_guards.py                     # 7 条核心守卫变异测试
 ```
 
 关键守卫：
@@ -1039,6 +1049,7 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 | `test_interrupt_round_budget.py` | approval proceed 不重入 round_bump；轮次只由 round_bump 收口 |
 | `test_verified_by_propagation.py` | EDA/LLM 汇总规则；混合必须是 `mixed`，不能冒充 EDA |
 | `test_code_coverage_plan.py` | DUT 代码覆盖率合并排除 loopback、merge spec 正确 |
+| `test_scheduler_build_failure.py` | build 失败时 test 不执行，防止旧 work library 假结果 |
 | `tests/core/test_core_is_stdlib_only.py` | `src/core` 不反向依赖 layers/langgraph/pydantic |
 | `tests/core/test_provenance_attribution.py` | weak/exact 血缘规则；MISS/UNMAPPED 不建命中边；确定性重建 |
 | `tests/core/test_jobs_supervisor.py` | 超时杀进程树、非零退出、白名单 deny/monitor |
@@ -1091,6 +1102,11 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 - **三类工程服务不是独立引擎**：`optimize-regression` / `coverage-closure`
   只是 CLI 工作流；执行复用现有 `InfrastructureManager` 与
   `PipelineExecutionService`，不维护第二套仿真/收敛引擎。
+- **SoC run 只产回归报告**：`vagent soc run` 走 `InfrastructureManager`，
+  目前不生成 `RunContext / ArtifactStore / Provenance` 和签核证据包；
+  `examples/open_npu_soc` 的参考 TB 已 2/2 PASS，但证据链接入是下一步。
+- **E203 NICE 路径未实跑**：`examples/open_npu_soc` 的 E203 适配器/固件文件
+  已落地，但本机只验证了参考 TB 路径；E203 TB 需要 RISC-V 工具链。
 - **边界表同源**：`config/known_limitations.py` 是 §15 的代码真相；
   `test_architecture_invariants.py` 校验文档包含每条，player runtime 落地时
   必须同步改 `status` 与文档。
@@ -1130,6 +1146,8 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 │  │  ├─ cmd_casemodel.py       case-model 命令组
 │  │  ├─ cmd_evidence.py        evidence 命令组（人工链 + 签核包）
 │  │  ├─ cmd_config.py          config 命令组
+│  │  ├─ cmd_soc.py             SoC 参考工程 check / golden / run
+│  │  ├─ cmd_services.py        工程服务：optimize-regression / coverage-closure
 │  │  ├─ output.py              OutputAdapter / 公共选项
 │  │  └─ repl.py                交互式 REPL
 │  ├─ layers/
@@ -1157,6 +1175,7 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 │  │  ├─ common/                lib（哈希 / LLM / filelist / doc intake）
 │  │  └─ boards.py              板块单一真相
 │  └─ workbench/                PySide6 桌面工作台（可选）
+├─ examples/open_npu_soc/       SoC 参考工程（RTL / TB / golden / regression）
 ├─ tests/                       主测试套件
 ├─ output_<run>/                一次运行的产物
 └─ ARCHITECTURE.md              本文
@@ -1166,7 +1185,8 @@ python scripts/mutation_guards.py                     # 6 条核心守卫变异�
 
 ## 17. Architecture 2.0 路线图（已实现 vs 计划）
 
-**已实现（截至 2026-10-31）**：RunContext、ArtifactStore、EventStore、Provenance DAG、
+**已实现（截至 2026-10-31）**：参考 SoC 工程 v0.1 参考 TB 路径实测
+（`soc run` 2/2 PASS）；RunContext、ArtifactStore、EventStore、Provenance DAG、
 Coverage 归因完整率、Decision Evaluation、Verification Quality Gate、
 Job Runtime + 命令白名单、`LocalStrategy` 接入 JobSupervisor、
 UVM IR 契约与校验、增量计划（RTL diff → 依赖 → 受影响用例）、

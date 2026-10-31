@@ -39,6 +39,10 @@ KNOWN_LIMITATIONS: Tuple[Dict[str, str], ...] = (
      "text": "增量编译尚未实现"},
     {"id": "optimize_seed_level", "status": "open",
      "text": "回归优化未做种子级调度"},
+    {"id": "soc_no_full_evidence", "status": "open",
+     "text": "SoC run 只产回归报告"},
+    {"id": "e203_nice_path_not_run", "status": "open",
+     "text": "E203 NICE 路径未实跑"},
     {"id": "optional_auth_api", "status": "by_design",
      "text": "auth.py 是可选 API 面"},
 )
