@@ -26,8 +26,10 @@ module nice_cmd_sequencer (
     output logic done
 );
 
-    typedef enum logic [2:0] {
-        IDLE, LOAD, LAUNCH, WAIT_GEMM, STORE, WAIT_STORE, IRQ_PULSE, DONE
+    // 9 个状态需要 4 bit；用 3 bit 会让最后一个枚举值越界（vlog-13003）。
+    typedef enum logic [3:0] {
+        IDLE, LOAD, LAUNCH, WAIT_GEMM, STORE,
+        WAIT_STORE_START, WAIT_STORE_DONE, IRQ_PULSE, DONE
     } state_t;
 
     state_t state;
@@ -52,8 +54,12 @@ module nice_cmd_sequencer (
                 LOAD:       begin dma_load <= 1'b1; state <= LAUNCH; end
                 LAUNCH:     begin gemm_start <= 1'b1; state <= WAIT_GEMM; end
                 WAIT_GEMM:  if (gemm_done) state <= STORE;
-                STORE:      begin dma_store <= 1'b1; state <= WAIT_STORE; end
-                WAIT_STORE: if (!dma_busy) state <= IRQ_PULSE;
+                STORE:      begin dma_store <= 1'b1; state <= WAIT_STORE_START; end
+                // **两段等待**：STORE 只拉高一拍，DMA 在下一拍才看到 store 并
+                // 把 busy 拉高。若直接等 `!busy`，会在 DMA 还没开始时就读到
+                // busy=0 提前进 IRQ/DONE —— TB 在 C 写完前就读取，结果全 X。
+                WAIT_STORE_START: if (dma_busy) state <= WAIT_STORE_DONE;
+                WAIT_STORE_DONE:  if (!dma_busy) state <= IRQ_PULSE;
                 IRQ_PULSE:  begin irq <= 1'b1; state <= DONE; end
                 DONE:       begin done <= 1'b1; state <= IDLE; end
                 default:    state <= IDLE;

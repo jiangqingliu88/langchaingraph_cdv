@@ -26,6 +26,22 @@ logger = get_logger(__name__)
 # 各写各的（关键字散在 `_parse_task_result` 里），迟早漂移。
 ERROR_PATTERN = r'ERROR|FATAL|UVM_ERROR|FAILED'
 
+
+def _failed_builds(tasks) -> Set[str]:
+    return {t.name for t in tasks if t.status == 'fail'}
+
+
+def _run_test_task(task, failed_builds, strategy) -> None:
+    """执行 test；若依赖 build 失败则标记失败并**不执行**。"""
+    if task.build_name in failed_builds:
+        task.status = 'fail'
+        logger.warning(
+            f"跳过 {task.name}: 依赖的 build {task.build_name} 编译失败"
+            f"（不允许用旧 work library 跑出假结果）")
+        return
+    task.execute(strategy)
+
+
 class Scheduler:
     def __init__(self, strategy, build_only=False, test_only=False,
                  parallel_builds=1, state_file=None, dry_run=False,
@@ -238,6 +254,13 @@ class Scheduler:
 
         # ---- Test 阶段 ----
         if test_tasks and not self.build_only:
+            # **编译失败的 build，其 test 一律不跑。**
+            #
+            # 不跳过会非常危险：`vlog` 失败时上一次成功的 work library 可能还在，
+            # `vsim work.tb` 照样能起 —— 于是用**旧库**跑出一份看似正常的
+            # pass/fail。实测 SoC 例子：枚举越界导致 vlog 报错，但回归只用旧库
+            # 跑了 1.4us，TB 读到全 X，报告成"测试失败"而不是"编译失败"。
+            failed_builds = _failed_builds(build_tasks)
             logger.info(f"Running {len(test_tasks)} tests")
             pbar_test = tqdm(total=len(test_tasks), desc="Testing", unit="test", leave=True)
             test_stats = {'pass': 0, 'fail': 0, 'unknown': 0}
@@ -255,7 +278,7 @@ class Scheduler:
                 if self.test_only and not isinstance(task, TestTask):
                     continue
 
-                task.execute(self.strategy)
+                _run_test_task(task, failed_builds, self.strategy)
                 if not isinstance(self.strategy, LsfStrategy):
                     test_stats[task.status] += 1
                     pbar_test.set_postfix(test_stats)
