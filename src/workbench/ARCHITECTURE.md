@@ -1,6 +1,6 @@
 # Workbench 架构（当前实现）
 
-> 基线：2026-10-31
+> 基线：2026-10-31（清单 **45 个启用模块**；工作台 `pytest src/workbench/tests` **739 passed**）
 >
 > 本文描述 `src/workbench/` **代码现在怎么组织**，与仓库根
 > `ARCHITECTURE.md` 是同一套系统：CLI 是唯一正式入口，工作台是它的
@@ -21,25 +21,33 @@ Workbench 是一个 **PySide6 桌面应用**，不是 Web 前端：
 ## 2. 分层与依赖方向
 
 ```text
-app.py                         主窗口 / 菜单 / 工具栏 / 状态栏 / 启动流程
-  ├─ registry.py               ModuleManager：清单 → 视图
-  ├─ context.py                AppContext：模块能碰到的全部平台能力
-  ├─ manifest.py / spec.py     清单读取、校验、声明式契约（不依赖 Qt）
-  ├─ config.py                 清单路径 / 业务输入路径解析（不依赖 Qt）
-  ├─ loader.py                 "包.模块:类名" 工厂解析
-  ├─ projects.py               项目登记表（用户级 YAML）
-  ├─ settings_store.py         QSettings：几何 / dock / MDI / 主题
-  ├─ bus.py                    事件总线（模块之间只通过话题通信）
-  ├─ tasks.py                  后台任务（QThreadPool，结果回主线程）
-  ├─ bridge/                   工具绑定 / 归一化 / 参数整形（不依赖 Qt）
-  ├─ modules/                  业务模块（插件）
-  └─ ui/                       通用 UI 组件（不含业务词汇）
+                      app.py                   启动 / 窗口生命周期
+                         │
+                     registry.py               清单 → 模块实例
+                         │
+                      modules/  ──────┐         业务模块（插件）
+                      ╱       ╲      │
+                  ui/        bridge/ │          UI 通用件 / 工具绑定（不依赖 Qt）
+             （无业务词汇）       │
+                            catalog.py         工具绑定表（唯一写 python 路径处）
+                                 │
+                             src/tools/**      只读分析 / 查询 / 生成
 ```
 
-**依赖只能从上往下**：`ui ← bridge ← modules ← registry ← app`。
+**依赖方向**（与上面那张旧图不同 —— 旧图容易读成"bridge 依赖 ui"）：
 
-- `bridge/`、`spec.py`、`config.py` **不 import Qt** —— 清单解析与工具绑定
-  可以在无显示器环境下被测试和回答。
+| 层 | 可以依赖 | 不能依赖 |
+|---|---|---|
+| `ui/` | Qt、`ui/` 内部 | 任何业务词汇、modules、bridge |
+| `bridge/` | 标准库、`src/tools/**` | **Qt**、ui、modules |
+| `modules/` | ui、bridge、bus、tasks、ctx | 其它模块的实现（只走话题/工具名） |
+| `registry/` | modules、ctx、manifest | 业务逻辑 |
+| `app.py` | registry、ui、settings | 业务结论 |
+
+- **模块不能反向依赖 `app` / `registry`**：模块拿到的平台能力全在 `ctx`
+  （`AppContext`）；需要窗口的东西放 `on_activated()`。
+- `bridge/`、`spec.py`、`config.py`、`topics.py` **不 import Qt** —— 清单解析、
+  工具绑定与话题契约可以在无显示器环境下被测试和回答。
 - `ui/` **不认识任何业务词汇**；业务词汇只出现在 `modules/`。
 - 模块不直接 import `src/tools/**`，只通过 `bridge/catalog.py` 的绑定名调用。
 
@@ -162,6 +170,16 @@ QMainWindow
 **业务线不占顶层菜单**；它们在导航树、「窗口」菜单分段，以及模块动作归属
 （`debug → 调试`，其余 → `工具`）里。
 
+工具栏另有一个**业务模式**下拉：
+
+```text
+业务：全部业务 / SoC 业务 / IP 业务
+```
+
+它只切换导航树与「窗口」菜单里的团队业务线（SoC 模式收起 IP 团队，IP 模式
+收起 SoC 团队，共享专业模块不变），选择持久化到 QSettings `business/mode`。
+实现是 `NavPane.set_business_mode()`；不是第二套清单，也不改模块实例。
+
 ## 6. 模块插件契约
 
 `modules/base.py` 的 `IModule` 是平台唯一认识的契约：
@@ -204,6 +222,19 @@ payload = self.run_tool("sim.parse_log", log_text=text)
 - **非纯守卫**：`pure=False` 的绑定（LLM / 编译 / 仿真 / 回归 / 写盘）默认
   拒绝执行，必须 `force=True` 显式触发 —— 防止切标签页顺手烧一次 LLM。
 
+**触发权限（`trigger`，三层）**：`force` 只回答"是不是用户显式按的"，
+不回答"谁有资格按"。绑定上另加 `trigger`：
+
+| trigger | 谁能发起 | 典型绑定 |
+|---|---|---|
+| `user` | 只能由人（`actor="user"`）；agent 调不动 | 所有 `pure=False` 的默认值 |
+| `agent` | 人和 agent 都行 | 只读工具的默认值 |
+| `approval` | 必须带 `approval=True`（界面是确认框，agent 侧是审批记录） | `ip.release_build`（写对外发布包） |
+
+`call(name, force=..., actor=..., approval=...)` 三道闸门都要过；**真正的**
+目录范围 / 命令白名单 / 预算仍由 Core 的 Job Supervisor 实施，绑定层只回答
+"这次调用允许被发起吗"。CLI 路径不经过 Workbench，权限以 Core 为准。
+
 `bridge/catalog.py` 是**唯一**允许写工具 python 路径的地方；清单里写的是
 可审计的绑定名，不是任意 import 路径。`bridge/adapters.py` 只做参数整形
 （把吃 JSON 字符串的工具包成吃关键字参数），不改原工具。
@@ -225,26 +256,71 @@ Workbench 模块 ──tool 绑定──► src/tools（只读分析/查询）
 
 - **选中的运行**是跨视图的锚点：`flow.runs` 发布 `run.selected`，其余模块在
   清单 `params.subscribe` 里订阅。
-- 模块之间**不互相 import**，只通过 `bus.py` 的字符串话题通信。
+- **运行来源不止 UVM**：`flow.runs` 的列表来自 `RunRepository.discover_runs()`，
+  它认 `docs/manifest.json`（UVM）、`soc/soc_run.json`（SoC 回归）、
+  `ip/ip_run.json`（IP 回归）与 `c_run.json`（SoC C 用例），分别标
+  `kind=soc / ip / soc_c`；SoC 团队页面共用同一份运行事实。
+- 模块之间**不互相 import**，只通过 `bus.py` 的话题通信（形状见下）。
 - 长任务由 `tasks.TaskRunner` 提交（`QThreadPool` + `QRunnable`），结果经
   主线程信号返回；刻意不做取消/优先级/进度条（跑起来的仿真停不掉，给一个
   点不动的取消按钮更糟）。
+
+### 8.1 话题契约（`topics.py`）
+
+话题名与 payload 形状的**唯一真相**在 `src/workbench/topics.py`；`bus.py`
+只 re-export，旧 import 不用改。核心话题与形状：
+
+| 话题 | payload | 谁发 |
+|---|---|---|
+| `run.selected` | `RunSelected(run_id, run_kind, project_root, run_path)` | `flow.runs` / `flow.pipeline` / `service.*` |
+| `run.updated` | `RunUpdated(run_id, run_kind, stage, status)` | `flow.pipeline` |
+| `run.completed` | `RunCompleted(run_id, status)` | 后续（运行终态） |
+| `input.changed` | `InputChanged(module_id, path)` | `registry` |
+| `task.started` | `TaskStarted(task_id, module_id, operation, run_id)` | `app` 把 TaskRunner 接到总线 |
+| `task.completed` | `TaskCompleted(task_id, status, run_id, error)` | 同上 |
+| `evidence.updated` | `EvidenceUpdated(run_id, ok, files)` | 后续（证据写盘后） |
+| `decision.updated` | `DecisionUpdated(run_id, action, reason)` | 后续（决策落盘后） |
+
+- **兼容旧载荷**：`run_id_of(payload)` 同时认 `str`（旧的 run_id 字符串）、
+  `dict` 与 dataclass；订阅方一律用它取 run_id，不再写 `str(payload or "")`。
+- 发布方用 `bus.publish_run_selected(run_id, **fields)` / `publish_run_updated`
+  走契约形状，不必手拼 dict。
+
+### 8.2 任务生命周期（`tasks.py`）
+
+`TaskRunner` 为每个任务记一条 `TaskRecord`：
+
+```text
+task_id · label · module_id · operation · run_id
+queued → running → finished | failed
+started_at / finished_at · result / error
+```
+
+- 模块用 `self.submit_task(label, fn, operation=...)` 提交 —— 平台自动填
+  `module_id` 与当前 `run_id`，模块不用自己拼；
+- `tasks.record(id)` / `tasks.records()` / `tasks.pending()` 回答"哪个模块
+  起的、属于哪次验证、跑完没有"；
+- 任务开始/结束同时发到总线（`task.started` / `task.completed`），别的视图
+  订阅即可，不必认识发起任务的模块。
+- 仍然**不提供**取消与进度百分比。
 - 工作台与 CLI 的契约是**文件**：同一份 run 目录既能被 CLI 读，也能被工作台
   打开；工作台不替流水线计算业务结论。
 
-## 9. 模块清单（`config/workbench.yaml`，37 个启用模块）
+## 9. 模块清单（`config/workbench.yaml`，45 个启用模块）
 
 | 业务线 / 域 | 模块 | 作用 |
 |---|---|---|
 | `project` / 项目 | `project.overview`、`project.management` | 当前项目/最近运行进展 + 项目登记表（切换需重启） |
+| `soc` / SoC 团队 | `soc.overview`、`soc.architecture`、`soc.verification`、`soc.c_cases`、`soc.signoff` | SoC 集成视角：工程总览 / 层级 / 回归 / C 用例 / 签核（含消费的 IP 发布包绑定）；数据来自 `soc_adapter` |
+| `ip` / IP 团队 | `ip.catalog`、`ip.workspace`、`ip.signoff` | IP 供应方视角：清单 / 工作区（IP 回归 + 生成发布包）/ 发布检查（`ip_release_v1` 准则逐条） |
 | `service` / 客户工程 | `service.uvm`、`service.regression`、`service.coverage` | 三个业务服务入口（只做导航/编排，见 §16） |
 | `platform` / 平台配置 | `platform.settings` | 当前项目/清单/Python/Qt/EDA 工具的可读视图 |
 | `ide` / 设计时 | `ide.ip_spec`、`ide.manual_nodes` | IP 规格、人工节点 YAML 编辑 + schema 校验 |
 | `verify` / 运行时 | `verify.casemodel`（12 页）、`verify.isa_gen`、`verify.output` | case 属性建模、ISA 激励、验证产出 |
 | `design` / `model` / `ops` / `coverage` / `debug` / `audit` | `*.output` | 各 agent 本次运行的产出视图 |
 | `ops` | `ops.regression_status`、`ops.regression_wave`、`ops.regression_coverage` | 回归状态、波形、覆盖率产物 |
-| `debug` | `debug.sim_log`、`debug.fingerprint` | 仿真日志解析、错误指纹 |
 | `coverage` | `coverage.excludes` | 覆盖率豁免审批 |
+| `debug` | `debug.sim_log`、`debug.fingerprint` | 仿真日志解析、错误指纹 |
 | `flow` / 工程工作区 | `flow.pipeline`、`flow.diagram`、`flow.task`、`flow.todo`、`flow.runs`、`flow.evidence`、`flow.artifacts`、`flow.fcov`、`flow.drafts`、`flow.compare`、`flow.signoff`、`flow.trend`、`flow.decision`、`flow.manifest` | 闭环编排/流程视图/运行历史/证据/签核/趋势/决策轨迹/运行清单 |
 
 **边界**：`*.output` 是只读视图；`verify.casemodel` 是唯一「界面能力本身即核心」
@@ -344,9 +420,10 @@ src/workbench/
 ├─ projects.py          ~/.signoffai/projects.yaml
 ├─ sim_modes.py         仿真业务词条（与 CLI 同源）
 ├─ manual_gate.py       人工节点开关辅助
+├─ help_guide.py        帮助 → 使用指南（一页纸：输入 / 怎么跑 / 输出 / 怎么看）
 ├─ bridge/              catalog / binding / adapters（不 import Qt）
 ├─ ui/                  theme / models / widgets / views / editors / nav / containers / helpers
-├─ modules/             design model verify ops coverage debug audit ide flow
+├─ modules/             design model verify ops coverage debug audit ide flow soc ip service
 ├─ tests/               工作台测试（offscreen）
 ├─ readme.md            使用与上手说明
 └─ ARCHITECTURE.md      本文
@@ -361,10 +438,11 @@ src/workbench/
 ├─ 项目总览            project.overview
 └─ 项目管理            project.management
 
-客户工程（service）
-├─ UVM 自动化验证      service.uvm
-├─ 回归效率优化        service.regression
-└─ Coverage Closure    service.coverage
+客户工程
+├─ SoC 团队            soc.overview / soc.architecture / soc.verification
+│                      soc.c_cases / soc.signoff
+├─ IP 团队             ip.catalog / ip.workspace / ip.signoff
+└─ 工程服务            service.uvm / service.regression / service.coverage
 
 设计时（ide）
 工程工作区（flow / ops / coverage / debug）
@@ -443,3 +521,74 @@ modules:
     order: 10
     params: {subscribe: [run.selected]}
 ```
+
+### 16.6 SoC 团队 / IP 团队 / 业务模式
+
+**两条业务线是供应方 / 消费方**（不是同一流程的两个入口），共用工程事实、
+不复制回归/波形/证据页面：
+
+| 页面 | 模块 | 数据/动作 |
+|---|---|---|
+| SoC 总览 | `soc.overview` | `soc.project`、`soc.runs`、`soc.run_summary`；跑 SoC 回归、开波形、校验证据 |
+| SoC 架构 | `soc.architecture` | spec / IP manifest / RTL 清单（只读） |
+| SoC 验证工作区 | `soc.verification` | `regression.yaml` 用例表 + 运行 C 用例 + 打开波形 |
+| SoC C 用例 | `soc.c_cases` | `soc.c_cases` 清单、按用例 `soc.c_run`、打开对应 qwave.db |
+| SoC 签核 | `soc.signoff` | 回归/证据/波形 + IP release matrix + **消费的发布包绑定**（`consumed_ips`） |
+| IP 目录/工作区/发布检查 | `ip.catalog / ip.workspace / ip.signoff` | `ip.list`、`ip.plan`、`ip.status`、`ip.evidence`、`ip.release`、`ip.run`、**`ip.release_build` / `ip.release_check`**、`ip.binding` |
+
+**方法学差异（覆盖率分账）**：IP 团队按 `ip_cdv`（IP 内部覆盖点/断言），
+SoC 团队按集成场景覆盖；IP 内部覆盖率**不重算、不相加**。v0.1 没有独立
+IP TB，发布包里的覆盖是 `{measured: false, functional_pct: null,
+basis: soc_subset}` —— `None ≠ 0`，界面上显示"未测量"而不是一个假数字。
+
+**发布契约**：IP 工作区「生成发布包」→ `spec/ip_releases/<ip>.json`
+（`ip_release_v1`，含 rtl_hash / criteria / waivers / sha256）；准则没过也写，
+但 `released=false` 并列 blocking。SoC 每次 run 在 `soc/soc_run.json` 记
+`consumed_ips`，签核页把 `MISSING / STALE / NOT_RELEASED` 的条数显示出来。
+
+- **运行选择器**：每个 SoC 团队页面顶部都有 `soc.runs` 下拉；`list_soc_runs`
+  返回 `soc`（`soc/soc_run.json`）与 `soc_c`（`c_run.json`）run，
+  `c_run.json` 归一化成 `manifest.regression` 的最小形状供页面复用。
+  **IP run（`ip/ip_run.json`）被过滤掉**——它是子集回归，归 IP 工作区自己看，
+  混进来会被当成"这次 SoC 跑过了"。
+- **运行历史**：`RunRepository` 认 `soc/soc_run.json`、`ip/ip_run.json`、
+  `c_run.json`；C run 以 `kind=soc_c`、`case=C-GEMM-8X8` 显示。
+- **波形/源码**：SoC 页面的「打开波形」调用 `open_wave()`：
+  - 先找已存在的设计索引（回归 run 在用例目录 / C run 在 `<run>/e203/design.bin`）；
+  - 没有就对该 build 按需 `vopt -work work <top> -o vis_opt +acc -linedebug
+    -designfile design.db`，缓存一份；
+  - 然后 `visualizer -designfile design.db -wavefile qwave.db`，hierarchy 里
+    双击模块可看源码。
+- **业务模式**：工具栏「业务：全部 / SoC / IP」只过滤导航树里的团队业务线
+  （`NavPane.set_business_mode`），共享模块不变；值存 QSettings `business/mode`，
+  启动时由 `_report_after_build()` 应用。
+- **边界**：这些页面不跑第二套引擎；`soc.run` / `soc.c_run` / `ip.run` /
+  `ip.release_build` 都是 `pure=False` 的显式动作（最后一个写 `spec/ip_releases/`，
+  是对外交付物），页面只展示工具返回的事实与文件路径。
+
+## 17. 架构冻结（2026-11-01）
+
+Workbench 主体架构进入**冻结**：只允许在上面加契约与模块，不再调整骨架。
+与仓库根 `ARCHITECTURE.md` 的分工是固定的 —— **Core 保证可信可追溯、
+Agent 推进自主验证、Workbench 负责看清与管住**。
+
+**冻结项**（改它们要先改这份文档与对应测试）：
+
+- CLI 是唯一正式入口；Workbench 不复制执行引擎、不产生签核结论；
+- 文件契约 + Run Repository 是运行事实来源；
+- `ModuleBase` 插件契约、`config/workbench.yaml` 清单驱动；
+- `bridge/catalog.py` 工具绑定（唯一写 python 路径处）；
+- `EventBus` 模块通信、`TaskRunner` 后台执行（不引入第二套任务引擎）；
+- SoC / IP 双业务线与"Service 入口只编排"的边界。
+
+**允许增量完善**（不改骨架）：
+
+- 任务归属与生命周期（`TaskRecord`）、话题 payload 契约（`topics.py`）；
+- 非纯工具的触发权限（`trigger=user/agent/approval`）；
+- Agent 任务观察与审批入口（新增只读模块 + 审批按钮，复用 `bridge`）；
+- 模块异常恢复与资源释放。
+
+**接入自主 Agent 的原则**：Claude Code 等外部执行能力、Skill 等专业知识
+都在 Core 一侧；Workbench 只新增观察与审批面（`agent_output` /
+`agent_decisions` / `agent_tasks` / `agent_approvals` 之类），**不重造一遍
+执行、编排或决策**。

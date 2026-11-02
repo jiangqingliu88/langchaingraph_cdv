@@ -13,22 +13,13 @@ from typing import Any, Callable, Dict, List, Optional
 
 from PySide6.QtCore import QObject, Signal
 
-# ── 话题常量 ── 写成常量而不是散落的字符串字面量，改名时 grep 得到
-
-#: 某个模块的业务输入变了（payload: ModuleSpec.id 与 Path）
-TOPIC_INPUT_CHANGED = "input.changed"
-#: 模块被激活（切标签页 / raise dock）（payload: ModuleSpec.id）
-TOPIC_MODULE_ACTIVATED = "module.activated"
-#: 状态栏消息（payload: str）
-TOPIC_STATUS = "status.message"
-#: 工具调用出错（payload: (name, message)）
-TOPIC_TOOL_ERROR = "tool.error"
-#: 控制台日志（payload: (level, text)）
-TOPIC_LOG = "log"
-#: 选中的运行变了（payload: run_id str）—— 左窗格的运行列表发，其余视图跟
-TOPIC_RUN_SELECTED = "run.selected"
-#: 某次运行的进度有新事件（payload: run_id str）
-TOPIC_RUN_UPDATED = "run.updated"
+# 话题名与 payload 形状的唯一真相在 `topics.py`；这里 re-export，旧 import 不用改。
+from .topics import (  # noqa: F401
+    TOPIC_DECISION_UPDATED, TOPIC_EVIDENCE_UPDATED, TOPIC_INPUT_CHANGED,
+    TOPIC_LOG, TOPIC_MODULE_ACTIVATED, TOPIC_RUN_COMPLETED, TOPIC_RUN_SELECTED,
+    TOPIC_RUN_UPDATED, TOPIC_STATUS, TOPIC_TASK_COMPLETED, TOPIC_TASK_STARTED,
+    TOPIC_TOOL_ERROR, RunSelected, RunUpdated, run_id_of,
+)
 
 
 class EventBus(QObject):
@@ -60,6 +51,18 @@ class EventBus(QObject):
         for slot in list(self._subs.get(topic, ())):
             slot(payload)
         self.published.emit(topic, payload)
+
+    def publish_run_selected(self, run_id: str, **fields: Any) -> None:
+        """按契约发布 `run.selected`（dict 形状，见 `topics.RunSelected`）。
+
+        订阅方用 `run_id_of(payload)` 取 run_id —— 它也认旧的字面量字符串。
+        """
+        self.publish(TOPIC_RUN_SELECTED,
+                     RunSelected(run_id=str(run_id), **fields).to_payload())
+
+    def publish_run_updated(self, run_id: str, **fields: Any) -> None:
+        self.publish(TOPIC_RUN_UPDATED,
+                     RunUpdated(run_id=str(run_id), **fields).to_payload())
 
     def subscribers(self, topic: str) -> int:
         """某话题的订阅数 —— 测试与自检用。"""

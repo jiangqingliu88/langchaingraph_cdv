@@ -15,7 +15,8 @@ def test_shipped_manifest_parses():
     assert [m.id for m in manifest.enabled_modules()] == [
         # 项目入口 + 工程服务入口（客户视角，最前）
         "project.overview", "project.management",
-        "soc.overview", "soc.architecture", "soc.verification", "soc.signoff",
+        "soc.overview", "soc.architecture", "soc.verification", "soc.c_cases",
+        "soc.signoff",
         "ip.catalog", "ip.workspace", "ip.signoff",
         "service.uvm", "service.regression", "service.coverage",
         "platform.settings",
@@ -155,7 +156,7 @@ def test_builtin_manifest_has_groups_but_no_modules():
 
 def test_describe_counts_enabled_modules():
     manifest = load_manifest(default_manifest_path())
-    assert "44 个模块" in describe(manifest)
+    assert "45 个模块" in describe(manifest)
     assert describe(None) == "清单：无"
 
 

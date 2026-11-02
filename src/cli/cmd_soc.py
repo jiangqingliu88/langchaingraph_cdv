@@ -20,13 +20,15 @@ import click
 from src.cli.commands import cli, console
 from src.cli.output import get_output_adapter
 from src.cli.soc_adapter import (
-    find_wave, ip_plan, ip_status, load_run_manifest, run_ip_regression,
-    run_soc_project, soc_ip_release_matrix, verify_soc_evidence,
+    build_ip_release, find_design, find_wave, ip_plan, ip_status,
+    load_run_manifest, run_ip_regression, run_soc_project, soc_ip_binding,
+    soc_ip_release_matrix, verify_ip_release, verify_soc_evidence,
     write_ip_evidence,
 )
+from src.cli.soc_c_runner import list_c_cases, run_c_case
 
 _REQUIRED = (
-    "rtl/soc_top.sv",
+    "npu/soc_top.sv",
     "tb/tb_soc_top.sv",
     "filelist.f",
     "golden/gemm_golden.py",
@@ -134,9 +136,43 @@ def soc_run(project, output, json_output):
 
 def _latest_soc_run() -> Path | None:
     here = Path.cwd()
-    runs = sorted((p for p in here.glob("output_soc_*") if p.is_dir()),
-                  key=lambda p: p.stat().st_mtime, reverse=True)
+    runs = [p for p in here.glob("output_*")
+            if p.is_dir() and ((p / "soc" / "soc_run.json").is_file()
+                               or (p / "c_run.json").is_file())]
+    runs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return runs[0] if runs else None
+
+
+@soc_group.command("c-cases")
+@click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--json", "json_output", is_flag=True)
+def soc_c_cases(project, json_output):
+    """列出 SoC 的 C 用例（CPU/NICE 驱动 IP）。"""
+    cases = list_c_cases(project)
+    if json_output:
+        click.echo(json.dumps(cases, indent=2, ensure_ascii=False))
+        return
+    for case in cases:
+        console.print(f"{case.get('id')} · {case.get('name')} · "
+                      f"IPs={'、'.join(case.get('ips') or [])}")
+
+
+@soc_group.command("c-run")
+@click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--case", "case_id", required=True, help="C 用例 id（如 C-GEMM-8X8）")
+@click.option("--output", "-o", default=None)
+@click.option("--json", "json_output", is_flag=True)
+def soc_c_run(project, case_id, output, json_output):
+    """编译并运行 E203 bare-metal C 用例（需要 RISC-V 工具链 + Questa）。"""
+    result = run_c_case(project, case_id, output)
+    if json_output:
+        click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+    else:
+        console.print(f"C 用例 {case_id} · {result.get('status')} · "
+                      f"{result.get('output_root')}")
+        if result.get("error"):
+            console.print(f"[red]{result['error']}[/red]")
+    raise SystemExit(0 if result.get("status") == "PASS" else 1)
 
 
 @soc_group.command("report")
@@ -252,6 +288,66 @@ def ip_release(project, run_root, json_output):
                       f"owner={ip.get('owner')}")
 
 
+@ip_group.command("release-build")
+@click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--ip", "ip_id", required=True)
+@click.option("--run", "run_root", default="",
+              help="来源 run（缺省用该 IP 最近一次 IP run）")
+@click.option("--by", "released_by", default="", help="发布人（缺省取 IP owner）")
+@click.option("--json", "json_output", is_flag=True)
+def ip_release_build(project, ip_id, run_root, released_by, json_output):
+    """生成 IP 发布包（spec/ip_releases/<ip>.json）。
+
+    准则没过也照样写盘，但 `released=false` 并列出 blocking —— 发布与否是人的决定。
+    """
+    result = build_ip_release(project, ip_id, run_root, released_by)
+    if json_output:
+        click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+    elif not result.get("ok"):
+        click.echo(result.get("error") or "生成失败")
+    else:
+        console.print(f"{'✓ released' if result['released'] else '✗ blocked'} · "
+                      f"{result['path']} · sha256 {result['sha256'][:16]}…")
+        for c in result.get("criteria") or []:
+            mark = {"pass": "✓", "fail": "✗", "unknown": "?"}.get(c["status"], "?")
+            console.print(f"  {mark} {c['id']}"
+                          f"（{'必需' if c['required'] else '参考'}）{c['detail']}")
+    raise SystemExit(0 if result.get("ok") and result.get("released") else 1)
+
+
+@ip_group.command("release-check")
+@click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--ip", "ip_id", required=True)
+@click.option("--json", "json_output", is_flag=True)
+def ip_release_check(project, ip_id, json_output):
+    """校验发布包：自身哈希 / 是否放行 / 与清单 RTL hash 是否还绑得住。"""
+    result = verify_ip_release(project, ip_id)
+    if json_output:
+        click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+    elif result.get("ok"):
+        pkg = result.get("package") or {}
+        console.print(f"✓ {ip_id} {pkg.get('version')} · "
+                      f"sha256 {str(pkg.get('sha256'))[:16]}…")
+    else:
+        console.print(f"✗ {ip_id}：{result.get('issues')}")
+    raise SystemExit(0 if result.get("ok") else 1)
+
+
+@ip_group.command("binding")
+@click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--json", "json_output", is_flag=True)
+def ip_binding(project, json_output):
+    """SoC 视角：每个 IP 绑的发布包状态（OK / STALE / MISSING / UNRELEASED）。"""
+    rows = soc_ip_binding(project)
+    if json_output:
+        click.echo(json.dumps(rows, indent=2, ensure_ascii=False))
+        return
+    for row in rows:
+        console.print(f"{row['ip_id']} · {row['state']} · "
+                      f"release={row.get('release_version') or '-'} · "
+                      f"manifest={row.get('manifest_version') or '-'}")
+
+
 @ip_group.command("run")
 @click.argument("project", type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option("--ip", "ip_id", required=True)
@@ -273,16 +369,21 @@ def ip_run(project, ip_id, output, json_output):
 @click.argument("run", required=False, type=click.Path(exists=True, file_okay=False,
                                                        path_type=Path))
 @click.option("--list", "list_only", is_flag=True, help="只打印波形路径，不打开")
-def soc_wave(run, list_only):
-    """打开最近一次 SoC run 的波形（qwave.db → Visualizer）。"""
+@click.option("--test", "-t", "test_name", default="",
+              help="按用例名筛选（如 gemm_8x8_c）")
+def soc_wave(run, list_only, test_name):
+    """打开 SoC run / C 用例 run 的波形（qwave.db → Visualizer）。"""
     root = Path(run).resolve() if run else _latest_soc_run()
     if root is None:
-        raise click.ClickException("找不到 output_soc_*；先跑 `vagent soc run`")
-    wave = find_wave(root)
+        raise click.ClickException("找不到 output_* run；先跑 `vagent soc run` 或 `soc c-run`")
+    wave = find_wave(root, test_name)
     if wave is None:
         raise click.ClickException(
-            f"{root} 没有波形；确认 regression.yaml 的 `-qwavedb` 已启用")
+            f"{root} 没有波形；确认 regression.yaml 的 `-qwavedb` / c-run 已启用")
+    design = find_design(root, wave)
     console.print(f"wave: {wave}")
+    if design:
+        console.print(f"design: {design}")
     if list_only or not wave.is_file():
         return
     import subprocess
@@ -293,7 +394,8 @@ def soc_wave(run, list_only):
         args = ["-view", str(wave), "-do", "add wave -r /*"]
     else:
         exe = questa_exe("visualizer.exe")
-        args = ["-wavefile", str(wave)]
+        args = (["-designfile", str(design)] if design else []) + [
+            "-wavefile", str(wave)]
     if not os.path.exists(exe):
         raise click.ClickException(f"找不到打开波形的程序：{exe}")
     kwargs = {}

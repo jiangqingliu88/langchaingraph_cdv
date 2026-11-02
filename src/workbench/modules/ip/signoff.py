@@ -1,6 +1,7 @@
 """IP 发布检查 —— 发布前的结构化清单，不冒充签核结论。"""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict
 
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
@@ -34,6 +35,9 @@ class IpSignoffModule(IpModuleBase):
         self.body = QLabel("", root)
         self.body.setWordWrap(True)
         layout.addWidget(self.body)
+        self.release = QLabel("", root)
+        self.release.setWordWrap(True)
+        layout.addWidget(self.release)
         self.status = QLabel("", root)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
@@ -80,11 +84,30 @@ class IpSignoffModule(IpModuleBase):
             + "\n\n边界：IP 级证据来自最近一次 SoC run 的 TP 状态；"
               "独立 IP TB / 覆盖率拆分仍是 M2。")
         self.body.setStyleSheet(f"color: {theme.current().muted};")
+        info = self.run_tool("ip.release_check", quiet=True,
+                             root=str(self.project_root), ip_id=ip_id)
+        self.release.setText(self._release_text(info if isinstance(info, dict) else {}))
         st = self.run_tool("ip.status", quiet=True, root=str(self.project_root),
                            ip_id=ip_id, run_root="")
         if isinstance(st, dict):
             self.status.setText(
                 f"验证状态：{st.get('status')} · release_ready={st.get('release_ready')} · "
-                f"来源：{st.get('source_run') or '无'}\n"
+                f"来源：{Path(str(st.get('source_run') or '')).name or '无'}"
+                f"（{st.get('source_kind') or 'none'}）\n"
                 + "、".join(f"{t.get('tp_id')}={t.get('status')}"
                             for t in (st.get("testpoints") or [])))
+
+    @staticmethod
+    def _release_text(info: Dict[str, Any]) -> str:
+        pkg = info.get("package") or {}
+        if not pkg:
+            return ("发布包：未生成 —— 发布检查不能只靠清单里的 status 字段；"
+                    "先跑 IP 回归再点「生成发布包」。")
+        criteria = "、".join(
+            f"{c.get('id')}={c.get('status')}" for c in (pkg.get("criteria") or []))
+        state = "✓ released" if pkg.get("released") else "✗ blocked"
+        issues = "、".join(str(i.get("check")) for i in (info.get("issues") or []))
+        return (f"发布包：{pkg.get('version')} · {state} · "
+                f"sha256 {str(pkg.get('sha256'))[:12]}…\n"
+                f"准则：{criteria or '无'}"
+                + (f"\n问题：{issues}" if issues else ""))

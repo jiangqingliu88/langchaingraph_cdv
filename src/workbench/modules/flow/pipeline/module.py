@@ -16,6 +16,8 @@
 """
 from __future__ import annotations
 
+from src.workbench.bus import run_id_of
+
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -247,7 +249,7 @@ class PipelineModule(ModuleBase):
 
     def on_refresh(self, payload: Any = None) -> None:
         """`run.selected` 的订阅者 —— 左窗格换了运行，这里跟着切。"""
-        run_id = str(payload or "")
+        run_id = run_id_of(payload)
         if run_id and run_id != self.run_id:
             self.follow(run_id)
 
@@ -304,7 +306,7 @@ class PipelineModule(ModuleBase):
         # 还得等你去点一下。表现就是"点了启动，别的页不刷新"。
         # 自己也是订阅者，但 `on_refresh` 有 `run_id != self.run_id` 的守卫，
         # 所以不会绕回来。
-        self.ctx.bus.publish(bus.TOPIC_RUN_SELECTED, self.run_id)
+        self.ctx.bus.publish_run_selected(self.run_id)
 
     def cancel_run(self) -> None:
         if not self.run_id:
@@ -372,7 +374,7 @@ class PipelineModule(ModuleBase):
             self.timeline.set_events(self._events)
             for event in fresh:
                 self._append_log(event)
-            self.ctx.bus.publish(bus.TOPIC_RUN_UPDATED, self.run_id)
+            self.ctx.bus.publish_run_updated(self.run_id)
         self._refresh_state()
 
     def reload_journal(self) -> None:

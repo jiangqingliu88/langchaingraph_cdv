@@ -46,7 +46,10 @@ class NavPane(QWidget):
         super().__init__(parent)
         self._on_activate = on_activate
         self._items: Dict[str, QTreeWidgetItem] = {}
+        self._groups: Dict[str, QTreeWidgetItem] = {}
+        self._sections: Dict[str, QTreeWidgetItem] = {}
         self._active: Optional[QTreeWidgetItem] = None
+        self.business_mode = "all"
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -78,6 +81,8 @@ class NavPane(QWidget):
         """
         self.tree.clear()
         self._items.clear()
+        self._groups.clear()
+        self._sections.clear()
         self._active = None
 
         group_items = []                      # 所有业务线节点，稍后统一补占位
@@ -91,8 +96,11 @@ class NavPane(QWidget):
                                 & ~Qt.ItemFlag.ItemIsEditable)
                 parent.setExpanded(True)
                 _mark_as_domain(parent)
+                self._sections[section] = parent
             for group in groups:
-                group_items.append(self._add_group(parent, group, manifest))
+                top = self._add_group(parent, group, manifest)
+                self._groups[group.id] = top
+                group_items.append(top)
 
         # 业务线为空时留一个占位孩子，免得一条线看起来像「坏了」
         for top in group_items:
@@ -117,6 +125,23 @@ class NavPane(QWidget):
             child.setToolTip(0, f"{spec.title}\n{spec.id}　区域：{spec.area}")
             self._items[spec.id] = child
         return top
+
+    def set_business_mode(self, mode: str) -> None:
+        """业务模式：`all` / `soc` / `ip`。
+
+        只隐藏“另一条团队线”，共享的流程/证据/专业工具始终可见 ——
+        切 SoC 模式不是把 IP 数据删掉，只是把 IP 团队入口收起。
+        """
+        mode = mode if mode in ("all", "soc", "ip") else "all"
+        self.business_mode = mode
+        for gid, item in self._groups.items():
+            hidden = ((mode == "soc" and gid == "ip")
+                      or (mode == "ip" and gid == "soc"))
+            item.setHidden(hidden)
+        for section, item in self._sections.items():
+            visible = any(not item.child(i).isHidden()
+                          for i in range(item.childCount()))
+            item.setHidden(not visible)
 
     # ════════════════════════════════════════════════════════
     # 状态

@@ -21,6 +21,8 @@ YAML 是有损的（注释、键顺序都会丢），那等于悄悄改掉人写
 """
 from __future__ import annotations
 
+from src.workbench.bus import run_id_of
+
 import re
 from pathlib import Path
 from dataclasses import dataclass
@@ -174,7 +176,7 @@ class ArtifactsModule(ModuleBase):
 
     def on_refresh(self, payload: Any = None) -> None:
         """`run.selected` 的订阅者 —— 换一次运行就重新列产物。"""
-        run_id = str(payload or "")
+        run_id = run_id_of(payload)
         if run_id and run_id != self.run_id:
             self.run_id = run_id
             self.refresh()

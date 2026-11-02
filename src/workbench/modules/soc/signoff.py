@@ -71,5 +71,22 @@ class SoCSignoffModule(SocModuleBase):
             f"package_hash {str(ev.get('package_hash'))[:16]}…\n"
             f"波形：{waves[0].get('path') if waves else '无'}\n"
             f"IP release：{' · '.join(ip_lines) or '无 IP 清单'}\n"
+            f"{self._binding_text(doc)}\n"
             f"目录：{Path(summary.get('dir', '')) / 'signoff_evidence'}")
         self.body.setStyleSheet(f"color: {theme.current().muted};")
+
+    @staticmethod
+    def _binding_text(doc: Dict[str, Any]) -> str:
+        """消费的 IP 发布包绑定 —— 版本/hash 对不上就是签核的 caveat。"""
+        rows = doc.get("consumed_ips") or []
+        if not rows:
+            return "IP 发布包绑定：无（清单里没有 IP，或这次 run 早于绑定记录）"
+        parts = []
+        bad = 0
+        for row in rows:
+            state = str(row.get("state") or "?")
+            if state not in ("OK", "UNRELEASED"):
+                bad += 1
+            parts.append(f"{row.get('ip_id')}={state}")
+        head = "✓ 全部绑定正常" if not bad else f"✗ {bad} 个 IP 绑定异常"
+        return f"IP 发布包绑定：{head} · " + "、".join(parts)

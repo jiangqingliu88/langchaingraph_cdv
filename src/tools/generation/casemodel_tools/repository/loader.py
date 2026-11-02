@@ -158,6 +158,185 @@ def _parse_cross(raw: Any) -> List[CrossPair]:
 
 
 # ════════════════════════════════════════════════════════════
+# 断言（可选的 `assertions:` 块）
+# ════════════════════════════════════════════════════════════
+
+def _parse_assertions(raw: Any) -> List[Any]:
+    """`assertions:` → `Assertion` 列表。
+
+    缺 `name` / `expr` 的条目丢掉（构不成可渲染的断言）；`id` 缺省取 `name`；
+    `tp_bindings` 里的角色只认 primary / supporting，其它按 primary 处理。
+    """
+    from ..domain.model import Assertion
+
+    out = []
+    for item in as_list(raw):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        expr = str(item.get("expr") or "").strip()
+        if not (name and expr):
+            continue
+        bindings: List[Dict[str, str]] = []
+        for raw_binding in as_list(item.get("tp_bindings")):
+            if not isinstance(raw_binding, dict):
+                continue
+            tp_id = str(raw_binding.get("tp_id") or "").strip()
+            if not tp_id:
+                continue
+            role = str(raw_binding.get("role") or "primary").strip().lower()
+            if role not in ("primary", "supporting"):
+                role = "primary"
+            bindings.append({"tp_id": tp_id, "role": role})
+        policy = item.get("failure_policy")
+        severity = "error"
+        if isinstance(policy, dict):
+            severity = str(policy.get("severity") or "error").strip().lower()
+            if severity not in ("error", "warning", "info"):
+                severity = "error"
+        out.append(Assertion(
+            id=str(item.get("id") or name).strip(),
+            name=name,
+            expr=expr,
+            message=str(item.get("message") or ""),
+            signals=list(as_list(item.get("signals"))),
+            tp_bindings=bindings,
+            failure_severity=severity,
+        ))
+    return out
+
+
+# ════════════════════════════════════════════════════════════
+# 行为域（可选的 `behavior:` 块）
+# ════════════════════════════════════════════════════════════
+
+def _behavior_names(raw: Any, key: str) -> List[str]:
+    out = []
+    for item in as_list(raw.get(key)):
+        if isinstance(item, dict):
+            name = str(item.get("name") or item.get("id") or "").strip()
+        else:
+            name = str(item).strip()
+        if name:
+            out.append(name)
+    return out
+
+
+def _parse_transitions(raw: Any) -> List[Any]:
+    from ..domain.behavior import Transition
+
+    out = []
+    for item in as_list(raw):
+        if not isinstance(item, dict):
+            continue
+        tid = str(item.get("id") or "").strip()
+        source = str(item.get("from") or "").strip()
+        event = str(item.get("event") or "").strip()
+        target = str(item.get("to") or "").strip()
+        if not (tid and source and event and target):
+            continue
+        out.append(Transition(
+            id=tid, from_state=source, event=event, to_state=target,
+            checks=[str(c) for c in as_list(item.get("checks"))],
+            description=str(item.get("description") or "")))
+    return out
+
+
+def _parse_sequences(raw: Any) -> List[Any]:
+    from ..domain.behavior import BehaviorSequence
+
+    out = []
+    for item in as_list(raw):
+        if not isinstance(item, dict) or not str(item.get("id") or "").strip():
+            continue
+        out.append(BehaviorSequence(
+            id=str(item["id"]).strip(),
+            steps=[dict(step) for step in as_list(item.get("steps"))
+                   if isinstance(step, dict)],
+            expects=[str(c) for c in as_list(item.get("expects"))],
+            description=str(item.get("description") or "")))
+    return out
+
+
+def _parse_temporal(raw: Any) -> List[Any]:
+    from ..domain.behavior import TemporalProperty
+
+    out = []
+    for item in as_list(raw):
+        if not isinstance(item, dict) or not str(item.get("id") or "").strip():
+            continue
+        out.append(TemporalProperty(
+            id=str(item["id"]).strip(),
+            trigger=str(item.get("trigger") or "").strip(),
+            condition=dict(item.get("condition") or {})
+            if isinstance(item.get("condition"), dict) else {},
+            response=dict(item.get("response") or {})
+            if isinstance(item.get("response"), dict) else {},
+            within=dict(item.get("within") or {})
+            if isinstance(item.get("within"), dict) else {},
+            reset_policy=str(item.get("reset_policy") or "abort"),
+            checks=[str(c) for c in as_list(item.get("checks"))]))
+    return out
+
+
+def _parse_behavior(raw: Any) -> Any:
+    """`behavior:` → `BehaviorModel`；没写或没有 id 就返回 None。"""
+    from ..domain.behavior import BehaviorModel
+
+    if not isinstance(raw, dict):
+        return None
+    behavior_id = str(raw.get("id") or "").strip()
+    if not behavior_id:
+        return None
+    return BehaviorModel(
+        id=behavior_id,
+        name=str(raw.get("name") or ""),
+        clock=str(raw.get("clock") or ""),
+        reset=dict(raw.get("reset") or {})
+        if isinstance(raw.get("reset"), dict) else {},
+        states=_behavior_names(raw, "states"),
+        events=_behavior_names(raw, "events"),
+        transitions=_parse_transitions(raw.get("transitions")),
+        sequences=_parse_sequences(raw.get("sequences")),
+        temporal=_parse_temporal(raw.get("temporal")),
+        checks=[str(c) for c in as_list(raw.get("checks"))])
+
+
+# ════════════════════════════════════════════════════════════
+# 配置域（可选的 `config_space:` 块）
+# ════════════════════════════════════════════════════════════
+
+def _parse_config_space(raw: Any) -> Any:
+    """`config_space:` → `ConfigSpace`；没有维度返回 None。"""
+    from ..domain.config_space import ConfigDimension, ConfigSpace
+
+    if not isinstance(raw, dict):
+        return None
+    dimensions = []
+    for item in as_list(raw.get("dimensions")):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        dimensions.append(ConfigDimension(
+            name=name, values=list(as_list(item.get("values")))))
+    if not dimensions:
+        return None
+    try:
+        cap = int(raw.get("max_combinations") or 64)
+    except (TypeError, ValueError):
+        cap = 64
+    return ConfigSpace(
+        dimensions=dimensions,
+        cross_groups=[dict(g) for g in as_list(raw.get("cross_groups"))
+                      if isinstance(g, dict)],
+        feasibility=[dict(f) for f in as_list(raw.get("feasibility"))
+                     if isinstance(f, dict)],
+        max_combinations=max(1, cap))
+
+
+# ════════════════════════════════════════════════════════════
 # 组装
 # ════════════════════════════════════════════════════════════
 
@@ -218,6 +397,9 @@ def model_from_dict(data: Any, source: str = "<dict>") -> CaseModel:
                       if g is not None],
         sampling=(dict(data.get("sampling") or {})
                   if isinstance(data.get("sampling"), dict) else {}),
+        assertions=_parse_assertions(data.get("assertions")),
+        behavior=_parse_behavior(data.get("behavior")),
+        config_space=_parse_config_space(data.get("config_space")),
         env_required=env_required,
         env_defaults=env_defaults,
         env_unknown_keys=list(dict.fromkeys(env_unknown + defaults_unknown)),

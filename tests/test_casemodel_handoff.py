@@ -210,10 +210,13 @@ class TestItReachesTheGeneratedEnv:
     def test_nonempty_tests_renders_the_attr_test_file(self):
         """`env.tests` 非空 ⇒ 属性 test 模板进渲染清单。"""
         import inspect
-        import src.tools.generation.uvm_tools.tool_uvm.gen_uvm as g
+        from src.tools.generation.uvm_tools.generation.generators import tasks
+        from src.tools.generation.uvm_tools.generation.render import templates
 
-        src = inspect.getsource(g)
+        src = inspect.getsource(tasks)
         # 那条 if 是整条链的闸门：`environment.tests` 为空时属性 test 根本不渲染
         assert "if environment.tests" in src or "if env.tests" in src, \
             "属性 test 的渲染闸门没了 —— 这条链的终点变了，要重新确认"
-        assert "test_attr.sv.j2" in src, "属性 test 模板不在渲染清单里"
+        # 渲染清单已搬到 generation/render/templates.py（gen_uvm 只 re-export）
+        assert "test_attr.sv.j2" in inspect.getsource(templates), \
+            "属性 test 模板不在渲染清单里"

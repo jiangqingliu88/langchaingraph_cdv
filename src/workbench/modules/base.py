@@ -142,8 +142,19 @@ class ModuleBase(IModule):
 
     # ── 给子类的工具 ──
 
+    def submit_task(self, label: str, fn, *, operation: str = "") -> str:
+        """提交后台任务 —— 自动带上 module_id 与当前 run（模块有 run_id 时）。
+
+        任务归属是平台契约的一部分（哪个模块、哪次验证），别让每个模块自己拼。
+        """
+        return self.ctx.tasks.submit(
+            label, fn, module_id=self.module_id,
+            operation=operation or label,
+            run_id=str(getattr(self, "run_id", "") or ""))
+
     def run_tool(self, name: Optional[str] = None, *, quiet: bool = False,
-                 force: bool = False, **kwargs) -> Any:
+                 force: bool = False, approval: bool = False,
+                 **kwargs) -> Any:
         """调一个登记过的工具。
 
         失败时**不抛**：把话说清楚（横幅 + 控制台 + 状态栏）然后返回 None。
@@ -164,7 +175,8 @@ class ModuleBase(IModule):
         merged = dict(self.spec.tool.args) if self.spec.tool else {}
         merged.update(kwargs)
         try:
-            return self.ctx.call_tool(tool_name, force=force, **merged)
+            return self.ctx.call_tool(tool_name, force=force,
+                                      approval=approval, **merged)
         except ToolError as exc:
             self.ctx.log(f"[{self.module_id}] {tool_name} 失败：{exc.cause}", "error")
             if not quiet:

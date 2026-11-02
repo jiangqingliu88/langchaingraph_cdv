@@ -15,27 +15,7 @@ line_budget:
 # 每个条目都必须写 reason 和 plan —— “为什么大、准备怎么拆”是给人看的，
 # 也是下次有人想再塞东西进来时先看到的成本。
 watched:
-  src/cli/commands.py:
-    registered: 4044
-    reason: "CLI 入口 + 未拆完的命令组；共享 helper 已抽到 cli/common.py"
-    plan: "继续把剩余命令组拆到 cmd_*.py，目标 1500 行内"
-  src/tools/flow/flow_tools/api.py:
-    registered: 2048
-    reason: "flow 工具 API 集中了签核/运行/决策/覆盖率多组只读视图；recipe/stimulus 摘要已拆到 evidence_summary.py"
-    plan: "按域拆到 signoff_api / run_api / coverage_api（下一次改动前先拆）"
-  src/tools/generation/uvm_tools/tool_uvm/gen_uvm.py:
-    registered: 3305
-    reason: "历史生成器主体（agent/env/bench 解析与渲染）；RegionInjector / 文件操作 / 模板注册表 / JinjaRenderer 已搬到 generation/render/"
-    plan: "按 parsing → models → render → generators 继续搬（见 ARCHITECTURE §8.5）"
-  src/tools/generation/uvm_tools/_tools_old.py:
-    registered: 1753
-    reason: "旧版工具快照，仅兼容保留"
-    plan: "确认无调用方后删除，不参与新功能"
-  src/tools/generation/casemodel_tools/coverage.py:
-    registered: 1547
-    reason: "覆盖率模型（维度/字段/交叉/两条采样通道）集中在一处"
-    plan: "按 covergroup / bin / cross 拆"
-  src/tools/generation/doc_tools/pipeline_docs.py:
-    registered: 1863
-    reason: "文档流水线（多份模板与 RTM）"
-    plan: "按文档域拆模板渲染与数据组装"
+  # 当前没有登记项：原来超线的几个文件都拆到 1500 行以下了
+  # （gen_uvm / flow_tools.api / casemodel.coverage / commands.py；
+  #  _tools_old、pipeline_docs 确认无调用方后已删除）。
+

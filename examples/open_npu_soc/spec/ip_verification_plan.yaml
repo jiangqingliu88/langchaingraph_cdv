@@ -1,28 +1,54 @@
 # IP 级验证计划 —— IP 团队交付什么、SoC 团队消费什么。
 #
-# testpoints 引用 SoC verification_plan 的 TP id；IP 团队可以先用 SoC 级
-# TB 证明该 IP 在真实集成环境里的行为，后续 M2 再替换为 IP 独立 TB。
+# **两条业务线的方法学不同，不要混算**：
+#   · IP 团队（本文件）：IP 内部 CDV —— 功能覆盖点 / 断言 / 边界与异常；
+#     交付物是 `ip_release_v1` 发布包（spec/ip_releases/<ip>.json）。
+#   · SoC 团队（spec/verification_plan.yaml）：集成 CDV —— 跨 IP 场景 /
+#     配置组合 / 启动-中断序列；消费的是已发布的包，不重算 IP 内部覆盖。
+#
+# v0.1 还没有独立 IP TB（M2 落地）：tests 暂时复用 SoC 回归里的用例，
+# 覆盖率的 basis 如实记 `soc_subset`、`measured: false`，不拿 SoC 的数字冒充。
 schema: ip_verification_plan_v1
 soc: open_npu_soc
 
 ips:
   IP-CPU-NICE:
+    methodology: ip_cdv
     tests: [gemm_8x8]
     testpoints: [TP-NICE-IRQ]
     acceptance: GEMM 完成后 NICE IRQ 到达
   IP-DMA:
+    methodology: ip_cdv
     tests: [gemm_8x8]
     testpoints: [TP-DMA-SRAM]
     acceptance: A/B 搬入、C 搬回
   IP-SRAM:
+    methodology: ip_cdv
     tests: [gemm_8x8]
     testpoints: [TP-DMA-SRAM]
     acceptance: A/B/C bank 读写正确
   IP-NPU-GEMM:
+    methodology: ip_cdv
     tests: [gemm_8x8]
     testpoints: [TP-GEMM-8X8-BASIC]
     acceptance: INT8 8x8x8 结果与 golden 一致
+    # IP 内部覆盖点（IP 团队自己的分母）—— SoC 的集成覆盖另算
+    coverage:
+      strategy: feature_coverpoint
+      target: 95
+      coverpoints:
+        - {id: CP-GEMM-ACC, desc: 累加器位宽/溢出, bins: [partial, full, overflow]}
+        - {id: CP-GEMM-OP, desc: 乘加组合, bins: [mul_only, mul_add]}
+    assertions:
+      - {id: AS-GEMM-VALID-STABLE, kind: protocol}
+    release_criteria:
+      - {id: tests_pass, required: true}
+      - {id: evidence_ok, required: true}
+      - {id: testpoints_observed, required: true}
+      - {id: coverage_min, required: false,
+         note: "IP 独立 TB（M2）落地前按 SoC 子集计，不阻断发布"}
   IP-INTERCONNECT:
+    methodology: ip_cdv
     tests: [gemm_8x8]
     testpoints: [TP-NICE-IRQ, TP-DMA-SRAM]
     acceptance: 地址映射与 IRQ 路径正确

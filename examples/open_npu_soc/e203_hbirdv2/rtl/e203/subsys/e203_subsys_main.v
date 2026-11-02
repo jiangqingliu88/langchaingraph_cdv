@@ -236,7 +236,33 @@ module e203_subsys_main(
   input  corerst, // The original async reset
   input  hfclkrst, // The original async reset
   input  hfextclk,// The original clock from crystal
-  output hfclk // The generated clock by HCLKGEN
+  output hfclk, // The generated clock by HCLKGEN
+
+  `ifdef E203_HAS_NICE//{
+  // NICE 外部接口：NPU 在 e203_subsys_top 里与 u_e203_subsys_main 同级，
+  // 这里只把 CPU 的 NICE 请求/响应/ICB 主口引到子系统边界。
+  output                         nice_req_valid_o,
+  output [`E203_XLEN-1:0]        nice_req_inst_o,
+  output [`E203_XLEN-1:0]        nice_req_rs1_o,
+  output [`E203_XLEN-1:0]        nice_req_rs2_o,
+  input                          nice_req_ready_i,
+  input                          nice_rsp_valid_i,
+  input  [`E203_XLEN-1:0]        nice_rsp_rdat_i,
+  input                          nice_rsp_err_i,
+  output                         nice_rsp_ready_o,
+  input                          nice_mem_holdup_i,
+  output                         nice_icb_cmd_ready_o,
+  output                         nice_icb_rsp_valid_o,
+  output [`E203_XLEN-1:0]        nice_icb_rsp_rdata_o,
+  output                         nice_icb_rsp_err_o,
+  input                          nice_icb_cmd_valid_i,
+  input  [`E203_XLEN-1:0]        nice_icb_cmd_addr_i,
+  input                          nice_icb_cmd_read_i,
+  input  [`E203_XLEN-1:0]        nice_icb_cmd_wdata_i,
+  input  [1:0]                   nice_icb_cmd_size_i,
+  input                          nice_icb_rsp_ready_i,
+  output                         core_rst_n_o
+  `endif//}
 
   );
 
@@ -371,6 +397,11 @@ module e203_subsys_main(
 
 `ifndef E203_HAS_LOCKSTEP//{
   wire core_rst_n = main_rst_n;
+
+  `ifdef E203_HAS_NICE//{
+  // NPU 在子系统顶层，和 CPU 域用同一个复位。
+  assign core_rst_n_o = core_rst_n;
+  `endif//}
   wire bus_rst_n  = main_rst_n;
   wire per_rst_n  = main_rst_n;
 `endif//}
@@ -611,9 +642,32 @@ module e203_subsys_main(
     .mem_icb_rsp_err    (mem_icb_rsp_err  ),
     .mem_icb_rsp_rdata  (mem_icb_rsp_rdata),
 
-    .test_mode     (test_mode), 
+  `ifdef E203_HAS_NICE//{
+    .nice_req_valid_o  (nice_req_valid_o),
+    .nice_req_inst_o   (nice_req_inst_o ),
+    .nice_req_rs1_o    (nice_req_rs1_o  ),
+    .nice_req_rs2_o    (nice_req_rs2_o  ),
+    .nice_req_ready_i  (nice_req_ready_i),
+    .nice_rsp_valid_i  (nice_rsp_valid_i),
+    .nice_rsp_rdat_i   (nice_rsp_rdat_i ),
+    .nice_rsp_err_i    (nice_rsp_err_i  ),
+    .nice_rsp_ready_o  (nice_rsp_ready_o),
+    .nice_mem_holdup_i (nice_mem_holdup_i),
+    .nice_icb_cmd_ready_o (nice_icb_cmd_ready_o),
+    .nice_icb_rsp_valid_o (nice_icb_rsp_valid_o),
+    .nice_icb_rsp_rdata_o (nice_icb_rsp_rdata_o),
+    .nice_icb_rsp_err_o   (nice_icb_rsp_err_o  ),
+    .nice_icb_cmd_valid_i (nice_icb_cmd_valid_i),
+    .nice_icb_cmd_addr_i  (nice_icb_cmd_addr_i ),
+    .nice_icb_cmd_read_i  (nice_icb_cmd_read_i ),
+    .nice_icb_cmd_wdata_i (nice_icb_cmd_wdata_i),
+    .nice_icb_cmd_size_i  (nice_icb_cmd_size_i ),
+    .nice_icb_rsp_ready_i (nice_icb_rsp_ready_i),
+  `endif//}
+
+    .test_mode     (test_mode),
     .clk           (hfclk  ),
-    .rst_n         (core_rst_n) 
+    .rst_n         (core_rst_n)
   );
 
   wire  qspi0_irq; 

@@ -179,7 +179,10 @@ class TestRunsModule:
         module = module_of(window, "flow.runs")
         module.refresh()
         assert module.selected_run_id() == run_id
-        assert seen and seen[-1] == run_id
+        # payload 走契约形状（dict，见 topics.RunSelected）；run_id_of 兼容旧字符串
+        from src.workbench.bus import run_id_of
+        assert seen and run_id_of(seen[-1]) == run_id
+        assert seen[-1]["run_id"] == run_id
 
     def test_follow_latest_picks_the_newest(self, window, service, tmp_path):
         _run_once(service, tmp_path)
@@ -300,7 +303,8 @@ class TestStartAnnouncesTheRun:
 
         module.start_run()
 
-        assert seen == ["run-fresh"], f"新运行没有广播出去：{seen}"
+        from src.workbench.bus import run_id_of
+        assert [run_id_of(p) for p in seen] == ["run-fresh"],             f"新运行没有广播出去：{seen}"
 
     def test_the_broadcast_does_not_loop_back(self, window, monkeypatch):
         """自己也订阅着这个话题 —— 守卫（run_id 没变就不重载）必须挡住回声。"""

@@ -22,6 +22,8 @@
 """
 from __future__ import annotations
 
+from src.workbench.bus import run_id_of
+
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -190,7 +192,7 @@ class SignoffModule(ModuleBase):
 
     def on_refresh(self, payload: Any = None) -> None:
         """`run.selected` 的订阅者。"""
-        run_id = str(payload or "")
+        run_id = run_id_of(payload)
         if run_id and run_id != self.run_id:
             self.load(run_id)
 

@@ -47,6 +47,29 @@ def _latest_with_regression(runs):
     return None
 
 
+def _test_filter(selected: list, seed_plan: dict) -> str | None:
+    """按选中用例（和 seed 裁剪）拼回归框架的 test 正则。
+
+    框架对目录名做 `search`，seed 展开后的名字是
+    `<test>_run_<i>_seed_<s>`；裁剪时只认 keep 里的 seed，否则匹配全部。
+    """
+    if not selected:
+        return None
+    parts = []
+    for name in selected:
+        plan = (seed_plan or {}).get(name) or {}
+        seeds = [str(s) for s in (plan.get("keep") or [])]
+        escaped = re.escape(name)
+        if plan.get("mode") == "reduced" and seeds:
+            # `<test>_seed_<s>` 或 `<test>_run_<i>_seed_<s>`
+            parts.append(f"^{escaped}(?:_run_\\d+)?_seed_"
+                         f"(?:{'|'.join(re.escape(s) for s in seeds)})$")
+        else:
+            # 只匹配这个名字本身 / 它的 count/seed 展开，不误伤 `t10` 这种前缀
+            parts.append(f"^{escaped}(?:_run_\\d+)?(?:_seed_\\d+)?$")
+    return ",".join(parts)
+
+
 def _execute_optimized(run_dir: Path, plan: dict) -> dict:
     """在指定 run 上跑一次优化后的回归；返回前后对比。"""
     from src.core.optimize.result import compare_reports
@@ -55,14 +78,14 @@ def _execute_optimized(run_dir: Path, plan: dict) -> dict:
     before = _read_report(run_dir)
     _write_json(run_dir / "optimize" / "baseline_regression.json", before)
     selected = plan.get("selected_tests") or []
-    tests = None
-    if selected:
-        tests = "^(?:" + "|".join(re.escape(t) for t in selected) + ")$"
+    tests = _test_filter(selected, plan.get("seed_plan") or {})
     InfrastructureManager(run_dir).run_regression(mode="local", tests=tests)
     after = _read_report(run_dir)
     result = compare_reports(before, after)
     result["selected_tests"] = selected
     result["skipped_tests"] = plan.get("skipped_tests") or []
+    result["seed_plan"] = plan.get("seed_plan") or {}
+    result["reduced_seed_tests"] = plan.get("reduced_seed_tests") or []
     _write_json(run_dir / "optimize" / "result.json", result)
     return result
 
@@ -78,8 +101,11 @@ def _execute_optimized(run_dir: Path, plan: dict) -> dict:
               default=None, help="计划落点（缺省用最新 run 目录）")
 @click.option("--execute", is_flag=True,
               help="在最新 run 上执行优化后的回归（会重跑该 run 的 regression_run）")
+@click.option("--reduce-seeds", is_flag=True,
+              help="按历史裁剪稳定 seed（默认只排序、不裁剪；每个 seed 需 ≥3 次通过）")
 @click.option("--json", "json_output", is_flag=True, help="输出机器可读 JSON")
-def optimize_regression(project, history, policy, output, execute, json_output):
+def optimize_regression(project, history, policy, output, execute, reduce_seeds,
+                        json_output):
     """回归效率优化：历史 → 顺序/低边际用例 → 计划 →（可选）执行与对比。"""
     from src.core.optimize.history import collect_history, find_run_dirs
     from src.core.optimize.plan import build_plan, write_plan
@@ -95,7 +121,9 @@ def optimize_regression(project, history, policy, output, execute, json_output):
             policy_doc = yaml.safe_load(policy.read_text(encoding="utf-8")) or {}
         except Exception:
             policy_doc = {"path": str(policy)}
-    plan = build_plan(report, policy={"path": str(policy)} if policy else policy_doc)
+    plan = build_plan(report,
+                      policy={"path": str(policy)} if policy else policy_doc,
+                      reduce_seeds=reduce_seeds)
     target_run = output or runs[-1]
     write_plan(target_run, plan)
     result = None
@@ -116,6 +144,9 @@ def optimize_regression(project, history, policy, output, execute, json_output):
     table.add_row("用例", str(plan["tests"]))
     table.add_row("flaky / failing", f"{len(plan['flaky'])} / {len(plan['failing'])}")
     table.add_row("低边际跳过", f"{len(plan['skipped_tests'])} 条")
+    reduced = plan.get("reduced_seed_tests") or []
+    table.add_row("seed 裁剪", f"{len(reduced)} 条"
+                  + ("" if plan.get("seed_reduction_enabled") else "（未启用）"))
     table.add_row("预计节省", f"{plan['estimated_savings_seconds']}s "
                               f"({plan['estimated_savings_pct']}%)")
     table.add_row("置信度", plan["confidence"])

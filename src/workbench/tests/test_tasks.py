@@ -105,3 +105,51 @@ class TestTaskRunner:
         task_id = runner.submit("扫描仿真日志", lambda: None)
         assert runner.label(task_id) == "扫描仿真日志"
         assert runner.wait(3000)
+
+
+class TestTaskRecords:
+    """任务归属 —— 哪个模块起的、属于哪次验证，界面必须答得上来。"""
+
+    def test_submit_records_ownership_and_lifecycle(self, qt_app):
+        runner = TaskRunner()
+        captured = []
+        loop = QEventLoop()
+        runner.finished.connect(lambda *a: (captured.append(a), loop.quit()))
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(loop.quit)
+        timer.start(TIMEOUT_MS)
+
+        task_id = runner.submit("扫描", lambda: 42, module_id="flow.runs",
+                                operation="scan", run_id="run-1")
+        loop.exec()
+        runner.wait(1000)
+
+        rec = runner.record(task_id)
+        assert (rec.module_id, rec.operation, rec.run_id) == ("flow.runs", "scan", "run-1")
+        assert rec.status == "finished" and rec.result == 42
+        assert rec.started_at and rec.finished_at
+        assert [r.task_id for r in runner.records()] == [task_id]
+        assert runner.pending() == []
+
+    def test_failure_is_recorded_with_the_message(self, qt_app):
+        runner = TaskRunner()
+
+        def boom():
+            raise RuntimeError("炸了")
+
+        loop = QEventLoop()
+        runner.failed.connect(lambda *a: loop.quit())
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(loop.quit)
+        timer.start(TIMEOUT_MS)
+
+        task_id = runner.submit("构建", boom, module_id="ops.output")
+        loop.exec()
+        runner.wait(1000)
+
+        rec = runner.record(task_id)
+        assert rec.status == "failed"
+        assert "RuntimeError" in rec.error and "炸了" in rec.error
+        assert rec.finished_at

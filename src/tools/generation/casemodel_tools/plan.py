@@ -40,6 +40,53 @@ from .framework.naming import attr_class_slug, ascii_slug
 REALIZATION_KINDS = (KIND_STIMULUS, KIND_SEQUENCE, KIND_OBSERVE)
 
 
+def assertion_bindings(model: Any) -> List[Dict[str, Any]]:
+    """断言 ↔ 测试点（反向索引的来源）。
+
+    每条断言给出它**实际绑到的** tp_id（模型里写错的不算，单独列 `unknown`）——
+    失败归因、TP 矩阵反查、签核报告都从这一份读。
+    """
+    from .framework.naming import iter_value_points
+
+    known = {tp_id for *_rest, tp_id in iter_value_points(model)}
+    out: List[Dict[str, Any]] = []
+    for assertion in getattr(model, "assertions", None) or []:
+        bound = [b for b in assertion.tp_bindings if b["tp_id"] in known]
+        out.append({
+            "assertion_id": assertion.id,
+            "name": assertion.name,
+            "tp_ids": [b["tp_id"] for b in bound],
+            "roles": {b["tp_id"]: b["role"] for b in bound},
+            "unknown": [b["tp_id"] for b in assertion.tp_bindings
+                        if b["tp_id"] not in known],
+        })
+    return out
+
+
+def _with_config(payload: Dict[str, Any], model: Any) -> Dict[str, Any]:
+    """模型没写 `config_space:` → payload 形状与 v1 一致。
+
+    写了的话：每条 TP 挂 `config_instances`（可执行配置组合），摘要里带
+    实例总数 —— tp_id 不变，配置是**执行实例维度**，不是新的测试点。
+    """
+    from .framework.config_space import attach_instances, combination_summary
+
+    summary = combination_summary(model)
+    if summary:
+        summary["instances_total"] = attach_instances(
+            model, payload.get("testpoints") or [])
+        payload["config_space"] = summary
+    return payload
+
+
+def _with_assertions(payload: Dict[str, Any], model: Any) -> Dict[str, Any]:
+    """模型里没写断言 → payload 形状与 v1 完全一致。"""
+    bindings = assertion_bindings(model)
+    if bindings:
+        payload["assertion_bindings"] = bindings
+    return payload
+
+
 def build_bundle(model: Any, *, env_name: str = "",
                  agents: Optional[Dict[str, List[str]]] = None,
                  module_name: str = "", coverage: Any = "auto",
@@ -49,9 +96,18 @@ def build_bundle(model: Any, *, env_name: str = "",
     需要写 `coverage/methodology.json` 的调用方用这个；只要 payload 的用
     `build_testpoints`。
     """
-    return MethodologyPipeline().run(
+    bundle = MethodologyPipeline().run(
         model, env_name=env_name, agents=agents, module_name=module_name,
         coverage=coverage, max_tests=max_tests)
+    # 行为域（P1a）：行为节点与属性测试点并列进同一份 TP IR。
+    from .framework.behavior import compile_behavior
+
+    behavior_tps = compile_behavior(model)
+    if behavior_tps:
+        bundle.testpoints.extend(behavior_tps)
+        bundle.notes.append(
+            f"行为域：{len(behavior_tps)} 条 TP 已进 IR（执行后端 P1b 待接）")
+    return bundle
 
 
 def build_testpoints(model: Any, *, env_name: str = "",
@@ -65,7 +121,7 @@ def build_testpoints(model: Any, *, env_name: str = "",
     """
     bundle = build_bundle(model, env_name=env_name, agents=agents,
                           module_name=module_name, max_tests=max_tests)
-    return bundle.to_dict()
+    return _with_config(_with_assertions(bundle.to_dict(), model), model)
 
 
 def testpoints_yaml(payload: Dict[str, Any]) -> str:
@@ -100,7 +156,7 @@ def run_testpoints(yaml_text: str, *, env_name: str = "",
 
     bundle = build_bundle(models[0], env_name=env_name, agents=agents,
                           module_name=module_name, max_tests=max_tests)
-    payload = bundle.to_dict()
+    payload = _with_config(_with_assertions(bundle.to_dict(), models[0]), models[0])
     payload["testpoints_yaml"] = testpoints_yaml(payload)
     payload["methodology"] = bundle.manifest()
     return payload

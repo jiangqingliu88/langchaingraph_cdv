@@ -224,6 +224,30 @@ module e203_cpu_top(
   // The System Memory Interface (ICB): End
 
 
+  `ifdef E203_HAS_NICE//{
+  // NICE 外部接口（NPU 在 e203_subsys_top 层级）
+  output                         nice_req_valid_o,
+  output [`E203_XLEN-1:0]        nice_req_inst_o,
+  output [`E203_XLEN-1:0]        nice_req_rs1_o,
+  output [`E203_XLEN-1:0]        nice_req_rs2_o,
+  input                          nice_req_ready_i,
+  input                          nice_rsp_valid_i,
+  input  [`E203_XLEN-1:0]        nice_rsp_rdat_i,
+  input                          nice_rsp_err_i,
+  output                         nice_rsp_ready_o,
+  input                          nice_mem_holdup_i,
+  output                         nice_icb_cmd_ready_o,
+  output                         nice_icb_rsp_valid_o,
+  output [`E203_XLEN-1:0]        nice_icb_rsp_rdata_o,
+  output                         nice_icb_rsp_err_o,
+  input                          nice_icb_cmd_valid_i,
+  input  [`E203_XLEN-1:0]        nice_icb_cmd_addr_i,
+  input                          nice_icb_cmd_read_i,
+  input  [`E203_XLEN-1:0]        nice_icb_cmd_wdata_i,
+  input  [1:0]                   nice_icb_cmd_size_i,
+  input                          nice_icb_rsp_ready_i,
+  `endif//}
+
   // The test mode signal
   input  test_mode,
 
@@ -542,11 +566,34 @@ module e203_cpu_top(
     .rst_dtcm(rst_dtcm),
   `endif//}
 
-    .test_mode     (test_mode), 
+  `ifdef E203_HAS_NICE//{
+    .nice_req_valid_o  (nice_req_valid_o),
+    .nice_req_inst_o   (nice_req_inst_o ),
+    .nice_req_rs1_o    (nice_req_rs1_o  ),
+    .nice_req_rs2_o    (nice_req_rs2_o  ),
+    .nice_req_ready_i  (nice_req_ready_i),
+    .nice_rsp_valid_i  (nice_rsp_valid_i),
+    .nice_rsp_rdat_i   (nice_rsp_rdat_i ),
+    .nice_rsp_err_i    (nice_rsp_err_i  ),
+    .nice_rsp_ready_o  (nice_rsp_ready_o),
+    .nice_mem_holdup_i (nice_mem_holdup_i),
+    .nice_icb_cmd_ready_o (nice_icb_cmd_ready_o),
+    .nice_icb_rsp_valid_o (nice_icb_rsp_valid_o),
+    .nice_icb_rsp_rdata_o (nice_icb_rsp_rdata_o),
+    .nice_icb_rsp_err_o   (nice_icb_rsp_err_o  ),
+    .nice_icb_cmd_valid_i (nice_icb_cmd_valid_i),
+    .nice_icb_cmd_addr_i  (nice_icb_cmd_addr_i ),
+    .nice_icb_cmd_read_i  (nice_icb_cmd_read_i ),
+    .nice_icb_cmd_wdata_i (nice_icb_cmd_wdata_i),
+    .nice_icb_cmd_size_i  (nice_icb_cmd_size_i ),
+    .nice_icb_rsp_ready_i (nice_icb_rsp_ready_i),
+  `endif//}
+
+    .test_mode     (test_mode),
   `ifndef E203_HAS_LOCKSTEP//{
   `endif//}
     .rst_n         (rst_n),
-    .clk           (clk  ) 
+    .clk           (clk  )
 
   );
 

@@ -56,13 +56,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 #: 生成方法 → 它在约束层该长什么样。**是映射建议，不是硬判据** ——
 #: 约束模型里没有"方法"这个字段，所以只能反着看"声明的方法有没有对应的策略/组合器"。
-METHOD_TO_CONSTRAINT: Dict[str, str] = {
-    "D": "定向策略（一条策略压住具体取值）+ APPLY_FIRST_MATCH",
-    "G": "组合策略 + APPLY_ALL（维度之间两两组合）",
-    "SPCL": "专项策略（推边界）+ APPLY_SEQUENTIAL",
-    "RND": "加权随机策略 + APPLY_WEIGHTED",
-    "RPLY": "回放策略（复用历史激励）",
-}
+#: 定义收在 `framework/methods.py`（P5）：方法→策略名/组合器/赋值方式只有一处真相。
+from .framework.methods import (constraint_form_map as _constraint_forms,
+                                policy_map as _policy_map)
+
+METHOD_TO_CONSTRAINT: Dict[str, str] = _constraint_forms()
 
 
 def associate(case_text: str, coverage_text: str,
@@ -382,16 +380,9 @@ def _summary(issues: List[Dict[str, str]], cov, case) -> str:
 # 约束层可以一条组合策略都没有，而**两边的 yaml 都自洽、都解析得过**。这条边
 # （④）此前只能靠 `associate` 事后报，现在能生成，就能保证它从一开始就接上。
 
-#: 生成方法 → `(策略名后缀, 组合器模式)`。
-#: **键集必须与 `METHOD_TO_CONSTRAINT` 一致** —— 有单测钉住（漏一个，就等于
-#: "这个人读的描述认得它、生产者却映射不出它"）。
-METHOD_TO_POLICY: Dict[str, Tuple[str, str]] = {
-    "D":    ("directed", "APPLY_FIRST_MATCH"),
-    "G":    ("combo",    "APPLY_ALL"),
-    "SPCL": ("special",  "APPLY_SEQUENTIAL"),
-    "RND":  ("random",   "APPLY_WEIGHTED"),
-    "RPLY": ("replay",   "APPLY_SEQUENTIAL"),
-}
+#: 生成方法 → `(策略名后缀, 组合器模式)`。来源同 `METHOD_TO_CONSTRAINT`
+#: （`framework/methods.py`）—— 两张表**同源**，不会一个认、另一个不认。
+METHOD_TO_POLICY: Dict[str, Tuple[str, str]] = _policy_map()
 
 #: 组合器的 5 个模式 —— **一个都不能少**。那套渲染拿它当 `enum` 的取值表
 #: （`env_cons_policy_combinator.j2`），而 `apply()` 里的 `case` 分支是**写死的**

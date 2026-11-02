@@ -18,7 +18,11 @@ from .errors import CaseListError, CaseModelError
 from .fields import (FIELD_TYPE_REGISTRY, EnumField, Field, FieldType,
                      LinkageField, RangeField, SetField, ValuePoint,
                      WeightedField, build_field, field_type)
-from .model import CaseDefaults, CaseModel, Generation, ResolveReport
+from .behavior import (BehaviorModel, BehaviorSequence, TemporalProperty,
+                       Transition)
+from .config_space import ConfigDimension, ConfigSpace
+from .model import (Assertion, CaseDefaults, CaseModel, Generation,
+                    ResolveReport)
 from .nodes import OrgNode, build_org_tree, collect_leaves, flatten
 from .themes import Theme, build_theme, priority_gaps, sort_themes
 from .vocab import (CHECK_ALIASES, CHECK_NAMES, CHECK_ORDER, CROSS_LEVEL_MARKS,
@@ -33,7 +37,9 @@ from .vocab import (CHECK_ALIASES, CHECK_NAMES, CHECK_ORDER, CROSS_LEVEL_MARKS,
 
 __all__ = [
     # 聚合根与附属
-    "CaseModel", "Generation", "CaseDefaults", "ResolveReport",
+    "CaseModel", "Generation", "CaseDefaults", "ResolveReport", "Assertion",
+    "BehaviorModel", "BehaviorSequence", "Transition", "TemporalProperty",
+    "ConfigSpace", "ConfigDimension",
     # case 值对象
     "CaseAttribute", "ExternalCase", "NO_NODE_CODE",
     # 组织树

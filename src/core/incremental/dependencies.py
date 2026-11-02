@@ -119,6 +119,18 @@ def affected_tests(changed_files: Iterable[str],
                 "confidence": "conservative_all",
                 "reason": "没有 coverage/test_dependencies.json，无法缩小范围"}
 
+    # 变更文件不在任何声明里（新增文件 / 被清理的路径）→ 无法证明无关，跑全量。
+    declared_all: Set[str] = set()
+    for files in dep_map.values():
+        declared_all.update(files)
+    unknown = [c for c in changed
+               if not any(_matches(c, d) for d in declared_all)]
+    if unknown:
+        return {"selected": all_names, "excluded": [], "undeclared": [],
+                "confidence": "unknown_file",
+                "reason": (f"{len(unknown)} 个变更文件不在任何依赖声明里，"
+                           "无法证明无关，保守跑全量")}
+
     selected: List[str] = []
     excluded: List[str] = []
     undeclared: List[str] = []

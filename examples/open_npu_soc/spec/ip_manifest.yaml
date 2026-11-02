@@ -5,7 +5,7 @@
 # 不是自动签核结论（自动结论在 run 的 report/evidence 里）。
 schema: soc_ip_manifest_v1
 soc: open_npu_soc
-top: rtl/soc_top.sv
+top: npu/soc_top.sv
 
 ips:
   - id: IP-CPU-NICE
@@ -15,8 +15,8 @@ ips:
     version: v0.1
     status: in_progress
     rtl:
-      - rtl/cpu/nice_cmd_sequencer.sv
-      - rtl/cpu/e203_nice_npu_adapter.sv
+      - npu/nice_disp/nice_cmd_sequencer.sv
+      - npu/nice_disp/e203_nice_npu_adapter.sv
     spec: spec/interface_spec.yaml
     verification: spec/verification_plan.yaml
     notes: 参考 TB 使用确定性 NICE 时序；E203 本体路径仍待 M1 实跑。
@@ -27,7 +27,7 @@ ips:
     owner: memory-team
     version: v0.1
     status: released
-    rtl: [rtl/dma/dma_simple.sv]
+    rtl: [npu/dma/dma_simple.sv]
     spec: spec/interface_spec.yaml
     verification: spec/verification_plan.yaml
 
@@ -37,7 +37,7 @@ ips:
     owner: memory-team
     version: v0.1
     status: released
-    rtl: [rtl/sram/sram_banked.sv]
+    rtl: [npu/sram/sram_banked.sv]
     spec: spec/interface_spec.yaml
     verification: spec/verification_plan.yaml
 
@@ -47,7 +47,7 @@ ips:
     owner: npu-team
     version: v0.1
     status: released
-    rtl: [rtl/npu/int8_gemm.sv]
+    rtl: [npu/npu/int8_gemm.sv]
     spec: spec/interface_spec.yaml
     verification: spec/verification_plan.yaml
     notes: 8x8x8 正常路径；边界/异常矩阵在 M2 扩展。
@@ -58,6 +58,6 @@ ips:
     owner: soc-team
     version: v0.1
     status: released
-    rtl: [rtl/interconnect/soc_map.svh]
+    rtl: [npu/interconnect/soc_map.svh]
     spec: spec/soc_spec.yaml
     verification: spec/verification_plan.yaml

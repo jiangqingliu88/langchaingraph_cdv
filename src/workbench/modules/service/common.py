@@ -48,6 +48,6 @@ def publish_run(ctx, run_id: str) -> None:
         return
     try:
         from ...bus import TOPIC_RUN_SELECTED
-        ctx.bus.publish(TOPIC_RUN_SELECTED, run_id)
+        ctx.bus.publish_run_selected(run_id)
     except Exception:                       # noqa: BLE001
         pass

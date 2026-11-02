@@ -27,12 +27,35 @@ from .context import AppContext
 from .manifest import ManifestError, builtin_manifest, describe, load_manifest
 from .registry import ModuleManager
 from .settings_store import SettingsStore
+from .topics import (
+    TOPIC_TASK_COMPLETED, TOPIC_TASK_STARTED, TaskCompleted, TaskStarted,
+)
 from .ui import theme
 from .ui.widgets.banner import Banner
 from .ui.widgets.console import ConsolePanel
 
 APP_TITLE = "SignOffAI · 验证工作台"
 CONSOLE_TITLE = "控制台"
+
+
+def _publish_task_started(ctx: AppContext, task_id: str, label: str) -> None:
+    """任务开始 → `task.started`（带上模块归属与所属 run）。"""
+    rec = ctx.tasks.record(task_id)
+    ctx.bus.publish(TOPIC_TASK_STARTED, TaskStarted(
+        task_id=task_id,
+        module_id=rec.module_id if rec else "",
+        operation=rec.operation if rec else label,
+        run_id=rec.run_id if rec else "").to_payload())
+
+
+def _publish_task_done(ctx: AppContext, task_id: str) -> None:
+    """任务结束（成功或失败）→ `task.completed`。"""
+    rec = ctx.tasks.record(task_id)
+    ctx.bus.publish(TOPIC_TASK_COMPLETED, TaskCompleted(
+        task_id=task_id,
+        status=rec.status if rec else "",
+        run_id=rec.run_id if rec else "",
+        error=rec.error if rec else "").to_payload())
 
 #: 平台自带页签的 id。双下划线打头是刻意的 —— 它们不是清单里的模块，
 #: 不能跟模块 id 撞车。
@@ -289,6 +312,15 @@ def _build_window_class():
             tasks.started.connect(self._on_task_started)
             tasks.finished.connect(self._on_task_finished)
             tasks.failed.connect(self._on_task_failed)
+            # 任务生命周期也走总线：别的视图（证据/决策/状态）可以订阅，
+            # 不必直接认识"是哪个模块起的任务"。发布逻辑在模块级，避免把
+            # 分支堆进 `_build_window_class` 的圈复杂度。
+            tasks.started.connect(
+                lambda tid, label: _publish_task_started(self.ctx, tid, label))
+            tasks.finished.connect(
+                lambda tid, payload: _publish_task_done(self.ctx, tid))
+            tasks.failed.connect(
+                lambda tid, message: _publish_task_done(self.ctx, tid))
 
         def _on_task_started(self, task_id: str, label: str) -> None:
             self.console.begin_task(label)
@@ -367,6 +399,12 @@ def _build_window_class():
             self.act_clear_console.setIcon(icons.icon("clear"))
             self.act_clear_console.triggered.connect(self.console.clear_log)
 
+            self.act_guide = QAction("使用指南", self)
+            self.act_guide.setIcon(icons.icon("help"))
+            self.act_guide.setShortcut("F1")
+            self.act_guide.setStatusTip("业务怎么跑、输入是什么、输出去哪看")
+            self.act_guide.triggered.connect(self.on_guide)
+
             self.act_about = QAction("关于本工作台", self)
             self.act_about.setIcon(icons.icon("about"))
             self.act_about.triggered.connect(self.on_about)
@@ -390,6 +428,9 @@ def _build_window_class():
             # 见 projects.py）。不热切换的理由也在那儿写着了。
             self.project_box = None
             self._build_project_picker()
+            # ── 业务模式：SoC 团队 / IP 团队（只切换导航可见性）──
+            self.business_box = None
+            self._build_business_mode_picker()
             # ── 仿真业务下拉（工具栏，紧跟项目切换器）──
             # 回归"跑哪门业务"（覆盖率 / 波形 / 调试…）。默认取工具层的 `DEFAULT_MODE`（`cov+wave`）。
             self.sim_mode_box = None
@@ -447,6 +488,37 @@ def _build_window_class():
             self.toolbar.addWidget(QLabel("项目：", self))
             self.toolbar.addWidget(self.project_box)
             self.toolbar.addSeparator()
+
+        def _build_business_mode_picker(self) -> None:
+            """「业务模式」下拉 —— SoC 团队 / IP 团队。
+
+            只切换导航树里的团队业务线，不重建模块、不改数据：
+            SoC 模式收起 IP 团队入口，IP 模式收起 SoC 团队入口；
+            共享的流程/证据/专业工具始终可见。
+            """
+            from PySide6.QtWidgets import QComboBox, QLabel
+
+            self.business_box = QComboBox(self)
+            self.business_box.addItem("全部业务", "all")
+            self.business_box.addItem("SoC 业务", "soc")
+            self.business_box.addItem("IP 业务", "ip")
+            saved = str(self.ctx.settings.value("business/mode", "all") or "all")
+            idx = self.business_box.findData(saved)
+            self.business_box.setCurrentIndex(idx if idx >= 0 else 0)
+            self.ctx.business_mode = saved if idx >= 0 else "all"
+            self.business_box.currentIndexChanged.connect(
+                self._on_business_mode_picked)
+            self.toolbar.addWidget(QLabel("业务：", self))
+            self.toolbar.addWidget(self.business_box)
+            self.toolbar.addSeparator()
+            self.nav.set_business_mode(saved if idx >= 0 else "all")
+
+        def _on_business_mode_picked(self, _index: int) -> None:
+            mode = str(self.business_box.currentData() or "all")
+            self.ctx.business_mode = mode
+            self.nav.set_business_mode(mode)
+            self.ctx.settings.set_value("business/mode", mode)
+            self.set_status(f"业务模式：{self.business_box.currentText()}")
 
         def _build_sim_mode_picker(self) -> None:
             """「仿真业务」下拉 —— 这次回归跑哪门业务（默认 `cov+wave`）。
@@ -693,6 +765,8 @@ def _build_window_class():
             self._window_sections: set = set()
 
             help_menu = add("帮助(&H)")
+            help_menu.addAction(self.act_guide)
+            help_menu.addSeparator()
             help_menu.addAction(self.act_about)
 
         def menu(self, title: str) -> QMenu:
@@ -917,6 +991,11 @@ def _build_window_class():
             self.set_status("布局已重置 —— 重开窗口后恢复默认排布")
             self.ctx.log("已清除保存的窗口布局", "info")
 
+        def on_guide(self) -> None:
+            from .help_guide import UserGuideDialog
+
+            UserGuideDialog(self).exec()
+
         def on_about(self) -> None:
             sections = "\n".join(
                 f"  · {group.title}：{len(self.manager.manifest.modules_of(group.id))} 个模块"
@@ -985,6 +1064,8 @@ def _build_window_class():
 
             # 导航树在模块建完之后才填 —— 失败清单这时才完整
             self.nav.populate(manifest)
+            self.nav.set_business_mode(
+                getattr(self.ctx, "business_mode", "all") or "all")
             failures = self.manager.failures()
             self.nav.set_failed(failures)
             self.nav.set_active(self.workspace.active_module_id())

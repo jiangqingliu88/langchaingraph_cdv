@@ -381,3 +381,29 @@ class TestTpMatrix:
         from src.tools.common.lib.collect_real_coverage import _tp_matrix
 
         assert _tp_matrix(tmp_path, {}) == {}
+
+
+def test_behavior_testpoints_are_pending_not_unmapped():
+    """行为 TP 没有覆盖率数据可判 —— 单独一栏，混进 UNMAPPED 就是误报。"""
+    import tempfile
+    from pathlib import Path
+
+    from src.tools.common.lib.collect_real_coverage import _tp_matrix
+
+    class _T(TestTpMatrix):
+        pass
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        cov = _T()._write_tp(tmp_path, [
+            {"tp_id": "TP-A", "coverpoint": "cp_instr_type", "bin": "mac"},
+            {"tp_id": "TP-BEH", "coverpoint": "", "bin": "",
+             "realization": {"kind": "observe"},
+             "execution": {"stage": "behavior"}},
+        ])
+        m = _tp_matrix(tmp_path, cov)
+    assert m["counts"]["PENDING_BACKEND"] == 1
+    assert m["counts"]["UNMAPPED"] == 0
+    assert m["behavior_pending"] == 1
+    assert m["drivable"] == 1          # 行为 TP 不进可激励分母
+    assert [r["tp_id"] for r in m["unmapped"]] == []

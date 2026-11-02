@@ -6,10 +6,11 @@ parsing → IR → render 拆开的契约；新代码优先读写 IR，不再各
 """
 from src.tools.generation.uvm_tools.generation.ir.uvm_ir import (
     UVMAgentIR, UVMConnectionIR, UVMEnvIR, UVMIR, UVMSequenceIR, UVMTestIR,
-    build_uvm_ir, validate_ir,
+    build_agent_ir, build_uvm_ir, validate_agent_ir, validate_ir,
 )
 
 __all__ = [
     "UVMAgentIR", "UVMConnectionIR", "UVMEnvIR", "UVMIR", "UVMSequenceIR",
-    "UVMTestIR", "build_uvm_ir", "validate_ir",
+    "UVMTestIR", "build_agent_ir", "build_uvm_ir", "validate_agent_ir",
+    "validate_ir",
 ]

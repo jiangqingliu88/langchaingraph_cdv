@@ -105,6 +105,13 @@ modules:
     area: center
     order: 30
 
+  - id: soc.c_cases
+    title: SoC C 用例
+    group: soc
+    factory: src.workbench.modules.soc.c_cases:SoCCasesModule
+    area: center
+    order: 35
+
   - id: soc.signoff
     title: SoC 签核
     group: soc

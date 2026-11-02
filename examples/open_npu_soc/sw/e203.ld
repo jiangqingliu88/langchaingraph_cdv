@@ -11,6 +11,10 @@ MEMORY {
 SECTIONS {
   .text : {
     *(.text.start)
+    /* E203 自检 TB 的 PC_WRITE_TOHOST 是 0x80000086 —— 固定放一个自循环
+       标记；放在 main 之前，且 .text.start 只有十几字节，不会冲突。 */
+    . = ORIGIN(ITCM) + 0x86;
+    *(.tohost)
     *(.text*)
     *(.rodata*)
   } > ITCM

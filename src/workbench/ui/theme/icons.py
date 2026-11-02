@@ -111,6 +111,7 @@ _STANDARD: Dict[str, QStyle.StandardPixmap] = {
     "reload": QStyle.StandardPixmap.SP_BrowserReload,
     "quit": QStyle.StandardPixmap.SP_DialogCloseButton,
     "about": QStyle.StandardPixmap.SP_MessageBoxInformation,
+    "help": QStyle.StandardPixmap.SP_MessageBoxQuestion,
     "folder": QStyle.StandardPixmap.SP_DirIcon,
     "folder-closed": QStyle.StandardPixmap.SP_DirClosedIcon,
     "warning": QStyle.StandardPixmap.SP_MessageBoxCritical,

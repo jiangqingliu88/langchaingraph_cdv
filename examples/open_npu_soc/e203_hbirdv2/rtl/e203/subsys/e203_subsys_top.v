@@ -309,6 +309,30 @@ module e203_subsys_top(
 
   wire  [`E203_PC_SIZE-1:0] pc_rtvec;
 
+  `ifdef E203_HAS_NICE//{
+  // CPU ↔ NPU：NICE 请求/响应 + NICE 的 ICB 主口（NPU 搬 DTCM 用）。
+  wire                          nice_req_valid;
+  wire                          nice_req_ready;
+  wire  [`E203_XLEN-1:0]        nice_req_inst;
+  wire  [`E203_XLEN-1:0]        nice_req_rs1;
+  wire  [`E203_XLEN-1:0]        nice_req_rs2;
+  wire                          nice_rsp_valid;
+  wire                          nice_rsp_ready;
+  wire  [`E203_XLEN-1:0]        nice_rsp_rdat;
+  wire                          nice_rsp_err;
+  wire                          nice_mem_holdup;
+  wire                          nice_icb_cmd_valid;
+  wire                          nice_icb_cmd_ready;
+  wire  [`E203_ADDR_SIZE-1:0]   nice_icb_cmd_addr;
+  wire                          nice_icb_cmd_read;
+  wire  [`E203_XLEN-1:0]        nice_icb_cmd_wdata;
+  wire  [1:0]                   nice_icb_cmd_size;
+  wire                          nice_icb_rsp_valid;
+  wire                          nice_icb_rsp_ready;
+  wire  [`E203_XLEN-1:0]        nice_icb_rsp_rdata;
+  wire                          nice_icb_rsp_err;
+  wire                          npu_rst_n;
+  `endif//}
 
 
   e203_subsys_main  u_e203_subsys_main(
@@ -474,12 +498,69 @@ module e203_subsys_top(
     .sysmem_icb_rsp_err    (sysmem_icb_rsp_err  ),
     .sysmem_icb_rsp_rdata  (sysmem_icb_rsp_rdata),
 
-    .test_mode     (test_mode), 
-    .ls_clk        (lfextclk), 
+  `ifdef E203_HAS_NICE//{
+    .nice_req_valid_o  (nice_req_valid),
+    .nice_req_inst_o   (nice_req_inst ),
+    .nice_req_rs1_o    (nice_req_rs1  ),
+    .nice_req_rs2_o    (nice_req_rs2  ),
+    .nice_req_ready_i  (nice_req_ready),
+    .nice_rsp_valid_i  (nice_rsp_valid),
+    .nice_rsp_rdat_i   (nice_rsp_rdat ),
+    .nice_rsp_err_i    (nice_rsp_err  ),
+    .nice_rsp_ready_o  (nice_rsp_ready),
+    .nice_mem_holdup_i (nice_mem_holdup),
+    .nice_icb_cmd_ready_o (nice_icb_cmd_ready),
+    .nice_icb_rsp_valid_o (nice_icb_rsp_valid),
+    .nice_icb_rsp_rdata_o (nice_icb_rsp_rdata),
+    .nice_icb_rsp_err_o   (nice_icb_rsp_err  ),
+    .nice_icb_cmd_valid_i (nice_icb_cmd_valid),
+    .nice_icb_cmd_addr_i  (nice_icb_cmd_addr ),
+    .nice_icb_cmd_read_i  (nice_icb_cmd_read ),
+    .nice_icb_cmd_wdata_i (nice_icb_cmd_wdata),
+    .nice_icb_cmd_size_i  (nice_icb_cmd_size ),
+    .nice_icb_rsp_ready_i (nice_icb_rsp_ready),
+    .core_rst_n_o      (npu_rst_n),
+  `endif//}
+
+    .test_mode     (test_mode),
+    .ls_clk        (lfextclk),
     .hfclk         (hfclk   ),
     .hfclkrst      (hfclkrst),
     .corerst       (corerst)
   );
+
+  `ifdef E203_HAS_NICE//{
+  // NPU 子系统：与 u_e203_subsys_main 同层级，接口从 subsys_main 边界引出。
+  npu_top u_npu_top (
+    .clk             (hfclk),
+    .rst_n           (npu_rst_n),
+
+    .nice_req_valid  (nice_req_valid),
+    .nice_req_ready  (nice_req_ready),
+    .nice_req_inst   (nice_req_inst),
+    .nice_req_rs1    (nice_req_rs1),
+    .nice_req_rs2    (nice_req_rs2),
+
+    .nice_rsp_valid  (nice_rsp_valid),
+    .nice_rsp_ready  (nice_rsp_ready),
+    .nice_rsp_rdat   (nice_rsp_rdat),
+    .nice_rsp_err    (nice_rsp_err),
+    .nice_active     (),
+    .nice_mem_holdup (nice_mem_holdup),
+
+    .nice_icb_cmd_valid (nice_icb_cmd_valid),
+    .nice_icb_cmd_ready (nice_icb_cmd_ready),
+    .nice_icb_cmd_addr  (nice_icb_cmd_addr),
+    .nice_icb_cmd_read  (nice_icb_cmd_read),
+    .nice_icb_cmd_wdata (nice_icb_cmd_wdata),
+    .nice_icb_cmd_size  (nice_icb_cmd_size),
+
+    .nice_icb_rsp_valid (nice_icb_rsp_valid),
+    .nice_icb_rsp_ready (nice_icb_rsp_ready),
+    .nice_icb_rsp_rdata (nice_icb_rsp_rdata),
+    .nice_icb_rsp_err   (nice_icb_rsp_err)
+  );
+  `endif//}
 
 
 

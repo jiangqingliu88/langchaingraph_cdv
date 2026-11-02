@@ -487,6 +487,7 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
             "total": tp.get("total", 0),
             "drivable_pct": tp.get("drivable_pct", 0.0),
             "backdoor_pct": tp.get("backdoor_pct", 0.0),
+            "behavior_pending": tp.get("behavior_pending", 0),
             "missed_tp_ids": [r.get("tp_id") for r in (tp.get("missed") or [])
                               if isinstance(r, dict)],
         },
@@ -733,6 +734,8 @@ class AuditExecutor(BaseExecutor):
                 # 单独一栏，不混进可激励覆盖率。
                 "observe_only": tp.get("observe_only", 0),
                 "observed": tp.get("observed", 0),
+                # 行为域 TP：已进 IR、执行后端未接 —— 如实列出，不进任何覆盖率分母
+                "behavior_pending": tp.get("behavior_pending", 0),
                 "missed": len(tp.get("missed") or []),
                 "unmapped": len(tp.get("unmapped") or []),
             }

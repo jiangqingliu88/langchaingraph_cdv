@@ -355,6 +355,20 @@ BINDINGS: List[ToolBinding] = [
         doc="按 IP 验证计划跑一次 IP 回归（需要 EDA，显式触发）",
     ),
     ToolBinding(
+        name="ip.release_build",
+        target="src.cli.soc_adapter:build_ip_release",
+        kind="json", pure=False,
+        # 对外交付物：人点了按钮还不够，要带审批标记（界面上是确认对话框）
+        trigger="approval",
+        doc="生成 IP 发布包 spec/ip_releases/<ip>.json（对外交付物，需人工审批）",
+    ),
+    ToolBinding(
+        name="ip.release_check",
+        target="src.cli.soc_adapter:verify_ip_release",
+        kind="json",
+        doc="校验 IP 发布包自身哈希与清单 RTL hash 的绑定（只读）",
+    ),
+    ToolBinding(
         name="soc.runs",
         target="src.cli.soc_adapter:list_soc_runs",
         kind="json",
@@ -371,6 +385,18 @@ BINDINGS: List[ToolBinding] = [
         target="src.cli.soc_adapter:verify_soc_evidence",
         kind="json",
         doc="SoC 证据包 → 逐文件哈希校验（只读）",
+    ),
+    ToolBinding(
+        name="soc.c_cases",
+        target="src.cli.soc_c_runner:list_c_cases",
+        kind="json",
+        doc="SoC 工程 → C 用例清单（CPU/NICE 驱动 IP，只读）",
+    ),
+    ToolBinding(
+        name="soc.c_run",
+        target="src.cli.soc_c_runner:run_c_case",
+        kind="json", pure=False,
+        doc="编译并运行 E203 bare-metal C 用例（需要工具链/EDA，显式触发）",
     ),
     ToolBinding(
         name="soc.run",

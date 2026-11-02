@@ -18,6 +18,8 @@
 """
 from __future__ import annotations
 
+from src.workbench.bus import run_id_of
+
 from pathlib import Path
 from typing import Any, List, Optional
 
@@ -80,7 +82,7 @@ class CasemodelModule(ModuleBase):
         两边接不上的表现就是：界面对着 CPU 流水的示例，而本次运行那份躺在运行
         目录里没人看 —— 用户会直接问"gui 里 case 建模不是 apb_uart 的呢"。
         """
-        run_id = str(payload or "")
+        run_id = run_id_of(payload)
         if not run_id or run_id == self._run_id:
             return
         detail = self.run_tool("pipeline.detail", quiet=True, run_id=run_id)

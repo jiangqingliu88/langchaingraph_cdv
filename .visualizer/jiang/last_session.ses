@@ -1,39 +1,65 @@
 <!-- THIS IS TOOL GENERATED SESSION FILE. PLEASE DO NOT MODIFY THIS -->
 <!DOCTYPE visualizer_session>
-<session version="3" skip_do_file="0">
- <app argc="3">
+<session skip_do_file="0" version="3">
+ <app argc="5">
   <argv value="visualizer" pos="0"/>
-  <argv value="-ucdbfile" pos="1"/>
-  <argv value="D:\SignOffAI\output_e2e_cov_jiang_20261013_230812\sim\coverage\merged.ucdb" pos="2"/>
+  <argv value="-designfile" pos="1"/>
+  <argv value="D:\SignOffAI\output_npu_mem\e203\design.bin" pos="2"/>
+  <argv value="-wavefile" pos="3"/>
+  <argv value="D:\SignOffAI\output_npu_mem\e203\waves\c_c_gemm_8x8.db" pos="4"/>
  </app>
  <window_config>
-  <dockareas right="300" top="0" left="1366" bottom="398"/>
-  <taborder left="structure+" bottom="transcript+coveragesummary+"/>
-  <activetab activewindow="structure" left="structure" bottom="transcript"/>
-  <window x="0" dock_location="left" undocked="0" type="structure" y="0" visible="1"/>
-  <window x="0" dock_location="bottom" undocked="0" type="transcript" y="0" visible="1"/>
-  <window x="0" dock_location="bottom" undocked="0" type="coveragesummary" y="0" visible="1"/>
-  <window x="-1" width="1920" undocked="0" type="rtl" y="-9" visible="1" height="991"/>
-  <window x="0" dock_location="center" undocked="0" type="source" y="0" path="D:/SignOffAI/output_e2e_cov_jiang_20261013_230812/bench/npu_sched_bench_tb_top.sv" visible="1" firstVisibleLine="27"/>
+  <dockareas bottom="182" left="579" right="521" top="0"/>
+  <taborder bottom="transcript+" left="testbench+structure+library+" right="schematic+uvmconfig+variables+"/>
+  <activetab bottom="transcript" left="structure" right="variables"/>
+  <window dock_location="left" y="-743" width="499" visible="1" undocked="0" type="testbench" x="-999" height="306"/>
+  <window dock_location="left" y="-38" width="1916" visible="1" undocked="0" type="structure" x="-1" height="855"/>
+  <window dock_location="left" y="0" visible="1" undocked="0" type="library" x="0"/>
+  <window dock_location="right" y="0" width="1916" visible="1" undocked="0" type="schematic" x="0" height="666"/>
+  <window dock_location="right" y="0" width="1916" visible="1" undocked="0" type="uvmconfig" x="0" height="666"/>
+  <window dock_location="right" y="0" visible="1" undocked="0" type="variables" x="0"/>
+  <window dock_location="bottom" y="0" width="1916" visible="1" undocked="0" type="transcript" x="0" height="855"/>
+  <window y="-9" width="1920" visible="1" undocked="0" type="rtl" x="-1" height="991"/>
+  <window dock_location="bottom" y="286" width="1076" visible="0" undocked="1" type="wave" x="345" height="616"/>
+  <window dock_location="center" path="D:/SignOffAI/examples/open_npu_soc/tb/tb_soc_top.sv" y="0" visible="0" undocked="0" type="source" x="0" firstVisibleLine="0"/>
+  <window dock_location="center" path="D:/SignOffAI/examples/open_npu_soc/npu/npu/int8_gemm.sv" y="0" visible="1" undocked="0" id="1" type="source" x="0" firstVisibleLine="10"/>
+  <window dock_location="right" y="380" width="1100" visible="0" undocked="1" type="signalclipboard" x="160" height="500"/>
+  <window dock_location="right" y="0" visible="0" undocked="0" type="instances" x="0"/>
+  <window dock_location="right" y="0" width="1916" visible="0" undocked="0" type="uvmschematic" x="0" height="855"/>
  </window_config>
- <wave_file_mgr/>
+ <wave_file_mgr>
+  <waveFile tagName="F0" waveType="0" fileName="D:\SignOffAI\output_npu_mem\e203\waves\c_c_gemm_8x8.db"/>
+ </wave_file_mgr>
  <gui>
   <main_window visible="1">
-   <srcbrowser instancename="npu_sched_bench_tb_top" primary="true" filepath="D:/SignOffAI/output_e2e_cov_jiang_20261013_230812/bench/npu_sched_bench_tb_top.sv"/>
+   <srcbrowser filepath="D:/SignOffAI/examples/open_npu_soc/tb/tb_soc_top.sv" instancename="tb_soc_top"/>
    <sourcetclcommands>
     <tcl command="src activate source"/>
-    <tcl command="src top 28"/>
+    <tcl command="src top 1"/>
    </sourcetclcommands>
+   <srcbrowser filepath="D:/SignOffAI/examples/open_npu_soc/npu/npu/int8_gemm.sv" instancename="tb_soc_top.u_e203_tb_top.u_e203_soc_top.u_e203_subsys_top.u_npu_top.u_nice_disp.u_gemm" primary="true"/>
+   <sourcetclcommands>
+    <tcl command="src activate source1"/>
+    <tcl command="src top 11"/>
+   </sourcetclcommands>
+   <edge_gui cur_selection="AnyEdge"/>
   </main_window>
-  <watchTower_cur_setting curRadix="8" curDisplayTimeUnit="0" customDisplayTimeUnitListStr="">
-   <curTime lowtime="0" hightime="0"/>
+  <watchTower_cur_setting curRadix="8" curActiveWaveFile="F0" customDisplayTimeUnitListStr="" curDisplayTimeUnit="-9" curDisplayTimeUnitStr="1ns">
+   <curTime hightime="0" lowtime="34334000"/>
   </watchTower_cur_setting>
-  <structure selection="npu_sched_bench_tb_top"/>
+  <testbench/>
+  <structure selection="tb_soc_top.u_e203_tb_top.u_e203_soc_top.u_e203_subsys_top.u_npu_top.u_nice_disp.u_gemm"/>
+  <library/>
+  <schematic trace_action="0" upf_action="0" src_sync="1" time_sync="1" wf_diff="0" grey_mode="0" clock_domain="0" show_values="0" value_tooltip="0" zoom_and_center="0" schem_sync="1">
+   <command value="tb_soc_top.u_e203_tb_top.u_e203_soc_top.u_e203_subsys_top.u_npu_top.u_nice_disp.u_gemm"/>
+   <cur_viewport scroll_pos="0 -253" page_num="1" zoom_factor="0.124969"/>
+  </schematic>
+  <uvmconfig/>
+  <variables VA="0" CA="0" UPF="0"/>
   <transcript/>
-  <coveragesummary/>
  </gui>
  <wave_mgr sync_time_range="0"/>
  <mem_mgr/>
  <windows/>
- <dut selection="npu_sched_bench_tb_top"/>
+ <dut selection="tb_soc_top.u_e203_tb_top.u_e203_soc_top.u_e203_subsys_top.u_npu_top.u_nice_disp.u_gemm"/>
 </session>

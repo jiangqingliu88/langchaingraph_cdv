@@ -3,7 +3,7 @@
     "cov:below_80|reason:none|sugg:none::RETRY_ENV": 7.601161500000002,
     "cov:below_80|reason:none|sugg:none::FIX_COMPILE_bug": 7.247012228012076,
     "cov:below_80|reason:none|sugg:none::GENERATE_DIRECTED_TEST": 5.583778264599539,
-    "cov:below_80|reason:none|sugg:none::FIX_FUNCTIONAL_bug": 14.945353991240907,
+    "cov:below_80|reason:none|sugg:none::FIX_FUNCTIONAL_bug": 5.062000717010674,
     "cov:80_target|reason:none|sugg:none::EXPAND_SEEDS": -26.4,
     "cov:80_target|reason:none|sugg:none::RELAX_CONSTRAINT": -10.116458152429797,
     "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::GENERATE_DIRECTED_TEST": 13.956454403025822,
@@ -11,11 +11,12 @@
     "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::RELAX_CONSTRAINT": -3.0963952869704974,
     "cov:80_target|reason:none|sugg:none::FIX_FUNCTIONAL_bug": -12.131439390337677,
     "cov:at_target|reason:none|sugg:none::CONVERGE": -4.296277062447027,
-    "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::EXPAND_SEEDS": 10.028629359666315,
+    "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::EXPAND_SEEDS": 11.63545005050616,
     "cov:below_80|reason:unstimulated|sugg:INVESTIGATE::FIX_FUNCTIONAL_bug": -0.2630001934246373,
     "cov:80_target|reason:unstimulated|sugg:INVESTIGATE::GENERATE_DIRECTED_TEST": -10.432235191783416,
     "cov:80_target|reason:unstimulated|sugg:INVESTIGATE::EXPAND_SEEDS": 5.055000000000001,
     "cov:below_80|reason:unreachable|sugg:INVESTIGATE::FIX_FUNCTIONAL_bug": 2.7323210870882844,
-    "cov:below_80|reason:unreachable|sugg:INVESTIGATE::RELAX_CONSTRAINT": 4.619013979172334
+    "cov:below_80|reason:unreachable|sugg:INVESTIGATE::RELAX_CONSTRAINT": 4.619013979172334,
+    "cov:below_80|reason:none|sugg:none::EXPAND_SEEDS": 18.303892871703304
   }
 }

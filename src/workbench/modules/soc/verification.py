@@ -29,12 +29,18 @@ class SoCVerificationModule(SocModuleBase):
 
         row = QHBoxLayout()
         row.addWidget(self._button("运行 SoC 回归", self.run_soc, root))
+        row.addWidget(self._button("运行 C 用例", self.run_c_case, root))
         row.addWidget(self._button("打开波形", self.open_wave, root))
         row.addWidget(self._button("校验证据包", self.verify_evidence, root))
         row.addWidget(self._button("打开验证流程",
                                    lambda: self._open("flow.pipeline"), root))
         row.addStretch(1)
         layout.addLayout(row)
+
+        self.c_label = QLabel("C 用例：读取中…", root)
+        self.c_label.setWordWrap(True)
+        self.c_label.setStyleSheet(f"color: {theme.current().muted};")
+        layout.addWidget(self.c_label)
 
         label = QLabel("回归用例（regression/regression.yaml）", root)
         label.setStyleSheet(f"color: {theme.current().muted};")
@@ -49,8 +55,31 @@ class SoCVerificationModule(SocModuleBase):
         payload = self.run_tool("soc.project", quiet=True,
                                 root=str(self.project_root))
         self._fill_tests(payload if isinstance(payload, dict) else {})
+        cases = self.run_tool("soc.c_cases", quiet=True,
+                              root=str(self.project_root))
+        self._c_cases = cases if isinstance(cases, list) else []
+        self.c_label.setText(
+            "C 用例：" + ("、".join(str(c.get("id")) for c in self._c_cases)
+                          if self._c_cases else "无（sw/cases.yaml 未登记）"))
         self.refresh()
         return root
+
+    def run_c_case(self) -> None:
+        if not self._c_cases:
+            self.show_warning("没有登记 C 用例（sw/cases.yaml）")
+            return
+        case_id = str(self._c_cases[0].get("id") or "")
+        self.show_info(f"编译并运行 C 用例 {case_id}（E203 + NICE + NPU）…")
+        result = self.run_tool("soc.c_run", force=True,
+                               project_root=str(self.project_root),
+                               case_id=case_id)
+        if isinstance(result, dict):
+            if result.get("status") == "PASS":
+                self.show_info(f"C 用例 PASS · {result.get('output_root')}")
+            else:
+                self.show_error(f"C 用例失败：{result.get('error') or result.get('stage')}")
+        # c_run.json 已落盘；刷新 run 选择器（含运行历史）让它可见。
+        self.refresh()
 
     def _open(self, module_id: str) -> None:
         from ..service.common import open_module
@@ -76,6 +105,13 @@ class SoCVerificationModule(SocModuleBase):
         reg = doc.get("regression") or {}
         if not doc:
             self.status.setText("还没有 SoC run。")
+            return
+        kind = str((summary or {}).get("kind") or doc.get("kind") or "soc")
+        if kind == "soc_c":
+            case = doc.get("case") or {}
+            self.status.setText(
+                f"C 用例 {case.get('id') or '?'} · {reg.get('status') or '?'}\n"
+                f"波形：{summary.get('wave') or '无'}")
             return
         self.status.setText(
             f"{reg.get('status')} · 通过 {reg.get('passed')}/{reg.get('total')} · "

@@ -149,7 +149,9 @@ class TestTheSchemaAcceptsBothKeys:
 class TestTheTemplateStillReadsBothKeys:
     def test_field_bins_key_is_read_by_gen_uvm(self):
         """写端与读端**两个键名**要对得上 —— 对不上就是"写了但没人读"。"""
-        src = Path("src/tools/generation/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
+        # 读端 `read_env_cov_bins` 已搬到 generation/generators/tasks.py
+        src = Path("src/tools/generation/uvm_tools/generation/generators/tasks.py").read_text(
+            encoding="utf-8")
         assert 'data.get("field_bins")' in src
         assert 'coverage_field_bins' in src
 
@@ -305,7 +307,8 @@ class TestTheDutChannelIsWiredIntoTheEnv:
         句柄永远为空 → 覆盖率恒 0%，而编译与加载**都不报错**。所以两份模板
         必须由同一个来源喂，缺席时**两边一致地没有**。
         """
-        gen = Path("src/tools/generation/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
+        gen = Path("src/tools/generation/uvm_tools/generation/generators/tasks.py").read_text(
+            encoding="utf-8")
         env_tpl = Path("src/tools/generation/uvm_tools/tool_uvm/templates/environment_templates"
                        "/env_cov.sv.j2").read_text(encoding="utf-8")
         tb_tpl = Path("src/tools/generation/uvm_tools/tool_uvm/templates/bench_templates"
@@ -737,10 +740,15 @@ class TestBatchTestsAreRunnable:
         assert "//" not in macro.replace("/*", "").replace("*/", "")
 
     def test_the_render_task_produces_it(self):
-        src = Path("src/tools/generation/uvm_tools/tool_uvm/gen_uvm.py").read_text(encoding="utf-8")
+        # 渲染闸门在 tasks.py；归一化在 parsing（拆层后分属两个模块，链没断）
+        src = Path("src/tools/generation/uvm_tools/generation/generators/tasks.py").read_text(
+            encoding="utf-8")
         assert "ENVIRONMENT_BATCH_TEST_TEMPLATES" in src
         assert "if environment.batches:" in src
-        assert "_normalize_batches" in src
+        loader = Path(
+            "src/tools/generation/uvm_tools/generation/parsing/yaml_loader.py"
+        ).read_text(encoding="utf-8")
+        assert "_normalize_batches" in loader
 
     def test_the_test_package_includes_the_batch_file(self):
         """**产出来还不够，得有人 `include` 它** —— 不然那些类从没被编译过。

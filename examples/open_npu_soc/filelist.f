@@ -1,8 +1,8 @@
-+incdir+rtl
++incdir+npu
 +incdir+tb
-rtl/sram/sram_banked.sv
-rtl/dma/dma_simple.sv
-rtl/npu/int8_gemm.sv
-rtl/cpu/nice_cmd_sequencer.sv
-rtl/soc_top.sv
+npu/sram/sram_banked.sv
+npu/dma/dma_simple.sv
+npu/npu/int8_gemm.sv
+npu/nice_disp/nice_cmd_sequencer.sv
+npu/soc_top.sv
 tb/tb_soc_top.sv

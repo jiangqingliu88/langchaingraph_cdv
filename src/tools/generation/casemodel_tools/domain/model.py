@@ -30,6 +30,34 @@ from .vocab import (DEFAULT_ID_PREFIX, DEFAULT_REPEAT, DEFAULT_SEED, ENV_KEY_NAM
 # ════════════════════════════════════════════════════════════
 
 @dataclass
+class Assertion:
+    """模型里声明的一条 DUT 断言，以及它**保护了哪些测试点**。
+
+    `tp_bindings` 是一对多：一条 SVA 往往同时守住好几个功能点（一个事务级
+    稳定性质可以覆盖"基本等待""连续等待""写期间稳定"三条 TP）。绑定表示
+    **关联**，不代表失败必然由所有关联 TP 引起 —— 归因仍要看 run 证据。
+    """
+    id: str
+    name: str
+    expr: str = ""
+    message: str = ""
+    signals: List[Any] = _field(default_factory=list)
+    tp_bindings: List[Dict[str, str]] = _field(default_factory=list)
+    failure_severity: str = "error"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "expr": self.expr,
+            "message": self.message,
+            "signals": list(self.signals),
+            "tp_bindings": [dict(b) for b in self.tp_bindings],
+            "failure_severity": self.failure_severity,
+        }
+
+
+@dataclass
 class Generation:
     """case 组合生成参数（文档十七节）。"""
     themes: List[str] = _field(default_factory=list)        # 限定专题 id
@@ -102,6 +130,12 @@ class CaseModel:
     method_names: Dict[str, str] = _field(default_factory=dict)
     checks: List[str] = _field(default_factory=list)
     check_names: Dict[str, str] = _field(default_factory=dict)
+    #: 模型声明的 DUT 断言（含 `tp_bindings`：这条断言保护哪些测试点）。
+    assertions: List["Assertion"] = _field(default_factory=list)
+    #: 行为域（状态 / 迁移 / 序列 / 时序）；None = 模型没启用行为建模。
+    behavior: Optional[Any] = None
+    #: 配置域（DUT/特性配置空间）；None = 模型没启用配置建模。
+    config_space: Optional[Any] = None
     cross_pairs: List[CrossPair] = _field(default_factory=list)
     cross_groups: List[CrossGroup] = _field(default_factory=list)
     env_required: List[str] = _field(default_factory=list)

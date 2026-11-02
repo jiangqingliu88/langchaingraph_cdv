@@ -50,22 +50,77 @@ assertions:
     expr: "queue_level <= 6'd32"
     message: "队列水位超过深度 32（计数器越界）"
     signals: [{name: queue_level, width: 6}]
+    tp_bindings:
+      - {tp_id: TP-NPUSCH-D_QUEUE-31, role: primary}
+      - {tp_id: TP-NPUSCH-D_QUEUE-32, role: primary}
+      - {tp_id: TP-NPUSCH-D_QUEUE-24, role: supporting}
 
   - name: raw_never_issues
     expr: "dep_type == 2'd1 |-> issue_valid == 1'b0"
     message: "存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）"
     signals: [{name: dep_type, width: 2}, {name: issue_valid, width: 1}]
+    tp_bindings:
+      - {tp_id: TP-NPUSCH-D_DEP-RAW, role: primary}
+      - {tp_id: TP-NPUSCH-D_DECISION-BLOCKED, role: supporting}
 
   - name: barrier_flushes
     expr: "barrier_type != 2'd0 |-> issue_decision == 2'd3"
     message: "屏障命中时必须冲刷（barrier_type!=NONE → issue_decision==FLUSHED）"
     signals: [{name: barrier_type, width: 2}, {name: issue_decision, width: 2}]
+    tp_bindings:
+      - {tp_id: TP-NPUSCH-D_BARRIER-TILE_BARRIER, role: primary}
+      - {tp_id: TP-NPUSCH-D_BARRIER-OP_BARRIER, role: primary}
+      - {tp_id: TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER, role: primary}
+      - {tp_id: TP-NPUSCH-D_DECISION-FLUSHED, role: supporting}
 
   - name: issued_needs_no_blocker
     expr: "issue_decision == 2'd0 |-> queue_level != 6'd0 && barrier_type == 2'd0 && dep_type != 2'd1"
     message: "发射的三个前提：队列非空、无屏障、无 RAW 真依赖"
     signals: [{name: issue_decision, width: 2}, {name: queue_level, width: 6},
               {name: barrier_type, width: 2}, {name: dep_type, width: 2}]
+    tp_bindings:
+      - {tp_id: TP-NPUSCH-D_DECISION-ISSUED, role: primary}
+      - {tp_id: TP-NPUSCH-D_QUEUE-0, role: supporting}
+      - {tp_id: TP-NPUSCH-D_DEP-RAW, role: supporting}
+
+behavior:
+  id: BEH-QUEUE
+  name: 队列水位迁移
+  clock: clk
+  reset: {signal: rst_n, active_low: true}
+  checks: [CHECK-FUNC]
+  states: [EMPTY, LOW, HIGH, FULL]
+  events: [enqueue, dequeue, flush]
+  transitions:
+    - {id: TR-EMPTY-ENQ, from: EMPTY, event: enqueue, to: LOW,  checks: [CHECK-FUNC]}
+    - {id: TR-LOW-ENQ,   from: LOW,   event: enqueue, to: HIGH, checks: [CHECK-FUNC]}
+    - {id: TR-HIGH-ENQ,  from: HIGH,  event: enqueue, to: FULL, checks: [CHECK-FUNC]}
+    - {id: TR-FULL-DEQ,  from: FULL,  event: dequeue, to: HIGH, checks: [CHECK-FUNC]}
+    - {id: TR-FULL-FLUSH, from: FULL, event: flush,   to: EMPTY, checks: [CHECK-FUNC]}
+  sequences:
+    - id: SEQ-FILL-DRAIN
+      steps: [{event: enqueue, repeat: 3}, {event: dequeue, repeat: 2}]
+      expects: [CHECK-FUNC]
+  temporal:
+    - id: TMP-BACKPRESSURE
+      trigger: enqueue
+      condition: {queue_full: true}
+      response: {backpressure: true}
+      within: {cycles: 1}
+      checks: [CHECK-FUNC]
+
+config_space:
+  dimensions:
+    - {name: queue_depth,   values: [8, 16, 32]}
+    - {name: cluster_count, values: [1, 2, 4]}
+    - {name: gemm_enable,   values: [true, false]}
+  cross_groups:
+    - {id: XG-CFG-01, dimensions: [queue_depth, cluster_count], level: required}
+  feasibility:
+    - id: CFG-NO-GEMM
+      when: {gemm_enable: false}
+      then: {exclude: true, note: "GEMM 关闭时 NPU 相关 TP 不适用"}
+  max_combinations: 64
 
 sub_objects:
   - {id: OBJ-01, name: 指令队列管理,   code: QUEUE}

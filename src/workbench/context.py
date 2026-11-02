@@ -38,6 +38,8 @@ class AppContext:
     console: Any = None
     #: 模块 id → 模块实例，由 ModuleManager 回填（模块之间要互相找时用）
     modules: dict = field(default_factory=dict)
+    #: 业务模式：all / soc / ip（只影响导航可见性，不影响模块实例）
+    business_mode: str = "all"
 
     # ── 路径 ──
 
@@ -62,7 +64,8 @@ class AppContext:
 
     # ── 工具 ──
 
-    def call_tool(self, name: str, *, force: bool = False, **kwargs):
+    def call_tool(self, name: str, *, force: bool = False,
+                  actor: str = "user", approval: bool = False, **kwargs):
         """调一个登记过的工具 —— 失败时抛 `bridge.binding.ToolError`。
 
         模块通常用 `ModuleBase.run_tool()`（它会把异常变成横幅），直接调这个
@@ -70,5 +73,8 @@ class AppContext:
 
         `force=True` 才能调 `pure=False` 的绑定（启动/取消运行这类长任务）——
         那是**用户按了按钮**才算数的显式触发，不是"切个标签页顺手跑一遍"。
+        `actor` / `approval` 对应绑定的触发权限（见 `bridge/binding.py` 的
+        `TRIGGERS`）：写发布包这类对外动作要求 `approval=True`。
         """
-        return self.tools.call(name, force=force, **kwargs)
+        return self.tools.call(name, force=force, actor=actor,
+                               approval=approval, **kwargs)

@@ -111,9 +111,26 @@ def _ensure_designfile(db_path: str) -> str:
     失败不抛：返回空串，调用方退回 `visualizer -wavefile`（没 hier，但波形能看）。
     """
     db = Path(db_path)
-    # `<build>/test_x/waves/x.db` → build = 上三级；布局不认得就退回两级
-    build = db.parents[2] if db.parent.name.lower() == "waves" else db.parent
-    if not build.is_dir():
+    # 已有设计索引优先：回归 run 把它拷到用例目录（waves/ 上一级），C run 在
+    # `<run>/e203/design.bin`；两者都能直接给 Visualizer，不再 vopt。
+    for cand in (db.parent / "design.bin", db.parent / "design.db",
+                 db.parent.parent / "design.bin",
+                 db.parent.parent / "design.db"):
+        if cand.is_file() and cand.stat().st_size > 0:
+            return str(cand)
+
+    # 定位 build（含 work/）：回归是 `<build>/test_x/waves/x.db` → parents[2]；
+    # C run 是 `<run>/e203/waves/x.db` → 上一级就是 e203（work 在那里）。
+    candidates = []
+    if db.parent.name.lower() == "waves":
+        candidates.append(db.parent.parent)
+        if len(db.parents) > 2:
+            candidates.append(db.parents[2])
+    else:
+        candidates.append(db.parent)
+    build = next((p for p in candidates if p.is_dir() and (p / "work").is_dir()),
+                 None)
+    if build is None:
         return ""
     design = build / "design.db"
     if design.is_file() and design.stat().st_size > 0:
@@ -126,10 +143,11 @@ def _ensure_designfile(db_path: str) -> str:
     if not top:
         return ""
     try:
-        # `-o` 只收**设计名**（不是路径）；`-work work` 要求 cwd=build
+        # `-o` 只收**设计名**（不是路径）；`-work work` 要求 cwd=build。
+        # `-linedebug` 让 Visualizer 的 hierarchy 能跳到源码行。
         proc = subprocess.run(
             [vopt, "-work", "work", top, "-o", "vis_opt", "+acc",
-             "-designfile", "design.db"],
+             "-linedebug", "-designfile", "design.db"],
             cwd=str(build), capture_output=True, text=True,
             errors="replace", timeout=180)
     except (OSError, subprocess.SubprocessError):

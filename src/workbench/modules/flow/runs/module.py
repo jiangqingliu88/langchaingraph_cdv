@@ -151,5 +151,5 @@ class RunsModule(ModuleBase):
             self._publish(run_id)
 
     def _publish(self, run_id: str) -> None:
-        self.ctx.bus.publish(bus.TOPIC_RUN_SELECTED, run_id)
+        self.ctx.bus.publish_run_selected(run_id)
         self.set_status(f"选中运行 {run_id}")

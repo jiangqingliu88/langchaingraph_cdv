@@ -1,8 +1,8 @@
 """UVM IR 契约 + 校验。
 
-只做三件事：把 `EnvSpec` 的已有字段映射成稳定形状、做结构校验、给出可序列化
-视图。**不生成代码**（渲染仍在 `render/` / `gen_uvm.py`），因此引入它不会改变
-现有产物字节。
+只做三件事：把 `EnvSpec` / `EnvironmentModel` 的已有字段映射成稳定形状、做结构
+校验、给出可序列化视图。**不生成代码**（渲染仍在 `render/` / `gen_uvm.py`），
+因此引入它不会改变现有产物字节。
 """
 from __future__ import annotations
 
@@ -83,12 +83,26 @@ class UVMIR:
         return next((a for a in self.agents if a.name == name), None)
 
 
+def _attr(obj: Any, name: str, default: Any = None) -> Any:
+    """dict 与 dataclass（`AgentModel` / `EnvironmentModel`）统一取字段。"""
+    if isinstance(obj, dict):
+        return obj.get(name, default)
+    return getattr(obj, name, default)
+
+
 def _agent_dict(item: Any) -> Dict[str, Any]:
-    """`find_spec_yaml` 的 agents 可能是 dict，也可能是 (agent, meta) 元组。"""
+    """agents 项可能是 dict、`(agent, meta)` 元组，或解析后的 `AgentModel`。"""
     if isinstance(item, dict):
         return item
     if isinstance(item, (tuple, list)) and item and isinstance(item[0], dict):
         return item[0]
+    if item is not None and getattr(item, "name", None):
+        return {
+            "name": _attr(item, "name", ""),
+            "type": _attr(item, "agent_type", "") or _attr(item, "type", ""),
+            "interface": _attr(item, "interface", ""),
+            "ports": _attr(item, "ports", []),
+        }
     return {}
 
 
@@ -99,7 +113,8 @@ def _ports(raw: Any) -> List[UVMPortIR]:
             continue
         out.append(UVMPortIR(
             name=str(p.get("name") or ""),
-            direction=str(p.get("direction") or ""),
+            # 接口 YAML 用 `dir`（AXI-VIP 风格），spec 侧用 `direction`；两个都认。
+            direction=str(p.get("direction") or p.get("dir") or ""),
             width=p.get("width", 1),
             protocol=str(p.get("protocol") or p.get("proto") or ""),
             clock=str(p.get("clock") or ""),
@@ -148,40 +163,82 @@ def _build_tests(raw_tests: Iterable[Any]) -> List[UVMTestIR]:
 
 
 def build_uvm_ir(env_spec: Any) -> UVMIR:
-    """`EnvSpec`（或同形状 dict）→ UVMIR。**不做解析，只做映射**。"""
-    module = str(getattr(env_spec, "module", "") or "")
-    agents = _build_agents(getattr(env_spec, "agents", []) or [])
-    tests = _build_tests(getattr(env_spec, "tests", []) or [])
-    env = UVMEnvIR(name=f"{module}_env" if module else "env",
+    """`EnvSpec` / `EnvironmentModel`（或同形状 dict）→ UVMIR。
+
+    **不做解析，只做映射**：两者都只读字段，因此解析层换实现时这份契约不变。
+    """
+    module = str(_attr(env_spec, "module", "") or "")
+    agents = _build_agents(_attr(env_spec, "agents", []) or [])
+    tests = _build_tests(_attr(env_spec, "tests", []) or [])
+    # 解析后的 EnvironmentModel 自带 env_name；spec 侧只有 module。
+    env_name = str(_attr(env_spec, "env_name", "") or "")
+    env = UVMEnvIR(name=env_name or (f"{module}_env" if module else "env"),
                    agents=[a.name for a in agents])
     return UVMIR(module=module, env=env, agents=agents, tests=tests)
 
 
-def validate_ir(ir: UVMIR) -> List[Dict[str, str]]:
-    """结构校验 —— 只报确定性错误，不猜协议/不补端口。"""
+def build_agent_ir(agent: Any) -> UVMAgentIR:
+    """单个 agent（`AgentModel` 或 dict）→ UVMAgentIR，供渲染前校验。"""
+    doc = _agent_dict(agent)
+    if not doc.get("name"):
+        return UVMAgentIR(name="")
+    return UVMAgentIR(
+        name=str(doc["name"]),
+        agent_type=str(doc.get("type") or doc.get("agent_type") or "UVM_ACTIVE"),
+        interface=str(doc.get("interface") or doc.get("iface") or ""),
+        ports=_ports(doc.get("ports")),
+        sequence_item=str(doc.get("sequence_item") or ""),
+        driver=str(doc.get("driver") or ""),
+        monitor=str(doc.get("monitor") or ""),
+    )
+
+
+def _port_issues(agent: UVMAgentIR) -> List[Dict[str, str]]:
+    issues: List[Dict[str, str]] = []
+    if not agent.ports:
+        issues.append({"code": "agent_ports_missing",
+                       "message": f"agent {agent.name!r} 没有端口"})
+    for port in agent.ports:
+        if not port.name:
+            issues.append({"code": "port_name_missing",
+                           "message": f"agent {agent.name!r} 有空端口名"})
+        if port.direction not in ("input", "output", "inout", ""):
+            issues.append({"code": "port_direction_invalid",
+                           "message": f"agent {agent.name!r} 端口 {port.name!r} 方向 "
+                                      f"{port.direction!r} 非法"})
+    return issues
+
+
+def validate_agent_ir(agent: UVMAgentIR) -> List[Dict[str, str]]:
+    """单 agent 校验（渲染接口前用）。"""
+    if not agent.name:
+        return [{"code": "agent_name_missing", "message": "agent 没有名字"}]
+    return _port_issues(agent)
+
+
+def validate_ir(ir: UVMIR, require_ports: bool = True) -> List[Dict[str, str]]:
+    """结构校验 —— 只报确定性错误，不猜协议/不补端口。
+
+    `require_ports=False` 用于 env 级模型：`EnvironmentModel` 的 agent 是按名字
+    声明的，端口在 interface 侧，这里拿不到端口不代表模型有问题。
+    """
     issues: List[Dict[str, str]] = []
 
     def _add(code: str, message: str) -> None:
         issues.append({"code": code, "message": message})
 
-    if not ir.module:
-        _add("module_missing", "UVMIR.module 为空")
+    # module 只有 spec 侧才有（EnvironmentModel 的身份是 env_name）；两者都空才算没身份。
+    if not ir.module and not ir.env.name:
+        _add("env_identity_missing", "UVMIR.module 与 env.name 都为空")
     names = [a.name for a in ir.agents]
     if not names:
         _add("agent_missing", "环境没有任何 agent")
     dup = {n for n in names if names.count(n) > 1}
     if dup:
         _add("agent_duplicate", f"agent 重名: {sorted(dup)}")
-    for agent in ir.agents:
-        if not agent.ports:
-            _add("agent_ports_missing", f"agent {agent.name!r} 没有端口")
-        for port in agent.ports:
-            if not port.name:
-                _add("port_name_missing", f"agent {agent.name!r} 有空端口名")
-            if port.direction not in ("input", "output", "inout", ""):
-                _add("port_direction_invalid",
-                     f"agent {agent.name!r} 端口 {port.name!r} 方向 "
-                     f"{port.direction!r} 非法")
+    if require_ports:
+        for agent in ir.agents:
+            issues.extend(_port_issues(agent))
     known = set(names)
     for test in ir.tests:
         missing = [a for a in test.agents if a not in known]

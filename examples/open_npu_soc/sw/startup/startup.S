@@ -7,8 +7,19 @@
 _start:
     la      sp, _stack_top
     call    main
+    // E203 自检 TB 的约定：x3=1 表示 PASS；跳到 0x80000086（tohost 标记）
+    seqz    x3, a0
+    li      t0, 0x80000086
+    jr      t0
 1:
     j       1b
+
+    // TB 在 PC==0x80000086 时采样 x3；这里放一个自循环，
+    // 让提交 PC 停在标记地址上（不是数据/非法指令）。
+    .section .tohost, "ax"
+    .globl tohost
+tohost:
+    j       tohost
 
     .section .bss
     .align  4

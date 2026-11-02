@@ -1,8 +1,8 @@
-"""生成层 —— parsing / models / render / generators 四层。
+"""生成层 —— constants / parsing / models / render / ir / generators。
 
-现有实现（`tool_find_spec_yaml` / `tool_uvm`）仍是行为主体；本包提供
-稳定的分层入口，新代码从这里导入，逐批把逻辑搬进来。
+`tool_uvm/gen_uvm.py` 已降为兼容门面，实现全部在这几层里；新代码直接
+从这里导入，不要再往 `tool_uvm/` 里加逻辑。
 """
-from . import generators, models, parsing, render  # noqa: F401
+from . import constants, generators, ir, models, parsing, render  # noqa: F401
 
-__all__ = ["models", "parsing", "render", "generators"]
+__all__ = ["constants", "models", "parsing", "render", "ir", "generators"]

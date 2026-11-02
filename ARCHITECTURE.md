@@ -2,11 +2,11 @@
 
 > 基线：2026-10-31
 >
-> 全量单测：**1206 passed / 2 skipped**；工作台 **721 passed**
+> 全量单测：**1219 passed / 2 skipped**；工作台 **739 passed**
 >
 > UVM 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 >
-> SoC 参考工程实测：`examples/open_npu_soc`，`soc run` **2/2 PASS**（`mismatched=0`，2075 ns），输出 `output_soc_v01_release_jiang_20261031_193929`；`signoff_evidence/` 24 个文件（输入/RTL/golden/回归/波形），`soc evidence` 校验通过
+> SoC 参考工程实测：`examples/open_npu_soc`，`soc run` 的两条用例（参考 TB `gemm_8x8` + E203 C `gemm_8x8_c`）**PASS**；参考路径 `mismatched=0`/2075 ns，C 路径 `TEST_PASS`，输出 `output_soc_design_jiang_20261031_223611`；`signoff_evidence/` 27 个文件（输入/npu RTL/golden/回归/两份波形），`soc evidence` 校验通过；两份波形都带 `design.bin`，Visualizer hierarchy 可浏览源码
 >
 > **Architecture 2.0 基线**：`src/core/` 运行事实面（RunContext / ArtifactStore / EventStore / Provenance DAG / Job Runtime / Decision Evaluation / Verification Quality Gate）已落地；**Verification Intelligence 第一层**（归因完整率、四个工程指标、增量计划、Run Diff、LocalStrategy→JobSupervisor）已接入。新增单测 `tests/core/` 83 条 + UVM IR 5 条 + Job Runtime 集成 4 条 + 合成 run 集成 1 条。
 
@@ -80,44 +80,121 @@ Evidence。**不为三类服务各写一套引擎**；`optimize-regression` / `c
 
 ### 1.2 参考 SoC 工程（Open NPU SoC v0.1）
 
-`examples/open_npu_soc/` 是用来证明「SignOffAI 能验证真实 SoC」的样板工程：
+`examples/open_npu_soc/` 是用来证明「SignOffAI 能验证真实 SoC」的样板工程。两条路径共用
+`tb/tb_soc_top.sv`：
 
 ```text
-CPU/NICE 命令 → DMA → Banked SRAM → INT8 GEMM → IRQ → golden 比较
+参考路径: TB 预装 A/B → nice_cmd_sequencer → DMA → Banked SRAM → INT8 GEMM → golden 比较
+E203 路径: E203 CPU 执行 C → NICE custom3 → u_npu_top/u_nice_disp → ICB 读写 DTCM → INT8 GEMM
 ```
 
-- v0.1 参考 TB 用 `rtl/cpu/nice_cmd_sequencer.sv` 固定 NICE 命令时序；
-  E203 NICE 适配器/固件文件已落地，但 **E203 路径未实跑**（M1）；
-- 现有 `vagent soc check/golden/run` 是薄适配层：`run` 复用
-  `InfrastructureManager.run_regression`，不另造执行引擎；
-- 回归 YAML、golden 向量、自检 TB、spec/verification plan 都在工程内；
-- **实测（2026-10-31）**：`soc check` 输入齐全；`soc run` **2/2 PASS**，
-  `gemm_8x8` 日志 `mismatched=0` / `PASS`，仿真结束于 2075 ns；
+**NPU 是子系统级 IP**（`npu/`），不是 CPU 内的 NICE core：
+
+```text
+tb_soc_top
+ └─ u_e203_tb_top (E203 tb_top)
+    └─ u_e203_soc_top
+       └─ u_e203_subsys_top
+          ├─ u_e203_subsys_main      # E203 CPU 子系统
+          │    └─ u_e203_cpu_top → u_e203_cpu → u_e203_core
+          └─ u_npu_top               # 与 u_e203_subsys_main 同级
+               └─ u_nice_disp        # npu/nice_disp/e203_nice_npu_adapter.sv
+                    └─ u_gemm        # npu/npu/int8_gemm.sv
+```
+
+- **接口上引**：`e203_cpu.v → e203_cpu_top.v → e203_subsys_main.v →
+  e203_subsys_top.v` 把 NICE 请求/响应/ICB 主口引到子系统边界，并在
+  `e203_subsys_top` 例化 `npu_top`。只改这 4 个文件，CPU/NICE 协议本身不变；
+- **ICB 主口**：适配器用 `nice_icb_*` 作为 master，经 CPU 的 LSU 仲裁
+  （CPU AGU + NICE，NICE 优先）后按地址译码到 ITCM / DTCM / BIU。当前只发
+  DTCM 地址（desc/A/B/C），一次一笔、word 粒度、无 burst；
+- **数据流**：C 程序在 DTCM 里放 descriptor/A/B/C；`u_nice_disp` 读 6 个
+  descriptor 字、16+16 个 A/B 字，GEMM 后写 64 个 C 字；CPU 轮询 STATUS；
+- **NICE 编码受 E203 解码约束**：`instr[13]`=rs1en、`instr[14]`=rdwen（即
+  func3 的 bit1/bit2）；START func3=2、STATUS func3=4、ACK func3=0；
+- **C 用例编译**：`vlog +acc -linedebug` → `vopt -designfile design.bin
+  -linedebug +acc -o tb_soc_top_opt` → `vsim tb_soc_top_opt
+  -qwavedb=+signal+memory=4096,4+class+wavefile=...`；
+  - `+acc`：保留信号；`-linedebug` + `design.bin`：Visualizer hierarchy
+    可看源码；
+  - `+memory=4096,4`：数组（`u_gemm.a/b/c`、`a_buf/b_buf/c_buf`、`desc`、
+    `c_words`）进波形，否则打开时报 `Memory ... is not logged`；
+  - E203 `tb_top` 的 `$value$plusargs` 与 `$readmemh` 是两个 time-0 initial，
+    开 `+acc` 后顺序会变；在 vsim cwd 放一份 `.verilog` 兜底镜像；
+- **回归 YAML**：`build_soc`（参考）+ `build_e203_c`（E203）两个 build，
+  `gemm_8x8` + `gemm_8x8_c` 两条用例；`soc run` 一次跑完 4 个任务；
+- **实测（2026-10-31）**：`soc check` 输入齐全；`soc run` 4/4 PASS；
+  参考路径 `mismatched=0` / 2075 ns，C 路径 `TEST_PASS`；
 - `soc run` 通过工程适配层（`src/cli/soc_adapter.py`）落
   `RunContext` / `EventStore` / `ArtifactStore`，并生成
-  `soc/soc_run.json` 与 `signoff_evidence/`（`soc_evidence_v1`）；
-- 波形：`regression.yaml` 用 `-qwavedb` 落
-  `<test>/waves/gemm_8x8.db`，`soc wave <run>` 用 Visualizer 打开；
-  波形里能看到 `start → dma_load → gemm_start → gemm_done → dma_store → irq/done`；
-- 常用命令：`soc report <run>`（摘要）、`soc evidence <run>`（24 个文件逐哈希校验）、
-  `soc wave <run>`（qwave.db → Visualizer）；`run` 的回归 exit code 仍是
-  **唯一 PASS/FAIL 判据**；
+  `soc/soc_run.json` 与 `signoff_evidence/`（`soc_evidence_v1`，27 个文件）；
+- **波形/源码**：`regression.yaml` 用 `-qwavedb` 落
+  `<test>/waves/*.db` 与 `design.bin`；`soc wave <run> [--test gemm_8x8_c]`
+  把 `-designfile design.bin -wavefile <db>` 一起交给 Visualizer；
+  `soc wave` 也认 C-only run（`c_run.json` → `e203/waves/*.db`）；
+- **常用命令**：`soc report <run>`（摘要）、`soc evidence <run>`（27 个
+  文件逐哈希校验）、`soc wave <run>`、`soc c-cases` / `soc c-run`；
+  `run` 的回归 exit code 仍是 **唯一 PASS/FAIL 判据**；
+- **业务模式切换**：Workbench 工具栏「业务：全部 / SoC / IP」只切换导航树里的
+  团队业务线（SoC 模式收起 IP 团队，IP 模式收起 SoC 团队，共享专业模块不变），
+  选择持久化到 QSettings `business/mode`；
+- **SoC C 用例**：`sw/cases.yaml` + `src/cli/soc_c_runner.py`；`soc c-cases` /
+  `soc c-run --case C-GEMM-8X8` 用 RISC-V 工具链编 C、用 Questa 跑 E203
+  bare-metal；判据是 E203 TB 的 `TEST_PASS`/`TEST_FAIL`（C 先写 DTCM，经
+  NICE ICB 读写，INT8 GEMM 结果再与 C golden 逐元素比较）；
 - **团队业务线**：`spec/ip_manifest.yaml` 把 IP 的 team/owner/version/status
   与 RTL 列成契约；
-  - **SoC 团队**：`soc.overview / soc.architecture / soc.verification / soc.signoff`；
+  - **SoC 团队**：`soc.overview / soc.architecture / soc.verification /
+    soc.c_cases / soc.signoff`（C 用例页：`sw/cases.yaml` 清单、按用例编译
+    运行、打开对应 qwave.db；run 选择器与运行历史都认 `c_run.json`）；
   - **IP 团队**：`ip.catalog / ip.workspace / ip.signoff`；
   - IP 级验证：`ip run` 按 `spec/ip_verification_plan.yaml` 的 tests 跑；
-    `ip status/evidence/release` 从最近 SoC run 的 TP 矩阵 + 证据包推导，
-    `ip_evidence/<ip>.json` 引用来源 run；SoC 签核页展示 IP release matrix；
+    `ip status` **优先该 IP 自己的 IP run**（其次才回退 SoC run），
+    `ip_evidence/<ip>.json` 引用来源 run；`ip release-build` 生成带哈希的
+    发布包 `spec/ip_releases/<ip>.json`，SoC 签核页展示消费绑定（见 §1.3）；
   - 两套页面共用工程事实与 `soc.*` / `ip.*` 只读工具，不复制回归/波形/证据页面；
 - **运行历史**：`RunRepository.discover_runs()` 在没有
-  `docs/manifest.json` 时读 `soc/soc_run.json`，把 SoC run 以
-  `kind=soc`、`state=completed/failed` 列入 `flow.runs`（不再要求 UVM run）；
-- **边界**：SoC 证据包是工程级事实（输入/RTL/golden/回归/波形），
-  **不是 UVM 的 v2 三态签核证据包**；E203 路径需要 RISC-V 工具链和 E203 TB，
-  未在本机实跑。
+  `docs/manifest.json` 时读 `soc/soc_run.json`、`ip/ip_run.json` 或
+  `c_run.json`，分别以 `kind=soc / ip / soc_c`、`state=completed/failed`
+  列入 `flow.runs`；
+- **边界**：SoC 证据包是工程级事实（输入/npu RTL/golden/回归/波形），
+  **不是 UVM 的 v2 三态签核证据包**；E203 路径需要 RISC-V 工具链和 Questa，
+  已在本机实测 `C-GEMM-8X8` 通过。
 
 详见 [`examples/open_npu_soc/README.md`](examples/open_npu_soc/README.md)。
+
+### 1.3 IP 与 SoC 两条业务线：两套 CDV + 发布契约
+
+两条业务线模拟真实公司里的**供应方 / 消费方**，不是同一个流程的两个入口；
+方法学不同，覆盖率**分账、不相加**。
+
+| | IP 团队（供应方） | SoC 团队（消费方） |
+|---|---|---|
+| 验证对象 | IP 内部：微架构 / 协议 / 状态机 / 边界与异常 | 集成：跨 IP 数据流 / 配置组合 / 启动-中断序列 |
+| CDV 口径 | 功能覆盖点 + 断言 + 代码覆盖（`methodology: ip_cdv`） | 集成场景覆盖；IP 内部覆盖直接引用，**不重算** |
+| 交付物 | `spec/ip_releases/<ip>.json`（`ip_release_v1`，带 sha256） | run 里的 `consumed_ips` + 证据包 |
+| 通过判据 | tests / evidence / testpoints（必需），coverage（M2 前参考） | 集成回归 PASS + 消费的发布包绑定正常 |
+| 失败语义 | 不发布，或带 waiver 发布 | 未发布 / 版本漂移 → `MISSING` / `STALE` / `NOT_RELEASED` |
+
+**发布契约**（`src/cli/soc_adapter.py`）：
+
+- `build_ip_release(root, ip_id)`：准则没过也写包，但 `released=false`，
+  `blocking` 列出卡住的准则 —— 发布与否是人的决定，不是工具替人拍板；
+- 包的 `coverage` 在独立 IP TB（M2）落地前是
+  `{measured: false, functional_pct: null, basis: soc_subset}`：
+  **None ≠ 0**，不拿 SoC 的覆盖率冒充 IP 覆盖；
+- `soc_ip_binding(root)` 把清单里每个 IP 绑到发布包上，状态
+  `OK / STALE（RTL hash 变了）/ MISSING（清单说 released 但没包）/
+  NOT_RELEASED（被准则拦住）/ UNRELEASED（清单本来就没发布）`；
+- 每次 SoC run 的 `soc/soc_run.json` 记录 `consumed_ips`，SoC 签核页直接
+  显示绑定异常数。
+
+**CLI**：`vagent ip release-build --ip <id>` / `ip release-check --ip <id>` /
+`ip binding`。工作台 IP 工作区有「生成发布包」，IP 发布检查页显示准则逐条状态。
+
+**IP run 不冒充 SoC run**：IP run 也会写 `soc/soc_run.json`，所以
+`list_soc_runs` 先认 `ip/ip_run.json`、`latest_soc_run` 只取 `kind=soc`、
+`ip_status` 优先该 IP 自己的 ip_run —— 供应方的结论不再由消费方的 run 定义。
 
 ---
 
@@ -241,7 +318,14 @@ audit → finalize → END
 **文件行数 / 函数圈复杂度**由 `config/architecture_guard.py` 执行：
 
 - `config/architecture_budget.yaml`：> 1500 行必须登记（`reason` + `plan`），
-  > 2000 行失败；登记文件**只能变小不能变大**。
+  > 2000 行失败；登记文件**只能变小不能变大**。**当前 `watched` 为空** ——
+  原来超线的 `gen_uvm.py` / `flow_tools/api.py` / `casemodel/coverage.py` /
+  `cli/commands.py` 已拆到 1500 行以下，`_tools_old.py` / `pipeline_docs.py`
+  确认无调用方后已删除。
+- **基线已重置（2026-11-01）**：拆分/删除后的旧债务条目全部作废，
+  `complexity_baseline.json` 按当前代码重新生成（97 条，全部 > 20）。
+  这 97 条是**新结构的起点**，不再作为"历史欠账"逐条偿还；
+  新函数超阈值仍然会红。
 - `config/complexity_baseline.json`：现有 > 20 的函数进债务清单；
   新函数超阈值、或已登记函数复杂度增长 → 失败。
 - `python -m config.architecture_guard` 是 CI 入口。
@@ -487,6 +571,57 @@ TP IR ──► StimulusPlan IR（framework/stimulus_plan.py，确定性 + sha25
 当前 verify 会把 plan 落到 `coverage/stimulus_plan.json` 并随证据包收走；
 generated 仍按原路径执行。
 
+### 7.6 方法学的适用边界与 v2 路线
+
+当前模型是 **attribute-driven CDV**：把验证空间定义成"静态属性取值"。它能回答
+"某功能点有哪些取值、有没有都打到"，但回答不了"在什么状态、什么时刻、经过什么
+行为过程才算被验证"——状态迁移、时序、配置组合不在 `tp_id` 体系里。
+
+这不是主干设计错误，而是**适用边界**。扩展方向是并列加域（不推翻 L1–L6、
+不重排 `tp_id`）：
+
+```text
+Attribute（保留） + Behavioral（新增） + Configuration（新增）
+        + Verification（扩展） + 统一关联层（TP ID / Provenance / Evidence）
+```
+
+设计、兼容契约与分阶段路线见
+[`docs/design/multi_dimensional_tp_ir.md`](docs/design/multi_dimensional_tp_ir.md)。
+原则：**任何激励（含 AI 生成的）都必须先进 TP IR，再由编译器产出后端实现**，
+不允许直接生成 UVM sequence 绕过主键体系。
+
+建模期静态检查（`analysis/rules/coverage.py`）目前成对存在：
+
+- `cover_bin_unreachable`（error）：每个覆盖仓至少有一个取值点能打到；
+- `value_point_unmapped`（error）：每个取值点至少落进一个仓；
+- `cover_bin_overlap`（warning）：仓之间取值重叠（一个值记两笔）。
+
+断言建模（P2）：`assertions[].tp_bindings` 一对多绑定测试点；TP IR payload 带
+`assertion_bindings`（tp_id → 断言、unknown 单列）；`assertion_tp_unknown`（error）
+与 `assertion_unbound`（warning，仅在模型已启用绑定时报）把错误留在建模期。
+
+行为域（P1a）：顶层 `behavior:`（states / events / transitions / sequences /
+temporal）与属性维度并列；节点编译成行为 TP（`execution.stage=behavior`，
+迁移/时序为 `observe`、序列为 `sequence`），进同一份 TP IR；规则
+`behavior_ref_unknown` / `behavior_no_check` / `behavior_duplicate_node` 全为 error。
+`tp_matrix` 已认识行为 TP：单列 `PENDING_BACKEND`（无执行数据，不进可激励/
+观测分母，也不算 `UNMAPPED`），签核摘要带 `behavior_pending`。
+**执行后端（事件序列 → UVM）仍是 P1b**，TP 的 notes 里如实标注。
+
+配置域（P3a）：顶层 `config_space:`（配置维度 / 交叉组 / 可行性规则 /
+`max_combinations`）。建模期校验四条：重名、空取值、引用未知维度或取值、
+组合超限（warning）。编译产出 `config_space` 摘要进 TP IR：组合总数、
+可枚举数、可行性过滤后的清单、被排除的组合（带规则 id）、截断标记。
+P3b：每条 TP 挂 `config_instances`（该 TP 在哪些可行组合下要跑；`disable_tps`
+规则按组合生效），`tp_id` 不分叉，摘要带 `instances_total`。`config_instances`
+只进 JSON payload，**不进 `testpoints.yaml`** —— IR 哈希仍与实际落盘一致。
+按配置切换编译/执行（每组合一次 run）尚未实现。
+
+方法策略（P5）：`framework/methods.py` 是方法语义的唯一真相 ——
+`method → (策略名后缀, 组合器模式, 赋值方式)`；`associate` 的
+`METHOD_TO_POLICY` / `METHOD_TO_CONSTRAINT` 与约束编译器的 `mode` 都从它派生，
+两表同源、产物字节不变。
+
 ---
 
 ## 8. UVM 生成与回归
@@ -563,36 +698,52 @@ tests:
   跑出假 pass/fail；这是 SoC 例子实测暴露后补的守卫
 - 结果：`regression_stages.json`
 
-### 8.5 生成层拆分（进行中）
+### 8.5 生成层拆分（已完成，`gen_uvm.py` 只剩兼容门面）
 
 ```text
 src/tools/generation/uvm_tools/generation/
+├─ constants.py  # TEMPLATES_DIR / DEFAULT_META / __version__
+├─ models.py     # UVM 模型 dataclass + Artifact / RegressionCase / CoveragePlanSpec / EnvSpec
 ├─ parsing/      # YAML/spec → 内部数据（不渲染、不写文件）
-├─ models.py     # Artifact / RegressionCase / CoveragePlanSpec / ConstraintSpec / EnvSpec
+│  ├─ environment_specs.py  # 声明归一化 helper（_normalize_* / _ral_* …）
+│  └─ yaml_loader.py        # YAML 输入收集/解析（含 DUT/RAL 相对路径解析）
 ├─ render/       # 只做 Jinja2；render_checked 在渲染前校验 ctx key
+├─ ir/           # UVM IR 契约 + 校验（uvm_ir.py）
 └─ generators/
-   ├─ env_gen.py          # 环境产物门面（内部仍调 UVMGenerator）
+   ├─ tasks.py            # RenderTask 家族：模型 → 文件（不解析、不编排）
+   ├─ orchestrator.py     # UVMGenerator / generate_uvm：装配渲染任务
+   ├─ cli.py              # main() / --gate 编译仿真门禁
+   ├─ env_gen.py          # 环境产物门面（调 orchestrator）
    ├─ coverage_gen.py     # coverage_plan.yaml
    ├─ constraint_gen.py   # constraint_status.json + coverage_plan 标注
    └─ regression_gen.py   # regression.yaml / 种子 / 分级 tag / TP 回归任务
 ```
 
+- `tool_uvm/gen_uvm.py` 现在是**兼容门面**：只做按名 re-export + `main()` 入口
+  （3305 → 80 行，只留**仍在用的名字**而不是全量 re-export），`from ...tool_uvm.gen_uvm import X` 与
+  `python gen_uvm.py` 都照旧可用。
+- **验收判据是产物字节不变**：每次搬迁后 `examples/apb` 全量生成 60 个文件与
+  迁移前逐字节一致（只归一化了树根路径）；直接脚本入口单独跑 `--version` 验证，
+  因为它的兜底走 `generation.*` 顶层包名（`python gen_uvm.py` 时没有父包）。
 - `find_spec_yaml/main.py` 已把回归产物整段搬到 `generators/regression_gen.py`
   （主文件 2059 → 1469 行），并保留同名 re-export。
 - `VerifyExecutor` 的覆盖率计划、约束状态、coverage plan 标注已改调
   `generation.generators`。
 - `render_checked()` 是“模板声明 key、渲染前校验”的结构化守卫，用来替代
   “ctx 缺 key → 静默渲染成 TODO 空壳”。
-- **统一 UVM IR 已定义、迁移未完成**：`generation/ir/uvm_ir.py` 提供
-  `UVMAgentIR / UVMEnvIR / UVMTestIR / UVMConnectionIR` 与 `validate_ir()`，
-  `EnvSpec.to_uvm_ir()` 把已有字段映射进去；**不渲染、不改变现有产物字节**。
-  `gen_uvm.py`（~3305 行）的 agent/env/bench 解析与渲染仍留在原文件，
-  `generation/render/region_injector.py`（pragma custom 注入）、
-  `generation/render/file_ops.py`（签名判定 / 清理 / 生成报告 / merge 备份）、
-  `generation/render/templates.py`（模板注册表）与
-  `generation/render/jinja_renderer.py`（Jinja 渲染器 + 属性过滤器）已搬走
-  （`gen_uvm` 继续 re-export）；`env_gen` 目前只是稳定门面。后续按
-  parsing → IR → render → generators 继续搬。
+- **统一 UVM IR 已被渲染入口消费（只做守卫，不是渲染输入）**：
+  `generation/ir/uvm_ir.py` 提供 `UVMAgentIR / UVMEnvIR / UVMTestIR /
+  UVMConnectionIR`；`AgentModel.to_uvm_ir()` / `EnvironmentModel.to_uvm_ir()`
+  同时支持 spec 侧与解析后的模型（端口 `dir`/`direction` 都认）。
+  - `AgentRenderTask.generate()` 渲染接口前跑 `validate_agent_ir()`：
+    空端口名、非法方向会打印 `[gen_uvm] Warning: UVM IR ...`
+    （空端口名会渲染成 `logic [-1:0] ;` —— 正是本节开头那个“端口全是空名”的坑）。
+  - `EnvironmentRenderTask.generate()` 渲染前跑
+    `validate_ir(..., require_ports=False)`：查 agent 重名 / 身份缺失 /
+    test 引用不存在的 agent；env 侧 agent 只声明名字，端口在 interface 侧，故不查端口。
+  - **只警告、不改产物字节**（`examples/apb` 60 个文件逐字节不变），也不静默 ——
+    模型或解析漂移时生成前就能看见。
+  - 模板仍直接吃 dataclass/ctx：IR 目前是**校验契约**，还没成为渲染的数据源。
 
 ### 8.6 真 pass 判据
 
@@ -981,13 +1132,20 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 [`src/workbench/ARCHITECTURE.md`](src/workbench/ARCHITECTURE.md)）：
 
 - `app.py` / `bootstrap.py` / `bus.py`
-- `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`、`service`（三个工程服务入口）、`soc`（SoC 团队：总览 / 架构 / 验证 / 签核）、`ip`（IP 团队：目录 / 工作区 / 发布检查）
+- `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`、`service`（三个工程服务入口）、`soc`（SoC 团队：总览 / 架构 / 验证 / C 用例 / 签核）、`ip`（IP 团队：目录 / 工作区 / 发布检查）
 - **工程服务入口**：`project.overview` / `project.management` + `soc.*`（SoC 团队）+ `ip.*`（IP 团队）+ `service.uvm` / `service.regression` / `service.coverage` 都是普通 `ModuleBase` 模块，只做导航/编排（打开已有模块、调 `pipeline.start` / `soc.run`、生成 core 计划），不另造引擎；导航分域为「项目 → 客户工程（SoC 团队 / IP 团队 / 工程服务）→ 设计时 → 工程工作区 → 运行时 → 平台配置」
 - 签核页同时展示：门禁、六层证据链、**证据包 v2**（哈希 / caveat / 计划与单测覆盖率 / 种子多样性 / **粗连续奖励 + 权重** / **运行时知识图规模** / 参考模型与基线 / 审批 / Freeze / **recipe v2 与 Tier B EDA 依赖** / 回放命令）
 - 签核页工具栏新增 **「校验证据包」**：调 `evidence.check_package`（纯读），展示完整性、Tier A 重算、recipe 校验结果
 - 决策轨迹页新增 **「来源」**（硬规则 / 规则 / RL 采纳 / RL 被退回 / 终态）与 **「奖励」**（每轮 `sim_reward.total` + 最弱层）两列
 - GUI 的工具调用走 `bridge/catalog.py` 白名单；工具注册表启动摘要只在 CLI（GUI 不需要 bootstrap 全量工具）
+- 绑定带**触发权限**：`trigger=user / agent / approval`。写对外交付物（如
+  `ip.release_build`）要求 `approval=True`；`force=True` 只表示"人显式按的"，
+  不代表谁有资格。真正的目录/命令/预算治理仍在 Core 的 Job Supervisor。
 - 与 CLI/流水线通过文件契约（run 目录、manifest、evidence）解耦，**不共享内存 state**
+- **主体架构已冻结（2026-11-01）**：只加契约与模块，不再调整骨架。
+  三个系统的边界固定：**Core** 保证可信可追溯、**Agent** 推进自主验证、
+  **Workbench** 让人看清与管住。接入外部 Agent（Claude Code / Skills）时，
+  Workbench 只新增观察与审批面，不重造执行、编排或决策。
 - 波形：`.wlf` → `vsim -view`；`qwavedb` → Visualizer + 按需 `vopt -designfile`
 - 覆盖率：先 `materialize_ucdb()` 再开 Visualizer
 
@@ -1025,7 +1183,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1206 passed / 2 skipped
+python -m pytest tests/ -q                            # 1219 passed / 2 skipped
 python -m pytest tests/core -q                        # Architecture 2.0 核心（83 条）
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
@@ -1111,16 +1269,20 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
   run 生命周期自动清理仍未落地（`vagent prune` 已有手动入口）。
 - **命令白名单默认 monitor**：越界命令会被记进 `job.denied`（status=monitor），
   但不拦；要拦得显式设 `SIGNOFFAI_CMD_ALLOWLIST=enforce`。
-- **UVM 生成器尚未迁到统一 IR**：`generation/ir/` 已定义契约与校验，
-  `gen_uvm.py` 的解析/渲染仍在原文件；IR 迁移是 P1 路线图。
-- **增量回归依赖映射尚未自动生成**：当前依赖
+- **UVM 生成器尚未迁到统一 IR**：`generation/ir/` 的契约已在
+  `AgentRenderTask` / `EnvironmentRenderTask` 入口被消费做结构校验（只警告），
+  但模板仍直接吃 `AgentModel` / `EnvironmentModel` 的 ctx；IR 目前拦不住
+  “字段还在、语义已错”这类漂移。模型与解析已搬到
+  `generation/models.py` / `generation/parsing/`。
+- **增量依赖映射是文件级启发式**：当前依赖
   `coverage/test_dependencies.json` 或 regression.yaml 的 `file_pattern`；
+  依据文件变化筛选受影响用例，不代表已具备语义级依赖分析或自动映射生成。
   没有映射时保守跑全量，不会假装省了时间。
 - **增量编译尚未实现**：RTL diff 只决定"跑哪些用例"；编译仍由回归框架的
   共享 work library 处理，不是本层的选择性编译。
-- **回归优化未做种子级调度**：`optimize-regression` 给出执行顺序与
+- **回归优化的种子级重排未实现**：`optimize-regression` 给出执行顺序与
   "精确归因下可跳过"的低边际用例；按 seed 重排/裁剪不在本层（会改生成的
-  regression.yaml，风险更高）。
+  `regression.yaml`，风险更高）。
 - **三类工程服务不是独立引擎**：`optimize-regression` / `coverage-closure`
   只是 CLI 工作流；执行复用现有 `InfrastructureManager` 与
   `PipelineExecutionService`，不维护第二套仿真/收敛引擎。
@@ -1128,8 +1290,16 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
   RunContext/EventStore/ArtifactStore 与 `soc_evidence_v1`（输入/RTL/golden/
   回归/波形），但没有 UVM 的 TP 矩阵、caveat 与三态 verdict；这三项属于
   `verify` 的 UVM 路径（或后续 SoC 适配）。
-- **E203 NICE 路径未实跑**：`examples/open_npu_soc` 的 E203 适配器/固件文件
-  已落地，但本机只验证了参考 TB 路径；E203 TB 需要 RISC-V 工具链。
+- **IP 级覆盖率尚未测量（独立 IP TB 待 M2）**：`ip_release_v1` 已经能表达
+  IP 覆盖点与目标，但 v0.1 的 IP 回归仍复用 SoC 回归用例，发布包里如实写
+  `{measured: false, functional_pct: null, basis: soc_subset}`；发行判定靠
+  tests / evidence / testpoints，覆盖准则标为"参考、不阻断"。独立 IP TB 与
+  真正的 IP 覆盖率收集是 M2。
+- **E203 C 路径的边界**：`examples/open_npu_soc` 的 `C-GEMM-8X8` 已实跑
+  通过，但 NICE 仍是 START/STATUS/ACK 阻塞式轮询，IRQ 未接 PLIC；NPU 的
+  `dma_simple/sram_banked` 只用于参考路径，E203 路径的数据搬运走 NICE ICB
+  到 DTCM；ICB 一次只有一笔 outstanding、word 粒度、无 burst；适配器是
+  组合乘加的功能模型，不是时序收敛的 NPU。
 - **边界表同源**：`config/known_limitations.py` 是 §15 的代码真相；
   `test_architecture_invariants.py` 校验文档包含每条，player runtime 落地时
   必须同步改 `status` 与文档。
@@ -1142,215 +1312,65 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 
 ```text
 .
-├─ config/                      设置（settings.py）/ 路径（paths.py）
-│  ├─ architecture_budget.yaml  行数预算 + 大文件登记（reason/plan）
-│  ├─ complexity_baseline.json  圈复杂度债务基线
-│  ├─ architecture_guard.py     预算检查入口
-│  └─ known_limitations.py      §15 边界表的代码真相
+├─ config/                         配置、架构预算与路径
+│  ├─ known_limitations.py         §15 边界表的代码真相
+│  ├─ architecture_budget.yaml    行数预算与大文件登记
+│  ├─ complexity_baseline.json    圈复杂度债务基线
+│  ├─ architecture_guard.py       行数与复杂度检查入口
+│  ├─ paths.py                    运行期路径解析
+│  └─ settings.py                 设置
 ├─ scripts/
-│  ├─ mutation_guards.py        6 条核心守卫的变异测试
-│  └─ check_architecture.py     （可选 CI 包装）
-├─ database/                    运行期 SQLite（不进 git，只留 .gitkeep）
-├─ specs/<module>/              RTL + casemodel.yaml + signoff_policy.yaml
+│  ├─ mutation_guards.py           7 条核心守卫的变异测试
+│  └─ check_architecture.py        可选 CI 包装
+├─ database/                       运行期 SQLite；不进 git，仅保留 .gitkeep
+├─ specs/<module>/                 RTL、casemodel.yaml、signoff_policy.yaml
 ├─ src/
-│  ├─ core/                     **横向底座（标准库，不 import layers）**
-│  │  ├─ runtime/               RunContext / ArtifactStore / EventStore
-│  │  ├─ provenance/            DAG schema / builder / exact-vs-weak attribution
-│  │  ├─ jobs/                  JobSpec / Supervisor / allowlist / outputs
-│  │  ├─ decision/              decision_eval_v1
-│  │  └─ verification/          verification_quality_v1（五维质量门）
-│  ├─ cli/                      CLI / REPL
-│  │  ├─ commands.py            **入口 + 子命令组注册 + 剩余命令**
-│  │  ├─ common.py              退出码 + 无状态 helper（唯一定义）
-│  │  ├─ cmd_verify.py          init / verify / multi / plan
-│  │  ├─ cmd_signoff.py         signoff 命令组
-│  │  ├─ cmd_regression.py      regression 命令组
-│  │  ├─ cmd_coverage.py        coverage 命令组
-│  │  ├─ cmd_casemodel.py       case-model 命令组
-│  │  ├─ cmd_evidence.py        evidence 命令组（人工链 + 签核包）
-│  │  ├─ cmd_config.py          config 命令组
-│  │  ├─ cmd_soc.py             SoC 参考工程 check / golden / run / report / evidence / wave
-│  │  ├─ soc_adapter.py         SoC → RunContext/Event/Artifact/证据包适配层
-│  │  ├─ cmd_services.py        工程服务：optimize-regression / coverage-closure
-│  │  ├─ output.py              OutputAdapter / 公共选项
-│  │  └─ repl.py                交互式 REPL
-│  ├─ layers/
-│  │  ├─ _bootstrap.py          分层守卫
-│  │  ├─ l1_infrastructure/     EDA / 输出 / 哈希 / Reference Finder
-│  │  ├─ l2_orchestration/      LangGraph / executors / tools / evidence
-│  │  │                         （含 round_facts 轮次事实表）
-│  │  ├─ l3_decision/           决策（hard/soft 两阶段）/ 奖励 / 知识
-│  │  │                         schema / graph / query / persistence / runtime
-│  │  ├─ l4_memory/             SQLite 注册表 / 血缘 / 经验
-│  │  └─ l5_evolution/          蒸馏 / 生长
-│  ├─ executors/                8 个 executor
-│  │  └─ verify/steps_dag.py   verify 7 步依赖声明 + 执行期顺序记录器
-│  ├─ tools/                    领域工具包（按板块物理分目录）
-│  │  ├─ common/lib/code_coverage_plan.py  DUT 代码覆盖率回归合并口径
-│  │  ├─ flow/flow_tools/evidence_summary.py  recipe/StimulusPlan 摘要
-│  │  └─ generation/casemodel_tools/framework/
-│  │       stimulus_plan.py      plan IR + 双后端能力表
-│  │       plan_consistency.py   三份真相同源校验
-│  │  ├─ generation/            casemodel / uvm / isa / cmodel / doc
-│  │  ├─ checking/              assertion / debug / coverage / spec
-│  │  ├─ execution/             regression
-│  │  ├─ flow/                  signoff / lineage / trend
-│  │  ├─ integration/           IDE bridge
-│  │  ├─ common/                lib（哈希 / LLM / filelist / doc intake）
-│  │  └─ boards.py              板块单一真相
-│  └─ workbench/                PySide6 桌面工作台（可选）
-│     └─ modules/{soc,ip}/      SoC 团队 / IP 团队业务线
-├─ examples/open_npu_soc/       SoC 参考工程（RTL / TB / golden / regression）
-│  ├─ spec/ip_manifest.yaml     IP 团队 / owner / version / release 契约
-│  └─ spec/ip_verification_plan.yaml  IP testpoint / tests / acceptance
-├─ tests/                       主测试套件
-├─ output_<run>/                一次运行的产物
-└─ ARCHITECTURE.md              本文
+│  ├─ core/                        横向运行事实底座；标准库实现，不 import layers
+│  │  ├─ runtime/                  RunContext / ArtifactStore / EventStore
+│  │  ├─ provenance/               DAG / exact-vs-weak attribution
+│  │  ├─ jobs/                     JobSpec / Supervisor / allowlist
+│  │  ├─ decision/                 decision_eval_v1
+│  │  └─ verification/             verification_quality_v1
+│  ├─ cli/                         CLI / REPL / 命令组（commands.py + cmd_*.py，导入即注册）
+│  ├─ layers/                      L1–L5 分层架构
+│  ├─ executors/                   8 个 executor；verify 步骤 DAG 位于 verify/
+│  ├─ tools/                       generation / checking / execution / flow 等工具板块
+│  └─ workbench/                   可选 PySide6 桌面工作台
+├─ examples/open_npu_soc/          SoC 参考工程
+│  ├─ npu/                         NPU 子系统 RTL
+│  ├─ e203_hbirdv2/                 E203 NICE 接口适配
+│  ├─ tb/                           参考仿真 testbench
+│  ├─ sw/                           bare-metal C 用例与构建脚本
+│  ├─ spec/                         SoC / interface / verification plan / IP 清单与发布包（ip_releases/）
+│  └─ regression/regression.yaml   build 与测试配置
+├─ tests/                           主测试套件
+├─ output_<run>/                    单次运行产物
+└─ ARCHITECTURE.md                  当前实现架构说明
 ```
+
+**数量口径**：
+- 变异守卫数量以 `scripts/mutation_guards.py` 和对应测试为准。
+- SoC build、测试及任务数量以 `examples/open_npu_soc/regression/regression.yaml`
+及实际运行结果为准。更新数量时应同步修改架构文档和一致性测试。
 
 ---
 
 ## 17. Architecture 2.0 路线图（已实现 vs 计划）
 
-**已实现（截至 2026-10-31）**：参考 SoC 工程 v0.1 参考 TB 路径实测
-（`soc run` 2/2 PASS）；RunContext、ArtifactStore、EventStore、Provenance DAG、
-Coverage 归因完整率、Decision Evaluation、Verification Quality Gate、
-Job Runtime + 命令白名单、`LocalStrategy` 接入 JobSupervisor、
-UVM IR 契约与校验、增量计划（RTL diff → 依赖 → 受影响用例）、
-Run Diff、四个工程指标、证据包接入、三类 CLI 工程服务工作流
-（verify / optimize-regression / coverage-closure）。
+**已实现（截至 2026-10-31）**：参考 SoC 工程 v0.1 的两条测试用例均通过；一次 `soc run` 包含 2 个 build 配置和 2 条测试用例，共 4 个任务。RunContext、ArtifactStore、EventStore、Provenance DAG、Coverage 归因完整率、Decision Evaluation、Verification Quality Gate、Job Runtime + 命令白名单、`LocalStrategy` 接入 JobSupervisor、UVM IR 契约与校验、增量计划（RTL diff → 依赖 → 受影响用例）、Run Diff、四个工程指标、证据包接入、三类 CLI 工程服务工作流（verify / optimize-regression / coverage-closure）
 
 **下一阶段（Architecture 2.0 → Verification Intelligence）**：
 
 | 阶段 | 目标 | 状态 |
 |---|---|---|
-| P1 收口 | `gen_uvm.py` 按 parsing → UVM IR → render → generators 迁移 | **进行中**：IR/校验已落地，主体仍在原文件 |
+| P1 收口 | `gen_uvm.py` 按 parsing → UVM IR → render → generators 迁移 | **结构完成**：parsing / models / render / generators 全部搬完，`gen_uvm.py` 只剩兼容门面（3305 → 80 行，产物字节不变）；IR 已在渲染入口做结构校验，但模板仍吃 dataclass ctx |
 | P2 增量验证 | 依赖映射自动生成；增量**编译**；按 seed 级优化调度 | **部分**：计划/选择/估算/`--incremental-from`/`optimize-regression` 已通，自动依赖、增量编译、种子级调度未做 |
 | P3 智能选择 | 基于历史 TP/bin/seed 选择高价值测试；Unreachable TP Analyzer | **地基**：归因链与完整率已通 |
 | P4 多后端 | VCS / Verilator 适配；跨 run 血缘/事件索引；run 自动清理 | 未开始 |
-| P5 治理升级 | 质量门从"只报告"升级为可配置硬门禁（需新增 caveat code 并同步 `EXPECTED_CAVEATS`） | 未开始 |
+| P5 治理升级 | 质量门从“只报告”升级为可配置硬门禁（需新增 caveat code 并同步 `EXPECTED_CAVEATS`） | 未开始 |
 
 **工程指标口径**（见 §9.9）：回归总耗时下降、增量节省、归因完整率、
-决策有效率。缺数据写 null / `available:false`，不拿 0 冒充。
+决策有效率。缺数据写 `null` / `available:false`，不拿 0 冒充。
 
 **不要做的事**：为覆盖率收敛速度与 EDA 巨头硬拼；本项目的第一定位是
 **可复现·可审计·可治理的签核证据链 + 个人级治理**（见 `CLAUDE.md` §九）。
-
-
-
-有优势，而且已经有了一定的技术壁垒。但目前的优势主要在工程架构和验证流程整合上，还没有完全转化为客户愿意付费、竞争对手难以复制的商业优势。
-
-我对 SignOffAI 的判断是：它已经不只是一个简单的 AI 生成 UVM 代码的工具，而是在向一个 AI 驱动的 IC 验证工程平台发展。
-
-但要区分三个层次。
-1. 目前已经形成的优势
-维度	你的工程优势	我的判断
-架构	CLI、Workbench、Core、Agent、Executor 分层	较强
-执行体系	Job Runtime、RunContext、ArtifactStore	较强
-可追溯性	EventStore、Provenance DAG、Evidence	较强
-自动化	LangGraph、多个 Executor、ToolHub	有基础
-验证生成	Spec 分析、UVM IR、UVM Generator	待验证
-覆盖率闭环	Coverage Analyzer、StimulusPlan、Coverage Decision	待打通
-商业交付	客户项目、真实芯片验证、长期运行	尚未证明
-
-我认为最值得重视的不是 Agent 数量，也不是 GUI，而是以下三个东西。
-
-第一，验证过程可追溯。
-
-传统 AI 工具通常强调生成代码，而你的架构还考虑了：
-- 每次 Run 的运行上下文；
-- 输入、输出和中间产物；
-- 任务执行事件；
-- 产物之间的来源关系；
-- 决策结果；
-- Evidence 验证和 Replay。
-这意味着未来不仅能回答“AI 生成了什么”，还能回答：
-
-为什么生成、依据是什么、运行结果是什么、结果能否复现。
-
-这对芯片验证非常重要。
-
-第二，你正在构建验证闭环，而不只是代码生成。
-
-真正有价值的流程应该是：
-Spec / RTL 输入
-
-验证计划与 UVM 生成
-
-仿真与回归执行
-
-失败分析与 Coverage 分析
-
-定向测试、覆盖率收敛与 Evidence
-
-这是目标闭环，不代表所有环节目前都已完整实现。
-如果最后能够实现 Coverage 缺口自动分析、定向测试生成、仿真验证和覆盖率提升，这会比单纯的 UVM 生成器更有竞争力。
-
-第三，CLI 和 Workbench 的设计方向正确。
-
-你没有把工程做成一个单纯的聊天界面，而是保留了 CLI 正式执行入口、Workbench 工程操作入口，以及流水线产物作为数据依据。
-
-这更接近真正的 EDA 工程软件，而不是一个 AI Demo。
-2. 目前还没有形成的优势
-这里我反而想给你泼一点冷水。
-
-目前有三个关键问题：
-1. 生成质量还没有被真实项目证明。 能生成 UVM，不等于能在不同客户的 RTL、协议和验证环境中稳定工作。
-2. Coverage Closure 还需要真实闭环证明。 能分析 Coverage，不等于能自动把 Coverage 提升上去。
-3. Evidence 的价值需要客户认可。 有完整证据链是架构优势，但必须证明它能降低调试成本、缩短交付周期或减少验证风险。
-特别是第三点：你的系统内部测试通过率高，不等于客户芯片验证成功率高。
-
-所以我不会现在就把它评价成成熟的 AI Sign-Off 产品。
-3. 我认为真正值得建立的竞争壁垒
-我建议未来不要把核心竞争力定位为：
-- 多 Agent；
-- LangGraph；
-- 自动生成 UVM；
-- GUI 功能丰富；
-- 接入多少 EDA 工具。
-这些都可以被其他团队逐步复制。
-
-应该把核心竞争力定位为：
-
-芯片验证知识 + 自动化执行闭环 + 可复现证据链 + 真实项目数据积累。
-
-其中最难复制的是长期积累的真实验证数据：
-- 什么样的 Spec 缺陷容易导致什么样的验证遗漏；
-- 什么样的 Stimulus 能触发特定功能；
-- 哪类 Coverage Bin 难以覆盖；
-- 哪类仿真失败是真正的 DUT Bug；
-- 哪些修改导致回归结果变化；
-- 哪些证据足以支撑工程签核。
-这些数据和经验逐渐积累起来，才会成为 SignOffAI 长期的壁垒。
-4. 我建议下一阶段只做三件事
-优先级	工作	验收目标
-P0	DMA/AXI 真实项目试点	从输入到仿真报告完整交付
-P1	Coverage Closure 闭环	缺口分析→定向测试→仿真→覆盖率变化
-P2	Evidence 与 Replay	客户能够复现结果并审查证据
-
-尤其建议选择一个 DMA 或 AXI IP，做一个有对照组的 Benchmark：
-- 传统人工验证流程；
-- SignOffAI 辅助验证流程。
-对比生成时间、回归时间、功能覆盖率、Bug 检出数量、失败定位时间和复现能力。
-
-如果 SignOffAI 能在不降低 Bug 检出能力、不牺牲覆盖率的前提下，明显减少验证工程师的工作量，你就有了真正的商业竞争力。
-
-5. 最终判断
-SignOffAI 的当前定位
-有技术优势
-但商业优势仍需真实客户项目验证。
-
-我对它的评价：
-- 架构方向：正确。
-- 技术整合：有一定深度。
-- 工程化程度：明显超过简单的 AI UVM 生成工具。
-- 核心能力：还需要真实项目验证。
-- 商业化：可以开始小型 IP 项目试点。
-
-我还有一个比较重要的建议：
-
-不要再急着增加 Agent，也不要继续大量扩充 GUI。
-
-现在更应该把已有的能力压到一个真实 DMA/AXI 项目上，证明它能够交付。
-
-你现在最需要的不是让 SignOffAI 看起来更强，而是让它在一个真实芯片验证项目中表现得确实更强。

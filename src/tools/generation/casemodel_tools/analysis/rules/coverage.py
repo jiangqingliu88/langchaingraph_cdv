@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import List
+from typing import Any, List
 
 from ..issues import CATEGORY_COVERAGE, Issue
 from ..specifications import Rule, RuleContext, register
@@ -168,3 +168,124 @@ def _bin_hits(bin_spec: dict, nums: List[int], tokens: List[str]) -> bool:
     except (TypeError, ValueError):
         return False
     return any(lo_i <= v <= hi_i for v in nums)
+
+
+@register
+class ValuePointUnmapped(Rule):
+    id = "value_point_unmapped"
+    severity = "error"
+    category = CATEGORY_COVERAGE
+    description = "取值点不在任何合法覆盖仓里 —— 用例会跑，但覆盖率不记这一笔"
+
+    def check(self, ctx: RuleContext) -> List[Issue]:
+        """`cover_bin_unreachable` 的反向检查：**每个取值点都得有归属**。
+
+        正向检查回答"仓空不空"，反向回答"点了没有仓收"。后者漏掉时的表现是：
+        用例照常生成、仿真照常跑、日志全绿，而那个取值**不贡献任何覆盖率** ——
+        看上去像"这个点不重要"，实际是建模时漏了一个仓。
+        """
+        out: List[Issue] = []
+        for dim in ctx.model.dimensions:
+            for fld in dim.fields:
+                explicit = [b for b in (fld.cover_bins or [])
+                            if isinstance(b, dict)]
+                if not explicit:
+                    continue
+                lost = [p.token for p in fld.value_points()
+                        if not any(_bin_hits_value(b, p.token) for b in explicit)]
+                if lost:
+                    out.append(self.issue(
+                        f"field::{fld.qualified}",
+                        f"字段 '{fld.name}' 有 {len(lost)} 个取值点**不在任何覆盖仓里**："
+                        f"{'、'.join(lost[:8])}{'…' if len(lost) > 8 else ''} —— "
+                        f"这些取值点会生成 test，但覆盖率不记它们（建模漏了仓）"))
+        return out
+
+
+@register
+class CoverBinOverlap(Rule):
+    id = "cover_bin_overlap"
+    severity = "warning"
+    category = CATEGORY_COVERAGE
+    description = "显式覆盖仓之间取值重叠 —— 同一个值会被记进多个仓"
+
+    def check(self, ctx: RuleContext) -> List[Issue]:
+        """仓重叠会让"命中率"虚高（一个值记两笔）。
+
+        分区式的仓（`{[0:7]}` / `{[8:15]}`）不该重叠；真要重叠（分维度口径不同）
+        就该在模型里写清楚，而不是让它悄悄发生。
+        """
+        out: List[Issue] = []
+        for dim in ctx.model.dimensions:
+            for fld in dim.fields:
+                explicit = [b for b in (fld.cover_bins or [])
+                            if isinstance(b, dict)]
+                for i in range(len(explicit)):
+                    for j in range(i + 1, len(explicit)):
+                        if _bins_overlap(explicit[i], explicit[j]):
+                            out.append(self.issue(
+                                f"field::{fld.qualified}",
+                                f"字段 '{fld.name}' 的覆盖仓 "
+                                f"'{explicit[i].get('name')}' 与 "
+                                f"'{explicit[j].get('name')}' 取值重叠 —— "
+                                f"同一个值会同时记进两个仓"))
+        return out
+
+
+def _bin_hits_value(bin_spec: dict, token: str) -> bool:
+    """单个取值点能不能落进这个仓（数值按区间比，文本按 `at`/`values` 比）。"""
+    try:
+        num = int(str(token).strip())
+    except (TypeError, ValueError):
+        num = None
+    return _bin_hits(bin_spec, [num] if num is not None else [], [str(token)])
+
+
+def _bin_shape(bin_spec: dict) -> tuple:
+    """仓 → (文本点集, 数值点集, 数值闭区间)。"""
+    points = set()
+    nums = set()
+    at = bin_spec.get("at")
+    if at is not None:
+        points.add(str(at))
+        _add_int(nums, at)
+    vals = bin_spec.get("values")
+    if isinstance(vals, (list, tuple)):
+        for value in vals:
+            points.add(str(value))
+            _add_int(nums, value)
+    span = None
+    rng = bin_spec.get("range")
+    if isinstance(rng, (list, tuple)) and rng:
+        span = (rng[0], rng[1] if len(rng) > 1 else rng[0])
+    elif bin_spec.get("from") is not None:
+        span = (bin_spec.get("from"), bin_spec.get("to"))
+    if span is not None:
+        try:
+            lo = int(span[0])
+            hi = int(span[1]) if span[1] is not None else lo
+            span = (lo, hi)
+        except (TypeError, ValueError):
+            span = None
+    return points, nums, span
+
+
+def _add_int(target: set, value: Any) -> None:
+    try:
+        target.add(int(str(value).strip()))
+    except (TypeError, ValueError):
+        return
+
+
+def _bins_overlap(a: dict, b: dict) -> bool:
+    pa, na, sa = _bin_shape(a)
+    pb, nb, sb = _bin_shape(b)
+    if pa & pb or na & nb:
+        return True
+    if sa and sb:
+        return not (sa[1] < sb[0] or sb[1] < sa[0])
+    if sa and nb:
+        return any(sa[0] <= v <= sa[1] for v in nb)
+    if sb and na:
+        return any(sb[0] <= v <= sb[1] for v in na)
+    return False

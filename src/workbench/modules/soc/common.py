@@ -55,13 +55,19 @@ class SocModuleBase(ModuleBase):
 
     def refresh(self) -> None:
         payload = self.run_tool("soc.runs", quiet=True, base=str(Path.cwd()))
-        self._runs = payload if isinstance(payload, list) else []
+        # SoC 页面只认 SoC / C 用例 run。IP run 是**子集回归**，混进来会被
+        # 当成"这次 SoC 跑过了"——它归 IP 工作区自己看。
+        self._runs = [r for r in (payload if isinstance(payload, list) else [])
+                      if str(r.get("kind") or "") != "ip"]
         current = self.run_combo.currentData()
         self.run_combo.blockSignals(True)
         self.run_combo.clear()
         for item in self._runs:
-            self.run_combo.addItem(f"{item.get('run')} · {item.get('status') or '?'}",
-                                   item.get("dir"))
+            label = f"{item.get('run')} · {item.get('status') or '?'}"
+            if item.get("kind") == "soc_c":
+                label = (f"{item.get('run')} · C·{item.get('case') or '?'} · "
+                         f"{item.get('status') or '?'}")
+            self.run_combo.addItem(label, item.get("dir"))
         idx = self.run_combo.findData(current) if current else -1
         if idx < 0 and self.run_combo.count():
             idx = 0
@@ -97,6 +103,9 @@ class SocModuleBase(ModuleBase):
         root = self.current_dir()
         if not root:
             self.show_warning("先选一次 SoC run")
+            return
+        if str((self._summary or {}).get("kind") or "") == "soc_c":
+            self.show_info("C 用例 run 没有 SoC 证据包（产物是 c_run.json + 波形）。")
             return
         result = self.run_tool("soc.verify_evidence", quiet=True, run_root=root)
         if not isinstance(result, dict):

@@ -66,7 +66,7 @@ class SoCProject:
 
     @property
     def rtl_files(self) -> List[Path]:
-        return sorted(p for p in (self.root / "rtl").rglob("*.sv") if p.is_file())
+        return sorted(p for p in (self.root / "npu").rglob("*.sv") if p.is_file())
 
     @property
     def rtl_hash(self) -> str:
@@ -182,6 +182,9 @@ class SoCRun:
             "waves": waves,
             "artifacts": "artifacts/artifacts.json",
             "events": "docs/events.jsonl",
+            # 这次集成**消费了哪些 IP 发布包**（版本/哈希/是否还对得上）。
+            # 签核时靠它回答"用的 IP 到底是不是已发布的那一版"。
+            "consumed_ips": soc_ip_binding(self.project.root),
         }
         path = self.root / "soc" / "soc_run.json"
         path.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
@@ -256,8 +259,24 @@ def ip_plan(root: str | Path, ip_id: str = "") -> Dict[str, Any]:
 
 
 def latest_soc_run(root: str | Path = ".") -> str:
-    runs = list_soc_runs(root)
-    return str(runs[0]["dir"]) if runs else ""
+    """最近一次**真正的 SoC run** —— IP / C 用例 run 不算。
+
+    IP run 也会写 `soc/soc_run.json`（见 `run_ip_regression`），
+    如果这里只取"最新的 output_*"，一次 IP 回归就会变成"最新 SoC run"，
+    其它 IP 的 TP 状态会被拿去做单 IP 的 run 里查 —— 两条业务线会互相污染。
+    """
+    for run in list_soc_runs(root):
+        if run.get("kind") == "soc":
+            return str(run["dir"])
+    return ""
+
+
+def latest_ip_run(root: str | Path, ip_id: str) -> str:
+    """该 IP 最近一次 IP 级 run（`output_ip_*` / `ip/ip_run.json`）。"""
+    for run in list_soc_runs(root):
+        if run.get("kind") == "ip" and str(run.get("ip_id") or "") == str(ip_id or ""):
+            return str(run["dir"])
+    return ""
 
 
 def _tp_status(run_root: Path, tp_ids: List[str]) -> List[Dict[str, Any]]:
@@ -273,16 +292,34 @@ def _tp_status(run_root: Path, tp_ids: List[str]) -> List[Dict[str, Any]]:
     return out
 
 
+def _ip_status_source(root: str | Path, ip_id: str,
+                      run_root: str | Path) -> tuple:
+    """IP 状态该读哪次 run：显式 run > 该 IP 自己的 IP run > 最近 SoC run。
+
+    只看 SoC run 会把"消费者跑没跑"当成"供应方验没验" —— 两条业务线的
+    结论必须各算各的。
+    """
+    ip_run = latest_ip_run(root, ip_id)
+    if run_root:
+        same = bool(ip_run) and Path(run_root).resolve() == Path(ip_run).resolve()
+        return str(run_root), "ip_run" if same else "soc_run"
+    if ip_run:
+        return ip_run, "ip_run"
+    soc = latest_soc_run(root)
+    return soc, ("soc_run" if soc else "none")
+
+
 def ip_status(root: str | Path, ip_id: str,
               run_root: str | Path = "") -> Dict[str, Any]:
     """IP 的验证/发布状态 —— 从最近 SoC run 的 TP 矩阵推导。"""
     ip = ip_info(root, ip_id)
     plan = ip_plan(root, ip_id)
-    source = str(run_root or latest_soc_run(root) or "")
+    source, source_kind = _ip_status_source(root, ip_id, run_root)
     if not ip:
         return {"ip_id": ip_id, "status": "NO_IP", "release_ready": False}
     if not source:
         return {"ip": ip, "plan": plan, "source_run": "",
+                "source_kind": "none",
                 "status": "NO_RUN", "release_ready": False,
                 "testpoints": [], "evidence_ok": False}
     run = Path(source)
@@ -316,6 +353,7 @@ def ip_status(root: str | Path, ip_id: str,
         status = "PARTIAL"
     return {
         "ip": ip, "plan": plan, "source_run": source,
+        "source_kind": source_kind,
         "status": status, "verification_basis": basis,
         "release_ready": bool(status in ("VERIFIED", "TEST_PASS")
                               and ip.get("status") == "released"),
@@ -344,6 +382,179 @@ def write_ip_evidence(root: str | Path, ip_id: str,
     return {"path": str(path), "sha256": body["sha256"],
             "status": body.get("status"),
             "release_ready": body.get("release_ready", False)}
+
+
+# ── IP 发布契约（ip_release_v1）──────────────────────────────────
+#
+# 两条业务线的协作靠**一份带哈希的发布包**，不靠清单里那个手填的
+# `status: released`：
+#
+#   IP 团队  build  → `spec/ip_releases/<ip>.json`（进版本库，是契约）
+#   SoC 团队 每次 run 记录消费了哪些包的哪个哈希 → 签核时校验绑定
+#
+# 覆盖率两边口径不同（IP 内部 vs 集成场景），包里带 `methodology` 与
+# `coverage.basis`，两边数字**不相加、不互相顶替**。
+
+DEFAULT_RELEASE_CRITERIA = (
+    {"id": "tests_pass", "required": True},
+    {"id": "evidence_ok", "required": True},
+    {"id": "testpoints_observed", "required": True},
+    # 独立 IP TB 落地前（M2）没有 IP 级覆盖测量，不阻断发布 —— 但状态是
+    # `unknown` 不是 `pass`，包里如实记着。
+    {"id": "coverage_min", "required": False,
+     "note": "IP 独立 TB（M2）落地前按 SoC 子集计，不阻断发布"},
+)
+
+
+def _release_path(root: str | Path, ip_id: str) -> Path:
+    return Path(root).resolve() / "spec" / "ip_releases" / f"{ip_id}.json"
+
+
+def ip_release_package(root: str | Path, ip_id: str) -> Dict[str, Any]:
+    """读 IP 发布包（没有就返回空 dict，调用方按"未发布"处理）。"""
+    return _read_json(_release_path(root, ip_id))
+
+
+def _ip_coverage_block(plan: Dict[str, Any]) -> Dict[str, Any]:
+    cov = plan.get("coverage") or {}
+    return {
+        "strategy": str(cov.get("strategy") or "soc_subset"),
+        # None ≠ 0：还没测就写 None，不拿 SoC 的数字冒充 IP 覆盖。
+        "measured": False,
+        "basis": "soc_subset",
+        "target": cov.get("target"),
+        "functional_pct": None,
+        "coverpoints": cov.get("coverpoints") or [],
+    }
+
+
+def _eval_release_criterion(cid: str, status: Dict[str, Any]) -> tuple:
+    if cid == "tests_pass":
+        tests = status.get("tests") or []
+        if not tests:
+            return "unknown", "plan 没有登记 tests"
+        bad = [str(t.get("name")) for t in tests if t.get("status") != "pass"]
+        return ("pass", "") if not bad else ("fail", "未通过：" + "、".join(bad))
+    if cid == "evidence_ok":
+        return ("pass", "") if status.get("evidence_ok") else \
+            ("fail", "证据包缺失或哈希不一致")
+    if cid == "testpoints_observed":
+        tps = status.get("testpoints") or []
+        if not tps:
+            return "unknown", "plan 没有 testpoints"
+        hit = ("HIT", "OBSERVED", "BACKDOOR_HIT")
+        bad = [str(t.get("tp_id")) for t in tps if t.get("status") not in hit]
+        return ("pass", "") if not bad else ("fail", "未命中：" + "、".join(bad))
+    if cid == "coverage_min":
+        return "unknown", "IP 级覆盖尚未测量（basis=soc_subset）"
+    return "unknown", f"未知准则 {cid}"
+
+
+def _release_criteria(plan: Dict[str, Any],
+                      status: Dict[str, Any]) -> List[Dict[str, Any]]:
+    declared = plan.get("release_criteria") or list(DEFAULT_RELEASE_CRITERIA)
+    out = []
+    for item in declared:
+        spec = item if isinstance(item, dict) else {"id": str(item)}
+        cid = str(spec.get("id") or "")
+        state, detail = _eval_release_criterion(cid, status)
+        out.append({"id": cid, "required": bool(spec.get("required", True)),
+                    "status": state, "detail": detail or str(spec.get("note") or "")})
+    return out
+
+
+def build_ip_release(root: str | Path, ip_id: str, run_root: str | Path = "",
+                     released_by: str = "") -> Dict[str, Any]:
+    """生成 IP 发布包（`spec/ip_releases/<ip>.json`）。
+
+    **不伪造结论**：准则没过的包照样写盘，但 `released=false`，
+    `blocking` 列出卡住的是哪几条 —— 发布与否由人看这张单子决定。
+    """
+    ip = ip_info(root, ip_id)
+    if not ip:
+        return {"ok": False, "error": f"IP 不在清单里：{ip_id}"}
+    plan = ip_plan(root, ip_id)
+    status = ip_status(root, ip_id, run_root)
+    source = str(status.get("source_run") or "")
+    if not source:
+        return {"ok": False, "error": f"IP {ip_id} 还没有可用 run（先跑 ip.run）"}
+    criteria = _release_criteria(plan, status)
+    blocking = [c["id"] for c in criteria
+                if c["required"] and c["status"] != "pass"]
+    pkg = {
+        "schema": "ip_release_v1",
+        "ip_id": ip_id,
+        "name": ip.get("name", ""),
+        "team": ip.get("team", ""),
+        "owner": ip.get("owner", ""),
+        "version": ip.get("version", ""),
+        "methodology": plan.get("methodology") or "ip_cdv",
+        "rtl_hash": ip.get("rtl_hash", ""),
+        "source_run": Path(source).name,
+        "source_kind": status.get("source_kind", ""),
+        "coverage": _ip_coverage_block(plan),
+        "criteria": criteria,
+        "waivers": plan.get("waivers") or [],
+        "released": not blocking,
+        "blocking": blocking,
+        "released_by": released_by or ip.get("owner", ""),
+        "evidence": {"package_hash": status.get("evidence_package_hash", "")},
+    }
+    pkg["sha256"] = hashlib.sha256(_canon(pkg).encode("utf-8")).hexdigest()
+    path = _release_path(root, ip_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(pkg, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8")
+    return {"ok": True, "released": pkg["released"], "path": str(path),
+            "sha256": pkg["sha256"], "criteria": criteria,
+            "blocking": blocking, "package": pkg}
+
+
+def verify_ip_release(root: str | Path, ip_id: str) -> Dict[str, Any]:
+    """校验发布包：自身哈希 / 是否放行 / 与清单 RTL hash 是否还绑得住。"""
+    ip = ip_info(root, ip_id)
+    pkg = ip_release_package(root, ip_id)
+    if not pkg:
+        return {"ok": False, "issues": [{"check": "missing_release"}],
+                "package": {}}
+    body = {k: v for k, v in pkg.items() if k != "sha256"}
+    issues: List[Dict[str, Any]] = []
+    if hashlib.sha256(_canon(body).encode("utf-8")).hexdigest() != pkg.get("sha256"):
+        issues.append({"check": "package_hash_mismatch"})
+    if not pkg.get("released"):
+        issues.append({"check": "not_released", "blocking": pkg.get("blocking")})
+    if ip and pkg.get("rtl_hash") != ip.get("rtl_hash"):
+        issues.append({"check": "rtl_hash_mismatch",
+                       "release": pkg.get("rtl_hash", "")[:16],
+                       "manifest": str(ip.get("rtl_hash", ""))[:16]})
+    return {"ok": not issues, "issues": issues, "package": pkg}
+
+
+def _binding_state(ip: Dict[str, Any], pkg: Dict[str, Any]) -> str:
+    if not pkg:
+        return "MISSING" if str(ip.get("status")) == "released" else "UNRELEASED"
+    if not pkg.get("released"):
+        return "NOT_RELEASED"
+    if pkg.get("rtl_hash") != ip.get("rtl_hash"):
+        return "STALE"
+    return "OK"
+
+
+def soc_ip_binding(root: str | Path) -> List[Dict[str, Any]]:
+    """SoC 视角：这次集成的每个 IP 绑的是哪个发布包、还对不对得上。"""
+    rows = []
+    for ip in list_ips(root):
+        ip_id = str(ip.get("id") or "")
+        pkg = ip_release_package(root, ip_id)
+        rows.append({
+            "ip_id": ip_id,
+            "manifest_status": ip.get("status", ""),
+            "manifest_version": ip.get("version", ""),
+            "release_version": pkg.get("version", "") if pkg else "",
+            "release_hash": pkg.get("sha256", "") if pkg else "",
+            "state": _binding_state(ip, pkg),
+        })
+    return rows
 
 
 def soc_ip_release_matrix(root: str | Path,
@@ -393,13 +604,31 @@ def run_ip_regression(project_root: str | Path, ip_id: str,
 def list_soc_runs(base: str | Path = ".") -> List[Dict[str, Any]]:
     root = Path(base).resolve()
     runs = []
-    for p in sorted(root.glob("output_soc_*")):
+    for p in sorted(root.glob("output_*")):
         if not p.is_dir():
+            continue
+        # IP run 也有 `soc/soc_run.json`（子集回归），必须**先认 ip_run.json**，
+        # 否则它会以 kind="soc" 冒充 SoC run，混进 SoC 的 run 选择器。
+        ip_doc = _read_json(p / "ip" / "ip_run.json")
+        if ip_doc:
+            result = ip_doc.get("result") or {}
+            runs.append({"run": p.name, "dir": str(p), "kind": "ip",
+                         "ip_id": ip_doc.get("ip_id", ""),
+                         "status": result.get("status"),
+                         "mtime": p.stat().st_mtime})
             continue
         doc = load_run_manifest(p)
         if doc:
-            runs.append({"run": p.name, "dir": str(p),
+            runs.append({"run": p.name, "dir": str(p), "kind": "soc",
                          "status": (doc.get("regression") or {}).get("status"),
+                         "mtime": p.stat().st_mtime})
+            continue
+        c_doc = _read_json(p / "c_run.json")
+        if c_doc:
+            case = c_doc.get("case") or {}
+            runs.append({"run": p.name, "dir": str(p), "kind": "soc_c",
+                         "case": case.get("id", ""),
+                         "status": c_doc.get("status"),
                          "mtime": p.stat().st_mtime})
     return sorted(runs, key=lambda r: r["mtime"], reverse=True)
 
@@ -408,9 +637,44 @@ def run_summary(run_root: str | Path) -> Dict[str, Any]:
     root = Path(run_root).resolve()
     doc = load_run_manifest(root)
     wave = find_wave(root)
-    return {"available": bool(doc), "dir": str(root),
-            "manifest": doc, "wave": str(wave) if wave else "",
-            "evidence": verify_soc_evidence(root)}
+    if not doc:
+        c_doc = _read_json(root / "c_run.json")
+        if c_doc:
+            case = c_doc.get("case") or {}
+            status = str(c_doc.get("status") or "")
+            passes = status.upper() == "PASS"
+            # 归一化成与 SoC run 相同的最小形状：页面只认 manifest.regression。
+            doc = {"schema": c_doc.get("schema", "soc_c_run_v1"),
+                   "kind": "soc_c", "case": case,
+                   "regression": {"status": status,
+                                  "passed": 1 if passes else 0,
+                                  "failed": 0 if passes else 1,
+                                  "unknown": 0, "total": 1},
+                   "waves": c_doc.get("waves") or []}
+    return {"available": bool(doc), "kind": (doc or {}).get("kind", "soc"),
+            "dir": str(root), "manifest": doc,
+            "wave": str(wave) if wave else "",
+            "evidence": verify_soc_evidence(root) if doc and doc.get("kind") != "soc_c" else {}}
+
+
+def find_design(run_root: str | Path, wave: str | Path = None) -> Optional[Path]:
+    """找 Visualizer 的 design.bin（qwave.db 只提供波形，源码浏览要 design 库）。"""
+    root = Path(run_root)
+    c_doc = _read_json(root / "c_run.json")
+    design = c_doc.get("design") or {}
+    if isinstance(design, dict) and design.get("path"):
+        p = root / str(design["path"])
+        if p.is_file():
+            return p
+    if wave:
+        d = Path(wave).parent
+        for cand in (d / "design.bin", d.parent / "design.bin",
+                     d.parent.parent / "design.bin"):
+            if cand.is_file():
+                return cand
+    found = sorted(root.glob("regression_run/**/design.bin"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    return found[0] if found else None
 
 
 def run_soc_project(project_root: str | Path,
@@ -466,7 +730,7 @@ def _collect_evidence_files(tmp: Path, root: Path, proj_root: Path,
                 "spec/verification_plan.yaml", "regression/regression.yaml",
                 "filelist.f"):
         _copy_evidence(tmp, "inputs", rel, proj_root, entries)
-    for folder, pattern in (("vectors", "*"), ("rtl", "*.sv"), ("tb", "*.sv")):
+    for folder, pattern in (("vectors", "*"), ("npu", "*.sv"), ("tb", "*.sv")):
         for p in sorted((proj_root / folder).rglob(pattern)):
             _copy_evidence(tmp, "inputs", p.relative_to(proj_root).as_posix(),
                            proj_root, entries)
@@ -556,17 +820,23 @@ def verify_soc_evidence(run_root: str | Path) -> Dict[str, Any]:
             "regression": manifest.get("regression") or {}}
 
 
-def find_wave(run_root: str | Path) -> Optional[Path]:
-    doc = load_run_manifest(run_root)
-    for item in doc.get("waves") or []:
-        p = Path(run_root) / str(item.get("path") or "")
-        if p.is_file():
-            return p
+def find_wave(run_root: str | Path, test: str = "") -> Optional[Path]:
+    """找 run 里的波形：SoC 回归 run、C 用例 run（`c_run.json`）都认。
+
+    `test` 是路径子串过滤（例如 `gemm_8x8_c`），用于一次 run 里有多份波形时
+    精确选一份。
+    """
     root = Path(run_root)
-    for pat in ("regression_run/**/waves/*.db",
-                "regression_run/**/waves/*.wlf"):
-        found = sorted(root.glob(pat), key=lambda p: p.stat().st_mtime,
-                       reverse=True)
-        if found:
-            return found[0]
+    for doc in (load_run_manifest(root), _read_json(root / "c_run.json")):
+        for item in doc.get("waves") or []:
+            p = root / str(item.get("path") or "")
+            if p.is_file() and (not test or test in p.as_posix()):
+                return p
+    found: List[Path] = []
+    for pat in ("regression_run/**/waves/*.db", "regression_run/**/waves/*.wlf",
+                "e203/waves/*.db", "e203/waves/*.wlf"):
+        found.extend(p for p in root.glob(pat) if p.is_file())
+    found = [p for p in found if not test or test in p.as_posix()]
+    if found:
+        return max(found, key=lambda p: p.stat().st_mtime)
     return None

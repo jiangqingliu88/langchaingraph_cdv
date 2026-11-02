@@ -604,3 +604,87 @@ class TestCoverBinUnreachable:
                / "specs" / "npu_sched" / "casemodel.yaml")
         ids = rules_of(build(yaml.safe_load(npu.read_text(encoding="utf-8"))))
         assert "cover_bin_unreachable" not in ids
+
+
+class TestValuePointUnmapped:
+    """反向检查：**每个取值点都得有仓收**（`cover_bin_unreachable` 的反面）。
+
+    漏掉时的表现是"用例照跑、日志全绿、覆盖率不涨"——看上去像这个点不重要。
+    """
+
+    def _model(self, field: dict) -> dict:
+        return {
+            "version": "1", "object": "dut", "object_code": "DUT",
+            "sub_objects": [{"id": "OBJ-01", "name": "F", "code": "F1"}],
+            "dimensions": [{"id": "D_x", "name": "X", "fields": [field]}],
+            "themes": [{"id": "TH-P0", "name": "f", "priority": "P0",
+                        "dimensions": ["D_x"]}],
+        }
+
+    def test_a_point_outside_every_bin_is_an_error(self):
+        bad = {"name": "c", "type": "range", "min": 0, "max": 20,
+               "boundary": ["0", "10", "20"],
+               "cover_bins": [{"name": "low", "range": [0, 7]},
+                              {"name": "high", "range": [8, 12]}]}
+        hits = issues_of(build(self._model(bad)), "value_point_unmapped")
+        assert len(hits) == 1
+        assert hits[0].severity == "error"
+        assert "20" in hits[0].message
+
+    def test_fully_partitioned_bins_are_clean(self):
+        good = {"name": "c", "type": "range", "min": 0, "max": 12,
+                "boundary": ["0", "5", "12"],
+                "cover_bins": [{"name": "low", "range": [0, 7]},
+                               {"name": "high", "range": [8, 12]}]}
+        assert "value_point_unmapped" not in rules_in(self._model(good))
+
+    def test_text_enum_bins_match_by_name(self):
+        bad = {"name": "op", "type": "enum",
+               "values": ["READ", "WRITE", "NOOP"],
+               "cover_bins": [{"name": "rd", "at": "READ"},
+                              {"name": "wr", "at": "WRITE"}]}
+        hits = issues_of(build(self._model(bad)), "value_point_unmapped")
+        assert hits and "NOOP" in hits[0].message
+
+    def test_the_shipped_npu_model_is_clean(self):
+        import pathlib
+
+        npu = (pathlib.Path(__file__).resolve().parents[5]
+               / "specs" / "npu_sched" / "casemodel.yaml")
+        ids = rules_of(build(yaml.safe_load(npu.read_text(encoding="utf-8"))))
+        assert "value_point_unmapped" not in ids
+
+
+class TestCoverBinOverlap:
+    """仓重叠 = 一个值记两笔 —— 命中率虚高，必须说出来。"""
+
+    def _model(self, field: dict) -> dict:
+        return {
+            "version": "1", "object": "dut", "object_code": "DUT",
+            "sub_objects": [{"id": "OBJ-01", "name": "F", "code": "F1"}],
+            "dimensions": [{"id": "D_x", "name": "X", "fields": [field]}],
+            "themes": [{"id": "TH-P0", "name": "f", "priority": "P0",
+                        "dimensions": ["D_x"]}],
+        }
+
+    def test_overlapping_ranges_warn(self):
+        field = {"name": "c", "type": "range", "min": 0, "max": 12,
+                 "boundary": ["0", "6", "12"],
+                 "cover_bins": [{"name": "a", "range": [0, 7]},
+                                {"name": "b", "range": [5, 12]}]}
+        hits = issues_of(build(self._model(field)), "cover_bin_overlap")
+        assert hits and hits[0].severity == "warning"
+
+    def test_partitioned_bins_are_clean(self):
+        field = {"name": "c", "type": "range", "min": 0, "max": 12,
+                 "boundary": ["0", "6", "12"],
+                 "cover_bins": [{"name": "a", "range": [0, 7]},
+                                {"name": "b", "range": [8, 12]}]}
+        assert "cover_bin_overlap" not in rules_in(self._model(field))
+
+    def test_point_inside_range_warns(self):
+        field = {"name": "c", "type": "range", "min": 0, "max": 12,
+                 "boundary": ["0", "6", "12"],
+                 "cover_bins": [{"name": "a", "range": [0, 7]},
+                                {"name": "six", "at": 6}]}
+        assert "cover_bin_overlap" in rules_in(self._model(field))

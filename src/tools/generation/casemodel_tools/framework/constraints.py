@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from .contracts import Registry
+from .methods import assignment_mode
 from .naming import int_value_of
 
 
@@ -86,8 +87,8 @@ class StimulusAssignmentCompiler(ConstraintCompiler):
                 "trans": owner,
                 "field": field_name,
                 "values": values,
-                # D/G/SPCL/RPLY 用轮转（保证每个合法取值都被打到）；RND 用随机。
-                "mode": "random" if req.method == "RND" else "cycle",
+                # 赋值方式由方法策略表决定（P5）：D/G/SPCL/RPLY 轮转、RND 随机。
+                "mode": assignment_mode(req.method),
             })
         return out
 

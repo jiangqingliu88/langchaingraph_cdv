@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.core.incremental.dependencies import (
-    affected_tests, all_tests, derive_dependency_map, load_dependency_map,
+    affected_tests, all_tests, load_dependency_map,
+)
+from src.core.incremental.deps_gen import (
+    generate_dependency_map, write_dependency_map,
 )
 from src.core.incremental.rtl_diff import diff_runs, snapshot
 
@@ -73,25 +76,46 @@ def _estimate(tests: List[str], selected: List[str],
     }
 
 
+def _load_dependencies(current: Path,
+                       dependency_map: Optional[Dict[str, set]] = None
+                       ) -> Tuple[Dict[str, Set[str]], str, Dict[str, Any],
+                                  Dict[str, Any]]:
+    dep = dependency_map if dependency_map is not None else load_dependency_map(current)
+    source = "sidecar"
+    auto_doc: Dict[str, Any] = {}
+    sidecar_doc: Dict[str, Any] = {}
+    if dependency_map is None:
+        sidecar_doc = _read_json(current / "coverage" / "test_dependencies.json")
+    if not dep:
+        # 没有 sidecar：自动生成（file_pattern → env/testpoint/RTL 启发式）。
+        auto_doc = generate_dependency_map(current)
+        dep = {str(name): set((value or {}).get("files") or [])
+               for name, value in (auto_doc.get("tests") or {}).items()
+               if (value or {}).get("files")}
+        source = str(auto_doc.get("source") or "none")
+    return dep, source, auto_doc, sidecar_doc
+
+
 def build_plan(baseline_run: str | Path, current_run: str | Path, *,
                dependency_map: Optional[Dict[str, set]] = None,
                tests: Optional[List[str]] = None) -> Dict[str, Any]:
     base = Path(baseline_run)
     cur = Path(current_run)
     diff = diff_runs(base, cur)
-    dep = dependency_map if dependency_map is not None else load_dependency_map(cur)
-    source = "sidecar"
-    if not dep:
-        dep = derive_dependency_map(cur)
-        source = "regression_yaml" if dep else "none"
+    dep, source, auto_doc, sidecar_doc = _load_dependencies(cur, dependency_map)
     all_names = tests if tests is not None else (all_tests(cur) or sorted(dep))
     affected = affected_tests(diff["changed"], dep, all_names)
     elapsed = _test_elapsed(base)
     estimate = _estimate(all_names, affected["selected"], elapsed)
     notes: List[str] = []
     if dep == {}:
-        notes.append("没有依赖映射（coverage/test_dependencies.json 或 file_pattern），"
+        notes.append("没有依赖映射（sidecar / file_pattern / 自动生成均不可用），"
                      "只能保守跑全量")
+    if auto_doc:
+        notes.extend(str(n) for n in (auto_doc.get("notes") or []))
+        if auto_doc.get("unmapped_tests"):
+            notes.append(f"{len(auto_doc['unmapped_tests'])} 条用例依赖未识别，"
+                         "按 undeclared 保守全跑")
     if diff["changed"]:
         notes.append(f"RTL 变更 {len(diff['changed'])} 个文件")
     else:
@@ -104,6 +128,9 @@ def build_plan(baseline_run: str | Path, current_run: str | Path, *,
         "current_rtl_files": len(snapshot(cur)),
         "changed": diff,
         "dependency_source": source,
+        "dependency_map": {"source": source, "tests": len(dep),
+                           "unmapped": len((auto_doc or sidecar_doc)
+                                           .get("unmapped_tests") or [])},
         "all_tests": len(all_names),
         "selected_tests": affected["selected"],
         "excluded_tests": affected["excluded"],
@@ -112,12 +139,17 @@ def build_plan(baseline_run: str | Path, current_run: str | Path, *,
         "reason": affected["reason"],
         **estimate,
         "notes": notes,
+        "_auto_dependency_doc": auto_doc if (auto_doc and dep) else {},
     }
 
 
 def write_plan(baseline_run: str | Path, current_run: str | Path,
                **kwargs) -> Dict[str, Any]:
     plan = build_plan(baseline_run, current_run, **kwargs)
+    auto_doc = plan.pop("_auto_dependency_doc", {}) or {}
+    if auto_doc.get("tests"):
+        # 物化 sidecar：下一次增量计划直接复用，也能被证据包收走。
+        auto_doc["path"] = write_dependency_map(current_run, auto_doc)
     path = Path(current_run) / "incremental" / "plan.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n",

@@ -52,12 +52,14 @@ class TestCatalog:
                           # 生成覆盖率报告：**写盘**（报告落在覆盖率库旁边），
                           # 而且要起一个 vcover 子进程。它总是由"点那一格"显式触发。
                           "flow.coverage_report",
+                          # 发布包写 spec/ip_releases/，是**对外交付物**，
+                          # 只能在人点"生成发布包"时发生（列表按名字排序）
+                          "ip.evidence", "ip.release_build", "ip.run",
                           # ISA 产物落盘：**写盘**，必须显式触发
                           "isa_gen.export",
-                          "ip.evidence", "ip.run",
                           "pipeline.answer_approval", "pipeline.approval_handler",
                           "pipeline.cancel", "pipeline.resume", "pipeline.start",
-                          "soc.run"]
+                          "soc.c_run", "soc.run"]
 
     def test_every_non_pure_binding_is_documented(self):
         """非纯的要写清楚为什么 —— 否则下一个人只会看到"它不许调"。"""
@@ -246,3 +248,55 @@ class TestRealToolCalls:
                                yaml_text=example.read_text(encoding="utf-8"))
         assert result["count"] > 0
         assert yaml.safe_load(result["tests_yaml"])["tests"]
+
+
+class TestTriggerPolicy:
+    """触发权限 —— user / agent / approval 三层，不能只靠 force。"""
+
+    def _registry(self):
+        from ..bridge.binding import ToolBinding, ToolRegistry
+
+        reg = ToolRegistry()
+        reg.register(ToolBinding(name="t.read", target="builtins:len"))
+        reg.register(ToolBinding(name="t.approval", target="builtins:len",
+                                 trigger="approval"))
+        reg.register(ToolBinding(name="t.write", target="builtins:len", pure=False))
+        return reg
+
+    def test_pure_tools_default_to_agent_trigger(self):
+        reg = self._registry()
+        assert reg.call("t.read", [1, 2], actor="agent") == 2
+
+    def test_agent_cannot_call_user_only_tool(self):
+        from ..bridge.binding import ToolError
+
+        reg = self._registry()
+        try:
+            reg.call("t.write", [1], actor="agent", force=True)
+        except ToolError as exc:
+            assert "人工触发" in str(exc.cause)
+        else:
+            raise AssertionError("agent 不该能调 trigger=user 的绑定")
+
+    def test_approval_is_required_and_satisfiable(self):
+        from ..bridge.binding import ToolError
+
+        reg = self._registry()
+        try:
+            reg.call("t.approval", [1, 2, 3])
+        except ToolError as exc:
+            assert "审批" in str(exc.cause)
+        else:
+            raise AssertionError("没有审批标记也执行了")
+        assert reg.call("t.approval", [1, 2, 3], approval=True) == 3
+
+    def test_unknown_actor_is_rejected(self):
+        from ..bridge.binding import ToolError
+
+        reg = self._registry()
+        try:
+            reg.call("t.read", [1], actor="robot")
+        except ToolError as exc:
+            assert "actor" in str(exc.cause)
+        else:
+            raise AssertionError("未知 actor 被放行了")

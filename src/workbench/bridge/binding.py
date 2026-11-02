@@ -26,6 +26,12 @@ from ..loader import FactoryError, resolve
 #: 认得出来的归一化方式
 KINDS = ("auto", "text", "json", "filesystem")
 
+#: 触发权限：谁能发起这次调用
+#:   user     —— 只能由人显式触发（agent 调不动）
+#:   agent    —— 人和 agent 都可以（只读工具的默认）
+#:   approval —— 必须带人工审批（approval=True）才能执行，例如写发布包
+TRIGGERS = ("user", "agent", "approval")
+
 
 @dataclass(frozen=True)
 class ToolBinding:
@@ -37,10 +43,19 @@ class ToolBinding:
     #: False = LLM 调用 / 长任务，`call()` 默认不执行
     pure: bool = True
     doc: str = ""
+    #: 触发权限；空 = 按 pure 推导（纯工具 agent 可调，非纯的只能人触发）
+    trigger: str = ""
 
     def __post_init__(self) -> None:
         if self.kind not in KINDS:
             raise ValueError(f"未知的 kind={self.kind!r}（可选：{KINDS}）")
+        if self.trigger and self.trigger not in TRIGGERS:
+            raise ValueError(
+                f"未知的 trigger={self.trigger!r}（可选：{TRIGGERS}）")
+
+    @property
+    def effective_trigger(self) -> str:
+        return self.trigger or ("agent" if self.pure else "user")
 
 
 class ToolError(RuntimeError):
@@ -99,13 +114,29 @@ class ToolRegistry:
 
     # ── 调用 ──
 
-    def call(self, name: str, *args, force: bool = False, **kwargs) -> Any:
-        """调一个绑定，返回归一化后的结果。失败抛 `ToolError`。"""
+    def call(self, name: str, *args, force: bool = False,
+             actor: str = "user", approval: bool = False, **kwargs) -> Any:
+        """调一个绑定，返回归一化后的结果。失败抛 `ToolError`。
+
+        三层闸门（缺一不可）：
+          1. `pure=False` 还要 `force=True` —— "别切个标签页就顺手跑一次"；
+          2. `trigger` 决定**谁能**发起：user 只认人，agent 人机都行，
+             approval 必须带 `approval=True`（写发布包/RTL 这类对外动作）；
+          3. 真正的权限/目录/命令/预算治理在 Core（Job Supervisor），
+             这里只回答"这次调用允许被发起吗"。
+        """
         binding = self.get(name)
+        if actor not in ("user", "agent"):
+            raise ToolError(name, f"未知调用者 actor={actor!r}（user / agent）")
         if not binding.pure and not force:
             raise ToolError(
                 name, "这是长任务/LLM 工具，需要显式触发（call(..., force=True)）"
                       "—— 避免切换标签页就顺手跑一次")
+        trigger = binding.effective_trigger
+        if actor == "agent" and trigger == "user":
+            raise ToolError(name, "这条绑定只允许人工触发（trigger=user）")
+        if trigger == "approval" and not approval:
+            raise ToolError(name, "这条绑定需要人工审批（approval=True）才能执行")
         target = self._target(binding)
         try:
             raw = target(*args, **kwargs)

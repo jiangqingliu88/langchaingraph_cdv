@@ -15,6 +15,8 @@
 """
 from __future__ import annotations
 
+from src.workbench.bus import run_id_of
+
 from typing import Any, Dict, List
 
 from PySide6.QtCore import Qt
@@ -123,7 +125,7 @@ class AgentOutputModule(ModuleBase):
             self.load(self.run_id)
 
     def on_refresh(self, payload: Any = None) -> None:
-        run_id = str(payload or "")
+        run_id = run_id_of(payload)
         if run_id and run_id != self.run_id:
             self.load(run_id)
 

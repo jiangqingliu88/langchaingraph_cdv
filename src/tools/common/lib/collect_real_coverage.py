@@ -1174,6 +1174,51 @@ def _lookup_hits(hits: dict, cp_name: str, bin_name: str) -> Optional[int]:
     return None
 
 
+def _stage_of(tp: dict) -> str:
+    return str((tp.get("execution") or {}).get("stage") or "")
+
+
+def _status_for(n, kind: str, observe: bool) -> tuple:
+    """命中数 → 矩阵状态。`None` = 报告里没这一格（判不了），不是 0。"""
+    is_backdoor = kind == "backdoor"
+    if n is None:
+        return "UNMAPPED", 0, is_backdoor
+    if n > 0:
+        status = ("BACKDOOR_HIT" if is_backdoor
+                  else ("OBSERVED" if observe else "HIT"))
+        return status, n, is_backdoor
+    status = ("BACKDOOR_MISS" if is_backdoor
+              else ("UNOBSERVED" if observe else "MISS"))
+    return status, n, is_backdoor
+
+
+def _behavior_row(tp: dict, cp_name: str, bin_name: str, kind: str,
+                  observe: bool, stage: str) -> dict:
+    """行为 TP 的矩阵行 —— 没有执行数据，单列 PENDING_BACKEND。"""
+    return {
+        "tp_id": tp.get("tp_id"),
+        "dimension": tp.get("dimension"),
+        "value": tp.get("value"),
+        "coverpoint": cp_name,
+        "bin": bin_name,
+        "hits": 0,
+        "kind": kind,
+        "observe_only": observe,
+        "status": "PENDING_BACKEND",
+        "requirement": tp.get("requirement"),
+        "stage": stage,
+        "note": "行为域执行后端未接（P1b）—— 暂不参与覆盖率判定",
+    }
+
+
+def _attribute_rows(rows: list) -> list:
+    return [r for r in rows if r.get("stage") != "behavior"]
+
+
+def _count_stage(rows: list, stage: str) -> int:
+    return sum(1 for r in rows if r.get("stage") == stage)
+
+
 def _tp_matrix(od: Path, coverage: dict) -> dict:
     """测试点 × 覆盖仓 → 命中/缺口矩阵。
 
@@ -1212,14 +1257,16 @@ def _tp_matrix(od: Path, coverage: dict) -> dict:
         if not kind:
             kind = "observe" if observe else "stimulus"
         is_backdoor = kind == "backdoor"
+        stage = _stage_of(tp)
+        if stage == "behavior":
+            # 行为域（P1a）：TP 已进 IR，但执行后端（事件序列 → UVM）还没接，
+            # 因此**没有覆盖率数据可判**。单列 PENDING_BACKEND，不进
+            # drivable 分母、也不算 UNMAPPED（它不是"模型漂了"）。
+            counts["PENDING_BACKEND"] = counts.get("PENDING_BACKEND", 0) + 1
+            rows.append(_behavior_row(tp, cp_name, bin_name, kind, observe, stage))
+            continue
         n = _lookup_hits(hits, cp_name, bin_name)
-        if n is None:
-            # 报告里没有这一格：**判不了**，不是"没命中"
-            status, n = "UNMAPPED", 0
-        elif n > 0:
-            status = "BACKDOOR_HIT" if is_backdoor else ("OBSERVED" if observe else "HIT")
-        else:
-            status = "BACKDOOR_MISS" if is_backdoor else ("UNOBSERVED" if observe else "MISS")
+        status, n, is_backdoor = _status_for(n, kind, observe)
         counts[status] = counts.get(status, 0) + 1
         rows.append({
             "tp_id": tp.get("tp_id"),
@@ -1236,12 +1283,14 @@ def _tp_matrix(od: Path, coverage: dict) -> dict:
         })
 
     # **三类分开算**：激励 / 后门 / 观测。后门命中不能冒充"激励覆盖"。
-    drivable = sum(1 for r in rows if r["kind"] in ("stimulus", "sequence"))
-    drivable_hit = sum(1 for r in rows
+    # 行为 TP（PENDING_BACKEND）不参与任何覆盖率分母 —— 它们没有执行数据。
+    attr = _attribute_rows(rows)
+    drivable = sum(1 for r in attr if r["kind"] in ("stimulus", "sequence"))
+    drivable_hit = sum(1 for r in attr
                        if r["kind"] in ("stimulus", "sequence") and r["hits"] > 0)
-    backdoor = sum(1 for r in rows if r["kind"] == "backdoor")
-    backdoor_hit = sum(1 for r in rows if r["kind"] == "backdoor" and r["hits"] > 0)
-    observed = sum(1 for r in rows if r["kind"] == "observe" and r["hits"] > 0)
+    backdoor = sum(1 for r in attr if r["kind"] == "backdoor")
+    backdoor_hit = sum(1 for r in attr if r["kind"] == "backdoor" and r["hits"] > 0)
+    observed = sum(1 for r in attr if r["kind"] == "observe" and r["hits"] > 0)
     return {
         "total": len(rows),
         "counts": counts,
@@ -1253,6 +1302,7 @@ def _tp_matrix(od: Path, coverage: dict) -> dict:
         "backdoor_pct": round(100.0 * backdoor_hit / backdoor, 2) if backdoor else 0.0,
         "observe_only": sum(1 for r in rows if r["kind"] == "observe"),
         "observed": observed,
+        "behavior_pending": _count_stage(rows, "behavior"),
         "missed": [r for r in rows
                    if r["status"] in ("MISS", "UNOBSERVED", "BACKDOOR_MISS")],
         "unmapped": [r for r in rows if r["status"] == "UNMAPPED"],

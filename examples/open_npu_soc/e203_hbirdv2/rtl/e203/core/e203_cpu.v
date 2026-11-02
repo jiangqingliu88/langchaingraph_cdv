@@ -280,6 +280,31 @@ module e203_cpu #(
   output                         clk_dtcm_ram,
   `endif//}
 
+  `ifdef E203_HAS_NICE//{
+  // NICE 外部接口：NPU 已上移到 e203_subsys_top 层级（与 e203_subsys_main
+  // 同级）。CPU 只把请求/响应/ICB 主口引到模块边界，本身不再实例化 NPU。
+  output                         nice_req_valid_o,
+  output [`E203_XLEN-1:0]        nice_req_inst_o,
+  output [`E203_XLEN-1:0]        nice_req_rs1_o,
+  output [`E203_XLEN-1:0]        nice_req_rs2_o,
+  input                          nice_req_ready_i,
+  input                          nice_rsp_valid_i,
+  input  [`E203_XLEN-1:0]        nice_rsp_rdat_i,
+  input                          nice_rsp_err_i,
+  output                         nice_rsp_ready_o,
+  input                          nice_mem_holdup_i,
+  output                         nice_icb_cmd_ready_o,
+  output                         nice_icb_rsp_valid_o,
+  output [`E203_XLEN-1:0]        nice_icb_rsp_rdata_o,
+  output                         nice_icb_rsp_err_o,
+  input                          nice_icb_cmd_valid_i,
+  input  [`E203_XLEN-1:0]        nice_icb_cmd_addr_i,
+  input                          nice_icb_cmd_read_i,
+  input  [`E203_XLEN-1:0]        nice_icb_cmd_wdata_i,
+  input  [1:0]                   nice_icb_cmd_size_i,
+  input                          nice_icb_rsp_ready_i,
+  `endif//}
+
   input  test_mode,
 
   input  clk,
@@ -484,37 +509,29 @@ module e203_cpu #(
    /* output*/ wire  [`E203_XLEN-1:0]  nice_icb_rsp_rdata      ;
    /* output*/ wire  nice_icb_rsp_err                          ; 
 
-   e203_nice_npu_adapter  u_e203_nice_core  (
-    
-    .nice_clk             (clk_aon),
-    .nice_rst_n	          (rst_aon),
-    .nice_active	         (),
-    .nice_mem_holdup	  (nice_mem_holdup),
-    
-    .nice_req_valid       (nice_req_valid),
-    .nice_req_ready       (nice_req_ready),
-    .nice_req_inst        (nice_req_inst),
-    .nice_req_rs1         (nice_req_rs1),
-    .nice_req_rs2         (nice_req_rs2),
-    
-    .nice_rsp_valid       (nice_rsp_multicyc_valid),
-    .nice_rsp_ready       (nice_rsp_multicyc_ready),
-    .nice_rsp_rdat        (nice_rsp_multicyc_dat),
-    .nice_rsp_err    	  (nice_rsp_multicyc_err),
-    
-    .nice_icb_cmd_valid   (nice_icb_cmd_valid),
-    .nice_icb_cmd_ready   (nice_icb_cmd_ready),
-    .nice_icb_cmd_addr    (nice_icb_cmd_addr),
-    .nice_icb_cmd_read    (nice_icb_cmd_read),
-    .nice_icb_cmd_wdata   (nice_icb_cmd_wdata),
-    .nice_icb_cmd_size    (nice_icb_cmd_size),
-    
-    .nice_icb_rsp_valid   (nice_icb_rsp_valid),
-    .nice_icb_rsp_ready   (nice_icb_rsp_ready),
-    .nice_icb_rsp_rdata   (nice_icb_rsp_rdata),
-    .nice_icb_rsp_err     (nice_icb_rsp_err)	
+   // NPU 不在 CPU 内：请求/响应/ICB 主口从模块边界引出，接
+   // e203_subsys_top 里的 u_npu_top（与 u_e203_subsys_main 同级）。
+   assign nice_req_valid_o        = nice_req_valid;
+   assign nice_req_inst_o         = nice_req_inst;
+   assign nice_req_rs1_o          = nice_req_rs1;
+   assign nice_req_rs2_o          = nice_req_rs2;
+   assign nice_req_ready          = nice_req_ready_i;
+   assign nice_rsp_multicyc_valid = nice_rsp_valid_i;
+   assign nice_rsp_multicyc_dat   = nice_rsp_rdat_i;
+   assign nice_rsp_multicyc_err   = nice_rsp_err_i;
+   assign nice_rsp_ready_o        = nice_rsp_multicyc_ready;
+   assign nice_mem_holdup         = nice_mem_holdup_i;
 
-   );
+   assign nice_icb_cmd_ready_o    = nice_icb_cmd_ready;
+   assign nice_icb_rsp_valid_o    = nice_icb_rsp_valid;
+   assign nice_icb_rsp_rdata_o    = nice_icb_rsp_rdata;
+   assign nice_icb_rsp_err_o      = nice_icb_rsp_err;
+   assign nice_icb_cmd_valid      = nice_icb_cmd_valid_i;
+   assign nice_icb_cmd_addr       = nice_icb_cmd_addr_i;
+   assign nice_icb_cmd_read       = nice_icb_cmd_read_i;
+   assign nice_icb_cmd_wdata      = nice_icb_cmd_wdata_i;
+   assign nice_icb_cmd_size       = nice_icb_cmd_size_i;
+   assign nice_icb_rsp_ready      = nice_icb_rsp_ready_i;
   `endif//}
 
 

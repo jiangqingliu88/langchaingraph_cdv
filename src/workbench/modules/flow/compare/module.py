@@ -13,6 +13,8 @@
 """
 from __future__ import annotations
 
+from src.workbench.bus import run_id_of
+
 from typing import Any, Dict, List
 
 from PySide6.QtGui import QAction, QColor
@@ -118,7 +120,7 @@ class CompareModule(ModuleBase):
 
     def on_refresh(self, payload: Any = None) -> None:
         """`run.selected` 的订阅者 —— 选中的那次当"对比侧"，基线自动取它前一次。"""
-        run_id = str(payload or "")
+        run_id = run_id_of(payload)
         if run_id and run_id != self.run_id:
             self._load_runs(select=run_id)
 

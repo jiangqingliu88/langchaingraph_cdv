@@ -641,7 +641,8 @@ class TestNormalizeTests:
             "not-a-dict",
             {"dimension": "D", "value": "1"},
         ]) == [{"dimension": "D", "value": "1", "key": "", "int_value": None,
-               "base": "", "field": "", "tp_id": "", "backdoor_path": ""}]
+             "base": "", "field": "", "tp_id": "", "backdoor_path": "",
+             "sequence": "", "sequence_values": []}]
 
     def test_stimulus_field_is_passed_through(self):
         """模型声明的激励绑定必须原样到模板 —— 丢了它就退回「死标签」。"""
@@ -828,6 +829,71 @@ class TestStimulusBindingValidation:
             [{"dimension": "D_rsp", "value": "OK", "field": "rsp_code"}],
             transaction_vars=[{"name": "rsp_code", "is_master": "False"}])
         assert "rsp_code" in capsys.readouterr().out
+
+
+class TestIrGate:
+    """IR 必须在渲染前**真的被消费** —— 模型漂移时要出声，而不是产出废 SV。
+
+    只看 IR 自己的单测不够：契约定义了没人调，等于没有。这里验证渲染入口确实
+    走了 `validate_agent_ir` / `validate_ir`。
+    """
+
+    class _AgentProbe:
+        """只跑校验、不真渲染：render_file 返回 None，should_skip 全 True。"""
+
+        def __init__(self, out):
+            from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import (
+                AgentRenderTask, RegionInjector,
+            )
+
+            self._task = AgentRenderTask(
+                renderer=None, output_dir=out, injector=RegionInjector())
+            self._task.render_file = lambda *a, **k: None
+            self._task.should_skip = lambda path: True
+
+        def generate(self, agent):
+            return self._task.generate(agent)
+
+    class _EnvProbe:
+        def __init__(self, out):
+            from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import (
+                EnvironmentRenderTask, RegionInjector,
+            )
+
+            self._task = EnvironmentRenderTask(
+                renderer=None, output_dir=out, injector=RegionInjector())
+            self._task.render_file = lambda *a, **k: None
+            self._task.should_skip = lambda path: True
+
+        def generate(self, env):
+            return self._task.generate(env)
+
+    def test_agent_port_problems_are_reported(self, tmp_path, capsys):
+        from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import AgentModel
+
+        agent = AgentModel(name="a", agent_name="a", interface="a",
+                           interface_name="a",
+                           ports=[{"name": "", "dir": "sideways"}])
+        self._AgentProbe(tmp_path).generate(agent)
+        out = capsys.readouterr().out
+        assert "空端口名" in out and "非法" in out
+
+    def test_clean_agent_is_silent(self, tmp_path, capsys):
+        from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import AgentModel
+
+        agent = AgentModel(name="a", agent_name="a", interface="a",
+                           interface_name="a",
+                           ports=[{"name": "p", "dir": "output"}])
+        self._AgentProbe(tmp_path).generate(agent)
+        assert capsys.readouterr().out == ""
+
+    def test_duplicate_agents_are_reported_at_env_level(self, tmp_path, capsys):
+        """端口不在 env 侧要求，但重名 agent 是确定的模型错误。"""
+        self._EnvProbe(tmp_path).generate(
+            EnvironmentModel(name="e", env_name="e",
+                             agents=[_normalize_agents_list([{"name": "x"}])[0],
+                                     _normalize_agents_list([{"name": "x"}])[0]]))
+        assert "重名" in capsys.readouterr().out
 
 
 class TestConstraintLayerIsWired:

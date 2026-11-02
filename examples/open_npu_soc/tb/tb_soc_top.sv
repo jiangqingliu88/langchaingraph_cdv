@@ -1,13 +1,20 @@
 // Open NPU SoC v0.1 自检 TB。
 //
-// 读取 golden 生成的三份 hex：
-//   vectors/a.hex / b.hex / c.hex
-// 预装 A/B -> start -> 等 done -> 读 SRAM C 与 c.hex 逐字比较。
-//
-// 判据（与仓库「真 pass」口径一致）：
-//   mismatched=0 且打印 PASS；否则 FAIL。
+// 两条路径共用本 TB：
+//   1. 参考路径（默认）：soc_top + vectors/*.hex，逐字比较 C；判据
+//      mismatched=0 且打印 PASS。
+//   2. E203 C 用例路径（+define+E203_C_RUN）：例化 E203 官方
+//      `e203_hbirdv2/tb/tb_top.v`（只读复用，不修改 E203 源树），由它装载
+//      ITCM/固件并判定 TEST_PASS / TEST_FAIL。
 `timescale 1ns/1ps
 
+`ifdef E203_C_RUN
+module tb_soc_top;
+    // 复用 SoC 的 tb_top：C 用例的 top 仍然是 tb_soc_top，
+    // 但真正的时钟/复位/固件加载/结果判定都在 E203 tb_top 里。
+    tb_top u_e203_tb_top();
+endmodule
+`else
 module tb_soc_top;
 
     localparam int M = 8;
@@ -97,3 +104,4 @@ module tb_soc_top;
     end
 
 endmodule
+`endif

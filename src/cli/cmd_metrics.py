@@ -13,7 +13,8 @@ from pathlib import Path
 import click
 from rich.table import Table  # noqa: F401
 
-from src.cli.commands import cli, console, diff
+from src.cli.commands import cli, console
+from src.cli.cmd_diff import diff
 
 
 def _fmt_pct(value, digits=2):
@@ -120,6 +121,35 @@ def incremental_plan(baseline, current, json_output):
     if plan.get("notes"):
         for note in plan["notes"]:
             console.print(f"[dim]· {note}[/dim]")
+
+
+@incremental_group.command("deps")
+@click.option("--run", "run_root", required=True,
+              type=click.Path(exists=True, file_okay=False, path_type=Path),
+              help="run 目录（读 env/testpoints/attribution/rtl）")
+@click.option("--write", is_flag=True,
+              help="写到 <run>/coverage/test_dependencies.json")
+@click.option("--force", is_flag=True, help="覆盖已有 sidecar")
+@click.option("--json", "json_output", is_flag=True, help="输出机器可读 JSON")
+def incremental_deps(run_root, write, force, json_output):
+    """从 run 产物自动生成用例依赖映射（file_pattern → env/testpoint/RTL）。"""
+    from src.core.incremental.deps_gen import generate_dependency_map
+
+    doc = generate_dependency_map(run_root, write=write, force=force)
+    if json_output:
+        click.echo(json.dumps(doc, indent=2, ensure_ascii=False, default=str))
+        return
+    table = Table(title=f"Dependency Map — {Path(run_root).name}")
+    table.add_column("项", style="cyan")
+    table.add_column("值")
+    table.add_row("来源", str(doc.get("source") or "none"))
+    table.add_row("用例", f"{len(doc.get('tests') or {})} 条"
+                  f"（{doc.get('coverage_of_tests') or '?'}）")
+    table.add_row("未映射", f"{len(doc.get('unmapped_tests') or [])} 条")
+    table.add_row("文件", str(doc.get("path") or "（未写盘，加 --write）"))
+    console.print(table)
+    for note in doc.get("notes") or []:
+        console.print(f"[dim]· {note}[/dim]")
 
 
 @diff.command("runs")

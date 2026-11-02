@@ -23,6 +23,171 @@
     }
   ],
   "properties": {
+    "config_space": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "配置域（P3）：DUT / 特性配置空间。配置改变功能空间，不是运行环境。",
+      "required": ["dimensions"],
+      "properties": {
+        "dimensions": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["name", "values"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "values": {"type": "array", "minItems": 1,
+                         "items": {"type": ["string", "number", "boolean"]}}
+            }
+          }
+        },
+        "cross_groups": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": true,
+            "required": ["dimensions"],
+            "properties": {
+              "id": {"type": "string"},
+              "dimensions": {"type": "array", "minItems": 2,
+                             "items": {"type": "string", "minLength": 1}},
+              "level": {"enum": ["required", "optional"]}
+            }
+          }
+        },
+        "feasibility": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": true,
+            "required": ["when"],
+            "properties": {
+              "id": {"type": "string"},
+              "when": {"type": "object", "minProperties": 1,
+                       "description": "配置维度取值匹配条件"},
+              "then": {"type": "object",
+                       "description": "命中后：exclude=true 排除组合，或 disable_tps 禁用部分测试点"}
+            }
+          }
+        },
+        "max_combinations": {"type": "integer", "minimum": 1,
+                             "description": "组合数上限；超过要截断并记账"}
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "行为域（P1）：状态 / 事件 / 迁移 / 序列 / 时序。与属性维度并列，节点编译成行为 TP；执行后端在 P1b。",
+      "required": ["id", "states", "transitions"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "clock": {"type": "string"},
+        "reset": {"type": "object"},
+        "checks": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "states": {"type": "array", "minItems": 1, "items": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "object", "additionalProperties": false, "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1}, "description": {"type": "string"}}}]}},
+        "events": {"type": "array", "minItems": 1, "items": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "object", "additionalProperties": false, "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1}, "description": {"type": "string"}}}]}},
+        "transitions": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["id", "from", "event", "to"],
+            "properties": {
+              "id": {"type": "string", "minLength": 1},
+              "from": {"type": "string", "minLength": 1},
+              "event": {"type": "string", "minLength": 1},
+              "to": {"type": "string", "minLength": 1},
+              "checks": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+              "description": {"type": "string"}
+            }
+          }
+        },
+        "sequences": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["id", "steps"],
+            "properties": {
+              "id": {"type": "string", "minLength": 1},
+              "steps": {
+                "type": "array", "minItems": 1,
+                "items": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["event"],
+                  "properties": {
+                    "event": {"type": "string", "minLength": 1},
+                    "repeat": {"type": "integer", "minimum": 1},
+                    "field": {"type": "string"},
+                    "value": {"type": "string"}
+                  }
+                }
+              },
+              "expects": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+              "description": {"type": "string"}
+            }
+          }
+        },
+        "temporal": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["id", "trigger", "response"],
+            "properties": {
+              "id": {"type": "string", "minLength": 1},
+              "trigger": {"type": "string", "minLength": 1},
+              "condition": {"type": "object"},
+              "response": {"type": "object"},
+              "within": {"type": "object"},
+              "reset_policy": {"enum": ["abort", "hold", "ignore"]},
+              "checks": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
+    "assertions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "模型声明的 DUT 断言；tp_bindings 表示它保护哪些测试点（一对多：一条 SVA 可守多条 TP）",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "expr"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1, "description": "断言 id（缺省取 name）"},
+          "name": {"type": "string", "minLength": 1},
+          "expr": {"type": "string", "minLength": 1, "description": "SVA 表达式；带 ## / [* 的时序规则不会被逐拍检查组翻译"},
+          "message": {"type": "string"},
+          "signals": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"oneOf": [
+              {"type": "string", "minLength": 1},
+              {"type": "object", "additionalProperties": false, "required": ["name"],
+               "properties": {"name": {"type": "string", "minLength": 1},
+                              "width": {"type": "integer", "minimum": 1}}}
+            ]}
+          },
+          "tp_bindings": {
+            "type": "array",
+            "minItems": 1,
+            "description": "这条断言保护哪些测试点；role=primary 表示该 TP 的主要判据",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["tp_id"],
+              "properties": {
+                "tp_id": {"type": "string", "minLength": 1},
+                "role": {"enum": ["primary", "supporting"]}
+              }
+            }
+          },
+          "failure_policy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {"severity": {"enum": ["error", "warning", "info"]}}
+          }
+        }
+      }
+    },
     "version": {
       "type": "string",
       "minLength": 1,
