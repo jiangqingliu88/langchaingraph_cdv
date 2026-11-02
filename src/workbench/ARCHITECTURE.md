@@ -1,6 +1,6 @@
 # Workbench 架构（当前实现）
 
-> 基线：2026-10-31（清单 **45 个启用模块**；工作台 `pytest src/workbench/tests` **739 passed**）
+> 基线：2026-10-31（清单 **46 个启用模块**；工作台 `pytest src/workbench/tests` **741 passed**）
 >
 > 本文描述 `src/workbench/` **代码现在怎么组织**，与仓库根
 > `ARCHITECTURE.md` 是同一套系统：CLI 是唯一正式入口，工作台是它的
@@ -306,7 +306,7 @@ started_at / finished_at · result / error
 - 工作台与 CLI 的契约是**文件**：同一份 run 目录既能被 CLI 读，也能被工作台
   打开；工作台不替流水线计算业务结论。
 
-## 9. 模块清单（`config/workbench.yaml`，45 个启用模块）
+## 9. 模块清单（`config/workbench.yaml`，46 个启用模块）
 
 | 业务线 / 域 | 模块 | 作用 |
 |---|---|---|
@@ -315,7 +315,7 @@ started_at / finished_at · result / error
 | `ip` / IP 团队 | `ip.catalog`、`ip.workspace`、`ip.signoff` | IP 供应方视角：清单 / 工作区（IP 回归 + 生成发布包）/ 发布检查（`ip_release_v1` 准则逐条） |
 | `service` / 客户工程 | `service.uvm`、`service.regression`、`service.coverage` | 三个业务服务入口（只做导航/编排，见 §16） |
 | `platform` / 平台配置 | `platform.settings` | 当前项目/清单/Python/Qt/EDA 工具的可读视图 |
-| `ide` / 设计时 | `ide.ip_spec`、`ide.manual_nodes` | IP 规格、人工节点 YAML 编辑 + schema 校验 |
+| `ide` / 设计时 | `ide.ip_spec`、`ide.manual_nodes`、`ide.aivm` | IP 规格、人工节点 YAML 编辑 + schema 校验；AIVM 测试点表（xlsx）只读视图（TP / 三通道覆盖点 / M1 计划摘要，绑定 `humanview.aivm_plan`） |
 | `verify` / 运行时 | `verify.casemodel`（12 页）、`verify.isa_gen`、`verify.output` | case 属性建模、ISA 激励、验证产出 |
 | `design` / `model` / `ops` / `coverage` / `debug` / `audit` | `*.output` | 各 agent 本次运行的产出视图 |
 | `ops` | `ops.regression_status`、`ops.regression_wave`、`ops.regression_coverage` | 回归状态、波形、覆盖率产物 |

@@ -1,12 +1,13 @@
 """工具板块（board）—— **按职责分组，而不是按目录出现顺序**。
 
-五个板块：
+七个板块：
 
     generation  生成产物（case 模型 / UVM / ISA / C 模型 / 文档）
     checking    检查与判定（断言、debug、覆盖率分析、spec 校验）
     execution   执行 EDA / 回归
     flow        签核 / 血缘 / 趋势等跨阶段流程
     integration 对外集成（IDE 桥）
+    humanview   人读视图（PM 手写测试点表 → 测试点本体 / casemodel 导入）
     common      共享底层（lib）
 
 **一个包只属于一个板块**；新增工具必须在这里登记（有测试钉住）。
@@ -33,6 +34,9 @@ BOARDS: Dict[str, Tuple[str, ...]] = {
     ),
     "integration": (
         "ide_tools",
+    ),
+    "humanview": (
+        "aivm_ir",
     ),
     "common": (
         "lib",

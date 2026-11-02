@@ -1,0 +1,31 @@
+# 轴声明（sidecar）示例 —— 给"没有维度建模的 xlsx"补上验证轴。
+#
+# 真实 xlsx 只有 TP 行 + 格子文本，loader 不建 Dimension；组合格要变成真正的
+# cross 覆盖，就靠这份声明：把格子拆成哪几个轴、每个轴的取值原文是什么。
+# `raw_text` 必须出现在该 TP 的某个组合格里，否则导入时记 `unmatched`。
+schema: aivm_axes_v1
+tps:
+  IF01:
+    dimensions:
+      - id: handshake_order
+        name: valid/ready 顺序
+        values:
+          - {value: valid_first,  raw_text: "valid先于ready"}
+          - {value: ready_first,  raw_text: "ready先于valid"}
+          - {value: simultaneous, raw_text: "valid和ready同时置起"}
+  IF02:
+    dimensions: &order_axes
+      - id: start_order
+        name: start 顺序
+        values:
+          - {value: s0_first, raw_text: "start_id0 先于start_id1"}
+          - {value: s1_first, raw_text: "start_id0 后于start_id1"}
+      - id: done_order
+        name: done 顺序
+        values:
+          - {value: d0_first, raw_text: "done_id0先于done_id1"}
+          - {value: d1_first, raw_text: "done_id0后于done_id1"}
+  IF03: {dimensions: *order_axes}
+  IF04: {dimensions: *order_axes}
+  IF05: {dimensions: *order_axes}
+  IF06: {dimensions: *order_axes}

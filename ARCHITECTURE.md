@@ -2,7 +2,7 @@
 
 > 基线：2026-10-31
 >
-> 全量单测：**1219 passed / 2 skipped**；工作台 **739 passed**
+> 全量单测：**1219 passed / 2 skipped**；工作台 **741 passed**
 >
 > UVM 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 >
@@ -435,6 +435,7 @@ pass（`None ≠ False`）。报告随证据包 `verdict/` 段收走，并作为
 | **execution** | 跑 EDA/回归 | `regression_tools` |
 | **flow** | 签核/血缘/趋势 | `flow_tools`、`trend_tools` |
 | **integration** | 对外集成 | `ide_tools` |
+| **humanview** | 人读视图（xlsx 测试点表 → casemodel） | `aivm_ir` |
 | **common** | 共享底层 | `lib` |
 
 物理目录与板块一一对应：
@@ -446,6 +447,7 @@ src/tools/checking/      assertion_tools  debug_tools  coverage_tools  spec_tool
 src/tools/execution/     regression_tools
 src/tools/flow/          flow_tools       trend_tools
 src/tools/integration/   ide_tools
+src/tools/humanview/     aivm_ir          （PM 手写测试点表 → casemodel 导入）
 src/tools/common/        lib
 ```
 
@@ -472,6 +474,7 @@ src/tools/common/        lib
 | `generation/isa_gen_tools` | NPU ISA DSL → IR → 32bit 编码 / 张量 / manifest |
 | `flow/flow_tools` | signoff/lineage/compare 等流程 API |
 | `generation/doc_tools` / `flow/trend_tools` / `generation/cmodel_tools` / `generation/scmodel_tools` | 文档、趋势、C/Python 参考模型 |
+| `humanview/aivm_ir` | PM 手写测试点表（xlsx）→ 测试点本体 + M1 覆盖计划；`bridge.py` 按方案 B 导入 casemodel（xlsx 管"测什么"，casemodel 管"怎么测"），`source_map.json` 进证据包；模型导入后被手改 → audit 挂 `INGEST_DRIFT` |
 
 ### 6.5 Job Runtime 与命令白名单（`src/core/jobs/`）
 
@@ -1132,7 +1135,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 [`src/workbench/ARCHITECTURE.md`](src/workbench/ARCHITECTURE.md)）：
 
 - `app.py` / `bootstrap.py` / `bus.py`
-- `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`、`model`、`ops`、`verify`、`service`（三个工程服务入口）、`soc`（SoC 团队：总览 / 架构 / 验证 / C 用例 / 签核）、`ip`（IP 团队：目录 / 工作区 / 发布检查）
+- `modules/`：`agent_output`、`audit`、`coverage`、`debug`、`design`、`flow`、`ide`（含 `ide.aivm`：xlsx 测试点表只读视图）、`model`、`ops`、`verify`、`service`（三个工程服务入口）、`soc`（SoC 团队：总览 / 架构 / 验证 / C 用例 / 签核）、`ip`（IP 团队：目录 / 工作区 / 发布检查）
 - **工程服务入口**：`project.overview` / `project.management` + `soc.*`（SoC 团队）+ `ip.*`（IP 团队）+ `service.uvm` / `service.regression` / `service.coverage` 都是普通 `ModuleBase` 模块，只做导航/编排（打开已有模块、调 `pipeline.start` / `soc.run`、生成 core 计划），不另造引擎；导航分域为「项目 → 客户工程（SoC 团队 / IP 团队 / 工程服务）→ 设计时 → 工程工作区 → 运行时 → 平台配置」
 - 签核页同时展示：门禁、六层证据链、**证据包 v2**（哈希 / caveat / 计划与单测覆盖率 / 种子多样性 / **粗连续奖励 + 权重** / **运行时知识图规模** / 参考模型与基线 / 审批 / Freeze / **recipe v2 与 Tier B EDA 依赖** / 回放命令）
 - 签核页工具栏新增 **「校验证据包」**：调 `evidence.check_package`（纯读），展示完整性、Tier A 重算、recipe 校验结果
@@ -1160,7 +1163,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 | 新 executor | `src/executors/<role>/main.py` + `@register_executor` | 图拓扑（除非要接节点） |
 | 新工具 | 实现 `ITool` + 注册到 ToolHub | 调用方 |
 | 新 GUI 工具 | `src/workbench/bridge/catalog.py` 加 `ToolBinding` + 模块 `tool.name` | CLI / 流水线 |
-| 新工具包 | 放对应板块目录（`generation/checking/execution/flow/integration/common`）+ 在 `src/tools/boards.py` 登记 | 其它工具包 |
+| 新工具包 | 放对应板块目录（`generation/checking/execution/flow/integration/humanview/common`）+ 在 `src/tools/boards.py` 登记 | 其它工具包 |
 | 新 realization | 注册 `RealizationStrategy` | `stages.py` |
 | 新约束来源 | 注册 `ConstraintCompiler` | `build_constraint` |
 | 新 EDA 后端 | `execution/regression_tools/backend_profiles.py` 加字典条目（保留键 + `run_cmd_template`） | 框架类 |

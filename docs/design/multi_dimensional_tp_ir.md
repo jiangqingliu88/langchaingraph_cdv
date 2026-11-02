@@ -22,6 +22,22 @@
 **硬约束**：任何激励（人工、生成器或 AI 产出的）都必须先进入 TP IR，
 再由编译器产出后端实现。**不允许**直接生成 UVM sequence 绕过主键与证据体系。
 
+## 0.1 文档表导入（方案 B，已落地）
+
+PM/DV lead 手工维护的 xlsx 测试点表**不当运行时真源**，而是导入视图：
+
+```text
+xlsx（该测什么） ──aivm_ir.bridge──► casemodel.yaml（怎么测，过 schema）
+                                  └─ source_map.json（逐格出处 + 双哈希）
+```
+
+- 实现在 `src/tools/humanview/aivm_ir/bridge.py`；
+- CLI：`vagent case-model import-xlsx` / `verify-import`；
+- 映射规则、当前边界见 `src/tools/humanview/README.md`。
+- 真实 xlsx 不自带维度轴 → 未给轴声明时组合格退化为**场景维度**（一格一仓，
+  不冒充交叉）；给 `--axes`（`aivm_axes_v1` sidecar）后编译成真正的
+  `cross_matrix` 显式仓。轴里多出来的取值记账并丢弃（表是真源）。
+
 ---
 
 ## 1. 总架构

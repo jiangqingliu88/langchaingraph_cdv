@@ -24,7 +24,7 @@ def test_shipped_manifest_parses():
         "design.output", "model.output", "ops.output",
         "ops.regression_status", "ops.regression_wave", "ops.regression_coverage",
         "coverage.output", "audit.output",
-        "ide.ip_spec", "ide.manual_nodes",
+        "ide.ip_spec", "ide.manual_nodes", "ide.aivm",
         "coverage.excludes",
         "debug.sim_log", "debug.fingerprint", "debug.output",
         "verify.output", "verify.casemodel", "verify.isa_gen",
@@ -156,7 +156,7 @@ def test_builtin_manifest_has_groups_but_no_modules():
 
 def test_describe_counts_enabled_modules():
     manifest = load_manifest(default_manifest_path())
-    assert "45 个模块" in describe(manifest)
+    assert "46 个模块" in describe(manifest)
     assert describe(None) == "清单：无"
 
 

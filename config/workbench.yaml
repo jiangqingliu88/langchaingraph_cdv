@@ -285,6 +285,18 @@ modules:
     input: ide/manual_nodes.yaml
     tool: {name: ide.manual_nodes, kind: json}
 
+  # AIVM 测试点表 —— PM/DV lead 手写 xlsx 的**只读**视图（方案 B 的"该测什么"侧）。
+  # 导入 casemodel / 双哈希防漂移在 CLI（`case-model import-xlsx` / `verify-import`）；
+  # 这一页不写盘、不起子进程。
+  - id: ide.aivm
+    title: 测试点表（xlsx）
+    group: ide
+    factory: src.workbench.modules.ide.aivm:AivmTableModule
+    area: center
+    order: 30
+    input: ../src/tools/humanview/aivm_ir/example/NPU_V2.CMDSCHED.testpoint.xlsx
+    tool: {name: humanview.aivm_plan, kind: json}
+
   # 覆盖率豁免审批 —— 自动发现提出的"这个洞结构不可达"，等人签字。
   #
   # 为什么必须是人：一个覆盖率洞到底是不是**结构不可达**，是设计知识，AI 判不了。

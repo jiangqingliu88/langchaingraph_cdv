@@ -196,6 +196,7 @@ class VerifyExecutor(BaseExecutor):
             # 从运行结果上看不出来（都是"有一份模型"）。一份手写模型悄悄接管了
             # 整轮回归的测试点，却没有任何一行日志提到它 —— 排查时会很痛苦。
             logger.info(f"case 模型：{case_model}（人写的优先于 front 的草稿）")
+            files.extend(self._copy_ingest_artifacts(case_model, output_dir))
             try:
                 from src.tools.generation.casemodel_tools.api import run_gaps, run_generate
 
@@ -554,6 +555,21 @@ class VerifyExecutor(BaseExecutor):
         from src.tools.generation.uvm_tools.generation.generators.constraint_gen import (
             annotate_coverage_plan)
         annotate_coverage_plan(output_dir, payload, logger)
+
+    def _copy_ingest_artifacts(self, case_model: Path,
+                               output_dir: Path) -> List[str]:
+        """xlsx 导入的模型旁边有 source_map → 复制进 run（证据包 + 漂移检查）。"""
+        try:
+            from src.tools.humanview.aivm_ir.evidence import copy_ingest_artifacts
+
+            copied = copy_ingest_artifacts(case_model, output_dir)
+            if copied:
+                print(f"  [verify] 导入事实：{Path(copied[0]).name} → inputs/",
+                      flush=True)
+            return copied
+        except Exception as e:                          # noqa: BLE001 旁路
+            print(f"  [verify] 导入事实复制失败（不影响主流程）: {e}", flush=True)
+            return []
 
     def _write_plan_consistency(self, output_dir: Path) -> None:
         """TP IR / StimulusPlan / constraint_backing 的同源校验。"""

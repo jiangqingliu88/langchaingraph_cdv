@@ -31,6 +31,7 @@ EXPECTED_CAVEATS = {
     "ASSOCIATION_HARD_EDGE", "PLAN_INCONSISTENT", "TP_UNMAPPED",
     "TP_TRACE_INCOMPLETE", "TP_MISSED",
     "MODEL_UNAVAILABLE", "BASELINE_MISSING", "BACKEND_ARGS_USED",
+    "INGEST_DRIFT",
 }
 
 
@@ -55,9 +56,9 @@ def test_eight_executors_have_a_tool_mapping():
     assert len(roles) == 8
 
 
-def test_tool_boards_are_the_six_canonical_boards():
+def test_tool_boards_are_the_canonical_boards():
     assert set(BOARDS) == {"generation", "checking", "execution",
-                           "flow", "integration", "common"}
+                           "flow", "integration", "common", "humanview"}
     assert "uvm_tools" in BOARDS["generation"]
     assert "coverage_tools" in BOARDS["checking"]
     assert "regression_tools" in BOARDS["execution"]

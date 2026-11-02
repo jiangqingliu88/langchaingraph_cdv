@@ -62,6 +62,7 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
     "inputs": (
         "spec.json",
         "inputs/casemodel.yaml",
+        "inputs/source_map.json",
         "inputs/yaml/uvm/constraint.yaml",
         "inputs/yaml/uvm/models.yaml",
         "coverage/coverage_plan.yaml",

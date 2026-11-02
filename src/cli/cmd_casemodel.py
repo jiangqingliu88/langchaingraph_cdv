@@ -401,3 +401,73 @@ def case_model_gui(model):
 # 分不清"没人改"和"改了没记"——两者在链上都是一片空白。**没记的能被发现，
 # 链才可信。**
 
+
+
+@case_model.command("import-xlsx")
+@click.argument("xlsx", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--module", required=True, help="模块名（进 casemodel object）")
+@click.option("--code", "object_code", default=None,
+              help="object_code（缺省从模块名推，须匹配 ^[A-Z][A-Z0-9]{1,7}$）")
+@click.option("--out", "-o", "out_dir", default=None,
+              help="输出目录（缺省 specs/<module>）")
+@click.option("--axes", "axes_path", default=None,
+              type=click.Path(exists=True, dir_okay=False, path_type=Path),
+              help="轴声明 sidecar（xlsx 没有维度建模时，用它把组合格拆成 cross）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def case_model_import_xlsx(xlsx, module, object_code, out_dir, axes_path, json_output):
+    """PM 手写测试点表（xlsx）→ casemodel + source_map（方案 B）。
+
+    xlsx 管"该测什么"（人评审、diff），casemodel 管"怎么测"（执行契约）。
+    生成的 casemodel **必须过 schema** 才落盘；两边哈希写进 source_map，表改了
+    没重新导入可以用 `case-model verify-import` 查出来。
+
+    \b
+    示例:
+      vagent case-model import-xlsx NPU.xlsx --module npu_cmdsched
+      vagent case-model verify-import NPU.xlsx specs/npu_cmdsched/casemodel.yaml \
+             specs/npu_cmdsched/source_map.json
+    """
+    from src.tools.humanview.aivm_ir import load_xlsx_to_ontology
+    from src.tools.humanview.aivm_ir.bridge import import_ontology
+
+    target = Path(out_dir) if out_dir else Path("specs") / module
+    try:
+        onto = load_xlsx_to_ontology(str(xlsx))
+        result = import_ontology(onto, target, module_name=module,
+                                 object_code=object_code, source_path=xlsx,
+                                 axes_path=axes_path)
+    except Exception as exc:                    # noqa: BLE001  CLI 边界统一报
+        console.print(f"[red]导入失败：{exc}[/red]")
+        raise SystemExit(2)
+    if json_output:
+        click.echo(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    console.print(f"[green]✓[/green] {result['casemodel']} · bins={result['bins']}"
+                  f" · dropped={result['dropped']} · warnings={result['warnings']}")
+    console.print(f"  source_map：{result['source_map']}")
+    if result["dropped"]:
+        console.print(f"  [yellow]{result['dropped']} 个格子未映射"
+                      f"（逐条见 source_map.dropped）[/yellow]")
+
+
+@case_model.command("verify-import")
+@click.argument("xlsx", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("casemodel", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("source_map", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--axes", "axes_path", default=None,
+              type=click.Path(exists=True, dir_okay=False, path_type=Path),
+              help="轴声明 sidecar（导入时用过就一起校验）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def case_model_verify_import(xlsx, casemodel, source_map, axes_path, json_output):
+    """双哈希校验：xlsx 或 casemodel 被单边改过（没重新导入）就失败。"""
+    from src.tools.humanview.aivm_ir.bridge import verify_import
+
+    result = verify_import(xlsx, casemodel, source_map, axes_path=axes_path)
+    if json_output:
+        click.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    elif result["ok"]:
+        console.print("[green]✓ xlsx 与 casemodel 的绑定未被改动[/green]")
+    else:
+        for issue in result["issues"]:
+            console.print(f"[red]✗ {issue['check']}: {issue['detail']}[/red]")
+    raise SystemExit(0 if result["ok"] else 1)

@@ -1,4 +1,4 @@
-"""工具板块（generation / checking / execution / flow / integration / common）。
+"""工具板块（generation / checking / execution / flow / integration / common / humanview）。
 
 钉的是**组织不变量**：
   ① 每个工具包只属于一个板块；

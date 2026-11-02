@@ -101,6 +101,12 @@ BINDINGS: List[ToolBinding] = [
         kind="json",
         doc="ip_spec.yaml → IP 规格声明 schema 校验结果",
     ),
+    ToolBinding(
+        name="humanview.aivm_plan",
+        target="src.tools.humanview.aivm_ir.api:summarize_xlsx",
+        kind="json",
+        doc="PM 手写测试点表（xlsx）→ TP 清单 / 三通道覆盖点 / M1 计划摘要（只读）",
+    ),
 
     # ══ 验证管理系统：case 模型 ═══════════════════════════════════
     # casemodel_tools.api 是**唯一**已经是 dict 进 dict 出、且零 LLM 依赖的

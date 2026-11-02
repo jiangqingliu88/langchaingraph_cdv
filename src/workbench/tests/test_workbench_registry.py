@@ -535,8 +535,9 @@ class TestRealManifestBuilds:
         window = make_window(qt_app, ctx)
         try:
             assert window.manager.failures() == {}
-            # 45 = 31 个专业模块 + 项目入口 2 + SoC 5 + IP 3 + 工程服务 3 + 环境与工具
-            assert len(window.modules) == 45
+            # 46 = 31 个专业模块 + 项目入口 2 + SoC 5 + IP 3 + 工程服务 3
+            #      + 环境与工具 1 + 测试点表（xlsx）1
+            assert len(window.modules) == 46
             assert {m.module_id for m in window.modules} >= {
                 "project.overview", "project.management",
                 "soc.overview", "soc.architecture", "soc.verification",
@@ -564,7 +565,7 @@ class TestRealManifestBuilds:
                     "SoC 签核",
                     "IP 目录", "IP 工作区", "IP 发布检查",
                     "UVM 自动化验证", "回归效率优化", "Coverage Closure",
-                    "IP 规格", "人工节点",
+                    "IP 规格", "人工节点", "测试点表（xlsx）",
                     # 工程工作区（order 8）排在运行时之前 —— 它是入口。
                     # 线内顺序按"用法"：起（验证流程）→ 选（运行历史，左窗格）→
                     # 看（任务总览/流程视图/运行对比）→ 材料（产物审查/证据）→
