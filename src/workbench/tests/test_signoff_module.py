@@ -205,6 +205,36 @@ class TestRendering:
         assert "93%" in loaded.count_label.text()
 
 
+class TestTabsLayout:
+    """三块明细**用标签页切换**，不纵向堆叠。
+
+    堆叠时每张表被压到几十像素，谁都看不清；签核要的是"先看哪一块"。
+    """
+
+    def test_sections_are_switched_by_tabs(self, loaded):
+        from PySide6.QtWidgets import QTabWidget
+
+        tabs = loaded.tabs
+        assert isinstance(tabs, QTabWidget)
+        titles = [tabs.tabText(i) for i in range(tabs.count())]
+        assert len(titles) == 4
+        assert any("签核门禁" in t for t in titles)
+        assert any("领域证据链" in t for t in titles)
+        assert any("Case 证据" in t for t in titles)
+        assert any("证据包 v2" in t for t in titles)
+
+    def test_tab_titles_carry_x_of_y(self, loaded):
+        """标签上带 3/5、1/2 这类计数 —— 不用点进去才知道这一页有没有料。"""
+        titles = [loaded.tabs.tabText(i) for i in range(loaded.tabs.count())]
+        assert "3/5" in titles[0] or "签核门禁 3/5" == titles[0]
+        assert any("/" in t for t in titles[1:2])
+
+    def test_only_one_page_is_visible_at_a_time(self, loaded):
+        loaded.tabs.setCurrentIndex(2)
+        assert loaded.tabs.currentIndex() == 2
+        assert loaded.tabs.currentWidget() is loaded.case_table.parent()
+
+
 class TestCaseEvidenceInSignoff:
     """Case 证据（三集合）是**签核产出**：要能在签核页上看见它进没进包。"""
 

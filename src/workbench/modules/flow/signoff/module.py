@@ -29,8 +29,8 @@ from typing import Any, Dict, List
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor
-from PySide6.QtWidgets import (QApplication, QLabel, QMessageBox, QSplitter,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QLabel, QMessageBox, QScrollArea,
+                               QTabWidget, QVBoxLayout, QWidget)
 
 from ....ui import theme
 from ....ui.helpers import tables as table_helpers
@@ -92,50 +92,10 @@ class SignoffModule(ModuleBase):
         self.verdict_label.setWordWrap(True)
         layout.addWidget(self.verdict_label)
 
-        splitter = QSplitter(Qt.Orientation.Vertical, root)
-
-        gate_page = QWidget(splitter)
-        gate_layout = QVBoxLayout(gate_page)
-        gate_layout.setContentsMargins(2, 2, 2, 2)
-        gate_layout.setSpacing(2)
-        gate_layout.addWidget(self._section("签核门禁（audit · report.json）", gate_page))
-        self.gate_model = RowsModel(GATE_COLUMNS, gate_page)
-        self.gate_table = table_helpers.configure_table(gate_page, self.gate_model)
-        gate_layout.addWidget(self.gate_table, 1)
-        splitter.addWidget(gate_page)
-
-        chain_page = QWidget(splitter)
-        chain_layout = QVBoxLayout(chain_page)
-        chain_layout.setContentsMargins(2, 2, 2, 2)
-        chain_layout.setSpacing(2)
-        chain_layout.addWidget(self._section("领域证据链（finalize · docs/evidence_chain.json）", chain_page))
-        self.chain_model = RowsModel(CHAIN_COLUMNS, chain_page)
-        self.chain_table = table_helpers.configure_table(chain_page, self.chain_model)
-        chain_layout.addWidget(self.chain_table, 1)
-        splitter.addWidget(chain_page)
-
-        # ── Case 证据（三集合）：签核产出的第 4 块 ──
-        # 它回答"这条用例证明了哪些组 / 哪条 SVA / 哪个 scoreboard"，
-        # 与 TP 矩阵同级 —— 所以在这里，而不是只留在覆盖率页。
-        case_page = QWidget(splitter)
-        case_layout = QVBoxLayout(case_page)
-        case_layout.setContentsMargins(2, 2, 2, 2)
-        case_layout.setSpacing(2)
-        case_layout.addWidget(self._section(
-            "Case 证据（签核产出 · groups / sva / scb）", case_page))
-        self.case_label = QLabel("", case_page)
-        self.case_label.setWordWrap(True)
-        self.case_label.setStyleSheet(f"color: {theme.current().muted};")
-        case_layout.addWidget(self.case_label)
-        self.case_model = RowsModel(CASE_COLUMNS, case_page)
-        self.case_table = table_helpers.configure_table(case_page, self.case_model)
-        case_layout.addWidget(self.case_table, 1)
-        splitter.addWidget(case_page)
-
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
-        splitter.setStretchFactor(2, 1)
-        layout.addWidget(splitter, 1)
+        # ── 顶部只留**判定与口径**（紧凑几行）──
+        self.count_label = QLabel("", root)
+        self.count_label.setStyleSheet(f"color: {theme.current().muted};")
+        layout.addWidget(self.count_label)
 
         # 测试点口径：**签核按测试点说话，不只看百分比**。
         # 「可激励命中 / 观测到达 / 未命中」三栏分开 —— 观测型不是缺口。
@@ -150,16 +110,72 @@ class SignoffModule(ModuleBase):
         self.caveat_label.setStyleSheet(f"color: {theme.current().warning};")
         layout.addWidget(self.caveat_label)
 
-        self.count_label = QLabel("", root)
-        self.count_label.setStyleSheet(f"color: {theme.current().muted};")
-        layout.addWidget(self.count_label)
+        # ── 明细表放进 Tab：一次看一张，用标签页切换 ──
+        #
+        # 原来是三张表纵向堆在一个 splitter 里：每张都被压在几十像素高，
+        # 谁都看不清。签核要的是"先看哪一块"，不是"一块里塞下全部"。
+        self.tabs = QTabWidget(root)
+        self.tabs.setDocumentMode(True)
 
-        # 合同级证据包（v2）：哈希 / caveat / 种子 / 基线 / 审批 / Freeze / 回放
-        self.evidence_label = QLabel("", root)
+        gate_page = QWidget(self.tabs)
+        gate_layout = QVBoxLayout(gate_page)
+        gate_layout.setContentsMargins(2, 2, 2, 2)
+        gate_layout.setSpacing(2)
+        gate_layout.addWidget(self._section("签核门禁（audit · report.json）", gate_page))
+        self.gate_model = RowsModel(GATE_COLUMNS, gate_page)
+        self.gate_table = table_helpers.configure_table(gate_page, self.gate_model)
+        gate_layout.addWidget(self.gate_table, 1)
+        self.tabs.addTab(gate_page, "签核门禁")
+
+        chain_page = QWidget(self.tabs)
+        chain_layout = QVBoxLayout(chain_page)
+        chain_layout.setContentsMargins(2, 2, 2, 2)
+        chain_layout.setSpacing(2)
+        chain_layout.addWidget(self._section("领域证据链（finalize · docs/evidence_chain.json）", chain_page))
+        self.chain_model = RowsModel(CHAIN_COLUMNS, chain_page)
+        self.chain_table = table_helpers.configure_table(chain_page, self.chain_model)
+        chain_layout.addWidget(self.chain_table, 1)
+        self.tabs.addTab(chain_page, "领域证据链")
+
+        # ── Case 证据（三集合）：签核产出的第 4 块 ──
+        # 它回答"这条用例证明了哪些组 / 哪条 SVA / 哪个 scoreboard"，
+        # 与 TP 矩阵同级 —— 所以在这里，而不是只留在覆盖率页。
+        case_page = QWidget(self.tabs)
+        case_layout = QVBoxLayout(case_page)
+        case_layout.setContentsMargins(2, 2, 2, 2)
+        case_layout.setSpacing(2)
+        case_layout.addWidget(self._section(
+            "Case 证据（签核产出 · groups / sva / scb）", case_page))
+        self.case_label = QLabel("", case_page)
+        self.case_label.setWordWrap(True)
+        self.case_label.setStyleSheet(f"color: {theme.current().muted};")
+        case_layout.addWidget(self.case_label)
+        self.case_model = RowsModel(CASE_COLUMNS, case_page)
+        self.case_table = table_helpers.configure_table(case_page, self.case_model)
+        case_layout.addWidget(self.case_table, 1)
+        self.tabs.addTab(case_page, "Case 证据")
+
+        # 合同级证据包（v2）：哈希 / caveat / 种子 / 基线 / 审批 / Freeze / 回放。
+        # 这段是多行长文本，单独一页 + 可滚动，不挤占表格的高度。
+        ev_page = QWidget(self.tabs)
+        ev_layout = QVBoxLayout(ev_page)
+        ev_layout.setContentsMargins(2, 2, 2, 2)
+        ev_layout.setSpacing(2)
+        ev_layout.addWidget(self._section(
+            "合同级证据包 v2（signoff_evidence/manifest.json）", ev_page))
+        self.evidence_label = QLabel("", ev_page)
         self.evidence_label.setWordWrap(True)
-        self.evidence_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.evidence_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse)
         self.evidence_label.setStyleSheet(f"color: {theme.current().muted};")
-        layout.addWidget(self.evidence_label)
+        self.evidence_label.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll = QScrollArea(ev_page)
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self.evidence_label)
+        ev_layout.addWidget(scroll, 1)
+        self.tabs.addTab(ev_page, "证据包 v2")
+
+        layout.addWidget(self.tabs, 1)
         return root
 
     @staticmethod
@@ -255,6 +271,7 @@ class SignoffModule(ModuleBase):
                                     "（改造前的 run，或没跑到 coverage）")
             self.case_label.setStyleSheet(f"color: {theme.current().muted};")
             self.case_model.set_rows([])
+            self._tab_meta(2, "Case 证据（无产物）")
             return
         gate = cv.get("gate") or {}
         counts = gate.get("counts") or {}
@@ -274,6 +291,8 @@ class SignoffModule(ModuleBase):
         self.case_label.setStyleSheet(
             f"color: {palette.warning if verdict == 'BLOCKED' else palette.muted};")
 
+        self._tab_meta(2, f"Case 证据 {cells.get('green', 0)}绿/"
+                          f"{cells.get('yellow', 0)}黄/{cells.get('red', 0)}红")
         rows = [{
             "label": a.get("label"), "path": a.get("path"),
             "state": "是" if a.get("exists") else "否",
@@ -330,6 +349,7 @@ class SignoffModule(ModuleBase):
         """
         self.evidence_dir = str(Path(run_dir) / "signoff_evidence") if run_dir else ""
         self.replay_cmd = str(ev.get("replay_cmd") or "")
+        self._tab_meta(3, _evidence_tab_title(bool(ev.get("available"))))
         if not ev.get("available"):
             self.evidence_label.setText(
                 "证据包 v2：未生成（老 run，或这次还没跑到 audit）")
@@ -399,6 +419,8 @@ class SignoffModule(ModuleBase):
                          "detail": gate.get("detail", "")})
             colors[index] = _color(gate["passed"])
         self.gate_model.set_rows(rows, row_colors=colors)
+        self._tab_meta(0, f"签核门禁 {sum(1 for g in gates.get('rows') or [] if g['passed'])}"
+                          f"/{len(rows)}")
 
     def _fill_chain(self, chain: Dict[str, Any]) -> None:
         if not chain.get("available"):
@@ -419,6 +441,16 @@ class SignoffModule(ModuleBase):
             })
             colors[index] = _color(fully)
         self.chain_model.set_rows(rows, row_colors=colors)
+        done = sum(1 for layer in chain.get("layers") or []
+                   if layer["total"] > 0 and layer["passed"] == layer["total"])
+        self._tab_meta(1, f"领域证据链 {done}/{len(rows)}")
+
+    def _tab_meta(self, index: int, text: str) -> None:
+        """标签页标题带上"这一页有没有东西"—— 不用点进去才知道。"""
+        tabs = getattr(self, "tabs", None)
+        if tabs is None or index >= tabs.count():
+            return
+        tabs.setTabText(index, text)
 
     def _clear(self) -> None:
         self.run_id = ""
@@ -435,6 +467,14 @@ class SignoffModule(ModuleBase):
         self.evidence_label.setText("")
         self.evidence_dir = ""
         self.replay_cmd = ""
+        for index, title in enumerate(("签核门禁", "领域证据链", "Case 证据",
+                                       "证据包 v2")):
+            self._tab_meta(index, title)
+
+
+def _evidence_tab_title(available: bool) -> str:
+    """证据包那一页的标签文案（有包 / 没包 一眼看出）。"""
+    return "证据包 v2 ✓" if available else "证据包 v2（未生成）"
 
 
 def _reward_text(reward: Dict[str, Any]) -> str:
