@@ -68,13 +68,18 @@ def _stage(tp: Dict[str, Any]) -> str:
     return str((tp.get("execution") or {}).get("stage") or "")
 
 
-def _report_path(run_dir: Path) -> Optional[Path]:
+def _report_path(run_dir: Path,
+                 coverage: Optional[Dict[str, Any]] = None) -> Optional[Path]:
     """**与 `_tp_matrix` 同源**：优先计划合并报告（`tp_report`），否则单测报告。
 
     两边读不同报告 = 对账时全是假差异（合并库和单测库的命中数不一样）。
+
+    `coverage` 由调用方**当场**传入时优先用它：证据流水线跑在
+    `coverage_result.json` 落盘**之前**，那里读文件会读到上一轮的旧路径
+    （实测导致 20 条假差异）。
     """
-    coverage = (_read_json(run_dir / "sim" / "coverage" / "coverage_result.json")
-                .get("coverage") or {})
+    coverage = coverage or (_read_json(
+        run_dir / "sim" / "coverage" / "coverage_result.json").get("coverage") or {})
     tp_report = str(coverage.get("tp_report") or "")
     if tp_report:
         path = Path(tp_report)
@@ -88,9 +93,10 @@ def _report_path(run_dir: Path) -> Optional[Path]:
     return single if single.is_file() else None
 
 
-def run_facts(run_dir: Path) -> Optional[FactBundle]:
+def run_facts(run_dir: Path,
+              coverage: Optional[Dict[str, Any]] = None) -> Optional[FactBundle]:
     """合并覆盖率报告 → run 级 `bin_hit` 事实（subject 不带 case）。"""
-    report = _report_path(run_dir)
+    report = _report_path(run_dir, coverage)
     if report is None:
         return None
     try:
@@ -207,8 +213,12 @@ def derive_tp_status(testpoints: List[Dict[str, Any]],
     return out
 
 
-def run_tp_shadow(run_dir: str | Path, *, write: bool = True) -> Dict[str, Any]:
-    """TP 级影子对账：推导 vs `tp_matrix.rows[]`。"""
+def run_tp_shadow(run_dir: str | Path, *, write: bool = True,
+                  coverage: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """TP 级影子对账：推导 vs `tp_matrix.rows[]`。
+
+    `coverage` 由当场调用方传入（证据流水线里 `coverage_result.json` 还没落盘）。
+    """
     root = Path(run_dir)
     matrix = _read_json(root / "coverage" / "tp_matrix.json")
     rows = {str(r.get("tp_id") or ""): r for r in matrix.get("rows") or []
@@ -218,7 +228,7 @@ def run_tp_shadow(run_dir: str | Path, *, write: bool = True) -> Dict[str, Any]:
         return {"schema": SCHEMA, "available": False,
                 "note": "没有 TP IR 或 tp_matrix（先跑一轮覆盖率）"}
 
-    bundle = run_facts(root)
+    bundle = run_facts(root, coverage)
     ledger = [f.model_dump(by_alias=True) for f in (bundle.facts if bundle else [])]
     derived = derive_tp_status(testpoints, ledger)
 

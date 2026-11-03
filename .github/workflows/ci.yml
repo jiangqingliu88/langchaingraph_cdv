@@ -5,6 +5,9 @@ on:
     branches: [master, develop, develop_claude]
   pull_request:
     branches: [master]
+  schedule:
+    # 夜间变异测试（守卫的守卫）—— 慢，不放在每次 push
+    - cron: "17 19 * * *"
 
 jobs:
   lint:
@@ -30,6 +33,38 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest tests/ -x --tb=short -q
 
+  # 工具包测试 + 架构守卫：这些以前只有本地手动跑。
+  packages:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[dev]"
+      - run: pytest src/tools/checking src/tools/humanview src/tools/generation/casemodel_tools/tests -q
+      - run: python -m config.architecture_guard
+
+  # Workbench（753 条）以前完全不在 CI 里 —— 改底层弄崩 GUI 也无人知。
+  # 三个 IP 页面用例是**既有失败**（依赖真实工程数据），先显式 deselect；
+  # 修好后必须删掉这几行，不允许用 skip 目录掩盖。
+  workbench:
+    needs: lint
+    runs-on: ubuntu-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[dev,gui]"
+      - name: pytest (workbench)
+        run: |
+          pytest src/workbench/tests -q \
+            --deselect src/workbench/tests/test_ip_team_module.py::TestIpWorkspace::test_builds_with_the_real_project \
+            --deselect src/workbench/tests/test_ip_team_module.py::TestIpSignoff::test_builds_and_reports_release_state \
+            --deselect src/workbench/tests/test_ip_team_module.py::TestIpCatalog::test_builds_with_one_row_per_ip
+
   integration:
     needs: test
     runs-on: ubuntu-latest
@@ -39,3 +74,14 @@ jobs:
         with: { python-version: "3.11" }
       - run: pip install -e ".[dev]"
       - run: pytest tests/ -m "integration" -x --tb=short -q
+
+  # 变异测试（守卫的守卫）：只在夜间/手动触发
+  mutations:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[dev]"
+      - run: python scripts/mutation_guards.py --json

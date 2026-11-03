@@ -30,8 +30,10 @@ SCHEMA = "evidence_manifest_v1"
 STEPS: tuple = ("case_cov", "tp_matrix", "tp_evidence", "cell_matrix",
                 # `evd` 要读 cell_matrix 反查每条执行落在哪些 CELL —— 顺序反了
                 # 时新 run 的 EVD 行会全是空 cells（历史 bug，实测 47 行）
-                "evd", "case_view", "gates", "os_shadow", "os_tp_shadow",
-                "os_seeds")
+                "evd", "case_view", "gates",
+                # 状态权威对账：视图展示色 vs case_cov 的 derive 判定（只读）
+                "os_authority",
+                "os_shadow", "os_tp_shadow", "os_seeds")
 
 #: 每步**应当**产出的文件（相对 run 目录）。缺了记进 manifest，不静默。
 STEP_ARTIFACTS: Dict[str, tuple] = {
@@ -42,6 +44,8 @@ STEP_ARTIFACTS: Dict[str, tuple] = {
     "cell_matrix": ("coverage/cell_matrix.json",),
     "case_view": ("coverage/case_view.json",),
     "gates": ("coverage/gates.json",),
+    # 状态权威对账：视图展示色 vs derive 判定（单一判定的验收读数）
+    "os_authority": ("status/authority_diff.json",),
     # Verification OS v3 · M0：契约/义务/事实账本/影子对账（不改变旧判定）
     "os_shadow": ("status/shadow_report.json", "evidence/ledger.jsonl"),
     # M2 第一步：TP 级状态也推导一遍，与 tp_matrix 对账（仍不改判定）
@@ -121,6 +125,14 @@ def _step_gates(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     return write_gates(od)
 
 
+def _step_os_authority(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """状态权威对账：视图展示色 vs `case_cov` 的 derive 判定（只读）。"""
+    from src.tools.checking.coverage_tools.authority_diff import (
+        write_authority_diff,
+    )
+    return write_authority_diff(od)
+
+
 def _step_os_shadow(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     """M0 影子：契约→义务→账本→推导，与旧结论逐条对账（不改任何判定）。"""
     from src.tools.checking.verification_os import run_shadow
@@ -143,10 +155,13 @@ def _step_os_tp_shadow(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     from src.tools.checking.verification_os.tp_shadow import (
         attr_bundle, run_facts, run_tp_shadow)
 
-    for bundle in (run_facts(od), attr_bundle(od)):
+    # **当场传入 coverage**：`coverage_result.json` 在本流水线跑完后才落盘，
+    # 读文件会拿到上一轮的 `tp_report`（实测 20 条假差异）。
+    coverage = (ctx or {}).get("coverage") or {}
+    for bundle in (run_facts(od, coverage), attr_bundle(od)):
         if bundle is not None:
             append_bundle(od, bundle)
-    return run_tp_shadow(od)
+    return run_tp_shadow(od, coverage=coverage)
 
 
 _STEP_FUNCS: Dict[str, Callable[[Path, Dict[str, Any]], Any]] = {
@@ -157,6 +172,7 @@ _STEP_FUNCS: Dict[str, Callable[[Path, Dict[str, Any]], Any]] = {
     "cell_matrix": _step_cell_matrix,
     "case_view": _step_case_view,
     "gates": _step_gates,
+    "os_authority": _step_os_authority,
     "os_shadow": _step_os_shadow,
     "os_tp_shadow": _step_os_tp_shadow,
     "os_seeds": _step_os_seeds,

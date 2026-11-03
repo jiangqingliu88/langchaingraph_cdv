@@ -75,14 +75,10 @@ def _contract_status(tp: Dict[str, Any], row: Dict[str, Any]) -> str:
 
 
 def cell_color(statuses: List[str]) -> str:
-    """一组契约状态 → CELL 颜色。空集合是 `na`。"""
-    if not statuses:
-        return COLOR_NA
-    if any(s in ("NOT_VERIFIED", "UNMAPPED", "MISSING") for s in statuses):
-        return COLOR_RED
-    if all(s == "VERIFIED" for s in statuses):
-        return COLOR_GREEN
-    return COLOR_YELLOW
+    """一组契约状态 → CELL 颜色。**映射在 `status_vocab`（唯一实现）**。"""
+    from src.tools.checking.coverage_tools.status_vocab import cell_color as _impl
+
+    return _impl(statuses)
 
 
 def _layer_summary(layers: Dict[str, Any]) -> Dict[str, str]:
@@ -159,20 +155,15 @@ def _evidence_by_cell(od: Path) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
 
 
 def _evidence_status(ev: Dict[str, List[Dict[str, Any]]]) -> str:
-    """三集合证据 → 色（与 arch.md 的映射一致）。"""
+    """集合证据 → 色。**映射在 `status_vocab.evidence_color`（唯一实现）**。"""
+    from src.tools.checking.coverage_tools.status_vocab import (
+        evidence_color as _impl,
+    )
+
     statuses = ([g.get("result") for g in ev.get("groups") or []]
                 + [s.get("status") for s in ev.get("sva") or []]
                 + [s.get("status") for s in ev.get("scb") or []])
-    real = [s for s in statuses if s]
-    if not real:
-        return COLOR_NA
-    if any(s in ("MISSING", "UNMAPPED", "NOT_EXECUTED") for s in real):
-        return COLOR_RED
-    if all(s in ("PROVEN", "NOT_APPLICABLE") for s in real):
-        return COLOR_GREEN
-    if all(s == "PENDING_BACKEND" for s in real):
-        return COLOR_NA
-    return COLOR_YELLOW
+    return _impl(statuses)
 
 
 def _accumulate(evidence: Dict[str, Any], rows: Dict[str, Dict[str, Any]],

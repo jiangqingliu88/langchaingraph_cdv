@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.core.runtime.events import EventStore, emit
+from src.core.runtime.outcome import Outcome
 
 SCHEMA = versions.ARTIFACT_INDEX
 
@@ -73,8 +74,16 @@ class ArtifactStore:
         self.cas_dir = self.output_root / "artifacts" / "cas"
         self._lock = threading.RLock()
         self._refs: List[ArtifactRef] = []
+        #: 最近一次写入的显式状态 —— 索引/CAS 写失败不再只是日志里的 warning。
+        self.last: Outcome = Outcome.success()
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
         self._load()
+
+    def health(self) -> Dict[str, Any]:
+        """索引写入健康度：`{status, ok, issues, index}`（下游可判）。"""
+        return {**self.last.to_dict(),
+                "index": self.index_path.as_posix(),
+                "artifacts": len(self._refs)}
 
     # ── 索引 ──
 
@@ -90,7 +99,7 @@ class ArtifactStore:
                 except TypeError:
                     continue
 
-    def _save(self) -> None:
+    def _save(self) -> bool:
         payload = {
             "schema": SCHEMA,
             "run_id": self.run_id,
@@ -101,12 +110,27 @@ class ArtifactStore:
             tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False),
                            encoding="utf-8")
             os.replace(tmp, self.index_path)
-        except OSError:
-            # 索引写失败不拦主流程；证据的缺失会由 quality gate 的 evidence 维度看见
+            self.last = Outcome.success()
+            return True
+        except OSError as exc:
+            # 主流程继续，但**状态是显式的**：`health()` 给调用方、
+            # 事件流给审计 —— 不再只留一行 warning。
+            self.last.add(f"artifact index write failed: {exc}")
             try:
                 tmp.unlink()
             except OSError:
                 pass
+            if self.event_store is not None:
+                try:
+                    self.event_store.append(
+                        "artifact.index.write_failed", status="degraded",
+                        payload={"index": self.index_path.as_posix(),
+                                 "error": str(exc)},
+                        source="artifact_store",
+                        dedup_key=f"artifact-index-fail:{self.run_id}")
+                except Exception:                   # noqa: BLE001 旁路
+                    pass
+            return False
 
     def _rel(self, path: Path) -> str:
         try:
@@ -169,7 +193,8 @@ class ArtifactStore:
             try:
                 tmp.write_bytes(p.read_bytes())
                 os.replace(tmp, dest)
-            except OSError:
+            except OSError as exc:
+                self.last.add(f"artifact cas write failed: {exc}")
                 try:
                     tmp.unlink()
                 except OSError:

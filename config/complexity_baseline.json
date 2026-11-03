@@ -46,8 +46,6 @@
   "src/tools/checking/spec_tools/verify_dsl.py::build_graph_from_spec": 34,
   "src/tools/common/lib/collect_real_coverage.py::_semantic_validations": 33,
   "src/tools/common/lib/collect_real_coverage.py::_tp_matrix": 34,
-  "src/tools/common/lib/collect_real_coverage.py::analyze_seed_diversity": 36,
-  "src/tools/common/lib/collect_real_coverage.py::merge_regression_coverage": 31,
   "src/tools/common/lib/collect_real_coverage.py::run": 22,
   "src/tools/common/lib/design_precheck.py::precheck": 44,
   "src/tools/common/lib/llm_refine.py::llm_refine_sim_timing": 21,
@@ -97,5 +95,7 @@
   "src/tools/humanview/aivm_ir/_base_loader.py::load_xlsx_to_ontology": 52,
   "src/tools/humanview/aivm_ir/xlsx_loader.py::load_xlsx_to_ontology": 59,
   "src/workbench/app.py::_build_window_class": 74,
-  "src/workbench/modules/flow/signoff/module.py::_fill_evidence": 36
+  "src/workbench/modules/flow/signoff/module.py::_fill_evidence": 36,
+  "src/tools/checking/coverage_tools/seed_diversity.py::analyze_seed_diversity": 36,
+  "src/tools/checking/coverage_tools/coverage_merge.py::merge_regression_coverage": 31
 }

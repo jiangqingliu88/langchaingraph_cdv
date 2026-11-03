@@ -27,78 +27,21 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import structlog
 
-from src.tools.execution.regression_tools.sim_modes import (
-    DEFAULT_MODE as _DEFAULT_SIM_MODE,
-)
-
 logger = structlog.get_logger()
 
 
 # ═══════════════════════════════════════════════════════════════
-# 请求
+# 请求（唯一实现见 `verify_request.py`；这里保留旧名字给调用方）
 # ═══════════════════════════════════════════════════════════════
 
-@dataclass
-class RunRequest:
-    """一次闭环运行的输入。字段与 `run_closed_loop` 的形参一一对应。"""
-
-    spec_text: str = ""
-    spec_file: str = ""
-    #: 留空 = 用 RunService 自己的 output_base。
-    #: 写死 "output" 会让服务层实例化时指定的基准目录被悄悄忽略 ——
-    #: 界面上"启动"跑到仓库根的 output/，而列表读的是别处，两边对不上。
-    output_root: str = ""
-    target: Optional[float] = None
-    max_rounds: int = 5
-    design_style: str = "baseline"
-    bypass_design_model: bool = False
-    #: 回归要开的仿真业务（`cov` / `wave` / …）。**属于这次运行的输入**：
-    #: 它决定仿真命令拼哪些选项（`MODE_OPTS`），不写进 RunRequest 的话
-    #: "这一轮为什么没有波形"就只能靠猜。默认 `cov+wave`。
-    sim_modes: List[str] = field(
-        default_factory=lambda: [_DEFAULT_SIM_MODE])
-    #: 分级回归的**人工节点**是否拦截（loopback 全过后停下等人放行）。
-    #: **属于这次运行的输入**：它决定闭环跑不跑得过那道放行点，不写进 RunRequest
-    #: 的话"这一轮为什么没停"就只能靠猜。默认 `True` —— 门是默认该在的。
-    manual_gate: bool = True
-    #: **外部 RTL 目录**：非空 = 用这份现成 RTL 当 DUT，**跳过 design/model**。
-    #: 验开源 IP（Forencich 的 apb_uart、OpenCores 16550…）走的就是这条路 ——
-    #: 把「这份 RTL 对不对」与「design agent 会不会生成 RTL」两个变量隔开，
-    #: 免得 LLM 抽一次风就把整轮拖垮。
-    rtl_dir: str = ""
-    #: 用户指定的 case 模型 YAML；非空 = 复制到 `<run>/inputs/casemodel.yaml`。
-    #: 流水线仍按固定落点发现它，不在视图层另加一条路径。
-    casemodel: str = ""
-    approval: str = "threshold"
-    approval_timeout_s: float = 0.0
-    run_id: str = ""
-    #: 落检查点。打开之后高风险动作的审批从"阻塞等答案"变成"停下来等人"。
-    checkpointing: bool = True
-    #: 非空表示"从这次运行停下的地方继续"（值就是要重入的 run_id）。
-    resume_from: str = ""
-    #: 重入时给出的审批答案：approve / reject / skip。
-    resume_value: str = "approve"
-
-    def resolved_spec(self) -> str:
-        """`spec_file` 与 `spec_text` 二选一；文件读不到就是空规格（会走启发式）。"""
-        if self.spec_text:
-            return self.spec_text
-        if self.spec_file:
-            # **多格式入口** —— 不再只认纯文本。`.md`/`.txt`/`.xlsx`/`.docx`/`.pdf`
-            # 都从这里进（读不了的格式会**响亮报错并说清装什么**，见 doc_intake）。
-            # 静默返回空串是更坏的：下游会一路走到 `design_name: dut`。
-            try:
-                from src.tools.common.lib.doc_intake import read_document
-                return read_document(self.spec_file)
-            except Exception as exc:                   # noqa: BLE001
-                logger.warning(f"规格读取失败 {self.spec_file}: {exc}")
-        return ""
+from src.layers.l2_orchestration.verify_request import (  # noqa: E402
+    VerifyRequest as RunRequest, copy_casemodel, unique_output_root,
+)
 
 
 def _resolve_run_dir(output_base: str, run_id: str) -> str:
@@ -111,22 +54,6 @@ def _resolve_run_dir(output_base: str, run_id: str) -> str:
     found = RunRepository(output_base).run_dir(run_id)
     return str(found) if found else output_base
 
-
-def _unique_root(base: str) -> Path:
-    """给这次运行定一个不撞车的输出目录。
-
-    `make_output_root` 的时间戳精确到**秒** —— 串行启动两次仍可能落在同一秒里，
-    那会让两次运行写进同一个目录（日志、证据链全混在一起）。撞了就加后缀。
-    """
-    from src.layers.l1_infrastructure.output_config import make_output_root
-    root = Path(make_output_root(base))
-    if not root.exists():
-        return root
-    for i in range(2, 1000):
-        candidate = root.with_name(f"{root.name}_{i}")
-        if not candidate.exists():
-            return candidate
-    return root
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -250,7 +177,9 @@ class RunService:
         不等它跑完 —— 调用方（CLI / GUI）拿 run_id 去查进度。
         """
         self._ensure_loop()
-        root = _unique_root(request.output_root or self.output_base)
+        if not request.origin or request.origin == "service":
+            request.origin = "gui"
+        root = unique_output_root(request.output_root or self.output_base)
         handle = _RunHandle(request, root)
         if on_event is not None:
             self._on_event = on_event
@@ -458,31 +387,16 @@ class RunService:
 
     async def _run_impl(self, handle: _RunHandle) -> Dict[str, Any]:
         from src.layers.l2_orchestration.execution import PipelineExecutionService
-        from src.layers.l2_orchestration.governance.approval import (
-            create_approval_gate,
-        )
 
         req = handle.request
         # 有人听（界面装了 handler）→ EventChannel：不碰 stdin，超时降级为 SKIP
-        # 并记账；没人听（无头 CLI）→ 交给 create_approval_gate 的默认终端通道。
+        # 并记账；没人听（无头 CLI）→ 交给默认终端通道。
         # 检查点模式下通道根本不会被问到（审批走 interrupt），但还是要造一个：
         # `requires_approval` 的风险判定与记录都挂在它身上。
         channel = self._channel_for()
-        gate = create_approval_gate(req.approval, channel=channel,
-                                    timeout_s=req.approval_timeout_s)
-
-        # `--config` / GUI 的 case 模型：复制到流水线约定的固定落点。
-        # 这不是新入口 —— `front` / `verify` 本来就在 `inputs/casemodel.yaml` 找它。
-        if req.casemodel:
-            from src.layers.l1_infrastructure.layout import casemodel_path
-
-            src = Path(req.casemodel)
-            if not src.is_file():
-                raise FileNotFoundError(f"casemodel 不存在：{src}")
-            dest = casemodel_path(handle.root)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(src.read_text(encoding="utf-8", errors="replace"),
-                            encoding="utf-8")
+        gate = req.approval_gate(channel)
+        # case 模型落点与 CLI **同一套**（`verify_request.copy_casemodel`）。
+        req.prepare(handle.root)
 
         service = PipelineExecutionService.get_instance()
         return await service.run_closed_loop_streaming(

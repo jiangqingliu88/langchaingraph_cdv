@@ -15,8 +15,6 @@ from rich.panel import Panel  # noqa: F401
 from rich.table import Table  # noqa: F401
 
 from src.cli.output import common_options, get_output_adapter  # noqa: F401
-from src.layers.l2_orchestration.execution import PipelineExecutionService
-from src.layers.l2_orchestration.governance.approval import create_approval_gate
 from src.cli.commands import (  # noqa: F401
     cli, console,
     EXIT_OK, EXIT_FAIL, EXIT_USAGE, EXIT_WAITING, EXIT_STRICT,
@@ -53,34 +51,25 @@ def _warn_spec_and_rtl(spec_file, rtl_dir) -> None:
                       "参考模型输入，跳过 design。[/yellow]")
 
 
-def _copy_casemodel(casemodel, output_root) -> None:
-    """`--config`：把用户 case 模型放到 run 的固定落点（inputs/casemodel.yaml）。"""
-    if not casemodel:
-        return
-    from src.layers.l1_infrastructure.layout import casemodel_path
-    dest = casemodel_path(output_root)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(Path(casemodel).read_text(encoding="utf-8"), encoding="utf-8")
-
-
-def _run_with_incremental(runner, incremental_from):
-    """跑流水线；`--incremental-from` 通过环境变量传给 ops，跑完恢复原值。
-
-    用环境变量而不是加 PipelineState 字段：它天然不进检查点（基线路径只对
-    这一次启动有效），也不会让 `--resume` 拿到过期的另一个基线。
-    """
-    import os
-    prev = os.environ.get("SIGNOFFAI_INCREMENTAL_BASELINE")
-    if incremental_from:
-        os.environ["SIGNOFFAI_INCREMENTAL_BASELINE"] = str(incremental_from)
-    try:
-        return asyncio.run(runner())
-    finally:
-        if incremental_from:
-            if prev is None:
-                os.environ.pop("SIGNOFFAI_INCREMENTAL_BASELINE", None)
-            else:
-                os.environ["SIGNOFFAI_INCREMENTAL_BASELINE"] = prev
+def _verify_kwargs(**kw) -> dict:
+    """CLI 参数 → `run_verify_async` 的关键字（归一空值与 tuple）。"""
+    return {
+        "spec_file": str(kw.get("spec_file") or ""),
+        "output_root": str(kw.get("output") or "output"),
+        "target": kw.get("target"),
+        "max_rounds": kw.get("max_rounds"),
+        "design_style": kw.get("design_style"),
+        "bypass_design_model": kw.get("verify_only"),
+        "sim_modes": list(kw.get("sim_modes") or []) or None,
+        "manual_gate": kw.get("manual_gate"),
+        "rtl_dir": str(kw.get("rtl_dir") or ""),
+        "casemodel": str(kw.get("casemodel") or ""),
+        "approval": kw.get("approval"),
+        "checkpointing": kw.get("checkpoint"),
+        "full_regression": kw.get("full_regression"),
+        "incremental_from": str(kw.get("incremental_from") or ""),
+        "origin": "cli",
+    }
 
 
 @cli.command()
@@ -153,45 +142,22 @@ def verify(spec_file, output, design_style, target, max_rounds,
       vagent verify spec.md --json                       # CI JSON 输出
     """
     out = get_output_adapter(json_output, quiet)
-    from src.layers.l1_infrastructure.output_config import make_output_root
-    output_root = make_output_root(output)
-    approval_gate = create_approval_gate(approval)
-
-    _copy_casemodel(casemodel, output_root)
-
-    # 回归模式开关：--full-regression → 全量跑所有 case（覆盖默认增量）
-    if full_regression:
-        from config.settings import Settings
-        Settings.get_instance().verification.incremental_regression = False
 
     if not quiet and not json_output:
         console.print(f"[bold cyan]═══ Closed Loop: coverage-driven ═══[/bold cyan]")
 
-    async def run():
-        service = PipelineExecutionService.get_instance()
-        spec = (Path(spec_file).read_text(encoding="utf-8")
-                if spec_file else "")   # --rtl 模式下无 spec：由 DUT 分析生成
-        # **走 streaming 而不是 `run_closed_loop`** —— 返回结构完全一致，区别是
-        # 它落检查点（`docs/checkpoints.sqlite`，thread_id = run_id）。有了检查点
-        # 才谈得上"停下来等人"：`run_closed_loop` 既不落检查点也没有 thread_id，
-        # 于是 `n_approval` 里的 `interrupt()` **永不触发**，退化成在当前进程里
-        # 阻塞等终端输入 —— 人不在场就卡死，且进程一退那个现场就没了。
-        # 顺带把过程写进 `docs/run_events.jsonl`（`astream` 白送，没有埋点）。
-        # `--no-checkpoint` 可退回旧行为（阻塞等答案）。
-        return await service.run_closed_loop_streaming(
-            spec_text=spec, output_root=output_root,
-            target=target, max_rounds=max_rounds,
-            design_style=design_style, approval_gate=approval_gate,
-            bypass_design_model=verify_only,
-            # `multiple=True` 给的是 tuple；空则交默认（cov）
-            sim_modes=list(sim_modes) or None,
-            # 分级回归的人工节点（loopback 全过后停下等人放行）。默认开。
-            manual_gate=manual_gate,
-            rtl_dir=str(rtl_dir or ""),
-            checkpointing=checkpoint,
-        )
+    # **唯一入口**：预检（输出目录 / casemodel / 全量开关 / 增量基线）在
+    # `VerifyRequest.prepare()`，CLI 只做参数解析与输出渲染。
+    from src.app.services import run_verify_async
 
-    result = _run_with_incremental(run, incremental_from)
+    result = asyncio.run(run_verify_async(**_verify_kwargs(
+        spec_file=spec_file, output=output, target=target,
+        max_rounds=max_rounds, design_style=design_style,
+        verify_only=verify_only, sim_modes=sim_modes, manual_gate=manual_gate,
+        rtl_dir=rtl_dir, casemodel=casemodel, approval=approval,
+        checkpoint=checkpoint, full_regression=full_regression,
+        incremental_from=incremental_from)))
+    output_root = result.get("output_root") or str(output or "output")
 
     # **挂起不是失败**：图停在人工节点上，运行没结束、状态在检查点里。
     # 这一步要显式说出来，并给出继续的那条命令 —— 否则人看到的就是"跑完了、
@@ -402,15 +368,13 @@ def multi(spec_files, modules_file, output, concurrency, design_style, max_round
         src = m.get("spec_file") or str(m.get("spec_text", ""))[:40]
         console.print(f"  [{i+1}] {m.get('name', f'module_{i+1}')} <- {src}")
 
-    service = PipelineExecutionService.get_instance()
+    from src.app.services import run_multi_module_async
 
-    async def run():
-        return await service.run_multi_module(
-            module_specs=module_specs, output_root=output or "output",
-            design_style=design_style, max_rounds=max_rounds, max_concurrency=concurrency,
-        )
-
-    results = asyncio.run(run())
+    results = asyncio.run(run_multi_module_async(
+        module_specs=module_specs, output_root=output or "output",
+        design_style=design_style, max_rounds=max_rounds,
+        max_concurrency=concurrency,
+    ))
 
     if json_output:
         click.echo(json.dumps(results, indent=2, ensure_ascii=False, default=str))

@@ -1,5 +1,7 @@
 """工程服务 facade：verify / optimize / coverage / soc / ip。"""
-from src.app.services.verify_service import run_verify
+from src.app.services.verify_service import (
+    run_multi_module, run_multi_module_async, run_verify, run_verify_async,
+)
 from src.app.services.optimize_regression_service import analyze_plan, execute_plan
 from src.app.services.coverage_closure_service import run_closure
 from src.app.services.soc_service import (
@@ -14,7 +16,8 @@ from src.app.services.case_view_service import (
 )
 
 __all__ = [
-    "run_verify",
+    "run_verify", "run_verify_async",
+    "run_multi_module", "run_multi_module_async",
     "analyze_plan", "execute_plan",
     "run_closure",
     "run_soc_project", "run_c_project", "run_c_case", "list_c_cases",

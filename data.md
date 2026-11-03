@@ -133,7 +133,8 @@ case_cov → tp_matrix → tp_evidence → cell_matrix → evd
 | `coverage/{attribution,seed_diversity,association_report,plan_consistency}.json` | 归因 / 种子 / 关联 / 一致性 |
 | `evidence/ledger.jsonl` | **事实账本**：只追加 + 哈希链（`prev_hash`），按 FactBundle 幂等写入 |
 | `status/shadow_report.json` | M0 case 级影子对账（契约推导 vs 旧结论） |
-| `status/tp_shadow.json` | M2 TP 级对账 + run 级 `bin_hit` / `tp_attr` 事实 |
+| `status/tp_shadow.json` | M2 TP 级对账 + run 级 `bin_hit` / `tp_attr` 事实（读取**当场**的覆盖率 payload，不读上一轮 `coverage_result.json`） |
+| `status/authority_diff.json` | **状态权威对账**：`case_view` 展示色 vs `case_cov` 的 derive 判定（差异应为 0） |
 | `status/seed_index.json` | P6 种子索引：哪颗 seed 清偿了哪些义务（可复现） |
 
 ### ⑦ audit（签核）
@@ -144,6 +145,7 @@ case_cov → tp_matrix → tp_evidence → cell_matrix → evd
   - `<run>/caveats.json` —— 未签收事项（`TP_NOT_SIGNED_OFF` / `CASE_GATE_BLOCKED` / `MODEL_UNAVAILABLE` / `QUALITY_GATE_BLOCKED` …）
   - `<run>/docs/verification_quality.json` —— 五维质量门（functional / coverage / model / structural / evidence）
   - `<run>/docs/engineering_metrics.json` —— 回归耗时 / 增量节省 / 归因完整率 / 决策有效率
+  - `<run>/docs/run_config.json` —— 本次运行的生效配置（来源 cli/gui/service + `SIGNOFFAI_*` 环境）
   - `<run>/signoff_evidence.json` + `signoff_evidence/` —— 证据包 v2：
     `inputs/ execution/ verdict/ case_view/ replay/` + `manifest.json`
   - `<run>/effective_policy.yaml` —— 本次生效的签核策略快照
@@ -195,7 +197,7 @@ hard_ok=True + 无有效 caveat       → READY（APPROVED）
 ├── evidence/ledger.jsonl         事实账本（只追加 + 哈希链）
 ├── status/                       worklist / shadow / tp_shadow / seed_index
 ├── docs/                         events / provenance / quality / metrics /
-│                                 ir_shadow_diff（下次 run 起）/ checkpoints
+│                                 ir_shadow_diff / run_config / checkpoints
 ├── model/  golden/  artifacts/   参考模型、黄金基线、产物索引
 ├── report.json  caveats.json  signoff_evidence.json  effective_policy.yaml
 └── signoff_evidence/             证据包 v2（313 份文件；case_view 段 278 份）

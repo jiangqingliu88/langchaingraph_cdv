@@ -224,8 +224,16 @@ src/core/contracts/            # schema 版本 / JSONL / 事件注册 / envelope
 
 **边界**：
 
-- CLI 只做参数解析与输出，`cmd_services.py` / `cmd_soc.py` 调 `src.app.services`；
+- CLI 只做参数解析与输出，`cmd_services.py` / `cmd_soc.py` / `cmd_verify.py`
+  调 `src.app.services`；**CLI 不 import `PipelineExecutionService`**
+  （`tests/test_service_boundary.py` 用 AST 扫描钉住）。
 - Workbench 的 service/soc/ip 页面通过 `bridge/catalog.py` 调同一组 app service；
+  GUI 的异步线程边界是 `run_service`，与 CLI 共用同一份
+  `VerifyRequest`（`verify_request.py`）：输出目录 / casemodel 落点 / 全量开关 /
+  增量基线 / 审批通道**只有一处实现**。
+- `VerifyRequest.prepare()` 落 `docs/run_config.json`（`run_config_v1`）：记录
+  生效值、来源（cli/gui/service）与当前 `SIGNOFFAI_*` 环境变量 —— 回答
+  "这一轮到底用了什么配置"。
 - `src/app` 可以调 L1–L5；L1–L5 **不反向依赖** app；
 - `src/core/contracts` 只用标准库，不 import layers。
 
@@ -1081,6 +1089,7 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 | 5 | **四色 CELL** green/yellow/red/na，**缺证据不下绿** | 95% 的总覆盖率盖住了整块没测的组 | `cell_matrix.json` |
 | 6 | **分级门禁** blocker/warning/info，先报告后阻断 | 规则埋在 audit 里，CI 拿不到、也没法灰度 | `gates.yaml`（版本化）+ `vagent coverage case-gate` |
 | 7 | **增量证据包 + 可复现** | 每次签核把几百份证据全量重拷；换台机器就说不清 | sha 索引 + 硬链接复用 + `replay/recipe.json` |
+| 8 | **状态单一权威**：视图只做展示映射 | 同一 CELL 在 `cell_matrix` 绿、`case_view` 红 —— 团队自己都说不清过没过 | `derive()` 判定 + `status_vocab` 映射 + `status/authority_diff.json` 对账 |
 
 #### 9.12.2 视图即签核材料
 
@@ -1094,6 +1103,10 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
   回答"这条用例靠什么兜底、激励受哪条约束塑造"。
 - **Case × CELL**：哪些格子绿/黄/红、谁声明、谁实际跑到。
 - **执行证据（EVD）**：证据来自哪次执行、哪个 seed、波形在哪。
+- **状态来自哪里**：`case_view` 的绿黄红**只映射** `case_cov` 里 derive 判定过的
+  状态（`status_source=derive`），不再从原始日志重算；没有契约的批次/旧目录
+  才走 `legacy` 展示并如实标注。`status/authority_diff.json` 是这份纪律的
+  验收读数（`case_view` 展示色 vs `case_cov` 推导，差异应为 0）。
 - **案例**（npu_sched）：13 个契约组 → 8 个有执行证据、5 个标"无"（4 个观测型
   组没有独立用例、1 个行为域后端待接）—— 这正是"用例可能是假的"要暴露的东西。
 
@@ -1395,12 +1408,18 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 ```bash
 python -m pytest tests/ -q                            # 全量（数量见顶部基线，以实际输出为准）
 python -m pytest tests/core -q                        # Architecture 2.0 核心
-python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
-python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
+python -m pytest src/tools/checking src/tools/humanview -q          # 检查/视图工具包
+python -m pytest src/tools/generation/casemodel_tools/tests -q      # case 建模 + 框架
+python -m pytest src/tools/generation/isa_gen_tools/tests -q        # ISA 工具
 python -m pytest src/workbench/tests -q               # 工作台（数量见顶部基线）
 python -m config.architecture_guard                   # 行数 / 圈复杂度预算
 python scripts/mutation_guards.py                     # 9 条核心守卫变异测试
 ```
+
+**CI（`.github/workflows/ci.yml`）覆盖同一组入口**：`tests/`（3.10/3.11）、
+`packages`（工具包 + 架构守卫）、`workbench`（`QT_QPA_PLATFORM=offscreen`，
+三个既有失败的 IP 页面用例显式 `--deselect`，修好后删除）、`integration`；
+变异测试放夜间 schedule。
 
 关键守卫：
 
@@ -1493,8 +1512,10 @@ python scripts/mutation_guards.py                     # 9 条核心守卫变异�
   `evidence` / `functional` 维度 `fail` → 硬失败 + `QUALITY_GATE_BLOCKED`；
   其余维度非 pass → 软 caveat `QUALITY_GATE_WARN`。`report`（默认）/`warn`
   仍不改变三态 —— 阈值稳定前只报告。
-- **应用服务层是过渡 facade**：`src/app/services` 已统一 CLI/Workbench 的
-  optimize/coverage/soc/ip 入口；SoC/IP 底层仍调用 `soc_adapter`，后续再搬。
+- **应用服务层已收口**：`src/app/services` 统一 CLI 入口，GUI 经 `run_service`
+  共用 `VerifyRequest`；`tests/test_service_boundary.py` 禁止 CLI/GUI 直连
+  `PipelineExecutionService`。**剩余**：SoC/IP 底层仍调用 `soc_adapter`，
+  后续再搬进服务内部（入口已统一，搬运是内部实现问题）。
 - **增量依赖映射由文件级启发式自动生成**：`src/core/incremental/deps_gen.py`
   从 regression.yaml / env.yaml / TP / round_manifest / RTL 推导；没有映射时
   保守跑全量，不会假装省了时间。它不是编译级真依赖。

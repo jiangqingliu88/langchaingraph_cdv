@@ -19,8 +19,7 @@ watched:
   # （gen_uvm / flow_tools.api / casemodel.coverage / commands.py；
   #  _tools_old、pipeline_docs 确认无调用方后已删除）。
 
-  src/tools/common/lib/collect_real_coverage.py:
-    registered: 1643
-    reason: "覆盖率解析 / 回归合并 / 种子多样性 / TP 矩阵的唯一实现；逐用例签核在本轮加了一层委托与矩阵拆分。"
-    plan: "下一次动这个文件时把 merge_regression_coverage 与 analyze_seed_diversity 拆到 tools/checking/coverage_tools/，目标 < 1200 行。"
+  # 2026-11-04：解析 / 合并 / 种子分析已拆到 `tools/checking/coverage_tools/`
+  # （cvg_parse / coverage_merge / seed_diversity），本文件 1620 → 1096 行，
+  # 低于 warn 线，不再需要登记。
 

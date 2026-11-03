@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.tools.checking.coverage_tools.status_vocab import (
+    NA, conclusion_for, detail_of, display_color, worst)
 from src.tools.checking.coverage_tools.tp_evidence import (
     LAYERS, build_tp_evidence, _case_records)
 
@@ -36,15 +38,8 @@ _ACTION = {
 
 
 def _status(*statuses: str) -> str:
-    """多值 → 一个展示态：红 > 黄 > 绿 > na。"""
-    values = [s for s in statuses if s]
-    if any(s in ("MISSING", "UNMAPPED", "NOT_VERIFIED", "red") for s in values):
-        return "red"
-    if any(s in ("PARTIAL", "PENDING_BACKEND", "yellow") for s in values):
-        return "yellow"
-    if values and all(s in ("PROVEN", "VERIFIED", "green") for s in values):
-        return "green"
-    return "na"
+    """多值 → 一个展示态。**映射在 `status_vocab`（唯一实现）**。"""
+    return worst(statuses)
 
 
 def _case_coverage(entries: List[Dict[str, Any]], rec: Dict[str, Any]) -> Dict[str, str]:
@@ -101,15 +96,35 @@ def _path_of(tp_evs: List[Dict[str, Any]]) -> Dict[str, str]:
 
 
 def _conclusion(statuses: Dict[str, str]) -> str:
-    if all(s == "green" for s in statuses.values()):
-        return "已验证"
-    reds = [k for k, s in statuses.items() if s == "red"]
-    yellows = [k for k, s in statuses.items() if s == "yellow"]
-    if reds:
-        return "证据链不完整（" + "、".join(reds) + "）"
-    if yellows:
-        return "待补（" + "、".join(yellows) + "）"
-    return "不适用"
+    """四层展示色 → 结论。**映射在 `status_vocab.conclusion_for`**。"""
+    return conclusion_for(statuses)
+
+
+def _canonical_layers(rec: Dict[str, Any]) -> Optional[Dict[str, Dict[str, str]]]:
+    """有契约的记录 → 直接用 `case_cov` 里 **derive 判定过** 的状态。
+
+    返回 `None` 表示这条记录没有契约身份（批次级 test / 旧目录）—— 调用方
+    才走 legacy 展示路径。**视图不再从原始日志重算绿黄红**：那是第二套
+    判定，改一处就会和签核结论分叉。
+    """
+    groups = [g for g in rec.get("groups") or [] if isinstance(g, dict)]
+    if not groups:
+        return None
+    results = [g.get("result") for g in groups]
+    coverage = {"status": worst(results), "detail": detail_of(results)}
+    sva_items = [s for s in rec.get("sva") or [] if isinstance(s, dict)]
+    sva_statuses = [s.get("status") for s in sva_items]
+    sva = ({"status": worst(sva_statuses), "detail": detail_of(sva_statuses)}
+           if sva_items else {"status": NA, "detail": "未声明 SVA"})
+    scb_items = [s for s in rec.get("scb") or [] if isinstance(s, dict)]
+    scb_statuses = [s.get("status") for s in scb_items]
+    scb = ({"status": worst(scb_statuses), "detail": detail_of(scb_statuses)}
+           if scb_items else {"status": NA, "detail": "未声明 SCB"})
+    path_statuses = [(g.get("path") or {}).get("status") for g in groups]
+    real_path = [s for s in path_statuses if s and s != "NOT_APPLICABLE"]
+    path = ({"status": worst(real_path), "detail": detail_of(real_path)}
+            if real_path else {"status": NA, "detail": "未声明 PATH 组"})
+    return {"coverage": coverage, "sva": sva, "scoreboard": scb, "path": path}
 
 
 def _constraints_for_record(rec: Dict[str, Any],
@@ -137,10 +152,16 @@ def _case_row(task: str, rec: Dict[str, Any], by_id: Dict[str, Any],
     entries = _dict_items(rec.get("tp"))
     tps = [by_id[e["tp_id"]] for e in entries if e.get("tp_id") in by_id]
     feats = sorted({t.get("requirement") for t in tps if t.get("requirement")})
-    coverage = _case_coverage(entries, rec)
-    sva = _case_sva(rec)
-    scoreboard = _case_scb(rec)
-    path = _path_of(tps)
+    # **有契约就用 derive 判过的状态**；没有才走 legacy 展示（批次/旧目录）。
+    canonical = _canonical_layers(rec)
+    if canonical:
+        coverage, sva = canonical["coverage"], canonical["sva"]
+        scoreboard, path = canonical["scoreboard"], canonical["path"]
+    else:
+        coverage = _case_coverage(entries, rec)
+        sva = _case_sva(rec)
+        scoreboard = _case_scb(rec)
+        path = _path_of(tps)
     c_items = _constraints_for_record(rec, constraint_items)
     return {
         "name": str(rec.get("test") or task),
@@ -163,10 +184,10 @@ def _case_row(task: str, rec: Dict[str, Any], by_id: Dict[str, Any],
         "desc": str(rec.get("test_name") or task),
         "coverage": coverage, "sva": sva,
         "scoreboard": scoreboard, "path": path,
-        "conclusion": _conclusion({"功能覆盖": coverage["status"],
-                                   "SVA": sva["status"],
-                                   "Scoreboard": scoreboard["status"],
-                                   "PATH": path["status"]}),
+        "status_source": "derive" if canonical else "legacy",
+        "conclusion": _conclusion({
+            "coverage": coverage["status"], "sva": sva["status"],
+            "scoreboard": scoreboard["status"], "path": path["status"]}),
     }
 
 
