@@ -74,7 +74,54 @@ def run_signoff(run_dir: str = "") -> Dict[str, Any]:
         "caveats": list((report or {}).get("caveats") or []),
         # 证据包 v2（唯一权威）+ 审批/种子/约束/Freeze 的界面视图。
         "evidence": _evidence_v2(root),
+        # Case 证据（三集合）：签核产出的第 4 块 —— 用例证明了哪些组/SVA/SB。
+        "case_view": _case_view(root),
         "summary": _summary(report, gates, chain),
+    }
+
+
+#: 签核包里的 Case 证据产物（与 `signoff_package.SECTION_FILES["case_view"]` 同源）
+_CASE_ARTIFACTS = (
+    ("coverage/case_ir.json", "用例契约（CCAT/CASE + 三集合）"),
+    ("coverage/case_group_map.json", "Case ↔ group ↔ CELL 索引"),
+    ("coverage/case_checker_map.json", "Case ↔ SVA/SB 索引"),
+    ("coverage/case_tp.json", "用例 ↔ 测试点证据"),
+    ("coverage/cell_matrix.json", "CELL 签核读数（四色）"),
+    ("coverage/evd.json", "执行证据（checker 级去重）"),
+    ("coverage/gates.json", "Case 门禁（blocker/warning/info）"),
+    ("coverage/case_view.json", "Case 证据视图（机读）"),
+    ("coverage/case_view.md", "Case 证据视图（评审材料）"),
+    ("coverage/case_view.html", "Case 证据视图（网页）"),
+    ("coverage/evidence_manifest.json", "派生链（每步 sha + 耗时）"),
+)
+
+
+def _case_view(root: Path) -> Dict[str, Any]:
+    """Case 证据在**签核产出**里的状态：有没有生成、进没进证据包。"""
+    gates = _read_json(root / "coverage" / "gates.json") or {}
+    cells = _read_json(root / "coverage" / "cell_matrix.json") or {}
+    case_ir = _read_json(root / "coverage" / "case_ir.json") or {}
+    evd = _read_json(root / "coverage" / "evd.json") or {}
+    package_manifest = _read_json(root / "signoff_evidence" / "manifest.json") or {}
+    packaged = {str(f.get("source") or "")
+                for f in (package_manifest.get("files") or [])
+                if isinstance(f, dict)}
+    rows = [{"path": rel, "label": label,
+             "exists": (root / rel).is_file(),
+             "in_package": rel in packaged}
+            for rel, label in _CASE_ARTIFACTS]
+    case_cov = root / "coverage" / "case_cov"
+    return {
+        "available": bool(gates or cells or case_ir),
+        "gate": {"verdict": str(gates.get("verdict") or ""),
+                 "counts": gates.get("counts") or {}},
+        "cells": cells.get("counts") or {},
+        "cases": case_ir.get("counts") or {},
+        "evd": evd.get("counts") or {},
+        "case_cov_files": (len(list(case_cov.rglob("*.json")))
+                           if case_cov.is_dir() else 0),
+        "artifacts": rows,
+        "package_available": (root / "signoff_evidence" / "manifest.json").is_file(),
     }
 
 

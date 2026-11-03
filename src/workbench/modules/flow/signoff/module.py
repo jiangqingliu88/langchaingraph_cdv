@@ -50,6 +50,13 @@ CHAIN_COLUMNS = (
     ("description", "说明", 240, LEFT),
     ("checks", "检查项", 480, LEFT),
 )
+#: Case 证据在签核产出里的清单（三集合）
+CASE_COLUMNS = (
+    ("label", "Case 产物", 280, LEFT),
+    ("state", "已生成", 80, CENTER),
+    ("in_package", "进包", 70, CENTER),
+    ("path", "路径", 330, LEFT),
+)
 
 
 class SignoffModule(ModuleBase):
@@ -107,8 +114,27 @@ class SignoffModule(ModuleBase):
         chain_layout.addWidget(self.chain_table, 1)
         splitter.addWidget(chain_page)
 
+        # ── Case 证据（三集合）：签核产出的第 4 块 ──
+        # 它回答"这条用例证明了哪些组 / 哪条 SVA / 哪个 scoreboard"，
+        # 与 TP 矩阵同级 —— 所以在这里，而不是只留在覆盖率页。
+        case_page = QWidget(splitter)
+        case_layout = QVBoxLayout(case_page)
+        case_layout.setContentsMargins(2, 2, 2, 2)
+        case_layout.setSpacing(2)
+        case_layout.addWidget(self._section(
+            "Case 证据（签核产出 · groups / sva / scb）", case_page))
+        self.case_label = QLabel("", case_page)
+        self.case_label.setWordWrap(True)
+        self.case_label.setStyleSheet(f"color: {theme.current().muted};")
+        case_layout.addWidget(self.case_label)
+        self.case_model = RowsModel(CASE_COLUMNS, case_page)
+        self.case_table = table_helpers.configure_table(case_page, self.case_model)
+        case_layout.addWidget(self.case_table, 1)
+        splitter.addWidget(case_page)
+
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 2)
+        splitter.setStretchFactor(2, 1)
         layout.addWidget(splitter, 1)
 
         # 测试点口径：**签核按测试点说话，不只看百分比**。
@@ -218,6 +244,44 @@ class SignoffModule(ModuleBase):
         self._fill_header(payload)
         self._fill_gates(payload.get("gates") or {})
         self._fill_chain(payload.get("chain") or {})
+        self._fill_case_view(payload.get("case_view") or {})
+
+    def _fill_case_view(self, cv: Dict[str, Any]) -> None:
+        """Case 证据：生成没有、进没进证据包、Gate 与 CELL 读数。"""
+        if not getattr(self, "case_model", None):
+            return
+        if not cv.get("available"):
+            self.case_label.setText("Case 证据：这一轮没有三集合产物"
+                                    "（改造前的 run，或没跑到 coverage）")
+            self.case_label.setStyleSheet(f"color: {theme.current().muted};")
+            self.case_model.set_rows([])
+            return
+        gate = cv.get("gate") or {}
+        counts = gate.get("counts") or {}
+        cells = cv.get("cells") or {}
+        cases = cv.get("cases") or {}
+        evd = cv.get("evd") or {}
+        verdict = str(gate.get("verdict") or "—")
+        self.case_label.setText(
+            f"Case Gate：{verdict}（blocker {counts.get('blocker', 0)} / "
+            f"warning {counts.get('warning', 0)}）　·　"
+            f"CELL 绿 {cells.get('green', 0)} / 黄 {cells.get('yellow', 0)} / "
+            f"红 {cells.get('red', 0)} / na {cells.get('na', 0)}　·　"
+            f"用例 {cases.get('cases', 0)}（组 {cases.get('groups', 0)} / "
+            f"SVA {cases.get('sva', 0)} / SB {cases.get('scb', 0)}）　·　"
+            f"EVD {evd.get('total', 0)}　·　case_cov {cv.get('case_cov_files', 0)} 份")
+        palette = theme.current()
+        self.case_label.setStyleSheet(
+            f"color: {palette.warning if verdict == 'BLOCKED' else palette.muted};")
+
+        rows = [{
+            "label": a.get("label"), "path": a.get("path"),
+            "state": "是" if a.get("exists") else "否",
+            "in_package": "是" if a.get("in_package") else "否",
+            "_in_package": bool(a.get("in_package")),
+        } for a in (cv.get("artifacts") or [])]
+        self.case_model.set_rows(rows)
+        self.case_model.apply_column_widths(self.case_table)
 
     def _fill_header(self, payload: Dict[str, Any]) -> None:
         verdict = payload.get("verdict") or "（无 verdict）"
@@ -362,6 +426,9 @@ class SignoffModule(ModuleBase):
         self.verdict_label.setStyleSheet("")
         self.gate_model.set_rows([])
         self.chain_model.set_rows([])
+        if getattr(self, "case_model", None):
+            self.case_model.set_rows([])
+            self.case_label.setText("")
         self.tp_label.setText("")
         self.caveat_label.setText("")
         self.count_label.setText("")

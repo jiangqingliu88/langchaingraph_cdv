@@ -56,7 +56,8 @@ def _run_dir(tmp_path: Path) -> Path:
     (root / "signoff_evidence" / "manifest.json").write_text(json.dumps({
         "schema": "signoff_evidence_v2",
         "package_hash": "a" * 64, "manifest_hash": "b" * 64,
-        "files": [{"path": "manifest.json"}],
+        "files": [{"path": "manifest.json"},
+                  {"path": "case_view/gates.json", "source": "coverage/gates.json"}],
         "coverage": {"plan_pct": 95.23, "single_test_pct": 68.57,
                      "code_plan_pct": 75.8, "code_single_pct": 70.9},
         "tp_matrix": {"counts": {"HIT": 37, "MISS": 0}},
@@ -88,6 +89,25 @@ def _run_dir(tmp_path: Path) -> Path:
         "tier_b": {"requires_eda": True, "eda_tools": ["vsim", "vcover"]},
     }, ensure_ascii=False), encoding="utf-8")
     (root / "coverage").mkdir(exist_ok=True)
+    # Case 证据（三集合）—— 签核页第 4 块
+    (root / "coverage" / "gates.json").write_text(json.dumps({
+        "schema": "case_gates_v1", "verdict": "BLOCKED",
+        "counts": {"blocker": 2, "warning": 1, "info": 0, "total": 3},
+    }), encoding="utf-8")
+    (root / "coverage" / "cell_matrix.json").write_text(json.dumps({
+        "schema": "cell_matrix_v1",
+        "counts": {"green": 3, "yellow": 2, "red": 1, "na": 0, "total": 6},
+    }), encoding="utf-8")
+    (root / "coverage" / "case_ir.json").write_text(json.dumps({
+        "schema": "case_ir_v1",
+        "counts": {"cases": 4, "groups": 5, "sva": 2, "scb": 1},
+    }), encoding="utf-8")
+    (root / "coverage" / "evd.json").write_text(json.dumps({
+        "schema": "evd_v1", "counts": {"total": 12},
+    }), encoding="utf-8")
+    (root / "coverage" / "case_cov" / "p1").mkdir(parents=True)
+    (root / "coverage" / "case_cov" / "p1" / "t1.json").write_text(
+        json.dumps({"schema": "case_cov_v1", "case_id": "CASE-D"}), encoding="utf-8")
     (root / "coverage" / "stimulus_plan.json").write_text(json.dumps({
         "schema": "stimulus_plan_v1", "backend": "generated",
         "sha256": "e" * 64,
@@ -183,6 +203,33 @@ class TestRendering:
         assert "NEEDS_FIX" in loaded.count_label.text()
         assert "5/6" in loaded.count_label.text()
         assert "93%" in loaded.count_label.text()
+
+
+class TestCaseEvidenceInSignoff:
+    """Case 证据（三集合）是**签核产出**：要能在签核页上看见它进没进包。"""
+
+    def test_case_section_summarises_gate_and_cells(self, loaded):
+        text = loaded.case_label.text()
+        assert "BLOCKED" in text                      # gates.json 的 verdict
+        assert "blocker 2" in text
+        assert "绿 3" in text and "红 1" in text       # cell_matrix counts
+        assert "用例 4" in text                       # case_ir counts
+        assert "EVD 12" in text
+        assert "case_cov 1 份" in text
+
+    def test_case_artifacts_table_marks_packaged(self, loaded):
+        rows = {r["path"]: r for r in loaded.case_model.rows}
+        assert rows["coverage/gates.json"]["state"] == "是"
+        assert rows["coverage/gates.json"]["in_package"] == "是"   # manifest 里登记过
+        assert rows["coverage/evd.json"]["in_package"] == "否"     # 还没进包
+
+    def test_without_case_artifacts_says_so(self, module, tmp_path):
+        root = tmp_path / "nocase_20260101_000000"
+        root.mkdir(parents=True)
+        _patch_tools(module, root)
+        module.load(root.name)
+        assert "没有三集合产物" in module.case_label.text()
+        assert module.case_model.rowCount() == 0
 
 
 class TestEvidencePackage:

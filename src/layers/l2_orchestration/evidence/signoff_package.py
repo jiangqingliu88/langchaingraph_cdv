@@ -105,6 +105,25 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         # 五维质量门：报告用，不阻断（见 src/core/verification/quality.py）
         "docs/verification_quality.json",
     ),
+    # ── Case View（三集合证据）──
+    #
+    # 签核要能离线回答"这条用例证明了哪些组 / 哪条 SVA / 哪个 scoreboard"，
+    # 所以它和 TP 矩阵、覆盖率一样是**签核产出**，不是页面上的一张临时表。
+    # `coverage/case_cov/**` 用通配符展开（一条用例一个文件，数量随回归增长）。
+    "case_view": (
+        "coverage/case_ir.json",
+        "coverage/case_group_map.json",
+        "coverage/case_checker_map.json",
+        "coverage/case_tp.json",
+        "coverage/cell_matrix.json",
+        "coverage/evd.json",
+        "coverage/gates.json",
+        "coverage/case_view.json",
+        "coverage/case_view.md",
+        "coverage/case_view.html",
+        "coverage/evidence_manifest.json",
+        "coverage/case_cov/**/*.json",
+    ),
 }
 
 
@@ -363,6 +382,43 @@ def _attach_envelope(manifest: Dict[str, Any],
     return manifest
 
 
+def _json_file(path: Path) -> Dict[str, Any]:
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _expand(output_dir: Path, rel: str) -> List[Path]:
+    """`SECTION_FILES` 的条目 → 真实文件（支持 `**` 通配，如 case_cov/**）。"""
+    if not any(ch in rel for ch in "*?["):
+        path = output_dir / rel
+        return [path] if path.is_file() else []
+    try:
+        return sorted(p for p in output_dir.glob(rel) if p.is_file())
+    except (OSError, ValueError):
+        return []
+
+
+def _previous_index(pkg: Path) -> Dict[str, Dict[str, str]]:
+    """上一版包的 `source → {path, sha256}` —— 增量打包的唯一依据。"""
+    out: Dict[str, Dict[str, str]] = {}
+    for item in _json_file(pkg / "manifest.json").get("files") or []:
+        if isinstance(item, dict) and item.get("source"):
+            out[str(item["source"])] = {"path": str(item.get("path") or ""),
+                                        "sha256": str(item.get("sha256") or "")}
+    return out
+
+
+def _link_or_copy(prev: Path, src: Path, dst: Path) -> None:
+    """复用上一版包里的同名同哈希文件：同盘硬链接（O(1)），跨盘退回复制。"""
+    try:
+        os.link(prev, dst)
+    except OSError:
+        shutil.copy2(src, dst)
+
+
 def write_package(output_dir: Path, manifest: Dict[str, Any],
                   project_root: Optional[Path] = None) -> Dict[str, Any]:
     """把 v2 证据包写到 `<run>/signoff_evidence/`，返回带哈希的 manifest。
@@ -381,35 +437,49 @@ def write_package(output_dir: Path, manifest: Dict[str, Any],
     pkg.mkdir(parents=True, exist_ok=True)
 
     files: List[Dict[str, Any]] = []
+    # **增量**：上一版包里已有、且源文件哈希没变的条目直接复用（硬链接），
+    # 只复制新增/变化的文件。重跑 audit（例如 case 证据重生成了）时，
+    # 两三百份 `case_cov` 不必再全量拷贝一遍。
+    previous = _previous_index(final_pkg)
+    copied = reused = 0
     for section, candidates in SECTION_FILES.items():
         target_dir = pkg / section
         target_dir.mkdir(parents=True, exist_ok=True)
-        for rel in candidates:
-            src = output_dir / rel
-            if not src.is_file():
-                continue
-            # 包内路径：
-            #   inputs/ 本来就是 run 的相对路径（`inputs/...` 或 `coverage/...`）；
-            #   execution/、verdict/ 统一挂到各自段下。
-            # 不用 `section/rel` 一刀切 —— 那会拼出 `inputs/inputs/casemodel.yaml`。
-            if section == "inputs":
-                dst_rel = (Path(rel).as_posix() if rel.startswith("inputs/")
-                           else f"inputs/{Path(rel).as_posix()}")
-            else:
-                dst_rel = f"{section}/{Path(rel).as_posix()}"
-            dst = pkg / dst_rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                shutil.copy2(src, dst)
-            except OSError:
-                continue
-            files.append({
-                "section": section,
-                "path": dst_rel,
-                "source": rel,
-                "sha256": sha256_file(dst),
-                "size": dst.stat().st_size,
-            })
+        for pattern in candidates:
+            for src in _expand(output_dir, pattern):
+                rel = src.relative_to(output_dir).as_posix()
+                # 包内路径：
+                #   inputs/ 本来就是 run 的相对路径（`inputs/...` 或 `coverage/...`）；
+                #   其余段统一挂到各自段下。
+                # 不用 `section/rel` 一刀切 —— 那会拼出 `inputs/inputs/casemodel.yaml`。
+                if section == "inputs":
+                    dst_rel = (Path(rel).as_posix() if rel.startswith("inputs/")
+                               else f"inputs/{Path(rel).as_posix()}")
+                else:
+                    dst_rel = f"{section}/{Path(rel).as_posix()}"
+                dst = pkg / dst_rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                digest = sha256_file(src)
+                prev = previous.get(rel) or {}
+                prev_file = final_pkg / prev["path"] if prev.get("path") else None
+                if (prev_file is not None and prev_file.is_file()
+                        and prev.get("sha256") == digest):
+                    _link_or_copy(prev_file, src, dst)
+                    reused += 1
+                else:
+                    try:
+                        shutil.copy2(src, dst)
+                    except OSError:
+                        continue
+                    copied += 1
+                files.append({
+                    "section": section,
+                    "path": dst_rel,
+                    "source": rel,
+                    "sha256": sha256_file(dst),
+                    "size": dst.stat().st_size,
+                    "reused": bool(prev and prev.get("sha256") == digest),
+                })
 
     # 生成离线回放脚本（materials 都在包里，脚本不 import 本项目）
     replay_dir = pkg / "replay"
@@ -469,6 +539,10 @@ def write_package(output_dir: Path, manifest: Dict[str, Any],
     manifest = dict(manifest)
     manifest["schema"] = SCHEMA
     manifest["files"] = files
+    # 增量打包的自述：这次复制了几份、复用了几份（复用 = 哈希未变）。
+    # 写进 manifest 是为了让"包为什么这么快"可回答，而不是靠猜。
+    manifest["incremental"] = {"copied": copied, "reused": reused,
+                               "files": len(files)}
     manifest["package_hash"] = sha256_json(identity)
     # EvidenceEnvelope 基础段：UVM profile 保留三态/caveat/TP 矩阵，
     # 只补「身份 / 输入 / 执行 / 判定 / 回放 / 哈希」六段共同骨架。

@@ -1034,6 +1034,11 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 - **审计 caveat**（三集合）：`CASE_GATE_BLOCKED`、`CASE_GROUP_PARTIAL`、
   `CASE_SVA_VACUOUS`、`CASE_SCB_NOT_EXECUTED`、`CASE_PATH_PENDING_BACKEND`、
   `CASE_IR_EVIDENCE_MISMATCH`；门禁码另见 `case_associate_view/gates.yaml`。
+- **进签核包**：`signoff_evidence/case_view/` 收 `case_ir / case_group_map /
+  case_checker_map / case_tp / cell_matrix / evd / gates / case_view.* /
+  evidence_manifest / case_cov/**`（通配展开）。打包**增量**：源文件哈希未变的
+  条目从上一版包硬链接复用，`manifest.incremental = {copied, reused}` 自述。
+  界面在「签核判定」页的「Case 证据」一节（Gate / CELL 读数 + 产物是否进包）。
 
 ---
 
