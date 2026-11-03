@@ -1090,6 +1090,10 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 - SCB 目前是 **aggregate 粒度**（`[SCB_DUT]` 收口行）；逐条 SB 收口（`[SCB <id>]`）
   的接口已留好（`evidence: auto|aggregate|log`），等 UVM 侧按 `scoreboards:` 生成。
 
+**下一步（根本重构）**：把判定权从各模块收归"契约 → 义务 → 事实账本 → 推导 →
+裁决"，见 `docs/design/contract_driven_architecture_v3.md`。本节描述的是当前实现，
+那份文档描述的是它之后的目标形态。
+
 ---
 
 ## 10. 证据链与治理

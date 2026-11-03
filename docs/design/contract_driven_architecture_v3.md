@@ -1,0 +1,321 @@
+# 根本重构计划：从流程驱动到契约驱动（Verification OS v3）
+
+> 状态：**方案（未实施）**。上一版 `architecture_transformation_plan.md`（Case View / 三集合）
+> 已落地；本文回答它之后的那个问题：**这套东西离"本质跃迁"还差什么，怎么把差的部分
+> 换掉，而不是继续往上叠。**
+> 关联：`ARCHITECTURE.md` §9.11–§9.12（现有标准）、`docs/design/architecture_transformation_plan.md`
+> （推导过程）、`docs/design/case_coverage_and_wave_traceability.md`。
+
+---
+
+## 0. 一句话
+
+**把"流水线跑完 → 出报表"的架构，换成"契约 → 义务 → 事实 → 推导 → 裁决"的架构。**
+
+现有的三集合、CELL、门禁都保留 —— 但它们的**控制方向要反过来**：
+不再由阶段顺序决定产出什么，而由**契约产生的义务（Obligation）**驱动整条链；
+不再由各处代码各自算状态，而由**一份只追加的事实账本 + 一套推导规则**算出唯一结论；
+签核不再是"某一轮跑到了 audit"，而是**义务被清偿的比例**。
+
+一句话概括这次重构：**换掉的是"谁说了算"——从流程节点，换成事实与规则。**
+
+---
+
+## 1. 现状审计（诚实版）
+
+上一轮已经把 Case 契约、三集合、CELL、门禁、增量证据包做出来了。但按四个本质维度
+对照，当前实现**仍然是一个"契约增强过的流程架构"**，不是契约架构：
+
+| 本质维度 | 目标形态 | 现状 | 差距 |
+|---|---|---|---|
+| **数据主权** | 契约先于执行；没有契约不许跑 | `case_ir` 在 **verify 阶段生成**，是流程产物；ops 可以先跑再谈契约 | 契约不是构建物，是流水线中间件 |
+| **验证粒度** | 三元组驱动的状态机 | 三集合已落地，但 **tp_matrix / case_tp / tp_cov_evidence / cell_matrix / case_view 五份投影各自算状态** | 状态有五份实现，天然会漂 |
+| **拓扑** | 反向溯源：Cell → 义务 → 事实 → 执行 | 已有 `case_group_map`，但"为什么红"仍要人去读 4~5 个 JSON | 没有统一的 **义务—事实** 图 |
+| **防伪** | 零信任：账本 + 规则推导 | `case_ir_sha` 已进 task_meta，gates 有 8 条，但结论是**各阶段各自 append 的 JSON** | 没有不可篡改的事实账本；`report.json` 是最后一步"写死"的 |
+
+另外三处流程残留，是这次要动刀的地方：
+
+1. **24 节点闭环**：verify/ops/coverage/audit 的先后由图的边决定；想"只补一条 SVA
+   的证据"也得从头跑一轮。
+2. **五份投影链**：`case_cov → case_tp → tp_matrix → tp_cov_evidence → cell_matrix
+   → case_view`，每一步都重算一次状态（`SIGNED_OFF`、`PROVEN`、`green` 各有一套判据）。
+3. **audit 是"阶段"不是"裁决器"**：caveat 从 5 个文件里拼，verdict 在最后一步合成；
+   `gates.py` 只是被调用，不是规则引擎。
+
+**结论**：上一轮换的是"心脏"（Case 的定义）和"神经末梢"（三集合证据）；
+这一轮要换的是**中枢**——谁产生义务、谁记账、谁推导结论。
+
+---
+
+## 2. 目标架构：五层模型
+
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│  L5 裁决（Adjudication）                                              │
+│    规则引擎：obligation + facts → status → verdict；Caveat/豁免/审批    │
+├──────────────────────────────────────────────────────────────────────┤
+│  L4 推导（Derivation）                                                │
+│    纯函数：derive(obligations, facts) → statuses（无副作用、可重放）     │
+├──────────────────────────────────────────────────────────────────────┤
+│  L3 事实账本（Evidence Ledger）                                       │
+│    append-only、按契约哈希绑定、每条事实带 producer + run/seed + sha     │
+├──────────────────────────────────────────────────────────────────────┤
+│  L2 义务（Obligations）                                               │
+│    契约编译器产出：每个 group/sva/scb/tp 一条义务，带谓词与所需事实类型    │
+├──────────────────────────────────────────────────────────────────────┤
+│  L1 契约（Contract）                                                  │
+│    casemodel / xlsx → Case IR（唯一可编辑源），带版本与哈希             │
+└──────────────────────────────────────────────────────────────────────┘
+        ▲ 生产端（LLM/工具）只做两件事：产出候选契约、产出事实
+        ▼ 消费端（CLI/GUI/CI）只读 L3/L4：账本与推导结果
+```
+
+四条不变量（写进 CI，不靠自觉）：
+
+1. **无契约不执行**：没有 `contract_id` 的回归任务一律拒绝生成。
+2. **事实只追加**：账本一旦写入不可修改；更正靠"新事实 + 指向旧事实的 `supersedes`"。
+3. **状态只推导**：任何 `SIGNED_OFF / green / VERIFIED` 都只能由 `derive()` 产生，
+   不允许任何模块自己写死。
+4. **视图只渲染**：GUI/HTML/CLI 不计算判据，只画 `derive()` 的结果。
+
+---
+
+## 3. 核心数据模型
+
+### 3.1 Contract（L1）
+
+现有 `case_ir_v1` 升级为 `contract_v2`：
+
+```yaml
+contract:
+  id: CT-NPU_SCHED-20261104-3fa9
+  module: npu_sched
+  hash: sha256(canonical_yaml)
+  cases:
+    - id: CASE-D_DEP
+      groups:
+        - {group: CG-D_DEP, coverage_type: 观测覆盖, required_layers: [functional],
+           scope: 指令队列管理, coverpoints: [cp_dep_type], requirements: [REQ-NPU-004]}
+      sva:  [{id: SVA-RAW_NEVER_ISSUES, expr: "...", required: true}]
+      scb:  [{id: SB-NPU-DUT, evidence: aggregate, required: true}]
+```
+
+**契约是构建物**：`vagent contract build` 由 casemodel/xlsx 生成，写入
+`<run>/contract/contract.yaml`，并把 `contract.hash` 注入**每一条**下游事实。
+没有 `vagent contract build`，`ops` 拒绝开跑。
+
+### 3.2 Obligation（L2）
+
+```json
+{
+  "obligation_id": "OBL-CASE-D_DEP-CG-D_DEP-P1-functional",
+  "contract_id": "CT-NPU_SCHED-...",
+  "kind": "group_layer",              // group_layer | sva | scb | tp_bin | timing | path
+  "subject": {"case": "CASE-D_DEP", "group": "CG-D_DEP", "cell": "CELL-D_DEP-P1"},
+  "predicate": {
+    "fact_type": "bin_hit",
+    "where": {"cp": "cp_dep_type", "bins": ["*"], "stage": "p1"},
+    "op": "all_bins_hit"
+  },
+  "required": true,
+  "depends_on": []
+}
+```
+
+义务由**契约编译器**一次性展开（`contract → obligations`），数量可预测
+（当前 npu_sched：13 组 × 层 + 4 SVA + 1 SCB + 70 TP ≈ 120 条）。
+**义务是流水线的输入**，不是它的输出。
+
+### 3.3 Fact（L3）
+
+```json
+{
+  "fact_id": "F-000123",
+  "type": "bin_hit",                  // bin_hit | sva_result | scb_result | timing | wave | log
+  "contract_hash": "3fa9…",
+  "run_id": "...", "tst_id": "TST-...@10001", "seed": 10001,
+  "subject": {"cp": "cp_dep_type", "bin": "raw"},
+  "value": {"hits": 12},
+  "producer": "coverage.collector@v3",
+  "evidence": {"ucdb": "cov/.../questa.db", "log": "sim_vsim.log"},
+  "prev_hash": "…"                    // 哈希链
+}
+```
+
+事实**只有生产者、没有编辑器**：`coverage` 写 `bin_hit/sva_result/scb_result/timing`；
+`ops` 写 `wave/log`；`verify` 写 `generated`（证明某文件由哪个契约生成）。
+
+### 3.4 Derivation（L4）与 Adjudication（L5）
+
+```python
+statuses = derive(contract, obligations, ledger)   # 纯函数，可重放
+verdict  = adjudicate(contract, statuses, policy)  # 规则 + 豁免 + 审批
+```
+
+`derive` 的输出是一张表：`obligation_id → {status, discharged_by, reasons}`。
+状态词汇与今天一致（PROVEN / PARTIAL / MISSING / PENDING_BACKEND / NOT_APPLICABLE），
+但**只有一处实现**。
+
+---
+
+## 4. 模块重构（改什么、删什么）
+
+### 4.1 保留并升格
+
+| 现有 | 新角色 | 变化 |
+|---|---|---|
+| `humanview/case_ir` | **契约编译器**（L1→L2） | 新增 `compile_obligations()`；`case_ir.json` 改名 `contract/contract.yaml` |
+| `coverage_tools/evidence_pipeline` | **事实采集器**（L3 写入端） | 只写事实，不再算 `PROVEN/green` |
+| `humanview/case_associate_view/gates` | **规则引擎**（L4/L5） | `gates.yaml` 升级为推导规则表（可组合、可版本化） |
+| `case_associate_view`（视图） | **渲染器** | 只读 `derive()` 结果 |
+| `signoff_package` | **账本导出器** | 导出 ledger + 推导结果 + 回放配方 |
+
+### 4.2 合并/删除（这是"根本"的部分）
+
+| 现有 | 处置 | 理由 |
+|---|---|---|
+| `case_cov` 里的 `signed_off/case_status` | **删除判定字段**，只留原始命中 | 判定归 L4 |
+| `case_tp.json` | **合并进 ledger**（`tp_bin` 事实 + 视图） | 与 `tp_matrix` 重复 |
+| `tp_matrix.json` | 降级为**导出视图**（从 ledger 推导后渲染） | 五份投影之一 |
+| `tp_cov_evidence.json` | 降级为**导出视图** | 同上 |
+| `cell_matrix.json` | 降级为**导出视图** | 同上 |
+| `report.json` 的 verdict | 改为**导出视图**（adjudicate 的结果快照） | 不再由 audit 阶段"写死" |
+| audit 的 `_caveat` 拼接 | 改为**规则输出**（每条 caveat 由一条规则产生，带 `rule_id`） | 现在 caveat 与 gate 是两套 |
+
+> 保留的**实体**只有三样：**契约**、**事实账本**、**推导结果**。
+> 其余全部是这三样的派生视图（可随时删掉重建）。
+
+### 4.3 主链的去流程化
+
+`front → verify → ops → coverage → audit` 五个节点仍在，但职责变成：
+
+| 节点 | v3 角色 | 不再做的事 |
+|---|---|---|
+| front | 产 spec/输入 | — |
+| verify | **编译契约** + 生成实现 | 不再"顺带"算签核状态 |
+| ops | 按义务清单**规划执行**（worklist） | 不再固定 loopback→p0→p3 的死顺序，而是"清偿义务需要哪些 test/seed" |
+| coverage | **采集事实**（追加进账本） | 不再算矩阵/CELL |
+| audit | **裁决**（derive + adjudicate + 导出） | 不再从 5 个文件拼 caveat |
+
+**闭环保留，但驱动方式变了**：从"跑到收敛"改为"义务清偿率到阈值"；
+未清偿的义务自动变成下一轮 worklist（`OBL-... → need test=tp_npusch_d_dep_raw seed=4001`）。
+
+---
+
+## 5. 目录与产物（v3）
+
+```text
+<run>/
+├── contract/
+│   ├── contract.yaml            # L1 唯一可编辑源（生成物，带 hash）
+│   ├── obligations.json         # L2 展开结果（带 hash，供 ops 规划）
+│   └── contract_manifest.json   # hash + 生成器版本 + 输入 sha
+├── evidence/
+│   ├── ledger.jsonl             # L3 只追加事实（每行带 prev_hash）
+│   └── ledger.lock              # 写入锁 + 最后一条 hash
+├── status/
+│   ├── obligations.json         # L4 derive 结果（每条义务一条）
+│   └── verdict.json             # L5 adjudicate 结果（含规则 id / 豁免）
+├── coverage/                    # 只保留原始产物（case_cov 原始命中 / ucdb）
+├── regression_run/              # 度量原件（不变）
+└── signoff_evidence/            # 导出：contract + ledger + status + 视图
+```
+
+`case_view.{json,md,html}` 仍然在 `coverage/`（兼容），但它现在只是
+`status/` 的**渲染**；GUI 读 `status/`，不读中间 JSON。
+
+---
+
+## 6. 分阶段落地（每阶段都可停、可回滚）
+
+### M0 —— 账本与义务的"影子模式"（1 周）
+
+- 新增 `contract/obligations.json`、`evidence/ledger.jsonl`；**不改变现有判定**。
+- 现有流水线照跑，结束时把同样的事实**双写**进账本。
+- 验收：`derive()` 的结果与现有 `cell_matrix` **逐条一致**（影子比对，差异进日志）。
+
+### M1 —— 契约成为构建物（1 周）
+
+- `vagent contract build`（新增），ops 前置校验 `contract.hash`。
+- `task_meta` 记 `contract_hash`（替换 `case_ir_sha`，语义更准）。
+- 验收：没有契约时 ops **拒绝开跑**；换了契约，旧账本事实自动标 `stale`。
+
+### M2 —— 事实采集统一（1–2 周）
+
+- `coverage` 只写事实；`case_cov` 去掉 `signed_off / case_status`。
+- `derive()` 接管 `case_tp / tp_matrix / tp_cov_evidence / cell_matrix` 的判定，
+  这些文件改为导出。
+- 验收：五个文件的判定字段**全部由 derive 生成**（旧实现删除）。
+
+### M3 —— 规则引擎（1 周）
+
+- `gates.yaml` 升级为**推导规则**（条件 + 证据类型 + 级别 + 规则 id）。
+- 每条 caveat 带 `rule_id`；`EXPECTED_CAVEATS` 改为从规则表生成。
+- 验收：新增一条规则 = 改一处 YAML；CI 能列出"每条 blocker 的证据链"。
+
+### M4 —— 义务驱动的执行规划（2 周）
+
+- ops 从"跑全量"改为"按未清偿义务生成 worklist"；种子/分级由义务属性决定。
+- 保留"全量回归"开关（CI nightly），但默认是义务驱动。
+- 验收：补一条 SVA 证据 < 3 分钟（不重跑全量）；每轮耗时下降可量化。
+
+### M5 —— 消费端切换（1 周）
+
+- GUI/CLI 读 `status/`；`case_view` 只渲染。
+- 新增 `vagent why <obligation_id>`：一条命令回答"它为什么红"（缺哪条事实、由
+  哪个 run/seed 提供、对应哪条规则）。
+- 验收：任意红灯，从 GUI 三次点击内定位到具体事实与 test/seed。
+
+### 里程碑与停点
+
+| 阶段 | 停点条件（不过就不进下一阶段） |
+|---|---|
+| M0 | 影子比对 100% 一致（差异必须解释，不允许"差不多"） |
+| M1 | 无契约 run 被拒；契约变更后旧事实正确标 stale |
+| M2 | 五份导出与 derive 结果逐字节一致（去掉时间戳） |
+| M3 | caveat 全带 rule_id；规则表能回放出当前 report |
+| M4 | 义务驱动与全量回归的结论一致；耗时有实测下降 |
+| M5 | `vagent why` 对 20 个红灯人工抽查全对 |
+
+---
+
+## 7. 验收指标（可度量，不靠感觉）
+
+1. **宣称可证明率**：任何 `VERIFIED/green` 都能在 3 步内追溯到事实与执行实例。
+2. **防伪**：注入一条"伪造 PASS"事实（手工改 JSON）→ 哈希链断裂 + gate 拦截。
+3. **可重放**：同一 run 的 `derive()` 重跑逐字节一致；换机器一致。
+4. **契约漂移**：改契约后，旧事实标 `stale` 的比例与预期一致（不静默复用）。
+5. **补证据成本**：单条义务补齐 ≤ 3 分钟（含仿真），不触发全量回归。
+6. **红灯定位**：`vagent why` 输出必须包含 `obligation → 缺的事实类型 → 需要的 test/seed`。
+
+---
+
+## 8. 风险与对策
+
+| 风险 | 对策 |
+|---|---|
+| 账本膨胀（70 TP × 多 seed × 多事实） | 事实按 `(contract_hash, tst, seed, type, subject)` 去重；账本按月分片 |
+| 双写期结论不一致 | M0 只做影子，不一致**阻断合并**；M2 一次性切换判定 |
+| LLM 生成层的不确定性 | 契约与事实都不由 LLM 直接写；LLM 只产"候选契约"（过 schema + 推导） |
+| 规则引擎变成新的"万能配置" | 规则只允许引用**已声明**的事实类型；未知事实类型 → 阻断 |
+| 旧视图/测试大面积失败 | 每一阶段保留导出视图的兼容字段；`tests/` 按阶段加"派生一致性"测试 |
+| 过度设计（为一个 DUT 造 OS） | 每个阶段的停点都可回退；M4（义务驱动）是可选深化，M0–M3 已是完整收益 |
+
+---
+
+## 9. 明确不做
+
+- 不做跨项目的中央证据服务（本方案是 run-local 账本 + 项目级归档）；
+- 不引入数据库作为事实源（JSONL 足够；SQL 只在**查询**侧，且是派生）；
+- 不要求所有真相都由 LLM 产出：LLM 只做"候选契约 / 修复建议"，判定永远确定性；
+- 不推翻现有 UVM/回归/EDA 链路 —— 那是原材料，不是本次重构对象；
+- 不把 `case_view` 变成签核入口（这条上一版就定了，v3 继续守）。
+
+---
+
+## 10. 与上一版（Case View）的关系
+
+- **保留**：三集合、四层证据、四色 CELL、分级门禁、增量证据包、`case_view` 只读。
+- **换掉**：判定权（从各模块 → 推导引擎）、契约位置（从 verify 中间件 → 构建物）、
+  事实形态（从各阶段 JSON → 只追加账本）、执行规划（从固定分级 → 义务 worklist）。
+- **一句话**：上一版让"用例有了契约"，这一版让**契约有了主权**。
