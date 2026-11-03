@@ -76,6 +76,8 @@ def run_signoff(run_dir: str = "") -> Dict[str, Any]:
         "evidence": _evidence_v2(root),
         # Case 证据（三集合）：签核产出的第 4 块 —— 用例证明了哪些组/SVA/SB。
         "case_view": _case_view(root),
+        # Verification OS：契约 / 账本 / 两级影子对账（只读）
+        "os": _os_status(root),
         "summary": _summary(report, gates, chain),
     }
 
@@ -94,6 +96,18 @@ _CASE_ARTIFACTS = (
     ("coverage/case_view.html", "Case 证据视图（网页）"),
     ("coverage/evidence_manifest.json", "派生链（每步 sha + 耗时）"),
 )
+
+
+def _os_status(root: Path) -> Dict[str, Any]:
+    """Verification OS 视图；老 run 没有契约/账本时如实返回 `available: false`。"""
+    try:
+        from src.tools.checking.verification_os import status_summary
+
+        data = status_summary(root)
+    except Exception as exc:                        # noqa: BLE001 页面不该挂
+        return {"available": False, "note": str(exc)}
+    return {"available": bool((data.get("contract") or {}).get("ok")),
+            **data}
 
 
 def _case_view(root: Path) -> Dict[str, Any]:

@@ -25,7 +25,8 @@ from .contract_model import (
     FactType, GroupSpec, Obligation, Predicate, ScbSpec, SvaSpec, canonical_hash,
     contract_from_case_ir, worst,
 )
-from .derive import case_statuses, derive, evaluate
+from .derive import case_statuses, derive, evaluate, tp_contract_status
+from .explain import explain, status_summary
 from .ledger import append_bundle, read_ledger, verify_chain
 from .shadow import build_bundle, run_shadow
 
@@ -37,5 +38,5 @@ __all__ = [
     "check_contract", "compile_obligations", "contract_from_case_ir",
     "contract_hash", "derive", "evaluate", "load_contract", "obligation_id",
     "read_ledger", "read_manifest", "run_shadow", "verify_chain", "worst",
-    "write_contract",
+    "write_contract", "explain", "status_summary", "tp_contract_status",
 ]

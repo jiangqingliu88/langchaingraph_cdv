@@ -260,15 +260,18 @@ class SignoffModule(ModuleBase):
         self._fill_header(payload)
         self._fill_gates(payload.get("gates") or {})
         self._fill_chain(payload.get("chain") or {})
-        self._fill_case_view(payload.get("case_view") or {})
+        self._fill_case_view(payload.get("case_view") or {},
+                             payload.get("os") or {})
 
-    def _fill_case_view(self, cv: Dict[str, Any]) -> None:
-        """Case 证据：生成没有、进没进证据包、Gate 与 CELL 读数。"""
+    def _fill_case_view(self, cv: Dict[str, Any],
+                        os_status: Dict[str, Any] = None) -> None:
+        """Case 证据：生成没有、进没进证据包、Gate 与 CELL 读数（+ OS 账本）。"""
         if not getattr(self, "case_model", None):
             return
         if not cv.get("available"):
-            self.case_label.setText("Case 证据：这一轮没有三集合产物"
-                                    "（改造前的 run，或没跑到 coverage）")
+            self.case_label.setText(
+                "Case 证据：这一轮没有三集合产物（改造前的 run，或没跑到 coverage）"
+                + self._os_text(os_status))
             self.case_label.setStyleSheet(f"color: {theme.current().muted};")
             self.case_model.set_rows([])
             self._tab_meta(2, "Case 证据（无产物）")
@@ -286,7 +289,8 @@ class SignoffModule(ModuleBase):
             f"红 {cells.get('red', 0)} / na {cells.get('na', 0)}　·　"
             f"用例 {cases.get('cases', 0)}（组 {cases.get('groups', 0)} / "
             f"SVA {cases.get('sva', 0)} / SB {cases.get('scb', 0)}）　·　"
-            f"EVD {evd.get('total', 0)}　·　case_cov {cv.get('case_cov_files', 0)} 份")
+            f"EVD {evd.get('total', 0)}　·　case_cov {cv.get('case_cov_files', 0)} 份"
+            + self._os_text(os_status))
         palette = theme.current()
         self.case_label.setStyleSheet(
             f"color: {palette.warning if verdict == 'BLOCKED' else palette.muted};")
@@ -301,6 +305,19 @@ class SignoffModule(ModuleBase):
         } for a in (cv.get("artifacts") or [])]
         self.case_model.set_rows(rows)
         self.case_model.apply_column_widths(self.case_table)
+
+    @staticmethod
+    def _os_text(os_status: Dict[str, Any] = None) -> str:
+        """OS 账本一行（契约 / 事实数 / 两级对账）；没有 OS 产物就不提。"""
+        data = os_status or {}
+        contract = data.get("contract") or {}
+        if not contract.get("ok"):
+            return ""
+        case_shadow = data.get("case_shadow") or {}
+        tp_shadow = data.get("tp_shadow") or {}
+        return (f"　·　OS：{contract.get('obligations', 0)} 条义务 · "
+                f"账本 {(data.get('ledger') or {}).get('facts', 0)} 条事实 · "
+                f"对账 {'一致' if case_shadow.get('ok') and tp_shadow.get('ok') else '有差异'}")
 
     def _fill_header(self, payload: Dict[str, Any]) -> None:
         verdict = payload.get("verdict") or "（无 verdict）"

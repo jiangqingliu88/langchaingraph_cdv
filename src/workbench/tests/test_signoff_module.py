@@ -253,6 +253,27 @@ class TestCaseEvidenceInSignoff:
         assert rows["coverage/gates.json"]["in_package"] == "是"   # manifest 里登记过
         assert rows["coverage/evd.json"]["in_package"] == "否"     # 还没进包
 
+    def test_os_ledger_line_is_shown_when_contract_exists(self, module):
+        module._fill_case_view(
+            {"available": True, "gate": {"verdict": "PASS", "counts": {}},
+             "cells": {}, "cases": {}, "evd": {}, "case_cov_files": 0,
+             "artifacts": []},
+            {"available": True,
+             "contract": {"ok": True, "obligations": 58},
+             "ledger": {"facts": 468},
+             "case_shadow": {"ok": True}, "tp_shadow": {"ok": True}})
+        text = module.case_label.text()
+        assert "OS：" in text and "58 条义务" in text and "468 条事实" in text
+        assert "对账 一致" in text
+
+    def test_without_contract_the_os_line_is_absent(self, module):
+        module._fill_case_view(
+            {"available": True, "gate": {"verdict": "PASS", "counts": {}},
+             "cells": {}, "cases": {}, "evd": {}, "case_cov_files": 0,
+             "artifacts": []},
+            {"available": False})
+        assert "OS：" not in module.case_label.text()
+
     def test_without_case_artifacts_says_so(self, module, tmp_path):
         root = tmp_path / "nocase_20260101_000000"
         root.mkdir(parents=True)

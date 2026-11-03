@@ -329,12 +329,24 @@ EVD 行 `cells` 全空（47 行），只有重跑时拿到上一轮 cell_matrix 
 - 保留"全量回归"开关（CI nightly），但默认是义务驱动。
 - 验收：补一条 SVA 证据 < 3 分钟（不重跑全量）；每轮耗时下降可量化。
 
-### M5 —— 消费端切换（1 周）
+### M5 —— 消费端切换（1 周）🟡 核心已落地
 
 - GUI/CLI 读 `status/`；`case_view` 只渲染。
 - 新增 `vagent why <obligation_id>`：一条命令回答"它为什么红"（缺哪条事实、由
   哪个 run/seed 提供、对应哪条规则）。
 - 验收：任意红灯，从 GUI 三次点击内定位到具体事实与 test/seed。
+
+**已落地**：
+
+| 落点 | 内容 |
+|---|---|
+| `verification_os/explain.py` | `explain()`：契约 → 义务 → 谓词 → 相关事实（**旧契约事实被 stale 过滤**）→ 状态（同一份 `derive`）→ 缺什么 / 该跑哪条 test×seed（从 TP IR 反查）；`status_summary()`：契约 / 账本 / 两级对账 |
+| CLI | `vagent contract why <obligation_id> --run …`（非 PROVEN 退出码 1）、`vagent contract status --run …` |
+| GUI | 签核页「Case 证据」摘要行追加 **OS** 段（义务数 / 账本事实数 / 两级对账是否一致）；没有契约时如实不显示 |
+| 实测 | npu_sched：契约 ok · 账本 468 条 · case/TP 对账一致；`why` 对 `OBL-GROUP-CASE-D_DEP-…` 给出 2651 次 run 级命中 + "该跑 d_dep 四条 test×seed" |
+
+**剩余**：GUI 从 `case_view` 改为直接读 `status/`（目前 `case_view` 已由 derive
+驱动，二者等价，切换是形式问题）；M4（义务 worklist）未做。
 
 ### 里程碑与停点
 

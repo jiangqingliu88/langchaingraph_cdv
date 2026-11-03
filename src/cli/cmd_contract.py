@@ -98,6 +98,70 @@ def contract_check(run_dir, json_output):
         raise SystemExit(1)
 
 
+@contract.command("why")
+@click.argument("obligation_id")
+@click.option("--run", "-o", "run_dir", required=True,
+              type=click.Path(file_okay=False), help="运行目录")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def contract_why(obligation_id, run_dir, json_output):
+    """一条义务为什么是这个状态：谓词 → 事实 → 状态 → 还差什么
+
+    \b
+    示例:
+      vagent contract why OBL-GROUP-CASE-D_DEP-CG-D_DEP-FUNCTIONAL --run output_xxx
+    """
+    from src.tools.checking.verification_os import explain
+
+    data = explain(_resolve_run_dir(run_dir), obligation_id)
+    if json_output:
+        click.echo(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+    if not data.get("available"):
+        click.echo(f"查不了：{data.get('reason')}", err=True)
+        raise SystemExit(2)
+    console.print(f"[bold]{data['obligation_id']}[/bold]  →  {data['status']}")
+    pred = data["predicate"]
+    console.print(f"  判据：{pred['fact_type']} / {pred['op']}  {pred['where']}")
+    console.print(f"  事实：{data['facts_total']} 条")
+    for fact in data["facts"][:3]:
+        console.print(f"    {fact['type']} {fact['subject']} → {fact['value']}")
+    missing = data.get("missing")
+    if missing:
+        console.print(f"  还差：{missing['fact_type']}")
+        for run in missing.get("suggested_runs") or []:
+            console.print(f"    跑 {run.get('test')} seed={run.get('seeds')} "
+                          f"（TP {run.get('tp_id')}）")
+    if data["status"] != "PROVEN":
+        raise SystemExit(1)
+
+
+@contract.command("status")
+@click.option("--run", "-o", "run_dir", required=True,
+              type=click.Path(file_okay=False), help="运行目录")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def contract_status(run_dir, json_output):
+    """OS 视图：契约 / 账本 / case 与 TP 两级影子对账"""
+    from src.tools.checking.verification_os import status_summary
+
+    data = status_summary(_resolve_run_dir(run_dir))
+    if json_output:
+        click.echo(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+    contract = data.get("contract") or {}
+    console.print(f"[bold]{data['run']}[/bold]")
+    console.print(f"  契约：{'ok' if contract.get('ok') else contract.get('reason')}"
+                  f"（{contract.get('obligations', 0)} 条义务）")
+    console.print(f"  账本：{data['ledger']['facts']} 条事实 · head "
+                  f"{data['ledger']['head']}")
+    for key, label in (("case_shadow", "case 对账"), ("tp_shadow", "TP 对账")):
+        shadow = data.get(key) or {}
+        console.print(f"  {label}：{'一致' if shadow.get('ok') else '有差异'}"
+                      f"（mismatched={shadow.get('mismatched')}）")
+    if (data.get("case_shadow") or {}).get("stale_facts"):
+        console.print(f"  stale 事实：{data['case_shadow']['stale_facts']} 条"
+                      f"（契约换版前采集的，不参与推导）")
+
+
 @contract.command("show")
 @click.option("--run", "-o", "run_dir", required=True,
               type=click.Path(file_okay=False), help="运行目录")
