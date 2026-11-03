@@ -54,43 +54,107 @@ def render_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _empty_group(key: str) -> Dict[str, Any]:
+    return {"group": key, "name": "", "description": "", "coverage_type": "",
+            "scope": "", "coverpoints": [], "requirements": [], "checks": [],
+            "required_layers": [], "cells": [], "cases": [], "observed": False}
+
+
+def _merge_group(slot: Dict[str, Any], g: Dict[str, Any], cid: str) -> None:
+    for field in ("coverpoints", "requirements", "checks", "required_layers"):
+        bucket = slot.setdefault(field, [])
+        for v in g.get(field) or []:
+            if v and v not in bucket:
+                bucket.append(v)
+    for field in ("name", "description", "coverage_type", "scope"):
+        if not slot.get(field) and g.get(field):
+            slot[field] = g[field]
+    if g.get("cell") and g["cell"] not in slot["cells"]:
+        slot["cells"].append(g["cell"])
+    if cid and cid not in slot["cases"]:
+        slot["cases"].append(cid)
+
+
+def _group_rows(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """覆盖率组总览：**契约要求的全部组** + 已跑出的证据（observed 标记）。
+
+    只列"跑过的组"会把漏测的组藏起来 —— 签核第一问是"该覆盖哪些组"。
+    """
+    merged: Dict[str, Dict[str, Any]] = {
+        str(g.get("group")): {**g, "observed": False}
+        for g in data.get("contract_groups") or [] if g.get("group")}
+    for case in data.get("cases") or []:
+        cid = case.get("case_id") or case.get("task")
+        for g in case.get("groups_evidence") or []:
+            key = str(g.get("group") or "")
+            if not key:
+                continue
+            slot = merged.setdefault(key, _empty_group(key))
+            slot["observed"] = True
+            _merge_group(slot, g, cid)
+    return [merged[k] for k in sorted(merged)]
+
+
+def _render_group_overview(data: Dict[str, Any]) -> List[str]:
+    """**覆盖率组总览** —— 这一轮到底必须覆盖哪些组、各测什么。"""
+    groups = _group_rows(data)
+    if not groups:
+        return []
+    lines = ["## 覆盖率组总览（必须覆盖什么）", "",
+             "| 覆盖率组 | 功能点 | 覆盖类型 | 作用域（模块/逻辑） | 覆盖点 | 需求 | 必需证据层 | 执行证据 | CELL |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    for g in groups:
+        lines.append(
+            f"| {g['group']} | {g.get('name') or '—'} | {g.get('coverage_type') or '—'} | "
+            f"{g.get('scope') or '—'} | {'、'.join(g['coverpoints']) or '—'} | "
+            f"{'、'.join(g['requirements']) or '—'} | "
+            f"{' + '.join(g['required_layers']) or '—'} | "
+            f"{'有' if g.get('observed') else '**无**'} | "
+            f"{'、'.join(g['cells'])} |")
+    return lines + [""]
+
+
 def _render_three_sets(data: Dict[str, Any]) -> List[str]:
     """三节渲染：每条 case 的 [Groups] / [SVA] / [SCB] + 总状态。"""
     rows = [c for c in data.get("cases") or [] if c.get("groups_evidence")]
     if not rows:
         return []
-    lines: List[str] = ["## 三集合证据（Groups / SVA / SCB）", ""]
-    for c in rows:
-        cid = c.get("case_id") or c.get("task")
-        lines += [f"### Case: {cid}　`case_status={c.get('case_status') or '—'}`", ""]
-        lines += ["**Groups**", "",
-                  "| group | cell | functional | timing | data | path | result |",
+    return (_render_group_overview(data)
+            + ["## 三集合证据（Groups / SVA / SCB）", ""]
+            + [line for c in rows for line in _render_one_case(c)])
+
+
+def _render_one_case(c: Dict[str, Any]) -> List[str]:
+    """一条 case 的 Markdown 三节（Groups / SVA / SCB）。"""
+    cid = c.get("case_id") or c.get("task")
+    lines = [f"### Case: {cid}　`case_status={c.get('case_status') or '—'}`", "",
+             "**Groups**", "",
+             "| group | 功能点 | 覆盖类型 | 作用域 | cell | functional | timing | data | path | result |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
+    for g in c["groups_evidence"]:
+        statuses = [str((g.get(k) or {}).get("status") or "")
+                    for k in ("functional", "timing", "data", "path")]
+        lines.append(f"| {g.get('group')} | {g.get('name') or '—'} | "
+                     f"{g.get('coverage_type') or '—'} | {g.get('scope') or '—'} | "
+                     f"{g.get('cell')} | {' | '.join(statuses)} | {g.get('result')} |")
+    if c.get("sva_items"):
+        lines += ["", "**SVA（断言）**", "",
+                  "| id | 名称 | 规则 | cell | fail | cover_property_hit | status |",
                   "|---|---|---|---|---|---|---|"]
-        for g in c["groups_evidence"]:
-            def _st(key: str) -> str:
-                return str((g.get(key) or {}).get("status") or "")
-            lines.append(
-                f"| {g.get('group')} | {g.get('cell')} | {_st('functional')} | "
-                f"{_st('timing')} | {_st('data')} | {_st('path')} | "
-                f"{g.get('result')} |")
-        if c.get("sva_items"):
-            lines += ["", "**SVA**", "",
-                      "| id | cell | hit | fail | cover_property_hit | status |",
-                      "|---|---|---|---|---|---|"]
-            for s in c["sva_items"]:
-                lines.append(f"| {s.get('id')} | {s.get('cell')} | "
-                             f"{s.get('hit')} | {s.get('fail')} | "
-                             f"{s.get('cover_property_hit')} | {s.get('status')} |")
-        if c.get("scb_items"):
-            lines += ["", "**SCB**", "",
-                      "| id | cell | exec | matched | mismatched | status |",
-                      "|---|---|---|---|---|---|"]
-            for s in c["scb_items"]:
-                lines.append(f"| {s.get('id')} | {s.get('cell')} | "
-                             f"{s.get('exec')} | {s.get('matched')} | "
-                             f"{s.get('mismatched')} | {s.get('status')} |")
-        lines.append("")
-    return lines
+        lines += [f"| {s.get('id')} | {s.get('name') or '—'} | `{s.get('expr') or '—'}` | "
+                  f"{s.get('cell')} | {s.get('fail')} | {s.get('cover_property_hit')} | "
+                  f"{s.get('status')} |" for s in c["sva_items"]]
+    if c.get("scb_items"):
+        lines += ["", "**SCB（比对）**", "",
+                  "| id | 名称 | 说明 | 证据粒度 | cell | exec | matched | mismatched | status |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        lines += [f"| {s.get('id')} | {s.get('name') or '—'} | "
+                  f"{s.get('description') or '—'} | "
+                  f"{s.get('evidence_level') or s.get('evidence_mode') or '—'} | "
+                  f"{s.get('cell')} | {s.get('exec')} | {s.get('matched')} | "
+                  f"{s.get('mismatched')} | {s.get('status')} |"
+                  for s in c["scb_items"]]
+    return lines + [""]
 
 
 def _render_v2(data: Dict[str, Any]) -> List[str]:
@@ -134,6 +198,93 @@ def _html_table(headers: List[str], rows: List[str]) -> str:
     head = "".join(f"<th>{html.escape(h)}</th>" for h in headers)
     return (f"<table><thead><tr>{head}</tr></thead><tbody>"
             + "".join(rows) + "</tbody></table>")
+
+
+def _html_plain_table(headers: List[str], rows: List[List[Any]]) -> str:
+    """普通表格：单元格转义后原样输出（不做状态着色）。"""
+    # `quote=False`：单元格是**文本节点**不是属性，引号无需转义 ——
+    # 转义后 `2'd1` 会变成 `2&#x27;d1`，SVA 表达式就没法读了。
+    body = "".join(
+        "<tr>" + "".join(f"<td>{html.escape(str(c), quote=False)}</td>" for c in row)
+        + "</tr>" for row in rows)
+    return _html_table(headers, [body])
+
+
+def _html_group_overview(data: Dict[str, Any]) -> str:
+    groups = _group_rows(data)
+    if not groups:
+        return ""
+    rows = [[g["group"], g.get("name") or "—", g.get("coverage_type") or "—",
+             g.get("scope") or "—",
+             "、".join(g["coverpoints"]) or "—",
+             "、".join(g["requirements"]) or "—",
+             " + ".join(g["required_layers"]) or "—",
+             "有" if g.get("observed") else "无",
+             "、".join(g["cells"])] for g in groups]
+    return ("<h2>覆盖率组总览（必须覆盖什么）</h2>"
+            + _html_plain_table(
+                ["覆盖率组", "功能点", "覆盖类型", "作用域（模块/逻辑）",
+                 "覆盖点", "需求", "必需证据层", "执行证据", "CELL"], rows))
+
+
+def _html_one_case(c: Dict[str, Any]) -> str:
+    """一条 case 的三节 HTML（Groups / SVA / SCB）。"""
+    cid = c.get("case_id") or c.get("task")
+    out: List[str] = [f"<h3>Case: {html.escape(str(cid))} · "
+                      f"case_status={html.escape(str(c.get('case_status') or '—'))}</h3>"]
+    grows = [[g.get("group"), g.get("name") or "—", g.get("coverage_type") or "—",
+              g.get("scope") or "—", g.get("cell"),
+              *[str((g.get(k) or {}).get("status") or "")
+                for k in ("functional", "timing", "data", "path")],
+              g.get("result")] for g in c["groups_evidence"]]
+    out.append("<b>Groups</b>" + _html_plain_table(
+        ["group", "功能点", "覆盖类型", "作用域", "cell", "functional",
+         "timing", "data", "path", "result"], grows))
+    srows = [[s.get("id"), s.get("name") or "—", s.get("expr") or "—",
+              s.get("cell"), s.get("fail"), s.get("cover_property_hit"),
+              s.get("status")] for s in c.get("sva_items") or []]
+    if srows:
+        out.append("<b>SVA（断言）</b>" + _html_plain_table(
+            ["id", "名称", "规则", "cell", "fail",
+             "cover_property_hit", "status"], srows))
+    crows = [[s.get("id"), s.get("name") or "—", s.get("description") or "—",
+              s.get("evidence_level") or s.get("evidence_mode") or "—",
+              s.get("cell"), s.get("exec"), s.get("matched"),
+              s.get("mismatched"), s.get("status")]
+             for s in c.get("scb_items") or []]
+    if crows:
+        out.append("<b>SCB（比对）</b>" + _html_plain_table(
+            ["id", "名称", "说明", "证据粒度", "cell", "exec",
+             "matched", "mismatched", "status"], crows))
+    return "".join(out)
+
+
+def _html_three_sets(data: Dict[str, Any]) -> str:
+    """每条 case 的三节（Groups / SVA / SCB）—— 与 Markdown 同口径。"""
+    return ("<h2>三集合证据（Groups / SVA / SCB）</h2>"
+            + "".join(_html_one_case(c) for c in data.get("cases") or []
+                      if c.get("groups_evidence")))
+
+
+def _html_v2(data: Dict[str, Any]) -> str:
+    """v2 两张表：Case × CELL 与执行证据（EVD）。"""
+    out: List[str] = []
+    cell_rows = (data.get("case_cell") or {}).get("rows") or []
+    if cell_rows:
+        out.append("<h2>Case × CELL</h2>" + _html_plain_table(
+            ["CELL", "CG", "P", "颜色", "TP 数", "声明用例", "实际用例"],
+            [[r.get("cell_id"), r.get("cg"), r.get("p"), r.get("color"),
+              r.get("tp_count"), "、".join(r.get("declared_cases") or []),
+              "、".join(r.get("observed_cases") or [])] for r in cell_rows]))
+    runs = data.get("case_runs") or []
+    if runs:
+        out.append("<h2>执行证据（EVD）</h2>" + _html_plain_table(
+            ["EVD", "CASE", "TST", "测试", "seed", "阶段", "CELL", "legacy"],
+            [[r.get("evd_id"), r.get("case_id") or "—", r.get("tst_id"),
+              r.get("test"), r.get("seed"), r.get("stage"),
+              "、".join(r.get("cells") or []),
+              "是" if r.get("legacy") else "否"] for r in runs]))
+    return "".join(out)
 
 
 def _html_status(status: str, detail: str = "") -> str:
@@ -184,6 +335,9 @@ def render_html(data: Dict[str, Any]) -> str:
         + _html_table(["路径"] + groups, [mrows]) +
         "<h2>视图4：缺口与豁免</h2>"
         + _html_table(["类型", "项", "根因", "补齐动作", "责任人", "状态"], [gaps])
+        + _html_group_overview(data)
+        + _html_three_sets(data)
+        + _html_v2(data)
         + "</body></html>")
 
 

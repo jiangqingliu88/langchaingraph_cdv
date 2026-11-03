@@ -339,6 +339,39 @@ def _case_cell(case_ir: Dict[str, Any], cells: Dict[str, Any],
             "declared_but_missing": orphans}
 
 
+def _contract_groups(case_ir: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """契约里**必须覆盖的全部组**（不只是已经跑出证据的那些）。
+
+    签核先要回答"该覆盖哪些组"；只列"跑过的组"会把漏测的组藏起来。
+    """
+    merged: Dict[str, Dict[str, Any]] = {}
+    for case in case_ir.get("cases") or []:
+        if not isinstance(case, dict):
+            continue
+        for g in case.get("groups") or []:
+            key = str((g or {}).get("group") or "")
+            if not key:
+                continue
+            slot = merged.setdefault(key, {
+                "group": key, "name": g.get("name", ""),
+                "description": g.get("description", ""),
+                "coverage_type": g.get("coverage_type", ""),
+                "scope": g.get("scope", ""),
+                "coverpoints": [], "requirements": [], "checks": [],
+                "required_layers": [], "cells": [], "cases": [],
+            })
+            for field in ("coverpoints", "requirements", "checks",
+                          "required_layers"):
+                for v in g.get(field) or []:
+                    if v and v not in slot[field]:
+                        slot[field].append(v)
+            if g.get("cell") and g["cell"] not in slot["cells"]:
+                slot["cells"].append(g["cell"])
+            if case.get("id") and case["id"] not in slot["cases"]:
+                slot["cases"].append(case["id"])
+    return [merged[k] for k in sorted(merged)]
+
+
 def _case_runs(evd: Dict[str, Any]) -> List[Dict[str, Any]]:
     """视图7：执行证据（case × run × seed × cfg × 结论）。"""
     rows = []
@@ -399,6 +432,8 @@ def build_case_view(run_dir: str | Path) -> Dict[str, Any]:
         "matrix": _matrix(tp_ev),
         "gaps": gaps,
         # ── v2 新增 ──
+        # 契约要求的全部覆盖率组（含尚未跑出证据的）—— "必须覆盖什么"的答案
+        "contract_groups": _contract_groups(case_ir),
         "case_tree": _case_tree(case_ir),
         "case_cell": _case_cell(case_ir, cells, cases),
         "case_runs": _case_runs(evd),

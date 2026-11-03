@@ -125,14 +125,17 @@ GAP_COLUMNS = (
 #: 三张表分开而不是揉成一张：group 看"功能组 × 阶段"，SVA 看"跨拍性质"，
 #: SCB 看"值/账本比对"，判据与读者都不同。
 GROUP_COLUMNS = (
-    ("case_id", "用例", 200, LEFT),
-    ("group", "功能组", 150, LEFT),
-    ("cell", "CELL", 190, LEFT),
-    ("functional", "Functional", 100, CENTER),
-    ("timing", "Timing", 90, CENTER),
-    ("data", "Data", 90, CENTER),
-    ("path", "Path", 100, CENTER),
-    ("result", "结论", 110, CENTER),
+    ("case_id", "用例", 180, LEFT),
+    ("group", "覆盖率组", 140, LEFT),
+    ("name", "功能点", 140, LEFT),
+    ("coverage_type", "覆盖类型", 100, LEFT),
+    ("scope", "作用域（模块/逻辑）", 160, LEFT),
+    ("cell", "CELL", 170, LEFT),
+    ("functional", "Functional", 95, CENTER),
+    ("timing", "Timing", 85, CENTER),
+    ("data", "Data", 85, CENTER),
+    ("path", "Path", 95, CENTER),
+    ("result", "结论", 100, CENTER),
 )
 SVA_COLUMNS = (
     ("case_id", "用例", 200, LEFT),
@@ -388,7 +391,13 @@ class FunctionalCoverageModule(ModuleBase):
             cid = case.get("case_id") or case.get("task")
             for g in case.get("groups_evidence") or []:
                 groups.append({
-                    "case_id": cid, "group": g.get("group"), "cell": g.get("cell"),
+                    "case_id": cid, "group": g.get("group"),
+                    # 覆盖描述：功能点 / 覆盖类型 / 作用域 —— 只给 CG 编号看不出
+                    # "这条用例证明的是哪块逻辑"。
+                    "name": g.get("name") or "",
+                    "coverage_type": g.get("coverage_type") or "",
+                    "scope": g.get("scope") or "",
+                    "cell": g.get("cell"),
                     **{key: str((g.get(key) or {}).get("status") or "")
                        for key in ("functional", "timing", "data", "path")},
                     "result": str(g.get("result") or ""),

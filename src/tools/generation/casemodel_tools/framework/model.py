@@ -162,6 +162,9 @@ class TestPoint:
     value: str
     field: str = ""
     dimension_name: str = ""
+    #: 覆盖描述（模型里维度的 `description`）：这一组测的**功能点**是什么。
+    #: 签核视图据此回答"这条用例证明的是哪块逻辑"，而不是只给 CG 编号。
+    dimension_description: str = ""
     tree_path: str = ""
     requirement: str = ""
     cover_id: str = ""
@@ -203,6 +206,8 @@ class TestPoint:
             "cover_id": self.cover_id,
             "dimension": self.dimension,
             "dimension_name": self.dimension_name,
+            **({"dimension_description": self.dimension_description}
+               if self.dimension_description else {}),
             "field": self.field,
             "value": self.value,
             "tree_path": self.tree_path,

@@ -55,6 +55,12 @@ def assertion_bindings(model: Any) -> List[Dict[str, Any]]:
         out.append({
             "assertion_id": assertion.id,
             "name": assertion.name,
+            # 规则原文与说明：签核视图要能回答"这条 SVA 到底在查什么"，
+            # 只给一个 id 等于让人回头翻模型。
+            "expr": assertion.expr,
+            "message": assertion.message,
+            "signals": [s.get("name") if isinstance(s, dict) else str(s)
+                        for s in (assertion.signals or [])],
             "tp_ids": [b["tp_id"] for b in bound],
             "roles": {b["tp_id"]: b["role"] for b in bound},
             "unknown": [b["tp_id"] for b in assertion.tp_bindings

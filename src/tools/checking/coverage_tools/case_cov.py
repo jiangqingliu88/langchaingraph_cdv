@@ -426,6 +426,27 @@ def _load_case_contract(od: Path) -> dict:
             if isinstance(c, dict) and c.get("id")}
 
 
+def _functional_status(mine: list, hit: list) -> str:
+    if mine and len(hit) == len(mine):
+        return "PROVEN"
+    return "PARTIAL" if any(float(e.get("pct") or 0) > 0 for e in mine) else "MISSING"
+
+
+def _timing_status(timing_ok) -> str:
+    if timing_ok is True:
+        return "PROVEN"
+    return "MISSING" if timing_ok is False else "NOT_APPLICABLE"
+
+
+def _data_status(scb: dict) -> str:
+    matched = scb.get("matched")
+    if matched is None:
+        return "NOT_APPLICABLE"
+    if int(matched) > 0 and int(scb.get("mismatched") or 0) == 0:
+        return "PROVEN"
+    return "MISSING"
+
+
 def _group_evidence(item: dict, entries: list, facts: dict,
                     timing_ok) -> dict:
     """一组覆盖组证据：functional / timing / data / path + result。"""
@@ -434,34 +455,24 @@ def _group_evidence(item: dict, entries: list, facts: dict,
     tp_ids = {str(t) for t in (item.get("tp_ids") or [])}
     mine = [e for e in entries if not tp_ids or str(e.get("tp_id")) in tp_ids]
     hit = [e for e in mine if float(e.get("pct") or 0) >= 100.0]
-    if mine and len(hit) == len(mine):
-        functional = "PROVEN"
-    elif any(float(e.get("pct") or 0) > 0 for e in mine):
-        functional = "PARTIAL"
-    else:
-        functional = "MISSING"
-
-    if timing_ok is True:
-        timing = "PROVEN"
-    elif timing_ok is False:
-        timing = "MISSING"
-    else:
-        timing = "NOT_APPLICABLE"
-
+    functional = _functional_status(mine, hit)
+    timing = _timing_status(timing_ok)
     scb = facts.get("scb_summary") or {}
-    matched = scb.get("matched")
-    if matched is None:
-        data = "NOT_APPLICABLE"
-    elif int(matched) > 0 and int(scb.get("mismatched") or 0) == 0:
-        data = "PROVEN"
-    else:
-        data = "MISSING"
-
+    data = _data_status(scb)
     path = "PENDING_BACKEND" if "path" in required else "NOT_APPLICABLE"
     layers = {"functional": functional, "timing": timing,
               "data": data, "path": path}
     return {
         "group": item.get("group", ""),
+        # 覆盖描述：功能点 / 覆盖类型 / 作用域 / 覆盖点 / 需求 / 检查项。
+        # 只给 CG 编号的话，读的人没法判断"这条用例证明的是哪块逻辑"。
+        "name": item.get("name", ""),
+        "description": item.get("description", ""),
+        "coverage_type": item.get("coverage_type", ""),
+        "scope": item.get("scope", ""),
+        "coverpoints": list(item.get("coverpoints") or []),
+        "requirements": list(item.get("requirements") or []),
+        "checks": list(item.get("checks") or []),
         "cell": item.get("cell", ""),
         "required_layers": required,
         "functional": {"status": functional,
@@ -469,7 +480,7 @@ def _group_evidence(item: dict, entries: list, facts: dict,
                        "bins_miss": [e.get("tp_id") for e in mine
                                      if e not in hit]},
         "timing": {"status": timing},
-        "data": {"status": data, "matched": matched,
+        "data": {"status": data, "matched": scb.get("matched"),
                  "mismatched": scb.get("mismatched")},
         "path": {"status": path},
         "result": _worst([layers[k] for k in required]),
@@ -493,7 +504,9 @@ def _sva_evidence(items: list, facts: dict) -> list:
             status, hit = "MISSING", None
         out.append({
             "id": item.get("id", ""), "cell": item.get("cell", ""),
-            "name": name, "hit": hit, "fail": int(fired or 0),
+            "name": name, "expr": item.get("expr", ""),
+            "message": item.get("message", ""),
+            "hit": hit, "fail": int(fired or 0),
             "cover_property_hit": None, "status": status,
         })
     return out
@@ -512,6 +525,10 @@ def _scb_evidence(items: list, facts: dict) -> list:
     by_id = (facts.get("log_facts") or {}).get("scb_by_id") or {}
     return [{
         "id": str(item.get("id") or ""), "cell": item.get("cell", ""),
+        "name": item.get("name", ""),
+        "description": item.get("description", ""),
+        "model": item.get("model", ""),
+        "evidence_mode": item.get("evidence", "auto"),
         "exec": int((data or {}).get("total") or 0),
         "matched": (data or {}).get("matched"),
         "mismatched": (data or {}).get("mismatched"),

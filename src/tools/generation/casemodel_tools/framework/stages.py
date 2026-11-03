@@ -103,6 +103,10 @@ class DecomposeStage(Stage):
                 object=model.object,
                 dimension=dim.key,
                 dimension_name=dim.name,
+                # 覆盖描述：这一组**测的功能点是什么**（"仲裁"/"解码"…），
+                # 以及它落在功能树的哪个节点（作用域）。签核视图靠它回答
+                # "这条用例证明的是哪块逻辑"，而不是只给一个 CG 编号。
+                dimension_description=getattr(dim, "description", "") or "",
                 field=fld.name,
                 value=str(point.token),
                 tree_path="、".join(dim.sub_objects),
