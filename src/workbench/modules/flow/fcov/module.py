@@ -100,6 +100,7 @@ CASE_COLUMNS = (
     ("coverage", "功能覆盖", 210, LEFT),
     ("sva", "SVA", 200, LEFT),
     ("scoreboard", "Scoreboard", 200, LEFT),
+    ("constraints", "约束", 220, LEFT),
     ("path", "PATH", 180, LEFT),
     ("conclusion", "结论", 200, LEFT),
 )
@@ -224,8 +225,10 @@ class FunctionalCoverageModule(ModuleBase):
 
     HINT = ("数据源是**本次运行目录里已落盘**的文件（case 模型、功能覆盖率计划、"
             "env_cov 注入、vcover 实测文本）—— 不重跑生成器、不重跑 vcover。"
-            "「实测 %」为空 = 那一列还没有数据（旧格式的覆盖率文本，或还没跑到"
-            "覆盖率收集），**不是 0**。")
+            "「Case 证据」页是四集合契约：Groups / SVA / SCB / **约束**（约束列空 = "
+            "该维度没绑定策略，不是缺数据）。本页按执行实例列出（一条 test×seed 一行）；"
+            "离线 HTML 的视图1 另按逻辑 CASE 聚合，缺口与 CELL 颜色一一对应。"
+            "「实测 %」为空 = 那一列还没有数据，**不是 0**。")
 
     def __init__(self, ctx, spec) -> None:
         super().__init__(ctx, spec)
@@ -469,6 +472,8 @@ class FunctionalCoverageModule(ModuleBase):
                    for key in ("coverage", "sva", "scoreboard", "path")},
                 **{f"{key}_status": (c.get(key) or {}).get("status")
                    for key in ("coverage", "sva", "scoreboard", "path")},
+                # 第四集合：约束 id（空 = 该维度没有绑定约束策略，不编）
+                "constraints": "、".join(c.get("constraints") or []) or "—",
                 "conclusion": c.get("conclusion"),
             })
         return out

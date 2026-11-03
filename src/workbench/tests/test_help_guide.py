@@ -29,6 +29,24 @@ class TestGuideContent:
         assert "None ≠ False" in GUIDE_HTML
         assert "measured: false" in GUIDE_HTML
 
+    def test_covers_the_verification_os_and_case_evidence(self):
+        """新能力（契约义务 / 四集合 / 质量门 / IR 影子）不能只活在代码里。"""
+        from ..help_guide import GUIDE_HTML
+
+        for phrase in ("contract why", "case-gate", "case-registry",
+                       "case_view", "metrics trend", "constraints",
+                       "OS 账本", "QUALITY_GATE", "ir_shadow_diff"):
+            assert phrase in GUIDE_HTML, phrase
+
+    def test_lists_the_default_switches(self):
+        """默认开关与回退写清楚 —— "能力已通、默认没开、没人知道"最贵。"""
+        from ..help_guide import GUIDE_HTML
+
+        for phrase in ("SIGNOFFAI_WORKLIST=0", "SIGNOFFAI_QUALITY_GATE=block",
+                       "SIGNOFFAI_UVM_IR_SHADOW=off",
+                       "SIGNOFFAI_STATE_CONTRACT=warn"):
+            assert phrase in GUIDE_HTML, phrase
+
 
 class TestGuideDialog:
     def test_builds_and_renders_the_guide(self, qt_app):
