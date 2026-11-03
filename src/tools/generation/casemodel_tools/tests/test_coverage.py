@@ -1050,6 +1050,44 @@ class TestCoverageInterface:
         assert "input logic rst_n," in sv
         assert ".clk(clk)" in sv and ".rst_n(rst_n)" in sv
 
+    def test_extra_signals_are_exposed_for_assertion_rules(self):
+        """断言规则引用、但没被覆盖点采的信号也要引成端口。
+
+        历史坑：`raw_never_issues` 要读 `issue_valid`，而它不在任何覆盖点里 →
+        接口没有它 → env 检查组「引用到接口上没有的信号」直接跳过这条规则，
+        **断言那一半等于没查**。规则声明的 `{name,width}` 正好够生成端口。
+        """
+        from src.tools.generation.casemodel_tools.coverage import (
+            checker_rules, cov_interface_meta, render_cov_interface)
+
+        sampling = {"dut_module": "npu_sched"}
+        cm = _cov_cm()
+        meta = cov_interface_meta(cm, sampling,
+                                  extra_signals=[{"name": "issue_valid", "width": 1}])
+        assert "issue_valid" in meta["signals"]
+        sv = render_cov_interface(cm, sampling,
+                                  extra_signals=[{"name": "issue_valid", "width": 1}])
+        assert "input logic issue_valid" in sv
+        assert ".issue_valid(issue_valid)" in sv
+        # 引了端口，规则就该**能查**而不是被跳过
+        # 左半边用**采样信号**（模型里有），右半边用额外引的 —— 两边都在
+        # `available` 里，规则才求得了值
+        decl = [{"name": "raw", "expr": "queue_level == 6'd32 |-> issue_valid == 1'b0",
+                 "signals": [{"name": "queue_level", "width": 6},
+                             {"name": "issue_valid", "width": 1}]}]
+        got = checker_rules(decl, meta["signals"])
+        assert [r["name"] for r in got["rules"]] == ["raw"]
+        assert got["skipped"] == []
+
+    def test_extra_signals_dedupes_against_sampled_ones(self):
+        """已经在采样里的名字不能再引一遍 —— 会撞端口名。"""
+        from src.tools.generation.casemodel_tools.coverage import cov_interface_meta
+
+        meta = cov_interface_meta(_cov_cm(), {"dut_module": "npu_sched"},
+                                  extra_signals=[{"name": "queue_level", "width": 6}])
+        assert meta["extra_signals"] == []
+        assert meta["signals"].count("queue_level") == 1
+
     def test_only_dut_sourced_coverpoints_are_exposed(self):
         """`sample: stimulus` 的走 env_cov 那条路，不该出现在这个接口里。"""
         from src.tools.generation.casemodel_tools.coverage import render_cov_interface

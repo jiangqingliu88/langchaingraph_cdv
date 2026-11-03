@@ -694,10 +694,15 @@ class VerifyExecutor(BaseExecutor):
         cm_file = _find_case_model(_spec_of(output_dir), output_dir)
         if cm_file is None:
             return {}
+        text = cm_file.read_text(encoding="utf-8", errors="replace")
+        decls = _load_case_model_doc(text)
         try:
             from src.tools.generation.casemodel_tools.api import run_covergroups
 
-            payload = run_covergroups(cm_file.read_text(encoding="utf-8"), "dut")
+            # `extra_signals`：断言规则引用、但没被覆盖点采的信号（`issue_valid`
+            # 这种端口）。接口里不引，env 检查组就读不到 —— 规则只能被跳过。
+            payload = run_covergroups(text, "dut",
+                                      extra_signals=_assertion_signals(decls))
         except Exception as e:                       # noqa: BLE001 旁路
             logger.warning(f"读 case 模型失败（不生成 DUT 覆盖率接口）: {e}")
             return {}
@@ -730,10 +735,7 @@ class VerifyExecutor(BaseExecutor):
         # 一套规则两处生效，数出来的东西才对得上；各写一份必然漂。
         dut_checker: Dict[str, Any] = {}
         try:
-            import yaml as _yaml
             from src.tools.generation.casemodel_tools.coverage import checker_rules
-            decls = (_yaml.safe_load(cm_file.read_text(encoding="utf-8",
-                                                        errors="replace")) or {})
             got = checker_rules(decls.get("assertions"), meta.get("signals") or [])
             if got["rules"]:
                 dut_checker = {"rules": got["rules"], "skipped": got["skipped"],
@@ -1196,6 +1198,37 @@ def _find_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
     from src.layers.l1_infrastructure.layout import find_case_model
 
     return find_case_model(spec, output_dir)
+
+
+def _load_case_model_doc(text: str) -> Dict[str, Any]:
+    """casemodel 文本 → dict（解析失败/不是映射 → 空 dict）。
+
+    读不动不算错：覆盖率接口照旧能出，只是断言规则那半没有信号可用。
+    """
+    import yaml as _yaml
+
+    try:
+        doc = _yaml.safe_load(text)
+    except Exception:                              # noqa: BLE001 旁路
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _assertion_signals(decls: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """`assertions[].signals` → `[{name, width}]`（覆盖率接口要额外引的信号）。
+
+    已经出现在采样覆盖点里的名字由 `coverage_render._extra_signals` 去重 ——
+    这里只管把模型声明过的信号**全**交代出去，不在这边判重。
+    """
+    out: List[Dict[str, Any]] = []
+    for decl in (decls.get("assertions") or []):
+        if not isinstance(decl, dict):
+            continue
+        for sig in (decl.get("signals") or []):
+            if isinstance(sig, dict) and sig.get("name"):
+                out.append({"name": sig.get("name"),
+                            "width": sig.get("width") or 1})
+    return out
 
 
 #: agent 类名的后缀 —— 去掉它再加 `_seq_item` 就是事务类型名。

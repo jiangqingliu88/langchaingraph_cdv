@@ -124,6 +124,26 @@
             "type": "string"
           }
         },
+        "extra_signals": {
+          "$comment": "断言规则要用、但**没有**被任何覆盖点采的信号（`{name,width}`）。也引成接口端口 —— 否则 env 检查组读不到，那条规则只能被跳过（`issue_valid` 这类端口就是这么丢的）。",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
         "coverpoints": {
           "$comment": "覆盖点表（signal / sv_name / field / width / expr）—— 模板据此出 `cg_dut`",
           "type": "array",

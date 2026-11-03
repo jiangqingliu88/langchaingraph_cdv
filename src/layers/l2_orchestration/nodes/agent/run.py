@@ -193,6 +193,16 @@ def _record_decision_effect(rt, state: PipelineState, data: Any,
     rt._round_tp_snapshot = {}
 
 
+def _log_metric_effective(exclude_effect: Dict[str, Any],
+                          effective_coverage: float) -> None:
+    """口径过滤生效时记一笔 —— 让人看得出这个数是**功能口径**的，不是混合值。"""
+    if not exclude_effect.get("metric_filtered"):
+        return
+    logger.info(f"有效覆盖率按口径 {exclude_effect['metric']} 计："
+                f"{exclude_effect['covered']}/{exclude_effect['total']} bin "
+                f"→ {effective_coverage}%")
+
+
 def _safe_record_decision_effect(rt, state: PipelineState, data: Any,
                                  final_coverage: float) -> None:
     try:
@@ -212,6 +222,8 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
     coverage = data.get("coverage", {}) if isinstance(data, dict) else {}
     gaps = data.get("gaps", []) if isinstance(data, dict) else []
     final_coverage = state.final_coverage
+    # 口径选择结果（`coverage` 不是 dict 时保持空 —— 下面按"没配置口径"处理）
+    _pick: Dict[str, Any] = {}
     if isinstance(coverage, dict):
         # **按口径取**（默认功能覆盖率）—— 收敛信号盯哪个数由
         # `Settings.verification.coverage_metric` 决定，不是写死代码覆盖率。
@@ -244,8 +256,13 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
         proposed = svc._discover_excludes(rt.exclude_reg, gaps, calibration)
         if proposed:
             logger.info(f"Exclude 自动发现 {proposed} 处结构性不可达覆盖点，已提议（待审批）")
-        exclude_effect = rt.exclude_reg.effective_coverage_from_map(coverage_map)
+        # **按配置的口径算有效覆盖率**（`coverage_metric`）：收敛判据用的数
+        # 必须和执行侧盯的是同一个分母，否则功能口径 95% 会被代码覆盖率的
+        # 缺口拖住，闭环跑满轮次也到不了目标。
+        exclude_effect = rt.exclude_reg.effective_coverage_from_map(
+            coverage_map, metric=_pick.get("metric", ""))
         effective_coverage = exclude_effect.get("effective_coverage", final_coverage)
+        _log_metric_effective(exclude_effect, effective_coverage)
         if exclude_effect.get("excluded"):
             logger.info(f"Exclude 调规：{exclude_effect['excluded']} 点已放弃，"
                         f"有效覆盖率 {effective_coverage}%（原始 {exclude_effect['raw_coverage']}%）")

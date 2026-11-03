@@ -56,6 +56,34 @@ CREATE TABLE IF NOT EXISTS exclude_registry (
 """
 
 
+#: 覆盖率口径 → 覆盖地图里的 bin 归属。
+#:
+#: 两个口径是**不同分母**：功能口径看 `covergroup` 采到的 bin，代码口径看
+#: line/branch/toggle 那些。混在一起算（历史行为）等于让"功能覆盖率 95%"
+#: 被代码覆盖率的缺口拖下去 —— 闭环于是永远收敛不了（拿一个它的动作推不动
+#: 的数当目标，正是 `planning.py` 里记过的同一类病）。
+_METRIC_BIN_KINDS = {
+    "functional": lambda b: b.get("metric") == "covergroup" or b.get("type") == "functional",
+    "code": lambda b: b.get("type") in ("code", "toggle"),
+}
+
+
+def _bins_for_metric(bins: List[Dict[str, Any]],
+                     metric: str = "") -> tuple:
+    """按口径挑 bin → `(bins, 是否真的过滤了)`。
+
+    口径为空 / 不认识 / 这个口径一个 bin 都没有 → 原样返回全部（第二项 False），
+    调用方据此回退到整体覆盖地图，而不是拿一个空集合算出 0%。
+    """
+    pick = _METRIC_BIN_KINDS.get((metric or "").strip().lower())
+    if pick is None:
+        return list(bins), False
+    selected = [b for b in bins if pick(b)]
+    if not selected:
+        return list(bins), False
+    return selected, True
+
+
 class ExcludeRegistry:
     """Exclude 状态库（同步 sqlite，跨 run 持久，接证据链哈希）。"""
 
@@ -221,21 +249,31 @@ class ExcludeRegistry:
         effective_total = max(total_points - excluded, 1)
         return round(coverage * total_points / 100 / effective_total * 100, 1)
 
-    def effective_coverage_from_map(self, map_data: Dict[str, Any]) -> Dict[str, Any]:
+    def effective_coverage_from_map(self, map_data: Dict[str, Any],
+                                     metric: str = "") -> Dict[str, Any]:
         """从覆盖地图 + 已批准 Exclude 计算有效覆盖率（bin 级精确调规）。
 
         Args:
             map_data: CoverageMap.build() 输出 {bins, covered, total, coverage, ...}
+            metric: 覆盖率**口径**（`functional` / `code`）。给了就只在这一口径的
+                bin 上算 —— 不把代码/toggle 的缺口混进功能口径的分母。
         返回:
-            {total, covered, excluded, effective_total, effective_coverage, raw_coverage}
+            {total, covered, excluded, effective_total, effective_coverage,
+             raw_coverage, metric, metric_filtered}
         """
-        total = map_data.get("total", 0)
-        covered = map_data.get("covered", 0)
-        raw_coverage = map_data.get("coverage", 0.0)
+        bins, metric_filtered = _bins_for_metric(map_data.get("bins") or [], metric)
+        if metric_filtered:
+            total = sum(int(b.get("bins", 0) or 0) for b in bins)
+            covered = sum(int(b.get("covered", 0) or 0) for b in bins)
+            raw_coverage = round(covered / total * 100, 1) if total else 0.0
+        else:
+            total = map_data.get("total", 0)
+            covered = map_data.get("covered", 0)
+            raw_coverage = map_data.get("coverage", 0.0)
         excluded_points = self.get_excluded_points()
         # `total`/`covered` 是 **bin 数**（见 `CoverageMap.build`），所以被豁免的条目
         # 要按它**自己的 bin 数**从分母里扣 —— 扣"条目个数"会和分母不同量纲。
-        excluded = sum(int(b.get("bins", 1) or 0) for b in map_data.get("bins", [])
+        excluded = sum(int(b.get("bins", 1) or 0) for b in bins
                        if b.get("location") in excluded_points) if excluded_points else 0
         effective_total = max(total - excluded, 1)
         effective_coverage = round(covered / effective_total * 100, 1) if total else 0.0
@@ -246,6 +284,8 @@ class ExcludeRegistry:
             "effective_total": effective_total,
             "raw_coverage": raw_coverage,
             "effective_coverage": effective_coverage,
+            "metric": metric,
+            "metric_filtered": metric_filtered,
         }
 
     def stats(self) -> Dict[str, Any]:

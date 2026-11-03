@@ -338,7 +338,8 @@ def run_uvm_tests(yaml_text: str, *, dimensions: Optional[List[str]] = None,
     }
 
 
-def run_covergroups(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
+def run_covergroups(yaml_text: str, module_name: str = "dut",
+                    extra_signals: List[Dict[str, Any]] = None) -> Dict[str, Any]:
     """YAML 文本 → 功能覆盖率模型 + 可编译的 SystemVerilog covergroup。
 
     **一条 = 一个覆盖点**：维度归类、字段承载取值、取值点是一个 bin、声明了可
@@ -376,8 +377,12 @@ def run_covergroups(yaml_text: str, module_name: str = "dut") -> Dict[str, Any]:
     payload["sampling"] = dict(model.sampling)
     # DUT 通道的**接口**（env 组件持它采样）与它给组件用的 bins 表。
     # 名字/实例/时钟/复位都从 `cov_interface_meta` 出 —— 一处，见那里的注释。
-    payload["cov_interface"] = cov_interface_meta(cm, model.sampling) or {}
-    payload["cov_interface_code"] = render_cov_interface(cm, model.sampling)
+    # `extra_signals`：断言规则要用、但没被任何覆盖点采的信号（`{name,width}`）。
+    # 不引成端口的话，env 检查组读不到它们 —— 那条规则只能被跳过。
+    payload["cov_interface"] = cov_interface_meta(
+        cm, model.sampling, extra_signals=extra_signals) or {}
+    payload["cov_interface_code"] = render_cov_interface(
+        cm, model.sampling, extra_signals=extra_signals)
     payload["dut_bins"] = dut_bins(cm)
     if probe_ports(cm) and not payload["probe_code"]:
         payload["notes"].append(

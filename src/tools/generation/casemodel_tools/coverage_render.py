@@ -379,8 +379,36 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
     }
 
 
+def _extra_signals(cps, extra_signals) -> List[Dict[str, Any]]:
+    """断言规则要用、但**没有**被任何覆盖点采的信号 → 也引成接口端口。
+
+    为什么必须引：env 组件的检查组通过**同一个 virtual interface** 读信号，
+    接口上没有的它就够不着 —— 于是那条规则被跳过，"断言那一半"就没人查。
+    规则声明的 `signals[{name,width}]` 自带位宽，拿来生成端口即可。
+
+    已经在采样列表里的不重复引（会撞端口名），名字非法的直接丢（`sv_ident`）。
+    """
+    have = {cp.signal for cp in cps}
+    out: List[Dict[str, Any]] = []
+    for item in (extra_signals or []):
+        if not isinstance(item, dict):
+            continue
+        name = sv_ident(item.get("name"), "")
+        if not name or name in have:
+            continue
+        try:
+            width = int(item.get("width") or 1)
+        except (TypeError, ValueError):
+            width = 1
+        have.add(name)
+        out.append({"name": name, "width": max(1, width)})
+    return out
+
+
 def cov_interface_meta(cm: CoverageModel, sampling: Dict[str, Any] = None,
-                       if_name: str = "") -> Optional[Dict[str, Any]]:
+                       if_name: str = "",
+                       extra_signals: List[Dict[str, Any]] = None,
+                       ) -> Optional[Dict[str, Any]]:
     """覆盖率接口的**全部身份信息** —— 一份，谁都不许自己推。
 
     三个地方要知道同一个名字：**生成方**（verify 按它落盘）、**消费方**
@@ -420,7 +448,11 @@ def cov_interface_meta(cm: CoverageModel, sampling: Dict[str, Any] = None,
         "dut_module": dut,
         "clock": clock,
         "reset": reset,
-        "signals": [cp.signal for cp in cps],
+        # 采样信号在前，断言规则额外要的信号在后（`signals` 是 env 侧**能读到
+        # 什么**的唯一口径：`checker_rules(available=...)` 按它判规则能不能查）
+        "signals": ([cp.signal for cp in cps]
+                    + [e["name"] for e in _extra_signals(cps, extra_signals)]),
+        "extra_signals": _extra_signals(cps, extra_signals),
         "coverpoints": [{"signal": cp.signal, "sv_name": cp.sv_name,
                          "field": cp.field, "width": cp.width,
                          "expr": cp.expr} for cp in cps],
@@ -507,7 +539,8 @@ def checker_rules(decls: List[Dict[str, Any]],
 
 
 def render_cov_interface(cm: CoverageModel, sampling: Dict[str, Any] = None,
-                         if_name: str = "") -> str:
+                         if_name: str = "",
+                         extra_signals: List[Dict[str, Any]] = None) -> str:
     """`CoverageModel` → **一个 bind 进 DUT 的接口**（把采样信号引出来）。
 
     ## 为什么是"接口"而不是"模块"
@@ -533,7 +566,7 @@ def render_cov_interface(cm: CoverageModel, sampling: Dict[str, Any] = None,
     `sampling` 里没写 `dut_module`（或者模型里根本没有 `sample: dut` 的字段）则返回
     空串 —— **不生成半成品**（一个挂不上东西的接口，编译得过、一个信号都不采）。
     """
-    meta = cov_interface_meta(cm, sampling, if_name)
+    meta = cov_interface_meta(cm, sampling, if_name, extra_signals=extra_signals)
     if meta is None:
         return ""
     cps = probe_ports(cm)
@@ -572,7 +605,8 @@ def render_cov_interface(cm: CoverageModel, sampling: Dict[str, Any] = None,
     # 一律 `input`：接口只**观察** DUT —— 输入端口是被驱动的网、输出端口也是，
     # 都只读一份值。声明成 `output` 会反过来去驱动 DUT。
     ports = [(n, 0, "") for n in extra_ports] + \
-            [(cp.signal, cp.width, cp.field) for cp in cps]
+            [(cp.signal, cp.width, cp.field) for cp in cps] + \
+            [(e["name"], e["width"], "") for e in meta.get("extra_signals") or []]
     for i, (sig, width, note) in enumerate(ports):
         decl = f"[{width - 1}:0] " if width > 1 else ""
         sep = "," if i < len(ports) - 1 else ""
@@ -588,6 +622,8 @@ def render_cov_interface(cm: CoverageModel, sampling: Dict[str, Any] = None,
     ]
     conns = [f"  .{n}({n})" for n in extra_ports]
     conns += [f"  .{cp.signal}({cp.expr or cp.signal})" for cp in cps]
+    conns += [f"  .{e['name']}({e['name']})"
+              for e in meta.get("extra_signals") or []]
     out.append(",\n".join(conns))
     out += [");", "", f"`endif  // {macro}", ""]
     return "\n".join(out)

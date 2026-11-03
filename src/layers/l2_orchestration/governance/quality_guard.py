@@ -109,8 +109,34 @@ def validate_design(output: dict) -> ValidationResult:
 
 # ── UVM Agent 校验 ──
 
+#: 产物判据按**后缀**认，不写死 `<agent名>_<文件名>` 的扁平命名。
+#: 生成器现在的布局是分目录 + 模块前缀（`agents/<m>_in_agent/5_agent/<m>_in_system_env.sv`），
+#: 旧布局（`agents/<m>_in_agent/<m>_in_agent_env.sv`）同样以这些后缀结尾 —— 两代都认。
+#: `scoreboard` **故意不列**：生成器按 ref_mirror_gate 有意不加（见
+#: `tool_check_env_arch/_env_has_scoreboard`），把它当硬缺口就是造假红灯。
+REQUIRED_UVM_SUFFIXES: Dict[str, Tuple[str, ...]] = {
+    "env（环境本体）": ("_env.sv",),
+    "env_pkg（环境包）": ("_pkg.sv",),
+    "agent（agent）": ("_agent.sv",),
+    "driver（驱动）": ("_driver.sv",),
+    "monitor（监视器）": ("_monitor.sv",),
+    "sequence（序列）": ("_sequence.sv",),
+    "transaction（事务）": ("_seq_item.sv", "_transaction.sv"),
+}
+
+
+def _missing_uvm_artifacts(agent_dir: Path) -> List[str]:
+    """该 agent 目录下缺哪几类产物 —— 返回类名，不甩一长串绝对路径。"""
+    try:
+        names = [p.name for p in agent_dir.rglob("*.sv")]
+    except OSError:
+        return list(REQUIRED_UVM_SUFFIXES)
+    return [label for label, suffixes in REQUIRED_UVM_SUFFIXES.items()
+            if not any(n.endswith(suffixes) for n in names)]
+
+
 def validate_uvm(output: dict, output_dir: str = "") -> ValidationResult:
-    """校验 UVM Agent 输出: 8 个 UVM 文件必须存在"""
+    """校验 UVM Agent 输出：每代 agent 的 7 类核心产物必须存在（scoreboard 可选）"""
     issues = []
     od = Path(output_dir) if output_dir else Path("output")
     env_name = str(output.get("env_name", ""))
@@ -131,20 +157,16 @@ def validate_uvm(output: dict, output_dir: str = "") -> ValidationResult:
         except Exception:
             issues.append("cannot read quality_report.json")
     else:
-        # 直接检查文件
-        expected = ["env_pkg.sv", "env.sv", "agent.sv", "driver.sv",
-                    "monitor.sv", "scoreboard.sv", "transaction.sv", "sequence.sv"]
+        # 没有 quality_report.json：直接按布局扫产物
         agent_dir = od / "agents"
-        missing = []
+        missing: List[str] = []
         if agent_dir.exists():
-            for ad in agent_dir.iterdir():
+            for ad in sorted(agent_dir.iterdir()):
                 if ad.is_dir():
-                    for exp in expected:
-                        fpath = ad / f"{ad.name}_{exp}"
-                        if not fpath.exists():
-                            missing.append(str(fpath))
+                    missing.extend(f"{ad.name}/{kind}"
+                                   for kind in _missing_uvm_artifacts(ad))
         if missing:
-            issues.append(f"missing {len(missing)} UVM files: {missing[:5]}")
+            issues.append(f"missing {len(missing)} UVM artifacts: {missing[:5]}")
 
     score = 80 if not issues else max(0, 80 - len(issues) * 20)
     verdict = Verdict.PASS if not issues else Verdict.FALLBACK
@@ -222,6 +244,11 @@ def validate_regress(output: dict, output_dir: str = "") -> ValidationResult:
         try:
             rpt = json.loads(report_path.read_text(encoding="utf-8", errors="replace"))
             passed, total = _regression_counts(rpt)
+            blocked = str(rpt.get("blocked_at") or "").strip()
+            if blocked:
+                # 分级回归停在某一级之后（人工节点 / 上一级失败）：passed/total
+                # 只统计跑到的那几级，"全过"是假象 —— 如实说没跑完。
+                issues.append(f"regression blocked at {blocked}（分级回归没跑完）")
             if total == 0:
                 issues.append("regression report: total=0 tests")
             elif passed == 0:
@@ -247,12 +274,19 @@ def validate_regress(output: dict, output_dir: str = "") -> ValidationResult:
 
 
 def _regression_report(root: Path):
-    """回归框架那份报告在哪 —— 认两个位置，认不出返回 None。
+    """回归框架那份报告在哪 —— 认三个位置，认不出返回 None。
 
-    `regression_run/report.json` 是回归框架自己写的（`total` + `stats`），
-    `<root>/report.json` 是收尾写的审计判定（旧路径，留着兼容手工摆放的报告）。
+    · `regression_run/report.json`   单级（不分级）回归自己写的；
+    · `regression_stages.json`       **分级回归**的汇总（loopback→p3 每级一行）；
+    · `<root>/report.json`           收尾写的审计判定（旧路径，兼容手工摆放）。
+
+    分级回归是默认路径（`run_regression_staged`），它**不写** `regression_run/
+    report.json` —— 只认扁平那个位置，这条校验每轮都报 `regression report
+    not found`，把 ops 的分数从 70 压到 55。
     """
-    for candidate in (root / "regression_run" / "report.json", root / "report.json"):
+    for candidate in (root / "regression_run" / "report.json",
+                      root / "regression_stages.json",
+                      root / "report.json"):
         if candidate.exists():
             return candidate
     return None

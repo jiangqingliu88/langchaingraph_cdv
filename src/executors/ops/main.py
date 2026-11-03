@@ -10,6 +10,23 @@ import structlog
 logger = structlog.get_logger()
 
 
+def _case_library():
+    """回归结果回写目标（L4 `TestcaseRegistry`）。
+
+    `InfrastructureManager` 在 L1，**不能**自己 import L4，所以库对象是注入的。
+    L2 的 `hydrate_runtime` 会注入 `rt.infra`，但 ops 执行器自己另起一个
+    `InfrastructureManager` 跑分级回归 —— 不在这儿补上，回归结果就永远不落库
+    （每次跑都出一条「没有注入 case 库」warning）。拿不到就返回 None，L1 会
+    自己出声，不静默。
+    """
+    try:
+        from src.layers.l4_memory.testcase_registry import TestcaseRegistry
+        return TestcaseRegistry()
+    except Exception as e:                      # noqa: BLE001 旁路
+        logger.warning(f"case 库不可用，回归结果不会回写用例状态: {e}")
+        return None
+
+
 @register_executor("ops")
 class OpsExecutor(BaseExecutor):
     """运维调度智能体 = 编译 + 仿真（RegressionRunner）"""
@@ -72,7 +89,7 @@ class OpsExecutor(BaseExecutor):
         # 同一个环境问题刷屏，把真正的 DUT 缺陷埋掉。`blocked_at` 说明卡在哪一级。
         try:
             from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
-            infra = InfrastructureManager(output_dir)
+            infra = InfrastructureManager(output_dir, case_library=_case_library())
             # 人工节点开关（工具栏「人工节点」，`RunRequest.manual_gate`）：
             # **关掉 = auto_approve**，loopback 全过也直接往下跑，不停车等人。
             # 缺省（没传）按**开**处理 —— 门是默认该在的。
