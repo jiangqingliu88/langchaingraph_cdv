@@ -272,12 +272,25 @@ CELL 主色仍由 `tp_cov_evidence` 提供，M2 接管。
 **修掉的一个真 bug**：契约哈希原先包含 `id`，而 `id` 又由哈希派生 —— 读回来永远
 对不上清单。现在 `compute_hash` 排除 `hash` 与 `id`（内容哈希），往返一致。
 
-### M2 —— 事实采集统一（1–2 周）
+### M2 —— 事实采集统一（1–2 周）🟡 第一步已落地
 
 - `coverage` 只写事实；`case_cov` 去掉 `signed_off / case_status`。
 - `derive()` 接管 `case_tp / tp_matrix / tp_cov_evidence / cell_matrix` 的判定，
   这些文件改为导出。
 - 验收：五个文件的判定字段**全部由 derive 生成**（旧实现删除）。
+
+**已落地（M2a）**：
+
+| 落点 | 内容 |
+|---|---|
+| `verification_os/tp_shadow.py` | run 级 `bin_hit`（**与 `_tp_matrix` 同源**：优先计划合并报告 `tp_report`，不是单测报告）+ `tp_attr` 事实；`derive_tp_status()` 复现 HIT/MISS/OBSERVED/BACKDOOR/UNMAPPED/PENDING_BACKEND |
+| `collect_real_coverage._status_for` | **改为委托** `verification_os.tp_shadow.status_for_hits` —— TP 状态判据只剩一份实现（"状态只推导"从 TP 级开始成立），产物形状不变 |
+| evidence_pipeline | 新增 `os_tp_shadow` 步：run 级事实与 TP 属性入账本，写 `status/tp_shadow.json` |
+| 实测 | npu_sched：**70 条 TP、106 条 run 事实、0 差异** |
+
+**剩余（M2b）**：`case_cov` 去掉判定字段；`case_tp / tp_matrix /
+tp_cov_evidence / cell_matrix` 的判定全部改成 derive 导出（先 shadow 对比，
+一致后再切换）。这一步会动签核读数，按停点推进。
 
 ### M3 —— 规则引擎（1 周）
 

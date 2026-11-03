@@ -1202,17 +1202,15 @@ def _stage_of(tp: dict) -> str:
 
 
 def _status_for(n, kind: str, observe: bool) -> tuple:
-    """命中数 → 矩阵状态。`None` = 报告里没这一格（判不了），不是 0。"""
-    is_backdoor = kind == "backdoor"
-    if n is None:
-        return "UNMAPPED", 0, is_backdoor
-    if n > 0:
-        status = ("BACKDOOR_HIT" if is_backdoor
-                  else ("OBSERVED" if observe else "HIT"))
-        return status, n, is_backdoor
-    status = ("BACKDOOR_MISS" if is_backdoor
-              else ("UNOBSERVED" if observe else "MISS"))
-    return status, n, is_backdoor
+    """命中数 → 矩阵状态。`None` = 报告里没这一格（判不了），不是 0。
+
+    **判定实现在 `verification_os.tp_shadow.status_for_hits`**（v3 M2）：
+    本函数只做委托，保证"状态只推导"从 TP 级开始成立 —— 形态与返回值不变，
+    但规则不再有两份。
+    """
+    from src.tools.checking.verification_os.tp_shadow import status_for_hits
+
+    return status_for_hits(n, kind, observe)
 
 
 def _behavior_row(tp: dict, cp_name: str, bin_name: str, kind: str,

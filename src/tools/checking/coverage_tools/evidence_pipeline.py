@@ -28,7 +28,8 @@ from typing import Any, Callable, Dict, List, Optional
 SCHEMA = "evidence_manifest_v1"
 
 STEPS: tuple = ("case_cov", "tp_matrix", "tp_evidence", "evd",
-                "cell_matrix", "case_view", "gates", "os_shadow")
+                "cell_matrix", "case_view", "gates", "os_shadow",
+                "os_tp_shadow")
 
 #: 每步**应当**产出的文件（相对 run 目录）。缺了记进 manifest，不静默。
 STEP_ARTIFACTS: Dict[str, tuple] = {
@@ -41,6 +42,8 @@ STEP_ARTIFACTS: Dict[str, tuple] = {
     "gates": ("coverage/gates.json",),
     # Verification OS v3 · M0：契约/义务/事实账本/影子对账（不改变旧判定）
     "os_shadow": ("status/shadow_report.json", "evidence/ledger.jsonl"),
+    # M2 第一步：TP 级状态也推导一遍，与 tp_matrix 对账（仍不改判定）
+    "os_tp_shadow": ("status/tp_shadow.json",),
 }
 
 
@@ -113,6 +116,22 @@ def _step_os_shadow(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     return run_shadow(od)
 
 
+def _step_os_tp_shadow(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """M2a：TP 级状态由事实推导，与 `tp_matrix` 对账（仍不改判定）。
+
+    顺带把 run 级 `bin_hit`（合并覆盖率）与 `tp_attr` 写进账本 —— 批次级 test
+    没有 case 身份，但它们的命中必须进事实账本，否则 TP 度量缺一块。
+    """
+    from src.tools.checking.verification_os import append_bundle
+    from src.tools.checking.verification_os.tp_shadow import (
+        attr_bundle, run_facts, run_tp_shadow)
+
+    for bundle in (run_facts(od), attr_bundle(od)):
+        if bundle is not None:
+            append_bundle(od, bundle)
+    return run_tp_shadow(od)
+
+
 _STEP_FUNCS: Dict[str, Callable[[Path, Dict[str, Any]], Any]] = {
     "case_cov": _step_case_cov,
     "tp_matrix": _step_tp_matrix,
@@ -122,6 +141,7 @@ _STEP_FUNCS: Dict[str, Callable[[Path, Dict[str, Any]], Any]] = {
     "case_view": _step_case_view,
     "gates": _step_gates,
     "os_shadow": _step_os_shadow,
+    "os_tp_shadow": _step_os_tp_shadow,
 }
 
 
