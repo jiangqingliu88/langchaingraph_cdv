@@ -121,10 +121,11 @@ GAP_COLUMNS = (
     ("owner", "责任人", 100, CENTER),
     ("status", "状态", 90, CENTER),
 )
-#: ── 三集合视图（arch.md：case = groups[] + sva[] + scb[]）──
+#: ── 四集合视图（arch.md：case = groups[] + sva[] + scb[] + constraints[]）──
 #:
-#: 三张表分开而不是揉成一张：group 看"功能组 × 阶段"，SVA 看"跨拍性质"，
-#: SCB 看"值/账本比对"，判据与读者都不同。
+#: 表分开而不是揉成一张：group 看"功能组 × 阶段"，SVA 看"跨拍性质"，
+#: SCB 看"值/账本比对"，约束看"激励由哪条策略塑造"，判据与读者都不同。
+#: 约束不单独占一张表 —— 它的粒度是"每条 case 依赖哪些策略"，放进用例行。
 GROUP_COLUMNS = (
     ("case_id", "用例", 180, LEFT),
     ("group", "覆盖率组", 140, LEFT),
