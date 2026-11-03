@@ -1483,6 +1483,12 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
   `dma_simple/sram_banked` 只用于参考路径，E203 路径的数据搬运走 NICE ICB
   到 DTCM；ICB 一次只有一笔 outstanding、word 粒度、无 burst；适配器是
   组合乘加的功能模型，不是时序收敛的 NPU。
+- **输出目录过长会撞 Windows MAX_PATH（coverstore 打不开 → vsim-7）**：
+  实测把 run 复制到更长的目录名下重跑时，覆盖率库路径超限、单条用例被判 fail；
+  换成短目录名即 55/55 全过。产品本身没问题，但输出目录名不宜过长。
+- **义务 worklist 默认关闭（需 SIGNOFFAI_WORKLIST=1）**：按未清偿义务生成
+  执行清单的能力已落地（实测 55 条 vs 全量 273 条、163 s vs 847 s），但默认仍
+  跑全量回归；等一周实测再翻默认（见 `docs/design/contract_driven_architecture_v3.md` §M4）。
 - **边界表同源**：`config/known_limitations.py` 是 §15 的代码真相；
   `test_architecture_invariants.py` 校验文档包含每条，player runtime 落地时
   必须同步改 `status` 与文档。

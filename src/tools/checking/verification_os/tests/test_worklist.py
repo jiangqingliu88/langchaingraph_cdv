@@ -65,6 +65,17 @@ def test_regression_test_name_matches_generator_convention():
     assert regression_test_name("tp_x") == "tp_x"
 
 
+def test_regex_accepts_seed_and_run_suffixes(tmp_path):
+    """`tests` 过滤对目录名做 search（`tp_x_seed_3001`）—— 锚死 $ 会把它们筛空。"""
+    import re
+
+    data = build_worklist(_run(tmp_path))
+    pattern = re.compile(data["regex"])
+    for name in ("tp_2", "tp_2_seed_7", "tp_2_run_3_seed_7"):
+        assert pattern.search(name), name
+    assert not pattern.search("tp_20_seed_7")
+
+
 def test_only_unsatisfied_obligation_is_listed(tmp_path):
     root = _run(tmp_path)                    # TP-1 有命中，TP-2 没有
     data = build_worklist(root)

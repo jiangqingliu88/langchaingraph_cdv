@@ -154,7 +154,11 @@ def build_worklist(run_dir: str | Path) -> Dict[str, Any]:
         "items": [items[t] for t in tests],
         "tests": tests,
         "count": len(tests),
-        "regex": f"^({'|'.join(re.escape(t) for t in tests)})$" if tests else "",
+        # **必须允许种子/批次后缀**：`tests` 过滤是对**目录名**做 `re.search`
+        # （`tp_x_seed_3001` / `tp_x_run_2_seed_3001`），锚死 `$` 会把它们全筛掉，
+        # 分级回归随即报"没有任何用例匹配 tag"。
+        "regex": ("^(" + "|".join(re.escape(t) for t in tests) + ")"
+                  r"(?:_run_\d+)?(?:_seed_\d+)?$") if tests else "",
         "skipped_no_test": skipped[:50],
     }
 

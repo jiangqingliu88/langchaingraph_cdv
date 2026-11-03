@@ -336,7 +336,11 @@ EVD 行 `cells` 全空（47 行），只有重跑时拿到上一轮 cell_matrix 
 | `verification_os/worklist.py` | `build_worklist()`：契约义务 −（当前契约事实推导出的）已清偿 = 未清偿；按 `tp_ids`/`case_id` 映射到 TP，再按 `regression_gen` 同一口径（`tp_<slug>`）映射到**真实存在**的回归 test；产出 `status/worklist.json` + 正则 |
 | ops | `_regression_filter()`：`params.worklist is True` 或 `SIGNOFFAI_WORKLIST=1` 时用 worklist 正则，否则回落增量基线/全量；算不出来（无契约/无回归清单）**回落全量**，不静默缩小 |
 | CLI | `vagent contract worklist --run …` |
-| 实测 | npu_sched：未清偿义务映射到 42 条 test（覆盖 dtype/opcode/pipeline/…），另有 **15 条映射不到回归 test**（观测型/行为域组没有独立用例）进 `skipped_no_test` |
+| 实测 | npu_sched：58 条义务中 **25 条未清偿 → 47 条 test**（本轮 55 个任务 = 47 test + 8 build）；**163 s vs 全量 847 s（约 5×）**，273 → 55 条用例；另有 15 条映射不到回归 test（观测型/行为域组没有独立用例）进 `skipped_no_test` |
+
+> 实测时踩到一个与产品无关的坑：把 run 复制到**更长**的目录名下跑，coverstore
+> 路径超过 Windows MAX_PATH，`vsim-7` 打不开覆盖率库 → 该用例判 fail；换回短
+> 目录名后 55/55 全过。worklist 本身没问题，但"输出目录别太长"值得进 `known_limitations`。
 
 **与计划的两处偏差（如实记账）**：
 

@@ -47,6 +47,10 @@ KNOWN_LIMITATIONS: Tuple[Dict[str, str], ...] = (
      "text": "E203 C 路径的边界"},
     {"id": "optional_auth_api", "status": "by_design",
      "text": "auth.py 是可选 API 面"},
+    {"id": "long_output_path", "status": "by_design",
+     "text": "输出目录过长会撞 Windows MAX_PATH（coverstore 打不开 → vsim-7）"},
+    {"id": "os_worklist_opt_in", "status": "open",
+     "text": "义务 worklist 默认关闭（需 SIGNOFFAI_WORKLIST=1）"},
 )
 
 
