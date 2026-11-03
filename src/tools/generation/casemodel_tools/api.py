@@ -339,7 +339,8 @@ def run_uvm_tests(yaml_text: str, *, dimensions: Optional[List[str]] = None,
 
 
 def run_covergroups(yaml_text: str, module_name: str = "dut",
-                    extra_signals: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+                    extra_signals: List[Dict[str, Any]] = None,
+                    tp_bitmap_width: int = 0) -> Dict[str, Any]:
     """YAML 文本 → 功能覆盖率模型 + 可编译的 SystemVerilog covergroup。
 
     **一条 = 一个覆盖点**：维度归类、字段承载取值、取值点是一个 bin、声明了可
@@ -380,9 +381,11 @@ def run_covergroups(yaml_text: str, module_name: str = "dut",
     # `extra_signals`：断言规则要用、但没被任何覆盖点采的信号（`{name,width}`）。
     # 不引成端口的话，env 检查组读不到它们 —— 那条规则只能被跳过。
     payload["cov_interface"] = cov_interface_meta(
-        cm, model.sampling, extra_signals=extra_signals) or {}
+        cm, model.sampling, extra_signals=extra_signals,
+        tp_bitmap_width=tp_bitmap_width) or {}
     payload["cov_interface_code"] = render_cov_interface(
-        cm, model.sampling, extra_signals=extra_signals)
+        cm, model.sampling, extra_signals=extra_signals,
+        tp_bitmap_width=tp_bitmap_width)
     payload["dut_bins"] = dut_bins(cm)
     if probe_ports(cm) and not payload["probe_code"]:
         payload["notes"].append(

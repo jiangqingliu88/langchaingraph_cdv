@@ -84,6 +84,76 @@ class Execution:
 
 
 @dataclass
+class Timing:
+    """测试点的**时序窗口**（P2）—— "这件事该在几拍内发生"的机器判据。
+
+    写在 case 模型的维度 `realization.timing` 里（见 `domain/dimensions.py`）：
+
+        realization:
+          kind: sequence
+          timing:
+            expect_cycles: {min: 2, max: 12}
+            start: load_submit          # SV 信号名（DUT 侧）
+            end: issue_valid            # 不给就退回 sample
+            sample: issue_valid
+            tolerance: 0
+
+    **没有 timing 的 TP 不判时序**：不编一个假期望，也不把"没声明"当"通过"。
+    `start`/`end` 都必须是 DUT 信号名（env 检查组通过覆盖率接口读），任一缺失
+    就 `checkable=False` —— 生成期在 `notes` 里说清，而不是生成一个永远不报的
+    空检查。
+    """
+    min_cycles: int = 0
+    max_cycles: int = 0
+    start: str = ""
+    end: str = ""
+    sample: str = ""
+    tolerance: int = 0
+    clock: str = ""
+    reset: str = ""
+
+    @classmethod
+    def from_dict(cls, raw: Any) -> Optional["Timing"]:
+        if not isinstance(raw, dict) or not raw:
+            return None
+        spec = raw.get("expect_cycles")
+        if not isinstance(spec, dict):
+            spec = raw
+        try:
+            lo = int(spec.get("min", spec.get("min_cycles", 0)) or 0)
+            hi = int(spec.get("max", spec.get("max_cycles", 0)) or 0)
+        except (TypeError, ValueError):
+            return None
+        if hi < lo:
+            lo, hi = hi, lo
+        return cls(
+            min_cycles=lo, max_cycles=hi,
+            start=str(raw.get("start") or "").strip(),
+            end=str(raw.get("end") or raw.get("sample") or "").strip(),
+            sample=str(raw.get("sample") or "").strip(),
+            tolerance=int(raw.get("tolerance") or 0),
+            clock=str(raw.get("clock") or "").strip(),
+            reset=str(raw.get("reset") or "").strip(),
+        )
+
+    @property
+    def checkable(self) -> bool:
+        """有起点、有终点、窗口合法才可判 —— 缺一项就是"判不了"。"""
+        return bool(self.start and self.end) and self.max_cycles >= self.min_cycles
+
+    def to_dict(self) -> Dict[str, Any]:
+        out: Dict[str, Any] = {"expect_cycles": {"min": self.min_cycles,
+                                                 "max": self.max_cycles}}
+        for key in ("start", "end", "sample", "clock", "reset"):
+            value = getattr(self, key)
+            if value:
+                out[key] = value
+        if self.tolerance:
+            out["tolerance"] = self.tolerance
+        return out
+
+
+@dataclass
 class TestPoint:
     """一条测试点 —— 建模、激励、覆盖、回归、签核的公共主键。"""
     tp_id: str
@@ -105,6 +175,8 @@ class TestPoint:
     boundary: bool = False
     realization: Realization = _field(default_factory=Realization)
     execution: Execution = _field(default_factory=Execution)
+    #: 时序窗口（可选）。没有就是**不判时序**，不是"默认通过"。
+    timing: Optional[Timing] = None
     status_rule: Dict[str, str] = _field(default_factory=dict)
     notes: List[str] = _field(default_factory=list)
 
@@ -131,6 +203,9 @@ class TestPoint:
             "priority": self.priority,
             "realization": self.realization.to_dict(),
             "execution": self.execution.to_dict(),
+            # 没有时序就不写这个键 —— 序列化是 manifest 哈希的一部分，
+            # 空 dict 会让"没声明"和"声明了空窗口"看起来一样。
+            **({"timing": self.timing.to_dict()} if self.timing else {}),
             "status_rule": dict(self.status_rule),
             "observe_only": self.observe_only,
             "notes": list(self.notes),

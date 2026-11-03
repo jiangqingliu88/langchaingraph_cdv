@@ -107,31 +107,18 @@ def _execute_optimized(run_dir: Path, plan: dict) -> dict:
 def optimize_regression(project, history, policy, output, execute, reduce_seeds,
                         json_output):
     """回归效率优化：历史 → 顺序/低边际用例 → 计划 →（可选）执行与对比。"""
-    from src.core.optimize.history import collect_history, find_run_dirs
-    from src.core.optimize.plan import build_plan, write_plan
+    from src.app.services import analyze_plan
 
-    runs = find_run_dirs(project, history)
-    if not runs:
-        raise click.ClickException(f"没有找到历史 run（{project} / {history}）")
-    report = collect_history(runs)
-    policy_doc = {}
-    if policy:
-        try:
-            import yaml
-            policy_doc = yaml.safe_load(policy.read_text(encoding="utf-8")) or {}
-        except Exception:
-            policy_doc = {"path": str(policy)}
-    plan = build_plan(report,
-                      policy={"path": str(policy)} if policy else policy_doc,
-                      reduce_seeds=reduce_seeds)
-    target_run = output or runs[-1]
-    write_plan(target_run, plan)
-    result = None
-    if execute:
-        exec_run = _latest_with_regression(runs) or target_run
-        result = _execute_optimized(exec_run, plan)
-        plan["execute_result"] = result
-        write_plan(target_run, plan)
+    try:
+        payload = analyze_plan(project=project, history=history,
+                               policy_path=policy, output=output,
+                               execute=execute, reduce_seeds=reduce_seeds)
+    except FileNotFoundError as exc:
+        raise click.ClickException(str(exc))
+    report = payload["history"]
+    plan = payload["plan"]
+    result = payload["result"]
+    runs = payload["runs"]
 
     if json_output:
         click.echo(json.dumps({"history": report, "plan": plan, "result": result},
@@ -193,19 +180,15 @@ def _find_spec(project: Path, module: str) -> Path | None:
 def coverage_closure(project, coverage, target, spec, rtl, config, output, execute,
                      json_output):
     """Coverage Closure：缺口 → 定向动作计划 →（可选）用现有闭环执行。"""
-    from src.core.closure.plan import write_closure_plan
+    from src.app.services import run_closure
 
-    run_dir = _run_dir_from_coverage(coverage)
-    plan = write_closure_plan(run_dir, target)
-    result = None
-    if execute:
-        if not plan["actions"] and plan["current_coverage"] >= target:
-            console.print("[green]已达标，无需执行收敛[/green]")
-        else:
-            result = _execute_closure(project, run_dir, target, spec, rtl, config, output)
-            _write_json(run_dir / "closure" / "result.json", result)
-            plan["execute_result"] = result
-            _write_json(Path(plan["path"]), plan)
+    payload = run_closure(project=project, coverage=coverage, target=target,
+                          spec=spec, rtl=rtl, config=config, output=output,
+                          execute=execute)
+    plan = payload["plan"]
+    result = payload["result"]
+    if execute and isinstance(result, dict) and result.get("skipped"):
+        console.print("[green]已达标，无需执行收敛[/green]")
 
     if json_output:
         click.echo(json.dumps({"plan": plan, "result": result}, indent=2,

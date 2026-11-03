@@ -9,6 +9,7 @@ Provenance DAG 已经能回答大部分；这里把它压成**可计量的完整
 完整率按「五段链是否都有」算，缺一段就是缺一段。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
 import hashlib
 import json
@@ -19,7 +20,7 @@ from src.core.provenance.attribution import (
     HIT_STATUSES, Attribution, _bin_name, classify, read_json, sha256_file,
 )
 
-SCHEMA = "coverage_attribution_v1"
+SCHEMA = versions.ATTRIBUTION
 
 
 def _digest(obj: Any) -> str:

@@ -72,6 +72,11 @@ class Dimension:
     #: 一个维度里的不同取值点对应不同场景（相邻 opcode 组合），所以序列不能
     #: 只有一份。没有这一格时退回 `realization_values`（整个维度共用一条）。
     realization_sequences: Dict[str, List[int]] = _field(default_factory=dict)
+    #: **时序窗口**（`realization.timing`）—— 归一成 `{token: spec}`；
+    #: `"*"` 表示整维度共用一份（`timing: {expect_cycles: {...}}`）。
+    #: 取值点单独写时按 token 覆盖：`timing: {MAC_MAC: {...}, LOAD_MAC: {...}}`。
+    #: 空 dict = 不判时序（**不是**"默认通过"，见 `framework.model.Timing`）。
+    realization_timing: Dict[str, Any] = _field(default_factory=dict)
 
     @property
     def field_names(self) -> List[str]:
@@ -197,6 +202,7 @@ def build_dimension(item: Any) -> Optional[Dimension]:
     realization_path = ""
     realization_values: List[int] = []
     realization_sequences: Dict[str, List[int]] = {}
+    realization_timing: Dict[str, Any] = {}
     if isinstance(realization, dict):
         realization_kind = str(realization.get("kind") or "").strip().lower()
         realization_agent = str(realization.get("agent") or "").strip()
@@ -216,6 +222,7 @@ def build_dimension(item: Any) -> Optional[Dimension]:
                     continue
             if vals:
                 realization_sequences[str(token)] = vals
+        realization_timing = _normalize_timing(realization.get("timing"))
 
     return Dimension(
         key=key, id=dim_id, name=name,
@@ -230,7 +237,27 @@ def build_dimension(item: Any) -> Optional[Dimension]:
         realization_path=realization_path,
         realization_values=realization_values,
         realization_sequences=realization_sequences,
+        realization_timing=realization_timing,
     )
+
+
+#: 一份 timing 规格会出现的键。出现任一就是"整维度共用"，否则按 token 分。
+_TIMING_KEYS = {"expect_cycles", "min", "max", "min_cycles", "max_cycles",
+                "start", "end", "sample", "tolerance", "clock", "reset"}
+
+
+def _normalize_timing(raw: Any) -> Dict[str, Any]:
+    """`realization.timing` → `{token|"*": spec}`（两种写法都认）。
+
+        timing: {expect_cycles: {min: 2, max: 12}, start: a, end: b}   # 共用
+        timing: {MAC_MAC: {...}, default: {...}, LOAD_MAC: {...}}      # 按取值
+    """
+    if not isinstance(raw, dict) or not raw:
+        return {}
+    if _TIMING_KEYS & set(raw):
+        return {"*": dict(raw)}
+    return {str(token): dict(spec) for token, spec in raw.items()
+            if isinstance(spec, dict)}
 
 
 def build_cross_pair(key: str, level_raw: Any) -> Optional[CrossPair]:

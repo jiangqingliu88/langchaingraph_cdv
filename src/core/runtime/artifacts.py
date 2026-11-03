@@ -11,6 +11,7 @@
 历史版本（同一路径内容变了会追加一条，不覆盖旧身份）。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
 import hashlib
 import json
@@ -22,7 +23,7 @@ from typing import Any, Dict, List, Optional
 
 from src.core.runtime.events import EventStore, emit
 
-SCHEMA = "artifact_index_v1"
+SCHEMA = versions.ARTIFACT_INDEX
 
 
 def sha256_file(path: str | Path) -> str:

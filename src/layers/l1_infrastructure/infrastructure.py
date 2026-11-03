@@ -457,7 +457,10 @@ class InfrastructureManager:
             ShellGenerator().generate(
                 config, root_dir, mode,
                 reference_mode=reference_mode, debug_mode=debug_mode,
-                test_filter=tag_match if getattr(self, "_stage_tag", "") else None)
+                test_filter=tag_match if getattr(self, "_stage_tag", "") else None,
+                # 用例身份从 `<run>/coverage/testpoints.yaml` 反查 tp_id；
+                # `root_dir` 是 `<run>/regression_run[/<stage>]`，不能往上猜。
+                run_root=self.output_root)
 
             # ── 3. Scheduler 批量跑 build + test（扫描生成目录）──
             from src.tools.execution.regression_tools.regression_framework.models.scheduler import Scheduler

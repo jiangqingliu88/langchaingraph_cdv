@@ -101,3 +101,31 @@ python -m pytest src/tools/humanview/aivm_ir/tests -q
 
 - `test_bridge.py`：绑定 / 映射 / 丢弃 / 双哈希 / CLI 端到端（合成 + 真表）；
 - `test_xlsx_example.py`：示例表 64 TP 对齐、重复 id 不合并、往返守恒、M1 编译。
+
+## `covg_ir` / `sva_ir` / `scb_ir`（方法学 IR）
+
+三份**人维护的 YAML IR**，对应同目录 `arch.md` 的三套方法学：
+
+| 包 | 回答 | 必填骨架 | CLI |
+|---|---|---|---|
+| `covg_ir` | 功能组 × 生命周期路径的纵横矩阵 | 组有需求/覆盖点/矩阵归属；路径有 SVA+SB+定向序列；跨组交叉有实现方式 | `vagent humanview covg <yaml>` |
+| `sva_ir` | 契约 → 七类 SVA → 格子/路径 | contract/class/antecedent/consequent/cover_property/bound_cells | `vagent humanview sva <yaml>` |
+| `scb_ir` | 契约 → 五类 SCB → 格子 | contract/class/model/expected_source/execute_count/bound_cells | `vagent humanview scb <yaml>` |
+
+共同纪律：
+
+- **声明自洽 ≠ 仿真命中**：IR 只判"有没有建模、有没有 checker、有没有执行"；
+  命中率仍来自 ucdb / 仿真日志；
+- `covg_ir` 的矩阵格子：缺 SVA/SCB → 🔴，有 checker 但未签核 → 🟡，两边签核 → 🟢；
+- `sva_ir` 的 `hit_count == 0` 是 **vacuous pass**，判 error；
+- `scb_ir` 的 `execute_count == 0` 判 error；期望来源与 DUT 自身相同时告警；
+- 三份 IR 都输出 `{ok, errors, warnings, metrics, details}`，并可用 `--markdown`
+  生成评审视图（矩阵 / 分解树 / 缺口）。
+
+示例（最小）：
+
+```bash
+vagent humanview covg coverage_model/covg.yaml --markdown
+vagent humanview sva  coverage_model/sva.yaml  --json
+vagent humanview scb  coverage_model/scb.yaml
+```

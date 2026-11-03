@@ -196,6 +196,21 @@ def _dir_has_evidence(test_dir: Path) -> bool:
         return False
 
 
+def _tp_ids_by_task(run_root: Path) -> Dict[str, List[str]]:
+    """`waves/manifest.json` → `{task: [tp_id…]}`；没有就给空。
+
+    **读不到不是错误**：老 run / 没做逐用例取证时没有 manifest，界面那一列
+    空着就是事实（不是"这条没有测试点"）。
+    """
+    try:
+        from src.tools.common.lib.case_meta import read_wave_manifest
+        manifest = read_wave_manifest(run_root)
+    except Exception:                                  # noqa: BLE001 旁路
+        return {}
+    return {str(e.get("task")): list(e.get("tp_ids") or [])
+            for e in (manifest.get("entries") or []) if isinstance(e, dict)}
+
+
 def _case_dirs(run_root: Path) -> Dict[str, List[Path]]:
     """run 根 → **{用例名: 它在每一级的目录}**（旧 → 新），分级布局也不例外。
 
@@ -319,6 +334,10 @@ def run_regression_status(run_dir: str = "") -> Dict[str, Any]:
                 report_tasks[str(t["name"])] = t
     comments = _read_json(reg_root / "test_comments.json") or {}
 
+    # 用例 → 测试点：`waves/manifest.json` 是回归收尾写的唯一映射（task → tp_ids）。
+    # 没有 manifest（老 run / 没做逐用例取证）就是空 —— 不猜。
+    tp_by_task = _tp_ids_by_task(root)
+
     rows: List[Dict[str, Any]] = []
     host = platform.node()
     # 用例枚举**看全每一级**（`layout.test_dirs` 的口径），按用例名收口 ——
@@ -392,6 +411,9 @@ def run_regression_status(run_dir: str = "") -> Dict[str, Any]:
             "cov_source": cov_source,
             "cov_kb": cov_kb,
             "cov_time": cov_time,
+            # 这条用例证明哪些测试点（`waves/manifest.json` 的 task → tp_ids）。
+            # 空列表 = 没登记（批次用例 / 老 run），不是"没有测试点"。
+            "tp_ids": tp_by_task.get(name, []),
         })
 
     stats = {"total": len(rows), "pass": 0, "fail": 0, "unknown": 0}

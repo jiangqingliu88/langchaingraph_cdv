@@ -10,6 +10,9 @@ from typing import Any, Dict, List, Optional
 
 from ..constants import DEFAULT_META, TEMPLATES_DIR, __version__
 from ..ir.uvm_ir import validate_agent_ir, validate_ir
+from ..ir.shadow import (
+    compare_agent_context, compare_environment_context, shadow_enabled, warn_shadow,
+)
 from ..models import (
     AgentModel, BenchAgentEntry, BenchModel, ConstraintModel, EnvironmentModel,
     HarnessModel,
@@ -158,6 +161,9 @@ class AgentRenderTask(RenderTask):
         # 只警告：空端口名会渲染成 `logic [-1:0] ;` 这种废接口，正是要拦住的那类漂移。
         _warn_ir_issues(f"agent {agent.name}",
                         validate_agent_ir(agent.to_uvm_ir()))
+        if shadow_enabled():
+            warn_shadow(f"agent {agent.name}",
+                        compare_agent_context(agent, {"agent": agent}))
         rendered: List[Path] = []
         base_dir = self.output_dir / "agents" / f"{agent.name}_agent"
         # filelist.f 是「在 agent 目录里单独用」的（cd agents/<X>_agent && vlog -f filelist.f），
@@ -562,6 +568,10 @@ class EnvironmentRenderTask(RenderTask):
         # 端口在 interface 侧声明，这里不要求端口（`require_ports=False`）。
         _warn_ir_issues(f"environment {environment.env_name}",
                         validate_ir(environment.to_uvm_ir(), require_ports=False))
+        if shadow_enabled():
+            warn_shadow(f"environment {environment.env_name}",
+                        compare_environment_context(environment,
+                                                    {"environment": environment}))
         rendered: List[Path] = []
         env_dir = self.output_dir / "env"
         context = {"environment": environment, **environment.to_context()}
@@ -704,6 +714,10 @@ class EnvironmentRenderTask(RenderTask):
         # 的边界值分箱，没有就退回模板里那套"值类自动分箱"（0/1/其余）。
         _fb = data.get("field_bins")
         context["coverage_field_bins"] = _fb if isinstance(_fb, dict) else {}
+        # 测试点位图 + 时序判据（verify 落 `env_cov_bins.yaml` 的 `tp_bitmap`）：
+        # 位序 → TP，以及每个 bit 在哪个信号/bin 上置位、有没有时序窗口。
+        _tb = data.get("tp_bitmap")
+        context["coverage_tp_bitmap"] = _tb if isinstance(_tb, dict) else {}
         self._add_coverage_dut_context(context)
 
 

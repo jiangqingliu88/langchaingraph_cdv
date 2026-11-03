@@ -9,12 +9,13 @@
 **没有声明依赖的 test 一律视为受影响**（保守）—— 宁可多跑，不可漏跑。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
 import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
 
-SCHEMA = "test_dependencies_v1"
+SCHEMA = versions.TEST_DEPENDENCIES
 
 
 def _read_json(path: Path) -> Dict[str, Any]:

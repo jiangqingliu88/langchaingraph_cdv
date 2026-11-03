@@ -479,6 +479,58 @@ def _attach_crosses(model: CaseModel, cm: CoverageModel) -> None:
             #（实测 npu_sched：7 条全报），而真相是"这一侧根本没填"。
             # 手写覆盖率模型的作者会自己填这一项；派生路径得替作者填上。
             matrix_ref=f"{pair.a}×{pair.b}"))
+    _attach_group_crosses(model, cm, by_dim)
+
+
+def _attach_group_crosses(model: CaseModel, cm: CoverageModel,
+                          by_dim: Dict[str, CoverPoint]) -> None:
+    """`cross_groups` → N 元交叉（**跨组 cross 的落地实现**）。
+
+    `cross_matrix` 只表达"两两是否可组合"；`cross_groups` 是"这一组维度必须
+    一起组合"（`X_ISSUE_DEP_PATH` 这种 N 元组合）。SV 的 `cross` 支持多个
+    coverpoint，所以直接生成 `cross cp_a, cp_b, cp_c;`。
+
+    去重：如果这组维度已经由 `cross_matrix` 的某条两两交叉覆盖，就跳过（组
+    级别的交叉会在 ucdb 里多一份重复计量）。每维只取**第一个覆盖点**；一维多
+    字段时记账说明，不静默丢。
+    """
+    existing = {tuple(sorted(cx.dimensions)) for cx in cm.crosses}
+    for grp in model.cross_groups:
+        if grp.level == "forbidden" or grp.level not in CROSSABLE_LEVELS:
+            cm.notes.append(
+                f"cross_group {grp.key} 的级别 {grp.level!r} 不生成交叉")
+            continue
+        dims = list(grp.dims) or [model.dimension(ref) for ref in grp.dimensions]
+        dims = [d for d in dims if d is not None]
+        if len(dims) < 2:
+            cm.notes.append(f"cross_group {grp.key} 解出的维度不足 2 个 —— 跳过")
+            continue
+        key = tuple(sorted(d.key for d in dims))
+        if key in existing:
+            continue
+        cps = [by_dim.get(d.key) for d in dims]
+        missing = [d.key for d, cp in zip(dims, cps) if cp is None]
+        if missing:
+            cm.notes.append(
+                f"cross_group {grp.key} 的维度 {'、'.join(missing)} 没有覆盖点 —— 跳过")
+            continue
+        sources = {cp.source for cp in cps}
+        if len(sources) > 1:
+            cm.notes.append(
+                f"cross_group {grp.key} 的维度采样来源不同"
+                f"（{'、'.join(sorted(sources))}）—— 跳过：cross 要求同作用域")
+            continue
+        for d in dims:
+            if len(d.fields) > 1:
+                cm.notes.append(
+                    f"cross_group {grp.key}：维度 {d.key} 有 {len(d.fields)} 个字段，"
+                    f"只交叉第一个（{d.fields[0].name}）")
+        cm.crosses.append(CrossPoint(
+            name=f"cx_grp_{sv_ident(grp.key, 'grp')}",
+            signals=[cp.signal for cp in cps], level=grp.level,
+            dimensions=[cp.dimension for cp in cps], bins=[],
+            source=cps[0].source, cover_id=grp.id, matrix_ref=grp.key))
+        existing.add(key)
 
 
 def _cross_bins(pair: Any, cps: List[CoverPoint], notes: List[str],

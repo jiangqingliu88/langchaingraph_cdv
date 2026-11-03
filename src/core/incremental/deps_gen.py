@@ -20,13 +20,14 @@
 这是**文件级启发式**，不是编译级真依赖；`source` 字段会写清楚。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
 import json
 import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Set, Tuple
 
-SCHEMA = "test_dependencies_v1"
+SCHEMA = versions.TEST_DEPENDENCIES
 
 _SEED_RE = re.compile(r"_seed_\d+")
 _RUN_RE = re.compile(r"_run_\d+")

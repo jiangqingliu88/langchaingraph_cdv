@@ -7,6 +7,7 @@
 regression.yaml 的 `file_pattern`）时才真正缩小范围。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
 import json
 from pathlib import Path
@@ -20,7 +21,7 @@ from src.core.incremental.deps_gen import (
 )
 from src.core.incremental.rtl_diff import diff_runs, snapshot
 
-SCHEMA = "incremental_plan_v1"
+SCHEMA = versions.INCREMENTAL_PLAN
 
 
 def _read_json(path: Path) -> Dict[str, Any]:

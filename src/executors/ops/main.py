@@ -27,6 +27,26 @@ def _case_library():
         return None
 
 
+def _write_wave_index(output_dir: Path) -> None:
+    """回归收尾写 `waves/manifest.json` —— 波形 ↔ 用例 ↔ 测试点。
+
+    波形按用例落（`test_*/waves/<task>.db`），但此前**没有任何文件**把
+    "这份波形对应哪条用例、证明哪些测试点"写下来 —— 打开波形只看到模块名。
+    这里统一落一份索引（唯一真源，供 audit 反查、`vagent wave show` 展示）。
+
+    **失败不拦回归**：索引是旁路证据，落不下去时日志喊一声，别把一次真实
+    跑完的回归报成失败。波形文件本身仍在用例目录里。
+    """
+    try:
+        from src.layers.l1_infrastructure.layout import test_dirs
+        from src.tools.common.lib.case_meta import write_wave_manifest
+        manifest = write_wave_manifest(output_dir, test_dirs(output_dir))
+        logger.info(f"波形索引：{manifest.get('with_wave', 0)}/"
+                    f"{manifest.get('count', 0)} 条用例有波形 → waves/manifest.json")
+    except Exception as e:                      # noqa: BLE001 旁路证据
+        logger.warning(f"波形索引生成失败（回归结果不受影响）: {e}")
+
+
 @register_executor("ops")
 class OpsExecutor(BaseExecutor):
     """运维调度智能体 = 编译 + 仿真（RegressionRunner）"""
@@ -142,6 +162,8 @@ class OpsExecutor(BaseExecutor):
             _err = str(reg_data.get("error", "") or reg_data.get("stderr", ""))
             if not reg_data.get("eda_missing"):
                 reg_data["eda_missing"] = self._is_eda_missing(_err)
+
+        _write_wave_index(output_dir)
 
         passed = reg_data.get("passed", 0)
         failed = reg_data.get("failed", 0)

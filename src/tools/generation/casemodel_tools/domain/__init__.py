@@ -20,6 +20,7 @@ from .fields import (FIELD_TYPE_REGISTRY, EnumField, Field, FieldType,
                      WeightedField, build_field, field_type)
 from .behavior import (BehaviorModel, BehaviorSequence, TemporalProperty,
                        Transition)
+from .paths import PathBin, PathGroup
 from .config_space import ConfigDimension, ConfigSpace
 from .model import (Assertion, CaseDefaults, CaseModel, Generation,
                     ResolveReport)
@@ -39,6 +40,7 @@ __all__ = [
     # 聚合根与附属
     "CaseModel", "Generation", "CaseDefaults", "ResolveReport", "Assertion",
     "BehaviorModel", "BehaviorSequence", "Transition", "TemporalProperty",
+    "PathGroup", "PathBin",
     "ConfigSpace", "ConfigDimension",
     # case 值对象
     "CaseAttribute", "ExternalCase", "NO_NODE_CODE",

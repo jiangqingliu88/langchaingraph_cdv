@@ -1,6 +1,12 @@
 # 用例级覆盖率闭环与波形可追溯（方案设计）
 
-> 状态：**设计稿，未落地**。
+> 状态：**已落地**。P0：逐用例取证 / `case_tp.json` / `waves/manifest.json` /
+> audit 门 / `coverage case-report` + `wave show`；P1：`coverage/tp_bitmap.json`
+> + 覆盖率接口 `tp_seen` 位图 + `[TP_HIT]` 日志 + 工作台「测试点」列 / 波形归属；
+> P2：TP IR `timing.expect_cycles` + env 逐拍判窗 `[TP_TIMING]`（序列型只
+> `TP_TIMING_WARN`，不否决）；P3：PATH 组（`path_groups:` → TP → 计划/证据）、
+> 跨组 cross 实现架构、**TP Cov 四层证据视图**（`coverage/tp_cov_evidence.json`
+> + `功能覆盖率 → TP Cov 证据` 页 + `vagent coverage tp-evidence`）。
 > 关联：`docs/design/multi_dimensional_tp_ir.md`（TP IR v2）、
 > `ARCHITECTURE.md` §7（方法论）、`src/tools/common/lib/collect_real_coverage.py`
 > （`tp_matrix` 现状实现）、`src/tools/checking/coverage_tools/cov_api.py`
@@ -188,19 +194,23 @@ BACKDOOR_HIT / PENDING_BACKEND）**保留**，只是把"命中"的**统计域**�
 }
 ```
 
-2. **波形内**：覆盖率接口新增 `tp_seen` 位图（复用已有 `extra_signals` 机制，
-   见 `coverage_render._extra_signals`），第 *i* 位 = 第 *i* 个 TP 的仓在本拍
-   命中过。打开波形就能看到"这一拍哪几个测试点被点亮"：
+2. **波形内**：覆盖率接口新增 `tp_seen` 位图。它**不是端口**（端口是 bind 到
+   DUT 信号的；`tp_seen` 没有对应的 DUT 信号），而是接口体内的一个变量，由
+   env 覆盖率组件在仓命中时置位：
 
 ```systemverilog
 // coverage/<dut>_cov_if.sv（自动生成）
-input logic [69:0] tp_seen;   // 位序 = testpoints.yaml 的序号
+logic [69:0] tp_seen;   // 位序 = coverage/tp_bitmap.json 的 entries[].bit
 ```
+
+   第 *i* 位在对应 TP 的仓**首次命中**时置 1，**之后保持为 1**（不做逐拍清零）——
+   波形里看的是"到这一刻为止点亮了哪些测试点"。位序 = `testpoints.yaml` 的
+   序号，**一旦发布不重排**（历史波形靠它对号）。
 
 3. **日志内**：env 覆盖率组件在 TP 仓**首次**命中时打一行，带仿真时间：
 
 ```text
-[TP_HIT] tp=TP-NPUSCH-D_QUEUE-0 cp=cp_queue_level bin=empty t=125.5ns
+[TP_HIT] tp=TP-NPUSCH-D_QUEUE-0 cp=cp_queue_level bin=empty t=%0t
 ```
 
 > 三者的顺序是"权威 → 方便"：`manifest.json` 是签核材料，`tp_seen` 是给人看
@@ -215,9 +225,15 @@ tp_id: TP-NPUSCH-D_SEQ-LOAD_MAC
 realization: {kind: sequence}
 timing:
   expect_cycles: {min: 2, max: 12}     # 从 load 提交到 mac 发射
-  sample: issue_valid                  # 观测点
-  tolerance: 0                           # 严格相等时可省
+  start: load_submit                   # 窗口起点（DUT 信号名）
+  end: issue_valid                     # 窗口终点（= sample 亦可）
+  sample: issue_valid                  # 观测点（end 缺省时用它）
+  tolerance: 0                         # 严格相等时可省
 ```
+
+**落地口径**：`start` / `end` 必须是 DUT 信号名（env 检查组通过覆盖率接口读，
+verify 会把它们作为 `extra_signals` 引成接口端口）。缺任一 → `checkable=False`，
+生成期在 `tp_bitmap.json.notes` 里说清，**不生成一个永远不报的空检查**。
 
 env 检查组逐拍求值，超窗即 `UVM_ERROR [TP_TIMING]`，并写进
 `case_cov/<task>.json → timing_ok`。**没有 `timing` 块的 TP 不判时序**——
@@ -289,9 +305,10 @@ env 检查组逐拍求值，超窗即 `UVM_ERROR [TP_TIMING]`，并写进
 ### P1 —— 波形里看得见（改 SV 模板）
 
 6. `src/tools/generation/uvm_tools/tool_uvm/templates/environment_templates/env_cov.sv.j2`
-   - 按 TP 序号生成 `logic [N-1:0] tp_seen` 的置位逻辑（仓命中即置位），
-     `tp_seen` 作为 `extra_signals` 进覆盖率接口（机制已存在）；
-   - 首次命中打 `[TP_HIT] tp=… cp=… bin=… t=…ns`。
+   - 按 TP 序号生成位图置位逻辑（仓命中即置位，保持为 1）；
+   - `tp_seen` 作为**接口体变量**（不是端口）进覆盖率接口，`render_cov_interface`
+     按 `tp_bitmap_width` 生成 `logic [N-1:0] tp_seen;`；
+   - 首次命中打 `[TP_HIT] tp=… cp=… bin=… t=%0t`。
 7. `src/executors/verify/main.py`
    - 生成 TP 序号表 `coverage/tp_bitmap.json`（位序 → tp_id），位序一旦发布
      不重排（重排会让历史波形对不上号）。
@@ -479,3 +496,97 @@ vagent coverage case-report -o output_e2e_npu_sched_... --tp TP-NPUSCH-D_DEP-RAW
 
   需要的话我可以按 P0 先落地，跑一遍 npu_sched
   验证 case_tp.json 能出来。
+---
+
+## 9. 四层证据与 PATH 组（评审口径）
+
+### 9.1 四层证据不是"一个用例覆盖了"的并列条件
+
+覆盖率报告里的 bin 命中只回答**第一层**："这个场景发生过吗"。一个**功能契约**
+要被判定为验证完成，需要四类证据（**按契约判定，不按单个用例判定**）：
+
+| 层 | 回答 | 由谁证明 | 只命中/通过意味着什么 | 不证明什么 |
+|---|---|---|---|---|
+| 功能覆盖 | 场景发生过吗？ | coverpoint / cross bin | 激励和状态到达 | 不证明时序、数据、路径正确 |
+| 时序断言 | 时序行为对吗？ | SVA / `[DUT_CHK]` | 握手、start/done/rls、反压保持正确 | 不证明数据结果或整条路径 |
+| 数据比对 | 数据/资源结果对吗？ | scoreboard | 数据、tag、SPAD/寄存器不丢不重 | 不证明没声明要查的字段 |
+| 路径覆盖 | 整条生命周期走通了吗？ | PATH 组 | `cmd_hs → … → rsp/rls` 的完整路径发生且绑定检查通过 | 功能组 100% 不能替代 |
+
+**一个用例可以只提供其中一部分**，多个用例合起来构成完整证据链。所以：
+`bin 命中 ≠ 功能已验证`；`只跑通 SVA`、`只命中功能 bin` 都不能单独签核功能。
+
+落地产物：`coverage/tp_cov_evidence.json`（`tp_cov_evidence_v1`）。每个 TP 一节
+`evidence_layers`，四层各自带 `status / proves / source`；`contract_status` 只在
+`functional + timing + data` 全部 `PROVEN`（路径型契约还要 `path PROVEN`）时才判
+`VERIFIED`。任一层 `NOT_APPLICABLE`（模型没声明检查/比对）→ 只能 `PARTIAL`，
+**不把"没声明"当"通过"**。
+
+工作台：`功能覆盖率 → TP Cov 证据` 页（左表四层状态，右栏完整证据链）；
+CLI：`vagent coverage tp-evidence -o <run> [--tp …]`。
+
+### 9.2 PATH 组：功能组之外的第二条度量轴
+
+`path_groups:` 按**指令生命周期**切，不按功能切：
+
+```yaml
+path_groups:
+  - id: CG_CMDSCHED_PATH
+    name: 端到端指令路径
+    sample: path_seq
+    coverpoint: cp_path_issue_lifecycle
+    bins:
+      - name: direct_full
+        sequence: [cmd_hs, no_dep, direct, start, done, rls, rsp]
+        checks: [SVA-START-DONE-ID, SCB-RSP-DATA]
+        requirement: Feat-10
+        timing: {expect_cycles: {min: 2, max: 12}, start: a, end: b}
+```
+
+- **一条 bin = 一条 TP**（`TP-<obj>-PATH-<bin>`），进同一份 TP IR / 矩阵 / 证据视图；
+- `checks` 是**这条路径必须同时绑定的 SVA/SCB 检查项** —— PATH 组证明"路径走通"，
+  checker 证明"走通且走对"；
+- 执行后端（序列 → UVM + `path_seq` 采样）在 P1b：当前如实标 `PENDING_BACKEND`，
+  不进功能覆盖率分母，也**不宣称路径已验证**；
+- 实现：`domain/paths.py`（模型）→ `framework/paths.py`（编译成 TP）→
+  `coverage_plan` 的 `paths` 段（计划/追溯）→ `tp_evidence` 的 `path` 层。
+
+### 9.3 跨组 cross 的实现架构
+
+```
+casemodel.cross_matrix / cross_groups / policy_pack.coverage_bins
+        │  声明"哪两个维度要一起组合、哪些组合非法"
+        ▼
+CoverageModel.crosses (CrossPoint：name / dimensions / bins / illegal)
+        │  渲染
+        ▼
+SV covergroup：cg_<agent> 的 `cross_<name>`（同 agent）
+              或 cg_mixed 的 `cross_<name>`（跨 agent，重复声明各 agent 的 cp）
+        │  ucdb
+        ▼
+vcover `-cvg -details`：cross 级百分比
+        │
+        ▼
+tp_cov_evidence.groups.cross：name / dimensions / bin 数 / 实测 %
+```
+
+边界（评审要能说清）：
+
+- cross 只证明**组合发生过**；组合在正确时序/数据下发生，仍由 `timing`
+  （SVA/`[DUT_CHK]`）与 `data`（SCB）两层证明；
+- 非法组合走 `illegal_bins`（一票否决），不混进"正常仓"；
+- 跨 agent 的组合不能塞进单个 `cg_<agent>`，必须单开 `cg_mixed`（模板已实现）；
+- `coverage_bins`（策略包）生成的是**语义 cross**，与模型 `cross_matrix` 同源不同层：
+  前者是设计风格知识，后者是模块声明；两边名字都进证据视图，不互相冒充。
+
+### 9.4 评审现场可直接用的回答
+
+> "功能组的 100% 只证明每个功能契约的取值/场景都打到了；路径通不通由独立的
+> PATH 组负责，且每个 PATH bin 都绑定对应的 SVA 和 scoreboard 检查项。
+> 四类证据按功能契约汇聚，不按单个用例：一个用例可以只提供一部分，多个用例
+> 合起来构成完整证据链。覆盖率报告里的 bin 命中率只是第一层，不单独作为功能
+> 签核依据。"
+
+如果 PATH 后端尚未接：
+
+> "PATH 组已建模并进 TP IR / 证据视图，当前是 `PENDING_BACKEND` —— 我们不宣称
+> 路径已验证；功能组 100% 只说明场景覆盖，路径证据待后端接上后补。"

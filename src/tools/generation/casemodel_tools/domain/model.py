@@ -134,6 +134,8 @@ class CaseModel:
     assertions: List["Assertion"] = _field(default_factory=list)
     #: 行为域（状态 / 迁移 / 序列 / 时序）；None = 模型没启用行为建模。
     behavior: Optional[Any] = None
+    #: **PATH 组**（端到端指令生命周期）—— 与功能组并列，回答"路径通不通"。
+    path_groups: List[Any] = _field(default_factory=list)
     #: 配置域（DUT/特性配置空间）；None = 模型没启用配置建模。
     config_space: Optional[Any] = None
     cross_pairs: List[CrossPair] = _field(default_factory=list)
@@ -419,6 +421,9 @@ class CaseModel:
             "check_count": len(self.checks),
             "cross_pair_count": len(self.cross_pairs),
             "cross_group_count": len(self.cross_groups),
+            "path_group_count": len(self.path_groups),
+            "path_bin_count": sum(len(getattr(g, "bins", []) or [])
+                                  for g in self.path_groups),
             "env_required": list(self.env_required),
             "source": self.source,
         }

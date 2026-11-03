@@ -16,6 +16,13 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 ENV_MODE = "SIGNOFFAI_CMD_ALLOWLIST"
 ENV_ROOTS = "SIGNOFFAI_CMD_ROOTS"
 
+#: EDA 工具类别：即使全局是 monitor，也默认 enforce —— 这些命令直接烧 license/
+#: 改工作库，越界调用不该只记一笔。可用 `SIGNOFFAI_CMD_ALLOWLIST_EDA=monitor` 退回。
+EDA_TOOLS = frozenset({
+    "vlog", "vopt", "vsim", "vcover", "vcs", "simv", "verdi", "xrun",
+    "iverilog", "vvp", "verilator",
+})
+
 #: 常见 EDA / 构建 / 脚本工具。新增工具在这里加，别在调用点一处处放开。
 DEFAULT_TOOLS = frozenset({
     "vlog", "vopt", "vsim", "vcover", "vcs", "simv", "verdi", "xrun",
@@ -64,6 +71,8 @@ class CommandPolicy:
     allow_paths: bool = True
     strict_path: bool = False
     extra_roots: Tuple[Path, ...] = ()
+    #: EDA 类别是否强制 enforce（不受全局 monitor 影响）。
+    eda_enforce: bool = True
 
     @classmethod
     def from_env(cls) -> "CommandPolicy":
@@ -72,7 +81,8 @@ class CommandPolicy:
             mode = "monitor"
         raw_roots = os.environ.get(ENV_ROOTS, "")
         roots = tuple(Path(p).expanduser() for p in raw_roots.split(os.pathsep) if p.strip())
-        return cls(mode=mode, extra_roots=roots)
+        eda = os.environ.get("SIGNOFFAI_CMD_ALLOWLIST_EDA", "enforce").strip().lower()
+        return cls(mode=mode, extra_roots=roots, eda_enforce=(eda != "monitor"))
 
     def _violation(self, argv: Sequence[str], cwd: Optional[Path],
                    run_dir: Optional[Path]) -> str:
@@ -109,6 +119,8 @@ class CommandPolicy:
             return True, ""
         if self.mode == "enforce":
             return False, reason
+        if self.eda_enforce and _norm_tool(argv[0]) in EDA_TOOLS:
+            return False, f"EDA enforce: {reason}"
         return True, f"monitor: {reason}"
 
 

@@ -10,6 +10,7 @@
 幂等（节点重跑不会写出两条）。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
 import json
 import os
@@ -17,7 +18,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-DECISION_SCHEMA = "decision_eval_v1"
+DECISION_SCHEMA = versions.DECISION
 
 EFFECTIVE = "EFFECTIVE"
 INEFFECTIVE = "INEFFECTIVE"

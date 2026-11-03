@@ -56,6 +56,28 @@ def run_coverage(run_dir: str = "") -> Dict[str, Any]:
             "report": files.get("report") or {}, "notes": notes}
 
 
+def _tp_evidence_section(root: Path, notes: List[str]) -> Dict[str, Any]:
+    """TP Cov 证据视图（四层）—— 失败只在 notes 里说，不拖垮整页。"""
+    try:
+        from src.tools.checking.coverage_tools.tp_evidence import build_tp_evidence
+
+        return build_tp_evidence(root)
+    except Exception as exc:                        # noqa: BLE001 页面不该挂
+        notes.append(f"TP 证据视图构建失败：{exc}")
+        return {}
+
+
+def _case_view_section(root: Path, notes: List[str]) -> Dict[str, Any]:
+    """Case 关联视图（用例/契约/矩阵/缺口四张表）—— 失败只在 notes 里说。"""
+    try:
+        from src.tools.humanview.case_associate_view.builder import build_case_view
+
+        return build_case_view(root)
+    except Exception as exc:                        # noqa: BLE001 页面不该挂
+        notes.append(f"Case 证据视图构建失败：{exc}")
+        return {}
+
+
 def run_fcov(run_dir: str = "") -> Dict[str, Any]:
     """一次运行 → **功能覆盖率**三张表（覆盖点 / 测试点 / 资产）。
 
@@ -257,11 +279,16 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
             ("实测覆盖率文本", Path("sim/coverage/reports/coverage_cvg.txt"))):
         assets.append(_artifact(root, rel, "功能覆盖", None) | {"label": label})
 
+    tp_evidence = _tp_evidence_section(root, notes)
+    case_view = _case_view_section(root, notes)
+
     return {
         "run_id": root.name,
         "run_dir": str(root),
         "coverpoints": coverpoint_rows,
         "testpoints": testpoint_rows,
+        "tp_evidence": tp_evidence,
+        "case_view": case_view,
         "batches": batches,
         "traceability": trace,
         "assets": assets,

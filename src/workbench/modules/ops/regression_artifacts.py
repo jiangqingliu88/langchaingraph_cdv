@@ -44,6 +44,9 @@ from . import cov_actions
 COLUMNS = (
     ("name", "用例", 240, LEFT),
     ("detail", "状态", 110, CENTER),
+    # 这条用例证明哪些测试点（`waves/manifest.json` 的 task → tp_ids）。
+    # 列宽故意窄：**显示截断、hover 看全量**（Qt 的 tooltip 取整格文本）。
+    ("tp_ids", "测试点", 180, LEFT),
     ("artifact", "文件（绝对路径）", 560, LEFT),
     ("size", "大小", 90, CENTER),
     ("time", "时间", 150, CENTER),
@@ -241,6 +244,9 @@ class _ArtifactPage(ModuleBase):
                 "size": _fmt_size(row.get(f"{self.ARTIFACT_KEY}_kb")),
                 "time": row.get(f"{self.ARTIFACT_KEY}_time", "") or "",
                 "source": row.get(f"{self.ARTIFACT_KEY}_source", "") or "",
+                # 整格文本给 `RowsModel` —— 显示按列宽截断，tooltip 是全量
+                # （模型对 DisplayRole / ToolTipRole 返回同一份文本）。
+                "tp_ids": "、".join(row.get("tp_ids") or []),
                 "detail": row.get("detail", "") or ""}
 
     # ── 点开 ──
@@ -346,8 +352,9 @@ class RegressionWaveModule(_ArtifactPage):
     def _open(self, row: Dict[str, Any]) -> None:
         if not row:
             return
-        cov_actions.open_wave(self, self._artifact_path(row),
-                              what=f"{row.get('name', '这条用例')} 的波形")
+        # 不传 `what`：让 `open_wave` 从 `waves/manifest.json` 取
+        # `test · tp_ids`，manifest 缺失时才退回文件名（一处判据，不各写一份）。
+        cov_actions.open_wave(self, self._artifact_path(row), what="")
 
 
 class RegressionCoverageModule(_ArtifactPage):

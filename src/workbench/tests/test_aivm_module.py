@@ -31,6 +31,28 @@ def test_builds_with_the_shipped_example_table(qt_app, settings):
         app.processEvents()
 
 
+def test_headers_follow_the_xlsx_headtitle(qt_app, settings):
+    """GUI 的列名 = 源 xlsx 的表头（第 2 行 + 第 3 行释义），不是 GUI 自己一套。"""
+    module, widget, app = _build(qt_app, settings)
+    try:
+        headers = [module.table.horizontalHeaderItem(i).text()
+                   for i in range(module.table.columnCount())]
+        assert [h.split("·")[0] for h in headers] == [
+            "序号", "Feature 提取", "Sub_Feature（可选）",
+            "Sub_Sub_Feature（可选）", "Sub_Sub_Feature（可选）",
+            "TestName", "TestNum", "Doc Section", "章节",
+        ]
+        # D/E 在源表同名，靠第 3 行的三级/四级区分
+        assert headers[3].endswith("三级分类")
+        assert headers[4].endswith("四级分类")
+        # 第一行的 A/B 列是源表原文（TP id + feature 提取）
+        assert module.table.item(0, 0).text().startswith("NPU_V2-CMDSCHED-")
+        assert module.table.item(0, 1).text().strip()
+    finally:
+        widget.deleteLater()
+        app.processEvents()
+
+
 def test_missing_input_is_reported_not_crashed(qt_app, settings):
     module, widget, app = _build(qt_app, settings)
     try:

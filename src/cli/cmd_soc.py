@@ -19,13 +19,12 @@ import click
 
 from src.cli.commands import cli, console
 from src.cli.output import get_output_adapter
-from src.cli.soc_adapter import (
+from src.app.services.soc_service import (
     build_ip_release, find_design, find_wave, ip_plan, ip_status,
-    load_run_manifest, run_ip_regression, run_soc_project, soc_ip_binding,
-    soc_ip_release_matrix, verify_ip_release, verify_soc_evidence,
-    write_ip_evidence,
+    list_c_cases, load_run_manifest, run_c_project, run_ip_regression,
+    run_soc_project, soc_ip_binding, soc_ip_release_matrix,
+    verify_ip_release, verify_soc_evidence, write_ip_evidence,
 )
-from src.cli.soc_c_runner import list_c_cases, run_c_case
 
 _REQUIRED = (
     "npu/soc_top.sv",
@@ -164,7 +163,7 @@ def soc_c_cases(project, json_output):
 @click.option("--json", "json_output", is_flag=True)
 def soc_c_run(project, case_id, output, json_output):
     """编译并运行 E203 bare-metal C 用例（需要 RISC-V 工具链 + Questa）。"""
-    result = run_c_case(project, case_id, output)
+    result = run_c_project(project, case_id, output)
     if json_output:
         click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
     else:

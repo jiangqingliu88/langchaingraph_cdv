@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Tuple
 
 from ..domain import priority_rank
 from .contracts import PipelineContext, Stage
-from .model import KIND_OBSERVE, Execution, TestPoint
+from .model import KIND_OBSERVE, Execution, TestPoint, Timing
 from .naming import ascii_slug, attribute_test_name, iter_value_points
 from .realization import REALIZATIONS, resolve_realization
 
@@ -157,6 +157,30 @@ def _bin_for_value(cp: Any, token: Any) -> str:
     return ""
 
 
+def _attach_timing(tp: TestPoint, dim: Any, ctx: Any) -> None:
+    """维度的 `realization.timing` → TP 的时序窗口（按取值点覆盖 `*`）。
+
+    **没有 timing 就不设**（`tp.timing` 保持 None）：不判时序 ≠ 通过时序。
+    声明了但缺 `start`/`end` 时照样记进 IR，并在 `notes` 里说"不可判" ——
+    生成期说出来，比生成一个永远不报的空检查强。
+    """
+    spec_map = getattr(dim, "realization_timing", None) or {}
+    if not spec_map:
+        return
+    spec = (spec_map.get(str(tp.value))
+            or spec_map.get("*") or spec_map.get("default"))
+    timing = Timing.from_dict(spec)
+    if timing is None:
+        ctx.notes.append(f"{tp.tp_id}: timing 写法无法解析（需要 min/max 整数）"
+                         f"—— 这条不判时序")
+        return
+    tp.timing = timing
+    if not timing.checkable:
+        ctx.notes.append(
+            f"{tp.tp_id}: timing 缺 start/end（或窗口非法）—— 时序不可判，"
+            f"env 不会为它生成检查；补 `start: <DUT 信号>` / `end: <DUT 信号>`")
+
+
 class RealizeStage(Stage):
     """测试点 → realization（**走注册表**，新增 kind 不用改这里）。"""
     name = "realize"
@@ -178,6 +202,7 @@ class RealizeStage(Stage):
             tp.realization = resolve_realization(dim, fld, value,
                                                  ctx.agents, ctx.notes,
                                                  token=tp.value)
+            _attach_timing(tp, dim, ctx)
             if tp.observe_only:
                 observe_dims.add(dim.key)
 

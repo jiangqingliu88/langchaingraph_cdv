@@ -3,6 +3,11 @@
 方案 B 里 xlsx 是"该测什么"的真源；这一页只读：TP 清单、三通道覆盖点数、
 M1 计划摘要、校验统计。导入 casemodel / 防漂移校验在 CLI（`case-model
 import-xlsx` / `verify-import`），页面不写盘、不起子进程。
+
+**列名按源表表头走**：`humanview.aivm_plan` 用 `discover_column_headers`
+读 xlsx 的第 2 行（headtitle）与第 3 行（中文释义），界面照它出列 ——
+换一份表头不同的测试点表，GUI 不用改代码。下方 `COLUMNS` 只是 API 不可用
+时的兜底（与本仓库示例表一致）。
 """
 from __future__ import annotations
 
@@ -16,12 +21,26 @@ from PySide6.QtWidgets import (
 from ...ui import theme
 from ..base import ModuleBase
 
-COLUMNS = ("TP", "分类", "模式", "覆盖点", "配置枚举", "定向用例")
+#: 表头**逐字对齐**源 xlsx（`NPU_V2.CMDSCHED.testpoint.xlsx`）的第 2 行；
+#: D/E 两列在源表里同名（都是 `Sub_Sub_Feature（可选）`），用第 3 行的
+#: 「三级分类 / 四级分类」后缀区分 —— 否则界面上两列看不出差别。
+COLUMNS = (
+    ("seq", "序号", 170),
+    ("feature", "Feature 提取·一级分类", 170),
+    ("sub_feature", "Sub_Feature（可选）·二级分类", 180),
+    ("sub_sub_feature", "Sub_Sub_Feature（可选）·三级分类", 200),
+    ("sub_sub_sub_feature", "Sub_Sub_Feature（可选）·四级分类", 200),
+    ("test_name", "TestName·用例名", 130),
+    ("test_num", "TestNum·test个数", 100),
+    ("doc_section", "Doc Section·相关文档", 230),
+    ("chapter", "章节·摘取位置", 150),
+)
 
 
 class AivmTableModule(ModuleBase):
-    HINT = ("PM/DV lead 手写的测试点表（xlsx）。只读查看 TP 与三通道覆盖点；"
-            "导入 casemodel 用 `vagent case-model import-xlsx`。")
+    HINT = ("PM/DV lead 手写的测试点表（xlsx）。**列名按源表第 2/3 行表头"
+            "动态生成**；只读查看 TP 原文与三通道覆盖点，导入 casemodel 用 "
+            "`vagent case-model import-xlsx`。")
 
     def build_content(self) -> QWidget:
         root = QWidget()
@@ -47,10 +66,12 @@ class AivmTableModule(ModuleBase):
         layout.addWidget(self.summary)
 
         self.table = QTableWidget(0, len(COLUMNS), root)
-        self.table.setHorizontalHeaderLabels(list(COLUMNS))
+        self.table.setHorizontalHeaderLabels([label for _key, label, _w in COLUMNS])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
+        for column, (_key, _label, width) in enumerate(COLUMNS):
+            self.table.setColumnWidth(column, width)
         layout.addWidget(self.table, 1)
 
         data_path = self.ctx.data_path(self.spec)
@@ -82,16 +103,25 @@ class AivmTableModule(ModuleBase):
             self.table.setRowCount(0)
             return
         rows = payload.get("tps") or []
+        # **表头来自源 xlsx**（`payload["columns"]`，由 `discover_column_headers`
+        # 读第 2/3 行）。API 没给出时才退回本页的 `COLUMNS` —— 不在这里另推一份。
+        columns = payload.get("columns") or [
+            {"key": key, "label": label} for key, label, _w in COLUMNS]
+        widths = {key: width for key, _label, width in COLUMNS}
+        self.table.setColumnCount(len(columns))
+        self.table.setHorizontalHeaderLabels([str(c.get("label") or c.get("key"))
+                                              for c in columns])
+        for column, item in enumerate(columns):
+            self.table.setColumnWidth(column, widths.get(str(item.get("key")), 150))
         self.table.setRowCount(len(rows))
         for index, row in enumerate(rows):
-            values = (row.get("orig_id") or row.get("tp_id") or "",
-                      row.get("category") or "",
-                      row.get("mode") or "",
-                      row.get("cover_bins", 0),
-                      row.get("config_enums", 0),
-                      row.get("directed_cases", 0))
+            # 列值与源表列一一对应 —— 直接取 API 带出的**源表原文**，
+            # 不在这里二次推导（表格是输入表的映射，不是另一个视图）。
+            values = tuple(row.get(str(item.get("key")), "") for item in columns)
             for column, value in enumerate(values):
-                self.table.setItem(index, column, QTableWidgetItem(str(value)))
+                self.table.setItem(index, column,
+                                   QTableWidgetItem("" if value is None
+                                                    else str(value)))
         self.summary.setStyleSheet(f"color: {theme.current().muted};")
         self.summary.setText(self._summary_text(payload))
         self.set_status(f"测试点表：{len(rows)} 个 TP")

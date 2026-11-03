@@ -109,6 +109,33 @@ def _discover_columns(ws, header_rows=(1, 2, 3)) -> dict[int, RawColumn]:
     return col_map
 
 
+def discover_column_headers(ws) -> list[dict]:
+    """源表表头 → `[{key, label, sub_label}]`（按列序，只收能映射的列）。
+
+    **GUI 的表头按这份走**，不写死。示例表的表头是两行：
+
+        第 2 行：序号 / Feature 提取 / Sub_Feature（可选）/ Sub_Sub_Feature（可选）/ …
+        第 3 行：feature 编号…（图例）/ 一级分类 / 二级分类 / 三级分类 / 四级分类 / …
+
+    第 2 行是"headtitle"，第 3 行是中文释义。D/E 两列在第 2 行**同名**
+    （都是 `Sub_Sub_Feature（可选）`），靠第 3 行的「三级分类 / 四级分类」
+    区分；A 列第 3 行是一整段图例（含换行），不当释义拼进去。
+    """
+    col_map = _discover_columns(ws)
+    out: list[dict] = []
+    for col, raw in sorted(col_map.items()):
+        top = re.sub(r"\s+", " ", str(ws.cell(2, col).value or "")).strip()
+        sub = re.sub(r"\s+", " ", str(ws.cell(3, col).value or "")).strip()
+        # 图例（多行/过长）不是释义 —— 不要拼进表头
+        if "\n" in str(ws.cell(3, col).value or "") or len(sub) > 20:
+            sub = ""
+        label = top or sub or raw.value
+        if top and sub and sub != top:
+            label = f"{top}·{sub}"
+        out.append({"key": raw.value, "label": label, "sub_label": sub})
+    return out
+
+
 def _cell(ws, row: int, col: int) -> str:
     """读单元格值；碰上 openpyxl 的 MergedCell 代理，回退到合并区左上角真值。
 

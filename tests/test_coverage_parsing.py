@@ -362,7 +362,10 @@ class TestTpMatrix:
         m = _tp_matrix(tmp_path, cov)
         assert m["counts"] == {"HIT": 2, "MISS": 1, "OBSERVED": 1,
                                "UNOBSERVED": 0, "BACKDOOR_HIT": 0,
-                               "BACKDOOR_MISS": 0, "UNMAPPED": 0}
+                               "BACKDOOR_MISS": 0, "UNMAPPED": 0,
+                               # 没有回归目录 → 没有逐用例证据：签核一律 UNSIGNED，
+                               # 不把"合并库里命中"冒充成"这条用例证明了"。
+                               "SIGNED_OFF": 0, "UNSIGNED": 4}
         assert m["drivable"] == 3 and m["drivable_hit"] == 2
         assert [r["tp_id"] for r in m["missed"]] == ["TP-3"]
 

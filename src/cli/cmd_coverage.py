@@ -225,6 +225,236 @@ def coverage_merge(runs, json_output):
         out.print_error(str(e))
 
 
+def _print_tp_chain(tid, s, cases):
+    """打印一条测试点的取证链（人读；机器读走 `--json`）。"""
+    if not s:
+        console.print(f"[red]{tid}: 没有这条测试点[/red]")
+        return
+    mark = "[green]SIGNED_OFF[/green]" if s.get("signed_off") else "[red]UNSIGNED[/red]"
+    by = f" ({s['signed_off_by']})" if s.get("signed_off_by") else ""
+    console.print(f"[bold]{tid}[/bold]  {mark}")
+    console.print(f"  owner : {s.get('owner_test') or '-'} @ {s.get('owner_stage') or '-'}")
+    console.print(f"  task  : {s.get('owner_case') or '-'}{by}")
+    console.print(f"  bins  : {', '.join(s.get('owned_bins') or []) or '-'}")
+    rec = cases.get(s.get("owner_case"))
+    if rec:
+        scb = rec.get("scb") or {}
+        a = rec.get("assertions") or {}
+        console.print(f"  scb   : total={scb.get('total')} matched={scb.get('matched')} "
+                      f"mismatched={scb.get('mismatched')}")
+        console.print(f"  assert: {a.get('rules', 0)} rules, {a.get('fired', 0)} fired")
+        if s.get("timing_ok") is not None:
+            console.print(f"  timing: {'ok' if s['timing_ok'] else 'VIOLATION'}"
+                          f"（expect_cycles）")
+        wave = rec.get("wave") or rec.get("wave_abs") or "-"
+        console.print(f"  wave  : {wave}")
+        if rec.get("wave_abs"):
+            from src.tools.common.lib.case_meta import visualizer_command
+            console.print(f"          [dim]{visualizer_command(rec['wave_abs'])}[/dim]")
+    if s.get("reasons"):
+        console.print(f"  reason: {', '.join(str(r) for r in s['reasons'])}")
+    console.print()
+
+
+@coverage.command("case-report")
+@click.option("--output", "-o", "output_dir", required=True,
+              type=click.Path(file_okay=False),
+              help="运行目录（含 coverage/case_tp.json 的那一层）")
+@click.option("--tp", "tp_id", default=None, help="只看某条测试点（如 TP-NPUSCH-D_DEP-RAW）")
+@click.option("--sample", "max_cases", default=0, type=int,
+              help="逐用例解析上限（超过则采样，并在 evidence_sampled 里说明）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def coverage_case_report(output_dir, tp_id, max_cases, json_output):
+    """逐用例取证链：用例 → 覆盖仓 → 测试点 → 波形
+
+    \b
+    示例:
+      vagent coverage case-report -o output_xxx --tp TP-NPUSCH-D_DEP-RAW
+    """
+    from src.tools.common.lib.collect_real_coverage import _case_cov_matrix
+
+    try:
+        idx = _case_cov_matrix(Path(output_dir), max_cases=max_cases)
+    except Exception as e:                            # noqa: BLE001
+        click.echo(f"逐用例取证读取失败: {e}", err=True)
+        return
+    by_tp = idx.get("by_tp") or {}
+    if not by_tp:
+        click.echo(f"没有逐用例证据（{output_dir}/coverage/testpoints.yaml 缺失"
+                   f"或回归目录为空）", err=True)
+        return
+    if json_output:
+        payload = by_tp.get(tp_id, {}) if tp_id else {"counts": idx.get("counts"),
+                                                      "by_tp": by_tp}
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+        return
+
+    cases = {c.get("task"): c for c in idx.get("cases") or []}
+    for tid in ([tp_id] if tp_id else list(by_tp)):
+        _print_tp_chain(tid, by_tp.get(tid), cases)
+    console.print(f"[dim]共 {idx.get('counts', {}).get('total', 0)} 条；"
+                  f"签核 {idx.get('counts', {}).get('signed_off', 0)} / "
+                  f"未签核 {idx.get('counts', {}).get('unsigned', 0)}[/dim]")
+
+
+def _print_evidence_tp(tp: dict, review: dict) -> None:
+    """打印一条 TP 的四层证据（人读；机器读走 `--json`）。"""
+    mark = {"VERIFIED": "[green]VERIFIED[/green]",
+            "PARTIAL": "[yellow]PARTIAL[/yellow]",
+            "NOT_VERIFIED": "[red]NOT_VERIFIED[/red]",
+            "PENDING_BACKEND": "[cyan]PENDING_BACKEND[/cyan]"}.get(
+                tp.get("contract_status"), str(tp.get("contract_status")))
+    console.print(f"[bold]{tp.get('tp_id')}[/bold]  {mark}  "
+                  f"{tp.get('dimension')}={tp.get('value')}  "
+                  f"req={tp.get('requirement') or '-'}")
+    for layer_def in review.get("four_layers") or []:
+        key = layer_def.get("key")
+        name = layer_def.get("name") or key
+        question = layer_def.get("question") or ""
+        layer = (tp.get("evidence_layers") or {}).get(key) or {}
+        status = layer.get("status") or "?"
+        color = "green" if status == "PROVEN" else (
+            "yellow" if status == "PARTIAL" else
+            ("cyan" if status in ("NOT_APPLICABLE", "PENDING_BACKEND") else "red"))
+        console.print(f"  {name:<6} [{color}]{status:<16}[/{color}] {question}  "
+                      f"{layer.get('proves') or ''}")
+    if tp.get("signed_off_by"):
+        console.print(f"  signoff: {tp['signed_off_by']}  wave={tp.get('wave') or '-'}")
+    console.print()
+
+
+@coverage.command("tp-evidence")
+@click.option("--output", "-o", "output_dir", required=True,
+              type=click.Path(file_okay=False), help="运行目录")
+@click.option("--tp", "tp_id", default=None, help="只看某条测试点")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def coverage_tp_evidence(output_dir, tp_id, json_output):
+    """TP Cov 证据视图：功能覆盖 / 时序 / 数据 / 路径 四层按契约汇聚
+
+    \b
+    示例:
+      vagent coverage tp-evidence -o output_xxx
+      vagent coverage tp-evidence -o output_xxx --tp TP-NPUSCH-D_QUEUE-0
+    """
+    from src.tools.checking.coverage_tools.tp_evidence import load_tp_evidence
+
+    ev = load_tp_evidence(Path(output_dir))
+    tps = ev.get("tps") or []
+    if not tps:
+        click.echo(f"没有 TP IR / 证据（{output_dir}/coverage/testpoints.yaml）",
+                   err=True)
+        return
+    if json_output:
+        payload = (next((t for t in tps if t.get("tp_id") == tp_id), {})
+                   if tp_id else ev)
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+        return
+    console.print(f"[bold]TP Cov 证据视图[/bold] —— {ev.get('run')}  "
+                  f"{ev.get('counts')}")
+    console.print(f"[dim]{(ev.get('review') or {}).get('answer') or ''}[/dim]\n")
+    wanted = [tp_id] if tp_id else [t.get("tp_id") for t in tps]
+    by_id = {t.get("tp_id"): t for t in tps}
+    for tid in wanted:
+        if tid not in by_id:
+            console.print(f"[red]{tid}: 没有这条测试点[/red]")
+            continue
+        _print_evidence_tp(by_id[tid], ev.get("review") or {})
+    proof = (ev.get("review") or {}).get("path_proof") or []
+    if proof:
+        console.print("[bold]PATH 组[/bold]")
+        for b in proof:
+            console.print(f"  {b.get('group')}.{b.get('bin')}  "
+                          f"tp={b.get('tp_id') or '-'}  status={b.get('status')}  "
+                          f"checks={', '.join(b.get('checks') or []) or '-'}")
+
+
+@coverage.command("case-evidence")
+@click.option("--output", "-o", "output_dir", required=True,
+              type=click.Path(file_okay=False), help="运行目录")
+@click.option("--format", "-f", "fmt", default="terminal",
+              type=click.Choice(["terminal", "markdown", "html", "json"]),
+              help="输出格式")
+@click.option("--out", "out_prefix", default="", help="markdown/html 落盘前缀")
+def coverage_case_evidence(output_dir, fmt, out_prefix):
+    """Case 证据视图：用例 / 功能契约 / 功能组×路径 / 缺口 四张表
+
+    \b
+    示例:
+      vagent coverage case-evidence -o output_xxx
+      vagent coverage case-evidence -o output_xxx -f html --out report/case_view
+    """
+    from src.tools.humanview.case_associate_view import (
+        build_case_view, render_html, render_markdown, render_terminal)
+
+    try:
+        data = build_case_view(Path(output_dir))
+    except Exception as exc:                        # noqa: BLE001
+        click.echo(f"Case 证据视图构建失败: {exc}", err=True)
+        return
+    if not data.get("cases") and not data.get("features"):
+        click.echo(f"没有可展示的证据（{output_dir} 里没有 case_cov / TP IR）",
+                   err=True)
+        return
+    text = {"terminal": render_terminal, "markdown": render_markdown,
+            "html": render_html}.get(fmt)
+    if fmt == "json":
+        click.echo(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+        return
+    rendered = text(data) if text else render_terminal(data)
+    if out_prefix and fmt in ("markdown", "html"):
+        path = Path(out_prefix).with_suffix(".md" if fmt == "markdown" else ".html")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(rendered, encoding="utf-8")
+        console.print(f"已写到 {path}")
+        return
+    console.print(rendered)
+
+
+@cli.group()
+def wave():
+    """波形索引（用例 ↔ 测试点 ↔ 波形）"""
+    pass
+
+
+@wave.command("show")
+@click.option("--output", "-o", "output_dir", required=True,
+              type=click.Path(file_okay=False), help="运行目录")
+@click.option("--task", "task", default=None, help="只看某条用例（如 tp_xxx_seed_6001）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def wave_show(output_dir, task, json_output):
+    """读 waves/manifest.json，给出波形路径与打开命令
+
+    \b
+    示例:
+      vagent wave show -o output_xxx --task tp_npusch_d_queue_0_seed_6001
+    """
+    from src.tools.common.lib.case_meta import (
+        read_wave_manifest, visualizer_command)
+
+    manifest = read_wave_manifest(Path(output_dir))
+    entries = manifest.get("entries") or []
+    if task:
+        entries = [e for e in entries if e.get("task") == task]
+    if json_output:
+        click.echo(json.dumps({"entries": entries,
+                               "by_tp": manifest.get("by_tp") or {}},
+                              indent=2, ensure_ascii=False, default=str))
+        return
+    if not entries:
+        click.echo(f"没有波形索引条目（{output_dir}/waves/manifest.json）", err=True)
+        return
+    for e in entries:
+        console.print(f"[bold]{e.get('task')}[/bold]  test={e.get('test') or '-'} "
+                      f"seed={e.get('seed')}  stage={e.get('stage') or '-'}")
+        console.print(f"  tp    : {', '.join(e.get('tp_ids') or []) or '-'}")
+        console.print(f"  wave  : {e.get('wave') or e.get('wave_abs') or '-'}"
+                      f"{'' if e.get('wave_exists') else '  [yellow](不存在)[/yellow]'}")
+        cmd = visualizer_command(e.get("wave_abs") or "")
+        if cmd:
+            console.print(f"          [dim]{cmd}[/dim]")
+        console.print()
+
+
 # ═══════════════════════════════════════════════════════════════
 # vagent env — UVM 环境操作 (P3)
 # ═══════════════════════════════════════════════════════════════

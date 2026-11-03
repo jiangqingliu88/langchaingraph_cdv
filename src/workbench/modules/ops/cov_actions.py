@@ -33,6 +33,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -174,15 +175,53 @@ def _top_from_sim_scripts(build: Path) -> str:
     return ""
 
 
+def _wave_manifest_context(path: str) -> dict:
+    """波形路径 → `waves/manifest.json` 里那条 `{task,test,tp_ids,…}`。
+
+    波形是二进制，写不进字符串；"这条波形在证明哪个测试点"只能靠索引。
+    从用例目录往上找运行根下的 `waves/manifest.json`（ops 收尾写的唯一真源）。
+    找不到就返回 `{}`（调用方退回文件名，不编归属）。
+    """
+    d = Path(path)
+    if d.parent.name.lower() == "waves":
+        d = d.parent.parent
+    task = d.name[len("test_"):] if d.name.startswith("test_") else d.name
+    for base in (d, *d.parents):
+        manifest = base / "waves" / "manifest.json"
+        if not manifest.is_file():
+            continue
+        try:
+            doc = json.loads(manifest.read_text(encoding="utf-8",
+                                                errors="replace"))
+        except (OSError, ValueError):
+            continue
+        for entry in doc.get("entries") or []:
+            if isinstance(entry, dict) and entry.get("task") == task:
+                return entry
+    return {}
+
+
 def open_wave(module, path: str, what: str = "波形") -> None:
     """打开一条用例的波形 —— **按扩展名选对工具**（见模块头 "按格式选工具"）。
 
     `qwave.db` → `visualizer -wavefile`；`.wlf` → `vsim -view`。
+
+    **归属写进状态栏**：Visualizer / vsim 的命令行不接受窗口标题，所以
+    "这条波形在证明哪个测试点"只能落在这里（+ `waves/manifest.json`）。
+    manifest 缺失时退回文件名 —— 不编一个看着像的 tp_id。
     """
     if not path or not Path(path).exists():
         module.set_status(f"这条用例没有{what} —— 这轮回归的仿真业务里没开 `wave`"
                           "（工具栏「仿真业务」下拉可切）")
         return
+
+    entry = _wave_manifest_context(path)
+    if entry:
+        tps = "、".join(entry.get("tp_ids") or []) or "（未登记测试点）"
+        label = entry.get("test") or entry.get("task") or Path(path).stem
+        what = f"{label} · {tps} 的波形"
+    elif not what or what == "波形":
+        what = f"{Path(path).stem} 的波形"
 
     is_wlf = Path(path).suffix.lower() == ".wlf"
     if is_wlf:

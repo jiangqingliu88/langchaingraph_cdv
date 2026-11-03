@@ -144,6 +144,11 @@
             "additionalProperties": false
           }
         },
+        "tp_bitmap_width": {
+          "$comment": "测试点位图的位宽（0 = 不产位图）。接口体里据此多一个非端口变量 `logic [N-1:0] tp_seen`，env 覆盖率组件在仓命中时置位。",
+          "type": "integer",
+          "minimum": 0
+        },
         "coverpoints": {
           "$comment": "覆盖点表（signal / sv_name / field / width / expr）—— 模板据此出 `cg_dut`",
           "type": "array",
@@ -190,6 +195,32 @@
         }
       },
       "additionalProperties": false
+    },
+    "tp_bitmap": {
+      "$comment": "env_cov_bins.yaml —— **测试点位图 + 时序判据**（P1/P2）。位序 = testpoints.yaml 的序号，一旦发布不重排；env 覆盖率组件按它置位 `cov_vif.tp_seen`、打 `[TP_HIT]`，并按 `timing` 逐拍判窗。",
+      "type": "object",
+      "properties": {
+        "schema": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tpBitEntry"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
     },
     "source": {
       "type": "object",
@@ -1803,6 +1834,64 @@
         }
       },
       "additionalProperties": false
+    },
+    "tpBitEntry": {
+      "$comment": "测试点位图的一格：bit（位序）+ tp_id + 覆盖仓 + 通道（dut/stimulus + agent）+ 可追踪性 + 可选时序窗口。`trackable=false` 表示没有显式 bin / 自动分箱 / 开区间无法在 `inside` 里表达 —— 如实标出来，不生成假位。",
+      "type": "object",
+      "required": [
+        "bit",
+        "tp_id"
+      ],
+      "properties": {
+        "bit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tp_id": {
+          "type": "string"
+        },
+        "coverpoint": {
+          "type": "string"
+        },
+        "bin": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "signal": {
+          "type": "string"
+        },
+        "literal": {
+          "type": "string"
+        },
+        "trackable": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string"
+        },
+        "timing": {
+          "type": "object",
+          "properties": {
+            "min": {"type": "integer"},
+            "max": {"type": "integer"},
+            "tolerance": {"type": "integer"},
+            "start": {"type": "string"},
+            "end": {"type": "string"},
+            "sample": {"type": "string"},
+            "checkable": {"type": "boolean"}
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
     },
     "batchTest": {
       "type": "object",

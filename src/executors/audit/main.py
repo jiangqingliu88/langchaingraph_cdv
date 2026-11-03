@@ -55,6 +55,121 @@ def _read_tp_matrix(output_dir: Path) -> Dict[str, Any]:
         return {}
 
 
+def _read_case_tp(output_dir: Path) -> Dict[str, Any]:
+    """读覆盖率阶段写下的 `coverage/case_tp.json`；读不到给空字典。
+
+    它回答的是 **"哪条用例、哪颗 seed 证明了哪条测试点"**。没有 = 这一轮
+    没做逐用例取证（老 run / 没有 TP IR）—— **判不了**，不挂
+    `TP_NOT_SIGNED_OFF`（否则每个老 run 都会凭空多一条）。
+    """
+    try:
+        doc = json.loads((output_dir / "coverage" / "case_tp.json")
+                         .read_text(encoding="utf-8", errors="replace"))
+        return doc if isinstance(doc, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _case_coverage_summary(output_dir: Path, tp: Dict[str, Any]) -> Dict[str, Any]:
+    """逐用例签核的**事实**（供 caveat 与证据包共用）。
+
+    波形交叉核对用 `waves/manifest.json`（ops 收尾写的）：`tp_matrix` 说某条
+    TP 由 `task@seed` 签核，manifest 必须能找到同一 task 的条目且有波形。
+    找不到 → `wave_missing`；manifest 本身不存在 → `wave_index_available=False`
+    （判不了，不逐条报缺口）。
+    """
+    from src.tools.common.lib.case_meta import read_wave_manifest
+
+    rows = [r for r in (tp.get("rows") or []) if isinstance(r, dict)]
+    attr = [r for r in rows if r.get("stage") != "behavior"]
+    signed = [r for r in attr if r.get("signed_off")]
+    unsigned = [r for r in attr if not r.get("signed_off")]
+    required_kinds = ("stimulus", "sequence", "backdoor")
+    unsigned_required = [r for r in unsigned if r.get("kind") in required_kinds]
+    # 序列型时序超窗只降级为 WARN（设计稿 §6.2）—— 不算未签核，但要说出来。
+    timing_warn = [r for r in attr
+                   if r.get("timing_ok") is False and r.get("kind") == "sequence"]
+
+    manifest = read_wave_manifest(output_dir)
+    wave_missing = _wave_missing_for_signed(signed, manifest)
+
+    return {
+        "available": bool(attr and any("signed_off" in r for r in attr)),
+        "case_tp": "coverage/case_tp.json",
+        "wave_manifest": ("waves/manifest.json" if manifest else ""),
+        "wave_index_available": bool(manifest),
+        "signed_off": len(signed),
+        "unsigned": len(unsigned),
+        "unsigned_required": len(unsigned_required),
+        "signed_off_pct": (round(100.0 * len(signed) / len(attr), 2)
+                           if attr else 0.0),
+        "unsigned_tp_ids": [r.get("tp_id") for r in unsigned][:200],
+        "unsigned_required_tp_ids": [r.get("tp_id") for r in unsigned_required][:200],
+        "timing_warn": len(timing_warn),
+        "timing_warn_tp_ids": [r.get("tp_id") for r in timing_warn][:200],
+        "wave_missing": wave_missing,
+        "wave_missing_tp_ids": [x.get("tp_id") for x in wave_missing],
+    }
+
+
+def _wave_missing_for_signed(signed: list,
+                             manifest: Dict[str, Any]) -> list:
+    """已签核的 TP → 在 manifest 里找不到对应波形（或波形文件不在）的清单。
+
+    条目在、波形却不在也算缺口（manifest 可能比波形活得久）。manifest 本身
+    不存在 = 判不了 → 空列表，不逐条报缺口（三态纪律）。
+    """
+    if not manifest:
+        return []
+    indexed = {e.get("task"): e for e in (manifest.get("entries") or [])
+               if isinstance(e, dict)}
+    out = []
+    for r in signed:
+        by = str(r.get("signed_off_by") or "")
+        task = by.split("@", 1)[0] if by else str(r.get("owner_case") or "")
+        if task and not (indexed.get(task) or {}).get("wave_exists"):
+            out.append({"tp_id": r.get("tp_id"), "signed_off_by": by})
+    return out
+
+
+def _apply_case_coverage_gate(output_dir: Path, tp: Dict[str, Any],
+                              gates: Dict[str, Any], caveat) -> Dict[str, Any]:
+    """逐用例签核门 → 写 `gates["tp_signed_off"]` + 两条 caveat。
+
+    三态（与全文件同一纪律）：
+
+        None  = 没有逐用例证据（老 run / 没 TP IR）→ 判不了，不挂 caveat
+        True  = 有证据，且可激励/后门的 TP 全部 SIGNED_OFF
+        False = 有证据，仍有未签核的 TP → `TP_NOT_SIGNED_OFF`
+    """
+    cc = _case_coverage_summary(output_dir, tp)
+    if not cc["available"]:
+        gates["tp_signed_off"] = None
+        return cc
+    gates["tp_signed_off"] = not bool(cc["unsigned_required"])
+    if cc["unsigned_required"]:
+        ids = "、".join(str(t) for t in cc["unsigned_required_tp_ids"][:8])
+        more = (f" 等 {cc['unsigned_required']} 条"
+                if cc["unsigned_required"] > 8 else "")
+        caveat("TP_NOT_SIGNED_OFF",
+               f"{cc['unsigned_required']} 条可激励/后门测试点没有"
+               f"「同一条用例 + 同一次 seed」的完整证据（{ids}{more}）"
+               f"—— 见 coverage/case_tp.json")
+    if cc["wave_missing"]:
+        caveat("TP_WAVE_MISSING",
+               f"{len(cc['wave_missing'])} 条已签核测试点在"
+               f" waves/manifest.json 里找不到对应波形"
+               f"（签核材料不可反查）—— 见 waves/manifest.json")
+    # 序列型时序超窗只降级为 WARN —— 不否决签核，但不能当没发生。
+    if cc.get("timing_warn"):
+        ids = "、".join(str(t) for t in cc["timing_warn_tp_ids"][:8])
+        caveat("TP_TIMING_WARN",
+               f"{cc['timing_warn']} 条序列型测试点的时序窗口超窗"
+               f"（{ids}）—— 按设计稿只降级为 TIMING_WARN，不否决；"
+               f"见 coverage/case_tp.json 的 timing_warn")
+    return cc
+
+
 def _rel_to_run(path_str: str, output_dir: Path) -> str:
     """绝对路径 → run 内相对路径；不在 run 内就原样返回（不假装可移植）。"""
     if not path_str:
@@ -509,9 +624,15 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
             "drivable_pct": tp.get("drivable_pct", 0.0),
             "backdoor_pct": tp.get("backdoor_pct", 0.0),
             "behavior_pending": tp.get("behavior_pending", 0),
+            "signed_off": tp.get("signed_off_total", 0),
+            "unsigned": tp.get("unsigned_total", 0),
+            "signed_off_pct": tp.get("signed_off_pct", 0.0),
             "missed_tp_ids": [r.get("tp_id") for r in (tp.get("missed") or [])
                               if isinstance(r, dict)],
         },
+        # **逐用例签核**：用例 → 测试点 → 波形 的可反查证据。
+        # 空 = 这一轮没有逐用例证据（老 run / 没 TP IR），不是"全部签核"。
+        "case_coverage": _case_coverage_summary(output_dir, tp),
         # **做过就是对象，没做才 null** —— 不再无条件 null。
         "seed_diversity": seed_div,
         # 粗连续奖励：编译/回归/覆盖率三层合成。没有就是没有（老 run）。
@@ -757,6 +878,11 @@ class AuditExecutor(BaseExecutor):
                 "observed": tp.get("observed", 0),
                 # 行为域 TP：已进 IR、执行后端未接 —— 如实列出，不进任何覆盖率分母
                 "behavior_pending": tp.get("behavior_pending", 0),
+                # **逐用例签核**（与上面的合并库命中是两回事）
+                "signed_off": tp.get("signed_off_total", 0),
+                "unsigned": tp.get("unsigned_total", 0),
+                "signed_off_pct": tp.get("signed_off_pct", 0.0),
+                "timing_warn": tp.get("timing_warn", 0),
                 "missed": len(tp.get("missed") or []),
                 "unmapped": len(tp.get("unmapped") or []),
             }
@@ -775,6 +901,12 @@ class AuditExecutor(BaseExecutor):
                         f"{tp_summary.get('backdoor_hit', 0)}/{tp_summary.get('backdoor', 0)}；"
                         f"观测型 {tp_summary['observed']}/{tp_summary['observe_only']}）"
                         f"—— 逐条见 coverage/tp_matrix.json")
+
+        # ── 逐用例签核门 ──
+        #
+        # 上面那些是"合并库里有没有"，这里回答的是签核真正要的那句话：
+        # **"有没有一条用例、同一次 seed 证明了这个测试点"**。
+        _apply_case_coverage_gate(output_dir, tp, gates, _caveat)
         _ingest_drift_caveat(output_dir, _caveat)
 
         # ── 参考模型 / 基线 / 模块策略：签核的"资格条件" ──

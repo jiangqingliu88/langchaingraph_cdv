@@ -958,8 +958,54 @@ def _attach_code_plan(coverage: dict, result: dict, od: Path) -> None:
         print(f"[coverage] 计划代码覆盖率合并跳过：{e}")
 
 
-def run(output_dir: str, top_module: str = "", seed: int = 0) -> dict:
-    """一站式收集覆盖率"""
+def _attach_tp_evidence(od: Path, result: dict) -> None:
+    """TP Cov 证据视图：**四层证据按功能契约汇聚到一处**（旁路，不拦主流程）。
+
+    功能组 100% 只回答"场景发生过"；一个契约是否验证完成，还要时序断言、
+    SCB 数据比对、PATH 组路径覆盖。三处数据散在不同文件里，签核的人对不上账，
+    评审问"每组都 100%，路径怎么证明"时也没有一处能直接指。这里统一成
+    `coverage/tp_cov_evidence.json`（只读落盘产物，不重跑 vcover/仿真）。
+    """
+    try:
+        from src.tools.checking.coverage_tools.tp_evidence import write_tp_evidence
+
+        ev = write_tp_evidence(od)
+        result["tp_cov_evidence"] = {
+            "path": str(od / "coverage" / "tp_cov_evidence.json"),
+            "counts": ev.get("counts") or {},
+            "evidence_layers": ev.get("evidence_layers") or {},
+            "path_backend": ((ev.get("review") or {}).get("path_backend") or ""),
+        }
+    except Exception as e:                       # noqa: BLE001 旁路证据
+        print(f"[coverage] TP Cov 证据视图生成失败: {e}")
+
+
+def _attach_case_view(od: Path, result: dict) -> None:
+    """Case 关联视图：四张人类可读表（用例/契约/矩阵/缺口）落盘。
+
+    与 `tp_cov_evidence.json` 不同：那份是逐 TP 的机器证据，这份是**评审看的
+    四张表**（Markdown / HTML 可直接贴进评审材料）。只读落盘产物，不重跑仿真。
+    """
+    try:
+        from src.tools.humanview.case_associate_view.api import write_case_view
+
+        cv = write_case_view(od)
+        result["case_view"] = {
+            "path": str(od / "coverage" / "case_view.json"),
+            "counts": cv.get("counts") or {},
+            "reports": cv.get("_reports") or {},
+        }
+    except Exception as e:                       # noqa: BLE001 旁路证据
+        print(f"[coverage] Case 证据视图生成失败: {e}")
+
+
+def run(output_dir: str, top_module: str = "", seed: int = 0,
+        case_cov_sample: int = 0) -> dict:
+    """一站式收集覆盖率。
+
+    `case_cov_sample > 0` 时逐用例取证超过该条数就采样（**会在
+    `case_tp.json.evidence_sampled` 与 `notes` 里说出来**，不静默降级）。
+    """
     od = Path(output_dir).resolve()
     if not od.exists():
         return {"status": "FAIL", "error": f"Output dir not found: {od}"}
@@ -1081,10 +1127,20 @@ def run(output_dir: str, top_module: str = "", seed: int = 0) -> dict:
     # 是以前答不出的那个问题："这个 bin 没打中，是哪条测试点没被激励/没跑到？"
     # 没有它时，缺口只按 coverpoint 百分比列出来 —— 而一个 coverpoint 可能对应
     # 十几个测试点，人得自己去猜。
-    tp = _tp_matrix(od, result.get("coverage") or {})
+    #
+    # **逐用例取证先跑**：每条用例自己的 ucdb → 它名下 TP 的 proof obligation。
+    # 合并库只能回答"某条用例打到过"，逐用例才能回答"这条用例证明了这个点"，
+    # 而且能接上同目录的波形。
+    case_index = _case_cov_matrix(od, max_cases=case_cov_sample)
+    from src.tools.checking.coverage_tools.case_cov import case_coverage_patch
+    result.update(case_coverage_patch(case_index))
+    tp = _tp_matrix(od, result.get("coverage") or {}, case_index=case_index)
     if tp:
         result["tp_matrix"] = tp
         _write_tp_matrix(od, tp)
+
+    _attach_tp_evidence(od, result)
+    _attach_case_view(od, result)
 
     # ── 语义自述：把"绿但空"的中间态写成结构化字段 ──
     #
@@ -1219,16 +1275,150 @@ def _count_stage(rows: list, stage: str) -> int:
     return sum(1 for r in rows if r.get("stage") == stage)
 
 
-def _tp_matrix(od: Path, coverage: dict) -> dict:
-    """测试点 × 覆盖仓 → 命中/缺口矩阵。
+def _row_hits(tp: dict, hits: dict) -> tuple:
+    """`(owned_bins, {bin: hits|None}, legacy_hit_count)`。
 
-    状态（**四态，不把"没激励"混进"没覆盖"**）：
+    多仓 TP 的 legacy 命中数取**最大**（"打到过"）；proof obligation 的
+    全部命中判定在逐用例签核那边（`case_cov`），这里不重复。
+    """
+    cp_name = str(tp.get("coverpoint") or "")
+    owned = _owned_bins(tp)
+    bin_hits = {b: _lookup_hits(hits, cp_name, b) for b in owned}
+    vals = [v for v in bin_hits.values() if v is not None]
+    if owned and not vals:
+        return owned, bin_hits, None
+    return owned, bin_hits, (max(vals) if vals else 0)
+
+
+def _tp_row(tp: dict, hits: dict, signoff: dict, counts: dict) -> dict:
+    """一条测试点 → 矩阵行（合并库 status + 逐用例签核字段）。"""
+    cp_name = str(tp.get("coverpoint") or "")
+    bin_name = str(tp.get("bin") or "")
+    observe = bool(tp.get("observe_only"))
+    kind = str((tp.get("realization") or {}).get("kind") or "")
+    if not kind:
+        kind = "observe" if observe else "stimulus"
+    stage = _stage_of(tp)
+    if stage == "behavior":
+        # 行为域（P1a）：TP 已进 IR，但执行后端（事件序列 → UVM）还没接，
+        # 因此**没有覆盖率数据可判**。单列 PENDING_BACKEND，不进
+        # drivable 分母、也不算 UNMAPPED（它不是"模型漂了"）。
+        counts["PENDING_BACKEND"] = counts.get("PENDING_BACKEND", 0) + 1
+        return _behavior_row(tp, cp_name, bin_name, kind, observe, stage)
+
+    owned, bin_hits, n = _row_hits(tp, hits)
+    # `_status_for` 对 UNMAPPED 会把 `None` 归成 `0`（"报告里没这一格"与
+    # "打中了 0 次"在 **legacy status** 里不区分；逐用例签核那边用
+    # `bin_hits` 保留 None，不把模型漂移记成"该补激励"）。
+    status, n, is_backdoor = _status_for(n, kind, observe)
+    counts[status] = counts.get(status, 0) + 1
+    _s = signoff.get(str(tp.get("tp_id") or "")) or {}
+    signed = bool(_s.get("signed_off"))
+    counts["SIGNED_OFF" if signed else "UNSIGNED"] += 1
+    return {
+        "tp_id": tp.get("tp_id"),
+        "dimension": tp.get("dimension"),
+        "value": tp.get("value"),
+        "coverpoint": cp_name,
+        "bin": bin_name,
+        "bins": owned,
+        "bin_hits": bin_hits,
+        "hits": n,
+        "kind": kind,
+        "observe_only": observe,
+        "status": status,
+        "requirement": tp.get("requirement"),
+        "stage": ((tp.get("execution") or {}).get("stage") or ""),
+        # ── 逐用例签核（与上面的合并库 status 是两回事）──
+        "owner_test": (_s.get("owner_test")
+                       or ((tp.get("execution") or {}).get("test") or "")),
+        "owner_case": _s.get("owner_case", ""),
+        "signed_off": signed,
+        "signed_off_by": _s.get("signed_off_by", ""),
+        "signoff_reasons": _s.get("reasons") or [],
+        # 时序（P2）：None = 没声明/没检查，不是"通过"。
+        "timing_ok": _s.get("timing_ok"),
+    }
+
+
+def _matrix_counts(rows: list, counts: dict) -> dict:
+    """**三类分开算**：激励 / 后门 / 观测。后门命中不冒充"激励覆盖"。"""
+    attr = _attribute_rows(rows)
+    out = {"drivable": 0, "drivable_hit": 0, "backdoor": 0,
+           "backdoor_hit": 0, "observed": 0, "attr_total": len(attr)}
+    for r in attr:
+        kind, hits = r["kind"], r["hits"]
+        if kind in ("stimulus", "sequence"):
+            out["drivable"] += 1
+            if hits > 0:
+                out["drivable_hit"] += 1
+        elif kind == "backdoor":
+            out["backdoor"] += 1
+            if hits > 0:
+                out["backdoor_hit"] += 1
+        elif kind == "observe" and hits > 0:
+            out["observed"] += 1
+    out["observe_only"] = sum(1 for r in rows if r["kind"] == "observe")
+    out["signed_off_total"] = counts["SIGNED_OFF"]
+    out["unsigned_total"] = counts["UNSIGNED"]
+    return out
+
+
+def _matrix_summary(rows: list, counts: dict, case_index: dict,
+                    stats: dict) -> dict:
+    drivable, backdoor = stats["drivable"], stats["backdoor"]
+    attr_total = stats["attr_total"]
+    return {
+        "total": len(rows),
+        "counts": counts,
+        "drivable": drivable,
+        "drivable_hit": stats["drivable_hit"],
+        "drivable_pct": (round(100.0 * stats["drivable_hit"] / drivable, 2)
+                         if drivable else 0.0),
+        "backdoor": backdoor,
+        "backdoor_hit": stats["backdoor_hit"],
+        "backdoor_pct": (round(100.0 * stats["backdoor_hit"] / backdoor, 2)
+                         if backdoor else 0.0),
+        "observe_only": stats["observe_only"],
+        "observed": stats["observed"],
+        "behavior_pending": _count_stage(rows, "behavior"),
+        # 签核口径（逐用例、逐 seed）
+        "signed_off_total": stats["signed_off_total"],
+        "unsigned_total": stats["unsigned_total"],
+        "signed_off_pct": (round(100.0 * stats["signed_off_total"] / attr_total, 2)
+                           if attr_total else 0.0),
+        "timing_warn": sum(1 for r in rows
+                           if r.get("timing_ok") is False
+                           and r.get("kind") == "sequence"),
+        "case_evidence": {
+            "case_count": case_index.get("case_count", 0),
+            "evidence_sampled": bool(case_index.get("evidence_sampled")),
+            "counts": case_index.get("counts") or {},
+        },
+        "missed": [r for r in rows
+                   if r["status"] in ("MISS", "UNOBSERVED", "BACKDOOR_MISS")],
+        "unsigned": [r for r in rows
+                     if not r.get("signed_off") and r.get("stage") != "behavior"],
+        "unmapped": [r for r in rows if r["status"] == "UNMAPPED"],
+        "rows": rows,
+    }
+
+
+def _tp_matrix(od: Path, coverage: dict, case_index: dict = None,
+               *, require_wave: bool = True) -> dict:
+    """测试点 × 覆盖仓 → 命中/缺口矩阵 + **逐 TP 签核状态**。
+
+    命中状态（**四态，不把"没激励"混进"没覆盖"**，口径仍是**合并库**）：
 
         HIT         激励型测试点，它的仓命中了
         MISS        激励型测试点，仓一个都没中
         OBSERVED    观测型测试点，仓命中了（没有激励差异，但状态确实到达过）
         UNOBSERVED  观测型测试点，仓没命中
         UNMAPPED    模型给的 `coverpoint.bin` 在报告里找不到（模型/生成漂了）
+
+    **`status` 回答的是"合并库里有没有"**；`signed_off` 回答的是完全另一个
+    问题："有没有**一条用例、同一次 seed** 证明了这个测试点"。两者不能互相
+    冒充 —— 合并库里有命中，只能说明某条用例打到过。
     """
     tps = _read_testpoints(od)
     if not tps:
@@ -1244,70 +1434,17 @@ def _tp_matrix(od: Path, coverage: dict) -> dict:
     except OSError:
         return {"error": f"读不到 {report}", "total": len(tps)}
 
+    if case_index is None:
+        case_index = _case_cov_matrix(od, require_wave=require_wave)
+    signoff = case_index.get("by_tp") or {}
     hits = _parse_cvg_bin_hits(text)
-    rows, counts = [], {"HIT": 0, "MISS": 0, "OBSERVED": 0, "UNOBSERVED": 0,
-                        "BACKDOOR_HIT": 0, "BACKDOOR_MISS": 0, "UNMAPPED": 0}
-    for tp in tps:
-        if not isinstance(tp, dict):
-            continue
-        cp_name = str(tp.get("coverpoint") or "")
-        bin_name = str(tp.get("bin") or "")
-        observe = bool(tp.get("observe_only"))
-        kind = str((tp.get("realization") or {}).get("kind") or "")
-        if not kind:
-            kind = "observe" if observe else "stimulus"
-        is_backdoor = kind == "backdoor"
-        stage = _stage_of(tp)
-        if stage == "behavior":
-            # 行为域（P1a）：TP 已进 IR，但执行后端（事件序列 → UVM）还没接，
-            # 因此**没有覆盖率数据可判**。单列 PENDING_BACKEND，不进
-            # drivable 分母、也不算 UNMAPPED（它不是"模型漂了"）。
-            counts["PENDING_BACKEND"] = counts.get("PENDING_BACKEND", 0) + 1
-            rows.append(_behavior_row(tp, cp_name, bin_name, kind, observe, stage))
-            continue
-        n = _lookup_hits(hits, cp_name, bin_name)
-        status, n, is_backdoor = _status_for(n, kind, observe)
-        counts[status] = counts.get(status, 0) + 1
-        rows.append({
-            "tp_id": tp.get("tp_id"),
-            "dimension": tp.get("dimension"),
-            "value": tp.get("value"),
-            "coverpoint": cp_name,
-            "bin": bin_name,
-            "hits": n,
-            "kind": kind,
-            "observe_only": observe,
-            "status": status,
-            "requirement": tp.get("requirement"),
-            "stage": ((tp.get("execution") or {}).get("stage") or ""),
-        })
-
-    # **三类分开算**：激励 / 后门 / 观测。后门命中不能冒充"激励覆盖"。
-    # 行为 TP（PENDING_BACKEND）不参与任何覆盖率分母 —— 它们没有执行数据。
-    attr = _attribute_rows(rows)
-    drivable = sum(1 for r in attr if r["kind"] in ("stimulus", "sequence"))
-    drivable_hit = sum(1 for r in attr
-                       if r["kind"] in ("stimulus", "sequence") and r["hits"] > 0)
-    backdoor = sum(1 for r in attr if r["kind"] == "backdoor")
-    backdoor_hit = sum(1 for r in attr if r["kind"] == "backdoor" and r["hits"] > 0)
-    observed = sum(1 for r in attr if r["kind"] == "observe" and r["hits"] > 0)
-    return {
-        "total": len(rows),
-        "counts": counts,
-        "drivable": drivable,
-        "drivable_hit": drivable_hit,
-        "drivable_pct": round(100.0 * drivable_hit / drivable, 2) if drivable else 0.0,
-        "backdoor": backdoor,
-        "backdoor_hit": backdoor_hit,
-        "backdoor_pct": round(100.0 * backdoor_hit / backdoor, 2) if backdoor else 0.0,
-        "observe_only": sum(1 for r in rows if r["kind"] == "observe"),
-        "observed": observed,
-        "behavior_pending": _count_stage(rows, "behavior"),
-        "missed": [r for r in rows
-                   if r["status"] in ("MISS", "UNOBSERVED", "BACKDOOR_MISS")],
-        "unmapped": [r for r in rows if r["status"] == "UNMAPPED"],
-        "rows": rows,
-    }
+    counts = {"HIT": 0, "MISS": 0, "OBSERVED": 0, "UNOBSERVED": 0,
+              "BACKDOOR_HIT": 0, "BACKDOOR_MISS": 0, "UNMAPPED": 0,
+              "SIGNED_OFF": 0, "UNSIGNED": 0}
+    rows = [_tp_row(tp, hits, signoff, counts)
+            for tp in tps if isinstance(tp, dict)]
+    return _matrix_summary(rows, counts, case_index,
+                           _matrix_counts(rows, counts))
 
 
 def _write_tp_matrix(od: Path, matrix: dict) -> None:
@@ -1319,6 +1456,39 @@ def _write_tp_matrix(od: Path, matrix: dict) -> None:
                      encoding="utf-8")
     except OSError as e:
         print(f"[coverage] 测试点矩阵落盘失败: {e}")
+
+
+# ════════════════════════════════════════════════════════════
+# 逐用例取证 —— case_cov / case_tp（实现在检查层，解析器复用本模块）
+# ════════════════════════════════════════════════════════════
+#
+# 签核的口径从「合并库里存在这个 bin」改成「**这一条用例自己的 ucdb** 里，
+# 该测试点名下的全部覆盖仓命中，且这条用例本身是干净的」。
+#
+# 实现放在 `tools/checking/coverage_tools/case_cov.py`：那里读 vcover、写
+# case_cov / case_tp，但**不复制任何解析器** —— `_parse_cvg_bin_hits` /
+# `_lookup_hits` / proof obligation 都还是本模块这一份。
+
+
+def _owned_bins(tp: dict) -> list:
+    """测试点的 **proof obligation**：它名下必须全部命中的仓。
+
+    `bins:`（多仓/交叉）优先；否则单个 `bin:`。空 = 模型没声明（判不了，
+    不能当成"通过"）。
+    """
+    bins = tp.get("bins")
+    owned = [str(b) for b in bins if str(b)] if isinstance(bins, list) else []
+    if not owned and tp.get("bin"):
+        owned = [str(tp["bin"])]
+    return owned
+
+
+def _case_cov_matrix(od: Path, *, max_cases: int = 0,
+                     require_wave: bool = True, force: bool = False) -> dict:
+    """逐用例解析回归目录 → 覆盖切片 + 用例 ↔ 测试点证据表（委托检查层）。"""
+    from src.tools.checking.coverage_tools.case_cov import case_cov_matrix
+    return case_cov_matrix(od, max_cases=max_cases, require_wave=require_wave,
+                           force=force)
 
 
 def _semantic_validations(od: Path, result: dict) -> dict:

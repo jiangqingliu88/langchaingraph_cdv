@@ -1,6 +1,7 @@
 """验证开发智能体 —— UVM环境 + 测试用例 + 断言（真实工具链）"""
 from typing import Dict, Any, List, Optional
 import json
+import re
 from pathlib import Path
 
 from src.layers.l2_orchestration.executors.base import BaseExecutor, ExecutorResult
@@ -47,6 +48,10 @@ class VerifyExecutor(BaseExecutor):
             spec = {}
 
         module_name = spec.get("design_name", "dut") or "dut"
+        # **早于 env 生成解析一次**：测试点位图（`tp_seen`）要进覆盖率接口，
+        # 而接口在 `jinja_render` 之前就要落盘。这里只读文件，没有副作用；
+        # 第 2 步复用同一份，不再重复解析。
+        case_model = _find_case_model(spec, output_dir)
         params = task.get("params", {}) or {}
         supplement = params.get("supplement", False) if isinstance(params, dict) else False
         gaps = params.get("gaps", []) if isinstance(params, dict) else []
@@ -120,6 +125,15 @@ class VerifyExecutor(BaseExecutor):
             steps.mark("coverage_plan")
             call_tool("find_spec_yaml", {"spec_text": json.dumps(spec, ensure_ascii=False)})
             steps.mark("find_spec_yaml")
+            # ── 测试点 IR **提前算一次** ──
+            #
+            # `tp_seen` 位图要进覆盖率接口，而接口在 `jinja_render` 之前落盘；
+            # 渲染后再生成 testpoints 就赶不上这一轮。这里只算不写（写仍在
+            # `_write_testpoints`，那一步还要落 methodology/StimulusPlan），
+            # 两份产物共用同一份 payload —— **不重建第二份真源**。
+            tp_payload = self._prebuild_testpoints(output_dir, case_model,
+                                                   module_name)
+            steps.mark("testpoints_prebuild")
             # ⚠️ **落盘必须在这里，不能更早。**
             #
             # `find_spec_yaml` 第一步就把 `inputs/yaml/uvm/*.yaml` **清空**（那是它的
@@ -134,7 +148,8 @@ class VerifyExecutor(BaseExecutor):
             #（也要在 filelist 生成前落盘）。先做它：它解析出来的身份（接口名/
             # bind 实例名/时钟/复位）与 bins 要一起进下面那份契约，而 env 组件与
             # tb_top **都从那一份读** —— 两份各写一次名字就是"改了三个漏一个"。
-            dut_channel = self._write_coverage_dut_channel(output_dir)
+            dut_channel = self._write_coverage_dut_channel(
+                output_dir, tp_payload=tp_payload)
             steps.mark("dut_channel")
             self._write_env_cov_bins(output_dir, cov_bins_for_render, dut_channel)
             steps.mark("env_cov_bins")
@@ -186,7 +201,8 @@ class VerifyExecutor(BaseExecutor):
         # **case 模型从哪来**：闭环里目前**没有** spec → case 模型的桥（设计阶段不产出
         # 它）。所以这一步现在是**有条件生效**的 —— 找到就用，找不到就明确说一句，不
         # 假装做过。要让它真正常态生效，得让设计阶段产出一份，或者由人给一份。
-        case_model = _find_case_model(spec, output_dir)
+        # `case_model` 已在 env 生成前解析过一次（见上面的注释）；这里只在
+        # 完全没有模型时退回合成，不重复走 `_find_case_model`。
         if case_model is None:
             case_model = _synthesize_case_model(spec, output_dir)
         if case_model is None:
@@ -229,7 +245,8 @@ class VerifyExecutor(BaseExecutor):
                         #    没有它，下游各自的产物（test / 覆盖 / 回归 / 报告）
                         #    仍然只能靠命名碰巧对齐。
                         tp_files = self._write_testpoints(output_dir, case_model,
-                                                          module_name)
+                                                          module_name,
+                                                          payload=tp_payload)
                         files.extend(tp_files)
                         # 必须在 TP IR + StimulusPlan 落盘之后：它读的就是这两份
                         # 与 constraint_backing（UVM 生成阶段已写好）。
@@ -373,26 +390,52 @@ class VerifyExecutor(BaseExecutor):
                 out[name] = fields
         return out
 
+    def _prebuild_testpoints(self, output_dir: Path, case_model: Path,
+                             module_name: str) -> Optional[Dict[str, Any]]:
+        """env 渲染前的**只算不写**版本：失败返回 None（位图/timing 不生成）。"""
+        if case_model is None:
+            return None
+        payload = self._build_testpoints(output_dir, case_model, module_name)
+        if payload.get("error"):
+            logger.warning(f"测试点 IR 预计算失败（位图/timing 不生成）: "
+                           f"{payload['error']}")
+            return None
+        return payload
+
+    def _build_testpoints(self, output_dir: Path, case_model: Path,
+                          module_name: str) -> Dict[str, Any]:
+        """case 模型 → 测试点 IR payload（**只算不写**）。
+
+        `verify` 在 env 渲染**之前**就要它（`tp_seen` 位图/timing 信号要进覆盖率
+        接口），而 IR 的落盘要等 `_write_testpoints`。两份共用这一份 payload，
+        避免"渲染用的 TP 集合"与"落盘的 TP 集合"各算一遍、可能漂。
+        """
+        from src.tools.generation.casemodel_tools.api import run_testpoints
+
+        return run_testpoints(
+            case_model.read_text(encoding="utf-8", errors="replace"),
+            env_name=f"{module_name}_env",
+            agents=self._agent_transaction_fields(output_dir) or None,
+            module_name=module_name,
+            max_tests=200)
+
     def _write_testpoints(self, output_dir: Path, case_model: Path,
-                          module_name: str) -> List[str]:
+                          module_name: str,
+                          *, payload: Dict[str, Any] = None) -> List[str]:
         """落 `coverage/testpoints.yaml` + `.json` —— 测试点 IR 的唯一落点。
 
         **为什么落在 `coverage/`**：它与覆盖报告同性质（都是签核材料），而且
         `inputs/yaml/uvm/` 会被 `find_spec_yaml` 清空（见 `layout.casemodel_path`
         的注释）。放在 coverage 下，证据包 `dump` 会连同覆盖率一起收走。
+
+        `payload` 由 `_build_testpoints` 预计算（env 渲染前要用）；不传则现算。
         """
         try:
-            from src.tools.generation.casemodel_tools.api import run_testpoints
-
             # **与 `_casemodel_test_lines` 的 200 条上限同一口径**：那边截断后
             # 不会生成更多属性 test 类，TP 这边若还列着"有 test 名但没类"的
             # 条目，报告就会出现永远 NOT_RUN 的幽灵测试点。
-            payload = run_testpoints(
-                case_model.read_text(encoding="utf-8", errors="replace"),
-                env_name=f"{module_name}_env",
-                agents=self._agent_transaction_fields(output_dir) or None,
-                module_name=module_name,
-                max_tests=200)
+            if payload is None:
+                payload = self._build_testpoints(output_dir, case_model, module_name)
             if payload.get("error"):
                 logger.warning(f"测试点 IR 生成失败: {payload['error']}")
                 return []
@@ -661,7 +704,9 @@ class VerifyExecutor(BaseExecutor):
             write_coverage_plan)
         write_coverage_plan(output_dir, cm_file, logger, module_name="dut")
 
-    def _write_coverage_dut_channel(self, output_dir: Path) -> Dict[str, Any]:
+    def _write_coverage_dut_channel(self, output_dir: Path,
+                                    tp_payload: Dict[str, Any] = None
+                                    ) -> Dict[str, Any]:
         """`sample: dut` 的字段 → `coverage/<接口>.sv`（bind 进 DUT 的覆盖率接口）。
 
         **第二条采样通道**。monitor 的事务通道只看得到**激励侧** —— 队列水位、
@@ -696,18 +741,28 @@ class VerifyExecutor(BaseExecutor):
             return {}
         text = cm_file.read_text(encoding="utf-8", errors="replace")
         decls = _load_case_model_doc(text)
+        tp_width = len((tp_payload or {}).get("testpoints") or [])
         try:
             from src.tools.generation.casemodel_tools.api import run_covergroups
 
             # `extra_signals`：断言规则引用、但没被覆盖点采的信号（`issue_valid`
             # 这种端口）。接口里不引，env 检查组就读不到 —— 规则只能被跳过。
-            payload = run_covergroups(text, "dut",
-                                      extra_signals=_assertion_signals(decls))
+            # **timing 的 start/end 也要引**：它们由 env 检查组逐拍读，不在
+            # 覆盖点里的话接口上根本没有。
+            payload = run_covergroups(
+                text, "dut",
+                extra_signals=(_assertion_signals(decls)
+                               + _timing_signals(tp_payload)),
+                tp_bitmap_width=tp_width)
         except Exception as e:                       # noqa: BLE001 旁路
             logger.warning(f"读 case 模型失败（不生成 DUT 覆盖率接口）: {e}")
             return {}
+        bitmap_patch = _bitmap_patch(output_dir, tp_payload, payload,
+                                     self._agent_transaction_fields(output_dir))
         if not payload.get("probe_ports"):
-            return {}                                # 模型里没有 sample: dut 的字段
+            # 模型里没有 `sample: dut` 的字段：没有覆盖率接口，`tp_seen` 无处可放；
+            # 但位图与 `[TP_HIT]` 日志仍然有用（stimulus 通道）。
+            return bitmap_patch
         code = payload.get("cov_interface_code") or ""
         meta = payload.get("cov_interface") or {}
         if not code or not meta.get("type"):
@@ -720,7 +775,7 @@ class VerifyExecutor(BaseExecutor):
             else:
                 logger.warning("DUT 覆盖率接口生成不了（模型里有 sample: dut 的字段，"
                                "但接口身份算不出来）")
-            return {}
+            return bitmap_patch
         path = output_dir / meta["file"]
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(code, encoding="utf-8")
@@ -733,35 +788,17 @@ class VerifyExecutor(BaseExecutor):
         # **同一份规则、两个执行点**：模型里那几条 `assertions` 既渲染成 SVA
         # （设计侧，bind 进 DUT），也翻译成逐拍布尔喂给 env 组件（验证侧，UVM 收口）。
         # 一套规则两处生效，数出来的东西才对得上；各写一份必然漂。
-        dut_checker: Dict[str, Any] = {}
-        try:
-            from src.tools.generation.casemodel_tools.coverage import checker_rules
-            got = checker_rules(decls.get("assertions"), meta.get("signals") or [])
-            if got["rules"]:
-                dut_checker = {"rules": got["rules"], "skipped": got["skipped"],
-                               "clock": meta.get("clock", "clk"),
-                               "reset": meta.get("reset", "rst_n")}
-                logger.info(f"DUT 检查：{len(got['rules'])} 条规则由 env 组件逐拍求值"
-                            f"（收口打印 matched/mismatched → 真 pass 的比对半边）")
-            for _s in got["skipped"]:
-                logger.warning(f"DUT 检查跳过：{_s}")
-        except Exception as e:                             # noqa: BLE001 旁路
-            logger.warning(f"DUT 检查规则生成失败（本轮没有比对收口）: {e}")
+        checker_patch = _dut_checker(decls, meta)
         # 它和这个接口采的是**同一批信号**：两份同时挂在 filelist 里，就是同一个
         # 信号被两个 covergroup 各采一遍 —— `vcover` 报表里多一个 covergroup，
         # 签核的"功能覆盖率"被自己搅浑。删的是本管道自己的产物（名字固定、
         # 随时可重生成），而且**说出来**，不静默动别人的文件。
-        stale = path.parent / "dut_probe.sv"
-        if stale.exists():
-            stale.unlink()
-            logger.info(f"清掉上一版的 DUT 探针 {stale.name}：DUT 通道已改走 "
-                        f"{path.name} + env 覆盖率组件（两个 covergroup 采同一批"
-                        f"信号会重复计量）")
+        _retire_stale_probe(path)
         logger.info(f"功能覆盖率点（DUT 通道）：{len(payload['probe_ports'])} 个信号 "
                     f"→ {path.name}（bind 到 {meta['dut_module']}；由 "
                     f"{meta['type']} 引给 env 覆盖率组件，会被真编译、真采样）")
         return {"dut_if": meta, "dut_bins": payload.get("dut_bins") or {},
-                **({"dut_checker": dut_checker} if dut_checker else {})}
+                **checker_patch, **bitmap_patch}
 
     @staticmethod
     def _case_model_field_bins(output_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
@@ -1229,6 +1266,186 @@ def _assertion_signals(decls: Dict[str, Any]) -> List[Dict[str, Any]]:
                 out.append({"name": sig.get("name"),
                             "width": sig.get("width") or 1})
     return out
+
+
+def _bitmap_patch(output_dir: Path, tp_payload: Dict[str, Any],
+                  cov_payload: Dict[str, Any],
+                  agent_fields: Dict[str, List[str]]) -> Dict[str, Any]:
+    """位图 → 落盘 + 返回可并进 `env_cov_bins` 的补丁（`{}` = 没有位图）。"""
+    bitmap = _build_tp_bitmap(tp_payload or {}, cov_payload, agent_fields)
+    _write_tp_bitmap(output_dir, bitmap)
+    if not bitmap.get("width"):
+        return {}
+    tracked = sum(1 for e in bitmap["entries"] if e["trackable"])
+    logger.info(f"测试点位图：{bitmap['width']} 位（{tracked} 位可追踪）"
+                f"→ coverage/tp_bitmap.json")
+    return {"tp_bitmap": bitmap}
+
+
+def _dut_checker(decls: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:
+    """模型 `assertions` → env 逐拍检查规则（失败给 `{}`，不编规则）。"""
+    try:
+        from src.tools.generation.casemodel_tools.coverage import checker_rules
+        got = checker_rules(decls.get("assertions"), meta.get("signals") or [])
+        for skipped in got["skipped"]:
+            logger.warning(f"DUT 检查跳过：{skipped}")
+        if not got["rules"]:
+            return {}
+        logger.info(f"DUT 检查：{len(got['rules'])} 条规则由 env 组件逐拍求值"
+                    f"（收口打印 matched/mismatched → 真 pass 的比对半边）")
+        return {"dut_checker": {"rules": got["rules"], "skipped": got["skipped"],
+                                "clock": meta.get("clock", "clk"),
+                                "reset": meta.get("reset", "rst_n")}}
+    except Exception as e:                             # noqa: BLE001 旁路
+        logger.warning(f"DUT 检查规则生成失败（本轮没有比对收口）: {e}")
+        return {}
+
+
+def _retire_stale_probe(iface_path: Path) -> None:
+    """删掉上一版的独立探针 —— 它和接口采同一批信号，会重复计量。"""
+    stale = iface_path.parent / "dut_probe.sv"
+    if not stale.exists():
+        return
+    stale.unlink()
+    logger.info(f"清掉上一版的 DUT 探针 {stale.name}：DUT 通道已改走 "
+                f"{iface_path.name} + env 覆盖率组件（两个 covergroup 采同一批"
+                f"信号会重复计量）")
+
+
+def _timing_signals(tp_payload: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    """TP 的 `timing.start/end` → 覆盖率接口要额外引的信号。
+
+    只收合法 SV 标识符：接口端口只能同名连接，`a && b` 这种表达式引不出来。
+    非标识符由 `_build_tp_bitmap` 标成 `checkable=False`，不生成假检查。
+    """
+    out: List[Dict[str, Any]] = []
+    for tp in (tp_payload or {}).get("testpoints") or []:
+        if not isinstance(tp, dict):
+            continue
+        timing = tp.get("timing") or {}
+        for key in ("start", "end"):
+            name = str(timing.get(key) or "").strip()
+            if name and re.fullmatch(r"[A-Za-z_][\w$]*", name):
+                out.append({"name": name, "width": 1})
+    return out
+
+
+def _sv_ident(name: str) -> str:
+    return name if re.fullmatch(r"[A-Za-z_][\w$]*", name or "") else ""
+
+
+def _bitmap_timing(tp: Dict[str, Any]) -> Dict[str, Any] | None:
+    """TP 的 timing → 位图里那一格（没有 / 不可判都给 `checkable=False`）。"""
+    timing = tp.get("timing") or {}
+    if not timing:
+        return None
+    spec = timing.get("expect_cycles") or {}
+    start = _sv_ident(str(timing.get("start") or ""))
+    end = _sv_ident(str(timing.get("end") or timing.get("sample") or ""))
+    tm = {"min": int(spec.get("min", 0) or 0),
+          "max": int(spec.get("max", 0) or 0),
+          "tolerance": int(timing.get("tolerance") or 0),
+          "start": start, "end": end,
+          "sample": _sv_ident(str(timing.get("sample") or ""))}
+    tm["checkable"] = bool(start and end and tm["max"] >= tm["min"])
+    return tm
+
+
+def _bitmap_agent(tp: Dict[str, Any], signal: str,
+                  agent_fields: Dict[str, List[str]]) -> str:
+    """激励字段 → 承载它的 agent（模型声明的优先，其次按字段反查）。"""
+    declared = str((tp.get("realization") or {}).get("agent") or "")
+    if signal in (agent_fields.get(declared) or []):
+        return declared
+    return next((a for a, fields in agent_fields.items() if signal in fields), "")
+
+
+def _untrackable_note(tid: str, cp_name: str, bin_name: str, cp: dict,
+                      bin_spec: Any, source: str, agent: str,
+                      signal: str, literal: str) -> str:
+    """不可追踪的原因（空串 = 可追踪）。**不编位**，如实说为什么。"""
+    if not tid or not cp_name or not bin_name:
+        return "没有 coverpoint/bin（行为域或未追踪）"
+    if not cp:
+        return "覆盖率模型里没有这个覆盖点（模型/生成漂移）"
+    if bin_spec is None:
+        return "覆盖点没有显式 bin（自动分箱无法逐 bin 追踪）"
+    if source == "stimulus" and not agent:
+        return "找不到承载字段的 agent（激励通道不可追踪）"
+    if "$" in literal:
+        return "开区间 `[lo:$]` 无法在 `inside` 里表达"
+    if not signal or not literal:
+        return "信号名/bin 字面量缺失"
+    return ""
+
+
+def _bitmap_entry(bit: int, tp: Dict[str, Any], covs: Dict[str, Any],
+                  agent_fields: Dict[str, List[str]]) -> Dict[str, Any]:
+    """一条 TP → 位图的一格（bit / 仓 / 通道 / 可追踪性 / 时序）。"""
+    tid = str(tp.get("tp_id") or "")
+    cp_name = str(tp.get("coverpoint") or "")
+    bin_name = str(tp.get("bin") or "")
+    cp = covs.get(cp_name) or {}
+    bin_spec = next((b for b in cp.get("bins") or []
+                     if isinstance(b, dict) and b.get("name") == bin_name), None)
+    source = str(cp.get("source") or "")
+    signal = _sv_ident(str(cp.get("signal") or ""))
+    literal = str((bin_spec or {}).get("literal") or "")
+    agent = _bitmap_agent(tp, signal, agent_fields) if source == "stimulus" else ""
+    note = _untrackable_note(tid, cp_name, bin_name, cp, bin_spec,
+                             source, agent, signal, literal)
+    entry: Dict[str, Any] = {
+        "bit": bit, "tp_id": tid, "coverpoint": cp_name, "bin": bin_name,
+        "kind": str((tp.get("realization") or {}).get("kind") or ""),
+        "source": source, "agent": agent, "signal": signal,
+        "literal": literal, "trackable": not note, "note": note,
+    }
+    timing = _bitmap_timing(tp)
+    if timing:
+        entry["timing"] = timing
+    return entry
+
+
+def _build_tp_bitmap(tp_payload: Dict[str, Any],
+                     cov_payload: Dict[str, Any],
+                     agent_fields: Dict[str, List[str]] = None) -> Dict[str, Any]:
+    """TP IR + 覆盖率模型 → **位序固定的测试点位图**（+ 时序判据）。
+
+    位序 = `testpoints.yaml` 的序号，**一旦发布不重排**（历史波形靠它对号）。
+    每一格回答三件事：这条 TP 打哪个仓（`literal`）、在哪个通道比（dut /
+    stimulus + agent）、有没有时序窗口。
+
+    `trackable=False` 的情形（自动分箱无显式 bin、覆盖点没生成、开区间
+    `[lo:$]` 在 `inside` 里表达不了）**如实标出来**：不生成一个"永远不点亮"
+    的假位，也不假装它被追踪了。
+    """
+    tps = [tp for tp in (tp_payload or {}).get("testpoints") or []
+           if isinstance(tp, dict)]
+    covs = {str(cp.get("cp_name") or ""): cp
+            for cp in (cov_payload or {}).get("coverpoints") or []
+            if isinstance(cp, dict)}
+    agent_fields = agent_fields or {}
+    entries = [_bitmap_entry(bit, tp, covs, agent_fields)
+               for bit, tp in enumerate(tps)]
+    notes = [f"{e['tp_id']}: timing 缺 start/end 或不是合法信号名 —— "
+             f"不生成时序检查（不编假期望）"
+             for e in entries
+             if e.get("timing") and not e["timing"]["checkable"]]
+    return {"schema": "tp_bitmap_v1", "width": len(entries),
+            "entries": entries, "notes": notes}
+
+
+def _write_tp_bitmap(output_dir: Path, bitmap: Dict[str, Any]) -> None:
+    """`coverage/tp_bitmap.json` —— 位序 ↔ tp_id（一旦发布不重排）。"""
+    if not (bitmap or {}).get("width"):
+        return
+    path = output_dir / "coverage" / "tp_bitmap.json"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(bitmap, ensure_ascii=False, indent=2),
+                        encoding="utf-8", newline="\n")
+    except OSError as e:
+        logger.warning(f"测试点位图落盘失败: {e}")
 
 
 #: agent 类名的后缀 —— 去掉它再加 `_seq_item` 就是事务类型名。

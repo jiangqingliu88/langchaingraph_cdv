@@ -17,10 +17,12 @@
 
 合成一个数就再也分不出"该测的没测"和"测了的没打中"—— 那正是要分的。
 
-## 五张表
+## 六张表
 
   · 功能覆盖点 —— 一个覆盖点一行：维度 / 信号 / 类型 / bin 数 / bin 名单 / 实测%
   · 测试点     —— 模型摊平出来的用例（与回归里跑的那份**同一分母**）
+  · TP Cov 证据 —— **四层证据按功能契约汇聚**（功能 / 时序 / 数据 / 路径），
+                   右栏是选中 TP 的完整证据链（来源、支持用例、不证明什么）
   · 批次 / 种子 —— 打算怎么测够（每批的 test、种子基线、探索条数、合计）
   · 需求追溯   —— 哪条需求被谁验了（覆盖点 / 交叉 / 批次）
   · 链上文件   —— 这条链上的四份文件（模型 / 计划 / 探针 / 实测文本）
@@ -34,12 +36,17 @@
 """
 from __future__ import annotations
 
+import json
+
 from src.workbench.bus import run_id_of
 
 from typing import Any, Dict, List
 
+from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtGui import QAction, QColor
-from PySide6.QtWidgets import (QLabel, QTabWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QLabel, QPlainTextEdit,
+                               QSplitter, QTabWidget, QTableWidget,
+                               QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ....ui import theme
 from ....ui.helpers import tables as table_helpers
@@ -70,6 +77,53 @@ TESTPOINT_COLUMNS = (
     ("priority", "级别", 60, CENTER),
     ("coverage_bin", "覆盖点", 200, LEFT),
 )
+
+#: TP Cov 证据视图 —— **一个功能契约一行**：功能/时序/数据/路径四层状态。
+#: 四层是"验证完成"的四类证据，不是"一个用例覆盖了"的并列条件；一个用例可以
+#: 只提供其中一部分，多个用例合起来构成完整链（详见 tp_evidence 模块头）。
+TP_EVIDENCE_COLUMNS = (
+    ("tp_id", "测试点", 210, LEFT),
+    ("domain", "域", 80, CENTER),
+    ("functional", "功能覆盖", 100, CENTER),
+    ("timing", "时序断言", 100, CENTER),
+    ("data", "数据比对", 100, CENTER),
+    ("path", "路径覆盖", 130, CENTER),
+    ("contract_status", "契约状态", 130, CENTER),
+    ("signed_off_by", "签核", 180, LEFT),
+)
+
+#: Case 关联视图四张表（与 `case_associate_view` 的 builder 同形）。
+CASE_COLUMNS = (
+    ("name", "用例", 230, LEFT),
+    ("feats", "Feat", 130, LEFT),
+    ("desc", "说明", 150, LEFT),
+    ("coverage", "功能覆盖", 210, LEFT),
+    ("sva", "SVA", 200, LEFT),
+    ("scoreboard", "Scoreboard", 200, LEFT),
+    ("path", "PATH", 180, LEFT),
+    ("conclusion", "结论", 200, LEFT),
+)
+FEATURE_COLUMNS = (
+    ("id", "Feat", 120, LEFT),
+    ("desc", "描述", 220, LEFT),
+    ("functional", "功能覆盖", 100, CENTER),
+    ("timing", "SVA", 90, CENTER),
+    ("data", "Scoreboard", 110, CENTER),
+    ("path", "PATH", 100, CENTER),
+    ("status", "状态", 200, LEFT),
+)
+GAP_COLUMNS = (
+    ("type", "类型", 100, LEFT),
+    ("item", "项", 240, LEFT),
+    ("root", "根因", 320, LEFT),
+    ("action", "补齐动作", 300, LEFT),
+    ("owner", "责任人", 100, CENTER),
+    ("status", "状态", 90, CENTER),
+)
+_STATUS_EMOJI = {"green": "🟢", "yellow": "🟡", "red": "🔴", "na": "—"}
+_STATUS_TEXT = {"green": "通过", "yellow": "部分", "red": "缺失", "na": "不适用"}
+_STATUS_THEME = {"green": "ok", "yellow": "warning", "red": "error",
+                 "na": "muted"}
 
 #: 批次 / 种子管理表 —— 回答"**打算怎么测够**"。
 #:
@@ -142,11 +196,187 @@ class FunctionalCoverageModule(ModuleBase):
         self.tabs.setDocumentMode(True)
         self.tabs.addTab(self._build_page(COVERPOINT_COLUMNS, "cp"), "功能覆盖点")
         self.tabs.addTab(self._build_page(TESTPOINT_COLUMNS, "tp"), "测试点")
+        self.tabs.addTab(self._build_case_evidence_page(), "Case 证据")
         self.tabs.addTab(self._build_page(BATCH_COLUMNS, "batch"), "批次 / 种子")
         self.tabs.addTab(self._build_page(TRACE_COLUMNS, "trace"), "需求追溯")
         self.tabs.addTab(self._build_page(ASSET_COLUMNS, "asset"), "链上文件")
         layout.addWidget(self.tabs, 1)
         return root
+
+    def _build_case_evidence_page(self) -> QWidget:
+        """「Case 证据」——四张人类可读表 + TP 明细。
+
+        数据来自 `case_view`（`case_associate_view` builder）：用例 × 证据层、
+        功能契约 × 证据层、功能组 × 路径、缺口与豁免。状态用颜色/emoji 标出，
+        和 CLI 的 `coverage case-evidence` 是同一份数据。
+        """
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(4, 4, 4, 4)
+        inner = QTabWidget(page)
+        inner.setDocumentMode(True)
+
+        self.ce_case_model = RowsModel(CASE_COLUMNS, page)
+        self.ce_case_table = table_helpers.configure_table(page, self.ce_case_model)
+        inner.addTab(self.ce_case_table, "用例 × 证据层")
+
+        self.ce_feat_model = RowsModel(FEATURE_COLUMNS, page)
+        self.ce_feat_table = table_helpers.configure_table(page, self.ce_feat_model)
+        inner.addTab(self.ce_feat_table, "功能契约 × 证据层")
+
+        self.ce_matrix = QTableWidget(0, 1, page)
+        self.ce_matrix.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.ce_matrix.verticalHeader().setVisible(False)
+        self.ce_matrix.horizontalHeader().setStretchLastSection(True)
+        inner.addTab(self.ce_matrix, "功能组 × 路径")
+
+        self.ce_gap_model = RowsModel(GAP_COLUMNS, page)
+        self.ce_gap_table = table_helpers.configure_table(page, self.ce_gap_model)
+        inner.addTab(self.ce_gap_table, "缺口与豁免")
+
+        # 逐 TP 的完整证据链保留为最后一个子页 —— 评审从四张表下钻到单条 TP
+        inner.addTab(self._build_tp_evidence_page(), "TP 明细")
+        layout.addWidget(inner, 1)
+        self._case_view: Dict[str, Any] = {}
+        return page
+
+    def _fill_case_evidence(self, cv: Dict[str, Any]) -> None:
+        self._case_view = cv or {}
+        cases = self._case_display_rows(cv.get("cases") or [])
+        self.ce_case_model.set_rows(cases, cell_colors=self._case_colors(cases))
+        features = self._feature_display_rows(cv.get("features") or [])
+        self.ce_feat_model.set_rows(features,
+                                    cell_colors=self._feature_colors(features))
+        self._fill_matrix(cv.get("matrix") or {})
+        self.ce_gap_model.set_rows(list(cv.get("gaps") or []))
+        for model, table in ((self.ce_case_model, self.ce_case_table),
+                             (self.ce_feat_model, self.ce_feat_table),
+                             (self.ce_gap_model, self.ce_gap_table)):
+            model.apply_column_widths(table)
+
+    @staticmethod
+    def _case_display_rows(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        out = []
+        for c in cases:
+            out.append({
+                "name": c.get("name"),
+                "feats": "、".join(c.get("feats") or []),
+                "desc": c.get("desc"),
+                **{key: f"{_STATUS_EMOJI.get((c.get(key) or {}).get('status'), '?')} "
+                        f"{(c.get(key) or {}).get('detail', '')}"
+                   for key in ("coverage", "sva", "scoreboard", "path")},
+                **{f"{key}_status": (c.get(key) or {}).get("status")
+                   for key in ("coverage", "sva", "scoreboard", "path")},
+                "conclusion": c.get("conclusion"),
+            })
+        return out
+
+    def _case_colors(self, rows: List[Dict[str, Any]]) -> Dict[tuple, QColor]:
+        pairs = tuple((key, f"{key}_status")
+                      for key in ("coverage", "sva", "scoreboard", "path"))
+        cols = {key: i for i, (key, *_rest) in enumerate(CASE_COLUMNS)}
+        palette = theme.current()
+        out = {}
+        for index, row in enumerate(rows):
+            for key, status_key in pairs:
+                color = _STATUS_THEME.get(str(row.get(status_key)))
+                if color:
+                    out[(index, cols[key])] = QColor(getattr(palette, color))
+        return out
+
+    @staticmethod
+    def _feature_display_rows(features: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        out = []
+        for f in features:
+            row = {"id": f.get("id"), "desc": f.get("desc"), "status": f.get("status")}
+            for key in ("functional", "timing", "data", "path"):
+                status = f.get(key)
+                row[key] = f"{_STATUS_EMOJI.get(status, '?')} {_STATUS_TEXT.get(status, '')}"
+                row[f"{key}_status"] = status
+            out.append(row)
+        return out
+
+    def _feature_colors(self, rows: List[Dict[str, Any]]) -> Dict[tuple, QColor]:
+        cols = {key: i for i, (key, *_rest) in enumerate(FEATURE_COLUMNS)}
+        palette = theme.current()
+        out = {}
+        for index, row in enumerate(rows):
+            for key in ("functional", "timing", "data", "path"):
+                color = _STATUS_THEME.get(str(row.get(f"{key}_status")))
+                if color:
+                    out[(index, cols[key])] = QColor(getattr(palette, color))
+        return out
+
+    def _fill_matrix(self, matrix: Dict[str, Any]) -> None:
+        groups = list(matrix.get("groups") or [])
+        rows = list(matrix.get("rows") or [])
+        palette = theme.current()
+        self.ce_matrix.clear()
+        self.ce_matrix.setColumnCount(len(groups) + 1)
+        self.ce_matrix.setRowCount(len(rows))
+        self.ce_matrix.setHorizontalHeaderLabels(["路径"] + groups)
+        for i, row in enumerate(rows):
+            self.ce_matrix.setItem(i, 0, QTableWidgetItem(str(row.get("path") or "")))
+            cells = row.get("cells") or {}
+            for j, group in enumerate(groups, start=1):
+                status = str(cells.get(group, "na"))
+                item = QTableWidgetItem(
+                    f"{_STATUS_EMOJI.get(status, '?')} {_STATUS_TEXT.get(status, '')}")
+                color = getattr(palette, _STATUS_THEME.get(status, "muted"))
+                item.setBackground(QColor(color))
+                self.ce_matrix.setItem(i, j, item)
+        self.ce_matrix.resizeColumnsToContents()
+
+    def _build_tp_evidence_page(self) -> QWidget:
+        """「TP Cov 证据」—— 左表四层状态，右栏该 TP 的完整证据 JSON。
+
+        右栏不是重复左表，而是**评审要追溯的那个东西**：每一层的来源
+        （bin/断言/SCB/PATH 序列）、支持它的用例、不证明什么。点哪行看哪行。
+        """
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(4, 4, 4, 4)
+        splitter = QSplitter(Qt.Orientation.Horizontal, page)
+        self.te_model = RowsModel(TP_EVIDENCE_COLUMNS, page)
+        self.te_table = table_helpers.configure_table(page, self.te_model)
+        self.te_table.selectionModel().currentRowChanged.connect(
+            self._on_tp_evidence_row)
+        splitter.addWidget(self.te_table)
+        self.te_detail = QPlainTextEdit()
+        self.te_detail.setReadOnly(True)
+        self.te_detail.setFont(theme.mono_font())
+        splitter.addWidget(self.te_detail)
+        splitter.setSizes([900, 520])
+        layout.addWidget(splitter, 1)
+        self._tp_evidence: Dict[str, Any] = {}
+        return page
+
+    def _on_tp_evidence_row(self, current: QModelIndex,
+                            _previous: QModelIndex) -> None:
+        if not current.isValid():
+            self.te_detail.clear()
+            return
+        row = table_helpers.source_index(self.te_table, current).row()
+        tps = (self._tp_evidence or {}).get("tps") or []
+        if not 0 <= row < len(tps):
+            self.te_detail.clear()
+            return
+        self.te_detail.setPlainText(
+            json.dumps(tps[row], ensure_ascii=False, indent=2))
+
+    def _tp_evidence_rows(self) -> List[Dict[str, Any]]:
+        out = []
+        for tp in (self._tp_evidence or {}).get("tps") or []:
+            layers = tp.get("evidence_layers") or {}
+            out.append({
+                "tp_id": tp.get("tp_id"),
+                "domain": tp.get("domain"),
+                **{key: (layers.get(key) or {}).get("status")
+                   for key in ("functional", "timing", "data", "path")},
+                "contract_status": tp.get("contract_status"),
+                "signed_off_by": tp.get("signed_off_by") or "",
+            })
+        return out
 
     def _build_page(self, columns, prefix: str) -> QWidget:
         page = QWidget()
@@ -208,6 +438,9 @@ class FunctionalCoverageModule(ModuleBase):
         self.cp_model.set_rows([self._display_cp(r) for r in self._coverpoints],
                                cell_colors=self._unmeasured_colors())
         self.tp_model.set_rows(list(payload.get("testpoints") or []))
+        self._tp_evidence = payload.get("tp_evidence") or {}
+        self.te_model.set_rows(self._tp_evidence_rows())
+        self._fill_case_evidence(payload.get("case_view") or {})
         self.batch_model.set_rows(list(payload.get("batches") or []))
         # 没有覆盖点/交叉认领的需求标灰 —— "孤立需求"是签核要拦的，得看得见
         trace = list(payload.get("traceability") or [])
@@ -215,6 +448,7 @@ class FunctionalCoverageModule(ModuleBase):
         self.asset_model.set_rows(list(payload.get("assets") or []))
         for model, table in ((self.cp_model, self.cp_table),
                              (self.tp_model, self.tp_table),
+                             (self.te_model, self.te_table),
                              (self.batch_model, self.batch_table),
                              (self.trace_model, self.trace_table),
                              (self.asset_model, self.asset_table)):
@@ -247,11 +481,19 @@ class FunctionalCoverageModule(ModuleBase):
 
     def _clear(self) -> None:
         self._coverpoints = []
-        for attr in ("cp_model", "tp_model", "batch_model", "trace_model",
-                     "asset_model"):
+        self._tp_evidence = {}
+        self._case_view = {}
+        for attr in ("cp_model", "tp_model", "te_model", "ce_case_model",
+                     "ce_feat_model", "ce_gap_model", "batch_model",
+                     "trace_model", "asset_model"):
             model = getattr(self, attr, None)
             if model is not None:
                 model.set_rows([])
+        if getattr(self, "ce_matrix", None):
+            self.ce_matrix.clear()
+            self.ce_matrix.setRowCount(0)
+        if getattr(self, "te_detail", None):
+            self.te_detail.clear()
         if getattr(self, "summary_label", None):
             self.summary_label.setText("")
         if getattr(self, "notes_label", None):

@@ -31,6 +31,7 @@ v2 的做法是三件事：
 前者回答"这一轮怎么跑出来的"，后者回答"凭什么签/不签"。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
 import hashlib
 import json
@@ -43,7 +44,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-SCHEMA = "signoff_evidence_v2"
+SCHEMA = versions.EVIDENCE_UVM_PROFILE
 POLICY_SCHEMA = "signoff_policy_v1"
 
 #: 策略文件允许的键。未知键 = 拼写错误/过期字段，**不静默忽略**。
@@ -338,6 +339,30 @@ def write_policy_snapshot(output_dir: Path, policy: Dict[str, Any]) -> str:
 # 写包
 # ═══════════════════════════════════════════════════════════
 
+def _attach_envelope(manifest: Dict[str, Any],
+                     files: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """给 v2 manifest 补 EvidenceEnvelope 基础段（profile 业务字段原样保留）。"""
+    from src.core.contracts.evidence import build_envelope
+
+    manifest["profile"] = SCHEMA
+    manifest["envelope"] = build_envelope(
+        run_id=str(manifest.get("run") or ""),
+        module=str(manifest.get("module") or ""),
+        profile=SCHEMA,
+        inputs={"framework": manifest.get("framework") or {},
+                "policy": manifest.get("policy") or {},
+                "versions": manifest.get("versions") or {}},
+        execution={"coverage": manifest.get("coverage") or {},
+                   "tp_matrix": manifest.get("tp_matrix") or {},
+                   "sim_reward": manifest.get("sim_reward") or {},
+                   "knowledge_graph": manifest.get("knowledge_graph") or {}},
+        verdict=manifest.get("verdict") or {},
+        replay={"recipe": "replay/recipe.json", "tier_a": "verdict_recompute"},
+        hashes={"package_hash": manifest["package_hash"], "files": len(files)},
+        versions_seen={"evidence": SCHEMA})
+    return manifest
+
+
 def write_package(output_dir: Path, manifest: Dict[str, Any],
                   project_root: Optional[Path] = None) -> Dict[str, Any]:
     """把 v2 证据包写到 `<run>/signoff_evidence/`，返回带哈希的 manifest。
@@ -445,6 +470,9 @@ def write_package(output_dir: Path, manifest: Dict[str, Any],
     manifest["schema"] = SCHEMA
     manifest["files"] = files
     manifest["package_hash"] = sha256_json(identity)
+    # EvidenceEnvelope 基础段：UVM profile 保留三态/caveat/TP 矩阵，
+    # 只补「身份 / 输入 / 执行 / 判定 / 回放 / 哈希」六段共同骨架。
+    manifest = _attach_envelope(manifest, files)
     # `package_dir` 必须在算 `manifest_hash` **之前**定下来 ——
     # 否则哈希漏掉一个字段，回读复核必然 mismatch（实测踩过）。
     manifest["package_dir"] = _rel(final_pkg, root)

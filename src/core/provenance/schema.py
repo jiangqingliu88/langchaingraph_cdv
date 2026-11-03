@@ -4,8 +4,9 @@
 纪律）；改已有语义才升 `SCHEMA` 版本。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
-SCHEMA = "provenance_dag_v1"
+SCHEMA = versions.PROVENANCE
 
 #: 节点种类。新增种类时同步 `graph.py` 的建边逻辑与文档。
 NODE_KINDS = (

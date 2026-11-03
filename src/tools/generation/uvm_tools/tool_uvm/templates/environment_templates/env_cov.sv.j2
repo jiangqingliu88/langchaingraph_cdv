@@ -192,6 +192,71 @@ class {{ environment.env_name }}_coverage extends uvm_component;
   endgroup : cg_dut
 {%- endif %}
 
+{%- set _tpb = coverage_tp_bitmap | default({}) %}
+{%- set _tpb_entries = _tpb['entries'] | default([]) %}
+{%- set _tpb_stim = [] %}
+{%- set _tpb_dut = [] %}
+{%- set _tpb_timing = [] %}
+{%- for e in _tpb_entries %}
+{%-   if e.trackable and e.source == 'stimulus' %}{% set _ = _tpb_stim.append(e) %}{% endif %}
+{%-   if e.trackable and e.source == 'dut' %}{% set _ = _tpb_dut.append(e) %}{% endif %}
+{%-   if e.timing is defined and e.timing.checkable %}{% set _ = _tpb_timing.append(e) %}{% endif %}
+{%- endfor %}
+{#-   report_phase 的收口行要一个"违规总数"表达式：把各计数变量加起来 #}
+{%- set _tpb_viol_terms = [] %}
+{%- for e in _tpb_timing %}{% set _ = _tpb_viol_terms.append('tp_tm_%d_viol' | format(e.bit)) %}{% endfor %}
+{%- set _tpb_viol_sum = _tpb_viol_terms | join(' + ') if _tpb_viol_terms else '0' %}
+{%- if _tpb_entries %}
+
+  // ── 测试点位图（`coverage/tp_bitmap.json`）──
+  //
+  // 第 i 位 = 第 i 条 TP（位序 = testpoints.yaml 的序号，**一旦发布不重排**）。
+  // 仓首次命中时置位（之后保持为 1）并打一行 `[TP_HIT]` —— 打开波形就能看到
+  // "到这一刻为止点亮了哪几个测试点"，日志里也能 grep 到归属。
+  bit [{{ _tpb.width - 1 }}:0] tp_hit_logged = '0;
+{%-   for e in _tpb_timing %}
+  // timing: {{ e.tp_id }}（{{ e.timing.start }} → {{ e.timing.end }}，期望
+  //         [{{ e.timing.min }}, {{ e.timing.max }}] 拍 ±{{ e.timing.tolerance }}）
+  int unsigned tp_tm_{{ e.bit }}_cyc = 0;
+  bit          tp_tm_{{ e.bit }}_active = 1'b0;
+  int unsigned tp_tm_{{ e.bit }}_viol = 0;
+{%-   endfor %}
+{%- endif %}
+
+{%- if _tpb_dut or _tpb_timing %}
+{%- macro _tp_probe_dut() %}
+{%-   for e in _tpb_dut %}
+      if (cov_vif.{{ e.signal }} inside { {{- e.literal -}} }) begin
+        cov_vif.tp_seen[{{ e.bit }}] = 1'b1;
+        if (!tp_hit_logged[{{ e.bit }}]) begin
+          tp_hit_logged[{{ e.bit }}] = 1'b1;
+          `uvm_info("TP_HIT", $sformatf("tp={{ e.tp_id }} cp={{ e.coverpoint }} bin={{ e.bin }} t=%0t", $time), UVM_NONE)
+        end
+      end
+{%-   endfor %}
+{%-   for e in _tpb_timing %}
+      if (cov_vif.{{ e.timing.start }}) begin
+        tp_tm_{{ e.bit }}_active = 1'b1;
+        tp_tm_{{ e.bit }}_cyc = 0;
+      end else if (tp_tm_{{ e.bit }}_active) begin
+        tp_tm_{{ e.bit }}_cyc++;
+        if (cov_vif.{{ e.timing.end }}) begin
+          tp_tm_{{ e.bit }}_active = 1'b0;
+          if (tp_tm_{{ e.bit }}_cyc < {{ e.timing.min - e.timing.tolerance if e.timing.min > e.timing.tolerance else 0 }} || tp_tm_{{ e.bit }}_cyc > {{ e.timing.max + e.timing.tolerance }}) begin
+            tp_tm_{{ e.bit }}_viol++;
+{%-     if e.kind == 'sequence' %}
+            // 序列型时序超窗只降级为 TIMING_WARN，不否决（见设计稿 §6.2）
+            `uvm_warning("TP_TIMING", $sformatf("tp={{ e.tp_id }} cycles=%0d 期望 [{{ e.timing.min }},{{ e.timing.max }}]（±{{ e.timing.tolerance }}）", tp_tm_{{ e.bit }}_cyc))
+{%-     else %}
+            `uvm_error("TP_TIMING", $sformatf("tp={{ e.tp_id }} cycles=%0d 期望 [{{ e.timing.min }},{{ e.timing.max }}]（±{{ e.timing.tolerance }}）", tp_tm_{{ e.bit }}_cyc))
+{%-     endif %}
+          end
+        end
+      end
+{%-   endfor %}
+{%- endmacro %}
+{%- endif %}
+
   function new(string name, uvm_component parent);
     super.new(name, parent);
 {%- for agent in agents %}
@@ -309,11 +374,17 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 {%- if _dc and _dc.rules %}
         chk_dut_one();
 {%- endif %}
+{%- if _tpb_dut or _tpb_timing %}
+{{ _tp_probe_dut() }}
+{%- endif %}
       end
 {%- else %}
       cg_dut.sample();
 {%- if _dc and _dc.rules %}
       chk_dut_one();
+{%- endif %}
+{%- if _tpb_dut or _tpb_timing %}
+{{ _tp_probe_dut() }}
 {%- endif %}
 {%- endif %}
     end
@@ -328,6 +399,20 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 {%-   if mixed.bins|length > 0 %}
     cg_mixed.sample();
 {%-   endif %}
+{%-   for e in _tpb_stim %}
+{%-     if e.agent == agent.name %}
+    // TP {{ e.tp_id }}：{{ e.coverpoint }}.{{ e.bin }}（激励通道，首笔命中记日志）
+    if (t.{{ e.signal }} inside { {{- e.literal -}} }) begin
+{%-       if _dif %}
+      cov_vif.tp_seen[{{ e.bit }}] = 1'b1;
+{%-       endif %}
+      if (!tp_hit_logged[{{ e.bit }}]) begin
+        tp_hit_logged[{{ e.bit }}] = 1'b1;
+        `uvm_info("TP_HIT", $sformatf("tp={{ e.tp_id }} cp={{ e.coverpoint }} bin={{ e.bin }} t=%0t", $time), UVM_NONE)
+      end
+    end
+{%-     endif %}
+{%-   endfor %}
   endfunction
 {%- endfor %}
 
@@ -343,6 +428,10 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 {%- if _dif %}
     // DUT 通道也在这里报 —— 两条通道的数在**同一份报告**里，才不会各看各的
     `uvm_info("ENV_COV", $sformatf("功能覆盖率[dut]: %.1f%%", cg_dut.get_inst_coverage()), UVM_NONE)
+{%- endif %}
+{%- if _tpb_timing %}
+    // ── 时序判据收口（`case_cov` 读这一行判 `timing_ok`）──
+    `uvm_info("TP_TIMING", $sformatf("checked={{ _tpb_timing|length }} violations=%0d", {{ _tpb_viol_sum }}), UVM_NONE)
 {%- endif %}
 {%- if _dc and _dc.rules %}
     // ── 比对结论（**判据读的就是这一行**）──

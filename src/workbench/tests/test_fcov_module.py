@@ -86,6 +86,34 @@ def module(qt_app, settings, run_dir):
     qt_app.processEvents()
 
 
+def test_the_case_evidence_tab_exists(module):
+    titles = [module.tabs.tabText(i) for i in range(module.tabs.count())]
+    assert "Case 证据" in titles
+    from PySide6.QtWidgets import QTabWidget
+
+    page = module.tabs.widget(titles.index("Case 证据"))
+    inner = page.findChild(QTabWidget)
+    assert inner is not None
+    sub = [inner.tabText(i) for i in range(inner.count())]
+    assert "用例 × 证据层" in sub and "功能契约 × 证据层" in sub
+    assert "功能组 × 路径" in sub and "缺口与豁免" in sub
+
+
+def test_tp_evidence_rows_flatten_the_four_layers(module):
+    module._tp_evidence = {"tps": [{
+        "tp_id": "TP-1", "domain": "attribute", "contract_status": "VERIFIED",
+        "signed_off_by": "tp_a_seed_1@1",
+        "evidence_layers": {k: {"status": "PROVEN"}
+                            for k in ("functional", "timing", "data", "path")},
+    }]}
+    rows = module._tp_evidence_rows()
+    assert rows[0]["functional"] == "PROVEN"
+    assert rows[0]["timing"] == "PROVEN"
+    assert rows[0]["data"] == "PROVEN"
+    assert rows[0]["path"] == "PROVEN"
+    assert rows[0]["contract_status"] == "VERIFIED"
+
+
 #: 覆盖点表里「实测 %」那一列的下标（与 `COVERPOINT_COLUMNS` 的顺序同源）
 ACTUAL_COL = 7
 

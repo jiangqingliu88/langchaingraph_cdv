@@ -264,6 +264,14 @@
         "$ref": "#/$defs/cross_group"
       }
     },
+    "path_groups": {
+      "type": "array",
+      "minItems": 1,
+      "description": "PATH 组 —— 按指令生命周期切的端到端路径覆盖。每个 bin = 一条阶段序列 + 绑定的 SVA/scoreboard 检查项；与功能组并列，回答‘路径通不通’。",
+      "items": {
+        "$ref": "#/$defs/path_group"
+      }
+    },
     "environment": {
       "type": "object",
       "additionalProperties": false,
@@ -1326,6 +1334,44 @@
           "type": "string",
           "minLength": 1,
           "description": "需求编号（REQ-xxx）—— 追溯矩阵的另一头"
+        }
+      }
+    },
+    "path_bin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sequence"],
+      "description": "一条端到端路径：阶段序列 + 必须同时绑定的 SVA/scoreboard 检查项。",
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "sequence": {
+          "type": "array", "minItems": 2,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "checks": {"type": "array", "items": {"type": "string"}},
+        "description": {"type": "string"},
+        "requirement": {"type": "string"},
+        "timing": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "path_group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "bins"],
+      "description": "PATH 组：按指令生命周期切的路径覆盖（一个 bin = 一条 TP）。",
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "sample": {"type": "string", "description": "SV 里路径枚举/序号变量的名字"},
+        "coverpoint": {"type": "string", "description": "SV coverpoint 名（缺省 cp_path_<id>）"},
+        "groups": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "这条路径经过的功能组（与 dimension_name 同名），供矩阵视图用"
+        },
+        "bins": {
+          "type": "array", "minItems": 1,
+          "items": {"$ref": "#/$defs/path_bin"}
         }
       }
     }

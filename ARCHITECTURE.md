@@ -2,13 +2,13 @@
 
 > 基线：2026-10-31
 >
-> 全量单测：**1219 passed / 2 skipped**；工作台 **741 passed**
+> 全量单测：**1228 passed / 5 skipped**；工作台 **741 passed**
 >
 > UVM 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
 >
 > SoC 参考工程实测：`examples/open_npu_soc`，`soc run` 的两条用例（参考 TB `gemm_8x8` + E203 C `gemm_8x8_c`）**PASS**；参考路径 `mismatched=0`/2075 ns，C 路径 `TEST_PASS`，输出 `output_soc_design_jiang_20261031_223611`；`signoff_evidence/` 27 个文件（输入/npu RTL/golden/回归/两份波形），`soc evidence` 校验通过；两份波形都带 `design.bin`，Visualizer hierarchy 可浏览源码
 >
-> **Architecture 2.0 基线**：`src/core/` 运行事实面（RunContext / ArtifactStore / EventStore / Provenance DAG / Job Runtime / Decision Evaluation / Verification Quality Gate）已落地；**Verification Intelligence 第一层**（归因完整率、四个工程指标、增量计划、Run Diff、LocalStrategy→JobSupervisor）已接入。新增单测 `tests/core/` 83 条 + UVM IR 5 条 + Job Runtime 集成 4 条 + 合成 run 集成 1 条。
+> **Architecture 2.0 基线**：`src/core/` 运行事实面（RunContext / ArtifactStore / EventStore / Provenance DAG / Job Runtime / Decision Evaluation / Verification Quality Gate）已落地；**Verification Intelligence 第一层**（归因完整率、四个工程指标、增量计划、Run Diff、LocalStrategy→JobSupervisor）已接入。新增单测 `tests/core/` 89 条 + UVM IR 10 条 + Job Runtime 集成 4 条 + 合成 run 集成 1 条。
 
 本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
 
@@ -196,6 +196,54 @@ tb_soc_top
 `list_soc_runs` 先认 `ip/ip_run.json`、`latest_soc_run` 只取 `kind=soc`、
 `ip_status` 优先该 IP 自己的 ip_run —— 供应方的结论不再由消费方的 run 定义。
 
+### 1.3 应用服务层与契约层（Architecture 2.1）
+
+主链路不变，只把「入口编排」和「数据契约」收口：
+
+```text
+CLI / PySide6 Workbench
+        │
+        ▼
+src/app/services/              # 应用服务 facade（CLI/Workbench 共用）
+  verify_service / optimize_regression_service / coverage_closure_service
+  soc_service / ip_service
+        │
+        ▼
+LangGraph / PipelineExecutionService / InfrastructureManager
+        │
+        ▼
+Executors / ToolHub / JobSupervisor / EDA
+        │
+        ▼
+Run-local facts + EvidenceEnvelope
+RunContext / EventStore / ArtifactStore / Provenance / Quality / DecisionEval
+        ▲
+        │
+src/core/contracts/            # schema 版本 / JSONL / 事件注册 / envelope / 质量词汇
+```
+
+**边界**：
+
+- CLI 只做参数解析与输出，`cmd_services.py` / `cmd_soc.py` 调 `src.app.services`；
+- Workbench 的 service/soc/ip 页面通过 `bridge/catalog.py` 调同一组 app service；
+- `src/app` 可以调 L1–L5；L1–L5 **不反向依赖** app；
+- `src/core/contracts` 只用标准库，不 import layers。
+
+### 1.4 EvidenceEnvelope（基础段 + domain profile）
+
+证据包不再各写一套顶层形状，但**不强行统一 verdict**：
+
+```text
+EvidenceEnvelope = identity + inputs + execution + verdict + replay + hashes
+UVM profile   = uvm_signoff_v2     （保留三态 / caveat / TP 矩阵）
+SoC profile   = soc_evidence_v1    （verdict 写 soc_regression；uvm_verdict=not_applicable）
+IP profile    = ip_release_v1      （不拿 SoC 覆盖率冒充 measured/verified）
+```
+
+版本常量在 `src/core/contracts/versions.py`；envelope 构建/校验在
+`src/core/contracts/evidence.py`。UVM v2 与 SoC 证据包都带 `profile` +
+`envelope` 段，原有 `files` / `package_hash` 兼容视图保留。
+
 ---
 
 ## 2. 总览图
@@ -229,6 +277,7 @@ flowchart TB
 
 | 层 | 职责 | 关键模块 | 依赖方向 |
 |---|---|---|---|
+| **app 应用服务** | CLI/Workbench 共用的业务编排 facade；不造第二套引擎 | `src/app/services/`：`verify`、`optimize_regression`、`coverage_closure`、`soc`、`ip` | 依赖 L1–L5；被 CLI/Workbench 调用 |
 | **core 横切底座** | 运行身份 / 产物索引 / 事件事实 / 血缘 / Job 进程 / 决策评估 / 质量门 | `src/core/`：`runtime/`、`provenance/`、`jobs/`、`decision/`、`verification/` | **只用标准库**，不 import `src.layers`（`tests/core/test_core_is_stdlib_only.py` 守卫） |
 | **L1 基础设施** | EDA 调用、输出目录、哈希、归档、Reference Finder | `layers/l1_infrastructure/`：`infrastructure.py`、`eda_backend.py`、`coverage_backend.py`、`output_config.py`、`layout.py`、`reference_finder.py` | 最底层，不依赖上层 |
 | **L2 编排** | LangGraph、执行器运行时、ToolHub、状态/运行时、证据、治理 | `layers/l2_orchestration/`：`graph.py`、`execution.py`、`runtime.py`、`state.py`、`routers.py`、`stages.py`、`executors/`（base/registry）、`communication/`、`evidence/`、`governance/`；8 个 executor 实现在 `src/executors/` | 依赖 L1 |
@@ -539,8 +588,11 @@ case 模型 → TP IR → 属性 test 类 → 约束 → 回归任务 → 覆盖
 | `coverage/testpoints.yaml` | TP IR（人读） |
 | `coverage/testpoints.json` | TP IR（机器读） |
 | `coverage/methodology.json` | 阶段、计数、输入、IR sha256 |
-| `coverage/coverage_plan.yaml` | 覆盖点/bin/cross/批次/种子/需求追溯 + `constraint_backing` |
+| `coverage/coverage_plan.yaml` | 覆盖点/bin/cross/批次/种子/需求追溯 + `constraint_backing`；`paths` 是 PATH 组（端到端路径，后端 P1b） |
 | `coverage/tp_matrix.json` | TP × 覆盖仓 × 命中状态 |
+| `coverage/case_cov/**/*.json` | 逐用例覆盖切片（bin/illegal/SCB/断言/时序/波形） |
+| `coverage/case_tp.json` | 用例 ↔ TP 证据表（`signed_off_by` / 逐用例原因） |
+| `coverage/tp_cov_evidence.json` | **四层证据按 TP 汇聚**：功能覆盖 / 时序断言 / 数据比对 / 路径覆盖（`tp_cov_evidence_v1`） |
 | `coverage/constraint_status.json` | 约束逐条生效状态 |
 | `coverage/association_report.json` | 三模型关联断点 |
 | `coverage/sim_reward.json` | 编译 / 回归 / 覆盖率三层合成的粗连续奖励 |
@@ -1063,7 +1115,14 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 
 **Caveat 码：**
 
-`CONSTRAINT_PARTIAL / CONSTRAINT_INACTIVE / UCDB_NO_BINS / CG_DUT_ZERO / ASSOCIATION_HARD_EDGE / PLAN_INCONSISTENT / TP_UNMAPPED / TP_TRACE_INCOMPLETE / TP_MISSED / MODEL_UNAVAILABLE / BASELINE_MISSING / BACKEND_ARGS_USED`
+`CONSTRAINT_PARTIAL / CONSTRAINT_INACTIVE / UCDB_NO_BINS / CG_DUT_ZERO / ASSOCIATION_HARD_EDGE / PLAN_INCONSISTENT / TP_UNMAPPED / TP_TRACE_INCOMPLETE / TP_MISSED / TP_NOT_SIGNED_OFF / TP_WAVE_MISSING / TP_TIMING_WARN / MODEL_UNAVAILABLE / BASELINE_MISSING / BACKEND_ARGS_USED`
+
+其中 `TP_NOT_SIGNED_OFF` / `TP_WAVE_MISSING` 是**逐用例签核门**：前者表示
+可激励/后门测试点缺少「同一条用例 + 同一次 seed」的完整证据（见
+`coverage/case_tp.json`），后者表示已签核测试点在 `waves/manifest.json`
+里反查不到波形。两者只在有逐用例证据时出现（老 run 是 `None` = 判不了）。
+`TP_TIMING_WARN` 是序列型测试点的时序超窗（`timing.expect_cycles`）：按
+设计稿只降级为 WARN，不否决签核。
 
 ### 10.6 Architecture 2.0 运行事实面
 
@@ -1127,6 +1186,22 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
   都跟着 run 目录走（能打包、能换机器、离线可读），**不新增跨 run SQLite**。
   跨 run 的血缘/事件索引是 roadmap；目前需要跨 run 对账时按 SHA256 匹配。
 
+### 11.1 契约层（`src/core/contracts/`）
+
+所有 schema 版本与 JSONL 规则只有一处：
+
+| 模块 | 内容 |
+|---|---|
+| `versions.py` | `events_v1` / `provenance_dag_v1` / `verification_quality_v1` / `decision_eval_v1` / `coverage_attribution_v1` / `incremental_plan_v1` / `uvm_signoff_v2` / `soc_evidence_v1` / `ip_release_v1` … |
+| `jsonl.py` | `read_jsonl` / `write_jsonl`（排序 + 无时间戳 + 原子写）/ `append_jsonl` / `sha256_json` |
+| `events.py` | `EVENT_TYPES` + `PRODUCERS`（事件 → 唯一产生者）；重复登记不同产生者直接报错 |
+| `evidence.py` | `build_envelope` / `validate_envelope` / `EVIDENCE_PROFILES` |
+| `quality.py` | 五维状态、总状态优先级、`report/warn/block` 执行策略词汇 |
+
+现有产生者（`runtime/events`、`provenance`、`quality`、`decision/eval`、
+`incremental/*`、`metrics`、`signoff_package`、`soc_adapter`）已改为 import
+这些版本常量；新增 schema 先改 `versions.py`。
+
 ---
 
 ## 12. 工作台（可选，非 Web）
@@ -1152,6 +1227,11 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 - 波形：`.wlf` → `vsim -view`；`qwavedb` → Visualizer + 按需 `vopt -designfile`
 - 覆盖率：先 `materialize_ucdb()` 再开 Visualizer
 
+**只读查询层**：`src/workbench/query/`（`runs.py` / `evidence.py`）不 import Qt，
+页面只渲染 ViewModel；写操作走 `src/app/services/`，页面不直接调工具/读 RTL。
+老证据包没有 `envelope` 时 `validate_evidence` 明确返回 `missing_envelope`，
+不把事情伪装成"通过"。
+
 ---
 
 ## 13. 扩展点
@@ -1171,7 +1251,11 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 | 新签核证据字段 | `signoff_package.py` 的 `SECTION_FILES` + audit 的 v2 manifest | 回放脚本（若不需要重算） |
 | 新运行时因果边 | `knowledge/schema.py` 加 `EdgeType` + `runtime.build_runtime_graph()` 建边；需要进决策就补 `trace_gap` | 图存储与证据包 |
 | 新奖励层 | `l3_decision/reward.py` 的权重与分量；同步 `tests/test_sim_reward.py` | 决策动作空间 |
-| 新事件类型 | `src/core/runtime/events.py` 加常量 + 一个产生者；不要在节点里重复写 `stage.*` | RunJournal 镜像路径 |
+| 新事件类型 | `src/core/contracts/events.py` 登记类型 + 产生者；`src/core/runtime/events.py` 负责写 | RunJournal 镜像路径 |
+| 新 schema 版本 | `src/core/contracts/versions.py` 加常量；产生者 import 它 | 其它 schema |
+| 新证据 profile | `src/core/contracts/evidence.py` + `evidence/signoff_package.py` / `soc_adapter.py` 的 profile 段 | 已有 files/package_hash |
+| 新 Workbench 只读视图 | `src/workbench/query/` 加 ViewModel 查询 | 页面/Qt |
+| 新后端能力 | `backend_capabilities.py` 的 `CAPABILITY_MATRIX` | `backend_profiles.py` 方言表 |
 | 新血缘边 | `src/core/provenance/schema.py` 的 `EDGE_TYPES` + `graph.py` 建边；改语义才升 `SCHEMA` | 已有节点 id / 查询 |
 | 新质量维度 | `src/core/verification/quality.py` 的 `DIMENSIONS` + 一个 `_dimension()` | 签核三态（本阶段只报告） |
 | 新受控工具 | `src/core/jobs/allowlist.py` 的 `DEFAULT_TOOLS` | JobSupervisor / ToolHub |
@@ -1179,15 +1263,15 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 | 新依赖映射 | `coverage/test_dependencies.json`（test → RTL files）或 regression.yaml 的 `file_pattern` | 增量引擎 |
 | 新工程指标 | `src/core/metrics/engineering.py` 的 `_collect()` + 一个字段 | CLI / 证据包 |
 | 新 Run Diff 字段 | `src/core/incremental/run_diff.py` 的 `compare_runs()` | 已落盘指标 |
-| 新工程服务 | `src/cli/cmd_services.py` 加命令 + 复用 `InfrastructureManager` / `PipelineExecutionService` | 已有 Agent/Executor/Core |
+| 新工程服务 | `src/app/services/` 加 facade + CLI/Workbench 调它；复用 `InfrastructureManager` / `PipelineExecutionService` | 已有 Agent/Executor/Core |
 
 ---
 
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1219 passed / 2 skipped
-python -m pytest tests/core -q                        # Architecture 2.0 核心（83 条）
+python -m pytest tests/ -q                            # 1228 passed / 5 skipped
+python -m pytest tests/core -q                        # Architecture 2.0 核心（89 条）
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
 python -m pytest src/workbench/tests -q               # 721 passed
@@ -1234,6 +1318,8 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 | `test_soc_adapter.py` | SoC 工程校验；RunContext/Artifact/Event/证据包；IP 清单；波形定位 |
 | `test_soc_run_repository.py` | 无 manifest 的 SoC run 仍进入运行历史；detail 可读 |
 | `tests/core/test_core_is_stdlib_only.py` | `src/core` 不反向依赖 layers/langgraph/pydantic |
+| `tests/core/test_contracts.py` | schema 版本单一来源、JSONL 确定性、事件产生者注册、EvidenceEnvelope 校验 |
+| `tests/test_app_services.py` | app service facade、query 层、后端能力矩阵、envelope 老包显式失败 |
 | `tests/core/test_provenance_attribution.py` | weak/exact 血缘规则；MISS/UNMAPPED 不建命中边；确定性重建 |
 | `tests/core/test_jobs_supervisor.py` | 超时杀进程树、非零退出、白名单 deny/monitor |
 | `tests/core/test_decision_eval.py` | 四种成效状态、幂等、汇总 |
@@ -1270,17 +1356,22 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
   不冒充精确归因；工具 sandbox 路径/命令白名单已接入，但**默认 monitor**
   （`SIGNOFFAI_CMD_ALLOWLIST=enforce` 才拦），且尚未覆盖所有生产工具调用；
   run 生命周期自动清理仍未落地（`vagent prune` 已有手动入口）。
-- **命令白名单默认 monitor**：越界命令会被记进 `job.denied`（status=monitor），
-  但不拦；要拦得显式设 `SIGNOFFAI_CMD_ALLOWLIST=enforce`。
-- **UVM 生成器尚未迁到统一 IR**：`generation/ir/` 的契约已在
-  `AgentRenderTask` / `EnvironmentRenderTask` 入口被消费做结构校验（只警告），
-  但模板仍直接吃 `AgentModel` / `EnvironmentModel` 的 ctx；IR 目前拦不住
-  “字段还在、语义已错”这类漂移。模型与解析已搬到
-  `generation/models.py` / `generation/parsing/`。
-- **增量依赖映射是文件级启发式**：当前依赖
-  `coverage/test_dependencies.json` 或 regression.yaml 的 `file_pattern`；
-  依据文件变化筛选受影响用例，不代表已具备语义级依赖分析或自动映射生成。
-  没有映射时保守跑全量，不会假装省了时间。
+- **命令白名单默认 EDA enforce、其他 monitor**：`vlog/vopt/vsim/vcover/vcs/simv/
+  verdi/xrun/iverilog/vvp/verilator` 类别默认 enforce；未知工具仍记
+  `job.denied(status=monitor)`。全局收紧用 `SIGNOFFAI_CMD_ALLOWLIST=enforce`，
+  EDA 退回 monitor 用 `SIGNOFFAI_CMD_ALLOWLIST_EDA=monitor`。
+- **UVM 生成器尚未迁到统一 IR**（当前是影子模式）：`generation/ir/shadow.py` 在
+  `AgentRenderTask` / `EnvironmentRenderTask` 入口比较 IR 与现有模型/ctx，
+  只 print warning；模板仍直接吃 `AgentModel` / `EnvironmentModel` 的 ctx。
+  字节门禁与 IR-first 尚未切换；IR 目前拦不住“字段还在、语义已错”这类漂移。
+- **质量门默认 report**：`write(...)` 支持 `report/warn/block`（环境变量
+  `SIGNOFFAI_QUALITY_GATE`），但 block 尚未接入签核三态/caveat；本阶段只把
+  策略词汇和配置入口落地。
+- **应用服务层是过渡 facade**：`src/app/services` 已统一 CLI/Workbench 的
+  optimize/coverage/soc/ip 入口；SoC/IP 底层仍调用 `soc_adapter`，后续再搬。
+- **增量依赖映射由文件级启发式自动生成**：`src/core/incremental/deps_gen.py`
+  从 regression.yaml / env.yaml / TP / round_manifest / RTL 推导；没有映射时
+  保守跑全量，不会假装省了时间。它不是编译级真依赖。
 - **增量编译尚未实现**：RTL diff 只决定"跑哪些用例"；编译仍由回归框架的
   共享 work library 处理，不是本层的选择性编译。
 - **回归优化的种子级重排未实现**：`optimize-regression` 给出执行顺序与
@@ -1329,16 +1420,20 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 ├─ specs/<module>/                 RTL、casemodel.yaml、signoff_policy.yaml
 ├─ src/
 │  ├─ core/                        横向运行事实底座；标准库实现，不 import layers
+│  │  ├─ contracts/                versions / jsonl / events / evidence / quality
 │  │  ├─ runtime/                  RunContext / ArtifactStore / EventStore
 │  │  ├─ provenance/               DAG / exact-vs-weak attribution
-│  │  ├─ jobs/                     JobSpec / Supervisor / allowlist
+│  │  ├─ jobs/                     JobSpec / Supervisor / allowlist（EDA enforce）
 │  │  ├─ decision/                 decision_eval_v1
 │  │  └─ verification/             verification_quality_v1
+│  ├─ app/services/                CLI/Workbench 共用 facade（verify/optimize/coverage/soc/ip）
 │  ├─ cli/                         CLI / REPL / 命令组（commands.py + cmd_*.py，导入即注册）
 │  ├─ layers/                      L1–L5 分层架构
 │  ├─ executors/                   8 个 executor；verify 步骤 DAG 位于 verify/
 │  ├─ tools/                       generation / checking / execution / flow 等工具板块
+│  │  └─ execution/regression_tools/backend_capabilities.py  多后端能力矩阵
 │  └─ workbench/                   可选 PySide6 桌面工作台
+│     └─ query/                    只读 ViewModel 查询（runs / evidence）
 ├─ examples/open_npu_soc/          SoC 参考工程
 │  ├─ npu/                         NPU 子系统 RTL
 │  ├─ e203_hbirdv2/                 E203 NICE 接口适配
@@ -1366,8 +1461,9 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 
 | 阶段 | 目标 | 状态 |
 |---|---|---|
-| P1 收口 | `gen_uvm.py` 按 parsing → UVM IR → render → generators 迁移 | **结构完成**：parsing / models / render / generators 全部搬完，`gen_uvm.py` 只剩兼容门面（3305 → 80 行，产物字节不变）；IR 已在渲染入口做结构校验，但模板仍吃 dataclass ctx |
-| P2 增量验证 | 依赖映射自动生成；增量**编译**；按 seed 级优化调度 | **部分**：计划/选择/估算/`--incremental-from`/`optimize-regression` 已通，自动依赖、增量编译、种子级调度未做 |
+| P0 收口 | `src/app/services` + `src/core/contracts` + EvidenceEnvelope + Workbench query | **完成**：CLI/Workbench 共用 facade；schema 版本与 JSONL 单一来源；UVM/SoC 证据包带 profile+envelope；query 层无 Qt |
+| P1 收口 | `gen_uvm.py` 按 parsing → UVM IR → render → generators 迁移 | **结构完成**：parsing / models / render / generators 全部搬完，`gen_uvm.py` 只剩兼容门面；IR 已做结构校验 + shadow 比对（只 warning），但模板仍吃 dataclass ctx |
+| P2 增量验证 | 依赖映射自动生成；增量**编译**；按 seed 级优化调度 | **部分**：`deps_gen.py` 已能自动生成文件级依赖；计划/选择/估算/`--incremental-from`/`optimize-regression` 已通；增量编译、种子级调度未做 |
 | P3 智能选择 | 基于历史 TP/bin/seed 选择高价值测试；Unreachable TP Analyzer | **地基**：归因链与完整率已通 |
 | P4 多后端 | VCS / Verilator 适配；跨 run 血缘/事件索引；run 自动清理 | 未开始 |
 | P5 治理升级 | 质量门从“只报告”升级为可配置硬门禁（需新增 caveat code 并同步 `EXPECTED_CAVEATS`） | 未开始 |

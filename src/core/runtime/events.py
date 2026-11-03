@@ -16,6 +16,7 @@
 化的东西 —— 与 RunJournal 同一条纪律。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
 import contextvars
 import json
@@ -25,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-SCHEMA = "events_v1"
+SCHEMA = versions.EVENTS
 
 #: 环境变量关闭事件日志（测试 / 兼容旧 run 目录时用）。
 ENV_FLAG = "SIGNOFFAI_EVENT_STORE"

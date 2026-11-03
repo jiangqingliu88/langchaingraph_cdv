@@ -11,6 +11,7 @@
 边界：它不生成 UVM、不做覆盖率闭环、不替代 `verify` 的 LangGraph 路径。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
 import hashlib
 import json
@@ -20,7 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 SCHEMA = "soc_run_v1"
-EVIDENCE_SCHEMA = "soc_evidence_v1"
+EVIDENCE_SCHEMA = versions.EVIDENCE_SOC_PROFILE
 
 
 def _sha(path: Path) -> str:
@@ -746,6 +747,32 @@ def _collect_evidence_files(tmp: Path, root: Path, proj_root: Path,
         _copy_evidence(tmp, "wave", str(wave.get("path") or ""), root, entries)
 
 
+def _soc_envelope(run_doc: Dict[str, Any], entries: List[Dict[str, Any]],
+                  package_hash: str, root: Path) -> Dict[str, Any]:
+    """SoC profile 的 EvidenceEnvelope 基础段（不伪造 UVM 三态）。"""
+    from src.core.contracts.evidence import build_envelope
+
+    run_info = run_doc.get("run") or {}
+    return {
+        "profile": EVIDENCE_SCHEMA,
+        "envelope": build_envelope(
+            run_id=str(run_info.get("run_id") or run_info.get("id") or root.name),
+            module=str((run_doc.get("project") or {}).get("name") or ""),
+            profile=EVIDENCE_SCHEMA,
+            inputs={"project": run_doc.get("project") or {},
+                    "files": [f["path"] for f in entries
+                              if f.get("section") == "inputs"]},
+            execution={"regression": run_doc.get("regression") or {},
+                       "waves": run_doc.get("waves") or []},
+            verdict={"soc_regression":
+                     (run_doc.get("regression") or {}).get("status", ""),
+                     "uvm_verdict": "not_applicable"},
+            replay={"tier_a": "file_sha256", "tier_b": "not_applicable"},
+            hashes={"package_hash": package_hash, "files": len(entries)},
+            versions_seen={"evidence": EVIDENCE_SCHEMA}),
+    }
+
+
 def write_soc_evidence(run_root: str | Path) -> Dict[str, Any]:
     """把 SoC run 收成可交换的 `signoff_evidence/`（独立 schema）。
 
@@ -776,6 +803,7 @@ def write_soc_evidence(run_root: str | Path) -> Dict[str, Any]:
     manifest["package_hash"] = hashlib.sha256(_canon({
         "files": sorted((f["path"], f["sha256"]) for f in entries),
     }).encode("utf-8")).hexdigest()
+    manifest.update(_soc_envelope(run_doc, entries, manifest["package_hash"], root))
     manifest["manifest_hash"] = hashlib.sha256(
         _canon({k: v for k, v in manifest.items() if k != "manifest_hash"})
         .encode("utf-8")).hexdigest()

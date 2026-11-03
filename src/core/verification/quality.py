@@ -12,13 +12,16 @@
 ——「判不了」与「判过了」必须分开。
 """
 from __future__ import annotations
+from src.core.contracts import versions
+from src.core.contracts.quality import ENFORCEMENT_MODES, overall_status
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-QUALITY_SCHEMA = "verification_quality_v1"
+QUALITY_SCHEMA = versions.QUALITY
 
 DIMENSIONS = ("functional", "coverage", "model", "structural", "evidence")
 
@@ -226,7 +229,7 @@ def _evidence(root: Path) -> Dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════
 
 def evaluate(run_root: str | Path, *, target: Optional[float] = None,
-             run_id: str = "") -> Dict[str, Any]:
+             run_id: str = "", enforcement: str = "report") -> Dict[str, Any]:
     root = Path(run_root)
     dims = {
         "functional": _functional(root),
@@ -235,29 +238,33 @@ def evaluate(run_root: str | Path, *, target: Optional[float] = None,
         "structural": _structural(root),
         "evidence": _evidence(root),
     }
-    overall = "pass"
-    for dim in dims.values():
-        status = dim["status"]
-        if _RANK[status] > _RANK[overall]:
-            overall = status
-    if overall == "not_applicable":
-        overall = "unknown"
+    overall = overall_status(d["status"] for d in dims.values())
     issues = [f"{name}: {msg}" for name, dim in dims.items()
               for msg in dim.get("issues") or []]
+    mode = str(enforcement or "report").strip().lower()
+    if mode not in ENFORCEMENT_MODES:
+        mode = "report"
     return {
         "schema": QUALITY_SCHEMA,
         "run": run_id or root.name,
         "dimensions": dims,
         "overall": overall,
+        "enforcement": mode,
         "issues": issues,
     }
 
 
 def write(run_root: str | Path, *, target: Optional[float] = None,
-          run_id: str = "", event_store=None) -> Dict[str, Any]:
-    """落盘 `<run>/docs/verification_quality.json`；返回报告本身。"""
+          run_id: str = "", event_store=None,
+          enforcement: Optional[str] = None) -> Dict[str, Any]:
+    """落盘 `<run>/docs/verification_quality.json`；返回报告本身。
+
+    `enforcement`：report（默认，只报告）/ warn / block。本阶段不改变签核
+    三态；block 的消费（新增 caveat + mutation）是后续策略升级。
+    """
     root = Path(run_root)
-    report = evaluate(root, target=target, run_id=run_id)
+    mode = enforcement or os.environ.get("SIGNOFFAI_QUALITY_GATE", "report")
+    report = evaluate(root, target=target, run_id=run_id, enforcement=mode)
     path = root / "docs" / "verification_quality.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n",

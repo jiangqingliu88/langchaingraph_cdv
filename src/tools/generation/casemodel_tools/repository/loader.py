@@ -306,6 +306,18 @@ def _parse_behavior(raw: Any) -> Any:
 # 配置域（可选的 `config_space:` 块）
 # ════════════════════════════════════════════════════════════
 
+def _parse_path_groups(raw: Any) -> list:
+    """`path_groups:` → `[PathGroup]`（无 bins 的组跳过，不产空 PATH 组）。"""
+    from ..domain.paths import PathGroup
+
+    out = []
+    for index, item in enumerate(as_list(raw), start=1):
+        group = PathGroup.from_dict(item, index)
+        if group is not None:
+            out.append(group)
+    return out
+
+
 def _parse_config_space(raw: Any) -> Any:
     """`config_space:` → `ConfigSpace`；没有维度返回 None。"""
     from ..domain.config_space import ConfigDimension, ConfigSpace
@@ -399,6 +411,7 @@ def model_from_dict(data: Any, source: str = "<dict>") -> CaseModel:
                   if isinstance(data.get("sampling"), dict) else {}),
         assertions=_parse_assertions(data.get("assertions")),
         behavior=_parse_behavior(data.get("behavior")),
+        path_groups=_parse_path_groups(data.get("path_groups")),
         config_space=_parse_config_space(data.get("config_space")),
         env_required=env_required,
         env_defaults=env_defaults,

@@ -46,14 +46,18 @@ def render_covergroup(cm: CoverageModel) -> str:
             lines.append(f"        {kind} {b.name} = {{{b.literal()}}};{note}")
         lines.append("    }")
     for cx in cm.crosses:
-        left, right = cx.signals
+        # `cross` 支持 N 个 coverpoint（跨组 cross 就是三元及以上）；refs 用
+        # `cx.refs` 而不是硬拼 `cp_<signal>` —— 作者可能给覆盖点起了别名。
+        refs = list(cx.refs)
+        ref_of = dict(zip(cx.signals, refs))
         if not cx.bins:
-            lines.append(f"    {cx.name}: cross cp_{left}, cp_{right};  // {cx.level}")
+            lines.append(f"    {cx.name}: cross {', '.join(refs)};  // {cx.level}")
             continue
-        lines.append(f"    {cx.name}: cross cp_{left}, cp_{right} {{  // {cx.level}")
+        lines.append(f"    {cx.name}: cross {', '.join(refs)} {{  // {cx.level}")
         for b in sorted(cx.bins, key=lambda x: x.illegal):
-            terms = " && ".join(f"binsof(cp_{sig}.{name})"
-                                for sig, name in b.when.items())
+            terms = " && ".join(
+                f"binsof({ref_of.get(sig, 'cp_' + sig)}.{name})"
+                for sig, name in b.when.items())
             kind = "illegal_bins" if b.illegal else "bins"
             lines.append(f"        {kind} {b.name} = {terms};")
         lines.append("    }")
@@ -166,14 +170,16 @@ def render_probe(cm: CoverageModel, sampling: Dict[str, Any] = None) -> str:
     for cx in cm.crosses:
         if cx.source != "dut":
             continue
-        left, right = cx.signals
+        refs = list(cx.refs)
+        ref_of = dict(zip(cx.signals, refs))
         if not cx.bins:
-            out.append(f"    {cx.name}: cross cp_{left}, cp_{right};")
+            out.append(f"    {cx.name}: cross {', '.join(refs)};")
             continue
-        out.append(f"    {cx.name}: cross cp_{left}, cp_{right} {{")
+        out.append(f"    {cx.name}: cross {', '.join(refs)} {{")
         for b in sorted(cx.bins, key=lambda x: x.illegal):
-            terms = " && ".join(f"binsof(cp_{sig}.{name})"
-                                for sig, name in b.when.items())
+            terms = " && ".join(
+                f"binsof({ref_of.get(sig, 'cp_' + sig)}.{name})"
+                for sig, name in b.when.items())
             kind = "illegal_bins" if b.illegal else "bins"
             out.append(f"        {kind} {b.name} = {terms};")
         out.append("    }")
@@ -195,6 +201,48 @@ def render_probe(cm: CoverageModel, sampling: Dict[str, Any] = None) -> str:
     out.append(",\n".join(conns))
     out += [");", "", f"`endif  // {guard_macro}", ""]
     return "\n".join(out)
+
+
+def _plan_paths(model: CaseModel, notes: List[str]) -> List[Dict[str, Any]]:
+    """`path_groups` → 计划里的 `paths` 段（一条 bin 一行，状态 PENDING_BACKEND）。
+
+    与功能覆盖点**并列**，不进功能覆盖率分母（执行后端 P1b 待接）。放进计划
+    是为了让"路径视图"和"功能视图"在同一份材料里 —— 评审问"每组 100% 怎么
+    证明路径通"时，能直接指向这份清单，而不是靠口头解释。
+    """
+    paths: List[Dict[str, Any]] = []
+    for group in getattr(model, "path_groups", []) or []:
+        bins = []
+        for b in getattr(group, "bins", []) or []:
+            bins.append({"name": b.name, "sequence": list(b.sequence),
+                         "checks": list(b.checks), "requirement": b.requirement,
+                         "timing": dict(b.timing or {})})
+            if not b.requirement:
+                notes.append(f"PATH 组 {group.id} 的 bin {b.name} 没有需求编号 —— "
+                             f"追溯矩阵里认领不到它")
+        paths.append({"id": group.id, "name": getattr(group, "name", "") or group.id,
+                      "coverpoint": group.cp_name,
+                      "sample": getattr(group, "sample", "path_seq"),
+                      "groups": list(getattr(group, "groups", []) or []),
+                      "bins": bins, "bin_count": len(bins),
+                      "status": "PENDING_BACKEND", "covered_by": []})
+    return paths
+
+
+def _claimed_requirement(entry: Dict[str, Any]) -> bool:
+    """需求是否被覆盖点 / 交叉 / PATH 任一方认领。"""
+    return bool(entry["coverpoints"] or entry["crosses"] or entry["paths"])
+
+
+def _claim_path_requirements(paths: List[Dict[str, Any]], slot_fn, refs_fn) -> None:
+    """PATH 组也认领需求：只被路径覆盖的需求不是孤立需求。"""
+    for p in paths:
+        for b in p["bins"]:
+            for r in refs_fn(b["requirement"]):
+                slot = slot_fn(r)
+                ref = f"{p['id']}.{b['name']}"
+                if ref not in slot["paths"]:
+                    slot["paths"].append(ref)
 
 
 def coverage_plan(model: CaseModel, cm: CoverageModel,
@@ -269,8 +317,8 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
             "illegal_bins": [b.name for b in cx.bins if b.illegal],
             "bin_count": len(cx.bins),
             "target": 100,
-            "covered_by": sorted({*by_dim.get(cx.dimensions[0], []),
-                                  *by_dim.get(cx.dimensions[1], [])}),
+            "covered_by": sorted({b for dim in cx.dimensions
+                                  for b in by_dim.get(dim, [])}),
         })
 
     batches: List[Dict[str, Any]] = []
@@ -293,6 +341,8 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
         elif not seeds:
             notes.append(f"批次 {th.key}（{th.test}）没有声明 seeds —— "
                          f"回归按默认跑一条，覆盖强度没被声明过")
+
+    paths = _plan_paths(model, notes)
 
     # ── §8 需求追溯：把三张表按 requirement 串起来 ──
     #
@@ -320,7 +370,7 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
 
     def _slot(req: str) -> Dict[str, Any]:
         return reqs.setdefault(req, {"requirement": req, "coverpoints": [],
-                                     "crosses": [], "batches": []})
+                                     "crosses": [], "batches": [], "paths": []})
     for cp in coverpoints:
         for r in _refs(cp["requirement"]):
             _slot(r)["coverpoints"].append(cp["cover_id"] or cp["signal"])
@@ -336,6 +386,7 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
                     slot = _slot(r)
                     if b["theme"] not in slot["batches"]:
                         slot["batches"].append(b["theme"])
+    _claim_path_requirements(paths, _slot, _refs)
 
     # 「孤立需求」= 既没有覆盖点、也没有交叉认领它。
     # **只看 coverpoints 是错的**：一条需求由交叉覆盖（而不是某个覆盖点）完全
@@ -345,7 +396,7 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
     # `requirements:` 声明块）。留着是为了 §9.1 那个措辞不落空：等模型能单独
     # 声明需求时，这里自动开始生效。
     orphan_reqs = [r["requirement"] for r in reqs.values()
-                   if not r["coverpoints"] and not r["crosses"]]
+                   if not _claimed_requirement(r)]
     orphan_cps = [cp["signal"] for cp in coverpoints if not cp["requirement"]]
     if orphan_reqs:
         notes.append(f"有需求既没有覆盖点也没有交叉：{'、'.join(sorted(orphan_reqs))} "
@@ -363,12 +414,15 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
         "coverpoints": coverpoints,
         "crosses": crosses,
         "batches": batches,
+        "paths": paths,
         "traceability": [reqs[k] for k in sorted(reqs)],
         "summary": {
             "coverpoint_count": len(coverpoints),
             "bin_count": sum(c["bin_count"] for c in coverpoints),
             "cross_count": len(crosses),
             "cross_bin_count": sum(c["bin_count"] for c in crosses),
+            "path_group_count": len(paths),
+            "path_bin_count": sum(p["bin_count"] for p in paths),
             "illegal_bin_count": (sum(len(c["illegal_bins"]) for c in coverpoints)
                                   + sum(len(c["illegal_bins"]) for c in crosses)),
             "batch_count": len(batches),
@@ -408,6 +462,7 @@ def _extra_signals(cps, extra_signals) -> List[Dict[str, Any]]:
 def cov_interface_meta(cm: CoverageModel, sampling: Dict[str, Any] = None,
                        if_name: str = "",
                        extra_signals: List[Dict[str, Any]] = None,
+                       tp_bitmap_width: int = 0,
                        ) -> Optional[Dict[str, Any]]:
     """覆盖率接口的**全部身份信息** —— 一份，谁都不许自己推。
 
@@ -453,6 +508,10 @@ def cov_interface_meta(cm: CoverageModel, sampling: Dict[str, Any] = None,
         "signals": ([cp.signal for cp in cps]
                     + [e["name"] for e in _extra_signals(cps, extra_signals)]),
         "extra_signals": _extra_signals(cps, extra_signals),
+        # 测试点位图的位宽（0 = 这一轮不产位图）。接口里会多一个**非端口**
+        # 变量 `logic [N-1:0] tp_seen`，由 env 覆盖率组件在仓命中时置位 ——
+        # 打开波形就能看到"这一拍点亮了哪几个测试点"。
+        "tp_bitmap_width": max(0, int(tp_bitmap_width or 0)),
         "coverpoints": [{"signal": cp.signal, "sv_name": cp.sv_name,
                          "field": cp.field, "width": cp.width,
                          "expr": cp.expr} for cp in cps],
@@ -540,7 +599,8 @@ def checker_rules(decls: List[Dict[str, Any]],
 
 def render_cov_interface(cm: CoverageModel, sampling: Dict[str, Any] = None,
                          if_name: str = "",
-                         extra_signals: List[Dict[str, Any]] = None) -> str:
+                         extra_signals: List[Dict[str, Any]] = None,
+                         tp_bitmap_width: int = 0) -> str:
     """`CoverageModel` → **一个 bind 进 DUT 的接口**（把采样信号引出来）。
 
     ## 为什么是"接口"而不是"模块"
@@ -566,7 +626,8 @@ def render_cov_interface(cm: CoverageModel, sampling: Dict[str, Any] = None,
     `sampling` 里没写 `dut_module`（或者模型里根本没有 `sample: dut` 的字段）则返回
     空串 —— **不生成半成品**（一个挂不上东西的接口，编译得过、一个信号都不采）。
     """
-    meta = cov_interface_meta(cm, sampling, if_name, extra_signals=extra_signals)
+    meta = cov_interface_meta(cm, sampling, if_name, extra_signals=extra_signals,
+                              tp_bitmap_width=tp_bitmap_width)
     if meta is None:
         return ""
     cps = probe_ports(cm)
@@ -614,8 +675,19 @@ def render_cov_interface(cm: CoverageModel, sampling: Dict[str, Any] = None,
         # 自己注释自己没有信息量（单模型路径下两者本来就同名）
         comment = f"  // {note}" if note and note != sig else ""
         out.append(f"  input logic {decl}{sig}{sep}{comment}")
+    out.append(");")
+    # `tp_seen` 是**接口体内的变量**，不是端口：它不来自 DUT，而是 env 覆盖率
+    # 组件在本拍仓命中时置位。打开波形（visualizer -wavefile）就能看到
+    # "第 i 位 = 第 i 条测试点在本拍/之前命中过"。位序见
+    # `coverage/tp_bitmap.json`（一旦发布不重排）。
+    width = int(meta.get("tp_bitmap_width") or 0)
+    if width > 0:
+        out += [
+            "",
+            f"  // 测试点位图（位序 = coverage/tp_bitmap.json 的 entries[].bit）",
+            f"  logic [{width - 1}:0] tp_seen;",
+        ]
     out += [
-        f");",
         f"endinterface : {name}",
         "",
         f"bind {dut} {name} {meta['instance']}(",

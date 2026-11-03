@@ -8,9 +8,15 @@ from src.tools.generation.uvm_tools.generation.ir.uvm_ir import (
     UVMAgentIR, UVMConnectionIR, UVMEnvIR, UVMIR, UVMSequenceIR, UVMTestIR,
     build_agent_ir, build_uvm_ir, validate_agent_ir, validate_ir,
 )
+from src.tools.generation.uvm_tools.generation.ir.shadow import (
+    compare_agent_context, compare_environment_context, shadow_enabled,
+    warn_shadow,
+)
 
 __all__ = [
     "UVMAgentIR", "UVMConnectionIR", "UVMEnvIR", "UVMIR", "UVMSequenceIR",
     "UVMTestIR", "build_agent_ir", "build_uvm_ir", "validate_agent_ir",
     "validate_ir",
+    "compare_agent_context", "compare_environment_context", "shadow_enabled",
+    "warn_shadow",
 ]

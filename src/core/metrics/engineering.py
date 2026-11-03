@@ -9,6 +9,7 @@
 —— "没测到"和"省了 0 秒"是两件事。
 """
 from __future__ import annotations
+from src.core.contracts import versions
 
 import json
 import re
@@ -21,7 +22,7 @@ from src.core.decision.eval import (
 )
 from src.core.provenance.report import build_attribution_report
 
-SCHEMA = "engineering_metrics_v1"
+SCHEMA = versions.ENGINEERING_METRICS
 
 _HMS = re.compile(r"(\d+):(\d{2}):(\d{2})")
 

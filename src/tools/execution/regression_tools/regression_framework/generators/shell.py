@@ -12,6 +12,92 @@ from ..models.scheduler import ERROR_PATTERN
 
 logger = get_logger(__name__)
 
+
+def _testpoint_test_map(run_root) -> dict:
+    """TP IR 的 `execution.test` → `[tp_id…]`。
+
+    一条用例（UVM test 类）可能挂多条测试点，签核要把它们都记下来 ——
+    否则"这条波形在证明哪个测试点"又要靠人去翻 testpoints.yaml。
+
+    读不到 / 解析失败返回 `{}`：这是**旁路索引**，不该拦住回归生成。缺失时
+    `task_meta.json` 仍会带上标签里显式的 `TP-*`。
+    """
+    if not run_root:
+        return {}
+    path = os.path.join(str(run_root), "coverage", "testpoints.yaml")
+    try:
+        import yaml as _yaml
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            doc = _yaml.safe_load(fh) or {}
+    except (OSError, ValueError):
+        return {}
+    tps = doc.get("testpoints") if isinstance(doc, dict) else None
+    out = {}
+    for tp in tps or []:
+        if not isinstance(tp, dict):
+            continue
+        tp_id = str(tp.get("tp_id") or "").strip()
+        test = str((tp.get("execution") or {}).get("test") or "").strip()
+        if tp_id and test:
+            out.setdefault(test, []).append(tp_id)
+    return out
+
+
+def _tp_ids_from_tags(tags) -> list:
+    """`TP-…` 形式的 tag → tp_id（与 `collect_real_coverage` 反查同一口径）。"""
+    out = []
+    for t in tags or []:
+        s = str(t).strip()
+        if s.upper().startswith("TP-"):
+            out.append(s)
+    return list(dict.fromkeys(out))
+
+
+def _stage_from_tags(tags) -> str:
+    for t in tags or []:
+        s = str(t).strip().lower()
+        if s in ("loopback", "p0", "p1", "p2", "p3"):
+            return s
+    return ""
+
+
+def _uvm_test_from_command(sim_cmd: str, fallback: str) -> str:
+    """从渲染后的仿真命令里取 `+UVM_TESTNAME=`（真正的 UVM 类名）。"""
+    m = re.search(r"\+UVM_TESTNAME\s*[= ]\s*([^\s;'\"]+)", sim_cmd or "")
+    return m.group(1) if m else fallback
+
+
+def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
+                         seed, build_name, test, tp_map) -> None:
+    """落 `task_meta.json` —— 用例 → 测试点 → 波形那条链的起点。
+
+    归属优先级：显式 `tp_ids` > tag 里的 `TP-*` > `execution.test` 反查
+    （`tp_map` 来自 `<run>/coverage/testpoints.yaml`）。失败只告警：这是
+    旁路索引，不该拦住回归目录生成。
+    """
+    test_class = _uvm_test_from_command(
+        sim_cmd, str(t_context.get('TEST') or test_name))
+    tp_ids = list(_tp_ids_from_tags(test.get('tags') or []))
+    for tid in tp_map.get(test_class, []):
+        if tid not in tp_ids:
+            tp_ids.append(tid)
+    try:
+        from src.tools.common.lib.case_meta import write_task_meta
+        write_task_meta(test_dir, {
+            "task": testcase,
+            "test_name": test_name,
+            "test": test_class,
+            "seed": seed,
+            "build": build_name,
+            "stage": _stage_from_tags(test.get('tags') or []),
+            "tags": list(test.get('tags') or []),
+            "tp_ids": tp_ids,
+            "desc": str(test.get('desc') or ""),
+        })
+    except Exception as e:                      # noqa: BLE001 旁路索引
+        logger.warning(f"{test_name}: task_meta 落盘失败: {e}")
+
+
 class ShellGenerator:
     def __init__(self):
         self.context = {}
@@ -29,10 +115,12 @@ class ShellGenerator:
         self.debug_mode = False
         #: 分级裁剪判定（吃用例名 → 是否生成本级目录）；None = 生成全量。
         self.test_filter = None
+        #: `execution.test → [tp_id]`（来自 <run>/coverage/testpoints.yaml）。
+        self.tp_map = {}
 
     def generate(self, config: dict, root_dir: str, mode: str,
                  reference_mode: bool = False, debug_mode: bool = False,
-                 test_filter=None):
+                 test_filter=None, run_root=None):
         """生成 build/test 目录与脚本。
 
         `test_filter` 是**可选的用例裁剪判定**（吃一调用例名，返回 bool）。
@@ -68,6 +156,10 @@ class ShellGenerator:
         self.debug_mode = bool(debug_mode)
         # 分级裁剪：吃用例名、返回是否生成本级目录（见 `_generate_build`）
         self.test_filter = test_filter
+        # 测试点归属（用例 → tp_id）：从运行根下的 TP IR 反查。
+        # `root_dir` 可能是 `<run>/regression_run/<stage>`，不能从它往上猜；
+        # 调用方给 `run_root` 才是**唯一**说得清的那个落点。
+        self.tp_map = _testpoint_test_map(run_root)
         self.settings = config.get('settings', {})
         self.simulators = self.settings.get('simulators', {})
         self.default_sim = self.settings.get('default_simulator', 'vcs')
@@ -258,6 +350,11 @@ class ShellGenerator:
                 sim_tmpl = self.simulators.get(sim, {}).get('run', './simv {run_opts}')
                 sim_cmd = sim_tmpl.format(run_opts=run_opts)
             self._write_sim_script(test_dir, test_name, seed, sim_cmd, mode, exports=test_exports)
+
+            # 用例身份（用例 → 测试点 → 波形那条链的起点）。写在**脚本落盘
+            # 之后**：`+UVM_TESTNAME` 是渲染后的真名，原始配置里读不到。
+            _write_task_identity(test_dir, testcase, test_name, sim_cmd,
+                                 t_context, seed, build_name, test, self.tp_map)
 
             post_sim_cmd = test.get('hooks', {}).get('post_sim') or self.hooks_global.get('post_sim')
             if post_sim_cmd:

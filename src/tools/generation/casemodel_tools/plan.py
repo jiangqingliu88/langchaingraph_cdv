@@ -107,6 +107,15 @@ def build_bundle(model: Any, *, env_name: str = "",
         bundle.testpoints.extend(behavior_tps)
         bundle.notes.append(
             f"行为域：{len(behavior_tps)} 条 TP 已进 IR（执行后端 P1b 待接）")
+    # PATH 组：按指令生命周期切的端到端路径 —— 与功能组并列，一条 bin 一条 TP。
+    from .framework.paths import compile_paths
+
+    path_tps = compile_paths(model)
+    if path_tps:
+        bundle.testpoints.extend(path_tps)
+        bundle.notes.append(
+            f"PATH 组：{len(path_tps)} 条路径 TP 已进 IR"
+            f"（执行后端 P1b 待接；进证据视图，不冒充功能覆盖）")
     return bundle
 
 
