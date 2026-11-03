@@ -301,8 +301,14 @@ def _classify_protocol_by_name(name: str) -> str:
     if n in ("paddr", "pwdata", "prdata", "pwrite", "psel", "penable",
              "pready", "pslverr", "pselx"):
         return "apb"
-    # AXI 前缀：aw/w/b/ar/r + 后续字母（awaddr/wdata/bresp/araddr/rdata）
-    if re.match(r'^(aw|w|b|ar|r)[a-z]', n) and len(n) > 1:
+    # AXI 通道信号 = 通道前缀 + **字段名**（awaddr / wdata / bresp / rready）。
+    # 旧规则 `^(aw|w|b|ar|r)[a-z]` 把任何以这几个字母开头的词都当 AXI ——
+    # 实测 `barrier_type` 被判成 axi，生成只含 1 个端口的 `axi_agent`，
+    # 其余端口挤进"方向兜底"，整轮 p0 全挂。
+    if re.match(
+            r'^(aw|ar|w|b|r)'
+            r'(addr|data|valid|ready|resp|last|len|size|burst|id|user|strb|'
+            r'lock|cache|prot|qos|region)', n):
         return "axi"
     return "generic"
 
@@ -404,10 +410,10 @@ def _group_agents_by_protocol(spec: dict, rtl_data: dict, module_name: str) -> l
         for proto, grp in list(groups.items()):
             if len(grp) != 1 or grp[0].get("_explicit_protocol"):
                 continue
-            port = grp[0]
-            if _classify_protocol_by_name(port["name"]) != proto:
-                demoted.append((proto, port))
-                generic_ports.extend(groups.pop(proto))
+            # **不再拿名称分类器当"证据"**：它和 LLM 可能错得一样（`barrier_type`
+            # → axi 就是这么漏过去的）。没有规格显式声明时，单端口组一律不可信。
+            demoted.append((proto, grp[0]))
+            generic_ports.extend(groups.pop(proto))
         for proto, port in demoted:
             print(f"  [find_yaml] 忽略单端口协议猜测 {port['name']}→{proto}"
                   f"（无规格依据，走方向兜底）", flush=True)

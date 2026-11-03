@@ -225,7 +225,10 @@ def _identity_fields(raw: Dict[str, Any]) -> Dict[str, Any]:
         "sva_ids": _str_list(raw.get("sva_ids")),
         "scb_ids": _str_list(raw.get("scb_ids")),
         "case_ir_sha": str(raw.get("case_ir_sha") or ""),
-        "legacy": bool(raw) and not case_id,
+        # **legacy = 这份身份不是 v2 写的**（缺 `case_ir_sha` 键），而不是
+        # "没有 case_id"：批次级 test 合法地不挂 CASE，把它记成 legacy 会让
+        # 视图里 199 条正常执行看起来像"改造前的旧 run"。
+        "legacy": "case_ir_sha" not in raw,
     }
 
 

@@ -351,7 +351,7 @@ audit → finalize → END
 
 | 不变量 | 实现 | 失败方式 |
 |---|---|---|
-| verify 7 步的数据依赖 | `src/executors/verify/steps_dag.py` | import 期拓扑校验（缺失/成环）；执行期前置未跑 → `StepOrderError` |
+| verify 8 步的数据依赖 | `src/executors/verify/steps_dag.py` | import 期拓扑校验（缺失/成环）；执行期前置未跑 → `StepOrderError` |
 | State 字段归属 | `state.PHASE_OWNERS` + `STATE_CONTRACTS`；`graph._guarded_node` | 启动期字段存在性校验；运行期越权写关键字段 → warning（不改变 reducer 行为） |
 | 硬失败 vs 软建议 | `decision_engine.hard_action()` / `soft_action()`；`DecisionBrain` 显式先调 hard | 硬失败（编译/比对/回归）结构上到不了 RL |
 | 工具角色映射 | `ToolHub.validate_registry()` + CLI 启动一行汇总 | 空映射未在 `EXECUTORS_WITHOUT_HUB_TOOLS` 登记 → 启动 `exit 2` |
@@ -385,7 +385,7 @@ audit → finalize → END
 | mutant | 守卫 | 对应测试 |
 |---|---|---|
 | `decision_hard_overridden` | 硬失败优先 | `test_decision_phases` |
-| `steps_dag_missing_dependency` | 7 步依赖 | `test_verify_steps_dag` |
+| `steps_dag_missing_dependency` | 8 步依赖 | `test_verify_steps_dag` |
 | `plusargs_reserved_allowed` | 后端保留键 | `test_plusargs_semantics` |
 | `file_audit_hash_skipped` | 证据链哈希 | `test_human_edit_evidence` |
 | `state_contract_wrong_owner` | State 写入者 | `test_state_contracts` |
@@ -695,7 +695,7 @@ _write_coverage_plan
 
 顺序错一步的典型表现：env_cov 未生成、约束没进渲染、覆盖率静默退回自动分箱。
 
-**顺序不再是注释约定**：`src/executors/verify/steps_dag.py` 把这 7 步声明成
+**顺序不再是注释约定**：`src/executors/verify/steps_dag.py` 把这 8 步声明成
 `deps/inputs/outputs/why` 的数据 DAG。import 期跑拓扑校验（缺依赖/成环直接
 失败），执行期由 `StepRecorder` 在每步后 `mark()`，前置没跑就抛
 `StepOrderError`。`find_spec_yaml` 会清空 `inputs/yaml/uvm/`，所以
@@ -1331,7 +1331,7 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 | `test_sim_reward.py` | 空输入不冒充通过；权重与最弱层口径 |
 | `test_tools_boards.py` | 工具物理目录与板块单一真相一致 |
 | `test_tools_skills.py` | Native Skills（`SKILL.md`）骨架不丢 |
-| `test_verify_steps_dag.py` | verify 7 步依赖声明 / 拓扑序 / 前置未跑即失败 |
+| `test_verify_steps_dag.py` | verify 8 步依赖声明 / 拓扑序 / 前置未跑即失败 |
 | `test_decision_phases.py` | 硬失败不被软策略/RL 覆盖；软阶段才允许语义归因 |
 | `test_state_contracts.py` | 关键 State 字段的写入者契约；越权写入留痕 |
 | `test_tool_registry.py` | 空工具映射必须显式登记“不用工具” |

@@ -98,17 +98,18 @@ def _case_rows(view: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _check_identity(out, rules, view, cells) -> None:
-    seen: Dict[str, str] = {}
+    """身份检查**只看带了契约身份的用例**。
+
+    `case_view.cases` 是**按执行实例**（task@seed）一行的：同一条 CASE 会被
+    多条测试实例覆盖，在这里按 case_id 判重会把正常情况报成 39 条重复。
+    契约 ID 的唯一性由 `case_ir` 自己校验（`_check_contract_ids`）。
+    """
     for case in _case_rows(view):
-        cid = str(case.get("case_id") or case.get("task") or "")
-        if cid and cid in seen:
-            _emit(out, rules, "duplicate_id", cid, "同一 case_id 出现多次")
-        seen[cid] = "case"
+        cid = str(case.get("case_id") or "")
+        if not cid:
+            continue                      # 批次级 test：没有契约身份，不套契约规则
         if not str(case.get("tst_id") or ""):
             _emit(out, rules, "case_without_tst", cid, "用例没有 TST 身份（落不到执行实例）")
-        if case.get("source") == "synthesized":
-            _emit(out, rules, "case_synthesized", cid,
-                  "该用例由模型结构合成，尚未经人设计分类")
 
 
 def _check_cells(out, rules, cells, view) -> None:
@@ -150,7 +151,8 @@ def _check_evd(out, rules, evd, view) -> None:
     legacy = [e for e in _evd(evd) if e.get("legacy")]
     if legacy:
         _emit(out, rules, "evd_legacy", f"{len(legacy)} 条 EVD",
-              "这些执行发生在身份注入之前，不参与新版本聚合")
+              "这些执行的 task_meta 不是 v2 写的（缺 case_ir_sha），"
+              "不参与新版本聚合；批次级 test 合法地不挂 CASE，不算 legacy")
 
 
 def _case_cov_records(od: Path) -> List[Dict[str, Any]]:
@@ -229,9 +231,18 @@ def _check_contracts(out, rules, case_ir: Dict[str, Any],
     by_case: Dict[str, List[Dict[str, Any]]] = {}
     for rec in records:
         by_case.setdefault(str(rec.get("case_id") or ""), []).append(rec)
+    seen: set = set()
     for case in case_ir.get("cases") or []:
         if not isinstance(case, dict):
             continue
+        cid = str(case.get("id") or "")
+        if cid:
+            if cid in seen:
+                _emit(out, rules, "duplicate_id", cid, "契约里同一 case_id 出现多次")
+            seen.add(cid)
+        if case.get("source") == "synthesized":
+            _emit(out, rules, "case_synthesized", cid or "<case>",
+                  "该用例由模型结构合成，尚未经人设计分类")
         _check_contract_items(out, rules, case)
         for rec in by_case.get(str(case.get("id") or "")) or []:
             _check_contract_evidence(out, rules, case, rec)

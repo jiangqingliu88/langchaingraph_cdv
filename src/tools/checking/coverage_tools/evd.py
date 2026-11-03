@@ -103,7 +103,9 @@ def _evd_common(rec: Dict[str, Any], run_id: str,
         "uvm_errors": int(rec.get("uvm_errors") or 0),
         "timing_ok": rec.get("timing_ok"),
         "case_status": str(rec.get("case_status") or ""),
-        "legacy": not bool(case_id),
+        # legacy 的判据在 `case_meta`（task_meta 是不是 v2 写的），不是"有没有
+        # case_id" —— 批次级 test 合法地不挂 CASE，不该被记成旧 run。
+        "legacy": bool(rec.get("legacy")),
     }
     return str(rec.get("evd_id") or evd_id_of(run_id, test, seed)), common
 
@@ -139,7 +141,10 @@ def build_evd(od: str | Path) -> Dict[str, Any]:
     duplicates = 0
     for rec in _case_records(root):
         for evd in _evd_rows(rec, run_id, cell_of):
-            key = (evd["case_id"], evd["seed"], evd["cfg"],
+            # 去重键用 **tst_id**（`test@seed`）而不是 case_id：一条 CASE 会被
+            # 多条测试实例覆盖（同 case 的多个 TP 各是一条 test），按 case 去重
+            # 会把它们折叠成一条 —— 实测 39 条 case 因此"找不到 EVD"。
+            key = (evd["tst_id"], evd["seed"], evd["cfg"],
                    evd["checker_type"], evd["checker_id"])
             if key in records:
                 duplicates += 1

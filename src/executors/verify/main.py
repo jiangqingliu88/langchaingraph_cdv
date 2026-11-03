@@ -59,7 +59,7 @@ class VerifyExecutor(BaseExecutor):
         files = []
         #: 策略包的语义 bin —— 攒着，等 `find_spec_yaml` 跑完再落盘（理由见下面那段）
         cov_bins_for_render: List[Any] = []
-        #: 7 步的数据依赖记录器（`steps_dag.py`）—— 前置没跑就当场报错，
+        #: 8 步的数据依赖记录器（`steps_dag.py`）—— 前置没跑就当场报错，
         #: 不靠注释里的“顺序不能乱”提醒下一个人。
         steps = StepRecorder()
 

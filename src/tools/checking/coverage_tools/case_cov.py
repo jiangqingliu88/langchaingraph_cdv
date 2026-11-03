@@ -542,7 +542,13 @@ def _scb_status(data) -> str:
 
 
 def _case_status(groups: list, sva: list, scb: list) -> str:
-    """三集合 → case 总状态：全 PROVEN/NA 才是 VERIFIED。"""
+    """三集合 → case 总状态：全 PROVEN/NA 才是 VERIFIED。
+
+    **三集合全空 = 没有契约 = 判不了**（批次级 test 不挂 case）：返回空串，
+    不能落成 VERIFIED —— 那等于拿"没声明"冒充"验证通过"。
+    """
+    if not groups and not sva and not scb:
+        return ""
     worst = _worst([g.get("result") for g in groups]
                    + [s.get("status") for s in sva]
                    + [s.get("status") for s in scb])

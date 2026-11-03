@@ -54,9 +54,15 @@ STEPS: Tuple[Step, ...] = (
         why="它会清空 inputs/yaml/uvm/*.yaml，一切要进渲染的文件必须晚于它",
     ),
     Step(
-        "dut_channel", deps=("find_spec_yaml",),
+        "testpoints_prebuild", deps=("find_spec_yaml",),
+        why="测试点 IR **只算不写**：tp_seen 位图与 timing 信号要进覆盖率接口，"
+            "而接口在 jinja_render 之前落盘 —— 算晚了这一轮就少这两样",
+    ),
+    Step(
+        "dut_channel", deps=("testpoints_prebuild",),
         outputs=("coverage/<dut_if>.sv",),
-        why="生成 bind 进 DUT 的覆盖率接口；bins 与 env/tb_top 共用它的身份",
+        why="生成 bind 进 DUT 的覆盖率接口；bins 与 env/tb_top 共用它的身份，"
+            "位图来自上一步的 tp_payload",
     ),
     Step(
         "env_cov_bins", deps=("dut_channel",),

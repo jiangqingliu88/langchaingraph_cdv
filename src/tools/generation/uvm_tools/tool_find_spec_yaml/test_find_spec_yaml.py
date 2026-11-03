@@ -143,3 +143,35 @@ class TestDedupeLoopbackTests:
     def test_no_names_is_noop(self):
         lines = self._block("test_apb_loopback", "b", "t")
         assert _dedupe_loopback_tests(lines, set()) == lines
+
+
+class TestProtocolGroupingDoesNotSwallowTheDut:
+    """协议分组不能因为一个端口猜错就把整份 DUT 挤进"方向兜底"。
+
+    实测事故：`barrier_type` 被名称规则判成 AXI（旧规则 `^(aw|w|b|ar|r)[a-z]`
+    把任何以 b 开头的词都算），于是生成了一个只含 1 个端口的 `axi_agent`，
+    其余 11 个端口没有 agent → p0 全挂。
+    """
+
+    def test_axi_needs_a_channel_field_suffix(self):
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import (
+            _classify_protocol_by_name as classify)
+
+        assert classify("barrier_type") == "generic"
+        assert classify("bit_flag") == "generic"
+        assert classify("bresp") == "axi" and classify("awaddr") == "axi"
+
+    def test_one_port_protocol_group_is_demoted(self, monkeypatch):
+        from src.tools.generation.uvm_tools.tool_find_spec_yaml import main as m
+
+        # LLM 也把它猜成 axi —— 名称分类器与 LLM 同时错，单端口组仍要降级
+        monkeypatch.setattr(m, "_llm_classify_protocols",
+                            lambda names: {"barrier_type": "axi"})
+        rtl = {"ports": [
+            {"name": "clk", "direction": "input", "width": 1},
+            {"name": "rst_n", "direction": "input", "width": 1},
+            {"name": "barrier_type", "direction": "input", "width": 2},
+            {"name": "issue_valid", "direction": "output", "width": 1},
+        ]}
+        # 全部退回 generic → 无法协议分组 → 交给方向兜底
+        assert m._group_agents_by_protocol({}, rtl, "npu_sched") == []

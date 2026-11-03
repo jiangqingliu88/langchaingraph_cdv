@@ -1,4 +1,4 @@
-"""verify 内部 7 步顺序 —— 从“注释约定”变成“代码会检查”。
+"""verify 内部 8 步顺序 —— 从“注释约定”变成“代码会检查”。
 
 这些测试不跑 UVM：只钉住 DAG 声明、拓扑校验和执行期记录器。
 顺序错一步的真实代价是**静默少产物**（bins 被清空 / 约束没进渲染），
@@ -21,14 +21,14 @@ from src.executors.verify.steps_dag import (
 
 
 EXPECTED = (
-    "coverage_plan", "find_spec_yaml", "dut_channel", "env_cov_bins",
-    "constraint_yaml", "association_report", "jinja_render",
+    "coverage_plan", "find_spec_yaml", "testpoints_prebuild", "dut_channel",
+    "env_cov_bins", "constraint_yaml", "association_report", "jinja_render",
 )
 
 
 def test_declared_dag_is_the_expected_linear_chain():
     assert STEP_NAMES == EXPECTED
-    assert len(STEPS) == 7
+    assert len(STEPS) == 8
     # 声明顺序必须与拓扑序一致（这就是 yaml/渲染之间的真实依赖）
     assert validate_steps() == EXPECTED
 
