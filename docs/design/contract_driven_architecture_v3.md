@@ -342,14 +342,14 @@ EVD 行 `cells` 全空（47 行），只有重跑时拿到上一轮 cell_matrix 
 > 路径超过 Windows MAX_PATH，`vsim-7` 打不开覆盖率库 → 该用例判 fail；换回短
 > 目录名后 55/55 全过。worklist 本身没问题，但"输出目录别太长"值得进 `known_limitations`。
 
-**与计划的两处偏差（如实记账）**：
+**默认开关（已翻）**：worklist **默认开**，但只在**账本里已有历史证据**时生效
+（`prior_evidence`）。全新 run 的账本是空的，"全部未清偿"只是因为还没跑过 ——
+此时 worklist 只含 TP test、漏掉批次用例，必须回落全量。显式关闭：
+`params.worklist is False` 或 `SIGNOFFAI_WORKLIST=off`。
 
-1. **默认仍关**：worklist 需要显式开关（`params.worklist` / `SIGNOFFAI_WORKLIST=1`）。
-   计划原写"默认义务驱动"，但 duty 驱动的正确性依赖"上一轮账本完整"，在 M2 刚切换
-   的窗口里默认打开风险太高；用一周实测（每轮耗时 + 未清偿数）后再改默认。
-2. **没有加 `--worklist` CLI 开关**：它要穿越 `PipelineState(extra="forbid")` 的
-   schema 与三处 façade（execution / run_service / cmd_verify），代价与收益不成比例；
-   环境变量已能覆盖同一场景。
+**仍保留的一处偏差**：没有加 `--worklist` CLI 开关 —— 要穿越
+`PipelineState(extra="forbid")` 的 schema 与三处 façade（execution / run_service /
+cmd_verify），代价与收益不成比例；环境变量覆盖同一场景。
 
 ### M5 —— 消费端切换（1 周）🟡 核心已落地
 
@@ -367,8 +367,14 @@ EVD 行 `cells` 全空（47 行），只有重跑时拿到上一轮 cell_matrix 
 | GUI | 签核页「Case 证据」摘要行追加 **OS** 段（义务数 / 账本事实数 / 两级对账是否一致）；没有契约时如实不显示 |
 | 实测 | npu_sched：契约 ok · 账本 468 条 · case/TP 对账一致；`why` 对 `OBL-GROUP-CASE-D_DEP-…` 给出 2651 次 run 级命中 + "该跑 d_dep 四条 test×seed" |
 
-**剩余**：GUI 从 `case_view` 改为直接读 `status/`（目前 `case_view` 已由 derive
-驱动，二者等价，切换是形式问题）；M4（义务 worklist）未做。
+**已补完**：
+
+- 签核页新增第 5 个标签页「**OS 账本**」：义务表（id / 类型 / 用例 / 状态）+
+  未清偿计数 + "建议重跑 N 条 test"；数据来自 `flow.signoff.os`（`status_summary()`
+  现算义务状态，读的是 `status/` 与账本，不是 `case_view`）。
+- 逐条 SB 证据路径（`[SCB <id>]`）已有测试锁住：日志里出现逐条收口时，
+  `evidence_level=per_scb` 优先于聚合；`evidence: log` 没有自己那行 → `NOT_EXECUTED`。
+  **生成侧仍待接**（env 模板目前只打聚合行）。
 
 ### 里程碑与停点
 

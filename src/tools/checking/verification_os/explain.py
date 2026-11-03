@@ -125,13 +125,32 @@ def explain(run_dir: str | Path, obligation_id: str) -> Dict[str, Any]:
     return out
 
 
+def obligations_view(run_dir: str | Path) -> List[Dict[str, Any]]:
+    """义务清单 + 当前状态（GUI/CLI 只读；判据仍是 `derive`）。"""
+    root = Path(run_dir)
+    contract = load_contract(root)
+    if contract is None:
+        return []
+    current = contract_hash(root)
+    ledger = [f for f in read_ledger(root)
+              if str(f.get("contract_hash") or "") in ("", current)]
+    obligations = compile_obligations(contract)
+    statuses = derive(obligations, ledger)
+    return [{
+        "obligation_id": o.obligation_id, "kind": o.kind, "case": o.case,
+        "subject": dict(o.subject),
+        "status": statuses.get(o.obligation_id, ""),
+    } for o in obligations]
+
+
 def status_summary(run_dir: str | Path) -> Dict[str, Any]:
-    """一次 run 的 OS 视图：契约 / 账本 / 两级影子对账。"""
+    """一次 run 的 OS 视图：契约 / 账本 / 两级影子对账 / 义务状态。"""
     root = Path(run_dir)
     check = check_contract(root)
     case_shadow = _read_json(root / "status" / "shadow_report.json")
     tp_shadow = _read_json(root / "status" / "tp_shadow.json")
     ledger = read_ledger(root)
+    worklist = _read_json(root / "status" / "worklist.json")
     return {
         "run": root.name,
         "contract": check,
@@ -143,7 +162,11 @@ def status_summary(run_dir: str | Path) -> Dict[str, Any]:
         "tp_shadow": {"ok": tp_shadow.get("ok"),
                       "mismatched": tp_shadow.get("mismatched"),
                       "tps": tp_shadow.get("tps")},
+        "obligations": obligations_view(root),
+        "worklist": {"open": worklist.get("open", 0),
+                     "count": worklist.get("count", 0),
+                     "tests": list(worklist.get("tests") or [])[:50]},
     }
 
 
-__all__ = ["explain", "status_summary"]
+__all__ = ["explain", "obligations_view", "status_summary"]

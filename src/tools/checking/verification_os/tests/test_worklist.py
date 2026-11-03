@@ -60,6 +60,17 @@ def _run(tmp_path: Path, *, reg=True, contract=True, fact_tp="TP-1") -> Path:
     return root
 
 
+def test_prior_evidence_flag_distinguishes_fresh_runs(tmp_path):
+    """全新 run 的账本为空 → 自动启用 worklist 的调用方必须回落全量。"""
+    root = _run(tmp_path)
+    assert build_worklist(root)["prior_evidence"] is True
+    (root / "evidence" / "ledger.jsonl").unlink()
+    (root / "evidence" / "ledger.index.json").unlink(missing_ok=True)
+    data = build_worklist(root)
+    assert data["prior_evidence"] is False
+    assert data["open"] == 2                 # 全未清偿，但这不是"该跑的清单"
+
+
 def test_regression_test_name_matches_generator_convention():
     assert regression_test_name("TP-NPUSCH-D_QUEUE-0") == "tp_npusch_d_queue_0"
     assert regression_test_name("tp_x") == "tp_x"

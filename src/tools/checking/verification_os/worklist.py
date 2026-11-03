@@ -110,7 +110,8 @@ def build_worklist(run_dir: str | Path) -> Dict[str, Any]:
                 "reason": "regression_yaml_missing", "note": "没有回归清单 → 跑全量"}
 
     obligations = compile_obligations(contract)
-    statuses = derive(obligations, _current_ledger(root, contract_hash(root)))
+    current_facts = _current_ledger(root, contract_hash(root))
+    statuses = derive(obligations, current_facts)
     tp_index = _tp_index(root)
 
     items: Dict[str, Dict[str, Any]] = {}
@@ -147,6 +148,11 @@ def build_worklist(run_dir: str | Path) -> Dict[str, Any]:
     return {
         "schema": SCHEMA,
         "available": True,
+        # **有没有历史证据**：一次全新 run 的账本是空的，此时"全部未清偿"只是
+        # 因为还没跑过，worklist 不能当执行计划用（它会漏掉批次用例）。
+        # 自动启用 worklist 的调用方必须看这个标志。
+        "prior_evidence": bool(current_facts),
+        "ledger_facts": len(current_facts),
         "contract_id": contract.id,
         "contract_hash": contract_hash(root),
         "obligations": len(obligations),

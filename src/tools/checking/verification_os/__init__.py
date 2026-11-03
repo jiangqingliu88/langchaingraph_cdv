@@ -26,7 +26,7 @@ from .contract_model import (
     contract_from_case_ir, worst,
 )
 from .derive import case_statuses, derive, evaluate, tp_contract_status
-from .explain import explain, status_summary
+from .explain import explain, obligations_view, status_summary
 from .ledger import append_bundle, read_ledger, verify_chain
 from .shadow import build_bundle, run_shadow
 from .worklist import build_worklist, regression_test_name, write_worklist

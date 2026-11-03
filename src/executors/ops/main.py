@@ -11,17 +11,22 @@ logger = structlog.get_logger()
 
 
 def _worklist_filter(output_dir: Path, params: Dict[str, Any]) -> str:
-    """M4 义务 worklist（**opt-in**）：只重跑未清偿义务对应的回归 test。
+    """M4 义务 worklist：只重跑未清偿义务对应的回归 test。
 
-    开关：`params.worklist is True` 或 `SIGNOFFAI_WORKLIST=1`。默认关闭 ——
-    默认仍是全量回归（nightly 需要它），worklist 用于"补一条证据"的重跑。
-    算不出来（没有契约 / 没有回归清单）就返回空串，回落全量，不静默缩小范围。
+    开关（M4 默认开，实测 5× 提速）：
+
+      · 默认：**账本里已有历史证据**时启用（重跑/补证据场景）；
+      · `params.worklist is False` 或 `SIGNOFFAI_WORKLIST=off`：显式关掉；
+      · 全新 run（账本空）→ `prior_evidence=false` → 回落全量 ——
+        否则 worklist 只有 TP test、漏掉批次用例，等于把覆盖率砍一半。
+      · 算不出来（没有契约 / 没有回归清单 / 没有未清偿义务）同样回落全量，
+        不静默缩小范围。
     """
     import os
 
-    enabled = (isinstance(params, dict) and params.get("worklist") is True) or \
-        str(os.environ.get("SIGNOFFAI_WORKLIST", "")).lower() in ("1", "true", "on")
-    if not enabled:
+    if isinstance(params, dict) and params.get("worklist") is False:
+        return ""
+    if str(os.environ.get("SIGNOFFAI_WORKLIST", "")).lower() in ("0", "off", "false"):
         return ""
     try:
         from src.tools.checking.verification_os.worklist import write_worklist
@@ -30,8 +35,11 @@ def _worklist_filter(output_dir: Path, params: Dict[str, Any]) -> str:
     except Exception as e:                          # noqa: BLE001 旁路
         logger.warning(f"worklist 生成失败（回落全量）: {e}")
         return ""
-    if not data.get("available") or not data.get("regex"):
-        logger.info("worklist：没有未清偿义务或清单不可用 → 跑全量")
+    if not data.get("available") or not data.get("prior_evidence"):
+        logger.info("worklist：没有历史证据或清单不可用 → 跑全量")
+        return ""
+    if not data.get("regex"):
+        logger.info("worklist：没有未清偿义务 → 跑全量")
         return ""
     logger.info(f"worklist：{data['open']}/{data['obligations']} 条义务未清偿 "
                 f"→ 只跑 {data['count']} 条 test")

@@ -57,6 +57,13 @@ CASE_COLUMNS = (
     ("in_package", "进包", 70, CENTER),
     ("path", "路径", 330, LEFT),
 )
+#: OS 账本：每条义务当前状态（判据来自 derive，页面只呈现）
+OS_COLUMNS = (
+    ("obligation_id", "义务", 330, LEFT),
+    ("kind", "类型", 90, CENTER),
+    ("case", "用例", 190, LEFT),
+    ("status", "状态", 120, CENTER),
+)
 
 
 class SignoffModule(ModuleBase):
@@ -175,8 +182,25 @@ class SignoffModule(ModuleBase):
         ev_layout.addWidget(scroll, 1)
         self.tabs.addTab(ev_page, "证据包 v2")
 
+        # Verification OS：义务清单 + 状态（只呈现 derive 的结论）
+        self.tabs.addTab(self._build_os_page(), "OS 账本")
+
         layout.addWidget(self.tabs, 1)
         return root
+
+    def _build_os_page(self) -> QWidget:
+        page = QWidget(self.tabs)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(2)
+        self.os_label = QLabel("", page)
+        self.os_label.setWordWrap(True)
+        self.os_label.setStyleSheet(f"color: {theme.current().muted};")
+        layout.addWidget(self.os_label)
+        self.os_model = RowsModel(OS_COLUMNS, page)
+        self.os_table = table_helpers.configure_table(page, self.os_model)
+        layout.addWidget(self.os_table, 1)
+        return page
 
     @staticmethod
     def _section(text: str, parent: QWidget) -> QLabel:
@@ -262,6 +286,33 @@ class SignoffModule(ModuleBase):
         self._fill_chain(payload.get("chain") or {})
         self._fill_case_view(payload.get("case_view") or {},
                              payload.get("os") or {})
+        self._fill_os(payload.get("os") or {})
+
+    def _fill_os(self, os_status: Dict[str, Any]) -> None:
+        """OS 账本：义务状态表 + "未清偿 / 建议重跑"摘要。"""
+        model = getattr(self, "os_model", None)
+        if model is None:
+            return
+        obligations = list(os_status.get("obligations") or [])
+        model.set_rows([{
+            "obligation_id": o.get("obligation_id"),
+            "kind": o.get("kind"),
+            "case": o.get("case"),
+            "status": o.get("status"),
+        } for o in obligations])
+        model.apply_column_widths(self.os_table)
+        if not obligations:
+            self.os_label.setText("OS 账本：这一轮没有契约产物（老 run，或没跑到 coverage）")
+            self._tab_meta(4, "OS 账本")
+            return
+        open_n = sum(1 for o in obligations
+                     if o.get("status") not in ("PROVEN", "NOT_APPLICABLE"))
+        worklist = os_status.get("worklist") or {}
+        self.os_label.setText(
+            f"义务 {len(obligations)} 条 · 未清偿 {open_n} 条 · "
+            f"建议重跑 {worklist.get('count', 0)} 条 test"
+            f"（worklist 打开时只跑这些）")
+        self._tab_meta(4, f"OS 账本 {len(obligations) - open_n}/{len(obligations)}")
 
     def _fill_case_view(self, cv: Dict[str, Any],
                         os_status: Dict[str, Any] = None) -> None:
@@ -478,6 +529,9 @@ class SignoffModule(ModuleBase):
         if getattr(self, "case_model", None):
             self.case_model.set_rows([])
             self.case_label.setText("")
+        if getattr(self, "os_model", None):
+            self.os_model.set_rows([])
+            self.os_label.setText("")
         self.tp_label.setText("")
         self.caveat_label.setText("")
         self.count_label.setText("")
@@ -485,7 +539,7 @@ class SignoffModule(ModuleBase):
         self.evidence_dir = ""
         self.replay_cmd = ""
         for index, title in enumerate(("签核门禁", "领域证据链", "Case 证据",
-                                       "证据包 v2")):
+                                       "证据包 v2", "OS 账本")):
             self._tab_meta(index, title)
 
 

@@ -217,11 +217,12 @@ class TestTabsLayout:
         tabs = loaded.tabs
         assert isinstance(tabs, QTabWidget)
         titles = [tabs.tabText(i) for i in range(tabs.count())]
-        assert len(titles) == 4
+        assert len(titles) == 5
         assert any("签核门禁" in t for t in titles)
         assert any("领域证据链" in t for t in titles)
         assert any("Case 证据" in t for t in titles)
         assert any("证据包 v2" in t for t in titles)
+        assert any("OS 账本" in t for t in titles)
 
     def test_tab_titles_carry_x_of_y(self, loaded):
         """标签上带 3/5、1/2 这类计数 —— 不用点进去才知道这一页有没有料。"""
@@ -265,6 +266,23 @@ class TestCaseEvidenceInSignoff:
         text = module.case_label.text()
         assert "OS：" in text and "58 条义务" in text and "468 条事实" in text
         assert "对账 一致" in text
+
+    def test_os_tab_lists_obligations_and_open_count(self, module):
+        module._fill_os({
+            "available": True,
+            "obligations": [
+                {"obligation_id": "OBL-A", "kind": "group_layer",
+                 "case": "CASE-A", "status": "PROVEN"},
+                {"obligation_id": "OBL-B", "kind": "sva",
+                 "case": "CASE-A", "status": "MISSING"},
+            ],
+            "worklist": {"open": 1, "count": 3, "tests": ["tp_a"]},
+        })
+        assert module.os_model.rowCount() == 2
+        text = module.os_label.text()
+        assert "义务 2 条" in text and "未清偿 1 条" in text
+        assert "建议重跑 3 条 test" in text
+        assert "OS 账本 1/2" in module.tabs.tabText(4)
 
     def test_without_contract_the_os_line_is_absent(self, module):
         module._fill_case_view(
