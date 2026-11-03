@@ -213,6 +213,10 @@ class FunctionalCoverageModule(ModuleBase):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(4, 4, 4, 4)
+        # Case Gate 状态条：blocker / warning / info 计数（数据在 coverage/gates.json）
+        self.ce_gate_label = QLabel("", page)
+        self.ce_gate_label.setWordWrap(True)
+        layout.addWidget(self.ce_gate_label)
         inner = QTabWidget(page)
         inner.setDocumentMode(True)
 
@@ -240,8 +244,10 @@ class FunctionalCoverageModule(ModuleBase):
         self._case_view: Dict[str, Any] = {}
         return page
 
-    def _fill_case_evidence(self, cv: Dict[str, Any]) -> None:
+    def _fill_case_evidence(self, cv: Dict[str, Any],
+                            gates: Dict[str, Any] = None) -> None:
         self._case_view = cv or {}
+        self._fill_gate_label(gates or {})
         cases = self._case_display_rows(cv.get("cases") or [])
         self.ce_case_model.set_rows(cases, cell_colors=self._case_colors(cases))
         features = self._feature_display_rows(cv.get("features") or [])
@@ -253,6 +259,26 @@ class FunctionalCoverageModule(ModuleBase):
                              (self.ce_feat_model, self.ce_feat_table),
                              (self.ce_gap_model, self.ce_gap_table)):
             model.apply_column_widths(table)
+
+    def _fill_gate_label(self, gates: Dict[str, Any]) -> None:
+        """Case Gate 状态条 —— 没生成就说没生成，不显示成"通过"。"""
+        label = getattr(self, "ce_gate_label", None)
+        if label is None:
+            return
+        verdict = str(gates.get("verdict") or "")
+        if not verdict:
+            label.setText("Case Gate：还没有门禁产物（跑一轮覆盖率或 "
+                          "`vagent coverage case-gate -o <run>`）")
+            label.setStyleSheet(f"color: {theme.current().muted};")
+            return
+        counts = gates.get("counts") or {}
+        label.setText(f"Case Gate：{verdict}　·　"
+                      f"blocker {counts.get('blocker', 0)}　"
+                      f"warning {counts.get('warning', 0)}　"
+                      f"info {counts.get('info', 0)}")
+        color = (theme.current().warning if verdict == "BLOCKED"
+                 else theme.current().ok)
+        label.setStyleSheet(f"color: {color};")
 
     @staticmethod
     def _case_display_rows(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -440,7 +466,8 @@ class FunctionalCoverageModule(ModuleBase):
         self.tp_model.set_rows(list(payload.get("testpoints") or []))
         self._tp_evidence = payload.get("tp_evidence") or {}
         self.te_model.set_rows(self._tp_evidence_rows())
-        self._fill_case_evidence(payload.get("case_view") or {})
+        self._fill_case_evidence(payload.get("case_view") or {},
+                                 payload.get("case_gates") or {})
         self.batch_model.set_rows(list(payload.get("batches") or []))
         # 没有覆盖点/交叉认领的需求标灰 —— "孤立需求"是签核要拦的，得看得见
         trace = list(payload.get("traceability") or [])

@@ -20,6 +20,7 @@ _LAYER_KEYS = (("coverage", "功能覆盖"), ("sva", "SVA"),
 
 def render_markdown(data: Dict[str, Any]) -> str:
     lines = [f"# Case 证据视图 —— {data.get('run', '')}", ""]
+    lines += _render_three_sets(data)
     lines += ["## 视图1：用例 × 证据层", "",
               "| 用例 | 功能覆盖 | SVA | Scoreboard | PATH | 结论 |",
               "|---|---|---|---|---|---|"]
@@ -49,7 +50,84 @@ def render_markdown(data: Dict[str, Any]) -> str:
     for g in data.get("gaps") or []:
         lines.append(f"| {g.get('type')} | {g.get('item')} | {g.get('root')} | "
                      f"{g.get('action')} | {g.get('owner')} | {g.get('status')} |")
+    lines += _render_v2(data)
     return "\n".join(lines) + "\n"
+
+
+def _render_three_sets(data: Dict[str, Any]) -> List[str]:
+    """三节渲染：每条 case 的 [Groups] / [SVA] / [SCB] + 总状态。"""
+    rows = [c for c in data.get("cases") or [] if c.get("groups_evidence")]
+    if not rows:
+        return []
+    lines: List[str] = ["## 三集合证据（Groups / SVA / SCB）", ""]
+    for c in rows:
+        cid = c.get("case_id") or c.get("task")
+        lines += [f"### Case: {cid}　`case_status={c.get('case_status') or '—'}`", ""]
+        lines += ["**Groups**", "",
+                  "| group | cell | functional | timing | data | path | result |",
+                  "|---|---|---|---|---|---|---|"]
+        for g in c["groups_evidence"]:
+            def _st(key: str) -> str:
+                return str((g.get(key) or {}).get("status") or "")
+            lines.append(
+                f"| {g.get('group')} | {g.get('cell')} | {_st('functional')} | "
+                f"{_st('timing')} | {_st('data')} | {_st('path')} | "
+                f"{g.get('result')} |")
+        if c.get("sva_items"):
+            lines += ["", "**SVA**", "",
+                      "| id | cell | hit | fail | cover_property_hit | status |",
+                      "|---|---|---|---|---|---|"]
+            for s in c["sva_items"]:
+                lines.append(f"| {s.get('id')} | {s.get('cell')} | "
+                             f"{s.get('hit')} | {s.get('fail')} | "
+                             f"{s.get('cover_property_hit')} | {s.get('status')} |")
+        if c.get("scb_items"):
+            lines += ["", "**SCB**", "",
+                      "| id | cell | exec | matched | mismatched | status |",
+                      "|---|---|---|---|---|---|"]
+            for s in c["scb_items"]:
+                lines.append(f"| {s.get('id')} | {s.get('cell')} | "
+                             f"{s.get('exec')} | {s.get('matched')} | "
+                             f"{s.get('mismatched')} | {s.get('status')} |")
+        lines.append("")
+    return lines
+
+
+def _render_v2(data: Dict[str, Any]) -> List[str]:
+    """v2 三张新表：分类树 / Case × CELL / 执行证据。空表不出标题。"""
+    lines: List[str] = []
+    tree = (data.get("case_tree") or {}).get("rows") or []
+    if tree:
+        lines += ["", "## 视图5：Case 分类树", "",
+                  "| 分类 | 名称 | 父级 | 用例数 | 测试数 | 来源 |",
+                  "|---|---|---|---|---|---|"]
+        for row in tree:
+            lines.append(f"| {row.get('id')} | {row.get('name')} | "
+                         f"{row.get('parent') or '—'} | {row.get('cases')} | "
+                         f"{row.get('tests')} | {row.get('source')} |")
+    case_cell = (data.get("case_cell") or {}).get("rows") or []
+    if case_cell:
+        lines += ["", "## 视图6：Case × CELL", "",
+                  "| CELL | CG | P | 颜色 | TP 数 | 声明用例 | 实际用例 |",
+                  "|---|---|---|---|---|---|---|"]
+        for row in case_cell:
+            lines.append(f"| {row.get('cell_id')} | {row.get('cg')} | "
+                         f"{row.get('p')} | {EMOJI.get(row.get('color'), '?')} | "
+                         f"{row.get('tp_count')} | "
+                         f"{'、'.join(row.get('declared_cases') or []) or '—'} | "
+                         f"{'、'.join(row.get('observed_cases') or []) or '—'} |")
+    runs = data.get("case_runs") or []
+    if runs:
+        lines += ["", "## 视图7：执行证据（EVD）", "",
+                  "| EVD | CASE | TST | 测试 | seed | 阶段 | 波形 | legacy |",
+                  "|---|---|---|---|---|---|---|---|"]
+        for row in runs:
+            lines.append(f"| {row.get('evd_id')} | {row.get('case_id') or '—'} | "
+                         f"{row.get('tst_id')} | {row.get('test')} | "
+                         f"{row.get('seed')} | {row.get('stage')} | "
+                         f"{row.get('wave') or '—'} | "
+                         f"{'是' if row.get('legacy') else '否'} |")
+    return lines
 
 
 def _html_table(headers: List[str], rows: List[str]) -> str:

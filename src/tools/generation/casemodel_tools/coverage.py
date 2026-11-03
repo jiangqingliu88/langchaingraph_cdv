@@ -75,6 +75,7 @@ from .coverage_parse import (  # noqa: F401
 )
 from .coverage_render import (  # noqa: F401
     DEFAULT_CLOCK, DEFAULT_INSTANCE, DEFAULT_RESET, DEFAULT_WIDTH,
-    checker_rules, cov_interface_meta, coverage_plan, dut_bins, probe_ports,
-    render_covergroup, render_cov_interface, render_probe,
+    assertion_signals, checker_rules, cov_interface_meta, coverage_plan,
+    dut_bins, parse_model_text, probe_ports, render_covergroup,
+    render_cov_interface, render_probe,
 )

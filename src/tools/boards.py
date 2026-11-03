@@ -37,6 +37,8 @@ BOARDS: Dict[str, Tuple[str, ...]] = {
     ),
     "humanview": (
         "aivm_ir",
+        # 身份层（CCAT/CASE/TST）与人类可读视图（含 Case Gate）
+        "case_ir", "case_associate_view", "covg_ir", "sva_ir", "scb_ir",
     ),
     "common": (
         "lib",

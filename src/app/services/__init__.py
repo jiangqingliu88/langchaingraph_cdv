@@ -8,6 +8,10 @@ from src.app.services.soc_service import (
 from src.app.services.ip_service import (
     list_ips, ip_info, ip_plan, ip_status, write_ip_evidence, build_ip_release,
 )
+from src.app.services.case_view_service import (
+    artifact as case_artifact, case_gate, case_view, list_artifacts,
+    rebuild_evidence,
+)
 
 __all__ = [
     "run_verify",
@@ -17,4 +21,6 @@ __all__ = [
     "run_ip_regression",
     "list_ips", "ip_info", "ip_plan", "ip_status", "write_ip_evidence",
     "build_ip_release",
+    "case_artifact", "case_gate", "case_view", "list_artifacts",
+    "rebuild_evidence",
 ]

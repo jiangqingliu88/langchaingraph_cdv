@@ -1005,6 +1005,36 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 **未实现**：增量**编译**（当前仍走框架的共享 work library 增量编译，不是本层
 控制）、按依赖图做 finer-grained 选择性编译；这些是 P2 路线图。
 
+### 9.11 Case View 身份脊梁（CASE → TST → EVD → CELL）
+
+签核读数从"覆盖率数字"升级为"CELL 四层证据"。四张身份表的关系：
+
+| 身份 | 谁产生 | 落在哪 | 说明 |
+|---|---|---|---|
+| `CCAT` / `CASE` | 模型 `cases:` 段（缺省按维度/行为/PATH 合成） | TP IR + `coverage/case_ir.json` | 逻辑用例；`source=declared/synthesized` 如实标注 |
+| `TST` | `test + seed` 派生（`humanview.case_ir.tst_id_of`） | `task_meta.json`（`regression_task_v2`） | 可执行实例模板；不手写 |
+| `EVD` | 一次执行 | `coverage/case_cov/**/*.json` + `coverage/evd.json` | 去重键 `(run, tst, seed, cfg)`；旧 run 标 `legacy` |
+| `CELL` | `CG × P` 派生（`cell_matrix.cell_id_of`） | `coverage/cell_matrix.json` | **派生视图，不是实体**；不许手写 |
+
+- **身份在生成期注入**：`verify` 写 TP IR 的 `case_id/tst_id` → 回归目录写
+  `task_meta.case_id/tst_id` → 证据聚合写 `evd_id/cell_ids`。**不从测试名反推**。
+- **证据流水线**：`coverage_tools/evidence_pipeline.py` 按
+  `case_cov → tp_matrix → tp_evidence → evd → cell_matrix → case_view → gates`
+  顺序产出派生物，写 `coverage/evidence_manifest.json`（每步 sha + 耗时）。
+  `only=` 可单步重跑，改模型不必重跑仿真。
+- **门禁**：`humanview.case_associate_view.gates`（规则表 `gates.yaml`，blocker/
+  warning/info）；`vagent coverage case-gate -o <run> [--strict]`；audit 消费其
+  结论并挂 `CASE_GATE_BLOCKED`。
+- **视图**：`coverage/case_view.{json,md,html}`（`case_associate_view_v2`）四张
+  旧表 + 三张新表（分类树 / Case×CELL / 执行证据）+ 元数据（`ssot_sha256` /
+  `readonly`）。设计见 `docs/design/architecture_transformation_plan.md`。
+- **case 三集合**：`group = CG-<dimension>`，`cell = CELL-<dimension>-<stage>`；
+  `sva` 来自 `assertions[].tp_bindings`，`scb` 来自 `scoreboards:`（按
+  `tp_bindings` 或 `checks` 交集绑定，证据粒度写进 `evidence_level`）。
+- **审计 caveat**（三集合）：`CASE_GATE_BLOCKED`、`CASE_GROUP_PARTIAL`、
+  `CASE_SVA_VACUOUS`、`CASE_SCB_NOT_EXECUTED`、`CASE_PATH_PENDING_BACKEND`、
+  `CASE_IR_EVIDENCE_MISMATCH`；门禁码另见 `case_associate_view/gates.yaml`。
+
 ---
 
 ## 10. 证据链与治理

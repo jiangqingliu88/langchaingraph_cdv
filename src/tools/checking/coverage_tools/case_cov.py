@@ -156,6 +156,15 @@ def _cache_is_fresh(cache: Path, cov_db: str, log_path: str) -> bool:
     return True
 
 
+def _tst(test: str, seed) -> str:
+    """`TST-<test>@<seed>` —— 与 `humanview.case_ir.tst_id_of` 同一口径。"""
+    try:
+        from src.tools.humanview.case_ir import tst_id_of
+        return tst_id_of(test, seed)
+    except Exception:                            # noqa: BLE001 身份层不可用不挡聚合
+        return f"TST-{test}@{seed}" if test else ""
+
+
 def _case_facts(od: Path, test_dir: Path, *, force: bool = False) -> dict:
     """一条用例的**原始事实**（不判签核）+ 缓存（覆盖率库只读一次）。
 
@@ -177,6 +186,18 @@ def _case_facts(od: Path, test_dir: Path, *, force: bool = False) -> dict:
         "task": meta["task"], "test": meta["test"] or meta["test_name"],
         "test_name": meta["test_name"], "seed": meta["seed"],
         "stage": meta["stage"], "build": meta["build"], "dir": meta["dir"],
+        # 身份脊梁（v2）：CASE 在生成期注入，TST 由 test+seed 派生。
+        # 旧目录没有这些键 → 空串 + legacy=True，绝不编一个看起来对的。
+        "case_id": meta.get("case_id", ""),
+        "case_ids": list(meta.get("case_ids") or []),
+        "tst_id": meta.get("tst_id", "") or _tst(meta["test"] or meta["test_name"],
+                                                  meta["seed"]),
+        "legacy": bool(meta.get("legacy")),
+        # 契约哈希 + 三集合指纹（task_meta v2 写，case_cov 原样带出）
+        "case_ir_sha": str(meta.get("case_ir_sha") or ""),
+        "group_ids": list(meta.get("group_ids") or []),
+        "sva_ids": list(meta.get("sva_ids") or []),
+        "scb_ids": list(meta.get("scb_ids") or []),
         "cov_db": cov_db, "cov_source": cov_source,
         "ucdb": "", "ucdb_abs": "", "log": log_path,
         "wave": wave, "wave_abs": wave, "log_facts": log_facts,
@@ -353,14 +374,214 @@ def _case_timing_ok(facts: dict):
     return int(timing.get("violations") or 0) == 0
 
 
+def _evd(run_id: str, test: str, seed) -> str:
+    try:
+        from src.tools.humanview.case_ir import evd_id_of
+        return evd_id_of(run_id, test, seed)
+    except Exception:                            # noqa: BLE001 身份层不可用不挡聚合
+        return f"EVD-{run_id}-{test}@{seed}" if test else ""
+
+
+def _cell_ids(owner_tps: list) -> list:
+    """这条用例占住的签核格子（CG × P）—— **派生**，不手写。"""
+    try:
+        from src.tools.checking.coverage_tools.cell_matrix import cell_id_of
+    except Exception:                            # noqa: BLE001
+        return []
+    out = set()
+    for tp in owner_tps or []:
+        if not isinstance(tp, dict):
+            continue
+        cid = cell_id_of(tp.get("dimension"),
+                         (tp.get("execution") or {}).get("stage") or tp.get("stage"))
+        if cid:
+            out.add(cid)
+    return sorted(out)
+
+
+#: 三集合状态的"好坏"排序（越大越差）；`NOT_APPLICABLE` 不参与比较。
+_STATUS_RANK = {"PROVEN": 0, "NOT_APPLICABLE": 0, "PARTIAL": 1,
+                "PENDING_BACKEND": 2, "NOT_EXECUTED": 3, "MISSING": 4}
+
+
+def _worst(statuses) -> str:
+    real = [s for s in statuses if s and s != "NOT_APPLICABLE"]
+    if not real:
+        return "NOT_APPLICABLE"
+    return max(real, key=lambda s: _STATUS_RANK.get(s, 4))
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _load_case_contract(od: Path) -> dict:
+    """`coverage/case_ir.json` → `{case_id: case}`（三集合契约）。"""
+    doc = _read_json(od / "coverage" / "case_ir.json")
+    return {str(c.get("id") or ""): c for c in doc.get("cases") or []
+            if isinstance(c, dict) and c.get("id")}
+
+
+def _group_evidence(item: dict, entries: list, facts: dict,
+                    timing_ok) -> dict:
+    """一组覆盖组证据：functional / timing / data / path + result。"""
+    required = list(item.get("required_layers") or
+                    ["functional", "timing", "data"])
+    tp_ids = {str(t) for t in (item.get("tp_ids") or [])}
+    mine = [e for e in entries if not tp_ids or str(e.get("tp_id")) in tp_ids]
+    hit = [e for e in mine if float(e.get("pct") or 0) >= 100.0]
+    if mine and len(hit) == len(mine):
+        functional = "PROVEN"
+    elif any(float(e.get("pct") or 0) > 0 for e in mine):
+        functional = "PARTIAL"
+    else:
+        functional = "MISSING"
+
+    if timing_ok is True:
+        timing = "PROVEN"
+    elif timing_ok is False:
+        timing = "MISSING"
+    else:
+        timing = "NOT_APPLICABLE"
+
+    scb = facts.get("scb_summary") or {}
+    matched = scb.get("matched")
+    if matched is None:
+        data = "NOT_APPLICABLE"
+    elif int(matched) > 0 and int(scb.get("mismatched") or 0) == 0:
+        data = "PROVEN"
+    else:
+        data = "MISSING"
+
+    path = "PENDING_BACKEND" if "path" in required else "NOT_APPLICABLE"
+    layers = {"functional": functional, "timing": timing,
+              "data": data, "path": path}
+    return {
+        "group": item.get("group", ""),
+        "cell": item.get("cell", ""),
+        "required_layers": required,
+        "functional": {"status": functional,
+                       "bins_hit": [e.get("tp_id") for e in hit],
+                       "bins_miss": [e.get("tp_id") for e in mine
+                                     if e not in hit]},
+        "timing": {"status": timing},
+        "data": {"status": data, "matched": matched,
+                 "mismatched": scb.get("mismatched")},
+        "path": {"status": path},
+        "result": _worst([layers[k] for k in required]),
+    }
+
+
+def _sva_evidence(items: list, facts: dict) -> list:
+    """断言证据：`by_rule` 里有记录才算"求值过"；0 违规才算 PROVEN。"""
+    by_rule = ((facts.get("log_facts") or {}).get("assertions") or {}).get("by_rule") or {}
+    lowered = {str(k).lower(): v for k, v in by_rule.items()}
+    out = []
+    for item in items:
+        name = str(item.get("name") or "")
+        key = name.lower() or str(item.get("id") or "").removeprefix("SVA-").lower()
+        fired = lowered.get(key)
+        if fired is None:
+            status, hit = "MISSING", None
+        elif int(fired) == 0:
+            status, hit = "PROVEN", None
+        else:
+            status, hit = "MISSING", None
+        out.append({
+            "id": item.get("id", ""), "cell": item.get("cell", ""),
+            "name": name, "hit": hit, "fail": int(fired or 0),
+            "cover_property_hit": None, "status": status,
+        })
+    return out
+
+
+def _scb_evidence(items: list, facts: dict) -> list:
+    """SCB 证据：优先 `[SCB <id>]` 逐条收口，其次 env 的 `[SCB_DUT]` 汇总。
+
+    契约项自带 `evidence` 模式（`auto` / `aggregate` / `log`）：
+      · `log`       —— 必须有自己的收口行，没有就判未执行；
+      · `aggregate` —— 用 env 的聚合行；
+      · `auto`      —— 先找自己那行，找不到退回聚合。
+    用了哪一层写进 `evidence_level`，**不把聚合证据冒充成逐条证据**。
+    """
+    aggregate = facts.get("scb_summary") or {}
+    by_id = (facts.get("log_facts") or {}).get("scb_by_id") or {}
+    return [{
+        "id": str(item.get("id") or ""), "cell": item.get("cell", ""),
+        "exec": int((data or {}).get("total") or 0),
+        "matched": (data or {}).get("matched"),
+        "mismatched": (data or {}).get("mismatched"),
+        "evidence_level": level or "none",
+        "status": _scb_status(data),
+    } for item in items for data, level in [_scb_source(item, aggregate, by_id)]]
+
+
+def _scb_source(item: dict, aggregate: dict, by_id: dict) -> tuple:
+    """这条 SB 的证据来自哪：自己的收口行优先，其次 env 聚合行。"""
+    sb_id = str(item.get("id") or "")
+    raw_id = sb_id[3:] if sb_id.startswith("SB-") else sb_id
+    own = by_id.get(sb_id) or by_id.get(raw_id)
+    if own:
+        return own, "per_scb"
+    if str(item.get("evidence") or "auto") != "log" \
+            and aggregate.get("matched") is not None:
+        return aggregate, "aggregate"
+    return None, ""
+
+
+def _scb_status(data) -> str:
+    if data is None:
+        return "NOT_EXECUTED"
+    if int(data.get("mismatched") or 0) > 0:
+        return "MISSING"
+    return "PROVEN" if int(data.get("matched") or 0) > 0 else "NOT_EXECUTED"
+
+
+def _case_status(groups: list, sva: list, scb: list) -> str:
+    """三集合 → case 总状态：全 PROVEN/NA 才是 VERIFIED。"""
+    worst = _worst([g.get("result") for g in groups]
+                   + [s.get("status") for s in sva]
+                   + [s.get("status") for s in scb])
+    if worst in ("PROVEN", "NOT_APPLICABLE"):
+        return "VERIFIED"
+    if worst == "MISSING":
+        return "NOT_VERIFIED"
+    return "PARTIAL"
+
+
 def _evaluate_case(od: Path, test_dir: Path, owner_tps: list, basis: str,
-                   *, require_wave: bool, force: bool) -> dict:
+                   *, require_wave: bool, force: bool,
+                   contract: dict = None) -> dict:
     """一条用例 → `case_cov_v1` 记录（并落盘）。"""
     facts = _case_facts(od, test_dir, force=force)
     entries = [_tp_case_entry(tp, facts, require_wave=require_wave)
                for tp in owner_tps]
+    case = (contract or {}).get(str(facts.get("case_id") or "")) or {}
+    timing_ok = _case_timing_ok(facts)
+    groups = [_group_evidence(g, entries, facts, timing_ok)
+              for g in (case.get("groups") or []) if isinstance(g, dict)]
+    sva = _sva_evidence(case.get("sva") or [], facts)
+    scb = _scb_evidence(case.get("scb") or [], facts)
     rec = {
         "schema": CASE_COV_SCHEMA,
+        # ── 身份（EVD）：一次执行一条证据；去重键 (run, tst, seed, cfg) ──
+        "evd_id": _evd(od.name, facts["test"], facts["seed"]),
+        "run_id": od.name,
+        "tst_id": facts.get("tst_id", ""),
+        "case_id": facts.get("case_id", ""),
+        "case_ids": list(facts.get("case_ids") or []),
+        "cell_ids": _cell_ids(owner_tps),
+        "legacy": bool(facts.get("legacy")),
+        "case_ir_sha": str(facts.get("case_ir_sha", "")),
+        # ── 三集合证据（与 case_ir 契约一一对应；缺项标 MISSING）──
+        "groups": groups,
+        "sva": sva,
+        "scb": scb,
+        "case_status": _case_status(groups, sva, scb),
         "task": facts["task"], "test": facts["test"],
         "test_name": facts["test_name"], "seed": facts["seed"],
         "stage": facts["stage"], "build": facts["build"],
@@ -377,10 +598,12 @@ def _evaluate_case(od: Path, test_dir: Path, owner_tps: list, basis: str,
         "tp": entries,
         "uvm_errors": int((facts.get("log_facts") or {}).get("uvm_errors") or 0),
         "uvm_fatal": int((facts.get("log_facts") or {}).get("uvm_fatal") or 0),
-        "scb": (facts.get("log_facts") or {}).get("scb") or {},
+        # `scb` 现在是**三集合证据**（上面）；原始 `[SCB_DUT]` 汇总改名
+        # `scb_summary` —— 两个不同东西共用一个键会让读者以为是同一件事。
+        "scb_summary": (facts.get("log_facts") or {}).get("scb") or {},
         "assertions": (facts.get("log_facts") or {}).get("assertions") or {},
         # 用例级时序结论：`None` = 这一轮没声明/没检查（不是"通过"）。
-        "timing_ok": _case_timing_ok(facts),
+        "timing_ok": timing_ok,
         "error": facts.get("error", ""),
         "cached": bool(facts.get("cached")),
     }
@@ -441,6 +664,9 @@ def _summarize_tp(tp: dict, entries: list) -> dict:
                     "reasons", "owner_basis", "timing_ok")}
                   for e in entries],
         "reasons": [] if signed else _unsigned_reasons(entries),
+        # 三集合（TP 行来自 TP IR；case_status 取 owner 用例的结论）
+        "case_id": tp.get("case_id", ""),
+        "case_status": str((picked or {}).get("case_status", "")),
     }
 
 
@@ -490,6 +716,8 @@ def _index_tps(tps: list) -> tuple:
 
 def _entries_for(tid: str, cases: list) -> list:
     return [dict(e, task=rec["task"], seed=rec["seed"],
+                 case_id=rec.get("case_id", ""),
+                 case_status=rec.get("case_status", ""),
                  stage=rec["stage"], wave=rec["wave"],
                  wave_abs=rec["wave_abs"], owner_basis=rec["owner_basis"],
                  cached=rec["cached"])
@@ -501,6 +729,14 @@ def _by_case(cases: list) -> dict:
         rec["task"]: {
             "test": rec["test"], "seed": rec["seed"],
             "stage": rec["stage"], "owner_basis": rec["owner_basis"],
+            "case_id": rec.get("case_id", ""),
+            "tst_id": rec.get("tst_id", ""),
+            "case_status": rec.get("case_status", ""),
+            # 三集合反向索引（视图与门禁按 checker 反查用例）
+            "group_ids": [g.get("group") for g in rec.get("groups") or []
+                          if g.get("group")],
+            "sva_ids": [s.get("id") for s in rec.get("sva") or [] if s.get("id")],
+            "scb_ids": [s.get("id") for s in rec.get("scb") or [] if s.get("id")],
             "tp_ids": [e["tp_id"] for e in rec["tp"]],
             "signed_tp_ids": [e["tp_id"] for e in rec["tp"]
                               if e["status"] == "SIGNED_OFF"],
@@ -532,6 +768,7 @@ def case_cov_matrix(od: Path, *, max_cases: int = 0,
                 "errors": [], "case_count": 0}
 
     tp_by_id, tp_by_test = _index_tps(tps)
+    contract = _load_case_contract(od)
     selected, sampled, notes = _select_case_dirs(
         _case_dirs(od), tp_by_id, tp_by_test, max_cases)
 
@@ -543,7 +780,8 @@ def case_cov_matrix(od: Path, *, max_cases: int = 0,
         if sampled and not owner_tps:
             continue
         rec = _evaluate_case(od, d, owner_tps, basis,
-                             require_wave=require_wave, force=force)
+                             require_wave=require_wave, force=force,
+                             contract=contract)
         if rec.get("error"):
             errors.append(f"{rec['task']}: {rec.get('error_detail') or rec['error']}")
         cases.append(rec)

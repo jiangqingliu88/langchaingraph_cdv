@@ -58,6 +58,44 @@ class Assertion:
 
 
 @dataclass
+class Scoreboard:
+    """模型里声明的一条 **scoreboard 检查**（case 三集合里的 `scb`）。
+
+    与 `Assertion` 是并列的两类 checker：
+
+        SVA  —— 跨拍时序性质（bind 进 DUT）
+        SB   —— 值 / 账本 / 计数（env 的比对组件）
+
+    `tp_bindings` 与断言同口径（`[{tp_id, role}]`）；不写绑定时按 `checks`
+    与 TP 的 `checks` 求交集兜底 —— 绑不上的条目进 `unknown`，不静默丢。
+
+    `evidence` 决定证据从哪来：
+
+        aggregate —— env 的 DUT 检查收口行 `[SCB_DUT] total/matched/mismatched`
+        log       —— 必须有自己的 `[SCB <id>] total=… matched=…` 行，否则判未执行
+        auto      —— 有 per-SB 行就用它，否则退回 aggregate
+    """
+    id: str
+    name: str = ""
+    checks: List[str] = _field(default_factory=list)
+    tp_bindings: List[Dict[str, str]] = _field(default_factory=list)
+    evidence: str = "auto"
+    model: str = ""
+    description: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name or self.id,
+            "checks": list(self.checks),
+            "tp_bindings": [dict(b) for b in self.tp_bindings],
+            "evidence": self.evidence,
+            "model": self.model,
+            "description": self.description,
+        }
+
+
+@dataclass
 class Generation:
     """case 组合生成参数（文档十七节）。"""
     themes: List[str] = _field(default_factory=list)        # 限定专题 id
@@ -132,12 +170,19 @@ class CaseModel:
     check_names: Dict[str, str] = _field(default_factory=dict)
     #: 模型声明的 DUT 断言（含 `tp_bindings`：这条断言保护哪些测试点）。
     assertions: List["Assertion"] = _field(default_factory=list)
+    #: 模型声明的 scoreboard 检查（case 三集合里的 `scb` 来源）。
+    scoreboards: List["Scoreboard"] = _field(default_factory=list)
     #: 行为域（状态 / 迁移 / 序列 / 时序）；None = 模型没启用行为建模。
     behavior: Optional[Any] = None
     #: **PATH 组**（端到端指令生命周期）—— 与功能组并列，回答"路径通不通"。
     path_groups: List[Any] = _field(default_factory=list)
     #: 配置域（DUT/特性配置空间）；None = 模型没启用配置建模。
     config_space: Optional[Any] = None
+    #: **Case IR 段**（`cases:`）—— CCAT 分类树 + CASE 逻辑用例的**原始声明**。
+    #:
+    #: 本模块只承载、不解释：语义归 `humanview.case_ir`（它才知道 ID 唯一性、
+    #: 引用完整性该怎么判）。空 dict = 模型没声明，用例身份按维度合成。
+    cases_doc: Dict[str, Any] = _field(default_factory=dict)
     cross_pairs: List[CrossPair] = _field(default_factory=list)
     cross_groups: List[CrossGroup] = _field(default_factory=list)
     env_required: List[str] = _field(default_factory=list)

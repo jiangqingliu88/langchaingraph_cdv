@@ -53,6 +53,9 @@ class MethodBundle:
     module_name: str = ""
     dropped: int = 0
     truncated: bool = False
+    #: Case IR 快照（`case_ir_v1`）—— CCAT 分类树 + CASE 逻辑用例。
+    #: 没启用身份层时是空 dict（不是空壳文档）。
+    case_doc: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def count(self) -> int:
@@ -197,8 +200,13 @@ class MethodologyPipeline:
             ctx.notes.append(f"测试点截断到 {max_tests} 条，丢弃 "
                              f"{total - len(points)} 条（优先保留边界取值）")
 
+        # Case IR 与测试点同批产出：身份在生成期就定下，下游（verify 落盘 /
+        # 回归任务 / 证据聚合）只消费，不再各自投影一次。
+        case_doc = ctx.take("case_doc")
         return MethodBundle(testpoints=points, notes=ctx.notes, stages=records,
                             env_name=env_name, module_name=module_name,
-                            dropped=total - len(points), truncated=truncated)
+                            dropped=total - len(points), truncated=truncated,
+                            case_doc=(case_doc.to_dict()
+                                      if hasattr(case_doc, "to_dict") else {}))
 
 

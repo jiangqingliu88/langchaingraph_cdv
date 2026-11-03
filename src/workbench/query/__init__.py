@@ -7,8 +7,14 @@ from src.workbench.query.runs import (
     list_soc_runs, read_events, read_artifact_index, run_summary,
 )
 from src.workbench.query.evidence import read_envelope, validate_evidence
+from src.workbench.query.case_view import (
+    list_case_artifacts, read_case_gates, read_case_view, read_cell_matrix,
+    read_evd,
+)
 
 __all__ = [
     "list_soc_runs", "read_events", "read_artifact_index", "run_summary",
     "read_envelope", "validate_evidence",
+    "list_case_artifacts", "read_case_gates", "read_case_view",
+    "read_cell_matrix", "read_evd",
 ]

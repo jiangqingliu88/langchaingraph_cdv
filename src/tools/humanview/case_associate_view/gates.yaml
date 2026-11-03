@@ -1,0 +1,29 @@
+# Case Gate 规则表 —— **规则版本的唯一出处**（RULE_VER 随本文件走）。
+#
+# level: blocker / warning / info
+# stage: block  = 真阻断（CI 退出码 1）
+#        report = 只报告（首版**所有 blocker 默认 report**，统计一周后逐条升级）
+#
+# 升级纪律：每次只升一条，先在 nightly 上看一周 "如果当时是 block 会怎样"，
+# 没有误杀再改。误杀存量债务比漏报更贵 —— 它会让整条流水线被历史遗留挡住。
+schema: case_gates_v1
+rule_version: "1.0"
+rules:
+  - {id: duplicate_id,          level: blocker, stage: block,  title: ID 重复}
+  - {id: case_without_tst,      level: blocker, stage: block,  title: 用例落不到可执行实例}
+  - {id: cell_without_checker,  level: blocker, stage: report, title: CELL 没有任何 checker}
+  - {id: cell_red,              level: blocker, stage: report, title: CELL 红：该证明的没证明}
+  - {id: cell_without_case,     level: warning, stage: report, title: CELL 没有对应用例}
+  - {id: case_without_evd,      level: warning, stage: report, title: 用例没有执行证据}
+  - {id: evd_legacy,            level: warning, stage: report, title: 旧 run 无 CASE 身份}
+  - {id: case_synthesized,      level: info,    stage: report, title: 用例身份是结构合成的}
+  - {id: cell_yellow,           level: info,    stage: report, title: CELL 黄：证据不完整}
+  # ── 三集合完整性（arch.md §8）—— 契约结构错是硬伤，默认就 block ──
+  - {id: CASE_GROUPS_EMPTY,        level: blocker, stage: block,  title: 用例没有任何功能组}
+  - {id: CASE_SVA_UNDECLARED,      level: blocker, stage: block,  title: 用例缺 sva 字段}
+  - {id: CASE_SCB_UNDECLARED,      level: blocker, stage: block,  title: 用例缺 scb 字段}
+  - {id: CASE_ITEM_NO_CELL,        level: blocker, stage: block,  title: 三集合项缺 cell}
+  - {id: CASE_SVA_VACUOUS,         level: blocker, stage: report, title: SVA 空转（cover_property 未命中）}
+  - {id: CASE_SCB_NOT_EXECUTED,    level: blocker, stage: report, title: SCB 未执行}
+  - {id: CASE_STATUS_OVERCLAIM,    level: blocker, stage: block,  title: 用例状态越报}
+  - {id: CASE_IR_EVIDENCE_MISMATCH, level: blocker, stage: block, title: 契约与证据不一致}

@@ -18,6 +18,16 @@ ROUND_MANIFEST = "round_manifest_v1"
 TEST_DEPENDENCIES = "test_dependencies_v1"
 ENGINEERING_METRICS = "engineering_metrics_v1"
 
+# ── case view（身份脊梁：CASE → TST → EVD → CELL）──
+CASE_IR = "case_ir_v1"
+REGRESSION_TASK = "regression_task_v2"
+CASE_COV = "case_cov_v1"          # 只加键、不升版（向后兼容）
+EVD = "evd_v1"
+CELL_MATRIX = "cell_matrix_v1"
+CASE_GATES = "case_gates_v1"
+EVIDENCE_MANIFEST = "evidence_manifest_v1"
+CASE_VIEW = "case_associate_view_v2"
+
 # ── evidence ──
 EVIDENCE_ENVELOPE = "evidence_envelope_v1"
 EVIDENCE_UVM_PROFILE = "uvm_signoff_v2"
@@ -37,6 +47,14 @@ SCHEMAS = {
     ROUND_MANIFEST: "run_facts",
     TEST_DEPENDENCIES: "run_facts",
     ENGINEERING_METRICS: "run_facts",
+    CASE_IR: "case_view",
+    REGRESSION_TASK: "case_view",
+    CASE_COV: "case_view",
+    EVD: "case_view",
+    CELL_MATRIX: "case_view",
+    CASE_GATES: "case_view",
+    EVIDENCE_MANIFEST: "case_view",
+    CASE_VIEW: "case_view",
     EVIDENCE_ENVELOPE: "evidence",
     EVIDENCE_UVM_PROFILE: "evidence",
     EVIDENCE_SOC_PROFILE: "evidence",

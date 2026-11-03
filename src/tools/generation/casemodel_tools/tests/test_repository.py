@@ -195,9 +195,14 @@ def test_directory_expansion_is_recursive(checker):
 
 
 def test_case_list_is_not_a_model(checker):
-    """fc_real_cases.yaml 是 case 列表而不是模型 —— 被拦下是正确行为。"""
+    """fc_real_cases.yaml 是 case 列表而不是模型 —— 被拦下是正确行为。
+
+    `cases:` 现在是**合法的模型段**（Case IR 三集合契约），所以这条外部列表
+    不再以 `unknown_property` 被拒，而是以"缺必填 dimensions + 不是文档结构"
+    被拒 —— 结论不变：它不是一份模型。
+    """
     issues = checker.check_file(FC_REAL)
-    assert {i.rule for i in issues} >= {"unknown_property", "missing_required"}
+    assert {i.rule for i in issues} >= {"unknown_document_kind", "missing_required"}
 
 
 # ════════════════════════════════════════════════════════════

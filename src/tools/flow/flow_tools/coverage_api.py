@@ -78,6 +78,37 @@ def _case_view_section(root: Path, notes: List[str]) -> Dict[str, Any]:
         return {}
 
 
+def _case_gates_section(root: Path, notes: List[str]) -> Dict[str, Any]:
+    """Case 门禁（blocker / warning / info）—— 有生成物就读，没有就是空。
+
+    **直接读 JSON，不 import workbench**：工具层不能反向依赖工作台
+    （工作台经 `bridge/catalog.py` 调工具，反了就成了环）。
+    """
+    doc = _read_json(root / "coverage" / "gates.json") or {}
+    if not doc:
+        return {}
+    return {
+        "verdict": doc.get("verdict", ""),
+        "counts": doc.get("counts") or {},
+        "blockers": list(doc.get("blockers") or [])[:20],
+        "warnings": list(doc.get("warnings") or [])[:20],
+        "infos": list(doc.get("infos") or [])[:20],
+    }
+
+
+def _summary_line(coverpoint_rows: List[Dict[str, Any]],
+                  testpoint_rows: List[Dict[str, Any]], measured: bool,
+                  gates: Dict[str, Any]) -> str:
+    """页面顶部一句话摘要（覆盖点 / 测试点 / 实测 / Case Gate）。"""
+    text = f"{len(coverpoint_rows)} 个覆盖点 / {len(testpoint_rows)} 条测试点"
+    text += (f"　·　实测 {sum(1 for r in coverpoint_rows if r['measured'])} 个"
+             if measured else "　·　（还没有实测数据）")
+    if gates.get("verdict"):
+        blockers = (gates.get("counts") or {}).get("blocker", 0)
+        text += f"　·　Case Gate {gates['verdict']}（blocker {blockers}）"
+    return text
+
+
 def run_fcov(run_dir: str = "") -> Dict[str, Any]:
     """一次运行 → **功能覆盖率**三张表（覆盖点 / 测试点 / 资产）。
 
@@ -281,6 +312,7 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
 
     tp_evidence = _tp_evidence_section(root, notes)
     case_view = _case_view_section(root, notes)
+    case_gates = _case_gates_section(root, notes)
 
     return {
         "run_id": root.name,
@@ -289,6 +321,7 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
         "testpoints": testpoint_rows,
         "tp_evidence": tp_evidence,
         "case_view": case_view,
+        "case_gates": case_gates,
         "batches": batches,
         "traceability": trace,
         "assets": assets,
@@ -305,7 +338,6 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
         },
         "source": points.get("source", "") or ("casemodel" if points else ""),
         "notes": list(dict.fromkeys(notes)),
-        "summary": (f"{len(coverpoint_rows)} 个覆盖点 / {len(testpoint_rows)} 条测试点"
-                    + (f"　·　实测 {sum(1 for r in coverpoint_rows if r['measured'])} 个"
-                       if measured else "　·　（还没有实测数据）")),
+        "summary": _summary_line(coverpoint_rows, testpoint_rows,
+                                 bool(measured), case_gates),
     }

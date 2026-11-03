@@ -16,6 +16,20 @@ source_map.json                    ← 双向出处 + xlsx/casemodel 双哈希�
 **职责分层**：xlsx 决定"该测什么"，casemodel 决定"怎么测"。
 不让 xlsx 直接驱动执行——表里没有激励字段、约束语义和信号归属，硬解析等于猜。
 
+## `case_ir`（CCAT / CASE 身份层）
+
+案例模型的 `cases:` 段（人声明）或按结构合成（`source=synthesized`）→
+`CaseDoc`（分类树 + 用例 + `test/维度 → case_id` 反查）。
+
+- **TST / EVD 不是实体**：id 由 `test + seed` 派生（`tst_id_of` / `evd_id_of`），一处生成；
+- 生成期注入：`verify` 把 `case_id/tst_id` 写进 TP IR，回归目录写进
+  `task_meta.json`（`regression_task_v2`），证据聚合写 `evd_id/cell_ids`；
+- 校验：`validate_case_doc()`（ID 唯一、引用存在、CASE 落得到执行实例）。
+
+配套：`coverage_tools/cell_matrix.py`（`CELL = CG × P`，四色状态）、
+`coverage_tools/evd.py`、`case_associate_view/gates.py`（blocker/warning/info）。
+设计与落地状态见 `docs/design/architecture_transformation_plan.md`。
+
 ## `aivm_ir`（ontology + M1 计划编译器）
 
 - `xlsx_loader` / `xlsx_writer`：表 ↔ `Ontology` 往返；

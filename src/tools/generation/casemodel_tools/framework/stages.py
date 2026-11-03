@@ -26,6 +26,26 @@ def stage_for(priority: str) -> str:
     return STAGE_BY_PRIORITY.get(priority_rank(priority), DEFAULT_STAGE)
 
 
+def bind_case_identity(ctx: PipelineContext, *, test: str,
+                       dimension: str) -> Tuple[str, str]:
+    """(case_id, tst_id) —— **身份在生成期注入**，不做事后反推。
+
+    Case IR 的来源：模型 `cases:` 段（人声明）> 按维度合成（结构兜底）。
+    拿不到就返回空串 —— 门禁会报 `CASE_MISSING`，而不是编一个默认用例。
+    """
+    try:
+        from src.tools.humanview.case_ir import project_from_casemodel, tst_id_of
+    except Exception:                          # noqa: BLE001 身份层不可用不挡生成
+        return "", ""
+
+    doc = ctx.take("case_doc")
+    if doc is None:
+        doc = project_from_casemodel(ctx.model, module=ctx.module_name or "")
+        ctx.put("case_doc", doc)
+    case_id = doc.resolve(test=test, dimension=dimension) if not doc.empty else ""
+    return case_id, (tst_id_of(test) if test else "")
+
+
 def priority_of(themes: List[Any]) -> str:
     """一组专题里**最高**的优先级（P0 最优先）。没有专题 → P3。"""
     ranked = [t for t in themes if t.priority]
@@ -239,11 +259,14 @@ class ExecuteStage(Stage):
             covering = [t for t in ctx.model.themes
                         if any(d.key == tp.dimension for d in (t.dims or []))]
 
+            test_name = attribute_test_name(env_name, dim_ref, tp.value, value_int)
             tp.execution = Execution(
-                test=attribute_test_name(env_name, dim_ref, tp.value, value_int),
+                test=test_name,
                 stage=stage_for(tp.priority),
                 seeds=theme_seeds(covering),
             )
+            tp.case_id, tp.tst_id = bind_case_identity(
+                ctx, test=test_name, dimension=dim_ref)
             rule: Dict[str, str] = {
                 "pass": "UVM_ERROR=0 and mismatched=0",
                 "evidence": (f"bin {tp.coverpoint}.{tp.bin}" if tp.bin else ""),

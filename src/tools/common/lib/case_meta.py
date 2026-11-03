@@ -36,7 +36,9 @@ from typing import Any, Dict, Iterable, List
 
 #: 每个用例目录里的身份文件（回归目录生成时写）。
 TASK_META_NAME = "task_meta.json"
-TASK_META_SCHEMA = "regression_task_v1"
+#: v2 只**加键**（`case_id/tst_id/cell_ids`）：v1 的读端不受影响，缺键即 legacy。
+#: 见 `src/core/contracts/versions.py::REGRESSION_TASK`。
+TASK_META_SCHEMA = "regression_task_v2"
 
 #: 运行根下的波形索引（回归收尾时写）。
 WAVE_MANIFEST_DIR = "waves"
@@ -53,6 +55,10 @@ _UVM_TEST_RE = re.compile(r"\+UVM_TESTNAME\s*[= ]\s*([^\s;'\"]+)")
 #: `[SCB_DUT] total=40 matched=40 mismatched=0`（env_cov.sv.j2 的收口行）。
 _SCB_RE = re.compile(
     r"\[SCB_DUT\]\s+total=(\d+)\s+matched=(\d+)\s+mismatched=(\d+)")
+#: `[SCB <id>] total=… matched=… mismatched=…` —— **单条 scoreboard** 的收口行。
+#: 与 `[SCB_DUT]`（env 聚合行）区分：`\s+` 后面必须是 id，`SCB_DUT` 不会被它匹配。
+_SCB_ID_RE = re.compile(
+    r"\[SCB\s+([^\]\s]+)\]\s+total=(\d+)\s+matched=(\d+)\s+mismatched=(\d+)")
 #: `规则 <name> 违规 <n> 次`（DUT 检查规则）。
 _DUT_RULE_RE = re.compile(r"规则\s+(\S+)\s+违规\s+(\d+)\s*次")
 _WAVE_LOG_RE = re.compile(r"WAVE_PATH\s*=\s*(.+)")
@@ -144,6 +150,85 @@ def _stage_of(test_dir: Path) -> str:
     return ""
 
 
+CASE_IR_NAME = "case_ir.json"
+CASE_IR_SCHEMA = "case_ir_v1"
+
+
+CASE_GROUP_MAP_NAME = "case_group_map.json"
+CASE_CHECKER_MAP_NAME = "case_checker_map.json"
+
+
+def write_case_ir(cov_dir: str | Path, case_ir: Dict[str, Any],
+                  case_maps: Dict[str, Any] = None) -> Dict[str, Any]:
+    """落 `coverage/case_ir.json`（身份来源）+ 两份派生索引。空文档**不写**。
+
+    返回 `{path, cases, categories, declared, synthesized, group_map,
+    checker_map}`；没写盘时 `path=""`。
+    """
+    empty = {"path": "", "cases": 0, "categories": 0, "declared": 0,
+             "synthesized": 0, "group_map": "", "checker_map": ""}
+    if not isinstance(case_ir, dict) or not case_ir.get("cases"):
+        return empty
+    d = Path(cov_dir)
+    out = d / CASE_IR_NAME
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(case_ir, ensure_ascii=False, indent=2),
+                       encoding="utf-8", newline="\n")
+    except OSError:
+        return empty
+    maps = case_maps or {}
+    written = {}
+    for key, name in (("group_map", CASE_GROUP_MAP_NAME),
+                      ("checker_map", CASE_CHECKER_MAP_NAME)):
+        doc = maps.get(key)
+        if not isinstance(doc, dict) or not doc:
+            continue
+        try:
+            (d / name).write_text(
+                json.dumps(doc, ensure_ascii=False, indent=2),
+                encoding="utf-8", newline="\n")
+            written[key] = str(d / name)
+        except OSError:
+            pass
+    counts = case_ir.get("counts") or {}
+    return {"path": str(out), "cases": int(counts.get("cases") or 0),
+            "categories": int(counts.get("categories") or 0),
+            "declared": int(counts.get("declared") or 0),
+            "synthesized": int(counts.get("synthesized") or 0),
+            "groups": int(counts.get("groups") or 0),
+            "sva": int(counts.get("sva") or 0),
+            "scb": int(counts.get("scb") or 0),
+            "group_map": written.get("group_map", ""),
+            "checker_map": written.get("checker_map", "")}
+
+
+def _str_list(value: Any) -> List[str]:
+    return [str(v) for v in value if str(v)] if isinstance(value, list) else []
+
+
+def _identity_fields(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """v2 身份键（`case_id/case_ids/tst_id/cell_ids/legacy`）。
+
+    **缺了就是 legacy**：v1 目录 / 手工摆放的用例没有 CASE 身份，标出来让
+    视图与门禁能区分，而不是编一个看起来对的默认值。
+    """
+    case_id = str(raw.get("case_id") or "")
+    case_ids = _str_list(raw.get("case_ids")) or ([case_id] if case_id else [])
+    return {
+        "case_id": case_id,
+        "case_ids": case_ids,
+        "tst_id": str(raw.get("tst_id") or ""),
+        "cell_ids": _str_list(raw.get("cell_ids")),
+        # 三集合指纹（v2 追加）：group/sva/scb + 契约哈希
+        "group_ids": _str_list(raw.get("group_ids")),
+        "sva_ids": _str_list(raw.get("sva_ids")),
+        "scb_ids": _str_list(raw.get("scb_ids")),
+        "case_ir_sha": str(raw.get("case_ir_sha") or ""),
+        "legacy": bool(raw) and not case_id,
+    }
+
+
 def read_task_meta(test_dir: str | Path) -> Dict[str, Any]:
     """读一条用例的身份；**文件缺失时按同一套规则从现场推导**。
 
@@ -184,6 +269,8 @@ def read_task_meta(test_dir: str | Path) -> Dict[str, Any]:
         "stage": str(raw.get("stage") or _stage_of(d) or ""),
         "tags": list(raw.get("tags") or []) if isinstance(raw.get("tags"), list) else [],
         "tp_ids": tp_ids,
+        # ── v2 身份键：缺了就是 legacy（v1 目录 / 手工摆放），不编默认值 ──
+        **_identity_fields(raw),
         "desc": str(raw.get("desc") or ""),
         "dir": str(d),
         "source": "meta" if raw else "derived",
@@ -261,6 +348,12 @@ def parse_case_log(text: str) -> Dict[str, Any]:
     for m in _SCB_RE.finditer(text):
         scb = {"total": int(m.group(1)), "matched": int(m.group(2)),
                "mismatched": int(m.group(3))}
+    # 单条 scoreboard 的收口行（`[SCB <id>]`）—— 有就用它做逐 SB 证据
+    scb_by_id: Dict[str, Dict[str, int]] = {}
+    for m in _SCB_ID_RE.finditer(text):
+        scb_by_id[m.group(1)] = {"total": int(m.group(2)),
+                                 "matched": int(m.group(3)),
+                                 "mismatched": int(m.group(4))}
 
     summary = [int(x) for x in re.findall(r"UVM_ERROR\s*:\s*(\d+)", text)]
     if summary:
@@ -290,6 +383,7 @@ def parse_case_log(text: str) -> Dict[str, Any]:
         "uvm_errors": int(uvm_errors),
         "uvm_fatal": int(max(fatal)) if fatal else 0,
         "scb": scb,
+        "scb_by_id": scb_by_id,
         "assertions": {"rules": len(rules), "fired": sum(rules.values()),
                        "by_rule": rules},
         "timing": timing,

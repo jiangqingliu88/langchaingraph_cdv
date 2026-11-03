@@ -179,6 +179,17 @@ class TestPoint:
     timing: Optional[Timing] = None
     status_rule: Dict[str, str] = _field(default_factory=dict)
     notes: List[str] = _field(default_factory=list)
+    #: **逻辑用例身份**（Case IR）。空串 = 模型没声明 cases 且合成也没绑上 ——
+    #: 序列化时不写这个键，让"没有身份"和"身份为空串"在 IR 里可区分。
+    case_id: str = ""
+    #: 可执行实例**模板**身份（`TST-<test>`）；带种子的实例身份在 task_meta 里。
+    tst_id: str = ""
+    #: **三集合契约引用**（见 `docs/design/architecture_transformation_plan.md`
+    #: 与 `arch.md`）：这条 TP 属于哪些功能组、受哪些断言/检查保护。
+    #: 由 `plan` 在生成期从 dimension 与 assertion bindings 聚合，不手写。
+    groups: List[str] = _field(default_factory=list)
+    sva: List[str] = _field(default_factory=list)
+    scb: List[str] = _field(default_factory=list)
 
     @property
     def observe_only(self) -> bool:
@@ -206,6 +217,13 @@ class TestPoint:
             # 没有时序就不写这个键 —— 序列化是 manifest 哈希的一部分，
             # 空 dict 会让"没声明"和"声明了空窗口"看起来一样。
             **({"timing": self.timing.to_dict()} if self.timing else {}),
+            # 身份同理：没有就不写，别让空串混进哈希
+            **({"case_id": self.case_id} if self.case_id else {}),
+            **({"tst_id": self.tst_id} if self.tst_id else {}),
+            # 三集合引用：空就不写（"没声明"与"声明了空集合"要能分开）
+            **({"groups": list(self.groups)} if self.groups else {}),
+            **({"sva": list(self.sva)} if self.sva else {}),
+            **({"scb": list(self.scb)} if self.scb else {}),
             "status_rule": dict(self.status_rule),
             "observe_only": self.observe_only,
             "notes": list(self.notes),

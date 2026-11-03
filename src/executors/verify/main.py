@@ -479,6 +479,18 @@ class VerifyExecutor(BaseExecutor):
                 (cov_dir / "methodology.json").write_text(
                     json.dumps(payload["methodology"], ensure_ascii=False, indent=2),
                     encoding="utf-8")
+            # Case IR：CCAT/CASE 身份随 TP 一起落盘（`coverage/case_ir.json`）。
+            # 它是**身份来源**，下游（回归任务 / 证据聚合 / 视图）只读不改。
+            from src.tools.common.lib.case_meta import write_case_ir
+
+            _ci = write_case_ir(cov_dir, payload.get("case_ir") or {},
+                                payload.get("case_maps") or {})
+            if _ci.get("path"):
+                logger.info(f"Case IR：{_ci['cases']} 条用例 / "
+                            f"{_ci['categories']} 个分类（声明 {_ci['declared']}、"
+                            f"合成 {_ci['synthesized']}）· 三集合 "
+                            f"group={_ci['groups']} sva={_ci['sva']} scb={_ci['scb']}"
+                            f" → coverage/case_ir.json")
         except Exception as e:                       # noqa: BLE001 旁路，别拦主流程
             logger.warning(f"测试点 IR 落盘失败: {e}")
             return []
@@ -490,9 +502,14 @@ class VerifyExecutor(BaseExecutor):
         files = [str(output_dir / "coverage" / "testpoints.yaml"),
                  str(output_dir / "coverage" / "testpoints.json"),
                  str(output_dir / "coverage" / "methodology.json")]
+        for _name in ("case_ir.json", "case_group_map.json",
+                      "case_checker_map.json"):
+            if (output_dir / "coverage" / _name).is_file():
+                files.append(str(output_dir / "coverage" / _name))
         if (output_dir / "coverage" / "stimulus_plan.json").is_file():
             files.append(str(output_dir / "coverage" / "stimulus_plan.json"))
         return files
+
 
     def _write_constraint_yaml(self, output_dir: Path) -> None:
         """`inputs/yaml/uvm/constraint.yaml` —— case 模型 → 约束模型（`env/cons/*` 的输入）。
@@ -1238,34 +1255,17 @@ def _find_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
 
 
 def _load_case_model_doc(text: str) -> Dict[str, Any]:
-    """casemodel 文本 → dict（解析失败/不是映射 → 空 dict）。
+    """casemodel 文本 → dict。实现在 `casemodel_tools.coverage_render`。"""
+    from src.tools.generation.casemodel_tools.coverage import parse_model_text
 
-    读不动不算错：覆盖率接口照旧能出，只是断言规则那半没有信号可用。
-    """
-    import yaml as _yaml
-
-    try:
-        doc = _yaml.safe_load(text)
-    except Exception:                              # noqa: BLE001 旁路
-        return {}
-    return doc if isinstance(doc, dict) else {}
+    return parse_model_text(text)
 
 
 def _assertion_signals(decls: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """`assertions[].signals` → `[{name, width}]`（覆盖率接口要额外引的信号）。
+    """`assertions[].signals` → 覆盖率接口要额外引的信号（实现同一处）。"""
+    from src.tools.generation.casemodel_tools.coverage import assertion_signals
 
-    已经出现在采样覆盖点里的名字由 `coverage_render._extra_signals` 去重 ——
-    这里只管把模型声明过的信号**全**交代出去，不在这边判重。
-    """
-    out: List[Dict[str, Any]] = []
-    for decl in (decls.get("assertions") or []):
-        if not isinstance(decl, dict):
-            continue
-        for sig in (decl.get("signals") or []):
-            if isinstance(sig, dict) and sig.get("name"):
-                out.append({"name": sig.get("name"),
-                            "width": sig.get("width") or 1})
-    return out
+    return assertion_signals(decls)
 
 
 def _bitmap_patch(output_dir: Path, tp_payload: Dict[str, Any],

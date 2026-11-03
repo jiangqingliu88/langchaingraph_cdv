@@ -958,45 +958,19 @@ def _attach_code_plan(coverage: dict, result: dict, od: Path) -> None:
         print(f"[coverage] 计划代码覆盖率合并跳过：{e}")
 
 
-def _attach_tp_evidence(od: Path, result: dict) -> None:
-    """TP Cov 证据视图：**四层证据按功能契约汇聚到一处**（旁路，不拦主流程）。
+def _attach_evidence(od: Path, result: dict, max_cases: int) -> None:
+    """跑证据流水线并把结果并进 `result`（编排在 `evidence_pipeline` 里）。
 
-    功能组 100% 只回答"场景发生过"；一个契约是否验证完成，还要时序断言、
-    SCB 数据比对、PATH 组路径覆盖。三处数据散在不同文件里，签核的人对不上账，
-    评审问"每组都 100%，路径怎么证明"时也没有一处能直接指。这里统一成
-    `coverage/tp_cov_evidence.json`（只读落盘产物，不重跑 vcover/仿真）。
+    旁路：失败只记一句，不拦"度量"这条主流程。
     """
     try:
-        from src.tools.checking.coverage_tools.tp_evidence import write_tp_evidence
+        from src.tools.checking.coverage_tools.evidence_pipeline import (
+            attach_to_result)
 
-        ev = write_tp_evidence(od)
-        result["tp_cov_evidence"] = {
-            "path": str(od / "coverage" / "tp_cov_evidence.json"),
-            "counts": ev.get("counts") or {},
-            "evidence_layers": ev.get("evidence_layers") or {},
-            "path_backend": ((ev.get("review") or {}).get("path_backend") or ""),
-        }
-    except Exception as e:                       # noqa: BLE001 旁路证据
-        print(f"[coverage] TP Cov 证据视图生成失败: {e}")
+        attach_to_result(od, result, max_cases=max_cases)
+    except Exception as e:                          # noqa: BLE001 旁路证据
+        print(f"[coverage] 证据流水线失败（度量结果不受影响）: {e}")
 
-
-def _attach_case_view(od: Path, result: dict) -> None:
-    """Case 关联视图：四张人类可读表（用例/契约/矩阵/缺口）落盘。
-
-    与 `tp_cov_evidence.json` 不同：那份是逐 TP 的机器证据，这份是**评审看的
-    四张表**（Markdown / HTML 可直接贴进评审材料）。只读落盘产物，不重跑仿真。
-    """
-    try:
-        from src.tools.humanview.case_associate_view.api import write_case_view
-
-        cv = write_case_view(od)
-        result["case_view"] = {
-            "path": str(od / "coverage" / "case_view.json"),
-            "counts": cv.get("counts") or {},
-            "reports": cv.get("_reports") or {},
-        }
-    except Exception as e:                       # noqa: BLE001 旁路证据
-        print(f"[coverage] Case 证据视图生成失败: {e}")
 
 
 def run(output_dir: str, top_module: str = "", seed: int = 0,
@@ -1131,16 +1105,9 @@ def run(output_dir: str, top_module: str = "", seed: int = 0,
     # **逐用例取证先跑**：每条用例自己的 ucdb → 它名下 TP 的 proof obligation。
     # 合并库只能回答"某条用例打到过"，逐用例才能回答"这条用例证明了这个点"，
     # 而且能接上同目录的波形。
-    case_index = _case_cov_matrix(od, max_cases=case_cov_sample)
-    from src.tools.checking.coverage_tools.case_cov import case_coverage_patch
-    result.update(case_coverage_patch(case_index))
-    tp = _tp_matrix(od, result.get("coverage") or {}, case_index=case_index)
-    if tp:
-        result["tp_matrix"] = tp
-        _write_tp_matrix(od, tp)
-
-    _attach_tp_evidence(od, result)
-    _attach_case_view(od, result)
+    # 派生物统一走 `evidence_pipeline`（case_cov → tp_matrix → tp_evidence →
+    # evd → cell_matrix → case_view → gates）。每步可单独重跑，产物带 manifest。
+    _attach_evidence(od, result, case_cov_sample)
 
     # ── 语义自述：把"绿但空"的中间态写成结构化字段 ──
     #
@@ -1338,6 +1305,18 @@ def _tp_row(tp: dict, hits: dict, signoff: dict, counts: dict) -> dict:
         "signoff_reasons": _s.get("reasons") or [],
         # 时序（P2）：None = 没声明/没检查，不是"通过"。
         "timing_ok": _s.get("timing_ok"),
+        **_tp_contract_fields(tp, _s),
+    }
+
+
+def _tp_contract_fields(tp: dict, summary: dict) -> dict:
+    """三集合引用（arch.md）：这条 TP 属于哪些组 / 受哪些 checker 保护。"""
+    return {
+        "case_id": tp.get("case_id", "") or summary.get("case_id", ""),
+        "groups": list(tp.get("groups") or []),
+        "sva": list(tp.get("sva") or []),
+        "scb": list(tp.get("scb") or []),
+        "case_status": summary.get("case_status", ""),
     }
 
 

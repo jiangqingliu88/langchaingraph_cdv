@@ -410,6 +410,43 @@ def coverage_case_evidence(output_dir, fmt, out_prefix):
     console.print(rendered)
 
 
+@coverage.command("case-gate")
+@click.option("--output", "-o", "output_dir", required=True,
+              type=click.Path(file_okay=False), help="运行目录")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+@click.option("--strict", is_flag=True,
+              help="有 blocker 时以非零码退出（CI 用）")
+def coverage_case_gate(output_dir, json_output, strict):
+    """Case 门禁：blocker / warning / info（读 case_view + cell_matrix + evd）
+
+    \b
+    示例:
+      vagent coverage case-gate -o output_xxx
+      vagent coverage case-gate -o output_xxx --strict   # CI 里当硬门
+    """
+    from src.tools.humanview.case_associate_view.gates import write_gates
+
+    try:
+        data = write_gates(Path(output_dir))
+    except Exception as exc:                        # noqa: BLE001
+        click.echo(f"Case 门禁执行失败: {exc}", err=True)
+        raise SystemExit(2)
+    if json_output:
+        click.echo(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+    else:
+        counts = data.get("counts") or {}
+        console.print(f"[bold]Case Gate[/bold]  {data.get('verdict')}  "
+                      f"blocker={counts.get('blocker', 0)} "
+                      f"warning={counts.get('warning', 0)} "
+                      f"info={counts.get('info', 0)}")
+        for level in ("blockers", "warnings", "infos"):
+            for item in (data.get(level) or [])[:20]:
+                console.print(f"  [{level[:-1]}] {item.get('rule')} · "
+                              f"{item.get('target')} · {item.get('message')}")
+    if strict and (data.get("counts") or {}).get("blocker"):
+        raise SystemExit(1)
+
+
 @cli.group()
 def wave():
     """波形索引（用例 ↔ 测试点 ↔ 波形）"""

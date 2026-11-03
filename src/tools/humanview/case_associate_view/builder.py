@@ -12,13 +12,16 @@
 """
 from __future__ import annotations
 
+import hashlib
+import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.tools.checking.coverage_tools.tp_evidence import (
     LAYERS, build_tp_evidence, _case_records)
 
-SCHEMA = "case_associate_view_v1"
+SCHEMA = "case_associate_view_v2"
 
 #: 层名（与 tp_evidence 同一份顺序）
 _LAYER_LABEL = {key: name for key, name, *_ in LAYERS}
@@ -73,7 +76,9 @@ def _case_sva(rec: Dict[str, Any]) -> Dict[str, str]:
 
 
 def _case_scb(rec: Dict[str, Any]) -> Dict[str, str]:
-    scb = rec.get("scb") or {}
+    # `scb_summary` 是 [SCB_DUT] 汇总；旧记录把它放在 `scb`（dict）里
+    scb = rec.get("scb_summary") or (
+        rec.get("scb") if isinstance(rec.get("scb"), dict) else {}) or {}
     matched, mismatched = scb.get("matched"), scb.get("mismatched")
     if matched is None:
         return {"status": "yellow", "detail": "没有 SCB 比对结论"}
@@ -122,6 +127,20 @@ def _case_rows(tp_ev: Dict[str, Any],
         rows.append({
             "name": str(rec.get("test") or task),
             "task": task,
+            # ── 身份（v2）：CASE/TST 来自生成期注入，legacy 目录如实标注 ──
+            "case_id": str(rec.get("case_id") or ""),
+            "tst_id": str(rec.get("tst_id") or ""),
+            "evd_id": str(rec.get("evd_id") or ""),
+            "cell_ids": list(rec.get("cell_ids") or []),
+            "legacy": bool(rec.get("legacy")),
+            # ── 三集合证据（键名与"证据层状态"的 sva 区分开，别撞）──
+            "case_status": str(rec.get("case_status") or ""),
+            "groups_evidence": [g for g in rec.get("groups") or []
+                                if isinstance(g, dict)],
+            "sva_items": [s for s in rec.get("sva") or []
+                          if isinstance(s, dict)],
+            "scb_items": [s for s in rec.get("scb") or []
+                          if isinstance(s, dict)],
             "feats": feats,
             "desc": str(rec.get("test_name") or task),
             "coverage": coverage, "sva": sva,
@@ -244,28 +263,143 @@ def _gaps(tp_ev: Dict[str, Any], case_tp: Dict[str, Any]) -> List[Dict[str, Any]
     return uniq[:200]
 
 
+def _read_json(path: Path) -> Dict[str, Any]:
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _ssot_hash(od: Path) -> str:
+    """SSOT 指纹 = TP IR + Case IR 的 sha（模型变了，指纹就变）。"""
+    digest = hashlib.sha256()
+    for rel in ("coverage/testpoints.yaml", "coverage/case_ir.json"):
+        try:
+            digest.update((od / rel).read_bytes())
+        except OSError:
+            digest.update(rel.encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _case_tree(case_ir: Dict[str, Any]) -> Dict[str, Any]:
+    """视图5：Case 分类树（CCAT → CASE 数 / TST 数）。"""
+    cats = [c for c in case_ir.get("categories") or [] if isinstance(c, dict)]
+    cases = [c for c in case_ir.get("cases") or [] if isinstance(c, dict)]
+    by_cat: Dict[str, List[Dict[str, Any]]] = {}
+    for case in cases:
+        for cid in case.get("categories") or []:
+            by_cat.setdefault(str(cid), []).append(case)
+    rows = []
+    for cat in cats:
+        cid = str(cat.get("id") or "")
+        bound = by_cat.get(cid) or []
+        rows.append({
+            "id": cid,
+            "name": str(cat.get("name") or cid),
+            "parent": str(cat.get("parent") or ""),
+            "cases": len(bound),
+            "tests": sum(len(c.get("tests") or []) for c in bound),
+            "source": str(case_ir.get("source") or ""),
+        })
+    return {"source": str(case_ir.get("source") or ""),
+            "rows": rows, "counts": {"categories": len(rows), "cases": len(cases)}}
+
+
+def _case_cell(case_ir: Dict[str, Any], cells: Dict[str, Any],
+               cases: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """视图6：Case × CELL —— 哪些格子有用例、哪些只有 checker、哪些红。"""
+    cell_rows = {str(c.get("cell_id")): c for c in cells.get("cells") or []
+                 if isinstance(c, dict)}
+    claimed: Dict[str, set] = {}
+    for case in case_ir.get("cases") or []:
+        cid = str(case.get("id") or "")
+        for cell_id in case.get("cells") or []:
+            claimed.setdefault(str(cell_id), set()).add(cid)
+    seen: Dict[str, set] = {}
+    for row in cases:
+        for cell_id in row.get("cell_ids") or []:
+            seen.setdefault(str(cell_id), set()).add(str(row.get("case_id") or ""))
+    rows = []
+    for cell_id, cell in sorted(cell_rows.items()):
+        rows.append({
+            "cell_id": cell_id,
+            "cg": cell.get("cg", ""), "p": cell.get("p", ""),
+            "color": cell.get("color", ""),
+            "tp_count": cell.get("tp_count", 0),
+            "declared_cases": sorted(claimed.get(cell_id) or []),
+            "observed_cases": sorted(c for c in (seen.get(cell_id) or set()) if c),
+        })
+    orphans = sorted(set(claimed) - set(cell_rows))
+    return {"rows": rows,
+            "counts": {"cells": len(rows),
+                       "without_case": sum(1 for r in rows
+                                           if not r["declared_cases"]),
+                       "red": sum(1 for r in rows if r["color"] == "red")},
+            "declared_but_missing": orphans}
+
+
+def _case_runs(evd: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """视图7：执行证据（case × run × seed × cfg × 结论）。"""
+    rows = []
+    for item in evd.get("evd") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append({
+            "evd_id": item.get("evd_id", ""),
+            "case_id": item.get("case_id", ""),
+            "tst_id": item.get("tst_id", ""),
+            "test": item.get("test", ""),
+            "seed": item.get("seed"),
+            "stage": item.get("stage", ""),
+            "cells": item.get("cells") or [],
+            "wave": item.get("wave", ""),
+            "legacy": bool(item.get("legacy")),
+        })
+    return rows
+
+
 def build_case_view(run_dir: str | Path) -> Dict[str, Any]:
-    """一次运行 → `case_associate_view_v1`（四张人读视图的数据）。"""
+    """一次运行 → `case_associate_view_v2`（七张人读视图的数据）。
+
+    v1 的四张表**字段不变**；v2 增三张（分类树 / Case×CELL / 执行证据）与
+    一份元数据（SSOT 指纹、生成时间、只读标记）。
+    """
     od = Path(run_dir)
     tp_ev = build_tp_evidence(od)
     records = _case_records(od)
-    import json as _json
-    case_tp = {}
-    try:
-        case_tp = _json.loads((od / "coverage" / "case_tp.json").read_text(
-            encoding="utf-8", errors="replace"))
-    except (OSError, ValueError):
-        case_tp = {}
+    case_tp = _read_json(od / "coverage" / "case_tp.json")
+    case_ir = _read_json(od / "coverage" / "case_ir.json")
+    cells = _read_json(od / "coverage" / "cell_matrix.json")
+    evd = _read_json(od / "coverage" / "evd.json")
+
     cases = _case_rows(tp_ev, records)
     features = _feature_rows(tp_ev)
     gaps = _gaps(tp_ev, case_tp)
+    ssot = _ssot_hash(od)
     return {
         "schema": SCHEMA,
         "run": od.name,
+        # ── 元数据：每份生成物都要能回答"这是哪个模型版本出的" ──
+        "meta": {
+            "ver_id": f"VER-{ssot[:12]}",
+            "source_ssot": "coverage/testpoints.yaml + coverage/case_ir.json",
+            "ssot_sha256": ssot,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "generator": "src.tools.humanview.case_associate_view",
+            "confidence": "measured",
+            "readonly": True,
+        },
         "counts": {"cases": len(cases), "features": len(features),
-                   "gaps": len(gaps)},
+                   "gaps": len(gaps),
+                   "cells": len(cells.get("cells") or []),
+                   "evd": len(evd.get("evd") or [])},
         "cases": cases,
         "features": features,
         "matrix": _matrix(tp_ev),
         "gaps": gaps,
+        # ── v2 新增 ──
+        "case_tree": _case_tree(case_ir),
+        "case_cell": _case_cell(case_ir, cells, cases),
+        "case_runs": _case_runs(evd),
     }

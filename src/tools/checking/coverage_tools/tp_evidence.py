@@ -125,7 +125,12 @@ def _case_facts(tp_id: str, tasks: List[str],
             "task": task, "test": rec.get("test"), "seed": rec.get("seed"),
             "stage": rec.get("stage"), "wave": rec.get("wave", ""),
             "entry": entry,
-            "scb": rec.get("scb") or {},
+            # `case_cov` 里 `scb` 是三集合证据、`scb_summary` 才是 [SCB_DUT] 汇总
+            "scb": rec.get("scb_summary") or
+                   (rec.get("scb") if isinstance(rec.get("scb"), dict) else {}),
+            "groups": rec.get("groups") or [],
+            "sva": rec.get("sva") or [],
+            "case_status": rec.get("case_status", ""),
             "assertions": rec.get("assertions") or {},
             "timing_ok": rec.get("timing_ok"),
             "uvm_errors": rec.get("uvm_errors", 0),

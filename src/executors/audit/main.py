@@ -170,6 +170,152 @@ def _apply_case_coverage_gate(output_dir: Path, tp: Dict[str, Any],
     return cc
 
 
+def _apply_case_view_gates(output_dir: Path, gates: Dict[str, Any],
+                           caveat) -> Dict[str, Any]:
+    """Case View 门禁 → `gates["case_view"]` + `CASE_GATE_BLOCKED`。
+
+    三态：没有 `gates.json` = 这一轮没生成（老 run），判不了就不挂 caveat；
+    `verdict=PASS` = 无 blocker；`verdict=BLOCKED` = 有 blocker，逐条列前几条。
+    """
+    import json
+
+    path = output_dir / "coverage" / "gates.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        gates["case_view"] = None
+        return {"available": False}
+    if not isinstance(data, dict) or not data.get("schema"):
+        gates["case_view"] = None
+        return {"available": False}
+    # **签核读数以 cell_matrix 为主**（arch.md §9）：gates 是规则结论，
+    # cell 是"哪个组×通路绿了"的主索引；两者都进 report。
+    try:
+        cell = json.loads((output_dir / "coverage" / "cell_matrix.json")
+                          .read_text(encoding="utf-8", errors="replace"))
+        gates["cell_matrix"] = (cell or {}).get("counts") or {}
+    except (OSError, ValueError):
+        gates["cell_matrix"] = None
+    blockers = data.get("blockers") or []
+    gates["case_view"] = not blockers
+    if blockers:
+        sample = "；".join(f"{b.get('rule')}@{b.get('target')}"
+                          for b in blockers[:5])
+        caveat("CASE_GATE_BLOCKED",
+               f"Case 门禁有 {len(blockers)} 条 blocker（{sample}）"
+               f"—— 逐条见 coverage/gates.json")
+    return {"available": True, "verdict": data.get("verdict", ""),
+            "counts": data.get("counts") or {}}
+
+
+#: 三集合证据 → caveat 的判定表（arch.md §9）。顺序即输出顺序。
+_CASE_CONTRACT_RULES = (
+    ("CASE_GROUP_PARTIAL", "组证据不完整"),
+    ("CASE_SVA_VACUOUS", "SVA 空转（cover_property 未命中）"),
+    ("CASE_SCB_NOT_EXECUTED", "SCB 未执行"),
+    ("CASE_PATH_PENDING_BACKEND", "PATH 后端未接"),
+    ("CASE_IR_EVIDENCE_MISMATCH", "契约与证据不一致"),
+)
+
+
+def _case_cov_records(output_dir: Path) -> list:
+    import json
+
+    out = []
+    for path in sorted((output_dir / "coverage" / "case_cov").rglob("*.json")):
+        if path.name.endswith(".cache"):
+            continue
+        try:
+            rec = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(rec, dict):
+            out.append(rec)
+    return out
+
+
+def _case_group_issues(groups: list) -> set:
+    """组证据层面的问题码。"""
+    codes = set()
+    if any(str(g.get("result")) == "PARTIAL" for g in groups):
+        codes.add("CASE_GROUP_PARTIAL")
+    if any(str((g.get("path") or {}).get("status")) == "PENDING_BACKEND"
+           for g in groups):
+        codes.add("CASE_PATH_PENDING_BACKEND")
+    return codes
+
+
+def _case_checker_issues(rec: Dict[str, Any]) -> set:
+    """SVA 空转 / SCB 未执行。"""
+    codes = set()
+    if any(s.get("cover_property_hit") == 0 for s in rec.get("sva") or []
+           if isinstance(s, dict)):
+        codes.add("CASE_SVA_VACUOUS")
+    if any(int(s.get("exec") or 0) == 0 for s in rec.get("scb") or []
+           if isinstance(s, dict)
+           and str(s.get("status")) not in ("NOT_APPLICABLE", "MISSING")):
+        codes.add("CASE_SCB_NOT_EXECUTED")
+    return codes
+
+
+def _case_contract_issues(output_dir: Path) -> Dict[str, list]:
+    """三集合证据 → `{code: [case_id…]}`（只收**有命中**的项）。"""
+    import json
+
+    issues: Dict[str, list] = {code: [] for code, _ in _CASE_CONTRACT_RULES}
+    try:
+        ir = json.loads((output_dir / "coverage" / "case_ir.json")
+                        .read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        ir = {}
+    contract = {str(c.get("id")): c for c in (ir.get("cases") or [])
+                if isinstance(c, dict)}
+    for rec in _case_cov_records(output_dir):
+        cid = str(rec.get("case_id") or rec.get("task") or "")
+        groups = [g for g in rec.get("groups") or [] if isinstance(g, dict)]
+        codes = _case_group_issues(groups) | _case_checker_issues(rec)
+        want = {str(g.get("group")) for g in
+                (contract.get(cid) or {}).get("groups") or []}
+        if want - {str(g.get("group")) for g in groups}:
+            codes.add("CASE_IR_EVIDENCE_MISMATCH")
+        for code in codes:
+            issues[code].append(cid)
+    return issues
+
+
+def _case_msg(ids: list, label: str) -> str:
+    sample = "、".join(sorted(set(ids))[:5])
+    return (f"{len(set(ids))} 条用例{label}（{sample}）"
+            f"—— 逐条见 coverage/case_cov/")
+
+
+def _apply_case_contract_caveats(output_dir: Path, gates: Dict[str, Any],
+                                 caveat) -> Dict[str, Any]:
+    """三集合证据问题 → 每条规则一条 caveat（列前几条用例）。
+
+    **规则码写成字面量**：`EXPECTED_CAVEATS` 的白名单测试按 caveat 调用处的
+    大写字面量扫描源码，走变量的话新码在测试里看不见（会被当成"未登记"）。
+    """
+    issues = _case_contract_issues(output_dir)
+    gates["case_contract"] = {code: len(ids) for code, ids in issues.items()}
+    if issues["CASE_GROUP_PARTIAL"]:
+        caveat("CASE_GROUP_PARTIAL",
+               _case_msg(issues["CASE_GROUP_PARTIAL"], "的组证据不完整"))
+    if issues["CASE_SVA_VACUOUS"]:
+        caveat("CASE_SVA_VACUOUS",
+               _case_msg(issues["CASE_SVA_VACUOUS"], "的 SVA 空转（cover_property 未命中）"))
+    if issues["CASE_SCB_NOT_EXECUTED"]:
+        caveat("CASE_SCB_NOT_EXECUTED",
+               _case_msg(issues["CASE_SCB_NOT_EXECUTED"], "的 SCB 未执行"))
+    if issues["CASE_PATH_PENDING_BACKEND"]:
+        caveat("CASE_PATH_PENDING_BACKEND",
+               _case_msg(issues["CASE_PATH_PENDING_BACKEND"], "的 PATH 后端未接"))
+    if issues["CASE_IR_EVIDENCE_MISMATCH"]:
+        caveat("CASE_IR_EVIDENCE_MISMATCH",
+               _case_msg(issues["CASE_IR_EVIDENCE_MISMATCH"], "的契约与证据不一致"))
+    return gates["case_contract"]
+
+
 def _rel_to_run(path_str: str, output_dir: Path) -> str:
     """绝对路径 → run 内相对路径；不在 run 内就原样返回（不假装可移植）。"""
     if not path_str:
@@ -907,6 +1053,13 @@ class AuditExecutor(BaseExecutor):
         # 上面那些是"合并库里有没有"，这里回答的是签核真正要的那句话：
         # **"有没有一条用例、同一次 seed 证明了这个测试点"**。
         _apply_case_coverage_gate(output_dir, tp, gates, _caveat)
+        # ── Case View 门禁（blocker / warning / info）──
+        #
+        # 规则在 `humanview.case_associate_view.gates`（CI 也直接调它），audit
+        # 只**消费**结论：有 blocker 就挂一条 caveat，并在 gates 里留一个布尔。
+        _apply_case_view_gates(output_dir, gates, _caveat)
+        # ── case 三集合契约（arch.md）：证据层面的 caveat ──
+        _apply_case_contract_caveats(output_dir, gates, _caveat)
         _ingest_drift_caveat(output_dir, _caveat)
 
         # ── 参考模型 / 基线 / 模块策略：签核的"资格条件" ──

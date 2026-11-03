@@ -201,9 +201,15 @@ class TestManifest:
 
 class TestBackwardCompatibility:
     def test_plan_facade_matches_the_pipeline(self):
+        """门面 == 产物包。
+
+        契约变了：身份（case_id/tst_id）与三集合（groups/sva/scb）在
+        `build_bundle` 里注入（行为/PATH TP 也是在那里追加的），所以参照物是
+        `build_bundle` 而不是裸 `MethodologyPipeline().run()` —— 后者是
+        属性域那半段，不含身份层。
+        """
         model = load_models_from_text(FC_TEXT, source="<test>")[0]
-        bundle = MethodologyPipeline().run(model, env_name="fc_env",
-                                           module_name="fc")
+        bundle = plan.build_bundle(model, env_name="fc_env", module_name="fc")
         payload = plan.build_testpoints(model, env_name="fc_env", module_name="fc")
         assert payload == bundle.to_dict()
 

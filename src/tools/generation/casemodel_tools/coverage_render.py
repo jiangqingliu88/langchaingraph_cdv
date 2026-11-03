@@ -7,6 +7,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
+import yaml
+
 from .coverage_model import (
     MAX_BINS_PER_POINT, CoverBin, CoverPoint, CoverageModel, CrossBin, CrossPoint,
     _slug, sv_ident, sv_value,
@@ -532,6 +534,37 @@ def dut_bins(cm: CoverageModel) -> Dict[str, List[Dict[str, Any]]]:
                 for b in cp.bins + cp.illegal_bins]
         if rows:
             out[cp.signal] = rows
+    return out
+
+
+def parse_model_text(text: str) -> Dict[str, Any]:
+    """case 模型文本 → dict（解析失败/不是映射 → 空 dict）。
+
+    读不动不算错：覆盖率接口照旧能出，只是断言规则那半没有信号可用。
+    """
+    if not isinstance(text, str):
+        return {}
+    try:
+        doc = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def assertion_signals(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """`assertions[].signals` → `[{name, width}]`（覆盖率接口要额外引的信号）。
+
+    已经出现在采样覆盖点里的名字由 `_extra_signals` 去重 —— 这里只管把模型
+    声明过的信号**全**交代出去，不在这边判重。
+    """
+    out: List[Dict[str, Any]] = []
+    for decl in (doc.get("assertions") or []):
+        if not isinstance(decl, dict):
+            continue
+        for sig in (decl.get("signals") or []):
+            if isinstance(sig, dict) and sig.get("name"):
+                out.append({"name": sig.get("name"),
+                            "width": sig.get("width") or 1})
     return out
 
 

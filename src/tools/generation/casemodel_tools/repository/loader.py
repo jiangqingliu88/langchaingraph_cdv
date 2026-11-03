@@ -161,6 +161,47 @@ def _parse_cross(raw: Any) -> List[CrossPair]:
 # 断言（可选的 `assertions:` 块）
 # ════════════════════════════════════════════════════════════
 
+def _parse_scoreboards(raw: Any) -> List[Any]:
+    """`scoreboards:` → `Scoreboard` 列表（缺 `id` 的条目丢掉）。
+
+    绑定规则与断言一致：显式 `tp_bindings` 优先，角色只认 primary/supporting；
+    没写绑定就按 `checks` 与 TP 的 checks 求交集（在 plan 里做，这里只存声明）。
+    """
+    from ..domain.model import Scoreboard
+
+    out = []
+    for item in as_list(raw):
+        if not isinstance(item, dict):
+            continue
+        sb_id = str(item.get("id") or item.get("name") or "").strip()
+        if not sb_id:
+            continue
+        bindings: List[Dict[str, str]] = []
+        for raw_binding in as_list(item.get("tp_bindings")):
+            if not isinstance(raw_binding, dict):
+                continue
+            tp_id = str(raw_binding.get("tp_id") or "").strip()
+            if not tp_id:
+                continue
+            role = str(raw_binding.get("role") or "primary").strip().lower()
+            if role not in ("primary", "supporting"):
+                role = "primary"
+            bindings.append({"tp_id": tp_id, "role": role})
+        evidence = str(item.get("evidence") or "auto").strip().lower()
+        if evidence not in ("auto", "aggregate", "log"):
+            evidence = "auto"
+        out.append(Scoreboard(
+            id=sb_id,
+            name=str(item.get("name") or "").strip(),
+            checks=[str(c) for c in as_list(item.get("checks")) if str(c).strip()],
+            tp_bindings=bindings,
+            evidence=evidence,
+            model=str(item.get("model") or "").strip(),
+            description=str(item.get("description") or "").strip(),
+        ))
+    return out
+
+
 def _parse_assertions(raw: Any) -> List[Any]:
     """`assertions:` → `Assertion` 列表。
 
@@ -410,9 +451,13 @@ def model_from_dict(data: Any, source: str = "<dict>") -> CaseModel:
         sampling=(dict(data.get("sampling") or {})
                   if isinstance(data.get("sampling"), dict) else {}),
         assertions=_parse_assertions(data.get("assertions")),
+        scoreboards=_parse_scoreboards(data.get("scoreboards")),
         behavior=_parse_behavior(data.get("behavior")),
         path_groups=_parse_path_groups(data.get("path_groups")),
         config_space=_parse_config_space(data.get("config_space")),
+        # Case IR 段原样承载（语义校验在 humanview.case_ir，见其 loader/validate）
+        cases_doc=(dict(data.get("cases"))
+                   if isinstance(data.get("cases"), dict) else {}),
         env_required=env_required,
         env_defaults=env_defaults,
         env_unknown_keys=list(dict.fromkeys(env_unknown + defaults_unknown)),

@@ -34,6 +34,11 @@ EXPECTED_CAVEATS = {
     "TP_NOT_SIGNED_OFF", "TP_WAVE_MISSING", "TP_TIMING_WARN",
     "MODEL_UNAVAILABLE", "BASELINE_MISSING", "BACKEND_ARGS_USED",
     "INGEST_DRIFT",
+    # Case View 门禁（docs/design/architecture_transformation_plan.md D5）
+    "CASE_GATE_BLOCKED",
+    # case 三集合契约（arch.md §9）
+    "CASE_GROUP_PARTIAL", "CASE_SVA_VACUOUS", "CASE_SCB_NOT_EXECUTED",
+    "CASE_PATH_PENDING_BACKEND", "CASE_IR_EVIDENCE_MISMATCH",
 }
 
 

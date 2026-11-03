@@ -43,6 +43,104 @@ def _testpoint_test_map(run_root) -> dict:
     return out
 
 
+def _testpoint_case_map(run_root) -> dict:
+    """TP IR 的 `execution.test` → `case_id`（Case IR 在生成期已注入）。
+
+    同一测试类下的多条 TP 共用同一条 CASE（声明式）；合成式则可能一条 test
+    对应多条 CASE —— 取第一个，并**不掩盖**（`case_ids` 全量也写进 meta）。
+    """
+    m = _testpoint_case_map_detail(run_root)
+    return {test: ids[0] for test, ids in m.items() if ids}
+
+
+def _testpoint_case_map_detail(run_root) -> dict:
+    """`{test: [case_id…]}` —— 全量（去重保序）。"""
+    if not run_root:
+        return {}
+    path = os.path.join(str(run_root), "coverage", "testpoints.yaml")
+    try:
+        import yaml as _yaml
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            doc = _yaml.safe_load(fh) or {}
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for tp in (doc.get("testpoints") if isinstance(doc, dict) else None) or []:
+        if not isinstance(tp, dict):
+            continue
+        test = str((tp.get("execution") or {}).get("test") or "").strip()
+        case_id = str(tp.get("case_id") or "").strip()
+        if test and case_id and case_id not in out.get(test, []):
+            out.setdefault(test, []).append(case_id)
+    return out
+
+
+def _testpoint_contract_map(run_root) -> dict:
+    """TP IR 的 `execution.test` → 三集合指纹 `{groups, sva, scb}`。
+
+    与 `_testpoint_test_map` 同源同口径：**只读** `coverage/testpoints.yaml`。
+    缺字段就是空列表 —— 不在这里编 ID（契约由 verify 生成）。
+    """
+    if not run_root:
+        return {}
+    path = os.path.join(str(run_root), "coverage", "testpoints.yaml")
+    try:
+        import yaml as _yaml
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            doc = _yaml.safe_load(fh) or {}
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for tp in (doc.get("testpoints") if isinstance(doc, dict) else None) or []:
+        if not isinstance(tp, dict):
+            continue
+        test = str((tp.get("execution") or {}).get("test") or "").strip()
+        if not test:
+            continue
+        slot = out.setdefault(test, {"groups": [], "sva": [], "scb": []})
+        for key in ("groups", "sva", "scb"):
+            for item in tp.get(key) or []:
+                if str(item) and str(item) not in slot[key]:
+                    slot[key].append(str(item))
+    return out
+
+
+def _case_ir_sha(run_root) -> str:
+    """`case_ir_sha256` —— 证据对的是哪一版契约。
+
+    **从 `methodology.json` 读**（verify 生成期算的规范哈希），不在回归侧
+    另算一份：两处各算一次，字节/换行/键序稍有不同就会得到一个永远对不上的
+    指纹 —— 那正是哈希链最该避免的事。读不到就回退到文件的 sha256。
+    """
+    if not run_root:
+        return ""
+    try:
+        import json as _json
+        with open(os.path.join(str(run_root), "coverage", "methodology.json"),
+                  "r", encoding="utf-8", errors="replace") as fh:
+            doc = _json.load(fh) or {}
+        sha = str((doc or {}).get("case_ir_sha256") or "").strip()
+        if sha:
+            return sha
+    except (OSError, ValueError):
+        pass
+    try:
+        import hashlib
+        with open(os.path.join(str(run_root), "coverage", "case_ir.json"), "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()
+    except OSError:
+        return ""
+
+
+def _tst_id(test: str, seed) -> str:
+    """`TST-<test>@<seed>` —— 与 `humanview.case_ir.tst_id_of` 同一口径。"""
+    try:
+        from src.tools.humanview.case_ir import tst_id_of
+        return tst_id_of(test, seed)
+    except Exception:                            # noqa: BLE001 身份层不可用不挡生成
+        return f"TST-{test}@{seed}" if test else ""
+
+
 def _tp_ids_from_tags(tags) -> list:
     """`TP-…` 形式的 tag → tp_id（与 `collect_real_coverage` 反查同一口径）。"""
     out = []
@@ -67,8 +165,20 @@ def _uvm_test_from_command(sim_cmd: str, fallback: str) -> str:
     return m.group(1) if m else fallback
 
 
+def _contract_meta(test_class: str, contract_map, case_ir_sha: str) -> dict:
+    """`task_meta` 的三集合指纹段（group/sva/scb + 契约哈希）。"""
+    slot = (contract_map or {}).get(test_class) or {}
+    return {
+        "group_ids": list(slot.get("groups") or []),
+        "sva_ids": list(slot.get("sva") or []),
+        "scb_ids": list(slot.get("scb") or []),
+        "case_ir_sha": case_ir_sha,
+    }
+
+
 def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
-                         seed, build_name, test, tp_map) -> None:
+                         seed, build_name, test, tp_map, case_map=None,
+                         contract_map=None, case_ir_sha="") -> None:
     """落 `task_meta.json` —— 用例 → 测试点 → 波形那条链的起点。
 
     归属优先级：显式 `tp_ids` > tag 里的 `TP-*` > `execution.test` 反查
@@ -92,6 +202,12 @@ def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
             "stage": _stage_from_tags(test.get('tags') or []),
             "tags": list(test.get('tags') or []),
             "tp_ids": tp_ids,
+            # ── 身份脊梁（v2）：CASE 来自 Case IR，TST 由 test+seed 派生 ──
+            "case_ids": list((case_map or {}).get(test_class) or []),
+            "case_id": ((case_map or {}).get(test_class) or [""])[0],
+            "tst_id": _tst_id(test_class, seed),
+            # 三集合指纹 + 契约哈希：这条任务自证"跑的是哪一版 case 契约"
+            **_contract_meta(test_class, contract_map, case_ir_sha),
             "desc": str(test.get('desc') or ""),
         })
     except Exception as e:                      # noqa: BLE001 旁路索引
@@ -160,6 +276,11 @@ class ShellGenerator:
         # `root_dir` 可能是 `<run>/regression_run/<stage>`，不能从它往上猜；
         # 调用方给 `run_root` 才是**唯一**说得清的那个落点。
         self.tp_map = _testpoint_test_map(run_root)
+        # 用例身份（`test → case_id`）：和 tp_map 同源（TP IR），同样只做旁路。
+        self.case_map = _testpoint_case_map_detail(run_root)
+        # 三集合指纹 + 契约哈希（同样只读 TP IR / methodology）
+        self.contract_map = _testpoint_contract_map(run_root)
+        self.case_ir_sha = _case_ir_sha(run_root)
         self.settings = config.get('settings', {})
         self.simulators = self.settings.get('simulators', {})
         self.default_sim = self.settings.get('default_simulator', 'vcs')
@@ -354,7 +475,9 @@ class ShellGenerator:
             # 用例身份（用例 → 测试点 → 波形那条链的起点）。写在**脚本落盘
             # 之后**：`+UVM_TESTNAME` 是渲染后的真名，原始配置里读不到。
             _write_task_identity(test_dir, testcase, test_name, sim_cmd,
-                                 t_context, seed, build_name, test, self.tp_map)
+                                 t_context, seed, build_name, test, self.tp_map,
+                                 self.case_map, self.contract_map,
+                                 self.case_ir_sha)
 
             post_sim_cmd = test.get('hooks', {}).get('post_sim') or self.hooks_global.get('post_sim')
             if post_sim_cmd:
