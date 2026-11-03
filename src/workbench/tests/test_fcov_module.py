@@ -99,6 +99,61 @@ def test_the_case_evidence_tab_exists(module):
     assert "功能组 × 路径" in sub and "缺口与豁免" in sub
 
 
+def test_the_three_set_tabs_exist(module):
+    """arch.md 的 Groups / SVA / SCB 三节 + Case×CELL + 执行证据。"""
+    from PySide6.QtWidgets import QTabWidget
+
+    titles = [module.tabs.tabText(i) for i in range(module.tabs.count())]
+    page = module.tabs.widget(titles.index("Case 证据"))
+    inner = page.findChild(QTabWidget)
+    sub = [inner.tabText(i) for i in range(inner.count())]
+    for title in ("Groups", "SVA", "SCB", "Case × CELL", "执行证据"):
+        assert title in sub, title
+
+
+def test_three_set_rows_flatten_from_case_view(module):
+    """`case_view.cases[]` 的三集合 → 三张平表（行数与状态都要对）。"""
+    cases = [{
+        "case_id": "CASE-D_DEP",
+        "groups_evidence": [{
+            "group": "CG-D_DEP", "cell": "CELL-D_DEP-P1",
+            "functional": {"status": "PROVEN"}, "timing": {"status": "NOT_APPLICABLE"},
+            "data": {"status": "PROVEN"}, "path": {"status": "NOT_APPLICABLE"},
+            "result": "PROVEN"}],
+        "sva_items": [{"id": "SVA-X", "cell": "CELL-D_DEP-P1", "fail": 0,
+                       "cover_property_hit": 3, "status": "PROVEN"}],
+        "scb_items": [{"id": "SB-Y", "cell": "CELL-D_DEP-P1", "exec": 40,
+                       "matched": 40, "mismatched": 0,
+                       "evidence_level": "aggregate", "status": "PROVEN"}],
+    }]
+    module._fill_three_sets(cases)
+    assert module.ce_groups_model.rowCount() == 1
+    assert module.ce_sva_model.rowCount() == 1
+    assert module.ce_scb_model.rowCount() == 1
+    g = module.ce_groups_model.rows[0]
+    assert (g["group"], g["functional"], g["result"]) == ("CG-D_DEP", "PROVEN", "PROVEN")
+    assert module.ce_scb_model.rows[0]["evidence_level"] == "aggregate"
+
+
+def test_cell_and_evd_tables_flatten(module):
+    module._fill_cell_and_evd({
+        "case_cell": {"rows": [{
+            "cell_id": "CELL-D_DEP-P1", "cg": "CG-D_DEP", "p": "p1",
+            "color": "green", "tp_count": 2,
+            "declared_cases": ["CASE-D_DEP"], "observed_cases": ["CASE-D_DEP"]}]},
+        "case_runs": [{
+            "evd_id": "EVD-r-TST-X@1", "case_id": "CASE-D_DEP", "tst_id": "TST-X@1",
+            "test": "x", "seed": 1, "stage": "p1",
+            "cells": ["CELL-D_DEP-P1"], "legacy": False}],
+    })
+    assert module.ce_cell_model.rowCount() == 1
+    assert module.ce_evd_model.rowCount() == 1
+    assert module.ce_evd_model.rows[0]["legacy"] == "否"
+    row = module.ce_cell_model.rows[0]
+    assert row["cell_id"] == "CELL-D_DEP-P1"
+    assert row["declared_cases"] == "CASE-D_DEP"
+
+
 def test_tp_evidence_rows_flatten_the_four_layers(module):
     module._tp_evidence = {"tps": [{
         "tp_id": "TP-1", "domain": "attribute", "contract_status": "VERIFIED",

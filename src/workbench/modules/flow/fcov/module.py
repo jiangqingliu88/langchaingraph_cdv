@@ -120,7 +120,64 @@ GAP_COLUMNS = (
     ("owner", "责任人", 100, CENTER),
     ("status", "状态", 90, CENTER),
 )
+#: ── 三集合视图（arch.md：case = groups[] + sva[] + scb[]）──
+#:
+#: 三张表分开而不是揉成一张：group 看"功能组 × 阶段"，SVA 看"跨拍性质"，
+#: SCB 看"值/账本比对"，判据与读者都不同。
+GROUP_COLUMNS = (
+    ("case_id", "用例", 200, LEFT),
+    ("group", "功能组", 150, LEFT),
+    ("cell", "CELL", 190, LEFT),
+    ("functional", "Functional", 100, CENTER),
+    ("timing", "Timing", 90, CENTER),
+    ("data", "Data", 90, CENTER),
+    ("path", "Path", 100, CENTER),
+    ("result", "结论", 110, CENTER),
+)
+SVA_COLUMNS = (
+    ("case_id", "用例", 200, LEFT),
+    ("id", "SVA", 220, LEFT),
+    ("cell", "CELL", 190, LEFT),
+    ("fail", "违规", 60, CENTER),
+    ("cover_property_hit", "cover_property", 110, CENTER),
+    ("status", "状态", 110, CENTER),
+)
+SCB_COLUMNS = (
+    ("case_id", "用例", 200, LEFT),
+    ("id", "Scoreboard", 200, LEFT),
+    ("cell", "CELL", 190, LEFT),
+    ("exec", "exec", 60, CENTER),
+    ("matched", "matched", 70, CENTER),
+    ("mismatched", "mismatched", 80, CENTER),
+    ("evidence_level", "证据粒度", 90, CENTER),
+    ("status", "状态", 110, CENTER),
+)
+CASE_CELL_COLUMNS = (
+    ("cell_id", "CELL", 200, LEFT),
+    ("cg", "功能组", 150, LEFT),
+    ("p", "阶段", 80, CENTER),
+    ("color", "颜色", 70, CENTER),
+    ("tp_count", "TP 数", 60, CENTER),
+    ("declared_cases", "声明用例", 220, LEFT),
+    ("observed_cases", "实际用例", 220, LEFT),
+)
+EVD_COLUMNS = (
+    ("evd_id", "EVD", 230, LEFT),
+    ("case_id", "CASE", 160, LEFT),
+    ("tst_id", "TST", 180, LEFT),
+    ("test", "测试", 180, LEFT),
+    ("seed", "seed", 70, CENTER),
+    ("stage", "阶段", 70, CENTER),
+    ("cells", "CELL", 200, LEFT),
+    ("legacy", "legacy", 60, CENTER),
+)
+
 _STATUS_EMOJI = {"green": "🟢", "yellow": "🟡", "red": "🔴", "na": "—"}
+
+#: 三集合证据状态 → 颜色（与 `_STATUS_THEME` 同一套主题色）。
+_CHECKER_THEME = {"PROVEN": "ok", "PARTIAL": "warning", "PENDING_BACKEND": "muted",
+                  "NOT_APPLICABLE": "muted", "NOT_EXECUTED": "error",
+                  "MISSING": "error", "UNMAPPED": "error"}
 _STATUS_TEXT = {"green": "通过", "yellow": "部分", "red": "缺失", "na": "不适用"}
 _STATUS_THEME = {"green": "ok", "yellow": "warning", "red": "error",
                  "na": "muted"}
@@ -224,6 +281,18 @@ class FunctionalCoverageModule(ModuleBase):
         self.ce_case_table = table_helpers.configure_table(page, self.ce_case_model)
         inner.addTab(self.ce_case_table, "用例 × 证据层")
 
+        # ── 三集合（arch.md）：Groups / SVA / SCB，一张表一列判据 ──
+        self.ce_groups_model = self._rows_tab(inner, page, GROUP_COLUMNS,
+                                              "ce_groups", "Groups")
+        self.ce_sva_model = self._rows_tab(inner, page, SVA_COLUMNS,
+                                           "ce_sva", "SVA")
+        self.ce_scb_model = self._rows_tab(inner, page, SCB_COLUMNS,
+                                           "ce_scb", "SCB")
+        self.ce_cell_model = self._rows_tab(inner, page, CASE_CELL_COLUMNS,
+                                            "ce_cell", "Case × CELL")
+        self.ce_evd_model = self._rows_tab(inner, page, EVD_COLUMNS,
+                                           "ce_evd", "执行证据")
+
         self.ce_feat_model = RowsModel(FEATURE_COLUMNS, page)
         self.ce_feat_table = table_helpers.configure_table(page, self.ce_feat_model)
         inner.addTab(self.ce_feat_table, "功能契约 × 证据层")
@@ -244,10 +313,34 @@ class FunctionalCoverageModule(ModuleBase):
         self._case_view: Dict[str, Any] = {}
         return page
 
+    def _rows_tab(self, inner: QTabWidget, page: QWidget, columns, prefix: str,
+                  title: str) -> RowsModel:
+        """建一个「模型 + 表格 + Tab」三件套，并挂到 self 上（`<prefix>_model`）。"""
+        model = RowsModel(columns, page)
+        table = table_helpers.configure_table(page, model)
+        inner.addTab(table, title)
+        setattr(self, f"{prefix}_model", model)
+        setattr(self, f"{prefix}_table", table)
+        return model
+
+    def _status_colors(self, rows: List[Dict[str, Any]], columns, keys) -> Dict[tuple, QColor]:
+        """把三集合状态列染成主题色（PROVEN 绿 / PARTIAL 黄 / MISSING 红）。"""
+        cols = {key: i for i, (key, *_rest) in enumerate(columns)}
+        palette = theme.current()
+        out: Dict[tuple, QColor] = {}
+        for index, row in enumerate(rows):
+            for key in keys:
+                color = _CHECKER_THEME.get(str(row.get(key)))
+                if color and key in cols:
+                    out[(index, cols[key])] = QColor(getattr(palette, color))
+        return out
+
     def _fill_case_evidence(self, cv: Dict[str, Any],
                             gates: Dict[str, Any] = None) -> None:
         self._case_view = cv or {}
         self._fill_gate_label(gates or {})
+        self._fill_three_sets(cv.get("cases") or [])
+        self._fill_cell_and_evd(cv)
         cases = self._case_display_rows(cv.get("cases") or [])
         self.ce_case_model.set_rows(cases, cell_colors=self._case_colors(cases))
         features = self._feature_display_rows(cv.get("features") or [])
@@ -256,6 +349,11 @@ class FunctionalCoverageModule(ModuleBase):
         self._fill_matrix(cv.get("matrix") or {})
         self.ce_gap_model.set_rows(list(cv.get("gaps") or []))
         for model, table in ((self.ce_case_model, self.ce_case_table),
+                             (self.ce_groups_model, self.ce_groups_table),
+                             (self.ce_sva_model, self.ce_sva_table),
+                             (self.ce_scb_model, self.ce_scb_table),
+                             (self.ce_cell_model, self.ce_cell_table),
+                             (self.ce_evd_model, self.ce_evd_table),
                              (self.ce_feat_model, self.ce_feat_table),
                              (self.ce_gap_model, self.ce_gap_table)):
             model.apply_column_widths(table)
@@ -279,6 +377,75 @@ class FunctionalCoverageModule(ModuleBase):
         color = (theme.current().warning if verdict == "BLOCKED"
                  else theme.current().ok)
         label.setStyleSheet(f"color: {color};")
+
+    @staticmethod
+    def _three_set_rows(cases: List[Dict[str, Any]]) -> tuple:
+        """`case_view.cases[]` → `(groups, sva, scb)` 三张平表。"""
+        groups: List[Dict[str, Any]] = []
+        svas: List[Dict[str, Any]] = []
+        scbs: List[Dict[str, Any]] = []
+        for case in cases:
+            cid = case.get("case_id") or case.get("task")
+            for g in case.get("groups_evidence") or []:
+                groups.append({
+                    "case_id": cid, "group": g.get("group"), "cell": g.get("cell"),
+                    **{key: str((g.get(key) or {}).get("status") or "")
+                       for key in ("functional", "timing", "data", "path")},
+                    "result": str(g.get("result") or ""),
+                })
+            for s in case.get("sva_items") or []:
+                svas.append({
+                    "case_id": cid, "id": s.get("id"), "cell": s.get("cell"),
+                    "fail": s.get("fail"),
+                    "cover_property_hit": s.get("cover_property_hit"),
+                    "status": str(s.get("status") or ""),
+                })
+            for s in case.get("scb_items") or []:
+                scbs.append({
+                    "case_id": cid, "id": s.get("id"), "cell": s.get("cell"),
+                    "exec": s.get("exec"), "matched": s.get("matched"),
+                    "mismatched": s.get("mismatched"),
+                    "evidence_level": str(s.get("evidence_level") or ""),
+                    "status": str(s.get("status") or ""),
+                })
+        return groups, svas, scbs
+
+    def _fill_three_sets(self, cases: List[Dict[str, Any]]) -> None:
+        groups, svas, scbs = self._three_set_rows(cases)
+        self.ce_groups_model.set_rows(
+            groups, cell_colors=self._status_colors(
+                groups, GROUP_COLUMNS,
+                ("functional", "timing", "data", "path", "result")))
+        self.ce_sva_model.set_rows(
+            svas, cell_colors=self._status_colors(svas, SVA_COLUMNS, ("status",)))
+        self.ce_scb_model.set_rows(
+            scbs, cell_colors=self._status_colors(scbs, SCB_COLUMNS, ("status",)))
+
+    def _fill_cell_and_evd(self, cv: Dict[str, Any]) -> None:
+        cell_rows = [{
+            "cell_id": r.get("cell_id"), "cg": r.get("cg"), "p": r.get("p"),
+            "color": f"{_STATUS_EMOJI.get(r.get('color'), '?')} "
+                     f"{_STATUS_TEXT.get(r.get('color'), '')}",
+            "tp_count": r.get("tp_count"),
+            "declared_cases": "、".join(r.get("declared_cases") or []),
+            "observed_cases": "、".join(r.get("observed_cases") or []),
+            "_color": r.get("color"),
+        } for r in ((cv.get("case_cell") or {}).get("rows") or [])]
+        cols = {key: i for i, (key, *_rest) in enumerate(CASE_CELL_COLUMNS)}
+        palette = theme.current()
+        colors = {(i, cols["color"]): QColor(getattr(palette, theme_key))
+                  for i, r in enumerate(cell_rows)
+                  for theme_key in [_STATUS_THEME.get(str(r.get("_color")))]
+                  if theme_key}
+        self.ce_cell_model.set_rows(cell_rows, cell_colors=colors)
+
+        evd_rows = [{
+            "evd_id": r.get("evd_id"), "case_id": r.get("case_id") or "—",
+            "tst_id": r.get("tst_id"), "test": r.get("test"), "seed": r.get("seed"),
+            "stage": r.get("stage"), "cells": "、".join(r.get("cells") or []),
+            "legacy": "是" if r.get("legacy") else "否",
+        } for r in (cv.get("case_runs") or [])]
+        self.ce_evd_model.set_rows(evd_rows)
 
     @staticmethod
     def _case_display_rows(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -511,6 +678,8 @@ class FunctionalCoverageModule(ModuleBase):
         self._tp_evidence = {}
         self._case_view = {}
         for attr in ("cp_model", "tp_model", "te_model", "ce_case_model",
+                     "ce_groups_model", "ce_sva_model", "ce_scb_model",
+                     "ce_cell_model", "ce_evd_model",
                      "ce_feat_model", "ce_gap_model", "batch_model",
                      "trace_model", "asset_model"):
             model = getattr(self, attr, None)
