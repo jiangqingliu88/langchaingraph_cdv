@@ -28,6 +28,7 @@ from .contract_model import (
 from .derive import case_statuses, derive, evaluate, tp_contract_status
 from .explain import explain, obligations_view, status_summary
 from .ledger import append_bundle, read_ledger, verify_chain
+from .seeds import build_seed_index, write_seed_index
 from .shadow import build_bundle, run_shadow
 from .worklist import build_worklist, regression_test_name, write_worklist
 
@@ -41,4 +42,5 @@ __all__ = [
     "read_ledger", "read_manifest", "run_shadow", "verify_chain", "worst",
     "write_contract", "explain", "status_summary", "tp_contract_status",
     "build_worklist", "regression_test_name", "write_worklist",
+    "build_seed_index", "write_seed_index",
 ]

@@ -30,7 +30,8 @@ SCHEMA = "evidence_manifest_v1"
 STEPS: tuple = ("case_cov", "tp_matrix", "tp_evidence", "cell_matrix",
                 # `evd` 要读 cell_matrix 反查每条执行落在哪些 CELL —— 顺序反了
                 # 时新 run 的 EVD 行会全是空 cells（历史 bug，实测 47 行）
-                "evd", "case_view", "gates", "os_shadow", "os_tp_shadow")
+                "evd", "case_view", "gates", "os_shadow", "os_tp_shadow",
+                "os_seeds")
 
 #: 每步**应当**产出的文件（相对 run 目录）。缺了记进 manifest，不静默。
 STEP_ARTIFACTS: Dict[str, tuple] = {
@@ -45,6 +46,8 @@ STEP_ARTIFACTS: Dict[str, tuple] = {
     "os_shadow": ("status/shadow_report.json", "evidence/ledger.jsonl"),
     # M2 第一步：TP 级状态也推导一遍，与 tp_matrix 对账（仍不改判定）
     "os_tp_shadow": ("status/tp_shadow.json",),
+    # P6：种子索引（哪个 seed 清偿了哪些义务）
+    "os_seeds": ("status/seed_index.json",),
 }
 
 
@@ -117,6 +120,12 @@ def _step_os_shadow(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     return run_shadow(od)
 
 
+def _step_os_seeds(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """P6：种子索引 —— 每颗 seed 清偿了哪些义务（只读账本，不改判定）。"""
+    from src.tools.checking.verification_os.seeds import write_seed_index
+    return write_seed_index(od)
+
+
 def _step_os_tp_shadow(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     """M2a：TP 级状态由事实推导，与 `tp_matrix` 对账（仍不改判定）。
 
@@ -143,6 +152,7 @@ _STEP_FUNCS: Dict[str, Callable[[Path, Dict[str, Any]], Any]] = {
     "gates": _step_gates,
     "os_shadow": _step_os_shadow,
     "os_tp_shadow": _step_os_tp_shadow,
+    "os_seeds": _step_os_seeds,
 }
 
 

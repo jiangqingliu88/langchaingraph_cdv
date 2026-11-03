@@ -389,6 +389,23 @@ cmd_verify），代价与收益不成比例；环境变量覆盖同一场景。
 
 ---
 
+### P6 —— 种子索引（收尾，已落地）
+
+`vagent why` 回答"这条义务为什么红"；种子索引回答它的反面：**这颗 seed
+清偿了哪些义务**（可复现证据的索引）。
+
+| 落点 | 内容 |
+|---|---|
+| `verification_os/seeds.py` | 取当前契约的事实，按 `(tst, seed)` 分组重新 `derive` → 每组的 `discharged / remaining`；`by_seed` 汇总每颗 seed 的清偿数 |
+| evidence_pipeline | 新增 `os_seeds` 步 → `status/seed_index.json` |
+| CLI | `vagent contract seeds --run …` |
+| 实测 | npu_sched：**6 颗 seed / 47 次执行 / 清偿 157 条义务**（seed 10001 清偿 10 条） |
+
+边界：只有带 CASE 身份的执行才有义务（批次级 test 没有 case），所以索引覆盖
+**用例证据**；批次用例的合并覆盖率仍由 `tp_shadow` 对账。
+
+---
+
 ## 7. 验收指标（可度量，不靠感觉）
 
 1. **宣称可证明率**：任何 `VERIFIED/green` 都能在 3 步内追溯到事实与执行实例。

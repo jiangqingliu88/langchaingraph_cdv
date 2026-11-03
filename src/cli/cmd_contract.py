@@ -160,6 +160,29 @@ def contract_worklist(run_dir, json_output):
                       f"（见 status/worklist.json）")
 
 
+@contract.command("seeds")
+@click.option("--run", "-o", "run_dir", required=True,
+              type=click.Path(file_okay=False), help="运行目录")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def contract_seeds(run_dir, json_output):
+    """种子索引：哪个 seed 清偿了哪些义务（可复现证据）"""
+    from src.tools.checking.verification_os.seeds import write_seed_index
+
+    data = write_seed_index(_resolve_run_dir(run_dir))
+    if json_output:
+        click.echo(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+    if not data.get("available"):
+        click.echo(f"索引不可用（{data.get('reason')}）", err=True)
+        raise SystemExit(2)
+    counts = data.get("counts") or {}
+    console.print(f"[bold]种子索引[/bold] {counts.get('seeds', 0)} 颗 seed · "
+                  f"{counts.get('runs', 0)} 次执行 · 清偿 {counts.get('discharged_total', 0)} 条义务")
+    for seed, slot in list((data.get("by_seed") or {}).items())[:20]:
+        console.print(f"  seed {seed}: 清偿 {slot.get('count', 0)} 条"
+                      f"（{slot.get('runs', 0)} 次执行）")
+
+
 @contract.command("status")
 @click.option("--run", "-o", "run_dir", required=True,
               type=click.Path(file_okay=False), help="运行目录")
