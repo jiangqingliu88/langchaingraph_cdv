@@ -507,6 +507,8 @@ def _sva_evidence(items: list, facts: dict) -> list:
             "name": name, "expr": item.get("expr", ""),
             "message": item.get("message", ""),
             "hit": hit, "fail": int(fired or 0),
+            # 这条断言**有没有被求值过**（区分"0 违规"与"根本没跑"）
+            "present": fired is not None,
             "cover_property_hit": None, "status": status,
         })
     return out
@@ -558,6 +560,55 @@ def _scb_status(data) -> str:
     return "PROVEN" if int(data.get("matched") or 0) > 0 else "NOT_EXECUTED"
 
 
+def _raw_facts_for(entries: list, case: dict, facts: dict) -> list:
+    """采集端能看到的最原始事实 → 事实列表（判据交给 `derive`）。"""
+    from src.tools.checking.verification_os.case_judge import build_raw_facts
+
+    bins = [{"tp": e.get("tp_id"), "cp": e.get("coverpoint"), "bin": b,
+             "hits": (e.get("hits") or {}).get(b, 0)}
+            for e in entries for b in (e.get("owned") or [])]
+    assertion_facts = (facts.get("log_facts") or {}).get("assertions") or {}
+    by_rule = {str(k).lower(): int(v or 0)
+               for k, v in (assertion_facts.get("by_rule") or {}).items()}
+    sva: list = []
+    for item in case.get("sva") or []:
+        key = str(item.get("name") or item.get("id") or "").lower()
+        key = key[4:] if key.startswith("sva-") else key
+        present = key in by_rule
+        sva.append({"id": item.get("id"), "present": present,
+                    "fail": by_rule.get(key) if present else None})
+    summary = facts.get("scb_summary") or {}
+    # data 层用的是 env 的**聚合**收口（`[SCB_DUT]`），所以聚合事实必须有一条
+    # `id=aggregate`；逐条 SB 的事实也照发（证据粒度可能是 per_scb）
+    scb = [{"id": "aggregate", "exec": int(summary.get("total") or 0),
+            "matched": summary.get("matched"),
+            "mismatched": summary.get("mismatched")}]
+    scb += [{"id": item.get("id"), "exec": int(summary.get("total") or 0),
+             "matched": summary.get("matched"),
+             "mismatched": summary.get("mismatched")}
+            for item in case.get("scb") or []]
+    return build_raw_facts(str(facts.get("case_id") or ""), bins=bins, sva=sva,
+                           scb=scb, timing_ok=facts.get("timing_ok"))
+
+
+def _apply_judgement(groups: list, sva: list, scb: list, judged: dict) -> None:
+    """把 `derive()` 的结论写回 case_cov 的字段（形状不变，判定权转移）。"""
+    for g in groups:
+        info = (judged.get("groups") or {}).get(str(g.get("group") or ""))
+        if not info:
+            continue
+        # **只覆盖 derive 真的给出来的层**：没要求的层（如属性型组的 path）
+        # 保持原值 NOT_APPLICABLE —— 覆盖成空串会把"不适用"改成"空"。
+        for layer, status in (info.get("layers") or {}).items():
+            if layer in g and status:
+                g[layer] = dict(g.get(layer) or {}, status=status)
+        g["result"] = info.get("result") or g.get("result", "")
+    for item in sva:
+        item["status"] = (judged.get("sva") or {}).get(item.get("id"), item["status"])
+    for item in scb:
+        item["status"] = (judged.get("scb") or {}).get(item.get("id"), item["status"])
+
+
 def _case_status(groups: list, sva: list, scb: list) -> str:
     """三集合 → case 总状态：全 PROVEN/NA 才是 VERIFIED。
 
@@ -576,19 +627,39 @@ def _case_status(groups: list, sva: list, scb: list) -> str:
     return "PARTIAL"
 
 
+def _judged_case_status(case_ir: dict, case: dict, entries: list, facts: dict,
+                        groups: list, sva: list, scb: list, fallback: str) -> str:
+    """M2b：有契约就让 `derive()` 判，没有就沿用旧判定（返回 case_status）。"""
+    if not case_ir:
+        return fallback
+    from src.tools.checking.verification_os.case_judge import judge_case
+
+    judged = judge_case(case_ir, str(facts.get("case_id") or ""),
+                        _raw_facts_for(entries, case, facts))
+    if not judged:
+        return fallback
+    _apply_judgement(groups, sva, scb, judged)
+    return judged.get("case_status", fallback)
+
+
 def _evaluate_case(od: Path, test_dir: Path, owner_tps: list, basis: str,
                    *, require_wave: bool, force: bool,
-                   contract: dict = None) -> dict:
+                   contract: dict = None, case_ir: dict = None) -> dict:
     """一条用例 → `case_cov_v1` 记录（并落盘）。"""
     facts = _case_facts(od, test_dir, force=force)
     entries = [_tp_case_entry(tp, facts, require_wave=require_wave)
                for tp in owner_tps]
     case = (contract or {}).get(str(facts.get("case_id") or "")) or {}
     timing_ok = _case_timing_ok(facts)
+    facts["timing_ok"] = timing_ok
     groups = [_group_evidence(g, entries, facts, timing_ok)
               for g in (case.get("groups") or []) if isinstance(g, dict)]
     sva = _sva_evidence(case.get("sva") or [], facts)
     scb = _scb_evidence(case.get("scb") or [], facts)
+    # **M2b：判定权交给 `derive()`** —— 采集端只给原始事实；没有契约时保留旧判定。
+    case_status = _judged_case_status(case_ir, case, entries, facts,
+                                      groups, sva, scb,
+                                      _case_status(groups, sva, scb))
     rec = {
         "schema": CASE_COV_SCHEMA,
         # ── 身份（EVD）：一次执行一条证据；去重键 (run, tst, seed, cfg) ──
@@ -606,7 +677,7 @@ def _evaluate_case(od: Path, test_dir: Path, owner_tps: list, basis: str,
         "groups": groups,
         "sva": sva,
         "scb": scb,
-        "case_status": _case_status(groups, sva, scb),
+        "case_status": case_status,
         "task": facts["task"], "test": facts["test"],
         "test_name": facts["test_name"], "seed": facts["seed"],
         "stage": facts["stage"], "build": facts["build"],
@@ -794,6 +865,8 @@ def case_cov_matrix(od: Path, *, max_cases: int = 0,
 
     tp_by_id, tp_by_test = _index_tps(tps)
     contract = _load_case_contract(od)
+    # M2b：判定交给 derive —— 需要整份 case_ir（契约），不只是按 case 的索引
+    case_ir_doc = _read_json(od / "coverage" / "case_ir.json")
     selected, sampled, notes = _select_case_dirs(
         _case_dirs(od), tp_by_id, tp_by_test, max_cases)
 
@@ -806,7 +879,7 @@ def case_cov_matrix(od: Path, *, max_cases: int = 0,
             continue
         rec = _evaluate_case(od, d, owner_tps, basis,
                              require_wave=require_wave, force=force,
-                             contract=contract)
+                             contract=contract, case_ir=case_ir_doc)
         if rec.get("error"):
             errors.append(f"{rec['task']}: {rec.get('error_detail') or rec['error']}")
         cases.append(rec)

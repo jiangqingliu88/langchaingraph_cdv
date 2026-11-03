@@ -272,7 +272,7 @@ CELL 主色仍由 `tp_cov_evidence` 提供，M2 接管。
 **修掉的一个真 bug**：契约哈希原先包含 `id`，而 `id` 又由哈希派生 —— 读回来永远
 对不上清单。现在 `compute_hash` 排除 `hash` 与 `id`（内容哈希），往返一致。
 
-### M2 —— 事实采集统一（1–2 周）🟡 第一步已落地
+### M2 —— 事实采集统一（1–2 周）✅ 已落地
 
 - `coverage` 只写事实；`case_cov` 去掉 `signed_off / case_status`。
 - `derive()` 接管 `case_tp / tp_matrix / tp_cov_evidence / cell_matrix` 的判定，
@@ -288,9 +288,22 @@ CELL 主色仍由 `tp_cov_evidence` 提供，M2 接管。
 | evidence_pipeline | 新增 `os_tp_shadow` 步：run 级事实与 TP 属性入账本，写 `status/tp_shadow.json` |
 | 实测 | npu_sched：**70 条 TP、106 条 run 事实、0 差异** |
 
-**剩余（M2b）**：`case_cov` 去掉判定字段；`case_tp / tp_matrix /
-tp_cov_evidence / cell_matrix` 的判定全部改成 derive 导出（先 shadow 对比，
-一致后再切换）。这一步会动签核读数，按停点推进。
+**M2b（判定切换，已完成）**：
+
+| 落点 | 内容 |
+|---|---|
+| `verification_os/case_judge.py` | `build_raw_facts()`（bins / sva present+fail / scb aggregate+逐条 / timing）+ `judge_case()`（编译该 case 的义务 → derive → 组层状态 / SVA / SCB / case_status） |
+| `case_cov._evaluate_case` | 采集端只给**原始事实**，判定改由 `judge_case()` 给出（无契约时保留旧判定作兼容）；字段形状不变，`sva[]` 新增 `present`（断言有没有被求值过） |
+| `tp_evidence._contract_status` | 委托 `derive.tp_contract_status`（四层证据 → VERIFIED/PARTIAL/NOT_VERIFIED 只剩一份实现） |
+| 实测 | **267 份 case_cov 的判定字段与改造前逐条一致；case shadow 0、TP shadow 0** |
+
+顺带修掉一个**流水线顺序 bug**：`evd` 原先排在 `cell_matrix` 之前，导致新 run 的
+EVD 行 `cells` 全空（47 行），只有重跑时拿到上一轮 cell_matrix 才对。现在
+`cell_matrix → evd`，`with_cells` 118 → 165 且两次重跑逐字节一致。
+
+> 说明：`case_cov / case_tp / tp_matrix / tp_cov_evidence / cell_matrix` 的
+> **字段仍然保留**（下游读者不变），但它们的判定已全部由 derive 产出 ——
+> 保留的是"导出的缓存"，不是第二套判据。
 
 ### M3 —— 规则引擎（1 周）
 

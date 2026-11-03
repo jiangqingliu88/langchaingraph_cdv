@@ -116,14 +116,23 @@ def _path(ledger: List[Dict[str, Any]], where: Dict[str, Any]) -> str:
 
 
 def _sva(ledger: List[Dict[str, Any]], where: Dict[str, Any]) -> str:
+    """断言：**有求值记录且 0 违规**才算 PROVEN。
+
+    事实可以给原始 `fail`/`present`（采集端最真实），也可以给已判好的
+    `status`（老账本）—— 前者优先。
+    """
     fact = _first(ledger, "sva_result", str(where.get("case") or ""),
                   id=str(where.get("id") or ""))
     if fact is None:
         return S.MISSING.value
-    return str(_value(fact, "status") or S.MISSING.value)
+    fail = _value(fact, "fail")
+    if _value(fact, "present") is False or fail is None:
+        return str(_value(fact, "status") or S.MISSING.value)
+    return S.PROVEN.value if int(fail) == 0 else S.MISSING.value
 
 
 def _scb_executed(ledger: List[Dict[str, Any]], where: Dict[str, Any]) -> str:
+    """比对：执行过且 0 mismatch 才算 PROVEN；原始计数优先，`status` 兜底。"""
     case = str(where.get("case") or "")
     sb_id = str(where.get("id") or "")
     fact = _first(ledger, "scb_result", case, id=sb_id)
@@ -131,7 +140,15 @@ def _scb_executed(ledger: List[Dict[str, Any]], where: Dict[str, Any]) -> str:
         fact = _first(ledger, "scb_result", case, id="aggregate")
     if fact is None:
         return S.NOT_EXECUTED.value
-    return str(_value(fact, "status") or S.NOT_EXECUTED.value)
+    status = str(_value(fact, "status") or "")
+    matched = _value(fact, "matched")
+    if matched is None:
+        return status or S.NOT_EXECUTED.value
+    if int(_value(fact, "mismatched") or 0) > 0:
+        return S.MISSING.value
+    if int(_value(fact, "exec") or 0) > 0 or int(matched) > 0:
+        return S.PROVEN.value
+    return status or S.NOT_EXECUTED.value
 
 
 _DISPATCH = {
@@ -156,6 +173,26 @@ def derive(obligations: List[Obligation],
            ledger: List[Dict[str, Any]]) -> Dict[str, str]:
     """义务 → 状态。**唯一判定实现**：任何模块都不许再自己算。"""
     return {o.obligation_id: evaluate(o, ledger) for o in obligations}
+
+
+def tp_contract_status(layers: Dict[str, Any], stage: str = "") -> str:
+    """TP 的四层证据 → 契约状态（**唯一实现**，`tp_evidence` 委托到这里）。
+
+    bin 命中只证明"场景发生过"：要判 VERIFIED，functional + timing + data 必须
+    全部 PROVEN（路径型再加 path）；任一 NOT_APPLICABLE 只能 PARTIAL ——
+    "没声明"不是"验证通过"。
+    """
+    if stage == "behavior":
+        return "PENDING_BACKEND"
+    required = ("functional", "timing", "data")
+    statuses = {key: str((layers.get(key) or {}).get("status") or "")
+                for key in required}
+    if any(s in ("MISSING", "UNMAPPED") for s in statuses.values()):
+        return "NOT_VERIFIED"
+    if all(s == "PROVEN" for s in statuses.values()):
+        path = str((layers.get("path") or {}).get("status") or "")
+        return "VERIFIED" if path in ("PROVEN", "NOT_APPLICABLE") else "PARTIAL"
+    return "PARTIAL" if any(s == "PROVEN" for s in statuses.values()) else "NOT_VERIFIED"
 
 
 def case_statuses(obligations: List[Obligation],
@@ -190,4 +227,4 @@ def _case_status(statuses: List[str]) -> str:
     return "NOT_VERIFIED" if verdict == "MISSING" else "PARTIAL"
 
 
-__all__ = ["case_statuses", "derive", "evaluate"]
+__all__ = ["case_statuses", "derive", "evaluate", "tp_contract_status"]

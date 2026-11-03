@@ -89,6 +89,7 @@ def _checker_facts(rec: Dict[str, Any], case: str,
         out.append(Fact(type="sva_result",
                         subject={"case": case, "id": str(item.get("id") or "")},
                         value={"status": str(item.get("status") or ""),
+                               "present": bool(item.get("present")),
                                "fail": int(item.get("fail") or 0)}, **common))
     for item in rec.get("scb") or []:
         out.append(Fact(type="scb_result",

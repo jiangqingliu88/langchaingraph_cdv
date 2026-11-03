@@ -53,7 +53,9 @@ def _facts(case="CASE-A", hits=None, timing=True, scb=("PROVEN", 10, 0),
                              "matched": matched, "mismatched": mismatched}))
     facts.append(Fact(type="sva_result", contract_hash=contract.hash,
                       subject={"case": case, "id": "SVA-X"},
-                      value={"status": sva, "fail": 0}))
+                      value={"status": sva,
+                             "present": sva != "MISSING",
+                             "fail": 0 if sva != "MISSING" else None}))
     return [f.model_dump(by_alias=True) for f in facts]
 
 

@@ -265,25 +265,14 @@ def _layer_path(tp: Dict[str, Any], row: Dict[str, Any],
 def _contract_status(layers: Dict[str, Dict[str, Any]], tp: Dict[str, Any]) -> str:
     """四层证据 → 功能契约状态。
 
-    **bin 命中不能单独签核功能**：`functional` 只证明场景发生过。要判
-    `VERIFIED`，`functional + timing + data` 必须全部 PROVEN（路径型契约还要
-    `path` PROVEN）。任一层 `NOT_APPLICABLE`（模型没声明检查/比对）时只能
-    判 `PARTIAL` —— "没声明"不是"验证通过"。
+    **判据在 `verification_os.derive.tp_contract_status`（唯一实现）**，这里只
+    传递 stage：bin 命中不能单独签核功能，要 VERIFIED 必须四层齐（见那里的
+    docstring）。M2 起 `tp_evidence` 不再自己算这套规则。
     """
-    if str((tp.get("execution") or {}).get("stage")) == "behavior":
-        return "PENDING_BACKEND"
-    required = ("functional", "timing", "data")
-    statuses = {key: str(layers[key]["status"]) for key in required}
-    if any(s in ("MISSING", "UNMAPPED") for s in statuses.values()):
-        return "NOT_VERIFIED"
-    if all(s == "PROVEN" for s in statuses.values()):
-        path_status = str(layers["path"]["status"])
-        if path_status in ("PROVEN", "NOT_APPLICABLE"):
-            return "VERIFIED"
-        return "PARTIAL"
-    if any(s == "PROVEN" for s in statuses.values()):
-        return "PARTIAL"
-    return "NOT_VERIFIED"
+    from src.tools.checking.verification_os.derive import tp_contract_status
+
+    stage = str((tp.get("execution") or {}).get("stage") or "")
+    return tp_contract_status(layers, stage)
 
 
 def _tp_evidence(tp: Dict[str, Any], row: Dict[str, Any], by_tp: Dict[str, Any],
