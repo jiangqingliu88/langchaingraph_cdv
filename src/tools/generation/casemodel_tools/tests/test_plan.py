@@ -126,7 +126,7 @@ class TestNamingContract:
     """`plan.py` 与 `gen_uvm.attr_class_slug` 各写一份 —— 必须逐字一致。"""
 
     def test_class_names_match_uvm_tools(self):
-        from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import attr_class_slug
+        from src.tools.generation.uvm_tools.generation.render.jinja_renderer import attr_class_slug
 
         cases = [("D_ratio", "50", 50), ("D_mode", "首拍", 1),
                  ("D_type", "MAC", 0), ("反压模式", "尾拍", 2)]

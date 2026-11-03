@@ -38,7 +38,11 @@ QUESTA_TEMPLATE = (
     "[ -s sim_vsim.log ] && "
     '! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]|FATAL ERROR|Errors: *[1-9]"'
     ' sim_vsim.log && { '
-    'grep -qE "mismatched=0" sim_vsim.log '
+    # 锚点不能只是 `mismatched=0`：env 现在会为**每条 scoreboard** 打一行
+    # `[SCB <id>] … mismatched=0`，子串匹配会让"某条 SB 干净、聚合脏"的日志
+    # 也被判通过。只认 env 的聚合收口行（`[SCB_DUT]`）与独立 scoreboard 的
+    # `Scoreboard:` 结算行 —— 两者的 0 都代表**这一层真的比过了**。
+    'grep -qE "(\\[SCB_DUT\\]|Scoreboard:).*mismatched=0" sim_vsim.log '
     '|| { echo "NO_CHECKER_EVIDENCE: 没有比对结论（真 pass 要求 SCB 报 mismatched=0）"; '
     'exit 1; }; }'
 )

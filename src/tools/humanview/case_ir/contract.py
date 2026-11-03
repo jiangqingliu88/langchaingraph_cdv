@@ -221,6 +221,8 @@ def _scb_entries(case: Any, tps: List[Dict[str, Any]],
             "required": True,
             "evidence": str(sb.get("evidence") or "auto"),
             "tp_ids": [str(t.get("tp_id")) for t in members],
+            # 逐条收口归属（签核时"这条 SB 比的是哪几条规则"）
+            "rules": list(sb.get("rules") or []),
         })
     return out
 

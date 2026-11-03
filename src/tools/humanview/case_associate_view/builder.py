@@ -220,8 +220,35 @@ def _matrix(tp_ev: Dict[str, Any]) -> Dict[str, Any]:
     return {"groups": groups, "rows": rows}
 
 
-def _gaps(tp_ev: Dict[str, Any], case_tp: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _cell_gaps(cells: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """**每个未绿 CELL 一条** —— 视图4 必须和 Case×CELL 的颜色对得上。
+
+    TP 层的缺口只看"证据层缺哪一层"，解释不了"PARTIAL（未签核）"这类黄格；
+    而人看视图先看颜色。两边各说各的，读的人只能自己脑补差异（实测被指出过）。
+    """
     out: List[Dict[str, Any]] = []
+    for cell in (cells or {}).get("cells") or []:
+        color = str(cell.get("color") or "").lower()
+        if color not in ("red", "yellow"):
+            continue
+        reasons = [str(r) for r in (cell.get("reasons") or []) if str(r).strip()]
+        root = "；".join(reasons[:3]) + ("…" if len(reasons) > 3 else "")
+        out.append({
+            "type": "CELL 未签核" if color == "red" else "CELL 部分证据",
+            "item": str(cell.get("cell_id") or ""),
+            "root": root or ("缺证据" if color == "red" else "部分 TP 未签核"),
+            "action": ("补缺失证据（同一条用例 + 同一种子）" if color == "red"
+                       else "补齐未签核 TP 的执行证据 / 接后端"),
+            "owner": "待分配",
+            "status": "未开始" if color == "red" else "进行中",
+        })
+    return out
+
+
+def _gaps(tp_ev: Dict[str, Any], case_tp: Dict[str, Any],
+          cells: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    # CELL 层的缺口排前面：它与视图“颜色”一一对应，先回答"哪些格子不绿、为什么"
+    out: List[Dict[str, Any]] = _cell_gaps(cells or {})
     for tp in tp_ev.get("tps") or []:
         if tp.get("contract_status") in ("VERIFIED", "PENDING_BACKEND"):
             continue
@@ -408,7 +435,7 @@ def build_case_view(run_dir: str | Path) -> Dict[str, Any]:
 
     cases = _case_rows(tp_ev, records)
     features = _feature_rows(tp_ev)
-    gaps = _gaps(tp_ev, case_tp)
+    gaps = _gaps(tp_ev, case_tp, cells)
     ssot = _ssot_hash(od)
     return {
         "schema": SCHEMA,

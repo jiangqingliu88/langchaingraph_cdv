@@ -59,7 +59,8 @@ def _detect_signals(module_name: str) -> dict:
 def generate_cmodel(cmodel_dir: str, module_name: str = "dut",
                     agent_in: str = "", agent_out: str = "") -> dict:
     """Generate UVM cmodel predictor + DPI wrapper from C++ ref model."""
-    from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import JinjaRenderer, TEMPLATES_DIR
+    from src.tools.generation.uvm_tools.generation.constants import TEMPLATES_DIR
+    from src.tools.generation.uvm_tools.generation.render.jinja_renderer import JinjaRenderer
 
     cmodel = Path(cmodel_dir)
     cmodel.mkdir(parents=True, exist_ok=True)

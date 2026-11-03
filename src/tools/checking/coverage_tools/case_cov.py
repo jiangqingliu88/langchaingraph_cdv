@@ -577,18 +577,29 @@ def _raw_facts_for(entries: list, case: dict, facts: dict) -> list:
         present = key in by_rule
         sva.append({"id": item.get("id"), "present": present,
                     "fail": by_rule.get(key) if present else None})
+    scb = _scb_facts(case, facts)
+    return build_raw_facts(str(facts.get("case_id") or ""), bins=bins, sva=sva,
+                           scb=scb, timing_ok=facts.get("timing_ok"))
+
+
+def _scb_facts(case: dict, facts: dict) -> list:
+    """SCB 事实：聚合一条 + 每条 SB 按**它自己的收口行**（没有才退回聚合）。
+
+    不能拿聚合数字冒充逐条 —— 否则 `evidence: log` 的 SB 在没打自己那行时
+    会被判成 PROVEN。口径与 `_scb_evidence` 同一处（`_scb_source`）。
+    """
     summary = facts.get("scb_summary") or {}
-    # data 层用的是 env 的**聚合**收口（`[SCB_DUT]`），所以聚合事实必须有一条
-    # `id=aggregate`；逐条 SB 的事实也照发（证据粒度可能是 per_scb）
+    by_id = (facts.get("log_facts") or {}).get("scb_by_id") or {}
     scb = [{"id": "aggregate", "exec": int(summary.get("total") or 0),
             "matched": summary.get("matched"),
             "mismatched": summary.get("mismatched")}]
-    scb += [{"id": item.get("id"), "exec": int(summary.get("total") or 0),
-             "matched": summary.get("matched"),
-             "mismatched": summary.get("mismatched")}
-            for item in case.get("scb") or []]
-    return build_raw_facts(str(facts.get("case_id") or ""), bins=bins, sva=sva,
-                           scb=scb, timing_ok=facts.get("timing_ok"))
+    for item in case.get("scb") or []:
+        data, _ = _scb_source(item, summary, by_id)
+        scb.append({"id": item.get("id"),
+                    "exec": int((data or {}).get("total") or 0),
+                    "matched": (data or {}).get("matched"),
+                    "mismatched": (data or {}).get("mismatched")})
+    return scb
 
 
 def _apply_judgement(groups: list, sva: list, scb: list, judged: dict) -> None:

@@ -74,6 +74,10 @@ class Scoreboard:
         aggregate —— env 的 DUT 检查收口行 `[SCB_DUT] total/matched/mismatched`
         log       —— 必须有自己的 `[SCB <id>] total=… matched=…` 行，否则判未执行
         auto      —— 有 per-SB 行就用它，否则退回 aggregate
+
+    `rules` 是**这条 SB 负责哪几条检查规则**（env 检查组 `rules[].name`，
+    也就是 `assertions[].name`）。声明了且名字对得上，生成端才会为它打一行
+    `[SCB <id>]`；不声明就只有 env 的聚合行 —— **逐条证据不靠猜**。
     """
     id: str
     name: str = ""
@@ -82,6 +86,7 @@ class Scoreboard:
     evidence: str = "auto"
     model: str = ""
     description: str = ""
+    rules: List[str] = _field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -92,6 +97,7 @@ class Scoreboard:
             "evidence": self.evidence,
             "model": self.model,
             "description": self.description,
+            "rules": list(self.rules),
         }
 
 

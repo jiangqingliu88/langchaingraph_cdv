@@ -16,19 +16,77 @@ TEXT = {"green": "通过", "yellow": "部分", "red": "缺失", "na": "不适用
 
 _LAYER_KEYS = (("coverage", "功能覆盖"), ("sva", "SVA"),
                ("scoreboard", "Scoreboard"), ("path", "PATH"))
+_LAYER_LABEL = {key: name for key, name in _LAYER_KEYS}
+_STATUS_ORDER = {"red": 3, "yellow": 2, "green": 1, "na": 0}
+
+
+def _worst_status(statuses) -> str:
+    """多值 → 一个展示态：红 > 黄 > 绿 > na。"""
+    return max((s or "na" for s in statuses),
+               key=lambda s: _STATUS_ORDER.get(s, 0))
+
+
+def _conclusion_from_layers(layers: Dict[str, str]) -> str:
+    if all(v == "green" for v in layers.values()):
+        return "已验证"
+    reds = [_LAYER_LABEL[k] for k, v in layers.items() if v == "red"]
+    yellows = [_LAYER_LABEL[k] for k, v in layers.items() if v == "yellow"]
+    if reds:
+        return "证据链不完整（" + "、".join(reds) + "）"
+    if yellows:
+        return "待补（" + "、".join(yellows) + "）"
+    return "不适用"
+
+
+def _group_cases(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """视图1 按**逻辑用例**聚合 —— `data["cases"]` 是执行实例（CASE×TST）。
+
+    同一 CASE 会在多个 seed/轮次下重复出现（`npu_dep_test` 会有几十行），
+    那是**执行实例**不是逻辑用例。视图1 回答"哪个逻辑用例有什么证据"，
+    所以按 `case_id`（没有 CASE 的批次测试按测试名）归并，并给出执行次数；
+    逐实例的账在 EVD 表里。不聚合会让读的人以为数据重复了。
+    """
+    groups: Dict[str, Dict[str, Any]] = {}
+    for c in cases or []:
+        case_id = str(c.get("case_id") or "")
+        key = case_id or str(c.get("name") or "")
+        slot = groups.setdefault(key, {
+            "name": key, "kind": "用例" if case_id else "批次",
+            "execs": 0, "tests": [],
+            "layers": {k: [] for k, _n in _LAYER_KEYS},
+        })
+        slot["execs"] += 1
+        test = str(c.get("name") or "")
+        if test and test not in slot["tests"]:
+            slot["tests"].append(test)
+        for key_layer, _n in _LAYER_KEYS:
+            slot["layers"][key_layer].append(
+                (c.get(key_layer) or {}).get("status") or "na")
+    rows = []
+    for key in sorted(groups):
+        slot = groups[key]
+        layers = {k: _worst_status(v) for k, v in slot["layers"].items()}
+        slot["layers"] = layers
+        slot["conclusion"] = _conclusion_from_layers(layers)
+        slot["tests"] = slot["tests"][:3]
+        rows.append(slot)
+    return rows
 
 
 def render_markdown(data: Dict[str, Any]) -> str:
     lines = [f"# Case 证据视图 —— {data.get('run', '')}", ""]
     lines += _render_three_sets(data)
-    lines += ["## 视图1：用例 × 证据层", "",
-              "| 用例 | 功能覆盖 | SVA | Scoreboard | PATH | 结论 |",
-              "|---|---|---|---|---|---|"]
-    for c in data.get("cases") or []:
+    grouped = _group_cases(data.get("cases") or [])
+    lines += [f"## 视图1：用例 × 证据层（{len(grouped)} 个逻辑用例 / "
+              f"{len(data.get('cases') or [])} 次执行）", "",
+              "| 逻辑用例 | 类型 | 执行 | 功能覆盖 | SVA | Scoreboard | PATH | 结论 |",
+              "|---|---|---|---|---|---|---|---|"]
+    for c in grouped:
         cells = " | ".join(
-            f"{EMOJI.get(c[k]['status'], '?')} {c[k]['detail']}"
+            f"{EMOJI.get(c['layers'][k], '?')} {TEXT.get(c['layers'][k], '')}"
             for k, _name in _LAYER_KEYS)
-        lines.append(f"| {c.get('name')} | {cells} | {c.get('conclusion')} |")
+        lines.append(f"| {c.get('name')} | {c.get('kind')} | ×{c.get('execs')} "
+                     f"| {cells} | {c.get('conclusion')} |")
     lines += ["", "## 视图2：功能契约 × 证据层", "",
               "| Feat | 描述 | 功能覆盖 | SVA | Scoreboard | PATH | 状态 |",
               "|---|---|---|---|---|---|---|"]
@@ -278,11 +336,14 @@ def _html_v2(data: Dict[str, Any]) -> str:
               "、".join(r.get("observed_cases") or [])] for r in cell_rows]))
     runs = data.get("case_runs") or []
     if runs:
+        # 批次测试没有 CASE/CELL 是**事实**，不是缺数据：如实写"批次"，别用 `—`
+        # 让人去猜"是不是忘填了"。
         out.append("<h2>执行证据（EVD）</h2>" + _html_plain_table(
             ["EVD", "CASE", "TST", "测试", "seed", "阶段", "CELL", "legacy"],
-            [[r.get("evd_id"), r.get("case_id") or "—", r.get("tst_id"),
+            [[r.get("evd_id"), r.get("case_id") or "批次", r.get("tst_id"),
               r.get("test"), r.get("seed"), r.get("stage"),
-              "、".join(r.get("cells") or []),
+              "、".join(r.get("cells") or []) or ("—（批次不绑定 CELL）"
+                                                   if not r.get("case_id") else "—"),
               "是" if r.get("legacy") else "否"] for r in runs]))
     return "".join(out)
 
@@ -294,12 +355,15 @@ def _html_status(status: str, detail: str = "") -> str:
 
 
 def render_html(data: Dict[str, Any]) -> str:
+    grouped = _group_cases(data.get("cases") or [])
     cases = "".join(
         "<tr><td><b>" + html.escape(str(c.get("name"))) + "</b></td>"
-        + "".join(_html_status(c[k]["status"], c[k].get("detail", ""))
+        f"<td>{html.escape(c.get('kind'))}</td>"
+        f"<td>×{c.get('execs')}</td>"
+        + "".join(_html_status(c["layers"][k], TEXT.get(c["layers"][k], ""))
                   for k, _n in _LAYER_KEYS)
         + f"<td>{html.escape(str(c.get('conclusion')))}</td></tr>"
-        for c in data.get("cases") or [])
+        for c in grouped)
     features = "".join(
         "<tr><td>" + html.escape(str(f.get("id"))) + "</td><td>"
         + html.escape(str(f.get("desc"))) + "</td>"
@@ -325,9 +389,11 @@ def render_html(data: Dict[str, Any]) -> str:
         f"<title>Case 证据视图 —— {html.escape(str(data.get('run', '')))}</title>"
         f"<style>{css}</style></head><body>"
         f"<h1>Case 证据视图 —— {html.escape(str(data.get('run', '')))}</h1>"
-        "<h2>视图1：用例 × 证据层</h2>"
-        + _html_table(["用例", "功能覆盖", "SVA", "Scoreboard", "PATH", "结论"],
-                      [cases]) +
+        f"<h2>视图1：用例 × 证据层（{len(grouped)} 个逻辑用例 / "
+        f"{len(data.get('cases') or [])} 次执行）</h2>"
+        + _html_table(["逻辑用例", "类型", "执行", "功能覆盖", "SVA",
+                       "Scoreboard", "PATH", "结论"], [cases])
+        + "<p>按 CASE 聚合（没有 CASE 的批次测试按测试名）；逐执行实例见下方 EVD 表。</p>" +
         "<h2>视图2：功能契约 × 证据层</h2>"
         + _html_table(["Feat", "描述", "功能覆盖", "SVA", "Scoreboard", "PATH", "状态"],
                       [features]) +
@@ -343,12 +409,15 @@ def render_html(data: Dict[str, Any]) -> str:
 
 def render_terminal(data: Dict[str, Any]) -> str:
     """纯文本版（不依赖 rich，GUI/CI 日志都能贴）。"""
+    grouped = _group_cases(data.get("cases") or [])
     out = [f"Case 证据视图 —— {data.get('run', '')}"]
-    out.append("\n视图1：用例 × 证据层")
-    for c in data.get("cases") or []:
-        marks = " ".join(f"{EMOJI.get(c[k]['status'], '?')}{name}"
+    out.append(f"\n视图1：用例 × 证据层（{len(grouped)} 个逻辑用例 / "
+               f"{len(data.get('cases') or [])} 次执行）")
+    for c in grouped:
+        marks = " ".join(f"{EMOJI.get(c['layers'][k], '?')}{name}"
                          for k, name in _LAYER_KEYS)
-        out.append(f"  {c.get('name'):<36} {marks}  {c.get('conclusion')}")
+        out.append(f"  {c.get('name'):<36} {c.get('kind')} ×{c.get('execs'):<3} "
+                   f"{marks}  {c.get('conclusion')}")
     out.append("\n视图2：功能契约 × 证据层")
     for f in data.get("features") or []:
         marks = " ".join(f"{EMOJI.get(f.get(k), '?')}" for k, _n in _LAYER_KEYS)

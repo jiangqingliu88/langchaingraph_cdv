@@ -87,3 +87,54 @@ def test_rendering_is_json_safe():
     """视图数据最终要进 JSON / 签核包，渲染不能依赖不可序列化的东西。"""
     json.dumps(_view(), ensure_ascii=False)
     assert render_markdown(_view()).count("CG-D_DEP") >= 2
+
+
+def _two_runs_view() -> dict:
+    """同一逻辑用例的两次执行 + 一条批次测试（没有 CASE）。"""
+    data = _view()
+    first = dict(data["cases"][0])
+    second = dict(first, task="t2", tst_id="TST-X@2",
+                  sva={"status": "green", "detail": "0 触发"})
+    batch = dict(first, name="npu_basic_test", case_id="", tst_id="TST-B@1",
+                 coverage={"status": "na", "detail": "没有关联 TP"})
+    data["cases"] = [first, second, batch]
+    return data
+
+
+def test_view1_aggregates_execution_instances_by_case():
+    """视图1 是"逻辑用例"，不是执行实例 —— 否则同一测试会重复几十行。"""
+    page = render_html(_two_runs_view())
+    assert "2 个逻辑用例 / 3 次执行" in page
+    assert page.count("<b>CASE-D_DEP</b>") == 1
+    assert "<td>×2</td>" in page
+    assert "<td>批次</td>" in page          # 没有 CASE 的行如实标批次
+
+
+def test_evd_batch_rows_are_labelled_not_dashed():
+    data = _view()
+    data["case_runs"] = [{
+        "evd_id": "EVD-R-TST-B@1", "case_id": "", "tst_id": "TST-B@1",
+        "test": "npu_basic_test", "seed": 1, "stage": "p0", "cells": [],
+        "wave": "", "legacy": False,
+    }]
+    page = render_html(data)
+    assert "批次" in page
+    assert "批次不绑定 CELL" in page
+
+
+def test_gaps_cover_every_non_green_cell():
+    """视图4 必须和 Case×CELL 的颜色对得上（黄/红都要有对应的缺口行）。"""
+    from src.tools.humanview.case_associate_view.builder import _cell_gaps
+
+    cells = {"cells": [
+        {"cell_id": "CELL-A-P0", "color": "red",
+         "reasons": ["TP-A: NOT_VERIFIED"]},
+        {"cell_id": "CELL-B-P1", "color": "yellow",
+         "reasons": ["TP-B: PARTIAL"]},
+        {"cell_id": "CELL-C-P2", "color": "green"},
+        {"cell_id": "CELL-D-P3", "color": "na"},
+    ]}
+    gaps = _cell_gaps(cells)
+    assert [g["item"] for g in gaps] == ["CELL-A-P0", "CELL-B-P1"]
+    assert gaps[0]["type"] == "CELL 未签核" and "NOT_VERIFIED" in gaps[0]["root"]
+    assert gaps[1]["type"] == "CELL 部分证据"

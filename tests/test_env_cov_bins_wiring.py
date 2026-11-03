@@ -1132,9 +1132,9 @@ class TestBatchConstraintComesFromTheModel:
         都会让宏定义在那里断掉 —— 而报的错在下游（`tc_name` 未声明），不在那一行。
         这条不变量没有别的守卫，且**静默**炸编译。
         """
-        from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import (
-            TEMPLATES_DIR, JinjaRenderer, _normalize_batches,
-        )
+        from src.tools.generation.uvm_tools.generation.constants import TEMPLATES_DIR
+        from src.tools.generation.uvm_tools.generation.parsing.environment_specs import _normalize_batches
+        from src.tools.generation.uvm_tools.generation.render.jinja_renderer import JinjaRenderer
 
         batches = _normalize_batches([{"name": "t1", "theme": "TH-B01",
                                        "dimensions": "D_x", "method": "RND",
@@ -1262,9 +1262,9 @@ class TestTheConstraintModelIsWrittenInTheSameWindow:
         import shutil
 
         from src.executors.verify.main import VerifyExecutor
-        from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import (
-            TEMPLATES_DIR, UVMGenerator, JinjaRenderer,
-        )
+        from src.tools.generation.uvm_tools.generation.constants import TEMPLATES_DIR
+        from src.tools.generation.uvm_tools.generation.generators.orchestrator import UVMGenerator
+        from src.tools.generation.uvm_tools.generation.render.jinja_renderer import JinjaRenderer
 
         ydir = tmp_path / "inputs" / "yaml" / "uvm"
         ydir.mkdir(parents=True)

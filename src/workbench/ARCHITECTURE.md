@@ -1,6 +1,6 @@
 # Workbench 架构（当前实现）
 
-> 基线：2026-10-31（清单 **46 个启用模块**；工作台 `pytest src/workbench/tests` **741 passed**）
+> 基线：2026-11-04（清单 **46 个启用模块**；工作台 `pytest src/workbench/tests` **753 passed**，另有 3 个 IP 页面用例为既有失败）
 >
 > 本文描述 `src/workbench/` **代码现在怎么组织**，与仓库根
 > `ARCHITECTURE.md` 是同一套系统：CLI 是唯一正式入口，工作台是它的

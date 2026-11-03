@@ -86,15 +86,22 @@ assertions:
 # ── scoreboard 检查（case 三集合的 scb 来源）────────────────────────────
 # 与 assertions 并列：SVA 管跨拍时序（bind 进 DUT），SB 管值/账本/计数。
 # 本模型没有独立的参考模型，env 的 in-order scoreboard 是唯一的数据比对收口，
-# 它在日志里打 `[SCB_DUT] total=… matched=… mismatched=…`。
-# `evidence: aggregate` = 就用这条聚合行做证据（明文标注，不冒充逐条 SB 证据）；
-# 将来接上逐条 SB 收口（`[SCB <id>] …`）时改成 auto/log 即可。
+# 它在日志里打 `[SCB_DUT] total=… matched=… mismatched=…`（聚合），
+# 并按 `rules` 归并它负责的那几条规则打 `[SCB SB-NPU-DUT] …`（逐条）。
+# `evidence: auto` = 有逐条行用它，没有退回聚合行 —— 用了哪一层如实写进
+# `evidence_level`，不拿聚合冒充逐条。
 scoreboards:
   - id: SB-NPU-DUT
     name: NPU 调度器 in-order 比对
     checks: [CHECK-FUNC]
-    evidence: aggregate
+    evidence: auto
     description: env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB
+    # 这条 SB 真正在比的是这四条恒真规则（= assertions[].name，一份规则两个执行点）
+    rules:
+      - queue_level_within_depth
+      - raw_never_issues
+      - barrier_flushes
+      - issued_needs_no_blocker
 
 behavior:
   id: BEH-QUEUE

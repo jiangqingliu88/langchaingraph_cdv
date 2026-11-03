@@ -315,7 +315,7 @@ def test_schema_is_valid_jsonschema():
 # ── 集成：gen_uvm 生成流程 Phase 0（error 阻断 / --skip-schema-check）──
 
 def test_gen_blocks_on_schema_error(tmp_path):
-    from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import main as gen_main
+    from src.tools.generation.uvm_tools.generation.generators.cli import main as gen_main
     _write(tmp_path, "bad.yaml", {"interfaces": [{"ports": []}]})
     dest = tmp_path / "out"
     with pytest.raises(SystemExit):
@@ -325,7 +325,7 @@ def test_gen_blocks_on_schema_error(tmp_path):
 
 
 def test_gen_blocks_on_unknown_key(tmp_path):
-    from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import main as gen_main
+    from src.tools.generation.uvm_tools.generation.generators.cli import main as gen_main
     src = yaml.safe_load((EXAMPLES / "apb_interface.yaml").read_text(encoding="utf-8"))
     src["interfaces"][0]["reset_active_loww"] = True  # 拼错键 → unknown key error
     tmp_yaml = _write(tmp_path, "typo.yaml", src)
@@ -338,7 +338,7 @@ def test_gen_blocks_on_unknown_key(tmp_path):
 
 
 def test_gen_skip_schema_check_bypasses(tmp_path):
-    from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import main as gen_main
+    from src.tools.generation.uvm_tools.generation.generators.cli import main as gen_main
     src = yaml.safe_load((EXAMPLES / "apb_interface.yaml").read_text(encoding="utf-8"))
     src["interfaces"][0]["ports"][0]["dir"] = "inout"  # 非法枚举 → schema error
     tmp_yaml = _write(tmp_path, "bad.yaml", src)

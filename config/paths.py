@@ -30,11 +30,8 @@ PROJECT_ROOT = Path(os.environ.get("SIGNOFFAI_HOME", _REPO_ROOT)).expanduser().r
 #: 所有运行期数据库的唯一目录（不进 git）
 DATABASE_DIR = PROJECT_ROOT / "database"
 
-#: 主库 —— 领域数据 + 回归趋势 + 权限等
+#: 主库 —— 领域数据 + 回归趋势 + 权限等（趋势没有第二份库）
 MAIN_DB = DATABASE_DIR / "ic_verification.db"
-
-#: 兼容旧名字：趋势不再有独立库，读写都落到主库
-TREND_DB = MAIN_DB
 
 #: 领域注册表 / 成长库 —— 仍然一库一域，但**位置统一**在 database/
 MODEL_DB = DATABASE_DIR / "model_registry.db"

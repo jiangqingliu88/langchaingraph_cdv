@@ -198,6 +198,8 @@ def _parse_scoreboards(raw: Any) -> List[Any]:
             evidence=evidence,
             model=str(item.get("model") or "").strip(),
             description=str(item.get("description") or "").strip(),
+            rules=[str(r).strip() for r in as_list(item.get("rules"))
+                   if str(r).strip()],
         ))
     return out
 

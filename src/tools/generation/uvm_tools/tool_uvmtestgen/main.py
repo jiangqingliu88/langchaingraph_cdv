@@ -32,12 +32,14 @@ from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
 
-# 复用 gen_uvm 的文件头元数据（商标/权利/时间戳）
+# 复用生成层的文件头元数据（商标/权利/时间戳）
 try:
-    from ..tool_uvm.gen_uvm import DEFAULT_META, _make_banner, __version__ as GEN_UVN_VERSION
+    from ..generation.constants import DEFAULT_META, __version__ as GEN_UVN_VERSION
+    from ..generation.render.region_injector import _make_banner
 except ImportError:  # 直接脚本执行
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tool_uvm"))
-    from gen_uvm import DEFAULT_META, _make_banner, __version__ as GEN_UVN_VERSION
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from generation.constants import DEFAULT_META, __version__ as GEN_UVN_VERSION
+    from generation.render.region_injector import _make_banner
 
 __version__ = "0.1.0"
 

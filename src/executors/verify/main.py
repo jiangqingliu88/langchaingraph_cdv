@@ -10,6 +10,7 @@ from src.executors.verify.steps_dag import StepRecorder
 from src.executors.verify.ir_artifacts import (
     testpoint_files, write_contract_build,
 )
+from src.executors.verify.dut_checker import build_dut_checker
 import structlog
 
 logger = structlog.get_logger()
@@ -801,7 +802,7 @@ class VerifyExecutor(BaseExecutor):
         # **同一份规则、两个执行点**：模型里那几条 `assertions` 既渲染成 SVA
         # （设计侧，bind 进 DUT），也翻译成逐拍布尔喂给 env 组件（验证侧，UVM 收口）。
         # 一套规则两处生效，数出来的东西才对得上；各写一份必然漂。
-        checker_patch = _dut_checker(decls, meta)
+        checker_patch = build_dut_checker(decls, meta)
         # 它和这个接口采的是**同一批信号**：两份同时挂在 filelist 里，就是同一个
         # 信号被两个 covergroup 各采一遍 —— `vcover` 报表里多一个 covergroup，
         # 签核的"功能覆盖率"被自己搅浑。删的是本管道自己的产物（名字固定、
@@ -1276,25 +1277,6 @@ def _bitmap_patch(output_dir: Path, tp_payload: Dict[str, Any],
     logger.info(f"测试点位图：{bitmap['width']} 位（{tracked} 位可追踪）"
                 f"→ coverage/tp_bitmap.json")
     return {"tp_bitmap": bitmap}
-
-
-def _dut_checker(decls: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:
-    """模型 `assertions` → env 逐拍检查规则（失败给 `{}`，不编规则）。"""
-    try:
-        from src.tools.generation.casemodel_tools.coverage import checker_rules
-        got = checker_rules(decls.get("assertions"), meta.get("signals") or [])
-        for skipped in got["skipped"]:
-            logger.warning(f"DUT 检查跳过：{skipped}")
-        if not got["rules"]:
-            return {}
-        logger.info(f"DUT 检查：{len(got['rules'])} 条规则由 env 组件逐拍求值"
-                    f"（收口打印 matched/mismatched → 真 pass 的比对半边）")
-        return {"dut_checker": {"rules": got["rules"], "skipped": got["skipped"],
-                                "clock": meta.get("clock", "clk"),
-                                "reset": meta.get("reset", "rst_n")}}
-    except Exception as e:                             # noqa: BLE001 旁路
-        logger.warning(f"DUT 检查规则生成失败（本轮没有比对收口）: {e}")
-        return {}
 
 
 def _retire_stale_probe(iface_path: Path) -> None:

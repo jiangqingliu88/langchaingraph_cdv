@@ -217,7 +217,12 @@
             "description": "aggregate=用 env 的 [SCB_DUT] 收口行；log=必须有自己的 [SCB <id>] 行；auto=先找自己那行，找不到退回 aggregate"
           },
           "model": {"type": "string", "description": "参考模型名（可空）"},
-          "description": {"type": "string"}
+          "description": {"type": "string"},
+          "rules": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+            "description": "这条 SB 负责的检查规则名（= assertions[].name）。声明了且与 env 检查组对得上，生成端才为它打 [SCB <id>] 逐条收口行；不声明只有聚合行。"
+          }
         }
       }
     },

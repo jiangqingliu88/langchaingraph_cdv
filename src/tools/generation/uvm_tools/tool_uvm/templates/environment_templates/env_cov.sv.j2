@@ -296,7 +296,11 @@ class {{ environment.env_name }}_coverage extends uvm_component;
   int unsigned chk_unknown = 0;
   string chk_first_fail = "";
 {%- for r in _dc.rules %}
-  int unsigned chk_bad_{{ r.name }} = 0;
+  int unsigned chk_bad_{{ r.name }} = 0;   // 这条规则违规次数
+  // 逐条 SB 收口（`[SCB <id>]`）要按规则归并 —— 聚合行分不出是哪条 SB 的账，
+  // 所以每条规则各记**求值次数**与**求值为 X 的次数**。
+  int unsigned chk_n_{{ r.name }} = 0;
+  int unsigned chk_x_{{ r.name }} = 0;
 {%- endfor %}
 
   function void chk_dut_one();
@@ -319,6 +323,7 @@ class {{ environment.env_name }}_coverage extends uvm_component;
       // mismatched=0` —— 看着全绿，其实一个 bit 都没验。
       if ($isunknown(_ok_{{ loop.index }})) begin
         chk_unknown++;
+        chk_x_{{ r.name }}++;
         if (chk_first_fail == "")
           chk_first_fail = "{{ r.name }}: 求值为 X（信号未知）—— 不是命中，是没验到";
       end else if (!_ok_{{ loop.index }}) begin
@@ -331,6 +336,7 @@ class {{ environment.env_name }}_coverage extends uvm_component;
       end
     end
     chk_total++;
+    chk_n_{{ r.name }}++;
 {%- endfor %}
   endfunction
 {%- endif %}
@@ -465,6 +471,38 @@ class {{ environment.env_name }}_coverage extends uvm_component;
         "[SCB_DUT] total=%0d matched=%0d mismatched=%0d unverified=%0d  首条：%s",
         chk_total, chk_matched, chk_mismatched, chk_unknown, chk_first_fail), UVM_NONE)
     end
+{%- endif %}
+{%- if _dc and _dc.scoreboards %}
+    // ── 逐条 SB 收口 ──
+    //
+    // 每行只数**这条 SB 自己那几条规则**（case 模型 `scoreboards[].rules`）：
+    // 聚合行 `[SCB_DUT]` 说明"整轮比过了"，但签核问的是"**哪一条 SB** 比过"。
+    // 规则归属来自声明，不靠猜 —— 没声明 `rules` 的 SB 就只有聚合证据。
+    //
+    // 与聚合行同一口径：有 X 的那支**不写 `mismatched=0`**（否则"没验到"
+    // 会被 `grep` 当成"验过了"；回归判据已改为锚定 `[SCB_DUT]`/`Scoreboard:`）。
+{%- for sb in _dc.scoreboards %}
+{%-   set si = loop.index %}
+    begin
+      int unsigned sb_n_{{ si }} = 0;
+      int unsigned sb_bad_{{ si }} = 0;
+      int unsigned sb_x_{{ si }} = 0;
+{%-   for r in sb.rules %}
+      sb_n_{{ si }} += chk_n_{{ r }};
+      sb_bad_{{ si }} += chk_bad_{{ r }};
+      sb_x_{{ si }} += chk_x_{{ r }};
+{%-   endfor %}
+      if (sb_x_{{ si }} == 0)
+        `uvm_info("DUT_CHK", $sformatf(
+          "[SCB {{ sb.id }}] total=%0d matched=%0d mismatched=%0d",
+          sb_n_{{ si }}, (sb_n_{{ si }} - sb_bad_{{ si }}), sb_bad_{{ si }}), UVM_NONE)
+      else
+        `uvm_info("DUT_CHK", $sformatf(
+          "[SCB {{ sb.id }}] total=%0d matched=%0d unverified=%0d（求值为 X 的拍）",
+          sb_n_{{ si }}, (sb_n_{{ si }} - sb_bad_{{ si }} - sb_x_{{ si }}),
+          sb_x_{{ si }}), UVM_NONE)
+    end
+{%- endfor %}
 {%- endif %}
   endfunction
 

@@ -181,7 +181,8 @@ class TestCoverageModelIsBounded:
         """用**项目自己的渲染器**（它挂了 `now` 之类全局）—— 别自己搭一个裸 Jinja。"""
         from pathlib import Path
 
-        from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import JinjaRenderer, TEMPLATES_DIR
+        from src.tools.generation.uvm_tools.generation.constants import TEMPLATES_DIR
+        from src.tools.generation.uvm_tools.generation.render.jinja_renderer import JinjaRenderer
 
         renderer = JinjaRenderer(Path(TEMPLATES_DIR))
         return renderer.render("environment_templates/env_cov.sv.j2", dict(ctx))

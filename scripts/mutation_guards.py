@@ -90,6 +90,25 @@ MUTATIONS: List[Mutation] = [
         new='    "terminal": frozenset(ALL_ACTIONS),',
         tests="tests/test_source_transitions.py",
     ),
+    Mutation(
+        # 判据退化成子串匹配 → 逐条 SB 的 `mismatched=0` 能把"聚合脏"骗成通过
+        name="scb_pass_anchor_loosened",
+        path="src/tools/execution/regression_tools/backend_profiles.py",
+        old=("    'grep -qE \"(\\\\[SCB_DUT\\\\]|Scoreboard:).*mismatched=0\" "
+             "sim_vsim.log '"),
+        new="    'grep -qE \"mismatched=0\" sim_vsim.log '",
+        tests="tests/test_per_sb_scoreboard.py",
+    ),
+    Mutation(
+        # 归属靠猜（名字对不上也发逐条行）→ "不猜" 的测试必须红
+        name="scoreboard_rules_guessed",
+        path="src/executors/verify/dut_checker.py",
+        old=("        owned = [str(n) for n in (sb.get(\"rules\") or []) "
+             "if str(n) in known]"),
+        new=("        owned = ([str(n) for n in (sb.get(\"rules\") or [])]\n"
+             "                 or sorted(known)[:1])"),
+        tests="tests/test_per_sb_scoreboard.py",
+    ),
 ]
 
 

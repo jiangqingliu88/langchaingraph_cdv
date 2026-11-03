@@ -29,7 +29,7 @@ from .generators.regression_gen import (  # noqa: E402,F401
 )
 
 from src.tools.common.lib.uvm_context import ctx
-from src.tools.generation.uvm_tools.tool_uvm.gen_uvm import TEMPLATES_DIR
+from src.tools.generation.uvm_tools.generation.constants import TEMPLATES_DIR
 
 
 def _load_spec(output_dir: Path) -> dict | None:

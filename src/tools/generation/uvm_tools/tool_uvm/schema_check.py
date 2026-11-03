@@ -31,13 +31,15 @@ except ImportError as exc:  # pragma: no cover
     raise SystemExit(
         "Missing dependency: jsonschema. Install with: pip install jsonschema") from exc
 
-# 双重导入守卫（与 gen_uvm.py:32-35 相同，兼容 python -m 与直接脚本两种路径）
+# 双重导入守卫（兼容 python -m 与直接脚本两种路径）—— 直接脚本时把
+# `uvm_tools/`（generation 包的父目录）放进 sys.path，不依赖仓库根。
 try:
     from .semantic_check import Issue
-    from .gen_uvm import YAMLLoader
+    from ..generation.parsing.yaml_loader import YAMLLoader
 except ImportError:
     from semantic_check import Issue
-    from gen_uvm import YAMLLoader
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from generation.parsing.yaml_loader import YAMLLoader
 
 __version__ = "1.0"
 

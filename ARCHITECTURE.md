@@ -2,9 +2,9 @@
 
 > 基线：2026-11-04
 >
-> 全量单测：**1317 passed / 2 skipped**；工作台 **744 passed**（另有 3 个 IP 页面用例为既有失败，与本次改动无关）
+> 全量单测：**1349 passed / 2 skipped**；工作台 **753 passed**（另有 3 个 IP 页面用例为既有失败，与本次改动无关）
 >
-> UVM 端到端实测：`output_e2e_npu_sched_20261104d_jiang_20261103_231400`，分级回归 **273/273 PASS**，功能计划覆盖率 **95.23%**（第 1 轮收敛），签核 **PASS_WITH_CAVEAT / CONDITIONAL**；Case View：13 个契约组 / 267 份逐用例证据 / 364 条 EVD / 13 个 CELL（黄 11 · 红 2，缺证据不冒充绿），Case Gate **PASS**（blocker 0）；签核包 308 份文件，`case_view` 段 278 份，增量 `copied=4 / reused=302`，`verify_package` 通过
+> UVM 端到端实测：`output_e2e_persb_jiang_20261104_022328`，分级回归 **273/273 PASS**，功能计划覆盖率 **95.23%**（第 1 轮收敛），签核 **PASS_WITH_CAVEAT / CONDITIONAL**；Case View：13 个契约组 / 267 份逐用例证据 / 364 条 EVD / 13 个 CELL（黄 11 · 红 2，缺证据不冒充绿），SCB 逐条收口 **47 条 `per_scb`**，Case Gate **PASS**（blocker 0）；签核包 313 份文件，`case_view` 段 278 份，增量 `copied=311 / reused=0`（首次打包），`evidence verify` 通过
 >
 > SoC 参考工程实测：`examples/open_npu_soc`，`soc run` 的两条用例（参考 TB `gemm_8x8` + E203 C `gemm_8x8_c`）**PASS**；参考路径 `mismatched=0`/2075 ns，C 路径 `TEST_PASS`，输出 `output_soc_design_jiang_20261031_223611`；`signoff_evidence/` 27 个文件（输入/npu RTL/golden/回归/两份波形），`soc evidence` 校验通过；两份波形都带 `design.bin`，Visualizer hierarchy 可浏览源码
 >
@@ -379,7 +379,7 @@ audit → finalize → END
   新函数超阈值、或已登记函数复杂度增长 → 失败。
 - `python -m config.architecture_guard` 是 CI 入口。
 
-**变异测试** `scripts/mutation_guards.py` 故意改坏 7 条核心守卫，再跑对应
+**变异测试** `scripts/mutation_guards.py` 故意改坏 9 条核心守卫，再跑对应
 测试；测试必须失败（mutant killed），否则说明守卫没被测到：
 
 | mutant | 守卫 | 对应测试 |
@@ -391,8 +391,10 @@ audit → finalize → END
 | `state_contract_wrong_owner` | State 写入者 | `test_state_contracts` |
 | `tool_registry_empty_allowed` | 工具映射完整性 | `test_tool_registry` |
 | `source_terminal_accepts_anything` | `source` 转移契约 | `test_source_transitions` |
+| `scb_pass_anchor_loosened` | 判据锚定 `[SCB_DUT]`/`Scoreboard:` | `test_per_sb_scoreboard` |
+| `scoreboard_rules_guessed` | SB 归属不猜 | `test_per_sb_scoreboard` |
 
-当前 **7/7 killed**。新增守卫必须在 `MUTATIONS` 里有一条“改坏它会红”的
+当前 **9/9 killed**。新增守卫必须在 `MUTATIONS` 里有一条“改坏它会红”的
 mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
 
 ---
@@ -774,9 +776,9 @@ src/tools/generation/uvm_tools/generation/
    └─ regression_gen.py   # regression.yaml / 种子 / 分级 tag / TP 回归任务
 ```
 
-- `tool_uvm/gen_uvm.py` 现在是**兼容门面**：只做按名 re-export + `main()` 入口
-  （3305 → 80 行，只留**仍在用的名字**而不是全量 re-export），`from ...tool_uvm.gen_uvm import X` 与
-  `python gen_uvm.py` 都照旧可用。
+- `tool_uvm/gen_uvm.py` 现在**只剩命令行入口**（`main()` 转发）：
+  实现全部在 `generation/`，旧调用方已搬到 `generation.*` 导入；
+  `python gen_uvm.py` / `python -m ...tool_uvm.gen_uvm` 两种入口照旧可用。
 - **验收判据是产物字节不变**：每次搬迁后 `examples/apb` 全量生成 60 个文件与
   迁移前逐字节一致（只归一化了树根路径）；直接脚本入口单独跑 `--version` 验证，
   因为它的兜底走 `generation.*` 顶层包名（`python gen_uvm.py` 时没有父包）。
@@ -999,6 +1001,10 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
   `incremental/plan.json`；`vagent verify --incremental-from <run>` 让 ops 在
   回归前生成计划并按选中用例过滤（`confidence=mapped` 才过滤）。
 - 质量门 `functional` 维度在"增量只跑 X/Y"时给 `warn`，签核范围不静默缩小。
+- **义务 worklist（默认开）**：账本里已有历史证据时，按未清偿义务生成执行
+  清单，只重跑对应 test（实测 55 条 vs 全量 273 条、163 s vs 847 s）；
+  全新 run（账本空）、没有契约、或算不出清单时**回落全量**，不静默缩小范围。
+  关掉：`SIGNOFFAI_WORKLIST=0/off/false` 或 `params.worklist=False`。
 - `vagent diff runs --baseline <run> --current <run>` → `docs/run_diff.json`：
   覆盖率/TP/回归耗时/决策有效率/归因完整率/RTL 变化的并排 delta。
 
@@ -1028,6 +1034,10 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 - **视图**：`coverage/case_view.{json,md,html}`（`case_associate_view_v2`）四张
   旧表 + 三张新表（分类树 / Case×CELL / 执行证据）+ 元数据（`ssot_sha256` /
   `readonly`）。设计见 `docs/design/architecture_transformation_plan.md`。
+  **视图1 按逻辑 CASE 聚合**（没有 CASE 的批次测试按测试名），执行次数单列；
+  逐实例明细在 EVD 表（批次行的 CASE 列写"批次"，不写 `—`）。
+  **视图4 的缺口与 Case×CELL 颜色一一对应**：每个非绿 CELL 一条，再叠加 TP
+  层证据缺口 —— 两边各说各的会让人自己脑补差异。
 - **case 三集合**：`group = CG-<dimension>`，`cell = CELL-<dimension>-<stage>`；
   `sva` 来自 `assertions[].tp_bindings`，`scb` 来自 `scoreboards:`（按
   `tp_bindings` 或 `checks` 交集绑定，证据粒度写进 `evidence_level`）。
@@ -1080,15 +1090,20 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 5. **"没声明"≠"通过"**：一律进 `not_applicable` / `NOT_APPLICABLE` / `na`，
    绝不折成绿色。
 6. **签核包必须含 Case 证据**：`signoff_evidence/case_view/`，哈希可复现、可 replay。
-7. **证据粒度如实**：聚合证据（如 env 的 `[SCB_DUT]`）标 `aggregate`，不冒充逐条。
+7. **证据粒度如实**：聚合证据（如 env 的 `[SCB_DUT]`）标 `aggregate`；模型
+   `scoreboards[].rules` 声明了归属、env 真打了 `[SCB <id>]` 才标 `per_scb`，
+   不冒充逐条。两者同一口径：**有 X 就不写 `mismatched=0`**（"没验到"≠"验过"），
+   回归判据也只认 `[SCB_DUT]` / `Scoreboard:` 锚点，不被逐条行骗过。
 
 #### 9.12.4 当前边界（如实记账）
 
 - 观测型组（`D_DEP / D_UNIT / D_DECISION / D_CLUSTER`）没有独立用例：要靠别的用例
   的 checkpoint 观测；要变成可驱动需在模型里补 `stimulus.field` 或 `realization.sequence`。
 - 行为域组（`BEH_QUEUE`）：TP 已进 IR，执行后端（P1b）未接 → `PENDING_BACKEND` / 黄。
-- SCB 目前是 **aggregate 粒度**（`[SCB_DUT]` 收口行）；逐条 SB 收口（`[SCB <id>]`）
-  的接口已留好（`evidence: auto|aggregate|log`），等 UVM 侧按 `scoreboards:` 生成。
+- SCB **逐条收口已接**：`scoreboards[].rules`（= `assertions[].name`）声明归属
+  → verify 生成 `dut_checker.scoreboards` → env 按规则计数打 `[SCB <id>]`
+  （`evidence: auto|aggregate|log` 决定采集侧用哪一层）。没声明 `rules` 的 SB
+  仍只有 `[SCB_DUT]` 聚合证据 —— 归属不猜。
 
 **下一步（根本重构）**：把判定权从各模块收归"契约 → 义务 → 事实账本 → 推导 →
 裁决"，见 `docs/design/contract_driven_architecture_v3.md`。本节描述的是当前实现，
@@ -1268,8 +1283,8 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 - 另有 `database/reference_finder_cache.db`（Reference Finder 缓存）。
 - 连接统一开 **WAL + busy_timeout**：工作台与 CLI 可同时读，写冲突时等待而不是立刻报错。
 - 路径解析统一走 `config/paths.py`；`SIGNOFFAI_HOME` 可把运行期根目录指到仓库外
-  （pip 安装后不会写进 site-packages）。`TREND_DB` 是 `MAIN_DB` 的兼容别名，
-  **趋势不再有第二份库**。
+  （pip 安装后不会写进 site-packages）。趋势与领域数据共用 `MAIN_DB`，
+  **没有第二份趋势库**（旧别名已删）。
 - **Architecture 2.0 的事实文件是 run-local 的**：`docs/events.jsonl`、
   `docs/provenance.jsonl`、`decision/evaluations.jsonl`、`artifacts/artifacts.json`
   都跟着 run 目录走（能打包、能换机器、离线可读），**不新增跨 run SQLite**。
@@ -1359,13 +1374,13 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 ## 14. 测试与质量门禁
 
 ```bash
-python -m pytest tests/ -q                            # 1228 passed / 5 skipped
-python -m pytest tests/core -q                        # Architecture 2.0 核心（89 条）
+python -m pytest tests/ -q                            # 全量（数量见顶部基线，以实际输出为准）
+python -m pytest tests/core -q                        # Architecture 2.0 核心
 python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具
-python -m pytest src/workbench/tests -q               # 721 passed
+python -m pytest src/workbench/tests -q               # 工作台（数量见顶部基线）
 python -m config.architecture_guard                   # 行数 / 圈复杂度预算
-python scripts/mutation_guards.py                     # 7 条核心守卫变异测试
+python scripts/mutation_guards.py                     # 9 条核心守卫变异测试
 ```
 
 关键守卫：
@@ -1486,9 +1501,6 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 - **输出目录过长会撞 Windows MAX_PATH（coverstore 打不开 → vsim-7）**：
   实测把 run 复制到更长的目录名下重跑时，覆盖率库路径超限、单条用例被判 fail；
   换成短目录名即 55/55 全过。产品本身没问题，但输出目录名不宜过长。
-- **义务 worklist 默认关闭（需 SIGNOFFAI_WORKLIST=1）**：按未清偿义务生成
-  执行清单的能力已落地（实测 55 条 vs 全量 273 条、163 s vs 847 s），但默认仍
-  跑全量回归；等一周实测再翻默认（见 `docs/design/contract_driven_architecture_v3.md` §M4）。
 - **边界表同源**：`config/known_limitations.py` 是 §15 的代码真相；
   `test_architecture_invariants.py` 校验文档包含每条，player runtime 落地时
   必须同步改 `status` 与文档。
@@ -1509,7 +1521,7 @@ python scripts/mutation_guards.py                     # 7 条核心守卫变异�
 │  ├─ paths.py                    运行期路径解析
 │  └─ settings.py                 设置
 ├─ scripts/
-│  ├─ mutation_guards.py           7 条核心守卫的变异测试
+│  ├─ mutation_guards.py           9 条核心守卫的变异测试
 │  └─ check_architecture.py        可选 CI 包装
 ├─ database/                       运行期 SQLite；不进 git，仅保留 .gitkeep
 ├─ specs/<module>/                 RTL、casemodel.yaml、signoff_policy.yaml

@@ -192,6 +192,13 @@
         },
         "reset": {
           "type": "string"
+        },
+        "scoreboards": {
+          "$comment": "逐条 SB 收口：每条 scoreboard 归并它自己那几条规则的计数，打 `[SCB <id>] total/matched/mismatched`。名字对不上的不出现（不猜）。",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dutCheckerScoreboard"
+          }
         }
       },
       "additionalProperties": false
@@ -1831,6 +1838,27 @@
         },
         "message": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dutCheckerScoreboard": {
+      "$comment": "一条 scoreboard 的逐条收口归属：id（SB-…）+ 它负责的规则名（必须是 dut_checker.rules[].name 的子集）。",
+      "type": "object",
+      "required": [
+        "id",
+        "rules"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

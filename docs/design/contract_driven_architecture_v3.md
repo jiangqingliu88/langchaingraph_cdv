@@ -334,7 +334,7 @@ EVD 行 `cells` 全空（47 行），只有重跑时拿到上一轮 cell_matrix 
 | 落点 | 内容 |
 |---|---|
 | `verification_os/worklist.py` | `build_worklist()`：契约义务 −（当前契约事实推导出的）已清偿 = 未清偿；按 `tp_ids`/`case_id` 映射到 TP，再按 `regression_gen` 同一口径（`tp_<slug>`）映射到**真实存在**的回归 test；产出 `status/worklist.json` + 正则 |
-| ops | `_regression_filter()`：`params.worklist is True` 或 `SIGNOFFAI_WORKLIST=1` 时用 worklist 正则，否则回落增量基线/全量；算不出来（无契约/无回归清单）**回落全量**，不静默缩小 |
+| ops | `_regression_filter()`：**默认**在账本已有历史证据时用 worklist 正则；`params.worklist=False` 或 `SIGNOFFAI_WORKLIST=0/off/false` 显式关掉，否则回落增量基线/全量；算不出来（无契约/无回归清单/全新 run）**回落全量**，不静默缩小 |
 | CLI | `vagent contract worklist --run …` |
 | 实测 | npu_sched：58 条义务中 **25 条未清偿 → 47 条 test**（本轮 55 个任务 = 47 test + 8 build）；**163 s vs 全量 847 s（约 5×）**，273 → 55 条用例；另有 15 条映射不到回归 test（观测型/行为域组没有独立用例）进 `skipped_no_test` |
 
@@ -372,9 +372,16 @@ cmd_verify），代价与收益不成比例；环境变量覆盖同一场景。
 - 签核页新增第 5 个标签页「**OS 账本**」：义务表（id / 类型 / 用例 / 状态）+
   未清偿计数 + "建议重跑 N 条 test"；数据来自 `flow.signoff.os`（`status_summary()`
   现算义务状态，读的是 `status/` 与账本，不是 `case_view`）。
-- 逐条 SB 证据路径（`[SCB <id>]`）已有测试锁住：日志里出现逐条收口时，
-  `evidence_level=per_scb` 优先于聚合；`evidence: log` 没有自己那行 → `NOT_EXECUTED`。
-  **生成侧仍待接**（env 模板目前只打聚合行）。
+- **逐条 SB 证据（生成侧已接完）**：case 模型的 `scoreboards[].rules` 声明这条
+  SB 负责哪几条检查规则（= `assertions[].name`），verify 生成
+  `env_cov_bins.yaml#dut_checker.scoreboards`；env 模板按规则计数归并，打
+  `[SCB <id>] total=… matched=… mismatched=…`（有 X 时改打 `unverified=…`，
+  不写 `mismatched=0`）。采集侧照旧：有逐条行 `evidence_level=per_scb`，
+  没有退回聚合；`evidence: log` 没有自己那行 → `NOT_EXECUTED`。
+  采集事实也按同一条行发（不再拿聚合数字冒充逐条）。
+- **判据锚点收紧**：回归的 `grep` 从子串 `mismatched=0` 改为
+  `(\[SCB_DUT\]|Scoreboard:).*mismatched=0` —— 否则"某条 SB 干净、聚合脏"
+  会被逐条行骗过。逐条行与聚合行同一口径：有 X 不写 0。
 
 ### 里程碑与停点
 

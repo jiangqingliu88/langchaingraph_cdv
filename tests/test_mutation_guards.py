@@ -37,11 +37,14 @@ def test_every_mutant_targets_a_unique_existing_snippet():
         assert (ROOT / mutation.tests).is_file(), mutation.tests
 
 
-def test_the_mutation_set_covers_the_six_core_guards():
+def test_the_mutation_set_covers_the_core_guards():
+    """逐条登记：新增守卫必须显式加进来，不能被悄悄删掉。"""
     mod = _load_script()
     assert {m.name for m in mod.MUTATIONS} == {
         "decision_hard_overridden", "steps_dag_missing_dependency",
         "plusargs_reserved_allowed", "file_audit_hash_skipped",
         "state_contract_wrong_owner", "tool_registry_empty_allowed",
         "source_terminal_accepts_anything",
+        # SCB 逐条收口：判据锚点 + 规则归属（"不猜"）
+        "scb_pass_anchor_loosened", "scoreboard_rules_guessed",
     }
