@@ -11,7 +11,8 @@ from typing import Any, Dict, List, Optional
 from ..constants import DEFAULT_META, TEMPLATES_DIR, __version__
 from ..ir.uvm_ir import validate_agent_ir, validate_ir
 from ..ir.shadow import (
-    compare_agent_context, compare_environment_context, shadow_enabled, warn_shadow,
+    compare_agent_context, compare_environment_context, record_agent,
+    record_environment, shadow_enabled, warn_shadow,
 )
 from ..models import (
     AgentModel, BenchAgentEntry, BenchModel, ConstraintModel, EnvironmentModel,
@@ -162,8 +163,11 @@ class AgentRenderTask(RenderTask):
         _warn_ir_issues(f"agent {agent.name}",
                         validate_agent_ir(agent.to_uvm_ir()))
         if shadow_enabled():
-            warn_shadow(f"agent {agent.name}",
-                        compare_agent_context(agent, {"agent": agent}))
+            # 双写比对：IR 派生视图 vs 渲染 ctx —— 差异进日志**并落盘**
+            # （`docs/ir_shadow_diff.json`）。只报告，不改变产物字节。
+            issues = compare_agent_context(agent, {"agent": agent})
+            warn_shadow(f"agent {agent.name}", issues)
+            record_agent(self.output_dir, agent, {"agent": agent})
         rendered: List[Path] = []
         base_dir = self.output_dir / "agents" / f"{agent.name}_agent"
         # filelist.f 是「在 agent 目录里单独用」的（cd agents/<X>_agent && vlog -f filelist.f），
@@ -569,9 +573,11 @@ class EnvironmentRenderTask(RenderTask):
         _warn_ir_issues(f"environment {environment.env_name}",
                         validate_ir(environment.to_uvm_ir(), require_ports=False))
         if shadow_enabled():
-            warn_shadow(f"environment {environment.env_name}",
-                        compare_environment_context(environment,
-                                                    {"environment": environment}))
+            issues = compare_environment_context(
+                environment, {"environment": environment})
+            warn_shadow(f"environment {environment.env_name}", issues)
+            record_environment(self.output_dir, environment,
+                               {"environment": environment})
         rendered: List[Path] = []
         env_dir = self.output_dir / "env"
         context = {"environment": environment, **environment.to_context()}

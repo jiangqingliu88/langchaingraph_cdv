@@ -800,6 +800,11 @@ src/tools/generation/uvm_tools/generation/
     test 引用不存在的 agent；env 侧 agent 只声明名字，端口在 interface 侧，故不查端口。
   - **只警告、不改产物字节**（`examples/apb` 60 个文件逐字节不变），也不静默 ——
     模型或解析漂移时生成前就能看见。
+  - **双写比对（IR 影子报告）**：同一入口再从 IR 派生一份渲染视图，与模板真正
+    吃的 ctx 逐字段比对（agent：name/interface/agent_type/ports；env：
+    env_name/agents/tests），差异 print 并落 `docs/ir_shadow_diff.json`
+    （`schema=uvm_ir_shadow_v1`，`counts.inconsistent` 是切换字节门禁的读数）。
+    开关 `SIGNOFFAI_UVM_IR_SHADOW=off`；写报告失败不影响生成。
   - 模板仍直接吃 dataclass/ctx：IR 目前是**校验契约**，还没成为渲染的数据源。
 
 ### 8.6 真 pass 判据
@@ -1465,9 +1470,10 @@ python scripts/mutation_guards.py                     # 9 条核心守卫变异�
   `job.denied(status=monitor)`。全局收紧用 `SIGNOFFAI_CMD_ALLOWLIST=enforce`，
   EDA 退回 monitor 用 `SIGNOFFAI_CMD_ALLOWLIST_EDA=monitor`。
 - **UVM 生成器尚未迁到统一 IR**（当前是影子模式）：`generation/ir/shadow.py` 在
-  `AgentRenderTask` / `EnvironmentRenderTask` 入口比较 IR 与现有模型/ctx，
-  只 print warning；模板仍直接吃 `AgentModel` / `EnvironmentModel` 的 ctx。
-  字节门禁与 IR-first 尚未切换；IR 目前拦不住“字段还在、语义已错”这类漂移。
+  `AgentRenderTask` / `EnvironmentRenderTask` 入口做**双写比对**（IR 派生视图 vs
+  渲染 ctx），差异 print 并落 `docs/ir_shadow_diff.json`；模板仍直接吃
+  `AgentModel` / `EnvironmentModel` 的 ctx。字节门禁与 IR-first 尚未切换；
+  “差异为 0”是切换的前置读数，IR 目前仍拦不住“字段还在、语义已错”这类漂移。
 - **质量门默认 report**：`write(...)` 支持 `report/warn/block`（环境变量
   `SIGNOFFAI_QUALITY_GATE`），但 block 尚未接入签核三态/caveat；本阶段只把
   策略词汇和配置入口落地。
