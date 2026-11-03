@@ -8,7 +8,8 @@ from src.layers.l2_orchestration.executors.base import BaseExecutor, ExecutorRes
 from src.layers.l2_orchestration.executors.registry import register_executor
 from src.executors.verify.steps_dag import StepRecorder
 from src.executors.verify.ir_artifacts import (
-    testpoint_files, write_contract_build,
+    attach_tp_constraints, enrich_case_ir, testpoint_files,
+    write_contract_build,
 )
 from src.executors.verify.dut_checker import build_dut_checker
 import structlog
@@ -443,6 +444,8 @@ class VerifyExecutor(BaseExecutor):
             if payload.get("error"):
                 logger.warning(f"测试点 IR 生成失败: {payload['error']}")
                 return []
+            # **第四集合**：约束归属写进 Case IR 与 TP IR（并重算 YAML 哈希）。
+            payload = attach_tp_constraints(payload, output_dir)
             cov_dir = output_dir / "coverage"
             cov_dir.mkdir(parents=True, exist_ok=True)
             # **必须 `newline="\n"`**：Windows 的文本模式会把 `\n` 翻成 `\r\n`，
@@ -487,16 +490,20 @@ class VerifyExecutor(BaseExecutor):
             # 它是**身份来源**，下游（回归任务 / 证据聚合 / 视图）只读不改。
             from src.tools.common.lib.case_meta import write_case_ir
 
-            _ci = write_case_ir(cov_dir, payload.get("case_ir") or {},
-                                payload.get("case_maps") or {})
+            # **约束归属**：case = groups[] + sva[] + scb[] + constraints[]。
+            # 归属按 coverage plan 的策略维度交集算；契约哈希因此覆盖"这条
+            # 用例依赖哪条约束"—— 约束换了版本，证据就不再对得上。
+            case_ir = enrich_case_ir(output_dir, payload.get("case_ir") or {})
+            _ci = write_case_ir(cov_dir, case_ir, payload.get("case_maps") or {})
             if _ci.get("path"):
                 logger.info(f"Case IR：{_ci['cases']} 条用例 / "
                             f"{_ci['categories']} 个分类（声明 {_ci['declared']}、"
-                            f"合成 {_ci['synthesized']}）· 三集合 "
-                            f"group={_ci['groups']} sva={_ci['sva']} scb={_ci['scb']}"
+                            f"合成 {_ci['synthesized']}）· 四集合 "
+                            f"group={_ci['groups']} sva={_ci['sva']} scb={_ci['scb']} "
+                            f"constraints={_ci.get('constraints', 0)}"
                             f" → coverage/case_ir.json")
             # M1：契约是**构建物** —— 写完 case_ir 立刻编译，ops 前置校验它。
-            write_contract_build(output_dir, payload.get("case_ir") or {})
+            write_contract_build(output_dir, case_ir)
         except Exception as e:                       # noqa: BLE001 旁路，别拦主流程
             logger.warning(f"测试点 IR 落盘失败: {e}")
             return []

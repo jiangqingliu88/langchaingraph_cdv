@@ -187,12 +187,14 @@ class TestPoint:
     case_id: str = ""
     #: 可执行实例**模板**身份（`TST-<test>`）；带种子的实例身份在 task_meta 里。
     tst_id: str = ""
-    #: **三集合契约引用**（见 `docs/design/architecture_transformation_plan.md`
-    #: 与 `arch.md`）：这条 TP 属于哪些功能组、受哪些断言/检查保护。
+    #: **四集合契约引用**（见 `docs/design/architecture_transformation_plan.md`
+    #: 与 `arch.md`）：这条 TP 属于哪些功能组、受哪些断言/检查/约束保护。
     #: 由 `plan` 在生成期从 dimension 与 assertion bindings 聚合，不手写。
     groups: List[str] = _field(default_factory=list)
     sva: List[str] = _field(default_factory=list)
     scb: List[str] = _field(default_factory=list)
+    #: **约束 id**（`p_*` 策略名）—— 这条 TP 的激励受哪些约束塑造。
+    constraints: List[str] = _field(default_factory=list)
 
     @property
     def observe_only(self) -> bool:
@@ -225,10 +227,11 @@ class TestPoint:
             # 身份同理：没有就不写，别让空串混进哈希
             **({"case_id": self.case_id} if self.case_id else {}),
             **({"tst_id": self.tst_id} if self.tst_id else {}),
-            # 三集合引用：空就不写（"没声明"与"声明了空集合"要能分开）
+            # 四集合引用：空就不写（"没声明"与"声明了空集合"要能分开）
             **({"groups": list(self.groups)} if self.groups else {}),
             **({"sva": list(self.sva)} if self.sva else {}),
             **({"scb": list(self.scb)} if self.scb else {}),
+            **({"constraints": list(self.constraints)} if self.constraints else {}),
             "status_rule": dict(self.status_rule),
             "observe_only": self.observe_only,
             "notes": list(self.notes),

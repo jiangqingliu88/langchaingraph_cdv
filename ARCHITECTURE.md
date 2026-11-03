@@ -1048,10 +1048,13 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
   逐实例明细在 EVD 表（批次行的 CASE 列写"批次"，不写 `—`）。
   **视图4 的缺口与 Case×CELL 颜色一一对应**：每个非绿 CELL 一条，再叠加 TP
   层证据缺口 —— 两边各说各的会让人自己脑补差异。
-- **case 三集合**：`group = CG-<dimension>`，`cell = CELL-<dimension>-<stage>`；
+- **case 四集合**：`group = CG-<dimension>`，`cell = CELL-<dimension>-<stage>`；
   `sva` 来自 `assertions[].tp_bindings`，`scb` 来自 `scoreboards:`（按
-  `tp_bindings` 或 `checks` 交集绑定，证据粒度写进 `evidence_level`）。
-- **审计 caveat**（三集合）：`CASE_GATE_BLOCKED`、`CASE_GROUP_PARTIAL`、
+  `tp_bindings` 或 `checks` 交集绑定，证据粒度写进 `evidence_level`）；
+  `constraints` 是约束 id（`p_*` 策略名），按 `coverage_plan.constraint_backing`
+  的维度交集归属，随 `constraint_backing`（backed/dimensions/reason）一起进
+  Case IR 与契约哈希；`task_meta.constraint_ids` 记下这条执行依赖的约束。
+- **审计 caveat**（四集合）：`CASE_GATE_BLOCKED`、`CASE_GROUP_PARTIAL`、
   `CASE_SVA_VACUOUS`、`CASE_SCB_NOT_EXECUTED`、`CASE_PATH_PENDING_BACKEND`、
   `CASE_IR_EVIDENCE_MISMATCH`；门禁码另见 `case_associate_view/gates.yaml`。
 - **进签核包**：`signoff_evidence/case_view/` 收 `case_ir / case_group_map /
@@ -1071,9 +1074,9 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 
 | # | 创意 | 解决的老问题 | 落点 |
 |---|---|---|---|
-| 1 | **契约先行**：先固化"该测什么"（组/断言/比对），再谈覆盖率 | 覆盖率百分比好看，但没人说得清它证明了什么 | `case_ir.json` 三集合契约（由 TP 反聚合，不手写） |
+| 1 | **契约先行**：先固化"该测什么"（组/断言/比对/约束），再谈覆盖率 | 覆盖率百分比好看，但没人说得清它证明了什么 | `case_ir.json` 四集合契约（由 TP 反聚合，不手写） |
 | 2 | **身份脊梁** `CASE → TST → EVD → CELL` | 用例只有"目录名 + seed"，跨 run 对不上账 | `task_meta` v2 / `case_cov` / `evd.json` |
-| 3 | **三集合** groups + sva + scb，**空也要显式** | 一条用例只有功能 bin 命中，没有断言、没有比对，仍被判"过" | `contract.py` + `not_applicable` 原因 |
+| 3 | **四集合** groups + sva + scb + constraints，**空也要显式** | 一条用例只有功能 bin 命中，没有断言、没有比对、约束还是空骨架，仍被判"过" | `contract.py` + `not_applicable` 原因 + `constraint_backing` |
 | 4 | **四层证据** functional / timing / data / path | "场景发生过"冒充"验证完成" | `tp_cov_evidence.json` |
 | 5 | **四色 CELL** green/yellow/red/na，**缺证据不下绿** | 95% 的总覆盖率盖住了整块没测的组 | `cell_matrix.json` |
 | 6 | **分级门禁** blocker/warning/info，先报告后阻断 | 规则埋在 audit 里，CI 拿不到、也没法灰度 | `gates.yaml`（版本化）+ `vagent coverage case-gate` |
@@ -1086,8 +1089,9 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 - **覆盖率组总览（必须覆盖什么）**：契约里的**全部**组 —— 组 / 功能点 / 覆盖类型 /
   作用域（功能树节点，如"指令发射""指令队列管理"）/ 覆盖点 / 需求 / 必需证据层 /
   **执行证据 有·无** / CELL。没跑过的组**不会消失**，而是标"无"。
-- **三集合明细**：每组的功能状态 + **SVA 规则原文** + **SCB 说明与证据粒度**
-  （`per_scb` / `aggregate`）—— 回答"这条用例靠什么兜底"。
+- **四集合明细**：每组的功能状态 + **SVA 规则原文** + **SCB 说明与证据粒度**
+  （`per_scb` / `aggregate`）+ **约束 id 与 backed**（空骨架要标出来）——
+  回答"这条用例靠什么兜底、激励受哪条约束塑造"。
 - **Case × CELL**：哪些格子绿/黄/红、谁声明、谁实际跑到。
 - **执行证据（EVD）**：证据来自哪次执行、哪个 seed、波形在哪。
 - **案例**（npu_sched）：13 个契约组 → 8 个有执行证据、5 个标"无"（4 个观测型

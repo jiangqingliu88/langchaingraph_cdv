@@ -173,17 +173,39 @@ def _render_group_overview(data: Dict[str, Any]) -> List[str]:
 
 
 def _render_three_sets(data: Dict[str, Any]) -> List[str]:
-    """三节渲染：每条 case 的 [Groups] / [SVA] / [SCB] + 总状态。"""
+    """四节渲染：每条 case 的 [Groups] / [SVA] / [SCB] / [Constraints]。"""
     rows = [c for c in data.get("cases") or [] if c.get("groups_evidence")]
     if not rows:
         return []
     return (_render_group_overview(data)
-            + ["## 三集合证据（Groups / SVA / SCB）", ""]
+            + ["## 四集合证据（Groups / SVA / SCB / Constraints）", ""]
             + [line for c in rows for line in _render_one_case(c)])
 
 
+def _backed_label(value: Any) -> str:
+    """backed 的三态：True=是 / False=空骨架 / None=未登记（**不冒充否**）。"""
+    if value is True:
+        return "是"
+    if value is False:
+        return "**否（空骨架）**"
+    return "未登记"
+
+
+def _render_constraints(c: Dict[str, Any]) -> List[str]:
+    """约束段：id + 是否真编译进模型（backed）+ 负责的维度。"""
+    items = [s for s in c.get("constraint_items") or [] if isinstance(s, dict)]
+    if not items:
+        return ["", "**Constraints（约束）**", "", "（无：该用例的维度没有绑定约束策略）"]
+    lines = ["", "**Constraints（约束）**", "",
+             "| id | backed | 维度 | 说明 |", "|---|---|---|---|"]
+    lines += [f"| {s.get('id')} | {_backed_label(s.get('backed'))} | "
+              f"{'、'.join(s.get('dimensions') or []) or '—'} | "
+              f"{s.get('reason') or '—'} |" for s in items]
+    return lines
+
+
 def _render_one_case(c: Dict[str, Any]) -> List[str]:
-    """一条 case 的 Markdown 三节（Groups / SVA / SCB）。"""
+    """一条 case 的 Markdown 四节（Groups / SVA / SCB / Constraints）。"""
     cid = c.get("case_id") or c.get("task")
     lines = [f"### Case: {cid}　`case_status={c.get('case_status') or '—'}`", "",
              "**Groups**", "",
@@ -212,6 +234,7 @@ def _render_one_case(c: Dict[str, Any]) -> List[str]:
                   f"{s.get('cell')} | {s.get('exec')} | {s.get('matched')} | "
                   f"{s.get('mismatched')} | {s.get('status')} |"
                   for s in c["scb_items"]]
+    lines += _render_constraints(c)
     return lines + [""]
 
 
@@ -286,7 +309,7 @@ def _html_group_overview(data: Dict[str, Any]) -> str:
 
 
 def _html_one_case(c: Dict[str, Any]) -> str:
-    """一条 case 的三节 HTML（Groups / SVA / SCB）。"""
+    """一条 case 的四节 HTML（Groups / SVA / SCB / Constraints）。"""
     cid = c.get("case_id") or c.get("task")
     out: List[str] = [f"<h3>Case: {html.escape(str(cid))} · "
                       f"case_status={html.escape(str(c.get('case_status') or '—'))}</h3>"]
@@ -314,12 +337,25 @@ def _html_one_case(c: Dict[str, Any]) -> str:
         out.append("<b>SCB（比对）</b>" + _html_plain_table(
             ["id", "名称", "说明", "证据粒度", "cell", "exec",
              "matched", "mismatched", "status"], crows))
+    out.append(_html_constraints(c))
     return "".join(out)
 
 
+def _html_constraints(c: Dict[str, Any]) -> str:
+    """约束段：id / backed / 维度 / 说明（空骨架必须显式标出）。"""
+    items = [s for s in c.get("constraint_items") or [] if isinstance(s, dict)]
+    if not items:
+        return "<b>Constraints（约束）</b><p>无：该用例的维度没有绑定约束策略</p>"
+    return "<b>Constraints（约束）</b>" + _html_plain_table(
+        ["id", "backed", "维度", "说明"],
+        [[s.get("id"), _backed_label(s.get("backed")).replace("**", ""),
+          "、".join(s.get("dimensions") or []) or "—",
+          s.get("reason") or "—"] for s in items])
+
+
 def _html_three_sets(data: Dict[str, Any]) -> str:
-    """每条 case 的三节（Groups / SVA / SCB）—— 与 Markdown 同口径。"""
-    return ("<h2>三集合证据（Groups / SVA / SCB）</h2>"
+    """每条 case 的四节（Groups / SVA / SCB / Constraints）—— 与 Markdown 同口径。"""
+    return ("<h2>四集合证据（Groups / SVA / SCB / Constraints）</h2>"
             + "".join(_html_one_case(c) for c in data.get("cases") or []
                       if c.get("groups_evidence")))
 

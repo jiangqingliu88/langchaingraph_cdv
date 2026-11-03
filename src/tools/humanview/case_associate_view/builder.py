@@ -112,45 +112,72 @@ def _conclusion(statuses: Dict[str, str]) -> str:
     return "不适用"
 
 
+def _constraints_for_record(rec: Dict[str, Any],
+                            constraint_items: Dict[str, List[Dict[str, Any]]]
+                            ) -> List[Dict[str, Any]]:
+    """一条执行记录的约束项：记录自带 > 契约注册表 > 只有 id（backed 未登记）。"""
+    own = rec.get("constraints")
+    if isinstance(own, list) and own and isinstance(own[0], dict):
+        return list(own)
+    case_id = str(rec.get("case_id") or "")
+    items = list((constraint_items or {}).get(case_id) or [])
+    if items:
+        return items
+    ids = [str(c) for c in (rec.get("constraint_ids") or []) if str(c)]
+    return [{"id": cid, "backed": None, "dimensions": [], "reason": ""}
+            for cid in ids]
+
+
+def _dict_items(value: Any) -> List[Dict[str, Any]]:
+    return [v for v in value or [] if isinstance(v, dict)]
+
+
+def _case_row(task: str, rec: Dict[str, Any], by_id: Dict[str, Any],
+              constraint_items: Dict[str, Any]) -> Dict[str, Any]:
+    entries = _dict_items(rec.get("tp"))
+    tps = [by_id[e["tp_id"]] for e in entries if e.get("tp_id") in by_id]
+    feats = sorted({t.get("requirement") for t in tps if t.get("requirement")})
+    coverage = _case_coverage(entries, rec)
+    sva = _case_sva(rec)
+    scoreboard = _case_scb(rec)
+    path = _path_of(tps)
+    c_items = _constraints_for_record(rec, constraint_items)
+    return {
+        "name": str(rec.get("test") or task),
+        "task": task,
+        # ── 第四集合：约束（case 的激励由哪些策略塑造）──
+        "constraints": [str(c["id"]) for c in _dict_items(c_items) if c.get("id")],
+        "constraint_items": c_items,
+        # ── 身份（v2）：CASE/TST 来自生成期注入，legacy 目录如实标注 ──
+        "case_id": str(rec.get("case_id") or ""),
+        "tst_id": str(rec.get("tst_id") or ""),
+        "evd_id": str(rec.get("evd_id") or ""),
+        "cell_ids": list(rec.get("cell_ids") or []),
+        "legacy": bool(rec.get("legacy")),
+        # ── 集合证据（键名与"证据层状态"的 sva 区分开，别撞）──
+        "case_status": str(rec.get("case_status") or ""),
+        "groups_evidence": _dict_items(rec.get("groups")),
+        "sva_items": _dict_items(rec.get("sva")),
+        "scb_items": _dict_items(rec.get("scb")),
+        "feats": feats,
+        "desc": str(rec.get("test_name") or task),
+        "coverage": coverage, "sva": sva,
+        "scoreboard": scoreboard, "path": path,
+        "conclusion": _conclusion({"功能覆盖": coverage["status"],
+                                   "SVA": sva["status"],
+                                   "Scoreboard": scoreboard["status"],
+                                   "PATH": path["status"]}),
+    }
+
+
 def _case_rows(tp_ev: Dict[str, Any],
-               records: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+               records: Dict[str, Dict[str, Any]],
+               constraint_items: Dict[str, List[Dict[str, Any]]] = None,
+               ) -> List[Dict[str, Any]]:
     by_id = {t["tp_id"]: t for t in tp_ev.get("tps") or []}
-    rows = []
-    for task, rec in sorted(records.items()):
-        entries = [e for e in (rec.get("tp") or []) if isinstance(e, dict)]
-        tps = [by_id[e["tp_id"]] for e in entries if e.get("tp_id") in by_id]
-        feats = sorted({t.get("requirement") for t in tps if t.get("requirement")})
-        coverage = _case_coverage(entries, rec)
-        sva = _case_sva(rec)
-        scoreboard = _case_scb(rec)
-        path = _path_of(tps)
-        rows.append({
-            "name": str(rec.get("test") or task),
-            "task": task,
-            # ── 身份（v2）：CASE/TST 来自生成期注入，legacy 目录如实标注 ──
-            "case_id": str(rec.get("case_id") or ""),
-            "tst_id": str(rec.get("tst_id") or ""),
-            "evd_id": str(rec.get("evd_id") or ""),
-            "cell_ids": list(rec.get("cell_ids") or []),
-            "legacy": bool(rec.get("legacy")),
-            # ── 三集合证据（键名与"证据层状态"的 sva 区分开，别撞）──
-            "case_status": str(rec.get("case_status") or ""),
-            "groups_evidence": [g for g in rec.get("groups") or []
-                                if isinstance(g, dict)],
-            "sva_items": [s for s in rec.get("sva") or []
-                          if isinstance(s, dict)],
-            "scb_items": [s for s in rec.get("scb") or []
-                          if isinstance(s, dict)],
-            "feats": feats,
-            "desc": str(rec.get("test_name") or task),
-            "coverage": coverage, "sva": sva,
-            "scoreboard": scoreboard, "path": path,
-            "conclusion": _conclusion({"功能覆盖": coverage["status"],
-                                       "SVA": sva["status"],
-                                       "Scoreboard": scoreboard["status"],
-                                       "PATH": path["status"]}),
-        })
-    return rows
+    constraint_items = constraint_items or {}
+    return [_case_row(task, rec, by_id, constraint_items)
+            for task, rec in sorted(records.items())]
 
 
 def _feature_status(tps: List[Dict[str, Any]], key: str) -> str:
@@ -399,6 +426,26 @@ def _contract_groups(case_ir: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [merged[k] for k in sorted(merged)]
 
 
+def _case_constraint_items(case_ir: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """`case_id → [{id, backed, dimensions, reason}]`（来自 case_ir + 注册表）。"""
+    backing = case_ir.get("constraint_backing") or {}
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for case in case_ir.get("cases") or []:
+        if not isinstance(case, dict) or not case.get("id"):
+            continue
+        items = []
+        for cid in case.get("constraints") or []:
+            meta = backing.get(str(cid)) or {}
+            items.append({
+                "id": str(cid),
+                "backed": bool(meta.get("backed")),
+                "dimensions": list(meta.get("dimensions") or []),
+                "reason": str(meta.get("reason") or ""),
+            })
+        out[str(case["id"])] = items
+    return out
+
+
 def _case_runs(evd: Dict[str, Any]) -> List[Dict[str, Any]]:
     """视图7：执行证据（case × run × seed × cfg × 结论）。"""
     rows = []
@@ -433,7 +480,8 @@ def build_case_view(run_dir: str | Path) -> Dict[str, Any]:
     cells = _read_json(od / "coverage" / "cell_matrix.json")
     evd = _read_json(od / "coverage" / "evd.json")
 
-    cases = _case_rows(tp_ev, records)
+    constraint_items = _case_constraint_items(case_ir)
+    cases = _case_rows(tp_ev, records, constraint_items)
     features = _feature_rows(tp_ev)
     gaps = _gaps(tp_ev, case_tp, cells)
     ssot = _ssot_hash(od)
@@ -458,6 +506,9 @@ def build_case_view(run_dir: str | Path) -> Dict[str, Any]:
         "features": features,
         "matrix": _matrix(tp_ev),
         "gaps": gaps,
+        # 约束注册表（来自 case_ir.constraint_backing）：视图回答"这条约束
+        # 真编译进模型了吗"。缺省为空 —— 老 run 不编。
+        "constraint_backing": dict(case_ir.get("constraint_backing") or {}),
         # ── v2 新增 ──
         # 契约要求的全部覆盖率组（含尚未跑出证据的）—— "必须覆盖什么"的答案
         "contract_groups": _contract_groups(case_ir),

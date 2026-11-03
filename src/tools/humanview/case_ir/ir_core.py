@@ -127,11 +127,13 @@ def scb_id_of(check: Any) -> str:
 
 @dataclass
 class CaseIR:
-    """一条**逻辑用例** —— 三集合契约的容器。
+    """一条**逻辑用例** —— 四集合契约的容器。
 
-    `groups` / `sva` / `scb` 是**必填结构**（见 `arch.md`）：
+    `groups` / `sva` / `scb` / `constraints` 是**必填结构**（见 `arch.md`）：
       · `groups` 非空，每项带 `cell` 与 `required_layers`；
       · `sva` / `scb` 可以是空列表，但字段必须存在，空要写 `not_applicable` 原因；
+      · `constraints` 是约束 id（`p_*` 策略名），空列表 = 该维度没有绑定约束
+        （不编 id）；
       · 每项都带 `cell` —— 证据最后要落回 Cell 枢纽。
 
     `tests` 是它落到 UVM 上的测试类名；`dimensions` 是它归属的功能维度。
@@ -154,6 +156,10 @@ class CaseIR:
     sva: List[Dict[str, Any]] = field(default_factory=list)
     #: `[{id, cell, required, checks}]`
     scb: List[Dict[str, Any]] = field(default_factory=list)
+    #: **约束 id**（`p_*` 策略名）—— 这条用例的激励受哪些约束塑造。
+    #: 归属来自 `coverage_plan.constraint_backing.policies[].dimensions` 与
+    #: 本 case 的维度交集；**没有声明就不编**（空列表是事实）。
+    constraints: List[str] = field(default_factory=list)
     #: `{sva: 原因, scb: 原因}` —— 空集合必须解释（"没声明"≠"不需要"）。
     not_applicable: Dict[str, str] = field(default_factory=dict)
 
@@ -172,6 +178,7 @@ class CaseIR:
             "groups": [dict(g) for g in self.groups],
             "sva": [dict(s) for s in self.sva],
             "scb": [dict(s) for s in self.scb],
+            "constraints": list(self.constraints),
             "not_applicable": dict(self.not_applicable),
             "description": self.description,
             "source": self.source,
@@ -187,6 +194,10 @@ class CaseDoc:
     categories: List[CCatIR] = field(default_factory=list)
     cases: List[CaseIR] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
+    #: `{policy_id: {backed, dimensions, reason}}` —— 约束注册表（来自
+    #: `coverage_plan.constraint_backing`）。视图/审计据此回答"这条约束是真
+    #: 编译进模型了，还是空骨架"。
+    constraint_backing: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     # ── 反查索引（懒建，读端只管用）─────────────────────────────
     _by_test: Dict[str, List[str]] = field(default_factory=dict, repr=False)
@@ -272,8 +283,11 @@ class CaseDoc:
                             for s in c.sva if s.get("id")}),
                 "scb": len({s.get("id") for c in self.cases
                             for s in c.scb if s.get("id")}),
+                "constraints": len({cid for c in self.cases
+                                    for cid in c.constraints if cid}),
             },
             "categories": [c.to_dict() for c in self.categories],
             "cases": [c.to_dict() for c in self.cases],
+            "constraint_backing": dict(self.constraint_backing),
             "notes": list(self.notes),
         }

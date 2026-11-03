@@ -15,6 +15,9 @@ TST（可执行实例）与 EVD（一次执行证据）**不是**这里的实体
 """
 from __future__ import annotations
 
+from .constraints import (
+    attach_constraints, case_dimensions, constraints_for, policy_index,
+)
 from .contract import attach_contracts, checker_map, group_map
 from .ir_core import (
     SCHEMA, SOURCE_DECLARED, SOURCE_SYNTHESIZED, CaseDoc, CaseIR, CCatIR,
@@ -33,5 +36,6 @@ __all__ = [
     "scb_id_of", "slug", "sva_id_of", "tst_id_of",
     "load_case_ir", "parse_declared", "project_from_casemodel", "synthesize",
     "attach_contracts", "checker_map", "group_map",
+    "attach_constraints", "case_dimensions", "constraints_for", "policy_index",
     "validate_case_doc",
 ]

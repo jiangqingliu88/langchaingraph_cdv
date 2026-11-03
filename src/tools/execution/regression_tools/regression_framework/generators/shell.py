@@ -105,6 +105,31 @@ def _testpoint_contract_map(run_root) -> dict:
     return out
 
 
+def _case_constraint_map(run_root) -> dict:
+    """`case_ir.json` → `{case_id: [constraint ids]}`（第四集合，旁路索引）。
+
+    约束归属由 verify 按 coverage plan 的维度交集算好；这里**只读**。
+    缺文件/缺字段就是空 —— 不按测试名猜约束。
+    """
+    if not run_root:
+        return {}
+    path = os.path.join(str(run_root), "coverage", "case_ir.json")
+    try:
+        import json as _json
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            doc = _json.load(fh) or {}
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for case in (doc.get("cases") if isinstance(doc, dict) else None) or []:
+        if not isinstance(case, dict) or not case.get("id"):
+            continue
+        ids = [str(c) for c in case.get("constraints") or [] if str(c)]
+        if ids:
+            out[str(case["id"])] = ids
+    return out
+
+
 def _case_ir_sha(run_root) -> str:
     """`case_ir_sha256` —— 证据对的是哪一版契约。
 
@@ -199,7 +224,7 @@ def _contract_meta(test_class: str, contract_map, case_ir_sha: str,
 def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
                          seed, build_name, test, tp_map, case_map=None,
                          contract_map=None, case_ir_sha="",
-                         contract_hash="") -> None:
+                         contract_hash="", constraint_map=None) -> None:
     """落 `task_meta.json` —— 用例 → 测试点 → 波形那条链的起点。
 
     归属优先级：显式 `tp_ids` > tag 里的 `TP-*` > `execution.test` 反查
@@ -214,6 +239,12 @@ def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
             tp_ids.append(tid)
     try:
         from src.tools.common.lib.case_meta import write_task_meta
+        # 第四集合：这条执行依赖的约束（来自 case_ir，按 case_id 展开）
+        constraint_ids = []
+        for cid in (case_map or {}).get(test_class) or []:
+            for c in (constraint_map or {}).get(cid) or []:
+                if c not in constraint_ids:
+                    constraint_ids.append(c)
         write_task_meta(test_dir, {
             "task": testcase,
             "test_name": test_name,
@@ -229,6 +260,7 @@ def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
             "tst_id": _tst_id(test_class, seed),
             # 三集合指纹 + 契约哈希：这条任务自证"跑的是哪一版契约"
             **_contract_meta(test_class, contract_map, case_ir_sha, contract_hash),
+            "constraint_ids": constraint_ids,
             "desc": str(test.get('desc') or ""),
         })
     except Exception as e:                      # noqa: BLE001 旁路索引
@@ -301,6 +333,8 @@ class ShellGenerator:
         self.case_map = _testpoint_case_map_detail(run_root)
         # 三集合指纹 + 契约哈希（同样只读 TP IR / methodology）
         self.contract_map = _testpoint_contract_map(run_root)
+        # 第四集合：约束归属（只读 case_ir）
+        self.constraint_map = _case_constraint_map(run_root)
         self.case_ir_sha = _case_ir_sha(run_root)
         # M1：契约构建物的哈希（没有时为空串，task_meta 如实留空）
         self.contract_hash = _contract_hash(run_root)
@@ -500,7 +534,8 @@ class ShellGenerator:
             _write_task_identity(test_dir, testcase, test_name, sim_cmd,
                                  t_context, seed, build_name, test, self.tp_map,
                                  self.case_map, self.contract_map,
-                                 self.case_ir_sha, self.contract_hash)
+                                 self.case_ir_sha, self.contract_hash,
+                                 self.constraint_map)
 
             post_sim_cmd = test.get('hooks', {}).get('post_sim') or self.hooks_global.get('post_sim')
             if post_sim_cmd:

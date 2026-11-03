@@ -471,27 +471,28 @@ python -m pytest tests -q && python -m config.architecture_guard.py
 **门禁上线策略**：`gates.yaml` 里只有 `duplicate_id` / `case_without_tst` 是
 `stage: block`，其余 blocker 先 `report`（只记不阻断）——统计一周后逐条升级。
 
-### 12.1b 三集合契约（arch.md 落地，2026-11-03）
+### 12.1b 四集合契约（arch.md 落地，2026-11-03；约束 id 2026-11-04 补）
 
-`case = groups[] + sva[] + scb[]` 的显式容器已落到主链，**主链顺序不变**：
+`case = groups[] + sva[] + scb[] + constraints[]` 的显式容器已落到主链，**主链顺序不变**：
 
 | 节点 | 落点 | 说明 |
 |---|---|---|
-| verify | `case_ir.json` 每条 case 带 `groups/sva/scb/not_applicable`；每项带 `cell` | 由 TP 反聚合（`case_ir/contract.py`），不手写 |
-| verify | `testpoints.yaml` 每条 TP 带 `case_id/groups/sva/scb` | TP 是聚合源 |
+| verify | `case_ir.json` 每条 case 带 `groups/sva/scb/constraints/not_applicable`；每项带 `cell` | 由 TP 反聚合（`case_ir/contract.py`），不手写 |
+| verify | `testpoints.yaml` 每条 TP 带 `case_id/groups/sva/scb/constraints` | TP 是聚合源 |
+| verify | `constraints[]` + `constraint_backing` | 按 `coverage_plan.constraint_backing.policies[].dimensions` 与 case 维度交集归属；没有交集不编 id |
 | verify | `case_group_map.json` / `case_checker_map.json`（新） | 正反查索引 |
 | verify | `methodology.json` 加 `case_ir_sha256` | 哈希链锚点 |
-| ops | `task_meta.json` 加 `group_ids/sva_ids/scb_ids/case_ir_sha` | **不动** `cov/*.db`、`waves/*.db` |
-| coverage | `case_cov` 变三集合证据 + `scb_summary`（原 `scb` 汇总改名）+ `case_status` | |
-| coverage | `case_tp` 加三集合反向索引；`tp_matrix` 行加 `case_id/groups/sva/scb/case_status` | |
-| coverage | `cell_matrix` 由三集合反向填充（`evidence{groups,sva,scb}` + `evidence_color`） | |
+| ops | `task_meta.json` 加 `group_ids/sva_ids/scb_ids/constraint_ids/case_ir_sha` | **不动** `cov/*.db`、`waves/*.db` |
+| coverage | `case_cov` 变四集合证据 + `scb_summary`（原 `scb` 汇总改名）+ `case_status` | |
+| coverage | `case_tp` 加四集合反向索引；`tp_matrix` 行加 `case_id/groups/sva/scb/constraints/case_status` | |
+| coverage | `cell_matrix` 由集合反向填充（`evidence{groups,sva,scb}` + `evidence_color`） | |
 | coverage | `evd` 去重键扩到 `(case, seed, cfg, checker_type, checker_id)` | |
-| coverage | `case_view` 加三节（Groups / SVA / SCB） | |
-| coverage | `gates` 加 8 条三集合门禁 | |
+| coverage | `case_view` 加四节（Groups / SVA / SCB / Constraints） | 约束段标 `backed`（空骨架不冒充已生效） |
+| coverage | `gates` 加 8 条集合完整性门禁 | |
 | audit | 消费 `cell_matrix` + `gates`；新增 5 条 caveat | |
 
 **`scb` 来源（已接入模型声明）**：`scoreboards:` 段（与 `assertions:` 并列）
-→ `SB-*` → 按 `tp_bindings` 或 `checks` 交集绑到 TP → case 三集合的 `scb[]`。
+→ `SB-*` → 按 `tp_bindings` 或 `checks` 交集绑到 TP → case 集合的 `scb[]`。
 证据两种粒度，**明文标注**：
 
 | `evidence` | 数据来源 | 写进 `evidence_level` |

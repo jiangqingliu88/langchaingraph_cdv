@@ -50,6 +50,12 @@ def _view() -> dict:
                 "evidence_level": "aggregate", "cell": "CELL-D_DEP-P1",
                 "exec": 40, "matched": 40, "mismatched": 0, "status": "PROVEN",
             }],
+            "constraints": ["p_th_b04_combo"],
+            "constraint_items": [{
+                "id": "p_th_b04_combo", "backed": False,
+                "dimensions": ["D_dep", "D_decision"],
+                "reason": "维度不可激励（没有 stimulus.field）",
+            }],
         }],
         "case_cell": {"rows": [{"cell_id": "CELL-D_DEP-P1", "cg": "CG-D_DEP",
                                 "p": "p1", "color": "yellow", "tp_count": 4,
@@ -73,14 +79,26 @@ def test_markdown_three_sets_carry_assertion_and_scb_semantics():
     assert "dep_type == 2'd1" in md                      # 规则原文
     assert "SCB（比对）" in md and "DUT 检查收口" in md   # 比的是什么
     assert "aggregate" in md                              # 证据粒度
+    assert "四集合证据" in md                             # groups/sva/scb/constraints
 
 
 def test_html_has_the_same_sections():
     page = render_html(_view())
-    for phrase in ("覆盖率组总览", "三集合证据", "功能覆盖", "指令依赖检查",
-                   "SVA（断言）", "SCB（比对）", "Case × CELL"):
+    for phrase in ("覆盖率组总览", "四集合证据", "功能覆盖", "指令依赖检查",
+                   "SVA（断言）", "SCB（比对）", "Constraints（约束）",
+                   "Case × CELL"):
         assert phrase in page, phrase
     assert "dep_type == 2'd1" in page
+
+
+def test_constraints_are_rendered_with_backing_state():
+    """第四集合：约束 id 必须在视图里，且空骨架（backed=false）要说出来。"""
+    md = render_markdown(_view())
+    assert "Constraints（约束）" in md
+    assert "p_th_b04_combo" in md
+    assert "空骨架" in md                       # backed=false 不能装成已生效
+    page = render_html(_view())
+    assert "p_th_b04_combo" in page and "空骨架" in page
 
 
 def test_rendering_is_json_safe():

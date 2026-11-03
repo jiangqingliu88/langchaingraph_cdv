@@ -166,7 +166,8 @@ def write_case_ir(cov_dir: str | Path, case_ir: Dict[str, Any],
     checker_map}`；没写盘时 `path=""`。
     """
     empty = {"path": "", "cases": 0, "categories": 0, "declared": 0,
-             "synthesized": 0, "group_map": "", "checker_map": ""}
+             "synthesized": 0, "constraints": 0,
+             "group_map": "", "checker_map": ""}
     if not isinstance(case_ir, dict) or not case_ir.get("cases"):
         return empty
     d = Path(cov_dir)
@@ -199,6 +200,7 @@ def write_case_ir(cov_dir: str | Path, case_ir: Dict[str, Any],
             "groups": int(counts.get("groups") or 0),
             "sva": int(counts.get("sva") or 0),
             "scb": int(counts.get("scb") or 0),
+            "constraints": int(counts.get("constraints") or 0),
             "group_map": written.get("group_map", ""),
             "checker_map": written.get("checker_map", "")}
 
@@ -220,10 +222,12 @@ def _identity_fields(raw: Dict[str, Any]) -> Dict[str, Any]:
         "case_ids": case_ids,
         "tst_id": str(raw.get("tst_id") or ""),
         "cell_ids": _str_list(raw.get("cell_ids")),
-        # 三集合指纹（v2 追加）：group/sva/scb + 契约哈希
+        # 四集合指纹（v2 追加）：group/sva/scb/constraints + 契约哈希
         "group_ids": _str_list(raw.get("group_ids")),
         "sva_ids": _str_list(raw.get("sva_ids")),
         "scb_ids": _str_list(raw.get("scb_ids")),
+        # 第四集合：这条执行依赖的约束（`p_*` 策略名）—— 约束换版，证据失效
+        "constraint_ids": _str_list(raw.get("constraint_ids")),
         "case_ir_sha": str(raw.get("case_ir_sha") or ""),
         # M1：契约构建物的哈希（证据只对那一版契约有效）
         "contract_hash": str(raw.get("contract_hash") or ""),

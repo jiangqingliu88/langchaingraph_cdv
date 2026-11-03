@@ -193,11 +193,12 @@ def _case_facts(od: Path, test_dir: Path, *, force: bool = False) -> dict:
         "tst_id": meta.get("tst_id", "") or _tst(meta["test"] or meta["test_name"],
                                                   meta["seed"]),
         "legacy": bool(meta.get("legacy")),
-        # 契约哈希 + 三集合指纹（task_meta v2 写，case_cov 原样带出）
+        # 契约哈希 + 四集合指纹（task_meta v2 写，case_cov 原样带出）
         "case_ir_sha": str(meta.get("case_ir_sha") or ""),
         "group_ids": list(meta.get("group_ids") or []),
         "sva_ids": list(meta.get("sva_ids") or []),
         "scb_ids": list(meta.get("scb_ids") or []),
+        "constraint_ids": list(meta.get("constraint_ids") or []),
         "cov_db": cov_db, "cov_source": cov_source,
         "ucdb": "", "ucdb_abs": "", "log": log_path,
         "wave": wave, "wave_abs": wave, "log_facts": log_facts,
@@ -839,11 +840,12 @@ def _by_case(cases: list) -> dict:
             "case_id": rec.get("case_id", ""),
             "tst_id": rec.get("tst_id", ""),
             "case_status": rec.get("case_status", ""),
-            # 三集合反向索引（视图与门禁按 checker 反查用例）
+            # 四集合反向索引（视图与门禁按 checker/约束反查用例）
             "group_ids": [g.get("group") for g in rec.get("groups") or []
                           if g.get("group")],
             "sva_ids": [s.get("id") for s in rec.get("sva") or [] if s.get("id")],
             "scb_ids": [s.get("id") for s in rec.get("scb") or [] if s.get("id")],
+            "constraint_ids": list(rec.get("constraint_ids") or []),
             "tp_ids": [e["tp_id"] for e in rec["tp"]],
             "signed_tp_ids": [e["tp_id"] for e in rec["tp"]
                               if e["status"] == "SIGNED_OFF"],

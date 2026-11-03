@@ -125,6 +125,9 @@ class CaseSpec(BaseModel):
     groups: List[GroupSpec] = Field(default_factory=list)
     sva: List[SvaSpec] = Field(default_factory=list)
     scb: List[ScbSpec] = Field(default_factory=list)
+    #: **约束 id**（`p_*` 策略名）—— 用例的激励由哪些约束塑造。它进契约哈希：
+    #: 约束换版后，旧证据不再对得上这一版契约。
+    constraints: List[str] = Field(default_factory=list)
     not_applicable: Dict[str, str] = Field(default_factory=dict)
 
 
@@ -244,6 +247,7 @@ def contract_from_case_ir(case_ir: Dict[str, Any]) -> Contract:
                             if k in s}) for s in raw.get("sva") or []],
             scb=[ScbSpec(**{k: s.get(k) for k in ScbSpec.model_fields
                             if k in s}) for s in raw.get("scb") or []],
+            constraints=[str(c) for c in raw.get("constraints") or [] if c],
             not_applicable=dict(raw.get("not_applicable") or {}),
         ))
     return Contract(module=str(case_ir.get("module") or ""), cases=cases).seal()

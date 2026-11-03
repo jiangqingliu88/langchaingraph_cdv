@@ -79,7 +79,7 @@ coverage_plan → find_spec_yaml → testpoints_prebuild → dut_channel
 | `bench/<m>_bench_tb_top.sv` | tb_top（挂覆盖率接口） |
 | `inputs/yaml/uvm/*.yaml` | 生成器契约（含 `dut_if` 身份、`dut_checker` 规则与逐条 SB 归属） |
 | `coverage/testpoints.yaml` + `.json` | 测试点 IR（tp_id / 覆盖仓 / test / 种子 / 判据） |
-| `coverage/case_ir.json` + `case_group_map.json` + `case_checker_map.json` | CCAT 分类树 + CASE 逻辑用例 + 三集合（groups/sva/scb） |
+| `coverage/case_ir.json` + `case_group_map.json` + `case_checker_map.json` | CCAT 分类树 + CASE 逻辑用例 + **四集合（groups / sva / scb / constraints）**；`constraints` 是约束 id（`p_*` 策略名），按 coverage plan 的维度交集归属，附 `constraint_backing`（backed / dimensions / reason） |
 | `contract/contract.yaml` + `obligations.json` + `contract_manifest.json` | **契约构建物**：义务与规范哈希（M1） |
 | `coverage/methodology.json` | 阶段记录 + TP IR 的 sha256 |
 | `coverage/coverage_plan.yaml` / `coverage_points.json` | 覆盖点 + 批次 + 种子管理 |
@@ -98,7 +98,7 @@ coverage_plan → find_spec_yaml → testpoints_prebuild → dut_channel
 ```text
 regression_run/<stage>/build_<build>/test_<task>/
     sim.sh / status.env / sim_vsim.log   ← 命令、结论、UVM 日志（含 [SCB_DUT] / [SCB <id>] / [TP_HIT]）
-    task_meta.json                       ← 用例身份 v2（task/test/seed/stage/tp_ids/case_id/case_ir_sha/contract_hash）
+    task_meta.json                       ← 用例身份 v2（task/test/seed/stage/tp_ids/case_id/case_ir_sha/contract_hash/constraint_ids）
     cov/<test>/questa.db                 ← 这一条用例自己的覆盖库（267 份）
     waves/<test>.db                      ← 这一条用例自己的波形（qwave.db）
 regression_stages.json                   ← 每级 passed/failed/total + blocked_at
@@ -127,7 +127,7 @@ case_cov → tp_matrix → tp_evidence → cell_matrix → evd
 | `coverage/tp_cov_evidence.json` | 四层证据（functional / timing / data / path） |
 | `coverage/evd.json` | 执行证据索引（去重键 `(tst_id, seed, cfg, checker_type, checker_id)`） |
 | `coverage/cell_matrix.json` | CELL = CG × P，green / yellow / red / na（NA ≠ pass） |
-| `coverage/case_view.{json,md,html}` | 人读视图：视图1 **按逻辑 CASE 聚合**（批次按测试名，执行次数单列）、视图2 功能契约、视图3 路径矩阵、视图4 缺口（与 CELL 颜色一一对应）+ 覆盖率组总览 / 三集合 / Case×CELL / EVD |
+| `coverage/case_view.{json,md,html}` | 人读视图：视图1 **按逻辑 CASE 聚合**（批次按测试名，执行次数单列）、视图2 功能契约、视图3 路径矩阵、视图4 缺口（与 CELL 颜色一一对应）+ 覆盖率组总览 / **四集合（含约束 id 与 backed）** / Case×CELL / EVD |
 | `coverage/gates.json` | Case Gate（blocker / warning / info；规则表 + 声明式规则） |
 | `coverage/evidence_manifest.json` | 每步产物 sha + 耗时（"这份视图是哪个版本出的"） |
 | `coverage/{attribution,seed_diversity,association_report,plan_consistency}.json` | 归因 / 种子 / 关联 / 一致性 |
@@ -210,7 +210,10 @@ hard_ok=True + 无有效 caveat       → READY（APPROVED）
 ## 5. 五条链（整条路径的价值所在）
 
 1. **身份链**
-   `spec → 手写 casemodel → testpoints.yaml（tp_id + case_id）→ task_meta.json（tst_id）→ case_cov（evd_id、cell_ids）→ evd.json → cell_matrix` —— 回答"这条波形在证明哪个功能点"。身份在**生成期注入**，不从测试名反推。
+   `spec → 手写 casemodel → testpoints.yaml（tp_id + case_id）→ task_meta.json（tst_id + 四集合指纹）→ case_cov（evd_id、cell_ids）→ evd.json → cell_matrix` —— 回答"这条波形在证明哪个功能点、受哪条约束驱动"。身份在**生成期注入**，不从测试名反推。
+
+   **CASE = groups[] + sva[] + scb[] + constraints[]**：约束 id 进契约哈希 ——
+   约束换版后，旧证据不再对得上这一版契约。
 
 2. **哈希链**
    `testpoints.yaml` 的 sha ↔ `methodology.json` 登记；`source_map.json` 的 xlsx/axes/casemodel 三方哈希（防导入后手改）；`contract_hash` 写进 task_meta 与事实；`evidence_manifest.json` 记录每个派生物 sha；证据包 `manifest.json` 逐文件 sha256 + `package_hash`。
