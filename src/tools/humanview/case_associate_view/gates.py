@@ -69,18 +69,57 @@ def load_rules(path: str | Path = RULE_FILE) -> Dict[str, Dict[str, str]]:
             entry["title"] = str(item["title"])
         if item.get("stage"):
             entry["stage"] = str(item["stage"])
+        # M3：规则可**关掉**（存量债务 / 新规则灰度），不用改代码
+        if item.get("enabled") is False:
+            entry["enabled"] = False
     return rules
+
+
+def load_declarative(path: str | Path = RULE_FILE) -> List[Dict[str, Any]]:
+    """`gates.yaml` 的 `declarative:` 段 —— **纯 YAML 规则**（M3）。
+
+    一条规则 = 数据源 + 匹配条件 + 级别 + 文案：
+
+        - id: CASE_REQUIREMENTS_EMPTY
+          level: warning
+          source: case_groups
+          where: {requirements: empty}
+          target: "{group}"
+          message: "覆盖率组 {group} 没有 requirements"
+
+    新增这类规则只改 YAML；复杂判据（集合比对等）仍留在 Python 里按 id 注册。
+    """
+    try:
+        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError):
+        return []
+    out = []
+    for item in (doc.get("declarative") or []) if isinstance(doc, dict) else []:
+        if isinstance(item, dict) and str(item.get("id") or "").strip():
+            out.append(dict(item))
+    return out
+
+
+def rules_table(rules: Dict[str, Dict[str, str]]) -> List[Dict[str, str]]:
+    """规则表（CLI/CI 用）—— 每条规则的级别、阶段、是否启用。"""
+    return [{"id": rid, "level": str(spec.get("level") or WARNING),
+             "stage": str(spec.get("stage") or "block"),
+             "enabled": spec.get("enabled", True) is not False,
+             "title": str(spec.get("title") or rid)}
+            for rid, spec in sorted(rules.items())]
 
 
 def _emit(out: Dict[str, List[Dict[str, Any]]], rules: Dict[str, Dict[str, str]],
           rule: str, target: str, message: str, **extra: Any) -> None:
     spec = rules.get(rule) or {"level": WARNING, "title": rule}
+    if spec.get("enabled") is False:
+        return                      # 规则被 YAML 关掉：不产出、不占位
     level = spec.get("level", WARNING)
     # `stage: report` = 只报告不阻断（存量债务上线期的安全阀）
     if level == BLOCKER and spec.get("stage") == "report":
         level = WARNING
     out.setdefault(level, []).append({
-        "rule": rule, "title": spec.get("title", rule),
+        "rule": rule, "rule_id": rule, "title": spec.get("title", rule),
         "target": str(target), "message": message, **extra,
     })
 
@@ -248,19 +287,128 @@ def _check_contracts(out, rules, case_ir: Dict[str, Any],
             _check_contract_evidence(out, rules, case, rec)
 
 
+#: 规则数据源：`source:` 写哪个 key，就取哪张表。
+_MISSING = object()
+
+
+def _value_of(item: Dict[str, Any], key: str) -> Any:
+    cur: Any = item
+    for part in str(key).split("."):
+        if not isinstance(cur, dict):
+            return _MISSING
+        cur = cur.get(part, _MISSING)
+    return cur
+
+
+def _test(value: Any, op: str, spec: Any) -> bool:
+    blank = value is _MISSING or value in (None, "", [], {})
+    if op == "missing":
+        return value is _MISSING or value in (None, "")
+    if op == "present":
+        return not (value is _MISSING or value in (None, ""))
+    if op == "empty":
+        return blank
+    if op == "nonempty":
+        return not blank
+    if op == "eq":
+        return value is not _MISSING and value == spec
+    if op == "ne":
+        return value is _MISSING or value != spec
+    if op in ("in", "any"):
+        return value in (spec or [])
+    return False
+
+
+def _match(item: Dict[str, Any], where: Dict[str, Any]) -> bool:
+    for key, spec in (where or {}).items():
+        if isinstance(spec, dict) and "op" in spec:
+            op, spec = str(spec.get("op") or "eq"), spec.get("value")
+        else:
+            op = "eq"
+        if not _test(_value_of(item, key), op, spec):
+            return False
+    return True
+
+
+def _render(template: Any, item: Dict[str, Any]) -> str:
+    try:
+        return str(template or "").format(
+            **{k: ("" if v is _MISSING else v)
+               for k, v in item.items() if isinstance(k, str)})
+    except (KeyError, IndexError, ValueError):
+        return str(template or "")
+
+
+def _default_target(item: Dict[str, Any]) -> str:
+    for key in ("id", "case", "cell_id", "tp_id", "group", "evd_id", "task"):
+        if item.get(key):
+            return str(item[key])
+    return "?"
+
+
+def _rule_sources(view, cells, evd, case_ir, case_cov) -> Dict[str, List[Dict[str, Any]]]:
+    groups: List[Dict[str, Any]] = []
+    for case in (case_ir or {}).get("cases") or []:
+        if not isinstance(case, dict):
+            continue
+        for group in case.get("groups") or []:
+            if isinstance(group, dict):
+                groups.append({**group, "case": case.get("id")})
+    return {"case_cases": [c for c in (case_ir or {}).get("cases") or []
+                           if isinstance(c, dict)],
+            "case_groups": groups, "case_cov": list(case_cov or []),
+            "cells": _cells(cells), "evd": _evd(evd),
+            "view_cases": _case_rows(view)}
+
+
+def _declarative_findings(declarative: List[Dict[str, Any]],
+                          sources: Dict[str, List[Dict[str, Any]]],
+                          out: Dict[str, List[Dict[str, Any]]],
+                          rules: Dict[str, Dict[str, str]]) -> None:
+    """`gates.yaml` 的 `declarative:` —— 纯 YAML 规则（新增规则不必改代码）。"""
+    for rule in declarative or []:
+        rid = str(rule.get("id") or "")
+        items = sources.get(str(rule.get("source") or "")) or []
+        for item in items:
+            if not _match(item, rule.get("where") or {}):
+                continue
+            target = (_render(rule.get("target") or "", item)
+                      or _default_target(item))
+            evidence = {k: item.get(k) for k in (rule.get("evidence") or [])}
+            _emit(out, rules, rid, target,
+                  _render(rule.get("message") or rid, item),
+                  source=str(rule.get("source") or ""), evidence=evidence)
+
+
 def validate_case_view(view: Dict[str, Any], cells: Dict[str, Any],
                        evd: Dict[str, Any],
                        rules: Optional[Dict[str, Dict[str, str]]] = None,
                        *, run: str = "", case_ir: Dict[str, Any] = None,
-                       case_cov: List[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """生成物 → `case_gates_v1`（含三集合完整性）。"""
+                       case_cov: List[Dict[str, Any]] = None,
+                       declarative: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """生成物 → `case_gates_v1`（含三集合完整性 + 声明式规则）。"""
     rules = rules or load_rules()
+    for rule in declarative or []:
+        rid = str(rule.get("id") or "")
+        if rid:
+            entry = rules.setdefault(rid, {"level": WARNING, "title": rid})
+            level = str(rule.get("level") or "").strip()
+            if level in _LEVELS:
+                entry["level"] = level
+            entry.setdefault("title", str(rule.get("title") or rid))
+            if rule.get("stage"):
+                entry["stage"] = str(rule["stage"])
+            if rule.get("enabled") is False:
+                entry["enabled"] = False
     out: Dict[str, List[Dict[str, Any]]] = {BLOCKER: [], WARNING: [], INFO: []}
     _check_identity(out, rules, view, cells)
     _check_cells(out, rules, cells, view)
     _check_evd(out, rules, evd, view)
     if case_ir:
         _check_contracts(out, rules, case_ir, case_cov or [])
+    _declarative_findings(
+        declarative or [], _rule_sources(view, cells, evd, case_ir, case_cov),
+        out, rules)
     counts = {level: len(items) for level, items in out.items()}
     return {
         "schema": SCHEMA,
@@ -283,16 +431,20 @@ def _read_json(path: Path) -> Dict[str, Any]:
     return doc if isinstance(doc, dict) else {}
 
 
-def write_gates(od: str | Path, *, rules: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """从 run 目录读生成物 → 写 `coverage/gates.json`。"""
+def write_gates(od: str | Path, *,
+                rules: Optional[Dict[str, Any]] = None,
+                rule_file: str | Path = RULE_FILE) -> Dict[str, Any]:
+    """从 run 目录读生成物 → 写 `coverage/gates.json`（规则表 + 声明式规则）。"""
     root = Path(od)
     cov = root / "coverage"
     view = _read_json(cov / "case_view.json")
     cells = _read_json(cov / "cell_matrix.json")
     evd = _read_json(cov / "evd.json")
     case_ir = _read_json(cov / "case_ir.json")
+    rules = rules or load_rules(rule_file)
     data = validate_case_view(view, cells, evd, rules, run=root.name,
-                              case_ir=case_ir, case_cov=_case_cov_records(root))
+                              case_ir=case_ir, case_cov=_case_cov_records(root),
+                              declarative=load_declarative(rule_file))
     try:
         (cov / "gates.json").write_text(
             json.dumps(data, ensure_ascii=False, indent=2),

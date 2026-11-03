@@ -416,7 +416,9 @@ def coverage_case_evidence(output_dir, fmt, out_prefix):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 @click.option("--strict", is_flag=True,
               help="有 blocker 时以非零码退出（CI 用）")
-def coverage_case_gate(output_dir, json_output, strict):
+@click.option("--rules", "show_rules", is_flag=True,
+              help="只打印规则表（id / 级别 / 阶段 / 是否启用）")
+def coverage_case_gate(output_dir, json_output, strict, show_rules):
     """Case 门禁：blocker / warning / info（读 case_view + cell_matrix + evd）
 
     \b
@@ -424,7 +426,28 @@ def coverage_case_gate(output_dir, json_output, strict):
       vagent coverage case-gate -o output_xxx
       vagent coverage case-gate -o output_xxx --strict   # CI 里当硬门
     """
-    from src.tools.humanview.case_associate_view.gates import write_gates
+    from src.tools.humanview.case_associate_view.gates import (
+        load_declarative, load_rules, rules_table, write_gates)
+
+    if show_rules:
+        table = {r["id"]: r for r in rules_table(load_rules())}
+        for rule in load_declarative():
+            entry = table.setdefault(rule["id"], {
+                "id": rule["id"], "level": rule.get("level", "warning"),
+                "stage": rule.get("stage", "block"),
+                "enabled": rule.get("enabled", True) is not False,
+                "title": rule.get("title", rule["id"])})
+            entry["declarative"] = True
+        if json_output:
+            click.echo(json.dumps(list(table.values()), ensure_ascii=False,
+                                  indent=2))
+            return
+        for row in sorted(table.values(), key=lambda r: r["id"]):
+            console.print(f"  {row['id']:<30} {row['level']:<8} "
+                          f"{row['stage']:<7} "
+                          f"{'on ' if row.get('enabled', True) else 'off'} "
+                          f"{row['title']}")
+        return
 
     try:
         data = write_gates(Path(output_dir))

@@ -305,11 +305,23 @@ EVD 行 `cells` 全空（47 行），只有重跑时拿到上一轮 cell_matrix 
 > **字段仍然保留**（下游读者不变），但它们的判定已全部由 derive 产出 ——
 > 保留的是"导出的缓存"，不是第二套判据。
 
-### M3 —— 规则引擎（1 周）
+### M3 —— 规则引擎（1 周）✅ 已落地
 
 - `gates.yaml` 升级为**推导规则**（条件 + 证据类型 + 级别 + 规则 id）。
 - 每条 caveat 带 `rule_id`；`EXPECTED_CAVEATS` 改为从规则表生成。
 - 验收：新增一条规则 = 改一处 YAML；CI 能列出"每条 blocker 的证据链"。
+
+**落地情况**：
+
+| 落点 | 内容 |
+|---|---|
+| `gates.yaml#declarative` | **纯 YAML 规则**：`source`（case_cases / case_groups / case_cov / cells / evd / view_cases）+ `where`（eq/ne/empty/nonempty/missing/present/in）+ `target`/`message` 模板 + `evidence` 字段 + `enabled` |
+| `gates.py` | 声明式规则求值器 + 规则表导出（`rules_table`）+ finding 统一带 `rule_id` 与 `evidence`；`enabled: false` 直接关掉一条规则 |
+| CLI | `vagent coverage case-gate --rules` 列出规则表（id / 级别 / 阶段 / 开关） |
+| 实测 | npu_sched：规则表 19 条；新增的 `CASE_GROUP_NO_REQUIREMENT` 在真实 run 上命中了 1 条（行为域组没有需求编号）—— 新规则不写代码就生效 |
+
+`EXPECTED_CAVEATS` 仍按 audit 的 caveat 白名单维护（caveat 是审计口径，规则是门禁
+口径，两者刻意不合并）；但每条 caveat 的 message 已带 `rule@target`。
 
 ### M4 —— 义务驱动的执行规划（2 周）
 

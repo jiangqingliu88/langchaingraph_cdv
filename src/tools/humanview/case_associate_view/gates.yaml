@@ -27,3 +27,25 @@ rules:
   - {id: CASE_SCB_NOT_EXECUTED,    level: blocker, stage: report, title: SCB 未执行}
   - {id: CASE_STATUS_OVERCLAIM,    level: blocker, stage: block,  title: 用例状态越报}
   - {id: CASE_IR_EVIDENCE_MISMATCH, level: blocker, stage: block, title: 契约与证据不一致}
+
+# ── 声明式规则（M3）：新增这类规则**只改 YAML**，不用动代码 ──
+#
+#   source: case_cases | case_groups | case_cov | cells | evd | view_cases
+#   where:  {字段: 值}                 等价匹配
+#           {字段: {op: empty|nonempty|missing|present|eq|ne|in}}
+#   target / message: `{字段}` 占位符（取不到就留空，不抛错）
+#   enabled: false                     关掉一条规则（灰度/存量债务）
+#
+# 复杂判据（集合比对、跨表一致性）仍按 id 注册在 gates.py 里 —— 这里只覆盖
+# "某个字段为空/缺失/不等于"这一类，够覆盖大多数新规则。
+declarative:
+  - id: CASE_GROUP_NO_REQUIREMENT
+    level: warning
+    stage: report
+    title: 覆盖率组没有需求编号
+    source: case_groups
+    where: {requirements: {op: empty}}
+    target: "{case}/{group}"
+    message: "覆盖率组 {group}（{name}）没有 requirements —— 无法追溯需求"
+    evidence: [case, group, name, coverage_type]
+

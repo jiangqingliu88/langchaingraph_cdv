@@ -6,11 +6,14 @@ v2 在 v1 四张表（用例 / 契约 / 矩阵 / 缺口）之上追加三张
 """
 from .api import build_case_view, load_case_view, write_case_view
 from .builder import SCHEMA
-from .gates import load_rules, validate_case_view, write_gates
+from .gates import (
+    load_declarative, load_rules, rules_table, validate_case_view, write_gates,
+)
 from .render import render_html, render_markdown, render_terminal, write_reports
 
 __all__ = [
     "SCHEMA", "build_case_view", "load_case_view", "write_case_view",
-    "load_rules", "validate_case_view", "write_gates",
+    "load_declarative", "load_rules", "rules_table", "validate_case_view",
+    "write_gates",
     "render_html", "render_markdown", "render_terminal", "write_reports",
 ]
