@@ -26,13 +26,13 @@ KNOWN_LIMITATIONS: Tuple[Dict[str, str], ...] = (
     {"id": "kg_is_query_only", "status": "by_design",
      "text": "知识图是查询层，不是推理层"},
     {"id": "player_runtime", "status": "open",
-     "text": "player 激励后端只有 plan，没有 runtime"},
+     "text": "player 激励后端只有 plan，没有 runtime", "owner_phase": "P3"},
     {"id": "provenance_sandbox_lifecycle", "status": "open",
-     "text": "产物级 provenance DAG"},
+     "text": "产物级 provenance DAG", "owner_phase": "P3"},
     {"id": "cmd_allowlist_monitor", "status": "by_design",
-     "text": "命令白名单默认 EDA enforce、其他 monitor"},
+     "text": "命令白名单默认 EDA enforce、其他 monitor", "owner_phase": "P5"},
     {"id": "uvm_ir_migration", "status": "open",
-     "text": "UVM 生成器尚未迁到统一 IR"},
+     "text": "UVM 生成器尚未迁到统一 IR", "owner_phase": "P1"},
     {"id": "incremental_dependency_heuristic", "status": "by_design",
      "text": "增量依赖映射由文件级启发式自动生成"},
     {"id": "incremental_compile", "status": "open",
@@ -57,3 +57,29 @@ def by_id(limitation_id: str) -> Dict[str, str]:
         if item["id"] == limitation_id:
             return item
     raise KeyError(limitation_id)
+
+
+#: 机器可读状态机的取值（`open` 以外的都不是"要做的事"）。
+LIMITATION_STATUSES = ("open", "closed", "deferred", "by_design")
+
+
+def rows() -> list:
+    """**状态机视图** —— 每条边界的 `{id, summary, status, owner_phase, verify_test}`。
+
+    纯文本边界只能回答"有没有这条"，回答不了"谁负责、到哪一阶段、哪条测试
+    证明它已关闭"。`owner_phase` / `verify_test` 可空（空 ≠ 没有，是还没排）。
+    `text` 仍保留：文档同源校验读它，别改字段名。
+    """
+    out = []
+    for item in KNOWN_LIMITATIONS:
+        status = str(item.get("status") or "open")
+        if status not in LIMITATION_STATUSES:
+            status = "open"
+        out.append({
+            "id": item["id"],
+            "summary": item.get("text", ""),
+            "status": status,
+            "owner_phase": item.get("owner_phase", ""),
+            "verify_test": item.get("verify_test", ""),
+        })
+    return out

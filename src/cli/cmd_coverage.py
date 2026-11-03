@@ -410,6 +410,29 @@ def coverage_case_evidence(output_dir, fmt, out_prefix):
     console.print(rendered)
 
 
+@coverage.command("case-registry")
+@click.option("--module", "-m", "module", default="", help="只看某个模块（空 = 全部）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def coverage_case_registry(module, json_output):
+    """跨 run 的 CASE 索引：首末 run 与执行实例数（可重建的元数据）"""
+    from src.layers.l4_memory.case_registry import list_cases
+
+    rows = list_cases(module)
+    if json_output:
+        click.echo(json.dumps(rows, ensure_ascii=False, indent=2))
+        return
+    if not rows:
+        console.print("[dim]注册表为空 —— 跑一次证据流水线后再看[/dim]")
+        return
+    table = Table(title=f"CASE 索引（{len(rows)} 条）")
+    for col in ("模块", "CASE", "首见 run", "最近 run", "EVD"):
+        table.add_column(col)
+    for row in rows[:200]:
+        table.add_row(row["module"], row["case_id"], row["first_seen_run"],
+                      row["last_seen_run"], str(row["evd_count"]))
+    console.print(table)
+
+
 @coverage.command("case-gate")
 @click.option("--output", "-o", "output_dir", required=True,
               type=click.Path(file_okay=False), help="运行目录")

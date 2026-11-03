@@ -44,6 +44,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import structlog
+
+logger = structlog.get_logger()
+
 SCHEMA = versions.EVIDENCE_UVM_PROFILE
 POLICY_SCHEMA = "signoff_policy_v1"
 
@@ -99,6 +103,8 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "evidence/ledger.jsonl",
         "status/shadow_report.json",
         "docs/engineering_metrics.json",
+        # UVM IR 双写比对：签核材料要能回答"IR 与渲染 ctx 还差多少"
+        "docs/ir_shadow_diff.json",
         "incremental/plan.json",
         "docs/run_diff.json",
         "decision/evaluations.jsonl",
@@ -469,11 +475,20 @@ def write_package(output_dir: Path, manifest: Dict[str, Any],
                 digest = sha256_file(src)
                 prev = previous.get(rel) or {}
                 prev_file = final_pkg / prev["path"] if prev.get("path") else None
+                reused_now = False
                 if (prev_file is not None and prev_file.is_file()
                         and prev.get("sha256") == digest):
-                    _link_or_copy(prev_file, src, dst)
-                    reused += 1
-                else:
+                    # **复用前校验包内文件本体**：manifest 说没变不等于文件没被
+                    # 动过（手改 / 中断写一半 / 硬链接源被替换）。本体哈希对不上
+                    # 就强制重新复制，不把坏文件硬链进新包。
+                    if sha256_file(prev_file) != prev.get("sha256"):
+                        logger.warning(
+                            f"证据包复用命中但文件本体哈希不符，强制重拷: {rel}")
+                    else:
+                        _link_or_copy(prev_file, src, dst)
+                        reused += 1
+                        reused_now = True
+                if not reused_now:
                     try:
                         shutil.copy2(src, dst)
                     except OSError:
@@ -485,7 +500,7 @@ def write_package(output_dir: Path, manifest: Dict[str, Any],
                     "source": rel,
                     "sha256": sha256_file(dst),
                     "size": dst.stat().st_size,
-                    "reused": bool(prev and prev.get("sha256") == digest),
+                    "reused": reused_now,
                 })
 
     # 生成离线回放脚本（materials 都在包里，脚本不 import 本项目）

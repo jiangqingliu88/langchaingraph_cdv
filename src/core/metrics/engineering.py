@@ -122,6 +122,7 @@ def _incremental(root: Path) -> Dict[str, Any]:
     if not doc:
         return {"available": False,
                 "reason": "没有 incremental/plan.json（未启用增量验证）"}
+    confidence = str(doc.get("confidence", ""))
     return {
         "available": True,
         "baseline_run": doc.get("baseline_run", ""),
@@ -131,7 +132,10 @@ def _incremental(root: Path) -> Dict[str, Any]:
         "estimated_selected_seconds": doc.get("estimated_selected_seconds"),
         "estimated_savings_seconds": doc.get("estimated_savings_seconds"),
         "estimated_savings_pct": doc.get("estimated_savings_pct"),
-        "confidence": doc.get("confidence", ""),
+        "confidence": confidence,
+        # **对冲指标**：没有依赖映射时保守跑全量（节省为 0）。单看"savings"
+        # 会系统性偏乐观 —— 这个布尔让趋势视图能数"有多大比例在保守全量"。
+        "conservative": confidence == "conservative_all",
         "estimated": bool(doc.get("estimated", True)),
     }
 
@@ -231,6 +235,59 @@ def _notes(out: Dict[str, Any]) -> List[str]:
     if out["attribution"]["hit_bins"] == 0:
         notes.append("没有命中 bin，归因完整率按 0 计")
     return [n for n in notes if n]
+
+
+def trend(run_root: str | Path, last: int = 10) -> Dict[str, Any]:
+    """连续 N 个 run 的工程指标趋势（读各 run 已落盘的 `engineering_metrics.json`）。
+
+    单 run 快照回答不了"效率到底有没有提升"；两 run diff 又太短。这里按
+    同目录下 run 的落盘时间取最近 N 个，顺手给出**保守全量比例** —— 没有它，
+    "预计节省"会系统性偏乐观（算不出依赖时就保守全量，节省为 0）。
+    """
+    root = Path(run_root).resolve()
+    candidates: List[Tuple[float, Path]] = []
+    parent = root.parent if root.parent != root else root
+    try:
+        for path in parent.iterdir():
+            if not path.is_dir():
+                continue
+            metrics_file = path / "docs" / "engineering_metrics.json"
+            if metrics_file.is_file():
+                candidates.append((metrics_file.stat().st_mtime, path))
+    except OSError:
+        pass
+    if not any(path == root for _ts, path in candidates):
+        metrics_file = root / "docs" / "engineering_metrics.json"
+        if metrics_file.is_file():
+            candidates.append((metrics_file.stat().st_mtime, root))
+    candidates.sort(key=lambda item: (item[0], item[1].name))
+    selected = candidates[-max(1, int(last or 1)):]
+    rows: List[Dict[str, Any]] = []
+    for _ts, path in selected:
+        doc = _read_json(path / "docs" / "engineering_metrics.json")
+        inc = doc.get("incremental") or {}
+        conservative = inc.get("conservative")
+        if conservative is None:
+            conservative = str(inc.get("confidence") or "") == "conservative_all"
+        rows.append({
+            "run": path.name,
+            "regression_seconds": (doc.get("regression") or {}).get("total_seconds"),
+            "attribution_rate": (doc.get("attribution") or {}).get("attribution_rate"),
+            "decision_rate": (doc.get("decision") or {}).get("effectiveness_rate"),
+            "incremental_available": bool(inc.get("available")),
+            "incremental_confidence": inc.get("confidence", ""),
+            "conservative": bool(conservative),
+        })
+    with_inc = [r for r in rows if r["incremental_available"]]
+    conservative = [r for r in with_inc if r["conservative"]]
+    return {
+        "schema": "engineering_trend_v1",
+        "runs": rows,
+        "counts": {"runs": len(rows), "with_incremental": len(with_inc),
+                   "conservative": len(conservative)},
+        "conservative_rate": (round(len(conservative) / len(with_inc), 4)
+                              if with_inc else None),
+    }
 
 
 def write(run_root: str | Path, *, baseline: Optional[str | Path] = None,

@@ -352,7 +352,7 @@ audit → finalize → END
 | 不变量 | 实现 | 失败方式 |
 |---|---|---|
 | verify 8 步的数据依赖 | `src/executors/verify/steps_dag.py` | import 期拓扑校验（缺失/成环）；执行期前置未跑 → `StepOrderError` |
-| State 字段归属 | `state.PHASE_OWNERS` + `STATE_CONTRACTS`；`graph._guarded_node` | 启动期字段存在性校验；运行期越权写关键字段 → warning（不改变 reducer 行为） |
+| State 字段归属 | `state.PHASE_OWNERS` + `STATE_CONTRACTS`；`graph._guarded_node` | 启动期字段存在性校验；运行期越权写 `tests/coverage/audit/result` → **硬失败**（`SIGNOFFAI_STATE_CONTRACT=warn` 退回告警），其余字段 → warning |
 | 硬失败 vs 软建议 | `decision_engine.hard_action()` / `soft_action()`；`DecisionBrain` 显式先调 hard | 硬失败（编译/比对/回归）结构上到不了 RL |
 | 工具角色映射 | `ToolHub.validate_registry()` + CLI 启动一行汇总 | 空映射未在 `EXECUTORS_WITHOUT_HUB_TOOLS` 登记 → 启动 `exit 2` |
 | LLM 协议猜测 | `find_spec_yaml` 对“非规格显式声明的单端口协议组”回退 generic | 一个猜测不会劫持整份 spec（否则生成错误 agent、DUT_CHK 求值 X） |
@@ -990,6 +990,11 @@ exact**：没有 `coverage/per_test_bins.json` 时 `test_seed_rate` 仍可 100%�
 CLI：`vagent metrics show -o <run> [--baseline <run>]`（`--json` 机器读）。
 指标写进 `docs/engineering_metrics.json`，也进签核报告的 `architecture_v2`。
 
+**趋势视图**：`vagent metrics trend -o <run> [--last 10]` 取同目录最近 N 个 run
+的落盘指标，逐 run 给回归耗时 / 增量 / 归因 / 决策，并给出
+`conservative_rate`（有增量计划却**保守跑全量**的比例）—— 没有这个对冲指标，
+"预计节省"会系统性偏乐观。
+
 ### 9.10 增量验证与 Run Diff（Verification Intelligence）
 
 链路已经打通到**计划**，不是口号：
@@ -1053,6 +1058,8 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
   case_checker_map / case_tp / cell_matrix / evd / gates / case_view.* /
   evidence_manifest / case_cov/**`（通配展开）。打包**增量**：源文件哈希未变的
   条目从上一版包硬链接复用，`manifest.incremental = {copied, reused}` 自述。
+  复用前先校验**包内文件本体哈希**（不看 manifest 自述）；对不上就强制重拷并
+  warning —— 复用率越高，一次错误复用的代价越大。
   界面在「签核判定」页的「Case 证据」一节（Gate / CELL 读数 + 产物是否进包）。
 
 ### 9.12 Case View 签核标准（Signoff Standard）
@@ -1263,7 +1270,8 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
   否则 summary 明确写「seed 级归因不可用」。
 
 **确定性**：节点/边排序后写入，JSONL 不含时间戳；同一输入重复构建得到同一串字节，
-可被 `round_manifest` 式复现校验。跨 run 的 SQLite 索引是 roadmap，不冒充已实现。
+可被 `round_manifest` 式复现校验。跨 run 的 CASE 索引已落在主库
+`case_registry`（可重建的元数据，见 §11）；血缘/事件索引仍是 roadmap，不冒充已实现。
 
 **进包时点**：`docs/events.jsonl` 在 audit 组装证据包时被收走；finalize 之后还会
 追加 `run.finished` 等收尾事实。离线校验以**包内快照**为准，run 目录里的文件更全。
@@ -1281,6 +1289,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 | IP 库 | `database/ip_registry.db` | 复用 RTL / IP 缓存 |
 | 模型库 | `database/model_registry.db` | TLM 1.0 参考模型、版本、状态、证据 |
 | 血缘 | `database/lineage.db` | RTL 版本、run 绑定、基线、bug↔版本 |
+| CASE 索引 | `database/ic_verification.db#case_registry` | 同一条 CASE 的首末 run 与 EVD 数（跨 run 对账；可重建） |
 | 排除规则 | `database/exclude_registry.db` | 覆盖率排除 |
 | 经验/统计 | `database/{coverage_experience,debug_experience,rule_stats,hint_stats}.db` | 跨 run 经验与规则命中 |
 | 检查点 | `<run>/docs/checkpoints.sqlite` | LangGraph 中断/恢复 |
@@ -1292,8 +1301,9 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
   **没有第二份趋势库**（旧别名已删）。
 - **Architecture 2.0 的事实文件是 run-local 的**：`docs/events.jsonl`、
   `docs/provenance.jsonl`、`decision/evaluations.jsonl`、`artifacts/artifacts.json`
-  都跟着 run 目录走（能打包、能换机器、离线可读），**不新增跨 run SQLite**。
-  跨 run 的血缘/事件索引是 roadmap；目前需要跨 run 对账时按 SHA256 匹配。
+  都跟着 run 目录走（能打包、能换机器、离线可读），**不新增跨 run SQLite 文件**。
+  跨 run 只加**可重建的元数据索引**：`ic_verification.db#case_registry`（CASE 首末
+  run / EVD 数）；血缘/事件索引仍是 roadmap。
 
 ### 11.1 契约层（`src/core/contracts/`）
 
@@ -1475,8 +1485,10 @@ python scripts/mutation_guards.py                     # 9 条核心守卫变异�
   `AgentModel` / `EnvironmentModel` 的 ctx。字节门禁与 IR-first 尚未切换；
   “差异为 0”是切换的前置读数，IR 目前仍拦不住“字段还在、语义已错”这类漂移。
 - **质量门默认 report**：`write(...)` 支持 `report/warn/block`（环境变量
-  `SIGNOFFAI_QUALITY_GATE`），但 block 尚未接入签核三态/caveat；本阶段只把
-  策略词汇和配置入口落地。
+  `SIGNOFFAI_QUALITY_GATE`）。**block 已接签核三态（按维度灰度）**：
+  `evidence` / `functional` 维度 `fail` → 硬失败 + `QUALITY_GATE_BLOCKED`；
+  其余维度非 pass → 软 caveat `QUALITY_GATE_WARN`。`report`（默认）/`warn`
+  仍不改变三态 —— 阈值稳定前只报告。
 - **应用服务层是过渡 facade**：`src/app/services` 已统一 CLI/Workbench 的
   optimize/coverage/soc/ip 入口；SoC/IP 底层仍调用 `soc_adapter`，后续再搬。
 - **增量依赖映射由文件级启发式自动生成**：`src/core/incremental/deps_gen.py`
@@ -1509,8 +1521,11 @@ python scripts/mutation_guards.py                     # 9 条核心守卫变异�
   换成短目录名即 55/55 全过。产品本身没问题，但输出目录名不宜过长。
 - **边界表同源**：`config/known_limitations.py` 是 §15 的代码真相；
   `test_architecture_invariants.py` 校验文档包含每条，player runtime 落地时
-  必须同步改 `status` 与文档。
-- **auth.py 是可选 API 面**：CLI 不 import 它，FastAPI/PyJWT 放在 `api` extra；
+  必须同步改 `status` 与文档。`rows()` 给出机器可读状态机
+  （`id/summary/status/owner_phase/verify_test`）；`status` 只认
+  `open|closed|deferred|by_design`。
+- **auth.py 是可选 API 面**：CLI 不 import 它（`test_cli_does_not_import_optional_auth`
+  钉住），FastAPI/PyJWT 放在 `api` extra；
   核心安装不再为未使用的认证代码付依赖成本。
 
 ---
@@ -1575,11 +1590,11 @@ python scripts/mutation_guards.py                     # 9 条核心守卫变异�
 | 阶段 | 目标 | 状态 |
 |---|---|---|
 | P0 收口 | `src/app/services` + `src/core/contracts` + EvidenceEnvelope + Workbench query | **完成**：CLI/Workbench 共用 facade；schema 版本与 JSONL 单一来源；UVM/SoC 证据包带 profile+envelope；query 层无 Qt |
-| P1 收口 | `gen_uvm.py` 按 parsing → UVM IR → render → generators 迁移 | **结构完成**：parsing / models / render / generators 全部搬完，`gen_uvm.py` 只剩兼容门面；IR 已做结构校验 + shadow 比对（只 warning），但模板仍吃 dataclass ctx |
+| P1 收口 | `gen_uvm.py` 按 parsing → UVM IR → render → generators 迁移 | **结构完成**：parsing / models / render / generators 全部搬完，`gen_uvm.py` 只剩 CLI 入口；IR 已做结构校验 + **双写比对并落 `docs/ir_shadow_diff.json`**，但模板仍吃 dataclass ctx |
 | P2 增量验证 | 依赖映射自动生成；增量**编译**；按 seed 级优化调度 | **部分**：`deps_gen.py` 已能自动生成文件级依赖；计划/选择/估算/`--incremental-from`/`optimize-regression` 已通；增量编译、种子级调度未做 |
 | P3 智能选择 | 基于历史 TP/bin/seed 选择高价值测试；Unreachable TP Analyzer | **地基**：归因链与完整率已通 |
 | P4 多后端 | VCS / Verilator 适配；跨 run 血缘/事件索引；run 自动清理 | 未开始 |
-| P5 治理升级 | 质量门从“只报告”升级为可配置硬门禁（需新增 caveat code 并同步 `EXPECTED_CAVEATS`） | 未开始 |
+| P5 治理升级 | 质量门从“只报告”升级为可配置硬门禁（需新增 caveat code 并同步 `EXPECTED_CAVEATS`） | **部分**：`block` 已接三态（evidence/functional 硬、其余软，新增 `QUALITY_GATE_BLOCKED/WARN`）；命令白名单默认仍 monitor（EDA enforce） |
 
 **工程指标口径**（见 §9.9）：回归总耗时下降、增量节省、归因完整率、
 决策有效率。缺数据写 `null` / `available:false`，不拿 0 冒充。

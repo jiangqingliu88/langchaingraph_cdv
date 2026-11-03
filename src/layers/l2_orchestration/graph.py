@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import functools
+import os
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -56,7 +57,7 @@ from src.layers.l2_orchestration.routers import (
 from src.layers.l2_orchestration.runtime import (Runtime, hydrate_runtime,
                                                  recursion_limit)
 from src.layers.l2_orchestration.state import (
-    PipelineState, unexpected_state_writers)
+    CRITICAL_STATE_FIELDS, PipelineState, unexpected_state_writers)
 
 logger = structlog.get_logger()
 
@@ -91,10 +92,12 @@ _STATE_WARNED: set = set()
 
 
 def _guarded_node(name: str, fn):
-    """包一层 State 契约检查：写了不属于自己的关键字段 → warning。
+    """包一层 State 契约检查：越权写**关键字段** → 硬失败，其余 → warning。
 
-    不是事务/失败：LangGraph 的 reducer 仍是合并权威；这里只把**静默覆盖**
-    变成一条可见的告警。包装函数保持 `(state, config)` 签名。
+    `tests` / `coverage` / `audit` / `result` 被非属主覆盖 = 身份或结论被静默
+    篡改，不能只留一条日志；其余字段仍只告警（LangGraph 的 reducer 是合并权威，
+    小范围观察哨没必要拦死）。`SIGNOFFAI_STATE_CONTRACT=warn` 可整体退回告警。
+    包装函数保持 `(state, config)` 签名。
     """
     if getattr(fn, "__state_guard__", False):
         return fn
@@ -104,6 +107,14 @@ def _guarded_node(name: str, fn):
         update = await fn(state, config)
         if isinstance(update, dict):
             bad = unexpected_state_writers(name, update)
+            strict = os.environ.get(
+                "SIGNOFFAI_STATE_CONTRACT", "strict").strip().lower() != "warn"
+            critical = [f for f in bad if f in CRITICAL_STATE_FIELDS]
+            if strict and critical:
+                raise RuntimeError(
+                    f"State 契约违规（硬失败）: 节点 {name!r} 写了不属于它的关键"
+                    f"字段 {critical}（写入者见 state.STATE_CONTRACTS；"
+                    f"如确属无害，用 SIGNOFFAI_STATE_CONTRACT=warn 退回告警）")
             for field in bad:
                 key = (name, field)
                 if key in _STATE_WARNED:

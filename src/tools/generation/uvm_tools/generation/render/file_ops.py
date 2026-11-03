@@ -1,6 +1,6 @@
 """生成文件操作 —— 签名判定 / 清理 / merge 备份 / 生成报告。
 
-从 `tool_uvm/gen_uvm.py` 搬出；`gen_uvm` 继续 re-export 这些名字。
+从 `tool_uvm/gen_uvm.py` 搬出；调用方直接从这里导入（门面已删）。
 不渲染、不判断业务，只做文件与报告。
 """
 from __future__ import annotations

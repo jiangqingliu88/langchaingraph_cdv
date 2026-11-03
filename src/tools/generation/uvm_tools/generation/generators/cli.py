@@ -1,6 +1,6 @@
 """命令行入口 —— `python -m ...tool_uvm.gen_uvm` 的实现。
 
-从 `tool_uvm/gen_uvm.py` 原样搬入；`gen_uvm.main` 是它的兼容门面。
+从 `tool_uvm/gen_uvm.py` 原样搬入；`gen_uvm.main` 现在只是转发到这里的入口。
 """
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
 """环境产物生成器 —— `agents/`、`env/`、`bench/` 的统一入口。
 
 调用方（verify / 测试 / 未来证据收集）只依赖这个模块，不直接依赖
-`tool_uvm/gen_uvm.py`（它现在只是兼容门面）。实现在 `orchestrator.py`。
+`tool_uvm/gen_uvm.py`（它现在只是 CLI 入口）。实现在 `orchestrator.py`。
 """
 from __future__ import annotations
 

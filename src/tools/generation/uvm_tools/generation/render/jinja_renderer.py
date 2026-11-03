@@ -1,6 +1,6 @@
 """Jinja2 渲染器与模板过滤器 —— 只渲染，不判断业务。
 
-从 `tool_uvm/gen_uvm.py` 搬出；`gen_uvm` 继续 re-export 这些名字。
+从 `tool_uvm/gen_uvm.py` 搬出；调用方直接从这里导入（门面已删）。
 `now()` 保持确定性（SOURCE_DATE_EPOCH），否则生成物不可复现。
 """
 from __future__ import annotations

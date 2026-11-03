@@ -1,6 +1,6 @@
 """UVM 模板注册表 —— 只描述「模板 → 目标文件名」，不渲染。
 
-从 `tool_uvm/gen_uvm.py` 搬出；`gen_uvm` 继续 re-export，外部调用点不变。
+从 `tool_uvm/gen_uvm.py` 搬出；调用方直接从这里导入（门面已删）。
 新增模板在这里登记，渲染与业务判断仍在生成器侧。
 """
 from __future__ import annotations

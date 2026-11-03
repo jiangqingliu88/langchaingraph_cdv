@@ -1,7 +1,7 @@
 """pragma custom 区域注入 —— 渲染层的独立件。
 
-从 `tool_uvm/gen_uvm.py` 搬出；行为与常量保持不变，`gen_uvm` 继续 re-export
-这些名字，外部调用点无需改动。只依赖标准库：不 import 生成器、不读 YAML。
+从 `tool_uvm/gen_uvm.py` 搬出；行为与常量保持不变，调用方直接从这里导入
+（门面已删）。只依赖标准库：不 import 生成器、不读 YAML。
 
 生成文件带 BANNER 签名；`-c/--clean` 只删带签名的文件，绝不碰手写文件。
 """

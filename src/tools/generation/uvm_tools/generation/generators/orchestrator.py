@@ -1,6 +1,6 @@
 """生成编排 —— 把解析结果装配成渲染任务（`UVMGenerator` / `generate_uvm`）。
 
-从 `tool_uvm/gen_uvm.py` 原样搬入；`gen_uvm` 继续 re-export 这些名字。
+从 `tool_uvm/gen_uvm.py` 原样搬入；调用方直接从这里导入（门面已删）。
 本模块不做渲染（见 `tasks.py`），也不解析 YAML（见 `parsing/`）。
 """
 from __future__ import annotations

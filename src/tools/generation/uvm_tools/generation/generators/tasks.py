@@ -1,6 +1,6 @@
 """渲染任务 —— 模型 → 文件，只做渲染、不解析、不编排。
 
-从 `tool_uvm/gen_uvm.py` 原样搬入；`gen_uvm` 继续 re-export 这些名字。
+从 `tool_uvm/gen_uvm.py` 原样搬入；调用方直接从这里导入（门面已删）。
 """
 from __future__ import annotations
 

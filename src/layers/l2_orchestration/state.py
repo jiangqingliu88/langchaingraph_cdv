@@ -264,6 +264,17 @@ STATE_CONTRACTS: Dict[str, Dict[str, Any]] = {
 }
 
 
+#: **越权写这些字段会静默篡改身份/结论** → 运行期硬失败（而不是 warning）。
+#: 其余字段（如 `spec` / `env`）仍有 warning 作为观察哨，避免一上来把流水线
+#: 拦死在"其实无害"的写冲突上。可用 `SIGNOFFAI_STATE_CONTRACT=warn` 退回告警。
+CRITICAL_STATE_FIELDS = frozenset({
+    "tests",        # verify 的产物：被别的节点覆盖 = 用例身份被改
+    "coverage",     # 签核主指标：被覆盖 = 结论被改
+    "audit",        # 终局判定：只能由 audit 写
+    "result",       # 对外结论：只能由 finalize 写
+})
+
+
 def unexpected_state_writers(node_name: str, update: Dict[str, Any]) -> list:
     """节点写了不属于它的**关键字段** —— 返回字段名（空 = 正常）。
 

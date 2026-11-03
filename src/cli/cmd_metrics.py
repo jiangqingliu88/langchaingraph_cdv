@@ -86,6 +86,45 @@ def metrics_show(output, baseline, json_output):
         console.print(f"[dim]· {note}[/dim]")
 
 
+@metrics_group.command("trend")
+@click.option("-o", "--output", type=click.Path(file_okay=False, path_type=Path),
+              default=".", show_default=True, help="run 目录（同目录下取最近 N 个）")
+@click.option("--last", type=int, default=10, show_default=True,
+              help="取最近多少个 run")
+@click.option("--json", "json_output", is_flag=True, help="输出机器可读 JSON")
+def metrics_trend(output, last, json_output):
+    """连续 N 个 run 的工程指标趋势（含**保守全量比例**）。"""
+    from src.core.metrics.engineering import trend
+
+    report = trend(output, last=last)
+    if json_output:
+        click.echo(json.dumps(report, indent=2, ensure_ascii=False, default=str))
+        return
+    table = Table(title=f"Engineering Trend — 最近 {len(report['runs'])} 个 run")
+    table.add_column("run", style="cyan")
+    table.add_column("回归耗时")
+    table.add_column("增量")
+    table.add_column("归因完整率")
+    table.add_column("决策有效率")
+    for row in report["runs"]:
+        inc = ("保守全量" if row["conservative"]
+               else (row["incremental_confidence"] or "-"))
+        if not row["incremental_available"]:
+            inc = "-"
+        table.add_row(
+            row["run"], _fmt_seconds(row["regression_seconds"]), inc,
+            _fmt_pct((row["attribution_rate"] or 0) * 100
+                     if row["attribution_rate"] is not None else None),
+            _fmt_pct((row["decision_rate"] or 0) * 100
+                     if row["decision_rate"] is not None else None))
+    console.print(table)
+    counts = report["counts"]
+    rate = report["conservative_rate"]
+    console.print(f"[dim]有增量计划 {counts['with_incremental']}/{counts['runs']} 个 run · "
+                  f"保守全量 {counts['conservative']} 个"
+                  + (f"（{rate:.0%}）" if rate is not None else "") + "[/dim]")
+
+
 @cli.group("incremental")
 def incremental_group():
     """增量验证：RTL diff → 依赖分析 → 受影响用例 → 节省估算"""

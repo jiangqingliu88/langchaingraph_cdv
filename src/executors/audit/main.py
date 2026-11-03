@@ -392,14 +392,64 @@ def _build_architecture_v2(output_dir: Path, target: float) -> Dict[str, Any]:
             "verification_quality": {
                 "path": _rel_to_run(quality["path"], output_dir),
                 "overall": quality["overall"],
+                "enforcement": quality.get("enforcement", "report"),
                 "dimensions": {k: v["status"]
                                for k, v in quality["dimensions"].items()},
                 "issues": quality["issues"],
             },
+            # UVM IR 双写比对：签核包里能直接读"IR 与渲染 ctx 还差多少"。
+            # 不做门禁 —— 差异清零是后续切 IR-first 的前置条件，不是签核条件。
+            "ir_shadow": _ir_shadow_summary(output_dir),
         }
     except Exception as e:                             # noqa: BLE001 证据增量别拦签核
         logger.warning(f"Architecture 2.0 证据构建失败（签核继续）: {e}")
         return {}
+
+
+def _ir_shadow_summary(output_dir: Path) -> Dict[str, Any]:
+    """`docs/ir_shadow_diff.json` → 签核报告里的摘要（缺文件 = 未生成，不编 0）。"""
+    path = Path(output_dir) / "docs" / "ir_shadow_diff.json"
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return {"available": False}
+    counts = doc.get("counts") or {}
+    return {
+        "available": True,
+        "path": _rel_to_run(path, Path(output_dir)),
+        "scopes": int(counts.get("scopes") or 0),
+        "inconsistent": int(counts.get("inconsistent") or 0),
+        "differences": int(counts.get("differences") or 0),
+    }
+
+
+def _apply_quality_gate_block(architecture_v2: Dict[str, Any], hard_ok: bool,
+                              caveat) -> bool:
+    """`SIGNOFFAI_QUALITY_GATE=block` → 接进签核三态（按维度灰度）。
+
+    · `evidence` / `functional` 维度 `fail` → **硬失败**（NEEDS_FIX）：
+      前者是"数据不够判"，后者是"功能没验到"，两条都不该被软 caveat 放过。
+    · 其余维度的非 pass（fail/warn/unknown）→ 软 caveat `QUALITY_GATE_WARN`。
+    · `report`（默认）/ `warn` 不改变三态 —— 阈值稳定前只报告。
+    """
+    quality = (architecture_v2 or {}).get("verification_quality") or {}
+    if str(quality.get("enforcement") or "") != "block":
+        return hard_ok
+    dims = quality.get("dimensions") or {}
+    hard = sorted(k for k in ("evidence", "functional")
+                  if dims.get(k) == "fail")
+    if hard:
+        caveat("QUALITY_GATE_BLOCKED",
+               f"质量门 block：{', '.join(f'{k}={dims[k]}' for k in hard)} "
+               f"—— 见 docs/verification_quality.json")
+        return False
+    soft = sorted(k for k, v in dims.items()
+                  if v in ("fail", "warn", "unknown") and k not in hard)
+    if soft:
+        caveat("QUALITY_GATE_WARN",
+               f"质量门 block 模式下仍有非 pass 维度："
+               f"{', '.join(f'{k}={dims[k]}' for k in soft)}")
+    return hard_ok
 
 
 def _rtl_version_hash(output_dir: Path) -> str:
@@ -1117,6 +1167,11 @@ class AuditExecutor(BaseExecutor):
                     f"后端命令 —— 这些参数不受结构化字段保护"
                     f"（见 {regression_config.get('path')}）")
 
+        # Architecture 2.0：血缘与五维质量门先落盘，再组装签核（否则它们进不了
+        # 下面的 evidence 包）。report/warn 只报告；block 才进三态。
+        architecture_v2 = _build_architecture_v2(output_dir, _target)
+        hard_ok = _apply_quality_gate_block(architecture_v2, hard_ok, _caveat)
+
         from src.layers.l2_orchestration.evidence.verdict import (
             accepted_codes_from_policy, decide_verdict, effective_caveats as _effective,
             signoff_status as _status)
@@ -1133,10 +1188,6 @@ class AuditExecutor(BaseExecutor):
         # **两个覆盖率都写进去，并标出哪个是本次判定的口径**。只留一个数的话，
         # 读报告的人分不清"32.5%"是代码覆盖率还是功能覆盖率 —— 而这两个数在
         # 同一份 run 里可以差一倍（32.5% vs 64.81%），"差在哪"正是要回答的问题。
-        #
-        # Architecture 2.0：血缘与五维质量门先落盘，再组装签核（否则它们进不了
-        # 下面的 evidence 包）。**只报告、不阻断**。
-        architecture_v2 = _build_architecture_v2(output_dir, _target)
         signoff = {
             "verdict": verdict,
             "module": module,

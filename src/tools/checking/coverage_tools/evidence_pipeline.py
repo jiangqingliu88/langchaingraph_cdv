@@ -106,7 +106,14 @@ def _step_cell_matrix(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
 
 def _step_case_view(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     from src.tools.humanview.case_associate_view import write_case_view
-    return write_case_view(od)
+    result = write_case_view(od)
+    # 跨 run 的 CASE 索引（元数据，可重建）——写失败不拦证据流水线。
+    try:
+        from src.layers.l4_memory.case_registry import record_case_view
+        record_case_view(od)
+    except Exception:                                   # noqa: BLE001 旁路
+        pass
+    return result
 
 
 def _step_gates(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:

@@ -39,6 +39,8 @@ EXPECTED_CAVEATS = {
     # case 三集合契约（arch.md §9）
     "CASE_GROUP_PARTIAL", "CASE_SVA_VACUOUS", "CASE_SCB_NOT_EXECUTED",
     "CASE_PATH_PENDING_BACKEND", "CASE_IR_EVIDENCE_MISMATCH",
+    # 五维质量门 block 模式（§15：evidence/functional 硬，其余软）
+    "QUALITY_GATE_BLOCKED", "QUALITY_GATE_WARN",
 }
 
 
@@ -164,3 +166,34 @@ def test_doc_test_count_matches_reality():
     assert m, "ARCHITECTURE.md 头部没有单测计数"
     # 只做下限检查：新增测试后如果忘了更新，这里会提示（不反向卡住）
     assert int(m.group(1)) >= 1000
+
+
+def test_cli_does_not_import_optional_auth():
+    """`auth.py` 是**可选 API 面**（FastAPI/PyJWT 在 `api` extra）—— CLI 不许 import。
+
+    否则核心安装为了认证代码被拉上两个重依赖；这条不变量之前只在文档里写着，
+    没有守卫（改一行 import 就能悄悄破掉）。
+    """
+    offenders = []
+    pattern = re.compile(r"(l2_orchestration\.auth|from\s+\.auth\s+import)")
+    for path in (ROOT / "src" / "cli").rglob("*.py"):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for line in text.splitlines():
+            if line.strip().startswith("#"):
+                continue
+            if pattern.search(line):
+                offenders.append(f"{path.relative_to(ROOT).as_posix()}: {line.strip()}")
+    assert not offenders, "CLI 不得 import 可选认证模块：\n" + "\n".join(offenders)
+
+
+def test_known_limitations_expose_a_machine_readable_state():
+    """边界表是状态机（id/status/owner_phase/verify_test），不是一段散文。"""
+    from config.known_limitations import LIMITATION_STATUSES, rows
+
+    items = rows()
+    assert items and {r["id"] for r in items} == {
+        r["id"] for r in rows()}
+    for row in items:
+        assert row["status"] in LIMITATION_STATUSES, row
+        assert row["summary"], row
+        assert set(row) == {"id", "summary", "status", "owner_phase", "verify_test"}

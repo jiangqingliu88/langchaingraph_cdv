@@ -53,7 +53,9 @@ def test_uncontracted_fields_stay_free():
     assert unexpected_state_writers("any_node", {"phases": [], "seed": 3}) == []
 
 
-def test_graph_wrapper_reports_but_does_not_block(monkeypatch):
+def test_warn_mode_reports_but_does_not_block(monkeypatch):
+    """`SIGNOFFAI_STATE_CONTRACT=warn`：观察哨模式，不改变返回值。"""
+    monkeypatch.setenv("SIGNOFFAI_STATE_CONTRACT", "warn")
     graph_mod._STATE_WARNED.clear()
 
     async def bad_node(state, config):
@@ -64,6 +66,34 @@ def test_graph_wrapper_reports_but_does_not_block(monkeypatch):
     assert out == {"coverage": {"functional": 1.0}}       # 不改变返回值
     assert ("design", "coverage") in graph_mod._STATE_WARNED
     assert getattr(wrapped, "__state_guard__", False) is True
+
+
+def test_strict_mode_hard_fails_on_critical_field(monkeypatch):
+    """关键字段（tests/coverage/audit/result）被越权写 → 硬失败，不是告警。"""
+    monkeypatch.delenv("SIGNOFFAI_STATE_CONTRACT", raising=False)
+
+    async def bad_node(state, config):
+        return {"coverage": {"functional": 1.0}}
+
+    wrapped = _guarded_node("design", bad_node)
+    try:
+        asyncio.run(wrapped({}, {}))
+    except RuntimeError as exc:
+        assert "State" in str(exc) or "state" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("关键字段越权写必须硬失败")
+
+
+def test_strict_mode_still_warns_for_non_critical(monkeypatch):
+    monkeypatch.delenv("SIGNOFFAI_STATE_CONTRACT", raising=False)
+    graph_mod._STATE_WARNED.clear()
+
+    async def bad_node(state, config):
+        return {"spec": {}}          # spec 不是关键字段，只告警
+
+    wrapped = _guarded_node("design", bad_node)
+    assert asyncio.run(wrapped({}, {})) == {"spec": {}}
+    assert ("design", "spec") in graph_mod._STATE_WARNED
 
 
 def test_wrapper_is_idempotent():
