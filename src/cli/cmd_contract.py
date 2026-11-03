@@ -135,6 +135,31 @@ def contract_why(obligation_id, run_dir, json_output):
         raise SystemExit(1)
 
 
+@contract.command("worklist")
+@click.option("--run", "-o", "run_dir", required=True,
+              type=click.Path(file_okay=False), help="运行目录")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def contract_worklist(run_dir, json_output):
+    """未清偿义务 → 需要重跑的回归 test 清单（义务驱动执行）"""
+    from src.tools.checking.verification_os.worklist import write_worklist
+
+    data = write_worklist(_resolve_run_dir(run_dir))
+    if json_output:
+        click.echo(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+    if not data.get("available"):
+        click.echo(f"清单不可用（{data.get('reason')}）—— 跑全量", err=True)
+        return
+    console.print(f"[bold]未清偿 {data['open']}/{data['obligations']} 条义务[/bold] "
+                  f"→ {data['count']} 条 test")
+    for item in data["items"][:20]:
+        console.print(f"  {item['test']}（{item.get('stage') or '-'}）"
+                      f" TP {len(item['tp_ids'])} · 义务 {len(item['obligations'])}")
+    if data.get("skipped_no_test"):
+        console.print(f"  映射不到回归 test：{len(data['skipped_no_test'])} 条"
+                      f"（见 status/worklist.json）")
+
+
 @contract.command("status")
 @click.option("--run", "-o", "run_dir", required=True,
               type=click.Path(file_okay=False), help="运行目录")

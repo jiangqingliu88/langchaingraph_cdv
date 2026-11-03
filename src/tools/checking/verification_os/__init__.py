@@ -29,6 +29,7 @@ from .derive import case_statuses, derive, evaluate, tp_contract_status
 from .explain import explain, status_summary
 from .ledger import append_bundle, read_ledger, verify_chain
 from .shadow import build_bundle, run_shadow
+from .worklist import build_worklist, regression_test_name, write_worklist
 
 __all__ = [
     "FACT_TYPES", "LAYERS", "LAYER_PREDICATES",
@@ -39,4 +40,5 @@ __all__ = [
     "contract_hash", "derive", "evaluate", "load_contract", "obligation_id",
     "read_ledger", "read_manifest", "run_shadow", "verify_chain", "worst",
     "write_contract", "explain", "status_summary", "tp_contract_status",
+    "build_worklist", "regression_test_name", "write_worklist",
 ]

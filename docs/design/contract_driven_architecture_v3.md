@@ -323,11 +323,29 @@ EVD 行 `cells` 全空（47 行），只有重跑时拿到上一轮 cell_matrix 
 `EXPECTED_CAVEATS` 仍按 audit 的 caveat 白名单维护（caveat 是审计口径，规则是门禁
 口径，两者刻意不合并）；但每条 caveat 的 message 已带 `rule@target`。
 
-### M4 —— 义务驱动的执行规划（2 周）
+### M4 —— 义务驱动的执行规划（2 周）🟡 已落地（opt-in）
 
 - ops 从"跑全量"改为"按未清偿义务生成 worklist"；种子/分级由义务属性决定。
 - 保留"全量回归"开关（CI nightly），但默认是义务驱动。
 - 验收：补一条 SVA 证据 < 3 分钟（不重跑全量）；每轮耗时下降可量化。
+
+**落地情况**：
+
+| 落点 | 内容 |
+|---|---|
+| `verification_os/worklist.py` | `build_worklist()`：契约义务 −（当前契约事实推导出的）已清偿 = 未清偿；按 `tp_ids`/`case_id` 映射到 TP，再按 `regression_gen` 同一口径（`tp_<slug>`）映射到**真实存在**的回归 test；产出 `status/worklist.json` + 正则 |
+| ops | `_regression_filter()`：`params.worklist is True` 或 `SIGNOFFAI_WORKLIST=1` 时用 worklist 正则，否则回落增量基线/全量；算不出来（无契约/无回归清单）**回落全量**，不静默缩小 |
+| CLI | `vagent contract worklist --run …` |
+| 实测 | npu_sched：未清偿义务映射到 42 条 test（覆盖 dtype/opcode/pipeline/…），另有 **15 条映射不到回归 test**（观测型/行为域组没有独立用例）进 `skipped_no_test` |
+
+**与计划的两处偏差（如实记账）**：
+
+1. **默认仍关**：worklist 需要显式开关（`params.worklist` / `SIGNOFFAI_WORKLIST=1`）。
+   计划原写"默认义务驱动"，但 duty 驱动的正确性依赖"上一轮账本完整"，在 M2 刚切换
+   的窗口里默认打开风险太高；用一周实测（每轮耗时 + 未清偿数）后再改默认。
+2. **没有加 `--worklist` CLI 开关**：它要穿越 `PipelineState(extra="forbid")` 的
+   schema 与三处 façade（execution / run_service / cmd_verify），代价与收益不成比例；
+   环境变量已能覆盖同一场景。
 
 ### M5 —— 消费端切换（1 周）🟡 核心已落地
 

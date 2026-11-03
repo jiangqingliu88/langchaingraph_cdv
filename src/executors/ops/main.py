@@ -10,6 +10,39 @@ import structlog
 logger = structlog.get_logger()
 
 
+def _worklist_filter(output_dir: Path, params: Dict[str, Any]) -> str:
+    """M4 义务 worklist（**opt-in**）：只重跑未清偿义务对应的回归 test。
+
+    开关：`params.worklist is True` 或 `SIGNOFFAI_WORKLIST=1`。默认关闭 ——
+    默认仍是全量回归（nightly 需要它），worklist 用于"补一条证据"的重跑。
+    算不出来（没有契约 / 没有回归清单）就返回空串，回落全量，不静默缩小范围。
+    """
+    import os
+
+    enabled = (isinstance(params, dict) and params.get("worklist") is True) or \
+        str(os.environ.get("SIGNOFFAI_WORKLIST", "")).lower() in ("1", "true", "on")
+    if not enabled:
+        return ""
+    try:
+        from src.tools.checking.verification_os.worklist import write_worklist
+
+        data = write_worklist(output_dir)
+    except Exception as e:                          # noqa: BLE001 旁路
+        logger.warning(f"worklist 生成失败（回落全量）: {e}")
+        return ""
+    if not data.get("available") or not data.get("regex"):
+        logger.info("worklist：没有未清偿义务或清单不可用 → 跑全量")
+        return ""
+    logger.info(f"worklist：{data['open']}/{data['obligations']} 条义务未清偿 "
+                f"→ 只跑 {data['count']} 条 test")
+    return str(data["regex"])
+
+
+def _regression_filter(output_dir: Path, params: Dict[str, Any]) -> str:
+    """回归 test 过滤：worklist（义务驱动）优先，其次增量基线，否则全量。"""
+    return _worklist_filter(output_dir, params) or OpsExecutor._incremental_filter(output_dir)
+
+
 def _eda_guard(design_style: str):
     """EDA 可用性前置检查：没有 vlog/vsim 就响亮失败，不假装跑回归。
 
@@ -170,7 +203,7 @@ class OpsExecutor(BaseExecutor):
             reg_data = infra.run_regression_staged(
                 mode="local", enabled_modes=sim_modes,
                 auto_approve=not manual_gate,
-                tests=self._incremental_filter(output_dir))
+                tests=_regression_filter(output_dir, params))
             if not isinstance(reg_data, dict):
                 reg_data = {}
         except Exception as e:
