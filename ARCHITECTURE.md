@@ -1,10 +1,10 @@
 # SignOffAI 代码架构（当前实现）
 
-> 基线：2026-10-31
+> 基线：2026-11-04
 >
-> 全量单测：**1228 passed / 5 skipped**；工作台 **741 passed**
+> 全量单测：**1317 passed / 2 skipped**；工作台 **744 passed**（另有 3 个 IP 页面用例为既有失败，与本次改动无关）
 >
-> UVM 端到端实测：`output_e2e_code_plan_jiang_20261030_233908`，**272/272 PASS**，功能计划覆盖率 **95.23%**，代码覆盖率单测 **70.9%** / DUT 计划 **75.8%**，签核 **PASS_WITH_CAVEAT / CONDITIONAL**；证据包 `verify` / `replay` 均通过；StimulusPlan 47 可激励 / 16 不适用；round_manifest 1 轮 × 63 条
+> UVM 端到端实测：`output_e2e_npu_sched_20261104d_jiang_20261103_231400`，分级回归 **273/273 PASS**，功能计划覆盖率 **95.23%**（第 1 轮收敛），签核 **PASS_WITH_CAVEAT / CONDITIONAL**；Case View：13 个契约组 / 267 份逐用例证据 / 364 条 EVD / 13 个 CELL（黄 11 · 红 2，缺证据不冒充绿），Case Gate **PASS**（blocker 0）；签核包 308 份文件，`case_view` 段 278 份，增量 `copied=4 / reused=302`，`verify_package` 通过
 >
 > SoC 参考工程实测：`examples/open_npu_soc`，`soc run` 的两条用例（参考 TB `gemm_8x8` + E203 C `gemm_8x8_c`）**PASS**；参考路径 `mismatched=0`/2075 ns，C 路径 `TEST_PASS`，输出 `output_soc_design_jiang_20261031_223611`；`signoff_evidence/` 27 个文件（输入/npu RTL/golden/回归/两份波形），`soc evidence` 校验通过；两份波形都带 `design.bin`，Visualizer hierarchy 可浏览源码
 >
@@ -1013,7 +1013,7 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 |---|---|---|---|
 | `CCAT` / `CASE` | 模型 `cases:` 段（缺省按维度/行为/PATH 合成） | TP IR + `coverage/case_ir.json` | 逻辑用例；`source=declared/synthesized` 如实标注 |
 | `TST` | `test + seed` 派生（`humanview.case_ir.tst_id_of`） | `task_meta.json`（`regression_task_v2`） | 可执行实例模板；不手写 |
-| `EVD` | 一次执行 | `coverage/case_cov/**/*.json` + `coverage/evd.json` | 去重键 `(run, tst, seed, cfg)`；旧 run 标 `legacy` |
+| `EVD` | 一次执行 | `coverage/case_cov/**/*.json` + `coverage/evd.json` | 去重键 `(tst, seed, cfg, checker_type, checker_id)` —— 一条 CASE 会被多条 test 覆盖，按 case 去重会折叠实例；旧 run 标 `legacy` |
 | `CELL` | `CG × P` 派生（`cell_matrix.cell_id_of`） | `coverage/cell_matrix.json` | **派生视图，不是实体**；不许手写 |
 
 - **身份在生成期注入**：`verify` 写 TP IR 的 `case_id/tst_id` → 回归目录写
@@ -1039,6 +1039,56 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
   evidence_manifest / case_cov/**`（通配展开）。打包**增量**：源文件哈希未变的
   条目从上一版包硬链接复用，`manifest.incremental = {copied, reused}` 自述。
   界面在「签核判定」页的「Case 证据」一节（Gate / CELL 读数 + 产物是否进包）。
+
+### 9.12 Case View 签核标准（Signoff Standard）
+
+**一句话**：签核不再是"跑完看 pass/fail"，而是
+**契约 → 证据 → 门禁 → 签核材料** 的闭环审核；IP 与 SoC 两级共用这一套。
+
+#### 9.12.1 七个主要性创意
+
+| # | 创意 | 解决的老问题 | 落点 |
+|---|---|---|---|
+| 1 | **契约先行**：先固化"该测什么"（组/断言/比对），再谈覆盖率 | 覆盖率百分比好看，但没人说得清它证明了什么 | `case_ir.json` 三集合契约（由 TP 反聚合，不手写） |
+| 2 | **身份脊梁** `CASE → TST → EVD → CELL` | 用例只有"目录名 + seed"，跨 run 对不上账 | `task_meta` v2 / `case_cov` / `evd.json` |
+| 3 | **三集合** groups + sva + scb，**空也要显式** | 一条用例只有功能 bin 命中，没有断言、没有比对，仍被判"过" | `contract.py` + `not_applicable` 原因 |
+| 4 | **四层证据** functional / timing / data / path | "场景发生过"冒充"验证完成" | `tp_cov_evidence.json` |
+| 5 | **四色 CELL** green/yellow/red/na，**缺证据不下绿** | 95% 的总覆盖率盖住了整块没测的组 | `cell_matrix.json` |
+| 6 | **分级门禁** blocker/warning/info，先报告后阻断 | 规则埋在 audit 里，CI 拿不到、也没法灰度 | `gates.yaml`（版本化）+ `vagent coverage case-gate` |
+| 7 | **增量证据包 + 可复现** | 每次签核把几百份证据全量重拷；换台机器就说不清 | sha 索引 + 硬链接复用 + `replay/recipe.json` |
+
+#### 9.12.2 视图即签核材料
+
+`case_view.{json,md,html}` 不是"看板截图"，是**能离线评审的签核材料**：
+
+- **覆盖率组总览（必须覆盖什么）**：契约里的**全部**组 —— 组 / 功能点 / 覆盖类型 /
+  作用域（功能树节点，如"指令发射""指令队列管理"）/ 覆盖点 / 需求 / 必需证据层 /
+  **执行证据 有·无** / CELL。没跑过的组**不会消失**，而是标"无"。
+- **三集合明细**：每组的功能状态 + **SVA 规则原文** + **SCB 说明与证据粒度**
+  （`per_scb` / `aggregate`）—— 回答"这条用例靠什么兜底"。
+- **Case × CELL**：哪些格子绿/黄/红、谁声明、谁实际跑到。
+- **执行证据（EVD）**：证据来自哪次执行、哪个 seed、波形在哪。
+- **案例**（npu_sched）：13 个契约组 → 8 个有执行证据、5 个标"无"（4 个观测型
+  组没有独立用例、1 个行为域后端待接）—— 这正是"用例可能是假的"要暴露的东西。
+
+#### 9.12.3 判据（可直接当团队标准）
+
+1. **TP 签核**：必须"同一条用例 + 同一次 seed"的完整证据（`signed_off_by`）。
+2. **CELL 绿**：functional + timing + data（路径型再 + path）逐层 PROVEN。
+3. **每组有主**：每个契约组至少一条 CASE，或显式标为观测型（`coverage_type=观测覆盖`）。
+4. **Checker 不许空转**：SVA `cover_property_hit=0`、SCB `exec=0` 都算缺口。
+5. **"没声明"≠"通过"**：一律进 `not_applicable` / `NOT_APPLICABLE` / `na`，
+   绝不折成绿色。
+6. **签核包必须含 Case 证据**：`signoff_evidence/case_view/`，哈希可复现、可 replay。
+7. **证据粒度如实**：聚合证据（如 env 的 `[SCB_DUT]`）标 `aggregate`，不冒充逐条。
+
+#### 9.12.4 当前边界（如实记账）
+
+- 观测型组（`D_DEP / D_UNIT / D_DECISION / D_CLUSTER`）没有独立用例：要靠别的用例
+  的 checkpoint 观测；要变成可驱动需在模型里补 `stimulus.field` 或 `realization.sequence`。
+- 行为域组（`BEH_QUEUE`）：TP 已进 IR，执行后端（P1b）未接 → `PENDING_BACKEND` / 黄。
+- SCB 目前是 **aggregate 粒度**（`[SCB_DUT]` 收口行）；逐条 SB 收口（`[SCB <id>]`）
+  的接口已留好（`evidence: auto|aggregate|log`），等 UVM 侧按 `scoreboards:` 生成。
 
 ---
 

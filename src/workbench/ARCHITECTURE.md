@@ -571,6 +571,29 @@ basis: soc_subset}` —— `None ≠ 0`，界面上显示"未测量"而不是一
   `ip.release_build` 都是 `pure=False` 的显式动作（最后一个写 `spec/ip_releases/`，
   是对外交付物），页面只展示工具返回的事实与文件路径。
 
+### 16.7 Case 证据视图（签核标准在界面上的落点）
+
+两块页面读同一份 `coverage/case_view.json`（`case_associate_view_v2`），
+**只呈现、不判定**：
+
+| 页面 | 模块 | 内容 | 工具 |
+|---|---|---|---|
+| 签核判定 | `flow.signoff` | 顶部：verdict / 回归率 / TP 口径 / caveat；下面**四个标签页**：签核门禁（3/5）· 领域证据链（2/4）· Case 证据（0绿/11黄/2红）· 证据包 v2 | `flow.signoff` → `case_view` 段 |
+| 功能覆盖率 | `flow.fcov` | 「Case 证据」内新增 Groups / SVA / SCB / Case×CELL / 执行证据 五张表；顶部 Case Gate 状态条 | `flow.fcov` → `case_view` + `case_gates` |
+
+**布局约定**：三块明细用 `QTabWidget` 切换，不纵向堆叠（堆叠会把每张表压到
+几十像素）；标签上带 `3/5`、`0绿/11黄/2红` 这类计数，不点进去就知道有没有料；
+没有产物时标签写「无产物 / 未生成」，不显示成通过。
+
+**Groups 表的语义列**：`功能点 / 覆盖类型 / 作用域（模块·逻辑）/ 覆盖率组 / CELL`，
+状态列染主题色（PROVEN 绿、PARTIAL 黄、MISSING/NOT_EXECUTED 红、
+PENDING_BACKEND/NOT_APPLICABLE 灰）。SVA 列展示名称与违规数，SCB 列展示
+exec/matched/mismatched 与**证据粒度**（`per_scb` / `aggregate`）。
+
+**边界**：页面不重算证据（那是 `evidence_pipeline` 的事），也不产生签核结论
+（结论只在 audit 的 `report.json` / 证据包）；`coverage case-gate` 是 CI 的
+入口，页面只读 `gates.json`。
+
 ## 17. 架构冻结（2026-11-01）
 
 Workbench 主体架构进入**冻结**：只允许在上面加契约与模块，不再调整骨架。
