@@ -139,7 +139,13 @@ class Contract(BaseModel):
     model_config = {"populate_by_name": True}
 
     def compute_hash(self) -> str:
-        return canonical_hash(self.model_dump(by_alias=True, exclude={"hash"}))
+        """内容哈希：**不含 `hash` 与 `id`**（id 由 hash 派生，不能反过来参与）。
+
+        否则"算 hash → 用 hash 生成 id → 再算 hash"会得到两个不同的值，
+        读回来的契约永远对不上清单（实测踩过）。
+        """
+        return canonical_hash(
+            self.model_dump(by_alias=True, exclude={"hash", "id"}))
 
     def seal(self) -> "Contract":
         """算好规范哈希再封存 —— 之后任何改动都会让 `contract.hash` 对不上。"""

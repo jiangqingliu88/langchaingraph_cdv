@@ -165,7 +165,25 @@ def _uvm_test_from_command(sim_cmd: str, fallback: str) -> str:
     return m.group(1) if m else fallback
 
 
-def _contract_meta(test_class: str, contract_map, case_ir_sha: str) -> dict:
+def _contract_hash(run_root) -> str:
+    """`contract/contract_manifest.json` 的 `contract_hash`（M1 构建物）。
+
+    读不到就空串：**不拿 case_ir 的哈希冒充契约哈希** —— 两者语义不同，
+    混用会让"证据对的是哪一版契约"这件事从此说不清。
+    """
+    if not run_root:
+        return ""
+    try:
+        import json as _json
+        with open(os.path.join(str(run_root), "contract", "contract_manifest.json"),
+                  "r", encoding="utf-8", errors="replace") as fh:
+            return str((_json.load(fh) or {}).get("contract_hash") or "")
+    except (OSError, ValueError):
+        return ""
+
+
+def _contract_meta(test_class: str, contract_map, case_ir_sha: str,
+                   contract_hash: str = "") -> dict:
     """`task_meta` 的三集合指纹段（group/sva/scb + 契约哈希）。"""
     slot = (contract_map or {}).get(test_class) or {}
     return {
@@ -173,12 +191,15 @@ def _contract_meta(test_class: str, contract_map, case_ir_sha: str) -> dict:
         "sva_ids": list(slot.get("sva") or []),
         "scb_ids": list(slot.get("scb") or []),
         "case_ir_sha": case_ir_sha,
+        # M1：证据对的是**这一版契约**（构建物），不是 case_ir 文件
+        "contract_hash": contract_hash,
     }
 
 
 def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
                          seed, build_name, test, tp_map, case_map=None,
-                         contract_map=None, case_ir_sha="") -> None:
+                         contract_map=None, case_ir_sha="",
+                         contract_hash="") -> None:
     """落 `task_meta.json` —— 用例 → 测试点 → 波形那条链的起点。
 
     归属优先级：显式 `tp_ids` > tag 里的 `TP-*` > `execution.test` 反查
@@ -206,8 +227,8 @@ def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
             "case_ids": list((case_map or {}).get(test_class) or []),
             "case_id": ((case_map or {}).get(test_class) or [""])[0],
             "tst_id": _tst_id(test_class, seed),
-            # 三集合指纹 + 契约哈希：这条任务自证"跑的是哪一版 case 契约"
-            **_contract_meta(test_class, contract_map, case_ir_sha),
+            # 三集合指纹 + 契约哈希：这条任务自证"跑的是哪一版契约"
+            **_contract_meta(test_class, contract_map, case_ir_sha, contract_hash),
             "desc": str(test.get('desc') or ""),
         })
     except Exception as e:                      # noqa: BLE001 旁路索引
@@ -281,6 +302,8 @@ class ShellGenerator:
         # 三集合指纹 + 契约哈希（同样只读 TP IR / methodology）
         self.contract_map = _testpoint_contract_map(run_root)
         self.case_ir_sha = _case_ir_sha(run_root)
+        # M1：契约构建物的哈希（没有时为空串，task_meta 如实留空）
+        self.contract_hash = _contract_hash(run_root)
         self.settings = config.get('settings', {})
         self.simulators = self.settings.get('simulators', {})
         self.default_sim = self.settings.get('default_simulator', 'vcs')
@@ -477,7 +500,7 @@ class ShellGenerator:
             _write_task_identity(test_dir, testcase, test_name, sim_cmd,
                                  t_context, seed, build_name, test, self.tp_map,
                                  self.case_map, self.contract_map,
-                                 self.case_ir_sha)
+                                 self.case_ir_sha, self.contract_hash)
 
             post_sim_cmd = test.get('hooks', {}).get('post_sim') or self.hooks_global.get('post_sim')
             if post_sim_cmd:

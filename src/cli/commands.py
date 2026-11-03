@@ -1295,7 +1295,7 @@ def gui_run(manifest, module, input, theme, reset_layout):
 # 命令组拆分：**导入即注册**。必须放在所有 helper 定义之后，否则被拆出的
 # 模块 `from src.cli.commands import _repo, ...` 会拿到半成品。
 from . import (  # noqa: E402,F401
-    cmd_casemodel, cmd_config, cmd_coverage, cmd_debug, cmd_diff,
+    cmd_casemodel, cmd_config, cmd_contract, cmd_coverage, cmd_debug, cmd_diff,
     cmd_evidence, cmd_humanview, cmd_infra, cmd_memory, cmd_metrics,
     cmd_regression,
     cmd_runs, cmd_services, cmd_signoff, cmd_soc, cmd_specs, cmd_tools,

@@ -7,6 +7,9 @@ from pathlib import Path
 from src.layers.l2_orchestration.executors.base import BaseExecutor, ExecutorResult
 from src.layers.l2_orchestration.executors.registry import register_executor
 from src.executors.verify.steps_dag import StepRecorder
+from src.executors.verify.ir_artifacts import (
+    testpoint_files, write_contract_build,
+)
 import structlog
 
 logger = structlog.get_logger()
@@ -491,6 +494,8 @@ class VerifyExecutor(BaseExecutor):
                             f"合成 {_ci['synthesized']}）· 三集合 "
                             f"group={_ci['groups']} sva={_ci['sva']} scb={_ci['scb']}"
                             f" → coverage/case_ir.json")
+            # M1：契约是**构建物** —— 写完 case_ir 立刻编译，ops 前置校验它。
+            write_contract_build(output_dir, payload.get("case_ir") or {})
         except Exception as e:                       # noqa: BLE001 旁路，别拦主流程
             logger.warning(f"测试点 IR 落盘失败: {e}")
             return []
@@ -499,16 +504,7 @@ class VerifyExecutor(BaseExecutor):
                     f"观测型 {payload['observe_only']} 条）→ coverage/testpoints.yaml")
         for note in payload.get("notes") or []:
             logger.info(f"  测试点注意: {note}")
-        files = [str(output_dir / "coverage" / "testpoints.yaml"),
-                 str(output_dir / "coverage" / "testpoints.json"),
-                 str(output_dir / "coverage" / "methodology.json")]
-        for _name in ("case_ir.json", "case_group_map.json",
-                      "case_checker_map.json"):
-            if (output_dir / "coverage" / _name).is_file():
-                files.append(str(output_dir / "coverage" / _name))
-        if (output_dir / "coverage" / "stimulus_plan.json").is_file():
-            files.append(str(output_dir / "coverage" / "stimulus_plan.json"))
-        return files
+        return testpoint_files(output_dir)
 
 
     def _write_constraint_yaml(self, output_dir: Path) -> None:

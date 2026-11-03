@@ -600,6 +600,8 @@ def _evaluate_case(od: Path, test_dir: Path, owner_tps: list, basis: str,
         "cell_ids": _cell_ids(owner_tps),
         "legacy": bool(facts.get("legacy")),
         "case_ir_sha": str(facts.get("case_ir_sha", "")),
+        # M1：这一条执行用的是哪一版**契约构建物**（task_meta 抄过来的）
+        "contract_hash": str(facts.get("contract_hash", "")),
         # ── 三集合证据（与 case_ir 契约一一对应；缺项标 MISSING）──
         "groups": groups,
         "sva": sva,

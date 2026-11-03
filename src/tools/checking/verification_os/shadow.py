@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .build import check_contract, load_contract
 from .compiler import compile_obligations, obligation_id
 from .contract_model import (
     CaseStatus, Contract, Fact, FactBundle, contract_from_case_ir, worst,
@@ -169,7 +170,12 @@ def run_shadow(run_dir: str | Path, *, write: bool = True) -> Dict[str, Any]:
     if not case_ir.get("cases"):
         return {"schema": SCHEMA, "available": False,
                 "note": "没有 case_ir.json（先跑一轮 verify）"}
-    contract = contract_from_case_ir(case_ir)
+    # M1：优先用**构建物**（contract/contract.yaml）；老 run 没有时退回适配 case_ir。
+    built = check_contract(root)
+    contract = load_contract(root) if built.get("ok") else None
+    source = "built" if contract is not None else "adapted_case_ir"
+    if contract is None:
+        contract = contract_from_case_ir(case_ir)
     obligations = compile_obligations(contract)
     by_case: Dict[str, list] = {}
     for obligation in obligations:
@@ -193,11 +199,17 @@ def run_shadow(run_dir: str | Path, *, write: bool = True) -> Dict[str, Any]:
         diffs.extend(_compare(rec, contract, statuses))
 
     chain = verify_chain(root) if write else {"ok": True, "count": 0}
+    # 契约换版后，旧事实**标 stale**，不参与新契约的推导（也不静默删掉）
+    ledger = read_ledger(root) if write else []
+    stale = [f for f in ledger
+             if str(f.get("contract_hash") or "") not in ("", contract.hash)]
     report = {
         "schema": SCHEMA,
         "available": True,
         "contract_id": contract.id,
         "contract_hash": contract.hash,
+        "contract_source": source,
+        "stale_facts": len(stale),
         "obligations": len(obligations),
         "bundles": bundles,
         "bundles_skipped_no_case": skipped,

@@ -10,6 +10,64 @@ import structlog
 logger = structlog.get_logger()
 
 
+def _eda_guard(design_style: str):
+    """EDA 可用性前置检查：没有 vlog/vsim 就响亮失败，不假装跑回归。
+
+    确定性检测 PATH；缺失 → `eda_missing`（score 0，success=False），由执行引擎
+    终止闭环（BLOCKED_EDA_MISSING），而不是误判为功能失败去循环重构。
+    """
+    import shutil
+
+    eda_found = [t for t in ("vlog", "vsim") if shutil.which(t)]
+    if eda_found:
+        return None
+    return ExecutorResult(success=False, data={
+        "regression": {
+            "status": "FAIL", "passed": 0, "failed": 1, "total": 1,
+            "eda_missing": True,
+            "error": "未检测到 EDA 工具（vlog/vsim）。请安装 QuestaSim 并加入 PATH 后重试。",
+            "eda_tools_found": eda_found,
+            "design_style": design_style,
+        },
+        "score": 0,
+    })
+
+
+def _contract_gate(output_dir: Path, params: Dict[str, Any]):
+    """M1 契约门禁：**没有（或损坏的）契约，ops 拒绝开跑**。
+
+    放宽条件只有两条，都写在这里：
+      · 环境变量 `SIGNOFFAI_CONTRACT_GATE=off`（手工/迁移期）；
+      · `params.contract_gate is False`（调用方显式关掉）。
+    没有 `coverage/testpoints.yaml` 的 run 不是 verify 产出的（历史/手工目录），
+    契约无从谈起 —— 放行，不退化成"所有老 run 都不能跑回归"。
+    """
+    import os
+
+    if str(os.environ.get("SIGNOFFAI_CONTRACT_GATE", "")).lower() in ("off", "0", "false"):
+        return None
+    if isinstance(params, dict) and params.get("contract_gate") is False:
+        return None
+    if not (Path(output_dir) / "coverage" / "testpoints.yaml").is_file():
+        return None
+
+    from src.tools.checking.verification_os import check_contract
+
+    result = check_contract(output_dir)
+    if result.get("ok"):
+        return None
+    logger.warning(f"契约门禁拦截：{result.get('reason')}（{output_dir}）")
+    return ExecutorResult(success=False, data={
+        "regression": {
+            "status": "FAIL", "passed": 0, "failed": 1, "total": 1,
+            "contract_missing": True, "contract": result,
+            "error": f"契约不可用（{result.get('reason')}）—— 先跑 verify，"
+                     f"或用 `vagent contract build --run {output_dir}` 生成",
+        },
+        "score": 0,
+    }, error=f"契约门禁拦截：{result.get('reason')}")
+
+
 def _case_library():
     """回归结果回写目标（L4 `TestcaseRegistry`）。
 
@@ -79,26 +137,20 @@ class OpsExecutor(BaseExecutor):
 
         params = task.get("params", {}) or {}
         design_style = params.get("design_style", "baseline") if isinstance(params, dict) else "baseline"
+
+        # **无契约不执行**（v3 M1）：verify 已经编译过 contract/，ops 只校验它。
+        # 只有"本该有契约却缺失/损坏"才算拦截 —— 没有 TP IR 的手工/历史 run 放行。
+        blocked = _contract_gate(output_dir, params)
+        if blocked is not None:
+            return blocked
         # 这一轮要开的**仿真业务**（cov / wave / debug_all …，见 sim_modes.py）。
         # None = 交给默认（`_normalize_sim_modes` 给 `cov+wave`），不是"什么都不开"。
         sim_modes = params.get("sim_modes") if isinstance(params, dict) else None
 
         # ── EDA 可用性前置检查（失败响亮：没有 EDA 就不假装跑回归）──
-        # 确定性检测 vlog/vsim 是否在 PATH；缺失 → EDA_MISSING（score 0，success=False），
-        # 由执行引擎终止闭环（BLOCKED_EDA_MISSING），而不是误判为功能失败循环重构。
-        import shutil
-        eda_found = [t for t in ("vlog", "vsim") if shutil.which(t)]
-        if not eda_found:
-            return ExecutorResult(success=False, data={
-                "regression": {
-                    "status": "FAIL", "passed": 0, "failed": 1, "total": 1,
-                    "eda_missing": True,
-                    "error": "未检测到 EDA 工具（vlog/vsim）。请安装 QuestaSim 并加入 PATH 后重试。",
-                    "eda_tools_found": eda_found,
-                    "design_style": design_style,
-                },
-                "score": 0,
-            })
+        blocked = _eda_guard(design_style)
+        if blocked is not None:
+            return blocked
 
         # ── 回归执行：直接走 L1 InfrastructureManager（真实回归框架）──
         # 不走 MCP 子进程工具（regression.run）：tool_worker 引用的 regression_tool 模块

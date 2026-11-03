@@ -225,6 +225,8 @@ def _identity_fields(raw: Dict[str, Any]) -> Dict[str, Any]:
         "sva_ids": _str_list(raw.get("sva_ids")),
         "scb_ids": _str_list(raw.get("scb_ids")),
         "case_ir_sha": str(raw.get("case_ir_sha") or ""),
+        # M1：契约构建物的哈希（证据只对那一版契约有效）
+        "contract_hash": str(raw.get("contract_hash") or ""),
         # **legacy = 这份身份不是 v2 写的**（缺 `case_ir_sha` 键），而不是
         # "没有 case_id"：批次级 test 合法地不挂 CASE，把它记成 legacy 会让
         # 视图里 199 条正常执行看起来像"改造前的旧 run"。

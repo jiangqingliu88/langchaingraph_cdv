@@ -16,6 +16,9 @@
 """
 from __future__ import annotations
 
+from .build import (
+    check_contract, contract_hash, load_contract, read_manifest, write_contract,
+)
 from .compiler import LAYER_PREDICATES, compile_obligations, obligation_id
 from .contract_model import (
     FACT_TYPES, LAYERS, CaseStatus, CaseSpec, Contract, Fact, FactBundle,
@@ -31,6 +34,8 @@ __all__ = [
     "CaseStatus", "CaseSpec", "Contract", "Fact", "FactBundle", "FactType",
     "GroupSpec", "Obligation", "Predicate", "ScbSpec", "SvaSpec",
     "append_bundle", "build_bundle", "canonical_hash", "case_statuses",
-    "compile_obligations", "contract_from_case_ir", "derive", "evaluate",
-    "obligation_id", "read_ledger", "run_shadow", "verify_chain", "worst",
+    "check_contract", "compile_obligations", "contract_from_case_ir",
+    "contract_hash", "derive", "evaluate", "load_contract", "obligation_id",
+    "read_ledger", "read_manifest", "run_shadow", "verify_chain", "worst",
+    "write_contract",
 ]

@@ -73,6 +73,10 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "coverage/constraint_status.json",
         "signoff_policy.yaml",
         "effective_policy.yaml",
+        # Verification OS v3：契约是**构建物** —— 签核材料要能复现"测的是什么"
+        "contract/contract.yaml",
+        "contract/obligations.json",
+        "contract/contract_manifest.json",
     ),
     "execution": (
         "regression_run/report.json",
@@ -91,6 +95,9 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "docs/provenance.jsonl",
         "docs/provenance_summary.json",
         "coverage/attribution.json",
+        # Verification OS v3：事实账本（只追加 + 哈希链）与影子对账结果
+        "evidence/ledger.jsonl",
+        "status/shadow_report.json",
         "docs/engineering_metrics.json",
         "incremental/plan.json",
         "docs/run_diff.json",

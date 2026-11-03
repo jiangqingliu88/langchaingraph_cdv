@@ -252,11 +252,25 @@ verdict  = adjudicate(contract, statuses, policy)  # 规则 + 豁免 + 审批
 （220 条无 case 身份）如实计入 `bundles_skipped_no_case`，不混进对账。
 CELL 主色仍由 `tp_cov_evidence` 提供，M2 接管。
 
-### M1 —— 契约成为构建物（1 周）
+### M1 —— 契约成为构建物（1 周）✅ 已落地
 
 - `vagent contract build`（新增），ops 前置校验 `contract.hash`。
 - `task_meta` 记 `contract_hash`（替换 `case_ir_sha`，语义更准）。
 - 验收：没有契约时 ops **拒绝开跑**；换了契约，旧账本事实自动标 `stale`。
+
+**落地情况**：
+
+| 落点 | 内容 |
+|---|---|
+| `verification_os/build.py` | `write_contract()` 产出 `contract/{contract.yaml, obligations.json, contract_manifest.json}`；`check_contract()` 校验哈希自洽；`load_contract()` 读回 |
+| verify | Case IR 落盘后立刻编译契约（`executors/verify/ir_artifacts.py`），契约文件进本轮产物清单 |
+| ops | `_contract_gate()`：**有 TP IR 却没有（或损坏的）契约 → 拒绝开跑**；历史/手工 run（无 TP IR）不误伤；`SIGNOFFAI_CONTRACT_GATE=off` / `params.contract_gate=False` 可显式旁路 |
+| `task_meta` | 新增 `contract_hash`（读 `contract/contract_manifest.json`），`case_ir_sha` 保留为兼容键 |
+| 账本 | 事实的 `contract_hash` 来自**构建物**；契约换版后旧事实计入 `stale_facts`，不参与新契约推导（只追加、不删除） |
+| CLI | `vagent contract build / check / show` |
+
+**修掉的一个真 bug**：契约哈希原先包含 `id`，而 `id` 又由哈希派生 —— 读回来永远
+对不上清单。现在 `compute_hash` 排除 `hash` 与 `id`（内容哈希），往返一致。
 
 ### M2 —— 事实采集统一（1–2 周）
 
