@@ -28,7 +28,7 @@ from typing import Any, Callable, Dict, List, Optional
 SCHEMA = "evidence_manifest_v1"
 
 STEPS: tuple = ("case_cov", "tp_matrix", "tp_evidence", "evd",
-                "cell_matrix", "case_view", "gates")
+                "cell_matrix", "case_view", "gates", "os_shadow")
 
 #: 每步**应当**产出的文件（相对 run 目录）。缺了记进 manifest，不静默。
 STEP_ARTIFACTS: Dict[str, tuple] = {
@@ -39,6 +39,8 @@ STEP_ARTIFACTS: Dict[str, tuple] = {
     "cell_matrix": ("coverage/cell_matrix.json",),
     "case_view": ("coverage/case_view.json",),
     "gates": ("coverage/gates.json",),
+    # Verification OS v3 · M0：契约/义务/事实账本/影子对账（不改变旧判定）
+    "os_shadow": ("status/shadow_report.json", "evidence/ledger.jsonl"),
 }
 
 
@@ -105,6 +107,12 @@ def _step_gates(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     return write_gates(od)
 
 
+def _step_os_shadow(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """M0 影子：契约→义务→账本→推导，与旧结论逐条对账（不改任何判定）。"""
+    from src.tools.checking.verification_os import run_shadow
+    return run_shadow(od)
+
+
 _STEP_FUNCS: Dict[str, Callable[[Path, Dict[str, Any]], Any]] = {
     "case_cov": _step_case_cov,
     "tp_matrix": _step_tp_matrix,
@@ -113,6 +121,7 @@ _STEP_FUNCS: Dict[str, Callable[[Path, Dict[str, Any]], Any]] = {
     "cell_matrix": _step_cell_matrix,
     "case_view": _step_case_view,
     "gates": _step_gates,
+    "os_shadow": _step_os_shadow,
 }
 
 
@@ -225,11 +234,24 @@ def attach_sections(result: Dict[str, Any], steps: Dict[str, Any]) -> None:
         if doc:
             result[key] = {"counts": doc.get("counts") or {},
                            "path": f"coverage/{rel}"}
+    _attach_verdict_sections(result, steps)
+
+
+def _attach_verdict_sections(result: Dict[str, Any], steps: Dict[str, Any]) -> None:
+    """门禁 / 影子对账两段摘要（判定相关的派生结果，单独一处）。"""
     gates = steps.get("gates") or {}
     if gates:
         result["case_gates"] = {"verdict": gates.get("verdict", ""),
                                 "counts": gates.get("counts") or {},
                                 "path": "coverage/gates.json"}
+    shadow = steps.get("os_shadow") or {}
+    if shadow.get("available"):
+        result["os_shadow"] = {
+            "ok": bool(shadow.get("ok")),
+            "obligations": shadow.get("obligations", 0),
+            "mismatched": (shadow.get("compare") or {}).get("mismatched", 0),
+            "path": "status/shadow_report.json",
+        }
 
 
 __all__ = ["SCHEMA", "STEPS", "STEP_ARTIFACTS", "attach_sections",

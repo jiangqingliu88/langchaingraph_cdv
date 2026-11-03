@@ -1,6 +1,9 @@
 # 根本重构计划：从流程驱动到契约驱动（Verification OS v3）
 
-> 状态：**方案（未实施）**。上一版 `architecture_transformation_plan.md`（Case View / 三集合）
+> 状态：**M0（影子模式）已落地（2026-11-04）**，M1–M5 待推进。
+> 落点：`src/tools/checking/verification_os/`（契约 / 义务 / 账本 / 推导 / 影子）。
+> 实测（npu_sched）：58 条义务 / 47 个事实包 / 212 条事实 / **对账 47 条、0 差异**，
+> 哈希链完整。上一版 `architecture_transformation_plan.md`（Case View / 三集合）
 > 已落地；本文回答它之后的那个问题：**这套东西离"本质跃迁"还差什么，怎么把差的部分
 > 换掉，而不是继续往上叠。**
 > 关联：`ARCHITECTURE.md` §9.11–§9.12（现有标准）、`docs/design/architecture_transformation_plan.md`
@@ -228,11 +231,26 @@ verdict  = adjudicate(contract, statuses, policy)  # 规则 + 豁免 + 审批
 
 ## 6. 分阶段落地（每阶段都可停、可回滚）
 
-### M0 —— 账本与义务的"影子模式"（1 周）
+### M0 —— 账本与义务的"影子模式"（1 周）✅ 已落地
 
 - 新增 `contract/obligations.json`、`evidence/ledger.jsonl`；**不改变现有判定**。
 - 现有流水线照跑，结束时把同样的事实**双写**进账本。
 - 验收：`derive()` 的结果与现有 `cell_matrix` **逐条一致**（影子比对，差异进日志）。
+
+**落地情况**（`src/tools/checking/verification_os/`）：
+
+| 模块 | 内容 |
+|---|---|
+| `contract_model.py` | Pydantic 强类型：`Contract / CaseSpec / GroupSpec / SvaSpec / ScbSpec / Obligation / Predicate / Fact / FactBundle`；`FACT_TYPES` 是唯一事实清单，未知类型/证据层在类型层就拒 |
+| `compiler.py` | `compile_obligations()`：每层一条 group 义务 + 每 SVA/SB 一条；id 确定性生成 |
+| `ledger.py` | append-only JSONL + `prev_hash` 哈希链；按 **FactBundle 批次**写、每包一次锁；重复包幂等；`verify_chain` 能抓篡改 |
+| `derive.py` | 唯一判定实现（纯函数）：`all_bins_hit / ok / matched / proven / no_fail / executed` |
+| `shadow.py` | `run_shadow()`：case_ir → Contract → 义务 → 事实包 → 账本 → 推导 → 与 case_cov 逐条对账，写 `status/shadow_report.json` |
+
+影子对账口径：**case 级**（组结果 / SVA / SCB / case_status）。
+实测 npu_sched：**58 义务 / 47 包 / 212 事实 / 47 条对账 0 差异**；批次测试
+（220 条无 case 身份）如实计入 `bundles_skipped_no_case`，不混进对账。
+CELL 主色仍由 `tp_cov_evidence` 提供，M2 接管。
 
 ### M1 —— 契约成为构建物（1 周）
 

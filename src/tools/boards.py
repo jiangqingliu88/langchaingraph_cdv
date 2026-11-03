@@ -25,6 +25,8 @@ BOARDS: Dict[str, Tuple[str, ...]] = {
     ),
     "checking": (
         "assertion_tools", "debug_tools", "coverage_tools", "spec_tools",
+        # Verification OS v3：契约 / 义务 / 事实账本 / 推导（M0 影子模式）
+        "verification_os",
     ),
     "execution": (
         "regression_tools",

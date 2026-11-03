@@ -28,6 +28,12 @@ CASE_GATES = "case_gates_v1"
 EVIDENCE_MANIFEST = "evidence_manifest_v1"
 CASE_VIEW = "case_associate_view_v2"
 
+# ── Verification OS v3（契约驱动内核）：见 docs/design/contract_driven_architecture_v3.md ──
+CONTRACT = "contract_v2"
+OBLIGATION = "obligation_v1"
+FACT = "fact_v1"
+OS_SHADOW = "os_shadow_v1"
+
 # ── evidence ──
 EVIDENCE_ENVELOPE = "evidence_envelope_v1"
 EVIDENCE_UVM_PROFILE = "uvm_signoff_v2"
@@ -55,6 +61,10 @@ SCHEMAS = {
     CASE_GATES: "case_view",
     EVIDENCE_MANIFEST: "case_view",
     CASE_VIEW: "case_view",
+    CONTRACT: "verification_os",
+    OBLIGATION: "verification_os",
+    FACT: "verification_os",
+    OS_SHADOW: "verification_os",
     EVIDENCE_ENVELOPE: "evidence",
     EVIDENCE_UVM_PROFILE: "evidence",
     EVIDENCE_SOC_PROFILE: "evidence",

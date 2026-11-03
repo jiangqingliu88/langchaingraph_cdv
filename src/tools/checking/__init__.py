@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import importlib
 
-PACKAGES = ("assertion_tools", "debug_tools", "coverage_tools", "spec_tools")
+PACKAGES = ("assertion_tools", "debug_tools", "coverage_tools", "spec_tools",
+            # Verification OS v3：契约 / 义务 / 事实账本 / 推导（M0 影子模式）
+            "verification_os")
 
 
 def __getattr__(name: str):
