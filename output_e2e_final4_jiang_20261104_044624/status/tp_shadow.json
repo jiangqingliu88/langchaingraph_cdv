@@ -1,0 +1,10 @@
+{
+  "schema": "os_tp_shadow_v1",
+  "available": true,
+  "tps": 70,
+  "facts": 106,
+  "mismatched": 0,
+  "diffs": [],
+  "ok": true,
+  "scope": "TP 级（HIT/MISS/OBSERVED/BACKDOOR/UNMAPPED/PENDING_BACKEND）"
+}

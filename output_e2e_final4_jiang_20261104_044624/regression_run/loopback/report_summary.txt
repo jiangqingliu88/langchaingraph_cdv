@@ -1,0 +1,12 @@
+Regression Summary
+Total Time: N/A
+Total Tasks: 4
+Pass: 4
+Fail: 0
+Unknown: 0
+
+Detailed list:
+pass     : npu_sched_npu_sched_in_loopback (output_e2e_final4_jiang_20261104_044624\regression_run\loopback\build_build_npu_sched_npu_sched_in_loopback) [1.12s]
+pass     : npu_sched_in_loopback (output_e2e_final4_jiang_20261104_044624\regression_run\loopback\build_build_npu_sched_npu_sched_in_loopback\test_test_npu_sched_in_loopback) [4.63s]
+pass     : npu_sched_npu_sched_out_loopback (output_e2e_final4_jiang_20261104_044624\regression_run\loopback\build_build_npu_sched_npu_sched_out_loopback) [1.07s]
+pass     : npu_sched_out_loopback (output_e2e_final4_jiang_20261104_044624\regression_run\loopback\build_build_npu_sched_npu_sched_out_loopback\test_test_npu_sched_out_loopback) [4.47s]

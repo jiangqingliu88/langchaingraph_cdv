@@ -1,0 +1,2261 @@
+{
+  "case_model": "specs\\npu_sched\\casemodel.yaml",
+  "score": 65.2,
+  "count": 72,
+  "cases": [
+    {
+      "case_id": "TC-NPUSCH-ALL-D-01",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B01",
+      "priority": "P0",
+      "tree_path": "",
+      "dimensions": [
+        "发射决策"
+      ],
+      "fields": {
+        "issue_decision": "ISSUED"
+      },
+      "method": "D",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-01",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B02",
+      "priority": "P0",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型"
+      ],
+      "fields": {
+        "instr_type": "VECTOR"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "vector"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-02",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B02",
+      "priority": "P0",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型"
+      ],
+      "fields": {
+        "instr_type": "MAC"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-03",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B02",
+      "priority": "P0",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型"
+      ],
+      "fields": {
+        "instr_type": "DMA"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "dma"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-04",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B02",
+      "priority": "P0",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型"
+      ],
+      "fields": {
+        "instr_type": "SCALAR"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "scalar"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-05",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B03",
+      "priority": "P0",
+      "tree_path": "",
+      "dimensions": [
+        "数据类型"
+      ],
+      "fields": {
+        "instr_dtype": "FP32"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "fp32"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-06",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B03",
+      "priority": "P0",
+      "tree_path": "",
+      "dimensions": [
+        "数据类型"
+      ],
+      "fields": {
+        "instr_dtype": "BF16"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "bf16"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-07",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B03",
+      "priority": "P0",
+      "tree_path": "",
+      "dimensions": [
+        "数据类型"
+      ],
+      "fields": {
+        "instr_dtype": "INT8"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "int8"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-08",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B03",
+      "priority": "P0",
+      "tree_path": "",
+      "dimensions": [
+        "数据类型"
+      ],
+      "fields": {
+        "instr_dtype": "FP16"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "fp16"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-01",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "NONE",
+        "issue_decision": "ISSUED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "no_dep",
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-02",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "NONE",
+        "issue_decision": "STALLED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "no_dep",
+        "stalled"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-03",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "NONE",
+        "issue_decision": "BLOCKED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "no_dep",
+        "blocked"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-04",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "NONE",
+        "issue_decision": "FLUSHED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "no_dep",
+        "flushed"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-05",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "RAW",
+        "issue_decision": "ISSUED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "raw",
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-06",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "RAW",
+        "issue_decision": "STALLED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "raw",
+        "stalled"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-07",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "RAW",
+        "issue_decision": "BLOCKED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "raw",
+        "blocked"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-08",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "RAW",
+        "issue_decision": "FLUSHED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "raw",
+        "flushed"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-09",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "WAW",
+        "issue_decision": "ISSUED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "waw",
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-10",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "WAW",
+        "issue_decision": "STALLED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "waw",
+        "stalled"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-11",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "WAW",
+        "issue_decision": "BLOCKED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "waw",
+        "blocked"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-12",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "WAW",
+        "issue_decision": "FLUSHED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "waw",
+        "flushed"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-13",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "WAR",
+        "issue_decision": "ISSUED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "war",
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-14",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "WAR",
+        "issue_decision": "STALLED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "war",
+        "stalled"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-15",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "WAR",
+        "issue_decision": "BLOCKED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "war",
+        "blocked"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-16",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B04",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖",
+        "发射决策"
+      ],
+      "fields": {
+        "dep_type": "WAR",
+        "issue_decision": "FLUSHED"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "war",
+        "flushed"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-01",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B05",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "数据依赖"
+      ],
+      "fields": {
+        "dep_type": "NONE"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "no_dep"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-02",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B06",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "发射决策"
+      ],
+      "fields": {
+        "queue_level": "0",
+        "issue_decision": "ISSUED"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC",
+        "CHECK-WBOX"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-03",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B06",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "发射决策"
+      ],
+      "fields": {
+        "queue_level": "1",
+        "issue_decision": "ISSUED"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC",
+        "CHECK-WBOX"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-04",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B06",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "发射决策"
+      ],
+      "fields": {
+        "queue_level": "7",
+        "issue_decision": "ISSUED"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC",
+        "CHECK-WBOX"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-05",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B06",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "发射决策"
+      ],
+      "fields": {
+        "queue_level": "8",
+        "issue_decision": "ISSUED"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC",
+        "CHECK-WBOX"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-06",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B06",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "发射决策"
+      ],
+      "fields": {
+        "queue_level": "15",
+        "issue_decision": "ISSUED"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC",
+        "CHECK-WBOX"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-07",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B06",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "发射决策"
+      ],
+      "fields": {
+        "queue_level": "16",
+        "issue_decision": "ISSUED"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC",
+        "CHECK-WBOX"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-08",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B06",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "发射决策"
+      ],
+      "fields": {
+        "queue_level": "24",
+        "issue_decision": "ISSUED"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC",
+        "CHECK-WBOX"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-09",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B06",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "发射决策"
+      ],
+      "fields": {
+        "queue_level": "25",
+        "issue_decision": "ISSUED"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC",
+        "CHECK-WBOX"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-10",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B06",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "发射决策"
+      ],
+      "fields": {
+        "queue_level": "31",
+        "issue_decision": "ISSUED"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC",
+        "CHECK-WBOX"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-SPCL-11",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B06",
+      "priority": "P1",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "发射决策"
+      ],
+      "fields": {
+        "queue_level": "32",
+        "issue_decision": "ISSUED"
+      },
+      "method": "SPCL",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC",
+        "CHECK-WBOX"
+      ],
+      "cover_bins": [
+        "issued"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-17",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "MAC",
+        "cluster_id": "0"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-18",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "VECTOR",
+        "cluster_id": "0"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "vector"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-19",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "SCALAR",
+        "cluster_id": "0"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "scalar"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-20",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "DMA",
+        "cluster_id": "0"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "dma"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-21",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "MAC",
+        "cluster_id": "1"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-22",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "VECTOR",
+        "cluster_id": "1"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "vector"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-23",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "SCALAR",
+        "cluster_id": "1"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "scalar"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-24",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "DMA",
+        "cluster_id": "1"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "dma"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-25",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "MAC",
+        "cluster_id": "2"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-26",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "VECTOR",
+        "cluster_id": "2"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "vector"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-27",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "SCALAR",
+        "cluster_id": "2"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "scalar"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-28",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "DMA",
+        "cluster_id": "2"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "dma"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-29",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "MAC",
+        "cluster_id": "3"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-30",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "VECTOR",
+        "cluster_id": "3"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "vector"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-31",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "SCALAR",
+        "cluster_id": "3"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "scalar"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-G-32",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B07",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "簇 ID",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "DMA",
+        "cluster_id": "3"
+      },
+      "method": "G",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "dma"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-D-02",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B08",
+      "priority": "P2",
+      "tree_path": "",
+      "dimensions": [
+        "硬件指令操作码",
+        "执行单元"
+      ],
+      "fields": {
+        "issue_unit": "MAC",
+        "instr_opcode": "MAC_INT8"
+      },
+      "method": "D",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac",
+        "mac_i8"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-09",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B09",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型",
+        "执行单元"
+      ],
+      "fields": {
+        "instr_type": "MAC",
+        "issue_unit": "DMA"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac",
+        "dma"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-10",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B09",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型",
+        "执行单元"
+      ],
+      "fields": {
+        "instr_type": "SCALAR",
+        "issue_unit": "VECTOR"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "scalar",
+        "vector"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-11",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B09",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型",
+        "执行单元"
+      ],
+      "fields": {
+        "instr_type": "SCALAR",
+        "issue_unit": "SCALAR"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "scalar",
+        "scalar"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-12",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B09",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型",
+        "执行单元"
+      ],
+      "fields": {
+        "instr_type": "DMA",
+        "issue_unit": "VECTOR"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "dma",
+        "vector"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-13",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B09",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型",
+        "执行单元"
+      ],
+      "fields": {
+        "instr_type": "SCALAR",
+        "issue_unit": "MAC"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "scalar",
+        "mac"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-14",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B09",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型",
+        "执行单元"
+      ],
+      "fields": {
+        "instr_type": "SCALAR",
+        "issue_unit": "DMA"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "scalar",
+        "dma"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-15",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B09",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令类型",
+        "执行单元"
+      ],
+      "fields": {
+        "instr_type": "VECTOR",
+        "issue_unit": "MAC"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "vector",
+        "mac"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-16",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B10",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "流水重叠"
+      ],
+      "fields": {
+        "pipeline_state": "NONE"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "no_overlap"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-17",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B10",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "流水重叠"
+      ],
+      "fields": {
+        "pipeline_state": "VEC_MAC"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "vec_mac_overlap"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-18",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B10",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "流水重叠"
+      ],
+      "fields": {
+        "pipeline_state": "MULTI_OP"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "multi_op_overlap"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-19",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B10",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "流水重叠"
+      ],
+      "fields": {
+        "pipeline_state": "MAC_DMA"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac_dma_overlap"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-20",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B11",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "指令类型",
+        "数据类型",
+        "数据依赖",
+        "执行单元",
+        "发射决策",
+        "簇 ID",
+        "硬件指令操作码",
+        "指令序列模式",
+        "流水重叠",
+        "优先级调度",
+        "硬件同步屏障"
+      ],
+      "fields": {
+        "queue_level": "15",
+        "instr_type": "VECTOR",
+        "instr_dtype": "FP16",
+        "dep_type": "WAR",
+        "issue_unit": "DMA",
+        "issue_decision": "BLOCKED",
+        "cluster_id": "2",
+        "instr_opcode": "VEC_ADD",
+        "instr_seq": "DMA_MAC",
+        "pipeline_state": "MAC_MAC",
+        "op_priority": "ROUND_ROBIN",
+        "barrier_type": "OP_BARRIER"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "vector",
+        "fp16",
+        "war",
+        "dma",
+        "blocked",
+        "vec_add",
+        "dma_mac",
+        "mac_mac_overlap",
+        "round_robin",
+        "op_barrier"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-21",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B11",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "指令类型",
+        "数据类型",
+        "数据依赖",
+        "执行单元",
+        "发射决策",
+        "簇 ID",
+        "硬件指令操作码",
+        "指令序列模式",
+        "流水重叠",
+        "优先级调度",
+        "硬件同步屏障"
+      ],
+      "fields": {
+        "queue_level": "25",
+        "instr_type": "SCALAR",
+        "instr_dtype": "FP32",
+        "dep_type": "NONE",
+        "issue_unit": "DMA",
+        "issue_decision": "STALLED",
+        "cluster_id": "1",
+        "instr_opcode": "VEC_MUL",
+        "instr_seq": "LOAD_MAC",
+        "pipeline_state": "MULTI_OP",
+        "op_priority": "HIGH_FIRST",
+        "barrier_type": "OP_BARRIER"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "scalar",
+        "fp32",
+        "no_dep",
+        "dma",
+        "stalled",
+        "vec_mul",
+        "load_mac",
+        "multi_op_overlap",
+        "high_first",
+        "op_barrier"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-22",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B11",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "指令类型",
+        "数据类型",
+        "数据依赖",
+        "执行单元",
+        "发射决策",
+        "簇 ID",
+        "硬件指令操作码",
+        "指令序列模式",
+        "流水重叠",
+        "优先级调度",
+        "硬件同步屏障"
+      ],
+      "fields": {
+        "queue_level": "15",
+        "instr_type": "MAC",
+        "instr_dtype": "BF16",
+        "dep_type": "WAR",
+        "issue_unit": "MAC",
+        "issue_decision": "STALLED",
+        "cluster_id": "2",
+        "instr_opcode": "STORE",
+        "instr_seq": "VEC_MAC",
+        "pipeline_state": "MULTI_OP",
+        "op_priority": "HIGH_FIRST",
+        "barrier_type": "TILE_BARRIER"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac",
+        "bf16",
+        "war",
+        "mac",
+        "stalled",
+        "store",
+        "vec_mac",
+        "multi_op_overlap",
+        "high_first",
+        "tile_barrier"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-23",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B11",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "指令类型",
+        "数据类型",
+        "数据依赖",
+        "执行单元",
+        "发射决策",
+        "簇 ID",
+        "硬件指令操作码",
+        "指令序列模式",
+        "流水重叠",
+        "优先级调度",
+        "硬件同步屏障"
+      ],
+      "fields": {
+        "queue_level": "24",
+        "instr_type": "DMA",
+        "instr_dtype": "FP16",
+        "dep_type": "WAR",
+        "issue_unit": "MAC",
+        "issue_decision": "STALLED",
+        "cluster_id": "3",
+        "instr_opcode": "VEC_ADD",
+        "instr_seq": "MAC_MAC",
+        "pipeline_state": "VEC_MAC",
+        "op_priority": "SAME_PRIO",
+        "barrier_type": "CLUSTER_BARRIER"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "dma",
+        "fp16",
+        "war",
+        "mac",
+        "stalled",
+        "vec_add",
+        "mac_mac",
+        "vec_mac_overlap",
+        "same_priority",
+        "cluster_barrier"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-24",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B11",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "指令类型",
+        "数据类型",
+        "数据依赖",
+        "执行单元",
+        "发射决策",
+        "簇 ID",
+        "硬件指令操作码",
+        "指令序列模式",
+        "流水重叠",
+        "优先级调度",
+        "硬件同步屏障"
+      ],
+      "fields": {
+        "queue_level": "1",
+        "instr_type": "MAC",
+        "instr_dtype": "FP32",
+        "dep_type": "WAR",
+        "issue_unit": "MAC",
+        "issue_decision": "STALLED",
+        "cluster_id": "3",
+        "instr_opcode": "DMA_READ",
+        "instr_seq": "DMA_MAC",
+        "pipeline_state": "VEC_MAC",
+        "op_priority": "ROUND_ROBIN",
+        "barrier_type": "TILE_BARRIER"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac",
+        "fp32",
+        "war",
+        "mac",
+        "stalled",
+        "dma_rd",
+        "dma_mac",
+        "vec_mac_overlap",
+        "round_robin",
+        "tile_barrier"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-25",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B11",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "指令类型",
+        "数据类型",
+        "数据依赖",
+        "执行单元",
+        "发射决策",
+        "簇 ID",
+        "硬件指令操作码",
+        "指令序列模式",
+        "流水重叠",
+        "优先级调度",
+        "硬件同步屏障"
+      ],
+      "fields": {
+        "queue_level": "24",
+        "instr_type": "MAC",
+        "instr_dtype": "BF16",
+        "dep_type": "WAW",
+        "issue_unit": "VECTOR",
+        "issue_decision": "ISSUED",
+        "cluster_id": "3",
+        "instr_opcode": "STORE",
+        "instr_seq": "VEC_MAC",
+        "pipeline_state": "VEC_MAC",
+        "op_priority": "LOW_FIRST",
+        "barrier_type": "OP_BARRIER"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "mac",
+        "bf16",
+        "waw",
+        "vector",
+        "issued",
+        "store",
+        "vec_mac",
+        "vec_mac_overlap",
+        "low_first",
+        "op_barrier"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-26",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B11",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "指令类型",
+        "数据类型",
+        "数据依赖",
+        "执行单元",
+        "发射决策",
+        "簇 ID",
+        "硬件指令操作码",
+        "指令序列模式",
+        "流水重叠",
+        "优先级调度",
+        "硬件同步屏障"
+      ],
+      "fields": {
+        "queue_level": "24",
+        "instr_type": "VECTOR",
+        "instr_dtype": "FP32",
+        "dep_type": "WAW",
+        "issue_unit": "MAC",
+        "issue_decision": "ISSUED",
+        "cluster_id": "2",
+        "instr_opcode": "MAC_BF16",
+        "instr_seq": "SCALAR_MAC",
+        "pipeline_state": "VEC_MAC",
+        "op_priority": "ROUND_ROBIN",
+        "barrier_type": "CLUSTER_BARRIER"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "vector",
+        "fp32",
+        "waw",
+        "mac",
+        "issued",
+        "mac_bf16",
+        "scalar_mac",
+        "vec_mac_overlap",
+        "round_robin",
+        "cluster_barrier"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    },
+    {
+      "case_id": "TC-NPUSCH-ALL-RND-27",
+      "object": "npu_sched",
+      "sub_object": "（不作用功能组织树）",
+      "sub_object_id": "",
+      "theme": "TH-B11",
+      "priority": "P3",
+      "tree_path": "",
+      "dimensions": [
+        "指令队列水位",
+        "指令类型",
+        "数据类型",
+        "数据依赖",
+        "执行单元",
+        "发射决策",
+        "簇 ID",
+        "硬件指令操作码",
+        "指令序列模式",
+        "流水重叠",
+        "优先级调度",
+        "硬件同步屏障"
+      ],
+      "fields": {
+        "queue_level": "7",
+        "instr_type": "DMA",
+        "instr_dtype": "BF16",
+        "dep_type": "WAR",
+        "issue_unit": "VECTOR",
+        "issue_decision": "ISSUED",
+        "cluster_id": "0",
+        "instr_opcode": "MAC_BF16",
+        "instr_seq": "MAC_MAC",
+        "pipeline_state": "MAC_MAC",
+        "op_priority": "LOW_FIRST",
+        "barrier_type": "TILE_BARRIER"
+      },
+      "method": "RND",
+      "cross_group": "",
+      "checks": [
+        "CHECK-FUNC"
+      ],
+      "cover_bins": [
+        "dma",
+        "bf16",
+        "war",
+        "vector",
+        "issued",
+        "mac_bf16",
+        "mac_mac",
+        "mac_mac_overlap",
+        "low_first",
+        "tile_barrier"
+      ],
+      "environment": {},
+      "expected_result": "",
+      "seed": 12345
+    }
+  ]
+}

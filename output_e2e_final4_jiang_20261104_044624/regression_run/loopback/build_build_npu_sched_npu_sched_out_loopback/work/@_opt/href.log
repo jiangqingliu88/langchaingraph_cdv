@@ -1,0 +1,6 @@
+BEGIN 3:npu_sched_out_if:fast__1:work
+    rst_n :  1:npu_sched_out_pkg:fast:work
+    issue_valid :  1:npu_sched_out_pkg:fast:work
+    issue_unit :  1:npu_sched_out_pkg:fast:work
+    issue_decision :  1:npu_sched_out_pkg:fast:work
+END 

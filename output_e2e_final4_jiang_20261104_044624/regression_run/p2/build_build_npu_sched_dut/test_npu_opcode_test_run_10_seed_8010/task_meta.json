@@ -1,0 +1,25 @@
+{
+  "schema": "regression_task_v2",
+  "task": "npu_opcode_test_run_10_seed_8010",
+  "test_name": "npu_opcode_test_run_10",
+  "test": "npu_opcode_test",
+  "seed": 8010,
+  "build": "build_npu_sched_dut",
+  "stage": "p2",
+  "tags": [
+    "p2",
+    "batch",
+    "TH-B08"
+  ],
+  "tp_ids": [],
+  "case_ids": [],
+  "case_id": "",
+  "tst_id": "TST-NPU_OPCODE_TEST@8010",
+  "group_ids": [],
+  "sva_ids": [],
+  "scb_ids": [],
+  "case_ir_sha": "5ff42ab7c7316e921b37d615d04a053a1a7a79c4ceac9350a3c05381eb4a173f",
+  "contract_hash": "82e0f463b7e3ecef537b8af28263c40fdd2f444d095e1cd11fd53eb27f4ef036",
+  "constraint_ids": [],
+  "desc": "批次 TH-B08：打 D_opcode,D_unit"
+}

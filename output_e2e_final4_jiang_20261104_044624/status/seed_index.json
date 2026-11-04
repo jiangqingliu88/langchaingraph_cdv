@@ -1,0 +1,747 @@
+{
+  "schema": "os_seed_index_v1",
+  "available": true,
+  "run": "output_e2e_final4_jiang_20261104_044624",
+  "contract_id": "CT-npu_sched-82e0f463b7e3",
+  "contract_hash": "82e0f463b7e3ecef537b8af28263c40fdd2f444d095e1cd11fd53eb27f4ef036",
+  "seeds": [
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_BARRIER_PCLUSTER_BARRIER_TEST@10001",
+      "case": "CASE-D_BARRIER",
+      "total": 5,
+      "discharged": [
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-DATA",
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-TIMING",
+        "OBL-SCB-CASE-D_BARRIER-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_BARRIER-SVA-BARRIER_FLUSHES"
+      ]
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_BARRIER_PNONE_TEST@10001",
+      "case": "CASE-D_BARRIER",
+      "total": 5,
+      "discharged": [
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-DATA",
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-TIMING",
+        "OBL-SCB-CASE-D_BARRIER-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_BARRIER-SVA-BARRIER_FLUSHES"
+      ]
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_BARRIER_POP_BARRIER_TEST@10001",
+      "case": "CASE-D_BARRIER",
+      "total": 5,
+      "discharged": [
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-DATA",
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-TIMING",
+        "OBL-SCB-CASE-D_BARRIER-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_BARRIER-SVA-BARRIER_FLUSHES"
+      ]
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_BARRIER_PTILE_BARRIER_TEST@10001",
+      "case": "CASE-D_BARRIER",
+      "total": 5,
+      "discharged": [
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-DATA",
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-TIMING",
+        "OBL-SCB-CASE-D_BARRIER-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_BARRIER-SVA-BARRIER_FLUSHES"
+      ]
+    },
+    {
+      "seed": 3001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_DTYPE_PBF16_TEST@3001",
+      "case": "CASE-D_DTYPE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-DATA",
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-TIMING",
+        "OBL-SCB-CASE-D_DTYPE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 3001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_DTYPE_PFP16_TEST@3001",
+      "case": "CASE-D_DTYPE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-DATA",
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-TIMING",
+        "OBL-SCB-CASE-D_DTYPE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 3001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_DTYPE_PFP32_TEST@3001",
+      "case": "CASE-D_DTYPE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-DATA",
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-TIMING",
+        "OBL-SCB-CASE-D_DTYPE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 3001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_DTYPE_PINT8_TEST@3001",
+      "case": "CASE-D_DTYPE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-DATA",
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-TIMING",
+        "OBL-SCB-CASE-D_DTYPE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 8001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_OPCODE_PDMA_READ_TEST@8001",
+      "case": "CASE-D_OPCODE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 8001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_OPCODE_PDMA_WRITE_TEST@8001",
+      "case": "CASE-D_OPCODE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 8001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_OPCODE_PLOAD_TEST@8001",
+      "case": "CASE-D_OPCODE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 8001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_OPCODE_PMAC_BF16_TEST@8001",
+      "case": "CASE-D_OPCODE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 8001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_OPCODE_PMAC_FP16_TEST@8001",
+      "case": "CASE-D_OPCODE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 8001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_OPCODE_PMAC_INT8_TEST@8001",
+      "case": "CASE-D_OPCODE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 8001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_OPCODE_PSTORE_TEST@8001",
+      "case": "CASE-D_OPCODE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 8001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_OPCODE_PVEC_ADD_TEST@8001",
+      "case": "CASE-D_OPCODE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 8001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_OPCODE_PVEC_MUL_TEST@8001",
+      "case": "CASE-D_OPCODE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 8001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_OPCODE_PVEC_RELU_TEST@8001",
+      "case": "CASE-D_OPCODE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 9501,
+      "tst_id": "TST-NPU_SCHED_ENV_D_PIPELINE_PMAC_DMA_TEST@9501",
+      "case": "CASE-D_PIPELINE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-DATA",
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-TIMING",
+        "OBL-SCB-CASE-D_PIPELINE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-FUNCTIONAL"
+      ]
+    },
+    {
+      "seed": 9501,
+      "tst_id": "TST-NPU_SCHED_ENV_D_PIPELINE_PMAC_MAC_TEST@9501",
+      "case": "CASE-D_PIPELINE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-DATA",
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-TIMING",
+        "OBL-SCB-CASE-D_PIPELINE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 9501,
+      "tst_id": "TST-NPU_SCHED_ENV_D_PIPELINE_PMULTI_OP_TEST@9501",
+      "case": "CASE-D_PIPELINE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-DATA",
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-TIMING",
+        "OBL-SCB-CASE-D_PIPELINE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 9501,
+      "tst_id": "TST-NPU_SCHED_ENV_D_PIPELINE_PNONE_TEST@9501",
+      "case": "CASE-D_PIPELINE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-DATA",
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-TIMING",
+        "OBL-SCB-CASE-D_PIPELINE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-FUNCTIONAL"
+      ]
+    },
+    {
+      "seed": 9501,
+      "tst_id": "TST-NPU_SCHED_ENV_D_PIPELINE_PVEC_MAC_TEST@9501",
+      "case": "CASE-D_PIPELINE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-DATA",
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-TIMING",
+        "OBL-SCB-CASE-D_PIPELINE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-FUNCTIONAL"
+      ]
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_PRIORITY_PHIGH_FIRST_TEST@10001",
+      "case": "CASE-D_PRIORITY",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-DATA",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-TIMING",
+        "OBL-SCB-CASE-D_PRIORITY-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_PRIORITY_PLOW_FIRST_TEST@10001",
+      "case": "CASE-D_PRIORITY",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-DATA",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-TIMING",
+        "OBL-SCB-CASE-D_PRIORITY-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_PRIORITY_PROUND_ROBIN_TEST@10001",
+      "case": "CASE-D_PRIORITY",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-DATA",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-TIMING",
+        "OBL-SCB-CASE-D_PRIORITY-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_PRIORITY_PSAME_PRIO_TEST@10001",
+      "case": "CASE-D_PRIORITY",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-DATA",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-TIMING",
+        "OBL-SCB-CASE-D_PRIORITY-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 6001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_QUEUE_P0_TEST@6001",
+      "case": "CASE-D_QUEUE",
+      "total": 6,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_QUEUE-SVA-ISSUED_NEEDS_NO_BLOCKER",
+        "OBL-SVA-CASE-D_QUEUE-SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+      ]
+    },
+    {
+      "seed": 6001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_QUEUE_P15_TEST@6001",
+      "case": "CASE-D_QUEUE",
+      "total": 6,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_QUEUE-SVA-ISSUED_NEEDS_NO_BLOCKER",
+        "OBL-SVA-CASE-D_QUEUE-SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+      ]
+    },
+    {
+      "seed": 6001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_QUEUE_P16_TEST@6001",
+      "case": "CASE-D_QUEUE",
+      "total": 6,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_QUEUE-SVA-ISSUED_NEEDS_NO_BLOCKER",
+        "OBL-SVA-CASE-D_QUEUE-SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+      ]
+    },
+    {
+      "seed": 6001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_QUEUE_P1_TEST@6001",
+      "case": "CASE-D_QUEUE",
+      "total": 6,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_QUEUE-SVA-ISSUED_NEEDS_NO_BLOCKER",
+        "OBL-SVA-CASE-D_QUEUE-SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+      ]
+    },
+    {
+      "seed": 6001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_QUEUE_P24_TEST@6001",
+      "case": "CASE-D_QUEUE",
+      "total": 6,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_QUEUE-SVA-ISSUED_NEEDS_NO_BLOCKER",
+        "OBL-SVA-CASE-D_QUEUE-SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+      ]
+    },
+    {
+      "seed": 6001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_QUEUE_P25_TEST@6001",
+      "case": "CASE-D_QUEUE",
+      "total": 6,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_QUEUE-SVA-ISSUED_NEEDS_NO_BLOCKER",
+        "OBL-SVA-CASE-D_QUEUE-SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+      ]
+    },
+    {
+      "seed": 6001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_QUEUE_P31_TEST@6001",
+      "case": "CASE-D_QUEUE",
+      "total": 6,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_QUEUE-SVA-ISSUED_NEEDS_NO_BLOCKER",
+        "OBL-SVA-CASE-D_QUEUE-SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+      ]
+    },
+    {
+      "seed": 6001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_QUEUE_P32_TEST@6001",
+      "case": "CASE-D_QUEUE",
+      "total": 6,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_QUEUE-SVA-ISSUED_NEEDS_NO_BLOCKER",
+        "OBL-SVA-CASE-D_QUEUE-SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+      ]
+    },
+    {
+      "seed": 6001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_QUEUE_P7_TEST@6001",
+      "case": "CASE-D_QUEUE",
+      "total": 6,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_QUEUE-SVA-ISSUED_NEEDS_NO_BLOCKER",
+        "OBL-SVA-CASE-D_QUEUE-SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+      ]
+    },
+    {
+      "seed": 6001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_QUEUE_P8_TEST@6001",
+      "case": "CASE-D_QUEUE",
+      "total": 6,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-SVA-CASE-D_QUEUE-SVA-ISSUED_NEEDS_NO_BLOCKER",
+        "OBL-SVA-CASE-D_QUEUE-SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+      ]
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_SEQ_PDMA_MAC_TEST@10001",
+      "case": "CASE-D_SEQ",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-DATA",
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-TIMING",
+        "OBL-SCB-CASE-D_SEQ-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-FUNCTIONAL"
+      ]
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_SEQ_PLOAD_MAC_TEST@10001",
+      "case": "CASE-D_SEQ",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-DATA",
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-TIMING",
+        "OBL-SCB-CASE-D_SEQ-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-FUNCTIONAL"
+      ]
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_SEQ_PMAC_MAC_TEST@10001",
+      "case": "CASE-D_SEQ",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-DATA",
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-TIMING",
+        "OBL-SCB-CASE-D_SEQ-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_SEQ_PMAC_STORE_TEST@10001",
+      "case": "CASE-D_SEQ",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-DATA",
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-TIMING",
+        "OBL-SCB-CASE-D_SEQ-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-FUNCTIONAL"
+      ]
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_SEQ_PSCALAR_MAC_TEST@10001",
+      "case": "CASE-D_SEQ",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-DATA",
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-TIMING",
+        "OBL-SCB-CASE-D_SEQ-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-FUNCTIONAL"
+      ]
+    },
+    {
+      "seed": 10001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_SEQ_PVEC_MAC_TEST@10001",
+      "case": "CASE-D_SEQ",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-DATA",
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-TIMING",
+        "OBL-SCB-CASE-D_SEQ-SB-NPU-DUT"
+      ],
+      "remaining": [
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-FUNCTIONAL"
+      ]
+    },
+    {
+      "seed": 2001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_TYPE_PDMA_TEST@2001",
+      "case": "CASE-D_TYPE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-DATA",
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-TIMING",
+        "OBL-SCB-CASE-D_TYPE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 2001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_TYPE_PMAC_TEST@2001",
+      "case": "CASE-D_TYPE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-DATA",
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-TIMING",
+        "OBL-SCB-CASE-D_TYPE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 2001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_TYPE_PSCALAR_TEST@2001",
+      "case": "CASE-D_TYPE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-DATA",
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-TIMING",
+        "OBL-SCB-CASE-D_TYPE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    },
+    {
+      "seed": 2001,
+      "tst_id": "TST-NPU_SCHED_ENV_D_TYPE_PVECTOR_TEST@2001",
+      "case": "CASE-D_TYPE",
+      "total": 4,
+      "discharged": [
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-DATA",
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-TIMING",
+        "OBL-SCB-CASE-D_TYPE-SB-NPU-DUT"
+      ],
+      "remaining": []
+    }
+  ],
+  "by_seed": {
+    "10001": {
+      "seed": 10001,
+      "discharged": [
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-DATA",
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_BARRIER-CG-D_BARRIER-TIMING",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-DATA",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_PRIORITY-CG-D_PRIORITY-TIMING",
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-DATA",
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_SEQ-CG-D_SEQ-TIMING",
+        "OBL-SCB-CASE-D_BARRIER-SB-NPU-DUT",
+        "OBL-SCB-CASE-D_PRIORITY-SB-NPU-DUT",
+        "OBL-SCB-CASE-D_SEQ-SB-NPU-DUT"
+      ],
+      "runs": 14,
+      "count": 12
+    },
+    "2001": {
+      "seed": 2001,
+      "discharged": [
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-DATA",
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_TYPE-CG-D_TYPE-TIMING",
+        "OBL-SCB-CASE-D_TYPE-SB-NPU-DUT"
+      ],
+      "runs": 4,
+      "count": 4
+    },
+    "3001": {
+      "seed": 3001,
+      "discharged": [
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-DATA",
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_DTYPE-CG-D_DTYPE-TIMING",
+        "OBL-SCB-CASE-D_DTYPE-SB-NPU-DUT"
+      ],
+      "runs": 4,
+      "count": 4
+    },
+    "6001": {
+      "seed": 6001,
+      "discharged": [
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-DATA",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_QUEUE-CG-D_QUEUE-TIMING",
+        "OBL-SCB-CASE-D_QUEUE-SB-NPU-DUT"
+      ],
+      "runs": 10,
+      "count": 4
+    },
+    "8001": {
+      "seed": 8001,
+      "discharged": [
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-DATA",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_OPCODE-CG-D_OPCODE-TIMING",
+        "OBL-SCB-CASE-D_OPCODE-SB-NPU-DUT"
+      ],
+      "runs": 10,
+      "count": 4
+    },
+    "9501": {
+      "seed": 9501,
+      "discharged": [
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-DATA",
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-FUNCTIONAL",
+        "OBL-GROUP-CASE-D_PIPELINE-CG-D_PIPELINE-TIMING",
+        "OBL-SCB-CASE-D_PIPELINE-SB-NPU-DUT"
+      ],
+      "runs": 5,
+      "count": 4
+    }
+  },
+  "counts": {
+    "runs": 47,
+    "seeds": 6,
+    "discharged_total": 180
+  }
+}

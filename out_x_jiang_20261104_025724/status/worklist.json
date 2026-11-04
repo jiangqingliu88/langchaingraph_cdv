@@ -1,0 +1,6 @@
+{
+  "schema": "os_worklist_v1",
+  "available": false,
+  "reason": "contract_missing",
+  "note": "没有契约 → 跑全量"
+}

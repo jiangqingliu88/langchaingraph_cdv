@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-11-04T04:46:46.542901",
+  "root_dir": "output_e2e_final4_jiang_20261104_044624\\regression_run\\loopback",
+  "total_time": "N/A",
+  "total": 4,
+  "stats": {
+    "pass": 4,
+    "fail": 0,
+    "unknown": 0
+  },
+  "tasks": [
+    {
+      "name": "npu_sched_npu_sched_in_loopback",
+      "status": "pass",
+      "work_dir": "output_e2e_final4_jiang_20261104_044624\\regression_run\\loopback\\build_build_npu_sched_npu_sched_in_loopback",
+      "elapsed": 1.12,
+      "job_id": null,
+      "fingerprint": "unknown",
+      "sim_time": 0.0,
+      "wave_path": null,
+      "performance_degraded": false
+    },
+    {
+      "name": "npu_sched_in_loopback",
+      "status": "pass",
+      "work_dir": "output_e2e_final4_jiang_20261104_044624\\regression_run\\loopback\\build_build_npu_sched_npu_sched_in_loopback\\test_test_npu_sched_in_loopback",
+      "elapsed": 4.63,
+      "job_id": null,
+      "fingerprint": "unknown",
+      "sim_time": 0.0,
+      "wave_path": null,
+      "performance_degraded": false
+    },
+    {
+      "name": "npu_sched_npu_sched_out_loopback",
+      "status": "pass",
+      "work_dir": "output_e2e_final4_jiang_20261104_044624\\regression_run\\loopback\\build_build_npu_sched_npu_sched_out_loopback",
+      "elapsed": 1.07,
+      "job_id": null,
+      "fingerprint": "unknown",
+      "sim_time": 0.0,
+      "wave_path": null,
+      "performance_degraded": false
+    },
+    {
+      "name": "npu_sched_out_loopback",
+      "status": "pass",
+      "work_dir": "output_e2e_final4_jiang_20261104_044624\\regression_run\\loopback\\build_build_npu_sched_npu_sched_out_loopback\\test_test_npu_sched_out_loopback",
+      "elapsed": 4.47,
+      "job_id": null,
+      "fingerprint": "unknown",
+      "sim_time": 0.0,
+      "wave_path": null,
+      "performance_degraded": false
+    }
+  ]
+}

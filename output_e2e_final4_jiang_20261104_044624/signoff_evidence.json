@@ -1,0 +1,462 @@
+{
+  "schema": "signoff_evidence_v1",
+  "deprecated": true,
+  "canonical": "signoff_evidence/manifest.json",
+  "run": "output_e2e_final4_jiang_20261104_044624",
+  "module": "npu_sched",
+  "rtl_version_hash": "4adf7649eda5a6dcde31bd6e7be0e6fea9f388ceeb119120f19820d15239b226",
+  "testpoint_ir_sha256": "b73c39d0bdab5c0dca08d340cd22d1c6f418a13b51c999d901b20b3a48d7856a",
+  "framework": {
+    "name": "signoff-methodology",
+    "version": "1.0"
+  },
+  "versions": {
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "signoffai": "",
+    "questa": {
+      "available": true,
+      "version": "QuestaSim-64 vlog 2024.1 Compiler 2024.02 Feb  1 2024"
+    },
+    "packages": {
+      "pydantic": "2.13.4",
+      "jinja2": "3.1.6",
+      "langgraph": "1.2.12",
+      "langchain-core": "1.6.6"
+    }
+  },
+  "coverage": {
+    "plan_pct": 95.23,
+    "single_test_pct": 68.57,
+    "code_single_pct": 70.9,
+    "code_plan_pct": 86.2,
+    "code_plan_metrics": {
+      "branch_pct": 92.1,
+      "condition_pct": 79.16,
+      "statement_pct": 94.54,
+      "toggle_pct": 79.16
+    },
+    "gate_pct": 95.23,
+    "gate_passed": true,
+    "merged_stores": 267,
+    "merged_ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\plan_merged.ucdb",
+    "merged_ucdb_rel": "sim/coverage/plan_merged.ucdb",
+    "merge_manifest": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\coverage\\plan_merge_manifest.json",
+    "merge_manifest_sha256": "d842a72bba166cb3ef1458a6f4d1309a983b0822f8ed0ef65a458d2545fe5008"
+  },
+  "humanview_ingest": {
+    "available": false
+  },
+  "tp_matrix": {
+    "counts": {
+      "HIT": 37,
+      "MISS": 0,
+      "OBSERVED": 14,
+      "UNOBSERVED": 2,
+      "BACKDOOR_HIT": 10,
+      "BACKDOOR_MISS": 0,
+      "UNMAPPED": 0,
+      "SIGNED_OFF": 39,
+      "UNSIGNED": 24,
+      "PENDING_BACKEND": 7
+    },
+    "total": 70,
+    "drivable_pct": 100.0,
+    "backdoor_pct": 100.0,
+    "behavior_pending": 7,
+    "signed_off": 39,
+    "unsigned": 24,
+    "signed_off_pct": 61.9,
+    "missed_tp_ids": [
+      "TP-NPUSCH-D_DEP-WAR",
+      "TP-NPUSCH-D_DECISION-BLOCKED"
+    ]
+  },
+  "case_coverage": {
+    "available": true,
+    "case_tp": "coverage/case_tp.json",
+    "wave_manifest": "waves/manifest.json",
+    "wave_index_available": true,
+    "signed_off": 39,
+    "unsigned": 24,
+    "unsigned_required": 8,
+    "signed_off_pct": 61.9,
+    "unsigned_tp_ids": [
+      "TP-NPUSCH-D_DEP-NONE",
+      "TP-NPUSCH-D_DEP-RAW",
+      "TP-NPUSCH-D_DEP-WAW",
+      "TP-NPUSCH-D_DEP-WAR",
+      "TP-NPUSCH-D_UNIT-MAC",
+      "TP-NPUSCH-D_UNIT-VECTOR",
+      "TP-NPUSCH-D_UNIT-SCALAR",
+      "TP-NPUSCH-D_UNIT-DMA",
+      "TP-NPUSCH-D_DECISION-ISSUED",
+      "TP-NPUSCH-D_DECISION-STALLED",
+      "TP-NPUSCH-D_DECISION-BLOCKED",
+      "TP-NPUSCH-D_DECISION-FLUSHED",
+      "TP-NPUSCH-D_CLUSTER-0",
+      "TP-NPUSCH-D_CLUSTER-1",
+      "TP-NPUSCH-D_CLUSTER-2",
+      "TP-NPUSCH-D_CLUSTER-3",
+      "TP-NPUSCH-D_SEQ-LOAD_MAC",
+      "TP-NPUSCH-D_SEQ-MAC_STORE",
+      "TP-NPUSCH-D_SEQ-DMA_MAC",
+      "TP-NPUSCH-D_SEQ-VEC_MAC",
+      "TP-NPUSCH-D_SEQ-SCALAR_MAC",
+      "TP-NPUSCH-D_PIPELINE-NONE",
+      "TP-NPUSCH-D_PIPELINE-MAC_DMA",
+      "TP-NPUSCH-D_PIPELINE-VEC_MAC"
+    ],
+    "unsigned_required_tp_ids": [
+      "TP-NPUSCH-D_SEQ-LOAD_MAC",
+      "TP-NPUSCH-D_SEQ-MAC_STORE",
+      "TP-NPUSCH-D_SEQ-DMA_MAC",
+      "TP-NPUSCH-D_SEQ-VEC_MAC",
+      "TP-NPUSCH-D_SEQ-SCALAR_MAC",
+      "TP-NPUSCH-D_PIPELINE-NONE",
+      "TP-NPUSCH-D_PIPELINE-MAC_DMA",
+      "TP-NPUSCH-D_PIPELINE-VEC_MAC"
+    ],
+    "timing_warn": 0,
+    "timing_warn_tp_ids": [],
+    "wave_missing": [],
+    "wave_missing_tp_ids": []
+  },
+  "seed_diversity": {
+    "verdict": "DIVERSE",
+    "seeds": [
+      1001,
+      2001,
+      2002,
+      2003,
+      2004
+    ],
+    "stores": 267,
+    "per_seed": {
+      "1001": {
+        "stores": 1,
+        "hit_bins": 12,
+        "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_1001_merged.ucdb",
+        "new_bins": 12
+      },
+      "2001": {
+        "stores": 5,
+        "hit_bins": 69,
+        "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2001_merged.ucdb",
+        "new_bins": 57
+      },
+      "2002": {
+        "stores": 1,
+        "hit_bins": 12,
+        "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2002_merged.ucdb",
+        "new_bins": 0
+      },
+      "2003": {
+        "stores": 1,
+        "hit_bins": 12,
+        "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2003_merged.ucdb",
+        "new_bins": 0
+      },
+      "2004": {
+        "stores": 1,
+        "hit_bins": 12,
+        "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2004_merged.ucdb",
+        "new_bins": 0
+      }
+    },
+    "stable_bins": 12,
+    "variable_bins": 57,
+    "union_bins": 69,
+    "new_bins_per_seed": {
+      "1001": 12,
+      "2001": 57,
+      "2002": 0,
+      "2003": 0,
+      "2004": 0
+    },
+    "notes": [
+      "只分析前 5 颗种子（共 195 颗）：[1001, 2001, 2002, 2003, 2004]，其余 190 颗未分析"
+    ],
+    "errors": [],
+    "analyzed": true,
+    "schema": "seed_diversity_v1"
+  },
+  "sim_reward": {
+    "schema": "sim_reward_v1",
+    "total": 0.9725,
+    "weights": {
+      "compile": 0.25,
+      "regression": 0.35,
+      "coverage": 0.4
+    },
+    "weight_issues": [],
+    "components": {
+      "compile": {
+        "score": 1.0,
+        "passed": true,
+        "errors": 0,
+        "warnings": 0,
+        "status": "PASS"
+      },
+      "regression": {
+        "score": 1.0,
+        "passed": 273,
+        "failed": 0,
+        "total": 273,
+        "pass_ratio": 1.0,
+        "harness_failures": 0
+      },
+      "coverage": {
+        "score": 0.9312,
+        "plan_pct": 95.23,
+        "plan_score": 0.9523,
+        "tp_hit": 61,
+        "tp_total": 70,
+        "tp_score": 0.8714,
+        "seed_verdict": "DIVERSE",
+        "seed_score": 1.0
+      }
+    },
+    "weakest": "coverage"
+  },
+  "knowledge_graph": {
+    "path": "coverage/knowledge_graph.json",
+    "sha256": "a6ac7a416629e4229fe847be5fe3860f6b59659784839f414f81130a1f47ccc4",
+    "schema": "knowledge_graph_runtime_v1",
+    "summary": {
+      "nodes": 10,
+      "edges": 8,
+      "by_type": {
+        "requirement": 3,
+        "feature": 0,
+        "module": 0,
+        "signal": 0,
+        "coverage_bin": 2,
+        "test": 2,
+        "bug": 0,
+        "fix": 0,
+        "gap": 2,
+        "rtl_version": 1
+      }
+    },
+    "gaps": 2
+  },
+  "seed_diversity_reason": "",
+  "no_test_success": "",
+  "reference_models": {
+    "available": false,
+    "models_yaml": false,
+    "status": "",
+    "reason": "没有 models.yaml（模型库未选中任何模型）",
+    "source": {},
+    "util_components": [],
+    "placeholder": true,
+    "registry": [
+      {
+        "name": "apb_uart",
+        "version": 1,
+        "status": "draft",
+        "protocol": "apb",
+        "trans_in": "apb_master_seq_item",
+        "trans_out": "uart_master_seq_item"
+      }
+    ]
+  },
+  "lineage": {
+    "available": true,
+    "module": "npu_sched",
+    "version_no": 1,
+    "name": "v1",
+    "content_hash": "2ff2359578fb164438cb7a1203704ce601cb683d94588d7448154d89cb482c6b",
+    "baseline": {
+      "module": "npu_sched",
+      "run_id": "output_lineage_jiang_20261014_004510",
+      "version_no": 1,
+      "name": "v1",
+      "created_at": "2026-10-14T00:55:35"
+    },
+    "baseline_is_new": false
+  },
+  "regression_config": {
+    "available": true,
+    "simulator": "questa",
+    "tests": 83,
+    "run_cmd_tests": 83,
+    "structured_test": 0,
+    "seeds": 0,
+    "plusargs": 0,
+    "backend_args": 0,
+    "plusarg_matrix": 0,
+    "path": "inputs/yaml/regression.yaml"
+  },
+  "policy": {
+    "schema": "signoff_policy_v1",
+    "policy_hash": "b77b4441f1b0e44745be5fe18085edf81b1fee1007c5470db48c4f6aad7c0cec",
+    "source": "D:\\SignOffAI\\specs\\npu_sched\\signoff_policy.yaml",
+    "require_ref_model": false,
+    "require_baseline": true,
+    "accepted_codes": []
+  },
+  "tool_receipts": {
+    "available": true,
+    "total": 2,
+    "by_verified_by": {
+      "none": 2
+    },
+    "aggregate": "none",
+    "eda_pct": 0.0
+  },
+  "semantic_validations": {},
+  "caveats": [
+    "约束只部分生效：6/11 条策略由模型编译出真实赋值，其余 5 条仍是空骨架（维度不可驱动，没有 `stimulus.field`）—— 见 coverage/constraint_status.json",
+    "激励计划与 TP/约束不一致：6 处（见 coverage/plan_consistency.json）",
+    "2 条测试点的仓未命中（可激励 37/37，100.0%；后门 10/10；观测型 14/22）—— 逐条见 coverage/tp_matrix.json",
+    "8 条可激励/后门测试点没有「同一条用例 + 同一次 seed」的完整证据（TP-NPUSCH-D_SEQ-LOAD_MAC、TP-NPUSCH-D_SEQ-MAC_STORE、TP-NPUSCH-D_SEQ-DMA_MAC、TP-NPUSCH-D_SEQ-VEC_MAC、TP-NPUSCH-D_SEQ-SCALAR_MAC、TP-NPUSCH-D_PIPELINE-NONE、TP-NPUSCH-D_PIPELINE-MAC_DMA、TP-NPUSCH-D_PIPELINE-VEC_MAC）—— 见 coverage/case_tp.json",
+    "本轮没有 verified 参考模型（没有 models.yaml（模型库未选中任何模型））—— 签核不含模型比对结论"
+  ],
+  "caveat_records": [
+    {
+      "code": "CONSTRAINT_PARTIAL",
+      "message": "约束只部分生效：6/11 条策略由模型编译出真实赋值，其余 5 条仍是空骨架（维度不可驱动，没有 `stimulus.field`）—— 见 coverage/constraint_status.json"
+    },
+    {
+      "code": "PLAN_INCONSISTENT",
+      "message": "激励计划与 TP/约束不一致：6 处（见 coverage/plan_consistency.json）"
+    },
+    {
+      "code": "TP_MISSED",
+      "message": "2 条测试点的仓未命中（可激励 37/37，100.0%；后门 10/10；观测型 14/22）—— 逐条见 coverage/tp_matrix.json"
+    },
+    {
+      "code": "TP_NOT_SIGNED_OFF",
+      "message": "8 条可激励/后门测试点没有「同一条用例 + 同一次 seed」的完整证据（TP-NPUSCH-D_SEQ-LOAD_MAC、TP-NPUSCH-D_SEQ-MAC_STORE、TP-NPUSCH-D_SEQ-DMA_MAC、TP-NPUSCH-D_SEQ-VEC_MAC、TP-NPUSCH-D_SEQ-SCALAR_MAC、TP-NPUSCH-D_PIPELINE-NONE、TP-NPUSCH-D_PIPELINE-MAC_DMA、TP-NPUSCH-D_PIPELINE-VEC_MAC）—— 见 coverage/case_tp.json"
+    },
+    {
+      "code": "MODEL_UNAVAILABLE",
+      "message": "本轮没有 verified 参考模型（没有 models.yaml（模型库未选中任何模型））—— 签核不含模型比对结论"
+    }
+  ],
+  "accepted_caveat_codes": [],
+  "effective_caveat_codes": [
+    "CONSTRAINT_PARTIAL",
+    "PLAN_INCONSISTENT",
+    "TP_MISSED",
+    "TP_NOT_SIGNED_OFF",
+    "MODEL_UNAVAILABLE"
+  ],
+  "caveat_actions": [
+    {
+      "action": "BACKFILL_CONSTRAINTS",
+      "auto": false,
+      "reason": "部分策略仍是骨架：补 sequence realization / 协议参数"
+    },
+    {
+      "action": "GENERATE_DIRECTED_TEST",
+      "auto": false,
+      "reason": "2 条测试点未命中：从 tp_matrix.missed[] 生成定向约束/用例"
+    }
+  ],
+  "unreachable_justifications": [
+    {
+      "tp_id": "TP-NPUSCH-D_DEP-WAR",
+      "bin": "cp_dep_type.war",
+      "kind": "observe",
+      "status": "SUSPECT",
+      "evidence": "0 hits across 267 merged regression test stores",
+      "note": "需要模型声明 `unreachable` 才能从覆盖率分母里剔除"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DECISION-BLOCKED",
+      "bin": "cp_issue_decision.blocked",
+      "kind": "observe",
+      "status": "SUSPECT",
+      "evidence": "0 hits across 267 merged regression test stores",
+      "note": "需要模型声明 `unreachable` 才能从覆盖率分母里剔除"
+    }
+  ],
+  "llm_audit_digest": "",
+  "verdict": "PASS_WITH_CAVEAT",
+  "signoff_status": "CONDITIONAL",
+  "hard_ok": true,
+  "architecture_v2": {
+    "schema": "architecture_v2_v1",
+    "provenance": {
+      "path": "output_e2e_final4_jiang_20261104_044624/docs/provenance.jsonl",
+      "sha256": "1a872f4e8cfe12535127410f5531f26d14cbd9866b5bb4f526ac9e20a7da88a3",
+      "summary_path": "output_e2e_final4_jiang_20261104_044624/docs/provenance_summary.json",
+      "summary": {
+        "schema": "provenance_dag_v1",
+        "run_id": "output_e2e_final4_jiang_20261104_044624",
+        "nodes": 675,
+        "edges": 1134,
+        "by_kind": {
+          "artifact": 8,
+          "bin": 59,
+          "seed": 195,
+          "test": 350,
+          "tp": 63
+        },
+        "by_type": {
+          "aggregates": 63,
+          "attributed_by": 61,
+          "derived_from": 5,
+          "executed_against": 350,
+          "executed_with": 350,
+          "realizes": 63,
+          "seed_derived": 242
+        },
+        "by_confidence": {
+          "exact": 1073,
+          "weak": 61
+        },
+        "unattributed_bins": [
+          "bin:unknown"
+        ],
+        "notes": [
+          "没有 per-test 覆盖率（coverage/per_test_bins.json）：bin→test 只能是 attributed_by（weak），不能把合并覆盖率的功劳算到某条 test 上",
+          "1 个命中 bin 没有任何 TP→test 映射"
+        ]
+      }
+    },
+    "attribution": {
+      "path": "output_e2e_final4_jiang_20261104_044624/coverage/attribution.json",
+      "hit_bins": 61,
+      "attribution_rate": 0.0,
+      "test_seed_rate": 0.0,
+      "exact_rate": 0.0,
+      "weak_rate": 1.0
+    },
+    "engineering_metrics": {
+      "path": "output_e2e_final4_jiang_20261104_044624/docs/engineering_metrics.json",
+      "regression_seconds": 11975.85,
+      "incremental": null,
+      "attribution_rate": 0.0,
+      "decision_rate": null
+    },
+    "verification_quality": {
+      "path": "output_e2e_final4_jiang_20261104_044624/docs/verification_quality.json",
+      "overall": "unknown",
+      "enforcement": "report",
+      "dimensions": {
+        "functional": "pass",
+        "coverage": "unknown",
+        "model": "unknown",
+        "structural": "pass",
+        "evidence": "warn"
+      },
+      "issues": [
+        "coverage: 覆盖率结果缺 pct 字段",
+        "model: 没有 models.yaml —— 判不了参考模型状态",
+        "evidence: 61 条血缘边是 weak（缺 per-test 覆盖率，不能精确归因）",
+        "evidence: 没有 per-test 覆盖率 sidecar"
+      ]
+    },
+    "ir_shadow": {
+      "available": true,
+      "path": "output_e2e_final4_jiang_20261104_044624/docs/ir_shadow_diff.json",
+      "scopes": 3,
+      "inconsistent": 0,
+      "differences": 0
+    }
+  }
+}

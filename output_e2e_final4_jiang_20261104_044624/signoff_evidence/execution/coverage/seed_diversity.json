@@ -1,0 +1,59 @@
+{
+  "verdict": "DIVERSE",
+  "seeds": [
+    1001,
+    2001,
+    2002,
+    2003,
+    2004
+  ],
+  "stores": 267,
+  "per_seed": {
+    "1001": {
+      "stores": 1,
+      "hit_bins": 12,
+      "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_1001_merged.ucdb",
+      "new_bins": 12
+    },
+    "2001": {
+      "stores": 5,
+      "hit_bins": 69,
+      "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2001_merged.ucdb",
+      "new_bins": 57
+    },
+    "2002": {
+      "stores": 1,
+      "hit_bins": 12,
+      "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2002_merged.ucdb",
+      "new_bins": 0
+    },
+    "2003": {
+      "stores": 1,
+      "hit_bins": 12,
+      "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2003_merged.ucdb",
+      "new_bins": 0
+    },
+    "2004": {
+      "stores": 1,
+      "hit_bins": 12,
+      "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2004_merged.ucdb",
+      "new_bins": 0
+    }
+  },
+  "stable_bins": 12,
+  "variable_bins": 57,
+  "union_bins": 69,
+  "new_bins_per_seed": {
+    "1001": 12,
+    "2001": 57,
+    "2002": 0,
+    "2003": 0,
+    "2004": 0
+  },
+  "notes": [
+    "只分析前 5 颗种子（共 195 颗）：[1001, 2001, 2002, 2003, 2004]，其余 190 颗未分析"
+  ],
+  "errors": [],
+  "analyzed": true,
+  "schema": "seed_diversity_v1"
+}

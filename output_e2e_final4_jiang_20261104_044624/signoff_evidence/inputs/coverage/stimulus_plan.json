@@ -1,0 +1,794 @@
+{
+  "schema": "stimulus_plan_v1",
+  "backend": "generated",
+  "module": "npu_sched",
+  "seed": 0,
+  "testpoints": [
+    {
+      "tp_id": "TP-NPUSCH-D_QUEUE-0",
+      "kind": "backdoor",
+      "agent": "",
+      "test": "npu_sched_env_d_queue_p0_test",
+      "stage": "p1",
+      "transactions": [
+        {
+          "path": "npu_sched_bench_tb_top.u_npu_sched.queue_level",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_QUEUE-1",
+      "kind": "backdoor",
+      "agent": "",
+      "test": "npu_sched_env_d_queue_p1_test",
+      "stage": "p1",
+      "transactions": [
+        {
+          "path": "npu_sched_bench_tb_top.u_npu_sched.queue_level",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_QUEUE-7",
+      "kind": "backdoor",
+      "agent": "",
+      "test": "npu_sched_env_d_queue_p7_test",
+      "stage": "p1",
+      "transactions": [
+        {
+          "path": "npu_sched_bench_tb_top.u_npu_sched.queue_level",
+          "value": 7
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_QUEUE-8",
+      "kind": "backdoor",
+      "agent": "",
+      "test": "npu_sched_env_d_queue_p8_test",
+      "stage": "p1",
+      "transactions": [
+        {
+          "path": "npu_sched_bench_tb_top.u_npu_sched.queue_level",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_QUEUE-15",
+      "kind": "backdoor",
+      "agent": "",
+      "test": "npu_sched_env_d_queue_p15_test",
+      "stage": "p1",
+      "transactions": [
+        {
+          "path": "npu_sched_bench_tb_top.u_npu_sched.queue_level",
+          "value": 15
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_QUEUE-16",
+      "kind": "backdoor",
+      "agent": "",
+      "test": "npu_sched_env_d_queue_p16_test",
+      "stage": "p1",
+      "transactions": [
+        {
+          "path": "npu_sched_bench_tb_top.u_npu_sched.queue_level",
+          "value": 16
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_QUEUE-24",
+      "kind": "backdoor",
+      "agent": "",
+      "test": "npu_sched_env_d_queue_p24_test",
+      "stage": "p1",
+      "transactions": [
+        {
+          "path": "npu_sched_bench_tb_top.u_npu_sched.queue_level",
+          "value": 24
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_QUEUE-25",
+      "kind": "backdoor",
+      "agent": "",
+      "test": "npu_sched_env_d_queue_p25_test",
+      "stage": "p1",
+      "transactions": [
+        {
+          "path": "npu_sched_bench_tb_top.u_npu_sched.queue_level",
+          "value": 25
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_QUEUE-31",
+      "kind": "backdoor",
+      "agent": "",
+      "test": "npu_sched_env_d_queue_p31_test",
+      "stage": "p1",
+      "transactions": [
+        {
+          "path": "npu_sched_bench_tb_top.u_npu_sched.queue_level",
+          "value": 31
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_QUEUE-32",
+      "kind": "backdoor",
+      "agent": "",
+      "test": "npu_sched_env_d_queue_p32_test",
+      "stage": "p1",
+      "transactions": [
+        {
+          "path": "npu_sched_bench_tb_top.u_npu_sched.queue_level",
+          "value": 32
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_TYPE-MAC",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_type_pMAC_test",
+      "stage": "p0",
+      "transactions": [
+        {
+          "field": "instr_type",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_TYPE-VECTOR",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_type_pVECTOR_test",
+      "stage": "p0",
+      "transactions": [
+        {
+          "field": "instr_type",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_TYPE-SCALAR",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_type_pSCALAR_test",
+      "stage": "p0",
+      "transactions": [
+        {
+          "field": "instr_type",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_TYPE-DMA",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_type_pDMA_test",
+      "stage": "p0",
+      "transactions": [
+        {
+          "field": "instr_type",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DTYPE-INT8",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_dtype_pINT8_test",
+      "stage": "p0",
+      "transactions": [
+        {
+          "field": "instr_dtype",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DTYPE-FP16",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_dtype_pFP16_test",
+      "stage": "p0",
+      "transactions": [
+        {
+          "field": "instr_dtype",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DTYPE-BF16",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_dtype_pBF16_test",
+      "stage": "p0",
+      "transactions": [
+        {
+          "field": "instr_dtype",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DTYPE-FP32",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_dtype_pFP32_test",
+      "stage": "p0",
+      "transactions": [
+        {
+          "field": "instr_dtype",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_OPCODE-MAC_INT8",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_opcode_pMAC_INT8_test",
+      "stage": "p2",
+      "transactions": [
+        {
+          "field": "instr_opcode",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_OPCODE-MAC_FP16",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_opcode_pMAC_FP16_test",
+      "stage": "p2",
+      "transactions": [
+        {
+          "field": "instr_opcode",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_OPCODE-MAC_BF16",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_opcode_pMAC_BF16_test",
+      "stage": "p2",
+      "transactions": [
+        {
+          "field": "instr_opcode",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_OPCODE-VEC_ADD",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_opcode_pVEC_ADD_test",
+      "stage": "p2",
+      "transactions": [
+        {
+          "field": "instr_opcode",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_OPCODE-VEC_MUL",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_opcode_pVEC_MUL_test",
+      "stage": "p2",
+      "transactions": [
+        {
+          "field": "instr_opcode",
+          "value": 4
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_OPCODE-VEC_RELU",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_opcode_pVEC_RELU_test",
+      "stage": "p2",
+      "transactions": [
+        {
+          "field": "instr_opcode",
+          "value": 5
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_OPCODE-LOAD",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_opcode_pLOAD_test",
+      "stage": "p2",
+      "transactions": [
+        {
+          "field": "instr_opcode",
+          "value": 6
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_OPCODE-STORE",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_opcode_pSTORE_test",
+      "stage": "p2",
+      "transactions": [
+        {
+          "field": "instr_opcode",
+          "value": 7
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_OPCODE-DMA_READ",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_opcode_pDMA_READ_test",
+      "stage": "p2",
+      "transactions": [
+        {
+          "field": "instr_opcode",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_OPCODE-DMA_WRITE",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_opcode_pDMA_WRITE_test",
+      "stage": "p2",
+      "transactions": [
+        {
+          "field": "instr_opcode",
+          "value": 9
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_SEQ-MAC_MAC",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_seq_pMAC_MAC_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 0,
+          "ordinal": 0
+        },
+        {
+          "value": 0,
+          "ordinal": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_SEQ-LOAD_MAC",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_seq_pLOAD_MAC_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 6,
+          "ordinal": 0
+        },
+        {
+          "value": 0,
+          "ordinal": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_SEQ-MAC_STORE",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_seq_pMAC_STORE_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 0,
+          "ordinal": 0
+        },
+        {
+          "value": 7,
+          "ordinal": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_SEQ-DMA_MAC",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_seq_pDMA_MAC_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 8,
+          "ordinal": 0
+        },
+        {
+          "value": 0,
+          "ordinal": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_SEQ-VEC_MAC",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_seq_pVEC_MAC_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 3,
+          "ordinal": 0
+        },
+        {
+          "value": 0,
+          "ordinal": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_SEQ-SCALAR_MAC",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_seq_pSCALAR_MAC_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 0,
+          "ordinal": 0
+        },
+        {
+          "value": 0,
+          "ordinal": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_PIPELINE-NONE",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_pipeline_pNONE_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 0,
+          "ordinal": 0
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_PIPELINE-MAC_MAC",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_pipeline_pMAC_MAC_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 0,
+          "ordinal": 0
+        },
+        {
+          "value": 0,
+          "ordinal": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_PIPELINE-MAC_DMA",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_pipeline_pMAC_DMA_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 0,
+          "ordinal": 0
+        },
+        {
+          "value": 8,
+          "ordinal": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_PIPELINE-VEC_MAC",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_pipeline_pVEC_MAC_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 3,
+          "ordinal": 0
+        },
+        {
+          "value": 0,
+          "ordinal": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_PIPELINE-MULTI_OP",
+      "kind": "sequence",
+      "agent": "",
+      "test": "npu_sched_env_d_pipeline_pMULTI_OP_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "value": 0,
+          "ordinal": 0
+        },
+        {
+          "value": 3,
+          "ordinal": 1
+        },
+        {
+          "value": 8,
+          "ordinal": 2
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_PRIORITY-HIGH_FIRST",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_priority_pHIGH_FIRST_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "field": "op_priority",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_PRIORITY-LOW_FIRST",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_priority_pLOW_FIRST_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "field": "op_priority",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_PRIORITY-SAME_PRIO",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_priority_pSAME_PRIO_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "field": "op_priority",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_PRIORITY-ROUND_ROBIN",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_priority_pROUND_ROBIN_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "field": "op_priority",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_BARRIER-NONE",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_barrier_pNONE_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "field": "barrier_type",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_BARRIER-TILE_BARRIER",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_barrier_pTILE_BARRIER_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "field": "barrier_type",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_BARRIER-OP_BARRIER",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_barrier_pOP_BARRIER_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "field": "barrier_type",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER",
+      "kind": "stimulus",
+      "agent": "npu_sched_in",
+      "test": "npu_sched_env_d_barrier_pCLUSTER_BARRIER_test",
+      "stage": "p3",
+      "transactions": [
+        {
+          "field": "barrier_type",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "tp_id": "TP-NPUSCH-BEH_QUEUE-SEQ_FILL_DRAIN",
+      "kind": "sequence",
+      "agent": "",
+      "test": "",
+      "stage": "behavior",
+      "transactions": []
+    }
+  ],
+  "unsupported": [
+    {
+      "tp_id": "TP-NPUSCH-D_DEP-NONE",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DEP-RAW",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DEP-WAW",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DEP-WAR",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_UNIT-MAC",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_UNIT-VECTOR",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_UNIT-SCALAR",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_UNIT-DMA",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DECISION-ISSUED",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DECISION-STALLED",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DECISION-BLOCKED",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_DECISION-FLUSHED",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_CLUSTER-0",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_CLUSTER-1",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_CLUSTER-2",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-D_CLUSTER-3",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-BEH_QUEUE-TR_EMPTY_ENQ",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-BEH_QUEUE-TR_LOW_ENQ",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-BEH_QUEUE-TR_HIGH_ENQ",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-BEH_QUEUE-TR_FULL_DEQ",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-BEH_QUEUE-TR_FULL_FLUSH",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    },
+    {
+      "tp_id": "TP-NPUSCH-BEH_QUEUE-TMP_BACKPRESSURE",
+      "kind": "observe",
+      "reason": "observe 不产生激励"
+    }
+  ],
+  "stats": {
+    "total": 70,
+    "planned": 48,
+    "unsupported": 22,
+    "by_kind": {
+      "backdoor": 10,
+      "sequence": 12,
+      "stimulus": 26
+    }
+  },
+  "sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5"
+}

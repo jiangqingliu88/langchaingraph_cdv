@@ -1,0 +1,4320 @@
+{
+  "output_dir": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624",
+  "top_module": "npu_sched_bench_tb_top",
+  "filelist": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\inputs\\filelists\\filelist.f",
+  "compile": {
+    "status": "PASS",
+    "errors": 0,
+    "time_s": 1.3,
+    "stderr": "",
+    "stdout": "QuestaSim-64 vlog 2024.1 Compiler 2024.02 Feb  1 2024\nStart time: 08:06:20 on Nov 04,2026\nvlog -work D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/build/work \"+cover=bcesf\" -f D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/inputs/filelists/filelist.f \n-- Compiling package uvm_pkg (uvm-1.2 Built-in)\n-- Compiling package clk_and_rst_pkg_sv_unit\n-- Importing package uvm_pkg (uvm-1.2 Built-in)\n-- Compiling interface clk_rst_if\n-- Compiling package clk_and_rst_pkg\n-- Compiling package scb_pkg\n-- Compiling package common_typedefs_pkg\n-- Compiling package npu_sched_in_parameters_pkg\n-- Compiling package npu_sched_in_typedefs_pkg\n-- Importing package npu_sched_in_parameters_pkg\n-- Compiling interface npu_sched_in_if\n-- Compiling interface npu_sched_in_system_if\n-- Compiling package npu_sched_in_pkg\n-- Importing package npu_sched_in_typedefs_pkg\n-- Importing package common_typedefs_pkg\n-- Compiling package npu_sched_out_parameters_pkg\n-- Compiling package npu_sched_out_typedefs_pkg\n-- Importing package npu_sched_out_parameters_pkg\n-- Compiling interface npu_sched_out_if\n-- Compiling interface npu_sched_out_system_if\n-- Compiling package npu_sched_out_pkg\n-- Importing package npu_sched_out_typedefs_pkg\n-- Compiling module npu_sched\n-- Compiling interface npu_sched_cov_if\n-- Compiling package npu_sched_cov_if_sv_unit\n-- Compiling package npu_sched_env_parameters_pkg\n-- Compiling package npu_sched_env_pkg\n-- Importing package npu_sched_env_parameters_pkg\n-- Importing package clk_and_rst_pkg\n-- Importing package scb_pkg\n-- Importing package npu_sched_in_pkg\n-- Importing package npu_sched_out_pkg\n** Warning: ** while parsing file included at D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_pkg.sv(70)\n** at D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(89): (vlib-2597) '4294967295' is being treated as 32-bit signed integer and will overflow.\n** Warning: ** while parsing file included at D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_pkg.sv(70)\n** at D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(94): (vlib-2597) '4294967295' is being treated as 32-bit signed integer and will overflow.\n-- Compiling package npu_sched_env_seq_pkg\n-- Importing package npu_sched_env_pkg\n-- Compiling package npu_sched_env_test_pkg\n-- Importing package npu_sched_env_seq_pkg\n-- Compiling module npu_sched_bench_tb_top\n-- Importing package npu_sched_env_test_pkg\n\nTop level modules:\n\tnpu_sched_bench_tb_top\n** Warning: (vlib-2650) 'bind' found in compilation unit scope. Please use -mfcu -cuname to ensure that 'bind' gets elaborated.\nEnd time: 08:06:21 on Nov 04,2026, Elapsed time: 0:00:01\nErrors: 0, Warnings: 3\n"
+  },
+  "simulation": {
+    "status": "PASS",
+    "errors": 0,
+    "ucdb_path": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\merged.ucdb",
+    "log_path": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\sim_seed_default.log",
+    "vcd_path": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\wave_seed_default.vcd",
+    "stdout_tail": "_clk_rst_agent_h.mon [CLK_MON] Clock Monitor Report:\n# UVM_INFO D:/SignOffAI/src/tools/generation/uvm_tools/tool_uvm/base_pkg/clk_and_rst/clk_rst_monitor.svh(75) @ 1585.000 ns: uvm_test_top.env.clk_clk_rst_agent_h.mon [CLK_MON]   clk[0]: 159 edges, period=10000ps\n# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(920) @ 1585.000 ns: uvm_test_top.env.env_cov [ENV_COV] ???��??��????????[npu_sched_in]: 81.7%\n# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(921) @ 1585.000 ns: uvm_test_top.env.env_cov [ENV_COV] ???��??��????????[npu_sched_out]: 79.2%\n# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(923) @ 1585.000 ns: uvm_test_top.env.env_cov [ENV_COV] ???��??��????????[dut]: 69.7%\n# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(928) @ 1585.000 ns: uvm_test_top.env.env_cov [DUT_CHK] [SCB_DUT] total=596 matched=596 mismatched=0\n# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(987) @ 1585.000 ns: uvm_test_top.env.env_cov [DUT_CHK] [SCB SB-NPU-DUT] total=596 matched=596 mismatched=0\n# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_sim_end.sv(87) @ 1585.000 ns: uvm_test_top.env.sim_end_h [npu_sched_env_sim_end] SIMULATION COMPLETE ??? $finish\n# ** Note: $finish    : D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_sim_end.sv(88)\n#    Time: 1585 ns  Iteration: 65  Region: /uvm_pkg::uvm_phase::m_run_phases\n# Break in Function npu_sched_env_pkg/npu_sched_env_sim_end::report_phase at D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_sim_end.sv line 88\n# Stopped at D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_sim_end.sv line 88\n#  quit -f\n# Saving coverage database on exit...\n# End time: 08:06:26 on Nov 04,2026, Elapsed time: 0:00:04\n# Errors: 0, Warnings: 8\n"
+  },
+  "coverage": {
+    "line_pct": 0.0,
+    "line_bins": 0,
+    "line_misses": 0,
+    "branch_pct": 78.94,
+    "branch_bins": 38,
+    "branch_misses": 8,
+    "toggle_pct": 0.0,
+    "toggle_bins": 0,
+    "toggle_misses": 0,
+    "fsm_pct": 0.0,
+    "fsm_bins": 0,
+    "fsm_misses": 0,
+    "statement_pct": 83.63,
+    "statement_bins": 55,
+    "statement_misses": 9,
+    "condition_pct": 50.0,
+    "condition_bins": 24,
+    "condition_misses": 12,
+    "overall_pct": 70.9,
+    "metrics_present": [
+      "branch",
+      "condition",
+      "statement"
+    ],
+    "metrics_absent": [
+      "fsm",
+      "line",
+      "toggle"
+    ],
+    "functional_pct": 95.23,
+    "functional_detail": {
+      "functional_pct": 95.23,
+      "covergroup_count": 3,
+      "raw_pcts": [
+        95.27,
+        95.23,
+        90.0,
+        90.62,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        95.83,
+        96.61,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        75.0,
+        75.0,
+        100.0,
+        100.0,
+        75.0,
+        75.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        90.0,
+        90.62,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        95.83,
+        96.61,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        75.0,
+        75.0,
+        100.0,
+        100.0,
+        75.0,
+        75.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        95.27,
+        95.27
+      ],
+      "covergroup_pct": 95.27,
+      "bin_hits": 100,
+      "bin_total": 105,
+      "covergroups": [
+        {
+          "name": "cg_npu_sched_in",
+          "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_in",
+          "goal": 100.0,
+          "actual": 90.0,
+          "coverpoints": [
+            {
+              "name": "cp_instr_valid",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_opcode",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_type",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_dtype",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_tile_id",
+              "actual": 66.66
+            },
+            {
+              "name": "cp_instr_src_addr",
+              "actual": 66.66
+            },
+            {
+              "name": "cp_instr_dst_addr",
+              "actual": 66.66
+            },
+            {
+              "name": "cp_barrier_type",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_op_priority",
+              "actual": 100.0
+            }
+          ],
+          "crosses": [
+            {
+              "name": "cross_all",
+              "actual": 100.0
+            }
+          ],
+          "cross_actual": 100.0
+        },
+        {
+          "name": "cg_npu_sched_out",
+          "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_out",
+          "goal": 100.0,
+          "actual": 100.0,
+          "coverpoints": [
+            {
+              "name": "cp_issue_valid",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_issue_unit",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_issue_decision",
+              "actual": 100.0
+            }
+          ],
+          "crosses": [
+            {
+              "name": "cross_all",
+              "actual": 100.0
+            }
+          ],
+          "cross_actual": 100.0
+        },
+        {
+          "name": "cg_dut",
+          "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_dut",
+          "goal": 100.0,
+          "actual": 95.83,
+          "coverpoints": [
+            {
+              "name": "cp_queue_level",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_type",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_dtype",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_dep_type",
+              "actual": 75.0
+            },
+            {
+              "name": "cp_issue_unit",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_issue_decision",
+              "actual": 75.0
+            },
+            {
+              "name": "cp_cluster_id",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_opcode",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_seq",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_pipeline_state",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_op_priority",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_barrier_type",
+              "actual": 100.0
+            }
+          ],
+          "crosses": [],
+          "cross_actual": 100.0
+        }
+      ]
+    },
+    "ucdb_path": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\merged.ucdb",
+    "report_dir": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\reports",
+    "single_test_functional_pct": 68.57,
+    "single_test_detail": {
+      "functional_pct": 68.57,
+      "covergroup_count": 3,
+      "raw_pcts": [
+        76.85,
+        68.57,
+        81.66,
+        78.12,
+        100.0,
+        100.0,
+        66.66,
+        66.66,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        50.0,
+        50.0,
+        79.16,
+        71.42,
+        100.0,
+        100.0,
+        66.66,
+        66.66,
+        100.0,
+        100.0,
+        50.0,
+        50.0,
+        69.72,
+        62.71,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        75.0,
+        75.0,
+        50.0,
+        50.0,
+        50.0,
+        50.0,
+        75.0,
+        75.0,
+        100.0,
+        100.0,
+        10.0,
+        10.0,
+        16.66,
+        16.66,
+        60.0,
+        60.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        81.66,
+        78.12,
+        100.0,
+        100.0,
+        66.66,
+        66.66,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        66.66,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        50.0,
+        50.0,
+        79.16,
+        71.42,
+        100.0,
+        100.0,
+        66.66,
+        66.66,
+        100.0,
+        100.0,
+        50.0,
+        50.0,
+        69.72,
+        62.71,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        75.0,
+        75.0,
+        50.0,
+        50.0,
+        50.0,
+        50.0,
+        75.0,
+        75.0,
+        100.0,
+        100.0,
+        10.0,
+        10.0,
+        16.66,
+        16.66,
+        60.0,
+        60.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        76.85,
+        76.85
+      ],
+      "covergroup_pct": 76.85,
+      "bin_hits": 72,
+      "bin_total": 105,
+      "covergroups": [
+        {
+          "name": "cg_npu_sched_in",
+          "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_in",
+          "goal": 100.0,
+          "actual": 81.66,
+          "coverpoints": [
+            {
+              "name": "cp_instr_valid",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_opcode",
+              "actual": 66.66
+            },
+            {
+              "name": "cp_instr_type",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_dtype",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_tile_id",
+              "actual": 66.66
+            },
+            {
+              "name": "cp_instr_src_addr",
+              "actual": 66.66
+            },
+            {
+              "name": "cp_instr_dst_addr",
+              "actual": 66.66
+            },
+            {
+              "name": "cp_barrier_type",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_op_priority",
+              "actual": 100.0
+            }
+          ],
+          "crosses": [
+            {
+              "name": "cross_all",
+              "actual": 50.0
+            }
+          ],
+          "cross_actual": 50.0
+        },
+        {
+          "name": "cg_npu_sched_out",
+          "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_out",
+          "goal": 100.0,
+          "actual": 79.16,
+          "coverpoints": [
+            {
+              "name": "cp_issue_valid",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_issue_unit",
+              "actual": 66.66
+            },
+            {
+              "name": "cp_issue_decision",
+              "actual": 100.0
+            }
+          ],
+          "crosses": [
+            {
+              "name": "cross_all",
+              "actual": 50.0
+            }
+          ],
+          "cross_actual": 50.0
+        },
+        {
+          "name": "cg_dut",
+          "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_dut",
+          "goal": 100.0,
+          "actual": 69.72,
+          "coverpoints": [
+            {
+              "name": "cp_queue_level",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_type",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_dtype",
+              "actual": 75.0
+            },
+            {
+              "name": "cp_dep_type",
+              "actual": 50.0
+            },
+            {
+              "name": "cp_issue_unit",
+              "actual": 50.0
+            },
+            {
+              "name": "cp_issue_decision",
+              "actual": 75.0
+            },
+            {
+              "name": "cp_cluster_id",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_instr_opcode",
+              "actual": 10.0
+            },
+            {
+              "name": "cp_instr_seq",
+              "actual": 16.66
+            },
+            {
+              "name": "cp_pipeline_state",
+              "actual": 60.0
+            },
+            {
+              "name": "cp_op_priority",
+              "actual": 100.0
+            },
+            {
+              "name": "cp_barrier_type",
+              "actual": 100.0
+            }
+          ],
+          "crosses": [],
+          "cross_actual": 100.0
+        }
+      ]
+    },
+    "plan_ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\plan_merged.ucdb",
+    "plan_stores": 267,
+    "plan_merge_errors": [],
+    "tp_report": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\reports\\coverage_cvg_plan.txt",
+    "code_plan": {
+      "schema": "code_coverage_plan_v1",
+      "stores": 265,
+      "merged": 265,
+      "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\plan_dut_code.ucdb",
+      "report": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\reports\\coverage_code_plan.txt",
+      "errors": [],
+      "warnings": [],
+      "line_pct": 0.0,
+      "line_bins": 0,
+      "line_misses": 0,
+      "branch_pct": 92.1,
+      "branch_bins": 38,
+      "branch_misses": 3,
+      "toggle_pct": 79.16,
+      "toggle_bins": 360,
+      "toggle_misses": 75,
+      "fsm_pct": 0.0,
+      "fsm_bins": 0,
+      "fsm_misses": 0,
+      "statement_pct": 94.54,
+      "statement_bins": 55,
+      "statement_misses": 3,
+      "condition_pct": 79.16,
+      "condition_bins": 24,
+      "condition_misses": 5,
+      "overall_pct": 86.2,
+      "metrics_present": [
+        "branch",
+        "condition",
+        "statement",
+        "toggle"
+      ],
+      "metrics_absent": [
+        "fsm",
+        "line"
+      ]
+    }
+  },
+  "status": "PASS",
+  "plan_coverage": {
+    "functional_pct": 95.23,
+    "stores": 267,
+    "merged": 267,
+    "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\plan_merged.ucdb",
+    "report": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\reports\\coverage_cvg_plan.txt",
+    "errors": [],
+    "warnings": [
+      "部分用例的代码覆盖层次不同（loopback vs DUT），功能覆盖已合并；代码覆盖按层次跳过"
+    ],
+    "single_test_pct": 68.57,
+    "merge_manifest": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\coverage\\plan_merge_manifest.json"
+  },
+  "code_coverage_plan": {
+    "schema": "code_coverage_plan_v1",
+    "stores": 265,
+    "merged": 265,
+    "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\plan_dut_code.ucdb",
+    "report": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\reports\\coverage_code_plan.txt",
+    "errors": [],
+    "warnings": [],
+    "line_pct": 0.0,
+    "line_bins": 0,
+    "line_misses": 0,
+    "branch_pct": 92.1,
+    "branch_bins": 38,
+    "branch_misses": 3,
+    "toggle_pct": 79.16,
+    "toggle_bins": 360,
+    "toggle_misses": 75,
+    "fsm_pct": 0.0,
+    "fsm_bins": 0,
+    "fsm_misses": 0,
+    "statement_pct": 94.54,
+    "statement_bins": 55,
+    "statement_misses": 3,
+    "condition_pct": 79.16,
+    "condition_bins": 24,
+    "condition_misses": 5,
+    "overall_pct": 86.2,
+    "metrics_present": [
+      "branch",
+      "condition",
+      "statement",
+      "toggle"
+    ],
+    "metrics_absent": [
+      "fsm",
+      "line"
+    ]
+  },
+  "seed_diversity": {
+    "verdict": "DIVERSE",
+    "seeds": [
+      1001,
+      2001,
+      2002,
+      2003,
+      2004
+    ],
+    "stores": 267,
+    "per_seed": {
+      "1001": {
+        "stores": 1,
+        "hit_bins": 12,
+        "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_1001_merged.ucdb",
+        "new_bins": 12
+      },
+      "2001": {
+        "stores": 5,
+        "hit_bins": 69,
+        "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2001_merged.ucdb",
+        "new_bins": 57
+      },
+      "2002": {
+        "stores": 1,
+        "hit_bins": 12,
+        "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2002_merged.ucdb",
+        "new_bins": 0
+      },
+      "2003": {
+        "stores": 1,
+        "hit_bins": 12,
+        "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2003_merged.ucdb",
+        "new_bins": 0
+      },
+      "2004": {
+        "stores": 1,
+        "hit_bins": 12,
+        "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2004_merged.ucdb",
+        "new_bins": 0
+      }
+    },
+    "stable_bins": 12,
+    "variable_bins": 57,
+    "union_bins": 69,
+    "new_bins_per_seed": {
+      "1001": 12,
+      "2001": 57,
+      "2002": 0,
+      "2003": 0,
+      "2004": 0
+    },
+    "notes": [
+      "只分析前 5 颗种子（共 195 颗）：[1001, 2001, 2002, 2003, 2004]，其余 190 颗未分析"
+    ],
+    "errors": [],
+    "analyzed": true,
+    "schema": "seed_diversity_v1"
+  },
+  "artifacts": {
+    "ucdb": {
+      "path": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\merged.ucdb",
+      "sha256": "b77f713c67dae275cf30bcd593c4db27d21d3a3b047cf8dc3b6da173f6093d7a",
+      "size": 105848,
+      "kind": "coverage_db"
+    },
+    "waveform": {
+      "path": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\wave_seed_default.vcd",
+      "sha256": "52c8cc2d72ca9ffd11331da31f3736100f3e346e1833d29dadd3b3d34818ee7b",
+      "size": 107,
+      "kind": "waveform"
+    }
+  },
+  "case_coverage": {
+    "case_count": 267,
+    "counts": {
+      "total": 70,
+      "signed_off": 39,
+      "unsigned": 24,
+      "behavior_pending": 7,
+      "no_owner_case": 16,
+      "timing_warn": 0
+    },
+    "evidence_sampled": false,
+    "case_tp": "coverage/case_tp.json",
+    "notes": [],
+    "errors": []
+  },
+  "tp_matrix": {
+    "total": 70,
+    "counts": {
+      "HIT": 37,
+      "MISS": 0,
+      "OBSERVED": 14,
+      "UNOBSERVED": 2,
+      "BACKDOOR_HIT": 10,
+      "BACKDOOR_MISS": 0,
+      "UNMAPPED": 0,
+      "SIGNED_OFF": 39,
+      "UNSIGNED": 24,
+      "PENDING_BACKEND": 7
+    },
+    "drivable": 37,
+    "drivable_hit": 37,
+    "drivable_pct": 100.0,
+    "backdoor": 10,
+    "backdoor_hit": 10,
+    "backdoor_pct": 100.0,
+    "observe_only": 22,
+    "observed": 14,
+    "behavior_pending": 7,
+    "signed_off_total": 39,
+    "unsigned_total": 24,
+    "signed_off_pct": 61.9,
+    "timing_warn": 0,
+    "case_evidence": {
+      "case_count": 267,
+      "evidence_sampled": false,
+      "counts": {
+        "total": 70,
+        "signed_off": 39,
+        "unsigned": 24,
+        "behavior_pending": 7,
+        "no_owner_case": 16,
+        "timing_warn": 0
+      }
+    },
+    "missed": [
+      {
+        "tp_id": "TP-NPUSCH-D_DEP-WAR",
+        "dimension": "D_dep",
+        "value": "WAR",
+        "coverpoint": "cp_dep_type",
+        "bin": "war",
+        "bins": [
+          "war"
+        ],
+        "bin_hits": {
+          "war": 0
+        },
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "UNOBSERVED",
+        "requirement": "REQ-NPU-004",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_dep_pWAR_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DEP",
+        "groups": [
+          "CG-D_DEP"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DECISION-BLOCKED",
+        "dimension": "D_decision",
+        "value": "BLOCKED",
+        "coverpoint": "cp_issue_decision",
+        "bin": "blocked",
+        "bins": [
+          "blocked"
+        ],
+        "bin_hits": {
+          "blocked": 0
+        },
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "UNOBSERVED",
+        "requirement": "REQ-NPU-006",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_decision_pBLOCKED_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DECISION",
+        "groups": [
+          "CG-D_DECISION"
+        ],
+        "sva": [
+          "SVA-RAW_NEVER_ISSUES"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      }
+    ],
+    "unsigned": [
+      {
+        "tp_id": "TP-NPUSCH-D_DEP-NONE",
+        "dimension": "D_dep",
+        "value": "NONE",
+        "coverpoint": "cp_dep_type",
+        "bin": "no_dep",
+        "bins": [
+          "no_dep"
+        ],
+        "bin_hits": {
+          "no_dep": 2559
+        },
+        "hits": 2559,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-004",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_dep_pNONE_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DEP",
+        "groups": [
+          "CG-D_DEP"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DEP-RAW",
+        "dimension": "D_dep",
+        "value": "RAW",
+        "coverpoint": "cp_dep_type",
+        "bin": "raw",
+        "bins": [
+          "raw"
+        ],
+        "bin_hits": {
+          "raw": 315
+        },
+        "hits": 315,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-004",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_dep_pRAW_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DEP",
+        "groups": [
+          "CG-D_DEP"
+        ],
+        "sva": [
+          "SVA-ISSUED_NEEDS_NO_BLOCKER",
+          "SVA-RAW_NEVER_ISSUES"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DEP-WAW",
+        "dimension": "D_dep",
+        "value": "WAW",
+        "coverpoint": "cp_dep_type",
+        "bin": "waw",
+        "bins": [
+          "waw"
+        ],
+        "bin_hits": {
+          "waw": 4044
+        },
+        "hits": 4044,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-004",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_dep_pWAW_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DEP",
+        "groups": [
+          "CG-D_DEP"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DEP-WAR",
+        "dimension": "D_dep",
+        "value": "WAR",
+        "coverpoint": "cp_dep_type",
+        "bin": "war",
+        "bins": [
+          "war"
+        ],
+        "bin_hits": {
+          "war": 0
+        },
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "UNOBSERVED",
+        "requirement": "REQ-NPU-004",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_dep_pWAR_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DEP",
+        "groups": [
+          "CG-D_DEP"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_UNIT-MAC",
+        "dimension": "D_unit",
+        "value": "MAC",
+        "coverpoint": "cp_issue_unit",
+        "bin": "mac",
+        "bins": [
+          "mac"
+        ],
+        "bin_hits": {
+          "mac": 2900
+        },
+        "hits": 2900,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-005",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_unit_pMAC_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_UNIT",
+        "groups": [
+          "CG-D_UNIT"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_UNIT-VECTOR",
+        "dimension": "D_unit",
+        "value": "VECTOR",
+        "coverpoint": "cp_issue_unit",
+        "bin": "vector",
+        "bins": [
+          "vector"
+        ],
+        "bin_hits": {
+          "vector": 26
+        },
+        "hits": 26,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-005",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_unit_pVECTOR_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_UNIT",
+        "groups": [
+          "CG-D_UNIT"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_UNIT-SCALAR",
+        "dimension": "D_unit",
+        "value": "SCALAR",
+        "coverpoint": "cp_issue_unit",
+        "bin": "scalar",
+        "bins": [
+          "scalar"
+        ],
+        "bin_hits": {
+          "scalar": 24
+        },
+        "hits": 24,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-005",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_unit_pSCALAR_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_UNIT",
+        "groups": [
+          "CG-D_UNIT"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_UNIT-DMA",
+        "dimension": "D_unit",
+        "value": "DMA",
+        "coverpoint": "cp_issue_unit",
+        "bin": "dma",
+        "bins": [
+          "dma"
+        ],
+        "bin_hits": {
+          "dma": 2554
+        },
+        "hits": 2554,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-005",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_unit_pDMA_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_UNIT",
+        "groups": [
+          "CG-D_UNIT"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DECISION-ISSUED",
+        "dimension": "D_decision",
+        "value": "ISSUED",
+        "coverpoint": "cp_issue_decision",
+        "bin": "issued",
+        "bins": [
+          "issued"
+        ],
+        "bin_hits": {
+          "issued": 76
+        },
+        "hits": 76,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-006",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_decision_pISSUED_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DECISION",
+        "groups": [
+          "CG-D_DECISION"
+        ],
+        "sva": [
+          "SVA-ISSUED_NEEDS_NO_BLOCKER"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DECISION-STALLED",
+        "dimension": "D_decision",
+        "value": "STALLED",
+        "coverpoint": "cp_issue_decision",
+        "bin": "stalled",
+        "bins": [
+          "stalled"
+        ],
+        "bin_hits": {
+          "stalled": 2669
+        },
+        "hits": 2669,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-006",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_decision_pSTALLED_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DECISION",
+        "groups": [
+          "CG-D_DECISION"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DECISION-BLOCKED",
+        "dimension": "D_decision",
+        "value": "BLOCKED",
+        "coverpoint": "cp_issue_decision",
+        "bin": "blocked",
+        "bins": [
+          "blocked"
+        ],
+        "bin_hits": {
+          "blocked": 0
+        },
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "UNOBSERVED",
+        "requirement": "REQ-NPU-006",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_decision_pBLOCKED_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DECISION",
+        "groups": [
+          "CG-D_DECISION"
+        ],
+        "sva": [
+          "SVA-RAW_NEVER_ISSUES"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DECISION-FLUSHED",
+        "dimension": "D_decision",
+        "value": "FLUSHED",
+        "coverpoint": "cp_issue_decision",
+        "bin": "flushed",
+        "bins": [
+          "flushed"
+        ],
+        "bin_hits": {
+          "flushed": 4173
+        },
+        "hits": 4173,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-006",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_decision_pFLUSHED_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DECISION",
+        "groups": [
+          "CG-D_DECISION"
+        ],
+        "sva": [
+          "SVA-BARRIER_FLUSHES"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_CLUSTER-0",
+        "dimension": "D_cluster",
+        "value": "0",
+        "coverpoint": "cp_cluster_id",
+        "bin": "c0",
+        "bins": [
+          "c0"
+        ],
+        "bin_hits": {
+          "c0": 3008
+        },
+        "hits": 3008,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-007",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_cluster_p0_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_CLUSTER",
+        "groups": [
+          "CG-D_CLUSTER"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_CLUSTER-1",
+        "dimension": "D_cluster",
+        "value": "1",
+        "coverpoint": "cp_cluster_id",
+        "bin": "c1",
+        "bins": [
+          "c1"
+        ],
+        "bin_hits": {
+          "c1": 988
+        },
+        "hits": 988,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-007",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_cluster_p1_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_CLUSTER",
+        "groups": [
+          "CG-D_CLUSTER"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_CLUSTER-2",
+        "dimension": "D_cluster",
+        "value": "2",
+        "coverpoint": "cp_cluster_id",
+        "bin": "c2",
+        "bins": [
+          "c2"
+        ],
+        "bin_hits": {
+          "c2": 536
+        },
+        "hits": 536,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-007",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_cluster_p2_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_CLUSTER",
+        "groups": [
+          "CG-D_CLUSTER"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_CLUSTER-3",
+        "dimension": "D_cluster",
+        "value": "3",
+        "coverpoint": "cp_cluster_id",
+        "bin": "c3",
+        "bins": [
+          "c3"
+        ],
+        "bin_hits": {
+          "c3": 2386
+        },
+        "hits": 2386,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-007",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_cluster_p3_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_CLUSTER",
+        "groups": [
+          "CG-D_CLUSTER"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-LOAD_MAC",
+        "dimension": "D_seq",
+        "value": "LOAD_MAC",
+        "coverpoint": "cp_instr_seq",
+        "bin": "load_mac",
+        "bins": [
+          "load_mac"
+        ],
+        "bin_hits": {
+          "load_mac": 1
+        },
+        "hits": 1,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pLOAD_MAC_test",
+        "owner_case": "tp_npusch_d_seq_load_mac_seed_10001",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-MAC_STORE",
+        "dimension": "D_seq",
+        "value": "MAC_STORE",
+        "coverpoint": "cp_instr_seq",
+        "bin": "mac_store",
+        "bins": [
+          "mac_store"
+        ],
+        "bin_hits": {
+          "mac_store": 1
+        },
+        "hits": 1,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pMAC_STORE_test",
+        "owner_case": "tp_npusch_d_seq_mac_store_seed_10001",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-DMA_MAC",
+        "dimension": "D_seq",
+        "value": "DMA_MAC",
+        "coverpoint": "cp_instr_seq",
+        "bin": "dma_mac",
+        "bins": [
+          "dma_mac"
+        ],
+        "bin_hits": {
+          "dma_mac": 1
+        },
+        "hits": 1,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pDMA_MAC_test",
+        "owner_case": "tp_npusch_d_seq_dma_mac_seed_10001",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-VEC_MAC",
+        "dimension": "D_seq",
+        "value": "VEC_MAC",
+        "coverpoint": "cp_instr_seq",
+        "bin": "vec_mac",
+        "bins": [
+          "vec_mac"
+        ],
+        "bin_hits": {
+          "vec_mac": 1
+        },
+        "hits": 1,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pVEC_MAC_test",
+        "owner_case": "tp_npusch_d_seq_vec_mac_seed_10001",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-SCALAR_MAC",
+        "dimension": "D_seq",
+        "value": "SCALAR_MAC",
+        "coverpoint": "cp_instr_seq",
+        "bin": "scalar_mac",
+        "bins": [
+          "scalar_mac"
+        ],
+        "bin_hits": {
+          "scalar_mac": 1
+        },
+        "hits": 1,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pSCALAR_MAC_test",
+        "owner_case": "tp_npusch_d_seq_scalar_mac_seed_10001",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PIPELINE-NONE",
+        "dimension": "D_pipeline",
+        "value": "NONE",
+        "coverpoint": "cp_pipeline_state",
+        "bin": "no_overlap",
+        "bins": [
+          "no_overlap"
+        ],
+        "bin_hits": {
+          "no_overlap": 3139
+        },
+        "hits": 3139,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-010",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_pipeline_pNONE_test",
+        "owner_case": "tp_npusch_d_pipeline_none_seed_9501",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_PIPELINE",
+        "groups": [
+          "CG-D_PIPELINE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PIPELINE-MAC_DMA",
+        "dimension": "D_pipeline",
+        "value": "MAC_DMA",
+        "coverpoint": "cp_pipeline_state",
+        "bin": "mac_dma_overlap",
+        "bins": [
+          "mac_dma_overlap"
+        ],
+        "bin_hits": {
+          "mac_dma_overlap": 46
+        },
+        "hits": 46,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-010",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_pipeline_pMAC_DMA_test",
+        "owner_case": "tp_npusch_d_pipeline_mac_dma_seed_9501",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_PIPELINE",
+        "groups": [
+          "CG-D_PIPELINE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PIPELINE-VEC_MAC",
+        "dimension": "D_pipeline",
+        "value": "VEC_MAC",
+        "coverpoint": "cp_pipeline_state",
+        "bin": "vec_mac_overlap",
+        "bins": [
+          "vec_mac_overlap"
+        ],
+        "bin_hits": {
+          "vec_mac_overlap": 4
+        },
+        "hits": 4,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-010",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_pipeline_pVEC_MAC_test",
+        "owner_case": "tp_npusch_d_pipeline_vec_mac_seed_9501",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_PIPELINE",
+        "groups": [
+          "CG-D_PIPELINE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      }
+    ],
+    "unmapped": [],
+    "rows": [
+      {
+        "tp_id": "TP-NPUSCH-D_QUEUE-0",
+        "dimension": "D_queue",
+        "value": "0",
+        "coverpoint": "cp_queue_level",
+        "bin": "empty",
+        "bins": [
+          "empty"
+        ],
+        "bin_hits": {
+          "empty": 2559
+        },
+        "hits": 2559,
+        "kind": "backdoor",
+        "observe_only": false,
+        "status": "BACKDOOR_HIT",
+        "requirement": "REQ-NPU-001",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_queue_p0_test",
+        "owner_case": "tp_npusch_d_queue_0_seed_6001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_queue_0_seed_6001@6001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_QUEUE",
+        "groups": [
+          "CG-D_QUEUE"
+        ],
+        "sva": [
+          "SVA-ISSUED_NEEDS_NO_BLOCKER"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_QUEUE-1",
+        "dimension": "D_queue",
+        "value": "1",
+        "coverpoint": "cp_queue_level",
+        "bin": "low",
+        "bins": [
+          "low"
+        ],
+        "bin_hits": {
+          "low": 559
+        },
+        "hits": 559,
+        "kind": "backdoor",
+        "observe_only": false,
+        "status": "BACKDOOR_HIT",
+        "requirement": "REQ-NPU-001",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_queue_p1_test",
+        "owner_case": "tp_npusch_d_queue_1_seed_6001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_queue_1_seed_6001@6001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_QUEUE",
+        "groups": [
+          "CG-D_QUEUE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_QUEUE-7",
+        "dimension": "D_queue",
+        "value": "7",
+        "coverpoint": "cp_queue_level",
+        "bin": "low",
+        "bins": [
+          "low"
+        ],
+        "bin_hits": {
+          "low": 559
+        },
+        "hits": 559,
+        "kind": "backdoor",
+        "observe_only": false,
+        "status": "BACKDOOR_HIT",
+        "requirement": "REQ-NPU-001",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_queue_p7_test",
+        "owner_case": "tp_npusch_d_queue_7_seed_6001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_queue_7_seed_6001@6001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_QUEUE",
+        "groups": [
+          "CG-D_QUEUE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_QUEUE-8",
+        "dimension": "D_queue",
+        "value": "8",
+        "coverpoint": "cp_queue_level",
+        "bin": "mid",
+        "bins": [
+          "mid"
+        ],
+        "bin_hits": {
+          "mid": 875
+        },
+        "hits": 875,
+        "kind": "backdoor",
+        "observe_only": false,
+        "status": "BACKDOOR_HIT",
+        "requirement": "REQ-NPU-001",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_queue_p8_test",
+        "owner_case": "tp_npusch_d_queue_8_seed_6001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_queue_8_seed_6001@6001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_QUEUE",
+        "groups": [
+          "CG-D_QUEUE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_QUEUE-15",
+        "dimension": "D_queue",
+        "value": "15",
+        "coverpoint": "cp_queue_level",
+        "bin": "mid",
+        "bins": [
+          "mid"
+        ],
+        "bin_hits": {
+          "mid": 875
+        },
+        "hits": 875,
+        "kind": "backdoor",
+        "observe_only": false,
+        "status": "BACKDOOR_HIT",
+        "requirement": "REQ-NPU-001",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_queue_p15_test",
+        "owner_case": "tp_npusch_d_queue_15_seed_6001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_queue_15_seed_6001@6001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_QUEUE",
+        "groups": [
+          "CG-D_QUEUE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_QUEUE-16",
+        "dimension": "D_queue",
+        "value": "16",
+        "coverpoint": "cp_queue_level",
+        "bin": "high",
+        "bins": [
+          "high"
+        ],
+        "bin_hits": {
+          "high": 268
+        },
+        "hits": 268,
+        "kind": "backdoor",
+        "observe_only": false,
+        "status": "BACKDOOR_HIT",
+        "requirement": "REQ-NPU-001",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_queue_p16_test",
+        "owner_case": "tp_npusch_d_queue_16_seed_6001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_queue_16_seed_6001@6001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_QUEUE",
+        "groups": [
+          "CG-D_QUEUE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_QUEUE-24",
+        "dimension": "D_queue",
+        "value": "24",
+        "coverpoint": "cp_queue_level",
+        "bin": "high",
+        "bins": [
+          "high"
+        ],
+        "bin_hits": {
+          "high": 268
+        },
+        "hits": 268,
+        "kind": "backdoor",
+        "observe_only": false,
+        "status": "BACKDOOR_HIT",
+        "requirement": "REQ-NPU-001",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_queue_p24_test",
+        "owner_case": "tp_npusch_d_queue_24_seed_6001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_queue_24_seed_6001@6001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_QUEUE",
+        "groups": [
+          "CG-D_QUEUE"
+        ],
+        "sva": [
+          "SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_QUEUE-25",
+        "dimension": "D_queue",
+        "value": "25",
+        "coverpoint": "cp_queue_level",
+        "bin": "near_full",
+        "bins": [
+          "near_full"
+        ],
+        "bin_hits": {
+          "near_full": 334
+        },
+        "hits": 334,
+        "kind": "backdoor",
+        "observe_only": false,
+        "status": "BACKDOOR_HIT",
+        "requirement": "REQ-NPU-001",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_queue_p25_test",
+        "owner_case": "tp_npusch_d_queue_25_seed_6001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_queue_25_seed_6001@6001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_QUEUE",
+        "groups": [
+          "CG-D_QUEUE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_QUEUE-31",
+        "dimension": "D_queue",
+        "value": "31",
+        "coverpoint": "cp_queue_level",
+        "bin": "near_full",
+        "bins": [
+          "near_full"
+        ],
+        "bin_hits": {
+          "near_full": 334
+        },
+        "hits": 334,
+        "kind": "backdoor",
+        "observe_only": false,
+        "status": "BACKDOOR_HIT",
+        "requirement": "REQ-NPU-001",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_queue_p31_test",
+        "owner_case": "tp_npusch_d_queue_31_seed_6001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_queue_31_seed_6001@6001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_QUEUE",
+        "groups": [
+          "CG-D_QUEUE"
+        ],
+        "sva": [
+          "SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_QUEUE-32",
+        "dimension": "D_queue",
+        "value": "32",
+        "coverpoint": "cp_queue_level",
+        "bin": "full",
+        "bins": [
+          "full"
+        ],
+        "bin_hits": {
+          "full": 2323
+        },
+        "hits": 2323,
+        "kind": "backdoor",
+        "observe_only": false,
+        "status": "BACKDOOR_HIT",
+        "requirement": "REQ-NPU-001",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_queue_p32_test",
+        "owner_case": "tp_npusch_d_queue_32_seed_6001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_queue_32_seed_6001@6001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_QUEUE",
+        "groups": [
+          "CG-D_QUEUE"
+        ],
+        "sva": [
+          "SVA-QUEUE_LEVEL_WITHIN_DEPTH"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_TYPE-MAC",
+        "dimension": "D_type",
+        "value": "MAC",
+        "coverpoint": "cp_instr_type",
+        "bin": "mac",
+        "bins": [
+          "mac"
+        ],
+        "bin_hits": {
+          "mac": 4967
+        },
+        "hits": 4967,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-002",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_type_pMAC_test",
+        "owner_case": "tp_npusch_d_type_mac_seed_2001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_type_mac_seed_2001@2001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_TYPE",
+        "groups": [
+          "CG-D_TYPE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_TYPE-VECTOR",
+        "dimension": "D_type",
+        "value": "VECTOR",
+        "coverpoint": "cp_instr_type",
+        "bin": "vector",
+        "bins": [
+          "vector"
+        ],
+        "bin_hits": {
+          "vector": 229
+        },
+        "hits": 229,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-002",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_type_pVECTOR_test",
+        "owner_case": "tp_npusch_d_type_vector_seed_2001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_type_vector_seed_2001@2001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_TYPE",
+        "groups": [
+          "CG-D_TYPE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_TYPE-SCALAR",
+        "dimension": "D_type",
+        "value": "SCALAR",
+        "coverpoint": "cp_instr_type",
+        "bin": "scalar",
+        "bins": [
+          "scalar"
+        ],
+        "bin_hits": {
+          "scalar": 117
+        },
+        "hits": 117,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-002",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_type_pSCALAR_test",
+        "owner_case": "tp_npusch_d_type_scalar_seed_2001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_type_scalar_seed_2001@2001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_TYPE",
+        "groups": [
+          "CG-D_TYPE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_TYPE-DMA",
+        "dimension": "D_type",
+        "value": "DMA",
+        "coverpoint": "cp_instr_type",
+        "bin": "dma",
+        "bins": [
+          "dma"
+        ],
+        "bin_hits": {
+          "dma": 185
+        },
+        "hits": 185,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-002",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_type_pDMA_test",
+        "owner_case": "tp_npusch_d_type_dma_seed_2001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_type_dma_seed_2001@2001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_TYPE",
+        "groups": [
+          "CG-D_TYPE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DTYPE-INT8",
+        "dimension": "D_dtype",
+        "value": "INT8",
+        "coverpoint": "cp_instr_dtype",
+        "bin": "int8",
+        "bins": [
+          "int8"
+        ],
+        "bin_hits": {
+          "int8": 2901
+        },
+        "hits": 2901,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-003",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_dtype_pINT8_test",
+        "owner_case": "tp_npusch_d_dtype_int8_seed_3001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_dtype_int8_seed_3001@3001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_DTYPE",
+        "groups": [
+          "CG-D_DTYPE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DTYPE-FP16",
+        "dimension": "D_dtype",
+        "value": "FP16",
+        "coverpoint": "cp_instr_dtype",
+        "bin": "fp16",
+        "bins": [
+          "fp16"
+        ],
+        "bin_hits": {
+          "fp16": 409
+        },
+        "hits": 409,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-003",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_dtype_pFP16_test",
+        "owner_case": "tp_npusch_d_dtype_fp16_seed_3001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_dtype_fp16_seed_3001@3001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_DTYPE",
+        "groups": [
+          "CG-D_DTYPE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DTYPE-BF16",
+        "dimension": "D_dtype",
+        "value": "BF16",
+        "coverpoint": "cp_instr_dtype",
+        "bin": "bf16",
+        "bins": [
+          "bf16"
+        ],
+        "bin_hits": {
+          "bf16": 29
+        },
+        "hits": 29,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-003",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_dtype_pBF16_test",
+        "owner_case": "tp_npusch_d_dtype_bf16_seed_3001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_dtype_bf16_seed_3001@3001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_DTYPE",
+        "groups": [
+          "CG-D_DTYPE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DTYPE-FP32",
+        "dimension": "D_dtype",
+        "value": "FP32",
+        "coverpoint": "cp_instr_dtype",
+        "bin": "fp32",
+        "bins": [
+          "fp32"
+        ],
+        "bin_hits": {
+          "fp32": 2363
+        },
+        "hits": 2363,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-003",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_dtype_pFP32_test",
+        "owner_case": "tp_npusch_d_dtype_fp32_seed_3001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_dtype_fp32_seed_3001@3001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_DTYPE",
+        "groups": [
+          "CG-D_DTYPE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DEP-NONE",
+        "dimension": "D_dep",
+        "value": "NONE",
+        "coverpoint": "cp_dep_type",
+        "bin": "no_dep",
+        "bins": [
+          "no_dep"
+        ],
+        "bin_hits": {
+          "no_dep": 2559
+        },
+        "hits": 2559,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-004",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_dep_pNONE_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DEP",
+        "groups": [
+          "CG-D_DEP"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DEP-RAW",
+        "dimension": "D_dep",
+        "value": "RAW",
+        "coverpoint": "cp_dep_type",
+        "bin": "raw",
+        "bins": [
+          "raw"
+        ],
+        "bin_hits": {
+          "raw": 315
+        },
+        "hits": 315,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-004",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_dep_pRAW_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DEP",
+        "groups": [
+          "CG-D_DEP"
+        ],
+        "sva": [
+          "SVA-ISSUED_NEEDS_NO_BLOCKER",
+          "SVA-RAW_NEVER_ISSUES"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DEP-WAW",
+        "dimension": "D_dep",
+        "value": "WAW",
+        "coverpoint": "cp_dep_type",
+        "bin": "waw",
+        "bins": [
+          "waw"
+        ],
+        "bin_hits": {
+          "waw": 4044
+        },
+        "hits": 4044,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-004",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_dep_pWAW_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DEP",
+        "groups": [
+          "CG-D_DEP"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DEP-WAR",
+        "dimension": "D_dep",
+        "value": "WAR",
+        "coverpoint": "cp_dep_type",
+        "bin": "war",
+        "bins": [
+          "war"
+        ],
+        "bin_hits": {
+          "war": 0
+        },
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "UNOBSERVED",
+        "requirement": "REQ-NPU-004",
+        "stage": "p1",
+        "owner_test": "npu_sched_env_d_dep_pWAR_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DEP",
+        "groups": [
+          "CG-D_DEP"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_UNIT-MAC",
+        "dimension": "D_unit",
+        "value": "MAC",
+        "coverpoint": "cp_issue_unit",
+        "bin": "mac",
+        "bins": [
+          "mac"
+        ],
+        "bin_hits": {
+          "mac": 2900
+        },
+        "hits": 2900,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-005",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_unit_pMAC_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_UNIT",
+        "groups": [
+          "CG-D_UNIT"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_UNIT-VECTOR",
+        "dimension": "D_unit",
+        "value": "VECTOR",
+        "coverpoint": "cp_issue_unit",
+        "bin": "vector",
+        "bins": [
+          "vector"
+        ],
+        "bin_hits": {
+          "vector": 26
+        },
+        "hits": 26,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-005",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_unit_pVECTOR_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_UNIT",
+        "groups": [
+          "CG-D_UNIT"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_UNIT-SCALAR",
+        "dimension": "D_unit",
+        "value": "SCALAR",
+        "coverpoint": "cp_issue_unit",
+        "bin": "scalar",
+        "bins": [
+          "scalar"
+        ],
+        "bin_hits": {
+          "scalar": 24
+        },
+        "hits": 24,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-005",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_unit_pSCALAR_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_UNIT",
+        "groups": [
+          "CG-D_UNIT"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_UNIT-DMA",
+        "dimension": "D_unit",
+        "value": "DMA",
+        "coverpoint": "cp_issue_unit",
+        "bin": "dma",
+        "bins": [
+          "dma"
+        ],
+        "bin_hits": {
+          "dma": 2554
+        },
+        "hits": 2554,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-005",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_unit_pDMA_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_UNIT",
+        "groups": [
+          "CG-D_UNIT"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DECISION-ISSUED",
+        "dimension": "D_decision",
+        "value": "ISSUED",
+        "coverpoint": "cp_issue_decision",
+        "bin": "issued",
+        "bins": [
+          "issued"
+        ],
+        "bin_hits": {
+          "issued": 76
+        },
+        "hits": 76,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-006",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_decision_pISSUED_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DECISION",
+        "groups": [
+          "CG-D_DECISION"
+        ],
+        "sva": [
+          "SVA-ISSUED_NEEDS_NO_BLOCKER"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DECISION-STALLED",
+        "dimension": "D_decision",
+        "value": "STALLED",
+        "coverpoint": "cp_issue_decision",
+        "bin": "stalled",
+        "bins": [
+          "stalled"
+        ],
+        "bin_hits": {
+          "stalled": 2669
+        },
+        "hits": 2669,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-006",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_decision_pSTALLED_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DECISION",
+        "groups": [
+          "CG-D_DECISION"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DECISION-BLOCKED",
+        "dimension": "D_decision",
+        "value": "BLOCKED",
+        "coverpoint": "cp_issue_decision",
+        "bin": "blocked",
+        "bins": [
+          "blocked"
+        ],
+        "bin_hits": {
+          "blocked": 0
+        },
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "UNOBSERVED",
+        "requirement": "REQ-NPU-006",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_decision_pBLOCKED_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DECISION",
+        "groups": [
+          "CG-D_DECISION"
+        ],
+        "sva": [
+          "SVA-RAW_NEVER_ISSUES"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_DECISION-FLUSHED",
+        "dimension": "D_decision",
+        "value": "FLUSHED",
+        "coverpoint": "cp_issue_decision",
+        "bin": "flushed",
+        "bins": [
+          "flushed"
+        ],
+        "bin_hits": {
+          "flushed": 4173
+        },
+        "hits": 4173,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-006",
+        "stage": "p0",
+        "owner_test": "npu_sched_env_d_decision_pFLUSHED_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_DECISION",
+        "groups": [
+          "CG-D_DECISION"
+        ],
+        "sva": [
+          "SVA-BARRIER_FLUSHES"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_CLUSTER-0",
+        "dimension": "D_cluster",
+        "value": "0",
+        "coverpoint": "cp_cluster_id",
+        "bin": "c0",
+        "bins": [
+          "c0"
+        ],
+        "bin_hits": {
+          "c0": 3008
+        },
+        "hits": 3008,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-007",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_cluster_p0_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_CLUSTER",
+        "groups": [
+          "CG-D_CLUSTER"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_CLUSTER-1",
+        "dimension": "D_cluster",
+        "value": "1",
+        "coverpoint": "cp_cluster_id",
+        "bin": "c1",
+        "bins": [
+          "c1"
+        ],
+        "bin_hits": {
+          "c1": 988
+        },
+        "hits": 988,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-007",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_cluster_p1_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_CLUSTER",
+        "groups": [
+          "CG-D_CLUSTER"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_CLUSTER-2",
+        "dimension": "D_cluster",
+        "value": "2",
+        "coverpoint": "cp_cluster_id",
+        "bin": "c2",
+        "bins": [
+          "c2"
+        ],
+        "bin_hits": {
+          "c2": 536
+        },
+        "hits": 536,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-007",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_cluster_p2_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_CLUSTER",
+        "groups": [
+          "CG-D_CLUSTER"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_CLUSTER-3",
+        "dimension": "D_cluster",
+        "value": "3",
+        "coverpoint": "cp_cluster_id",
+        "bin": "c3",
+        "bins": [
+          "c3"
+        ],
+        "bin_hits": {
+          "c3": 2386
+        },
+        "hits": 2386,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "OBSERVED",
+        "requirement": "REQ-NPU-007",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_cluster_p3_test",
+        "owner_case": "",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "no_owner_case"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_CLUSTER",
+        "groups": [
+          "CG-D_CLUSTER"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": ""
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_OPCODE-MAC_INT8",
+        "dimension": "D_opcode",
+        "value": "MAC_INT8",
+        "coverpoint": "cp_instr_opcode",
+        "bin": "mac_i8",
+        "bins": [
+          "mac_i8"
+        ],
+        "bin_hits": {
+          "mac_i8": 2908
+        },
+        "hits": 2908,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-008",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_opcode_pMAC_INT8_test",
+        "owner_case": "tp_npusch_d_opcode_mac_int8_seed_8001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_opcode_mac_int8_seed_8001@8001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_OPCODE",
+        "groups": [
+          "CG-D_OPCODE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_OPCODE-MAC_FP16",
+        "dimension": "D_opcode",
+        "value": "MAC_FP16",
+        "coverpoint": "cp_instr_opcode",
+        "bin": "mac_fp16",
+        "bins": [
+          "mac_fp16"
+        ],
+        "bin_hits": {
+          "mac_fp16": 29
+        },
+        "hits": 29,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-008",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_opcode_pMAC_FP16_test",
+        "owner_case": "tp_npusch_d_opcode_mac_fp16_seed_8001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_opcode_mac_fp16_seed_8001@8001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_OPCODE",
+        "groups": [
+          "CG-D_OPCODE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_OPCODE-MAC_BF16",
+        "dimension": "D_opcode",
+        "value": "MAC_BF16",
+        "coverpoint": "cp_instr_opcode",
+        "bin": "mac_bf16",
+        "bins": [
+          "mac_bf16"
+        ],
+        "bin_hits": {
+          "mac_bf16": 29
+        },
+        "hits": 29,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-008",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_opcode_pMAC_BF16_test",
+        "owner_case": "tp_npusch_d_opcode_mac_bf16_seed_8001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_opcode_mac_bf16_seed_8001@8001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_OPCODE",
+        "groups": [
+          "CG-D_OPCODE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_OPCODE-VEC_ADD",
+        "dimension": "D_opcode",
+        "value": "VEC_ADD",
+        "coverpoint": "cp_instr_opcode",
+        "bin": "vec_add",
+        "bins": [
+          "vec_add"
+        ],
+        "bin_hits": {
+          "vec_add": 29
+        },
+        "hits": 29,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-008",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_opcode_pVEC_ADD_test",
+        "owner_case": "tp_npusch_d_opcode_vec_add_seed_8001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_opcode_vec_add_seed_8001@8001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_OPCODE",
+        "groups": [
+          "CG-D_OPCODE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_OPCODE-VEC_MUL",
+        "dimension": "D_opcode",
+        "value": "VEC_MUL",
+        "coverpoint": "cp_instr_opcode",
+        "bin": "vec_mul",
+        "bins": [
+          "vec_mul"
+        ],
+        "bin_hits": {
+          "vec_mul": 29
+        },
+        "hits": 29,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-008",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_opcode_pVEC_MUL_test",
+        "owner_case": "tp_npusch_d_opcode_vec_mul_seed_8001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_opcode_vec_mul_seed_8001@8001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_OPCODE",
+        "groups": [
+          "CG-D_OPCODE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_OPCODE-VEC_RELU",
+        "dimension": "D_opcode",
+        "value": "VEC_RELU",
+        "coverpoint": "cp_instr_opcode",
+        "bin": "vec_relu",
+        "bins": [
+          "vec_relu"
+        ],
+        "bin_hits": {
+          "vec_relu": 29
+        },
+        "hits": 29,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-008",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_opcode_pVEC_RELU_test",
+        "owner_case": "tp_npusch_d_opcode_vec_relu_seed_8001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_opcode_vec_relu_seed_8001@8001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_OPCODE",
+        "groups": [
+          "CG-D_OPCODE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_OPCODE-LOAD",
+        "dimension": "D_opcode",
+        "value": "LOAD",
+        "coverpoint": "cp_instr_opcode",
+        "bin": "load",
+        "bins": [
+          "load"
+        ],
+        "bin_hits": {
+          "load": 29
+        },
+        "hits": 29,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-008",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_opcode_pLOAD_test",
+        "owner_case": "tp_npusch_d_opcode_load_seed_8001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_opcode_load_seed_8001@8001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_OPCODE",
+        "groups": [
+          "CG-D_OPCODE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_OPCODE-STORE",
+        "dimension": "D_opcode",
+        "value": "STORE",
+        "coverpoint": "cp_instr_opcode",
+        "bin": "store",
+        "bins": [
+          "store"
+        ],
+        "bin_hits": {
+          "store": 29
+        },
+        "hits": 29,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-008",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_opcode_pSTORE_test",
+        "owner_case": "tp_npusch_d_opcode_store_seed_8001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_opcode_store_seed_8001@8001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_OPCODE",
+        "groups": [
+          "CG-D_OPCODE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_OPCODE-DMA_READ",
+        "dimension": "D_opcode",
+        "value": "DMA_READ",
+        "coverpoint": "cp_instr_opcode",
+        "bin": "dma_rd",
+        "bins": [
+          "dma_rd"
+        ],
+        "bin_hits": {
+          "dma_rd": 29
+        },
+        "hits": 29,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-008",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_opcode_pDMA_READ_test",
+        "owner_case": "tp_npusch_d_opcode_dma_read_seed_8001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_opcode_dma_read_seed_8001@8001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_OPCODE",
+        "groups": [
+          "CG-D_OPCODE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_OPCODE-DMA_WRITE",
+        "dimension": "D_opcode",
+        "value": "DMA_WRITE",
+        "coverpoint": "cp_instr_opcode",
+        "bin": "dma_wr",
+        "bins": [
+          "dma_wr"
+        ],
+        "bin_hits": {
+          "dma_wr": 29
+        },
+        "hits": 29,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-008",
+        "stage": "p2",
+        "owner_test": "npu_sched_env_d_opcode_pDMA_WRITE_test",
+        "owner_case": "tp_npusch_d_opcode_dma_write_seed_8001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_opcode_dma_write_seed_8001@8001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_OPCODE",
+        "groups": [
+          "CG-D_OPCODE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-MAC_MAC",
+        "dimension": "D_seq",
+        "value": "MAC_MAC",
+        "coverpoint": "cp_instr_seq",
+        "bin": "mac_mac",
+        "bins": [
+          "mac_mac"
+        ],
+        "bin_hits": {
+          "mac_mac": 3148
+        },
+        "hits": 3148,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pMAC_MAC_test",
+        "owner_case": "tp_npusch_d_seq_mac_mac_seed_10001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_seq_mac_mac_seed_10001@10001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-LOAD_MAC",
+        "dimension": "D_seq",
+        "value": "LOAD_MAC",
+        "coverpoint": "cp_instr_seq",
+        "bin": "load_mac",
+        "bins": [
+          "load_mac"
+        ],
+        "bin_hits": {
+          "load_mac": 1
+        },
+        "hits": 1,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pLOAD_MAC_test",
+        "owner_case": "tp_npusch_d_seq_load_mac_seed_10001",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-MAC_STORE",
+        "dimension": "D_seq",
+        "value": "MAC_STORE",
+        "coverpoint": "cp_instr_seq",
+        "bin": "mac_store",
+        "bins": [
+          "mac_store"
+        ],
+        "bin_hits": {
+          "mac_store": 1
+        },
+        "hits": 1,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pMAC_STORE_test",
+        "owner_case": "tp_npusch_d_seq_mac_store_seed_10001",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-DMA_MAC",
+        "dimension": "D_seq",
+        "value": "DMA_MAC",
+        "coverpoint": "cp_instr_seq",
+        "bin": "dma_mac",
+        "bins": [
+          "dma_mac"
+        ],
+        "bin_hits": {
+          "dma_mac": 1
+        },
+        "hits": 1,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pDMA_MAC_test",
+        "owner_case": "tp_npusch_d_seq_dma_mac_seed_10001",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-VEC_MAC",
+        "dimension": "D_seq",
+        "value": "VEC_MAC",
+        "coverpoint": "cp_instr_seq",
+        "bin": "vec_mac",
+        "bins": [
+          "vec_mac"
+        ],
+        "bin_hits": {
+          "vec_mac": 1
+        },
+        "hits": 1,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pVEC_MAC_test",
+        "owner_case": "tp_npusch_d_seq_vec_mac_seed_10001",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_SEQ-SCALAR_MAC",
+        "dimension": "D_seq",
+        "value": "SCALAR_MAC",
+        "coverpoint": "cp_instr_seq",
+        "bin": "scalar_mac",
+        "bins": [
+          "scalar_mac"
+        ],
+        "bin_hits": {
+          "scalar_mac": 1
+        },
+        "hits": 1,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-009",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_seq_pSCALAR_MAC_test",
+        "owner_case": "tp_npusch_d_seq_scalar_mac_seed_10001",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_SEQ",
+        "groups": [
+          "CG-D_SEQ"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PIPELINE-NONE",
+        "dimension": "D_pipeline",
+        "value": "NONE",
+        "coverpoint": "cp_pipeline_state",
+        "bin": "no_overlap",
+        "bins": [
+          "no_overlap"
+        ],
+        "bin_hits": {
+          "no_overlap": 3139
+        },
+        "hits": 3139,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-010",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_pipeline_pNONE_test",
+        "owner_case": "tp_npusch_d_pipeline_none_seed_9501",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_PIPELINE",
+        "groups": [
+          "CG-D_PIPELINE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PIPELINE-MAC_MAC",
+        "dimension": "D_pipeline",
+        "value": "MAC_MAC",
+        "coverpoint": "cp_pipeline_state",
+        "bin": "mac_mac_overlap",
+        "bins": [
+          "mac_mac_overlap"
+        ],
+        "bin_hits": {
+          "mac_mac_overlap": 2885
+        },
+        "hits": 2885,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-010",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_pipeline_pMAC_MAC_test",
+        "owner_case": "tp_npusch_d_pipeline_mac_mac_seed_9501",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_pipeline_mac_mac_seed_9501@9501",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_PIPELINE",
+        "groups": [
+          "CG-D_PIPELINE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PIPELINE-MAC_DMA",
+        "dimension": "D_pipeline",
+        "value": "MAC_DMA",
+        "coverpoint": "cp_pipeline_state",
+        "bin": "mac_dma_overlap",
+        "bins": [
+          "mac_dma_overlap"
+        ],
+        "bin_hits": {
+          "mac_dma_overlap": 46
+        },
+        "hits": 46,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-010",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_pipeline_pMAC_DMA_test",
+        "owner_case": "tp_npusch_d_pipeline_mac_dma_seed_9501",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_PIPELINE",
+        "groups": [
+          "CG-D_PIPELINE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PIPELINE-VEC_MAC",
+        "dimension": "D_pipeline",
+        "value": "VEC_MAC",
+        "coverpoint": "cp_pipeline_state",
+        "bin": "vec_mac_overlap",
+        "bins": [
+          "vec_mac_overlap"
+        ],
+        "bin_hits": {
+          "vec_mac_overlap": 4
+        },
+        "hits": 4,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-010",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_pipeline_pVEC_MAC_test",
+        "owner_case": "tp_npusch_d_pipeline_vec_mac_seed_9501",
+        "signed_off": false,
+        "signed_off_by": "",
+        "signoff_reasons": [
+          "bin_miss"
+        ],
+        "timing_ok": null,
+        "case_id": "CASE-D_PIPELINE",
+        "groups": [
+          "CG-D_PIPELINE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PIPELINE-MULTI_OP",
+        "dimension": "D_pipeline",
+        "value": "MULTI_OP",
+        "coverpoint": "cp_pipeline_state",
+        "bin": "multi_op_overlap",
+        "bins": [
+          "multi_op_overlap"
+        ],
+        "bin_hits": {
+          "multi_op_overlap": 844
+        },
+        "hits": 844,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-010",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_pipeline_pMULTI_OP_test",
+        "owner_case": "tp_npusch_d_pipeline_multi_op_seed_9501",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_pipeline_multi_op_seed_9501@9501",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_PIPELINE",
+        "groups": [
+          "CG-D_PIPELINE"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PRIORITY-HIGH_FIRST",
+        "dimension": "D_priority",
+        "value": "HIGH_FIRST",
+        "coverpoint": "cp_op_priority",
+        "bin": "high_first",
+        "bins": [
+          "high_first"
+        ],
+        "bin_hits": {
+          "high_first": 5167
+        },
+        "hits": 5167,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-011",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_priority_pHIGH_FIRST_test",
+        "owner_case": "tp_npusch_d_priority_high_first_seed_10001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_priority_high_first_seed_10001@10001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_PRIORITY",
+        "groups": [
+          "CG-D_PRIORITY"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PRIORITY-LOW_FIRST",
+        "dimension": "D_priority",
+        "value": "LOW_FIRST",
+        "coverpoint": "cp_op_priority",
+        "bin": "low_first",
+        "bins": [
+          "low_first"
+        ],
+        "bin_hits": {
+          "low_first": 229
+        },
+        "hits": 229,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-011",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_priority_pLOW_FIRST_test",
+        "owner_case": "tp_npusch_d_priority_low_first_seed_10001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_priority_low_first_seed_10001@10001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_PRIORITY",
+        "groups": [
+          "CG-D_PRIORITY"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PRIORITY-SAME_PRIO",
+        "dimension": "D_priority",
+        "value": "SAME_PRIO",
+        "coverpoint": "cp_op_priority",
+        "bin": "same_priority",
+        "bins": [
+          "same_priority"
+        ],
+        "bin_hits": {
+          "same_priority": 757
+        },
+        "hits": 757,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-011",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_priority_pSAME_PRIO_test",
+        "owner_case": "tp_npusch_d_priority_same_prio_seed_10001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_priority_same_prio_seed_10001@10001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_PRIORITY",
+        "groups": [
+          "CG-D_PRIORITY"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_PRIORITY-ROUND_ROBIN",
+        "dimension": "D_priority",
+        "value": "ROUND_ROBIN",
+        "coverpoint": "cp_op_priority",
+        "bin": "round_robin",
+        "bins": [
+          "round_robin"
+        ],
+        "bin_hits": {
+          "round_robin": 765
+        },
+        "hits": 765,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-011",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_priority_pROUND_ROBIN_test",
+        "owner_case": "tp_npusch_d_priority_round_robin_seed_10001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_priority_round_robin_seed_10001@10001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_PRIORITY",
+        "groups": [
+          "CG-D_PRIORITY"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_BARRIER-NONE",
+        "dimension": "D_barrier",
+        "value": "NONE",
+        "coverpoint": "cp_barrier_type",
+        "bin": "no_barrier",
+        "bins": [
+          "no_barrier"
+        ],
+        "bin_hits": {
+          "no_barrier": 2745
+        },
+        "hits": 2745,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-012",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_barrier_pNONE_test",
+        "owner_case": "tp_npusch_d_barrier_none_seed_10001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_barrier_none_seed_10001@10001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_BARRIER",
+        "groups": [
+          "CG-D_BARRIER"
+        ],
+        "sva": [],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_BARRIER-TILE_BARRIER",
+        "dimension": "D_barrier",
+        "value": "TILE_BARRIER",
+        "coverpoint": "cp_barrier_type",
+        "bin": "tile_barrier",
+        "bins": [
+          "tile_barrier"
+        ],
+        "bin_hits": {
+          "tile_barrier": 453
+        },
+        "hits": 453,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-012",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_barrier_pTILE_BARRIER_test",
+        "owner_case": "tp_npusch_d_barrier_tile_barrier_seed_10001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_barrier_tile_barrier_seed_10001@10001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_BARRIER",
+        "groups": [
+          "CG-D_BARRIER"
+        ],
+        "sva": [
+          "SVA-BARRIER_FLUSHES"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_BARRIER-OP_BARRIER",
+        "dimension": "D_barrier",
+        "value": "OP_BARRIER",
+        "coverpoint": "cp_barrier_type",
+        "bin": "op_barrier",
+        "bins": [
+          "op_barrier"
+        ],
+        "bin_hits": {
+          "op_barrier": 2651
+        },
+        "hits": 2651,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-012",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_barrier_pOP_BARRIER_test",
+        "owner_case": "tp_npusch_d_barrier_op_barrier_seed_10001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_barrier_op_barrier_seed_10001@10001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_BARRIER",
+        "groups": [
+          "CG-D_BARRIER"
+        ],
+        "sva": [
+          "SVA-BARRIER_FLUSHES"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER",
+        "dimension": "D_barrier",
+        "value": "CLUSTER_BARRIER",
+        "coverpoint": "cp_barrier_type",
+        "bin": "cluster_barrier",
+        "bins": [
+          "cluster_barrier"
+        ],
+        "bin_hits": {
+          "cluster_barrier": 1069
+        },
+        "hits": 1069,
+        "kind": "stimulus",
+        "observe_only": false,
+        "status": "HIT",
+        "requirement": "REQ-NPU-012",
+        "stage": "p3",
+        "owner_test": "npu_sched_env_d_barrier_pCLUSTER_BARRIER_test",
+        "owner_case": "tp_npusch_d_barrier_cluster_barrier_seed_10001",
+        "signed_off": true,
+        "signed_off_by": "tp_npusch_d_barrier_cluster_barrier_seed_10001@10001",
+        "signoff_reasons": [],
+        "timing_ok": null,
+        "case_id": "CASE-D_BARRIER",
+        "groups": [
+          "CG-D_BARRIER"
+        ],
+        "sva": [
+          "SVA-BARRIER_FLUSHES"
+        ],
+        "scb": [
+          "SB-NPU-DUT"
+        ],
+        "case_status": "NOT_VERIFIED"
+      },
+      {
+        "tp_id": "TP-NPUSCH-BEH_QUEUE-TR_EMPTY_ENQ",
+        "dimension": "BEH_QUEUE",
+        "value": "EMPTY->enqueue->LOW",
+        "coverpoint": "",
+        "bin": "",
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "PENDING_BACKEND",
+        "requirement": "",
+        "stage": "behavior",
+        "note": "行为域执行后端未接（P1b）—— 暂不参与覆盖率判定"
+      },
+      {
+        "tp_id": "TP-NPUSCH-BEH_QUEUE-TR_LOW_ENQ",
+        "dimension": "BEH_QUEUE",
+        "value": "LOW->enqueue->HIGH",
+        "coverpoint": "",
+        "bin": "",
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "PENDING_BACKEND",
+        "requirement": "",
+        "stage": "behavior",
+        "note": "行为域执行后端未接（P1b）—— 暂不参与覆盖率判定"
+      },
+      {
+        "tp_id": "TP-NPUSCH-BEH_QUEUE-TR_HIGH_ENQ",
+        "dimension": "BEH_QUEUE",
+        "value": "HIGH->enqueue->FULL",
+        "coverpoint": "",
+        "bin": "",
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "PENDING_BACKEND",
+        "requirement": "",
+        "stage": "behavior",
+        "note": "行为域执行后端未接（P1b）—— 暂不参与覆盖率判定"
+      },
+      {
+        "tp_id": "TP-NPUSCH-BEH_QUEUE-TR_FULL_DEQ",
+        "dimension": "BEH_QUEUE",
+        "value": "FULL->dequeue->HIGH",
+        "coverpoint": "",
+        "bin": "",
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "PENDING_BACKEND",
+        "requirement": "",
+        "stage": "behavior",
+        "note": "行为域执行后端未接（P1b）—— 暂不参与覆盖率判定"
+      },
+      {
+        "tp_id": "TP-NPUSCH-BEH_QUEUE-TR_FULL_FLUSH",
+        "dimension": "BEH_QUEUE",
+        "value": "FULL->flush->EMPTY",
+        "coverpoint": "",
+        "bin": "",
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "PENDING_BACKEND",
+        "requirement": "",
+        "stage": "behavior",
+        "note": "行为域执行后端未接（P1b）—— 暂不参与覆盖率判定"
+      },
+      {
+        "tp_id": "TP-NPUSCH-BEH_QUEUE-SEQ_FILL_DRAIN",
+        "dimension": "BEH_QUEUE",
+        "value": "enqueue > dequeue",
+        "coverpoint": "",
+        "bin": "",
+        "hits": 0,
+        "kind": "sequence",
+        "observe_only": false,
+        "status": "PENDING_BACKEND",
+        "requirement": "",
+        "stage": "behavior",
+        "note": "行为域执行后端未接（P1b）—— 暂不参与覆盖率判定"
+      },
+      {
+        "tp_id": "TP-NPUSCH-BEH_QUEUE-TMP_BACKPRESSURE",
+        "dimension": "BEH_QUEUE",
+        "value": "enqueue->backpressure=True",
+        "coverpoint": "",
+        "bin": "",
+        "hits": 0,
+        "kind": "observe",
+        "observe_only": true,
+        "status": "PENDING_BACKEND",
+        "requirement": "",
+        "stage": "behavior",
+        "note": "行为域执行后端未接（P1b）—— 暂不参与覆盖率判定"
+      }
+    ]
+  },
+  "tp_cov_evidence": {
+    "path": "coverage/tp_cov_evidence.json",
+    "counts": {
+      "VERIFIED": 0,
+      "PARTIAL": 61,
+      "NOT_VERIFIED": 2,
+      "PENDING_BACKEND": 7
+    },
+    "evidence_layers": {
+      "functional": {
+        "PROVEN": 61,
+        "PARTIAL": 0,
+        "MISSING": 2,
+        "UNMAPPED": 0,
+        "NOT_APPLICABLE": 7,
+        "PENDING_BACKEND": 0
+      },
+      "timing": {
+        "PROVEN": 0,
+        "PARTIAL": 0,
+        "MISSING": 0,
+        "UNMAPPED": 0,
+        "NOT_APPLICABLE": 70,
+        "PENDING_BACKEND": 0
+      },
+      "data": {
+        "PROVEN": 47,
+        "PARTIAL": 0,
+        "MISSING": 0,
+        "UNMAPPED": 0,
+        "NOT_APPLICABLE": 23,
+        "PENDING_BACKEND": 0
+      },
+      "path": {
+        "PROVEN": 0,
+        "PARTIAL": 0,
+        "MISSING": 0,
+        "UNMAPPED": 0,
+        "NOT_APPLICABLE": 70,
+        "PENDING_BACKEND": 0
+      }
+    },
+    "path_backend": "active"
+  },
+  "case_view": {
+    "path": "coverage/case_view.json",
+    "counts": {
+      "cases": 267,
+      "features": 13,
+      "gaps": 15,
+      "cells": 13,
+      "evd": 364
+    },
+    "reports": {
+      "json": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\coverage\\case_view.json",
+      "markdown": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\coverage\\case_view.md",
+      "html": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\coverage\\case_view.html"
+    }
+  },
+  "cell_matrix": {
+    "counts": {
+      "green": 0,
+      "yellow": 11,
+      "red": 2,
+      "na": 0,
+      "total": 13
+    },
+    "path": "coverage/cell_matrix.json"
+  },
+  "evd": {
+    "counts": {
+      "total": 364,
+      "cases": 246,
+      "legacy": 0,
+      "with_case": 165,
+      "with_cells": 165,
+      "by_checker": {
+        "case": 246,
+        "group": 47,
+        "sva": 24,
+        "scb": 47
+      },
+      "duplicates_collapsed": 21
+    },
+    "path": "coverage/evd.json"
+  },
+  "case_gates": {
+    "verdict": "PASS",
+    "counts": {
+      "blocker": 0,
+      "warning": 13,
+      "info": 24,
+      "total": 37
+    },
+    "path": "coverage/gates.json"
+  },
+  "os_shadow": {
+    "ok": true,
+    "obligations": 58,
+    "mismatched": 0,
+    "path": "status/shadow_report.json"
+  },
+  "evidence_pipeline": {
+    "path": "coverage/evidence_manifest.json",
+    "steps": [
+      {
+        "step": "case_cov",
+        "ok": true,
+        "ms": 39683.1,
+        "error": ""
+      },
+      {
+        "step": "tp_matrix",
+        "ok": true,
+        "ms": 140.6,
+        "error": ""
+      },
+      {
+        "step": "tp_evidence",
+        "ok": true,
+        "ms": 4401.2,
+        "error": ""
+      },
+      {
+        "step": "cell_matrix",
+        "ok": true,
+        "ms": 33.7,
+        "error": ""
+      },
+      {
+        "step": "evd",
+        "ok": true,
+        "ms": 35.2,
+        "error": ""
+      },
+      {
+        "step": "case_view",
+        "ok": true,
+        "ms": 343.6,
+        "error": ""
+      },
+      {
+        "step": "gates",
+        "ok": true,
+        "ms": 42.2,
+        "error": ""
+      },
+      {
+        "step": "os_shadow",
+        "ok": true,
+        "ms": 1375.5,
+        "error": ""
+      },
+      {
+        "step": "os_tp_shadow",
+        "ok": true,
+        "ms": 302.3,
+        "error": ""
+      },
+      {
+        "step": "os_authority",
+        "ok": true,
+        "ms": 36.0,
+        "error": ""
+      },
+      {
+        "step": "os_seeds",
+        "ok": true,
+        "ms": 70.7,
+        "error": ""
+      }
+    ]
+  },
+  "semantic_validations": {
+    "ucdb_nonzero_bins": true,
+    "cg_dut_hit_gt_zero": true,
+    "constraint_policy_applied": false,
+    "testpoints_traced": true,
+    "seed_diversity_verified": true,
+    "seed_diversity": {
+      "verdict": "DIVERSE",
+      "seeds": [
+        1001,
+        2001,
+        2002,
+        2003,
+        2004
+      ],
+      "stores": 267,
+      "per_seed": {
+        "1001": {
+          "stores": 1,
+          "hit_bins": 12,
+          "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_1001_merged.ucdb",
+          "new_bins": 12
+        },
+        "2001": {
+          "stores": 5,
+          "hit_bins": 69,
+          "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2001_merged.ucdb",
+          "new_bins": 57
+        },
+        "2002": {
+          "stores": 1,
+          "hit_bins": 12,
+          "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2002_merged.ucdb",
+          "new_bins": 0
+        },
+        "2003": {
+          "stores": 1,
+          "hit_bins": 12,
+          "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2003_merged.ucdb",
+          "new_bins": 0
+        },
+        "2004": {
+          "stores": 1,
+          "hit_bins": 12,
+          "ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\seed_2004_merged.ucdb",
+          "new_bins": 0
+        }
+      },
+      "stable_bins": 12,
+      "variable_bins": 57,
+      "union_bins": 69,
+      "new_bins_per_seed": {
+        "1001": 12,
+        "2001": 57,
+        "2002": 0,
+        "2003": 0,
+        "2004": 0
+      },
+      "notes": [
+        "只分析前 5 颗种子（共 195 颗）：[1001, 2001, 2002, 2003, 2004]，其余 190 颗未分析"
+      ],
+      "errors": [],
+      "analyzed": true,
+      "schema": "seed_diversity_v1"
+    },
+    "notes": [
+      "约束只部分生效：6/11 条策略由模型编译出真实赋值，其余 5 条仍落在 `default:` 分支（维度不可驱动）",
+      "2 条测试点的仓未命中（激励型 37 条中命中 37 条，100.0%）—— 逐条见 tp_matrix.json",
+      "种子多样性：DIVERSE（5 颗种子，稳定 12 bin / 种子敏感 57 bin / 并集 69）"
+    ]
+  }
+}

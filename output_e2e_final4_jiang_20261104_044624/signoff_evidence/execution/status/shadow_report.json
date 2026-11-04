@@ -1,0 +1,25 @@
+{
+  "schema": "os_shadow_v1",
+  "available": true,
+  "contract_id": "CT-npu_sched-82e0f463b7e3",
+  "contract_hash": "82e0f463b7e3ecef537b8af28263c40fdd2f444d095e1cd11fd53eb27f4ef036",
+  "contract_source": "built",
+  "stale_facts": 0,
+  "obligations": 58,
+  "bundles": 47,
+  "bundles_skipped_no_case": 220,
+  "facts": 212,
+  "ledger": {
+    "path": "evidence/ledger.jsonl",
+    "count": 212,
+    "chain_ok": true,
+    "head": "cce0b2b089bd294e"
+  },
+  "compare": {
+    "checked": 47,
+    "mismatched": 0,
+    "diffs": []
+  },
+  "ok": true,
+  "scope": "case_level（组结果 / SVA / SCB / case_status）；CELL 主色仍由 tp_cov_evidence 提供，M2 再接管"
+}

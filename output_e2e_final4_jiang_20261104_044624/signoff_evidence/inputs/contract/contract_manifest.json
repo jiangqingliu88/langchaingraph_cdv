@@ -1,0 +1,11 @@
+{
+  "schema": "contract_manifest_v1",
+  "contract_id": "CT-npu_sched-82e0f463b7e3",
+  "contract_hash": "82e0f463b7e3ecef537b8af28263c40fdd2f444d095e1cd11fd53eb27f4ef036",
+  "obligations": 58,
+  "cases": 13,
+  "generator": "verification_os.compiler@v3",
+  "inputs": {
+    "case_ir_sha256": "c84c5af96c1ad058c84bb49bbf97cb70683f26e1872760d7d464a753b99965dd"
+  }
+}

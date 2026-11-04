@@ -1,0 +1,2 @@
+var g_data = {"25":[24,"clk_vif",1],"26":[24,"npu_sched_in_if_inst",1],"27":[24,"npu_sched_out_if_inst",1],"30":[24,"u_npu_sched",1],"24":[-1,"npu_sched_bench_tb_top",1],"37":[-1,"npu_sched_out_pkg",1],"40":[-1,"npu_sched_in_pkg",1],"42":[-1,"clk_and_rst_pkg",1],"44":[-1,"npu_sched_env_pkg",1],"74":[-1,"npu_sched_env_seq_pkg",1],"75":[-1,"npu_sched_env_test_pkg",1]};
+processInstLinks(g_data);

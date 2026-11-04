@@ -1,0 +1,185 @@
+# vsim -c -sv_lib f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi -onfinish stop -work D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/regression_run/p2/build_build_npu_sched_dut/work npu_sched_bench_tb_top "+UVM_TESTNAME=npu_sched_env_d_opcode_pVEC_RELU_test" "+ntb_random_seed=8001" -l sim_vsim.log -do "log -r /*; run -all; quit -f" -coverage -coverstore D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_vec_relu_seed_8001/cov/tp_npusch_d_opcode_vec_relu -testname tp_npusch_d_opcode_vec_relu -voptargs="+acc" -qwavedb=+signal+class+wavefile=D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_vec_relu_seed_8001/waves/tp_npusch_d_opcode_vec_relu.db 
+# Start time: 08:01:18 on Nov 04,2026
+# Loading Siemens Visualizer shared object 'F:/questasim64_2024.1/win64/VisualizerRls/bin/libqvisualizer.dll'
+# Loading C:/Users/jiang/AppData/Local/Temp\jiang@LIUJIANGQING_dpi_608\win64_gcc-12.2.0\export_tramp.dll
+# ** Note: (vsim-8009) Loading existing optimized design _opt
+# //  Questa Sim-64
+# //  Version 2024.1 win64 Feb  1 2024
+# //
+# // Unpublished work. Copyright 2024 Siemens
+# //
+# // This material contains trade secrets or otherwise confidential information
+# // owned by Siemens Industry Software Inc. or its affiliates (collectively,
+# // "SISW"), or its licensors. Access to and use of this information is strictly
+# // limited as set forth in the Customer's applicable agreements with SISW.
+# //
+# // This material may not be copied, distributed, or otherwise disclosed outside
+# // of the Customer's facilities without the express written permission of SISW,
+# // and may not be used in any way not expressly authorized by SISW.
+# //
+# ** Note: (vsim-8785) UVM-aware debugging capabilities will be disabled since no compiled "questa_uvm_pkg" can be found.
+# This also means that later if you turn on UVM-aware debugging your debug simulations may have
+# different random seeds from your non-debug simulations.
+# Loading sv_std.std
+# Loading work.npu_sched_cov_if(fast)
+# Loading work.clk_rst_if(fast)
+# Loading work.npu_sched_out_if(fast)
+# Loading work.npu_sched_out_system_if(fast)
+# Loading work.common_typedefs_pkg(fast)
+# Loading work.npu_sched_out_parameters_pkg(fast)
+# Loading work.npu_sched_out_typedefs_pkg(fast)
+# Loading work.npu_sched_in_if(fast)
+# Loading work.npu_sched_in_system_if(fast)
+# Loading work.uvm_pkg(fast)
+# Loading work.npu_sched_out_pkg(fast)
+# Loading work.npu_sched_in_parameters_pkg(fast)
+# Loading work.npu_sched_in_typedefs_pkg(fast)
+# Loading work.npu_sched_in_pkg(fast)
+# Loading work.scb_pkg(fast)
+# Loading work.clk_and_rst_pkg(fast)
+# Loading work.npu_sched_env_parameters_pkg(fast)
+# Loading work.npu_sched_env_pkg(fast)
+# Loading work.npu_sched_env_seq_pkg(fast)
+# Loading work.npu_sched_env_test_pkg(fast)
+# Loading work.uvm_pkg_sv_unit(fast)
+# Loading work.npu_sched_bench_tb_top(fast)
+# Loading work.clk_rst_if(fast__2)
+# Loading work.npu_sched_in_if(fast__2)
+# Loading work.npu_sched_out_if(fast__2)
+# Loading work.npu_sched_in_system_if(fast__2)
+# Loading work.npu_sched_out_system_if(fast__2)
+# Loading work.npu_sched(fast)
+# Loading work.npu_sched_cov_if(fast__2)
+# Compiling C:/Users/jiang/AppData/Local/Temp\jiang@LIUJIANGQING_dpi_608\win64_gcc-12.2.0\exportwrapper.c
+# Loading C:/Users/jiang/AppData/Local/Temp\jiang@LIUJIANGQING_dpi_608\win64_gcc-12.2.0\vsim_auto_compile.dll
+# Loading f:/questasim64_2024.1/uvm-1.2/win64/uvm_dpi.dll
+# log -r /*
+# Logging all objects in the design...
+#  wave file name = D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_vec_relu_seed_8001/waves/tp_npusch_d_opcode_vec_relu.db
+# 
+# *****************************************************************
+#    Using QuickLZ compression software.
+# *****************************************************************
+# 
+# qwavedb_dumpvars: Initiating qwavedb class logging
+# 
+# 	Loading class filter file 'F:/questasim64_2024.1/win64/VisualizerRls/bin/../config/uvmclassfilter.txt'
+# 
+# qwavedb_dumpvars: Done initiating qwavedb class logging
+#  run -all
+# Siemens software version 2024.1 (Build number 0)
+# Unpublished work. Copyright 2026 Siemens
+# qwavedb_dumpvars: Initiating qwavedb waveform capturing
+# 
+# 
+# qwavedb_dumpvars: Done initiating qwavedb waveform capturing
+# 
+# UVM_INFO f:/questasim64_2024.1/verilog_src/uvm-1.2/src/base/uvm_root.svh(392) @ 0: reporter [UVM/RELNOTES] 
+# ----------------------------------------------------------------
+# UVM-1.2
+# (C) 2007-2014 Mentor Graphics Corporation
+# (C) 2007-2014 Cadence Design Systems, Inc.
+# (C) 2006-2014 Synopsys, Inc.
+# (C) 2011-2013 Cypress Semiconductor Corp.
+# (C) 2013-2014 NVIDIA Corporation
+# ----------------------------------------------------------------
+# 
+#   ***********       IMPORTANT RELEASE NOTES         ************
+# 
+#   You are using a version of the UVM library that has been compiled
+#   with `UVM_NO_DEPRECATED undefined.
+#   See http://www.eda.org/svdb/view.php?id=3313 for more details.
+# 
+#   You are using a version of the UVM library that has been compiled
+#   with `UVM_OBJECT_DO_NOT_NEED_CONSTRUCTOR undefined.
+#   See http://www.eda.org/svdb/view.php?id=3770 for more details.
+# 
+#       (Specify +UVM_NO_RELNOTES to turn off this notice)
+# 
+# UVM_INFO @ 0.000 ns: reporter [RNTST] Running test npu_sched_env_d_opcode_pVEC_RELU_test...
+# ** Warning: (vsim-3881) D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(89): Sign-and-Width conversion applied in bin 'v_rest' for Coverpoint 'cp_instr_src_addr'. Value '-1' changed to '0 (minimum)' value.
+#    Time: 0 ps  Iteration: 10  Region: /uvm_pkg::uvm_phase::m_run_phases
+# ** Warning: (vsim-3882) D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(89): Out of bounds value range in bin 'v_rest' for Coverpoint 'cp_instr_src_addr' converted to nearest valid bounded range of [2:0].
+#    Time: 0 ps  Iteration: 10  Region: /uvm_pkg::uvm_phase::m_run_phases
+# ** Warning: (vsim-3881) D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(94): Sign-and-Width conversion applied in bin 'v_rest' for Coverpoint 'cp_instr_dst_addr'. Value '-1' changed to '0 (minimum)' value.
+#    Time: 0 ps  Iteration: 10  Region: /uvm_pkg::uvm_phase::m_run_phases
+# ** Warning: (vsim-3882) D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(94): Out of bounds value range in bin 'v_rest' for Coverpoint 'cp_instr_dst_addr' converted to nearest valid bounded range of [2:0].
+#    Time: 0 ps  Iteration: 10  Region: /uvm_pkg::uvm_phase::m_run_phases
+# ** Warning: (vsim-3881) D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(196): Sign-and-Width conversion applied in bin 'illegal_cluster' for Coverpoint 'cp_cluster_id'. Value '4' changed to '3 (maximum)' value.
+#    Time: 0 ps  Iteration: 10  Region: /uvm_pkg::uvm_phase::m_run_phases
+# ** Warning: (vsim-8475) The invalid value range [4 : 3] is found in bin 'illegal_cluster' of Coverpoint 'cp_cluster_id'. It will be ignored.
+#    Time: 0 ps  Iteration: 10  Process: /uvm_pkg::uvm_phase::m_run_phases/#FORK#2213_7ff4f88c631 File: D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv Line: 196
+# ** Warning: (vsim-8549) After dropping the illegal, ignore or invalid values, the values list associated with scalar bin 'illegal_cluster' in Coverpoint 'cp_cluster_id' of Covergroup instance '\/npu_sched_env_pkg::npu_sched_env_coverage::cg_dut ' has converged to empty list. The bin will be taken out of coverage calculation.
+#    Time: 0 ps  Iteration: 10  Region: /uvm_pkg::uvm_phase::m_run_phases
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_sim_end.sv(64) @ 0.000 ns: uvm_test_top.env.sim_end_h [npu_sched_env_sim_end] watchdog_ns=100000 auto_finish=1
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/seqs/npu_sched_env_virtual_sequencer.sv(127) @ 0.000 ns: uvm_test_top.env.virtual_sqr [virtual_sqr] Building npu_sched_env_virtual_sequencer
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env.sv(185) @ 0.000 ns: uvm_test_top.env [ENV_TOPOLOGY] Environment npu_sched_env structure:
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env.sv(186) @ 0.000 ns: uvm_test_top.env [ENV_TOPOLOGY]   Agent: npu_sched_in_agent_h
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env.sv(187) @ 0.000 ns: uvm_test_top.env [ENV_TOPOLOGY]   Agent: npu_sched_out_agent_h
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/tests/npu_sched_env_gen_test.sv(74) @ 0.000 ns: uvm_test_top [TEST] npu_sched_env_base_test elaborated
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env.sv(192) @ 0.000 ns: uvm_test_top.env [env] start_of_simulation_phase
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/tests/npu_sched_env_gen_test.sv(79) @ 100.000 ns: uvm_test_top [npu_sched_env_d_opcode_pVEC_RELU_test] configure_phase: start
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env.sv(198) @ 100.000 ns: uvm_test_top.env [env] configure_phase: start
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/seqs/npu_sched_env_virtual_sequencer.sv(544) @ 100.000 ns: uvm_test_top.env.virtual_sqr [virtual_sqr] Virtual sequencer configure_phase: start
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/agents/npu_sched_out_agent/4_driver_monitor/npu_sched_out_port_monitor.sv(104) @ 100.000 ns: uvm_test_top.env.npu_sched_out_agent_h.monitor [npu_sched_out_port_monitor] configure_phase: start
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/agents/npu_sched_in_agent/4_driver_monitor/npu_sched_in_port_monitor.sv(104) @ 100.000 ns: uvm_test_top.env.npu_sched_in_agent_h.monitor [npu_sched_in_port_monitor] configure_phase: start
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/tests/npu_sched_env_gen_test.sv(86) @ 100.000 ns: uvm_test_top [npu_sched_env_d_opcode_pVEC_RELU_test] main_phase: start
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env.sv(242) @ 100.000 ns: uvm_test_top.env [env] main_phase
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/seqs/npu_sched_env_virtual_sequencer.sv(551) @ 100.000 ns: uvm_test_top.env.virtual_sqr [virtual_sqr] Virtual sequencer main_phase: start
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/agents/npu_sched_out_agent/4_driver_monitor/npu_sched_out_port_monitor.sv(111) @ 100.000 ns: uvm_test_top.env.npu_sched_out_agent_h.monitor [npu_sched_out_port_monitor] main_phase: start
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/agents/npu_sched_in_agent/4_driver_monitor/npu_sched_in_port_monitor.sv(111) @ 100.000 ns: uvm_test_top.env.npu_sched_in_agent_h.monitor [npu_sched_in_port_monitor] main_phase: start
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/agents/npu_sched_in_agent/4_driver_monitor/npu_sched_in_master_driver.sv(114) @ 100.000 ns: uvm_test_top.env.npu_sched_in_agent_h.driver [npu_sched_in_master_driver] main_phase: start
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(466) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_QUEUE-0 cp=cp_queue_level bin=empty t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(536) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_TYPE-MAC cp=cp_instr_type bin=mac t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(564) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_DTYPE-INT8 cp=cp_instr_dtype bin=int8 t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(592) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_DEP-NONE cp=cp_dep_type bin=no_dep t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(620) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_UNIT-MAC cp=cp_issue_unit bin=mac t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(655) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_DECISION-STALLED cp=cp_issue_decision bin=stalled t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(676) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_CLUSTER-0 cp=cp_cluster_id bin=c0 t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(704) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_OPCODE-MAC_INT8 cp=cp_instr_opcode bin=mac_i8 t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(774) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_SEQ-MAC_MAC cp=cp_instr_seq bin=mac_mac t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(823) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_PIPELINE-MAC_MAC cp=cp_pipeline_state bin=mac_mac_overlap t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(851) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_PRIORITY-HIGH_FIRST cp=cp_op_priority bin=high_first t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(879) @ 105.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_BARRIER-NONE cp=cp_barrier_type bin=no_barrier t=105.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(557) @ 115.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_TYPE-DMA cp=cp_instr_type bin=dma t=115.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(690) @ 115.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_CLUSTER-2 cp=cp_cluster_id bin=c2 t=115.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(739) @ 115.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_OPCODE-VEC_RELU cp=cp_instr_opcode bin=vec_relu t=115.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(872) @ 115.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_PRIORITY-ROUND_ROBIN cp=cp_op_priority bin=round_robin t=115.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(669) @ 135.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_DECISION-FLUSHED cp=cp_issue_decision bin=flushed t=135.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(900) @ 135.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER cp=cp_barrier_type bin=cluster_barrier t=135.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(585) @ 155.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_DTYPE-FP32 cp=cp_instr_dtype bin=fp32 t=155.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(697) @ 155.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_CLUSTER-3 cp=cp_cluster_id bin=c3 t=155.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(865) @ 155.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_PRIORITY-SAME_PRIO cp=cp_op_priority bin=same_priority t=155.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(473) @ 165.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_QUEUE-1 cp=cp_queue_level bin=low t=165.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(480) @ 165.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_QUEUE-7 cp=cp_queue_level bin=low t=165.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(606) @ 165.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_DEP-WAW cp=cp_dep_type bin=waw t=165.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(809) @ 165.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_SEQ-SCALAR_MAC cp=cp_instr_seq bin=scalar_mac t=165.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(844) @ 165.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_PIPELINE-MULTI_OP cp=cp_pipeline_state bin=multi_op_overlap t=165.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(893) @ 175.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_BARRIER-OP_BARRIER cp=cp_barrier_type bin=op_barrier t=175.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(571) @ 195.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_DTYPE-FP16 cp=cp_instr_dtype bin=fp16 t=195.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(683) @ 195.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_CLUSTER-1 cp=cp_cluster_id bin=c1 t=195.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(886) @ 195.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_BARRIER-TILE_BARRIER cp=cp_barrier_type bin=tile_barrier t=195.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(543) @ 215.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_TYPE-VECTOR cp=cp_instr_type bin=vector t=215.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(487) @ 235.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_QUEUE-8 cp=cp_queue_level bin=mid t=235.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(494) @ 235.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_QUEUE-15 cp=cp_queue_level bin=mid t=235.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(858) @ 235.000 ns: uvm_test_top.env.env_cov [TP_HIT] tp=TP-NPUSCH-D_PRIORITY-LOW_FIRST cp=cp_op_priority bin=low_first t=235.000 ns
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env.sv(263) @ 395.000 ns: uvm_test_top.env [env] extract_phase
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env.sv(270) @ 395.000 ns: uvm_test_top.env [env] check_phase
+# UVM_INFO D:/SignOffAI/src/tools/generation/uvm_tools/tool_uvm/base_pkg/clk_and_rst/clk_rst_monitor.svh(73) @ 395.000 ns: uvm_test_top.env.clk_clk_rst_agent_h.mon [CLK_MON] Clock Monitor Report:
+# UVM_INFO D:/SignOffAI/src/tools/generation/uvm_tools/tool_uvm/base_pkg/clk_and_rst/clk_rst_monitor.svh(75) @ 395.000 ns: uvm_test_top.env.clk_clk_rst_agent_h.mon [CLK_MON]   clk[0]: 40 edges, period=10000ps
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(920) @ 395.000 ns: uvm_test_top.env.env_cov [ENV_COV] 功能覆盖率[npu_sched_in]: 81.7%
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(921) @ 395.000 ns: uvm_test_top.env.env_cov [ENV_COV] 功能覆盖率[npu_sched_out]: 54.2%
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(923) @ 395.000 ns: uvm_test_top.env.env_cov [ENV_COV] 功能覆盖率[dut]: 59.9%
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(928) @ 395.000 ns: uvm_test_top.env.env_cov [DUT_CHK] [SCB_DUT] total=120 matched=120 mismatched=0
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_coverage.sv(987) @ 395.000 ns: uvm_test_top.env.env_cov [DUT_CHK] [SCB SB-NPU-DUT] total=120 matched=120 mismatched=0
+# UVM_INFO D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_sim_end.sv(87) @ 395.000 ns: uvm_test_top.env.sim_end_h [npu_sched_env_sim_end] SIMULATION COMPLETE — $finish
+# ** Note: $finish    : D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_sim_end.sv(88)
+#    Time: 395 ns  Iteration: 65  Region: /uvm_pkg::uvm_phase::m_run_phases
+# Break in Function npu_sched_env_pkg/npu_sched_env_sim_end::report_phase at D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_sim_end.sv line 88
+# Stopped at D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/env/npu_sched_env_sim_end.sv line 88
+#  quit -f
+# Saving coverage data in D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_vec_relu_seed_8001/cov/tp_npusch_d_opcode_vec_relu ...
+# qwavedb_dumpvars : Simulation ending at [0 395000] 0
+# 	 Class Filter File used = F:/questasim64_2024.1/win64/VisualizerRls/bin/../config/uvmclassfilter.txt
+# End time: 08:01:20 on Nov 04,2026, Elapsed time: 0:00:02
+# Errors: 0, Warnings: 7

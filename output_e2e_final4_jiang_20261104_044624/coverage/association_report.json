@@ -1,0 +1,17 @@
+{
+  "hard_edge_broken": 0,
+  "error_count": 0,
+  "warning_count": 0,
+  "renderable": true,
+  "summary": "12 覆盖点 / 7 交叉 与 case 模型关联完整",
+  "issues": [],
+  "notes": [
+    "③ 只查了**约束内部**（applies_to 是否引用已声明的 transactions）——端口名↔信号名的对应关系没有建模，所以'策略压的端口有没有对应coverpoint'这半查不到",
+    "⑤ 是上面那半的**替代问法**：不追端口名（那个没有建模），改追 **dimension ID** —— 覆盖率侧 `coverpoint.dimension` 与约束侧 `policy.dimensions` 是同一个 ID 空间。",
+    "cp_queue_level：bin low 既没有 values 也没有 ranges —— 跳过",
+    "cp_queue_level：bin mid 既没有 values 也没有 ranges —— 跳过",
+    "cp_queue_level：bin high 既没有 values 也没有 ranges —— 跳过",
+    "cp_queue_level：bin near_full 既没有 values 也没有 ranges —— 跳过",
+    "覆盖率模型没有 `module.object_ref` —— 关联不到 case 模型的 L1 对象（`run_associate` 的第一条边查的就是它）"
+  ]
+}

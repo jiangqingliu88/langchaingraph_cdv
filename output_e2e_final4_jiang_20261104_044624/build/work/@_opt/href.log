@@ -1,0 +1,61 @@
+BEGIN 3:npu_sched_out_if:fast__1:work
+    rst_n :  1:npu_sched_out_pkg:fast:work
+    issue_unit :  1:npu_sched_out_pkg:fast:work
+    issue_decision :  1:npu_sched_out_pkg:fast:work
+    issue_valid :  1:npu_sched_out_pkg:fast:work
+END 
+BEGIN 3:npu_sched_in_if:fast__2:work
+    instr_src_addr :  1:npu_sched_bench_tb_top:fast:work
+    barrier_type :  1:npu_sched_bench_tb_top:fast:work
+    instr_valid :  1:npu_sched_bench_tb_top:fast:work
+    instr_type :  1:npu_sched_bench_tb_top:fast:work
+    instr_tile_id :  1:npu_sched_bench_tb_top:fast:work
+    instr_dst_addr :  1:npu_sched_bench_tb_top:fast:work
+    op_priority :  1:npu_sched_bench_tb_top:fast:work
+    instr_opcode :  1:npu_sched_bench_tb_top:fast:work
+    instr_dtype :  1:npu_sched_bench_tb_top:fast:work
+END 
+BEGIN 3:npu_sched_in_if:fast__1:work
+    instr_src_addr :  1:npu_sched_in_pkg:fast:work
+    rst_n :  1:npu_sched_in_pkg:fast:work
+    instr_type :  1:npu_sched_in_pkg:fast:work
+    instr_dst_addr :  1:npu_sched_in_pkg:fast:work
+    instr_dtype :  1:npu_sched_in_pkg:fast:work
+    instr_valid :  1:npu_sched_in_pkg:fast:work
+    barrier_type :  1:npu_sched_in_pkg:fast:work
+    instr_tile_id :  1:npu_sched_in_pkg:fast:work
+    instr_opcode :  1:npu_sched_in_pkg:fast:work
+    op_priority :  1:npu_sched_in_pkg:fast:work
+END 
+BEGIN 3:clk_rst_if:fast__1:work
+    clk :  1:clk_and_rst_pkg:fast:work
+    rst_n :  1:clk_and_rst_pkg:fast:work
+    rst_active :  1:npu_sched_env_pkg:fast:work
+END 
+BEGIN 3:clk_rst_if:fast__2:work
+    rst_n :  1:npu_sched_bench_tb_top:fast:work
+    clk :  1:npu_sched_bench_tb_top:fast:work
+END 
+BEGIN 3:npu_sched_cov_if:fast__1:work
+    instr_seq :  1:npu_sched_env_pkg:fast:work
+    tp_seen :  1:npu_sched_env_pkg:fast:work
+    clk :  1:npu_sched_env_pkg:fast:work
+    issue_decision :  1:npu_sched_env_pkg:fast:work
+    op_priority :  1:npu_sched_env_pkg:fast:work
+    instr_dtype :  1:npu_sched_env_pkg:fast:work
+    instr_opcode :  1:npu_sched_env_pkg:fast:work
+    rst_n :  1:npu_sched_env_pkg:fast:work
+    issue_valid :  1:npu_sched_env_pkg:fast:work
+    issue_unit :  1:npu_sched_env_pkg:fast:work
+    pipeline_state :  1:npu_sched_env_pkg:fast:work
+    dep_type :  1:npu_sched_env_pkg:fast:work
+    instr_type :  1:npu_sched_env_pkg:fast:work
+    cluster_id :  1:npu_sched_env_pkg:fast:work
+    barrier_type :  1:npu_sched_env_pkg:fast:work
+    queue_level :  1:npu_sched_env_pkg:fast:work
+END 
+BEGIN 3:npu_sched_out_if:fast__2:work
+    issue_unit :  1:npu_sched_bench_tb_top:fast:work
+    issue_valid :  1:npu_sched_bench_tb_top:fast:work
+    issue_decision :  1:npu_sched_bench_tb_top:fast:work
+END 

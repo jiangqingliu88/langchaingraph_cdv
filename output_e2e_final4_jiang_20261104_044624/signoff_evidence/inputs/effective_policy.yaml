@@ -1,0 +1,20 @@
+schema: signoff_policy_v1
+module: npu_sched
+source: D:\SignOffAI\specs\npu_sched\signoff_policy.yaml
+policy_hash: b77b4441f1b0e44745be5fe18085edf81b1fee1007c5470db48c4f6aad7c0cec
+effective:
+  schema:
+    value: signoff_policy_v1
+    source: module
+  require_ref_model:
+    value: false
+    source: module
+  require_baseline:
+    value: true
+    source: module
+  accepted_caveats:
+    value: {}
+    source: module
+  module:
+    value: npu_sched
+    source: module

@@ -1,0 +1,2 @@
+  CREATE_STREAM @100.000 ns {NAME:npu_sched_in_seq T:Transactions SCOPE:uvm_test_top.env.npu_sched_in_agent_h.sequencer STREAM:1210}
+  CREATE_STREAM @1295.000 ns {NAME:_seq T:Transactions SCOPE:uvm_test_top.env.npu_sched_in_agent_h.sequencer STREAM:2808}

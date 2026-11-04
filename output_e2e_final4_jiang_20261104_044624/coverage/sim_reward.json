@@ -1,0 +1,38 @@
+{
+  "schema": "sim_reward_v1",
+  "total": 0.9725,
+  "weights": {
+    "compile": 0.25,
+    "regression": 0.35,
+    "coverage": 0.4
+  },
+  "weight_issues": [],
+  "components": {
+    "compile": {
+      "score": 1.0,
+      "passed": true,
+      "errors": 0,
+      "warnings": 0,
+      "status": "PASS"
+    },
+    "regression": {
+      "score": 1.0,
+      "passed": 273,
+      "failed": 0,
+      "total": 273,
+      "pass_ratio": 1.0,
+      "harness_failures": 0
+    },
+    "coverage": {
+      "score": 0.9312,
+      "plan_pct": 95.23,
+      "plan_score": 0.9523,
+      "tp_hit": 61,
+      "tp_total": 70,
+      "tp_score": 0.8714,
+      "seed_verdict": "DIVERSE",
+      "seed_score": 1.0
+    }
+  },
+  "weakest": "coverage"
+}

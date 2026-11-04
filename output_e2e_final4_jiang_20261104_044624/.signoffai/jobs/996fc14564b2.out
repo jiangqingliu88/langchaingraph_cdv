@@ -1,0 +1,29 @@
+QuestaSim-64 vlog 2024.1 Compiler 2024.02 Feb  1 2024
+Start time: 04:46:35 on Nov 04,2026
+vlog -work D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/regression_run/loopback/build_build_npu_sched_npu_sched_in_loopback/work -sv -mfcu "+incdir+f:/questasim64_2024.1/verilog_src/uvm-1.2/src" f:/questasim64_2024.1/verilog_src/uvm-1.2/src/uvm_pkg.sv -f D:/SignOffAI/output_e2e_final4_jiang_20261104_044624/inputs/filelists/filelist_npu_sched_in_agent_lb.f "+cover" 
+-- Compiling package uvm_pkg (uvm-1.2 Built-in)
+-- Compiling package uvm_pkg_sv_unit
+-- Importing package uvm_pkg (uvm-1.2 Built-in)
+-- Importing package npu_sched_in_pkg
+-- Importing package npu_sched_in_parameters_pkg
+-- Importing package npu_sched_in_typedefs_pkg
+-- Importing package common_typedefs_pkg
+** Warning: D:\SignOffAI\output_e2e_final4_jiang_20261104_044624\agents\npu_sched_in_agent\loopback\npu_sched_in_loopback_scb.sv(99): (vlog-2240) Treating stand-alone use of function 'pop_front' as an implicit VOID cast.
+** Warning: D:\SignOffAI\output_e2e_final4_jiang_20261104_044624\agents\npu_sched_in_agent\loopback\npu_sched_in_loopback_scb.sv(100): (vlog-2240) Treating stand-alone use of function 'pop_front' as an implicit VOID cast.
+** Warning: D:\SignOffAI\output_e2e_final4_jiang_20261104_044624\agents\npu_sched_in_agent\loopback\npu_sched_in_loopback_scb.sv(108): (vlog-2240) Treating stand-alone use of function 'pop_front' as an implicit VOID cast.
+** Warning: D:\SignOffAI\output_e2e_final4_jiang_20261104_044624\agents\npu_sched_in_agent\loopback\npu_sched_in_loopback_scb.sv(109): (vlog-2240) Treating stand-alone use of function 'pop_front' as an implicit VOID cast.
+-- Compiling interface clk_rst_if
+-- Compiling package clk_and_rst_pkg
+-- Compiling package scb_pkg
+-- Compiling package common_typedefs_pkg
+-- Compiling package npu_sched_in_parameters_pkg
+-- Compiling package npu_sched_in_typedefs_pkg
+-- Compiling interface npu_sched_in_if
+-- Compiling interface npu_sched_in_system_if
+-- Compiling package npu_sched_in_pkg
+-- Compiling module npu_sched_in_loopback_tb
+
+Top level modules:
+	npu_sched_in_loopback_tb
+End time: 04:46:36 on Nov 04,2026, Elapsed time: 0:00:01
+Errors: 0, Warnings: 4

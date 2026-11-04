@@ -1,0 +1,1884 @@
+{
+  "schema": "plan_merge_manifest_v1",
+  "store_count": 267,
+  "merged_stores": 267,
+  "stores": [
+    {
+      "path": "regression_run/loopback/build_build_npu_sched_npu_sched_in_loopback/test_test_npu_sched_in_loopback/cov/test_npu_sched_in_loopback/questa.db",
+      "size": 35129,
+      "mtime": 1793738801,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/loopback/build_build_npu_sched_npu_sched_out_loopback/test_test_npu_sched_out_loopback/cov/test_npu_sched_out_loopback/questa.db",
+      "size": 31239,
+      "mtime": 1793738806,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_basic_test_seed_1001/cov/npu_basic_test/questa.db",
+      "size": 104941,
+      "mtime": 1793738813,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_10_seed_3010/cov/npu_dtype_test_run_10/questa.db",
+      "size": 104972,
+      "mtime": 1793738816,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_11_seed_3011/cov/npu_dtype_test_run_11/questa.db",
+      "size": 104972,
+      "mtime": 1793738819,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_12_seed_3012/cov/npu_dtype_test_run_12/questa.db",
+      "size": 104972,
+      "mtime": 1793738822,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_13_seed_3013/cov/npu_dtype_test_run_13/questa.db",
+      "size": 104972,
+      "mtime": 1793738825,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_14_seed_3014/cov/npu_dtype_test_run_14/questa.db",
+      "size": 104971,
+      "mtime": 1793738828,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_15_seed_3015/cov/npu_dtype_test_run_15/questa.db",
+      "size": 104973,
+      "mtime": 1793738831,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_16_seed_3016/cov/npu_dtype_test_run_16/questa.db",
+      "size": 104973,
+      "mtime": 1793738834,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_17_seed_3017/cov/npu_dtype_test_run_17/questa.db",
+      "size": 104973,
+      "mtime": 1793738837,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_18_seed_3018/cov/npu_dtype_test_run_18/questa.db",
+      "size": 104972,
+      "mtime": 1793738840,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_1_seed_3001/cov/npu_dtype_test_run_1/questa.db",
+      "size": 104969,
+      "mtime": 1793738843,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_2_seed_3002/cov/npu_dtype_test_run_2/questa.db",
+      "size": 104970,
+      "mtime": 1793738846,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_3_seed_3003/cov/npu_dtype_test_run_3/questa.db",
+      "size": 104968,
+      "mtime": 1793738849,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_4_seed_3004/cov/npu_dtype_test_run_4/questa.db",
+      "size": 104969,
+      "mtime": 1793738852,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_5_seed_3005/cov/npu_dtype_test_run_5/questa.db",
+      "size": 104970,
+      "mtime": 1793738855,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_6_seed_3006/cov/npu_dtype_test_run_6/questa.db",
+      "size": 104972,
+      "mtime": 1793738858,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_7_seed_3007/cov/npu_dtype_test_run_7/questa.db",
+      "size": 104971,
+      "mtime": 1793738861,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_8_seed_3008/cov/npu_dtype_test_run_8/questa.db",
+      "size": 104970,
+      "mtime": 1793738864,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_9_seed_3009/cov/npu_dtype_test_run_9/questa.db",
+      "size": 104973,
+      "mtime": 1793738867,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_sched_D_ADDR_0/cov/npu_sched_D_ADDR_0/questa.db",
+      "size": 105043,
+      "mtime": 1793738870,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_sched_D_ADDR_3/cov/npu_sched_D_ADDR_3/questa.db",
+      "size": 105043,
+      "mtime": 1793738874,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_sched_D_ADDR_4/cov/npu_sched_D_ADDR_4/questa.db",
+      "size": 105042,
+      "mtime": 1793738876,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_sched_D_ADDR_4294967295/cov/npu_sched_D_ADDR_4294967295/questa.db",
+      "size": 105061,
+      "mtime": 1793738879,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_10_seed_2010/cov/npu_type_test_run_10/questa.db",
+      "size": 104960,
+      "mtime": 1793738883,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_11_seed_2011/cov/npu_type_test_run_11/questa.db",
+      "size": 104960,
+      "mtime": 1793738885,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_12_seed_2012/cov/npu_type_test_run_12/questa.db",
+      "size": 104957,
+      "mtime": 1793738888,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_13_seed_2013/cov/npu_type_test_run_13/questa.db",
+      "size": 104958,
+      "mtime": 1793738892,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_14_seed_2014/cov/npu_type_test_run_14/questa.db",
+      "size": 104959,
+      "mtime": 1793738895,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_15_seed_2015/cov/npu_type_test_run_15/questa.db",
+      "size": 104960,
+      "mtime": 1793738898,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_16_seed_2016/cov/npu_type_test_run_16/questa.db",
+      "size": 104961,
+      "mtime": 1793738901,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_17_seed_2017/cov/npu_type_test_run_17/questa.db",
+      "size": 104961,
+      "mtime": 1793738904,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_18_seed_2018/cov/npu_type_test_run_18/questa.db",
+      "size": 104959,
+      "mtime": 1793738907,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_1_seed_2001/cov/npu_type_test_run_1/questa.db",
+      "size": 104958,
+      "mtime": 1793738910,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_2_seed_2002/cov/npu_type_test_run_2/questa.db",
+      "size": 104958,
+      "mtime": 1793738913,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_3_seed_2003/cov/npu_type_test_run_3/questa.db",
+      "size": 104959,
+      "mtime": 1793738916,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_4_seed_2004/cov/npu_type_test_run_4/questa.db",
+      "size": 104958,
+      "mtime": 1793738919,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_5_seed_2005/cov/npu_type_test_run_5/questa.db",
+      "size": 104955,
+      "mtime": 1793738922,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_6_seed_2006/cov/npu_type_test_run_6/questa.db",
+      "size": 104959,
+      "mtime": 1793738925,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_7_seed_2007/cov/npu_type_test_run_7/questa.db",
+      "size": 104961,
+      "mtime": 1793738928,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_8_seed_2008/cov/npu_type_test_run_8/questa.db",
+      "size": 104959,
+      "mtime": 1793738931,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_9_seed_2009/cov/npu_type_test_run_9/questa.db",
+      "size": 104962,
+      "mtime": 1793738934,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_test_npu_sched_case_basic/cov/test_npu_sched_case_basic/questa.db",
+      "size": 105048,
+      "mtime": 1793738937,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_test_npu_sched_reset/cov/test_npu_sched_reset/questa.db",
+      "size": 105036,
+      "mtime": 1793738940,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_dtype_bf16_seed_3001/cov/tp_npusch_d_dtype_bf16/questa.db",
+      "size": 105144,
+      "mtime": 1793738943,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_dtype_fp16_seed_3001/cov/tp_npusch_d_dtype_fp16/questa.db",
+      "size": 105136,
+      "mtime": 1793738946,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_dtype_fp32_seed_3001/cov/tp_npusch_d_dtype_fp32/questa.db",
+      "size": 105140,
+      "mtime": 1793738949,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_dtype_int8_seed_3001/cov/tp_npusch_d_dtype_int8/questa.db",
+      "size": 105133,
+      "mtime": 1793738952,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_type_dma_seed_2001/cov/tp_npusch_d_type_dma/questa.db",
+      "size": 105117,
+      "mtime": 1793738955,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_type_mac_seed_2001/cov/tp_npusch_d_type_mac/questa.db",
+      "size": 105093,
+      "mtime": 1793738959,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_type_scalar_seed_2001/cov/tp_npusch_d_type_scalar/questa.db",
+      "size": 105115,
+      "mtime": 1793738962,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_type_vector_seed_2001/cov/tp_npusch_d_type_vector/questa.db",
+      "size": 105132,
+      "mtime": 1793738965,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_10_seed_4010/cov/npu_dep_test_run_10/questa.db",
+      "size": 104962,
+      "mtime": 1793738973,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_11_seed_4011/cov/npu_dep_test_run_11/questa.db",
+      "size": 104966,
+      "mtime": 1793738976,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_12_seed_4012/cov/npu_dep_test_run_12/questa.db",
+      "size": 104962,
+      "mtime": 1793738979,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_13_seed_4013/cov/npu_dep_test_run_13/questa.db",
+      "size": 104963,
+      "mtime": 1793738982,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_14_seed_4014/cov/npu_dep_test_run_14/questa.db",
+      "size": 104965,
+      "mtime": 1793750128,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_15_seed_4015/cov/npu_dep_test_run_15/questa.db",
+      "size": 104966,
+      "mtime": 1793750133,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_16_seed_4016/cov/npu_dep_test_run_16/questa.db",
+      "size": 104963,
+      "mtime": 1793750136,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_17_seed_4017/cov/npu_dep_test_run_17/questa.db",
+      "size": 104966,
+      "mtime": 1793750140,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_18_seed_4018/cov/npu_dep_test_run_18/questa.db",
+      "size": 104965,
+      "mtime": 1793750144,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_19_seed_4019/cov/npu_dep_test_run_19/questa.db",
+      "size": 104964,
+      "mtime": 1793750147,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_1_seed_4001/cov/npu_dep_test_run_1/questa.db",
+      "size": 104962,
+      "mtime": 1793750150,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_20_seed_4020/cov/npu_dep_test_run_20/questa.db",
+      "size": 104966,
+      "mtime": 1793750153,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_21_seed_4021/cov/npu_dep_test_run_21/questa.db",
+      "size": 104964,
+      "mtime": 1793750158,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_22_seed_4022/cov/npu_dep_test_run_22/questa.db",
+      "size": 104969,
+      "mtime": 1793750161,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_23_seed_4023/cov/npu_dep_test_run_23/questa.db",
+      "size": 104964,
+      "mtime": 1793750164,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_24_seed_4024/cov/npu_dep_test_run_24/questa.db",
+      "size": 104965,
+      "mtime": 1793750167,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_25_seed_4025/cov/npu_dep_test_run_25/questa.db",
+      "size": 104967,
+      "mtime": 1793750170,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_26_seed_4026/cov/npu_dep_test_run_26/questa.db",
+      "size": 104961,
+      "mtime": 1793750173,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_27_seed_4027/cov/npu_dep_test_run_27/questa.db",
+      "size": 104965,
+      "mtime": 1793750176,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_28_seed_4028/cov/npu_dep_test_run_28/questa.db",
+      "size": 104965,
+      "mtime": 1793750179,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_29_seed_4029/cov/npu_dep_test_run_29/questa.db",
+      "size": 104967,
+      "mtime": 1793750182,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_2_seed_4002/cov/npu_dep_test_run_2/questa.db",
+      "size": 104962,
+      "mtime": 1793750185,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_30_seed_4030/cov/npu_dep_test_run_30/questa.db",
+      "size": 104967,
+      "mtime": 1793750189,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_3_seed_4003/cov/npu_dep_test_run_3/questa.db",
+      "size": 104964,
+      "mtime": 1793750192,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_4_seed_4004/cov/npu_dep_test_run_4/questa.db",
+      "size": 104962,
+      "mtime": 1793750195,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_5_seed_4005/cov/npu_dep_test_run_5/questa.db",
+      "size": 104964,
+      "mtime": 1793750199,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_6_seed_4006/cov/npu_dep_test_run_6/questa.db",
+      "size": 104962,
+      "mtime": 1793750202,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_7_seed_4007/cov/npu_dep_test_run_7/questa.db",
+      "size": 104960,
+      "mtime": 1793750205,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_8_seed_4008/cov/npu_dep_test_run_8/questa.db",
+      "size": 104964,
+      "mtime": 1793750208,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_9_seed_4009/cov/npu_dep_test_run_9/questa.db",
+      "size": 104966,
+      "mtime": 1793750211,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_10_seed_6010/cov/npu_full_queue_test_run_10/questa.db",
+      "size": 104967,
+      "mtime": 1793750214,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_11_seed_6011/cov/npu_full_queue_test_run_11/questa.db",
+      "size": 104969,
+      "mtime": 1793750217,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_12_seed_6012/cov/npu_full_queue_test_run_12/questa.db",
+      "size": 104970,
+      "mtime": 1793750220,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_13_seed_6013/cov/npu_full_queue_test_run_13/questa.db",
+      "size": 104968,
+      "mtime": 1793750223,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_14_seed_6014/cov/npu_full_queue_test_run_14/questa.db",
+      "size": 104966,
+      "mtime": 1793750226,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_15_seed_6015/cov/npu_full_queue_test_run_15/questa.db",
+      "size": 104968,
+      "mtime": 1793750229,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_16_seed_6016/cov/npu_full_queue_test_run_16/questa.db",
+      "size": 104968,
+      "mtime": 1793750232,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_17_seed_6017/cov/npu_full_queue_test_run_17/questa.db",
+      "size": 104968,
+      "mtime": 1793750235,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_18_seed_6018/cov/npu_full_queue_test_run_18/questa.db",
+      "size": 104966,
+      "mtime": 1793750238,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_1_seed_6001/cov/npu_full_queue_test_run_1/questa.db",
+      "size": 104967,
+      "mtime": 1793750241,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_2_seed_6002/cov/npu_full_queue_test_run_2/questa.db",
+      "size": 104968,
+      "mtime": 1793750244,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_3_seed_6003/cov/npu_full_queue_test_run_3/questa.db",
+      "size": 104966,
+      "mtime": 1793750247,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_4_seed_6004/cov/npu_full_queue_test_run_4/questa.db",
+      "size": 104969,
+      "mtime": 1793750250,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_5_seed_6005/cov/npu_full_queue_test_run_5/questa.db",
+      "size": 104967,
+      "mtime": 1793750253,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_6_seed_6006/cov/npu_full_queue_test_run_6/questa.db",
+      "size": 104966,
+      "mtime": 1793750257,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_7_seed_6007/cov/npu_full_queue_test_run_7/questa.db",
+      "size": 104967,
+      "mtime": 1793750260,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_8_seed_6008/cov/npu_full_queue_test_run_8/questa.db",
+      "size": 104965,
+      "mtime": 1793750263,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_9_seed_6009/cov/npu_full_queue_test_run_9/questa.db",
+      "size": 104967,
+      "mtime": 1793750266,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_10_seed_5010/cov/npu_raw_stall_test_run_10/questa.db",
+      "size": 104963,
+      "mtime": 1793750269,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_11_seed_5011/cov/npu_raw_stall_test_run_11/questa.db",
+      "size": 104960,
+      "mtime": 1793750272,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_12_seed_5012/cov/npu_raw_stall_test_run_12/questa.db",
+      "size": 104966,
+      "mtime": 1793750275,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_1_seed_5001/cov/npu_raw_stall_test_run_1/questa.db",
+      "size": 104963,
+      "mtime": 1793750278,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_2_seed_5002/cov/npu_raw_stall_test_run_2/questa.db",
+      "size": 104965,
+      "mtime": 1793750281,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_3_seed_5003/cov/npu_raw_stall_test_run_3/questa.db",
+      "size": 104963,
+      "mtime": 1793750284,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_4_seed_5004/cov/npu_raw_stall_test_run_4/questa.db",
+      "size": 104961,
+      "mtime": 1793750287,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_5_seed_5005/cov/npu_raw_stall_test_run_5/questa.db",
+      "size": 104964,
+      "mtime": 1793750290,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_6_seed_5006/cov/npu_raw_stall_test_run_6/questa.db",
+      "size": 104963,
+      "mtime": 1793750293,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_7_seed_5007/cov/npu_raw_stall_test_run_7/questa.db",
+      "size": 104964,
+      "mtime": 1793750296,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_8_seed_5008/cov/npu_raw_stall_test_run_8/questa.db",
+      "size": 104964,
+      "mtime": 1793750299,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_9_seed_5009/cov/npu_raw_stall_test_run_9/questa.db",
+      "size": 104966,
+      "mtime": 1793750302,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_barrier_type_handshake/cov/test_npu_sched_barrier_type_handshake/questa.db",
+      "size": 105061,
+      "mtime": 1793750305,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_clk_handshake/cov/test_npu_sched_clk_handshake/questa.db",
+      "size": 105055,
+      "mtime": 1793750309,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_dst_addr_handshake/cov/test_npu_sched_instr_dst_addr_handshake/questa.db",
+      "size": 105066,
+      "mtime": 1793750312,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_dtype_handshake/cov/test_npu_sched_instr_dtype_handshake/questa.db",
+      "size": 105066,
+      "mtime": 1793750315,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_opcode_handshake/cov/test_npu_sched_instr_opcode_handshake/questa.db",
+      "size": 105062,
+      "mtime": 1793750318,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_src_addr_handshake/cov/test_npu_sched_instr_src_addr_handshake/questa.db",
+      "size": 105070,
+      "mtime": 1793750321,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_tile_id_handshake/cov/test_npu_sched_instr_tile_id_handshake/questa.db",
+      "size": 105063,
+      "mtime": 1793750324,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_type_handshake/cov/test_npu_sched_instr_type_handshake/questa.db",
+      "size": 105065,
+      "mtime": 1793750327,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_valid_handshake/cov/test_npu_sched_instr_valid_handshake/questa.db",
+      "size": 105065,
+      "mtime": 1793750330,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_issue_decision_handshake/cov/test_npu_sched_issue_decision_handshake/questa.db",
+      "size": 105057,
+      "mtime": 1793750333,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_issue_unit_handshake/cov/test_npu_sched_issue_unit_handshake/questa.db",
+      "size": 105061,
+      "mtime": 1793750336,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_issue_valid_handshake/cov/test_npu_sched_issue_valid_handshake/questa.db",
+      "size": 105062,
+      "mtime": 1793750339,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_op_priority_handshake/cov/test_npu_sched_op_priority_handshake/questa.db",
+      "size": 105059,
+      "mtime": 1793750342,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_rst_n_handshake/cov/test_npu_sched_rst_n_handshake/questa.db",
+      "size": 105057,
+      "mtime": 1793750345,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_0_seed_6001/cov/tp_npusch_d_queue_0/questa.db",
+      "size": 104782,
+      "mtime": 1793750348,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_15_seed_6001/cov/tp_npusch_d_queue_15/questa.db",
+      "size": 104823,
+      "mtime": 1793750351,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_16_seed_6001/cov/tp_npusch_d_queue_16/questa.db",
+      "size": 104814,
+      "mtime": 1793750354,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_1_seed_6001/cov/tp_npusch_d_queue_1/questa.db",
+      "size": 104798,
+      "mtime": 1793750357,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_24_seed_6001/cov/tp_npusch_d_queue_24/questa.db",
+      "size": 104822,
+      "mtime": 1793750360,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_25_seed_6001/cov/tp_npusch_d_queue_25/questa.db",
+      "size": 104820,
+      "mtime": 1793750363,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_31_seed_6001/cov/tp_npusch_d_queue_31/questa.db",
+      "size": 104831,
+      "mtime": 1793750366,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_32_seed_6001/cov/tp_npusch_d_queue_32/questa.db",
+      "size": 104800,
+      "mtime": 1793750369,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_7_seed_6001/cov/tp_npusch_d_queue_7/questa.db",
+      "size": 104816,
+      "mtime": 1793750372,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_8_seed_6001/cov/tp_npusch_d_queue_8/questa.db",
+      "size": 104810,
+      "mtime": 1793750376,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_10_seed_7010/cov/npu_cluster_test_run_10/questa.db",
+      "size": 104968,
+      "mtime": 1793750386,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_11_seed_7011/cov/npu_cluster_test_run_11/questa.db",
+      "size": 104966,
+      "mtime": 1793750389,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_12_seed_7012/cov/npu_cluster_test_run_12/questa.db",
+      "size": 104967,
+      "mtime": 1793750392,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_1_seed_7001/cov/npu_cluster_test_run_1/questa.db",
+      "size": 104966,
+      "mtime": 1793750395,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_2_seed_7002/cov/npu_cluster_test_run_2/questa.db",
+      "size": 104969,
+      "mtime": 1793750398,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_3_seed_7003/cov/npu_cluster_test_run_3/questa.db",
+      "size": 104964,
+      "mtime": 1793750401,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_4_seed_7004/cov/npu_cluster_test_run_4/questa.db",
+      "size": 104961,
+      "mtime": 1793750403,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_5_seed_7005/cov/npu_cluster_test_run_5/questa.db",
+      "size": 104961,
+      "mtime": 1793750406,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_6_seed_7006/cov/npu_cluster_test_run_6/questa.db",
+      "size": 104961,
+      "mtime": 1793750409,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_7_seed_7007/cov/npu_cluster_test_run_7/questa.db",
+      "size": 104958,
+      "mtime": 1793750412,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_8_seed_7008/cov/npu_cluster_test_run_8/questa.db",
+      "size": 104959,
+      "mtime": 1793750415,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_9_seed_7009/cov/npu_cluster_test_run_9/questa.db",
+      "size": 104962,
+      "mtime": 1793750418,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_10_seed_8010/cov/npu_opcode_test_run_10/questa.db",
+      "size": 104975,
+      "mtime": 1793750422,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_1_seed_8001/cov/npu_opcode_test_run_1/questa.db",
+      "size": 104977,
+      "mtime": 1793750425,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_2_seed_8002/cov/npu_opcode_test_run_2/questa.db",
+      "size": 104977,
+      "mtime": 1793750428,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_3_seed_8003/cov/npu_opcode_test_run_3/questa.db",
+      "size": 104977,
+      "mtime": 1793750430,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_4_seed_8004/cov/npu_opcode_test_run_4/questa.db",
+      "size": 104979,
+      "mtime": 1793750433,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_5_seed_8005/cov/npu_opcode_test_run_5/questa.db",
+      "size": 104978,
+      "mtime": 1793750436,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_6_seed_8006/cov/npu_opcode_test_run_6/questa.db",
+      "size": 104978,
+      "mtime": 1793750439,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_7_seed_8007/cov/npu_opcode_test_run_7/questa.db",
+      "size": 104977,
+      "mtime": 1793750442,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_8_seed_8008/cov/npu_opcode_test_run_8/questa.db",
+      "size": 104978,
+      "mtime": 1793750445,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_9_seed_8009/cov/npu_opcode_test_run_9/questa.db",
+      "size": 104980,
+      "mtime": 1793750448,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_test_npu_sched_throughput/cov/test_npu_sched_throughput/questa.db",
+      "size": 105043,
+      "mtime": 1793750451,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_dma_read_seed_8001/cov/tp_npusch_d_opcode_dma_read/questa.db",
+      "size": 105090,
+      "mtime": 1793750454,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_dma_write_seed_8001/cov/tp_npusch_d_opcode_dma_write/questa.db",
+      "size": 105107,
+      "mtime": 1793750457,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_load_seed_8001/cov/tp_npusch_d_opcode_load/questa.db",
+      "size": 105100,
+      "mtime": 1793750460,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_mac_bf16_seed_8001/cov/tp_npusch_d_opcode_mac_bf16/questa.db",
+      "size": 105095,
+      "mtime": 1793750463,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_mac_fp16_seed_8001/cov/tp_npusch_d_opcode_mac_fp16/questa.db",
+      "size": 105098,
+      "mtime": 1793750466,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_mac_int8_seed_8001/cov/tp_npusch_d_opcode_mac_int8/questa.db",
+      "size": 105074,
+      "mtime": 1793750468,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_store_seed_8001/cov/tp_npusch_d_opcode_store/questa.db",
+      "size": 105107,
+      "mtime": 1793750471,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_vec_add_seed_8001/cov/tp_npusch_d_opcode_vec_add/questa.db",
+      "size": 105114,
+      "mtime": 1793750474,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_vec_mul_seed_8001/cov/tp_npusch_d_opcode_vec_mul/questa.db",
+      "size": 105092,
+      "mtime": 1793750477,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_vec_relu_seed_8001/cov/tp_npusch_d_opcode_vec_relu/questa.db",
+      "size": 105106,
+      "mtime": 1793750480,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_10_seed_9010/cov/npu_dma_compute_test_run_10/questa.db",
+      "size": 104987,
+      "mtime": 1793750488,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_11_seed_9011/cov/npu_dma_compute_test_run_11/questa.db",
+      "size": 104988,
+      "mtime": 1793750491,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_12_seed_9012/cov/npu_dma_compute_test_run_12/questa.db",
+      "size": 104987,
+      "mtime": 1793750494,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_13_seed_9013/cov/npu_dma_compute_test_run_13/questa.db",
+      "size": 104990,
+      "mtime": 1793750497,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_14_seed_9014/cov/npu_dma_compute_test_run_14/questa.db",
+      "size": 104992,
+      "mtime": 1793750500,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_1_seed_9001/cov/npu_dma_compute_test_run_1/questa.db",
+      "size": 104988,
+      "mtime": 1793750503,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_2_seed_9002/cov/npu_dma_compute_test_run_2/questa.db",
+      "size": 104989,
+      "mtime": 1793750506,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_3_seed_9003/cov/npu_dma_compute_test_run_3/questa.db",
+      "size": 104987,
+      "mtime": 1793750509,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_4_seed_9004/cov/npu_dma_compute_test_run_4/questa.db",
+      "size": 104990,
+      "mtime": 1793750512,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_5_seed_9005/cov/npu_dma_compute_test_run_5/questa.db",
+      "size": 104987,
+      "mtime": 1793750515,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_6_seed_9006/cov/npu_dma_compute_test_run_6/questa.db",
+      "size": 104991,
+      "mtime": 1793750518,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_7_seed_9007/cov/npu_dma_compute_test_run_7/questa.db",
+      "size": 104988,
+      "mtime": 1793750521,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_8_seed_9008/cov/npu_dma_compute_test_run_8/questa.db",
+      "size": 104989,
+      "mtime": 1793750524,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_9_seed_9009/cov/npu_dma_compute_test_run_9/questa.db",
+      "size": 104986,
+      "mtime": 1793750527,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_10_seed_9510/cov/npu_pipeline_test_run_10/questa.db",
+      "size": 104977,
+      "mtime": 1793750530,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_11_seed_9511/cov/npu_pipeline_test_run_11/questa.db",
+      "size": 104973,
+      "mtime": 1793750533,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_12_seed_9512/cov/npu_pipeline_test_run_12/questa.db",
+      "size": 104975,
+      "mtime": 1793750536,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_13_seed_9513/cov/npu_pipeline_test_run_13/questa.db",
+      "size": 104974,
+      "mtime": 1793750539,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_14_seed_9514/cov/npu_pipeline_test_run_14/questa.db",
+      "size": 104972,
+      "mtime": 1793750542,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_1_seed_9501/cov/npu_pipeline_test_run_1/questa.db",
+      "size": 104976,
+      "mtime": 1793750546,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_2_seed_9502/cov/npu_pipeline_test_run_2/questa.db",
+      "size": 104977,
+      "mtime": 1793750549,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_3_seed_9503/cov/npu_pipeline_test_run_3/questa.db",
+      "size": 104974,
+      "mtime": 1793750552,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_4_seed_9504/cov/npu_pipeline_test_run_4/questa.db",
+      "size": 104972,
+      "mtime": 1793750555,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_5_seed_9505/cov/npu_pipeline_test_run_5/questa.db",
+      "size": 104973,
+      "mtime": 1793750558,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_6_seed_9506/cov/npu_pipeline_test_run_6/questa.db",
+      "size": 104975,
+      "mtime": 1793750560,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_7_seed_9507/cov/npu_pipeline_test_run_7/questa.db",
+      "size": 104975,
+      "mtime": 1793750563,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_8_seed_9508/cov/npu_pipeline_test_run_8/questa.db",
+      "size": 104976,
+      "mtime": 1793750566,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_9_seed_9509/cov/npu_pipeline_test_run_9/questa.db",
+      "size": 104976,
+      "mtime": 1793750569,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_10_seed_10010/cov/npu_random_mix_test_run_10/questa.db",
+      "size": 104968,
+      "mtime": 1793750572,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_11_seed_10011/cov/npu_random_mix_test_run_11/questa.db",
+      "size": 104971,
+      "mtime": 1793750575,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_12_seed_10012/cov/npu_random_mix_test_run_12/questa.db",
+      "size": 104971,
+      "mtime": 1793750579,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_13_seed_10013/cov/npu_random_mix_test_run_13/questa.db",
+      "size": 104971,
+      "mtime": 1793750582,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_14_seed_10014/cov/npu_random_mix_test_run_14/questa.db",
+      "size": 104970,
+      "mtime": 1793750584,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_15_seed_10015/cov/npu_random_mix_test_run_15/questa.db",
+      "size": 104970,
+      "mtime": 1793750587,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_16_seed_10016/cov/npu_random_mix_test_run_16/questa.db",
+      "size": 104970,
+      "mtime": 1793750590,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_17_seed_10017/cov/npu_random_mix_test_run_17/questa.db",
+      "size": 104970,
+      "mtime": 1793750593,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_18_seed_10018/cov/npu_random_mix_test_run_18/questa.db",
+      "size": 104973,
+      "mtime": 1793750596,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_19_seed_10019/cov/npu_random_mix_test_run_19/questa.db",
+      "size": 104970,
+      "mtime": 1793750599,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_1_seed_10001/cov/npu_random_mix_test_run_1/questa.db",
+      "size": 104963,
+      "mtime": 1793750602,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_20_seed_10020/cov/npu_random_mix_test_run_20/questa.db",
+      "size": 104971,
+      "mtime": 1793750605,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_21_seed_10021/cov/npu_random_mix_test_run_21/questa.db",
+      "size": 104971,
+      "mtime": 1793750608,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_22_seed_10022/cov/npu_random_mix_test_run_22/questa.db",
+      "size": 104971,
+      "mtime": 1793750611,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_23_seed_10023/cov/npu_random_mix_test_run_23/questa.db",
+      "size": 104971,
+      "mtime": 1793750614,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_24_seed_10024/cov/npu_random_mix_test_run_24/questa.db",
+      "size": 104970,
+      "mtime": 1793750617,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_25_seed_10025/cov/npu_random_mix_test_run_25/questa.db",
+      "size": 104970,
+      "mtime": 1793750620,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_26_seed_10026/cov/npu_random_mix_test_run_26/questa.db",
+      "size": 104968,
+      "mtime": 1793750623,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_27_seed_10027/cov/npu_random_mix_test_run_27/questa.db",
+      "size": 104968,
+      "mtime": 1793750626,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_28_seed_10028/cov/npu_random_mix_test_run_28/questa.db",
+      "size": 104972,
+      "mtime": 1793750629,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_29_seed_10029/cov/npu_random_mix_test_run_29/questa.db",
+      "size": 104973,
+      "mtime": 1793750632,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_2_seed_10002/cov/npu_random_mix_test_run_2/questa.db",
+      "size": 104970,
+      "mtime": 1793750635,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_30_seed_10030/cov/npu_random_mix_test_run_30/questa.db",
+      "size": 104972,
+      "mtime": 1793750638,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_31_seed_10031/cov/npu_random_mix_test_run_31/questa.db",
+      "size": 104972,
+      "mtime": 1793750641,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_32_seed_10032/cov/npu_random_mix_test_run_32/questa.db",
+      "size": 104973,
+      "mtime": 1793750644,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_33_seed_10033/cov/npu_random_mix_test_run_33/questa.db",
+      "size": 104969,
+      "mtime": 1793750647,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_34_seed_10034/cov/npu_random_mix_test_run_34/questa.db",
+      "size": 104972,
+      "mtime": 1793750650,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_35_seed_10035/cov/npu_random_mix_test_run_35/questa.db",
+      "size": 104972,
+      "mtime": 1793750653,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_36_seed_10036/cov/npu_random_mix_test_run_36/questa.db",
+      "size": 104970,
+      "mtime": 1793750656,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_37_seed_10037/cov/npu_random_mix_test_run_37/questa.db",
+      "size": 104972,
+      "mtime": 1793750659,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_38_seed_10038/cov/npu_random_mix_test_run_38/questa.db",
+      "size": 104971,
+      "mtime": 1793750662,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_39_seed_10039/cov/npu_random_mix_test_run_39/questa.db",
+      "size": 104973,
+      "mtime": 1793750665,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_3_seed_10003/cov/npu_random_mix_test_run_3/questa.db",
+      "size": 104970,
+      "mtime": 1793750668,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_40_seed_10040/cov/npu_random_mix_test_run_40/questa.db",
+      "size": 104972,
+      "mtime": 1793750671,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_41_seed_10041/cov/npu_random_mix_test_run_41/questa.db",
+      "size": 104968,
+      "mtime": 1793750674,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_42_seed_10042/cov/npu_random_mix_test_run_42/questa.db",
+      "size": 104970,
+      "mtime": 1793750677,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_43_seed_10043/cov/npu_random_mix_test_run_43/questa.db",
+      "size": 104972,
+      "mtime": 1793750680,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_44_seed_10044/cov/npu_random_mix_test_run_44/questa.db",
+      "size": 104968,
+      "mtime": 1793750683,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_45_seed_10045/cov/npu_random_mix_test_run_45/questa.db",
+      "size": 104971,
+      "mtime": 1793750686,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_46_seed_10046/cov/npu_random_mix_test_run_46/questa.db",
+      "size": 104969,
+      "mtime": 1793750689,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_47_seed_10047/cov/npu_random_mix_test_run_47/questa.db",
+      "size": 104972,
+      "mtime": 1793750692,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_48_seed_10048/cov/npu_random_mix_test_run_48/questa.db",
+      "size": 104972,
+      "mtime": 1793750695,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_4_seed_10004/cov/npu_random_mix_test_run_4/questa.db",
+      "size": 104966,
+      "mtime": 1793750698,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_5_seed_10005/cov/npu_random_mix_test_run_5/questa.db",
+      "size": 104968,
+      "mtime": 1793750701,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_6_seed_10006/cov/npu_random_mix_test_run_6/questa.db",
+      "size": 104968,
+      "mtime": 1793750704,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_7_seed_10007/cov/npu_random_mix_test_run_7/questa.db",
+      "size": 104967,
+      "mtime": 1793750707,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_8_seed_10008/cov/npu_random_mix_test_run_8/questa.db",
+      "size": 104970,
+      "mtime": 1793750710,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_9_seed_10009/cov/npu_random_mix_test_run_9/questa.db",
+      "size": 104971,
+      "mtime": 1793750713,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_npu_sched_gen_stimulus/cov/npu_sched_gen_stimulus/questa.db",
+      "size": 105067,
+      "mtime": 1793750716,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_test_npu_sched_error_injection/cov/test_npu_sched_error_injection/questa.db",
+      "size": 105049,
+      "mtime": 1793750719,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_barrier_cluster_barrier_seed_10001/cov/tp_npusch_d_barrier_cluster_barrier/questa.db",
+      "size": 105139,
+      "mtime": 1793750722,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_barrier_none_seed_10001/cov/tp_npusch_d_barrier_none/questa.db",
+      "size": 105091,
+      "mtime": 1793750725,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_barrier_op_barrier_seed_10001/cov/tp_npusch_d_barrier_op_barrier/questa.db",
+      "size": 105127,
+      "mtime": 1793750728,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_barrier_tile_barrier_seed_10001/cov/tp_npusch_d_barrier_tile_barrier/questa.db",
+      "size": 105140,
+      "mtime": 1793750731,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_pipeline_mac_dma_seed_9501/cov/tp_npusch_d_pipeline_mac_dma/questa.db",
+      "size": 105074,
+      "mtime": 1793750734,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_pipeline_mac_mac_seed_9501/cov/tp_npusch_d_pipeline_mac_mac/questa.db",
+      "size": 105069,
+      "mtime": 1793750737,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_pipeline_multi_op_seed_9501/cov/tp_npusch_d_pipeline_multi_op/questa.db",
+      "size": 105075,
+      "mtime": 1793750740,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_pipeline_none_seed_9501/cov/tp_npusch_d_pipeline_none/questa.db",
+      "size": 105063,
+      "mtime": 1793750743,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_pipeline_vec_mac_seed_9501/cov/tp_npusch_d_pipeline_vec_mac/questa.db",
+      "size": 105072,
+      "mtime": 1793750746,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_priority_high_first_seed_10001/cov/tp_npusch_d_priority_high_first/questa.db",
+      "size": 105132,
+      "mtime": 1793750749,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_priority_low_first_seed_10001/cov/tp_npusch_d_priority_low_first/questa.db",
+      "size": 105136,
+      "mtime": 1793750752,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_priority_round_robin_seed_10001/cov/tp_npusch_d_priority_round_robin/questa.db",
+      "size": 105143,
+      "mtime": 1793750755,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_priority_same_prio_seed_10001/cov/tp_npusch_d_priority_same_prio/questa.db",
+      "size": 105122,
+      "mtime": 1793750758,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_dma_mac_seed_10001/cov/tp_npusch_d_seq_dma_mac/questa.db",
+      "size": 105070,
+      "mtime": 1793750761,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_load_mac_seed_10001/cov/tp_npusch_d_seq_load_mac/questa.db",
+      "size": 105073,
+      "mtime": 1793750764,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_mac_mac_seed_10001/cov/tp_npusch_d_seq_mac_mac/questa.db",
+      "size": 105063,
+      "mtime": 1793750767,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_mac_store_seed_10001/cov/tp_npusch_d_seq_mac_store/questa.db",
+      "size": 105079,
+      "mtime": 1793750770,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_scalar_mac_seed_10001/cov/tp_npusch_d_seq_scalar_mac/questa.db",
+      "size": 105075,
+      "mtime": 1793750773,
+      "sha256": ""
+    },
+    {
+      "path": "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_vec_mac_seed_10001/cov/tp_npusch_d_seq_vec_mac/questa.db",
+      "size": 105075,
+      "mtime": 1793750776,
+      "sha256": ""
+    }
+  ],
+  "specs": [
+    "regression_run/loopback/build_build_npu_sched_npu_sched_in_loopback/test_test_npu_sched_in_loopback/cov/test_npu_sched_in_loopback:test_npu_sched_in_loopback",
+    "regression_run/loopback/build_build_npu_sched_npu_sched_out_loopback/test_test_npu_sched_out_loopback/cov/test_npu_sched_out_loopback:test_npu_sched_out_loopback",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_basic_test_seed_1001/cov/npu_basic_test:npu_basic_test",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_10_seed_3010/cov/npu_dtype_test_run_10:npu_dtype_test_run_10",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_11_seed_3011/cov/npu_dtype_test_run_11:npu_dtype_test_run_11",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_12_seed_3012/cov/npu_dtype_test_run_12:npu_dtype_test_run_12",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_13_seed_3013/cov/npu_dtype_test_run_13:npu_dtype_test_run_13",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_14_seed_3014/cov/npu_dtype_test_run_14:npu_dtype_test_run_14",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_15_seed_3015/cov/npu_dtype_test_run_15:npu_dtype_test_run_15",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_16_seed_3016/cov/npu_dtype_test_run_16:npu_dtype_test_run_16",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_17_seed_3017/cov/npu_dtype_test_run_17:npu_dtype_test_run_17",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_18_seed_3018/cov/npu_dtype_test_run_18:npu_dtype_test_run_18",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_1_seed_3001/cov/npu_dtype_test_run_1:npu_dtype_test_run_1",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_2_seed_3002/cov/npu_dtype_test_run_2:npu_dtype_test_run_2",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_3_seed_3003/cov/npu_dtype_test_run_3:npu_dtype_test_run_3",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_4_seed_3004/cov/npu_dtype_test_run_4:npu_dtype_test_run_4",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_5_seed_3005/cov/npu_dtype_test_run_5:npu_dtype_test_run_5",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_6_seed_3006/cov/npu_dtype_test_run_6:npu_dtype_test_run_6",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_7_seed_3007/cov/npu_dtype_test_run_7:npu_dtype_test_run_7",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_8_seed_3008/cov/npu_dtype_test_run_8:npu_dtype_test_run_8",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_dtype_test_run_9_seed_3009/cov/npu_dtype_test_run_9:npu_dtype_test_run_9",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_sched_D_ADDR_0/cov/npu_sched_D_ADDR_0:npu_sched_D_ADDR_0",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_sched_D_ADDR_3/cov/npu_sched_D_ADDR_3:npu_sched_D_ADDR_3",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_sched_D_ADDR_4/cov/npu_sched_D_ADDR_4:npu_sched_D_ADDR_4",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_sched_D_ADDR_4294967295/cov/npu_sched_D_ADDR_4294967295:npu_sched_D_ADDR_4294967295",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_10_seed_2010/cov/npu_type_test_run_10:npu_type_test_run_10",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_11_seed_2011/cov/npu_type_test_run_11:npu_type_test_run_11",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_12_seed_2012/cov/npu_type_test_run_12:npu_type_test_run_12",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_13_seed_2013/cov/npu_type_test_run_13:npu_type_test_run_13",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_14_seed_2014/cov/npu_type_test_run_14:npu_type_test_run_14",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_15_seed_2015/cov/npu_type_test_run_15:npu_type_test_run_15",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_16_seed_2016/cov/npu_type_test_run_16:npu_type_test_run_16",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_17_seed_2017/cov/npu_type_test_run_17:npu_type_test_run_17",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_18_seed_2018/cov/npu_type_test_run_18:npu_type_test_run_18",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_1_seed_2001/cov/npu_type_test_run_1:npu_type_test_run_1",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_2_seed_2002/cov/npu_type_test_run_2:npu_type_test_run_2",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_3_seed_2003/cov/npu_type_test_run_3:npu_type_test_run_3",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_4_seed_2004/cov/npu_type_test_run_4:npu_type_test_run_4",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_5_seed_2005/cov/npu_type_test_run_5:npu_type_test_run_5",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_6_seed_2006/cov/npu_type_test_run_6:npu_type_test_run_6",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_7_seed_2007/cov/npu_type_test_run_7:npu_type_test_run_7",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_8_seed_2008/cov/npu_type_test_run_8:npu_type_test_run_8",
+    "regression_run/p0/build_build_npu_sched_dut/test_npu_type_test_run_9_seed_2009/cov/npu_type_test_run_9:npu_type_test_run_9",
+    "regression_run/p0/build_build_npu_sched_dut/test_test_npu_sched_case_basic/cov/test_npu_sched_case_basic:test_npu_sched_case_basic",
+    "regression_run/p0/build_build_npu_sched_dut/test_test_npu_sched_reset/cov/test_npu_sched_reset:test_npu_sched_reset",
+    "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_dtype_bf16_seed_3001/cov/tp_npusch_d_dtype_bf16:tp_npusch_d_dtype_bf16",
+    "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_dtype_fp16_seed_3001/cov/tp_npusch_d_dtype_fp16:tp_npusch_d_dtype_fp16",
+    "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_dtype_fp32_seed_3001/cov/tp_npusch_d_dtype_fp32:tp_npusch_d_dtype_fp32",
+    "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_dtype_int8_seed_3001/cov/tp_npusch_d_dtype_int8:tp_npusch_d_dtype_int8",
+    "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_type_dma_seed_2001/cov/tp_npusch_d_type_dma:tp_npusch_d_type_dma",
+    "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_type_mac_seed_2001/cov/tp_npusch_d_type_mac:tp_npusch_d_type_mac",
+    "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_type_scalar_seed_2001/cov/tp_npusch_d_type_scalar:tp_npusch_d_type_scalar",
+    "regression_run/p0/build_build_npu_sched_dut/test_tp_npusch_d_type_vector_seed_2001/cov/tp_npusch_d_type_vector:tp_npusch_d_type_vector",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_10_seed_4010/cov/npu_dep_test_run_10:npu_dep_test_run_10",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_11_seed_4011/cov/npu_dep_test_run_11:npu_dep_test_run_11",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_12_seed_4012/cov/npu_dep_test_run_12:npu_dep_test_run_12",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_13_seed_4013/cov/npu_dep_test_run_13:npu_dep_test_run_13",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_14_seed_4014/cov/npu_dep_test_run_14:npu_dep_test_run_14",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_15_seed_4015/cov/npu_dep_test_run_15:npu_dep_test_run_15",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_16_seed_4016/cov/npu_dep_test_run_16:npu_dep_test_run_16",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_17_seed_4017/cov/npu_dep_test_run_17:npu_dep_test_run_17",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_18_seed_4018/cov/npu_dep_test_run_18:npu_dep_test_run_18",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_19_seed_4019/cov/npu_dep_test_run_19:npu_dep_test_run_19",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_1_seed_4001/cov/npu_dep_test_run_1:npu_dep_test_run_1",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_20_seed_4020/cov/npu_dep_test_run_20:npu_dep_test_run_20",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_21_seed_4021/cov/npu_dep_test_run_21:npu_dep_test_run_21",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_22_seed_4022/cov/npu_dep_test_run_22:npu_dep_test_run_22",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_23_seed_4023/cov/npu_dep_test_run_23:npu_dep_test_run_23",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_24_seed_4024/cov/npu_dep_test_run_24:npu_dep_test_run_24",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_25_seed_4025/cov/npu_dep_test_run_25:npu_dep_test_run_25",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_26_seed_4026/cov/npu_dep_test_run_26:npu_dep_test_run_26",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_27_seed_4027/cov/npu_dep_test_run_27:npu_dep_test_run_27",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_28_seed_4028/cov/npu_dep_test_run_28:npu_dep_test_run_28",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_29_seed_4029/cov/npu_dep_test_run_29:npu_dep_test_run_29",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_2_seed_4002/cov/npu_dep_test_run_2:npu_dep_test_run_2",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_30_seed_4030/cov/npu_dep_test_run_30:npu_dep_test_run_30",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_3_seed_4003/cov/npu_dep_test_run_3:npu_dep_test_run_3",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_4_seed_4004/cov/npu_dep_test_run_4:npu_dep_test_run_4",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_5_seed_4005/cov/npu_dep_test_run_5:npu_dep_test_run_5",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_6_seed_4006/cov/npu_dep_test_run_6:npu_dep_test_run_6",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_7_seed_4007/cov/npu_dep_test_run_7:npu_dep_test_run_7",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_8_seed_4008/cov/npu_dep_test_run_8:npu_dep_test_run_8",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_dep_test_run_9_seed_4009/cov/npu_dep_test_run_9:npu_dep_test_run_9",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_10_seed_6010/cov/npu_full_queue_test_run_10:npu_full_queue_test_run_10",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_11_seed_6011/cov/npu_full_queue_test_run_11:npu_full_queue_test_run_11",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_12_seed_6012/cov/npu_full_queue_test_run_12:npu_full_queue_test_run_12",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_13_seed_6013/cov/npu_full_queue_test_run_13:npu_full_queue_test_run_13",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_14_seed_6014/cov/npu_full_queue_test_run_14:npu_full_queue_test_run_14",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_15_seed_6015/cov/npu_full_queue_test_run_15:npu_full_queue_test_run_15",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_16_seed_6016/cov/npu_full_queue_test_run_16:npu_full_queue_test_run_16",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_17_seed_6017/cov/npu_full_queue_test_run_17:npu_full_queue_test_run_17",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_18_seed_6018/cov/npu_full_queue_test_run_18:npu_full_queue_test_run_18",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_1_seed_6001/cov/npu_full_queue_test_run_1:npu_full_queue_test_run_1",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_2_seed_6002/cov/npu_full_queue_test_run_2:npu_full_queue_test_run_2",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_3_seed_6003/cov/npu_full_queue_test_run_3:npu_full_queue_test_run_3",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_4_seed_6004/cov/npu_full_queue_test_run_4:npu_full_queue_test_run_4",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_5_seed_6005/cov/npu_full_queue_test_run_5:npu_full_queue_test_run_5",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_6_seed_6006/cov/npu_full_queue_test_run_6:npu_full_queue_test_run_6",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_7_seed_6007/cov/npu_full_queue_test_run_7:npu_full_queue_test_run_7",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_8_seed_6008/cov/npu_full_queue_test_run_8:npu_full_queue_test_run_8",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_full_queue_test_run_9_seed_6009/cov/npu_full_queue_test_run_9:npu_full_queue_test_run_9",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_10_seed_5010/cov/npu_raw_stall_test_run_10:npu_raw_stall_test_run_10",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_11_seed_5011/cov/npu_raw_stall_test_run_11:npu_raw_stall_test_run_11",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_12_seed_5012/cov/npu_raw_stall_test_run_12:npu_raw_stall_test_run_12",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_1_seed_5001/cov/npu_raw_stall_test_run_1:npu_raw_stall_test_run_1",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_2_seed_5002/cov/npu_raw_stall_test_run_2:npu_raw_stall_test_run_2",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_3_seed_5003/cov/npu_raw_stall_test_run_3:npu_raw_stall_test_run_3",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_4_seed_5004/cov/npu_raw_stall_test_run_4:npu_raw_stall_test_run_4",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_5_seed_5005/cov/npu_raw_stall_test_run_5:npu_raw_stall_test_run_5",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_6_seed_5006/cov/npu_raw_stall_test_run_6:npu_raw_stall_test_run_6",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_7_seed_5007/cov/npu_raw_stall_test_run_7:npu_raw_stall_test_run_7",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_8_seed_5008/cov/npu_raw_stall_test_run_8:npu_raw_stall_test_run_8",
+    "regression_run/p1/build_build_npu_sched_dut/test_npu_raw_stall_test_run_9_seed_5009/cov/npu_raw_stall_test_run_9:npu_raw_stall_test_run_9",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_barrier_type_handshake/cov/test_npu_sched_barrier_type_handshake:test_npu_sched_barrier_type_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_clk_handshake/cov/test_npu_sched_clk_handshake:test_npu_sched_clk_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_dst_addr_handshake/cov/test_npu_sched_instr_dst_addr_handshake:test_npu_sched_instr_dst_addr_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_dtype_handshake/cov/test_npu_sched_instr_dtype_handshake:test_npu_sched_instr_dtype_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_opcode_handshake/cov/test_npu_sched_instr_opcode_handshake:test_npu_sched_instr_opcode_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_src_addr_handshake/cov/test_npu_sched_instr_src_addr_handshake:test_npu_sched_instr_src_addr_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_tile_id_handshake/cov/test_npu_sched_instr_tile_id_handshake:test_npu_sched_instr_tile_id_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_type_handshake/cov/test_npu_sched_instr_type_handshake:test_npu_sched_instr_type_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_instr_valid_handshake/cov/test_npu_sched_instr_valid_handshake:test_npu_sched_instr_valid_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_issue_decision_handshake/cov/test_npu_sched_issue_decision_handshake:test_npu_sched_issue_decision_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_issue_unit_handshake/cov/test_npu_sched_issue_unit_handshake:test_npu_sched_issue_unit_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_issue_valid_handshake/cov/test_npu_sched_issue_valid_handshake:test_npu_sched_issue_valid_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_op_priority_handshake/cov/test_npu_sched_op_priority_handshake:test_npu_sched_op_priority_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_test_npu_sched_rst_n_handshake/cov/test_npu_sched_rst_n_handshake:test_npu_sched_rst_n_handshake",
+    "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_0_seed_6001/cov/tp_npusch_d_queue_0:tp_npusch_d_queue_0",
+    "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_15_seed_6001/cov/tp_npusch_d_queue_15:tp_npusch_d_queue_15",
+    "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_16_seed_6001/cov/tp_npusch_d_queue_16:tp_npusch_d_queue_16",
+    "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_1_seed_6001/cov/tp_npusch_d_queue_1:tp_npusch_d_queue_1",
+    "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_24_seed_6001/cov/tp_npusch_d_queue_24:tp_npusch_d_queue_24",
+    "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_25_seed_6001/cov/tp_npusch_d_queue_25:tp_npusch_d_queue_25",
+    "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_31_seed_6001/cov/tp_npusch_d_queue_31:tp_npusch_d_queue_31",
+    "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_32_seed_6001/cov/tp_npusch_d_queue_32:tp_npusch_d_queue_32",
+    "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_7_seed_6001/cov/tp_npusch_d_queue_7:tp_npusch_d_queue_7",
+    "regression_run/p1/build_build_npu_sched_dut/test_tp_npusch_d_queue_8_seed_6001/cov/tp_npusch_d_queue_8:tp_npusch_d_queue_8",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_10_seed_7010/cov/npu_cluster_test_run_10:npu_cluster_test_run_10",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_11_seed_7011/cov/npu_cluster_test_run_11:npu_cluster_test_run_11",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_12_seed_7012/cov/npu_cluster_test_run_12:npu_cluster_test_run_12",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_1_seed_7001/cov/npu_cluster_test_run_1:npu_cluster_test_run_1",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_2_seed_7002/cov/npu_cluster_test_run_2:npu_cluster_test_run_2",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_3_seed_7003/cov/npu_cluster_test_run_3:npu_cluster_test_run_3",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_4_seed_7004/cov/npu_cluster_test_run_4:npu_cluster_test_run_4",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_5_seed_7005/cov/npu_cluster_test_run_5:npu_cluster_test_run_5",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_6_seed_7006/cov/npu_cluster_test_run_6:npu_cluster_test_run_6",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_7_seed_7007/cov/npu_cluster_test_run_7:npu_cluster_test_run_7",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_8_seed_7008/cov/npu_cluster_test_run_8:npu_cluster_test_run_8",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_cluster_test_run_9_seed_7009/cov/npu_cluster_test_run_9:npu_cluster_test_run_9",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_10_seed_8010/cov/npu_opcode_test_run_10:npu_opcode_test_run_10",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_1_seed_8001/cov/npu_opcode_test_run_1:npu_opcode_test_run_1",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_2_seed_8002/cov/npu_opcode_test_run_2:npu_opcode_test_run_2",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_3_seed_8003/cov/npu_opcode_test_run_3:npu_opcode_test_run_3",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_4_seed_8004/cov/npu_opcode_test_run_4:npu_opcode_test_run_4",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_5_seed_8005/cov/npu_opcode_test_run_5:npu_opcode_test_run_5",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_6_seed_8006/cov/npu_opcode_test_run_6:npu_opcode_test_run_6",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_7_seed_8007/cov/npu_opcode_test_run_7:npu_opcode_test_run_7",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_8_seed_8008/cov/npu_opcode_test_run_8:npu_opcode_test_run_8",
+    "regression_run/p2/build_build_npu_sched_dut/test_npu_opcode_test_run_9_seed_8009/cov/npu_opcode_test_run_9:npu_opcode_test_run_9",
+    "regression_run/p2/build_build_npu_sched_dut/test_test_npu_sched_throughput/cov/test_npu_sched_throughput:test_npu_sched_throughput",
+    "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_dma_read_seed_8001/cov/tp_npusch_d_opcode_dma_read:tp_npusch_d_opcode_dma_read",
+    "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_dma_write_seed_8001/cov/tp_npusch_d_opcode_dma_write:tp_npusch_d_opcode_dma_write",
+    "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_load_seed_8001/cov/tp_npusch_d_opcode_load:tp_npusch_d_opcode_load",
+    "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_mac_bf16_seed_8001/cov/tp_npusch_d_opcode_mac_bf16:tp_npusch_d_opcode_mac_bf16",
+    "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_mac_fp16_seed_8001/cov/tp_npusch_d_opcode_mac_fp16:tp_npusch_d_opcode_mac_fp16",
+    "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_mac_int8_seed_8001/cov/tp_npusch_d_opcode_mac_int8:tp_npusch_d_opcode_mac_int8",
+    "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_store_seed_8001/cov/tp_npusch_d_opcode_store:tp_npusch_d_opcode_store",
+    "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_vec_add_seed_8001/cov/tp_npusch_d_opcode_vec_add:tp_npusch_d_opcode_vec_add",
+    "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_vec_mul_seed_8001/cov/tp_npusch_d_opcode_vec_mul:tp_npusch_d_opcode_vec_mul",
+    "regression_run/p2/build_build_npu_sched_dut/test_tp_npusch_d_opcode_vec_relu_seed_8001/cov/tp_npusch_d_opcode_vec_relu:tp_npusch_d_opcode_vec_relu",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_10_seed_9010/cov/npu_dma_compute_test_run_10:npu_dma_compute_test_run_10",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_11_seed_9011/cov/npu_dma_compute_test_run_11:npu_dma_compute_test_run_11",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_12_seed_9012/cov/npu_dma_compute_test_run_12:npu_dma_compute_test_run_12",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_13_seed_9013/cov/npu_dma_compute_test_run_13:npu_dma_compute_test_run_13",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_14_seed_9014/cov/npu_dma_compute_test_run_14:npu_dma_compute_test_run_14",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_1_seed_9001/cov/npu_dma_compute_test_run_1:npu_dma_compute_test_run_1",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_2_seed_9002/cov/npu_dma_compute_test_run_2:npu_dma_compute_test_run_2",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_3_seed_9003/cov/npu_dma_compute_test_run_3:npu_dma_compute_test_run_3",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_4_seed_9004/cov/npu_dma_compute_test_run_4:npu_dma_compute_test_run_4",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_5_seed_9005/cov/npu_dma_compute_test_run_5:npu_dma_compute_test_run_5",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_6_seed_9006/cov/npu_dma_compute_test_run_6:npu_dma_compute_test_run_6",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_7_seed_9007/cov/npu_dma_compute_test_run_7:npu_dma_compute_test_run_7",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_8_seed_9008/cov/npu_dma_compute_test_run_8:npu_dma_compute_test_run_8",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_dma_compute_test_run_9_seed_9009/cov/npu_dma_compute_test_run_9:npu_dma_compute_test_run_9",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_10_seed_9510/cov/npu_pipeline_test_run_10:npu_pipeline_test_run_10",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_11_seed_9511/cov/npu_pipeline_test_run_11:npu_pipeline_test_run_11",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_12_seed_9512/cov/npu_pipeline_test_run_12:npu_pipeline_test_run_12",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_13_seed_9513/cov/npu_pipeline_test_run_13:npu_pipeline_test_run_13",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_14_seed_9514/cov/npu_pipeline_test_run_14:npu_pipeline_test_run_14",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_1_seed_9501/cov/npu_pipeline_test_run_1:npu_pipeline_test_run_1",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_2_seed_9502/cov/npu_pipeline_test_run_2:npu_pipeline_test_run_2",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_3_seed_9503/cov/npu_pipeline_test_run_3:npu_pipeline_test_run_3",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_4_seed_9504/cov/npu_pipeline_test_run_4:npu_pipeline_test_run_4",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_5_seed_9505/cov/npu_pipeline_test_run_5:npu_pipeline_test_run_5",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_6_seed_9506/cov/npu_pipeline_test_run_6:npu_pipeline_test_run_6",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_7_seed_9507/cov/npu_pipeline_test_run_7:npu_pipeline_test_run_7",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_8_seed_9508/cov/npu_pipeline_test_run_8:npu_pipeline_test_run_8",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_pipeline_test_run_9_seed_9509/cov/npu_pipeline_test_run_9:npu_pipeline_test_run_9",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_10_seed_10010/cov/npu_random_mix_test_run_10:npu_random_mix_test_run_10",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_11_seed_10011/cov/npu_random_mix_test_run_11:npu_random_mix_test_run_11",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_12_seed_10012/cov/npu_random_mix_test_run_12:npu_random_mix_test_run_12",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_13_seed_10013/cov/npu_random_mix_test_run_13:npu_random_mix_test_run_13",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_14_seed_10014/cov/npu_random_mix_test_run_14:npu_random_mix_test_run_14",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_15_seed_10015/cov/npu_random_mix_test_run_15:npu_random_mix_test_run_15",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_16_seed_10016/cov/npu_random_mix_test_run_16:npu_random_mix_test_run_16",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_17_seed_10017/cov/npu_random_mix_test_run_17:npu_random_mix_test_run_17",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_18_seed_10018/cov/npu_random_mix_test_run_18:npu_random_mix_test_run_18",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_19_seed_10019/cov/npu_random_mix_test_run_19:npu_random_mix_test_run_19",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_1_seed_10001/cov/npu_random_mix_test_run_1:npu_random_mix_test_run_1",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_20_seed_10020/cov/npu_random_mix_test_run_20:npu_random_mix_test_run_20",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_21_seed_10021/cov/npu_random_mix_test_run_21:npu_random_mix_test_run_21",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_22_seed_10022/cov/npu_random_mix_test_run_22:npu_random_mix_test_run_22",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_23_seed_10023/cov/npu_random_mix_test_run_23:npu_random_mix_test_run_23",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_24_seed_10024/cov/npu_random_mix_test_run_24:npu_random_mix_test_run_24",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_25_seed_10025/cov/npu_random_mix_test_run_25:npu_random_mix_test_run_25",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_26_seed_10026/cov/npu_random_mix_test_run_26:npu_random_mix_test_run_26",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_27_seed_10027/cov/npu_random_mix_test_run_27:npu_random_mix_test_run_27",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_28_seed_10028/cov/npu_random_mix_test_run_28:npu_random_mix_test_run_28",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_29_seed_10029/cov/npu_random_mix_test_run_29:npu_random_mix_test_run_29",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_2_seed_10002/cov/npu_random_mix_test_run_2:npu_random_mix_test_run_2",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_30_seed_10030/cov/npu_random_mix_test_run_30:npu_random_mix_test_run_30",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_31_seed_10031/cov/npu_random_mix_test_run_31:npu_random_mix_test_run_31",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_32_seed_10032/cov/npu_random_mix_test_run_32:npu_random_mix_test_run_32",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_33_seed_10033/cov/npu_random_mix_test_run_33:npu_random_mix_test_run_33",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_34_seed_10034/cov/npu_random_mix_test_run_34:npu_random_mix_test_run_34",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_35_seed_10035/cov/npu_random_mix_test_run_35:npu_random_mix_test_run_35",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_36_seed_10036/cov/npu_random_mix_test_run_36:npu_random_mix_test_run_36",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_37_seed_10037/cov/npu_random_mix_test_run_37:npu_random_mix_test_run_37",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_38_seed_10038/cov/npu_random_mix_test_run_38:npu_random_mix_test_run_38",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_39_seed_10039/cov/npu_random_mix_test_run_39:npu_random_mix_test_run_39",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_3_seed_10003/cov/npu_random_mix_test_run_3:npu_random_mix_test_run_3",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_40_seed_10040/cov/npu_random_mix_test_run_40:npu_random_mix_test_run_40",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_41_seed_10041/cov/npu_random_mix_test_run_41:npu_random_mix_test_run_41",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_42_seed_10042/cov/npu_random_mix_test_run_42:npu_random_mix_test_run_42",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_43_seed_10043/cov/npu_random_mix_test_run_43:npu_random_mix_test_run_43",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_44_seed_10044/cov/npu_random_mix_test_run_44:npu_random_mix_test_run_44",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_45_seed_10045/cov/npu_random_mix_test_run_45:npu_random_mix_test_run_45",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_46_seed_10046/cov/npu_random_mix_test_run_46:npu_random_mix_test_run_46",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_47_seed_10047/cov/npu_random_mix_test_run_47:npu_random_mix_test_run_47",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_48_seed_10048/cov/npu_random_mix_test_run_48:npu_random_mix_test_run_48",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_4_seed_10004/cov/npu_random_mix_test_run_4:npu_random_mix_test_run_4",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_5_seed_10005/cov/npu_random_mix_test_run_5:npu_random_mix_test_run_5",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_6_seed_10006/cov/npu_random_mix_test_run_6:npu_random_mix_test_run_6",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_7_seed_10007/cov/npu_random_mix_test_run_7:npu_random_mix_test_run_7",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_8_seed_10008/cov/npu_random_mix_test_run_8:npu_random_mix_test_run_8",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_random_mix_test_run_9_seed_10009/cov/npu_random_mix_test_run_9:npu_random_mix_test_run_9",
+    "regression_run/p3/build_build_npu_sched_dut/test_npu_sched_gen_stimulus/cov/npu_sched_gen_stimulus:npu_sched_gen_stimulus",
+    "regression_run/p3/build_build_npu_sched_dut/test_test_npu_sched_error_injection/cov/test_npu_sched_error_injection:test_npu_sched_error_injection",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_barrier_cluster_barrier_seed_10001/cov/tp_npusch_d_barrier_cluster_barrier:tp_npusch_d_barrier_cluster_barrier",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_barrier_none_seed_10001/cov/tp_npusch_d_barrier_none:tp_npusch_d_barrier_none",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_barrier_op_barrier_seed_10001/cov/tp_npusch_d_barrier_op_barrier:tp_npusch_d_barrier_op_barrier",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_barrier_tile_barrier_seed_10001/cov/tp_npusch_d_barrier_tile_barrier:tp_npusch_d_barrier_tile_barrier",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_pipeline_mac_dma_seed_9501/cov/tp_npusch_d_pipeline_mac_dma:tp_npusch_d_pipeline_mac_dma",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_pipeline_mac_mac_seed_9501/cov/tp_npusch_d_pipeline_mac_mac:tp_npusch_d_pipeline_mac_mac",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_pipeline_multi_op_seed_9501/cov/tp_npusch_d_pipeline_multi_op:tp_npusch_d_pipeline_multi_op",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_pipeline_none_seed_9501/cov/tp_npusch_d_pipeline_none:tp_npusch_d_pipeline_none",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_pipeline_vec_mac_seed_9501/cov/tp_npusch_d_pipeline_vec_mac:tp_npusch_d_pipeline_vec_mac",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_priority_high_first_seed_10001/cov/tp_npusch_d_priority_high_first:tp_npusch_d_priority_high_first",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_priority_low_first_seed_10001/cov/tp_npusch_d_priority_low_first:tp_npusch_d_priority_low_first",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_priority_round_robin_seed_10001/cov/tp_npusch_d_priority_round_robin:tp_npusch_d_priority_round_robin",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_priority_same_prio_seed_10001/cov/tp_npusch_d_priority_same_prio:tp_npusch_d_priority_same_prio",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_dma_mac_seed_10001/cov/tp_npusch_d_seq_dma_mac:tp_npusch_d_seq_dma_mac",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_load_mac_seed_10001/cov/tp_npusch_d_seq_load_mac:tp_npusch_d_seq_load_mac",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_mac_mac_seed_10001/cov/tp_npusch_d_seq_mac_mac:tp_npusch_d_seq_mac_mac",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_mac_store_seed_10001/cov/tp_npusch_d_seq_mac_store:tp_npusch_d_seq_mac_store",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_scalar_mac_seed_10001/cov/tp_npusch_d_seq_scalar_mac:tp_npusch_d_seq_scalar_mac",
+    "regression_run/p3/build_build_npu_sched_dut/test_tp_npusch_d_seq_vec_mac_seed_10001/cov/tp_npusch_d_seq_vec_mac:tp_npusch_d_seq_vec_mac"
+  ],
+  "merged_ucdb": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\plan_merged.ucdb",
+  "merged_sha256": "5882c8c10ef5fbf41c66a98767c684dc71360c8356b78fe641206037e58259a3",
+  "errors": [],
+  "warnings": [
+    "部分用例的代码覆盖层次不同（loopback vs DUT），功能覆盖已合并；代码覆盖按层次跳过"
+  ]
+}

@@ -1,0 +1,5 @@
+schema: signoff_policy_v1
+require_ref_model: false
+require_baseline: true
+accepted_caveats: {}
+module: npu_sched

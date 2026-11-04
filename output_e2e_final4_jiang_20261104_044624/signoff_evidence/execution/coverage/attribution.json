@@ -1,0 +1,1190 @@
+{
+  "schema": "coverage_attribution_v1",
+  "run_id": "output_e2e_final4_jiang_20261104_044624",
+  "hit_bins": 61,
+  "with_tp": 61,
+  "with_test": 61,
+  "with_seed": 0,
+  "with_stimulus_plan": 61,
+  "with_rtl": 61,
+  "complete_chain": 0,
+  "attribution_rate": 0.0,
+  "test_seed_rate": 0.0,
+  "exact_rate": 0.0,
+  "weak_rate": 1.0,
+  "bins_total": 70,
+  "bins": [
+    {
+      "bin": "bin:cp_queue_level.empty",
+      "tp_id": "TP-NPUSCH-D_QUEUE-0",
+      "tests": [
+        "npu_sched_env_d_queue_p0_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_queue_level.low",
+      "tp_id": "TP-NPUSCH-D_QUEUE-1",
+      "tests": [
+        "npu_sched_env_d_queue_p1_test",
+        "npu_sched_env_d_queue_p7_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_queue_level.low",
+      "tp_id": "TP-NPUSCH-D_QUEUE-7",
+      "tests": [
+        "npu_sched_env_d_queue_p1_test",
+        "npu_sched_env_d_queue_p7_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_queue_level.mid",
+      "tp_id": "TP-NPUSCH-D_QUEUE-8",
+      "tests": [
+        "npu_sched_env_d_queue_p15_test",
+        "npu_sched_env_d_queue_p8_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_queue_level.mid",
+      "tp_id": "TP-NPUSCH-D_QUEUE-15",
+      "tests": [
+        "npu_sched_env_d_queue_p15_test",
+        "npu_sched_env_d_queue_p8_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_queue_level.high",
+      "tp_id": "TP-NPUSCH-D_QUEUE-16",
+      "tests": [
+        "npu_sched_env_d_queue_p16_test",
+        "npu_sched_env_d_queue_p24_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_queue_level.high",
+      "tp_id": "TP-NPUSCH-D_QUEUE-24",
+      "tests": [
+        "npu_sched_env_d_queue_p16_test",
+        "npu_sched_env_d_queue_p24_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_queue_level.near_full",
+      "tp_id": "TP-NPUSCH-D_QUEUE-25",
+      "tests": [
+        "npu_sched_env_d_queue_p25_test",
+        "npu_sched_env_d_queue_p31_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_queue_level.near_full",
+      "tp_id": "TP-NPUSCH-D_QUEUE-31",
+      "tests": [
+        "npu_sched_env_d_queue_p25_test",
+        "npu_sched_env_d_queue_p31_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_queue_level.full",
+      "tp_id": "TP-NPUSCH-D_QUEUE-32",
+      "tests": [
+        "npu_sched_env_d_queue_p32_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_type.mac",
+      "tp_id": "TP-NPUSCH-D_TYPE-MAC",
+      "tests": [
+        "npu_sched_env_d_type_pMAC_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_type.vector",
+      "tp_id": "TP-NPUSCH-D_TYPE-VECTOR",
+      "tests": [
+        "npu_sched_env_d_type_pVECTOR_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_type.scalar",
+      "tp_id": "TP-NPUSCH-D_TYPE-SCALAR",
+      "tests": [
+        "npu_sched_env_d_type_pSCALAR_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_type.dma",
+      "tp_id": "TP-NPUSCH-D_TYPE-DMA",
+      "tests": [
+        "npu_sched_env_d_type_pDMA_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_dtype.int8",
+      "tp_id": "TP-NPUSCH-D_DTYPE-INT8",
+      "tests": [
+        "npu_sched_env_d_dtype_pINT8_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_dtype.fp16",
+      "tp_id": "TP-NPUSCH-D_DTYPE-FP16",
+      "tests": [
+        "npu_sched_env_d_dtype_pFP16_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_dtype.bf16",
+      "tp_id": "TP-NPUSCH-D_DTYPE-BF16",
+      "tests": [
+        "npu_sched_env_d_dtype_pBF16_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_dtype.fp32",
+      "tp_id": "TP-NPUSCH-D_DTYPE-FP32",
+      "tests": [
+        "npu_sched_env_d_dtype_pFP32_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_dep_type.no_dep",
+      "tp_id": "TP-NPUSCH-D_DEP-NONE",
+      "tests": [
+        "npu_sched_env_d_dep_pNONE_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_dep_type.raw",
+      "tp_id": "TP-NPUSCH-D_DEP-RAW",
+      "tests": [
+        "npu_sched_env_d_dep_pRAW_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_dep_type.waw",
+      "tp_id": "TP-NPUSCH-D_DEP-WAW",
+      "tests": [
+        "npu_sched_env_d_dep_pWAW_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_issue_unit.mac",
+      "tp_id": "TP-NPUSCH-D_UNIT-MAC",
+      "tests": [
+        "npu_sched_env_d_unit_pMAC_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_issue_unit.vector",
+      "tp_id": "TP-NPUSCH-D_UNIT-VECTOR",
+      "tests": [
+        "npu_sched_env_d_unit_pVECTOR_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_issue_unit.scalar",
+      "tp_id": "TP-NPUSCH-D_UNIT-SCALAR",
+      "tests": [
+        "npu_sched_env_d_unit_pSCALAR_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_issue_unit.dma",
+      "tp_id": "TP-NPUSCH-D_UNIT-DMA",
+      "tests": [
+        "npu_sched_env_d_unit_pDMA_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_issue_decision.issued",
+      "tp_id": "TP-NPUSCH-D_DECISION-ISSUED",
+      "tests": [
+        "npu_sched_env_d_decision_pISSUED_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_issue_decision.stalled",
+      "tp_id": "TP-NPUSCH-D_DECISION-STALLED",
+      "tests": [
+        "npu_sched_env_d_decision_pSTALLED_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_issue_decision.flushed",
+      "tp_id": "TP-NPUSCH-D_DECISION-FLUSHED",
+      "tests": [
+        "npu_sched_env_d_decision_pFLUSHED_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_cluster_id.c0",
+      "tp_id": "TP-NPUSCH-D_CLUSTER-0",
+      "tests": [
+        "npu_sched_env_d_cluster_p0_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_cluster_id.c1",
+      "tp_id": "TP-NPUSCH-D_CLUSTER-1",
+      "tests": [
+        "npu_sched_env_d_cluster_p1_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_cluster_id.c2",
+      "tp_id": "TP-NPUSCH-D_CLUSTER-2",
+      "tests": [
+        "npu_sched_env_d_cluster_p2_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_cluster_id.c3",
+      "tp_id": "TP-NPUSCH-D_CLUSTER-3",
+      "tests": [
+        "npu_sched_env_d_cluster_p3_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_opcode.mac_i8",
+      "tp_id": "TP-NPUSCH-D_OPCODE-MAC_INT8",
+      "tests": [
+        "npu_sched_env_d_opcode_pMAC_INT8_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_opcode.mac_fp16",
+      "tp_id": "TP-NPUSCH-D_OPCODE-MAC_FP16",
+      "tests": [
+        "npu_sched_env_d_opcode_pMAC_FP16_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_opcode.mac_bf16",
+      "tp_id": "TP-NPUSCH-D_OPCODE-MAC_BF16",
+      "tests": [
+        "npu_sched_env_d_opcode_pMAC_BF16_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_opcode.vec_add",
+      "tp_id": "TP-NPUSCH-D_OPCODE-VEC_ADD",
+      "tests": [
+        "npu_sched_env_d_opcode_pVEC_ADD_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_opcode.vec_mul",
+      "tp_id": "TP-NPUSCH-D_OPCODE-VEC_MUL",
+      "tests": [
+        "npu_sched_env_d_opcode_pVEC_MUL_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_opcode.vec_relu",
+      "tp_id": "TP-NPUSCH-D_OPCODE-VEC_RELU",
+      "tests": [
+        "npu_sched_env_d_opcode_pVEC_RELU_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_opcode.load",
+      "tp_id": "TP-NPUSCH-D_OPCODE-LOAD",
+      "tests": [
+        "npu_sched_env_d_opcode_pLOAD_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_opcode.store",
+      "tp_id": "TP-NPUSCH-D_OPCODE-STORE",
+      "tests": [
+        "npu_sched_env_d_opcode_pSTORE_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_opcode.dma_rd",
+      "tp_id": "TP-NPUSCH-D_OPCODE-DMA_READ",
+      "tests": [
+        "npu_sched_env_d_opcode_pDMA_READ_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_opcode.dma_wr",
+      "tp_id": "TP-NPUSCH-D_OPCODE-DMA_WRITE",
+      "tests": [
+        "npu_sched_env_d_opcode_pDMA_WRITE_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_seq.mac_mac",
+      "tp_id": "TP-NPUSCH-D_SEQ-MAC_MAC",
+      "tests": [
+        "npu_sched_env_d_seq_pMAC_MAC_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_seq.load_mac",
+      "tp_id": "TP-NPUSCH-D_SEQ-LOAD_MAC",
+      "tests": [
+        "npu_sched_env_d_seq_pLOAD_MAC_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_seq.mac_store",
+      "tp_id": "TP-NPUSCH-D_SEQ-MAC_STORE",
+      "tests": [
+        "npu_sched_env_d_seq_pMAC_STORE_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_seq.dma_mac",
+      "tp_id": "TP-NPUSCH-D_SEQ-DMA_MAC",
+      "tests": [
+        "npu_sched_env_d_seq_pDMA_MAC_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_seq.vec_mac",
+      "tp_id": "TP-NPUSCH-D_SEQ-VEC_MAC",
+      "tests": [
+        "npu_sched_env_d_seq_pVEC_MAC_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_instr_seq.scalar_mac",
+      "tp_id": "TP-NPUSCH-D_SEQ-SCALAR_MAC",
+      "tests": [
+        "npu_sched_env_d_seq_pSCALAR_MAC_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_pipeline_state.no_overlap",
+      "tp_id": "TP-NPUSCH-D_PIPELINE-NONE",
+      "tests": [
+        "npu_sched_env_d_pipeline_pNONE_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_pipeline_state.mac_mac_overlap",
+      "tp_id": "TP-NPUSCH-D_PIPELINE-MAC_MAC",
+      "tests": [
+        "npu_sched_env_d_pipeline_pMAC_MAC_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_pipeline_state.mac_dma_overlap",
+      "tp_id": "TP-NPUSCH-D_PIPELINE-MAC_DMA",
+      "tests": [
+        "npu_sched_env_d_pipeline_pMAC_DMA_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_pipeline_state.vec_mac_overlap",
+      "tp_id": "TP-NPUSCH-D_PIPELINE-VEC_MAC",
+      "tests": [
+        "npu_sched_env_d_pipeline_pVEC_MAC_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_pipeline_state.multi_op_overlap",
+      "tp_id": "TP-NPUSCH-D_PIPELINE-MULTI_OP",
+      "tests": [
+        "npu_sched_env_d_pipeline_pMULTI_OP_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_op_priority.high_first",
+      "tp_id": "TP-NPUSCH-D_PRIORITY-HIGH_FIRST",
+      "tests": [
+        "npu_sched_env_d_priority_pHIGH_FIRST_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_op_priority.low_first",
+      "tp_id": "TP-NPUSCH-D_PRIORITY-LOW_FIRST",
+      "tests": [
+        "npu_sched_env_d_priority_pLOW_FIRST_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_op_priority.same_priority",
+      "tp_id": "TP-NPUSCH-D_PRIORITY-SAME_PRIO",
+      "tests": [
+        "npu_sched_env_d_priority_pSAME_PRIO_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_op_priority.round_robin",
+      "tp_id": "TP-NPUSCH-D_PRIORITY-ROUND_ROBIN",
+      "tests": [
+        "npu_sched_env_d_priority_pROUND_ROBIN_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_barrier_type.no_barrier",
+      "tp_id": "TP-NPUSCH-D_BARRIER-NONE",
+      "tests": [
+        "npu_sched_env_d_barrier_pNONE_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_barrier_type.tile_barrier",
+      "tp_id": "TP-NPUSCH-D_BARRIER-TILE_BARRIER",
+      "tests": [
+        "npu_sched_env_d_barrier_pTILE_BARRIER_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_barrier_type.op_barrier",
+      "tp_id": "TP-NPUSCH-D_BARRIER-OP_BARRIER",
+      "tests": [
+        "npu_sched_env_d_barrier_pOP_BARRIER_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    },
+    {
+      "bin": "bin:cp_barrier_type.cluster_barrier",
+      "tp_id": "TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER",
+      "tests": [
+        "npu_sched_env_d_barrier_pCLUSTER_BARRIER_test"
+      ],
+      "seeds": [],
+      "stimulus_plan_sha256": "c012754ef8cbb33e329b63b5dfd5ba3363b83ca41b59ef5733387ac3abf2f4d5",
+      "rtl_hash": "998103c6c429f7568052ae89e6fe2bb3f1e53ef34ffc3528389cf7af2ce0dae7",
+      "confidence": "weak",
+      "links": {
+        "tp": true,
+        "test": true,
+        "seed": false,
+        "stimulus_plan": true,
+        "rtl": true
+      },
+      "complete": false
+    }
+  ],
+  "notes": [
+    "没有 per-test 覆盖率（coverage/per_test_bins.json）：bin→test 只能是 attributed_by（weak），不能把合并覆盖率的功劳算到某条 test 上",
+    "1 个命中 bin 没有任何 TP→test 映射",
+    "没有 per-test 覆盖率 sidecar：bin→test 只能 weak，完整率按 weak 计入"
+  ]
+}

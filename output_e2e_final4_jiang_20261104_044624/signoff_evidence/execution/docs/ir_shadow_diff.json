@@ -1,0 +1,282 @@
+{
+  "schema": "uvm_ir_shadow_v1",
+  "generated_at": "2026-11-04T04:46:31",
+  "scopes": [
+    {
+      "scope": "agent npu_sched_in",
+      "kind": "agent",
+      "ok": true,
+      "fields": [
+        "name",
+        "interface",
+        "agent_type",
+        "ports"
+      ],
+      "differences": [],
+      "ir": {
+        "name": "npu_sched_in",
+        "interface": "npu_sched_in",
+        "agent_type": "npu_sched_in_agent",
+        "ports": [
+          {
+            "name": "clk",
+            "direction": "input",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "rst_n",
+            "direction": "input",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "instr_valid",
+            "direction": "output",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "instr_opcode",
+            "direction": "output",
+            "width": 8,
+            "protocol": ""
+          },
+          {
+            "name": "instr_type",
+            "direction": "output",
+            "width": 3,
+            "protocol": ""
+          },
+          {
+            "name": "instr_dtype",
+            "direction": "output",
+            "width": 3,
+            "protocol": ""
+          },
+          {
+            "name": "instr_tile_id",
+            "direction": "output",
+            "width": 8,
+            "protocol": ""
+          },
+          {
+            "name": "instr_src_addr",
+            "direction": "output",
+            "width": 32,
+            "protocol": ""
+          },
+          {
+            "name": "instr_dst_addr",
+            "direction": "output",
+            "width": 32,
+            "protocol": ""
+          },
+          {
+            "name": "barrier_type",
+            "direction": "output",
+            "width": 2,
+            "protocol": ""
+          },
+          {
+            "name": "op_priority",
+            "direction": "output",
+            "width": 2,
+            "protocol": ""
+          }
+        ]
+      },
+      "ctx": {
+        "name": "npu_sched_in",
+        "interface": "npu_sched_in",
+        "agent_type": "npu_sched_in_agent",
+        "ports": [
+          {
+            "name": "clk",
+            "direction": "input",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "rst_n",
+            "direction": "input",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "instr_valid",
+            "direction": "output",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "instr_opcode",
+            "direction": "output",
+            "width": 8,
+            "protocol": ""
+          },
+          {
+            "name": "instr_type",
+            "direction": "output",
+            "width": 3,
+            "protocol": ""
+          },
+          {
+            "name": "instr_dtype",
+            "direction": "output",
+            "width": 3,
+            "protocol": ""
+          },
+          {
+            "name": "instr_tile_id",
+            "direction": "output",
+            "width": 8,
+            "protocol": ""
+          },
+          {
+            "name": "instr_src_addr",
+            "direction": "output",
+            "width": 32,
+            "protocol": ""
+          },
+          {
+            "name": "instr_dst_addr",
+            "direction": "output",
+            "width": 32,
+            "protocol": ""
+          },
+          {
+            "name": "barrier_type",
+            "direction": "output",
+            "width": 2,
+            "protocol": ""
+          },
+          {
+            "name": "op_priority",
+            "direction": "output",
+            "width": 2,
+            "protocol": ""
+          }
+        ]
+      }
+    },
+    {
+      "scope": "agent npu_sched_out",
+      "kind": "agent",
+      "ok": true,
+      "fields": [
+        "name",
+        "interface",
+        "agent_type",
+        "ports"
+      ],
+      "differences": [],
+      "ir": {
+        "name": "npu_sched_out",
+        "interface": "npu_sched_out",
+        "agent_type": "npu_sched_out_agent",
+        "ports": [
+          {
+            "name": "clk",
+            "direction": "input",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "rst_n",
+            "direction": "input",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "issue_valid",
+            "direction": "input",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "issue_unit",
+            "direction": "input",
+            "width": 3,
+            "protocol": ""
+          },
+          {
+            "name": "issue_decision",
+            "direction": "input",
+            "width": 2,
+            "protocol": ""
+          }
+        ]
+      },
+      "ctx": {
+        "name": "npu_sched_out",
+        "interface": "npu_sched_out",
+        "agent_type": "npu_sched_out_agent",
+        "ports": [
+          {
+            "name": "clk",
+            "direction": "input",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "rst_n",
+            "direction": "input",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "issue_valid",
+            "direction": "input",
+            "width": 1,
+            "protocol": ""
+          },
+          {
+            "name": "issue_unit",
+            "direction": "input",
+            "width": 3,
+            "protocol": ""
+          },
+          {
+            "name": "issue_decision",
+            "direction": "input",
+            "width": 2,
+            "protocol": ""
+          }
+        ]
+      }
+    },
+    {
+      "scope": "environment npu_sched_env",
+      "kind": "environment",
+      "ok": true,
+      "fields": [
+        "env_name",
+        "agents",
+        "tests"
+      ],
+      "differences": [],
+      "ir": {
+        "env_name": "npu_sched_env",
+        "agents": [
+          "npu_sched_in",
+          "npu_sched_out"
+        ],
+        "tests": []
+      },
+      "ctx": {
+        "env_name": "npu_sched_env",
+        "agents": [
+          "npu_sched_in",
+          "npu_sched_out"
+        ],
+        "tests": []
+      }
+    }
+  ],
+  "counts": {
+    "scopes": 3,
+    "inconsistent": 0,
+    "differences": 0
+  }
+}

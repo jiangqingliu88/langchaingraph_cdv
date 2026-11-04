@@ -1,0 +1,38 @@
+interfaces:
+  name: npu_sched_in
+  clock: clk
+  reset: rst_n
+  parameters:
+    - { name: INSTR_OPCODE_WIDTH, type: int, value: '8' }
+    - { name: INSTR_TYPE_WIDTH, type: int, value: '3' }
+    - { name: INSTR_DTYPE_WIDTH, type: int, value: '3' }
+    - { name: INSTR_TILE_ID_WIDTH, type: int, value: '8' }
+    - { name: INSTR_SRC_ADDR_WIDTH, type: int, value: '32' }
+    - { name: INSTR_DST_ADDR_WIDTH, type: int, value: '32' }
+    - { name: BARRIER_TYPE_WIDTH, type: int, value: '2' }
+    - { name: OP_PRIORITY_WIDTH, type: int, value: '2' }
+  ports:
+    - { name: clk, dir: input, width: 1 }
+    - { name: rst_n, dir: input, width: 1 }
+    - { name: instr_valid, dir: output, width: 1 }
+    - { name: instr_opcode, dir: output, width: 8 }
+    - { name: instr_type, dir: output, width: 3 }
+    - { name: instr_dtype, dir: output, width: 3 }
+    - { name: instr_tile_id, dir: output, width: 8 }
+    - { name: instr_src_addr, dir: output, width: 32 }
+    - { name: instr_dst_addr, dir: output, width: 32 }
+    - { name: barrier_type, dir: output, width: 2 }
+    - { name: op_priority, dir: output, width: 2 }
+  transaction_vars:
+    - { name: instr_valid, type: "bit", iscompare: 'True', isrand: 'True' }
+    - { name: instr_opcode, type: "bit [7:0]", iscompare: 'True', isrand: 'True' }
+    - { name: instr_type, type: "bit [2:0]", iscompare: 'True', isrand: 'True' }
+    - { name: instr_dtype, type: "bit [2:0]", iscompare: 'True', isrand: 'True' }
+    - { name: instr_tile_id, type: "bit [7:0]", iscompare: 'True', isrand: 'True' }
+    - { name: instr_src_addr, type: "bit [31:0]", iscompare: 'True', isrand: 'True' }
+    - { name: instr_dst_addr, type: "bit [31:0]", iscompare: 'True', isrand: 'True' }
+    - { name: barrier_type, type: "bit [1:0]", iscompare: 'True', isrand: 'True' }
+    - { name: op_priority, type: "bit [1:0]", iscompare: 'True', isrand: 'True' }
+  transaction_constraints:
+    - name: data_c
+      value: '{instr_valid inside {[0:1]}; }'

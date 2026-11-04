@@ -1,0 +1,56 @@
+{
+  "schema": "signoff_replay_recipe_v2",
+  "run": "output_e2e_final4_jiang_20261104_044624",
+  "tier_a": {
+    "description": "不跑 EDA：校验文件哈希并重算三态判定",
+    "command": "python replay/replay.py",
+    "requires_eda": false,
+    "inputs": [
+      "manifest.json",
+      "execution/coverage/tp_matrix.json",
+      "execution/sim/coverage/coverage_result.json"
+    ],
+    "checks": [
+      "file_sha256",
+      "package_hash",
+      "manifest_hash",
+      "verdict_recompute",
+      "tp_matrix_counts",
+      "plan_coverage_pct"
+    ]
+  },
+  "tier_b": {
+    "description": "需要 EDA：按回归 YAML 重跑并重新合并覆盖率",
+    "requires_eda": true,
+    "eda_tools": [
+      "vsim",
+      "vcover"
+    ],
+    "note": "本包不自动执行 —— 证据复核不应默认依赖重跑仿真",
+    "steps": [
+      {
+        "name": "regression",
+        "cwd": "regression_run",
+        "command_source": "inputs/yaml/regression.yaml 的 tests[*].run_cmd",
+        "expected_artifacts": [
+          "report.json",
+          "report_summary.txt"
+        ]
+      },
+      {
+        "name": "coverage_merge",
+        "command": "vcover report -cvg -details sim/coverage/plan_merged.ucdb",
+        "expected_artifacts": [
+          "coverage/tp_matrix.json"
+        ]
+      }
+    ]
+  },
+  "seeds": [
+    1001,
+    2001,
+    2002,
+    2003,
+    2004
+  ]
+}

@@ -1,0 +1,243 @@
+{
+  "architecture": "closed_loop_7agents",
+  "generated_at": "2026-11-04T08:07:24",
+  "git_head": "ad980aa3647e2ffee54c702c28740128fc8eea92",
+  "target": 95.0,
+  "final_coverage": 95.2,
+  "effective_coverage": 95.2,
+  "converged": true,
+  "iterations": 1,
+  "phases": [
+    {
+      "name": "planning",
+      "status": "planned",
+      "target": 95.0,
+      "milestones": [
+        95.0
+      ]
+    },
+    {
+      "name": "front",
+      "status": "passed",
+      "score": 90,
+      "time": 0.3
+    },
+    {
+      "name": "design",
+      "status": "skipped",
+      "score": 0
+    },
+    {
+      "name": "model",
+      "status": "passed",
+      "score": 55,
+      "time": 0.0
+    },
+    {
+      "name": "verify",
+      "status": "passed",
+      "score": 90,
+      "time": 8.5,
+      "quality": {
+        "validator": "uvm",
+        "verdict": "pass",
+        "score": 80,
+        "issues": [],
+        "fallback_used": false,
+        "mode": "advisory"
+      }
+    },
+    {
+      "name": "env_arch_check",
+      "status": "passed",
+      "score": 100,
+      "port_ownership": "PASS",
+      "scoreboard": "SKIP",
+      "reason": "端口归属正确：每个 DUT 端口恰好一个 agent（回环端口另有标注） | 这个 env 没接 scoreboard（生成器按 ref_mirror_gate 有意不加：设计看不出是寄存器文件时，接上去只会造假失败）—— 没得比，不是「比对失败」"
+    },
+    {
+      "name": "ops_r1",
+      "status": "passed",
+      "score": 60,
+      "time": 11985.6,
+      "quality": {
+        "validator": "regress_cov",
+        "verdict": "pass",
+        "score": 70,
+        "issues": [],
+        "fallback_used": false,
+        "mode": "advisory"
+      }
+    },
+    {
+      "name": "coverage_r1",
+      "status": "passed",
+      "score": 81,
+      "time": 60.0
+    },
+    {
+      "name": "governor",
+      "status": "blocked",
+      "reason": "预算耗尽: {'tokens': {'used': 716, 'budget': 200000}, 'time_s': {'used': 12054.5, 'budget': 3600.0}, 'eda': {'used': 2, 'budget': 100}, 'exhausted': True}"
+    },
+    {
+      "name": "audit",
+      "status": "failed",
+      "score": 40,
+      "time": 3.1
+    }
+  ],
+  "planning": {
+    "target": 95.0,
+    "milestones": [
+      95.0
+    ],
+    "convergence_forecast": {
+      "rounds_to_target": null,
+      "converging": null
+    }
+  },
+  "testcase_portfolio": {
+    "functional": {
+      "weight": 0.595,
+      "min_w": 0.3,
+      "max_w": 0.7
+    },
+    "protocol": {
+      "weight": 0.297,
+      "min_w": 0.1,
+      "max_w": 0.3
+    },
+    "performance": {
+      "weight": 0.058,
+      "min_w": 0.05,
+      "max_w": 0.25
+    },
+    "corner": {
+      "weight": 0.049,
+      "min_w": 0.05,
+      "max_w": 0.2
+    }
+  },
+  "testcase_stats": {
+    "total": 90,
+    "by_status": {
+      "passed": 73,
+      "planned": 17
+    },
+    "by_purpose": {
+      "corner": 10,
+      "functional": 20,
+      "performance": 5,
+      "protocol": 43,
+      "smoke": 12
+    }
+  },
+  "exclude": {
+    "stats": {
+      "total": 0,
+      "approved": 0,
+      "pending": 0,
+      "excluded_points": 0
+    },
+    "effect": {
+      "total": 105,
+      "covered": 100,
+      "excluded": 0,
+      "effective_total": 105,
+      "raw_coverage": 95.2,
+      "effective_coverage": 95.2,
+      "metric": "functional",
+      "metric_filtered": true
+    },
+    "approved_points": []
+  },
+  "rtl_hashes": {
+    "npu_sched.sv": "62c5d1697ee65adc"
+  },
+  "rtl_version": {
+    "module": "npu_sched",
+    "version_no": 1,
+    "name": "v1",
+    "content_hash": "2ff2359578fb164438cb7a1203704ce601cb683d94588d7448154d89cb482c6b"
+  },
+  "coverage_db_history": [
+    {
+      "round": 1,
+      "coverage_db": {
+        "ucdb_path": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\merged.ucdb",
+        "sha256": "b77f713c67dae275cf30bcd593c4db27d21d3a3b047cf8dc3b6da173f6093d7a"
+      },
+      "coverage_summary": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\reports\\coverage_summary_llm.txt",
+      "coverage": 95.2,
+      "log_path": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\sim_seed_default.log",
+      "log_sha256": "b9e0bbc45e3c8f78",
+      "vcd_path": "D:\\SignOffAI\\output_e2e_final4_jiang_20261104_044624\\sim\\coverage\\wave_seed_default.vcd",
+      "vcd_sha256": "52c8cc2d72ca9ffd"
+    }
+  ],
+  "distilled_weights": {},
+  "llm_audit": {
+    "call_count": 1,
+    "prompt_hashes": [
+      "aee7cfd747bc035a"
+    ],
+    "response_hashes": [
+      "16444b82e853b3ea"
+    ],
+    "statuses": {
+      "ok": 1
+    },
+    "tokens_used": 716,
+    "budget": 200000,
+    "cache_hits": 0
+  },
+  "evidence": {
+    "total_changes": 10,
+    "chain_valid": true,
+    "evidence_path": "output_e2e_final4_jiang_20261104_044624\\docs\\evidence_chain.json",
+    "file_change_chain_path": "output_e2e_final4_jiang_20261104_044624\\docs\\file_change_chain.json",
+    "architecture_v2": {
+      "schema": "architecture_v2_v1",
+      "provenance": {
+        "path": "docs/provenance.jsonl",
+        "sha256": "fdadf5f674f9ff56f98e4197235796e2ffeb619694d810cd4abf3e0317a46793",
+        "nodes": 676,
+        "edges": 1134,
+        "by_confidence": {
+          "exact": 1073,
+          "weak": 61
+        }
+      },
+      "attribution": {
+        "path": "coverage/attribution.json",
+        "hit_bins": 61,
+        "attribution_rate": 0.0,
+        "test_seed_rate": 0.0,
+        "exact_rate": 0.0,
+        "weak_rate": 1.0
+      },
+      "engineering_metrics": {
+        "path": "docs/engineering_metrics.json",
+        "regression_seconds": 11975.85,
+        "attribution_rate": 0.0,
+        "decision_rate": null,
+        "incremental": {
+          "available": false,
+          "reason": "没有 incremental/plan.json（未启用增量验证）"
+        }
+      },
+      "verification_quality": {
+        "path": "docs/verification_quality.json",
+        "overall": "unknown",
+        "dimensions": {
+          "functional": "pass",
+          "coverage": "unknown",
+          "model": "unknown",
+          "structural": "pass",
+          "evidence": "warn"
+        }
+      }
+    }
+  }
+}

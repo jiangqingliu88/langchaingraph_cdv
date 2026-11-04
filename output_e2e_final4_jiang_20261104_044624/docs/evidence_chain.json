@@ -1,0 +1,387 @@
+{
+  "version": "1.0",
+  "layers": {
+    "requirement_layer": {
+      "description": "MD 规格文档 → 结构化需求树",
+      "passed": 0,
+      "total": 2,
+      "checks": {
+        "req_spec_completeness": false,
+        "req_test_mapping": false
+      },
+      "evidence": {
+        "total_requirements": 0,
+        "mapped_requirements": 0,
+        "unmapped_requirements": 0
+      }
+    },
+    "design_layer": {
+      "description": "需求树 → RTL 信号/接口映射",
+      "passed": 2,
+      "total": 2,
+      "checks": {
+        "rtl_signal_mapping": true,
+        "register_mapping": true
+      },
+      "evidence": {
+        "interface_count_spec": 14,
+        "interface_count_rtl": 14,
+        "register_count_spec": 0,
+        "register_count_rtl": 0
+      }
+    },
+    "verification_layer": {
+      "description": "需求树 → UVM 测试用例 + 覆盖率",
+      "passed": 4,
+      "total": 4,
+      "checks": {
+        "case_coverage_P0": true,
+        "case_coverage_P1": true,
+        "case_coverage_P2": true,
+        "case_coverage_P3": true
+      },
+      "evidence": {
+        "total_cases": 273,
+        "passed_cases": 273,
+        "failed_cases": 0,
+        "pass_rate": 100.0
+      }
+    },
+    "execution_layer": {
+      "description": "仿真执行 + 数据通路 + 控制功能",
+      "passed": 3,
+      "total": 4,
+      "checks": {
+        "sim_executed": false,
+        "data_path_check": true,
+        "control_path_check": true,
+        "timing_driver_check": true
+      },
+      "evidence": {
+        "sim_returncode": null,
+        "scoreboard_mismatched": 0,
+        "assertion_failures": 0,
+        "timing_violations": 0
+      }
+    },
+    "functional_coverage_layer": {
+      "description": "SystemVerilog Covergroup/Coverpoint/Cross 模型",
+      "passed": 3,
+      "total": 4,
+      "checks": {
+        "func_cov_covergroups": false,
+        "func_cov_cross": true,
+        "func_cov_holes": true,
+        "func_cov_features": true
+      },
+      "evidence": {
+        "covergroups": [
+          {
+            "name": "cg_npu_sched_in",
+            "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_in",
+            "goal": 100.0,
+            "actual": 90.0,
+            "coverpoints": [
+              {
+                "name": "cp_instr_valid",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_instr_opcode",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_instr_type",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_instr_dtype",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_instr_tile_id",
+                "actual": 66.66
+              },
+              {
+                "name": "cp_instr_src_addr",
+                "actual": 66.66
+              },
+              {
+                "name": "cp_instr_dst_addr",
+                "actual": 66.66
+              },
+              {
+                "name": "cp_barrier_type",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_op_priority",
+                "actual": 100.0
+              }
+            ],
+            "crosses": [
+              {
+                "name": "cross_all",
+                "actual": 100.0
+              }
+            ],
+            "cross_actual": 100.0
+          },
+          {
+            "name": "cg_npu_sched_out",
+            "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_out",
+            "goal": 100.0,
+            "actual": 100.0,
+            "coverpoints": [
+              {
+                "name": "cp_issue_valid",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_issue_unit",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_issue_decision",
+                "actual": 100.0
+              }
+            ],
+            "crosses": [
+              {
+                "name": "cross_all",
+                "actual": 100.0
+              }
+            ],
+            "cross_actual": 100.0
+          },
+          {
+            "name": "cg_dut",
+            "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_dut",
+            "goal": 100.0,
+            "actual": 95.83,
+            "coverpoints": [
+              {
+                "name": "cp_queue_level",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_instr_type",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_instr_dtype",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_dep_type",
+                "actual": 75.0
+              },
+              {
+                "name": "cp_issue_unit",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_issue_decision",
+                "actual": 75.0
+              },
+              {
+                "name": "cp_cluster_id",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_instr_opcode",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_instr_seq",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_pipeline_state",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_op_priority",
+                "actual": 100.0
+              },
+              {
+                "name": "cp_barrier_type",
+                "actual": 100.0
+              }
+            ],
+            "crosses": [],
+            "cross_actual": 100.0
+          }
+        ],
+        "overall_coverage": 95.2,
+        "holes_by_priority": {}
+      }
+    },
+    "signoff_layer": {
+      "description": "覆盖率 + 回归 + waived issue + 门限判定",
+      "passed": 3,
+      "total": 4,
+      "checks": {
+        "coverage_threshold": false,
+        "regression_pass": true,
+        "waived_issues": true,
+        "evidence_integrity": true
+      },
+      "evidence": {
+        "coverage_line": 0.0,
+        "coverage_branch": 78.94,
+        "coverage_toggle": 0.0,
+        "regression_pass_rate": 100.0,
+        "waived_count": 0,
+        "target": 95.0,
+        "effective_coverage": 95.2
+      }
+    }
+  },
+  "functional_coverage": {
+    "covergroups": [
+      {
+        "name": "cg_npu_sched_in",
+        "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_in",
+        "goal": 100.0,
+        "actual": 90.0,
+        "coverpoints": [
+          {
+            "name": "cp_instr_valid",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_instr_opcode",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_instr_type",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_instr_dtype",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_instr_tile_id",
+            "actual": 66.66
+          },
+          {
+            "name": "cp_instr_src_addr",
+            "actual": 66.66
+          },
+          {
+            "name": "cp_instr_dst_addr",
+            "actual": 66.66
+          },
+          {
+            "name": "cp_barrier_type",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_op_priority",
+            "actual": 100.0
+          }
+        ],
+        "crosses": [
+          {
+            "name": "cross_all",
+            "actual": 100.0
+          }
+        ],
+        "cross_actual": 100.0
+      },
+      {
+        "name": "cg_npu_sched_out",
+        "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_out",
+        "goal": 100.0,
+        "actual": 100.0,
+        "coverpoints": [
+          {
+            "name": "cp_issue_valid",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_issue_unit",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_issue_decision",
+            "actual": 100.0
+          }
+        ],
+        "crosses": [
+          {
+            "name": "cross_all",
+            "actual": 100.0
+          }
+        ],
+        "cross_actual": 100.0
+      },
+      {
+        "name": "cg_dut",
+        "path": "/npu_sched_env_pkg/npu_sched_env_coverage/cg_dut",
+        "goal": 100.0,
+        "actual": 95.83,
+        "coverpoints": [
+          {
+            "name": "cp_queue_level",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_instr_type",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_instr_dtype",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_dep_type",
+            "actual": 75.0
+          },
+          {
+            "name": "cp_issue_unit",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_issue_decision",
+            "actual": 75.0
+          },
+          {
+            "name": "cp_cluster_id",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_instr_opcode",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_instr_seq",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_pipeline_state",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_op_priority",
+            "actual": 100.0
+          },
+          {
+            "name": "cp_barrier_type",
+            "actual": 100.0
+          }
+        ],
+        "crosses": [],
+        "cross_actual": 100.0
+      }
+    ],
+    "overall_coverage": 95.2,
+    "holes_by_priority": {}
+  },
+  "checks_passed": 15,
+  "checks_total": 20,
+  "signoff_ready": false,
+  "overall_status": "FAIL"
+}

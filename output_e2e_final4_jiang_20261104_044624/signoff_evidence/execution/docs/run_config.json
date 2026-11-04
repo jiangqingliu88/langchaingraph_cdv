@@ -1,0 +1,19 @@
+{
+  "schema": "run_config_v1",
+  "origin": "cli",
+  "spec_file": "",
+  "output_root": "output_e2e_final4",
+  "target": 95.0,
+  "max_rounds": 1,
+  "design_style": "baseline",
+  "bypass_design_model": false,
+  "sim_modes": [],
+  "manual_gate": false,
+  "rtl_dir": "specs/npu_sched",
+  "casemodel": "",
+  "approval": "auto",
+  "checkpointing": true,
+  "full_regression": false,
+  "incremental_from": "",
+  "env": {}
+}

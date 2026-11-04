@@ -1,0 +1,35 @@
+{
+  "schema": "signoff_caveats_v1",
+  "module": "npu_sched",
+  "raw": [
+    {
+      "code": "CONSTRAINT_PARTIAL",
+      "message": "约束只部分生效：6/11 条策略由模型编译出真实赋值，其余 5 条仍是空骨架（维度不可驱动，没有 `stimulus.field`）—— 见 coverage/constraint_status.json"
+    },
+    {
+      "code": "PLAN_INCONSISTENT",
+      "message": "激励计划与 TP/约束不一致：6 处（见 coverage/plan_consistency.json）"
+    },
+    {
+      "code": "TP_MISSED",
+      "message": "2 条测试点的仓未命中（可激励 37/37，100.0%；后门 10/10；观测型 14/22）—— 逐条见 coverage/tp_matrix.json"
+    },
+    {
+      "code": "TP_NOT_SIGNED_OFF",
+      "message": "8 条可激励/后门测试点没有「同一条用例 + 同一次 seed」的完整证据（TP-NPUSCH-D_SEQ-LOAD_MAC、TP-NPUSCH-D_SEQ-MAC_STORE、TP-NPUSCH-D_SEQ-DMA_MAC、TP-NPUSCH-D_SEQ-VEC_MAC、TP-NPUSCH-D_SEQ-SCALAR_MAC、TP-NPUSCH-D_PIPELINE-NONE、TP-NPUSCH-D_PIPELINE-MAC_DMA、TP-NPUSCH-D_PIPELINE-VEC_MAC）—— 见 coverage/case_tp.json"
+    },
+    {
+      "code": "MODEL_UNAVAILABLE",
+      "message": "本轮没有 verified 参考模型（没有 models.yaml（模型库未选中任何模型））—— 签核不含模型比对结论"
+    }
+  ],
+  "accepted_codes": [],
+  "effective_codes": [
+    "CONSTRAINT_PARTIAL",
+    "PLAN_INCONSISTENT",
+    "TP_MISSED",
+    "TP_NOT_SIGNED_OFF",
+    "MODEL_UNAVAILABLE"
+  ],
+  "policy_source": "D:\\SignOffAI\\specs\\npu_sched\\signoff_policy.yaml"
+}

@@ -1,0 +1,2 @@
+var g_data = {"40":{"pr":"/npu_sched_in_pkg","ty":2,"dui":15,"dun":"work.npu_sched_in_pkg","asserts":[{"n":["npu_sched_in_master_sequence/do_write/immed__317"],"h":[0,1]},{"n":["npu_sched_in_master_sequence/do_read/immed__335"],"h":[0,1]}],"ad":0}}
+processAssertionsData(g_data);

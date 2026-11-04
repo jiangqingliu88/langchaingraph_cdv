@@ -1,0 +1,1598 @@
+{
+  "module": "npu_sched",
+  "covergroup": "cg_npu_sched",
+  "coverpoints": [
+    {
+      "signal": "queue_level",
+      "field": "queue_level",
+      "dimension": "D_queue",
+      "type": "range",
+      "cp_name": "cp_queue_level",
+      "cover_id": "CP_NPU_QUEUE_001",
+      "requirement": "REQ-NPU-001",
+      "source": "dut",
+      "width": 6,
+      "expr": "",
+      "bins": [
+        {
+          "name": "empty",
+          "token": "0",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "low",
+          "token": "1:7",
+          "boundary": false,
+          "illegal": false,
+          "literal": "[1:7]",
+          "lo": 1,
+          "hi": 7
+        },
+        {
+          "name": "mid",
+          "token": "8:15",
+          "boundary": false,
+          "illegal": false,
+          "literal": "[8:15]",
+          "lo": 8,
+          "hi": 15
+        },
+        {
+          "name": "high",
+          "token": "16:24",
+          "boundary": false,
+          "illegal": false,
+          "literal": "[16:24]",
+          "lo": 16,
+          "hi": 24
+        },
+        {
+          "name": "near_full",
+          "token": "25:31",
+          "boundary": false,
+          "illegal": false,
+          "literal": "[25:31]",
+          "lo": 25,
+          "hi": 31
+        },
+        {
+          "name": "full",
+          "token": "32",
+          "boundary": false,
+          "illegal": false,
+          "literal": "32",
+          "value": 32
+        }
+      ],
+      "illegal_bins": [
+        {
+          "name": "illegal_over",
+          "token": "33:$",
+          "boundary": false,
+          "illegal": true,
+          "literal": "[33:$]",
+          "lo": 33,
+          "hi": null
+        }
+      ],
+      "bin_count": 6,
+      "illegal_bin_count": 1
+    },
+    {
+      "signal": "instr_type",
+      "field": "instr_type",
+      "dimension": "D_type",
+      "type": "enum",
+      "cp_name": "cp_instr_type",
+      "cover_id": "CP_NPU_TYPE_002",
+      "requirement": "REQ-NPU-002",
+      "source": "dut",
+      "width": 3,
+      "expr": "",
+      "bins": [
+        {
+          "name": "mac",
+          "token": "MAC",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "vector",
+          "token": "VECTOR",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "scalar",
+          "token": "SCALAR",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "dma",
+          "token": "DMA",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        }
+      ],
+      "illegal_bins": [],
+      "bin_count": 4,
+      "illegal_bin_count": 0
+    },
+    {
+      "signal": "instr_dtype",
+      "field": "instr_dtype",
+      "dimension": "D_dtype",
+      "type": "enum",
+      "cp_name": "cp_instr_dtype",
+      "cover_id": "CP_NPU_DTYPE_003",
+      "requirement": "REQ-NPU-003",
+      "source": "dut",
+      "width": 3,
+      "expr": "",
+      "bins": [
+        {
+          "name": "int8",
+          "token": "INT8",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "fp16",
+          "token": "FP16",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "bf16",
+          "token": "BF16",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "fp32",
+          "token": "FP32",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        }
+      ],
+      "illegal_bins": [],
+      "bin_count": 4,
+      "illegal_bin_count": 0
+    },
+    {
+      "signal": "dep_type",
+      "field": "dep_type",
+      "dimension": "D_dep",
+      "type": "enum",
+      "cp_name": "cp_dep_type",
+      "cover_id": "CP_NPU_DEP_004",
+      "requirement": "REQ-NPU-004",
+      "source": "dut",
+      "width": 2,
+      "expr": "",
+      "bins": [
+        {
+          "name": "no_dep",
+          "token": "NONE",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "raw",
+          "token": "RAW",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "waw",
+          "token": "WAW",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "war",
+          "token": "WAR",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        }
+      ],
+      "illegal_bins": [],
+      "bin_count": 4,
+      "illegal_bin_count": 0
+    },
+    {
+      "signal": "issue_unit",
+      "field": "issue_unit",
+      "dimension": "D_unit",
+      "type": "enum",
+      "cp_name": "cp_issue_unit",
+      "cover_id": "CP_NPU_UNIT_005",
+      "requirement": "REQ-NPU-005",
+      "source": "dut",
+      "width": 3,
+      "expr": "",
+      "bins": [
+        {
+          "name": "mac",
+          "token": "MAC",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "vector",
+          "token": "VECTOR",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "scalar",
+          "token": "SCALAR",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "dma",
+          "token": "DMA",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        }
+      ],
+      "illegal_bins": [],
+      "bin_count": 4,
+      "illegal_bin_count": 0
+    },
+    {
+      "signal": "issue_decision",
+      "field": "issue_decision",
+      "dimension": "D_decision",
+      "type": "enum",
+      "cp_name": "cp_issue_decision",
+      "cover_id": "CP_NPU_DECISION_006",
+      "requirement": "REQ-NPU-006",
+      "source": "dut",
+      "width": 2,
+      "expr": "",
+      "bins": [
+        {
+          "name": "issued",
+          "token": "ISSUED",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "stalled",
+          "token": "STALLED",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "blocked",
+          "token": "BLOCKED",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "flushed",
+          "token": "FLUSHED",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        }
+      ],
+      "illegal_bins": [],
+      "bin_count": 4,
+      "illegal_bin_count": 0
+    },
+    {
+      "signal": "cluster_id",
+      "field": "cluster_id",
+      "dimension": "D_cluster",
+      "type": "range",
+      "cp_name": "cp_cluster_id",
+      "cover_id": "CP_NPU_CLUSTER_007",
+      "requirement": "REQ-NPU-007",
+      "source": "dut",
+      "width": 2,
+      "expr": "",
+      "bins": [
+        {
+          "name": "c0",
+          "token": "0",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "c1",
+          "token": "1",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "c2",
+          "token": "2",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "c3",
+          "token": "3",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        }
+      ],
+      "illegal_bins": [
+        {
+          "name": "illegal_cluster",
+          "token": "4:$",
+          "boundary": false,
+          "illegal": true,
+          "literal": "[4:$]",
+          "lo": 4,
+          "hi": null
+        }
+      ],
+      "bin_count": 4,
+      "illegal_bin_count": 1
+    },
+    {
+      "signal": "instr_opcode",
+      "field": "instr_opcode",
+      "dimension": "D_opcode",
+      "type": "enum",
+      "cp_name": "cp_instr_opcode",
+      "cover_id": "CP_NPU_OPCODE_008",
+      "requirement": "REQ-NPU-008",
+      "source": "dut",
+      "width": 8,
+      "expr": "",
+      "bins": [
+        {
+          "name": "mac_i8",
+          "token": "MAC_INT8",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "mac_fp16",
+          "token": "MAC_FP16",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "mac_bf16",
+          "token": "MAC_BF16",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "vec_add",
+          "token": "VEC_ADD",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        },
+        {
+          "name": "vec_mul",
+          "token": "VEC_MUL",
+          "boundary": false,
+          "illegal": false,
+          "literal": "4",
+          "value": 4
+        },
+        {
+          "name": "vec_relu",
+          "token": "VEC_RELU",
+          "boundary": false,
+          "illegal": false,
+          "literal": "5",
+          "value": 5
+        },
+        {
+          "name": "load",
+          "token": "LOAD",
+          "boundary": false,
+          "illegal": false,
+          "literal": "6",
+          "value": 6
+        },
+        {
+          "name": "store",
+          "token": "STORE",
+          "boundary": false,
+          "illegal": false,
+          "literal": "7",
+          "value": 7
+        },
+        {
+          "name": "dma_rd",
+          "token": "DMA_READ",
+          "boundary": false,
+          "illegal": false,
+          "literal": "8",
+          "value": 8
+        },
+        {
+          "name": "dma_wr",
+          "token": "DMA_WRITE",
+          "boundary": false,
+          "illegal": false,
+          "literal": "9",
+          "value": 9
+        }
+      ],
+      "illegal_bins": [],
+      "bin_count": 10,
+      "illegal_bin_count": 0
+    },
+    {
+      "signal": "instr_seq",
+      "field": "instr_seq",
+      "dimension": "D_seq",
+      "type": "enum",
+      "cp_name": "cp_instr_seq",
+      "cover_id": "CP_NPU_INSTR_SEQ_009",
+      "requirement": "REQ-NPU-009",
+      "source": "dut",
+      "width": 8,
+      "expr": "",
+      "bins": [
+        {
+          "name": "mac_mac",
+          "token": "MAC_MAC",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "load_mac",
+          "token": "LOAD_MAC",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "mac_store",
+          "token": "MAC_STORE",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "dma_mac",
+          "token": "DMA_MAC",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        },
+        {
+          "name": "vec_mac",
+          "token": "VEC_MAC",
+          "boundary": false,
+          "illegal": false,
+          "literal": "4",
+          "value": 4
+        },
+        {
+          "name": "scalar_mac",
+          "token": "SCALAR_MAC",
+          "boundary": false,
+          "illegal": false,
+          "literal": "5",
+          "value": 5
+        }
+      ],
+      "illegal_bins": [],
+      "bin_count": 6,
+      "illegal_bin_count": 0
+    },
+    {
+      "signal": "pipeline_state",
+      "field": "pipeline_state",
+      "dimension": "D_pipeline",
+      "type": "enum",
+      "cp_name": "cp_pipeline_state",
+      "cover_id": "CP_NPU_PIPELINE_010",
+      "requirement": "REQ-NPU-010",
+      "source": "dut",
+      "width": 3,
+      "expr": "",
+      "bins": [
+        {
+          "name": "no_overlap",
+          "token": "NONE",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "mac_mac_overlap",
+          "token": "MAC_MAC",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "mac_dma_overlap",
+          "token": "MAC_DMA",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "vec_mac_overlap",
+          "token": "VEC_MAC",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        },
+        {
+          "name": "multi_op_overlap",
+          "token": "MULTI_OP",
+          "boundary": false,
+          "illegal": false,
+          "literal": "4",
+          "value": 4
+        }
+      ],
+      "illegal_bins": [],
+      "bin_count": 5,
+      "illegal_bin_count": 0
+    },
+    {
+      "signal": "op_priority",
+      "field": "op_priority",
+      "dimension": "D_priority",
+      "type": "enum",
+      "cp_name": "cp_op_priority",
+      "cover_id": "CP_NPU_PRIORITY_011",
+      "requirement": "REQ-NPU-011",
+      "source": "dut",
+      "width": 2,
+      "expr": "",
+      "bins": [
+        {
+          "name": "high_first",
+          "token": "HIGH_FIRST",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "low_first",
+          "token": "LOW_FIRST",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "same_priority",
+          "token": "SAME_PRIO",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "round_robin",
+          "token": "ROUND_ROBIN",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        }
+      ],
+      "illegal_bins": [],
+      "bin_count": 4,
+      "illegal_bin_count": 0
+    },
+    {
+      "signal": "barrier_type",
+      "field": "barrier_type",
+      "dimension": "D_barrier",
+      "type": "enum",
+      "cp_name": "cp_barrier_type",
+      "cover_id": "CP_NPU_BARRIER_012",
+      "requirement": "REQ-NPU-012",
+      "source": "dut",
+      "width": 2,
+      "expr": "",
+      "bins": [
+        {
+          "name": "no_barrier",
+          "token": "NONE",
+          "boundary": false,
+          "illegal": false,
+          "literal": "0",
+          "value": 0
+        },
+        {
+          "name": "tile_barrier",
+          "token": "TILE_BARRIER",
+          "boundary": false,
+          "illegal": false,
+          "literal": "1",
+          "value": 1
+        },
+        {
+          "name": "op_barrier",
+          "token": "OP_BARRIER",
+          "boundary": false,
+          "illegal": false,
+          "literal": "2",
+          "value": 2
+        },
+        {
+          "name": "cluster_barrier",
+          "token": "CLUSTER_BARRIER",
+          "boundary": false,
+          "illegal": false,
+          "literal": "3",
+          "value": 3
+        }
+      ],
+      "illegal_bins": [],
+      "bin_count": 4,
+      "illegal_bin_count": 0
+    }
+  ],
+  "crosses": [
+    {
+      "name": "cx_instr_type_issue_unit",
+      "signals": [
+        "instr_type",
+        "issue_unit"
+      ],
+      "cp_refs": [
+        "cp_instr_type",
+        "cp_issue_unit"
+      ],
+      "matrix_ref": "D_type×D_unit",
+      "level": "required",
+      "dimensions": [
+        "D_type",
+        "D_unit"
+      ],
+      "source": "dut",
+      "cover_id": "X_NPU_TYPE_UNIT_001",
+      "requirement": "REQ-NPU-002/005",
+      "bins": [
+        {
+          "name": "mac_to_mac",
+          "when": {
+            "instr_type": "mac",
+            "issue_unit": "mac"
+          },
+          "illegal": false
+        },
+        {
+          "name": "vec_to_vec",
+          "when": {
+            "instr_type": "vector",
+            "issue_unit": "vector"
+          },
+          "illegal": false
+        },
+        {
+          "name": "scalar_to_scalar",
+          "when": {
+            "instr_type": "scalar",
+            "issue_unit": "scalar"
+          },
+          "illegal": false
+        },
+        {
+          "name": "dma_to_dma",
+          "when": {
+            "instr_type": "dma",
+            "issue_unit": "dma"
+          },
+          "illegal": false
+        },
+        {
+          "name": "mac_to_dma",
+          "when": {
+            "instr_type": "mac",
+            "issue_unit": "dma"
+          },
+          "illegal": true
+        }
+      ],
+      "bin_count": 5
+    },
+    {
+      "name": "cx_instr_dtype_issue_unit",
+      "signals": [
+        "instr_dtype",
+        "issue_unit"
+      ],
+      "cp_refs": [
+        "cp_instr_dtype",
+        "cp_issue_unit"
+      ],
+      "matrix_ref": "D_dtype×D_unit",
+      "level": "required",
+      "dimensions": [
+        "D_dtype",
+        "D_unit"
+      ],
+      "source": "dut",
+      "cover_id": "X_NPU_DTYPE_UNIT_002",
+      "requirement": "REQ-NPU-003/005",
+      "bins": [
+        {
+          "name": "int8_mac",
+          "when": {
+            "instr_dtype": "int8",
+            "issue_unit": "mac"
+          },
+          "illegal": false
+        },
+        {
+          "name": "fp16_mac",
+          "when": {
+            "instr_dtype": "fp16",
+            "issue_unit": "mac"
+          },
+          "illegal": false
+        },
+        {
+          "name": "bf16_mac",
+          "when": {
+            "instr_dtype": "bf16",
+            "issue_unit": "mac"
+          },
+          "illegal": false
+        },
+        {
+          "name": "fp32_vector",
+          "when": {
+            "instr_dtype": "fp32",
+            "issue_unit": "vector"
+          },
+          "illegal": false
+        },
+        {
+          "name": "int8_vector",
+          "when": {
+            "instr_dtype": "int8",
+            "issue_unit": "vector"
+          },
+          "illegal": true
+        }
+      ],
+      "bin_count": 5
+    },
+    {
+      "name": "cx_dep_type_issue_decision",
+      "signals": [
+        "dep_type",
+        "issue_decision"
+      ],
+      "cp_refs": [
+        "cp_dep_type",
+        "cp_issue_decision"
+      ],
+      "matrix_ref": "D_dep×D_decision",
+      "level": "required",
+      "dimensions": [
+        "D_dep",
+        "D_decision"
+      ],
+      "source": "dut",
+      "cover_id": "X_NPU_DEP_DEC_003",
+      "requirement": "REQ-NPU-004/006",
+      "bins": [
+        {
+          "name": "raw_stalled",
+          "when": {
+            "dep_type": "raw",
+            "issue_decision": "stalled"
+          },
+          "illegal": false
+        },
+        {
+          "name": "raw_issued",
+          "when": {
+            "dep_type": "raw",
+            "issue_decision": "issued"
+          },
+          "illegal": false
+        },
+        {
+          "name": "waw_stalled",
+          "when": {
+            "dep_type": "waw",
+            "issue_decision": "stalled"
+          },
+          "illegal": false
+        },
+        {
+          "name": "war_stalled",
+          "when": {
+            "dep_type": "war",
+            "issue_decision": "stalled"
+          },
+          "illegal": false
+        },
+        {
+          "name": "no_dep_issued",
+          "when": {
+            "dep_type": "no_dep",
+            "issue_decision": "issued"
+          },
+          "illegal": false
+        },
+        {
+          "name": "no_dep_blocked",
+          "when": {
+            "dep_type": "no_dep",
+            "issue_decision": "blocked"
+          },
+          "illegal": false
+        }
+      ],
+      "bin_count": 6
+    },
+    {
+      "name": "cx_queue_level_issue_decision",
+      "signals": [
+        "queue_level",
+        "issue_decision"
+      ],
+      "cp_refs": [
+        "cp_queue_level",
+        "cp_issue_decision"
+      ],
+      "matrix_ref": "D_queue×D_decision",
+      "level": "required",
+      "dimensions": [
+        "D_queue",
+        "D_decision"
+      ],
+      "source": "dut",
+      "cover_id": "X_NPU_LEVEL_DEC_004",
+      "requirement": "REQ-NPU-001/006",
+      "bins": [
+        {
+          "name": "full_blocked",
+          "when": {
+            "queue_level": "full",
+            "issue_decision": "blocked"
+          },
+          "illegal": false
+        },
+        {
+          "name": "near_full_stalled",
+          "when": {
+            "queue_level": "near_full",
+            "issue_decision": "stalled"
+          },
+          "illegal": false
+        },
+        {
+          "name": "empty_issued",
+          "when": {
+            "queue_level": "empty",
+            "issue_decision": "issued"
+          },
+          "illegal": false
+        },
+        {
+          "name": "low_issued",
+          "when": {
+            "queue_level": "low",
+            "issue_decision": "issued"
+          },
+          "illegal": false
+        }
+      ],
+      "bin_count": 4
+    },
+    {
+      "name": "cx_cluster_id_issue_unit",
+      "signals": [
+        "cluster_id",
+        "issue_unit"
+      ],
+      "cp_refs": [
+        "cp_cluster_id",
+        "cp_issue_unit"
+      ],
+      "matrix_ref": "D_cluster×D_unit",
+      "level": "required",
+      "dimensions": [
+        "D_cluster",
+        "D_unit"
+      ],
+      "source": "dut",
+      "cover_id": "X_NPU_CLUSTER_UNIT_005",
+      "requirement": "REQ-NPU-005/007",
+      "bins": [],
+      "bin_count": 0
+    },
+    {
+      "name": "cx_instr_opcode_issue_unit",
+      "signals": [
+        "instr_opcode",
+        "issue_unit"
+      ],
+      "cp_refs": [
+        "cp_instr_opcode",
+        "cp_issue_unit"
+      ],
+      "matrix_ref": "D_opcode×D_unit",
+      "level": "required",
+      "dimensions": [
+        "D_opcode",
+        "D_unit"
+      ],
+      "source": "dut",
+      "cover_id": "X_NPU_OPCODE_UNIT_006",
+      "requirement": "REQ-NPU-008/005",
+      "bins": [
+        {
+          "name": "mac_i8_mac",
+          "when": {
+            "instr_opcode": "mac_i8",
+            "issue_unit": "mac"
+          },
+          "illegal": false
+        },
+        {
+          "name": "mac_fp16_mac",
+          "when": {
+            "instr_opcode": "mac_fp16",
+            "issue_unit": "mac"
+          },
+          "illegal": false
+        },
+        {
+          "name": "vec_add_vec",
+          "when": {
+            "instr_opcode": "vec_add",
+            "issue_unit": "vector"
+          },
+          "illegal": false
+        },
+        {
+          "name": "load_scalar",
+          "when": {
+            "instr_opcode": "load",
+            "issue_unit": "scalar"
+          },
+          "illegal": false
+        },
+        {
+          "name": "dma_rd_dma",
+          "when": {
+            "instr_opcode": "dma_rd",
+            "issue_unit": "dma"
+          },
+          "illegal": false
+        },
+        {
+          "name": "mac_vec",
+          "when": {
+            "instr_opcode": "mac_i8",
+            "issue_unit": "vector"
+          },
+          "illegal": true
+        }
+      ],
+      "bin_count": 6
+    },
+    {
+      "name": "cx_instr_seq_issue_decision",
+      "signals": [
+        "instr_seq",
+        "issue_decision"
+      ],
+      "cp_refs": [
+        "cp_instr_seq",
+        "cp_issue_decision"
+      ],
+      "matrix_ref": "D_seq×D_decision",
+      "level": "required",
+      "dimensions": [
+        "D_seq",
+        "D_decision"
+      ],
+      "source": "dut",
+      "cover_id": "X_NPU_SEQ_DEC_007",
+      "requirement": "REQ-NPU-009/006",
+      "bins": [
+        {
+          "name": "mac_mac_stalled",
+          "when": {
+            "instr_seq": "mac_mac",
+            "issue_decision": "stalled"
+          },
+          "illegal": false
+        },
+        {
+          "name": "load_mac_issued",
+          "when": {
+            "instr_seq": "load_mac",
+            "issue_decision": "issued"
+          },
+          "illegal": false
+        },
+        {
+          "name": "mac_store_issued",
+          "when": {
+            "instr_seq": "mac_store",
+            "issue_decision": "issued"
+          },
+          "illegal": false
+        },
+        {
+          "name": "dma_mac_blocked",
+          "when": {
+            "instr_seq": "dma_mac",
+            "issue_decision": "blocked"
+          },
+          "illegal": false
+        },
+        {
+          "name": "vec_mac_issued",
+          "when": {
+            "instr_seq": "vec_mac",
+            "issue_decision": "issued"
+          },
+          "illegal": false
+        },
+        {
+          "name": "scalar_mac_stalled",
+          "when": {
+            "instr_seq": "scalar_mac",
+            "issue_decision": "stalled"
+          },
+          "illegal": false
+        }
+      ],
+      "bin_count": 6
+    }
+  ],
+  "coverpoint_count": 12,
+  "bin_count": 59,
+  "cross_count": 7,
+  "stimulus_coverpoint_count": 0,
+  "dut_coverpoint_count": 12,
+  "notes": [
+    "字段 D_queue.queue_level 既有显式覆盖仓又有 10 个取值点 —— **以显式仓为准**（取值点仍参与用例生成，只是不各自成仓）",
+    "字段 D_cluster.cluster_id 既有显式覆盖仓又有 4 个取值点 —— **以显式仓为准**（取值点仍参与用例生成，只是不各自成仓）"
+  ],
+  "covergroup_code": "// 功能覆盖率点 —— 由 case 模型生成（casemodel_tools.coverage）\n// 一条 = 一个覆盖点；bin 名取自模型的 cover_bins 或取值本身。\n// 采样由集成方负责：`cg_npu_sched cg = new(); cg.sample();`\ncovergroup cg_npu_sched;\n    cp_queue_level: coverpoint queue_level {\n        bins empty = {0};  // 0\n        bins low = {[1:7]};  // 1:7\n        bins mid = {[8:15]};  // 8:15\n        bins high = {[16:24]};  // 16:24\n        bins near_full = {[25:31]};  // 25:31\n        bins full = {32};  // 32\n        illegal_bins illegal_over = {[33:$]};  // 33:$\n    }\n    cp_instr_type: coverpoint instr_type {\n        bins mac = {0};  // MAC\n        bins vector = {1};  // VECTOR\n        bins scalar = {2};  // SCALAR\n        bins dma = {3};  // DMA\n    }\n    cp_instr_dtype: coverpoint instr_dtype {\n        bins int8 = {0};  // INT8\n        bins fp16 = {1};  // FP16\n        bins bf16 = {2};  // BF16\n        bins fp32 = {3};  // FP32\n    }\n    cp_dep_type: coverpoint dep_type {\n        bins no_dep = {0};  // NONE\n        bins raw = {1};  // RAW\n        bins waw = {2};  // WAW\n        bins war = {3};  // WAR\n    }\n    cp_issue_unit: coverpoint issue_unit {\n        bins mac = {0};  // MAC\n        bins vector = {1};  // VECTOR\n        bins scalar = {2};  // SCALAR\n        bins dma = {3};  // DMA\n    }\n    cp_issue_decision: coverpoint issue_decision {\n        bins issued = {0};  // ISSUED\n        bins stalled = {1};  // STALLED\n        bins blocked = {2};  // BLOCKED\n        bins flushed = {3};  // FLUSHED\n    }\n    cp_cluster_id: coverpoint cluster_id {\n        bins c0 = {0};  // 0\n        bins c1 = {1};  // 1\n        bins c2 = {2};  // 2\n        bins c3 = {3};  // 3\n        illegal_bins illegal_cluster = {[4:$]};  // 4:$\n    }\n    cp_instr_opcode: coverpoint instr_opcode {\n        bins mac_i8 = {0};  // MAC_INT8\n        bins mac_fp16 = {1};  // MAC_FP16\n        bins mac_bf16 = {2};  // MAC_BF16\n        bins vec_add = {3};  // VEC_ADD\n        bins vec_mul = {4};  // VEC_MUL\n        bins vec_relu = {5};  // VEC_RELU\n        bins load = {6};  // LOAD\n        bins store = {7};  // STORE\n        bins dma_rd = {8};  // DMA_READ\n        bins dma_wr = {9};  // DMA_WRITE\n    }\n    cp_instr_seq: coverpoint instr_seq {\n        bins mac_mac = {0};  // MAC_MAC\n        bins load_mac = {1};  // LOAD_MAC\n        bins mac_store = {2};  // MAC_STORE\n        bins dma_mac = {3};  // DMA_MAC\n        bins vec_mac = {4};  // VEC_MAC\n        bins scalar_mac = {5};  // SCALAR_MAC\n    }\n    cp_pipeline_state: coverpoint pipeline_state {\n        bins no_overlap = {0};  // NONE\n        bins mac_mac_overlap = {1};  // MAC_MAC\n        bins mac_dma_overlap = {2};  // MAC_DMA\n        bins vec_mac_overlap = {3};  // VEC_MAC\n        bins multi_op_overlap = {4};  // MULTI_OP\n    }\n    cp_op_priority: coverpoint op_priority {\n        bins high_first = {0};  // HIGH_FIRST\n        bins low_first = {1};  // LOW_FIRST\n        bins same_priority = {2};  // SAME_PRIO\n        bins round_robin = {3};  // ROUND_ROBIN\n    }\n    cp_barrier_type: coverpoint barrier_type {\n        bins no_barrier = {0};  // NONE\n        bins tile_barrier = {1};  // TILE_BARRIER\n        bins op_barrier = {2};  // OP_BARRIER\n        bins cluster_barrier = {3};  // CLUSTER_BARRIER\n    }\n    cx_instr_type_issue_unit: cross cp_instr_type, cp_issue_unit {  // required\n        bins mac_to_mac = binsof(cp_instr_type.mac) && binsof(cp_issue_unit.mac);\n        bins vec_to_vec = binsof(cp_instr_type.vector) && binsof(cp_issue_unit.vector);\n        bins scalar_to_scalar = binsof(cp_instr_type.scalar) && binsof(cp_issue_unit.scalar);\n        bins dma_to_dma = binsof(cp_instr_type.dma) && binsof(cp_issue_unit.dma);\n        illegal_bins mac_to_dma = binsof(cp_instr_type.mac) && binsof(cp_issue_unit.dma);\n    }\n    cx_instr_dtype_issue_unit: cross cp_instr_dtype, cp_issue_unit {  // required\n        bins int8_mac = binsof(cp_instr_dtype.int8) && binsof(cp_issue_unit.mac);\n        bins fp16_mac = binsof(cp_instr_dtype.fp16) && binsof(cp_issue_unit.mac);\n        bins bf16_mac = binsof(cp_instr_dtype.bf16) && binsof(cp_issue_unit.mac);\n        bins fp32_vector = binsof(cp_instr_dtype.fp32) && binsof(cp_issue_unit.vector);\n        illegal_bins int8_vector = binsof(cp_instr_dtype.int8) && binsof(cp_issue_unit.vector);\n    }\n    cx_dep_type_issue_decision: cross cp_dep_type, cp_issue_decision {  // required\n        bins raw_stalled = binsof(cp_dep_type.raw) && binsof(cp_issue_decision.stalled);\n        bins raw_issued = binsof(cp_dep_type.raw) && binsof(cp_issue_decision.issued);\n        bins waw_stalled = binsof(cp_dep_type.waw) && binsof(cp_issue_decision.stalled);\n        bins war_stalled = binsof(cp_dep_type.war) && binsof(cp_issue_decision.stalled);\n        bins no_dep_issued = binsof(cp_dep_type.no_dep) && binsof(cp_issue_decision.issued);\n        bins no_dep_blocked = binsof(cp_dep_type.no_dep) && binsof(cp_issue_decision.blocked);\n    }\n    cx_queue_level_issue_decision: cross cp_queue_level, cp_issue_decision {  // required\n        bins full_blocked = binsof(cp_queue_level.full) && binsof(cp_issue_decision.blocked);\n        bins near_full_stalled = binsof(cp_queue_level.near_full) && binsof(cp_issue_decision.stalled);\n        bins empty_issued = binsof(cp_queue_level.empty) && binsof(cp_issue_decision.issued);\n        bins low_issued = binsof(cp_queue_level.low) && binsof(cp_issue_decision.issued);\n    }\n    cx_cluster_id_issue_unit: cross cp_cluster_id, cp_issue_unit;  // required\n    cx_instr_opcode_issue_unit: cross cp_instr_opcode, cp_issue_unit {  // required\n        bins mac_i8_mac = binsof(cp_instr_opcode.mac_i8) && binsof(cp_issue_unit.mac);\n        bins mac_fp16_mac = binsof(cp_instr_opcode.mac_fp16) && binsof(cp_issue_unit.mac);\n        bins vec_add_vec = binsof(cp_instr_opcode.vec_add) && binsof(cp_issue_unit.vector);\n        bins load_scalar = binsof(cp_instr_opcode.load) && binsof(cp_issue_unit.scalar);\n        bins dma_rd_dma = binsof(cp_instr_opcode.dma_rd) && binsof(cp_issue_unit.dma);\n        illegal_bins mac_vec = binsof(cp_instr_opcode.mac_i8) && binsof(cp_issue_unit.vector);\n    }\n    cx_instr_seq_issue_decision: cross cp_instr_seq, cp_issue_decision {  // required\n        bins mac_mac_stalled = binsof(cp_instr_seq.mac_mac) && binsof(cp_issue_decision.stalled);\n        bins load_mac_issued = binsof(cp_instr_seq.load_mac) && binsof(cp_issue_decision.issued);\n        bins mac_store_issued = binsof(cp_instr_seq.mac_store) && binsof(cp_issue_decision.issued);\n        bins dma_mac_blocked = binsof(cp_instr_seq.dma_mac) && binsof(cp_issue_decision.blocked);\n        bins vec_mac_issued = binsof(cp_instr_seq.vec_mac) && binsof(cp_issue_decision.issued);\n        bins scalar_mac_stalled = binsof(cp_instr_seq.scalar_mac) && binsof(cp_issue_decision.stalled);\n    }\nendgroup\n",
+  "probe_code": "`ifndef CG_NPU_SCHED_DUT_SV\n`define CG_NPU_SCHED_DUT_SV\n\n// DUT 信号的功能覆盖率 —— 由 case 模型生成（casemodel_tools.coverage）\n// 用 `bind` 挂到 `npu_sched` 上：该模块的**每个实例**都会带一份探针。\n//\n// 为什么走 bind 而不是从 monitor 采：monitor 只看得到**激励侧**，而\n// 队列水位 / 依赖类型 / 发射决策这些是内部状态与输出端口 —— 只有从 DUT\n// 内部才看得见。端口连接表达式在**目标模块作用域**里求值，所以内部名\n// 直接连过来即可。\n\nmodule cg_npu_sched_dut_probe (\n  input logic clk,\n  input logic rst_n,\n  input logic [5:0] queue_level,  // queue_level\n  input logic [2:0] instr_type,  // instr_type\n  input logic [2:0] instr_dtype,  // instr_dtype\n  input logic [1:0] dep_type,  // dep_type\n  input logic [2:0] issue_unit,  // issue_unit\n  input logic [1:0] issue_decision,  // issue_decision\n  input logic [1:0] cluster_id,  // cluster_id\n  input logic [7:0] instr_opcode,  // instr_opcode\n  input logic [7:0] instr_seq,  // instr_seq\n  input logic [2:0] pipeline_state,  // pipeline_state\n  input logic [1:0] op_priority,  // op_priority\n  input logic [1:0] barrier_type  // barrier_type\n);\n\n  covergroup cg_npu_sched_dut;\n    option.per_instance = 1;\n    cp_queue_level: coverpoint queue_level {\n        bins empty = {0};  // 0\n        bins low = {[1:7]};  // 1:7\n        bins mid = {[8:15]};  // 8:15\n        bins high = {[16:24]};  // 16:24\n        bins near_full = {[25:31]};  // 25:31\n        bins full = {32};  // 32\n        illegal_bins illegal_over = {[33:$]};  // 33:$\n    }\n    cp_instr_type: coverpoint instr_type {\n        bins mac = {0};  // MAC\n        bins vector = {1};  // VECTOR\n        bins scalar = {2};  // SCALAR\n        bins dma = {3};  // DMA\n    }\n    cp_instr_dtype: coverpoint instr_dtype {\n        bins int8 = {0};  // INT8\n        bins fp16 = {1};  // FP16\n        bins bf16 = {2};  // BF16\n        bins fp32 = {3};  // FP32\n    }\n    cp_dep_type: coverpoint dep_type {\n        bins no_dep = {0};  // NONE\n        bins raw = {1};  // RAW\n        bins waw = {2};  // WAW\n        bins war = {3};  // WAR\n    }\n    cp_issue_unit: coverpoint issue_unit {\n        bins mac = {0};  // MAC\n        bins vector = {1};  // VECTOR\n        bins scalar = {2};  // SCALAR\n        bins dma = {3};  // DMA\n    }\n    cp_issue_decision: coverpoint issue_decision {\n        bins issued = {0};  // ISSUED\n        bins stalled = {1};  // STALLED\n        bins blocked = {2};  // BLOCKED\n        bins flushed = {3};  // FLUSHED\n    }\n    cp_cluster_id: coverpoint cluster_id {\n        bins c0 = {0};  // 0\n        bins c1 = {1};  // 1\n        bins c2 = {2};  // 2\n        bins c3 = {3};  // 3\n        illegal_bins illegal_cluster = {[4:$]};  // 4:$\n    }\n    cp_instr_opcode: coverpoint instr_opcode {\n        bins mac_i8 = {0};  // MAC_INT8\n        bins mac_fp16 = {1};  // MAC_FP16\n        bins mac_bf16 = {2};  // MAC_BF16\n        bins vec_add = {3};  // VEC_ADD\n        bins vec_mul = {4};  // VEC_MUL\n        bins vec_relu = {5};  // VEC_RELU\n        bins load = {6};  // LOAD\n        bins store = {7};  // STORE\n        bins dma_rd = {8};  // DMA_READ\n        bins dma_wr = {9};  // DMA_WRITE\n    }\n    cp_instr_seq: coverpoint instr_seq {\n        bins mac_mac = {0};  // MAC_MAC\n        bins load_mac = {1};  // LOAD_MAC\n        bins mac_store = {2};  // MAC_STORE\n        bins dma_mac = {3};  // DMA_MAC\n        bins vec_mac = {4};  // VEC_MAC\n        bins scalar_mac = {5};  // SCALAR_MAC\n    }\n    cp_pipeline_state: coverpoint pipeline_state {\n        bins no_overlap = {0};  // NONE\n        bins mac_mac_overlap = {1};  // MAC_MAC\n        bins mac_dma_overlap = {2};  // MAC_DMA\n        bins vec_mac_overlap = {3};  // VEC_MAC\n        bins multi_op_overlap = {4};  // MULTI_OP\n    }\n    cp_op_priority: coverpoint op_priority {\n        bins high_first = {0};  // HIGH_FIRST\n        bins low_first = {1};  // LOW_FIRST\n        bins same_priority = {2};  // SAME_PRIO\n        bins round_robin = {3};  // ROUND_ROBIN\n    }\n    cp_barrier_type: coverpoint barrier_type {\n        bins no_barrier = {0};  // NONE\n        bins tile_barrier = {1};  // TILE_BARRIER\n        bins op_barrier = {2};  // OP_BARRIER\n        bins cluster_barrier = {3};  // CLUSTER_BARRIER\n    }\n    cx_instr_type_issue_unit: cross cp_instr_type, cp_issue_unit {\n        bins mac_to_mac = binsof(cp_instr_type.mac) && binsof(cp_issue_unit.mac);\n        bins vec_to_vec = binsof(cp_instr_type.vector) && binsof(cp_issue_unit.vector);\n        bins scalar_to_scalar = binsof(cp_instr_type.scalar) && binsof(cp_issue_unit.scalar);\n        bins dma_to_dma = binsof(cp_instr_type.dma) && binsof(cp_issue_unit.dma);\n        illegal_bins mac_to_dma = binsof(cp_instr_type.mac) && binsof(cp_issue_unit.dma);\n    }\n    cx_instr_dtype_issue_unit: cross cp_instr_dtype, cp_issue_unit {\n        bins int8_mac = binsof(cp_instr_dtype.int8) && binsof(cp_issue_unit.mac);\n        bins fp16_mac = binsof(cp_instr_dtype.fp16) && binsof(cp_issue_unit.mac);\n        bins bf16_mac = binsof(cp_instr_dtype.bf16) && binsof(cp_issue_unit.mac);\n        bins fp32_vector = binsof(cp_instr_dtype.fp32) && binsof(cp_issue_unit.vector);\n        illegal_bins int8_vector = binsof(cp_instr_dtype.int8) && binsof(cp_issue_unit.vector);\n    }\n    cx_dep_type_issue_decision: cross cp_dep_type, cp_issue_decision {\n        bins raw_stalled = binsof(cp_dep_type.raw) && binsof(cp_issue_decision.stalled);\n        bins raw_issued = binsof(cp_dep_type.raw) && binsof(cp_issue_decision.issued);\n        bins waw_stalled = binsof(cp_dep_type.waw) && binsof(cp_issue_decision.stalled);\n        bins war_stalled = binsof(cp_dep_type.war) && binsof(cp_issue_decision.stalled);\n        bins no_dep_issued = binsof(cp_dep_type.no_dep) && binsof(cp_issue_decision.issued);\n        bins no_dep_blocked = binsof(cp_dep_type.no_dep) && binsof(cp_issue_decision.blocked);\n    }\n    cx_queue_level_issue_decision: cross cp_queue_level, cp_issue_decision {\n        bins full_blocked = binsof(cp_queue_level.full) && binsof(cp_issue_decision.blocked);\n        bins near_full_stalled = binsof(cp_queue_level.near_full) && binsof(cp_issue_decision.stalled);\n        bins empty_issued = binsof(cp_queue_level.empty) && binsof(cp_issue_decision.issued);\n        bins low_issued = binsof(cp_queue_level.low) && binsof(cp_issue_decision.issued);\n    }\n    cx_cluster_id_issue_unit: cross cp_cluster_id, cp_issue_unit;\n    cx_instr_opcode_issue_unit: cross cp_instr_opcode, cp_issue_unit {\n        bins mac_i8_mac = binsof(cp_instr_opcode.mac_i8) && binsof(cp_issue_unit.mac);\n        bins mac_fp16_mac = binsof(cp_instr_opcode.mac_fp16) && binsof(cp_issue_unit.mac);\n        bins vec_add_vec = binsof(cp_instr_opcode.vec_add) && binsof(cp_issue_unit.vector);\n        bins load_scalar = binsof(cp_instr_opcode.load) && binsof(cp_issue_unit.scalar);\n        bins dma_rd_dma = binsof(cp_instr_opcode.dma_rd) && binsof(cp_issue_unit.dma);\n        illegal_bins mac_vec = binsof(cp_instr_opcode.mac_i8) && binsof(cp_issue_unit.vector);\n    }\n    cx_instr_seq_issue_decision: cross cp_instr_seq, cp_issue_decision {\n        bins mac_mac_stalled = binsof(cp_instr_seq.mac_mac) && binsof(cp_issue_decision.stalled);\n        bins load_mac_issued = binsof(cp_instr_seq.load_mac) && binsof(cp_issue_decision.issued);\n        bins mac_store_issued = binsof(cp_instr_seq.mac_store) && binsof(cp_issue_decision.issued);\n        bins dma_mac_blocked = binsof(cp_instr_seq.dma_mac) && binsof(cp_issue_decision.blocked);\n        bins vec_mac_issued = binsof(cp_instr_seq.vec_mac) && binsof(cp_issue_decision.issued);\n        bins scalar_mac_stalled = binsof(cp_instr_seq.scalar_mac) && binsof(cp_issue_decision.stalled);\n    }\n  endgroup\n\n  cg_npu_sched_dut cg = new();\n\n  // 采样：时钟沿，且**不在复位周期**（复位期间的水位/决策是无意义值）\n  always @(posedge clk) if (rst_n) cg.sample();\nendmodule\n\nbind npu_sched cg_npu_sched_dut_probe u_cg_probe(\n  .clk(clk),\n  .rst_n(rst_n),\n  .queue_level(queue_level),\n  .instr_type(instr_type),\n  .instr_dtype(instr_dtype),\n  .dep_type(dep_type),\n  .issue_unit(issue_unit),\n  .issue_decision(issue_decision),\n  .cluster_id(cluster_id),\n  .instr_opcode(instr_opcode),\n  .instr_seq(instr_seq),\n  .pipeline_state(pipeline_state),\n  .op_priority(op_priority),\n  .barrier_type(barrier_type)\n);\n\n`endif  // CG_NPU_SCHED_DUT_SV\n",
+  "probe_ports": [
+    "queue_level",
+    "instr_type",
+    "instr_dtype",
+    "dep_type",
+    "issue_unit",
+    "issue_decision",
+    "cluster_id",
+    "instr_opcode",
+    "instr_seq",
+    "pipeline_state",
+    "op_priority",
+    "barrier_type"
+  ],
+  "sampling": {
+    "dut_module": "npu_sched",
+    "clock": "clk",
+    "reset": "rst_n"
+  },
+  "cov_interface": {
+    "name": "npu_sched_cov_if",
+    "type": "npu_sched_cov_if",
+    "instance": "u_npu_sched_cov_if",
+    "dut_module": "npu_sched",
+    "clock": "clk",
+    "reset": "rst_n",
+    "signals": [
+      "queue_level",
+      "instr_type",
+      "instr_dtype",
+      "dep_type",
+      "issue_unit",
+      "issue_decision",
+      "cluster_id",
+      "instr_opcode",
+      "instr_seq",
+      "pipeline_state",
+      "op_priority",
+      "barrier_type"
+    ],
+    "extra_signals": [],
+    "tp_bitmap_width": 0,
+    "coverpoints": [
+      {
+        "signal": "queue_level",
+        "sv_name": "cp_queue_level",
+        "field": "queue_level",
+        "width": 6,
+        "expr": ""
+      },
+      {
+        "signal": "instr_type",
+        "sv_name": "cp_instr_type",
+        "field": "instr_type",
+        "width": 3,
+        "expr": ""
+      },
+      {
+        "signal": "instr_dtype",
+        "sv_name": "cp_instr_dtype",
+        "field": "instr_dtype",
+        "width": 3,
+        "expr": ""
+      },
+      {
+        "signal": "dep_type",
+        "sv_name": "cp_dep_type",
+        "field": "dep_type",
+        "width": 2,
+        "expr": ""
+      },
+      {
+        "signal": "issue_unit",
+        "sv_name": "cp_issue_unit",
+        "field": "issue_unit",
+        "width": 3,
+        "expr": ""
+      },
+      {
+        "signal": "issue_decision",
+        "sv_name": "cp_issue_decision",
+        "field": "issue_decision",
+        "width": 2,
+        "expr": ""
+      },
+      {
+        "signal": "cluster_id",
+        "sv_name": "cp_cluster_id",
+        "field": "cluster_id",
+        "width": 2,
+        "expr": ""
+      },
+      {
+        "signal": "instr_opcode",
+        "sv_name": "cp_instr_opcode",
+        "field": "instr_opcode",
+        "width": 8,
+        "expr": ""
+      },
+      {
+        "signal": "instr_seq",
+        "sv_name": "cp_instr_seq",
+        "field": "instr_seq",
+        "width": 8,
+        "expr": ""
+      },
+      {
+        "signal": "pipeline_state",
+        "sv_name": "cp_pipeline_state",
+        "field": "pipeline_state",
+        "width": 3,
+        "expr": ""
+      },
+      {
+        "signal": "op_priority",
+        "sv_name": "cp_op_priority",
+        "field": "op_priority",
+        "width": 2,
+        "expr": ""
+      },
+      {
+        "signal": "barrier_type",
+        "sv_name": "cp_barrier_type",
+        "field": "barrier_type",
+        "width": 2,
+        "expr": ""
+      }
+    ],
+    "file": "coverage/npu_sched_cov_if.sv"
+  },
+  "cov_interface_code": "`ifndef NPU_SCHED_COV_IF_SV\n`define NPU_SCHED_COV_IF_SV\n\n// 覆盖率采样接口 —— 由 case/覆盖率模型生成（casemodel_tools.coverage）\n// `bind` 到 `npu_sched`：端口连接表达式在该模块作用域里求值，\n// 所以输入端口 / 输出端口 / **内部寄存器** 一视同仁地连得进来。\n//\n// 它只**引信号**，不采样 —— 采样由 env 的覆盖率组件做（`coverpoint vif.<信号>`，\n// 时钟沿 + 复位屏蔽），这样覆盖率跟着 UVM 的报告走。\n//\n// bind 出来的实例是 `u_npu_sched_cov_if`，它在 DUT 的作用域里 —— 所以\n// tb_top 用层次路径挂给组件：`config_db::set(..., <dut 实例>.\n// u_npu_sched_cov_if)`。两边的名字都来自同一份 meta（`cov_interface_meta`）。\n\ninterface npu_sched_cov_if (\n  input logic clk,\n  input logic rst_n,\n  input logic [5:0] queue_level,\n  input logic [2:0] instr_type,\n  input logic [2:0] instr_dtype,\n  input logic [1:0] dep_type,\n  input logic [2:0] issue_unit,\n  input logic [1:0] issue_decision,\n  input logic [1:0] cluster_id,\n  input logic [7:0] instr_opcode,\n  input logic [7:0] instr_seq,\n  input logic [2:0] pipeline_state,\n  input logic [1:0] op_priority,\n  input logic [1:0] barrier_type\n);\nendinterface : npu_sched_cov_if\n\nbind npu_sched npu_sched_cov_if u_npu_sched_cov_if(\n  .clk(clk),\n  .rst_n(rst_n),\n  .queue_level(queue_level),\n  .instr_type(instr_type),\n  .instr_dtype(instr_dtype),\n  .dep_type(dep_type),\n  .issue_unit(issue_unit),\n  .issue_decision(issue_decision),\n  .cluster_id(cluster_id),\n  .instr_opcode(instr_opcode),\n  .instr_seq(instr_seq),\n  .pipeline_state(pipeline_state),\n  .op_priority(op_priority),\n  .barrier_type(barrier_type)\n);\n\n`endif  // NPU_SCHED_COV_IF_SV\n",
+  "dut_bins": {
+    "queue_level": [
+      {
+        "name": "empty",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "low",
+        "value": "[1:7]",
+        "illegal": false
+      },
+      {
+        "name": "mid",
+        "value": "[8:15]",
+        "illegal": false
+      },
+      {
+        "name": "high",
+        "value": "[16:24]",
+        "illegal": false
+      },
+      {
+        "name": "near_full",
+        "value": "[25:31]",
+        "illegal": false
+      },
+      {
+        "name": "full",
+        "value": "32",
+        "illegal": false
+      },
+      {
+        "name": "illegal_over",
+        "value": "[33:$]",
+        "illegal": true
+      }
+    ],
+    "instr_type": [
+      {
+        "name": "mac",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "vector",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "scalar",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "dma",
+        "value": "3",
+        "illegal": false
+      }
+    ],
+    "instr_dtype": [
+      {
+        "name": "int8",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "fp16",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "bf16",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "fp32",
+        "value": "3",
+        "illegal": false
+      }
+    ],
+    "dep_type": [
+      {
+        "name": "no_dep",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "raw",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "waw",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "war",
+        "value": "3",
+        "illegal": false
+      }
+    ],
+    "issue_unit": [
+      {
+        "name": "mac",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "vector",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "scalar",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "dma",
+        "value": "3",
+        "illegal": false
+      }
+    ],
+    "issue_decision": [
+      {
+        "name": "issued",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "stalled",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "blocked",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "flushed",
+        "value": "3",
+        "illegal": false
+      }
+    ],
+    "cluster_id": [
+      {
+        "name": "c0",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "c1",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "c2",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "c3",
+        "value": "3",
+        "illegal": false
+      },
+      {
+        "name": "illegal_cluster",
+        "value": "[4:$]",
+        "illegal": true
+      }
+    ],
+    "instr_opcode": [
+      {
+        "name": "mac_i8",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "mac_fp16",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "mac_bf16",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "vec_add",
+        "value": "3",
+        "illegal": false
+      },
+      {
+        "name": "vec_mul",
+        "value": "4",
+        "illegal": false
+      },
+      {
+        "name": "vec_relu",
+        "value": "5",
+        "illegal": false
+      },
+      {
+        "name": "load",
+        "value": "6",
+        "illegal": false
+      },
+      {
+        "name": "store",
+        "value": "7",
+        "illegal": false
+      },
+      {
+        "name": "dma_rd",
+        "value": "8",
+        "illegal": false
+      },
+      {
+        "name": "dma_wr",
+        "value": "9",
+        "illegal": false
+      }
+    ],
+    "instr_seq": [
+      {
+        "name": "mac_mac",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "load_mac",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "mac_store",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "dma_mac",
+        "value": "3",
+        "illegal": false
+      },
+      {
+        "name": "vec_mac",
+        "value": "4",
+        "illegal": false
+      },
+      {
+        "name": "scalar_mac",
+        "value": "5",
+        "illegal": false
+      }
+    ],
+    "pipeline_state": [
+      {
+        "name": "no_overlap",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "mac_mac_overlap",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "mac_dma_overlap",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "vec_mac_overlap",
+        "value": "3",
+        "illegal": false
+      },
+      {
+        "name": "multi_op_overlap",
+        "value": "4",
+        "illegal": false
+      }
+    ],
+    "op_priority": [
+      {
+        "name": "high_first",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "low_first",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "same_priority",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "round_robin",
+        "value": "3",
+        "illegal": false
+      }
+    ],
+    "barrier_type": [
+      {
+        "name": "no_barrier",
+        "value": "0",
+        "illegal": false
+      },
+      {
+        "name": "tile_barrier",
+        "value": "1",
+        "illegal": false
+      },
+      {
+        "name": "op_barrier",
+        "value": "2",
+        "illegal": false
+      },
+      {
+        "name": "cluster_barrier",
+        "value": "3",
+        "illegal": false
+      }
+    ]
+  },
+  "source": "casemodel"
+}

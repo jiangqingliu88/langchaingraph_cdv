@@ -1,0 +1,1404 @@
+{
+  "schema": "case_ir_v1",
+  "module": "npu_sched",
+  "source": "declared",
+  "counts": {
+    "categories": 4,
+    "cases": 13,
+    "declared": 0,
+    "synthesized": 13,
+    "cases_without_groups": 0,
+    "groups": 13,
+    "sva": 4,
+    "scb": 1,
+    "constraints": 11
+  },
+  "categories": [
+    {
+      "id": "CCAT-ROOT",
+      "name": "根",
+      "parent": "",
+      "description": ""
+    },
+    {
+      "id": "CCAT-OBJ-01",
+      "name": "指令队列管理",
+      "parent": "CCAT-ROOT",
+      "description": ""
+    },
+    {
+      "id": "CCAT-OBJ-02",
+      "name": "指令发射",
+      "parent": "CCAT-ROOT",
+      "description": ""
+    },
+    {
+      "id": "CCAT-OBJ-03",
+      "name": "多簇同步",
+      "parent": "CCAT-ROOT",
+      "description": ""
+    }
+  ],
+  "cases": [
+    {
+      "id": "CASE-BEH_QUEUE",
+      "name": "行为域 BEH-QUEUE",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-BEH_QUEUE-BEHAVIOR"
+      ],
+      "dimensions": [
+        "BEH_QUEUE"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-BEH_QUEUE",
+          "name": "队列水位迁移",
+          "description": "",
+          "coverage_type": "场景序列",
+          "scope": "",
+          "coverpoints": [],
+          "requirements": [],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-BEH_QUEUE-BEHAVIOR",
+          "stage": "behavior",
+          "required_layers": [
+            "functional"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-BEH_QUEUE-TR_EMPTY_ENQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_LOW_ENQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_HIGH_ENQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_FULL_DEQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_FULL_FLUSH",
+            "TP-NPUSCH-BEH_QUEUE-SEQ_FILL_DRAIN",
+            "TP-NPUSCH-BEH_QUEUE-TMP_BACKPRESSURE"
+          ]
+        }
+      ],
+      "sva": [],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-BEH_QUEUE-BEHAVIOR",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-BEH_QUEUE-TR_EMPTY_ENQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_LOW_ENQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_HIGH_ENQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_FULL_DEQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_FULL_FLUSH",
+            "TP-NPUSCH-BEH_QUEUE-SEQ_FILL_DRAIN",
+            "TP-NPUSCH-BEH_QUEUE-TMP_BACKPRESSURE"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [],
+      "not_applicable": {
+        "sva": "模型未声明断言（`assertions:` 为空）或断言未绑定到本用例的测试点"
+      },
+      "description": "行为/状态迁移用例（执行后端 P1b 待接）",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_QUEUE",
+      "name": "指令队列水位",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_QUEUE-P1"
+      ],
+      "dimensions": [
+        "D_queue"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_QUEUE",
+          "name": "指令队列水位",
+          "description": "REQ-NPU-001：调度器支持 0-32 条指令的队列深度",
+          "coverage_type": "状态后门",
+          "scope": "指令队列管理",
+          "coverpoints": [
+            "cp_queue_level"
+          ],
+          "requirements": [
+            "REQ-NPU-001"
+          ],
+          "checks": [
+            "CHECK-FUNC",
+            "CHECK-WBOX"
+          ],
+          "cell": "CELL-D_QUEUE-P1",
+          "stage": "p1",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_QUEUE-0",
+            "TP-NPUSCH-D_QUEUE-1",
+            "TP-NPUSCH-D_QUEUE-7",
+            "TP-NPUSCH-D_QUEUE-8",
+            "TP-NPUSCH-D_QUEUE-15",
+            "TP-NPUSCH-D_QUEUE-16",
+            "TP-NPUSCH-D_QUEUE-24",
+            "TP-NPUSCH-D_QUEUE-25",
+            "TP-NPUSCH-D_QUEUE-31",
+            "TP-NPUSCH-D_QUEUE-32"
+          ]
+        }
+      ],
+      "sva": [
+        {
+          "id": "SVA-QUEUE_LEVEL_WITHIN_DEPTH",
+          "name": "queue_level_within_depth",
+          "expr": "queue_level <= 6'd32",
+          "message": "队列水位超过深度 32（计数器越界）",
+          "signals": [
+            "queue_level"
+          ],
+          "cell": "CELL-D_QUEUE-P1",
+          "required": true,
+          "tp_ids": [
+            "TP-NPUSCH-D_QUEUE-31",
+            "TP-NPUSCH-D_QUEUE-32",
+            "TP-NPUSCH-D_QUEUE-24"
+          ]
+        },
+        {
+          "id": "SVA-ISSUED_NEEDS_NO_BLOCKER",
+          "name": "issued_needs_no_blocker",
+          "expr": "issue_decision == 2'd0 |-> queue_level != 6'd0 && barrier_type == 2'd0 && dep_type != 2'd1",
+          "message": "发射的三个前提：队列非空、无屏障、无 RAW 真依赖",
+          "signals": [
+            "issue_decision",
+            "queue_level",
+            "barrier_type",
+            "dep_type"
+          ],
+          "cell": "CELL-D_QUEUE-P1",
+          "required": true,
+          "tp_ids": [
+            "TP-NPUSCH-D_QUEUE-0"
+          ]
+        }
+      ],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_QUEUE-P1",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_QUEUE-0",
+            "TP-NPUSCH-D_QUEUE-1",
+            "TP-NPUSCH-D_QUEUE-7",
+            "TP-NPUSCH-D_QUEUE-8",
+            "TP-NPUSCH-D_QUEUE-15",
+            "TP-NPUSCH-D_QUEUE-16",
+            "TP-NPUSCH-D_QUEUE-24",
+            "TP-NPUSCH-D_QUEUE-25",
+            "TP-NPUSCH-D_QUEUE-31",
+            "TP-NPUSCH-D_QUEUE-32"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b06_special",
+        "p_th_b11_random"
+      ],
+      "not_applicable": {},
+      "description": "REQ-NPU-001：调度器支持 0-32 条指令的队列深度",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_TYPE",
+      "name": "指令类型",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_TYPE-P0"
+      ],
+      "dimensions": [
+        "D_type"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_TYPE",
+          "name": "指令类型",
+          "description": "REQ-NPU-002：支持 4 类指令（MAC / Vector / Scalar / DMA）",
+          "coverage_type": "功能覆盖",
+          "scope": "指令发射",
+          "coverpoints": [
+            "cp_instr_type"
+          ],
+          "requirements": [
+            "REQ-NPU-002"
+          ],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_TYPE-P0",
+          "stage": "p0",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_TYPE-MAC",
+            "TP-NPUSCH-D_TYPE-VECTOR",
+            "TP-NPUSCH-D_TYPE-SCALAR",
+            "TP-NPUSCH-D_TYPE-DMA"
+          ]
+        }
+      ],
+      "sva": [],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_TYPE-P0",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_TYPE-MAC",
+            "TP-NPUSCH-D_TYPE-VECTOR",
+            "TP-NPUSCH-D_TYPE-SCALAR",
+            "TP-NPUSCH-D_TYPE-DMA"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b02_random",
+        "p_th_b09_random",
+        "p_th_b11_random"
+      ],
+      "not_applicable": {
+        "sva": "模型未声明断言（`assertions:` 为空）或断言未绑定到本用例的测试点"
+      },
+      "description": "REQ-NPU-002：支持 4 类指令（MAC / Vector / Scalar / DMA）",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_DTYPE",
+      "name": "数据类型",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_DTYPE-P0"
+      ],
+      "dimensions": [
+        "D_dtype"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_DTYPE",
+          "name": "数据类型",
+          "description": "REQ-NPU-003：支持 4 种数据类型（INT8 / FP16 / BF16 / FP32）",
+          "coverage_type": "功能覆盖",
+          "scope": "指令发射",
+          "coverpoints": [
+            "cp_instr_dtype"
+          ],
+          "requirements": [
+            "REQ-NPU-003"
+          ],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_DTYPE-P0",
+          "stage": "p0",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_DTYPE-INT8",
+            "TP-NPUSCH-D_DTYPE-FP16",
+            "TP-NPUSCH-D_DTYPE-BF16",
+            "TP-NPUSCH-D_DTYPE-FP32"
+          ]
+        }
+      ],
+      "sva": [],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_DTYPE-P0",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_DTYPE-INT8",
+            "TP-NPUSCH-D_DTYPE-FP16",
+            "TP-NPUSCH-D_DTYPE-BF16",
+            "TP-NPUSCH-D_DTYPE-FP32"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b03_random",
+        "p_th_b11_random"
+      ],
+      "not_applicable": {
+        "sva": "模型未声明断言（`assertions:` 为空）或断言未绑定到本用例的测试点"
+      },
+      "description": "REQ-NPU-003：支持 4 种数据类型（INT8 / FP16 / BF16 / FP32）",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_DEP",
+      "name": "数据依赖",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_DEP-P1"
+      ],
+      "dimensions": [
+        "D_dep"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_DEP",
+          "name": "数据依赖",
+          "description": "REQ-NPU-004：正确处理 RAW / WAW / WAR 依赖",
+          "coverage_type": "观测覆盖",
+          "scope": "指令队列管理",
+          "coverpoints": [
+            "cp_dep_type"
+          ],
+          "requirements": [
+            "REQ-NPU-004"
+          ],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_DEP-P1",
+          "stage": "p1",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_DEP-NONE",
+            "TP-NPUSCH-D_DEP-RAW",
+            "TP-NPUSCH-D_DEP-WAW",
+            "TP-NPUSCH-D_DEP-WAR"
+          ]
+        }
+      ],
+      "sva": [
+        {
+          "id": "SVA-RAW_NEVER_ISSUES",
+          "name": "raw_never_issues",
+          "expr": "dep_type == 2'd1 |-> issue_valid == 1'b0",
+          "message": "存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）",
+          "signals": [
+            "dep_type",
+            "issue_valid"
+          ],
+          "cell": "CELL-D_DEP-P1",
+          "required": true,
+          "tp_ids": [
+            "TP-NPUSCH-D_DEP-RAW"
+          ]
+        },
+        {
+          "id": "SVA-ISSUED_NEEDS_NO_BLOCKER",
+          "name": "issued_needs_no_blocker",
+          "expr": "issue_decision == 2'd0 |-> queue_level != 6'd0 && barrier_type == 2'd0 && dep_type != 2'd1",
+          "message": "发射的三个前提：队列非空、无屏障、无 RAW 真依赖",
+          "signals": [
+            "issue_decision",
+            "queue_level",
+            "barrier_type",
+            "dep_type"
+          ],
+          "cell": "CELL-D_DEP-P1",
+          "required": true,
+          "tp_ids": [
+            "TP-NPUSCH-D_DEP-RAW"
+          ]
+        }
+      ],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_DEP-P1",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_DEP-NONE",
+            "TP-NPUSCH-D_DEP-RAW",
+            "TP-NPUSCH-D_DEP-WAW",
+            "TP-NPUSCH-D_DEP-WAR"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b04_combo",
+        "p_th_b05_special",
+        "p_th_b11_random"
+      ],
+      "not_applicable": {},
+      "description": "REQ-NPU-004：正确处理 RAW / WAW / WAR 依赖",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_UNIT",
+      "name": "执行单元",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_UNIT-P2"
+      ],
+      "dimensions": [
+        "D_unit"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_UNIT",
+          "name": "执行单元",
+          "description": "REQ-NPU-005：支持 4 个执行单元",
+          "coverage_type": "观测覆盖",
+          "scope": "指令发射",
+          "coverpoints": [
+            "cp_issue_unit"
+          ],
+          "requirements": [
+            "REQ-NPU-005"
+          ],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_UNIT-P2",
+          "stage": "p2",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_UNIT-MAC",
+            "TP-NPUSCH-D_UNIT-VECTOR",
+            "TP-NPUSCH-D_UNIT-SCALAR",
+            "TP-NPUSCH-D_UNIT-DMA"
+          ]
+        }
+      ],
+      "sva": [],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_UNIT-P2",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_UNIT-MAC",
+            "TP-NPUSCH-D_UNIT-VECTOR",
+            "TP-NPUSCH-D_UNIT-SCALAR",
+            "TP-NPUSCH-D_UNIT-DMA"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b07_combo",
+        "p_th_b08_directed",
+        "p_th_b09_random",
+        "p_th_b11_random"
+      ],
+      "not_applicable": {
+        "sva": "模型未声明断言（`assertions:` 为空）或断言未绑定到本用例的测试点"
+      },
+      "description": "REQ-NPU-005：支持 4 个执行单元",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_DECISION",
+      "name": "发射决策",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_DECISION-P0"
+      ],
+      "dimensions": [
+        "D_decision"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_DECISION",
+          "name": "发射决策",
+          "description": "REQ-NPU-006：正确做出发射决策（发射 / 停顿 / 阻塞 / 冲刷）",
+          "coverage_type": "观测覆盖",
+          "scope": "指令发射",
+          "coverpoints": [
+            "cp_issue_decision"
+          ],
+          "requirements": [
+            "REQ-NPU-006"
+          ],
+          "checks": [
+            "CHECK-FUNC",
+            "CHECK-WBOX"
+          ],
+          "cell": "CELL-D_DECISION-P0",
+          "stage": "p0",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_DECISION-ISSUED",
+            "TP-NPUSCH-D_DECISION-STALLED",
+            "TP-NPUSCH-D_DECISION-BLOCKED",
+            "TP-NPUSCH-D_DECISION-FLUSHED"
+          ]
+        }
+      ],
+      "sva": [
+        {
+          "id": "SVA-RAW_NEVER_ISSUES",
+          "name": "raw_never_issues",
+          "expr": "dep_type == 2'd1 |-> issue_valid == 1'b0",
+          "message": "存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）",
+          "signals": [
+            "dep_type",
+            "issue_valid"
+          ],
+          "cell": "CELL-D_DECISION-P0",
+          "required": true,
+          "tp_ids": [
+            "TP-NPUSCH-D_DECISION-BLOCKED"
+          ]
+        },
+        {
+          "id": "SVA-BARRIER_FLUSHES",
+          "name": "barrier_flushes",
+          "expr": "barrier_type != 2'd0 |-> issue_decision == 2'd3",
+          "message": "屏障命中时必须冲刷（barrier_type!=NONE → issue_decision==FLUSHED）",
+          "signals": [
+            "barrier_type",
+            "issue_decision"
+          ],
+          "cell": "CELL-D_DECISION-P0",
+          "required": true,
+          "tp_ids": [
+            "TP-NPUSCH-D_DECISION-FLUSHED"
+          ]
+        },
+        {
+          "id": "SVA-ISSUED_NEEDS_NO_BLOCKER",
+          "name": "issued_needs_no_blocker",
+          "expr": "issue_decision == 2'd0 |-> queue_level != 6'd0 && barrier_type == 2'd0 && dep_type != 2'd1",
+          "message": "发射的三个前提：队列非空、无屏障、无 RAW 真依赖",
+          "signals": [
+            "issue_decision",
+            "queue_level",
+            "barrier_type",
+            "dep_type"
+          ],
+          "cell": "CELL-D_DECISION-P0",
+          "required": true,
+          "tp_ids": [
+            "TP-NPUSCH-D_DECISION-ISSUED"
+          ]
+        }
+      ],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_DECISION-P0",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_DECISION-ISSUED",
+            "TP-NPUSCH-D_DECISION-STALLED",
+            "TP-NPUSCH-D_DECISION-BLOCKED",
+            "TP-NPUSCH-D_DECISION-FLUSHED"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b01_directed",
+        "p_th_b04_combo",
+        "p_th_b06_special",
+        "p_th_b11_random"
+      ],
+      "not_applicable": {},
+      "description": "REQ-NPU-006：正确做出发射决策（发射 / 停顿 / 阻塞 / 冲刷）",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_CLUSTER",
+      "name": "簇 ID",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_CLUSTER-P2"
+      ],
+      "dimensions": [
+        "D_cluster"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_CLUSTER",
+          "name": "簇 ID",
+          "description": "REQ-NPU-007：支持 4 个簇",
+          "coverage_type": "观测覆盖",
+          "scope": "多簇同步",
+          "coverpoints": [
+            "cp_cluster_id"
+          ],
+          "requirements": [
+            "REQ-NPU-007"
+          ],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_CLUSTER-P2",
+          "stage": "p2",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_CLUSTER-0",
+            "TP-NPUSCH-D_CLUSTER-1",
+            "TP-NPUSCH-D_CLUSTER-2",
+            "TP-NPUSCH-D_CLUSTER-3"
+          ]
+        }
+      ],
+      "sva": [],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_CLUSTER-P2",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_CLUSTER-0",
+            "TP-NPUSCH-D_CLUSTER-1",
+            "TP-NPUSCH-D_CLUSTER-2",
+            "TP-NPUSCH-D_CLUSTER-3"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b07_combo",
+        "p_th_b11_random"
+      ],
+      "not_applicable": {
+        "sva": "模型未声明断言（`assertions:` 为空）或断言未绑定到本用例的测试点"
+      },
+      "description": "REQ-NPU-007：支持 4 个簇",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_OPCODE",
+      "name": "硬件指令操作码",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_OPCODE-P2"
+      ],
+      "dimensions": [
+        "D_opcode"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_OPCODE",
+          "name": "硬件指令操作码",
+          "description": "REQ-NPU-008：支持硬件指令集（10 条）",
+          "coverage_type": "功能覆盖",
+          "scope": "指令发射",
+          "coverpoints": [
+            "cp_instr_opcode"
+          ],
+          "requirements": [
+            "REQ-NPU-008"
+          ],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_OPCODE-P2",
+          "stage": "p2",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_OPCODE-MAC_INT8",
+            "TP-NPUSCH-D_OPCODE-MAC_FP16",
+            "TP-NPUSCH-D_OPCODE-MAC_BF16",
+            "TP-NPUSCH-D_OPCODE-VEC_ADD",
+            "TP-NPUSCH-D_OPCODE-VEC_MUL",
+            "TP-NPUSCH-D_OPCODE-VEC_RELU",
+            "TP-NPUSCH-D_OPCODE-LOAD",
+            "TP-NPUSCH-D_OPCODE-STORE",
+            "TP-NPUSCH-D_OPCODE-DMA_READ",
+            "TP-NPUSCH-D_OPCODE-DMA_WRITE"
+          ]
+        }
+      ],
+      "sva": [],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_OPCODE-P2",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_OPCODE-MAC_INT8",
+            "TP-NPUSCH-D_OPCODE-MAC_FP16",
+            "TP-NPUSCH-D_OPCODE-MAC_BF16",
+            "TP-NPUSCH-D_OPCODE-VEC_ADD",
+            "TP-NPUSCH-D_OPCODE-VEC_MUL",
+            "TP-NPUSCH-D_OPCODE-VEC_RELU",
+            "TP-NPUSCH-D_OPCODE-LOAD",
+            "TP-NPUSCH-D_OPCODE-STORE",
+            "TP-NPUSCH-D_OPCODE-DMA_READ",
+            "TP-NPUSCH-D_OPCODE-DMA_WRITE"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b08_directed",
+        "p_th_b11_random"
+      ],
+      "not_applicable": {
+        "sva": "模型未声明断言（`assertions:` 为空）或断言未绑定到本用例的测试点"
+      },
+      "description": "REQ-NPU-008：支持硬件指令集（10 条）",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_SEQ",
+      "name": "指令序列模式",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_SEQ-P3"
+      ],
+      "dimensions": [
+        "D_seq"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_SEQ",
+          "name": "指令序列模式",
+          "description": "REQ-NPU-009：正确处理相邻指令的 opcode 组合",
+          "coverage_type": "场景序列",
+          "scope": "指令队列管理",
+          "coverpoints": [
+            "cp_instr_seq"
+          ],
+          "requirements": [
+            "REQ-NPU-009"
+          ],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_SEQ-P3",
+          "stage": "p3",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_SEQ-MAC_MAC",
+            "TP-NPUSCH-D_SEQ-LOAD_MAC",
+            "TP-NPUSCH-D_SEQ-MAC_STORE",
+            "TP-NPUSCH-D_SEQ-DMA_MAC",
+            "TP-NPUSCH-D_SEQ-VEC_MAC",
+            "TP-NPUSCH-D_SEQ-SCALAR_MAC"
+          ]
+        }
+      ],
+      "sva": [],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_SEQ-P3",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_SEQ-MAC_MAC",
+            "TP-NPUSCH-D_SEQ-LOAD_MAC",
+            "TP-NPUSCH-D_SEQ-MAC_STORE",
+            "TP-NPUSCH-D_SEQ-DMA_MAC",
+            "TP-NPUSCH-D_SEQ-VEC_MAC",
+            "TP-NPUSCH-D_SEQ-SCALAR_MAC"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b11_random"
+      ],
+      "not_applicable": {
+        "sva": "模型未声明断言（`assertions:` 为空）或断言未绑定到本用例的测试点"
+      },
+      "description": "REQ-NPU-009：正确处理相邻指令的 opcode 组合",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_PIPELINE",
+      "name": "流水重叠",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_PIPELINE-P3"
+      ],
+      "dimensions": [
+        "D_pipeline"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_PIPELINE",
+          "name": "流水重叠",
+          "description": "REQ-NPU-010：支持指令流水重叠",
+          "coverage_type": "场景序列",
+          "scope": "指令发射",
+          "coverpoints": [
+            "cp_pipeline_state"
+          ],
+          "requirements": [
+            "REQ-NPU-010"
+          ],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_PIPELINE-P3",
+          "stage": "p3",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_PIPELINE-NONE",
+            "TP-NPUSCH-D_PIPELINE-MAC_MAC",
+            "TP-NPUSCH-D_PIPELINE-MAC_DMA",
+            "TP-NPUSCH-D_PIPELINE-VEC_MAC",
+            "TP-NPUSCH-D_PIPELINE-MULTI_OP"
+          ]
+        }
+      ],
+      "sva": [],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_PIPELINE-P3",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_PIPELINE-NONE",
+            "TP-NPUSCH-D_PIPELINE-MAC_MAC",
+            "TP-NPUSCH-D_PIPELINE-MAC_DMA",
+            "TP-NPUSCH-D_PIPELINE-VEC_MAC",
+            "TP-NPUSCH-D_PIPELINE-MULTI_OP"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b10_random",
+        "p_th_b11_random"
+      ],
+      "not_applicable": {
+        "sva": "模型未声明断言（`assertions:` 为空）或断言未绑定到本用例的测试点"
+      },
+      "description": "REQ-NPU-010：支持指令流水重叠",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_PRIORITY",
+      "name": "优先级调度",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_PRIORITY-P3"
+      ],
+      "dimensions": [
+        "D_priority"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_PRIORITY",
+          "name": "优先级调度",
+          "description": "REQ-NPU-011：支持优先级调度",
+          "coverage_type": "功能覆盖",
+          "scope": "指令发射",
+          "coverpoints": [
+            "cp_op_priority"
+          ],
+          "requirements": [
+            "REQ-NPU-011"
+          ],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_PRIORITY-P3",
+          "stage": "p3",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_PRIORITY-HIGH_FIRST",
+            "TP-NPUSCH-D_PRIORITY-LOW_FIRST",
+            "TP-NPUSCH-D_PRIORITY-SAME_PRIO",
+            "TP-NPUSCH-D_PRIORITY-ROUND_ROBIN"
+          ]
+        }
+      ],
+      "sva": [],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_PRIORITY-P3",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_PRIORITY-HIGH_FIRST",
+            "TP-NPUSCH-D_PRIORITY-LOW_FIRST",
+            "TP-NPUSCH-D_PRIORITY-SAME_PRIO",
+            "TP-NPUSCH-D_PRIORITY-ROUND_ROBIN"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b11_random"
+      ],
+      "not_applicable": {
+        "sva": "模型未声明断言（`assertions:` 为空）或断言未绑定到本用例的测试点"
+      },
+      "description": "REQ-NPU-011：支持优先级调度",
+      "source": "synthesized"
+    },
+    {
+      "id": "CASE-D_BARRIER",
+      "name": "硬件同步屏障",
+      "categories": [
+        "CCAT-ROOT"
+      ],
+      "feats": [],
+      "tests": [],
+      "cells": [
+        "CELL-D_BARRIER-P3"
+      ],
+      "dimensions": [
+        "D_barrier"
+      ],
+      "owner": "",
+      "priority": "",
+      "tags": [],
+      "groups": [
+        {
+          "group": "CG-D_BARRIER",
+          "name": "硬件同步屏障",
+          "description": "REQ-NPU-012：支持硬件同步屏障",
+          "coverage_type": "功能覆盖",
+          "scope": "多簇同步",
+          "coverpoints": [
+            "cp_barrier_type"
+          ],
+          "requirements": [
+            "REQ-NPU-012"
+          ],
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_BARRIER-P3",
+          "stage": "p3",
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_BARRIER-NONE",
+            "TP-NPUSCH-D_BARRIER-TILE_BARRIER",
+            "TP-NPUSCH-D_BARRIER-OP_BARRIER",
+            "TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER"
+          ]
+        }
+      ],
+      "sva": [
+        {
+          "id": "SVA-BARRIER_FLUSHES",
+          "name": "barrier_flushes",
+          "expr": "barrier_type != 2'd0 |-> issue_decision == 2'd3",
+          "message": "屏障命中时必须冲刷（barrier_type!=NONE → issue_decision==FLUSHED）",
+          "signals": [
+            "barrier_type",
+            "issue_decision"
+          ],
+          "cell": "CELL-D_BARRIER-P3",
+          "required": true,
+          "tp_ids": [
+            "TP-NPUSCH-D_BARRIER-TILE_BARRIER",
+            "TP-NPUSCH-D_BARRIER-OP_BARRIER",
+            "TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER"
+          ]
+        }
+      ],
+      "scb": [
+        {
+          "id": "SB-NPU-DUT",
+          "name": "NPU 调度器 in-order 比对",
+          "description": "env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB",
+          "model": "",
+          "checks": [
+            "CHECK-FUNC"
+          ],
+          "cell": "CELL-D_BARRIER-P3",
+          "required": true,
+          "evidence": "auto",
+          "tp_ids": [
+            "TP-NPUSCH-D_BARRIER-NONE",
+            "TP-NPUSCH-D_BARRIER-TILE_BARRIER",
+            "TP-NPUSCH-D_BARRIER-OP_BARRIER",
+            "TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER"
+          ],
+          "rules": [
+            "queue_level_within_depth",
+            "raw_never_issues",
+            "barrier_flushes",
+            "issued_needs_no_blocker"
+          ]
+        }
+      ],
+      "constraints": [
+        "p_th_b11_random"
+      ],
+      "not_applicable": {},
+      "description": "REQ-NPU-012：支持硬件同步屏障",
+      "source": "synthesized"
+    }
+  ],
+  "constraint_backing": {
+    "p_th_b01_directed": {
+      "backed": false,
+      "dimensions": [
+        "D_decision"
+      ],
+      "reason": "维度不可驱动：没有 `stimulus.field`，也没有 `realization.values` 场景序列 —— apply() 落 default 分支"
+    },
+    "p_th_b02_random": {
+      "backed": true,
+      "dimensions": [
+        "D_type"
+      ],
+      "reason": "1 条字段赋值（模型可驱动）"
+    },
+    "p_th_b03_random": {
+      "backed": true,
+      "dimensions": [
+        "D_dtype"
+      ],
+      "reason": "1 条字段赋值（模型可驱动）"
+    },
+    "p_th_b04_combo": {
+      "backed": false,
+      "dimensions": [
+        "D_dep",
+        "D_decision"
+      ],
+      "reason": "维度不可驱动：没有 `stimulus.field`，也没有 `realization.values` 场景序列 —— apply() 落 default 分支"
+    },
+    "p_th_b05_special": {
+      "backed": false,
+      "dimensions": [
+        "D_dep"
+      ],
+      "reason": "维度不可驱动：没有 `stimulus.field`，也没有 `realization.values` 场景序列 —— apply() 落 default 分支"
+    },
+    "p_th_b06_special": {
+      "backed": false,
+      "dimensions": [
+        "D_queue",
+        "D_decision"
+      ],
+      "reason": "维度不可驱动：没有 `stimulus.field`，也没有 `realization.values` 场景序列 —— apply() 落 default 分支"
+    },
+    "p_th_b07_combo": {
+      "backed": false,
+      "dimensions": [
+        "D_cluster",
+        "D_unit"
+      ],
+      "reason": "维度不可驱动：没有 `stimulus.field`，也没有 `realization.values` 场景序列 —— apply() 落 default 分支"
+    },
+    "p_th_b08_directed": {
+      "backed": true,
+      "dimensions": [
+        "D_opcode",
+        "D_unit"
+      ],
+      "reason": "1 条字段赋值（模型可驱动）"
+    },
+    "p_th_b09_random": {
+      "backed": true,
+      "dimensions": [
+        "D_type",
+        "D_unit"
+      ],
+      "reason": "1 条字段赋值（模型可驱动）"
+    },
+    "p_th_b10_random": {
+      "backed": true,
+      "dimensions": [
+        "D_pipeline"
+      ],
+      "reason": "1 条字段赋值（模型可驱动）"
+    },
+    "p_th_b11_random": {
+      "backed": true,
+      "dimensions": [
+        "D_queue",
+        "D_type",
+        "D_dtype",
+        "D_dep",
+        "D_unit",
+        "D_decision",
+        "D_cluster",
+        "D_opcode",
+        "D_seq",
+        "D_pipeline",
+        "D_priority",
+        "D_barrier"
+      ],
+      "reason": "7 条字段赋值（模型可驱动）"
+    }
+  },
+  "notes": [
+    "模型没有 `cases:` 段 —— 按维度合成 CASE（source=synthesized）"
+  ]
+}

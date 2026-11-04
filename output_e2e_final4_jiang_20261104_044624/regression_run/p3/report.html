@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Regression Report</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+.container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+.summary { display: flex; gap: 20px; flex-wrap: wrap; margin: 20px 0; }
+.summary-card { background: #f9f9f9; padding: 15px 25px; border-radius: 5px; flex: 1; min-width: 100px; text-align: center; }
+.summary-card .number { font-size: 28px; font-weight: bold; }
+.pass .number { color: #4CAF50; } .fail .number { color: #f44336; } .unknown .number { color: #ff9800; }
+.pass-rate { font-size: 24px; font-weight: bold; color: #2196F3; }
+.build-section { margin: 30px 0; border: 1px solid #ddd; border-radius: 5px; }
+.build-header { background: #e0e0e0; padding: 10px 15px; cursor: pointer; font-weight: bold; display: flex; justify-content: space-between; }
+.build-header:hover { background: #d0d0d0; }
+.test-table { width: 100%; border-collapse: collapse; }
+.test-table th, .test-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #eee; }
+.test-table th { background: #f2f2f2; }
+.status-badge { padding: 2px 10px; border-radius: 12px; color: white; font-size: 12px; font-weight: bold; }
+.status-pass { background: #4CAF50; } .status-fail { background: #f44336; } .status-unknown { background: #ff9800; }
+.performance-badge { background: #ff6f00; color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; }
+.wave-link { color: #2196F3; text-decoration: none; }
+.wave-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>Regression Report</h1>
+    <p>Generated: 2026-11-04 08:06:16 | Total Time: N/A</p>
+    <div class="summary">
+        <div class="summary-card"><div class="number">98</div><div class="label">Total</div></div>
+        <div class="summary-card pass"><div class="number">98</div><div class="label">Pass</div></div>
+        <div class="summary-card fail"><div class="number">0</div><div class="label">Fail</div></div>
+        <div class="summary-card unknown"><div class="number">0</div><div class="label">Unknown</div></div>
+        <div class="summary-card"><div class="pass-rate">100.0%</div><div class="label">Pass Rate</div></div>
+    </div>
+    
+    <div class="build-section">
+        <div class="build-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span>Build: npu_sched_dut</span>
+            <span>Total: 98 | Pass: 98 | Fail: 0 | Unknown: 0</span>
+        </div>
+        <div class="build-tests" style="display:block">
+            <table class="test-table">
+                <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Sim Time (s)</th>
+                    <th>Waveform</th>
+                    <th>Job ID</th>
+                    <th>Directory</th>
+                </tr></thead>
+                <tbody>
+                
+                <tr>
+                    <td>npu_sched_dut</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_10_seed_9010</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_10_seed_9010</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_11_seed_9011</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_11_seed_9011</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_12_seed_9012</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_12_seed_9012</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_13_seed_9013</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_13_seed_9013</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_14_seed_9014</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_14_seed_9014</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_1_seed_9001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_1_seed_9001</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_2_seed_9002</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_2_seed_9002</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_3_seed_9003</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_3_seed_9003</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_4_seed_9004</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_4_seed_9004</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_5_seed_9005</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_5_seed_9005</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_6_seed_9006</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_6_seed_9006</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_7_seed_9007</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_7_seed_9007</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_8_seed_9008</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_8_seed_9008</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_dma_compute_test_run_9_seed_9009</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_dma_compute_test_run_9_seed_9009</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_10_seed_9510</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_10_seed_9510</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_11_seed_9511</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_11_seed_9511</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_12_seed_9512</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_12_seed_9512</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_13_seed_9513</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_13_seed_9513</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_14_seed_9514</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_14_seed_9514</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_1_seed_9501</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_1_seed_9501</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_2_seed_9502</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_2_seed_9502</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_3_seed_9503</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_3_seed_9503</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_4_seed_9504</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_4_seed_9504</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_5_seed_9505</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_5_seed_9505</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_6_seed_9506</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_6_seed_9506</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_7_seed_9507</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_7_seed_9507</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_8_seed_9508</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_8_seed_9508</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_pipeline_test_run_9_seed_9509</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_pipeline_test_run_9_seed_9509</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_10_seed_10010</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_10_seed_10010</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_11_seed_10011</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_11_seed_10011</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_12_seed_10012</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_12_seed_10012</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_13_seed_10013</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_13_seed_10013</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_14_seed_10014</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_14_seed_10014</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_15_seed_10015</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_15_seed_10015</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_16_seed_10016</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_16_seed_10016</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_17_seed_10017</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_17_seed_10017</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_18_seed_10018</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_18_seed_10018</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_19_seed_10019</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_19_seed_10019</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_1_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_1_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_20_seed_10020</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_20_seed_10020</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_21_seed_10021</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_21_seed_10021</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_22_seed_10022</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_22_seed_10022</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_23_seed_10023</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_23_seed_10023</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_24_seed_10024</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_24_seed_10024</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_25_seed_10025</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_25_seed_10025</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_26_seed_10026</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_26_seed_10026</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_27_seed_10027</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_27_seed_10027</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_28_seed_10028</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_28_seed_10028</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_29_seed_10029</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_29_seed_10029</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_2_seed_10002</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_2_seed_10002</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_30_seed_10030</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_30_seed_10030</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_31_seed_10031</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_31_seed_10031</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_32_seed_10032</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_32_seed_10032</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_33_seed_10033</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_33_seed_10033</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_34_seed_10034</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_34_seed_10034</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_35_seed_10035</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_35_seed_10035</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_36_seed_10036</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_36_seed_10036</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_37_seed_10037</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_37_seed_10037</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_38_seed_10038</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_38_seed_10038</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_39_seed_10039</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_39_seed_10039</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_3_seed_10003</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_3_seed_10003</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_40_seed_10040</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_40_seed_10040</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_41_seed_10041</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_41_seed_10041</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_42_seed_10042</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_42_seed_10042</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_43_seed_10043</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_43_seed_10043</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_44_seed_10044</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_44_seed_10044</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_45_seed_10045</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_45_seed_10045</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_46_seed_10046</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_46_seed_10046</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_47_seed_10047</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_47_seed_10047</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_48_seed_10048</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_48_seed_10048</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_4_seed_10004</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_4_seed_10004</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_5_seed_10005</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_5_seed_10005</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_6_seed_10006</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_6_seed_10006</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_7_seed_10007</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_7_seed_10007</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_8_seed_10008</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_8_seed_10008</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_random_mix_test_run_9_seed_10009</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_random_mix_test_run_9_seed_10009</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_sched_gen_stimulus</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_npu_sched_gen_stimulus</td>
+                </tr>
+                
+                <tr>
+                    <td>npu_sched_error_injection</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_test_npu_sched_error_injection</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_barrier_cluster_barrier_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_barrier_cluster_barrier_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_barrier_none_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_barrier_none_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_barrier_op_barrier_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_barrier_op_barrier_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_barrier_tile_barrier_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_barrier_tile_barrier_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_pipeline_mac_dma_seed_9501</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_pipeline_mac_dma_seed_9501</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_pipeline_mac_mac_seed_9501</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_pipeline_mac_mac_seed_9501</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_pipeline_multi_op_seed_9501</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_pipeline_multi_op_seed_9501</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_pipeline_none_seed_9501</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_pipeline_none_seed_9501</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_pipeline_vec_mac_seed_9501</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_pipeline_vec_mac_seed_9501</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_priority_high_first_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_priority_high_first_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_priority_low_first_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_priority_low_first_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_priority_round_robin_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_priority_round_robin_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_priority_same_prio_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_priority_same_prio_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_seq_dma_mac_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_seq_dma_mac_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_seq_load_mac_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_seq_load_mac_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_seq_mac_mac_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_seq_mac_mac_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_seq_mac_store_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_seq_mac_store_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_seq_scalar_mac_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_seq_scalar_mac_seed_10001</td>
+                </tr>
+                
+                <tr>
+                    <td>tp_npusch_d_seq_vec_mac_seed_10001</td>
+                    <td><span class="status-badge status-pass">PASS</span></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                    <td class="test-dir">output_e2e_final4_jiang_20261104_044624\regression_run\p3\build_build_npu_sched_dut\test_tp_npusch_d_seq_vec_mac_seed_10001</td>
+                </tr>
+                
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+</div>
+</body>
+</html>

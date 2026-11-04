@@ -1,0 +1,2 @@
+var g_data = {"44":{"pr":"/npu_sched_env_pkg","ty":2,"dui":19,"dun":"work.npu_sched_env_pkg","cvgs":[{"h":["/npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_in",1,1,45],"cov":[32,25,81.66],"opts":{"goal":"100","merge_instance":"auto(true)"}},{"h":["/npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_out",1,1,56],"cov":[14,10,79.16],"opts":{"goal":"100","merge_instance":"auto(true)"}},{"h":["/npu_sched_env_pkg/npu_sched_env_coverage/cg_dut",1,1,61],"cov":[59,37,69.72],"opts":{"goal":"100","merge_instance":"auto(true)"}}]}};
+processCovergroupsData(g_data);

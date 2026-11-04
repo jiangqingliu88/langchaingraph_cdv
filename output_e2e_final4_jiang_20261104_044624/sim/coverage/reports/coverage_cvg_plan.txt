@@ -1,0 +1,487 @@
+QuestaSim-64 vcover 2024.1 Coverage Utility 2024.02 Feb  1 2024
+Start time: 08:06:30 on Nov 04,2026
+vcover report -cvg -details D:\SignOffAI\output_e2e_final4_jiang_20261104_044624\sim\coverage\plan_merged.ucdb 
+Support of the MGLS_LICENSE_FILE and LM_LICENSE_FILE licensing environment variables will be discontinued starting with the 2025.1 release. Please update to using the SALT_LICENSE_SERVER variable.
+Please contact Siemens EDA Customer Support (https://support.sw.siemens.com/) for assistance.
+Coverage Report by instance with details
+
+=================================================================================
+=== Instance: /npu_sched_env_pkg
+=== Design Unit: work.npu_sched_env_pkg
+=================================================================================
+
+Covergroup Coverage:
+    Covergroups                      3        na        na    95.27%
+        Coverpoints/Crosses         26        na        na        na
+            Covergroup Bins        105       100         5    95.23%
+----------------------------------------------------------------------------------------------------------
+Covergroup                                             Metric       Goal       Bins    Status               
+                                                                                                         
+----------------------------------------------------------------------------------------------------------
+ TYPE /npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_in 
+                                                       90.00%        100          -    Uncovered            
+    covered/total bins:                                    29         32          -                      
+    missing/total bins:                                     3         32          -                      
+    % Hit:                                             90.62%        100          -                      
+    Coverpoint cp_instr_valid                         100.00%        100          -    Covered              
+        covered/total bins:                                 2          2          -                      
+        missing/total bins:                                 0          2          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin auto[0]                                      1182          1          -    Covered              
+        bin auto[1]                                      3086          1          -    Covered              
+    Coverpoint cp_instr_opcode                        100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                        738          1          -    Covered              
+        bin v_one                                          19          1          -    Covered              
+        bin v_rest                                       3511          1          -    Covered              
+    Coverpoint cp_instr_type                          100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                       2907          1          -    Covered              
+        bin v_one                                         219          1          -    Covered              
+        bin v_rest                                       1142          1          -    Covered              
+    Coverpoint cp_instr_dtype                         100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                        841          1          -    Covered              
+        bin v_one                                         399          1          -    Covered              
+        bin v_rest                                       3028          1          -    Covered              
+    Coverpoint cp_instr_tile_id                        66.66%        100          -    Uncovered            
+        covered/total bins:                                 2          3          -                      
+        missing/total bins:                                 1          3          -                      
+        % Hit:                                         66.66%        100          -                      
+        bin v_zero                                        510          1          -    Covered              
+        bin v_one                                           0          1          -    ZERO                 
+        bin v_rest                                       3758          1          -    Covered              
+    Coverpoint cp_instr_src_addr                       66.66%        100          -    Uncovered            
+        covered/total bins:                                 2          3          -                      
+        missing/total bins:                                 1          3          -                      
+        % Hit:                                         66.66%        100          -                      
+        bin v_zero                                        510          1          -    Covered              
+        bin v_one                                           0          1          -    ZERO                 
+        bin v_rest                                        510          1          -    Covered              
+    Coverpoint cp_instr_dst_addr                       66.66%        100          -    Uncovered            
+        covered/total bins:                                 2          3          -                      
+        missing/total bins:                                 1          3          -                      
+        % Hit:                                         66.66%        100          -                      
+        bin v_zero                                        510          1          -    Covered              
+        bin v_one                                           0          1          -    ZERO                 
+        bin v_rest                                        510          1          -    Covered              
+    Coverpoint cp_barrier_type                        100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                        685          1          -    Covered              
+        bin v_one                                         443          1          -    Covered              
+        bin v_rest                                       3140          1          -    Covered              
+    Coverpoint cp_op_priority                         100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                       3107          1          -    Covered              
+        bin v_one                                         219          1          -    Covered              
+        bin v_rest                                        942          1          -    Covered              
+    Cross cross_all                                   100.00%        100          -    Covered              
+        covered/total bins:                                 6          6          -                      
+        missing/total bins:                                 0          6          -                      
+        % Hit:                                        100.00%        100          -                      
+        Auto, Default and User Defined Bins:
+            bin <auto[1],v_rest>                         2956          1          -    Covered              
+            bin <auto[1],v_one>                            10          1          -    Covered              
+            bin <auto[1],v_zero>                          120          1          -    Covered              
+            bin <auto[0],v_rest>                          555          1          -    Covered              
+            bin <auto[0],v_one>                             9          1          -    Covered              
+            bin <auto[0],v_zero>                          618          1          -    Covered              
+ TYPE /npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_out 
+                                                      100.00%        100          -    Covered              
+    covered/total bins:                                    14         14          -                      
+    missing/total bins:                                     0         14          -                      
+    % Hit:                                            100.00%        100          -                      
+    Coverpoint cp_issue_valid                         100.00%        100          -    Covered              
+        covered/total bins:                                 2          2          -                      
+        missing/total bins:                                 0          2          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin auto[0]                                      4170          1          -    Covered              
+        bin auto[1]                                        98          1          -    Covered              
+    Coverpoint cp_issue_unit                          100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                        772          1          -    Covered              
+        bin v_one                                          17          1          -    Covered              
+        bin v_rest                                       3479          1          -    Covered              
+    Coverpoint cp_issue_decision                      100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                         98          1          -    Covered              
+        bin v_one                                         587          1          -    Covered              
+        bin v_rest                                       3583          1          -    Covered              
+    Cross cross_all                                   100.00%        100          -    Covered              
+        covered/total bins:                                 6          6          -                      
+        missing/total bins:                                 0          6          -                      
+        % Hit:                                        100.00%        100          -                      
+        Auto, Default and User Defined Bins:
+            bin <auto[1],v_rest>                           94          1          -    Covered              
+            bin <auto[1],v_one>                             2          1          -    Covered              
+            bin <auto[1],v_zero>                            2          1          -    Covered              
+            bin <auto[0],v_rest>                         3385          1          -    Covered              
+            bin <auto[0],v_one>                            15          1          -    Covered              
+            bin <auto[0],v_zero>                          770          1          -    Covered              
+ TYPE /npu_sched_env_pkg/npu_sched_env_coverage/cg_dut 
+                                                       95.83%        100          -    Uncovered            
+    covered/total bins:                                    57         59          -                      
+    missing/total bins:                                     2         59          -                      
+    % Hit:                                             96.61%        100          -                      
+    Coverpoint cp_queue_level                         100.00%        100          -    Covered              
+        covered/total bins:                                 6          6          -                      
+        missing/total bins:                                 0          6          -                      
+        % Hit:                                        100.00%        100          -                      
+        illegal_bin illegal_over                            0                     -    ZERO                 
+        bin empty                                        2559          1          -    Covered              
+        bin low                                           559          1          -    Covered              
+        bin mid                                           875          1          -    Covered              
+        bin high                                          268          1          -    Covered              
+        bin near_full                                     334          1          -    Covered              
+        bin full                                         2323          1          -    Covered              
+    Coverpoint cp_instr_type                          100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin mac                                          4967          1          -    Covered              
+        bin vector                                        229          1          -    Covered              
+        bin scalar                                        117          1          -    Covered              
+        bin dma                                           185          1          -    Covered              
+    Coverpoint cp_instr_dtype                         100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin int8                                         2901          1          -    Covered              
+        bin fp16                                          409          1          -    Covered              
+        bin bf16                                           29          1          -    Covered              
+        bin fp32                                         2363          1          -    Covered              
+    Coverpoint cp_dep_type                             75.00%        100          -    Uncovered            
+        covered/total bins:                                 3          4          -                      
+        missing/total bins:                                 1          4          -                      
+        % Hit:                                         75.00%        100          -                      
+        bin no_dep                                       2559          1          -    Covered              
+        bin raw                                           315          1          -    Covered              
+        bin waw                                          4044          1          -    Covered              
+        bin war                                             0          1          -    ZERO                 
+    Coverpoint cp_issue_unit                          100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin mac                                          2900          1          -    Covered              
+        bin vector                                         26          1          -    Covered              
+        bin scalar                                         24          1          -    Covered              
+        bin dma                                          2554          1          -    Covered              
+    Coverpoint cp_issue_decision                       75.00%        100          -    Uncovered            
+        covered/total bins:                                 3          4          -                      
+        missing/total bins:                                 1          4          -                      
+        % Hit:                                         75.00%        100          -                      
+        bin issued                                         76          1          -    Covered              
+        bin stalled                                      2669          1          -    Covered              
+        bin blocked                                         0          1          -    ZERO                 
+        bin flushed                                      4173          1          -    Covered              
+    Coverpoint cp_cluster_id                          100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin c0                                           3008          1          -    Covered              
+        bin c1                                            988          1          -    Covered              
+        bin c2                                            536          1          -    Covered              
+        bin c3                                           2386          1          -    Covered              
+    Coverpoint cp_instr_opcode                        100.00%        100          -    Covered              
+        covered/total bins:                                10         10          -                      
+        missing/total bins:                                 0         10          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin mac_i8                                       2908          1          -    Covered              
+        bin mac_fp16                                       29          1          -    Covered              
+        bin mac_bf16                                       29          1          -    Covered              
+        bin vec_add                                        29          1          -    Covered              
+        bin vec_mul                                        29          1          -    Covered              
+        bin vec_relu                                       29          1          -    Covered              
+        bin load                                           29          1          -    Covered              
+        bin store                                          29          1          -    Covered              
+        bin dma_rd                                         29          1          -    Covered              
+        bin dma_wr                                         29          1          -    Covered              
+    Coverpoint cp_instr_seq                           100.00%        100          -    Covered              
+        covered/total bins:                                 6          6          -                      
+        missing/total bins:                                 0          6          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin mac_mac                                      3148          1          -    Covered              
+        bin load_mac                                        1          1          -    Covered              
+        bin mac_store                                       1          1          -    Covered              
+        bin dma_mac                                         1          1          -    Covered              
+        bin vec_mac                                         1          1          -    Covered              
+        bin scalar_mac                                      1          1          -    Covered              
+    Coverpoint cp_pipeline_state                      100.00%        100          -    Covered              
+        covered/total bins:                                 5          5          -                      
+        missing/total bins:                                 0          5          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin no_overlap                                   3139          1          -    Covered              
+        bin mac_mac_overlap                              2885          1          -    Covered              
+        bin mac_dma_overlap                                46          1          -    Covered              
+        bin vec_mac_overlap                                 4          1          -    Covered              
+        bin multi_op_overlap                              844          1          -    Covered              
+    Coverpoint cp_op_priority                         100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin high_first                                   5167          1          -    Covered              
+        bin low_first                                     229          1          -    Covered              
+        bin same_priority                                 757          1          -    Covered              
+        bin round_robin                                   765          1          -    Covered              
+    Coverpoint cp_barrier_type                        100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin no_barrier                                   2745          1          -    Covered              
+        bin tile_barrier                                  453          1          -    Covered              
+        bin op_barrier                                   2651          1          -    Covered              
+        bin cluster_barrier                              1069          1          -    Covered              
+
+COVERGROUP COVERAGE:
+----------------------------------------------------------------------------------------------------------
+Covergroup                                             Metric       Goal       Bins    Status               
+                                                                                                         
+----------------------------------------------------------------------------------------------------------
+ TYPE /npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_in 
+                                                       90.00%        100          -    Uncovered            
+    covered/total bins:                                    29         32          -                      
+    missing/total bins:                                     3         32          -                      
+    % Hit:                                             90.62%        100          -                      
+    Coverpoint cp_instr_valid                         100.00%        100          -    Covered              
+        covered/total bins:                                 2          2          -                      
+        missing/total bins:                                 0          2          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin auto[0]                                      1182          1          -    Covered              
+        bin auto[1]                                      3086          1          -    Covered              
+    Coverpoint cp_instr_opcode                        100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                        738          1          -    Covered              
+        bin v_one                                          19          1          -    Covered              
+        bin v_rest                                       3511          1          -    Covered              
+    Coverpoint cp_instr_type                          100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                       2907          1          -    Covered              
+        bin v_one                                         219          1          -    Covered              
+        bin v_rest                                       1142          1          -    Covered              
+    Coverpoint cp_instr_dtype                         100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                        841          1          -    Covered              
+        bin v_one                                         399          1          -    Covered              
+        bin v_rest                                       3028          1          -    Covered              
+    Coverpoint cp_instr_tile_id                        66.66%        100          -    Uncovered            
+        covered/total bins:                                 2          3          -                      
+        missing/total bins:                                 1          3          -                      
+        % Hit:                                         66.66%        100          -                      
+        bin v_zero                                        510          1          -    Covered              
+        bin v_one                                           0          1          -    ZERO                 
+        bin v_rest                                       3758          1          -    Covered              
+    Coverpoint cp_instr_src_addr                       66.66%        100          -    Uncovered            
+        covered/total bins:                                 2          3          -                      
+        missing/total bins:                                 1          3          -                      
+        % Hit:                                         66.66%        100          -                      
+        bin v_zero                                        510          1          -    Covered              
+        bin v_one                                           0          1          -    ZERO                 
+        bin v_rest                                        510          1          -    Covered              
+    Coverpoint cp_instr_dst_addr                       66.66%        100          -    Uncovered            
+        covered/total bins:                                 2          3          -                      
+        missing/total bins:                                 1          3          -                      
+        % Hit:                                         66.66%        100          -                      
+        bin v_zero                                        510          1          -    Covered              
+        bin v_one                                           0          1          -    ZERO                 
+        bin v_rest                                        510          1          -    Covered              
+    Coverpoint cp_barrier_type                        100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                        685          1          -    Covered              
+        bin v_one                                         443          1          -    Covered              
+        bin v_rest                                       3140          1          -    Covered              
+    Coverpoint cp_op_priority                         100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                       3107          1          -    Covered              
+        bin v_one                                         219          1          -    Covered              
+        bin v_rest                                        942          1          -    Covered              
+    Cross cross_all                                   100.00%        100          -    Covered              
+        covered/total bins:                                 6          6          -                      
+        missing/total bins:                                 0          6          -                      
+        % Hit:                                        100.00%        100          -                      
+        Auto, Default and User Defined Bins:
+            bin <auto[1],v_rest>                         2956          1          -    Covered              
+            bin <auto[1],v_one>                            10          1          -    Covered              
+            bin <auto[1],v_zero>                          120          1          -    Covered              
+            bin <auto[0],v_rest>                          555          1          -    Covered              
+            bin <auto[0],v_one>                             9          1          -    Covered              
+            bin <auto[0],v_zero>                          618          1          -    Covered              
+ TYPE /npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched_out 
+                                                      100.00%        100          -    Covered              
+    covered/total bins:                                    14         14          -                      
+    missing/total bins:                                     0         14          -                      
+    % Hit:                                            100.00%        100          -                      
+    Coverpoint cp_issue_valid                         100.00%        100          -    Covered              
+        covered/total bins:                                 2          2          -                      
+        missing/total bins:                                 0          2          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin auto[0]                                      4170          1          -    Covered              
+        bin auto[1]                                        98          1          -    Covered              
+    Coverpoint cp_issue_unit                          100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                        772          1          -    Covered              
+        bin v_one                                          17          1          -    Covered              
+        bin v_rest                                       3479          1          -    Covered              
+    Coverpoint cp_issue_decision                      100.00%        100          -    Covered              
+        covered/total bins:                                 3          3          -                      
+        missing/total bins:                                 0          3          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin v_zero                                         98          1          -    Covered              
+        bin v_one                                         587          1          -    Covered              
+        bin v_rest                                       3583          1          -    Covered              
+    Cross cross_all                                   100.00%        100          -    Covered              
+        covered/total bins:                                 6          6          -                      
+        missing/total bins:                                 0          6          -                      
+        % Hit:                                        100.00%        100          -                      
+        Auto, Default and User Defined Bins:
+            bin <auto[1],v_rest>                           94          1          -    Covered              
+            bin <auto[1],v_one>                             2          1          -    Covered              
+            bin <auto[1],v_zero>                            2          1          -    Covered              
+            bin <auto[0],v_rest>                         3385          1          -    Covered              
+            bin <auto[0],v_one>                            15          1          -    Covered              
+            bin <auto[0],v_zero>                          770          1          -    Covered              
+ TYPE /npu_sched_env_pkg/npu_sched_env_coverage/cg_dut 
+                                                       95.83%        100          -    Uncovered            
+    covered/total bins:                                    57         59          -                      
+    missing/total bins:                                     2         59          -                      
+    % Hit:                                             96.61%        100          -                      
+    Coverpoint cp_queue_level                         100.00%        100          -    Covered              
+        covered/total bins:                                 6          6          -                      
+        missing/total bins:                                 0          6          -                      
+        % Hit:                                        100.00%        100          -                      
+        illegal_bin illegal_over                            0                     -    ZERO                 
+        bin empty                                        2559          1          -    Covered              
+        bin low                                           559          1          -    Covered              
+        bin mid                                           875          1          -    Covered              
+        bin high                                          268          1          -    Covered              
+        bin near_full                                     334          1          -    Covered              
+        bin full                                         2323          1          -    Covered              
+    Coverpoint cp_instr_type                          100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin mac                                          4967          1          -    Covered              
+        bin vector                                        229          1          -    Covered              
+        bin scalar                                        117          1          -    Covered              
+        bin dma                                           185          1          -    Covered              
+    Coverpoint cp_instr_dtype                         100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin int8                                         2901          1          -    Covered              
+        bin fp16                                          409          1          -    Covered              
+        bin bf16                                           29          1          -    Covered              
+        bin fp32                                         2363          1          -    Covered              
+    Coverpoint cp_dep_type                             75.00%        100          -    Uncovered            
+        covered/total bins:                                 3          4          -                      
+        missing/total bins:                                 1          4          -                      
+        % Hit:                                         75.00%        100          -                      
+        bin no_dep                                       2559          1          -    Covered              
+        bin raw                                           315          1          -    Covered              
+        bin waw                                          4044          1          -    Covered              
+        bin war                                             0          1          -    ZERO                 
+    Coverpoint cp_issue_unit                          100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin mac                                          2900          1          -    Covered              
+        bin vector                                         26          1          -    Covered              
+        bin scalar                                         24          1          -    Covered              
+        bin dma                                          2554          1          -    Covered              
+    Coverpoint cp_issue_decision                       75.00%        100          -    Uncovered            
+        covered/total bins:                                 3          4          -                      
+        missing/total bins:                                 1          4          -                      
+        % Hit:                                         75.00%        100          -                      
+        bin issued                                         76          1          -    Covered              
+        bin stalled                                      2669          1          -    Covered              
+        bin blocked                                         0          1          -    ZERO                 
+        bin flushed                                      4173          1          -    Covered              
+    Coverpoint cp_cluster_id                          100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin c0                                           3008          1          -    Covered              
+        bin c1                                            988          1          -    Covered              
+        bin c2                                            536          1          -    Covered              
+        bin c3                                           2386          1          -    Covered              
+    Coverpoint cp_instr_opcode                        100.00%        100          -    Covered              
+        covered/total bins:                                10         10          -                      
+        missing/total bins:                                 0         10          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin mac_i8                                       2908          1          -    Covered              
+        bin mac_fp16                                       29          1          -    Covered              
+        bin mac_bf16                                       29          1          -    Covered              
+        bin vec_add                                        29          1          -    Covered              
+        bin vec_mul                                        29          1          -    Covered              
+        bin vec_relu                                       29          1          -    Covered              
+        bin load                                           29          1          -    Covered              
+        bin store                                          29          1          -    Covered              
+        bin dma_rd                                         29          1          -    Covered              
+        bin dma_wr                                         29          1          -    Covered              
+    Coverpoint cp_instr_seq                           100.00%        100          -    Covered              
+        covered/total bins:                                 6          6          -                      
+        missing/total bins:                                 0          6          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin mac_mac                                      3148          1          -    Covered              
+        bin load_mac                                        1          1          -    Covered              
+        bin mac_store                                       1          1          -    Covered              
+        bin dma_mac                                         1          1          -    Covered              
+        bin vec_mac                                         1          1          -    Covered              
+        bin scalar_mac                                      1          1          -    Covered              
+    Coverpoint cp_pipeline_state                      100.00%        100          -    Covered              
+        covered/total bins:                                 5          5          -                      
+        missing/total bins:                                 0          5          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin no_overlap                                   3139          1          -    Covered              
+        bin mac_mac_overlap                              2885          1          -    Covered              
+        bin mac_dma_overlap                                46          1          -    Covered              
+        bin vec_mac_overlap                                 4          1          -    Covered              
+        bin multi_op_overlap                              844          1          -    Covered              
+    Coverpoint cp_op_priority                         100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin high_first                                   5167          1          -    Covered              
+        bin low_first                                     229          1          -    Covered              
+        bin same_priority                                 757          1          -    Covered              
+        bin round_robin                                   765          1          -    Covered              
+    Coverpoint cp_barrier_type                        100.00%        100          -    Covered              
+        covered/total bins:                                 4          4          -                      
+        missing/total bins:                                 0          4          -                      
+        % Hit:                                        100.00%        100          -                      
+        bin no_barrier                                   2745          1          -    Covered              
+        bin tile_barrier                                  453          1          -    Covered              
+        bin op_barrier                                   2651          1          -    Covered              
+        bin cluster_barrier                              1069          1          -    Covered              
+
+TOTAL COVERGROUP COVERAGE: 95.27%  COVERGROUP TYPES: 3
+
+Total Coverage By Instance (filtered view): 95.27%
+
+End time: 08:06:30 on Nov 04,2026, Elapsed time: 0:00:00
+Errors: 0, Warnings: 0

@@ -1,0 +1,433 @@
+{
+  "schema": "case_group_map_v1",
+  "counts": {
+    "cases": 13,
+    "groups": 13,
+    "cells": 13
+  },
+  "cases": [
+    {
+      "case_id": "CASE-BEH_QUEUE",
+      "groups": [
+        {
+          "group": "CG-BEH_QUEUE",
+          "cells": [
+            "CELL-BEH_QUEUE-BEHAVIOR"
+          ],
+          "required_layers": [
+            "functional"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-BEH_QUEUE-TR_EMPTY_ENQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_LOW_ENQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_HIGH_ENQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_FULL_DEQ",
+            "TP-NPUSCH-BEH_QUEUE-TR_FULL_FLUSH",
+            "TP-NPUSCH-BEH_QUEUE-SEQ_FILL_DRAIN",
+            "TP-NPUSCH-BEH_QUEUE-TMP_BACKPRESSURE"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_QUEUE",
+      "groups": [
+        {
+          "group": "CG-D_QUEUE",
+          "cells": [
+            "CELL-D_QUEUE-P1"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_QUEUE-0",
+            "TP-NPUSCH-D_QUEUE-1",
+            "TP-NPUSCH-D_QUEUE-7",
+            "TP-NPUSCH-D_QUEUE-8",
+            "TP-NPUSCH-D_QUEUE-15",
+            "TP-NPUSCH-D_QUEUE-16",
+            "TP-NPUSCH-D_QUEUE-24",
+            "TP-NPUSCH-D_QUEUE-25",
+            "TP-NPUSCH-D_QUEUE-31",
+            "TP-NPUSCH-D_QUEUE-32"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_TYPE",
+      "groups": [
+        {
+          "group": "CG-D_TYPE",
+          "cells": [
+            "CELL-D_TYPE-P0"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_TYPE-MAC",
+            "TP-NPUSCH-D_TYPE-VECTOR",
+            "TP-NPUSCH-D_TYPE-SCALAR",
+            "TP-NPUSCH-D_TYPE-DMA"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_DTYPE",
+      "groups": [
+        {
+          "group": "CG-D_DTYPE",
+          "cells": [
+            "CELL-D_DTYPE-P0"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_DTYPE-INT8",
+            "TP-NPUSCH-D_DTYPE-FP16",
+            "TP-NPUSCH-D_DTYPE-BF16",
+            "TP-NPUSCH-D_DTYPE-FP32"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_DEP",
+      "groups": [
+        {
+          "group": "CG-D_DEP",
+          "cells": [
+            "CELL-D_DEP-P1"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_DEP-NONE",
+            "TP-NPUSCH-D_DEP-RAW",
+            "TP-NPUSCH-D_DEP-WAW",
+            "TP-NPUSCH-D_DEP-WAR"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_UNIT",
+      "groups": [
+        {
+          "group": "CG-D_UNIT",
+          "cells": [
+            "CELL-D_UNIT-P2"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_UNIT-MAC",
+            "TP-NPUSCH-D_UNIT-VECTOR",
+            "TP-NPUSCH-D_UNIT-SCALAR",
+            "TP-NPUSCH-D_UNIT-DMA"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_DECISION",
+      "groups": [
+        {
+          "group": "CG-D_DECISION",
+          "cells": [
+            "CELL-D_DECISION-P0"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_DECISION-ISSUED",
+            "TP-NPUSCH-D_DECISION-STALLED",
+            "TP-NPUSCH-D_DECISION-BLOCKED",
+            "TP-NPUSCH-D_DECISION-FLUSHED"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_CLUSTER",
+      "groups": [
+        {
+          "group": "CG-D_CLUSTER",
+          "cells": [
+            "CELL-D_CLUSTER-P2"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_CLUSTER-0",
+            "TP-NPUSCH-D_CLUSTER-1",
+            "TP-NPUSCH-D_CLUSTER-2",
+            "TP-NPUSCH-D_CLUSTER-3"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_OPCODE",
+      "groups": [
+        {
+          "group": "CG-D_OPCODE",
+          "cells": [
+            "CELL-D_OPCODE-P2"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_OPCODE-MAC_INT8",
+            "TP-NPUSCH-D_OPCODE-MAC_FP16",
+            "TP-NPUSCH-D_OPCODE-MAC_BF16",
+            "TP-NPUSCH-D_OPCODE-VEC_ADD",
+            "TP-NPUSCH-D_OPCODE-VEC_MUL",
+            "TP-NPUSCH-D_OPCODE-VEC_RELU",
+            "TP-NPUSCH-D_OPCODE-LOAD",
+            "TP-NPUSCH-D_OPCODE-STORE",
+            "TP-NPUSCH-D_OPCODE-DMA_READ",
+            "TP-NPUSCH-D_OPCODE-DMA_WRITE"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_SEQ",
+      "groups": [
+        {
+          "group": "CG-D_SEQ",
+          "cells": [
+            "CELL-D_SEQ-P3"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_SEQ-MAC_MAC",
+            "TP-NPUSCH-D_SEQ-LOAD_MAC",
+            "TP-NPUSCH-D_SEQ-MAC_STORE",
+            "TP-NPUSCH-D_SEQ-DMA_MAC",
+            "TP-NPUSCH-D_SEQ-VEC_MAC",
+            "TP-NPUSCH-D_SEQ-SCALAR_MAC"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_PIPELINE",
+      "groups": [
+        {
+          "group": "CG-D_PIPELINE",
+          "cells": [
+            "CELL-D_PIPELINE-P3"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_PIPELINE-NONE",
+            "TP-NPUSCH-D_PIPELINE-MAC_MAC",
+            "TP-NPUSCH-D_PIPELINE-MAC_DMA",
+            "TP-NPUSCH-D_PIPELINE-VEC_MAC",
+            "TP-NPUSCH-D_PIPELINE-MULTI_OP"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_PRIORITY",
+      "groups": [
+        {
+          "group": "CG-D_PRIORITY",
+          "cells": [
+            "CELL-D_PRIORITY-P3"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_PRIORITY-HIGH_FIRST",
+            "TP-NPUSCH-D_PRIORITY-LOW_FIRST",
+            "TP-NPUSCH-D_PRIORITY-SAME_PRIO",
+            "TP-NPUSCH-D_PRIORITY-ROUND_ROBIN"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "CASE-D_BARRIER",
+      "groups": [
+        {
+          "group": "CG-D_BARRIER",
+          "cells": [
+            "CELL-D_BARRIER-P3"
+          ],
+          "required_layers": [
+            "functional",
+            "timing",
+            "data"
+          ],
+          "tp_ids": [
+            "TP-NPUSCH-D_BARRIER-NONE",
+            "TP-NPUSCH-D_BARRIER-TILE_BARRIER",
+            "TP-NPUSCH-D_BARRIER-OP_BARRIER",
+            "TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER"
+          ]
+        }
+      ]
+    }
+  ],
+  "index": {
+    "CG-BEH_QUEUE": [
+      "CASE-BEH_QUEUE"
+    ],
+    "CG-D_BARRIER": [
+      "CASE-D_BARRIER"
+    ],
+    "CG-D_CLUSTER": [
+      "CASE-D_CLUSTER"
+    ],
+    "CG-D_DECISION": [
+      "CASE-D_DECISION"
+    ],
+    "CG-D_DEP": [
+      "CASE-D_DEP"
+    ],
+    "CG-D_DTYPE": [
+      "CASE-D_DTYPE"
+    ],
+    "CG-D_OPCODE": [
+      "CASE-D_OPCODE"
+    ],
+    "CG-D_PIPELINE": [
+      "CASE-D_PIPELINE"
+    ],
+    "CG-D_PRIORITY": [
+      "CASE-D_PRIORITY"
+    ],
+    "CG-D_QUEUE": [
+      "CASE-D_QUEUE"
+    ],
+    "CG-D_SEQ": [
+      "CASE-D_SEQ"
+    ],
+    "CG-D_TYPE": [
+      "CASE-D_TYPE"
+    ],
+    "CG-D_UNIT": [
+      "CASE-D_UNIT"
+    ]
+  },
+  "cell_index": {
+    "CELL-BEH_QUEUE-BEHAVIOR": [
+      {
+        "case": "CASE-BEH_QUEUE",
+        "group": "CG-BEH_QUEUE"
+      }
+    ],
+    "CELL-D_BARRIER-P3": [
+      {
+        "case": "CASE-D_BARRIER",
+        "group": "CG-D_BARRIER"
+      }
+    ],
+    "CELL-D_CLUSTER-P2": [
+      {
+        "case": "CASE-D_CLUSTER",
+        "group": "CG-D_CLUSTER"
+      }
+    ],
+    "CELL-D_DECISION-P0": [
+      {
+        "case": "CASE-D_DECISION",
+        "group": "CG-D_DECISION"
+      }
+    ],
+    "CELL-D_DEP-P1": [
+      {
+        "case": "CASE-D_DEP",
+        "group": "CG-D_DEP"
+      }
+    ],
+    "CELL-D_DTYPE-P0": [
+      {
+        "case": "CASE-D_DTYPE",
+        "group": "CG-D_DTYPE"
+      }
+    ],
+    "CELL-D_OPCODE-P2": [
+      {
+        "case": "CASE-D_OPCODE",
+        "group": "CG-D_OPCODE"
+      }
+    ],
+    "CELL-D_PIPELINE-P3": [
+      {
+        "case": "CASE-D_PIPELINE",
+        "group": "CG-D_PIPELINE"
+      }
+    ],
+    "CELL-D_PRIORITY-P3": [
+      {
+        "case": "CASE-D_PRIORITY",
+        "group": "CG-D_PRIORITY"
+      }
+    ],
+    "CELL-D_QUEUE-P1": [
+      {
+        "case": "CASE-D_QUEUE",
+        "group": "CG-D_QUEUE"
+      }
+    ],
+    "CELL-D_SEQ-P3": [
+      {
+        "case": "CASE-D_SEQ",
+        "group": "CG-D_SEQ"
+      }
+    ],
+    "CELL-D_TYPE-P0": [
+      {
+        "case": "CASE-D_TYPE",
+        "group": "CG-D_TYPE"
+      }
+    ],
+    "CELL-D_UNIT-P2": [
+      {
+        "case": "CASE-D_UNIT",
+        "group": "CG-D_UNIT"
+      }
+    ]
+  }
+}

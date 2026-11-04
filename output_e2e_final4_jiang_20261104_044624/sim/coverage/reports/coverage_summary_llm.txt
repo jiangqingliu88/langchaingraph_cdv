@@ -1,0 +1,15 @@
+# coverage summary（降采样；原始 6753 字符）
+QuestaSim-64 vcover 2024.1 Coverage Utility 2024.02 Feb  1 2024
+Coverage Report Summary Data by instance
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+Total Coverage By Instance (filtered view): 6.91%
