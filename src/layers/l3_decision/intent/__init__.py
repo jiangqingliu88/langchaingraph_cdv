@@ -5,12 +5,12 @@ from .schema import (
     SCHEMA, Assumption, IntentGoal, IntentStatus, VerificationIntent,
     canonical_hash, from_dict,
 )
-from .store import load_intents, write_intents
+from .store import load_intents, save_intents, write_intents
 from .validator import validate
 
 __all__ = [
     "SCHEMA", "Assumption", "IntentGoal", "IntentPromotionError", "IntentStatus",
     "VerificationIntent", "canonical_hash", "from_dict", "gate_check",
-    "intents_from_case_ir", "load_intents", "promote", "validate",
-    "write_intents",
+    "intents_from_case_ir", "load_intents", "promote", "save_intents",
+    "validate", "write_intents",
 ]

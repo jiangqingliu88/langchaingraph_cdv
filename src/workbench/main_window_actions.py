@@ -11,7 +11,9 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QMenu, QMessageBox,
                                QVBoxLayout, QWidget)
 
 from .bus import EventBus
-from .constants import APP_TITLE, CONSOLE_TITLE
+from .constants import (
+    APP_TITLE, CONSOLE_PIN, CONSOLE_TITLE, NAV_PIN, REGISTER_ACTION,
+)
 from .context import AppContext
 from .manifest import ManifestError, builtin_manifest, describe, load_manifest
 from .registry import ModuleManager

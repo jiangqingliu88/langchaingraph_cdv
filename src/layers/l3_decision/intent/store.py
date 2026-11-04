@@ -35,6 +35,29 @@ def write_intents(output_dir: str | Path, case_ir: Dict[str, Any], *,
             "ok": bool(report["ok"])}
 
 
+def save_intents(output_dir: str | Path,
+                 intents: List[VerificationIntent]) -> Dict[str, Any]:
+    """把（人工审阅后的）intent 列表写回 `coverage/intents.json`。"""
+    root = Path(output_dir)
+    report = validate(intents)
+    doc = {
+        "schema": SCHEMA,
+        "module": intents[0].module if intents else "",
+        "total": len(intents),
+        "candidate": sum(1 for i in intents if not i.confirmed),
+        "confirmed": sum(1 for i in intents if i.confirmed),
+        "validation": report,
+        "intents": [i.to_dict() for i in intents],
+    }
+    path = root / "coverage" / "intents.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8", newline="\n")
+    return {"path": "coverage/intents.json", "total": len(intents),
+            "candidate": doc["candidate"], "confirmed": doc["confirmed"],
+            "ok": bool(report["ok"])}
+
+
 def load_intents(output_dir: str | Path) -> List[VerificationIntent]:
     try:
         doc = json.loads((Path(output_dir) / "coverage" / "intents.json")
@@ -45,4 +68,4 @@ def load_intents(output_dir: str | Path) -> List[VerificationIntent]:
             if isinstance(i, dict)]
 
 
-__all__ = ["SCHEMA", "load_intents", "write_intents"]
+__all__ = ["SCHEMA", "load_intents", "save_intents", "write_intents"]

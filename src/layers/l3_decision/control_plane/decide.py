@@ -53,7 +53,7 @@ def decide(action: str, *, role: str = "", module: str = "",
 
 
 def record(root: str | Path, decision: Dict[str, Any], *,
-           actor: str = "", output_sha: str = "",
+           actor: str = "", output_sha: str = "", appr_id: str = "",
            metadata: Dict[str, Any] = None) -> Dict[str, Any]:
     """把决策写进 `docs/action_audit.jsonl`（只追加）。"""
     body = {
@@ -65,6 +65,8 @@ def record(root: str | Path, decision: Dict[str, Any], *,
         "policy_id": decision.get("policy_id", ""),
         "reason": decision.get("reason", ""),
         "actor": str(actor or ""),
+        # 人工审批 token：绑定被批动作的输入哈希（见 approvals.py）。
+        "appr_id": str(appr_id or ""),
         "input_sha256": decision.get("input_sha", ""),
         "output_sha256": str(output_sha or ""),
         "metadata": dict(metadata or {}),

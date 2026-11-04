@@ -39,6 +39,9 @@ class Claim:
     producer_class: str = "agent"  # engine | human | agent
     obligation_ids: List[str] = field(default_factory=list)
     evidence_ids: List[str] = field(default_factory=list)
+    #: 人工/证据晋升的出处（审计用）。
+    confirmed_by: str = ""
+    confirmed_at: str = ""
     claim_id: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
@@ -71,6 +74,8 @@ def from_dict(doc: Dict[str, Any]) -> Claim:
         producer_class=str(doc.get("producer_class") or "agent"),
         obligation_ids=[str(o) for o in (doc.get("obligation_ids") or []) if str(o)],
         evidence_ids=[str(e) for e in (doc.get("evidence_ids") or []) if str(e)],
+        confirmed_by=str(doc.get("confirmed_by") or ""),
+        confirmed_at=str(doc.get("confirmed_at") or ""),
         claim_id=str(doc.get("claim_id") or ""),
     )
 

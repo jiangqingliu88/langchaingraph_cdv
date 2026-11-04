@@ -132,6 +132,8 @@ def _patch_tools(module, run_dir) -> None:
             return {"dir": str(run_dir)}
         if tool == "flow.signoff":
             return run_signoff(str(run_dir))
+        if tool in ("flow.manual_signoff", "flow.review"):
+            return {"available": False, "note": "测试桩：没有人工签核/审阅产物"}
         if tool == "evidence.check_package":
             return {
                 "available": True,

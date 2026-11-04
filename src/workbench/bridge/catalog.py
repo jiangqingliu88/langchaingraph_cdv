@@ -215,6 +215,44 @@ BINDINGS: List[ToolBinding] = [
         doc="一次运行目录 → 签核门禁 + 六层证据链 + 总判定",
     ),
 
+    # 人工签核 —— 逐用例结论 + TB/RTL 封存（写盘动作，必须人工显式触发）
+    ToolBinding(
+        name="flow.manual_signoff",
+        target="src.app.services.manual_signoff_service:manual_signoff",
+        kind="json",
+        doc="一次运行目录 → 逐用例人工签核表 + 封存状态",
+    ),
+    ToolBinding(
+        name="flow.review",
+        target="src.app.services.review_service:review_board",
+        kind="json",
+        doc="一次运行目录 → 意图/Claim/解释/下一轮上下文/证据门禁审阅表",
+    ),
+    ToolBinding(
+        name="flow.review_decide",
+        target="src.app.services.review_service:review_decide",
+        kind="json", pure=False, trigger="user",
+        doc="人工审阅结论（intent / claim / interpretation）",
+    ),
+    ToolBinding(
+        name="flow.manual_signoff_record",
+        target="src.app.services.manual_signoff_service:record_case_decision",
+        kind="json", pure=False, trigger="user",
+        doc="记录一个用例的人工结论（APPROVED / REJECTED / PENDING）",
+    ),
+    ToolBinding(
+        name="flow.seal",
+        target="src.app.services.manual_signoff_service:seal_tb_rtl",
+        kind="json", pure=False, trigger="user",
+        doc="封存 TB + RTL：逐文件哈希 + 聚合哈希 + 签核快照",
+    ),
+    ToolBinding(
+        name="flow.unseal",
+        target="src.app.services.manual_signoff_service:unseal",
+        kind="json", pure=False, trigger="user",
+        doc="解封 TB/RTL（需要签核人 + 原因）",
+    ),
+
     # 任务总览 —— 一次运行作为一个「验证任务」：目标 / 进度 / 收敛预测 / 卡点。
     ToolBinding(
         name="flow.task",

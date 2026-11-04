@@ -23,7 +23,9 @@ from typing import Dict, List, Optional, Sequence
 from .bootstrap import require_pyside6
 from .bus import EventBus
 from .config import resolve_manifest_path
-from .constants import APP_TITLE, CONSOLE_TITLE
+from .constants import (
+    APP_TITLE, CONSOLE_PIN, CONSOLE_TITLE, NAV_PIN, REGISTER_ACTION,
+)
 from .context import AppContext
 from .manifest import ManifestError, builtin_manifest, describe, load_manifest
 from .registry import ModuleManager
@@ -54,14 +56,6 @@ def _publish_task_done(ctx: AppContext, task_id: str) -> None:
         status=rec.status if rec else "",
         run_id=rec.run_id if rec else "",
         error=rec.error if rec else "").to_payload())
-
-#: 平台自带页签的 id。双下划线打头是刻意的 —— 它们不是清单里的模块，
-#: 不能跟模块 id 撞车。
-CONSOLE_PIN = "__console__"
-NAV_PIN = "__nav__"
-
-#: 项目下拉里那条"就地登记"的哨兵值（不是项目 id）
-REGISTER_ACTION = "__register__"
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -368,6 +368,24 @@ hard_ok=True + 无 caveat → READY
 
 `score` 不能覆盖 `verdict`；`MODEL_UNAVAILABLE` 是否接受由 `signoff_policy.yaml` 决定。
 
+**人工签核与 TB/RTL 封存**（Workbench「签核判定 → 人工签核」）：
+
+- 表格逐 CASE 显示证据状态、人工结论、签核人、时间、备注；
+- 结论写 `status/manual_signoff.json`，动作进 `docs/action_audit.jsonl`（带 `appr_id`）；
+- **全部用例有结论**后才能「封存 TB/RTL」：逐文件哈希 + 聚合哈希写入
+  `status/seal_manifest.json`，并复制到 `signoff_evidence/seal_manifest.json`；
+- 封存后签核表锁定；解封必须填写签核人 + 原因，动作同样留审计。
+
+**人机审阅**（同一页的「人机审阅」标签）：
+
+- **意图 / 结论 / 解释** 三合一表：Intent `CANDIDATE→CONFIRMED/REJECTED`、
+  Claim 人工确认（记 `confirmed_by`）、Interpretation `DRAFT→REVIEWED/REJECTED`；
+- **下一轮上下文**：未决义务 / 覆盖缺口 / 无证据 Claim，只读；
+- **证据门禁**：Claim 证据覆盖、失败义务、闭环状态、可用/占位证据源、
+  高风险未审批动作；`SIGNOFFAI_EVIDENCE_GATE` 当前模式只读展示。
+- 所有审阅动作写 `docs/action_audit.jsonl`（`review_intent / review_claim /
+  review_interpretation`，带 `appr_id`）。
+
 **证据闭环相关读数**（默认 `warning`，`SIGNOFFAI_EVIDENCE_GATE=block` 才硬失败）：
 
 - `claim_confirmed_without_evidence`

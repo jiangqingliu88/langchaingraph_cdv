@@ -5,7 +5,9 @@ from typing import List, Optional
 
 from PySide6.QtWidgets import QApplication, QMainWindow
 
+from .constants import APP_TITLE
 from .context import AppContext
+from .registry import ModuleManager
 from .main_window_actions import WindowActionsMixin
 from .main_window_events import WindowEventsMixin
 from .main_window_layout import WindowLayoutMixin

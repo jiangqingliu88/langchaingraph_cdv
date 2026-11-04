@@ -22,6 +22,8 @@
 """
 from __future__ import annotations
 
+import os
+
 from src.workbench.bus import run_id_of
 
 from pathlib import Path
@@ -29,8 +31,9 @@ from typing import Any, Dict, List
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor
-from PySide6.QtWidgets import (QApplication, QLabel, QMessageBox, QScrollArea,
-                               QTabWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit,
+                               QMessageBox, QPushButton, QScrollArea, QTabWidget,
+                               QVBoxLayout, QWidget)
 
 from ....ui import theme
 from ....ui.helpers import tables as table_helpers
@@ -64,15 +67,51 @@ OS_COLUMNS = (
     ("case", "用例", 190, LEFT),
     ("status", "状态", 120, CENTER),
 )
+#: 人工签核：每个 CASE 一行（结论由人写，证据状态只读）
+MANUAL_COLUMNS = (
+    ("case_id", "用例", 180, LEFT),
+    ("name", "名称", 180, LEFT),
+    ("source", "来源", 90, CENTER),
+    ("evidence", "证据", 110, CENTER),
+    ("evidence_records", "记录", 60, CENTER),
+    ("decision", "人工结论", 100, CENTER),
+    ("signer", "签核人", 100, LEFT),
+    ("at", "时间", 145, LEFT),
+    ("comment", "备注", 220, LEFT),
+)
+#: 人机审阅：意图 / Claim / 解释 统一表
+REVIEW_COLUMNS = (
+    ("kind_label", "类型", 70, CENTER),
+    ("item_id", "编号", 150, LEFT),
+    ("case_id", "用例", 150, LEFT),
+    ("statement", "内容", 360, LEFT),
+    ("status", "状态", 100, CENTER),
+    ("reviewer", "审阅人", 100, LEFT),
+    ("basis", "依据", 220, LEFT),
+)
+CONTEXT_COLUMNS = (
+    ("section", "区块", 110, CENTER),
+    ("item", "项", 200, LEFT),
+    ("status", "状态", 120, CENTER),
+    ("detail", "说明", 420, LEFT),
+)
+GATE_COLUMNS_REVIEW = (
+    ("check", "检查项", 180, LEFT),
+    ("value", "数值", 80, CENTER),
+    ("status", "状态", 80, CENTER),
+    ("detail", "说明", 420, LEFT),
+)
 
 
 class SignoffModule(ModuleBase):
     """一次运行的签核判定（门禁 + 证据链）。"""
 
-    HINT = ("选一次运行（左边「运行历史」），这里显示它能不能签核。五个标签页："
+    HINT = ("选一次运行（左边「运行历史」），这里显示它能不能签核。七个标签页："
             "签核门禁 / 领域证据链 / Case 证据（四集合 + 非绿 CELL 缺口）/ "
             "证据包 v2（哈希 / caveat / 覆盖率 / 种子 / 奖励 / 知识图 / 审批 / 回放）/ "
-            "OS 账本（义务 / 账本 / 两级对账 / 建议重跑的 test）。"
+            "OS 账本（义务 / 账本 / 两级对账 / 建议重跑的 test）/ "
+            "人工签核（逐用例签核/驳回，全部有结论后封存 TB/RTL）/ "
+            "人机审阅（意图 / 结论 / 解释 / 下一轮上下文 / 证据门禁）。"
             "工具栏「校验证据包」会重算 Tier A 并检查 replay recipe。")
 
     def __init__(self, ctx, spec) -> None:
@@ -80,6 +119,7 @@ class SignoffModule(ModuleBase):
         self.run_id: str = ""
         self.evidence_dir: str = ""
         self.replay_cmd: str = ""
+        self._run_dir: str = ""
 
     # ════════════════════════════════════════════════════════
     # 搭界面
@@ -186,8 +226,120 @@ class SignoffModule(ModuleBase):
         # Verification OS：义务清单 + 状态（只呈现 derive 的结论）
         self.tabs.addTab(self._build_os_page(), "OS 账本")
 
+        # 人工签核：逐用例写结论；全部有结论后封存 TB/RTL。
+        self.tabs.addTab(self._build_manual_page(), "人工签核")
+
+        # 人机审阅：意图 / Claim / 解释 / 下一轮上下文 / 证据门禁
+        self.tabs.addTab(self._build_review_page(), "人机审阅")
+
         layout.addWidget(self.tabs, 1)
         return root
+
+    def _build_review_page(self) -> QWidget:
+        page = QWidget(self.tabs)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(3)
+
+        self.review_label = QLabel("（还没加载审阅项）", page)
+        self.review_label.setWordWrap(True)
+        self.review_label.setStyleSheet(f"color: {theme.current().muted};")
+        layout.addWidget(self.review_label)
+
+        buttons = QHBoxLayout()
+        buttons.setSpacing(4)
+        for text, slot in (
+            ("确认/复核通过", lambda: self._review_decide("CONFIRMED")),
+            ("驳回", lambda: self._review_decide("REJECTED")),
+            ("撤销", lambda: self._review_decide("CANDIDATE")),
+            ("刷新审阅", self._reload_review),
+        ):
+            button = QPushButton(text, page)
+            button.clicked.connect(slot)
+            buttons.addWidget(button)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+
+        self.review_tabs = QTabWidget(page)
+        self.review_tabs.setDocumentMode(True)
+
+        items = QWidget(self.review_tabs)
+        items_layout = QVBoxLayout(items)
+        items_layout.setContentsMargins(2, 2, 2, 2)
+        self.review_model = RowsModel(REVIEW_COLUMNS, items)
+        self.review_table = table_helpers.configure_table(items, self.review_model)
+        items_layout.addWidget(self.review_table, 1)
+        self.review_tabs.addTab(items, "意图 / 结论 / 解释")
+
+        context = QWidget(self.review_tabs)
+        context_layout = QVBoxLayout(context)
+        context_layout.setContentsMargins(2, 2, 2, 2)
+        self.context_model = RowsModel(CONTEXT_COLUMNS, context)
+        self.context_table = table_helpers.configure_table(context,
+                                                           self.context_model)
+        context_layout.addWidget(self.context_table, 1)
+        self.review_tabs.addTab(context, "下一轮上下文")
+
+        gates = QWidget(self.review_tabs)
+        gates_layout = QVBoxLayout(gates)
+        gates_layout.setContentsMargins(2, 2, 2, 2)
+        self.review_gate_model = RowsModel(GATE_COLUMNS_REVIEW, gates)
+        self.review_gate_table = table_helpers.configure_table(
+            gates, self.review_gate_model)
+        gates_layout.addWidget(self.review_gate_table, 1)
+        self.review_tabs.addTab(gates, "证据门禁")
+
+        layout.addWidget(self.review_tabs, 1)
+        return page
+
+    def _build_manual_page(self) -> QWidget:
+        page = QWidget(self.tabs)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(3)
+
+        intro = QLabel(
+            "人工结论只记录人的决定，不改 derive 判定。签核/驳回必须填签核人；"
+            "全部用例有结论后「封存 TB/RTL」，封存后本表锁定。", page)
+        intro.setWordWrap(True)
+        intro.setStyleSheet(f"color: {theme.current().muted};")
+        layout.addWidget(intro)
+
+        self.manual_label = QLabel("（还没加载人工签核）", page)
+        self.manual_label.setWordWrap(True)
+        layout.addWidget(self.manual_label)
+
+        controls = QHBoxLayout()
+        controls.setSpacing(4)
+        controls.addWidget(QLabel("签核人", page))
+        self.signer_edit = QLineEdit(page)
+        self.signer_edit.setPlaceholderText("姓名 / 工号")
+        self.signer_edit.setText(os.environ.get("USERNAME")
+                                 or os.environ.get("USER") or "")
+        self.signer_edit.setMaximumWidth(150)
+        controls.addWidget(self.signer_edit)
+        controls.addWidget(QLabel("备注", page))
+        self.comment_edit = QLineEdit(page)
+        self.comment_edit.setPlaceholderText("结论依据 / 保留意见")
+        controls.addWidget(self.comment_edit, 1)
+        for text, slot in (
+            ("签核选中", lambda: self._record_case("APPROVED")),
+            ("驳回选中", lambda: self._record_case("REJECTED")),
+            ("撤销结论", lambda: self._record_case("PENDING")),
+            ("封存 TB/RTL", self._seal),
+            ("解封", self._unseal),
+        ):
+            button = QPushButton(text, page)
+            button.clicked.connect(slot)
+            controls.addWidget(button)
+        layout.addLayout(controls)
+
+        self.manual_model = RowsModel(MANUAL_COLUMNS, page)
+        self.manual_table = table_helpers.configure_table(page, self.manual_model)
+        layout.addWidget(self.manual_table, 1)
+        self._manual_rows: List[Dict[str, Any]] = []
+        self._manual_sealed = False
+        return page
 
     def _build_os_page(self) -> QWidget:
         page = QWidget(self.tabs)
@@ -282,12 +434,20 @@ class SignoffModule(ModuleBase):
             return
 
         self.run_id = run_id
+        self._run_dir = run_dir
         self._fill_header(payload)
         self._fill_gates(payload.get("gates") or {})
         self._fill_chain(payload.get("chain") or {})
         self._fill_case_view(payload.get("case_view") or {},
                              payload.get("os") or {})
         self._fill_os(payload.get("os") or {})
+        manual = self.run_tool("flow.manual_signoff", quiet=True,
+                               run_dir=run_dir)
+        if isinstance(manual, dict) and not self.report_payload_error(manual):
+            self._fill_manual(manual)
+        review = self.run_tool("flow.review", quiet=True, run_dir=run_dir)
+        if isinstance(review, dict) and not self.report_payload_error(review):
+            self._fill_review(review)
 
     def _fill_os(self, os_status: Dict[str, Any]) -> None:
         """OS 账本：义务状态表 + "未清偿 / 建议重跑"摘要。"""
@@ -357,6 +517,234 @@ class SignoffModule(ModuleBase):
         } for a in (cv.get("artifacts") or [])]
         self.case_model.set_rows(rows)
         self.case_model.apply_column_widths(self.case_table)
+
+    # ── 人工签核 ────────────────────────────────────────────
+
+    def _fill_manual(self, payload: Dict[str, Any]) -> None:
+        """逐用例签核表 + 封存状态。"""
+        model = getattr(self, "manual_model", None)
+        if model is None:
+            return
+        if not payload.get("available"):
+            self.manual_label.setText(
+                str(payload.get("note") or "这一轮没有可签核的用例"))
+            model.set_rows([])
+            self._tab_meta(5, "人工签核（无产物）")
+            return
+        summary = payload.get("summary") or {}
+        seal = payload.get("seal") or {}
+        seal_text = ("已封存 · TB %s / RTL %s · by %s" % (
+            str(seal.get("tb_hash") or "")[:12],
+            str(seal.get("rtl_hash") or "")[:12],
+            seal.get("sealed_by") or "?")) if seal.get("sealed") else "未封存"
+        self.manual_label.setText(
+            f"用例 {summary.get('total', 0)} · 已签核 {summary.get('approved', 0)}"
+            f" / 驳回 {summary.get('rejected', 0)}"
+            f" / 待处理 {summary.get('pending', 0)}　·　{seal_text}　·　"
+            f"Contract {str(payload.get('contract_hash') or '')[:12]}")
+        palette = theme.current()
+        color = palette.ok if seal.get("sealed") else palette.muted
+        self.manual_label.setStyleSheet(f"color: {color};")
+        rows = list(payload.get("cases") or [])
+        colors: Dict[int, QColor] = {}
+        for index, row in enumerate(rows):
+            decision = str(row.get("decision") or "PENDING")
+            if decision == "APPROVED":
+                colors[index] = palette.ok
+            elif decision == "REJECTED":
+                colors[index] = palette.error
+        model.set_rows(rows, row_colors=colors)
+        model.apply_column_widths(self.manual_table)
+        self._manual_sealed = bool(seal.get("sealed"))
+        self._tab_meta(5, f"人工签核 {summary.get('decided', 0)}/{summary.get('total', 0)}")
+
+    # ── 人机审阅 ────────────────────────────────────────────
+
+    @staticmethod
+    def _review_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        kind_label = {"intent": "意图", "claim": "结论",
+                      "interpretation": "解释"}
+        rows: List[Dict[str, Any]] = []
+        for group in ("intents", "claims", "interpretations"):
+            for item in payload.get(group) or []:
+                kind = str(item.get("kind") or "")
+                rows.append({
+                    "_kind": kind,
+                    "kind_label": kind_label.get(kind, kind),
+                    "item_id": item.get("item_id"),
+                    "case_id": item.get("case_id") or "",
+                    "statement": (item.get("statement")
+                                  or item.get("preview") or ""),
+                    "status": item.get("status") or "",
+                    "reviewer": (item.get("confirmed_by")
+                                 or item.get("reviewed_by") or ""),
+                    "basis": (item.get("evidence_required") or item.get("source")
+                              or item.get("actor") or ""),
+                })
+        return rows
+
+    @staticmethod
+    def _by_status_colors(rows: List[Dict[str, Any]],
+                          ok: set, warn: set = None) -> Dict[int, QColor]:
+        palette = theme.current()
+        colors: Dict[int, QColor] = {}
+        for index, row in enumerate(rows):
+            status = str(row.get("status") or "")
+            if status in ok:
+                colors[index] = palette.ok
+            elif status in (warn or set()):
+                colors[index] = palette.warning
+            elif status == "REJECTED":
+                colors[index] = palette.error
+            elif status == "BLOCK":
+                colors[index] = palette.error
+        return colors
+
+    def _fill_review(self, payload: Dict[str, Any]) -> None:
+        model = getattr(self, "review_model", None)
+        if model is None:
+            return
+        if not payload.get("available"):
+            self.review_label.setText(str(payload.get("note") or "没有可审阅项"))
+            model.set_rows([])
+            self._tab_meta(6, "人机审阅（无产物）")
+            return
+        rows = self._review_rows(payload)
+        model.set_rows(rows, row_colors=self._by_status_colors(
+            rows, {"CONFIRMED", "REVIEWED"}))
+        model.apply_column_widths(self.review_table)
+        context_rows = list(payload.get("context") or [])
+        self.context_model.set_rows(context_rows)
+        self.context_model.apply_column_widths(self.context_table)
+        gate_rows = list(payload.get("gate") or [])
+        self.review_gate_model.set_rows(
+            gate_rows, row_colors=self._by_status_colors(
+                gate_rows, {"OK"}, {"WARN"}))
+        self.review_gate_model.apply_column_widths(self.review_gate_table)
+        counts: Dict[str, int] = {}
+        for row in rows:
+            counts[row["status"]] = counts.get(row["status"], 0) + 1
+        self.review_label.setText(
+            f"审阅项 {len(rows)}（{counts}）　·　"
+            f"上下文项 {len(context_rows)} 条　·　"
+            f"证据门禁模式 {payload.get('gate_mode') or 'report'}")
+        self._tab_meta(6, f"人机审阅 {len(rows)}")
+
+    def _reload_review(self) -> None:
+        payload = self.run_tool("flow.review", quiet=True, run_dir=self._run_dir)
+        if isinstance(payload, dict) and not self.report_payload_error(payload):
+            self._fill_review(payload)
+
+    def _selected_review(self) -> Dict[str, Any] | None:
+        table = getattr(self, "review_table", None)
+        if table is None:
+            return None
+        index = table.currentIndex()
+        if not index.isValid():
+            return None
+        source = table_helpers.source_index(table, index)
+        return self.review_model.row_at(source.row())
+
+    def _review_decide(self, decision: str) -> None:
+        row = self._selected_review()
+        if not row:
+            QMessageBox.information(self.content, "人机审阅", "先在表里选一条审阅项。")
+            return
+        reviewer = self.signer_edit.text().strip()
+        if not reviewer:
+            QMessageBox.warning(self.content, "人机审阅", "请先填写审阅人。")
+            return
+        kind = str(row.get("_kind") or "")
+        mapped = decision
+        if kind == "interpretation":
+            mapped = {"CONFIRMED": "REVIEWED", "REJECTED": "REJECTED",
+                      "CANDIDATE": "DRAFT"}.get(decision, decision)
+        payload = self.run_tool(
+            "flow.review_decide", force=True, run_dir=self._run_dir,
+            kind=kind, item_id=row.get("item_id"), decision=mapped,
+            reviewer=reviewer, comment=self.comment_edit.text().strip())
+        if not isinstance(payload, dict):
+            return
+        if payload.get("error"):
+            QMessageBox.warning(self.content, "人机审阅", str(payload["error"]))
+            return
+        self._fill_review(payload)
+        self.ctx.log(f"[review] {kind} {row.get('item_id')} → {mapped}",
+                     "info")
+
+    def _selected_case(self) -> Dict[str, Any] | None:
+        table = getattr(self, "manual_table", None)
+        if table is None:
+            return None
+        index = table.currentIndex()
+        if not index.isValid():
+            return None
+        source = table_helpers.source_index(table, index)
+        return self.manual_model.row_at(source.row())
+
+    def _record_case(self, decision: str) -> None:
+        row = self._selected_case()
+        if not row:
+            QMessageBox.information(self.content, "人工签核", "先在表里选一条用例。")
+            return
+        signer = self.signer_edit.text().strip()
+        if decision != "PENDING" and not signer:
+            QMessageBox.warning(self.content, "人工签核", "请先填写签核人。")
+            return
+        payload = self.run_tool(
+            "flow.manual_signoff_record", force=True, run_dir=self._run_dir,
+            case_id=row.get("case_id"), decision=decision, signer=signer,
+            comment=self.comment_edit.text().strip())
+        if not isinstance(payload, dict):
+            return
+        if payload.get("error"):
+            QMessageBox.warning(self.content, "人工签核", str(payload["error"]))
+            return
+        self._fill_manual(payload)
+        self.ctx.log(f"[signoff] {row.get('case_id')} → {decision} by {signer or '?'}",
+                     "info")
+
+    def _seal(self) -> None:
+        answer = QMessageBox.question(
+            self.content, "封存 TB/RTL",
+            "封存会锁定本轮人工签核结论，并记录 TB/RTL 逐文件哈希与聚合哈希。\n"
+            "确定继续？")
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        payload = self.run_tool(
+            "flow.seal", force=True, run_dir=self._run_dir,
+            signer=self.signer_edit.text().strip(),
+            note=self.comment_edit.text().strip())
+        if not isinstance(payload, dict):
+            return
+        if payload.get("error"):
+            QMessageBox.warning(self.content, "封存失败", str(payload["error"]))
+            return
+        self._fill_manual(payload)
+        seal = payload.get("seal") or {}
+        QMessageBox.information(
+            self.content, "已封存",
+            f"TB {seal.get('tb_hash') or '?'}\nRTL {seal.get('rtl_hash') or '?'}\n"
+            f"已写入 status/seal_manifest.json 与 signoff_evidence/seal_manifest.json")
+
+    def _unseal(self) -> None:
+        signer = self.signer_edit.text().strip()
+        reason = self.comment_edit.text().strip()
+        if not signer or not reason:
+            QMessageBox.warning(self.content, "解封",
+                                "解封必须填写签核人（上方输入框）与原因（备注框）。")
+            return
+        answer = QMessageBox.question(
+            self.content, "解封", "解封后签核表可再次修改。确定继续？")
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        payload = self.run_tool("flow.unseal", force=True, run_dir=self._run_dir,
+                                signer=signer, reason=reason)
+        if isinstance(payload, dict) and payload.get("error"):
+            QMessageBox.warning(self.content, "解封失败", str(payload["error"]))
+            return
+        if isinstance(payload, dict):
+            self._fill_manual(payload)
 
     @staticmethod
     def _os_text(os_status: Dict[str, Any] = None) -> str:
@@ -523,6 +911,7 @@ class SignoffModule(ModuleBase):
 
     def _clear(self) -> None:
         self.run_id = ""
+        self._run_dir = ""
         self.verdict_label.setText("（还没选中运行）")
         self.verdict_label.setStyleSheet("")
         self.gate_model.set_rows([])
@@ -539,8 +928,18 @@ class SignoffModule(ModuleBase):
         self.evidence_label.setText("")
         self.evidence_dir = ""
         self.replay_cmd = ""
+        if getattr(self, "manual_model", None):
+            self.manual_model.set_rows([])
+            self.manual_label.setText("（还没加载人工签核）")
+            self._manual_sealed = False
+        if getattr(self, "review_model", None):
+            self.review_model.set_rows([])
+            self.context_model.set_rows([])
+            self.review_gate_model.set_rows([])
+            self.review_label.setText("（还没加载审阅项）")
         for index, title in enumerate(("签核门禁", "领域证据链", "Case 证据",
-                                       "证据包 v2", "OS 账本")):
+                                       "证据包 v2", "OS 账本", "人工签核",
+                                       "人机审阅")):
             self._tab_meta(index, title)
 
 

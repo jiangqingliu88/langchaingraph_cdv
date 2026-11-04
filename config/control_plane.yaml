@@ -24,6 +24,12 @@ rules:
   - {action: accept_caveat, decision: APPROVAL, risk: HIGH}
   - {action: affect_signoff_state, decision: APPROVAL, risk: HIGH}
   - {action: disable_gate_rule, decision: APPROVAL, risk: HIGH}
+  - {action: manual_case_signoff, decision: APPROVAL, risk: HIGH}
+  - {action: seal_tb_rtl, decision: APPROVAL, risk: HIGH}
+  - {action: unseal_tb_rtl, decision: APPROVAL, risk: HIGH}
+  - {action: review_intent, decision: APPROVAL, risk: HIGH}
+  - {action: review_claim, decision: APPROVAL, risk: HIGH}
+  - {action: review_interpretation, decision: APPROVAL, risk: HIGH}
   # 破坏证据链：禁止（角色不能豁免）。
   - {action: edit_ledger, decision: FORBIDDEN, risk: CRITICAL}
   - {action: fabricate_evidence, decision: FORBIDDEN, risk: CRITICAL}

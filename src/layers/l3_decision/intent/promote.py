@@ -25,7 +25,8 @@ def promote(intent: VerificationIntent, decision: str, *,
     intent.confirmed_by = str(by or "")
     if evidence:
         intent.evidence_ids = sorted(set(intent.evidence_ids) | set(evidence))
-    return intent.seal()
+    # **身份稳定**：状态迁移不换 intent_id —— goal 才是语义身份，审批状态不是。
+    return intent if intent.intent_id else intent.seal()
 
 
 def gate_check(intents: List[VerificationIntent]) -> Dict[str, Any]:

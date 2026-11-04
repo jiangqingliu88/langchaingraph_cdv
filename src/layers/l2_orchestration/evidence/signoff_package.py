@@ -141,6 +141,9 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         # Architecture 3.0：统一义务与确定性闭环计划
         "docs/obligations_v3.json",
         "status/closure_plan.json",
+        # 人工签核与 TB/RTL 封存（工程师决定的证据）
+        "status/manual_signoff.json",
+        "status/seal_manifest.json",
     ),
     # ── Case View（三集合证据）──
     #

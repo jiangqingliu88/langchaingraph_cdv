@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QMenu, QMessageBox,
                                QVBoxLayout, QWidget)
 
 from .bus import EventBus
-from .constants import APP_TITLE, CONSOLE_TITLE
+from .constants import APP_TITLE, CONSOLE_PIN, CONSOLE_TITLE, NAV_PIN
 from .context import AppContext
 from .manifest import ManifestError, builtin_manifest, describe, load_manifest
 from .registry import ModuleManager
@@ -22,6 +22,9 @@ from .ui.widgets.banner import Banner
 from .ui.widgets.console import ConsolePanel
 from .ui.nav.tree import NavPane
 from .ui.containers.workspace import Workspace
+
+#: 窗口不贴屏幕边缘的余量（旧 `app.py` 里的局部常量，拆分时漏了定义）。
+SCREEN_MARGIN = 40
 
 
 class WindowLayoutMixin:
@@ -95,8 +98,8 @@ class WindowLayoutMixin:
 
             if screen is not None:
                 available = screen.availableGeometry()
-                width = min(width, max(640, available.width() - self.SCREEN_MARGIN))
-                height = min(height, max(480, available.height() - self.SCREEN_MARGIN))
+                width = min(width, max(640, available.width() - SCREEN_MARGIN))
+                height = min(height, max(480, available.height() - SCREEN_MARGIN))
                 min_width, min_height = min(min_width, width), min(min_height, height)
 
             self.setMinimumSize(min_width, min_height)

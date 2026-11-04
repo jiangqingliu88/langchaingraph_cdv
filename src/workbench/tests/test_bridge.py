@@ -52,6 +52,10 @@ class TestCatalog:
                           # 生成覆盖率报告：**写盘**（报告落在覆盖率库旁边），
                           # 而且要起一个 vcover 子进程。它总是由"点那一格"显式触发。
                           "flow.coverage_report",
+                          # 人工签核 / 封存 / 审阅：**写盘**且改变签核状态，
+                          # 只能由人点按钮触发（trigger=user）。
+                          "flow.manual_signoff_record", "flow.review_decide",
+                          "flow.seal", "flow.unseal",
                           # 发布包写 spec/ip_releases/，是**对外交付物**，
                           # 只能在人点"生成发布包"时发生（列表按名字排序）
                           "ip.evidence", "ip.release_build", "ip.run",

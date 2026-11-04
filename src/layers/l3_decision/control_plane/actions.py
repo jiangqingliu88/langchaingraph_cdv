@@ -29,6 +29,14 @@ DEFAULT_ACTIONS = {
     "affect_signoff_state": (APPROVAL, "HIGH"),
     "disable_gate_rule": (APPROVAL, "HIGH"),
     "change_risk_class": (APPROVAL, "HIGH"),
+    # 人工签核 / 封存 TB+RTL（工程师动作）
+    "manual_case_signoff": (APPROVAL, "HIGH"),
+    "seal_tb_rtl": (APPROVAL, "HIGH"),
+    "unseal_tb_rtl": (APPROVAL, "HIGH"),
+    # 证据闭环审阅（意图 / Claim / 解释）
+    "review_intent": (APPROVAL, "HIGH"),
+    "review_claim": (APPROVAL, "HIGH"),
+    "review_interpretation": (APPROVAL, "HIGH"),
     # ── 破坏证据链：禁止 ──
     "edit_ledger": (FORBIDDEN, "CRITICAL"),
     "fabricate_evidence": (FORBIDDEN, "CRITICAL"),

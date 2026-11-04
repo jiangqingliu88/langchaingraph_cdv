@@ -14,6 +14,9 @@ from src.app.services.case_view_service import (
     artifact as case_artifact, case_gate, case_view, list_artifacts,
     rebuild_evidence,
 )
+from src.app.services.manual_signoff_service import (
+    manual_signoff, record_case_decision, seal_tb_rtl, unseal,
+)
 
 __all__ = [
     "run_verify", "run_verify_async",
@@ -26,4 +29,5 @@ __all__ = [
     "build_ip_release",
     "case_artifact", "case_gate", "case_view", "list_artifacts",
     "rebuild_evidence",
+    "manual_signoff", "record_case_decision", "seal_tb_rtl", "unseal",
 ]
