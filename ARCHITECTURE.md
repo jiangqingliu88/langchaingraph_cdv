@@ -4,7 +4,7 @@
 >
 > 全量单测：**1349 passed / 2 skipped**；工作台 **753 passed**（另有 3 个 IP 页面用例为既有失败，与本次改动无关）
 >
-> UVM 端到端实测：`output_e2e_final4_jiang_20261104_044624`（P0–P5 重构后），分级回归 **273/273 PASS**，功能计划覆盖率 **95.23%**（第 1 轮收敛），签核 **PASS_WITH_CAVEAT / CONDITIONAL**；Case View：13 个契约组 / 267 份逐用例证据 / 364 条 EVD / 13 个 CELL（黄 11 · 红 2，缺证据不冒充绿），SCB 逐条收口 **47 条 `per_scb`**、47 条 CASE 带约束 id；**状态权威对账 0 差异、TP 影子 0 差异**，Case Gate **PASS**（blocker 0）；签核包 319 份文件，`case_view` 段 278 份，`execution` 段含 `run_config / ir_shadow_diff / authority_diff / tp_shadow / seed_index / worklist`，增量 `copied=317 / reused=0`（首次打包），`evidence verify` 通过
+> UVM 端到端实测：`output_e2e_v3_10_jiang_20261104_215130`（3.0 全量接线后），分级回归 **273/273 PASS**，功能计划覆盖率 **95.23%**（第 1 轮收敛），签核 **PASS_WITH_CAVEAT / CONDITIONAL**；Case View：13 个契约组 / 267 份逐用例证据 / 364 条 EVD / 13 个 CELL（黄 11 · 红 2，缺证据不冒充绿），SCB 逐条收口 **47 条 `per_scb`**、47 条 CASE 带约束 id；**状态权威对账 0 差异、TP 影子 0 差异**，Case Gate **PASS**（blocker 0）；签核包 332 份文件，`case_view` 段 278 份，`execution` 段含 `run_config / ir_shadow_diff / authority_diff / tp_shadow / seed_index / worklist`，增量 `copied=330 / reused=0`（首次打包），`evidence verify` 通过
 >
 > SoC 参考工程实测：`examples/open_npu_soc`，`soc run` 的两条用例（参考 TB `gemm_8x8` + E203 C `gemm_8x8_c`）**PASS**；参考路径 `mismatched=0`/2075 ns，C 路径 `TEST_PASS`，输出 `output_soc_design_jiang_20261031_223611`；`signoff_evidence/` 27 个文件（输入/npu RTL/golden/回归/两份波形），`soc evidence` 校验通过；两份波形都带 `design.bin`，Visualizer hierarchy 可浏览源码
 >
@@ -556,7 +556,7 @@ src/tools/common/        lib
 
 ## 7. Case 建模 → 测试点 IR（方法学核心）
 
-目录：`src/tools/generation/casemodel_tools/`
+目录：`src/layers/l3_decision/casemodel/`
 
 ### 7.1 单一主键 `tp_id`
 
@@ -1418,7 +1418,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 python -m pytest tests/ -q                            # 全量（数量见顶部基线，以实际输出为准）
 python -m pytest tests/core -q                        # Architecture 2.0 核心
 python -m pytest src/tools/checking src/tools/humanview -q          # 检查/视图工具包
-python -m pytest src/tools/generation/casemodel_tools/tests -q      # case 建模 + 框架
+python -m pytest src/layers/l3_decision/casemodel/tests -q      # case 建模 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q        # ISA 工具
 python -m pytest src/workbench/tests -q               # 工作台（数量见顶部基线）
 python -m config.architecture_guard                   # 行数 / 圈复杂度预算

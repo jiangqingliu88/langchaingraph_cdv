@@ -641,48 +641,23 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
         out_item = _seq_item_of_agents(agents_spec, out_agent)
         pred = _pred_spec(module_name, uvm_yaml_dir, reg_model, mirror,
                           in_item, out_item)
-        pred_h = f"{module_name}_pred"
-        # **成员名不能与类名同名**：util 组件是 `include` 进 env_pkg 的裸 class，
-        # `npu_sched_pred npu_sched_pred;` 会让 Questa 在 `x = x::type_id::create`
-        # 处把类名解析成成员变量（实测 env_pkg 整包作废）。类型与成员同名时加 `_h`。
-        if str(pred.get("cls") or "") == pred_h:
-            pred_h = f"{pred_h}_h"
-        scb_h = f"{module_name}_scb"
-        if pred.get("placeholder"):
-            # 空骨架参考模型：**不接 scoreboard**。保留注释说明原因，读 env.yaml
-            # 的人一眼能看到"这轮没有参考模型比对"，而不是去查为什么 SCB 全 mismatch。
-            lines += [
-                "  # 参考模型为占位（body 仍含 TODO）—— 本轮**不接 scoreboard**，",
-                "  # 避免 expected 恒空导致的假 mismatch；参考模型实现后会自动接回。",
-                "  analysis_components: []",
-                "  scoreboards: []",
-            ]
-            util_str = ""
-            pred_placeholder = True
-        else:
-            lines += [
-                "  analysis_components:",
-                f"    - name: {pred_h}",
-                f"      type: {pred['cls']}",
-                "  scoreboards:",
-                f"    - name: {scb_h}",
-                "      sb_type: in_order_scoreboard",
-                f"      trans_type: {out_item}",
-                f"      params: [{out_item}, {out_item}]",
-                "  tlm_connections:",
-                f"    - {{ driver: {in_agent}_agent_ap, receiver: {pred_h}.{pred['in_port']} }}",
-                f"    - {{ driver: {pred_h}.{pred['out_port']}, receiver: {scb_h}.expected_export }}",
-                f"    - {{ driver: {out_agent}_agent_ap, receiver: {scb_h}.actual_export }}",
-            ]
-            util_str = pred["util_yaml"]
+        wiring, util_str, pred_placeholder = _pred_wiring_lines(
+            pred, module_name, in_agent, out_agent, out_item)
+        lines += wiring
     else:
         lines += ["  scoreboards: []", "  analysis_components: []",
                   "  tlm_connections: []"]
 
     env_text = "\n".join(lines) + "\n"
-    if enforce_pred and not pred_placeholder:
-        _validate_env_pred_wiring(env_text, util_str, in_agent, out_agent)
+    _maybe_validate_env(env_text, util_str, in_agent, out_agent,
+                        enforce=bool(enforce_pred and not pred_placeholder))
     return (env_text, util_str) if with_util else env_text
+
+
+def _maybe_validate_env(env_text: str, util_text: str, in_agent: str,
+                        out_agent: str, *, enforce: bool) -> None:
+    if enforce:
+        _validate_env_pred_wiring(env_text, util_text, in_agent, out_agent)
 
 
 def _copy_project_util_comp(uvm_yaml_dir: Path, module_name: str) -> str:
@@ -819,6 +794,43 @@ def _pred_spec(module_name, uvm_yaml_dir, reg_model, mirror,
                 "out_port": "out_port", "util_yaml": block}
 
     raise ValueError(_pred_required_message(module_name, in_item, out_item))
+
+
+def _pred_wiring_lines(pred: dict, module_name: str, in_agent: str,
+                       out_agent: str, out_item: str):
+    """pred → env.yaml 的 `analysis_components / scoreboards / tlm_connections`。
+
+    返回 `(lines, util_yaml, placeholder)`。占位参考模型（body 仍含 TODO）只写
+    空列表 + 注释 —— 不接 scoreboard，避免 expected 恒空造成满屏假 mismatch。
+    """
+    pred_h = f"{module_name}_pred"
+    # **成员名不能与类名同名**：util 组件是 `include` 进 env_pkg 的裸 class，
+    # `npu_sched_pred npu_sched_pred;` 会让 Questa 在 `x = x::type_id::create`
+    # 处把类名解析成成员变量（实测 env_pkg 整包作废）。类型与成员同名时加 `_h`。
+    if str(pred.get("cls") or "") == pred_h:
+        pred_h = f"{pred_h}_h"
+    if pred.get("placeholder"):
+        return ([
+            "  # 参考模型为占位（body 仍含 TODO）—— 本轮**不接 scoreboard**，",
+            "  # 避免 expected 恒空导致的假 mismatch；参考模型实现后会自动接回。",
+            "  analysis_components: []",
+            "  scoreboards: []",
+        ], "", True)
+    scb_h = f"{module_name}_scb"
+    return ([
+        "  analysis_components:",
+        f"    - name: {pred_h}",
+        f"      type: {pred['cls']}",
+        "  scoreboards:",
+        f"    - name: {scb_h}",
+        "      sb_type: in_order_scoreboard",
+        f"      trans_type: {out_item}",
+        f"      params: [{out_item}, {out_item}]",
+        "  tlm_connections:",
+        f"    - {{ driver: {in_agent}_agent_ap, receiver: {pred_h}.{pred['in_port']} }}",
+        f"    - {{ driver: {pred_h}.{pred['out_port']}, receiver: {scb_h}.expected_export }}",
+        f"    - {{ driver: {out_agent}_agent_ap, receiver: {scb_h}.actual_export }}",
+    ], pred["util_yaml"], False)
 
 
 def _validate_env_pred_wiring(env_text: str, util_text: str,
@@ -1228,7 +1240,7 @@ def _casemodel_test_lines(output_dir) -> List[str]:
         cm = find_case_model(_load_spec(output_dir) or {}, output_dir)
         if cm is None or not cm.exists():
             return []
-        from src.tools.generation.casemodel_tools.api import run_uvm_tests
+        from src.layers.l3_decision.casemodel.api import run_uvm_tests
         t = run_uvm_tests(cm.read_text(encoding="utf-8"), max_tests=200)
         tests = t.get("tests") or []
         if not tests:
@@ -1261,7 +1273,7 @@ def _casemodel_test_lines(output_dir) -> List[str]:
         # 批次 test 类（**一条 = 一个批次/专题**）—— 与属性 test 平行的另一条路。
         # 没有它，回归里 `+UVM_TESTNAME=<批次名>` 会撞 UVM_FATAL(INVTST)，
         # 而那条路径被记成 pass（vsim 遇到未知 testname 仍然 exit 0）。
-        from src.tools.generation.casemodel_tools.api import run_uvm_batches
+        from src.layers.l3_decision.casemodel.api import run_uvm_batches
         batches = run_uvm_batches(cm.read_text(encoding="utf-8")).get("batches") or []
         if batches:
             out.append("  batches:")

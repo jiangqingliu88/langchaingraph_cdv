@@ -315,7 +315,7 @@ env 检查组逐拍求值，超窗即 `UVM_ERROR [TP_TIMING]`，并写进
 
 ### P2 —— 时序判据
 
-8. `src/tools/generation/casemodel_tools/domain/model.py` + `framework/serialize.py`
+8. `src/layers/l3_decision/casemodel/domain/model.py` + `framework/serialize.py`
    - TP IR 支持 `timing.expect_cycles`；
 9. `env_cov.sv.j2` + `checker_rules`：逐拍判窗，超窗报 `[TP_TIMING]`。
 

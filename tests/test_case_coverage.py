@@ -86,7 +86,7 @@ def _run_with_tp(tmp_path: Path, **tp):
 
 @pytest.fixture
 def fake_vcover(monkeypatch):
-    from src.layers.l3_decision.evidence import case_cov as cc
+    from src.layers.l3_decision.evidence import case_cov_impl as cc
     from src.layers.l3_decision.evidence import cov_api
     from src.tools.common.lib import collect_real_coverage as crc
 
@@ -198,7 +198,7 @@ class TestCaseCov:
 
     def test_illegal_bin_vetoes_an_otherwise_green_case(
             self, tmp_path, fake_vcover, monkeypatch):
-        from src.layers.l3_decision.evidence import case_cov as cc
+        from src.layers.l3_decision.evidence import case_cov_impl as cc
         run = _run_with_tp(tmp_path)
         _task_dir(run, task="tp_a_seed_6001", tp_ids=["TP-1"])
         monkeypatch.setattr(cc, "_vcover_cvg_report",
@@ -367,7 +367,7 @@ class TestPerSbEvidence:
                                              "mismatched": 1}
 
     def test_per_sb_evidence_wins_over_aggregate(self):
-        from src.layers.l3_decision.evidence.case_cov import _scb_evidence
+        from src.layers.l3_decision.evidence.case_cov_impl import _scb_evidence
 
         facts = {"scb_summary": {"total": 40, "matched": 40, "mismatched": 0},
                  "log_facts": {"scb_by_id": {"SB-X": {"total": 5, "matched": 4,
@@ -378,7 +378,7 @@ class TestPerSbEvidence:
         assert out[0]["status"] == "MISSING"       # 逐条的 mismatch 不能被聚合盖住
 
     def test_log_mode_without_own_line_is_not_executed(self):
-        from src.layers.l3_decision.evidence.case_cov import _scb_evidence
+        from src.layers.l3_decision.evidence.case_cov_impl import _scb_evidence
 
         facts = {"scb_summary": {"total": 40, "matched": 40, "mismatched": 0},
                  "log_facts": {}}

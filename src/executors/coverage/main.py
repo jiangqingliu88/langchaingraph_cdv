@@ -285,7 +285,7 @@ class CoverageExecutor(BaseExecutor):
         cov_dir.mkdir(parents=True, exist_ok=True)
         points: Dict[str, Any] = {}
         if cm_file is not None:
-            from src.tools.generation.casemodel_tools.api import run_covergroups
+            from src.layers.l3_decision.casemodel.api import run_covergroups
 
             points = run_covergroups(cm_file.read_text(encoding="utf-8"), module_name)
             if points.get("error"):

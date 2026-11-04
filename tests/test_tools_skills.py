@@ -11,7 +11,7 @@ import pytest
 
 SKILLS = (
     Path("src/layers/l3_decision/evidence/SKILL.md"),
-    Path("src/tools/generation/casemodel_tools/SKILL.md"),
+    Path("src/layers/l3_decision/casemodel/SKILL.md"),
 )
 
 REQUIRED = ("什么时候用我", "不要用我", "正确调用方式", "常见错误", "产物")

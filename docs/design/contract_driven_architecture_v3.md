@@ -1,7 +1,7 @@
 # 根本重构计划：从流程驱动到契约驱动（Verification OS v3）
 
 > 状态：**M0（影子模式）已落地（2026-11-04）**，M1–M5 待推进。
-> 落点：`src/tools/checking/verification_os/`（契约 / 义务 / 账本 / 推导 / 影子）。
+> 落点：`src/layers/l3_decision/contract/`（契约 / 义务 / 账本 / 推导 / 影子）。
 > 实测（npu_sched）：58 条义务 / 47 个事实包 / 212 条事实 / **对账 47 条、0 差异**，
 > 哈希链完整。上一版 `architecture_transformation_plan.md`（Case View / 三集合）
 > 已落地；本文回答它之后的那个问题：**这套东西离"本质跃迁"还差什么，怎么把差的部分
@@ -237,7 +237,7 @@ verdict  = adjudicate(contract, statuses, policy)  # 规则 + 豁免 + 审批
 - 现有流水线照跑，结束时把同样的事实**双写**进账本。
 - 验收：`derive()` 的结果与现有 `cell_matrix` **逐条一致**（影子比对，差异进日志）。
 
-**落地情况**（`src/tools/checking/verification_os/`）：
+**落地情况**（`src/layers/l3_decision/contract/`）：
 
 | 模块 | 内容 |
 |---|---|

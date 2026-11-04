@@ -176,7 +176,7 @@ class FrontExecutor(BaseExecutor):
         casemodel_path = ""
         try:
             import yaml as _yaml
-            from src.tools.generation.casemodel_tools.api import (blocking_issues,
+            from src.layers.l3_decision.casemodel.api import (blocking_issues,
                                                        run_validate, run_uvm_tests)
 
             model = self._draft_casemodel(info)
@@ -220,7 +220,7 @@ class FrontExecutor(BaseExecutor):
                     # 上面 `run_uvm_tests` 的条数 **1:1** —— 对不上就说明漏了。
                     # 复用 `ctx_reg`（同一个库句柄），不另开一个连接指向同一个文件。
                     try:
-                        from src.tools.generation.casemodel_tools.registry_bridge import register_cases
+                        from src.layers.l3_decision.casemodel.registry_bridge import register_cases
                         _r = register_cases(text, info.get("design_name", "dut"),
                                             registry=self.ctx_reg, max_cases=200,
                                             rtl_version_no=rtl_version_no)

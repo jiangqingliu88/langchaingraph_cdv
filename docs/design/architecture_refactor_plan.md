@@ -58,7 +58,7 @@
 | 复杂度基线 | `config/complexity_baseline.json` |
 | 行数预算 | `config/architecture_budget.yaml` |
 | verify 内部 DAG 显式依赖 | `src/executors/verify/steps_dag.py` |
-| 契约锚点 / 事实账本 | `src/tools/checking/verification_os/` |
+| 契约锚点 / 事实账本 | `src/layers/l3_decision/contract/` |
 | 原子落盘 | `src/core/runtime/atomic.py` |
 | 存储回收 | `src/core/runtime/gc.py` |
 | 端到端基线 run | `output_e2e_final4_jiang_20261104_044624` |
@@ -232,7 +232,7 @@ src/executors/verify/
 ```
 
 - 公共入口 `VerifyExecutor.execute_task()` 不变；
-- 每拆一步，先跑 `python -m pytest src/tools/generation/casemodel_tools/tests tests/test_verify_steps_dag.py -q` + golden diff。
+- 每拆一步，先跑 `python -m pytest src/layers/l3_decision/casemodel/tests tests/test_verify_steps_dag.py -q` + golden diff。
 
 #### 2.2 `src/executors/audit/main.py`（1449 → 目标 ≤ 600）
 

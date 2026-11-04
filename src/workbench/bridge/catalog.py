@@ -114,25 +114,25 @@ BINDINGS: List[ToolBinding] = [
 
     ToolBinding(
         name="casemodel.validate",
-        target="src.tools.generation.casemodel_tools.api:run_validate",
+        target="src.layers.l3_decision.casemodel.api:run_validate",
         kind="json",
         doc="YAML → schema 校验结果",
     ),
     ToolBinding(
         name="casemodel.gaps",
-        target="src.tools.generation.casemodel_tools.api:run_gaps",
+        target="src.layers.l3_decision.casemodel.api:run_gaps",
         kind="json",
         doc="YAML → 完备性分析（评分 / 覆盖 / 诊断）",
     ),
     ToolBinding(
         name="casemodel.generate",
-        target="src.tools.generation.casemodel_tools.api:run_generate",
+        target="src.layers.l3_decision.casemodel.api:run_generate",
         kind="json",
         doc="YAML → case 属性表",
     ),
     ToolBinding(
         name="casemodel.uvm_tests",
-        target="src.tools.generation.casemodel_tools.api:run_uvm_tests",
+        target="src.layers.l3_decision.casemodel.api:run_uvm_tests",
         kind="json",
         doc="YAML → UVM 的 environment.tests 片段（一条 = 一个 UVM_TEST）",
     ),

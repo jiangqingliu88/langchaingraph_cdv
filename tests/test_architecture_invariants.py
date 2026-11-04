@@ -148,7 +148,7 @@ def test_known_limitations_match_architecture_doc():
 
 def test_player_runtime_boundary_matches_code():
     from config.known_limitations import by_id
-    from src.tools.generation.casemodel_tools.framework.stimulus_plan import BACKENDS
+    from src.layers.l3_decision.casemodel.framework.stimulus_plan import BACKENDS
 
     boundary = by_id("player_runtime")
     if BACKENDS["player"]["runtime"]:

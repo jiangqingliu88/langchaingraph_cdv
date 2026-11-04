@@ -15,7 +15,7 @@
 "看起来像配置"的文档。
 
 它复用 casemodel 那套 **schema 无关**的 `SchemaChecker`
-（`src/tools/generation/casemodel_tools/analysis/schema_check.py`）—— 把 schema 路径换成
+（`src/layers/l3_decision/casemodel/analysis/schema_check.py`）—— 把 schema 路径换成
 `manual_nodes.schema.json` 即可，校验与中文诊断口径完全一致。
 
 失败**响亮**（与全仓库一致）：没有路径 / 文件不在 / YAML 坏 —— 返回
@@ -30,7 +30,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.tools.generation.casemodel_tools.analysis.schema_check import SchemaChecker
+def _schema_checker(schema_path):
+    """延迟加载 casemodel 的 SchemaChecker。
+
+    3.0 后实现位于 `l3_decision.casemodel`（L3）。工具层**模块级** import L3 会
+    构成静态方向逆流；函数内加载只在真正校验时才建立运行期依赖。
+    """
+    from src.layers.l3_decision.casemodel.analysis.schema_check import (
+        SchemaChecker,
+    )
+    return SchemaChecker(schema_path)
 
 
 @dataclass(frozen=True)
@@ -129,7 +138,7 @@ def run_decl(path: str = "", decl: Decl = MANUAL_NODES) -> Dict[str, Any]:
     if target.is_dir():
         return {"error": f"{decl.name} 路径是一个目录而不是文件：{target}"}
 
-    checker = SchemaChecker(decl.schema_path)
+    checker = _schema_checker(decl.schema_path)
     return _summarise(checker.check_file(target))
 
 
@@ -146,13 +155,13 @@ def run_ip_spec(path: str = "") -> Dict[str, Any]:
 def validate_decl_text(text: str, decl: Decl = MANUAL_NODES,
                        name: str = "<编辑器>") -> Dict[str, Any]:
     """编辑器用：直接校验一段文本，不必先落盘（口径与 run_decl 一致）。"""
-    return _summarise(SchemaChecker(decl.schema_path).check_text(text, name=name))
+    return _summarise(_schema_checker(decl.schema_path).check_text(text, name=name))
 
 
 def load_decl_issues(text: str, decl: Decl = MANUAL_NODES,
                      name: str = "<编辑器>") -> List[Any]:
     """编辑器用：直接拿 `Issue` 对象列表（IssuePanel 要的是对象，不是 dict）。"""
-    return SchemaChecker(decl.schema_path).check_text(text, name=name)
+    return _schema_checker(decl.schema_path).check_text(text, name=name)
 
 
 def load_manual_nodes(path: str = "") -> List[Dict[str, Any]]:

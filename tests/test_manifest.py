@@ -178,7 +178,7 @@ class TestFunctionalCoverageIsARunAsset:
     def _points(self, tmp_path, **over):
         import json
 
-        from src.tools.generation.casemodel_tools.api import run_covergroups
+        from src.layers.l3_decision.casemodel.api import run_covergroups
 
         spec = (Path(__file__).resolve().parents[1]
                 / "specs" / "apb_uart" / "casemodel.yaml")

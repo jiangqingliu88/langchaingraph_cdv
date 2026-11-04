@@ -85,7 +85,7 @@ def _synthesize_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
     spec 里既没功能点也没信号 → 返回 None（不编一份空模型假装做过）。
     """
     try:
-        from src.tools.generation.casemodel_tools.spec_bridge import case_model_yaml
+        from src.layers.l3_decision.casemodel.spec_bridge import case_model_yaml
 
         yaml_text = case_model_yaml(spec if isinstance(spec, dict) else {})
         if not yaml_text:
@@ -137,14 +137,14 @@ def _find_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
 
 def _load_case_model_doc(text: str) -> Dict[str, Any]:
     """casemodel 文本 → dict。实现在 `casemodel_tools.coverage_render`。"""
-    from src.tools.generation.casemodel_tools.coverage import parse_model_text
+    from src.layers.l3_decision.casemodel.coverage import parse_model_text
 
     return parse_model_text(text)
 
 
 def _assertion_signals(decls: Dict[str, Any]) -> List[Dict[str, Any]]:
     """`assertions[].signals` → 覆盖率接口要额外引的信号（实现同一处）。"""
-    from src.tools.generation.casemodel_tools.coverage import assertion_signals
+    from src.layers.l3_decision.casemodel.coverage import assertion_signals
 
     return assertion_signals(decls)
 

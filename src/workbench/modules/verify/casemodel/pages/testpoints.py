@@ -35,8 +35,8 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QLabel, QPlainTextEdit, QSplitter, QVBoxLayout,
                                QWidget)
 
-from src.tools.generation.casemodel_tools.framework import ascii_slug
-from src.tools.generation.casemodel_tools.plan import build_bundle
+from src.layers.l3_decision.casemodel.framework import ascii_slug
+from src.layers.l3_decision.casemodel.plan import build_bundle
 from src.workbench.ui import theme
 from src.workbench.ui.models import CENTER, LEFT, RowsModel
 

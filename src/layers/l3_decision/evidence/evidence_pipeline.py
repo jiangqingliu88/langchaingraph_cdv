@@ -171,13 +171,13 @@ def _step_os_authority(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
 
 def _step_os_shadow(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     """M0 影子：契约→义务→账本→推导，与旧结论逐条对账（不改任何判定）。"""
-    from src.tools.checking.verification_os import run_shadow
+    from src.layers.l3_decision.contract import run_shadow
     return run_shadow(od)
 
 
 def _step_os_seeds(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     """P6：种子索引 —— 每颗 seed 清偿了哪些义务（只读账本，不改判定）。"""
-    from src.tools.checking.verification_os.seeds import write_seed_index
+    from src.layers.l3_decision.contract.seeds import write_seed_index
     return write_seed_index(od)
 
 
@@ -209,8 +209,8 @@ def _step_os_tp_shadow(od: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     顺带把 run 级 `bin_hit`（合并覆盖率）与 `tp_attr` 写进账本 —— 批次级 test
     没有 case 身份，但它们的命中必须进事实账本，否则 TP 度量缺一块。
     """
-    from src.tools.checking.verification_os import append_bundle
-    from src.tools.checking.verification_os.tp_shadow import (
+    from src.layers.l3_decision.contract import append_bundle
+    from src.layers.l3_decision.contract.tp_shadow import (
         attr_bundle, run_facts, run_tp_shadow)
 
     # **当场传入 coverage**：`coverage_result.json` 在本流水线跑完后才落盘，

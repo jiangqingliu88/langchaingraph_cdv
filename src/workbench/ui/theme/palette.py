@@ -27,7 +27,7 @@
 > Verdi 那套窗格布局与七项菜单栏还留着（见 `readme.md`），只是不再连
 > "长什么样"都照抄。
 >
-> 本文件原在 `src/tools/generation/casemodel_tools/view/gui/theme.py`，工作台第一轮
+> 本文件原在 `src/layers/l3_decision/casemodel/view/gui/theme.py`，工作台第一轮
 > 上提为平台通用件。
 >
 > **整套界面是新思紫**（品牌紫 `#573885` 那一族），不是库默认的灰 + 蓝。

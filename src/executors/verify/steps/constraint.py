@@ -53,7 +53,7 @@ class ConstraintSteps:
                         "（没有端口就不生成，见 build_constraint）")
             return
         try:
-            from src.tools.generation.casemodel_tools.associate import build_constraint
+            from src.layers.l3_decision.casemodel.associate import build_constraint
 
             # `agent_fields` 决定"这个字段该约束哪个 agent" —— 没有它，可驱动
             # 维度只能在一端口时才敢落，多 agent 时全部退化成骨架。

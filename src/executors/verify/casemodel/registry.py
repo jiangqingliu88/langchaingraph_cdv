@@ -19,7 +19,7 @@ from __future__ import annotations
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.tools.generation.casemodel_tools.api import (TOOL_GAPS, TOOL_GENERATE, TOOL_NAMES,
+from src.layers.l3_decision.casemodel.api import (TOOL_GAPS, TOOL_GENERATE, TOOL_NAMES,
                                            TOOL_VALIDATE, RUNNERS)
 
 __version__ = "2.0.0"

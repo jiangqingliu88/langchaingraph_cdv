@@ -409,7 +409,7 @@ class FallbackStrategy:
         casemodel 本来就是**纯矩阵**工具（属性组合，零 LLM），正好是这条路想要的形状：
         交给它一份 case 模型，它吐 case 属性表。
         """
-        from src.tools.generation.casemodel_tools.api import run_generate
+        from src.layers.l3_decision.casemodel.api import run_generate
 
         od = Path(ctx.get("working_dir", "output"))
         model_path = od / "inputs" / "casemodel.yaml"

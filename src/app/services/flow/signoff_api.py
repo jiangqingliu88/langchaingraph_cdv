@@ -101,7 +101,7 @@ _CASE_ARTIFACTS = (
 def _os_status(root: Path) -> Dict[str, Any]:
     """Verification OS 视图；老 run 没有契约/账本时如实返回 `available: false`。"""
     try:
-        from src.tools.checking.verification_os import status_summary
+        from src.layers.l3_decision.contract import status_summary
 
         data = status_summary(root)
     except Exception as exc:                        # noqa: BLE001 页面不该挂

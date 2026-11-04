@@ -239,7 +239,7 @@ P95 > 2 s。SQL 只读派生 JSON，**永不成为 SSOT**。
 | 文件 | 改动 |
 |---|---|
 | `casemodel_tools/schema/case_model.schema.json` | 新增 `cases:`（CCAT/CASE/TST 最小集合）；`feats:` 预留给 P3 |
-| `src/tools/generation/casemodel_tools/domain/model.py` | 承载 `cases` 段（只存不解释，解释权在 case_ir） |
+| `src/layers/l3_decision/casemodel/domain/model.py` | 承载 `cases` 段（只存不解释，解释权在 case_ir） |
 | `src/executors/verify/main.py` | 生成 TP IR 时写 `case_id` / `tst_id` |
 | `regression_framework/generators/shell.py::_write_task_identity` | `task_meta` 增加 `case_id/tst_id/cell_ids`，schema 升 `regression_task_v2` |
 | `coverage_tools/case_cov.py` | 写 `evd_id = EVD-<run>-<task>-<seed>`、`run_id`、`tst_id`、`case_id`；旧 run 无键 → `legacy: true` |

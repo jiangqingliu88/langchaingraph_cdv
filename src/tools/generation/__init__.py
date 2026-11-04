@@ -1,14 +1,12 @@
-"""生成板块 —— 产生验证产物的工具。
+"""生成板块 —— 产生验证产物的工具（
 
-按需加载（`from src.tools.generation import casemodel_tools`），避免导入
-本包时把所有重依赖拉起来。
+casemodel_tools 已迁到 `src.layers.l3_decision.casemodel`，不再在此列。
 """
 from __future__ import annotations
 
 import importlib
 
-PACKAGES = ("casemodel_tools", "uvm_tools", "isa_gen_tools",
-            "cmodel_tools", "scmodel_tools")
+PACKAGES = ("uvm_tools", "isa_gen_tools", "cmodel_tools", "scmodel_tools")
 
 
 def __getattr__(name: str):

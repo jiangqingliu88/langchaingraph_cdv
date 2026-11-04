@@ -295,7 +295,7 @@ VALUES ('legacy_case', 'protocol', 'opcode[7:0]');
             reg.close()
 
     def test_register_cases_binds_module_and_version(self, tmp_path):
-        from src.tools.generation.casemodel_tools.registry_bridge import register_cases
+        from src.layers.l3_decision.casemodel.registry_bridge import register_cases
 
         yaml_text = Path("specs/npu_sched/casemodel.yaml").read_text(encoding="utf-8")
         out = register_cases(yaml_text, "npu_sched",

@@ -8,7 +8,7 @@ from .kinds import PROVEN_FACT_CLASSES
 
 
 def read_ledger(root: str | Path) -> List[Dict[str, Any]]:
-    from src.tools.checking.verification_os import read_ledger as _read
+    from src.layers.l3_decision.contract import read_ledger as _read
     try:
         return _read(root)
     except Exception:                                  # noqa: BLE001 旁路

@@ -140,6 +140,50 @@ def _incremental(root: Path) -> Dict[str, Any]:
     }
 
 
+def _selected_name(name: str, selected: set) -> str:
+    """回归任务名带 `_seed_<n>` / `_run_<n>` 后缀，worklist 用 base 名。"""
+    if name in selected:
+        return name
+    for test in selected:
+        if name.startswith(test + "_seed_") or name.startswith(test + "_run_"):
+            return test
+    return ""
+
+
+def _is_test_task(task: Dict[str, Any]) -> bool:
+    """`work_dir` 里带 `test_` 子目录 = 一条用例；否则是 build 任务。"""
+    work_dir = str(task.get("work_dir") or "")
+    return "/test_" in work_dir or "\\test_" in work_dir
+
+
+def _worklist_totals(reports: List[Path], selected: set):
+    """逐 task 回放 → `(全量秒, worklist 秒, 命中 test, 最慢 test)`。"""
+    worklist_s = full_s = 0.0
+    matched: set = set()
+    slowest: Dict[str, Any] = {}
+    for path in reports:
+        rep = _read_json(path)
+        for task in rep.get("tasks") or []:
+            if not isinstance(task, dict):
+                continue
+            secs = _num(task.get("elapsed")) or 0.0
+            full_s += secs
+            if not _is_test_task(task):
+                worklist_s += secs    # 编译 / 环境准备：worklist 也必须跑
+                continue
+            if secs > float(slowest.get("seconds") or 0):
+                slowest = {"name": str(task.get("name") or ""),
+                           "seconds": round(secs, 2)}
+            base = _selected_name(str(task.get("name") or ""), selected)
+            if base:
+                matched.add(base)
+                worklist_s += secs    # 选中的 test：计入 worklist 时间
+            elif "loopback" in str(task.get("work_dir") or "").lower():
+                worklist_s += secs    # loopback 是环境自检，永远不被过滤
+            # 其它未选中的 test：**不计入** worklist 时间
+    return full_s, worklist_s, matched, slowest
+
+
 def _worklist(root: Path) -> Dict[str, Any]:
     """义务 worklist vs 全量回归的耗时对照（**逐 task 实测耗时回放**）。
 
@@ -163,44 +207,7 @@ def _worklist(root: Path) -> Dict[str, Any]:
     reports = sorted(root.glob("regression_run/**/report.json"))
     if not reports:
         return {"available": False, "reason": "没有 regression_run/**/report.json"}
-    def _selected_name(name: str) -> str:
-        """回归任务名带 `_seed_<n>` / `_run_<n>` 后缀，worklist 用 base 名。"""
-        if name in selected:
-            return name
-        for test in selected:
-            if (name.startswith(test + "_seed_")
-                    or name.startswith(test + "_run_")):
-                return test
-        return ""
-
-    def _is_test_task(task: Dict[str, Any]) -> bool:
-        """`work_dir` 里带 `test_` 子目录 = 一条用例；否则是 build 任务。"""
-        work_dir = str(task.get("work_dir") or "")
-        return "/test_" in work_dir or "\\test_" in work_dir
-
-    worklist_s = full_s = 0.0
-    matched_tests: set = set()
-    slowest: Dict[str, Any] = {}
-    for path in reports:
-        rep = _read_json(path)
-        for task in rep.get("tasks") or []:
-            if not isinstance(task, dict):
-                continue
-            secs = _num(task.get("elapsed")) or 0.0
-            full_s += secs
-            if not _is_test_task(task):
-                worklist_s += secs    # 编译 / 环境准备：worklist 也必须跑
-                continue
-            if secs > float(slowest.get("seconds") or 0):
-                slowest = {"name": str(task.get("name") or ""),
-                           "seconds": round(secs, 2)}
-            base = _selected_name(str(task.get("name") or ""))
-            if base:
-                matched_tests.add(base)
-                worklist_s += secs    # 选中的 test：计入 worklist 时间
-            elif "loopback" in str(task.get("work_dir") or "").lower():
-                worklist_s += secs    # loopback 是环境自检，永远不被过滤
-            # 其它未选中的 test：**不计入** worklist 时间
+    full_s, worklist_s, matched_tests, slowest = _worklist_totals(reports, selected)
     if not matched_tests:
         return {"available": False,
                 "reason": "worklist 选中的 test 在回归报告里匹配不到"}

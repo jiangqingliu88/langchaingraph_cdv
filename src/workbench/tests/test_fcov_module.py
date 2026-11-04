@@ -350,7 +350,7 @@ class TestBatchesAndTraceability:
     def npu_run(self, tmp_path):
         import shutil
 
-        from src.tools.generation.casemodel_tools.api import run_coverage_plan
+        from src.layers.l3_decision.casemodel.api import run_coverage_plan
 
         root = tmp_path / "output_npu_20260101_000000"
         (root / "inputs").mkdir(parents=True)

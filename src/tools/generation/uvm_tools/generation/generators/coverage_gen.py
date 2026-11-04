@@ -18,7 +18,7 @@ def write_coverage_plan(output_dir: Path, case_model: Optional[Path],
     if case_model is None:
         return None
     try:
-        from src.tools.generation.casemodel_tools.api import run_coverage_plan
+        from src.layers.l3_decision.casemodel.api import run_coverage_plan
 
         payload = run_coverage_plan(case_model.read_text(encoding="utf-8"), module_name)
     except Exception as e:                       # noqa: BLE001 旁路

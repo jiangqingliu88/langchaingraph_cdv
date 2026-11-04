@@ -41,7 +41,7 @@ def contract_build(run_dir, config, module, json_output):
       vagent contract build --run output_xxx
       vagent contract build --run output_xxx --config specs/npu_sched/casemodel.yaml
     """
-    from src.tools.checking.verification_os import write_contract
+    from src.layers.l3_decision.contract import write_contract
 
     root = _resolve_run_dir(run_dir)
     case_ir_path = root / "coverage" / "case_ir.json"
@@ -55,7 +55,7 @@ def contract_build(run_dir, config, module, json_output):
         click.echo(f"case 模型不存在: {config}", err=True)
         raise SystemExit(2)
     if not case_ir.get("cases") and config:
-        from src.tools.generation.casemodel_tools.api import run_testpoints
+        from src.layers.l3_decision.casemodel.api import run_testpoints
 
         payload = run_testpoints(Path(config).read_text(encoding="utf-8"),
                                  env_name=f"{module or root.name}_env",
@@ -84,7 +84,7 @@ def contract_build(run_dir, config, module, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def contract_check(run_dir, json_output):
     """校验契约自洽（存在 / 哈希 / 义务数）—— ops 的前置门禁同一套逻辑"""
-    from src.tools.checking.verification_os import check_contract
+    from src.layers.l3_decision.contract import check_contract
 
     result = check_contract(_resolve_run_dir(run_dir))
     if json_output:
@@ -110,7 +110,7 @@ def contract_why(obligation_id, run_dir, json_output):
     示例:
       vagent contract why OBL-GROUP-CASE-D_DEP-CG-D_DEP-FUNCTIONAL --run output_xxx
     """
-    from src.tools.checking.verification_os import explain
+    from src.layers.l3_decision.contract import explain
 
     data = explain(_resolve_run_dir(run_dir), obligation_id)
     if json_output:
@@ -141,7 +141,7 @@ def contract_why(obligation_id, run_dir, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def contract_worklist(run_dir, json_output):
     """未清偿义务 → 需要重跑的回归 test 清单（义务驱动执行）"""
-    from src.tools.checking.verification_os.worklist import write_worklist
+    from src.layers.l3_decision.contract.worklist import write_worklist
 
     data = write_worklist(_resolve_run_dir(run_dir))
     if json_output:
@@ -166,7 +166,7 @@ def contract_worklist(run_dir, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def contract_seeds(run_dir, json_output):
     """种子索引：哪个 seed 清偿了哪些义务（可复现证据）"""
-    from src.tools.checking.verification_os.seeds import write_seed_index
+    from src.layers.l3_decision.contract.seeds import write_seed_index
 
     data = write_seed_index(_resolve_run_dir(run_dir))
     if json_output:
@@ -189,7 +189,7 @@ def contract_seeds(run_dir, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def contract_status(run_dir, json_output):
     """OS 视图：契约 / 账本 / case 与 TP 两级影子对账"""
-    from src.tools.checking.verification_os import status_summary
+    from src.layers.l3_decision.contract import status_summary
 
     data = status_summary(_resolve_run_dir(run_dir))
     if json_output:
@@ -216,7 +216,7 @@ def contract_status(run_dir, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def contract_show(run_dir, json_output):
     """查看契约与义务清单（按 case 归并）"""
-    from src.tools.checking.verification_os import load_contract, read_manifest
+    from src.layers.l3_decision.contract import load_contract, read_manifest
 
     root = _resolve_run_dir(run_dir)
     manifest = read_manifest(root)

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import yaml
 
-from src.tools.generation.casemodel_tools.api import run_validate
+from src.layers.l3_decision.casemodel.api import run_validate
 from src.tools.humanview.aivm_ir.bridge import (
     AivmImportError, bind_cells, import_ontology, to_casemodel, verify_import,
 )

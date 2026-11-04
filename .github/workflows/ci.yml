@@ -42,7 +42,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install -e ".[dev]"
-      - run: pytest src/tools/checking src/tools/humanview src/tools/generation/casemodel_tools/tests -q
+      - run: pytest src/tools/checking src/tools/humanview src/layers/l3_decision/contract/tests src/layers/l3_decision/casemodel/tests -q
       - run: python -m config.architecture_guard
 
   # Workbench（753 条）以前完全不在 CI 里 —— 改底层弄崩 GUI 也无人知。

@@ -359,7 +359,7 @@ def _write_json(path: Path, doc: Dict[str, Any]) -> None:
 
 def _load_contract(output_dir: Path):
     """构建物优先，没有就适配 case_ir —— 与 `run_shadow` 同一口径。"""
-    from src.tools.checking.verification_os import (
+    from src.layers.l3_decision.contract import (
         check_contract, contract_from_case_ir, load_contract,
     )
 
@@ -374,7 +374,7 @@ def _load_contract(output_dir: Path):
 def _build_obligations_v3(output_dir: Path):
     """P4：统一义务 → `docs/obligations_v3.json`；返回（摘要, 义务对象）。"""
     try:
-        from src.tools.checking.verification_os import read_ledger
+        from src.layers.l3_decision.contract import read_ledger
         from src.layers.l3_decision.obligation import derive_obligations, summary
 
         contract = _load_contract(output_dir)

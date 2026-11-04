@@ -49,6 +49,8 @@ ALLOWED_CLI_IMPORTS = {
     "src/cli/cmd_tools.py": "工具页需要 Agent 实例",
     "src/cli/commands.py": "_init_service / resume 等共享初始化",
     "src/cli/repl.py": "交互式 resume",
+    "src/cli/cmd_project.py": "工程/会话管理（3.0 新增）",
+    "src/cli/cmd_session.py": "会话/人工签核（3.0 新增）",
 }
 
 

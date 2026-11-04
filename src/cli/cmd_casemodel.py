@@ -45,7 +45,7 @@ def case_model_check(models, json_output):
       vagent case-model check examples/             # 目录递归
     """
     out = get_output_adapter(json_output)
-    from src.tools.generation.casemodel_tools.cli import build_parser, cmd_check
+    from src.layers.l3_decision.casemodel.cli import build_parser, cmd_check
 
     argv = ["check", *models] + (["--json"] if json_output else [])
     rc = cmd_check(build_parser().parse_args(argv))
@@ -65,8 +65,8 @@ def case_model_lint(model, json_output):
       vagent case-model lint specs/npu_sched/casemodel.yaml
       vagent case-model lint split/casemodel.yaml --json
     """
-    from src.tools.generation.casemodel_tools.domain import CaseModelError
-    from src.tools.generation.casemodel_tools.repository import load_models
+    from src.layers.l3_decision.casemodel.domain import CaseModelError
+    from src.layers.l3_decision.casemodel.repository import load_models
 
     try:
         models = load_models(model)
@@ -117,10 +117,10 @@ def case_model_analyze(model, cases_file, report_path, seed, max_cases, json_out
       vagent case-model analyze model.yaml --json -o report.txt
     """
     out = get_output_adapter(json_output)
-    from src.tools.generation.casemodel_tools.analysis import analyze_file
-    from src.tools.generation.casemodel_tools.cli import payload as _payload
-    from src.tools.generation.casemodel_tools.domain import CaseModelError as _CaseModelError
-    from src.tools.generation.casemodel_tools import text as _text
+    from src.layers.l3_decision.casemodel.analysis import analyze_file
+    from src.layers.l3_decision.casemodel.cli import payload as _payload
+    from src.layers.l3_decision.casemodel.domain import CaseModelError as _CaseModelError
+    from src.layers.l3_decision.casemodel import text as _text
 
     try:
         result = analyze_file(model, cases=cases_file, seed=seed,
@@ -162,7 +162,7 @@ def case_model_tree(model, seed, max_cases):
     """
     out = get_output_adapter(False)
     try:
-        from src.tools.generation.casemodel_tools.cli import build_parser, cmd_tree
+        from src.layers.l3_decision.casemodel.cli import build_parser, cmd_tree
         argv = ["tree", model]
         if seed is not None:
             argv += ["--seed", str(seed)]
@@ -184,7 +184,7 @@ def case_model_rules(json_output):
       vagent case-model rules
       vagent case-model rules --json
     """
-    from src.tools.generation.casemodel_tools.cli import build_parser, cmd_rules
+    from src.layers.l3_decision.casemodel.cli import build_parser, cmd_rules
     argv = ["rules"] + (["--json"] if json_output else [])
     sys.exit(cmd_rules(build_parser().parse_args(argv)))
 
@@ -206,8 +206,8 @@ def case_model_generate(model, fmt, output_path, seed, max_cases):
       vagent case-model generate model.yaml -f csv  -o cases.csv
     """
     out = get_output_adapter(False)
-    from src.tools.generation.casemodel_tools.cli import build_parser, cmd_generate
-    from src.tools.generation.casemodel_tools.domain import CaseModelError as _CaseModelError
+    from src.layers.l3_decision.casemodel.cli import build_parser, cmd_generate
+    from src.layers.l3_decision.casemodel.domain import CaseModelError as _CaseModelError
 
     try:
         argv = ["generate", model, "--format", fmt, "--out", output_path or ""]
@@ -244,8 +244,8 @@ def case_model_uvm_tests(model, dimensions, max_tests, output_path):
       vagent case-model uvm-tests model.yaml -o tests.yaml
     """
     out = get_output_adapter(False)
-    from src.tools.generation.casemodel_tools.cli import build_parser, cmd_uvm_tests
-    from src.tools.generation.casemodel_tools.domain import CaseModelError as _CaseModelError
+    from src.layers.l3_decision.casemodel.cli import build_parser, cmd_uvm_tests
+    from src.layers.l3_decision.casemodel.domain import CaseModelError as _CaseModelError
 
     try:
         argv = ["uvm-tests", model, "--max-tests", str(max_tests)]
@@ -269,7 +269,7 @@ def case_model_covergroups(model, module, output_path):
     """覆盖点 → SystemVerilog covergroup（功能覆盖率方法学）
 
     维度 → covergroup、字段 → coverpoint、取值点 → bin、可组合的 cross_pair →
-    cross。规则见 src/tools/generation/casemodel_tools/coverage.py 的模块头。
+    cross。规则见 src/layers/l3_decision/casemodel/coverage.py 的模块头。
 
     与 `uvm-tests` 是同一份分母的两面：那边说"这些取值点各跑一条用例"（激励），
     这边说"这些取值点各收一个 bin"（度量）—— 两边的数对得上，闭环才成立。
@@ -280,8 +280,8 @@ def case_model_covergroups(model, module, output_path):
       vagent case-model covergroups model.yaml -o coverage/apb_uart_cg.sv
     """
     out = get_output_adapter(False)
-    from src.tools.generation.casemodel_tools.cli import build_parser, cmd_covergroups
-    from src.tools.generation.casemodel_tools.domain import CaseModelError as _CaseModelError
+    from src.layers.l3_decision.casemodel.cli import build_parser, cmd_covergroups
+    from src.layers.l3_decision.casemodel.domain import CaseModelError as _CaseModelError
 
     try:
         argv = ["covergroups", model, "--module", module]
@@ -318,8 +318,8 @@ def case_model_associate(cases, coverage, constraint_path, json_output):
       vagent case-model associate cases.yaml coverage.yaml -c constraint.yaml --json
     """
     out = get_output_adapter(json_output)
-    from src.tools.generation.casemodel_tools.cli import build_parser, cmd_associate
-    from src.tools.generation.casemodel_tools.domain import CaseModelError as _CaseModelError
+    from src.layers.l3_decision.casemodel.cli import build_parser, cmd_associate
+    from src.layers.l3_decision.casemodel.domain import CaseModelError as _CaseModelError
 
     try:
         argv = ["associate", cases, coverage]
@@ -362,8 +362,8 @@ def case_model_constraints(model, ports, output_path):
               -p dma_master:DMA_seq_item -o constraint.yaml
     """
     out = get_output_adapter(False)
-    from src.tools.generation.casemodel_tools.cli import build_parser, cmd_constraints
-    from src.tools.generation.casemodel_tools.domain import CaseModelError as _CaseModelError
+    from src.layers.l3_decision.casemodel.cli import build_parser, cmd_constraints
+    from src.layers.l3_decision.casemodel.domain import CaseModelError as _CaseModelError
 
     try:
         argv = ["constraints", model]
@@ -395,8 +395,8 @@ def case_model_coverage_plan(model, module, output_path):
       vagent case-model coverage-plan model.yaml -o coverage_plan.yaml
     """
     out = get_output_adapter(False)
-    from src.tools.generation.casemodel_tools.cli import build_parser, cmd_coverage_plan
-    from src.tools.generation.casemodel_tools.domain import CaseModelError as _CaseModelError
+    from src.layers.l3_decision.casemodel.cli import build_parser, cmd_coverage_plan
+    from src.layers.l3_decision.casemodel.domain import CaseModelError as _CaseModelError
 
     try:
         argv = ["coverage-plan", model, "--module", module]

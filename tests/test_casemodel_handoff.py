@@ -29,7 +29,7 @@ from pathlib import Path
 
 def _casemodel_yaml(tmp_run: Path) -> Path:
     """一份最小但真实的 casemodel（两个维度、若干取值）。"""
-    from src.tools.generation.casemodel_tools.tests.conftest import FC
+    from src.layers.l3_decision.casemodel.tests.conftest import FC
     return FC
 
 

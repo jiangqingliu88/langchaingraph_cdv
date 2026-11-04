@@ -324,7 +324,7 @@ class TestTheModelRulesFeedBothTheAssertionAndTheChecker:
     ]
 
     def _rules(self, available):
-        from src.tools.generation.casemodel_tools.coverage import checker_rules
+        from src.layers.l3_decision.casemodel.coverage import checker_rules
 
         return checker_rules(self.DECLS, available)
 
@@ -365,7 +365,7 @@ class TestTheModelRulesFeedBothTheAssertionAndTheChecker:
 
     def test_a_signal_name_that_is_a_prefix_of_another_is_still_qualified(self):
         """`valid` 与 `valid_ready` 这种前缀关系不许误伤（`` 边界）。"""
-        from src.tools.generation.casemodel_tools.coverage import checker_rules
+        from src.layers.l3_decision.casemodel.coverage import checker_rules
 
         got = checker_rules(
             [{"name": "r", "expr": "valid && valid_ready", "message": "m",
@@ -388,7 +388,7 @@ class TestTheModelRulesFeedBothTheAssertionAndTheChecker:
         不是构造出来的样例。"""
         import yaml as _yaml
 
-        from src.tools.generation.casemodel_tools.coverage import checker_rules
+        from src.layers.l3_decision.casemodel.coverage import checker_rules
 
         cm = _yaml.safe_load(Path("specs/npu_sched/casemodel.yaml").read_text(
             encoding="utf-8"))

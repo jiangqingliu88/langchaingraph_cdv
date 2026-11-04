@@ -74,7 +74,7 @@ def test_without_plan_nothing_is_invented():
 
 
 def test_contract_carries_constraints_into_the_hash():
-    from src.tools.checking.verification_os.contract_model import contract_from_case_ir
+    from src.layers.l3_decision.contract.contract_model import contract_from_case_ir
 
     plain = {"module": "demo", "cases": [dict(CASE_IR["cases"][0])]}
     enriched = {"module": "demo", "cases": [dict(CASE_IR["cases"][0])]}

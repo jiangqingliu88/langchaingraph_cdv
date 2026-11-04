@@ -99,7 +99,7 @@ class TestScoreboardRuleOwnership:
         assert got == [{"id": "SB-NPU-DUT", "rules": ["r"]}]
 
     def test_model_carries_rules_through_the_loader(self):
-        from src.tools.generation.casemodel_tools.repository.loader import (
+        from src.layers.l3_decision.casemodel.repository.loader import (
             load_model_from_text)
 
         model = load_model_from_text(
@@ -201,7 +201,7 @@ class TestCollectedFactsPreferThePerSbLine:
             [{"id": "SB-LOG", "evidence": "log"}], {},
             {"total": 10, "matched": 10, "mismatched": 0})
         assert values["SB-LOG"]["matched"] is None
-        from src.tools.checking.verification_os.case_judge import build_raw_facts
+        from src.layers.l3_decision.contract.case_judge import build_raw_facts
 
         assert build_raw_facts("C", scb=[{"id": "SB-LOG", "exec": 0,
                                           "matched": None,

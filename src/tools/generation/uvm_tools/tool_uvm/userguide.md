@@ -844,7 +844,7 @@ environment:
 互不 import）：
 
 ```bash
-python -m src.tools.generation.casemodel_tools.cli uvm-tests model.yaml -d D_ratio
+python -m src.layers.l3_decision.casemodel.cli uvm-tests model.yaml -d D_ratio
 # → 4 条 tests: 片段，贴进上面 environment: 下
 ```
 

@@ -1,6 +1,6 @@
 """casemodel 工具的 Agent 接入层 —— verify 角色消费。
 
-工具本身在 `src/tools/generation/casemodel_tools/`（纯工具，零 LLM 依赖）；
+工具本身在 `src/layers/l3_decision/casemodel/`（纯工具，零 LLM 依赖）；
 本包是它在 Agent 框架里的三个包装面：
 
     langchain_tools.py   LangChain @tool 外壳
@@ -16,7 +16,7 @@ generation / analysis / view / cli / api。
 """
 from __future__ import annotations
 
-from src.tools.generation.casemodel_tools.api import (RUNNERS, TOOL_GAPS, TOOL_GENERATE,
+from src.layers.l3_decision.casemodel.api import (RUNNERS, TOOL_GAPS, TOOL_GENERATE,
                                            TOOL_NAMES, TOOL_VALIDATE, run_gaps,
                                            run_generate, run_validate)
 

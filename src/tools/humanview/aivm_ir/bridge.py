@@ -471,7 +471,7 @@ def import_ontology(onto: Any, out_dir: str | Path, *, module_name: str,
     `axes_path` 是"怎么拆轴"的 sidecar —— 真实 xlsx 不建维度，组合格要变成
     真正的 cross bin，就靠这份声明。
     """
-    from src.tools.generation.casemodel_tools.api import run_validate
+    from src.layers.l3_decision.casemodel.api import run_validate
 
     axes_stats = {}
     axes_doc: Dict[str, Any] = {}

@@ -16,8 +16,8 @@ from pathlib import Path
 import yaml
 
 from src.tools.common.lib import case_meta
-from src.tools.generation.casemodel_tools.domain.dimensions import build_dimension
-from src.tools.generation.casemodel_tools.framework.model import (
+from src.layers.l3_decision.casemodel.domain.dimensions import build_dimension
+from src.layers.l3_decision.casemodel.framework.model import (
     TestPoint as TpModel, Timing)
 
 
@@ -137,7 +137,7 @@ class TestTpBitmap:
         assert bmp["entries"][0]["trackable"] is False
 
     def test_interface_gets_tp_seen_when_width_is_given(self):
-        from src.tools.generation.casemodel_tools.api import run_covergroups
+        from src.layers.l3_decision.casemodel.api import run_covergroups
 
         text = Path("specs/npu_sched/casemodel.yaml").read_text(encoding="utf-8")
         p = run_covergroups(text, "npu_sched", tp_bitmap_width=70)

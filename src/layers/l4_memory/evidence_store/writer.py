@@ -32,7 +32,7 @@ def append_evidence(root: str | Path, facts: List[Dict[str, Any]], *,
                     run_id: str = "", tst_id: str = "", seed: Any = None,
                     actor: str = "") -> Dict[str, Any]:
     """`[{type, subject, value, ...}]` → FactBundle → 账本。"""
-    from src.tools.checking.verification_os import FactBundle, append_bundle
+    from src.layers.l3_decision.contract import FactBundle, append_bundle
 
     bundle = FactBundle(
         bundle_id=bundle_id, run_id=str(run_id or ""), tst_id=str(tst_id or ""),

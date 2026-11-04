@@ -1,6 +1,6 @@
 """casemodel 工具的 LangChain 接入面。
 
-语义在 `src/tools/generation/casemodel_tools/api.py`（零 LLM 依赖），这里只负责包成
+语义在 `src/layers/l3_decision/casemodel/api.py`（零 LLM 依赖），这里只负责包成
 LangChain 工具。用 `src/tools/_lc_tool_compat.tool` 而不是 `langchain.tools.tool`：
 langchain-core 1.x 的 StructuredTool 实例不可直接调用，垫片让它保持可调用
 （本仓库有大量调用点把工具对象当普通函数用）。
@@ -11,7 +11,7 @@ import json
 from typing import Optional
 
 from src.tools._lc_tool_compat import tool
-from src.tools.generation.casemodel_tools.api import run_gaps, run_generate, run_validate
+from src.layers.l3_decision.casemodel.api import run_gaps, run_generate, run_validate
 
 
 def _dumps(payload: dict) -> str:

@@ -10,8 +10,8 @@
 #   3. **然后是维度的约束组合**：cross_matrix 去约束这些维度怎么配
 #
 # 用法:
-#   python -m src.tools.generation.casemodel_tools.cli analyze config/casemodel/examples/cpu_pipeline.yaml
-#   python -m src.tools.generation.casemodel_tools.cli uvm-tests config/casemodel/examples/cpu_pipeline.yaml
+#   python -m src.layers.l3_decision.casemodel.cli analyze config/casemodel/examples/cpu_pipeline.yaml
+#   python -m src.layers.l3_decision.casemodel.cli uvm-tests config/casemodel/examples/cpu_pipeline.yaml
 #   vagent case-model gui config/casemodel/examples/cpu_pipeline.yaml
 # ════════════════════════════════════════════════════════════
 

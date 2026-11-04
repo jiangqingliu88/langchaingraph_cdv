@@ -11,10 +11,10 @@
 > - **[`COMMERCIAL_VALUE.md`](COMMERCIAL_VALUE.md)** —— **商业化价值评估**（值钱的是证据链，不是“AI 更聪明”）
 > - **[`PITCH_PLAYBOOK.md`](PITCH_PLAYBOOK.md)** —— **展示与方法学落地**（10 分钟演示 / Title / 45k 谈判）
 > - **[`OUR_MOAT.md`](OUR_MOAT.md)** —— **护城河分析**（验证完备性，不是求解器速度）
-> - `src/tools/generation/casemodel_tools/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
-> - `src/tools/generation/casemodel_tools/readme.md` —— **功能覆盖率方法学**（case 模型 → covergroup → 种子 → 回归）
-> - `src/tools/generation/casemodel_tools/plan.py` —— 测试点 IR 的公开门面
-> - `src/tools/generation/casemodel_tools/framework/` —— `contracts / model / naming / realization / stages / pipeline / constraints`
+> - `src/layers/l3_decision/casemodel/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
+> - `src/layers/l3_decision/casemodel/readme.md` —— **功能覆盖率方法学**（case 模型 → covergroup → 种子 → 回归）
+> - `src/layers/l3_decision/casemodel/plan.py` —— 测试点 IR 的公开门面
+> - `src/layers/l3_decision/casemodel/framework/` —— `contracts / model / naming / realization / stages / pipeline / constraints`
 
 ---
 
@@ -48,7 +48,7 @@ case 模型 ──framework 流水线──► TestPoint IR ──► 属性 tes
                                 coverage/methodology.json   （阶段 + 计数 + 输入 + IR sha256）
 ```
 
-流水线只有四段（`src/tools/generation/casemodel_tools/framework/`）：
+流水线只有四段（`src/layers/l3_decision/casemodel/framework/`）：
 
 | 阶段 | 回答什么 | 产出 |
 |---|---|---|
@@ -189,7 +189,7 @@ RL 只管 4 个软动作，且经验统计只做"降级建议"不直接拍板（
 ## 功能覆盖率方法学（case 模型 → covergroup → 种子 → 回归）
 
 **这条链是本项目"可度量、可追溯、可签核"那条主张的落点。** 规则只此一份：
-`src/tools/generation/casemodel_tools/coverage.py`（模块头 = 方法学），细节见 `casemodel_tools/readme.md`。
+`src/layers/l3_decision/casemodel/coverage.py`（模块头 = 方法学），细节见 `casemodel_tools/readme.md`。
 
 ### 一、模型里的东西变成 SystemVerilog
 
@@ -292,16 +292,16 @@ DUT 那条先走 `bind`（挂**模块**上、端口表达式在目标模块作�
 ### 五、命令
 
 ```powershell
-python -m src.tools.generation.casemodel_tools.cli covergroups    specs\npu_sched\casemodel.yaml -m npu_sched
-python -m src.tools.generation.casemodel_tools.cli coverage-plan  specs\npu_sched\casemodel.yaml -m npu_sched
+python -m src.layers.l3_decision.casemodel.cli covergroups    specs\npu_sched\casemodel.yaml -m npu_sched
+python -m src.layers.l3_decision.casemodel.cli coverage-plan  specs\npu_sched\casemodel.yaml -m npu_sched
 
 # 测试点 IR（框架流水线；下游只认 tp_id）
-python -m src.tools.generation.casemodel_tools.cli testpoints specs\npu_sched\casemodel.yaml `
+python -m src.layers.l3_decision.casemodel.cli testpoints specs\npu_sched\casemodel.yaml `
   --env-name npu_sched_env --module npu_sched `
   --agent-fields npu_sched_in=instr_type,instr_opcode,instr_dtype,barrier_type,op_priority
 
 # 约束模型（有 --agent-fields 才会把 stimulus 维度编译成真实赋值）
-python -m src.tools.generation.casemodel_tools.cli constraints specs\npu_sched\casemodel.yaml `
+python -m src.layers.l3_decision.casemodel.cli constraints specs\npu_sched\casemodel.yaml `
   -p npu_sched_in:npu_sched_in_master_seq_item `
   --agent-fields npu_sched_in=instr_type,instr_opcode
 
@@ -341,8 +341,8 @@ python -m src.tools.generation.casemodel_tools.cli constraints specs\npu_sched\c
 `dimensions: ["*"]` 的语义是**全部维度**，得展开 —— 否则所有维度都被报成"没人驱动"。
 
 ```powershell
-python -m src.tools.generation.casemodel_tools.cli associate   cases.yaml coverage.yaml [-c constraint.yaml]
-python -m src.tools.generation.casemodel_tools.cli constraints cases.yaml -p apb_master:APB_master_seq_item -o constraint.yaml
+python -m src.layers.l3_decision.casemodel.cli associate   cases.yaml coverage.yaml [-c constraint.yaml]
+python -m src.layers.l3_decision.casemodel.cli constraints cases.yaml -p apb_master:APB_master_seq_item -o constraint.yaml
 # 主 CLI 同形：vagent case-model {associate,constraints}
 ```
 
@@ -872,7 +872,7 @@ include，测试恢复其原意。**这 82 个测试现在全绿。**
 ```powershell
 python -m pytest tests/ -q                            # 963 passed / 2 skipped；已知 18 项基线失败已全部收敛
 python -m pytest src/workbench/tests -q               # 工作台：713 passed
-python -m pytest src/tools/generation/casemodel_tools/tests -q   # case 建模 + 框架 + 覆盖率方法学：509 passed
+python -m pytest src/layers/l3_decision/casemodel/tests -q   # case 建模 + 框架 + 覆盖率方法学：509 passed
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
 ```
 

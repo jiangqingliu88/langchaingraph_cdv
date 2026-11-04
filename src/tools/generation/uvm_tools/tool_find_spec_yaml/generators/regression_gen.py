@@ -195,7 +195,7 @@ def _tp_regression_lines(output_dir: Path, module_name: str, env_name: str,
     if cm is None:
         return []
     try:
-        from src.tools.generation.casemodel_tools.api import run_testpoints
+        from src.layers.l3_decision.casemodel.api import run_testpoints
 
         payload = run_testpoints(
             cm.read_text(encoding="utf-8", errors="replace"),

@@ -55,7 +55,7 @@ def write_case_closure(output_dir: Path, case_ir: Dict[str, Any],
     CASE 绑定的维度必须在 casemodel 里，checker 必须绑到 TP。这里不阻断
     生成 —— 由 Case Gate 据这份读数发 blocker。
     """
-    from src.tools.generation.casemodel_tools.repository import load_model
+    from src.layers.l3_decision.casemodel.repository import load_model
     from src.layers.l3_decision.case_ir import parse_declared, validate_case_closure
 
     known = [d.key for d in load_model(case_model).dimensions] if case_model else []
@@ -114,7 +114,7 @@ def _restamp_testpoints_yaml(payload: Dict[str, Any]) -> None:
     try:
         import hashlib
 
-        from src.tools.generation.casemodel_tools.plan import testpoints_yaml
+        from src.layers.l3_decision.casemodel.plan import testpoints_yaml
 
         text = testpoints_yaml(payload)
         payload["testpoints_yaml"] = text
@@ -289,7 +289,7 @@ def write_contract_build(output_dir: Path, case_ir: Dict[str, Any]) -> None:
     if not case_ir or not case_ir.get("cases"):
         return
     try:
-        from src.tools.checking.verification_os import write_contract
+        from src.layers.l3_decision.contract import write_contract
 
         manifest = write_contract(output_dir, case_ir)
         logger.info(f"契约：{manifest['contract_id']} · "

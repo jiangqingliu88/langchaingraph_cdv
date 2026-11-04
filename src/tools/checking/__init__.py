@@ -1,11 +1,12 @@
-"""检查板块 —— 只读/判定类工具（断言、debug、覆盖率分析、spec 校验）。"""
+"""检查板块 —— 只读/判定类工具（断言、debug、覆盖率分析、spec 校验）。
+
+verification_os 已迁到 `src.layers.l3_decision.contract`，不再在此列。
+"""
 from __future__ import annotations
 
 import importlib
 
-PACKAGES = ("assertion_tools",
-            # Verification OS v3：契约 / 义务 / 事实账本 / 推导（M0 影子模式）
-            "verification_os")
+PACKAGES = ("assertion_tools",)
 
 
 def __getattr__(name: str):

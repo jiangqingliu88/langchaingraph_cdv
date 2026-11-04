@@ -8,9 +8,9 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QSplitter, QVBoxLayout, QWidget
 
-from src.tools.generation.casemodel_tools.analysis import (CATEGORY_ENVIRONMENT,
+from src.layers.l3_decision.casemodel.analysis import (CATEGORY_ENVIRONMENT,
                                                 CATEGORY_REFERENCE)
-from src.tools.generation.casemodel_tools.domain import ENV_KEY_NAMES
+from src.layers.l3_decision.casemodel.domain import ENV_KEY_NAMES
 from src.workbench.ui import theme
 from src.workbench.ui.models import RowsModel
 from src.workbench.ui.widgets.panels import IssuePanel

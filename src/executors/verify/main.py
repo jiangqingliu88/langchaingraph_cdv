@@ -235,7 +235,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         #
         # 现在走 casemodel：它吃一份 **case 模型 YAML**（功能组织树 + P0/P1/P2 专题 +
         # 维度约束组合），吐 case 属性表与 UVM tests 片段。工具本体在
-        # `src/tools/generation/casemodel_tools/`（零 LLM 依赖），Agent 侧的三个包装面在
+        # `src/layers/l3_decision/casemodel/`（零 LLM 依赖），Agent 侧的三个包装面在
         # `src/executors/verify/casemodel/`。
         #
         # **case 模型从哪来**：闭环里目前**没有** spec → case 模型的桥（设计阶段不产出
@@ -254,7 +254,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
             logger.info(f"case 模型：{case_model}（人写的优先于 front 的草稿）")
             files.extend(self._copy_ingest_artifacts(case_model, output_dir))
             try:
-                from src.tools.generation.casemodel_tools.api import run_gaps, run_generate
+                from src.layers.l3_decision.casemodel.api import run_gaps, run_generate
 
                 yaml_text = case_model.read_text(encoding="utf-8", errors="replace")
                 gaps = run_gaps(yaml_text)
@@ -363,7 +363,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
     def _write_plan_consistency(self, output_dir: Path) -> None:
         """TP IR / StimulusPlan / constraint_backing 的同源校验。"""
         try:
-            from src.tools.generation.casemodel_tools.framework.plan_consistency import (
+            from src.layers.l3_decision.casemodel.framework.plan_consistency import (
                 write_plan_consistency)
 
             summary = write_plan_consistency(output_dir)
@@ -394,11 +394,11 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
             return
         cons_path = output_dir / "inputs" / "yaml" / "uvm" / "constraint.yaml"
         try:
-            from src.tools.generation.casemodel_tools.associate import associate
-            from src.tools.generation.casemodel_tools.coverage import (
+            from src.layers.l3_decision.casemodel.associate import associate
+            from src.layers.l3_decision.casemodel.coverage import (
                 coverage_model, coverage_model_to_dict,
             )
-            from src.tools.generation.casemodel_tools.repository import load_models_from_text
+            from src.layers.l3_decision.casemodel.repository import load_models_from_text
 
             case_text = cm_file.read_text(encoding="utf-8")
             model = load_models_from_text(case_text, source=str(cm_file))[0].resolve()
@@ -489,7 +489,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         decls = _load_case_model_doc(text)
         tp_width = len((tp_payload or {}).get("testpoints") or [])
         try:
-            from src.tools.generation.casemodel_tools.api import run_covergroups
+            from src.layers.l3_decision.casemodel.api import run_covergroups
 
             # `extra_signals`：断言规则引用、但没被覆盖点采的信号（`issue_valid`
             # 这种端口）。接口里不引，env 检查组就读不到 —— 规则只能被跳过。
@@ -562,7 +562,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         if cm_file is None:
             return {}
         try:
-            from src.tools.generation.casemodel_tools.api import run_covergroups
+            from src.layers.l3_decision.casemodel.api import run_covergroups
 
             points = run_covergroups(cm_file.read_text(encoding="utf-8"), "dut")
         except Exception as e:                       # noqa: BLE001 旁路，别拦生成

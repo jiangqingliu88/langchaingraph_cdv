@@ -1,13 +1,13 @@
 """case 建模模块 —— Qt 模型、自绘控件、12 个页面的构建与填充。
 
-原在 `src/tools/generation/casemodel_tools/tests/test_gui.py`。第二轮把界面搬进工作台时
+原在 `src/layers/l3_decision/casemodel/tests/test_gui.py`。第二轮把界面搬进工作台时
 一并迁过来：**工具包现在是纯工具，测试不需要 Qt**；界面测试归界面。
 
 用 `QT_QPA_PLATFORM=offscreen`（conftest 里设），所以不需要显示器、也不会弹窗。
 """
 from __future__ import annotations
 
-from src.tools.generation.casemodel_tools.analysis import CATEGORY_ORTHOGONAL
+from src.layers.l3_decision.casemodel.analysis import CATEGORY_ORTHOGONAL
 from src.workbench.modules.verify.casemodel.models import (CaseTableModel,
                                                         OrgTreeModel)
 from src.workbench.modules.verify.casemodel.pages import PAGES
@@ -150,7 +150,7 @@ def test_coverage_view_paints(qt_app, casemodel):
 
 
 def test_issue_panel_shows_summary(qt_app):
-    from src.tools.generation.casemodel_tools.analysis import analyze_file
+    from src.layers.l3_decision.casemodel.analysis import analyze_file
     panel = IssuePanel("提示", empty_hint="（空）")
     panel.set_issues([])
     assert "（空）" in panel.summary.text()
@@ -228,7 +228,7 @@ def test_opening_a_model_populates_every_page(casemodel):
         len(result.by_category().get(CATEGORY_ORTHOGONAL, []))
     assert pages["Case 属性表"].model.rowCount() == result.generation.count
     assert pages["规则清单"].model.rowCount() == len(
-        __import__("src.tools.generation.casemodel_tools.analysis",
+        __import__("src.layers.l3_decision.casemodel.analysis",
                    fromlist=["rule_docs"]).rule_docs())
     assert pages["取值覆盖"].model.rowCount() == len(result.field_coverage)
     assert pages["环境与检查"].env_model.rowCount() > 0
@@ -290,7 +290,7 @@ def test_external_page_populates_after_loading_cases(casemodel):
 
 def test_report_matches_cli_sections(casemodel):
     """导出的报告复用 CLI 渲染器 —— 两处不该各说各话。"""
-    from src.tools.generation.casemodel_tools import text as T
+    from src.layers.l3_decision.casemodel import text as T
     report = casemodel.render_report()
     assert "组织树" in report and "完备性评分" in report
     assert T.report(casemodel.result) in report

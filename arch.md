@@ -494,10 +494,19 @@ Intent（CANDIDATE）→ EDA/人工确认 → Unified IR → Contract(claims+obl
 | 原子写 | `core/runtime/atomic.py` 覆盖关键产物 |
 | 存储回收 | `core/runtime/gc.py` + `vagent gc`（默认 dry-run） |
 
+**已完成的收尾（2026-11-04 夜）**：
+
+- `verification_os` → **`l3_decision/contract/`**（实现与门面同包；账本留在 L3，
+  因为 ledger 依赖 contract_model，放 L4 会违反 L4→L3 禁止规则）；旧路径删除，
+  全仓 113 处引用改成新路径。
+- `casemodel_tools` → **`l3_decision/casemodel/`**（domain/repository/analysis/
+  framework 全套搬入）；旧路径删除。
+- 未使用的 `l4_memory/ledger` 门面删除（L4 不得静态依赖 L3）。
+- 验证：`architecture_guard` OK、关键模块 import OK、CLI 启动 OK、
+  **691 条相关单测通过**（contract/casemodel/layer/boundary/case 证据）。
+
 **仍待完成**：
 
-- `tools/checking/verification_os` / `tools/generation/casemodel_tools` 的实现
-  仍通过门面被引用；下一步迁进 `l3_decision` / `l4_memory`，再删旧路径。
 - 形式 / Lint / CDC / RDC / Emulation 仍是显式占位适配器，工具接入后替换 provider。
 - 资源 checker 的 SV 编译、P3 vcover 真机验证需要 EDA 环境。
 

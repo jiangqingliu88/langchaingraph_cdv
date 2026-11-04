@@ -162,7 +162,7 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
     points: Dict[str, Any] = {}
     if cm_text:
         try:
-            from src.tools.generation.casemodel_tools.api import run_covergroups
+            from src.layers.l3_decision.casemodel.api import run_covergroups
 
             points = run_covergroups(cm_text, module_name)
             if points.get("error"):
@@ -239,7 +239,7 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
     testpoint_rows: List[Dict[str, Any]] = []
     if cm_text:
         try:
-            from src.tools.generation.casemodel_tools.registry_bridge import case_rows
+            from src.layers.l3_decision.casemodel.registry_bridge import case_rows
 
             rows = case_rows(cm_text, module_name)
             for c in rows.get("cases") or []:

@@ -597,7 +597,7 @@ class TestSeedsReachTheRegression:
     NPU = Path("specs/npu_sched/casemodel.yaml")
 
     def _plan_dir(self, tmp_path):
-        from src.tools.generation.casemodel_tools.api import run_coverage_plan
+        from src.layers.l3_decision.casemodel.api import run_coverage_plan
 
         (tmp_path / "coverage").mkdir(parents=True, exist_ok=True)
         plan = run_coverage_plan(self.NPU.read_text(encoding="utf-8"), "npu_sched")
@@ -710,7 +710,7 @@ class TestBatchTestsAreRunnable:
     NPU = Path("specs/npu_sched/casemodel.yaml")
 
     def test_the_model_yields_one_class_per_batch(self):
-        from src.tools.generation.casemodel_tools.api import run_uvm_batches
+        from src.layers.l3_decision.casemodel.api import run_uvm_batches
 
         p = run_uvm_batches(self.NPU.read_text(encoding="utf-8"), "npu_sched")
         assert p["count"] == 11
@@ -718,7 +718,7 @@ class TestBatchTestsAreRunnable:
         assert p["batches"][1]["theme"] == "TH-B02"
 
     def test_a_batch_without_a_test_name_is_noted(self):
-        from src.tools.generation.casemodel_tools.api import run_uvm_batches
+        from src.layers.l3_decision.casemodel.api import run_uvm_batches
         import yaml
 
         model = yaml.safe_load(self.NPU.read_text(encoding="utf-8"))
@@ -1062,8 +1062,8 @@ class TestBatchConstraintComesFromTheModel:
     NPU = Path("specs/npu_sched/casemodel.yaml")
 
     def _both(self):
-        from src.tools.generation.casemodel_tools.api import run_uvm_batches
-        from src.tools.generation.casemodel_tools.associate import build_constraint
+        from src.layers.l3_decision.casemodel.api import run_uvm_batches
+        from src.layers.l3_decision.casemodel.associate import build_constraint
 
         text = self.NPU.read_text(encoding="utf-8")
         bc = build_constraint(text, ports=[{"name": "npu_sched_in",
@@ -1087,7 +1087,7 @@ class TestBatchConstraintComesFromTheModel:
         """
         import yaml
 
-        from src.tools.generation.casemodel_tools.api import run_uvm_batches
+        from src.layers.l3_decision.casemodel.api import run_uvm_batches
 
         model = yaml.safe_load(self.NPU.read_text(encoding="utf-8"))
         model["themes"][0].pop("method", None)
@@ -1107,7 +1107,7 @@ class TestBatchConstraintComesFromTheModel:
         """
         import yaml
 
-        from src.tools.generation.casemodel_tools.api import run_uvm_batches
+        from src.layers.l3_decision.casemodel.api import run_uvm_batches
 
         model = yaml.safe_load(self.NPU.read_text(encoding="utf-8"))
         model["themes"][0]["method"] = "NOPE"

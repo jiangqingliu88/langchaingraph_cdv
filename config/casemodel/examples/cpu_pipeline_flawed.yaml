@@ -6,7 +6,7 @@
 # 不要照抄。
 #
 # 完整诊断:
-#   python -m src.tools.generation.casemodel_tools.cli analyze config/casemodel/examples/cpu_pipeline_flawed.yaml
+#   python -m src.layers.l3_decision.casemodel.cli analyze config/casemodel/examples/cpu_pipeline_flawed.yaml
 # ════════════════════════════════════════════════════════════
 
 version: "0.9"

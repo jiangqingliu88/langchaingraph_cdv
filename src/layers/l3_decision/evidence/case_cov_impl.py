@@ -595,7 +595,7 @@ def _scb_status(data) -> str:
 
 def _raw_facts_for(entries: list, case: dict, facts: dict) -> list:
     """采集端能看到的最原始事实 → 事实列表（判据交给 `derive`）。"""
-    from src.tools.checking.verification_os.case_judge import build_raw_facts
+    from src.layers.l3_decision.contract.case_judge import build_raw_facts
 
     bins = [{"tp": e.get("tp_id"), "cp": e.get("coverpoint"), "bin": b,
              "hits": (e.get("hits") or {}).get(b, 0)}
@@ -678,7 +678,7 @@ def _judged_case_status(case_ir: dict, case: dict, entries: list, facts: dict,
     """M2b：有契约就让 `derive()` 判，没有就沿用旧判定（返回 case_status）。"""
     if not case_ir:
         return fallback
-    from src.tools.checking.verification_os.case_judge import judge_case
+    from src.layers.l3_decision.contract.case_judge import judge_case
 
     judged = judge_case(case_ir, str(facts.get("case_id") or ""),
                         _raw_facts_for(entries, case, facts),

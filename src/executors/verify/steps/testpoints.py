@@ -36,7 +36,7 @@ class TestpointSteps:
         接口），而 IR 的落盘要等 `_write_testpoints`。两份共用这一份 payload，
         避免"渲染用的 TP 集合"与"落盘的 TP 集合"各算一遍、可能漂。
         """
-        from src.tools.generation.casemodel_tools.api import run_testpoints
+        from src.layers.l3_decision.casemodel.api import run_testpoints
 
         return run_testpoints(
             case_model.read_text(encoding="utf-8", errors="replace"),
@@ -91,7 +91,7 @@ class TestpointSteps:
         不静默换后端。资源场景作为附加段并入 plan（P2）。
         """
         try:
-            from src.tools.generation.casemodel_tools.framework.stimulus_plan import (
+            from src.layers.l3_decision.casemodel.framework.stimulus_plan import (
                 DEFAULT_BACKEND, build_and_write)
 
             plan = build_and_write(

@@ -1,7 +1,7 @@
 # spec/RTL → 产物：一条数据路径
 
 > 基线：2026-11-04 · 对应实现 `refactor/langgraph-migration`
-> 实测 run：`output_e2e_final4_jiang_20261104_044624`（npu_sched，273/273 PASS，功能计划覆盖率 95.23%，签核 PASS_WITH_CAVEAT / CONDITIONAL；状态权威对账 0 差异、TP 影子 0 差异）
+> 实测 run：`output_e2e_v3_10_jiang_20261104_215130`（npu_sched，273/273 PASS，功能计划覆盖率 95.23%，签核 PASS_WITH_CAVEAT / CONDITIONAL；状态权威对账 0 差异、TP 影子 0 差异）
 
 ---
 
@@ -319,7 +319,7 @@ hard_ok=True + 无有效 caveat       → READY（APPROVED）
 │                                 ir_shadow_diff / run_config / checkpoints
 ├── model/  golden/  artifacts/   参考模型、黄金基线、产物索引
 ├── report.json  caveats.json  signoff_evidence.json  effective_policy.yaml
-└── signoff_evidence/             证据包 v2（319 份文件；case_view 段 278 份，
+└── signoff_evidence/             证据包 v2（332 份文件；case_view 段 278 份，
                                   execution 段含 run_config / authority / tp_shadow / seed_index / worklist）
 ```
 

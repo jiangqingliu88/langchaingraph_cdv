@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.tools.checking.verification_os import write_contract
-from src.tools.checking.verification_os.contract_model import Fact, FactBundle
-from src.tools.checking.verification_os.ledger import append_bundle
+from src.layers.l3_decision.contract import write_contract
+from src.layers.l3_decision.contract.contract_model import Fact, FactBundle
+from src.layers.l3_decision.contract.ledger import append_bundle
 
 CASE_IR = {"module": "demo", "cases": [{
     "id": "CASE-A",

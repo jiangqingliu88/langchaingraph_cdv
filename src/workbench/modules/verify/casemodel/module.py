@@ -27,10 +27,10 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QFileDialog, QLineEdit, QMessageBox, QTabWidget,
                                QVBoxLayout, QWidget)
 
-from src.tools.generation.casemodel_tools.analysis import AnalysisResult, analyze_text
-from src.tools.generation.casemodel_tools.analysis.schema_check import SchemaChecker
-from src.tools.generation.casemodel_tools.domain import CaseModelError
-from src.tools.generation.casemodel_tools.domain.errors import CaseListError
+from src.layers.l3_decision.casemodel.analysis import AnalysisResult, analyze_text
+from src.layers.l3_decision.casemodel.analysis.schema_check import SchemaChecker
+from src.layers.l3_decision.casemodel.domain import CaseModelError
+from src.layers.l3_decision.casemodel.domain.errors import CaseListError
 # 跨层引用一律绝对路径：本模块比 `modules/` 深两层，`..base` 会解析成
 # `modules.verify.base`（不存在），而报错信息只说「模块 import 不了」，
 # 从堆栈里看不出是少点了一个点。
@@ -465,7 +465,7 @@ class CasemodelModule(ModuleBase):
 
     def render_report(self) -> str:
         """导出文本报告 —— 复用 CLI 的渲染器，两处输出保持一致。"""
-        from src.tools.generation.casemodel_tools.text import report as text_report
+        from src.layers.l3_decision.casemodel.text import report as text_report
 
         parts = [text_report(self.result)]
         if not self.schema_issues:
