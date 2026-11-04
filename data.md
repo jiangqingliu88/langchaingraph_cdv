@@ -16,6 +16,17 @@
 
 **契约不是输入，是构建物**：`contract/` 由 casemodel + TP IR 编译得到（见 ④）。
 
+### 入口预检（CLI / GUI / 服务共用一处）
+
+运行开始前，`VerifyRequest.prepare()`（`src/layers/l2_orchestration/verify_request.py`）
+统一做三件事：定输出目录（时间戳撞车加后缀）、把 casemodel 拷到
+`inputs/casemodel.yaml`、套用全量回归 / 增量基线开关；并落
+**`docs/run_config.json`**（`run_config_v1`）—— 记录生效值与来源
+（`origin=cli|gui|service`）以及当前 `SIGNOFFAI_*` 环境变量。
+
+CLI 与 GUI 都只构造这一份请求，**不各自推断路径/默认值**；CLI 不直连
+`PipelineExecutionService`（`tests/test_service_boundary.py` 钉住）。
+
 ---
 
 ## 1. 主链（24 个节点里真正干活的 8 个）
@@ -112,12 +123,18 @@ status/worklist.json                     ← 未清偿义务 → 该重跑哪些
 - **度量（必须重跑仿真才能重建）**：
   - `sim/coverage/merged.ucdb`、`plan_merged.ucdb`、`reports/coverage_cvg.txt`
   - `sim/coverage/coverage_result.json`（functional_pct / overall_pct / 每 metric bins）
-- **派生（可由度量 + 模型重建）**——证据流水线 **10 步**（`evidence_pipeline.py`）：
+- **派生（可由度量 + 模型重建）**——证据流水线 **11 步**（`evidence_pipeline.py`）：
 
 ```text
 case_cov → tp_matrix → tp_evidence → cell_matrix → evd
-→ case_view → gates → os_shadow → os_tp_shadow → os_seeds
+→ case_view → gates
+→ os_shadow → os_tp_shadow → os_authority → os_seeds
 ```
+
+顺序有约束：`cell_matrix` 必须在 `evd` 之前（EVD 要按 CELL 反查）；
+`os_tp_shadow` 必须在 `os_authority` 之前（权威报告要带当轮 TP 阴影读数）；
+`os_tp_shadow` 读**当场传入**的 coverage payload，不读尚未落盘的
+`coverage_result.json`（否则会拿上一轮的 `tp_report`，实测 20 条假差异）。
 
 | 文件 | 内容 |
 |---|---|
@@ -127,15 +144,16 @@ case_cov → tp_matrix → tp_evidence → cell_matrix → evd
 | `coverage/tp_cov_evidence.json` | 四层证据（functional / timing / data / path） |
 | `coverage/evd.json` | 执行证据索引（去重键 `(tst_id, seed, cfg, checker_type, checker_id)`） |
 | `coverage/cell_matrix.json` | CELL = CG × P，green / yellow / red / na（NA ≠ pass） |
-| `coverage/case_view.{json,md,html}` | 人读视图：视图1 **按逻辑 CASE 聚合**（批次按测试名，执行次数单列）、视图2 功能契约、视图3 路径矩阵、视图4 缺口（与 CELL 颜色一一对应）+ 覆盖率组总览 / **四集合（含约束 id 与 backed）** / Case×CELL / EVD |
+| `coverage/case_view.{json,md,html}` | 人读视图：视图1 **按逻辑 CASE 聚合**（批次按测试名，执行次数单列）、视图2 功能契约、视图3 路径矩阵、视图4 缺口（与 CELL 颜色一一对应）+ 覆盖率组总览 / **四集合（含约束 id 与 backed）** / Case×CELL / EVD。绿黄红**只映射** `case_cov` 的 derive 判定（`status_source=derive`）；无契约的批次/旧目录才走 `legacy` |
 | `coverage/gates.json` | Case Gate（blocker / warning / info；规则表 + 声明式规则） |
 | `coverage/evidence_manifest.json` | 每步产物 sha + 耗时（"这份视图是哪个版本出的"） |
 | `coverage/{attribution,seed_diversity,association_report,plan_consistency}.json` | 归因 / 种子 / 关联 / 一致性 |
 | `evidence/ledger.jsonl` | **事实账本**：只追加 + 哈希链（`prev_hash`），按 FactBundle 幂等写入 |
 | `status/shadow_report.json` | M0 case 级影子对账（契约推导 vs 旧结论） |
 | `status/tp_shadow.json` | M2 TP 级对账 + run 级 `bin_hit` / `tp_attr` 事实（读取**当场**的覆盖率 payload，不读上一轮 `coverage_result.json`） |
-| `status/authority_diff.json` | **状态权威对账**：`case_view` 展示色 vs `case_cov` 的 derive 判定（差异应为 0） |
+| `status/authority_diff.json` | **状态权威对账**：`case_view` 展示色 vs `case_cov` 的 derive 判定 + 当轮 TP 阴影（差异应为 0） |
 | `status/seed_index.json` | P6 种子索引：哪颗 seed 清偿了哪些义务（可复现） |
+| `status/worklist.json` | 未清偿义务 → 该重跑哪些 test（ops 默认按它过滤；全新 run 回落全量） |
 
 ### ⑦ audit（签核）
 
@@ -175,7 +193,7 @@ hard_ok=True + 无有效 caveat       → READY（APPROVED）
 | **输入副本** | `rtl/`、`inputs/casemodel.yaml`、`inputs/source_map.json` | 不能（原件在工程里） |
 | **生成物** | `agents/`、`env/`、`bench/`、`inputs/yaml/uvm/`、`contract/`、`coverage/case_ir.json`、`docs/ir_shadow_diff.json` | 能（模型 + 模板） |
 | **度量** | `sim/coverage/*.ucdb`、`coverage_result.json`、`regression_run/**` | 不能，只能重跑仿真 |
-| **派生结论** | `case_cov/`、`tp_matrix`、`cell_matrix`、`evd`、`case_view`、`gates`、`status/*`、`report/caveats` | 能（`evidence_pipeline --only <step>` 单步重跑，不必重跑仿真；账本按 bundle 摘要幂等） |
+| **派生结论** | `case_cov/`、`tp_matrix`、`cell_matrix`、`evd`、`case_view`、`gates`、`status/*`、`docs/run_config.json`、`report/caveats` | 能（`evidence_pipeline --only <step>` 单步重跑，不必重跑仿真；账本按 bundle 摘要幂等） |
 
 ---
 
@@ -195,7 +213,8 @@ hard_ok=True + 无有效 caveat       → READY（APPROVED）
 ├── sim/coverage/                 merged/plan ucdb + reports + coverage_result.json
 ├── coverage/                     TP IR / Case IR / 矩阵 / 证据 / 视图 / 门禁
 ├── evidence/ledger.jsonl         事实账本（只追加 + 哈希链）
-├── status/                       worklist / shadow / tp_shadow / seed_index
+├── status/                       worklist / shadow / tp_shadow / authority_diff /
+│                                 seed_index
 ├── docs/                         events / provenance / quality / metrics /
 │                                 ir_shadow_diff / run_config / checkpoints
 ├── model/  golden/  artifacts/   参考模型、黄金基线、产物索引
@@ -204,9 +223,13 @@ hard_ok=True + 无有效 caveat       → READY（APPROVED）
                                   execution 段含 run_config / authority / tp_shadow / seed_index / worklist）
 ```
 
-本次读数：13 个契约组 / 267 次执行实例（HTML 视图1 聚合为 **23 个逻辑用例**）/ 364 条 EVD / 13 个 CELL（黄 11 · 红 2）/ **47 条 SCB 证据为 `per_scb`** / Case Gate PASS（blocker 0）。
+本次读数：13 个契约组 / 267 次执行实例（HTML 视图1 聚合为 **23 个逻辑用例**）/
+364 条 EVD / 13 个 CELL（黄 11 · 红 2）/ **47 条 SCB 证据为 `per_scb`** /
+47 条 CASE 带约束 id / **状态权威对账 0 差异 · TP 影子 0 差异** /
+Case Gate PASS（blocker 0）。
 
-> 注：这批产物里 `docs/ir_shadow_diff.json` 是本轮新增能力，下一次 verify 生成时出现（本 run 早于该提交）。
+`docs/ir_shadow_diff.json`（IR 双写比对）与 `docs/run_config.json`（生效配置）
+都在本 run 里生成并进了证据包。
 
 ---
 
@@ -223,6 +246,8 @@ hard_ok=True + 无有效 caveat       → READY（APPROVED）
 
 3. **事实链（Verification OS）**
    `contract/` → `compile_obligations` → `evidence/ledger.jsonl`（FactBundle + `prev_hash`）→ `derive()`（唯一判定实现）→ `status/{shadow,tp_shadow,seed_index}` → `vagent contract why/status/worklist/seeds`。**无契约不执行、事实只追加、状态只推导、视图只渲染。**
+   视图层只做展示映射（`status_vocab`）；`status/authority_diff.json` 把
+   "视图 vs 推导"的差异数成数字（本 run 47 条 / 0 差异）。
 
 4. **复现链**
    `status/seed_index.json`：`signed_off_by = task@seed` 回答"这条 TP 由哪次执行证明"；反过来"这颗 seed 清偿了哪些义务"也在表里。证据包自带 `replay/replay.py`（不依赖本工具）重算哈希与三态。
@@ -252,6 +277,12 @@ python -m src.cli.commands coverage case-registry -m npu_sched
 # 工程指标与趋势
 python -m src.cli.commands metrics show  -o <run> [--baseline <run>]
 python -m src.cli.commands metrics trend -o <run> --last 10
+
+# 增量 / 对比 / 证据包
+python -m src.cli.commands incremental plan --baseline <a> --current <b>
+python -m src.cli.commands diff runs --baseline <a> --current <b>
+python -m src.cli.commands evidence verify <run>/signoff_evidence
+python -m src.cli.commands evidence replay <run>/signoff_evidence
 ```
 
 ---
