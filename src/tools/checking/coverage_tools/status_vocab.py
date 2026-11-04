@@ -71,7 +71,12 @@ def worst(statuses: Iterable[Any]) -> str:
 
 
 def cell_color(statuses: Iterable[Any]) -> str:
-    """TP 契约状态集合 → CELL 颜色（与 `cell_matrix` 原口径一致）。"""
+    """TP 契约状态集合 → CELL 颜色（**与 `cell_matrix` 原口径一致**）。
+
+    注意：`PENDING_BACKEND` 在 CELL 层是**黄**（"还没接后端"是待办，不是
+    "不适用"）；只有 case 证据的 `evidence_color` 才把"全 PENDING_BACKEND"
+    视作 na。两者别混。
+    """
     values = [str(s) for s in statuses if s]
     if not values:
         return NA
@@ -79,8 +84,6 @@ def cell_color(statuses: Iterable[Any]) -> str:
         return RED
     if all(v == "VERIFIED" for v in values):
         return GREEN
-    if all(v == "PENDING_BACKEND" for v in values):
-        return NA
     return YELLOW
 
 

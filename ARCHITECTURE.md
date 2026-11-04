@@ -1071,6 +1071,9 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
   条目从上一版包硬链接复用，`manifest.incremental = {copied, reused}` 自述。
   复用前先校验**包内文件本体哈希**（不看 manifest 自述）；对不上就强制重拷并
   warning —— 复用率越高，一次错误复用的代价越大。
+  `execution/` 段同时收 `docs/run_config.json`（生效配置）、
+  `docs/ir_shadow_diff.json`（IR 双写比对）、`status/{authority_diff,tp_shadow,
+  seed_index,worklist}.json`（状态权威与复现索引）—— 离线评审不必回仓库。
   界面在「签核判定」页的「Case 证据」一节（Gate / CELL 读数 + 产物是否进包）。
 
 ### 9.12 Case View 签核标准（Signoff Standard）

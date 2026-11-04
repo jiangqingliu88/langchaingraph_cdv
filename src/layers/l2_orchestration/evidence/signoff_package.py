@@ -103,8 +103,15 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "evidence/ledger.jsonl",
         "status/shadow_report.json",
         "docs/engineering_metrics.json",
+        # 本次运行的生效配置（来源 cli/gui + SIGNOFFAI_* 环境）
+        "docs/run_config.json",
         # UVM IR 双写比对：签核材料要能回答"IR 与渲染 ctx 还差多少"
         "docs/ir_shadow_diff.json",
+        # Verification OS：状态权威对账 / TP 影子 / 种子索引 / worklist
+        "status/authority_diff.json",
+        "status/tp_shadow.json",
+        "status/seed_index.json",
+        "status/worklist.json",
         "incremental/plan.json",
         "docs/run_diff.json",
         "decision/evaluations.jsonl",

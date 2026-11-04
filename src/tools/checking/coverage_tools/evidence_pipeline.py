@@ -31,9 +31,11 @@ STEPS: tuple = ("case_cov", "tp_matrix", "tp_evidence", "cell_matrix",
                 # `evd` 要读 cell_matrix 反查每条执行落在哪些 CELL —— 顺序反了
                 # 时新 run 的 EVD 行会全是空 cells（历史 bug，实测 47 行）
                 "evd", "case_view", "gates",
-                # 状态权威对账：视图展示色 vs case_cov 的 derive 判定（只读）
+                "os_shadow", "os_tp_shadow",
+                # 状态权威对账：视图展示色 vs case_cov 的 derive 判定（只读）。
+                # **必须在 os_tp_shadow 之后**：报告里要带当轮 TP 阴影读数。
                 "os_authority",
-                "os_shadow", "os_tp_shadow", "os_seeds")
+                "os_seeds")
 
 #: 每步**应当**产出的文件（相对 run 目录）。缺了记进 manifest，不静默。
 STEP_ARTIFACTS: Dict[str, tuple] = {
