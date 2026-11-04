@@ -992,8 +992,14 @@ exact**：没有 `coverage/per_test_bins.json` 时 `test_seed_rate` 仍可 100%�
 |---|---|---|
 | 回归总耗时 + 相对基线下降 | `regression_run/**/report.json` 的 `total_time` / `tasks[].elapsed`；基线用 `--baseline` | `null`，不写 0 |
 | 增量预计节省 | `incremental/plan.json` 的 selected/all + 基线每用例耗时 | `available:false` |
+| **义务 worklist vs 全量** | 同一 run 的逐 task 实测耗时回放：worklist 选中的 test + 全部 build + loopback（编译与自检永远跑）；未选中的 test 不计 | `available:false` + 原因 |
 | 归因完整率 | `coverage/attribution.json` | 现场构建（只读） |
 | Agent 决策有效率 | `decision/evaluations.jsonl`：EFFECTIVE / (EFFECTIVE+INEFFECTIVE+REGRESSED) | `null`；UNCERTAIN 不进分母 |
+
+worklist 指标同时给 `slowest_test` 与 `savings_pct_excluding_slowest`：一条病态
+慢用例（实测有 11146s 的）会把原始节省率拉得很难看，两个读数都摆出来，读者
+自己判断该信哪个。实测（final4）：**159.5s vs 829.0s（去掉最慢一条），省 80.76%**；
+原始全量 11975.9s 包含那条 3h 的 `npu_dep_test_run_14`。
 
 CLI：`vagent metrics show -o <run> [--baseline <run>]`（`--json` 机器读）。
 指标写进 `docs/engineering_metrics.json`，也进签核报告的 `architecture_v2`。

@@ -218,6 +218,14 @@ def build_worklist(run_dir: str | Path) -> Dict[str, Any]:
 
     obligations = compile_obligations(contract)
     current_facts = _current_ledger(root, contract_hash(root))
+    # **执行证据**（不是契约元数据）：contract_anchor / tp_attr 在 verify 阶段就
+    # 落账，但它们不代表"这段用例跑过"。拿它们当 prior evidence 会让**全新 run**
+    # 也走 worklist 过滤（实测 p0 只剩 9 条、漏掉批次用例）。
+    execution_facts = [
+        f for f in current_facts
+        if str(getattr(f.get("type"), "value", f.get("type"))) not in
+        ("contract_anchor", "tp_attr")
+    ]
     statuses = derive(obligations, current_facts)
     tp_index = _tp_index(root)
     suggestions, hole_skipped = _coverage_suggestions(holes, declared, tp_index)
@@ -266,8 +274,8 @@ def build_worklist(run_dir: str | Path) -> Dict[str, Any]:
         # **有没有历史证据**：一次全新 run 的账本是空的，此时"全部未清偿"只是
         # 因为还没跑过，worklist 不能当执行计划用（它会漏掉批次用例）。
         # 自动启用 worklist 的调用方必须看这个标志。
-        "prior_evidence": bool(current_facts),
-        "ledger_facts": len(current_facts),
+        "prior_evidence": bool(execution_facts),
+        "ledger_facts": len(execution_facts),
         "contract_id": contract.id,
         "contract_hash": contract_hash(root),
         "obligations": len(obligations),

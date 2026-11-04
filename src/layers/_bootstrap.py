@@ -17,8 +17,9 @@
 
 注释、文档串里也会出现 `src.layers.lX_...`（这个仓库的注释很爱举例），
 grep 会把它们当成违规。AST 只看真正的 import 语句 —— 而且**函数体里的延迟
-import 照样算**（`ast.walk` 走整棵树）：把违规藏进函数体正是最常见的规避手法，
-测试的失败文案专门点了这一条。
+import 不算静态依赖**（与 `config/architecture_guard.py` 同一口径）—— 3.0
+迁移用函数内加载切断了几条 L1→L2 / L5→L3 的静态边；启动期守卫若按整棵树扫，
+会把这些有意为之的延迟加载当成违规，把 CLI 在第一条命令前自锁。
 """
 from __future__ import annotations
 
@@ -73,11 +74,13 @@ def _layer_of(path: Path, layers_root: Path) -> str:
 
 
 def _imported_layers(tree: ast.AST) -> Iterator[Tuple[int, str]]:
-    """文件里出现的 `src.layers.lX_*` import → (行号, 层名)。
+    """**模块级** `src.layers.lX_*` import → (行号, 层名)。
 
     同时认 `import a.b.c` 与 `from a.b import c`；本仓库统一用绝对 import。
+    函数体内的延迟 import 不算静态依赖（与 `config/architecture_guard.py`
+    同一口径，见模块头）。
     """
-    for node in ast.walk(tree):
+    for node in tree.body:
         mods: List[str] = []
         if isinstance(node, ast.ImportFrom) and node.module:
             mods.append(node.module)

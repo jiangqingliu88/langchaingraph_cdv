@@ -7,6 +7,18 @@ from pathlib import Path
 from config.settings import questa_exe, questa_home
 
 
+def _artifact_manifest(sim_result: dict) -> dict:
+    """`run()` 末尾的制品清单；实现在矩阵模块（Phase 4 拆分后不在本文件）。"""
+    from .coverage_matrix import _artifact_manifest as _impl
+    return _impl(sim_result)
+
+
+def _semantic_validations(od, result: dict) -> dict:
+    """语义自述（"绿但空"的中间态）；实现在矩阵模块。"""
+    from .coverage_matrix import _semantic_validations as _impl
+    return _impl(od, result)
+
+
 def print(*args, **kwargs):
     kwargs.setdefault("file", sys.stderr)
     builtins.print(*args, **kwargs)

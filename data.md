@@ -202,7 +202,11 @@ coverage_plan → find_spec_yaml → testpoints_prebuild → dut_channel
 
 ```text
 regression_run/<stage>/build_<build>/test_<task>/
-    sim.sh / status.env / sim_vsim.log   ← 命令、结论、UVM 日志（含 [SCB_DUT] / [SCB <id>] / [TP_HIT]）
+    sim.sh / status.env / sim_vsim.log   ← 命令、结论、UVM 日志
+                                           （[DRV] 发送 / [MON] 采样 /
+                                            [SCB] MATCH·MISMATCH·SUMMARY /
+                                            [SCB_DUT] 聚合 / [SCB <id>] 逐条 /
+                                            [TP_HIT]）
     task_meta.json                       ← 用例身份 v2（task/test/seed/stage/tp_ids/case_id 主身份/case_ids 全量/case_ir_sha/contract_hash/constraint_ids）
     cov/<test>/questa.db                 ← 这一条用例自己的覆盖库（267 份）
     waves/<test>.db                      ← 这一条用例自己的波形（qwave.db）

@@ -1,8 +1,10 @@
-"""L5 覆盖 / 义务闭环 —— 缺口、动作候选与确定性规划。"""
+"""L5 覆盖 / 义务闭环 —— 缺口、动作候选与确定性规划。
+
+**不在这里 re-export L3 的覆盖缺口函数**：L5 不得静态依赖 L3（依赖方向门禁）。
+需要 `build_coverage_holes` 的调用方直接 `from src.layers.l3_decision.evidence
+import build_coverage_holes` —— 那是 L3 的职责，不是 L5 的门面。
+"""
 from src.core.metrics.engineering import collect as engineering_metrics
-from src.layers.l3_decision.evidence.coverage_holes import (
-    build_coverage_holes, write_coverage_holes,
-)
 
 from .actions import (
     ActionCandidate, any_candidates, from_coverage_holes, from_obligations,
@@ -10,7 +12,6 @@ from .actions import (
 from .loop import plan_next, should_continue
 
 __all__ = [
-    "ActionCandidate", "any_candidates", "build_coverage_holes",
-    "engineering_metrics", "from_coverage_holes", "from_obligations",
-    "plan_next", "should_continue", "write_coverage_holes",
+    "ActionCandidate", "any_candidates", "engineering_metrics",
+    "from_coverage_holes", "from_obligations", "plan_next", "should_continue",
 ]

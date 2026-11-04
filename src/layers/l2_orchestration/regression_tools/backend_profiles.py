@@ -36,7 +36,11 @@ QUESTA_TEMPLATE = (
     '-do "log -r /*; run -all; quit -f" {{ MODE_OPTS | default("") }} '
     "{{ PLUSARGS }} ; "
     "[ -s sim_vsim.log ] && "
-    '! grep -qE "UVM_ERROR : *[1-9]|UVM_FATAL : *[1-9]|FATAL ERROR|Errors: *[1-9]"'
+    # Questa 有两种错误行格式：旧 `UVM_ERROR :    3`（计数）与新
+    # `UVM_ERROR <file>(line) @ time`（逐条）。**只认前者会造成假通过** ——
+    # 实测新版日志里 139 条 `UVM_ERROR D:/…sv(181)` 全被漏掉，用例仍判 pass。
+    '! grep -qE "UVM_ERROR *: *[1-9]|UVM_ERROR +[^ ]*\\.s?v[h]?\\(|'
+    'UVM_FATAL *: *[1-9]|UVM_FATAL +[^ ]*\\.s?v[h]?\\(|FATAL ERROR|Errors: *[1-9]"'
     ' sim_vsim.log && { '
     # 锚点不能只是 `mismatched=0`：env 现在会为**每条 scoreboard** 打一行
     # `[SCB <id>] … mismatched=0`，子串匹配会让"某条 SB 干净、聚合脏"的日志

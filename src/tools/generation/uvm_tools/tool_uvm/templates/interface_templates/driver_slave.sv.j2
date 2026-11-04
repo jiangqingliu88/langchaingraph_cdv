@@ -79,6 +79,9 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
       {{ agent.name }}_slave_seq_item rsp;
       seq_item_port.get_next_item(rsp);
       drive_response(rsp);
+      // 从端同样留痕：发了哪一笔响应。
+      `uvm_info("DRV", $sformatf("[DRV] {{ agent.name }} 发送响应: %s",
+                rsp.sprint()), UVM_MEDIUM)
       seq_item_port.item_done();
     end
   endtask

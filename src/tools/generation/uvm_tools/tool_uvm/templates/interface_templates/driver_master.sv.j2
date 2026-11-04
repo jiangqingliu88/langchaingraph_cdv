@@ -96,6 +96,10 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
       {{ agent.name }}_master_seq_item req;
       seq_item_port.get_next_item(req);
       drive_transaction(req);
+      // **发送事务必须留痕**：日志里要能逐笔看到 driver 发了什么。
+      // 用 `sprint()` 而不是 `convert2string()`：seq_item 不保证实现后者。
+      `uvm_info("DRV", $sformatf("[DRV] {{ agent.name }} 发送事务: %s",
+                req.sprint()), UVM_MEDIUM)
       // 广播「这一拍驱动了什么」——必须紧跟在 drive_transaction 之后：
       // 它是在**第二个** `@(vif.master_cb)` 之后返回的，也就是 slave monitor
       // 采到这一拍的那个边沿。SCB 按 `$time` 配对，所以这三者同拍。

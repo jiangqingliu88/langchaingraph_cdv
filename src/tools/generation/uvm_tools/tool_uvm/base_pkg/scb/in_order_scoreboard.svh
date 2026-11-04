@@ -177,8 +177,9 @@ class in_order_scoreboard #(
       actual   = m_actual_queue[0];
       if (!compare_items(expected, actual)) begin
         m_num_mismatches++;
-        `uvm_error(get_name(), $sformatf("mismatch\n  expected: %s\n  actual: %s",
-                   req2string(expected), req2string(actual)))
+        // **mismatch 必须打印**：带上两侧事务，日志里能直接定位哪一笔错。
+        `uvm_error(get_name(), $sformatf("[SCB] MISMATCH #%0d\n  expected: %s\n  actual: %s",
+                   m_num_mismatches, req2string(expected), req2string(actual)))
         void'(m_expected_queue.pop_front());
         void'(m_actual_queue.pop_front());
         continue;
@@ -187,7 +188,10 @@ class in_order_scoreboard #(
       void'(m_expected_queue.pop_front());
       void'(m_actual_queue.pop_front());
       m_num_matches++;
-      `uvm_info(get_name(), "strict match", UVM_HIGH)
+      // **match 也要打印**（UVM_MEDIUM 默认可见）：只有 mismatch 才出声的话，
+      // "全 match" 和 "根本没比" 在日志里长得一样。
+      `uvm_info(get_name(), $sformatf("[SCB] MATCH #%0d\n  expected: %s",
+                m_num_matches, req2string(expected)), UVM_MEDIUM)
     end
   endfunction
 
@@ -198,10 +202,12 @@ class in_order_scoreboard #(
     for (int a = 0; a < m_actual_queue.size(); a++) begin
       for (int e = 0; e < m_expected_queue.size(); e++) begin
         if (compare_items(m_expected_queue[e], m_actual_queue[a])) begin
+          REQ_T matched = m_expected_queue[e];   // 先留一份：delete 后下标就失效了
           m_expected_queue.delete(e);
           m_actual_queue.delete(a);
           m_num_matches++;
-          `uvm_info(get_name(), $sformatf("match at e=%0d a=%0d", e, a), UVM_HIGH)
+          `uvm_info(get_name(), $sformatf("[SCB] MATCH #%0d (e=%0d a=%0d)\n  expected: %s",
+                    m_num_matches, e, a, req2string(matched)), UVM_MEDIUM)
           a = -1;   // 队列已变更，从头重扫
           break;
         end
@@ -278,6 +284,19 @@ class in_order_scoreboard #(
   //--------------------------------------------------------------------------
   // 统计读取（线程安全快照）
   //--------------------------------------------------------------------------
+  //--------------------------------------------------------------------------
+  // 收口：**match / mismatch 的汇总必须打印**（UVM_NONE = 一定可见）。
+  // 只有逐条 MATCH 不够：签核判据读的就是这一行，且"0 条比对"要能和
+  // "全部 match" 区分开。
+  //--------------------------------------------------------------------------
+  virtual function void report_phase(uvm_phase phase);
+    super.report_phase(phase);
+    `uvm_info(get_name(), $sformatf(
+      "[SCB] SUMMARY expected=%0d actual=%0d matched=%0d mismatched=%0d extra=%0d missing=%0d",
+      m_num_expected, m_num_actual, m_num_matches, m_num_mismatches,
+      m_num_extra, m_num_missing), UVM_NONE)
+  endfunction
+
   // 注：这个出参原来叫 `matches` —— 那是 **SystemVerilog 关键字**（`matches`
   // 运算符，IEEE 1800-2012），vlog 直接判语法错：
   //     in_order_scoreboard.svh(279): near "matches": syntax error,

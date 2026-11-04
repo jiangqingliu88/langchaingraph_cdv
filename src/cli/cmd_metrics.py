@@ -60,6 +60,7 @@ def metrics_show(output, baseline, json_output):
     att = report["attribution"]
     dec = report["decision"]
     inc = report["incremental"]
+    wl = report.get("worklist") or {}
     table = Table(title=f"Engineering Metrics — {report['run_id']}")
     table.add_column("指标", style="cyan")
     table.add_column("值")
@@ -74,6 +75,12 @@ def metrics_show(output, baseline, json_output):
                   (f"{inc.get('estimated_savings_pct')}% · "
                    f"{inc.get('selected_tests')}/{inc.get('all_tests')} 条"
                    if inc.get("available") else inc.get("reason", "")))
+    table.add_row(
+        "义务 worklist",
+        _fmt_seconds(wl.get("worklist_seconds")) if wl.get("available") else "-",
+        (f"{wl.get('selected_tests')} 条 test · 省 "
+         f"{wl.get('savings_pct')}%（全量 {_fmt_seconds(wl.get('full_seconds'))}）"
+         if wl.get("available") else wl.get("reason", "")))
     table.add_row("归因完整率", _fmt_pct((att.get("attribution_rate") or 0) * 100
                                         if att.get("attribution_rate") is not None else None),
                   f"hit bins {att.get('hit_bins')} · exact {_fmt_pct((att.get('exact_rate') or 0) * 100)}")

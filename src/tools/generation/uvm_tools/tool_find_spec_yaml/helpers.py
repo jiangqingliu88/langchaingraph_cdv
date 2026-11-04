@@ -632,6 +632,7 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
     reg_model = _registry_model(module_name, agent_names, agents_spec)
     mirror = _ref_mirror_gate(module_name, interfaces or [], registers or [])
     util_str = ""
+    pred_placeholder = False
     #: 只有**生产路径**（传了 uvm_yaml_dir）才强制 pred 契约；
     #: 纯字符串构造（老测试/工具函数）保持旧行为，不在这里硬失败。
     enforce_pred = uvm_yaml_dir is not None
@@ -641,28 +642,45 @@ def _gen_env_yaml(module_name: str, agent_names: list, agents_spec: list,
         pred = _pred_spec(module_name, uvm_yaml_dir, reg_model, mirror,
                           in_item, out_item)
         pred_h = f"{module_name}_pred"
+        # **成员名不能与类名同名**：util 组件是 `include` 进 env_pkg 的裸 class，
+        # `npu_sched_pred npu_sched_pred;` 会让 Questa 在 `x = x::type_id::create`
+        # 处把类名解析成成员变量（实测 env_pkg 整包作废）。类型与成员同名时加 `_h`。
+        if str(pred.get("cls") or "") == pred_h:
+            pred_h = f"{pred_h}_h"
         scb_h = f"{module_name}_scb"
-        lines += [
-            "  analysis_components:",
-            f"    - name: {pred_h}",
-            f"      type: {pred['cls']}",
-            "  scoreboards:",
-            f"    - name: {scb_h}",
-            "      sb_type: in_order_scoreboard",
-            f"      trans_type: {out_item}",
-            f"      params: [{out_item}, {out_item}]",
-            "  tlm_connections:",
-            f"    - {{ driver: {in_agent}_agent_ap, receiver: {pred_h}.{pred['in_port']} }}",
-            f"    - {{ driver: {pred_h}.{pred['out_port']}, receiver: {scb_h}.expected_export }}",
-            f"    - {{ driver: {out_agent}_agent_ap, receiver: {scb_h}.actual_export }}",
-        ]
-        util_str = pred["util_yaml"]
+        if pred.get("placeholder"):
+            # 空骨架参考模型：**不接 scoreboard**。保留注释说明原因，读 env.yaml
+            # 的人一眼能看到"这轮没有参考模型比对"，而不是去查为什么 SCB 全 mismatch。
+            lines += [
+                "  # 参考模型为占位（body 仍含 TODO）—— 本轮**不接 scoreboard**，",
+                "  # 避免 expected 恒空导致的假 mismatch；参考模型实现后会自动接回。",
+                "  analysis_components: []",
+                "  scoreboards: []",
+            ]
+            util_str = ""
+            pred_placeholder = True
+        else:
+            lines += [
+                "  analysis_components:",
+                f"    - name: {pred_h}",
+                f"      type: {pred['cls']}",
+                "  scoreboards:",
+                f"    - name: {scb_h}",
+                "      sb_type: in_order_scoreboard",
+                f"      trans_type: {out_item}",
+                f"      params: [{out_item}, {out_item}]",
+                "  tlm_connections:",
+                f"    - {{ driver: {in_agent}_agent_ap, receiver: {pred_h}.{pred['in_port']} }}",
+                f"    - {{ driver: {pred_h}.{pred['out_port']}, receiver: {scb_h}.expected_export }}",
+                f"    - {{ driver: {out_agent}_agent_ap, receiver: {scb_h}.actual_export }}",
+            ]
+            util_str = pred["util_yaml"]
     else:
         lines += ["  scoreboards: []", "  analysis_components: []",
                   "  tlm_connections: []"]
 
     env_text = "\n".join(lines) + "\n"
-    if enforce_pred:
+    if enforce_pred and not pred_placeholder:
         _validate_env_pred_wiring(env_text, util_str, in_agent, out_agent)
     return (env_text, util_str) if with_util else env_text
 
@@ -759,8 +777,13 @@ def _pred_spec(module_name, uvm_yaml_dir, reg_model, mirror,
             raise ValueError(
                 f"util_comp.yaml pred 端口类型不匹配："
                 f"in={in_type}（期望 {in_item}）/ out={out_type}（期望 {out_item}）")
+        body = str(uc.get("body") or "")
+        # **占位参考模型不接 scoreboard**：body 里还写着 TODO 时，pred 产出的是
+        # 空事务，跟 DUT 实际一比就是满屏假 mismatch（实测 139 条 UVM_ERROR/用例）。
+        # 假失败比"没有比对"更糟 —— 所以只保留 util 类（便于后续实现），不接线。
+        placeholder = bool(uc.get("placeholder")) or "TODO" in body.upper()
         return {"cls": str(uc.get("name")), "in_port": in_name,
-                "out_port": out_name,
+                "out_port": out_name, "placeholder": placeholder,
                 "util_yaml": "util_components:\n" + _yaml.safe_dump(
                     [uc], allow_unicode=True, sort_keys=False)}
 

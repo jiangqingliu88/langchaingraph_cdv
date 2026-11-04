@@ -157,6 +157,11 @@ class UVMGenerator:
                 # `{% if body %}` 分支永远不会进，库里存的模型语义一路白存，
                 # 渲染出来的还是空壳。模板分支在 `util_comp.sv.j2:111-120`。
                 "body": comp.get("body"),
+                # `auto_send: false` = body 自己写 out_port，模板不再把输入事务
+                # 原样 send_output。**必须转发**：不转发的后果不是"少一次发送"，
+                # 而是把 `in_*_seq_item` 塞进 `out_port`（类型不兼容）→ vlog 报
+                # `Illegal assignment ... Types are not assignment compatible`。
+                "auto_send": comp.get("auto_send"),
                 # 带这一项 → util 模板把 `process_<port>` 的 TODO 空壳换成真的
                 # 参考模型镜像（见模板与 schema 的 `refModelMirror`）。缺省 None
                 # 保持原样 —— 不带镜像的 util 组件行为逐字节不变。
@@ -849,6 +854,7 @@ def generate_uvm(tool_type: str, yaml_spec: str) -> str:
                 "analysis_exports": comp.get("analysis_exports", []),
                 "analysis_ports": comp.get("analysis_ports", []),
                 "body": comp.get("body"),
+                "auto_send": comp.get("auto_send"),
                 "ref_model": comp.get("ref_model"),
             }
             files = []

@@ -58,6 +58,22 @@ class TestThePassCriterionIsAnchored:
         text = ENV_TEMPLATE.read_text(encoding="utf-8")
         assert "有 X 的那支**不写 `mismatched=0`**" in text
 
+    def test_error_criterion_catches_both_questa_formats(self):
+        """旧格式 `UVM_ERROR : 3` 与新格式 `UVM_ERROR file(line)` 都要拦。
+
+        只认旧格式会造成假通过：实测新版日志里 139 条逐条 `UVM_ERROR` 全被漏掉。
+        """
+        from src.layers.l2_orchestration.regression_tools.backend_profiles import (
+            QUESTA_TEMPLATE)
+        m = re.search(r'! grep -qE "([^"]+)"', QUESTA_TEMPLATE)
+        assert m, "判据链里找不到 UVM_ERROR 锚点"
+        pat = re.compile(m.group(1))
+        assert not pat.search("UVM_ERROR :    0")
+        assert not pat.search("Errors: 0")
+        assert pat.search("UVM_ERROR :    3")
+        assert pat.search("UVM_ERROR D:/x/y.sv(181) @ 1 ns")
+        assert pat.search("UVM_FATAL D:/x/y.sv(9) @ 1 ns")
+
 
 # ────────────────────────────────────────────────────────────────
 # 生成侧：SB → 规则归属
@@ -164,7 +180,7 @@ class TestTheRenderedCheckerCountsPerScoreboard:
 
 class TestCollectedFactsPreferThePerSbLine:
     def _facts(self, scb_items, by_id, summary):
-        from src.layers.l3_decision.evidence.case_cov import _raw_facts_for
+        from src.layers.l3_decision.evidence.case_cov_impl import _raw_facts_for
 
         found = _raw_facts_for([], {"scb": scb_items},
                                {"case_id": "C", "scb_summary": summary,
@@ -198,7 +214,7 @@ class TestEvidenceLevelIsNotGuessed:
     AGG = {"total": 9, "matched": 9, "mismatched": 0}
 
     def _level(self, item, by_id=None):
-        from src.layers.l3_decision.evidence.case_cov import _scb_evidence
+        from src.layers.l3_decision.evidence.case_cov_impl import _scb_evidence
 
         got = _scb_evidence([item], {"scb_summary": self.AGG,
                                      "log_facts": {"scb_by_id": by_id or {}}})

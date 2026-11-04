@@ -168,25 +168,6 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "coverage/resource_scenarios.json",
         "coverage/case_cov/**/*.json",
     ),
-    # ── Case View（三集合证据）──
-    #
-    # 签核要能离线回答"这条用例证明了哪些组 / 哪条 SVA / 哪个 scoreboard"，
-    # 所以它和 TP 矩阵、覆盖率一样是**签核产出**，不是页面上的一张临时表。
-    # `coverage/case_cov/**` 用通配符展开（一条用例一个文件，数量随回归增长）。
-    "case_view": (
-        "coverage/case_ir.json",
-        "coverage/case_group_map.json",
-        "coverage/case_checker_map.json",
-        "coverage/case_tp.json",
-        "coverage/cell_matrix.json",
-        "coverage/evd.json",
-        "coverage/gates.json",
-        "coverage/case_view.json",
-        "coverage/case_view.md",
-        "coverage/case_view.html",
-        "coverage/evidence_manifest.json",
-        "coverage/case_cov/**/*.json",
-    ),
 }
 
 

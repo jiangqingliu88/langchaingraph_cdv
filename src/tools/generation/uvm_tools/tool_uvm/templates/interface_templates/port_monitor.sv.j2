@@ -94,11 +94,16 @@ class {{ agent.name }}_port_monitor extends uvm_monitor;
         {{ agent.name }}_master_seq_item tx;
         tx = {{ agent.name }}_master_seq_item::type_id::create("tx");
         collect_transaction(tx);
+        // **采样事务必须留痕**：日志里要能逐笔看到 monitor 采到了什么。
+        `uvm_info("MON", $sformatf("[MON] {{ agent.name }} 采样事务: %s",
+                  tx.sprint()), UVM_MEDIUM)
         master_mon_ap.write(tx);
       end else begin
         {{ agent.name }}_slave_seq_item tx;
         tx = {{ agent.name }}_slave_seq_item::type_id::create("tx");
         collect_slave_transaction(tx);
+        `uvm_info("MON", $sformatf("[MON] {{ agent.name }} 采样响应: %s",
+                  tx.sprint()), UVM_MEDIUM)
         slave_mon_ap.write(tx);
         // ★ 核心：塞进 Sequencer FIFO
         if (sqr != null) begin

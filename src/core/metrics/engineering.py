@@ -140,6 +140,97 @@ def _incremental(root: Path) -> Dict[str, Any]:
     }
 
 
+def _worklist(root: Path) -> Dict[str, Any]:
+    """义务 worklist vs 全量回归的耗时对照（**逐 task 实测耗时回放**）。
+
+    口径：从 `regression_run/**/report.json` 的 `tasks[].elapsed` 取每条
+    test 的实测耗时；worklist 选中哪些 test 由 `status/worklist.json` 决定，
+    build 任务**照跑**（编译不能跳过）。把选中的 test 耗时 + 全部 build 耗时
+    相加，就是"按义务驱动只跑这些"的实测对照 —— 不是拍脑袋的估算。
+
+    缺 worklist / 缺 report / 匹配不到 test 都写 `available:false` 并给原因，
+    **不拿 0 冒充"没省时间"**。
+    """
+    doc = _read_json(root / "status" / "worklist.json")
+    if not doc.get("available"):
+        return {"available": False,
+                "reason": "没有可用的 status/worklist.json"}
+    selected = {str(item.get("test") or "")
+                for item in (doc.get("items") or [])
+                if isinstance(item, dict) and item.get("test")}
+    if not selected:
+        return {"available": False, "reason": "worklist 没有选中任何 test"}
+    reports = sorted(root.glob("regression_run/**/report.json"))
+    if not reports:
+        return {"available": False, "reason": "没有 regression_run/**/report.json"}
+    def _selected_name(name: str) -> str:
+        """回归任务名带 `_seed_<n>` / `_run_<n>` 后缀，worklist 用 base 名。"""
+        if name in selected:
+            return name
+        for test in selected:
+            if (name.startswith(test + "_seed_")
+                    or name.startswith(test + "_run_")):
+                return test
+        return ""
+
+    def _is_test_task(task: Dict[str, Any]) -> bool:
+        """`work_dir` 里带 `test_` 子目录 = 一条用例；否则是 build 任务。"""
+        work_dir = str(task.get("work_dir") or "")
+        return "/test_" in work_dir or "\\test_" in work_dir
+
+    worklist_s = full_s = 0.0
+    matched_tests: set = set()
+    slowest: Dict[str, Any] = {}
+    for path in reports:
+        rep = _read_json(path)
+        for task in rep.get("tasks") or []:
+            if not isinstance(task, dict):
+                continue
+            secs = _num(task.get("elapsed")) or 0.0
+            full_s += secs
+            if not _is_test_task(task):
+                worklist_s += secs    # 编译 / 环境准备：worklist 也必须跑
+                continue
+            if secs > float(slowest.get("seconds") or 0):
+                slowest = {"name": str(task.get("name") or ""),
+                           "seconds": round(secs, 2)}
+            base = _selected_name(str(task.get("name") or ""))
+            if base:
+                matched_tests.add(base)
+                worklist_s += secs    # 选中的 test：计入 worklist 时间
+            elif "loopback" in str(task.get("work_dir") or "").lower():
+                worklist_s += secs    # loopback 是环境自检，永远不被过滤
+            # 其它未选中的 test：**不计入** worklist 时间
+    if not matched_tests:
+        return {"available": False,
+                "reason": "worklist 选中的 test 在回归报告里匹配不到"}
+    selected_s = worklist_s
+    return {
+        "available": True,
+        "open_obligations": int(doc.get("open") or 0),
+        "obligations": int(doc.get("obligations") or 0),
+        "selected_tests": len(selected),
+        "matched_tests": len(matched_tests),
+        "full_seconds": round(full_s, 2),
+        "worklist_seconds": round(selected_s, 2),
+        "savings_seconds": round(full_s - selected_s, 2),
+        "savings_pct": (round((full_s - selected_s) / full_s * 100, 2)
+                        if full_s > 0 else None),
+        # 单条病态慢用例（本机实测有 11146s 的）会把原始节省率拉得很难看；
+        # 给一个"去掉最慢一条"的对照，读者自己能判断该信哪个。
+        "slowest_test": slowest,
+        "full_seconds_excluding_slowest": (round(full_s - float(
+            slowest.get("seconds") or 0), 2)),
+        "savings_pct_excluding_slowest": (
+            round((full_s - float(slowest.get("seconds") or 0) - selected_s)
+                  / (full_s - float(slowest.get("seconds") or 0)) * 100, 2)
+            if full_s > float(slowest.get("seconds") or 0) else None),
+        # 数据来源写明：这是同一轮 run 里逐 test 的**实测**耗时，不是估算
+        "method": "per-task elapsed replay",
+        "basis": "measured",
+    }
+
+
 def _decision(root: Path) -> Dict[str, Any]:
     records = read_records(root)
     summary = summarize(records)
@@ -285,6 +376,7 @@ def _collect(run_root: str | Path) -> Dict[str, Any]:
         "regression": _regression(root),
         "run_wall_seconds": _run_wall_seconds(root),
         "incremental": _incremental(root),
+        "worklist": _worklist(root),
         "attribution": _attribution(root),
         "decision": _decision(root),
         "red_lights": _red_lights(root),

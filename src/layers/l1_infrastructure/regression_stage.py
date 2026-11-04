@@ -56,6 +56,18 @@ from .infra_helpers import (
 
 
 class RegressionStageMixin:
+    #: 分级回归的顺序与门控（第 4 位 = 这一级是否需要人工放行）。
+    #: **一处定义**：`run_regression_staged` / `_stage_gates` / layout 都从它推。
+    #: 3.0 拆文件时这一段丢了 → ops 直接 FAIL（实测 `'InfrastructureManager'
+    #: object has no attribute 'REGRESSION_STAGES'`）。恢复原位。
+    REGRESSION_STAGES = (
+        ("loopback", "agent loopback 自检（SCB 必须全 match）", "loopback", True),
+        ("p0", "P0 功能", "p0", False),
+        ("p1", "P1 次功能（边界 + corner）", "p1", False),
+        ("p2", "P2 压力", "p2", False),
+        ("p3", "P3 错误 + 随机", "p3", False),
+    )
+
     def run_regression(self, reg_yaml: str = None, mode: str = "local",
                        tests: str = None, tags: str = None,
                        exclude_tags: str = None,

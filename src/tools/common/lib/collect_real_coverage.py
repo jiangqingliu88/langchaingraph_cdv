@@ -50,8 +50,9 @@ def analyze_seed_diversity(*args, **kwargs):
 
 # ── 兼容入口：实现在 coverage_collect / coverage_matrix ──
 from .coverage_collect import (  # noqa: F401
-    _parse_vcover_text, build_rtl_filelist, compile_with_coverage,
-    parse_coverage_report, parse_toggle_details, run, simulate_with_coverage,
+    _discover_dut_name, _parse_vcover_text, build_rtl_filelist,
+    compile_with_coverage, parse_coverage_report, parse_toggle_details, run,
+    simulate_with_coverage,
 )
 from .coverage_matrix import (  # noqa: F401
     _artifact_manifest, _case_cov_matrix, _lookup_hits, _owned_bins,

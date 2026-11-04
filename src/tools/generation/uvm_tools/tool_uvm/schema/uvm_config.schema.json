@@ -5,6 +5,14 @@
   "description": "tool_uvm 的 YAML 配置契约（一个文件 = 一个文档）。键名/类型/必填/枚举校验；严重度由 schema_check.py 按 validator 映射（unknown key → warning，其余 → error）。",
   "type": "object",
   "properties": {
+    "schema": {
+      "type": "string",
+      "$comment": "env_cov_bins.yaml 的生成端 schema 标记（v2 覆盖语义起写入）。"
+    },
+    "generated_by": {
+      "type": "string",
+      "$comment": "生成者标识（verify 侧写），用于回答“这份文件是谁产的”。"
+    },
     "meta": {
       "$ref": "#/$defs/meta"
     },
@@ -888,7 +896,9 @@
         "sequence_values": {
           "$comment": "sequence 型测试点的逐笔事务取值；生成类把它写进 <field>_seq_* 通道，sequence 每笔按序约束事务字段",
           "type": "array",
-          "items": { "type": "integer" }
+          "items": {
+            "type": "integer"
+          }
         }
       },
       "additionalProperties": false
@@ -1579,12 +1589,30 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["trans", "field", "values"],
+              "required": [
+                "trans",
+                "field",
+                "values"
+              ],
               "properties": {
-                "trans": {"type": "string"},
-                "field": {"type": "string"},
-                "values": {"type": "array", "items": {"type": "integer"}},
-                "mode": {"enum": ["cycle", "random"]}
+                "trans": {
+                  "type": "string"
+                },
+                "field": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                "mode": {
+                  "enum": [
+                    "cycle",
+                    "random"
+                  ]
+                }
               }
             }
           },
@@ -1684,6 +1712,10 @@
         "source_version": {
           "type": "string",
           "$comment": "模型出处 `name/vN`，来自 model_registry.db 的 (name, version) 主键"
+        },
+        "auto_send": {
+          "type": "boolean",
+          "$comment": "单 analysis_port 的 util 组件是否自动 send_output（模板默认 true；关掉时需在 body 里自己发）"
         }
       },
       "additionalProperties": false
@@ -1796,6 +1828,33 @@
         },
         "value": {
           "type": "integer"
+        },
+        "at_least": {
+          "type": "integer",
+          "minimum": 1,
+          "$comment": "该覆盖点/组至少命中次数（UVM option.at_least）"
+        },
+        "ignore": {
+          "type": "boolean",
+          "$comment": "true = ignore_bins（不计入分母）"
+        },
+        "transition": {
+          "type": [
+            "array",
+            "boolean"
+          ],
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "$comment": "转移仓序列（渲染成 (a => b), (b => c)）；非转移仓写 false（生成端统一字段形状）"
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 1,
+          "$comment": "覆盖点/组权重（UVM option.weight）"
         }
       },
       "additionalProperties": false
@@ -1817,6 +1876,33 @@
         },
         "illegal": {
           "type": "boolean"
+        },
+        "at_least": {
+          "type": "integer",
+          "minimum": 1,
+          "$comment": "该覆盖点/组至少命中次数（UVM option.at_least）"
+        },
+        "ignore": {
+          "type": "boolean",
+          "$comment": "true = ignore_bins（不计入分母）"
+        },
+        "transition": {
+          "type": [
+            "array",
+            "boolean"
+          ],
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "$comment": "转移仓序列（渲染成 (a => b), (b => c)）；非转移仓写 false（生成端统一字段形状）"
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 1,
+          "$comment": "覆盖点/组权重（UVM option.weight）"
         }
       },
       "additionalProperties": false
@@ -1908,13 +1994,27 @@
         "timing": {
           "type": "object",
           "properties": {
-            "min": {"type": "integer"},
-            "max": {"type": "integer"},
-            "tolerance": {"type": "integer"},
-            "start": {"type": "string"},
-            "end": {"type": "string"},
-            "sample": {"type": "string"},
-            "checkable": {"type": "boolean"}
+            "min": {
+              "type": "integer"
+            },
+            "max": {
+              "type": "integer"
+            },
+            "tolerance": {
+              "type": "integer"
+            },
+            "start": {
+              "type": "string"
+            },
+            "end": {
+              "type": "string"
+            },
+            "sample": {
+              "type": "string"
+            },
+            "checkable": {
+              "type": "boolean"
+            }
           },
           "additionalProperties": true
         }

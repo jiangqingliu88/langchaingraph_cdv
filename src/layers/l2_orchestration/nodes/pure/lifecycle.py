@@ -285,9 +285,10 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
     return {"result": result}
 
 
-# _collect_llm_audit 是 execution.py 的模块级函数；此处延迟引用避免循环 import
+# `_collect_llm_audit` 已随 execution.py 拆分搬到 `execution_helpers`；
+# 这里延迟引用避免循环 import（execution → lifecycle → execution）。
 def _collect_llm_audit() -> Any:
-    from src.layers.l2_orchestration.execution import _collect_llm_audit as _f
+    from src.layers.l2_orchestration.execution_helpers import _collect_llm_audit as _f
     return _f()
 
 

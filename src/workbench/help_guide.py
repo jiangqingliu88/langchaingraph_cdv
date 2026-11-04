@@ -144,7 +144,9 @@ GUIDE_HTML = """
       <code>Scoreboard: ... mismatched=0</code>，没有 <code>UVM_ERROR</code>；
       C 路径是 <code>TEST_PASS</code>。逐条 scoreboard 另有
       <code>[SCB &lt;id&gt;]</code> 行，<b>它不能单独满足判据</b>（防止"某条干净、
-      聚合脏"被误判）。</li>
+      聚合脏"被误判）。日志里还应有 <code>[DRV]</code>（发送）、
+      <code>[MON]</code>（采样）、<code>[SCB] MATCH / MISMATCH / SUMMARY</code>
+      —— 逐笔事务与比对结论都能直接看到。</li>
   <li><b>证据是否完整</b>：「签核判定」→「证据包 v2」→「校验证据包」，
       逐文件哈希 + <code>package_hash</code>；缺失或对不上就是 ✗，不算 pass。
       复用旧包文件前会校验<b>本体哈希</b>，不符强制重拷。</li>
