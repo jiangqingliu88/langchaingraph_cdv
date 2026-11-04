@@ -131,8 +131,14 @@ def _single_agent(entries: List[Dict[str, Any]]):
 def build_stimulus_plan(testpoints: List[Dict[str, Any]],
                         backend: str = DEFAULT_BACKEND,
                         module: str = "",
-                        seed: int = 0) -> Dict[str, Any]:
-    """TP IR → StimulusPlan。纯函数，不读盘、不跑 EDA、不调 LLM。"""
+                        seed: int = 0,
+                        resource_scenarios: List[Dict[str, Any]] = None
+                        ) -> Dict[str, Any]:
+    """TP IR → StimulusPlan。纯函数，不读盘、不跑 EDA、不调 LLM。
+
+    `resource_scenarios`（P2 资源交互场景）作为**附加段**并入 plan：
+    没有声明时保持原字节日（不新增键），有场景时参与 sha256。
+    """
     info = backend_info(backend)
     allowed = set(info.get("kinds") or ())
     entries: List[Dict[str, Any]] = []
@@ -166,6 +172,9 @@ def build_stimulus_plan(testpoints: List[Dict[str, Any]],
             "by_kind": _count(entries, "kind"),
         },
     }
+    if resource_scenarios:
+        plan["resource_scenarios"] = list(resource_scenarios)
+        plan["stats"]["resource_scenarios"] = len(resource_scenarios)
     plan["sha256"] = plan_digest(plan)
     return plan
 
@@ -208,8 +217,11 @@ def load_stimulus_plan(output_dir: str | Path) -> Dict[str, Any]:
 def build_and_write(testpoints: List[Dict[str, Any]],
                     output_dir: str | Path,
                     backend: str = DEFAULT_BACKEND,
-                    module: str = "", seed: int = 0) -> Dict[str, Any]:
+                    module: str = "", seed: int = 0,
+                    resource_scenarios: List[Dict[str, Any]] = None
+                    ) -> Dict[str, Any]:
     """常用组合：建 plan → 落盘。"""
-    plan = build_stimulus_plan(testpoints, backend=backend,
-                               module=module, seed=seed)
+    plan = build_stimulus_plan(testpoints, backend=backend, module=module,
+                               seed=seed,
+                               resource_scenarios=resource_scenarios)
     return write_stimulus_plan(output_dir, plan)

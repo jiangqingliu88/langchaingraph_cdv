@@ -677,6 +677,17 @@ class ToolAuditor:
                 }, ensure_ascii=False, default=str) + "\n")
         except Exception:
             pass
+        # 控制平面：每次工具调用都留一条动作决策（默认 AUTO，只审计不拦）。
+        try:
+            from src.layers.l3_decision.control_plane import decide_and_record
+
+            decide_and_record(
+                Path(self._receipt_path).parent.parent,
+                f"tool:{record.tool_name}", actor=record.run_id, role="executor",
+                metadata={"success": record.success,
+                          "verified_by": getattr(record, "verified_by", "none")})
+        except Exception:                              # noqa: BLE001 旁路
+            pass
 
     def query(self, tool_name: str = None, success: bool = None, limit: int = 50) -> List[ToolCallRecord]:
         records = self._records

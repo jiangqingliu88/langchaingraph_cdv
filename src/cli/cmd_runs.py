@@ -154,6 +154,42 @@ def prune_runs(keep_last, apply, include_approved, output_base, json_output):
             console.print("[dim]加 --apply 才会真的删除[/dim]")
 
 
+@cli.command("gc")
+@click.option("--runs-root", default=".", show_default=True,
+              help="run 目录所在根（默认当前目录）")
+@click.option("--keep-last", default=5, show_default=True, type=int,
+              help="最近 N 个 run 不回收")
+@click.option("--keep-days", default=30.0, show_default=True, type=float,
+              help="N 天内的 run 不回收")
+@click.option("--apply", is_flag=True,
+              help="真的删除；默认 dry-run（只列计划）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def gc_artifacts(runs_root, keep_last, keep_days, apply, json_output):
+    """回收旧 run 的大件（波形/覆盖库），**保留证据链**。
+
+    \b
+    与 `prune` 的分工：prune 删整个 run；gc 只删可重建的
+    `regression_run/**/waves|cov` 与 `sim/**/*.ucdb|vdb`，
+    `coverage/ status/ docs/ contract/ evidence/` 永不删除。
+    """
+    from src.core.runtime.gc import apply_gc, plan_gc
+
+    plan = plan_gc(runs_root, keep_last=keep_last, keep_days=keep_days)
+    result = apply_gc(plan, confirm=True) if apply else plan
+    if json_output:
+        click.echo(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+    mb = (result.get("candidate_bytes") or result.get("freed_bytes") or 0) / 1048576
+    verb = "已回收" if apply else "将回收"
+    console.print(f"[bold]{verb}[/bold] {result.get('candidate_files', 0)} 个文件 / "
+                  f"{mb:.1f} MB（扫描 {result.get('runs', 0)} 个 run，"
+                  f"保留 {len(result.get('kept_runs') or [])} 个）")
+    for item in (result.get("deleted") or result.get("candidates") or [])[:10]:
+        console.print(f"  [dim]{item['path']} ({item['bytes'] / 1048576:.1f} MB)[/dim]")
+    if not apply:
+        console.print("[dim]加 --apply 才会真的删除[/dim]")
+
+
 @cli.command("logs")
 @click.option("--run", "run_id", default="", help="run ID 或前缀（默认最新）")
 @click.option("--stage", default="", help="阶段过滤（compile/sim/coverage）")

@@ -256,6 +256,13 @@ class LLMQueryEngine:
             "failure_policy": failure_policy,
             "output_format": output_format,
             "validation": validation,
+            # ── 证据闭环：**模型不是事实源** ──
+            # LLM 输出一律是假设；带 claim_id 便于证据库按结论聚合。
+            "fact_class": "HYPOTHESIS",
+            "producer_class": "agent",
+            "claim_id": "CLM-" + self._hash(
+                f"{org.node_id if org else ''}|{self._hash(str(key))[:12]}|"
+                f"{response_sha}")[:12],
         }
         self.audit_log.append(record)
         # 只保留最近 500 条（内存里的**快视图**；落盘那份是全量）

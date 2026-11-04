@@ -108,7 +108,7 @@ async def n_design(state: PipelineState, config) -> Dict[str, Any]:
                 logger.warning(f"RTL 分析失败，回退最小 spec: {e}")
                 spec = {}
         try:
-            from src.tools.checking.spec_tools.main import analyze_specification
+            from src.layers.l3_decision.spec_tools.main import analyze_specification
             _raw = (analyze_specification(rt.spec_text) if not spec
                     else json.dumps(spec, ensure_ascii=False))
             spec = (json.loads(_raw)

@@ -456,7 +456,7 @@ def _normalize_sim_modes(sim_modes) -> List[str]:
     挡在运行请求这一层时错误还带着"是谁给的"这个上下文（界面下拉 / CLI 参数）。
     留空 → 默认 `cov+wave`（覆盖率是主指标，波形是事后现场）。
     """
-    from src.tools.execution.regression_tools import sim_modes as sm
+    from src.layers.l2_orchestration.regression_tools import sim_modes as sm
 
     if sim_modes is None:
         return [sm.DEFAULT_MODE]

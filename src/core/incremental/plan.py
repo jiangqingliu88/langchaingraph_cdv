@@ -151,9 +151,9 @@ def write_plan(baseline_run: str | Path, current_run: str | Path,
     if auto_doc.get("tests"):
         # 物化 sidecar：下一次增量计划直接复用，也能被证据包收走。
         auto_doc["path"] = write_dependency_map(current_run, auto_doc)
+    from src.core.runtime.atomic import atomic_write_json
+
     path = Path(current_run) / "incremental" / "plan.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n",
-                    encoding="utf-8", newline="\n")
+    atomic_write_json(path, plan)
     plan["path"] = str(path)
     return plan

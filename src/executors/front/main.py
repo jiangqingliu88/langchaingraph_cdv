@@ -124,7 +124,7 @@ class FrontExecutor(BaseExecutor):
         if spec_text.strip():
             try:
                 import json as _json
-                from src.tools.checking.spec_tools.main import analyze_specification
+                from src.layers.l3_decision.spec_tools.main import analyze_specification
                 raw = analyze_specification(spec_text)
                 doc = _json.loads(raw) if isinstance(raw, str) and raw.strip().startswith("{") else {}
                 if isinstance(doc, dict):

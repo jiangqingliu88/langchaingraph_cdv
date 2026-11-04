@@ -178,9 +178,19 @@ class {{ environment.env_name }}_coverage extends uvm_component;
 {%-   set _bins = (coverage_dut_bins | default({})).get(cp.signal, []) %}
 {%-   if _bins %}
     {{ cp.sv_name }}: coverpoint cov_vif.{{ cp.signal }} {   // {{ cp.field }}{% if cp.expr %} ← {{ cp.expr }}{% endif %}
+{%-     if cp.weight %}
+      option.weight = {{ cp.weight }};
+{%-     endif %}
+{%-     if cp.at_least %}
+      option.at_least = {{ cp.at_least }};
+{%-     endif %}
 
 {%-     for b in _bins %}
-      {{ 'illegal_bins' if b.illegal else 'bins' }} {{ b.name }} = { {{- b.value -}} };
+{%-       if b.transition %}
+      bins {{ b.name }} = {{ b.value }};
+{%-       else %}
+      {{ 'illegal_bins' if b.illegal else ('ignore_bins' if b.ignore else 'bins') }} {{ b.name }} = { {{- b.value -}} };
+{%-       endif %}
 {%-     endfor %}
     }
 {%-   else %}

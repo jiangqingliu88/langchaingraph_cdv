@@ -40,6 +40,9 @@ class FactType(str, Enum):
     WAVE = "wave"                # (case) → 波形路径
     LOG = "log"                  # (case) → 日志路径 / UVM_ERROR
     TP_ATTR = "tp_attr"          # (tp) → kind / observe_only（契约派生属性）
+    #: **契约锚点**：证据产生前冻结的契约版本（不可回改的承诺）。
+    #: 不是证明义务，不参与 derive；只作为账本里的版本锚。
+    CONTRACT_ANCHOR = "contract_anchor"
 
 
 FACT_TYPES = frozenset(t.value for t in FactType)
@@ -138,6 +141,10 @@ class Contract(BaseModel):
     module: str = ""
     hash: str = ""
     cases: List[CaseSpec] = Field(default_factory=list)
+    #: **约束内容指纹**（`p_*` id → 策略定义的规范哈希）。只把 id 放进
+    #: `CaseSpec.constraints` 会漏掉"约束逻辑变了但 id 没变"—— 那样旧证据
+    #: 会被错误地认为仍然有效。内容指纹一起进契约哈希。
+    constraint_fingerprints: Dict[str, str] = Field(default_factory=dict)
 
     model_config = {"populate_by_name": True}
 
@@ -197,6 +204,12 @@ class Fact(BaseModel):
     subject: Dict[str, Any] = Field(default_factory=dict)
     value: Dict[str, Any] = Field(default_factory=dict)
     producer: str = ""
+    # ── 证据闭环（Architecture 3.x）：事实类别与来源 ──
+    # 旧账本没有这些字段 → 默认 OBSERVED / engine，保持兼容。
+    fact_class: str = "OBSERVED"       # OBSERVED | DERIVED | HYPOTHESIS | HUMAN_DECISION | TOOL_RECEIPT
+    producer_class: str = "engine"     # engine | human | agent
+    claim_ids: List[str] = Field(default_factory=list)
+    actor: str = ""
     prev_hash: str = ""
     hash: str = ""
 
@@ -220,13 +233,24 @@ class FactBundle(BaseModel):
     tst_id: str = ""
     seed: Optional[int] = None
     contract_hash: str = ""
+    actor: str = ""
     facts: List[Fact] = Field(default_factory=list)
 
     def digest(self) -> str:
+        # **向后兼容**：新增的证据类别字段在取默认值时从摘要里剔除 ——
+        # 否则老 run 的 bundle 会因为“多了几个默认字段”被判成新包而重复入账。
+        defaults = {"fact_class": "OBSERVED", "producer_class": "engine",
+                    "claim_ids": [], "actor": ""}
+        rows = []
+        for fact in self.facts:
+            row = fact.model_dump(by_alias=True, exclude={"hash", "prev_hash"})
+            for key, value in defaults.items():
+                if row.get(key) == value:
+                    row.pop(key, None)
+            rows.append(row)
         return canonical_hash({
             "tst": self.tst_id, "seed": self.seed, "contract": self.contract_hash,
-            "facts": [f.model_dump(by_alias=True, exclude={"hash", "prev_hash"})
-                      for f in self.facts],
+            "facts": rows,
         })
 
 
@@ -250,4 +274,11 @@ def contract_from_case_ir(case_ir: Dict[str, Any]) -> Contract:
             constraints=[str(c) for c in raw.get("constraints") or [] if c],
             not_applicable=dict(raw.get("not_applicable") or {}),
         ))
-    return Contract(module=str(case_ir.get("module") or ""), cases=cases).seal()
+    # 约束 id 之外，把**策略内容**也冻进契约哈希（id 不变、逻辑变了要能发现）。
+    fingerprints = {
+        str(pid): canonical_hash(detail)
+        for pid, detail in (case_ir.get("constraint_backing") or {}).items()
+        if isinstance(detail, dict)
+    }
+    return Contract(module=str(case_ir.get("module") or ""), cases=cases,
+                    constraint_fingerprints=fingerprints).seal()

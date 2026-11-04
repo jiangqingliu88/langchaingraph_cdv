@@ -149,7 +149,7 @@ def _triage_harness(harness: List[str]) -> List[Dict[str, Any]]:
     """
     out = []
     try:
-        from src.tools.checking.debug_tools.main import fingerprint_error
+        from src.executors.debug.tools.main import fingerprint_error
     except Exception:                                 # noqa: BLE001
         return out
     for entry in harness[:10]:

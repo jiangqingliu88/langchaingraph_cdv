@@ -169,6 +169,114 @@ def _attribution(root: Path) -> Dict[str, Any]:
     }
 
 
+#: 规则 → 红灯类别。**归因是分类，不是判定**；认不出的规则进 unattributed。
+_RULE_CATEGORY = {
+    "case_without_binding": "contract_gap",
+    "unknown_dimension": "contract_gap",
+    "checker_without_tp": "contract_gap",
+    "CASE_GROUPS_EMPTY": "contract_gap",
+    "CASE_SVA_UNDECLARED": "contract_gap",
+    "CASE_SCB_UNDECLARED": "contract_gap",
+    "CASE_ITEM_NO_CELL": "contract_gap",
+    "waiver_incomplete": "governance",
+    "waiver_expired": "governance",
+    "waiver_invalid_date": "governance",
+    "cell_red": "stimulus_gap",
+    "cell_yellow": "stimulus_gap",
+    "cell_without_checker": "checker_gap",
+    "CASE_SVA_VACUOUS": "checker_gap",
+    "CASE_SCB_NOT_EXECUTED": "checker_gap",
+    "case_without_evd": "signoff_gap",
+    "evd_legacy": "evidence_gap",
+    "duplicate_id": "model_drift",
+    "case_synthesized": "model_drift",
+    "unknown_test": "model_drift",
+    "CASE_IR_EVIDENCE_MISMATCH": "model_drift",
+    "CASE_STATUS_OVERCLAIM": "model_drift",
+    "AUTHORITY_DIFF": "infra_error",
+    "COVERAGE_REGRESSION": "regression",
+    "QUALITY_GATE_BLOCKED": "quality",
+    "QUALITY_GATE_WARN": "quality",
+}
+
+
+def _red_rules(root: Path) -> List[Dict[str, Any]]:
+    """gate blocker + closure error → 统一的红灯条目。"""
+    gates = _read_json(root / "coverage" / "gates.json")
+    closure = _read_json(root / "coverage" / "case_closure.json")
+    rules: List[Dict[str, Any]] = []
+    for source in (gates.get("blockers"), closure.get("errors")):
+        for item in source or []:
+            if isinstance(item, dict):
+                rules.append({"rule": str(item.get("rule") or ""),
+                              "target": item.get("target", ""),
+                              "message": item.get("message", "")})
+    return rules
+
+
+def _classify_rules(rules: List[Dict[str, Any]]) -> Dict[str, Any]:
+    by_category: Dict[str, int] = {}
+    unattributed: Dict[str, int] = {}
+    for item in rules:
+        rule = item["rule"]
+        category = _RULE_CATEGORY.get(rule)
+        if category:
+            by_category[category] = by_category.get(category, 0) + 1
+        else:
+            key = rule or "<unknown>"
+            unattributed[key] = unattributed.get(key, 0) + 1
+    total = len(rules)
+    attributed = total - sum(unattributed.values())
+    return {
+        "blockers": total,
+        "by_category": dict(sorted(by_category.items())),
+        "unattributed": dict(sorted(unattributed.items())),
+        "attribution_completeness": (round(attributed / total, 4)
+                                     if total else None),
+    }
+
+
+def _triage(root: Path) -> Dict[str, Any]:
+    """人工裁决（`docs/triage.json`）→ 误报率；没有就标未知，不编 0。"""
+    triage = _read_json(root / "docs" / "triage.json")
+    records = [r for r in (triage.get("records") or [])
+               if isinstance(r, dict) and r.get("verdict")]
+    fp = sum(1 for r in records if r.get("verdict") == "false_positive")
+    triaged = len(records)
+    return {
+        "available": bool(triaged),
+        "triaged": triaged,
+        "false_positive": fp,
+        "rate": round(fp / triaged, 4) if triaged else None,
+        "note": ("无 docs/triage.json —— 误报率未知，不按 0 计"
+                 if not triaged else ""),
+    }
+
+
+def _red_lights(root: Path) -> Dict[str, Any]:
+    """红灯分类 + 归因完整率 + 误报率（有 triage 才有，不编 0）。
+
+    · **分类**：gate blocker / closure error 的规则 → 类别（`contract_gap` /
+      `stimulus_gap` / `model_drift` / `infra_error` …）。
+    · **归因完整率**：能归到类别的红灯 / 全部红灯。归因不完整时，
+      自动补齐动作就无从谈起。
+    · **误报率**：只在 `docs/triage.json` 有记录时计算 —— 没有人工裁决就不能
+      声称"误报率 0"。
+    """
+    classified = _classify_rules(_red_rules(root))
+    holes = _read_json(root / "coverage" / "coverage_holes.json")
+    hole_actions: Dict[str, int] = {}
+    for hole in holes.get("holes") or []:
+        if isinstance(hole, dict) and hole.get("action"):
+            action = str(hole["action"])
+            hole_actions[action] = hole_actions.get(action, 0) + 1
+    return {
+        **classified,
+        "coverage_holes": dict(sorted(hole_actions.items())),
+        "false_positive": _triage(root),
+    }
+
+
 def _collect(run_root: str | Path) -> Dict[str, Any]:
     root = Path(run_root)
     return {
@@ -179,6 +287,7 @@ def _collect(run_root: str | Path) -> Dict[str, Any]:
         "incremental": _incremental(root),
         "attribution": _attribution(root),
         "decision": _decision(root),
+        "red_lights": _red_lights(root),
     }
 
 
@@ -234,6 +343,14 @@ def _notes(out: Dict[str, Any]) -> List[str]:
         notes.append("没有带确定性结论的决策评估（全为 UNCERTAIN 或未运行）")
     if out["attribution"]["hit_bins"] == 0:
         notes.append("没有命中 bin，归因完整率按 0 计")
+    red = out.get("red_lights") or {}
+    completeness = red.get("attribution_completeness")
+    if red.get("blockers") and completeness is not None and completeness < 1:
+        notes.append(f"红灯归因不完整：{red['blockers']} 条 blocker 中"
+                     f"只有 {round(completeness * 100, 1)}% 能归到类别 —— "
+                     f"未归类：{', '.join(sorted(red.get('unattributed') or {})) or '—'}")
+    if not (red.get("false_positive") or {}).get("available"):
+        notes.append("没有 docs/triage.json —— 误报率未知，不按 0 计")
     return [n for n in notes if n]
 
 

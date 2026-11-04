@@ -308,7 +308,7 @@ def _launch_visualizer_ucdb(module, db_path: str, what: str) -> None:
         module.set_status(f"没有{what}的覆盖率库：{db_path or '(空)'}")
         return
     try:
-        from src.tools.checking.coverage_tools.cov_api import materialize_ucdb
+        from src.layers.l3_decision.evidence.cov_api import materialize_ucdb
 
         ucdb, why = materialize_ucdb(str(db_path))
     except Exception as exc:                           # noqa: BLE001 界面不炸

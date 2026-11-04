@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -349,6 +350,11 @@ def _parse_behavior(raw: Any) -> Any:
 # 配置域（可选的 `config_space:` 块）
 # ════════════════════════════════════════════════════════════
 
+def _parse_case_source(raw: Any) -> dict:
+    """`case_source:` → dict（xlsx / bindings / module）；非 mapping 给空。"""
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
 def _parse_path_groups(raw: Any) -> list:
     """`path_groups:` → `[PathGroup]`（无 bins 的组跳过，不产空 PATH 组）。"""
     from ..domain.paths import PathGroup
@@ -392,11 +398,116 @@ def _parse_config_space(raw: Any) -> Any:
 
 
 # ════════════════════════════════════════════════════════════
+# casemodel_v2：分节写法 → 现有扁平结构（P0 兼容层）
+# ════════════════════════════════════════════════════════════
+
+#: v2 分节 → 现有扁平字段。**行为不变**，只是把"职责边界"显式写出来。
+_SECTION_FIELDS: Dict[str, Tuple[str, ...]] = {
+    "identity": ("object", "object_code", "object_cn", "description",
+                 "version"),
+    "coverage": ("sub_objects", "dimensions", "cross_matrix", "cross_groups",
+                 "sampling"),
+    "checkers": ("assertions", "scoreboards"),
+    "stimuli": ("themes", "methods", "checks", "config_space", "generation",
+                "case_defaults", "behavior", "path_groups"),
+}
+
+_V2_SECTIONS = tuple(_SECTION_FIELDS) + ("plan", "bindings")
+
+
+def _merge_section(out: Dict[str, Any], name: str,
+                   fields: Tuple[str, ...]) -> None:
+    section = out.get(name)
+    if not isinstance(section, dict):
+        return
+    for field in fields:
+        if field not in section:
+            continue
+        if field in out and out[field] != section[field]:
+            warnings.warn(
+                f"casemodel_v2：顶层 `{field}` 与 `{name}.{field}` 同时存在，"
+                f"以顶层为准（请删掉重复声明）",
+                DeprecationWarning, stacklevel=3)
+            continue
+        out.setdefault(field, section[field])
+
+
+def _plan_item_case(item: Any) -> Any:
+    """`plan.items[]` → CaseIR 形状；只做**显式映射**，不猜维度。"""
+    if not isinstance(item, dict):
+        return item
+    out = dict(item)
+    parent = out.pop("parent", "")
+    if parent and not out.get("categories"):
+        out["categories"] = [parent]
+    maps = out.pop("maps_to", None)
+    if isinstance(maps, list):
+        dims = list(out.get("dimensions") or [])
+        for ref in maps:
+            text = str(ref)
+            if text.startswith("DIM-"):
+                text = text[4:]
+            # 覆盖组 / 证据引用不是维度 —— 不塞进 dimensions（不猜）
+            elif text.startswith(("CG-", "CELL-", "TST-", "SVA-", "SB-")):
+                continue
+            if text and text not in dims:
+                dims.append(text)
+        if dims:
+            out["dimensions"] = dims
+    return out
+
+
+def normalize_sections(data: Any) -> Any:
+    """`casemodel_v2` 分节写法 → 现有扁平结构（P0，行为不变）。
+
+    旧扁平写法原样返回（并发一条 DeprecationWarning）；分节写法把各节
+    展开到顶层，`plan.source` → `case_source`，`bindings` → 绑定表。
+    """
+    if not isinstance(data, dict):
+        return data
+    if not (data.get("schema") == "casemodel_v2"
+            or any(k in data for k in _V2_SECTIONS)):
+        if data.get("schema") in (None, ""):
+            warnings.warn(
+                "casemodel 仍是扁平写法；建议迁移到 `schema: casemodel_v2` "
+                "的 identity / coverage / checkers / stimuli / plan 分节",
+                DeprecationWarning, stacklevel=3)
+        return data
+    out = dict(data)
+    for name, fields in _SECTION_FIELDS.items():
+        _merge_section(out, name, fields)
+
+    plan = out.get("plan")
+    if isinstance(plan, dict):
+        source = plan.get("source")
+        if isinstance(source, dict):
+            src = dict(out.get("case_source") or {})
+            for key in ("xlsx", "bindings", "module"):
+                if source.get(key) and not src.get(key):
+                    src[key] = source[key]
+            if src:
+                out["case_source"] = src
+        items = plan.get("items")
+        if isinstance(items, list) and "cases" not in out:
+            out["cases"] = {"cases": [_plan_item_case(x) for x in items]}
+        if isinstance(plan.get("bindings"), dict) and "bindings" not in out:
+            out["bindings"] = plan["bindings"]
+
+    bindings = out.get("bindings")
+    if isinstance(bindings, dict):
+        src = dict(out.get("case_source") or {})
+        src.setdefault("bindings", bindings)
+        out["case_source"] = src
+    return out
+
+
+# ════════════════════════════════════════════════════════════
 # 组装
 # ════════════════════════════════════════════════════════════
 
 def model_from_dict(data: Any, source: str = "<dict>") -> CaseModel:
     """dict → CaseModel（含归一化与引用解析）。结构非法时抛 CaseModelError。"""
+    data = normalize_sections(data)
     if not isinstance(data, dict):
         raise CaseModelError(f"顶层必须是 mapping，当前为 {type(data).__name__}")
 
@@ -456,6 +567,7 @@ def model_from_dict(data: Any, source: str = "<dict>") -> CaseModel:
         scoreboards=_parse_scoreboards(data.get("scoreboards")),
         behavior=_parse_behavior(data.get("behavior")),
         path_groups=_parse_path_groups(data.get("path_groups")),
+        case_source=_parse_case_source(data.get("case_source")),
         config_space=_parse_config_space(data.get("config_space")),
         # Case IR 段原样承载（语义校验在 humanview.case_ir，见其 loader/validate）
         cases_doc=(dict(data.get("cases"))
@@ -501,6 +613,7 @@ def models_from_dict(data: Any, source: str = "<dict>") -> List[CaseModel]:
     """
     if not isinstance(data, dict):
         raise CaseModelError(f"顶层必须是 mapping，当前为 {type(data).__name__}")
+    data = normalize_sections(data)
 
     entries = data.get("tests")
     if entries is None:
@@ -541,19 +654,54 @@ def _duplicate_object_codes(models: List[CaseModel]) -> str:
 # Repository 门面
 # ════════════════════════════════════════════════════════════
 
-def load_model(path: str | Path) -> CaseModel:
-    """读取 YAML 文件 → CaseModel。"""
-    p = Path(path)
+def _read_yaml_file(path: Path) -> Dict[str, Any]:
     try:
-        text = p.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         raise                       # 交给调用方报「文件不存在」，别伪装成模型错误
     except OSError as exc:
-        raise CaseModelError(f"读取失败 {p}: {exc}") from exc
+        raise CaseModelError(f"读取失败 {path}: {exc}") from exc
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise CaseModelError(f"YAML 解析失败 {p.name}: {exc}") from exc
+        raise CaseModelError(f"YAML 解析失败 {path.name}: {exc}") from exc
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise CaseModelError(f"{path.name} 顶层必须是 mapping")
+    return data
+
+
+def _resolve_includes(data: Dict[str, Any], base: Path) -> Dict[str, Any]:
+    """`manifest:` / `include:` → 把分文件内容合并回一个 v2 文档（P2）。
+
+    `manifest: {coverage: coverage.yaml}` 里被引用的文件可以只写该节内容，
+    也可以自己带 `coverage:` 分节 —— 两种都能被 `normalize_sections` 展开。
+    """
+    manifest = data.get("manifest")
+    include = data.get("include")
+    refs: List[Tuple[str, str]] = []
+    if isinstance(manifest, dict):
+        refs += [(str(k), str(v)) for k, v in manifest.items()
+                 if isinstance(v, str)]
+    elif isinstance(include, list):
+        refs += [("", str(v)) for v in include if isinstance(v, str)]
+    if not refs:
+        return data
+    out = {k: v for k, v in data.items() if k not in ("manifest", "include")}
+    for section, ref in refs:
+        part = _read_yaml_file(base / ref)
+        if section and section not in part:
+            out[section] = part
+        else:
+            out.update(part)
+    return out
+
+
+def load_model(path: str | Path) -> CaseModel:
+    """读取 YAML 文件 → CaseModel（支持 v2 分节与 `manifest/include` 拆文件）。"""
+    p = Path(path)
+    data = _resolve_includes(_read_yaml_file(p), p.parent)
     return model_from_dict(data, source=str(p))
 
 
@@ -562,6 +710,10 @@ def load_model_from_text(text: str, source: str = "<text>") -> CaseModel:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
         raise CaseModelError(f"YAML 解析失败: {exc}") from exc
+    if isinstance(data, dict) and (data.get("manifest") or data.get("include")):
+        raise CaseModelError(
+            "manifest/include 需要文件路径来解析相对引用 —— 请用 "
+            "load_model() / load_models()")
     return model_from_dict(data, source=source)
 
 
@@ -572,13 +724,8 @@ def load_models(path: str | Path) -> List[CaseModel]:
     只想要那一个对象时用 `load_model`。
     """
     p = Path(path)
-    try:
-        text = p.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        raise
-    except OSError as exc:
-        raise CaseModelError(f"读取失败 {p}: {exc}") from exc
-    return load_models_from_text(text, source=str(p))
+    data = _resolve_includes(_read_yaml_file(p), p.parent)
+    return models_from_dict(data, source=str(p))
 
 
 def load_models_from_text(text: str, source: str = "<text>") -> List[CaseModel]:
@@ -586,4 +733,8 @@ def load_models_from_text(text: str, source: str = "<text>") -> List[CaseModel]:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
         raise CaseModelError(f"YAML 解析失败: {exc}") from exc
+    if isinstance(data, dict) and (data.get("manifest") or data.get("include")):
+        raise CaseModelError(
+            "manifest/include 需要文件路径来解析相对引用 —— 请用 "
+            "load_model() / load_models()")
     return models_from_dict(data, source=source)

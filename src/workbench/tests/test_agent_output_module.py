@@ -54,7 +54,7 @@ def _spec(module_id: str):
 
 
 def _patch(module, run_dir) -> None:
-    from src.tools.flow.flow_tools import run_agent_outputs
+    from src.app.services.flow import run_agent_outputs
 
     def fake_run_tool(name=None, *, quiet=False, force=False, **kwargs):
         tool = name or (module.spec.tool.name if module.spec.tool else None)

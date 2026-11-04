@@ -19,7 +19,7 @@ import json
 import pytest
 
 from src.layers.l1_infrastructure.infrastructure import declared_tests_by_build
-from src.tools.execution.regression_tools import sim_modes as sm
+from src.layers.l2_orchestration.regression_tools import sim_modes as sm
 
 
 # ════════════════════════════════════════════════════════════
@@ -190,9 +190,9 @@ class TestRenderedScripts:
     def _render(self, generated_yaml, tmp_path, enabled_modes):
         import shutil
 
-        from src.tools.execution.regression_tools.regression_framework.core.config import (
+        from src.layers.l2_orchestration.regression_tools.regression_framework.core.config import (
             ConfigBuilder)
-        from src.tools.execution.regression_tools.regression_framework.generators.shell import (
+        from src.layers.l2_orchestration.regression_tools.regression_framework.generators.shell import (
             ShellGenerator)
 
         yml = tmp_path / "inputs" / "yaml"
@@ -280,7 +280,7 @@ class TestModeExpansionIsTableDriven:
             "cov_wave_opt": "-coverage -qwavedb", "upf_opt": ""}
 
     def _expand(self, selection):
-        from src.tools.execution.regression_tools.regression_framework.core.config import (
+        from src.layers.l2_orchestration.regression_tools.regression_framework.core.config import (
             expand_modes,
         )
         applied, opts, warnings, flags = expand_modes(
@@ -353,7 +353,7 @@ class TestForeignBuildsStayOut:
         这条不变量是 `run_regression` 那道白名单的地基：一旦某个 test 声明到了
         common_base 的 build 上，那条 `VCS …` 命令就会被真跑，整轮回归全崩。
         """
-        from src.tools.execution.regression_tools.regression_framework.core.config import (
+        from src.layers.l2_orchestration.regression_tools.regression_framework.core.config import (
             ConfigBuilder)
 
         yml = tmp_path / "inputs" / "yaml"
@@ -386,7 +386,7 @@ class TestRunRequestNormalisation:
         让这条测试跟着改（那说明默认值散成了两份）。
         """
         from src.layers.l2_orchestration.run_service import _normalize_sim_modes
-        from src.tools.execution.regression_tools import sim_modes as sm
+        from src.layers.l2_orchestration.regression_tools import sim_modes as sm
 
         assert _normalize_sim_modes(None) == [sm.DEFAULT_MODE]
 
@@ -420,7 +420,7 @@ class TestRunRequestNormalisation:
 
 class TestWaveColumn:
     def _status(self, root):
-        from src.tools.flow.flow_tools.api import run_regression_status
+        from src.app.services.flow.api import run_regression_status
 
         return run_regression_status(str(root))
 
@@ -487,7 +487,7 @@ class TestCoverageColumn:
     """覆盖率列 —— 口径与波形列一致（记录 > 现场，来源标出来）。"""
 
     def _status(self, root):
-        from src.tools.flow.flow_tools.api import run_regression_status
+        from src.app.services.flow.api import run_regression_status
 
         return run_regression_status(str(root))
 
@@ -521,7 +521,7 @@ class TestArtifactFacts:
     """每行还带**大小与时间** —— "逐条校对"那两页要拿它判断这份产物新不新。"""
 
     def _status(self, root):
-        from src.tools.flow.flow_tools.api import run_regression_status
+        from src.app.services.flow.api import run_regression_status
 
         return run_regression_status(str(root))
 
@@ -565,7 +565,7 @@ class TestWorkbenchSelection:
 
     def test_missing_store_falls_back_to_the_tool_default(self, monkeypatch, tmp_path):
         """界面侧没存过 → 跟工具层的默认走（不自己定一份）。"""
-        from src.tools.execution.regression_tools import sim_modes as tool_modes
+        from src.layers.l2_orchestration.regression_tools import sim_modes as tool_modes
         from src.workbench import sim_modes as ui
 
         monkeypatch.setattr(ui, "STORE", tmp_path / "nope.json")
@@ -614,7 +614,7 @@ class TestTheTagFilterAcceptsSeedExpandedNames:
     """
 
     def _matcher(self):
-        from src.tools.execution.regression_tools.regression_framework.core.config import (
+        from src.layers.l2_orchestration.regression_tools.regression_framework.core.config import (
             make_tag_matcher,
         )
 
@@ -648,7 +648,7 @@ class TestTheTagFilterAcceptsSeedExpandedNames:
 
         规则必须是"**把所有前导 `test_` 都削掉**"。
         """
-        from src.tools.execution.regression_tools.regression_framework.core.config import (
+        from src.layers.l2_orchestration.regression_tools.regression_framework.core.config import (
             strip_test_prefix,
         )
 
@@ -675,7 +675,7 @@ def test_cov_wave_coverstore_is_test_associated():
     少了它 Questa 落成 `(null).data`；之后按用例打开覆盖率时，vcover 找不到
     对应 test 名 —— 功能覆盖率会**静默读不到**（实测）。
     """
-    from src.tools.execution.regression_tools import sim_modes
+    from src.layers.l2_orchestration.regression_tools import sim_modes
 
     value = sim_modes.get("cov+wave").value
     assert "-coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME}" in value

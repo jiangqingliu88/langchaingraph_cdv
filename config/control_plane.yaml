@@ -1,0 +1,32 @@
+# 控制平面策略 —— 动作级 AUTO / APPROVAL / FORBIDDEN
+#
+# 默认表在 `src/layers/l3_decision/control_plane/actions.py`；这里只写覆盖。
+# 模块可在 `specs/<module>/control_plane.yaml` 再覆盖一次。
+schema: control_plane_policy_v1
+defaults:
+  unknown_action: FORBIDDEN      # 未知动作默认拒绝
+  tool_action: AUTO              # 工具调用默认自动（只记录审计）
+  tool_risk: MEDIUM
+rules:
+  # 只读/生成候选可自动；高风险动作固定审批。
+  - {action: run_simulation, decision: AUTO, risk: MEDIUM}
+  - {action: run_regression, decision: AUTO, risk: MEDIUM}
+  - {action: generate_assertion, decision: AUTO, risk: LOW}
+  - {action: generate_constraint, decision: AUTO, risk: LOW}
+  - {action: generate_debug_hypothesis, decision: AUTO, risk: LOW}
+  - {action: generate_interpretation, decision: AUTO, risk: LOW}
+  - {action: modify_intent, decision: APPROVAL, risk: HIGH}
+  - {action: confirm_intent, decision: APPROVAL, risk: HIGH}
+  - {action: change_assumption, decision: APPROVAL, risk: HIGH}
+  - {action: promote_hypothesis_to_fact, decision: APPROVAL, risk: HIGH}
+  - {action: waive_failing_proof, decision: APPROVAL, risk: HIGH}
+  - {action: waive_obligation, decision: APPROVAL, risk: HIGH}
+  - {action: accept_caveat, decision: APPROVAL, risk: HIGH}
+  - {action: affect_signoff_state, decision: APPROVAL, risk: HIGH}
+  - {action: disable_gate_rule, decision: APPROVAL, risk: HIGH}
+  # 破坏证据链：禁止（角色不能豁免）。
+  - {action: edit_ledger, decision: FORBIDDEN, risk: CRITICAL}
+  - {action: fabricate_evidence, decision: FORBIDDEN, risk: CRITICAL}
+  - {action: bypass_gate, decision: FORBIDDEN, risk: CRITICAL}
+  - {action: downgrade_verdict_silently, decision: FORBIDDEN, risk: CRITICAL}
+  - {action: write_contract_from_unconfirmed_intent, decision: FORBIDDEN, risk: CRITICAL}

@@ -87,7 +87,7 @@ def build_runtime_graph(output_dir: str | Path,
     graph = VerificationGraph()
     if spec:
         try:
-            from src.tools.checking.spec_tools.verify_dsl import build_graph_from_spec
+            from src.layers.l3_decision.spec_tools.verify_dsl import build_graph_from_spec
 
             graph.merge(build_graph_from_spec(spec))
         except Exception:                          # noqa: BLE001 spec 不完整就只建运行时

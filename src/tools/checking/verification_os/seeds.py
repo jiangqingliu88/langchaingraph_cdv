@@ -112,11 +112,11 @@ def build_seed_index(run_dir: str | Path) -> Dict[str, Any]:
 
 def write_seed_index(run_dir: str | Path) -> Dict[str, Any]:
     data = build_seed_index(run_dir)
+    from src.core.runtime.atomic import atomic_write_json
+
     path = Path(run_dir) / "status" / "seed_index.json"
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2),
-                        encoding="utf-8", newline="\n")
+        atomic_write_json(path, data)
     except OSError:
         pass
     return data

@@ -46,3 +46,7 @@ output_dir/
 # OS
 .DS_Store
 Thumbs.db
+
+# Tool / IDE generated artifacts
+/out_x_*/
+*.vstf

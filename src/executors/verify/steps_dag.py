@@ -23,8 +23,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Tuple
 
 
-class StepOrderError(RuntimeError):
-    """步骤顺序 / 依赖不满足。"""
+from src.core.runtime.errors import StepOrderError  # noqa: F401
 
 
 @dataclass(frozen=True)

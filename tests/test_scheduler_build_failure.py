@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.tools.execution.regression_tools.regression_framework.models.scheduler import (
+from src.layers.l2_orchestration.regression_tools.regression_framework.models.scheduler import (
     Scheduler,
 )
-from src.tools.execution.regression_tools.regression_framework.models.task import (
+from src.layers.l2_orchestration.regression_tools.regression_framework.models.task import (
     BuildTask,
     TestTask,
 )

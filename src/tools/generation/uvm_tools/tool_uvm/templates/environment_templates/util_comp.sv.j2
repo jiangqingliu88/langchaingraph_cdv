@@ -115,7 +115,7 @@ class {{ name }} extends uvm_component;
     // 信号级 RTL，不是参考模型（见 `src/layers/l4_memory/model_registry.py`）。
     // 出处：{{ source_version | default('model_registry') }}
 {{ body }}
-{%- if analysis_ports|length == 1 %}
+{%- if analysis_ports|length == 1 and (auto_send is not defined or auto_send) %}
     send_output(tr);
 {%- endif %}
 {%- elif ref_model %}
@@ -128,7 +128,7 @@ class {{ name }} extends uvm_component;
         tr.prdata = (tr.paddr < {{ ref_model.nregs }}) ? m_regs[tr.paddr] : '0;
       end
     endcase
-{%- if analysis_ports|length == 1 %}
+{%- if analysis_ports|length == 1 and (auto_send is not defined or auto_send) %}
     send_output(tr);
 {%- endif %}
 {%- else %}

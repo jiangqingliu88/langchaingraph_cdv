@@ -421,7 +421,7 @@ def init_run_core(rt: "Runtime", output_root, run_id: str = "") -> bool:
                                 artifact_store=rt.artifacts)
         # 回归框架的 LocalStrategy 用 module-global 拿到 supervisor（单进程串行）。
         try:
-            from src.tools.execution.regression_tools.regression_framework.execution.strategy \
+            from src.layers.l2_orchestration.regression_tools.regression_framework.execution.strategy \
                 import set_job_supervisor
             set_job_supervisor(rt.jobs)
         except Exception as _e:                            # noqa: BLE001

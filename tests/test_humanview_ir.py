@@ -167,6 +167,71 @@ class TestSVAIR:
         assert norm_class("S7") == "S7"
 
 
+EXAMPLE_XLSX = ("src/tools/humanview/aivm_ir/example/"
+                "NPU_V2.CMDSCHED.testpoint.xlsx")
+
+
+class TestXlsxCaseProjection:
+    def _doc(self, bindings=None):
+        from pathlib import Path
+
+        from src.layers.l3_decision.case_ir import project_from_xlsx
+
+        if not Path(EXAMPLE_XLSX).is_file():
+            import pytest
+
+            pytest.skip("示例 xlsx 不在仓库里")
+        return project_from_xlsx(EXAMPLE_XLSX, module="NPU_V2-CMDSCHED",
+                                 bindings=bindings)
+
+    def test_one_anchor_tp_is_one_case_and_duplicate_ids_stay_separate(self):
+        doc = self._doc()
+        assert len(doc.cases) == 64
+        ids = [c.id for c in doc.cases]
+        assert len(ids) == len(set(ids))
+        # 源表 BO02-F02 重复出现 —— CASE 身份不能撞
+        assert len([i for i in ids if "BO02" in i]) >= 2
+
+    def test_business_fields_are_preserved(self):
+        doc = self._doc()
+        case = next(c for c in doc.cases if "IF02" in c.id)
+        assert case.test_intent == "func_cov监测"
+        assert case.doc_section.startswith("L5-")
+        assert case.chapter
+        assert case.provenance.get("xlsx_rows")
+        assert case.source == "xlsx"
+
+    def test_bindings_fill_dimensions_and_reduce_binding_errors(self):
+        from src.layers.l3_decision.case_ir import validate_case_doc
+
+        without = validate_case_doc(self._doc())
+        with_bind = validate_case_doc(self._doc({
+            "schema": "case_bindings_v1",
+            "bindings": {
+                "CASE-NPU_V2-CMDSCHED-IF01": {"dimensions": ["D_type"]},
+                "CASE-NPU_V2-CMDSCHED-IF02": {"dimensions": ["D_seq"]},
+            },
+        }))
+        assert len(with_bind["errors"]) < len(without["errors"])
+
+    def test_bindings_skeleton_has_every_case(self):
+        from src.layers.l3_decision.case_ir import bindings_skeleton
+
+        doc = self._doc()
+        skeleton = bindings_skeleton(doc)
+        assert len(skeleton["bindings"]) == len(doc.cases)
+
+    def test_case_source_xlsx_is_used_instead_of_dimension_synthesis(self):
+        from src.layers.l3_decision.case_ir import project_from_casemodel
+
+        model = {"object": "npu_sched", "source": EXAMPLE_XLSX,
+                 "dimensions": [{"id": "D_type", "fields": []}],
+                 "case_source": {"xlsx": EXAMPLE_XLSX}}
+        doc = project_from_casemodel(model, module="npu_sched")
+        assert len(doc.cases) == 64
+        assert doc.to_dict()["counts"]["xlsx"] == 64
+
+
 class TestSCBIR:
     def test_valid_ir_is_executed(self):
         from src.tools.humanview.scb_ir import validate_scb_text

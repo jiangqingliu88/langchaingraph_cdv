@@ -27,7 +27,10 @@ from .contract_model import (
 )
 from .derive import case_statuses, derive, evaluate, tp_contract_status
 from .explain import explain, obligations_view, status_summary
-from .ledger import append_bundle, read_ledger, verify_chain
+from .ledger import (
+    ContractAnchorMismatch, anchor_contract, append_bundle, contract_anchor,
+    read_ledger, verify_chain,
+)
 from .seeds import build_seed_index, write_seed_index
 from .shadow import build_bundle, run_shadow
 from .worklist import build_worklist, regression_test_name, write_worklist
@@ -36,7 +39,8 @@ __all__ = [
     "FACT_TYPES", "LAYERS", "LAYER_PREDICATES",
     "CaseStatus", "CaseSpec", "Contract", "Fact", "FactBundle", "FactType",
     "GroupSpec", "Obligation", "Predicate", "ScbSpec", "SvaSpec",
-    "append_bundle", "build_bundle", "canonical_hash", "case_statuses",
+    "ContractAnchorMismatch", "anchor_contract", "append_bundle", "build_bundle",
+    "canonical_hash", "case_statuses", "contract_anchor",
     "check_contract", "compile_obligations", "contract_from_case_ir",
     "contract_hash", "derive", "evaluate", "load_contract", "obligation_id",
     "read_ledger", "read_manifest", "run_shadow", "verify_chain", "worst",

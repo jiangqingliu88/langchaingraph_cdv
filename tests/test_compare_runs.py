@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.tools.flow.flow_tools.api import compare_runs
+from src.app.services.flow.api import compare_runs
 
 
 def _run(tmp_path, name: str, cases: dict, verdict="NEEDS_FIX",

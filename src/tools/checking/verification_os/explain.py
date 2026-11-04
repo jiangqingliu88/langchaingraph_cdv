@@ -64,7 +64,11 @@ def _suggest_tests(run_dir: Path, obligation) -> List[Dict[str, Any]]:
     tp_ids = set((obligation.predicate.where or {}).get("tp_ids") or [])
     out: List[Dict[str, Any]] = []
     for tp in (doc.get("testpoints") if isinstance(doc, dict) else None) or []:
-        if not isinstance(tp, dict) or str(tp.get("case_id") or "") != obligation.case:
+        if not isinstance(tp, dict):
+            continue
+        case_ids = ([str(c) for c in (tp.get("case_ids") or []) if str(c)]
+                    or ([str(tp["case_id"])] if tp.get("case_id") else []))
+        if obligation.case not in case_ids:
             continue
         if tp_ids and str(tp.get("tp_id") or "") not in tp_ids:
             continue

@@ -170,12 +170,12 @@ def write_case_ir(cov_dir: str | Path, case_ir: Dict[str, Any],
              "group_map": "", "checker_map": ""}
     if not isinstance(case_ir, dict) or not case_ir.get("cases"):
         return empty
+    from src.core.runtime.atomic import atomic_write_json
+
     d = Path(cov_dir)
     out = d / CASE_IR_NAME
     try:
-        d.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(case_ir, ensure_ascii=False, indent=2),
-                       encoding="utf-8", newline="\n")
+        atomic_write_json(out, case_ir)
     except OSError:
         return empty
     maps = case_maps or {}
@@ -186,9 +186,7 @@ def write_case_ir(cov_dir: str | Path, case_ir: Dict[str, Any],
         if not isinstance(doc, dict) or not doc:
             continue
         try:
-            (d / name).write_text(
-                json.dumps(doc, ensure_ascii=False, indent=2),
-                encoding="utf-8", newline="\n")
+            atomic_write_json(d / name, doc)
             written[key] = str(d / name)
         except OSError:
             pass

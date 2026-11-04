@@ -236,7 +236,7 @@ class TestGapSequenceHasItsOwnTimeout:
     """
 
     def _seq(self) -> str:
-        from src.tools.checking.coverage_tools.main import generate_gap_directed_seq
+        from src.layers.l3_decision.evidence.main import generate_gap_directed_seq
 
         return generate_gap_directed_seq(
             "apb", [{"dimension": "toggle", "location": "paddr[7:0]",

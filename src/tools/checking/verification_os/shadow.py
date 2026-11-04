@@ -203,7 +203,8 @@ def run_shadow(run_dir: str | Path, *, write: bool = True) -> Dict[str, Any]:
     # 契约换版后，旧事实**标 stale**，不参与新契约的推导（也不静默删掉）
     ledger = read_ledger(root) if write else []
     stale = [f for f in ledger
-             if str(f.get("contract_hash") or "") not in ("", contract.hash)]
+             if str(f.get("type") or "") != "contract_anchor"
+             and str(f.get("contract_hash") or "") not in ("", contract.hash)]
     report = {
         "schema": SCHEMA,
         "available": True,

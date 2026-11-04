@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..constants import DEFAULT_META, TEMPLATES_DIR, __version__
+from ..ir.ir_first import (
+    enabled as ir_first_enabled, merge_agent_context, merge_context, write_audit,
+)
+from ..resource_checker import build_checker_plan
 from ..ir.uvm_ir import validate_agent_ir, validate_ir
 from ..ir.shadow import (
     compare_agent_context, compare_environment_context, record_agent,
@@ -178,6 +182,9 @@ class AgentRenderTask(RenderTask):
             "base_pkg_dir": _rel_or_abs(_base_pkg, base_dir),
             **agent.to_context(),
         }
+        # IR-first（`SIGNOFFAI_UVM_IR_FIRST=on`）：IR 拥有字段的最终值由 IR 决定。
+        if ir_first_enabled():
+            context = merge_agent_context(agent, context)
         for entry in INTERFACE_TEMPLATES:
             template_path, target_pattern, extra_ctx = _split_template_entry(entry)
             ctx = {**context, **extra_ctx}
@@ -581,6 +588,23 @@ class EnvironmentRenderTask(RenderTask):
         rendered: List[Path] = []
         env_dir = self.output_dir / "env"
         context = {"environment": environment, **environment.to_context()}
+        # IR-first（`SIGNOFFAI_UVM_IR_FIRST=on`）：env_name / agent 身份以 IR 为准。
+        if ir_first_enabled():
+            context = merge_context(environment, context)
+        # P2：资源交互 checker（有 resource_model/scenarios 且声明了 agent+watch 才生成）
+        resource_checker = build_checker_plan(
+            self.output_dir, environment.env_name, list(environment.agents or []))
+        if resource_checker:
+            context["resource_checker"] = resource_checker
+            for item in resource_checker.get("unsupported") or []:
+                print(f"  [gen_uvm] Warning: resource checker 跳过操作 "
+                      f"{item.get('operation')}: {item.get('reason')}", flush=True)
+            self._write_resource_checker_plan(resource_checker)
+        try:
+            # P0 就绪读数（不切换渲染，只落 `docs/ir_first_audit.json`）
+            write_audit(self.output_dir, [environment])
+        except Exception as exc:                       # noqa: BLE001 旁路
+            print(f"  [gen_uvm] Warning: IR-first audit 失败: {exc}", flush=True)
         # 补充 agent 的 transaction_vars（env 渲染需要，供 env_cov 生成 coverpoint/cross）
         self._enrich_agents_transaction_vars(context)
         self._check_stimulus_bindings(environment, context)
@@ -589,6 +613,14 @@ class EnvironmentRenderTask(RenderTask):
             target_name = target_pattern.format(env_name=environment.env_name)
             target_path = env_dir / target_name
             rendered.append(self.render_file(template_path, target_path, context))
+
+        # 资源交互 checker（可选）：与 env 同目录，由 env_pkg include。
+        if context.get("resource_checker"):
+            result = self.render_file(
+                "environment_templates/resource_checker.sv.j2",
+                env_dir / f"{environment.env_name}_resource_checker.sv", context)
+            if result is not None:
+                rendered.append(result)
 
         tests_dir = env_dir / "tests"
         for template_path, target_pattern in ENVIRONMENT_TEST_TEMPLATES:
@@ -636,6 +668,21 @@ class EnvironmentRenderTask(RenderTask):
         # scoreboard 一律由 sb_type 指向外部类，本工具不生成 scb 文件
 
         return rendered
+
+    def _write_resource_checker_plan(self, plan):
+        """把 checker 计划落盘 —— 说明“生成了什么、哪些操作没观测点”。"""
+        import json
+
+        path = self.output_dir / "docs" / "resource_checker.json"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(
+                {"schema": "resource_checker_plan_v1", **plan},
+                ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8", newline="\n")
+        except OSError as exc:
+            print(f"  [gen_uvm] Warning: resource checker 计划落盘失败: {exc}",
+                  flush=True)
 
     def _check_stimulus_bindings(self, environment: "EnvironmentModel",
                                  context: Dict[str, Any]) -> None:

@@ -33,19 +33,19 @@ BINDINGS: List[ToolBinding] = [
 
     ToolBinding(
         name="debug.collect_sim_log",
-        target="src.tools.checking.debug_tools.main:collect_sim_log",
+        target="src.executors.debug.tools.main:collect_sim_log",
         kind="json",
         doc="扫 output_dir 下的仿真日志，汇总 pass/fail 与错误摘要",
     ),
     ToolBinding(
         name="debug.collect_compile_log",
-        target="src.tools.checking.debug_tools.main:collect_compile_log",
+        target="src.executors.debug.tools.main:collect_compile_log",
         kind="json",
         doc="扫 output_dir 下的编译日志",
     ),
     ToolBinding(
         name="debug.fingerprint_error",
-        target="src.tools.checking.debug_tools.main:fingerprint_error",
+        target="src.executors.debug.tools.main:fingerprint_error",
         kind="json",
         doc="为一段错误文本算去重指纹 + 归类",
     ),
@@ -181,19 +181,19 @@ BINDINGS: List[ToolBinding] = [
     # 所以批准/拒绝两条都是 `pure=False`：**不可逆，且不能因为切标签页就发生**。
     ToolBinding(
         name="coverage.excludes",
-        target="src.tools.checking.coverage_tools.exclude_api:read_excludes",
+        target="src.layers.l3_decision.evidence.exclude_api:read_excludes",
         kind="json",
         doc="覆盖率豁免登记册 → 待批 / 已批（带审批人与哈希指纹）/ 统计",
     ),
     ToolBinding(
         name="coverage.approve_exclude",
-        target="src.tools.checking.coverage_tools.exclude_api:approve_exclude",
+        target="src.layers.l3_decision.evidence.exclude_api:approve_exclude",
         kind="json", pure=False,
         doc="批准一条豁免 —— 签名 + 哈希指纹入链（改动覆盖率分母）",
     ),
     ToolBinding(
         name="coverage.reject_exclude",
-        target="src.tools.checking.coverage_tools.exclude_api:reject_exclude",
+        target="src.layers.l3_decision.evidence.exclude_api:reject_exclude",
         kind="json", pure=False,
         doc="拒绝一条豁免 —— 该点仍需覆盖",
     ),
@@ -210,7 +210,7 @@ BINDINGS: List[ToolBinding] = [
     # 纯读、无子进程，所以是 pure；run_dir 由调用方从 pipeline.detail 取。
     ToolBinding(
         name="flow.signoff",
-        target="src.tools.flow.flow_tools.api:run_signoff",
+        target="src.app.services.flow.api:run_signoff",
         kind="json",
         doc="一次运行目录 → 签核门禁 + 六层证据链 + 总判定",
     ),
@@ -218,7 +218,7 @@ BINDINGS: List[ToolBinding] = [
     # 任务总览 —— 一次运行作为一个「验证任务」：目标 / 进度 / 收敛预测 / 卡点。
     ToolBinding(
         name="flow.task",
-        target="src.tools.flow.flow_tools.api:run_task",
+        target="src.app.services.flow.api:run_task",
         kind="json",
         doc="一次运行目录 → 任务总览（目标 / 覆盖率 / 收敛预测 / 卡在哪）",
     ),
@@ -228,7 +228,7 @@ BINDINGS: List[ToolBinding] = [
     # 与哈希链），改了等于篡改结论，不给编辑入口。
     ToolBinding(
         name="flow.artifacts",
-        target="src.tools.flow.flow_tools.api:run_artifacts",
+        target="src.app.services.flow.api:run_artifacts",
         kind="json",
         doc="一次运行目录 → 中间产物清单（存在与否 / 哈希 / schema 体检）",
     ),
@@ -246,19 +246,19 @@ BINDINGS: List[ToolBinding] = [
     # 数据源同上：运行目录里的日志与产物。
     ToolBinding(
         name="agent.outputs",
-        target="src.tools.flow.flow_tools.api:run_agent_outputs",
+        target="src.app.services.flow.api:run_agent_outputs",
         kind="json",
         doc="一次运行目录 + agent 角色 → 该 agent 的阶段与产物",
     ),
     ToolBinding(
         name="flow.decision",
-        target="src.tools.flow.flow_tools.api:run_decision_trace",
+        target="src.app.services.flow.api:run_decision_trace",
         kind="json",
         doc="一次运行目录 → 逐轮决策动作与驾驭裁决",
     ),
     ToolBinding(
         name="flow.regression_status",
-        target="src.tools.flow.flow_tools.api:run_regression_status",
+        target="src.app.services.flow.api:run_regression_status",
         kind="json",
         doc="一次运行目录 → 回归用例状态（用例/状态/耗时/UVM 计数/日志/波形/覆盖率库）",
     ),
@@ -269,13 +269,13 @@ BINDINGS: List[ToolBinding] = [
     # 纯读盘（模型 + 覆盖率文本 + 几个文件），不重跑生成器、不重跑 vcover。
     ToolBinding(
         name="flow.fcov",
-        target="src.tools.flow.flow_tools.api:run_fcov",
+        target="src.app.services.flow.api:run_fcov",
         kind="json",
         doc="一次运行目录 → 功能覆盖率三表（覆盖点 / 测试点 / 资产）",
     ),
     ToolBinding(
         name="flow.coverage_report",
-        target="src.tools.checking.coverage_tools.cov_api:build_coverage_report",
+        target="src.layers.l3_decision.evidence.cov_api:build_coverage_report",
         kind="json", pure=False,
         doc="覆盖率库 → HTML 报告（已是最新则复用）；返回报告路径供界面打开",
     ),
@@ -283,31 +283,31 @@ BINDINGS: List[ToolBinding] = [
     # （只看文件在不在、多大、什么时候写的），所以是 pure。
     ToolBinding(
         name="flow.run_coverage",
-        target="src.tools.flow.flow_tools.api:run_coverage",
+        target="src.app.services.flow.api:run_coverage",
         kind="json",
         doc="一次运行目录 → 总覆盖率（总/功能 + 分项 + 合并库与报告的位置）",
     ),
     ToolBinding(
         name="flow.rule_drafts",
-        target="src.tools.flow.flow_tools.api:run_rule_drafts",
+        target="src.app.services.flow.api:run_rule_drafts",
         kind="json",
         doc="一次运行 → 起草的规则草案（含粘贴骨架与是否已被接受）",
     ),
     ToolBinding(
         name="flow.todo",
-        target="src.tools.flow.flow_tools.api:collect_todos",
+        target="src.app.services.flow.api:collect_todos",
         kind="json",
         doc="一次运行 → 「现在该干什么」（待审批 / 待签豁免 / 需人工确认 / 卡住 / 挂死）",
     ),
     ToolBinding(
         name="flow.compare",
-        target="src.tools.flow.flow_tools.api:compare_runs",
+        target="src.app.services.flow.api:compare_runs",
         kind="json",
         doc="两次运行 → 逐项对比（覆盖率 delta / 变坏的用例 / 修复的用例 / 判定变化）",
     ),
     ToolBinding(
         name="flow.manifest",
-        target="src.tools.flow.flow_tools.api:run_manifest_info",
+        target="src.app.services.flow.api:run_manifest_info",
         kind="json",
         doc="一次运行目录 → 运行清单 + 文件变更链",
     ),

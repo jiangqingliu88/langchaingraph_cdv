@@ -15,7 +15,6 @@ import structlog
 from src.tools.common.lib.filelist import build_loopback_filelist
 from src.tools.common.lib.llm_call import call_llm
 from src.tools.common.lib.loopback import run_agent_loopback, _extract_method_body
-from src.tools.execution.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
 
 logger = structlog.get_logger()
 

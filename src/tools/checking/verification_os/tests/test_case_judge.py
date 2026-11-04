@@ -92,6 +92,6 @@ class TestTpContractStatusIsSingleSourced:
 
 def test_pipeline_orders_cell_matrix_before_evd():
     """EVD 要读 cell_matrix 反查 CELL —— 顺序反了，新 run 的 EVD 行全是空 cells。"""
-    from src.tools.checking.coverage_tools.evidence_pipeline import STEPS
+    from src.layers.l3_decision.evidence.evidence_pipeline import STEPS
 
     assert STEPS.index("cell_matrix") < STEPS.index("evd")

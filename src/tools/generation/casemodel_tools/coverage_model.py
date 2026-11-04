@@ -35,6 +35,13 @@ class CoverBin:
     token: str = ""                # 模型里的原始写法（进注释，不丢语义）
     boundary: bool = False
     illegal: bool = False
+    #: **忽略仓**：采样到也不计入分母（工具级排除，不是人工 waiver）。
+    ignore: bool = False
+    #: **转移仓**：`(a => b)` —— 状态/取值迁移的覆盖，不是单值。
+    transitions: List[tuple] = _field(default_factory=list)
+    #: UVM 语义：仓/覆盖点的权重与最少命中次数（1 = 默认）。
+    weight: int = 1
+    at_least: int = 1
 
     def literal(self) -> str:
         """`bins` 右边那对花括号里的东西 —— **唯一进 SV 的部分**。"""
@@ -44,10 +51,20 @@ class CoverBin:
             return ",".join(str(v) for v in self.values)
         return str(self.value if self.value is not None else 0)
 
+    def render_rhs(self) -> str:
+        """完整的仓右值：普通仓带花括号，转移仓是 `(a => b)`。"""
+        if self.transitions:
+            return ", ".join(f"({a} => {b})" for a, b in self.transitions)
+        return "{" + self.literal() + "}"
+
     def as_dict(self) -> Dict[str, Any]:
         out = {"name": self.name, "token": self.token, "boundary": self.boundary,
-               "illegal": self.illegal, "literal": self.literal()}
-        if self.lo is not None:
+               "illegal": self.illegal, "ignore": self.ignore,
+               "weight": self.weight, "at_least": self.at_least,
+               "literal": self.literal(), "rhs": self.render_rhs()}
+        if self.transitions:
+            out["transitions"] = [list(t) for t in self.transitions]
+        elif self.lo is not None:
             out.update(lo=self.lo, hi=self.hi)
         elif self.values:
             out["values"] = list(self.values)
@@ -79,6 +96,9 @@ class CoverPoint:
     cp_name: str = ""
     bins: List[CoverBin] = _field(default_factory=list)
     illegal_bins: List[CoverBin] = _field(default_factory=list)
+    #: 覆盖点级 UVM 选项（0 = 不写，沿用 covergroup 默认）。
+    weight: int = 0
+    at_least: int = 0
 
     @property
     def sv_name(self) -> str:
@@ -91,6 +111,7 @@ class CoverPoint:
                 "cp_name": self.sv_name,
                 "cover_id": self.cover_id, "requirement": self.requirement,
                 "source": self.source, "width": self.width, "expr": self.expr,
+                "weight": self.weight, "at_least": self.at_least,
                 "bins": [b.as_dict() for b in self.bins],
                 "illegal_bins": [b.as_dict() for b in self.illegal_bins],
                 "bin_count": len(self.bins),
@@ -106,9 +127,14 @@ class CrossBin:
     name: str
     when: Dict[str, str] = _field(default_factory=dict)
     illegal: bool = False
+    ignore: bool = False
+    weight: int = 1
+    at_least: int = 1
 
     def as_dict(self) -> Dict[str, Any]:
-        return {"name": self.name, "when": dict(self.when), "illegal": self.illegal}
+        return {"name": self.name, "when": dict(self.when),
+                "illegal": self.illegal, "ignore": self.ignore,
+                "weight": self.weight, "at_least": self.at_least}
 
 
 @dataclass
@@ -153,6 +179,8 @@ class CoverageModel:
     object_ref: str = ""
     coverpoints: List[CoverPoint] = _field(default_factory=list)
     crosses: List[CrossPoint] = _field(default_factory=list)
+    #: covergroup 级 UVM 选项（per_instance / weight / at_least / auto_bin_max）。
+    options: Dict[str, Any] = _field(default_factory=dict)
     notes: List[str] = _field(default_factory=list)
     #: **硬错** —— 关联断了、取值投影不了这类。有它就**不许渲染 SV**。
     #:
@@ -179,6 +207,7 @@ class CoverageModel:
             "covergroup": self.covergroup,
             "coverpoints": [cp.as_dict() for cp in self.coverpoints],
             "crosses": [c.as_dict() for c in self.crosses],
+            "options": dict(self.options),
             "coverpoint_count": len(self.coverpoints),
             "bin_count": self.bin_count,
             "cross_count": len(self.crosses),
@@ -256,7 +285,8 @@ def coverage_model(model: CaseModel, module_name: str = "dut") -> CoverageModel:
     这里对没解析的情况记账（见 `notes`）。
     """
     module = sv_ident(module_name or model.object or "dut", "dut")
-    cm = CoverageModel(module=module, covergroup=f"cg_{module}")
+    cm = CoverageModel(module=module, covergroup=f"cg_{module}",
+                       options=_sampling_options(model.sampling or {}))
 
     for dim in model.dimensions:
         if not dim.fields:
@@ -270,6 +300,35 @@ def coverage_model(model: CaseModel, module_name: str = "dut") -> CoverageModel:
     cm.coverpoints = [cp for cp in cm.coverpoints if cp is not None]
     _attach_crosses(model, cm)
     return cm
+
+
+#: covergroup 级 UVM 选项（与 `sampling:` 同名读取）。
+_SAMPLING_OPTIONS = ("per_instance", "weight", "at_least", "auto_bin_max",
+                     "strobe")
+
+
+def _sampling_options(sampling: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: sampling[k] for k in _SAMPLING_OPTIONS
+            if sampling.get(k) is not None}
+
+
+def _uniform_opt(bins: List[CoverBin], attr: str, notes: List[str],
+                 where: str) -> int:
+    """仓级 `weight`/`at_least` → 覆盖点级选项（**UVM 是覆盖点/组级**）。
+
+    所有有效仓取同一个非默认值才提升；不一致就记账并用默认 —— 不编一个
+    "看起来像逐仓"的语义（SV 的 bins 声明没有这种语法）。
+    """
+    vals = {int(getattr(b, attr) or 0) for b in bins
+            if not b.illegal and not b.ignore}
+    vals = {v for v in vals if v > 1}
+    if not vals:
+        return 0
+    if len(vals) == 1:
+        return next(iter(vals))
+    notes.append(f"{where}：每个仓的 {attr} 不一致 {sorted(vals)} —— "
+                 f"按覆盖点默认处理（{attr} 是覆盖点级选项，不是仓级）")
+    return 0
 
 
 def _explicit_bins(raw: Any, used: set, notes: List[str], where: str,
@@ -301,7 +360,19 @@ def _explicit_bins(raw: Any, used: set, notes: List[str], where: str,
             continue
         used.add(name)
 
-        bin_ = CoverBin(name=name, illegal=illegal)
+        bin_ = CoverBin(name=name, illegal=illegal,
+                        ignore=bool(item.get("ignore")),
+                        weight=_as_int(item.get("weight"))
+                        if item.get("weight") is not None else 1,
+                        at_least=_as_int(item.get("at_least"))
+                        if item.get("at_least") is not None else 1)
+        # 转移仓：`(a => b)`。与单值/区间互斥，先判。
+        transitions = _transitions(item)
+        if transitions:
+            bin_.transitions = transitions
+            bin_.token = " => ".join(f"{a}:{b}" for a, b in transitions)
+            out.append(bin_)
+            continue
         rng = item.get("range")
         lo, hi = None, None
         if isinstance(rng, (list, tuple)) and rng:
@@ -321,10 +392,30 @@ def _explicit_bins(raw: Any, used: set, notes: List[str], where: str,
             bin_.token = str(bin_.value)
         else:
             used.discard(name)
-            notes.append(f"{where}：仓 {name} 既没有 range/from/at 也没有 values "
-                         f"—— 跳过（没法生成一个空的 bins）")
+            notes.append(f"{where}：仓 {name} 既没有 range/from/at/transitions "
+                         f"也没有 values —— 跳过（没法生成一个空的 bins）")
             continue
         out.append(bin_)
+    return out
+
+
+def _transitions(item: Dict[str, Any]) -> List[tuple]:
+    """`transitions:` / `transition:` → `[(from, to), …]`（转移仓）。"""
+    raw = item.get("transitions")
+    if raw is None:
+        raw = item.get("transition")
+    if raw is None:
+        return []
+    out: List[tuple] = []
+    for entry in (raw if isinstance(raw, list) else [raw]):
+        if isinstance(entry, dict):
+            a, b = entry.get("from"), entry.get("to")
+        elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+            a, b = entry[0], entry[1]
+        else:
+            continue
+        if a is not None and b is not None:
+            out.append((_as_int(a), _as_int(b)))
     return out
 
 
@@ -401,7 +492,9 @@ def _coverpoint(dim_key: str, fld: Field, notes: List[str]) -> Optional[CoverPoi
                       dimension=dim_key, type=fld.type, bins=bins,
                       illegal_bins=illegal, cover_id=fld.cover_id,
                       requirement=fld.requirement, source=fld.sample,
-                      width=width, expr=fld.sample_expr)
+                      width=width, expr=fld.sample_expr,
+                      weight=_uniform_opt(bins, "weight", notes, where),
+                      at_least=_uniform_opt(bins, "at_least", notes, where))
 
 
 def _derive_width_from_bins(bins: List[CoverBin]) -> int:
@@ -550,6 +643,11 @@ def _cross_bins(pair: Any, cps: List[CoverPoint], notes: List[str],
         if not isinstance(item, dict):
             continue
         item_name = sv_ident(item.get("name"), "")
+        # 交叉仓也有 ignore / weight / at_least 语义（与普通仓同口径）
+        ignore = bool(item.get("ignore"))
+        weight = _as_int(item.get("weight")) if item.get("weight") is not None else 1
+        at_least = (_as_int(item.get("at_least"))
+                    if item.get("at_least") is not None else 1)
         when = item.get("when")
         if not item_name or not isinstance(when, dict):
             notes.append(f"{cx_name}：交叉仓条目缺 name 或 when —— 跳过（{item!r}）")
@@ -573,7 +671,9 @@ def _cross_bins(pair: Any, cps: List[CoverPoint], notes: List[str],
             resolved[cp.signal] = found
         if not bad:
             out.append(CrossBin(name=item_name, when=resolved,
-                                illegal=bool(item.get("illegal"))))
+                                illegal=bool(item.get("illegal")),
+                                ignore=ignore, weight=weight,
+                                at_least=at_least))
     return out
 
 

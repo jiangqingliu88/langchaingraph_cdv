@@ -54,6 +54,50 @@ def case_model_check(models, json_output):
     sys.exit(rc)
 
 
+@case_model.command("lint")
+@click.argument("model", type=click.Path(exists=True))
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def case_model_lint(model, json_output):
+    """结构 lint：v2 分节 / manifest 展开 / 必填字段 / 引用形状。
+
+    \b
+    示例:
+      vagent case-model lint specs/npu_sched/casemodel.yaml
+      vagent case-model lint split/casemodel.yaml --json
+    """
+    from src.tools.generation.casemodel_tools.domain import CaseModelError
+    from src.tools.generation.casemodel_tools.repository import load_models
+
+    try:
+        models = load_models(model)
+    except CaseModelError as exc:
+        if json_output:
+            click.echo(json.dumps({"ok": False, "error": str(exc)},
+                                  ensure_ascii=False))
+        else:
+            console.print(f"[red]FAIL[/red] {exc}")
+        sys.exit(EXIT_FAIL)
+    rows = [{
+        "object": m.object,
+        "object_code": m.object_code,
+        "dimensions": len(m.dimensions),
+        "themes": len(m.themes),
+        "assertions": len(m.assertions),
+        "scoreboards": len(m.scoreboards),
+        "case_source": dict(m.case_source or {}),
+    } for m in models]
+    result = {"ok": True, "schema": "casemodel_lint_v1", "models": rows}
+    if json_output:
+        click.echo(json.dumps(result, ensure_ascii=False, default=str))
+        return
+    console.print(f"[green]OK[/green] {Path(model).name} · {len(rows)} 个对象")
+    for row in rows:
+        console.print(
+            f"  {row['object']} ({row['object_code']}) · "
+            f"dims={row['dimensions']} themes={row['themes']} "
+            f"sva={row['assertions']} scb={row['scoreboards']}")
+
+
 @case_model.command("analyze")
 @click.argument("model", type=click.Path(exists=True))
 @click.option("--cases", "-c", "cases_file", type=click.Path(exists=True),

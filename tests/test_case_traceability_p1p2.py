@@ -244,7 +244,7 @@ class TestTimingFactsAndSignoff:
         }
 
     def test_timing_violation_blocks_a_stimulus_tp(self):
-        from src.tools.checking.coverage_tools.case_cov import _tp_case_entry
+        from src.layers.l3_decision.evidence.case_cov import _tp_case_entry
 
         tp = {"tp_id": "TP-A", "coverpoint": "cp_x", "bin": "b0",
               "realization": {"kind": "stimulus"}}
@@ -253,7 +253,7 @@ class TestTimingFactsAndSignoff:
         assert "timing_violation" in e["reasons"]
 
     def test_timing_violation_only_warns_for_a_sequence_tp(self):
-        from src.tools.checking.coverage_tools.case_cov import _tp_case_entry
+        from src.layers.l3_decision.evidence.case_cov import _tp_case_entry
 
         tp = {"tp_id": "TP-A", "coverpoint": "cp_x", "bin": "b0",
               "realization": {"kind": "sequence"}}
@@ -263,7 +263,7 @@ class TestTimingFactsAndSignoff:
         assert e["status"] == "SIGNED_OFF"       # 不否决
 
     def test_clean_timing_is_true(self):
-        from src.tools.checking.coverage_tools.case_cov import _tp_case_entry
+        from src.layers.l3_decision.evidence.case_cov import _tp_case_entry
 
         tp = {"tp_id": "TP-A", "coverpoint": "cp_x", "bin": "b0",
               "realization": {"kind": "stimulus"}}
@@ -271,7 +271,7 @@ class TestTimingFactsAndSignoff:
         assert e["timing_ok"] is True
 
     def test_case_level_timing_is_none_when_not_checked(self):
-        from src.tools.checking.coverage_tools.case_cov import _case_timing_ok
+        from src.layers.l3_decision.evidence.case_cov import _case_timing_ok
 
         assert _case_timing_ok({"log_facts": {"timing": {"checked": None}}}) is None
         assert _case_timing_ok({"log_facts": {"timing": {
@@ -299,7 +299,7 @@ class TestTimingFactsAndSignoff:
 
 class TestWorkbenchTrace:
     def test_regression_rows_carry_tp_ids_from_the_manifest(self, tmp_path):
-        from src.tools.flow.flow_tools.regression_api import run_regression_status
+        from src.app.services.flow.regression_api import run_regression_status
 
         d = tmp_path / "regression_run" / "p1" / "build_b" / "test_tp_a_seed_1"
         d.mkdir(parents=True)

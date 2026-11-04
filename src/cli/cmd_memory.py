@@ -379,7 +379,7 @@ def lineage_versions_cmd(module, json_output):
       vagent lineage versions npu_sched  # 只看这个模块
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow.flow_tools.lineage_api import lineage_versions
+    from src.app.services.flow.lineage_api import lineage_versions
 
     rows = lineage_versions(module)
     if json_output:
@@ -404,7 +404,7 @@ def lineage_baseline_cmd(module, json_output):
       vagent lineage baseline npu_sched
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow.flow_tools.lineage_api import lineage_versions, resolve_baseline_for
+    from src.app.services.flow.lineage_api import lineage_versions, resolve_baseline_for
 
     if not module:
         mods = sorted({r["module"] for r in lineage_versions("")})
@@ -446,7 +446,7 @@ def lineage_bugs_cmd(module, version_no, json_output):
       vagent lineage bugs npu_sched --version 2
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow.flow_tools.lineage_api import lineage_bugs
+    from src.app.services.flow.lineage_api import lineage_bugs
 
     rows = lineage_bugs(module, version_no)
     if json_output:
@@ -487,7 +487,7 @@ def lineage_bind_modules_cmd(apply_, candidates, json_output):
       vagent lineage bind-modules --apply      # 写库（先备份 .bak）
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow.flow_tools.lineage_api import bind_testcase_modules
+    from src.app.services.flow.lineage_api import bind_testcase_modules
 
     result = bind_testcase_modules(candidates=candidates or None, apply=apply_)
     if json_output:
@@ -526,7 +526,7 @@ def lineage_compare_cmd(current, baseline, module, json_output):
       vagent lineage compare out_x -b output_npu2_jiang_20261012_230152
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow.flow_tools.lineage_api import compare_against_baseline
+    from src.app.services.flow.lineage_api import compare_against_baseline
 
     result = compare_against_baseline(current, baseline=baseline, module=module)
     if result.get("error"):
@@ -566,7 +566,7 @@ def lineage_prune_cmd(keep_last, module, apply_, json_output):
     （一行一次 run），而那是**证据**，不在这里删。
     """
     out = get_output_adapter(json_output)
-    from src.tools.flow.flow_tools.lineage_api import prune_lineage
+    from src.app.services.flow.lineage_api import prune_lineage
 
     result = prune_lineage(keep_last=keep_last, module=module, dry_run=not apply_)
     if json_output:

@@ -17,6 +17,73 @@ from .coverage_model import (
 DEFAULT_WIDTH = 32
 
 
+def _bin_line(b: CoverBin, indent: str = "        ") -> str:
+    """一个仓的 SV 行：普通/忽略/非法/转移四种形态。"""
+    kind = "illegal_bins" if b.illegal else (
+        "ignore_bins" if b.ignore else "bins")
+    rhs = b.render_rhs()
+    note = f"  // {b.token}" if b.token else ""
+    if b.boundary and not b.illegal:
+        note = f"  // {b.token}（边界）"
+    return f"{indent}{kind} {b.name} = {rhs};{note}"
+
+
+def _cross_bin_line(b: CrossBin, ref_of: Dict[str, str],
+                    indent: str = "        ") -> str:
+    terms = " && ".join(
+        f"binsof({ref_of.get(sig, 'cp_' + sig)}.{name})"
+        for sig, name in b.when.items())
+    kind = "illegal_bins" if b.illegal else (
+        "ignore_bins" if b.ignore else "bins")
+    return f"{indent}{kind} {b.name} = {terms};"
+
+
+def _option_value(val: Any) -> Any:
+    """SV 不认 `True`/`False` —— 布尔选项写成 1/0。"""
+    if val is True:
+        return 1
+    if val is False:
+        return 0
+    return val
+
+
+def _emit_options(out: List[str], options: Dict[str, Any],
+                  *, skip: tuple = ()) -> None:
+    for key, val in (options or {}).items():
+        if key in skip:
+            continue
+        out.append(f"    option.{key} = {_option_value(val)};")
+
+
+def _emit_coverpoints(out: List[str], cps: List[CoverPoint],
+                      indent: str = "    ") -> None:
+    for cp in cps:
+        out.append(f"{indent}cp_{cp.signal}: coverpoint {cp.signal} {{")
+        if cp.weight:
+            out.append(f"{indent}    option.weight = {cp.weight};")
+        if cp.at_least:
+            out.append(f"{indent}    option.at_least = {cp.at_least};")
+        for b in cp.bins + cp.illegal_bins:
+            out.append(_bin_line(b, indent + "    "))
+        out.append(f"{indent}}}")
+
+
+def _emit_crosses(out: List[str], crosses: List[CrossPoint],
+                  *, source: str = "") -> None:
+    for cx in crosses:
+        if source and cx.source != source:
+            continue
+        refs = list(cx.refs)
+        ref_of = dict(zip(cx.signals, refs))
+        if not cx.bins:
+            out.append(f"    {cx.name}: cross {', '.join(refs)};")
+            continue
+        out.append(f"    {cx.name}: cross {', '.join(refs)} {{")
+        for b in sorted(cx.bins, key=lambda x: x.illegal):
+            out.append(_cross_bin_line(b, ref_of))
+        out.append("    }")
+
+
 def render_covergroup(cm: CoverageModel) -> str:
     """`CoverageModel` → 可编译的 SystemVerilog covergroup 文本。
 
@@ -36,33 +103,13 @@ def render_covergroup(cm: CoverageModel) -> str:
         f"// 采样由集成方负责：`{cm.covergroup} cg = new(); cg.sample();`",
         f"covergroup {cm.covergroup};",
     ]
+    _emit_options(lines, cm.options)
     if not cm.coverpoints:
         lines.append("    // 模型里没有任何可取值的字段 —— 这个 covergroup 是空的")
-    for cp in cm.coverpoints:
-        lines.append(f"    cp_{cp.signal}: coverpoint {cp.signal} {{")
-        for b in cp.bins + cp.illegal_bins:
-            kind = "illegal_bins" if b.illegal else "bins"
-            note = f"  // {b.token}" if b.token else ""
-            if b.boundary and not b.illegal:
-                note = f"  // {b.token}（边界）"
-            lines.append(f"        {kind} {b.name} = {{{b.literal()}}};{note}")
-        lines.append("    }")
-    for cx in cm.crosses:
-        # `cross` 支持 N 个 coverpoint（跨组 cross 就是三元及以上）；refs 用
-        # `cx.refs` 而不是硬拼 `cp_<signal>` —— 作者可能给覆盖点起了别名。
-        refs = list(cx.refs)
-        ref_of = dict(zip(cx.signals, refs))
-        if not cx.bins:
-            lines.append(f"    {cx.name}: cross {', '.join(refs)};  // {cx.level}")
-            continue
-        lines.append(f"    {cx.name}: cross {', '.join(refs)} {{  // {cx.level}")
-        for b in sorted(cx.bins, key=lambda x: x.illegal):
-            terms = " && ".join(
-                f"binsof({ref_of.get(sig, 'cp_' + sig)}.{name})"
-                for sig, name in b.when.items())
-            kind = "illegal_bins" if b.illegal else "bins"
-            lines.append(f"        {kind} {b.name} = {terms};")
-        lines.append("    }")
+    _emit_coverpoints(lines, cm.coverpoints)
+    # `cross` 支持 N 个 coverpoint（跨组 cross 就是三元及以上）；refs 用
+    # `cx.refs` 而不是硬拼 `cp_<signal>` —— 作者可能给覆盖点起了别名。
+    _emit_crosses(lines, cm.crosses)
     lines.append("endgroup")
     return "\n".join(lines) + "\n"
 
@@ -162,29 +209,9 @@ def render_probe(cm: CoverageModel, sampling: Dict[str, Any] = None) -> str:
         f"  covergroup {cg_name};",
         "    option.per_instance = 1;",
     ]
-    for cp in cps:
-        out.append(f"    cp_{cp.signal}: coverpoint {cp.signal} {{")
-        for b in cp.bins + cp.illegal_bins:
-            kind = "illegal_bins" if b.illegal else "bins"
-            note = f"  // {b.token}" if b.token else ""
-            out.append(f"        {kind} {b.name} = {{{b.literal()}}};{note}")
-        out.append("    }")
-    for cx in cm.crosses:
-        if cx.source != "dut":
-            continue
-        refs = list(cx.refs)
-        ref_of = dict(zip(cx.signals, refs))
-        if not cx.bins:
-            out.append(f"    {cx.name}: cross {', '.join(refs)};")
-            continue
-        out.append(f"    {cx.name}: cross {', '.join(refs)} {{")
-        for b in sorted(cx.bins, key=lambda x: x.illegal):
-            terms = " && ".join(
-                f"binsof({ref_of.get(sig, 'cp_' + sig)}.{name})"
-                for sig, name in b.when.items())
-            kind = "illegal_bins" if b.illegal else "bins"
-            out.append(f"        {kind} {b.name} = {terms};")
-        out.append("    }")
+    _emit_options(out, cm.options, skip=("per_instance",))
+    _emit_coverpoints(out, cps)
+    _emit_crosses(out, cm.crosses, source="dut")
     out += [
         f"  endgroup",
         "",
@@ -247,6 +274,76 @@ def _claim_path_requirements(paths: List[Dict[str, Any]], slot_fn, refs_fn) -> N
                     slot["paths"].append(ref)
 
 
+def _coverpoint_plan(cp: CoverPoint,
+                     by_dim: Dict[str, List[str]]) -> Dict[str, Any]:
+    return {
+        "cover_id": cp.cover_id,
+        "requirement": cp.requirement,
+        "dimension": cp.dimension,
+        "signal": cp.signal,
+        "type": cp.type,
+        "source": cp.source,
+        "width": cp.width,
+        "expr": cp.expr,
+        "bins": [b.name for b in cp.bins if not b.ignore],
+        "ignore_bins": [b.name for b in cp.bins if b.ignore],
+        "illegal_bins": [b.name for b in cp.illegal_bins],
+        "bin_count": len(cp.bins),
+        "required_bin_count": len([b for b in cp.bins if not b.ignore]),
+        "transition_bin_count": sum(1 for b in cp.bins if b.transitions),
+        "weight": cp.weight,
+        "at_least": cp.at_least,
+        "target": 100,
+        "covered_by": by_dim.get(cp.dimension, []),
+    }
+
+
+def _cross_plan(cx: CrossPoint,
+                by_dim: Dict[str, List[str]]) -> Dict[str, Any]:
+    return {
+        "cover_id": cx.cover_id,
+        "requirement": cx.requirement,
+        "name": cx.name,
+        "dimensions": list(cx.dimensions),
+        "level": cx.level,
+        "source": cx.source,
+        "bins": [b.name for b in cx.bins if not b.ignore],
+        "ignore_bins": [b.name for b in cx.bins if b.ignore],
+        "illegal_bins": [b.name for b in cx.bins if b.illegal],
+        "bin_count": len(cx.bins),
+        "required_bin_count": len([b for b in cx.bins if not b.ignore]),
+        "target": 100,
+        "covered_by": sorted({b for dim in cx.dimensions
+                              for b in by_dim.get(dim, [])}),
+    }
+
+
+def _waiver_scopes(model: CaseModel) -> set:
+    """Case IR 里人工豁免的 scope 集合（`D_x` / `DIM-D_x` / `CG-D_x` / `CELL-D_x-*`）。"""
+    scopes: set = set()
+    cases = (getattr(model, "cases_doc", None) or {}).get("cases") or []
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        for waiver in case.get("waivers") or []:
+            if not isinstance(waiver, dict):
+                continue
+            for scope in (waiver.get("scope") or []):
+                if str(scope).strip():
+                    scopes.add(str(scope).strip())
+    return scopes
+
+
+def _waived_dimension(dim: str, scopes: set) -> bool:
+    """这一维度的仓是否被某条豁免覆盖（豁免是**分母**上的扣减，不是忽略仓）。"""
+    if not dim:
+        return False
+    names = {dim, f"DIM-{dim}", f"CG-{dim}", f"CG-{dim.upper()}"}
+    if names & scopes:
+        return True
+    return any(s.startswith(f"CELL-{dim}-") for s in scopes)
+
+
 def coverage_plan(model: CaseModel, cm: CoverageModel,
                   module_name: str = "dut") -> Dict[str, Any]:
     """case 模型 + 覆盖点模型 → **一份完整的功能覆盖率计划**（dict，可 yaml 化）。
@@ -282,46 +379,21 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
     """
     notes: List[str] = []
     by_dim: Dict[str, List[str]] = {}
+    goals = {d.key: int(getattr(d, "goal", 0) or 0) for d in model.dimensions}
+    waiver_scopes = _waiver_scopes(model)
     for th in model.themes:
         for dim in (th.dims or []):
             by_dim.setdefault(dim.key, []).append(th.key)
 
     coverpoints: List[Dict[str, Any]] = []
     for cp in cm.coverpoints:
-        coverpoints.append({
-            "cover_id": cp.cover_id,
-            "requirement": cp.requirement,
-            "dimension": cp.dimension,
-            "signal": cp.signal,
-            "type": cp.type,
-            "source": cp.source,
-            "width": cp.width,
-            "expr": cp.expr,
-            "bins": [b.name for b in cp.bins],
-            "illegal_bins": [b.name for b in cp.illegal_bins],
-            "bin_count": len(cp.bins),
-            "target": 100,
-            "covered_by": by_dim.get(cp.dimension, []),
-        })
+        item = _coverpoint_plan(cp, by_dim)
+        item["goal"] = goals.get(cp.dimension, 0)
+        coverpoints.append(item)
         if not cp.cover_id:
             notes.append(f"覆盖点 {cp.signal} 没有 cover_id —— 追溯矩阵里引用不到它")
 
-    crosses: List[Dict[str, Any]] = []
-    for cx in cm.crosses:
-        crosses.append({
-            "cover_id": cx.cover_id,
-            "requirement": cx.requirement,
-            "name": cx.name,
-            "dimensions": list(cx.dimensions),
-            "level": cx.level,
-            "source": cx.source,
-            "bins": [b.name for b in cx.bins],
-            "illegal_bins": [b.name for b in cx.bins if b.illegal],
-            "bin_count": len(cx.bins),
-            "target": 100,
-            "covered_by": sorted({b for dim in cx.dimensions
-                                  for b in by_dim.get(dim, [])}),
-        })
+    crosses = [_cross_plan(cx, by_dim) for cx in cm.crosses]
 
     batches: List[Dict[str, Any]] = []
     for th in model.themes:
@@ -407,12 +479,17 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
         notes.append(f"有覆盖点没有需求编号：{'、'.join(sorted(orphan_cps))} "
                      f"—— 签核要的「无孤立覆盖点」过不了")
 
+    required_total = (sum(c["required_bin_count"] for c in coverpoints)
+                      + sum(c["required_bin_count"] for c in crosses))
+    waived_total = sum(c["required_bin_count"] for c in coverpoints
+                       if _waived_dimension(c["dimension"], waiver_scopes))
     return {
         "object": model.object,
         "object_cn": model.object_cn,
         "module": cm.module,
         "covergroup": cm.covergroup,
         "sampling": dict(model.sampling or {}),
+        "waivers": sorted(waiver_scopes),
         "coverpoints": coverpoints,
         "crosses": crosses,
         "batches": batches,
@@ -427,6 +504,15 @@ def coverage_plan(model: CaseModel, cm: CoverageModel,
             "path_bin_count": sum(p["bin_count"] for p in paths),
             "illegal_bin_count": (sum(len(c["illegal_bins"]) for c in coverpoints)
                                   + sum(len(c["illegal_bins"]) for c in crosses)),
+            "ignore_bin_count": (sum(len(c["ignore_bins"]) for c in coverpoints)
+                                 + sum(len(c["ignore_bins"]) for c in crosses)),
+            "required_bin_count": required_total,
+            "waived_bin_count": waived_total,
+            # **闭合分母 = required − waived − ignored**（ignored 已在
+            # required 里剔除）。分母显式化，不做加权求和。
+            "coverage_denominator": max(0, required_total - waived_total),
+            "transition_bin_count": sum(c["transition_bin_count"]
+                                        for c in coverpoints),
             "batch_count": len(batches),
             "requirement_count": len(reqs),
             "total_runs": sum(b["total_runs"] for b in batches),
@@ -516,7 +602,8 @@ def cov_interface_meta(cm: CoverageModel, sampling: Dict[str, Any] = None,
         "tp_bitmap_width": max(0, int(tp_bitmap_width or 0)),
         "coverpoints": [{"signal": cp.signal, "sv_name": cp.sv_name,
                          "field": cp.field, "width": cp.width,
-                         "expr": cp.expr} for cp in cps],
+                         "expr": cp.expr, "weight": cp.weight,
+                         "at_least": cp.at_least} for cp in cps],
         "file": f"coverage/{name}.sv",
     }
 
@@ -530,8 +617,16 @@ def dut_bins(cm: CoverageModel) -> Dict[str, List[Dict[str, Any]]]:
     """
     out: Dict[str, List[Dict[str, Any]]] = {}
     for cp in probe_ports(cm):
-        rows = [{"name": b.name, "value": b.literal(), "illegal": bool(b.illegal)}
-                for b in cp.bins + cp.illegal_bins]
+        rows = [{
+            "name": b.name,
+            # 转移仓的右值已带括号；普通仓只给字面量（模板负责包 `{ }`）
+            "value": b.render_rhs() if b.transitions else b.literal(),
+            "illegal": bool(b.illegal),
+            "ignore": bool(b.ignore),
+            "transition": bool(b.transitions),
+            "weight": b.weight,
+            "at_least": b.at_least,
+        } for b in cp.bins + cp.illegal_bins]
         if rows:
             out[cp.signal] = rows
     return out

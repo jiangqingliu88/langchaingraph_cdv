@@ -65,13 +65,13 @@ def case_view(run_dir: str | Path, *, rebuild: bool = False) -> Dict[str, Any]:
         doc = _read(od / ARTIFACTS["case_view"])
         if doc:
             return doc
-    from src.tools.humanview.case_associate_view import build_case_view
+    from src.layers.l3_decision.case_view import build_case_view
     return build_case_view(od)
 
 
 def case_gate(run_dir: str | Path, *, write: bool = True) -> Dict[str, Any]:
     """Case 门禁（blocker / warning / info）。"""
-    from src.tools.humanview.case_associate_view.gates import (
+    from src.layers.l3_decision.case_view.gates import (
         write_gates, validate_case_view,
     )
     od = _run_dir(run_dir)
@@ -84,7 +84,7 @@ def case_gate(run_dir: str | Path, *, write: bool = True) -> Dict[str, Any]:
 def rebuild_evidence(run_dir: str | Path,
                      only: Optional[list] = None) -> Dict[str, Any]:
     """重跑派生物（模型改了、仿真没重跑时用）。"""
-    from src.tools.checking.coverage_tools.evidence_pipeline import (
+    from src.layers.l3_decision.evidence.evidence_pipeline import (
         run_evidence_pipeline)
     return run_evidence_pipeline(_run_dir(run_dir), only=only)
 

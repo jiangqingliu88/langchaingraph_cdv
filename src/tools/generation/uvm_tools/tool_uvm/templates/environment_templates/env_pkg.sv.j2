@@ -62,6 +62,10 @@ package {{ environment.env_name }}_pkg;
 {%- endif %}
   `include "{{ environment.env_name }}_coverage.sv"
   `include "{{ environment.env_name }}_sim_end.sv"
+{%- if resource_checker %}
+  // 资源交互 checker（必须在 env 之前：env 里有它的成员声明）
+  `include "{{ environment.env_name }}_resource_checker.sv"
+{%- endif %}
   `include "{{ environment.env_name }}.sv"
 
 endpackage : {{ environment.env_name }}_pkg

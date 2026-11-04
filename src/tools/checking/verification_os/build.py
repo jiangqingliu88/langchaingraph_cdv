@@ -18,8 +18,11 @@ from typing import Any, Dict, Optional
 
 import yaml
 
+from src.core.runtime.atomic import atomic_write_json, atomic_write_text
+
 from .compiler import compile_obligations
 from .contract_model import Contract, canonical_hash, contract_from_case_ir
+from .ledger import anchor_contract, contract_anchor
 
 SCHEMA_MANIFEST = "contract_manifest_v1"
 GENERATOR = "verification_os.compiler@v3"
@@ -50,14 +53,12 @@ def write_contract(run_dir: str | Path, case_ir: Dict[str, Any],
     out = contract_dir(run_dir)
     out.mkdir(parents=True, exist_ok=True)
     body = contract.model_dump(by_alias=True, exclude={"hash"})
-    (out / CONTRACT_YAML).write_text(
+    atomic_write_text(
+        out / CONTRACT_YAML,
         yaml.safe_dump({**body, "hash": contract.hash}, allow_unicode=True,
-                       sort_keys=False),
-        encoding="utf-8", newline="\n")
-    (out / OBLIGATIONS_JSON).write_text(
-        json.dumps([o.model_dump(by_alias=True) for o in obligations],
-                   ensure_ascii=False, indent=2),
-        encoding="utf-8", newline="\n")
+                       sort_keys=False))
+    atomic_write_json(out / OBLIGATIONS_JSON,
+                      [o.model_dump(by_alias=True) for o in obligations])
     manifest = {
         "schema": SCHEMA_MANIFEST,
         "contract_id": contract.id,
@@ -67,9 +68,11 @@ def write_contract(run_dir: str | Path, case_ir: Dict[str, Any],
         "generator": GENERATOR,
         "inputs": {"case_ir_sha256": _sha_text(canonical_hash(case_ir))},
     }
-    (out / MANIFEST_JSON).write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2),
-        encoding="utf-8", newline="\n")
+    atomic_write_json(out / MANIFEST_JSON, manifest)
+    # L2 → L3 交接：**证据产生之前**把契约版本冻结进账本（只追加的承诺）。
+    # 之后 AI 再改 case_ir / 重建契约，旧事实不会静默对上新版。
+    anchor_contract(run_dir, contract.hash,
+                    manifest["inputs"]["case_ir_sha256"], generator=GENERATOR)
     return manifest
 
 
@@ -130,6 +133,11 @@ def check_contract(run_dir: str | Path) -> Dict[str, Any]:
     if recomputed != manifest.get("contract_hash"):
         return {"ok": False, "reason": "contract_hash_mismatch",
                 "expected": manifest.get("contract_hash"), "actual": recomputed}
+    # 账本锚点（老 run 没有锚点 → 不要求；有就必须与当前契约一致）
+    anchor = contract_anchor(root)
+    if anchor and anchor != manifest.get("contract_hash"):
+        return {"ok": False, "reason": "contract_anchor_mismatch",
+                "anchor": anchor, "contract_hash": manifest.get("contract_hash")}
     obligations = _read_list(contract_dir(root) / OBLIGATIONS_JSON)
     return {
         "ok": True,

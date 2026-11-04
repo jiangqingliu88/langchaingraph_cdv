@@ -75,7 +75,66 @@ CCAT 分类 → CASE 逻辑用例 → TST 可执行实例（test+seed+cfg）
 
 ---
 
+## 1.3 业务表（xlsx）vs 覆盖模型（casemodel）—— 两个真源的区别
+
+以 `NPU_V2.CMDSCHED.testpoint.xlsx` 与 `specs/npu_sched/casemodel.yaml` 实测：
+
+| 维度 | xlsx（业务测试点表） | casemodel（覆盖/激励模型） |
+|---|---|---|
+| 回答 | **该测什么**（Feature → Sub_Feature → 用例意图） | **怎么测/怎么量**（维度 / bin / cross / 批次） |
+| 结构 | 470 行、64 个 TP 锚点、C/D/E 三层子特性（56/153/307 行） | 12 个维度、11 个批次、7 条 cross、4 条断言 |
+| 分类 | CR/IF/C/F/BP/BO/R/E/P（F=25、IF=7、E=7、P=6…） | 维度名（D_queue/D_type/D_dep…），**不携带业务分类** |
+| 测试 | TestName 多为 `func_cov监测` / 场景名，TestNum 有 0/1/8/11/1561/21854 | 11 个真实 UVM 批次 test（`npu_*_test`） |
+| 追溯 | Doc Section / 章节（L5-HM057…） | `requirement` / `cover_id`（CP/REQ 编号） |
+| 角色 | **CASE/CCAT 的真源** | **覆盖仓/checker/批次的实现模型** |
+
+**结论**：两者不是同一条轴。当前 `case_ir` 按 casemodel 维度合成 CASE，只能得到
+"12 个维度 CASE"，不是业务表里的 64 条用例；而 xlsx 的 64 条锚点、
+C/D/E 子特性、TestName/TestNum/Doc Section 在 CASE 身份里全部丢失。
+
+**大胆改法（已落地）**：
+
+```text
+xlsx（what） ──project_from_xlsx──► CaseDoc（CCAT/CASE，source=xlsx）
+                                      │
+                                      │ case_bindings.yaml
+                                      │ （CASE → dimensions/cells/tests）
+                                      ▼
+                         casemodel（how）→ TP IR → CELL → EVD → Case View
+```
+
+- `case_ir.xlsx_projection` 把 xlsx 锚点 TP 投影成 CASE（64 条，重复 id 不合并），
+  C/D 子特性投影成 CCAT 树，TestName/TestNum/Doc Section 保留在 CASE 上；
+- **不自动猜维度**：CASE → dimensions/cells/tests 由 `case_bindings.yaml` 显式声明；
+  没绑定的 CASE 由门禁报 `case_without_binding`，不编一个看起来对的；
+- `casemodel.case_source` 声明业务来源：
+  ```yaml
+  case_source:
+    xlsx: src/tools/humanview/aivm_ir/example/NPU_V2.CMDSCHED.testpoint.xlsx
+    bindings: specs/npu_sched/case_bindings.yaml
+    module: NPU_V2-CMDSCHED
+  ```
+  声明后 `project_from_casemodel` **优先用 xlsx**，不再按维度合成；
+- 没声明 `case_source` 的模型保持旧行为（`cases:` 段 > 维度合成），兼容存量。
+
+CLI：
+
+```bash
+# 生成绑定骨架（只填 dimensions/cells/tests，不重抄用例身份）
+vagent humanview case-xlsx NPU.xlsx --emit-bindings specs/npu_sched/case_bindings.yaml
+# 投影成 Case IR 并校验
+vagent humanview case-xlsx NPU.xlsx --bindings specs/npu_sched/case_bindings.yaml \
+       --out coverage/case_ir.json
+```
+
 ## 2. 核心设计决策（先定边界，避免双真源）
+
+### D0. 业务 xlsx 是 CASE/CCAT 的 SSOT，casemodel 是测量 IR
+
+- **CASE 身份**（id / 分类 / 子特性 / 测试意图 / 文档出处）来自 xlsx；
+- **覆盖仓 / checker / 批次**来自 casemodel；
+- 两者通过 `case_bindings.yaml` 显式绑定（人不写第二份身份）；
+- `case_source` 未声明时退回旧行为（声明 > 合成），且 `source` 字段如实标注来源。
 
 ### D1. TP 保留主键，CELL 是**派生签核视图**，不是第二 SSOT
 

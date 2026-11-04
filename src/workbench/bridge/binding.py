@@ -38,7 +38,7 @@ class ToolBinding:
     """一条绑定：清单里写的名字，对应哪个函数、怎么解释它的返回值。"""
 
     name: str
-    target: str                      # "src.tools.checking.debug_tools.main:collect_sim_log"
+    target: str                      # "src.executors.debug.tools.main:collect_sim_log"
     kind: str = "auto"
     #: False = LLM 调用 / 长任务，`call()` 默认不执行
     pure: bool = True

@@ -137,7 +137,7 @@ def _bind_identity_and_contracts(bundle: Any, model: Any) -> None:
     if not bundle.testpoints:
         return
     try:
-        from src.tools.humanview.case_ir import (
+        from src.layers.l3_decision.case_ir import (
             attach_contracts, group_id_of, parse_declared, scb_id_of,
             sva_id_of, tst_id_of)
     except Exception:                              # noqa: BLE001 身份层不可用
@@ -145,12 +145,18 @@ def _bind_identity_and_contracts(bundle: Any, model: Any) -> None:
     doc = parse_declared(bundle.case_doc or {}, module=bundle.module_name)
     if doc.empty:
         return
-    # ① 身份：没有 case_id 的（行为/PATH）按 test > dimension 兜底
+    # ① 身份：**全量**绑定（一条 TP 可被多条 CASE 共享）。
+    #    ExecuteStage 已注入的先用；没有的（行为/PATH）按 test > dimension 兜底。
     for tp in bundle.testpoints:
-        if getattr(tp, "case_id", ""):
-            continue
         test = str(getattr(getattr(tp, "execution", None), "test", "") or "")
-        tp.case_id = doc.resolve(test=test, dimension=str(getattr(tp, "dimension", "")))
+        ids = list(getattr(tp, "case_ids", None) or [])
+        if not ids and getattr(tp, "case_id", ""):
+            ids = [str(tp.case_id)]
+        if not ids:
+            ids = doc.resolve_all(test=test,
+                                  dimension=str(getattr(tp, "dimension", "")))
+        tp.case_ids = ids
+        tp.case_id = ids[0] if ids else ""
         if not getattr(tp, "tst_id", "") and test:
             tp.tst_id = tst_id_of(test)
     # ② 三集合引用（TP 层）：组 = 维度；SVA = 绑到这条 TP 的断言；
@@ -277,7 +283,7 @@ def _attach_case_maps(payload: Dict[str, Any]) -> None:
     import hashlib
     import json as _json
 
-    from src.tools.humanview.case_ir import checker_map, group_map, parse_declared
+    from src.layers.l3_decision.case_ir import checker_map, group_map, parse_declared
 
     doc = parse_declared(case_ir)
     if doc.empty:

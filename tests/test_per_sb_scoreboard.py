@@ -31,7 +31,7 @@ class TestThePassCriterionIsAnchored:
     """`grep -qE "mismatched=0"` 是子串匹配 —— 逐条行会让它假通过。"""
 
     def _pattern(self):
-        from src.tools.execution.regression_tools.backend_profiles import (
+        from src.layers.l2_orchestration.regression_tools.backend_profiles import (
             QUESTA_TEMPLATE)
         m = re.search(r'grep -qE "([^"]*mismatched=0[^"]*)" sim_vsim\.log',
                       QUESTA_TEMPLATE)
@@ -164,7 +164,7 @@ class TestTheRenderedCheckerCountsPerScoreboard:
 
 class TestCollectedFactsPreferThePerSbLine:
     def _facts(self, scb_items, by_id, summary):
-        from src.tools.checking.coverage_tools.case_cov import _raw_facts_for
+        from src.layers.l3_decision.evidence.case_cov import _raw_facts_for
 
         found = _raw_facts_for([], {"scb": scb_items},
                                {"case_id": "C", "scb_summary": summary,
@@ -198,7 +198,7 @@ class TestEvidenceLevelIsNotGuessed:
     AGG = {"total": 9, "matched": 9, "mismatched": 0}
 
     def _level(self, item, by_id=None):
-        from src.tools.checking.coverage_tools.case_cov import _scb_evidence
+        from src.layers.l3_decision.evidence.case_cov import _scb_evidence
 
         got = _scb_evidence([item], {"scb_summary": self.AGG,
                                      "log_facts": {"scb_by_id": by_id or {}}})

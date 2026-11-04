@@ -10,7 +10,7 @@
 """
 from __future__ import annotations
 
-from src.tools.humanview.case_ir.constraints import (
+from src.layers.l3_decision.case_ir.constraints import (
     attach_constraints, constraints_for, policy_index,
 )
 
@@ -98,7 +98,7 @@ def test_enrich_reads_the_coverage_plan(tmp_path):
 
 
 def test_case_view_joins_the_backing_registry():
-    from src.tools.humanview.case_associate_view.builder import (
+    from src.layers.l3_decision.case_view.builder import (
         _case_constraint_items,
     )
 

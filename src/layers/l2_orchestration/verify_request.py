@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Optional
 
-from src.tools.execution.regression_tools.sim_modes import (
+from src.layers.l2_orchestration.regression_tools.sim_modes import (
     DEFAULT_MODE as _DEFAULT_SIM_MODE,
 )
 

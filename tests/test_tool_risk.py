@@ -31,10 +31,10 @@ from src.layers.l2_orchestration.communication.tool_hub import _LC_SAFE_TOOLS
 #: 那份表是 `(模块名, 标签)`，这里只要文件路径（AST 要读文件）。
 TOOL_MODULES = (
     "src/tools/checking/assertion_tools/main.py",
-    "src/tools/checking/coverage_tools/main.py",
-    "src/tools/checking/debug_tools/main.py",
-    "src/tools/generation/doc_tools/main.py",
-    "src/tools/checking/spec_tools/main.py",
+    "src/layers/l3_decision/evidence/main.py",
+    "src/executors/debug/tools/main.py",
+    "src/layers/l5_evolution/docs/main.py",
+    "src/layers/l3_decision/spec_tools/main.py",
     "src/tools/generation/uvm_tools/agent_tools.py",
 )
 

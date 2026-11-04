@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
-from .contract_model import Fact, FactBundle, canonical_hash
+from .contract_model import Fact, FactBundle, FactType, canonical_hash
 
 LEDGER_NAME = "ledger.jsonl"
 INDEX_NAME = "ledger.index.json"
@@ -127,9 +127,80 @@ def _read_index(run_dir: str | Path) -> Dict[str, str]:
     return doc if isinstance(doc, dict) else {}
 
 
+from src.core.runtime.errors import ContractAnchorMismatch  # noqa: F401
+
+
+def _anchor_of(facts: List[Dict[str, Any]]) -> str:
+    """账本里**最新**契约锚点（没有 → 空串，兼容锚点机制之前的老 run）。"""
+    for fact in reversed(facts):
+        if str(fact.get("type") or "") != FactType.CONTRACT_ANCHOR.value:
+            continue
+        value = fact.get("value") or {}
+        return str(value.get("contract_hash")
+                   or fact.get("contract_hash") or "")
+    return ""
+
+
+def contract_anchor(run_dir: str | Path) -> str:
+    """当前冻结的契约版本（账本锚点）。"""
+    return _anchor_of(read_ledger(run_dir))
+
+
+def anchor_contract(run_dir: str | Path, contract_hash: str,
+                    case_ir_sha256: str = "", *,
+                    generator: str = "") -> Dict[str, Any]:
+    """把契约版本**冻结**进账本（只追加；换版 = 追加新锚点，旧锚保留在链上）。
+
+    这是 L2 → L3 的交接：锚点写于证据采集之前，之后 AI 再改
+    `case_ir.json` / 重建契约，都不能让旧事实自动对上新版 —— 版本不一致
+    的事实会被 `append_bundle` 直接拒绝。
+    """
+    contract_hash = str(contract_hash or "").strip()
+    if not contract_hash:
+        return {"appended": False, "reason": "no_contract_hash"}
+    value = {"contract_hash": contract_hash,
+             "case_ir_sha256": str(case_ir_sha256 or "")}
+    bundle = FactBundle(
+        bundle_id=f"ANCHOR-{contract_hash[:16]}",
+        contract_hash=contract_hash,
+        facts=[Fact(type=FactType.CONTRACT_ANCHOR,
+                    contract_hash=contract_hash,
+                    subject={"kind": "contract_anchor"},
+                    value=value,
+                    producer=generator or "verification_os.build")],
+    )
+    return append_bundle(run_dir, bundle)
+
+
+def _guard_anchor(ledger: List[Dict[str, Any]], bundle: FactBundle) -> None:
+    """deny-first：锚点存在时，任何**另一版契约**的事实都不得入账。
+
+    锚点包自身例外（换版靠追加新锚点）；`contract_hash=""` 的 run 级事实
+    （合并覆盖率、TP 属性）与契约无关，照常允许。
+    """
+    anchor = _anchor_of(ledger)
+    if not anchor:
+        return
+    if bundle.facts and all(f.type == FactType.CONTRACT_ANCHOR
+                            for f in bundle.facts):
+        return
+    if bundle.contract_hash and bundle.contract_hash != anchor:
+        raise ContractAnchorMismatch(
+            f"契约版本不一致：bundle={bundle.contract_hash[:12]}… "
+            f"锚点={anchor[:12]}… —— 证据只能对冻结的契约版本有效")
+    for fact in bundle.facts:
+        if fact.contract_hash and fact.contract_hash != anchor:
+            raise ContractAnchorMismatch(
+                f"事实 {fact.fact_id or fact.type} 属于契约 "
+                f"{fact.contract_hash[:12]}…，锚点是 {anchor[:12]}…")
+
+
 def append_bundle(run_dir: str | Path, bundle: FactBundle,
                   timeout: float = 10.0) -> Dict[str, Any]:
-    """把一包事实追加进账本（**幂等**：同一包只写一次）。"""
+    """把一包事实追加进账本（**幂等**：同一包只写一次）。
+
+    写入前先过**契约锚点**：锚点已冻结且 `bundle` 属于另一版契约 → 拒绝。
+    """
     path = ledger_path(run_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     digest = bundle.digest()
@@ -138,7 +209,9 @@ def append_bundle(run_dir: str | Path, bundle: FactBundle,
         if index.get(bundle.bundle_id) == digest:
             return {"appended": False, "reason": "duplicate", "facts": 0,
                     "head": _head_hash(read_ledger(run_dir))}
-        prev = _head_hash(read_ledger(run_dir))
+        ledger = read_ledger(run_dir)
+        _guard_anchor(ledger, bundle)
+        prev = _head_hash(ledger)
         lines: List[str] = []
         for fact in bundle.facts:
             sealed = fact.model_copy(deep=True).seal(prev)
@@ -159,6 +232,7 @@ def facts_of(ledger: List[Dict[str, Any]], fact_type: str) -> List[Dict[str, Any
 
 
 __all__ = [
-    "LEDGER_NAME", "append_bundle", "facts_of", "ledger_path", "read_ledger",
-    "verify_chain",
+    "ContractAnchorMismatch", "LEDGER_NAME", "anchor_contract",
+    "append_bundle", "contract_anchor", "facts_of", "ledger_path",
+    "read_ledger", "verify_chain",
 ]

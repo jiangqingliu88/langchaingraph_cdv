@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from src.tools.checking.coverage_tools.tp_evidence import (
+from src.layers.l3_decision.evidence.tp_evidence import (
     LAYERS, build_tp_evidence, write_tp_evidence)
 from src.tools.generation.casemodel_tools.framework.paths import compile_paths
 from src.tools.generation.casemodel_tools.repository.loader import load_model_from_text
@@ -267,7 +267,7 @@ class TestEvidenceView:
         assert "does_not_prove" in review["cross_architecture"]
 
     def test_write_and_load(self, tmp_path):
-        from src.tools.checking.coverage_tools.tp_evidence import load_tp_evidence
+        from src.layers.l3_decision.evidence.tp_evidence import load_tp_evidence
 
         run = _make_run(tmp_path)
         write_tp_evidence(run)

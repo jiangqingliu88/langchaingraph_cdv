@@ -12,7 +12,6 @@ from pathlib import Path
 from src.tools.common.lib.uvm_context import ctx
 from src.tools.common.lib.filelist import build_loopback_filelist
 from src.tools.common.lib.sim_log import parse_sim_log
-from src.tools.execution.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
 
 
 def _try_autofix_loopback(output_dir: Path, agent_name: str, compile_log: str) -> bool:
@@ -136,6 +135,7 @@ def run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
     import structlog
     logger = structlog.get_logger()
 
+    from src.layers.l2_orchestration.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
     from src.tools.common.lib.regress_dir import get_compile_dir, get_sim_dir
     compile_dir = get_compile_dir(output_dir)
     sim_dir = get_sim_dir(output_dir)

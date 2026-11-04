@@ -105,7 +105,7 @@ class TestReaderRecognisesTheWrittenLayout:
         而最后一级往往只剩"随机/通用"那批，跑完什么都不落，于是
         「回归波形」「回归覆盖率」两页**整页空白**：产物明明在 p0/p1/p2。
         """
-        from src.tools.flow.flow_tools.api import run_regression_status
+        from src.app.services.flow.api import run_regression_status
 
         _write_run_dir(tmp_path, stages=("loopback", "p0", "p1"))
         payload = run_regression_status(str(tmp_path))
@@ -123,7 +123,7 @@ class TestReaderRecognisesTheWrittenLayout:
         """
         from pathlib import Path
 
-        from src.tools.flow.flow_tools.api import run_regression_status
+        from src.app.services.flow.api import run_regression_status
 
         _write_run_dir(tmp_path, stages=("p0", "p1"), shared_case="t_shared",
                        artifact_stage="p0")
@@ -137,7 +137,7 @@ class TestReaderRecognisesTheWrittenLayout:
 
     def test_flat_layout_still_reads(self, tmp_path):
         """老布局**不能因为支持分级就废掉** —— 存量运行目录都是平的。"""
-        from src.tools.flow.flow_tools.api import run_regression_status
+        from src.app.services.flow.api import run_regression_status
 
         _write_run_dir(tmp_path, flat=True)
         payload = run_regression_status(str(tmp_path))
@@ -146,7 +146,7 @@ class TestReaderRecognisesTheWrittenLayout:
     def test_regression_dir_itself_is_accepted(self, tmp_path):
         """传进来的可能就是**回归目录本身** —— 实测踩过，别再退回去。"""
         from src.layers.l1_infrastructure.layout import regression_root
-        from src.tools.flow.flow_tools.api import run_regression_status
+        from src.app.services.flow.api import run_regression_status
 
         _write_run_dir(tmp_path, stages=("p0",))
         reg_dir = regression_root(tmp_path)

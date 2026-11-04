@@ -29,10 +29,12 @@ def register_all_tools() -> ToolRegistry:
     #   casemodel_generate  按属性组合生成 case 属性表
     # 适配器归 verify 角色；工具本体在 src/tools/generation/casemodel_tools/
     # ═══════════════════════════════════════════════════
-    from src.executors.verify.casemodel.registry import (
-        ensure_casemodel_tool_registry,
-    )
-    casemodel_reg = ensure_casemodel_tool_registry()
+    # **延迟加载**：L2 不静态 import executors（组合根在接口层）。
+    from importlib import import_module
+
+    _casemodel_registry = import_module(
+        "src.executors.verify.casemodel.registry")
+    casemodel_reg = _casemodel_registry.ensure_casemodel_tool_registry()
     for t in casemodel_reg._tools.values():
         registry.register(t)
 

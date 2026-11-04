@@ -15,7 +15,7 @@ from src.layers.l2_orchestration.executors.registry import register_executor
 # 工具统一入口：走 ToolHub 的 schema 校验 + 审计回执，
 # 而不是绕过 hub 直接 import 工具函数（见 call_tool 的 docstring）
 from src.layers.l2_orchestration.communication.tool_hub import call_tool
-from src.tools.checking.debug_tools.main import (
+from src.executors.debug.tools.main import (
     DebugTools, _classify_error, _fingerprint, fingerprint_error,
 )
 import asyncio, structlog, json, re
@@ -480,7 +480,7 @@ class DebugExecutor(BaseExecutor):
         LLM 不直接判断根因，而是基于信号级证据做分类。
         先查跨 run 经验库：命中同类错误则直接复用历史根因，跳过重复诊断。
         """
-        from src.tools.checking.debug_tools.signal_diagnosis import diagnose
+        from src.executors.debug.tools.signal_diagnosis import diagnose
         import hashlib
         results = []
         for err in errors:
@@ -644,7 +644,7 @@ class DebugExecutor(BaseExecutor):
         if not names:
             return {}, ""
         try:
-            from src.tools.checking.debug_tools.waveform import extract_signal_trace
+            from src.executors.debug.tools.waveform import extract_signal_trace
 
             traces = extract_signal_trace(wave, names)
         except Exception:                              # noqa: BLE001 波形是旁路证据

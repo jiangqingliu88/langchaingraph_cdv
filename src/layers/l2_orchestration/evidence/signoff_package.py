@@ -99,6 +99,17 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "docs/provenance.jsonl",
         "docs/provenance_summary.json",
         "coverage/attribution.json",
+        # Architecture 3.0：逐 test 命中事实 + 归因等级（EXACT/WEAK/UNKNOWN）
+        "coverage/per_test_bins.json",
+        "coverage/attribution_v2.json",
+        # 证据闭环：意图 / 待证明结论 / 证据索引 / 解释 / 下一轮上下文
+        "coverage/intents.json",
+        "coverage/claims.json",
+        "docs/evidence_index.json",
+        "docs/evidence_sources.json",
+        "status/interpretations.json",
+        "status/next_iteration_context.json",
+        "docs/action_audit.jsonl",
         # Verification OS v3：事实账本（只追加 + 哈希链）与影子对账结果
         "evidence/ledger.jsonl",
         "status/shadow_report.json",
@@ -107,6 +118,9 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "docs/run_config.json",
         # UVM IR 双写比对：签核材料要能回答"IR 与渲染 ctx 还差多少"
         "docs/ir_shadow_diff.json",
+        # P0 就绪读数 / 资源 checker 计划（生成器落盘）
+        "docs/ir_first_audit.json",
+        "docs/resource_checker.json",
         # Verification OS：状态权威对账 / TP 影子 / 种子索引 / worklist
         "status/authority_diff.json",
         "status/tp_shadow.json",
@@ -124,6 +138,32 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "caveats.json",
         # 五维质量门：报告用，不阻断（见 src/core/verification/quality.py）
         "docs/verification_quality.json",
+        # Architecture 3.0：统一义务与确定性闭环计划
+        "docs/obligations_v3.json",
+        "status/closure_plan.json",
+    ),
+    # ── Case View（三集合证据）──
+    #
+    # 签核要能离线回答"这条用例证明了哪些组 / 哪条 SVA / 哪个 scoreboard"，
+    # 所以它和 TP 矩阵、覆盖率一样是**签核产出**，不是页面上的一张临时表。
+    # `coverage/case_cov/**` 用通配符展开（一条用例一个文件，数量随回归增长）。
+    "case_view": (
+        "coverage/case_ir.json",
+        "coverage/case_group_map.json",
+        "coverage/case_checker_map.json",
+        "coverage/case_tp.json",
+        "coverage/cell_matrix.json",
+        "coverage/evd.json",
+        "coverage/gates.json",
+        "coverage/case_view.json",
+        "coverage/case_view.md",
+        "coverage/case_view.html",
+        "coverage/evidence_manifest.json",
+        # Architecture 3.0：统一 IR 视图与资源/交互模型
+        "coverage/verification_ir.json",
+        "coverage/resource_model.json",
+        "coverage/resource_scenarios.json",
+        "coverage/case_cov/**/*.json",
     ),
     # ── Case View（三集合证据）──
     #

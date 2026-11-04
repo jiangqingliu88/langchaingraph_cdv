@@ -474,7 +474,7 @@ class TestASimThatNeverRanIsNotAPass:
 
     # 命令模板已迁到后端档案（`backend_profiles.py`）—— 不同后端生成不同
     # YAML，但 Questa 的判据链仍只有这一份权威实现。
-    RUN_CMD = Path("src/tools/execution/regression_tools/backend_profiles.py")
+    RUN_CMD = Path("src/layers/l2_orchestration/regression_tools/backend_profiles.py")
 
     def test_the_verdict_requires_a_nonempty_log_first(self):
         src = self.RUN_CMD.read_text(encoding="utf-8")
@@ -647,7 +647,7 @@ class TestSeedsReachTheRegression:
         模板已按后端拆到 `backend_profiles.py`；断言**渲染出来的命令**，
         而不是某一处源码字面量 —— 否则换个实现位置就会误报。
         """
-        from src.tools.execution.regression_tools.backend_profiles import render_sim_command
+        from src.layers.l2_orchestration.regression_tools.backend_profiles import render_sim_command
 
         cmd = render_sim_command("questa", "top", "t")
         assert "+ntb_random_seed={{ SEED }}" in cmd
@@ -922,7 +922,7 @@ class TestTheGapSequenceIsRunnable:
     GAPS = [{"dimension": "toggle", "location": "queue_level[5:4]", "reason": "toggle"}]
 
     def _seq(self):
-        from src.tools.checking.coverage_tools.main import generate_gap_directed_seq
+        from src.layers.l3_decision.evidence.main import generate_gap_directed_seq
 
         return generate_gap_directed_seq("npu_sched_in", self.GAPS,
                                          {"queue_level": 6},

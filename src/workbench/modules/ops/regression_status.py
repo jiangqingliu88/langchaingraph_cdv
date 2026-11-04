@@ -3,7 +3,7 @@
 形状对齐 ExecMan 的回归报表（Figure 32）：一个用例一行，状态用彩色徽章，
 后面跟 UVM 消息计数、断言错误数、日志入口、备注。
 
-**数据来自 `src/tools/flow/flow_tools.api:run_regression_status`** —— 模块只负责显示，
+**数据来自 `src/app/services/flow.api:run_regression_status`** —— 模块只负责显示，
 判定逻辑（状态怎么定、错因怎么分类）都在工具层，这是全仓库的分层纪律。
 订阅 `run.selected`：在「运行历史」里选一次运行，本页跟着切。
 

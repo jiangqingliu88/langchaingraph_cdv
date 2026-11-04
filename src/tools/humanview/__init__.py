@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import importlib
 
-PACKAGES = ("aivm_ir", "case_ir", "case_associate_view", "covg_ir",
-            "scb_ir", "sva_ir")
+PACKAGES = ("aivm_ir", "covg_ir", "scb_ir", "sva_ir")
 
 
 def __getattr__(name: str):

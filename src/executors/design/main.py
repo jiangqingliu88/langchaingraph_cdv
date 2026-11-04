@@ -157,7 +157,7 @@ class DesignExecutor(BaseExecutor):
 
         # V2 Knowledge Graph：设计时子图落库（跨 run 沉淀，供决策层语义溯源）
         try:
-            from src.tools.checking.spec_tools.verify_dsl import build_graph_from_spec
+            from src.layers.l3_decision.spec_tools.verify_dsl import build_graph_from_spec
             from src.layers.l3_decision.knowledge.persistence import save_graph_to_db
             _kg = build_graph_from_spec(spec)
             await save_graph_to_db(_kg)

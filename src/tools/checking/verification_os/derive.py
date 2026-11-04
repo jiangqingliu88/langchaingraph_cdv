@@ -31,8 +31,15 @@ def _type_of(fact: Dict[str, Any]) -> str:
     return str(getattr(value, "value", value))
 
 
+#: derive 采信的事实类别 —— HYPOTHESIS / TOOL_RECEIPT 不参与判定。
+_PROVEN_FACT_CLASSES = frozenset({"OBSERVED", "HUMAN_DECISION", "DERIVED"})
+
+
 def _by_type(ledger: List[Dict[str, Any]], fact_type: str) -> List[Dict[str, Any]]:
-    return [f for f in ledger if _type_of(f) == fact_type]
+    return [f for f in ledger
+            if _type_of(f) == fact_type
+            and str(f.get("fact_class") or "OBSERVED").upper()
+            in _PROVEN_FACT_CLASSES]
 
 
 def _subject(fact: Dict[str, Any], key: str) -> Any:

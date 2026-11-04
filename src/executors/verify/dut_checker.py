@@ -50,7 +50,7 @@ def _per_sb_rules(scoreboards: Any,
     对不上（规则被跳过 / 拼错）的条目也不发 —— 静默忽略会让签核看到一行
     "这条 SB 一条规则都没数"却以为比过了。
     """
-    from src.tools.humanview.case_ir.ir_core import scb_id_of
+    from src.layers.l3_decision.case_ir.ir_core import scb_id_of
 
     known = {str(r.get("name") or "") for r in rules or []}
     out: List[Dict[str, Any]] = []

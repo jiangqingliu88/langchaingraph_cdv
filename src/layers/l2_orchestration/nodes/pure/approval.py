@@ -29,7 +29,7 @@ def _approval_artifacts(state: PipelineState) -> List[Dict[str, Any]]:
     详情它自己会去 `flow.artifacts` 读。
     """
     try:
-        from src.tools.flow.flow_tools.api import run_artifacts
+        from src.layers.l2_orchestration.run_artifacts import run_artifacts
 
         report = run_artifacts(str(state.output_root))
         if not isinstance(report, dict) or report.get("error"):

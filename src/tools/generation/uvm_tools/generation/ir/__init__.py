@@ -13,11 +13,17 @@ from src.tools.generation.uvm_tools.generation.ir.shadow import (
     environment_diff, record_agent, record_environment, record_shadow,
     shadow_enabled, warn_shadow,
 )
+from src.tools.generation.uvm_tools.generation.ir.ir_first import (
+    IR_FIRST_FLAG, assert_consistent, audit, enabled, ir_context,
+    merge_agent_context, merge_context, write_audit,
+)
 
 __all__ = [
-    "UVMAgentIR", "UVMConnectionIR", "UVMEnvIR", "UVMIR", "UVMSequenceIR",
-    "UVMTestIR", "build_agent_ir", "build_uvm_ir", "validate_agent_ir",
-    "validate_ir",
+    "IR_FIRST_FLAG", "UVMAgentIR", "UVMConnectionIR", "UVMEnvIR", "UVMIR",
+    "UVMSequenceIR", "UVMTestIR", "assert_consistent", "audit",
+    "build_agent_ir", "build_uvm_ir", "enabled", "ir_context",
+    "merge_agent_context", "merge_context", "write_audit",
+    "validate_agent_ir", "validate_ir",
     "agent_diff", "compare_agent_context", "compare_environment_context",
     "environment_diff", "record_agent", "record_environment", "record_shadow",
     "shadow_enabled", "warn_shadow",

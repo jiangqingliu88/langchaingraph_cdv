@@ -26,6 +26,8 @@ class Dimension:
     id: str = ""
     name: str = ""
     description: str = ""
+    #: **覆盖目标**（0–100）：这一维度的闭合目标。0 = 用全局目标。
+    goal: int = 0
     sub_objects: List[str] = _field(default_factory=list)   # 限定的组织树节点
     relation: Dict[str, str] = _field(default_factory=dict)  # 另一字段名 → 关系
     fields: List[Field] = _field(default_factory=list)
@@ -177,6 +179,14 @@ class CrossGroup:
 # 构建
 # ════════════════════════════════════════════════════════════
 
+def _goal_of(item: Dict[str, Any]) -> int:
+    """`goal` → 0–100；非法/缺省 = 0（用全局目标）。"""
+    try:
+        return max(0, min(100, int(item.get("goal") or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
 def build_dimension(item: Any) -> Optional[Dimension]:
     if not isinstance(item, dict):
         return None
@@ -185,6 +195,7 @@ def build_dimension(item: Any) -> Optional[Dimension]:
     key = dim_id or name
     if not key:
         return None
+    goal = _goal_of(item)
 
     relation: Dict[str, str] = {}
     for ref, kind in (item.get("relation") or {}).items():
@@ -226,7 +237,7 @@ def build_dimension(item: Any) -> Optional[Dimension]:
 
     return Dimension(
         key=key, id=dim_id, name=name,
-        description=str(item.get("description") or ""),
+        description=str(item.get("description") or ""), goal=goal,
         sub_objects=[str(s) for s in as_list(item.get("sub_objects"))],
         relation=relation,
         fields=[build_field(f, key) for f in as_list(item.get("fields"))],

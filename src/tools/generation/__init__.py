@@ -8,7 +8,7 @@ from __future__ import annotations
 import importlib
 
 PACKAGES = ("casemodel_tools", "uvm_tools", "isa_gen_tools",
-            "cmodel_tools", "scmodel_tools", "doc_tools")
+            "cmodel_tools", "scmodel_tools")
 
 
 def __getattr__(name: str):

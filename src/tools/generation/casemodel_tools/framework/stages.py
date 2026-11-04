@@ -27,23 +27,26 @@ def stage_for(priority: str) -> str:
 
 
 def bind_case_identity(ctx: PipelineContext, *, test: str,
-                       dimension: str) -> Tuple[str, str]:
-    """(case_id, tst_id) —— **身份在生成期注入**，不做事后反推。
+                       dimension: str) -> Tuple[str, List[str], str]:
+    """(case_id, case_ids, tst_id) —— **身份在生成期注入**，不做事后反推。
 
     Case IR 的来源：模型 `cases:` 段（人声明）> 按维度合成（结构兜底）。
-    拿不到就返回空串 —— 门禁会报 `CASE_MISSING`，而不是编一个默认用例。
+    **一条 TP 可被多条 CASE 共享**（多个业务用例绑同一维度），所以返回
+    全量 `case_ids`，`case_id` 只是首项（主身份，供旧读端）。
+    拿不到就返回空串/空列表 —— 门禁会报 `CASE_MISSING`，而不是编一个默认用例。
     """
     try:
-        from src.tools.humanview.case_ir import project_from_casemodel, tst_id_of
+        from src.layers.l3_decision.case_ir import project_from_casemodel, tst_id_of
     except Exception:                          # noqa: BLE001 身份层不可用不挡生成
-        return "", ""
+        return "", [], ""
 
     doc = ctx.take("case_doc")
     if doc is None:
         doc = project_from_casemodel(ctx.model, module=ctx.module_name or "")
         ctx.put("case_doc", doc)
-    case_id = doc.resolve(test=test, dimension=dimension) if not doc.empty else ""
-    return case_id, (tst_id_of(test) if test else "")
+    case_ids = doc.resolve_all(test=test, dimension=dimension) if not doc.empty else []
+    return ((case_ids[0] if case_ids else ""), case_ids,
+            (tst_id_of(test) if test else ""))
 
 
 def priority_of(themes: List[Any]) -> str:
@@ -269,7 +272,7 @@ class ExecuteStage(Stage):
                 stage=stage_for(tp.priority),
                 seeds=theme_seeds(covering),
             )
-            tp.case_id, tp.tst_id = bind_case_identity(
+            tp.case_id, tp.case_ids, tp.tst_id = bind_case_identity(
                 ctx, test=test_name, dimension=dim_ref)
             rule: Dict[str, str] = {
                 "pass": "UVM_ERROR=0 and mismatched=0",

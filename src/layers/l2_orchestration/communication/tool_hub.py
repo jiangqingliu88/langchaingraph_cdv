@@ -576,7 +576,7 @@ class ToolHub:
         # 查不到，`vagent tool list/show` 也就看不见，更不会被审计覆盖。
         # 与 read_file 那批「定义了却注册不上」是同一类问题。
         try:
-            from src.tools.execution.regression_tools.regression_tool import (
+            from src.layers.l2_orchestration.regression_tools.regression_tool import (
                 RegressionRunTool, CoverageCollectTool, ReferenceFinderTool)
             for t in (RegressionRunTool(), CoverageCollectTool(), ReferenceFinderTool()):
                 if self.register(t, ["ops"]):
@@ -718,13 +718,13 @@ class ToolHub:
     # 没有任何 @tool，故无工具可注册。
     _LC_TOOL_MODULES = (
         ("src.tools.checking.assertion_tools.main", "assert"),
-        ("src.tools.checking.coverage_tools.main", "coverage"),
-        ("src.tools.checking.debug_tools.main", "debug"),
-        ("src.tools.generation.doc_tools.main", "doc"),
+        ("src.layers.l3_decision.evidence.main", "coverage"),
+        ("src.executors.debug.tools.main", "debug"),
+        ("src.layers.l5_evolution.docs.main", "doc"),
         # `src.tools.reuse_tools.main` **不存在** —— 这个条目每次 bootstrap 都报
         # "No module named 'src.tools.reuse_tools'" 再被 except 吞掉，只在启动
         # 日志里留一条假错误。去掉。
-        ("src.tools.checking.spec_tools.main", "spec"),
+        ("src.layers.l3_decision.spec_tools.main", "spec"),
         # **uvm 的 9 个工具此前从未被注册**：真实实现是
         # `src/tools/generation/uvm_tools/agent_tools.py` 里的 @tool（read_file / write_file /
         # find_spec_yaml / jinja_render / check_static / check_compile /

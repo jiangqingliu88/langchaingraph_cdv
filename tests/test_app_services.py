@@ -7,7 +7,7 @@ import pytest
 from src.app.services import (
     analyze_plan, list_ips, run_closure, run_soc_project,
 )
-from src.tools.execution.regression_tools.backend_capabilities import (
+from src.layers.l2_orchestration.regression_tools.backend_capabilities import (
     capabilities, supports,
 )
 from src.workbench.query.evidence import read_envelope, validate_evidence

@@ -31,6 +31,56 @@ def _print_validation(title: str, result: dict, as_json: bool) -> int:
     return EXIT_OK if result.get("ok") else EXIT_FAIL
 
 
+@humanview.command("case-xlsx")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--bindings", "-b", default=None,
+              type=click.Path(exists=True, dir_okay=False),
+              help="case_bindings_v1 YAML（CASE → dimensions/cells/tests）")
+@click.option("--module", "-m", default="", help="模块名")
+@click.option("--out", "-o", default="", help="写 case_ir.json 的路径")
+@click.option("--emit-bindings", "emit_bindings", default="",
+              help="写 case_bindings_v1 空骨架（只填 dimensions/cells/tests）")
+@click.option("--json", "-j", "as_json", is_flag=True, help="JSON 输出")
+def humanview_case_xlsx(path, bindings, module, out, emit_bindings, as_json):
+    """业务测试点表（xlsx）→ Case IR（CCAT/CASE；不自动猜维度）"""
+    from src.layers.l3_decision.case_ir import (bindings_skeleton,
+                                             project_from_xlsx,
+                                             validate_case_doc)
+
+    doc = project_from_xlsx(path, module=module, bindings=bindings)
+    result = validate_case_doc(doc)
+    payload = doc.to_dict()
+    if out:
+        from pathlib import Path
+
+        target = Path(out)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                          encoding="utf-8")
+        click.echo(f"已写到 {target}")
+    if emit_bindings:
+        import yaml as _yaml
+
+        from pathlib import Path
+
+        target = Path(emit_bindings)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(_yaml.safe_dump(bindings_skeleton(doc),
+                                          allow_unicode=True, sort_keys=False),
+                          encoding="utf-8", newline="\n")
+        click.echo(f"绑定骨架已写到 {target}（每条 CASE 填 dimensions/cells/tests）")
+    if as_json:
+        click.echo(json.dumps({"case_ir": payload, "validation": result},
+                              indent=2, ensure_ascii=False, default=str))
+        return
+    counts = payload.get("counts") or {}
+    console.print(f"[bold]Case IR（xlsx）[/bold] {counts}")
+    for err in result.get("errors") or []:
+        console.print(f"  [red]error[/red] {err.get('message')}")
+    for warn in result.get("warnings") or []:
+        console.print(f"  [yellow]warn[/yellow] {warn.get('message')}")
+
+
 @humanview.command("covg")
 @click.argument("path", type=click.Path(exists=True, dir_okay=False))
 @click.option("--json", "-j", "as_json", is_flag=True, help="JSON 输出")

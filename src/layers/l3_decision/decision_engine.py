@@ -714,7 +714,7 @@ async def enrich_observation(observation: Observation, spec: dict) -> Observatio
     if not spec or not isinstance(spec, dict):
         return observation
     try:
-        from src.tools.checking.spec_tools.verify_dsl import build_graph_from_spec
+        from src.layers.l3_decision.spec_tools.verify_dsl import build_graph_from_spec
         from src.layers.l3_decision.knowledge.query import find_gap_contexts
         # spec 建全图（含运行时 coverage_bin），DB 作补充（跨 run 的 bug/fix 等）
         graph = build_graph_from_spec(spec)

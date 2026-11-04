@@ -68,7 +68,7 @@ def worker_main():
 
     async def _run():
         from src.layers.l2_orchestration.communication.tool_hub import ToolHub
-        from src.tools.execution.regression_tools.regression_tool import (
+        from src.layers.l2_orchestration.regression_tools.regression_tool import (
             RegressionRunTool, CoverageCollectTool)
         hub = ToolHub.get_instance()
         # 懒注册（worker 进程独立，需重新注册工具）

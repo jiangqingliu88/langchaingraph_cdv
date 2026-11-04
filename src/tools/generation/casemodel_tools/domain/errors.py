@@ -6,14 +6,7 @@ repository 抛出它，analysis 与 view 捕获它，domain 内部不该捕获�
 from __future__ import annotations
 
 
-class CaseModelError(ValueError):
-    """模型无法构建 —— 结构性错误。
-
-    典型场景：YAML 顶层不是 mapping、缺 object/dimensions、object 不是字符串。
-    与「schema 违规」的区别：schema 违规是逐条可枚举的 Issue（不抛异常），
-    这里是「连模型对象都建不出来」，只能中断。
-    """
+from src.core.runtime.errors import CaseListError, CaseModelError  # noqa: F401
 
 
-class CaseListError(ValueError):
-    """外部真实 case 列表无法解析。"""
+__all__ = ["CaseListError", "CaseModelError"]

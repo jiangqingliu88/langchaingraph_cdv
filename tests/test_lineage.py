@@ -501,7 +501,7 @@ class TestBaselineAwareCompare:
         finally:
             s.close()
 
-        from src.tools.flow.flow_tools.lineage_api import (baseline_of_run,
+        from src.app.services.flow.lineage_api import (baseline_of_run,
                                                       compare_against_baseline)
 
         anchor = baseline_of_run(b)
@@ -515,7 +515,7 @@ class TestBaselineAwareCompare:
         monkeypatch.chdir(tmp_path)
         lonely = self._run(tmp_path, "output_c_20260103_000000",
                            "module dut; endmodule\n")
-        from src.tools.flow.flow_tools.lineage_api import compare_against_baseline
+        from src.app.services.flow.lineage_api import compare_against_baseline
 
         result = compare_against_baseline(str(lonely))
         assert "error" in result and "血缘" in result["error"]
@@ -524,7 +524,7 @@ class TestBaselineAwareCompare:
         monkeypatch.chdir(tmp_path)
         a = self._run(tmp_path, "output_a_20260101_000000", "module dut; endmodule\n")
         b = self._run(tmp_path, "output_b_20260102_000000", "module dut; endmodule\n")
-        from src.tools.flow.flow_tools.lineage_api import compare_against_baseline
+        from src.app.services.flow.lineage_api import compare_against_baseline
 
         result = compare_against_baseline(str(b), baseline=str(a))
         assert Path(result["baseline_dir"]).name == a.name

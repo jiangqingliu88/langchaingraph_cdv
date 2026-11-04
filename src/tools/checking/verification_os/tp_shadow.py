@@ -69,7 +69,8 @@ def _stage(tp: Dict[str, Any]) -> str:
 
 
 def _report_path(run_dir: Path,
-                 coverage: Optional[Dict[str, Any]] = None) -> Optional[Path]:
+                 coverage: Optional[Dict[str, Any]] = None, *,
+                 require_coverage: bool = False) -> Optional[Path]:
     """**与 `_tp_matrix` 同源**：优先计划合并报告（`tp_report`），否则单测报告。
 
     两边读不同报告 = 对账时全是假差异（合并库和单测库的命中数不一样）。
@@ -78,6 +79,11 @@ def _report_path(run_dir: Path,
     `coverage_result.json` 落盘**之前**，那里读文件会读到上一轮的旧路径
     （实测导致 20 条假差异）。
     """
+    if not coverage and require_coverage:
+        raise ValueError(
+            "os_tp_shadow 必须使用**当场传入**的 coverage payload：证据流水线"
+            "跑在 coverage_result.json 落盘之前，回退读文件会拿到上一轮的 "
+            "tp_report（实测 20 条假差异）。")
     coverage = coverage or (_read_json(
         run_dir / "sim" / "coverage" / "coverage_result.json").get("coverage") or {})
     tp_report = str(coverage.get("tp_report") or "")
@@ -94,9 +100,10 @@ def _report_path(run_dir: Path,
 
 
 def run_facts(run_dir: Path,
-              coverage: Optional[Dict[str, Any]] = None) -> Optional[FactBundle]:
+              coverage: Optional[Dict[str, Any]] = None, *,
+              require_coverage: bool = False) -> Optional[FactBundle]:
     """合并覆盖率报告 → run 级 `bin_hit` 事实（subject 不带 case）。"""
-    report = _report_path(run_dir, coverage)
+    report = _report_path(run_dir, coverage, require_coverage=require_coverage)
     if report is None:
         return None
     try:
@@ -214,7 +221,8 @@ def derive_tp_status(testpoints: List[Dict[str, Any]],
 
 
 def run_tp_shadow(run_dir: str | Path, *, write: bool = True,
-                  coverage: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                  coverage: Optional[Dict[str, Any]] = None,
+                  require_coverage: bool = False) -> Dict[str, Any]:
     """TP 级影子对账：推导 vs `tp_matrix.rows[]`。
 
     `coverage` 由当场调用方传入（证据流水线里 `coverage_result.json` 还没落盘）。
@@ -228,7 +236,7 @@ def run_tp_shadow(run_dir: str | Path, *, write: bool = True,
         return {"schema": SCHEMA, "available": False,
                 "note": "没有 TP IR 或 tp_matrix（先跑一轮覆盖率）"}
 
-    bundle = run_facts(root, coverage)
+    bundle = run_facts(root, coverage, require_coverage=require_coverage)
     ledger = [f.model_dump(by_alias=True) for f in (bundle.facts if bundle else [])]
     derived = derive_tp_status(testpoints, ledger)
 

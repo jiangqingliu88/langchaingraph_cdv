@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import importlib
 
-PACKAGES = ("flow_tools", "trend_tools")
+PACKAGES = ("trend_tools",)
 
 
 def __getattr__(name: str):

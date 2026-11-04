@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from src.tools.humanview.case_associate_view.gates import (
+from src.layers.l3_decision.case_view.gates import (
     load_declarative, load_rules, rules_table, validate_case_view,
 )
 

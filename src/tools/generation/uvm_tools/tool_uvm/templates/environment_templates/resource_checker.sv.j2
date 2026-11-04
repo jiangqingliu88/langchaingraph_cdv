@@ -1,0 +1,124 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// 多路 analysis imp 必须在 **class 外**声明：`uvm_analysis_imp_decl` 展开出
+// `uvm_analysis_imp_<suffix>` 类，类里才能用它。少这几行 = "Invalid type"。
+{%- for a in resource_checker.agents %}
+`uvm_analysis_imp_decl(_{{ a.name }})
+{%- endfor %}
+
+// Resource Interaction Checker: {{ resource_checker.class_name }}
+//
+// 规则来自 `resources.yaml` 编译出的 resource_model / resource_scenarios；
+// **协议级观测规则**（哪个 agent、从事务里取哪几个字段）来自 operation 的
+// `agent` + `watch` 声明 —— 没有声明的操作不会生成观测点（不猜字段名）。
+//
+// 并发窗口 `window_` 与仿真 `$time` 同单位；0 = 只比较同一时刻的访问。
+class {{ resource_checker.class_name }} extends uvm_scoreboard;
+  `uvm_component_utils({{ resource_checker.class_name }})
+
+  typedef struct {
+    longint address;
+    longint length;
+    bit     is_write;
+    time    at;
+    int     op;
+  } resource_access_t;
+
+{%- for a in resource_checker.agents %}
+  uvm_analysis_imp_{{ a.name }} #({{ a.seq_item_type }}, {{ resource_checker.class_name }}) {{ a.name }}_imp;
+{%- endfor %}
+
+  local resource_access_t last_[{{ resource_checker.operations | length }}];
+  local bit seen_[{{ resource_checker.operations | length }}];
+  local longint window_ = {{ resource_checker.window }};
+  local int observations_ = 0;
+  local int checked_pairs_ = 0;
+  local int conflicts_ = 0;
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+{%- for a in resource_checker.agents %}
+    {{ a.name }}_imp = new("{{ a.name }}_imp", this);
+{%- endfor %}
+    foreach (seen_[i]) seen_[i] = 1'b0;
+  endfunction
+
+  function automatic bit ranges_overlap(longint a0, longint alen,
+                                        longint b0, longint blen);
+    longint a1, b1;
+    if (alen <= 0 || blen <= 0) return 1'b0;
+    a1 = a0 + alen - 1;
+    b1 = b0 + blen - 1;
+    return (a0 <= b1) && (b0 <= a1);
+  endfunction
+
+  function automatic bit concurrent(resource_access_t a, resource_access_t b);
+    if (window_ <= 0) return a.at == b.at;
+    return ((a.at - b.at) <= window_) || ((b.at - a.at) <= window_);
+  endfunction
+
+  function void check_pair(resource_access_t cur, resource_access_t prev,
+                           bit conflict, string interaction, string policy,
+                           string resource_id);
+    if (!concurrent(cur, prev)) return;
+    if (!ranges_overlap(cur.address, cur.length, prev.address, prev.length))
+      return;
+    checked_pairs_++;
+    if (conflict) begin
+      conflicts_++;
+      `uvm_error("RES_CONFLICT", $sformatf(
+        "resource=%s interaction=%s policy=%s op%0d[0x%0h+%0d] overlaps op%0d[0x%0h+%0d]",
+        resource_id, interaction, policy,
+        cur.op, cur.address, cur.length, prev.op, prev.address, prev.length))
+    end else begin
+      `uvm_info("RES_POLICY", $sformatf(
+        "resource=%s interaction=%s policy=%s op%0d overlaps op%0d (allowed)",
+        resource_id, interaction, policy, cur.op, prev.op), UVM_MEDIUM)
+    end
+  endfunction
+
+  function void observe(resource_access_t access);
+    observations_++;
+    last_[access.op] = access;
+    seen_[access.op] = 1'b1;
+{%- for r in resource_checker.rules %}
+    if (access.op == {{ r.a }} && seen_[{{ r.b }}])
+      check_pair(access, last_[{{ r.b }}], {{ "1'b1" if r.conflict else "1'b0" }},
+                 "{{ r.interaction }}", "{{ r.policy }}", "{{ r.resource }}");
+    if (access.op == {{ r.b }} && seen_[{{ r.a }}])
+      check_pair(access, last_[{{ r.a }}], {{ "1'b1" if r.conflict else "1'b0" }},
+                 "{{ r.interaction }}", "{{ r.policy }}", "{{ r.resource }}");
+{%- endfor %}
+  endfunction
+
+{%- for a in resource_checker.agents %}
+  function void write_{{ a.name }}({{ a.seq_item_type }} tr);
+  {%- for op in resource_checker.operations %}
+  {%- if op.agent == a.name %}
+    begin
+      resource_access_t access;
+      access.op       = {{ op.index }};
+      access.address  = longint'({{ op.address }});
+      access.length   = longint'({{ op.length }});
+      access.is_write = {{ op.write }};
+      access.at       = $time;
+      observe(access);
+    end
+  {%- endif %}
+  {%- endfor %}
+  endfunction
+{%- endfor %}
+
+  virtual function void report_phase(uvm_phase phase);
+    super.report_phase(phase);
+    `uvm_info("RES_CHECKER", $sformatf(
+      "observations=%0d checked_pairs=%0d conflicts=%0d",
+      observations_, checked_pairs_, conflicts_), UVM_LOW)
+    if (conflicts_ > 0)
+      `uvm_error("RES_CHECKER", $sformatf("%0d forbidden resource overlap(s)", conflicts_))
+  endfunction
+endclass : {{ resource_checker.class_name }}

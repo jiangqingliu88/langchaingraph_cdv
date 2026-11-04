@@ -126,7 +126,7 @@ class CoverageExecutor(BaseExecutor):
         # ── 语义层降维：真实 gap 归因（constraint / unstimulated / unreachable）──
         toggle_details = []
         try:
-            from src.tools.checking.coverage_tools.main import build_coverage_gaps
+            from src.layers.l3_decision.evidence.main import build_coverage_gaps
             from src.layers.l1_infrastructure.coverage_backend import get_coverage_backend
             constraints = self._extract_constraints(output_dir)
             toggle_details = get_coverage_backend().parse_toggle_details(output_dir)

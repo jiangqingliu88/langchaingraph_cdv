@@ -182,6 +182,9 @@ class CaseModel:
     behavior: Optional[Any] = None
     #: **PATH 组**（端到端指令生命周期）—— 与功能组并列，回答"路径通不通"。
     path_groups: List[Any] = _field(default_factory=list)
+    #: **业务用例来源**（xlsx 测试点表 + 绑定表）—— CASE/CCAT 的真源。
+    #: 空 dict = 用模型里的 `cases:` 段或按维度合成。
+    case_source: Dict[str, Any] = _field(default_factory=dict)
     #: 配置域（DUT/特性配置空间）；None = 模型没启用配置建模。
     config_space: Optional[Any] = None
     #: **Case IR 段**（`cases:`）—— CCAT 分类树 + CASE 逻辑用例的**原始声明**。

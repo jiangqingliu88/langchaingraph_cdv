@@ -5,9 +5,20 @@
   "description": "case 六层属性模型：L1 对象 / L2 子对象 / L3 维度 / L4 字段 / L5 方法 / L6 检查，外加维度交叉矩阵与环境指纹。文档见 src/tools/generation/casemodel_tools/readem.md。schema 只做「语法 + 类型 + 引用形状」的硬校验；「引用是否指向已存在的维度/字段」「层级是否错位」等语义问题由 completeness.py 报告。",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "dimensions"
-  ],
+  "if": {
+    "required": ["coverage"]
+  },
+  "then": {
+    "required": ["coverage"],
+    "properties": {
+      "coverage": {
+        "required": ["dimensions"]
+      }
+    }
+  },
+  "else": {
+    "required": ["dimensions"]
+  },
   "anyOf": [
     {
       "required": [
@@ -20,9 +31,49 @@
         "tests"
       ],
       "description": "写法二：顶层 tests 列表 —— 一份模型测多个对象，共享下面的属性空间"
+    },
+    {
+      "required": [
+        "identity"
+      ],
+      "description": "写法三：casemodel_v2 分节 —— identity / coverage / checkers / stimuli / plan / bindings，loader 展开成现有扁平结构"
     }
   ],
   "properties": {
+    "schema": {
+      "enum": ["casemodel_v1", "casemodel_v2"],
+      "description": "模型写法版本；缺省视为 v1（扁平），v2 为分节写法"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "v2：对象身份（object / object_code / object_cn / version / requirements）"
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "v2：验证意图与追踪（source / items / bindings）—— vPlan 同源"
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "v2：覆盖模型（sub_objects / dimensions / cross_* / sampling）—— CGF 同源"
+    },
+    "checkers": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "v2：断言与 scoreboard 声明（assertions / scoreboards）"
+    },
+    "stimuli": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "v2：激励结构（themes / methods / checks / config_space / generation / case_defaults / behavior / path_groups）"
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "v2：CASE → dimensions/cells/tests 绑定（唯一桥）"
+    },
     "config_space": {
       "type": "object",
       "additionalProperties": false,
@@ -310,6 +361,16 @@
         "$ref": "#/$defs/path_group"
       }
     },
+    "case_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "业务用例来源：xlsx 测试点表 + case_bindings 绑定表。CASE/CCAT 的真源；空 = 用 cases: 段或按维度合成。",
+      "properties": {
+        "xlsx": {"type": "string", "description": "xlsx 路径（相对仓库根或模型目录）"},
+        "bindings": {"type": "string", "description": "case_bindings_v1 YAML 路径"},
+        "module": {"type": "string", "description": "模块名（缺省用 object）"}
+      }
+    },
     "environment": {
       "type": "object",
       "additionalProperties": false,
@@ -554,6 +615,17 @@
           "type": "string",
           "minLength": 1,
           "description": "探针实例名（默认 u_cg_probe）"
+        },
+        "per_instance": {
+          "type": "boolean",
+          "description": "covergroup option.per_instance（探针默认 1）"
+        },
+        "weight": {"type": "integer", "minimum": 1},
+        "at_least": {"type": "integer", "minimum": 1},
+        "auto_bin_max": {"type": "integer", "minimum": 1},
+        "strobe": {
+          "type": ["string", "number"],
+          "description": "option.strobe（如 1ns / 10）"
         }
       }
     }
@@ -1096,6 +1168,12 @@
         "description": {
           "type": "string"
         },
+        "goal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "该维度的覆盖闭合目标（0 = 用全局目标）"
+        },
         "sub_objects": {
           "type": "array",
           "minItems": 1,
@@ -1357,6 +1435,44 @@
             "null"
           ],
           "description": "省略 ⇒ $"
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "UVM 权重（不一致时提升为覆盖点级 option.weight）"
+        },
+        "at_least": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "UVM 最少命中次数（不一致时提升为覆盖点级 option.at_least）"
+        },
+        "ignore": {
+          "type": "boolean",
+          "description": "忽略仓：采样到也不计入分母（ignore_bins）"
+        },
+        "transitions": {
+          "type": "array",
+          "minItems": 1,
+          "description": "转移仓：`(a => b)`；每条是 [from,to] 或 {from,to}",
+          "items": {
+            "oneOf": [
+              {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {"type": "integer"}
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["from", "to"],
+                "properties": {
+                  "from": {"type": "integer"},
+                  "to": {"type": "integer"}
+                }
+              }
+            ]
+          }
         }
       }
     },
@@ -1381,7 +1497,17 @@
             "minLength": 1
           },
           "description": "覆盖点名（信号名）→ 仓名。**bin 名与取值 token 都认**"
-        }
+        },
+        "illegal": {
+          "type": "boolean",
+          "description": "非法交叉仓（illegal_bins）"
+        },
+        "ignore": {
+          "type": "boolean",
+          "description": "忽略交叉仓（ignore_bins，不计入分母）"
+        },
+        "weight": {"type": "integer", "minimum": 1},
+        "at_least": {"type": "integer", "minimum": 1}
       }
     },
     "cross_decl": {

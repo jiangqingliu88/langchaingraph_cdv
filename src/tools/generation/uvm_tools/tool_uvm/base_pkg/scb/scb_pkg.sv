@@ -3,6 +3,7 @@
 // 职责: 按依赖顺序 include 各分片（.svh），对外仅暴露本 package；
 //   filelist 只需编译本文件，分片经 +incdir 解析
 // 分片:
+//   common_pred.svh                     通用参考模型 / predictor 模板
 //   in_order_scoreboard.svh             基座: 比较器接口 + 顺序计分板
 //   out_of_order_scoreboard.svh         乱序计分板（按事务 ID 关联匹配）
 // 注:
@@ -17,8 +18,9 @@ package scb_pkg;
   import uvm_pkg::*;
   `include "uvm_macros.svh"
 
-  // 依赖顺序: 基座(in_order) → 乱序
+  // 依赖顺序: predictor → 基座(in_order) → 乱序
   // （各分片自带 include 守卫与依赖 include，顺序仅作显式声明）
+  `include "common_pred.svh"
   `include "in_order_scoreboard.svh"
   `include "out_of_order_scoreboard.svh"
 

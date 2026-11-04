@@ -89,7 +89,7 @@ def _verify_kwargs(**kw) -> dict:
 @click.option("--sim-mode", "sim_modes", default=None, multiple=True,
               help="回归的仿真业务（可重复：--sim-mode wave --sim-mode cov）；"
                    "默认 cov+wave（覆盖率 + 波形）—— 要省机时就显式只给 cov。"
-                   "可用词条见 src/tools/execution/regression_tools/sim_modes.py")
+                   "可用词条见 src/layers/l2_orchestration/regression_tools/sim_modes.py")
 @click.option("--no-manual-gate", "manual_gate", flag_value=False, default=True,
               help="关闭分级回归的**人工节点**（loopback 全过也不停车等人放行）。"
                    "默认开启：门是默认该在的。工作台工具栏上也有同一个开关")
@@ -301,7 +301,7 @@ def _do_compile_check(result: dict):
     out_dir = ctx.get("env", {}).get("output_dir", "") if hasattr(ctx, "get") else ""
     if fl and Path(fl).exists():
         try:
-            from src.tools.execution.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
+            from src.layers.l2_orchestration.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
             runner = RegressionRunner(
                 env_output_dir=out_dir,
                 filelist=fl,

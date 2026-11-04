@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 SKILLS = (
-    Path("src/tools/checking/coverage_tools/SKILL.md"),
+    Path("src/layers/l3_decision/evidence/SKILL.md"),
     Path("src/tools/generation/casemodel_tools/SKILL.md"),
 )
 

@@ -170,6 +170,93 @@ def complexity_violations(root: Path = ROOT, threshold: int = 20,
 
 
 # ═══════════════════════════════════════════════════════════════
+# 依赖方向（Phase 1 先 warning，Phase 2 后转 error）
+# ═══════════════════════════════════════════════════════════════
+
+_ZONES = (
+    ("src/core/", "core"),
+    ("src/layers/l1_infrastructure/", "l1"),
+    ("src/layers/l2_orchestration/", "l2"),
+    ("src/layers/l3_decision/", "l3"),
+    ("src/layers/l4_memory/", "l4"),
+    ("src/layers/l5_evolution/", "l5"),
+    ("src/executors/", "executors"),
+    ("src/tools/", "tools"),
+    ("src/agents/", "agents"),
+    ("src/cli/", "iface"),
+    ("src/workbench/", "iface"),
+    ("src/app/", "iface"),
+)
+
+#: zone → 允许 import 的 zone（只能向下 / 同层）。
+_ALLOWED = {
+    "core": set(),
+    # `tools` 目前是低层适配器集合（UVM/EDA/覆盖率解析），l1/l2/l3/l4/l5
+    # 都可以调用它；**反向（tools → layers）才是债务**，Phase 3 要清零。
+    "l1": {"core", "tools"},
+    "l3": {"l1", "l4", "core", "tools"},
+    "l4": {"l1", "core", "tools"},
+    "l5": {"l1", "l3", "l4", "core", "tools"},
+    "l2": {"l1", "l3", "l4", "l5", "core", "agents", "tools"},
+    "executors": {"l1", "l2", "l3", "l4", "l5", "core", "agents", "tools"},
+    # 适配器可以调用基础设施（L1）；但不得反向依赖 L2/L3/L4（业务层）。
+    "tools": {"core", "l1"},
+    "agents": {"l1", "l2", "l3", "l4", "l5", "core", "tools"},
+    "iface": {"core", "l1", "l2", "l3", "l4", "l5", "executors", "agents", "tools"},
+}
+
+#: Phase 1 的 façade：它们**故意**转发旧实现，搬迁完成后删除。
+_FACADE_PATHS = {
+    "src/layers/l3_decision/contract/__init__.py",
+    "src/layers/l3_decision/casemodel/__init__.py",
+    "src/layers/l4_memory/ledger/__init__.py",
+    "src/layers/l5_evolution/closure/__init__.py",
+    # Phase 3 后保留的**边界 shim**：
+    # Phase 4：边界 shim 逐步替换为端口/注册表注入；当前已全部删除。
+}
+
+
+def _zone_of(rel: str) -> str:
+    for prefix, zone in _ZONES:
+        if rel.startswith(prefix):
+            return zone
+    return ""
+
+
+def import_violations(root: Path = ROOT) -> List[Dict[str, Any]]:
+    """检查 `src.*` 绝对 import 是否逆流。相对 import 视为同包，不检查。"""
+    issues: List[Dict[str, Any]] = []
+    for path in _iter_py(root / "src"):
+        rel = path.relative_to(root).as_posix()
+        src_zone = _zone_of(rel)
+        if not src_zone or rel in _FACADE_PATHS:
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, SyntaxError):
+            continue
+        # **只看模块级 import**：函数内 `import` / `from ... import` 是
+        # 有意的延迟加载（切断静态依赖的手段），不算方向违规。
+        for node in tree.body:
+            target = ""
+            if isinstance(node, ast.ImportFrom) and node.level == 0:
+                target = str(node.module or "")
+            elif isinstance(node, ast.Import):
+                target = next((a.name for a in node.names
+                               if a.name.startswith("src.")), "")
+            if not target.startswith("src."):
+                continue
+            dst_zone = _zone_of(target.replace(".", "/") + "/")
+            if not dst_zone or dst_zone == src_zone:
+                continue
+            if dst_zone not in _ALLOWED.get(src_zone, set()):
+                issues.append({"type": "import_direction", "file": rel,
+                               "from": src_zone, "to": dst_zone,
+                               "import": target})
+    return issues
+
+
+# ═══════════════════════════════════════════════════════════════
 # 入口
 # ═══════════════════════════════════════════════════════════════
 
@@ -177,11 +264,15 @@ def check(root: Path = ROOT) -> Dict[str, Any]:
     budget = load_budget()
     line_issues = line_violations(root, budget)
     comp_issues = complexity_violations(root, 20, load_baseline())
+    import_issues = import_violations(root)
     return {
-        "ok": not line_issues and not comp_issues,
+        # Phase 3 结束：依赖方向已经清零，**并入阻断门禁**（0 违规才绿）。
+        "ok": not line_issues and not comp_issues and not import_issues,
         "line_budget": {"warn": budget["warn"], "error": budget["error"]},
         "line_issues": line_issues,
         "complexity_issues": comp_issues,
+        "import_issues": import_issues,
+        "import_direction_ok": not import_issues,
     }
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 from src.core.jobs.spec import JobResult
 from src.core.runtime.artifacts import ArtifactStore
 from src.layers.l2_orchestration.runtime import _register_artifacts
-from src.tools.execution.regression_tools.regression_framework.execution.strategy import (
+from src.layers.l2_orchestration.regression_tools.regression_framework.execution.strategy import (
     LocalStrategy, get_job_supervisor, set_job_supervisor,
 )
 

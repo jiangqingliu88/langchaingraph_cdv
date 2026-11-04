@@ -67,6 +67,11 @@ class {{ environment.env_name }} extends uvm_env;
   {{ sb.handle_type }} {{ sb.name }};
 {%- endfor %}
 
+{%- if resource_checker %}
+  // 资源交互 checker（协议观测规则来自 resources.yaml 的 agent + watch）
+  {{ resource_checker.class_name }} resource_checker;
+{%- endif %}
+
   // 功能覆盖率模型（env 级，跨 agent covergroup）
   {{ environment.env_name }}_coverage env_cov;
   {{ environment.env_name }}_sim_end sim_end_h;   // 仿真自动结束组件（watchdog + auto finish）
@@ -202,6 +207,11 @@ class {{ environment.env_name }} extends uvm_env;
     {{ sb.name }} = {{ sb.handle_type }}::type_id::create("{{ sb.name }}", this);
 {%- endfor %}
 
+{%- if resource_checker %}
+    // 创建资源交互 checker
+    resource_checker = {{ resource_checker.class_name }}::type_id::create("resource_checker", this);
+{%- endif %}
+
     // 创建功能覆盖率模型（env_cov）
     env_cov = {{ environment.env_name }}_coverage::type_id::create("env_cov", this);
 
@@ -250,6 +260,13 @@ class {{ environment.env_name }} extends uvm_env;
 {%- for agent in agents %}
     {{ agent.name }}_agent_ap.connect(env_cov.{{ agent.name }}_export);
 {%- endfor %}
+
+{%- if resource_checker %}
+    // 资源交互 checker：每个被观测 agent 的 analysis port 接一个 imp
+{%- for ra in resource_checker.agents %}
+    {{ ra.name }}_agent_ap.connect(resource_checker.{{ ra.name }}_imp);
+{%- endfor %}
+{%- endif %}
 
     // ─── Register Model（RAL）连接 ───
 {%- if register_model and register_model.reg_block and register_model.bus_agent %}
