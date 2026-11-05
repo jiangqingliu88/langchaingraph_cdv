@@ -1,4 +1,24 @@
 {% include "base_templates/base_template.sv.j2" %}
+{#- 协议握手信号（供接口内时序断言）：output 侧 `*valid` + input 侧 `*ready`；
+    payload = 其余 output 端口。 #}
+{%- set _pv = namespace(name="") %}
+{%- set _pr = namespace(name="") %}
+{%- set _pl = namespace(names=[]) %}
+{%- for p in ports %}
+{%-   if p.name != clock and p.name != reset %}
+{%-     if p.dir == 'output' and not _pv.name and (p.name|lower).endswith('valid') %}
+{%-       set _pv.name = p.name %}
+{%-     endif %}
+{%-     if p.dir == 'input' and not _pr.name and (p.name|lower).endswith('ready') %}
+{%-       set _pr.name = p.name %}
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+{%- for p in ports %}
+{%-   if p.dir == 'output' and p.name != clock and p.name != reset and p.name != _pv.name %}
+{%-     set _pl.names = _pl.names + [p.name] %}
+{%-   endif %}
+{%- endfor %}
 
 // ============================================================
 // Interface: {{ agent.name }}_if
@@ -128,4 +148,30 @@ import {{ agent.name }}_parameters_pkg::*;
     //property p_addr_valid;
     //    @(posedge clk) valid |-> ($isunknown(addr[`{{ agent.name | upper }}_MAX_ADDR_WIDTH-1:cfg.addr_width]));
     //endproperty
+
+{%- if _pv.name %}
+  // ════════════════════════════════════════════════════════════
+  // 协议时序断言（**TB 自检，独立于 driver / monitor 的采样判据**）
+  //
+  // 只在这里拦三类"agent 时序错"：
+  //   1. valid 为 X —— 时序不可判定（不是"没有事务"）；
+  //   2. valid 未等 ready 就撤销 —— handshake 不成立；
+  //   3. 等待 ready 期间 payload 变化 —— 事务内容不稳定的经典错误。
+  // 命中走 `$error` → 回归判据（UVM_ERROR/Errors）→ 分级门控拦下。
+  // ════════════════════════════════════════════════════════════
+  property p_{{ agent.name }}_valid_known;
+    @(posedge {{ clock }}) disable iff (!{{ reset }})
+      !$isunknown({{ _pv.name }});
+  endproperty
+  assert property (p_{{ agent.name }}_valid_known)
+    else $error("[PROTO] {{ _pv.name }} 为 X —— 事务时序不成立");
+{%- if _pr.name %}
+  property p_{{ agent.name }}_valid_stable;
+    @(posedge {{ clock }}) disable iff (!{{ reset }})
+      ({{ _pv.name }} && !{{ _pr.name }}) |=> ({{ _pv.name }}{% if _pl.names %} && $stable({{ _pl.names|join(', ') }}){% endif %});
+  endproperty
+  assert property (p_{{ agent.name }}_valid_stable)
+    else $error("[PROTO] valid 等待 ready 期间撤销或 payload 变化");
+{%- endif %}
+{%- endif %}
 endinterface : {{ agent.name }}_if

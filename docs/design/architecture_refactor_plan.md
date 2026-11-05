@@ -306,7 +306,7 @@ tool_find_spec_yaml/
 - [ ] 删除所有 shim 与旧实现。
 - [ ] 清理 `config/complexity_baseline.json` 中已拆掉的函数条目。
 - [ ] 把 `architecture_budget.yaml` 的 warn 线从 1500 降到 800（或分目录阈值）。
-- [ ] 更新 `ARCHITECTURE.md` 与 `data.md` 的目录说明。
+- [ ] 更新 `ARCHITECTURE.md` 与 `../notes/data.md` 的目录说明。
 - [ ] 保留 `docs/design/architecture_refactor_plan.md` 作为历史记录，标记完成。
 
 **验收**：
@@ -363,7 +363,7 @@ tool_find_spec_yaml/
 - 产物：golden diff 0。
 - 端到端：npu_sched 基线一致。
 - 无 shim、无旧导入路径。
-- `ARCHITECTURE.md` / `data.md` 与新结构一致。
+- `ARCHITECTURE.md` / `../notes/data.md` 与新结构一致。
 
 ---
 
@@ -551,7 +551,7 @@ import 树直接碎。执行顺序固定为：
 
 ## 11. 附：这次重构**不**做的事
 
-- 不改 `data.md` 描述的业务主链。
+- 不改 `../notes/data.md` 描述的业务主链。
 - 不改 `case_ir` / `testpoints` / `contract` / `case_cov` 的字段语义。
 - 不改签核三态与门禁级别。
 - 不引入新的外部框架（LangGraph 迁移是另一条线，不混在这次重构里）。

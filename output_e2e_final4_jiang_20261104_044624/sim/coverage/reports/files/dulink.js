@@ -1,2 +1,0 @@
-var g_data = {"17":["work.clk_and_rst_pkg",18.64,1],"6":["work.clk_rst_if",100.00,1],"23":["work.npu_sched",61.47,1],"22":["work.npu_sched_bench_tb_top",100.00,1],"19":["work.npu_sched_env_pkg",24.03,1],"20":["work.npu_sched_env_seq_pkg",0.00,1],"21":["work.npu_sched_env_test_pkg",5.95,1],"2":["work.npu_sched_in_if",100.00,1],"15":["work.npu_sched_in_pkg",27.44,1],"4":["work.npu_sched_out_if",100.00,1],"12":["work.npu_sched_out_pkg",1.54,1]};
-processDuLinks(g_data);

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "defaultMode": "default"
+  },
+  "env": {
+    "CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY": "1"
+  }
+}

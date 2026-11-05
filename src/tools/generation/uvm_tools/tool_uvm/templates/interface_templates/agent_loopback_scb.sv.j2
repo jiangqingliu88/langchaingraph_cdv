@@ -1,4 +1,11 @@
 {% include "base_templates/base_template.sv.j2" %}
+{#- 驱动侧判定（与 loopback env/test 同一口径）：expected 永远取**驱动侧**
+    driver 的 driven_ap；全输入 agent 的驱动侧是 slave。 #}
+{%- set _has_out = namespace(v=False) %}
+{%- for p in ports %}{% if p.dir == 'output' %}{% set _has_out.v = True %}{% endif %}{% endfor %}
+{%- set _exp_t = agent.name ~ ('_master_seq_item' if _has_out.v else '_slave_seq_item') %}
+{%- set _act_t = agent.name ~ ('_slave_seq_item' if _has_out.v else '_master_seq_item') %}
+{%- set _cmp_dir = 'output' if _has_out.v else 'input' %}
 
 // ============================================================
 // Loopback Scoreboard: {{ agent.name }}_loopback_scb
@@ -22,12 +29,12 @@ import {{ agent.name }}_pkg::*;
 class {{ agent.name }}_loopback_scb extends uvm_scoreboard;
   `uvm_component_utils({{ agent.name }}_loopback_scb)
 
-  uvm_analysis_imp_expected #({{ agent.name }}_master_seq_item, {{ agent.name }}_loopback_scb) expected_export;
-  uvm_analysis_imp_actual   #({{ agent.name }}_slave_seq_item,  {{ agent.name }}_loopback_scb) actual_export;
+  uvm_analysis_imp_expected #({{ _exp_t }}, {{ agent.name }}_loopback_scb) expected_export;
+  uvm_analysis_imp_actual   #({{ _act_t }},  {{ agent.name }}_loopback_scb) actual_export;
 
-  protected {{ agent.name }}_master_seq_item expected_q[$];
+  protected {{ _exp_t }} expected_q[$];
   protected time                            expected_t[$];
-  protected {{ agent.name }}_slave_seq_item actual_q[$];
+  protected {{ _act_t }} actual_q[$];
   protected time                            actual_t[$];
   protected int m_matched    = 0;
   protected int m_mismatched = 0;
@@ -41,13 +48,13 @@ class {{ agent.name }}_loopback_scb extends uvm_scoreboard;
     actual_export   = new("actual_export",   this);
   endfunction
 
-  virtual function void write_expected({{ agent.name }}_master_seq_item exp);
+  virtual function void write_expected({{ _exp_t }} exp);
     expected_q.push_back(exp);
     expected_t.push_back($time);
     pair_ready();
   endfunction
 
-  virtual function void write_actual({{ agent.name }}_slave_seq_item act);
+  virtual function void write_actual({{ _act_t }} act);
     actual_q.push_back(act);
     actual_t.push_back($time);
     pair_ready();
@@ -69,8 +76,8 @@ class {{ agent.name }}_loopback_scb extends uvm_scoreboard;
     // ⚠️ 声明必须排在**块内所有语句之前**（SV 规则）：循环体里有 `continue`，
     // 声明写在它后面就是 "Illegal declaration after the statement ... Look for
     // stray semicolons."（实测踩过）。故提到 while 之前。
-    {{ agent.name }}_master_seq_item exp;
-    {{ agent.name }}_slave_seq_item  act;
+    {{ _exp_t }} exp;
+    {{ _act_t }}  act;
     while (expected_q.size() > 0 && actual_q.size() > 0) begin
       if (actual_t[0] < expected_t[0]) begin
         // slave 先看到的空拍，driver 这边没有对应事务
@@ -108,13 +115,13 @@ class {{ agent.name }}_loopback_scb extends uvm_scoreboard;
   // 比较 driver 驱动出去的字段 —— 口径与 `<ag>_master_driver` 的驱动列表一致：
   // 既要是 is_compare 的公共字段，又要**映射到 output 端口**（driver 才驱动得到，
   // 也只有这些在总线上是 driver 说了算）。
-  virtual function bit compare_fields({{ agent.name }}_master_seq_item exp,
-                                      {{ agent.name }}_slave_seq_item act);
+  virtual function bit compare_fields({{ _exp_t }} exp,
+                                      {{ _act_t }} act);
     bit ok = 1;
 {%- for var in transaction_vars %}
 {%-   set drivable = namespace(found=false) %}
 {%-   for port in ports %}
-{%-     if port.name == var.name and port.dir == 'output' %}
+{%-     if port.name == var.name and port.dir == '{{ _cmp_dir }}' %}
 {%-       set drivable.found = true %}
 {%-     endif %}
 {%-   endfor %}

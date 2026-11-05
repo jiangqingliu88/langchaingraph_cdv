@@ -1,4 +1,17 @@
 {% include "base_templates/base_template.sv.j2" %}
+{#- 协议握手信号识别：output 侧 `*valid` + input 侧 `*ready`。
+    **valid 不能由随机字段决定** —— 事务发送时必须置起，否则总线上根本没有
+    有效事务（monitor 采到的是 idle），这是"agent 时序错"最常见的形态。 #}
+{%- set _vld = namespace(name="") %}
+{%- set _rdy = namespace(name="") %}
+{%- for p in ports %}
+{%-   if p.dir == 'output' and not _vld.name and (p.name|lower).endswith('valid') %}
+{%-     set _vld.name = p.name %}
+{%-   endif %}
+{%-   if p.dir == 'input' and not _rdy.name and (p.name|lower).endswith('ready') %}
+{%-     set _rdy.name = p.name %}
+{%-   endif %}
+{%- endfor %}
 
 // ============================================================
 // Master Driver Callback: {{ agent.name }}_master_driver_cb
@@ -157,7 +170,20 @@ class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_maste
 {%-     endif %}
 {%-   endif %}
 {%- endfor %}
+{%- if _vld.name %}
+    // **协议 valid 由驱动语义决定，不由随机字段决定**：发送事务时置 1；
+    // 有 ready 时保持数据稳定直到握手成功，然后撤掉 valid。
+    // 随机 `valid` 会让"总线上有时根本没事务"，下游 monitor/SCB 全错位。
+    req.{{ _vld.name }} = 1'b1;
+    vif.master_cb.{{ _vld.name }} <= 1'b1;
+{%- if _rdy.name %}
+    do @(vif.master_cb); while (vif.master_cb.{{ _rdy.name }} !== 1'b1);
+{%- endif %}
     @(vif.master_cb);
+    vif.master_cb.{{ _vld.name }} <= 1'b0;
+{%- else %}
+    @(vif.master_cb);
+{%- endif %}
 {%- endif %}
     // pragma custom drive_logic end
     // 回调：驱动后

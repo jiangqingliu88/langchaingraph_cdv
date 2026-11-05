@@ -1,4 +1,9 @@
 {% include "base_templates/base_template.sv.j2" %}
+{#- 驱动侧：有 output 事务端口 → master 发激励；全输入 agent → slave 发激励。 #}
+{%- set _has_out = namespace(v=False) %}
+{%- for p in ports %}{% if p.dir == 'output' %}{% set _has_out.v = True %}{% endif %}{% endfor %}
+{%- set _seq_item = agent.name ~ ('_master_seq_item' if _has_out.v else '_slave_seq_item') %}
+{%- set _seq_agent = 'master_agent_h' if _has_out.v else 'slave_agent_h' %}
 
 // ============================================================
 // Loopback Test: {{ agent.name }}_loopback_test
@@ -7,8 +12,8 @@ import uvm_pkg::*;
 import {{ agent.name }}_pkg::*;
 `include "uvm_macros.svh"
 
-// 简单激励序列：随机生成 N 个 master 事务（不等待响应，规避 get_response 阻塞）
-class {{ agent.name }}_loopback_seq extends uvm_sequence #({{ agent.name }}_master_seq_item);
+// 简单激励序列：在**驱动侧**（master 或 slave）随机生成 N 个事务（不等待响应）
+class {{ agent.name }}_loopback_seq extends uvm_sequence #({{ _seq_item }});
   `uvm_object_utils({{ agent.name }}_loopback_seq)
 
   int num_items = 20;
@@ -19,8 +24,8 @@ class {{ agent.name }}_loopback_seq extends uvm_sequence #({{ agent.name }}_mast
 
   task body();
     repeat (num_items) begin
-      {{ agent.name }}_master_seq_item req;
-      req = {{ agent.name }}_master_seq_item::type_id::create("req");
+      {{ _seq_item }} req;
+      req = {{ _seq_item }}::type_id::create("req");
       if (!req.randomize())
         `uvm_fatal("SEQ", "randomize failed")
       start_item(req);
@@ -67,7 +72,7 @@ class {{ agent.name }}_loopback_test extends uvm_test;
 
     seq = {{ agent.name }}_loopback_seq::type_id::create("seq");
     seq.num_items = num_items;
-    seq.start(env_h.master_agent_h.sequencer);
+    seq.start(env_h.{{ _seq_agent }}.sequencer);
 
     // 等待最后一项被 slave monitor 采样
     #30ns;

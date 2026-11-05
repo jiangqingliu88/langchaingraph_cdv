@@ -50,3 +50,36 @@ Thumbs.db
 # Tool / IDE generated artifacts
 /out_x_*/
 *.vstf
+
+# Local secrets
+.jwt_secret
+.env.local
+
+# Local agent / runtime state (machine-specific)
+.claude/settings.json
+.claude/settings.local.json
+.sessions/
+.agents/
+.signoffai/*
+!.signoffai/.gitkeep
+.visualizer/
+
+# EDA / simulation artifacts (never commit)
+*.ucdb
+*.wlf
+*.fsdb
+*.vcd
+*.qpg
+*.qdb
+*.ses
+simv
+simv.daidir/
+csrc/
+
+# Vendored E203: keep functional RTL/TB/toolchain sources, omit bulky assets.
+# The full upstream tree is available at https://github.com/riscv-mcu/e203_hbirdv2
+/examples/open_npu_soc/e203_hbirdv2/doc/
+/examples/open_npu_soc/e203_hbirdv2/pics/
+/examples/open_npu_soc/e203_hbirdv2/fpga/
+/examples/open_npu_soc/e203_hbirdv2/riscv-tools/**/*.dump
+/examples/open_npu_soc/e203_hbirdv2/riscv-tools/**/*.rpt

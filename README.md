@@ -1,4 +1,107 @@
-# SignOffAI — IC 验证垂直领域智能体（纯 Python CLI）
+# SignOffAI
+
+[![CI](https://github.com/jiangqingliu88/langchaingraph_cdv/actions/workflows/ci.yml/badge.svg)](https://github.com/jiangqingliu88/langchaingraph_cdv/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python 3.10–3.12](https://img.shields.io/badge/python-3.10%E2%80%933.12-blue.svg)](pyproject.toml)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+**An AI-native, auditable IC functional verification and sign-off platform.**
+Spec → RTL → UVM → regression → coverage → evidence-backed sign-off, orchestrated
+as a deterministic LangGraph closed loop. CLI-first, with an optional PySide6
+desktop workbench.
+
+**[简体中文](#signoffai--ic-验证垂直领域智能体) · [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)**
+
+---
+
+## Overview
+
+SignOffAI turns functional verification from a pile of manual steps into a
+reproducible, auditable engineering pipeline. LLMs are used sparingly and only
+where they add value (drafting small RTL blocks, triaging failures); process
+control, tool selection, and pass/fail decisions stay deterministic and
+EDA-verified.
+
+**Three non-negotiable rules**
+
+1. **The EDA tool is the source of truth.** Generated RTL must compile with
+   `vlog` (exit 0/1). Failures are loud and are never silently downgraded to a
+   "pass".
+2. **Coverage databases are version-pinned.** Each round's UCDB is hashed and
+   archived so results can be reproduced and compared.
+3. **LLMs never read raw simulation databases.** Gap analysis consumes a small
+   semantic summary instead of gigabytes of UCDB.
+
+### Highlights
+
+- **LangGraph closed loop** — 24-node verification graph on a five-layer engine
+  (L1 infrastructure → L5 evolution), with human approval gates.
+- **Test-point IR** — a stable `tp_id` axis that links case models, stimulus,
+  constraints, coverage, regression levels, and sign-off evidence.
+- **UVM generation** — interfaces, loopbacks, drivers, monitors, sequencers,
+  scoreboards, and tests generated from templates, gated by the compiler.
+- **Staged regression** — p0–p3 filtering, coverage merge/archive, and
+  reproducible seeds.
+- **Evidence chain v2** — contract-level sign-off artifacts with manifests and
+  hashes for audit.
+- **Reference SoC** — `examples/open_npu_soc/` runs NICE → DMA → banked SRAM →
+  INT8 GEMM → IRQ → Python golden comparison on real RTL.
+
+## Quick start
+
+```bash
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -e ".[dev]"                            # add ",gui" for the workbench
+cp .env.example .env                               # optional; add your LLM key
+
+# Full closed loop on the bundled APB UART spec
+python -m src.cli.commands verify specs/apb_uart/apb_uart_spec.md --json
+
+# Optional: compile/simulate the reference SoC (requires QuestaSim on PATH)
+python -m src.cli.commands soc check examples/open_npu_soc
+python -m src.cli.commands soc run examples/open_npu_soc --output output_soc_v01
+```
+
+Without an LLM key, deterministic/template paths still run and LLM-dependent
+steps fail honestly. Without QuestaSim, EDA-dependent stages report
+`BLOCKED_EDA_MISSING` instead of a fake pass.
+
+## Repository layout
+
+| Path | Purpose |
+|---|---|
+| `src/executors/` | Eight stage executors (front, design, model, verify, ops, coverage, debug, audit) |
+| `src/layers/` | Five-layer engine (L1 infrastructure → L5 evolution) |
+| `src/tools/` | Domain tools: generation, regression, checking, humanview, … |
+| `src/cli/` | The `vagent` command-line interface |
+| `src/workbench/` | Optional PySide6 desktop workbench |
+| `config/` | YAML configuration, schemas, and architecture guards |
+| `specs/`, `examples/` | Sample specs and the Open NPU SoC reference project |
+| `tests/` | pytest suites |
+
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — five layers, 24-node graph, executors, evidence chain
+- [docs/design/](docs/design/) — design notes and implementation plans
+- [docs/notes/](docs/notes/) — working notes (data model, optimization, differentiation)
+- [examples/open_npu_soc/README.md](examples/open_npu_soc/README.md) — end-to-end reference SoC
+- `src/layers/l3_decision/casemodel/framework/README.md` — methodology framework (stage contracts, test-point IR)
+- `src/layers/l3_decision/casemodel/readme.md` — functional coverage methodology
+
+## Contributing
+
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md)
+and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) first. Report security issues
+privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE). Third-party components retain their
+own licenses; see [NOTICE](NOTICE).
+
+---
+
+# SignOffAI — IC 验证垂直领域智能体
 
 **规格 → RTL → UVM → 回归 → 覆盖率 → 签核** 的 AI 验证闭环工具。个人级 CLI，**无 Web 前端**（`python -m src.cli.commands` 交付全部功能）。
 
@@ -7,10 +110,10 @@
 >
 > 关键文档：
 > - **[`ARCHITECTURE.md`](ARCHITECTURE.md)** —— **当前代码架构**（五层 / 24 节点 / 执行器 / 工具协议 / 证据链 / 扩展点）
-> - **[`ENGINEERING_PROCESS.md`](ENGINEERING_PROCESS.md)** —— **工程落地流程**（知识卡 → RTL Freeze → TP IR → 回归 → 签核 → 审批/复审）
-> - **[`COMMERCIAL_VALUE.md`](COMMERCIAL_VALUE.md)** —— **商业化价值评估**（值钱的是证据链，不是“AI 更聪明”）
-> - **[`PITCH_PLAYBOOK.md`](PITCH_PLAYBOOK.md)** —— **展示与方法学落地**（10 分钟演示 / Title / 45k 谈判）
-> - **[`OUR_MOAT.md`](OUR_MOAT.md)** —— **护城河分析**（验证完备性，不是求解器速度）
+> - **[`docs/design/`](docs/design/)** —— 设计文档与实施计划（架构迁移 / 契约 / 覆盖率 / 证据链）
+> - **[`docs/notes/`](docs/notes/)** —— 工作笔记（数据模型 / 优化 / 差异化 / 新架构草案）
+> - **[`CONTRIBUTING.md`](CONTRIBUTING.md)** —— 开发流程、代码规范、DCO 与 PR 检查
+> - **[`SECURITY.md`](SECURITY.md)** —— 漏洞报告与密钥处理
 > - `src/layers/l3_decision/casemodel/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
 > - `src/layers/l3_decision/casemodel/readme.md` —— **功能覆盖率方法学**（case 模型 → covergroup → 种子 → 回归）
 > - `src/layers/l3_decision/casemodel/plan.py` —— 测试点 IR 的公开门面

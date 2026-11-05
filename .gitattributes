@@ -1,0 +1,30 @@
+# Normalize line endings in the repository; keep Windows scripts native.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.7z binary
+*.mcs binary
+*.bit binary
+*.elf binary
+*.bin binary
+*.db binary
+*.ucdb binary
+*.qpg binary
+*.wlf binary
+*.fsdb binary
+*.vcd binary
+*.so binary
+*.dll binary
+*.pyc binary

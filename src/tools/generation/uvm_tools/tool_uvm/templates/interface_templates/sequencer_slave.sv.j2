@@ -16,7 +16,12 @@ class {{ agent.name }}_slave_sequencer extends uvm_sequencer #({{ agent.name }}_
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
-    req_fifo = new("req_fifo", this);
+    // **子组件名不能用 `req_fifo`**：UVM 的 `uvm_sequencer_base` 自己就有一个
+    // 名为 `req_fifo` 的内部 child；同名会让 ACTIVE slave agent 在 build 时
+    // 直接 `UVM_FATAL [CLDEXT] Cannot set 'req_fifo' as a child ...`（实测：
+    // 全输入 agent 的 loopback 改成 slave 驱动后立刻撞上）。成员名保持
+    // `req_fifo` 不变，sequence/monitor 的引用不用改。
+    req_fifo = new("mon_req_fifo", this);
   endfunction
 
   function void build_phase(uvm_phase phase);

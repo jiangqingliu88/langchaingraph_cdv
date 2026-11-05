@@ -1,1 +1,0 @@
-  CREATE_STREAM @100.000 ns {NAME:_vseq T:Transactions SCOPE:uvm_test_top.env.virtual_sqr STREAM:1236}

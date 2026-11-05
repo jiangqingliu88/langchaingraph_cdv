@@ -1,8 +1,0 @@
-{
-  "constraint_generated": true,
-  "constraint_policy_applied": false,
-  "policy_count": 11,
-  "backed_policy_count": 6,
-  "unbacked_policy_count": 5,
-  "note": "6/11 条策略由模型编译出真实赋值；其余 5 条仍是骨架 —— 它们的维度不可驱动（没有 `stimulus.field`，通常是 DUT 内部量/输出端口）"
-}

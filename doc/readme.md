@@ -1,1 +1,1 @@
-$env:OPENAI_API_KEY="sk-6039322a0eec4cc68f5d546bf9ee7c56"
+$env:OPENAI_API_KEY="<your-openai-api-key>"

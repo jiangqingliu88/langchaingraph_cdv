@@ -257,8 +257,17 @@ class {{ environment.env_name }} extends uvm_env;
 {%- endfor %}
 
     // 连接 Analysis Ports 到功能覆盖率模型（env_cov）
+    //
+    // **覆盖走 monitor 的按拍通道（cov_*_ap），不走事务通道（*_mon_ap）**：
+    // 事务流按 valid 门控、只产出真实事务（SCB 用）；覆盖仓量的是信号值，
+    // valid=0 的空闲拍和 idle payload 都是 DUT 真实看到的输入，必须逐拍采。
+    // 两者混在一条流上只能二选一：要么 SCB 收进空闲拍，要么覆盖丢掉 idle bin。
 {%- for agent in agents %}
-    {{ agent.name }}_agent_ap.connect(env_cov.{{ agent.name }}_export);
+{%-   if agent.is_master is not false %}
+    {{ agent.name }}_agent_h.monitor.cov_master_ap.connect(env_cov.{{ agent.name }}_export);
+{%-   else %}
+    {{ agent.name }}_agent_h.monitor.cov_slave_ap.connect(env_cov.{{ agent.name }}_export);
+{%-   endif %}
 {%- endfor %}
 
 {%- if resource_checker %}
