@@ -1,0 +1,49 @@
+schema: soc_spec_v1
+design_name: open_npu_soc
+version: v0.1
+description: >
+  E203 + NPU 子系统 + DMA + Banked SRAM + INT8 GEMM 的参考 SoC。NPU 挂在
+  `e203_subsys_top` 层级（`u_npu_top` 与 `u_e203_subsys_main` 同级）；
+  参考 TB 路径用确定性 NICE 命令时序，E203 路径由真实 CPU 执行 C 固件。
+
+modules:
+  - name: cpu
+    role: E203 RV32 CPU / NICE command source
+    rtl: npu/nice_disp/nice_cmd_sequencer.sv
+    note: 参考 TB 用 sequencer；E203 路径由 e203_cpu 经 subsys 边界驱动 u_npu_top
+  - name: npu_top
+    role: NPU 子系统顶层（NICE 从口 → nice_disp → INT8 GEMM）
+    rtl: npu/npu_top.sv
+    note: 在 e203_subsys_top 内与 u_e203_subsys_main 同级
+  - name: nice_disp
+    role: E203 NICE 请求/响应 + ICB 主口 → GEMM
+    rtl: npu/nice_disp/e203_nice_npu_adapter.sv
+  - name: dma
+    role: A/B load and C store
+    rtl: npu/dma/dma_simple.sv
+  - name: sram
+    role: banked A/B/C storage
+    rtl: npu/sram/sram_banked.sv
+  - name: npu_gemm
+    role: INT8 GEMM C = A x B
+    rtl: npu/npu/int8_gemm.sv
+
+memory_map:
+  sram_a: 0x0000_A000
+  sram_b: 0x0000_B000
+  sram_c: 0x0000_C000
+  nice_cmd: 0x0000_2000
+  nice_irq: 0x0000_2004
+
+features:
+  - id: F-GEMM-INT8
+    text: INT8 矩阵乘法，32-bit 累加
+  - id: F-NICE-IRQ
+    text: GEMM 完成后通过 NICE 中断通知 CPU
+  - id: F-DMA-SRAM
+    text: DMA 负责 A/B 搬入与 C 搬回
+
+acceptance:
+  - software, RTL and golden model produce identical C
+  - reference path: simulation log contains mismatched=0 and PASS
+  - E203 C path: simulation log contains TEST_PASS

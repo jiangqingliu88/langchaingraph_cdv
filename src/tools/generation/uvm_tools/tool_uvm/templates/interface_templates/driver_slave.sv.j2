@@ -1,0 +1,190 @@
+{% include "base_templates/base_template.sv.j2" %}
+{#- 全输入 agent 由 slave 驱动：valid 是**从端驱动**的 input 端口，ready 是
+    master 侧给出的 output 端口（slave 采样）。同 master 的规则 —— valid 必须
+    由驱动语义置起，不能交给随机字段。 #}
+{%- set _vld = namespace(name="") %}
+{%- set _rdy = namespace(name="") %}
+{%- for p in ports %}
+{%-   if p.dir == 'input' and not _vld.name and (p.name|lower).endswith('valid') %}
+{%-     set _vld.name = p.name %}
+{%-   endif %}
+{%-   if p.dir == 'output' and not _rdy.name and (p.name|lower).endswith('ready') %}
+{%-     set _rdy.name = p.name %}
+{%-   endif %}
+{%- endfor %}
+
+// ============================================================
+// Slave Driver Callback: {{ agent.name }}_slave_driver_cb
+// ============================================================
+// UVM callback 扩展点：可在响应前后插入行为（改响应数据、注入 pslverr、
+// 调整延迟），**无需改动 driver 本体**。
+//
+// 注册（test 的 build_phase）：
+//   {{ agent.name }}_slave_driver_cb cb;
+//   cb = {{ agent.name }}_slave_driver_cb::type_id::create("cb");
+//   uvm_callbacks#({{ agent.name }}_slave_driver,
+//                  {{ agent.name }}_slave_driver_cb)::add(drv, cb);
+//
+// 注：typedef class 是前置声明 —— callback 方法签名要用到 driver 类型，
+//     而 driver 定义在下方（SystemVerilog 要求先声明后使用）。
+
+typedef class {{ agent.name }}_slave_driver;
+
+class {{ agent.name }}_slave_driver_cb extends uvm_callback;
+  `uvm_object_utils({{ agent.name }}_slave_driver_cb)
+
+  function new(string name = "{{ agent.name }}_slave_driver_cb");
+    super.new(name);
+  endfunction
+
+  // 响应前：可修改 rsp 字段（响应数据、错误位、延迟）
+  virtual task pre_drive({{ agent.name }}_slave_driver drv,
+                         {{ agent.name }}_slave_seq_item rsp);
+  endtask
+
+  // 响应后：时序记录 / 协议检查
+  virtual task post_drive({{ agent.name }}_slave_driver drv,
+                          {{ agent.name }}_slave_seq_item rsp);
+  endtask
+endclass : {{ agent.name }}_slave_driver_cb
+
+// ============================================================
+// Slave Driver: {{ agent.name }}_slave_driver
+// ============================================================
+
+class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_seq_item);
+  `uvm_component_utils({{ agent.name }}_slave_driver)
+  // 建立 driver 类型 ↔ callback 类型的回调池（uvm_do_callbacks 依赖它）
+  `uvm_register_cb({{ agent.name }}_slave_driver, {{ agent.name }}_slave_driver_cb)
+
+  virtual {{ agent.name }}_if vif;
+  {{ agent.name }}_port_config cfg;
+  // 「从端驱动出去了什么」—— 全输入 agent 的 loopback 以它为 expected
+  //（master 侧没有输出端口可驱动，取 master driver 会得到空比对的假 PASS）。
+  uvm_analysis_port #({{ agent.name }}_slave_seq_item) driven_ap;
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+    driven_ap = new("driven_ap", this);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "", "vif", vif))
+      `uvm_fatal("NOVIF", "Virtual interface not set")
+    if (!uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg))
+      `uvm_fatal("CFG", "Config not set")
+    // pragma custom build_logic begin
+    // pragma custom build_logic end
+  endfunction
+
+  task configure_phase(uvm_phase phase);
+    super.configure_phase(phase);
+    `uvm_info(get_type_name(), "configure_phase: start", UVM_MEDIUM)
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+
+  task main_phase(uvm_phase phase);
+    super.main_phase(phase);
+    `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
+    // driver 的 forever 循环不 raise objection（避免悬挂）；复位门控后才开始响应
+    wait (vif.{{ agent.reset }} == 1'b{{ 1 if agent.reset_active_low else 0 }});
+    // **复位后先给总线确定的空闲值**：loopback 里从端是唯一驱动源，不初始化
+    // 时 `_slv` 是 'z，wire 解出来是 X —— monitor 的 valid 检查会在第一笔事务
+    // 前就报 "valid 为 X"。这里把从端负责的 input 端口全部压到 0（合法空闲值）。
+    //
+    // 必须**立即**写（阻塞赋值，不等时钟沿）：时钟块在 posedge 的输出走 NBA，
+    // monitor 在同一 posedge 采到的是 preponed 的旧值 'z —— 等一个 `@(slave_cb)`
+    // 再驱动，复位释放后的第一拍仍然会看到 X（实测 t=105 两条 PROTO 误报）。
+    // 此刻从端尚未有任何时钟块驱动，直接给影子变量置初值不构成多驱动。
+{%- for port in ports %}
+{%-   if port.dir == 'input' and port.name != agent.clock and port.name != agent.reset %}
+    vif.{{ port.name }}_slv = '0;
+{%-   endif %}
+{%- endfor %}
+    @(vif.slave_cb);
+    forever begin
+      {{ agent.name }}_slave_seq_item rsp;
+      seq_item_port.get_next_item(rsp);
+      drive_response(rsp);
+      // 从端同样留痕：发了哪一笔响应。
+      `uvm_info("DRV", $sformatf("[DRV] {{ agent.name }} 发送响应: %s",
+                rsp.sprint()), UVM_MEDIUM)
+      // **全输入 agent 的 loopback 以从端驱动为准**：expected 必须取"从端
+      // 真正驱动出去的事务"，而不是 master driver（它没有输出端口可驱动，
+      // 那种 loopback 只会空比一场、恒真 PASS）。
+      driven_ap.write(rsp);
+      seq_item_port.item_done();
+    end
+  endtask
+
+  virtual task drive_response({{ agent.name }}_slave_seq_item rsp);
+    // 回调：响应前（可改 rsp）
+    `uvm_do_callbacks({{ agent.name }}_slave_driver, {{ agent.name }}_slave_driver_cb,
+                      pre_drive(this, rsp))
+    // pragma custom drive_logic begin
+{%- if agent.protocol == 'apb' %}
+    // === APB slave 响应: 等 setup+access 拍 → pready + 数据/错误 ===
+{%- set _drv = 'vif.slave_cb' %}
+    // 驱动口是时钟块的 output，而它指向的是**从端影子变量 `<sig>_slv`**
+    //（见 interface.sv.j2：对外的 `<sig>` 是 wire，要留给 DUT 直连）。
+    do @(vif.slave_cb); while (!(vif.slave_cb.psel && vif.slave_cb.penable));
+    if (cfg.response_mode == AUTO_MEMORY) begin
+      if (vif.slave_cb.pwrite)
+        cfg.memory[vif.slave_cb.paddr] = vif.slave_cb.pwdata;
+      else
+        {{ _drv }}.prdata_slv <= (cfg.memory.exists(vif.slave_cb.paddr))
+                                 ? cfg.memory[vif.slave_cb.paddr] : cfg.default_read_data;
+    end else begin
+      {{ _drv }}.prdata_slv  <= rsp.prdata;
+      {{ _drv }}.pslverr_slv <= rsp.pslverr;
+    end
+    {{ _drv }}.pready_slv <= 1'b1;
+    @(vif.slave_cb);
+    {{ _drv }}.pready_slv <= 1'b0;
+{%- else %}
+    // 响应延迟（由 slave sequence 决定）
+    repeat (rsp.delay_cycles) @(vif.slave_cb);
+{%- set has_input_port = namespace(found=false) %}
+{%- for port in ports %}
+{%-   if port.dir == 'input' %}{% set has_input_port.found = true %}{% endif %}
+{%- endfor %}
+{%- if has_input_port.found %}
+    // 默认：将请求字段回填到 slave 驱动的 input 端口
+    @(vif.slave_cb);
+{%-   for port in ports %}
+{%-     if port.dir == 'input' %}
+{%-       set port_in_txn = namespace(found=false) %}
+{%-       for var in transaction_vars %}
+{%-         if var.name == port.name %}{% set port_in_txn.found = true %}{% endif %}
+{%-       endfor %}
+{%-       if port_in_txn.found %}
+    vif.slave_cb.{{ port.name }}_slv <= rsp.{{ port.name }};   // 驱动的是从端影子变量
+{%-       endif %}
+{%-     endif %}
+{%-   endfor %}
+{%- if _vld.name %}
+    // **valid 由驱动语义置起**：全输入 agent 的 loopback 里由从端发激励；
+    // 等待 ready 期间保持 payload 稳定，握手后撤销。
+    rsp.{{ _vld.name }} = 1'b1;
+    vif.slave_cb.{{ _vld.name }}_slv <= 1'b1;
+{%- if _rdy.name %}
+    do @(vif.slave_cb); while (vif.{{ _rdy.name }} !== 1'b1);
+{%- endif %}
+    @(vif.slave_cb);
+    vif.slave_cb.{{ _vld.name }}_slv <= 1'b0;
+{%- endif %}
+{%- else %}
+    // 无 input 端口：slave 仅产生响应延迟，不做信号驱动
+    `uvm_info("SLV_DRV", $sformatf("slave response delay=%0d", rsp.delay_cycles), UVM_HIGH)
+{%- endif %}
+{%- endif %}
+    // pragma custom drive_logic end
+    // 回调：响应后
+    `uvm_do_callbacks({{ agent.name }}_slave_driver, {{ agent.name }}_slave_driver_cb,
+                      post_drive(this, rsp))
+  endtask
+endclass : {{ agent.name }}_slave_driver

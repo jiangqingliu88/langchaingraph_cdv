@@ -1,0 +1,40 @@
+# 架构复杂度预算 —— 给“成功带来的复杂度增长”装上刹车。
+#
+# 规则（由 config/architecture_guard.py 执行）：
+#   1. 单文件 > 2000 行 → 失败；> 1500 行 → 必须登记在 watched 里。
+#   2. 登记的文件**只能变小不能变大**（actual 必须 <= registered）。
+#   3. 单函数圈复杂度 > 20 → 必须登记在 complexity_baseline.json；
+#      已登记的函数复杂度**不得再增长**。
+#
+# 拆文件 / 降复杂度后请同步下调 registered / baseline，别让预算变成永久豁免。
+
+line_budget:
+  warn: 1500
+  error: 2000
+
+# 每个条目都必须写 reason 和 plan —— “为什么大、准备怎么拆”是给人看的，
+# 也是下次有人想再塞东西进来时先看到的成本。
+watched:
+  # 2026-11-04：重构 Phase 2 的拆分目标。registered 只许下调；拆完删除条目。
+  # 见 docs/design/architecture_refactor_plan.md §5 Phase 2。
+  src/executors/verify/main.py:
+    registered: 600
+    reason: "已拆出 steps/{helpers,testpoints,env_cov,constraint,gap}.py；main 只剩编排与 DUT/关联/覆盖率计划"
+    plan: "剩余 _write_coverage_dut_channel / _write_association_report / _write_coverage_plan 继续拆到 steps/coverage_dut.py"
+  src/tools/generation/uvm_tools/tool_find_spec_yaml/main.py:
+    registered: 450
+    reason: "辅助函数已拆到 helpers.py；main.py 只剩 run() 编排"
+    plan: "helpers.py（1129 行）继续按 discovery / env_yaml / interface_yaml 拆"
+  src/executors/audit/main.py:
+    registered: 600
+    reason: "helpers 已拆出 audit/helpers.py；main 只剩 execute_task 编排"
+    plan: "继续把 helpers.py（964 行）按 gates / summaries / evidence 三段拆开"
+  src/cli/commands.py:
+    registered: 800
+    reason: "会话查询已拆 cmd_session.py、项目管理已拆 cmd_project.py；剩 approval/archive/clean/resume/gui 与公共 helper"
+    plan: "继续把 approval/archive/clean/resume/gui 搬到对应 cmd_*.py；commands.py 只留 cli 对象、helper 与导入注册"
+
+  # 2026-11-04：解析 / 合并 / 种子分析已拆到 `tools/checking/coverage_tools/`
+  # （cvg_parse / coverage_merge / seed_diversity），本文件 1620 → 1096 行，
+  # 低于 warn 线，不再需要登记。
+

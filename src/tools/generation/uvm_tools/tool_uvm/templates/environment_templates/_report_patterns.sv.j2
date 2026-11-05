@@ -1,0 +1,40 @@
+// ════════════════════════════════════════════════════════════
+// 报告图案片段（被 environment.sv.j2 include，减少主模板体量）
+// ════════════════════════════════════════════════════════════
+  function void print_test_pass();
+      `uvm_info(get_name(), "", UVM_NONE)
+      `uvm_info(get_name(), "    ████████╗███████╗███████╗████████╗", UVM_NONE)
+      `uvm_info(get_name(), "    ╚══██╔══╝██╔════╝██╔════╝╚══██╔══╝", UVM_NONE)
+      `uvm_info(get_name(), "       ██║   █████╗  ███████╗   ██║   ", UVM_NONE)
+      `uvm_info(get_name(), "       ██║   ██╔══╝  ╚════██║   ██║   ", UVM_NONE)
+      `uvm_info(get_name(), "       ██║   ███████╗███████║   ██║   ", UVM_NONE)
+      `uvm_info(get_name(), "       ╚═╝   ╚══════╝╚══════╝   ╚═╝   ", UVM_NONE)
+      `uvm_info(get_name(), "                                       ", UVM_NONE)
+      `uvm_info(get_name(), "    ██████╗  █████╗ ███████╗███████╗   ", UVM_NONE)
+      `uvm_info(get_name(), "    ██╔══██╗██╔══██╗██╔════╝██╔════╝   ", UVM_NONE)
+      `uvm_info(get_name(), "    ██████╔╝███████║███████╗███████╗   ", UVM_NONE)
+      `uvm_info(get_name(), "    ██╔═══╝ ██╔══██║╚════██║╚════██║   ", UVM_NONE)
+      `uvm_info(get_name(), "    ██║     ██║  ██║███████║███████║   ", UVM_NONE)
+      `uvm_info(get_name(), "    ╚═╝     ╚═╝  ╚═╝╚══════╝╚══════╝   ", UVM_NONE)
+      `uvm_info(get_name(), "                                       ", UVM_NONE)
+      `uvm_info(get_name(), "                         ✓  TEST PASSED  ✓                         ", UVM_NONE)
+  endfunction
+
+  function void print_test_fail();
+      `uvm_info(get_name(), "", UVM_NONE)
+      `uvm_info(get_name(), "    ████████╗███████╗███████╗████████╗", UVM_NONE)
+      `uvm_info(get_name(), "    ╚══██╔══╝██╔════╝██╔════╝╚══██╔══╝", UVM_NONE)
+      `uvm_info(get_name(), "       ██║   █████╗  ███████╗   ██║   ", UVM_NONE)
+      `uvm_info(get_name(), "       ██║   ██╔══╝  ╚════██║   ██║   ", UVM_NONE)
+      `uvm_info(get_name(), "       ██║   ███████╗███████║   ██║   ", UVM_NONE)
+      `uvm_info(get_name(), "       ╚═╝   ╚══════╝╚══════╝   ╚═╝   ", UVM_NONE)
+      `uvm_info(get_name(), "                                       ", UVM_NONE)
+      `uvm_info(get_name(), "    ███████╗ █████╗ ██╗██╗     ███████╗", UVM_NONE)
+      `uvm_info(get_name(), "    ██╔════╝██╔══██╗██║██║     ██╔════╝", UVM_NONE)
+      `uvm_info(get_name(), "    █████╗  ███████║██║██║     █████╗  ", UVM_NONE)
+      `uvm_info(get_name(), "    ██╔══╝  ██╔══██║██║██║     ██╔══╝  ", UVM_NONE)
+      `uvm_info(get_name(), "    ██║     ██║  ██║██║███████╗███████╗", UVM_NONE)
+      `uvm_info(get_name(), "    ╚═╝     ╚═╝  ╚═╝╚═╝╚══════╝╚══════╝", UVM_NONE)
+      `uvm_info(get_name(), "                                       ", UVM_NONE)
+      `uvm_info(get_name(), "                         ✗  TEST FAILED  ✗                         ", UVM_NONE)
+  endfunction

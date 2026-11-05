@@ -1,0 +1,65 @@
+# ════════════════════════════════════════════════════════════════
+# IP 规格 —— 集成设计环境的 IP 声明
+#
+# 这份文件声明「一个 IP 长什么样」：接口有哪些端口与协议、有哪些寄存器、
+# 干什么用、成熟到什么程度。它是**设计时**的规格，用来对齐环境生成与参考模型；
+# 当前不被闭环消费（与 manual_nodes.yaml 同一性质，见
+# docs/design/gui_pipeline_architecture.md §8）。
+#
+# 字段刻意对齐既有的 IP 库（src/layers/l4_memory/ip_registry.py）：
+#   name ↔ ip_name    category ↔ category   function ↔ function_desc
+#   revision ↔ version
+# 同一个概念在仓库里只该有一套字段名 —— 否则规格和库对不上，谁也不知道信哪边。
+#
+# 读取入口：src/tools/integration/ide_tools/api.py::run_ip_spec
+# 界面模块：src/workbench/modules/ide/ip_spec/module.py
+# schema：  src/tools/integration/ide_tools/schema/ip_spec.schema.json
+#
+# ── 字段约定 ──
+# version              文档版本号（可省，默认 1）
+# project              所属项目/模块（可省）
+# ips[].name           IP 名，文档内唯一（必填）；建议与 RTL 顶层模块名一致
+# ips[].category       分类，如 peripheral / bus / memory（自由文本）
+# ips[].function       功能描述
+# ips[].tags           标签列表
+# ips[].status         planned 规划 / implemented 已实现 / verified 已签核 / deprecated 弃用
+# ips[].revision       规格自身版本号（改接口/寄存器时 +1）
+# ips[].interface.protocols  协议集合：apb / uart / intr / axi / clock / reset / generic
+# ips[].interface.ports[]    端口：name（必填）/ dir(input|output|inout) / width / protocol
+# ips[].registers[]          寄存器：name（必填）/ offset('0x00') / width / access(rw|ro|wo|w1c) / reset
+#
+# ⚠ 端口名要与 RTL 里的端口名**一致** —— 不一致时接口绑定会静默错位（踩过）。
+# ════════════════════════════════════════════════════════════════
+
+version: 1
+project: apb_uart
+
+ips:
+  # ── 示例 IP：把它改成你自己的 ──
+  - name: apb_uart
+    category: peripheral
+    function: APB 总线挂载的 UART 外设，提供收发 FIFO、波特率分频与中断上报。
+    tags: [uart, apb, serial]
+    status: planned
+    revision: 1
+    interface:
+      protocols: [apb, uart, intr]
+      ports:
+        - { name: pclk,     dir: input,  width: 1, protocol: clock, description: APB 时钟 }
+        - { name: preset_n, dir: input,  width: 1, protocol: reset, description: 异步复位，低有效 }
+        - { name: psel,     dir: input,  width: 1, protocol: apb,   description: 片选 }
+        - { name: penable,  dir: input,  width: 1, protocol: apb,   description: 使能 }
+        - { name: pwrite,   dir: input,  width: 1, protocol: apb,   description: 写标志 }
+        - { name: paddr,    dir: input,  width: 8, protocol: apb,   description: 地址 }
+        - { name: pwdata,   dir: input,  width: 8, protocol: apb,   description: 写数据 }
+        - { name: prdata,   dir: output, width: 8, protocol: apb,   description: 读数据 }
+        - { name: uart_tx,  dir: output, width: 1, protocol: uart,  description: 串行发送 }
+        - { name: uart_rx,  dir: input,  width: 1, protocol: uart,  description: 串行接收 }
+        - { name: irq,      dir: output, width: 1, protocol: intr,  description: 中断请求 }
+    registers:
+      - { name: CTRL,    offset: '0x00', width: 32, access: rw,  reset: '0x0', description: 使能与模式控制 }
+      - { name: BAUD,    offset: '0x04', width: 32, access: rw,  reset: '0x0', description: 波特率分频系数 }
+      - { name: TXDATA,  offset: '0x08', width: 32, access: wo,  reset: '0x0', description: 发送数据（写触发） }
+      - { name: RXDATA,  offset: '0x0C', width: 32, access: ro,  reset: '0x0', description: 接收数据 }
+      - { name: STATUS,  offset: '0x10', width: 32, access: ro,  reset: '0x0', description: FIFO 状态与错误标志 }
+      - { name: INT_CLR, offset: '0x14', width: 32, access: w1c, reset: '0x0', description: 中断清除 }

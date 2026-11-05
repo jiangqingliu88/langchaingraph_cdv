@@ -1,0 +1,20 @@
+name: check_compile
+description: 'QuestaSim vlog 编译 UVM 环境，返回编译状态和错误统计'
+input_schema:
+  type: object
+  properties:
+    env_dir:
+      type: string
+      default: ''
+output_schema:
+  type: object
+  properties:
+    status:
+      type: string
+    errors:
+      type: integer
+    time_s:
+      type: number
+    passed:
+      type: boolean
+risk_level: safe

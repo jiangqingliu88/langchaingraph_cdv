@@ -1,0 +1,85 @@
+# ════════════════════════════════════════════════════════════════
+# 场景 DSL 示例（**随工具走**，不依赖 config/）—— NPU 调度器的一轮干净活动
+#
+# 这份示例的目标是：**validate 全绿、compile 全绿、零 operand gap**。
+# 它回答"这个工具最少要写什么、产物长什么样"。
+#
+# ## 为什么只放 mask / gemm / sync 三类事务
+#
+# 另外三类在本版本的编码器里有**已知的实现缺口**（工具会响亮记账，不静默）：
+#
+#   · `tld_txn`   —— `base_addr_gmem[28:0]` 只有 29 位，而 fixture memmap 的
+#                    `dram.share` 基址是 0x1_0000_0000（4GB）→ 地址溢出；
+#   · `cfg_txn`   —— cfg 类字段要 `cfg.registry.json`（§3.12.9），尚未实现；
+#   · `noc_1to1_txn` —— 拼接地址（`base_addr[43:40] + base_addr_src[17:0]`）
+#                    尚未实现。
+#
+# 详见 `08_验证策略.md` §3.12.2 / §3.12.9。示例里不放它们，是为了让"跑通"
+# 这件事本身可核对；那三条的现状由 `seq.lst` 的 gap 清单负责说清楚。
+#
+# ## 与 case 模型维度的对应
+#
+#   D_type / D_opcode → txn_pool 的 gemm 为主（指令类别/操作码）
+#   D_dtype           → precision_mix（fp16 / bf16）
+#   D_dep             → intent.hazard_density（RAW/WAW/WAR 密度旋钮）
+#   D_barrier / D_seq → intent.fence_every_n_epochs + epoch_boundary_sync
+#
+# 事务的强配对（`gemm_out_org_pre_xn` → `gemm_drv_xn`）由 Transaction 类型保证，
+# 不靠随机撞 —— 这是本工具与"随机造指令"的分界线。
+#
+# 用法（从仓库根）:
+#   python -m src.tools.generation.isa_gen_tools.cli validate src/tools/generation/isa_gen_tools/examples/npu_sched_issue_mix.yaml
+#   python -m src.tools.generation.isa_gen_tools.cli compile  src/tools/generation/isa_gen_tools/examples/npu_sched_issue_mix.yaml \
+#       -o output_isa_gen_npu_sched --max-txns 12 --seed 20261023
+# ════════════════════════════════════════════════════════════════
+
+meta:
+  name: npu_sched_issue_mix
+  # 可复现链的根：同一个 seed + 同一份 DSL → 产物逐字节相同。
+  seed: 20261023
+  isa_rev: V0.8
+  target: npu_scheduler
+
+resources:
+  # 调度器按核/簇组织；4 个核与 case 模型 D_cluster 的 0..3 对齐。
+  cores: [0..3]
+  spad_tiles: 8
+  cimc_pages: 4
+
+# ── 事务池：随机化的最小单元是**事务**，不是指令 ──
+txn_pool:
+  include: [mask_txn, gemm_txn, sync_txn]
+  # 权重表达"这一轮以什么为主"：GEMM 为主，sync 保证 epoch 边界有屏障。
+  weights: {gemm_txn: 4, sync_txn: 1}
+
+# ── 形状与精度：离散枚举，保证每个取值都落在合法 tile 边界 ──
+shape_space:
+  dim0: [64, 128]
+  dim1: [64, 128]
+precision_mix: {fp16: 0.6, bf16: 0.4}
+
+# ── 意图旋钮：只调权重，改不了"什么是一条合法指令" ──
+intent:
+  # 依赖冲突（RAW/WAW/WAR）的密度 —— 对应 case 模型 D_dep 的探索强度。
+  hazard_density: 0.45
+  tile_contention: 0.25
+  mcast_mix: {unicast: 1.0}
+  # 每 2 个 epoch 放一次屏障 —— 对应 D_barrier。
+  fence_every_n_epochs: 2
+  # 负例不走随机空间；写非零只会被记成 note。
+  illegal_ratio: 0.0
+
+orchestration:
+  epochs: 4
+  epoch_boundary_sync: always     # random / always / never
+
+harness:
+  inst_agent: {gap_mode: random, gap_range: [0, 8], ready_throttle: 0.15}
+
+# ── 必须驻留的对象（角色与 txn.registry.json 的 operands 对齐）──
+alloc:
+  - {name: act, pool: lmem.core.spad, shape: [64, 64], dtype: fp16, role: in}
+  - {name: wgt, pool: lmem.core.cimc, shape: [64, 64], dtype: fp16, role: wgt}
+  - {name: out, pool: lmem.core.spad, shape: [64, 64], dtype: fp16, role: out}
+  # gemm_out_org_pre_xn 的 rs2 是原累加器 —— 角色名 `origin`。
+  - {name: org, pool: lmem.core.spad, shape: [64, 64], dtype: fp16, role: origin}

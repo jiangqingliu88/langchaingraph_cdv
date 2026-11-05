@@ -1,0 +1,519 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// Env Coverage: {{ environment.env_name }}_coverage
+// 环境级功能覆盖率模型（跨 agent 的语义级 covergroup，自动生成）
+//
+// ── 为什么**每个 agent 一个 covergroup**，而不是揉成一个 ──
+// 揉成一个 `cg_env` 时，每个 coverpoint 都写成 `<某 agent>_item.<字段>`，
+// 而 `write_<agent>` 里无条件 `cg_env.sample()` —— 采样会把**所有** coverpoint
+// 都求值一遍，包括**另一个 agent 尚未产生过事务**的那个句柄。
+// 那个句柄此时是 null，求值 `<null>.<字段>` 就是 Questa 的
+//   ** Fatal: (SIGSEGV) Bad handle or reference.
+// 实测：只跑 master 侧、slave 还没抓到任何事务时，master 的第一笔就崩。
+// 拆开之后，`cg_<agent>` 只引用本 agent 的 item，天然不会互相牵连。
+//
+// 另外 `*_item` 一律在 new() 里建好**非空占位对象**：万一某个 covergroup 在
+// item 还是 null 的时候被 sample（比如跨 agent 的 cross），也不会解引用空句柄。
+
+// 为每个 agent 声明独立的 analysis_imp（不同 seq_item 类型）
+{%- for agent in agents %}
+`uvm_analysis_imp_decl(_{{ agent.name }})
+{%- endfor %}
+
+class {{ environment.env_name }}_coverage extends uvm_component;
+  `uvm_component_utils({{ environment.env_name }}_coverage)
+
+  // 分析端口：接收各 agent 的 monitor 采样
+{%- for agent in agents %}
+  uvm_analysis_imp_{{ agent.name }} #({{ agent.seq_item_type }}, {{ environment.env_name }}_coverage) {{ agent.name }}_export;
+{%- endfor %}
+
+  // 采样项（保存最新采样的 transaction，供 covergroup 采样）
+{%- for agent in agents %}
+  {{ agent.seq_item_type }} {{ agent.name }}_item;
+{%- endfor %}
+
+{%- for agent in agents %}
+{%-   set rv = namespace(names=[], bits=[]) %}
+{%-   for var in agent.transaction_vars %}
+{%-     if var.isrand == 'True' %}
+{%-       set rv.names = rv.names + [var.name] %}
+{#-      位宽从声明的类型里读：`bit [7:0]` → 8；`bit` → 1 #}
+{%-       set msb = (var.type.split('[')[1].split(']')[0].split(':')[0]|int) if '[' in var.type else 0 %}
+{%-       set rv.bits = rv.bits + [msb + 1] %}
+{%-     endif %}
+{%-   endfor %}
+
+  // ── {{ agent.name }} 的功能覆盖率 ──
+  //
+  // **多位字段只分三个值类（0 / 1 / 其余），这不是省事，是必须**：
+  // 不给 coverpoint 写 bins，仿真器会把整个取值空间自动分箱 —— 8 位就是 256 个
+  // bin，下面那句 `cross_all` 再把两个这样的 coverpoint 一乘就是几万个 bin。
+  // 那种模型随机激励永远填不满：实测 4360 个 bin 只命中 64 个（1.46%），
+  // 于是"功能覆盖率"这个数字常年趴在地上，既收敛不了、也看不出该往哪使劲。
+  // 分箱后同一个 cross 是 3×3 —— 是定向激励能收敛的粒度。
+  // 真正的领域粒度在策略包的 `coverage_bins`（语义化 cross）里，不靠自动分箱。
+  covergroup cg_{{ agent.name }};
+{%-   for name in rv.names %}
+{%-     set w = rv.bits[loop.index0] %}
+{#-       **case 模型声明了覆盖点就用模型的**：那些边界值是"这一维该扫哪些点"的
+        建模结论（0 / 3 / 4 / 31 / 32 / 255 …），比"0/1/其余"精确得多 ——
+        而覆盖率的意义就在于"扫描点有没有被打到"：分母不对，结论就是错的。
+        模型没覆盖到的字段才退回值类分箱。 #}
+{#-      `| default({})` 不能省：渲染走 StrictUndefined，裸引用一个没给的键
+        会在 `if coverage_field_bins` 上直接抛（真路径总会给，但测试夹具与
+        别的调用方不一定 —— 少一个键就整份渲染失败，代价太大）。 #}
+{%-     set model_bins = (coverage_field_bins | default({})).get(name) %}
+{%-     if model_bins %}
+    cp_{{ name }}: coverpoint {{ agent.name }}_item.{{ name }} {   // 取自 case 模型
+{%-       for b in model_bins %}
+      bins {{ b.name }} = { {{- b.value -}} };
+{%-       endfor %}
+    }
+{%-     elif w >= 2 %}
+    cp_{{ name }}: coverpoint {{ agent.name }}_item.{{ name }} {   // 值类：0 / 1 / 其余
+      bins v_zero = {0};
+      bins v_one  = {1};
+      bins v_rest = {[2:{{ 2 ** w - 1 }}]};
+    }
+{%-     else %}
+    cp_{{ name }}: coverpoint {{ agent.name }}_item.{{ name }};
+{%-     endif %}
+{%-   endfor %}
+{%-   if rv.names|length >= 2 %}
+    // cross: {{ agent.name }} 的关键信号组合（语义级）
+    cross_all: cross cp_{{ rv.names[0] }}, cp_{{ rv.names[1] }};
+{%-   endif %}
+{%-   if loop.first %}
+{%-     for cross in coverage_crosses %}
+    // 语义 cross（env YAML coverage_crosses: [{{ cross|join(', ') }}]）
+    cr_yaml_{{ loop.index0 }}: cross cp_{{ cross[0] }}, cp_{{ cross[1] }};
+{%-     endfor %}
+{%-   endif %}
+{%-   for bin in coverage_bins %}
+{%-     set ns = namespace(sigs=[], foreign=0) %}
+{%-     for sig in bin.signals %}
+{%-       for a2 in agents %}
+{%-         for var in a2.transaction_vars %}
+{%-           if var.isrand == 'True' and var.name == sig %}
+{%-             if a2.name == agent.name %}
+{%-               if ('cp_' ~ sig) not in ns.sigs %}{% set ns.sigs = ns.sigs + ['cp_' ~ sig] %}{% endif %}
+{%-             else %}
+{%-               set ns.foreign = ns.foreign + 1 %}
+{%-             endif %}
+{%-           endif %}
+{%-         endfor %}
+{%-       endfor %}
+{%-     endfor %}
+{%-     if ns.foreign == 0 and ns.sigs|length >= 2 %}
+    // 语义化 cross: {{ bin.name }}（策略包 coverage_bins）
+    cross_{{ bin.name }}: cross {{ ns.sigs|join(', ') }};
+{%-     endif %}
+{%-   endfor %}
+  endgroup : cg_{{ agent.name }}
+{%- endfor %}
+
+{%- set mixed = namespace(bins=[]) %}
+{%- for bin in coverage_bins %}
+{%-   set ns = namespace(ag=[], foreign=0) %}
+{%-   for sig in bin.signals %}
+{%-     for a2 in agents %}
+{%-       for var in a2.transaction_vars %}
+{%-         if var.isrand == 'True' and var.name == sig %}
+{%-           if a2.name not in ns.ag %}{% set ns.ag = ns.ag + [a2.name] %}{% endif %}
+{%-         endif %}
+{%-       endfor %}
+{%-     endfor %}
+{%-   endfor %}
+{%-   if ns.ag|length > 1 %}{% set mixed.bins = mixed.bins + [bin] %}{% endif %}
+{%- endfor %}
+{%- if mixed.bins|length > 0 %}
+
+  // ── 跨 agent 的语义化 cross ──
+  // 一个 cross 只能引用**同一 covergroup 内**声明的 coverpoint，跨 agent 的组合
+  // 没法塞进上面任一 `cg_<agent>`，只能单开一组，把各 agent 的 coverpoint
+  // **按 `<agent>_<字段>` 再声明一遍**。这一组由每个 write_* 触发 sample，
+  // 句柄靠 new() 里的非空占位对象兜底。
+  covergroup cg_mixed;
+{%- for bin in mixed.bins %}
+{%-   set ns = namespace(refs=[]) %}
+{%-   for sig in bin.signals %}
+{%-     for a2 in agents %}
+{%-       for var in a2.transaction_vars %}
+{%-         if var.isrand == 'True' and var.name == sig %}
+{%-           if ('cp_' ~ a2.name ~ '_' ~ sig) not in ns.refs %}
+{%-             set ns.refs = ns.refs + ['cp_' ~ a2.name ~ '_' ~ sig] %}
+    cp_{{ a2.name }}_{{ sig }}: coverpoint {{ a2.name }}_item.{{ sig }};
+{%-           endif %}
+{%-         endif %}
+{%-       endfor %}
+{%-     endfor %}
+{%-   endfor %}
+    cross_{{ bin.name }}: cross {{ ns.refs|join(', ') }};
+{%- endfor %}
+  endgroup : cg_mixed
+{%- endif %}
+
+{%- set _dif = coverage_dut_if | default({}) %}
+{%- if _dif %}
+  // ── DUT 信号的功能覆盖率（**第二条采样通道**）──
+  //
+  // 上面那些 `cg_<agent>` 采的是 **monitor 的事务对象** —— 只看得到**激励侧**。
+  // 队列水位、依赖类型、发射决策这些**内部状态**与输出端口，事务里根本没有，
+  // 也永远不会出现在 monitor 的采样里。
+  //
+  // 所以另有一条：`bind` 进 DUT 的**接口**（`{{ _dif.file }}`）把信号引出来，
+  // 本组件持 `virtual {{ _dif.type }}` 句柄、**时钟沿**采样。`bind` 的端口连接
+  // 表达式在**目标模块作用域**里求值，所以输入端口 / 输出端口 / 内部寄存器
+  // 一视同仁 —— 内部名直接连得过来（vlog + vopt 实测通过）。
+  //
+  // ⚠️ **句柄是 tb_top 挂进来的**（`config_db` 的 "cov_vif"，路径
+  // `{{ _dif.dut_module }}` 的实例下 `{{ _dif.instance }}`）。挂不上就
+  // `uvm_fatal` —— 那是个**接线错误**，不是"这次没覆盖率"：静默跑完会给出一个
+  // 恒 0% 的数字，比停下来更难查。
+  virtual {{ _dif.type }} cov_vif;
+
+  covergroup cg_dut;
+{%- for cp in _dif.coverpoints %}
+{%-   set _bins = (coverage_dut_bins | default({})).get(cp.signal, []) %}
+{%-   if _bins %}
+    {{ cp.sv_name }}: coverpoint cov_vif.{{ cp.signal }} {   // {{ cp.field }}{% if cp.expr %} ← {{ cp.expr }}{% endif %}
+{%-     if cp.weight %}
+      option.weight = {{ cp.weight }};
+{%-     endif %}
+{%-     if cp.at_least %}
+      option.at_least = {{ cp.at_least }};
+{%-     endif %}
+
+{%-     for b in _bins %}
+{%-       if b.transition %}
+      bins {{ b.name }} = {{ b.value }};
+{%-       else %}
+      {{ 'illegal_bins' if b.illegal else ('ignore_bins' if b.ignore else 'bins') }} {{ b.name }} = { {{- b.value -}} };
+{%-       endif %}
+{%-     endfor %}
+    }
+{%-   else %}
+    {#- 模型没给 bins 就退回"值类自动分箱"——**不写空的花括号**：
+        `coverpoint x { }` 一个仓都没有，那不叫覆盖率模型。 #}
+    {{ cp.sv_name }}: coverpoint cov_vif.{{ cp.signal }};
+{%-   endif %}
+{%- endfor %}
+  endgroup : cg_dut
+{%- endif %}
+
+{%- set _tpb = coverage_tp_bitmap | default({}) %}
+{%- set _tpb_entries = _tpb['entries'] | default([]) %}
+{%- set _tpb_stim = [] %}
+{%- set _tpb_dut = [] %}
+{%- set _tpb_timing = [] %}
+{%- for e in _tpb_entries %}
+{%-   if e.trackable and e.source == 'stimulus' %}{% set _ = _tpb_stim.append(e) %}{% endif %}
+{%-   if e.trackable and e.source == 'dut' %}{% set _ = _tpb_dut.append(e) %}{% endif %}
+{%-   if e.timing is defined and e.timing.checkable %}{% set _ = _tpb_timing.append(e) %}{% endif %}
+{%- endfor %}
+{#-   report_phase 的收口行要一个"违规总数"表达式：把各计数变量加起来 #}
+{%- set _tpb_viol_terms = [] %}
+{%- for e in _tpb_timing %}{% set _ = _tpb_viol_terms.append('tp_tm_%d_viol' | format(e.bit)) %}{% endfor %}
+{%- set _tpb_viol_sum = _tpb_viol_terms | join(' + ') if _tpb_viol_terms else '0' %}
+{%- if _tpb_entries %}
+
+  // ── 测试点位图（`coverage/tp_bitmap.json`）──
+  //
+  // 第 i 位 = 第 i 条 TP（位序 = testpoints.yaml 的序号，**一旦发布不重排**）。
+  // 仓首次命中时置位（之后保持为 1）并打一行 `[TP_HIT]` —— 打开波形就能看到
+  // "到这一刻为止点亮了哪几个测试点"，日志里也能 grep 到归属。
+  bit [{{ _tpb.width - 1 }}:0] tp_hit_logged = '0;
+{%-   for e in _tpb_timing %}
+  // timing: {{ e.tp_id }}（{{ e.timing.start }} → {{ e.timing.end }}，期望
+  //         [{{ e.timing.min }}, {{ e.timing.max }}] 拍 ±{{ e.timing.tolerance }}）
+  int unsigned tp_tm_{{ e.bit }}_cyc = 0;
+  bit          tp_tm_{{ e.bit }}_active = 1'b0;
+  int unsigned tp_tm_{{ e.bit }}_viol = 0;
+{%-   endfor %}
+{%- endif %}
+
+{%- if _tpb_dut or _tpb_timing %}
+{%- macro _tp_probe_dut() %}
+{%-   for e in _tpb_dut %}
+      if (cov_vif.{{ e.signal }} inside { {{- e.literal -}} }) begin
+        cov_vif.tp_seen[{{ e.bit }}] = 1'b1;
+        if (!tp_hit_logged[{{ e.bit }}]) begin
+          tp_hit_logged[{{ e.bit }}] = 1'b1;
+          `uvm_info("TP_HIT", $sformatf("tp={{ e.tp_id }} cp={{ e.coverpoint }} bin={{ e.bin }} t=%0t", $time), UVM_NONE)
+        end
+      end
+{%-   endfor %}
+{%-   for e in _tpb_timing %}
+      if (cov_vif.{{ e.timing.start }}) begin
+        tp_tm_{{ e.bit }}_active = 1'b1;
+        tp_tm_{{ e.bit }}_cyc = 0;
+      end else if (tp_tm_{{ e.bit }}_active) begin
+        tp_tm_{{ e.bit }}_cyc++;
+        if (cov_vif.{{ e.timing.end }}) begin
+          tp_tm_{{ e.bit }}_active = 1'b0;
+          if (tp_tm_{{ e.bit }}_cyc < {{ e.timing.min - e.timing.tolerance if e.timing.min > e.timing.tolerance else 0 }} || tp_tm_{{ e.bit }}_cyc > {{ e.timing.max + e.timing.tolerance }}) begin
+            tp_tm_{{ e.bit }}_viol++;
+{%-     if e.kind == 'sequence' %}
+            // 序列型时序超窗只降级为 TIMING_WARN，不否决（见设计稿 §6.2）
+            `uvm_warning("TP_TIMING", $sformatf("tp={{ e.tp_id }} cycles=%0d 期望 [{{ e.timing.min }},{{ e.timing.max }}]（±{{ e.timing.tolerance }}）", tp_tm_{{ e.bit }}_cyc))
+{%-     else %}
+            `uvm_error("TP_TIMING", $sformatf("tp={{ e.tp_id }} cycles=%0d 期望 [{{ e.timing.min }},{{ e.timing.max }}]（±{{ e.timing.tolerance }}）", tp_tm_{{ e.bit }}_cyc))
+{%-     endif %}
+          end
+        end
+      end
+{%-   endfor %}
+{%- endmacro %}
+{%- endif %}
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+{%- for agent in agents %}
+    {{ agent.name }}_export = new("{{ agent.name }}_export", this);
+    // 非空占位：防止 covergroup 在首个事务到来前解引用空句柄（SIGSEGV）
+    {{ agent.name }}_item = {{ agent.seq_item_type }}::type_id::create("{{ agent.name }}_item");
+{%- endfor %}
+{%- for agent in agents %}
+    cg_{{ agent.name }} = new();
+{%- endfor %}
+{%- if mixed.bins|length > 0 %}
+    cg_mixed = new();
+{%- endif %}
+{%- if _dif %}
+    cg_dut = new();
+{%- endif %}
+  endfunction
+
+{%- set _dc = coverage_dut_checker | default({}) %}
+{%- if _dc and _dc.rules %}
+
+  // ── DUT 检查（**真 pass 的"比对"那一半**）──
+  //
+  // 判据：真 pass = **SCB 报 `mismatched=0`** + 断言不报错。断言那半由 SVA 承担
+  //（bind 进 DUT）；这一半在 env 里逐拍求值**同一组规则**，把结论收口成一行
+  // `matched=…  mismatched=…` 打出来。
+  //
+  // 规则来自 case 模型（设计者写的"这条必须恒成立"），**一份规则两个执行点** ——
+  // 设计侧（SVA）与验证侧（这里）各写一份必然漂，而对不上时没人看得出来。
+  //
+  // 采样的两个条件与 `cg_dut` 一致：**时钟沿 + 不在复位周期**（复位期间的值无意义，
+  // 拿它判会造出一堆假违规）。
+  int unsigned chk_total = 0;
+  int unsigned chk_matched = 0;
+  int unsigned chk_mismatched = 0;
+  // **求值为 X 的次数** —— 单列一个计数，因为"没验到"与"验了不过"是两件事。
+  int unsigned chk_unknown = 0;
+  string chk_first_fail = "";
+{%- for r in _dc.rules %}
+  int unsigned chk_bad_{{ r.name }} = 0;   // 这条规则违规次数
+  // 逐条 SB 收口（`[SCB <id>]`）要按规则归并 —— 聚合行分不出是哪条 SB 的账，
+  // 所以每条规则各记**求值次数**与**求值为 X 的次数**。
+  int unsigned chk_n_{{ r.name }} = 0;
+  int unsigned chk_x_{{ r.name }} = 0;
+{%- endfor %}
+
+  function void chk_dut_one();
+{%- for r in _dc.rules %}
+    begin
+      // **必须 `logic`（四态），不能用 `bit`** —— `bit` 是两态，X 赋进去会被
+      // **静默转成 0**，于是下面那句 `$isunknown` 恒为假："求值为 X" 被读成
+      // "值为 0"，再往下就成了"**违规**"。实测：误报 32 条 mismatched / 0 条
+      // unverified，看着像设计违例，其实是 X 被压成了 0。
+      logic _ok_{{ loop.index }} = 1'b0;
+      _ok_{{ loop.index }} = ({{ r.expr }});
+      // **X 不算命中。**
+      //
+      // 原来直接写 `if (!(expr))`：`expr` 为 X 时 `!(X)` 也是 X，`if (X)` 取
+      // **false** → 落到 `else` → `chk_matched++`。于是"**不知道**"被记成"**通过**"。
+      //
+      // 这不是理论问题：DUT 的输入在复位竞态/悬空时会把它推成 X，而那种情况下
+      // 检查的意义恰恰在于说"这里**没验到**"。实测踩过整条端到端：DUT 输入晚一拍
+      // 被驱动，`queue_level` 锁成 X，而检查组件报了 `total=90 matched=90
+      // mismatched=0` —— 看着全绿，其实一个 bit 都没验。
+      if ($isunknown(_ok_{{ loop.index }})) begin
+        chk_unknown++;
+        chk_x_{{ r.name }}++;
+        if (chk_first_fail == "")
+          chk_first_fail = "{{ r.name }}: 求值为 X（信号未知）—— 不是命中，是没验到";
+      end else if (!_ok_{{ loop.index }}) begin
+        chk_mismatched++;
+        chk_bad_{{ r.name }}++;
+        if (chk_first_fail == "")
+          chk_first_fail = "{{ r.name }}: {{ r.message }}";
+      end else begin
+        chk_matched++;
+      end
+    end
+    chk_total++;
+    chk_n_{{ r.name }}++;
+{%- endfor %}
+  endfunction
+{%- endif %}
+
+
+{%- if _dif %}
+  // ── DUT 通道：取句柄 + 时钟沿采样 ──
+  //
+  // `get` 用的是**相对的** `this`/""（而不是 `null`/"*"）：tb_top 那边 `set(null,
+  // "*", ...)` 广播，谁先建谁先取，两边不必知道对方的层次路径。
+  //
+  // 采样的两个条件，缺一不可：
+  //   · **时钟沿** —— DUT 的信号是时序的，组合期间采到的是中间值；
+  //   · **不在复位周期** —— 复位期间的水位/决策是无意义值，采进去只会把命中率
+  //     弄脏（探针那边为同一个理由加了同样的屏蔽）。
+  // 取句柄失败 = **接线错误**，不是"这次没覆盖率"：静默跑完只会给出一个恒 0%
+  // 的数字，比停下来更难查（本仓库反复吃过"0% 与没有无从区分"的亏）。
+  //
+  // 消息先拼进一个 `string` 再交给宏，两个理由：
+  //   · **跨行的字符串字面量在 SV 里不合法**（必须在同一行），拼接才写得下；
+  //   · 宏实参里的逗号有预处理边界，塞进变量最省心。
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual {{ _dif.type }})::get(this, "", "cov_vif", cov_vif)) begin
+      string hint = {
+        "DUT 覆盖率接口没挂进来（config_db 的 'cov_vif' 取不到）—— ",
+        "接口是 verify 落在 {{ _dif.file }}，",
+        "由 tb_top 沿层次路径 <dut 实例>.{{ _dif.instance }} 挂上。",
+        "**这是接线错误，不是'这次没覆盖率'**：",
+        "静默跑完只会给一个恒 0% 的数字，比停下来更难查"};
+      `uvm_fatal("ENV_COV", hint)
+    end
+  endfunction
+
+  task run_phase(uvm_phase phase);   // 只采样，不参与 objection（仿真由 sim_end 收口）
+    forever begin
+      @(posedge cov_vif.{{ _dif.clock }});
+{%- if _dif.reset %}
+      if (cov_vif.{{ _dif.reset }}) begin              // 复位周期不采、也不判
+        cg_dut.sample();
+{%- if _dc and _dc.rules %}
+        chk_dut_one();
+{%- endif %}
+{%- if _tpb_dut or _tpb_timing %}
+{{ _tp_probe_dut() }}
+{%- endif %}
+      end
+{%- else %}
+      cg_dut.sample();
+{%- if _dc and _dc.rules %}
+      chk_dut_one();
+{%- endif %}
+{%- if _tpb_dut or _tpb_timing %}
+{{ _tp_probe_dut() }}
+{%- endif %}
+{%- endif %}
+    end
+  endtask
+{%- endif %}
+
+  // write 函数：每个 agent 的 monitor 采样触发**本 agent** 的 covergroup 采样
+{%- for agent in agents %}
+  function void write_{{ agent.name }}({{ agent.seq_item_type }} t);
+    {{ agent.name }}_item = t;
+    cg_{{ agent.name }}.sample();
+{%-   if mixed.bins|length > 0 %}
+    cg_mixed.sample();
+{%-   endif %}
+{%-   for e in _tpb_stim %}
+{%-     if e.agent == agent.name %}
+    // TP {{ e.tp_id }}：{{ e.coverpoint }}.{{ e.bin }}（激励通道，首笔命中记日志）
+    if (t.{{ e.signal }} inside { {{- e.literal -}} }) begin
+{%-       if _dif %}
+      cov_vif.tp_seen[{{ e.bit }}] = 1'b1;
+{%-       endif %}
+      if (!tp_hit_logged[{{ e.bit }}]) begin
+        tp_hit_logged[{{ e.bit }}] = 1'b1;
+        `uvm_info("TP_HIT", $sformatf("tp={{ e.tp_id }} cp={{ e.coverpoint }} bin={{ e.bin }} t=%0t", $time), UVM_NONE)
+      end
+    end
+{%-     endif %}
+{%-   endfor %}
+  endfunction
+{%- endfor %}
+
+  // 报告功能覆盖率
+  function void report_phase(uvm_phase phase);
+    super.report_phase(phase);
+{%- for agent in agents %}
+    `uvm_info("ENV_COV", $sformatf("功能覆盖率[{{ agent.name }}]: %.1f%%", cg_{{ agent.name }}.get_inst_coverage()), UVM_NONE)
+{%- endfor %}
+{%- if mixed.bins|length > 0 %}
+    `uvm_info("ENV_COV", $sformatf("功能覆盖率[mixed]: %.1f%%", cg_mixed.get_inst_coverage()), UVM_NONE)
+{%- endif %}
+{%- if _dif %}
+    // DUT 通道也在这里报 —— 两条通道的数在**同一份报告**里，才不会各看各的
+    `uvm_info("ENV_COV", $sformatf("功能覆盖率[dut]: %.1f%%", cg_dut.get_inst_coverage()), UVM_NONE)
+{%- endif %}
+{%- if _tpb_timing %}
+    // ── 时序判据收口（`case_cov` 读这一行判 `timing_ok`）──
+    `uvm_info("TP_TIMING", $sformatf("checked={{ _tpb_timing|length }} violations=%0d", {{ _tpb_viol_sum }}), UVM_NONE)
+{%- endif %}
+{%- if _dc and _dc.rules %}
+    // ── 比对结论（**判据读的就是这一行**）──
+    // 回归的判据要求出现 `mismatched=0`；没有这一行就没有比对结论，用例会判
+    // `NO_CHECKER_EVIDENCE` 而不是"通过"（"没报错"不等于"验过了"）。
+    if (chk_mismatched == 0 && chk_unknown == 0)
+      `uvm_info("DUT_CHK", $sformatf(
+        "[SCB_DUT] total=%0d matched=%0d mismatched=0", chk_total, chk_matched), UVM_NONE)
+    else if (chk_mismatched == 0) begin
+      // **有 X、没违规** —— 这一支**故意不打 `mismatched=0`**。
+      //
+      // 回归的判据就是 `grep -qE "mismatched=0"`（子串匹配）——只要这行里出现那个
+      // 串，"**有拍求值为 X**"就会被判成"**验过了**"。所以这里换一个词
+      //（`unverified`），让"没验到"和"验过且没过"都落在**同一个不通过**里。
+      //
+      // 同时报 `uvm_error`：判据的另一半是"日志里不许有 UVM_ERROR"。两条都亮，
+      // 免得只看一处的读法把它读漏。
+      `uvm_error("DUT_CHK", $sformatf(
+        "有 %0d 拍求值为 X —— 那些拍**根本没验**（不是通过）：%s",
+        chk_unknown, chk_first_fail))
+      `uvm_info("DUT_CHK", $sformatf(
+        "[SCB_DUT] total=%0d matched=%0d unverified=%0d（求值为 X 的拍）",
+        chk_total, chk_matched, chk_unknown), UVM_NONE)
+    end else begin
+{%- for r in _dc.rules %}
+      if (chk_bad_{{ r.name }})
+        `uvm_error("DUT_CHK", $sformatf("规则 %s 违规 %0d 次：{{ r.message }}",
+                   "{{ r.name }}", chk_bad_{{ r.name }}))
+{%- endfor %}
+      `uvm_info("DUT_CHK", $sformatf(
+        "[SCB_DUT] total=%0d matched=%0d mismatched=%0d unverified=%0d  首条：%s",
+        chk_total, chk_matched, chk_mismatched, chk_unknown, chk_first_fail), UVM_NONE)
+    end
+{%- endif %}
+{%- if _dc and _dc.scoreboards %}
+    // ── 逐条 SB 收口 ──
+    //
+    // 每行只数**这条 SB 自己那几条规则**（case 模型 `scoreboards[].rules`）：
+    // 聚合行 `[SCB_DUT]` 说明"整轮比过了"，但签核问的是"**哪一条 SB** 比过"。
+    // 规则归属来自声明，不靠猜 —— 没声明 `rules` 的 SB 就只有聚合证据。
+    //
+    // 与聚合行同一口径：有 X 的那支**不写 `mismatched=0`**（否则"没验到"
+    // 会被 `grep` 当成"验过了"；回归判据已改为锚定 `[SCB_DUT]`/`Scoreboard:`）。
+{%- for sb in _dc.scoreboards %}
+{%-   set si = loop.index %}
+    begin
+      int unsigned sb_n_{{ si }} = 0;
+      int unsigned sb_bad_{{ si }} = 0;
+      int unsigned sb_x_{{ si }} = 0;
+{%-   for r in sb.rules %}
+      sb_n_{{ si }} += chk_n_{{ r }};
+      sb_bad_{{ si }} += chk_bad_{{ r }};
+      sb_x_{{ si }} += chk_x_{{ r }};
+{%-   endfor %}
+      if (sb_x_{{ si }} == 0)
+        `uvm_info("DUT_CHK", $sformatf(
+          "[SCB {{ sb.id }}] total=%0d matched=%0d mismatched=%0d",
+          sb_n_{{ si }}, (sb_n_{{ si }} - sb_bad_{{ si }}), sb_bad_{{ si }}), UVM_NONE)
+      else
+        `uvm_info("DUT_CHK", $sformatf(
+          "[SCB {{ sb.id }}] total=%0d matched=%0d unverified=%0d（求值为 X 的拍）",
+          sb_n_{{ si }}, (sb_n_{{ si }} - sb_bad_{{ si }} - sb_x_{{ si }}),
+          sb_x_{{ si }}), UVM_NONE)
+    end
+{%- endfor %}
+{%- endif %}
+  endfunction
+
+endclass : {{ environment.env_name }}_coverage

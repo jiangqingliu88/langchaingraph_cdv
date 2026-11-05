@@ -1,0 +1,645 @@
+# ════════════════════════════════════════════════════════════════
+# 验证工作台 —— 界面清单
+#
+# 这份文件就是「界面长什么样」的**唯一真相**：有哪些模块、属于哪条业务线、
+# 停靠在哪儿、绑定哪个工具。改这里就能改界面，不用动 python。
+#
+# 启动：  python -m src.workbench                 # 读本文件
+#         python -m src.workbench 别的清单.yaml    # 用别的清单
+# 契约：  src/workbench/spec.py（字段说明在那里，不在这份文件的注释里）
+#
+# 键名写错会**启动就报错**（不是静默忽略）—— 报错消息会点名是哪个字段，
+# 照着改即可。
+# ════════════════════════════════════════════════════════════════
+
+version: 1
+
+window:
+  title: "SignOffAI · 验证工作台"
+  size: [1520, 940]
+  min_size: [1080, 680]
+  # 留空 = 用平台默认主题。可选值见 src/workbench/ui/theme.py 的 PALETTES
+  theme: ""
+  # 关窗口时保存位置与 Dock 布局，"视图 → 重置布局" 可以清掉
+  restore_layout: true
+
+# ── 业务线 ──
+# 三层：**业务域 → 业务线 → 模块**（导航树按这个摊开）。
+#
+# 业务域（`section`）= "这一步在哪一段"，是标准的三段式：
+#   · 设计时    —— 声明式编辑（中间 YAML）。**跑之前**先把输入写对。
+#   · 运行时    —— 七个领域 agent 干活，按流水线顺序
+#                  （design → model → verify → ops → coverage → debug → audit）
+#   · 贯穿层    —— 横切全部 agent 的编排 / 运行 / 证据 / 签核 / 跟踪 / 趋势 / 决策
+#
+# （刻意**不**叫"流程与证据"—— 那会和 flow 那条业务线同名套同名，树上看着像坏了。）
+#
+# 一条线 = 代码里的 modules/<id>/ 目录。域的顺序由**域内最小 order** 决定，
+# 所以 `ide` 的 order 比 `design` 小（它是流程的上游）。
+# 每条生成一个同名菜单；模块在菜单里的分组就按 group 走。
+# order 同时决定中央标签页的先后（业务线 order 优先于模块 order）。
+# 详见 docs/design/agent_gui_business_architecture.md。
+#
+# **贯穿层排在运行时前面**（order 8，夹在设计时 5 与运行时 10 之间）：
+# 那一条线装的是"一进界面就要用的"东西 —— 任务总览、验证流程、运行历史、
+# 运行对比、签核判定。它是**入口**，不是附录；沉到列表最底下等于每次都要滚下去。
+groups:
+  # 客户视角：项目入口 → 三条工程服务入口（面向任务，而不是技术领域）。
+  - {id: project,  title: 项目,         order: 0,  menu: true, section: 项目}
+  - {id: soc,      title: SoC 团队,     order: 1,  menu: true, section: 客户工程}
+  - {id: ip,       title: IP 团队,      order: 2,  menu: true, section: 客户工程}
+  - {id: service,  title: 工程服务,     order: 3,  menu: true, section: 客户工程}
+  # 专业工具：设计时 / 运行时代 / 工程工作区 / 平台配置。
+  - {id: ide,      title: 集成设计环境, order: 5,  menu: true, section: 设计时}
+  - {id: flow,     title: 流程与证据,   order: 8,  menu: true, section: 工程工作区}
+  - {id: design,   title: 设计构建,     order: 10, menu: true, section: 运行时}
+  - {id: model,    title: 参考模型,     order: 20, menu: true, section: 运行时}
+  - {id: verify,   title: 验证构建,     order: 30, menu: true, section: 运行时}
+  - {id: ops,      title: 编译与回归,   order: 40, menu: true, section: 工程工作区}
+  - {id: coverage, title: 覆盖率,       order: 50, menu: true, section: 工程工作区}
+  - {id: debug,    title: 调试技术,     order: 60, menu: true, section: 工程工作区}
+  - {id: audit,    title: 签核审查,     order: 70, menu: true, section: 运行时}
+  - {id: platform, title: 平台配置,     order: 90, menu: true, section: 平台配置}
+
+# ── 模块 ──
+# area: center = 中央工作区标签页；left/right/bottom = 停靠区。
+#       同一停靠区的模块会被 tabify 成一组（像 Verdi 底部那一排页签）。
+# tool: 主绑定，名字取自 src/workbench/bridge/catalog.py 的 BINDINGS。
+modules:
+
+  # ══ 项目入口（客户视角）══════════════════════════════════════
+  - id: project.overview
+    title: 项目总览
+    group: project
+    factory: src.workbench.modules.service.project:ProjectOverviewModule
+    area: center
+    order: 5
+    params: {subscribe: [run.selected]}
+
+  - id: project.management
+    title: 项目管理
+    group: project
+    factory: src.workbench.modules.service.project:ProjectManagementModule
+    area: center
+    order: 6
+
+  # ══ SoC 参考工程（客户视角；工程适配层，不另造执行引擎）══════════
+  - id: soc.overview
+    title: SoC 总览
+    group: soc
+    factory: src.workbench.modules.soc.overview:SoCOverviewModule
+    area: center
+    order: 10
+
+  - id: soc.architecture
+    title: SoC 架构
+    group: soc
+    factory: src.workbench.modules.soc.architecture:SoCArchitectureModule
+    area: center
+    order: 20
+
+  - id: soc.verification
+    title: SoC 验证工作区
+    group: soc
+    factory: src.workbench.modules.soc.verification:SoCVerificationModule
+    area: center
+    order: 30
+
+  - id: soc.c_cases
+    title: SoC C 用例
+    group: soc
+    factory: src.workbench.modules.soc.c_cases:SoCCasesModule
+    area: center
+    order: 35
+
+  - id: soc.signoff
+    title: SoC 签核
+    group: soc
+    factory: src.workbench.modules.soc.signoff:SoCSignoffModule
+    area: center
+    order: 40
+
+  # ══ IP 团队（IP 开发视角；与 SoC 团队共用工程事实）══════════════
+  - id: ip.catalog
+    title: IP 目录
+    group: ip
+    factory: src.workbench.modules.ip.catalog:IpCatalogModule
+    area: center
+    order: 10
+
+  - id: ip.workspace
+    title: IP 工作区
+    group: ip
+    factory: src.workbench.modules.ip.workspace:IpWorkspaceModule
+    area: center
+    order: 20
+
+  - id: ip.signoff
+    title: IP 发布检查
+    group: ip
+    factory: src.workbench.modules.ip.signoff:IpSignoffModule
+    area: center
+    order: 30
+
+  # ══ 工程服务入口（客户视角；只做导航/编排，不另造引擎）══════════
+  # 每个入口内部的步骤都跳到下面已有的专业模块；数据来自 run 目录/文件契约。
+  - id: service.uvm
+    title: UVM 自动化验证
+    group: service
+    factory: src.workbench.modules.service.uvm:UVMServiceModule
+    area: center
+    order: 10
+    params: {subscribe: [run.selected]}
+
+  - id: service.regression
+    title: 回归效率优化
+    group: service
+    factory: src.workbench.modules.service.regression:RegressionServiceModule
+    area: center
+    order: 20
+    params: {subscribe: [run.selected]}
+
+  - id: service.coverage
+    title: Coverage Closure
+    group: service
+    factory: src.workbench.modules.service.coverage:CoverageClosureModule
+    area: center
+    order: 30
+    params: {subscribe: [run.selected]}
+
+  # ══ 平台配置 ══════════════════════════════════════════════════
+  - id: platform.settings
+    title: 环境与工具
+    group: platform
+    factory: src.workbench.modules.service.platform:PlatformSettingsModule
+    area: center
+    order: 10
+
+  # ══ 七条 agent 线 ════════════════════════════════════════════
+  # 每条线一个「产出总览」：这次运行里该 agent 跑了哪些阶段、产出了哪些文件。
+  # 视图本身是跨线共享件（modules/agent_output.py），每条线一个几行的子类 ——
+  # 那样「group: ops ⇒ 代码在 modules/ops/」这条约定才继续成立。
+  # 全部订阅 run.selected：运行历史里选一次，七条线一起切。
+
+  - id: design.output
+    title: 设计产出
+    group: design
+    factory: src.workbench.modules.design.output:DesignOutputModule
+    area: center
+    order: 10
+    tool: {name: agent.outputs, kind: json}
+    params: {subscribe: run.selected}
+
+  - id: model.output
+    title: 模型产出
+    group: model
+    factory: src.workbench.modules.model.output:ModelOutputModule
+    area: center
+    order: 10
+    tool: {name: agent.outputs, kind: json}
+    params: {subscribe: run.selected}
+
+  - id: ops.output
+    title: 回归产出
+    group: ops
+    factory: src.workbench.modules.ops.output:OpsOutputModule
+    area: center
+    order: 10
+    tool: {name: agent.outputs, kind: json}
+    params: {subscribe: run.selected}
+
+  # 回归状态：一个用例一行（状态 / 耗时 / UVM 计数 / 断言错误 / 日志）。
+  # 与上面「回归产出」的分工：那条线回答「ops 这次干了什么」，
+  # 这条回答「这次回归到底哪条挂了、挂的是什么错」。
+  - id: ops.regression_status
+    title: 回归状态
+    group: ops
+    factory: src.workbench.modules.ops.regression_status:RegressionStatusModule
+    area: center
+    order: 20
+    tool: {name: flow.regression_status, kind: json}
+    params: {subscribe: run.selected}
+
+  # 回归波形 / 回归覆盖率：**逐条用例校对**用的两条路。
+  # 与「回归状态」的分工：那条回答"哪条挂了、挂的是什么错"（判定），
+  # 这两条回答"这条的波形/覆盖率在哪、打开它"（逐条确认产物）。
+  # 三条吃同一份数据（flow.regression_status），不是同一件事。
+  - id: ops.regression_wave
+    title: 回归波形
+    group: ops
+    factory: src.workbench.modules.ops.regression_artifacts:RegressionWaveModule
+    area: center
+    order: 22
+    tool: {name: flow.regression_status, kind: json}
+    params: {subscribe: run.selected}
+
+  - id: ops.regression_coverage
+    title: 回归覆盖率
+    group: ops
+    factory: src.workbench.modules.ops.regression_artifacts:RegressionCoverageModule
+    area: center
+    order: 24
+    tool: {name: flow.regression_status, kind: json}
+    params: {subscribe: run.selected}
+
+  - id: coverage.output
+    title: 覆盖率产出
+    group: coverage
+    factory: src.workbench.modules.coverage.output:CoverageOutputModule
+    area: center
+    order: 10
+    tool: {name: agent.outputs, kind: json}
+    params: {subscribe: run.selected}
+
+  - id: audit.output
+    title: 签核产出
+    group: audit
+    factory: src.workbench.modules.audit.output:AuditOutputModule
+    area: center
+    order: 10
+    tool: {name: agent.outputs, kind: json}
+    params: {subscribe: run.selected}
+
+  # ══ 集成设计环境 ══════════════════════════════════════════════
+
+  # IP 规格 —— 编辑「一个 IP 长什么样」的声明 YAML（接口/寄存器/状态）。
+  # **设计时的声明**：目前不被闭环消费；字段对齐既有的 IP 库，免得同一概念两套字段名。
+  # 放在人工节点**上面**（order 10 < 20）—— 先声明 IP 是什么，再声明流程在哪等人。
+  - id: ide.ip_spec
+    title: IP 规格
+    group: ide
+    factory: src.workbench.modules.ide.ip_spec:IpSpecModule
+    area: center
+    order: 10
+    input: ide/ip_spec.yaml
+    tool: {name: ide.ip_spec, kind: json}
+
+  # 人工节点 —— 编辑「流程人工节点」的声明 YAML（文本 + schema 实时校验）。
+  # **不改闭环拓扑**：这份 YAML 目前是声明/规划性质（见 src/tools/integration/ide_tools/__init__.py）。
+  - id: ide.manual_nodes
+    title: 人工节点
+    group: ide
+    factory: src.workbench.modules.ide.manual_nodes:ManualNodesModule
+    area: center
+    order: 20
+    input: ide/manual_nodes.yaml
+    tool: {name: ide.manual_nodes, kind: json}
+
+  # AIVM 测试点表 —— PM/DV lead 手写 xlsx 的**只读**视图（方案 B 的"该测什么"侧）。
+  # 导入 casemodel / 双哈希防漂移在 CLI（`case-model import-xlsx` / `verify-import`）；
+  # 这一页不写盘、不起子进程。
+  - id: ide.aivm
+    title: 测试点表（xlsx）
+    group: ide
+    factory: src.workbench.modules.ide.aivm:AivmTableModule
+    area: center
+    order: 30
+    input: ../src/tools/humanview/aivm_ir/example/NPU_V2.CMDSCHED.testpoint.xlsx
+    tool: {name: humanview.aivm_plan, kind: json}
+
+  # 覆盖率豁免审批 —— 自动发现提出的"这个洞结构不可达"，等人签字。
+  #
+  # 为什么必须是人：一个覆盖率洞到底是不是**结构不可达**，是设计知识，AI 判不了。
+  # 而批准它会把那个点从**分母**里拿掉 —— 等于放行一个原本没覆盖的点。所以这一页
+  # 的核心不是列表，是**让人看清自己在签什么**：提议的理由、证据、以及签完之后
+  # 谁签的、哈希指纹是哪一串（接证据链）。
+  - id: coverage.excludes
+    title: 覆盖率豁免
+    group: coverage
+    factory: src.workbench.modules.coverage.excludes:ExcludesModule
+    area: center
+    order: 20
+    tool: {name: coverage.excludes, kind: json}
+
+  # ══ 调试技术 ════════════════════════════════════════════════
+
+  - id: debug.sim_log
+    title: 仿真日志
+    group: debug
+    factory: src.workbench.modules.debug.sim_log:SimLogModule
+    area: center
+    order: 10
+    tool: {name: debug.collect_sim_log, kind: json}
+
+  - id: debug.fingerprint
+    title: 错误指纹
+    group: debug
+    factory: src.workbench.modules.debug.fingerprint:FingerprintModule
+    area: bottom
+    order: 10
+    # 它本质是一个**窗格**（贴一段报错、看一眼、切走），所以显隐开关除了
+    # 「窗口」菜单里那份，再挂一份到「视图」菜单 —— 想收起它的人会去视图里
+    # 找（那儿的邻居是「模块导航树」「控制台」）。同一份 QAction，状态同步。
+    pin_to_view: true
+    tool: {name: debug.fingerprint_error, kind: json}
+
+  - id: debug.output
+    title: 调试产出
+    group: debug
+    factory: src.workbench.modules.debug.output:DebugOutputModule
+    area: center
+    order: 20
+    tool: {name: agent.outputs, kind: json}
+    params: {subscribe: run.selected}
+
+  # ══ 验证构建 ════════════════════════════════════════════════
+
+  - id: verify.output
+    title: 验证产出
+    group: verify
+    factory: src.workbench.modules.verify.output:VerifyOutputModule
+    area: center
+    order: 10
+    tool: {name: agent.outputs, kind: json}
+    params: {subscribe: run.selected}
+
+  # case 属性完备性建模 —— 11 个页面嵌在模块内部一个 QTabWidget 里。
+  # 它是唯一一个「界面能力本身就是核心」的模块：正交属性怎么 cross、
+  # 覆盖率怎么收敛，都在这 11 页里回答。归 verify 线：它建的是验证的输入。
+  - id: verify.casemodel
+    title: Case 建模
+    group: verify
+    factory: src.workbench.modules.verify.casemodel:CasemodelModule
+    area: center
+    order: 20
+    # 相对本清单所在目录解析 —— config/casemodel/examples/cpu_pipeline.yaml
+    # **这是"没有选中运行"时的默认输入**（那份是示例，属于另一个设计）。
+    # 一旦在「运行历史」里选了某次运行，页面会跟着切到**那次运行自己的** case 模型
+    # （`<运行目录>/inputs/casemodel.yaml`，闭环里由 spec 合成或人放置）——
+    # 见 `CasemodelModule.on_refresh`。不订阅的话，界面对着的永远是那个示例。
+    input: casemodel/examples/cpu_pipeline.yaml
+    tool: {name: casemodel.gaps, kind: json}
+    params: {subscribe: run.selected}
+
+  # ISA 激励 —— 场景 DSL → ISA 事务层 IR（+ L3 编码 + 张量数据）。
+  #
+  # 归 `verify`：它产出的是**激励**，和 Case 建模一样属于"先把要测什么
+  # 说清楚"这一环，是验证构建的输入。
+  #
+  # 放在 Case 建模**下面**（order 30 > 20）：先声明要测什么（case 模型），
+  # 再把它铺成具体的指令流。两页是同一条线的两个层次。
+  - id: verify.isa_gen
+    title: ISA 激励
+    group: verify
+    factory: src.workbench.modules.verify.isa_gen:IsaGenModule
+    area: center
+    order: 30
+    # 相对本清单所在目录解析 —— config/isa_gen/examples/npu_gemm.yaml
+    input: isa_gen/examples/npu_gemm.yaml
+    tool: {name: isa_gen.compile, kind: json}
+
+  # ══ 流程与证据 ══════════════════════════════════════════════
+  # 横切全部 agent 的那条线：任务总览、编排、运行、证据、签核、跟踪、趋势、决策。
+  # 它们不属于任何单个 agent，却贯穿全部 —— 所以单独成线。
+  #
+  # **线内顺序按"怎么用"排，不按"是什么"排**（`order` 就是干这个的）：
+  #   5  验证流程    起 —— 入口。没有它就没有运行，所以排第一
+  #   6  运行历史    选 —— 选一次运行，其余页跟着它切（左窗格）
+  #   10 任务总览    看 —— 这次什么情况
+  #   12 流程视图    看 —— 闭环的形状：卡在哪一段
+  #   14 运行对比    看 —— 这次比上次差在哪、是谁改坏的
+  #   20 产物审查    材料 —— 中间产物，人该看、也该能改
+  #   22 证据 / 产物 材料 —— 原始文件树（右窗格）
+  #   30 签核判定    判 —— 能不能签
+  #   32 运行清单    判 —— 签核凭据：哈希 + 文件变更链
+  #   40 决策轨迹    回头查 —— 每轮为什么这么走
+  #   42 进度趋势    回头查 —— 跨运行趋势
+  #   50 测试点 / 资产 参考 —— 跟踪表（只读 YAML）
+  #
+  # 排在最前的是**入口**（起 / 选），不是"最重要的页" —— 前者是每次都走的动作。
+
+  # 任务总览 —— 一次运行作为一个「验证任务」：目标 / 覆盖率 / 差距 / 收敛预测 /
+  # 阶段 / 卡点。其余视图都是某个侧面，这一页回答最早那个问题：「现在什么情况」。
+  - id: flow.task
+    title: 任务总览
+    group: flow
+    factory: src.workbench.modules.flow.task:TaskModule
+    area: center
+    order: 10
+    tool: {name: flow.task, kind: json}
+    params: {subscribe: run.selected}
+
+  # 流程视图 —— 把闭环**画成一张图**：七段主线 + 「不达标再来一轮」的回边。
+  # 与下面的 `验证流程` 页是两件事：那页把阶段摊平成时间线（谁在跑、跑到哪），
+  # 这页保留闭环的**形状**（哪一段卡住、从哪回到哪）。摊平了就看不见回路。
+  #
+  # 同样地，清单里**没有阶段清单**：结构来自 `flow.stages` 绑定，
+  # 状态来自所选运行的日志。没选运行就是一片灰 —— 不编造。
+  - id: flow.diagram
+    title: 流程视图
+    group: flow
+    factory: src.workbench.modules.flow.diagram:DiagramModule
+    area: center
+    order: 12
+    tool: {name: flow.stages, kind: json}
+    params: {subscribe: run.selected}
+
+  # 中间产物审查台 —— 一次运行产出的那几份"人该看、也该能改"的文件。
+  #
+  # 为什么单独一页：产物在此之前只以**原始文件树**存在（`证据 / 产物` 那页），
+  # 看得见文件名，但看不出哪份有问题、哪份是谁写的、改了会怎样。而卡住运行的
+  # 恰恰是这些中间 YAML。实测一次：`bench.yaml` 的 schema 不符让整次运行挂在
+  # verify，从日志挖到生成器才定位到 —— 有这一页那是 30 秒的事。
+  #
+  # 编辑之后**会记进证据链**（带 run_id 锚点：这次编辑属于这次运行）。但
+  # **不会自动重跑** —— 改的是那次运行目录里的文件，要让改动生效得重新起一次。
+  # 界面上把这句话写出来，免得人以为改完就生效了。
+  - id: flow.artifacts
+    title: 产物审查
+    group: flow
+    factory: src.workbench.modules.flow.artifacts:ArtifactsModule
+    area: center
+    order: 20
+    tool: {name: flow.artifacts, kind: json}
+    params: {subscribe: run.selected}
+
+  # 验证流程 —— 把闭环搬上界面。
+  #
+  # 注意清单里**没有流程的拓扑**：有哪些阶段、谁是谁的前驱属于领域
+  # （src/layers/l2_orchestration/graph.py + stages.py）。清单只描述**视图**：
+  # 停在哪、轮询多快、有哪些预设。把阶段写进 YAML 会让流程有第二份真相。
+  - id: flow.pipeline
+    title: 验证流程
+    group: flow
+    factory: src.workbench.modules.flow.pipeline:PipelineModule
+    area: center
+    order: 5
+    tool: {name: pipeline.status, kind: json}
+    params:
+      poll_ms: 500
+      # 预设 = 参数集合，不是控制流（改预设不会让流程走出图之外）
+      presets:
+        - {id: smoke,  title: "冒烟（1 轮）",    max_rounds: 1, target: 60.0, approval: auto}
+        - {id: full,   title: "全流程（5 轮）",  max_rounds: 5, target: 95.0, approval: threshold}
+        - {id: cover,  title: "只收敛覆盖率",    max_rounds: 8, target: 95.0, approval: threshold, bypass_design_model: true}
+
+  # 运行历史 —— 左窗格。选中即广播 run.selected，其余视图跟着切。
+  # 放在左窗格而不是中央：它是**导航**（"我要看哪一次"），不是工作区。
+  - id: flow.runs
+    title: 运行历史
+    group: flow
+    factory: src.workbench.modules.flow.runs:RunsModule
+    area: left
+    order: 6
+    tool: {name: pipeline.runs, kind: json}
+
+  # 证据 / 产物 —— 右窗格。订阅 run.selected。
+  - id: flow.evidence
+    title: 证据 / 产物
+    group: flow
+    factory: src.workbench.modules.flow.evidence:EvidenceModule
+    area: right
+    order: 22
+    tool: {name: pipeline.detail, kind: json}
+    params:
+      subscribe: run.selected
+
+  # 待办 / 卡点 —— 「现在该干什么」：把要人做的事聚成一页（要你动手的排前面）。
+  # 它不在"看情况"那一族里，它在**让你别漏**那一族：原本待审批在验证流程、
+  # 待签豁免在覆盖率豁免、要人工确认在决策轨迹、卡住的运行在运行历史 —— 靠人记
+  # 着去哪看，就是漏掉的来源。
+  - id: flow.todo
+    title: 待办 / 卡点
+    group: flow
+    factory: src.workbench.modules.flow.todo:TodoModule
+    area: center
+    order: 7
+    tool: {name: flow.todo, kind: json}
+    params: {subscribe: run.selected}
+
+  # 功能覆盖率 —— 「建模声明的覆盖点 → 实测命中了没有」。
+  #
+  # 与「回归覆盖率」是**两个问题**：那一页答"哪条用例跑了、它的库在哪"（粒度=用例），
+  # 这一页答"模型声明的那些覆盖点打到了没有"（粒度=覆盖点）。都叫"覆盖率"才最容易
+  # 混为一谈 —— 而 `analysis/coverage.py` 的"用例写全了没有"与 vcover 的"仿真打到了
+  # 没有"是两回事，前者的 100% 不保证后者。所以本页把**声明与实测分列**，不合成一个数。
+  - id: flow.fcov
+    title: 功能覆盖率
+    group: flow
+    factory: src.workbench.modules.flow.fcov:FunctionalCoverageModule
+    area: center
+    order: 36
+    tool: {name: flow.fcov, kind: json}
+    params: {subscribe: run.selected}
+
+  # 规则草案 —— 从真实失败里起草出来的校验规则，等人拍板（只提议，不自动生效）。
+  # 它是「规则库能长大」那条链的最后一环：发现（指纹）→ 记录（命中统计）→
+  # 归纳成规则（本页）→ 人写进 semantic_check。
+  - id: flow.drafts
+    title: 规则草案
+    group: flow
+    factory: src.workbench.modules.flow.drafts:DraftsModule
+    area: center
+    order: 34
+    tool: {name: flow.rule_drafts, kind: json}
+    params: {subscribe: run.selected}
+
+  # 运行对比 —— **两次运行并排**：覆盖率 delta / 变坏的用例 / 修复的用例 / 判定变化。
+  #
+  # 单次报告只回答"这次怎么样"，回答不了"这次比上次差在哪、是谁改坏的" —— 而
+  # 后者才是「可审计」最贵的那个问题。数据每次运行都落了盘（报告 + 回归产物 +
+  # 覆盖率），所以这一页**不重跑、不碰进程，只做对齐**。
+  #
+  # 与 `refactor_guard` 是同一个故事的人机两面：守卫是机器在改完 RTL 后自动比对
+  # "原先通过的现在还过吗"，这一页是人手动挑两次运行做同样的事。
+  - id: flow.compare
+    title: 运行对比
+    group: flow
+    factory: src.workbench.modules.flow.compare:CompareModule
+    area: center
+    order: 14
+    tool: {name: flow.compare, kind: json}
+    params: {subscribe: run.selected}
+
+  # 签核判定 —— 一次运行能不能签核：audit 的四道门禁 + 六层领域证据链。
+  # 这是「可审计」这条承诺在界面上的落点（此前只有原始文件树，证据链读不到）。
+  # 订阅 run.selected：运行历史里选一次，这里跟着切。
+  - id: flow.signoff
+    title: 签核判定
+    group: flow
+    factory: src.workbench.modules.flow.signoff:SignoffModule
+    area: center
+    order: 30
+    tool: {name: flow.signoff, kind: json}
+    params:
+      subscribe: run.selected
+
+  # 进度趋势 —— 两张折线图（build 数量 / 覆盖率与各档通过率）+ 汇总表，只读。
+  # 数据同样是 YAML（清单的 input）；阶段轴与口径见 config/trend/trend.yaml。
+  - id: flow.trend
+    title: 进度趋势
+    group: flow
+    factory: src.workbench.modules.flow.trend:TrendModule
+    area: center
+    order: 42
+    input: trend/trend.yaml
+    tool: {name: flow.trend, kind: json}
+
+  # 决策轨迹 —— 每轮「为什么这么走」：决策动作 + 驾驭层裁决。
+  # 此前这两件事在界面上只以一行行日志文本存在。
+  - id: flow.decision
+    title: 决策轨迹
+    group: flow
+    factory: src.workbench.modules.flow.decision:DecisionTraceModule
+    area: center
+    order: 40
+    tool: {name: flow.decision, kind: json}
+    params: {subscribe: run.selected}
+
+  # 运行清单 / 证据 —— 清单哈希 + 文件变更链（谁、因为什么、改了哪个文件）。
+  - id: flow.manifest
+    title: 运行清单
+    group: flow
+    factory: src.workbench.modules.flow.manifest:ManifestModule
+    area: center
+    order: 32
+    tool: {name: flow.manifest, kind: json}
+    params: {subscribe: run.selected}
+
+  # ══ 待接入（第二轮）══════════════════════════════════════════
+  # 放在这里而不是删掉：它们说明这套清单能表达什么，也免得下一个人
+  # 重新设计一遍。取消注释前先确认对应的模块文件已经写出来。
+  #
+  # - id: debug.waveform            # 真实数据源：debug.collect_waveform
+  #   title: 波形查看               # （扫 output/**/*.wlf，经 wlf2log 解析）
+  #   group: debug
+  #   factory: src.workbench.modules.debug.waveform:WaveformModule
+  #   area: bottom
+  #   order: 20
+  #   tool: {name: debug.collect_waveform, kind: json}
+  #
+  # - id: debug.bisect              # 真实数据源：debug.bisect_failed_tests
+  #   title: 失败用例二分
+  #   group: debug
+  #   factory: src.workbench.modules.debug.bisect:BisectModule
+  #   area: bottom
+  #   order: 30
+  #   tool: {name: debug.bisect_failed_tests, kind: json}
+  #
+  # - id: coverage.gaps             # 真实数据源：coverage.collect
+  #   title: 覆盖率
+  #   group: coverage
+  #   factory: src.workbench.modules.coverage.gaps:CoverageModule
+  #   area: right
+  #   order: 10
+  #   tool: {name: coverage.collect, kind: json}
+  #
+  # ── 以下两个**没有真实数据源**，按约定必须 placeholder: true ──
+  # 仓库里既没有网表/原理图读取器，也没有状态机提取器，所以它们只能画
+  # 演示数据，界面上会常驻一条琥珀色横幅说明这一点。
+  #
+  # - id: ide.schematic
+  #   title: 电路图视图
+  #   group: ide
+  #   factory: src.workbench.modules.ide.schematic:SchematicModule
+  #   area: right
+  #   order: 50
+  #   placeholder: true
+  #
+  # - id: audit.state_machine
+  #   title: 状态机视图
+  #   group: audit
+  #   factory: src.workbench.modules.audit.state_machine:StateMachineModule
+  #   area: right
+  #   order: 60
+  #   placeholder: true

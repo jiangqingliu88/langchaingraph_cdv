@@ -1,0 +1,315 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// {{ environment.env_name }}_constraint_policies.sv
+// 自动生成的具体策略实现
+
+`include "{{ environment.env_name }}_constraint_policy.sv"
+
+{% for policy in policies %}
+// ============================================================
+// {{ policy.name }}: {{ policy.description }}
+// ============================================================
+class {{ policy.name }}_policy extends {{ environment.env_name }}_constraint_policy;
+  `uvm_object_utils({{ policy.name }}_policy)
+  
+{% for param in policy.params %}
+  // {{ param.name }}
+{% if param.type == "int" %}
+  int {{ param.name }};
+{% elif param.type == "string" %}
+  string {{ param.name }};
+{% elif param.type == "bool" %}
+  bit {{ param.name }};
+{% elif param.type == "list" %}
+  int {{ param.name }}[];
+{% elif param.type == "float" %}
+  real {{ param.name }};
+{% endif %}
+{% endfor %}
+
+{% for trans in policy.applies_to %}
+  // {{ trans }} 事务句柄
+  {{ get_transaction_type(trans) }} {{ trans }}_trans;
+{% endfor %}
+
+  function new(string name = "{{ policy.name }}_policy");
+    super.new(name);
+    policy_name = "{{ policy.name }}";
+    policy_priority = {{ policy.priority }};
+    
+{% for param in policy.params %}
+    // 初始化参数
+{% if param.type == "int" %}
+    {{ param.name }} = {{ param.default }};
+{% elif param.type == "string" %}
+    {{ param.name }} = "{{ param.default }}";
+{% elif param.type == "bool" %}
+    {{ param.name }} = {{ param.default | lower }};
+{% elif param.type == "list" %}
+    {{ param.name }} = {{ param.default }};
+{% elif param.type == "float" %}
+    {{ param.name }} = {{ param.default }};
+{% endif %}
+{% endfor %}
+  endfunction
+  
+  virtual function void apply(ref {{ environment.env_name }}_policy_context ctx);
+    if (!enabled) return;
+    
+{% for trans in policy.applies_to %}
+    // 获取 {{ trans }} 事务
+    if (!$cast({{ trans }}_trans, ctx.get_transaction("{{ trans }}"))) begin
+      `uvm_warning(get_name(), "Cannot get {{ trans }} transaction")
+      return;
+    end
+{% endfor %}
+
+    // 应用策略约束
+    case (policy_name)
+{% if policy.name == "precision_consistency" %}
+      "precision_consistency": begin
+        // 精度一致性约束
+        if (enforce_match) begin
+          weight_trans.precision = cfg_trans.precision;
+          input_trans.precision = cfg_trans.precision;
+        end
+        
+        // 根据精度设置数据范围
+        case (cfg_trans.precision)
+          INT8: begin
+            foreach (weight_trans.data[i])
+              weight_trans.data[i] inside {[-128:127]};
+            foreach (input_trans.data[i])
+              input_trans.data[i] inside {[-128:127]};
+          end
+          INT16: begin
+            foreach (weight_trans.data[i])
+              weight_trans.data[i] inside {[-32768:32767]};
+            foreach (input_trans.data[i])
+              input_trans.data[i] inside {[-32768:32767]};
+          end
+        endcase
+      end
+      
+{% elif policy.name == "mem_capacity" %}
+      "mem_capacity": begin
+        // 存储容量约束
+        int max_addr = addr_boundary[cfg_trans.mem_size];
+        
+        // 地址不能超出范围
+        if (weight_trans.addr >= max_addr)
+          weight_trans.addr = weight_trans.addr % max_addr;
+        if (input_trans.addr >= max_addr)
+          input_trans.addr = input_trans.addr % max_addr;
+        
+        // 数据数量约束
+        int max_cnt = max_addr / 4;
+        if (weight_trans.count > max_cnt)
+          weight_trans.count = max_cnt;
+        if (input_trans.count > max_cnt)
+          input_trans.count = max_cnt;
+      end
+      
+{% elif policy.name == "data_dependency" %}
+      "data_dependency": begin
+        static {{ environment.env_name }}_policy_context last_ctx[$];
+        
+        // 数据依赖约束
+        case (dep_type)
+          "WEIGHT_DEPENDENT": begin
+            input_trans.count = weight_trans.count;
+          end
+          "INPUT_DEPENDENT": begin
+            weight_trans.count = input_trans.count;
+          end
+          "CROSS_DEPENDENT": begin
+            int min_cnt = (weight_trans.count < input_trans.count) ? 
+                           weight_trans.count : input_trans.count;
+            weight_trans.count = min_cnt;
+            input_trans.count = min_cnt;
+          end
+        endcase
+        
+        // 输出数量等于输入数量
+        output_trans.count = input_trans.count;
+        
+        // 流水线依赖
+        if (pipeline_depth > 0 && last_ctx.size() >= pipeline_depth) begin
+          {{ environment.env_name }}_policy_context prev_ctx = last_ctx[0];
+          // 从上次输出获取依赖数据
+          // input_trans.data[0] = prev_ctx.output_trans.data[prev_ctx.output_trans.count-1];
+        end
+        
+        // 保存当前上下文
+        last_ctx.push_back(ctx);
+        while (last_ctx.size() > pipeline_depth + 1)
+          last_ctx.pop_front();
+      end
+      
+{% elif policy.name == "boundary_overflow" %}
+      "boundary_overflow": begin
+        case (boundary_type)
+          "BOUNDARY": begin
+            for (int i = 0; i < weight_trans.count; i++)
+              weight_trans.data[i] = (i % 2 == 0) ? -128 : 127;
+            for (int i = 0; i < input_trans.count; i++)
+              input_trans.data[i] = (i % 2 == 0) ? -128 : 127;
+          end
+          "OVERFLOW": begin
+            for (int i = 0; i < weight_trans.count; i++)
+              weight_trans.data[i] = 127;
+            for (int i = 0; i < input_trans.count; i++)
+              input_trans.data[i] = 127;
+          end
+          "UNDERFLOW": begin
+            for (int i = 0; i < weight_trans.count; i++)
+              weight_trans.data[i] = -128;
+            for (int i = 0; i < input_trans.count; i++)
+              input_trans.data[i] = -128;
+          end
+        endcase
+      end
+      
+{% elif policy.name == "concurrent_access" %}
+      "concurrent_access": begin
+        static int current_port = 0;
+        
+        // 端口分配
+        input_trans.addr = (input_trans.addr & ~3) | current_port;
+        weight_trans.addr = (weight_trans.addr & ~3) | current_port;
+        
+        current_port = (current_port + 1) % num_ports;
+        
+        // 冲突概率
+        if ($urandom_range(0, 100) < conflict_prob * 100) begin
+          weight_trans.addr = input_trans.addr;
+          `uvm_warning(get_name(), "Address conflict generated")
+        end
+      end
+      
+{% elif policy.name == "power_performance" %}
+      "power_performance": begin
+        case (power_mode)
+          "LOW_POWER": begin
+            cfg_trans.precision = INT8;
+            cfg_trans.mem_size = CFG_SIZE_4KB;
+            if (weight_trans.count > 10) weight_trans.count = 10;
+            if (input_trans.count > 10) input_trans.count = 10;
+          end
+          "HIGH_PERFORMANCE": begin
+            cfg_trans.precision = INT16;
+            cfg_trans.mem_size = CFG_SIZE_16KB;
+            if (weight_trans.count < 50) weight_trans.count = 50;
+            if (input_trans.count < 50) input_trans.count = 50;
+          end
+          "BALANCED": begin
+            cfg_trans.precision = INT8;
+            cfg_trans.mem_size = CFG_SIZE_8KB;
+          end
+        endcase
+      end
+      
+{% elif policy.name == "apb_addr_align" %}
+      "apb_addr_align": begin
+        // APB 地址对齐（示例策略；applies_to 端口 = apb_master）
+        apb_master_trans.paddr = (apb_master_trans.paddr / align) * align;
+      end
+
+{% elif policy.name == "compute_mode" %}
+      "compute_mode": begin
+        case (cfg_trans.compute_op)
+          LINEAR: begin
+            foreach (weight_trans.data[i])
+              weight_trans.data[i] inside {[-10:10]};
+            foreach (input_trans.data[i])
+              input_trans.data[i] inside {[-100:100]};
+          end
+          RELU: begin
+            foreach (weight_trans.data[i])
+              weight_trans.data[i] inside {[0:1]};
+            foreach (input_trans.data[i])
+              input_trans.data[i] inside {[-50:200]};
+          end
+          POOLING: begin
+            foreach (weight_trans.data[i])
+              weight_trans.data[i] inside {[1:10]};
+            foreach (input_trans.data[i])
+              input_trans.data[i] inside {[0:255]};
+          end
+        endcase
+        
+        // 计算输出
+        output_trans.compute_op = cfg_trans.compute_op;
+        // output_trans.compute_from_input(input_trans, weight_trans);
+      end
+      
+{% elif policy.assignments %}
+      // **模型编译出来的约束**（`build_constraint` 的 `assignments`）：
+      // 只对声明了 `stimulus.field` 的维度生成 —— 观测型维度没有输入引脚，
+      // 给它们编约束就是造假。`cycle` 让每个合法取值都轮到；`random` 用于 RND。
+      "{{ policy.name }}": begin
+{% for a in policy.assignments %}
+        // {{ a.trans }}.{{ a.field }} ← {{ a.mode }}
+        //（合法取值：{{ a['values'] | join(', ') }}）
+        if ({{ a.trans }}_trans != null) begin
+{% if a.mode == 'random' %}
+          case ($urandom_range(0, {{ a['values'] | length - 1 }}))
+{% else %}
+          case (ctx.iteration % {{ a['values'] | length }})
+{% endif %}
+{% for v in a['values'] %}
+            {{ loop.index0 }}: {{ a.trans }}_trans.{{ a.field }} = {{ v }};
+{% endfor %}
+          endcase
+        end
+{% endfor %}
+      end
+
+{% endif %}
+      // **这个 `default` 不能省。** 上面那 8 个分支是**内置策略名**（按验证主题
+      // 命名：`precision_consistency` / `mem_capacity` / …，见
+      // `semantic_check.BUILTIN_POLICIES`）；而 `build_constraint` 从 case 模型
+      // 推出来的名字是**按专题 + 方法**命名的（`p_th_b02_random`）—— 两套一个都
+      // 对不上，于是这里的 `case` 会**一个分支都没有**。
+      //
+      // 而空 `case` 不是"什么都不做"，是**编译错误**：
+      //     vlog-13302  Empty case statement. SystemVerilog syntax requires at least one branch.
+      // （实测：11 个策略 = 11 条 error，整个 env_pkg 连带编不过。）
+      // 所以留一个 default，把"没有约束体"这件事从**编译期**挪到**运行期**，
+      // 并且在生成物里说清楚 —— 见 `build_constraint` 的 notes：策略是**结构骨架**，
+      // 协议参数是领域知识，模型里没有，只能人补。
+      default: begin
+        `uvm_info(get_name(),
+                  "apply(): 该策略无内置约束体 —— 协议约束待人补（模板只给骨架）",
+                  UVM_HIGH)
+      end
+    endcase
+  endfunction
+  
+  virtual function bit verify(ref {{ environment.env_name }}_policy_context ctx);
+    // 验证一致性
+    return 1;
+  endfunction
+  
+  virtual function string get_stats();
+    string stats = "";
+{% if policy.params %}
+    stats = $sformatf("params: ");
+{% for param in policy.params %}
+    stats = {stats, $sformatf("{{ param.name }}=%0d ", {{ param.name }})};
+{% endfor %}
+{% endif %}
+    return stats;
+  endfunction
+  
+  virtual function void parse_plusargs();
+    super.parse_plusargs();
+{% for param in policy.params %}
+    // 解析 {{ param.name }} 参数
+    if (params.exists("{{ param.name }}"))
+      $sscanf(params["{{ param.name }}"], "%d", {{ param.name }});
+{% endfor %}
+  endfunction
+endclass
+
+{% endfor %}

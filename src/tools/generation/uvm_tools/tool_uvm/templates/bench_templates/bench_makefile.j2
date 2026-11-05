@@ -1,0 +1,141 @@
+{% set comment_prefix = "# " %}
+{% include "base_templates/base_template.sv.j2" %}
+
+# ============================================================
+# {{ environment.env_name }} 整环境编译/仿真 Makefile（Questa / VCS 双后端）
+# ============================================================
+# 用法（在生成目录根执行）:
+#   make                                # 编译（缺省 SIM=questa）
+#   make compile SIM=vcs                # VCS 编译
+#   make run TEST={{ environment.env_name }}_base_test     # 编译 + 仿真一个测试
+#   make run SIM=vcs SEED=5 TEST={{ environment.env_name }}_direct_test
+#   make compile DUT=rtl/dut.sv         # 追加 DUT 源码（单文件，可传多个）
+# 后端路径可覆盖: QUESTA / UVM_HOME / UVM_DPI / VCS / BASE_PKG
+
+SIM ?= questa        # questa | vcs
+
+ENV    ?= {{ environment.env_name }}
+BENCH  ?= {{ bench_name }}
+TEST   ?= {{ environment.env_name }}_base_test
+SEED   ?= 1
+OUTDIR ?= build
+# DUT / 寄存器模型 —— 默认取 bench YAML 的 `dut_filelist` / `ral_filelist`，
+# 命令行仍可覆盖（`make compile DUT=xxx.sv RAL=yyy.sv`）。
+# **注意**：这里是 YAML 里的原样路径，相对**运行 make 的目录**。
+DUT    ?= {{ (bench.dut_filelist or []) | join(' ') }}
+RAL    ?= {{ (bench.ral_filelist or []) | join(' ') }}
+COV    ?= 0
+
+# ── Questa 后端 ──
+# MTI_HOME = 安装根。vsim/vlog 在 <MTI_HOME>/win64/ 下；
+# UVM 源码在 <MTI_HOME>/verilog_src/uvm-1.2/src/ 下；
+# 而 **UVM 的预编译 DPI 库在 <MTI_HOME>/uvm-1.2/win64/ 下**（不在 verilog_src 里，
+# 那儿只有源码）。把 UVM_DPI 指到 verilog_src/.../win64/uvm_dpi 会报
+# "SystemVerilog DPI cannot access file ... uvm_dpi.dll" → "Error loading design"。
+MTI_HOME ?= f:/questasim64_2024.1
+QUESTA   ?= $(MTI_HOME)/win64
+WORK      = $(OUTDIR)/work
+UVM_HOME ?= $(MTI_HOME)/verilog_src/uvm-1.2/src
+UVM_DPI  ?= $(MTI_HOME)/uvm-1.2/win64/uvm_dpi
+
+# ── VCS 后端 ──
+VCS  ?= vcs
+SIMV  = $(OUTDIR)/simv
+
+# ── Base PKG（clk_rst + scoreboard 组件族；生成器渲染相对路径）──
+BASE_PKG ?= {{ base_pkg_rel }}
+
+# ── 编译文件清单（相对路径，自包含）──
+# 顺序: base_pkg → interface agents → harness → env → tests → seqs → tb_top
+SRC = \
+  +incdir+$(BASE_PKG)/clk_and_rst \
+  $(BASE_PKG)/clk_and_rst/clk_and_rst_pkg.sv \
+  +incdir+$(BASE_PKG)/scb \
+  $(BASE_PKG)/scb/scb_pkg.sv \
+  +incdir+$(BASE_PKG)/common_typedefs \
+  $(BASE_PKG)/common_typedefs/common_typedefs_pkg.sv \
+{%- for ia in interface_agents %}
+  +incdir+agents/{{ ia.name }}_agent \
+  {#- **顺序要紧**：`<if>_if.sv` 里写着 `import <if>_parameters_pkg::*;`
+      并直接用 ADDR_WIDTH / DATA_WIDTH，所以 **parameters_pkg 必须先编**。
+      之前把 interface 排在前面 → "Could not find the package
+      (apb_parameters_pkg)" + 一串 "Undefined variable: 'ADDR_WIDTH'"。 #}
+  agents/{{ ia.name }}_agent/{{ ia.name }}_parameters_pkg.sv \
+  agents/{{ ia.name }}_agent/{{ ia.name }}_typedefs_pkg.sv \
+  agents/{{ ia.name }}_agent/1_interface/{{ ia.name }}_if.sv \
+  agents/{{ ia.name }}_agent/1_interface/{{ ia.name }}_system_if.sv \
+  agents/{{ ia.name }}_agent/{{ ia.name }}_pkg.sv \
+{%- endfor %}
+{%- for h in harnesses %}
+  bench/{{ h.name }}.sv \
+{%- endfor %}
+{#- DUT 与 RAL 都排在 env 之前：RTL 要先于 tb_top；**寄存器模型（RAL）要先于 env**
+    —— env 的 register_model 直接引用 apb_ral_pkg::apb_reg_block，
+    而 RAL 自己 import apb_pkg::*，所以它又在 agents 之后。 #}
+  $(DUT) \
+  $(RAL) \
+  +incdir+env \
+  env/$(ENV)_parameters_pkg.sv \
+  env/$(ENV)_pkg.sv \
+  +incdir+env/seqs \
+  env/seqs/$(ENV)_seq_pkg.sv \
+  +incdir+env/tests \
+  env/tests/$(ENV)_test_pkg.sv \
+  bench/$(BENCH)_tb_top.sv
+
+# ── 覆盖率选项 ──
+COV_FLAG_Q =
+COV_FLAG_V =
+COV_FLAG_Q_RUN =
+ifeq ($(COV),1)
+COV_FLAG_Q = +cover=bcesf
+COV_FLAG_V = -cm line+cond+fsm+tgl+branch
+COV_FLAG_Q_RUN = -coverage
+endif
+
+# ── Questa 仿真 do 脚本（COV=1 时退出前保存 ucdb）──
+VSIM_DO = run -all; quit -f
+ifeq ($(COV),1)
+VSIM_DO = coverage save -onexit $(OUTDIR)/$(TEST)_s$(SEED).ucdb; run -all; quit -f
+endif
+
+.PHONY: all compile run clean compile_questa compile_vcs run_questa run_vcs
+
+all: compile
+
+# ── Questa: vlib + vlog ──
+compile_questa:
+	@mkdir -p $(OUTDIR)
+	$(QUESTA)/vlib.exe $(WORK)
+	$(QUESTA)/vlog.exe -work $(WORK) -sv -mfcu +acc \
+		+incdir+$(UVM_HOME) $(UVM_HOME)/uvm_pkg.sv \
+		$(COV_FLAG_Q) \
+		$(SRC)
+
+# ── VCS: 单步编译（vcs 直接出 simv）──
+compile_vcs:
+	@mkdir -p $(OUTDIR)
+	$(VCS) -full64 -sverilog +v2k -timescale=1ns/1ps \
+		-debug_access+all -ntb_opts uvm-1.2 \
+		$(COV_FLAG_V) \
+		$(SRC) \
+		-top $(BENCH)_tb_top -o $(SIMV) -l $(OUTDIR)/comp.log
+
+# ── 仿真 ──
+run: run_$(SIM)
+
+run_questa: compile_questa
+	$(QUESTA)/vsim.exe -c -do "$(VSIM_DO)" \
+		-sv_lib $(UVM_DPI) $(COV_FLAG_Q_RUN) \
+		-work $(WORK) -l $(OUTDIR)/$(TEST)_s$(SEED).log \
+		$(BENCH)_tb_top +UVM_TESTNAME=$(TEST) +ntb_random_seed=$(SEED)
+
+run_vcs: compile_vcs
+	$(SIMV) +UVM_TESTNAME=$(TEST) +ntb_random_seed=$(SEED) \
+		$(COV_FLAG_V) -cm_dir $(OUTDIR)/$(TEST)_s$(SEED).vdb \
+		-l $(OUTDIR)/$(TEST)_s$(SEED).log
+
+compile: compile_$(SIM)
+
+clean:
+	rm -rf $(OUTDIR)

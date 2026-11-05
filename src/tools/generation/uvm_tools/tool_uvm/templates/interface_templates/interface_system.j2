@@ -1,0 +1,12 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// ============================================================
+// Interface: {{ agent.name }}_system_if
+// ============================================================
+
+interface {{ agent.name }}_system_if #();
+
+virtual {{ agent.name }}_if   master_if[15:0];
+virtual {{ agent.name }}_if   slave_if[15:0];
+
+endinterface : {{ agent.name }}_system_if

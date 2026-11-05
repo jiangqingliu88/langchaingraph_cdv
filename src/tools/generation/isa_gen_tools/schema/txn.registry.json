@@ -1,0 +1,1185 @@
+{
+  "version": 1,
+  "source": "08_验证策略.md §3.11 L1 事务原子清单",
+  "$comment": "事务是**随机化的最小单元**（§3.9）。每条给出：构成它的指令组（ops，顺序即发射顺序）、前置条件（requires，人读）、硬约束（hard，L0 机器可读）、效应（effects）。编码表里没有这些 —— 它们是事务层语义，只能来自文档。",
+  "transactions": [
+    {
+      "id": "mask_txn",
+      "group": "control",
+      "ops": [
+        "group_mask_drv_xn"
+      ],
+      "requires": [
+        "无"
+      ],
+      "hard": [
+        {
+          "kind": "mask_nonzero",
+          "target": "group_mask",
+          "note": "core_mask ≠ 0；全零的异常语义待定"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "set_global_mask",
+          "target": "nice"
+        }
+      ]
+    },
+    {
+      "id": "cfg_txn",
+      "group": "control",
+      "ops": [
+        "npu_cfg_drv_xn"
+      ],
+      "requires": [
+        "mask 已设置"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_reg_legal",
+          "target": "rs1val[31:16]",
+          "note": "必须是合法 cfg_reg 地址"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "update_config",
+          "target": "selected_cores"
+        }
+      ],
+      "note": "形状不变时可复用"
+    },
+    {
+      "id": "wr_lmem_txn",
+      "group": "control",
+      "ops": [
+        "wr_lmem_drv_xn"
+      ],
+      "requires": [
+        "mask"
+      ],
+      "hard": [
+        {
+          "kind": "align",
+          "target": "spad",
+          "param": 4
+        },
+        {
+          "kind": "region",
+          "target": "lmem.spad"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "write",
+          "target": "spad",
+          "span": "32bit 覆盖写"
+        }
+      ],
+      "roles": {
+        "binds": [],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "rd_lmem_txn",
+      "group": "control",
+      "ops": [
+        "rd_lmem_drv_xn"
+      ],
+      "requires": [
+        "mask"
+      ],
+      "hard": [
+        {
+          "kind": "align",
+          "target": "spad",
+          "param": 4
+        },
+        {
+          "kind": "region",
+          "target": "lmem.spad"
+        },
+        {
+          "kind": "mask_cardinality",
+          "target": "xn",
+          "param": 1,
+          "note": "xn 形式仅选 1 核"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "read",
+          "target": "spad",
+          "span": "rdval"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": []
+      },
+      "operands": {
+        "rd_lmem_drv_xn": {
+          "rs1val": "src"
+        }
+      }
+    },
+    {
+      "id": "rd_csr_txn",
+      "group": "control",
+      "ops": [
+        "csr_read"
+      ],
+      "requires": [
+        "mask"
+      ],
+      "hard": [
+        {
+          "kind": "csr_addr_legal"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "read",
+          "target": "csr",
+          "span": "rdval"
+        }
+      ],
+      "deferred": true,
+      "note": "文档 §3.2/§3.11 把 rd_csr_drv_xn 列为 Control 指令，但《指令编码总表》的 ctrl sheet 里没有它（只有 10 条，不含 csr 类）。CSR 访问在表里是非指令 op（csr_read/csr_write，走 csr_agent）。**不发明编码** —— 记为不可用。"
+    },
+    {
+      "id": "sync_txn",
+      "group": "control",
+      "ops": [
+        "sync_drv_xn"
+      ],
+      "requires": [
+        "无"
+      ],
+      "hard": [],
+      "effects": [
+        {
+          "kind": "barrier",
+          "target": "local_masters"
+        }
+      ],
+      "note": "fast 变体无返回、不阻塞"
+    },
+    {
+      "id": "noc_1to1_txn",
+      "group": "noc",
+      "ops": [
+        "noc_drv_xn"
+      ],
+      "requires": [
+        "两侧核均已完成 mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "mask_cardinality",
+          "param": 2,
+          "note": "恰好选中 2 核"
+        },
+        {
+          "kind": "same_cluster"
+        },
+        {
+          "kind": "align",
+          "param": 32,
+          "note": "256bit 对齐"
+        },
+        {
+          "kind": "src_core_hit",
+          "target": "4b_src_core_id"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "move",
+          "target": "lmem"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "noc_pair_txn",
+      "group": "noc",
+      "ops": [
+        "noc_drv_dst_xn",
+        "noc_drv_src_xn"
+      ],
+      "requires": [
+        "双侧核完成 mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "pairing",
+          "param": "strict",
+          "note": "强配对，中途不允许插入其他指令"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "move",
+          "target": "cross_cluster"
+        }
+      ],
+      "note": "多播经配置实现",
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "noc_vn_txn",
+      "group": "noc",
+      "ops": [
+        "noc_drv_vn01"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "vn_mask_legal",
+          "target": "6b_grp_mask",
+          "param": [
+            "all_src",
+            "all_dst",
+            "2+2"
+          ],
+          "note": "禁用 1+1"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "move",
+          "target": "multi_core"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "noc_fence_txn",
+      "group": "noc",
+      "ops": [
+        "noc_fence_drv_xn"
+      ],
+      "requires": [
+        "存在在飞 NoC 事务"
+      ],
+      "hard": [
+        {
+          "kind": "completion_policy",
+          "param": "E1|E2|E3",
+          "note": "完成语义待定"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "barrier",
+          "target": "noc",
+          "span": "标准 fence 返回 rd=1"
+        }
+      ]
+    },
+    {
+      "id": "tld_txn",
+      "group": "glsu",
+      "ops": [
+        "tld_drv_xn"
+      ],
+      "requires": [
+        "mask 与 TLD 配置"
+      ],
+      "hard": [
+        {
+          "kind": "addr_domain_pure",
+          "note": "地址域须为纯 Share 或纯 Common"
+        },
+        {
+          "kind": "align",
+          "param": 32,
+          "note": "256bit 对齐"
+        },
+        {
+          "kind": "cfg_required",
+          "param": "tld_cfg"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "move",
+          "target": "dram_to_lmem",
+          "span": "支持多播"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      },
+      "operands": {
+        "tld_drv_xn": {
+          "rs1val": "dst",
+          "rs2val": "src"
+        }
+      }
+    },
+    {
+      "id": "ttld_txn",
+      "group": "glsu",
+      "ops": [
+        "ttld_drv_xn"
+      ],
+      "requires": [
+        "mask 与 TLD 配置"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "tld_cfg"
+        },
+        {
+          "kind": "align",
+          "param": 32
+        },
+        {
+          "kind": "transpose_config",
+          "note": "配置按转置规则换算"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "move",
+          "target": "dram_to_lmem"
+        },
+        {
+          "kind": "transpose",
+          "target": "tmu"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "tst_txn",
+      "group": "glsu",
+      "ops": [
+        "tst_drv_xn"
+      ],
+      "requires": [
+        "mask 与 TST 配置"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "tst_cfg"
+        },
+        {
+          "kind": "align",
+          "param": 32
+        },
+        {
+          "kind": "no_transpose",
+          "note": "不支持转置，输入输出维度一致"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "move",
+          "target": "lmem_to_dram"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "tdram_txn",
+      "group": "glsu",
+      "ops": [
+        "die_cluster_pre_xn",
+        "gtld_dram_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "pairing",
+          "param": "pre_drv",
+          "note": "pre/drv 强配对"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "move",
+          "target": "dram_to_dram"
+        }
+      ],
+      "note": "文档 §3.11 写的是 tdram_pre_xn + tdram_drv_xn，但编码表里没有这两个名字。§3.12.3 说\"tdram、gather 类双源指令必须由 pre 指令预装高位地址（Die_ID、Cluster_ID）\"，而 GLSU 唯一的 pre 是 die_cluster_pre_xn —— 按这个对上。",
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "gather_txn",
+      "group": "glsu",
+      "ops": [
+        "gat_d2s_drv_xn"
+      ],
+      "requires": [
+        "index 向量已位于 Common DRAM",
+        "embedding 基地址已配置"
+      ],
+      "hard": [
+        {
+          "kind": "dtype",
+          "target": "index",
+          "param": "int32"
+        },
+        {
+          "kind": "index_offset",
+          "param": "index*32B"
+        },
+        {
+          "kind": "region",
+          "target": "spad|dram.share",
+          "note": "输出域为 SPAD/本核 DRAM/全局 Share DRAM 之一"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "gather",
+          "target": "embedding"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "index",
+          "table"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "bc_txn",
+      "group": "tmv",
+      "ops": [
+        "bc_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "tmu_cfg"
+        },
+        {
+          "kind": "cimc_float_align",
+          "note": "写 CIMC 且为浮点时自动浮点对齐"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "broadcast",
+          "target": "scalar_to_3d"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "vbc_txn",
+      "group": "tmv",
+      "ops": [
+        "vbc_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "via_tmu",
+          "param": "transpose"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "broadcast",
+          "target": "vector"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "tvbc_txn",
+      "group": "tmv",
+      "ops": [
+        "trans_vbc_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "via_tmu",
+          "param": "transpose_then_broadcast"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "broadcast",
+          "target": "transposed"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "tmov_txn",
+      "group": "tmv",
+      "ops": [
+        "tmov_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "align_exception",
+          "param": 32,
+          "note": "非 256bit 对齐搬运仅限 SPAD 之间"
+        },
+        {
+          "kind": "cimc_float_align"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "move",
+          "target": "local"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "ttmov_txn",
+      "group": "tmv",
+      "ops": [
+        "ttmov_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "transpose_config",
+          "note": "输出维度由输入推导"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "move",
+          "target": "local"
+        },
+        {
+          "kind": "transpose"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "setcimexp_txn",
+      "group": "tmv",
+      "ops": [
+        "setCIMExp_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "page_cover",
+          "note": "整页覆盖 Shadow"
+        },
+        {
+          "kind": "precedes_mx",
+          "note": "MXFP4/8 装载前必须执行"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "write",
+          "target": "cimc.exp_shadow"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "getcimexp_txn",
+      "group": "tmv",
+      "ops": [
+        "getCIMExp_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [],
+      "effects": [
+        {
+          "kind": "read",
+          "target": "cimc.exp_shadow"
+        }
+      ],
+      "note": "用于跨核转移 MX 权重",
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    },
+    {
+      "id": "gemm_txn",
+      "group": "mpu",
+      "ops": [
+        "gemm_out_org_pre_xn",
+        "gemm_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置",
+        "权重 page 已装配并激活"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "mpu_cfg"
+        },
+        {
+          "kind": "output_dtype",
+          "param": [
+            "fp16",
+            "bf16",
+            "fp32"
+          ]
+        },
+        {
+          "kind": "ost",
+          "param": 2
+        }
+      ],
+      "effects": [
+        {
+          "kind": "compute",
+          "target": "gemm"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "in",
+          "wgt"
+        ],
+        "writes": [
+          "out"
+        ]
+      },
+      "operands": {
+        "gemm_out_org_pre_xn": {
+          "rs1val": "out",
+          "rs2val": "origin"
+        },
+        "gemm_drv_xn": {
+          "rs1val": "in",
+          "rs2val": "wgt"
+        }
+      }
+    },
+    {
+      "id": "gemm_acc_txn",
+      "group": "mpu",
+      "ops": [
+        "gemm_out_org_pre_xn",
+        "gemm_acc_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置",
+        "origin 位于 SPAD"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "mpu_cfg"
+        },
+        {
+          "kind": "region",
+          "target": "spad",
+          "param": "origin"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "compute",
+          "target": "gemm_add"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "in",
+          "wgt",
+          "origin"
+        ],
+        "writes": [
+          "out"
+        ]
+      },
+      "operands": {
+        "gemm_out_org_pre_xn": {
+          "rs1val": "out",
+          "rs2val": "origin"
+        },
+        "gemm_acc_drv_xn": {
+          "rs1val": "in",
+          "rs2val": "wgt"
+        }
+      }
+    },
+    {
+      "id": "gemm_dq_txn",
+      "group": "mpu",
+      "ops": [
+        "gemm_out_sc_pre_xn",
+        "gemm_dq_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置",
+        "scale 向量已位于 SPAD"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "mpu_cfg"
+        },
+        {
+          "kind": "region",
+          "target": "spad",
+          "param": "scale"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "compute",
+          "target": "scale_times_gemm",
+          "note": "按列分组"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "in",
+          "wgt",
+          "scale"
+        ],
+        "writes": [
+          "out"
+        ]
+      },
+      "operands": {
+        "gemm_out_sc_pre_xn": {
+          "rs1val": "out",
+          "rs2val": "scale"
+        },
+        "gemm_dq_drv_xn": {
+          "rs1val": "in",
+          "rs2val": "wgt"
+        }
+      }
+    },
+    {
+      "id": "gemm_dq_acc_txn",
+      "group": "mpu",
+      "ops": [
+        "gemm_out_sc_pre_xn",
+        "gemm_dq_acc_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置",
+        "scale 与 origin 同时具备"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "mpu_cfg"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "compute",
+          "target": "scale_times_gemm_add"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "in",
+          "wgt",
+          "scale",
+          "origin"
+        ],
+        "writes": [
+          "out"
+        ]
+      },
+      "operands": {
+        "gemm_out_sc_pre_xn": {
+          "rs1val": "out",
+          "rs2val": "scale"
+        },
+        "gemm_dq_acc_drv_xn": {
+          "rs1val": "in",
+          "rs2val": "wgt"
+        }
+      }
+    },
+    {
+      "id": "vvv_txn",
+      "group": "vpu",
+      "ops": [
+        "v1v2_pre_xn",
+        "vvv_v_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置（op_mode / funct_sel）"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "vpu_cfg"
+        },
+        {
+          "kind": "operand_count",
+          "param": "2 或 3 个等长向量"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "compute",
+          "target": "elementwise_simd"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "in1",
+          "in2"
+        ],
+        "writes": [
+          "out"
+        ]
+      }
+    },
+    {
+      "id": "vsv_txn",
+      "group": "vpu",
+      "ops": [
+        "v1s1_pre_xn",
+        "vss_v_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "vpu_cfg"
+        },
+        {
+          "kind": "scalar_from",
+          "param": "rs2"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "compute",
+          "target": "vector_scalar"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "in1",
+          "in2"
+        ],
+        "writes": [
+          "out"
+        ]
+      }
+    },
+    {
+      "id": "vs_reduce_txn",
+      "group": "vpu",
+      "ops": [
+        "v1s1_pre_xn",
+        "v_s_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "vpu_cfg"
+        },
+        {
+          "kind": "reduce_output",
+          "target": "scalar"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "compute",
+          "target": "reduce",
+          "span": "rdval 返回"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "in1"
+        ],
+        "writes": [
+          "out"
+        ]
+      }
+    },
+    {
+      "id": "vv_txn",
+      "group": "vpu",
+      "ops": [
+        "v1v2_pre_xn",
+        "vv_v_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "vpu_cfg"
+        },
+        {
+          "kind": "operand_count",
+          "param": 1
+        }
+      ],
+      "effects": [
+        {
+          "kind": "compute",
+          "target": "elementwise"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "in1",
+          "in2"
+        ],
+        "writes": [
+          "out"
+        ]
+      }
+    },
+    {
+      "id": "mv_txn",
+      "group": "vpu",
+      "ops": [
+        "v1v2_pre_xn",
+        "m_v_drv_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "vpu_cfg"
+        },
+        {
+          "kind": "reduce_dim",
+          "note": "矩阵沿指定维归约"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "compute",
+          "target": "matrix_reduce",
+          "span": "输出向量"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "in1"
+        ],
+        "writes": [
+          "out"
+        ]
+      }
+    },
+    {
+      "id": "mv_m_txn",
+      "group": "vpu",
+      "ops": [
+        "v1v2_pre_xn",
+        "mv_m_drv_xn"
+      ],
+      "requires": [
+        "cfg_mv_v_type 已配置"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "vpu_cfg"
+        },
+        {
+          "kind": "mode",
+          "param": "A|B",
+          "note": "模式 A 为按行 vs_v；模式 B 为先向量运算再逐行"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "compute",
+          "target": "matrix_vector_broadcast"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "in1",
+          "in2"
+        ],
+        "writes": [
+          "out"
+        ]
+      }
+    },
+    {
+      "id": "f2m_txn",
+      "group": "vpu",
+      "ops": [
+        "f2m_pre_xn"
+      ],
+      "requires": [
+        "mask 与配置"
+      ],
+      "hard": [
+        {
+          "kind": "cfg_required",
+          "param": "vpu_cfg"
+        },
+        {
+          "kind": "mx_block_size",
+          "param": 32,
+          "note": "定值"
+        }
+      ],
+      "effects": [
+        {
+          "kind": "convert",
+          "target": "fp_to_mx",
+          "span": "每组选最大指数 UE8M0，组内按组指数缩放"
+        }
+      ],
+      "roles": {
+        "binds": [
+          "src"
+        ],
+        "writes": [
+          "dst"
+        ]
+      }
+    }
+  ]
+}

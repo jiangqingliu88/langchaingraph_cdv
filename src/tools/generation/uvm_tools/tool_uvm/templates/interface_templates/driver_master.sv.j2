@@ -1,0 +1,193 @@
+{% include "base_templates/base_template.sv.j2" %}
+{#- 协议握手信号识别：output 侧 `*valid` + input 侧 `*ready`。
+    **valid 不能由随机字段决定** —— 事务发送时必须置起，否则总线上根本没有
+    有效事务（monitor 采到的是 idle），这是"agent 时序错"最常见的形态。 #}
+{%- set _vld = namespace(name="") %}
+{%- set _rdy = namespace(name="") %}
+{%- for p in ports %}
+{%-   if p.dir == 'output' and not _vld.name and (p.name|lower).endswith('valid') %}
+{%-     set _vld.name = p.name %}
+{%-   endif %}
+{%-   if p.dir == 'input' and not _rdy.name and (p.name|lower).endswith('ready') %}
+{%-     set _rdy.name = p.name %}
+{%-   endif %}
+{%- endfor %}
+
+// ============================================================
+// Master Driver Callback: {{ agent.name }}_master_driver_cb
+// ============================================================
+// UVM callback 扩展点：测试可派生本类插入自己的行为（改激励、注入错误、
+// 记录时序），**无需改动 driver 本体**。
+//
+// 注册（test 的 build_phase）：
+//   {{ agent.name }}_master_driver_cb cb;
+//   cb = {{ agent.name }}_master_driver_cb::type_id::create("cb");
+//   uvm_callbacks#({{ agent.name }}_master_driver,
+//                  {{ agent.name }}_master_driver_cb)::add(drv, cb);
+//
+// 注：typedef class 是前置声明 —— callback 的方法签名要用到 driver 类型，
+//     而 driver 定义在下方，SystemVerilog 要求先声明后使用。
+
+typedef class {{ agent.name }}_master_driver;
+
+class {{ agent.name }}_master_driver_cb extends uvm_callback;
+  `uvm_object_utils({{ agent.name }}_master_driver_cb)
+
+  function new(string name = "{{ agent.name }}_master_driver_cb");
+    super.new(name);
+  endfunction
+
+  // 驱动前：可修改 req 字段（地址边界、错误注入、延迟调整等）
+  virtual task pre_drive({{ agent.name }}_master_driver drv,
+                         {{ agent.name }}_master_seq_item req);
+  endtask
+
+  // 驱动后：时序记录 / 协议检查
+  virtual task post_drive({{ agent.name }}_master_driver drv,
+                          {{ agent.name }}_master_seq_item req);
+  endtask
+endclass : {{ agent.name }}_master_driver_cb
+
+// ============================================================
+// Master Driver: {{ agent.name }}_master_driver
+// ============================================================
+
+class {{ agent.name }}_master_driver extends uvm_driver #({{ agent.name }}_master_seq_item);
+  `uvm_component_utils({{ agent.name }}_master_driver)
+  // 建立 driver 类型 ↔ callback 类型的回调池（uvm_do_callbacks 依赖它）
+  `uvm_register_cb({{ agent.name }}_master_driver, {{ agent.name }}_master_driver_cb)
+
+  virtual {{ agent.name }}_if vif;
+  {{ agent.name }}_port_config cfg;
+  // ── 「我发了什么」：驱动出去的事务 ──
+  // loopback 自检的 expected 取这里（见 `<ag>_loopback_env.sv` 的 connect_phase）：
+  // **driver 驱动出去的事务** vs slave monitor 在总线上看到的 actual，才是真正的闭环。
+  // 取 master monitor 的话，loopback 里两个 agent 拿的是同一个接口实例
+  //（见 `<ag>_loopback_tb.sv`），那就成了"同一个接口读两遍"，恒真。
+  // 真实 env 里没有人接这个口，不产生任何影响。
+  uvm_analysis_port #({{ agent.name }}_master_seq_item) driven_ap;
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+    driven_ap = new("driven_ap", this);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "", "vif", vif))
+      `uvm_fatal("NOVIF", "Virtual interface not set")
+    if (!uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg))
+      `uvm_fatal("CFG", "Config not set")
+    // pragma custom build_logic begin
+    // pragma custom build_logic end
+  endfunction
+
+  // ⚠️ **刻意不写 `configure_phase` / `reset_phase`。**
+  //
+  // 驱动器**只在复位释放之后才驱动**，这是设计意图（见下面 main_phase 的
+  // `wait (vif.rst_n == …)`）—— 复位期间 DUT 的输入是什么它不关心。
+  //
+  // 曾经在这里加过一个 `reset_phase` 去"提前压空闲值"，那**是错的**：
+  // ① 它违背上面那条时序约定；② 用时钟块写时，值要等时钟事件才生效，
+  // 实测落在复位释放后的**第一个沿**上 —— 与 DUT 采样那一拍**同拍**，
+  // 谁先谁后取决于调度，等于把一处确定行为换成一处竞态；
+  // ③ 想"立刻生效"改成直接 `vif.<sig> = '0;` 更糟：接口信号已被时钟块驱动，
+  // 再叠一个直接赋值成两个驱动源，信号变成 **`z`**，比 X 更难查。
+  //
+  // 输入在复位期间是 X 本身没问题（DUT 那时在被复位）。真正要保证的是
+  // **复位一释放就有人在驱动** —— 那件事由 `main_phase` 往下那段负责，
+  // 而它能不能及时开始，取决于相位与复位释放的先后（见 `main_phase` 的注释）。
+
+  task main_phase(uvm_phase phase);
+    super.main_phase(phase);
+    `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
+    // driver 的 forever 循环不 raise objection（避免悬挂）；复位门控后才开始驱动
+    wait (vif.{{ agent.reset }} == 1'b{{ 1 if agent.reset_active_low else 0 }});
+    forever begin
+      {{ agent.name }}_master_seq_item req;
+      seq_item_port.get_next_item(req);
+      drive_transaction(req);
+      // **发送事务必须留痕**：日志里要能逐笔看到 driver 发了什么。
+      // 用 `sprint()` 而不是 `convert2string()`：seq_item 不保证实现后者。
+      `uvm_info("DRV", $sformatf("[DRV] {{ agent.name }} 发送事务: %s",
+                req.sprint()), UVM_MEDIUM)
+      // 广播「这一拍驱动了什么」——必须紧跟在 drive_transaction 之后：
+      // 它是在**第二个** `@(vif.master_cb)` 之后返回的，也就是 slave monitor
+      // 采到这一拍的那个边沿。SCB 按 `$time` 配对，所以这三者同拍。
+      driven_ap.write(req);
+      seq_item_port.item_done();
+    end
+  endtask
+
+  virtual task drive_transaction({{ agent.name }}_master_seq_item req);
+    // 回调：驱动前（可改 req）
+    `uvm_do_callbacks({{ agent.name }}_master_driver, {{ agent.name }}_master_driver_cb,
+                      pre_drive(this, req))
+    // pragma custom drive_logic begin
+{%- if agent.protocol == 'apb' %}
+    // === APB 两拍时序: setup（addr/sel/write/data）→ access（penable）→ 等 pready → 撤拍 ===
+    @(vif.master_cb);
+    vif.master_cb.psel    <= 1'b1;
+    vif.master_cb.paddr   <= req.paddr;
+    vif.master_cb.pwrite  <= req.pwrite;
+    vif.master_cb.pwdata  <= req.pwdata;
+    @(vif.master_cb);
+    vif.master_cb.penable <= 1'b1;
+    do @(vif.master_cb); while (vif.master_cb.pready !== 1'b1);
+    // **采样读数据 / 错误响应。** 这是**寄存器模型（RAL）唯一的数据来源**：
+    // 适配器的 `bus2reg` 从**同一条 req** 上取 `prdata` / `pslverr`
+    //（`provides_responses=0`，driver 不 put_response，就地写回）。
+    // 不采的话，每一次寄存器读拿到的都是 seq_item 里那个未驱动的初值 ——
+    // 复位值检查、bit_bash 全部失真，而且是"假通过 / 假失败"，不报错。
+    if (!req.pwrite) begin
+      req.prdata  = vif.master_cb.prdata;
+      req.pslverr = vif.master_cb.pslverr;
+    end
+    vif.master_cb.penable <= 1'b0;
+    vif.master_cb.psel    <= 1'b0;
+{%- else %}
+    // === Default: 将 is_rand=True 且映射到 output 端口的字段单拍驱动 ===
+    //
+    // ⚠️ **必须先对齐到时钟沿再驱动**（下面这个 `@(vif.master_cb);` 不能省）：
+    // 时钟块的 output 驱动**只在时钟事件上生效**。若进任务就立刻写，而进来的时刻
+    // 落在沿与沿之间（sequence 刚 `start()` 时就是这样），这笔要等到下一个沿才上
+    // 总线；偏偏本任务末尾那个 `@(vif.master_cb)` 也正好在那个沿返回 —— 于是下一笔
+    // 驱动跟它**在同一时刻**覆盖掉它，**第一笔被吃掉**（实测 loopback 首笔：
+    // driver 说发了 `paddr=cc`、slave monitor 总线上看到的是 `x`；此后每一笔都对）。
+    @(vif.master_cb);
+    repeat (cfg.drive_delay_max > 0 ? $urandom_range(cfg.drive_delay_min, cfg.drive_delay_max) : 0)
+      @(vif.master_cb);
+{%- for port in ports %}
+{%-   if port.dir == 'output' %}
+{%-     set port_in_txn = namespace(found=false) %}
+{%-     for var in transaction_vars %}
+{%-       if var.name == port.name %}{% set port_in_txn.found = true %}{% endif %}
+{%-     endfor %}
+{%-     if port_in_txn.found %}
+    vif.master_cb.{{ port.name }} <= req.{{ port.name }};
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+{%- if _vld.name %}
+    // **协议 valid 由驱动语义决定，不由随机字段决定**：发送事务时置 1；
+    // 有 ready 时保持数据稳定直到握手成功，然后撤掉 valid。
+    // 随机 `valid` 会让"总线上有时根本没事务"，下游 monitor/SCB 全错位。
+    req.{{ _vld.name }} = 1'b1;
+    vif.master_cb.{{ _vld.name }} <= 1'b1;
+{%- if _rdy.name %}
+    do @(vif.master_cb); while (vif.master_cb.{{ _rdy.name }} !== 1'b1);
+{%- endif %}
+    @(vif.master_cb);
+    vif.master_cb.{{ _vld.name }} <= 1'b0;
+{%- else %}
+    @(vif.master_cb);
+{%- endif %}
+{%- endif %}
+    // pragma custom drive_logic end
+    // 回调：驱动后
+    `uvm_do_callbacks({{ agent.name }}_master_driver, {{ agent.name }}_master_driver_cb,
+                      post_drive(this, req))
+  endtask
+endclass : {{ agent.name }}_master_driver

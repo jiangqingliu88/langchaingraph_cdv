@@ -1,0 +1,36 @@
+// {{ point.point_name }}_mon_ex.sv
+class {{ point.point_name }}_mon_ex extends uvm_monitor;
+
+  `uvm_component_utils({{ point.point_name }}_mon_ex)
+
+  virtual {{ point.point_name }}_if vif;
+  uvm_analysis_port #({{ point.point_name }}_mon_ex) mon_ex_port;
+
+  // Monitored data
+{% for port in point.ports %}
+{% if port.name != 'clk' and port.name != 'rst' and port.dir == 'output' %}
+  {% if port.width > 1 %}
+  logic [{{ port.width-1 }}:0] monitored_{{ port.name }};
+  {% else %}
+  logic monitored_{{ port.name }};
+  {% endif %}
+{% endif %}
+{% endfor %}
+
+  function new(string name = "{{ point.point_name }}_mon_ex", uvm_component parent = null);
+    super.new(name, parent);
+    mon_ex_port = new("mon_ex_port", this);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if(!uvm_config_db#(virtual {{ point.point_name }}_if)::get(this, "", "vif", vif))
+      `uvm_fatal(get_type_name(), "Virtual interface not found")
+  endfunction
+
+  task run_phase(uvm_phase phase);
+    //
+  endtask
+
+
+endclass

@@ -1,0 +1,50 @@
+# 流水线设计验证策略包
+# design-style=pipeline 时加载。承载流水线特有的验证知识（差异化核心）。
+design_style: pipeline
+description: 流水线设计验证策略（时序边界/反压/前递/Flush/冒险检测）
+
+prompt_hints: |
+  针对流水线设计，验证用例必须覆盖流水线特有的时序与数据完整性场景：
+  1. 全速运行（无反压）：Valid && Ready 连续 N 拍，验证吞吐。
+  2. 随机反压：Valid/Ready 按概率随机，验证数据在任意反压下不丢不重。
+  3. 背压溢出：下游 Buffer 满，验证流水线是否停止而不丢数据。
+  4. 流水线 Flush：各级插入中断/异常，验证控制逻辑正确清空各级寄存器。
+  5. 前递相关性（Load-Use）：验证数据旁路（Bypass）是否正确转发。
+
+  冒险检测检查点（必须覆盖）：
+  - 数据冒险 RAW：相邻指令读后写，前递路径 EX/MEM→EX、MEM/WB→EX。
+  - 数据冒险 WAR/WAW：寄存器重命名 / 写回仲裁顺序。
+  - 控制冒险：分支预测错误 → 冲刷(flush) 流水线 + 气泡(bubble) 正确性。
+  - 结构冒险：多发射写回端口冲突 → writeback port 仲裁逻辑。
+
+  波形特征识别（调试用）：
+  - 前递失效：fwd_sel 恒为 00 但相邻指令有 RAW 依赖 → 前递路径未连接 EX/MEM→EX。
+  - 冒险停顿：stall 拉高但前递本可解决依赖 → 冒险检测漏了。
+  - 冲刷错误：flush 后错误指令仍写回 → 冲刷逻辑漏了某级。
+  - 写回冲突：多发射写同一寄存器，wr_port 仲裁异常 → 仲裁优先级错误。
+
+test_scenarios:
+  - { name: full_speed, desc: "流水线全速运行（无反压，Valid&&Ready 连续 N 拍）" }
+  - { name: random_backpressure, desc: "随机反压（Valid/Ready 50% 概率随机）" }
+  - { name: backpressure_overflow, desc: "背压溢出（下游 Buffer 满，验证不丢数据）" }
+  - { name: pipeline_flush, desc: "流水线 Flush（各级插入中断，验证正确清空）" }
+  - { name: forwarding_correlation, desc: "前递相关性（Load-Use 数据旁路）" }
+  - { name: hazard_raw, desc: "数据冒险 RAW（相邻指令读后写，前递路径）" }
+  - { name: hazard_control, desc: "控制冒险（分支预测错误冲刷）" }
+
+coverage_bins:
+  - { name: valid_ready_combination, desc: "各级流水线 Valid/Ready 握手组合", signals: [valid, ready] }
+  - { name: pipeline_full_empty, desc: "流水线满（Full）和空（Empty）状态" }
+  - { name: backpressure_streak, desc: "连续背压超过 N 周期的边界场景" }
+  - { name: forwarding_hit, desc: "前递路径命中（Bypass 生效，fwd_sel 组合覆盖）", signals: [opcode, result] }
+  - { name: hazard_coverage, desc: "RAW/WAR/WAW 数据冒险覆盖" }
+
+assertion_templates:
+  - { name: forwarding_check, desc: "检测流水线级间数据是否错误旁路" }
+  - { name: data_integrity_under_backpressure, desc: "反压时数据完整性断言" }
+  - { name: flush_clearance, desc: "Flush 后各级寄存器清空断言" }
+  - { name: hazard_stall_check, desc: "冒险停顿无多余气泡断言" }
+
+compile_options:
+  - "+pipeline_opt"
+  - "+delay_mode_distributed"

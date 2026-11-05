@@ -1,0 +1,18 @@
+name: check_loopback
+description: '编译 + vsim 仿真每个 Agent 的 loopback TB，解析 Driver->Monitor 通过率'
+input_schema:
+  type: object
+  properties:
+    env_dir:
+      type: string
+      default: ''
+output_schema:
+  type: object
+  properties:
+    agents:
+      type: array
+    all_pass:
+      type: boolean
+    score:
+      type: integer
+risk_level: safe

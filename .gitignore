@@ -1,0 +1,85 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+
+# Virtual environment
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing & coverage
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Databases (local)
+*.db
+*.db-journal
+# 运行期数据库统一放 database/（一份真相，见 config/paths.py）；
+# 只保留目录占位，库本体、备份与归档都不进 git。
+/database/*
+!/database/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Environment (local only — contains API keys)
+.env
+.env_bak
+
+# Generated regression output
+# 锚到仓库根：不加 `/` 的话 `regression_*/` 会连 `src/tools/regression_tools/`
+# 一起吞掉（它同样匹配 `regression_*`+`/`），整个回归框架源码因此长期不在版本控制里。
+/regression_*/
+/.build_cache/
+
+# Generated output directories
+output/
+output_*/
+output_dir/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tool / IDE generated artifacts
+/out_x_*/
+*.vstf
+
+# Local secrets
+.jwt_secret
+.env.local
+
+# Local agent / runtime state (machine-specific)
+.claude/settings.json
+.claude/settings.local.json
+.sessions/
+.agents/
+.signoffai/*
+!.signoffai/.gitkeep
+.visualizer/
+
+# EDA / simulation artifacts (never commit)
+*.ucdb
+*.wlf
+*.fsdb
+*.vcd
+*.qpg
+*.qdb
+*.ses
+simv
+simv.daidir/
+csrc/
+
+# Vendored E203: keep functional RTL/TB/toolchain sources, omit bulky assets.
+# The full upstream tree is available at https://github.com/riscv-mcu/e203_hbirdv2
+/examples/open_npu_soc/e203_hbirdv2/doc/
+/examples/open_npu_soc/e203_hbirdv2/pics/
+/examples/open_npu_soc/e203_hbirdv2/fpga/
+/examples/open_npu_soc/e203_hbirdv2/riscv-tools/**/*.dump
+/examples/open_npu_soc/e203_hbirdv2/riscv-tools/**/*.rpt

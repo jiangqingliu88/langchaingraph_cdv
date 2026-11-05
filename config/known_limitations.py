@@ -1,0 +1,85 @@
+"""已知边界（单一真相）—— `ARCHITECTURE.md` §15 必须与这里一致。
+
+不是“TODO 列表”：每条都是**当前承诺的边界**。实现了就把 status 改成
+`done` 并从文档移除，同时更新对应实现（例如 player runtime）。
+`tests/test_architecture_invariants.py` 会把这份表和文档钉在一起。
+"""
+from __future__ import annotations
+
+from typing import Dict, Tuple
+
+KNOWN_LIMITATIONS: Tuple[Dict[str, str], ...] = (
+    {"id": "unreachable_declaration", "status": "open",
+     "text": "不可达声明未实现"},
+    {"id": "verified_ref_model", "status": "open",
+     "text": "没有 verified TLM 1.0 参考模型"},
+    {"id": "single_backend_template", "status": "open",
+     "text": "只有 Questa 后端模板完整"},
+    {"id": "plusargs_source", "status": "open",
+     "text": "测试语义 plusargs 还没有生成源"},
+    {"id": "single_machine_regression", "status": "by_design",
+     "text": "单机串行回归"},
+    {"id": "no_web_ui", "status": "by_design",
+     "text": "不开发 Web UI"},
+    {"id": "coarse_reward", "status": "by_design",
+     "text": "奖励信号是“粗连续”"},
+    {"id": "kg_is_query_only", "status": "by_design",
+     "text": "知识图是查询层，不是推理层"},
+    {"id": "player_runtime", "status": "open",
+     "text": "player 激励后端只有 plan，没有 runtime", "owner_phase": "P3"},
+    {"id": "provenance_sandbox_lifecycle", "status": "open",
+     "text": "产物级 provenance DAG", "owner_phase": "P3"},
+    {"id": "cmd_allowlist_monitor", "status": "by_design",
+     "text": "命令白名单默认 EDA enforce、其他 monitor", "owner_phase": "P5"},
+    {"id": "uvm_ir_migration", "status": "open",
+     "text": "UVM 生成器尚未迁到统一 IR", "owner_phase": "P1"},
+    {"id": "incremental_dependency_heuristic", "status": "by_design",
+     "text": "增量依赖映射由文件级启发式自动生成"},
+    {"id": "incremental_compile", "status": "open",
+     "text": "增量编译尚未实现"},
+    {"id": "optimize_seed_order", "status": "open",
+     "text": "回归优化的种子级重排未实现"},
+    {"id": "soc_evidence_not_v2", "status": "open",
+     "text": "SoC 证据包不是 v2 三态签核"},
+    {"id": "ip_cdv_not_measured", "status": "open",
+     "text": "IP 级覆盖率尚未测量（独立 IP TB 待 M2）"},
+    {"id": "e203_c_path_boundary", "status": "open",
+     "text": "E203 C 路径的边界"},
+    {"id": "optional_auth_api", "status": "by_design",
+     "text": "auth.py 是可选 API 面"},
+    {"id": "long_output_path", "status": "by_design",
+     "text": "输出目录过长会撞 Windows MAX_PATH（coverstore 打不开 → vsim-7）"},
+)
+
+
+def by_id(limitation_id: str) -> Dict[str, str]:
+    for item in KNOWN_LIMITATIONS:
+        if item["id"] == limitation_id:
+            return item
+    raise KeyError(limitation_id)
+
+
+#: 机器可读状态机的取值（`open` 以外的都不是"要做的事"）。
+LIMITATION_STATUSES = ("open", "closed", "deferred", "by_design")
+
+
+def rows() -> list:
+    """**状态机视图** —— 每条边界的 `{id, summary, status, owner_phase, verify_test}`。
+
+    纯文本边界只能回答"有没有这条"，回答不了"谁负责、到哪一阶段、哪条测试
+    证明它已关闭"。`owner_phase` / `verify_test` 可空（空 ≠ 没有，是还没排）。
+    `text` 仍保留：文档同源校验读它，别改字段名。
+    """
+    out = []
+    for item in KNOWN_LIMITATIONS:
+        status = str(item.get("status") or "open")
+        if status not in LIMITATION_STATUSES:
+            status = "open"
+        out.append({
+            "id": item["id"],
+            "summary": item.get("text", ""),
+            "status": status,
+            "owner_phase": item.get("owner_phase", ""),
+            "verify_test": item.get("verify_test", ""),
+        })
+    return out

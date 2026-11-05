@@ -1,0 +1,69 @@
+# ════════════════════════════════════════════════════════════════
+# 场景 DSL 示例 —— NPU 子系统上的一轮 GEMM 为主的活动
+#
+# 七段结构照 `08_验证策略.md` §3.10.1：
+#   meta / resources / txn_pool / shape_space+precision_mix / intent /
+#   orchestration / harness，外加 §3.12.7 的 alloc。
+#
+# 用法:
+#   python -m src.tools.generation.isa_gen_tools.cli validate config/isa_gen/examples/npu_gemm.yaml
+#   python -m src.tools.generation.isa_gen_tools.cli compile  config/isa_gen/examples/npu_gemm.yaml -o out/
+#   或在工作台的「ISA 激励」页里直接编译
+# ════════════════════════════════════════════════════════════════
+
+meta:
+  name: npu_gemm_smoke
+  # seed 是**可复现链的根**：同一个 seed + 同一份 DSL → 产物逐字节相同。
+  # 留空则取时间戳，实际用的值会回填进 case.json。
+  seed: 12345
+  isa_rev: V0.8
+  target: npu_subsystem_top
+
+# ── 参与随机的资源 ──
+resources:
+  # cores 限定 6b_grp_mask 的随机域（文档字段约定第 2 条）
+  cores: [0..3]
+  spad_tiles: 8
+  cimc_pages: 4
+
+# ── 事务池：**随机化的最小单元是事务，不是指令**（§3.9）──
+txn_pool:
+  include: [mask_txn, cfg_txn, tld_txn, gemm_txn, noc_1to1_txn, sync_txn]
+  weights: {tld_txn: 3, gemm_txn: 4, noc_1to1_txn: 1, sync_txn: 1}
+
+# ── 形状与精度：shape_space 是**离散枚举**，保证每个取值都映射到合法 tile 边界 ──
+shape_space:
+  dim0: [64, 128]
+  dim1: [64, 128]
+precision_mix: {fp16: 0.6, bf16: 0.4}
+
+# ── L2 意图旋钮：**只调权重**，改不了"什么是一条合法指令"（§3.15 规则 2）──
+intent:
+  hazard_density: 0.35
+  tile_contention: 0.2
+  mcast_mix: {unicast: 1.0}
+  fence_every_n_epochs: 2
+  # 负例不走随机空间（§3.9）—— 写非零会被记成一条 note，不会静默生效
+  illegal_ratio: 0.0
+
+# ── L3 时间窗编排 ──
+orchestration:
+  epochs: 3
+  epoch_boundary_sync: always     # random / always / never
+
+harness:
+  inst_agent: {gap_mode: random, gap_range: [0, 8], ready_throttle: 0.15}
+
+# ── 本 case 必须驻留的对象（§3.12.7）──
+# `role` 是**计算类事务找对象的方式**：文档 §3.14.4 要求 MPU/VPU 计算类 IR
+# 必须携带 binds/writes，但没说生成器怎么知道哪个对象是权重 —— 靠这个对上。
+alloc:
+  - {name: img, pool: dram.share,     shape: [64, 128], dtype: fp16,
+     pattern: gauss, exp_range: [-6, 6], role: src}
+  - {name: out, pool: lmem.core.spad, shape: [64, 64],  dtype: fp16, role: dst}
+  - {name: wgt, pool: lmem.core.cimc, shape: [64, 64],  dtype: fp16, role: wgt}
+  - {name: act, pool: lmem.core.spad, shape: [64, 64],  dtype: fp16, role: in}
+  - {name: res, pool: lmem.core.spad, shape: [64, 64],  dtype: fp16, role: out}
+  # gemm_out_org_pre_xn 的 rs2 是 `base_addr_orig`（原累加器）—— 角色名 `origin`，
+  # 由 txn.registry.json 的 operands 声明引用（见 compile/templates.py 的说明）。
+  - {name: org, pool: lmem.core.spad, shape: [64, 64],  dtype: fp16, role: origin}

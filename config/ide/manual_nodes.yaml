@@ -1,0 +1,93 @@
+# ════════════════════════════════════════════════════════════════
+# 流程人工节点 —— 声明式配置
+#
+# 这份文件声明「在闭环流程的哪个阶段之后，插一个人工干预点」。
+#
+# **这份声明是主源**：`graph.py::n_approval` 读它（经运行时的 `manual_nodes`），
+# 写进去的动作就门控。只有那两个已知高危动作（改 RTL / 改模型）留了硬编码兜底，
+# 防的是"声明文件丢了/写坏了 → 治理静默失效"。
+#
+# 读取入口：src/tools/integration/ide_tools/api.py::run_manual_nodes
+# 界面模块：src/workbench/modules/ide/manual_nodes/module.py
+# schema：  src/tools/integration/ide_tools/schema/manual_nodes.schema.json
+#
+# ── ⚠️ 闭环里还有**另一层**人工节点，刻意不放进这份声明 ──
+#   分级回归（loopback → p0 → p1 → p2 → p3）在 **loopback 全过之后**会停下等人
+#   放行。它声明不了在这儿 —— 本文件的 `after` 是**图节点名**（decide / verify /
+#   ops / …），而分级住在 `ops` **内部**。
+#   它声明在 `InfrastructureManager.REGRESSION_STAGES` 的第 4 位；
+#   放行用 `vagent regression approve`，工作台工具栏也有开关。
+#
+#   两层闸的东西不同，别合并：
+#     · 这份声明 = 机器**将要做的动作**（REFACTOR_RTL…）→ 进程内 `ApprovalGate` 作答；
+#     · 分级那道 = 一级**已出的证据**（loopback 的 SCB 全 match）→ 跑结束、
+#       另起命令放行、再重跑（带绑证据的审计记录）。
+#   硬合成一套，就得让回归在进程内阻塞等答案 —— 那会把 `vagent verify` 挂死，
+#   而它正是被无人值守/agent 调用的那条路。
+#
+# ── 字段约定 ──
+# version           文档版本号（可省，默认 1）
+# project           所属项目/模块（可省）
+# nodes[].id        节点 id，文档内唯一（必填）
+# nodes[].title     显示名（可省，默认用 id）
+# nodes[].kind      approval 人工审批 / review 人工评审 / manual_step 人工执行
+# nodes[].after     挂在哪个既有阶段之后：
+#                   design / model / verify / env_arch_check / ops /
+#                   coverage / debug_functional / decide / audit
+# nodes[].action    只在某个决策动作发生时触发（可省），如 REFACTOR_RTL
+# nodes[].prompt    给人工看的提示语
+# nodes[].default   超时默认决策：proceed 放行 / reject 拒绝 / skip 跳过
+# nodes[].timeout_s 等待秒数，0 = 不限时
+# nodes[].required  是否必经：true = 必须等人；false = 超时按 default 走
+# ════════════════════════════════════════════════════════════════
+
+version: 1
+
+project: apb_uart
+
+nodes:
+
+  # 决策阶段之后的审批 —— 改动 RTL 是有风险的动作，要求人工放行
+  - id: decide_approve_refactor
+    title: 重构 RTL 审批
+    kind: approval
+    after: decide
+    action: REFACTOR_RTL
+    prompt: 决策引擎打算重构 RTL。请看覆盖率缺口与上一次回归结果，决定是否放行。
+    default: reject
+    timeout_s: 600
+    required: true
+
+  # 决策阶段之后的审批 —— 改参考模型与改 RTL 同级：它也是签核的门禁之一
+  #
+  # 这条对应的是闭环里那个**兜底名单**（`graph.py` 的 `_LEGACY_HIGH_RISK_ACTIONS`）：
+  # 那两个动作在声明出现之前就是写死要人批的。声明是**主源**，写在这里是为了让
+  # "哪些动作要人批"只有一份可见的答案；兜底只在声明文件丢了/坏了时才兜。
+  - id: decide_approve_model
+    title: 更新参考模型审批
+    kind: approval
+    after: decide
+    action: UPDATE_MODEL
+    prompt: 决策引擎打算更新参考模型。请确认模型改动与规格一致，再决定是否放行。
+    default: reject
+    timeout_s: 600
+    required: true
+
+  # 建模阶段之后的评审 —— 参考模型是签核的门禁之一，先让人过一眼
+  - id: model_review
+    title: 参考模型评审
+    kind: review
+    after: model
+    prompt: 参考模型生成完毕。确认它与规格一致再继续（模板占位模型 audit 会拦）。
+    default: skip
+    timeout_s: 0
+    required: false
+
+  # 签核之前的人工执行 —— 有些证据要人手工归档
+  - id: audit_manual_archive
+    title: 签核前人工归档
+    kind: manual_step
+    after: audit
+    prompt: 把波形与覆盖率报告手工归档到签核证据包，完成后继续。
+    timeout_s: 0
+    required: true

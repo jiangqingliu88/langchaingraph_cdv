@@ -1,0 +1,37 @@
+# ============================================================
+# Bench 定义 —— 顶层 testbench（clk_rst_if 实例化 + DUT + UVM 启动）
+# ============================================================
+
+bench:
+  name: apb_bench
+  include_assertions: false
+
+  # DUT / 寄存器模型的源文件 —— 编译清单要收它们（相对本文件所在目录）
+  dut_filelist:
+    - ../apb_slave_dut.sv
+  ral_filelist:
+    - ../apb_ral_pkg.sv
+
+  #clk_rst_vip 里配置，由 clk_rst_agent 驱动）──
+  clk_rst_if:
+    clocks:
+      - { name: pclk }
+    resets:
+      - { name: presetn }
+
+  dut_module: apb_slave_dut     # DUT **模块名**（tb_top 例化用）
+  dut_instance: u_dut           # DUT **实例名**（与模块名两回事，别混）
+
+  wave_dump:
+    enabled: true
+    format: FST
+    file_name: "apb_bench_tb_top.fsdb"
+
+  interfaces:
+    - name: apb_if                     # interface 实例名
+      type_name: apb_if                # interface 类型
+      clock: pclk                      # interface 的 clock 输入口名
+      reset: presetn                   # interface 的 reset 输入口名
+      agent_path: [apb_master_agent_h, apb_slave_agent_h]
+      # 协议信号（interface 与 DUT 同名，tb_top 直接 port 连接）
+      ports: [paddr, pwrite, psel, penable, pwdata, prdata, pready, pslverr]

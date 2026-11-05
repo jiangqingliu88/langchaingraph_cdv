@@ -1,0 +1,88 @@
+# ================= 全局变量 =================
+# 共享的 variables / modes ，供 demo.yaml 以 include 合并（本档优先覆盖）
+variables:
+  TB_TOP: demo_tb_top
+  SEED: 42
+  FILES_F: /work/home/jqliu/regression_framework/files.f
+
+  # options
+  fsdb_opt: -fsdb
+  interactive_opt: DEBUG=gui
+  smartlog_opt: DEBUG=gui
+  custom_opt: -debug
+  # **变量引用变量要写 `{{ }}`（Jinja），不要写 `$`。**
+  # `$fsdb_opt` 那种写法只有在「框架把 variables 导出成 shell 变量」时才生效，
+  # 而且 shell 不做递归展开：`export debug_args='$fsdb_opt'` 存进去的就是字面量，
+  # 命令里 `$debug_args` 展开出来还是 `$fsdb_opt`。`{{ }}` 在生成脚本前就渲染完了，
+  # 没有这个坑。变量值是带 `${...}` 的 shell 变量（如 ${EMAN_RUN_DIR}）没关系——
+  # 那些不是框架管的，留给 shell 在运行时展开。
+  debug_args: '{{ fsdb_opt }} {{ interactive_opt }} {{ smartlog_opt }} {{ custom_opt }}'
+
+  # debug all
+  debug_all: '-debug_all'
+
+  # x-propagate
+  xprop: '-xprop=${HVL_TOP_PATH}/cfg/xprop.cfg'
+  tprop: '-xprop=tprop'
+
+  # wave / coverage / upf / glitch / delta
+  wave_opt: '+DUMP_FILE=${EMAN_RUN_DIR}/waves/${EMAN_TEST_NAME}.fsdb +fsdb+force'
+  cov_opt: '-cm line+cond+fsm+tgl+branch+assert -cm_dir ${EMAN_CM_DIR}'
+  upf_opt: '-upf ${HVL_TOP_PATH}/upf/chip_top/chip_top_sim.upf -power_top chip_top -fsdb_power -fsdb_power_all'
+  glitch_opt: '+fsdb+glitch=0'
+  delta_opt: '+fsdb+delta'
+  common_opts: '{{ fsdb_opt }} {{ debug_all }} {{ xprop }} {{ tprop }} {{ wave_opt }} {{ cov_opt }} {{ upf_opt }} {{ glitch_opt }} {{ delta_opt }}'
+
+# ================= 环境变量 =================
+env:
+  DC_HOME: /cad/tools/synopsys/syn_vX-2025.06-SP1
+  VCS_HOME: /cad/tools/synopsys/vcs_vO-2020.03-SP1
+  UVM_HOME: /cad/tools/synopsys/vcs_vO-2020.03-SP1/etc/uvm-1.2
+
+# ================= 模式映射 =================
+# 便于在 CLI 或上层配置中通过简单的词条启用复杂选项集
+modes:
+  debug_all: debug_all
+  xprop: xprop
+  tprop: tprop
+  wave: wave_opt
+  cov: cov_opt
+  # 「覆盖率 + 波形」：一轮里两样都要。**不带 SCB_OFF** —— 这一轮是覆盖率轮，
+  # scoreboard 照常结算（见 `sim_modes.py` 里该词条的 note）。
+  cov+wave: cov_wave_opt
+  upf: upf_opt
+  glitch: glitch_opt
+  delta: delta_opt
+
+# ================= 构建流程 =================
+# Build：定义完整 vcs run_cmd，子 build 用 extends 继承 run_cmd，仅 override BUILD_OPTS 追加指令
+# builds:
+#   # 基础构建
+#   - name: multi_step_build
+#     variables:
+#       BUILD_OPTS: ''
+#     # `{{ BUILD_OPTS }}` 是子 build 唯一的差异点：它们 extends 本 build 拿到整条
+#     # run_cmd，只把 BUILD_OPTS 换成自己要加的编译宏。不引用它的话，子 build 里
+#     # override 的 BUILD_OPTS 就没有任何效果。
+#     run_cmd: 'VCS -full64 -sverilog -timescale=1ns/1ps {{ BUILD_OPTS }} +vcs+lic+wait +lint=TFIPC-L +notimingcheck -kdb -lca +vcs+lic+wait -cm line+cond+fsm+tgl+branch+assert -cm_dir ${EMAN_CM_DIR} -f {{ FILES_F }} -l ${EMAN_COMPILE_DIR}/build.log -o ${EMAN_SIMV}'
+#     # run_cmd 里两种写法各管一路：
+#     #   `{{ }}`  = 模板变量（variables / local_vars），生成脚本时就替换掉
+#     #   `${}`    = 环境变量，留给 shell 运行时展开 —— `${EMAN_*}` 是框架注入的
+#     #              （见 env 之外的那套运行时变量），`${HVL_TOP_PATH}` 之类则由
+#     #              外部环境提供
+
+#   # 继承基础构建，通过覆盖 BUILD_OPTS 追加编译宏
+#   - name: sc_three_step_build
+#     extends: multi_step_build
+#     variables:
+#       BUILD_OPTS: '+define+SC_THREE_STEP'
+
+#   - name: sig_step_build
+#     extends: multi_step_build
+#     variables:
+#       BUILD_OPTS: '+define+SIG_STEP'
+
+#   - name: vpu_multi_step_build
+#     extends: multi_step_build
+#     variables:
+#       BUILD_OPTS: '+define+VPU_MULTI_STEP'

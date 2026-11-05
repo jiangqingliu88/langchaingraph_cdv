@@ -1,0 +1,79 @@
+# ════════════════════════════════════════════════════════════════
+# 验证阶段进度趋势 —— 进度模型
+#
+# 这份文件是「各验证阶段进展到哪了」的**唯一真相**。界面
+# （验证管理系统 → 进度趋势）只读它、画成折线；改这里就能改趋势，
+# 不用重跑闭环（闭环的 journal 目前不采集 build 数量与 P0–P3 分层）。
+#
+# 读取入口：src/tools/flow/trend_tools/api.py::run_trend
+# 界面模块：src/workbench/modules/vms/trend/module.py
+#
+# ── 阶段（stages）──
+# 每个阶段有一个 kind，决定它画在哪个面板、y 轴是什么量：
+#   build  编译/构建 —— 面板①「编译构建趋势」，值 = 累计 build 次数
+#   loop   仿真循环 —— 面板②「验证收敛趋势」，值 = 覆盖率 %
+#   test   按优先级 —— 面板②，值 = 通过率 %
+# 阶段 id 可自由起名；title 是图上与表里的显示名。
+#
+# ── 每轮（rounds）──
+# 一轮一个条目，round 是轮次号（1 起）。每个阶段在这轮填一个格子：
+#   build: {build: N}                  N = 累计构建次数（单调不减）
+#   loop:  {coverage: P, iterations:i, drv_ok:bool}   P = 覆盖率 %
+#   test:  {passed: n, total: m}       n/m = 本轮通过/用例总数
+# **某阶段某轮不写，就是「这轮它还没数据」—— 图上那条线从有数据的轮次才起笔。**
+# ════════════════════════════════════════════════════════════════
+
+project: apb_uart
+
+stages:
+  - {id: compile_agent, title: "编译 agent",  kind: build}
+  - {id: compile_env,   title: "编译 env",    kind: build}
+  - {id: sim_loop,      title: "sim_loop 循环", kind: loop}
+  - {id: base,          title: "base test",   kind: test}
+  - {id: p0,            title: "P0 test",     kind: test}
+  - {id: p1,            title: "P1 test",     kind: test}
+  - {id: p2,            title: "P2 test",     kind: test}
+  - {id: p3,            title: "P3 test",     kind: test}
+
+rounds:
+
+  # ── 第 1 轮：先把 agent 与 env 编译出来，跑 base + P0 ──
+  - round: 1
+    compile_agent: {build: 3}
+    compile_env:   {build: 2}
+    sim_loop:      {coverage: 62.0, iterations: 4, drv_ok: false}
+    base:          {passed: 1, total: 1}
+    p0:            {passed: 2, total: 6}
+    p1:            {passed: 0, total: 5}
+
+  # ── 第 2 轮：driver 校准好了，sim_loop 覆盖率上台阶；P0 继续 ──
+  - round: 2
+    compile_agent: {build: 5}
+    compile_env:   {build: 4}
+    sim_loop:      {coverage: 74.0, iterations: 9, drv_ok: true}
+    base:          {passed: 1, total: 1}
+    p0:            {passed: 5, total: 6}
+    p1:            {passed: 2, total: 5}
+    p2:            {passed: 0, total: 4}
+
+  # ── 第 3 轮：P0 收口，P1/P2 铺开，P3 起步 ──
+  - round: 3
+    compile_agent: {build: 6}
+    compile_env:   {build: 5}
+    sim_loop:      {coverage: 85.5, iterations: 13, drv_ok: true}
+    base:          {passed: 1, total: 1}
+    p0:            {passed: 6, total: 6}
+    p1:            {passed: 4, total: 5}
+    p2:            {passed: 2, total: 4}
+    p3:            {passed: 0, total: 3}
+
+  # ── 第 4 轮：全档推进，P2/P3 还差一点（趋势线仍在上扬）──
+  - round: 4
+    compile_agent: {build: 7}
+    compile_env:   {build: 6}
+    sim_loop:      {coverage: 93.0, iterations: 16, drv_ok: true}
+    base:          {passed: 1, total: 1}
+    p0:            {passed: 6, total: 6}
+    p1:            {passed: 5, total: 5}
+    p2:            {passed: 3, total: 4}
+    p3:            {passed: 1, total: 3}

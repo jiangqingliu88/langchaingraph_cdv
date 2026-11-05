@@ -1,0 +1,177 @@
+{% include "base_templates/base_template.sv.j2" %}
+{#- 协议握手信号（供接口内时序断言）：output 侧 `*valid` + input 侧 `*ready`；
+    payload = 其余 output 端口。 #}
+{%- set _pv = namespace(name="") %}
+{%- set _pr = namespace(name="") %}
+{%- set _pl = namespace(names=[]) %}
+{%- for p in ports %}
+{%-   if p.name != clock and p.name != reset %}
+{%-     if p.dir == 'output' and not _pv.name and (p.name|lower).endswith('valid') %}
+{%-       set _pv.name = p.name %}
+{%-     endif %}
+{%-     if p.dir == 'input' and not _pr.name and (p.name|lower).endswith('ready') %}
+{%-       set _pr.name = p.name %}
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+{%- for p in ports %}
+{%-   if p.dir == 'output' and p.name != clock and p.name != reset and p.name != _pv.name %}
+{%-     set _pl.names = _pl.names + [p.name] %}
+{%-   endif %}
+{%- endfor %}
+
+// ============================================================
+// Interface: {{ agent.name }}_if
+// AXI-VIP 风格：内部 logic + master/slave/monitor 时钟块 + modport
+//   dir: 'output' => master 驱动、slave 采样
+//   dir: 'input'  => slave 驱动、master 采样
+//
+// ── 从端信号（dir: input）为什么是"wire + 影子变量"两个名字 ──
+//   `<name>`      : 对外（DUT 直连在这里，master/monitor 也采样它）
+//   `<name>_slv`  : TB 从端变量，**slave_cb 驱动它**（缺省高阻 'z）
+//   `assign <name> = <name>_slv;`
+//
+// 这样每个变量**只有一个驱动源**：
+//   · `<name>_slv` ← 时钟块（唯一）
+//   · `<name>`     ← 那条 assign（唯一），wire 语义下 'z 会让位给强驱动
+// 于是两种 bench 都能用同一份接口：
+//   · DUT 直连（DUT 挂在从端）：slave agent 是 passive，从端变量始终 'z，
+//     `<name>` 上只有 DUT 在驱动 → 读到的就是 DUT 的真值
+//   · loopback（没有 DUT）：slave driver 写 `<name>_slv`，经 assign 送到 `<name>`
+//
+// 原先是"`<name>` 一个变量 + slave 时钟块直接 output 它"：只要 DUT 也直连
+// `<name>`，Questa 在 vopt 阶段就判
+//   "Variable '.../<name>', driven via a port connection, is multiply driven"
+// —— 整个设计加载不了。而那恰恰是"从端时钟块反向驱动"最自然的写法，
+// 所以不能靠把时钟块降级成"仅采样"来躲（那会让 slave driver 没法走时钟块）。
+// ============================================================
+
+interface {{ agent.name }}_if  (input logic {{ clock }}, input logic {{ reset }});
+import {{ agent.name }}_parameters_pkg::*;
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset %}
+{%-     set width_str = port.width|string %}
+{%-     if port.dir == 'input' %}
+{#- 从端驱动：对外 wire + TB 侧影子变量 -#}
+{%-       if width_str == '1' %}
+  wire  {{ port.name }};                          // 对外（DUT 直连 / master 采样）
+  logic {{ port.name }}_slv = 'z;                 // TB 从端（slave_cb 驱动）
+{%-       else %}
+  wire  [{{ port.width }}-1:0] {{ port.name }};   // 对外（DUT 直连 / master 采样）
+  logic [{{ port.width }}-1:0] {{ port.name }}_slv = 'z;   // TB 从端（slave_cb 驱动）
+{%-       endif %}
+{%-     else %}
+{#- **master 驱动的信号必须给"空闲初值"。**
+    裸 `logic` 的默认值是 **X**，而在驱动器开口之前（复位期间、以及复位释放后
+    到第一笔事务之间）这些信号就一直是 X。DUT 是**连续**读这根线的，`always_ff`
+    在复位释放后的**第一个沿**就把它采进寄存器：
+
+        queue_level <= queue_level + (instr_valid && !full ? 1 : 0) - …
+
+    `instr_valid` 为 X → 寄存器被锁成 X，此后 `X + 1 = X` **再也回不来**。
+    实测：整轮 p0 6/7 红、覆盖率恒 0%，而日志上看不出"没人驱动"。
+
+    语义上也该如此：**一个 agent 的输出信号，在它开口之前是"空闲"，不是"未知"**。
+    X 是仿真器的默认，不是设计意图。给初值之后，驱动器**照样**在时钟块上驱动
+    （`logic` 的初值与时钟块驱动不冲突），只是那之前线上是 0 而不是 X。 #}
+{%-       if width_str == '1' %}
+  logic {{ port.name }} = 1'b0;                   // master 驱动（初值 = 空闲值）
+{%-       else %}
+  logic [{{ port.width }}-1:0] {{ port.name }} = '0;   // master 驱动（初值 = 空闲值）
+{%-       endif %}
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+
+  // 从端信号路由：TB 从端不驱动时保持 'z，让位给 DUT 的强驱动
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset and port.dir == 'input' %}
+  assign {{ port.name }} = {{ port.name }}_slv;
+{%-   endif %}
+{%- endfor %}
+
+  // -------- Master 时钟块（驱动 output，采样 input）--------
+  clocking master_cb @(posedge {{ clock }});
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset %}
+{%-     if port.dir == 'output' %}
+    output {{ port.name }};
+{%-     else %}
+    input  {{ port.name }};
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+  endclocking : master_cb
+
+  // -------- Slave 时钟块（采样 output 端口，驱动 input 端口）--------
+  // 方向与 master_cb **恰好相反**：master 驱动的信号这边是 `input`（采样），
+  // master 采样的信号这边是 `output`（驱动）。这份给 **slave driver** 用。
+  //
+  // 驱动的是**从端影子变量 `<name>_slv`**（不是对外的 `<name>`）：对外的
+  // `<name>` 是 wire，要留给 DUT 直连，由上面的 assign 做二选一。
+  // 时钟块永远保留这些 output —— 有没有 DUT 都一样，slave driver 照常经时钟块驱动。
+  clocking slave_cb @(posedge {{ clock }});
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset %}
+{%-     if port.dir == 'output' %}
+    input  {{ port.name }};
+{%-     else %}
+    output {{ port.name }}_slv;
+{%-     endif %}
+{%-   endif %}
+{%- endfor %}
+  endclocking : slave_cb
+
+  // -------- Monitor 时钟块（仅采样）--------
+  clocking mon_cb @(posedge {{ clock }});
+{%- for port in ports %}
+{%-   if port.name != clock and port.name != reset %}
+    input  {{ port.name }};
+{%-   endif %}
+{%- endfor %}
+  endclocking : mon_cb
+
+  modport MASTER  (clocking master_cb, input {{ reset }});
+  modport SLAVE   (clocking slave_cb,  input {{ reset }});
+  modport MONITOR (clocking mon_cb,    input {{ reset }});
+
+
+    // 接口内部获取配置对象（非常高级但合法的用法）
+    //{{ agent.name }}_port_config cfg;
+    //initial begin
+    //    if (!uvm_config_db#({{ agent.name }}_port_config)::get(null, "*.env.*", "cfg", cfg)) begin
+    //        cfg = {{ agent.name }}_port_config::type_id::create("cfg");
+    //    end
+    //end
+
+    // 宽松模式：高位不能是未知态（X/Z），但允许 0/1（不推荐，通常用于调试）
+    //property p_addr_valid;
+    //    @(posedge clk) valid |-> ($isunknown(addr[`{{ agent.name | upper }}_MAX_ADDR_WIDTH-1:cfg.addr_width]));
+    //endproperty
+
+{%- if _pv.name %}
+  // ════════════════════════════════════════════════════════════
+  // 协议时序断言（**TB 自检，独立于 driver / monitor 的采样判据**）
+  //
+  // 只在这里拦三类"agent 时序错"：
+  //   1. valid 为 X —— 时序不可判定（不是"没有事务"）；
+  //   2. valid 未等 ready 就撤销 —— handshake 不成立；
+  //   3. 等待 ready 期间 payload 变化 —— 事务内容不稳定的经典错误。
+  // 命中走 `$error` → 回归判据（UVM_ERROR/Errors）→ 分级门控拦下。
+  // ════════════════════════════════════════════════════════════
+  property p_{{ agent.name }}_valid_known;
+    @(posedge {{ clock }}) disable iff (!{{ reset }})
+      !$isunknown({{ _pv.name }});
+  endproperty
+  assert property (p_{{ agent.name }}_valid_known)
+    else $error("[PROTO] {{ _pv.name }} 为 X —— 事务时序不成立");
+{%- if _pr.name %}
+  property p_{{ agent.name }}_valid_stable;
+    @(posedge {{ clock }}) disable iff (!{{ reset }})
+      ({{ _pv.name }} && !{{ _pr.name }}) |=> ({{ _pv.name }}{% if _pl.names %} && $stable({{ _pl.names|join(', ') }}){% endif %});
+  endproperty
+  assert property (p_{{ agent.name }}_valid_stable)
+    else $error("[PROTO] valid 等待 ready 期间撤销或 payload 变化");
+{%- endif %}
+{%- endif %}
+endinterface : {{ agent.name }}_if

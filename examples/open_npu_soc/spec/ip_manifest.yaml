@@ -1,0 +1,63 @@
+# Open NPU SoC 的 IP 清单 —— SoC 团队 / IP 团队的共同契约。
+#
+# 这里只描述「有哪些 IP、各自归谁、release 到哪一步」；具体验证仍走
+# SignOffAI 的 RTL/回归/覆盖率/证据链。status 是人工维护的发布状态，
+# 不是自动签核结论（自动结论在 run 的 report/evidence 里）。
+schema: soc_ip_manifest_v1
+soc: open_npu_soc
+top: npu/soc_top.sv
+
+ips:
+  - id: IP-CPU-NICE
+    name: CPU / NICE command source
+    team: CPU IP
+    owner: cpu-team
+    version: v0.1
+    status: in_progress
+    rtl:
+      - npu/nice_disp/nice_cmd_sequencer.sv
+      - npu/nice_disp/e203_nice_npu_adapter.sv
+    spec: spec/interface_spec.yaml
+    verification: spec/verification_plan.yaml
+    notes: 参考 TB 使用确定性 NICE 时序；E203 本体路径仍待 M1 实跑。
+
+  - id: IP-DMA
+    name: Simple DMA (A/B load, C store)
+    team: Memory IP
+    owner: memory-team
+    version: v0.1
+    status: released
+    rtl: [npu/dma/dma_simple.sv]
+    spec: spec/interface_spec.yaml
+    verification: spec/verification_plan.yaml
+
+  - id: IP-SRAM
+    name: Banked SRAM (A/B/C)
+    team: Memory IP
+    owner: memory-team
+    version: v0.1
+    status: released
+    rtl: [npu/sram/sram_banked.sv]
+    spec: spec/interface_spec.yaml
+    verification: spec/verification_plan.yaml
+
+  - id: IP-NPU-GEMM
+    name: INT8 GEMM
+    team: NPU IP
+    owner: npu-team
+    version: v0.1
+    status: released
+    rtl: [npu/npu/int8_gemm.sv]
+    spec: spec/interface_spec.yaml
+    verification: spec/verification_plan.yaml
+    notes: 8x8x8 正常路径；边界/异常矩阵在 M2 扩展。
+
+  - id: IP-INTERCONNECT
+    name: SoC interconnect / address map
+    team: SoC Team
+    owner: soc-team
+    version: v0.1
+    status: released
+    rtl: [npu/interconnect/soc_map.svh]
+    spec: spec/soc_spec.yaml
+    verification: spec/verification_plan.yaml

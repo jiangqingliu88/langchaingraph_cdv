@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signoffai.local/schemas/manual_nodes.schema.json",
+  "title": "SignOffAI 人工节点 —— 流程中的人工干预点声明",
+  "description": "声明「在闭环流程的哪个阶段之后插一个人工节点」。本 schema 只做语法/类型/枚举的硬校验（additionalProperties: false，未知键即错误）；节点之间的引用一致性（id 唯一、after 指向真实阶段）留给语义检查，将来再接。注意：这份声明目前**不被闭环消费** —— 详见 src/tools/integration/ide_tools/__init__.py 的说明。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["nodes"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "文档版本号。当前为 1。省略视为 1。"
+    },
+    "project": {
+      "type": "string",
+      "description": "所属项目/模块名（可选，便于一份文档对多个对象）。"
+    },
+    "nodes": {
+      "type": "array",
+      "description": "人工节点列表。",
+      "items": { "$ref": "#/$defs/node" }
+    }
+  },
+  "$defs": {
+    "stage": {
+      "description": "闭环里的现有阶段名（graph.py 的节点）。人工节点只能挂在这些阶段**之后** —— 这是刻意的限制：节点是「插在既有流程里的干预点」，不是重构流程的拓扑。",
+      "enum": ["design", "model", "verify", "env_arch_check", "ops", "coverage", "debug_functional", "decide", "audit"]
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "节点 id，文档内唯一。建议 <阶段>_<用途>，如 decide_approve_refactor。"
+        },
+        "title": {
+          "type": "string",
+          "description": "显示名，给人在界面上看。省略则用 id。"
+        },
+        "kind": {
+          "description": "人工节点的种类：approval = 人工审批（放行/拒绝），review = 人工评审（看结果再决定），manual_step = 人工执行（人去做一步，做完继续）。省略视为 approval。",
+          "enum": ["approval", "review", "manual_step"]
+        },
+        "after": {
+          "description": "挂在哪个既有阶段之后。省略表示不绑定具体阶段（由触发条件决定，预留）。",
+          "$ref": "#/$defs/stage"
+        },
+        "action": {
+          "type": "string",
+          "description": "关联的决策动作（可空）。填了表示「只在这个动作发生时触发」，如 REFACTOR_RTL / UPDATE_MODEL —— 与闭环里的 approval 节点同一批动作名。"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "给人工看的提示语（要审批什么、看什么证据）。"
+        },
+        "default": {
+          "description": "超时或无人应答时的默认决策：proceed = 放行，reject = 拒绝，skip = 跳过本节点。省略视为 proceed。",
+          "enum": ["proceed", "reject", "skip"]
+        },
+        "timeout_s": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "等待人工的秒数；0 表示不限时。"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "是否必经：true = 即使有默认决策也必须等人；false = 超时按 default 走。省略视为 true。"
+        }
+      }
+    }
+  }
+}

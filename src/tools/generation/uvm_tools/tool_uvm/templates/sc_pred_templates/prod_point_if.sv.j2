@@ -1,0 +1,24 @@
+// {{ point.point_name }}_prod_if.sv
+interface {{ point.point_name }}_prod_if;
+  logic clk;
+  logic rst;
+
+  // Production interface
+  {% for port in point.ports %}
+  {% if port.name != 'clk' and port.name != 'rst' %}
+  {% if port.dir == 'input' %}
+  input {{ "" if port.width == 1 else "[{port.width-1}:0]" }} {{ port.name }};
+  {% else %}
+  output {{ "" if port.width == 1 else "[{port.width-1}:0]" }} {{ port.name }};
+  {% endif %}
+  {% endif %}
+  {% endfor %}
+
+  // Production monitor fields
+  {% if print_fields %}
+  `ifdef UVM
+  {{ convert_fields }};
+  `endif
+  {% endif %}
+
+endinterface

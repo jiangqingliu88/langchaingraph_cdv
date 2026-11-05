@@ -1,0 +1,8 @@
+# 全局签核策略默认值 —— 模块策略覆盖这里的同名键。
+#
+# 查找顺序（load_policy）：本文件 → 模块策略（run / specs / config/<module>.yaml）。
+# 模块文件不需要重复写默认值；只写与默认不同的项。
+schema: signoff_policy_v1
+require_ref_model: false
+require_baseline: true
+accepted_caveats: {}

@@ -1,0 +1,30 @@
+[
+    {
+        "name": "out_0",
+        "address": "0x00004000",
+        "dtypename": "FP32",
+        "dimension": {
+            "dim2": 1,
+            "dim1": 4,
+            "dim0": 16
+        },
+        "stride": {
+            "stride2": 8,
+            "stride1": 2
+        }
+    },
+    {
+        "name": "wt_int_0",
+        "address": "0x0000c000",
+        "dtypename": "INT16",
+        "dimension": {
+            "dim2": 1,
+            "dim1": 32,
+            "dim0": 16
+        },
+        "stride": {
+            "stride2": 32,
+            "stride1": 1
+        }
+    }
+]

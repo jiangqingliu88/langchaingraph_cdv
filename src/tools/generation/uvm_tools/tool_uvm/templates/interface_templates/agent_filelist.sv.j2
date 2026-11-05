@@ -1,0 +1,14 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+# ============================================================
+# {{ agent.name }} 编译 filelist
+# ============================================================
+# 编译顺序：interface → system_if → pkg（pkg 内按依赖顺序 include 所有 class）
++incdir+{{ base_pkg_dir }}/common_typedefs
+{{ base_pkg_dir }}/common_typedefs/common_typedefs_pkg.sv
+{{ agent.name }}_parameters_pkg.sv
+{{ agent.name }}_typedefs_pkg.sv
+1_interface/{{ agent.name }}_if.sv
+1_interface/{{ agent.name }}_system_if.sv
++incdir+.
+{{ agent.name }}_pkg.sv

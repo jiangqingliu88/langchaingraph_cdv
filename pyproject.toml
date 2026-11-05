@@ -1,0 +1,133 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "signoffai"
+version = "1.0.0"
+description = "An AI-native, auditable IC functional verification and sign-off platform"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "SignOffAI Contributors" }]
+keywords = [
+    "eda",
+    "verification",
+    "uvm",
+    "systemverilog",
+    "coverage",
+    "sign-off",
+    "langgraph",
+    "llm",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    # 见 requirements.txt 顶部说明：移除 langchain 元包 / langchain-community，
+    # 并解除对未声明的 langchain_classic 的隐性依赖。
+    "langchain-core==1.6.6",
+    "langchain-openai==1.6.7",
+    "langgraph==1.2.12",
+    "langgraph-checkpoint-sqlite==3.1.1",
+    "jinja2>=3.1.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.19.0",
+    "rich>=13.0",
+    "click>=8.0",
+    "pyyaml>=6.0",
+    "openpyxl>=3.1.0",
+    "tqdm>=4.60",
+    "tenacity>=8.0",
+    "structlog>=23.0",
+    "python-dotenv>=1.0",
+    "jsonschema>=4.0.0",
+]
+
+[project.optional-dependencies]
+# GUI 走 PySide6（桌面窗口，不是 Web 前端 —— 见 CLAUDE.md）。
+# 做成可选：纯 CLI 用法（check / analyze / generate）不需要它，
+# 没必要让每次安装都拖上 Qt。
+gui = [
+    "PySide6>=6.5",
+    "qdarkstyle>=3.2.3",
+]
+# 可选：更多规格格式（doc_intake 会给出同样的安装提示）
+docs = [
+    "python-docx>=1.1.0",
+    "pypdf>=4.0.0",
+]
+# 可选：Anthropic 提供商（llm_factory 按需 import）
+anthropic = [
+    "langchain-anthropic",
+]
+# 可选：Slack 通知 / 工具市场 / 数据脚本
+integrations = [
+    "requests>=2.31.0",
+    "aiohttp>=3.9.0",
+    "numpy>=1.26.0",
+]
+# 可选：将来真的起 HTTP 服务时需要（CLI 不 import auth / uvicorn）
+api = [
+    "fastapi>=0.109.0",
+    "PyJWT>=2.8.0",
+    "uvicorn[standard]>=0.27.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0",
+    "black>=24.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+vagent = "src.cli.commands:cli"
+
+[project.urls]
+Homepage = "https://github.com/jiangqingliu88/langchaingraph_cdv"
+Repository = "https://github.com/jiangqingliu88/langchaingraph_cdv"
+Issues = "https://github.com/jiangqingliu88/langchaingraph_cdv/issues"
+Changelog = "https://github.com/jiangqingliu88/langchaingraph_cdv/blob/main/CHANGELOG.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--tb=short", "--strict-markers", "-p no:warnings"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests requiring DB",
+    "slow: Slow running tests",
+    "api: API endpoint tests",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["venv", "__pycache__", ".git", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "config*"]

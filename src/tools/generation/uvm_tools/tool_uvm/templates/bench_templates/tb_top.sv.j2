@@ -1,0 +1,162 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// Testbench Top: {{ bench.name }}_tb_top
+// Data-driven generated from bench YAML configuration.
+`timescale 1ns/1ps
+{#- DUT 覆盖率接口的身份（类型名 / bind 实例名）—— **与 env_cov.sv 读的是同一份
+    契约**（`inputs/yaml/uvm/env_cov_bins.yaml` 的 `dut_if`，见 gen_uvm.py 的
+    `read_env_cov_bins`）。这里是"挂载方"：把 bind 出来的接口实例交给覆盖率组件。
+    两边各推一次名字就会漂，而漂了**编译与加载都不报错** —— 组件拿到空句柄、
+    覆盖率恒 0%，最难查的那种。缺席时一个字都不写（组件那边同样不生成）。 -#}
+{%- set _dif = coverage_dut_if | default({}) %}
+module {{ bench.name }}_tb_top;
+  import uvm_pkg::*;
+  import {{ bench.env_name }}_test_pkg::*;
+
+  // ── Clock & Reset Interface（clk/rst 由环境 clk_rst_agent 驱动）──
+{%- for clk in bench.clk_rst.clocks %}
+  clk_rst_if {{ clk.name }}_vif();
+{%- endfor %}
+
+  // ── 接口实例 + DUT 例化（**直连**，不走 bind 式 harness）──
+  //
+  // 每个 `bench.interfaces[]` 项 = 一个接口实例：
+  //   · 时钟/复位接到 clk_rst_if（`.pclk(pclk_vif.clk[0])`）
+  //   · 数据信号按**同名**直连 DUT 的端口（`.paddr(apb_if_inst.paddr)`）
+  // —— 名字对不上就是编译不过，这比 harness 的隐式 bind 好查得多。
+{%- set _clk = bench.clk_rst.clocks[0].name if bench.clk_rst.clocks else '' %}
+{%- for i in bench.interfaces %}
+  {{ i.type_name }} {{ i.name }}_inst(
+{%-   set _conns = [] %}
+{%-   if i.clock and _clk %}
+{%-     set _ = _conns.append('.' ~ i.clock ~ '(' ~ _clk ~ '_vif.clk[0])') %}
+{%-   endif %}
+{%-   if i.reset and _clk %}
+{%-     set _ = _conns.append('.' ~ i.reset ~ '(' ~ _clk ~ '_vif.rst_n[0])') %}
+{%-   endif %}
+{%-   if _conns %}
+    {{ _conns | join(',\n    ') }}
+{%-   endif %}
+  );
+{%- endfor %}
+
+{%- for i in bench.interfaces %}
+{%-   if i.system_type_name %}
+  // ── 系统接口实例（agent 包的 {{ i.name.split('_if')[0] }}_system_env / _system_monitor 引用
+  //    `virtual {{ i.system_type_name }}`；设计里没有它**任何实例**时，Questa load 阶段报
+  //    "(vsim-8451) Virtual interface resolution cannot find a matching instance"，整个设计
+  //    加载不了 —— 哪怕那些组件根本没例化。所以这里无条件实例化，并把真实接口句柄
+  //    挂进 master_if / slave_if 数组（下标 0）。）──
+  {{ i.system_type_name }} {{ i.name }}_sys_if_inst();
+{%-   endif %}
+{%- endfor %}
+
+{%- if bench.dut_module %}
+{#- ⚠️ 这一行 `{{ "\n" }}` 不是多余的：上面那一串 `{%- ... %}` 的 `-` 会把**之前的
+   换行全部吃掉**。接口清单为空时（例如 bench 还是老的 harness 形状），中间的
+   `for` 循环一个字都不输出，于是 DUT 例化那行会和上面注释的**最后一行粘在一起**，
+   渲染成 `// ...好查得多。apb_uart u_apb_uart (` → vlog 判 "near '.': syntax error"。
+   显式吐一个换行，把行切开。 -#}
+{{ "\n" }}
+{#- 先把所有连接**拍平成一个列表**再 join —— 嵌套循环里判断"是不是最后一个"
+   在 Jinja2 里没有 `loop.parent`（那是 Django 的），拍平最省事也最不容易错 -#}
+{%-   set _dut_conns = [] %}
+{%-   if _clk %}{% set _ = _dut_conns.append('.' ~ _clk ~ '(' ~ _clk ~ '_vif.clk[0])') %}{% endif %}
+{%-   for rst in bench.clk_rst.resets %}
+{%-     set _ = _dut_conns.append('.' ~ rst.name ~ '(' ~ _clk ~ '_vif.rst_n[' ~ loop.index0 ~ '])') %}
+{%-   endfor %}
+{%-   for i in bench.interfaces %}
+{%-     for p in (i.ports or []) %}
+{%-       set _ = _dut_conns.append('.' ~ p ~ '(' ~ i.name ~ '_inst.' ~ p ~ ')') %}
+{%-     endfor %}
+{%-   endfor %}
+  {{ bench.dut_module }} {{ bench.dut_instance | default("u_dut") }} (
+    {{ _dut_conns | join(',\n    ') }}
+  );
+{%- elif bench.harness and bench.harness.bind_to %}
+  {#- 兼容：老的 harness 形状（没有 dut_module 时回退） -#}
+  {{ bench.harness.bind_to }} {{ bench.dut_instance | default("u_dut") }} (
+{%-   for clk in bench.clk_rst.clocks %}
+    .{{ clk.name }}({{ clk.name }}_vif.clk[0]){% if not loop.last or bench.clk_rst.resets %},{% endif %}
+{%-   endfor %}
+{%-   for rst in bench.clk_rst.resets %}
+    .{{ rst.name }}({{ _clk }}_vif.rst_n[{{ loop.index0 }}]){% if not loop.last %},{% endif %}
+{%-   endfor %}
+  );
+{%- endif %}
+
+  // ── vif 广播给 agent ──
+  // `agent_path` 是**实例路径**（如 apb_master_agent_h），用 `*.<path>*` 匹配，
+  // 这样 env 挂在哪个层级都找得到。环境侧再从 config_db 取出来塞进 agent 的 cfg.vif。
+  initial begin
+{%- for i in bench.interfaces %}
+{%-   set _paths = i.agent_path if (i.agent_path is sequence and i.agent_path is not string) else ([i.agent_path] if i.agent_path else []) %}
+{%-   for ap in _paths %}
+    uvm_config_db#(virtual {{ i.type_name }})::set(null, "*.{{ ap }}*", "vif", {{ i.name }}_inst);
+{%-   endfor %}
+{%- endfor %}
+{%- for clk in bench.clk_rst.clocks %}
+    // 时钟复位接口：**只有 tb_top 能实例化它**，所以由这里放进 config_db，
+    // env 取出来再转发给 clk_rst agent（env 自己例化不了接口）。
+    uvm_config_db#(virtual clk_rst_if)::set(null, "*", "{{ clk.name }}_vif", {{ clk.name }}_vif);
+{%- endfor %}
+{%- for i in bench.interfaces %}
+{%-   if i.system_type_name %}
+    // 系统接口：本 bench 把同一个接口实例同时挂到 master 侧与 slave 侧的第 0 槽
+    //（agent 包的系统 env 是按 `sys_vif.master_if[i]` / `slave_if[i]` 取句柄的）。
+    {{ i.name }}_sys_if_inst.master_if[0] = {{ i.name }}_inst;
+    {{ i.name }}_sys_if_inst.slave_if[0]  = {{ i.name }}_inst;
+    uvm_config_db#(virtual {{ i.system_type_name }})::set(null, "*", "sys_vif", {{ i.name }}_sys_if_inst);
+{%-   endif %}
+{%- endfor %}
+{%- if _dif %}
+    // ── DUT 覆盖率接口 ──
+    // 它**不是这里例化的**：`bind {{ _dif.dut_module }} {{ _dif.type }}` 把它放进了
+    // DUT 的作用域（那是唯一能让**内部信号**连进来的地方 —— 内部名在 DUT 里，
+    // tb_top 这一层看不见）。所以层次路径 = `<DUT 实例>.<bind 实例名>`。
+    //
+    // 路径两段都来自 env_cov_bins.yaml 的 `dut_if`（类型名/实例名）与 bench
+    // （DUT 实例名）—— 与覆盖率组件是**同一份来源**，不会各说各话。
+    uvm_config_db#(virtual {{ _dif.type }})::set(
+        null, "*", "cov_vif", {{ bench.dut_instance | default("u_dut") }}.{{ _dif.instance }});
+{%- endif %}
+  end
+
+  // ── 波形名 + 日志时间单位 ──
+  initial begin
+    // **UVM 报告行的时间单位在这里定。**
+    // UVM 的报告服务器组消息时是 `$swrite(time_str, "%0t", $time)`
+    //（uvm_report_server.svh），而 `%t` 的显示格式完全由 `$timeformat` 决定。
+    // 不设的话打印的是**裸数字**：
+    //     UVM_INFO ... @ 15035000: uvm_test_top ...
+    // —— 看不出那是 ps 还是 ns（本 bench 的 timescale 是 1ns/1ps，
+    // 15035000 其实是 15035ns = 15.035us）。设成 ns 后是：
+    //     UVM_INFO ... @ 15035.000 ns: uvm_test_top ...
+    // 参数: (时间单位指数, 小数位, 单位后缀, 最小字段宽)；-9 = ns。
+    // **必须在 run_test() 之前**：报告服务器第一次组消息就取当前的时间格式。
+    $timeformat(-9, 3, " ns", 15);
+    run_test();
+  end
+
+{%- if bench.wave_dump and bench.wave_dump.enabled %}
+  // ── Waveform Dump ──
+  initial begin
+    if ($test$plusargs("{{ bench.wave_dump.plusargs | default('DUMP_WAVES') }}")) begin
+{%-   if bench.wave_dump.format | default('FST') == 'FSDB' %}
+      $fsdbDumpfile("{{ bench.wave_dump.file_name | default(bench.name + '_tb_top.fsdb') }}");
+      $fsdbDumpvars({{ bench.wave_dump.levels | default(0) }}, {{ bench.name }}_tb_top);
+{%-   elif bench.wave_dump.format | default('FST') == 'VCD' %}
+      $dumpfile("{{ bench.wave_dump.file_name | default(bench.name + '_tb_top.vcd') }}");
+      $dumpvars({{ bench.wave_dump.levels | default(0) }}, {{ bench.name }}_tb_top);
+{%-   else %}
+      $dumpfile("{{ bench.wave_dump.file_name | default(bench.name + '_tb_top.fst') }}");
+      $dumpvars({{ bench.wave_dump.levels | default(0) }}, {{ bench.name }}_tb_top);
+{%-   endif %}
+    end
+  end
+{%- endif %}
+
+{# 仿真结束控制由 env 级 {{ bench.env_name }}_sim_end 组件负责：
+   objection 清零自动 $finish + +SIM_WATCHDOG_NS 看门狗，tb_top 不再内嵌控制块 #}
+
+endmodule : {{ bench.name }}_tb_top

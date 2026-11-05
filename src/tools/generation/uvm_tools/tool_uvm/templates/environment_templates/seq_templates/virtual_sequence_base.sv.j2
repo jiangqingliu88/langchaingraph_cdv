@@ -1,0 +1,55 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// Virtual Base Sequence: {{ environment.env_name }}_virtual_base_seq
+// 增强版 - 支持仲裁、同步、超时控制
+
+class {{ environment.env_name }}_virtual_base_seq extends uvm_sequence;
+  `uvm_object_utils({{ environment.env_name }}_virtual_base_seq)
+
+  {{ environment.env_name }}_config cfg;
+  protected int m_started = 0;
+  protected int m_completed = 0;
+  
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
+
+  function new(string name = "{{ environment.env_name }}_virtual_base_seq");
+    super.new(name);
+  endfunction
+
+  virtual task pre_body();
+    if (!uvm_config_db#({{ environment.env_name }}_config)::get(get_sequencer(), "", "cfg", cfg))
+      `uvm_fatal("VSEQ_CFG", "Config not set")
+  endtask
+
+  virtual task body();
+    `uvm_info("VSEQ", "Virtual base seq body - override in derived", UVM_MEDIUM)
+  endtask
+
+{%- for agent in agents %}
+  protected task start_{{ agent.name }}_sequence(uvm_sequence #({{ agent.seq_item_type }}) _s);
+    m_started++;
+    fork
+      _s.start(get_sequencer());
+    join_none
+  endtask
+
+  protected task send_{{ agent.name }}_random(int count = 1);
+    {{ agent.sequence_type }} _rs;
+    _rs = {{ agent.sequence_type }}::type_id::create("_rs");
+{#- 只有**驱动侧**（master）序列有 `num_transactions` 这个"发多少笔"的旋钮；
+    slave 序列是事件驱动（从 req_fifo 取请求、持续响应），没有这个概念。
+    无条件写这行的话，slave 侧 vopt 阶段直接报 "Failed to find
+    'num_transactions'"，**整个设计加载不了**。 #}
+{%- if agent.is_master is not false %}
+    _rs.num_transactions = count;
+{%- endif %}
+    start_{{ agent.name }}_sequence(_rs);
+  endtask
+
+{%- endfor %}
+
+  // pragma custom seq_body begin
+  // pragma custom seq_body end
+
+endclass : {{ environment.env_name }}_virtual_base_seq

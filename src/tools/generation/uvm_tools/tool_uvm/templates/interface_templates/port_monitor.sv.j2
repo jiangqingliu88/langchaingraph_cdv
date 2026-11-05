@@ -1,0 +1,272 @@
+{% include "base_templates/base_template.sv.j2" %}
+{#- 协议握手信号识别：只要名字以 valid/ready 结尾的端口。
+    采样**只在 valid 有效时**发生；每秒都采会把 idle 拍当事务。 #}
+{%- set _vld = namespace(name="") %}
+{%- set _rdy = namespace(name="") %}
+{%- for p in ports %}
+{%-   if not _vld.name and (p.name|lower).endswith('valid') %}
+{%-     set _vld.name = p.name %}
+{%-   endif %}
+{%-   if not _rdy.name and (p.name|lower).endswith('ready') %}
+{%-     set _rdy.name = p.name %}
+{%-   endif %}
+{%- endfor %}
+
+// ============================================================
+// Port Monitor Callback: {{ agent.name }}_port_monitor_cb
+// ============================================================
+// UVM callback 扩展点：可在采样前后插入行为（改采样值、丢包、协议检查、
+// 覆盖率打点），**无需改动 monitor 本体**。
+//
+// 注册（test 的 build_phase）：
+//   {{ agent.name }}_port_monitor_cb cb;
+//   cb = {{ agent.name }}_port_monitor_cb::type_id::create("cb");
+//   uvm_callbacks#({{ agent.name }}_port_monitor,
+//                  {{ agent.name }}_port_monitor_cb)::add(mon, cb);
+//
+// master / slave 侧各有一对钩子：monitor 按 cfg.port_kind 只会走其中一条路径，
+// 但两对都提供，便于同一个 cb 类同时服务两种实例。
+//
+// 注：typedef class 是前置声明 —— callback 方法签名要用到 monitor 类型，
+//     而 monitor 定义在下方（SystemVerilog 要求先声明后使用）。
+
+typedef class {{ agent.name }}_port_monitor;
+
+class {{ agent.name }}_port_monitor_cb extends uvm_callback;
+  `uvm_object_utils({{ agent.name }}_port_monitor_cb)
+
+  function new(string name = "{{ agent.name }}_port_monitor_cb");
+    super.new(name);
+  endfunction
+
+  // ── master 侧（collect_transaction）──
+  // 采样后：可修改 tx 字段（如归一化、屏蔽某位）
+  virtual task post_sample({{ agent.name }}_port_monitor mon,
+                           {{ agent.name }}_master_seq_item tx);
+  endtask
+
+  // ── slave 侧（collect_slave_transaction）──
+  virtual task post_sample_slave({{ agent.name }}_port_monitor mon,
+                                 {{ agent.name }}_slave_seq_item tx);
+  endtask
+endclass : {{ agent.name }}_port_monitor_cb
+
+// ============================================================
+// Port Monitor: {{ agent.name }}_port_monitor
+// ============================================================
+// 单类 monitor（不区分 master/slave）：按 cfg.port_kind 分支
+//   master 侧 → master_mon_ap 抓 master_seq_item（expected/参考模型流）
+//   slave 侧 → slave_mon_ap 抓 slave_seq_item（actual/比对流），
+//     ACTIVE 时同时 clone 写入 slave sequencer 的 req_fifo（事件驱动响应）
+
+class {{ agent.name }}_port_monitor extends uvm_monitor;
+  `uvm_component_utils({{ agent.name }}_port_monitor)
+  // 建立 monitor 类型 ↔ callback 类型的回调池（uvm_do_callbacks 依赖它）
+  `uvm_register_cb({{ agent.name }}_port_monitor, {{ agent.name }}_port_monitor_cb)
+
+  virtual {{ agent.name }}_if vif;
+  {{ agent.name }}_port_config cfg;
+  uvm_analysis_port #({{ agent.name }}_master_seq_item) master_mon_ap;       // master 侧抓包
+  uvm_analysis_port #({{ agent.name }}_slave_seq_item) slave_mon_ap;  // slave 侧抓包
+  // **覆盖专用：每拍一条，不以 valid 为门。**
+  // 事务流（*_mon_ap）只应该给 SCB / 参考模型 —— 一笔记账，valid 为 0 的
+  // 空闲拍不是事务。但覆盖仓量的是"DUT 每拍实际看到的信号值"（和 cg_dut
+  // 一样按拍采）：valid=0 的空闲态、复位后的 0 值都是真实输入，不能因为
+  // "不是事务"就丢掉。两者共用一条流会二选一地错：要么 SCB 多收空闲拍，
+  // 要么覆盖少掉 idle/bin。所以拆成两条。
+  uvm_analysis_port #({{ agent.name }}_master_seq_item) cov_master_ap;
+  uvm_analysis_port #({{ agent.name }}_slave_seq_item) cov_slave_ap;
+  {{ agent.name }}_slave_sequencer sqr;  // ★ slave 侧 Sequencer 句柄（ACTIVE 时连接）
+  // 见过**确定值**（0/1）之前允许总线是 X/Z：复位释放后、驱动方开口之前，
+  // 信号还没被任何人驱动，这是"尚未开始"而不是"时序错误"。一旦见过确定值，
+  // 再出现 X 就是真错误（驱动方中途撤手 / 多驱动冲突），照常报。
+  bit m_known_seen = 1'b0;
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+    master_mon_ap = new("master_mon_ap", this);
+    slave_mon_ap = new("slave_mon_ap", this);
+    cov_master_ap = new("cov_master_ap", this);
+    cov_slave_ap = new("cov_slave_ap", this);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual {{ agent.name }}_if)::get(this, "", "vif", vif))
+      `uvm_fatal("NOVIF", "Virtual interface not set")
+    if (!uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg))
+      `uvm_fatal("CFG", "Config not set")
+    void'(uvm_config_db#({{ agent.name }}_slave_sequencer)::get(this, "", "sqr", sqr));
+    // pragma custom build_logic begin
+    // pragma custom build_logic end
+  endfunction
+
+  task configure_phase(uvm_phase phase);
+    super.configure_phase(phase);
+    `uvm_info(get_type_name(), "configure_phase: start", UVM_MEDIUM)
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+
+  task main_phase(uvm_phase phase);
+    super.main_phase(phase);
+    `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
+    // monitor 的 forever 循环不 raise objection（避免悬挂）；复位门控后才开始采样
+    wait (vif.{{ agent.reset }} == 1'b{{ 1 if agent.reset_active_low else 0 }});
+    fork
+      // ── 覆盖采样：**每拍一条**（不以 valid 为门）──
+      // 量的是"DUT 这一拍实际看到的输入"，valid=0 的空闲拍同样真实存在；
+      // 和 `cg_dut` 的按拍采样同口径。事务流（*_mon_ap）不承担覆盖职责。
+      forever begin
+        @(vif.mon_cb);
+        if (vif.{{ agent.reset }} == 1'b{{ 1 if agent.reset_active_low else 0 }}) begin
+          if (cfg.port_kind == MASTER) begin
+            {{ agent.name }}_master_seq_item cx;
+            cx = {{ agent.name }}_master_seq_item::type_id::create("cx");
+{%- for var in transaction_vars %}
+{%-   set port_in_ports = namespace(found=false) %}
+{%-   for port in ports %}
+{%-     if port.name == var.name %}{% set port_in_ports.found = true %}{% endif %}
+{%-   endfor %}
+{%-   if port_in_ports.found %}
+            cx.{{ var.name }} = vif.{{ var.name }};
+{%-   endif %}
+{%- endfor %}
+            cov_master_ap.write(cx);
+          end else begin
+            {{ agent.name }}_slave_seq_item cx;
+            cx = {{ agent.name }}_slave_seq_item::type_id::create("cx");
+{%- for var in transaction_vars %}
+{%-   set port_in_ports2 = namespace(found=false) %}
+{%-   for port in ports %}
+{%-     if port.name == var.name %}{% set port_in_ports2.found = true %}{% endif %}
+{%-   endfor %}
+{%-   if port_in_ports2.found %}
+            cx.{{ var.name }} = vif.{{ var.name }};
+{%-   endif %}
+{%- endfor %}
+            cov_slave_ap.write(cx);
+          end
+        end
+      end
+      // ── 事务采样：只在**有效事务**上采（SCB / 参考模型的数据源）──
+      forever begin
+        if (cfg.port_kind == MASTER) begin
+          {{ agent.name }}_master_seq_item tx;
+          tx = {{ agent.name }}_master_seq_item::type_id::create("tx");
+          collect_transaction(tx);
+          // **采样事务必须留痕**：日志里要能逐笔看到 monitor 采到了什么。
+          `uvm_info("MON", $sformatf("[MON] {{ agent.name }} 采样事务: %s",
+                    tx.sprint()), UVM_MEDIUM)
+          master_mon_ap.write(tx);
+        end else begin
+          {{ agent.name }}_slave_seq_item tx;
+          tx = {{ agent.name }}_slave_seq_item::type_id::create("tx");
+          collect_slave_transaction(tx);
+          `uvm_info("MON", $sformatf("[MON] {{ agent.name }} 采样响应: %s",
+                    tx.sprint()), UVM_MEDIUM)
+          slave_mon_ap.write(tx);
+          // ★ 核心：塞进 Sequencer FIFO
+          if (sqr != null) begin
+            {{ agent.name }}_slave_seq_item tx_clone;
+            $cast(tx_clone, tx.clone());
+            sqr.req_fifo.write(tx_clone);
+          end
+        end
+      end
+    join
+  endtask
+
+  virtual task collect_transaction({{ agent.name }}_master_seq_item tx);
+    // pragma custom collect_logic begin
+{%- if agent.protocol == 'apb' %}
+    // APB: 仅采样完整访问（penable && pready 拍）
+    do @(vif.mon_cb); while (!(vif.mon_cb.psel && vif.mon_cb.penable && vif.mon_cb.pready));
+{%- elif _vld.name %}
+    // **只采有效事务**：valid 为 X 报错（时序无法判定）；10000 拍不置起
+    // 直接 fatal —— 那是 driver 没驱动，不是"这条用例没事务"。
+    begin
+      int _guard = 0;
+      do begin
+        @(vif.mon_cb);
+        _guard++;
+        if ($isunknown(vif.{{ _vld.name }})) begin
+          // 第一次见到确定值之前，X/Z 是"驱动方还没开口"，不是时序错误。
+          if (m_known_seen)
+            `uvm_error("PROTO", "{{ _vld.name }} 为 X —— 采样时序无法判定")
+        end else begin
+          m_known_seen = 1'b1;
+        end
+        if (_guard > 10000)
+          `uvm_fatal("PROTO", "{{ _vld.name }} 10000 拍内从未置起 —— driver 时序错误")
+      end while (vif.{{ _vld.name }} !== 1'b1);
+{%- if _rdy.name %}
+      if (vif.{{ _rdy.name }} !== 1'b1)
+        do @(vif.mon_cb); while (vif.{{ _rdy.name }} !== 1'b1);
+{%- endif %}
+    end
+{%- else %}
+    @(vif.mon_cb);
+{%- endif %}
+{%- for var in transaction_vars %}
+{%-   set port_in_ports = namespace(found=false) %}
+{%-   for port in ports %}
+{%-     if port.name == var.name %}{% set port_in_ports.found = true %}{% endif %}
+{%-   endfor %}
+{%-   if port_in_ports.found %}
+    tx.{{ var.name }} = vif.{{ var.name }};
+{%-   endif %}
+{%- endfor %}
+    // pragma custom collect_logic end
+    // 回调：master 侧采样后（可改 tx）
+    `uvm_do_callbacks({{ agent.name }}_port_monitor, {{ agent.name }}_port_monitor_cb,
+                      post_sample(this, tx))
+  endtask
+
+  virtual task collect_slave_transaction({{ agent.name }}_slave_seq_item tx);
+    // pragma custom collect_slave_logic begin
+{%- if agent.protocol == 'apb' %}
+    // APB: 仅采样完整访问（penable && pready 拍）
+    do @(vif.mon_cb); while (!(vif.mon_cb.psel && vif.mon_cb.penable && vif.mon_cb.pready));
+{%- elif _vld.name %}
+    // 从端采样同样只认有效事务（valid 为 X / 长时间不置起都是时序错误）。
+    begin
+      int _guard = 0;
+      do begin
+        @(vif.mon_cb);
+        _guard++;
+        if ($isunknown(vif.{{ _vld.name }})) begin
+          // 第一次见到确定值之前，X/Z 是"驱动方还没开口"，不是时序错误。
+          if (m_known_seen)
+            `uvm_error("PROTO", "{{ _vld.name }} 为 X —— 采样时序无法判定")
+        end else begin
+          m_known_seen = 1'b1;
+        end
+        if (_guard > 10000)
+          `uvm_fatal("PROTO", "{{ _vld.name }} 10000 拍内从未置起 —— driver 时序错误")
+      end while (vif.{{ _vld.name }} !== 1'b1);
+{%- if _rdy.name %}
+      if (vif.{{ _rdy.name }} !== 1'b1)
+        do @(vif.mon_cb); while (vif.{{ _rdy.name }} !== 1'b1);
+{%- endif %}
+    end
+{%- else %}
+    @(vif.mon_cb);
+{%- endif %}
+{%- for var in transaction_vars %}
+{%-   set port_in_ports = namespace(found=false) %}
+{%-   for port in ports %}
+{%-     if port.name == var.name %}{% set port_in_ports.found = true %}{% endif %}
+{%-   endfor %}
+{%-   if port_in_ports.found %}
+    tx.{{ var.name }} = vif.{{ var.name }};
+{%-   endif %}
+{%- endfor %}
+    // pragma custom collect_slave_logic end
+    // 回调：slave 侧采样后（可改 tx）
+    `uvm_do_callbacks({{ agent.name }}_port_monitor, {{ agent.name }}_port_monitor_cb,
+                      post_sample_slave(this, tx))
+  endtask
+endclass : {{ agent.name }}_port_monitor

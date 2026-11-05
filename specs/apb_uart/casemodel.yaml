@@ -1,0 +1,38 @@
+version: "1"
+object: apb_uart
+object_cn: APB UART
+object_code: APBUART
+description: APB 接口 UART（寄存器读写 / 发送 / 接收 / FIFO / 中断）
+
+sub_objects:
+  - {id: OBJ-01, name: 寄存器读写, code: REG}
+  - {id: OBJ-02, name: 发送,       code: TX}
+  - {id: OBJ-03, name: 接收,       code: RX}
+  - {id: OBJ-04, name: 中断,       code: IRQ}
+
+dimensions:
+  - id: D_ADDR
+    name: 地址
+    fields:
+      - name: paddr
+        type: range
+        min: 0
+        max: 255
+        boundary: ["0", "3", "4", "31", "32", "255"]
+  - id: D_DIR
+    name: 读写方向
+    fields:
+      - {name: pwrite, type: enum, values: [0, 1]}
+  - id: D_DATA
+    name: 写数据
+    fields:
+      - name: pwdata
+        type: range
+        min: 0
+        max: 255
+        boundary: ["0", "255"]
+
+themes:
+  - {id: TH-P0,  name: 功能,       priority: P0, applies_to: [寄存器读写], dimensions: [D_ADDR, D_DIR, D_DATA]}
+  - {id: TH-ERR, name: 错误和异常, priority: P3, dimensions: [D_ADDR]}
+  - {id: TH-RND, name: 全量随机,   priority: P3}

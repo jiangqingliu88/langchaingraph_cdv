@@ -1,0 +1,8 @@
+# 仿真/回归本地产物（golden 向量保留，供 clone 后直接 vlog/vsim）
+sim_vsim.log
+sim_time.log
+wave.log
+work/
+*.vcd
+*.wlf
+__pycache__/

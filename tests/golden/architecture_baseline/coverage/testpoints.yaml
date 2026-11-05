@@ -1,0 +1,3821 @@
+# ============================================================
+# 测试点 IR —— **由 case 模型生成**，请勿手改
+# ============================================================
+# 一个 tp_id 就是一条：需求 → 激励 → 覆盖仓 → test → 回归级 → 判据。
+# `realization.kind` 决定它怎么被实现（可用注册表扩展）。
+version: '1.0'
+framework: signoff-methodology
+count: 70
+by_kind:
+  backdoor: 10
+  stimulus: 26
+  observe: 22
+  sequence: 12
+by_stage:
+  p1: 14
+  p0: 12
+  p2: 18
+  p3: 19
+  behavior: 7
+testpoints:
+- tp_id: TP-NPUSCH-D_QUEUE-0
+  object: npu_sched
+  requirement: REQ-NPU-001
+  cover_id: CP_NPU_QUEUE_001
+  dimension: D_queue
+  dimension_name: 指令队列水位
+  dimension_description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  field: queue_level
+  value: '0'
+  tree_path: 指令队列管理
+  coverpoint: cp_queue_level
+  bin: empty
+  method: SPCL
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B06
+  - TH-B11
+  priority: P1
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+    value: 0
+  execution:
+    test: npu_sched_env_d_queue_p0_test
+    stage: p1
+    seeds:
+    - 6001
+    - 6002
+    - 6003
+    - 6004
+    - 6005
+    - 6006
+    - 6007
+    - 6008
+    - 6009
+    - 6010
+    - 6011
+    - 6012
+    - 6013
+    - 6014
+    - 6015
+    - 10001
+  case_id: CASE-D_QUEUE
+  tst_id: TST-NPU_SCHED_ENV_D_QUEUE_P0_TEST
+  groups:
+  - CG-D_QUEUE
+  sva:
+  - SVA-ISSUED_NEEDS_NO_BLOCKER
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_queue_level.empty
+  observe_only: false
+  notes: []
+  constraints: &id001
+  - p_th_b06_special
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_QUEUE-1
+  object: npu_sched
+  requirement: REQ-NPU-001
+  cover_id: CP_NPU_QUEUE_001
+  dimension: D_queue
+  dimension_name: 指令队列水位
+  dimension_description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  field: queue_level
+  value: '1'
+  tree_path: 指令队列管理
+  coverpoint: cp_queue_level
+  bin: low
+  method: SPCL
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B06
+  - TH-B11
+  priority: P1
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+    value: 1
+  execution:
+    test: npu_sched_env_d_queue_p1_test
+    stage: p1
+    seeds:
+    - 6001
+    - 6002
+    - 6003
+    - 6004
+    - 6005
+    - 6006
+    - 6007
+    - 6008
+    - 6009
+    - 6010
+    - 6011
+    - 6012
+    - 6013
+    - 6014
+    - 6015
+    - 10001
+  case_id: CASE-D_QUEUE
+  tst_id: TST-NPU_SCHED_ENV_D_QUEUE_P1_TEST
+  groups:
+  - CG-D_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_queue_level.low
+  observe_only: false
+  notes: []
+  constraints: *id001
+- tp_id: TP-NPUSCH-D_QUEUE-7
+  object: npu_sched
+  requirement: REQ-NPU-001
+  cover_id: CP_NPU_QUEUE_001
+  dimension: D_queue
+  dimension_name: 指令队列水位
+  dimension_description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  field: queue_level
+  value: '7'
+  tree_path: 指令队列管理
+  coverpoint: cp_queue_level
+  bin: low
+  method: SPCL
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B06
+  - TH-B11
+  priority: P1
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+    value: 7
+  execution:
+    test: npu_sched_env_d_queue_p7_test
+    stage: p1
+    seeds:
+    - 6001
+    - 6002
+    - 6003
+    - 6004
+    - 6005
+    - 6006
+    - 6007
+    - 6008
+    - 6009
+    - 6010
+    - 6011
+    - 6012
+    - 6013
+    - 6014
+    - 6015
+    - 10001
+  case_id: CASE-D_QUEUE
+  tst_id: TST-NPU_SCHED_ENV_D_QUEUE_P7_TEST
+  groups:
+  - CG-D_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_queue_level.low
+  observe_only: false
+  notes: []
+  constraints: *id001
+- tp_id: TP-NPUSCH-D_QUEUE-8
+  object: npu_sched
+  requirement: REQ-NPU-001
+  cover_id: CP_NPU_QUEUE_001
+  dimension: D_queue
+  dimension_name: 指令队列水位
+  dimension_description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  field: queue_level
+  value: '8'
+  tree_path: 指令队列管理
+  coverpoint: cp_queue_level
+  bin: mid
+  method: SPCL
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B06
+  - TH-B11
+  priority: P1
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+    value: 8
+  execution:
+    test: npu_sched_env_d_queue_p8_test
+    stage: p1
+    seeds:
+    - 6001
+    - 6002
+    - 6003
+    - 6004
+    - 6005
+    - 6006
+    - 6007
+    - 6008
+    - 6009
+    - 6010
+    - 6011
+    - 6012
+    - 6013
+    - 6014
+    - 6015
+    - 10001
+  case_id: CASE-D_QUEUE
+  tst_id: TST-NPU_SCHED_ENV_D_QUEUE_P8_TEST
+  groups:
+  - CG-D_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_queue_level.mid
+  observe_only: false
+  notes: []
+  constraints: *id001
+- tp_id: TP-NPUSCH-D_QUEUE-15
+  object: npu_sched
+  requirement: REQ-NPU-001
+  cover_id: CP_NPU_QUEUE_001
+  dimension: D_queue
+  dimension_name: 指令队列水位
+  dimension_description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  field: queue_level
+  value: '15'
+  tree_path: 指令队列管理
+  coverpoint: cp_queue_level
+  bin: mid
+  method: SPCL
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B06
+  - TH-B11
+  priority: P1
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+    value: 15
+  execution:
+    test: npu_sched_env_d_queue_p15_test
+    stage: p1
+    seeds:
+    - 6001
+    - 6002
+    - 6003
+    - 6004
+    - 6005
+    - 6006
+    - 6007
+    - 6008
+    - 6009
+    - 6010
+    - 6011
+    - 6012
+    - 6013
+    - 6014
+    - 6015
+    - 10001
+  case_id: CASE-D_QUEUE
+  tst_id: TST-NPU_SCHED_ENV_D_QUEUE_P15_TEST
+  groups:
+  - CG-D_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_queue_level.mid
+  observe_only: false
+  notes: []
+  constraints: *id001
+- tp_id: TP-NPUSCH-D_QUEUE-16
+  object: npu_sched
+  requirement: REQ-NPU-001
+  cover_id: CP_NPU_QUEUE_001
+  dimension: D_queue
+  dimension_name: 指令队列水位
+  dimension_description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  field: queue_level
+  value: '16'
+  tree_path: 指令队列管理
+  coverpoint: cp_queue_level
+  bin: high
+  method: SPCL
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B06
+  - TH-B11
+  priority: P1
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+    value: 16
+  execution:
+    test: npu_sched_env_d_queue_p16_test
+    stage: p1
+    seeds:
+    - 6001
+    - 6002
+    - 6003
+    - 6004
+    - 6005
+    - 6006
+    - 6007
+    - 6008
+    - 6009
+    - 6010
+    - 6011
+    - 6012
+    - 6013
+    - 6014
+    - 6015
+    - 10001
+  case_id: CASE-D_QUEUE
+  tst_id: TST-NPU_SCHED_ENV_D_QUEUE_P16_TEST
+  groups:
+  - CG-D_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_queue_level.high
+  observe_only: false
+  notes: []
+  constraints: *id001
+- tp_id: TP-NPUSCH-D_QUEUE-24
+  object: npu_sched
+  requirement: REQ-NPU-001
+  cover_id: CP_NPU_QUEUE_001
+  dimension: D_queue
+  dimension_name: 指令队列水位
+  dimension_description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  field: queue_level
+  value: '24'
+  tree_path: 指令队列管理
+  coverpoint: cp_queue_level
+  bin: high
+  method: SPCL
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B06
+  - TH-B11
+  priority: P1
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+    value: 24
+  execution:
+    test: npu_sched_env_d_queue_p24_test
+    stage: p1
+    seeds:
+    - 6001
+    - 6002
+    - 6003
+    - 6004
+    - 6005
+    - 6006
+    - 6007
+    - 6008
+    - 6009
+    - 6010
+    - 6011
+    - 6012
+    - 6013
+    - 6014
+    - 6015
+    - 10001
+  case_id: CASE-D_QUEUE
+  tst_id: TST-NPU_SCHED_ENV_D_QUEUE_P24_TEST
+  groups:
+  - CG-D_QUEUE
+  sva:
+  - SVA-QUEUE_LEVEL_WITHIN_DEPTH
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_queue_level.high
+  observe_only: false
+  notes: []
+  constraints: *id001
+- tp_id: TP-NPUSCH-D_QUEUE-25
+  object: npu_sched
+  requirement: REQ-NPU-001
+  cover_id: CP_NPU_QUEUE_001
+  dimension: D_queue
+  dimension_name: 指令队列水位
+  dimension_description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  field: queue_level
+  value: '25'
+  tree_path: 指令队列管理
+  coverpoint: cp_queue_level
+  bin: near_full
+  method: SPCL
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B06
+  - TH-B11
+  priority: P1
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+    value: 25
+  execution:
+    test: npu_sched_env_d_queue_p25_test
+    stage: p1
+    seeds:
+    - 6001
+    - 6002
+    - 6003
+    - 6004
+    - 6005
+    - 6006
+    - 6007
+    - 6008
+    - 6009
+    - 6010
+    - 6011
+    - 6012
+    - 6013
+    - 6014
+    - 6015
+    - 10001
+  case_id: CASE-D_QUEUE
+  tst_id: TST-NPU_SCHED_ENV_D_QUEUE_P25_TEST
+  groups:
+  - CG-D_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_queue_level.near_full
+  observe_only: false
+  notes: []
+  constraints: *id001
+- tp_id: TP-NPUSCH-D_QUEUE-31
+  object: npu_sched
+  requirement: REQ-NPU-001
+  cover_id: CP_NPU_QUEUE_001
+  dimension: D_queue
+  dimension_name: 指令队列水位
+  dimension_description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  field: queue_level
+  value: '31'
+  tree_path: 指令队列管理
+  coverpoint: cp_queue_level
+  bin: near_full
+  method: SPCL
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B06
+  - TH-B11
+  priority: P1
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+    value: 31
+  execution:
+    test: npu_sched_env_d_queue_p31_test
+    stage: p1
+    seeds:
+    - 6001
+    - 6002
+    - 6003
+    - 6004
+    - 6005
+    - 6006
+    - 6007
+    - 6008
+    - 6009
+    - 6010
+    - 6011
+    - 6012
+    - 6013
+    - 6014
+    - 6015
+    - 10001
+  case_id: CASE-D_QUEUE
+  tst_id: TST-NPU_SCHED_ENV_D_QUEUE_P31_TEST
+  groups:
+  - CG-D_QUEUE
+  sva:
+  - SVA-QUEUE_LEVEL_WITHIN_DEPTH
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_queue_level.near_full
+  observe_only: false
+  notes: []
+  constraints: *id001
+- tp_id: TP-NPUSCH-D_QUEUE-32
+  object: npu_sched
+  requirement: REQ-NPU-001
+  cover_id: CP_NPU_QUEUE_001
+  dimension: D_queue
+  dimension_name: 指令队列水位
+  dimension_description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  field: queue_level
+  value: '32'
+  tree_path: 指令队列管理
+  coverpoint: cp_queue_level
+  bin: full
+  method: SPCL
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B06
+  - TH-B11
+  priority: P1
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+    value: 32
+  execution:
+    test: npu_sched_env_d_queue_p32_test
+    stage: p1
+    seeds:
+    - 6001
+    - 6002
+    - 6003
+    - 6004
+    - 6005
+    - 6006
+    - 6007
+    - 6008
+    - 6009
+    - 6010
+    - 6011
+    - 6012
+    - 6013
+    - 6014
+    - 6015
+    - 10001
+  case_id: CASE-D_QUEUE
+  tst_id: TST-NPU_SCHED_ENV_D_QUEUE_P32_TEST
+  groups:
+  - CG-D_QUEUE
+  sva:
+  - SVA-QUEUE_LEVEL_WITHIN_DEPTH
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_queue_level.full
+  observe_only: false
+  notes: []
+  constraints: *id001
+- tp_id: TP-NPUSCH-D_TYPE-MAC
+  object: npu_sched
+  requirement: REQ-NPU-002
+  cover_id: CP_NPU_TYPE_002
+  dimension: D_type
+  dimension_name: 指令类型
+  dimension_description: REQ-NPU-002：支持 4 类指令（MAC / Vector / Scalar / DMA）
+  field: instr_type
+  value: MAC
+  tree_path: 指令发射
+  coverpoint: cp_instr_type
+  bin: mac
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B02
+  - TH-B09
+  - TH-B11
+  priority: P0
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_type
+    value: 0
+  execution:
+    test: npu_sched_env_d_type_pMAC_test
+    stage: p0
+    seeds:
+    - 2001
+    - 2002
+    - 2003
+    - 2004
+    - 2005
+    - 2006
+    - 2007
+    - 2008
+    - 2009
+    - 2010
+    - 2011
+    - 2012
+    - 2013
+    - 2014
+    - 2015
+    - 9001
+  case_id: CASE-D_TYPE
+  tst_id: TST-NPU_SCHED_ENV_D_TYPE_PMAC_TEST
+  groups:
+  - CG-D_TYPE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_type.mac
+  observe_only: false
+  notes: []
+  constraints: &id002
+  - p_th_b02_random
+  - p_th_b09_random
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_TYPE-VECTOR
+  object: npu_sched
+  requirement: REQ-NPU-002
+  cover_id: CP_NPU_TYPE_002
+  dimension: D_type
+  dimension_name: 指令类型
+  dimension_description: REQ-NPU-002：支持 4 类指令（MAC / Vector / Scalar / DMA）
+  field: instr_type
+  value: VECTOR
+  tree_path: 指令发射
+  coverpoint: cp_instr_type
+  bin: vector
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B02
+  - TH-B09
+  - TH-B11
+  priority: P0
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_type
+    value: 1
+  execution:
+    test: npu_sched_env_d_type_pVECTOR_test
+    stage: p0
+    seeds:
+    - 2001
+    - 2002
+    - 2003
+    - 2004
+    - 2005
+    - 2006
+    - 2007
+    - 2008
+    - 2009
+    - 2010
+    - 2011
+    - 2012
+    - 2013
+    - 2014
+    - 2015
+    - 9001
+  case_id: CASE-D_TYPE
+  tst_id: TST-NPU_SCHED_ENV_D_TYPE_PVECTOR_TEST
+  groups:
+  - CG-D_TYPE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_type.vector
+  observe_only: false
+  notes: []
+  constraints: *id002
+- tp_id: TP-NPUSCH-D_TYPE-SCALAR
+  object: npu_sched
+  requirement: REQ-NPU-002
+  cover_id: CP_NPU_TYPE_002
+  dimension: D_type
+  dimension_name: 指令类型
+  dimension_description: REQ-NPU-002：支持 4 类指令（MAC / Vector / Scalar / DMA）
+  field: instr_type
+  value: SCALAR
+  tree_path: 指令发射
+  coverpoint: cp_instr_type
+  bin: scalar
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B02
+  - TH-B09
+  - TH-B11
+  priority: P0
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_type
+    value: 2
+  execution:
+    test: npu_sched_env_d_type_pSCALAR_test
+    stage: p0
+    seeds:
+    - 2001
+    - 2002
+    - 2003
+    - 2004
+    - 2005
+    - 2006
+    - 2007
+    - 2008
+    - 2009
+    - 2010
+    - 2011
+    - 2012
+    - 2013
+    - 2014
+    - 2015
+    - 9001
+  case_id: CASE-D_TYPE
+  tst_id: TST-NPU_SCHED_ENV_D_TYPE_PSCALAR_TEST
+  groups:
+  - CG-D_TYPE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_type.scalar
+  observe_only: false
+  notes: []
+  constraints: *id002
+- tp_id: TP-NPUSCH-D_TYPE-DMA
+  object: npu_sched
+  requirement: REQ-NPU-002
+  cover_id: CP_NPU_TYPE_002
+  dimension: D_type
+  dimension_name: 指令类型
+  dimension_description: REQ-NPU-002：支持 4 类指令（MAC / Vector / Scalar / DMA）
+  field: instr_type
+  value: DMA
+  tree_path: 指令发射
+  coverpoint: cp_instr_type
+  bin: dma
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B02
+  - TH-B09
+  - TH-B11
+  priority: P0
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_type
+    value: 3
+  execution:
+    test: npu_sched_env_d_type_pDMA_test
+    stage: p0
+    seeds:
+    - 2001
+    - 2002
+    - 2003
+    - 2004
+    - 2005
+    - 2006
+    - 2007
+    - 2008
+    - 2009
+    - 2010
+    - 2011
+    - 2012
+    - 2013
+    - 2014
+    - 2015
+    - 9001
+  case_id: CASE-D_TYPE
+  tst_id: TST-NPU_SCHED_ENV_D_TYPE_PDMA_TEST
+  groups:
+  - CG-D_TYPE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_type.dma
+  observe_only: false
+  notes: []
+  constraints: *id002
+- tp_id: TP-NPUSCH-D_DTYPE-INT8
+  object: npu_sched
+  requirement: REQ-NPU-003
+  cover_id: CP_NPU_DTYPE_003
+  dimension: D_dtype
+  dimension_name: 数据类型
+  dimension_description: REQ-NPU-003：支持 4 种数据类型（INT8 / FP16 / BF16 / FP32）
+  field: instr_dtype
+  value: INT8
+  tree_path: 指令发射
+  coverpoint: cp_instr_dtype
+  bin: int8
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B03
+  - TH-B11
+  priority: P0
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_dtype
+    value: 0
+  execution:
+    test: npu_sched_env_d_dtype_pINT8_test
+    stage: p0
+    seeds:
+    - 3001
+    - 3002
+    - 3003
+    - 3004
+    - 3005
+    - 3006
+    - 3007
+    - 3008
+    - 3009
+    - 3010
+    - 3011
+    - 3012
+    - 3013
+    - 3014
+    - 3015
+    - 10001
+  case_id: CASE-D_DTYPE
+  tst_id: TST-NPU_SCHED_ENV_D_DTYPE_PINT8_TEST
+  groups:
+  - CG-D_DTYPE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_dtype.int8
+  observe_only: false
+  notes: []
+  constraints: &id003
+  - p_th_b03_random
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_DTYPE-FP16
+  object: npu_sched
+  requirement: REQ-NPU-003
+  cover_id: CP_NPU_DTYPE_003
+  dimension: D_dtype
+  dimension_name: 数据类型
+  dimension_description: REQ-NPU-003：支持 4 种数据类型（INT8 / FP16 / BF16 / FP32）
+  field: instr_dtype
+  value: FP16
+  tree_path: 指令发射
+  coverpoint: cp_instr_dtype
+  bin: fp16
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B03
+  - TH-B11
+  priority: P0
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_dtype
+    value: 1
+  execution:
+    test: npu_sched_env_d_dtype_pFP16_test
+    stage: p0
+    seeds:
+    - 3001
+    - 3002
+    - 3003
+    - 3004
+    - 3005
+    - 3006
+    - 3007
+    - 3008
+    - 3009
+    - 3010
+    - 3011
+    - 3012
+    - 3013
+    - 3014
+    - 3015
+    - 10001
+  case_id: CASE-D_DTYPE
+  tst_id: TST-NPU_SCHED_ENV_D_DTYPE_PFP16_TEST
+  groups:
+  - CG-D_DTYPE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_dtype.fp16
+  observe_only: false
+  notes: []
+  constraints: *id003
+- tp_id: TP-NPUSCH-D_DTYPE-BF16
+  object: npu_sched
+  requirement: REQ-NPU-003
+  cover_id: CP_NPU_DTYPE_003
+  dimension: D_dtype
+  dimension_name: 数据类型
+  dimension_description: REQ-NPU-003：支持 4 种数据类型（INT8 / FP16 / BF16 / FP32）
+  field: instr_dtype
+  value: BF16
+  tree_path: 指令发射
+  coverpoint: cp_instr_dtype
+  bin: bf16
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B03
+  - TH-B11
+  priority: P0
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_dtype
+    value: 2
+  execution:
+    test: npu_sched_env_d_dtype_pBF16_test
+    stage: p0
+    seeds:
+    - 3001
+    - 3002
+    - 3003
+    - 3004
+    - 3005
+    - 3006
+    - 3007
+    - 3008
+    - 3009
+    - 3010
+    - 3011
+    - 3012
+    - 3013
+    - 3014
+    - 3015
+    - 10001
+  case_id: CASE-D_DTYPE
+  tst_id: TST-NPU_SCHED_ENV_D_DTYPE_PBF16_TEST
+  groups:
+  - CG-D_DTYPE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_dtype.bf16
+  observe_only: false
+  notes: []
+  constraints: *id003
+- tp_id: TP-NPUSCH-D_DTYPE-FP32
+  object: npu_sched
+  requirement: REQ-NPU-003
+  cover_id: CP_NPU_DTYPE_003
+  dimension: D_dtype
+  dimension_name: 数据类型
+  dimension_description: REQ-NPU-003：支持 4 种数据类型（INT8 / FP16 / BF16 / FP32）
+  field: instr_dtype
+  value: FP32
+  tree_path: 指令发射
+  coverpoint: cp_instr_dtype
+  bin: fp32
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B03
+  - TH-B11
+  priority: P0
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_dtype
+    value: 3
+  execution:
+    test: npu_sched_env_d_dtype_pFP32_test
+    stage: p0
+    seeds:
+    - 3001
+    - 3002
+    - 3003
+    - 3004
+    - 3005
+    - 3006
+    - 3007
+    - 3008
+    - 3009
+    - 3010
+    - 3011
+    - 3012
+    - 3013
+    - 3014
+    - 3015
+    - 10001
+  case_id: CASE-D_DTYPE
+  tst_id: TST-NPU_SCHED_ENV_D_DTYPE_PFP32_TEST
+  groups:
+  - CG-D_DTYPE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_dtype.fp32
+  observe_only: false
+  notes: []
+  constraints: *id003
+- tp_id: TP-NPUSCH-D_DEP-NONE
+  object: npu_sched
+  requirement: REQ-NPU-004
+  cover_id: CP_NPU_DEP_004
+  dimension: D_dep
+  dimension_name: 数据依赖
+  dimension_description: REQ-NPU-004：正确处理 RAW / WAW / WAR 依赖
+  field: dep_type
+  value: NONE
+  tree_path: 指令队列管理
+  coverpoint: cp_dep_type
+  bin: no_dep
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B04
+  - TH-B05
+  - TH-B11
+  priority: P1
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_dep_pNONE_test
+    stage: p1
+    seeds:
+    - 4001
+    - 4002
+    - 4003
+    - 4004
+    - 4005
+    - 4006
+    - 4007
+    - 4008
+    - 4009
+    - 4010
+    - 4011
+    - 4012
+    - 4013
+    - 4014
+    - 4015
+    - 4016
+  case_id: CASE-D_DEP
+  tst_id: TST-NPU_SCHED_ENV_D_DEP_PNONE_TEST
+  groups:
+  - CG-D_DEP
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_dep_type.no_dep
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: &id004
+  - p_th_b04_combo
+  - p_th_b05_special
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_DEP-RAW
+  object: npu_sched
+  requirement: REQ-NPU-004
+  cover_id: CP_NPU_DEP_004
+  dimension: D_dep
+  dimension_name: 数据依赖
+  dimension_description: REQ-NPU-004：正确处理 RAW / WAW / WAR 依赖
+  field: dep_type
+  value: RAW
+  tree_path: 指令队列管理
+  coverpoint: cp_dep_type
+  bin: raw
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B04
+  - TH-B05
+  - TH-B11
+  priority: P1
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_dep_pRAW_test
+    stage: p1
+    seeds:
+    - 4001
+    - 4002
+    - 4003
+    - 4004
+    - 4005
+    - 4006
+    - 4007
+    - 4008
+    - 4009
+    - 4010
+    - 4011
+    - 4012
+    - 4013
+    - 4014
+    - 4015
+    - 4016
+  case_id: CASE-D_DEP
+  tst_id: TST-NPU_SCHED_ENV_D_DEP_PRAW_TEST
+  groups:
+  - CG-D_DEP
+  sva:
+  - SVA-ISSUED_NEEDS_NO_BLOCKER
+  - SVA-RAW_NEVER_ISSUES
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_dep_type.raw
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id004
+- tp_id: TP-NPUSCH-D_DEP-WAW
+  object: npu_sched
+  requirement: REQ-NPU-004
+  cover_id: CP_NPU_DEP_004
+  dimension: D_dep
+  dimension_name: 数据依赖
+  dimension_description: REQ-NPU-004：正确处理 RAW / WAW / WAR 依赖
+  field: dep_type
+  value: WAW
+  tree_path: 指令队列管理
+  coverpoint: cp_dep_type
+  bin: waw
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B04
+  - TH-B05
+  - TH-B11
+  priority: P1
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_dep_pWAW_test
+    stage: p1
+    seeds:
+    - 4001
+    - 4002
+    - 4003
+    - 4004
+    - 4005
+    - 4006
+    - 4007
+    - 4008
+    - 4009
+    - 4010
+    - 4011
+    - 4012
+    - 4013
+    - 4014
+    - 4015
+    - 4016
+  case_id: CASE-D_DEP
+  tst_id: TST-NPU_SCHED_ENV_D_DEP_PWAW_TEST
+  groups:
+  - CG-D_DEP
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_dep_type.waw
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id004
+- tp_id: TP-NPUSCH-D_DEP-WAR
+  object: npu_sched
+  requirement: REQ-NPU-004
+  cover_id: CP_NPU_DEP_004
+  dimension: D_dep
+  dimension_name: 数据依赖
+  dimension_description: REQ-NPU-004：正确处理 RAW / WAW / WAR 依赖
+  field: dep_type
+  value: WAR
+  tree_path: 指令队列管理
+  coverpoint: cp_dep_type
+  bin: war
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B04
+  - TH-B05
+  - TH-B11
+  priority: P1
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_dep_pWAR_test
+    stage: p1
+    seeds:
+    - 4001
+    - 4002
+    - 4003
+    - 4004
+    - 4005
+    - 4006
+    - 4007
+    - 4008
+    - 4009
+    - 4010
+    - 4011
+    - 4012
+    - 4013
+    - 4014
+    - 4015
+    - 4016
+  case_id: CASE-D_DEP
+  tst_id: TST-NPU_SCHED_ENV_D_DEP_PWAR_TEST
+  groups:
+  - CG-D_DEP
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_dep_type.war
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id004
+- tp_id: TP-NPUSCH-D_UNIT-MAC
+  object: npu_sched
+  requirement: REQ-NPU-005
+  cover_id: CP_NPU_UNIT_005
+  dimension: D_unit
+  dimension_name: 执行单元
+  dimension_description: REQ-NPU-005：支持 4 个执行单元
+  field: issue_unit
+  value: MAC
+  tree_path: 指令发射
+  coverpoint: cp_issue_unit
+  bin: mac
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B07
+  - TH-B08
+  - TH-B09
+  - TH-B11
+  priority: P2
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_unit_pMAC_test
+    stage: p2
+    seeds:
+    - 7001
+    - 7002
+    - 7003
+    - 7004
+    - 7005
+    - 7006
+    - 7007
+    - 7008
+    - 7009
+    - 7010
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+  case_id: CASE-D_UNIT
+  tst_id: TST-NPU_SCHED_ENV_D_UNIT_PMAC_TEST
+  groups:
+  - CG-D_UNIT
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_issue_unit.mac
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: &id005
+  - p_th_b07_combo
+  - p_th_b08_directed
+  - p_th_b09_random
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_UNIT-VECTOR
+  object: npu_sched
+  requirement: REQ-NPU-005
+  cover_id: CP_NPU_UNIT_005
+  dimension: D_unit
+  dimension_name: 执行单元
+  dimension_description: REQ-NPU-005：支持 4 个执行单元
+  field: issue_unit
+  value: VECTOR
+  tree_path: 指令发射
+  coverpoint: cp_issue_unit
+  bin: vector
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B07
+  - TH-B08
+  - TH-B09
+  - TH-B11
+  priority: P2
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_unit_pVECTOR_test
+    stage: p2
+    seeds:
+    - 7001
+    - 7002
+    - 7003
+    - 7004
+    - 7005
+    - 7006
+    - 7007
+    - 7008
+    - 7009
+    - 7010
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+  case_id: CASE-D_UNIT
+  tst_id: TST-NPU_SCHED_ENV_D_UNIT_PVECTOR_TEST
+  groups:
+  - CG-D_UNIT
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_issue_unit.vector
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id005
+- tp_id: TP-NPUSCH-D_UNIT-SCALAR
+  object: npu_sched
+  requirement: REQ-NPU-005
+  cover_id: CP_NPU_UNIT_005
+  dimension: D_unit
+  dimension_name: 执行单元
+  dimension_description: REQ-NPU-005：支持 4 个执行单元
+  field: issue_unit
+  value: SCALAR
+  tree_path: 指令发射
+  coverpoint: cp_issue_unit
+  bin: scalar
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B07
+  - TH-B08
+  - TH-B09
+  - TH-B11
+  priority: P2
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_unit_pSCALAR_test
+    stage: p2
+    seeds:
+    - 7001
+    - 7002
+    - 7003
+    - 7004
+    - 7005
+    - 7006
+    - 7007
+    - 7008
+    - 7009
+    - 7010
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+  case_id: CASE-D_UNIT
+  tst_id: TST-NPU_SCHED_ENV_D_UNIT_PSCALAR_TEST
+  groups:
+  - CG-D_UNIT
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_issue_unit.scalar
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id005
+- tp_id: TP-NPUSCH-D_UNIT-DMA
+  object: npu_sched
+  requirement: REQ-NPU-005
+  cover_id: CP_NPU_UNIT_005
+  dimension: D_unit
+  dimension_name: 执行单元
+  dimension_description: REQ-NPU-005：支持 4 个执行单元
+  field: issue_unit
+  value: DMA
+  tree_path: 指令发射
+  coverpoint: cp_issue_unit
+  bin: dma
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B07
+  - TH-B08
+  - TH-B09
+  - TH-B11
+  priority: P2
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_unit_pDMA_test
+    stage: p2
+    seeds:
+    - 7001
+    - 7002
+    - 7003
+    - 7004
+    - 7005
+    - 7006
+    - 7007
+    - 7008
+    - 7009
+    - 7010
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+  case_id: CASE-D_UNIT
+  tst_id: TST-NPU_SCHED_ENV_D_UNIT_PDMA_TEST
+  groups:
+  - CG-D_UNIT
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_issue_unit.dma
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id005
+- tp_id: TP-NPUSCH-D_DECISION-ISSUED
+  object: npu_sched
+  requirement: REQ-NPU-006
+  cover_id: CP_NPU_DECISION_006
+  dimension: D_decision
+  dimension_name: 发射决策
+  dimension_description: REQ-NPU-006：正确做出发射决策（发射 / 停顿 / 阻塞 / 冲刷）
+  field: issue_decision
+  value: ISSUED
+  tree_path: 指令发射
+  coverpoint: cp_issue_decision
+  bin: issued
+  method: D
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B01
+  - TH-B04
+  - TH-B06
+  - TH-B11
+  priority: P0
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_decision_pISSUED_test
+    stage: p0
+    seeds:
+    - 1001
+    - 4001
+    - 4002
+    - 4003
+    - 4004
+    - 4005
+    - 4006
+    - 4007
+    - 4008
+    - 4009
+    - 4010
+    - 4011
+    - 4012
+    - 4013
+    - 4014
+    - 4015
+  case_id: CASE-D_DECISION
+  tst_id: TST-NPU_SCHED_ENV_D_DECISION_PISSUED_TEST
+  groups:
+  - CG-D_DECISION
+  sva:
+  - SVA-ISSUED_NEEDS_NO_BLOCKER
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_issue_decision.issued
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: &id006
+  - p_th_b01_directed
+  - p_th_b04_combo
+  - p_th_b06_special
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_DECISION-STALLED
+  object: npu_sched
+  requirement: REQ-NPU-006
+  cover_id: CP_NPU_DECISION_006
+  dimension: D_decision
+  dimension_name: 发射决策
+  dimension_description: REQ-NPU-006：正确做出发射决策（发射 / 停顿 / 阻塞 / 冲刷）
+  field: issue_decision
+  value: STALLED
+  tree_path: 指令发射
+  coverpoint: cp_issue_decision
+  bin: stalled
+  method: D
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B01
+  - TH-B04
+  - TH-B06
+  - TH-B11
+  priority: P0
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_decision_pSTALLED_test
+    stage: p0
+    seeds:
+    - 1001
+    - 4001
+    - 4002
+    - 4003
+    - 4004
+    - 4005
+    - 4006
+    - 4007
+    - 4008
+    - 4009
+    - 4010
+    - 4011
+    - 4012
+    - 4013
+    - 4014
+    - 4015
+  case_id: CASE-D_DECISION
+  tst_id: TST-NPU_SCHED_ENV_D_DECISION_PSTALLED_TEST
+  groups:
+  - CG-D_DECISION
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_issue_decision.stalled
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id006
+- tp_id: TP-NPUSCH-D_DECISION-BLOCKED
+  object: npu_sched
+  requirement: REQ-NPU-006
+  cover_id: CP_NPU_DECISION_006
+  dimension: D_decision
+  dimension_name: 发射决策
+  dimension_description: REQ-NPU-006：正确做出发射决策（发射 / 停顿 / 阻塞 / 冲刷）
+  field: issue_decision
+  value: BLOCKED
+  tree_path: 指令发射
+  coverpoint: cp_issue_decision
+  bin: blocked
+  method: D
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B01
+  - TH-B04
+  - TH-B06
+  - TH-B11
+  priority: P0
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_decision_pBLOCKED_test
+    stage: p0
+    seeds:
+    - 1001
+    - 4001
+    - 4002
+    - 4003
+    - 4004
+    - 4005
+    - 4006
+    - 4007
+    - 4008
+    - 4009
+    - 4010
+    - 4011
+    - 4012
+    - 4013
+    - 4014
+    - 4015
+  case_id: CASE-D_DECISION
+  tst_id: TST-NPU_SCHED_ENV_D_DECISION_PBLOCKED_TEST
+  groups:
+  - CG-D_DECISION
+  sva:
+  - SVA-RAW_NEVER_ISSUES
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_issue_decision.blocked
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id006
+- tp_id: TP-NPUSCH-D_DECISION-FLUSHED
+  object: npu_sched
+  requirement: REQ-NPU-006
+  cover_id: CP_NPU_DECISION_006
+  dimension: D_decision
+  dimension_name: 发射决策
+  dimension_description: REQ-NPU-006：正确做出发射决策（发射 / 停顿 / 阻塞 / 冲刷）
+  field: issue_decision
+  value: FLUSHED
+  tree_path: 指令发射
+  coverpoint: cp_issue_decision
+  bin: flushed
+  method: D
+  checks:
+  - CHECK-FUNC
+  - CHECK-WBOX
+  themes:
+  - TH-B01
+  - TH-B04
+  - TH-B06
+  - TH-B11
+  priority: P0
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_decision_pFLUSHED_test
+    stage: p0
+    seeds:
+    - 1001
+    - 4001
+    - 4002
+    - 4003
+    - 4004
+    - 4005
+    - 4006
+    - 4007
+    - 4008
+    - 4009
+    - 4010
+    - 4011
+    - 4012
+    - 4013
+    - 4014
+    - 4015
+  case_id: CASE-D_DECISION
+  tst_id: TST-NPU_SCHED_ENV_D_DECISION_PFLUSHED_TEST
+  groups:
+  - CG-D_DECISION
+  sva:
+  - SVA-BARRIER_FLUSHES
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_issue_decision.flushed
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id006
+- tp_id: TP-NPUSCH-D_CLUSTER-0
+  object: npu_sched
+  requirement: REQ-NPU-007
+  cover_id: CP_NPU_CLUSTER_007
+  dimension: D_cluster
+  dimension_name: 簇 ID
+  dimension_description: REQ-NPU-007：支持 4 个簇
+  field: cluster_id
+  value: '0'
+  tree_path: 多簇同步
+  coverpoint: cp_cluster_id
+  bin: c0
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B07
+  - TH-B11
+  priority: P2
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_cluster_p0_test
+    stage: p2
+    seeds:
+    - 7001
+    - 7002
+    - 7003
+    - 7004
+    - 7005
+    - 7006
+    - 7007
+    - 7008
+    - 7009
+    - 7010
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+  case_id: CASE-D_CLUSTER
+  tst_id: TST-NPU_SCHED_ENV_D_CLUSTER_P0_TEST
+  groups:
+  - CG-D_CLUSTER
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_cluster_id.c0
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: &id007
+  - p_th_b07_combo
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_CLUSTER-1
+  object: npu_sched
+  requirement: REQ-NPU-007
+  cover_id: CP_NPU_CLUSTER_007
+  dimension: D_cluster
+  dimension_name: 簇 ID
+  dimension_description: REQ-NPU-007：支持 4 个簇
+  field: cluster_id
+  value: '1'
+  tree_path: 多簇同步
+  coverpoint: cp_cluster_id
+  bin: c1
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B07
+  - TH-B11
+  priority: P2
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_cluster_p1_test
+    stage: p2
+    seeds:
+    - 7001
+    - 7002
+    - 7003
+    - 7004
+    - 7005
+    - 7006
+    - 7007
+    - 7008
+    - 7009
+    - 7010
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+  case_id: CASE-D_CLUSTER
+  tst_id: TST-NPU_SCHED_ENV_D_CLUSTER_P1_TEST
+  groups:
+  - CG-D_CLUSTER
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_cluster_id.c1
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id007
+- tp_id: TP-NPUSCH-D_CLUSTER-2
+  object: npu_sched
+  requirement: REQ-NPU-007
+  cover_id: CP_NPU_CLUSTER_007
+  dimension: D_cluster
+  dimension_name: 簇 ID
+  dimension_description: REQ-NPU-007：支持 4 个簇
+  field: cluster_id
+  value: '2'
+  tree_path: 多簇同步
+  coverpoint: cp_cluster_id
+  bin: c2
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B07
+  - TH-B11
+  priority: P2
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_cluster_p2_test
+    stage: p2
+    seeds:
+    - 7001
+    - 7002
+    - 7003
+    - 7004
+    - 7005
+    - 7006
+    - 7007
+    - 7008
+    - 7009
+    - 7010
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+  case_id: CASE-D_CLUSTER
+  tst_id: TST-NPU_SCHED_ENV_D_CLUSTER_P2_TEST
+  groups:
+  - CG-D_CLUSTER
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_cluster_id.c2
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id007
+- tp_id: TP-NPUSCH-D_CLUSTER-3
+  object: npu_sched
+  requirement: REQ-NPU-007
+  cover_id: CP_NPU_CLUSTER_007
+  dimension: D_cluster
+  dimension_name: 簇 ID
+  dimension_description: REQ-NPU-007：支持 4 个簇
+  field: cluster_id
+  value: '3'
+  tree_path: 多簇同步
+  coverpoint: cp_cluster_id
+  bin: c3
+  method: G
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B07
+  - TH-B11
+  priority: P2
+  realization:
+    kind: observe
+  execution:
+    test: npu_sched_env_d_cluster_p3_test
+    stage: p2
+    seeds:
+    - 7001
+    - 7002
+    - 7003
+    - 7004
+    - 7005
+    - 7006
+    - 7007
+    - 7008
+    - 7009
+    - 7010
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+  case_id: CASE-D_CLUSTER
+  tst_id: TST-NPU_SCHED_ENV_D_CLUSTER_P3_TEST
+  groups:
+  - CG-D_CLUSTER
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_cluster_id.c3
+    observe_only: bin_hit > 0
+  observe_only: true
+  notes: []
+  constraints: *id007
+- tp_id: TP-NPUSCH-D_OPCODE-MAC_INT8
+  object: npu_sched
+  requirement: REQ-NPU-008
+  cover_id: CP_NPU_OPCODE_008
+  dimension: D_opcode
+  dimension_name: 硬件指令操作码
+  dimension_description: REQ-NPU-008：支持硬件指令集（10 条）
+  field: instr_opcode
+  value: MAC_INT8
+  tree_path: 指令发射
+  coverpoint: cp_instr_opcode
+  bin: mac_i8
+  method: D
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B08
+  - TH-B11
+  priority: P2
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_opcode
+    value: 0
+  execution:
+    test: npu_sched_env_d_opcode_pMAC_INT8_test
+    stage: p2
+    seeds:
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+    - 8007
+    - 8008
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+  case_id: CASE-D_OPCODE
+  tst_id: TST-NPU_SCHED_ENV_D_OPCODE_PMAC_INT8_TEST
+  groups:
+  - CG-D_OPCODE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_opcode.mac_i8
+  observe_only: false
+  notes: []
+  constraints: &id008
+  - p_th_b08_directed
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_OPCODE-MAC_FP16
+  object: npu_sched
+  requirement: REQ-NPU-008
+  cover_id: CP_NPU_OPCODE_008
+  dimension: D_opcode
+  dimension_name: 硬件指令操作码
+  dimension_description: REQ-NPU-008：支持硬件指令集（10 条）
+  field: instr_opcode
+  value: MAC_FP16
+  tree_path: 指令发射
+  coverpoint: cp_instr_opcode
+  bin: mac_fp16
+  method: D
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B08
+  - TH-B11
+  priority: P2
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_opcode
+    value: 1
+  execution:
+    test: npu_sched_env_d_opcode_pMAC_FP16_test
+    stage: p2
+    seeds:
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+    - 8007
+    - 8008
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+  case_id: CASE-D_OPCODE
+  tst_id: TST-NPU_SCHED_ENV_D_OPCODE_PMAC_FP16_TEST
+  groups:
+  - CG-D_OPCODE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_opcode.mac_fp16
+  observe_only: false
+  notes: []
+  constraints: *id008
+- tp_id: TP-NPUSCH-D_OPCODE-MAC_BF16
+  object: npu_sched
+  requirement: REQ-NPU-008
+  cover_id: CP_NPU_OPCODE_008
+  dimension: D_opcode
+  dimension_name: 硬件指令操作码
+  dimension_description: REQ-NPU-008：支持硬件指令集（10 条）
+  field: instr_opcode
+  value: MAC_BF16
+  tree_path: 指令发射
+  coverpoint: cp_instr_opcode
+  bin: mac_bf16
+  method: D
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B08
+  - TH-B11
+  priority: P2
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_opcode
+    value: 2
+  execution:
+    test: npu_sched_env_d_opcode_pMAC_BF16_test
+    stage: p2
+    seeds:
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+    - 8007
+    - 8008
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+  case_id: CASE-D_OPCODE
+  tst_id: TST-NPU_SCHED_ENV_D_OPCODE_PMAC_BF16_TEST
+  groups:
+  - CG-D_OPCODE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_opcode.mac_bf16
+  observe_only: false
+  notes: []
+  constraints: *id008
+- tp_id: TP-NPUSCH-D_OPCODE-VEC_ADD
+  object: npu_sched
+  requirement: REQ-NPU-008
+  cover_id: CP_NPU_OPCODE_008
+  dimension: D_opcode
+  dimension_name: 硬件指令操作码
+  dimension_description: REQ-NPU-008：支持硬件指令集（10 条）
+  field: instr_opcode
+  value: VEC_ADD
+  tree_path: 指令发射
+  coverpoint: cp_instr_opcode
+  bin: vec_add
+  method: D
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B08
+  - TH-B11
+  priority: P2
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_opcode
+    value: 3
+  execution:
+    test: npu_sched_env_d_opcode_pVEC_ADD_test
+    stage: p2
+    seeds:
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+    - 8007
+    - 8008
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+  case_id: CASE-D_OPCODE
+  tst_id: TST-NPU_SCHED_ENV_D_OPCODE_PVEC_ADD_TEST
+  groups:
+  - CG-D_OPCODE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_opcode.vec_add
+  observe_only: false
+  notes: []
+  constraints: *id008
+- tp_id: TP-NPUSCH-D_OPCODE-VEC_MUL
+  object: npu_sched
+  requirement: REQ-NPU-008
+  cover_id: CP_NPU_OPCODE_008
+  dimension: D_opcode
+  dimension_name: 硬件指令操作码
+  dimension_description: REQ-NPU-008：支持硬件指令集（10 条）
+  field: instr_opcode
+  value: VEC_MUL
+  tree_path: 指令发射
+  coverpoint: cp_instr_opcode
+  bin: vec_mul
+  method: D
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B08
+  - TH-B11
+  priority: P2
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_opcode
+    value: 4
+  execution:
+    test: npu_sched_env_d_opcode_pVEC_MUL_test
+    stage: p2
+    seeds:
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+    - 8007
+    - 8008
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+  case_id: CASE-D_OPCODE
+  tst_id: TST-NPU_SCHED_ENV_D_OPCODE_PVEC_MUL_TEST
+  groups:
+  - CG-D_OPCODE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_opcode.vec_mul
+  observe_only: false
+  notes: []
+  constraints: *id008
+- tp_id: TP-NPUSCH-D_OPCODE-VEC_RELU
+  object: npu_sched
+  requirement: REQ-NPU-008
+  cover_id: CP_NPU_OPCODE_008
+  dimension: D_opcode
+  dimension_name: 硬件指令操作码
+  dimension_description: REQ-NPU-008：支持硬件指令集（10 条）
+  field: instr_opcode
+  value: VEC_RELU
+  tree_path: 指令发射
+  coverpoint: cp_instr_opcode
+  bin: vec_relu
+  method: D
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B08
+  - TH-B11
+  priority: P2
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_opcode
+    value: 5
+  execution:
+    test: npu_sched_env_d_opcode_pVEC_RELU_test
+    stage: p2
+    seeds:
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+    - 8007
+    - 8008
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+  case_id: CASE-D_OPCODE
+  tst_id: TST-NPU_SCHED_ENV_D_OPCODE_PVEC_RELU_TEST
+  groups:
+  - CG-D_OPCODE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_opcode.vec_relu
+  observe_only: false
+  notes: []
+  constraints: *id008
+- tp_id: TP-NPUSCH-D_OPCODE-LOAD
+  object: npu_sched
+  requirement: REQ-NPU-008
+  cover_id: CP_NPU_OPCODE_008
+  dimension: D_opcode
+  dimension_name: 硬件指令操作码
+  dimension_description: REQ-NPU-008：支持硬件指令集（10 条）
+  field: instr_opcode
+  value: LOAD
+  tree_path: 指令发射
+  coverpoint: cp_instr_opcode
+  bin: load
+  method: D
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B08
+  - TH-B11
+  priority: P2
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_opcode
+    value: 6
+  execution:
+    test: npu_sched_env_d_opcode_pLOAD_test
+    stage: p2
+    seeds:
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+    - 8007
+    - 8008
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+  case_id: CASE-D_OPCODE
+  tst_id: TST-NPU_SCHED_ENV_D_OPCODE_PLOAD_TEST
+  groups:
+  - CG-D_OPCODE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_opcode.load
+  observe_only: false
+  notes: []
+  constraints: *id008
+- tp_id: TP-NPUSCH-D_OPCODE-STORE
+  object: npu_sched
+  requirement: REQ-NPU-008
+  cover_id: CP_NPU_OPCODE_008
+  dimension: D_opcode
+  dimension_name: 硬件指令操作码
+  dimension_description: REQ-NPU-008：支持硬件指令集（10 条）
+  field: instr_opcode
+  value: STORE
+  tree_path: 指令发射
+  coverpoint: cp_instr_opcode
+  bin: store
+  method: D
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B08
+  - TH-B11
+  priority: P2
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_opcode
+    value: 7
+  execution:
+    test: npu_sched_env_d_opcode_pSTORE_test
+    stage: p2
+    seeds:
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+    - 8007
+    - 8008
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+  case_id: CASE-D_OPCODE
+  tst_id: TST-NPU_SCHED_ENV_D_OPCODE_PSTORE_TEST
+  groups:
+  - CG-D_OPCODE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_opcode.store
+  observe_only: false
+  notes: []
+  constraints: *id008
+- tp_id: TP-NPUSCH-D_OPCODE-DMA_READ
+  object: npu_sched
+  requirement: REQ-NPU-008
+  cover_id: CP_NPU_OPCODE_008
+  dimension: D_opcode
+  dimension_name: 硬件指令操作码
+  dimension_description: REQ-NPU-008：支持硬件指令集（10 条）
+  field: instr_opcode
+  value: DMA_READ
+  tree_path: 指令发射
+  coverpoint: cp_instr_opcode
+  bin: dma_rd
+  method: D
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B08
+  - TH-B11
+  priority: P2
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_opcode
+    value: 8
+  execution:
+    test: npu_sched_env_d_opcode_pDMA_READ_test
+    stage: p2
+    seeds:
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+    - 8007
+    - 8008
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+  case_id: CASE-D_OPCODE
+  tst_id: TST-NPU_SCHED_ENV_D_OPCODE_PDMA_READ_TEST
+  groups:
+  - CG-D_OPCODE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_opcode.dma_rd
+  observe_only: false
+  notes: []
+  constraints: *id008
+- tp_id: TP-NPUSCH-D_OPCODE-DMA_WRITE
+  object: npu_sched
+  requirement: REQ-NPU-008
+  cover_id: CP_NPU_OPCODE_008
+  dimension: D_opcode
+  dimension_name: 硬件指令操作码
+  dimension_description: REQ-NPU-008：支持硬件指令集（10 条）
+  field: instr_opcode
+  value: DMA_WRITE
+  tree_path: 指令发射
+  coverpoint: cp_instr_opcode
+  bin: dma_wr
+  method: D
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B08
+  - TH-B11
+  priority: P2
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: instr_opcode
+    value: 9
+  execution:
+    test: npu_sched_env_d_opcode_pDMA_WRITE_test
+    stage: p2
+    seeds:
+    - 8001
+    - 8002
+    - 8003
+    - 8004
+    - 8005
+    - 8006
+    - 8007
+    - 8008
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+  case_id: CASE-D_OPCODE
+  tst_id: TST-NPU_SCHED_ENV_D_OPCODE_PDMA_WRITE_TEST
+  groups:
+  - CG-D_OPCODE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_opcode.dma_wr
+  observe_only: false
+  notes: []
+  constraints: *id008
+- tp_id: TP-NPUSCH-D_SEQ-MAC_MAC
+  object: npu_sched
+  requirement: REQ-NPU-009
+  cover_id: CP_NPU_INSTR_SEQ_009
+  dimension: D_seq
+  dimension_name: 指令序列模式
+  dimension_description: REQ-NPU-009：正确处理相邻指令的 opcode 组合
+  field: instr_seq
+  value: MAC_MAC
+  tree_path: 指令队列管理
+  coverpoint: cp_instr_seq
+  bin: mac_mac
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: adjacent_opcode_pair
+    values:
+    - 0
+    - 0
+  execution:
+    test: npu_sched_env_d_seq_pMAC_MAC_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_SEQ
+  tst_id: TST-NPU_SCHED_ENV_D_SEQ_PMAC_MAC_TEST
+  groups:
+  - CG-D_SEQ
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_seq.mac_mac
+  observe_only: false
+  notes: []
+  constraints: &id009
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_SEQ-LOAD_MAC
+  object: npu_sched
+  requirement: REQ-NPU-009
+  cover_id: CP_NPU_INSTR_SEQ_009
+  dimension: D_seq
+  dimension_name: 指令序列模式
+  dimension_description: REQ-NPU-009：正确处理相邻指令的 opcode 组合
+  field: instr_seq
+  value: LOAD_MAC
+  tree_path: 指令队列管理
+  coverpoint: cp_instr_seq
+  bin: load_mac
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: adjacent_opcode_pair
+    values:
+    - 6
+    - 0
+  execution:
+    test: npu_sched_env_d_seq_pLOAD_MAC_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_SEQ
+  tst_id: TST-NPU_SCHED_ENV_D_SEQ_PLOAD_MAC_TEST
+  groups:
+  - CG-D_SEQ
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_seq.load_mac
+  observe_only: false
+  notes: []
+  constraints: *id009
+- tp_id: TP-NPUSCH-D_SEQ-MAC_STORE
+  object: npu_sched
+  requirement: REQ-NPU-009
+  cover_id: CP_NPU_INSTR_SEQ_009
+  dimension: D_seq
+  dimension_name: 指令序列模式
+  dimension_description: REQ-NPU-009：正确处理相邻指令的 opcode 组合
+  field: instr_seq
+  value: MAC_STORE
+  tree_path: 指令队列管理
+  coverpoint: cp_instr_seq
+  bin: mac_store
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: adjacent_opcode_pair
+    values:
+    - 0
+    - 7
+  execution:
+    test: npu_sched_env_d_seq_pMAC_STORE_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_SEQ
+  tst_id: TST-NPU_SCHED_ENV_D_SEQ_PMAC_STORE_TEST
+  groups:
+  - CG-D_SEQ
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_seq.mac_store
+  observe_only: false
+  notes: []
+  constraints: *id009
+- tp_id: TP-NPUSCH-D_SEQ-DMA_MAC
+  object: npu_sched
+  requirement: REQ-NPU-009
+  cover_id: CP_NPU_INSTR_SEQ_009
+  dimension: D_seq
+  dimension_name: 指令序列模式
+  dimension_description: REQ-NPU-009：正确处理相邻指令的 opcode 组合
+  field: instr_seq
+  value: DMA_MAC
+  tree_path: 指令队列管理
+  coverpoint: cp_instr_seq
+  bin: dma_mac
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: adjacent_opcode_pair
+    values:
+    - 8
+    - 0
+  execution:
+    test: npu_sched_env_d_seq_pDMA_MAC_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_SEQ
+  tst_id: TST-NPU_SCHED_ENV_D_SEQ_PDMA_MAC_TEST
+  groups:
+  - CG-D_SEQ
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_seq.dma_mac
+  observe_only: false
+  notes: []
+  constraints: *id009
+- tp_id: TP-NPUSCH-D_SEQ-VEC_MAC
+  object: npu_sched
+  requirement: REQ-NPU-009
+  cover_id: CP_NPU_INSTR_SEQ_009
+  dimension: D_seq
+  dimension_name: 指令序列模式
+  dimension_description: REQ-NPU-009：正确处理相邻指令的 opcode 组合
+  field: instr_seq
+  value: VEC_MAC
+  tree_path: 指令队列管理
+  coverpoint: cp_instr_seq
+  bin: vec_mac
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: adjacent_opcode_pair
+    values:
+    - 3
+    - 0
+  execution:
+    test: npu_sched_env_d_seq_pVEC_MAC_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_SEQ
+  tst_id: TST-NPU_SCHED_ENV_D_SEQ_PVEC_MAC_TEST
+  groups:
+  - CG-D_SEQ
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_seq.vec_mac
+  observe_only: false
+  notes: []
+  constraints: *id009
+- tp_id: TP-NPUSCH-D_SEQ-SCALAR_MAC
+  object: npu_sched
+  requirement: REQ-NPU-009
+  cover_id: CP_NPU_INSTR_SEQ_009
+  dimension: D_seq
+  dimension_name: 指令序列模式
+  dimension_description: REQ-NPU-009：正确处理相邻指令的 opcode 组合
+  field: instr_seq
+  value: SCALAR_MAC
+  tree_path: 指令队列管理
+  coverpoint: cp_instr_seq
+  bin: scalar_mac
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: adjacent_opcode_pair
+    values:
+    - 0
+    - 0
+  execution:
+    test: npu_sched_env_d_seq_pSCALAR_MAC_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_SEQ
+  tst_id: TST-NPU_SCHED_ENV_D_SEQ_PSCALAR_MAC_TEST
+  groups:
+  - CG-D_SEQ
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_instr_seq.scalar_mac
+  observe_only: false
+  notes: []
+  constraints: *id009
+- tp_id: TP-NPUSCH-D_PIPELINE-NONE
+  object: npu_sched
+  requirement: REQ-NPU-010
+  cover_id: CP_NPU_PIPELINE_010
+  dimension: D_pipeline
+  dimension_name: 流水重叠
+  dimension_description: REQ-NPU-010：支持指令流水重叠
+  field: pipeline_state
+  value: NONE
+  tree_path: 指令发射
+  coverpoint: cp_pipeline_state
+  bin: no_overlap
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B10
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: pipeline_overlap
+    values:
+    - 0
+  execution:
+    test: npu_sched_env_d_pipeline_pNONE_test
+    stage: p3
+    seeds:
+    - 9501
+    - 9502
+    - 9503
+    - 9504
+    - 9505
+    - 9506
+    - 9507
+    - 9508
+    - 9509
+    - 9510
+    - 9511
+    - 9512
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+  case_id: CASE-D_PIPELINE
+  tst_id: TST-NPU_SCHED_ENV_D_PIPELINE_PNONE_TEST
+  groups:
+  - CG-D_PIPELINE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_pipeline_state.no_overlap
+  observe_only: false
+  notes: []
+  constraints: &id010
+  - p_th_b10_random
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_PIPELINE-MAC_MAC
+  object: npu_sched
+  requirement: REQ-NPU-010
+  cover_id: CP_NPU_PIPELINE_010
+  dimension: D_pipeline
+  dimension_name: 流水重叠
+  dimension_description: REQ-NPU-010：支持指令流水重叠
+  field: pipeline_state
+  value: MAC_MAC
+  tree_path: 指令发射
+  coverpoint: cp_pipeline_state
+  bin: mac_mac_overlap
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B10
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: pipeline_overlap
+    values:
+    - 0
+    - 0
+  execution:
+    test: npu_sched_env_d_pipeline_pMAC_MAC_test
+    stage: p3
+    seeds:
+    - 9501
+    - 9502
+    - 9503
+    - 9504
+    - 9505
+    - 9506
+    - 9507
+    - 9508
+    - 9509
+    - 9510
+    - 9511
+    - 9512
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+  case_id: CASE-D_PIPELINE
+  tst_id: TST-NPU_SCHED_ENV_D_PIPELINE_PMAC_MAC_TEST
+  groups:
+  - CG-D_PIPELINE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_pipeline_state.mac_mac_overlap
+  observe_only: false
+  notes: []
+  constraints: *id010
+- tp_id: TP-NPUSCH-D_PIPELINE-MAC_DMA
+  object: npu_sched
+  requirement: REQ-NPU-010
+  cover_id: CP_NPU_PIPELINE_010
+  dimension: D_pipeline
+  dimension_name: 流水重叠
+  dimension_description: REQ-NPU-010：支持指令流水重叠
+  field: pipeline_state
+  value: MAC_DMA
+  tree_path: 指令发射
+  coverpoint: cp_pipeline_state
+  bin: mac_dma_overlap
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B10
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: pipeline_overlap
+    values:
+    - 0
+    - 8
+  execution:
+    test: npu_sched_env_d_pipeline_pMAC_DMA_test
+    stage: p3
+    seeds:
+    - 9501
+    - 9502
+    - 9503
+    - 9504
+    - 9505
+    - 9506
+    - 9507
+    - 9508
+    - 9509
+    - 9510
+    - 9511
+    - 9512
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+  case_id: CASE-D_PIPELINE
+  tst_id: TST-NPU_SCHED_ENV_D_PIPELINE_PMAC_DMA_TEST
+  groups:
+  - CG-D_PIPELINE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_pipeline_state.mac_dma_overlap
+  observe_only: false
+  notes: []
+  constraints: *id010
+- tp_id: TP-NPUSCH-D_PIPELINE-VEC_MAC
+  object: npu_sched
+  requirement: REQ-NPU-010
+  cover_id: CP_NPU_PIPELINE_010
+  dimension: D_pipeline
+  dimension_name: 流水重叠
+  dimension_description: REQ-NPU-010：支持指令流水重叠
+  field: pipeline_state
+  value: VEC_MAC
+  tree_path: 指令发射
+  coverpoint: cp_pipeline_state
+  bin: vec_mac_overlap
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B10
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: pipeline_overlap
+    values:
+    - 3
+    - 0
+  execution:
+    test: npu_sched_env_d_pipeline_pVEC_MAC_test
+    stage: p3
+    seeds:
+    - 9501
+    - 9502
+    - 9503
+    - 9504
+    - 9505
+    - 9506
+    - 9507
+    - 9508
+    - 9509
+    - 9510
+    - 9511
+    - 9512
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+  case_id: CASE-D_PIPELINE
+  tst_id: TST-NPU_SCHED_ENV_D_PIPELINE_PVEC_MAC_TEST
+  groups:
+  - CG-D_PIPELINE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_pipeline_state.vec_mac_overlap
+  observe_only: false
+  notes: []
+  constraints: *id010
+- tp_id: TP-NPUSCH-D_PIPELINE-MULTI_OP
+  object: npu_sched
+  requirement: REQ-NPU-010
+  cover_id: CP_NPU_PIPELINE_010
+  dimension: D_pipeline
+  dimension_name: 流水重叠
+  dimension_description: REQ-NPU-010：支持指令流水重叠
+  field: pipeline_state
+  value: MULTI_OP
+  tree_path: 指令发射
+  coverpoint: cp_pipeline_state
+  bin: multi_op_overlap
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B10
+  - TH-B11
+  priority: P3
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: pipeline_overlap
+    values:
+    - 0
+    - 3
+    - 8
+  execution:
+    test: npu_sched_env_d_pipeline_pMULTI_OP_test
+    stage: p3
+    seeds:
+    - 9501
+    - 9502
+    - 9503
+    - 9504
+    - 9505
+    - 9506
+    - 9507
+    - 9508
+    - 9509
+    - 9510
+    - 9511
+    - 9512
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+  case_id: CASE-D_PIPELINE
+  tst_id: TST-NPU_SCHED_ENV_D_PIPELINE_PMULTI_OP_TEST
+  groups:
+  - CG-D_PIPELINE
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_pipeline_state.multi_op_overlap
+  observe_only: false
+  notes: []
+  constraints: *id010
+- tp_id: TP-NPUSCH-D_PRIORITY-HIGH_FIRST
+  object: npu_sched
+  requirement: REQ-NPU-011
+  cover_id: CP_NPU_PRIORITY_011
+  dimension: D_priority
+  dimension_name: 优先级调度
+  dimension_description: REQ-NPU-011：支持优先级调度
+  field: op_priority
+  value: HIGH_FIRST
+  tree_path: 指令发射
+  coverpoint: cp_op_priority
+  bin: high_first
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: op_priority
+    value: 0
+  execution:
+    test: npu_sched_env_d_priority_pHIGH_FIRST_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_PRIORITY
+  tst_id: TST-NPU_SCHED_ENV_D_PRIORITY_PHIGH_FIRST_TEST
+  groups:
+  - CG-D_PRIORITY
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_op_priority.high_first
+  observe_only: false
+  notes: []
+  constraints: &id011
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_PRIORITY-LOW_FIRST
+  object: npu_sched
+  requirement: REQ-NPU-011
+  cover_id: CP_NPU_PRIORITY_011
+  dimension: D_priority
+  dimension_name: 优先级调度
+  dimension_description: REQ-NPU-011：支持优先级调度
+  field: op_priority
+  value: LOW_FIRST
+  tree_path: 指令发射
+  coverpoint: cp_op_priority
+  bin: low_first
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: op_priority
+    value: 1
+  execution:
+    test: npu_sched_env_d_priority_pLOW_FIRST_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_PRIORITY
+  tst_id: TST-NPU_SCHED_ENV_D_PRIORITY_PLOW_FIRST_TEST
+  groups:
+  - CG-D_PRIORITY
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_op_priority.low_first
+  observe_only: false
+  notes: []
+  constraints: *id011
+- tp_id: TP-NPUSCH-D_PRIORITY-SAME_PRIO
+  object: npu_sched
+  requirement: REQ-NPU-011
+  cover_id: CP_NPU_PRIORITY_011
+  dimension: D_priority
+  dimension_name: 优先级调度
+  dimension_description: REQ-NPU-011：支持优先级调度
+  field: op_priority
+  value: SAME_PRIO
+  tree_path: 指令发射
+  coverpoint: cp_op_priority
+  bin: same_priority
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: op_priority
+    value: 2
+  execution:
+    test: npu_sched_env_d_priority_pSAME_PRIO_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_PRIORITY
+  tst_id: TST-NPU_SCHED_ENV_D_PRIORITY_PSAME_PRIO_TEST
+  groups:
+  - CG-D_PRIORITY
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_op_priority.same_priority
+  observe_only: false
+  notes: []
+  constraints: *id011
+- tp_id: TP-NPUSCH-D_PRIORITY-ROUND_ROBIN
+  object: npu_sched
+  requirement: REQ-NPU-011
+  cover_id: CP_NPU_PRIORITY_011
+  dimension: D_priority
+  dimension_name: 优先级调度
+  dimension_description: REQ-NPU-011：支持优先级调度
+  field: op_priority
+  value: ROUND_ROBIN
+  tree_path: 指令发射
+  coverpoint: cp_op_priority
+  bin: round_robin
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: op_priority
+    value: 3
+  execution:
+    test: npu_sched_env_d_priority_pROUND_ROBIN_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_PRIORITY
+  tst_id: TST-NPU_SCHED_ENV_D_PRIORITY_PROUND_ROBIN_TEST
+  groups:
+  - CG-D_PRIORITY
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_op_priority.round_robin
+  observe_only: false
+  notes: []
+  constraints: *id011
+- tp_id: TP-NPUSCH-D_BARRIER-NONE
+  object: npu_sched
+  requirement: REQ-NPU-012
+  cover_id: CP_NPU_BARRIER_012
+  dimension: D_barrier
+  dimension_name: 硬件同步屏障
+  dimension_description: REQ-NPU-012：支持硬件同步屏障
+  field: barrier_type
+  value: NONE
+  tree_path: 多簇同步
+  coverpoint: cp_barrier_type
+  bin: no_barrier
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: barrier_type
+    value: 0
+  execution:
+    test: npu_sched_env_d_barrier_pNONE_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_BARRIER
+  tst_id: TST-NPU_SCHED_ENV_D_BARRIER_PNONE_TEST
+  groups:
+  - CG-D_BARRIER
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_barrier_type.no_barrier
+  observe_only: false
+  notes: []
+  constraints: &id012
+  - p_th_b11_random
+- tp_id: TP-NPUSCH-D_BARRIER-TILE_BARRIER
+  object: npu_sched
+  requirement: REQ-NPU-012
+  cover_id: CP_NPU_BARRIER_012
+  dimension: D_barrier
+  dimension_name: 硬件同步屏障
+  dimension_description: REQ-NPU-012：支持硬件同步屏障
+  field: barrier_type
+  value: TILE_BARRIER
+  tree_path: 多簇同步
+  coverpoint: cp_barrier_type
+  bin: tile_barrier
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: barrier_type
+    value: 1
+  execution:
+    test: npu_sched_env_d_barrier_pTILE_BARRIER_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_BARRIER
+  tst_id: TST-NPU_SCHED_ENV_D_BARRIER_PTILE_BARRIER_TEST
+  groups:
+  - CG-D_BARRIER
+  sva:
+  - SVA-BARRIER_FLUSHES
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_barrier_type.tile_barrier
+  observe_only: false
+  notes: []
+  constraints: *id012
+- tp_id: TP-NPUSCH-D_BARRIER-OP_BARRIER
+  object: npu_sched
+  requirement: REQ-NPU-012
+  cover_id: CP_NPU_BARRIER_012
+  dimension: D_barrier
+  dimension_name: 硬件同步屏障
+  dimension_description: REQ-NPU-012：支持硬件同步屏障
+  field: barrier_type
+  value: OP_BARRIER
+  tree_path: 多簇同步
+  coverpoint: cp_barrier_type
+  bin: op_barrier
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: barrier_type
+    value: 2
+  execution:
+    test: npu_sched_env_d_barrier_pOP_BARRIER_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_BARRIER
+  tst_id: TST-NPU_SCHED_ENV_D_BARRIER_POP_BARRIER_TEST
+  groups:
+  - CG-D_BARRIER
+  sva:
+  - SVA-BARRIER_FLUSHES
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_barrier_type.op_barrier
+  observe_only: false
+  notes: []
+  constraints: *id012
+- tp_id: TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER
+  object: npu_sched
+  requirement: REQ-NPU-012
+  cover_id: CP_NPU_BARRIER_012
+  dimension: D_barrier
+  dimension_name: 硬件同步屏障
+  dimension_description: REQ-NPU-012：支持硬件同步屏障
+  field: barrier_type
+  value: CLUSTER_BARRIER
+  tree_path: 多簇同步
+  coverpoint: cp_barrier_type
+  bin: cluster_barrier
+  method: RND
+  checks:
+  - CHECK-FUNC
+  themes:
+  - TH-B11
+  priority: P3
+  realization:
+    kind: stimulus
+    agent: npu_sched_in
+    field: barrier_type
+    value: 3
+  execution:
+    test: npu_sched_env_d_barrier_pCLUSTER_BARRIER_test
+    stage: p3
+    seeds:
+    - 10001
+    - 10002
+    - 10003
+    - 10004
+    - 10005
+    - 10006
+    - 10007
+    - 10008
+    - 10009
+    - 10010
+    - 10011
+    - 10012
+    - 10013
+    - 10014
+    - 10015
+    - 10016
+  case_id: CASE-D_BARRIER
+  tst_id: TST-NPU_SCHED_ENV_D_BARRIER_PCLUSTER_BARRIER_TEST
+  groups:
+  - CG-D_BARRIER
+  sva:
+  - SVA-BARRIER_FLUSHES
+  scb:
+  - SB-NPU-DUT
+  status_rule:
+    pass: UVM_ERROR=0 and mismatched=0
+    evidence: bin cp_barrier_type.cluster_barrier
+  observe_only: false
+  notes: []
+  constraints: *id012
+- tp_id: TP-NPUSCH-BEH_QUEUE-TR_EMPTY_ENQ
+  object: npu_sched
+  requirement: ''
+  cover_id: ''
+  dimension: BEH_QUEUE
+  dimension_name: 队列水位迁移
+  field: ''
+  value: EMPTY->enqueue->LOW
+  tree_path: ''
+  coverpoint: ''
+  bin: ''
+  method: ''
+  checks:
+  - CHECK-FUNC
+  themes: []
+  priority: ''
+  realization:
+    kind: observe
+  execution:
+    test: ''
+    stage: behavior
+    seeds: []
+  case_id: CASE-BEH_QUEUE
+  groups:
+  - CG-BEH_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule: {}
+  observe_only: true
+  notes:
+  - 行为域 P1a：已进 TP IR；执行后端（事件序列 → UVM）在 P1b
+- tp_id: TP-NPUSCH-BEH_QUEUE-TR_LOW_ENQ
+  object: npu_sched
+  requirement: ''
+  cover_id: ''
+  dimension: BEH_QUEUE
+  dimension_name: 队列水位迁移
+  field: ''
+  value: LOW->enqueue->HIGH
+  tree_path: ''
+  coverpoint: ''
+  bin: ''
+  method: ''
+  checks:
+  - CHECK-FUNC
+  themes: []
+  priority: ''
+  realization:
+    kind: observe
+  execution:
+    test: ''
+    stage: behavior
+    seeds: []
+  case_id: CASE-BEH_QUEUE
+  groups:
+  - CG-BEH_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule: {}
+  observe_only: true
+  notes:
+  - 行为域 P1a：已进 TP IR；执行后端（事件序列 → UVM）在 P1b
+- tp_id: TP-NPUSCH-BEH_QUEUE-TR_HIGH_ENQ
+  object: npu_sched
+  requirement: ''
+  cover_id: ''
+  dimension: BEH_QUEUE
+  dimension_name: 队列水位迁移
+  field: ''
+  value: HIGH->enqueue->FULL
+  tree_path: ''
+  coverpoint: ''
+  bin: ''
+  method: ''
+  checks:
+  - CHECK-FUNC
+  themes: []
+  priority: ''
+  realization:
+    kind: observe
+  execution:
+    test: ''
+    stage: behavior
+    seeds: []
+  case_id: CASE-BEH_QUEUE
+  groups:
+  - CG-BEH_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule: {}
+  observe_only: true
+  notes:
+  - 行为域 P1a：已进 TP IR；执行后端（事件序列 → UVM）在 P1b
+- tp_id: TP-NPUSCH-BEH_QUEUE-TR_FULL_DEQ
+  object: npu_sched
+  requirement: ''
+  cover_id: ''
+  dimension: BEH_QUEUE
+  dimension_name: 队列水位迁移
+  field: ''
+  value: FULL->dequeue->HIGH
+  tree_path: ''
+  coverpoint: ''
+  bin: ''
+  method: ''
+  checks:
+  - CHECK-FUNC
+  themes: []
+  priority: ''
+  realization:
+    kind: observe
+  execution:
+    test: ''
+    stage: behavior
+    seeds: []
+  case_id: CASE-BEH_QUEUE
+  groups:
+  - CG-BEH_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule: {}
+  observe_only: true
+  notes:
+  - 行为域 P1a：已进 TP IR；执行后端（事件序列 → UVM）在 P1b
+- tp_id: TP-NPUSCH-BEH_QUEUE-TR_FULL_FLUSH
+  object: npu_sched
+  requirement: ''
+  cover_id: ''
+  dimension: BEH_QUEUE
+  dimension_name: 队列水位迁移
+  field: ''
+  value: FULL->flush->EMPTY
+  tree_path: ''
+  coverpoint: ''
+  bin: ''
+  method: ''
+  checks:
+  - CHECK-FUNC
+  themes: []
+  priority: ''
+  realization:
+    kind: observe
+  execution:
+    test: ''
+    stage: behavior
+    seeds: []
+  case_id: CASE-BEH_QUEUE
+  groups:
+  - CG-BEH_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule: {}
+  observe_only: true
+  notes:
+  - 行为域 P1a：已进 TP IR；执行后端（事件序列 → UVM）在 P1b
+- tp_id: TP-NPUSCH-BEH_QUEUE-SEQ_FILL_DRAIN
+  object: npu_sched
+  requirement: ''
+  cover_id: ''
+  dimension: BEH_QUEUE
+  dimension_name: 队列水位迁移
+  field: ''
+  value: enqueue > dequeue
+  tree_path: ''
+  coverpoint: ''
+  bin: ''
+  method: ''
+  checks:
+  - CHECK-FUNC
+  themes: []
+  priority: ''
+  realization:
+    kind: sequence
+    agent: ''
+    sequence: SEQ-FILL-DRAIN
+  execution:
+    test: ''
+    stage: behavior
+    seeds: []
+  case_id: CASE-BEH_QUEUE
+  groups:
+  - CG-BEH_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule: {}
+  observe_only: false
+  notes:
+  - 行为域 P1a：已进 TP IR；执行后端（事件序列 → UVM）在 P1b
+- tp_id: TP-NPUSCH-BEH_QUEUE-TMP_BACKPRESSURE
+  object: npu_sched
+  requirement: ''
+  cover_id: ''
+  dimension: BEH_QUEUE
+  dimension_name: 队列水位迁移
+  field: ''
+  value: enqueue->backpressure=True
+  tree_path: ''
+  coverpoint: ''
+  bin: ''
+  method: ''
+  checks:
+  - CHECK-FUNC
+  themes: []
+  priority: ''
+  realization:
+    kind: observe
+  execution:
+    test: ''
+    stage: behavior
+    seeds: []
+  case_id: CASE-BEH_QUEUE
+  groups:
+  - CG-BEH_QUEUE
+  scb:
+  - SB-NPU-DUT
+  status_rule: {}
+  observe_only: true
+  notes:
+  - 行为域 P1a：已进 TP IR；执行后端（事件序列 → UVM）在 P1b

@@ -1,0 +1,16 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// ============================================================
+// Agent Typedef Package: {{ environment.env_name }}_typedefs_pkg
+// ============================================================
+// interface 级类型别名（YAML typedefs: 名字 → 类型），
+// 供 seq_item / config / driver / monitor 复用，避免各处硬编码。
+package {{ environment.env_name }}_typedefs_pkg;
+
+{%- if environment.typedefs %}
+{%-   for name, ty in environment.typedefs.items() %}
+  typedef {{ ty }} {{ name }};
+{%-   endfor %}
+{%- endif %}
+
+endpackage : {{ environment.env_name }}_typedefs_pkg

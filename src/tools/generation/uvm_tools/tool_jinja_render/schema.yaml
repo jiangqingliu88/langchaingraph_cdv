@@ -1,0 +1,21 @@
+name: jinja_render
+description: 'Jinja2 渲染 YAML -> UVM SystemVerilog 骨架代码（确定性生成，LLM 只做完形填空）'
+input_schema:
+  type: object
+  properties:
+    output_dir:
+      type: string
+      default: ''
+      description: '输出根目录'
+output_schema:
+  type: object
+  properties:
+    status:
+      type: string
+    file_count:
+      type: integer
+    agents:
+      type: array
+    files:
+      type: array
+risk_level: write

@@ -1,0 +1,2057 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signoffai.local/tool_uvm/uvm_config.schema.json",
+  "title": "tool_uvm YAML config",
+  "description": "tool_uvm 的 YAML 配置契约（一个文件 = 一个文档）。键名/类型/必填/枚举校验；严重度由 schema_check.py 按 validator 映射（unknown key → warning，其余 → error）。",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "$comment": "env_cov_bins.yaml 的生成端 schema 标记（v2 覆盖语义起写入）。"
+    },
+    "generated_by": {
+      "type": "string",
+      "$comment": "生成者标识（verify 侧写），用于回答“这份文件是谁产的”。"
+    },
+    "meta": {
+      "$ref": "#/$defs/meta"
+    },
+    "interfaces": {
+      "$ref": "#/$defs/interfaceArray"
+    },
+    "interface": {
+      "$ref": "#/$defs/interfaceArray"
+    },
+    "environment": {
+      "$ref": "#/$defs/environment"
+    },
+    "bench": {
+      "$ref": "#/$defs/bench"
+    },
+    "constraint": {
+      "$ref": "#/$defs/constraintDoc"
+    },
+    "sc_pred": {
+      "$ref": "#/$defs/scPred"
+    },
+    "rtl_sc_components": {
+      "$ref": "#/$defs/scPred"
+    },
+    "transactions": {
+      "$ref": "#/$defs/transactions"
+    },
+    "policies": {
+      "$ref": "#/$defs/policies"
+    },
+    "combinator": {
+      "$ref": "#/$defs/combinator"
+    },
+    "constraint_backing": {
+      "$comment": "约束逐条生效状态（associate.build_constraint 生成）。不参与渲染，供签核 / 人读：哪几条策略由模型编译出真实赋值、为什么其余仍是骨架。",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "harness": {
+      "$ref": "#/$defs/harnessArray"
+    },
+    "util_components": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/utilComponent"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/utilComponent"
+          }
+        }
+      ]
+    },
+    "cov_bins": {
+      "$comment": "env_cov_bins.yaml —— 策略包的语义覆盖率 bin（gen_uvm 渲染 env_cov 时生成语义化 cross）",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/covBin"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/covBin"
+          }
+        }
+      ]
+    },
+    "field_bins": {
+      "$comment": "env_cov_bins.yaml —— **case 模型**的边界 bin：字段名 → 显式 bin 表。gen_uvm 渲染 env_cov 时用它替换「值类自动分箱（0/1/其余）」。字段名就是事务字段名（= spec 接口信号名），所以能直接挂到 `cp_<字段>` 上。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/coverFieldBin"
+        }
+      }
+    },
+    "dut_if": {
+      "$comment": "env_cov_bins.yaml —— **DUT 覆盖率接口的身份**（类型名 / bind 实例名 / 时钟 / 复位 / 文件）。`verify` 落盘 `coverage/<name>.sv` 时一起写下，`gen_uvm` 渲染 env_cov（组件持 `virtual <type>`）与 tb_top（`config_db::set(..., <dut 实例>.<instance>)`）**都从这一份读** —— 两边各推一次名字就会漂，而漂了编译不报错、覆盖率恒 0%。缺席时两个模板一个字都不生成。",
+      "type": "object",
+      "required": [
+        "type",
+        "instance",
+        "dut_module"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$comment": "SV 接口类型名（= 文件名主干）",
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "instance": {
+          "$comment": "bind 出来的**实例名** —— tb_top 的层次路径用它（`<dut 实例>.<instance>`）",
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "dut_module": {
+          "$comment": "bind 的**目标模块名**（不是实例路径）",
+          "type": "string"
+        },
+        "clock": {
+          "type": "string"
+        },
+        "reset": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "signals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "extra_signals": {
+          "$comment": "断言规则要用、但**没有**被任何覆盖点采的信号（`{name,width}`）。也引成接口端口 —— 否则 env 检查组读不到，那条规则只能被跳过（`issue_valid` 这类端口就是这么丢的）。",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "tp_bitmap_width": {
+          "$comment": "测试点位图的位宽（0 = 不产位图）。接口体里据此多一个非端口变量 `logic [N-1:0] tp_seen`，env 覆盖率组件在仓命中时置位。",
+          "type": "integer",
+          "minimum": 0
+        },
+        "coverpoints": {
+          "$comment": "覆盖点表（signal / sv_name / field / width / expr）—— 模板据此出 `cg_dut`",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "dut_bins": {
+      "$comment": "env_cov_bins.yaml —— DUT 侧覆盖点的仓表：信号名 → 显式仓（`cg_dut` 的 `bins`/`illegal_bins`）。与 `field_bins` 是两条通道的两张表（事务字段 / DUT 信号），形状故意一致。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/dutCoverBin"
+        }
+      }
+    },
+    "dut_checker": {
+      "$comment": "env_cov_bins.yaml —— **DUT 检查规则**：env 覆盖率组件逐拍求值，收口打印 `matched=… mismatched=…`。这是「真 pass」的**比对半边**（判据要求日志里出现 `mismatched=0`），规则与 SVA **同源**（case 模型的 `assertions:` 块，一份规则两个执行点）。`|->` 已在生成端翻成逐拍布尔（`!(a) || (b)`），跨拍规则不进这里。",
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/checkerRule"
+          }
+        },
+        "skipped": {
+          "$comment": "生成端如实列出的「这条没查」——不假装检查过",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "clock": {
+          "type": "string"
+        },
+        "reset": {
+          "type": "string"
+        },
+        "scoreboards": {
+          "$comment": "逐条 SB 收口：每条 scoreboard 归并它自己那几条规则的计数，打 `[SCB <id>] total/matched/mismatched`。名字对不上的不出现（不猜）。",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dutCheckerScoreboard"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "tp_bitmap": {
+      "$comment": "env_cov_bins.yaml —— **测试点位图 + 时序判据**（P1/P2）。位序 = testpoints.yaml 的序号，一旦发布不重排；env 覆盖率组件按它置位 `cov_vif.tp_seen`、打 `[TP_HIT]`，并按 `timing` 逐拍判窗。",
+      "type": "object",
+      "properties": {
+        "schema": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tpBitEntry"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "source": {
+      "type": "object",
+      "$comment": "文书出处：这份 yaml 是从哪个库/哪一行抽出来的。**不参与生成**，给人看与审计用；`status` 是诚实标记（draft = 该版模型还没验证过）。",
+      "properties": {
+        "registry": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "interfaces"
+      ]
+    },
+    {
+      "required": [
+        "interface"
+      ]
+    },
+    {
+      "required": [
+        "environment"
+      ]
+    },
+    {
+      "required": [
+        "bench"
+      ]
+    },
+    {
+      "required": [
+        "constraint"
+      ]
+    },
+    {
+      "required": [
+        "sc_pred"
+      ]
+    },
+    {
+      "required": [
+        "rtl_sc_components"
+      ]
+    },
+    {
+      "required": [
+        "harness"
+      ]
+    },
+    {
+      "required": [
+        "util_components"
+      ]
+    },
+    {
+      "required": [
+        "cov_bins"
+      ]
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "meta": {
+      "$comment": "文件头元数据：键名自由，值仅限标量（gen_uvm.py:2125 对值做 str()）",
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null"
+        ]
+      }
+    },
+    "boolLike": {
+      "$comment": "YAML 布尔或 \"True\"/\"False\"/\"yes\"/\"no\"/\"1\"/\"0\" 字符串（_opt_bool, gen_uvm.py:697）",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "isActive": {
+      "$comment": "env 级 agent 实例的激活模式（_opt_bool → AgentModel.active，gen_uvm.py）；缺省 UVM_ACTIVE。interface 级已不再接受该键。",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/boolLike"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "master": {
+              "$ref": "#/$defs/boolLike"
+            },
+            "slave": {
+              "$ref": "#/$defs/boolLike"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "scPred": {
+      "$comment": "SC Pred 文档（gen_uvm.py parse_sc_pred_model；rtl_sc_components 为旧别名）。只列解析器实际读取的键，其余键报错而非静默忽略。",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "id": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "prod_points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scPredPoint"
+          }
+        },
+        "chck_points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scPredPoint"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "scPredPoint": {
+      "$comment": "SC Pred 观测点；缺 point_name 会被解析器丢弃",
+      "type": "object",
+      "required": [
+        "point_name"
+      ],
+      "properties": {
+        "point_name": {
+          "type": "string"
+        },
+        "width": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "channel_num": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/port"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "interface": {
+      "$comment": "interface 级 agent 定义（含旧别名 agent_name/interface_name/clk）",
+      "type": "object",
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "agent_name"
+          ]
+        }
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_name": {
+          "type": "string"
+        },
+        "interface_name": {
+          "type": "string"
+        },
+        "clock": {
+          "type": "string"
+        },
+        "clk": {
+          "type": "string"
+        },
+        "reset": {
+          "type": "string"
+        },
+        "protocol": {
+          "$comment": "协议名不做 enum（semantic_check 只特判 apb，新协议合法）",
+          "type": "string"
+        },
+        "reset_active_low": {
+          "$ref": "#/$defs/boolLike"
+        },
+        "type": {
+          "$comment": "→ agent_type",
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "value": {}
+            },
+            "additionalProperties": false
+          }
+        },
+        "typedefs": {
+          "$comment": "类型别名 list：每项 { type_t: 类型表达式, type_name: 新类型名 }，渲染进 <name>_typedefs_pkg",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "type_t",
+              "type_name"
+            ],
+            "properties": {
+              "type_t": {
+                "type": "string"
+              },
+              "type_name": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/port"
+          }
+        },
+        "base_transaction_vars": {
+          "$comment": "master/slave 共用的事务字段 —— 渲染进 <name>_base_seq_item，两侧 seq_item 继承它",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transactionVar"
+          }
+        },
+        "base_transaction_constraints": {
+          "$comment": "master/slave 共用的约束 —— 渲染进 <name>_base_seq_item",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/namedValue"
+          }
+        },
+        "transaction_vars": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transactionVar"
+          }
+        },
+        "transaction_constraints": {
+          "$comment": "list（旧，全归 master）或 {master, slave} dict（gen_uvm.py:571-578）",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/namedValue"
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "master": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/namedValue"
+                  }
+                },
+                "slave": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/namedValue"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "config_vars": {
+          "type": "array"
+        },
+        "config_constraints": {
+          "type": "array"
+        },
+        "response_info": {
+          "type": "object"
+        },
+        "config": {
+          "$comment": "自由透传的配置包（AgentModel.config，gen_uvm.py）；is_active 已下线，写在这里会被显式报错而非静默忽略",
+          "type": "object",
+          "not": {
+            "required": [
+              "is_active"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "interfaceArray": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/interface"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interface"
+          }
+        }
+      ]
+    },
+    "port": {
+      "type": "object",
+      "required": [
+        "name",
+        "dir"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "dir": {
+          "$comment": "模板按 dir 分支；拼错会静默退化为默认行为",
+          "enum": [
+            "input",
+            "output"
+          ]
+        },
+        "width": {
+          "$comment": "位宽：整数或参数名（如 ADDR_WIDTH）",
+          "type": [
+            "integer",
+            "string"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "transactionVar": {
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "iscompare": {
+          "$ref": "#/$defs/boolLike"
+        },
+        "isrand": {
+          "$ref": "#/$defs/boolLike"
+        },
+        "is_master": {
+          "$ref": "#/$defs/boolLike"
+        }
+      },
+      "additionalProperties": false
+    },
+    "namedValue": {
+      "$comment": "transaction_constraints 条目 {name, value}",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "agents": {
+          "$comment": "list / dict-of-dict / dict-of-string（_normalize_agents_list, gen_uvm.py:1667）",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/envAgentEntry"
+                  },
+                  {
+                    "$comment": "list 格式：name 或 type 至少写一个（另一个可推导）",
+                    "anyOf": [
+                      {
+                        "required": [
+                          "name"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "type"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/envAgentEntry"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "subenvs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "interface": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "vipenvs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "vip_path": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "scoreboards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scoreboardEntry"
+          }
+        },
+        "analysis_components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/analysisComponentEntry"
+          }
+        },
+        "analysis_exports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/analysisPortEntry"
+          }
+        },
+        "analysis_ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/analysisPortEntry"
+          }
+        },
+        "clk_rst_vip": {
+          "$ref": "#/$defs/clkRstVip"
+        },
+        "clk_rst": {
+          "$comment": "旧别名：缺 enabled，被包装为 clk_rst_vip（gen_uvm.py:2010-2016）",
+          "$ref": "#/$defs/clkRst"
+        },
+        "register_model": {
+          "$ref": "#/$defs/registerModel"
+        },
+        "reg_adapter": {
+          "$comment": "旧别名（gen_uvm.py:2020）",
+          "$ref": "#/$defs/registerModel"
+        },
+        "harness_connect": {
+          "$comment": "缺 path 时 set_vifs 无法渲染（semantic_check:152 同条件）",
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "env_suffix": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "coverage_crosses": {
+          "$comment": "内层 minItems:2 对应 gen_uvm.py:2040 的 len>=2 过滤",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2
+          }
+        },
+        "config_vars": {
+          "type": "array"
+        },
+        "config_constraints": {
+          "type": "array"
+        },
+        "tlm_connections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tlmConnection"
+          }
+        },
+        "bench": {
+          "$comment": "旧透传（示例为显式空对象）",
+          "type": "object"
+        },
+        "tests": {
+          "$comment": "属性测试：**一条 = 一个 UVM_TEST = 一个属性取值**（维度×取值）。渲染在 test_attr.sv.j2；内容为空时不产该文件",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/envTest"
+          }
+        },
+        "batches": {
+          "$comment": "env.yaml —— 批次测试：**一条 = 一个 UVM_TEST = 一个批次/专题**。与 `tests` 平行：那边一条一个属性取值，这边一条一个批次。`name` 就是 UVM 类名，回归的 +UVM_TESTNAME 靠它对齐。",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/batchTest"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "envTest": {
+      "$comment": "一个属性测试。dimension/value 必填；key（uvm_config_db 通道名，ASCII）与 int_value（机器可读镜像）缺省时由模板过滤器推；base 缺省 {env_name}_gen_test。取值 token 可以是中文——它只进注释与类名投影，不进 SV 字面量",
+      "type": "object",
+      "required": [
+        "dimension",
+        "value"
+      ],
+      "properties": {
+        "dimension": {
+          "type": "string"
+        },
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "key": {
+          "$comment": "config_db 键前缀；实际键是 <key>_int / <key>_str",
+          "type": "string"
+        },
+        "int_value": {
+          "type": "integer"
+        },
+        "base": {
+          "$comment": "被继承的测试基类",
+          "type": "string"
+        },
+        "field": {
+          "$comment": "激励绑定：事务字段名。给了就额外 set('<field>_int', int_value)，master sequence 读它并约束该字段；不给 = 观测型维度，test 不建立激励差异",
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "tp_id": {
+          "$comment": "测试点主键（TP-<对象>-<维度>-<取值>）—— 生成类注释里带上，用于把 test 反查到 TP/需求/覆盖仓",
+          "type": "string",
+          "pattern": "^TP-"
+        },
+        "backdoor_path": {
+          "$comment": "backdoor 型测试点的层次路径（如 npu_sched_bench_tb_top.u_npu_sched.queue_level）；生成类用 uvm_hdl_force 写入、采完覆盖再 release",
+          "type": "string"
+        },
+        "sequence": {
+          "$comment": "sequence 型测试点的场景名（进注释，用于人读与回溯）",
+          "type": "string"
+        },
+        "sequence_values": {
+          "$comment": "sequence 型测试点的逐笔事务取值；生成类把它写进 <field>_seq_* 通道，sequence 每笔按序约束事务字段",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "envAgentEntry": {
+      "$comment": "env 级 agent 实例条目（list 格式需 name 或 type 之一，见调用处 allOf）。type = agent 类名，从 YAML 显式读，不由 interface 拼接",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "interface": {
+          "type": "string"
+        },
+        "clock": {
+          "type": "string"
+        },
+        "reset": {
+          "type": "string"
+        },
+        "instance": {
+          "type": "string"
+        },
+        "config_db_path": {
+          "type": "string"
+        },
+        "is_master": {
+          "$ref": "#/$defs/boolLike"
+        },
+        "is_active": {
+          "$ref": "#/$defs/boolLike"
+        },
+        "active": {
+          "$comment": "AgentModel.active（gen_uvm.py:536）",
+          "$ref": "#/$defs/boolLike"
+        },
+        "connections": {
+          "type": "array"
+        },
+        "priority": {
+          "$comment": "virtual_sequencer 仲裁（模板 default(5)）",
+          "type": "integer"
+        },
+        "weight": {
+          "$comment": "virtual_sequencer 权重（模板 default(1)）",
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "scoreboardEntry": {
+      "$comment": "scoreboard 条目：sb_type 指向外部类（生成式 mode/expected_from/actual_from 已下线）。sb_type 是参数化类时用 params 传实参，模板会 typedef 出别名再声明句柄",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "sb_type": {
+          "type": "string"
+        },
+        "trans_type": {
+          "type": "string"
+        },
+        "params": {
+          "$comment": "参数化类的实参列表，渲染成 typedef <sb_type>#(<params>) <name>_t;",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "analysisComponentEntry": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "analysisPortEntry": {
+      "$comment": "env 级 analysis_exports/ports 条目（type 兼容 trans_type，缺省 uvm_sequence_item）",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "trans_type": {
+          "type": "string"
+        },
+        "connected_to": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tlmConnection": {
+      "type": "object",
+      "required": [
+        "driver",
+        "receiver"
+      ],
+      "properties": {
+        "driver": {
+          "type": "string"
+        },
+        "receiver": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "clockList": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/$defs/clockSpec"
+          }
+        ]
+      }
+    },
+    "resetList": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/$defs/resetSpec"
+          }
+        ]
+      }
+    },
+    "clockSpec": {
+      "$comment": "字段并集 = bench ClkSpec（period/init, gen_uvm.py:806）与 env clk_rst_vip 示例（period_ps/...）",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "period": {
+          "type": "string"
+        },
+        "init": {
+          "type": "integer"
+        },
+        "period_ps": {
+          "type": "integer"
+        },
+        "duty_cycle": {
+          "type": "number"
+        },
+        "initial_value": {
+          "type": "integer"
+        },
+        "jitter_ps": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "resetSpec": {
+      "$comment": "字段并集 = bench RstSpec（init/release_delay, gen_uvm.py:817）与 env 示例（assert_cycles/...）",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "init": {
+          "type": "integer"
+        },
+        "release_delay": {
+          "type": "integer"
+        },
+        "assert_cycles": {
+          "type": "integer"
+        },
+        "recover_cycles": {
+          "type": "integer"
+        },
+        "active_low": {
+          "type": "boolean"
+        },
+        "reset_type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "clkRst": {
+      "type": "object",
+      "properties": {
+        "clocks": {
+          "$ref": "#/$defs/clockList"
+        },
+        "resets": {
+          "$ref": "#/$defs/resetList"
+        }
+      },
+      "additionalProperties": false
+    },
+    "clkRstVip": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "clocks": {
+          "$ref": "#/$defs/clockList"
+        },
+        "resets": {
+          "$ref": "#/$defs/resetList"
+        }
+      },
+      "additionalProperties": false
+    },
+    "harnessArray": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/harness"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/harness"
+          }
+        }
+      ]
+    },
+    "harness": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "bind_to": {
+          "type": "string"
+        },
+        "parameter": {
+          "type": "string"
+        },
+        "connect_path": {
+          "type": "string"
+        },
+        "dut_instance": {
+          "type": "string"
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/harnessInterface"
+          }
+        },
+        "sub_harnesses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "env_path": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "connect": {
+          "$comment": "旧别名（gen_uvm.py:754）",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "harnessInterface": {
+      "$comment": "缺 name/type 会被 _normalize_harness 静默丢弃（gen_uvm.py:730）——本 schema 的核心拦截点",
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "agent_path": {
+          "type": "string"
+        },
+        "bind_to": {
+          "type": "string"
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "count": {
+          "$comment": "整数或参数名（_to_count, gen_uvm.py:711）",
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "connections": {
+          "$comment": "端口名 → 信号名映射，键名自由",
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "integer",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "bench": {
+      "type": "object",
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "bench_name"
+          ]
+        }
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "bench_name": {
+          "type": "string"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "include_assertions": {
+          "$ref": "#/$defs/boolLike"
+        },
+        "dut_instance": {
+          "type": "string"
+        },
+        "clk_rst_if": {
+          "$comment": "时钟复位（bench 级，tb_top 按此实例化 clk_rst_if）；gen_uvm 优先读它，旧名 clk_rst 兼容",
+          "$ref": "#/$defs/clkRst"
+        },
+        "clk_rst": {
+          "$comment": "旧名，等价 clk_rst_if",
+          "$ref": "#/$defs/clkRst"
+        },
+        "wire_decls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "width": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "assignments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "lhs",
+              "rhs"
+            ],
+            "properties": {
+              "lhs": {
+                "type": "string"
+              },
+              "rhs": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "agents": {
+          "$comment": "list / dict 两种格式（_normalize_agents_list）；list 条目缺 name 被跳过（gen_uvm.py:2053-2055）",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/benchAgentEntry"
+                  },
+                  {
+                    "required": [
+                      "name"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/benchAgentEntry"
+              }
+            }
+          ]
+        },
+        "harness": {
+          "$comment": "嵌套 harness 会被二次解析（gen_uvm.py:2186-2191）",
+          "$ref": "#/$defs/harness"
+        },
+        "uvm_config": {
+          "type": "object"
+        },
+        "wave_dump": {
+          "type": "object"
+        },
+        "simulation": {
+          "type": "object"
+        },
+        "dut_module": {
+          "type": "string",
+          "$comment": "DUT 模块名（tb_top 例化用）。dut_instance 是实例名，两回事。"
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/benchInterface"
+          },
+          "$comment": "替代 harness：tb_top 例化这些接口 + 同名端口直连 DUT。"
+        },
+        "dut_filelist": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "$comment": "DUT RTL 源文件（编译清单要收）"
+        },
+        "ral_filelist": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "$comment": "寄存器模型源文件（编译清单要收）"
+        }
+      },
+      "additionalProperties": false
+    },
+    "benchAgentEntry": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "interface": {
+          "type": "string"
+        },
+        "clock": {
+          "type": "string"
+        },
+        "reset": {
+          "type": "string"
+        },
+        "instance": {
+          "type": "string"
+        },
+        "config_db_path": {
+          "type": "string"
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "port",
+              "wire"
+            ],
+            "properties": {
+              "port": {
+                "type": "string"
+              },
+              "wire": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "registerModel": {
+      "$comment": "list 条目走 regModelEntry；dict 形式（reg_adapter 嵌套 / reg_block_class 旧格式）宽松透传（gen_uvm.py:1833-1936）",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/regModelEntry"
+          }
+        },
+        {
+          "type": "object"
+        }
+      ]
+    },
+    "regModelEntry": {
+      "type": "object",
+      "properties": {
+        "bus_name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "reg_block_name": {
+          "type": "string"
+        },
+        "reg_adpater_name": {
+          "type": "string"
+        },
+        "reg_adapter_name": {
+          "type": "string"
+        },
+        "predictor_name": {
+          "type": "string"
+        },
+        "trans_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "pkg": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "constraintDoc": {
+      "$comment": "name 缺省 \"constraint\"（gen_uvm.py:2085），不强制",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "constraint_name": {
+          "type": "string"
+        },
+        "env": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "transactions": {
+      "$comment": "constraint 文件的顶层兄弟键（parse_constraint_model 吃整个文件 dict）",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "policies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "params": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "default": {}
+              },
+              "additionalProperties": false
+            }
+          },
+          "applies_to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dimensions": {
+            "$comment": "constraint 文件的 policies 项 —— **这条策略驱动哪些维度**（case 模型的 `dimensions[].id`，如 `D_queue`）。它是 coverage↔constraint 那条关联边的桥墩：覆盖率侧 coverpoint 也声明 `dimension`，两边同一个 ID 空间。生成端由 `build_constraint` 从 `themes[].dimensions` 推来，**渲染不用它**（只用于关联校验，见 `associate` 边 ⑤）。",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "assignments": {
+            "$comment": "策略的**真实约束**：apply() 里对事务字段的赋值（按迭代轮转或随机取合法值）。只由声明了 `stimulus.field` 的维度生成；为空 = 该专题的维度都不可驱动（观测型），策略仍是骨架。",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "trans",
+                "field",
+                "values"
+              ],
+              "properties": {
+                "trans": {
+                  "type": "string"
+                },
+                "field": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                "mode": {
+                  "enum": [
+                    "cycle",
+                    "random"
+                  ]
+                }
+              }
+            }
+          },
+          "backed": {
+            "$comment": "这条策略有没有编译出真实赋值（= assignments 非空）。生成端写、渲染端不用。",
+            "type": "boolean"
+          },
+          "backing_reason": {
+            "$comment": "为什么有/没有真实赋值（逐条可回答，不只给一个布尔）。生成端写、渲染端不用。",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "combinator": {
+      "type": "object",
+      "properties": {
+        "default_mode": {
+          "enum": [
+            "APPLY_ALL",
+            "APPLY_WEIGHTED",
+            "APPLY_FIRST_MATCH",
+            "APPLY_SEQUENTIAL",
+            "APPLY_CHAIN"
+          ]
+        },
+        "modes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "APPLY_ALL",
+              "APPLY_WEIGHTED",
+              "APPLY_FIRST_MATCH",
+              "APPLY_SEQUENTIAL",
+              "APPLY_CHAIN"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "utilComponent": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "analysis_exports": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/analysisPortEntry"
+              },
+              {
+                "$comment": "util 模板直接渲染 type 进 uvm_analysis_imp_#()，缺 type 生成损坏 SV",
+                "required": [
+                  "type"
+                ]
+              }
+            ]
+          }
+        },
+        "analysis_ports": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/analysisPortEntry"
+              },
+              {
+                "required": [
+                  "type"
+                ]
+              }
+            ]
+          }
+        },
+        "ref_model": {
+          "$comment": "参考模型镜像：带这一项时，util 模板把 process_<port> 的 TODO 空壳换成**真的**寄存器镜像（写更新镜像、读给出期望 prdata）。形状见 #/$defs/refModelMirror。",
+          "$ref": "#/$defs/refModelMirror"
+        },
+        "body": {
+          "type": "string",
+          "$comment": "TLM 1.0 事务级语义（无 clk / 无引脚）。有这一项时 util 模板把 process_<port> 换成它；形状见 src/layers/l4_memory/model_registry.py。**不是** ref_model 那种寄存器镜像。"
+        },
+        "source_version": {
+          "type": "string",
+          "$comment": "模型出处 `name/vN`，来自 model_registry.db 的 (name, version) 主键"
+        },
+        "auto_send": {
+          "type": "boolean",
+          "$comment": "单 analysis_port 的 util 组件是否自动 send_output（模板默认 true；关掉时需在 body 里自己发）"
+        }
+      },
+      "additionalProperties": false
+    },
+    "refModelMirror": {
+      "$comment": "APB 寄存器镜像的语义参数 —— 与黄金模型 `golden_library.build_ref_model_config` / `{module}_ref_model.sv` 同一套语义（写：psel&&penable&&pwrite → regs[paddr]=pwdata；读：psel&&!pwrite → prdata=regs[paddr]；复位清零）。字段名是本生成器的 APB 约定。",
+      "type": "object",
+      "required": [
+        "nregs"
+      ],
+      "properties": {
+        "nregs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "addr_w": {
+          "type": "integer"
+        },
+        "data_w": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string",
+          "$comment": "这份镜像的出处（黄金 IP + 版本），写进生成文件头，便于回溯核对。"
+        }
+      },
+      "additionalProperties": false
+    },
+    "benchInterface": {
+      "$comment": "tb_top 要例化的一个接口实例：类型 + 时钟/复位口 + 与 DUT 同名直连的信号 + vif 落到哪些 agent。",
+      "type": "object",
+      "required": [
+        "name",
+        "type_name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "$comment": "接口实例名（tb_top 里那个变量名）"
+        },
+        "type_name": {
+          "type": "string",
+          "$comment": "接口类型名（如 apb_if）"
+        },
+        "clock": {
+          "type": "string",
+          "$comment": "接口的 clock 输入口名（如 pclk）"
+        },
+        "reset": {
+          "type": "string",
+          "$comment": "接口的 reset 输入口名（如 presetn）"
+        },
+        "agent_path": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ],
+          "$comment": "这个 vif 要 set 到哪些 agent 的 config_db 路径（可多个：master/slave 共用一条总线）"
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "$comment": "与 DUT 同名直连的信号名（沿 DUT 端口名）"
+        }
+      },
+      "additionalProperties": false
+    },
+    "covBin": {
+      "$comment": "一个语义 bin：涵盖的规格概念 + 由它派生的 cross 要用的信号",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "desc": {
+          "type": "string"
+        },
+        "signals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "coverFieldBin": {
+      "$comment": "一个字段取值 bin：名字 + 整型字面量。值是**整数**（不是字符串）—— 非 ASCII 取值由生成端投影成下标（见 casemodel_tools/coverage.py 的 sv_value）；中文直接进 `bins x = {首拍}` 是编译错误。名字必须是合法 SV 标识符（生成端已 ASCII 化并去重）。",
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "value": {
+          "type": "integer"
+        },
+        "at_least": {
+          "type": "integer",
+          "minimum": 1,
+          "$comment": "该覆盖点/组至少命中次数（UVM option.at_least）"
+        },
+        "ignore": {
+          "type": "boolean",
+          "$comment": "true = ignore_bins（不计入分母）"
+        },
+        "transition": {
+          "type": [
+            "array",
+            "boolean"
+          ],
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "$comment": "转移仓序列（渲染成 (a => b), (b => c)）；非转移仓写 false（生成端统一字段形状）"
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 1,
+          "$comment": "覆盖点/组权重（UVM option.weight）"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dutCoverBin": {
+      "$comment": "一个 DUT 信号的覆盖仓：名字 + **字面量文本**。为什么与 `coverFieldBin` 不同（那个是整数）：DUT 侧的仓常是**区间**（`{[1:7]}`、`{[33:$]}`）或**多值集合**（`{0,7,8}`）—— 那是值域的一个划分，用单个整数表达不出来。文本由 casemodel_tools/coverage.py 的 `CoverBin.literal()` 产出，模板原样写进 `bins x = {<文本>};`。",
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "value": {
+          "type": "string"
+        },
+        "illegal": {
+          "type": "boolean"
+        },
+        "at_least": {
+          "type": "integer",
+          "minimum": 1,
+          "$comment": "该覆盖点/组至少命中次数（UVM option.at_least）"
+        },
+        "ignore": {
+          "type": "boolean",
+          "$comment": "true = ignore_bins（不计入分母）"
+        },
+        "transition": {
+          "type": [
+            "array",
+            "boolean"
+          ],
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "$comment": "转移仓序列（渲染成 (a => b), (b => c)）；非转移仓写 false（生成端统一字段形状）"
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 1,
+          "$comment": "覆盖点/组权重（UVM option.weight）"
+        }
+      },
+      "additionalProperties": false
+    },
+    "checkerRule": {
+      "$comment": "DUT 检查里的一条规则：名字 + **逐拍可求值的 SV 布尔**（`!(a) || (b)` 这种形式，由 casemodel_tools.coverage.checker_rules 从模型的 `a |-> b` 翻过来）+ 违规时给人看的消息。",
+      "type": "object",
+      "required": [
+        "name",
+        "expr"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "expr": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dutCheckerScoreboard": {
+      "$comment": "一条 scoreboard 的逐条收口归属：id（SB-…）+ 它负责的规则名（必须是 dut_checker.rules[].name 的子集）。",
+      "type": "object",
+      "required": [
+        "id",
+        "rules"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "tpBitEntry": {
+      "$comment": "测试点位图的一格：bit（位序）+ tp_id + 覆盖仓 + 通道（dut/stimulus + agent）+ 可追踪性 + 可选时序窗口。`trackable=false` 表示没有显式 bin / 自动分箱 / 开区间无法在 `inside` 里表达 —— 如实标出来，不生成假位。",
+      "type": "object",
+      "required": [
+        "bit",
+        "tp_id"
+      ],
+      "properties": {
+        "bit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tp_id": {
+          "type": "string"
+        },
+        "coverpoint": {
+          "type": "string"
+        },
+        "bin": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "signal": {
+          "type": "string"
+        },
+        "literal": {
+          "type": "string"
+        },
+        "trackable": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string"
+        },
+        "timing": {
+          "type": "object",
+          "properties": {
+            "min": {
+              "type": "integer"
+            },
+            "max": {
+              "type": "integer"
+            },
+            "tolerance": {
+              "type": "integer"
+            },
+            "start": {
+              "type": "string"
+            },
+            "end": {
+              "type": "string"
+            },
+            "sample": {
+              "type": "string"
+            },
+            "checkable": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "batchTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "theme": {
+          "type": "string"
+        },
+        "dimensions": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "policy": {
+          "$comment": "env.yaml —— **约束策略类名**（`theme_policy_map` 从 case 模型推，与 `build_constraint` 的 `policies[].name` 同名）。批次 test 类把它 set 进 config_db（`batch_policy`），协调序列据此建策略 —— 约束因此**由模型指定**，不再只靠运行时 plusargs。空串 = 这一批没有模型给的约束，sequence 退回默认组合器。",
+          "type": "string"
+        },
+        "priority": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

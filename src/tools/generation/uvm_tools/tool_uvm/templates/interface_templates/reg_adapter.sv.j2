@@ -1,0 +1,83 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// ============================================================
+// Reg Adapter: {{ agent.name }}_reg_adapter
+// ============================================================
+// RAL 集成：uvm_reg_bus_op ↔ {{ agent.name }}_master_seq_item 双向转换。
+//
+// **按端口名认信号**，不按固定字段名。这里原来是写死 `addr` 的 —— 而 APB 的
+// 事务字段叫 `paddr` / `pwdata` / `prdata` / `pslverr`，一个都对不上。
+// 后果是 `reg2bus` 只设了个 xact_type：**地址和数据一个字都没驱动**，
+// 任何寄存器访问都打到地址 0、写 0；`bus2reg` 也不回填 `rw.data`，
+// 读到的永远是空 —— 整套 RAL 是"静默全错"，比直接报错难查得多。
+//
+// 匹配规则（按端口 dir 分两侧，各找第一个命中；不命中就不生成那一行）：
+//   addr  : output 侧名字含 addr    （paddr）
+//   we    : output 侧名字含 write   （pwrite）
+//   wdata : output 侧名字含 wdata / data  （pwdata）
+//   rdata : input  侧名字含 rdata / data  （prdata）
+//   err   : input  侧名字含 err     （pslverr）
+{%- set _p = namespace(addr='', we='', wdata='', rdata='', err='') %}
+{%- for pt in ports %}
+{%-   set n = pt.name | lower %}
+{%-   if pt.dir == 'output' %}
+{%-     if not _p.addr and 'addr' in n %}{% set _p.addr = pt.name %}{% endif %}
+{%-     if not _p.we and 'write' in n %}{% set _p.we = pt.name %}{% endif %}
+{%-     if not _p.wdata and ('wdata' in n or 'data' in n) %}{% set _p.wdata = pt.name %}{% endif %}
+{%-   else %}
+{%-     if not _p.rdata and ('rdata' in n or 'data' in n) %}{% set _p.rdata = pt.name %}{% endif %}
+{%-     if not _p.err and 'err' in n %}{% set _p.err = pt.name %}{% endif %}
+{%-   endif %}
+{%- endfor %}
+
+class {{ agent.name }}_reg_adapter extends uvm_reg_adapter;
+  `uvm_object_utils({{ agent.name }}_reg_adapter)
+
+  int m_bytes_per_word = 4;
+
+  function new(string name = "{{ agent.name }}_reg_adapter");
+    super.new(name);
+    // **0，不是 1。** 生成的 master driver 不 `put_response` —— 它是**就地**
+    // 把读到的数据写回同一条 req（见 driver_master 的 APB 分支）。设成 1 的话
+    // UVM 会去响应队列里等一条永远不来的响应，寄存器读直接挂死。
+    supports_byte_enable = 0;
+    provides_responses   = 0;
+  endfunction
+
+  function uvm_sequence_item reg2bus(const ref uvm_reg_bus_op rw);
+    {{ agent.name }}_master_seq_item req =
+        {{ agent.name }}_master_seq_item::type_id::create("reg_req");
+    req.xact_type = (rw.kind == UVM_READ) ? READ : WRITE;
+{%- if _p.addr %}
+    req.{{ _p.addr }} = rw.addr;
+{%- endif %}
+{%- if _p.we %}
+    req.{{ _p.we }} = (rw.kind == UVM_WRITE);
+{%- endif %}
+{%- if _p.wdata %}
+    req.{{ _p.wdata }} = rw.data;
+{%- endif %}
+    return req;
+  endfunction
+
+  function void bus2reg(uvm_sequence_item bus_item, ref uvm_reg_bus_op rw);
+    {{ agent.name }}_master_seq_item rsp;
+    if (!$cast(rsp, bus_item)) begin
+      `uvm_fatal("REG_ADAPTER",
+                 "bus2reg 拿到的不是 {{ agent.name }}_master_seq_item —— 适配器接错总线了")
+      return;
+    end
+    rw.kind = (rsp.xact_type == READ) ? UVM_READ : UVM_WRITE;
+{%- if _p.addr %}
+    rw.addr = rsp.{{ _p.addr }};
+{%- endif %}
+{%- if _p.rdata %}
+    rw.data = rsp.{{ _p.rdata }};
+{%- endif %}
+{%- if _p.err %}
+    rw.status = rsp.{{ _p.err }} ? UVM_NOT_OK : UVM_IS_OK;
+{%- else %}
+    rw.status = UVM_IS_OK;
+{%- endif %}
+  endfunction
+endclass : {{ agent.name }}_reg_adapter

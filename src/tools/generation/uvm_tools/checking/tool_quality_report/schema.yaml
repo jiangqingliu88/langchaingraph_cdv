@@ -1,0 +1,22 @@
+name: quality_report
+description: '静态检查 + 编译 + 闭环仿真 三项评分，生成 quality_report.json'
+input_schema:
+  type: object
+  properties:
+    output_dir:
+      type: string
+      default: ''
+output_schema:
+  type: object
+  properties:
+    status:
+      type: string
+    passed:
+      type: boolean
+    scores:
+      type: object
+    grade:
+      type: string
+    verdict:
+      type: string
+risk_level: safe

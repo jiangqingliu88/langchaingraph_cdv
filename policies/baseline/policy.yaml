@@ -1,0 +1,23 @@
+# 默认验证策略包
+# 未指定 --design-style 时的回退策略，覆盖通用组合逻辑验证。
+design_style: baseline
+description: 默认验证策略（通用组合/时序逻辑）
+
+prompt_hints: |
+  针对通用设计，验证用例覆盖标准功能验证场景：
+  1. 基本功能（各操作的正确性）。
+  2. 边界值（最小值/最大值/溢出）。
+  3. 复位与初始化。
+
+test_scenarios:
+  - { name: basic_function, desc: "基本功能正确性" }
+  - { name: boundary_value, desc: "边界值（最小/最大/溢出）" }
+  - { name: reset, desc: "复位与初始化" }
+
+coverage_bins:
+  - { name: statement_branch, desc: "语句与分支覆盖" }
+  - { name: toggle, desc: "翻转覆盖" }
+
+assertion_templates: []
+
+compile_options: []

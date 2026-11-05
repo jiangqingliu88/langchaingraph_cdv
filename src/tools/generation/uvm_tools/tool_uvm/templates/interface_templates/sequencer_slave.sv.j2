@@ -1,0 +1,36 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// ============================================================
+// Slave Sequencer: {{ agent.name }}_slave_sequencer
+// ============================================================
+
+class {{ agent.name }}_slave_sequencer extends uvm_sequencer #({{ agent.name }}_slave_seq_item);
+  `uvm_component_utils({{ agent.name }}_slave_sequencer)
+
+  // ★ 核心：接收 Monitor 抓包的事件 FIFO（事件驱动）
+  uvm_tlm_analysis_fifo #({{ agent.name }}_slave_seq_item) req_fifo;
+
+  // ★ 配置句柄（agent build_phase 经 config_db 传入；
+  //   sequence body 内通过 p_sequencer.get_cfg(...) 获取）
+  {{ agent.name }}_port_config cfg;
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+    // **子组件名不能用 `req_fifo`**：UVM 的 `uvm_sequencer_base` 自己就有一个
+    // 名为 `req_fifo` 的内部 child；同名会让 ACTIVE slave agent 在 build 时
+    // 直接 `UVM_FATAL [CLDEXT] Cannot set 'req_fifo' as a child ...`（实测：
+    // 全输入 agent 的 loopback 改成 slave 驱动后立刻撞上）。成员名保持
+    // `req_fifo` 不变，sequence/monitor 的引用不用改。
+    req_fifo = new("mon_req_fifo", this);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    void'(uvm_config_db#({{ agent.name }}_port_config)::get(this, "", "cfg", cfg));
+  endfunction
+
+  // ★ 向序列提供配置（sequence 侧: p_sequencer.get_cfg(cfg)）
+  function void get_cfg(ref {{ agent.name }}_port_config _cfg);
+    _cfg = cfg;
+  endfunction
+endclass : {{ agent.name }}_slave_sequencer

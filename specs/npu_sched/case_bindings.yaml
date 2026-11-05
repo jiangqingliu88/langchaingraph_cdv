@@ -1,0 +1,470 @@
+# Case 绑定表 —— 业务测试点表（xlsx）→ 覆盖模型（casemodel）的**唯一桥**。
+#
+# 每条 CASE 只填 dimensions / cells / tests：
+#   dimensions: 该用例覆盖的 casemodel 维度（D_type / D_dep / D_seq …）
+#   cells:      期望签核的 CELL（可由 cell_matrix 派生；留空则不声明）
+#   tests:      UVM 测试类（xlsx 的 TestName 多数是 func_cov监测，不是类名）
+#
+# 没填的 CASE 会被门禁报 `case_without_binding` —— **不自动猜**。
+# 填完后在 casemodel.yaml 声明：
+#   case_source:
+#     xlsx: src/tools/humanview/aivm_ir/example/NPU_V2.CMDSCHED.testpoint.xlsx
+#     bindings: specs/npu_sched/case_bindings.yaml
+#     module: NPU_V2-CMDSCHED
+schema: case_bindings_v1
+module: NPU_V2-CMDSCHED
+bindings:
+  CASE-NPU_V2-CMDSCHED-CR01-F:
+    origin: NPU_V2-CMDSCHED-CR01-F
+    name: 时钟500M
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-IF01:
+    origin: NPU_V2-CMDSCHED-IF01
+    name: valid -ready 协议
+    test_intent: func_cov监测
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-IF02:
+    origin: NPU_V2-CMDSCHED-IF02
+    name: 'glsu: start- done inst_id0 inst_id1, start- done'
+    test_intent: func_cov监测
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-IF03:
+    origin: NPU_V2-CMDSCHED-IF03
+    name: llsu:start- done inst_id0 inst_id1, start- done
+    test_intent: func_cov监测
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-IF04:
+    origin: NPU_V2-CMDSCHED-IF04
+    name: niu:start- done inst_id0 inst_id1, start- done
+    test_intent: func_cov监测
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-IF05:
+    origin: NPU_V2-CMDSCHED-IF05
+    name: vpu:start- done inst_id0 inst_id1, start- done
+    test_intent: func_cov监测
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-IF06:
+    origin: NPU_V2-CMDSCHED-IF06
+    name: mpu:start- done inst_id0 inst_id1, start- done
+    test_intent: func_cov监测
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-IF07:
+    origin: NPU_V2-CMDSCHED-IF07
+    name: 数据仲裁信号接口(toDO)
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-C01-F_FUNC:
+    origin: NPU_V2-CMDSCHED-C01-F 作用于func域
+    name: 独占busy颗粒tile
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-C02-F_FUNC:
+    origin: NPU_V2-CMDSCHED-C02-F 作用于func域
+    name: creg_cmd_spad_excl_enbit[12:0] 默认值全0 bit[0] 1：GLSU读通道为独占访问；0：GLSU读通道为非独占访问
+      bit[1] 1：GLSU写通道为独占访问；0：GLSU写通道为非独占访问 bit[2] 1：MPU第一个读通道为独占访问；0：MPU第一个读通道为非独占访问
+      bit[3] 1：MPU第二个读通道为独占访问；0：MPU第二个读通道为非独占访问 bit[4] 1：MPU写读通道为独占访问；0：MPU写通道为非独占访问
+      bit[5] 1：VPU第一个读通道为独占访问；0：VPU第一个读通道为非独占访问 bit[6] 1：VPU第二个读通道为独占访问；0：VPU第二个读通道为非独占访问
+      bit[7] 1：VPU第三个读通道为独占访问；0：VPU第三个读通道为非独占访问 bit[8] 1：VPU写读通道为独占访问；0：VPU写通道为非独占访问
+      bit[9] 1：LLSU读通道为独占访问；0：LLSU读通道为非独占访问 bit[10] 1：LLSU写通道为独占访问；0：LLSU写通道为非独占访问
+      bit[11] 1：NIU读通道为独占访问；0：NIU读通道为非独占访问 bit[12] 1：NIU写通道为独占访问；0：NIU写通道为非独占访问
+    test_intent: 0其他Feature 带后缀_tile_mode_cfg
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F01:
+    origin: NPU_V2-CMDSCHED-F01
+    name: 支持配置指令和pre_drv指令数据分别更新单个组件的配置信息和数据仲裁发射并执行 (直接说{模块名}+指令的是cfg+pre_drv)
+    test_intent: glsu_cfg_sdrv_2_base
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F02:
+    origin: NPU_V2-CMDSCHED-F02
+    name: 支持lmem 指令访问spad
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F03:
+    origin: NPU_V2-CMDSCHED-F03
+    name: RD CSR指令读取配置
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F04:
+    origin: NPU_V2-CMDSCHED-F04
+    name: WR CSR指令写配置
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F05:
+    origin: NPU_V2-CMDSCHED-F05
+    name: 状态返回指令
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F07:
+    origin: NPU_V2-CMDSCHED-F07
+    name: 支持5个5功能组件指令+lmem指令，组件间无数据冲突
+    test_intent: glsu_niu_base_para
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F08:
+    origin: NPU_V2-CMDSCHED-F08
+    name: 支持5功能组件指令+lmem指令，3模块并行 C6 3
+    test_intent: 遍历上面的场景，2 id0，2id1 指令并行
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F09:
+    origin: NPU_V2-CMDSCHED-F09
+    name: 支持5功能组件指令+lmem指令，4模块并行 C6 4
+    test_intent: 遍历上面的场景，2 id0，2id1 指令并行
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F10:
+    origin: NPU_V2-CMDSCHED-F10
+    name: 支持5功能组件指令+lmem指令，5模块并行 C6 5
+    test_intent: 遍历上面的场景，2 id0，2id1 指令并行
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F11:
+    origin: NPU_V2-CMDSCHED-F11
+    name: 支持5功能组件指令+lmem指令，6模块并行 C6 6
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F12:
+    origin: NPU_V2-CMDSCHED-F12
+    name: 支持lmem llsu 做结构冲突
+    test_intent: lmem_llsu_sbusy_serial
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F13:
+    origin: NPU_V2-CMDSCHED-F13
+    name: 支持GLSU调用TMU指令和LLSU调用TMU指令同时下发
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F14:
+    origin: NPU_V2-CMDSCHED-F14
+    name: 支持5个5功能组件指令+lmem指令，组件间数据冲突
+    test_intent: glsu_niu_base_seria
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F15:
+    origin: NPU_V2-CMDSCHED-F15
+    name: 支持5功能组件指令+lmem指令，支持任意三个组件之间的data hazard
+    test_intent: 遍历上面的场景，2 id0，2id1 指令并行
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F16:
+    origin: NPU_V2-CMDSCHED-F16
+    name: 支持5功能组件指令+lmem指令，支持任意四个组件之间的data hazard
+    test_intent: 遍历上面的场景，2 id0，2id1 指令并行
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F17:
+    origin: NPU_V2-CMDSCHED-F17
+    name: 支持5功能组件指令+lmem指令，支持五个组件之间的data hazard(WORST)
+    test_intent: 遍历上面的场景，2 id0，2id1 指令并行
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F18:
+    origin: NPU_V2-CMDSCHED-F18
+    name: 支持5功能组件指令+lmem指令，支持6个组件之间的data hazard(WORST)
+    test_intent: 遍历上面的场景，2 id0，2id1 指令并行
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F19:
+    origin: NPU_V2-CMDSCHED-F19
+    name: 支持指令乱序发射
+    test_intent: glsu_outorder_page
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F20:
+    origin: NPU_V2-CMDSCHED-F20
+    name: 支持xd=1指令乱序响应
+    test_intent: sync_llsu_base_rsp_outoder
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F21-P01:
+    origin: NPU_V2-CMDSCHED-F21-P01
+    name: GLSU 模块性能计数
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F22-P01:
+    origin: NPU_V2-CMDSCHED-F22-P01
+    name: LLSU 模块性能计数
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F23-P01:
+    origin: NPU_V2-CMDSCHED-F23-P01
+    name: NIU 模块性能计数
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F24-P01:
+    origin: NPU_V2-CMDSCHED-F24-P01
+    name: VPU 模块性能计数
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F25-P01:
+    origin: NPU_V2-CMDSCHED-F25-P01
+    name: MPU 模块性能计数
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-F26-P01:
+    origin: NPU_V2-CMDSCHED-F26-P01
+    name: npu core 性能计数
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-E01:
+    origin: NPU_V2-CMDSCHED-E01
+    name: GLSU 模块中断
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-E02:
+    origin: NPU_V2-CMDSCHED-E02
+    name: LLSU 模块中断
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-E03:
+    origin: NPU_V2-CMDSCHED-E03
+    name: NIU 模块中断
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-E04:
+    origin: NPU_V2-CMDSCHED-E04
+    name: VPU 模块中断
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-E05:
+    origin: NPU_V2-CMDSCHED-E05
+    name: MPU 模块中断
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-E06:
+    origin: NPU_V2-CMDSCHED-E06
+    name: CMDSCHED 模块中断
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-E07:
+    origin: NPU_V2-CMDSCHED-E07
+    name: cmdsched 中间复位
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BP01XF01:
+    origin: NPU_V2-CMDSCHED-Bp01xF01
+    name: 单模块（glsu、llsu、niu、vpu、mpu）和lmem 总共算 为6模块 指令执行接口反压
+    test_intent: glsu_cfg_base_bp_01
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BP02XF01:
+    origin: NPU_V2-CMDSCHED-Bp02xF01
+    name: 2模块指令执行接口组合反压
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BP03XF01:
+    origin: NPU_V2-CMDSCHED-Bp03xF01
+    name: 3模块指令执行接口组合反压
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BP04XF01:
+    origin: NPU_V2-CMDSCHED-Bp04xF01
+    name: 4模块指令执行接口组合反压
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BP05XF01:
+    origin: NPU_V2-CMDSCHED-Bp05xF01
+    name: 5模块指令执行接口组合反压
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BP06XF01:
+    origin: NPU_V2-CMDSCHED-Bp06xF01
+    name: 6模块指令执行接口组合反压
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BO01-F01:
+    origin: NPU_V2-CMDSCHED-BO01-F01
+    name: 单模块 操作数的end addr正常地址(mode)
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BO02-F02:
+    origin: NPU_V2-CMDSCHED-BO02-F02
+    name: 2模块 操作数的end addr正常地址 cross
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BO02-F02_2:
+    origin: NPU_V2-CMDSCHED-BO02-F02
+    name: 3模块操作数的end addr正常地址 cross
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BO02-F02_3:
+    origin: NPU_V2-CMDSCHED-BO02-F02
+    name: 4模块操作数的end addr正常地址 cross
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-BO02-F02_4:
+    origin: NPU_V2-CMDSCHED-BO02-F02
+    name: 5模块操作数的end addr正常地址 cross
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-R01_RD-RR_RR_RD:
+    origin: NPU_V2-CMDSCHED-R01（RD-RR） (回归加上RR，以上列出的都可为RD，作为生成参考，有个切换，跑回归的时候也可以选择加入或者不加入)
+    name: 单模块 操作数的随机模式
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-R02_RD-RR_RR_RD:
+    origin: NPU_V2-CMDSCHED-R02（RD-RR） (回归加上RR，以上列出的都可为RD，作为生成参考，有个切换，跑回归的时候也可以选择加入或者不加入)
+    name: 2个模块 操作数的随机模式 cross
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-R02_RD-RR_RR_RD_2:
+    origin: NPU_V2-CMDSCHED-R02（RD-RR） (回归加上RR，以上列出的都可为RD，作为生成参考，有个切换，跑回归的时候也可以选择加入或者不加入)
+    name: 3个模块 操作数的随机模式 cross
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-R02_RD-RR_RR_RD_3:
+    origin: NPU_V2-CMDSCHED-R02（RD-RR） (回归加上RR，以上列出的都可为RD，作为生成参考，有个切换，跑回归的时候也可以选择加入或者不加入)
+    name: 4个模块 操作数的随机模式 cross
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-R02_RD-RR_RR_RD_4:
+    origin: NPU_V2-CMDSCHED-R02（RD-RR） (回归加上RR，以上列出的都可为RD，作为生成参考，有个切换，跑回归的时候也可以选择加入或者不加入)
+    name: 5 个模块操作数的随机模式 cross
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-P01-RR:
+    origin: NPU_V2-CMDSCHED-P01-RR
+    name: 发射吞吐率性能基线
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-P02-RR:
+    origin: NPU_V2-CMDSCHED-P02-RR
+    name: 多功能组件发射最糟糕性能
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-P03-RR:
+    origin: NPU_V2-CMDSCHED-P03-RR
+    name: 多功能组件发射最糟糕性能 随机插入sync指令位置， fence指令插入位置
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-P04-RR:
+    origin: NPU_V2-CMDSCHED-P04-RR
+    name: 功能组件指令并行峰值性能基线
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-P05-RR:
+    origin: NPU_V2-CMDSCHED-P05-RR
+    name: 功能组件指令并行最糟糕性能
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []
+  CASE-NPU_V2-CMDSCHED-P06-RR:
+    origin: NPU_V2-CMDSCHED-P06-RR
+    name: 功能组件指令并行最糟糕性能，随机插入fece指令位置， fence指令插入位置
+    test_intent: ''
+    dimensions: []
+    cells: []
+    tests: []

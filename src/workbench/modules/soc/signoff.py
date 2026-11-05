@@ -1,0 +1,92 @@
+"""SoC 签核 —— 工程级证据包与事实面入口（不是 UVM v2 三态签核）。"""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+
+from ...ui import theme
+from .common import SocModuleBase
+
+
+class SoCSignoffModule(SocModuleBase):
+    HINT = ("SoC 证据包（soc_evidence_v1）：输入 / RTL / golden / 回归 / 波形。"
+            "它是工程级事实，不是 UVM 的 TP 矩阵 + caveat 三态签核。")
+
+    def build_content(self) -> QWidget:
+        root = QWidget()
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        layout.addWidget(self._run_bar(root))
+        self.body = QLabel("尚未选择 SoC run", root)
+        self.body.setWordWrap(True)
+        self.body.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.body)
+
+        row = QHBoxLayout()
+        row.addWidget(self._button("校验证据包", self.verify_evidence, root))
+        row.addWidget(self._button("打开波形", self.open_wave, root))
+        row.addWidget(self._button("证据 / 产物", lambda: self._open("flow.evidence"), root))
+        row.addWidget(self._button("签核判定", lambda: self._open("flow.signoff"), root))
+        row.addWidget(self._button("复制证据目录", self._copy_dir, root))
+        row.addStretch(1)
+        layout.addLayout(row)
+        self.refresh()
+        return root
+
+    def _open(self, module_id: str) -> None:
+        from ..service.common import open_module
+        open_module(self.ctx, module_id)
+
+    def _copy_dir(self) -> None:
+        root = self.current_dir()
+        if root:
+            QApplication.clipboard().setText(str(Path(root) / "signoff_evidence"))
+
+    def on_summary(self, summary: Dict[str, Any]) -> None:
+        doc = (summary or {}).get("manifest") or {}
+        if not doc:
+            self.body.setText("还没有 SoC run。")
+            return
+        ev = (summary or {}).get("evidence") or {}
+        reg = doc.get("regression") or {}
+        waves = doc.get("waves") or []
+        release = self.run_tool("ip.release", quiet=True,
+                                root=str(self.project_root),
+                                run_root=summary.get("dir", ""))
+        ip_lines = []
+        for row in release if isinstance(release, list) else []:
+            ip = row.get("ip") or {}
+            ip_lines.append(f"{ip.get('id')}={row.get('status')}"
+                            f"{'/released' if row.get('release_ready') else ''}")
+        self.body.setText(
+            f"run：{doc.get('run', {}).get('run_id') or summary.get('dir')}\n"
+            f"回归：{reg.get('status')} · {reg.get('passed')}/{reg.get('total')}\n"
+            f"证据包：{'✓' if ev.get('ok') else '✗'} {ev.get('files', 0)} 个文件 · "
+            f"package_hash {str(ev.get('package_hash'))[:16]}…\n"
+            f"波形：{waves[0].get('path') if waves else '无'}\n"
+            f"IP release：{' · '.join(ip_lines) or '无 IP 清单'}\n"
+            f"{self._binding_text(doc)}\n"
+            f"目录：{Path(summary.get('dir', '')) / 'signoff_evidence'}")
+        self.body.setStyleSheet(f"color: {theme.current().muted};")
+
+    @staticmethod
+    def _binding_text(doc: Dict[str, Any]) -> str:
+        """消费的 IP 发布包绑定 —— 版本/hash 对不上就是签核的 caveat。"""
+        rows = doc.get("consumed_ips") or []
+        if not rows:
+            return "IP 发布包绑定：无（清单里没有 IP，或这次 run 早于绑定记录）"
+        parts = []
+        bad = 0
+        for row in rows:
+            state = str(row.get("state") or "?")
+            if state not in ("OK", "UNRELEASED"):
+                bad += 1
+            parts.append(f"{row.get('ip_id')}={state}")
+        head = "✓ 全部绑定正常" if not bad else f"✗ {bad} 个 IP 绑定异常"
+        return f"IP 发布包绑定：{head} · " + "、".join(parts)

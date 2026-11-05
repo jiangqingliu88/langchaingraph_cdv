@@ -1,0 +1,89 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// ============================================================
+// System Env: {{ agent.name }}_system_env
+// ============================================================
+// 顶层系统环境：通过 {{ agent.name }}_system_if 分发接口到各个 master/slave agent
+//   sys_vif.master_if[i] → m_agents[i]
+//   sys_vif.slave_if[i]  → s_agents[i]
+
+class {{ agent.name }}_system_env extends uvm_env;
+  `uvm_component_utils({{ agent.name }}_system_env)
+
+  {{ agent.name }}_master_agent m_agents[];
+  {{ agent.name }}_slave_agent  s_agents[];
+
+  {{ agent.name }}_system_config sys_cfg;
+  virtual {{ agent.name }}_system_if sys_vif;
+
+  // 系统级嗅探器（sys_cfg.system_monitor_enable = 1 时才构建）
+  {{ agent.name }}_system_monitor sys_monitor;
+
+  // 系统级虚拟 sequencer：持有同协议全部 master/slave 子 sequencer 句柄，
+  // 供虚拟序列跨端口协调（句柄在 connect_phase 由本 env 赋值）
+  {{ agent.name }}_system_vsqr system_vsqr;
+
+  function new(string name = "{{ agent.name }}_system_env", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    void'(uvm_config_db#({{ agent.name }}_system_config)::get(this, "", "sys_cfg", sys_cfg));
+    if (sys_cfg == null) `uvm_fatal("ENV", "sys_cfg not found")
+    if (!uvm_config_db#(virtual {{ agent.name }}_system_if)::get(this, "", "sys_vif", sys_vif))
+      `uvm_fatal("NOVIF", "system interface not set")
+
+    m_agents = new[sys_cfg.num_masters];
+    foreach (m_agents[i]) begin
+      m_agents[i] = {{ agent.name }}_master_agent::type_id::create($sformatf("m_agent[%0d]", i), this);
+      uvm_config_db#({{ agent.name }}_port_config)::set(this, $sformatf("m_agent[%0d]", i), "cfg", sys_cfg.master_cfgs[i]);
+      if ($size(sys_vif.master_if) > i) begin
+        uvm_config_db#(virtual {{ agent.name }}_if)::set(this, $sformatf("m_agent[%0d]", i), "vif", sys_vif.master_if[i]);
+      end
+    end
+
+    s_agents = new[sys_cfg.num_slaves];
+    foreach (s_agents[i]) begin
+      s_agents[i] = {{ agent.name }}_slave_agent::type_id::create($sformatf("s_agent[%0d]", i), this);
+      uvm_config_db#({{ agent.name }}_port_config)::set(this, $sformatf("s_agent[%0d]", i), "cfg", sys_cfg.slave_cfgs[i]);
+      if ($size(sys_vif.slave_if) > i) begin
+        uvm_config_db#(virtual {{ agent.name }}_if)::set(this, $sformatf("s_agent[%0d]", i), "vif", sys_vif.slave_if[i]);
+      end
+    end
+
+    // 系统级 monitor：直接嗅探 sys_vif 全端口，与各 agent 的 monitor 并行
+    if (sys_cfg.system_monitor_enable) begin
+      uvm_config_db#({{ agent.name }}_system_config)::set(this, "sys_monitor", "cfg", sys_cfg);
+      uvm_config_db#(virtual {{ agent.name }}_system_if)::set(this, "sys_monitor", "sys_vif", sys_vif);
+      sys_monitor = {{ agent.name }}_system_monitor::type_id::create("sys_monitor", this);
+    end
+
+    // 系统级 virtual sequencer：先传 sys_cfg（vsqr.build_phase 靠它定句柄数组规模），
+    // 再创建。子 sequencer 句柄在 connect_phase 赋值。
+    uvm_config_db#({{ agent.name }}_system_config)::set(this, "system_vsqr", "sys_cfg", sys_cfg);
+    system_vsqr = {{ agent.name }}_system_vsqr::type_id::create("system_vsqr", this);
+  endfunction
+
+  function void connect_phase(uvm_phase phase);
+    super.connect_phase(phase);
+
+    // 子 sequencer 句柄由本 env 直接赋值。vsqr 刻意不引用 env 类型
+    // （二者互引会构成 SystemVerilog 循环类型依赖，见 vsqr 模板头部说明），
+    // 故这里直接逐个写数组，而非让 vsqr 从 config_db 反查。
+    for (int i = 0; i < sys_cfg.num_masters && i < system_vsqr.master_sqr.size(); i++)
+      system_vsqr.master_sqr[i] = m_agents[i].sequencer;
+    for (int i = 0; i < sys_cfg.num_slaves && i < system_vsqr.slave_sqr.size(); i++)
+      system_vsqr.slave_sqr[i] = s_agents[i].sequencer;
+    system_vsqr.mark_bound();
+  endfunction
+
+  function {{ agent.name }}_master_sequencer get_master_sequencer(int idx = 0);
+    return m_agents[idx].sequencer;
+  endfunction
+
+  function {{ agent.name }}_slave_sequencer get_slave_sequencer(int idx = 0);
+    return s_agents[idx].sequencer;
+  endfunction
+
+endclass : {{ agent.name }}_system_env

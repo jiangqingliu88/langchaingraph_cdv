@@ -1,0 +1,10 @@
+# SoC 业务的 C 用例 —— CPU 通过 NICE custom3 驱动 NPU/DMA/SRAM。
+schema: soc_c_cases_v1
+cases:
+  - id: C-GEMM-8X8
+    name: INT8 8x8x8 GEMM（E203 C 程序）
+    source: sw/tests/gemm_8x8.c
+    test: gemm_8x8
+    ips: [IP-CPU-NICE, IP-DMA, IP-SRAM, IP-NPU-GEMM]
+    acceptance: CPU 轮询 STATUS，C 与 C golden 一致，返回 0
+    notes: 需要 RISC-V 工具链（toolchain/setup_toolchain.py）和 Questa。

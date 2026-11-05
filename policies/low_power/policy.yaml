@@ -1,0 +1,36 @@
+# 低功耗设计验证策略包
+# design-style=low_power 时加载。承载 UPF/电源域切换验证知识。
+design_style: low_power
+description: 低功耗设计验证策略（UPF/电源域切换/门控时钟/电平转换）
+
+prompt_hints: |
+  针对低功耗设计，验证用例必须覆盖电源管理场景：
+  1. 电源域切换（Power Domain 上下电顺序正确）。
+  2. 门控时钟（Clock Gating）不产生毛刺，使能信号与时钟相位对齐。
+  3. 隔离单元（Isolation Cell）在关电时的输出钳位。
+  4. 保留寄存器（Retention Register）恢复正确性。
+  5. 电平转换（Level Shifter）：跨电压域信号正确转换。
+
+  测试用例模板：
+  - test_power_off_on         — 电源域下电/上电
+  - test_isolation_value      — 隔离单元输出值
+  - test_clock_gating_glitch  — 门控时钟毛刺
+  - test_retention_restore    — 状态保持/恢复
+
+test_scenarios:
+  - { name: power_domain_switch, desc: "电源域上下电切换" }
+  - { name: clock_gating, desc: "门控时钟正确性（无毛刺）" }
+  - { name: isolation, desc: "隔离单元输出钳位" }
+  - { name: retention_recovery, desc: "保留寄存器恢复" }
+  - { name: level_shifter, desc: "跨电压域电平转换" }
+
+coverage_bins:
+  - { name: power_state_coverage, desc: "电源状态组合覆盖" }
+  - { name: isolation_coverage, desc: "隔离单元钳位值覆盖" }
+
+assertion_templates:
+  - { name: isolation_clamp, desc: "关电时隔离单元钳位断言" }
+  - { name: clock_gating_glitch, desc: "门控时钟无毛刺断言" }
+
+compile_options:
+  - "+upf"

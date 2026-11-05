@@ -1,0 +1,48 @@
+# ════════════════════════════════════════════════════════════════
+# 场景 DSL 示例 —— 跨核搬运为主（NoC）
+#
+# 与 `npu_gemm.yaml` 的差别只在 `txn_pool` 挑的事务不同：那份以 GEMM 为主，
+# 这份以 `noc_1to1_txn` / `noc_pair_txn` 为主。
+#
+# 想看的点：`noc_pair_txn` 是 **dst + src 强配对**（§3.11），
+# 在 IR 里它俩永远一起出现，而且 `pairing.adjacency = "strict"`
+# —— 中途不允许插入其他指令。
+#
+# 用法:
+#   python -m src.tools.generation.isa_gen_tools.cli compile config/isa_gen/examples/npu_noc.yaml
+# ════════════════════════════════════════════════════════════════
+
+meta:
+  name: npu_noc_transfer
+  seed: 20261009
+  isa_rev: V0.8
+  target: npu_subsystem_top
+
+resources:
+  # NoC 1对1 要求**恰好选中 2 核**（§3.11 的硬约束），所以这里只开两个
+  cores: [0, 1]
+  spad_tiles: 4
+
+txn_pool:
+  include: [mask_txn, wr_lmem_txn, rd_lmem_txn, noc_1to1_txn, noc_pair_txn,
+            noc_fence_txn, sync_txn]
+  weights: {noc_1to1_txn: 4, noc_pair_txn: 3, wr_lmem_txn: 2, rd_lmem_txn: 2,
+            noc_fence_txn: 1, sync_txn: 1}
+
+intent:
+  # 两个核反复搬同一块地方 —— 这是**地址复用**，正是"复用观测点纪律"
+  # （§3.12.6 规则 2）盯的那件事
+  tile_contention: 0.6
+  hazard_density: 0.5
+  fence_every_n_epochs: 1
+
+orchestration:
+  epochs: 4
+  epoch_boundary_sync: random
+
+alloc:
+  - {name: src_buf, pool: lmem.core.spad, shape: [64, 64], dtype: fp16, role: src}
+  - {name: dst_buf, pool: lmem.core.spad, shape: [64, 64], dtype: fp16, role: dst}
+  - {name: wgt,     pool: lmem.core.cimc, shape: [64, 64], dtype: fp16, role: wgt}
+  - {name: act,     pool: lmem.core.spad, shape: [64, 64], dtype: fp16, role: in}
+  - {name: res,     pool: lmem.core.spad, shape: [64, 64], dtype: fp16, role: out}

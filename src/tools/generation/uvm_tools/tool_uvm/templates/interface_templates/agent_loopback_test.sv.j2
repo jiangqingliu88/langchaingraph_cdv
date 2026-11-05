@@ -1,0 +1,84 @@
+{% include "base_templates/base_template.sv.j2" %}
+{#- 驱动侧：有 output 事务端口 → master 发激励；全输入 agent → slave 发激励。 #}
+{%- set _has_out = namespace(v=False) %}
+{%- for p in ports %}{% if p.dir == 'output' %}{% set _has_out.v = True %}{% endif %}{% endfor %}
+{%- set _seq_item = agent.name ~ ('_master_seq_item' if _has_out.v else '_slave_seq_item') %}
+{%- set _seq_agent = 'master_agent_h' if _has_out.v else 'slave_agent_h' %}
+
+// ============================================================
+// Loopback Test: {{ agent.name }}_loopback_test
+// ============================================================
+import uvm_pkg::*;
+import {{ agent.name }}_pkg::*;
+`include "uvm_macros.svh"
+
+// 简单激励序列：在**驱动侧**（master 或 slave）随机生成 N 个事务（不等待响应）
+class {{ agent.name }}_loopback_seq extends uvm_sequence #({{ _seq_item }});
+  `uvm_object_utils({{ agent.name }}_loopback_seq)
+
+  int num_items = 20;
+
+  function new(string name = "{{ agent.name }}_loopback_seq");
+    super.new(name);
+  endfunction
+
+  task body();
+    repeat (num_items) begin
+      {{ _seq_item }} req;
+      req = {{ _seq_item }}::type_id::create("req");
+      if (!req.randomize())
+        `uvm_fatal("SEQ", "randomize failed")
+      start_item(req);
+      finish_item(req);
+    end
+  endtask
+endclass : {{ agent.name }}_loopback_seq
+
+
+class {{ agent.name }}_loopback_test extends uvm_test;
+  `uvm_component_utils({{ agent.name }}_loopback_test)
+
+  {{ agent.name }}_loopback_env env_h;
+  int num_items = 20;
+
+  function new(string name = "{{ agent.name }}_loopback_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    env_h = {{ agent.name }}_loopback_env::type_id::create("env_h", this);
+  endfunction
+
+  task configure_phase(uvm_phase phase);
+    super.configure_phase(phase);
+    `uvm_info(get_type_name(), "configure_phase: start", UVM_MEDIUM)
+    phase.raise_objection(this);
+    phase.drop_objection(this);
+  endtask
+
+  task main_phase(uvm_phase phase);
+    // ⚠️ 声明在最前：SV 要求块内声明先于语句（super.main_phase() 也算语句）
+    {{ agent.name }}_loopback_seq seq;
+    super.main_phase(phase);
+    `uvm_info(get_type_name(), "main_phase: start", UVM_MEDIUM)
+
+    phase.raise_objection(this);
+
+    `uvm_info("LB_TEST", "Starting {{ agent.name }} master→slave loopback test", UVM_NONE)
+
+    // 等待复位释放
+    #105ns;
+
+    seq = {{ agent.name }}_loopback_seq::type_id::create("seq");
+    seq.num_items = num_items;
+    seq.start(env_h.{{ _seq_agent }}.sequencer);
+
+    // 等待最后一项被 slave monitor 采样
+    #30ns;
+
+    `uvm_info("LB_TEST", $sformatf("Loopback test completed: %0d items sent", num_items), UVM_NONE)
+    phase.drop_objection(this);
+  endtask
+
+endclass : {{ agent.name }}_loopback_test

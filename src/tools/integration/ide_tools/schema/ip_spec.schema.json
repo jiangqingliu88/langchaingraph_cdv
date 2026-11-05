@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signoffai.local/schemas/ip_spec.schema.json",
+  "title": "SignOffAI IP 规格 —— 集成设计环境的 IP 声明",
+  "description": "声明一个 IP 的接口、寄存器与用途。字段对齐既有的 IP 库（src/layers/l4_memory/ip_registry.py 的 ip_registry 表：ip_name / category / interface / function_desc / tags / version / status），避免同一个概念在仓库里长出两套字段名。本 schema 只做语法/类型/枚举的硬校验（additionalProperties: false，未知键即错误）。注意：这份规格是**设计时**的声明，目前不被闭环消费。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ips"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "文档版本号。当前为 1。省略视为 1。"
+    },
+    "project": {
+      "type": "string",
+      "description": "所属项目/模块名（可选，便于一份文档对多个对象）。"
+    },
+    "ips": {
+      "type": "array",
+      "description": "IP 列表。每项描述一个可复用/待集成的 IP。",
+      "items": { "$ref": "#/$defs/ip" }
+    }
+  },
+  "$defs": {
+    "protocol": {
+      "description": "接口协议。取值与 UVM 生成工具认的那组对齐（tool_find_spec_yaml 的协议分类），这样规格里的协议名能直接喂给环境生成，不需要再做一层映射。",
+      "enum": ["apb", "uart", "intr", "axi", "clock", "reset", "generic"]
+    },
+    "status": {
+      "description": "IP 的成熟度。对齐 IP 库的 status 字段（其默认值是 planned）。verified 表示已经过回归+覆盖率签核，不是「写完了」。",
+      "enum": ["planned", "implemented", "verified", "deprecated"]
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "端口名。要与 RTL 里的端口名一致 —— 不一致时接口绑定会静默错位，是本仓库踩过的坑。"
+        },
+        "dir": {
+          "description": "方向。",
+          "enum": ["input", "output", "inout"]
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "位宽。单比特填 1。"
+        },
+        "protocol": {
+          "$ref": "#/$defs/protocol",
+          "description": "该端口所属的协议（可选；整组接口用 interface.protocols 声明时不必逐个填）。"
+        },
+        "description": {
+          "type": "string",
+          "description": "端口用途。"
+        }
+      }
+    },
+    "register": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "寄存器名。"
+        },
+        "offset": {
+          "type": "string",
+          "description": "地址偏移，写成 '0x00' 这种以 0x 开头的字符串 —— 用整数会在十进制/十六进制上产生歧义。"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "位宽，通常 32。"
+        },
+        "access": {
+          "description": "访问属性：rw 读写 / ro 只读 / wo 只写 / w1c 写 1 清零。",
+          "enum": ["rw", "ro", "wo", "w1c"]
+        },
+        "reset": {
+          "type": "string",
+          "description": "复位值（如 '0x0'）。"
+        },
+        "description": {
+          "type": "string",
+          "description": "寄存器用途。"
+        }
+      }
+    },
+    "interface": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocols": {
+          "type": "array",
+          "description": "本 IP 涉及的协议集合。",
+          "items": { "$ref": "#/$defs/protocol" }
+        },
+        "ports": {
+          "type": "array",
+          "description": "端口列表。",
+          "items": { "$ref": "#/$defs/port" }
+        }
+      }
+    },
+    "ip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IP 名，文档内唯一。建议与目录名/RTL 顶层模块名一致（IP 库用它做主键）。"
+        },
+        "category": {
+          "type": "string",
+          "description": "分类（如 peripheral / bus / memory / clock）。自由文本，便于分组。"
+        },
+        "function": {
+          "type": "string",
+          "description": "功能描述 —— 这个 IP 是干什么的。对应 IP 库的 function_desc。"
+        },
+        "tags": {
+          "type": "array",
+          "description": "标签，便于检索。",
+          "items": { "type": "string" }
+        },
+        "status": { "$ref": "#/$defs/status" },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "规格自身的版本号（改一次接口/寄存器就 +1）。对应 IP 库的 version。"
+        },
+        "interface": { "$ref": "#/$defs/interface" },
+        "registers": {
+          "type": "array",
+          "description": "寄存器列表。无寄存器的 IP 可以省略或给空数组。",
+          "items": { "$ref": "#/$defs/register" }
+        }
+      }
+    }
+  }
+}

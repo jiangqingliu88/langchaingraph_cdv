@@ -1,0 +1,150 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// {{ environment.env_name }}_policy_factory.sv
+// 自动生成的策略工厂
+
+`include "{{ environment.env_name }}_policy_combinator.sv"
+
+class {{ environment.env_name }}_policy_factory;
+  static {{ environment.env_name }}_constraint_policy policies[string];
+  static bit registered = 0;
+
+  // **懒注册**：这些文件被 include 进 env_pkg，而 package 作用域里不能写
+  // `initial`（vlog: "near initial: syntax error, expecting class"）。
+  // 所以改成第一次真正查表时再注册 —— 语义等价，位置合法。
+  static function void ensure_registered();
+    if (!registered) begin
+      register_all_policies();
+      registered = 1;
+    end
+  endfunction
+
+  // 注册策略
+  static function void register_policy(string name, {{ environment.env_name }}_constraint_policy policy);
+    policies[name] = policy;
+  endfunction
+  
+  // 获取策略
+  static function {{ environment.env_name }}_constraint_policy get_policy(string name);
+    if (policies.exists(name))
+      return policies[name];
+    else
+      return null;
+  endfunction
+  
+  // 创建默认组合器
+  static function {{ environment.env_name }}_policy_combinator create_default_combinator();
+    {{ environment.env_name }}_policy_combinator combo = new("combo");
+    // **先声明、后语句**：SV 不允许在语句之后声明变量（vlog：
+    // "Illegal declaration after the statement"）。原来每个策略的声明
+    // 和 `add_policy` 交错写在一起 —— 这些文件以前从没进过编译。
+{% for policy in policies %}
+    {{ policy.name }}_policy {{ policy.name }}_p;
+{% endfor %}
+
+{% for policy in policies %}
+    // 添加 {{ policy.name }} 策略
+    {{ policy.name }}_p = {{ policy.name }}_policy::type_id::create("{{ policy.name }}_p");
+    combo.add_policy({{ policy.name }}_p);
+{% endfor %}
+    return combo;
+  endfunction
+  
+  // 从 plusargs 创建组合器
+  static function {{ environment.env_name }}_policy_combinator create_from_plusargs();
+    {{ environment.env_name }}_policy_combinator combo = new("combo");
+    string policy_list;
+    ensure_registered();
+    
+    if ($value$plusargs("{{ environment.env_name | upper }}_POLICY_LIST=%s", policy_list)) begin
+      string policies_to_add[$];
+      int start = 0, stop;
+      
+      do begin
+        // SV 的 string **没有 index()**（只有 len/getc/substr…）—— 手写查找
+        stop = -1;
+        for (int _i = start; _i < policy_list.len(); _i++)
+          if (policy_list.substr(_i, _i) == ",") begin
+            stop = _i;
+            break;
+          end
+        if (stop == -1)
+          policies_to_add.push_back(policy_list.substr(start, policy_list.len()-1));
+        else
+          policies_to_add.push_back(policy_list.substr(start, stop-1));
+        start = stop + 1;
+      end while (stop != -1);
+      
+      foreach (policies_to_add[i]) begin
+        {{ environment.env_name }}_constraint_policy p = get_policy(policies_to_add[i]);
+        if (p != null) begin
+          // 创建新实例
+          {{ environment.env_name }}_constraint_policy new_p;
+          $cast(new_p, p.clone());
+          combo.add_policy(new_p);
+        end
+      end
+    end else begin
+      // 默认添加所有策略
+      combo = create_default_combinator();
+    end
+    
+    combo.configure_from_plusargs();
+    return combo;
+  endfunction
+  
+  // 从**批次**创建组合器（模型给的约束策略名）
+  //
+  // 名字由批次 test 类在 build_phase 里 `set(null, "*", "batch_policy", ...)`
+  // 挂进来（那个名字是 `theme_policy_map` 从 case 模型的 `themes[].method` 推的，
+  // 与 `build_constraint` 的 `policies[].name` 同名）。**约束因此由模型说了算** ——
+  // 而 `create_from_plusargs()` 那条路是"由回归命令行说了算"。
+  //
+  // 三种情况，**都不是错误**：
+  //   · 取不到 `batch_policy`（根本不在批次 test 下跑）→ 默认组合器；
+  //   · 取到空串（这一批的模型没声明 method）→ 默认组合器；
+  //   · 取到名字但表里没有（模型与策略生成不同步）→ 默认组合器 + 一句 `uvm_info`。
+  // 不报 `uvm_error`：那是"模型没声明"，不是"生成错了"。真要抓不同步，
+  // 看生成物里 `batch_policy` 那个名字在 `register_all_policies()` 里有没有。
+  static function {{ environment.env_name }}_policy_combinator create_from_batch();
+    {{ environment.env_name }}_policy_combinator combo = new("combo");
+    string policy_name = "";
+    ensure_registered();
+
+    if (!uvm_config_db#(string)::get(null, "", "batch_policy", policy_name) ||
+        policy_name == "") begin
+      // 没有模型给的约束 —— 退回默认组合器（全部策略）。
+      combo = create_default_combinator();
+    end else begin
+      {{ environment.env_name }}_constraint_policy p = get_policy(policy_name);
+      if (p != null) begin
+        {{ environment.env_name }}_constraint_policy new_p;
+        $cast(new_p, p.clone());
+        combo.add_policy(new_p);
+      end else begin
+        `uvm_info("CONS_FACTORY",
+                  $sformatf("batch_policy=%s 在策略表里没有 —— 退回默认组合器", policy_name),
+                  UVM_LOW)
+        combo = create_default_combinator();
+      end
+    end
+
+    combo.configure_from_plusargs();
+    return combo;
+  endfunction
+
+  // 从 YAML 创建组合器
+  static function {{ environment.env_name }}_policy_combinator create_from_yaml(string yaml_file);
+    {{ environment.env_name }}_policy_combinator combo = new("combo");
+    // YAML 解析逻辑
+    // ...
+    return combo;
+  endfunction
+  
+  // 注册所有策略
+  static function void register_all_policies();
+{% for policy in policies %}
+    register_policy("{{ policy.name }}", {{ policy.name }}_policy::type_id::create("{{ policy.name }}"));
+{% endfor %}
+  endfunction
+endclass

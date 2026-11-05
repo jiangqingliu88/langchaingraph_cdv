@@ -1,0 +1,465 @@
+{
+  "schema": "case_gates_v1",
+  "run": "output_e2e_final4_jiang_20261104_044624",
+  "readonly": true,
+  "counts": {
+    "blocker": 0,
+    "warning": 13,
+    "info": 24,
+    "total": 37
+  },
+  "blockers": [],
+  "warnings": [
+    {
+      "rule": "cell_without_checker",
+      "rule_id": "cell_without_checker",
+      "title": "CELL 没有任何 checker",
+      "target": "CELL-BEH_QUEUE-BEHAVIOR",
+      "message": "该 CELL 的 TP 没有任何 timing/data checker 声明的证据"
+    },
+    {
+      "rule": "cell_without_case",
+      "rule_id": "cell_without_case",
+      "title": "CELL 没有对应用例",
+      "target": "CELL-BEH_QUEUE-BEHAVIOR",
+      "message": "没有用例声明占住这个格子"
+    },
+    {
+      "rule": "cell_without_checker",
+      "rule_id": "cell_without_checker",
+      "title": "CELL 没有任何 checker",
+      "target": "CELL-D_CLUSTER-P2",
+      "message": "该 CELL 的 TP 没有任何 timing/data checker 声明的证据"
+    },
+    {
+      "rule": "cell_without_case",
+      "rule_id": "cell_without_case",
+      "title": "CELL 没有对应用例",
+      "target": "CELL-D_CLUSTER-P2",
+      "message": "没有用例声明占住这个格子"
+    },
+    {
+      "rule": "cell_red",
+      "rule_id": "cell_red",
+      "title": "CELL 红：该证明的没证明",
+      "target": "CELL-D_DECISION-P0",
+      "message": "4 条 TP 里有未验证项",
+      "reasons": [
+        "TP-NPUSCH-D_DECISION-BLOCKED: NOT_VERIFIED"
+      ]
+    },
+    {
+      "rule": "cell_without_checker",
+      "rule_id": "cell_without_checker",
+      "title": "CELL 没有任何 checker",
+      "target": "CELL-D_DECISION-P0",
+      "message": "该 CELL 的 TP 没有任何 timing/data checker 声明的证据"
+    },
+    {
+      "rule": "cell_without_case",
+      "rule_id": "cell_without_case",
+      "title": "CELL 没有对应用例",
+      "target": "CELL-D_DECISION-P0",
+      "message": "没有用例声明占住这个格子"
+    },
+    {
+      "rule": "cell_red",
+      "rule_id": "cell_red",
+      "title": "CELL 红：该证明的没证明",
+      "target": "CELL-D_DEP-P1",
+      "message": "4 条 TP 里有未验证项",
+      "reasons": [
+        "TP-NPUSCH-D_DEP-WAR: NOT_VERIFIED"
+      ]
+    },
+    {
+      "rule": "cell_without_checker",
+      "rule_id": "cell_without_checker",
+      "title": "CELL 没有任何 checker",
+      "target": "CELL-D_DEP-P1",
+      "message": "该 CELL 的 TP 没有任何 timing/data checker 声明的证据"
+    },
+    {
+      "rule": "cell_without_case",
+      "rule_id": "cell_without_case",
+      "title": "CELL 没有对应用例",
+      "target": "CELL-D_DEP-P1",
+      "message": "没有用例声明占住这个格子"
+    },
+    {
+      "rule": "cell_without_checker",
+      "rule_id": "cell_without_checker",
+      "title": "CELL 没有任何 checker",
+      "target": "CELL-D_UNIT-P2",
+      "message": "该 CELL 的 TP 没有任何 timing/data checker 声明的证据"
+    },
+    {
+      "rule": "cell_without_case",
+      "rule_id": "cell_without_case",
+      "title": "CELL 没有对应用例",
+      "target": "CELL-D_UNIT-P2",
+      "message": "没有用例声明占住这个格子"
+    },
+    {
+      "rule": "CASE_GROUP_NO_REQUIREMENT",
+      "rule_id": "CASE_GROUP_NO_REQUIREMENT",
+      "title": "CASE_GROUP_NO_REQUIREMENT",
+      "target": "CASE-BEH_QUEUE/CG-BEH_QUEUE",
+      "message": "覆盖率组 CG-BEH_QUEUE（队列水位迁移）没有 requirements —— 无法追溯需求",
+      "source": "case_groups",
+      "evidence": {
+        "case": "CASE-BEH_QUEUE",
+        "group": "CG-BEH_QUEUE",
+        "name": "队列水位迁移",
+        "coverage_type": "场景序列"
+      }
+    }
+  ],
+  "infos": [
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-BEH_QUEUE-BEHAVIOR",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-BEH_QUEUE-TR_EMPTY_ENQ: PENDING_BACKEND",
+        "TP-NPUSCH-BEH_QUEUE-TR_LOW_ENQ: PENDING_BACKEND",
+        "TP-NPUSCH-BEH_QUEUE-TR_HIGH_ENQ: PENDING_BACKEND",
+        "TP-NPUSCH-BEH_QUEUE-TR_FULL_DEQ: PENDING_BACKEND",
+        "TP-NPUSCH-BEH_QUEUE-TR_FULL_FLUSH: PENDING_BACKEND",
+        "TP-NPUSCH-BEH_QUEUE-SEQ_FILL_DRAIN: PENDING_BACKEND",
+        "TP-NPUSCH-BEH_QUEUE-TMP_BACKPRESSURE: PENDING_BACKEND"
+      ]
+    },
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-D_BARRIER-P3",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-D_BARRIER-NONE: PARTIAL",
+        "TP-NPUSCH-D_BARRIER-TILE_BARRIER: PARTIAL",
+        "TP-NPUSCH-D_BARRIER-OP_BARRIER: PARTIAL",
+        "TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER: PARTIAL"
+      ]
+    },
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-D_CLUSTER-P2",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-D_CLUSTER-0: PARTIAL",
+        "TP-NPUSCH-D_CLUSTER-1: PARTIAL",
+        "TP-NPUSCH-D_CLUSTER-2: PARTIAL",
+        "TP-NPUSCH-D_CLUSTER-3: PARTIAL"
+      ]
+    },
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-D_DTYPE-P0",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-D_DTYPE-INT8: PARTIAL",
+        "TP-NPUSCH-D_DTYPE-FP16: PARTIAL",
+        "TP-NPUSCH-D_DTYPE-BF16: PARTIAL",
+        "TP-NPUSCH-D_DTYPE-FP32: PARTIAL"
+      ]
+    },
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-D_OPCODE-P2",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-D_OPCODE-MAC_INT8: PARTIAL",
+        "TP-NPUSCH-D_OPCODE-MAC_FP16: PARTIAL",
+        "TP-NPUSCH-D_OPCODE-MAC_BF16: PARTIAL",
+        "TP-NPUSCH-D_OPCODE-VEC_ADD: PARTIAL",
+        "TP-NPUSCH-D_OPCODE-VEC_MUL: PARTIAL",
+        "TP-NPUSCH-D_OPCODE-VEC_RELU: PARTIAL",
+        "TP-NPUSCH-D_OPCODE-LOAD: PARTIAL",
+        "TP-NPUSCH-D_OPCODE-STORE: PARTIAL",
+        "TP-NPUSCH-D_OPCODE-DMA_READ: PARTIAL",
+        "TP-NPUSCH-D_OPCODE-DMA_WRITE: PARTIAL"
+      ]
+    },
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-D_PIPELINE-P3",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-D_PIPELINE-NONE: PARTIAL",
+        "TP-NPUSCH-D_PIPELINE-MAC_MAC: PARTIAL",
+        "TP-NPUSCH-D_PIPELINE-MAC_DMA: PARTIAL",
+        "TP-NPUSCH-D_PIPELINE-VEC_MAC: PARTIAL",
+        "TP-NPUSCH-D_PIPELINE-MULTI_OP: PARTIAL"
+      ]
+    },
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-D_PRIORITY-P3",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-D_PRIORITY-HIGH_FIRST: PARTIAL",
+        "TP-NPUSCH-D_PRIORITY-LOW_FIRST: PARTIAL",
+        "TP-NPUSCH-D_PRIORITY-SAME_PRIO: PARTIAL",
+        "TP-NPUSCH-D_PRIORITY-ROUND_ROBIN: PARTIAL"
+      ]
+    },
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-D_QUEUE-P1",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-D_QUEUE-0: PARTIAL",
+        "TP-NPUSCH-D_QUEUE-1: PARTIAL",
+        "TP-NPUSCH-D_QUEUE-7: PARTIAL",
+        "TP-NPUSCH-D_QUEUE-8: PARTIAL",
+        "TP-NPUSCH-D_QUEUE-15: PARTIAL",
+        "TP-NPUSCH-D_QUEUE-16: PARTIAL",
+        "TP-NPUSCH-D_QUEUE-24: PARTIAL",
+        "TP-NPUSCH-D_QUEUE-25: PARTIAL",
+        "TP-NPUSCH-D_QUEUE-31: PARTIAL",
+        "TP-NPUSCH-D_QUEUE-32: PARTIAL"
+      ]
+    },
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-D_SEQ-P3",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-D_SEQ-MAC_MAC: PARTIAL",
+        "TP-NPUSCH-D_SEQ-LOAD_MAC: PARTIAL",
+        "TP-NPUSCH-D_SEQ-MAC_STORE: PARTIAL",
+        "TP-NPUSCH-D_SEQ-DMA_MAC: PARTIAL",
+        "TP-NPUSCH-D_SEQ-VEC_MAC: PARTIAL",
+        "TP-NPUSCH-D_SEQ-SCALAR_MAC: PARTIAL"
+      ]
+    },
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-D_TYPE-P0",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-D_TYPE-MAC: PARTIAL",
+        "TP-NPUSCH-D_TYPE-VECTOR: PARTIAL",
+        "TP-NPUSCH-D_TYPE-SCALAR: PARTIAL",
+        "TP-NPUSCH-D_TYPE-DMA: PARTIAL"
+      ]
+    },
+    {
+      "rule": "cell_yellow",
+      "rule_id": "cell_yellow",
+      "title": "CELL 黄：证据不完整",
+      "target": "CELL-D_UNIT-P2",
+      "message": "证据不完整",
+      "reasons": [
+        "TP-NPUSCH-D_UNIT-MAC: PARTIAL",
+        "TP-NPUSCH-D_UNIT-VECTOR: PARTIAL",
+        "TP-NPUSCH-D_UNIT-SCALAR: PARTIAL",
+        "TP-NPUSCH-D_UNIT-DMA: PARTIAL"
+      ]
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-BEH_QUEUE",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_QUEUE",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_TYPE",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_DTYPE",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_DEP",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_UNIT",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_DECISION",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_CLUSTER",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_OPCODE",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_SEQ",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_PIPELINE",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_PRIORITY",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    },
+    {
+      "rule": "case_synthesized",
+      "rule_id": "case_synthesized",
+      "title": "用例身份是结构合成的",
+      "target": "CASE-D_BARRIER",
+      "message": "该用例由模型结构合成，尚未经人设计分类"
+    }
+  ],
+  "verdict": "PASS",
+  "rules": {
+    "duplicate_id": {
+      "level": "blocker",
+      "title": "ID 重复",
+      "stage": "block"
+    },
+    "case_without_tst": {
+      "level": "blocker",
+      "title": "用例落不到可执行实例",
+      "stage": "block"
+    },
+    "cell_without_checker": {
+      "level": "blocker",
+      "title": "CELL 没有任何 checker",
+      "stage": "report"
+    },
+    "cell_red": {
+      "level": "blocker",
+      "title": "CELL 红：该证明的没证明",
+      "stage": "report"
+    },
+    "cell_without_case": {
+      "level": "warning",
+      "title": "CELL 没有对应用例",
+      "stage": "report"
+    },
+    "case_without_evd": {
+      "level": "warning",
+      "title": "用例没有执行证据",
+      "stage": "report"
+    },
+    "evd_legacy": {
+      "level": "warning",
+      "title": "旧 run 无 CASE 身份",
+      "stage": "report"
+    },
+    "case_synthesized": {
+      "level": "info",
+      "title": "用例身份是结构合成的",
+      "stage": "report"
+    },
+    "cell_yellow": {
+      "level": "info",
+      "title": "CELL 黄：证据不完整",
+      "stage": "report"
+    },
+    "CASE_GROUPS_EMPTY": {
+      "level": "blocker",
+      "title": "用例没有任何功能组",
+      "stage": "block"
+    },
+    "CASE_SVA_UNDECLARED": {
+      "level": "blocker",
+      "title": "用例缺 sva 字段",
+      "stage": "block"
+    },
+    "CASE_SCB_UNDECLARED": {
+      "level": "blocker",
+      "title": "用例缺 scb 字段",
+      "stage": "block"
+    },
+    "CASE_ITEM_NO_CELL": {
+      "level": "blocker",
+      "title": "三集合项缺 cell",
+      "stage": "block"
+    },
+    "CASE_SVA_VACUOUS": {
+      "level": "blocker",
+      "title": "SVA 空转（cover_property 未命中）",
+      "stage": "report"
+    },
+    "CASE_SCB_NOT_EXECUTED": {
+      "level": "blocker",
+      "title": "SCB 未执行",
+      "stage": "report"
+    },
+    "CASE_STATUS_OVERCLAIM": {
+      "level": "blocker",
+      "title": "用例状态越报",
+      "stage": "block"
+    },
+    "CASE_IR_EVIDENCE_MISMATCH": {
+      "level": "blocker",
+      "title": "契约与证据不一致",
+      "stage": "block"
+    },
+    "CASE_GROUP_NO_REQUIREMENT": {
+      "level": "warning",
+      "title": "CASE_GROUP_NO_REQUIREMENT",
+      "stage": "report"
+    }
+  }
+}

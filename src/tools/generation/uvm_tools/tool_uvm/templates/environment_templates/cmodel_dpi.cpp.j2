@@ -1,0 +1,41 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// C-Model DPI Wrapper: {{ module_name }}
+// Generic: signal list from context, auto-generated
+#include "svdpi.h"
+#include "{{ module_name }}_ref_model.h"
+#include <cstdio>
+
+static {{ module_name }}_ref_model* g_model = nullptr;
+
+extern "C" void {{ module_name }}_dpi_init() {
+    if (!g_model) {
+        g_model = new {{ module_name }}_ref_model();
+        printf("[DPI] {{ module_name }} C-Model initialized\n");
+    }
+}
+
+extern "C" void {{ module_name }}_dpi_predict(
+{%- for sig in input_signals %}
+    int {{ sig }}{% if not loop.last %},{% endif %}
+{%- endfor %}
+{%- if input_signals and output_signals %},{% endif %}
+{%- for sig in output_signals %}
+    int* {{ sig }}{% if not loop.last %},{% endif %}
+{%- endfor %}
+) {
+    if (!g_model) {{ module_name }}_dpi_init();
+    g_model->predict(
+{%- for sig in input_signals %}
+        {{ sig }}{% if not loop.last %},{% endif %}
+{%- endfor %}
+{%- if input_signals and output_signals %},{% endif %}
+{%- for sig in output_signals %}
+        *{{ sig }}{% if not loop.last %},{% endif %}
+{%- endfor %}
+    );
+}
+
+extern "C" void {{ module_name }}_dpi_shutdown() {
+    if (g_model) { delete g_model; g_model = nullptr; }
+}

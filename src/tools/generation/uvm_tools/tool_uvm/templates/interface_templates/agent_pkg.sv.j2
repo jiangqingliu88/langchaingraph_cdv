@@ -1,0 +1,49 @@
+{% include "base_templates/base_template.sv.j2" %}
+
+// ============================================================
+// Agent Package: {{ agent.name }}_pkg
+// ============================================================
+// 注意：{{ agent.name }}_if.sv（interface）须在 package 之前单独编译（见 filelist）
+package {{ agent.name }}_pkg;
+  import uvm_pkg::*;
+  import {{ agent.name }}_parameters_pkg::*;
+  import {{ agent.name }}_typedefs_pkg::*;
+  import common_typedefs_pkg::*;
+  `include "uvm_macros.svh"
+  // 最大物理位宽（编译期固定）
+  `define {{ agent.name | default('', true) | upper }}_MAX_ADDR_WIDTH 512
+  `define {{ agent.name | default('', true) | upper }}_MAX_DATA_WIDTH 512
+  `define {{ agent.name | default('', true) | upper }}_AXI_MAX_ID_WIDTH 16
+  //  requirements
+  `include "2_config/{{ agent.name }}_port_config.sv"
+  `include "3_transaction_sequencer/{{ agent.name }}_base_seq_item.sv"
+  `include "3_transaction_sequencer/{{ agent.name }}_master_seq_item.sv"
+  `include "3_transaction_sequencer/{{ agent.name }}_slave_seq_item.sv"
+  `include "3_transaction_sequencer/{{ agent.name }}_master_sequencer.sv"
+  `include "3_transaction_sequencer/{{ agent.name }}_slave_sequencer.sv"
+  `include "4_driver_monitor/{{ agent.name }}_master_driver.sv"
+  `include "4_driver_monitor/{{ agent.name }}_slave_driver.sv"
+  `include "4_driver_monitor/{{ agent.name }}_port_monitor.sv"
+  `include "5_agent/{{ agent.name }}_master_agent.sv"
+  `include "5_agent/{{ agent.name }}_slave_agent.sv"
+
+  // ── 系统（sub）env 只在**有 subenv** 的构建里编 ──
+  // loopback 构建没有 subenv，却因为这一段无条件 include，被 Questa 在 load 阶段
+  // 要求实例化 `virtual {{ agent.name }}_system_if`：
+  //   "(vsim-8451) Virtual interface resolution cannot find a matching instance"
+  // → "Error loading design"（实测删掉 tb 里那个实例就是 4 条这个错）。
+  // 所以由 filelist 的 `+define+{{ agent.name }}_loop_back_test`
+  // （`src/tools/lib/filelist.py:build_loopback_filelist` 加的）作开关：
+  // loopback 不编这几个类 → 类型都不存在 → tb 里也就不需要那个空实例。
+  `ifndef {{ agent.name }}_loop_back_test
+  `include "5_agent/{{ agent.name }}_system_config.sv"
+  `include "5_agent/{{ agent.name }}_system_vsqr.sv"
+  `include "5_agent/{{ agent.name }}_system_monitor.sv"
+  `include "5_agent/{{ agent.name }}_system_env.sv"
+  `endif
+
+  `include "7_sequence/{{ agent.name }}_master_sequence.sv"
+  `include "7_sequence/{{ agent.name }}_slave_sequence.sv"
+  `include "8_ral/{{ agent.name }}_reg_adapter.sv"
+
+endpackage : {{ agent.name }}_pkg

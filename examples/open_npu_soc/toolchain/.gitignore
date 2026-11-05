@@ -1,0 +1,8 @@
+*.zip
+*.zip.part
+prefix.mk
+*/bin/
+*/
+!README.md
+!setup_toolchain.py
+!.gitignore

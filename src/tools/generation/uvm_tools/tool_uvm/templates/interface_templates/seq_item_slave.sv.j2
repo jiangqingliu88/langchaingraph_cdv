@@ -1,0 +1,64 @@
+{% include "base_templates/base_template.sv.j2" %}
+{% import "base_templates/field_macros.j2" as fm %}
+
+// ============================================================
+// Slave Seq Item: {{ agent.name }}_slave_seq_item
+// ============================================================
+
+// 继承 <name>_base_seq_item：xact_type 与 base_transaction_vars 由基类提供。
+class {{ agent.name }}_slave_seq_item extends {{ agent.name }}_base_seq_item;
+  // ── file 注册机制：字段注册进 factory（copy/compare/print/pack 自动化）──
+
+  // 请求字段（is_master=True：由 Monitor 回填，非随机）
+{%- for var in transaction_vars %}
+{%-   if var.is_master != 'False' %}
+  {{ var.type }} {{ var.name }}; // 由 monitor 回填
+{%-   endif %}
+{%- endfor %}
+
+  // slave 响应字段（is_master=False：slave 生成）
+{%- for var in transaction_vars %}
+{%-   if var.is_master == 'False' %}
+  rand {{ var.type }} {{ var.name }}; // slave 响应
+{%-   endif %}
+{%- endfor %}
+
+  // 响应控制指令（由 Slave Sequence 填充）
+  rand int       delay_cycles;
+  rand bit [1:0] force_resp;
+  rand bit       override_rdata;
+
+  // pragma custom field_decl begin
+  // pragma custom field_decl end
+
+{%- for cons in transaction_constraints.slave %}
+  constraint {{ cons.name }} {{ cons.value | safe }}
+{%- endfor %}
+  constraint c_delay_range { delay_cycles inside {[0:50]}; }
+  constraint c_resp_valid  { force_resp inside {2'b00, 2'b01, 2'b10, 2'b11}; }
+
+  //   基类字段由基类的 utils 块注册，这里只注册新增字段
+  `uvm_object_utils_begin({{ agent.name }}_slave_seq_item)
+    // 请求字段（由 monitor 回填）
+{%- for var in transaction_vars %}
+{%-   if var.is_master != 'False' %}
+    {{ fm.uvm_field(var) }}
+{%-   endif %}
+{%- endfor %}
+    // slave 响应字段
+{%- for var in transaction_vars %}
+{%-   if var.is_master == 'False' %}
+    {{ fm.uvm_field(var) }}
+{%-   endif %}
+{%- endfor %}
+    // 响应控制指令
+    `uvm_field_int(delay_cycles, UVM_DEFAULT)
+    `uvm_field_int(force_resp, UVM_DEFAULT)
+    `uvm_field_int(override_rdata, UVM_DEFAULT)
+  `uvm_object_utils_end
+
+  function new(string name = "{{ agent.name }}_slave_seq_item");
+    super.new(name);
+  endfunction
+
+endclass : {{ agent.name }}_slave_seq_item

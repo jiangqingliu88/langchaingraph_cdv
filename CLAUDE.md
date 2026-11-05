@@ -1,0 +1,53 @@
+# SignOffAI — contributor and AI-assistant guide
+
+This is a short orientation for contributors and coding assistants.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) is the authoritative description of the
+current code architecture; keep it in sync when layer boundaries or graph nodes
+change. [`README.md`](README.md) covers usage; [`CONTRIBUTING.md`](CONTRIBUTING.md)
+covers the development workflow.
+
+## Ground rules
+
+1. **EDA is the source of truth.** Never report a compile/simulation/coverage
+   stage as passed without tool evidence. "No log" is not "no error"; missing
+   EDA tools must surface as `BLOCKED_EDA_MISSING` or `EDA_MISSING`.
+2. **Keep the five-layer dependency direction.** Run
+   `python -m config.architecture_guard` after structural changes. Do not hide
+   violations behind function-local imports.
+3. **LLMs are called at specific points, not as the orchestrator.** All model
+   calls go through `src/tools/lib/llm_call.py:call_llm`; process control,
+   routing, and pass/fail decisions stay deterministic.
+4. **Behavior changes need tests.** A bug fix needs a regression test that fails
+   before the fix.
+5. **Never commit secrets or generated artifacts.** `.env`, `.jwt_secret`,
+   `output*/`, `work/`, `*.ucdb`, `*.qpg`, and `*.log` are ignored.
+
+## Common commands
+
+```bash
+pip install -e ".[dev]"          # add ",gui" for the PySide6 workbench
+pytest tests/ -q
+pytest src/tools/checking src/tools/humanview \
+       src/layers/l3_decision/contract/tests \
+       src/layers/l3_decision/casemodel/tests -q
+python -m config.architecture_guard
+ruff check src/ tests/ && ruff format --check src/ tests/
+python -m src.cli.commands --help
+```
+
+## Layout reminders
+
+- `src/executors/` — eight stage executors; only `design` and `debug` call an LLM directly.
+- `src/layers/l1_infrastructure/` — deterministic, zero-AI layer; must not import upward.
+- `src/layers/l2_orchestration/` — LangGraph graph, routers, nodes, governance, evidence.
+- `src/layers/l3_decision/` — coverage-driven decisions, case models, test-point IR.
+- `src/layers/l4_memory/` — persistence and IP/case/debug knowledge bases.
+- `src/layers/l5_evolution/` — experience distillation and policy weights.
+- `src/tools/` — domain tools grouped by generation / regression / checking / humanview.
+- `src/cli/` — the `vagent` entry point; `src/workbench/` — optional desktop UI.
+
+## Environment
+
+Start from [`.env.example`](.env.example). Without an LLM key, deterministic
+paths still run and LLM steps fail honestly. QuestaSim is optional for unit
+tests; end-to-end coverage flows require it.

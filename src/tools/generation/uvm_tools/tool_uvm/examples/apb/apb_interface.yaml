@@ -1,0 +1,129 @@
+# ============================================================
+# Interface (agent) 定义 —— 单个接口 → 生成 master/slave 两个 agent
+# ============================================================
+# ── 文件头元数据（可选）──
+#   所有生成文件继承 templates/base_templates/base_template.sv.j2，
+#   包含: 公司商标/权利声明/作者/创建时间/修改时间/联系邮箱/描述。
+#   顶层 meta: 键可覆盖默认值（DEFAULT_META，见 gen_uvm.py）:
+meta:
+  company: "nanocorechip.com NPU IP TEAM（功能签核）"
+  rights:  "Copyright © 2026 SignOffAI. All rights reserved."
+  author:  "JQLIU"
+  email:   "jqliu@nanocorechip.com"
+  created: "2026-09-12"          # 固定创建时间（缺省 = 生成时刻）
+  modified: ""                   # 修改时间（缺省 = 生成时刻）
+# dir 语义（AXI-VIP 风格）:
+#   output = master 驱动、slave 采样（master → slave 的通道）
+#   input  = slave 驱动、master 采样（slave → master 的通道）
+# ============================================================
+# 类命名约定: <name>_<kind>
+#   单类:   <name>_port_config / <name>_port_monitor / <name>_system_config
+#   共享:   <name>_if / <name>_system_if / <name>_pkg
+#           <name>_parameters_pkg / <name>_typedefs_pkg
+#   角色:   <name>_master_seq_item/driver/sequencer/sequence/agent
+#           <name>_slave_seq_item/driver/sequencer/sequence/agent
+# ============================================================
+
+interfaces:
+  - name: apb                # 协议/agent 名（生成类前缀 apb_）
+    clock: pclk
+    reset: presetn
+    # **这一行必须开着**：它决定 driver / monitor 走不走协议专属时序。
+    # 注释掉的话两个模板都会退到"通用单拍"分支 —— 而通用分支**根本不驱动
+    # psel / penable**（只按名字把 output 字段拍一拍），DUT 的 `access = psel &&
+    # penable` 恒为未初始化值 X，寄存器写读全是碰运气；monitor 也会**每个时钟沿
+    # 都凭空造一条事务**（psel/penable 不看），把 scoreboard 的 actual 灌成几百条、
+    # 还给 RAL 的 predictor 喂一堆 paddr=0 的假读。
+    protocol: apb            # 协议名 → 渲染协议正确的默认驱动/采样时序（两拍 setup+access）
+
+
+    reset_active_low: True   # 复位极性（缺省 True = 低有效，驱动/监控复位门控用）
+
+
+    # ── 接口参数（渲染进 interface #(...)）──
+    parameters:
+      - { type: int, name: ADDR_WIDTH, value: 32 }
+      - { type: int, name: DATA_WIDTH, value: 32 }
+
+    # ── 类型别名（渲染进 <name>_typedefs_pkg）──
+    #   list：每项 { type_t: 类型表达式, type_name: 新类型名 }
+    #   声明顺序 = 书写顺序，被引用的 typedef 须写在前面
+    #   声明顺序 = 书写顺序，被引用的 typedef 须写在前面。
+    #
+    # **这里只放本接口特有的 typedef。** `port_kind_enum` / `response_mode_e` /
+    # `resp_type_e` / `xact_type_e` 这些**公共库已经有了**
+    #（`base_pkg/common_typedefs/common_typedefs_pkg.sv`），agent 包会 import 它。
+    # 在这里重定义一遍会**撞车**：apb_pkg 同时通配 import 了两个包，
+    # `MASTER` 变成"不直接可见"（ambiguous），port_config 里所有枚举引用全废。
+    typedefs:
+      - { type_t: "bit [7:0]", type_name: "byte_t"}
+    # ── 端口 ──
+    #   name:  信号名
+    #   dir:   output=master驱动 / input=slave驱动
+    #   width: 位宽（1 = 单比特 logic；>1 = logic [width-1:0]；参数名 = 引用）
+    # **扁平形状**：每项直接是 `{name, dir, width}`。
+    #
+    # 这里原来是按 `port_type` 分组嵌套的（`- port_type: master` / `ports:`），
+    # 而生成器读的是扁平列表 —— 结果渲染出的 `apb_if` 里端口**全是空名**
+    # （`logic [-1:0] ;`），一个信号都没接上。schema 的 `$defs.port` 也是扁平的，
+    # 所以嵌套那份从来就对不上，是旧写法。
+    #
+    # dir 的语义（AXI-VIP 风格，见文件头）：output = master 驱动，input = slave 驱动。
+    ports:
+      - { name: paddr,   dir: output, width: ADDR_WIDTH }   # master → slave（引用参数）
+      - { name: pwrite,  dir: output, width: 1           }   # master → slave
+      - { name: psel,    dir: output, width: 1           }   # master → slave
+      - { name: penable, dir: output, width: 1           }   # master → slave
+      - { name: pwdata,  dir: output, width: DATA_WIDTH }   # master → slave（引用参数）
+      - { name: prdata,  dir: input,  width: DATA_WIDTH }   # slave → master（引用参数）
+      - { name: pready,  dir: input,  width: 1           }   # slave → master
+      - { name: pslverr, dir: input,  width: 1           }   # slave → master
+
+    # ── 事务字段 ──
+    #   is_master: "True"  → master 字段（master 驱动/生成，slave monitor 回填为请求）
+    #               "False" → slave 字段（slave 生成响应，master 采样）
+    #   iscompare: "True"  → 参与 loopback scoreboard 比对（仅 is_master="True" 字段参与）
+    #   isrand:    "True"  → master driver 默认驱动该字段（映射到同名 output 端口）
+    #   base 字段渲染进 <name>_base_seq_item，**master / slave 两侧都有**。
+    #
+    # `prdata` / `pslverr` 刻意放 base、不放 transaction_vars：它们原先是
+    # `is_master: "False"`（只进 slave seq_item），于是 **master 侧根本没有这两个成员** ——
+    # 而寄存器模型（RAL）的读回要靠 master 侧 driver 把 prdata 写回同一条 req，
+    # 适配器 `bus2reg` 再从那条 req 取。少了它们，任何寄存器读都是假的。
+    # 响应字段本来就该两侧可见（slave 驱动它、master 采样它）。
+    base_transaction_vars:
+      - { name: addr,    type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True"}
+      - { name: data,    type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True"}
+      - { name: prdata,  type: "bit [DATA_WIDTH-1:0]", iscompare: "True",  isrand: "False"}
+      - { name: pslverr, type: "bit",                  iscompare: "True",  isrand: "False"}
+    transaction_vars:
+      - { name: paddr,   type: "bit [ADDR_WIDTH-1:0]", iscompare: "True",  isrand: "True",  is_master: "True"  }
+      - { name: pwrite,  type: "bit",                  iscompare: "True",  isrand: "True",  is_master: "True"  }
+      - { name: pwdata,  type: "bit [DATA_WIDTH-1:0]", iscompare: "True",  isrand: "True",  is_master: "True"  }
+      - { name: prdata,  type: "bit [DATA_WIDTH-1:0]", iscompare: "True",  isrand: "False", is_master: "False" }
+      - { name: pslverr, type: "bit",                  iscompare: "True",  isrand: "False", is_master: "False" }
+    
+    base_transaction_constraints:
+      # 注意作用域：base 约束渲染进 <name>_base_seq_item（基类），**只能引用
+      # base_transaction_vars 里的字段**。写 paddr / prdata 这类只在派生类
+      # （master/slave seq_item）里声明的字段会编译不过。
+      # 另外约束名不要与 transaction_constraints 里的重名——基类与派生类
+      # 同名约束在 UVM 里会被后者覆盖，容易看走眼。
+      - { name: c_addr_align, value: "{ addr[1:0] == 2'b00; }" }
+    # ── 事务约束（master/slave 分开，渲染进各自 seq_item 的 constraint）──
+    transaction_constraints:
+      master:
+        - { name: c_paddr_align, value: "{ paddr[1:0] == 2'b00; }" }
+      slave:
+        - { name: c_prdata_range, value: "{ prdata inside {[0:32'hFFFF_FFFF]}; }" }
+
+    # ── 通用配置字段（渲染进 <name>_port_config：rand 字段 + factory 注册）──
+    config_vars:
+      - { type: int, name: priority_a, value: 0 }
+    config_constraints:
+      - { name: c_priority_range, value: "{ priority_a inside {[0:15]}; }" }
+
+    # ── 响应信息（可选，供后续乱序/关联使用）──
+    response_info:
+      fifo_depth: 4
+      support_out_of_order: false

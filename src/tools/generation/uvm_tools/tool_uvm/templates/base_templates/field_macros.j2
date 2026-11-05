@@ -1,0 +1,24 @@
+{# field_macros.j2 —— config 类的 file 注册机制（factory 字段注册）共享宏 #}
+{# 用法：config 模板 `{% import "base_templates/field_macros.j2" as fm %}` 后，
+   在 `uvm_object_utils_begin/end` 块内渲染 `{{ fm.uvm_field(var) }}`。 #}
+{# 类型 → 宏映射规则：
+   - int / bit / logic / byte / shortint / longint / integer
+     （含 ≤64bit 打包向量，如 bit [31:0]）→ uvm_field_int
+     （>64bit 打包数组请手动改为 uvm_field_sarray_int）
+   - string → uvm_field_string；real → uvm_field_real
+   - 其余类型（enum 等）→ uvm_field_enum(TYPE, NAME, UVM_DEFAULT)
+#}
+{% macro uvm_field(var) -%}
+{%- set t = (var.type | default('int')) | trim -%}
+{%- set tl = t | lower -%}
+{%- if tl.startswith('int') or tl.startswith('bit') or tl.startswith('logic')
+       or tl.startswith('byte') or tl.startswith('shortint') or tl.startswith('longint') -%}
+`uvm_field_int({{ var.name }}, UVM_DEFAULT)
+{%- elif tl.startswith('string') -%}
+`uvm_field_string({{ var.name }}, UVM_DEFAULT)
+{%- elif tl.startswith('real') -%}
+`uvm_field_real({{ var.name }}, UVM_DEFAULT)
+{%- else -%}
+`uvm_field_enum({{ t }}, {{ var.name }}, UVM_DEFAULT)
+{%- endif -%}
+{%- endmacro %}

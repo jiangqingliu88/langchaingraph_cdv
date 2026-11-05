@@ -1,0 +1,70 @@
+// {{ name }}_sc_pred_env.sv
+class {{ name }}_sc_pred_env extends uvm_env;
+  
+  `uvm_component_utils({{ name }}_sc_pred_env)
+  
+{% for point in prod_points %}
+  // {{ point.point_name }} prod array
+  {{ point.point_name }}_prod {{ point.point_name }}_prod_q[{{ point.channel_num }}];
+{% endfor %}
+  
+{% for point in chck_points %}
+  // {{ point.point_name }} mon_ex array
+  {{ point.point_name }}_mon_ex {{ point.point_name }}_mon_ex_q[{{ point.channel_num }}];
+  typedef  rtl_sc_register#(point.width) reg_{{point.point_name}}_t;
+{% endfor %}
+  // Configuration
+  int  ut_id;
+  bit has_prod = 1;
+
+  function new(string name = "{{ name }}_sc_pred_env", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+  
+  function void build_phase(uvm_phase phase);
+    rtl_sc_cfg cfg;
+    super.build_phase(phase);
+    cfg=new("cfg");
+{% for point in chck_points %}
+
+  reg_{{point.point_name}}_t::init(this,cfg);
+{% endfor %}
+if(hase_prod) begin
+    //register cfg
+    // Create prod arrays
+{% for point in prod_points %}
+    for(int i = 0; i < {{ point.channel_num }}; i++) begin
+      reg_{{point.point_name}}_t::register_cfg("$sformatf("{{point.point_name}}_%0d_%0d",i,ut_id));
+      {{ point.point_name }}_prod_q[i] = {{ point.point_name }}_prod::type_id::create(
+        $sformatf("{{ point.point_name }}_prod_%0d", i), this);
+    end
+{% endfor %}
+end
+//register sc
+// Create mon_ex arrays
+{% for point in chck_points %}
+    for(int i = 0; i < {{ point.channel_num }}; i++) begin
+      reg_{{point.point_name}}_t::register_sc($sformatf("{{point.point_name}}_%0d_%0d",i,ut_id));
+      {{ point.point_name }}_mon_ex_q[i] = {{ point.point_name }}_mon_ex::type_id::create(
+        $sformatf("{{ point.point_name }}_mon_ex_%0d", i), this);
+      {{ point.point_name }}_mon_ex_q[i].channel_id=$sformatf("{{point.point_name}}_%0d_%0d",i,ut_id);
+    end
+{% endfor %}
+  endfunction
+  
+  function void connect_phase(uvm_phase phase);
+    super.connect_phase(phase);
+    // Create connect
+    {% for point in chck_points %}
+    for(int i = 0; i < {{ point.channel_num }}; i++) begin
+      reg_{{point.point_name}}_t::register_sc($sformatf("{{point.point_name}}_%0d_%0d",i,ut_id),{{ point.point_name }}_mon_ex_q[i].ap);
+    end
+{% endfor %}
+ {% for point in chck_points %}
+      reg_{{point.point_name}}_t::connect_all();
+    end
+{% endfor %}
+  endfunction
+  
+  
+endclass
