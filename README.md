@@ -46,6 +46,10 @@ EDA-verified.
   hashes for audit.
 - **Reference SoC** — `examples/open_npu_soc/` runs NICE → DMA → banked SRAM →
   INT8 GEMM → IRQ → Python golden comparison on real RTL.
+- **Desktop workbench** — a PySide6 shell over run artifacts: regression status,
+  evidence/artifact browser, waveform and coverage drill-down, error
+  fingerprinting, and the human-approval gate. See
+  [可视化](#可视化可选pyside6-桌面工作台).
 
 ## Quick start
 
@@ -602,9 +606,50 @@ CI 不会把"等人答话"读成"跑完了"。
 
 ### 可视化（可选，PySide6 桌面工作台）
 
+![工作台 · 回归状态、证据产物与错误指纹](docs/images/workbench-overview.png)
+
+工作台是 CLI 的**桌面外壳**：页面上的数字全部来自流水线落盘的 `<run>/` 目录。
+它只读产物、生成计划、打开模块，**不产生独立的签核结论** —— 正式入口始终是 CLI。
+
 ```powershell
-python -m src.workbench          # 或 run_gui.bat
+python -m src.workbench          # 或 run_gui.bat / vagent gui run
 ```
+
+**业务怎么分**（左窗格导航树）：
+
+| 业务线 | 给谁用 | 典型路径 |
+|---|---|---|
+| **IP 业务**（供应方） | IP Owner / 负责人 | IP 目录 → IP 工作区（IP 回归）→ 生成发布包 → 发布检查 |
+| **SoC 业务**（消费方） | SoC 验证 / 集成 | SoC 总览 → 验证工作区（SoC 回归 / C 用例）→ SoC 签核 |
+| **工程服务** | 所有人 | UVM 自动化验证 / 回归效率优化 / Coverage Closure（只编排，跳到专业模块） |
+
+IP 与 SoC 的覆盖率**分账**：IP 看内部覆盖点，SoC 看集成场景，两个数字不相加；
+两者之间的契约是 IP 发布包（`ip_release_v1`）—— SoC 每次 run 都会记录消费了哪个
+版本、绑定是否还对得上。
+
+**截图里的关键业务**：
+
+1. **一次运行、全局联动** ——「运行历史」选中一个 run，回归状态 / 波形 / 覆盖率 /
+   证据 / 签核一起切过去；顶部工具栏固定显示 项目 · 业务线 · 仿真业务
+   （默认 `覆盖率+波形`）· 人工节点开关 · 清单重载与布局。
+2. **回归状态** —— 逐条用例的 pass/fail、耗时、`UVM_ERROR/WARN/INFO` 计数与断言
+   错误；顶部汇总「共 N / 通过 N / 失败 N / 无结论 N / 波形 N / 覆盖率 N」，
+   并可一键打开总覆盖率报告。判据锚定 `[SCB_DUT] ... mismatched=0` 且没有
+   `UVM_ERROR` —— 某条干净的 `[SCB <id>]` 不能单独满足判据。
+3. **证据 / 产物** —— 右侧按目录列出本次 run 留下的全部文件（覆盖率归档
+   `round_01.ucdb` + sha256、蒸馏任务日志等），选中文本文件即时预览开头，
+   回答「该有的都在吗」；证据包缺失或哈希对不上就是 ✗，不算 pass。
+4. **错误指纹** —— 粘贴一段编译/仿真报错（如 `ERROR: tb_fifo.sv(128): Undefined
+   variable 'rd_ptr'`），去掉行号/地址压成可比较的指纹，配合调试经验库做失败归类。
+5. **人工节点** —— 分级回归在 loopback 全过之后默认停车等人放行
+   （`WAITING_APPROVAL`，CLI 以 exit code 3 退出）；工具栏的
+   「人工节点：放行 / 拦截」就是这个开关，不是跳过门禁。
+
+导航树按 **流程与证据**（验证流程、运行历史、待办/卡点、任务总览、流程视图、
+运行对比、产物审查、证据/产物、签核判定、运行清单、规则草案、功能覆盖率、
+决策轨迹、进度趋势）、**编译与回归**（回归产出、回归状态、回归波形、回归覆盖率）
+和**覆盖率**组织。界面清单是 YAML（`config/workbench.yaml`）：加一个模块只需写插件
+并在清单里登记，不改平台代码。
 
 | 视图 | 行为 |
 |---|---|
