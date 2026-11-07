@@ -76,7 +76,7 @@ steps fail honestly. Without QuestaSim, EDA-dependent stages report
 |---|---|
 | `src/executors/` | Eight stage executors (front, design, model, verify, ops, coverage, debug, audit) |
 | `src/layers/` | Five-layer engine (L1 infrastructure → L5 evolution) |
-| `src/tools/` | Domain tools: generation, regression, checking, humanview, … |
+| `src/tools/` | Domain tools: generation, checking, humanview, common, … |
 | `src/cli/` | The `vagent` command-line interface |
 | `src/workbench/` | Optional PySide6 desktop workbench |
 | `config/` | YAML configuration, schemas, and architecture guards |
@@ -129,7 +129,7 @@ own licenses; see [NOTICE](NOTICE).
 
 | 铁律 | 含义 | 代码落点 |
 |------|------|---------|
-| **EDA 是唯一真理** | LLM 生成的代码必须经 `vlog` 编译返回 0/1，不通过即丢弃/回退；**失败必须响亮**，禁止静默降级为假通过 | `executors/design/main.py:_verify_ip_rtl`、`executors/verify/main.py:_verify_compilation` |
+| **EDA 是唯一真理** | LLM 生成的代码必须经 `vlog` 编译返回 0/1，不通过即丢弃/回退；**失败必须响亮**，禁止静默降级为假通过 | `executors/design/main.py:_verify_ip_rtl`、`executors/verify/steps/gap.py:_verify_compilation` |
 | **覆盖率库版本固化** | 每轮 ucdb 算 SHA256 归档，复现时回滚比对 | `l1_infrastructure/infrastructure.py:archive_coverage` |
 | **LLM 只读降采样文本** | 空洞分析只读 <1KB 语义汇总，绝不读几十 GB 的 ucdb | `executors/coverage` |
 
@@ -254,7 +254,7 @@ python -m src.cli.commands soc run examples/open_npu_soc --output output_soc_v01
 LLM 只在具体位置被**点状**调用（符合"LLM 只做完形填空"的定位）。
 
 > 「点状」的含义：**流程、决策、工具选择都是确定性的**，LLM 只在"该写一段代码/该给一个
-> 判断"的那个点上被叫一次。全部调用走唯一漏斗 `tools/lib/llm_call.py:call_llm`
+> 判断"的那个点上被叫一次。全部调用走唯一漏斗 `src/tools/common/lib/llm_call.py:call_llm`
 > （token 预算 / 缓存 / 重试+回退 / 审计一处实现）；每次调用落
 > `<run>/docs/llm_audit.jsonl`（`site` / `node_id` / `round` / `prompt_hash`）。
 
@@ -269,8 +269,9 @@ LLM 只在具体位置被**点状**调用（符合"LLM 只做完形填空"的定
 | `debug` | 日志收集 → 分类 → 指纹去重 → 模板修复 → LLM 兜底重写 → EDA 重验 | debug report |
 | `audit` | 签核门禁 + 签核报告 | `report.json` + 证据链 |
 
-**8 个执行器服务 24 个图节点**：`verify` 与 `coverage` 各服务 **2 个阶段**
-（`verify` 也管 `env_arch_check`，`coverage` 也管 `decide`），其余各 1 个。
+**8 个执行器只占 24 个图节点中的 10 个**：`verify` 与 `coverage` 各服务
+**2 个阶段**（`verify` 也管 `env_arch_check`，`coverage` 也管 `decide`），其余各 1 个；
+另外 14 个是框架控制节点（初始化 / 轮次 / 治理 / 审批 / 收敛动作 / 收尾）。
 所以"节点"和"执行器"是两个**正交**的概念，见 `l2_orchestration/stages.py`。
 
 ---
@@ -289,14 +290,15 @@ design → model → verify → [ops → coverage → decide]×N → audit
 EDA 缺失时在首个 `ops` 轮终止（`BLOCKED_EDA_MISSING`），不空转。
 
 **决策是确定性的**：硬失败动作（`FIX_COMPILE` / `FIX_MODEL`）**永远走规则**，RL 不参与；
-RL 只管 4 个软动作，且经验统计只做"降级建议"不直接拍板（`decision_engine.py:523`）。
+RL 只管 4 个软动作，且经验统计只做"降级建议"不直接拍板（`decision_engine.py`）。
 
 ---
 
 ## 功能覆盖率方法学（case 模型 → covergroup → 种子 → 回归）
 
 **这条链是本项目"可度量、可追溯、可签核"那条主张的落点。** 规则只此一份：
-`src/layers/l3_decision/casemodel/coverage.py`（模块头 = 方法学），细节见 `casemodel_tools/readme.md`。
+`src/layers/l3_decision/casemodel/coverage.py`（模块头 = 方法学），细节见
+`src/layers/l3_decision/casemodel/readme.md`。
 
 ### 一、模型里的东西变成 SystemVerilog
 
@@ -412,7 +414,8 @@ python -m src.layers.l3_decision.casemodel.cli constraints specs\npu_sched\casem
   -p npu_sched_in:npu_sched_in_master_seq_item `
   --agent-fields npu_sched_in=instr_type,instr_opcode
 
-# 主 CLI 同形：vagent case-model {covergroups,coverage-plan,testpoints,associate,constraints}
+# 主 CLI 同形：vagent case-model {covergroups,coverage-plan,associate,constraints}
+# （testpoints 只在上面这个 casemodel 独立 CLI 里，主 CLI 暂未收编）
 ```
 
 ### 六、三层模型（case / 覆盖率 / 约束）靠名字关联
@@ -472,13 +475,13 @@ python -m src.layers.l3_decision.casemodel.cli constraints cases.yaml -p apb_mas
   （`trans / field / values / mode`），模板渲染进 `apply()`；
 - `env/cons/*` **真的进了 `env_pkg` 编译**（以前生成了却从没被 include），
   批次 test 读到 `batch_policy` 时启动**协调序列**，逐迭代应用策略；
-- 用 `backed_policy_count / unbacked_policy_count` 如实报告：NPU 模型是 **5/11**，
-  其余 6 条专题的维度是观测型（没有输入引脚），按定义编不出字段约束。
+- 用 `backed_policy_count / unbacked_policy_count` 如实报告：NPU 模型是 **6/11**，
+  其余 5 条专题的维度是观测型（没有输入引脚），按定义编不出字段约束。
 
 > 剩下的是**业务缺口**，不是管道缺口：`sequence` 型维度（`D_seq` / `D_pipeline`）
 > 还没有场景序列生成器；非法交叉（需要两侧都可驱动）尚未编译；协议参数（对齐/握手）
 > 模型里没有。`constraint_policy_applied=false` 时 audit 会挂
-> **`PASS_WITH_CAVEAT`**，并在报告里写清"5/11 条有真实赋值"。
+> **`PASS_WITH_CAVEAT`**，并在报告里写清"6/11 条有真实赋值"。
 
 > 约束层的另一条实测坑：`vsim`/`vlog` 从没编译过的那几个 `env_cons_*` 文件里有一串
 > 语法错误（`priority` / `disable` / `end` 是 SV 关键字、语句后声明、`string.index()`
@@ -501,7 +504,7 @@ python -m src.cli.commands verify --rtl specs\npu_sched -o output_npu
 > 本机 Questa 2024.1 的 `vlog` / `vopt` / `vsim` / `vcover` 全都能跑，不需要额外
 > license 配置。别再用"验不了"当理由把仿真侧停在生成侧。
 
-### 八、一轮完整的端到端实测（2026-10-24）
+### 八、一轮完整的端到端实测（2026-10-24，历史基线）
 
 命令（无人值守：关掉分级回归的人工节点）：
 
@@ -544,7 +547,7 @@ python -m src.cli.commands agent list
 python -m src.cli.commands runs                      # 运行历史
 python -m src.cli.commands prune --keep-last 20      # 清理旧 run（默认 dry-run，保护已签核）
 python -m src.cli.commands show <run_id>
-python -m src.cli.commands dump <run_id>             # 复现 / 导出证据包
+python -m src.cli.commands dump <session_id>         # 复现 / 导出证据包（session 不是 run_id）
 
 # 人工介入（可治理）—— run_id 走 --run（不是位置参数）
 python -m src.cli.commands approve --run <run_id> --reason "..."   # 记审计 + 推图
@@ -556,18 +559,19 @@ python -m src.cli.commands signoff  {generate,export,verify,checklist,diff}
 python -m src.cli.commands coverage {report,gaps,exclude,trend,merge}
 python -m src.cli.commands env      {generate,validate,compile,template}
 python -m src.cli.commands regression {stages,approve,run,report,trend,compare,reference-finder}
-python -m src.cli.commands case-model {check,analyze,generate,tree,rules,uvm-tests,
-                                       testpoints,covergroups,coverage-plan,associate,
-                                       constraints,gui}
+python -m src.cli.commands case-model {check,lint,analyze,generate,tree,rules,uvm-tests,
+                                       covergroups,coverage-plan,associate,constraints,
+                                       gui,import-xlsx,verify-import}
 python -m src.cli.commands distill  {run,list,rollback}      # 经验蒸馏（L5）
 python -m src.cli.commands govern   {status,override,reset}  # 治理
-python -m src.cli.commands evidence {record,log,check}
+python -m src.cli.commands evidence {record,log,check,verify,replay,compare}
+python -m src.cli.commands contract {build,check,why,worklist,seeds,status,show}  # 契约 / 义务
 python -m src.cli.commands lineage  {versions,baseline,bugs,compare,bind-modules,prune}  # 血缘：RTL 版本 / 基准
 ```
 
 ### 血缘（`vagent lineage`）
 
-把**跨 run 的四个实体**记下来（`.signoffai/lineage.db`）—— 没有它们，"这一轮比
+把**跨 run 的四个实体**记下来（`database/lineage.db`）—— 没有它们，"这一轮比
 上一轮差在哪"只能靠人肉记目录名：
 
 | 实体 | 是什么 |
@@ -591,8 +595,8 @@ python -m src.cli.commands lineage compare out_x       # 与**基准**比（自�
 
 | 开关 | 作用 |
 |---|---|
-| `--rtl <dir>` | 拿现成 RTL 当 DUT，**自动跳过 design/model**（验开源 IP 用）；与 spec 互斥 |
-| `--sim-mode {cov,wave,cov+wave,…}` | 仿真业务，**默认 `cov+wave`**（覆盖率是闭环主指标，波形是唯一现场） |
+| `--rtl <dir>` | 拿现成 RTL 当 DUT，**自动跳过 design**（验开源 IP 用）；可与 spec 同时给（spec 继续用于分析与参考模型，RTL 优先做 DUT） |
+| `--sim-mode <mode>` | 仿真业务，可重复（`--sim-mode cov --sim-mode wave`），**默认 `cov+wave`**（覆盖率是闭环主指标，波形是唯一现场） |
 | `--no-manual-gate` | 关掉分级回归的人工节点（loopback 全过也不停车等人放行） |
 | `--approval {interactive,auto,threshold}` | 审批模式；无人值守请显式 `auto` |
 | `--strict-semantic` | 把签核判的 `PASS_WITH_CAVEAT` 当失败（exit 5）—— CI 用 |
@@ -669,7 +673,7 @@ src/
 ├── layers/
 │   ├── l1_infrastructure/         # 零 AI 确定性层：EDA 后端 / 编译自愈 / 覆盖率 / Git / 文件
 │   ├── l2_orchestration/          # 编排
-│   │   ├── graph.py               #   建图（174 行 —— 只回答"节点怎么连起来"）
+│   │   ├── graph.py               #   建图（~220 行 —— 只回答"节点怎么连起来"）
 │   │   ├── runtime.py             #   Runtime / hydrate_runtime / _run_agent
 │   │   ├── routers.py             #   条件边："下一步走哪"只在这里回答
 │   │   ├── nodes/
@@ -678,15 +682,17 @@ src/
 │   │   ├── stages.py              #   24 个节点的元数据（唯一来源）
 │   │   ├── governance/            #   审批 / 治理 / 质量守护 / 策略包
 │   │   ├── evidence/              #   证据链（五层证据 / manifest / 文件审计）
+│   │   ├── regression_tools/      #   回归框架（Questa）+ 仿真业务模式表（sim_modes.py）
 │   │   └── communication/         #   工具总线（ToolHub）
 │   ├── l3_decision/               # 覆盖率驱动决策引擎 + 知识图 + RL
+│   │   └── casemodel/             #   case 建模 + **方法学框架**（framework/）+ 功能覆盖率方法学
 │   ├── l4_memory/                 # 持久化 / IP 库 / 用例状态库 / exclude 库 / 调试经验
 │   └── l5_evolution/              # 经验蒸馏
-├── tools/             # 领域工具（14 个域）+ lib/ 公共库
-│   ├── casemodel_tools/           # case 建模 + **方法学框架**（framework/）+ 功能覆盖率方法学
-│   ├── regression_tools/          # 回归框架（Questa）+ 仿真业务模式表（sim_modes.py）
-│   └── isa_gen_tools/             # NPU ISA 事务序列生成器（见下节）
-├── cli/               # vagent CLI（commands.py / output.py / repl.py）
+├── tools/             # 领域工具：checking / generation / humanview / common …
+│   ├── generation/uvm_tools/      # UVM 渲染与模板
+│   ├── generation/isa_gen_tools/  # NPU ISA 事务序列生成器（见下节）
+│   └── checking/                  # coverage / debug / spec / assertion 工具
+├── cli/               # vagent CLI（commands.py + cmd_*.py 命令组）
 └── workbench/         # PySide6 桌面工作台（可选，不是 Web —— 见 CLAUDE.md）
 config/casemodel/examples/         # case 模型示例（+ `specs/<模块>/casemodel.yaml` 也是合法落点）
 specs/                 # 规格库（apb_uart / apb_slave / **npu_sched**）
@@ -750,9 +756,9 @@ python -m src.tools.generation.isa_gen_tools.cli ops                          # 
 |---|---|---|
 | **测试点 IR 是整条链的主键** | 多数 AI 验证工具停在"生成测试/报告"，没有一条从建模到签核的**可追溯主键** | `tp_id` 贯穿属性 test / 约束 / 回归级 / `tp_matrix` / audit；`methodology.json` 带阶段 + 计数 + IR sha256 |
 | **失败响亮 + 三态签核** | 行业工具擅长报"50x 快"，很少把"没证据"当失败 | `NEEDS_FIX` / `PASS_WITH_CAVEAT` / `READY`；`None ≠ False`；X 记 `unverified`；`mismatched=0` 才算真 pass |
-| **真实 EDA 闭环，不是 demo** | 通用 AI 编程工具进不了 VCS/Questa；多数"Agent 生成 RTL"项目停在生成 | 最新一轮 **259/259** 分级回归、254 条覆盖率库合并、TP 矩阵、`signoff_evidence_v1` 在同一 run 里落地；**计划覆盖率 95.23%，签核 PASS_WITH_CAVEAT** |
+| **真实 EDA 闭环，不是 demo** | 通用 AI 编程工具进不了 VCS/Questa；多数"Agent 生成 RTL"项目停在生成 | 最新一轮 **273/273** 分级回归、267 条覆盖率库合并、TP 矩阵、`signoff_evidence_v1` 在同一 run 里落地；**计划覆盖率 95.23%，签核 PASS_WITH_CAVEAT** |
 | **确定性编排 + 点状 LLM** | 长链路里 LLM 每步自由发挥 = 不可复现；这里只有 design/debug 调 LLM | `call_llm` 唯一漏斗；`docs/llm_audit.jsonl` 记 site/node/round/prompt_hash |
-| **领域深度** | 不是"套个 LLM 壳"：UVM 模板、bind 探针、双采样通道、种子管理、分级回归、约束编译 | `tool_uvm` / `casemodel_tools` / `regression_framework` |
+| **领域深度** | 不是"套个 LLM 壳"：UVM 模板、bind 探针、双采样通道、种子管理、分级回归、约束编译 | `src/tools/generation/uvm_tools` / `src/layers/l3_decision/casemodel` / `regression_framework` |
 | **可扩展框架** | 新增 realization / 阶段 / 约束编译器**核心零改动**，且有测试钉住 | `REALIZATIONS` / `MethodologyPipeline.insert` / `CONSTRAINT_COMPILERS`；`test_framework.py` |
 | **个人级治理** | 巨头服务企业客户，个人/小团队的"可审计签核"是空白 | 项目隔离、token 预算、人工审批、检查点、血缘、证据包 `dump` |
 
@@ -761,11 +767,11 @@ python -m src.tools.generation.isa_gen_tools.cli ops                          # 
 | 劣势 | 具体表现 | 影响 |
 |---|---|---|
 | **观测型覆盖的最后一公里** | 计划覆盖率已 95.23%，但 2 条观测型 TP（`D_dep=WAR` / `D_decision=BLOCKED`）仍 0 命中 | 签核 `PASS_WITH_CAVEAT`（可签、带条件），不是 `READY`；需要补状态到达或模型声明不可达 |
-| **约束只部分生效** | 5/11 条策略有真实赋值；`sequence` 型维度（`D_seq`/`D_pipeline`）没有场景序列生成器；非法交叉未编译 | 随机批次仍可能"打不到该打的状态" |
+| **约束只部分生效** | 6/11 条策略有真实赋值；`sequence` 型维度（`D_seq`/`D_pipeline`）没有场景序列生成器；非法交叉未编译 | 随机批次仍可能"打不到该打的状态" |
 | **参考模型层重构中** | bundled golden 兼容层已恢复（模型相关 17 项已收敛）；SQL `ModelRegistry` 仍只有 draft，缺真实 verified 模型 | 签核会如实挂 `MODEL_UNAVAILABLE`，`reference_model_available=false` |
 | **模型依赖人工** | 高质量 case 模型要人写；front 的草稿弱；spec→model 的桥不健全 | 换一个模块，方法学收益取决于建模质量 |
 | **LLM 作用面窄** | 只有 design/debug 调 LLM；不做 LLM 覆盖率归因（**有意**） | "AI 验证"叙事要收敛成"确定性验证 + 点状 AI" |
-| **规模** | 本地串行回归；244 条 sims 约 14 分钟；单用户；依赖 Questa/license | 不适合大团队/大规模并行；个人级定位要守住 |
+| **规模** | 本地串行回归；273 条 sims 约 15 分钟（实测 877.66 s）；单用户；依赖 Questa/license | 不适合大团队/大规模并行；个人级定位要守住 |
 | **界面** | PySide6 桌面工作台，非 Web；部分页面仍是通用产出视图 | 不是核心卖点，但"可视化"体验会拖后腿 |
 | **竞争** | 三大 EDA 已把 agentic verification 做进原生工具（Questa One / ChipStack / AgentEngineer） | 不能拼"AI 更聪明/覆盖率更快"，只能拼**可复现·可审计·可治理**的签核 |
 
@@ -855,7 +861,7 @@ tests:
 
 - **`{{ PLUSARGS }}` 是唯一注入点**，必须在判据链 `;` 之前；有用户参数却没有占位符 → 生成期报错。
 - `plusargs` 是**整组透传**；旧的“每个 plusarg 一条用例”改名为 `plusarg_matrix`（旧配置会被识别并告警）。
-- 后端保留键由 `src/tools/execution/regression_tools/backend_profiles.py` 的**数据表**维护；命中即 `ConfigError`。
+- 后端保留键由 `src/layers/l2_orchestration/regression_tools/backend_profiles.py` 的**数据表**维护；命中即 `ConfigError`。
 - `plusargs` 里不允许 `{{ SEED }}` —— 种子只从 `seeds` 出。
 - 新增 EDA = 在 `backend_profiles.py` 加一个字典条目（保留键 + `run_cmd_template`），不改框架类。
 
@@ -909,7 +915,7 @@ fifo16 / irq_gen` 的 bundled 模板），磁盘库存在时仍优先。它只�
 原先剩的最后 1 项 `test_sim_modes.py::test_common_base_builds_have_no_tests_declared`
 是 **fixture 过时**（`common_base.yaml` 的 builds 已被注释掉，fixture 仍要求
 include 带出外部 build）；fixture 已改为自带一个 `build_foreign_vcs` 的临时
-include，测试恢复其原意。**这 82 个测试现在全绿。**
+include，测试恢复其原意。**这 82 个测试当时恢复全绿。**
 
 方向仍是**参考模型改为 TLM1.0 + SQL 库**；在库里有真实 `verified` 模型之前，
 签核证据会如实写 `reference_models.available=false` 并挂 `MODEL_UNAVAILABLE`。
@@ -923,7 +929,7 @@ include，测试恢复其原意。**这 82 个测试现在全绿。**
 
 - [x] MCP 工具层断链：`tool_worker.py` 已无 `regression_tool` 引用（ops/coverage 直接调 L1）。
 - [x] `env_arch_check` 无 EDA：返回 `EDA_MISSING`（不再 `[WinError 2]`）。
-- [x] **点状 LLM 收敛到唯一漏斗**：`tools/lib/llm_call.py:call_llm`（token 预算 / 缓存 /
+- [x] **点状 LLM 收敛到唯一漏斗**：`src/tools/common/lib/llm_call.py:call_llm`（token 预算 / 缓存 /
   重试+回退 / 审计一处实现）；可用性探测换成便宜探针（`llm_factory.is_available`），
   **不再为了"能不能用"真发一次请求**。
 - [x] **CLI 的人工审批断链已修**：`verify` 改走 `run_closed_loop_streaming`（落检查点，
@@ -947,29 +953,31 @@ include，测试恢复其原意。**这 82 个测试现在全绿。**
       `async_fifo` 这条历史失败**需要复测**，不再用旧上限当理由。
 - [x] **批次 test 类跑起来了**（原来这条写的是"要等 `vsim` 可用" —— 那是**误判**，
       仿真器一直是好的，`Error loading design` 是设计侧 load 失败）：
-      分级回归五级全 PASS（最新一轮 **249/249**），`npu_basic_test` 真执行
+      分级回归五级全 PASS（最新一轮 **273/273**），`npu_basic_test` 真执行
       （`Errors: 0`、`mismatched=0`、覆盖率落库），用例目录按种子逐条展开，
       `sim.sh` 里 `+UVM_TESTNAME=<批次名> +ntb_random_seed=<base+i-1>`。
-      证据见「一轮完整的端到端实测」那节。
-- [ ] **种子有没有真改变激励分布**没验：种子进了命令行是事实，但"随机化真起作用"
-      要拿各批次的 ucdb 逐 bin 比 —— 前者不等于后者。
+      证据见最新 run 的 `regression_stages.json`（loopback 4/4、p0 52/52、
+      p1 85/85、p2 34/34、p3 98/98）。
+- [x] **种子确实改变激励分布**：最新 `coverage/seed_diversity.json` 判 `DIVERSE`
+      （5 颗种子，稳定 12 bin / 种子敏感 65 bin / 并集 77 bin）—— 不是"种子进了
+      命令行"就算数，而是按 seed 分组合并 UCDB 后逐 bin 比出来的。
 - [x] **批次约束已从 sequence 收回到模型**：`theme_policy_map` 是策略名的**唯一出处**
       （`build_constraint` 的 `policies[].name` 与 `batches[].policy` 同名，实测 11/11
       逐字一致 —— 两份各推一次就会漂，而漂了的表现是"约束没生效但回归全绿"）；
       批次 test 类挂全局 `batch_policy`，协调序列按 `create_from_batch()` 建策略
       （plusargs 保留为回退）。**且已接进 verify**（见上一节）。
 - [x] **约束层已接通并部分生效**：`env/cons/*` 真进编译；批次 test 触发协调序列；
-      `stimulus` 维度编译成 `apply()` 里的真实赋值（NPU：5/11 条）。
-- [ ] **约束仍有一半是骨架**：6/11 条对应观测型维度（没有 `stimulus.field`），
+      `stimulus` 维度编译成 `apply()` 里的真实赋值（NPU：6/11 条）。
+- [ ] **约束仍有一半是骨架**：5/11 条对应观测型维度（没有 `stimulus.field`），
       `sequence` 型维度（`D_seq` / `D_pipeline`）还没有场景序列生成器；非法交叉
       （需要两侧都可驱动）尚未编译成排除约束。
 - [x] **覆盖率硬门禁已过（计划口径）**：签核改用**回归全量用例库合并**的计划覆盖率，
-      最新一轮 **95.23% ≥ 95%**（254 条用例库）；单条 coverage test 的 68.57% 不再
-      作为签核数字。可激励 TP 26/26 命中、backdoor TP 10/10 到位。
+      最新一轮 **95.23% ≥ 95%**（267 条用例库）；单条 coverage test 的 69.52% 不再
+      作为签核数字。可激励 TP 37/37 命中、backdoor TP 10/10 到位。
 - [ ] **观测型仍有两个缺口**：`D_dep=WAR`、`D_decision=BLOCKED` 在计划覆盖率里 0 命中，
       证据包标为 `SUSPECT`；需要补状态到达手段，或在模型里显式声明不可达/降级分母。
-- [ ] **种子多样性未验**：证据包 `seed_diversity: null` —— 需要逐 bin 比对同一批次
-      不同种子的命中集合，才能把"可复现"从"种子进了命令行"升级为"分布真的不同"。
+- [x] **种子多样性已进证据包**：`coverage/seed_diversity.json` 按 seed 分组合并
+      UCDB 后逐 bin 比较，三态如实记录（未分析才是 `null`，不是"没差异"）。
 
 ---
 
@@ -1018,9 +1026,9 @@ include，测试恢复其原意。**这 82 个测试现在全绿。**
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q                            # 963 passed / 2 skipped；已知 18 项基线失败已全部收敛
-python -m pytest src/workbench/tests -q               # 工作台：713 passed
-python -m pytest src/layers/l3_decision/casemodel/tests -q   # case 建模 + 框架 + 覆盖率方法学：509 passed
+python -m pytest tests/ -q                            # 2026-11-05：1352 passed / 26 failed / 2 skipped
+python -m pytest src/workbench/tests -q               # 工作台：758 项（需要 PySide6）
+python -m pytest src/layers/l3_decision/casemodel/tests -q   # case 建模 + 框架 + 覆盖率方法学：560 passed
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
 ```
 
@@ -1035,18 +1043,20 @@ python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：
 | `tests/test_checkpoint.py` | 检查点 + `Command(resume=…)` 重入；**CLI 的 `approve`/`resume` 真把图推下去**（拿 journal 里出现 `run.finished` 当判据，不是"文件写没写"） |
 | `tests/test_manifest.py` | 覆盖率库 / 波形**带哈希进证据包**（不是文件表里的一行匿名记录）；相对 `output_root` 不许把路径拼两次 |
 | `tests/test_ref_model_wiring.py` | predictor **不是空壳** —— 且**走真生成器**（直接喂 ctx 的测试测不到"生成器把键丢了"） |
-| `casemodel_tools/tests/test_coverage.py` | 生成的 SV **真调 `vlog` 编译**（合成模型的断言挡不住 `bins b_ = {0};` 这类非法标识符） |
-| `casemodel_tools/tests/test_framework.py` | 阶段依赖前置报错、注册表扩展（新增 realization/constraint **不改核心**）、manifest 哈希与实际落盘文件一致 |
+| `src/layers/l3_decision/casemodel/tests/test_coverage.py` | 生成的 SV **真调 `vlog` 编译**（合成模型的断言挡不住 `bins b_ = {0};` 这类非法标识符） |
+| `src/layers/l3_decision/casemodel/tests/test_framework.py` | 阶段依赖前置报错、注册表扩展（新增 realization/constraint **不改核心**）、manifest 哈希与实际落盘文件一致 |
 | `tests/test_stage_filtered_generation.py` | 分级回归只生成**本级 tag** 的用例目录；非分级调用保持全量树 |
 | `tests/test_coverage_coverstore.py` | `questa.db`（coverstore）必须走 `vcover merge "<store>:<test>"`，否则功能覆盖率静默丢失；`(null).data` 走无 test 名的形式 |
 | `tests/test_audit_evidence.py` | `signoff_evidence_v1`：RTL/IR 哈希、计划覆盖率口径；`seed_diversity` 三态（没分析才 `null`）；不可达只标 `SUSPECT` |
 | `tests/test_audit_evidence.py` + `signoff_package` 冒烟 | v2：目录布局、逐文件 sha256、`package_hash`、离线 `replay.py`、双环境 `compare` |
-| `casemodel_tools/tests/test_plan.py::TestBackdoorRealization` | backdoor 维度带 `path`、不进 `observe`；缺 path 回退并记账 |
+| `src/layers/l3_decision/casemodel/tests/test_plan.py::TestBackdoorRealization` | backdoor 维度带 `path`、不进 `observe`；缺 path 回退并记账 |
 
-**"跑测试"在这里的定位**：已知的 18 项基线失败已全部收敛 —— 模型相关 17 项
-由 bundled golden 兼容层修复，`test_sim_modes` 的 1 项是 fixture 过时（已改为
-自带外部 build 的临时 include）。守卫型测试的价值不在通过率，而在
-**把本次踩过的坑固化成断言** —— 每一条失败信息里都写着"当时是怎么错的"。
+**"跑测试"在这里的定位**：计数会随迁移漂动，README 不把它写成"永远全绿"。
+最近一次实测（2026-11-05）：主测试集 **1352 passed / 26 failed / 2 skipped**。
+26 项失败集中在分层迁移后尚未同步的契约测试（工具板路径、case 追溯、
+收敛/签核期望值），不是 EDA 缺失导致的假失败；这 26 条本身就是待收敛清单。
+守卫型测试的价值不在通过率，而在**把本次踩过的坑固化成断言** ——
+每一条失败信息里都写着"当时是怎么错的"。
 
 ---
 
@@ -1062,7 +1072,8 @@ python scripts\eda_verify_all.py
 
 Python 3.10–3.12 · **langchain-core 1.6.6 + langchain-openai 1.6.7 + langgraph 1.2.12**
 （不再依赖 `langchain` 元包与 `langchain-community`）·
-QuestaSim（可选，编译仿真+覆盖率；缺失时失败响亮）· DeepSeek API key（可选）·
+QuestaSim（可选，编译仿真+覆盖率；缺失时失败响亮）· LLM API key（可选；
+支持 DeepSeek / Anthropic / 兼容 OpenAI 协议的自定义端点，见 `.env.example`）·
 PySide6（可选，仅工作台需要）
 
 **关于 EDA 工具的可用性探测**：`vlog` 不需要 license、`vsim` 需要 —— 所以"工具在不在"
@@ -1073,31 +1084,48 @@ PySide6（可选，仅工作台需要）
 | `vlog` / `vsim` 在不在 PATH | `shutil.which` | `EDA_MISSING` / `BLOCKED_EDA_MISSING`，**不进入假通过路径** |
 | LLM 能不能用 | `llm_factory.is_available`（**静态**探针，不发请求） | 确定性/模板路径，LLM 环节如实失败 |
 
+---
 
-不是“多用户并发请求”，也不是说你不该做性能优化。这句话拆开是两层意思，我上一轮说得太压缩了。
+## 产品定位：不拼什么，拼什么
 
-## “不拼 AI 聪明度”
+### 不拼 AI 聪明度
 
-指的是：**不去比“谁的 LLM 更会写 RTL、更会归因覆盖率缺口、更会自主决策”。**
+不比较“谁的 LLM 更会写 RTL、更会归因覆盖率缺口、更会自主决策”。
 
-巨头的路线是让 agent 越来越自主——Cadence ChipStack 号称 Level-5 自主性，目标是“你给个自然语言需求，它自己把验证跑完”。它们的护城河是：模型 + 海量内部验证数据 + 与自家 EDA 的深度耦合。你如果也往“让 LLM 更聪明地自主决策”使劲，是在它们的优势战场上用你的短板打。
+巨头的路线是让 agent 越来越自主 —— Cadence ChipStack 宣称 Level-5 自主性，
+目标是“给一段自然语言需求，自己把验证跑完”。它们的护城河是模型 + 海量内部
+验证数据 + 与自家 EDA 的深度耦合；在这条路上拼“更自主”，是用短板打优势。
 
-而你的项目恰恰是**反着设计的**——文档原话：“流程、决策、工具选择都是确定性的，LLM 只在‘该写一段代码/该给一个判断’的那个点上被叫一次”。8 个执行器里只有 `design` 和 `debug` 调 LLM，决策硬动作永远走规则，RL 只做降级建议不拍板。
+SignOffAI 是**反着设计**的：流程、决策、工具选择都是确定性的，LLM 只在
+“该写一段代码 / 该给一个判断”的点上被叫一次。8 个执行器里只有 `design` 与
+`debug` 调 LLM；决策硬动作永远走规则，RL 只做降级建议、不拍板。
 
-**这不是能力不足的妥协，是刻意的产品选择。** 你的卖点是“可复现”——同一个 spec 跑两遍结果一样。LLM 每步自由发挥的长链路是不可复现的。所以“不拼聪明度”= 别把确定性编排改成“更多 LLM 自主”，那会毁掉你唯一稀缺的东西。
+**这不是能力不足的妥协，而是刻意的产品选择。** 卖点是“可复现” —— 同一个 spec
+跑两遍结果一样；LLM 每步自由发挥的长链路不可复现。把确定性编排换成“更多 LLM
+自主”，会毁掉这条链路最稀缺的性质。
 
-## “不拼吞吐量”
+### 不拼吞吐量
 
-指的也不是“不做并发”。**个人级 CLI 根本不存在“多用户并发请求”这个问题**——一次就一个用户在本地跑，没有服务端、没有多租户。这跟商用 SaaS 的并发是两回事。
+也不是“不做并发”。个人级 CLI 不存在多用户并发请求：一次一个用户在本地跑，
+没有服务端、没有多租户 —— 与商用 SaaS 的并发是两回事。
 
-我说“不拼吞吐量”，针对的是巨头叙事里的**规模指标**：比如 Cadence 宣传的“40x 验证加速”“五周压到一天”，那是靠 Xcelium 大规模并行 + 云资源堆出来的。你要去比“谁能更快跑完一万条回归”，比的是机器和 license，不是你的代码。
+这里针对的是巨头叙事里的**规模指标**：Cadence 宣传的“40x 验证加速”“五周压到
+一天”，靠的是 Xcelium 大规模并行 + 云资源。去比“谁能更快跑完一万条回归”，
+比的是机器和 license，不是代码。
 
-但这**不等于**我反对你做性能优化。上一轮我明确提了两条：同 build 的 sims 合并成一次 `vsim` 会话、`vsim -batch` 按核数并行。244 条串行 14 分钟压到 3-5 分钟，这完全该做，而且不破坏个人级定位。**“个人级”不等于“串行低效”，这个我同意你。**
+但这不等于反对性能优化。值得做的是：同 build 的 sims 合并成一次 `vsim` 会话、
+`vsim -batch` 按核数并行 —— 当前 273 条串行约 15 分钟，压到 3–5 分钟不破坏
+个人级定位。**“个人级”不等于“串行低效”。**
 
-区别在于：优化是**为了你自己的闭环转得更快**（跑更多轮、更快看到覆盖率轨迹），不是为了**在“吞吐量”这个指标上跟巨头比高低**。前者是工具体验，后者是军备竞赛。
+区别在于：优化是为了让本地闭环转得更快（跑更多轮、更快看到覆盖率轨迹），
+而不是在“吞吐量”指标上跟巨头比高低。前者是工具体验，后者是军备竞赛。
 
-## 那到底拼什么
+### 那到底拼什么
 
-拼**“同一个 run 的证据，半年后别人能逐条验证”**。这个维度上，快 40 倍没用——你跑得再快，如果 `sim_vsim.log` 不存在被记成 pass、ucdb 落了 4360 个 bin 零命中还报绿，快就是负资产。
+拼**“同一个 run 的证据，半年后别人能逐条验证”**。这个维度上，快 40 倍没用 ——
+如果 `sim_vsim.log` 不存在被记成 pass、ucdb 落了 4360 个 bin 零命中还报绿，
+快就是负资产。
 
-所以那句话的完整意思是：**把工程精力放在“证据链的完整性和诚实度”上，而不是放在“让 agent 更自主”和“跑得更快更多”上。** 后者你赢不了，也不需要赢；前者巨头不做，因为它们的客户有流程和签字兜底，而你的客户（个人、小团队）没有，只能靠工具本身诚实。
+一句话：把工程精力放在**证据链的完整性和诚实度**上，而不是“让 agent 更自主”和
+“跑得更快更多”。后者赢不了，也不需要赢；前者巨头不做 —— 它们的客户有流程和
+签字兜底，而个人/小团队没有，只能靠工具本身诚实。

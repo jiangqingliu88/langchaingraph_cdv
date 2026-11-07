@@ -15,7 +15,8 @@ import pytest
 
 from src.layers.l2_orchestration import execution as execution_mod
 from src.layers.l2_orchestration import graph as graph_mod
-from src.layers.l2_orchestration.execution import PipelineExecutionService, _result_of
+from src.layers.l2_orchestration.execution import PipelineExecutionService
+from src.layers.l2_orchestration.execution_helpers import _result_of
 from src.layers.l2_orchestration.run_journal import read_journal
 from src.layers.l2_orchestration.state import PipelineState
 
@@ -227,7 +228,7 @@ class TestApprovalWiring:
     """审批的两端要进日志 —— 签核时要能回答"谁批的、什么时候问的"。"""
 
     def test_request_and_decision_land_in_the_journal(self, tmp_path, monkeypatch):
-        from src.layers.l2_orchestration.execution import _wire_approval_events
+        from src.layers.l2_orchestration.execution_helpers import _wire_approval_events
         from src.layers.l2_orchestration.governance.approval import (
             ApprovalDecision, ApprovalGate, ApprovalMode,
         )
@@ -257,7 +258,7 @@ class TestApprovalWiring:
         assert {e.kind for e in emitted} >= {"approval.requested", "approval.decided"}
 
     def test_an_existing_observer_is_chained_not_replaced(self, tmp_path):
-        from src.layers.l2_orchestration.execution import _wire_approval_events
+        from src.layers.l2_orchestration.execution_helpers import _wire_approval_events
         from src.layers.l2_orchestration.governance.approval import (
             ApprovalGate, ApprovalMode,
         )

@@ -16,9 +16,8 @@ from __future__ import annotations
 import pytest
 
 from src.layers.l2_orchestration import graph as graph_mod
-from src.layers.l2_orchestration.execution import (
-    CHECKPOINT_FILE, PipelineExecutionService, _state_of,
-)
+from src.layers.l2_orchestration.execution import PipelineExecutionService
+from src.layers.l2_orchestration.execution_helpers import CHECKPOINT_FILE, _state_of
 from src.layers.l2_orchestration.run_service import RunRequest, RunService
 from src.layers.l2_orchestration.run_journal import (
     KIND_RUN_FINISHED, KIND_RUN_INTERRUPTED, KIND_RUN_RESUMED, RunEvent,
