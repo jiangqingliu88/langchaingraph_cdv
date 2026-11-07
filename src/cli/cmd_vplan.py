@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 import click
+import yaml
 
 from src.cli.commands import cli, console
 
@@ -179,6 +180,31 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run, json_output):
     finally:
         import shutil
         shutil.rmtree(work, ignore_errors=True)
+
+    # 把 C-* ↔ TP ↔ case 的 sidecar 写进**实际 run**，供后续 gate/审计回查。
+    if isinstance(result, dict) and result.get("output_root"):
+        from src.core.runtime.atomic import atomic_write_json, atomic_write_text
+        from src.layers.l3_decision.vplan.build import build_contract_link
+
+        run_root = Path(str(result["output_root"]))
+        (run_root / "contract").mkdir(parents=True, exist_ok=True)
+        (run_root / "docs").mkdir(parents=True, exist_ok=True)
+        atomic_write_text(
+            run_root / "contract" / "plan_link.yaml",
+            yaml.safe_dump(build_contract_link(proj),
+                           allow_unicode=True, sort_keys=False))
+        atomic_write_json(run_root / "docs" / "vplan_source.json", {
+            "schema": "vplan_source_v1",
+            "project_root": str(proj.root),
+            "module": proj.module,
+            "dut": proj.dut,
+            "spec_hash": proj.spec_hash,
+            "contracts_by_status": proj.status_counts,
+            "testpoints_by_status": proj.tp_status_counts,
+            "cases_by_status": proj.case_status_counts,
+            "execution": "RUN",
+        })
+        summary["run"] = str(run_root)
 
     summary["result"] = result if isinstance(result, dict) else str(result)
     if json_output:

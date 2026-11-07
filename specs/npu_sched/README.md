@@ -87,8 +87,10 @@ vagent vplan execute specs/npu_sched -o output_vplan_npu_sched \
   --max-rounds 1 --sim-mode cov
 ```
 
-执行跑完会产出真实的 UVM/回归/覆盖率证据；但契约/TP/case 状态**仍不会自动
-升级** —— 必须先由 gate 依据证据推进，否则保持 `assume` / `planned`。
+执行跑完会产出真实的 UVM/回归/覆盖率证据；run 里会写
+`contract/plan_link.yaml`（C-* ↔ TP ↔ case）与 `docs/vplan_source.json`。
+但契约/TP/case 状态**仍不会自动升级** —— 必须先由 gate 依据证据推进，
+否则保持 `assume` / `planned`。
 
 ## 当前内容
 
