@@ -141,11 +141,17 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
         "coverage/foo_cov_if.sv": "interface foo_cov_if; endinterface\n",
         "env/tests/foo_test.sv": "class foo_test; endclass\n",
         "env/rtl_sc/foo_scb.sv": "class foo_scb; endclass\n",
+        "bench/foo_tb_top.sv": "module foo_tb_top; endmodule\n",
+        "agents/foo/loopback/foo_loopback_scb.sv": "class foo_loopback_scb; endclass\n",
     }
     for rel, text in files.items():
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+    (tmp_path / "inputs" / "filelists").mkdir(parents=True)
+    (tmp_path / "inputs" / "filelists" / "filelist.f").write_text(
+        "agents/foo/1_interface/foo_if.sv\nenv/foo_env.sv\n"
+        "bench/foo_tb_top.sv\n", encoding="utf-8")
     (tmp_path / "coverage" / "case_ir.json").write_text(
         '{"schema": "case_ir_v1", "cases": [{"id": "TC_FOO", '
         '"tests": ["foo_test"], "feats": ["C-FUNC-UNIT-001"], '
@@ -153,22 +159,29 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
         encoding="utf-8")
 
     summary = package_run_assets(tmp_path, "foo")
-    assert summary["copied"] == 7
+    assert summary["copied"] == 9
     assert (tmp_path / "sv" / "interface" / "foo_if.sv").is_file()
     assert (tmp_path / "sv" / "agents" / "foo" / "foo_driver.sv").is_file()
     assert (tmp_path / "sv" / "env" / "foo_env.sv").is_file()
     assert (tmp_path / "sv" / "coverage" / "foo_cov.sv").is_file()
     assert (tmp_path / "sv" / "interface" / "foo_cov_if.sv").is_file()
     assert (tmp_path / "sv" / "test" / "foo_test.sv").is_file()
-    assert (tmp_path / "sv" / "scb" / "foo_scb.sv").is_file()
+    assert (tmp_path / "sv" / "scbs" / "foo_scb.sv").is_file()
+    assert (tmp_path / "sv" / "tb" / "hdl_top.sv").is_file()
+    assert (tmp_path / "sv" / "scbs" / "foo_loopback_scb.sv").is_file()
     text = (tmp_path / "sv" / "interface" / "foo_if.sv").read_text(
         encoding="utf-8")
     assert "// ARTIFACT: foo_if" in text
-    scb = (tmp_path / "sv" / "scb" / "foo_scb.sv").read_text(encoding="utf-8")
+    scb = (tmp_path / "sv" / "scbs" / "foo_scb.sv").read_text(encoding="utf-8")
     assert "// CONTRACT_REFS: C-FUNC-UNIT-001" in scb
     test = (tmp_path / "sv" / "test" / "foo_test.sv").read_text(encoding="utf-8")
     assert "// CASE_ID: TC_FOO" in test
-    assert len(scan_assets(tmp_path)) == 7
+    hdl = (tmp_path / "sv" / "vc" / "hdl_files.f").read_text(encoding="utf-8")
+    hvl = (tmp_path / "sv" / "vc" / "hvl_files.f").read_text(encoding="utf-8")
+    assert "sv/interface/foo_if.sv" in hdl
+    assert "sv/tb/hdl_top.sv" in hdl
+    assert "sv/env/foo_env.sv" in hvl
+    assert len(scan_assets(tmp_path)) == 9
 
 
 def test_evidence_gate_requires_tp_regression_and_asset(tmp_path):

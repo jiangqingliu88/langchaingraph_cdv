@@ -608,7 +608,7 @@ vagent vplan gate specs/npu_sched [--apply]
 `vplan execute` 是执行层入口：用 `rtl/` + `data/execution_model.yaml`（维度/字段/
 断言/SCB）+ `cases/TC_*.yaml` 派生运行期 casemodel，再走现有 verify 内核跑
 UVM/回归/覆盖率。验证资产由内核生成，`vplan package-assets` 再按 VPlan 的
-`sv/{interface,agents,monitor,coverage,scb,seq,test,env}` 布局整理并登记锚点；
+`sv/{interface,agents,env,seq,test,tb,vc,checkers,scbs,svas,coverage}` 布局整理并登记锚点；
 **不在 `specs/` 里手写 SV**（布局规范见
 `specs/npu_sched/docs/appendix/X01_asset_layout.md`）。执行跑完仍不会自动把
 `assume` 升成 `active` —— 状态推进必须由 gate 依据真实证据完成。

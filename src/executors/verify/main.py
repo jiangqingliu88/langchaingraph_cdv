@@ -1,7 +1,6 @@
 """验证开发智能体 —— UVM环境 + 测试用例 + 断言（真实工具链）"""
 from typing import Dict, Any, List, Optional
 import json
-import os
 import re
 from pathlib import Path
 
@@ -13,29 +12,10 @@ from src.executors.verify.ir_artifacts import (
     write_contract_build,
 )
 from src.executors.verify.dut_checker import build_dut_checker
+from src.executors.verify.steps.vplan_layout import package_vplan_assets
 import structlog
 
 logger = structlog.get_logger()
-
-
-def _package_vplan_assets(output_dir: Path, module_name: str) -> None:
-    """生成期 VPlan 布局：把本次生成的 UVM 资产同时落 `<run>/sv/...`。
-
-    顶层 agents/env/bench 仍是内核工作路径；sv/ 是同一批文件的 VPlan 视图。
-    只在 `SIGNOFFAI_UVM_LAYOUT=vplan` 时启用；失败不拦主流程。
-    """
-    if os.environ.get("SIGNOFFAI_UVM_LAYOUT", "").strip().lower() != "vplan":
-        return
-    try:
-        from src.layers.l3_decision.vplan import package_run_assets
-
-        summary = package_run_assets(output_dir, module_name)
-        logger.info(
-            f"UVM 资产 VPlan sv/：{summary['assets']} 个"
-            f"（复制 {summary['copied']} / 跳过 {summary['skipped']}）")
-    except Exception as e:                           # noqa: BLE001 旁路，别拦主流程
-        logger.warning(f"UVM 资产 sv/ 布局失败: {e}")
-
 
 
 from src.executors.verify.steps.helpers import (  # noqa: E402
@@ -335,7 +315,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         # 否则它会立刻重新变成一片噪音。
         logger.info("断言：本轮不生成 SVA（已撤）—— 规则由 env 检查组件逐拍求值收口")
 
-        _package_vplan_assets(output_dir, module_name)
+        package_vplan_assets(output_dir, module_name)
         tests_data = {
             "module": module_name,
             "env_files": len(files),

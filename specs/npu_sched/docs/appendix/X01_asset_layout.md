@@ -9,46 +9,27 @@
 ```text
 <run>/sv/
 ├── README.md
-├── cmdsched_pkg.sv                      # package 聚合
 ├── interface/
-│   ├── cmdsched_if.sv
-│   ├── cmdsched_if_v2.sv
-│   └── bind/
-│       ├── bind_sva_handshake.sv
-│       ├── bind_sva_start_done.sv
-│       ├── bind_sva_int.sv
-│       └── bind_sva_lp.sv
-├── agents/                              # 接口 agent，自包含
-│   ├── cmdsched_cmd_agent/
-│   │   ├── cmdsched_cmd_agent.sv
-│   │   ├── cmdsched_cmd_driver.sv
-│   │   ├── cmdsched_cmd_sequencer.sv
-│   │   ├── cmdsched_cmd_monitor.sv
-│   │   └── cmdsched_cmd_adapter.sv
-│   ├── cmdsched_rsp_agent/
-│   ├── cmdsched_mst_agent/
-│   ├── cmdsched_mem_agent/
-│   ├── cmdsched_int_agent/
-│   └── cmdsched_csr_agent/
-├── monitor/                             # 内部观测 monitor，env 所有
-│   ├── cmdsched_monitor_base.sv
-│   ├── cmdsched_decode_monitor.sv
-│   ├── cmdsched_scoreboard_monitor.sv
-│   ├── cmdsched_sp_inst_monitor.sv
-│   └── cmdsched_int_perf_monitor.sv
-├── coverage/
-│   ├── cmdsched_coverage.sv
-│   ├── cmdsched_cov_pkg.sv
-│   └── cmdsched_cov_cfg.sv
-├── sva/                                 # 时序断言
-├── checker/                             # 静态规则/编码检查
-├── scb/                                 # 独立参考模型比对
-├── seq/                                 # 场景序列
-├── test/                                # UVM test
-└── env/
-    ├── cmdsched_env.sv
-    └── cmdsched_env_cfg.sv
+│   └── bind/                            # SVA bind（生成器产出时）
+├── agents/<agent>/                      # 自包含接口 agent（全部 .sv 平铺）
+├── env/                                 # env + clock/reset + loopback env
+├── seq/                                 # sequences / constraints
+├── test/                                # UVM tests
+├── tb/                                  # 顶层 testbench
+│   ├── hdl_top.sv                       #   由 bench/*_tb_top.sv 映射
+│   └── hvl_top.sv                       #   预留（内核当前只产单 tb_top）
+├── vc/                                  # 编译清单
+│   ├── hdl_files.f
+│   └── hvl_files.f
+├── checkers/                            # 静态规则/编码检查
+├── scbs/                                # scoreboard / reference model
+├── svas/                                # 时序断言
+└── coverage/                            # CG/CP/cross（生成器产出时）
 ```
+
+`cmdsched_pkg.sv` / `monitor/` 等不在生成器当前产物里的目录**不伪造**：
+有文件才落，没有就空着。内核目前只产**单个** `bench/*_tb_top.sv`，映射为
+`tb/hdl_top.sv`；`hvl_top.sv` 保留为空占位，等将来拆分 HVL top 再填。
 
 ## 2. 锚点规则
 

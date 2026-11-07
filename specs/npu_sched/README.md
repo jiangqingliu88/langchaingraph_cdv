@@ -102,7 +102,7 @@ vagent vplan execute specs/npu_sched -o output_vplan_npu_sched \
 
 ```bash
 vagent vplan package-assets <run>
-# → <run>/sv/{interface,agents,monitor,coverage,sva,checker,scb,seq,test,env}
+# → <run>/sv/{interface,agents,env,seq,test,tb,vc,checkers,scbs,svas,coverage}
 # → <run>/sv/asset_registry.csv（全部 candidate，未编译/无证据）
 
 # 清理内核顶层工作目录，只保留 sv/（默认 dry-run）
@@ -113,6 +113,9 @@ vagent vplan clean-layout <run> --apply
 vagent vplan link specs/npu_sched <run>
 vagent vplan gate specs/npu_sched [--apply]
 ```
+
+`tb/` 放 bench 顶层（`hdl_top.sv`），`vc/` 生成 `hdl_files.f` / `hvl_files.f`
+编译清单；`checkers/scbs/svas` 只放实际生成的文件，不伪造空壳。
 
 ## 当前内容
 
