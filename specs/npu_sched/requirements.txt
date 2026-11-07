@@ -1,0 +1,12 @@
+# CMD_SCH spec-first plan - no third-party runtime dependencies.
+# Requires Python >= 3.10 (verified on 3.11).
+#
+# venv setup:
+#   python -m venv .venv
+#   source .venv/Scripts/activate      # Windows Git Bash
+#   # .\.venv\Scripts\Activate.ps1     # Windows PowerShell
+#   # source .venv/bin/activate        # Linux / macOS
+#   python -m pip install -r requirements.txt
+#
+# The target plan generator, spec trace lint and placeholder case view use
+# only the Python standard library.

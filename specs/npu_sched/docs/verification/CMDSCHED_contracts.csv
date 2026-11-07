@@ -1,0 +1,43 @@
+﻿contract_id,category,content,check_method,gate,spec_ref,status
+C-IF-HS-001,接口,cmd valid/ready 握手，反压保持 payload,SVA,契约测试,1.3-5,已转 assume
+C-IF-HS-002,接口,rsp valid/ready 握手，反压保持 data/tag,SVA,契约测试,4,已转 assume
+C-IF-START-001,接口,start 最多两拍且 inst_id 不同，cfg 仅 start 当拍,SVA,契约测试,4,已转 assume
+C-IF-DONE-001,接口,done/rls inst_id 匹配，rls 在 done 前/同拍,SVA,契约测试,4,已转 assume
+C-FUNC-UNIT-001,功能,各组件信息配置和启动正确,SCB+SVA,回归,4,已转 assume
+C-FUNC-UNIT-002,功能,NIU load/store 并行,SCB+SVA,回归,4,已转 assume
+C-FUNC-UNIT-003,功能,GLSU load/store 并行,SCB+SVA,回归,4,已转 assume
+C-FUNC-UNIT-004,功能,同组件第三条指令被阻塞,SCB+SVA,回归,1.3-6,已转 assume
+C-FUNC-UNIT-005,功能,2~5 组件并行执行,SCB+SVA,回归,4,已转 assume
+C-FUNC-DEP-002,功能,sync 与所有组件 SHazard,SCB+SVA,回归,4,已转 assume
+C-FUNC-DEP-003,功能,wr/rd_lmem 与 LLSU SHazard,SCB+SVA,回归,4,已转 assume
+C-FUNC-DEP-004,功能,noc_fence 与后续 noc SHazard,SCB+SVA,回归,1.3-6,已转 assume
+C-FUNC-DEP-006,功能,2~5 组件 RAW/WAW/WAR 正确阻塞,SCB+SVA,回归,4,已转 assume
+C-FUNC-ISSUE-001,功能,乱序发射窗口 ISTB_DP,SCB+SVA,回归,1.3-7,已转 assume
+C-FUNC-RSP-001,功能,四类返回类型正确,SCB+SVA,回归,4,已转 assume
+C-FUNC-RSP-002,功能,多 xd=1 按 tag 乱序返回,SCB+SVA,回归,1.3-8,已转 assume
+C-FUNC-RSP-003,功能,rd_lmem 读回数据正确,SCB,回归,4,已转 assume
+C-DATA-TAG-001,数据,多 xd=1 按 tag 端到端匹配,SCB+SVA,回归,1.3-8,已转 assume
+C-DATA-RMW-001,数据,wr_lmem RMW 原子性,SCB+SVA,回归,4,已转 assume
+C-DATA-SYNC-001,数据,sync/noc_fence 返回 32'h1,SCB,回归,4,已转 assume
+C-DATA-VS-001,数据,V_S 返回 scalar 数据正确,SCB,回归,4,已转 assume
+C-PERF-TMU-001,性能,GLSU/LLSU TMU 竞争，GLSU 优先,SCB+SVA,回归,1.3-10,已转 assume
+C-PERF-PRIO-001,性能,rsp_fifo 优先级 scalar>lmem>fence>sync,SCB+SVA,回归,4,已转 assume
+C-PERF-PARAL-001,性能,并行度统计与 monitor 一致,SCB,回归,10.1,已转 assume
+C-PERF-START-DONE-001,时序,start 到 done 延迟不超过 N 拍,timeout+SVA,回归,9,已转 assume
+C-CFG-CSR-001,配置,creg_cmd_icg_en 32bit 默认值正确,Checker,契约测试,1.3-1,已转 assume
+C-CFG-CIMC-001,配置,CIMC 仅 2x2，1x4 删除,Checker,回归,1.3-2,已转 assume
+C-CFG-TILE-RLS-001,配置,tile_rls_en all/part/off 行为正确,Checker,回归,1.3-9,已转 assume
+C-CFG-SPAD-EXCL-001,配置,spad_excl_en 默认非独占,Checker,契约测试,3,已转 assume
+C-RES-TILE-001,资源,SPAD tile 占用最终释放不泄漏,res_model_scb,回归,1.3-9,已转 assume
+C-RES-PAGE-001,资源,CIMC page 占用释放不越界,res_model_scb,回归,4,已转 assume
+C-RES-DRAM-001,资源,DRAM 整块占用释放,res_model_scb,回归,1.3-13,已转 assume
+C-RES-SPAD-001,资源,多组件共享 SPAD tile 不重叠,res_model_scb+SVA,回归,1.3-4,已转 assume
+C-RES-RLS-001,资源,rls_vld 在 done 前/同拍，提前释放正确,SVA,回归,1.3-12,已转 assume
+C-EXC-ILLEGAL-001,异常,非法编码/rd_csr/reserved 触发 cmd_int[0],Checker+SCB,回归,1.3-1,已转 assume
+C-EXC-ADDR-001,异常,读写非 SPAD 地址触发 cmd_int[0],Checker,回归,8,已转 assume
+C-EXC-INT-001,异常,首次中断保存 inst0/inst1 现场，后续不覆盖,SCB,回归,8,已转 assume
+C-EXC-CLEAR-001,异常,中断 reset/wr1 清除，清除后恢复,SVA+SCB,回归,8,已转 assume
+C-EXC-BLOCK-001,异常,block_en=1 停止收发，=0 继续,SVA+Checker,回归,8,已转 assume
+C-DBG-REG-001,可观测,debug0/1/2 与 monitor 统计一致,debug_scb,回归,10.1,已转 assume
+C-LP-IDLE-001,低功耗,无指令 IDLE 无时钟，指令下发开时钟,SVA+Checker,回归,6.1,已转 assume
+C-LP-RST-001,低功耗,复位期间输出无效，复位后 CSR 默认值正确,SVA+Checker,契约测试,6.1,已转 assume

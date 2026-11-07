@@ -1,0 +1,13 @@
+﻿case_id,test_name,batch,contract_ids,covergroups,checks,owner,status,notes
+TC_CMDSCHED_BASIC_001,cmdsched_basic_test,1,C-IF-HS-001|C-IF-START-001|C-IF-DONE-001|C-FUNC-UNIT-001,CG_CMDSCHED_ITYPE|CG_CMDSCHED_UNIT,sva_if_hs|cfg_scb|start_done_sva,dv_cmd,planned,基础配置/启动/握手
+TC_CMDSCHED_ITYPE_001,cmdsched_instype_test,2,C-FUNC-UNIT-001|C-EXC-ILLEGAL-001|C-CFG-CIMC-001,CG_CMDSCHED_ITYPE,decode_checker|exc_checker,dv_func,planned,指令类型/精度/编码
+TC_CMDSCHED_INSTB_001,cmdsched_instb_test,3,C-FUNC-ISSUE-001|C-IF-HS-001,CG_CMDSCHED_INSTB|CG_CMDSCHED_ISSUE,issue_scb|buffer_sva,dv_func,planned,ins_buffer/乱序发射
+TC_CMDSCHED_DEP_001,cmdsched_dep_test,4,C-FUNC-DEP-002|C-FUNC-DEP-003|C-FUNC-DEP-004|C-FUNC-DEP-006|C-DATA-SYNC-001,CG_CMDSCHED_DEP|CG_CMDSCHED_ISSUE,hazard_scb|hazard_sva|sync_scb,dv_func,planned,SHazard/DHazard/依赖链
+TC_CMDSCHED_HAZARD_001,cmdsched_hazard_scope_test,5,C-FUNC-UNIT-004|C-FUNC-UNIT-005|C-FUNC-DEP-006,CG_CMDSCHED_DEP|CG_CMDSCHED_UNIT,unit_scb|hazard_scb,dv_func,planned,2~5 组件/第三条指令阻塞
+TC_CMDSCHED_PARALLEL_001,cmdsched_parallel_test,6,C-FUNC-UNIT-002|C-FUNC-UNIT-003|C-FUNC-UNIT-005|C-PERF-TMU-001,CG_CMDSCHED_UNIT,unit_scb|tmu_arb_sva,dv_func,planned,并行/TMU 竞争
+TC_CMDSCHED_MEM_001,cmdsched_mem_test,7,C-RES-TILE-001|C-RES-PAGE-001|C-RES-DRAM-001|C-RES-SPAD-001|C-RES-RLS-001|C-CFG-TILE-RLS-001,CG_CMDSCHED_MEM,res_model_scb|tile_sva,dv_res,planned,tile/page/dram/共享 SPAD/释放
+TC_CMDSCHED_RSP_001,cmdsched_rsp_test,8,C-IF-HS-002|C-FUNC-RSP-001|C-FUNC-RSP-002|C-FUNC-RSP-003|C-DATA-TAG-001|C-DATA-RMW-001|C-DATA-VS-001|C-PERF-PRIO-001,CG_CMDSCHED_RSP,rsp_scb|tag_checker|prio_scb,dv_func,planned,xd=1/优先级/反压/RMW
+TC_CMDSCHED_EXCP_001,cmdsched_excp_perf_test,9,C-EXC-ILLEGAL-001|C-EXC-ADDR-001|C-EXC-INT-001|C-EXC-CLEAR-001|C-EXC-BLOCK-001|C-CFG-CSR-001,CG_CMDSCHED_EXCP|CG_CMDSCHED_CSR,exc_checker|int_scb,dv_exc,planned,非法编码/地址/中断/block
+TC_CMDSCHED_PERF_001,cmdsched_perf_test,10,C-PERF-PARAL-001|C-PERF-START-DONE-001|C-DBG-REG-001,CG_CMDSCHED_PERF,perf_scb|debug_scb,dv_perf,planned,性能/拥塞/debug
+TC_CMDSCHED_CSR_001,cmdsched_csr_test,P1,C-CFG-CSR-001|C-CFG-CIMC-001|C-CFG-TILE-RLS-001|C-CFG-SPAD-EXCL-001|C-LP-IDLE-001,CG_CMDSCHED_CSR,cfg_checker|lp_sva,dv_csr,planned,CSR/CIMC/ICG/tile_rls/spad_excl
+TC_CMDSCHED_REL_001,cmdsched_rel_test,P1,C-LP-RST-001|C-EXC-INT-001|C-RES-TILE-001,CG_CMDSCHED_CSR,lp_sva|res_model_scb,dv_env,planned,中间复位/恢复/资源

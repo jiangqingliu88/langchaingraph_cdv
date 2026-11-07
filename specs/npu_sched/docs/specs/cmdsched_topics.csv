@@ -1,0 +1,11 @@
+﻿topic,applicability,reason
+接口,applicable,Ins Dispatcher、SPAD xbar、各 master 的握手与协议
+时钟复位,applicable,ICG 开关、复位释放、复位后首指令
+参数和配置,applicable,core_reg cfg、creg_cmd_icg_en、tile_rls_en、spad_excl、CIMC 2x2
+数据值域,applicable,funct7/xd/xs1/xs2/opcode、数据精度、地址值、返回值
+数据形状,applicable,指令组合、依赖链、tile/page/dram、并行度、地址范围
+错误异常,applicable,非法指令/地址、中断、协议错误、超时
+中间复位,applicable,在途指令/资源/中断状态下的中途复位恢复
+边界,applicable,OST=2、buffer 深度、发射窗口、tile 数、最大并行、TMU 占用
+流控和反压,applicable,master/ins_buffer/decode/rsp 反压链、TMU/资源竞争
+性能长稳,applicable,1 instr/cycle、并行度、拥塞、长稳

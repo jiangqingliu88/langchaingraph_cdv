@@ -1,0 +1,4 @@
+# cmdsched.md 的内容哈希锁在 cmdsched_spec_meta.json 里（SHA-256）。
+# 根 .gitattributes 的 `* text=auto eol=lf` 会把 CRLF 改成 LF，导致 spec_hash
+# 在重新 checkout 后对不上；这里显式声明为二进制，保持原始字节。
+docs/specs/cmdsched.md -text

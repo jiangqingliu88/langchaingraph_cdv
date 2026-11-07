@@ -1,0 +1,5 @@
+contract_id,class,object,description,source_ref,owner,p_level,check_method,check_artifact,gate,status,assumption,remark
+C-IF-HS-001,if,cmd_if,cmd 握手 valid 不撤销且 payload 稳定,V00-3.2,dv_if,P0,sva,spec_if_artifact,gate_matrix,assume,spec target plan；V00 demo removed；验证待落地,由 V00 运行契约转为 spec target assume
+C-IF-HS-002,if,接口,rsp valid/ready 握手，反压保持 data/tag,SPEC-4,dv_if,P0,sva,spec_if_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SVA
+C-IF-START-001,if,接口,start 最多两拍且 inst_id 不同，cfg 仅 start 当拍,SPEC-4,dv_if,P0,sva,spec_if_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SVA
+C-IF-DONE-001,if,接口,done/rls inst_id 匹配，rls 在 done 前/同拍,SPEC-4,dv_if,P0,sva,spec_if_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SVA
