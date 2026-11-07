@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
@@ -44,17 +45,53 @@ def _has_header(text: str, key: str) -> bool:
     return re.search(rf"^\s*//\s*{key}:", text, re.MULTILINE) is not None
 
 
-def _header(source_rel: str, artifact: str) -> str:
-    return "\n".join([
+def _anchor_index(root: Path) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+    """`artifact → C-*` / `test → TC_*`（来自 run 的 Case IR）。"""
+    artifact_contracts: Dict[str, set[str]] = {}
+    test_cases: Dict[str, set[str]] = {}
+    case_ir = _read_json(root / "coverage" / "case_ir.json")
+    for case in case_ir.get("cases") or []:
+        if not isinstance(case, dict):
+            continue
+        cid = str(case.get("id") or "")
+        contracts = [str(c) for c in (case.get("feats") or []) if c]
+        for item in (case.get("sva") or []) + (case.get("scb") or []):
+            if isinstance(item, dict) and item.get("id"):
+                artifact_contracts.setdefault(str(item["id"]), set()).update(contracts)
+        for test in case.get("tests") or []:
+            if test:
+                test_cases.setdefault(str(test), set()).add(cid)
+    return ({k: sorted(v) for k, v in artifact_contracts.items()},
+            {k: sorted(v) for k, v in test_cases.items()})
+
+
+def _read_json(path: Path) -> Dict[str, Any]:
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _header(source_rel: str, artifact: str,
+            contracts: List[str] | None = None,
+            case_ids: List[str] | None = None) -> str:
+    contract_text = " ".join(contracts or []) or "(none)"
+    lines = [
         "// ============================================================================",
         f"// {source_rel} — SignOffAI 生成资产（VPlan 布局）",
         f"// SOURCE: {source_rel}",
         f"// ARTIFACT: {artifact}",
-        "// CONTRACT_REFS: (none)",
+        f"// CONTRACT_REFS: {contract_text}",
+    ]
+    if case_ids:
+        lines.append("// CASE_ID: " + " ".join(case_ids))
+    lines += [
         "// STATUS: candidate",
         "// ============================================================================",
         "",
-    ])
+    ]
+    return "\n".join(lines)
 
 
 def _target_rel(src_rel: Path) -> Tuple[str, str] | None:
@@ -83,6 +120,7 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
     rows: List[Dict[str, str]] = []
     copied = 0
     skipped = 0
+    artifact_contracts, test_cases = _anchor_index(root)
     for src in sorted(_iter_sources(root)):
         rel = src.relative_to(root)
         target = _target_rel(rel)
@@ -94,9 +132,11 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
         if dest.exists() and dest.resolve() == src.resolve():
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
+        contracts = artifact_contracts.get(src.stem, [])
+        case_ids = test_cases.get(src.stem, []) if kind == "test" else []
         text = _read(src)
         if not _has_header(text, "ARTIFACT"):
-            text = _header(rel.as_posix(), src.stem) + text
+            text = _header(rel.as_posix(), src.stem, contracts, case_ids) + text
         dest.write_text(text, encoding="utf-8")
         copied += 1
         rows.append({
@@ -105,8 +145,8 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
             "path": dest.relative_to(root).as_posix(),
             "owner": "",
             "status": "candidate",
-            "contract_ids": "",
-            "case_ids": "",
+            "contract_ids": "|".join(contracts),
+            "case_ids": "|".join(case_ids),
             "source": rel.as_posix(),
         })
 

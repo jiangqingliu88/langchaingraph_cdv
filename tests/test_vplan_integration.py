@@ -135,24 +135,35 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
         "env/coverage/foo_cov.sv": "class foo_cov; endclass\n",
         "coverage/foo_cov_if.sv": "interface foo_cov_if; endinterface\n",
         "env/tests/foo_test.sv": "class foo_test; endclass\n",
+        "env/rtl_sc/foo_scb.sv": "class foo_scb; endclass\n",
     }
     for rel, text in files.items():
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+    (tmp_path / "coverage" / "case_ir.json").write_text(
+        '{"schema": "case_ir_v1", "cases": [{"id": "TC_FOO", '
+        '"tests": ["foo_test"], "feats": ["C-FUNC-UNIT-001"], '
+        '"sva": [], "scb": [{"id": "foo_scb"}]}]}',
+        encoding="utf-8")
 
     summary = package_run_assets(tmp_path, "foo")
-    assert summary["copied"] == 6
+    assert summary["copied"] == 7
     assert (tmp_path / "sv" / "interface" / "foo_if.sv").is_file()
     assert (tmp_path / "sv" / "agents" / "foo" / "foo_driver.sv").is_file()
     assert (tmp_path / "sv" / "env" / "foo_env.sv").is_file()
     assert (tmp_path / "sv" / "coverage" / "foo_cov.sv").is_file()
     assert (tmp_path / "sv" / "interface" / "foo_cov_if.sv").is_file()
     assert (tmp_path / "sv" / "test" / "foo_test.sv").is_file()
+    assert (tmp_path / "sv" / "scb" / "foo_scb.sv").is_file()
     text = (tmp_path / "sv" / "interface" / "foo_if.sv").read_text(
         encoding="utf-8")
     assert "// ARTIFACT: foo_if" in text
-    assert len(scan_assets(tmp_path)) == 6
+    scb = (tmp_path / "sv" / "scb" / "foo_scb.sv").read_text(encoding="utf-8")
+    assert "// CONTRACT_REFS: C-FUNC-UNIT-001" in scb
+    test = (tmp_path / "sv" / "test" / "foo_test.sv").read_text(encoding="utf-8")
+    assert "// CASE_ID: TC_FOO" in test
+    assert len(scan_assets(tmp_path)) == 7
 
 
 def test_explicit_casemodel_marker(tmp_path):
