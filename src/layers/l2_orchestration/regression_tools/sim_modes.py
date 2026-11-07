@@ -37,6 +37,7 @@ Questa 没有对应开关的（xprop 是 VCS 专有；UPF 要 `vlog/vopt -pa_upf
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -150,10 +151,27 @@ def is_known(mode: str) -> bool:
     return str(mode) in _BY_MODE
 
 
+_VOPT_ENV = "SIGNOFFAI_VOPT_ARGS"
+
+
+def _extra_vopt_args() -> str:
+    """低内存机器的逃生口：如 `SIGNOFFAI_VOPT_ARGS=-voptargs=-O0`。
+
+    `vopt` 默认 `-O4`，在只剩几百 MB 可用内存的机器上会 `VirtualAlloc` 失败；
+    `-O0` 关掉优化后同一套 DUT 能正常编译/仿真（实测）。
+    """
+    return os.environ.get(_VOPT_ENV, "").strip()
+
+
+def _with_extra(value: str) -> str:
+    extra = _extra_vopt_args()
+    return f"{value} {extra}".strip() if extra else value
+
+
 def value_for(mode: str) -> str:
     """这个词条在本后端的取值；不认识的词条给空串（调用方按"没有"处理）。"""
     found = _BY_MODE.get(str(mode))
-    return found.value if found else ""
+    return _with_extra(found.value) if found else ""
 
 
 def unsupported(selected: Any) -> List[str]:
@@ -169,7 +187,7 @@ def unsupported(selected: Any) -> List[str]:
 
 def yaml_variables() -> Dict[str, str]:
     """写成 `regression.yaml` 的 `variables:` 那几条（变量名 → 取值）。"""
-    return {m.var: m.value for m in MODES}
+    return {m.var: _with_extra(m.value) for m in MODES}
 
 
 def common_base_path() -> Path:

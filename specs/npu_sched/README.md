@@ -85,6 +85,10 @@ vagent vplan execute specs/npu_sched --dry-run
 # 实跑（需要 QuestaSim 在 PATH）
 vagent vplan execute specs/npu_sched -o output_vplan_npu_sched \
   --max-rounds 1 --sim-mode cov
+
+# 低内存机器：vopt 用 -O0（等价于 SIGNOFFAI_VOPT_ARGS=-voptargs=-O0）
+vagent vplan execute specs/npu_sched -o output_vplan_npu_sched \
+  --max-rounds 1 --sim-mode cov --low-memory
 ```
 
 执行跑完会产出真实的 UVM/回归/覆盖率证据；run 里会写

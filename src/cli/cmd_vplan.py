@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -115,8 +116,11 @@ def vplan_build(project, output, allow_spec_drift, json_output):
               help="仿真业务（可重复）；默认 cov")
 @click.option("--dry-run", is_flag=True,
               help="只生成运行期模型并打印命令，不跑 UVM/EDA")
+@click.option("--low-memory", is_flag=True,
+              help="低内存机器：vopt 用 -O0（置 SIGNOFFAI_VOPT_ARGS=-voptargs=-O0）")
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
-def vplan_execute(project, output, max_rounds, sim_modes, dry_run, json_output):
+def vplan_execute(project, output, max_rounds, sim_modes, dry_run,
+                  low_memory, json_output):
     """用 VPlan case/契约 + 执行资产跑现有 verify 内核（UVM/回归/证据）。"""
     from src.layers.l1_infrastructure.output_config import make_output_root
     from src.layers.l3_decision.vplan import (
@@ -143,10 +147,13 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run, json_output):
         "spec": str(proj.spec_path),
         "max_rounds": int(max_rounds),
         "sim_modes": list(sim_modes) or ["cov"],
+        "low_memory": bool(low_memory),
     }
     if dry_run:
+        _env = ("SIGNOFFAI_VOPT_ARGS=-voptargs=-O0 "
+                if low_memory else "")
         summary["command"] = (
-            f"vagent verify --rtl {rtl_dir} --config {model_path} "
+            f"{_env}vagent verify --rtl {rtl_dir} --config {model_path} "
             f"--verify-only --approval auto --no-manual-gate "
             f"--no-checkpoint -o {out}")
         if json_output:
@@ -160,6 +167,9 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run, json_output):
 
     from src.app.services import run_verify_async
 
+    _prev_vopt = os.environ.get("SIGNOFFAI_VOPT_ARGS")
+    if low_memory:
+        os.environ["SIGNOFFAI_VOPT_ARGS"] = "-voptargs=-O0"
     try:
         result = asyncio.run(run_verify_async(
             # 执行层的 DUT 名必须来自 RTL（npu_sched），而不是自然语言 spec
@@ -178,6 +188,10 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run, json_output):
             origin="vplan",
         ))
     finally:
+        if _prev_vopt is None:
+            os.environ.pop("SIGNOFFAI_VOPT_ARGS", None)
+        else:
+            os.environ["SIGNOFFAI_VOPT_ARGS"] = _prev_vopt
         import shutil
         shutil.rmtree(work, ignore_errors=True)
 

@@ -680,3 +680,14 @@ def test_cov_wave_coverstore_is_test_associated():
     value = sim_modes.get("cov+wave").value
     assert "-coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME}" in value
     assert "-testname ${EMAN_TEST_NAME}" in value
+
+
+def test_vopt_args_env_override_applies_to_modes(monkeypatch):
+    """低内存逃生口：`SIGNOFFAI_VOPT_ARGS` 追加到每个模式的取值。"""
+    from src.layers.l2_orchestration.regression_tools import sim_modes
+
+    monkeypatch.setenv("SIGNOFFAI_VOPT_ARGS", "-voptargs=-O0")
+    assert sim_modes.value_for("cov").endswith("-voptargs=-O0")
+    for value in sim_modes.yaml_variables().values():
+        if value:
+            assert value.endswith("-voptargs=-O0")
