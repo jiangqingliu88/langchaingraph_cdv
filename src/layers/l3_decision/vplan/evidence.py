@@ -66,6 +66,20 @@ def _read_tp_status(run_dir: Path) -> Dict[str, str]:
     return out
 
 
+def _read_case_tp_status(run_dir: Path) -> Dict[str, Dict[str, str]]:
+    """`case_id → {tp_id: status}` —— VPlan TP 与生成 TP 不同名时的桥。"""
+    doc = _read_json(run_dir / "coverage" / "tp_matrix.json")
+    out: Dict[str, Dict[str, str]] = {}
+    for row in doc.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        cid = str(row.get("case_id") or "")
+        tp_id = str(row.get("tp_id") or "")
+        if cid and tp_id:
+            out.setdefault(cid, {})[tp_id] = str(row.get("status") or "UNKNOWN")
+    return out
+
+
 def _regression_status(run_dir: Path) -> str:
     doc = _read_json(run_dir / "regression_stages.json")
     return str(doc.get("status") or "UNKNOWN")
@@ -81,6 +95,18 @@ def _sv_contracts(run_dir: Path) -> set[str]:
             for cid in (row.get("contract_ids") or "").split("|"):
                 if cid.strip():
                     out.add(cid.strip())
+    return out
+
+
+def _case_contracts(run_dir: Path) -> set[str]:
+    """Case IR 里声明了 sva/scb 的契约 —— 内核生成的环境覆盖了这些检查。"""
+    out: set[str] = set()
+    doc = _read_json(run_dir / "coverage" / "case_ir.json")
+    for case in doc.get("cases") or []:
+        if not isinstance(case, dict):
+            continue
+        if case.get("sva") or case.get("scb"):
+            out.update(str(c) for c in (case.get("feats") or []) if c)
     return out
 
 
@@ -106,7 +132,10 @@ def build_entry(run_dir: str | Path) -> Dict[str, Any]:
         "contracts": contracts,
         "regression_status": _regression_status(root),
         "tp_status": _read_tp_status(root),
-        "sv_contracts": sorted(_sv_contracts(root)),
+        "case_tp_status": _read_case_tp_status(root),
+        "sv_contracts": sorted(
+            _sv_contracts(root)
+            | (_case_contracts(root) if (root / "sv").is_dir() else set())),
         "sha256": {
             name: _sha256(root / rel)
             for name, rel in (
@@ -134,6 +163,10 @@ def link_run(project_root: str | Path, run_dir: str | Path) -> Dict[str, Any]:
     """把一个 run 记进项目证据索引（同 run_id 覆盖旧条目）。"""
     project = Path(project_root)
     entry = build_entry(run_dir)
+    try:
+        entry["run_dir"] = str(Path(entry["run_dir"]).relative_to(project.parent))
+    except ValueError:
+        pass
     index = load_index(project)
     entries = [e for e in index.get("entries") or []
                if e.get("run_id") != entry["run_id"]]
@@ -164,32 +197,50 @@ def _matrix_rows(project_root: Path) -> List[Tuple[Path, Dict[str, str]]]:
     return rows
 
 
+def _resolve_tp_status(entry: Dict[str, Any],
+                       mapping: Dict[str, Any]) -> Tuple[List[str], Dict[str, str]]:
+    """VPlan TP ID 与 kernel 生成的 TP ID 不是同一套：找不到就按 case 聚合。"""
+    tp_ids = [str(t) for t in (mapping.get("tp_ids") or []) if t]
+    case_ids = [str(c) for c in (mapping.get("case_ids") or []) if c]
+    tp_status = entry.get("tp_status") or {}
+    if any(t in tp_status for t in tp_ids):
+        return tp_ids, tp_status
+    aggregated: Dict[str, str] = {}
+    for case_id in case_ids:
+        aggregated.update((entry.get("case_tp_status") or {}).get(case_id) or {})
+    return (list(aggregated), aggregated) if aggregated else (tp_ids, tp_status)
+
+
+def _contract_reasons(entry: Dict[str, Any], cid: str,
+                      tp_ids: List[str], tp_status: Dict[str, str]
+                      ) -> List[str]:
+    reasons: List[str] = []
+    if not tp_ids:
+        reasons.append("plan_link has no tp_ids and case has no run TPs")
+    if entry.get("regression_status") != "PASS":
+        reasons.append(f"regression={entry.get('regression_status')}")
+    missing = [t for t in tp_ids if tp_status.get(t) not in HIT_STATES]
+    if missing:
+        reasons.append("TP not hit: " + ", ".join(missing[:5]))
+    if cid not in set(entry.get("sv_contracts") or []):
+        reasons.append("no sv/ asset declares this contract")
+    return reasons
+
+
 def _evaluate_contract(cid: str, status: str,
                        candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
-    reasons: List[str] = []
-    eligible = False
     if not candidates:
-        reasons.append("no linked run maps this contract")
+        reasons = ["no linked run maps this contract"]
     else:
         entry = candidates[-1]
         mapping = next((c for c in entry.get("contracts") or []
                         if c.get("contract_id") == cid), {})
-        tp_ids = [str(t) for t in (mapping.get("tp_ids") or []) if t]
-        if not tp_ids:
-            reasons.append("plan_link has no tp_ids")
-        if entry.get("regression_status") != "PASS":
-            reasons.append(f"regression={entry.get('regression_status')}")
-        tp_status = entry.get("tp_status") or {}
-        missing = [t for t in tp_ids if tp_status.get(t) not in HIT_STATES]
-        if missing:
-            reasons.append("TP not hit: " + ", ".join(missing[:5]))
-        if cid not in set(entry.get("sv_contracts") or []):
-            reasons.append("no sv/ asset declares this contract")
-        eligible = not reasons and bool(tp_ids)
+        tp_ids, tp_status = _resolve_tp_status(entry, mapping)
+        reasons = _contract_reasons(entry, cid, tp_ids, tp_status)
     return {
         "contract_id": cid,
         "status": status,
-        "eligible_active": eligible,
+        "eligible_active": not reasons,
         "reasons": reasons,
         "run_id": (candidates[-1].get("run_id") if candidates else ""),
     }
@@ -222,6 +273,7 @@ def apply_active(project_root: str | Path,
                 if r["eligible_active"] and r["status"] != "active"}
     if not eligible:
         return 0
+    run_of = {r["contract_id"]: r.get("run_id", "") for r in results}
     changed = 0
     for path in sorted((project / "data" / "contract_matrix").glob("*.csv")):
         with path.open(encoding="utf-8-sig", newline="") as fh:
@@ -233,8 +285,10 @@ def apply_active(project_root: str | Path,
             cid = row.get("contract_id")
             if cid in eligible and row.get("status") != "active":
                 row["status"] = "active"
+                run_id = run_of.get(cid or "", "")
+                note = f"gate: active from {run_id}" if run_id else "gate: active from evidence"
                 row["remark"] = (row.get("remark") or "").strip()
-                row["remark"] = (row["remark"] + " | gate: active from evidence").strip(" |")
+                row["remark"] = (row["remark"] + " | " + note).strip(" |")
                 touched = True
                 changed += 1
         if touched:

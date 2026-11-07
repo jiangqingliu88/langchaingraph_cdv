@@ -240,5 +240,5 @@ spec 1.3/4/5/7/8/9/10
 ## 11. 与执行阶段的关系
 
 - 执行层尚未接入；当前没有可执行仿真或证据。
-- `CMDSCHED_*` 是真实 arch spec 的目标计划：42 条契约已以 `assume` 写入 `data/contract_matrix/`，66 个 TP、12 个 planned case 已建立，但没有真实 case/资产/URG。
+- `CMDSCHED_*` 是真实 arch spec 的目标计划：42 条契约在 `data/contract_matrix/`（当前 8 active / 34 assume），66 个 TP、12 个 planned case 已建立；active 由 gate 依据 run 证据推进。
 - 下一步：选 `TC_CMDSCHED_RSP_001` 做首个真实 UVM/VCS/URG 样板，补 SVA/Checker/SCB/coverage 资产并转 active；再复制到其余 11 个 planned case。

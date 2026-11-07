@@ -54,6 +54,30 @@ def _seed(case: Dict[str, Any], index: int) -> int:
     return 1001 + index * 100
 
 
+#: VPlan 专题 → 执行模型维度（case 的批次只驱动它自己关心的维度）。
+TOPIC_DIMS: Dict[str, List[str]] = {
+    "接口": ["D_type", "D_dtype", "D_opcode"],
+    "时钟复位": ["D_barrier"],
+    "参数和配置": ["D_type", "D_opcode"],
+    "数据值域": ["D_type", "D_dtype", "D_opcode", "D_priority"],
+    "数据形状": ["D_seq", "D_pipeline", "D_cluster"],
+    "错误异常": ["D_decision", "D_barrier"],
+    "中间复位": ["D_barrier", "D_queue"],
+    "边界": ["D_queue", "D_cluster"],
+    "流控和反压": ["D_queue", "D_decision"],
+    "性能长稳": ["D_pipeline", "D_priority"],
+}
+
+
+def _case_dimensions(project: VPlanProject, case_id: str,
+                     all_dims: List[str]) -> List[str]:
+    topics = {str(tp.get("topic") or "") for tp in project.testpoints
+              if str(tp.get("case_plan") or "") == case_id}
+    dims = {d for topic in topics for d in TOPIC_DIMS.get(topic, [])}
+    chosen = [d for d in all_dims if d in dims]
+    return chosen or list(all_dims)
+
+
 def build_execution_model(project: VPlanProject) -> Dict[str, Any]:
     """执行资产 + case 契约 → casemodel 形状（内存）。"""
     asset_path = project.root / "data" / "execution_model.yaml"
@@ -82,6 +106,7 @@ def build_execution_model(project: VPlanProject) -> Dict[str, Any]:
         if not test:
             raise VPlanError(f"case {cid} 没有 test_name")
         priority = _priority(case.get("batch", ""))
+        case_dims = _case_dimensions(project, cid, dimensions)
         themes.append({
             "id": f"TH-{cid}",
             "test": test,
@@ -89,7 +114,7 @@ def build_execution_model(project: VPlanProject) -> Dict[str, Any]:
             "name": cid,
             "priority": priority,
             "description": str(case.get("title") or cid),
-            "dimensions": ["*"],
+            "dimensions": case_dims,
             "method": "RND",
             "checks": ["CHECK-FUNC"],
         })
@@ -97,7 +122,7 @@ def build_execution_model(project: VPlanProject) -> Dict[str, Any]:
             "id": cid,
             "tests": [test],
             # declared case 用显式维度列表（`*` 只在 theme 里展开）。
-            "dimensions": dimensions,
+            "dimensions": case_dims,
             "requirements": list(case.get("contract_refs") or []),
             "owner": str(case.get("owner") or ""),
             "priority": priority,

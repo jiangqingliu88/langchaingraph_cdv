@@ -5,13 +5,13 @@
 人审抽取表与 target plan 都从这里派生。DUT 名为 **CMDSCHED**，项目目录名为
 `npu_sched`。
 
-> 当前只完成 **规划层**：42 条契约全部 `assume`，66 个测试点和 12 个 planned case
-> 全部 `planned`。没有 VCS/UVM/URG 运行证据，`data/case_plan_view.html` 是
-> **PLACEHOLDER / NOT RUN**，**不可签核**。
-
-执行层尚未接入：本仓库的 L1–L5 / 24 节点 LangGraph 内核后续从 `output_*` run
-目录产出真实证据；在那之前，本项目的任何契约都不会被标成 `active`，任何 TP
-都不会被标成 `covered`。
+> 当前为 **规划 + 证据门禁**：42 条契约中 8 条 `active`、34 条 `assume`
+> （由 gate 依据 run 证据推进）；66 个 VPlan 测试点与 12 个 case 的计划状态仍是
+> `planned`。
+>
+> 最近一轮执行（`output_vplan_e2e_gate_jiang_20261107_130948`）：
+> **90/90 回归 PASS、功能覆盖率 95.23%、签核 PASS_WITH_CAVEAT / CONDITIONAL**。
+> 真实证据来自 QuestaSim；`data/case_plan_view.html` 仍是 planned 占位视图。
 
 ## 快速开始
 
@@ -29,8 +29,8 @@ python scripts/lint_spec_trace.py
 python scripts/gen_planned_case_view.py
 ```
 
-打开 `data/case_plan_view.html`：12 个 planned case、42/42 契约、66/66 TP，
-全部没有 JSON/log/cov/波形。
+打开 `data/case_plan_view.html`：12 个 case 的**计划占位视图**（PLACEHOLDER）；
+真实执行与覆盖率证据在 run 目录，见下方“执行层”。
 
 也可以使用 Makefile：
 
@@ -65,7 +65,7 @@ vagent vplan status specs/npu_sched
 | `coverage/testpoints.{yaml,json}` | 66 条 TP；`planned`、`observe-only`（VPlan 未绑定事务字段） |
 | `coverage/case_ir.json` | 12 条 CASE；`C-*` 引用保存在 `feats` |
 | `contract/contract.yaml` + `obligations.json` | 由 Case IR 编译的 CT/OBL（现有内核） |
-| `contract/plan_link.yaml` | `C-*` ↔ TP ↔ case 的 sidecar；42 条全部 `assume` |
+| `contract/plan_link.yaml` | `C-*` ↔ TP ↔ case 的 sidecar；当前 8 `active` / 34 `assume` |
 | `docs/manifest.json` | `origin=vplan`、`status=PLANNED`、`execution=PLAN_ONLY` |
 
 **不会**产生 `report.json` / `signoff_evidence/`，因此不可签核；契约状态
@@ -117,11 +117,11 @@ vagent vplan gate specs/npu_sched [--apply]
 | spec 需求 | 20 |
 | feature 节点 | 39（1 root + 9 branch + 29 leaf） |
 | 专题 | 10 |
-| spec 契约 | 42（全部 `assume`，已入 `data/contract_matrix/`） |
+| spec 契约 | 42（8 `active` / 34 `assume`，已入 `data/contract_matrix/`） |
 | 测试点 | 66（全部 `planned`） |
 | planned case | 12（全部 `planned`） |
-| 真实证据 | 0（无 VCS/UVM/URG、无 log/cov/波形） |
-| 签核 | **不可签核** |
+| 真实证据 | 最近 run：90/90 PASS、功能覆盖率 95.23%、3 条 caveat |
+| 签核 | run 级 `PASS_WITH_CAVEAT` / `CONDITIONAL`；项目级仍有 34 条 `assume` |
 
 ## 目录
 
@@ -133,7 +133,7 @@ specs/npu_sched/
 │   ├── contract/               契约矩阵说明
 │   └── appendix/               ID/锚点规范
 ├── data/
-│   ├── contract_matrix/        42 条 spec 契约（全部 assume）
+│   ├── contract_matrix/        42 条 spec 契约（8 active / 34 assume）
 │   └── case_plan_view.html     12 个 planned case 的占位视图
 ├── schemas/                    contract / case JSON Schema（供后续落地）
 ├── scripts/
@@ -155,16 +155,16 @@ specs/npu_sched/
 | `docs/verification/CMDSCHED_vplan.md` | 验证计划：feature 树、专题、TP、契约、case、签核 |
 | `docs/verification/CMDSCHED_cases.csv` | 12 个 planned case |
 | `docs/verification/CMDSCHED_case_trace.md` | contract → case → TP 追溯 |
-| `data/contract_matrix/README.md` | 42 条 spec 契约 |
+| `data/contract_matrix/README.md` | 42 条 spec 契约与当前状态 |
 | `scripts/README.md` | 生成/校验脚本 |
 
 ## 边界
 
-- 没有可执行 UVM/VCS/URG demo，也没有仿真 log、覆盖率库或波形。
+- 执行使用 QuestaSim（不是 VCS/URG）；最近 run 有仿真 log、UCDB 与覆盖率报告。
 - `case_plan_view.html` 是占位视图，不是签核依据。
 - 换 spec 必须先更新 `docs/specs/cmdsched_*.csv` 和 `cmdsched_spec_meta.json`，
   再运行生成/校验；spec hash 不匹配时生成器会拒绝。
 - 契约状态只允许按证据推进：`assume` 需要有 case、`// ARTIFACT:` 锚点、运行时
   激活和证据才能转 `active`；只改 CSV 状态不算。
-- 下一步：选 `TC_CMDSCHED_RSP_001` 做首个真实 UVM/VCS/URG 样板，把对应
-  `assume` 契约转 `active`。
+- 下一步：处理剩余 34 条 `assume` 契约（2 条 TP 未命中、资产/检查未齐），
+  再用 `vagent vplan gate --apply` 依据证据推进，而不是手改 CSV。

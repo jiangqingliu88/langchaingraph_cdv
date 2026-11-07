@@ -45,24 +45,31 @@ def _has_header(text: str, key: str) -> bool:
     return re.search(rf"^\s*//\s*{key}:", text, re.MULTILINE) is not None
 
 
-def _anchor_index(root: Path) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
-    """`artifact → C-*` / `test → TC_*`（来自 run 的 Case IR）。"""
+def _anchor_index(root: Path) -> Tuple[Dict[str, List[str]], Dict[str, List[str]],
+                                      Dict[str, List[str]]]:
+    """`artifact → C-*` / `test → TC_*` / `kind → C-*`（来自 run 的 Case IR）。"""
     artifact_contracts: Dict[str, set[str]] = {}
     test_cases: Dict[str, set[str]] = {}
+    kind_contracts: Dict[str, set[str]] = {}
     case_ir = _read_json(root / "coverage" / "case_ir.json")
     for case in case_ir.get("cases") or []:
         if not isinstance(case, dict):
             continue
         cid = str(case.get("id") or "")
         contracts = [str(c) for c in (case.get("feats") or []) if c]
-        for item in (case.get("sva") or []) + (case.get("scb") or []):
-            if isinstance(item, dict) and item.get("id"):
-                artifact_contracts.setdefault(str(item["id"]), set()).update(contracts)
+        for kind in ("sva", "scb"):
+            items = case.get(kind) or []
+            if items:
+                kind_contracts.setdefault(kind, set()).update(contracts)
+            for item in items:
+                if isinstance(item, dict) and item.get("id"):
+                    artifact_contracts.setdefault(str(item["id"]), set()).update(contracts)
         for test in case.get("tests") or []:
             if test:
                 test_cases.setdefault(str(test), set()).add(cid)
     return ({k: sorted(v) for k, v in artifact_contracts.items()},
-            {k: sorted(v) for k, v in test_cases.items()})
+            {k: sorted(v) for k, v in test_cases.items()},
+            {k: sorted(v) for k, v in kind_contracts.items()})
 
 
 def _read_json(path: Path) -> Dict[str, Any]:
@@ -120,7 +127,7 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
     rows: List[Dict[str, str]] = []
     copied = 0
     skipped = 0
-    artifact_contracts, test_cases = _anchor_index(root)
+    artifact_contracts, test_cases, kind_contracts = _anchor_index(root)
     for src in sorted(_iter_sources(root)):
         rel = src.relative_to(root)
         target = _target_rel(rel)
@@ -132,7 +139,9 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
         if dest.exists() and dest.resolve() == src.resolve():
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
-        contracts = artifact_contracts.get(src.stem, [])
+        contracts = (artifact_contracts.get(src.stem)
+                     or kind_contracts.get(kind)
+                     or [])
         case_ids = test_cases.get(src.stem, []) if kind == "test" else []
         text = _read(src)
         if not _has_header(text, "ARTIFACT"):

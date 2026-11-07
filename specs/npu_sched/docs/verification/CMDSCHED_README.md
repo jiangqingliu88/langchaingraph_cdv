@@ -9,7 +9,7 @@
 | `CMDSCHED_features.csv` | 39 节点 feature 树（1 root + 9 branch + 29 leaf） | 目标数据 |
 | `CMDSCHED_topics.csv` | 10 个专题 | 目标数据 |
 | `CMDSCHED_testpoints.csv` | 66 个 planned 测试点 | 目标数据 |
-| `CMDSCHED_contracts.csv` | 42 条 spec 契约（全部已转 assume） | 目标数据 |
+| `CMDSCHED_contracts.csv` | 42 条 spec 契约（当前 8 active / 34 assume） | 目标数据 |
 | `CMDSCHED_cases.csv` | 12 个 planned case | 计划层 |
 | `CMDSCHED_case_trace.md` | contract → case → TP 追溯 | 生成视图 |
 | `CMDSCHED_matrix.md` | feature × 专题矩阵 | 生成视图 |
@@ -18,7 +18,7 @@
 ## 状态
 
 - **all planned**：66 个测试点、12 个 case 全部是 `planned`；
-- **all assume**：42 条 spec 契约已写入 `data/contract_matrix/`，状态全部为 `assume`，没有 active/exempt；
+- **8 active / 34 assume**：42 条 spec 契约已写入 `data/contract_matrix/`；active 由 gate 依据回归/TP/资产证据推进，没有 exempt；
 - **no evidence**：没有 VCS/UVM/URG，没有 JSON/log/cov/波形；
 - **not signoff**：当前是目标计划，不可签核。
 

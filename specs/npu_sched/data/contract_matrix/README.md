@@ -1,6 +1,6 @@
 # contract_matrix — CMD_SCH spec 契约矩阵
 
-当前共 **42 条 spec 契约**，全部 `assume`，来自 `docs/specs/cmdsched_contracts.csv` 的推进结果。执行层尚未接入，因此没有运行契约。
+当前共 **42 条 spec 契约**（8 `active` / 34 `assume`），来自 `docs/specs/cmdsched_contracts.csv`；`active` 由 `vagent vplan gate --apply` 依据 run 的回归/TP/资产证据推进（run `output_vplan_e2e_gate_jiang_20261107_130948`）。
 
 | 文件 | class | 数量 | 例子 |
 |---|---|---|---|

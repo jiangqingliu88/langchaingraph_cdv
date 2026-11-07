@@ -30,7 +30,7 @@ def test_load_project_reads_current_source():
     assert len(proj.features) == 39
     assert len(proj.topics) == 10
     assert len(proj.contracts) == 42
-    assert proj.status_counts == {"assume": 42}
+    assert sum(proj.status_counts.values()) == 42
     assert len(proj.testpoints) == 66
     assert proj.tp_status_counts == {"planned": 66}
     assert len(proj.cases) == 12
@@ -64,8 +64,8 @@ def test_payload_keeps_ids_and_statuses():
     link = payload["contract_link"]
     assert link["schema"] == "vplan_contract_link_v1"
     assert len(link["contracts"]) == 42
-    assert link["status_counts"] == {"assume": 42}
-    assert all(row["status"] == "assume" for row in link["contracts"])
+    assert sum(link["status_counts"].values()) == 42
+    assert all(row["status"] in {"assume", "active"} for row in link["contracts"])
 
 
 def test_plan_only_run_writes_ir_but_no_evidence(tmp_path):
@@ -92,15 +92,15 @@ def test_plan_only_run_writes_ir_but_no_evidence(tmp_path):
 
     link = yaml.safe_load(
         (out / "contract" / "plan_link.yaml").read_text(encoding="utf-8"))
-    assert link["status_counts"] == {"assume": 42}
+    assert sum(link["status_counts"].values()) == 42
     assert len(link["contracts"]) == 42
     assert len(link["cases"]) == 12
 
     tp_doc = json.loads(
         (out / "coverage" / "testpoints.json").read_text(encoding="utf-8"))
     assert tp_doc["count"] == 66
-    assert tp_doc["methodology"]["counts"]["contracts_by_status"] == {
-        "assume": 42}
+    assert tp_doc["methodology"]["counts"]["contracts_by_status"] == \
+        proj.status_counts
 
 
 def test_execution_model_projects_vplan_cases(tmp_path):
@@ -113,7 +113,10 @@ def test_execution_model_projects_vplan_cases(tmp_path):
     assert {t["test"] for t in model["themes"]} == {
         c["test_name"] for c in proj.cases
     }
-    assert all(t["dimensions"] == ["*"] for t in model["themes"])
+    assert all(t["dimensions"] for t in model["themes"])
+    dim_ids = {d["id"] for d in model["dimensions"]}
+    assert all(set(t["dimensions"]) <= dim_ids for t in model["themes"])
+    assert len({tuple(t["dimensions"]) for t in model["themes"]}) > 1
     assert all(c["requirements"] for c in model["cases"]["cases"])
     assert (ROOT / "rtl" / "npu_sched.sv").is_file()
 

@@ -1,0 +1,601 @@
+{
+  "run_id": "output_vplan_e2e_ok_jiang_20261107_125851",
+  "run_dir": "D:\\SignOffAI\\output_vplan_e2e_ok_jiang_20261107_125851",
+  "spec_hash": "5f573c6cc7bbb910ec3a16ff556ec78019b6434cbbbb15821f79b065f9d8a416",
+  "module": "npu_sched",
+  "contracts": [
+    {
+      "contract_id": "C-CFG-CIMC-001",
+      "tp_ids": [
+        "TP_CFG_CSR_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_CSR_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-CFG-CSR-001",
+      "tp_ids": [
+        "TP_CFG_CREG_001",
+        "TP_CFG_CSR_001",
+        "TP_CMD_DEC_003"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_CSR_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-CFG-SPAD-EXCL-001",
+      "tp_ids": [
+        "TP_CFG_CSR_004"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_CSR_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-CFG-TILE-RLS-001",
+      "tp_ids": [
+        "TP_CFG_CSR_003"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_CSR_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-DATA-RMW-001",
+      "tp_ids": [
+        "TP_MEM_LMEM_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_RSP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-DATA-SYNC-001",
+      "tp_ids": [
+        "TP_SCHED_SH_004"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_RSP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-DATA-TAG-001",
+      "tp_ids": [
+        "TP_RSP_XD1_002",
+        "TP_RSP_XD1_003"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_RSP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-DATA-VS-001",
+      "tp_ids": [
+        "TP_MEM_LMEM_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_RSP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-DBG-REG-001",
+      "tp_ids": [
+        "TP_DBG_REG_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_PERF_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-EXC-ADDR-001",
+      "tp_ids": [
+        "TP_EXC_ADDR_001",
+        "TP_MEM_LMEM_003"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_EXCP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-EXC-BLOCK-001",
+      "tp_ids": [
+        "TP_EXC_BLOCK_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_EXCP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-EXC-CLEAR-001",
+      "tp_ids": [
+        "TP_EXC_INT_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_EXCP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-EXC-ILLEGAL-001",
+      "tp_ids": [
+        "TP_CMD_DEC_004",
+        "TP_EXC_ILL_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_EXCP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-EXC-INT-001",
+      "tp_ids": [
+        "TP_EXC_ILL_002",
+        "TP_EXC_INT_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_EXCP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-DEP-002",
+      "tp_ids": [
+        "TP_SCHED_SH_001",
+        "TP_SCHED_SH_005"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_DEP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-DEP-003",
+      "tp_ids": [
+        "TP_SCHED_SH_003"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_HAZARD_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-DEP-004",
+      "tp_ids": [
+        "TP_SCHED_SH_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_RSP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-DEP-006",
+      "tp_ids": [
+        "TP_SCHED_DH_001",
+        "TP_SCHED_DH_002",
+        "TP_SCHED_DH_003"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_DEP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-ISSUE-001",
+      "tp_ids": [
+        "TP_SCHED_ISSUE_001",
+        "TP_SCHED_ISSUE_002",
+        "TP_SCHED_ISSUE_003"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_INSTB_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-RSP-001",
+      "tp_ids": [
+        "TP_RSP_XD1_004"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_RSP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-RSP-002",
+      "tp_ids": [
+        "TP_RSP_BP_002",
+        "TP_RSP_XD1_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_RSP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-RSP-003",
+      "tp_ids": [
+        "TP_MEM_LMEM_004"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_RSP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-UNIT-001",
+      "tp_ids": [
+        "TP_CFG_START_001",
+        "TP_CMD_DEC_001",
+        "TP_CMD_DEC_002",
+        "TP_CMD_OST_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_BASIC_001",
+        "TC_CMDSCHED_ITYPE_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-UNIT-002",
+      "tp_ids": [
+        "TP_PAR_LS_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_PARALLEL_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-UNIT-003",
+      "tp_ids": [
+        "TP_PAR_LS_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_PARALLEL_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-UNIT-004",
+      "tp_ids": [
+        "TP_PAR_MST_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_HAZARD_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-FUNC-UNIT-005",
+      "tp_ids": [
+        "TP_PAR_MST_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_PARALLEL_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-IF-DONE-001",
+      "tp_ids": [
+        "TP_CFG_START_003"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_BASIC_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-IF-HS-001",
+      "tp_ids": [
+        "TP_CMD_HS_001",
+        "TP_CMD_HS_002",
+        "TP_CMD_OST_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_BASIC_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-IF-HS-002",
+      "tp_ids": [
+        "TP_RSP_BP_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_RSP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-IF-START-001",
+      "tp_ids": [
+        "TP_CFG_START_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_BASIC_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-LP-IDLE-001",
+      "tp_ids": [
+        "TP_LP_ICG_001",
+        "TP_LP_ICG_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_CSR_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-LP-RST-001",
+      "tp_ids": [
+        "TP_LP_RST_001",
+        "TP_LP_RST_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_CSR_001",
+        "TC_CMDSCHED_REL_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-PERF-PARAL-001",
+      "tp_ids": [
+        "TP_PERF_CNT_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_PERF_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-PERF-PRIO-001",
+      "tp_ids": [
+        "TP_RSP_PRIO_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_RSP_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-PERF-START-DONE-001",
+      "tp_ids": [
+        "TP_PERF_CNT_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_PERF_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-PERF-TMU-001",
+      "tp_ids": [
+        "TP_PAR_TMU_001",
+        "TP_PAR_TMU_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_PARALLEL_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-RES-DRAM-001",
+      "tp_ids": [
+        "TP_MEM_PD_002",
+        "TP_SCHED_RANGE_002"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_MEM_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-RES-PAGE-001",
+      "tp_ids": [
+        "TP_MEM_PD_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_MEM_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-RES-RLS-001",
+      "tp_ids": [
+        "TP_MEM_REL_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_MEM_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-RES-SPAD-001",
+      "tp_ids": [
+        "TP_MEM_SHARE_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_MEM_001"
+      ],
+      "matrix_status": "assume"
+    },
+    {
+      "contract_id": "C-RES-TILE-001",
+      "tp_ids": [
+        "TP_MEM_REL_002",
+        "TP_MEM_TILE_001",
+        "TP_MEM_TILE_002",
+        "TP_SCHED_RANGE_001"
+      ],
+      "case_ids": [
+        "TC_CMDSCHED_MEM_001"
+      ],
+      "matrix_status": "assume"
+    }
+  ],
+  "regression_status": "PASS",
+  "tp_status": {
+    "TP-NPUSCH-D_QUEUE-0": "BACKDOOR_HIT",
+    "TP-NPUSCH-D_QUEUE-1": "BACKDOOR_HIT",
+    "TP-NPUSCH-D_QUEUE-7": "BACKDOOR_HIT",
+    "TP-NPUSCH-D_QUEUE-8": "BACKDOOR_HIT",
+    "TP-NPUSCH-D_QUEUE-15": "BACKDOOR_HIT",
+    "TP-NPUSCH-D_QUEUE-16": "BACKDOOR_HIT",
+    "TP-NPUSCH-D_QUEUE-24": "BACKDOOR_HIT",
+    "TP-NPUSCH-D_QUEUE-25": "BACKDOOR_HIT",
+    "TP-NPUSCH-D_QUEUE-31": "BACKDOOR_HIT",
+    "TP-NPUSCH-D_QUEUE-32": "BACKDOOR_HIT",
+    "TP-NPUSCH-D_TYPE-MAC": "HIT",
+    "TP-NPUSCH-D_TYPE-VECTOR": "HIT",
+    "TP-NPUSCH-D_TYPE-SCALAR": "HIT",
+    "TP-NPUSCH-D_TYPE-DMA": "HIT",
+    "TP-NPUSCH-D_DTYPE-INT8": "HIT",
+    "TP-NPUSCH-D_DTYPE-FP16": "HIT",
+    "TP-NPUSCH-D_DTYPE-BF16": "HIT",
+    "TP-NPUSCH-D_DTYPE-FP32": "HIT",
+    "TP-NPUSCH-D_DEP-NONE": "OBSERVED",
+    "TP-NPUSCH-D_DEP-RAW": "OBSERVED",
+    "TP-NPUSCH-D_DEP-WAW": "OBSERVED",
+    "TP-NPUSCH-D_DEP-WAR": "UNOBSERVED",
+    "TP-NPUSCH-D_UNIT-MAC": "OBSERVED",
+    "TP-NPUSCH-D_UNIT-VECTOR": "OBSERVED",
+    "TP-NPUSCH-D_UNIT-SCALAR": "OBSERVED",
+    "TP-NPUSCH-D_UNIT-DMA": "OBSERVED",
+    "TP-NPUSCH-D_DECISION-ISSUED": "OBSERVED",
+    "TP-NPUSCH-D_DECISION-STALLED": "OBSERVED",
+    "TP-NPUSCH-D_DECISION-BLOCKED": "UNOBSERVED",
+    "TP-NPUSCH-D_DECISION-FLUSHED": "OBSERVED",
+    "TP-NPUSCH-D_CLUSTER-0": "OBSERVED",
+    "TP-NPUSCH-D_CLUSTER-1": "OBSERVED",
+    "TP-NPUSCH-D_CLUSTER-2": "OBSERVED",
+    "TP-NPUSCH-D_CLUSTER-3": "OBSERVED",
+    "TP-NPUSCH-D_OPCODE-MAC_INT8": "HIT",
+    "TP-NPUSCH-D_OPCODE-MAC_FP16": "HIT",
+    "TP-NPUSCH-D_OPCODE-MAC_BF16": "HIT",
+    "TP-NPUSCH-D_OPCODE-VEC_ADD": "HIT",
+    "TP-NPUSCH-D_OPCODE-VEC_MUL": "HIT",
+    "TP-NPUSCH-D_OPCODE-VEC_RELU": "HIT",
+    "TP-NPUSCH-D_OPCODE-LOAD": "HIT",
+    "TP-NPUSCH-D_OPCODE-STORE": "HIT",
+    "TP-NPUSCH-D_OPCODE-DMA_READ": "HIT",
+    "TP-NPUSCH-D_OPCODE-DMA_WRITE": "HIT",
+    "TP-NPUSCH-D_SEQ-MAC_MAC": "HIT",
+    "TP-NPUSCH-D_SEQ-LOAD_MAC": "HIT",
+    "TP-NPUSCH-D_SEQ-MAC_STORE": "HIT",
+    "TP-NPUSCH-D_SEQ-DMA_MAC": "HIT",
+    "TP-NPUSCH-D_SEQ-VEC_MAC": "HIT",
+    "TP-NPUSCH-D_SEQ-SCALAR_MAC": "HIT",
+    "TP-NPUSCH-D_PIPELINE-NONE": "HIT",
+    "TP-NPUSCH-D_PIPELINE-MAC_MAC": "HIT",
+    "TP-NPUSCH-D_PIPELINE-MAC_DMA": "HIT",
+    "TP-NPUSCH-D_PIPELINE-VEC_MAC": "HIT",
+    "TP-NPUSCH-D_PIPELINE-MULTI_OP": "HIT",
+    "TP-NPUSCH-D_PRIORITY-HIGH_FIRST": "HIT",
+    "TP-NPUSCH-D_PRIORITY-LOW_FIRST": "HIT",
+    "TP-NPUSCH-D_PRIORITY-SAME_PRIO": "HIT",
+    "TP-NPUSCH-D_PRIORITY-ROUND_ROBIN": "HIT",
+    "TP-NPUSCH-D_BARRIER-NONE": "HIT",
+    "TP-NPUSCH-D_BARRIER-TILE_BARRIER": "HIT",
+    "TP-NPUSCH-D_BARRIER-OP_BARRIER": "HIT",
+    "TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER": "HIT",
+    "TP-NPUSCH-BEH_QUEUE-TR_EMPTY_ENQ": "PENDING_BACKEND",
+    "TP-NPUSCH-BEH_QUEUE-TR_LOW_ENQ": "PENDING_BACKEND",
+    "TP-NPUSCH-BEH_QUEUE-TR_HIGH_ENQ": "PENDING_BACKEND",
+    "TP-NPUSCH-BEH_QUEUE-TR_FULL_DEQ": "PENDING_BACKEND",
+    "TP-NPUSCH-BEH_QUEUE-TR_FULL_FLUSH": "PENDING_BACKEND",
+    "TP-NPUSCH-BEH_QUEUE-SEQ_FILL_DRAIN": "PENDING_BACKEND",
+    "TP-NPUSCH-BEH_QUEUE-TMP_BACKPRESSURE": "PENDING_BACKEND"
+  },
+  "case_tp_status": {
+    "TC_CMDSCHED_BASIC_001": {
+      "TP-NPUSCH-D_QUEUE-0": "BACKDOOR_HIT",
+      "TP-NPUSCH-D_QUEUE-1": "BACKDOOR_HIT",
+      "TP-NPUSCH-D_QUEUE-7": "BACKDOOR_HIT",
+      "TP-NPUSCH-D_QUEUE-8": "BACKDOOR_HIT",
+      "TP-NPUSCH-D_QUEUE-15": "BACKDOOR_HIT",
+      "TP-NPUSCH-D_QUEUE-16": "BACKDOOR_HIT",
+      "TP-NPUSCH-D_QUEUE-24": "BACKDOOR_HIT",
+      "TP-NPUSCH-D_QUEUE-25": "BACKDOOR_HIT",
+      "TP-NPUSCH-D_QUEUE-31": "BACKDOOR_HIT",
+      "TP-NPUSCH-D_QUEUE-32": "BACKDOOR_HIT",
+      "TP-NPUSCH-D_TYPE-MAC": "HIT",
+      "TP-NPUSCH-D_TYPE-VECTOR": "HIT",
+      "TP-NPUSCH-D_TYPE-SCALAR": "HIT",
+      "TP-NPUSCH-D_TYPE-DMA": "HIT",
+      "TP-NPUSCH-D_DTYPE-INT8": "HIT",
+      "TP-NPUSCH-D_DTYPE-FP16": "HIT",
+      "TP-NPUSCH-D_DTYPE-BF16": "HIT",
+      "TP-NPUSCH-D_DTYPE-FP32": "HIT",
+      "TP-NPUSCH-D_DEP-NONE": "OBSERVED",
+      "TP-NPUSCH-D_DEP-RAW": "OBSERVED",
+      "TP-NPUSCH-D_DEP-WAW": "OBSERVED",
+      "TP-NPUSCH-D_DEP-WAR": "UNOBSERVED",
+      "TP-NPUSCH-D_UNIT-MAC": "OBSERVED",
+      "TP-NPUSCH-D_UNIT-VECTOR": "OBSERVED",
+      "TP-NPUSCH-D_UNIT-SCALAR": "OBSERVED",
+      "TP-NPUSCH-D_UNIT-DMA": "OBSERVED",
+      "TP-NPUSCH-D_DECISION-ISSUED": "OBSERVED",
+      "TP-NPUSCH-D_DECISION-STALLED": "OBSERVED",
+      "TP-NPUSCH-D_DECISION-BLOCKED": "UNOBSERVED",
+      "TP-NPUSCH-D_DECISION-FLUSHED": "OBSERVED",
+      "TP-NPUSCH-D_CLUSTER-0": "OBSERVED",
+      "TP-NPUSCH-D_CLUSTER-1": "OBSERVED",
+      "TP-NPUSCH-D_CLUSTER-2": "OBSERVED",
+      "TP-NPUSCH-D_CLUSTER-3": "OBSERVED",
+      "TP-NPUSCH-D_OPCODE-MAC_INT8": "HIT",
+      "TP-NPUSCH-D_OPCODE-MAC_FP16": "HIT",
+      "TP-NPUSCH-D_OPCODE-MAC_BF16": "HIT",
+      "TP-NPUSCH-D_OPCODE-VEC_ADD": "HIT",
+      "TP-NPUSCH-D_OPCODE-VEC_MUL": "HIT",
+      "TP-NPUSCH-D_OPCODE-VEC_RELU": "HIT",
+      "TP-NPUSCH-D_OPCODE-LOAD": "HIT",
+      "TP-NPUSCH-D_OPCODE-STORE": "HIT",
+      "TP-NPUSCH-D_OPCODE-DMA_READ": "HIT",
+      "TP-NPUSCH-D_OPCODE-DMA_WRITE": "HIT",
+      "TP-NPUSCH-D_SEQ-MAC_MAC": "HIT",
+      "TP-NPUSCH-D_SEQ-LOAD_MAC": "HIT",
+      "TP-NPUSCH-D_SEQ-MAC_STORE": "HIT",
+      "TP-NPUSCH-D_SEQ-DMA_MAC": "HIT",
+      "TP-NPUSCH-D_SEQ-VEC_MAC": "HIT",
+      "TP-NPUSCH-D_SEQ-SCALAR_MAC": "HIT",
+      "TP-NPUSCH-D_PIPELINE-NONE": "HIT",
+      "TP-NPUSCH-D_PIPELINE-MAC_MAC": "HIT",
+      "TP-NPUSCH-D_PIPELINE-MAC_DMA": "HIT",
+      "TP-NPUSCH-D_PIPELINE-VEC_MAC": "HIT",
+      "TP-NPUSCH-D_PIPELINE-MULTI_OP": "HIT",
+      "TP-NPUSCH-D_PRIORITY-HIGH_FIRST": "HIT",
+      "TP-NPUSCH-D_PRIORITY-LOW_FIRST": "HIT",
+      "TP-NPUSCH-D_PRIORITY-SAME_PRIO": "HIT",
+      "TP-NPUSCH-D_PRIORITY-ROUND_ROBIN": "HIT",
+      "TP-NPUSCH-D_BARRIER-NONE": "HIT",
+      "TP-NPUSCH-D_BARRIER-TILE_BARRIER": "HIT",
+      "TP-NPUSCH-D_BARRIER-OP_BARRIER": "HIT",
+      "TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER": "HIT"
+    }
+  },
+  "sv_contracts": [],
+  "sha256": {
+    "contract_manifest": "93a43e84b8efc5475923cd53f253084f3c951c7bb7f9a7af8576d901afa3c2d5",
+    "regression_stages": "65cf94d3d40f67b4ff821731fc086eb80b1a6c6257eddcae9686676ba065b3d9",
+    "tp_matrix": "234b9663919b574f39909e69b7dc51c8c8e01ed14518dac9c5972164dbee7ad0",
+    "sv_registry": "eff9e736505742d02e21338b66859b120cb2166fe9f3b998582458ed85cf75d6"
+  }
+}
