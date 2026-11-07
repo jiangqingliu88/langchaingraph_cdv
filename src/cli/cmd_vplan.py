@@ -125,6 +125,102 @@ def vplan_package_assets(run, json_output):
     console.print("  [yellow]全部 candidate：未编译、无运行证据，不能冒充 active[/yellow]")
 
 
+@vplan_group.command("scan-assets")
+@click.argument("run", type=click.Path(exists=True, file_okay=False,
+                                       path_type=Path))
+@click.option("--check", "check_only", is_flag=True,
+              help="与 sv/asset_registry.csv 核对，不一致则失败")
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def vplan_scan_assets(run, check_only, json_output):
+    """扫描 run 的 sv/ 锚点；`--check` 核对登记表。"""
+    import csv
+    from src.layers.l3_decision.vplan import scan_assets
+
+    rows = scan_assets(run)
+    problems = []
+    if check_only:
+        reg = run / "sv" / "asset_registry.csv"
+        if not reg.is_file():
+            problems.append("sv/asset_registry.csv 不存在（先 package-assets）")
+        else:
+            with reg.open(encoding="utf-8-sig", newline="") as fh:
+                registered = {r["path"] for r in csv.DictReader(fh)}
+            scanned = {r["path"] for r in rows}
+            for path in sorted(registered - scanned):
+                problems.append(f"登记了但扫描不到：{path}")
+            for path in sorted(scanned - registered):
+                problems.append(f"扫描到但未登记：{path}")
+    result = {"assets": len(rows), "problems": problems}
+    if json_output:
+        click.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        console.print(f"sv/ 资产：{len(rows)} 个")
+        for problem in problems:
+            console.print(f"  [red]✗ {problem}[/red]")
+    if problems:
+        raise SystemExit(1)
+
+
+@vplan_group.command("link")
+@click.argument("project", type=click.Path(exists=True, file_okay=False,
+                                           path_type=Path))
+@click.argument("run", type=click.Path(exists=True, file_okay=False,
+                                       path_type=Path))
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def vplan_link(project, run, json_output):
+    """把一个 run 记进项目 evidence/index.json。"""
+    from src.layers.l3_decision.vplan import link_run
+
+    entry = link_run(project, run)
+    if json_output:
+        click.echo(json.dumps(entry, ensure_ascii=False, indent=2))
+        return
+    console.print(f"[green]✓ 证据索引[/green] {entry['run_id']}")
+    console.print(f"  契约 {len(entry['contracts'])} / "
+                  f"regression={entry['regression_status']} / "
+                  f"TP {len(entry['tp_status'])}")
+
+
+@vplan_group.command("gate")
+@click.argument("project", type=click.Path(exists=True, file_okay=False,
+                                           path_type=Path))
+@click.option("--apply", is_flag=True,
+              help="把 eligible 的契约写成 active（只改满足全部证据条件的行）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def vplan_gate(project, apply, json_output):
+    """按证据评估 C-*：满足 TP/回归/资产条件才可能 active。"""
+    from src.layers.l3_decision.vplan import apply_active, evaluate
+
+    results = evaluate(project)
+    changed = apply_active(project, results) if apply else 0
+    if apply and changed:
+        results = evaluate(project)
+    counts: dict[str, int] = {}
+    for row in results:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    eligible = [r for r in results if r["eligible_active"]]
+    blocked = [r for r in results if not r["eligible_active"]]
+    summary = {
+        "contracts": len(results),
+        "by_status": counts,
+        "eligible_active": len(eligible),
+        "blocked": len(blocked),
+        "changed": changed,
+        "blocked_examples": blocked[:10],
+    }
+    if json_output:
+        click.echo(json.dumps(summary, ensure_ascii=False, indent=2))
+    else:
+        console.print(f"契约 {summary['contracts']}：{counts}")
+        console.print(f"  eligible_active {len(eligible)} / blocked {len(blocked)}"
+                      f" / changed {changed}")
+        for row in blocked[:5]:
+            console.print(f"  [yellow]• {row['contract_id']}: "
+                          f"{'; '.join(row['reasons'])}[/yellow]")
+    if any(r["status"] != "active" for r in results):
+        raise SystemExit(1)
+
+
 @vplan_group.command("execute")
 @click.argument("project", type=click.Path(exists=True, file_okay=False,
                                            path_type=Path))

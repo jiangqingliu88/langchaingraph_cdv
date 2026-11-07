@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 
@@ -164,6 +165,65 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
     test = (tmp_path / "sv" / "test" / "foo_test.sv").read_text(encoding="utf-8")
     assert "// CASE_ID: TC_FOO" in test
     assert len(scan_assets(tmp_path)) == 7
+
+
+def test_evidence_gate_requires_tp_regression_and_asset(tmp_path):
+    from src.layers.l3_decision.vplan import apply_active, evaluate, link_run
+
+    proj = tmp_path / "proj"
+    matrix = proj / "data" / "contract_matrix"
+    matrix.mkdir(parents=True)
+    fields = ["contract_id", "class", "object", "description", "source_ref",
+              "owner", "p_level", "check_method", "check_artifact", "gate",
+              "status", "assumption", "remark"]
+    rows = []
+    for cid in ("C-FUNC-UNIT-001", "C-FUNC-DEP-002"):
+        rows.append({"contract_id": cid, "class": "func", "object": "x",
+                     "description": "x", "source_ref": "1", "owner": "dv",
+                     "p_level": "P0", "check_method": "scb",
+                     "check_artifact": "x", "gate": "g", "status": "assume",
+                     "assumption": "planned", "remark": ""})
+    with (matrix / "func.csv").open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    run = tmp_path / "run"
+    (run / "contract").mkdir(parents=True)
+    (run / "coverage").mkdir()
+    (run / "sv").mkdir()
+    (run / "contract" / "plan_link.yaml").write_text(yaml.safe_dump({
+        "schema": "vplan_contract_link_v1",
+        "module": "p", "spec_hash": "x",
+        "contracts": [
+            {"contract_id": "C-FUNC-UNIT-001", "tp_ids": ["TP-1"],
+             "case_ids": ["TC-1"]},
+            {"contract_id": "C-FUNC-DEP-002", "tp_ids": ["TP-2"],
+             "case_ids": ["TC-2"]},
+        ],
+    }), encoding="utf-8")
+    (run / "coverage" / "tp_matrix.json").write_text(json.dumps({
+        "rows": [{"tp_id": "TP-1", "status": "HIT"},
+                 {"tp_id": "TP-2", "status": "MISS"}],
+    }), encoding="utf-8")
+    (run / "regression_stages.json").write_text(json.dumps({"status": "PASS"}),
+                                                encoding="utf-8")
+    (run / "sv" / "asset_registry.csv").write_text(
+        "artifact,kind,path,owner,status,contract_ids,case_ids,source\n"
+        "unit_scb,scb,sv/scb/unit_scb.sv,dv,candidate,C-FUNC-UNIT-001,,x\n",
+        encoding="utf-8")
+
+    link_run(proj, run)
+    result = {row["contract_id"]: row for row in evaluate(proj)}
+    assert result["C-FUNC-UNIT-001"]["eligible_active"] is True
+    assert result["C-FUNC-DEP-002"]["eligible_active"] is False
+    assert any("TP not hit" in reason
+               for reason in result["C-FUNC-DEP-002"]["reasons"])
+
+    assert apply_active(proj, result.values()) == 1
+    after = {row["contract_id"]: row for row in evaluate(proj)}
+    assert after["C-FUNC-UNIT-001"]["status"] == "active"
+    assert after["C-FUNC-DEP-002"]["status"] == "assume"
 
 
 def test_explicit_casemodel_marker(tmp_path):

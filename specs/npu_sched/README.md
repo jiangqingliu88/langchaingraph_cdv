@@ -104,6 +104,10 @@ vagent vplan execute specs/npu_sched -o output_vplan_npu_sched \
 vagent vplan package-assets <run>
 # → <run>/sv/{interface,agents,monitor,coverage,sva,checker,scb,seq,test,env}
 # → <run>/sv/asset_registry.csv（全部 candidate，未编译/无证据）
+
+# 证据索引 + 契约门禁：TP 全命中 / 回归 PASS / sv/ 资产声明齐全才可能 active
+vagent vplan link specs/npu_sched <run>
+vagent vplan gate specs/npu_sched [--apply]
 ```
 
 ## 当前内容

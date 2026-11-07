@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from .assets import package_run_assets, scan_assets
 from .build import build_case_ir, build_payload, build_testpoints
+from .evidence import apply_active, evaluate, link_run, load_index
 from .execution import build_execution_model, write_execution_model
 from .runner import write_plan_only_run
 from .source import VPlanError, VPlanProject, load_project
@@ -18,5 +19,6 @@ __all__ = [
     "build_testpoints", "build_case_ir", "build_payload",
     "build_execution_model", "write_execution_model",
     "package_run_assets", "scan_assets",
+    "apply_active", "evaluate", "link_run", "load_index",
     "write_plan_only_run",
 ]

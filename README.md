@@ -589,6 +589,11 @@ vagent vplan execute specs/npu_sched -o output_vplan_npu_sched --max-rounds 1 --
 
 # 生成后按 VPlan sv/ 布局整理内核产出的 UVM 资产（不手写 SV）
 vagent vplan package-assets <run>
+vagent vplan scan-assets <run> --check
+
+# 证据索引与契约推进：只有 TP 全命中、回归 PASS、sv/ 资产声明齐全才可能 active
+vagent vplan link specs/npu_sched <run>
+vagent vplan gate specs/npu_sched [--apply]
 ```
 
 产物与正常 run 同位置：`coverage/testpoints.{yaml,json}`、
@@ -1063,7 +1068,7 @@ include，测试恢复其原意。**这 82 个测试当时恢复全绿。**
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q                            # 2026-11-07：1164 passed / 8 failed / 2 skipped
+python -m pytest tests/ -q                            # 2026-11-07：1165 passed / 8 failed / 2 skipped
 python -m pytest src/workbench/tests -q               # 工作台：758 项（需要 PySide6）
 python -m pytest src/layers/l3_decision/casemodel/tests -q   # case 建模 + 框架 + 覆盖率方法学：560 passed
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
@@ -1088,7 +1093,7 @@ python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：
 | `src/layers/l3_decision/casemodel/tests/test_plan.py::TestBackdoorRealization` | backdoor 维度带 `path`、不进 `observe`；缺 path 回退并记账 |
 
 **"跑测试"在这里的定位**：计数会随迁移漂动，README 不把它写成"永远全绿"。
-最近一次实测（2026-11-07）：主测试集 **1164 passed / 8 failed / 2 skipped**。
+最近一次实测（2026-11-07）：主测试集 **1165 passed / 8 failed / 2 skipped**。
 VPlan 迁移删除了依赖旧 `specs/apb_*` 与 NPU casemodel 夹具的测试；剩余 8 项是
 迁移前就存在的契约/工具板/状态测试（caveat 码、case view 语义、mutation、
 分级回归审批、state 契约、tools boards/skills），不是 EDA 缺失导致的假失败。
