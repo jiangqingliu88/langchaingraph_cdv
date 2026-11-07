@@ -127,6 +127,35 @@ def vplan_package_assets(run, json_output):
     console.print("  [yellow]全部 candidate：未编译、无运行证据，不能冒充 active[/yellow]")
 
 
+@vplan_group.command("clean-layout")
+@click.argument("run", type=click.Path(exists=True, file_okay=False,
+                                       path_type=Path))
+@click.option("--apply", is_flag=True,
+              help="真的删除顶层 agents/bench/env/build（默认只列出）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def vplan_clean_layout(run, apply, json_output):
+    """删除内核的顶层工作目录，只保留 VPlan sv/ 布局。"""
+    from src.layers.l3_decision.vplan import clean_legacy_dirs
+
+    try:
+        summary = clean_legacy_dirs(run, apply=apply)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(summary, ensure_ascii=False, indent=2))
+        return
+    if not summary["present"]:
+        console.print("没有 legacy 目录需要清理")
+        return
+    if apply:
+        console.print(f"[green]✓ 已删除[/green] "
+                      f"{', '.join(summary['deleted'])}")
+    else:
+        console.print(f"[yellow]将删除（dry-run）：[/yellow] "
+                      f"{', '.join(summary['present'])}")
+        console.print("  确认后加 --apply")
+
+
 @vplan_group.command("scan-assets")
 @click.argument("run", type=click.Path(exists=True, file_okay=False,
                                        path_type=Path))
@@ -236,9 +265,14 @@ def vplan_gate(project, apply, json_output):
               help="只生成运行期模型并打印命令，不跑 UVM/EDA")
 @click.option("--low-memory", is_flag=True,
               help="低内存机器：vopt 用 -O0（置 SIGNOFFAI_VOPT_ARGS=-voptargs=-O0）")
+@click.option("--uvm-layout", type=click.Choice(["vplan", "legacy"]),
+              default="vplan", show_default=True,
+              help="UVM 生成布局：vplan = 生成期同时落 <run>/sv/；legacy = 只保留内核目录")
+@click.option("--clean-legacy", is_flag=True,
+              help="run 成功后删除顶层 agents/bench/env/build，只留 sv/")
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def vplan_execute(project, output, max_rounds, sim_modes, dry_run,
-                  low_memory, json_output):
+                  low_memory, uvm_layout, clean_legacy, json_output):
     """用 VPlan case/契约 + 执行资产跑现有 verify 内核（UVM/回归/证据）。"""
     from src.layers.l1_infrastructure.output_config import make_output_root
     from src.layers.l3_decision.vplan import (
@@ -266,10 +300,12 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run,
         "max_rounds": int(max_rounds),
         "sim_modes": list(sim_modes) or ["cov"],
         "low_memory": bool(low_memory),
+        "uvm_layout": uvm_layout,
     }
     if dry_run:
         _env = ("SIGNOFFAI_VOPT_ARGS=-voptargs=-O0 "
                 if low_memory else "")
+        _env += f"SIGNOFFAI_UVM_LAYOUT={uvm_layout} "
         summary["command"] = (
             f"{_env}vagent verify --rtl {rtl_dir} --config {model_path} "
             f"--verify-only --approval auto --no-manual-gate "
@@ -286,8 +322,10 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run,
     from src.app.services import run_verify_async
 
     _prev_vopt = os.environ.get("SIGNOFFAI_VOPT_ARGS")
+    _prev_layout = os.environ.get("SIGNOFFAI_UVM_LAYOUT")
     if low_memory:
         os.environ["SIGNOFFAI_VOPT_ARGS"] = "-voptargs=-O0"
+    os.environ["SIGNOFFAI_UVM_LAYOUT"] = uvm_layout
     try:
         result = asyncio.run(run_verify_async(
             # 执行层的 DUT 名必须来自 RTL（npu_sched），而不是自然语言 spec
@@ -310,6 +348,10 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run,
             os.environ.pop("SIGNOFFAI_VOPT_ARGS", None)
         else:
             os.environ["SIGNOFFAI_VOPT_ARGS"] = _prev_vopt
+        if _prev_layout is None:
+            os.environ.pop("SIGNOFFAI_UVM_LAYOUT", None)
+        else:
+            os.environ["SIGNOFFAI_UVM_LAYOUT"] = _prev_layout
         import shutil
         shutil.rmtree(work, ignore_errors=True)
 
@@ -336,10 +378,18 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run,
             "cases_by_status": proj.case_status_counts,
             "execution": "RUN",
         })
-        from src.layers.l3_decision.vplan import package_run_assets
+        from src.layers.l3_decision.vplan import (
+            clean_legacy_dirs, package_run_assets)
 
         summary["assets"] = package_run_assets(run_root, proj.module)
         summary["run"] = str(run_root)
+        if clean_legacy and result.get("status") in {"CONVERGED", "PASS",
+                                                     "COMPLETED"}:
+            try:
+                summary["legacy_cleaned"] = clean_legacy_dirs(
+                    run_root, apply=True)
+            except ValueError as exc:
+                summary["legacy_cleaned_error"] = str(exc)
 
     summary["result"] = result if isinstance(result, dict) else str(result)
     if json_output:

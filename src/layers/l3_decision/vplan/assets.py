@@ -188,6 +188,31 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
             "assets": len(rows)}
 
 
+LEGACY_DIRS = ("agents", "bench", "env", "build")
+
+
+def clean_legacy_dirs(run_root: str | Path, *, apply: bool = False) -> Dict[str, Any]:
+    """删除内核的顶层工作目录（仅当 sv/ 已生成时）。
+
+    这是**不可逆**操作；默认 dry-run。只有 `sv/asset_registry.csv` 存在且至少
+    有一个 `sv/**/*.sv` 才允许删 —— 否则会把唯一一份资产删掉。
+    """
+    root = Path(run_root)
+    sv_root = root / "sv"
+    assets = list(sv_root.rglob("*.sv")) if sv_root.is_dir() else []
+    if not (sv_root / "asset_registry.csv").is_file() or not assets:
+        raise ValueError("sv/ 未生成或无 .sv 资产，拒绝删除 legacy 目录")
+    present = [name for name in LEGACY_DIRS if (root / name).is_dir()]
+    if apply:
+        import shutil
+
+        for name in present:
+            shutil.rmtree(root / name)
+    return {"run": str(root), "apply": apply,
+            "present": present, "deleted": present if apply else [],
+            "assets": len(assets)}
+
+
 def scan_assets(root: str | Path) -> List[Dict[str, str]]:
     """扫描 `sv/**/*.sv` 的锚点（用于 --check / registry 核对）。"""
     sv_root = Path(root) / "sv"

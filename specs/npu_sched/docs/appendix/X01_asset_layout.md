@@ -81,6 +81,7 @@ VPlan docs/specs + contract_matrix
   → <run>/agents、env、coverage、...
   → vagent vplan package-assets <run>
   → <run>/sv/（本布局）+ sv/asset_registry.csv
+  → 可选：vplan clean-layout <run> --apply 删除顶层 agents/bench/env/build
   → 编译/仿真/覆盖率（后续）+ gate
 ```
 

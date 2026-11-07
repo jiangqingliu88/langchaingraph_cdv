@@ -586,6 +586,8 @@ vagent verify       specs/npu_sched -o output_vplan_npu_sched   # 同一个规�
 # 执行层：派生运行期 casemodel + 现有 verify 内核（UVM/回归/证据）
 vagent vplan execute specs/npu_sched --dry-run
 vagent vplan execute specs/npu_sched -o output_vplan_npu_sched --max-rounds 1 --sim-mode cov
+# 默认 --uvm-layout vplan：生成期就落 <run>/sv/（legacy 只保留内核目录）
+# 成功后清掉顶层 agents/bench/env/build：--clean-legacy
 
 # 生成后按 VPlan sv/ 布局整理内核产出的 UVM 资产（不手写 SV）
 vagent vplan package-assets <run>

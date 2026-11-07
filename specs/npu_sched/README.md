@@ -96,14 +96,18 @@ vagent vplan execute specs/npu_sched -o output_vplan_npu_sched \
 但契约/TP/case 状态**仍不会自动升级** —— 必须先由 gate 依据证据推进，
 否则保持 `assume` / `planned`。
 
-**验证资产由 SignOffAI 生成，不在本目录手写。** 生成后按
-[`docs/appendix/X01_asset_layout.md`](docs/appendix/X01_asset_layout.md)
-整理成 `sv/` 布局并登记锚点：
+**验证资产由 SignOffAI 生成，不在本目录手写。** `vplan execute` 默认
+`--uvm-layout vplan`：verify 的 `jinja_render` 之后就把本次生成的资产落
+`<run>/sv/`（与顶层 `agents/env/bench` 同一批文件）。已有 run 可补整理/核对：
 
 ```bash
 vagent vplan package-assets <run>
 # → <run>/sv/{interface,agents,monitor,coverage,sva,checker,scb,seq,test,env}
 # → <run>/sv/asset_registry.csv（全部 candidate，未编译/无证据）
+
+# 清理内核顶层工作目录，只保留 sv/（默认 dry-run）
+vagent vplan clean-layout <run> --apply
+# 或让 execute 成功后自动清：vagent vplan execute ... --clean-legacy
 
 # 证据索引 + 契约门禁：TP 全命中 / 回归 PASS / sv/ 资产声明齐全才可能 active
 vagent vplan link specs/npu_sched <run>

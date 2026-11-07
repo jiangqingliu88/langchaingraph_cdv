@@ -12,6 +12,7 @@ import csv
 import json
 from pathlib import Path
 
+import pytest
 import yaml
 
 from src.layers.l3_decision.vplan import (
@@ -227,6 +228,27 @@ def test_evidence_gate_requires_tp_regression_and_asset(tmp_path):
     after = {row["contract_id"]: row for row in evaluate(proj)}
     assert after["C-FUNC-UNIT-001"]["status"] == "active"
     assert after["C-FUNC-DEP-002"]["status"] == "assume"
+
+
+def test_clean_legacy_dirs_requires_sv(tmp_path):
+    from src.layers.l3_decision.vplan import clean_legacy_dirs
+
+    run = tmp_path / "run"
+    (run / "agents").mkdir(parents=True)
+    (run / "sv").mkdir()
+    with pytest.raises(ValueError):
+        clean_legacy_dirs(run)
+
+    (run / "sv" / "asset_registry.csv").write_text("artifact\nx\n",
+                                                   encoding="utf-8")
+    (run / "sv" / "x.sv").write_text("module x; endmodule\n", encoding="utf-8")
+    dry = clean_legacy_dirs(run)
+    assert dry["present"] == ["agents"]
+    assert (run / "agents").is_dir()
+
+    applied = clean_legacy_dirs(run, apply=True)
+    assert applied["deleted"] == ["agents"]
+    assert not (run / "agents").exists()
 
 
 def test_explicit_casemodel_marker(tmp_path):
