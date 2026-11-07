@@ -41,6 +41,36 @@ make trace     # 只跑 lint
 make view      # 重新生成 case 占位视图
 ```
 
+## 接入 SignOffAI 流程（规划/契约层）
+
+SignOffAI 现在能直接把本目录当作 VPlan 项目读入：**不读 casemodel.yaml**，
+而是用 `docs/specs/*.csv` 与 `data/contract_matrix/*.csv` 生成内核认识的
+TestPoint IR / Case IR / 执行契约。
+
+```bash
+# 方式一：显式构建规划 IR
+vagent vplan build specs/npu_sched -o output_vplan_npu_sched
+
+# 方式二：verify 识别 VPlan 项目目录（同一个规划层）
+vagent verify specs/npu_sched -o output_vplan_npu_sched
+
+# 只读查看计数与状态
+vagent vplan status specs/npu_sched
+```
+
+产物（位置与正常 run 一致）：
+
+| 产物 | 内容 |
+|---|---|
+| `coverage/testpoints.{yaml,json}` | 66 条 TP；`planned`、`observe-only`（VPlan 未绑定事务字段） |
+| `coverage/case_ir.json` | 12 条 CASE；`C-*` 引用保存在 `feats` |
+| `contract/contract.yaml` + `obligations.json` | 由 Case IR 编译的 CT/OBL（现有内核） |
+| `contract/plan_link.yaml` | `C-*` ↔ TP ↔ case 的 sidecar；42 条全部 `assume` |
+| `docs/manifest.json` | `origin=vplan`、`status=PLANNED`、`execution=PLAN_ONLY` |
+
+**不会**产生 `report.json` / `signoff_evidence/`，因此不可签核；契约状态
+也不会被自动改成 `active`。执行层（UVM/EDA/URG）尚未接入。
+
 ## 当前内容
 
 | 项 | 数量/状态 |

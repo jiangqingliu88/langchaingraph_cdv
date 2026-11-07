@@ -72,6 +72,61 @@ def _verify_kwargs(**kw) -> dict:
     }
 
 
+def _resolve_spec_input(spec_file, rtl_dir):
+    """默认 spec（只在 `--rtl` 缺席时套用），返回解析后的 spec 路径。"""
+    if not spec_file and not rtl_dir:
+        default = Path("specs/apb_uart/apb_uart_spec.md")
+        if default.exists():
+            console.print(f"[dim]未指定 spec，用默认：{default}[/dim]")
+            return str(default)
+        raise click.UsageError(
+            f"没给 spec，默认的 {default} 也不存在（工作目录下找不到）。"
+            "请显式给 spec，或用 --rtl 给 RTL")
+    return spec_file
+
+
+def _is_vplan_dir(path) -> bool:
+    return bool(path) and Path(path).is_dir()
+
+
+def _run_vplan_project(root: Path, output, json_output: bool, rtl_dir) -> None:
+    """`verify <vplan-project-dir>` 的规划层分支（不读 casemodel、不跑 EDA）。"""
+    if not ((root / "docs" / "specs").is_dir()
+            and (root / "data" / "contract_matrix").is_dir()):
+        raise click.UsageError(
+            f"{root} 是目录，但不是 VPlan 项目"
+            "（缺 docs/specs 或 data/contract_matrix）")
+    if rtl_dir:
+        raise click.UsageError(
+            "VPlan 项目当前只接规划/契约层，不接受 --rtl；执行层尚未接入")
+    from src.layers.l1_infrastructure.output_config import make_output_root
+    from src.layers.l3_decision.vplan import (
+        VPlanError, load_project, write_plan_only_run)
+
+    try:
+        proj = load_project(root)
+    except VPlanError as exc:
+        raise click.ClickException(str(exc)) from exc
+    run_dir = output or make_output_root(f"output_vplan_{proj.module}")
+    summary = write_plan_only_run(proj, run_dir)
+    _print_vplan_summary(summary, json_output)
+
+
+def _print_vplan_summary(summary: dict, json_output: bool) -> None:
+    if json_output:
+        click.echo(json.dumps(summary, ensure_ascii=False, indent=2))
+        return
+    counts = summary["counts"]
+    console.print(f"[green]✓ VPlan 规划 IR[/green] → {summary['run']}")
+    console.print(f"  契约 {counts['contracts']}："
+                  f"{counts['contracts_by_status']}")
+    console.print(f"  TP {counts['testpoints']}："
+                  f"{counts['testpoints_by_status']}")
+    console.print(f"  case {counts['cases']}：{counts['cases_by_status']}")
+    console.print("  [yellow]执行阶段未运行（PLAN_ONLY）：没有 EDA 证据，"
+                  "不可签核[/yellow]")
+
+
 @cli.command()
 @click.argument("spec_file", required=False, type=click.Path(exists=True))
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
@@ -114,23 +169,20 @@ def verify(spec_file, output, design_style, target, max_rounds,
            approval, full_regression, incremental_from, verify_only, sim_modes,
            json_output, summary, quiet, manual_gate, checkpoint,
            strict_semantic, rtl_dir, casemodel):
+    # ── VPlan 项目：目录 + docs/specs + data/contract_matrix ──
+    # 规划层接入：直接从 `docs/specs/*.csv` 与 `data/contract_matrix/*.csv`
+    # 生成 TP/Case/契约 IR。**不读 casemodel.yaml**，也不跑 EDA —— 因此
+    # 产物明确是 PLAN_ONLY，不能签核。
+    if _is_vplan_dir(spec_file):
+        _run_vplan_project(Path(spec_file), output, json_output, rtl_dir)
+        return
+
     # **spec 与 --rtl 二选一、互斥**：
     #   给 spec  → 走原来的路（design agent 生成 RTL）
     #   给 --rtl  → RTL 是唯一输入，**规格从 DUT 分析出来**（不指向 spec）
     # 两个都给会互相打脸（spec 说的和 RTL 实现的不一致时听谁的？），
     # 一个都不给则没有输入 —— 两种都当场拒掉，别让它跑到下游才含糊地失败。
-    # **默认 spec**：不给 spec、也不给 --rtl 时用它 —— 省得每次敲全路径。
-    # 只在 `--rtl` 缺席时套用：`--rtl` 是"RTL 唯一输入"，那时候默认值一填
-    # 就变成"两个都给"，被下面的互斥挡掉（那是正确行为，不是 bug）。
-    if not spec_file and not rtl_dir:
-        _default = Path("specs/apb_uart/apb_uart_spec.md")
-        if _default.exists():
-            spec_file = str(_default)
-            console.print(f"[dim]未指定 spec，用默认：{spec_file}[/dim]")
-        else:
-            raise click.UsageError(
-                f"没给 spec，默认的 {_default} 也不存在（工作目录下找不到）。"
-                "请显式给 spec，或用 --rtl 给 RTL")
+    spec_file = _resolve_spec_input(spec_file, rtl_dir)
     _warn_spec_and_rtl(spec_file, rtl_dir)
     """AI 驱动的芯片验证闭环（覆盖率驱动：case 回归 → coverage → 决策迭代）
 

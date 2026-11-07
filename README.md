@@ -50,6 +50,9 @@ EDA-verified.
   evidence/artifact browser, waveform and coverage drill-down, error
   fingerprinting, and the human-approval gate. See
   [可视化](#可视化可选pyside6-桌面工作台).
+- **VPlan planning layer** — spec-first projects (`docs/specs` extraction CSVs +
+  authoritative `C-*` contract matrix) feed the kernel directly, without a
+  casemodel YAML. Plan-only runs are explicitly marked `PLAN_ONLY`.
 
 ## Quick start
 
@@ -569,6 +572,26 @@ python -m src.cli.commands contract {build,check,why,worklist,seeds,status,show}
 python -m src.cli.commands lineage  {versions,baseline,bugs,compare,bind-modules,prune}  # 血缘：RTL 版本 / 基准
 ```
 
+### VPlan 规划层（spec-first 项目）
+
+`specs/<module>/` 可以按 AI VPlan 的目录组织：`docs/specs/` 放人审抽取表，
+`data/contract_matrix/` 放权威契约矩阵，`docs/verification/` 放生成物。
+SignOffAI 直接读它，**不再需要 `casemodel.yaml`**：
+
+```bash
+vagent vplan status specs/npu_sched      # 只读：计数与契约/TP/case 状态
+vagent vplan build  specs/npu_sched -o output_vplan_npu_sched
+vagent verify       specs/npu_sched -o output_vplan_npu_sched   # 同一个规划层
+```
+
+产物与正常 run 同位置：`coverage/testpoints.{yaml,json}`、
+`coverage/case_ir.json`、`contract/contract.yaml` + `obligations.json`；
+另写 `contract/plan_link.yaml` 保留 `C-*` ↔ TP ↔ case 映射。
+
+该模式明确是 **`PLAN_ONLY`**：不跑 EDA、不产生 `signoff_evidence/`，不可签核；
+`assume` 契约不会被自动升成 `active`，TP 仍是 `planned` / `observe-only`
+（VPlan 的 stimulus 还没有绑定到事务字段）。执行层接入是下一步。
+
 ### 血缘（`vagent lineage`）
 
 把**跨 run 的四个实体**记下来（`database/lineage.db`）—— 没有它们，"这一轮比
@@ -1026,7 +1049,7 @@ include，测试恢复其原意。**这 82 个测试当时恢复全绿。**
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q                            # 2026-11-05：1352 passed / 26 failed / 2 skipped
+python -m pytest tests/ -q                            # 2026-11-05：1355 passed / 26 failed / 2 skipped
 python -m pytest src/workbench/tests -q               # 工作台：758 项（需要 PySide6）
 python -m pytest src/layers/l3_decision/casemodel/tests -q   # case 建模 + 框架 + 覆盖率方法学：560 passed
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
@@ -1052,7 +1075,7 @@ python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：
 | `src/layers/l3_decision/casemodel/tests/test_plan.py::TestBackdoorRealization` | backdoor 维度带 `path`、不进 `observe`；缺 path 回退并记账 |
 
 **"跑测试"在这里的定位**：计数会随迁移漂动，README 不把它写成"永远全绿"。
-最近一次实测（2026-11-05）：主测试集 **1352 passed / 26 failed / 2 skipped**。
+最近一次实测（2026-11-05）：主测试集 **1355 passed / 26 failed / 2 skipped**。
 26 项失败集中在分层迁移后尚未同步的契约测试（工具板路径、case 追溯、
 收敛/签核期望值），不是 EDA 缺失导致的假失败；这 26 条本身就是待收敛清单。
 守卫型测试的价值不在通过率，而在**把本次踩过的坑固化成断言** ——

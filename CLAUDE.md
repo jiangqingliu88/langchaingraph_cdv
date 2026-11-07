@@ -15,12 +15,16 @@ covers the development workflow.
    `python -m config.architecture_guard` after structural changes. Do not hide
    violations behind function-local imports.
 3. **LLMs are called at specific points, not as the orchestrator.** All model
-   calls go through `src/tools/lib/llm_call.py:call_llm`; process control,
+   calls go through `src/tools/common/lib/llm_call.py:call_llm`; process control,
    routing, and pass/fail decisions stay deterministic.
 4. **Behavior changes need tests.** A bug fix needs a regression test that fails
    before the fix.
 5. **Never commit secrets or generated artifacts.** `.env`, `.jwt_secret`,
    `output*/`, `work/`, `*.ucdb`, `*.qpg`, and `*.log` are ignored.
+6. **VPlan statuses are evidence-driven.** `planned` ≠ `covered` and
+   `assume` ≠ `active`. A `vplan` build is `PLAN_ONLY`: it writes TP/Case/contract
+   IR but no EDA evidence, so it is not signable. Never promote a contract by
+   editing CSV status alone.
 
 ## Common commands
 
@@ -33,6 +37,11 @@ pytest src/tools/checking src/tools/humanview \
 python -m config.architecture_guard
 ruff check src/ tests/ && ruff format --check src/ tests/
 python -m src.cli.commands --help
+
+# VPlan planning layer (spec-first project, no casemodel.yaml)
+python -m src.cli.commands vplan status specs/npu_sched
+python -m src.cli.commands vplan build  specs/npu_sched -o output_vplan_npu_sched
+python -m src.cli.commands verify       specs/npu_sched -o output_vplan_npu_sched
 ```
 
 ## Layout reminders
@@ -40,10 +49,13 @@ python -m src.cli.commands --help
 - `src/executors/` — eight stage executors; only `design` and `debug` call an LLM directly.
 - `src/layers/l1_infrastructure/` — deterministic, zero-AI layer; must not import upward.
 - `src/layers/l2_orchestration/` — LangGraph graph, routers, nodes, governance, evidence.
-- `src/layers/l3_decision/` — coverage-driven decisions, case models, test-point IR.
+- `src/layers/l3_decision/` — coverage-driven decisions, case models, test-point IR;
+  `l3_decision/vplan/` loads `specs/<module>/docs/specs/*.csv` + `data/contract_matrix`
+  and projects them into the kernel (planning/contract layer only).
 - `src/layers/l4_memory/` — persistence and IP/case/debug knowledge bases.
 - `src/layers/l5_evolution/` — experience distillation and policy weights.
-- `src/tools/` — domain tools grouped by generation / regression / checking / humanview.
+- `src/tools/` — domain tools grouped by generation / checking / humanview / common
+  (regression lives in `src/layers/l2_orchestration/regression_tools/`).
 - `src/cli/` — the `vagent` entry point; `src/workbench/` — optional desktop UI.
 
 ## Environment
