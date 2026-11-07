@@ -121,6 +121,8 @@ def vplan_package_assets(run, json_output):
     console.print(f"[green]✓ VPlan sv/ 布局[/green] → {summary['sv_root']}")
     console.print(f"  资产 {summary['assets']} 个（复制 {summary['copied']}，"
                   f"跳过 {summary['skipped']}）")
+    for path in summary.get("skipped_paths") or []:
+        console.print(f"    [yellow]未映射：{path}[/yellow]")
     console.print(f"  登记：{summary['registry']}")
     console.print("  [yellow]全部 candidate：未编译、无运行证据，不能冒充 active[/yellow]")
 

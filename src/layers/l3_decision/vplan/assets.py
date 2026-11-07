@@ -21,10 +21,14 @@ from typing import Any, Dict, Iterable, List, Tuple
 #: 生成目录 → VPlan sv/ 子目录。顺序即匹配顺序（先具体、后宽泛）。
 _RULES: Tuple[Tuple[str, str, str], ...] = (
     ("agents/*/1_interface/*.sv", "interface", "interface"),
+    ("agents/*/2_config/*.sv", "agents", "config"),
     ("agents/*/3_transaction_sequencer/*.sv", "agents", "sequencer"),
     ("agents/*/4_driver_monitor/*.sv", "agents", "driver_monitor"),
     ("agents/*/5_agent/*.sv", "agents", "agent"),
     ("agents/*/7_sequence/*.sv", "seq", "seq"),
+    ("agents/*/8_ral/*.sv", "agents", "ral"),
+    ("agents/*/loopback/*.sv", "env", "loopback"),
+    ("env/seqs/*.sv", "seq", "seq"),
     ("env/coverage/*.sv", "coverage", "coverage"),
     ("env/tests/*.sv", "test", "test"),
     ("env/rtl_sc/*.sv", "scb", "scb"),
@@ -32,6 +36,9 @@ _RULES: Tuple[Tuple[str, str, str], ...] = (
     ("env/*.sv", "env", "env"),
     ("bench/*.sv", "env", "env"),
     ("coverage/*_cov_if.sv", "interface", "interface"),
+    ("coverage/*bind*.sv", "interface/bind", "bind"),
+    # 兜底：agent 目录下没被上面规则命中的 .sv 仍归到该 agent。
+    ("agents/*/*.sv", "agents", "agent"),
 )
 
 _HEADER_KEYS = ("ARTIFACT", "SOURCE", "CONTRACT_REFS", "CASE_ID", "STATUS")
@@ -127,12 +134,14 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
     rows: List[Dict[str, str]] = []
     copied = 0
     skipped = 0
+    skipped_paths: List[str] = []
     artifact_contracts, test_cases, kind_contracts = _anchor_index(root)
     for src in sorted(_iter_sources(root)):
         rel = src.relative_to(root)
         target = _target_rel(rel)
         if target is None:
             skipped += 1
+            skipped_paths.append(rel.as_posix())
             continue
         subdir, kind = target
         dest = sv_root / subdir / src.name
@@ -174,6 +183,7 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
         "全部 `candidate`：没有编译/运行证据，契约仍 `assume`、case 仍 `planned`。\n",
         encoding="utf-8")
     return {"sv_root": str(sv_root), "copied": copied, "skipped": skipped,
+            "skipped_paths": skipped_paths[:20],
             "registry": str(sv_root / "asset_registry.csv"),
             "assets": len(rows)}
 

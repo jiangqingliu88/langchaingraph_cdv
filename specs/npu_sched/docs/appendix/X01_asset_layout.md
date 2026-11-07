@@ -85,3 +85,19 @@ VPlan docs/specs + contract_matrix
 ```
 
 方法与锚点规范以本文件为准；`vplan package-assets` 在 SignOffAI 里实现。
+
+## 4. 生成目录 → sv/ 映射（全部 `.sv` 都要有落点）
+
+| 生成目录 | sv/ 落点 |
+|---|---|
+| `agents/*/1_interface/` | `sv/interface/` |
+| `agents/*/2_config/`、`3_transaction_sequencer/`、`4_driver_monitor/`、`5_agent/`、`8_ral/` | `sv/agents/<agent>/` |
+| `agents/*/7_sequence/`、`env/seqs/`、`env/cons/` | `sv/seq/` |
+| `agents/*/loopback/`、`bench/`、`env/*.sv` | `sv/env/` |
+| `env/coverage/` | `sv/coverage/` |
+| `env/tests/` | `sv/test/` |
+| `env/rtl_sc/` | `sv/scb/` |
+| `coverage/*_cov_if.sv` | `sv/interface/` |
+| `coverage/*bind*.sv` | `sv/interface/bind/` |
+
+`vplan package-assets` 输出 `skipped=0` 才算“排完”；有未映射文件会逐条打印。
