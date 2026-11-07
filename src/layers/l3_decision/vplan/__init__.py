@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+from .assets import package_run_assets, scan_assets
 from .build import build_case_ir, build_payload, build_testpoints
 from .execution import build_execution_model, write_execution_model
 from .runner import write_plan_only_run
@@ -16,5 +17,6 @@ __all__ = [
     "VPlanError", "VPlanProject", "load_project",
     "build_testpoints", "build_case_ir", "build_payload",
     "build_execution_model", "write_execution_model",
+    "package_run_assets", "scan_assets",
     "write_plan_only_run",
 ]

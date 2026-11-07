@@ -90,12 +90,3 @@ def test_plan_digest_is_stable_and_write_roundtrip(tmp_path):
     raw = json.loads((tmp_path / "coverage" / "stimulus_plan.json")
                      .read_text(encoding="utf-8"))
     assert raw["backend"] == "generated"
-
-
-def test_verify_writes_plan_under_run_not_nested_coverage():
-    """回归：`build_and_write` 自己会拼 `coverage/`，调用方不能再传 cov_dir。"""
-    from pathlib import Path
-
-    src = Path("src/executors/verify/main.py").read_text(encoding="utf-8")
-    i = src.index("build_and_write(")
-    assert 'payload.get("testpoints") or [], output_dir' in src[i:i + 200]

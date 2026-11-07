@@ -105,6 +105,26 @@ def vplan_build(project, output, allow_spec_drift, json_output):
                   "不可签核[/yellow]")
 
 
+@vplan_group.command("package-assets")
+@click.argument("run", type=click.Path(exists=True, file_okay=False,
+                                       path_type=Path))
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def vplan_package_assets(run, json_output):
+    """把 run 里 SignOffAI 生成的 UVM 资产整理成 VPlan sv/ 布局。"""
+    from src.layers.l3_decision.vplan import package_run_assets, scan_assets
+
+    summary = package_run_assets(run)
+    summary["scanned"] = len(scan_assets(run))
+    if json_output:
+        click.echo(json.dumps(summary, ensure_ascii=False, indent=2))
+        return
+    console.print(f"[green]✓ VPlan sv/ 布局[/green] → {summary['sv_root']}")
+    console.print(f"  资产 {summary['assets']} 个（复制 {summary['copied']}，"
+                  f"跳过 {summary['skipped']}）")
+    console.print(f"  登记：{summary['registry']}")
+    console.print("  [yellow]全部 candidate：未编译、无运行证据，不能冒充 active[/yellow]")
+
+
 @vplan_group.command("execute")
 @click.argument("project", type=click.Path(exists=True, file_okay=False,
                                            path_type=Path))
@@ -218,6 +238,9 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run,
             "cases_by_status": proj.case_status_counts,
             "execution": "RUN",
         })
+        from src.layers.l3_decision.vplan import package_run_assets
+
+        summary["assets"] = package_run_assets(run_root, proj.module)
         summary["run"] = str(run_root)
 
     summary["result"] = result if isinstance(result, dict) else str(result)

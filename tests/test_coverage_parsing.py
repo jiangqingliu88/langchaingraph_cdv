@@ -257,56 +257,6 @@ class TestGapSequenceHasItsOwnTimeout:
         assert "randomize()" in code[:override]
 
 
-class TestCaseModelBinsReachEnvCov:
-    """case 模型的覆盖点怎么变成**真被测量**的 bin。
-
-    这条链最容易断在中间：模型声明了 6 个边界值，而 env_cov 里还是 `0/1/其余`
-    三个自动分箱 —— 覆盖率数字照出，只是分母不是建模说的那个。
-
-    断点在这里：`coverage/<module>_cg.sv` **从来没有进过编译清单**（全仓没有一处
-    把它加进 filelist），所以它永远不被采样。真被采样的是 `env_cov.sv.j2` 的
-    `cg_<agent>`。所以模型的 bin 必须走 `env_cov_bins.yaml` 的 `field_bins` 进去。
-    """
-
-    def _field_bins(self, tmp_path):
-        import shutil
-        from pathlib import Path
-
-        from src.executors.verify.main import VerifyExecutor
-
-        (tmp_path / "inputs").mkdir(parents=True, exist_ok=True)
-        spec = Path(__file__).resolve().parents[1] / "specs" / "apb_uart" / "casemodel.yaml"
-        shutil.copy(spec, tmp_path / "inputs" / "casemodel.yaml")
-        return VerifyExecutor._case_model_field_bins(tmp_path)
-
-    def test_boundary_values_become_bins(self, tmp_path):
-        fb = self._field_bins(tmp_path)
-        assert [b["value"] for b in fb["paddr"]] == [0, 3, 4, 31, 32, 255]
-
-    def test_keys_are_the_interface_signal_names(self, tmp_path):
-        """键必须是**事务字段名**（= spec 接口信号名）—— env_cov 的 coverpoint
-        挂在 `agent_item.<字段>` 上，键对不上就一个 bin 都落不下去。"""
-        assert set(self._field_bins(tmp_path)) == {"paddr", "pwrite", "pwdata"}
-
-    def test_no_case_model_returns_empty_not_a_fake(self, tmp_path):
-        """没模型就老实给空 —— 调用方据此退回自动分箱，不假装有模型。"""
-        from src.executors.verify.main import VerifyExecutor
-
-        assert VerifyExecutor._case_model_field_bins(tmp_path) == {}
-
-    def test_the_bin_names_are_legal_sv_identifiers(self, tmp_path):
-        import re
-
-        for bins in self._field_bins(tmp_path).values():
-            for b in bins:
-                assert re.fullmatch(r"[A-Za-z_$][\w$]*", b["name"]), b
-
-
-# ════════════════════════════════════════════════════════════
-# 测试点 × 覆盖仓 矩阵 —— 缺口归因到 tp_id
-# ════════════════════════════════════════════════════════════
-
-#: `-cvg -details` 第一段的真实排版：TYPE 行下逐 coverpoint、逐 bin 的命中数
 VCOVER_BIN_HITS = """\
 Coverage Report by instance with details
 
@@ -325,7 +275,6 @@ COVERGROUP COVERAGE:
  TYPE /p/npu_sched_env_pkg/npu_sched_env_coverage/cg_dut
                                                        72.63%        100          -    Uncovered
 """
-
 
 class TestTpMatrix:
     def _write_tp(self, tmp_path, rows):

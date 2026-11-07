@@ -21,8 +21,8 @@ from src.executors.verify.casemodel import (RUNNERS, TOOL_GAPS, TOOL_GENERATE,
                                          run_generate, run_validate, tool_specs)
 from src.executors.verify.casemodel.registry import ensure_casemodel_tool_registry
 
-EXAMPLES = (Path(__file__).resolve().parent.parent / "config"
-            / "casemodel" / "examples")
+EXAMPLES = (Path(__file__).resolve().parent
+            / "fixtures" / "casemodel_examples")
 CPU = EXAMPLES / "cpu_pipeline.yaml"
 CPU_FLAWED = EXAMPLES / "cpu_pipeline_flawed.yaml"
 FC = EXAMPLES / "fc_flowcontrol.yaml"

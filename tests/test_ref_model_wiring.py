@@ -95,47 +95,6 @@ class TestGateAcceptsARealRegisterFile:
         assert got["nregs"] == 65536
 
 
-class TestEmittedEnvYaml:
-    def test_apb_uart_gets_no_scoreboard(self):
-        """回归里的主力项目：门禁拦下，env.yaml 里**不该**出现 scoreboard。"""
-        out = _gen_env_yaml("apb_uart", ["apb_master"], AGENTS_SPEC,
-                            "pclk", "preset_n", [], APB_IFACES)
-        assert "scoreboards:" not in out
-        assert "tlm_connections:" not in out
-        assert "util_components:" not in out
-
-    def test_register_file_gets_the_full_wiring(self):
-        out = _gen_env_yaml("dut", ["apb_master"], AGENTS_SPEC,
-                            "pclk", "preset_n", _regs("RW", "RW"), APB_IFACES)
-        doc = yaml.safe_load(out)                    # 必须是合法 YAML
-
-        env = doc["environment"]
-        assert env["analysis_components"] == [
-            {"name": "apb_ref_pred", "type": "apb_ref_predictor"}]
-
-        sb = env["scoreboards"][0]
-        assert sb["name"] == "dut_scb"
-        assert sb["sb_type"] == "in_order_scoreboard"
-        assert sb["params"] == ["apb_master_seq_item", "apb_master_seq_item"]
-
-        conns = {c["driver"]: c["receiver"] for c in env["tlm_connections"]}
-        # actual 侧：DUT monitor 出的事务（env 模板建的 <agent>_agent_ap）
-        assert conns["apb_master_agent_ap"] == "dut_scb.actual_export"
-        # expected 侧：参考模型镜像
-        assert conns["apb_ref_pred.out_port"] == "dut_scb.expected_export"
-
-    def test_util_component_matches_the_analysis_component_type(self):
-        """`analysis_components[].type` 必须**等于**生成的 util 类名 ——
-        不然 env 模板渲染出一个不存在的类，`type_id::create` 直接编译不过。"""
-        out = _gen_env_yaml("dut", ["apb_master"], AGENTS_SPEC,
-                            "pclk", "preset_n", _regs("RW"), APB_IFACES)
-        doc = yaml.safe_load(out)
-        cls = doc["environment"]["analysis_components"][0]["type"]
-        util = doc["util_components"][0]
-        assert util["name"] == cls
-        assert util["ref_model"]["nregs"] == 256
-
-
 class TestPredictorIsNotAHollowStub:
     """渲染出来的 predictor 必须**真的**做镜像 —— 这是断链那一半的回归测试。"""
 

@@ -586,6 +586,9 @@ vagent verify       specs/npu_sched -o output_vplan_npu_sched   # 同一个规�
 # 执行层：派生运行期 casemodel + 现有 verify 内核（UVM/回归/证据）
 vagent vplan execute specs/npu_sched --dry-run
 vagent vplan execute specs/npu_sched -o output_vplan_npu_sched --max-rounds 1 --sim-mode cov
+
+# 生成后按 VPlan sv/ 布局整理内核产出的 UVM 资产（不手写 SV）
+vagent vplan package-assets <run>
 ```
 
 产物与正常 run 同位置：`coverage/testpoints.{yaml,json}`、
@@ -597,8 +600,11 @@ vagent vplan execute specs/npu_sched -o output_vplan_npu_sched --max-rounds 1 --
 
 `vplan execute` 是执行层入口：用 `rtl/` + `data/execution_model.yaml`（维度/字段/
 断言/SCB）+ `cases/TC_*.yaml` 派生运行期 casemodel，再走现有 verify 内核跑
-UVM/回归/覆盖率。执行跑完仍不会自动把 `assume` 升成 `active` —— 状态推进必须
-由 gate 依据真实证据完成。
+UVM/回归/覆盖率。验证资产由内核生成，`vplan package-assets` 再按 VPlan 的
+`sv/{interface,agents,monitor,coverage,scb,seq,test,env}` 布局整理并登记锚点；
+**不在 `specs/` 里手写 SV**（布局规范见
+`specs/npu_sched/docs/appendix/X01_asset_layout.md`）。执行跑完仍不会自动把
+`assume` 升成 `active` —— 状态推进必须由 gate 依据真实证据完成。
 
 ### 血缘（`vagent lineage`）
 
@@ -1057,7 +1063,7 @@ include，测试恢复其原意。**这 82 个测试当时恢复全绿。**
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q                            # 2026-11-05：1357 passed / 26 failed / 2 skipped
+python -m pytest tests/ -q                            # 2026-11-07：1164 passed / 8 failed / 2 skipped
 python -m pytest src/workbench/tests -q               # 工作台：758 项（需要 PySide6）
 python -m pytest src/layers/l3_decision/casemodel/tests -q   # case 建模 + 框架 + 覆盖率方法学：560 passed
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
@@ -1070,7 +1076,6 @@ python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：
 | `tests/test_layer_direction.py` | 分层依赖方向 + 「L1 能脱离上层单独 import」（AST 扫，不被字符串骗到） |
 | `tests/test_tool_risk.py` | 每个 `@tool` 的风险分级完备；有副作用的工具不许被标成 SAFE |
 | `tests/test_no_undefined_names.py` | 拆文件后**漏 import** —— 单元测试构造图不碰函数体，要等图真跑到那个节点才 `NameError` |
-| `tests/test_env_cov_bins_wiring.py` | 落盘**时机**（`find_spec_yaml` 会清空那个目录）、四个读点是否走同一判据、批次 test 的 plusarg 对不对；**批次策略名与 `build_constraint` 逐字同名**；约束在同一个落盘窗口里 |
 | `tests/test_checkpoint.py` | 检查点 + `Command(resume=…)` 重入；**CLI 的 `approve`/`resume` 真把图推下去**（拿 journal 里出现 `run.finished` 当判据，不是"文件写没写"） |
 | `tests/test_manifest.py` | 覆盖率库 / 波形**带哈希进证据包**（不是文件表里的一行匿名记录）；相对 `output_root` 不许把路径拼两次 |
 | `tests/test_ref_model_wiring.py` | predictor **不是空壳** —— 且**走真生成器**（直接喂 ctx 的测试测不到"生成器把键丢了"） |
@@ -1083,9 +1088,10 @@ python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：
 | `src/layers/l3_decision/casemodel/tests/test_plan.py::TestBackdoorRealization` | backdoor 维度带 `path`、不进 `observe`；缺 path 回退并记账 |
 
 **"跑测试"在这里的定位**：计数会随迁移漂动，README 不把它写成"永远全绿"。
-最近一次实测（2026-11-05）：主测试集 **1357 passed / 26 failed / 2 skipped**。
-26 项失败集中在分层迁移后尚未同步的契约测试（工具板路径、case 追溯、
-收敛/签核期望值），不是 EDA 缺失导致的假失败；这 26 条本身就是待收敛清单。
+最近一次实测（2026-11-07）：主测试集 **1164 passed / 8 failed / 2 skipped**。
+VPlan 迁移删除了依赖旧 `specs/apb_*` 与 NPU casemodel 夹具的测试；剩余 8 项是
+迁移前就存在的契约/工具板/状态测试（caveat 码、case view 语义、mutation、
+分级回归审批、state 契约、tools boards/skills），不是 EDA 缺失导致的假失败。
 守卫型测试的价值不在通过率，而在**把本次踩过的坑固化成断言** ——
 每一条失败信息里都写着"当时是怎么错的"。
 

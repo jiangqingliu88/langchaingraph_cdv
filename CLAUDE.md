@@ -47,6 +47,7 @@ python -m src.cli.commands verify       specs/npu_sched -o output_vplan_npu_sche
 # -> runtime <run>/inputs/casemodel.yaml -> existing verify kernel (EDA required)
 python -m src.cli.commands vplan execute specs/npu_sched --dry-run
 python -m src.cli.commands vplan execute specs/npu_sched -o output_vplan_npu_sched --max-rounds 1 --sim-mode cov
+python -m src.cli.commands vplan package-assets <run>   # kernel-generated UVM → sv/ layout
 ```
 
 ## Layout reminders

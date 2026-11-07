@@ -125,6 +125,36 @@ def test_execution_model_projects_vplan_cases(tmp_path):
     assert len(resolved.cases_doc.get("cases") or []) == 12
 
 
+def test_package_run_assets_maps_generated_layout(tmp_path):
+    from src.layers.l3_decision.vplan import package_run_assets, scan_assets
+
+    files = {
+        "agents/foo/1_interface/foo_if.sv": "interface foo_if; endinterface\n",
+        "agents/foo/4_driver_monitor/foo_driver.sv": "class foo_driver; endclass\n",
+        "env/foo_env.sv": "class foo_env; endclass\n",
+        "env/coverage/foo_cov.sv": "class foo_cov; endclass\n",
+        "coverage/foo_cov_if.sv": "interface foo_cov_if; endinterface\n",
+        "env/tests/foo_test.sv": "class foo_test; endclass\n",
+    }
+    for rel, text in files.items():
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    summary = package_run_assets(tmp_path, "foo")
+    assert summary["copied"] == 6
+    assert (tmp_path / "sv" / "interface" / "foo_if.sv").is_file()
+    assert (tmp_path / "sv" / "agents" / "foo" / "foo_driver.sv").is_file()
+    assert (tmp_path / "sv" / "env" / "foo_env.sv").is_file()
+    assert (tmp_path / "sv" / "coverage" / "foo_cov.sv").is_file()
+    assert (tmp_path / "sv" / "interface" / "foo_cov_if.sv").is_file()
+    assert (tmp_path / "sv" / "test" / "foo_test.sv").is_file()
+    text = (tmp_path / "sv" / "interface" / "foo_if.sv").read_text(
+        encoding="utf-8")
+    assert "// ARTIFACT: foo_if" in text
+    assert len(scan_assets(tmp_path)) == 6
+
+
 def test_explicit_casemodel_marker(tmp_path):
     from src.layers.l2_orchestration.verify_request import copy_casemodel
 

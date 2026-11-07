@@ -15,8 +15,9 @@ from src.layers.l3_decision.casemodel.domain import CaseModel
 from src.layers.l3_decision.casemodel.generation import GenerationResult, generate
 from src.layers.l3_decision.casemodel.repository import load_model
 
-#: 示例模型已迁到 `config/casemodel/examples/`（CLI 与工作台共用，见 cli.py 的说明）
-EXAMPLES = Path(__file__).resolve().parents[5] / "config" / "casemodel" / "examples"
+#: 示例模型只作为**单元测试夹具**保留；项目输入已改为 VPlan（config/casemodel 不再存在）。
+EXAMPLES = (Path(__file__).resolve().parents[5]
+            / "tests" / "fixtures" / "casemodel_examples")
 
 CPU = EXAMPLES / "cpu_pipeline.yaml"                 # 组织树 + 专题，写对了
 CPU_FLAWED = EXAMPLES / "cpu_pipeline_flawed.yaml"   # 组织树 / 专题的坑
