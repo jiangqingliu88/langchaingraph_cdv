@@ -1,0 +1,26 @@
+case_id: TC_CMDSCHED_PERF_001
+test_name: cmdsched_perf_test
+title: 性能/拥塞/debug
+batch: '10'
+owner: dv_perf
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-PERF-PARAL-001
+- C-PERF-START-DONE-001
+- C-DBG-REG-001
+covergroups:
+- CG_CMDSCHED_PERF
+target_bins: []
+checks:
+- type: scb
+  artifact: perf_scb
+- type: scb
+  artifact: debug_scb
+constraints: []
+seed_baseline:
+- 2000
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

@@ -69,7 +69,26 @@ vagent vplan status specs/npu_sched
 | `docs/manifest.json` | `origin=vplan`、`status=PLANNED`、`execution=PLAN_ONLY` |
 
 **不会**产生 `report.json` / `signoff_evidence/`，因此不可签核；契约状态
-也不会被自动改成 `active`。执行层（UVM/EDA/URG）尚未接入。
+也不会被自动改成 `active`。
+
+### 执行层（UVM/回归/证据）
+
+`rtl/npu_sched.sv` + `data/execution_model.yaml`（维度/字段/断言/SCB/行为）
++ `cases/TC_*.yaml` 组成执行输入。`vagent vplan execute` 会把 case 契约与执行
+资产合成**运行期** `<run>/inputs/casemodel.yaml`（不写回项目），再交给现有
+verify 内核：
+
+```bash
+# 先看派生模型与等价命令，不跑 EDA
+vagent vplan execute specs/npu_sched --dry-run
+
+# 实跑（需要 QuestaSim 在 PATH）
+vagent vplan execute specs/npu_sched -o output_vplan_npu_sched \
+  --max-rounds 1 --sim-mode cov
+```
+
+执行跑完会产出真实的 UVM/回归/覆盖率证据；但契约/TP/case 状态**仍不会自动
+升级** —— 必须先由 gate 依据证据推进，否则保持 `assume` / `planned`。
 
 ## 当前内容
 

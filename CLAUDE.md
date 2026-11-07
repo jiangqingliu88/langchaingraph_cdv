@@ -42,6 +42,11 @@ python -m src.cli.commands --help
 python -m src.cli.commands vplan status specs/npu_sched
 python -m src.cli.commands vplan build  specs/npu_sched -o output_vplan_npu_sched
 python -m src.cli.commands verify       specs/npu_sched -o output_vplan_npu_sched
+
+# VPlan execution layer: rtl/ + data/execution_model.yaml + cases/*.yaml
+# -> runtime <run>/inputs/casemodel.yaml -> existing verify kernel (EDA required)
+python -m src.cli.commands vplan execute specs/npu_sched --dry-run
+python -m src.cli.commands vplan execute specs/npu_sched -o output_vplan_npu_sched --max-rounds 1 --sim-mode cov
 ```
 
 ## Layout reminders

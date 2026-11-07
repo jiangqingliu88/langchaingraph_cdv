@@ -1,0 +1,33 @@
+case_id: TC_CMDSCHED_RSP_001
+test_name: cmdsched_rsp_test
+title: xd=1/优先级/反压/RMW
+batch: '8'
+owner: dv_func
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-IF-HS-002
+- C-FUNC-RSP-001
+- C-FUNC-RSP-002
+- C-FUNC-RSP-003
+- C-DATA-TAG-001
+- C-DATA-RMW-001
+- C-DATA-VS-001
+- C-PERF-PRIO-001
+covergroups:
+- CG_CMDSCHED_RSP
+target_bins: []
+checks:
+- type: scb
+  artifact: rsp_scb
+- type: checker
+  artifact: tag_checker
+- type: scb
+  artifact: prio_scb
+constraints: []
+seed_baseline:
+- 1800
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

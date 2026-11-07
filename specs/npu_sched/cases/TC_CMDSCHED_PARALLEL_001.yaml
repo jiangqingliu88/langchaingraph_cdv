@@ -1,0 +1,27 @@
+case_id: TC_CMDSCHED_PARALLEL_001
+test_name: cmdsched_parallel_test
+title: 并行/TMU 竞争
+batch: '6'
+owner: dv_func
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-FUNC-UNIT-002
+- C-FUNC-UNIT-003
+- C-FUNC-UNIT-005
+- C-PERF-TMU-001
+covergroups:
+- CG_CMDSCHED_UNIT
+target_bins: []
+checks:
+- type: scb
+  artifact: unit_scb
+- type: sva
+  artifact: tmu_arb_sva
+constraints: []
+seed_baseline:
+- 1600
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

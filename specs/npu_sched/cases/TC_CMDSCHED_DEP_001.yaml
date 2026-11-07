@@ -1,0 +1,31 @@
+case_id: TC_CMDSCHED_DEP_001
+test_name: cmdsched_dep_test
+title: SHazard/DHazard/依赖链
+batch: '4'
+owner: dv_func
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-FUNC-DEP-002
+- C-FUNC-DEP-003
+- C-FUNC-DEP-004
+- C-FUNC-DEP-006
+- C-DATA-SYNC-001
+covergroups:
+- CG_CMDSCHED_DEP
+- CG_CMDSCHED_ISSUE
+target_bins: []
+checks:
+- type: scb
+  artifact: hazard_scb
+- type: sva
+  artifact: hazard_sva
+- type: scb
+  artifact: sync_scb
+constraints: []
+seed_baseline:
+- 1400
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

@@ -1,0 +1,26 @@
+case_id: TC_CMDSCHED_ITYPE_001
+test_name: cmdsched_instype_test
+title: 指令类型/精度/编码
+batch: '2'
+owner: dv_func
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-FUNC-UNIT-001
+- C-EXC-ILLEGAL-001
+- C-CFG-CIMC-001
+covergroups:
+- CG_CMDSCHED_ITYPE
+target_bins: []
+checks:
+- type: checker
+  artifact: decode_checker
+- type: checker
+  artifact: exc_checker
+constraints: []
+seed_baseline:
+- 1200
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

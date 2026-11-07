@@ -1,0 +1,28 @@
+case_id: TC_CMDSCHED_CSR_001
+test_name: cmdsched_csr_test
+title: CSR/CIMC/ICG/tile_rls/spad_excl
+batch: P1
+owner: dv_csr
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-CFG-CSR-001
+- C-CFG-CIMC-001
+- C-CFG-TILE-RLS-001
+- C-CFG-SPAD-EXCL-001
+- C-LP-IDLE-001
+covergroups:
+- CG_CMDSCHED_CSR
+target_bins: []
+checks:
+- type: checker
+  artifact: cfg_checker
+- type: sva
+  artifact: lp_sva
+constraints: []
+seed_baseline:
+- 9001
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

@@ -1,0 +1,758 @@
+version: '1'
+object: npu_sched
+object_cn: NPU 指令调度器
+object_code: NPUSCH
+description: NPU 硬件指令调度器（队列 / 指令类型 / 数据类型 / 依赖 / 执行单元 / 簇 / 屏障）
+sampling:
+  dut_module: npu_sched
+  clock: clk
+  reset: rst_n
+assertions:
+- name: queue_level_within_depth
+  expr: queue_level <= 6'd32
+  message: 队列水位超过深度 32（计数器越界）
+  signals:
+  - name: queue_level
+    width: 6
+  tp_bindings:
+  - tp_id: TP-NPUSCH-D_QUEUE-31
+    role: primary
+  - tp_id: TP-NPUSCH-D_QUEUE-32
+    role: primary
+  - tp_id: TP-NPUSCH-D_QUEUE-24
+    role: supporting
+- name: raw_never_issues
+  expr: dep_type == 2'd1 |-> issue_valid == 1'b0
+  message: 存在 RAW 真依赖时不发射（dec_type==RAW 时 issue_valid 必须为 0）
+  signals:
+  - name: dep_type
+    width: 2
+  - name: issue_valid
+    width: 1
+  tp_bindings:
+  - tp_id: TP-NPUSCH-D_DEP-RAW
+    role: primary
+  - tp_id: TP-NPUSCH-D_DECISION-BLOCKED
+    role: supporting
+- name: barrier_flushes
+  expr: barrier_type != 2'd0 |-> issue_decision == 2'd3
+  message: 屏障命中时必须冲刷（barrier_type!=NONE → issue_decision==FLUSHED）
+  signals:
+  - name: barrier_type
+    width: 2
+  - name: issue_decision
+    width: 2
+  tp_bindings:
+  - tp_id: TP-NPUSCH-D_BARRIER-TILE_BARRIER
+    role: primary
+  - tp_id: TP-NPUSCH-D_BARRIER-OP_BARRIER
+    role: primary
+  - tp_id: TP-NPUSCH-D_BARRIER-CLUSTER_BARRIER
+    role: primary
+  - tp_id: TP-NPUSCH-D_DECISION-FLUSHED
+    role: supporting
+- name: issued_needs_no_blocker
+  expr: issue_decision == 2'd0 |-> queue_level != 6'd0 && barrier_type == 2'd0 &&
+    dep_type != 2'd1
+  message: 发射的三个前提：队列非空、无屏障、无 RAW 真依赖
+  signals:
+  - name: issue_decision
+    width: 2
+  - name: queue_level
+    width: 6
+  - name: barrier_type
+    width: 2
+  - name: dep_type
+    width: 2
+  tp_bindings:
+  - tp_id: TP-NPUSCH-D_DECISION-ISSUED
+    role: primary
+  - tp_id: TP-NPUSCH-D_QUEUE-0
+    role: supporting
+  - tp_id: TP-NPUSCH-D_DEP-RAW
+    role: supporting
+scoreboards:
+- id: SB-NPU-DUT
+  name: NPU 调度器 in-order 比对
+  checks:
+  - CHECK-FUNC
+  evidence: auto
+  description: env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB
+  rules:
+  - queue_level_within_depth
+  - raw_never_issues
+  - barrier_flushes
+  - issued_needs_no_blocker
+behavior:
+  id: BEH-QUEUE
+  name: 队列水位迁移
+  clock: clk
+  reset:
+    signal: rst_n
+    active_low: true
+  checks:
+  - CHECK-FUNC
+  states:
+  - EMPTY
+  - LOW
+  - HIGH
+  - FULL
+  events:
+  - enqueue
+  - dequeue
+  - flush
+  transitions:
+  - id: TR-EMPTY-ENQ
+    from: EMPTY
+    event: enqueue
+    to: LOW
+    checks:
+    - CHECK-FUNC
+  - id: TR-LOW-ENQ
+    from: LOW
+    event: enqueue
+    to: HIGH
+    checks:
+    - CHECK-FUNC
+  - id: TR-HIGH-ENQ
+    from: HIGH
+    event: enqueue
+    to: FULL
+    checks:
+    - CHECK-FUNC
+  - id: TR-FULL-DEQ
+    from: FULL
+    event: dequeue
+    to: HIGH
+    checks:
+    - CHECK-FUNC
+  - id: TR-FULL-FLUSH
+    from: FULL
+    event: flush
+    to: EMPTY
+    checks:
+    - CHECK-FUNC
+  sequences:
+  - id: SEQ-FILL-DRAIN
+    steps:
+    - event: enqueue
+      repeat: 3
+    - event: dequeue
+      repeat: 2
+    expects:
+    - CHECK-FUNC
+  temporal:
+  - id: TMP-BACKPRESSURE
+    trigger: enqueue
+    condition:
+      queue_full: true
+    response:
+      backpressure: true
+    within:
+      cycles: 1
+    checks:
+    - CHECK-FUNC
+config_space:
+  dimensions:
+  - name: queue_depth
+    values:
+    - 8
+    - 16
+    - 32
+  - name: cluster_count
+    values:
+    - 1
+    - 2
+    - 4
+  - name: gemm_enable
+    values:
+    - true
+    - false
+  cross_groups:
+  - id: XG-CFG-01
+    dimensions:
+    - queue_depth
+    - cluster_count
+    level: required
+  feasibility:
+  - id: CFG-NO-GEMM
+    when:
+      gemm_enable: false
+    then:
+      exclude: true
+      note: GEMM 关闭时 NPU 相关 TP 不适用
+  max_combinations: 64
+sub_objects:
+- id: OBJ-01
+  name: 指令队列管理
+  code: QUEUE
+- id: OBJ-02
+  name: 指令发射
+  code: ISSUE
+- id: OBJ-03
+  name: 多簇同步
+  code: CLUSTER
+dimensions:
+- id: D_queue
+  name: 指令队列水位
+  description: REQ-NPU-001：调度器支持 0-32 条指令的队列深度
+  sub_objects:
+  - 指令队列管理
+  realization:
+    kind: backdoor
+    path: npu_sched_bench_tb_top.u_npu_sched.queue_level
+  fields:
+  - name: queue_level
+    type: range
+    width: 6
+    min: 0
+    max: 32
+    description: 队列水位 —— 六档划分 + 越界非法
+    sample: dut
+    cover_id: CP_NPU_QUEUE_001
+    requirement: REQ-NPU-001
+    boundary:
+    - '0'
+    - '1'
+    - '7'
+    - '8'
+    - '15'
+    - '16'
+    - '24'
+    - '25'
+    - '31'
+    - '32'
+    cover_bins:
+    - name: empty
+      at: 0
+    - name: low
+      range:
+      - 1
+      - 7
+    - name: mid
+      range:
+      - 8
+      - 15
+    - name: high
+      range:
+      - 16
+      - 24
+    - name: near_full
+      range:
+      - 25
+      - 31
+    - name: full
+      at: 32
+    cover_illegal:
+    - name: illegal_over
+      from: 33
+- id: D_type
+  name: 指令类型
+  description: REQ-NPU-002：支持 4 类指令（MAC / Vector / Scalar / DMA）
+  sub_objects:
+  - 指令发射
+  fields:
+  - name: instr_type
+    type: enum
+    width: 3
+    description: 硬件指令类型
+    sample: dut
+    cover_id: CP_NPU_TYPE_002
+    requirement: REQ-NPU-002
+    values:
+    - MAC
+    - VECTOR
+    - SCALAR
+    - DMA
+    cover_bins:
+    - mac
+    - vector
+    - scalar
+    - dma
+  stimulus:
+    field: instr_type
+- id: D_dtype
+  name: 数据类型
+  description: REQ-NPU-003：支持 4 种数据类型（INT8 / FP16 / BF16 / FP32）
+  sub_objects:
+  - 指令发射
+  fields:
+  - name: instr_dtype
+    type: enum
+    width: 3
+    description: 指令数据类型
+    sample: dut
+    cover_id: CP_NPU_DTYPE_003
+    requirement: REQ-NPU-003
+    values:
+    - INT8
+    - FP16
+    - BF16
+    - FP32
+    cover_bins:
+    - int8
+    - fp16
+    - bf16
+    - fp32
+  stimulus:
+    field: instr_dtype
+- id: D_dep
+  name: 数据依赖
+  description: REQ-NPU-004：正确处理 RAW / WAW / WAR 依赖
+  sub_objects:
+  - 指令队列管理
+  fields:
+  - name: dep_type
+    type: enum
+    width: 2
+    description: 与相邻指令的依赖类型
+    sample: dut
+    cover_id: CP_NPU_DEP_004
+    requirement: REQ-NPU-004
+    values:
+    - NONE
+    - RAW
+    - WAW
+    - WAR
+    cover_bins:
+    - no_dep
+    - raw
+    - waw
+    - war
+- id: D_unit
+  name: 执行单元
+  description: REQ-NPU-005：支持 4 个执行单元
+  sub_objects:
+  - 指令发射
+  fields:
+  - name: issue_unit
+    type: enum
+    width: 3
+    description: 指令被发到的执行单元
+    sample: dut
+    cover_id: CP_NPU_UNIT_005
+    requirement: REQ-NPU-005
+    values:
+    - MAC
+    - VECTOR
+    - SCALAR
+    - DMA
+    cover_bins:
+    - mac
+    - vector
+    - scalar
+    - dma
+- id: D_decision
+  name: 发射决策
+  description: REQ-NPU-006：正确做出发射决策（发射 / 停顿 / 阻塞 / 冲刷）
+  sub_objects:
+  - 指令发射
+  fields:
+  - name: issue_decision
+    type: enum
+    width: 2
+    description: 本拍对该指令的发射决策
+    sample: dut
+    cover_id: CP_NPU_DECISION_006
+    requirement: REQ-NPU-006
+    values:
+    - ISSUED
+    - STALLED
+    - BLOCKED
+    - FLUSHED
+    cover_bins:
+    - issued
+    - stalled
+    - blocked
+    - flushed
+- id: D_cluster
+  name: 簇 ID
+  description: REQ-NPU-007：支持 4 个簇
+  sub_objects:
+  - 多簇同步
+  fields:
+  - name: cluster_id
+    type: range
+    width: 2
+    min: 0
+    max: 3
+    description: 指令归属的簇
+    sample: dut
+    cover_id: CP_NPU_CLUSTER_007
+    requirement: REQ-NPU-007
+    boundary:
+    - '0'
+    - '1'
+    - '2'
+    - '3'
+    cover_bins:
+    - name: c0
+      at: 0
+    - name: c1
+      at: 1
+    - name: c2
+      at: 2
+    - name: c3
+      at: 3
+    cover_illegal:
+    - name: illegal_cluster
+      from: 4
+- id: D_opcode
+  name: 硬件指令操作码
+  description: REQ-NPU-008：支持硬件指令集（10 条）
+  sub_objects:
+  - 指令发射
+  fields:
+  - name: instr_opcode
+    type: enum
+    width: 8
+    description: 硬件指令操作码
+    sample: dut
+    cover_id: CP_NPU_OPCODE_008
+    requirement: REQ-NPU-008
+    values:
+    - MAC_INT8
+    - MAC_FP16
+    - MAC_BF16
+    - VEC_ADD
+    - VEC_MUL
+    - VEC_RELU
+    - LOAD
+    - STORE
+    - DMA_READ
+    - DMA_WRITE
+    cover_bins:
+    - mac_i8
+    - mac_fp16
+    - mac_bf16
+    - vec_add
+    - vec_mul
+    - vec_relu
+    - load
+    - store
+    - dma_rd
+    - dma_wr
+  stimulus:
+    field: instr_opcode
+- id: D_seq
+  name: 指令序列模式
+  description: REQ-NPU-009：正确处理相邻指令的 opcode 组合
+  sub_objects:
+  - 指令队列管理
+  fields:
+  - name: instr_seq
+    type: enum
+    width: 8
+    description: 相邻两条指令的 opcode 组合
+    sample: dut
+    cover_id: CP_NPU_INSTR_SEQ_009
+    requirement: REQ-NPU-009
+    values:
+    - MAC_MAC
+    - LOAD_MAC
+    - MAC_STORE
+    - DMA_MAC
+    - VEC_MAC
+    - SCALAR_MAC
+    cover_bins:
+    - mac_mac
+    - load_mac
+    - mac_store
+    - dma_mac
+    - vec_mac
+    - scalar_mac
+  stimulus:
+    field: instr_opcode
+  realization:
+    kind: sequence
+    sequence: adjacent_opcode_pair
+    sequences:
+      MAC_MAC:
+      - 0
+      - 0
+      LOAD_MAC:
+      - 6
+      - 0
+      MAC_STORE:
+      - 0
+      - 7
+      DMA_MAC:
+      - 8
+      - 0
+      VEC_MAC:
+      - 3
+      - 0
+      SCALAR_MAC:
+      - 0
+      - 0
+- id: D_pipeline
+  name: 流水重叠
+  description: REQ-NPU-010：支持指令流水重叠
+  sub_objects:
+  - 指令发射
+  fields:
+  - name: pipeline_state
+    type: enum
+    width: 3
+    description: 当前流水重叠状态
+    sample: dut
+    cover_id: CP_NPU_PIPELINE_010
+    requirement: REQ-NPU-010
+    values:
+    - NONE
+    - MAC_MAC
+    - MAC_DMA
+    - VEC_MAC
+    - MULTI_OP
+    cover_bins:
+    - no_overlap
+    - mac_mac_overlap
+    - mac_dma_overlap
+    - vec_mac_overlap
+    - multi_op_overlap
+  stimulus:
+    field: instr_opcode
+  realization:
+    kind: sequence
+    sequence: pipeline_overlap
+    sequences:
+      NONE:
+      - 0
+      MAC_MAC:
+      - 0
+      - 0
+      MAC_DMA:
+      - 0
+      - 8
+      VEC_MAC:
+      - 3
+      - 0
+      MULTI_OP:
+      - 0
+      - 3
+      - 8
+- id: D_priority
+  name: 优先级调度
+  description: REQ-NPU-011：支持优先级调度
+  sub_objects:
+  - 指令发射
+  fields:
+  - name: op_priority
+    type: enum
+    width: 2
+    description: 本拍的优先级策略
+    sample: dut
+    cover_id: CP_NPU_PRIORITY_011
+    requirement: REQ-NPU-011
+    values:
+    - HIGH_FIRST
+    - LOW_FIRST
+    - SAME_PRIO
+    - ROUND_ROBIN
+    cover_bins:
+    - high_first
+    - low_first
+    - same_priority
+    - round_robin
+  stimulus:
+    field: op_priority
+- id: D_barrier
+  name: 硬件同步屏障
+  description: REQ-NPU-012：支持硬件同步屏障
+  sub_objects:
+  - 多簇同步
+  fields:
+  - name: barrier_type
+    type: enum
+    width: 2
+    description: 屏障类型
+    sample: dut
+    cover_id: CP_NPU_BARRIER_012
+    requirement: REQ-NPU-012
+    values:
+    - NONE
+    - TILE_BARRIER
+    - OP_BARRIER
+    - CLUSTER_BARRIER
+    cover_bins:
+    - no_barrier
+    - tile_barrier
+    - op_barrier
+    - cluster_barrier
+  stimulus:
+    field: barrier_type
+cross_matrix:
+  D_type×D_unit:
+    cover_id: X_NPU_TYPE_UNIT_001
+    requirement: REQ-NPU-002/005
+    level: required
+    reason: REQ-NPU-002/005：指令类型应发到对应执行单元
+    bins:
+    - name: mac_to_mac
+      when:
+        instr_type: mac
+        issue_unit: mac
+    - name: vec_to_vec
+      when:
+        instr_type: vector
+        issue_unit: vector
+    - name: scalar_to_scalar
+      when:
+        instr_type: scalar
+        issue_unit: scalar
+    - name: dma_to_dma
+      when:
+        instr_type: dma
+        issue_unit: dma
+    illegal:
+    - name: mac_to_dma
+      when:
+        instr_type: mac
+        issue_unit: dma
+  D_dtype×D_unit:
+    cover_id: X_NPU_DTYPE_UNIT_002
+    requirement: REQ-NPU-003/005
+    level: required
+    reason: REQ-NPU-003/005：数据类型与执行单元的匹配
+    bins:
+    - name: int8_mac
+      when:
+        instr_dtype: int8
+        issue_unit: mac
+    - name: fp16_mac
+      when:
+        instr_dtype: fp16
+        issue_unit: mac
+    - name: bf16_mac
+      when:
+        instr_dtype: bf16
+        issue_unit: mac
+    - name: fp32_vector
+      when:
+        instr_dtype: fp32
+        issue_unit: vector
+    illegal:
+    - name: int8_vector
+      when:
+        instr_dtype: int8
+        issue_unit: vector
+  D_dep×D_decision:
+    cover_id: X_NPU_DEP_DEC_003
+    requirement: REQ-NPU-004/006
+    level: required
+    reason: REQ-NPU-004/006：依赖与发射决策的对应
+    bins:
+    - name: raw_stalled
+      when:
+        dep_type: raw
+        issue_decision: stalled
+    - name: raw_issued
+      when:
+        dep_type: raw
+        issue_decision: issued
+    - name: waw_stalled
+      when:
+        dep_type: waw
+        issue_decision: stalled
+    - name: war_stalled
+      when:
+        dep_type: war
+        issue_decision: stalled
+    - name: no_dep_issued
+      when:
+        dep_type: no_dep
+        issue_decision: issued
+    - name: no_dep_blocked
+      when:
+        dep_type: no_dep
+        issue_decision: blocked
+  D_queue×D_decision:
+    cover_id: X_NPU_LEVEL_DEC_004
+    requirement: REQ-NPU-001/006
+    level: required
+    reason: REQ-NPU-001/006：水位与发射决策的对应
+    bins:
+    - name: full_blocked
+      when:
+        queue_level: full
+        issue_decision: blocked
+    - name: near_full_stalled
+      when:
+        queue_level: near_full
+        issue_decision: stalled
+    - name: empty_issued
+      when:
+        queue_level: empty
+        issue_decision: issued
+    - name: low_issued
+      when:
+        queue_level: low
+        issue_decision: issued
+  D_cluster×D_unit:
+    cover_id: X_NPU_CLUSTER_UNIT_005
+    requirement: REQ-NPU-005/007
+    level: required
+  D_opcode×D_unit:
+    cover_id: X_NPU_OPCODE_UNIT_006
+    requirement: REQ-NPU-008/005
+    level: required
+    reason: REQ-NPU-008/005：操作码与执行单元的对应
+    bins:
+    - name: mac_i8_mac
+      when:
+        instr_opcode: mac_i8
+        issue_unit: mac
+    - name: mac_fp16_mac
+      when:
+        instr_opcode: mac_fp16
+        issue_unit: mac
+    - name: vec_add_vec
+      when:
+        instr_opcode: vec_add
+        issue_unit: vector
+    - name: load_scalar
+      when:
+        instr_opcode: load
+        issue_unit: scalar
+    - name: dma_rd_dma
+      when:
+        instr_opcode: dma_rd
+        issue_unit: dma
+    illegal:
+    - name: mac_vec
+      when:
+        instr_opcode: mac_i8
+        issue_unit: vector
+  D_seq×D_decision:
+    cover_id: X_NPU_SEQ_DEC_007
+    requirement: REQ-NPU-009/006
+    level: required
+    reason: REQ-NPU-009/006：指令序列与发射决策的对应
+    bins:
+    - name: mac_mac_stalled
+      when:
+        instr_seq: mac_mac
+        issue_decision: stalled
+    - name: load_mac_issued
+      when:
+        instr_seq: load_mac
+        issue_decision: issued
+    - name: mac_store_issued
+      when:
+        instr_seq: mac_store
+        issue_decision: issued
+    - name: dma_mac_blocked
+      when:
+        instr_seq: dma_mac
+        issue_decision: blocked
+    - name: vec_mac_issued
+      when:
+        instr_seq: vec_mac
+        issue_decision: issued
+    - name: scalar_mac_stalled
+      when:
+        instr_seq: scalar_mac
+        issue_decision: stalled
+generation:
+  seed: 12345
+  max_cases: 400

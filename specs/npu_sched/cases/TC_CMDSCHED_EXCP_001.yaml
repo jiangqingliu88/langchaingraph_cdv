@@ -1,0 +1,30 @@
+case_id: TC_CMDSCHED_EXCP_001
+test_name: cmdsched_excp_perf_test
+title: 非法编码/地址/中断/block
+batch: '9'
+owner: dv_exc
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-EXC-ILLEGAL-001
+- C-EXC-ADDR-001
+- C-EXC-INT-001
+- C-EXC-CLEAR-001
+- C-EXC-BLOCK-001
+- C-CFG-CSR-001
+covergroups:
+- CG_CMDSCHED_EXCP
+- CG_CMDSCHED_CSR
+target_bins: []
+checks:
+- type: checker
+  artifact: exc_checker
+- type: scb
+  artifact: int_scb
+constraints: []
+seed_baseline:
+- 1900
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

@@ -63,6 +63,10 @@ def copy_casemodel(casemodel: str, run_root: str | Path) -> Optional[Path]:
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(src.read_text(encoding="utf-8", errors="replace"),
                     encoding="utf-8")
+    # front 会生成自己的草稿并写同一个落点；显式模型必须能赢过草稿，
+    # 否则 `--config` / VPlan 派生模型会被静默覆盖（实测）。
+    (dest.parent / ".casemodel_explicit").write_text(
+        str(src), encoding="utf-8")
     return dest
 
 

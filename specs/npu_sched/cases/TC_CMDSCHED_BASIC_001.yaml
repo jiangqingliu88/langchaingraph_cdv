@@ -1,0 +1,30 @@
+case_id: TC_CMDSCHED_BASIC_001
+test_name: cmdsched_basic_test
+title: 基础配置/启动/握手
+batch: '1'
+owner: dv_cmd
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-IF-HS-001
+- C-IF-START-001
+- C-IF-DONE-001
+- C-FUNC-UNIT-001
+covergroups:
+- CG_CMDSCHED_ITYPE
+- CG_CMDSCHED_UNIT
+target_bins: []
+checks:
+- type: checker
+  artifact: sva_if_hs
+- type: scb
+  artifact: cfg_scb
+- type: sva
+  artifact: start_done_sva
+constraints: []
+seed_baseline:
+- 1100
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

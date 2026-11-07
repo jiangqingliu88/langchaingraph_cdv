@@ -179,7 +179,7 @@ class FrontExecutor(BaseExecutor):
             from src.layers.l3_decision.casemodel.api import (blocking_issues,
                                                        run_validate, run_uvm_tests)
 
-            model = self._draft_casemodel(info)
+            casemodel_path, model = self._front_casemodel(output_dir, info)
             if model:
                 text = _yaml.safe_dump(model, allow_unicode=True, sort_keys=False)
                 errs = [i for i in (run_validate(text).get("issues") or [])
@@ -260,6 +260,20 @@ class FrontExecutor(BaseExecutor):
     # **先出确定性草稿**：把 spec 的 features/registers/interfaces 摆成功能组织树，
     # 配上标准维度与专题（专题的 priority 正好对上分级回归的 p0/p1/p2/p3）。
     # LLM 精修是后续增量 —— 但**草稿先要过 `run_validate`**，过不了就不写盘。
+
+    def _front_casemodel(self, output_dir, info):
+        """显式 casemodel 优先；否则返回 front 草稿。
+
+        `--config` / VPlan 派生模型被复制到 `inputs/casemodel.yaml` 时会留下
+        `.casemodel_explicit` 标记。front 写的是同一个落点，不拦就会静默覆盖。
+        """
+        from src.layers.l1_infrastructure.layout import casemodel_path
+
+        marker = Path(output_dir) / "inputs" / ".casemodel_explicit"
+        if marker.is_file():
+            logger.info("front：显式 casemodel 已提供 —— 保留它，不写草稿")
+            return str(casemodel_path(output_dir)), None
+        return "", self._draft_casemodel(info)
 
     @staticmethod
     def _draft_casemodel(spec: Dict[str, Any]) -> Dict[str, Any]:

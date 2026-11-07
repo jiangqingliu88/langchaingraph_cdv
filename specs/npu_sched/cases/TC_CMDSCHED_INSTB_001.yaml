@@ -1,0 +1,26 @@
+case_id: TC_CMDSCHED_INSTB_001
+test_name: cmdsched_instb_test
+title: ins_buffer/乱序发射
+batch: '3'
+owner: dv_func
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-FUNC-ISSUE-001
+- C-IF-HS-001
+covergroups:
+- CG_CMDSCHED_INSTB
+- CG_CMDSCHED_ISSUE
+target_bins: []
+checks:
+- type: scb
+  artifact: issue_scb
+- type: sva
+  artifact: buffer_sva
+constraints: []
+seed_baseline:
+- 1300
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

@@ -14,7 +14,8 @@ from pathlib import Path
 import yaml
 
 from src.layers.l3_decision.vplan import (
-    build_payload, load_project, write_plan_only_run,
+    build_execution_model, build_payload, load_project,
+    write_execution_model, write_plan_only_run,
 )
 
 ROOT = Path(__file__).resolve().parents[1] / "specs" / "npu_sched"
@@ -99,3 +100,36 @@ def test_plan_only_run_writes_ir_but_no_evidence(tmp_path):
     assert tp_doc["count"] == 66
     assert tp_doc["methodology"]["counts"]["contracts_by_status"] == {
         "assume": 42}
+
+
+def test_execution_model_projects_vplan_cases(tmp_path):
+    proj = load_project(ROOT)
+    model = build_execution_model(proj)
+
+    assert len(model["dimensions"]) == 12
+    assert len(model["themes"]) == 12
+    assert len(model["cases"]["cases"]) == 12
+    assert {t["test"] for t in model["themes"]} == {
+        c["test_name"] for c in proj.cases
+    }
+    assert all(t["dimensions"] == ["*"] for t in model["themes"])
+    assert all(c["requirements"] for c in model["cases"]["cases"])
+    assert (ROOT / "rtl" / "npu_sched.sv").is_file()
+
+    path = write_execution_model(proj, tmp_path)
+    from src.layers.l3_decision.casemodel.repository import load_models_from_text
+
+    models = load_models_from_text(path.read_text(encoding="utf-8"))
+    resolved = models[0].resolve()
+    assert len(resolved.themes) == 12
+    assert len(resolved.cases_doc.get("cases") or []) == 12
+
+
+def test_explicit_casemodel_marker(tmp_path):
+    from src.layers.l2_orchestration.verify_request import copy_casemodel
+
+    src = tmp_path / "model.yaml"
+    src.write_text("version: '1'\n", encoding="utf-8")
+    dest = copy_casemodel(str(src), tmp_path / "run")
+    assert dest.is_file()
+    assert (dest.parent / ".casemodel_explicit").is_file()
