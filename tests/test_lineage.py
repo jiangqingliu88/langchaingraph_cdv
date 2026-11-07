@@ -13,6 +13,8 @@
 """
 from __future__ import annotations
 
+from tests.npu_fixtures import NPU_CASEMODEL, NPU_RTL_DIR
+
 import sqlite3
 import sys
 from pathlib import Path
@@ -297,7 +299,7 @@ VALUES ('legacy_case', 'protocol', 'opcode[7:0]');
     def test_register_cases_binds_module_and_version(self, tmp_path):
         from src.layers.l3_decision.casemodel.registry_bridge import register_cases
 
-        yaml_text = Path("specs/npu_sched/casemodel.yaml").read_text(encoding="utf-8")
+        yaml_text = NPU_CASEMODEL.read_text(encoding="utf-8")
         out = register_cases(yaml_text, "npu_sched",
                              db_path=str(tmp_path / "tc.db"), rtl_version_no=5)
         assert out["registered"] > 0, out

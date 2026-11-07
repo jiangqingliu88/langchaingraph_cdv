@@ -13,6 +13,8 @@
 """
 from __future__ import annotations
 
+from tests.npu_fixtures import NPU_CASEMODEL, NPU_RTL_DIR
+
 import re
 from pathlib import Path
 
@@ -507,8 +509,7 @@ class TestTheNpuSchedulerModel:
     合在一起能不能编译只有它知道。
     """
 
-    NPU = (Path(__file__).resolve().parents[5]
-           / "specs" / "npu_sched" / "casemodel.yaml")
+    NPU = NPU_CASEMODEL
 
     @pytest.fixture(scope="class")
     def payload(self):
@@ -761,8 +762,7 @@ class TestWidthDerivation:
 class TestTheNpuProbeCompiles:
     """NPU 那份模型的探针 —— **必须真过 vlog**（bind 的端口连接尤其容易错）。"""
 
-    NPU = (Path(__file__).resolve().parents[5]
-           / "specs" / "npu_sched" / "casemodel.yaml")
+    NPU = NPU_CASEMODEL
 
     def test_all_twelve_signals_are_dut_sourced(self):
         out = run_covergroups(self.NPU.read_text(encoding="utf-8"), "npu_sched")
@@ -923,8 +923,7 @@ class TestCoveragePlan:
 class TestTheNpuCoveragePlan:
     """NPU 那份模型的计划 —— 与文档 §3/§5/§6/§8 逐项对。"""
 
-    NPU = (Path(__file__).resolve().parents[5]
-           / "specs" / "npu_sched" / "casemodel.yaml")
+    NPU = NPU_CASEMODEL
 
     @pytest.fixture(scope="class")
     def plan(self):

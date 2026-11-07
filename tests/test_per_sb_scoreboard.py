@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+from tests.npu_fixtures import NPU_CASEMODEL, NPU_RTL_DIR
+
 import json
 import re
 import shutil
@@ -103,7 +105,7 @@ class TestScoreboardRuleOwnership:
             load_model_from_text)
 
         model = load_model_from_text(
-            Path("specs/npu_sched/casemodel.yaml").read_text(encoding="utf-8"))
+            NPU_CASEMODEL.read_text(encoding="utf-8"))
         sb = model.scoreboards[0]
         assert sb.rules and set(sb.rules) <= {
             a.name for a in model.assertions}

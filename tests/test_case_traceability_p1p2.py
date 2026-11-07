@@ -9,6 +9,8 @@ P2 回答"波形里的时序对不对"：TP IR 带 `timing.expect_cycles`，env 
 """
 from __future__ import annotations
 
+from tests.npu_fixtures import NPU_CASEMODEL, NPU_RTL_DIR
+
 import json
 import shutil
 from pathlib import Path
@@ -139,7 +141,7 @@ class TestTpBitmap:
     def test_interface_gets_tp_seen_when_width_is_given(self):
         from src.layers.l3_decision.casemodel.api import run_covergroups
 
-        text = Path("specs/npu_sched/casemodel.yaml").read_text(encoding="utf-8")
+        text = NPU_CASEMODEL.read_text(encoding="utf-8")
         p = run_covergroups(text, "npu_sched", tp_bitmap_width=70)
         code = p["cov_interface_code"]
         assert "logic [69:0] tp_seen;" in code

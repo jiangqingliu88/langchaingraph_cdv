@@ -29,6 +29,8 @@
 """
 from __future__ import annotations
 
+from tests.npu_fixtures import NPU_CASEMODEL, NPU_RTL_DIR
+
 import json
 from pathlib import Path
 
@@ -43,7 +45,7 @@ from src.layers.l3_decision.casemodel.coverage import (
 )
 from src.layers.l3_decision.casemodel.repository import load_models_from_text
 
-NPU = Path("specs/npu_sched/casemodel.yaml")
+NPU = NPU_CASEMODEL
 
 
 @pytest.fixture(scope="module")

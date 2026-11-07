@@ -18,6 +18,8 @@
 """
 from __future__ import annotations
 
+from tests.npu_fixtures import NPU_CASEMODEL, NPU_RTL_DIR
+
 import asyncio
 import json
 import sys
@@ -390,7 +392,7 @@ class TestTheModelRulesFeedBothTheAssertionAndTheChecker:
 
         from src.layers.l3_decision.casemodel.coverage import checker_rules
 
-        cm = _yaml.safe_load(Path("specs/npu_sched/casemodel.yaml").read_text(
+        cm = _yaml.safe_load(NPU_CASEMODEL.read_text(
             encoding="utf-8"))
         got = checker_rules(cm.get("assertions"), [
             "queue_level", "instr_type", "instr_dtype", "dep_type", "issue_unit",

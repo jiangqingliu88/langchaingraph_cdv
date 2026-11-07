@@ -26,6 +26,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.npu_fixtures import NPU_CASEMODEL, NPU_RTL_DIR
+
 VERIFY_MAIN = Path("src/executors/verify/main.py")
 
 
@@ -171,7 +173,7 @@ class TestTheTwoSamplingChannelsSplit:
     `sample: dut` 的走 `coverage/<模块>_cov_if.sv`（bind 的接口）+ `dut_bins`。
     """
 
-    NPU = Path("specs/npu_sched/casemodel.yaml")
+    NPU = NPU_CASEMODEL
     APB = Path("specs/apb_uart/casemodel.yaml")
 
     def _executor(self):
@@ -246,7 +248,7 @@ class TestTheDutChannelIsWiredIntoTheEnv:
     的产物**清掉**，而且要**说出来**。
     """
 
-    NPU = Path("specs/npu_sched/casemodel.yaml")
+    NPU = NPU_CASEMODEL
 
     def _run_dir(self, tmp_path):
         import shutil
@@ -594,7 +596,7 @@ class TestSeedsReachTheRegression:
     **与 case 模型同批落盘的覆盖率计划**，回归只读不算。
     """
 
-    NPU = Path("specs/npu_sched/casemodel.yaml")
+    NPU = NPU_CASEMODEL
 
     def _plan_dir(self, tmp_path):
         from src.layers.l3_decision.casemodel.api import run_coverage_plan
@@ -688,7 +690,7 @@ class TestThePlanIsWrittenWithTheCaseModel:
         from src.executors.verify.main import VerifyExecutor
 
         (tmp_path / "inputs").mkdir(parents=True)
-        shutil.copy("specs/npu_sched/casemodel.yaml",
+        shutil.copy(NPU_CASEMODEL,
                     tmp_path / "inputs" / "casemodel.yaml")
         VerifyExecutor()._write_coverage_plan(tmp_path)
         out = tmp_path / "coverage" / "coverage_plan.yaml"
@@ -707,7 +709,7 @@ class TestBatchTestsAreRunnable:
     于是"这一批跑不起来"被记成 pass，看不出来。
     """
 
-    NPU = Path("specs/npu_sched/casemodel.yaml")
+    NPU = NPU_CASEMODEL
 
     def test_the_model_yields_one_class_per_batch(self):
         from src.layers.l3_decision.casemodel.api import run_uvm_batches
@@ -990,7 +992,7 @@ class TestTheRtlPortTableIsParsedWhole:
     而且没有一行日志说端口丢了（是覆盖率通道把这件事报出来的）。
     """
 
-    NPU = Path("specs/npu_sched")
+    NPU = NPU_RTL_DIR
 
     def _ports(self, rtl_dir):
         from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _parse_rtl_module
@@ -1059,7 +1061,7 @@ class TestBatchConstraintComesFromTheModel:
     测**两份名字一模一样**（`theme_policy_map` 是唯一出处）。
     """
 
-    NPU = Path("specs/npu_sched/casemodel.yaml")
+    NPU = NPU_CASEMODEL
 
     def _both(self):
         from src.layers.l3_decision.casemodel.api import run_uvm_batches
@@ -1193,7 +1195,7 @@ class TestTheConstraintModelIsWrittenInTheSameWindow:
 
         ydir = tmp_path / "inputs" / "yaml" / "uvm"
         ydir.mkdir(parents=True)
-        shutil.copy(Path("specs/npu_sched/casemodel.yaml"),
+        shutil.copy(NPU_CASEMODEL,
                     tmp_path / "inputs" / "casemodel.yaml")
         (tmp_path / "spec.json").write_text(
             json.dumps({"design_name": "npu_sched"}), encoding="utf-8")
@@ -1268,7 +1270,7 @@ class TestTheConstraintModelIsWrittenInTheSameWindow:
 
         ydir = tmp_path / "inputs" / "yaml" / "uvm"
         ydir.mkdir(parents=True)
-        shutil.copy(Path("specs/npu_sched/casemodel.yaml"),
+        shutil.copy(NPU_CASEMODEL,
                     tmp_path / "inputs" / "casemodel.yaml")
         (ydir / "env.yaml").write_text(
             "environment:\n  name: npu_sched_env\n  agents:\n"
