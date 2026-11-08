@@ -15,11 +15,11 @@ class IpModuleBase(ModuleBase):
 
     def load_ips(self) -> List[Dict[str, Any]]:
         payload = self.run_tool("ip.list", quiet=True,
-                                root=str(self.project_root))
+                                project_root=str(self.project_root))
         self._ips = payload if isinstance(payload, list) else []
         return self._ips
 
     def ip_info(self, ip_id: str) -> Dict[str, Any]:
         payload = self.run_tool("ip.info", quiet=True,
-                                root=str(self.project_root), ip_id=ip_id)
+                                project_root=str(self.project_root), ip_id=ip_id)
         return payload if isinstance(payload, dict) else {}

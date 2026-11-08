@@ -1,0 +1,26 @@
+case_id: TC_CMDSCHED_REL_001
+test_name: cmdsched_rel_test
+title: 中间复位/恢复/资源
+batch: P1
+owner: dv_env
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-LP-RST-001
+- C-EXC-INT-001
+- C-RES-TILE-001
+covergroups:
+- CG_CMDSCHED_CSR
+target_bins: []
+checks:
+- type: sva
+  artifact: lp_sva
+- type: scb
+  artifact: res_model_scb
+constraints: []
+seed_baseline:
+- 9001
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

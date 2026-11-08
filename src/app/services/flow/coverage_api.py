@@ -131,52 +131,35 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
     if not root.is_dir():
         return {"error": f"run_dir not found: {run_dir}"}
 
-    # **走统一判据**：`casemodel_path()` 只是 front 的草稿落点，人写的模型
-    # （`specs/<模块>/casemodel.yaml`）优先级更高。直接读草稿的后果实测过 ——
-    # NPU 那份 12 维度的手写模型被绕过，页面显示"1 覆盖点 / 4 测试点"。
-    from src.layers.l1_infrastructure.layout import find_case_model
+    from src.layers.l3_decision.vplan import engine
 
-    cm_file = find_case_model(_spec_of_run(root), root)
+    project = engine.project_for(_spec_of_run(root), root)
     notes: List[str] = []
-    cm_text = ""
-    if cm_file is not None and cm_file.is_file():
-        try:
-            cm_text = cm_file.read_text(encoding="utf-8")
-        except OSError:
-            cm_text = ""
 
     # 模块名取模型的 `object`（`apb_uart`），**不是运行目录名** ——
     # 目录名会进用例名（`test_apb_uart_D_ADDR_0` vs
     # `test_output_e2e_fix2_jiang_..._D_ADDR_0`），那是两只手都数不过来的噪音。
     module_name = root.name
-    if cm_text:
-        import yaml as _yaml
-
+    if project is not None:
         try:
-            module_name = str((_yaml.safe_load(cm_text) or {}).get("object")
+            module_name = str(engine.load_exec_assets(project).get("object")
                               or root.name).strip() or root.name
-        except Exception:                           # noqa: BLE001 解析失败就退回目录名
+        except Exception:                           # noqa: BLE001
             pass
 
     # ── ① 覆盖点：模型的声明 + 实测的命中 ──
     points: Dict[str, Any] = {}
-    if cm_text:
+    if project is not None:
         try:
-            from src.layers.l3_decision.casemodel.api import run_covergroups
-
-            points = run_covergroups(cm_text, module_name)
+            points = engine.run_covergroups(project, module_name)
             if points.get("error"):
-                notes.append(f"case 模型构建失败：{points['error']}")
+                notes.append(f"VPlan 执行资产构建失败：{points['error']}")
                 points = {}
         except Exception as exc:                    # noqa: BLE001 旁路，别让页面挂
-            notes.append(f"读 case 模型失败：{exc}")
+            notes.append(f"读 VPlan 执行资产失败：{exc}")
     else:
-        tried = "、".join(str(x) for x in
-                         [Path("specs") / "<模块>" / "casemodel.yaml",
-                          Path("config") / "casemodel" / "<模块>.yaml"]
-                         + ([cm_file] if cm_file else []))
-        notes.append(f"没有 case 模型（找过 {tried}）—— 覆盖点无从列起"
-                     f"（front 阶段没产出它？）")
+        notes.append("没有 VPlan 执行资产 —— 覆盖点无从列起"
+                     "（用 `vplan execute` 生成）")
 
     measured, measured_path = {}, ""
     try:
@@ -237,25 +220,21 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
 
     # ── ② 测试点：模型摊平出来的用例（与 run_uvm_tests / 用例库同一份分母）──
     testpoint_rows: List[Dict[str, Any]] = []
-    if cm_text:
+    if project is not None:
         try:
-            from src.layers.l3_decision.casemodel.registry_bridge import case_rows
-
-            rows = case_rows(cm_text, module_name)
-            for c in rows.get("cases") or []:
-                cons = (c.get("constraints") or [{}])[0]
+            payload = engine.run_testpoints(project, module_name=module_name)
+            for tp in payload.get("testpoints") or []:
                 testpoint_rows.append({
-                    "name": c.get("name", ""),
-                    "dimension": cons.get("dimension", ""),
-                    "field": cons.get("field", ""),
-                    "value": cons.get("value", ""),
-                    "priority": c.get("priority", ""),
-                    "coverage_bin": c.get("coverage_bin", ""),
+                    "name": (tp.get("execution") or {}).get("test")
+                    or tp.get("tp_id", ""),
+                    "dimension": tp.get("dimension", ""),
+                    "field": tp.get("field", ""),
+                    "value": tp.get("value", ""),
+                    "priority": tp.get("priority", ""),
+                    "coverage_bin": tp.get("bin", ""),
                 })
-            notes.extend(rows.get("notes") or [])
-        except Exception as exc:                    # noqa: BLE001
-            notes.append(f"摊平测试点失败：{exc}")
-
+        except Exception as exc:                    # noqa: BLE001 旁路
+            notes.append(f"读 VPlan 测试点失败：{exc}")
     # ── ③ 批次 / 种子管理 + 需求追溯：从**计划**读（与 case 模型同批落盘的那份）──
     #
     # 覆盖点表回答"该测什么"，这两张表回答"**打算怎么测够**"与"**谁验了哪条需求**"。
@@ -302,9 +281,9 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
             })
     # ── ④ 资产：这条链上的文件 ──
     assets: List[Dict[str, Any]] = []
+    declared = Path("inputs/vplan/data/execution_meta.csv")
     for label, rel in (
-            ("case 模型（声明来源）",
-             _rel_to(cm_file, root, "inputs/casemodel.yaml")),
+            ("执行资产（声明来源）", declared),
             ("功能覆盖点声明", Path("coverage/coverage_points.json")),
             ("env_cov bin 注入", Path("inputs/yaml/uvm/env_cov_bins.yaml")),
             ("实测覆盖率文本", Path("sim/coverage/reports/coverage_cvg.txt"))):
@@ -336,7 +315,7 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
             "requirements": len(trace),
             "measured": sum(1 for r in coverpoint_rows if r["measured"]),
         },
-        "source": points.get("source", "") or ("casemodel" if points else ""),
+        "source": points.get("source", "") or ("legacy_model" if points else ""),
         "notes": list(dict.fromkeys(notes)),
         "summary": _summary_line(coverpoint_rows, testpoint_rows,
                                  bool(measured), case_gates),

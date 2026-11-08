@@ -119,7 +119,7 @@ class SocModuleBase(ModuleBase):
     def run_soc(self) -> None:
         self.show_info("开始跑 SoC 回归（Questa vlog/vsim，约 2–5 秒）…")
         result = self.run_tool("soc.run", force=True,
-                               project_root=str(self.project_root))
+                               project_project_root=str(self.project_root))
         if not isinstance(result, dict):
             return
         if result.get("status") == "PASS":

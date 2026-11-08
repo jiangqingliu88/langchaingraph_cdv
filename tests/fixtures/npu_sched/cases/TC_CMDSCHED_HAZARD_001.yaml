@@ -1,0 +1,27 @@
+case_id: TC_CMDSCHED_HAZARD_001
+test_name: cmdsched_hazard_scope_test
+title: 2~5 组件/第三条指令阻塞
+batch: '5'
+owner: dv_func
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-FUNC-UNIT-004
+- C-FUNC-UNIT-005
+- C-FUNC-DEP-006
+covergroups:
+- CG_CMDSCHED_DEP
+- CG_CMDSCHED_UNIT
+target_bins: []
+checks:
+- type: scb
+  artifact: unit_scb
+- type: scb
+  artifact: hazard_scb
+constraints: []
+seed_baseline:
+- 1500
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

@@ -189,17 +189,15 @@ def _tp_regression_lines(output_dir: Path, module_name: str, env_name: str,
     分级取 TP IR 的 `execution.stage`（由专题优先级派生）—— **不再靠目录名
     或 tag 手写**："这一条该在哪一级跑"是模型说的。
     """
-    from src.layers.l1_infrastructure.layout import find_case_model
+    from src.layers.l3_decision.vplan import engine
 
-    cm = find_case_model(_load_spec(output_dir) or {}, output_dir)
-    if cm is None:
+    project = engine.project_for(_load_spec(output_dir) or {}, output_dir)
+    if project is None:
         return []
     try:
-        from src.layers.l3_decision.casemodel.api import run_testpoints
-
-        payload = run_testpoints(
-            cm.read_text(encoding="utf-8", errors="replace"),
-            env_name=env_name, module_name=module_name, max_tests=200)
+        payload = engine.run_testpoints(
+            project, env_name=env_name, module_name=module_name,
+            max_tests=200)
     except Exception as e:                             # noqa: BLE001 旁路，别拦回归生成
         print(f"  [find_yaml] 测试点回归未生成: {e}", flush=True)
         return []

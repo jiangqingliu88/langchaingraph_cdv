@@ -943,26 +943,6 @@ def _coverage_detail(coverage: Dict[str, Any], gates: Dict[str, Any],
     }
 
 
-def _ingest_drift_caveat(output_dir: Path, caveat) -> None:
-    """xlsx 导入后 casemodel 被手改 —— 证据链对不上，必须开口。"""
-    ingest = _humanview_ingest(output_dir)
-    issues = ingest.get("issues") if ingest.get("available") else None
-    if issues:
-        caveat("INGEST_DRIFT",
-               f"xlsx 导入后 casemodel 被手改（{len(issues)} 处）"
-               f"—— 重新导入或说明原因，见 inputs/source_map.json")
-
-
-def _humanview_ingest(output_dir: Path) -> Dict[str, Any]:
-    """xlsx 导入事实（source_map）：覆盖点出处 / 丢弃 / 导入后被手改。"""
-    try:
-        from src.tools.humanview.aivm_ir.evidence import ingest_facts
-
-        return ingest_facts(output_dir)
-    except Exception:                                  # noqa: BLE001 旁路
-        return {"available": False}
-
-
 def _plan_consistency_caveat(output_dir: Path, caveat) -> None:
     doc = _read_json_file(output_dir / "coverage" / "plan_consistency.json")
     issues = doc.get("issues") if isinstance(doc, dict) else None
@@ -1118,7 +1098,6 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
             "merge_manifest": str(merge_manifest_path) if merge_manifest_sha else "",
             "merge_manifest_sha256": merge_manifest_sha,
         },
-        "humanview_ingest": _humanview_ingest(output_dir),
         "tp_matrix": {
             "counts": tp.get("counts") or {},
             "total": tp.get("total", 0),

@@ -7,11 +7,11 @@ import pytest
 
 sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents if (p / "src").is_dir())))
 from src.tools.generation.uvm_tools.tool_uvm import UVMGenerator, JinjaRenderer, YAMLLoader
-from src.tools.generation.uvm_tools.generation.render.region_injector import BANNER_MARKER, RegionError, RegionInjector
-from src.tools.generation.uvm_tools.generation.render.jinja_renderer import JinjaRenderer as _JinjaRenderer
-from src.tools.generation.uvm_tools.generation.constants import TEMPLATES_DIR as _TEMPLATES_DIR, __version__
-from src.tools.generation.uvm_tools.generation.parsing.environment_specs import _normalize_agents_list, _normalize_harness, _normalize_scoreboards, _normalize_subenvs
-from src.tools.generation.uvm_tools.generation.generators.cli import main
+from src.tools.generation.uvm_tools.tool_uvm.render.region_injector import BANNER_MARKER, RegionError, RegionInjector
+from src.tools.generation.uvm_tools.tool_uvm.render.jinja_renderer import JinjaRenderer as _JinjaRenderer
+from src.tools.generation.uvm_tools.tool_uvm.constants import TEMPLATES_DIR as _TEMPLATES_DIR, __version__
+from src.tools.generation.uvm_tools.tool_uvm.parsing.environment_specs import _normalize_agents_list, _normalize_harness, _normalize_scoreboards, _normalize_subenvs
+from src.tools.generation.uvm_tools.tool_uvm.generators.cli import main
 
 EXAMPLES = Path(__file__).parent / "examples" / "apb"
 
@@ -240,7 +240,7 @@ def test_harness_multi_instance_source_path():
 
 
 def test_harness_generate_uvm_tool_type():
-    from src.tools.generation.uvm_tools.generation.generators.orchestrator import generate_uvm
+    from src.tools.generation.uvm_tools.tool_uvm.generators.orchestrator import generate_uvm
     out = generate_uvm("harness", "harness:\n  name: h1\n  bind_to: dut_mod\n"
                         "  interfaces:\n"
                         "    - { name: i1, type: if1, agent_path: ag, connections: { clk: clk } }\n")
@@ -427,8 +427,10 @@ def test_bench_clk_rst_legacy_alias(tmp_path):
     assert ".presetn(pclk_vif.rst_n[0])" in tb
 
 
-def test_meta_header_default_and_yaml_override(tmp_path):
+def test_meta_header_default_and_yaml_override(tmp_path, monkeypatch):
     """所有生成文件继承 base_template.sv.j2 文件头；YAML meta 可覆盖。"""
+    # 时间戳默认是空的（可复现构建）；本测试要验证头部字段，显式钉一个 epoch。
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", "1700000000")
     import yaml
     # 默认 meta：必须剥掉示例里的 meta 块，否则测到的是被覆盖后的 company，
     # 而不是 DEFAULT_META（examples/apb/apb_interface.yaml 自带 meta）
@@ -591,11 +593,11 @@ def test_cli_generate_filter_and_skip(tmp_path, capsys):
 # 属性测试：一条 environment.tests = 一个 UVM_TEST = 一个属性取值
 # ════════════════════════════════════════════════════════════
 
-from src.tools.generation.uvm_tools.generation.models import EnvironmentModel  # noqa: E402
-from src.tools.generation.uvm_tools.generation.parsing.environment_specs import (  # noqa: E402
+from src.tools.generation.uvm_tools.tool_uvm.models import EnvironmentModel  # noqa: E402
+from src.tools.generation.uvm_tools.tool_uvm.parsing.environment_specs import (  # noqa: E402
     _normalize_tests,
 )
-from src.tools.generation.uvm_tools.generation.render.jinja_renderer import (  # noqa: E402
+from src.tools.generation.uvm_tools.tool_uvm.render.jinja_renderer import (  # noqa: E402
     attr_class_slug, attr_int_value, attr_key,
 )
 
@@ -795,7 +797,7 @@ class TestStimulusBindingValidation:
     """绑错了字段必须**出声** —— 否则又是一个编译通过、激励全同的死标签。"""
 
     def _check(self, tests, *, transaction_vars):
-        from src.tools.generation.uvm_tools.generation.generators.tasks import EnvironmentRenderTask
+        from src.tools.generation.uvm_tools.tool_uvm.generators.tasks import EnvironmentRenderTask
 
         class _Probe(EnvironmentRenderTask):
             def __init__(self):  # 不建 renderer，只调校验
@@ -838,8 +840,8 @@ class TestIrGate:
         """只跑校验、不真渲染：render_file 返回 None，should_skip 全 True。"""
 
         def __init__(self, out):
-            from src.tools.generation.uvm_tools.generation.generators.tasks import AgentRenderTask
-            from src.tools.generation.uvm_tools.generation.render.region_injector import RegionInjector
+            from src.tools.generation.uvm_tools.tool_uvm.generators.tasks import AgentRenderTask
+            from src.tools.generation.uvm_tools.tool_uvm.render.region_injector import RegionInjector
 
             self._task = AgentRenderTask(
                 renderer=None, output_dir=out, injector=RegionInjector())
@@ -851,8 +853,8 @@ class TestIrGate:
 
     class _EnvProbe:
         def __init__(self, out):
-            from src.tools.generation.uvm_tools.generation.generators.tasks import EnvironmentRenderTask
-            from src.tools.generation.uvm_tools.generation.render.region_injector import RegionInjector
+            from src.tools.generation.uvm_tools.tool_uvm.generators.tasks import EnvironmentRenderTask
+            from src.tools.generation.uvm_tools.tool_uvm.render.region_injector import RegionInjector
 
             self._task = EnvironmentRenderTask(
                 renderer=None, output_dir=out, injector=RegionInjector())
@@ -863,7 +865,7 @@ class TestIrGate:
             return self._task.generate(env)
 
     def test_agent_port_problems_are_reported(self, tmp_path, capsys):
-        from src.tools.generation.uvm_tools.generation.models import AgentModel
+        from src.tools.generation.uvm_tools.tool_uvm.models import AgentModel
 
         agent = AgentModel(name="a", agent_name="a", interface="a",
                            interface_name="a",
@@ -873,7 +875,7 @@ class TestIrGate:
         assert "空端口名" in out and "非法" in out
 
     def test_clean_agent_is_silent(self, tmp_path, capsys):
-        from src.tools.generation.uvm_tools.generation.models import AgentModel
+        from src.tools.generation.uvm_tools.tool_uvm.models import AgentModel
 
         agent = AgentModel(name="a", agent_name="a", interface="a",
                            interface_name="a",

@@ -293,7 +293,7 @@ class TestArtifactReviewListsFunctionalCoverage:
         payload = run_artifacts(str(tmp_path))
         groups = {a["path"]: a["group"] for a in payload["artifacts"]}
         assert groups.get("coverage/coverage_points.json") == "功能覆盖"
-        assert groups.get("inputs/casemodel.yaml") == "功能覆盖"
+        assert groups.get("inputs/vplan/data/execution_meta.csv") == "功能覆盖"
         assert groups.get("inputs/yaml/uvm/env_cov_bins.yaml") == "功能覆盖"
 
     def test_a_missing_one_is_still_listed(self, tmp_path):

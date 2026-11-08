@@ -28,18 +28,18 @@ def _resolve_run_dir(path: str) -> Path:
 @contract.command("build")
 @click.option("--run", "-o", "run_dir", required=True,
               type=click.Path(file_okay=False), help="运行目录")
-@click.option("--config", "-c", "config", default="",
-              type=click.Path(dir_okay=False),
-              help="case 模型 YAML（没有 case_ir 时现编译）")
-@click.option("--module", "-m", "module", default="", help="模块名（缺省取运行目录/模型）")
+@click.option("--vplan", "vplan_dir", default="",
+              type=click.Path(file_okay=False),
+              help="VPlan 项目根（没有 case_ir 时现投影）")
+@click.option("--module", "-m", "module", default="", help="模块名（缺省取运行目录/项目）")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def contract_build(run_dir, config, module, json_output):
+def contract_build(run_dir, vplan_dir, module, json_output):
     """把 case IR 编译成契约构建物（contract/contract.yaml + 义务 + 清单）
 
     \b
     示例:
       vagent contract build --run output_xxx
-      vagent contract build --run output_xxx --config specs/npu_sched/casemodel.yaml
+      vagent contract build --run output_xxx --vplan specs/npu_sched
     """
     from src.layers.l3_decision.contract import write_contract
 
@@ -51,21 +51,22 @@ def contract_build(run_dir, config, module, json_output):
             case_ir = json.loads(case_ir_path.read_text(encoding="utf-8"))
         except ValueError:
             case_ir = {}
-    if config and not Path(config).is_file():
-        click.echo(f"case 模型不存在: {config}", err=True)
+    if vplan_dir and not Path(vplan_dir).is_dir():
+        click.echo(f"VPlan 项目不存在: {vplan_dir}", err=True)
         raise SystemExit(2)
-    if not case_ir.get("cases") and config:
-        from src.layers.l3_decision.casemodel.api import run_testpoints
+    if not case_ir.get("cases") and vplan_dir:
+        from src.layers.l3_decision.vplan import engine
 
-        payload = run_testpoints(Path(config).read_text(encoding="utf-8"),
-                                 env_name=f"{module or root.name}_env",
-                                 module_name=module or root.name)
+        payload = engine.run_testpoints(
+            engine.load_project_from(vplan_dir),
+            env_name=f"{module or root.name}_env",
+            module_name=module or root.name)
         if payload.get("error"):
-            click.echo(f"case 模型编译失败: {payload['error']}", err=True)
+            click.echo(f"VPlan 投影失败: {payload['error']}", err=True)
             raise SystemExit(2)
         case_ir = payload.get("case_ir") or {}
     if not case_ir.get("cases"):
-        click.echo("没有 case IR：先跑 verify，或用 --config 给 case 模型", err=True)
+        click.echo("没有 case IR：先跑 verify，或用 --vplan 给项目根", err=True)
         raise SystemExit(2)
 
     manifest = write_contract(root, case_ir, module=module or root.name)

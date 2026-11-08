@@ -109,7 +109,7 @@ class TestCatalog:
         assert [i["path"] for i in module.items] == [
             "spec.json", "inputs/yaml/uvm/bench.yaml", "inputs/yaml/regression.yaml",
             # 功能覆盖那一组：模型 / 声明 / env_cov 注入（都是"输入侧"的产物）
-            "inputs/casemodel.yaml", "coverage/coverage_points.json",
+            "inputs/vplan/data/execution_meta.csv", "coverage/coverage_points.json",
             "inputs/yaml/uvm/env_cov_bins.yaml"]
 
     def test_the_tree_is_grouped_by_stage(self, module):

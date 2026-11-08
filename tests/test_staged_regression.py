@@ -17,6 +17,12 @@ class _Stub:
     REGRESSION_STAGES = InfrastructureManager.REGRESSION_STAGES
     _staged_summary = staticmethod(InfrastructureManager._staged_summary)
     _stage_parts = staticmethod(InfrastructureManager._stage_parts)
+    _plan_tags = staticmethod(InfrastructureManager._plan_tags)
+    _stage_status = staticmethod(InfrastructureManager._stage_status)
+
+    def _seeded_plan(self, path):
+        return InfrastructureManager._seeded_plan(self, path)
+    output_root = ""
 
     def __init__(self, script, approvals=None):
         self.script = list(script)
@@ -298,3 +304,74 @@ def test_incremental_filter_does_not_skip_loopback_self_check():
     assert res["status"] == "PASS"
     assert calls[0] is None                 # loopback
     assert all(c == "^(alu_test)$" for c in calls[1:])
+
+
+def test_stage_absent_from_plan_is_skipped_not_blocked(tmp_path):
+    """计划里根本没有 P2/P3 用例 → 该级 SKIPPED，不拦、不报假红。"""
+    plan = tmp_path / "regression.yaml"
+    plan.write_text(
+        "tests:\n"
+        "  - { name: a, tags: [\"loopback\"] }\n"
+        "  - { name: b, tags: [\"p0\"] }\n"
+        "  - { name: c, tags: [\"p1\"] }\n",
+        encoding="utf-8")
+    stub = _Stub([_ok(), _ok(), _ok(), {"total": 0}, {"total": 0}])
+    res = InfrastructureManager.run_regression_staged(
+        stub, reg_yaml=str(plan), auto_approve=True)
+    assert res["status"] == "PASS"
+    statuses = {s["name"]: s["status"] for s in res["stages"]}
+    assert statuses["p2"] == "SKIPPED" and statuses["p3"] == "SKIPPED"
+
+
+def test_empty_stage_still_blocks_when_tag_is_in_plan(tmp_path):
+    """计划里**有** p2，却一条都没匹配到 → 筛选失效，仍然拦下。"""
+    plan = tmp_path / "regression.yaml"
+    plan.write_text(
+        "tests:\n"
+        "  - { name: a, tags: [\"loopback\"] }\n"
+        "  - { name: b, tags: [\"p0\"] }\n"
+        "  - { name: c, tags: [\"p1\"] }\n"
+        "  - { name: d, tags: [\"p2\"] }\n",
+        encoding="utf-8")
+    stub = _Stub([_ok(), _ok(), _ok(), {"total": 0}])
+    res = InfrastructureManager.run_regression_staged(
+        stub, reg_yaml=str(plan), auto_approve=True)
+    assert res["status"] == "FAIL" and res["blocked_at"] == "p2"
+    assert "没有任何用例匹配" in res["blocked_reason"]
+
+
+def test_seed_offset_is_applied_to_existing_plan(tmp_path):
+    """round 2 不重跑 verify，扩种偏移必须在这里落进计划，否则空转。"""
+    import os
+    import yaml
+
+    plan = tmp_path / "regression.yaml"
+    plan.write_text(
+        "tests:\n"
+        "  - { name: a, count: 1, variables: {SEED: 1001} }\n"
+        "  - { name: b, count: 1, variables: {SEED: 2001} }\n",
+        encoding="utf-8")
+    expand = tmp_path / "coverage" / "seed_expand.json"
+    expand.parent.mkdir()
+    expand.write_text('{"round": 1, "offset": 1000}', encoding="utf-8")
+    # 计划比扩种记录旧 → 应用偏移
+    os.utime(expand, (plan.stat().st_atime + 10, plan.stat().st_mtime + 10))
+
+    infra = InfrastructureManager(tmp_path)
+    out = infra._seeded_plan(plan)
+    assert out != plan
+    seeds = [t["variables"]["SEED"] for t in
+             (yaml.safe_load(out.read_text(encoding="utf-8"))["tests"])]
+    assert seeds == [2001, 3001]
+
+
+def test_seed_offset_skipped_when_plan_is_newer(tmp_path):
+    """计划已经由 verify 带着偏移重新生成过 → 不能再加一遍。"""
+    plan = tmp_path / "regression.yaml"
+    plan.write_text(
+        "tests:\n  - { name: a, count: 1, variables: {SEED: 2001} }\n",
+        encoding="utf-8")
+    expand = tmp_path / "coverage" / "seed_expand.json"
+    expand.parent.mkdir()
+    expand.write_text('{"round": 1, "offset": 1000}', encoding="utf-8")
+    assert InfrastructureManager(tmp_path)._seeded_plan(plan) == plan

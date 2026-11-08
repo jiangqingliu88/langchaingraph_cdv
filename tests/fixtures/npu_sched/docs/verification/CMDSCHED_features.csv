@@ -1,0 +1,40 @@
+﻿feature_no,feature_id,feature_level,parent_feature_id,feature_l1,feature_l2,feature_l3,description,applicable_topics
+1,F-CMDSCHED,root,-,CMDSCHED,-,-,CMD Scheduler 主功能域（黑盒）,接口|时钟复位|参数和配置|数据值域|数据形状|错误异常|中间复位|边界|流控和反压|性能长稳
+1.1,F-CMD-IN,branch,F-CMDSCHED,CMDSCHED,CMD_IN,-,命令输入与解码路径,接口|参数和配置|数据值域|数据形状|错误异常|边界|流控和反压
+1.1.1,F-CMD-HS,leaf,F-CMD-IN,CMDSCHED,CMD_IN,HS,指令握手与反压,接口|流控和反压
+1.1.2,F-CMD-DECODE,leaf,F-CMD-IN,CMDSCHED,CMD_IN,DECODE,指令解析/配置/精度,参数和配置|数据值域|数据形状|错误异常
+1.1.3,F-CMD-OST2,leaf,F-CMD-IN,CMDSCHED,CMD_IN,OST2,指令 outstanding=2 与缓冲,边界|流控和反压
+1.2,F-SCHED,branch,F-CMDSCHED,CMDSCHED,SCHED,-,调度/依赖/发射,接口|数据值域|数据形状|错误异常|边界
+1.2.1,F-SCHED-SH,leaf,F-SCHED,CMDSCHED,SCHED,SH,结构冒险 sync/noc_fence/lmem-LLSU,数据值域|数据形状|错误异常
+1.2.2,F-SCHED-DH,leaf,F-SCHED,CMDSCHED,SCHED,DH,数据冒险 RAW/WAW/WAR 与粒度,数据值域|数据形状|错误异常
+1.2.3,F-SCHED-RANGE,leaf,F-SCHED,CMDSCHED,SCHED,RANGE,地址范围冲突 tile/dram,数据形状|边界
+1.2.4,F-SCHED-ISSUE,leaf,F-SCHED,CMDSCHED,SCHED,ISSUE,乱序发射与 ins_buffer 窗口,接口|数据形状|边界
+1.3,F-PAR,branch,F-CMDSCHED,CMDSCHED,PAR,-,并行与竞争,数据形状|边界|流控和反压
+1.3.1,F-PAR-MST,leaf,F-PAR,CMDSCHED,PAR,MST,2~5 组件并行/同组件双 drv,数据形状|边界
+1.3.2,F-PAR-LS,leaf,F-PAR,CMDSCHED,PAR,LS,GLSU/NIU load/store 并行,流控和反压
+1.3.3,F-PAR-TMU,leaf,F-PAR,CMDSCHED,PAR,TMU,GLSU/LLSU TMU 竞争,流控和反压|边界
+1.4,F-MEM,branch,F-CMDSCHED,CMDSCHED,MEM,-,SPAD/page/dram 资源,数据值域|数据形状|边界|错误异常
+1.4.1,F-MEM-TILE,leaf,F-MEM,CMDSCHED,MEM,TILE,SPAD tile 切分/冲突,数据形状|边界
+1.4.2,F-MEM-PAGEDRAM,leaf,F-MEM,CMDSCHED,MEM,PAGEDRAM,CIMC page/DRAM 整块,数据形状|边界
+1.4.3,F-MEM-SHARE,leaf,F-MEM,CMDSCHED,MEM,SHARE,多组件共享 SPAD/xbar 仲裁,数据形状
+1.4.4,F-MEM-RELEASE,leaf,F-MEM,CMDSCHED,MEM,RELEASE,tile/page/dram 释放,边界|错误异常
+1.4.5,F-MEM-LMEM,leaf,F-MEM,CMDSCHED,MEM,LMEM,CPU LMEM 读写/RMW,数据值域|数据形状|错误异常
+1.5,F-RSP,branch,F-CMDSCHED,CMDSCHED,RSP,-,响应输出路径,接口|数据值域|数据形状|错误异常|边界|流控和反压
+1.5.1,F-RSP-XD1,leaf,F-RSP,CMDSCHED,RSP,XD1,多 xd=1 乱序返回/tag,接口|数据值域|错误异常
+1.5.2,F-RSP-PRIO,leaf,F-RSP,CMDSCHED,RSP,PRIO,rsp_fifo 优先级,数据形状
+1.5.3,F-RSP-BP,leaf,F-RSP,CMDSCHED,RSP,BP,读/写/scalar/istb 反压,流控和反压|边界
+1.6,F-EXC,branch,F-CMDSCHED,CMDSCHED,EXC,-,异常与中断,接口|数据值域|错误异常|边界|流控和反压
+1.6.1,F-EXC-ILLEGAL,leaf,F-EXC,CMDSCHED,EXC,ILLEGAL,非法编码/rd_csr/reserved,数据值域|错误异常
+1.6.2,F-EXC-ADDR,leaf,F-EXC,CMDSCHED,EXC,ADDR,非 SPAD 地址/lmem-CIMC,错误异常
+1.6.3,F-EXC-INT,leaf,F-EXC,CMDSCHED,EXC,INT,中断现场/清除,接口|边界
+1.6.4,F-EXC-BLOCK,leaf,F-EXC,CMDSCHED,EXC,BLOCK,block_en 停止/恢复,流控和反压
+1.7,F-CFG,branch,F-CMDSCHED,CMDSCHED,CFG,-,配置/启动/CSR,接口|参数和配置|数据形状|边界
+1.7.1,F-CFG-START,leaf,F-CFG,CMDSCHED,CFG,START,组件启动/cfg/pre 时序,接口|参数和配置
+1.7.2,F-CFG-COREREG,leaf,F-CFG,CMDSCHED,CFG,COREREG,cfg 信息存 core_reg,参数和配置
+1.7.3,F-CFG-CSRCIMC,leaf,F-CFG,CMDSCHED,CFG,CSRCIMC,CSR 默认值/icg/tile_rls/spad_excl/CIMC 2x2,参数和配置|数据形状|边界
+1.8,F-DBGPERF,branch,F-CMDSCHED,CMDSCHED,DBGPERF,-,debug/性能可观测,接口|流控和反压|性能长稳
+1.8.1,F-DBG-REG,leaf,F-DBGPERF,CMDSCHED,DBGPERF,DBG,debug0/1/2 计数,接口
+1.8.2,F-PERF-CNT,leaf,F-DBGPERF,CMDSCHED,DBGPERF,PERF,并行度/拥塞/窗口,流控和反压|性能长稳
+1.9,F-LP,branch,F-CMDSCHED,CMDSCHED,LP,-,低功耗/复位,时钟复位|中间复位|边界
+1.9.1,F-LP-ICG,leaf,F-LP,CMDSCHED,LP,ICG,IDLE/ICG 开关,时钟复位|边界
+1.9.2,F-LP-RST,leaf,F-LP,CMDSCHED,LP,RST,中间复位/复位恢复,时钟复位|中间复位

@@ -1,0 +1,14 @@
+case_id: TC_CMD_INT_PERF_001
+test_name: cmd_int_perf_test
+batch: '1'
+contract_ids: C-CMD_INT_PERF-001
+covergroups:
+- CG_CMD_INT_PERF
+checks: cfg_scb
+owner: dv
+status: planned
+notes: 指令中断检查与指令性能监控，产生cmd_creg_int、各master exce中断信息、cmd_creg_dbg0~2及cmd_creg_perf_cnt。
+title: 指令中断检查与指令性能监控，产生cmd_creg_int、各master exce中断信息、cmd_creg_dbg0~2及cmd_creg_perf_cnt。
+contract_refs:
+- C-CMD_INT_PERF-001
+constraints: []

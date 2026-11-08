@@ -1,0 +1,12 @@
+case_id: TC_SCHED_012
+test_name: spad_xbar_multi_master_test
+batch: B03
+title: 多组件SPAD访问
+contract_refs:
+- C-FUNC-009
+- C-DATA-004
+covergroups:
+- cg_spad_exclusive
+- cg_raw_waw_war
+- cg_spad_addr_range
+constraints: []

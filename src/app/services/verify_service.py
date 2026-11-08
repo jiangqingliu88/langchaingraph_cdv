@@ -1,6 +1,6 @@
 """UVM 自动化验证 —— 应用服务 facade（**CLI / Workbench 的唯一入口**）。
 
-预检（输出目录 / casemodel 落点 / 全量回归开关 / 增量基线）统一在
+预检（输出目录 / VPlan 挂载 / 全量回归开关 / 增量基线）统一在
 `VerifyRequest.prepare()`，这里只负责构造请求、调引擎、补上 `output_root`。
 
     CLI      → run_verify_async / run_multi_module_async（本模块）
@@ -20,7 +20,7 @@ async def run_verify_async(*, spec_text: str = "", spec_file: str = "",
                            target: Optional[float] = None, max_rounds: int = 5,
                            design_style: str = "baseline",
                            bypass_design_model: bool = False,
-                           rtl_dir: str = "", casemodel: str = "",
+                           rtl_dir: str = "", vplan: str = "",
                            sim_modes=None, manual_gate: bool = True,
                            approval: str = "threshold",
                            checkpointing: bool = True,
@@ -36,13 +36,15 @@ async def run_verify_async(*, spec_text: str = "", spec_file: str = "",
         max_rounds=int(max_rounds), design_style=design_style,
         bypass_design_model=bool(bypass_design_model),
         sim_modes=list(sim_modes or []) or None, manual_gate=bool(manual_gate),
-        rtl_dir=str(rtl_dir or ""), casemodel=str(casemodel or ""),
+        rtl_dir=str(rtl_dir or ""), vplan=str(vplan or ""),
         approval=approval, checkpointing=bool(checkpointing),
         full_regression=bool(full_regression),
         incremental_from=str(incremental_from or ""),
         origin=str(origin or "service"),
     )
-    run_root = request.prepare()
+    # VPlan execute 的 `-o` 是**精确运行目录**：VPlan 输入必须挂在该目录下
+    # （`<run>/inputs/vplan/`），不能再追加时间戳另起一个目录。
+    run_root = request.prepare(root=output_root if vplan else None)
     service = PipelineExecutionService.get_instance()
     with request.incremental_env():
         result = await service.run_closed_loop_streaming(

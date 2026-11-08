@@ -1,0 +1,29 @@
+case_id: TC_CMDSCHED_MEM_001
+test_name: cmdsched_mem_test
+title: tile/page/dram/共享 SPAD/释放
+batch: '7'
+owner: dv_res
+vplan_status: planned
+kernel_case_id: ''
+contract_refs:
+- C-RES-TILE-001
+- C-RES-PAGE-001
+- C-RES-DRAM-001
+- C-RES-SPAD-001
+- C-RES-RLS-001
+- C-CFG-TILE-RLS-001
+covergroups:
+- CG_CMDSCHED_MEM
+target_bins: []
+checks:
+- type: scb
+  artifact: res_model_scb
+- type: sva
+  artifact: tile_sva
+constraints: []
+seed_baseline:
+- 1700
+stimulus:
+  profile: random
+  count: 1
+must_detect: []

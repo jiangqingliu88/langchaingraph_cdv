@@ -1,0 +1,47 @@
+tp_id,feature_id,topic,spec_ref,contract_id,test_point,stimulus,expected,check_method,case_plan,priority,status,notes
+TP_SCHED_001,F-011,接口,2.1.5,C-IF-GRP-VALID_READY,Inst Dispatcher输入指令握手与字段保持,发送NICE/VNICE指令，随机disp_cmd_vld/cmd_disp_rdy，覆盖不同disp_cmd_inst_flag和disp_cmd_inst_tag,握手成功时disp_cmd_inst/flag/tag被正确接收，无丢失或重复,SVA,TC_SCHED_001,P0,planned,按Top Signal表
+TP_SCHED_002,F-011,接口,2.1.5,C-IF-GRP-VALID_READY,Inst Dispatcher返回数据/valid/ready握手,构造cmd_disp_rsp_vld与disp_cmd_rsp_rdy随机反压，返回不同32+3位数据,返回数据保持稳定且每次有效仅接收一次,SVA,TC_SCHED_001,P0,planned,覆盖反压
+TP_SCHED_003,F-012,接口,2.1.5,C-IF-GRP-VALID_READY,SPAD写通道ch0请求/响应握手,发起写请求，随机wvld/wrdy及响应wvld/wlast/wrdy,waddr/wdata/wstrb/wid保持；响应wlast正确；无握手丢失,SVA,TC_SCHED_002,P0,planned,512bit写数据
+TP_SCHED_004,F-012,接口,2.1.5,C-IF-GRP-VALID_READY,SPAD读通道ch1请求/响应握手,发起读请求，随机rvld/rrdy及响应rvld/rrdy,raddr/rid保持；rdata在rvld与rrdy握手时稳定且正确,SVA,TC_SCHED_002,P0,planned,1读1写
+TP_SCHED_005,F-013,接口,2.1.5,C-IF-GRP-NIU,各master done与tile/page/dram释放信号,随机产生NIU/GLSU/LLSU/VPU/MPU的done_vld及各类rls_vld/idx/inst_id,scoreboard正确更新未完成指令与资源状态，释放信号按接口语义被采样,SVA,TC_SCHED_003,P0,planned,含inst0/inst1
+TP_SCHED_006,F-014,接口,2.1.5,C-IF-GRP-INTERRUPT,中断/性能/debug/预留/SPAD exclusive接口连通性,配置creg_cmd_excep_en、creg_cmd_perf_*、creg_cmd_spad_excl_en，读取cmd_creg_*与reserve,各接口位域和方向正确，配置能反映到对应输出/中断/计数器,Checker,TC_SCHED_019,P1,planned,按Top Signal表
+TP_SCHED_007,F-021,时钟复位,10.1,C-RES-001,rst_n复位后寄存器/FIFO初始化,在空闲和活动状态下拉低rst_n再释放,复位后内部寄存器为0、FIFO为empty，指令拉高时断言成立,SVA,TC_SCHED_015,P0,planned,复位低有效
+TP_SCHED_008,F-022,时钟复位,1.3-3/6.1,C-LP-001,ICG开关与删除各组件低功耗控制,接收指令原语开始/结束，指令fifo为空且master全done时关闭门控；检查不再使用creg_cmd_icg_en[5:0]控制各模块,门控打开/关闭条件符合规格；低功耗由master IP控制,Checker,TC_SCHED_017,P1,planned,低功耗设计
+TP_SCHED_009,F-031,参数和配置,2.1.2,C-CFG-001,decode解析cfg/pre并保存配置,发送不同cfg/pre/drv组合指令，覆盖更新与不更新cfg/pre,cfg/pre信息按定义保存并正确传递至dispatch/ins_buffer及scoreboard,SCB,TC_SCHED_004,P0,planned,cfg/pre时序性
+TP_SCHED_010,F-032,参数和配置,1.3-1/1.3-11,C-CFG-001,指令cfg信息写入core_reg,发送cfg指令并访问core_reg对应存储空间；确认无rd_csr nice路径,cfg信息正确存储于core_reg，可通过core_reg查阅；不通过指令读取csr,SCB,TC_SCHED_004,P0,planned,删除rd_csr
+TP_SCHED_011,F-034,参数和配置,7.2/8,C-CFG-002,指令字段func7/xd/xs/opcode对齐唯一性,遍历有效指令及错误字段组合，特别是vn�ice group_mask配置,有效组合正确解析；不匹配组合按指令错误处理,Checker,TC_SCHED_004,P0,planned,指令约束
+TP_SCHED_012,F-033,参数和配置,1.3-2,C-CFG-003,CIMC 1x4删除且默认2x2,发送setCIMC及MPU相关指令，尝试触发1x4模式,1x4模式不存在，setCIMC不被解析，默认仅2x2,Checker,TC_SCHED_004,P0,planned,指令集简化
+TP_SCHED_013,F-034,数据值域,2.1.5/7.2,C-DATA-001,数据精度与操作数配置传输,遍历FP32/FP16/BF16/F143/F152/FP4、Int、MX等精度配置及num_dim0/stride,master cfg输出与指令配置一致，不创造规格外精度,SCB,TC_SCHED_004,P0,planned,数据精度遵循ISA
+TP_SCHED_014,F-047,数据形状,1.3-9,C-CFG-005,tile个数配置边界,配置tile个数为1、2的幂中间值、单个SPAD深度及非法非2幂值,合法2幂且1..SPAD深度生效；非法配置被拒绝或按规格处理,Checker,TC_SCHED_006,P0,planned,最小1最大SPAD深度
+TP_SCHED_015,F-047,数据形状,1.3-12,C-FUNC-007,tile冲突与tile_rls释放,构造起始至终止地址冲突、读写不同tile、跨无读写tile、离散idle场景及tile_rls释放,冲突按起始至终止地址判断；master仅释放实际占有tile；跨无读写tile指令结束后释放；离散idle硬件不支持,SCB,TC_SCHED_006,P1,planned,对齐约束
+TP_SCHED_016,F-048,数据形状,1.3-13,C-FUNC-008,dram冲突与地址对齐,构造整个dram冲突、不同地址对齐组合及wr/rd_lmem 32bit对齐,dram冲突按整个dram判断；地址冲突对齐约束生效,SCB,TC_SCHED_003,P1,planned,对齐约束
+TP_SCHED_017,F-041,错误异常,2.1.2/2.1.3,C-FUNC-001,SHazard检测与dispatch/ins_buffer选择,构造与buffer中/各master中指令资源竞争及无竞争场景,无SHazard发dsp_en至dispatch；有SHazard发store_en至ins_buffer；buffer满反压,SCB,TC_SCHED_007,P0,planned,含buffer非满/满
+TP_SCHED_018,F-042,错误异常,1.3-6/2.1.2,C-FUNC-002,DHazard检测与drv data hazard检查,构造有/无data hazard的drv序列及同组件连续drv,有data hazard阻塞；无data hazard按调度规则分发,SCB,TC_SCHED_008,P0,planned,含新增drv data hazard
+TP_SCHED_019,F-043,错误异常,1.3-6,C-FUNC-003,同组件两条drv无structure hazard处理,某组件执行中连续发同组件drv，覆盖第二条无data hazard、第三条及有data hazard,第二条同组件drv无data hazard不阻塞；再下一条同组件drv阻塞；有data hazard阻塞,SCB,TC_SCHED_008,P0,planned,仅针对noc指令
+TP_SCHED_020,F-050,错误异常,4/5/7.3.1/7.3.2,C-FUNC-010,sync_drv与noc_fence_drv阻塞,在sync/noc_fence前后插入不同master指令及noc指令,sync_drv阻塞后续所有指令；noc_fence_drv阻塞后续所有noc指令；完成状态被收集,SCB,TC_SCHED_007,P0,planned,dispatch阻塞
+TP_SCHED_021,F-043,错误异常,1.3-6/7.3.2,C-FUNC-012,NIU不能同时下发两条store指令,连续下发两条NIU store，分别在无fence和有fence场景,无fence时按约束阻塞；软件插fence后满足顺序保证,Checker,TC_SCHED_020,P0,planned,软件插fence可保证
+TP_SCHED_022,F-044,性能长稳,1.3-7,C-FUNC-004,乱序发射最大查询窗口dRF_DP,构造master_0阻塞而master_i不阻塞，使阻塞指令位于窗口内/边界/窗口外,窗口内可跳过阻塞指令分发后续无阻塞指令；窗口外按规则不跳过,SCB,TC_SCHED_009,P0,planned,窗口边界
+TP_SCHED_023,F-045,性能长稳,1.3-8,C-FUNC-005,多xd=1返回乱序与同拍仲裁,下发多个xd=1指令，制造按id乱序返回及多个返回同拍有效,仅32bit返回值；乱序返回可接收；同拍仲裁正确且不丢数据,SCB,TC_SCHED_010,P0,planned,返回tag关联
+TP_SCHED_024,F-046,性能长稳,1.3-10,C-FUNC-006,GLSU/LLSU TMU同时抢占与优先级,GLSU与LLSU调用TMU指令同拍/近拍下发，覆盖有data hazard和无data hazard,无data hazard时可同时下发；先下发先占用；同拍抢占GLSU优先,SCB,TC_SCHED_011,P0,planned,TMU占用完成才释放
+TP_SCHED_025,F-049,数据值域,1.3-4,C-FUNC-009,多组件访问同一SPAD无RAW/WAW/WAR,配置SPAD exclusive，多master同时读写相同/不同SPAD地址,CMD不因同SPAD访问阻塞；xbar仲裁保证无RAW/WAW/WAR；独占配置生效,SCB,TC_SCHED_012,P0,planned,含creg_cmd_spad_excl_en
+TP_SCHED_026,F-061,流控和反压,2.1.4,C-RES-003,decode buffer深度2及满反压,连续注入指令直至decode buffer满，再释放,达到2深后反压Ins Dispatcher；非满后恢复握手,SCB,TC_SCHED_005,P0,planned,wen/ren语义
+TP_SCHED_027,F-062,流控和反压,2.1.4,C-RES-003,cfg/drv_buffer深度4及满反压,持续产生有hazard指令填满4深buffer，并模拟scoreboard_ren释放,4深满后反压decode；ren后按id顺序取出,SCB,TC_SCHED_005,P0,planned,store_en/scoreboard_ren
+TP_SCHED_028,F-063,流控和反压,1.3-5/2.1.4,C-CFG-004,master buffer深度2/ost=2及ins_fifo_full反压,向各master连续下发指令，使master ins_fifo_full,master buffer深度2；ins_fifo_full时反压cfg/drv_buffer,Checker,TC_SCHED_005,P0,planned,outstanding=2
+TP_SCHED_029,F-064,流控和反压,2.1.4,C-RES-003,反压链master->cfg/drv_buffer->decode->Ins Dispatcher,逐级填满master/cfg_drv_buffer/decode，再逐级释放,反压逐级传递，释放后逐级恢复，无死锁,SCB,TC_SCHED_005,P0,planned,反压机制
+TP_SCHED_030,F-065,流控和反压,2.1.2,C-FUNC-013,ins_buffer更新、优先级与ins_status,混合新指令和buffer中指令，master完成释放资源，buffer id乱序占用,新指令最高优先级；buffer按id先后分发；ins_status更新且valid正确清零,SCB,TC_SCHED_005,P0,planned,id不代表先后顺序
+TP_SCHED_031,F-071,性能长稳,2.1.2/4,C-FUNC-011,dispatch向各master分发与启动,遍历MPU/VPU/GLSU/LLSU/NIU指令类型，检查cmd_*_start/start_inst_id及cfg输出,指令按类型分发到对应master并正确启动，cfg信号匹配,SCB,TC_SCHED_007,P0,planned,6组master
+TP_SCHED_032,F-071,性能长稳,9,C-PERF-001,典型场景分发吞吐率1条/cycle,轮询配置master小参数指令，无DHazard，第一次cfg/pre后仅发送drv指令,稳态每周期成功分发1条指令,SCB,TC_SCHED_016,P1,planned,性能验收口径
+TP_SCHED_033,F-081,错误异常,8,C-EXC-001,指令错误检测与上报,注入func7/func3/opcode不匹配组合及read/write_lmem目的地址非spad,检测到指令错误并上报；支持软件重新配置和重置队列,Checker,TC_SCHED_013,P0,planned,P0硬件等级
+TP_SCHED_034,F-081,错误异常,8,C-EXC-002,协议错误检测与恢复,注入AXI响应超时/非法响应、跨SPAD块访问,错误中断和总线错误寄存器上报；复位总线接口并重发,Checker,TC_SCHED_014,P0,planned,P0硬件等级
+TP_SCHED_035,F-081,错误异常,8,C-EXC-003,超时看门狗检测与恢复,构造指令执行超过WDT阈值及DMA搬运无响应,触发致命中断；硬件强制停止执行；软件复位模块清理流水线,Checker,TC_SCHED_014,P1,planned,P1硬件等级
+TP_SCHED_036,F-081,错误异常,8,C-EXC-004,系统/硬件异常检测与系统复位,注入不可纠正ECC、电压异常、时钟丢失监控事件,触发致命错误中断并触发Warm Reset/冷启动恢复,Checker,TC_SCHED_014,P1,planned,P1硬件等级
+TP_SCHED_037,F-082,中间复位,8,C-RES-002,错误恢复复位与队列清理,分别注入指令错误、协议错误、超时、系统异常后执行对应恢复,队列/pipeline/总线按对应策略清理或复位，恢复后可继续接收指令,Checker,TC_SCHED_015,P1,planned,恢复策略按spec
+TP_SCHED_038,F-083,性能长稳,10.1,C-PERF-002,性能监控计数器统计,配置perf_en/start/pause/conti/end，运行多master并行及ins_buffer拥塞场景,96bit计数器按使能正确累加并行度、MPU执行、buffer数量、fifo满状态,Checker,TC_SCHED_016,P1,planned,性能计数器
+TP_SCHED_039,F-084,性能长稳,10.1,C-DBG-001,Debug寄存器可观测busy与计数器,运行各master及cfg/drv/pre指令，读取cmd_creg_dbg0/1/2,debug寄存器正确反映busy状态与原语计数器,Checker,TC_SCHED_018,P2,planned,可观测性
+TP_SCHED_040,F-085,中间复位,10.1,C-DBG-002,初始化寄存器/FIFO断言检查,复位后及指令拉高时检查内部计算器和FIFO状态,计算器为0、FIFO为empty时断言通过；异常场景断言失败可定位,SVA,TC_SCHED_018,P1,planned,断言覆盖率
+TP_SCHED_041,F-034,数据形状,1.3-12/7.3.1,C-DATA-004,tile/dram地址范围与对齐生成,遍历wr/rd_lmem 32bit对齐地址、tile起始/终止地址、dram冲突地址,地址范围按起始至终止生成；32bit对齐约束生效；dram按整个dram冲突,SCB,TC_SCHED_012,P1,planned,地址对齐
+TP_SCHED_042,F-014,参数和配置,2.1.5,C-IF-GRP-CSR,SPAD exclusive配置位域,配置creg_cmd_spad_excl_en各bit并检查对应GLSU/MPU/VPU/LLSU/NIU读写通道独占语义,各bit映射正确，保留位bit[31:13]保持reserved语义,Checker,TC_SCHED_019,P1,planned,default 32'h0
+TP_SCHED_043,F-062,边界,2.1.4,C-RES-003,cfg/drv_buffer 4深边界与恢复,精确填满4深、再发第5条、逐条释放,第5条触发反压；释放1条后恢复接收；无覆盖或丢指令,SCB,TC_SCHED_005,P0,planned,深度边界
+TP_SCHED_044,F-062,边界,2.1.4,C-RES-003,反压满状态长时间保持与恢复,保持master/cfg_drv_buffer/decode满状态多个周期后释放,反压稳定保持，无死锁；释放后按序恢复,SCB,TC_SCHED_005,P1,planned,长稳
+TP_SCHED_045,F-021,边界,10.1,C-RES-001,活动状态下复位边界,在指令处理中、buffer非空、FIFO非空时复位,复位后所有FIFO/寄存器回到初始化状态，无残留valid,SVA,TC_SCHED_015,P1,planned,中间复位边界
+TP_SCHED_046,F-012,数据值域,2.1.5/3,C-DATA-002,SPAD读写数据与wstrb完整性,遍历wstrb 2'b11/10/01及512bit读写数据模式,高低256bit选通正确，rdata与写入数据一致，无位翻转或错拍,SCB,TC_SCHED_002,P0,planned,数据完整性

@@ -14,7 +14,7 @@
 `to_dict()` 是**唯一**给 JSON 键命名的地方
     有它一个就够：`ir.schema.json` 与导出器都从这里对齐。分成两处写，
     迟早出现"schema 说叫 src_addr、代码里写成 srcaddr"这种只有对着样例
-    才发现的问题（casemodel 的 schema.yaml 就栽在注释指着一个已删掉的模块上）。
+    才发现的问题（旧建模引擎的 schema.yaml 就栽在注释指着一个已删掉的模块上）。
 """
 from __future__ import annotations
 

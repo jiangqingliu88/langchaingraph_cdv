@@ -6,7 +6,7 @@
     compile     import domain（+ repository 的产物）
     analysis    import domain（+ repository 的产物）
 
-    理由与 `casemodel_tools/domain` 同一套：依赖方向是**靠 import 纪律维持的**，
+    理由与 `vplan/runtime/domain` 同一套：依赖方向是**靠 import 纪律维持的**，
     没有别的机制保证它。一个层悄悄往上 import 一次，分层就名存实亡了。
 
 这一层是**不变量住的地方**，不是数据结构集合

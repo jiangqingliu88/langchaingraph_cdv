@@ -1,0 +1,11 @@
+topic,applicability,reason
+接口,applicable,npu_sched包含与Ins Dispatcher、SPAD XBAR、各master、中断/性能/debug/预留/SPAD exclusive等接口，需验证握手、位宽、方向和时序。
+时钟复位,applicable,规格定义clk目标700MHz@T22、rst_n低有效及复位初始化要求，需验证时钟复位行为。
+参数和配置,applicable,规格包含cfg/pre解析存储、core_reg cfg信息、buffer深度、ost=2、tile个数、SPAD exclusive、中断/性能使能等配置。
+数据值域,applicable,规格涉及数据精度FP32/FP16/BF16/F143/F152/FP4、Int、MXFP8/MXFP4/MXINT8/MXINT4、wstrb、32bit返回值、地址和ID等值域。
+数据形状,applicable,规格涉及Tensor dim0/dim1/dim2、stride、tile切分、CIMC默认2x2、dram/tile地址范围等形状约束。
+错误异常,applicable,规格列出指令错误、协议错误、超时、系统/硬件异常及检测、上报、恢复策略。
+中间复位,applicable,规格提供rst_n复位及错误恢复中的复位/队列清理策略，需验证复位后FIFO、寄存器和状态机恢复。
+边界,applicable,规格包含buffer深度2/4、tile最小1最大SPAD深度、乱序窗口dRF_DP、outstanding=2、地址对齐等边界条件。
+流控和反压,applicable,规格定义master ins_fifo_full反压、cfg/drv_buffer满反压decode、decode满反压Ins Dispatcher及xd返回仲裁。
+性能长稳,applicable,规格定义典型场景分发吞吐率1条/cycle、乱序发射、多xd=1、TMU优先级及性能监控计数器。

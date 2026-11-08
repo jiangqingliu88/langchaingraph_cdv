@@ -29,7 +29,6 @@ def _write_json(path: Path, obj: Any) -> None:
 
 def _execute_closure(project, run_dir: Path, target: float, spec, rtl,
                      config, output) -> Dict[str, Any]:
-    from src.layers.l1_infrastructure.layout import casemodel_path
     from src.layers.l1_infrastructure.output_config import make_output_root
     from src.layers.l2_orchestration.execution import PipelineExecutionService
     from src.layers.l2_orchestration.governance.approval import create_approval_gate
@@ -47,9 +46,9 @@ def _execute_closure(project, run_dir: Path, target: float, spec, rtl,
     spec_text = spec_path.read_text(encoding="utf-8") if spec_path else ""
     out_root = make_output_root(str(output) if output else f"output_closure_{run_dir.name}")
     if config:
-        dest = casemodel_path(out_root)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(Path(config).read_text(encoding="utf-8"), encoding="utf-8")
+        from src.layers.l3_decision.vplan import (
+            load_project, materialize_project_inputs)
+        materialize_project_inputs(load_project(config), out_root)
 
     async def _run():
         return await PipelineExecutionService.get_instance().run_closed_loop_streaming(

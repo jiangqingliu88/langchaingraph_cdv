@@ -1,12 +1,14 @@
 """生成板块 —— 产生验证产物的工具（
 
-casemodel_tools 已迁到 `src.layers.l3_decision.casemodel`，不再在此列。
+case 模型引擎已删除；生成入口只剩 UVM / ISA / C 模型 / SC 模型。
 """
 from __future__ import annotations
 
 import importlib
 
-PACKAGES = ("uvm_tools", "isa_gen_tools", "cmodel_tools", "scmodel_tools")
+from src.tools.boards import BOARDS
+
+PACKAGES = BOARDS["generation"]
 
 
 def __getattr__(name: str):

@@ -15,14 +15,16 @@ from ..ui.theme import icons
 
 
 def _app_source() -> str:
-    """`app.py` 的源码 —— 它引用的图标名要与 `icons.names()` 对得上。
+    """工作台源码 —— 引用的图标名要与 `icons.names()` 对得上。
 
-    路径从 `ui` 包往上数一层（`ui/` 的父是 `workbench/`）—— 别从 `icons.__file__`
-    数：那个搬进 `ui/theme/` 之后，数出来的位置就不对了。
+    图标用法已从 `app.py` 散到各模块（`main_window_actions.py` 等），所以扫整个包；
+    `tests/` 除外（那里会引用不存在的名字做负例）。
     """
     from .. import ui as ui_pkg
-    app = Path(ui_pkg.__file__).resolve().parent.parent / "app.py"
-    return app.read_text(encoding="utf-8")
+    root = Path(ui_pkg.__file__).resolve().parent.parent
+    return "\n".join(p.read_text(encoding="utf-8", errors="replace")
+                     for p in root.rglob("*.py")
+                     if "tests" not in p.relative_to(root).parts)
 
 
 class TestRender:
@@ -97,12 +99,6 @@ class TestReferences:
         used = self._names_used(_app_source())
         assert used, "app.py 里一个图标都没用上？"
         assert used <= set(icons.names()), f"app.py 引用了不存在的图标：{used - set(icons.names())}"
-
-    def test_casemodel_action_icons_all_exist(self):
-        from src.workbench.modules.verify.casemodel.module import CasemodelModule
-        wanted = set(CasemodelModule.ACTION_ICONS.values())
-        assert wanted <= set(icons.names()), \
-            f"case 建模引用了不存在的图标：{wanted - set(icons.names())}"
 
     def test_every_hand_drawn_svg_has_a_color_placeholder(self):
         """SVG 忘了写 {color} 就会永远是一个颜色，主题换了它不换。"""

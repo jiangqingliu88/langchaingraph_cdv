@@ -1,0 +1,21 @@
+case_id,test_name,batch,contract_ids,covergroups,checks,owner,status,notes
+TC_SCHED_001,inst_dispatcher_handshake_test,B01,C-IF-GRP-VALID_READY,cg_if_disp_req|cg_if_disp_rsp,SVA:disp_cmd_handshake_sva|SVA:disp_rsp_handshake_sva,DV,planned,Ins Dispatcher接口
+TC_SCHED_002,spad_rw_data_handshake_test,B01,C-IF-GRP-VALID_READY|C-DATA-002,cg_spad_wr_ch0|cg_spad_rd_ch1|cg_spad_wstrb,SVA:spad_wr_ch0_sva|SVA:spad_rd_ch1_sva|SCB:spad_data_scoreboard,DV,planned,SPAD 1读1写
+TC_SCHED_003,master_done_release_and_address_test,B01,C-IF-GRP-NIU|C-IF-GRP-GLSU|C-IF-GRP-LLSU|C-IF-GRP-VPU|C-IF-GRP-MPU|C-FUNC-007|C-FUNC-008|C-DATA-004,cg_master_done|cg_tile_release|cg_dram_conflict|cg_addr_align,SVA:master_done_release_sva|SCB:tile_conflict_release_scoreboard|SCB:dram_conflict_scoreboard|SCB:address_range_scoreboard,DV,planned,master释放与地址
+TC_SCHED_004,decode_cfg_core_reg_and_inst_field_test,B02,C-CFG-001|C-CFG-002|C-CFG-003|C-DATA-001,cg_cfg_pre|cg_core_reg_cfg|cg_inst_field|cg_cimc_shape|cg_data_precision,SCB:cfg_core_reg_scoreboard|Checker:inst_field_checker|Checker:cimc_shape_checker|SCB:inst_data_cfg_scoreboard,DV,planned,配置与指令字段
+TC_SCHED_005,buffer_depth_backpressure_test,B02,C-CFG-004|C-FUNC-013|C-RES-003,cg_buffer_depth|cg_backpressure_chain|cg_ins_buffer_status,Checker:buffer_depth_ost_checker|SCB:ins_buffer_update_scoreboard|SCB:backpressure_scoreboard,DV,planned,buffer与反压
+TC_SCHED_006,tile_config_and_conflict_test,B02,C-CFG-005|C-FUNC-007,cg_tile_num|cg_tile_conflict|cg_tile_release,Checker:tile_cfg_checker|SCB:tile_conflict_release_scoreboard,DV,planned,tile配置与冲突
+TC_SCHED_007,shazard_sync_dispatch_test,B03,C-FUNC-001|C-FUNC-010|C-FUNC-011|C-FUNC-012,cg_shazard|cg_sync_fence|cg_dispatch_master|cg_niu_store,SCB:shazard_scoreboard|SCB:sync_fence_scoreboard|SCB:dispatch_master_scoreboard|Checker:niu_store_constraint_checker,DV,planned,SHazard与sync/fence
+TC_SCHED_008,dhazard_same_master_drv_test,B03,C-FUNC-002|C-FUNC-003,cg_dhazard|cg_same_master_drv,SCB:dhazard_scoreboard|SCB:same_master_drv_scoreboard,DV,planned,DHazard与同组件drv
+TC_SCHED_009,out_of_order_issue_window_test,B03,C-FUNC-004,cg_ooo_window|cg_blocked_master,SCB:out_of_order_window_scoreboard,DV,planned,乱序发射
+TC_SCHED_010,xd_return_out_of_order_test,B03,C-FUNC-005|C-DATA-003,cg_xd_return|cg_xd_arbitration|cg_xd_tag,SCB:xd_return_scoreboard|SCB:xd_return_data_scoreboard,DV,planned,多xd=1
+TC_SCHED_011,glsu_llsu_tmu_conflict_test,B03,C-FUNC-006,cg_tmu_conflict|cg_tmu_priority,SCB:tmu_conflict_scoreboard,DV,planned,TMU冲突
+TC_SCHED_012,spad_xbar_multi_master_test,B03,C-FUNC-009|C-DATA-004,cg_spad_exclusive|cg_raw_waw_war|cg_spad_addr_range,SCB:spad_xbar_conflict_scoreboard|SCB:address_range_scoreboard,DV,planned,多组件SPAD访问
+TC_SCHED_013,instruction_error_test,B04,C-EXC-001|C-IF-GRP-INTERRUPT|C-IF-GRP-CSR|C-IF-GRP-DEBUG|C-IF-GRP-RESERVED,cg_inst_error|cg_int_config,Checker:inst_error_checker|Checker:cmd_ctrl_if_checker,DV,planned,指令错误
+TC_SCHED_014,protocol_timeout_system_error_test,B04,C-EXC-002|C-EXC-003|C-EXC-004,cg_protocol_error|cg_timeout|cg_system_error,Checker:protocol_error_checker|Checker:timeout_checker|Checker:system_error_checker,DV,planned,协议/超时/系统异常
+TC_SCHED_015,reset_and_recovery_test,B04,C-RES-001|C-RES-002,cg_reset_init|cg_error_recovery|cg_active_reset,SVA:reset_init_sva|Checker:recovery_checker,DV,planned,复位与恢复
+TC_SCHED_016,throughput_and_perf_counter_test,B05,C-PERF-001|C-PERF-002,cg_throughput|cg_perf_counter,SCB:throughput_scoreboard|Checker:perf_counter_checker,DV,planned,性能
+TC_SCHED_017,lowpower_icg_test,B05,C-LP-001,cg_icg_open_close|cg_lowpower_control,Checker:lowpower_icg_checker,DV,planned,低功耗
+TC_SCHED_018,debug_observability_assertion_test,B05,C-DBG-001|C-DBG-002,cg_debug_reg|cg_init_assertion,Checker:debug_observability_checker|SVA:init_assertion_sva,DV,planned,可观测与断言
+TC_SCHED_019,interrupt_perf_debug_reserved_interface_test,B04,C-IF-GRP-INTERRUPT|C-IF-GRP-CSR|C-IF-GRP-DEBUG|C-IF-GRP-RESERVED,cg_ctrl_if|cg_spad_exclusive_cfg,Checker:cmd_ctrl_if_checker,DV,planned,控制接口
+TC_SCHED_020,niu_store_fence_constraint_test,B03,C-FUNC-010|C-FUNC-012,cg_niu_store|cg_noc_fence,SCB:sync_fence_scoreboard|Checker:niu_store_constraint_checker,DV,planned,NIU store与fence

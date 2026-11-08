@@ -3,7 +3,7 @@
 钉住三件事：
 
 1. 源数据计数与状态**原样**进入 IR（42 assume / 66 planned / 12 planned）；
-2. 不读 `casemodel.yaml`，项目里也没有它；
+2. 不读旧建模模型，项目里也没有它；
 3. 只规划 run 明确写 `PLAN_ONLY`，不产生 `signoff_evidence/`。
 """
 from __future__ import annotations
@@ -16,11 +16,33 @@ import pytest
 import yaml
 
 from src.layers.l3_decision.vplan import (
-    build_execution_model, build_payload, load_project,
-    write_execution_model, write_plan_only_run,
+    build_execution_model, build_payload, load_project, project_summary,
+    run_artifacts, write_execution_model, write_plan_only_run,
 )
 
-ROOT = Path(__file__).resolve().parents[1] / "specs" / "npu_sched"
+# 冻结的项目源（首个完整 CMDSCHED VPlan 项目）。活项目 `specs/npu_sched`
+# 现在只剩裸 spec，由 front bootstrap 生成表，内容随 LLM 抽取变化 —— 集成测试
+# 必须钉一个确定的项目源，否则计数断言天天漂。
+ROOT = Path(__file__).resolve().parent / "fixtures" / "npu_sched"
+REPO = Path(__file__).resolve().parents[1]
+
+
+def test_vplan_build_does_not_import_legacy_model():
+    """VPlan 的规划/IR 层必须自包含 —— 引擎删掉后 build 仍能跑。"""
+    import subprocess
+    import sys
+
+    code = (
+        "import sys\n"
+        "import src.layers.l3_decision.vplan.build\n"
+        "bad = sorted(m for m in sys.modules if 'casemodel' in m)\n"
+        "print(bad)\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code],
+                            cwd=str(REPO),
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]"
 
 
 def test_load_project_reads_current_source():
@@ -36,7 +58,7 @@ def test_load_project_reads_current_source():
     assert proj.tp_status_counts == {"planned": 66}
     assert len(proj.cases) == 12
     assert proj.case_status_counts == {"planned": 12}
-    assert not (ROOT / "casemodel.yaml").exists()
+    assert not (ROOT / "runtime_model.yaml").exists()
 
 
 def test_payload_keeps_ids_and_statuses():
@@ -122,7 +144,7 @@ def test_execution_model_projects_vplan_cases(tmp_path):
     assert (ROOT / "rtl" / "npu_sched.sv").is_file()
 
     path = write_execution_model(proj, tmp_path)
-    from src.layers.l3_decision.casemodel.repository import load_models_from_text
+    from src.layers.l3_decision.vplan.runtime.repository import load_models_from_text
 
     models = load_models_from_text(path.read_text(encoding="utf-8"))
     resolved = models[0].resolve()
@@ -141,6 +163,7 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
         "coverage/foo_cov_if.sv": "interface foo_cov_if; endinterface\n",
         "env/tests/foo_test.sv": "class foo_test; endclass\n",
         "env/rtl_sc/foo_scb.sv": "class foo_scb; endclass\n",
+        "env/cons/foo_policy.sv": "class foo_policy; endclass\n",
         "bench/foo_tb_top.sv": "module foo_tb_top; endmodule\n",
         "agents/foo/loopback/foo_loopback_scb.sv": "class foo_loopback_scb; endclass\n",
     }
@@ -159,14 +182,15 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
         encoding="utf-8")
 
     summary = package_run_assets(tmp_path, "foo")
-    assert summary["copied"] == 9
+    assert summary["copied"] == 10
     assert (tmp_path / "sv" / "interface" / "foo_if.sv").is_file()
     assert (tmp_path / "sv" / "agents" / "foo" / "foo_driver.sv").is_file()
     assert (tmp_path / "sv" / "env" / "foo_env.sv").is_file()
-    assert (tmp_path / "sv" / "coverage" / "foo_cov.sv").is_file()
+    assert (tmp_path / "sv" / "covgs" / "foo_cov.sv").is_file()
     assert (tmp_path / "sv" / "interface" / "foo_cov_if.sv").is_file()
     assert (tmp_path / "sv" / "test" / "foo_test.sv").is_file()
     assert (tmp_path / "sv" / "scbs" / "foo_scb.sv").is_file()
+    assert (tmp_path / "sv" / "cons" / "foo_policy.sv").is_file()
     assert (tmp_path / "sv" / "tb" / "hdl_top.sv").is_file()
     assert (tmp_path / "sv" / "scbs" / "foo_loopback_scb.sv").is_file()
     text = (tmp_path / "sv" / "interface" / "foo_if.sv").read_text(
@@ -181,7 +205,7 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
     assert "sv/interface/foo_if.sv" in hdl
     assert "sv/tb/hdl_top.sv" in hdl
     assert "sv/env/foo_env.sv" in hvl
-    assert len(scan_assets(tmp_path)) == 9
+    assert len(scan_assets(tmp_path)) == 10
 
 
 def test_evidence_gate_requires_tp_regression_and_asset(tmp_path):
@@ -243,6 +267,112 @@ def test_evidence_gate_requires_tp_regression_and_asset(tmp_path):
     assert after["C-FUNC-DEP-002"]["status"] == "assume"
 
 
+def test_gate_prefers_mapped_environment_obligations(tmp_path):
+    """有 `vplan_map.json` 时，gate 按环境契约义务判，不再看 TP 名字。"""
+    from src.layers.l3_decision.vplan import evaluate, link_run
+
+    proj = tmp_path / "proj"
+    matrix = proj / "data" / "contract_matrix"
+    matrix.mkdir(parents=True)
+    fields = ["contract_id", "class", "object", "description", "source_ref",
+              "owner", "p_level", "check_method", "check_artifact", "gate",
+              "status", "assumption", "remark"]
+    ids = ("C-FUNC-UNIT-001", "C-FUNC-DEP-002")
+    with (matrix / "func.csv").open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        for cid in ids:
+            writer.writerow({"contract_id": cid, "class": "func", "object": "x",
+                             "description": "x", "source_ref": "1",
+                             "owner": "dv", "p_level": "P0",
+                             "check_method": "scb", "check_artifact": "x",
+                             "gate": "g", "status": "assume",
+                             "assumption": "planned", "remark": ""})
+
+    run = tmp_path / "run"
+    (run / "contract").mkdir(parents=True)
+    (run / "evidence").mkdir()
+    (run / "sv").mkdir()
+    # plan_link 里的 TP 都不可用 —— 映射存在时不应再回落到 TP 口径。
+    (run / "contract" / "plan_link.yaml").write_text(yaml.safe_dump({
+        "schema": "vplan_contract_link_v1", "module": "p", "spec_hash": "x",
+        "contracts": [{"contract_id": cid, "tp_ids": ["TP-VPLAN"],
+                       "case_ids": []} for cid in ids],
+    }), encoding="utf-8")
+    (run / "contract" / "vplan_map.json").write_text(json.dumps({
+        "schema": "vplan_contract_map_v1", "module": "p",
+        "contracts": {
+            "C-FUNC-UNIT-001": {"cases": ["TC-1"],
+                                "obligations": ["OBL-OK"],
+                                "artifacts": ["foo_scb"]},
+            "C-FUNC-DEP-002": {"cases": ["TC-2"],
+                               "obligations": ["OBL-MISS"],
+                               "artifacts": ["bar_scb"]},
+        },
+    }), encoding="utf-8")
+    (run / "contract" / "obligations.json").write_text(json.dumps([
+        {"schema": "obligation_v1", "obligation_id": "OBL-OK",
+         "contract_id": "CT-x", "kind": "scb", "case": "TC-1",
+         "subject": {"scb": "foo_scb"},
+         "predicate": {"fact_type": "scb_result", "op": "executed",
+                       "where": {"case": "TC-1", "id": "foo_scb"}},
+         "required": True},
+        {"schema": "obligation_v1", "obligation_id": "OBL-MISS",
+         "contract_id": "CT-x", "kind": "scb", "case": "TC-2",
+         "subject": {"scb": "bar_scb"},
+         "predicate": {"fact_type": "scb_result", "op": "executed",
+                       "where": {"case": "TC-2", "id": "bar_scb"}},
+         "required": True},
+    ]), encoding="utf-8")
+    (run / "evidence" / "ledger.jsonl").write_text(json.dumps({
+        "type": "scb_result", "fact_class": "OBSERVED",
+        "subject": {"case": "TC-1", "id": "foo_scb"},
+        "value": {"exec": 4, "matched": 4, "mismatched": 0},
+    }) + "\n", encoding="utf-8")
+    (run / "regression_stages.json").write_text(json.dumps({"status": "PASS"}),
+                                                encoding="utf-8")
+    (run / "sv" / "asset_registry.csv").write_text(
+        "artifact,kind,path,owner,status,contract_ids,case_ids,source\n"
+        "foo_scb,scb,sv/scbs/foo_scb.sv,dv,candidate,"
+        "C-FUNC-UNIT-001,,x\n"
+        "bar_scb,scb,sv/scbs/bar_scb.sv,dv,candidate,"
+        "C-FUNC-DEP-002,,x\n", encoding="utf-8")
+    (run / "coverage").mkdir()
+    (run / "coverage" / "case_ir.json").write_text(json.dumps({
+        "cases": [{"id": "TC-1", "feats": ["C-FUNC-UNIT-001"],
+                   "scb": [{"id": "foo_scb"}]},
+                  {"id": "TC-2", "feats": ["C-FUNC-DEP-002"],
+                   "scb": [{"id": "bar_scb"}]}],
+    }), encoding="utf-8")
+
+    link_run(proj, run)
+    result = {row["contract_id"]: row for row in evaluate(proj)}
+    ok, miss = result["C-FUNC-UNIT-001"], result["C-FUNC-DEP-002"]
+    assert ok["via"] == "vplan_obligations" and ok["eligible_active"] is True
+    assert miss["via"] == "vplan_obligations"
+    assert miss["eligible_active"] is False
+    assert any("OBL-MISS=NOT_EXECUTED" in reason
+               for reason in miss["reasons"]), miss["reasons"]
+
+
+def test_verify_vplan_layout_default_and_legacy(tmp_path, monkeypatch):
+    from src.executors.verify.steps.vplan_layout import package_vplan_assets
+
+    calls = []
+    monkeypatch.setattr(
+        "src.layers.l3_decision.vplan.package_run_assets",
+        lambda *a, **k: calls.append(a) or {
+            "assets": 0, "copied": 0, "skipped": 0})
+    monkeypatch.delenv("SIGNOFFAI_UVM_LAYOUT", raising=False)
+    package_vplan_assets(tmp_path, "m")
+    assert calls, "verify 默认应生成 sv/ 布局"
+
+    calls.clear()
+    monkeypatch.setenv("SIGNOFFAI_UVM_LAYOUT", "legacy")
+    package_vplan_assets(tmp_path, "m")
+    assert not calls, "legacy 模式应跳过 sv/ 布局"
+
+
 def test_clean_legacy_dirs_requires_sv(tmp_path):
     from src.layers.l3_decision.vplan import clean_legacy_dirs
 
@@ -264,11 +394,88 @@ def test_clean_legacy_dirs_requires_sv(tmp_path):
     assert not (run / "agents").exists()
 
 
-def test_explicit_casemodel_marker(tmp_path):
-    from src.layers.l2_orchestration.verify_request import copy_casemodel
+def test_mount_vplan_copies_the_project_into_the_run(tmp_path, monkeypatch):
+    from src.layers.l2_orchestration.verify_request import mount_vplan
 
-    src = tmp_path / "model.yaml"
-    src.write_text("version: '1'\n", encoding="utf-8")
-    dest = copy_casemodel(str(src), tmp_path / "run")
-    assert dest.is_file()
-    assert (dest.parent / ".casemodel_explicit").is_file()
+    # 人工审阅门：测试用显式跳过（真实流程必须先 `vplan review`）。
+    monkeypatch.setenv("SIGNOFFAI_ALLOW_UNREVIEWED", "1")
+    run = tmp_path / "run"
+    dest = mount_vplan(str(ROOT), run)
+    base = run / "inputs" / "vplan"
+    assert dest == base
+    assert (base / "docs" / "specs" / "cmdsched.md").is_file()
+    assert (base / "data" / "contract_matrix" / "func.csv").is_file()
+    assert (base / "data" / "dimensions.csv").is_file()
+    assert (base / "cases").is_dir()
+    assert (base / "schemas").is_dir()
+    assert not (run / "inputs" / "casemodel.yaml").exists()
+
+
+def test_mount_vplan_rejects_a_case_model_file(tmp_path):
+    """旧 case 模型 YAML 不再支持 —— 给错输入要响，而不是静默什么都不做。"""
+    import pytest
+
+    from src.layers.l2_orchestration.verify_request import mount_vplan
+
+    cfg = tmp_path / "model.yaml"
+    cfg.write_text("version: '1'\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="VPlan"):
+        mount_vplan(str(cfg), tmp_path / "run")
+
+
+def test_project_summary_and_run_artifacts(tmp_path):
+    """GUI/CLI 共用的只读投影：项目计数 + 运行产物登记。"""
+    summary = project_summary(ROOT)
+    assert summary["module"] == "npu_sched"
+    assert summary["testpoints"] == 66 and summary["cases"] == 12
+    assert summary["status"] == "PLAN_ONLY" and summary["signable"] is False
+
+    out = tmp_path / "run_vplan"
+    write_plan_only_run(load_project(ROOT), out)
+    art = run_artifacts(out)
+    assert art["testpoints"] == 66
+    assert art["contract_hash"]
+    paths = {a["path"]: a["exists"] for a in art["artifacts"]}
+    assert paths["coverage/testpoints.json"] is True
+    assert paths["inputs/vplan/data/execution_meta.csv"] is True
+
+
+def test_dplan_map_aligns_with_vplan_contracts():
+    """dplan feature/behavior → VPlan feature/requirement/contract 的对齐。"""
+    from src.layers.l3_decision.dplan import build_dplan_map
+
+    proj = load_project(ROOT)
+    contract = {
+        "design_name": "npu_sched",
+        "interfaces": [{"name": "cmd"}],
+        "features": [
+            {"name": "cmd_hs", "description": "cmd valid ready"},
+            {"name": "some_unknown_thing", "description": "zzz"},
+        ],
+        "model_contract": {"ports": [], "behaviors": [{"name": "cmd_hs"}]},
+    }
+    doc = build_dplan_map(contract, proj)
+    assert doc["schema"] == "dplan_map_v1"
+    assert doc["features"][0]["vplan_feature_id"] == "F-CMD-HS"
+    assert doc["features"][0]["mapped"] is True
+    assert doc["features"][1]["mapped"] is False
+    assert "F-CMD-HS" in doc["coverage"]["vplan_feature_mapped"]
+    assert doc["coverage"]["contract_count"] == 42
+
+
+def test_uvm_arch_is_built_from_vplan_contracts(tmp_path):
+    """UVM 环境架构来自 VPlan 契约/TP/case，而不是 RTL 端口猜测。"""
+    from src.layers.l3_decision.vplan.uvm_arch import write_uvm_arch
+
+    proj = load_project(ROOT)
+    run = tmp_path / "run_arch"
+    write_plan_only_run(proj, run)
+    doc = write_uvm_arch(run, proj)
+    assert doc["schema"] == "vplan_uvm_arch_v1"
+    agents = {a["name"]: a for a in doc["agents"]}
+    assert "cmd_if_agent" in agents
+    assert "C-IF-HS-001" in agents["cmd_if_agent"]["contracts"]
+    assert doc["checkers"] and doc["coverage"] and doc["tests"]
+    assert len(doc["tests"]) == 12
+    for name in ("uvm_arch.yaml", "uvm_arch.csv", "uvm_arch.md"):
+        assert (run / "sv" / name).is_file(), name

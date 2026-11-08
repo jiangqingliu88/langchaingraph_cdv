@@ -10,9 +10,9 @@ import builtins
 from pathlib import Path
 
 from src.tools.common.lib.uvm_context import ctx
-from src.tools.generation.uvm_tools.generation.generators.orchestrator import UVMGenerator
-from src.tools.generation.uvm_tools.generation.render.jinja_renderer import JinjaRenderer
-from src.tools.generation.uvm_tools.generation.constants import TEMPLATES_DIR
+from src.tools.generation.uvm_tools.tool_uvm.generators.orchestrator import UVMGenerator
+from src.tools.generation.uvm_tools.tool_uvm.render.jinja_renderer import JinjaRenderer
+from src.tools.generation.uvm_tools.tool_uvm.constants import TEMPLATES_DIR
 
 
 def print(*args, **kwargs):

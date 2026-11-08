@@ -13,6 +13,13 @@
 2. 契约映射到的 TP 全部 HIT / OBSERVED / BACKDOOR_HIT；
 3. `sv/asset_registry.csv` 里至少有一个资产声明了该 C-*。
 
+VPlan 契约（`C-*`）还可以通过**环境契约**取证：run 的
+`contract/vplan_map.json` 把 C-* 映射到 CASEMODEL 义务（OBL-*），义务状态
+由 `contract/obligations.json` + `evidence/ledger.jsonl` 用
+`contract.derive` 推导。有映射时以环境契约为准 —— 映射到的义务全部
+`PROVEN` / `NOT_APPLICABLE`、回归 PASS、且有 sv 资产声明该 C-*，才 eligible。
+没有映射的 run 继续走上面的 TP/case 口径（向后兼容）。
+
 缺任何一条都保持 `assume`。`--apply` 只把满足条件的行改成 `active`；
 不会自动 `exempt`，也不会因为“只改 CSV”而升级。
 """
@@ -28,6 +35,8 @@ import yaml
 
 INDEX_SCHEMA = "vplan_evidence_index_v1"
 HIT_STATES = {"HIT", "OBSERVED", "BACKDOOR_HIT"}
+#: 义务清偿状态里"算过关"的两种（与 contract.derive 的词汇一致）。
+CLEARED_STATES = {"PROVEN", "NOT_APPLICABLE"}
 
 
 def _read_json(path: Path) -> Dict[str, Any]:
@@ -36,6 +45,14 @@ def _read_json(path: Path) -> Dict[str, Any]:
     except (OSError, ValueError):
         return {}
     return doc if isinstance(doc, dict) else {}
+
+
+def _read_list(path: Path) -> List[Any]:
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return []
+    return doc if isinstance(doc, list) else []
 
 
 def _sha256(path: Path) -> str:
@@ -110,6 +127,44 @@ def _case_contracts(run_dir: Path) -> set[str]:
     return out
 
 
+def _vplan_obligations(run_dir: Path) -> Dict[str, Dict[str, Any]]:
+    """`vplan_map.json` + 义务 + 账本 → 每个 C-* 的环境义务状态。
+
+    映射由 `contract/build.py` 在编译契约时写盘；义务状态用
+    `contract.derive`（唯一判定实现）从账本事实推导。老 run 没有映射
+    → 返回空，调用方回退到 TP/case 口径。
+    """
+    doc = _read_json(run_dir / "contract" / "vplan_map.json")
+    contracts = doc.get("contracts")
+    if not isinstance(contracts, dict) or not contracts:
+        return {}
+    # 局部导入：没有映射时不必背 pydantic 契约模型。
+    from src.layers.l3_decision.contract import Obligation, derive, read_ledger
+
+    obligations = []
+    for row in _read_list(run_dir / "contract" / "obligations.json"):
+        try:
+            obligations.append(Obligation(**row))
+        except Exception:                  # noqa: BLE001 坏行不能让 gate 挂掉
+            continue
+    statuses = derive(obligations, read_ledger(run_dir)) if obligations else {}
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for cid, slot in contracts.items():
+        if not isinstance(slot, dict):
+            continue
+        oids = [str(o) for o in slot.get("obligations") or [] if o]
+        per = {oid: str(statuses.get(oid, "MISSING")) for oid in oids}
+        out[str(cid)] = {
+            "cases": [str(c) for c in slot.get("cases") or [] if c],
+            "artifacts": [str(a) for a in slot.get("artifacts") or [] if a],
+            "obligations": per,
+            "blocking": sorted({st for st in per.values()
+                                if st not in CLEARED_STATES}),
+        }
+    return out
+
+
 def build_entry(run_dir: str | Path) -> Dict[str, Any]:
     """run 目录 → 证据索引条目（缺什么如实留空）。"""
     root = Path(run_dir).resolve()
@@ -136,6 +191,7 @@ def build_entry(run_dir: str | Path) -> Dict[str, Any]:
         "sv_contracts": sorted(
             _sv_contracts(root)
             | (_case_contracts(root) if (root / "sv").is_dir() else set())),
+        "vplan_contracts": _vplan_obligations(root),
         "sha256": {
             name: _sha256(root / rel)
             for name, rel in (
@@ -160,8 +216,18 @@ def load_index(project_root: str | Path) -> Dict[str, Any]:
 
 
 def link_run(project_root: str | Path, run_dir: str | Path) -> Dict[str, Any]:
-    """把一个 run 记进项目证据索引（同 run_id 覆盖旧条目）。"""
+    """把一个 run 记进项目证据索引（同 run_id 覆盖旧条目）。
+
+    顺手为老 run 补写 `contract/vplan_map.json`（确定性投影）：这样在
+    mapping 上线之前跑出来的 run 也能按环境契约义务评估，不必重跑 EDA。
+    """
     project = Path(project_root)
+    try:
+        from src.layers.l3_decision.contract.build import ensure_vplan_map
+
+        ensure_vplan_map(run_dir)
+    except Exception:                      # noqa: BLE001 补映射失败不阻断 link
+        pass
     entry = build_entry(run_dir)
     try:
         entry["run_dir"] = str(Path(entry["run_dir"]).relative_to(project.parent))
@@ -227,22 +293,49 @@ def _contract_reasons(entry: Dict[str, Any], cid: str,
     return reasons
 
 
+def _vplan_reasons(entry: Dict[str, Any], cid: str) -> Optional[List[str]]:
+    """有 VPlan→环境契约映射 → 用义务状态判；没有映射返回 `None`。"""
+    vplan = (entry.get("vplan_contracts") or {}).get(cid)
+    if not vplan:
+        return None
+    reasons: List[str] = []
+    per = vplan.get("obligations") or {}
+    if not per:
+        reasons.append("vplan map has no environment obligations")
+    blocking = [f"{oid}={st}" for oid, st in per.items()
+                if st not in CLEARED_STATES]
+    if blocking:
+        reasons.append("obligation not proven: " + ", ".join(blocking[:5]))
+    if entry.get("regression_status") != "PASS":
+        reasons.append(f"regression={entry.get('regression_status')}")
+    if cid not in set(entry.get("sv_contracts") or []):
+        reasons.append("no sv/ asset declares this contract")
+    return reasons
+
+
 def _evaluate_contract(cid: str, status: str,
                        candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
+    entry = candidates[-1] if candidates else {}
+    reasons: List[str]
+    via = "none"
     if not candidates:
         reasons = ["no linked run maps this contract"]
     else:
-        entry = candidates[-1]
         mapping = next((c for c in entry.get("contracts") or []
                         if c.get("contract_id") == cid), {})
-        tp_ids, tp_status = _resolve_tp_status(entry, mapping)
-        reasons = _contract_reasons(entry, cid, tp_ids, tp_status)
+        mapped = _vplan_reasons(entry, cid)
+        if mapped is not None:
+            reasons, via = mapped, "vplan_obligations"
+        else:
+            tp_ids, tp_status = _resolve_tp_status(entry, mapping)
+            reasons, via = _contract_reasons(entry, cid, tp_ids, tp_status), "tp"
     return {
         "contract_id": cid,
         "status": status,
         "eligible_active": not reasons,
         "reasons": reasons,
-        "run_id": (candidates[-1].get("run_id") if candidates else ""),
+        "run_id": entry.get("run_id", "") if candidates else "",
+        "via": via,
     }
 
 
@@ -252,8 +345,12 @@ def evaluate(project_root: str | Path) -> List[Dict[str, Any]]:
     entries = list(load_index(project).get("entries") or [])
     by_contract: Dict[str, List[Dict[str, Any]]] = {}
     for entry in entries:
-        for row in entry.get("contracts") or []:
-            cid = str(row.get("contract_id") or "")
+        # plan_link 与 vplan_map 都是"C-* 属于哪个 run"的来源；取并集，
+        # 同一个 run 不重复登记。
+        cids = {str(row.get("contract_id") or "")
+                for row in entry.get("contracts") or []}
+        cids |= set(entry.get("vplan_contracts") or {})
+        for cid in cids:
             if cid:
                 by_contract.setdefault(cid, []).append(entry)
 

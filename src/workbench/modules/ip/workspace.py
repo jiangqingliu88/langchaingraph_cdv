@@ -115,7 +115,7 @@ class IpWorkspaceModule(IpModuleBase):
         self._fill_rtl(ip)
         self._show_status(self._load_status(ip_id))
         info = self.run_tool("ip.release_check", quiet=True,
-                             root=str(self.project_root), ip_id=ip_id)
+                             project_root=str(self.project_root), ip_id=ip_id)
         self._show_release(info if isinstance(info, dict) else {})
         self.set_status(f"IP 工作区：{ip_id}")
 
@@ -141,7 +141,7 @@ class IpWorkspaceModule(IpModuleBase):
         # 刚跑完的 IP run 优先显示；切到别的 IP 时回退到该 IP 自己的最近 run
         # （`ip_status` 内部会先找这个 IP 的 ip_run，再回退 SoC run）。
         run_root = self._last_run_root if self._last_run_ip == ip_id else ""
-        st = self.run_tool("ip.status", quiet=True, root=str(self.project_root),
+        st = self.run_tool("ip.status", quiet=True, project_root=str(self.project_root),
                            ip_id=ip_id, run_root=run_root)
         return st if isinstance(st, dict) else {}
 
@@ -194,7 +194,7 @@ class IpWorkspaceModule(IpModuleBase):
             return
         run_root = self._last_run_root if self._last_run_ip == ip_id else ""
         result = self.run_tool("ip.release_build", force=True, approval=True,
-                               root=str(self.project_root), ip_id=ip_id,
+                               project_root=str(self.project_root), ip_id=ip_id,
                                run_root=run_root)
         if not isinstance(result, dict):
             return
@@ -214,7 +214,7 @@ class IpWorkspaceModule(IpModuleBase):
             return
         self.show_info(f"开始跑 {ip_id} 的 IP 回归…")
         result = self.run_tool("ip.run", force=True,
-                               project_root=str(self.project_root), ip_id=ip_id)
+                               project_project_root=str(self.project_root), ip_id=ip_id)
         if isinstance(result, dict):
             self._last_run_root = str(result.get("output_root") or "")
             self._last_run_ip = ip_id
@@ -228,7 +228,7 @@ class IpWorkspaceModule(IpModuleBase):
             return
         run_root = self._last_run_root if self._last_run_ip == ip_id else ""
         result = self.run_tool("ip.evidence", force=True,
-                               root=str(self.project_root), ip_id=ip_id,
+                               project_root=str(self.project_root), ip_id=ip_id,
                                run_root=run_root)
         if isinstance(result, dict):
             self.show_info(f"IP 证据：{result.get('path')} · "

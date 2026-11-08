@@ -1,0 +1,14 @@
+case_id: TC_NPU_SCHED_001
+test_name: npu_sched_test
+batch: '1'
+contract_ids: C-NPU_SCHED-001
+covergroups:
+- CG_NPU_SCHED
+checks: cfg_scb
+owner: dv
+status: planned
+notes: CMD Scheduler顶层，接收Inst Dispatcher指令原语，完成解析、hazard判定、指令缓存与向6组master分发，并管理SPAD读写通道、中断、性能监控、debug与低功耗ICG控制。
+title: CMD Scheduler顶层，接收Inst Dispatcher指令原语，完成解析、hazard判定、指令缓存与向6组master分发，并管理SPAD读写通道、中断、性能监控、debug与低功耗ICG控制。
+contract_refs:
+- C-NPU_SCHED-001
+constraints: []

@@ -16,15 +16,15 @@ import yaml
 
 from src.layers.l3_decision.evidence.tp_evidence import (
     LAYERS, build_tp_evidence, write_tp_evidence)
-from src.layers.l3_decision.casemodel.framework.paths import compile_paths
-from src.layers.l3_decision.casemodel.repository.loader import load_model_from_text
+from src.layers.l3_decision.vplan.runtime.framework.paths import compile_paths
+from src.layers.l3_decision.vplan.runtime.repository.loader import load_model_from_text
 
 MODEL = """\
 version: "1"
 object: demo
 object_code: DEMO
 sub_objects:
-  - {id: OBJ-01, name: 功能, code: F}
+  - {id: OBJ-01, name: 功能, code: F01}
 dimensions:
   - id: D_X
     name: X
@@ -76,16 +76,15 @@ class TestPathGroup:
         assert first.execution.stage == "behavior"      # 后端待接，不冒充可执行
 
     def test_schema_accepts_path_groups(self):
-        from src.layers.l3_decision.casemodel.api import run_validate
+        from src.layers.l3_decision.schema.schema_check import SchemaChecker
 
-        result = run_validate(MODEL)
-        assert not result.get("error")
-        assert not result.get("errors")
+        issues = SchemaChecker().check_text(MODEL)
+        assert not [i for i in issues if i.severity == "error"]
 
     def test_the_plan_lists_the_path_group(self):
-        from src.layers.l3_decision.casemodel.api import run_coverage_plan
+        from src.layers.l3_decision.vplan import engine
 
-        plan = run_coverage_plan(MODEL, "demo")["plan"]
+        plan = engine.coverage_plan_from_text(MODEL, "demo")["plan"]
         assert plan["summary"]["path_bin_count"] == 2
         assert plan["paths"][0]["status"] == "PENDING_BACKEND"
         # 只被 PATH 认领的需求不是孤立需求
@@ -98,7 +97,7 @@ version: "1"
 object: demo3
 object_code: DEMO3
 sub_objects:
-  - {id: OBJ-01, name: 功能, code: F}
+  - {id: OBJ-01, name: 功能, code: F01}
 dimensions:
   - id: D_A
     fields: [{name: a, type: enum, values: [0, 1]}]
@@ -117,20 +116,20 @@ cross_groups:
 
 class TestCrossGroups:
     def test_a_group_builds_an_n_way_cross(self):
-        from src.layers.l3_decision.casemodel.api import run_covergroups
+        from src.layers.l3_decision.vplan import engine
 
-        payload = run_covergroups(CROSS_MODEL, "demo3")
+        payload = engine.covergroups_from_text(CROSS_MODEL, "demo3")
         grp = next(c for c in payload["crosses"] if c["name"].startswith("cx_grp_"))
         assert grp["dimensions"] == ["D_A", "D_B", "D_C"]
         assert "cross cp_a, cp_b, cp_c;" in payload["covergroup_code"]
 
     def test_a_pair_already_covered_by_cross_matrix_is_not_duplicated(self):
-        from src.layers.l3_decision.casemodel.api import run_covergroups
+        from src.layers.l3_decision.vplan import engine
 
         # 去掉三元组，只留 `cross_matrix` 的两两组合 → 不应再派生 `cx_grp_`
         text = CROSS_MODEL.replace(
             "cross_groups:\n  - {id: X_ISSUE_DEP_PATH, dimensions: [D_A, D_B, D_C], level: required}\n", "")
-        payload = run_covergroups(text, "demo3")
+        payload = engine.covergroups_from_text(text, "demo3")
         assert not any(c["name"].startswith("cx_grp_") for c in payload["crosses"])
 
 

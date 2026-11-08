@@ -51,7 +51,7 @@ class EnvCovSteps:
             "generated_by": "verify.env_cov_bins",
             "cov_bins": list(cov_bins or []),
         }
-        field_bins = self._case_model_field_bins(output_dir)
+        field_bins = self._field_bins(output_dir)
         if field_bins:
             payload["field_bins"] = field_bins
             logger.info(f"功能覆盖率点（case 模型）：{len(field_bins)} 个字段的边界 "

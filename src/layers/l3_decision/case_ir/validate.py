@@ -144,7 +144,7 @@ def validate_case_closure(doc: CaseDoc, *,
             if dims and dim not in dims:
                 errors.append({
                     "rule": "unknown_dimension", "target": case.id,
-                    "message": f"用例 {case.id} 绑定的维度 {dim} 不在 casemodel 的 "
+                    "message": f"用例 {case.id} 绑定的维度 {dim} 不在执行资产的 "
                                f"dimensions 里"})
         if tests:
             for test in case.tests:

@@ -12,7 +12,7 @@
       · 测试能**逐类**断言（每类一条正例一条反例），而不是断言"抛了个异常"；
       · 使用者看到 `kind` 就知道该改 DSL 的哪一段。
 
-与 `casemodel_tools` 的 `CaseModelError` 同一套做法：领域异常继承 `ValueError`，
+与 旧建模引擎的 `CaseModelError` 同一套做法：领域异常继承 `ValueError`，
 `api` 层统一兜住转成 dict，不让异常穿到调用方。
 """
 from __future__ import annotations

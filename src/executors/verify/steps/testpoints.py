@@ -16,19 +16,21 @@ logger = structlog.get_logger()
 
 
 class TestpointSteps:
-    def _prebuild_testpoints(self, output_dir: Path, case_model: Path,
+    def _prebuild_testpoints(self, output_dir: Path,
                              module_name: str) -> Optional[Dict[str, Any]]:
         """env 渲染前的**只算不写**版本：失败返回 None（位图/timing 不生成）。"""
-        if case_model is None:
+        from src.layers.l3_decision.vplan import engine
+
+        if engine.project_for(None, output_dir) is None:
             return None
-        payload = self._build_testpoints(output_dir, case_model, module_name)
+        payload = self._build_testpoints(output_dir, module_name)
         if payload.get("error"):
             logger.warning(f"测试点 IR 预计算失败（位图/timing 不生成）: "
                            f"{payload['error']}")
             return None
         return payload
 
-    def _build_testpoints(self, output_dir: Path, case_model: Path,
+    def _build_testpoints(self, output_dir: Path,
                           module_name: str) -> Dict[str, Any]:
         """case 模型 → 测试点 IR payload（**只算不写**）。
 
@@ -36,14 +38,15 @@ class TestpointSteps:
         接口），而 IR 的落盘要等 `_write_testpoints`。两份共用这一份 payload，
         避免"渲染用的 TP 集合"与"落盘的 TP 集合"各算一遍、可能漂。
         """
-        from src.layers.l3_decision.casemodel.api import run_testpoints
+        from src.layers.l3_decision.vplan import engine
 
-        return run_testpoints(
-            case_model.read_text(encoding="utf-8", errors="replace"),
-            env_name=f"{module_name}_env",
+        project = engine.project_for(None, output_dir)
+        if project is None:
+            return {"error": "no VPlan project"}
+        return engine.run_testpoints(
+            project, env_name=f"{module_name}_env",
             agents=self._agent_transaction_fields(output_dir) or None,
-            module_name=module_name,
-            max_tests=200)
+            module_name=module_name, max_tests=200)
 
     def _write_intent_claims(self, output_dir: Path, case_ir: Dict[str, Any],
                              module_name: str) -> Dict[str, Any]:
@@ -62,21 +65,21 @@ class TestpointSteps:
             logger.warning(f"Intent/Claim 生成失败（不影响生成）: {e}")
             return {}
 
-    def _prepare_resource_artifacts(self, output_dir: Path, module_name: str,
-                                    case_model: Path) -> Dict[str, Any]:
+    def _prepare_resource_artifacts(self, output_dir: Path,
+                                    module_name: str) -> Dict[str, Any]:
         """渲染前落盘资源模型/场景（env 据此生成 resource checker）。"""
-        docs = write_resource_artifacts(output_dir, module_name, case_model)
+        docs = write_resource_artifacts(output_dir, module_name)
         if docs.get("available"):
             logger.info(f"资源模型：{docs['resources']} 资源 / "
                         f"{docs['scenarios']} 条交互场景（渲染前落盘）")
         return docs
 
     def _resource_docs(self, output_dir: Path, module_name: str,
-                       case_model: Path) -> Dict[str, Any]:
+                       ) -> Dict[str, Any]:
         """复用渲染前已落盘的资源产物；没有才补写（单独跑这一步时）。"""
         docs = load_resource_docs(output_dir)
         if not docs.get("available"):
-            docs = write_resource_artifacts(output_dir, module_name, case_model)
+            docs = write_resource_artifacts(output_dir, module_name)
         if docs.get("available"):
             logger.info(f"资源模型：{docs['resources']} 资源 / "
                         f"{docs['scenarios']} 条交互场景")
@@ -91,7 +94,7 @@ class TestpointSteps:
         不静默换后端。资源场景作为附加段并入 plan（P2）。
         """
         try:
-            from src.layers.l3_decision.casemodel.framework.stimulus_plan import (
+            from src.layers.l3_decision.vplan.runtime.framework.stimulus_plan import (
                 DEFAULT_BACKEND, build_and_write)
 
             plan = build_and_write(
@@ -107,23 +110,23 @@ class TestpointSteps:
             logger.warning(f"StimulusPlan 生成失败: {e}")
             return {}
 
-    def _write_testpoints(self, output_dir: Path, case_model: Path,
+    def _write_testpoints(self, output_dir: Path,
                           module_name: str,
                           *, payload: Dict[str, Any] = None) -> List[str]:
         """落 `coverage/testpoints.yaml` + `.json` —— 测试点 IR 的唯一落点。
 
         **为什么落在 `coverage/`**：它与覆盖报告同性质（都是签核材料），而且
-        `inputs/yaml/uvm/` 会被 `find_spec_yaml` 清空（见 `layout.casemodel_path`
-        的注释）。放在 coverage 下，证据包 `dump` 会连同覆盖率一起收走。
+        `inputs/yaml/uvm/` 会被 `find_spec_yaml` 清空，所以落在 coverage 下；
+        证据包 `dump` 会连同覆盖率一起收走。
 
         `payload` 由 `_build_testpoints` 预计算（env 渲染前要用）；不传则现算。
         """
         try:
-            # **与 `_casemodel_test_lines` 的 200 条上限同一口径**：那边截断后
+            # **与 `_vplan_test_lines` 的 200 条上限同一口径**：那边截断后
             # 不会生成更多属性 test 类，TP 这边若还列着"有 test 名但没类"的
             # 条目，报告就会出现永远 NOT_RUN 的幽灵测试点。
             if payload is None:
-                payload = self._build_testpoints(output_dir, case_model, module_name)
+                payload = self._build_testpoints(output_dir, module_name)
             if payload.get("error"):
                 logger.warning(f"测试点 IR 生成失败: {payload['error']}")
                 return []
@@ -141,7 +144,7 @@ class TestpointSteps:
             atomic_write_json(cov_dir / "testpoints.json", payload)
             # P2：资源/交互模型（有 `resources.yaml` 声明才落，不编造资源）。
             # 渲染前通常已落盘（env 要据此生成 checker）；没有才补写。
-            _res = self._resource_docs(output_dir, module_name, case_model)
+            _res = self._resource_docs(output_dir, module_name)
             # ── StimulusPlan IR：generated / player 两个后端的公共前置层 ──
             self._write_stimulus_plan(output_dir, payload, module_name,
                                       _res.get("scenario_docs") or None)
@@ -174,9 +177,17 @@ class TestpointSteps:
             # **引用闭合**：读数落 `coverage/case_closure.json`，由 Case Gate 判。
             try:
                 from src.executors.verify.ir_artifacts import write_case_closure
+                from src.layers.l3_decision.vplan import engine
 
-                _closure = write_case_closure(output_dir, case_ir, case_model,
-                                              module_name)
+                _project = engine.project_for(None, output_dir)
+                _dims = None
+                if _project is not None:
+                    _dims = [str(d.get("id")) for d in
+                             (engine.load_exec_assets(_project)
+                              .get("dimensions") or []) if d.get("id")]
+                _closure = write_case_closure(output_dir, case_ir, None,
+                                              module_name,
+                                              known_dimensions=_dims)
                 if not _closure["ok"]:
                     logger.warning(
                         f"Case IR 引用闭合：{len(_closure['errors'])} 条错误"

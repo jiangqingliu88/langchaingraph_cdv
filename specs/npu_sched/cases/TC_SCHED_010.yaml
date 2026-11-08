@@ -1,0 +1,12 @@
+case_id: TC_SCHED_010
+test_name: xd_return_out_of_order_test
+batch: B03
+title: 多xd=1
+contract_refs:
+- C-FUNC-005
+- C-DATA-003
+covergroups:
+- cg_xd_return
+- cg_xd_arbitration
+- cg_xd_tag
+constraints: []

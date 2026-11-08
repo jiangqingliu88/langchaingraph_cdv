@@ -22,10 +22,8 @@ from src.executors.verify.steps.helpers import (  # noqa: E402
     _main_phase_objection_at,
     _test_files_defining,
     _regression_test_name,
-    _synthesize_case_model,
     _spec_of,
-    _find_case_model,
-    _load_case_model_doc,
+    _load_runtime_model_doc,
     _assertion_signals,
     _bitmap_patch,
     _retire_stale_probe,
@@ -47,6 +45,110 @@ from src.executors.verify.steps.env_cov import EnvCovSteps  # noqa: E402
 from src.executors.verify.steps.testpoints import TestpointSteps  # noqa: E402
 from src.executors.verify.steps.constraint import ConstraintSteps  # noqa: E402
 from src.executors.verify.steps.gap import GapRenderSteps  # noqa: E402
+
+_PROTOCOL_ALIASES = {
+    "clk": "clock", "clock": "clock",
+    "rst": "reset", "rst_n": "reset", "reset": "reset", "reset_n": "reset",
+}
+#: `config` 按 master 再拆：5 个模块的 cmd_*_start/base_addr 混在一个 agent 里
+#: 无法分模块驱动/断言（与 docs/specs 的接口契约分组保持同一套名字）。
+_CONFIG_MODULES = ("niu", "glsu", "llsu", "vpu", "mpu")
+
+
+def _interface_protocol(itf: Dict[str, Any]) -> str:
+    """接口项 → 合法 SV 标识符形式的协议名（分组键）。
+
+    dplan 的 protocol 是语义边界（config / pulse / interrupt / valid-ready …）。
+    **不要把所有端口压成一个 `cmd_if`**：那会把 74-bit 指令、512-bit wdata
+    这类互不相干的信号塞进同一个 interface，agent 也无法按边界驱动。
+    """
+    from src.tools.common.lib.ports import is_clock_port, is_reset_port
+
+    name = str(itf.get("name") or "").strip().lower()
+    proto = str(itf.get("protocol") or "").strip().lower()
+    if proto in _PROTOCOL_ALIASES:
+        return _PROTOCOL_ALIASES[proto]
+    if is_clock_port(name):
+        return "clock"
+    if is_reset_port(name):
+        return "reset"
+    clean = re.sub(r"[^a-z0-9_]+", "_", proto).strip("_") or "cmd_if"
+    # 一个 master 的接口 = config + start + done + 释放；按模块归组，
+    # 与 docs/specs 的接口契约分组同一套名字。
+    if clean in ("config", "pulse"):
+        tokens = set(name.split("_"))
+        module = next((m for m in _CONFIG_MODULES if m in tokens), "")
+        if module:
+            return module
+    return clean
+
+
+def _top_module_interfaces(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """dplan 的 level=top 模块端口（DUT 对外接口）；没有就返回空。"""
+    top_name = str((spec.get("architecture") or {}).get("top")
+                   or spec.get("design_name") or "")
+    for m in spec.get("modules") or []:
+        if not isinstance(m, dict):
+            continue
+        is_top = str(m.get("level") or "").lower() == "top"
+        if (is_top or str(m.get("name") or "") == top_name) and m.get("interfaces"):
+            return [i for i in m["interfaces"] if isinstance(i, dict)]
+    return []
+
+
+def _merge_interface_attrs(itf: Dict[str, Any],
+                           source: Dict[str, Any] | None) -> Dict[str, Any]:
+    """按全局接口补齐位宽/方向/协议；顶层显式给出的非默认值优先。
+
+    `modules[].interfaces` 常常只有端口名（1-bit/INOUT/无协议是占位），
+    不补的话 74-bit 指令、512-bit wdata 会被写成 1 bit。
+    """
+    if not source:
+        return dict(itf)
+    merged = dict(source)
+    try:
+        width = int(itf.get("data_width", 1) or 1)
+    except (TypeError, ValueError):
+        width = 1
+    if width > 1:
+        merged["data_width"] = width
+    direction = str(itf.get("direction") or "").upper()
+    if direction not in ("", "INOUT"):
+        merged["direction"] = direction
+    if str(itf.get("protocol") or "").strip():
+        merged["protocol"] = itf["protocol"]
+    merged["name"] = str(itf.get("name") or "").split("[")[0].strip()
+    return merged
+
+
+def _vplan_uvm_spec(spec: Dict[str, Any], output_dir: Path) -> Dict[str, Any]:
+    """VPlan 顶层契约 → UVM 接口声明（协议边界来自 VPlan，不是 LLM 猜）。
+
+    取 dplan 的顶层端口列表，按 `protocol` 分组交给 `find_spec_yaml`
+    （`config` / `pulse` / `interrupt` / `valid_ready` … 各成一个 interface），
+    不再把所有端口压成一个 `cmd_if`。端口位宽/方向以全局 `interfaces` 为准。
+    """
+    try:
+        from src.layers.l1_infrastructure.layout import find_vplan_root
+
+        if find_vplan_root(None, output_dir) is None:
+            return spec
+        full = [dict(i) for i in (spec.get("interfaces") or [])
+                if isinstance(i, dict) and i.get("name")]
+        full_by_name = {str(i["name"]).split("[")[0].strip(): i for i in full}
+        ifaces: List[Dict[str, Any]] = []
+        for itf in (_top_module_interfaces(spec) or full):
+            base = str(itf.get("name") or "").split("[")[0].strip()
+            merged = _merge_interface_attrs(itf, full_by_name.get(base))
+            merged["protocol"] = _interface_protocol(merged)
+            ifaces.append(merged)
+        out = dict(spec)
+        if ifaces:
+            out["interfaces"] = ifaces
+        return out
+    except Exception:                              # noqa: BLE001 旁路
+        return spec
+
 
 @register_executor("verify")
 class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderSteps, BaseExecutor):
@@ -87,7 +189,9 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         # **早于 env 生成解析一次**：测试点位图（`tp_seen`）要进覆盖率接口，
         # 而接口在 `jinja_render` 之前就要落盘。这里只读文件，没有副作用；
         # 第 2 步复用同一份，不再重复解析。
-        case_model = _find_case_model(spec, output_dir)
+        from src.layers.l3_decision.vplan import engine
+
+        vplan_project = engine.project_for(spec, output_dir)
         params = task.get("params", {}) or {}
         supplement = params.get("supplement", False) if isinstance(params, dict) else False
         gaps = params.get("gaps", []) if isinstance(params, dict) else []
@@ -150,8 +254,10 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
             from src.layers.l2_orchestration.communication.tool_hub import call_tool
             from src.tools.generation.uvm_tools.agent_tools import _uvm_ctx
             _uvm_ctx.set(output_dir=output_dir, agents=[], env_name=f"{module_name}_env")
-            # 保存 spec 供 find_spec_yaml 读取
-            (output_dir / "spec.json").write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+            # 保存 spec 供 find_spec_yaml 读取（VPlan 顶层契约会改写协议边界）
+            uvm_spec = _vplan_uvm_spec(spec, output_dir)
+            (output_dir / "spec.json").write_text(
+                json.dumps(uvm_spec, ensure_ascii=False), encoding="utf-8")
             # ⚠️ **计划必须早于 `find_spec_yaml`**：回归的 `count`/`SEED` 就在这一步
             # 由它铺开（`_seed_plan` 读 `coverage/coverage_plan.yaml`）。晚一步的话
             # 回归已经生成完了，批次一条都不在里面 —— 而日志看不出任何异常
@@ -159,7 +265,8 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
             # 只能晚于它。两件事的方向相反，别一起搬）。
             self._write_coverage_plan(output_dir)
             steps.mark("coverage_plan")
-            call_tool("find_spec_yaml", {"spec_text": json.dumps(spec, ensure_ascii=False)})
+            call_tool("find_spec_yaml", {"spec_text": json.dumps(
+                uvm_spec, ensure_ascii=False)})
             steps.mark("find_spec_yaml")
             # ── 测试点 IR **提前算一次** ──
             #
@@ -167,8 +274,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
             # 渲染后再生成 testpoints 就赶不上这一轮。这里只算不写（写仍在
             # `_write_testpoints`，那一步还要落 methodology/StimulusPlan），
             # 两份产物共用同一份 payload —— **不重建第二份真源**。
-            tp_payload = self._prebuild_testpoints(output_dir, case_model,
-                                                   module_name)
+            tp_payload = self._prebuild_testpoints(output_dir, module_name)
             steps.mark("testpoints_prebuild")
             # ⚠️ **落盘必须在这里，不能更早。**
             #
@@ -205,7 +311,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
             # P2：资源模型/场景必须先于渲染落盘 —— `EnvironmentRenderTask`
             # 读这两份生成 resource checker；晚于渲染这一轮就没有 checker
             # （而 checker 缺失不会让编译失败，只会静默少一个证据源）。
-            self._prepare_resource_artifacts(output_dir, module_name, case_model)
+            self._prepare_resource_artifacts(output_dir, module_name)
             call_tool("jinja_render", {"output_dir": str(output_dir)})
             steps.mark("jinja_render")
             steps.finish()
@@ -226,73 +332,23 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
                 "error": "UVM 环境生成失败：agents/ 下无 SV 文件（检查 find_spec_yaml/jinja_render 日志与 jsonschema 依赖）",
             })
 
-        # ── 2. 测试点分解（**casemodel_tools**）──
+        # ── 2. 测试点 IR（VPlan 执行资产 → TP/Case/契约）──
         #
-        # 这里原来是 `testcase_tools` 的三连：parse_test_points → map_policies_to_tests
-        # → build_scenario_yaml，产出 `inputs/yaml/constraint.yaml`。那个包**已经删掉**，
-        # 于是这一段每次运行都只留下一句 `No module named 'src.tools.testcase_tools'`
-        # 的 warning —— 分解测试点这件事实际上一直是没做的。
-        #
-        # 现在走 casemodel：它吃一份 **case 模型 YAML**（功能组织树 + P0/P1/P2 专题 +
-        # 维度约束组合），吐 case 属性表与 UVM tests 片段。工具本体在
-        # `src/layers/l3_decision/casemodel/`（零 LLM 依赖），Agent 侧的三个包装面在
-        # `src/executors/verify/casemodel/`。
-        #
-        # **case 模型从哪来**：闭环里目前**没有** spec → case 模型的桥（设计阶段不产出
-        # 它）。所以这一步现在是**有条件生效**的 —— 找到就用，找不到就明确说一句，不
-        # 假装做过。要让它真正常态生效，得让设计阶段产出一份，或者由人给一份。
-        # `case_model` 已在 env 生成前解析过一次（见上面的注释）；这里只在
-        # 完全没有模型时退回合成，不重复走 `_find_case_model`。
-        if case_model is None:
-            case_model = _synthesize_case_model(spec, output_dir)
-        if case_model is None:
-            logger.info("这次运行没有 case 模型 —— 跳过测试点分解（casemodel）")
-        else:
-            # **把"用了哪一份"说出来**：人写的模型优先于 front 的草稿，而这件事
-            # 从运行结果上看不出来（都是"有一份模型"）。一份手写模型悄悄接管了
-            # 整轮回归的测试点，却没有任何一行日志提到它 —— 排查时会很痛苦。
-            logger.info(f"case 模型：{case_model}（人写的优先于 front 的草稿）")
-            files.extend(self._copy_ingest_artifacts(case_model, output_dir))
+        # 输入是 run 的 `inputs/vplan/`（`data/*.csv` + `cases/*.yaml`）；
+        # `vplan.engine` 负责投影，不再有 case 模型引擎。
+        if vplan_project is not None:
+            # VPlan 原生：没有 case 表/完备性打分这一步，TP IR 直接从
+            # `data/*.csv` + `cases/*.yaml` 投影。
             try:
-                from src.layers.l3_decision.casemodel.api import run_gaps, run_generate
-
-                yaml_text = case_model.read_text(encoding="utf-8", errors="replace")
-                gaps = run_gaps(yaml_text)
-                if gaps.get("error"):
-                    logger.warning(f"case 模型有问题，跳过分解: {gaps['error']}")
-                else:
-                    result = run_generate(yaml_text)
-                    if result.get("error"):
-                        logger.warning(f"case 生成失败: {result['error']}")
-                    else:
-                        yaml_dir = output_dir / "inputs" / "yaml"
-                        yaml_dir.mkdir(parents=True, exist_ok=True)
-                        # 产物落在这里（旧 `constraint.yaml` 的位置）：它是"这一步分
-                        # 解出了什么"的凭证，人可以在「产物审查」页看它、改它。
-                        (yaml_dir / "case_table.json").write_text(
-                            json.dumps({"case_model": str(case_model),
-                                        "score": gaps.get("score"),
-                                        "count": result.get("count"),
-                                        "cases": result.get("cases", [])},
-                                       ensure_ascii=False, indent=2),
-                            encoding="utf-8")
-                        files.append(str(yaml_dir / "case_table.json"))
-                        logger.info(f"测试点分解完成: {result.get('count')} 条 case"
-                                    f"（源：{case_model.name}）")
-
-                        # ── 测试点 IR：case 表只是"分解出了什么"，这一份是
-                        #    "**每条测试点怎么实现、打哪个仓、跑哪一级**"。
-                        #    没有它，下游各自的产物（test / 覆盖 / 回归 / 报告）
-                        #    仍然只能靠命名碰巧对齐。
-                        tp_files = self._write_testpoints(output_dir, case_model,
-                                                          module_name,
-                                                          payload=tp_payload)
-                        files.extend(tp_files)
-                        # 必须在 TP IR + StimulusPlan 落盘之后：它读的就是这两份
-                        # 与 constraint_backing（UVM 生成阶段已写好）。
-                        self._write_plan_consistency(output_dir)
-            except Exception as e:
-                logger.warning(f"测试点分解失败（casemodel）: {e}")
+                tp_files = self._write_testpoints(output_dir, module_name,
+                                                  payload=tp_payload)
+                files.extend(tp_files)
+                self._write_plan_consistency(output_dir)
+                logger.info("测试点 IR：VPlan 原生投影（无 case 属性表）")
+            except Exception as e:                     # noqa: BLE001 旁路
+                logger.warning(f"VPlan 测试点 IR 落盘失败: {e}")
+        else:
+            logger.info("没有 VPlan 项目 —— 跳过测试点 IR")
 
         # ── 3. SVA 断言：**本轮不再生成**（2026-10-17 撤掉）──
         #
@@ -342,29 +398,14 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         解析失败只记日志：覆盖计划的权威内容已经落盘，标注是增强项，
         不该因为它把生成流程变成失败。
         """
-        from src.tools.generation.uvm_tools.generation.generators.constraint_gen import (
+        from src.tools.generation.uvm_tools.tool_uvm.generators.constraint_gen import (
             annotate_coverage_plan)
         annotate_coverage_plan(output_dir, payload, logger)
-
-    def _copy_ingest_artifacts(self, case_model: Path,
-                               output_dir: Path) -> List[str]:
-        """xlsx 导入的模型旁边有 source_map → 复制进 run（证据包 + 漂移检查）。"""
-        try:
-            from src.tools.humanview.aivm_ir.evidence import copy_ingest_artifacts
-
-            copied = copy_ingest_artifacts(case_model, output_dir)
-            if copied:
-                print(f"  [verify] 导入事实：{Path(copied[0]).name} → inputs/",
-                      flush=True)
-            return copied
-        except Exception as e:                          # noqa: BLE001 旁路
-            print(f"  [verify] 导入事实复制失败（不影响主流程）: {e}", flush=True)
-            return []
 
     def _write_plan_consistency(self, output_dir: Path) -> None:
         """TP IR / StimulusPlan / constraint_backing 的同源校验。"""
         try:
-            from src.layers.l3_decision.casemodel.framework.plan_consistency import (
+            from src.layers.l3_decision.vplan.runtime.framework.plan_consistency import (
                 write_plan_consistency)
 
             summary = write_plan_consistency(output_dir)
@@ -390,26 +431,19 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         **不硬崩**：任何一步出问题只记日志。关联校验是**旁路**，不该因为它
         跑不起来就把 verify 变成失败 —— 该失败的是"关联真断了"，不是"校验没跑成"。
         """
-        cm_file = _find_case_model(_spec_of(output_dir), output_dir)
-        if cm_file is None:
+        from src.layers.l3_decision.vplan import engine
+
+        module_name = str(_spec_of(output_dir).get("design_name") or "dut")
+        project = engine.project_for(_spec_of(output_dir), output_dir)
+        if project is None:
             return
+        case_text = engine.model_text(project)
+        coverage_text = engine.coverage_model_text(project, module_name)
         cons_path = output_dir / "inputs" / "yaml" / "uvm" / "constraint.yaml"
         try:
-            from src.layers.l3_decision.casemodel.associate import associate
-            from src.layers.l3_decision.casemodel.coverage import (
-                coverage_model, coverage_model_to_dict,
-            )
-            from src.layers.l3_decision.casemodel.repository import load_models_from_text
-
-            case_text = cm_file.read_text(encoding="utf-8")
-            model = load_models_from_text(case_text, source=str(cm_file))[0].resolve()
-            module_name = str(_spec_of(output_dir).get("design_name") or "dut")
-            cm = coverage_model(model, module_name)
-            coverage_text = json.dumps(coverage_model_to_dict(cm), ensure_ascii=False)
             constraint_text = (cons_path.read_text(encoding="utf-8")
                                if cons_path.is_file() else "")
-
-            a = associate(case_text, coverage_text, constraint_text)
+            a = engine.run_association(case_text, coverage_text, constraint_text)
             if a.get("error"):
                 logger.warning(f"关联校验跑不了，跳过: {a['error']}")
                 return
@@ -446,10 +480,9 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         实测的教训是"声明了 N 个覆盖点、回归里跑 M 条"没人发现得了。一份文件，
         三处读它：回归取种子、覆盖率页取覆盖点、审计取追溯。
         """
-        cm_file = _find_case_model(_spec_of(output_dir), output_dir)
-        from src.tools.generation.uvm_tools.generation.generators.coverage_gen import (
+        from src.tools.generation.uvm_tools.tool_uvm.generators.coverage_gen import (
             write_coverage_plan)
-        write_coverage_plan(output_dir, cm_file, logger, module_name="dut")
+        write_coverage_plan(output_dir, None, logger, module_name="dut")
 
     def _write_coverage_dut_channel(self, output_dir: Path,
                                     tp_payload: Dict[str, Any] = None
@@ -483,24 +516,22 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         与 tb_top 都从那一份读身份。**没生成就返回空字典** —— 调用方据此不写
         `dut_if`，于是两个模板一个字都不出（一致地"都没有"，而不是单边有）。
         """
-        cm_file = _find_case_model(_spec_of(output_dir), output_dir)
-        if cm_file is None:
+        from src.layers.l3_decision.vplan import engine
+
+        project = engine.project_for(_spec_of(output_dir), output_dir)
+        if project is None:
             return {}
-        text = cm_file.read_text(encoding="utf-8", errors="replace")
-        decls = _load_case_model_doc(text)
+        text = engine.model_text(project)
+        decls = _load_runtime_model_doc(text)
         tp_width = len((tp_payload or {}).get("testpoints") or [])
         try:
-            from src.layers.l3_decision.casemodel.api import run_covergroups
-
             # `extra_signals`：断言规则引用、但没被覆盖点采的信号（`issue_valid`
             # 这种端口）。接口里不引，env 检查组就读不到 —— 规则只能被跳过。
             # **timing 的 start/end 也要引**：它们由 env 检查组逐拍读，不在
             # 覆盖点里的话接口上根本没有。
-            payload = run_covergroups(
-                text, "dut",
-                extra_signals=(_assertion_signals(decls)
-                               + _timing_signals(tp_payload)),
-                tp_bitmap_width=tp_width)
+            extra = (_assertion_signals(decls) + _timing_signals(tp_payload))
+            payload = engine.run_covergroups(
+                project, "dut", extra_signals=extra, tp_bitmap_width=tp_width)
         except Exception as e:                       # noqa: BLE001 旁路
             logger.warning(f"读 case 模型失败（不生成 DUT 覆盖率接口）: {e}")
             return {}
@@ -548,8 +579,8 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
                 **checker_patch, **bitmap_patch}
 
     @staticmethod
-    def _case_model_field_bins(output_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
-        """`inputs/casemodel.yaml` → `{字段名: [{name, value}, …]}`（给 `env_cov` 用）。
+    def _field_bins(output_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
+        """VPlan 执行资产 → `{字段名: [{name, value}, …]}`（给 `env_cov` 用）。
 
         键是**字段名**（`paddr` / `pwdata` / `pwrite`）—— case 模型的字段名就是
         spec 的接口信号名，而 `env_cov` 的 coverpoint 挂在 `agent_item.<字段>` 上，
@@ -559,13 +590,13 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         拿不到模型（文件不在 / 解析失败）就返回空 —— 调用方据此退回自动分箱，
         **不静默假装有模型**。
         """
-        cm_file = _find_case_model(_spec_of(output_dir), output_dir)
-        if cm_file is None:
+        from src.layers.l3_decision.vplan import engine
+
+        project = engine.project_for(_spec_of(output_dir), output_dir)
+        if project is None:
             return {}
         try:
-            from src.layers.l3_decision.casemodel.api import run_covergroups
-
-            points = run_covergroups(cm_file.read_text(encoding="utf-8"), "dut")
+            points = engine.run_covergroups(project, "dut")
         except Exception as e:                       # noqa: BLE001 旁路，别拦生成
             logger.warning(f"读 case 模型失败（env_cov 退回自动分箱）: {e}")
             return {}

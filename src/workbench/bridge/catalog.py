@@ -108,33 +108,18 @@ BINDINGS: List[ToolBinding] = [
         doc="PM 手写测试点表（xlsx）→ TP 清单 / 三通道覆盖点 / M1 计划摘要（只读）",
     ),
 
-    # ══ 验证管理系统：case 模型 ═══════════════════════════════════
-    # casemodel_tools.api 是**唯一**已经是 dict 进 dict 出、且零 LLM 依赖的
-    # 工具面；normalize 对它基本是空操作。
-
+    # ══ 验证管理系统：VPlan 项目 / 运行产物 ═══════════════════════
     ToolBinding(
-        name="casemodel.validate",
-        target="src.layers.l3_decision.casemodel.api:run_validate",
+        name="vplan.status",
+        target="src.layers.l3_decision.vplan.report:project_summary",
         kind="json",
-        doc="YAML → schema 校验结果",
+        doc="VPlan 项目 → 需求/feature/契约/TP/case 计数与状态（只读）",
     ),
     ToolBinding(
-        name="casemodel.gaps",
-        target="src.layers.l3_decision.casemodel.api:run_gaps",
+        name="vplan.run_artifacts",
+        target="src.layers.l3_decision.vplan.report:run_artifacts",
         kind="json",
-        doc="YAML → 完备性分析（评分 / 覆盖 / 诊断）",
-    ),
-    ToolBinding(
-        name="casemodel.generate",
-        target="src.layers.l3_decision.casemodel.api:run_generate",
-        kind="json",
-        doc="YAML → case 属性表",
-    ),
-    ToolBinding(
-        name="casemodel.uvm_tests",
-        target="src.layers.l3_decision.casemodel.api:run_uvm_tests",
-        kind="json",
-        doc="YAML → UVM 的 environment.tests 片段（一条 = 一个 UVM_TEST）",
+        doc="run 目录 → TP IR / 覆盖率计划 / 契约 / sv 资产 / 回归（只读）",
     ),
 
     # ══ 验证管理系统：ISA 激励生成 ═══════════════════════════════
@@ -303,7 +288,7 @@ BINDINGS: List[ToolBinding] = [
     # 覆盖率库是二进制，人看不了 —— 这个绑定把它摊成 HTML 报告（`vcover report
     # -html`）再打开，人才能真去校对。它**会写盘**（报告落在库旁边），所以不是
     # pure：得由人点一下显式触发（`force=True`），顺带也挡住"切个标签页就编报告"。
-    # 功能覆盖率：case 模型声明的覆盖点 / 摊平出来的测试点 / 这条链上的资产。
+    # 功能覆盖率：VPlan 执行资产声明的覆盖点 / 摊平出来的测试点 / 这条链上的资产。
     # 纯读盘（模型 + 覆盖率文本 + 几个文件），不重跑生成器、不重跑 vcover。
     ToolBinding(
         name="flow.fcov",

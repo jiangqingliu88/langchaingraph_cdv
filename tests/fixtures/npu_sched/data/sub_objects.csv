@@ -1,0 +1,4 @@
+id,name,code
+OBJ-01,指令队列管理,QUEUE
+OBJ-02,指令发射,ISSUE
+OBJ-03,多簇同步,CLUSTER

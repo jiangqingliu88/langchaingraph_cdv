@@ -177,7 +177,7 @@ UVM_SCHEMA = "uvm_config"
 
 
 def _spec_of_run(root: Path) -> Dict[str, Any]:
-    """运行目录里的 `spec.json` —— `find_case_model` 认 `specs/<模块>/` 时要用它。"""
+    """运行目录里的 `spec.json` —— 本次运行的 spec（引擎据此读 VPlan 项目）。"""
     return _read_json(root / "spec.json") or {}
 
 

@@ -2,7 +2,7 @@
 
 PySide6 是**可选依赖**（`pip install -e .[gui]`）：纯 CLI 用法不需要它，
 没必要让每次安装都拖上 Qt。所以缺失时要给一段能照着做的提示，而不是
-甩一串 ImportError traceback。这与 `casemodel_tools/cli.py::cmd_gui`
+甩一串 ImportError traceback。这与旧 case 建模 CLI 的 `cmd_gui`
 的既有约定一致：**消息进 stderr，退出码 2**。
 """
 from __future__ import annotations

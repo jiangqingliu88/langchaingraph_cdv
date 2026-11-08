@@ -9,7 +9,7 @@ UVM 工具包 —— 独立封装的参数化代码生成器 + Agent 工具
     _uvm_ctx.set(output_dir=Path("output"), agents=[], env_name="dut_env")
     result = generate_uvm_from_spec.func(spec_text)
 """
-from .generation.generators.orchestrator import (  # noqa: F401
+from .tool_uvm.generators.orchestrator import (  # noqa: F401
     generate_uvm, SUPPORTED_TOOL_TYPES,
 )
 

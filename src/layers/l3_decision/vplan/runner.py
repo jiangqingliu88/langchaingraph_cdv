@@ -148,6 +148,11 @@ def write_plan_only_run(project: VPlanProject, output_dir: str | Path, *,
         ],
     })
 
+    try:
+        materialize_project_inputs(project, out)
+    except Exception:                                # noqa: BLE001 输入复制不拦产物
+        pass
+
     return {
         "run": str(out),
         "run_id": run_id or out.name,
@@ -169,3 +174,55 @@ def write_plan_only_run(project: VPlanProject, output_dir: str | Path, *,
         "contract_manifest": contract_manifest,
         "warnings": list(project.warnings),
     }
+
+
+def materialize_project_inputs(project: VPlanProject,
+                               run_dir: str | Path) -> Dict[str, Any]:
+    """把 VPlan 项目的**契约结构**复制到 `<run>/inputs/vplan/`。
+
+    让一次 run 自包含：spec 抽取表、契约矩阵、case、schemas、生成物说明、
+    执行资产都在 inputs/vplan 下。
+
+    执行期只读 `inputs/vplan/`；运行期模型在内存中由 CSV 投影。
+    """
+    import shutil
+
+    from src.layers.l1_infrastructure.layout import vplan_inputs_dir
+
+    root = Path(run_dir)
+    dest = vplan_inputs_dir(root)
+    dest.mkdir(parents=True, exist_ok=True)
+    copies = (
+        ("docs/specs", "docs/specs"),
+        ("docs/verification", "docs/verification"),
+        ("docs/contract", "docs/contract"),
+        ("docs/appendix", "docs/appendix"),
+        ("data", "data"),
+        ("cases", "cases"),
+        ("schemas", "schemas"),
+        ("scripts", "scripts"),
+        ("util_comp.yaml", "util_comp.yaml"),
+        ("signoff_policy.yaml", "signoff_policy.yaml"),
+        ("README.md", "README.md"),
+        ("VERSION", "VERSION"),
+    )
+    copied = []
+    for src_rel, dst_rel in copies:
+        src = project.root / src_rel
+        if not src.exists():
+            continue
+        target = dest / dst_rel
+        if src.is_dir():
+            shutil.copytree(src, target, dirs_exist_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, target)
+        copied.append(src_rel)
+
+    (dest / "README.md").write_text(
+        "# inputs/vplan — 本次 run 的 VPlan 契约结构\n\n"
+        f"来源项目：`{project.root}`\n\n"
+        "包含 spec 抽取表、契约矩阵、cases、schemas、`data/*.csv` 执行资产与\n"
+        "生成物说明。运行期结构由 CSV 在内存中组装。\n",
+        encoding="utf-8")
+    return {"path": str(dest), "copied": copied}

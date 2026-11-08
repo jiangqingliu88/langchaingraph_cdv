@@ -10,15 +10,25 @@ from __future__ import annotations
 from .assets import clean_legacy_dirs, package_run_assets, scan_assets
 from .build import build_case_ir, build_payload, build_testpoints
 from .evidence import apply_active, evaluate, link_run, load_index
-from .execution import build_execution_model, write_execution_model
-from .runner import write_plan_only_run
+from .execution import (
+    build_execution_model, build_runtime_model,
+    write_execution_model, write_runtime_model,
+)
+from .report import project_summary, run_artifacts
+from .review import (
+    current_hashes, record_review, require_review, review_status,
+)
+from .runner import materialize_project_inputs, write_plan_only_run
 from .source import VPlanError, VPlanProject, load_project
 
 __all__ = [
     "VPlanError", "VPlanProject", "load_project",
     "build_testpoints", "build_case_ir", "build_payload",
     "build_execution_model", "write_execution_model",
+    "build_runtime_model", "write_runtime_model",
     "package_run_assets", "scan_assets", "clean_legacy_dirs",
     "apply_active", "evaluate", "link_run", "load_index",
-    "write_plan_only_run",
+    "materialize_project_inputs", "write_plan_only_run",
+    "project_summary", "run_artifacts",
+    "review_status", "record_review", "require_review", "current_hashes",
 ]

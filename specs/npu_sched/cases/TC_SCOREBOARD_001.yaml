@@ -1,0 +1,14 @@
+case_id: TC_SCOREBOARD_001
+test_name: scoreboard_test
+batch: '1'
+contract_ids: C-SCOREBOARD-001
+covergroups:
+- CG_SCOREBOARD
+checks: cfg_scb
+owner: dv
+status: planned
+notes: 接收decode解析的指令信息，进行指令data hazard/structure hazard判断；记录所有已分发但未完成指令的信息与状态，判断cfg/drv_buffer保存指令状态；无hazard的当拍输入指令分发至dsp_en，有hazard的指令存至ins_buffer；master完成后更新hazard并ren出无hazard指令。
+title: 接收decode解析的指令信息，进行指令data hazard/structure hazard判断；记录所有已分发但未完成指令的信息与状态，判断cfg/drv_buffer保存指令状态；无hazard的当拍输入指令分发至dsp_en，有hazard的指令存至ins_buffer；master完成后更新hazard并ren出无hazard指令。
+contract_refs:
+- C-SCOREBOARD-001
+constraints: []

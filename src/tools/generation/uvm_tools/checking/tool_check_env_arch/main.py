@@ -135,8 +135,10 @@ def _load_loopbacks(output_dir: Path) -> Dict[str, str]:
     loopbacks: Dict[str, str] = {}
     bench_dir = output_dir / "bench"
     if not bench_dir.exists():
+        bench_dir = output_dir / "sv" / "tb"
+    if not bench_dir.exists():
         return loopbacks
-    for p in bench_dir.glob("*_tb_top.sv"):
+    for p in sorted(bench_dir.glob("*.sv")):
         try:
             text = p.read_text(encoding="utf-8", errors="replace")
         except Exception:
@@ -199,12 +201,19 @@ def check_port_ownership(output_dir: str) -> Dict[str, Any]:
 def _resolve_test(output_dir: Path) -> str | None:
     """解析默认测试：loopback_test（双向回环）> directed_test > base_test。"""
     tests_dir = output_dir / "env" / "tests"
+    if not tests_dir.exists():
+        tests_dir = output_dir / "sv" / "test"
     spec = _load_spec(output_dir)
     env_name = f"{spec.get('design_name', 'dut')}_env"
     candidates = ["loopback_test", f"{env_name}_directed_test", f"{env_name}_base_test"]
     for c in candidates:
         if (tests_dir / f"{c}.sv").exists():
             return c
+    # sv 布局：loopback test 带 agent 前缀，按后缀认。
+    for c in ("*_loopback_test.sv", "*_directed_test.sv", "*_base_test.sv"):
+        hit = sorted(tests_dir.glob(c))
+        if hit:
+            return hit[0].stem
     return None
 
 

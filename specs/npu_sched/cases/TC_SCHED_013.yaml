@@ -1,0 +1,14 @@
+case_id: TC_SCHED_013
+test_name: instruction_error_test
+batch: B04
+title: 指令错误
+contract_refs:
+- C-EXC-001
+- C-IF-GRP-INTERRUPT
+- C-IF-GRP-CSR
+- C-IF-GRP-DEBUG
+- C-IF-GRP-RESERVED
+covergroups:
+- cg_inst_error
+- cg_int_config
+constraints: []

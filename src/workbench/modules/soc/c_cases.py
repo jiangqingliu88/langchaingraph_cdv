@@ -65,7 +65,7 @@ class SoCCasesModule(SocModuleBase):
 
     def reload_cases(self) -> None:
         payload = self.run_tool("soc.c_cases", quiet=True,
-                                root=str(self.project_root))
+                                project_root=str(self.project_root))
         self._cases = payload if isinstance(payload, list) else []
         self.table.setRowCount(len(self._cases))
         for row, case in enumerate(self._cases):
@@ -94,7 +94,7 @@ class SoCCasesModule(SocModuleBase):
             return
         self.show_info(f"编译并运行 C 用例 {case_id}（E203 + NICE + NPU）…")
         result = self.run_tool("soc.c_run", force=True,
-                               project_root=str(self.project_root),
+                               project_project_root=str(self.project_root),
                                case_id=case_id)
         if isinstance(result, dict):
             if result.get("status") == "PASS":

@@ -159,6 +159,8 @@ def validate_uvm(output: dict, output_dir: str = "") -> ValidationResult:
     else:
         # 没有 quality_report.json：直接按布局扫产物
         agent_dir = od / "agents"
+        if not agent_dir.is_dir():
+            agent_dir = od / "sv" / "agents"
         missing: List[str] = []
         if agent_dir.exists():
             for ad in sorted(agent_dir.iterdir()):
@@ -179,15 +181,15 @@ def validate_uvm(output: dict, output_dir: str = "") -> ValidationResult:
 # ── TestAgent 校验 ──
 
 def validate_test(output: dict, output_dir: str = "") -> ValidationResult:
-    """校验测试点分解的输出：**casemodel 的 case 属性表**可解析、里面有 case。
+    """校验测试点分解的输出：**case_table.json** 可解析、里面有 case。
 
     原先这里校验的是 `inputs/yaml/constraint.yaml` —— 那是 `testcase_tools` 的产物，
-    而那个包已经删掉，测试点分解改走 `casemodel_tools`（产物是
+    而那个包已经删掉，测试点分解改走 VPlan 引擎（产物是
     `inputs/yaml/case_table.json`）。校验一件**永远不会被生成**的东西，等于这个门禁
     恒判失败。
 
     「没有 case 表」**不算问题**：闭环里目前没有 spec → case 模型的桥，所以这一步
-    本来就可能没跑（见 `verify` agent 里 `_find_case_model` 的说明）。如实记一句
+    本来就可能没跑（VPlan 项目按需提供）。如实记一句
     提示，不当失败 —— 否则每次运行都会挂一条假红灯。
     """
     issues = []
@@ -400,31 +402,13 @@ class FallbackStrategy:
 
     @staticmethod
     def test_fallback(ctx: dict, spec_text: str) -> dict:
-        """用 **casemodel** 的矩阵模式生成 case（不调 LLM）。
+        """矩阵回退（已随 case 模型引擎删除）。
 
         原来这里用的是 `testcase_tools.generator.TestCaseGenerator`，那个包已经删掉
-        （测试点分解改走 `casemodel_tools`）。留着就是一条指向不存在模块的 import ——
-        真被调到的时候是一句 ImportError，而不是"这条回退路走不通"。
-
-        casemodel 本来就是**纯矩阵**工具（属性组合，零 LLM），正好是这条路想要的形状：
-        交给它一份 case 模型，它吐 case 属性表。
+        现在 VPlan 是唯一输入，这条回退路没有输入可吃 —— 明确报错，不假装做过。
         """
-        from src.layers.l3_decision.casemodel.api import run_generate
-
-        od = Path(ctx.get("working_dir", "output"))
-        model_path = od / "inputs" / "casemodel.yaml"
-        if not model_path.is_file():
-            return {"error": "没有 case 模型（inputs/casemodel.yaml），走不了矩阵回退"}
-
-        result = run_generate(model_path.read_text(encoding="utf-8", errors="replace"))
-        if result.get("error"):
-            return {"error": result["error"]}
-        out_path = od / "inputs" / "yaml" / "case_table.json"
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2),
-                            encoding="utf-8")
-        return {"tests": result.get("cases", []), "count": result.get("count", 0),
-                "mode": "matrix", "fallback": True}
+        return {"error": "矩阵回退已移除（旧建模引擎删除）；"
+                         "请走 vplan execute 的 VPlan 执行资产"}
 
 
 _FALLBACKS: Dict[str, Callable] = {

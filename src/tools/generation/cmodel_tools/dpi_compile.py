@@ -25,8 +25,8 @@ def compile_cmodel_dpi(cmodel_dir: str, module_name: str = "dut",
 
     # Generate DPI wrapper from template if not exists
     if not dpi_cpp.exists():
-        from src.tools.generation.uvm_tools.generation.constants import TEMPLATES_DIR
-        from src.tools.generation.uvm_tools.generation.render.jinja_renderer import JinjaRenderer
+        from src.tools.generation.uvm_tools.tool_uvm.constants import TEMPLATES_DIR
+        from src.tools.generation.uvm_tools.tool_uvm.render.jinja_renderer import JinjaRenderer
         renderer = JinjaRenderer(TEMPLATES_DIR)
         dpi_code = renderer.render("interface_templates/cmodel_dpi.cpp.j2",
                                    {"module_name": module_name})

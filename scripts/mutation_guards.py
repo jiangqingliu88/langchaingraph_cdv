@@ -57,7 +57,7 @@ MUTATIONS: List[Mutation] = [
     ),
     Mutation(
         name="plusargs_reserved_allowed",
-        path="src/tools/execution/regression_tools/backend_profiles.py",
+        path="src/layers/l2_orchestration/regression_tools/backend_profiles.py",
         old="        if key in reserved:",
         new="        if False and key in reserved:",
         tests="tests/test_plusargs_semantics.py",
@@ -93,7 +93,7 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         # 判据退化成子串匹配 → 逐条 SB 的 `mismatched=0` 能把"聚合脏"骗成通过
         name="scb_pass_anchor_loosened",
-        path="src/tools/execution/regression_tools/backend_profiles.py",
+        path="src/layers/l2_orchestration/regression_tools/backend_profiles.py",
         old=("    'grep -qE \"(\\\\[SCB_DUT\\\\]|Scoreboard:).*mismatched=0\" "
              "sim_vsim.log '"),
         new="    'grep -qE \"mismatched=0\" sim_vsim.log '",

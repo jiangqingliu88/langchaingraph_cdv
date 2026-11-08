@@ -11,7 +11,6 @@ import pytest
 
 SKILLS = (
     Path("src/layers/l3_decision/evidence/SKILL.md"),
-    Path("src/layers/l3_decision/casemodel/SKILL.md"),
 )
 
 REQUIRED = ("什么时候用我", "不要用我", "正确调用方式", "常见错误", "产物")
@@ -25,7 +24,13 @@ def test_skill_has_the_contract_sections(path):
         assert section in text, f"{path} 缺段落：{section}"
 
 
-def test_skills_live_under_their_board_directory():
-    """技能文件跟着工具板块走，不放在仓库根散着。"""
+def test_skills_live_with_the_module_they_document():
+    """技能文件跟着**实现**走（同目录），不放仓库根散着。
+
+    `evidence` 已迁进 l3 层，所以不再要求
+    `checking/` 或 `generation/`；要求的是"实现旁边有它的技能"。
+    """
     for path in SKILLS:
-        assert "/checking/" in path.as_posix() or "/generation/" in path.as_posix()
+        posix = path.as_posix()
+        assert posix.startswith(("src/layers/", "src/tools/")), posix
+        assert any(path.parent.glob("*.py")), f"{path} 旁边没有实现文件"

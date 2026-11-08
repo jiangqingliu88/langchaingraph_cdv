@@ -41,7 +41,8 @@ def run_artifacts(run_dir: str = "") -> Dict[str, Any]:
     # `coverage_points.json` 是「功能覆盖率方法学」的落点：模型声明了哪些覆盖点、
     # 每个点有哪些 bin、哪些维度要交叉。它**不是**命中数据（命中在 ucdb 里，见
     # 覆盖率页），所以单列一组、和 uvmd 配置那组一样是"输入侧"的产物。
-    items.append(_artifact(root, Path("inputs/casemodel.yaml"), "功能覆盖", None))
+    items.append(_artifact(root, Path("inputs/vplan/data/execution_meta.csv"),
+                           "功能覆盖", None))
     items.append(_artifact(root, Path("coverage/coverage_points.json"), "功能覆盖", None))
     items.append(_artifact(root, Path("inputs/yaml/uvm/env_cov_bins.yaml"),
                            "功能覆盖", None))

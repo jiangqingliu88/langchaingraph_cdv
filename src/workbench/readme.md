@@ -44,7 +44,7 @@ PySide6 与 QDarkStyle 是**可选依赖**（`pip install -e .[gui]`）：纯 CL
 |--------|---------|-----------|----------|
 | 设计构建 | `design` | （暂无） | RTL 与门禁、IP 拆解 / 接口 / 寄存器总览、单 agent 触发 |
 | 参考模型 | `model` | （暂无） | 版本列表 / golden_ref / 占位标记 / 回滚 |
-| 验证构建 | `verify` | **Case 建模**（12 个页面） | UVM 环境、用例清单、SVA 断言 |
+| 验证构建 | `verify` | **VPlan 项目**（契约/TP/case + 运行产物） | UVM 环境、用例清单、SVA 断言 |
 | 编译与回归 | `ops` | （暂无） | 回归结果 / 趋势、失败用例、重跑 |
 | 覆盖率 | `coverage` | （暂无） | gap 归因、覆盖率地图、exclude 审批 |
 | 调试技术 | `debug` | 仿真日志、错误指纹 | 波形、失败用例二分 |
@@ -57,8 +57,7 @@ PySide6 与 QDarkStyle 是**可选依赖**（`pip install -e .[gui]`）：纯 CL
 > [`docs/design/agent_gui_business_architecture.md`](../../docs/design/agent_gui_business_architecture.md)。
 
 交付分三轮：第一轮是平台本身（清单契约、插件接口、工具绑定、通用控件）加一条
-垂直切片；第二轮把 **case 属性完备性建模**从 `casemodel_tools` 的旧界面整体搬进来，
-成了 `verify.casemodel` 模块 —— 它是目前唯一一个「界面能力本身就是核心」的模块
+垂直切片；case 建模界面已随引擎删除，替换为只读的 `verify.vplan` 模块
 （见下节）；第三轮按 agent 角色重构业务线，并补上只读的证据链 / 签核 / 跟踪 / 趋势视图。
 其余模块在清单里以注释形式留了位。
 
@@ -71,7 +70,7 @@ PySide6 与 QDarkStyle 是**可选依赖**（`pip install -e .[gui]`）：纯 CL
 | 入口 | 模块 | 复用的专业视图 |
 |---|---|---|
 | 项目总览 / 项目管理 | `project.overview`、`project.management` | `flow.runs`、`flow.evidence`、`flow.signoff`；项目登记表 |
-| UVM 自动化验证 | `service.uvm` | `ide.ip_spec`、`verify.casemodel`、`verify.isa_gen`、`flow.pipeline`、`verify.output`、`flow.evidence` |
+| UVM 自动化验证 | `service.uvm` | `ide.ip_spec`、`verify.vplan`、`verify.isa_gen`、`flow.pipeline`、`verify.output`、`flow.evidence` |
 | 回归效率优化 | `service.regression` | `ops.regression_status`、`debug.*`、`flow.compare`、`flow.trend`、`flow.decision` |
 | Coverage Closure | `service.coverage` | `ops.regression_coverage`、`coverage.excludes`、`flow.artifacts`、`flow.evidence`、`flow.signoff` |
 
@@ -186,8 +185,7 @@ payload = self.run_tool("sim.parse_log", log_text=text)
 [`bridge/binding.py`](bridge/binding.py) 负责三件事：
 
 1. **惰性 import** —— 清单里列了但没启用的模块，不会因为依赖缺失拖垮启动。
-2. **返回值归一化** —— `src/tools/` 里的返回值不统一：`casemodel_tools.api`
-   返回真 dict，而 `debug_tools` / `coverage_tools` 这些返回 **JSON 字符串**
+2. **返回值归一化** —— `src/tools/` 里的返回值不统一：`uvm_tools` 返回真 dict，而 `debug_tools` / `coverage_tools` 这些返回 **JSON 字符串**
    （它们的第一消费者是 LangChain）。界面不该逐个记这件事，`kind` 字段决定。
    **归一化永不抛**：`kind: json` 但拿到非 JSON 时返回 `{"raw": ..., "_parse_error": ...}`
    —— 工具的错误路径常常返回纯文本，那正是最需要显示出来的时候。
@@ -211,36 +209,22 @@ ctx.console.begin_task("扫描 output")
 刻意**没有**取消、优先级、进度百分比：跑起来的仿真停不掉（那是 EDA 工具自己的
 事），给一个点不动的「取消」按钮比没有更糟。
 
-## Case 建模模块（`verify.casemodel`）
+## VPlan 项目模块（`verify.vplan`）
 
-目前唯一一个「界面能力本身就是核心」的模块，也是这套插件化最实的一次检验 ——
-它原本是 `casemodel_tools` 包里一个 3142 行的独立窗口（`view/gui/`），第二轮
-整体搬进来成了普通模块，**没有为它改动平台一行**。
+GUI 现在只读 **VPlan 产物**（case 模型引擎已删除）：
+
+| 区域 | 内容 |
+|------|------|
+| 项目状态 | 需求 / feature / 专题 / 契约 / TP / case 的计数与状态分布（`vplan.status`） |
+| 运行产物 | 选中 run 的 TP IR、覆盖率计划、契约清单、`vplan_map.json`、sv 资产、分级回归（`vplan.run_artifacts`） |
+| 文件侧 | 上述产物在盘上的路径与大小；缺了显示 ✗，不编造 |
 
 ```bash
-vagent gui run -m verify.casemodel
-vagent case-model gui [模型.yaml]        # 同一扇门的别名
+vagent gui run -m verify.vplan
 ```
 
-它在回答 case 建模最核心的两个问题：
-
-| 问题 | 在哪一页 |
-|------|----------|
-| **正交属性怎么 cross** | 「维度交叉矩阵」—— 专题先选范围，`cross_matrix` 再约束这些维度哪些必须一起变（★）、哪些可选（○）、哪些互斥（✗） |
-| **覆盖率怎么收敛** | 「取值覆盖」—— 分母是字段声明的取值点，分子是被 case 命中的；缺口按维度列出，联动派生字段单独标灰 |
-| **测试点怎么落地** | 「测试点」—— 一条取值点一行，带实现方式（stimulus / sequence / observe）、覆盖仓、回归级；选中运行后叠加 `tp_matrix.json` 的命中状态 |
-
-**12 个页面嵌在模块内部的一个 QTabWidget 里**，不摊成平台的中央标签页。理由是
-它们都是同一份文本的只读视图：摊开之后用户能把「概览」拖到别的标签页去，而它
-跟「编辑 YAML」本来是一体的（点诊断跳源码靠的就是这个关系）。
-
-为了搬它，`ui/` 补了一批通用件（编辑器、高亮、矩阵、覆盖条、诊断表、面板），
-其中两处是**顺手修掉的老问题**：
-
-- `highlighter.py` 原来把 case 模型的骨架键/枚举值**写死在通用高亮器里** ——
-  现在这两张词表由调用方传入（`vocabulary.py`），通用层一行领域词都没有。
-- `coverage_view.py` 原来把底色写死成 `white` / `#eceff1`（那是照浅色背景调的），
-  放到深色主题上会撕出一大块白 —— 现在跟主题走。
+页面不解析 CSV、不重跑生成器：契约/TP/case 的投影在 `vplan/report.py`，
+数据源固定为 run 的 `inputs/vplan/` 与 `coverage/` 产物。
 
 ## 目录
 
@@ -269,7 +253,7 @@ src/workbench/
 │   └─ adapters.py   把「吃 JSON 字符串」的工具包成「吃关键字参数」的
 └─ modules/          业务模块（目录名与清单的 group 一致）
     ├─ debug/        仿真日志、错误指纹
-    ├─ verify/       casemodel/  module.py / page.py / pages/（12 页）/ models.py / vocabulary.py
+    ├─ verify/       vplan/  module.py（VPlan 项目 + 运行产物）
     ├─ ide/          manual_nodes/  人工节点 YAML 编辑
     ├─ flow/         pipeline / runs / evidence / signoff / tracking / trend + run_common.py
     ├─ agent_output.py   跨线共享：各 agent 的「这次运行产出了什么」视图
@@ -410,13 +394,7 @@ pytest src/workbench/tests -q
 | `test_theme.py` | 调色板字段合法、选中色对比度、**样式表 = 库 + 只碰 objectName 的补充**、没有没人用的字段、横幅跟主题 | 是 |
 | `test_icons.py` | 图标都渲染得出、缓存按颜色区分、引用的名字都存在 | 是 |
 | `test_tasks.py` | 结果回主线程、任务体在别的线程、不阻塞提交方 | 是 |
-| `test_casemodel_module.py` | case 建模：领域 Qt 模型、自绘控件、12 个页面都填上、报告与 CLI 一致 | 是 |
-| `test_casemodel_editor.py` | YAML 编辑器：**保存不改原文**（`RANDOM` 不被改写成 `RND`）、脏标记、保存前确认、构不出模型时保留上次结果、**刷新不碰文本** | 是 |
-
-后两个是从 `src/layers/l3_decision/casemodel/tests/` 的 `test_gui.py` / `test_editor.py`
-迁过来的（界面搬到哪，测试跟到哪）。它们保住的那几条不变式是「原文编辑」这个
-设计的全部理由 —— 迁的时候一条都没丢。工具层那三条（`check_text` / 文本入口 vs
-文件入口）留在原处，进了 `casemodel_tools/tests/test_analysis.py`。
+| `test_vplan_module.py` | VPlan 项目/运行产物视图：项目计数、状态表、产物清单 | 是 |
 
 「清单解析」与「工具调用」这两件事不需要 Qt，是本包一条硬性设计约束
 （`bridge/` 与 `spec.py` 一律不 import Qt），也是它能被单独测的前提。

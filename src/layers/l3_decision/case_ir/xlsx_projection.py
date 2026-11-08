@@ -2,12 +2,12 @@
 
 ## 为什么要这一层
 
-`specs/*/casemodel.yaml` 回答的是"**怎么测/怎么量**"（维度、bin、cross、批次）；
+`specs/*/data/*.csv` 回答的是"**怎么测/怎么量**"（维度、bin、cross、批次）；
 业务 xlsx 回答的是"**该测什么**"（Feature → Sub_Feature → TestName/TestNum）。
 两者不是同一条轴：
 
 - 把人写的 feature 层级硬塞进 dimensions，会把"场景"误当成"属性取值"；
-- 只用 casemodel 维度合成 CASE，会得到"12 个维度 CASE"，而不是业务表里的
+- 只用执行资产维度合成 CASE，会得到"12 个维度 CASE"，而不是业务表里的
   25 个 F / 7 个 IF / 7 个 E……的用例身份。
 
 所以这里把 xlsx **投影成 CASE 身份**，维度/覆盖仓/checker **通过绑定表**接上：
@@ -15,7 +15,7 @@
     xlsx（what） ──project──► CaseDoc（CCAT/CASE）
                                    │ bindings（dimensions/cells/tests）
                                    ▼
-                         casemodel（how）→ TP IR → CELL → EVD
+                         执行资产（how）→ TP IR → CELL → EVD
 
 **不自动猜维度**：文本相似度匹配会把"start_id0 先于 start_id1"错绑到
 `D_queue`。没给绑定的 CASE 保留 `dimensions=[]`，由门禁报

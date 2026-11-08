@@ -3,7 +3,7 @@
 Usage: python -m src.tools.generation.uvm_tools.tool_uvm.main [args]
 """
 import sys
-from ..generation.generators.cli import main as gen_main
+from ..tool_uvm.generators.cli import main as gen_main
 
 
 if __name__ == "__main__":

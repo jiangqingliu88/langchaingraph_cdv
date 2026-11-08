@@ -1,0 +1,44 @@
+feature_no,feature_id,feature_level,parent_feature_id,feature_l1,feature_l2,feature_l3,description,applicable_topics
+1,F-001,root,-,npu_sched,-,-,CMD Scheduler（npu_sched）总体功能：接收Inst Dispatcher指令原语，经decode解析、scoreboard冒险判断、ins_buffer缓冲、dispatch分发至各master，并支持中断/性能/调试/低功耗等控制。,接口|时钟复位|参数和配置|数据值域|数据形状|错误异常|中间复位|边界|流控和反压|性能长稳
+1.1,F-010,branch,F-001,npu_sched,接口与信号交互,-,CMD Scheduler与外部模块的接口与信号交互，包括Ins Dispatcher、SPAD XBAR、各master、中断/性能/调试/预留/SPAD独占配置。,接口|参数和配置|错误异常|性能长稳
+1.1.1,F-011,leaf,F-010,npu_sched,接口与信号交互,指令输入接口,接收Inst Dispatcher指令原语：disp_cmd_inst、disp_cmd_inst_flag、disp_cmd_vld、cmd_disp_rdy，以及cmd_disp_rsp_data/cmd_disp_rsp_vld/disp_cmd_rsp_rdy/disp_cmd_inst_tag。,接口|流控和反压|数据值域
+1.1.2,F-012,leaf,F-010,npu_sched,接口与信号交互,SPAD读写接口,与SPAD/XBAR的1读1写接口：ch0写请求/响应、ch1读请求/响应，512bit数据带宽，支持wstrb、读写ID及DV用ID。,接口|数据值域|流控和反压
+1.1.3,F-013,leaf,F-010,npu_sched,接口与信号交互,Master启动完成接口,与MPU/VPU/GLSU/LLSU/NIU的启动、done、rtile/wtile/page/dram释放等信号交互。,接口|流控和反压|错误异常
+1.1.4,F-014,leaf,F-010,npu_sched,接口与信号交互,中断性能调试与预留接口,中断使能/中断信息、性能监控、debug寄存器、SPAD exclusive配置、预留输入输出接口。,接口|参数和配置|错误异常|性能长稳
+1.2,F-020,branch,F-001,npu_sched,时钟复位与低功耗,-,CMD Scheduler时钟、复位和低功耗控制相关功能。,时钟复位|中间复位|性能长稳
+1.2.1,F-021,leaf,F-020,npu_sched,时钟复位与低功耗,时钟与复位,clk目标700MHz@T22，rst_n低有效；复位后寄存器/FIFO初始化状态需符合规格断言检查要求。,时钟复位|中间复位|边界
+1.2.2,F-022,leaf,F-020,npu_sched,时钟复位与低功耗,ICG与低功耗控制,删除creg_cmd_icg_en[5:0]信号，不再对各模块进行低功耗控制，改由各模块自己控制；时钟门控在接收指令原语开始打开，在指令fifo为空且master所有指令已回done时关闭。,时钟复位|参数和配置|性能长稳
+1.3,F-030,branch,F-001,npu_sched,指令解析与配置存储,-,decode解析指令原语、保存cfg/pre信息、cfg写core_reg及指令集简化相关功能。,参数和配置|数据值域|数据形状|错误异常
+1.3.1,F-031,leaf,F-030,npu_sched,指令解析与配置存储,decode解析与cfg/pre存储,decode接收CPU下发指令原语，解析配置寄存器/基地址/指令类型，保存cfg/pre信息，并与dispatch/ins_buffer及scoreboard交互。,参数和配置|数据值域|数据形状
+1.3.2,F-032,leaf,F-030,npu_sched,指令解析与配置存储,cfg信息写core_reg,删除rd_csr nice指令后，将指令cfg配置信息传输至core_reg对应存储空间，通过访问core_reg查阅寄存器配置。,参数和配置|数据值域
+1.3.3,F-033,leaf,F-030,npu_sched,指令解析与配置存储,指令集简化,删除rd_csr nice指令；删除CIMC的1x4形状，删除setCIMC指令解析，默认仅支持2x2模式。,参数和配置|数据形状|错误异常
+1.3.4,F-034,leaf,F-030,npu_sched,指令解析与配置存储,指令字段与操作数解析,解析funct7、xd/xs1/xs2、rs1val、rs2val、opcode等指令字段，并依据指令集约束输出至各master；数据精度、维度和stride配置随指令传输。,参数和配置|数据值域|数据形状|错误异常
+1.4,F-040,branch,F-001,npu_sched,Hazard检测与调度,-,scoreboard对指令进行SHazard/DHazard检测，并处理同组件drv、乱序发射、多xd返回、TMU冲突、tile/dram冲突、多组件SPAD访问及sync/fence阻塞。,错误异常|数据值域|数据形状|边界|流控和反压|性能长稳
+1.4.1,F-041,leaf,F-040,npu_sched,Hazard检测与调度,SHazard检测,接收decode解析的指令信息，进行structure hazard判断；记录分发但未完成指令状态，选择无SHazard指令至dsp_en，有SHazard指令至ins_buffer。,错误异常|参数和配置|数据值域|数据形状
+1.4.2,F-042,leaf,F-040,npu_sched,Hazard检测与调度,DHazard检测,对最新指令与指令buffer中各指令/各master中指令进行data hazard判断；增加drv指令data hazard冲突检查。,错误异常|数据值域|数据形状
+1.4.3,F-043,leaf,F-040,npu_sched,Hazard检测与调度,同组件drv无结构冒险处理,当某一功能组件正在执行时，下一条同组件drv指令在无data hazard时不被阻塞；再下一条同组件drv指令会被阻塞；NIU组件不能同时下发两条store指令，需软件插fence保证。,错误异常|性能长稳|边界
+1.4.4,F-044,leaf,F-040,npu_sched,Hazard检测与调度,指令乱序发射窗口,当当前阻塞master_0但不阻塞master_i时，可跳过当前指令检查后续不阻塞指令并分发；乱序发射指令最大查询窗口为dRF_DP/ins_buffer。,性能长稳|流控和反压|边界
+1.4.5,F-045,leaf,F-040,npu_sched,Hazard检测与调度,多xd=1指令返回乱序,支持多xd=1指令下发；cmd仅返回32bit返回值；增加返回数据深度，数据按id乱序返回；多个返回数据同拍有效时进行仲裁处理。,性能长稳|数据值域|流控和反压
+1.4.6,F-046,leaf,F-040,npu_sched,Hazard检测与调度,GLSU/LLSU TMU冲突,支持GLSU调用TMU指令和LLSU调用TMU指令同时下发；指令间需无data hazard；先下发指令先占用TMU直至占用完成；GLSU与LLSU同时抢占TMU时GLSU优先级更高。,错误异常|性能长稳|边界
+1.4.7,F-047,leaf,F-040,npu_sched,Hazard检测与调度,SPAD tile冲突与释放,SPAD按tile切分，tile个数可配且为2的整数次幂，最小1，最大单个SPAD深度；tile冲突仅支持起始地址与终止地址之间的地址冲突；释放依据master传输的tile_rls信号，离散idle场景硬件不支持。,数据形状|边界|流控和反压
+1.4.8,F-048,leaf,F-040,npu_sched,Hazard检测与调度,DRAM冲突与地址对齐,dram冲突按整个dram处理；指令阻塞关系需细化；对齐地址冲突约束。,数据形状|边界|错误异常
+1.4.9,F-049,leaf,F-040,npu_sched,Hazard检测与调度,多组件SPAD访问仲裁,删除多组件访问同一SPAD的阻塞条件；非hazard引起的读写口冲突由xbar控制；多组件之间需无RAW/WAW/WAR冲突，XBAR需要做读写仲裁。,数据值域|错误异常|流控和反压
+1.4.10,F-050,leaf,F-040,npu_sched,Hazard检测与调度,sync/fence/NIU同步,sync_drv指令与所有组件存在SHazard，阻塞后续所有指令下发；noc_fence_drv指令与后续所有noc指令存在SHazard，阻塞后续所有noc指令下发；fence/sync负责收集指令完成状态。,错误异常|流控和反压|边界
+1.5,F-060,branch,F-001,npu_sched,Buffer与流控反压,-,decode/cfg_drv_buffer/master指令buffer深度、ins_buffer状态更新及反压机制。,流控和反压|边界|性能长稳
+1.5.1,F-061,leaf,F-060,npu_sched,Buffer与流控反压,decode指令buffer,decode模块存在2深度指令存储buffer；wen为指令握手成功，ren为cfg_drv_buffer_not_full。,流控和反压|边界
+1.5.2,F-062,leaf,F-060,npu_sched,Buffer与流控反压,cfg/drv_buffer,cfg_buffer/drv_buffer存在4深度指令buffer，存储无法直接下发指令的cfg信息/基地址/指令类型信息；wen为store_en，ren为scoreboard_ren。,流控和反压|边界|参数和配置
+1.5.3,F-063,leaf,F-060,npu_sched,Buffer与流控反压,master指令buffer与ost,各个master存在2深度buffer，支持各功能组件指令outstanding=2；master指令buffer满，反压cfg_buffer/drv_buffer；反压条件为master ins_fifo_full。,流控和反压|边界|性能长稳
+1.5.4,F-064,leaf,F-060,npu_sched,Buffer与流控反压,反压链,master指令buffer满反压cfg_buffer/drv_buffer；cfg_buffer/drv_buffer满反压decode；decode满反压Ins Dispatcher。,流控和反压|边界
+1.5.5,F-065,leaf,F-060,npu_sched,Buffer与流控反压,ins_buffer更新与状态,根据ins_buff_xx_vld确认空余buffer_id，将存在竞争的新指令写入对应id buffer并同步ins_status；master完成且无新指令时更新ins_status并选择无竞争指令发送至dispatch，对应buffer valid更新为0；新指令分发优先级最高，指令buffer按id先后顺序分发。,流控和反压|参数和配置|错误异常
+1.6,F-070,branch,F-001,npu_sched,指令分发与Master控制,-,dispatch按指令类型分发至各master，支持master信息配置、分组、启动及cfg输出。,接口|参数和配置|数据值域|性能长稳
+1.6.1,F-071,leaf,F-070,npu_sched,指令分发与Master控制,dispatch指令分发,dispatch根据指令类型将指令下发至各个master，并根据scoreboard dsp_en/ren等控制完成分发。,接口|性能长稳|流控和反压
+1.6.2,F-072,leaf,F-070,npu_sched,指令分发与Master控制,Master信息配置,支持各个功能组件的信息配置和启动；各个master指令分发由CMD控制输出；master分组包括MPU、VPU、GLSU、LLSU和NIU。,参数和配置|接口
+1.6.3,F-073,leaf,F-070,npu_sched,指令分发与Master控制,Master分组控制,master分组：MPU、VPU、GLSU、LLSU和NIU，共6组master相关控制。,参数和配置|接口
+1.6.4,F-074,leaf,F-070,npu_sched,指令分发与Master控制,Master cfg输出,向NIU/GLSU/LLSU/VPU/MPU输出task_select、base_addr、cfg_type、cfg_wd、dim/stride、cfg_mx、cfg_mantissa等配置信号。,参数和配置|数据值域|数据形状
+1.6.5,F-075,leaf,F-070,npu_sched,指令分发与Master控制,outstanding=2支持,支持各个功能组件指令outstanding=2；增加指令ost=2，各master缩短指令间读取时间并增加深度为2的指令存储fifo。,流控和反压|性能长稳|边界
+1.7,F-080,branch,F-001,npu_sched,中断异常调试与性能,-,CMD Scheduler异常与错误处理、中断检查、性能监控、debug可观测及断言检查。,错误异常|中间复位|性能长稳|接口
+1.7.1,F-081,leaf,F-080,npu_sched,中断异常调试与性能,异常检测与上报,覆盖指令错误、协议错误、超时、系统/硬件异常；包含检测机制、上报路径和恢复策略；错误码需有统一定义表。,错误异常|中间复位
+1.7.2,F-082,leaf,F-080,npu_sched,中断异常调试与性能,中断检查与恢复,cmd_int_perf进行指令中断检查；creg_cmd_excep_en配置中断使能，输出cmd_creg_int、cmd_creg_exce*及各master masked int；错误恢复包括软件重配、复位接口/队列清理、看门狗强制停止、系统级复位等。,错误异常|中间复位|参数和配置
+1.7.3,F-083,leaf,F-080,npu_sched,中断异常调试与性能,性能监控计数器,creg_cmd_perf_en/start/pause/conti/end控制性能监测，cmd_creg_perf_cnt输出96bit计数器；可统计并行度、MPU执行、ins_buffer拥塞、fifo满状态等。,性能长稳|参数和配置
+1.7.4,F-084,leaf,F-080,npu_sched,中断异常调试与性能,Debug可观测,cmd_creg_dbg0/1/2 debug寄存器；记录各功能组件busy状态、cfg/drv/pre指令原语计数器、性能计数器等可观测信息。,接口|性能长稳|参数和配置
+1.7.5,F-085,leaf,F-080,npu_sched,中断异常调试与性能,断言与初始化检查,初始化寄存器应为0，指令拉高时可断言检查CMD内部所有计算器为0；初始化FIFO应为empty状态，指令拉高时可断言检查CMD内部所有fifo为empty。,中间复位|错误异常|边界

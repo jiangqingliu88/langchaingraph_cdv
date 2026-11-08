@@ -52,7 +52,7 @@ EDA-verified.
   [可视化](#可视化可选pyside6-桌面工作台).
 - **VPlan planning layer** — spec-first projects (`docs/specs` extraction CSVs +
   authoritative `C-*` contract matrix) feed the kernel directly, without a
-  casemodel YAML. Plan-only runs are explicitly marked `PLAN_ONLY`.
+  case-model YAML. Plan-only runs are explicitly marked `PLAN_ONLY`.
 
 ## Quick start
 
@@ -92,8 +92,8 @@ steps fail honestly. Without QuestaSim, EDA-dependent stages report
 - [docs/design/](docs/design/) — design notes and implementation plans
 - [docs/notes/](docs/notes/) — working notes (data model, optimization, differentiation)
 - [examples/open_npu_soc/README.md](examples/open_npu_soc/README.md) — end-to-end reference SoC
-- `src/layers/l3_decision/casemodel/framework/README.md` — methodology framework (stage contracts, test-point IR)
-- `src/layers/l3_decision/casemodel/readme.md` — functional coverage methodology
+- `src/layers/l3_decision/vplan/runtime/framework/README.md` — methodology framework (stage contracts, test-point IR)
+- `src/layers/l3_decision/vplan/runtime/readme.md` — functional coverage methodology
 
 ## Contributing
 
@@ -121,10 +121,10 @@ own licenses; see [NOTICE](NOTICE).
 > - **[`docs/notes/`](docs/notes/)** —— 工作笔记（数据模型 / 优化 / 差异化 / 新架构草案）
 > - **[`CONTRIBUTING.md`](CONTRIBUTING.md)** —— 开发流程、代码规范、DCO 与 PR 检查
 > - **[`SECURITY.md`](SECURITY.md)** —— 漏洞报告与密钥处理
-> - `src/layers/l3_decision/casemodel/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
-> - `src/layers/l3_decision/casemodel/readme.md` —— **功能覆盖率方法学**（case 模型 → covergroup → 种子 → 回归）
-> - `src/layers/l3_decision/casemodel/plan.py` —— 测试点 IR 的公开门面
-> - `src/layers/l3_decision/casemodel/framework/` —— `contracts / model / naming / realization / stages / pipeline / constraints`
+> - `src/layers/l3_decision/vplan/runtime/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
+> - `src/layers/l3_decision/vplan/runtime/readme.md` —— **功能覆盖率方法学**（case 模型 → covergroup → 种子 → 回归）
+> - `src/layers/l3_decision/vplan/runtime/plan.py` —— 测试点 IR 的公开门面
+> - `src/layers/l3_decision/vplan/runtime/framework/` —— `contracts / model / naming / realization / stages / pipeline / constraints`
 
 ---
 
@@ -158,7 +158,7 @@ case 模型 ──framework 流水线──► TestPoint IR ──► 属性 tes
                                 coverage/methodology.json   （阶段 + 计数 + 输入 + IR sha256）
 ```
 
-流水线只有四段（`src/layers/l3_decision/casemodel/framework/`）：
+流水线只有四段（`src/layers/l3_decision/vplan/runtime/framework/`）：
 
 | 阶段 | 回答什么 | 产出 |
 |---|---|---|
@@ -300,8 +300,8 @@ RL 只管 4 个软动作，且经验统计只做"降级建议"不直接拍板（
 ## 功能覆盖率方法学（case 模型 → covergroup → 种子 → 回归）
 
 **这条链是本项目"可度量、可追溯、可签核"那条主张的落点。** 规则只此一份：
-`src/layers/l3_decision/casemodel/coverage.py`（模块头 = 方法学），细节见
-`src/layers/l3_decision/casemodel/readme.md`。
+`src/layers/l3_decision/vplan/runtime/coverage.py`（模块头 = 方法学），细节见
+`src/layers/l3_decision/vplan/runtime/readme.md`。
 
 ### 一、模型里的东西变成 SystemVerilog
 
@@ -404,22 +404,13 @@ DUT 那条先走 `bind`（挂**模块**上、端口表达式在目标模块作�
 ### 五、命令
 
 ```powershell
-python -m src.layers.l3_decision.casemodel.cli covergroups    specs\npu_sched\casemodel.yaml -m npu_sched
-python -m src.layers.l3_decision.casemodel.cli coverage-plan  specs\npu_sched\casemodel.yaml -m npu_sched
-
-# 测试点 IR（框架流水线；下游只认 tp_id）
-python -m src.layers.l3_decision.casemodel.cli testpoints specs\npu_sched\casemodel.yaml `
-  --env-name npu_sched_env --module npu_sched `
-  --agent-fields npu_sched_in=instr_type,instr_opcode,instr_dtype,barrier_type,op_priority
-
-# 约束模型（有 --agent-fields 才会把 stimulus 维度编译成真实赋值）
-python -m src.layers.l3_decision.casemodel.cli constraints specs\npu_sched\casemodel.yaml `
-  -p npu_sched_in:npu_sched_in_master_seq_item `
-  --agent-fields npu_sched_in=instr_type,instr_opcode
-
-# 主 CLI 同形：vagent case-model {covergroups,coverage-plan,associate,constraints}
-# （testpoints 只在上面这个 casemodel 独立 CLI 里，主 CLI 暂未收编）
+# VPlan 执行资产就是唯一输入：覆盖率点 / 测试点 / 覆盖率计划都从它投影
+vagent vplan status specs/npu_sched
+vagent vplan execute specs/npu_sched -o output_vplan_npu_sched --sim-mode cov
 ```
+
+`vplan execute` 会生成 TP IR、`environment.tests/batches`、覆盖率点与 DUT 覆盖率
+接口、DUT checker、`coverage_plan.yaml`，再交给现有 verify 内核跑 UVM/回归/证据。
 
 ### 六、三层模型（case / 覆盖率 / 约束）靠名字关联
 
@@ -454,9 +445,6 @@ python -m src.layers.l3_decision.casemodel.cli constraints specs\npu_sched\casem
 `dimensions: ["*"]` 的语义是**全部维度**，得展开 —— 否则所有维度都被报成"没人驱动"。
 
 ```powershell
-python -m src.layers.l3_decision.casemodel.cli associate   cases.yaml coverage.yaml [-c constraint.yaml]
-python -m src.layers.l3_decision.casemodel.cli constraints cases.yaml -p apb_master:APB_master_seq_item -o constraint.yaml
-# 主 CLI 同形：vagent case-model {associate,constraints}
 ```
 
 - **`associate`** 只**报**断点，五条边各自报自己的。
@@ -495,7 +483,7 @@ python -m src.layers.l3_decision.casemodel.cli constraints cases.yaml -p apb_mas
 ### 七、一份能跑的样板：`specs/npu_sched/`
 
 `npu_sched.sv` 是《NPU 指令调度器功能覆盖率计划文档》§2.2 接口表的实现（12 个采样信号
-+ 5 个内部信号），`casemodel.yaml` 是它的覆盖点模型（12 覆盖点 / 7 交叉 / 11 批次 / 195 次运行）。
++ 5 个内部信号），执行资产 CSV 是它的覆盖点模型（12 覆盖点 / 7 交叉 / 11 批次 / 195 次运行）。
 
 ```powershell
 python -m src.cli.commands verify --rtl specs\npu_sched -o output_npu
@@ -576,18 +564,18 @@ python -m src.cli.commands lineage  {versions,baseline,bugs,compare,bind-modules
 
 `specs/<module>/` 可以按 AI VPlan 的目录组织：`docs/specs/` 放人审抽取表，
 `data/contract_matrix/` 放权威契约矩阵，`docs/verification/` 放生成物。
-SignOffAI 直接读它，**不再需要 `casemodel.yaml`**：
+SignOffAI 直接读它，**不再需要 case-model YAML**：
 
 ```bash
 vagent vplan status specs/npu_sched      # 只读：计数与契约/TP/case 状态
 vagent vplan build  specs/npu_sched -o output_vplan_npu_sched
 vagent verify       specs/npu_sched -o output_vplan_npu_sched   # 同一个规划层
 
-# 执行层：派生运行期 casemodel + 现有 verify 内核（UVM/回归/证据）
+# 执行层：VPlan 执行资产 + 现有 verify 内核（UVM/回归/证据）
 vagent vplan execute specs/npu_sched --dry-run
 vagent vplan execute specs/npu_sched -o output_vplan_npu_sched --max-rounds 1 --sim-mode cov
-# 默认 --uvm-layout vplan：生成期就落 <run>/sv/（legacy 只保留内核目录）
-# 成功后清掉顶层 agents/bench/env/build：--clean-legacy
+# verify 默认在生成期落 <run>/sv/（SIGNOFFAI_UVM_LAYOUT=legacy 可关闭）
+# 默认即清掉顶层 agents/bench/env/build；要保留用 --keep-legacy
 
 # 生成后按 VPlan sv/ 布局整理内核产出的 UVM 资产（不手写 SV）
 vagent vplan package-assets <run>
@@ -605,10 +593,10 @@ vagent vplan gate specs/npu_sched [--apply]
 `vplan build` / `verify <project>` 是 **`PLAN_ONLY`**：不跑 EDA、不产生
 `signoff_evidence/`，不可签核。
 
-`vplan execute` 是执行层入口：用 `rtl/` + `data/execution_model.yaml`（维度/字段/
-断言/SCB）+ `cases/TC_*.yaml` 派生运行期 casemodel，再走现有 verify 内核跑
-UVM/回归/覆盖率。验证资产由内核生成，`vplan package-assets` 再按 VPlan 的
-`sv/{interface,agents,env,seq,test,tb,vc,checkers,scbs,svas,coverage}` 布局整理并登记锚点；
+`vplan execute` 是执行层入口：用 `rtl/` + `data/*.csv`（维度/字段/
+断言/SCB）+ `cases/TC_*.yaml` 在**临时目录**里合成运行期模型（run 的
+`inputs/vplan/` 是唯一输入），再走现有 verify 内核跑 UVM/回归/覆盖率。验证资产由内核生成，`vplan package-assets` 再按 VPlan 的
+`sv/{interface,agents,env,seq,test,tb,vc,checkers,scbs,svas,covgs}` 布局整理并登记锚点；
 **不在 `specs/` 里手写 SV**（布局规范见
 `specs/npu_sched/docs/appendix/X01_asset_layout.md`）。执行跑完仍不会自动把
 `assume` 升成 `active` —— 状态推进必须由 gate 依据真实证据完成。
@@ -713,7 +701,6 @@ IP 与 SoC 的覆盖率**分账**：IP 看内部覆盖点，SoC 看集成场景�
 src/
 ├── executors/          # 8 个阶段执行器（见上表）
 │   ├── front/ design/ model/ verify/ ops/ coverage/ debug/ audit/
-│   └── verify/casemodel/          # Case 建模（属性模型）
 ├── layers/
 │   ├── l1_infrastructure/         # 零 AI 确定性层：EDA 后端 / 编译自愈 / 覆盖率 / Git / 文件
 │   ├── l2_orchestration/          # 编排
@@ -729,7 +716,7 @@ src/
 │   │   ├── regression_tools/      #   回归框架（Questa）+ 仿真业务模式表（sim_modes.py）
 │   │   └── communication/         #   工具总线（ToolHub）
 │   ├── l3_decision/               # 覆盖率驱动决策引擎 + 知识图 + RL
-│   │   └── casemodel/             #   case 建模 + **方法学框架**（framework/）+ 功能覆盖率方法学
+│   │   └── vplan/                 #   VPlan 引擎（runtime/ = 方法学框架 + 覆盖率）
 │   ├── l4_memory/                 # 持久化 / IP 库 / 用例状态库 / exclude 库 / 调试经验
 │   └── l5_evolution/              # 经验蒸馏
 ├── tools/             # 领域工具：checking / generation / humanview / common …
@@ -738,14 +725,14 @@ src/
 │   └── checking/                  # coverage / debug / spec / assertion 工具
 ├── cli/               # vagent CLI（commands.py + cmd_*.py 命令组）
 └── workbench/         # PySide6 桌面工作台（可选，不是 Web —— 见 CLAUDE.md）
-config/casemodel/examples/         # case 模型示例（+ `specs/<模块>/casemodel.yaml` 也是合法落点）
+specs/<模块>/data/*.csv            # VPlan 执行资产（取代 case 模型 YAML）
 specs/                 # 规格库（apb_uart / apb_slave / **npu_sched**）
 tests/                 # pytest 套件
 ```
 
 **"用哪份 case 模型"只有一个判据**（`l1_infrastructure/layout.py:find_case_model`）——
-优先级：`spec["case_model"]` → `specs/<模块>/casemodel.yaml` → `config/casemodel/<模块>.yaml`
-→ `<run>/inputs/casemodel.yaml`（front 的草稿）。**人写的优先于草稿。**
+唯一来源：`<run>/inputs/vplan/`（由 `materialize_project_inputs` 从项目挂载）；
+历史 run 仍可只读其 `inputs/` 下的旧模型。
 这条判据原来散在四个读点（verify 分解测试点、覆盖率生成、DUT 探针、工作台那页各一份），
 于是同一个 run 里两件事拿的是**两份不同的模型**而都不报错 —— 已收成一处，并有测试钉住"所有读点都走它"。
 
@@ -802,7 +789,7 @@ python -m src.tools.generation.isa_gen_tools.cli ops                          # 
 | **失败响亮 + 三态签核** | 行业工具擅长报"50x 快"，很少把"没证据"当失败 | `NEEDS_FIX` / `PASS_WITH_CAVEAT` / `READY`；`None ≠ False`；X 记 `unverified`；`mismatched=0` 才算真 pass |
 | **真实 EDA 闭环，不是 demo** | 通用 AI 编程工具进不了 VCS/Questa；多数"Agent 生成 RTL"项目停在生成 | 最新一轮 **273/273** 分级回归、267 条覆盖率库合并、TP 矩阵、`signoff_evidence_v1` 在同一 run 里落地；**计划覆盖率 95.23%，签核 PASS_WITH_CAVEAT** |
 | **确定性编排 + 点状 LLM** | 长链路里 LLM 每步自由发挥 = 不可复现；这里只有 design/debug 调 LLM | `call_llm` 唯一漏斗；`docs/llm_audit.jsonl` 记 site/node/round/prompt_hash |
-| **领域深度** | 不是"套个 LLM 壳"：UVM 模板、bind 探针、双采样通道、种子管理、分级回归、约束编译 | `src/tools/generation/uvm_tools` / `src/layers/l3_decision/casemodel` / `regression_framework` |
+| **领域深度** | 不是"套个 LLM 壳"：UVM 模板、bind 探针、双采样通道、种子管理、分级回归、约束编译 | `src/tools/generation/uvm_tools` / `src/layers/l3_decision/vplan` / `regression_framework` |
 | **可扩展框架** | 新增 realization / 阶段 / 约束编译器**核心零改动**，且有测试钉住 | `REALIZATIONS` / `MethodologyPipeline.insert` / `CONSTRAINT_COMPILERS`；`test_framework.py` |
 | **个人级治理** | 巨头服务企业客户，个人/小团队的"可审计签核"是空白 | 项目隔离、token 预算、人工审批、检查点、血缘、证据包 `dump` |
 
@@ -1072,7 +1059,7 @@ include，测试恢复其原意。**这 82 个测试当时恢复全绿。**
 ```powershell
 python -m pytest tests/ -q                            # 2026-11-07：1165 passed / 8 failed / 2 skipped
 python -m pytest src/workbench/tests -q               # 工作台：758 项（需要 PySide6）
-python -m pytest src/layers/l3_decision/casemodel/tests -q   # case 建模 + 框架 + 覆盖率方法学：560 passed
+python -m pytest src/layers/l3_decision/vplan tests/test_vplan_integration.py -q
 python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
 ```
 
@@ -1086,17 +1073,14 @@ python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：
 | `tests/test_checkpoint.py` | 检查点 + `Command(resume=…)` 重入；**CLI 的 `approve`/`resume` 真把图推下去**（拿 journal 里出现 `run.finished` 当判据，不是"文件写没写"） |
 | `tests/test_manifest.py` | 覆盖率库 / 波形**带哈希进证据包**（不是文件表里的一行匿名记录）；相对 `output_root` 不许把路径拼两次 |
 | `tests/test_ref_model_wiring.py` | predictor **不是空壳** —— 且**走真生成器**（直接喂 ctx 的测试测不到"生成器把键丢了"） |
-| `src/layers/l3_decision/casemodel/tests/test_coverage.py` | 生成的 SV **真调 `vlog` 编译**（合成模型的断言挡不住 `bins b_ = {0};` 这类非法标识符） |
-| `src/layers/l3_decision/casemodel/tests/test_framework.py` | 阶段依赖前置报错、注册表扩展（新增 realization/constraint **不改核心**）、manifest 哈希与实际落盘文件一致 |
 | `tests/test_stage_filtered_generation.py` | 分级回归只生成**本级 tag** 的用例目录；非分级调用保持全量树 |
 | `tests/test_coverage_coverstore.py` | `questa.db`（coverstore）必须走 `vcover merge "<store>:<test>"`，否则功能覆盖率静默丢失；`(null).data` 走无 test 名的形式 |
 | `tests/test_audit_evidence.py` | `signoff_evidence_v1`：RTL/IR 哈希、计划覆盖率口径；`seed_diversity` 三态（没分析才 `null`）；不可达只标 `SUSPECT` |
 | `tests/test_audit_evidence.py` + `signoff_package` 冒烟 | v2：目录布局、逐文件 sha256、`package_hash`、离线 `replay.py`、双环境 `compare` |
-| `src/layers/l3_decision/casemodel/tests/test_plan.py::TestBackdoorRealization` | backdoor 维度带 `path`、不进 `observe`；缺 path 回退并记账 |
 
 **"跑测试"在这里的定位**：计数会随迁移漂动，README 不把它写成"永远全绿"。
 最近一次实测（2026-11-07）：主测试集 **1165 passed / 8 failed / 2 skipped**。
-VPlan 迁移删除了依赖旧 `specs/apb_*` 与 NPU casemodel 夹具的测试；剩余 8 项是
+VPlan 迁移删除了依赖旧 `specs/apb_*` 与 case 模型夹具的测试；剩余 8 项是
 迁移前就存在的契约/工具板/状态测试（caveat 码、case view 语义、mutation、
 分级回归审批、state 契约、tools boards/skills），不是 EDA 缺失导致的假失败。
 守卫型测试的价值不在通过率，而在**把本次踩过的坑固化成断言** ——

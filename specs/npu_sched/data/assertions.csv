@@ -1,0 +1,7 @@
+﻿name,expr,message,signals,tp_bindings
+llsu_xbr_sel_encoding,cmd_llsu_xbr_sel_vld != 2'd3,cmd_llsu_xbr_sel_vld 只能取 00/01/10（11 未定义）,"[{""name"": ""cmd_llsu_xbr_sel_vld"", ""width"": 2}]",[]
+disp_rdy_known,!$isunknown(cmd_disp_rdy),cmd_disp_rdy 不能是 X（复位后必须已知）,"[{""name"": ""cmd_disp_rdy"", ""width"": 1}]",[]
+niu_start_known,!$isunknown(cmd_niu_start),cmd_niu_start 不能是 X（复位后必须已知）,"[{""name"": ""cmd_niu_start"", ""width"": 1}]",[]
+xbr_wdata_known_when_wvld,cmd_xbr_ch0_req_wvld |-> !$isunknown(cmd_xbr_ch0_req_wdata),ch0 写请求有效时 wdata 必须已知,"[{""name"": ""cmd_xbr_ch0_req_wvld"", ""width"": 1}, {""name"": ""cmd_xbr_ch0_req_wdata"", ""width"": 512}]",[]
+perf_cnt_known,!$isunknown(cmd_creg_perf_cnt),性能计数器 cmd_creg_perf_cnt 不能是 X,"[{""name"": ""cmd_creg_perf_cnt"", ""width"": 96}]",[]
+int_known,!$isunknown(cmd_creg_int),中断输出 cmd_creg_int 不能是 X,"[{""name"": ""cmd_creg_int"", ""width"": 32}]",[]

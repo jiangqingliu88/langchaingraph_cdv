@@ -395,6 +395,7 @@ class ModelExecutor(BaseExecutor):
             "module": module, "model_type": model_type,
             "version": f"v{version}", "files": [str(fpath)] if wrote_file else [],
             "operation_count": len(ops), "register_count": len(regs),
+            "model_contract": design_arch.get("model_contract", {}),
             "status": "generated", "reason": params.get("reason", ""),
             "all_versions": self._list_versions(model_dir, module),
         }

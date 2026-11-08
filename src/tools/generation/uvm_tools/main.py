@@ -5,7 +5,7 @@ Delegates to tool_uvm for UVM code generation.
 Usage: python -m src.tools.generation.uvm_tools.main [args]
 """
 import sys
-from .generation.generators.cli import main as uvm_main
+from .tool_uvm.generators.cli import main as uvm_main
 
 
 def run_uvm(argv=None):

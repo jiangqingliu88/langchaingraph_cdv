@@ -5,7 +5,7 @@ import json
 
 import yaml
 
-from src.layers.l3_decision.casemodel.framework.plan_consistency import (
+from src.layers.l3_decision.vplan.runtime.framework.plan_consistency import (
     build_plan_consistency,
     write_plan_consistency,
 )

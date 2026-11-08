@@ -33,7 +33,6 @@ EXPECTED_CAVEATS = {
     # 逐用例签核（docs/design/case_coverage_and_wave_traceability.md）
     "TP_NOT_SIGNED_OFF", "TP_WAVE_MISSING", "TP_TIMING_WARN",
     "MODEL_UNAVAILABLE", "BASELINE_MISSING", "BACKEND_ARGS_USED",
-    "INGEST_DRIFT",
     # Case View 门禁（docs/design/architecture_transformation_plan.md D5）
     "CASE_GATE_BLOCKED",
     # case 三集合契约（arch.md §9）
@@ -41,6 +40,9 @@ EXPECTED_CAVEATS = {
     "CASE_PATH_PENDING_BACKEND", "CASE_IR_EVIDENCE_MISMATCH",
     # 五维质量门 block 模式（§15：evidence/functional 硬，其余软）
     "QUALITY_GATE_BLOCKED", "QUALITY_GATE_WARN",
+    # 权威差分 / 覆盖率回退 / 证据门（audit/helpers.py）
+    "AUTHORITY_DIFF", "AUTHORITY_DIFF_MISSING",
+    "COVERAGE_REGRESSION", "EVIDENCE_GATE",
 }
 
 
@@ -78,8 +80,11 @@ def test_decision_action_universe_is_frozen():
 
 
 def test_caveat_codes_in_audit_match_the_public_set():
-    src = (ROOT / "src/executors/audit/main.py").read_text(encoding="utf-8")
-    found = set(re.findall(r'(?:_caveat|caveat)\("([A-Z_]+)"', src))
+    # 3.0 拆分后 caveat 分在 main.py 与 helpers.py 两处，按包扫描。
+    found = set()
+    for path in sorted((ROOT / "src/executors/audit").glob("*.py")):
+        found |= set(re.findall(r'(?:_caveat|caveat)\("([A-Z_]+)"',
+                                path.read_text(encoding="utf-8")))
     assert found == EXPECTED_CAVEATS
 
 
@@ -148,7 +153,7 @@ def test_known_limitations_match_architecture_doc():
 
 def test_player_runtime_boundary_matches_code():
     from config.known_limitations import by_id
-    from src.layers.l3_decision.casemodel.framework.stimulus_plan import BACKENDS
+    from src.layers.l3_decision.vplan.runtime.framework.stimulus_plan import BACKENDS
 
     boundary = by_id("player_runtime")
     if BACKENDS["player"]["runtime"]:

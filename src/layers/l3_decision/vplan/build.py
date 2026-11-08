@@ -19,12 +19,9 @@ from typing import Any, Dict, List, Optional
 from src.layers.l3_decision.case_ir import (
     checker_map, group_map, parse_declared, tst_id_of,
 )
-from src.layers.l3_decision.casemodel.framework.model import (
-    Execution, Realization, TestPoint,
-)
-from src.layers.l3_decision.casemodel.plan import testpoints_yaml
-
+from .serialize import testpoints_yaml
 from .source import TOPIC_CODES, VPlanProject, feature_paths
+from .types import Execution, Realization, TestPoint
 
 _STAGE_BY_PRIORITY = {"P0": "p0", "P1": "p1", "P2": "p2", "P3": "p3"}
 
@@ -295,7 +292,7 @@ def build_contract_link(project: VPlanProject,
 
 
 def build_payload(project: VPlanProject) -> Dict[str, Any]:
-    """完整 IR payload（与 `casemodel.plan.run_testpoints` 同形）。"""
+    """完整 IR payload（与 `vplan/runtime/plan.run_testpoints` 同形）。"""
     tps = build_testpoints(project)
     case_ir = build_case_ir(project, tps)
     by_kind = Counter(str(tp.get("realization", {}).get("kind") or "")

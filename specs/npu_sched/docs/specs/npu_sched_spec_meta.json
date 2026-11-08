@@ -1,0 +1,7 @@
+{
+  "source": "docs/specs/npu_sched.md",
+  "spec_version": "bootstrap",
+  "spec_hash": "04f6c9293643f9fcdbe668618e4b2d9f0d94ea6c5ce75276e0d8816ab51c0436",
+  "plan_version": "0.1.0-bootstrap",
+  "note": "LLM bootstrap：契约 assume / TP/case planned，需人工评审"
+}

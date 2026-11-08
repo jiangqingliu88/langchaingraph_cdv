@@ -678,8 +678,23 @@ def test_cov_wave_coverstore_is_test_associated():
     from src.layers.l2_orchestration.regression_tools import sim_modes
 
     value = sim_modes.get("cov+wave").value
-    assert "-coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME}" in value
+    assert "-coverstore ${EMAN_CM_DIR}/cs" in value
     assert "-testname ${EMAN_TEST_NAME}" in value
+
+
+def test_coverstore_dir_is_short_to_stay_under_max_path():
+    """coverstore 子目录**不能**再拼用例名：长用例名下会超过 Windows MAX_PATH。
+
+    实测 `test_npu_sched_master_instruction_outstanding_2_basic`：
+    `cov/<test>/<test>.data` 路径长度 262 > 260 → vsim 写库失败，一条真通过的
+    用例被判 fail（SCB 明明 mismatched=0）。
+    """
+    from src.layers.l2_orchestration.regression_tools import sim_modes
+
+    for mode in ("cov", "cov+wave"):
+        value = sim_modes.get(mode).value
+        assert "-coverstore ${EMAN_CM_DIR}/cs" in value, mode
+        assert "${EMAN_CM_DIR}/${EMAN_TEST_NAME}" not in value, mode
 
 
 def test_vopt_args_env_override_applies_to_modes(monkeypatch):

@@ -2,7 +2,7 @@
 
 分层：`repository` 只 import `domain`（见 `domain/__init__.py` 的分层规则）。
 
-**fail-closed**：读不进来就抛错，不吞。理由与 casemodel 的 schema 检查同一条 ——
+**fail-closed**：读不进来就抛错，不吞。理由与运行期模型的 schema 检查同一条 ——
 一个"读不到就静默用空表"的加载器，会让生成器产出一份没有指令的 IR，
 而调用方要到仿真里才发现"什么都没跑"。宁可起不来。
 

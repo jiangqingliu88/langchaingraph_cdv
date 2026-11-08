@@ -85,7 +85,9 @@ class SimMode:
 #:   +glitch/+delta → 记录毛刺 / delta（给 WLF 的日志细节）
 MODES: List[SimMode] = [
     SimMode("cov", "覆盖率", "cov_opt",
-            "-coverage -coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME}"
+            # coverstore 目录用**固定短名**：`cov/<test>/<test>.data` 在长用例名下会超过
+            # Windows MAX_PATH(260)，vsim 写库失败并把一条真通过的用例判成 fail。
+            "-coverage -coverstore ${EMAN_CM_DIR}/cs"
             " -testname ${EMAN_TEST_NAME}",
             note="vsim 保留覆盖率统计并落一份覆盖率库（编译侧由 cov_enabled 追加 vlog +cover）"),
     SimMode("wave", "波形", "wave_opt",
@@ -109,7 +111,9 @@ MODES: List[SimMode] = [
             # **`-testname` 不能漏**：`-coverstore` 要求成对给 test 名，否则
             # Questa 把数据落成 `(null).data` —— 之后 `vcover merge`/GUI 打开
             # 单用例覆盖率时找不到 test 名，功能覆盖率静默读不到（实测）。
-            "-coverage -coverstore ${EMAN_CM_DIR}/${EMAN_TEST_NAME}"
+            # coverstore 目录用**固定短名**：`cov/<test>/<test>.data` 在长用例名下会超过
+            # Windows MAX_PATH(260)，vsim 写库失败并把一条真通过的用例判成 fail。
+            "-coverage -coverstore ${EMAN_CM_DIR}/cs"
             " -testname ${EMAN_TEST_NAME}"
             " -voptargs=+acc"
             " -qwavedb=+signal+class+wavefile=${EMAN_RUN_DIR}/waves/${EMAN_TEST_NAME}.db",

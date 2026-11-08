@@ -508,10 +508,18 @@ def run(output_dir: str, top_module: str = "", seed: int = 0,
     # 查找 top module
     if not top_module:
         bench_dir = od / "bench"
-        sv_files = list(bench_dir.glob("*_tb_top.sv")) if bench_dir.exists() else []
+        if not bench_dir.is_dir():
+            bench_dir = od / "sv" / "tb"
+        sv_files = list(bench_dir.glob("*_tb_top.sv")) if bench_dir.is_dir() else []
         if sv_files:
             top_module = sv_files[0].stem
-        else:
+        elif (bench_dir / "hdl_top.sv").is_file():
+            import re as _re
+            m = _re.search(r"module\s+(\w+)",
+                           (bench_dir / "hdl_top.sv").read_text(
+                               encoding="utf-8", errors="replace"))
+            top_module = m.group(1) if m else ""
+        if not top_module:
             return {"status": "FAIL", "error": "No bench top module found"}
 
     result = {"output_dir": str(od), "top_module": top_module}

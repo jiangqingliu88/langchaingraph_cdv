@@ -1,0 +1,19 @@
+case_id: TC_SCHED_003
+test_name: master_done_release_and_address_test
+batch: B01
+title: master释放与地址
+contract_refs:
+- C-IF-GRP-NIU
+- C-IF-GRP-GLSU
+- C-IF-GRP-LLSU
+- C-IF-GRP-VPU
+- C-IF-GRP-MPU
+- C-FUNC-007
+- C-FUNC-008
+- C-DATA-004
+covergroups:
+- cg_master_done
+- cg_tile_release
+- cg_dram_conflict
+- cg_addr_align
+constraints: []

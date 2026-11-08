@@ -13,7 +13,7 @@
     alloc            本 case 必须驻留的对象（§3.12.7）
 
 **为什么用 pydantic 而不是手写 dataclass + 手写 JSON Schema**
-    手写两份就一定会漂移 —— 这个仓库已经栽过一次（casemodel 的 `schema.yaml`
+    手写两份就一定会漂移 —— 这个仓库已经栽过一次（旧建模引擎的 `schema.yaml`
     注释指着已删除的 `agent/registry.py`）。这里让 pydantic 模型当**唯一真相**，
     `schema/dsl.schema.json` 由 `model_json_schema()` 生成，
     并有测试断言两者相等。于是"契约文件"既存在（外部可读、可 diff）、

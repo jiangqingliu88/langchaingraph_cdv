@@ -1,0 +1,27 @@
+req_id,spec_section,description,feature_ids,priority,notes
+R-SPEC-01,1.3-1,删除CPU读取csr配置寄存器功能；删除rd_csr nice指令；cfg寄存器信息写入core reg，通过访问core reg查阅寄存器配置。,F-032|F-033,P0,指令集简化
+R-SPEC-02,1.3-2,删除CIMC的1x4形状；删除setCIMC指令解析，默认仅支持2x2模式。,F-033,P0,MPU矩阵尺寸考虑
+R-SPEC-03,1.3-3,删除creg_cmd_icg_en[5:0]信号；删除各组件低功耗模式；NPU低功耗设计由各个master IP控制，不再对各模块进行低功耗控制。,F-022,P1,优化硬件低功耗
+R-SPEC-04,1.3-4,删掉多组件访问同一SPAD的阻塞条件；非hazard引起的读写口冲突由xbar控制；多组件之间需无RAW/WAW/WAR冲突，XBAR需要做读写仲裁。,F-049,P0,清晰功能规划
+R-SPEC-05,1.3-5,增加指令ost=2；各个master增加指令存储fifo，深度为2；各个master反压cmd指令分发的条件为master ins_fifo_full。,F-063|F-064|F-075,P0,提高NPU指令性能
+R-SPEC-06,1.3-6,增加同一组件两条drv指令间无structure hazard处理；当某一功能组件正在执行时，下一条同组件drv指令无data hazard时不被阻塞，再下一条同组件drv指令被阻塞；NIU不能同时下发两条store指令；增加drv指令data hazard冲突检查。,F-043|F-042,P0,仅针对noc指令；NIU store需软件插fence保证
+R-SPEC-07,1.3-7,增加指令序列乱序发射；指令存储fifo增加，对当前阻塞master_0但不阻塞master_i的情况可跳过当前指令，检查后续不阻塞指令并分发；乱序发射指令最大查询窗口为dRF_DP。,F-044,P0,提高NPU指令性能
+R-SPEC-08,1.3-8,增加多xd=1指令下发；cmd仅返回32bit返回值；增加返回数据深度，数据按id乱序返回；多个返回数据同拍有效时做仲裁处理。,F-045,P0,提高NPU指令性能
+R-SPEC-09,1.3-9,SPAD增加按tile切分，Tensor按tile占用；tile个数参数可配，需为2的整数次幂，最小为1，最大为单个SPAD深度。,F-047,P0,适配存储模型修改
+R-SPEC-10,1.3-10,增加GLSU调用TMU指令和LLSU调用TMU指令同时下发；硬件对TMU使用冲突判断转移；指令间需无data hazard，先下发指令先占用TMU，占用完成才给下一条使用；GLSU与LLSU同时抢占TMU时GLSU优先级更高。,F-046,P0,清晰功能规划
+R-SPEC-11,1.3-11,增加指令cfg配置信息存储在core_reg；删除rd_csr nice指令后，将指令配置信息传输至core_reg中；增加core reg指令cfg对应存储空间。,F-032,P0,对齐指令集并保留原有功能
+R-SPEC-12,1.3-12,tile冲突仅支持起始地址与终止地址之间的地址冲突；tile冲突释放根据master传输的tile_rls信号释放对应tile；master仅释放自己实际占有的读/写tile；跨过无读写的tile只有当指令结束后才可释放。,F-047,P1,不支持指令起始地址与终止地址中间非占空间判断
+R-SPEC-13,1.3-13,dram冲突按整个dram处理；指令阻塞关系需要细化；对齐地址冲突约束。,F-048,P1,对齐约束
+R-SPEC-14,2.1.2,decode接收CPU下发指令原语，解析配置寄存器/基地址/指令类型；解析rd/wr_lmem指令与SPAD交互；存储6组master一条指令；分发指令至dispatch/ins_buffer。,F-031|F-034|F-071|F-073,P0,子模块功能定义
+R-SPEC-15,2.1.2,scoreboard接收decode解析的指令信息，进行指令data hazard/structure hazard判断；记录所有分发但未完成指令信息及状态，选择无hazard指令分发至dsp_en，有hazard指令分发至ins_buffer。,F-041|F-042|F-065,P0,新指令与指令buffer分发优先级：新指令最高
+R-SPEC-16,2.1.2/2.1.3,ins_buffer存储无法直接下发指令的cfg信息/基地址/指令类型信息；master完成指令后发送rtile_rls_vld/wtile_rls_vld与ins_done信息至scoreboard，scoreboard更新hazard并选择无hazard指令发送至dispatch或存入buffer。,F-062|F-065,P0,指令数据流与buffer更新
+R-SPEC-17,2.1.2/2.1.3,接收新指令后先判断是否与指令buffer中/各master中指令存在资源或数据竞争；无竞争直接分发至dispatch；有竞争且buffer非满存入buffer并保存竞争状态；有竞争且buffer满反压decode，直至buffer非满。,F-065|F-064,P0,指令buffer分发顺序：id先后顺序分发
+R-SPEC-18,2.1.4,decode模块存在2深度指令存储buffer；cfg_buffer/drv_buffer存在4深度指令buffer；master存在2深度buffer；master buffer满反压cfg_buffer/drv_buffer，cfg/drv buffer满反压decode，decode满反压Ins Dispatcher。,F-061|F-062|F-063|F-064,P0,反压机制深度定义
+R-SPEC-19,2.1.5,Top信号包括clk/rst_n、ICG、Inst Dispatcher指令与返回、SPAD读写、NIU/GLSU/LLSU/VPU/MPU交互、中断、debug、性能监控、SPAD exclusive使能及预留接口。,F-011|F-012|F-013|F-014|F-021,P1,按Top Signal表验证接口连接与信号语义
+R-SPEC-20,3,对外接口：与SPAD数据带宽512bit；与Ins dispatch读写数据带宽32bit；与Ins dispatch指令数据带宽75bit；通道数量1读1写；指令OST为1，cmd指令仅支持串行，每周期最多发送一条指令。,F-012|F-011|F-075,P1,3节OST=1与Feature List outstanding=2并存，按原文保留待评审统一
+R-SPEC-21,4,支持指令间的sync同步：sync_drv指令与所有组件存在SHazard，阻塞后续所有指令下发；支持NIU指令间同步：noc_fence_drv指令与后续所有noc指令存在SHazard，阻塞后续所有noc指令下发。,F-050,P0,fence/sync负责收集指令完成状态
+R-SPEC-22,6.1,时钟门控：cmd_int_perf、decode、scoreboard、ins_buff、dispatch在接收指令原语开始时打开；在指令fifo为空且master所有指令已经回done时关闭。,F-022,P1,低功耗设计
+R-SPEC-23,7.2,所有指令funct7、xd、xs1、xs2、opcode与指令集对齐且唯一；数据搬运指令输入/输出数据类型一致，数据精度cfg一致，num_dim0保持一致，tensor数据in/out_stride单独配置；vn�ice指令按group_mask约束配置。,F-034|F-072|F-074,P0,指令约束
+R-SPEC-24,8,异常与错误处理覆盖指令错误、协议错误、超时、系统/硬件异常；错误类型需有触发条件、检测机制、上报路径、恢复策略和硬件实现等级。,F-081|F-082,P0,错误码需有统一定义表
+R-SPEC-25,9,典型场景分发吞吐率：每周期成功分发的指令数=指令数/周期数，目标1条/cycle；测试条件为轮询配置master指令且指令无DHazard，数据量选择小参数，配置第一次cfg/pre后仅发送drv指令。,F-071|F-083,P1,性能指标与验收口径
+R-SPEC-26,10,可观测性设计包括debug寄存器、性能计数器、log/事件上报、断言；测试激励覆盖所有指令类型、cfg/pre组合、连续15+指令压力、并行指令组合；覆盖率目标包括代码/功能/断言覆盖率及Sign-off约定。,F-084|F-085|F-083,P2,调试验证考虑

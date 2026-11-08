@@ -1,0 +1,13 @@
+case_id: TC_SCHED_014
+test_name: protocol_timeout_system_error_test
+batch: B04
+title: 协议/超时/系统异常
+contract_refs:
+- C-EXC-002
+- C-EXC-003
+- C-EXC-004
+covergroups:
+- cg_protocol_error
+- cg_timeout
+- cg_system_error
+constraints: []

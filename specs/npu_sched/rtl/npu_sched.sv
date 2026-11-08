@@ -1,191 +1,429 @@
-// ============================================================================
-// NPU 指令调度器 —— 硬件指令调度器（DUT）
-//
-// 端口与内部信号**逐条对齐**《NPU 指令调度器功能覆盖率计划文档 v2.0》§2.2 的
-// 接口表 —— 那份表就是这份 RTL 的契约，也是 `specs/npu_sched/casemodel.yaml`
-// 里 12 个覆盖点的采样信号来源（`sample: dut` 走 bind 探针，按**名字**连）。
-//
-// ## 编码约定（**必须与 case 模型的 `values:` 顺序一致**）
-//
-// 模型把取值按**下标**投影成整型（`coverage.sv_value`）：`values: [A, B]` 意味着
-// `A=0, B=1`。所以下面这些 localparam 的顺序不能随手改 —— 改了模型那边的 bin
-// 含义就跟着变，而**编译不会报错**（只是覆盖率数字对不上实际行为）。
-//
-//   instr_type      MAC=0 VECTOR=1 SCALAR=2 DMA=3
-//   instr_dtype     INT8=0 FP16=1 BF16=2 FP32=3
-//   dep_type        NONE=0 RAW=1 WAW=2 WAR=3
-//   issue_unit      MAC=0 VECTOR=1 SCALAR=2 DMA=3
-//   issue_decision  ISSUED=0 STALLED=1 BLOCKED=2 FLUSHED=3
-//   instr_opcode    MAC_INT8=0 … DMA_WRITE=9
-//   instr_seq       由相邻两条 opcode 的**类型对**编码（见下）
-//   pipeline_state  NONE=0 MAC_MAC=1 MAC_DMA=2 VEC_MAC=3 MULTI_OP=4
-//   op_priority     HIGH_FIRST=0 LOW_FIRST=1 SAME_PRIO=2 ROUND_ROBIN=3
-//   barrier_type    NONE=0 TILE=1 OP=2 CLUSTER=3
-//
-// ## 职责（§2.1 的 8 条，这里落实前 8 条里可测的那几条）
-//
-//   接收指令流 → 入队（管满/空）→ 查依赖 → 决定发射 → 分配执行单元
-//   → 处理簇归属 → 响应屏障/冲刷 → 维护流水重叠
-//
-// **这是给验证流程用的模型化实现**，不是量产 RTL：它把 12 个被采样的信号都
-// 产生出来、且行为可复现（同一个种子同样输入 → 同样轨迹），但时序细节（流水级数、
-// 仲裁延迟）做了简化。真 RTL 替换掉它之后，覆盖点与种子管理**一行都不用改**。
-// ============================================================================
-
-`ifndef NPU_SCHED_SV
-`define NPU_SCHED_SV
-
 module npu_sched (
-  input  logic        clk,
-  input  logic        rst_n,            // 异步复位，低有效
-
-  // ── 指令流（来自主控）──
-  input  logic        instr_valid,
-  input  logic [7:0]  instr_opcode,
-  input  logic [2:0]  instr_type,
-  input  logic [2:0]  instr_dtype,
-  input  logic [7:0]  instr_tile_id,
-  input  logic [31:0] instr_src_addr,
-  input  logic [31:0] instr_dst_addr,
-
-  // ── 同步屏障与优先级策略（外部可配）──
-  input  logic [1:0]  barrier_type,     // NONE / TILE / OP / CLUSTER
-  input  logic [1:0]  op_priority,      // HIGH_FIRST / LOW_FIRST / SAME_PRIO / ROUND_ROBIN（4 个取值 → 2 位）
-
-  // ── 发射（到执行单元）──
-  output logic        issue_valid,
-  output logic [2:0]  issue_unit,
-  output logic [1:0]  issue_decision
+  input  logic clk,
+  input  logic rst_n,
+  input  logic [31:0] creg_cmd_icg_en,
+  output  logic cmd_xbar_ch0_icg_wstart,
+  output  logic cmd_xbar_ch1_icg_rstart,
+  output  logic cmd_niu_icg_start,
+  output  logic cmd_glsu_icg_start,
+  output  logic cmd_llsu_icg_start,
+  output  logic cmd_vpu_icg_start,
+  output  logic cmd_mpu_icg_start,
+  input  logic [73:0] disp_cmd_inst,
+  input  logic disp_cmd_inst_flag,
+  input  logic disp_cmd_vld,
+  output  logic cmd_disp_rdy,
+  output  logic [34:0] cmd_disp_rsp_data,
+  output  logic cmd_disp_rsp_vld,
+  input  logic disp_cmd_rsp_rdy,
+  input  logic [2:0] disp_cmd_inst_tag,
+  output  logic [1:0] cmd_llsu_xbr_sel_vld,
+  output  logic [17:0] cmd_xbr_ch0_req_waddr,
+  output  logic [511:0] cmd_xbr_ch0_req_wdata,
+  output  logic [1:0] cmd_xbr_ch0_req_wstrb,
+  output  logic cmd_xbr_ch0_req_wvld,
+  input  logic cmd_xbr_ch0_req_wrdy,
+  input  logic xbr_cmd_ch0_rsp_wvld,
+  input  logic xbr_cmd_ch0_rsp_wlast,
+  output  logic cmd_xbr_ch0_rsp_wrdy,
+  output  logic [31:0] cmd_xbr_ch0_req_wid_for_dv,
+  input  logic [31:0] xbr_cmd_ch0_rsp_wid_for_dv,
+  output  logic [43:0] cmd_xbr_ch1_req_raddr,
+  output  logic cmd_xbr_ch1_req_rvld,
+  input  logic xbr_cmd_ch1_req_rrdy,
+  input  logic [511:0] xbr_cmd_ch1_rsp_rdata,
+  input  logic xbr_cmd_ch1_rsp_rvld,
+  output  logic cmd_xbr_ch1_rsp_rrdy,
+  output  logic [31:0] cmd_xbr_ch1_req_rid_for_dv,
+  input  logic [31:0] xbr_cmd_ch1_rsp_rid_for_dv,
+  input  logic niu_cmd_inst0_done_vld,
+  input  logic niu_cmd_inst0_rtile_rls_vld,
+  input  logic [2:0] niu_cmd_inst0_rtile_rls_idx,
+  input  logic niu_cmd_inst0_wtile_rls_vld,
+  input  logic [2:0] niu_cmd_inst0_wtile_rls_idx,
+  input  logic niu_cmd_inst0_page_rls_vld,
+  input  logic [3:0] niu_cmd_inst0_page_rls_idx,
+  input  logic niu_cmd_inst1_done_vld,
+  input  logic niu_cmd_inst1_rtile_rls_vld,
+  input  logic [2:0] niu_cmd_inst1_rtile_rls_idx,
+  input  logic niu_cmd_inst1_wtile_rls_vld,
+  input  logic [2:0] niu_cmd_inst1_wtile_rls_idx,
+  input  logic niu_cmd_inst1_page_rls_vld,
+  input  logic [3:0] niu_cmd_inst1_page_rls_idx,
+  output  logic cmd_niu_start,
+  output  logic cmd_niu_start_inst_id,
+  output  logic [1:0] cmd_niu_task_select,
+  output  logic [43:0] cmd_niu_dst_base_addr,
+  output  logic [43:0] cmd_niu_src_base_addr,
+  output  logic cmd_niu_cfg_type,
+  output  logic [2:0] cmd_niu_cfg_wd,
+  output  logic [18:0] cmd_niu_cfg_num_dim0,
+  output  logic [12:0] cmd_niu_cfg_size_dim1,
+  output  logic [12:0] cmd_niu_cfg_size_dim2,
+  output  logic [12:0] cmd_niu_cfg_src_stride_dim1,
+  output  logic [24:0] cmd_niu_cfg_src_stride_dim2,
+  output  logic [12:0] cmd_niu_cfg_dst_stride_dim1,
+  output  logic [24:0] cmd_niu_cfg_dst_stride_dim2,
+  input  logic glsu_cmd_inst0_done_vld,
+  input  logic glsu_cmd_inst0_rtile_rls_vld,
+  input  logic [4:0] glsu_cmd_inst0_rtile_rls_idx,
+  input  logic glsu_cmd_inst0_wtile_rls_vld,
+  input  logic [4:0] glsu_cmd_inst0_wtile_rls_idx,
+  input  logic glsu_cmd_inst0_page_rls_vld,
+  input  logic [3:0] glsu_cmd_inst0_page_rls_idx,
+  input  logic glsu_cmd_inst0_rdram_rls_vld,
+  input  logic [3:0] glsu_cmd_inst0_rdram_rls_idx,
+  input  logic glsu_cmd_inst1_done_vld,
+  input  logic glsu_cmd_inst1_rtile_rls_vld,
+  input  logic [4:0] glsu_cmd_inst1_rtile_rls_idx,
+  input  logic glsu_cmd_inst1_wtile_rls_vld,
+  input  logic [4:0] glsu_cmd_inst1_wtile_rls_idx,
+  input  logic glsu_cmd_inst1_page_rls_vld,
+  input  logic [3:0] glsu_cmd_inst1_page_rls_idx,
+  input  logic glsu_cmd_inst1_rdram_rls_vld,
+  input  logic [3:0] glsu_cmd_inst1_rdram_rls_idx,
+  output  logic cmd_glsu_start,
+  output  logic cmd_glsu_start_inst_id,
+  output  logic [3:0] cmd_glsu_task_select,
+  output  logic [43:0] cmd_glsu_src_base_addr,
+  output  logic [43:0] cmd_glsu_dst_base_addr,
+  output  logic cmd_glsu_cfg_mx,
+  output  logic cmd_glsu_cfg_type,
+  output  logic cmd_glsu_cfg_mantissa,
+  output  logic [2:0] cmd_glsu_cfg_wd,
+  output  logic cmd_glsu_gather_dst_spad,
+  output  logic [17:0] cmd_glsu_cfg_index_base_addr,
+  output  logic cmd_glsu_src_global,
+  output  logic cmd_glsu_dst_global,
+  output  logic [18:0] cmd_glsu_cfg_num_dim0,
+  output  logic [18:0] cmd_glsu_cfg_index_num_dim0,
+  output  logic [12:0] cmd_glsu_cfg_size_dim1,
+  output  logic [12:0] cmd_glsu_cfg_size_dim2,
+  output  logic [12:0] cmd_glsu_cfg_src_stride_dim1,
+  output  logic [24:0] cmd_glsu_cfg_src_stride_dim2,
+  output  logic [12:0] cmd_glsu_cfg_dst_stride_dim1,
+  output  logic [24:0] cmd_glsu_cfg_dst_stride_dim2,
+  input  logic llsu_cmd_inst0_done_vld,
+  input  logic llsu_cmd_inst1_done_vld,
+  input  logic llsu_cmd_rtile_rls_vld,
+  input  logic [2:0] llsu_cmd_rtile_rls_idx,
+  input  logic llsu_cmd_rtile_rls_inst_id,
+  input  logic llsu_cmd_wtile_rls_vld,
+  input  logic [2:0] llsu_cmd_wtile_rls_idx,
+  input  logic llsu_cmd_wtile_rls_inst_id,
+  input  logic llsu_cmd_page_rls_vld,
+  input  logic [3:0] llsu_cmd_page_rls_idx,
+  input  logic llsu_cmd_page_rls_inst_id,
+  input  logic llsu_cmd_rls_inst_id,
+  output  logic cmd_llsu_start,
+  output  logic cmd_llsu_start_inst_id,
+  output  logic [17:0] cmd_llsu_base_addr_out,
+  output  logic [17:0] cmd_llsu_base_addr_in,
+  output  logic [2:0] cmd_llsu_task_select,
+  output  logic [31:0] cmd_llsu_scalar_val_in,
+  output  logic cmd_llsu_cfg_mx,
+  output  logic cmd_llsu_cfg_type,
+  output  logic cmd_llsu_cfg_mantissa,
+  output  logic [2:0] cmd_llsu_cfg_wd,
+  output  logic [18:0] cmd_llsu_cfg_num_dim0_in,
+  output  logic [18:0] cmd_llsu_cfg_num_dim0_trans_vbc_out,
+  output  logic [18:0] cmd_llsu_cfg_num_dim0_out,
+  output  logic [12:0] cmd_llsu_cfg_size_dim1,
+  output  logic [12:0] cmd_llsu_cfg_size_dim2,
+  output  logic [12:0] cmd_llsu_cfg_stride_dim1_out,
+  output  logic [24:0] cmd_llsu_cfg_stride_dim2_out,
+  output  logic [12:0] cmd_llsu_cfg_stride_dim1_in,
+  output  logic [24:0] cmd_llsu_cfg_stride_dim2_in,
+  input  logic vpu_cmd_inst0_done_vld,
+  input  logic vpu_cmd_inst1_done_vld,
+  input  logic vpu_cmd_ch1_rtile_rls_vld,
+  input  logic [4:0] vpu_cmd_ch1_rtile_rls_idx,
+  input  logic vpu_cmd_ch2_rtile_rls_vld,
+  input  logic [4:0] vpu_cmd_ch2_rtile_rls_idx,
+  input  logic vpu_cmd_ch3_rtile_rls_vld,
+  input  logic [4:0] vpu_cmd_ch3_rtile_rls_idx,
+  input  logic vpu_cmd_rtile_rls_inst_id,
+  input  logic vpu_cmd_wtile_rls_vld,
+  input  logic [4:0] vpu_cmd_wtile_rls_idx,
+  input  logic vpu_cmd_wtile_rls_inst_id,
+  input  logic [31:0] vpu_cmd_scalar_data,
+  output  logic cmd_vpu_start,
+  output  logic cmd_vpu_start_inst_id,
+  output  logic [17:0] cmd_vpu_base_addr_out,
+  output  logic [17:0] cmd_vpu_base_addr_in1,
+  output  logic [17:0] cmd_vpu_base_addr_in2,
+  output  logic [17:0] cmd_vpu_base_addr_in3,
+  output  logic [17:0] cmd_vpu_base_addr_mx,
+  output  logic [31:0] cmd_vpu_scalar_data_in1,
+  output  logic [31:0] cmd_vpu_scalar_data_in2,
+  output  logic [2:0] cmd_vpu_funct_sel,
+  output  logic cmd_vpu_cfg_mv_m_type,
+  output  logic cmd_vpu_cfg_mx_out,
+  output  logic cmd_vpu_cfg_mx_in1,
+  output  logic cmd_vpu_cfg_mx_in2,
+  output  logic cmd_vpu_cfg_mx_in3,
+  output  logic cmd_vpu_cfg_mx_an,
+  output  logic cmd_vpu_cfg_type_out,
+  output  logic cmd_vpu_cfg_type_in1,
+  output  logic cmd_vpu_cfg_type_in2,
+  output  logic cmd_vpu_cfg_type_in3,
+  output  logic cmd_vpu_cfg_type_an,
+  output  logic cmd_vpu_cfg_mantissa_out,
+  output  logic cmd_vpu_cfg_mantissa_in1,
+  output  logic cmd_vpu_cfg_mantissa_in2,
+  output  logic cmd_vpu_cfg_mantissa_in3,
+  output  logic cmd_vpu_cfg_mantissa_an,
+  output  logic [2:0] cmd_vpu_cfg_wd_out,
+  output  logic [2:0] cmd_vpu_cfg_wd_in1,
+  output  logic [2:0] cmd_vpu_cfg_wd_in2,
+  output  logic [2:0] cmd_vpu_cfg_wd_in3,
+  output  logic [2:0] cmd_vpu_cfg_wd_an,
+  output  logic [5:0] cmd_vpu_cfg_op,
+  output  logic [18:0] cmd_vpu_cfg_num_dim0,
+  output  logic [12:0] cmd_vpu_cfg_size_dim1,
+  output  logic [12:0] cmd_vpu_cfg_stride_dim1_out,
+  output  logic [12:0] cmd_vpu_cfg_stride_dim1_in1,
+  output  logic cmd_vpu_cfg_satu,
+  output  logic cmd_vpu_cfg_denor_is0,
+  output  logic [2:0] cmd_vpu_cfg_rm,
+  output  logic [2:0] cmd_vpu_cfg_ite_num,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_0,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_1,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_2,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_3,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_4,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_5,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_6,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_7,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_8,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_9,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_10,
+  output  logic [15:0] cmd_vpu_cfg_poly_an_buf_11,
+  input  logic mpu_cmd_inst0_done_vld,
+  input  logic mpu_cmd_inst1_done_vld,
+  input  logic mpu_cmd_inst0_page_rls_vld,
+  input  logic mpu_cmd_inst1_page_rls_vld,
+  input  logic mpu_cmd_ch1_rtile_rls_vld,
+  input  logic [4:0] mpu_cmd_ch1_rtile_rls_idx,
+  input  logic mpu_cmd_ch2_rtile_rls_vld,
+  input  logic [4:0] mpu_cmd_ch2_rtile_rls_idx,
+  input  logic mpu_cmd_rtile_rls_inst_id,
+  input  logic mpu_cmd_wtile_rls_vld,
+  input  logic [4:0] mpu_cmd_wtile_rls_idx,
+  input  logic mpu_cmd_wtile_rls_inst_id,
+  output  logic cmd_mpu_start,
+  output  logic cmd_mpu_start_inst_id,
+  output  logic [17:0] cmd_mpu_base_addr_mx_in,
+  output  logic [17:0] cmd_mpu_base_addr_wt,
+  output  logic [17:0] cmd_mpu_base_addr_out,
+  output  logic [17:0] cmd_mpu_base_addr_in,
+  output  logic [17:0] cmd_mpu_base_addr_orig,
+  output  logic [17:0] cmd_mpu_base_addr_scale,
+  output  logic cmd_mpu_cfg_mx_in,
+  output  logic cmd_mpu_cfg_mx_wt,
+  output  logic cmd_mpu_cfg_mx_scale,
+  output  logic cmd_mpu_cfg_type_out,
+  output  logic cmd_mpu_cfg_type_orig,
+  output  logic cmd_mpu_cfg_type_in,
+  output  logic cmd_mpu_cfg_type_wt,
+  output  logic cmd_mpu_cfg_type_scale,
+  output  logic cmd_mpu_cfg_mantissa_out,
+  output  logic cmd_mpu_cfg_mantissa_orig,
+  output  logic cmd_mpu_cfg_mantissa_in,
+  output  logic cmd_mpu_cfg_mantissa_wt,
+  output  logic cmd_mpu_cfg_mantissa_scale,
+  output  logic [2:0] cmd_mpu_cfg_wd_out,
+  output  logic [2:0] cmd_mpu_cfg_wd_orig,
+  output  logic [2:0] cmd_mpu_cfg_wd_in,
+  output  logic [2:0] cmd_mpu_cfg_wd_wt,
+  output  logic [2:0] cmd_mpu_cfg_wd_scale,
+  output  logic cmd_mpu_cfg_acc_en,
+  output  logic cmd_mpu_cfg_satu,
+  output  logic cmd_mpu_cfg_scale_en,
+  output  logic [18:0] cmd_mpu_cfg_num_dim0_in,
+  output  logic [18:0] cmd_mpu_cfg_num_dim0_out,
+  output  logic [12:0] cmd_mpu_cfg_size_dim1_in,
+  output  logic [12:0] cmd_mpu_cfg_stride_dim1_out,
+  output  logic [12:0] cmd_mpu_cfg_stride_dim1_in,
+  output  logic [12:0] cmd_mpu_cfg_stride_dim1_orig,
+  input  logic [31:0] creg_cmd_excep_en,
+  output  logic [31:0] cmd_creg_int,
+  input  logic [31:0] creg_cmd_mpu_inst0_masked_int,
+  input  logic [31:0] creg_cmd_mpu_inst1_masked_int,
+  input  logic [31:0] creg_cmd_vpu_inst0_masked_int,
+  input  logic [31:0] creg_cmd_vpu_inst1_masked_int,
+  input  logic [31:0] creg_cmd_glsu_inst0_masked_int,
+  input  logic [31:0] creg_cmd_glsu_inst1_masked_int,
+  input  logic [31:0] creg_cmd_llsu_inst0_masked_int,
+  input  logic [31:0] creg_cmd_llsu_inst1_masked_int,
+  input  logic [31:0] creg_cmd_niu_inst0_masked_int,
+  input  logic [31:0] creg_cmd_niu_inst1_masked_int,
+  output  logic [31:0] cmd_creg_exce0,
+  output  logic [31:0] cmd_creg_exce1,
+  output  logic [31:0] cmd_creg_exce2,
+  output  logic [31:0] cmd_creg_dbg0,
+  output  logic [31:0] cmd_creg_dbg1,
+  output  logic [31:0] cmd_creg_dbg2,
+  input  logic creg_cmd_perf_en,
+  input  logic creg_cmd_perf_start,
+  input  logic creg_cmd_perf_pause,
+  input  logic creg_cmd_perf_conti,
+  input  logic creg_cmd_perf_end,
+  output  logic [95:0] cmd_creg_perf_cnt,
+  input  logic [31:0] creg_cmd_spad_excl_en,
+  input  logic [127:0] creg_cmd_reserve_in,
+  output  logic [127:0] creg_cmd_reserve_out
 );
+  wire cfg_drv_buffer_not_full;  // 跨 IP 内部信号
+  wire [31:0] cmd_creg_glsu_exce0;  // 跨 IP 内部信号
+  wire [31:0] cmd_creg_llsu_exce0;  // 跨 IP 内部信号
+  wire [31:0] cmd_creg_mpu_exce0;  // 跨 IP 内部信号
+  wire [31:0] cmd_creg_niu_exce0;  // 跨 IP 内部信号
+  wire [31:0] cmd_creg_vpu_exce0;  // 跨 IP 内部信号
+  wire dsp_en;  // 跨 IP 内部信号
+  wire [15:0] ins_buff_xx_vld;  // 跨 IP 内部信号
+  wire [15:0] ins_done;  // 跨 IP 内部信号
+  wire ins_inst_info;  // 跨 IP 内部信号
+  wire [63:0] ins_status;  // 跨 IP 内部信号
+  wire [3:0] page_rls_idx;  // 跨 IP 内部信号
+  wire page_rls_vld;  // 跨 IP 内部信号
+  wire [2:0] rdram_rls_idx;  // 跨 IP 内部信号
+  wire rdram_rls_vld;  // 跨 IP 内部信号
+  wire ren;  // 跨 IP 内部信号
+  wire [3:0] ren_id;  // 跨 IP 内部信号
+  wire [2:0] rtile_rls_idx;  // 跨 IP 内部信号
+  wire rtile_rls_vld;  // 跨 IP 内部信号
+  wire scoreboard_ren;  // 跨 IP 内部信号
+  wire store_en;  // 跨 IP 内部信号
+  wire [2:0] wtile_rls_idx;  // 跨 IP 内部信号
+  wire wtile_rls_vld;  // 跨 IP 内部信号
+  wire __dispatch_cmd_xbr_ch0_req_wvld;  // 非主驱动（避免多驱动）
+  wire __dispatch_cmd_xbr_ch1_req_rvld;  // 非主驱动（避免多驱动）
+  wire __ins_buffer_cfg_drv_buffer_not_full;  // 非主驱动（避免多驱动）
+  wire __ins_buffer_dsp_en;  // 非主驱动（避免多驱动）
+  wire [3:0] __ins_buffer_ins_buff_xx_vld;  // 非主驱动（避免多驱动）
+  wire __ins_buffer_ins_inst_info;  // 非主驱动（避免多驱动）
 
-  // ── 编码常量（与 case 模型 values 的顺序一一对应，见文件头）──
-  localparam int TYPE_MAC = 0, TYPE_VEC = 1, TYPE_SCL = 2, TYPE_DMA = 3;
-  localparam int DEC_ISSUED = 0, DEC_STALLED = 1, DEC_BLOCKED = 2, DEC_FLUSHED = 3;
-  localparam int DEP_NONE = 0, DEP_RAW = 1, DEP_WAW = 2, DEP_WAR = 3;
-  localparam int PIPE_NONE = 0, PIPE_MAC_MAC = 1, PIPE_MAC_DMA = 2,
-                PIPE_VEC_MAC = 3, PIPE_MULTI = 4;
+  decode u_decode (
+    .clk(clk),
+    .rst_n(rst_n),
+    .disp_cmd_inst(disp_cmd_inst),
+    .disp_cmd_inst_flag(disp_cmd_inst_flag),
+    .disp_cmd_vld(disp_cmd_vld),
+    .cmd_disp_rdy(cmd_disp_rdy),
+    .cmd_xbr_ch0_req_waddr(cmd_xbr_ch0_req_waddr),
+    .cmd_xbr_ch0_req_wdata(cmd_xbr_ch0_req_wdata),
+    .cmd_xbr_ch0_req_wstrb(cmd_xbr_ch0_req_wstrb),
+    .cmd_xbr_ch0_req_wvld(cmd_xbr_ch0_req_wvld),
+    .cmd_xbr_ch0_req_wrdy(cmd_xbr_ch0_req_wrdy),
+    .xbr_cmd_ch0_rsp_wvld(xbr_cmd_ch0_rsp_wvld),
+    .xbr_cmd_ch0_rsp_wlast(xbr_cmd_ch0_rsp_wlast),
+    .cmd_xbr_ch0_rsp_wrdy(cmd_xbr_ch0_rsp_wrdy),
+    .cmd_xbr_ch1_req_raddr(cmd_xbr_ch1_req_raddr),
+    .cmd_xbr_ch1_req_rvld(cmd_xbr_ch1_req_rvld),
+    .xbr_cmd_ch1_req_rrdy(xbr_cmd_ch1_req_rrdy),
+    .xbr_cmd_ch1_rsp_rdata(xbr_cmd_ch1_rsp_rdata),
+    .xbr_cmd_ch1_rsp_rvld(xbr_cmd_ch1_rsp_rvld),
+    .cmd_xbr_ch1_rsp_rrdy(cmd_xbr_ch1_rsp_rrdy),
+    .dsp_en(dsp_en),
+    .store_en(store_en),
+    .cfg_drv_buffer_not_full(cfg_drv_buffer_not_full),
+    .ins_inst_info(ins_inst_info)
+  );
 
-  localparam int QUEUE_DEPTH = 32;      // §3.2 CP_NPU_QUEUE_001：0-32
+  scoreboard u_scoreboard (
+    .clk(clk),
+    .rst_n(rst_n),
+    .ins_inst_info({{63{1'b0}}, ins_inst_info}),
+    .dsp_en(dsp_en),
+    .store_en(store_en),
+    .ins_done(ins_done),
+    .rtile_rls_vld(rtile_rls_vld),
+    .rtile_rls_idx(rtile_rls_idx),
+    .wtile_rls_vld(wtile_rls_vld),
+    .wtile_rls_idx(wtile_rls_idx),
+    .page_rls_vld(page_rls_vld),
+    .page_rls_idx(page_rls_idx),
+    .rdram_rls_vld(rdram_rls_vld),
+    .rdram_rls_idx(rdram_rls_idx),
+    .ins_buff_xx_vld(ins_buff_xx_vld),
+    .ren(ren),
+    .ren_id(ren_id),
+    .ins_status(ins_status)
+  );
 
-  // ── 内部信号：**case 模型 `sample: dut` 采的就是这几个**，名字不能改 ──
-  logic [5:0] queue_level;              // 队列水位 0..32（6 位够到 63，33+ 走 illegal_bins）
-  logic [1:0] dep_type;                 // 队头那条指令的依赖类型
-  logic [1:0] cluster_id;               // 指令归属的簇（由 tile_id 低位来）
-  logic [7:0] instr_seq;                // 相邻两条指令的 opcode 组合
-  logic [2:0] pipeline_state;           // 当前流水重叠状态
+  ins_buffer u_ins_buffer (
+    .clk(clk),
+    .rst_n(rst_n),
+    .store_en(store_en),
+    .scoreboard_ren(scoreboard_ren),
+    .ren_id(ren_id[1:0]),
+    .ins_buff_xx_vld(__ins_buffer_ins_buff_xx_vld),
+    .cfg_drv_buffer_not_full(__ins_buffer_cfg_drv_buffer_not_full),
+    .ins_inst_info(__ins_buffer_ins_inst_info),
+    .dsp_en(__ins_buffer_dsp_en)
+  );
 
-  // ── 队列（存最近的指令摘要，供依赖判定）──
-  logic [31:0] q_src [0:QUEUE_DEPTH-1];
-  logic [31:0] q_dst [0:QUEUE_DEPTH-1];
-  logic [2:0]  q_typ [0:QUEUE_DEPTH-1];
-  logic [7:0]  q_opc [0:QUEUE_DEPTH-1];
+  dispatch u_dispatch (
+    .clk(clk),
+    .rst_n(rst_n),
+    .dsp_en(dsp_en),
+    .ins_inst_info(ins_inst_info),
+    .cmd_niu_start(cmd_niu_start),
+    .cmd_niu_start_inst_id(cmd_niu_start_inst_id),
+    .cmd_niu_task_select(cmd_niu_task_select),
+    .cmd_niu_dst_base_addr(cmd_niu_dst_base_addr),
+    .cmd_niu_src_base_addr(cmd_niu_src_base_addr),
+    .cmd_glsu_start(cmd_glsu_start),
+    .cmd_glsu_start_inst_id(cmd_glsu_start_inst_id),
+    .cmd_glsu_task_select(cmd_glsu_task_select),
+    .cmd_glsu_src_base_addr(cmd_glsu_src_base_addr),
+    .cmd_glsu_dst_base_addr(cmd_glsu_dst_base_addr),
+    .cmd_llsu_start(cmd_llsu_start),
+    .cmd_llsu_start_inst_id(cmd_llsu_start_inst_id),
+    .cmd_llsu_task_select(cmd_llsu_task_select),
+    .cmd_llsu_base_addr_in(cmd_llsu_base_addr_in),
+    .cmd_llsu_base_addr_out(cmd_llsu_base_addr_out),
+    .cmd_vpu_start(cmd_vpu_start),
+    .cmd_vpu_start_inst_id(cmd_vpu_start_inst_id),
+    .cmd_vpu_funct_sel(cmd_vpu_funct_sel),
+    .cmd_vpu_cfg_op(cmd_vpu_cfg_op),
+    .cmd_mpu_start(cmd_mpu_start),
+    .cmd_mpu_start_inst_id(cmd_mpu_start_inst_id),
+    .cmd_xbr_ch0_req_wvld(__dispatch_cmd_xbr_ch0_req_wvld),
+    .cmd_xbr_ch1_req_rvld(__dispatch_cmd_xbr_ch1_req_rvld),
+    .cmd_llsu_xbr_sel_vld(cmd_llsu_xbr_sel_vld)
+  );
 
-  logic [5:0]  rd_ptr, wr_ptr;
-  logic [7:0]  prev_opcode;             // 上一条入队的 opcode（算 instr_seq 用）
-  logic [2:0]  last_issued_type;        // 上一条发射出去的类型（算 pipeline_state 用）
-
-  wire full  = (queue_level >= QUEUE_DEPTH[5:0]);
-  wire empty = (queue_level == 6'd0);
-
-  // ── 组合：依赖判定（拿队头的地址比已入队的所有项）──
-  //   RAW —— 队头的**源**被它**前面**的指令写过（真依赖，必须等）
-  //   WAW —— 队头的**目的**与前面某条的目的相同（输出依赖）
-  //   WAR —— 队头的**目的**命中前面某条的**源**（反依赖）
-  // 取最先命中的那一条（真依赖优先于其余两种）。
-  logic has_raw, has_waw, has_war;
-  always_comb begin
-    has_raw = 1'b0; has_waw = 1'b0; has_war = 1'b0;
-    if (!empty) begin
-      for (int i = 0; i < QUEUE_DEPTH; i++) begin
-        if (q_dst[i] == q_src[rd_ptr]) has_raw = 1'b1;
-        if (q_dst[i] == q_dst[rd_ptr]) has_waw = 1'b1;
-        if (q_src[i] == q_dst[rd_ptr]) has_war = 1'b1;
-      end
-    end
-  end
-
-  // ── 组合：发射决策 ──
-  //   屏障命中        → FLUSHED（冲刷，这一拍不发）
-  //   队列空          → STALLED（没东西可发）
-  //   队列满且入队请求 → BLOCKED（压力来自入口，不是依赖）
-  //   有真依赖        → STALLED（等依赖消解）
-  //   其余            → ISSUED
-  always_comb begin
-    if (barrier_type != 2'd0)                issue_decision = 2'(DEC_FLUSHED);
-    else if (empty)                          issue_decision = 2'(DEC_STALLED);
-    else if (full && instr_valid)            issue_decision = 2'(DEC_BLOCKED);
-    else if (has_raw)                        issue_decision = 2'(DEC_STALLED);
-    else                                     issue_decision = 2'(DEC_ISSUED);
-  end
-
-  always_comb begin
-    logic [1:0] d;
-    if      (has_raw) d = 2'(DEP_RAW);
-    else if (has_waw) d = 2'(DEP_WAW);
-    else if (has_war) d = 2'(DEP_WAR);
-    else              d = 2'(DEP_NONE);
-    dep_type = d;
-  end
-
-  // 执行单元跟随指令类型（`MAC→MAC / VECTOR→VECTOR / SCALAR→SCALAR / DMA→DMA`）
-  assign issue_unit = empty ? 3'd0 : 3'(q_typ[rd_ptr]);
-  assign issue_valid = (issue_decision == 2'(DEC_ISSUED));
-  assign cluster_id  = 2'(instr_tile_id[1:0]);
-
-  // ── 组合：流水重叠状态（看**上一条**与**刚发射这条**的类型对）──
-  always_comb begin
-    if (last_issued_type == 3'(TYPE_MAC) && issue_unit == 3'(TYPE_MAC))
-      pipeline_state = 3'(PIPE_MAC_MAC);
-    else if (last_issued_type == 3'(TYPE_MAC) && issue_unit == 3'(TYPE_DMA))
-      pipeline_state = 3'(PIPE_MAC_DMA);
-    else if (last_issued_type == 3'(TYPE_VEC) && issue_unit == 3'(TYPE_MAC))
-      pipeline_state = 3'(PIPE_VEC_MAC);
-    else if (last_issued_type != 3'(TYPE_MAC) && last_issued_type != 3'(TYPE_VEC))
-      pipeline_state = 3'(PIPE_NONE);
-    else
-      pipeline_state = 3'(PIPE_MULTI);      // 其余组合：两条不同类型的指令并行
-  end
-
-  // ── 时序：入队 / 出队 / 流水状态 ──
-  integer k;
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      rd_ptr <= 6'd0; wr_ptr <= 6'd0; queue_level <= 6'd0;
-      prev_opcode <= 8'd0; instr_seq <= 8'd0; last_issued_type <= 3'd0;
-      for (k = 0; k < QUEUE_DEPTH; k++) begin
-        q_src[k] <= 32'd0; q_dst[k] <= 32'd0;
-        q_typ[k] <= 3'd0;  q_opc[k] <= 8'd0;
-      end
-    end else begin
-      // 入队：有效且没满
-      if (instr_valid && !full) begin
-        q_src[wr_ptr] <= instr_src_addr;
-        q_dst[wr_ptr] <= instr_dst_addr;
-        q_typ[wr_ptr] <= instr_type;
-        q_opc[wr_ptr] <= instr_opcode;
-        wr_ptr <= (wr_ptr == QUEUE_DEPTH[5:0] - 6'd1) ? 6'd0 : wr_ptr + 6'd1;
-
-        // `instr_seq`：**相邻两条 opcode 的组合作成一个码**。
-        // 组合空间按文档 §3.2 只留 6 种名义 bin（mac_mac / load_mac / …），
-        // 这里用 `{上一条的低 4 位, 当前的低 4 位}` 做机器通道 —— 名义 bin 与
-        // 具体编码的对应由覆盖率的 bin 划分承担（`cover_bins` 那 6 个）。
-        instr_seq <= {prev_opcode[3:0], instr_opcode[3:0]};
-        prev_opcode <= instr_opcode;
-      end
-
-      // 出队：这一拍真发射了
-      if (issue_valid && !empty) begin
-        rd_ptr <= (rd_ptr == QUEUE_DEPTH[5:0] - 6'd1) ? 6'd0 : rd_ptr + 6'd1;
-        last_issued_type <= q_typ[rd_ptr];
-      end
-
-      // 水位：入队 +1、出队 -1，两件事都可能在同一拍发生
-      queue_level <= queue_level
-                   + ((instr_valid && !full)   ? 6'd1 : 6'd0)
-                   - ((issue_valid && !empty)  ? 6'd1 : 6'd0);
-    end
-  end
+  cmd_int_perf u_cmd_int_perf (
+    .clk(clk),
+    .rst_n(rst_n),
+    .creg_cmd_excep_en(creg_cmd_excep_en),
+    .cmd_creg_int(cmd_creg_int),
+    .creg_cmd_mpu_inst0_masked_int(creg_cmd_mpu_inst0_masked_int),
+    .creg_cmd_mpu_inst1_masked_int(creg_cmd_mpu_inst1_masked_int),
+    .creg_cmd_vpu_inst0_masked_int(creg_cmd_vpu_inst0_masked_int),
+    .creg_cmd_vpu_inst1_masked_int(creg_cmd_vpu_inst1_masked_int),
+    .creg_cmd_glsu_inst0_masked_int(creg_cmd_glsu_inst0_masked_int),
+    .creg_cmd_glsu_inst1_masked_int(creg_cmd_glsu_inst1_masked_int),
+    .creg_cmd_llsu_inst0_masked_int(creg_cmd_llsu_inst0_masked_int),
+    .creg_cmd_llsu_inst1_masked_int(creg_cmd_llsu_inst1_masked_int),
+    .creg_cmd_niu_inst0_masked_int(creg_cmd_niu_inst0_masked_int),
+    .creg_cmd_niu_inst1_masked_int(creg_cmd_niu_inst1_masked_int),
+    .cmd_creg_exce0(cmd_creg_exce0),
+    .cmd_creg_exce1(cmd_creg_exce1),
+    .cmd_creg_exce2(cmd_creg_exce2),
+    .cmd_creg_mpu_exce0(cmd_creg_mpu_exce0),
+    .cmd_creg_vpu_exce0(cmd_creg_vpu_exce0),
+    .cmd_creg_glsu_exce0(cmd_creg_glsu_exce0),
+    .cmd_creg_llsu_exce0(cmd_creg_llsu_exce0),
+    .cmd_creg_niu_exce0(cmd_creg_niu_exce0),
+    .creg_cmd_perf_en(creg_cmd_perf_en),
+    .creg_cmd_perf_start(creg_cmd_perf_start),
+    .creg_cmd_perf_pause(creg_cmd_perf_pause),
+    .creg_cmd_perf_conti(creg_cmd_perf_conti),
+    .creg_cmd_perf_end(creg_cmd_perf_end),
+    .cmd_creg_perf_cnt(cmd_creg_perf_cnt)
+  );
 
 endmodule
-
-`endif  // NPU_SCHED_SV

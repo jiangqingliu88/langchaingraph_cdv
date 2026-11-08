@@ -1,0 +1,11 @@
+case_id: TC_SCHED_008
+test_name: dhazard_same_master_drv_test
+batch: B03
+title: DHazard与同组件drv
+contract_refs:
+- C-FUNC-002
+- C-FUNC-003
+covergroups:
+- cg_dhazard
+- cg_same_master_drv
+constraints: []

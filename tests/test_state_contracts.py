@@ -89,11 +89,11 @@ def test_strict_mode_still_warns_for_non_critical(monkeypatch):
     graph_mod._STATE_WARNED.clear()
 
     async def bad_node(state, config):
-        return {"spec": {}}          # spec 不是关键字段，只告警
+        return {"gaps": {}}          # gaps 不是关键字段，只告警
 
     wrapped = _guarded_node("design", bad_node)
-    assert asyncio.run(wrapped({}, {})) == {"spec": {}}
-    assert ("design", "spec") in graph_mod._STATE_WARNED
+    assert asyncio.run(wrapped({}, {})) == {"gaps": {}}
+    assert ("design", "gaps") in graph_mod._STATE_WARNED
 
 
 def test_wrapper_is_idempotent():

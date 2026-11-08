@@ -1,6 +1,7 @@
 """设计智能体 —— Spec → 架构 → RTL（真实工具链）"""
 from typing import Dict, Any
 import json
+import re
 from pathlib import Path
 
 from src.layers.l2_orchestration.executors.base import BaseExecutor, ExecutorResult
@@ -57,7 +58,8 @@ class DesignExecutor(BaseExecutor):
                 logger.warning(f"spec 分析失败: {e}")
                 spec = {"design_name": "dut"}
 
-        module_name = spec.get("design_name", "dut")
+        arch = spec.get("architecture") or {}
+        module_name = str(arch.get("top") or spec.get("design_name", "dut"))
         if module_name.lower() in ("dut", "dut_top", ""):
             module_name = "dut"
 
@@ -104,17 +106,23 @@ class DesignExecutor(BaseExecutor):
             # 重试**不改变"验不过就不收"**这条 —— 只是多给它两次机会；
             # 三次都不成，照旧丢弃并记明原因（由 RTL 门禁响亮收口）。
             _last_why = "未尝试"
+            _feedback = ""
             for _attempt in range(1, 4):
                 try:
-                    rtl = self._llm_write_ip(ip, spec)
+                    rtl = self._llm_write_ip(ip, spec, attempt=_attempt,
+                                             feedback=_feedback)
                     # RTL 完整性校验：module + 端口闭合 + endmodule（LLM 可能截断/残缺）
                     if not self._is_valid_rtl(rtl):
+                        _feedback = "RTL 残缺：缺端口闭合 `);` 或 endmodule"
                         _last_why = "RTL 残缺（缺端口闭合/endmodule）"
                         logger.warning(f"IP {ip['ip_name']} 第 {_attempt}/3 次 RTL 残缺，重试")
                         continue
                     # 铁律一：走 L1 基础设施做 vlog 编译校验（EDA 是唯一真理）
-                    if not self._verify_ip_rtl(rtl_dir, ip["ip_name"], rtl):
-                        _last_why = "vlog 编译失败"
+                    _ok, _detail = self._verify_ip_rtl(
+                        rtl_dir, ip["ip_name"], rtl)
+                    if not _ok:
+                        _feedback = _detail
+                        _last_why = f"vlog 编译失败: {_detail[:200]}"
                         logger.warning(f"IP {ip['ip_name']} 第 {_attempt}/3 次 vlog 不过，重试")
                         continue
                     from src.layers.l4_memory.ip_registry import IpRegistry
@@ -133,7 +141,8 @@ class DesignExecutor(BaseExecutor):
                                       "why": f"{_last_why}（已重试 3 次）"})
 
         # ── 4. 集成连线：各 IP RTL 集成为顶层 module ──
-        rtl_files, top_used_fallback = self._integrate_top(ips, module_name, spec, rtl_dir)
+        rtl_files, top_used_fallback = self._integrate_top(
+            ips, module_name, spec, rtl_dir)
 
         design_arch = {
             "module_name": module_name,
@@ -141,6 +150,7 @@ class DesignExecutor(BaseExecutor):
             "function_hier": self._build_func_hier(spec),
             "registers": spec.get("registers", []),
             "interfaces": spec.get("interfaces", []),
+            "model_contract": spec.get("model_contract", {}),
             "signoff_checklist": [],
             # 说真话：LLM 顶层连线失败 → 回退确定性骨架（只有 clk/rst 直连，无真实互连逻辑）
             # audit 门禁 rtl_real 据此拒绝签核（见 audit agent gate）
@@ -223,6 +233,22 @@ class DesignExecutor(BaseExecutor):
         命中 generated 的直接复用 RTL，命中 planned 的走 LLM 写手生成。
         force_regen=True（fix_agent=rtl）时跳过复用，全部 LLM 重新生成。
         """
+        # dplan 已经划分好模块（LLM 抽取的 architecture/modules）：按模块写 RTL，
+        # 不再从 IP 库按 feature 猜。组合/时序逻辑分开传给写手。
+        modules = [m for m in (spec.get("modules") or [])
+                   if isinstance(m, dict) and m.get("name")]
+        if modules:
+            return [{
+                "ip_name": str(m["name"]),
+                "category": str(m.get("method") or "logic"),
+                "function_desc": str(m.get("function") or m.get("description") or ""),
+                "interface": list(m.get("interfaces") or []),
+                "combinational": list(m.get("combinational") or []),
+                "sequential": list(m.get("sequential") or []),
+                "method": str(m.get("method") or ""),
+                "reused": False,
+            } for m in modules if str(m.get("name")) != module_name]
+
         from src.layers.l4_memory.ip_registry import IpRegistry
         ip_reg = IpRegistry()
 
@@ -267,14 +293,24 @@ class DesignExecutor(BaseExecutor):
         return []  # fifo 等内部信号，由 LLM 写手决定
 
     @staticmethod
-    def _llm_write_ip(ip: dict, spec: dict) -> str:
+    def _llm_write_ip(ip: dict, spec: dict, attempt: int = 1,
+                      feedback: str = "") -> str:
         """LLM 写手：根据 IP 功能描述 + 接口，生成真实 RTL 逻辑。
 
         这是"LLM 做完形填空"的落点——小 IP 的逻辑简单（状态机/寄存器），
         LLM 容易生成正确；大模块拆成小 IP 后，每个 IP 的 RTL 是真实逻辑而非占位。
+
+        `attempt > 1` 时把上次的编译错误写进 prompt：进程内响应缓存按 prompt
+        做键，prompt 不变时"重试"只是拿回同一份坏 RTL（实测 3 次全 cache_hit）。
         """
         clk_rst = [i for i in spec.get("interfaces", [])
                    if i.get("protocol", "").lower() in ("clock", "reset")]
+        retry = ""
+        if attempt > 1:
+            retry = (f"\n这是第 {attempt} 次尝试。上一版未能通过 vlog 编译"
+                     f"（{feedback or '语法/语义错误'}）。"
+                     "请重新生成完整、可独立编译的 module，"
+                     "检查所有信号/参数都已声明、位宽匹配、无多驱动。\n")
         prompt = f"""你是 IC 设计工程师，精通 SystemVerilog RTL 设计。
 
 请为以下 IP 生成完整的 RTL module：
@@ -282,13 +318,16 @@ class DesignExecutor(BaseExecutor):
 IP 名: {ip['ip_name']}
 类别: {ip['category']}
 功能: {ip['function_desc']}
+设计方法: {ip.get('method') or '按功能选择流水/状态机/组合'}
+组合逻辑: {json.dumps(ip.get('combinational') or [], ensure_ascii=False)}
+时序逻辑: {json.dumps(ip.get('sequential') or [], ensure_ascii=False)}
 
 时钟/复位信号:
 {json.dumps(clk_rst, ensure_ascii=False)}
 
 该 IP 的接口信号:
 {json.dumps(ip.get('interface', []), ensure_ascii=False)}
-
+{retry}
 要求：
 1. 生成完整的 module，端口 = 时钟/复位 + 接口信号
 2. 用 always_ff 写真实的功能逻辑（状态机/寄存器/组合逻辑，不是占位）
@@ -299,7 +338,7 @@ IP 名: {ip['ip_name']}
         try:
             from src.tools.common.lib.llm_call import CODE_SCHEMA, call_llm
             return call_llm(prompt, "", "", output_schema=CODE_SCHEMA,
-                            prompt_version="design-ip-v1")
+                            prompt_version="design-ip-v2")
         except Exception:
             return ""
 
@@ -316,15 +355,21 @@ IP 名: {ip['ip_name']}
         if "module" not in rtl or "endmodule" not in rtl:
             return False
         # 端口闭合：module X ( ... );  必须有 ");"
-        m = re.search(r'module\s+\w+\s*\(([^)]*)\)\s*;', rtl, re.DOTALL)
+        # 允许 `module x #(parameter ...) (ports);` 的参数表。
+        m = re.search(
+            r'module\s+\w+\s*(?:#\s*\((?:[^()]|\([^()]*\))*\))?'
+            r'\s*\(([^)]*)\)\s*;', rtl, re.DOTALL)
         return m is not None
 
     @staticmethod
-    def _verify_ip_rtl(output_dir: Path, ip_name: str, rtl_code: str) -> bool:
+    def _verify_ip_rtl(output_dir: Path, ip_name: str,
+                       rtl_code: str) -> tuple[bool, str]:
         """铁律一：用 L1 基础设施（InfrastructureManager.compile → EdaBackend）做 vlog 编译校验。
 
         LLM 生成的 RTL 语法对但可能有语义错误（多驱动/端口悬空），
         vlog 编译返回 0/1，失败则丢弃（回退）。这是"EDA 是唯一真理"的落点。
+
+        返回 `(ok, detail)`：detail 是编译错误摘要，回喂给下一次重试的 prompt。
         """
         import tempfile
         from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
@@ -337,10 +382,13 @@ IP 名: {ip['ip_name']}
             # L1 编译校验（vlog）
             infra = InfrastructureManager(tmp_dir)
             result = infra.compile(str(fl), coverage=False)
-            return result.get("status") == "PASS" and result.get("errors", 0) == 0
+            ok = result.get("status") == "PASS" and result.get("errors", 0) == 0
+            detail = "" if ok else str(
+                result.get("stderr") or result.get("error") or "vlog 编译失败")[-800:]
+            return ok, detail
         except Exception as e:
             logger.warning(f"IP {ip_name} L1 编译校验失败: {e}")
-            return False
+            return False, str(e)[:800]
 
     def _integrate_top(self, ips: list, module_name: str, spec: dict, rtl_dir: Path) -> tuple:
         """集成连线：各 IP 的 RTL 落盘 + LLM 生成顶层 module（完整连线）。
@@ -350,6 +398,11 @@ IP 名: {ip['ip_name']}
         """
         from src.layers.l4_memory.ip_registry import IpRegistry
         ip_reg = IpRegistry()
+
+        # **只集成真正产出 RTL 的 IP**：被丢弃的模块不能出现在顶层实例化表里，
+        # 否则编译期报 `Module 'xxx' is not defined`（实测 scoreboard 被丢弃后
+        # 顶层仍实例化它，整个 p0 全部无法 load design）。
+        ips = [ip for ip in ips if ip.get("rtl_code")]
 
         files = []
         for ip in ips:
@@ -361,6 +414,22 @@ IP 名: {ip['ip_name']}
                 fpath = rtl_dir / f"{ip['ip_name']}.sv"
                 fpath.write_text(rtl_code, encoding="utf-8")
                 files.append(str(fpath))
+
+        # 从**真实 RTL** 读每个 IP 的端口方向/位宽，并标出"谁赋了值"（谁驱动）。
+        # dplan 的模块接口只有名字，内部信号方向是占位 INOUT；按它连线会把
+        # 生产者也当读口，导致 dsp_en/ins_inst_info 这些线没人驱动 → 输出 X。
+        for ip in ips:
+            path = rtl_dir / f"{ip['ip_name']}.sv"
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                text = ""
+            ports = self._rtl_ports(rtl_dir, ip["ip_name"]) or [
+                dict(p) for p in self._ip_ports(ip)]
+            assigned = self._assigned_signals(text, [p["name"] for p in ports])
+            for port in ports:
+                port["drives"] = port["name"] in assigned
+            ip["_ports"] = ports
 
         # 顶层 module：优先 LLM 生成（理解各 IP 接口做完整连线），失败回退规则骨架
         top_used_fallback = False
@@ -376,6 +445,20 @@ IP 名: {ip['ip_name']}
 
         ip_reg.close()
         return files, top_used_fallback
+
+    @staticmethod
+    def _top_interfaces(spec: dict) -> list:
+        """顶层模块端口：优先 dplan 的 level=top module，其次 spec.interfaces。"""
+        name = str((spec.get("architecture") or {}).get("top")
+                   or spec.get("design_name") or "")
+        for m in spec.get("modules") or []:
+            if not isinstance(m, dict):
+                continue
+            is_top = str(m.get("level") or "").lower() == "top"
+            if is_top or str(m.get("name") or "") == name:
+                if m.get("interfaces"):
+                    return list(m["interfaces"])
+        return list(spec.get("interfaces") or [])
 
     @staticmethod
     def _llm_write_top(module_name: str, ips: list, spec: dict) -> str:
@@ -398,7 +481,7 @@ IP 名: {ip['ip_name']}
 
 顶层模块名: {module_name}
 顶层端口（来自 spec，这些是 DUT 对外接口）:
-{json.dumps(spec.get('interfaces', []), ensure_ascii=False)}
+{json.dumps(DesignExecutor._top_interfaces(spec), ensure_ascii=False)}
 
 各 IP 的 RTL（注意各 IP 的端口名，连线时用端口名匹配）:
 {json.dumps([{'ip_name': r['ip_name'], 'rtl': r['rtl']} for r in ip_rtls], ensure_ascii=False)}
@@ -417,36 +500,231 @@ IP 名: {ip['ip_name']}
             return ""
 
     @staticmethod
+    def _ip_ports(ip: dict) -> list:
+        """IP 的端口表 → `[{name,width,direction}]`（兼容 list / dict 两种形状）。"""
+        if ip.get("_ports"):
+            return ip["_ports"]
+        raw = ip.get("interface") or []
+        if isinstance(raw, dict):
+            raw = [{"name": k, "data_width": (v or {}).get("width", 1)}
+                   if isinstance(v, dict) else {"name": k, "data_width": 1}
+                   for k, v in raw.items()]
+        out = []
+        for p in raw:
+            if not isinstance(p, dict) or not p.get("name"):
+                continue
+            name = str(p["name"]).split("[")[0].strip()
+            try:
+                width = int(p.get("data_width", 1) or 1)
+            except (TypeError, ValueError):
+                width = 1
+            out.append({"name": name, "width": width,
+                        "direction": str(p.get("direction") or "INPUT").upper()})
+        return out
+
+    @staticmethod
+    def _rtl_ports(rtl_dir: Path, module_name: str) -> list:
+        """从**生成出来的 SV** 读端口（真实位宽/方向）—— 比 dplan 的名字表准。
+
+        要解析参数化位宽（`input [INST_INFO_W-1:0]` + `parameter INST_INFO_W=64`）：
+        通用解析器只认字面量，会把 64-bit 总线当 1 bit，顶层连线就丢高位。
+        """
+        path = Path(rtl_dir) / f"{module_name}.sv"
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return []
+        text = re.sub(r"//[^\n]*", "", text)
+        m = re.search(rf"\bmodule\s+{re.escape(module_name)}\b", text)
+        if not m:
+            return []
+        end = text.find(");", m.end())
+        header = text[m.end():end if end != -1 else len(text)]
+        params = {pm.group(1): int(pm.group(2)) for pm in re.finditer(
+            r"parameter\s+(?:int\s+|integer\s+|logic\s+)?(\w+)\s*=\s*(\d+)",
+            header)}
+
+        def _eval(expr: str):
+            e = re.sub(r"\b[A-Za-z_]\w*\b",
+                       lambda x: str(params.get(x.group(0), x.group(0))), expr)
+            if not re.fullmatch(r"[0-9+\-*/() ]+", e):
+                return None
+            try:
+                return int(eval(e, {"__builtins__": {}}, {}))   # noqa: S307 本地 RTL
+            except Exception:                      # noqa: BLE001 表达式算不出
+                return None
+
+        out = []
+        pat = re.compile(
+            r"\b(input|output|inout)\b\s+(?:wire|logic|reg|bit)?\s*"
+            r"(?:\[([^\]]+)\])?\s*([A-Za-z_]\w*)")
+        for pm in pat.finditer(header):
+            direction, rng, name = pm.group(1), pm.group(2), pm.group(3)
+            width = 1
+            if rng:
+                msb, _, lsb = rng.partition(":")
+                hi = _eval(msb)
+                lo = _eval(lsb) if lsb else 0
+                if hi is not None and lo is not None:
+                    width = abs(hi - lo) + 1
+            out.append({"name": name, "width": width,
+                        "direction": direction.upper()})
+        return out
+
+    @staticmethod
+    def _assigned_signals(text: str, port_names: list) -> set:
+        """RTL 文本里**被赋值**的端口名（`assign x` / `x <=`）。
+
+        dplan 的模块接口只有名字，内部信号方向被记成 INOUT —— LLM 写手于是把
+        `dsp_en` / `ins_inst_info` 这类跨模块线也写成 `inout wire`，但真正
+        驱动它的模块里一定有 `assign` / `<=`。按"谁赋值谁驱动"判方向，比看
+        dplan 的占位 INOUT 可靠。
+        """
+        names = set(port_names or [])
+        pat = re.compile(
+            r"(?:\bassign\s+)?\b([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)?(?:<=|=(?!=))")
+        return {m.group(1) for m in pat.finditer(text or "")} & names
+
+    @staticmethod
+    def _port_target(port: dict, top_dir: Dict[str, str], claimed: set,
+                     internal: Dict[str, int], shadows: Dict[str, int],
+                     ip_inst: str,
+                     net_widths: Dict[str, int] = None) -> str:
+        """一个 IP 端口连到哪根线：顶层同名端口 / 内部 wire / shadow wire。"""
+        nm = port["name"]
+        # 方向以"真正赋值"为准：dplan 的 INOUT 只是占位（见 _assigned_signals）。
+        is_driver = bool(port.get("drives")) or port["direction"] == "OUTPUT"
+        # 同一信号只允许一个驱动：顶层输入不能再被输出驱动；多个 IP 都驱动
+        # 同一输出时只接第一个，其余接 shadow（否则 vopt multi-driver）。
+        conflict = is_driver and (
+            nm in claimed or (nm in top_dir and top_dir.get(nm) == "INPUT"))
+        if nm not in top_dir:
+            # 内部线宽取**主驱动位宽**（见 `_net_widths`）。窄驱动接宽读口时，
+            # `_connect_expr` 会显式零扩展 —— 不能让 Questa 把高位接成 Z。
+            width = (net_widths or {}).get(nm, port["width"])
+            internal.setdefault(nm, width)
+        if conflict:
+            target = f"__{ip_inst}_{nm}"
+            shadows[target] = port["width"]
+            return target
+        if is_driver:
+            claimed.add(nm)
+        return nm
+
+    @staticmethod
+    def _net_widths(ips: list, top_dir: Dict[str, str]) -> Dict[str, int]:
+        """内部信号的主驱动位宽（先扫一遍，连接时才知道要不要零扩展）。
+
+        每个信号只认**第一个驱动者**的位宽；后来的同名驱动会接 shadow。
+        """
+        claimed: set = set()
+        widths: Dict[str, int] = {}
+        for ip in ips:
+            for port in DesignExecutor._ip_ports(ip):
+                nm = port["name"]
+                if nm in top_dir:
+                    continue
+                is_driver = bool(port.get("drives")) or port["direction"] == "OUTPUT"
+                if is_driver and nm not in claimed:
+                    claimed.add(nm)
+                    widths[nm] = port["width"]
+                else:
+                    widths.setdefault(nm, port["width"])
+        return widths
+
+    @staticmethod
+    def _connect_expr(nm: str, port: dict, net_widths: Dict[str, int],
+                      top_dir: Dict[str, str]) -> str:
+        """读口比线宽时显式零扩展（否则 Questa 把高位接成 Z，读完变 X）。"""
+        if nm in top_dir:
+            return nm
+        width = int(port.get("width", 1) or 1)
+        net_w = int(net_widths.get(nm, width) or width)
+        if width > net_w:
+            return "{{%d{1'b0}}, %s}" % (width - net_w, nm)
+        if width < net_w:
+            return f"{nm}[{width - 1}:0]"
+        return nm
+
+    @staticmethod
+    def _instance_connections(ip: dict, module_name: str,
+                              clk: str, rst_n: str,
+                              top_dir: Dict[str, str], claimed: set,
+                              internal: Dict[str, int],
+                              shadows: Dict[str, int],
+                              net_widths: Dict[str, int]) -> tuple:
+        """一个 IP 的实例化连线（clk/rst 直连 + 其余端口按名字接）。"""
+        ip_inst = str(ip["ip_name"]).replace(module_name + "_", "")
+        conns: list = []
+        seen: set = set()
+        for nm in (clk, rst_n):
+            if nm not in seen:
+                seen.add(nm)
+                conns.append(f"    .{nm}({nm})")
+        for port in DesignExecutor._ip_ports(ip):
+            nm = port["name"]
+            if nm in seen:
+                continue
+            seen.add(nm)
+            target = DesignExecutor._port_target(
+                port, top_dir, claimed, internal, shadows, ip_inst,
+                net_widths)
+            expr = target
+            if target == nm and not (
+                    port.get("drives") or port["direction"] == "OUTPUT"):
+                expr = DesignExecutor._connect_expr(nm, port, net_widths, top_dir)
+            conns.append(f"    .{nm}({expr})")
+        return ip_inst, conns
+
+    @staticmethod
     def _gen_top_module(module_name: str, ips: list, spec: dict) -> str:
-        """生成顶层 module：端口 = spec 接口，实例化各 IP（时钟/复位直连）。"""
-        interfaces = spec.get("interfaces", []) or []
-        # 端口声明
+        """生成顶层 module：端口 = spec 接口，IP 之间**按端口名**连线。
+
+        只连 clk/rst 的骨架会让所有子模块输入悬空、顶层输出恒 X —— 编译能过，
+        但 DUT 实际上什么也没连。这里按名字连：
+          · 名字是顶层端口 → 直连；
+          · 其余跨 IP 信号 → 声明内部 `wire`，同名端口自动接同一根线。
+        这是个确定性兜底，不依赖 LLM；连不上（名字对不上）就留 X，由检查器抓。
+        """
+        interfaces = DesignExecutor._top_interfaces(spec) or []
         ports = DesignExecutor._gen_ports(interfaces)
-        # 识别时钟/复位
         clk = rst_n = None
         for itf in interfaces:
-            proto = itf.get("protocol", "").lower()
-            nm = itf.get("name", "").split("[")[0]
+            proto = str(itf.get("protocol") or "").lower()
+            nm = str(itf.get("name") or "").split("[")[0]
             if proto in ("clock", "clk"):
                 clk = nm
             elif proto in ("reset", "rst"):
                 rst_n = nm
+        clk, rst_n = clk or "clk", rst_n or "rst_n"
+        top_dir = {str(i.get("name") or "").split("[")[0].strip():
+                   str(i.get("direction") or "INPUT").upper()
+                   for i in interfaces}
+
+        net_widths = DesignExecutor._net_widths(ips, top_dir)
+        internal: Dict[str, int] = {}
+        shadows: Dict[str, int] = {}
+        claimed: set = set()
+        insts = []
+        for ip in ips:
+            ip_inst, conns = DesignExecutor._instance_connections(
+                ip, module_name, clk, rst_n, top_dir, claimed, internal,
+                shadows, net_widths)
+            insts.append((str(ip["ip_name"]), ip_inst, conns))
 
         lines = [f"module {module_name} ("]
         lines.append(ports)
         lines.append(");")
-        # 实例化各 IP（时钟/复位直连，接口信号由 LLM 写手生成的 IP 端口决定）
-        for ip in ips:
-            ip_inst = ip["ip_name"].replace(module_name + "_", "")
+        for nm, width in sorted(internal.items()):
+            decl = f"[{width - 1}:0] " if width > 1 else ""
+            lines.append(f"  wire {decl}{nm};  // 跨 IP 内部信号")
+        for nm, width in sorted(shadows.items()):
+            decl = f"[{width - 1}:0] " if width > 1 else ""
+            lines.append(f"  wire {decl}{nm};  // 非主驱动（避免多驱动）")
+        for ip_name, ip_inst, conns in insts:
             lines.append("")
-            lines.append(f"  {ip['ip_name']} u_{ip_inst} (")
-            # 时钟/复位直连
-            conns = []
-            if clk:
-                conns.append(f"    .{clk}({clk})")
-            if rst_n:
-                conns.append(f"    .{rst_n}({rst_n})")
-            lines.append(",\n".join(conns) if conns else "    // 接口连线待 LLM 写手生成后补齐")
+            lines.append(f"  {ip_name} u_{ip_inst} (")
+            lines.append(",\n".join(conns))
             lines.append("  );")
         lines.append("")
         lines.append("endmodule")
@@ -454,6 +732,12 @@ IP 名: {ip['ip_name']}
 
     def _build_func_hier(self, spec: dict) -> dict:
         """从 spec features 构建功能层次。"""
+        modules = [m for m in (spec.get("modules") or [])
+                   if isinstance(m, dict) and m.get("name")]
+        if modules:
+            return {"name": spec.get("design_name", "dut"),
+                    "children": [{"name": str(m["name"])} for m in modules
+                                 if str(m.get("level") or "sub") != "top"]}
         features = spec.get("features", [])
         children = []
         for f in features:

@@ -94,7 +94,6 @@ class TestRegistryBasics:
         assert "debug.fingerprint_error" in str(info.value)
 
     def test_has_and_names(self, registry):
-        assert registry.has("casemodel.gaps")
         assert registry.names() == sorted(registry.names())
         assert len(registry) == len(BINDINGS)
 
@@ -214,15 +213,6 @@ class TestRealToolCalls:
                                output_dir="definitely-not-a-real-dir")
         assert "not found" in payload_error(result)
 
-    def test_casemodel_roundtrip(self, registry):
-        example = (Path(__file__).resolve().parents[3]
-                   / "config" / "casemodel" / "examples" / "cpu_pipeline.yaml")
-        if not example.exists():
-            pytest.skip("示例模型不在位")
-        yaml_text = example.read_text(encoding="utf-8")
-        result = registry.call("casemodel.gaps", yaml_text=yaml_text)
-        assert result["score"] > 0
-
     def test_pipeline_readers_are_pure(self, registry):
         """列表页与日志轮询会反复调 —— 不该每次都弹「要不要执行」。"""
         for name in ("pipeline.runs", "pipeline.journal", "pipeline.status",
@@ -240,18 +230,6 @@ class TestRealToolCalls:
         assert isinstance(registry.call("pipeline.runs"), dict)
         assert registry.call("pipeline.journal", run_id="nope")["events"] == []
         assert registry.call("pipeline.status")["run_id"] == ""
-
-    def test_casemodel_uvm_tests_exports_a_paste_ready_fragment(self, registry):
-        """把属性取值摊平成 UVM 的 `environment.tests` 片段 —— 产物是一段 YAML，
-        直接贴进 env 清单即可（两个工具之间只有文件格式契约）。"""
-        example = (Path(__file__).resolve().parents[3]
-                   / "config" / "casemodel" / "examples" / "fc_flowcontrol.yaml")
-        if not example.exists():
-            pytest.skip("示例模型不在位")
-        result = registry.call("casemodel.uvm_tests",
-                               yaml_text=example.read_text(encoding="utf-8"))
-        assert result["count"] > 0
-        assert yaml.safe_load(result["tests_yaml"])["tests"]
 
 
 class TestTriggerPolicy:

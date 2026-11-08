@@ -53,10 +53,10 @@ class SoCVerificationModule(SocModuleBase):
         layout.addWidget(self.table, 1)
 
         payload = self.run_tool("soc.project", quiet=True,
-                                root=str(self.project_root))
+                                project_root=str(self.project_root))
         self._fill_tests(payload if isinstance(payload, dict) else {})
         cases = self.run_tool("soc.c_cases", quiet=True,
-                              root=str(self.project_root))
+                              project_root=str(self.project_root))
         self._c_cases = cases if isinstance(cases, list) else []
         self.c_label.setText(
             "C 用例：" + ("、".join(str(c.get("id")) for c in self._c_cases)
@@ -71,7 +71,7 @@ class SoCVerificationModule(SocModuleBase):
         case_id = str(self._c_cases[0].get("id") or "")
         self.show_info(f"编译并运行 C 用例 {case_id}（E203 + NICE + NPU）…")
         result = self.run_tool("soc.c_run", force=True,
-                               project_root=str(self.project_root),
+                               project_project_root=str(self.project_root),
                                case_id=case_id)
         if isinstance(result, dict):
             if result.get("status") == "PASS":

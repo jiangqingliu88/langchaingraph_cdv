@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import importlib
 
-PACKAGES = ("assertion_tools",)
+from src.tools.boards import BOARDS
+
+PACKAGES = BOARDS["checking"]
 
 
 def __getattr__(name: str):

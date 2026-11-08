@@ -1,0 +1,2 @@
+dimensions,cross_groups,feasibility,max_combinations
+"[{""name"": ""queue_depth"", ""values"": [8, 16, 32]}, {""name"": ""cluster_count"", ""values"": [1, 2, 4]}, {""name"": ""gemm_enable"", ""values"": [true, false]}]","[{""id"": ""XG-CFG-01"", ""dimensions"": [""queue_depth"", ""cluster_count""], ""level"": ""required""}]","[{""id"": ""CFG-NO-GEMM"", ""when"": {""gemm_enable"": false}, ""then"": {""exclude"": true, ""note"": ""GEMM 关闭时 NPU 相关 TP 不适用""}}]",64

@@ -65,7 +65,7 @@ def count_by_severity(issues: Iterable[Issue]) -> Dict[str, int]:
 def sort_issues(issues: Iterable[Issue]) -> List[Issue]:
     """error → warning → info；同级按 target —— 顺序稳定，结果才能 diff。
 
-    与 casemodel 的 `sort_issues` 同一条纪律：不排序的话，同样的输入
+    与 VPlan 的 `sort_issues` 同一条纪律：不排序的话，同样的输入
     每次跑出来的报告顺序可能不同，diff 里全是噪声。
     """
     order = {name: index for index, name in enumerate(SEVERITIES)}

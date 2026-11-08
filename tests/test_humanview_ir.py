@@ -222,12 +222,12 @@ class TestXlsxCaseProjection:
         assert len(skeleton["bindings"]) == len(doc.cases)
 
     def test_case_source_xlsx_is_used_instead_of_dimension_synthesis(self):
-        from src.layers.l3_decision.case_ir import project_from_casemodel
+        from src.layers.l3_decision.case_ir import project_from_model
 
         model = {"object": "npu_sched", "source": EXAMPLE_XLSX,
                  "dimensions": [{"id": "D_type", "fields": []}],
                  "case_source": {"xlsx": EXAMPLE_XLSX}}
-        doc = project_from_casemodel(model, module="npu_sched")
+        doc = project_from_model(model, module="npu_sched")
         assert len(doc.cases) == 64
         assert doc.to_dict()["counts"]["xlsx"] == 64
 

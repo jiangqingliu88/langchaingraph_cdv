@@ -1,0 +1,14 @@
+case_id: TC_DISPATCH_001
+test_name: dispatch_test
+batch: '1'
+contract_ids: C-DISPATCH-001
+covergroups:
+- CG_DISPATCH
+checks: cfg_scb
+owner: dv
+status: planned
+notes: 根据指令类型将指令分发至各个master(XBAR/NIU/GLSU/LLSU/MPU/VPU)，输出各master start/inst_id/base_addr/cfg等信号，并按fence/sync阻塞向下分发。
+title: 根据指令类型将指令分发至各个master(XBAR/NIU/GLSU/LLSU/MPU/VPU)，输出各master start/inst_id/base_addr/cfg等信号，并按fence/sync阻塞向下分发。
+contract_refs:
+- C-DISPATCH-001
+constraints: []

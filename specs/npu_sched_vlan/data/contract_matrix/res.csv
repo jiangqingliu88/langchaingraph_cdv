@@ -1,0 +1,6 @@
+contract_id,class,object,description,source_ref,owner,p_level,check_method,check_artifact,gate,status,assumption,remark
+C-RES-TILE-001,res,资源,SPAD tile 占用最终释放不泄漏,SPEC-1.3-9,dv_res,P0,scb,spec_res_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=res_model_scb
+C-RES-PAGE-001,res,资源,CIMC page 占用释放不越界,SPEC-4,dv_res,P0,scb,spec_res_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=res_model_scb
+C-RES-DRAM-001,res,资源,DRAM 整块占用释放,SPEC-1.3-13,dv_res,P0,scb,spec_res_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=res_model_scb
+C-RES-SPAD-001,res,资源,多组件共享 SPAD tile 不重叠,SPEC-1.3-4,dv_res,P0,scb,spec_res_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=res_model_scb+SVA
+C-RES-RLS-001,res,资源,rls_vld 在 done 前/同拍，提前释放正确,SPEC-1.3-12,dv_res,P0,sva,spec_res_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SVA

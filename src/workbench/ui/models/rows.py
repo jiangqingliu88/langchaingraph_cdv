@@ -10,7 +10,7 @@
 颜色和图标交给调用方：传 `row_colors`（按行）或 `cell_colors`（按行列），
 模型只负责把它们翻成 Qt 的 ForegroundRole —— 判定逻辑不该跑进模型里。
 
-> 本文件原在 `src/layers/l3_decision/casemodel/view/gui/models/rows_model.py`，
+> 本文件从旧建模界面迁入，
 > 工作台第一轮上提为平台通用件；旧路径留了一个转发 shim。
 """
 from __future__ import annotations

@@ -14,14 +14,16 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
 
 from src.core.runtime.atomic import atomic_write_json, atomic_write_text
 
 from .compiler import compile_obligations
-from .contract_model import Contract, canonical_hash, contract_from_case_ir
+from .contract_model import (
+    Contract, Obligation, canonical_hash, contract_from_case_ir,
+)
 from .ledger import anchor_contract, contract_anchor
 
 SCHEMA_MANIFEST = "contract_manifest_v1"
@@ -31,6 +33,8 @@ CONTRACT_DIR = "contract"
 CONTRACT_YAML = "contract.yaml"
 OBLIGATIONS_JSON = "obligations.json"
 MANIFEST_JSON = "contract_manifest.json"
+#: VPlan C-* → 本环境契约义务的映射（sidecar；不参与契约哈希）。
+VPLAN_MAP_JSON = "vplan_map.json"
 
 
 def contract_dir(run_dir: str | Path) -> Path:
@@ -39,6 +43,69 @@ def contract_dir(run_dir: str | Path) -> Path:
 
 def _sha_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _obligations_by_case(obligations: List[Any]) -> Dict[str, List[str]]:
+    by_case: Dict[str, List[str]] = {}
+    for obligation in obligations:
+        by_case.setdefault(str(obligation.case), []).append(
+            str(obligation.obligation_id))
+    return by_case
+
+
+def _case_refs(case: Dict[str, Any]) -> List[str]:
+    return [str(c) for c in (case.get("feats") or case.get("requirements")
+                             or []) if c]
+
+
+def _case_artifacts(case: Dict[str, Any]) -> List[str]:
+    """case 覆盖到的环境资产：组 / SVA / SCB（VPlan 的 C-* 靠它们取证）。"""
+    artifacts = [str(g.get("group")) for g in case.get("groups") or []
+                 if isinstance(g, dict) and g.get("group")]
+    for key in ("sva", "scb"):
+        artifacts += [str(s.get("id")) for s in case.get(key) or []
+                      if isinstance(s, dict) and s.get("id")]
+    return artifacts
+
+
+def _merge_case(contracts: Dict[str, Dict[str, Any]], cid: str,
+                refs: List[str], artifacts: List[str],
+                by_case: Dict[str, List[str]]) -> None:
+    """一个 case 的引用合并进每个 C-* 槽位（去重，引用不复制字段）。"""
+    for ref in refs:
+        slot = contracts.setdefault(ref, {
+            "cases": [], "obligations": [], "artifacts": []})
+        for key, values in (("cases", [cid]),
+                            ("obligations", by_case.get(cid) or []),
+                            ("artifacts", artifacts)):
+            for value in values:
+                if value not in slot[key]:
+                    slot[key].append(value)
+
+
+def build_vplan_contract_map(case_ir: Dict[str, Any],
+                             obligations: List[Any]) -> Dict[str, Any]:
+    """VPlan `C-*` → 本 run 环境契约（CASE / OBL / 资产）的映射。
+
+    映射粒度是 **case**：环境契约按 case 展开义务，case IR 的 `feats`
+    是唯一把 C-* 指回 case 的字段。因此一个 C-* 的"已清偿"意味着
+    引用它的 case 的**全部**义务都已 PROVEN/NOT_APPLICABLE —— 宁可严，
+    不拿一个组的命中替整条契约背书。
+    """
+    by_case = _obligations_by_case(obligations)
+    contracts: Dict[str, Dict[str, Any]] = {}
+    for case in case_ir.get("cases") or []:
+        if not isinstance(case, dict):
+            continue
+        cid = str(case.get("id") or "")
+        refs = _case_refs(case)
+        if cid and refs:
+            _merge_case(contracts, cid, refs, _case_artifacts(case), by_case)
+    if not contracts:
+        return {}
+    return {"schema": "vplan_contract_map_v1",
+            "module": str(case_ir.get("module") or ""),
+            "contracts": contracts}
 
 
 def write_contract(run_dir: str | Path, case_ir: Dict[str, Any],
@@ -59,6 +126,9 @@ def write_contract(run_dir: str | Path, case_ir: Dict[str, Any],
                        sort_keys=False))
     atomic_write_json(out / OBLIGATIONS_JSON,
                       [o.model_dump(by_alias=True) for o in obligations])
+    vplan_map = build_vplan_contract_map(case_ir, obligations)
+    if vplan_map:
+        atomic_write_json(out / VPLAN_MAP_JSON, vplan_map)
     manifest = {
         "schema": SCHEMA_MANIFEST,
         "contract_id": contract.id,
@@ -90,6 +160,34 @@ def _read_list(path: Path) -> list:
     except (OSError, ValueError):
         return []
     return doc if isinstance(doc, list) else []
+
+
+def _load_obligations(run_dir: str | Path) -> List[Obligation]:
+    out: List[Obligation] = []
+    for row in _read_list(contract_dir(run_dir) / OBLIGATIONS_JSON):
+        try:
+            out.append(Obligation(**row))
+        except Exception:                  # noqa: BLE001 坏行跳过，不阻断 link
+            continue
+    return out
+
+
+def ensure_vplan_map(run_dir: str | Path) -> bool:
+    """老 run 补写 `contract/vplan_map.json`；已存在或没有 case_ir → 不动。
+
+    `link` 对历史 run 调它：映射是**确定性投影**（case_ir + obligations），
+    补写不会改变契约哈希，也不改任何证据。
+    """
+    out = contract_dir(run_dir)
+    if (out / VPLAN_MAP_JSON).is_file():
+        return False
+    case_ir = _read_json(Path(run_dir) / "coverage" / "case_ir.json")
+    doc = build_vplan_contract_map(case_ir, _load_obligations(run_dir))
+    if not doc:
+        return False
+    out.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(out / VPLAN_MAP_JSON, doc)
+    return True
 
 
 def read_manifest(run_dir: str | Path) -> Dict[str, Any]:
@@ -149,6 +247,7 @@ def check_contract(run_dir: str | Path) -> Dict[str, Any]:
 
 
 __all__ = [
-    "CONTRACT_DIR", "check_contract", "contract_hash", "load_contract",
+    "CONTRACT_DIR", "VPLAN_MAP_JSON", "build_vplan_contract_map",
+    "check_contract", "contract_hash", "ensure_vplan_map", "load_contract",
     "read_manifest", "write_contract",
 ]

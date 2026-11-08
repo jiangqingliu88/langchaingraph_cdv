@@ -286,7 +286,6 @@ modules:
     tool: {name: ide.manual_nodes, kind: json}
 
   # AIVM 测试点表 —— PM/DV lead 手写 xlsx 的**只读**视图（方案 B 的"该测什么"侧）。
-  # 导入 casemodel / 双哈希防漂移在 CLI（`case-model import-xlsx` / `verify-import`）；
   # 这一页不写盘、不起子进程。
   - id: ide.aivm
     title: 测试点表（xlsx）
@@ -353,22 +352,15 @@ modules:
     tool: {name: agent.outputs, kind: json}
     params: {subscribe: run.selected}
 
-  # case 属性完备性建模 —— 11 个页面嵌在模块内部一个 QTabWidget 里。
-  # 它是唯一一个「界面能力本身就是核心」的模块：正交属性怎么 cross、
-  # 覆盖率怎么收敛，都在这 11 页里回答。归 verify 线：它建的是验证的输入。
-  - id: verify.casemodel
-    title: Case 建模
+  # VPlan 项目 —— 契约 / TP / case 计数 + 运行产物（取代旧 Case 建模页）。
+  - id: verify.vplan
+    title: VPlan 项目
     group: verify
-    factory: src.workbench.modules.verify.casemodel:CasemodelModule
+    factory: src.workbench.modules.verify.vplan:VPlanModule
     area: center
     order: 20
-    # 相对本清单所在目录解析 —— config/casemodel/examples/cpu_pipeline.yaml
-    # **这是"没有选中运行"时的默认输入**（那份是示例，属于另一个设计）。
-    # 一旦在「运行历史」里选了某次运行，页面会跟着切到**那次运行自己的** case 模型
-    # （`<运行目录>/inputs/casemodel.yaml`，闭环里由 spec 合成或人放置）——
-    # 见 `CasemodelModule.on_refresh`。不订阅的话，界面对着的永远是那个示例。
-    input: casemodel/examples/cpu_pipeline.yaml
-    tool: {name: casemodel.gaps, kind: json}
+    input: ../specs/npu_sched
+    tool: {name: vplan.status, kind: json}
     params: {subscribe: run.selected}
 
   # ISA 激励 —— 场景 DSL → ISA 事务层 IR（+ L3 编码 + 张量数据）。
@@ -376,7 +368,7 @@ modules:
   # 归 `verify`：它产出的是**激励**，和 Case 建模一样属于"先把要测什么
   # 说清楚"这一环，是验证构建的输入。
   #
-  # 放在 Case 建模**下面**（order 30 > 20）：先声明要测什么（case 模型），
+  # 放在 VPlan 项目**下面**（order 30 > 20）：先看要测什么/证据到哪，
   # 再把它铺成具体的指令流。两页是同一条线的两个层次。
   - id: verify.isa_gen
     title: ISA 激励

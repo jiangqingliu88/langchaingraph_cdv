@@ -68,6 +68,11 @@ class RegressionStageMixin:
         ("p3", "P3 错误 + 随机", "p3", False),
     )
 
+    #: 人工放行绑定的"结果指纹"：这些字段变了，旧批条就不认。
+    #: 与 `REGRESSION_STAGES` 同一次拆分丢过 —— 缺了它 `approve_stage` 直接崩。
+    _APPROVAL_EVIDENCE_FIELDS = ("name", "status", "total", "passed",
+                                 "failed", "unknown")
+
     def run_regression(self, reg_yaml: str = None, mode: str = "local",
                        tests: str = None, tags: str = None,
                        exclude_tags: str = None,
@@ -106,6 +111,8 @@ class RegressionStageMixin:
                 env_name = derive_env_name(self.output_root)
                 agents = []
                 agents_dir = self.output_root / "agents"
+                if not agents_dir.is_dir():
+                    agents_dir = self.output_root / "sv" / "agents"
                 if agents_dir.exists():
                     agents = [{"name": d.name} for d in agents_dir.iterdir() if d.is_dir()]
                 build_filelist_for_tb(self.output_root, agents, env_name, "filelist.f")
@@ -395,6 +402,79 @@ class RegressionStageMixin:
         gate = bool(stage[3]) if len(stage) > 3 else False
         return name, label, tags, gate
 
+    def _seeded_plan(self, path: Path) -> Path:
+        """把闭环"扩种"偏移落进回归计划（只改 `variables.SEED`）。
+
+        扩种发生在 round 1 结束；round 2 通常**不重跑 verify**，计划文件不会
+        重新生成 —— 不在这里补，扩种就是静默空转（每轮同一批随机流，覆盖率
+        一动不动）。计划比 `seed_expand.json` 新说明已经带过偏移，跳过。
+        """
+        expand = Path(self.output_root) / "coverage" / "seed_expand.json"
+        try:
+            if not path.is_file() or not expand.is_file():
+                return path
+            if expand.stat().st_mtime <= path.stat().st_mtime:
+                return path
+            offset = int((json.loads(expand.read_text(
+                encoding="utf-8", errors="replace")) or {}).get("offset") or 0)
+            if offset <= 0:
+                return path
+            import yaml
+            doc = yaml.safe_load(path.read_text(encoding="utf-8",
+                                                errors="replace")) or {}
+            for test in (doc.get("tests") if isinstance(doc, dict) else None) or []:
+                variables = (test or {}).get("variables") if isinstance(test, dict) else None
+                if isinstance(variables, dict) and "SEED" in variables:
+                    try:
+                        variables["SEED"] = int(variables["SEED"]) + offset
+                    except (TypeError, ValueError):
+                        continue
+            out = path.with_name(f"{path.stem}_seed{offset}.yaml")
+            out.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False),
+                           encoding="utf-8")
+            logger.info(f"扩种偏移 +{offset}：本轮回归计划 → {out.name}")
+            return out
+        except Exception as exc:                    # noqa: BLE001 旁路，不拦回归
+            logger.warning(f"扩种偏移应用失败（按原计划跑）: {exc}")
+            return path
+
+    @staticmethod
+    def _stage_status(r: dict, tags: str, plan_tags: set) -> str:
+        """一级回归结果 → 状态（PASS / FAIL / EMPTY / SKIPPED）。
+
+        EMPTY 与 SKIPPED 的区别是**计划里有没有这个 tag**：没有 = 本来就没用例
+        （跳过），有却没匹配 = 筛选失效（拦下，不能假绿）。
+        """
+        if r.get("error"):
+            return "FAIL"
+        total = int(r.get("total") or 0)
+        if total == 0:
+            if plan_tags and str(tags) not in plan_tags:
+                return "SKIPPED"
+            return "EMPTY"
+        if int(r.get("failed") or 0) == 0 and int(r.get("unknown") or 0) == 0:
+            return "PASS"
+        return "FAIL"
+
+    @staticmethod
+    def _plan_tags(reg_yaml: Path) -> set:
+        """regression.yaml 里所有 test 的 tags 全集（读不到就返回空集）。
+
+        空集 = "不知道"：此时保持原行为（total=0 判 EMPTY 并拦下），不能因为
+        文件缺失就把所有空级都静默放过。
+        """
+        try:
+            import yaml
+            doc = yaml.safe_load(Path(reg_yaml).read_text(
+                encoding="utf-8", errors="replace")) or {}
+        except Exception:                          # noqa: BLE001 读不到就不知道
+            return set()
+        out: set = set()
+        for test in (doc.get("tests") if isinstance(doc, dict) else None) or []:
+            if isinstance(test, dict):
+                out.update(str(t) for t in (test.get("tags") or []))
+        return out
+
     @classmethod
     def regression_manual_gates(cls, stages=None) -> Dict[str, str]:
         """`{某级: 被它挡住的下一级}` —— **从 `REGRESSION_STAGES` 推出来**，不是另写一份。
@@ -444,6 +524,14 @@ class RegressionStageMixin:
         """
         stages = tuple(stages or self.REGRESSION_STAGES)
         results = []
+        plan_path = Path(reg_yaml) if reg_yaml else (
+            Path(self.output_root) / "inputs" / "yaml" / "regression.yaml")
+        # 闭环扩种：round 2 不重跑 verify，计划不会自己带上偏移 —— 在这里补。
+        plan_path = self._seeded_plan(plan_path)
+        reg_yaml = str(plan_path)
+        # 计划里**实际存在**的 tag 全集：用来区分"这一级筛选坏了"与"项目本来
+        # 就没有 P2/P3 用例"。后者不该拦（也没有用例可跑），更不该报假红。
+        plan_tags = self._plan_tags(plan_path)
         # 人工节点的判定只认**这一级自带的第 4 位** —— 不再另查一张表（见
         # `REGRESSION_STAGES` 上面那段：那张表会静默失配）
         for idx, raw in enumerate(stages):
@@ -462,19 +550,7 @@ class RegressionStageMixin:
             # `total == 0`（这一级没有用例）不算失败，但要说出来 —— 静默跳过会让人
             # 以为"这一级跑过了、过了"。`error` 是真错（配置读不到之类），照传。
             total = int(r.get("total") or 0)
-            if r.get("error"):
-                status = "FAIL"
-            elif total == 0:
-                # **一条用例都没匹配到 → 绝不能判 PASS（假绿）。**
-                # 实测踩过：`tags=loopback` 一级都没匹配上，五级全返回 total=0，
-                # 门看着在、其实什么都没拦，整轮报"每级都过"。这比报错还坏 ——
-                # 它把"过滤条件写错了"伪装成"全都通过了"。所以这里单列 EMPTY，
-                # 且**同样拦下**（没跑过的级不能当作过了往下走）。
-                status = "EMPTY"
-            elif failed == 0 and unknown == 0:
-                status = "PASS"
-            else:
-                status = "FAIL"
+            status = self._stage_status(r, tags, plan_tags)
             stage = {
                 "name": name, "label": label, "tags": tags,
                 "status": status,
@@ -486,6 +562,11 @@ class RegressionStageMixin:
                 if r.get(k):
                     stage[k] = r[k]
             results.append(stage)
+
+            if stage["status"] == "SKIPPED":
+                logger.info(f"分级回归：{name} 在计划里没有对应用例 → 跳过"
+                            f"（tags={tags!r}；不是筛选失效）")
+                continue
 
             if stage["status"] != "PASS":
                 if stage["status"] == "EMPTY":

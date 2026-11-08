@@ -550,7 +550,7 @@ class TestRealManifestBuilds:
                 "coverage.output",
                 "audit.output", "ide.manual_nodes", "flow.compare", "debug.sim_log",
                 "debug.fingerprint", "debug.output", "verify.output",
-                "verify.casemodel", "coverage.excludes",
+                "verify.vplan", "coverage.excludes",
                 "flow.pipeline", "flow.todo", "flow.drafts", "flow.runs", "flow.evidence",
                 "flow.task", "flow.diagram", "flow.artifacts", "flow.fcov", "flow.signoff",
                 "flow.trend", "flow.decision", "flow.manifest"}
@@ -574,9 +574,7 @@ class TestRealManifestBuilds:
                     "产物审查", "签核判定", "运行清单", "规则草案", "功能覆盖率",
                     "决策轨迹", "进度趋势",
                     "设计产出", "模型产出", "验证产出",
-                    # ISA 激励归 verify 线（order 30 > Case 建模 20）：先声明测什么，
-                    # 再把它铺成指令流。清单里的位置已与 `group: verify` 对齐。
-                    "Case 建模", "ISA 激励",
+                    "VPlan 项目", "ISA 激励",
                     "回归产出", "回归状态", "回归波形", "回归覆盖率",
                     "覆盖率产出", "覆盖率豁免",
                     "仿真日志", "调试产出", "签核产出",
@@ -586,31 +584,6 @@ class TestRealManifestBuilds:
             titles = [s.windowTitle() for s in window.mdi.subWindowList(
                 QMdiArea.WindowOrder.CreationOrder)]
             assert titles == want
-        finally:
-            window.manager.mark_all_clean()
-            window.close()
-
-    def test_manifest_input_is_loaded_at_startup(self, qt_app, ctx):
-        """清单里写了 input，模块启动时就该已经载入那份模型。
-
-        「文件不在就跳过」也是这条规则的一部分 —— 业务输入经常在别的机器上，
-        因为找不到数据就不让模块起来，会把「少一份数据」升级成「界面打不开」。
-        """
-        from ..config import default_manifest_path
-
-        manifest_path = default_manifest_path()
-        # manifest_path 也要指到真文件：清单里的 input 是**相对清单所在目录**
-        # 解析的，夹具默认给的临时路径会让它解析到 tmp 下去。
-        ctx.manifest_path = manifest_path
-        ctx.manifest = load_manifest_text(
-            manifest_path.read_text(encoding="utf-8"), source=str(manifest_path))
-
-        window = make_window(qt_app, ctx)
-        try:
-            module = window.manager.module("verify.casemodel")
-            assert module.path is not None and module.path.name == "cpu_pipeline.yaml"
-            assert module.result is not None
-            assert module.result.score.total > 0
         finally:
             window.manager.mark_all_clean()
             window.close()

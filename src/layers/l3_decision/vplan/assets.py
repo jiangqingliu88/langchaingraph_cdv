@@ -33,7 +33,7 @@ _RULES: Tuple[Tuple[str, str, str], ...] = (
     ("agents/*/loopback/*_env.sv", "env", "env"),
     ("agents/*/loopback/*.sv", "tb", "tb"),
     ("env/seqs/*.sv", "seq", "seq"),
-    ("env/coverage/*.sv", "coverage", "coverage"),
+    ("env/coverage/*.sv", "covgs", "coverage"),
     ("env/tests/*.sv", "test", "test"),
     ("env/*_loopback_scb.sv", "scbs", "scb"),
     ("env/*_loopback_tb.sv", "tb", "tb"),
@@ -42,10 +42,11 @@ _RULES: Tuple[Tuple[str, str, str], ...] = (
     ("env/*checker*.sv", "checkers", "checker"),
     ("env/*_chk*.sv", "checkers", "checker"),
     ("env/*sva*.sv", "svas", "sva"),
-    ("env/cons/*.sv", "seq", "constraint"),
+    ("env/cons/*.sv", "cons", "constraint"),
     ("env/*.sv", "env", "env"),
     ("bench/*.sv", "tb", "tb"),
     ("coverage/*_cov_if.sv", "interface", "interface"),
+    ("coverage/*.sv", "covgs", "coverage"),
     ("coverage/*bind*.sv", "interface/bind", "bind"),
     # 兜底：agent 目录下没被上面规则命中的 .sv 仍归到该 agent。
     ("agents/*/*.sv", "agents", "agent"),
@@ -137,8 +138,47 @@ def _iter_sources(run_root: Path) -> Iterable[Path]:
             yield from root.rglob("*.sv")
 
 
-def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]:
-    """把 run 里的生成资产整理到 `<run>/sv/`，返回摘要。"""
+def _rewrite_filelists(root: Path, rows: List[Dict[str, str]]) -> None:
+    """把 `inputs/filelists/*.f` 里指向顶层源文件的路径改到 `sv/`。
+
+    verify 生成期按顶层布局拼 filelist；move 到 sv 后必须同步，否则
+    regression 的 `-f filelist_..._lb.f` 会指向已经不存在的文件。
+    """
+    by_source = {str(r.get("source") or ""): r["path"] for r in rows}
+    by_name = {Path(str(r.get("source") or "")).name: r["path"] for r in rows}
+    fl_dir = root / "inputs" / "filelists"
+    if not fl_dir.is_dir():
+        return
+    for path in sorted(fl_dir.glob("*.f")):
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        out = []
+        for line in lines:
+            text = line.strip()
+            if not text or text.startswith(("#", "//", "+")):
+                out.append(line)
+                continue
+            norm = text.replace("\\", "/")
+            rel = ""
+            for src, sv_path in by_source.items():
+                if norm.endswith(src):
+                    rel = sv_path
+                    break
+            if not rel:
+                rel = by_name.get(Path(norm).name, "")
+            out.append(str((root / rel).resolve()) if rel else line)
+        path.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def package_run_assets(run_root: str | Path, module: str = "",
+                       *, move: bool = False) -> Dict[str, Any]:
+    """把 run 里的生成资产整理到 `<run>/sv/`，返回摘要。
+
+    `move=True`：写入 sv/ 后删除顶层源文件（verify 生成期使用；run 里
+    只保留 sv/ 这一份 UVM 资产）。`move=False` 保留源文件（旧 run 补整理）。
+    """
     root = Path(run_root)
     sv_root = root / "sv"
     rows: List[Dict[str, str]] = []
@@ -165,9 +205,19 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
                      or [])
         case_ids = test_cases.get(src.stem, []) if kind == "test" else []
         text = _read(src)
+        # 搬进扁平 sv/ 后，`include "2_config/x.sv"` 这类子目录路径失效 ——
+        # 统一改成 basename（filelist 会把各 sv 子目录都加进 incdir）。
+        text = re.sub(
+            r'`include\s+"([^"]+)"',
+            lambda m: '`include "' + Path(m.group(1)).name + '"', text)
         if not _has_header(text, "ARTIFACT"):
             text = _header(rel.as_posix(), src.stem, contracts, case_ids) + text
         dest.write_text(text, encoding="utf-8")
+        if move and dest.resolve() != src.resolve():
+            try:
+                src.unlink()
+            except OSError:
+                pass
         copied += 1
         rows.append({
             "artifact": src.stem,
@@ -181,6 +231,11 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
         })
 
     sv_root.mkdir(parents=True, exist_ok=True)
+    if not rows and (sv_root / "asset_registry.csv").is_file():
+        # 没有源文件（已被 move 走）→ 保留上一份登记，不能写成空表。
+        with (sv_root / "asset_registry.csv").open(
+                encoding="utf-8-sig", newline="") as fh:
+            rows = [dict(r) for r in csv.DictReader(fh)]
     fields = ["artifact", "kind", "path", "owner", "status",
               "contract_ids", "case_ids", "source"]
     with (sv_root / "asset_registry.csv").open(
@@ -188,6 +243,9 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
+    # 目标布局固定带 `covgs/` 与 `cons/`（即使本轮没有对应 SV 资产）。
+    (sv_root / "covgs").mkdir(exist_ok=True)
+    (sv_root / "cons").mkdir(exist_ok=True)
     (sv_root / "README.md").write_text(
         "# sv — SignOffAI 生成的验证资产（VPlan 布局）\n\n"
         "由 `vagent vplan package-assets` 从本 run 的 `agents/`、`env/`、"
@@ -197,6 +255,7 @@ def package_run_assets(run_root: str | Path, module: str = "") -> Dict[str, Any]
         "全部 `candidate`：没有编译/运行证据，契约仍 `assume`、case 仍 `planned`。\n",
         encoding="utf-8")
     _write_vc_filelists(root, sv_root, rows)
+    _rewrite_filelists(root, rows)
     return {"sv_root": str(sv_root), "copied": copied, "skipped": skipped,
             "skipped_paths": skipped_paths[:20],
             "registry": str(sv_root / "asset_registry.csv"),

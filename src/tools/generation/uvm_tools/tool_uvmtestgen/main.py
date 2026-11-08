@@ -34,8 +34,8 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 # 复用生成层的文件头元数据（商标/权利/时间戳）
 try:
-    from ..generation.constants import DEFAULT_META, __version__ as GEN_UVN_VERSION
-    from ..generation.render.region_injector import _make_banner
+    from ..tool_uvm.constants import DEFAULT_META, __version__ as GEN_UVN_VERSION
+    from ..tool_uvm.render.region_injector import _make_banner
 except ImportError:  # 直接脚本执行
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from generation.constants import DEFAULT_META, __version__ as GEN_UVN_VERSION

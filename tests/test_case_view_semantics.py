@@ -77,7 +77,7 @@ def test_markdown_three_sets_carry_assertion_and_scb_semantics():
     md = render_markdown(_view())
     assert "SVA（断言）" in md and "raw_never_issues" in md
     assert "dep_type == 2'd1" in md                      # 规则原文
-    assert "SCB（比对）" in md and "DUT 检查收口" in md   # 比的是什么
+    assert "SCB / DUT 规则检查" in md and "DUT 检查收口" in md   # 比的是什么
     assert "aggregate" in md                              # 证据粒度
     assert "四集合证据" in md                             # groups/sva/scb/constraints
 

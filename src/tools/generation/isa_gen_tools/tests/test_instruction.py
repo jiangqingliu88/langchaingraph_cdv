@@ -71,7 +71,7 @@ class TestJsonShape:
     def test_key_set_is_pinned(self):
         """IR 的键就是这些 —— 加字段要先改 `IR_KEYS` 和 `ir.schema.json`。
 
-        casemodel 栽过一次"注释指着已删掉的东西"，这里用**单一命名点**避免它：
+        旧建模引擎栽过一次"注释指着已删掉的东西"，这里用**单一命名点**避免它：
         `to_dict()` 是唯一给 JSON 键命名的地方。
         """
         assert IR_KEYS == ("op", "tag", "mask", "flags", "operands", "src", "dst",

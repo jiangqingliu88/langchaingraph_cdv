@@ -51,7 +51,7 @@ class SoCOverviewModule(SocModuleBase):
         layout.addStretch(1)
 
         payload = self.run_tool("soc.project", quiet=True,
-                                root=str(self.project_root))
+                                project_root=str(self.project_root))
         if isinstance(payload, dict):
             valid = payload.get("validation") or {}
             self.project_label.setText(

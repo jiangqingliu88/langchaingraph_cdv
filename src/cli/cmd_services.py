@@ -170,8 +170,8 @@ def _find_spec(project: Path, module: str) -> Path | None:
               default=None, help="执行时用的 spec（缺省从 project/specs 找）")
 @click.option("--rtl", type=click.Path(exists=True, file_okay=False, path_type=Path),
               default=None, help="执行时用的 RTL（缺省用 run/rtl）")
-@click.option("--config", type=click.Path(exists=True, dir_okay=False, path_type=Path),
-              default=None, help="执行时用的 casemodel.yaml")
+@click.option("--vplan", "config", type=click.Path(exists=True, file_okay=False, path_type=Path),
+              default=None, help="执行时用的 VPlan 项目根")
 @click.option("--output", "-o", type=click.Path(file_okay=False, path_type=Path),
               default=None, help="执行时的输出目录（缺省新建 output_closure_*）")
 @click.option("--execute", is_flag=True,
@@ -211,7 +211,6 @@ def coverage_closure(project, coverage, target, spec, rtl, config, output, execu
 
 def _execute_closure(project, run_dir, target, spec, rtl, config, output):
     """复用现有闭环：`--rtl` 当 DUT，spec 当分析输入；不另造收敛引擎。"""
-    from src.layers.l1_infrastructure.layout import casemodel_path
     from src.layers.l1_infrastructure.output_config import make_output_root
     from src.layers.l2_orchestration.execution import PipelineExecutionService
     from src.layers.l2_orchestration.governance.approval import create_approval_gate
@@ -228,9 +227,9 @@ def _execute_closure(project, run_dir, target, spec, rtl, config, output):
     spec_text = spec_path.read_text(encoding="utf-8") if spec_path else ""
     out_root = make_output_root(str(output) if output else f"output_closure_{run_dir.name}")
     if config:
-        dest = casemodel_path(out_root)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(Path(config).read_text(encoding="utf-8"), encoding="utf-8")
+        from src.layers.l3_decision.vplan import (
+            load_project, materialize_project_inputs)
+        materialize_project_inputs(load_project(config), out_root)
 
     async def _run():
         service = PipelineExecutionService.get_instance()

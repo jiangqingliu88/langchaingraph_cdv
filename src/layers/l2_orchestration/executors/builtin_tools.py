@@ -23,22 +23,6 @@ def register_all_tools() -> ToolRegistry:
         registry.register(t)
 
     # ═══════════════════════════════════════════════════
-    # case 属性建模 (3 tools) — verify 角色的工具适配器
-    #   casemodel_validate  Schema 校验
-    #   casemodel_gaps      全量完备性分析（可带真实 case 列表反向核对）
-    #   casemodel_generate  按属性组合生成 case 属性表
-    # 适配器归 verify 角色；工具本体在 src/layers/l3_decision/casemodel/
-    # ═══════════════════════════════════════════════════
-    # **延迟加载**：L2 不静态 import executors（组合根在接口层）。
-    from importlib import import_module
-
-    _casemodel_registry = import_module(
-        "src.executors.verify.casemodel.registry")
-    casemodel_reg = _casemodel_registry.ensure_casemodel_tool_registry()
-    for t in casemodel_reg._tools.values():
-        registry.register(t)
-
-    # ═══════════════════════════════════════════════════
     # model_agent (3 tools)
     # ═══════════════════════════════════════════════════
     registry.register_many([

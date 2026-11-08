@@ -320,14 +320,14 @@ started_at / finished_at · result / error
 | `service` / 客户工程 | `service.uvm`、`service.regression`、`service.coverage` | 三个业务服务入口（只做导航/编排，见 §16） |
 | `platform` / 平台配置 | `platform.settings` | 当前项目/清单/Python/Qt/EDA 工具的可读视图 |
 | `ide` / 设计时 | `ide.ip_spec`、`ide.manual_nodes`、`ide.aivm` | IP 规格、人工节点 YAML 编辑 + schema 校验；AIVM 测试点表（xlsx）只读视图（TP / 三通道覆盖点 / M1 计划摘要，绑定 `humanview.aivm_plan`） |
-| `verify` / 运行时 | `verify.casemodel`（12 页）、`verify.isa_gen`、`verify.output` | case 属性建模、ISA 激励、验证产出 |
+| `verify` / 运行时 | `verify.vplan`、`verify.isa_gen`、`verify.output` | VPlan 项目/运行产物、ISA 激励、验证产出 |
 | `design` / `model` / `ops` / `coverage` / `debug` / `audit` | `*.output` | 各 agent 本次运行的产出视图 |
 | `ops` | `ops.regression_status`、`ops.regression_wave`、`ops.regression_coverage` | 回归状态、波形、覆盖率产物 |
 | `coverage` | `coverage.excludes` | 覆盖率豁免审批 |
 | `debug` | `debug.sim_log`、`debug.fingerprint` | 仿真日志解析、错误指纹 |
 | `flow` / 工程工作区 | `flow.pipeline`、`flow.diagram`、`flow.task`、`flow.todo`、`flow.runs`、`flow.evidence`、`flow.artifacts`、`flow.fcov`、`flow.drafts`、`flow.compare`、`flow.signoff`、`flow.trend`、`flow.decision`、`flow.manifest` | 闭环编排/流程视图/运行历史/证据/签核/趋势/决策轨迹/运行清单 |
 
-**边界**：`*.output` 是只读视图；`verify.casemodel` 是唯一「界面能力本身即核心」
+**边界**：`*.output` 与 `verify.vplan` 都是只读视图；
 的模块（12 页嵌在模块内部 QTabWidget，不摊成平台中央标签页，因为它们同属
 一份 YAML 的只读视图，拆开就失去"点诊断跳源码"的整体关系）。
 
@@ -373,8 +373,7 @@ python -m pytest src/workbench/tests -q
   都不 import Qt），因此这两层可以单独测。
 - 关键测试：`test_workbench_manifest.py`、`test_bridge.py`、
   `test_workbench_registry.py`、`test_menu_structure.py`、`test_workspace*.py`、
-  `test_theme.py`、`test_nav_pane.py`、`test_casemodel_module.py`、
-  `test_casemodel_editor.py`。
+  `test_theme.py`、`test_nav_pane.py`、`test_vplan_module.py`。
 
 当前环境提示：本机 venv 若缺 `qdarkstyle`，工作台测试收集会失败
 （`ModuleNotFoundError: qdarkstyle`）；先 `pip install -e .[gui]`
@@ -466,8 +465,8 @@ src/workbench/
 
 | 步骤 | 入口做的事 | 复用的现有模块 |
 |---|---|---|
-| 项目输入 | 选 RTL 目录 / Spec 文件 / case 模型 | `ide.ip_spec`；`pipeline.start(casemodel=…)` 复制到 run 的 `inputs/casemodel.yaml` |
-| 验证配置 | 打开 case 模型 / ISA 激励 | `verify.casemodel`、`verify.isa_gen` |
+| 项目输入 | 选 RTL 目录 / Spec 文件 / VPlan 项目 | `ide.ip_spec`；`pipeline.start(vplan=…)` 挂到 run 的 `inputs/vplan/` |
+| 验证配置 | 打开 VPlan 项目 / ISA 激励 | `verify.vplan`、`verify.isa_gen` |
 | 环境生成 | 打开验证流程 | `flow.pipeline` |
 | 仿真 | 目标/轮次/审批 → `pipeline.start` | `flow.pipeline`、`flow.runs` |
 | 交付 | 打开产出/证据/签核 | `verify.output`、`flow.evidence`、`flow.signoff` |
@@ -492,7 +491,7 @@ GUI 不等待、不生成本地结论。
   `tp_matrix.json` / `coverage_result.json`，写 `<run>/closure/plan.json`。
 - 展示当前/目标/缺口/动作表；**不执行仿真**。执行由 CLI
   `coverage-closure --execute` 走现有闭环。
-- 导航按钮打开 `ops.regression_coverage`、`coverage.excludes`、`verify.casemodel`、
+- 导航按钮打开 `ops.regression_coverage`、`coverage.excludes`、`verify.vplan`、
   `flow.artifacts`、`flow.evidence`、`flow.signoff`。
 - 页面明确写出：**豁免 / 达到目标 / 真正收敛是三个不同结论**。
 

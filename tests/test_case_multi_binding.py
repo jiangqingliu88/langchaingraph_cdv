@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import yaml
 
-from src.layers.l3_decision.casemodel import plan
-from src.layers.l3_decision.casemodel.repository import load_models_from_text
+from src.layers.l3_decision.vplan.runtime import plan
+from src.layers.l3_decision.vplan.runtime.repository import load_models_from_text
 
 MODEL = """
 object: T

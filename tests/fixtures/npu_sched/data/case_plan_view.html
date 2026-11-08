@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CMDSCHED planned case view (PLACEHOLDER)</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; background: #f8fafc; color: #1f2937;
+         font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  header { background: #7c2d12; color: #fff; padding: 26px 34px; }
+  header h1 { margin: 0 0 6px; font-size: 26px; }
+  header p { margin: 0; color: #fed7aa; font-size: 13px; }
+  main { max-width: 1500px; margin: 0 auto; padding: 22px 26px 50px; }
+  .warn { background: #fff7ed; border-left: 4px solid #ea580c; padding: 10px 14px;
+           color: #9a3412; font-size: 13px; margin: 10px 0 16px; }
+  .cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .card { background: #fff; border-radius: 10px; padding: 14px 18px;
+           min-width: 140px; box-shadow: 0 1px 3px rgba(15,23,42,.08); }
+  .card-label { color: #64748b; font-size: 12px; margin-bottom: 6px; }
+  .card-value { font-size: 20px; font-weight: 700; }
+  nav { background: #fff; border-radius: 10px; padding: 12px 18px; margin-bottom: 18px;
+         font-size: 13px; box-shadow: 0 1px 3px rgba(15,23,42,.08); }
+  h2 { margin: 0 0 8px; font-size: 20px; }
+  h3 { margin: 18px 0 8px; font-size: 15px; color: #334155; }
+  table { width: 100%; border-collapse: collapse; background: #fff;
+           box-shadow: 0 1px 3px rgba(15,23,42,.06); }
+  th, td { border-bottom: 1px solid #e2e8f0; padding: 8px 10px;
+            text-align: left; vertical-align: top; font-size: 13px; }
+  th { background: #eef2f7; color: #334155; font-weight: 600; }
+  code { background: #eef2f7; padding: 1px 5px; border-radius: 4px;
+          font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  a { color: #2563eb; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .case { background: #fff; border-radius: 12px; padding: 20px 22px;
+           margin: 22px 0; box-shadow: 0 1px 4px rgba(15,23,42,.08); }
+  .meta { color: #64748b; font-size: 13px; margin: 0 0 10px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px;
+            font-size: 12px; font-weight: 700; }
+  .badge.planned { background: #fef3c7; color: #92400e; }
+  .badge.placeholder { background: #ffedd5; color: #9a3412; }
+  .badge.assume { background: #e0e7ff; color: #3730a3; }
+  .placeholder { background: #f8fafc; border: 1px dashed #cbd5e1;
+                  padding: 10px 12px; color: #64748b; font-size: 13px; }
+  footer { max-width: 1500px; margin: 0 auto; padding: 0 26px 30px;
+            color: #64748b; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CMDSCHED planned case view</h1>
+  <p>PLACEHOLDER · 全部来自 docs/specs/cmdsched_cases.csv · 不是仿真证据，不可签核</p>
+</header>
+<main>
+  <div class="warn">
+    本页把 target plan 的 12 个 case 全部列出，但状态是 <strong>planned / NOT RUN</strong>。
+    没有 case YAML、UVM test、仿真 log、URG、SCB/Checker/SVA 或波形。
+    <a href="case_view.html">返回可执行 case view（V00，4 条）</a>
+  </div>
+  <div class="cards">
+    <div class="card"><div class="card-label">Planned cases</div><div class="card-value">12</div></div>
+    <div class="card"><div class="card-label">Contracts</div><div class="card-value">42</div></div>
+    <div class="card"><div class="card-label">Test points</div><div class="card-value">66</div></div>
+    <div class="card"><div class="card-label">Covergroups</div><div class="card-value">10</div></div>
+    <div class="card"><div class="card-label">Evidence</div><div class="card-value">0</div></div>
+  </div>
+  <nav>Cases: <a href="#TC_CMDSCHED_BASIC_001">TC_CMDSCHED_BASIC_001</a> · <a href="#TC_CMDSCHED_ITYPE_001">TC_CMDSCHED_ITYPE_001</a> · <a href="#TC_CMDSCHED_INSTB_001">TC_CMDSCHED_INSTB_001</a> · <a href="#TC_CMDSCHED_DEP_001">TC_CMDSCHED_DEP_001</a> · <a href="#TC_CMDSCHED_HAZARD_001">TC_CMDSCHED_HAZARD_001</a> · <a href="#TC_CMDSCHED_PARALLEL_001">TC_CMDSCHED_PARALLEL_001</a> · <a href="#TC_CMDSCHED_MEM_001">TC_CMDSCHED_MEM_001</a> · <a href="#TC_CMDSCHED_RSP_001">TC_CMDSCHED_RSP_001</a> · <a href="#TC_CMDSCHED_EXCP_001">TC_CMDSCHED_EXCP_001</a> · <a href="#TC_CMDSCHED_PERF_001">TC_CMDSCHED_PERF_001</a> · <a href="#TC_CMDSCHED_CSR_001">TC_CMDSCHED_CSR_001</a> · <a href="#TC_CMDSCHED_REL_001">TC_CMDSCHED_REL_001</a></nav>
+  <section>
+    <h2>计划概览</h2>
+    <table>
+<thead><tr>
+<th>case</th>
+<th>batch</th>
+<th>owner</th>
+<th>contracts</th>
+<th>TPs</th>
+<th>covergroups</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><a href="#TC_CMDSCHED_BASIC_001"><code>TC_CMDSCHED_BASIC_001</code></a></td><td>1</td><td>dv_cmd</td><td>4</td><td>7</td><td>CG_CMDSCHED_ITYPE / CG_CMDSCHED_UNIT</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_ITYPE_001"><code>TC_CMDSCHED_ITYPE_001</code></a></td><td>2</td><td>dv_func</td><td>3</td><td>2</td><td>CG_CMDSCHED_ITYPE</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_INSTB_001"><code>TC_CMDSCHED_INSTB_001</code></a></td><td>3</td><td>dv_func</td><td>2</td><td>3</td><td>CG_CMDSCHED_INSTB / CG_CMDSCHED_ISSUE</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_DEP_001"><code>TC_CMDSCHED_DEP_001</code></a></td><td>4</td><td>dv_func</td><td>5</td><td>5</td><td>CG_CMDSCHED_DEP / CG_CMDSCHED_ISSUE</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_HAZARD_001"><code>TC_CMDSCHED_HAZARD_001</code></a></td><td>5</td><td>dv_func</td><td>3</td><td>2</td><td>CG_CMDSCHED_DEP / CG_CMDSCHED_UNIT</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_PARALLEL_001"><code>TC_CMDSCHED_PARALLEL_001</code></a></td><td>6</td><td>dv_func</td><td>4</td><td>5</td><td>CG_CMDSCHED_UNIT</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_MEM_001"><code>TC_CMDSCHED_MEM_001</code></a></td><td>7</td><td>dv_res</td><td>6</td><td>9</td><td>CG_CMDSCHED_MEM</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_RSP_001"><code>TC_CMDSCHED_RSP_001</code></a></td><td>8</td><td>dv_func</td><td>8</td><td>12</td><td>CG_CMDSCHED_RSP</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_EXCP_001"><code>TC_CMDSCHED_EXCP_001</code></a></td><td>9</td><td>dv_exc</td><td>6</td><td>8</td><td>CG_CMDSCHED_EXCP / CG_CMDSCHED_CSR</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_PERF_001"><code>TC_CMDSCHED_PERF_001</code></a></td><td>10</td><td>dv_perf</td><td>3</td><td>3</td><td>CG_CMDSCHED_PERF</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_CSR_001"><code>TC_CMDSCHED_CSR_001</code></a></td><td>P1</td><td>dv_csr</td><td>5</td><td>9</td><td>CG_CMDSCHED_CSR</td><td><span class="badge planned">PLANNED</span></td></tr>
+<tr><td><a href="#TC_CMDSCHED_REL_001"><code>TC_CMDSCHED_REL_001</code></a></td><td>P1</td><td>dv_env</td><td>3</td><td>1</td><td>CG_CMDSCHED_CSR</td><td><span class="badge planned">PLANNED</span></td></tr>
+</tbody>
+</table>
+  </section>
+  
+<section class="case" id="TC_CMDSCHED_BASIC_001">
+  <h2><code>TC_CMDSCHED_BASIC_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_basic_test · batch 1 · owner dv_cmd · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_ITYPE</code> <code>CG_CMDSCHED_UNIT</code></p>
+  <p><code>sva_if_hs</code> <code>cfg_scb</code> <code>start_done_sva</code></p>
+  <h3>契约（4）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-IF-HS-001</code></td><td>接口</td><td>SVA</td><td>1.3-5</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-IF-START-001</code></td><td>接口</td><td>SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-IF-DONE-001</code></td><td>接口</td><td>SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-UNIT-001</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（7）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_CMD_HS_001</code></td><td>CMDSCHED/CMD_IN/HS</td><td>接口</td><td><code>C-IF-HS-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CMD_HS_002</code></td><td>CMDSCHED/CMD_IN/HS</td><td>流控和反压</td><td><code>C-IF-HS-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CMD_OST_001</code></td><td>CMDSCHED/CMD_IN/OST2</td><td>边界</td><td><code>C-FUNC-UNIT-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CMD_OST_002</code></td><td>CMDSCHED/CMD_IN/OST2</td><td>流控和反压</td><td><code>C-IF-HS-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CFG_START_001</code></td><td>CMDSCHED/CFG/START</td><td>参数和配置</td><td><code>C-FUNC-UNIT-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CFG_START_002</code></td><td>CMDSCHED/CFG/START</td><td>接口</td><td><code>C-IF-START-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CFG_START_003</code></td><td>CMDSCHED/CFG/START</td><td>接口</td><td><code>C-IF-DONE-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_ITYPE_001">
+  <h2><code>TC_CMDSCHED_ITYPE_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_instype_test · batch 2 · owner dv_func · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_ITYPE</code></p>
+  <p><code>decode_checker</code> <code>exc_checker</code></p>
+  <h3>契约（3）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-FUNC-UNIT-001</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-EXC-ILLEGAL-001</code></td><td>异常</td><td>Checker+SCB</td><td>1.3-1</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-CFG-CIMC-001</code></td><td>配置</td><td>Checker</td><td>1.3-2</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（2）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_CMD_DEC_001</code></td><td>CMDSCHED/CMD_IN/DECODE</td><td>数据值域</td><td><code>C-FUNC-UNIT-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CMD_DEC_002</code></td><td>CMDSCHED/CMD_IN/DECODE</td><td>数据形状</td><td><code>C-FUNC-UNIT-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_INSTB_001">
+  <h2><code>TC_CMDSCHED_INSTB_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_instb_test · batch 3 · owner dv_func · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_INSTB</code> <code>CG_CMDSCHED_ISSUE</code></p>
+  <p><code>issue_scb</code> <code>buffer_sva</code></p>
+  <h3>契约（2）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-FUNC-ISSUE-001</code></td><td>功能</td><td>SCB+SVA</td><td>1.3-7</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-IF-HS-001</code></td><td>接口</td><td>SVA</td><td>1.3-5</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（3）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_SCHED_ISSUE_001</code></td><td>CMDSCHED/SCHED/ISSUE</td><td>接口</td><td><code>C-FUNC-ISSUE-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_SCHED_ISSUE_002</code></td><td>CMDSCHED/SCHED/ISSUE</td><td>边界</td><td><code>C-FUNC-ISSUE-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_SCHED_ISSUE_003</code></td><td>CMDSCHED/SCHED/ISSUE</td><td>数据形状</td><td><code>C-FUNC-ISSUE-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_DEP_001">
+  <h2><code>TC_CMDSCHED_DEP_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_dep_test · batch 4 · owner dv_func · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_DEP</code> <code>CG_CMDSCHED_ISSUE</code></p>
+  <p><code>hazard_scb</code> <code>hazard_sva</code> <code>sync_scb</code></p>
+  <h3>契约（5）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-FUNC-DEP-002</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-DEP-003</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-DEP-004</code></td><td>功能</td><td>SCB+SVA</td><td>1.3-6</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-DEP-006</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-DATA-SYNC-001</code></td><td>数据</td><td>SCB</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（5）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_SCHED_SH_001</code></td><td>CMDSCHED/SCHED/SH</td><td>数据形状</td><td><code>C-FUNC-DEP-002</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_SCHED_SH_005</code></td><td>CMDSCHED/SCHED/SH</td><td>错误异常</td><td><code>C-FUNC-DEP-002</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_SCHED_DH_001</code></td><td>CMDSCHED/SCHED/DH</td><td>数据形状</td><td><code>C-FUNC-DEP-006</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_SCHED_DH_002</code></td><td>CMDSCHED/SCHED/DH</td><td>数据值域</td><td><code>C-FUNC-DEP-006</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_SCHED_DH_003</code></td><td>CMDSCHED/SCHED/DH</td><td>错误异常</td><td><code>C-FUNC-DEP-006</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_HAZARD_001">
+  <h2><code>TC_CMDSCHED_HAZARD_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_hazard_scope_test · batch 5 · owner dv_func · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_DEP</code> <code>CG_CMDSCHED_UNIT</code></p>
+  <p><code>unit_scb</code> <code>hazard_scb</code></p>
+  <h3>契约（3）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-FUNC-UNIT-004</code></td><td>功能</td><td>SCB+SVA</td><td>1.3-6</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-UNIT-005</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-DEP-006</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（2）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_SCHED_SH_003</code></td><td>CMDSCHED/SCHED/SH</td><td>数据形状</td><td><code>C-FUNC-DEP-003</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_PAR_MST_002</code></td><td>CMDSCHED/PAR/MST</td><td>边界</td><td><code>C-FUNC-UNIT-004</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_PARALLEL_001">
+  <h2><code>TC_CMDSCHED_PARALLEL_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_parallel_test · batch 6 · owner dv_func · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_UNIT</code></p>
+  <p><code>unit_scb</code> <code>tmu_arb_sva</code></p>
+  <h3>契约（4）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-FUNC-UNIT-002</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-UNIT-003</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-UNIT-005</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-PERF-TMU-001</code></td><td>性能</td><td>SCB+SVA</td><td>1.3-10</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（5）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_PAR_MST_001</code></td><td>CMDSCHED/PAR/MST</td><td>数据形状</td><td><code>C-FUNC-UNIT-005</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_PAR_LS_001</code></td><td>CMDSCHED/PAR/LS</td><td>流控和反压</td><td><code>C-FUNC-UNIT-002</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_PAR_TMU_001</code></td><td>CMDSCHED/PAR/TMU</td><td>流控和反压</td><td><code>C-PERF-TMU-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_PAR_TMU_002</code></td><td>CMDSCHED/PAR/TMU</td><td>边界</td><td><code>C-PERF-TMU-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_PAR_LS_002</code></td><td>CMDSCHED/PAR/LS</td><td>流控和反压</td><td><code>C-FUNC-UNIT-003</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_MEM_001">
+  <h2><code>TC_CMDSCHED_MEM_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_mem_test · batch 7 · owner dv_res · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_MEM</code></p>
+  <p><code>res_model_scb</code> <code>tile_sva</code></p>
+  <h3>契约（6）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-RES-TILE-001</code></td><td>资源</td><td>res_model_scb</td><td>1.3-9</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-RES-PAGE-001</code></td><td>资源</td><td>res_model_scb</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-RES-DRAM-001</code></td><td>资源</td><td>res_model_scb</td><td>1.3-13</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-RES-SPAD-001</code></td><td>资源</td><td>res_model_scb+SVA</td><td>1.3-4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-RES-RLS-001</code></td><td>资源</td><td>SVA</td><td>1.3-12</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-CFG-TILE-RLS-001</code></td><td>配置</td><td>Checker</td><td>1.3-9</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（9）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_SCHED_RANGE_001</code></td><td>CMDSCHED/SCHED/RANGE</td><td>数据形状</td><td><code>C-RES-TILE-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_SCHED_RANGE_002</code></td><td>CMDSCHED/SCHED/RANGE</td><td>边界</td><td><code>C-RES-DRAM-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_TILE_001</code></td><td>CMDSCHED/MEM/TILE</td><td>数据形状</td><td><code>C-RES-TILE-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_TILE_002</code></td><td>CMDSCHED/MEM/TILE</td><td>边界</td><td><code>C-RES-TILE-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_PD_001</code></td><td>CMDSCHED/MEM/PAGEDRAM</td><td>数据形状</td><td><code>C-RES-PAGE-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_PD_002</code></td><td>CMDSCHED/MEM/PAGEDRAM</td><td>边界</td><td><code>C-RES-DRAM-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_SHARE_001</code></td><td>CMDSCHED/MEM/SHARE</td><td>数据形状</td><td><code>C-RES-SPAD-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_REL_001</code></td><td>CMDSCHED/MEM/RELEASE</td><td>边界</td><td><code>C-RES-RLS-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_REL_002</code></td><td>CMDSCHED/MEM/RELEASE</td><td>错误异常</td><td><code>C-RES-TILE-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_RSP_001">
+  <h2><code>TC_CMDSCHED_RSP_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_rsp_test · batch 8 · owner dv_func · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_RSP</code></p>
+  <p><code>rsp_scb</code> <code>tag_checker</code> <code>prio_scb</code></p>
+  <h3>契约（8）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-IF-HS-002</code></td><td>接口</td><td>SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-RSP-001</code></td><td>功能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-RSP-002</code></td><td>功能</td><td>SCB+SVA</td><td>1.3-8</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-FUNC-RSP-003</code></td><td>功能</td><td>SCB</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-DATA-TAG-001</code></td><td>数据</td><td>SCB+SVA</td><td>1.3-8</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-DATA-RMW-001</code></td><td>数据</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-DATA-VS-001</code></td><td>数据</td><td>SCB</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-PERF-PRIO-001</code></td><td>性能</td><td>SCB+SVA</td><td>4</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（12）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_SCHED_SH_002</code></td><td>CMDSCHED/SCHED/SH</td><td>数据形状</td><td><code>C-FUNC-DEP-004</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_SCHED_SH_004</code></td><td>CMDSCHED/SCHED/SH</td><td>数据值域</td><td><code>C-DATA-SYNC-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_LMEM_001</code></td><td>CMDSCHED/MEM/LMEM</td><td>数据值域</td><td><code>C-DATA-VS-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_LMEM_002</code></td><td>CMDSCHED/MEM/LMEM</td><td>数据形状</td><td><code>C-DATA-RMW-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_RSP_XD1_001</code></td><td>CMDSCHED/RSP/XD1</td><td>接口</td><td><code>C-FUNC-RSP-002</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_RSP_XD1_002</code></td><td>CMDSCHED/RSP/XD1</td><td>数据值域</td><td><code>C-DATA-TAG-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_RSP_XD1_003</code></td><td>CMDSCHED/RSP/XD1</td><td>错误异常</td><td><code>C-DATA-TAG-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_RSP_PRIO_001</code></td><td>CMDSCHED/RSP/PRIO</td><td>数据形状</td><td><code>C-PERF-PRIO-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_RSP_BP_001</code></td><td>CMDSCHED/RSP/BP</td><td>流控和反压</td><td><code>C-IF-HS-002</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_RSP_BP_002</code></td><td>CMDSCHED/RSP/BP</td><td>边界</td><td><code>C-FUNC-RSP-002</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_RSP_XD1_004</code></td><td>CMDSCHED/RSP/XD1</td><td>数据值域</td><td><code>C-FUNC-RSP-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_LMEM_004</code></td><td>CMDSCHED/MEM/LMEM</td><td>数据值域</td><td><code>C-FUNC-RSP-003</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_EXCP_001">
+  <h2><code>TC_CMDSCHED_EXCP_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_excp_perf_test · batch 9 · owner dv_exc · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_EXCP</code> <code>CG_CMDSCHED_CSR</code></p>
+  <p><code>exc_checker</code> <code>int_scb</code></p>
+  <h3>契约（6）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-EXC-ILLEGAL-001</code></td><td>异常</td><td>Checker+SCB</td><td>1.3-1</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-EXC-ADDR-001</code></td><td>异常</td><td>Checker</td><td>8</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-EXC-INT-001</code></td><td>异常</td><td>SCB</td><td>8</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-EXC-CLEAR-001</code></td><td>异常</td><td>SVA+SCB</td><td>8</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-EXC-BLOCK-001</code></td><td>异常</td><td>SVA+Checker</td><td>8</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-CFG-CSR-001</code></td><td>配置</td><td>Checker</td><td>1.3-1</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（8）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_CMD_DEC_004</code></td><td>CMDSCHED/CMD_IN/DECODE</td><td>错误异常</td><td><code>C-EXC-ILLEGAL-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_MEM_LMEM_003</code></td><td>CMDSCHED/MEM/LMEM</td><td>错误异常</td><td><code>C-EXC-ADDR-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_EXC_ILL_001</code></td><td>CMDSCHED/EXC/ILLEGAL</td><td>数据值域</td><td><code>C-EXC-ILLEGAL-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_EXC_ILL_002</code></td><td>CMDSCHED/EXC/ILLEGAL</td><td>错误异常</td><td><code>C-EXC-INT-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_EXC_ADDR_001</code></td><td>CMDSCHED/EXC/ADDR</td><td>错误异常</td><td><code>C-EXC-ADDR-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_EXC_INT_001</code></td><td>CMDSCHED/EXC/INT</td><td>接口</td><td><code>C-EXC-INT-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_EXC_INT_002</code></td><td>CMDSCHED/EXC/INT</td><td>边界</td><td><code>C-EXC-CLEAR-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_EXC_BLOCK_001</code></td><td>CMDSCHED/EXC/BLOCK</td><td>流控和反压</td><td><code>C-EXC-BLOCK-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_PERF_001">
+  <h2><code>TC_CMDSCHED_PERF_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_perf_test · batch 10 · owner dv_perf · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_PERF</code></p>
+  <p><code>perf_scb</code> <code>debug_scb</code></p>
+  <h3>契约（3）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-PERF-PARAL-001</code></td><td>性能</td><td>SCB</td><td>10.1</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-PERF-START-DONE-001</code></td><td>时序</td><td>timeout+SVA</td><td>9</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-DBG-REG-001</code></td><td>可观测</td><td>debug_scb</td><td>10.1</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（3）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_DBG_REG_001</code></td><td>CMDSCHED/DBGPERF/DBG</td><td>接口</td><td><code>C-DBG-REG-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_PERF_CNT_001</code></td><td>CMDSCHED/DBGPERF/PERF</td><td>流控和反压</td><td><code>C-PERF-PARAL-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_PERF_CNT_002</code></td><td>CMDSCHED/DBGPERF/PERF</td><td>性能长稳</td><td><code>C-PERF-START-DONE-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_CSR_001">
+  <h2><code>TC_CMDSCHED_CSR_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_csr_test · batch P1 · owner dv_csr · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_CSR</code></p>
+  <p><code>cfg_checker</code> <code>lp_sva</code></p>
+  <h3>契约（5）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-CFG-CSR-001</code></td><td>配置</td><td>Checker</td><td>1.3-1</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-CFG-CIMC-001</code></td><td>配置</td><td>Checker</td><td>1.3-2</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-CFG-TILE-RLS-001</code></td><td>配置</td><td>Checker</td><td>1.3-9</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-CFG-SPAD-EXCL-001</code></td><td>配置</td><td>Checker</td><td>3</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-LP-IDLE-001</code></td><td>低功耗</td><td>SVA+Checker</td><td>6.1</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（9）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_CMD_DEC_003</code></td><td>CMDSCHED/CMD_IN/DECODE</td><td>参数和配置</td><td><code>C-CFG-CSR-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CFG_CREG_001</code></td><td>CMDSCHED/CFG/COREREG</td><td>参数和配置</td><td><code>C-CFG-CSR-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CFG_CSR_001</code></td><td>CMDSCHED/CFG/CSRCIMC</td><td>参数和配置</td><td><code>C-CFG-CSR-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CFG_CSR_002</code></td><td>CMDSCHED/CFG/CSRCIMC</td><td>数据形状</td><td><code>C-CFG-CIMC-001</code></td><td>P0</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CFG_CSR_003</code></td><td>CMDSCHED/CFG/CSRCIMC</td><td>边界</td><td><code>C-CFG-TILE-RLS-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_LP_ICG_001</code></td><td>CMDSCHED/LP/ICG</td><td>时钟复位</td><td><code>C-LP-IDLE-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_LP_ICG_002</code></td><td>CMDSCHED/LP/ICG</td><td>边界</td><td><code>C-LP-IDLE-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_LP_RST_002</code></td><td>CMDSCHED/LP/RST</td><td>时钟复位</td><td><code>C-LP-RST-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+<tr><td><code>TP_CFG_CSR_004</code></td><td>CMDSCHED/CFG/CSRCIMC</td><td>参数和配置</td><td><code>C-CFG-SPAD-EXCL-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+<section class="case" id="TC_CMDSCHED_REL_001">
+  <h2><code>TC_CMDSCHED_REL_001</code> <span class="badge placeholder">PLACEHOLDER / NOT RUN</span></h2>
+  <p class="meta">cmdsched_rel_test · batch P1 · owner dv_env · status planned</p>
+  <div class="warn"><strong>这不是证据。</strong>该 case 来自 target plan，尚未生成 case YAML / UVM test / 仿真 log / URG 报告，不能用于签核。</div>
+  <h3>Covergroups / Checks（计划）</h3>
+  <p><code>CG_CMDSCHED_CSR</code></p>
+  <p><code>lp_sva</code> <code>res_model_scb</code></p>
+  <h3>契约（3）</h3>
+  <table>
+<thead><tr>
+<th>contract</th>
+<th>category</th>
+<th>method</th>
+<th>spec_ref</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>C-LP-RST-001</code></td><td>低功耗</td><td>SVA+Checker</td><td>6.1</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-EXC-INT-001</code></td><td>异常</td><td>SCB</td><td>8</td><td><span class="badge assume">已转 assume</span></td></tr>
+<tr><td><code>C-RES-TILE-001</code></td><td>资源</td><td>res_model_scb</td><td>1.3-9</td><td><span class="badge assume">已转 assume</span></td></tr>
+</tbody>
+</table>
+  <h3>测试点（1）</h3>
+  <table>
+<thead><tr>
+<th>tp_id</th>
+<th>feature</th>
+<th>topic</th>
+<th>contract</th>
+<th>priority</th>
+<th>status</th>
+</tr></thead>
+<tbody>
+<tr><td><code>TP_LP_RST_001</code></td><td>CMDSCHED/LP/RST</td><td>中间复位</td><td><code>C-LP-RST-001</code></td><td>P1</td><td><span class="badge planned">planned</span></td></tr>
+</tbody>
+</table>
+  <h3>Evidence</h3>
+  <p class="placeholder">NOT RUN · 无 JSON / log / cov / 波形</p>
+</section>
+</main>
+<footer>
+  数据源：docs/specs/cmdsched_cases.csv、cmdsched_testpoints.csv、cmdsched_contracts.csv、cmdsched_features.csv。
+  本页是占位视图，不写入 evidence/，不参与 V00 门禁。
+</footer>
+</body>
+</html>

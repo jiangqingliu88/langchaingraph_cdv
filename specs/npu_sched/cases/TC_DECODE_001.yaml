@@ -1,0 +1,14 @@
+case_id: TC_DECODE_001
+test_name: decode_test
+batch: '1'
+contract_ids: C-DECODE-001
+covergroups:
+- CG_DECODE
+checks: cfg_scb
+owner: dv
+status: planned
+notes: 接收CPU下发的指令原语，解析指令中的配置寄存器/基地址/指令类型；解析rd/wr_lmem指令并与spad进行数据交互；保存6组master[XBAR/NIU/GLSU/LLSU/MPU/VPU]一条指令；含2深度指令存储buffer；根据cfg/pre定义寄存器保存cfg/pre信息。
+title: 接收CPU下发的指令原语，解析指令中的配置寄存器/基地址/指令类型；解析rd/wr_lmem指令并与spad进行数据交互；保存6组master[XBAR/NIU/GLSU/LLSU/MPU/VPU]一条指令；含2深度指令存储buffer；根据cfg/pre定义寄存器保存cfg/pre信息。
+contract_refs:
+- C-DECODE-001
+constraints: []

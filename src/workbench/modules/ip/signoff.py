@@ -85,9 +85,9 @@ class IpSignoffModule(IpModuleBase):
               "独立 IP TB / 覆盖率拆分仍是 M2。")
         self.body.setStyleSheet(f"color: {theme.current().muted};")
         info = self.run_tool("ip.release_check", quiet=True,
-                             root=str(self.project_root), ip_id=ip_id)
+                             project_root=str(self.project_root), ip_id=ip_id)
         self.release.setText(self._release_text(info if isinstance(info, dict) else {}))
-        st = self.run_tool("ip.status", quiet=True, root=str(self.project_root),
+        st = self.run_tool("ip.status", quiet=True, project_root=str(self.project_root),
                            ip_id=ip_id, run_root="")
         if isinstance(st, dict):
             self.status.setText(

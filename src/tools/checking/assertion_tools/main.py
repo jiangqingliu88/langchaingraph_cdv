@@ -67,7 +67,7 @@ def generate_sva_assertions(specs: str = "") -> str:
     两层加起来的结果：**断言一行都没编进去**，"assertion 不报错"这件事从来没有被
     检验过 —— 它不是"没有违规"，是"没有断言"。
 
-    与基准探针同一条路子（见 `casemodel_tools.coverage.render_probe`）：包成一个
+    与基准探针同一条路子（见 `vplan/runtime/coverage.render_probe`）：包成一个
     **module**，用 `bind` 挂进 DUT —— 端口连接表达式在**目标模块作用域**里求值，
     所以 `clk`/`rst_n` 以及断言的信号直接按名字连得过去，不必知道层次路径。
 
@@ -109,7 +109,7 @@ def generate_sva_assertions(specs: str = "") -> str:
 
     # ── 模型声明的断言**优先** ──
     #
-    # `casemodel.yaml` 的 `assertions:` 是设计者写的（"这条规则必须恒成立"），
+    # 执行资产的 `assertions.csv` 是设计者写的（"这条规则必须恒成立"），
     # 比自动生成认得出的协议特征**精确得多** —— 自动那套只认 APB/UART/handshake
     # 这类通用特征，对调度器/仲裁器这种自定义逻辑一个都认不出来（实测：给
     # npu_sched 生成出来的是空串）。模型给了就用模型的，自动那套是兜底。

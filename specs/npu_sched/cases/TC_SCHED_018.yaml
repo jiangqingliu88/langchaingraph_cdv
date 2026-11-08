@@ -1,0 +1,11 @@
+case_id: TC_SCHED_018
+test_name: debug_observability_assertion_test
+batch: B05
+title: 可观测与断言
+contract_refs:
+- C-DBG-001
+- C-DBG-002
+covergroups:
+- cg_debug_reg
+- cg_init_assertion
+constraints: []

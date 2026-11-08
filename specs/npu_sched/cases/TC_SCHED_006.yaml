@@ -1,0 +1,12 @@
+case_id: TC_SCHED_006
+test_name: tile_config_and_conflict_test
+batch: B02
+title: tile配置与冲突
+contract_refs:
+- C-CFG-005
+- C-FUNC-007
+covergroups:
+- cg_tile_num
+- cg_tile_conflict
+- cg_tile_release
+constraints: []

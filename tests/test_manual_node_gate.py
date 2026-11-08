@@ -243,7 +243,7 @@ class TestArtifactCollection:
                                               "inputs/yaml/regression.yaml",
                                               # 功能覆盖那一组：同样是"卡住运行的
                                               # 中间产物"，审批时也该看得见
-                                              "inputs/casemodel.yaml",
+                                              "inputs/vplan/data/execution_meta.csv",
                                               "coverage/coverage_points.json",
                                               "inputs/yaml/uvm/env_cov_bins.yaml"]
         bench = [i for i in items if i["path"].endswith("bench.yaml")][0]

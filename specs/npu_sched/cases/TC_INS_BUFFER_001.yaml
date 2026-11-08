@@ -1,0 +1,14 @@
+case_id: TC_INS_BUFFER_001
+test_name: ins_buffer_test
+batch: '1'
+contract_ids: C-INS_BUFFER-001
+covergroups:
+- CG_INS_BUFFER
+checks: cfg_scb
+owner: dv
+status: planned
+notes: 存储无法直接下发指令的cfg信息/基地址/指令类型信息，深度4，按store_en写入、按ren_id/ren读出。
+title: 存储无法直接下发指令的cfg信息/基地址/指令类型信息，深度4，按store_en写入、按ren_id/ren读出。
+contract_refs:
+- C-INS_BUFFER-001
+constraints: []

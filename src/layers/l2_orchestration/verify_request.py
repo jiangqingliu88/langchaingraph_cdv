@@ -4,15 +4,15 @@
 
 同一个 `vagent verify` 曾经有三条入口：
 
-    CLI      → 自己 make_output_root / 拷 casemodel / 改 Settings → PipelineExecutionService
+    CLI      → 自己 make_output_root / 挂 VPlan / 改 Settings → PipelineExecutionService
     GUI      → run_service.RunRequest → RunService 线程 → PipelineExecutionService
     app 服务 → verify_service.run_verify_async → PipelineExecutionService
 
-三处各写一遍"运行前要准备什么"，改一处（比如 casemodel 的落点、全量回归开关）
+三处各写一遍"运行前要准备什么"，改一处（比如 VPlan 挂载、全量回归开关）
 另外两条路就不跟。所以把**输入字段 + 预检**收口到这里：
 
     VerifyRequest(...)        一次运行的完整声明
-    .prepare(root=None)       定输出目录（不撞车）/ 拷 casemodel / 套 Settings
+    .prepare(root=None)       定输出目录（不撞车）/ 挂 VPlan / 套 Settings
     .incremental_env()        `--incremental-from` 的环境变量窗口（跑完恢复）
     .approval_gate(channel)   审批通道（GUI 可注入 EventChannel）
 
@@ -50,24 +50,25 @@ def unique_output_root(base: str | Path) -> Path:
     return root
 
 
-def copy_casemodel(casemodel: str, run_root: str | Path) -> Optional[Path]:
-    """`--config` / GUI 的 case 模型 → `<run>/inputs/casemodel.yaml`。"""
-    if not casemodel:
+def mount_vplan(vplan: str, run_root: str | Path) -> Optional[Path]:
+    """VPlan 项目根 → `<run>/inputs/vplan/`（执行期唯一输入）。"""
+    if not vplan:
         return None
-    from src.layers.l1_infrastructure.layout import casemodel_path
+    src = Path(vplan)
+    if not src.is_dir():
+        raise ValueError(
+            f"不是 VPlan 项目目录：{src}（case 模型 YAML 已不再支持；"
+            "请给含 data/*.csv 与 cases/*.yaml 的项目根）")
+    from src.layers.l1_infrastructure.layout import vplan_inputs_dir
+    from src.layers.l3_decision.vplan import (
+        load_project, materialize_project_inputs, require_review)
 
-    src = Path(casemodel)
-    if not src.is_file():
-        raise FileNotFoundError(f"casemodel 不存在：{src}")
-    dest = Path(casemodel_path(run_root))
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(src.read_text(encoding="utf-8", errors="replace"),
-                    encoding="utf-8")
-    # front 会生成自己的草稿并写同一个落点；显式模型必须能赢过草稿，
-    # 否则 `--config` / VPlan 派生模型会被静默覆盖（实测）。
-    (dest.parent / ".casemodel_explicit").write_text(
-        str(src), encoding="utf-8")
-    return dest
+    project = load_project(src)
+    # **人工审阅门**：LLM 抽取的契约/接口/用例没人看过就执行，后面全错。
+    # 开发调试用 `SIGNOFFAI_ALLOW_UNREVIEWED=1` 显式跳过。
+    require_review(project)
+    materialize_project_inputs(project, run_root)
+    return vplan_inputs_dir(run_root)
 
 
 @dataclass
@@ -88,7 +89,7 @@ class VerifyRequest:
     #: 分级回归人工节点是否拦截。默认 `True` —— 门是默认该在的。
     manual_gate: bool = True
     rtl_dir: str = ""
-    casemodel: str = ""
+    vplan: str = ""
     approval: str = "threshold"
     approval_timeout_s: float = 0.0
     run_id: str = ""
@@ -123,7 +124,7 @@ class VerifyRequest:
             "sim_modes": list(self.sim_modes or []),
             "manual_gate": self.manual_gate,
             "rtl_dir": self.rtl_dir,
-            "casemodel": self.casemodel,
+            "vplan": self.vplan,
             "approval": self.approval,
             "checkpointing": self.checkpointing,
             "full_regression": self.full_regression,
@@ -148,10 +149,10 @@ class VerifyRequest:
         return ""
 
     def prepare(self, root: Optional[str | Path] = None) -> Path:
-        """运行前预检：输出目录（不撞车）+ casemodel 落点 + Settings 覆写。"""
+        """运行前预检：输出目录（不撞车）+ VPlan 挂载 + Settings 覆写。"""
         run_root = Path(root) if root else unique_output_root(
             self.output_root or "output")
-        copy_casemodel(self.casemodel, run_root)
+        mount_vplan(self.vplan, run_root)
         if self.full_regression:
             from config.settings import Settings
             Settings.get_instance().verification.incremental_regression = False
@@ -199,4 +200,4 @@ class VerifyRequest:
                                     timeout_s=self.approval_timeout_s)
 
 
-__all__ = ["VerifyRequest", "copy_casemodel", "unique_output_root"]
+__all__ = ["VerifyRequest", "mount_vplan", "unique_output_root"]

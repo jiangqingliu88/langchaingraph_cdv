@@ -7,6 +7,7 @@ Filelist 构建 —— 生成 QuestaSim vlog 兼容的 filelist.f
     lb_fl = build_loopback_filelist(output_dir, "agent_name")
 """
 from pathlib import Path
+from typing import List
 
 
 def derive_env_name(output_dir: Path) -> str:
@@ -28,6 +29,8 @@ def derive_env_name(output_dir: Path) -> str:
     （子包名总是父名加后缀）。
     """
     env_dir = Path(output_dir) / "env"
+    if not env_dir.is_dir():
+        env_dir = Path(output_dir) / "sv" / "env"
     if not env_dir.is_dir():
         return "dut_env"
 
@@ -210,6 +213,103 @@ def _bench_lines(output_dir: Path) -> list:
     return out
 
 
+def _sv_agent_lines(sv_root: Path, agent_dir: Path) -> List[str]:
+    """一个 agent 的编译序列（与旧布局一致：子包 → 接口 → 主包）。
+
+    主包 `include` 了 driver/monitor/sequencer 等；把它们再单列会重复定义。
+    """
+    name = agent_dir.name
+    iface = name[:-len("_agent")] if name.endswith("_agent") else name
+    out: List[str] = []
+    for fname in (f"{iface}_parameters_pkg.sv", f"{iface}_typedefs_pkg.sv"):
+        p = agent_dir / fname
+        if p.is_file():
+            out.append(p.as_posix())
+    iface_dir = sv_root / "interface"
+    for fname in (f"{iface}_if.sv", f"{iface}_system_if.sv"):
+        p = iface_dir / fname
+        if p.is_file():
+            out.append(p.as_posix())
+    pkg = agent_dir / f"{iface}_pkg.sv"
+    if pkg.is_file():
+        out.append(pkg.as_posix())
+    if not out:
+        out = [p.as_posix() for p in sorted(agent_dir.glob("*.sv"))]
+    return out
+
+
+def _sv_lines(output_dir: Path) -> List[str]:
+    """sv/ 布局的编译顺序：interface → agents → env/seq/test → checker/scb/cov → tb。
+
+    RTL 与参考模型仍在 run 根；`bind` 产物（覆盖率接口/SVA）排在 RTL 之后。
+    """
+    lines: List[str] = []
+    sv_root = output_dir / "sv"
+    # 扁平 sv 布局：所有子目录都进 incdir（`include "x.sv"` 按 basename 找）。
+    for sub in ("interface", "env", "seq", "test", "checkers", "scbs",
+                "svas", "cons", "covgs", "tb"):
+        d = sv_root / sub
+        if d.is_dir():
+            lines.append(f"+incdir+{d.as_posix()}")
+    agents_dir0 = sv_root / "agents"
+    if agents_dir0.is_dir():
+        for agent in sorted(p for p in agents_dir0.iterdir() if p.is_dir()):
+            lines.append(f"+incdir+{agent.as_posix()}")
+    rtl_dir = output_dir / "rtl"
+    if rtl_dir.is_dir():
+        lines.extend(p.as_posix() for p in sorted(rtl_dir.glob("*.sv")))
+
+    def _rank(path: Path) -> tuple:
+        name = path.name
+        if name.endswith("_parameters_pkg.sv"):
+            return (0, name)
+        if name.endswith("_typedefs_pkg.sv"):
+            return (1, name)
+        if name.endswith("_if.sv"):
+            return (2, name)
+        if name.endswith("_pkg.sv"):
+            return (3, name)
+        return (4, name)
+
+    agents_dir = sv_root / "agents"
+    if agents_dir.is_dir():
+        for agent in sorted(p for p in agents_dir.iterdir() if p.is_dir()):
+            lines.extend(_sv_agent_lines(sv_root, agent))
+    cov_if = sv_root / "interface"
+    if cov_if.is_dir():
+        lines.extend(p.as_posix() for p in sorted(cov_if.glob("*_cov_if.sv")))
+    # env/seq/test 只列**主包**（类由包 `include`，单独列会抢在包前面）。
+    for sub in ("env", "seq", "test"):
+        base = sv_root / sub
+        if base.is_dir():
+            lines.extend(p.as_posix() for p in sorted(base.glob("*_pkg.sv")))
+    tb = sv_root / "tb"
+    if tb.is_dir():
+        lines.extend(p.as_posix() for p in sorted(tb.glob("*.sv")))
+    return lines
+
+
+def _write_resolved(fl_path: Path, lines: List[str]) -> Path:
+    resolved = []
+    for line in lines:
+        if line.startswith("+incdir+"):
+            body = line[len("+incdir+"):]
+            try:
+                resolved.append("+incdir+" + Path(body).resolve().as_posix())
+            except OSError:
+                resolved.append(line)
+            continue
+        if line.startswith("+"):          # +define+ / … 不是文件路径
+            resolved.append(line)
+            continue
+        try:
+            resolved.append(Path(line).resolve().as_posix())
+        except OSError:
+            resolved.append(line)
+    fl_path.write_text("\n".join(resolved), encoding="utf-8", errors="replace")
+    return fl_path
+
+
 def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
                           filelist_name: str = "filelist.f") -> Path:
     """构建全环境编译 filelist。
@@ -238,6 +338,10 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
     # 外加一屏连带错误。实测踩过。
     lines.extend(_uvm_lines())
     lines.extend(_base_pkg_lines())
+    sv_root = output_dir / "sv"
+    if sv_root.is_dir() and not (output_dir / "agents").is_dir():
+        lines.extend(_sv_lines(output_dir))
+        return _write_resolved(fl_path, lines)
     for a in agents:
         lines.extend(_agent_lines(output_dir, a["name"]))
 
@@ -284,15 +388,46 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
     # resolve()，这里保持。
     resolved = []
     for line in lines:
-        prefix = "+incdir+" if line.startswith("+incdir+") else ""
-        body = line[len(prefix):]
+        if line.startswith("+incdir+"):
+            body = line[len("+incdir+"):]
+            try:
+                resolved.append("+incdir+" + Path(body).resolve().as_posix())
+            except OSError:
+                resolved.append(line)
+            continue
+        if line.startswith("+"):          # +define+ / … 不是文件路径
+            resolved.append(line)
+            continue
         try:
-            resolved.append(prefix + Path(body).resolve().as_posix())
+            resolved.append(Path(line).resolve().as_posix())
         except OSError:
             resolved.append(line)
 
     fl_path.write_text("\n".join(resolved), encoding="utf-8", errors="replace")
     return fl_path
+
+
+def _sv_loopback_filelist(output_dir: Path, agent_name: str,
+                          fl: Path) -> Path:
+    """sv/ 布局下的单 agent loopback 编译清单（扁平的 sv 子目录）。"""
+    iface = agent_name[:-len("_agent")] if agent_name.endswith("_agent") else agent_name
+    sv_root = output_dir / "sv"
+    lines = _uvm_lines() + _base_pkg_lines()
+    lines.append(f"+define+{iface}_loop_back_test")
+    for sub in ("interface", "env", "seq", "test", "scbs", "tb"):
+        d = sv_root / sub
+        if d.is_dir():
+            lines.append(f"+incdir+{d.resolve().as_posix()}")
+    lines.append(f"+incdir+{(sv_root / 'agents' / agent_name).resolve().as_posix()}")
+    agent_dir = sv_root / "agents" / agent_name
+    lines.extend(_sv_agent_lines(sv_root, agent_dir))
+    for sub, suffix in (("scbs", "_loopback_scb.sv"), ("env", "_loopback_env.sv"),
+                        ("test", "_loopback_test.sv"), ("tb", "_loopback_tb.sv")):
+        base = sv_root / sub
+        if base.is_dir():
+            for p in sorted(base.glob(f"{iface}{suffix}")):
+                lines.append(p.as_posix())
+    return _write_resolved(fl, lines)
 
 
 def build_loopback_filelist(output_dir: Path, agent_name: str) -> Path:
@@ -316,6 +451,9 @@ def build_loopback_filelist(output_dir: Path, agent_name: str) -> Path:
     fl_dir.mkdir(parents=True, exist_ok=True)
     fl = fl_dir / f"filelist_{agent_name}_lb.f"
     agent_dir = output_dir / "agents" / agent_name
+    sv_root = output_dir / "sv"
+    if not agent_dir.is_dir() and (sv_root / "agents" / agent_name).is_dir():
+        return _sv_loopback_filelist(output_dir, agent_name, fl)
     iface = agent_name[:-len("_agent")] if agent_name.endswith("_agent") else agent_name
 
     lines = _uvm_lines() + _base_pkg_lines()

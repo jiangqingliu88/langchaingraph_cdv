@@ -63,22 +63,46 @@ def _rtl_version_no(state: PipelineState, module: str):
         return None
 
 
+def _spec_from_front(state: PipelineState) -> tuple:
+    """bypass 模式复用 front 已解出的 spec/design_arch（没有则空）。
+
+    front 在 bypass 之前已经跑过（`--rtl` 时也读了 RTL、还可能合并了 dplan
+    sidecar）。若在这里按 `_parse_rtl_module(rtl_dir, "")` 重解析，多文件工程
+    会选中**错误的模块**（实测：npu_sched/ 下 6 个文件解析成 `cmd_int_perf`，
+    整条 UVM/回归都挂到子模块上）。front 的结论才是"这一轮的设计身份"。
+    """
+    spec = state.spec if isinstance(state.spec, dict) else {}
+    if not (spec.get("design_name") and spec.get("interfaces")):
+        return {}, {}
+    arch = dict(state.design_arch) if isinstance(state.design_arch, dict) else {}
+    arch.setdefault("module_name", spec["design_name"])
+    arch.setdefault("interfaces", spec.get("interfaces") or [])
+    arch.setdefault("registers", spec.get("registers") or [])
+    arch.setdefault("function_hier", spec.get("function_hier") or {"children": []})
+    logger.info(f"验证专注模式：复用 front spec design_name="
+                f"{spec['design_name']} interfaces="
+                f"{len(spec.get('interfaces') or [])}")
+    return dict(spec), arch
+
+
 async def n_design(state: PipelineState, config) -> Dict[str, Any]:
     """design（或 bypass 模式下从 spec 直接解析）。"""
     rt = _rt(config)
     if state.bypass_design or state.bypass_design_model:
         logger.info("验证专注模式：bypass design/model，直接进入 verify（预置 RTL + 黄金模型）")
-        spec, arch = {}, {}
+        spec, arch = _spec_from_front(state)
         # ── RTL 是**唯一输入**时：规格从 DUT 分析出来 ──
         # `--rtl` 与 spec 互斥（CLI 已挡），所以这里 spec_text 是空的 —— 再走
         # `analyze_specification("")` 只会解出 `design_name: dut` 这种假名字。
         # 改成读 RTL：顶层 module 名 → design_name，端口表 → interfaces。
         _rtl_dir = Path(state.output_root) / "rtl"
         _rtl_mods = sorted(_rtl_dir.glob("*.sv")) if _rtl_dir.is_dir() else []
-        if _rtl_mods and not (rt.spec_text or "").strip():
+        if not spec and _rtl_mods and not (rt.spec_text or "").strip():
             try:
+                import os as _os
                 from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import _parse_rtl_module
-                _rtl = _parse_rtl_module(_rtl_dir, "") or {}
+                _hint = _os.environ.get("SIGNOFFAI_DESIGN_NAME", "").strip()
+                _rtl = _parse_rtl_module(_rtl_dir, _hint) or {}
                 _m = _rtl.get("module_name") or ""
                 if not _m:
                     # 没指名就先按第一个文件里的 module 名兜（`_parse_rtl_module`

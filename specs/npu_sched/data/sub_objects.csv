@@ -1,0 +1,7 @@
+id,name,code
+OBJ-01,npu_sched,NPU_SCHE
+OBJ-02,decode,DECODE
+OBJ-03,scoreboard,SCOREBOA
+OBJ-04,ins_buffer,INS_BUFF
+OBJ-05,dispatch,DISPATCH
+OBJ-06,cmd_int_perf,CMD_INT_

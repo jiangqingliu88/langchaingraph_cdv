@@ -49,16 +49,24 @@ def load_coverage_plan(output_dir: Path) -> Dict[str, Any]:
 
 
 def write_case_closure(output_dir: Path, case_ir: Dict[str, Any],
-                       case_model: Path, module: str = "") -> Dict[str, Any]:
+                       case_model: Path | None, module: str = "",
+                       known_dimensions: Optional[List[str]] = None
+                       ) -> Dict[str, Any]:
     """**引用闭合** → `coverage/case_closure.json`（生成期只落读数）。
 
-    CASE 绑定的维度必须在 casemodel 里，checker 必须绑到 TP。这里不阻断
+    CASE 绑定的维度必须在执行资产里，checker 必须绑到 TP。这里不阻断
     生成 —— 由 Case Gate 据这份读数发 blocker。
+
+    VPlan 路径直接传 `known_dimensions`（`data/dimensions.csv` 的 id）；
+    老路径才从 case 模型读。
     """
-    from src.layers.l3_decision.casemodel.repository import load_model
     from src.layers.l3_decision.case_ir import parse_declared, validate_case_closure
 
-    known = [d.key for d in load_model(case_model).dimensions] if case_model else []
+    known = list(known_dimensions or [])
+    if not known and case_model is not None:
+        from src.layers.l3_decision.vplan.runtime.repository import load_model
+
+        known = [d.key for d in load_model(case_model).dimensions]
     closure = validate_case_closure(parse_declared(case_ir, module=module),
                                     known_dimensions=known)
     from src.core.runtime.atomic import atomic_write_json
@@ -114,7 +122,7 @@ def _restamp_testpoints_yaml(payload: Dict[str, Any]) -> None:
     try:
         import hashlib
 
-        from src.layers.l3_decision.casemodel.plan import testpoints_yaml
+        from src.layers.l3_decision.vplan.serialize import testpoints_yaml
 
         text = testpoints_yaml(payload)
         payload["testpoints_yaml"] = text

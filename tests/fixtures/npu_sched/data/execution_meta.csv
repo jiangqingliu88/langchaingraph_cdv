@@ -1,0 +1,2 @@
+version,object,object_cn,object_code,description,sampling,generation
+1,npu_sched,NPU 指令调度器,NPUSCH,NPU 硬件指令调度器（队列 / 指令类型 / 数据类型 / 依赖 / 执行单元 / 簇 / 屏障）,"{""dut_module"": ""npu_sched"", ""clock"": ""clk"", ""reset"": ""rst_n""}","{""seed"": 12345, ""max_cases"": 400}"

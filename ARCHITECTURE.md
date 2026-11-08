@@ -23,7 +23,7 @@ SignOffAI 是一个**个人级 CLI 验证平台**：
 - 输入：
   - `spec.md`（设计阶段生成 RTL），或
   - `--rtl <dir>`（现成 RTL，自动跳过 design/model）
-  - `specs/<module>/casemodel.yaml`（人工 case 模型，优先于 front 草稿）
+  - `specs/<module>/`（VPlan 项目：`data/*.csv` + `cases/*.yaml`）
   - `specs/<module>/signoff_policy.yaml`（模块签核策略）
 - 输出：一次 run 目录（RTL / UVM 环境 / 回归 / 覆盖率 / 签核证据包）
 - 依赖：QuestaSim（`vlog/vopt/vsim/vcover`）、Python 3.11
@@ -66,7 +66,7 @@ python -m src.cli.commands
 
 | 场景 | CLI 入口 | 复用链路 | 产物 |
 |---|---|---|---|
-| UVM 自动化验证 | `vagent verify --spec spec.md --rtl ./rtl --config casemodel.yaml` | LangGraph → front/design/model/verify/ops/coverage → EDA → evidence | run 目录 + 证据包 |
+| UVM 自动化验证 | `vagent vplan execute specs/<module> --sim-mode cov` | LangGraph → front/design/model/verify/ops/coverage → EDA → evidence | run 目录 + 证据包 |
 | 回归效率优化 | `vagent optimize-regression --project ./project --history ./runs --policy signoff_policy.yaml [--execute]` | 历史分析（core）→ `InfrastructureManager.run_regression`（已有执行器）→ `compare_reports` | `optimize/plan.json`、`optimize/result.json` |
 | Coverage Closure | `vagent coverage-closure --coverage ./output_x/coverage --target 98 [--execute]` | 缺口分析（core）→ `PipelineExecutionService` 现有闭环 → `run_diff` | `closure/plan.json`、`closure/result.json` |
 
@@ -76,7 +76,7 @@ Evidence。**不为三类服务各写一套引擎**；`optimize-regression` / `c
 只是对同一套基础设施的工作流编排。
 
 `verify` 同时给 spec 与 `--rtl` 时：RTL 当 DUT、spec 当分析/参考模型输入、
-跳过 design；`--config` 把 case 模型复制到 run 的 `inputs/casemodel.yaml`。
+跳过 design；VPlan 项目会被挂到 run 的 `inputs/vplan/`。
 
 ### 1.2 参考 SoC 工程（Open NPU SoC v0.1）
 
@@ -229,7 +229,7 @@ src/core/contracts/            # schema 版本 / JSONL / 事件注册 / envelope
   （`tests/test_service_boundary.py` 用 AST 扫描钉住）。
 - Workbench 的 service/soc/ip 页面通过 `bridge/catalog.py` 调同一组 app service；
   GUI 的异步线程边界是 `run_service`，与 CLI 共用同一份
-  `VerifyRequest`（`verify_request.py`）：输出目录 / casemodel 落点 / 全量开关 /
+  `VerifyRequest`（`verify_request.py`）：输出目录 / VPlan 挂载 / 全量开关 /
   增量基线 / 审批通道**只有一处实现**。
 - `VerifyRequest.prepare()` 落 `docs/run_config.json`（`run_config_v1`）：记录
   生效值、来源（cli/gui/service）与当前 `SIGNOFFAI_*` 环境变量 —— 回答
@@ -376,7 +376,7 @@ audit → finalize → END
 
 - `config/architecture_budget.yaml`：> 1500 行必须登记（`reason` + `plan`），
   > 2000 行失败；登记文件**只能变小不能变大**。**当前 `watched` 为空** ——
-  原来超线的 `gen_uvm.py` / `flow_tools/api.py` / `casemodel/coverage.py` /
+  原来超线的 `gen_uvm.py` / `flow_tools/api.py` / `vplan/runtime/coverage.py` /
   `cli/commands.py` 已拆到 1500 行以下，`_tools_old.py` / `pipeline_docs.py`
   确认无调用方后已删除。
 - **基线已重置（2026-11-01）**：拆分/删除后的旧债务条目全部作废，
@@ -413,7 +413,7 @@ mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
 
 | Executor | 职责 | 关键产出 |
 |---|---|---|
-| `front` | spec/RTL 分析、用例库登记、case 模型草稿 | `spec.json`、测试点、用例库条目 |
+| `front` | spec/RTL 分析、dplan 契约抽取、VPlan bootstrap、用例库登记 | `spec.json`、`inputs/dplan/`、`docs/specs/` + `data/*.csv` + `cases/*.yaml`（裸 spec） |
 | `design` | IP 拆解、RTL 生成、顶层连线、vlog 门禁、结构预检 | `rtl/*.sv`、`design_arch`、`precheck` |
 | `model` | 参考模型（优先 SQL `ModelRegistry`，兼容 golden） | `models.yaml` / 模型 SV、`placeholder` 标记 |
 | `verify` | UVM 生成、测试点分解、约束、覆盖率计划、回归 YAML | `env/`、`agents/`、`inputs/yaml/`、`coverage/` |
@@ -489,24 +489,24 @@ pass（`None ≠ False`）。报告随证据包 `verdict/` 段收走，并作为
 
 | 板块 | 职责 | 包 |
 |---|---|---|
-| **generation** | 产生产物 | `casemodel_tools`、`uvm_tools`、`isa_gen_tools`、`cmodel_tools`、`scmodel_tools`、`doc_tools` |
+| **generation** | 产生产物 | `uvm_tools`、`isa_gen_tools`、`cmodel_tools`、`scmodel_tools`、`doc_tools` |
 | **checking** | 只读/判定 | `assertion_tools`、`debug_tools`、`coverage_tools`、`spec_tools` |
 | **execution** | 跑 EDA/回归 | `regression_tools` |
 | **flow** | 签核/血缘/趋势 | `flow_tools`、`trend_tools` |
 | **integration** | 对外集成 | `ide_tools` |
-| **humanview** | 人读视图（xlsx 测试点表 → casemodel） | `aivm_ir` |
+| **humanview** | 人读视图（xlsx 测试点表 → TP IR） | `aivm_ir` |
 | **common** | 共享底层 | `lib` |
 
 物理目录与板块一一对应：
 
 ```text
-src/tools/generation/    casemodel_tools  uvm_tools  isa_gen_tools
+src/tools/generation/    uvm_tools        isa_gen_tools
                          cmodel_tools     scmodel_tools  doc_tools
 src/tools/checking/      assertion_tools  debug_tools  coverage_tools  spec_tools
 src/tools/execution/     regression_tools
 src/tools/flow/          flow_tools       trend_tools
 src/tools/integration/   ide_tools
-src/tools/humanview/     aivm_ir          （PM 手写测试点表 → casemodel 导入）
+src/tools/humanview/     aivm_ir          （PM 手写测试点表 → TP IR）
 src/tools/common/        lib
 ```
 
@@ -515,16 +515,15 @@ src/tools/common/        lib
 （`tool_check_compile/static/env_arch/loopback/health/quality_report`），
 生成主体留在 `tool_uvm / tool_find_spec_yaml / tool_jinja_render`。
 
-**Native Skills**：工具知识不只留在代码里。`coverage_tools` 与
-`casemodel_tools` 已提供 `SKILL.md`（何时用 / 不要用 / 正确调用 / 常见错误 /
-日志看什么 / 产物），给 LLM 与人都能直接读；由 `tests/test_tools_skills.py` 钉住骨架。
+**Native Skills**：工具知识不只留在代码里。`l3_decision/evidence` 提供
+`SKILL.md`（何时用 / 不要用 / 正确调用 / 常见错误 / 日志看什么 / 产物），
+给 LLM 与人都能直接读；由 `tests/test_tools_skills.py` 钉住骨架。
 
 ### 6.4 工具包
 
 | 包（按物理路径） | 职责 |
 |---|---|
 | `checking/spec_tools` | spec 分析、DSL、知识图 |
-| `generation/casemodel_tools` | case 模型 → TP IR → 覆盖率计划 → 约束 |
 | `generation/uvm_tools` | UVM 环境/agent/test/sequence 生成、YAML schema |
 | `execution/regression_tools` | 回归框架、分级、后端档案、sim modes |
 | `checking/coverage_tools` | UCDB/HTML/报告、coverstore materialize |
@@ -533,7 +532,7 @@ src/tools/common/        lib
 | `generation/isa_gen_tools` | NPU ISA DSL → IR → 32bit 编码 / 张量 / manifest |
 | `flow/flow_tools` | signoff/lineage/compare 等流程 API |
 | `generation/doc_tools` / `flow/trend_tools` / `generation/cmodel_tools` / `generation/scmodel_tools` | 文档、趋势、C/Python 参考模型 |
-| `humanview/aivm_ir` | PM 手写测试点表（xlsx）→ 测试点本体 + M1 覆盖计划；`bridge.py` 按方案 B 导入 casemodel（xlsx 管"测什么"，casemodel 管"怎么测"），`source_map.json` 进证据包；模型导入后被手改 → audit 挂 `INGEST_DRIFT` |
+| `humanview/aivm_ir` | PM 手写测试点表（xlsx）→ 测试点本体 + M1 覆盖计划（`bridge.py` 已随引擎删除） |
 
 ### 6.5 Job Runtime 与命令白名单（`src/core/jobs/`）
 
@@ -554,21 +553,22 @@ src/tools/common/        lib
 
 ---
 
-## 7. Case 建模 → 测试点 IR（方法学核心）
+## 7. VPlan 执行资产 → 测试点 IR（方法学核心）
 
-目录：`src/layers/l3_decision/casemodel/`
+目录：`src/layers/l3_decision/vplan/`（`engine.py` 是对外唯一门面；
+运行期实现与框架在 `vplan/runtime/`）。case 模型引擎已删除。
 
 ### 7.1 单一主键 `tp_id`
 
 一条测试点 = `TP-<对象>-<维度>-<取值>`，贯穿：
 
 ```text
-case 模型 → TP IR → 属性 test 类 → 约束 → 回归任务 → 覆盖仓 → tp_matrix → 签核证据
+VPlan 执行资产 → TP IR → 属性 test 类 → 约束 → 回归任务 → 覆盖仓 → tp_matrix → 签核证据
 ```
 
 ### 7.2 框架
 
-`casemodel_tools/framework/`
+`vplan/runtime/framework/`
 
 | 模块 | 职责 |
 |---|---|
@@ -1071,6 +1071,9 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 - **审计 caveat**（四集合）：`CASE_GATE_BLOCKED`、`CASE_GROUP_PARTIAL`、
   `CASE_SVA_VACUOUS`、`CASE_SCB_NOT_EXECUTED`、`CASE_PATH_PENDING_BACKEND`、
   `CASE_IR_EVIDENCE_MISMATCH`；门禁码另见 `case_associate_view/gates.yaml`。
+- **审计 caveat**（证据门 / 权威差分 / 覆盖率回退）：`EVIDENCE_GATE`、
+  `AUTHORITY_DIFF`、`AUTHORITY_DIFF_MISSING`、`COVERAGE_REGRESSION` ——
+  三类事实对不上或缺失时如实标记，不把"没证据"说成通过。
 - **进签核包**：`signoff_evidence/case_view/` 收 `case_ir / case_group_map /
   case_checker_map / case_tp / cell_matrix / evd / gates / case_view.* /
   evidence_manifest / case_cov/**`（通配展开）。打包**增量**：源文件哈希未变的
@@ -1418,7 +1421,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 python -m pytest tests/ -q                            # 全量（数量见顶部基线，以实际输出为准）
 python -m pytest tests/core -q                        # Architecture 2.0 核心
 python -m pytest src/tools/checking src/tools/humanview -q          # 检查/视图工具包
-python -m pytest src/layers/l3_decision/casemodel/tests -q      # case 建模 + 框架
+python -m pytest src/layers/l3_decision/vplan -q                 # VPlan 引擎 + 框架
 python -m pytest src/tools/generation/isa_gen_tools/tests -q        # ISA 工具
 python -m pytest src/workbench/tests -q               # 工作台（数量见顶部基线）
 python -m config.architecture_guard                   # 行数 / 圈复杂度预算
@@ -1579,7 +1582,7 @@ python scripts/mutation_guards.py                     # 9 条核心守卫变异�
 │  ├─ mutation_guards.py           9 条核心守卫的变异测试
 │  └─ check_architecture.py        可选 CI 包装
 ├─ database/                       运行期 SQLite；不进 git，仅保留 .gitkeep
-├─ specs/<module>/                 RTL、casemodel.yaml、signoff_policy.yaml
+├─ specs/<module>/                 VPlan 项目、RTL、signoff_policy.yaml
 ├─ src/
 │  ├─ core/                        横向运行事实底座；标准库实现，不 import layers
 │  │  ├─ contracts/                versions / jsonl / events / evidence / quality

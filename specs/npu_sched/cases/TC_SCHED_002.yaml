@@ -1,0 +1,12 @@
+case_id: TC_SCHED_002
+test_name: spad_rw_data_handshake_test
+batch: B01
+title: SPAD 1读1写
+contract_refs:
+- C-IF-GRP-VALID_READY
+- C-DATA-002
+covergroups:
+- cg_spad_wr_ch0
+- cg_spad_rd_ch1
+- cg_spad_wstrb
+constraints: []

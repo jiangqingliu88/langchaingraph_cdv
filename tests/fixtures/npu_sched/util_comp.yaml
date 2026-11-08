@@ -1,0 +1,26 @@
+# npu_sched 参考模型（SV，不接 DPI）
+#
+# 进方向 agent 的 seq_item → pred.in_export
+# pred.out_port（expected）→ env 的 scoreboard.expected_export
+# 出方向 agent 的 seq_item → env 的 scoreboard.actual_export
+#
+# body 由 util_comp.sv.j2 渲染进 process_in_export；auto_send: false 表示
+# 由 body 自己写 out_port，模板不再把输入事务原样 send_output。
+util_components:
+  - name: npu_sched_pred
+    type: uvm_component
+    description: "npu_sched 参考模型：输入指令 → 期望发射决策（SV 实现）"
+    analysis_exports:
+      - { name: in_export, type: npu_sched_in_master_seq_item }
+    analysis_ports:
+      - { name: out_port, type: npu_sched_out_master_seq_item }
+    auto_send: false
+    body: |
+      npu_sched_out_master_seq_item pred;
+      pred = npu_sched_out_master_seq_item::type_id::create("pred");
+      // TODO: 参考模型逻辑（只依赖输入事务，不读 DUT 内部信号）。
+      //   例：根据 tr.instr_type / tr.instr_dtype / tr.dep_type / tr.op_priority
+      //   计算 pred.issue_decision / pred.issue_unit 等字段。
+      // 未实现前写一条 warning，避免看起来像"已经比对过"。
+      `uvm_warning("NPU_PRED", "npu_sched_pred.predict 尚未实现（TODO）")
+      out_port.write(pred);

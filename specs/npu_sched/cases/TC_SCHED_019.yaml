@@ -1,0 +1,13 @@
+case_id: TC_SCHED_019
+test_name: interrupt_perf_debug_reserved_interface_test
+batch: B04
+title: 控制接口
+contract_refs:
+- C-IF-GRP-INTERRUPT
+- C-IF-GRP-CSR
+- C-IF-GRP-DEBUG
+- C-IF-GRP-RESERVED
+covergroups:
+- cg_ctrl_if
+- cg_spad_exclusive_cfg
+constraints: []

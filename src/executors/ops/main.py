@@ -328,7 +328,10 @@ class OpsExecutor(BaseExecutor):
     def _discover_env_name(output_dir: Path) -> str:
         """从 env/*_pkg.sv 发现环境名（如 dut_env）。"""
         try:
-            for p in sorted((output_dir / "env").glob("*_pkg.sv")):
+            base = output_dir / "env"
+            if not base.is_dir():
+                base = output_dir / "sv" / "env"
+            for p in sorted(base.glob("*_pkg.sv")):
                 return p.name.replace("_pkg.sv", "")
         except Exception:
             pass
@@ -339,6 +342,8 @@ class OpsExecutor(BaseExecutor):
         """从 agents/ 子目录发现 agent 名（如 dut_in, dut_out）。"""
         try:
             agents_dir = output_dir / "agents"
+            if not agents_dir.is_dir():
+                agents_dir = output_dir / "sv" / "agents"
             if agents_dir.exists():
                 return sorted(d.name for d in agents_dir.iterdir() if d.is_dir())
         except Exception:
@@ -349,8 +354,14 @@ class OpsExecutor(BaseExecutor):
     def _discover_top_module(output_dir: Path) -> str:
         """从 bench/*_tb_top.sv 发现 testbench 顶层模块名。"""
         try:
-            for p in sorted((output_dir / "bench").glob("*_tb_top.sv")):
-                return p.stem
+            bench = output_dir / "bench"
+            if not bench.is_dir():
+                bench = output_dir / "sv" / "tb"
+            for p in sorted(bench.glob("*.sv")):
+                text = p.read_text(encoding="utf-8", errors="replace")
+                m = __import__("re").search(r"\bmodule\s+(\w+)", text)
+                if m:
+                    return m.group(1)
         except Exception:
             pass
         return ""

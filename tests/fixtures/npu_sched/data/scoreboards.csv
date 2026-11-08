@@ -1,0 +1,2 @@
+id,name,checks,evidence,description,rules
+SB-NPU-DUT,NPU 调度器 in-order 比对,"[""CHECK-FUNC""]",auto,env DUT 检查收口；匹配 CHECK-FUNC 的测试点都归到这条 SB,"[""queue_level_within_depth"", ""raw_never_issues"", ""barrier_flushes"", ""issued_needs_no_blocker""]"

@@ -119,7 +119,7 @@ class ProvenanceGraph:
 
 _ARTIFACTS: Tuple[Tuple[str, str, str], ...] = (
     ("spec.json", "spec", "front"),
-    ("inputs/casemodel.yaml", "casemodel", "front"),
+    ("inputs/vplan/data/execution_meta.csv", "vplan_inputs", "vplan"),
     ("coverage/testpoints.json", "tp_ir", "verify"),
     ("coverage/stimulus_plan.json", "stimulus_plan", "verify"),
     ("coverage/tp_matrix.json", "tp_matrix", "coverage"),
@@ -166,7 +166,7 @@ def _add_derivations(graph: ProvenanceGraph, ids: Dict[str, str]) -> None:
     """已知的确定性派生关系（只在两端都存在时建边）。"""
     pairs = (
         ("spec", "tp_ir", "spec → TP IR"),
-        ("casemodel", "tp_ir", "case 模型 → TP IR"),
+        ("vplan_inputs", "tp_ir", "VPlan 执行资产 → TP IR"),
         ("tp_ir", "stimulus_plan", "TP IR → StimulusPlan"),
         ("tp_ir", "tp_matrix", "TP IR → TP 矩阵"),
         ("regression_plan", "tp_matrix", "回归计划 → TP 矩阵"),

@@ -300,7 +300,7 @@ def _resolve_path(raw: str, base: str = "") -> Path:
     return p
 
 
-def project_from_casemodel(model: Any, *, module: str = "",
+def project_from_model(model: Any, *, module: str = "",
                            synthesize_missing: bool = True) -> CaseDoc:
     """case 模型（对象或原始 dict）→ CaseDoc。
 
@@ -346,11 +346,11 @@ def load_case_ir(source: Any, *, module: str = "",
     doc = _load_doc(source)
     if "cases" in doc:
         return parse_declared(doc, module=module or str(doc.get("object") or ""))
-    return project_from_casemodel(doc, module=module,
+    return project_from_model(doc, module=module,
                                   synthesize_missing=synthesize_missing)
 
 
 __all__ = [
-    "DEFAULT_ROOT", "load_case_ir", "parse_declared", "project_from_casemodel",
+    "DEFAULT_ROOT", "load_case_ir", "parse_declared", "project_from_model",
     "slug", "synthesize",
 ]

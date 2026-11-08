@@ -14,8 +14,8 @@
 **只有校验、没有解析** —— 闭环（`graph.py`）无从读起，于是它一直只是一份
 "看起来像配置"的文档。
 
-它复用 casemodel 那套 **schema 无关**的 `SchemaChecker`
-（`src/layers/l3_decision/casemodel/analysis/schema_check.py`）—— 把 schema 路径换成
+它复用 **schema 无关**的 `SchemaChecker`
+（`src/layers/l3_decision/schema/schema_check.py`）—— 把 schema 路径换成
 `manual_nodes.schema.json` 即可，校验与中文诊断口径完全一致。
 
 失败**响亮**（与全仓库一致）：没有路径 / 文件不在 / YAML 坏 —— 返回
@@ -31,12 +31,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 def _schema_checker(schema_path):
-    """延迟加载 casemodel 的 SchemaChecker。
+    """延迟加载通用的 SchemaChecker。
 
-    3.0 后实现位于 `l3_decision.casemodel`（L3）。工具层**模块级** import L3 会
-    构成静态方向逆流；函数内加载只在真正校验时才建立运行期依赖。
+    实现在 `l3_decision/schema/schema_check.py`（L3）。工具层**模块级** import L3
+    会构成静态方向逆流；函数内加载只在真正校验时才建立运行期依赖。
     """
-    from src.layers.l3_decision.casemodel.analysis.schema_check import (
+    from src.layers.l3_decision.schema.schema_check import (
         SchemaChecker,
     )
     return SchemaChecker(schema_path)
@@ -106,7 +106,7 @@ IP_SPEC = Decl(
 DECLS: Dict[str, Decl] = {d.name: d for d in (MANUAL_NODES, IP_SPEC)}
 
 # ── 以下两个常量是 manual_nodes 的旧名，保留兼容（模块与测试都在用）──
-#: 本工具的 schema —— 与 api.py 同包，放在 schema/ 下（对齐 casemodel_tools 的布局）
+#: 本工具的 schema —— 与 api.py 同包，放在 schema/ 下
 SCHEMA_PATH = MANUAL_NODES.schema_path
 
 #: 声明的默认位置（相对仓库根）。闭环在没被显式告知时读它。

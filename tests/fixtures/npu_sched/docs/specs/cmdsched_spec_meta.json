@@ -1,0 +1,8 @@
+{
+  "source": "docs/specs/cmdsched.md",
+  "spec_version": "初版",
+  "spec_hash": "5f573c6cc7bbb910ec3a16ff556ec78019b6434cbbbb15821f79b065f9d8a416",
+  "plan_version": "0.1.0",
+  "updated": "2026-11-06",
+  "note": "spec 变更后，先更新 requirements/features/contracts/testpoints 与 spec_hash，再运行 gen_spec_plan.py"
+}

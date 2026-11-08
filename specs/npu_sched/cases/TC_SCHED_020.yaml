@@ -1,0 +1,11 @@
+case_id: TC_SCHED_020
+test_name: niu_store_fence_constraint_test
+batch: B03
+title: NIU store与fence
+contract_refs:
+- C-FUNC-010
+- C-FUNC-012
+covergroups:
+- cg_niu_store
+- cg_noc_fence
+constraints: []

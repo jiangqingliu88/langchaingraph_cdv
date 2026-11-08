@@ -1,6 +1,6 @@
 """维度交叉矩阵视图 —— QPainter 自绘，支持缩放与拖拽。
 
-> 原在 `casemodel_tools/view/gui/widgets/`，工作台第二轮上提为通用件。
+> 工作台第二轮上提为通用件。
 > 它只按鸭子类型取 `matrix.dimensions[i].label` / `matrix.cells` /
 > `matrix.mark_grid()`，不认识 case 模型的任何类型。
 

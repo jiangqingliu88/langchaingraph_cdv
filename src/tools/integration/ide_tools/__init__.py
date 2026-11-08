@@ -2,7 +2,7 @@
 
 本包**零 Qt 依赖**：把 `manual_nodes.yaml` 按 JSON Schema 校验成一张诊断清单，
 界面（`src/workbench/modules/ide/manual_nodes/`）拿它显示问题。校验逻辑在工具层、
-界面是只读视图 —— 与 `casemodel_tools` / `trend_tools` 同一条纪律。
+界面是只读视图 —— 与 `trend_tools` 同一条纪律。
 
 **这份 YAML 目前不接闭环**：闭环图（`src/layers/l2_orchestration/graph.py`）的节点
 是写死的，`build_closed_loop_graph()` 不读任何节点声明；设计文档

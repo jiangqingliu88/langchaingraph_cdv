@@ -379,7 +379,7 @@ class BaseExecutor(ABC, ExecutorSubject):
         # 根据角色查找 schema.yaml
         #
         # 注：原来这里还有 `"test": "src/tools/testcase_tools/schema.yaml"`。
-        # `testcase_tools` 已经删掉（测试点分解改走 `casemodel_tools`），留着就是
+        # `testcase_tools` 已经删掉（测试点分解改走 VPlan 引擎），留着就是
         # 一条指向不存在文件的映射 —— 哪天有人真调了这个方法，拿到的是一句
         # FileNotFoundError 而不是"这个角色没有 schema"。删掉即回落到下面那句
         # `if not schema_path: return True, []`（无 schema 则跳过）。

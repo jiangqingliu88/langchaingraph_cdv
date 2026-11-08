@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from src.layers.l3_decision.casemodel.framework.stimulus_plan import (
+from src.layers.l3_decision.vplan.runtime.framework.stimulus_plan import (
     BACKENDS,
     DEFAULT_BACKEND,
     StimulusBackendError,

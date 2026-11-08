@@ -1,5 +1,5 @@
 contract_id,class,object,description,source_ref,owner,p_level,check_method,check_artifact,gate,status,assumption,remark
-C-DATA-TAG-001,data,数据,多 xd=1 按 tag 端到端匹配,SPEC-1.3-8,dv_data,P0,scb,spec_data_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SCB+SVA
-C-DATA-RMW-001,data,数据,wr_lmem RMW 原子性,SPEC-4,dv_data,P0,scb,spec_data_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SCB+SVA
-C-DATA-SYNC-001,data,数据,sync/noc_fence 返回 32'h1,SPEC-4,dv_data,P0,scb,spec_data_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SCB
-C-DATA-VS-001,data,数据,V_S 返回 scalar 数据正确,SPEC-4,dv_data,P0,scb,spec_data_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SCB
+C-DATA-001,data,数据,指令配置与操作数传输：funct7/xd/xs1/xs2/rs1val/rs2val、数据精度、num_dim0、stride、base_addr等按指令集与master配置要求正确输出。,2.1.5/7.2,dv_data,P1,SCB,spec_data_artifact,gate_matrix,assume,LLM bootstrap；待人工评审,bootstrap from spec
+C-DATA-002,data,数据,SPAD读写数据完整性：wdata/wstrb与waddr匹配；rdata在rvld/rrdy握手时稳定；512bit数据带宽及高低256bit选通语义正确。,2.1.5/3,dv_data,P1,SCB,spec_data_artifact,gate_matrix,assume,LLM bootstrap；待人工评审,bootstrap from spec
+C-DATA-003,data,数据,xd=1返回数据：仅32bit返回值；数据按id乱序返回；同拍多个返回有效时仲裁选择；返回tag与请求id关联正确。,1.3-8,dv_data,P1,SCB,spec_data_artifact,gate_matrix,assume,LLM bootstrap；待人工评审,bootstrap from spec
+C-DATA-004,data,数据,tile/dram地址范围生成与检查：tile冲突基于起始至终止地址；dram按整个dram冲突；地址按32bit/tile对齐约束输出。,1.3-12/1.3-13/7.3.1,dv_data,P1,SCB,spec_data_artifact,gate_matrix,assume,LLM bootstrap；待人工评审,bootstrap from spec

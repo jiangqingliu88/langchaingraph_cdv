@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "contract_row",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_id",
+    "class",
+    "object",
+    "description",
+    "source_ref",
+    "owner",
+    "p_level",
+    "check_method",
+    "check_artifact",
+    "gate",
+    "status",
+    "assumption",
+    "remark"
+  ],
+  "properties": {
+    "contract_id": {"type": "string", "pattern": "^C-[A-Z]+(?:-[A-Z0-9]+)*-\\d{3}$"},
+    "class": {
+      "type": "string",
+      "enum": ["func", "if", "perf", "cfg", "res", "exc", "data", "dbg", "lp", "env", "gate", "agent", "concurrency", "integration"]
+    },
+    "object": {"type": "string"},
+    "description": {"type": "string"},
+    "source_ref": {"type": "string"},
+    "owner": {"type": "string"},
+    "p_level": {"type": "string", "enum": ["P0", "P1", "P2"]},
+    "check_method": {"type": "string", "enum": ["sva", "checker", "scb", "cover", "formal", "perf", "manual"]},
+    "check_artifact": {"type": "string"},
+    "gate": {"type": "string"},
+    "status": {"type": "string", "enum": ["active", "assume", "exempt"]},
+    "assumption": {"type": "string"},
+    "remark": {"type": "string"}
+  }
+}

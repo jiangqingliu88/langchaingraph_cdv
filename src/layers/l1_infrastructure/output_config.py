@@ -32,6 +32,12 @@ def make_output_root(base: str | None = None) -> str:
         输出目录路径，格式 {prefix}_{user}_{YYYYMMDD_HHMMSS}。
     """
     prefix = base if base else "output"
+    # 显式 `-o`：VPlan execute 要的是**精确运行目录**（`<run>/inputs/vplan/`），
+    # 不能再被各 executor 追加时间戳另起一个目录。
+    import os
+    if os.environ.get("SIGNOFFAI_OUTPUT_EXACT", "").strip().lower() in (
+            "1", "true", "yes") and base:
+        return str(prefix)
     # 幂等：若已含 _user_YYYYMMDD_HHMMSS 后缀，直接返回
     if _TIMESTAMPED.search(prefix):
         return prefix

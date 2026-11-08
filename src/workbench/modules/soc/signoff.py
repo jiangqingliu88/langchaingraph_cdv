@@ -57,7 +57,7 @@ class SoCSignoffModule(SocModuleBase):
         reg = doc.get("regression") or {}
         waves = doc.get("waves") or []
         release = self.run_tool("ip.release", quiet=True,
-                                root=str(self.project_root),
+                                project_root=str(self.project_root),
                                 run_root=summary.get("dir", ""))
         ip_lines = []
         for row in release if isinstance(release, list) else []:

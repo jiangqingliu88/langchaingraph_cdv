@@ -1,0 +1,10 @@
+case_id: TC_SCHED_001
+test_name: inst_dispatcher_handshake_test
+batch: B01
+title: Ins Dispatcher接口
+contract_refs:
+- C-IF-GRP-VALID_READY
+covergroups:
+- cg_if_disp_req
+- cg_if_disp_rsp
+constraints: []

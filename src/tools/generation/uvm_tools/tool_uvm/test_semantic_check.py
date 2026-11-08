@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents if (p / "src").is_dir())))
-from src.tools.generation.uvm_tools.generation.models import AgentModel, BenchModel, ConstraintModel, EnvironmentModel, HarnessModel
-from src.tools.generation.uvm_tools.generation.parsing.yaml_loader import YAMLLoader
-from src.tools.generation.uvm_tools.generation.parsing.environment_specs import _normalize_harness, _normalize_typedefs
-from src.tools.generation.uvm_tools.generation.generators.cli import main
+from src.tools.generation.uvm_tools.tool_uvm.models import AgentModel, BenchModel, ConstraintModel, EnvironmentModel, HarnessModel
+from src.tools.generation.uvm_tools.tool_uvm.parsing.yaml_loader import YAMLLoader
+from src.tools.generation.uvm_tools.tool_uvm.parsing.environment_specs import _normalize_harness, _normalize_typedefs
+from src.tools.generation.uvm_tools.tool_uvm.generators.cli import main
 from src.tools.generation.uvm_tools.tool_uvm.semantic_check import Issue, SemanticValidator
 
 EXAMPLES = Path(__file__).parent / "examples" / "apb"
@@ -143,7 +143,7 @@ def test_tlm_connection_unknown_ref_warning():
 
 
 def test_register_model_bus_unmatched_warning():
-    from src.tools.generation.uvm_tools.generation.parsing.environment_specs import _normalize_register_model
+    from src.tools.generation.uvm_tools.tool_uvm.parsing.environment_specs import _normalize_register_model
     agents = [AgentModel(name="apb_master", agent_name="apb_master",
                          interface="apb", interface_name="apb",
                          agent_type="apb_master_agent")]
@@ -173,7 +173,7 @@ def test_harness_connect_path_missing_error():
 # ── bench 级 ──
 
 def test_bench_agent_wire_undefined_skipped_with_harness():
-    from src.tools.generation.uvm_tools.generation.models import BenchAgentEntry
+    from src.tools.generation.uvm_tools.tool_uvm.models import BenchAgentEntry
     bench = BenchModel(name="B", env_name="E", harness={"name": "h"},
                        agents={"A": BenchAgentEntry(
                            name="A", interface="A",

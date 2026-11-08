@@ -1,7 +1,7 @@
 """应用服务边界 —— CLI / GUI 不得绕过 `src/app/services` 直连执行引擎。
 
 历史问题：`cmd_verify.py` 直接 `PipelineExecutionService.get_instance()`，
-走的是自己的预检（输出目录 / casemodel / 全量开关），GUI 又走
+走的是自己的预检（输出目录 / VPlan / 全量开关），GUI 又走
 `run_service`，三处各写一遍 —— 改一处另外两条路不跟。
 
 允许直连的地方只有：

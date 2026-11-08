@@ -69,7 +69,6 @@ class CoverageClosureModule(ModuleBase):
         row3 = QHBoxLayout()
         row3.addWidget(_button("回归覆盖率", lambda: open_module(self.ctx, "ops.regression_coverage")))
         row3.addWidget(_button("覆盖率豁免", lambda: open_module(self.ctx, "coverage.excludes")))
-        row3.addWidget(_button("Case 建模", lambda: open_module(self.ctx, "verify.casemodel")))
         row3.addWidget(_button("产物审查", lambda: open_module(self.ctx, "flow.artifacts")))
         row3.addWidget(_button("证据", lambda: open_module(self.ctx, "flow.evidence")))
         row3.addWidget(_button("签核判定", lambda: open_module(self.ctx, "flow.signoff")))

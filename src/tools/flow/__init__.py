@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import importlib
 
-PACKAGES = ("trend_tools",)
+from src.tools.boards import BOARDS
+
+PACKAGES = BOARDS["flow"]
 
 
 def __getattr__(name: str):

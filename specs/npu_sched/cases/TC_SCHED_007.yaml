@@ -1,0 +1,15 @@
+case_id: TC_SCHED_007
+test_name: shazard_sync_dispatch_test
+batch: B03
+title: SHazard与sync/fence
+contract_refs:
+- C-FUNC-001
+- C-FUNC-010
+- C-FUNC-011
+- C-FUNC-012
+covergroups:
+- cg_shazard
+- cg_sync_fence
+- cg_dispatch_master
+- cg_niu_store
+constraints: []

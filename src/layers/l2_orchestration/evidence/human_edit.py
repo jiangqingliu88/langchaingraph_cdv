@@ -2,7 +2,7 @@
 
 在此之前，**人在界面上改了什么，一条痕迹都不留**：GUI 的保存就是一句
 `Path.write_text`（`modules/ide/manual_nodes/module.py:224`、
-`modules/verify/casemodel/module.py:327`），哈希链、运行日志、五层证据里都没有。
+旧的 case 建模界面已删除），哈希链、运行日志、五层证据里都没有。
 对一个把"可审计、可追溯"当第一承诺的产品，这是正中间那个洞。
 
 为什么人工编辑**不能**写进某次运行的 `file_change_chain.json`

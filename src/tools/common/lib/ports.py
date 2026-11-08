@@ -23,6 +23,13 @@
 """
 from __future__ import annotations
 
+import re
+
+# 复位名按 **token** 认，不能用裸子串：`cmd_xbar_ch1_icg_rstart` 里含 `rst`，
+# 裸子串会把它当复位 —— 实测 VPlan 生成的 UVM interface 复位信号直接接错，
+# 整轮回归按错误复位沿复位。
+_RESET_RE = re.compile(r"(^|_)(rst|reset|preset)(n)?($|_)")
+
 
 def is_clock_port(name: str) -> bool:
     """名字像时钟（`clk` / `clock` / `pclk` / `clk_sys` …）。"""
@@ -31,9 +38,12 @@ def is_clock_port(name: str) -> bool:
 
 
 def is_reset_port(name: str) -> bool:
-    """名字像复位（`rst` / `reset` / `rst_n` / `presetn` …）。"""
+    """名字像复位（`rst` / `reset` / `rst_n` / `presetn` …）。
+
+    **按 token 匹配**：`rst_n`、`sys_reset`、`presetn` 认；`rstart` 不认。
+    """
     n = str(name or "").lower()
-    return "rst" in n or "reset" in n
+    return bool(_RESET_RE.search(n))
 
 
 def is_clock_or_reset(name: str) -> bool:

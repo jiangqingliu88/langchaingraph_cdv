@@ -1,0 +1,10 @@
+case_id: TC_SCHED_011
+test_name: glsu_llsu_tmu_conflict_test
+batch: B03
+title: TMU冲突
+contract_refs:
+- C-FUNC-006
+covergroups:
+- cg_tmu_conflict
+- cg_tmu_priority
+constraints: []

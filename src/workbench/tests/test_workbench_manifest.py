@@ -27,7 +27,7 @@ def test_shipped_manifest_parses():
         "ide.ip_spec", "ide.manual_nodes", "ide.aivm",
         "coverage.excludes",
         "debug.sim_log", "debug.fingerprint", "debug.output",
-        "verify.output", "verify.casemodel", "verify.isa_gen",
+        "verify.output", "verify.vplan", "verify.isa_gen",
         # 流程与证据线：流程视图 + 编排 + 运行历史 + 证据 + 跟踪 + 对比 + 签核 + 趋势 + 决策 + 清单
         "flow.task", "flow.diagram", "flow.artifacts", "flow.pipeline", "flow.runs", "flow.evidence",
         "flow.todo", "flow.fcov", "flow.drafts", "flow.compare", "flow.signoff", "flow.trend",

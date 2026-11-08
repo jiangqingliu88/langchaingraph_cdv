@@ -225,6 +225,25 @@ def _contract_meta(test_class: str, contract_map, case_ir_sha: str,
     }
 
 
+def _case_ids_for(test: dict, test_class: str, case_map: dict) -> list:
+    """这条执行的 CASE 身份：`testpoints.yaml` 反查 + 批次主题 tag 兜底。
+
+    VPlan 的批次 test（`test_npu_sched_*_basic`）执行的 UVM 类叫
+    `npu_sched_env_directed_test`，在 testpoints 的 `execution.test` 里查不到；
+    但它的 tag 里有 `TH-TC_<case_id>`（`engine` 里 theme id = `TH-` + case）。
+    不补这一步，`case_cov` 的 case_id 就是空的，账本里连一条 SCB 事实都没有，
+    闭合率永远 0、closure plan 永远在喊 `QUALIFY_REFERENCE_MODEL`。
+    """
+    ids = list((case_map or {}).get(test_class) or [])
+    for tag in test.get("tags") or []:
+        text = str(tag or "")
+        if text.startswith("TH-TC_"):
+            cid = text[3:]
+            if cid not in ids:
+                ids.append(cid)
+    return ids
+
+
 def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
                          seed, build_name, test, tp_map, case_map=None,
                          contract_map=None, case_ir_sha="",
@@ -243,9 +262,10 @@ def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
             tp_ids.append(tid)
     try:
         from src.tools.common.lib.case_meta import write_task_meta
+        case_ids = _case_ids_for(test, test_class, case_map or {})
         # 第四集合：这条执行依赖的约束（来自 case_ir，按 case_id 展开）
         constraint_ids = []
-        for cid in (case_map or {}).get(test_class) or []:
+        for cid in case_ids:
             for c in (constraint_map or {}).get(cid) or []:
                 if c not in constraint_ids:
                     constraint_ids.append(c)
@@ -259,8 +279,8 @@ def _write_task_identity(test_dir, testcase, test_name, sim_cmd, t_context,
             "tags": list(test.get('tags') or []),
             "tp_ids": tp_ids,
             # ── 身份脊梁（v2）：CASE 来自 Case IR，TST 由 test+seed 派生 ──
-            "case_ids": list((case_map or {}).get(test_class) or []),
-            "case_id": ((case_map or {}).get(test_class) or [""])[0],
+            "case_ids": case_ids,
+            "case_id": case_ids[0] if case_ids else "",
             "tst_id": _tst_id(test_class, seed),
             # 三集合指纹 + 契约哈希：这条任务自证"跑的是哪一版契约"
             **_contract_meta(test_class, contract_map, case_ir_sha, contract_hash),

@@ -414,7 +414,7 @@ def _review(plan: Dict[str, Any], tps: List[Dict[str, Any]],
         "path_backend": ("pending" if any(b.get("status") == "PENDING_BACKEND"
                                           for b in proof) else "active"),
         "cross_architecture": {
-            "source": "casemodel.cross_matrix / cross_groups / policy_pack.coverage_bins",
+            "source": "vplan.cross_matrix / cross_groups / policy_pack.coverage_bins",
             "render": ("CoverageModel.crosses → covergroup `cross_<name>`（cg_<agent> "
                        "或 cg_mixed）→ ucdb 的 cross 覆盖"),
             "evidence": ("本视图 groups.cross_groups：名字 / 维度 / bin 数 / 实测 %；"

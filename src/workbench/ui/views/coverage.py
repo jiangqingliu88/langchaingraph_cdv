@@ -3,7 +3,7 @@
 每行一个维度：左边维度名，中间覆盖条，右边命中/总数。联动派生字段的维度标灰 ——
 它的取值跟随被联动字段，不是独立的缺口，视觉上不该和真缺口一样红。
 
-> 原在 `casemodel_tools/view/gui/widgets/`，工作台第二轮上提为通用件。按鸭子
+> 工作台第二轮上提为通用件。按鸭子
 > 类型取 `row.name / ratio / hit_count / total / key / derived_only`。
 """
 from __future__ import annotations

@@ -1,0 +1,6 @@
+contract_id,class,object,description,source_ref,owner,p_level,check_method,check_artifact,gate,status,assumption,remark
+C-EXC-ILLEGAL-001,exc,异常,非法编码/rd_csr/reserved 触发 cmd_int[0],SPEC-1.3-1,dv_exc,P0,scb,spec_exc_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=Checker+SCB
+C-EXC-ADDR-001,exc,异常,读写非 SPAD 地址触发 cmd_int[0],SPEC-8,dv_exc,P0,checker,spec_exc_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=Checker
+C-EXC-INT-001,exc,异常,首次中断保存 inst0/inst1 现场，后续不覆盖,SPEC-8,dv_exc,P0,scb,spec_exc_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SCB
+C-EXC-CLEAR-001,exc,异常,中断 reset/wr1 清除，清除后恢复,SPEC-8,dv_exc,P1,scb,spec_exc_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SVA+SCB
+C-EXC-BLOCK-001,exc,异常,block_en=1 停止收发，=0 继续,SPEC-8,dv_exc,P0,sva,spec_exc_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=SVA+Checker

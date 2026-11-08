@@ -32,7 +32,7 @@ class SoCArchitectureModule(SocModuleBase):
         layout.addWidget(self.iface, 2)
 
         payload = self.run_tool("soc.project", quiet=True,
-                                root=str(self.project_root))
+                                project_root=str(self.project_root))
         self._fill(payload if isinstance(payload, dict) else {})
         return root
 

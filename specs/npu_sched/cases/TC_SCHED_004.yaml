@@ -1,0 +1,16 @@
+case_id: TC_SCHED_004
+test_name: decode_cfg_core_reg_and_inst_field_test
+batch: B02
+title: 配置与指令字段
+contract_refs:
+- C-CFG-001
+- C-CFG-002
+- C-CFG-003
+- C-DATA-001
+covergroups:
+- cg_cfg_pre
+- cg_core_reg_cfg
+- cg_inst_field
+- cg_cimc_shape
+- cg_data_precision
+constraints: []

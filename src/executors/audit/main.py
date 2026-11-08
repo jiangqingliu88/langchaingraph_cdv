@@ -49,8 +49,6 @@ from src.executors.audit.helpers import (  # noqa: E402
     _code_plan_from,
     _code_coverage_evidence,
     _coverage_detail,
-    _ingest_drift_caveat,
-    _humanview_ingest,
     _plan_consistency_caveat,
     _tool_receipt_summary,
     _build_signoff_evidence,
@@ -294,7 +292,6 @@ class AuditExecutor(BaseExecutor):
         _apply_case_view_gates(output_dir, gates, _caveat)
         # ── case 三集合契约（arch.md）：证据层面的 caveat ──
         _apply_case_contract_caveats(output_dir, gates, _caveat)
-        _ingest_drift_caveat(output_dir, _caveat)
 
         # ── 参考模型 / 基线 / 模块策略：签核的"资格条件" ──
         #

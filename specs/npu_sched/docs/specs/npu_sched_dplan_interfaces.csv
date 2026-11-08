@@ -1,0 +1,700 @@
+scope,module,level,name,direction,data_width,protocol,description,interface_group
+global,npu_sched,global,clk,INPUT,1,clock,时钟，目标700MHz@T22,clock
+global,npu_sched,global,rst_n,INPUT,1,reset,复位信号，低有效,reset
+global,npu_sched,global,creg_cmd_icg_en,INPUT,32,csr,时钟ICG使能，1打开ICG低功耗，0时钟常开,csr
+global,npu_sched,global,cmd_xbar_ch0_icg_wstart,OUTPUT,1,icg,cmd ch0写通道icg信号,icg
+global,npu_sched,global,cmd_xbar_ch1_icg_rstart,OUTPUT,1,icg,cmd ch1读通道icg信号,icg
+global,npu_sched,global,cmd_niu_icg_start,OUTPUT,1,icg,niu模块预启动脉冲，用于开启时钟,icg
+global,npu_sched,global,cmd_glsu_icg_start,OUTPUT,1,icg,glsu模块预启动脉冲，用于开启时钟,icg
+global,npu_sched,global,cmd_llsu_icg_start,OUTPUT,1,icg,llsu模块预启动脉冲，用于开启时钟,icg
+global,npu_sched,global,cmd_vpu_icg_start,OUTPUT,1,icg,vpu模块预启动脉冲，用于开启时钟,icg
+global,npu_sched,global,cmd_mpu_icg_start,OUTPUT,1,icg,mpu模块预启动脉冲，用于开启时钟,icg
+global,npu_sched,global,disp_cmd_inst,INPUT,74,valid-ready,"指令信号：bit[2:0]=xd/xs1/xs2, bit[9:3]=func7, bit[41:10]=rs1val, bit[73:42]=rs2val",valid_ready
+global,npu_sched,global,disp_cmd_inst_flag,INPUT,1,valid-ready,输入指令类型，0=NICE指令，1=VNICE指令,valid_ready
+global,npu_sched,global,disp_cmd_vld,INPUT,1,valid-ready,指令valid，高有效,valid_ready
+global,npu_sched,global,cmd_disp_rdy,OUTPUT,1,valid-ready,指令ready，高有效,valid_ready
+global,npu_sched,global,cmd_disp_rsp_data,OUTPUT,35,valid-ready,指令返回值（32bit数据+3bit）,valid_ready
+global,npu_sched,global,cmd_disp_rsp_vld,OUTPUT,1,valid-ready,指令返回值valid，高有效,valid_ready
+global,npu_sched,global,disp_cmd_rsp_rdy,INPUT,1,valid-ready,指令返回值ready，高有效,valid_ready
+global,npu_sched,global,disp_cmd_inst_tag,INPUT,3,valid-ready,xd=1时的指令id，用于数据保序,valid_ready
+global,npu_sched,global,cmd_llsu_xbr_sel_vld,OUTPUT,2,status,read/write lmem与tensor move指令状态，2'b01=read/write lmem，2'b10=tensor move，2'b00=均非,status
+global,npu_sched,global,cmd_xbr_ch0_req_waddr,OUTPUT,18,valid-ready,写请求地址,valid_ready
+global,npu_sched,global,cmd_xbr_ch0_req_wdata,OUTPUT,512,valid-ready,写请求数据,valid_ready
+global,npu_sched,global,cmd_xbr_ch0_req_wstrb,OUTPUT,2,valid-ready,写请求选通，2'b11高低256bit均有效，2'b10高有效，2'b01低有效,valid_ready
+global,npu_sched,global,cmd_xbr_ch0_req_wvld,OUTPUT,1,valid-ready,写请求valid，高有效,valid_ready
+global,npu_sched,global,cmd_xbr_ch0_req_wrdy,INPUT,1,valid-ready,写请求ready，高有效,valid_ready
+global,npu_sched,global,xbr_cmd_ch0_rsp_wvld,INPUT,1,valid-ready,写响应valid，高有效,valid_ready
+global,npu_sched,global,xbr_cmd_ch0_rsp_wlast,INPUT,1,valid-ready,写响应最后一笔数据标志，高有效,valid_ready
+global,npu_sched,global,cmd_xbr_ch0_rsp_wrdy,OUTPUT,1,valid-ready,写响应接收就绪，高有效,valid_ready
+global,npu_sched,global,cmd_xbr_ch0_req_wid_for_dv,OUTPUT,32,valid-ready,写请求ID（DV用）,valid_ready
+global,npu_sched,global,xbr_cmd_ch0_rsp_wid_for_dv,INPUT,32,valid-ready,写响应ID（DV用）,valid_ready
+global,npu_sched,global,cmd_xbr_ch1_req_raddr,OUTPUT,44,valid-ready,读请求地址,valid_ready
+global,npu_sched,global,cmd_xbr_ch1_req_rvld,OUTPUT,1,valid-ready,读请求valid，高有效,valid_ready
+global,npu_sched,global,xbr_cmd_ch1_req_rrdy,INPUT,1,valid-ready,读请求ready，高有效,valid_ready
+global,npu_sched,global,xbr_cmd_ch1_rsp_rdata,INPUT,512,valid-ready,读响应数据,valid_ready
+global,npu_sched,global,xbr_cmd_ch1_rsp_rvld,INPUT,1,valid-ready,读响应valid，高有效,valid_ready
+global,npu_sched,global,cmd_xbr_ch1_rsp_rrdy,OUTPUT,1,valid-ready,读响应ready，高有效,valid_ready
+global,npu_sched,global,cmd_xbr_ch1_req_rid_for_dv,OUTPUT,32,valid-ready,RD1读请求ID（DV用）,valid_ready
+global,npu_sched,global,xbr_cmd_ch1_rsp_rid_for_dv,INPUT,32,valid-ready,RD1读响应ID（DV用）,valid_ready
+global,npu_sched,global,niu_cmd_inst0_done_vld,INPUT,1,pulse,niu inst0执行结束脉冲,niu
+global,npu_sched,global,niu_cmd_inst0_rtile_rls_vld,INPUT,1,pulse,niu inst0读SPAD释放脉冲,niu
+global,npu_sched,global,niu_cmd_inst0_rtile_rls_idx,INPUT,3,pulse,niu inst0读释放SPAD index,niu
+global,npu_sched,global,niu_cmd_inst0_wtile_rls_vld,INPUT,1,pulse,niu inst0写SPAD释放脉冲,niu
+global,npu_sched,global,niu_cmd_inst0_wtile_rls_idx,INPUT,3,pulse,niu inst0写释放SPAD index,niu
+global,npu_sched,global,niu_cmd_inst0_page_rls_vld,INPUT,1,pulse,niu inst0 page释放脉冲,niu
+global,npu_sched,global,niu_cmd_inst0_page_rls_idx,INPUT,4,pulse,niu inst0释放page index,niu
+global,npu_sched,global,niu_cmd_inst1_done_vld,INPUT,1,pulse,niu inst1执行结束脉冲,niu
+global,npu_sched,global,niu_cmd_inst1_rtile_rls_vld,INPUT,1,pulse,niu inst1读SPAD释放脉冲,niu
+global,npu_sched,global,niu_cmd_inst1_rtile_rls_idx,INPUT,3,pulse,niu inst1读释放SPAD index,niu
+global,npu_sched,global,niu_cmd_inst1_wtile_rls_vld,INPUT,1,pulse,niu inst1写SPAD释放脉冲,niu
+global,npu_sched,global,niu_cmd_inst1_wtile_rls_idx,INPUT,3,pulse,niu inst1写释放SPAD index,niu
+global,npu_sched,global,niu_cmd_inst1_page_rls_vld,INPUT,1,pulse,niu inst1 page释放脉冲,niu
+global,npu_sched,global,niu_cmd_inst1_page_rls_idx,INPUT,4,pulse,niu inst1释放page index,niu
+global,npu_sched,global,cmd_niu_start,OUTPUT,1,pulse,niu模块启动脉冲,niu
+global,npu_sched,global,cmd_niu_start_inst_id,OUTPUT,1,pulse,niu启动指令id，0=inst0，1=inst1,niu
+global,npu_sched,global,cmd_niu_task_select,OUTPUT,2,config,0=default，1=load，2=store,niu
+global,npu_sched,global,cmd_niu_dst_base_addr,OUTPUT,44,config,dest NPU core基地址,niu
+global,npu_sched,global,cmd_niu_src_base_addr,OUTPUT,44,config,source NPU core基地址,niu
+global,npu_sched,global,cmd_niu_cfg_type,OUTPUT,1,config,浮点格式标志，1=BF/BBF/FP,niu
+global,npu_sched,global,cmd_niu_cfg_wd,OUTPUT,3,config,数据位宽,niu
+global,npu_sched,global,cmd_niu_cfg_num_dim0,OUTPUT,19,config,Tensor在dim0上的元素个数,niu
+global,npu_sched,global,cmd_niu_cfg_size_dim1,OUTPUT,13,config,Tensor在dim1上的size,niu
+global,npu_sched,global,cmd_niu_cfg_size_dim2,OUTPUT,13,config,Tensor在dim2上的size,niu
+global,npu_sched,global,cmd_niu_cfg_src_stride_dim1,OUTPUT,13,config,输入tensor dim1步长,niu
+global,npu_sched,global,cmd_niu_cfg_src_stride_dim2,OUTPUT,25,config,输入tensor dim2步长,niu
+global,npu_sched,global,cmd_niu_cfg_dst_stride_dim1,OUTPUT,13,config,输出tensor dim1步长,niu
+global,npu_sched,global,cmd_niu_cfg_dst_stride_dim2,OUTPUT,25,config,输出tensor dim2步长,niu
+global,npu_sched,global,glsu_cmd_inst0_done_vld,INPUT,1,pulse,glsu inst0执行结束脉冲,glsu
+global,npu_sched,global,glsu_cmd_inst0_rtile_rls_vld,INPUT,1,pulse,glsu inst0读SPAD释放脉冲,glsu
+global,npu_sched,global,glsu_cmd_inst0_rtile_rls_idx,INPUT,5,pulse,glsu inst0读释放SPAD index,glsu
+global,npu_sched,global,glsu_cmd_inst0_wtile_rls_vld,INPUT,1,pulse,glsu inst0写SPAD释放脉冲,glsu
+global,npu_sched,global,glsu_cmd_inst0_wtile_rls_idx,INPUT,5,pulse,glsu inst0写释放SPAD index,glsu
+global,npu_sched,global,glsu_cmd_inst0_page_rls_vld,INPUT,1,pulse,glsu inst0 page释放脉冲,glsu
+global,npu_sched,global,glsu_cmd_inst0_page_rls_idx,INPUT,4,pulse,glsu inst0释放page index,glsu
+global,npu_sched,global,glsu_cmd_inst0_rdram_rls_vld,INPUT,1,pulse,glsu inst0读dram释放脉冲,glsu
+global,npu_sched,global,glsu_cmd_inst0_rdram_rls_idx,INPUT,4,pulse,glsu inst0读释放dram index,glsu
+global,npu_sched,global,glsu_cmd_inst1_done_vld,INPUT,1,pulse,glsu inst1执行结束脉冲,glsu
+global,npu_sched,global,glsu_cmd_inst1_rtile_rls_vld,INPUT,1,pulse,glsu inst1读SPAD释放脉冲,glsu
+global,npu_sched,global,glsu_cmd_inst1_rtile_rls_idx,INPUT,5,pulse,glsu inst1读释放SPAD index,glsu
+global,npu_sched,global,glsu_cmd_inst1_wtile_rls_vld,INPUT,1,pulse,glsu inst1写SPAD释放脉冲,glsu
+global,npu_sched,global,glsu_cmd_inst1_wtile_rls_idx,INPUT,5,pulse,glsu inst1写释放SPAD index,glsu
+global,npu_sched,global,glsu_cmd_inst1_page_rls_vld,INPUT,1,pulse,glsu inst1 page释放脉冲,glsu
+global,npu_sched,global,glsu_cmd_inst1_page_rls_idx,INPUT,4,pulse,glsu inst1释放page index,glsu
+global,npu_sched,global,glsu_cmd_inst1_rdram_rls_vld,INPUT,1,pulse,glsu inst1读dram释放脉冲,glsu
+global,npu_sched,global,glsu_cmd_inst1_rdram_rls_idx,INPUT,4,pulse,glsu inst1读释放dram index,glsu
+global,npu_sched,global,cmd_glsu_start,OUTPUT,1,pulse,glsu模块启动脉冲,glsu
+global,npu_sched,global,cmd_glsu_start_inst_id,OUTPUT,1,pulse,glsu启动指令id，0=inst0，1=inst1,glsu
+global,npu_sched,global,cmd_glsu_task_select,OUTPUT,4,config,操作选择：1=tld，2=ttld，3=gather，4=loadcimcexp，5=tensor dma，6=tst，7=storecimcexp,glsu
+global,npu_sched,global,cmd_glsu_src_base_addr,OUTPUT,44,config,source core访存基地址,glsu
+global,npu_sched,global,cmd_glsu_dst_base_addr,OUTPUT,44,config,dst core访存基地址,glsu
+global,npu_sched,global,cmd_glsu_cfg_mx,OUTPUT,1,config,操作数MX格式标志,glsu
+global,npu_sched,global,cmd_glsu_cfg_type,OUTPUT,1,config,操作数浮点格式标志,glsu
+global,npu_sched,global,cmd_glsu_cfg_mantissa,OUTPUT,1,config,区分FP8 E5M2/E4M3、FP16/BF16,glsu
+global,npu_sched,global,cmd_glsu_cfg_wd,OUTPUT,3,config,数据位宽，2=4bit，3=8bit，4=16bit，5=32bit,glsu
+global,npu_sched,global,cmd_glsu_gather_dst_spad,OUTPUT,1,config,gather指令dst为local spad(1)或local dram(0),glsu
+global,npu_sched,global,cmd_glsu_cfg_index_base_addr,OUTPUT,18,config,gather指令index在本地SPAD的存储地址,glsu
+global,npu_sched,global,cmd_glsu_src_global,OUTPUT,1,config,gather指令src为global(1)或local(0),glsu
+global,npu_sched,global,cmd_glsu_dst_global,OUTPUT,1,config,gather指令dst为global(1)或local(0),glsu
+global,npu_sched,global,cmd_glsu_cfg_num_dim0,OUTPUT,19,config,Tensor在dim0上的元素个数,glsu
+global,npu_sched,global,cmd_glsu_cfg_index_num_dim0,OUTPUT,19,config,gather指令index用到的dim0操作数数量,glsu
+global,npu_sched,global,cmd_glsu_cfg_size_dim1,OUTPUT,13,config,Tensor在dim1上的size,glsu
+global,npu_sched,global,cmd_glsu_cfg_size_dim2,OUTPUT,13,config,Tensor在dim2上的size,glsu
+global,npu_sched,global,cmd_glsu_cfg_src_stride_dim1,OUTPUT,13,config,输入Tensor dim1步长,glsu
+global,npu_sched,global,cmd_glsu_cfg_src_stride_dim2,OUTPUT,25,config,输入Tensor dim2步长,glsu
+global,npu_sched,global,cmd_glsu_cfg_dst_stride_dim1,OUTPUT,13,config,输出Tensor dim1步长,glsu
+global,npu_sched,global,cmd_glsu_cfg_dst_stride_dim2,OUTPUT,25,config,输出Tensor dim2步长,glsu
+global,npu_sched,global,llsu_cmd_inst0_done_vld,INPUT,1,pulse,llsu inst0执行结束脉冲,llsu
+global,npu_sched,global,llsu_cmd_inst1_done_vld,INPUT,1,pulse,llsu inst1执行结束脉冲,llsu
+global,npu_sched,global,llsu_cmd_rtile_rls_vld,INPUT,1,pulse,llsu读SPAD释放脉冲,llsu
+global,npu_sched,global,llsu_cmd_rtile_rls_idx,INPUT,3,pulse,llsu读释放SPAD index,llsu
+global,npu_sched,global,llsu_cmd_rtile_rls_inst_id,INPUT,1,pulse,llsu读释放指令id，0=inst0，1=inst1,llsu
+global,npu_sched,global,llsu_cmd_wtile_rls_vld,INPUT,1,pulse,llsu写SPAD释放脉冲,llsu
+global,npu_sched,global,llsu_cmd_wtile_rls_idx,INPUT,3,pulse,llsu写释放SPAD index,llsu
+global,npu_sched,global,llsu_cmd_wtile_rls_inst_id,INPUT,1,pulse,llsu写释放指令id,llsu
+global,npu_sched,global,llsu_cmd_page_rls_vld,INPUT,1,pulse,llsu page释放脉冲,llsu
+global,npu_sched,global,llsu_cmd_page_rls_idx,INPUT,4,pulse,llsu释放page index,llsu
+global,npu_sched,global,llsu_cmd_page_rls_inst_id,INPUT,1,pulse,llsu page释放指令id,llsu
+global,npu_sched,global,llsu_cmd_rls_inst_id,INPUT,1,pulse,llsu指令释放资源选择指令标志,llsu
+global,npu_sched,global,cmd_llsu_start,OUTPUT,1,pulse,llsu模块启动脉冲,llsu
+global,npu_sched,global,cmd_llsu_start_inst_id,OUTPUT,1,pulse,llsu启动指令id,llsu
+global,npu_sched,global,cmd_llsu_base_addr_out,OUTPUT,18,config,输出tensor基地址,llsu
+global,npu_sched,global,cmd_llsu_base_addr_in,OUTPUT,18,config,输入tensor基地址,llsu
+global,npu_sched,global,cmd_llsu_task_select,OUTPUT,3,config,操作模式：0=bc，1=vbc，2=trans_vbc，3=setCIMExp，4=getCIMExp，5=mov，6=trans,llsu
+global,npu_sched,global,cmd_llsu_scalar_val_in,OUTPUT,32,config,广播的标量值,llsu
+global,npu_sched,global,cmd_llsu_cfg_mx,OUTPUT,1,config,MX格式使能,llsu
+global,npu_sched,global,cmd_llsu_cfg_type,OUTPUT,1,config,浮点格式标志,llsu
+global,npu_sched,global,cmd_llsu_cfg_mantissa,OUTPUT,1,config,区分FP8 E5M2/E4M3、FP16/BF16,llsu
+global,npu_sched,global,cmd_llsu_cfg_wd,OUTPUT,3,config,数据位宽,llsu
+global,npu_sched,global,cmd_llsu_cfg_num_dim0_in,OUTPUT,19,config,输入Tensor dim0元素个数,llsu
+global,npu_sched,global,cmd_llsu_cfg_num_dim0_trans_vbc_out,OUTPUT,19,config,trans_vbc输出Tensor dim0元素个数,llsu
+global,npu_sched,global,cmd_llsu_cfg_num_dim0_out,OUTPUT,19,config,bc/trans_vbc输出Tensor dim0元素个数,llsu
+global,npu_sched,global,cmd_llsu_cfg_size_dim1,OUTPUT,13,config,Tensor在dim1上的size,llsu
+global,npu_sched,global,cmd_llsu_cfg_size_dim2,OUTPUT,13,config,Tensor在dim2上的size,llsu
+global,npu_sched,global,cmd_llsu_cfg_stride_dim1_out,OUTPUT,13,config,输出tensor dim1步长,llsu
+global,npu_sched,global,cmd_llsu_cfg_stride_dim2_out,OUTPUT,25,config,输出tensor dim2步长,llsu
+global,npu_sched,global,cmd_llsu_cfg_stride_dim1_in,OUTPUT,13,config,输入tensor dim1步长,llsu
+global,npu_sched,global,cmd_llsu_cfg_stride_dim2_in,OUTPUT,25,config,输入tensor dim2步长,llsu
+global,npu_sched,global,vpu_cmd_inst0_done_vld,INPUT,1,pulse,vpu inst0执行结束脉冲,vpu
+global,npu_sched,global,vpu_cmd_inst1_done_vld,INPUT,1,pulse,vpu inst1执行结束脉冲,vpu
+global,npu_sched,global,vpu_cmd_ch1_rtile_rls_vld,INPUT,1,pulse,vpu ch1读SPAD释放脉冲,vpu
+global,npu_sched,global,vpu_cmd_ch1_rtile_rls_idx,INPUT,5,pulse,vpu ch1读释放SPAD index,vpu
+global,npu_sched,global,vpu_cmd_ch2_rtile_rls_vld,INPUT,1,pulse,vpu ch2读SPAD释放脉冲,vpu
+global,npu_sched,global,vpu_cmd_ch2_rtile_rls_idx,INPUT,5,pulse,vpu ch2读释放SPAD index,vpu
+global,npu_sched,global,vpu_cmd_ch3_rtile_rls_vld,INPUT,1,pulse,vpu ch3读SPAD释放脉冲,vpu
+global,npu_sched,global,vpu_cmd_ch3_rtile_rls_idx,INPUT,5,pulse,vpu ch3读释放SPAD index,vpu
+global,npu_sched,global,vpu_cmd_rtile_rls_inst_id,INPUT,1,pulse,vpu读释放指令id,vpu
+global,npu_sched,global,vpu_cmd_wtile_rls_vld,INPUT,1,pulse,vpu写SPAD释放脉冲,vpu
+global,npu_sched,global,vpu_cmd_wtile_rls_idx,INPUT,5,pulse,vpu写释放SPAD index,vpu
+global,npu_sched,global,vpu_cmd_wtile_rls_inst_id,INPUT,1,pulse,vpu写释放指令id,vpu
+global,npu_sched,global,vpu_cmd_scalar_data,INPUT,32,config,输出scalar O的值,vpu
+global,npu_sched,global,cmd_vpu_start,OUTPUT,1,pulse,vpu模块启动脉冲,vpu
+global,npu_sched,global,cmd_vpu_start_inst_id,OUTPUT,1,pulse,vpu启动指令id,vpu
+global,npu_sched,global,cmd_vpu_base_addr_out,OUTPUT,18,config,输出tensor基地址,vpu
+global,npu_sched,global,cmd_vpu_base_addr_in1,OUTPUT,18,config,输入tensor1基地址,vpu
+global,npu_sched,global,cmd_vpu_base_addr_in2,OUTPUT,18,config,输入tensor2基地址,vpu
+global,npu_sched,global,cmd_vpu_base_addr_in3,OUTPUT,18,config,输入tensor3基地址,vpu
+global,npu_sched,global,cmd_vpu_base_addr_mx,OUTPUT,18,config,输入MX格式tensor基地址,vpu
+global,npu_sched,global,cmd_vpu_scalar_data_in1,OUTPUT,32,config,输入scalar I1的值,vpu
+global,npu_sched,global,cmd_vpu_scalar_data_in2,OUTPUT,32,config,输入scalar I2的值,vpu
+global,npu_sched,global,cmd_vpu_funct_sel,OUTPUT,3,config,功能选择：0=VV_V，1=VS_V，2=V_S，3=V_V，4=M_V，5=MV_M,vpu
+global,npu_sched,global,cmd_vpu_cfg_mv_m_type,OUTPUT,1,config,mv_m类型，0=vs_v扩展，1=vv_v扩展,vpu
+global,npu_sched,global,cmd_vpu_cfg_mx_out,OUTPUT,1,config,输出元素MX格式标志,vpu
+global,npu_sched,global,cmd_vpu_cfg_mx_in1,OUTPUT,1,config,输入1元素MX格式标志,vpu
+global,npu_sched,global,cmd_vpu_cfg_mx_in2,OUTPUT,1,config,输入2元素MX格式标志,vpu
+global,npu_sched,global,cmd_vpu_cfg_mx_in3,OUTPUT,1,config,输入3元素MX格式标志,vpu
+global,npu_sched,global,cmd_vpu_cfg_mx_an,OUTPUT,1,config,多项式系数MX格式标志,vpu
+global,npu_sched,global,cmd_vpu_cfg_type_out,OUTPUT,1,config,输出数据精度选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_type_in1,OUTPUT,1,config,输入1数据精度选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_type_in2,OUTPUT,1,config,输入2数据精度选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_type_in3,OUTPUT,1,config,输入3数据精度选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_type_an,OUTPUT,1,config,多项式系数数据精度选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_mantissa_out,OUTPUT,1,config,输出mantissa选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_mantissa_in1,OUTPUT,1,config,输入1 mantissa选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_mantissa_in2,OUTPUT,1,config,输入2 mantissa选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_mantissa_in3,OUTPUT,1,config,输入3 mantissa选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_mantissa_an,OUTPUT,1,config,多项式系数mantissa选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_wd_out,OUTPUT,3,config,输出数据位宽选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_wd_in1,OUTPUT,3,config,输入1数据位宽选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_wd_in2,OUTPUT,3,config,输入2数据位宽选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_wd_in3,OUTPUT,3,config,输入3数据位宽选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_wd_an,OUTPUT,3,config,多项式系数数据位宽选择,vpu
+global,npu_sched,global,cmd_vpu_cfg_op,OUTPUT,6,config,操作模式,vpu
+global,npu_sched,global,cmd_vpu_cfg_num_dim0,OUTPUT,19,config,输入/输出向量dim0元素个数,vpu
+global,npu_sched,global,cmd_vpu_cfg_size_dim1,OUTPUT,13,config,输入/输出Tensor dim1 size,vpu
+global,npu_sched,global,cmd_vpu_cfg_stride_dim1_out,OUTPUT,13,config,输出Tensor dim1步长,vpu
+global,npu_sched,global,cmd_vpu_cfg_stride_dim1_in1,OUTPUT,13,config,输入Tensor in1 dim1步长,vpu
+global,npu_sched,global,cmd_vpu_cfg_satu,OUTPUT,1,config,结果是否饱和处理,vpu
+global,npu_sched,global,cmd_vpu_cfg_denor_is0,OUTPUT,1,config,denormal输出是否置0,vpu
+global,npu_sched,global,cmd_vpu_cfg_rm,OUTPUT,3,config,round mode,vpu
+global,npu_sched,global,cmd_vpu_cfg_ite_num,OUTPUT,3,config,输入多项式配置迭代次数,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_0,OUTPUT,16,config,多项式迭代系数a0,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_1,OUTPUT,16,config,多项式迭代系数a1,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_2,OUTPUT,16,config,多项式迭代系数a2,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_3,OUTPUT,16,config,多项式迭代系数a3,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_4,OUTPUT,16,config,多项式迭代系数a4,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_5,OUTPUT,16,config,多项式迭代系数a5,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_6,OUTPUT,16,config,多项式迭代系数a6,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_7,OUTPUT,16,config,多项式迭代系数a7,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_8,OUTPUT,16,config,多项式迭代系数a8,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_9,OUTPUT,16,config,多项式迭代系数a9,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_10,OUTPUT,16,config,多项式迭代系数a10,vpu
+global,npu_sched,global,cmd_vpu_cfg_poly_an_buf_11,OUTPUT,16,config,多项式迭代系数a11,vpu
+global,npu_sched,global,mpu_cmd_inst0_done_vld,INPUT,1,pulse,mpu inst0执行结束脉冲,mpu
+global,npu_sched,global,mpu_cmd_inst1_done_vld,INPUT,1,pulse,mpu inst1执行结束脉冲,mpu
+global,npu_sched,global,mpu_cmd_inst0_page_rls_vld,INPUT,1,pulse,mpu inst0 page释放脉冲,mpu
+global,npu_sched,global,mpu_cmd_inst1_page_rls_vld,INPUT,1,pulse,mpu inst1 page释放脉冲,mpu
+global,npu_sched,global,mpu_cmd_ch1_rtile_rls_vld,INPUT,1,pulse,mpu ch1读SPAD释放脉冲,mpu
+global,npu_sched,global,mpu_cmd_ch1_rtile_rls_idx,INPUT,5,pulse,mpu ch1读释放SPAD index,mpu
+global,npu_sched,global,mpu_cmd_ch2_rtile_rls_vld,INPUT,1,pulse,mpu ch2读SPAD释放脉冲,mpu
+global,npu_sched,global,mpu_cmd_ch2_rtile_rls_idx,INPUT,5,pulse,mpu ch2读释放SPAD index,mpu
+global,npu_sched,global,mpu_cmd_rtile_rls_inst_id,INPUT,1,pulse,mpu读释放指令id,mpu
+global,npu_sched,global,mpu_cmd_wtile_rls_vld,INPUT,1,pulse,mpu写SPAD释放脉冲,mpu
+global,npu_sched,global,mpu_cmd_wtile_rls_idx,INPUT,5,pulse,mpu写释放SPAD index,mpu
+global,npu_sched,global,mpu_cmd_wtile_rls_inst_id,INPUT,1,pulse,mpu写释放指令id,mpu
+global,npu_sched,global,cmd_mpu_start,OUTPUT,1,pulse,mpu模块启动脉冲,mpu
+global,npu_sched,global,cmd_mpu_start_inst_id,OUTPUT,1,pulse,mpu启动指令id,mpu
+global,npu_sched,global,cmd_mpu_base_addr_mx_in,OUTPUT,18,config,输入MX格式tensor基地址,mpu
+global,npu_sched,global,cmd_mpu_base_addr_wt,OUTPUT,18,config,权重tensor基地址,mpu
+global,npu_sched,global,cmd_mpu_base_addr_out,OUTPUT,18,config,输出tensor基地址,mpu
+global,npu_sched,global,cmd_mpu_base_addr_in,OUTPUT,18,config,输入tensor基地址,mpu
+global,npu_sched,global,cmd_mpu_base_addr_orig,OUTPUT,18,config,原始tensor基地址,mpu
+global,npu_sched,global,cmd_mpu_base_addr_scale,OUTPUT,18,config,dq操作系数基地址,mpu
+global,npu_sched,global,cmd_mpu_cfg_mx_in,OUTPUT,1,config,输入MX格式使能,mpu
+global,npu_sched,global,cmd_mpu_cfg_mx_wt,OUTPUT,1,config,权重MX格式使能,mpu
+global,npu_sched,global,cmd_mpu_cfg_mx_scale,OUTPUT,1,config,scale MX格式使能,mpu
+global,npu_sched,global,cmd_mpu_cfg_type_out,OUTPUT,1,config,输出浮点格式标志,mpu
+global,npu_sched,global,cmd_mpu_cfg_type_orig,OUTPUT,1,config,orig浮点格式标志,mpu
+global,npu_sched,global,cmd_mpu_cfg_type_in,OUTPUT,1,config,输入浮点格式标志,mpu
+global,npu_sched,global,cmd_mpu_cfg_type_wt,OUTPUT,1,config,权重浮点格式标志,mpu
+global,npu_sched,global,cmd_mpu_cfg_type_scale,OUTPUT,1,config,scale浮点格式标志,mpu
+global,npu_sched,global,cmd_mpu_cfg_mantissa_out,OUTPUT,1,config,输出mantissa选择,mpu
+global,npu_sched,global,cmd_mpu_cfg_mantissa_orig,OUTPUT,1,config,orig mantissa选择,mpu
+global,npu_sched,global,cmd_mpu_cfg_mantissa_in,OUTPUT,1,config,输入mantissa选择,mpu
+global,npu_sched,global,cmd_mpu_cfg_mantissa_wt,OUTPUT,1,config,权重mantissa选择,mpu
+global,npu_sched,global,cmd_mpu_cfg_mantissa_scale,OUTPUT,1,config,scale mantissa选择,mpu
+global,npu_sched,global,cmd_mpu_cfg_wd_out,OUTPUT,3,config,输出数据位宽,mpu
+global,npu_sched,global,cmd_mpu_cfg_wd_orig,OUTPUT,3,config,orig数据位宽,mpu
+global,npu_sched,global,cmd_mpu_cfg_wd_in,OUTPUT,3,config,输入数据位宽,mpu
+global,npu_sched,global,cmd_mpu_cfg_wd_wt,OUTPUT,3,config,权重数据位宽,mpu
+global,npu_sched,global,cmd_mpu_cfg_wd_scale,OUTPUT,3,config,scale数据位宽,mpu
+global,npu_sched,global,cmd_mpu_cfg_acc_en,OUTPUT,1,config,累加使能,mpu
+global,npu_sched,global,cmd_mpu_cfg_satu,OUTPUT,1,config,浮点溢出饱和处理，0=inf，1=max/min,mpu
+global,npu_sched,global,cmd_mpu_cfg_scale_en,OUTPUT,1,config,反量化使能,mpu
+global,npu_sched,global,cmd_mpu_cfg_num_dim0_in,OUTPUT,19,config,输入Tensor dim0元素个数,mpu
+global,npu_sched,global,cmd_mpu_cfg_num_dim0_out,OUTPUT,19,config,输出Tensor dim0元素个数,mpu
+global,npu_sched,global,cmd_mpu_cfg_size_dim1_in,OUTPUT,13,config,输入tensor dim1 size,mpu
+global,npu_sched,global,cmd_mpu_cfg_stride_dim1_out,OUTPUT,13,config,输出tensor dim1步长,mpu
+global,npu_sched,global,cmd_mpu_cfg_stride_dim1_in,OUTPUT,13,config,输入tensor dim1步长,mpu
+global,npu_sched,global,cmd_mpu_cfg_stride_dim1_orig,OUTPUT,13,config,output tensor original dim1步长,mpu
+global,npu_sched,global,creg_cmd_excep_en,INPUT,32,csr,中断使能信号,csr
+global,npu_sched,global,cmd_creg_int,OUTPUT,32,interrupt,CMD模块原始中断脉冲,interrupt
+global,npu_sched,global,creg_cmd_mpu_inst0_masked_int,INPUT,32,csr,MPU inst0 mask后中断使能,csr
+global,npu_sched,global,creg_cmd_mpu_inst1_masked_int,INPUT,32,csr,MPU inst1 mask后中断使能,csr
+global,npu_sched,global,creg_cmd_vpu_inst0_masked_int,INPUT,32,csr,VPU inst0 mask后中断使能,csr
+global,npu_sched,global,creg_cmd_vpu_inst1_masked_int,INPUT,32,csr,VPU inst1 mask后中断使能,csr
+global,npu_sched,global,creg_cmd_glsu_inst0_masked_int,INPUT,32,csr,GLSU inst0 mask后中断使能,csr
+global,npu_sched,global,creg_cmd_glsu_inst1_masked_int,INPUT,32,csr,GLSU inst1 mask后中断使能,csr
+global,npu_sched,global,creg_cmd_llsu_inst0_masked_int,INPUT,32,csr,LLSU inst0 mask后中断使能,csr
+global,npu_sched,global,creg_cmd_llsu_inst1_masked_int,INPUT,32,csr,LLSU inst1 mask后中断使能,csr
+global,npu_sched,global,creg_cmd_niu_inst0_masked_int,INPUT,32,csr,NIU inst0 mask后中断使能,csr
+global,npu_sched,global,creg_cmd_niu_inst1_masked_int,INPUT,32,csr,NIU inst1 mask后中断使能,csr
+global,npu_sched,global,cmd_creg_exce0,OUTPUT,32,interrupt,CMD中断信息0,interrupt
+global,npu_sched,global,cmd_creg_exce1,OUTPUT,32,interrupt,CMD中断信息1,interrupt
+global,npu_sched,global,cmd_creg_exce2,OUTPUT,32,interrupt,CMD中断信息2,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce0,OUTPUT,32,interrupt,MPU inst0中断信息0,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce1,OUTPUT,32,interrupt,MPU inst0中断信息1,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce2,OUTPUT,32,interrupt,MPU inst0中断信息2,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce3,OUTPUT,32,interrupt,MPU inst0中断信息3,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce4,OUTPUT,32,interrupt,MPU inst0中断信息4,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce5,OUTPUT,32,interrupt,MPU inst0中断信息5,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce6,OUTPUT,32,interrupt,MPU inst0中断信息6,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce7,OUTPUT,32,interrupt,MPU inst0中断信息7,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce8,OUTPUT,32,interrupt,MPU inst0中断信息8,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce9,OUTPUT,32,interrupt,MPU inst1中断信息9,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce10,OUTPUT,32,interrupt,MPU inst1中断信息10,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce11,OUTPUT,32,interrupt,MPU inst1中断信息11,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce12,OUTPUT,32,interrupt,MPU inst1中断信息12,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce13,OUTPUT,32,interrupt,MPU inst1中断信息13,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce14,OUTPUT,32,interrupt,MPU inst1中断信息14,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce15,OUTPUT,32,interrupt,MPU inst1中断信息15,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce16,OUTPUT,32,interrupt,MPU inst1中断信息16,interrupt
+global,npu_sched,global,cmd_creg_mpu_exce17,OUTPUT,32,interrupt,MPU inst1中断信息17,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce0,OUTPUT,32,interrupt,VPU inst0中断信息0,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce1,OUTPUT,32,interrupt,VPU inst0中断信息1,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce2,OUTPUT,32,interrupt,VPU inst0中断信息2,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce3,OUTPUT,32,interrupt,VPU inst0中断信息3,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce4,OUTPUT,32,interrupt,VPU inst0中断信息4,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce5,OUTPUT,32,interrupt,VPU inst0中断信息5,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce6,OUTPUT,32,interrupt,VPU inst1中断信息6,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce7,OUTPUT,32,interrupt,VPU inst1中断信息7,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce8,OUTPUT,32,interrupt,VPU inst1中断信息8,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce9,OUTPUT,32,interrupt,VPU inst1中断信息9,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce10,OUTPUT,32,interrupt,VPU inst1中断信息10,interrupt
+global,npu_sched,global,cmd_creg_vpu_exce11,OUTPUT,32,interrupt,VPU inst1中断信息11,interrupt
+global,npu_sched,global,cmd_creg_glsu_exce0,OUTPUT,32,interrupt,GLSU inst0中断信息0,interrupt
+global,npu_sched,global,cmd_creg_glsu_exce1,OUTPUT,32,interrupt,GLSU inst0中断信息1,interrupt
+global,npu_sched,global,cmd_creg_glsu_exce2,OUTPUT,32,interrupt,GLSU inst0中断信息2,interrupt
+global,npu_sched,global,cmd_creg_glsu_exce3,OUTPUT,32,interrupt,GLSU inst1中断信息3,interrupt
+global,npu_sched,global,cmd_creg_glsu_exce4,OUTPUT,32,interrupt,GLSU inst1中断信息4,interrupt
+global,npu_sched,global,cmd_creg_glsu_exce5,OUTPUT,32,interrupt,GLSU inst1中断信息5,interrupt
+global,npu_sched,global,cmd_creg_llsu_exce0,OUTPUT,32,interrupt,LLSU inst0中断信息0,interrupt
+global,npu_sched,global,cmd_creg_llsu_exce1,OUTPUT,32,interrupt,LLSU inst0中断信息1,interrupt
+global,npu_sched,global,cmd_creg_llsu_exce2,OUTPUT,32,interrupt,LLSU inst0中断信息2,interrupt
+global,npu_sched,global,cmd_creg_llsu_exce3,OUTPUT,32,interrupt,LLSU inst1中断信息3,interrupt
+global,npu_sched,global,cmd_creg_llsu_exce4,OUTPUT,32,interrupt,LLSU inst1中断信息4,interrupt
+global,npu_sched,global,cmd_creg_llsu_exce5,OUTPUT,32,interrupt,LLSU inst1中断信息5,interrupt
+global,npu_sched,global,cmd_creg_niu_exce0,OUTPUT,32,interrupt,NIU inst0中断信息0,interrupt
+global,npu_sched,global,cmd_creg_niu_exce1,OUTPUT,32,interrupt,NIU inst0中断信息1,interrupt
+global,npu_sched,global,cmd_creg_niu_exce2,OUTPUT,32,interrupt,NIU inst0中断信息2,interrupt
+global,npu_sched,global,cmd_creg_niu_exce3,OUTPUT,32,interrupt,NIU inst0中断信息3,interrupt
+global,npu_sched,global,cmd_creg_niu_exce4,OUTPUT,32,interrupt,NIU inst0中断信息4,interrupt
+global,npu_sched,global,cmd_creg_niu_exce5,OUTPUT,32,interrupt,NIU inst0中断信息5,interrupt
+global,npu_sched,global,cmd_creg_niu_exce6,OUTPUT,32,interrupt,NIU inst1中断信息6,interrupt
+global,npu_sched,global,cmd_creg_niu_exce7,OUTPUT,32,interrupt,NIU inst1中断信息7,interrupt
+global,npu_sched,global,cmd_creg_niu_exce8,OUTPUT,32,interrupt,NIU inst1中断信息8,interrupt
+global,npu_sched,global,cmd_creg_niu_exce9,OUTPUT,32,interrupt,NIU inst1中断信息9,interrupt
+global,npu_sched,global,cmd_creg_niu_exce10,OUTPUT,32,interrupt,NIU inst1中断信息10,interrupt
+global,npu_sched,global,cmd_creg_niu_exce11,OUTPUT,32,interrupt,NIU inst1中断信息11,interrupt
+global,npu_sched,global,cmd_creg_dbg0,OUTPUT,32,debug,CMD debug0寄存器,debug
+global,npu_sched,global,cmd_creg_dbg1,OUTPUT,32,debug,CMD debug1寄存器,debug
+global,npu_sched,global,cmd_creg_dbg2,OUTPUT,32,debug,CMD debug2寄存器,debug
+global,npu_sched,global,creg_cmd_perf_en,INPUT,1,csr,性能监测使能，电平,csr
+global,npu_sched,global,creg_cmd_perf_start,INPUT,1,csr,性能监测开始，电平,csr
+global,npu_sched,global,creg_cmd_perf_pause,INPUT,1,csr,性能监测暂停，电平,csr
+global,npu_sched,global,creg_cmd_perf_conti,INPUT,1,csr,性能监测继续，电平,csr
+global,npu_sched,global,creg_cmd_perf_end,INPUT,1,csr,性能监测结束，电平,csr
+global,npu_sched,global,cmd_creg_perf_cnt,OUTPUT,96,debug,性能监测计数器,debug
+global,npu_sched,global,creg_cmd_spad_excl_en,INPUT,32,csr,MST各读写通道SPAD独占访问控制，bit[12:0]对应GLSU/MPU/VPU/LLSU/NIU读写通道，bit[31:13]保留,csr
+global,npu_sched,global,creg_cmd_reserve_in,INPUT,128,reserved,预留输入接口,reserved
+global,npu_sched,global,creg_cmd_reserve_out,OUTPUT,128,reserved,预留输出接口,reserved
+module,npu_sched,top,clk,INPUT,1,clock,时钟，目标700MHz@T22,clock
+module,npu_sched,top,rst_n,INPUT,1,reset,复位信号，低有效,reset
+module,npu_sched,top,creg_cmd_icg_en,INPUT,32,csr,时钟ICG使能，1打开ICG低功耗，0时钟常开,csr
+module,npu_sched,top,cmd_xbar_ch0_icg_wstart,OUTPUT,1,icg,cmd ch0写通道icg信号,icg
+module,npu_sched,top,cmd_xbar_ch1_icg_rstart,OUTPUT,1,icg,cmd ch1读通道icg信号,icg
+module,npu_sched,top,cmd_niu_icg_start,OUTPUT,1,icg,niu模块预启动脉冲，用于开启时钟,icg
+module,npu_sched,top,cmd_glsu_icg_start,OUTPUT,1,icg,glsu模块预启动脉冲，用于开启时钟,icg
+module,npu_sched,top,cmd_llsu_icg_start,OUTPUT,1,icg,llsu模块预启动脉冲，用于开启时钟,icg
+module,npu_sched,top,cmd_vpu_icg_start,OUTPUT,1,icg,vpu模块预启动脉冲，用于开启时钟,icg
+module,npu_sched,top,cmd_mpu_icg_start,OUTPUT,1,icg,mpu模块预启动脉冲，用于开启时钟,icg
+module,npu_sched,top,disp_cmd_inst,INPUT,74,valid-ready,"指令信号：bit[2:0]=xd/xs1/xs2, bit[9:3]=func7, bit[41:10]=rs1val, bit[73:42]=rs2val",valid_ready
+module,npu_sched,top,disp_cmd_inst_flag,INPUT,1,valid-ready,输入指令类型，0=NICE指令，1=VNICE指令,valid_ready
+module,npu_sched,top,disp_cmd_vld,INPUT,1,valid-ready,指令valid，高有效,valid_ready
+module,npu_sched,top,cmd_disp_rdy,OUTPUT,1,valid-ready,指令ready，高有效,valid_ready
+module,npu_sched,top,cmd_disp_rsp_data,OUTPUT,35,valid-ready,指令返回值（32bit数据+3bit）,valid_ready
+module,npu_sched,top,cmd_disp_rsp_vld,OUTPUT,1,valid-ready,指令返回值valid，高有效,valid_ready
+module,npu_sched,top,disp_cmd_rsp_rdy,INPUT,1,valid-ready,指令返回值ready，高有效,valid_ready
+module,npu_sched,top,disp_cmd_inst_tag,INPUT,3,valid-ready,xd=1时的指令id，用于数据保序,valid_ready
+module,npu_sched,top,cmd_llsu_xbr_sel_vld,OUTPUT,2,status,read/write lmem与tensor move指令状态，2'b01=read/write lmem，2'b10=tensor move，2'b00=均非,status
+module,npu_sched,top,cmd_xbr_ch0_req_waddr,OUTPUT,18,valid-ready,写请求地址,valid_ready
+module,npu_sched,top,cmd_xbr_ch0_req_wdata,OUTPUT,512,valid-ready,写请求数据,valid_ready
+module,npu_sched,top,cmd_xbr_ch0_req_wstrb,OUTPUT,2,valid-ready,写请求选通，2'b11高低256bit均有效，2'b10高有效，2'b01低有效,valid_ready
+module,npu_sched,top,cmd_xbr_ch0_req_wvld,OUTPUT,1,valid-ready,写请求valid，高有效,valid_ready
+module,npu_sched,top,cmd_xbr_ch0_req_wrdy,INPUT,1,valid-ready,写请求ready，高有效,valid_ready
+module,npu_sched,top,xbr_cmd_ch0_rsp_wvld,INPUT,1,valid-ready,写响应valid，高有效,valid_ready
+module,npu_sched,top,xbr_cmd_ch0_rsp_wlast,INPUT,1,valid-ready,写响应最后一笔数据标志，高有效,valid_ready
+module,npu_sched,top,cmd_xbr_ch0_rsp_wrdy,OUTPUT,1,valid-ready,写响应接收就绪，高有效,valid_ready
+module,npu_sched,top,cmd_xbr_ch0_req_wid_for_dv,OUTPUT,32,valid-ready,写请求ID（DV用）,valid_ready
+module,npu_sched,top,xbr_cmd_ch0_rsp_wid_for_dv,INPUT,32,valid-ready,写响应ID（DV用）,valid_ready
+module,npu_sched,top,cmd_xbr_ch1_req_raddr,OUTPUT,44,valid-ready,读请求地址,valid_ready
+module,npu_sched,top,cmd_xbr_ch1_req_rvld,OUTPUT,1,valid-ready,读请求valid，高有效,valid_ready
+module,npu_sched,top,xbr_cmd_ch1_req_rrdy,INPUT,1,valid-ready,读请求ready，高有效,valid_ready
+module,npu_sched,top,xbr_cmd_ch1_rsp_rdata,INPUT,512,valid-ready,读响应数据,valid_ready
+module,npu_sched,top,xbr_cmd_ch1_rsp_rvld,INPUT,1,valid-ready,读响应valid，高有效,valid_ready
+module,npu_sched,top,cmd_xbr_ch1_rsp_rrdy,OUTPUT,1,valid-ready,读响应ready，高有效,valid_ready
+module,npu_sched,top,cmd_xbr_ch1_req_rid_for_dv,OUTPUT,32,valid-ready,RD1读请求ID（DV用）,valid_ready
+module,npu_sched,top,xbr_cmd_ch1_rsp_rid_for_dv,INPUT,32,valid-ready,RD1读响应ID（DV用）,valid_ready
+module,npu_sched,top,niu_cmd_inst0_done_vld,INPUT,1,pulse,niu inst0执行结束脉冲,niu
+module,npu_sched,top,niu_cmd_inst0_rtile_rls_vld,INPUT,1,pulse,niu inst0读SPAD释放脉冲,niu
+module,npu_sched,top,niu_cmd_inst0_rtile_rls_idx,INPUT,3,pulse,niu inst0读释放SPAD index,niu
+module,npu_sched,top,niu_cmd_inst0_wtile_rls_vld,INPUT,1,pulse,niu inst0写SPAD释放脉冲,niu
+module,npu_sched,top,niu_cmd_inst0_wtile_rls_idx,INPUT,3,pulse,niu inst0写释放SPAD index,niu
+module,npu_sched,top,niu_cmd_inst0_page_rls_vld,INPUT,1,pulse,niu inst0 page释放脉冲,niu
+module,npu_sched,top,niu_cmd_inst0_page_rls_idx,INPUT,4,pulse,niu inst0释放page index,niu
+module,npu_sched,top,niu_cmd_inst1_done_vld,INPUT,1,pulse,niu inst1执行结束脉冲,niu
+module,npu_sched,top,niu_cmd_inst1_rtile_rls_vld,INPUT,1,pulse,niu inst1读SPAD释放脉冲,niu
+module,npu_sched,top,niu_cmd_inst1_rtile_rls_idx,INPUT,3,pulse,niu inst1读释放SPAD index,niu
+module,npu_sched,top,niu_cmd_inst1_wtile_rls_vld,INPUT,1,pulse,niu inst1写SPAD释放脉冲,niu
+module,npu_sched,top,niu_cmd_inst1_wtile_rls_idx,INPUT,3,pulse,niu inst1写释放SPAD index,niu
+module,npu_sched,top,niu_cmd_inst1_page_rls_vld,INPUT,1,pulse,niu inst1 page释放脉冲,niu
+module,npu_sched,top,niu_cmd_inst1_page_rls_idx,INPUT,4,pulse,niu inst1释放page index,niu
+module,npu_sched,top,cmd_niu_start,OUTPUT,1,pulse,niu模块启动脉冲,niu
+module,npu_sched,top,cmd_niu_start_inst_id,OUTPUT,1,pulse,niu启动指令id，0=inst0，1=inst1,niu
+module,npu_sched,top,cmd_niu_task_select,OUTPUT,2,config,0=default，1=load，2=store,niu
+module,npu_sched,top,cmd_niu_dst_base_addr,OUTPUT,44,config,dest NPU core基地址,niu
+module,npu_sched,top,cmd_niu_src_base_addr,OUTPUT,44,config,source NPU core基地址,niu
+module,npu_sched,top,cmd_niu_cfg_type,OUTPUT,1,config,浮点格式标志，1=BF/BBF/FP,niu
+module,npu_sched,top,cmd_niu_cfg_wd,OUTPUT,3,config,数据位宽,niu
+module,npu_sched,top,cmd_niu_cfg_num_dim0,OUTPUT,19,config,Tensor在dim0上的元素个数,niu
+module,npu_sched,top,cmd_niu_cfg_size_dim1,OUTPUT,13,config,Tensor在dim1上的size,niu
+module,npu_sched,top,cmd_niu_cfg_size_dim2,OUTPUT,13,config,Tensor在dim2上的size,niu
+module,npu_sched,top,cmd_niu_cfg_src_stride_dim1,OUTPUT,13,config,输入tensor dim1步长,niu
+module,npu_sched,top,cmd_niu_cfg_src_stride_dim2,OUTPUT,25,config,输入tensor dim2步长,niu
+module,npu_sched,top,cmd_niu_cfg_dst_stride_dim1,OUTPUT,13,config,输出tensor dim1步长,niu
+module,npu_sched,top,cmd_niu_cfg_dst_stride_dim2,OUTPUT,25,config,输出tensor dim2步长,niu
+module,npu_sched,top,glsu_cmd_inst0_done_vld,INPUT,1,pulse,glsu inst0执行结束脉冲,glsu
+module,npu_sched,top,glsu_cmd_inst0_rtile_rls_vld,INPUT,1,pulse,glsu inst0读SPAD释放脉冲,glsu
+module,npu_sched,top,glsu_cmd_inst0_rtile_rls_idx,INPUT,5,pulse,glsu inst0读释放SPAD index,glsu
+module,npu_sched,top,glsu_cmd_inst0_wtile_rls_vld,INPUT,1,pulse,glsu inst0写SPAD释放脉冲,glsu
+module,npu_sched,top,glsu_cmd_inst0_wtile_rls_idx,INPUT,5,pulse,glsu inst0写释放SPAD index,glsu
+module,npu_sched,top,glsu_cmd_inst0_page_rls_vld,INPUT,1,pulse,glsu inst0 page释放脉冲,glsu
+module,npu_sched,top,glsu_cmd_inst0_page_rls_idx,INPUT,4,pulse,glsu inst0释放page index,glsu
+module,npu_sched,top,glsu_cmd_inst0_rdram_rls_vld,INPUT,1,pulse,glsu inst0读dram释放脉冲,glsu
+module,npu_sched,top,glsu_cmd_inst0_rdram_rls_idx,INPUT,4,pulse,glsu inst0读释放dram index,glsu
+module,npu_sched,top,glsu_cmd_inst1_done_vld,INPUT,1,pulse,glsu inst1执行结束脉冲,glsu
+module,npu_sched,top,glsu_cmd_inst1_rtile_rls_vld,INPUT,1,pulse,glsu inst1读SPAD释放脉冲,glsu
+module,npu_sched,top,glsu_cmd_inst1_rtile_rls_idx,INPUT,5,pulse,glsu inst1读释放SPAD index,glsu
+module,npu_sched,top,glsu_cmd_inst1_wtile_rls_vld,INPUT,1,pulse,glsu inst1写SPAD释放脉冲,glsu
+module,npu_sched,top,glsu_cmd_inst1_wtile_rls_idx,INPUT,5,pulse,glsu inst1写释放SPAD index,glsu
+module,npu_sched,top,glsu_cmd_inst1_page_rls_vld,INPUT,1,pulse,glsu inst1 page释放脉冲,glsu
+module,npu_sched,top,glsu_cmd_inst1_page_rls_idx,INPUT,4,pulse,glsu inst1释放page index,glsu
+module,npu_sched,top,glsu_cmd_inst1_rdram_rls_vld,INPUT,1,pulse,glsu inst1读dram释放脉冲,glsu
+module,npu_sched,top,glsu_cmd_inst1_rdram_rls_idx,INPUT,4,pulse,glsu inst1读释放dram index,glsu
+module,npu_sched,top,cmd_glsu_start,OUTPUT,1,pulse,glsu模块启动脉冲,glsu
+module,npu_sched,top,cmd_glsu_start_inst_id,OUTPUT,1,pulse,glsu启动指令id，0=inst0，1=inst1,glsu
+module,npu_sched,top,cmd_glsu_task_select,OUTPUT,4,config,操作选择：1=tld，2=ttld，3=gather，4=loadcimcexp，5=tensor dma，6=tst，7=storecimcexp,glsu
+module,npu_sched,top,cmd_glsu_src_base_addr,OUTPUT,44,config,source core访存基地址,glsu
+module,npu_sched,top,cmd_glsu_dst_base_addr,OUTPUT,44,config,dst core访存基地址,glsu
+module,npu_sched,top,cmd_glsu_cfg_mx,OUTPUT,1,config,操作数MX格式标志,glsu
+module,npu_sched,top,cmd_glsu_cfg_type,OUTPUT,1,config,操作数浮点格式标志,glsu
+module,npu_sched,top,cmd_glsu_cfg_mantissa,OUTPUT,1,config,区分FP8 E5M2/E4M3、FP16/BF16,glsu
+module,npu_sched,top,cmd_glsu_cfg_wd,OUTPUT,3,config,数据位宽，2=4bit，3=8bit，4=16bit，5=32bit,glsu
+module,npu_sched,top,cmd_glsu_gather_dst_spad,OUTPUT,1,config,gather指令dst为local spad(1)或local dram(0),glsu
+module,npu_sched,top,cmd_glsu_cfg_index_base_addr,OUTPUT,18,config,gather指令index在本地SPAD的存储地址,glsu
+module,npu_sched,top,cmd_glsu_src_global,OUTPUT,1,config,gather指令src为global(1)或local(0),glsu
+module,npu_sched,top,cmd_glsu_dst_global,OUTPUT,1,config,gather指令dst为global(1)或local(0),glsu
+module,npu_sched,top,cmd_glsu_cfg_num_dim0,OUTPUT,19,config,Tensor在dim0上的元素个数,glsu
+module,npu_sched,top,cmd_glsu_cfg_index_num_dim0,OUTPUT,19,config,gather指令index用到的dim0操作数数量,glsu
+module,npu_sched,top,cmd_glsu_cfg_size_dim1,OUTPUT,13,config,Tensor在dim1上的size,glsu
+module,npu_sched,top,cmd_glsu_cfg_size_dim2,OUTPUT,13,config,Tensor在dim2上的size,glsu
+module,npu_sched,top,cmd_glsu_cfg_src_stride_dim1,OUTPUT,13,config,输入Tensor dim1步长,glsu
+module,npu_sched,top,cmd_glsu_cfg_src_stride_dim2,OUTPUT,25,config,输入Tensor dim2步长,glsu
+module,npu_sched,top,cmd_glsu_cfg_dst_stride_dim1,OUTPUT,13,config,输出Tensor dim1步长,glsu
+module,npu_sched,top,cmd_glsu_cfg_dst_stride_dim2,OUTPUT,25,config,输出Tensor dim2步长,glsu
+module,npu_sched,top,llsu_cmd_inst0_done_vld,INPUT,1,pulse,llsu inst0执行结束脉冲,llsu
+module,npu_sched,top,llsu_cmd_inst1_done_vld,INPUT,1,pulse,llsu inst1执行结束脉冲,llsu
+module,npu_sched,top,llsu_cmd_rtile_rls_vld,INPUT,1,pulse,llsu读SPAD释放脉冲,llsu
+module,npu_sched,top,llsu_cmd_rtile_rls_idx,INPUT,3,pulse,llsu读释放SPAD index,llsu
+module,npu_sched,top,llsu_cmd_rtile_rls_inst_id,INPUT,1,pulse,llsu读释放指令id，0=inst0，1=inst1,llsu
+module,npu_sched,top,llsu_cmd_wtile_rls_vld,INPUT,1,pulse,llsu写SPAD释放脉冲,llsu
+module,npu_sched,top,llsu_cmd_wtile_rls_idx,INPUT,3,pulse,llsu写释放SPAD index,llsu
+module,npu_sched,top,llsu_cmd_wtile_rls_inst_id,INPUT,1,pulse,llsu写释放指令id,llsu
+module,npu_sched,top,llsu_cmd_page_rls_vld,INPUT,1,pulse,llsu page释放脉冲,llsu
+module,npu_sched,top,llsu_cmd_page_rls_idx,INPUT,4,pulse,llsu释放page index,llsu
+module,npu_sched,top,llsu_cmd_page_rls_inst_id,INPUT,1,pulse,llsu page释放指令id,llsu
+module,npu_sched,top,llsu_cmd_rls_inst_id,INPUT,1,pulse,llsu指令释放资源选择指令标志,llsu
+module,npu_sched,top,cmd_llsu_start,OUTPUT,1,pulse,llsu模块启动脉冲,llsu
+module,npu_sched,top,cmd_llsu_start_inst_id,OUTPUT,1,pulse,llsu启动指令id,llsu
+module,npu_sched,top,cmd_llsu_base_addr_out,OUTPUT,18,config,输出tensor基地址,llsu
+module,npu_sched,top,cmd_llsu_base_addr_in,OUTPUT,18,config,输入tensor基地址,llsu
+module,npu_sched,top,cmd_llsu_task_select,OUTPUT,3,config,操作模式：0=bc，1=vbc，2=trans_vbc，3=setCIMExp，4=getCIMExp，5=mov，6=trans,llsu
+module,npu_sched,top,cmd_llsu_scalar_val_in,OUTPUT,32,config,广播的标量值,llsu
+module,npu_sched,top,cmd_llsu_cfg_mx,OUTPUT,1,config,MX格式使能,llsu
+module,npu_sched,top,cmd_llsu_cfg_type,OUTPUT,1,config,浮点格式标志,llsu
+module,npu_sched,top,cmd_llsu_cfg_mantissa,OUTPUT,1,config,区分FP8 E5M2/E4M3、FP16/BF16,llsu
+module,npu_sched,top,cmd_llsu_cfg_wd,OUTPUT,3,config,数据位宽,llsu
+module,npu_sched,top,cmd_llsu_cfg_num_dim0_in,OUTPUT,19,config,输入Tensor dim0元素个数,llsu
+module,npu_sched,top,cmd_llsu_cfg_num_dim0_trans_vbc_out,OUTPUT,19,config,trans_vbc输出Tensor dim0元素个数,llsu
+module,npu_sched,top,cmd_llsu_cfg_num_dim0_out,OUTPUT,19,config,bc/trans_vbc输出Tensor dim0元素个数,llsu
+module,npu_sched,top,cmd_llsu_cfg_size_dim1,OUTPUT,13,config,Tensor在dim1上的size,llsu
+module,npu_sched,top,cmd_llsu_cfg_size_dim2,OUTPUT,13,config,Tensor在dim2上的size,llsu
+module,npu_sched,top,cmd_llsu_cfg_stride_dim1_out,OUTPUT,13,config,输出tensor dim1步长,llsu
+module,npu_sched,top,cmd_llsu_cfg_stride_dim2_out,OUTPUT,25,config,输出tensor dim2步长,llsu
+module,npu_sched,top,cmd_llsu_cfg_stride_dim1_in,OUTPUT,13,config,输入tensor dim1步长,llsu
+module,npu_sched,top,cmd_llsu_cfg_stride_dim2_in,OUTPUT,25,config,输入tensor dim2步长,llsu
+module,npu_sched,top,vpu_cmd_inst0_done_vld,INPUT,1,pulse,vpu inst0执行结束脉冲,vpu
+module,npu_sched,top,vpu_cmd_inst1_done_vld,INPUT,1,pulse,vpu inst1执行结束脉冲,vpu
+module,npu_sched,top,vpu_cmd_ch1_rtile_rls_vld,INPUT,1,pulse,vpu ch1读SPAD释放脉冲,vpu
+module,npu_sched,top,vpu_cmd_ch1_rtile_rls_idx,INPUT,5,pulse,vpu ch1读释放SPAD index,vpu
+module,npu_sched,top,vpu_cmd_ch2_rtile_rls_vld,INPUT,1,pulse,vpu ch2读SPAD释放脉冲,vpu
+module,npu_sched,top,vpu_cmd_ch2_rtile_rls_idx,INPUT,5,pulse,vpu ch2读释放SPAD index,vpu
+module,npu_sched,top,vpu_cmd_ch3_rtile_rls_vld,INPUT,1,pulse,vpu ch3读SPAD释放脉冲,vpu
+module,npu_sched,top,vpu_cmd_ch3_rtile_rls_idx,INPUT,5,pulse,vpu ch3读释放SPAD index,vpu
+module,npu_sched,top,vpu_cmd_rtile_rls_inst_id,INPUT,1,pulse,vpu读释放指令id,vpu
+module,npu_sched,top,vpu_cmd_wtile_rls_vld,INPUT,1,pulse,vpu写SPAD释放脉冲,vpu
+module,npu_sched,top,vpu_cmd_wtile_rls_idx,INPUT,5,pulse,vpu写释放SPAD index,vpu
+module,npu_sched,top,vpu_cmd_wtile_rls_inst_id,INPUT,1,pulse,vpu写释放指令id,vpu
+module,npu_sched,top,vpu_cmd_scalar_data,INPUT,32,config,输出scalar O的值,vpu
+module,npu_sched,top,cmd_vpu_start,OUTPUT,1,pulse,vpu模块启动脉冲,vpu
+module,npu_sched,top,cmd_vpu_start_inst_id,OUTPUT,1,pulse,vpu启动指令id,vpu
+module,npu_sched,top,cmd_vpu_base_addr_out,OUTPUT,18,config,输出tensor基地址,vpu
+module,npu_sched,top,cmd_vpu_base_addr_in1,OUTPUT,18,config,输入tensor1基地址,vpu
+module,npu_sched,top,cmd_vpu_base_addr_in2,OUTPUT,18,config,输入tensor2基地址,vpu
+module,npu_sched,top,cmd_vpu_base_addr_in3,OUTPUT,18,config,输入tensor3基地址,vpu
+module,npu_sched,top,cmd_vpu_base_addr_mx,OUTPUT,18,config,输入MX格式tensor基地址,vpu
+module,npu_sched,top,cmd_vpu_scalar_data_in1,OUTPUT,32,config,输入scalar I1的值,vpu
+module,npu_sched,top,cmd_vpu_scalar_data_in2,OUTPUT,32,config,输入scalar I2的值,vpu
+module,npu_sched,top,cmd_vpu_funct_sel,OUTPUT,3,config,功能选择：0=VV_V，1=VS_V，2=V_S，3=V_V，4=M_V，5=MV_M,vpu
+module,npu_sched,top,cmd_vpu_cfg_mv_m_type,OUTPUT,1,config,mv_m类型，0=vs_v扩展，1=vv_v扩展,vpu
+module,npu_sched,top,cmd_vpu_cfg_mx_out,OUTPUT,1,config,输出元素MX格式标志,vpu
+module,npu_sched,top,cmd_vpu_cfg_mx_in1,OUTPUT,1,config,输入1元素MX格式标志,vpu
+module,npu_sched,top,cmd_vpu_cfg_mx_in2,OUTPUT,1,config,输入2元素MX格式标志,vpu
+module,npu_sched,top,cmd_vpu_cfg_mx_in3,OUTPUT,1,config,输入3元素MX格式标志,vpu
+module,npu_sched,top,cmd_vpu_cfg_mx_an,OUTPUT,1,config,多项式系数MX格式标志,vpu
+module,npu_sched,top,cmd_vpu_cfg_type_out,OUTPUT,1,config,输出数据精度选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_type_in1,OUTPUT,1,config,输入1数据精度选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_type_in2,OUTPUT,1,config,输入2数据精度选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_type_in3,OUTPUT,1,config,输入3数据精度选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_type_an,OUTPUT,1,config,多项式系数数据精度选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_mantissa_out,OUTPUT,1,config,输出mantissa选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_mantissa_in1,OUTPUT,1,config,输入1 mantissa选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_mantissa_in2,OUTPUT,1,config,输入2 mantissa选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_mantissa_in3,OUTPUT,1,config,输入3 mantissa选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_mantissa_an,OUTPUT,1,config,多项式系数mantissa选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_wd_out,OUTPUT,3,config,输出数据位宽选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_wd_in1,OUTPUT,3,config,输入1数据位宽选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_wd_in2,OUTPUT,3,config,输入2数据位宽选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_wd_in3,OUTPUT,3,config,输入3数据位宽选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_wd_an,OUTPUT,3,config,多项式系数数据位宽选择,vpu
+module,npu_sched,top,cmd_vpu_cfg_op,OUTPUT,6,config,操作模式,vpu
+module,npu_sched,top,cmd_vpu_cfg_num_dim0,OUTPUT,19,config,输入/输出向量dim0元素个数,vpu
+module,npu_sched,top,cmd_vpu_cfg_size_dim1,OUTPUT,13,config,输入/输出Tensor dim1 size,vpu
+module,npu_sched,top,cmd_vpu_cfg_stride_dim1_out,OUTPUT,13,config,输出Tensor dim1步长,vpu
+module,npu_sched,top,cmd_vpu_cfg_stride_dim1_in1,OUTPUT,13,config,输入Tensor in1 dim1步长,vpu
+module,npu_sched,top,cmd_vpu_cfg_satu,OUTPUT,1,config,结果是否饱和处理,vpu
+module,npu_sched,top,cmd_vpu_cfg_denor_is0,OUTPUT,1,config,denormal输出是否置0,vpu
+module,npu_sched,top,cmd_vpu_cfg_rm,OUTPUT,3,config,round mode,vpu
+module,npu_sched,top,cmd_vpu_cfg_ite_num,OUTPUT,3,config,输入多项式配置迭代次数,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_0,OUTPUT,16,config,多项式迭代系数a0,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_1,OUTPUT,16,config,多项式迭代系数a1,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_2,OUTPUT,16,config,多项式迭代系数a2,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_3,OUTPUT,16,config,多项式迭代系数a3,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_4,OUTPUT,16,config,多项式迭代系数a4,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_5,OUTPUT,16,config,多项式迭代系数a5,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_6,OUTPUT,16,config,多项式迭代系数a6,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_7,OUTPUT,16,config,多项式迭代系数a7,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_8,OUTPUT,16,config,多项式迭代系数a8,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_9,OUTPUT,16,config,多项式迭代系数a9,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_10,OUTPUT,16,config,多项式迭代系数a10,vpu
+module,npu_sched,top,cmd_vpu_cfg_poly_an_buf_11,OUTPUT,16,config,多项式迭代系数a11,vpu
+module,npu_sched,top,mpu_cmd_inst0_done_vld,INPUT,1,pulse,mpu inst0执行结束脉冲,mpu
+module,npu_sched,top,mpu_cmd_inst1_done_vld,INPUT,1,pulse,mpu inst1执行结束脉冲,mpu
+module,npu_sched,top,mpu_cmd_inst0_page_rls_vld,INPUT,1,pulse,mpu inst0 page释放脉冲,mpu
+module,npu_sched,top,mpu_cmd_inst1_page_rls_vld,INPUT,1,pulse,mpu inst1 page释放脉冲,mpu
+module,npu_sched,top,mpu_cmd_ch1_rtile_rls_vld,INPUT,1,pulse,mpu ch1读SPAD释放脉冲,mpu
+module,npu_sched,top,mpu_cmd_ch1_rtile_rls_idx,INPUT,5,pulse,mpu ch1读释放SPAD index,mpu
+module,npu_sched,top,mpu_cmd_ch2_rtile_rls_vld,INPUT,1,pulse,mpu ch2读SPAD释放脉冲,mpu
+module,npu_sched,top,mpu_cmd_ch2_rtile_rls_idx,INPUT,5,pulse,mpu ch2读释放SPAD index,mpu
+module,npu_sched,top,mpu_cmd_rtile_rls_inst_id,INPUT,1,pulse,mpu读释放指令id,mpu
+module,npu_sched,top,mpu_cmd_wtile_rls_vld,INPUT,1,pulse,mpu写SPAD释放脉冲,mpu
+module,npu_sched,top,mpu_cmd_wtile_rls_idx,INPUT,5,pulse,mpu写释放SPAD index,mpu
+module,npu_sched,top,mpu_cmd_wtile_rls_inst_id,INPUT,1,pulse,mpu写释放指令id,mpu
+module,npu_sched,top,cmd_mpu_start,OUTPUT,1,pulse,mpu模块启动脉冲,mpu
+module,npu_sched,top,cmd_mpu_start_inst_id,OUTPUT,1,pulse,mpu启动指令id,mpu
+module,npu_sched,top,cmd_mpu_base_addr_mx_in,OUTPUT,18,config,输入MX格式tensor基地址,mpu
+module,npu_sched,top,cmd_mpu_base_addr_wt,OUTPUT,18,config,权重tensor基地址,mpu
+module,npu_sched,top,cmd_mpu_base_addr_out,OUTPUT,18,config,输出tensor基地址,mpu
+module,npu_sched,top,cmd_mpu_base_addr_in,OUTPUT,18,config,输入tensor基地址,mpu
+module,npu_sched,top,cmd_mpu_base_addr_orig,OUTPUT,18,config,原始tensor基地址,mpu
+module,npu_sched,top,cmd_mpu_base_addr_scale,OUTPUT,18,config,dq操作系数基地址,mpu
+module,npu_sched,top,cmd_mpu_cfg_mx_in,OUTPUT,1,config,输入MX格式使能,mpu
+module,npu_sched,top,cmd_mpu_cfg_mx_wt,OUTPUT,1,config,权重MX格式使能,mpu
+module,npu_sched,top,cmd_mpu_cfg_mx_scale,OUTPUT,1,config,scale MX格式使能,mpu
+module,npu_sched,top,cmd_mpu_cfg_type_out,OUTPUT,1,config,输出浮点格式标志,mpu
+module,npu_sched,top,cmd_mpu_cfg_type_orig,OUTPUT,1,config,orig浮点格式标志,mpu
+module,npu_sched,top,cmd_mpu_cfg_type_in,OUTPUT,1,config,输入浮点格式标志,mpu
+module,npu_sched,top,cmd_mpu_cfg_type_wt,OUTPUT,1,config,权重浮点格式标志,mpu
+module,npu_sched,top,cmd_mpu_cfg_type_scale,OUTPUT,1,config,scale浮点格式标志,mpu
+module,npu_sched,top,cmd_mpu_cfg_mantissa_out,OUTPUT,1,config,输出mantissa选择,mpu
+module,npu_sched,top,cmd_mpu_cfg_mantissa_orig,OUTPUT,1,config,orig mantissa选择,mpu
+module,npu_sched,top,cmd_mpu_cfg_mantissa_in,OUTPUT,1,config,输入mantissa选择,mpu
+module,npu_sched,top,cmd_mpu_cfg_mantissa_wt,OUTPUT,1,config,权重mantissa选择,mpu
+module,npu_sched,top,cmd_mpu_cfg_mantissa_scale,OUTPUT,1,config,scale mantissa选择,mpu
+module,npu_sched,top,cmd_mpu_cfg_wd_out,OUTPUT,3,config,输出数据位宽,mpu
+module,npu_sched,top,cmd_mpu_cfg_wd_orig,OUTPUT,3,config,orig数据位宽,mpu
+module,npu_sched,top,cmd_mpu_cfg_wd_in,OUTPUT,3,config,输入数据位宽,mpu
+module,npu_sched,top,cmd_mpu_cfg_wd_wt,OUTPUT,3,config,权重数据位宽,mpu
+module,npu_sched,top,cmd_mpu_cfg_wd_scale,OUTPUT,3,config,scale数据位宽,mpu
+module,npu_sched,top,cmd_mpu_cfg_acc_en,OUTPUT,1,config,累加使能,mpu
+module,npu_sched,top,cmd_mpu_cfg_satu,OUTPUT,1,config,浮点溢出饱和处理，0=inf，1=max/min,mpu
+module,npu_sched,top,cmd_mpu_cfg_scale_en,OUTPUT,1,config,反量化使能,mpu
+module,npu_sched,top,cmd_mpu_cfg_num_dim0_in,OUTPUT,19,config,输入Tensor dim0元素个数,mpu
+module,npu_sched,top,cmd_mpu_cfg_num_dim0_out,OUTPUT,19,config,输出Tensor dim0元素个数,mpu
+module,npu_sched,top,cmd_mpu_cfg_size_dim1_in,OUTPUT,13,config,输入tensor dim1 size,mpu
+module,npu_sched,top,cmd_mpu_cfg_stride_dim1_out,OUTPUT,13,config,输出tensor dim1步长,mpu
+module,npu_sched,top,cmd_mpu_cfg_stride_dim1_in,OUTPUT,13,config,输入tensor dim1步长,mpu
+module,npu_sched,top,cmd_mpu_cfg_stride_dim1_orig,OUTPUT,13,config,output tensor original dim1步长,mpu
+module,npu_sched,top,creg_cmd_excep_en,INPUT,32,csr,中断使能信号,csr
+module,npu_sched,top,cmd_creg_int,OUTPUT,32,interrupt,CMD模块原始中断脉冲,interrupt
+module,npu_sched,top,creg_cmd_mpu_inst0_masked_int,INPUT,32,csr,MPU inst0 mask后中断使能,csr
+module,npu_sched,top,creg_cmd_mpu_inst1_masked_int,INPUT,32,csr,MPU inst1 mask后中断使能,csr
+module,npu_sched,top,creg_cmd_vpu_inst0_masked_int,INPUT,32,csr,VPU inst0 mask后中断使能,csr
+module,npu_sched,top,creg_cmd_vpu_inst1_masked_int,INPUT,32,csr,VPU inst1 mask后中断使能,csr
+module,npu_sched,top,creg_cmd_glsu_inst0_masked_int,INPUT,32,csr,GLSU inst0 mask后中断使能,csr
+module,npu_sched,top,creg_cmd_glsu_inst1_masked_int,INPUT,32,csr,GLSU inst1 mask后中断使能,csr
+module,npu_sched,top,creg_cmd_llsu_inst0_masked_int,INPUT,32,csr,LLSU inst0 mask后中断使能,csr
+module,npu_sched,top,creg_cmd_llsu_inst1_masked_int,INPUT,32,csr,LLSU inst1 mask后中断使能,csr
+module,npu_sched,top,creg_cmd_niu_inst0_masked_int,INPUT,32,csr,NIU inst0 mask后中断使能,csr
+module,npu_sched,top,creg_cmd_niu_inst1_masked_int,INPUT,32,csr,NIU inst1 mask后中断使能,csr
+module,npu_sched,top,cmd_creg_exce0,OUTPUT,32,interrupt,CMD中断信息0,interrupt
+module,npu_sched,top,cmd_creg_exce1,OUTPUT,32,interrupt,CMD中断信息1,interrupt
+module,npu_sched,top,cmd_creg_exce2,OUTPUT,32,interrupt,CMD中断信息2,interrupt
+module,npu_sched,top,cmd_creg_dbg0,OUTPUT,32,debug,CMD debug0寄存器,debug
+module,npu_sched,top,cmd_creg_dbg1,OUTPUT,32,debug,CMD debug1寄存器,debug
+module,npu_sched,top,cmd_creg_dbg2,OUTPUT,32,debug,CMD debug2寄存器,debug
+module,npu_sched,top,creg_cmd_perf_en,INPUT,1,csr,性能监测使能，电平,csr
+module,npu_sched,top,creg_cmd_perf_start,INPUT,1,csr,性能监测开始，电平,csr
+module,npu_sched,top,creg_cmd_perf_pause,INPUT,1,csr,性能监测暂停，电平,csr
+module,npu_sched,top,creg_cmd_perf_conti,INPUT,1,csr,性能监测继续，电平,csr
+module,npu_sched,top,creg_cmd_perf_end,INPUT,1,csr,性能监测结束，电平,csr
+module,npu_sched,top,cmd_creg_perf_cnt,OUTPUT,96,debug,性能监测计数器,debug
+module,npu_sched,top,creg_cmd_spad_excl_en,INPUT,32,csr,MST各读写通道SPAD独占访问控制，bit[12:0]对应GLSU/MPU/VPU/LLSU/NIU读写通道，bit[31:13]保留,csr
+module,npu_sched,top,creg_cmd_reserve_in,INPUT,128,reserved,预留输入接口,reserved
+module,npu_sched,top,creg_cmd_reserve_out,OUTPUT,128,reserved,预留输出接口,reserved
+module,decode,sub,disp_cmd_inst,INPUT,74,valid-ready,"指令信号：bit[2:0]=xd/xs1/xs2, bit[9:3]=func7, bit[41:10]=rs1val, bit[73:42]=rs2val",valid_ready
+module,decode,sub,disp_cmd_inst_flag,INPUT,1,valid-ready,输入指令类型，0=NICE指令，1=VNICE指令,valid_ready
+module,decode,sub,disp_cmd_vld,INPUT,1,valid-ready,指令valid，高有效,valid_ready
+module,decode,sub,cmd_disp_rdy,OUTPUT,1,valid-ready,指令ready，高有效,valid_ready
+module,decode,sub,cmd_xbr_ch0_req_waddr,OUTPUT,18,valid-ready,写请求地址,valid_ready
+module,decode,sub,cmd_xbr_ch0_req_wdata,OUTPUT,512,valid-ready,写请求数据,valid_ready
+module,decode,sub,cmd_xbr_ch0_req_wstrb,OUTPUT,2,valid-ready,写请求选通，2'b11高低256bit均有效，2'b10高有效，2'b01低有效,valid_ready
+module,decode,sub,cmd_xbr_ch0_req_wvld,OUTPUT,1,valid-ready,写请求valid，高有效,valid_ready
+module,decode,sub,cmd_xbr_ch0_req_wrdy,INPUT,1,valid-ready,写请求ready，高有效,valid_ready
+module,decode,sub,xbr_cmd_ch0_rsp_wvld,INPUT,1,valid-ready,写响应valid，高有效,valid_ready
+module,decode,sub,xbr_cmd_ch0_rsp_wlast,INPUT,1,valid-ready,写响应最后一笔数据标志，高有效,valid_ready
+module,decode,sub,cmd_xbr_ch0_rsp_wrdy,OUTPUT,1,valid-ready,写响应接收就绪，高有效,valid_ready
+module,decode,sub,cmd_xbr_ch1_req_raddr,OUTPUT,44,valid-ready,读请求地址,valid_ready
+module,decode,sub,cmd_xbr_ch1_req_rvld,OUTPUT,1,valid-ready,读请求valid，高有效,valid_ready
+module,decode,sub,xbr_cmd_ch1_req_rrdy,INPUT,1,valid-ready,读请求ready，高有效,valid_ready
+module,decode,sub,xbr_cmd_ch1_rsp_rdata,INPUT,512,valid-ready,读响应数据,valid_ready
+module,decode,sub,xbr_cmd_ch1_rsp_rvld,INPUT,1,valid-ready,读响应valid，高有效,valid_ready
+module,decode,sub,cmd_xbr_ch1_rsp_rrdy,OUTPUT,1,valid-ready,读响应ready，高有效,valid_ready
+module,decode,sub,dsp_en,INOUT,1,,,cmd_if
+module,decode,sub,store_en,INOUT,1,,,cmd_if
+module,decode,sub,cfg_drv_buffer_not_full,INOUT,1,,,cmd_if
+module,decode,sub,ins_inst_info,INOUT,1,,,cmd_if
+module,scoreboard,sub,ins_inst_info,INOUT,1,,,cmd_if
+module,scoreboard,sub,dsp_en,INOUT,1,,,cmd_if
+module,scoreboard,sub,store_en,INOUT,1,,,cmd_if
+module,scoreboard,sub,ins_done,INOUT,1,,,cmd_if
+module,scoreboard,sub,rtile_rls_vld,INOUT,1,,,cmd_if
+module,scoreboard,sub,rtile_rls_idx,INOUT,1,,,cmd_if
+module,scoreboard,sub,wtile_rls_vld,INOUT,1,,,cmd_if
+module,scoreboard,sub,wtile_rls_idx,INOUT,1,,,cmd_if
+module,scoreboard,sub,page_rls_vld,INOUT,1,,,cmd_if
+module,scoreboard,sub,page_rls_idx,INOUT,1,,,cmd_if
+module,scoreboard,sub,rdram_rls_vld,INOUT,1,,,cmd_if
+module,scoreboard,sub,rdram_rls_idx,INOUT,1,,,cmd_if
+module,scoreboard,sub,ins_buff_xx_vld,INOUT,1,,,cmd_if
+module,scoreboard,sub,ren,INOUT,1,,,cmd_if
+module,scoreboard,sub,ren_id,INOUT,1,,,cmd_if
+module,scoreboard,sub,ins_status,INOUT,1,,,cmd_if
+module,ins_buffer,sub,store_en,INOUT,1,,,cmd_if
+module,ins_buffer,sub,scoreboard_ren,INOUT,1,,,cmd_if
+module,ins_buffer,sub,ren_id,INOUT,1,,,cmd_if
+module,ins_buffer,sub,ins_buff_xx_vld,INOUT,1,,,cmd_if
+module,ins_buffer,sub,cfg_drv_buffer_not_full,INOUT,1,,,cmd_if
+module,ins_buffer,sub,ins_inst_info,INOUT,1,,,cmd_if
+module,ins_buffer,sub,dsp_en,INOUT,1,,,cmd_if
+module,dispatch,sub,dsp_en,INOUT,1,,,cmd_if
+module,dispatch,sub,ins_inst_info,INOUT,1,,,cmd_if
+module,dispatch,sub,cmd_niu_start,OUTPUT,1,pulse,niu模块启动脉冲,niu
+module,dispatch,sub,cmd_niu_start_inst_id,OUTPUT,1,pulse,niu启动指令id，0=inst0，1=inst1,niu
+module,dispatch,sub,cmd_niu_task_select,OUTPUT,2,config,0=default，1=load，2=store,niu
+module,dispatch,sub,cmd_niu_dst_base_addr,OUTPUT,44,config,dest NPU core基地址,niu
+module,dispatch,sub,cmd_niu_src_base_addr,OUTPUT,44,config,source NPU core基地址,niu
+module,dispatch,sub,cmd_glsu_start,OUTPUT,1,pulse,glsu模块启动脉冲,glsu
+module,dispatch,sub,cmd_glsu_start_inst_id,OUTPUT,1,pulse,glsu启动指令id，0=inst0，1=inst1,glsu
+module,dispatch,sub,cmd_glsu_task_select,OUTPUT,4,config,操作选择：1=tld，2=ttld，3=gather，4=loadcimcexp，5=tensor dma，6=tst，7=storecimcexp,glsu
+module,dispatch,sub,cmd_glsu_src_base_addr,OUTPUT,44,config,source core访存基地址,glsu
+module,dispatch,sub,cmd_glsu_dst_base_addr,OUTPUT,44,config,dst core访存基地址,glsu
+module,dispatch,sub,cmd_llsu_start,OUTPUT,1,pulse,llsu模块启动脉冲,llsu
+module,dispatch,sub,cmd_llsu_start_inst_id,OUTPUT,1,pulse,llsu启动指令id,llsu
+module,dispatch,sub,cmd_llsu_task_select,OUTPUT,3,config,操作模式：0=bc，1=vbc，2=trans_vbc，3=setCIMExp，4=getCIMExp，5=mov，6=trans,llsu
+module,dispatch,sub,cmd_llsu_base_addr_in,OUTPUT,18,config,输入tensor基地址,llsu
+module,dispatch,sub,cmd_llsu_base_addr_out,OUTPUT,18,config,输出tensor基地址,llsu
+module,dispatch,sub,cmd_vpu_start,OUTPUT,1,pulse,vpu模块启动脉冲,vpu
+module,dispatch,sub,cmd_vpu_start_inst_id,OUTPUT,1,pulse,vpu启动指令id,vpu
+module,dispatch,sub,cmd_vpu_funct_sel,OUTPUT,3,config,功能选择：0=VV_V，1=VS_V，2=V_S，3=V_V，4=M_V，5=MV_M,vpu
+module,dispatch,sub,cmd_vpu_cfg_op,OUTPUT,6,config,操作模式,vpu
+module,dispatch,sub,cmd_mpu_start,OUTPUT,1,pulse,mpu模块启动脉冲,mpu
+module,dispatch,sub,cmd_mpu_start_inst_id,OUTPUT,1,pulse,mpu启动指令id,mpu
+module,dispatch,sub,cmd_xbr_ch0_req_wvld,OUTPUT,1,valid-ready,写请求valid，高有效,valid_ready
+module,dispatch,sub,cmd_xbr_ch1_req_rvld,OUTPUT,1,valid-ready,读请求valid，高有效,valid_ready
+module,dispatch,sub,cmd_llsu_xbr_sel_vld,OUTPUT,2,status,read/write lmem与tensor move指令状态，2'b01=read/write lmem，2'b10=tensor move，2'b00=均非,status
+module,cmd_int_perf,sub,creg_cmd_excep_en,INPUT,32,csr,中断使能信号,csr
+module,cmd_int_perf,sub,cmd_creg_int,OUTPUT,32,interrupt,CMD模块原始中断脉冲,interrupt
+module,cmd_int_perf,sub,creg_cmd_mpu_inst0_masked_int,INPUT,32,csr,MPU inst0 mask后中断使能,csr
+module,cmd_int_perf,sub,creg_cmd_mpu_inst1_masked_int,INPUT,32,csr,MPU inst1 mask后中断使能,csr
+module,cmd_int_perf,sub,creg_cmd_vpu_inst0_masked_int,INPUT,32,csr,VPU inst0 mask后中断使能,csr
+module,cmd_int_perf,sub,creg_cmd_vpu_inst1_masked_int,INPUT,32,csr,VPU inst1 mask后中断使能,csr
+module,cmd_int_perf,sub,creg_cmd_glsu_inst0_masked_int,INPUT,32,csr,GLSU inst0 mask后中断使能,csr
+module,cmd_int_perf,sub,creg_cmd_glsu_inst1_masked_int,INPUT,32,csr,GLSU inst1 mask后中断使能,csr
+module,cmd_int_perf,sub,creg_cmd_llsu_inst0_masked_int,INPUT,32,csr,LLSU inst0 mask后中断使能,csr
+module,cmd_int_perf,sub,creg_cmd_llsu_inst1_masked_int,INPUT,32,csr,LLSU inst1 mask后中断使能,csr
+module,cmd_int_perf,sub,creg_cmd_niu_inst0_masked_int,INPUT,32,csr,NIU inst0 mask后中断使能,csr
+module,cmd_int_perf,sub,creg_cmd_niu_inst1_masked_int,INPUT,32,csr,NIU inst1 mask后中断使能,csr
+module,cmd_int_perf,sub,cmd_creg_exce0,OUTPUT,32,interrupt,CMD中断信息0,interrupt
+module,cmd_int_perf,sub,cmd_creg_exce1,OUTPUT,32,interrupt,CMD中断信息1,interrupt
+module,cmd_int_perf,sub,cmd_creg_exce2,OUTPUT,32,interrupt,CMD中断信息2,interrupt
+module,cmd_int_perf,sub,cmd_creg_mpu_exce0,OUTPUT,32,interrupt,MPU inst0中断信息0,interrupt
+module,cmd_int_perf,sub,cmd_creg_vpu_exce0,OUTPUT,32,interrupt,VPU inst0中断信息0,interrupt
+module,cmd_int_perf,sub,cmd_creg_glsu_exce0,OUTPUT,32,interrupt,GLSU inst0中断信息0,interrupt
+module,cmd_int_perf,sub,cmd_creg_llsu_exce0,OUTPUT,32,interrupt,LLSU inst0中断信息0,interrupt
+module,cmd_int_perf,sub,cmd_creg_niu_exce0,OUTPUT,32,interrupt,NIU inst0中断信息0,interrupt
+module,cmd_int_perf,sub,creg_cmd_perf_en,INPUT,1,csr,性能监测使能，电平,csr
+module,cmd_int_perf,sub,creg_cmd_perf_start,INPUT,1,csr,性能监测开始，电平,csr
+module,cmd_int_perf,sub,creg_cmd_perf_pause,INPUT,1,csr,性能监测暂停，电平,csr
+module,cmd_int_perf,sub,creg_cmd_perf_conti,INPUT,1,csr,性能监测继续，电平,csr
+module,cmd_int_perf,sub,creg_cmd_perf_end,INPUT,1,csr,性能监测结束，电平,csr
+module,cmd_int_perf,sub,cmd_creg_perf_cnt,OUTPUT,96,debug,性能监测计数器,debug

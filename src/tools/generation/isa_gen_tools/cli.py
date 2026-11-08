@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 # ── UTF-8 强制编码 ──
 # 报告里有 → / ✓ 这些字符，而 Windows 控制台默认是 GBK：不转的话
 # `explain` 会在 print 那一步抛 UnicodeEncodeError（用户看到的是一段
-# traceback，而不是报告）。与 casemodel_tools/cli.py 同一处理。
+# traceback，而不是报告）。与 旧建模 CLI 同一处理。
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")

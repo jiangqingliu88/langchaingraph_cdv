@@ -795,7 +795,7 @@ class SignoffModule(ModuleBase):
                 f"观测 {tp.get('observed', 0)}/{tp.get('observe_only', 0)} · "
                 f"未命中 {tp.get('missed', 0)}")
         else:
-            self.tp_label.setText("测试点：这一轮没有 TP IR（没有 case 模型或没跑覆盖率）")
+            self.tp_label.setText("测试点：这一轮没有 TP IR（没有 VPlan 项目或没跑覆盖率）")
         self.caveat_label.setText(
             "；".join(str(c) for c in caveats[:6]) if caveats else "")
 

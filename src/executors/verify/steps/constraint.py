@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 import structlog
 
-from src.executors.verify.steps.helpers import _constraint_ports, _find_case_model, _spec_of
+from src.executors.verify.steps.helpers import _constraint_ports, _spec_of
 
 logger = structlog.get_logger()
 
@@ -43,9 +43,12 @@ class ConstraintSteps:
         一个空的 `transactions` 渲染出来的协调序列是个空壳（发送循环一次都不进），
         不生成比生成空壳诚实。
         """
-        cm_file = _find_case_model(_spec_of(output_dir), output_dir)
-        if cm_file is None:
-            logger.info("没有 case 模型 —— 跳过约束模型生成（env/cons 不会出现）")
+        from src.layers.l3_decision.vplan import engine
+
+        project = engine.project_for(_spec_of(output_dir), output_dir)
+        if project is None:
+            logger.info("没有 VPlan 项目 —— 跳过约束模型生成"
+                        "（env/cons 不会出现）")
             return
         ports = _constraint_ports(output_dir)
         if not ports:
@@ -53,13 +56,11 @@ class ConstraintSteps:
                         "（没有端口就不生成，见 build_constraint）")
             return
         try:
-            from src.layers.l3_decision.casemodel.associate import build_constraint
-
             # `agent_fields` 决定"这个字段该约束哪个 agent" —— 没有它，可驱动
             # 维度只能在一端口时才敢落，多 agent 时全部退化成骨架。
-            payload = build_constraint(
-                cm_file.read_text(encoding="utf-8"), ports=ports,
-                agent_fields=self._agent_transaction_fields(output_dir) or None)
+            agent_fields = self._agent_transaction_fields(output_dir) or None
+            payload = engine.run_constraints(
+                project, ports=ports, agent_fields=agent_fields)
             if payload.get("error"):
                 logger.warning(f"约束模型生成不了，跳过: {payload['error']}")
                 return
@@ -97,7 +98,7 @@ class ConstraintSteps:
         而这件事**生成期就确定**（`build_constraint` 声明 `policies_are_skeletons`），
         不必等仿真、也不必改 verbosity。
         """
-        from src.tools.generation.uvm_tools.generation.generators.constraint_gen import (
+        from src.tools.generation.uvm_tools.tool_uvm.generators.constraint_gen import (
             write_constraint_status)
         write_constraint_status(output_dir, payload, logger)
 

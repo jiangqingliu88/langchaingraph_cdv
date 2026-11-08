@@ -29,7 +29,7 @@ from .generators.regression_gen import (  # noqa: E402,F401
 )
 
 from src.tools.common.lib.uvm_context import ctx
-from src.tools.generation.uvm_tools.generation.constants import TEMPLATES_DIR
+from src.tools.generation.uvm_tools.tool_uvm.constants import TEMPLATES_DIR
 
 
 from .helpers import (  # noqa: E402
@@ -61,7 +61,7 @@ from .helpers import (  # noqa: E402
     _generate_models_yaml,
     _registry_model,
     _util_component_yaml,
-    _casemodel_test_lines,
+    _vplan_test_lines,
 )
 
 def run(spec_text: str) -> str:
@@ -251,16 +251,16 @@ def run(spec_text: str) -> str:
             module_name, agent_names, agents_spec,
             clock_port, reset_port, registers, ifaces,
             uvm_yaml_dir=uvm_yaml_archive, with_util=True)
-        # ── casemodel 产的属性测试 → `environment.tests` ──
-        # `casemodel.yaml` 由 front 从 spec 跑出来（测试点分解 + 维度组合），
+        # ── VPlan 执行资产产的属性测试 → `environment.tests` ──
+        # 执行资产由 VPlan 项目提供（测试点分解 + 维度组合），
         # `run_uvm_tests` 把每个维度取值摊平成一条 UVM_TEST。**接在这里**：
-        # 缺这一段，casemodel 产的东西就永远停在 casemodel.yaml 里 ——
+        # 缺这一段，VPlan 产的测试就永远进不了回归 ——
         # 生成不出 test 类，也进不了回归（实测：env/tests/ 只有手写模板那三个）。
-        _cm = _casemodel_test_lines(output_dir)
+        _cm = _vplan_test_lines(output_dir)
         if _cm:
             env_str = env_str.replace("  clk_rst_vip:",
                                       chr(10).join(_cm) + chr(10) + "  clk_rst_vip:", 1)
-            print(f"  [find_yaml] env.yaml 注入 {len(_cm)} 行 casemodel tests", flush=True)
+            print(f"  [find_yaml] env.yaml 注入 {len(_cm)} 行 VPlan tests", flush=True)
 
         # pred 装配单**单独一份** `util_comp.yaml`；env.yaml 只引用它。
         # 双向 agent 但既没有 verified 模型、也没有用户 pred 时，

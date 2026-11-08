@@ -66,7 +66,7 @@ class PolicyError(ValueError):
 SECTION_FILES: Dict[str, Tuple[str, ...]] = {
     "inputs": (
         "spec.json",
-        "inputs/casemodel.yaml",
+        "inputs/vplan/data/execution_meta.csv",
         "inputs/source_map.json",
         "inputs/yaml/uvm/constraint.yaml",
         "inputs/yaml/uvm/models.yaml",
@@ -495,7 +495,7 @@ def write_package(output_dir: Path, manifest: Dict[str, Any],
                 # 包内路径：
                 #   inputs/ 本来就是 run 的相对路径（`inputs/...` 或 `coverage/...`）；
                 #   其余段统一挂到各自段下。
-                # 不用 `section/rel` 一刀切 —— 那会拼出 `inputs/inputs/casemodel.yaml`。
+                # 不用 `section/rel` 一刀切 —— 那会拼出 `inputs/inputs/...`。
                 if section == "inputs":
                     dst_rel = (Path(rel).as_posix() if rel.startswith("inputs/")
                                else f"inputs/{Path(rel).as_posix()}")

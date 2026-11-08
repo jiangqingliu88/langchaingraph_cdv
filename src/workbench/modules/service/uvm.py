@@ -68,11 +68,11 @@ class UVMServiceModule(ModuleBase):
         self.spec_edit.setPlaceholderText("./spec.md")
         form.addRow("Spec 文件", self._with_browse(self.spec_edit, "file"))
         self.config_edit = QLineEdit()
-        self.config_edit.setPlaceholderText("可选：case 模型 YAML（复制到 run 的 inputs/casemodel.yaml）")
-        form.addRow("Case 模型", self._with_browse(self.config_edit, "file"))
+        self.config_edit.setPlaceholderText("可选：VPlan 项目根（含 data/*.csv 与 cases/*.yaml）")
+        form.addRow("VPlan 项目", self._with_browse(self.config_edit, "dir"))
         layout.addLayout(form)
-        layout.addWidget(_muted("Case 模型留空时，流水线会找 specs/<module>/casemodel.yaml；"
-                                "填了就以这份为准。"))
+        layout.addWidget(_muted("留空时流水线不会做功能覆盖；填了就按该项目的"
+                                "执行资产投影 TP/覆盖率/回归。"))
         row = QHBoxLayout()
         row.addWidget(_button("打开 IP 规格", lambda: open_module(self.ctx, "ide.ip_spec")))
         row.addWidget(_button("下一步：验证配置", lambda: self.steps.setCurrentRow(1)))
@@ -83,13 +83,12 @@ class UVMServiceModule(ModuleBase):
 
     def _config_page(self) -> QWidget:
         page, layout = self._page()
-        layout.addWidget(QLabel("验证配置由 case 模型和激励工具承担，本页只做入口。"))
+        layout.addWidget(QLabel("验证配置由 VPlan 执行资产与激励工具承担，本页只做入口。"))
         row = QHBoxLayout()
-        row.addWidget(_button("打开 Case 建模", lambda: open_module(self.ctx, "verify.casemodel")))
         row.addWidget(_button("打开 ISA 激励", lambda: open_module(self.ctx, "verify.isa_gen")))
         row.addStretch(1)
         layout.addLayout(row)
-        layout.addWidget(_muted("编辑的是 YAML/激励输入；保存后回到本服务继续。"))
+        layout.addWidget(_muted("编辑的是 VPlan/激励输入；保存后回到本服务继续。"))
         layout.addStretch(1)
         return page
 
@@ -172,7 +171,7 @@ class UVMServiceModule(ModuleBase):
             return
         payload = self.run_tool(
             "pipeline.start", force=True, spec_file=spec_file, rtl_dir=rtl_dir,
-            casemodel=self.config_edit.text().strip(),
+            vplan=self.config_edit.text().strip(),
             target=float(self.target_spin.value()),
             max_rounds=int(self.rounds_spin.value()),
             approval=self.approval_combo.currentText())

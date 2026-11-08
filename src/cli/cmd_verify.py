@@ -63,7 +63,7 @@ def _verify_kwargs(**kw) -> dict:
         "sim_modes": list(kw.get("sim_modes") or []) or None,
         "manual_gate": kw.get("manual_gate"),
         "rtl_dir": str(kw.get("rtl_dir") or ""),
-        "casemodel": str(kw.get("casemodel") or ""),
+        "vplan": str(kw.get("vplan") or ""),
         "approval": kw.get("approval"),
         "checkpointing": kw.get("checkpoint"),
         "full_regression": kw.get("full_regression"),
@@ -90,7 +90,7 @@ def _is_vplan_dir(path) -> bool:
 
 
 def _run_vplan_project(root: Path, output, json_output: bool, rtl_dir) -> None:
-    """`verify <vplan-project-dir>` 的规划层分支（不读 casemodel、不跑 EDA）。"""
+    """`verify <vplan-project-dir>` 的规划层分支（不跑 EDA）。"""
     if not ((root / "docs" / "specs").is_dir()
             and (root / "data" / "contract_matrix").is_dir()):
         raise click.UsageError(
@@ -159,19 +159,18 @@ def _print_vplan_summary(summary: dict, json_output: bool) -> None:
 @click.option("--rtl", "rtl_dir", type=click.Path(exists=True),
               help="外部 RTL 目录：拿现成 RTL 当 DUT；给了它自动跳过 design，"
                    "spec 仍作为分析/建模输入（可同时给 --rtl 和 spec）")
-@click.option("--config", "casemodel", type=click.Path(exists=True, dir_okay=False),
-              default=None, help="case 模型 YAML（复制到 run 的 inputs/casemodel.yaml；"
-                                 "优先于 specs/<module>/casemodel.yaml）")
+@click.option("--vplan", "vplan", type=click.Path(exists=True, file_okay=False),
+              default=None, help="VPlan 项目根（含 data/*.csv 与 cases/*.yaml）")
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 @click.option("--summary", is_flag=True, help="仅输出最终摘要")
 @click.option("--quiet", "-q", is_flag=True, help="只打印错误")
 def verify(spec_file, output, design_style, target, max_rounds,
            approval, full_regression, incremental_from, verify_only, sim_modes,
            json_output, summary, quiet, manual_gate, checkpoint,
-           strict_semantic, rtl_dir, casemodel):
+           strict_semantic, rtl_dir, vplan):
     # ── VPlan 项目：目录 + docs/specs + data/contract_matrix ──
     # 规划层接入：直接从 `docs/specs/*.csv` 与 `data/contract_matrix/*.csv`
-    # 生成 TP/Case/契约 IR。**不读 casemodel.yaml**，也不跑 EDA —— 因此
+    # 生成 TP/Case/契约 IR。**不读旧 case 模型**，也不跑 EDA —— 因此
     # 产物明确是 PLAN_ONLY，不能签核。
     if _is_vplan_dir(spec_file):
         _run_vplan_project(Path(spec_file), output, json_output, rtl_dir)
@@ -198,7 +197,7 @@ def verify(spec_file, output, design_style, target, max_rounds,
     if not quiet and not json_output:
         console.print(f"[bold cyan]═══ Closed Loop: coverage-driven ═══[/bold cyan]")
 
-    # **唯一入口**：预检（输出目录 / casemodel / 全量开关 / 增量基线）在
+    # **唯一入口**：预检（输出目录 / VPlan 项目 / 全量开关 / 增量基线）在
     # `VerifyRequest.prepare()`，CLI 只做参数解析与输出渲染。
     from src.app.services import run_verify_async
 
@@ -206,7 +205,7 @@ def verify(spec_file, output, design_style, target, max_rounds,
         spec_file=spec_file, output=output, target=target,
         max_rounds=max_rounds, design_style=design_style,
         verify_only=verify_only, sim_modes=sim_modes, manual_gate=manual_gate,
-        rtl_dir=rtl_dir, casemodel=casemodel, approval=approval,
+        rtl_dir=rtl_dir, vplan=vplan, approval=approval,
         checkpoint=checkpoint, full_regression=full_regression,
         incremental_from=incremental_from)))
     output_root = result.get("output_root") or str(output or "output")

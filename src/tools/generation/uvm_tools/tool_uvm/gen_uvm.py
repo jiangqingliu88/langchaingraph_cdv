@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 try:  # 包内导入（python -m 路径）
-    from ..generation.generators.cli import main
+    from ..tool_uvm.generators.cli import main
 except ImportError:  # 直接脚本执行（python gen_uvm.py）—— 没有父包
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from generation.generators.cli import main  # type: ignore[no-redef]

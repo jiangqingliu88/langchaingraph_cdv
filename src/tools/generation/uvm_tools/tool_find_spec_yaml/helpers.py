@@ -7,7 +7,7 @@ Tool: find_spec_yaml — 从 spec 文本查找已有 YAML 或构造新的 YAML
     from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import run
     result = run(spec_text)
 """
-import sys, json, re
+import sys, json, re, os
 import builtins
 from pathlib import Path
 from typing import Any, Dict, List
@@ -29,7 +29,7 @@ from .generators.regression_gen import (  # noqa: E402,F401
 )
 
 from src.tools.common.lib.uvm_context import ctx
-from src.tools.generation.uvm_tools.generation.constants import TEMPLATES_DIR
+from src.tools.generation.uvm_tools.tool_uvm.constants import TEMPLATES_DIR
 
 
 def _load_spec(output_dir: Path) -> dict | None:
@@ -665,7 +665,13 @@ def _copy_project_util_comp(uvm_yaml_dir: Path, module_name: str) -> str:
 
     查找顺序：`specs/<module>/util_comp.yaml` →
     `config/uvm/<module>_util_comp.yaml`。
+
+    `--from-spec`（`SIGNOFFAI_SPEC_LLM=1`）不复制：工程里的 pred 是给旧 RTL
+    的事务类型写的，套到 LLM 新生成的 agent 上会端口类型不匹配。
     """
+    if os.environ.get("SIGNOFFAI_SPEC_LLM", "").strip().lower() in (
+            "1", "true", "yes"):
+        return ""
     for cand in (Path.cwd() / "specs" / module_name / "util_comp.yaml",
                  Path.cwd() / "config" / "uvm" / f"{module_name}_util_comp.yaml"):
         if cand.is_file():
@@ -792,6 +798,33 @@ def _pred_spec(module_name, uvm_yaml_dir, reg_model, mirror,
             f"      source: '{mirror['source']}'\n")
         return {"cls": f"{module_name}_pred", "in_port": "in_export",
                 "out_port": "out_port", "util_yaml": block}
+
+    # from-spec / VPlan 执行：没有工程 pred / verified 模型时，自动生成**占位**
+    # predictor。只保证 env 能被生成；placeholder=True 会让 scoreboard 不接线，
+    # 避免假 mismatch。VPlan 的比对证据走 `sample: dut` + assertions 的 DUT 检查组，
+    # 不依赖这个 pred —— 所以不能因为"没有模型"让整个 env 生成失败。
+    if os.environ.get("SIGNOFFAI_SPEC_LLM", "").strip().lower() in (
+            "1", "true", "yes") or os.environ.get(
+            "SIGNOFFAI_VPLAN", "").strip() == "1":
+        block = (
+            "util_components:\n"
+            f"  - name: {module_name}_pred\n"
+            "    type: uvm_component\n"
+            "    description: \"LLM spec 自动占位 predictor（无 verified 模型）\"\n"
+            "    analysis_exports:\n"
+            f"      - {{ name: in_export, type: {in_item} }}\n"
+            "    analysis_ports:\n"
+            f"      - {{ name: out_port, type: {out_item} }}\n"
+            "    auto_send: false\n"
+            "    body: |\n"
+            f"      {out_item} pred;\n"
+            f"      pred = {out_item}::type_id::create(\"pred\");\n"
+            "      `uvm_warning(\"SPEC_PRED\", \"LLM spec 占位 predictor："
+            "行为未实现，scoreboard 不接线\")\n"
+            "      out_port.write(pred);\n")
+        return {"cls": f"{module_name}_pred", "in_port": "in_export",
+                "out_port": "out_port", "placeholder": True,
+                "util_yaml": block}
 
     raise ValueError(_pred_required_message(module_name, in_item, out_item))
 
@@ -1215,33 +1248,21 @@ def _util_component_yaml(uc: dict) -> str:
     return "\n".join(out)
 
 
-def _casemodel_test_lines(output_dir) -> List[str]:
-    """`casemodel.yaml` → `environment.tests:` 那几行；没有就给空。
+def _vplan_test_lines(output_dir) -> List[str]:
+    """VPlan 执行资产 → `environment.tests/batches` 那几行；没有 VPlan 项目就空着。
 
-    没有就**空着**（不编、不猜）—— 这份 yaml 是 front 从 spec 跑出来的，
-    spec 里没料时它本来就不该存在。
-
-    **路径走 `layout.find_case_model`，不许自己拼、也不许只认 `casemodel_path`**：
-
-      · 以前找 `inputs/yaml/uvm/casemodel.yaml`（front 当时也写那儿），而那个目录
-        是本工具的私有产物目录、**每次跑先被清空** —— "删它的和读它的是同一趟运行
-        的同一个工具"，`tests:` 永远注入不进去（实测：`env/tests` 里没有属性 test）。
-      · 后来改成只认 `casemodel_path()`（= front 的草稿落点）—— 又错在**人写的
-        模型被绕过**：`specs/<模块>/casemodel.yaml` 优先级更高，而这里拿到的是草稿。
-        实测：NPU 那份 12 维度的手写模型被跳过，注入的是草稿的 4 条，而日志只说
-        "注入 5 行"，**看不出少了什么**。
+    `vplan.engine` 是唯一来源；不再有 case 模型输入。
     """
     try:
-        # **走统一判据**，别自己认 `casemodel_path()`：那是 front 的草稿落点，
-        # 而人写的模型（`specs/<模块>/casemodel.yaml`）优先级更高。
+        # 而 VPlan 项目的执行资产优先级更高。
         # 直接读草稿的后果实测过：NPU 那份 12 维度的手写模型被绕过，
         # 注入进来的是草稿的 4 条 —— 而**日志只说"注入 5 行"，看不出少了什么**。
-        from src.layers.l1_infrastructure.layout import find_case_model
-        cm = find_case_model(_load_spec(output_dir) or {}, output_dir)
-        if cm is None or not cm.exists():
+        from src.layers.l3_decision.vplan import engine
+
+        project = engine.project_for(_load_spec(output_dir) or {}, output_dir)
+        if project is None:
             return []
-        from src.layers.l3_decision.casemodel.api import run_uvm_tests
-        t = run_uvm_tests(cm.read_text(encoding="utf-8"), max_tests=200)
+        t = engine.run_uvm_tests(project, max_tests=200)
         tests = t.get("tests") or []
         if not tests:
             return []
@@ -1273,8 +1294,7 @@ def _casemodel_test_lines(output_dir) -> List[str]:
         # 批次 test 类（**一条 = 一个批次/专题**）—— 与属性 test 平行的另一条路。
         # 没有它，回归里 `+UVM_TESTNAME=<批次名>` 会撞 UVM_FATAL(INVTST)，
         # 而那条路径被记成 pass（vsim 遇到未知 testname 仍然 exit 0）。
-        from src.layers.l3_decision.casemodel.api import run_uvm_batches
-        batches = run_uvm_batches(cm.read_text(encoding="utf-8")).get("batches") or []
+        batches = engine.run_uvm_batches(project).get("batches") or []
         if batches:
             out.append("  batches:")
             for b in batches:
@@ -1290,5 +1310,5 @@ def _casemodel_test_lines(output_dir) -> List[str]:
                               b["priority"] or "''", b["checks"]))
         return out
     except Exception as e:
-        print(f"  [find_yaml] casemodel tests 未注入: {e}", flush=True)
+        print(f"  [find_yaml] VPlan tests 未注入: {e}", flush=True)
         return []

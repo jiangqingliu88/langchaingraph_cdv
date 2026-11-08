@@ -1,0 +1,10 @@
+case_id: TC_SCHED_009
+test_name: out_of_order_issue_window_test
+batch: B03
+title: 乱序发射
+contract_refs:
+- C-FUNC-004
+covergroups:
+- cg_ooo_window
+- cg_blocked_master
+constraints: []

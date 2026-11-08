@@ -68,48 +68,10 @@ def _regression_test_name(output_root: Path) -> str:
         return ""
 
 
-def _synthesize_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
-    """没有现成 case 模型时，**从 spec 合成一份**并落盘（`casemodel_tools.spec_bridge`）。
-
-    这是原来缺的那座桥：闭环里没有任何一步产 case 模型，于是测试点分解常年
-    「跳过」—— 覆盖率的收敛只能靠随机激励。
-
-    落盘到 `inputs/casemodel.yaml`（`layout.find_case_model` 的**最后一个**来源）
-    是**有意的**：这份文件人看得见、改得动。但它是**兜底**那一档 —— 人想长期
-    用自己那份，写到 `specs/<模块>/casemodel.yaml` 或 `config/casemodel/<模块>.yaml`
-    更合适（那两个来源的优先级高于这里）。
-
-    数据本身不编：功能点/接口/中断都是 spec 里已经有的字段，机械映射成 case 模型
-    的结构（几个功能点就几个叶子，几个数据信号就几个维度）。
-
-    spec 里既没功能点也没信号 → 返回 None（不编一份空模型假装做过）。
-    """
-    try:
-        from src.layers.l3_decision.casemodel.spec_bridge import case_model_yaml
-
-        yaml_text = case_model_yaml(spec if isinstance(spec, dict) else {})
-        if not yaml_text:
-            return None
-        from src.layers.l1_infrastructure.layout import casemodel_path
-        path = casemodel_path(output_dir)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        # 已经有一份就不覆盖 —— 优先级：**人放的 / front 从 spec 出的** > 这里合成的。
-        # front 比本步更早跑，所以这一步在正常情况下就是"不覆盖"。
-        if not path.exists():
-            path.write_text(yaml_text, encoding="utf-8")
-        logger.info(f"case 模型由 spec 合成并落盘（{path.name}）—— "
-                    f"想换一份就改这个文件，下次运行优先用它")
-        return path
-    except Exception as e:
-        logger.warning(f"从 spec 合成 case 模型失败: {e}")
-        return None
-
-
 def _spec_of(output_dir: Path) -> Dict[str, Any]:
     """这次运行的 spec —— 从 `<run>/spec.json` 读（verify 自己在 UVM 生成前落的那份）。
 
     写盘器（field_bins / DUT 探针）拿不到调用栈里的 `spec` 变量，而
-    `_find_case_model` 需要它来认 `specs/<模块>/casemodel.yaml` 这类候选。
     `spec.json` 就是"这次运行的 spec"的落点，读它比把 spec 一路透传干净。
     """
     try:
@@ -118,33 +80,16 @@ def _spec_of(output_dir: Path) -> Dict[str, Any]:
         return {}
 
 
-def _find_case_model(spec: Any, output_dir: Path) -> Optional[Path]:
-    """转发到 `layout.find_case_model` —— **"用哪份模型"的判据只有那一处**。
-
-    原来这里自己实现了一份（认识 `config/`），而**覆盖率侧**读的是
-    `casemodel_path()`（只认 `inputs/`）。同一个 run 里于是：
-
-        verify   拿 `config/casemodel/<模块>.yaml` 分解测试点
-        coverage 拿 front 的草稿 `inputs/casemodel.yaml` 生成覆盖点
-
-    两份模型的覆盖点不一样，而两边都觉得自己对。收成一处之后只有一个答案；
-    `specs/<模块>/casemodel.yaml`（手写模型最自然的位置）也一并被认了。
-    """
-    from src.layers.l1_infrastructure.layout import find_case_model
-
-    return find_case_model(spec, output_dir)
-
-
-def _load_case_model_doc(text: str) -> Dict[str, Any]:
-    """casemodel 文本 → dict。实现在 `casemodel_tools.coverage_render`。"""
-    from src.layers.l3_decision.casemodel.coverage import parse_model_text
+def _load_runtime_model_doc(text: str) -> Dict[str, Any]:
+    """运行期模型文本 → dict（`vplan/runtime/coverage_parse`）。"""
+    from src.layers.l3_decision.vplan.runtime.coverage import parse_model_text
 
     return parse_model_text(text)
 
 
 def _assertion_signals(decls: Dict[str, Any]) -> List[Dict[str, Any]]:
     """`assertions[].signals` → 覆盖率接口要额外引的信号（实现同一处）。"""
-    from src.layers.l3_decision.casemodel.coverage import assertion_signals
+    from src.layers.l3_decision.vplan.runtime.coverage import assertion_signals
 
     return assertion_signals(decls)
 

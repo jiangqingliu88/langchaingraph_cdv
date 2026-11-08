@@ -35,7 +35,7 @@ except ImportError as exc:  # pragma: no cover
 # `uvm_tools/`（generation 包的父目录）放进 sys.path，不依赖仓库根。
 try:
     from .semantic_check import Issue
-    from ..generation.parsing.yaml_loader import YAMLLoader
+    from ..tool_uvm.parsing.yaml_loader import YAMLLoader
 except ImportError:
     from semantic_check import Issue
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

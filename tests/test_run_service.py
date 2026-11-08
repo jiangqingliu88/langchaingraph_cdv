@@ -407,13 +407,14 @@ def test_get_run_service_is_a_singleton():
     assert get_run_service() is get_run_service()
 
 
-def test_casemodel_is_copied_into_the_run(svc, tmp_path):
-    """GUI/CLI 传的 case 模型落到流水线约定的 `inputs/casemodel.yaml`。"""
-    cfg = tmp_path / "my_casemodel.yaml"
-    cfg.write_text("name: demo\n", encoding="utf-8")
-    run_id = svc.start(RunRequest(spec_text="# 假规格", casemodel=str(cfg)))
+def test_vplan_project_is_mounted_into_the_run(svc, tmp_path, monkeypatch):
+    """GUI/CLI 传的 VPlan 项目挂到 `<run>/inputs/vplan/`。"""
+    monkeypatch.setenv("SIGNOFFAI_ALLOW_UNREVIEWED", "1")  # 跳过人工审阅门
+    project = Path(__file__).resolve().parents[1] / "specs" / "npu_sched"
+    run_id = svc.start(RunRequest(spec_text="# 假规格", vplan=str(project)))
     svc.wait(run_id, timeout=20)
     run_root = svc._handles[run_id].root       # noqa: SLF001 测试要看真实落点
-    target = Path(run_root) / "inputs" / "casemodel.yaml"
-    assert target.is_file()
-    assert target.read_text(encoding="utf-8") == "name: demo\n"
+    base = Path(run_root) / "inputs" / "vplan"
+    assert (base / "data" / "execution_meta.csv").is_file()
+    assert (base / "cases").is_dir()
+    assert not (Path(run_root) / "inputs" / "casemodel.yaml").exists()

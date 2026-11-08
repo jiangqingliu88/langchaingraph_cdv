@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "case_contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "title",
+    "batch",
+    "contract_refs",
+    "covergroups",
+    "target_bins",
+    "checks",
+    "constraints",
+    "seed_baseline",
+    "stimulus"
+  ],
+  "properties": {
+    "case_id": {"type": "string", "pattern": "^TC_[A-Z0-9]+(?:_[A-Z0-9]+)*$"},
+    "title": {"type": "string"},
+    "batch": {"type": "string", "pattern": "^batch\\d{2}$"},
+    "contract_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "pattern": "^C-[A-Z]+(?:-[A-Z0-9]+)*-\\d{3}$"}
+    },
+    "covergroups": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "pattern": "^cg_[a-z0-9_]+$"}
+    },
+    "target_bins": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "pattern": "^(cp|cross)_[a-z0-9_]+:[a-z0-9_]+$"}
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "artifact"],
+        "properties": {
+          "type": {"type": "string", "enum": ["sva", "checker", "scb"]},
+          "artifact": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+        }
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^CON_[A-Z0-9_]+$"}
+    },
+    "seed_baseline": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "integer"}
+    },
+    "stimulus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "count"],
+      "properties": {
+        "profile": {"type": "string", "enum": ["basic", "handshake", "hazard", "illegal"]},
+        "count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "must_detect": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+    },
+    "notes": {"type": "string"}
+  }
+}

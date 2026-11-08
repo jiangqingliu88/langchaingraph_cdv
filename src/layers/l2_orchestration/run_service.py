@@ -40,7 +40,7 @@ logger = structlog.get_logger()
 # ═══════════════════════════════════════════════════════════════
 
 from src.layers.l2_orchestration.verify_request import (  # noqa: E402
-    VerifyRequest as RunRequest, copy_casemodel, unique_output_root,
+    VerifyRequest as RunRequest, mount_vplan, unique_output_root,
 )
 
 
@@ -395,7 +395,7 @@ class RunService:
         # `requires_approval` 的风险判定与记录都挂在它身上。
         channel = self._channel_for()
         gate = req.approval_gate(channel)
-        # case 模型落点与 CLI **同一套**（`verify_request.copy_casemodel`）。
+        # VPlan 挂载与 CLI **同一套**（`verify_request.mount_vplan`）。
         req.prepare(handle.root)
 
         service = PipelineExecutionService.get_instance()
@@ -487,7 +487,7 @@ def start_run(spec_file: str = "", spec_text: str = "",
               bypass_design_model: bool = False, approval: str = "threshold",
               approval_timeout_s: float = 0.0,
               sim_modes=None, manual_gate: bool = True,
-              rtl_dir: str = "", casemodel: str = "") -> Dict[str, Any]:
+              rtl_dir: str = "", vplan: str = "") -> Dict[str, Any]:
     """启动一次闭环运行，**立即**返回 run_id（不等它跑完）。
 
     `output_root` 留空 = 用服务自己的 output_base（默认 `output`）。
@@ -509,7 +509,7 @@ def start_run(spec_file: str = "", spec_text: str = "",
         # 但 `RunRequest` 的缺省是 True —— 不显式转布尔会让"关"悄悄变成"开"。
         manual_gate=bool(manual_gate),
         rtl_dir=str(rtl_dir or ""),
-        casemodel=str(casemodel or ""),
+        vplan=str(vplan or ""),
     )
     run_id = service.start(request)
     return {"run_id": run_id, **service.status()}

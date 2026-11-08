@@ -1,0 +1,2 @@
+﻿id,name,checks,evidence,description,rules
+SB-NPU_SCHED,npu_sched,"[""CHECK-FUNC""]",auto,顶层端口不变量检查（编码合法性 + 输出已知性）,"[""llsu_xbr_sel_encoding"", ""disp_rdy_known"", ""niu_start_known"", ""xbr_wdata_known_when_wvld"", ""perf_cnt_known"", ""int_known""]"

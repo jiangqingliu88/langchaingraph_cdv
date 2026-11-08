@@ -7,7 +7,7 @@
     execution   执行 EDA / 回归
     flow        签核 / 血缘 / 趋势等跨阶段流程
     integration 对外集成（IDE 桥）
-    humanview   人读视图（PM 手写测试点表 → 测试点本体 / casemodel 导入）
+    humanview   人读视图（PM 手写测试点表 → 测试点本体）
     common      共享底层（lib）
 
 **一个包只属于一个板块**；新增工具必须在这里登记（有测试钉住）。
@@ -20,13 +20,13 @@ from typing import Dict, Tuple
 
 BOARDS: Dict[str, Tuple[str, ...]] = {
     "generation": (
-        "casemodel_tools", "uvm_tools", "isa_gen_tools",
+        # case 模型引擎已删除；执行资产在 `src.layers.l3_decision.vplan`
+        "uvm_tools", "isa_gen_tools",
         "cmodel_tools", "scmodel_tools", "doc_tools",
     ),
     "checking": (
+        # verification_os 已迁到 `src.layers.l3_decision.contract`
         "assertion_tools", "debug_tools", "coverage_tools", "spec_tools",
-        # Verification OS v3：契约 / 义务 / 事实账本 / 推导（M0 影子模式）
-        "verification_os",
     ),
     "execution": (
         "regression_tools",

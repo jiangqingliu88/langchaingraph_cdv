@@ -1,0 +1,2 @@
+contract_id,class,object,description,source_ref,owner,p_level,check_method,check_artifact,gate,status,assumption,remark
+C-DBG-REG-001,dbg,可观测,debug0/1/2 与 monitor 统计一致,SPEC-10.1,dv_dbg,P1,scb,spec_dbg_artifact,gate_matrix,assume,spec 已评审；target plan 为 planned，验证待落地,由 docs/specs/cmdsched_contracts.csv 推进；原 check_method=debug_scb

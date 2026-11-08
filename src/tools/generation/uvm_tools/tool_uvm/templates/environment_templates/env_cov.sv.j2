@@ -381,11 +381,19 @@ class {{ environment.env_name }}_coverage extends uvm_component;
     end
   endfunction
 
+  //: **必须真的见过复位有效**才开始采样/判定。
+  // UVM 的 run_phase 与 clk_rst agent 的 reset_phase 同时开始，而复位往往
+  // 晚几拍才被驱动；这段时间 DUT 寄存器还是 X（复位没来过），一旦采样就会
+  // 把"还没复位"记成违规（实测 disp_rdy_known 误报 16/20 拍）。
+  bit cov_rst_observed = 1'b0;
+
   task run_phase(uvm_phase phase);   // 只采样，不参与 objection（仿真由 sim_end 收口）
     forever begin
       @(posedge cov_vif.{{ _dif.clock }});
 {%- if _dif.reset %}
-      if (cov_vif.{{ _dif.reset }}) begin              // 复位周期不采、也不判
+      if (cov_vif.{{ _dif.reset }} === 1'b0) cov_rst_observed = 1'b1;
+      if (cov_rst_observed && cov_vif.{{ _dif.reset }}) begin
+                                                       // 复位周期不采、也不判
         cg_dut.sample();
 {%- if _dc and _dc.rules %}
         chk_dut_one();

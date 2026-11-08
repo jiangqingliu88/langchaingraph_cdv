@@ -10,19 +10,25 @@ logger = structlog.get_logger()
 
 
 def package_vplan_assets(output_dir: Path, module_name: str) -> None:
-    """把本次生成的 UVM 资产同时落 `<run>/sv/...`。
+    """把本次生成的 UVM 资产同时落 `<run>/sv/...`（**verify 默认行为**）。
 
-    顶层 agents/env/bench 仍是内核工作路径；sv/ 是同一批文件的 VPlan 视图。
-    只在 `SIGNOFFAI_UVM_LAYOUT=vplan` 时启用；失败不拦主流程。
+    生成完就**搬进 sv/** 并删掉顶层 agents/env/bench/build：run 里只留一份
+    UVM 资产。`SIGNOFFAI_UVM_LAYOUT=legacy` 可显式关闭；失败不拦主流程。
     """
-    if os.environ.get("SIGNOFFAI_UVM_LAYOUT", "").strip().lower() != "vplan":
+    if os.environ.get("SIGNOFFAI_UVM_LAYOUT", "vplan").strip().lower() == "legacy":
         return
     try:
-        from src.layers.l3_decision.vplan import package_run_assets
+        from src.layers.l3_decision.vplan import (
+            clean_legacy_dirs, package_run_assets)
 
-        summary = package_run_assets(output_dir, module_name)
+        summary = package_run_assets(output_dir, module_name, move=True)
+        try:
+            cleaned = clean_legacy_dirs(output_dir, apply=True)
+        except ValueError:
+            cleaned = {"deleted": []}
         logger.info(
             f"UVM 资产 VPlan sv/：{summary['assets']} 个"
-            f"（复制 {summary['copied']} / 跳过 {summary['skipped']}）")
+            f"（搬入 {summary['copied']} / 跳过 {summary['skipped']}；"
+            f"删除顶层 {', '.join(cleaned.get('deleted') or []) or '无'}）")
     except Exception as e:                           # noqa: BLE001 旁路，别拦主流程
         logger.warning(f"UVM 资产 sv/ 布局失败: {e}")

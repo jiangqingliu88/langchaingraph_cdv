@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import importlib
 
-PACKAGES = ("aivm_ir", "covg_ir", "scb_ir", "sva_ir")
+from src.tools.boards import BOARDS
+
+PACKAGES = BOARDS["humanview"]
 
 
 def __getattr__(name: str):

@@ -49,7 +49,7 @@ GUIDE_HTML = """
 <h4>UVM 自动化验证（<code>vagent verify</code>）</h4>
 <ul>
   <li><code>spec.md</code>（规格，用来生成 RTL）<b>或</b> <code>--rtl &lt;dir&gt;</code>（现成 RTL）；</li>
-  <li><code>specs/&lt;module&gt;/casemodel.yaml</code>（人工 case 模型，优先于草稿）——
+  <li><code>specs/&lt;module&gt;/</code>（VPlan 项目：<code>data/*.csv</code> + <code>cases/*.yaml</code>）——
       维度 / 覆盖仓 / 交叉 / <code>assertions</code> / <code>scoreboards</code> / 批次；</li>
   <li><code>specs/&lt;module&gt;/signoff_policy.yaml</code>（签核策略，可选）；</li>
   <li>EDA：QuestaSim（<code>vlog / vopt / vsim / vcover</code>）。</li>
@@ -74,7 +74,7 @@ GUIDE_HTML = """
 <h3>三、怎么跑</h3>
 <table border="1" cellspacing="0" cellpadding="6">
 <tr><th>目标</th><th>CLI</th><th>工作台</th></tr>
-<tr><td>UVM 全流程</td><td><code>vagent verify --spec spec.md --rtl ./rtl --config casemodel.yaml</code></td>
+<tr><td>UVM 全流程</td><td><code>vagent vplan execute specs/&lt;module&gt; --sim-mode cov</code></td>
     <td>工程服务 → UVM 自动化验证</td></tr>
 <tr><td>契约 / 义务</td><td><code>vagent contract build|check|show -o &lt;run&gt;</code><br>
     <code>vagent contract why &lt;OBL-ID&gt; -o &lt;run&gt;</code><br>

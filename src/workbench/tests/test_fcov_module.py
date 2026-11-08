@@ -15,8 +15,10 @@ from pathlib import Path
 import pytest
 
 MODULE_ID = "flow.fcov"
+NPU = (Path(__file__).resolve().parents[3] / "tests" / "fixtures"
+       / "npu_sched")
 
-#: 一份最小但完整的 case 模型（跟 `front._draft_casemodel` 的草稿同形）
+#: 一份最小但完整的执行资产模型
 CASEMODEL = """\
 version: "1"
 object: apb_uart
@@ -44,9 +46,9 @@ themes:
 CVG_TEXT = """\
 COVERGROUP COVERAGE:
 ----------------------------------------------------------------------------------------------------------
- TYPE /apb_uart_env_pkg/apb_uart_env_coverage/cg_apb
+ TYPE /npu_sched_env_pkg/npu_sched_env_coverage/cg_npu_sched
                                                        71.42%        100          -    Uncovered
-    Coverpoint cp_paddr                                66.66%        100          -    Uncovered
+    Coverpoint cp_queue_level                          66.66%        100          -    Uncovered
 """
 
 
@@ -58,10 +60,12 @@ def _shipped_spec():
 
 @pytest.fixture
 def run_dir(tmp_path):
-    """一次运行的目录骨架 —— 造的是"前缀式"那一支（与产物审查台同一套反解）。"""
+    """一次 VPlan 运行的目录骨架（执行资产挂在 `inputs/vplan/`）。"""
+    from src.layers.l3_decision.vplan import (
+        load_project, materialize_project_inputs)
+
     root = tmp_path / "output_test_20260101_000000"
-    (root / "inputs").mkdir(parents=True)
-    (root / "inputs" / "casemodel.yaml").write_text(CASEMODEL, encoding="utf-8")
+    materialize_project_inputs(load_project(NPU), root)
     return root
 
 
@@ -182,12 +186,12 @@ def _fg(model, row: int, col: int):
 
 class TestCoverpointTable:
     def test_one_row_per_declared_coverpoint(self, module):
-        assert module.cp_model.rowCount() == 2          # paddr + pwrite
+        assert module.cp_model.rowCount() == 19         # 12 覆盖点 + 7 交叉
 
     def test_bin_count_comes_from_the_model_declaration(self, module):
         rows = {r["signal"]: r for r in module._coverpoints}
-        assert rows["paddr"]["bin_count"] == 2          # 边界 0 / 255
-        assert rows["pwrite"]["bin_count"] == 2         # 枚举 0 / 1
+        assert rows["queue_level"]["bin_count"] == 6
+        assert rows["instr_type"]["bin_count"] == 4
 
     def test_no_measurement_yet_leaves_the_cell_blank_not_zero(self, module):
         """**没测到 ≠ 0%**。写 0 会让人去查一个不存在的覆盖率问题。"""
@@ -211,10 +215,10 @@ class TestMeasurementJoinsTheDeclaration:
         try:
             mod.load(run_id=run_dir.name)
             rows = {r["signal"]: r for r in mod._coverpoints}
-            # 实测里 coverpoint 叫 `cp_paddr`，声明里叫 `paddr` —— 要能对上
-            assert rows["paddr"]["measured"] is True
-            assert rows["paddr"]["actual"] == 66.66
-            assert rows["pwrite"]["measured"] is False      # 实测里没有它
+            # 实测里 coverpoint 叫 `cp_queue_level`，声明里叫 `queue_level`
+            assert rows["queue_level"]["measured"] is True
+            assert rows["queue_level"]["actual"] == 66.66
+            assert rows["instr_type"]["measured"] is False  # 实测里没有它
         finally:
             widget.deleteLater()
 
@@ -223,8 +227,9 @@ class TestTestpointTable:
     def test_testpoints_come_from_the_same_denominator_as_the_regression(self, module):
         """`registry_bridge.case_rows` 摊出来的名字 —— 与回归里跑的那份同一分母。"""
         names = [r["name"] for r in module.tp_model.rows]
-        assert names == ["apb_uart_D_ADDR_0", "apb_uart_D_ADDR_255",
-                         "apb_uart_D_DIR_0", "apb_uart_D_DIR_1"]
+        assert len(names) == 70
+        assert names[0] == "npu_sched_env_d_queue_p0_test"
+        assert "npu_sched_env_d_type_pVECTOR_test" in names
 
     def test_the_module_name_is_the_models_object_not_the_run_dir(self, module):
         """用运行目录名会得到 `output_test_20260101_000000_D_ADDR_0` —— 噪音。"""
@@ -232,13 +237,14 @@ class TestTestpointTable:
 
     def test_each_row_carries_its_coverage_bin(self, module):
         rows = {r["name"]: r for r in module.tp_model.rows}
-        assert rows["apb_uart_D_ADDR_0"]["coverage_bin"] == "D_ADDR.paddr[0]"
+        assert rows["npu_sched_env_d_queue_p0_test"]["coverage_bin"] == "empty"
 
 
 class TestAssetTable:
     def test_the_chain_files_are_listed(self, module):
         paths = {a["path"] for a in module.asset_model.rows}
-        assert {"inputs/casemodel.yaml", "coverage/coverage_points.json",
+        assert {"inputs/vplan/data/execution_meta.csv",
+                "coverage/coverage_points.json",
                 "inputs/yaml/uvm/env_cov_bins.yaml",
                 "sim/coverage/reports/coverage_cvg.txt"} <= paths
 
@@ -246,7 +252,7 @@ class TestAssetTable:
         """"还没生成"是有用的信息 —— 照列，标 `exists: false`。"""
         rows = {a["path"]: a for a in module.asset_model.rows}
         assert rows["coverage/coverage_points.json"]["exists"] is False
-        assert rows["inputs/casemodel.yaml"]["exists"] is True
+        assert rows["inputs/vplan/data/execution_meta.csv"]["exists"] is True
 
 
 class TestDegradesHonestly:
@@ -266,7 +272,7 @@ class TestDegradesHonestly:
         try:
             mod.load(root.name)
             assert mod.cp_model.rowCount() == 0
-            assert "case 模型" in mod.notes_label.text()
+            assert "VPlan" in mod.notes_label.text()
         finally:
             widget.deleteLater()
 
@@ -302,9 +308,10 @@ class TestTraceability:
         names = [c[0] for c in COVERPOINT_COLUMNS]
         assert "cover_id" in names and "requirement" in names
 
-    def test_a_model_without_ids_leaves_the_cells_empty(self, module):
-        """没有编号就是空 —— **不编一个出来**（编了就看不出"这份模型没写编号"）。"""
-        assert all(r["cover_id"] == "" for r in module._coverpoints)
+    def test_coverpoints_carry_document_ids(self, module):
+        """VPlan 的覆盖点带文档编号（`CP_NPU_*`），不是只有派生信号名。"""
+        ids = [r["cover_id"] for r in module._coverpoints if r["cover_id"]]
+        assert "CP_NPU_QUEUE_001" in ids
 
 
 class TestTheNpuModelEndToEnd:
@@ -312,14 +319,15 @@ class TestTheNpuModelEndToEnd:
 
     @pytest.fixture
     def npu_run(self, tmp_path):
-        import shutil
         from pathlib import Path
 
+        from src.layers.l3_decision.vplan import (
+            load_project, materialize_project_inputs)
+
         root = tmp_path / "output_npu_20260101_000000"
-        (root / "inputs").mkdir(parents=True)
-        shutil.copy(Path(__file__).resolve().parents[3]
-                    / "specs" / "npu_sched" / "casemodel.yaml",
-                    root / "inputs" / "casemodel.yaml")
+        project = (Path(__file__).resolve().parents[3] / "tests" / "fixtures"
+              / "npu_sched")
+        materialize_project_inputs(load_project(project), root)
         return root
 
     def test_twelve_coverpoints_and_seven_crosses_land(self, npu_run, qt_app, settings):
@@ -344,19 +352,17 @@ class TestBatchesAndTraceability:
     """
 
     NPU = (Path(__file__).resolve().parents[3]
-           / "specs" / "npu_sched" / "casemodel.yaml")
+           / "tests" / "fixtures" / "npu_sched")
 
     @pytest.fixture
     def npu_run(self, tmp_path):
-        import shutil
-
-        from src.layers.l3_decision.casemodel.api import run_coverage_plan
+        from src.layers.l3_decision.vplan import engine
 
         root = tmp_path / "output_npu_20260101_000000"
         (root / "inputs").mkdir(parents=True)
         (root / "coverage").mkdir(parents=True)
-        shutil.copy(self.NPU, root / "inputs" / "casemodel.yaml")
-        plan = run_coverage_plan(self.NPU.read_text(encoding="utf-8"), "npu_sched")
+        plan = engine.run_coverage_plan(
+            engine.load_project_from(self.NPU), "npu_sched")
         (root / "coverage" / "coverage_plan.yaml").write_text(
             plan["plan_yaml"], encoding="utf-8")
         return root
@@ -370,11 +376,11 @@ class TestBatchesAndTraceability:
         mod, widget = self._load(npu_run, qt_app, settings)
         try:
             rows = {r["theme"]: r for r in mod.batch_model.rows}
-            assert len(rows) == 11
-            b = rows["TH-B02"]
-            assert b["test"] == "npu_type_test"
-            assert (b["base"], b["count"], b["explore"]) == (2001, 15, 3)
-            assert b["total_runs"] == 18
+            assert len(rows) == 12
+            b = rows["TH-TC_CMDSCHED_BASIC_001"]
+            assert b["test"] == "cmdsched_basic_test"
+            assert (b["base"], b["count"], b["explore"]) == (1100, 1, 0)
+            assert b["total_runs"] == 1
         finally:
             widget.deleteLater()
 

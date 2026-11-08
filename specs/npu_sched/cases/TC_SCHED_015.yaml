@@ -1,0 +1,12 @@
+case_id: TC_SCHED_015
+test_name: reset_and_recovery_test
+batch: B04
+title: 复位与恢复
+contract_refs:
+- C-RES-001
+- C-RES-002
+covergroups:
+- cg_reset_init
+- cg_error_recovery
+- cg_active_reset
+constraints: []

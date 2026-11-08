@@ -20,7 +20,7 @@ def build_dut_checker(decls: Dict[str, Any],
                       meta: Dict[str, Any]) -> Dict[str, Any]:
     """模型 `assertions` → env 逐拍检查规则（失败给 `{}`，不编规则）。"""
     try:
-        from src.layers.l3_decision.casemodel.coverage import checker_rules
+        from src.layers.l3_decision.vplan.runtime.coverage import checker_rules
         got = checker_rules(decls.get("assertions"), meta.get("signals") or [])
         for skipped in got["skipped"]:
             logger.warning(f"DUT 检查跳过：{skipped}")

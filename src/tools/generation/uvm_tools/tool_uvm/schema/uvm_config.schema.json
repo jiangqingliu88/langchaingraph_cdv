@@ -1815,7 +1815,7 @@
       "additionalProperties": false
     },
     "coverFieldBin": {
-      "$comment": "一个字段取值 bin：名字 + 整型字面量。值是**整数**（不是字符串）—— 非 ASCII 取值由生成端投影成下标（见 casemodel_tools/coverage.py 的 sv_value）；中文直接进 `bins x = {首拍}` 是编译错误。名字必须是合法 SV 标识符（生成端已 ASCII 化并去重）。",
+      "$comment": "一个字段取值 bin：名字 + 整型字面量。值是**整数**（不是字符串）—— 非 ASCII 取值由生成端投影成下标（见 vplan/runtime/coverage_render.py 的 sv_value）；中文直接进 `bins x = {首拍}` 是编译错误。名字必须是合法 SV 标识符（生成端已 ASCII 化并去重）。",
       "type": "object",
       "required": [
         "name",
@@ -1860,7 +1860,7 @@
       "additionalProperties": false
     },
     "dutCoverBin": {
-      "$comment": "一个 DUT 信号的覆盖仓：名字 + **字面量文本**。为什么与 `coverFieldBin` 不同（那个是整数）：DUT 侧的仓常是**区间**（`{[1:7]}`、`{[33:$]}`）或**多值集合**（`{0,7,8}`）—— 那是值域的一个划分，用单个整数表达不出来。文本由 casemodel_tools/coverage.py 的 `CoverBin.literal()` 产出，模板原样写进 `bins x = {<文本>};`。",
+      "$comment": "一个 DUT 信号的覆盖仓：名字 + **字面量文本**。为什么与 `coverFieldBin` 不同（那个是整数）：DUT 侧的仓常是**区间**（`{[1:7]}`、`{[33:$]}`）或**多值集合**（`{0,7,8}`）—— 那是值域的一个划分，用单个整数表达不出来。文本由 vplan/runtime/coverage_render.py 的 `CoverBin.literal()` 产出，模板原样写进 `bins x = {<文本>};`。",
       "type": "object",
       "required": [
         "name",
@@ -1908,7 +1908,7 @@
       "additionalProperties": false
     },
     "checkerRule": {
-      "$comment": "DUT 检查里的一条规则：名字 + **逐拍可求值的 SV 布尔**（`!(a) || (b)` 这种形式，由 casemodel_tools.coverage.checker_rules 从模型的 `a |-> b` 翻过来）+ 违规时给人看的消息。",
+      "$comment": "DUT 检查里的一条规则：名字 + **逐拍可求值的 SV 布尔**（`!(a) || (b)` 这种形式，由 vplan/runtime/coverage.checker_rules 从模型的 `a |-> b` 翻过来）+ 违规时给人看的消息。",
       "type": "object",
       "required": [
         "name",

@@ -1,7 +1,6 @@
 """测试夹具。
 
-三条约定（与 `casemodel_tools/tests/conftest.py` 一致，那边踩过的坑这边不
-再踩一遍）：
+三条约定（早先在 case 建模测试里踩过，之后一直沿用）：
 
   · Qt 在**夹具里** import，不在模块顶层 —— 顶层 import 会让「没装 PySide6」
     变成收集期错误，而不是一条清楚的 skip。
@@ -18,16 +17,6 @@ from pathlib import Path
 import pytest
 
 from ..manifest import load_manifest_text
-
-#: 示例模型 —— 与 CLI 共用同一份（`config/casemodel/examples/`）。
-#: 它们不放在 `casemodel_tools` 包里，是因为工具与工作台都要用，
-#: 而两边谁都不该依赖对方。
-EXAMPLES = Path(__file__).resolve().parents[3] / "config" / "casemodel" / "examples"
-CPU = EXAMPLES / "cpu_pipeline.yaml"                 # 组织树 + 专题，写对了
-CPU_FLAWED = EXAMPLES / "cpu_pipeline_flawed.yaml"   # 组织树 / 专题的坑
-FC = EXAMPLES / "fc_flowcontrol.yaml"                # 扁平子对象 + 交叉组（老写法）
-FC_FLAWED = EXAMPLES / "fc_flawed.yaml"              # 维度层的坑
-FC_REAL = EXAMPLES / "fc_real_cases.yaml"            # 外部真实 case 列表
 
 #: 干净的桩清单 —— 两个中央页（故意让 vms 那页的 order 更小，验证
 #: 「业务线 order 优先于模块 order」）+ 两个底部模块（验证同窗格成页签）。
@@ -204,55 +193,6 @@ def shipped_manifest():
 
     path = default_manifest_path()
     return load_manifest_text(path.read_text(encoding="utf-8"), source=str(path)), path
-
-
-def _casemodel_window(qt_app, settings, *, with_input: bool):
-    manifest, manifest_path = shipped_manifest()
-    if not with_input:
-        # 把 casemodel 的 input 抹掉 —— 得到「模型没打开」的初始状态，
-        # 而不是伪造一份清单（那份清单会跟真清单漂移）。
-        manifest = manifest.model_copy(deep=True)
-        for spec in manifest.modules:
-            if spec.id == "verify.casemodel":
-                spec.input = ""
-    window = make_window(qt_app, make_ctx(manifest, manifest_path, settings))
-    # **center 模块是懒加载的**：工作区默认空，要点一下才建。
-    # 这个夹具测的就是 casemodel 本身，所以替它"点"一下。
-    window.manager.open("verify.casemodel")
-    return window, window.manager.module("verify.casemodel")
-
-
-@pytest.fixture
-def casemodel_window(qt_app, settings):
-    """装着 case 建模模块的真窗口（清单里的 input 已载入）。"""
-    window, _module = _casemodel_window(qt_app, settings, with_input=True)
-    yield window
-    window.manager.mark_all_clean()
-    window.close()
-    window.deleteLater()
-    qt_app.processEvents()
-
-
-@pytest.fixture
-def casemodel(casemodel_window):
-    """case 建模模块本身 —— 旧测试里的 `gui` 就是它。
-
-    旧界面的窗口职责（菜单、状态栏、标题）现在一半归平台、一半归模块：
-    `save_model` / `reanalyze` / `load` / `pages` / `editor` 都在模块上，
-    状态栏与标签页标题要经 `casemodel_window` 看。
-    """
-    return casemodel_window.manager.module("verify.casemodel")
-
-
-@pytest.fixture
-def casemodel_empty(qt_app, settings):
-    """没打开任何模型的 case 建模模块。"""
-    window, module = _casemodel_window(qt_app, settings, with_input=False)
-    yield module
-    window.manager.mark_all_clean()
-    window.close()
-    window.deleteLater()
-    qt_app.processEvents()
 
 
 def type_into(editor_page, text: str) -> None:

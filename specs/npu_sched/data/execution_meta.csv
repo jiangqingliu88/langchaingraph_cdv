@@ -1,0 +1,62 @@
+version,object,object_cn,object_code,description,sampling,generation
+1,npu_sched,"
+1. 发布初版CMD Scheduler Arch Spec.
+
+1.2 Abbreviations
+缩写
+全称
+定义说明
+CMD
+Command Scheduler
+命令调度器。
+SHazard
+Structural Hazard
+结构冒险，因硬件资源冲突导致的流水线冒险。
+DHazard
+Data Hazard
+数据冒险，因指令间数据依赖导致的流水线冒险。
+
+
+
+
+1.3 需求来源输入 
+序列
+需求描述
+需求来源
+解决方案
+优化方向
+1
+删除CPU读取csr配置寄存器功能
+指令集修改csr规格，且输入来源由软件配置，故不再通过指令读取寄存器配置。
+- 删除rd_csr nice指令;
+-",NPU_SCHED,"
+1. 发布初版CMD Scheduler Arch Spec.
+
+1.2 Abbreviations
+缩写
+全称
+定义说明
+CMD
+Command Scheduler
+命令调度器。
+SHazard
+Structural Hazard
+结构冒险，因硬件资源冲突导致的流水线冒险。
+DHazard
+Data Hazard
+数据冒险，因指令间数据依赖导致的流水线冒险。
+
+
+
+
+1.3 需求来源输入 
+序列
+需求描述
+需求来源
+解决方案
+优化方向
+1
+删除CPU读取csr配置寄存器功能
+指令集修改csr规格，且输入来源由软件配置，故不再通过指令读取寄存器配置。
+- 删除rd_csr nice指令;
+-","{clock: clk, dut_module: npu_sched, reset: rst_n}","{max_cases: 400, seed: 12345}"

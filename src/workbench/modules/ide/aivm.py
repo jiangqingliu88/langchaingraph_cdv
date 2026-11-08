@@ -1,8 +1,7 @@
 """AIVM 测试点表（xlsx）—— PM/DV lead 手写表的**只读**视图。
 
 方案 B 里 xlsx 是"该测什么"的真源；这一页只读：TP 清单、三通道覆盖点数、
-M1 计划摘要、校验统计。导入 casemodel / 防漂移校验在 CLI（`case-model
-import-xlsx` / `verify-import`），页面不写盘、不起子进程。
+M1 计划摘要、校验统计。页面只读、不写盘、不起子进程。
 
 **列名按源表表头走**：`humanview.aivm_plan` 用 `discover_column_headers`
 读 xlsx 的第 2 行（headtitle）与第 3 行（中文释义），界面照它出列 ——
@@ -39,8 +38,7 @@ COLUMNS = (
 
 class AivmTableModule(ModuleBase):
     HINT = ("PM/DV lead 手写的测试点表（xlsx）。**列名按源表第 2/3 行表头"
-            "动态生成**；只读查看 TP 原文与三通道覆盖点，导入 casemodel 用 "
-            "`vagent case-model import-xlsx`。")
+            "动态生成**；只读查看 TP 原文与三通道覆盖点。")
 
     def build_content(self) -> QWidget:
         root = QWidget()

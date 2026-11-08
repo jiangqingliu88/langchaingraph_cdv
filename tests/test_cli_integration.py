@@ -280,7 +280,7 @@ class TestEngineeringServiceCommands:
         from src.cli.commands import cli
         result = runner.invoke(cli, ["verify", "--help"])
         assert result.exit_code == 0
-        assert "--config" in result.output
+        assert "--vplan" in result.output
         assert "--rtl" in result.output
 
     def test_soc_subcommands_are_registered(self, runner):
