@@ -119,6 +119,7 @@ own licenses; see [NOTICE](NOTICE).
 > - **[`ARCHITECTURE.md`](ARCHITECTURE.md)** —— **当前代码架构**（五层 / 24 节点 / 执行器 / 工具协议 / 证据链 / 扩展点）
 > - **[`docs/design/`](docs/design/)** —— 设计文档与实施计划（架构迁移 / 契约 / 覆盖率 / 证据链）
 > - **[`docs/notes/`](docs/notes/)** —— 工作笔记（数据模型 / 优化 / 差异化 / 新架构草案）
+> - **[`CONTRACT_FLOW.md`](CONTRACT_FLOW.md)** —— **契约流程用户指南**（dplan / C-* 契约矩阵 / Case IR / 契约构建物：从 spec 到 active 的完整操作与判据）
 > - **[`CONTRIBUTING.md`](CONTRIBUTING.md)** —— 开发流程、代码规范、DCO 与 PR 检查
 > - **[`SECURITY.md`](SECURITY.md)** —— 漏洞报告与密钥处理
 > - `src/layers/l3_decision/vplan/runtime/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
