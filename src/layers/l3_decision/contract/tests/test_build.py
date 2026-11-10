@@ -129,7 +129,7 @@ def test_ensure_vplan_map_backfills_old_runs(tmp_path):
 
 class TestOpsGate:
     def test_blocks_when_contract_missing_but_tp_ir_present(self, tmp_path):
-        from src.executors.ops.main import _contract_gate
+        from src.skills.ops.main import _contract_gate
 
         root = _run(tmp_path)
         gate = _contract_gate(root, {})
@@ -137,20 +137,20 @@ class TestOpsGate:
         assert gate.data["regression"]["contract_missing"] is True
 
     def test_passes_after_build(self, tmp_path):
-        from src.executors.ops.main import _contract_gate
+        from src.skills.ops.main import _contract_gate
 
         root = _run(tmp_path)
         write_contract(root, CASE_IR)
         assert _contract_gate(root, {}) is None
 
     def test_legacy_run_without_tp_ir_is_not_blocked(self, tmp_path):
-        from src.executors.ops.main import _contract_gate
+        from src.skills.ops.main import _contract_gate
 
         root = _run(tmp_path, testpoints=False)
         assert _contract_gate(root, {}) is None
 
     def test_explicit_bypass(self, tmp_path, monkeypatch):
-        from src.executors.ops.main import _contract_gate
+        from src.skills.ops.main import _contract_gate
 
         root = _run(tmp_path)
         assert _contract_gate(root, {"contract_gate": False}) is None

@@ -763,7 +763,7 @@ class EnvironmentRenderTask(RenderTask):
         context["coverage_bins"] = data.get("cov_bins") \
             or data.get("coverage_bins") or []
         # `field_bins`: 字段名 → 显式 bin 表（`[{name, value}]`），来自 **case 模型**
-        # （verify 阶段注入，见 `src/executors/verify/main.py`）。有了它就按模型声明
+        # （verify 阶段注入，见 `src/skills/verify/main.py`）。有了它就按模型声明
         # 的边界值分箱，没有就退回模板里那套"值类自动分箱"（0/1/其余）。
         _fb = data.get("field_bins")
         context["coverage_field_bins"] = _fb if isinstance(_fb, dict) else {}

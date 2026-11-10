@@ -85,7 +85,7 @@ def test_decision_action_universe_is_frozen():
 def test_caveat_codes_in_audit_match_the_public_set():
     # 3.0 拆分后 caveat 分在 main.py 与 helpers.py 两处，按包扫描。
     found = set()
-    for path in sorted((ROOT / "src/executors/audit").glob("*.py")):
+    for path in sorted((ROOT / "src/skills/audit").glob("*.py")):
         found |= set(re.findall(r'(?:_caveat|caveat)\("([A-Z_]+)"',
                                 path.read_text(encoding="utf-8")))
     assert found == EXPECTED_CAVEATS
@@ -136,7 +136,7 @@ def test_watched_files_register_reason_plan_and_size():
 
 def test_architecture_doc_matches_code_facts():
     doc = DOC.read_text(encoding="utf-8")
-    for phrase in ("Supervisor 主图", "四个专家", "八个 Executor",
+    for phrase in ("Supervisor 主图", "四个专家", "八个 Skill",
                    "steps_dag.py", "STATE_CONTRACTS",
                    "EXECUTORS_WITHOUT_HUB_TOOLS",
                    "signoff_replay_recipe_v2",

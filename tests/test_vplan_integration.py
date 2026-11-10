@@ -472,7 +472,7 @@ def test_gate_prefers_mapped_environment_obligations(tmp_path):
 
 
 def test_verify_vplan_layout_default_and_legacy(tmp_path, monkeypatch):
-    from src.executors.verify.steps.vplan_layout import package_vplan_assets
+    from src.skills.verify.steps.vplan_layout import package_vplan_assets
 
     calls = []
     monkeypatch.setattr(

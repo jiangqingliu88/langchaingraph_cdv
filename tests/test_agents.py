@@ -5,14 +5,14 @@
 """
 import pytest
 
-from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
-from src.executors.design import DesignExecutor
-from src.executors.model import ModelExecutor
-from src.executors.verify import VerifyExecutor
-from src.executors.ops import OpsExecutor
-from src.executors.coverage import CoverageExecutor
-from src.executors.debug import DebugExecutor
-from src.executors.audit import AuditExecutor
+from src.layers.l2_orchestration.skills.registry import ExecutorRegistry
+from src.skills.design import DesignExecutor
+from src.skills.model import ModelExecutor
+from src.skills.verify import VerifyExecutor
+from src.skills.ops import OpsExecutor
+from src.skills.coverage import CoverageExecutor
+from src.skills.debug import DebugExecutor
+from src.skills.audit import AuditExecutor
 
 CURRENT_AGENTS = [
     ("design", DesignExecutor),
@@ -67,7 +67,7 @@ async def test_debug_agent_no_evidence_fails_loudly(tmp_path):
 
 def test_model_sv_render_real_registers():
     """有 spec.registers → SV 模型含真实寄存器语义，placeholder=False。"""
-    from src.executors.model.main import _render_sv
+    from src.skills.model.main import _render_sv
     regs = [
         {"offset": "0x00", "name": "CTRL", "width": 8, "access": "RW", "description": "控制字"},
         {"offset": "0x04", "name": "STATUS", "width": 8, "access": "RO", "description": "状态字"},
@@ -93,7 +93,7 @@ def test_model_sv_render_real_registers():
 
 def test_model_sv_render_placeholder_without_registers():
     """无 spec.registers → 占位模型（placeholder=True），audit 门禁据此拒绝。"""
-    from src.executors.model.main import _render_sv
+    from src.skills.model.main import _render_sv
     interfaces = [
         {"name": "clk", "data_width": 1, "direction": "INPUT", "protocol": "Clock"},
         {"name": "rst_n", "data_width": 1, "direction": "INPUT", "protocol": "Reset"},

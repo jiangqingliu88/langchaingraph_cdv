@@ -88,7 +88,7 @@ def test_contract_carries_constraints_into_the_hash():
 def test_enrich_reads_the_coverage_plan(tmp_path):
     import yaml
 
-    from src.executors.verify.ir_artifacts import enrich_case_ir
+    from src.skills.verify.ir_artifacts import enrich_case_ir
 
     (tmp_path / "coverage").mkdir(parents=True)
     (tmp_path / "coverage" / "coverage_plan.yaml").write_text(

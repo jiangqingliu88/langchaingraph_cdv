@@ -1,6 +1,6 @@
 """参数整形 —— 把「吃一个 JSON 字符串」的工具包成「吃关键字参数」的。
 
-`src/executors/debug/tools` 里有几个工具签名是 `fn(input_json: str = "") -> str`：
+`src/skills/debug/tools` 里有几个工具签名是 `fn(input_json: str = "") -> str`：
 参数被打包成一个 JSON 字符串（那是给 LLM 的 function-calling 准备的形状，
 模型只能传字符串）。界面这边传的是「一个输出目录、一串信号名」，硬要自己
 `json.dumps` 再传，等于把调用约定抄进每个模块里。
@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
-from src.executors.debug.tools import main as _debug_main
+from src.skills.debug.tools import main as _debug_main
 
 
 def json_input(fn: Callable[..., Any]) -> Callable[..., Any]:

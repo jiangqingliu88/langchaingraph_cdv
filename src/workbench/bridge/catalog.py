@@ -33,19 +33,19 @@ BINDINGS: List[ToolBinding] = [
 
     ToolBinding(
         name="debug.collect_sim_log",
-        target="src.executors.debug.tools.main:collect_sim_log",
+        target="src.skills.debug.tools.main:collect_sim_log",
         kind="json",
         doc="扫 output_dir 下的仿真日志，汇总 pass/fail 与错误摘要",
     ),
     ToolBinding(
         name="debug.collect_compile_log",
-        target="src.executors.debug.tools.main:collect_compile_log",
+        target="src.skills.debug.tools.main:collect_compile_log",
         kind="json",
         doc="扫 output_dir 下的编译日志",
     ),
     ToolBinding(
         name="debug.fingerprint_error",
-        target="src.executors.debug.tools.main:fingerprint_error",
+        target="src.skills.debug.tools.main:fingerprint_error",
         kind="json",
         doc="为一段错误文本算去重指纹 + 归类",
     ),

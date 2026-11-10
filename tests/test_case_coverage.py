@@ -306,7 +306,7 @@ class TestWaveManifest:
 
 class TestAuditSignoffGate:
     def _gate(self, tmp_path, rows):
-        from src.executors.audit.main import _apply_case_coverage_gate
+        from src.skills.audit.main import _apply_case_coverage_gate
         gates: dict = {}
         caveats: list = []
         cc = _apply_case_coverage_gate(

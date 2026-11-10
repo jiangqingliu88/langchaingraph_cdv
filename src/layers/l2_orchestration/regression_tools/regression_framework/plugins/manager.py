@@ -144,6 +144,6 @@ class PluginManager:
             'notifiers': list(self.notifiers.keys()),
             'reporters': list(self.reporters.keys()),
             'matrix_plugins': list(self.matrix_plugins.keys()),
-            'executors': list(self.executors.keys()),
+            'skills': list(self.executors.keys()),
             'hooks': [h.plugin_name for h in self.hooks]
         }

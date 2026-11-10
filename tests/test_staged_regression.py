@@ -216,7 +216,7 @@ def test_the_ops_agent_turns_the_switch_into_auto_approve(monkeypatch):
     """
     import asyncio
 
-    from src.executors.ops import main as ops_main
+    from src.skills.ops import main as ops_main
 
     seen = {}
 

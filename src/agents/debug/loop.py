@@ -40,7 +40,7 @@ async def n_debug_agent(state, config) -> Dict[str, Any]:
         return {"debug_agent_loop": {"skipped": True,
                                      "reason": "SIGNOFFAI_AGENT_LOOP!=on"}}
     try:
-        from src.executors.debug.tools.main import DebugTools
+        from src.skills.debug.tools.main import DebugTools
 
         tools = DebugTools().get_tools()
         result = await asyncio.to_thread(

@@ -266,7 +266,7 @@ flowchart TB
     GRAPH --> CORE
     EXEC --> CORE
     CORE --> EVID
-    GRAPH --> EXEC["8 个 Executor<br/>src/executors/*"]
+    GRAPH --> EXEC["8 个 Skill<br/>src/skills/*"]
     EXEC --> TOOLS["ToolHub / ITool<br/>l2_orchestration/communication"]
     TOOLS --> EDA["QuestaSim<br/>vlog / vopt / vsim / vcover"]
     TOOLS --> FS["文件系统<br/>RTL / UVM / regression / coverage"]
@@ -288,7 +288,7 @@ flowchart TB
 | **app 应用服务** | CLI/Workbench 共用的业务编排 facade；不造第二套引擎 | `src/app/services/`：`verify`、`optimize_regression`、`coverage_closure`、`soc`、`ip` | 依赖 L1–L5；被 CLI/Workbench 调用 |
 | **core 横切底座** | 运行身份 / 产物索引 / 事件事实 / 血缘 / Job 进程 / 决策评估 / 质量门 | `src/core/`：`runtime/`、`provenance/`、`jobs/`、`decision/`、`verification/` | **只用标准库**，不 import `src.layers`（`tests/core/test_core_is_stdlib_only.py` 守卫） |
 | **L1 基础设施** | EDA 调用、输出目录、哈希、归档、Reference Finder | `layers/l1_infrastructure/`：`infrastructure.py`、`eda_backend.py`、`coverage_backend.py`、`output_config.py`、`layout.py`、`reference_finder.py` | 最底层，不依赖上层 |
-| **L2 编排** | LangGraph、执行器运行时、ToolHub、状态/运行时、证据、治理 | `layers/l2_orchestration/`：`graph.py`、`execution.py`、`runtime.py`、`state.py`、`routers.py`、`stages.py`、`executors/`（base/registry）、`communication/`、`evidence/`、`governance/`；8 个 executor 实现在 `src/executors/` | 依赖 L1 |
+| **L2 编排** | LangGraph、执行器运行时、ToolHub、状态/运行时、证据、治理 | `src/agents/`：Supervisor + 四个专家子图；`layers/l2_orchestration/`：`execution.py`、`runtime.py`、`state.py`、`stages.py`、`communication/`、`evidence/`、`governance/`；8 个阶段 skill 实现在 `src/skills/`，base/registry 在 `layers/l2_orchestration/skills/` | 依赖 L1 |
 | **L3 决策** | 覆盖率驱动决策、动作选择、粗连续奖励、知识图谱（设计时 + 运行时） | `layers/l3_decision/`：`decision_engine.py`、`reward.py`、`brain/`、`knowledge/`（`schema/graph/query/persistence/runtime`） | 依赖 L1/L2 的契约 |
 | **L4 记忆** | 用例库、IP 库、模型库、排除规则、血缘、经验统计 | `layers/l4_memory/`：`testcase_registry.py`、`ip_registry.py`、`model_registry.py`、`lineage.py`、`coverage_experience.py`、`debug_experience.py` | 可被 L2/L3/L5 调用 |
 | **L5 进化** | 经验蒸馏、规则生长 | `layers/l5_evolution/`：`distillation.py`、`growth.py` | 依赖 L4 |
@@ -361,7 +361,7 @@ START → init → supervisor
 
 | 不变量 | 实现 | 失败方式 |
 |---|---|---|
-| verify 8 步的数据依赖 | `src/executors/verify/steps_dag.py` | import 期拓扑校验（缺失/成环）；执行期前置未跑 → `StepOrderError` |
+| verify 8 步的数据依赖 | `src/skills/verify/steps_dag.py` | import 期拓扑校验（缺失/成环）；执行期前置未跑 → `StepOrderError` |
 | State 字段归属 | `state.PHASE_OWNERS` + `STATE_CONTRACTS`；`graph._guarded_node` | 启动期字段存在性校验；运行期越权写 `tests/coverage/audit/result` → **硬失败**（`SIGNOFFAI_STATE_CONTRACT=warn` 退回告警），其余字段 → warning |
 | 硬失败 vs 软建议 | `decision_engine.hard_action()` / `soft_action()`；`DecisionBrain` 显式先调 hard | 硬失败（编译/比对/回归）结构上到不了 RL |
 | 工具角色映射 | `ToolHub.validate_registry()` + CLI 启动一行汇总 | 空映射未在 `EXECUTORS_WITHOUT_HUB_TOOLS` 登记 → 启动 `exit 2` |
@@ -410,9 +410,9 @@ mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
 
 ---
 
-## 5. 八个 Executor
+## 5. 八个 Skill
 
-注册表：`src/layers/l2_orchestration/executors/registry.py`；每个 executor 实现 `execute_task()`。
+注册表：`src/layers/l2_orchestration/skills/registry.py`；每个 executor 实现 `execute_task()`。
 
 | Executor | 职责 | 关键产出 |
 |---|---|---|
@@ -708,7 +708,7 @@ _write_coverage_plan
 
 顺序错一步的典型表现：env_cov 未生成、约束没进渲染、覆盖率静默退回自动分箱。
 
-**顺序不再是注释约定**：`src/executors/verify/steps_dag.py` 把这 8 步声明成
+**顺序不再是注释约定**：`src/skills/verify/steps_dag.py` 把这 8 步声明成
 `deps/inputs/outputs/why` 的数据 DAG。import 期跑拓扑校验（缺依赖/成环直接
 失败），执行期由 `StepRecorder` 在每步后 `mark()`，前置没跑就抛
 `StepOrderError`。`find_spec_yaml` 会清空 `inputs/yaml/uvm/`，所以
@@ -1390,8 +1390,8 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 | 想加什么 | 改哪里 | 不需要改 |
 |---|---|---|
 | 新 CLI 命令组 | `src/cli/cmd_<domain>.py` + 在 `commands.py` 末尾的导入列表注册 | 其它命令组 |
-| 新 LangGraph 节点 | `nodes/` + `graph.py` 的 `NODE_FUNCS` + 边表 + `stages.py` | executor 内部 |
-| 新 executor | `src/executors/<role>/main.py` + `@register_executor` | 图拓扑（除非要接节点） |
+| 新 LangGraph 节点 | `src/agents/supervisor/graph.py` 的 `NODE_FUNCS` + 边表 + `stages.py` | skill 内部 |
+| 新 skill | `src/skills/<role>/main.py` + `@register_executor` | 图拓扑（除非要接节点） |
 | 新工具 | 实现 `ITool` + 注册到 ToolHub | 调用方 |
 | 新 GUI 工具 | `src/workbench/bridge/catalog.py` 加 `ToolBinding` + 模块 `tool.name` | CLI / 流水线 |
 | 新工具包 | 放对应板块目录（`generation/checking/execution/flow/integration/humanview/common`）+ 在 `src/tools/boards.py` 登记 | 其它工具包 |
@@ -1599,7 +1599,7 @@ python scripts/mutation_guards.py                     # 9 条核心守卫变异�
 │  ├─ app/services/                CLI/Workbench 共用 facade（verify/optimize/coverage/soc/ip）
 │  ├─ cli/                         CLI / REPL / 命令组（commands.py + cmd_*.py，导入即注册）
 │  ├─ layers/                      L1–L5 分层架构
-│  ├─ executors/                   8 个 executor；verify 步骤 DAG 位于 verify/
+│  ├─ skills/                   8 个 executor；verify 步骤 DAG 位于 verify/
 │  ├─ tools/                       generation / checking / execution / flow 等工具板块
 │  │  └─ layers/l2_orchestration/regression_tools/backend_capabilities.py  多后端能力矩阵
 │  └─ workbench/                   可选 PySide6 桌面工作台

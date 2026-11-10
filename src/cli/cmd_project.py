@@ -45,7 +45,7 @@ def project_init(name, template):
     dirs = [
         "specs", project_output, "logs",
         f"{project_output}/docs/de", f"{project_output}/docs/dv",
-        "src/rtl", "src/tb", "src/executors",
+        "src/rtl", "src/tb", "src/skills",
     ]
     for d in dirs:
         (project_dir / d).mkdir(parents=True, exist_ok=True)

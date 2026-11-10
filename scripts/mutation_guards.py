@@ -50,7 +50,7 @@ MUTATIONS: List[Mutation] = [
     ),
     Mutation(
         name="steps_dag_missing_dependency",
-        path="src/executors/verify/steps_dag.py",
+        path="src/skills/verify/steps_dag.py",
         old='        "env_cov_bins", deps=("dut_channel",),',
         new='        "env_cov_bins", deps=(),',
         tests="tests/test_verify_steps_dag.py",
@@ -102,7 +102,7 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         # 归属靠猜（名字对不上也发逐条行）→ "不猜" 的测试必须红
         name="scoreboard_rules_guessed",
-        path="src/executors/verify/dut_checker.py",
+        path="src/skills/verify/dut_checker.py",
         old=("        owned = [str(n) for n in (sb.get(\"rules\") or []) "
              "if str(n) in known]"),
         new=("        owned = ([str(n) for n in (sb.get(\"rules\") or [])]\n"

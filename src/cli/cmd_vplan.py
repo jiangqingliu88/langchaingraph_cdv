@@ -379,7 +379,7 @@ def _spec_contract(spec_text: str, module: str, llm: bool,
         "SIGNOFFAI_SPEC_LLM", "").strip().lower() in ("1", "true", "yes")
     if use_llm:
         try:
-            from src.executors.front.dplan import (
+            from src.skills.front.dplan import (
                 extract_contracts, extract_plan_tables, merge_contracts)
 
             contract = merge_contracts(
@@ -418,7 +418,7 @@ def _ensure_project_inputs(project: Path, *, llm: bool = False,
     已有表但缺 `data/execution_meta.csv`（如参考项目 demo）时，只补 `data/*.csv`
     与契约 sidecar，**不改 docs/specs 下的人工表**。
     """
-    from src.executors.front.vplan import ProjectFormatError
+    from src.skills.front.vplan import ProjectFormatError
 
     has_tables = _has_project_tables(project)
     need_assets = assets and not (project / "data" / "execution_meta.csv").is_file()
@@ -432,7 +432,7 @@ def _ensure_project_inputs(project: Path, *, llm: bool = False,
                               plan_tables=not (has_tables and not force))
     try:
         if not force and has_tables:
-            from src.executors.front.vplan import bootstrap_assets
+            from src.skills.front.vplan import bootstrap_assets
 
             summary = bootstrap_assets(project, spec_text, contract)
             if not quiet:
@@ -440,7 +440,7 @@ def _ensure_project_inputs(project: Path, *, llm: bool = False,
                     f"[green]✓ 补齐执行资产[/green] {spec_path.name} → "
                     f"{summary['dimensions']} 维度（docs/specs 未改动）")
             return summary
-        from src.executors.front.vplan import bootstrap_project
+        from src.skills.front.vplan import bootstrap_project
 
         summary = bootstrap_project(project, spec_text, contract)
     except ProjectFormatError as exc:

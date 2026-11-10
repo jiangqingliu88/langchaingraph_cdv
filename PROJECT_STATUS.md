@@ -109,7 +109,7 @@ spec → front bootstrap → docs/specs + data + cases
 
 | 问题 | 修复 |
 |---|---|
-| `verify/main.py` 626 行 > registered 600 | 接口投影拆到 `src/executors/verify/steps/interface_spec.py`，main 降到 522 行 |
+| `verify/main.py` 626 行 > registered 600 | 接口投影拆到 `src/skills/verify/steps/interface_spec.py`，main 降到 522 行 |
 | `architecture_guard` 只在 >2000 时检查 registered | watched 文件始终执行 `registered` 预算；guard 与测试同源 |
 | `test_tools_boards` 2 项失败 | `boards.py` 按实际目录重建；`generation/__init__` 从 boards 派生 |
 | `test_vplan_bootstrap` 2 项失败 | 契约计数改为“2 功能 + 1 接口组 = 3” |

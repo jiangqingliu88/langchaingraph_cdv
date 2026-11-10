@@ -34,7 +34,7 @@ EDA-verified.
 
 ### Highlights
 
-- **LangGraph closed loop** — 24-node verification graph on a five-layer engine
+- **LangGraph closed loop** — Supervisor + four expert subgraphs on a five-layer engine
   (L1 infrastructure → L5 evolution), with human approval gates.
 - **Test-point IR** — a stable `tp_id` axis that links case models, stimulus,
   constraints, coverage, regression levels, and sign-off evidence.
@@ -81,7 +81,7 @@ steps fail honestly. Without QuestaSim, EDA-dependent stages report
 
 | Path | Purpose |
 |---|---|
-| `src/executors/` | Eight stage executors (front, design, model, verify, ops, coverage, debug, audit) |
+| `src/skills/` | Eight stage skills (front, design, model, verify, ops, coverage, debug, audit) |
 | `src/layers/` | Five-layer engine (L1 infrastructure → L5 evolution) |
 | `src/tools/` | Domain tools: generation, checking, humanview, common, … |
 | `src/cli/` | The `vagent` command-line interface |
@@ -92,7 +92,7 @@ steps fail honestly. Without QuestaSim, EDA-dependent stages report
 
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — five layers, 24-node graph, executors, evidence chain
+- [ARCHITECTURE.md](ARCHITECTURE.md) — five layers, Supervisor + four expert subgraphs, skills, evidence chain
 - [CONTRACT_FLOW.md](CONTRACT_FLOW.md) — 契约流程（dplan / C-* / Case IR / 契约构建物 / gate）
 - [PROJECT_STATUS.md](PROJECT_STATUS.md) — 当前架构分析与风险清单
 - [examples/open_npu_soc/README.md](examples/open_npu_soc/README.md) — end-to-end reference SoC
@@ -117,7 +117,7 @@ own licenses; see [NOTICE](NOTICE).
 **规格 → RTL → UVM → 回归 → 覆盖率 → 签核** 的 AI 验证闭环工具。个人级 CLI，**无 Web 前端**（`python -m src.cli.commands` 交付全部功能）。
 
 > **架构**：**Supervisor 主图 + 四个专家子图**，编排 **8 个阶段执行器
-> （executor）**，坐落在**五层引擎**（L1 基础设施 / L2 编排 / L3 决策 /
+> （skill）**，坐落在**五层引擎**（L1 基础设施 / L2 编排 / L3 决策 /
 > L4 记忆 / L5 进化）之上。
 >
 > 关键文档：
@@ -137,9 +137,9 @@ own licenses; see [NOTICE](NOTICE).
 
 | 铁律 | 含义 | 代码落点 |
 |------|------|---------|
-| **EDA 是唯一真理** | LLM 生成的代码必须经 `vlog` 编译返回 0/1，不通过即丢弃/回退；**失败必须响亮**，禁止静默降级为假通过 | `executors/design/main.py:_verify_ip_rtl`、`executors/verify/steps/gap.py:_verify_compilation` |
+| **EDA 是唯一真理** | LLM 生成的代码必须经 `vlog` 编译返回 0/1，不通过即丢弃/回退；**失败必须响亮**，禁止静默降级为假通过 | `skills/design/main.py:_verify_ip_rtl`、`skills/verify/steps/gap.py:_verify_compilation` |
 | **覆盖率库版本固化** | 每轮 ucdb 算 SHA256 归档，复现时回滚比对 | `l1_infrastructure/infrastructure.py:archive_coverage` |
-| **LLM 只读降采样文本** | 空洞分析只读 <1KB 语义汇总，绝不读几十 GB 的 ucdb | `executors/coverage` |
+| **LLM 只读降采样文本** | 空洞分析只读 <1KB 语义汇总，绝不读几十 GB 的 ucdb | `skills/coverage` |
 
 **"失败响亮"的几处具体落地**（都是实测踩出来的，不是设计口号）：
 
@@ -257,7 +257,7 @@ python -m src.cli.commands soc run examples/open_npu_soc --output output_soc_v01
 
 ## 8 个阶段执行器
 
-代码在 `src/executors/`。它们**不是"会自己思考的 agent"** —— 8 个里**只有 `design` 与
+代码在 `src/skills/`。它们**不是"会自己思考的 agent"** —— 8 个里**只有 `design` 与
 `debug` 直接调 LLM**（前者写小 IP、后者兜底重写），其余 6 个是确定性管线；
 LLM 只在具体位置被**点状**调用（符合"LLM 只做完形填空"的定位）。
 
@@ -710,18 +710,16 @@ IP 与 SoC 的覆盖率**分账**：IP 看内部覆盖点，SoC 看集成场景�
 
 ```
 src/
-├── executors/          # 8 个阶段执行器（见上表）
+├── agents/          # Supervisor + 四个专家子图（见上）
+├── skills/          # 8 个阶段技能（见上表）
 │   ├── front/ design/ model/ verify/ ops/ coverage/ debug/ audit/
 ├── layers/
 │   ├── l1_infrastructure/         # 零 AI 确定性层：EDA 后端 / 编译自愈 / 覆盖率 / Git / 文件
-│   ├── l2_orchestration/          # 编排
-│   │   ├── graph.py               #   建图（~220 行 —— 只回答"节点怎么连起来"）
+│   ├── l2_orchestration/          # 平台运行时（不含 agent 拓扑）
 │   │   ├── runtime.py             #   Runtime / hydrate_runtime / _run_agent
-│   │   ├── routers.py             #   条件边："下一步走哪"只在这里回答
-│   │   ├── nodes/
-│   │   │   ├── pure/              #   12 个纯函数节点（决策/治理/审批/轮次/收尾）
-│   │   │   └── agent/             #   12 个调 executor 的节点
-│   │   ├── stages.py              #   24 个节点的元数据（唯一来源）
+│   │   ├── state.py               #   PipelineState
+│   │   ├── execution_loop.py      #   入口
+│   │   ├── stages.py              #   9 个 agent 节点元数据（唯一来源）
 │   │   ├── governance/            #   审批 / 治理 / 质量守护 / 策略包
 │   │   ├── evidence/              #   证据链（五层证据 / manifest / 文件审计）
 │   │   ├── regression_tools/      #   回归框架（Questa）+ 仿真业务模式表（sim_modes.py）
@@ -990,7 +988,7 @@ include，测试恢复其原意。**这 82 个测试当时恢复全绿。**
       的逻辑 —— 那个回退让白名单形同虚设（一个只该读 spec 的 `design` 手里握着
       `write_file` 与 `regression.run`）。表**建在实测用量上**（各 executor 里
       `call_tool(...)` 的名字落在哪个模块），并由 `tests/test_tool_roles.py` 从
-      `executors/` 目录读角色反查"有没有漏登记"。
+      `skills/` 目录读角色反查"有没有漏登记"。
       **空元组 = 声明不用工具**（`_get_tools()` 返回 `[]`），与"没查到"分得开 ——
       混成一个的话前者会拿到全部工具。注：`ops` 那条是**同名巧合**撑着
       （模块角色里也有个 `ops`），迁移时按"名字一样所以不用映射"归零会把它的

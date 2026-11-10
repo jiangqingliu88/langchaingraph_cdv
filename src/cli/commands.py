@@ -45,7 +45,7 @@ if __name__ == "__main__" and "src.cli.commands" not in sys.modules:
 import structlog  # noqa: E402
 structlog.configure(logger_factory=structlog.WriteLoggerFactory(sys.stderr))
 
-from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
+from src.layers.l2_orchestration.skills.registry import ExecutorRegistry
 from src.layers.l2_orchestration.execution import PipelineExecutionService
 from src.layers.l2_orchestration.governance.approval import create_approval_gate, ApprovalDecision, PipelineTerminatedError
 from src.cli.output import OutputAdapter, common_options, get_output_adapter
@@ -111,7 +111,7 @@ class VerificationCLI:
         self.agent_config = {}
 
     async def initialize(self):
-        from src.executors import DesignExecutor, ModelExecutor, VerifyExecutor, OpsExecutor, CoverageExecutor, DebugExecutor, AuditExecutor
+        from src.skills import DesignExecutor, ModelExecutor, VerifyExecutor, OpsExecutor, CoverageExecutor, DebugExecutor, AuditExecutor
         agents = [
             ("design", DesignExecutor()),
             ("model", ModelExecutor()),

@@ -66,7 +66,7 @@ def call_tool(name: str, args: Dict[str, Any] = None, *, context=None,
               default=_UNSET):
     """agent 调工具的统一入口 —— 走完整校验 + 审计链路，返回工具原始结果。
 
-    为什么需要它：`src/executors/*` 原本是直接 import 工具函数调用，例如
+    为什么需要它：`src/skills/*` 原本是直接 import 工具函数调用，例如
 
         from src.tools.checking.assertion_tools.main import generate_sva_assertions
         sva = generate_sva_assertions(json.dumps(spec))
@@ -597,7 +597,7 @@ class ToolHub:
 
         # 注册 agent_tools 中的工具 (agent_tools.py 的工具)
         try:
-            from src.layers.l2_orchestration.executors.builtin_tools import register_all_tools
+            from src.layers.l2_orchestration.skills.builtin_tools import register_all_tools
             old_registry = register_all_tools()
             # 跳过 uvm tools（已注册），注册其他
             uvm_names = {"find_spec_yaml", "jinja_render", "quality_report",
@@ -719,7 +719,7 @@ class ToolHub:
     _LC_TOOL_MODULES = (
         ("src.tools.checking.assertion_tools.main", "assert"),
         ("src.layers.l3_decision.evidence.main", "coverage"),
-        ("src.executors.debug.tools.main", "debug"),
+        ("src.skills.debug.tools.main", "debug"),
         ("src.layers.l5_evolution.docs.main", "doc"),
         # `src.tools.reuse_tools.main` **不存在** —— 这个条目每次 bootstrap 都报
         # "No module named 'src.tools.reuse_tools'" 再被 except 吞掉，只在启动

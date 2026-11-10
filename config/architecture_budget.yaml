@@ -17,7 +17,7 @@ line_budget:
 watched:
   # 2026-11-04：重构 Phase 2 的拆分目标。registered 只许下调；拆完删除条目。
   # 见 docs/design/architecture_refactor_plan.md §5 Phase 2。
-  src/executors/verify/main.py:
+  src/skills/verify/main.py:
     registered: 600
     reason: "已拆出 steps/{helpers,testpoints,env_cov,constraint,gap}.py；main 只剩编排与 DUT/关联/覆盖率计划"
     plan: "剩余 _write_coverage_dut_channel / _write_association_report / _write_coverage_plan 继续拆到 steps/coverage_dut.py"
@@ -25,7 +25,7 @@ watched:
     registered: 450
     reason: "辅助函数已拆到 helpers.py；main.py 只剩 run() 编排"
     plan: "helpers.py（1129 行）继续按 discovery / env_yaml / interface_yaml 拆"
-  src/executors/audit/main.py:
+  src/skills/audit/main.py:
     registered: 600
     reason: "helpers 已拆出 audit/helpers.py；main 只剩 execute_task 编排"
     plan: "继续把 helpers.py（964 行）按 gates / summaries / evidence 三段拆开"

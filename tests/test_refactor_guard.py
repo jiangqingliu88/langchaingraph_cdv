@@ -312,7 +312,7 @@ class TestDesignFixReportsNoChange:
     """
 
     def test_fingerprint_and_diff_agree_with_the_guard(self, tmp_path):
-        from src.executors.design.main import DesignExecutor
+        from src.skills.design.main import DesignExecutor
 
         rtl = tmp_path / "rtl"
         rtl.mkdir()
@@ -330,7 +330,7 @@ class TestDesignFixReportsNoChange:
 
     def test_rerun_with_identical_output_counts_as_no_change(self, tmp_path):
         """LLM 原样重写一遍（内容相同）—— 字节一样就不算改动。"""
-        from src.executors.design.main import DesignExecutor
+        from src.skills.design.main import DesignExecutor
 
         rtl = tmp_path / "rtl"
         rtl.mkdir()

@@ -44,7 +44,7 @@ def hub():
 
 def _executor_roles() -> set:
     """仓库里实际存在的 executor 角色 —— 从目录名读，不手写清单。"""
-    d = Path(__file__).resolve().parents[1] / "src" / "executors"
+    d = Path(__file__).resolve().parents[1] / "src" / "skills"
     return {p.name for p in d.iterdir()
             if p.is_dir() and (p / "main.py").is_file()}
 

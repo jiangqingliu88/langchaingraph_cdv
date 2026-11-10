@@ -13,7 +13,7 @@ import csv
 import hashlib
 import json
 
-from src.executors.front.vplan import bootstrap_project
+from src.skills.front.vplan import bootstrap_project
 from src.layers.l3_decision.vplan import load_project
 
 SPEC_TEXT = """# demo pipeline
@@ -137,7 +137,7 @@ def test_front_reuses_bootstrap_dplan_sidecar(tmp_path):
     """bootstrap 与执行期必须吃同一份契约，不能再抽一次（否则接口数会漂）。"""
     import shutil
 
-    from src.executors.front.main import _prebuilt_contract
+    from src.skills.front.main import _prebuilt_contract
 
     project = tmp_path / "npu_sched"
     bootstrap_project(project, SPEC_TEXT, CONTRACT)
@@ -151,7 +151,7 @@ def test_front_reuses_bootstrap_dplan_sidecar(tmp_path):
 
 
 def _tables_contract() -> dict:
-    from src.executors.front.vplan.validate import FIELDS, TOPICS
+    from src.skills.front.vplan.validate import FIELDS, TOPICS
 
     features = [
         {"feature_no": "1", "feature_id": "F-DEMO", "feature_level": "root",
@@ -203,7 +203,7 @@ def _tables_contract() -> dict:
 
 
 def test_bootstrap_uses_llm_tables_and_checks_format(tmp_path):
-    from src.executors.front.vplan.validate import FIELDS
+    from src.skills.front.vplan.validate import FIELDS
 
     contract = _tables_contract()
     project = tmp_path / "demo"
@@ -234,7 +234,7 @@ def test_bootstrap_uses_llm_tables_and_checks_format(tmp_path):
 def test_bootstrap_rejects_broken_references(tmp_path):
     import pytest
 
-    from src.executors.front.vplan import ProjectFormatError
+    from src.skills.front.vplan import ProjectFormatError
 
     contract = _tables_contract()
     contract["testpoints"][0]["case_plan"] = "TC_MISSING_001"

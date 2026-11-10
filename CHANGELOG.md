@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`supervisor/`, `design/`, `verify/`, `debug/`, `coverage/`, `runtime/`,
   `gates/`); old `src/layers/l2_orchestration/{graph,nodes,supervisor,routers}.py`
   were deleted.
+- Renamed `src/executors/` → `src/skills/` and
+  `src/layers/l2_orchestration/executors/` → `.../skills/`; class names and
+  `execute_task()` interfaces are unchanged.
 - Removed the 24-node single graph, `build_legacy_closed_loop_graph()` and
   `SIGNOFFAI_SUPERVISOR` rollback path. `build_closed_loop_graph()` is now the
   only entry point.
@@ -118,7 +121,7 @@ Initial public release.
 - **LangGraph closed-loop orchestration** — 24-node verification graph built on a
   five-layer engine (L1 infrastructure, L2 orchestration, L3 decision,
   L4 memory, L5 evolution).
-- **Eight stage executors** covering spec intake, design, reference models,
+- **Eight stage skills** covering spec intake, design, reference models,
   verification, operations, coverage, debug, and audit/sign-off.
 - **Test-point IR methodology** — case models decomposed into a stable
   `tp_id` axis that drives stimulus, constraints, coverage, regression, and

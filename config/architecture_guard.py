@@ -182,7 +182,7 @@ _ZONES = (
     ("src/layers/l3_decision/", "l3"),
     ("src/layers/l4_memory/", "l4"),
     ("src/layers/l5_evolution/", "l5"),
-    ("src/executors/", "executors"),
+    ("src/skills/", "skills"),
     ("src/tools/", "tools"),
     ("src/agents/", "agents"),
     ("src/cli/", "iface"),
@@ -200,11 +200,11 @@ _ALLOWED = {
     "l4": {"l1", "core", "tools"},
     "l5": {"l1", "l3", "l4", "core", "tools"},
     "l2": {"l1", "l3", "l4", "l5", "core", "agents", "tools"},
-    "executors": {"l1", "l2", "l3", "l4", "l5", "core", "agents", "tools"},
+    "skills": {"l1", "l2", "l3", "l4", "l5", "core", "agents", "tools"},
     # 适配器可以调用基础设施（L1）；但不得反向依赖 L2/L3/L4（业务层）。
     "tools": {"core", "l1"},
     "agents": {"l1", "l2", "l3", "l4", "l5", "core", "tools"},
-    "iface": {"core", "l1", "l2", "l3", "l4", "l5", "executors", "agents", "tools"},
+    "iface": {"core", "l1", "l2", "l3", "l4", "l5", "skills", "agents", "tools"},
 }
 
 #: Phase 1 的 façade：它们**故意**转发旧实现，搬迁完成后删除。

@@ -47,7 +47,7 @@ def _run(tmp_path: Path, *, with_facts=True) -> Path:
 
 
 def _filter(root, params=None, env=None, monkeypatch=None):
-    from src.executors.ops.main import _worklist_filter
+    from src.skills.ops.main import _worklist_filter
 
     if env is not None:
         monkeypatch.setenv("SIGNOFFAI_WORKLIST", env)

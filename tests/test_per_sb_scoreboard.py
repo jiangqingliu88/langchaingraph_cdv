@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from src.executors.verify.dut_checker import _per_sb_rules
+from src.skills.verify.dut_checker import _per_sb_rules
 from src.layers.l2_orchestration.regression_tools.backend_profiles import (
     QUESTA_TEMPLATE,
 )

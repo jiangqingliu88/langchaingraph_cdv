@@ -256,7 +256,7 @@ class TestDvsimRemoval:
     def test_no_dvsim_import_in_agents(self):
         """确认没有 Agent 引用 dvsim"""
         import ast
-        for agent_dir in Path("src/executors").iterdir():
+        for agent_dir in Path("src/skills").iterdir():
             if agent_dir.is_dir():
                 for py_file in agent_dir.rglob("*.py"):
                     code = py_file.read_text(encoding="utf-8", errors="replace")

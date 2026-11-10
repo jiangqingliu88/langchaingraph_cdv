@@ -1,7 +1,7 @@
 """design 写手的重试必须真的换 prompt（否则进程内缓存会原样返回坏 RTL）。"""
 from __future__ import annotations
 
-from src.executors.design.main import DesignExecutor
+from src.skills.design.main import DesignExecutor
 
 
 def test_retry_prompt_contains_attempt_and_compile_feedback(monkeypatch):

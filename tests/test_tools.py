@@ -8,7 +8,7 @@ import json
 from src.layers.l3_decision.spec_tools import analyze_specification, extract_features, generate_test_plan
 from src.tools.generation.uvm_tools import generate_uvm
 from src.tools.checking.assertion_tools import generate_sva_assertions
-from src.executors.debug.tools import collect_sim_log
+from src.skills.debug.tools import collect_sim_log
 from src.layers.l3_decision.evidence import collect_coverage
 
 

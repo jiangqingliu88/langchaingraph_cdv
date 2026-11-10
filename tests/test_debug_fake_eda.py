@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from src.executors.debug.tools.main import auto_fix, collect_sim_log
+from src.skills.debug.tools.main import auto_fix, collect_sim_log
 from src.agents.runtime.tool_loop import run_tool_loop
 
 
