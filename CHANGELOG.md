@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-10
+
+### Added
+
+- **Agent capability registry**: `src/agents/registry.py` (`AgentCard` for
+  supervisor/design/verify/debug/coverage) with skill/tool allowlists,
+  max attempts, human-review thresholds and write scopes.
+- **Skill policy**: `src/agents/skill_policy.py` enforces agent→skill and
+  agent→tool permissions; `human_review` threshold now comes from
+  `card("debug").requires_human_after` instead of a hard-coded 5.
+- **Skill-as-tool**: `src/agents/runtime/skill_tools.py` exposes stage skills
+  as agent-callable tools with structured summaries.
+- **Terminology**: `docs/AGENT_GLOSSARY.md` defines Skill vs Executor; the
+  `Executor` class name remains stable (option B, no breaking rename).
+- Main suite: 1181 passed / 15 skipped.
+
 ## [2.5.0] - 2026-11-10
 
 ### Changed

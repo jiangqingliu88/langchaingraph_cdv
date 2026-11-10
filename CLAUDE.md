@@ -70,7 +70,7 @@ python -m src.cli.commands vplan gate specs/npu_sched [--apply]
 
 ## Layout reminders
 
-- `src/skills/` — eight stage executors; only `design` and `debug` call an LLM directly.
+- `src/skills/` — eight stage **skills**; `Executor` is their implementation base/registry name, not legacy. See `docs/AGENT_GLOSSARY.md`. Only `design` and `debug` call an LLM directly.
 - `src/layers/l1_infrastructure/` — deterministic, zero-AI layer; must not import upward.
 - `src/agents/` — canonical agentic orchestration: `supervisor/` main graph,
   `design/ verify/ debug/ coverage/` expert subgraphs, `runtime/` tool loop/nodes,

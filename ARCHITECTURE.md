@@ -2,7 +2,7 @@
 
 > 基线：2026-11-10
 >
-> 全量单测：**1177 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
+> 全量单测：**1181 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
 >
 > 历史 UVM 端到端实测：`output_e2e_v3_10_jiang_20261104_215130`（3.0 全量接线后）曾记录分级回归 **273/273 PASS**、功能计划覆盖率 **95.23%**、签核 **PASS_WITH_CAVEAT / CONDITIONAL**；**该 run 目录当前不在本工作区，不能作为当前 HEAD 的可复核证据**。Case View / 证据包的历史数字同样只作背景。
 >
@@ -328,7 +328,19 @@ START → init → supervisor
 `supervisor` 只读状态、只写路由字段；`init / audit_gate / finalize` 是纯代码；
 `human_review` 在 Debug 连续返工 ≥5 次时 `interrupt()`。
 
-### 4.2 四个专家子图
+### 4.2 术语：Skill vs Executor
+
+- **Skill**：面向 agent 的阶段能力包，目录 `src/skills/<role>/`；
+- **Executor**：Skill 的**实现基类/历史注册名**（`BaseExecutor`、
+  `ExecutorRegistry`），不是旧 24 节点架构；
+- **Agent**：带循环/预算/工具的专家，不直接操作 EDA；
+- **Gate**：纯代码门禁。
+
+完整术语表见 [`docs/AGENT_GLOSSARY.md`](docs/AGENT_GLOSSARY.md)。
+本轮选择“快速止血”：保留 `Executor` 类名，不破坏外部 import；目录与 agent
+侧统一用 skill。
+
+### 4.3 四个专家子图
 
 | 子图 | 内部 | 循环/工具 |
 |---|---|---|
@@ -341,7 +353,7 @@ START → init → supervisor
 `SIGNOFFAI_DESIGN_LOOP` / `SIGNOFFAI_VERIFY_LOOP` /
 `SIGNOFFAI_COVERAGE_LOOP` 覆盖。默认 off，确定性 executor 仍是兜底。
 
-### 4.3 运行时与事实面
+### 4.4 运行时与事实面
 
 - `Runtime`（`runtime.py`）持有上下文、客户端、审计链；`PipelineState`
   （`state.py`）是图状态。
@@ -354,7 +366,7 @@ START → init → supervisor
   `docs/verification_quality.json`，并把 `run.finished`、`provenance.built`、
   `quality.gate` 落进事实日志。
 
-### 4.4 结构护栏（把“人记住的不变量”变成代码检查）
+### 4.5 结构护栏（把“人记住的不变量”变成代码检查）
 
 系统跑通后，以下四处最容易因“成功带来的复杂度增长”而变脆；现在都有
 **结构性检查**，不靠注释或记性：
@@ -372,7 +384,7 @@ START → init → supervisor
 原则：**查询与构建分离、配置与代码分离、硬规则与软策略分离**。这些护栏
 只加检查、不加节点，不改变已跑通的拓扑。
 
-### 4.5 复杂度预算与“守卫的守卫”
+### 4.6 复杂度预算与“守卫的守卫”
 
 **文件行数 / 函数圈复杂度**由 `config/architecture_guard.py` 执行：
 

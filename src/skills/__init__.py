@@ -1,4 +1,7 @@
 """
+术语：Skill = 阶段能力包；Executor = 其实现类名（不是旧架构）。
+见 docs/AGENT_GLOSSARY.md。
+
 Skills 包 —— 七 Agent 最终架构（真实功能，无 Mock）
 
   design    设计智能体   = spec + design + rtl

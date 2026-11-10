@@ -26,6 +26,7 @@ from src.agents.debug.graph import build_debug_subgraph
 from src.agents.design.graph import build_design_subgraph
 from src.agents.gates.audit import n_hard_audit_gate
 from src.agents.gates.human import n_human_review
+from src.agents.registry import card
 from src.agents.runtime.nodes.pure.lifecycle import n_finalize, n_init
 from src.agents.supervisor.state import SupervisorView
 from src.agents.verify.graph import build_verify_subgraph
@@ -64,7 +65,8 @@ async def n_supervisor(state: PipelineState, config) -> Dict[str, Any]:
     elif not view.debug_done:
         choice = "debug"
         reason = "verify 已完成，进入 debug_expert"
-    elif (view.debug_attempts >= 5 and not view.human_reviewed):
+    elif (view.debug_attempts >= card("debug").requires_human_after
+          and not view.human_reviewed):
         choice = "human_review"
         reason = f"Debug 已连续返工 {view.debug_attempts} 次，暂停让人确认"
     elif not view.coverage_done:
