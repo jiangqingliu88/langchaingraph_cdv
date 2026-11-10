@@ -66,6 +66,24 @@ python -m src.cli.commands vplan execute ... --keep-legacy   # keep top-level di
 python -m src.cli.commands vplan scan-assets <run> --check
 python -m src.cli.commands vplan link specs/npu_sched <run>
 python -m src.cli.commands vplan gate specs/npu_sched [--apply]
+
+# Workspace zones: main (read-only) / staging (sandbox) / proposal / gate
+python -m src.cli.commands workspace init <root> [--from <baseline>] [--project-root .]
+python -m src.cli.commands workspace resources <root> [--kind rtl|verification|coverage|env|spec|model]
+python -m src.cli.commands workspace loop <root> --task "补一个边界用例" \
+    [--plan] [--require-plan-approval] [--require-exec-approval] \
+    [--max-rounds 2] [--max-tokens 200000] [--no-subagent] [--project-root .] \
+    [--goal coverage --target 95 --evidence <run>] [--export]
+python -m src.cli.commands workspace propose <root> --task "手工修边界" \
+    --before "coverage 82%" --after "coverage 94%" --reasoning "..." \
+    --run "sim ..." [--open-question "..."]
+python -m src.cli.commands workspace sessions <root>
+python -m src.cli.commands workspace resume <root> <session_id> \
+    [--approve|--deny] [--answer "..."]
+python -m src.cli.commands workspace export <root> --run <run_dir> [-o evidence.zip]
+python -m src.cli.commands workspace gate <root> <proposal_id> [--check module:callable]
+python -m src.cli.commands workspace approve <root> <proposal_id> --by <name>
+python -m src.cli.commands workspace promote <root> <proposal_id> --by <name>
 ```
 
 ## Layout reminders
@@ -86,6 +104,10 @@ python -m src.cli.commands vplan gate specs/npu_sched [--apply]
 - `src/layers/l5_evolution/` — experience distillation and policy weights.
 - `src/tools/` — domain tools grouped by generation / checking / humanview / common
   (regression lives in `src/layers/l2_orchestration/regression_tools/`).
+- `src/workspace/` — **main/staging/proposal/gate** 四区：沙箱只写 `staging/`，
+  `main/` 只由 `gate.promote` 写；`proposal_v1` 是唯一窄通道，Gate 做确定性检查，
+  `open_questions` 走人工门。`resources.py` 是**只读项目视图**（RTL/验证/
+  覆盖率/环境/spec/模型），只读不写；目录与分区一一对应，见 ARCHITECTURE §4.7。
 - `src/cli/` — the `vagent` entry point; `src/workbench/` — optional desktop UI.
 
 ## Environment

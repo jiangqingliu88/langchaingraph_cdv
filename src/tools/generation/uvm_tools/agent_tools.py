@@ -27,11 +27,11 @@ def find_spec_yaml(spec_text: str) -> str:
 
 
 @tool("jinja_render")
-def jinja_render(output_dir: str = "") -> str:
+def jinja_render(output_dir: str = "", dest_dir: str = "") -> str:
     """Jinja2 确定性渲染 YAML → UVM SystemVerilog 骨架代码。
     生成 agent/driver/monitor/scoreboard 等完整类结构。
-    LLM 后续只需要往 drive_transaction/sample_transaction 填时序代码。"""
-    return _render_run(output_dir)
+    `dest_dir` 可把渲染结果落到 run 根之外（VPlan 的 sv/ 暂存区）。"""
+    return _render_run(output_dir, dest_dir)
 
 
 @tool("quality_report")
@@ -94,7 +94,9 @@ def ensure_uvm_tool_registry():
              risk_level="write"),
         Tool("jinja_render",
              description="Jinja2 确定性渲染 YAML -> UVM 骨架代码",
-             input_schema={"type":"object","properties":{"output_dir":{"type":"string","default":""}}},
+             input_schema={"type":"object","properties":{
+                 "output_dir":{"type":"string","default":""},
+                 "dest_dir":{"type":"string","default":""}}},
              risk_level="write"),
         Tool("quality_report",
              description="静态+编译+闭环 三项质量评分",

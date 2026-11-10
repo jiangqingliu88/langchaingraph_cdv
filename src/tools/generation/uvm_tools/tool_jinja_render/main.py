@@ -21,21 +21,26 @@ def print(*args, **kwargs):
     builtins.print(*args, **kwargs)
 
 
-def run(output_dir: str = "") -> str:
+def run(output_dir: str = "", dest_dir: str = "") -> str:
     """用 Jinja2 渲染所有 YAML → UVM SystemVerilog 骨架文件。
 
-    Returns JSON: {status, file_count, agents, files}
-    """
-    od = Path(output_dir) if output_dir else Path(ctx.output_dir)
-    od.mkdir(parents=True, exist_ok=True)
+    `output_dir` 是 run 根（YAML 输入在 `<run>/inputs/yaml/uvm`）；
+    `dest_dir` 是可选的渲染落点（verify 在 VPlan 布局下传入暂存目录，
+    避免先写顶层 `agents/` 再搬进 `sv/`）。缺省时与 `output_dir` 相同。
 
-    yaml_dir = od / "inputs" / "yaml" / "uvm"
+    Returns JSON: {status, file_count, agents, files, dest}
+    """
+    src_root = Path(output_dir) if output_dir else Path(ctx.output_dir)
+    dest_root = Path(dest_dir) if dest_dir else src_root
+    dest_root.mkdir(parents=True, exist_ok=True)
+
+    yaml_dir = src_root / "inputs" / "yaml" / "uvm"
     yaml_files = sorted(yaml_dir.glob("*.yaml")) if yaml_dir.exists() else []
     if not yaml_files:
         return json.dumps({"status": "error", "error": f"No YAML files in {yaml_dir}"}, ensure_ascii=False)
 
     renderer = JinjaRenderer(TEMPLATES_DIR)
-    generator = UVMGenerator(renderer, od)
+    generator = UVMGenerator(renderer, dest_root, source_root=src_root)
     # **一次把全部 YAML 交给生成器**，不要逐个文件调。
     #
     # 逐个调会切断**跨文件**的推导：`env_name` 已从 YAML 下线，bench / constraint 的
@@ -63,6 +68,7 @@ def run(output_dir: str = "") -> str:
         "file_count": len(all_files),
         "agents": sorted(agent_names),
         "files": [str(f) for f in all_files],
+        "dest": str(dest_root),
     }, ensure_ascii=False)
 
 

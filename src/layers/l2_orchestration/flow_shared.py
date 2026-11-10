@@ -11,8 +11,9 @@ from typing import Any, Dict, List, Optional
 ROLE_ARTIFACT_DIRS: Dict[str, tuple] = {
     "design":   (("rtl", "RTL"),),
     "model":    (("model", "参考模型"),),
-    "verify":   (("agents", "UVM 组件"), ("env", "环境"),
-                 ("assertions", "断言"), ("inputs", "输入 YAML")),
+    # UVM 资产只落 `<run>/sv/`（verify 生成期直接进 sv，不再有顶层 agents/env/bench）。
+    "verify":   (("sv", "UVM 资产（sv）"), ("coverage", "覆盖率模型"),
+                 ("inputs", "输入 YAML")),
     "ops":      (("sim", "仿真 / 回归"),),
     "coverage": (("coverage", "覆盖率"),),
     "debug":    (),

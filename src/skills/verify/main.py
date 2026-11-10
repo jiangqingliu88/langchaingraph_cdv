@@ -1,6 +1,8 @@
 """验证开发智能体 —— UVM环境 + 测试用例 + 断言（真实工具链）"""
 from typing import Dict, Any, List, Optional
 import json
+import os
+import shutil
 from pathlib import Path
 
 from src.layers.l2_orchestration.skills.base import BaseExecutor, ExecutorResult
@@ -21,6 +23,20 @@ from src.skills.verify.steps.interface_spec import (  # noqa: F401
 import structlog
 
 logger = structlog.get_logger()
+
+
+def _uvm_render_root(output_dir: Path) -> tuple[Optional[Path], Path]:
+    """VPlan 布局的渲染落点：返回 (暂存目录或 None, 渲染根)。
+
+    legacy 模式仍写 run 根；VPlan 模式先写 `.signoffai/uvm_stage`，打包进
+    `sv/` 后删除 —— run 根自始至终没有顶层 `agents/env/bench`。
+    """
+    if os.environ.get("SIGNOFFAI_UVM_LAYOUT", "vplan").strip().lower() == "legacy":
+        return None, output_dir
+    stage = output_dir / ".signoffai" / "uvm_stage"
+    if stage.exists():
+        shutil.rmtree(stage, ignore_errors=True)
+    return stage, stage
 
 
 from src.skills.verify.steps.helpers import (  # noqa: E402
@@ -147,6 +163,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
             return ExecutorResult(success=bool(files), data={"tests": tests_data, "score": score})
 
         # ── 1. UVM 环境生成（真实工具 uvm_tools）──
+        uvm_stage, uvm_render_root = _uvm_render_root(output_dir)
         env_gen_ok = False
         try:
             # 经 `call_tool` 调（走 ToolHub 的 schema 校验 + 审计回执）。
@@ -213,11 +230,13 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
             # 读这两份生成 resource checker；晚于渲染这一轮就没有 checker
             # （而 checker 缺失不会让编译失败，只会静默少一个证据源）。
             self._prepare_resource_artifacts(output_dir, module_name)
-            call_tool("jinja_render", {"output_dir": str(output_dir)})
+            call_tool("jinja_render", {"output_dir": str(output_dir),
+                                       "dest_dir": str(uvm_render_root)})
             steps.mark("jinja_render")
             steps.finish()
-            env_files = [str(p) for p in (output_dir / "agents").rglob("*.sv")] \
-                if (output_dir / "agents").exists() else []
+            agent_root = uvm_render_root / "agents"
+            env_files = [str(p) for p in agent_root.rglob("*.sv")] \
+                if agent_root.exists() else []
             # 失败响亮：env 骨架没生成出来（agents/ 空）→ 记失败，不得靠断言文件蒙混"passed"
             env_gen_ok = len(env_files) > 0
             if env_gen_ok:
@@ -272,7 +291,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         # 否则它会立刻重新变成一片噪音。
         logger.info("断言：本轮不生成 SVA（已撤）—— 规则由 env 检查组件逐拍求值收口")
 
-        package_vplan_assets(output_dir, module_name)
+        package_vplan_assets(output_dir, module_name, source_root=uvm_stage)
         tests_data = {
             "module": module_name,
             "env_files": len(files),

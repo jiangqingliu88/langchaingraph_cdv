@@ -692,7 +692,7 @@ from . import (  # noqa: E402,F401
     cmd_regression,
     cmd_project, cmd_runs, cmd_services, cmd_session, cmd_signoff, cmd_soc,
     cmd_specs, cmd_tools,
-    cmd_verify, cmd_vplan,
+    cmd_verify, cmd_vplan, cmd_workspace,
 )
 
 

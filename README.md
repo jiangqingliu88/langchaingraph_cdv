@@ -95,6 +95,7 @@ steps fail honestly. Without QuestaSim, EDA-dependent stages report
 - [ARCHITECTURE.md](ARCHITECTURE.md) — five layers, Supervisor + four expert subgraphs, skills, evidence chain
 - [CONTRACT_FLOW.md](CONTRACT_FLOW.md) — 契约流程（dplan / C-* / Case IR / 契约构建物 / gate）
 - [PROJECT_STATUS.md](PROJECT_STATUS.md) — 当前架构分析与风险清单
+- [docs/WORKSPACE_USER_GUIDE.md](docs/WORKSPACE_USER_GUIDE.md) — 工作区 / 沙箱 harness 用户指南（main/staging/proposal/gate）
 - [examples/open_npu_soc/README.md](examples/open_npu_soc/README.md) — end-to-end reference SoC
 - [src/layers/l3_decision/vplan/runtime/framework/README.md](src/layers/l3_decision/vplan/runtime/framework/README.md) — methodology framework (stage contracts, test-point IR)
 - [src/layers/l3_decision/vplan/runtime/coverage.py](src/layers/l3_decision/vplan/runtime/coverage.py) — functional coverage methodology
@@ -124,6 +125,7 @@ own licenses; see [NOTICE](NOTICE).
 > - **[`ARCHITECTURE.md`](ARCHITECTURE.md)** —— **当前代码架构**（五层 / Supervisor + 四个专家子图 / 执行器 / 工具协议 / 证据链 / 扩展点）
 > - **[`CONTRACT_FLOW.md`](CONTRACT_FLOW.md)** —— **契约流程用户指南**（dplan / C-* 契约矩阵 / Case IR / 契约构建物：从 spec 到 active 的完整操作与判据）
 > - **[`PROJECT_STATUS.md`](PROJECT_STATUS.md)** —— 当前架构原理、优点、风险与优化路线
+> - **[`docs/WORKSPACE_USER_GUIDE.md`](docs/WORKSPACE_USER_GUIDE.md)** —— **工作区 / 沙箱 harness 用户指南**（main / staging / proposal / gate；手工与 LLM 两条用法）
 > - **[`CONTRIBUTING.md`](CONTRIBUTING.md)** —— 开发流程、代码规范、DCO 与 PR 检查
 > - **[`SECURITY.md`](SECURITY.md)** —— 漏洞报告与密钥处理
 > - [`src/layers/l3_decision/vplan/runtime/framework/README.md`](src/layers/l3_decision/vplan/runtime/framework/README.md) —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）

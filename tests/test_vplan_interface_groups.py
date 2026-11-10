@@ -113,7 +113,7 @@ def test_reset_detection_does_not_match_rstart():
     assert is_clock_port("clk_sys")
 
 
-def test_setup_skips_legacy_dirs_in_vplan_layout(tmp_path, monkeypatch):
+def test_setup_never_precreates_legacy_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("SIGNOFFAI_UVM_LAYOUT", "vplan")
     paths = InfrastructureManager(tmp_path / "run").setup()
     # 返回字典仍然完整（调用方不必改）
@@ -124,11 +124,12 @@ def test_setup_skips_legacy_dirs_in_vplan_layout(tmp_path, monkeypatch):
     assert (tmp_path / "run" / "sim" / "coverage").is_dir()
 
 
-def test_setup_keeps_legacy_dirs_when_explicitly_legacy(tmp_path, monkeypatch):
+def test_setup_does_not_create_legacy_dirs_even_in_legacy_mode(tmp_path, monkeypatch):
+    """legacy 布局开关只影响 sv/ 打包；目录初始化不再预建顶层工作目录。"""
     monkeypatch.setenv("SIGNOFFAI_UVM_LAYOUT", "legacy")
     paths = InfrastructureManager(tmp_path / "run").setup()
     for rel in ("agents", "env", "bench", "build"):
-        assert Path(paths[rel]).is_dir(), rel
+        assert not Path(paths[rel]).exists(), rel
 
 
 def test_case_ids_from_batch_theme_tags():

@@ -88,3 +88,10 @@ csrc/
 pytest-of-*/
 tmp*_liujiangqing_*/
 signoffai-theme-icons/
+
+# Workspace zones (runtime: main/staging/proposals/gate are local state)
+/workspace/
+
+# Generated evidence indexes/artifacts (point at local output_* runs)
+/specs/*/evidence/
+/src/tools/generation/isa_ir_tools/artifacts/

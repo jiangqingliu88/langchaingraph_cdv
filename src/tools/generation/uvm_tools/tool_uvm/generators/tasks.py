@@ -77,9 +77,13 @@ class RenderTask:
     def __init__(self, renderer: JinjaRenderer, output_dir: Path,
                  injector: Optional[RegionInjector] = None,
                  overwrite: bool = False,
-                 meta: Optional[Dict[str, str]] = None) -> None:
+                 meta: Optional[Dict[str, str]] = None,
+                 source_dir: Optional[Path] = None) -> None:
         self.renderer = renderer
         self.output_dir = output_dir
+        #: 输入（YAML / env_cov_bins）所在根。VPlan 布局下渲染落在暂存目录，
+        #: 但输入仍在 run 根；两者分开，不能拿 output_dir 当输入根。
+        self.source_dir = source_dir or output_dir
         self.injector = injector if injector is not None else RegionInjector()
         self.overwrite = overwrite
         self.meta = dict(meta or DEFAULT_META)
@@ -98,7 +102,7 @@ class RenderTask:
         是有意的 —— 单边有（组件声明了 `virtual <type>` 而 tb_top 没挂）会渲染出
         一个永远拿到空句柄的组件，覆盖率恒 0%，而编译与加载都不报错。
         """
-        data = read_env_cov_bins(self.output_dir)
+        data = read_env_cov_bins(self.source_dir)
         _dif = data.get("dut_if")
         context["coverage_dut_if"] = _dif if isinstance(_dif, dict) else {}
         _db = data.get("dut_bins")
@@ -728,7 +732,7 @@ class EnvironmentRenderTask(RenderTask):
         coverage_bins（策略包）生成语义化 cross。
         """
         import yaml as _yaml
-        yaml_dir = self.output_dir / "inputs" / "yaml" / "uvm"
+        yaml_dir = self.source_dir / "inputs" / "yaml" / "uvm"
         agents = context.get("agents", [])
         if not isinstance(agents, (list, tuple)):
             return
@@ -759,7 +763,7 @@ class EnvironmentRenderTask(RenderTask):
             except Exception:
                 pass
         # 读策略包的语义 bin（verify agent 落盘的 env_cov_bins.yaml）。
-        data = read_env_cov_bins(self.output_dir)
+        data = read_env_cov_bins(self.source_dir)
         context["coverage_bins"] = data.get("cov_bins") \
             or data.get("coverage_bins") or []
         # `field_bins`: 字段名 → 显式 bin 表（`[{name, value}]`），来自 **case 模型**
@@ -824,17 +828,20 @@ class RenderTaskFactory:
     def create(task_type: str, renderer: JinjaRenderer, output_dir: Path,
                injector: Optional[RegionInjector] = None,
                overwrite: bool = False,
-               meta: Optional[Dict[str, str]] = None) -> RenderTask:
+               meta: Optional[Dict[str, str]] = None,
+               source_dir: Optional[Path] = None) -> RenderTask:
+        kwargs = dict(injector=injector, overwrite=overwrite, meta=meta,
+                      source_dir=source_dir)
         if task_type == "agent":
-            return AgentRenderTask(renderer, output_dir, injector, overwrite, meta)
+            return AgentRenderTask(renderer, output_dir, **kwargs)
         if task_type == "environment":
-            return EnvironmentRenderTask(renderer, output_dir, injector, overwrite, meta)
+            return EnvironmentRenderTask(renderer, output_dir, **kwargs)
         if task_type == "constraint":
-            return ConstraintRenderTask(renderer, output_dir, injector, overwrite, meta)
+            return ConstraintRenderTask(renderer, output_dir, **kwargs)
         if task_type == "bench":
-            return BenchRenderTask(renderer, output_dir, injector, overwrite, meta)
+            return BenchRenderTask(renderer, output_dir, **kwargs)
         if task_type == "harness":
-            return HarnessRenderTask(renderer, output_dir, injector, overwrite, meta)
+            return HarnessRenderTask(renderer, output_dir, **kwargs)
         raise ValueError(f"Unknown task type: {task_type}")
 
 

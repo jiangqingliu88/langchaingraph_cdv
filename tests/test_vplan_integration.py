@@ -259,6 +259,71 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
     assert layout_mismatches(tmp_path) == []
 
 
+def test_package_run_assets_packages_from_staging_without_legacy_dirs(tmp_path):
+    """verify 的 VPlan 布局从暂存目录打包：run 根不出现顶层 agents/env/bench。"""
+    from src.layers.l3_decision.vplan import package_run_assets
+
+    stage = tmp_path / ".signoffai" / "uvm_stage"
+    files = {
+        "agents/foo/1_interface/foo_if.sv": "interface foo_if; endinterface\n",
+        "agents/foo/4_driver_monitor/foo_driver.sv": "class foo_driver; endclass\n",
+        "bench/foo_tb_top.sv": "module foo_tb_top; endmodule\n",
+    }
+    for rel, text in files.items():
+        path = stage / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    # verify 写在 run 根的覆盖率接口不属于暂存区，也要一起进 sv/interface。
+    cov_if = tmp_path / "coverage" / "foo_cov_if.sv"
+    cov_if.parent.mkdir(parents=True, exist_ok=True)
+    cov_if.write_text("interface foo_cov_if; endinterface\n", encoding="utf-8")
+
+    summary = package_run_assets(tmp_path, "foo", move=True, source_root=stage)
+
+    assert summary["copied"] == 4
+    assert (tmp_path / "sv" / "interface" / "foo_if.sv").is_file()
+    assert (tmp_path / "sv" / "interface" / "foo_cov_if.sv").is_file()
+    assert (tmp_path / "sv" / "agents" / "foo" / "foo_driver.sv").is_file()
+    assert (tmp_path / "sv" / "tb" / "hdl_top.sv").is_file()
+    for legacy in ("agents", "env", "bench"):
+        assert not (tmp_path / legacy).exists(), legacy
+    assert not any(stage.rglob("*.sv"))
+
+
+def test_render_task_reads_inputs_from_source_root(tmp_path):
+    """渲染落点与输入根分离后，env_cov_bins 仍从 run 根读，不跟着去暂存区。"""
+    from src.tools.generation.uvm_tools.tool_uvm.generators.tasks import (
+        RenderTaskFactory)
+
+    src = tmp_path / "run"
+    yaml_dir = src / "inputs" / "yaml" / "uvm"
+    yaml_dir.mkdir(parents=True)
+    (yaml_dir / "env_cov_bins.yaml").write_text(
+        '{"dut_if": {"type": "foo_cov_if"}, "field_bins": {"sig": []}}',
+        encoding="utf-8")
+
+    stage = tmp_path / "stage"
+    task = RenderTaskFactory.create("environment", None, stage, source_dir=src)
+    context = {}
+    task._add_coverage_dut_context(context)
+    assert task.source_dir == src
+    assert context["coverage_dut_if"]["type"] == "foo_cov_if"
+
+
+def test_uvm_render_root_stages_only_in_vplan_layout(tmp_path, monkeypatch):
+    from src.skills.verify.main import _uvm_render_root
+
+    monkeypatch.delenv("SIGNOFFAI_UVM_LAYOUT", raising=False)
+    stage, root = _uvm_render_root(tmp_path)
+    assert stage == tmp_path / ".signoffai" / "uvm_stage"
+    assert root == stage
+
+    monkeypatch.setenv("SIGNOFFAI_UVM_LAYOUT", "legacy")
+    stage, root = _uvm_render_root(tmp_path)
+    assert stage is None
+    assert root == tmp_path
+
+
 def test_uvm_arch_scoreboard_binds_by_check_artifact(tmp_path):
     """契约声明了 check_artifact 时，scoreboard 只绑自己那份，不做“万能收口”。"""
     import json as _json

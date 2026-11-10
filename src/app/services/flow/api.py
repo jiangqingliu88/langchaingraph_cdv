@@ -14,7 +14,7 @@
   · `docs/run_events.jsonl`    —— 运行日志（阶段事件自带 `agent`，按 agent 过滤不必
                                   去 import 领域代码）
   · `docs/manifest.json` / `docs/file_change_chain.json`
-  · 产物目录（`rtl/` `model/` `agents/` `sim/` `coverage/` …）
+  · 产物目录（`rtl/` `model/` `sv/` `sim/` `coverage/` …）
 
 **两份来源都要看**：门禁回答"该跑的都跑了吗"，证据链回答"证据链每一层都闭合了吗"。
 一份缺失不算错 —— 运行可能还没跑到那一步；如实标 `available: false`，

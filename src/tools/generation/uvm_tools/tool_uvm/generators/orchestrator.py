@@ -52,9 +52,13 @@ class UVMGenerator:
                  overwrite: bool = False,
                  generate_names: Optional[List[str]] = None,
                  quiet: bool = False,
-                 schema_check: bool = True) -> None:
+                 schema_check: bool = True,
+                 source_root: Optional[Path] = None) -> None:
         self.renderer = renderer
         self.output_root = output_root
+        #: 输入根（YAML / env_cov_bins）。VPlan 布局下 output_root 是暂存目录，
+        #: 输入仍在 run 根；分开后才能既不写顶层 agents/、又读得到覆盖率模型。
+        self.source_root = source_root or output_root
         self.injector = injector if injector is not None else RegionInjector()
         self.overwrite = overwrite
         self.generate_names = generate_names or []
@@ -88,7 +92,8 @@ class UVMGenerator:
 
     def generate_agents(self, agents: Iterable[AgentModel]) -> List[Optional[Path]]:
         task = RenderTaskFactory.create(
-            "agent", self.renderer, self.output_root, self.injector, self.overwrite, self.meta)
+            "agent", self.renderer, self.output_root, self.injector, self.overwrite,
+            self.meta, source_dir=self.source_root)
         generated: List[Optional[Path]] = []
         for agent in agents:
             generated.extend(task.generate(agent))
@@ -97,7 +102,8 @@ class UVMGenerator:
 
     def generate_environments(self, environments: Iterable[EnvironmentModel]) -> List[Optional[Path]]:
         task = RenderTaskFactory.create(
-            "environment", self.renderer, self.output_root, self.injector, self.overwrite, self.meta)
+            "environment", self.renderer, self.output_root, self.injector,
+            self.overwrite, self.meta, source_dir=self.source_root)
         generated: List[Optional[Path]] = []
         for environment in environments:
             generated.extend(task.generate(environment))
@@ -106,7 +112,8 @@ class UVMGenerator:
 
     def generate_constraints(self, constraints: Iterable[ConstraintModel]) -> List[Optional[Path]]:
         task = RenderTaskFactory.create(
-            "constraint", self.renderer, self.output_root, self.injector, self.overwrite, self.meta)
+            "constraint", self.renderer, self.output_root, self.injector,
+            self.overwrite, self.meta, source_dir=self.source_root)
         generated: List[Optional[Path]] = []
         for constraint in constraints:
             generated.extend(task.generate(constraint))
@@ -115,7 +122,8 @@ class UVMGenerator:
 
     def generate_benches(self, benches: Iterable[BenchModel]) -> List[Optional[Path]]:
         task = RenderTaskFactory.create(
-            "bench", self.renderer, self.output_root, self.injector, self.overwrite, self.meta)
+            "bench", self.renderer, self.output_root, self.injector,
+            self.overwrite, self.meta, source_dir=self.source_root)
         generated: List[Optional[Path]] = []
         for bench in benches:
             generated.extend([task.generate(bench)])
@@ -124,7 +132,8 @@ class UVMGenerator:
 
     def generate_harnesses(self, harnesses: Iterable[HarnessModel]) -> List[Optional[Path]]:
         task = RenderTaskFactory.create(
-            "harness", self.renderer, self.output_root, self.injector, self.overwrite, self.meta)
+            "harness", self.renderer, self.output_root, self.injector,
+            self.overwrite, self.meta, source_dir=self.source_root)
         generated: List[Optional[Path]] = []
         for harness in harnesses:
             result = task.generate(harness)

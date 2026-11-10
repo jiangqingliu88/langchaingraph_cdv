@@ -135,3 +135,66 @@ def call_llm(prompt: str, code: str, errors: str, *,
     except Exception as e:                          # noqa: BLE001
         logger.warning(f"LLM call failed: {e}")
     return ""
+
+
+def call_llm_json(prompt: str, payload: str, *,
+                  output_schema: Dict[str, Any],
+                  prompt_version: str,
+                  task_type: str = "structured",
+                  failure_policy: str = "fallback") -> str:
+    """通用结构化调用：`prompt` + `payload` → JSON 文本（仍走同一漏斗）。
+
+    与 `call_llm` 的区别只在 user message 的拼法：`call_llm` 面向“给代码 +
+    报错，返回修好的代码”，这里面向自由循环（plan / tool_call / observe）。
+    预算、缓存、审计、schema 校验都和 `call_llm` 共用。
+    """
+    if not prompt_version:
+        raise ValueError("call_llm_json 需要显式 prompt_version")
+    try:
+        from src.layers.l2_orchestration.context.query_engine import (
+            LLMContractError, LLMQueryEngine,
+        )
+    except Exception as e:                          # noqa: BLE001
+        logger.warning(f"LLM 引擎不可用: {e}")
+        return ""
+    messages: List[Dict[str, Any]] = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": str(payload)[:60_000]},
+    ]
+    try:
+        return LLMQueryEngine.get_instance().query(
+            task_type, messages, site=caller_site(),
+            output_schema=output_schema, output_format="json",
+            prompt_version=prompt_version, failure_policy=failure_policy)
+    except LLMContractError:
+        raise
+    except Exception as e:                          # noqa: BLE001
+        logger.warning(f"LLM structured call failed: {e}")
+    return ""
+
+
+def call_llm_messages(messages: List[Dict[str, Any]], *,
+                      output_schema: Dict[str, Any],
+                      prompt_version: str,
+                      task_type: str = "agent_loop",
+                      failure_policy: str = "fallback") -> str:
+    """Chat 形态的通用入口：调用方已经拼好 messages（system/user/assistant/tool）。"""
+    if not prompt_version:
+        raise ValueError("call_llm_messages 需要显式 prompt_version")
+    try:
+        from src.layers.l2_orchestration.context.query_engine import (
+            LLMContractError, LLMQueryEngine,
+        )
+    except Exception as e:                          # noqa: BLE001
+        logger.warning(f"LLM 引擎不可用: {e}")
+        return ""
+    try:
+        return LLMQueryEngine.get_instance().query(
+            task_type, messages, site=caller_site(),
+            output_schema=output_schema, output_format="json",
+            prompt_version=prompt_version, failure_policy=failure_policy)
+    except LLMContractError:
+        raise
+    except Exception as e:                          # noqa: BLE001
+        logger.warning(f"LLM chat call failed: {e}")
+    return ""

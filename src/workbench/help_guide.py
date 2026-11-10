@@ -117,7 +117,7 @@ GUIDE_HTML = """
 ├─ docs/verification_quality.json  五维质量门（functional/coverage/model/structural/evidence）
 ├─ docs/engineering_metrics.json   回归耗时 / 增量节省 / 归因 / 决策有效率
 ├─ docs/ir_shadow_diff.json        UVM IR 双写比对（IR 派生视图 vs 渲染 ctx）
-├─ rtl/ model/ agents/ env/ bench/ sim/   各类产物
+├─ rtl/ model/ sim/ sv/            各类产物（UVM 资产只在 sv/）
 ├─ contract/                      契约构建物（contract.yaml / obligations / manifest）
 ├─ coverage/                      TP IR / Case IR（四集合）/ 矩阵 / 证据 / 视图 / 门禁
 ├─ evidence/ledger.jsonl          事实账本（只追加 + 哈希链）

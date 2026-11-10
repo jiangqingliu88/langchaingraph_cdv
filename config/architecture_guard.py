@@ -185,6 +185,7 @@ _ZONES = (
     ("src/skills/", "skills"),
     ("src/tools/", "tools"),
     ("src/agents/", "agents"),
+    ("src/workspace/", "workspace"),
     ("src/cli/", "iface"),
     ("src/workbench/", "iface"),
     ("src/app/", "iface"),
@@ -204,7 +205,10 @@ _ALLOWED = {
     # 适配器可以调用基础设施（L1）；但不得反向依赖 L2/L3/L4（业务层）。
     "tools": {"core", "l1"},
     "agents": {"l1", "l2", "l3", "l4", "l5", "core", "tools"},
-    "iface": {"core", "l1", "l2", "l3", "l4", "l5", "skills", "agents", "tools"},
+    # 工作区分区（main/staging/proposal/gate）只向下依赖。
+    "workspace": {"core", "l1", "l2", "l3", "l4", "l5", "tools"},
+    "iface": {"core", "l1", "l2", "l3", "l4", "l5", "skills", "agents",
+              "workspace", "tools"},
 }
 
 #: Phase 1 的 façade：它们**故意**转发旧实现，搬迁完成后删除。

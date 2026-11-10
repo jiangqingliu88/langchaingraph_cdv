@@ -245,7 +245,8 @@ def record_case_decision(run_dir: str = "", case_id: str = "",
 # TB / RTL 封存
 # ═══════════════════════════════════════════════════════════
 
-_TB_ROOTS = ("agents", "env", "bench", "tb", "harness")
+#: `sv/` 是新布局（UVM 资产只在 sv/）；其余键保留给旧 run 的兼容读取。
+_TB_ROOTS = ("sv", "agents", "env", "bench", "tb", "harness")
 _TB_EXT = (".sv", ".svh", ".v", ".vh")
 _RTL_EXT = (".sv", ".svh", ".v", ".vh")
 
@@ -302,7 +303,7 @@ def seal_tb_rtl(run_dir: str = "", signer: str = "", note: str = "",
     tb = _tb_files(root)
     rtl = _rtl_files(root)
     if not tb:
-        return {"error": "没有找到 TB 源文件（agents/env/bench/tb）"}
+        return {"error": "没有找到 TB 源文件（sv/ 或旧布局 agents/env/bench/tb）"}
     if not rtl:
         return {"error": "没有找到 RTL 源文件（rtl/ 或 specs/<module>/）"}
     case_ir = _read_json(root / "coverage" / "case_ir.json") or {}
@@ -319,7 +320,9 @@ def seal_tb_rtl(run_dir: str = "", signer: str = "", note: str = "",
         "signoff_digest": _sha(_canonical(_manual_doc(root))),
         "signoff_summary": summary,
         "gate_snapshot": _gate_snapshot(root),
-        "tb": {"root": "agents/env/bench/tb", "count": len(tb),
+        "tb": {"root": ("sv" if (root / "sv").is_dir()
+                        else "agents/env/bench/tb"),
+               "count": len(tb),
                "aggregate_hash": _aggregate(tb), "files": tb},
         "rtl": {"root": "rtl", "count": len(rtl),
                 "aggregate_hash": _aggregate(rtl), "files": rtl},

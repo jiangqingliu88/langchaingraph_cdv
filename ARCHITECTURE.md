@@ -422,6 +422,171 @@ mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
 
 ---
 
+### 4.7 工作区分区：main / staging / proposal / gate
+
+通用循环与签核平面**物理隔离**：循环再自由，也只能写 staging；main 只由
+`gate.promote` 写入。两区之间唯一的通道是 Proposal，且必须过 Gate。
+
+```text
+┌──────────────────────────────────────────────────────┐
+│ main/        签核过的内容（read-only, 只有 promote 写） │
+└──────────────────────────────────────────────────────┘
+          ▲ promote（过 gate + 人工门）
+          │
+┌──────────────────────┐   ┌───────────────────────────┐
+│ gate/                │◄──│ proposals/                │
+│ 确定性检查 / 批准 / 账本 │   │ 变更 + 证据 + open_questions│
+└──────────────────────┘   └───────────────────────────┘
+                                      ▲
+┌──────────────────────────────────────────────────────┐
+│ staging/     可写 / 可跑 / 可丢弃（通用 agent loop）   │
+└──────────────────────────────────────────────────────┘
+```
+
+源码目录与分区一一对应：
+
+```text
+src/workspace/
+├─ zones.py              # 四区路径、路径隔离、指纹/差异
+├─ resources.py          # 项目只读视图：rtl/verification/coverage/env/spec/model
+├─ main/reader.py        # main 只读视图（没有写方法）
+├─ staging/
+│  ├─ tools.py           # read/list/search/write(仅 staging)/run_shell(cwd=staging)
+│  └─ loop.py            # 兼容门面 → harness
+├─ harness/              # 显式状态机 + 回填 + 压缩 + 会话（对齐 DeepSeek Harness）
+│  ├─ state.py session.py backfill.py context.py
+│  ├─ goal.py plan.py permissions.py tools.py
+│  ├─ jobs.py skills.py subagent.py events.py
+│  └─ harness.py         # 驱动循环
+├─ proposal/schema.py    # proposal_v1：changed_files + evidence + open_questions
+└─ gate/
+   ├─ checks.py          # schema / 基线 / 差异 / 证据 / open_questions
+   ├─ runner.py          # GateReport + 人工批准
+   └─ promote.py         # **唯一**写 main：备份 + 原子写 + ledger
+```
+
+边界契约：
+
+- **main ↔ staging**：沙箱没有写 main 的 API；越区路径（`../`、绝对路径、
+  `main/`）在 `zones.py` 直接拒绝。出错代价 = 丢一个 staging 目录。
+- **项目只读视图**：harness 通过 `project_map/read_project_file/search_project`
+  （`resources.py`）读整个项目——RTL、验证代码、覆盖率数据、环境配置、spec、
+  C/SystemC 模型；`.env`/凭据/私钥不可读，二进制（`.ucdb` 等）只给元数据。
+  视图只读，写仍只能落 `staging/`；项目根在 `workspace init --project-root`
+  时记入 `.harness/workspace.json`，`workspace resources` 可单独查看清单。
+- **proposal 是窄接口**：结构固定（变更 + 证据 + 待决问题），Gate 能机械校验，
+  审计能回放。`open_questions` 非空 → `human_required`，必须人工批准。
+- **gate 留在确定性平面**：默认检查 + 可注入的领域钩子（契约/回归/覆盖率阈值）；
+  模型只“提议”，不“批准”。
+- **promote 可回滚**：覆盖/删除前备份到 `gate/backups/<id>/`，每次提升追加
+  `gate/ledger.jsonl`（谁提议、什么证据、谁批的）。
+
+Proposal 字段（`proposal_v1`，`src/workspace/proposal/schema.py`）：
+
+| 字段 | 含义 |
+|---|---|
+| `proposal_id` / `task` / `status` | 身份 / 任务 / `draft→submitted→accepted/rejected→promoted` |
+| `base.main_fingerprint` | 提议基于的 main 指纹；main 变了必须 rebase |
+| `changed_files[]` | `{path: "staging/...", action: add/modify/delete, sha256}` |
+| `evidence.before/after` | 变更前后的可量化结论（覆盖率/回归/行为） |
+| `evidence.commands[]` | `{cmd, exit_code, log}`；至少一条 `exit_code=0` |
+| `evidence.logs[]` | `staging/...` 下的真实日志 |
+| `evidence.reasoning_trace` | 为什么这么改（审计可回放） |
+| `open_questions[]` | 循环主动交还的不确定点 → 人工门必看 |
+
+Gate 默认检查（`src/workspace/gate/checks.py`）：
+
+| 检查 | 判据 |
+|---|---|
+| `proposal_schema` | 字段齐全、路径/哈希合法、日志存在 |
+| `main_baseline` | `base.main_fingerprint` == 当前 main |
+| `changed_files` | proposal 申报的变更 == staging 当前差异（防夹带） |
+| `evidence_commands` | 至少一条 `exit_code=0`；非 0 命令 → warn（人工确认） |
+| `evidence_logs` | 日志存在且在 `staging/` 内 |
+| `subgoals` | 分解过的提案：未完成子目标 → fail；blocked → warn + 人工门 |
+| `open_questions` | 非空 → `human_required` |
+
+`workspace gate --profile eda` 追加：
+
+| 检查 | 判据 |
+|---|---|
+| `eda_regression` | `regression_stages.status == PASS` 且 `failed == 0` |
+| `eda_coverage` | `functional_pct >= target`（target 未声明 → warn + 人工门） |
+| `eda_evidence_files` | 证据文件存在且 sha256 匹配 |
+| `eda_contracts` | 证据里有契约义务计数 |
+
+领域检查（契约 / 分级回归 / 覆盖率阈值 / 签核）通过
+`workspace gate --check module:callable` 注入，返回同样的
+`{name,status,severity,detail}` 结构；任何 `fail + block` 都会挡住 promote。
+`promote` 还要求：`ok == true`；`human_required` 时必须有 `approved`；main 基线
+未变化（除非显式 `--force`，账本记 `forced=true`）。
+
+### 4.8 Agent harness：状态机、回填、恢复
+
+`staging/loop.py` 只是兼容门面；真正的循环在 `src/workspace/harness/`，
+能力对齐 DeepSeek Harness 的插件面：
+
+| DSH 能力 | 本实现 |
+|---|---|
+| `goal` + `goal-round-driver` | `goal.py`：goal → rounds；提案不合法/步数用尽 → 下一轮，最多 `max_rounds` |
+| 目标分解 + ReAct | `harness.py`：首次决策可给 `subgoals`；每个子目标一轮 reason→act→observe；`complete_subgoal(summary)` 必须有工具证据，`block_subgoal(reason)` 变成 open_question；`react.reason/act/observe` 事件 |
+| EDA 证据 | `harness/domain.py`：`run_verify`（调 vplan execute）、`collect_evidence`（读回归/覆盖率/缺口/契约 + sha256）、`compare_evidence`（前后 delta）、`export_evidence`（优先打包 `<run>/signoff_evidence/`，否则结构化证据；固定时间戳 + `export_manifest.json`，落 staging）；`run_verify --export` 自动导出；`coverage_gap_decomposer` 把 closure actions 拆成子目标；`gate/domain_checks.py::eda_evidence` 裁决 |
+| `plan-mode` | `plan.py` + `HarnessConfig.plan_first` / `require_plan_approval`：第一次响应必须带 `plan`，可暂停等人工批准 |
+| `compaction-basic` / `tool-result-pruner` / `token-meter` | `context.py`：token 估算、旧 tool 结果裁剪、超预算 compaction |
+| `session` / `session-projection` | `session.py`：messages / working / usage / pending / projection；`.harness/sessions/<id>.{json,events.jsonl}` 可恢复 |
+| `tools` / `tool-*` | `staging/tools.py` + `harness/tools.py`：read/list/search/write/delete/str_replace/run_shell/todo/skill/job/subagent；项目只读视图 `project_map/read_project_file/search_project`（`resources.py`） |
+| `tool-ask-user` + 权限 | `permissions.py` + `ask_user`：plan/命令可暂停等 `workspace resume --approve` |
+| `jobs-local` | `jobs.py`：后台命令 `job_start/job_output/job_kill`，日志在 `staging/.jobs/` |
+| `skill-filesystem` | `skills.py`：`.skills/*.md` 发现、读全文、注入 system prompt |
+| `subagent` / `subagent-control` | `subagent.py`：受限子 harness（同 staging、独立 session、禁止再派子 agent） |
+| `agent-tool-presentation` / 事件 | `events.py`：`state/decision/tool.call/tool.result/compaction/proposal` JSONL + 可选 UI sink |
+
+状态机（合法转移在 `state.py` 里，非法转移直接抛错）：
+
+```
+NEW → PLANNING → ACTING → OBSERVING → PLANNING …  （循环）
+              ├→ AWAITING_PLAN → PLANNING         （plan 审批）
+              ├→ PAUSED        → PLANNING/ACTING  （ask_user / 命令审批）
+              └→ PROPOSING → DONE | BLOCKED | CANCELLED | FAILED
+```
+
+**结果回填**（`backfill.py`）不是“把工具结果拼进字符串”：
+每次工具调用写入 assistant `tool_calls`，结果写入 tool message，同时更新
+`working`（changed_files / evidence.commands/logs / reads / todos / subagents /
+jobs / open_questions）—— 下一轮 LLM 看到的是消息，Gate 看到的是工作状态。
+
+会话恢复：`workspace resume <root> <session_id> --approve/--deny|--answer`
+从磁盘加载状态（含 pending 动作）继续；事件日志继续追加，序号不重置。
+没有 LLM key 时 `workspace loop` 返回 `blocked / LLM_UNAVAILABLE`，不伪造轨迹。
+
+未纳入（保留扩展点）：MCP client、web 工具、workflow-worker；它们接在
+`tools.py` 的 ToolSpec 注册表和 `_execute_tool` 分发上即可。
+
+CLI：
+
+```bash
+python -m src.cli.commands workspace init <root> [--from <baseline>]
+python -m src.cli.commands workspace loop <root> --task "补一个边界用例" \
+    [--plan] [--require-plan-approval] [--require-exec-approval] \
+    [--max-rounds 2] [--max-tokens 200000] [--no-subagent] \
+    [--goal coverage --target 95 --project <staging> --evidence <run>]
+python -m src.cli.commands workspace propose <root> --task "手工修边界" \
+    --before "coverage 82%" --after "coverage 94%" --reasoning "..." \
+    --run "sim ..." [--open-question "..."] [--eda-run <run>] [--target 95]
+python -m src.cli.commands workspace sessions <root>
+python -m src.cli.commands workspace resume <root> <session_id> \
+    [--approve|--deny] [--answer "..."] [--plan "..."]
+python -m src.cli.commands workspace gate <root> <proposal_id> [--check module:callable] [--profile eda]
+python -m src.cli.commands workspace approve <root> <proposal_id> --by <name>
+python -m src.cli.commands workspace promote <root> <proposal_id> --by <name>
+```
+
+没有 LLM key 时 `workspace loop` 如实返回 `blocked / LLM_UNAVAILABLE`，
+不会伪造轨迹；有 key 时仍走 `src/tools/common/lib/llm_call.py` 的同一个漏斗
+（预算 / 缓存 / 审计 / schema 校验）。
+
+---
+
 ## 5. 八个 Skill
 
 注册表：`src/layers/l2_orchestration/skills/registry.py`；每个 executor 实现 `execute_task()`。

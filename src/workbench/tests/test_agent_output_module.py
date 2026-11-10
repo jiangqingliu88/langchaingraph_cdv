@@ -184,3 +184,21 @@ class TestWiring:
             spec, _m, _p = _spec(module_id)
             assert spec.factory.startswith(f"src.workbench.modules.{spec.group}."), spec.id
             assert factory == f"src.workbench.modules.{role}.output"
+
+
+def test_verify_outputs_point_at_sv_not_legacy_agents(tmp_path):
+    """verify 的产物页跟新布局：列 sv/，不再列已废弃的顶层 agents/env/bench。"""
+    from src.app.services.flow import run_agent_outputs
+
+    root = tmp_path / "run"
+    (root / "sv" / "agents").mkdir(parents=True)
+    (root / "sv" / "agents" / "foo.sv").write_text(
+        "class foo; endclass\n", encoding="utf-8")
+    (root / "agents").mkdir()
+    (root / "env").mkdir()
+
+    payload = run_agent_outputs(str(root), "verify")
+    dirs = [row["dir"] for row in payload["artifacts"]]
+    assert "sv" in dirs
+    assert "agents" not in dirs and "env" not in dirs
+    assert payload["artifacts"][0]["title"] == "UVM 资产（sv）"

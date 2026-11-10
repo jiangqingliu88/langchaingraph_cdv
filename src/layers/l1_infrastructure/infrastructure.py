@@ -82,12 +82,11 @@ class InfrastructureManager(RegressionStageMixin):
         self.rtl_archive = self.meta_dir / "rtl_archive"
 
     def setup(self) -> Dict[str, str]:
-        """初始化标准目录布局，返回各目录路径。
+        """初始化运行目录，返回各目录路径。
 
-        `SIGNOFFAI_UVM_LAYOUT=vplan`（VPlan execute 显式开启）时**不预建**
-        `agents/env/bench/build` 这些 legacy 顶层目录 —— UVM 资产在 verify
-        生成期就会被打包进 `sv/`，提前建空目录只会在 run 一开始就留下老布局，
-        而且真实写入端会自己按需 `mkdir`。返回的字典仍包含全部键。
+        **不预建** `agents/env/bench/build` 这四个 legacy 顶层目录：UVM 资产
+        在 verify 生成期进入 `sv/`，提前建空目录只会在 run 一开始就留下老布局。
+        真实写入端会自己按需 `mkdir`。返回的字典仍保留这些键，供旧调用方查路径。
         """
         dirs = {
             "rtl": self.output_root / "rtl",
@@ -101,10 +100,9 @@ class InfrastructureManager(RegressionStageMixin):
             "coverage_archive": self.coverage_archive,
             "rtl_archive": self.rtl_archive,
         }
-        legacy = os.environ.get("SIGNOFFAI_UVM_LAYOUT", "").strip().lower()
-        skip = {"env", "agents", "bench", "build"} if legacy == "vplan" else set()
+        legacy = {"env", "agents", "bench", "build"}
         for key, d in dirs.items():
-            if key in skip:
+            if key in legacy:
                 continue
             d.mkdir(parents=True, exist_ok=True)
         return {k: str(v) for k, v in dirs.items()}

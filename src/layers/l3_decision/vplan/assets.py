@@ -173,21 +173,33 @@ def _rewrite_filelists(root: Path, rows: List[Dict[str, str]]) -> None:
 
 
 def package_run_assets(run_root: str | Path, module: str = "",
-                       *, move: bool = False) -> Dict[str, Any]:
-    """把 run 里的生成资产整理到 `<run>/sv/`，返回摘要。
+                       *, move: bool = False,
+                       source_root: str | Path | None = None) -> Dict[str, Any]:
+    """把生成资产整理到 `<run>/sv/`，返回摘要。
 
-    `move=True`：写入 sv/ 后删除顶层源文件（verify 生成期使用；run 里
-    只保留 sv/ 这一份 UVM 资产）。`move=False` 保留源文件（旧 run 补整理）。
+    `source_root`：资产的实际落点（verify 的 VPlan 布局传暂存目录，避免在
+    run 根留下顶层 `agents/env/bench`）；缺省为 `run_root`（旧 run 补整理）。
+    `move=True`：写入 sv/ 后删除源文件（verify 生成期使用；run 里只保留
+    sv/ 这一份 UVM 资产）。`move=False` 保留源文件。
     """
     root = Path(run_root)
+    source = Path(source_root) if source_root else root
     sv_root = root / "sv"
     rows: List[Dict[str, str]] = []
     copied = 0
     skipped = 0
     skipped_paths: List[str] = []
     artifact_contracts, test_cases, kind_contracts = _anchor_index(root)
-    for src in sorted(_iter_sources(root)):
-        rel = src.relative_to(root)
+    sources: List[Tuple[Path, Path]] = [
+        (src, src.relative_to(source)) for src in _iter_sources(source)]
+    if source.resolve() != root.resolve():
+        # verify 写在 run 根的覆盖率资产（DUT cov_if / bind）不在暂存区里；
+        # 它们和生成资产一起进 sv/，否则 DUT 覆盖率通道会整条丢失。
+        cov_root = root / "coverage"
+        if cov_root.is_dir():
+            sources.extend((src, src.relative_to(root))
+                           for src in cov_root.rglob("*.sv"))
+    for src, rel in sorted(sources, key=lambda item: item[1].as_posix()):
         target = _target_rel(rel)
         if target is None:
             skipped += 1
@@ -248,8 +260,8 @@ def package_run_assets(run_root: str | Path, module: str = "",
     (sv_root / "cons").mkdir(exist_ok=True)
     (sv_root / "README.md").write_text(
         "# sv — SignOffAI 生成的验证资产（VPlan 布局）\n\n"
-        "由 `vagent vplan package-assets` 从本 run 的 `agents/`、`env/`、"
-        "`coverage/` 整理而来；每个文件带 `// ARTIFACT:` / `// SOURCE:` 锚点。\n"
+        "由 verify 生成期的暂存目录（或旧 run 的 `agents/`、`env/`、`coverage/`）"
+        "整理而来；每个文件带 `// ARTIFACT:` / `// SOURCE:` 锚点。\n"
         "`tb/` 放顶层 testbench，`vc/` 放 hdl/hvl 编译清单，"
         "`checkers/scbs/svas` 放对应资产。\n"
         "全部 `candidate`：没有编译/运行证据，契约仍 `assume`、case 仍 `planned`。\n",
