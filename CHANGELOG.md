@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-10
+
+### Changed
+
+- **Bounded LLM tool loop**: new `supervisor/tool_loop.py` (JSON `tool`/`final`
+  protocol, hard max steps, per-step observations) and a Debug opt-in node.
+  `SIGNOFFAI_AGENT_LOOP=on` runs the loop before the deterministic
+  `debug_functional` fallback; default off.
+- Tool calls are whitelisted by name and recorded in `debug_agent_loop`;
+  unknown tools are rejected and fed back as observations.
+- Main suite: 1193 passed / 4 skipped.
+
 ## [2.2.0] - 2026-11-10
 
 ### Changed
@@ -64,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VPlan TP can bind explicit stimulus fields; `uvm_arch` scoreboards map via
   `check_artifact`/`object` where declared.
 - Secret scan (`scripts/check_secrets.py`) and cleaned `TODO.md`.
-- Main suite 1188 passed / 4 skipped; workbench 692 passed.
+- Main suite 1174 passed / 4 skipped; workbench 692 passed.
 
 ## [1.0.0] - 2026-11-05
 

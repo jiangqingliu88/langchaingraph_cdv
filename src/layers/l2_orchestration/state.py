@@ -192,6 +192,8 @@ class PipelineState(BaseModel):
     #: 人类是否已经看过“Debug 连续返工”的告警（避免每次 supervisor 都打断）。
     human_reviewed: bool = False
     human_decision: str = ""
+    #: Debug 子图内 LLM 工具循环的审计读数（启用 SIGNOFFAI_AGENT_LOOP=on 时）。
+    debug_agent_loop: Dict[str, Any] = Field(default_factory=dict)
     #: 纯审计门的结论（`report.json` / `signoff_evidence` 是否存在 + 哈希可读）。
     audit_gate: Dict[str, Any] = Field(default_factory=dict)
     #: 可观测的路由轨迹（只追加，不覆盖）。

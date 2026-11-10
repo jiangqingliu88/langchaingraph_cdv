@@ -142,6 +142,23 @@ def test_hard_audit_gate_requires_report_and_evidence(tmp_path, monkeypatch):
     assert "interrupted" not in second
 
 
+def test_debug_agent_loop_is_opt_in(monkeypatch):
+    from src.layers.l2_orchestration.supervisor import debug_loop
+    from src.layers.l2_orchestration.supervisor.tool_loop import LoopResult
+
+    monkeypatch.delenv("SIGNOFFAI_AGENT_LOOP", raising=False)
+    off = asyncio.run(debug_loop.n_debug_agent(PipelineState(), {}))
+    assert off["debug_agent_loop"]["skipped"] is True
+
+    monkeypatch.setenv("SIGNOFFAI_AGENT_LOOP", "1")
+    monkeypatch.setattr(
+        debug_loop, "run_tool_loop",
+        lambda *a, **k: LoopResult(ok=True, answer="done", steps=2))
+    on = asyncio.run(debug_loop.n_debug_agent(PipelineState(), {}))
+    assert on["debug_agent_loop"]["ok"] is True
+    assert on["debug_agent_loop"]["answer"] == "done"
+
+
 def test_agent_context_is_filtered_per_expert():
     from src.layers.l2_orchestration.runtime import _rebuild_ctx
 
