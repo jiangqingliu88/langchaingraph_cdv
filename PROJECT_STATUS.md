@@ -1,155 +1,222 @@
-# SignOffAI 鏋舵瀯鐜扮姸涓庝慨澶嶆姤鍛婏紙2026-11-10锛?
-> 鍒嗘瀽瀵硅薄锛歚C:\Users\liujiangqing\Desktop\cdv_advanced`
-> 褰撳墠鍒嗘敮锛歚refactor/langgraph-migration`
-> 淇鑼冨洿锛氶櫎 `isa_ir_tools` / TB player 涓?EDA 渚濊禆澶栫殑宸茬煡闂
-> 杈圭晫锛氭湰鏈烘病鏈?QuestaSim 涓?LLM key锛汦DA/LLM 璺緞鏈疄娴嬨€?
----
+# SignOffAI 架构现状与修复报告（2026-11-10）
 
-## 0. 缁撹
-
-**鏈淇鎶娾€滄灦鏋勫師鍒欐纭€佷絾娴嬭瘯/legacy/鏂囨。/瀹夊叏娌℃敹鍙ｂ€濈殑鐘舵€佹敹鍙ｅ埌浜嗗彲鎻愪氦銆佸彲鍥炲綊鐨勫熀绾匡細涓诲浠朵笌宸ヤ綔鍙板浠跺潎鏃?failed锛屾灦鏋勫畧鍗€氳繃锛宐oards/legacy/鏂囨。閾炬帴/鏄庢枃鍑嵁宸叉竻鐞嗭紝VPlan 鐨?gate 閫?run 涓?active 婕傜Щ銆乀P realization銆佺煩闃?schema銆乽vm_arch 鏄犲皠涔熷仛浜嗗寮恒€?*
-
-浠嶆湭闂幆銆佷笖鎸夎姹備笉淇殑涓ら」锛?
-1. `isa_ir_tools` / TB player 鐨勯泦鎴愪笌鑷姩鍖栨祴璇曪紙鐙珛宸ュ叿锛屾寜浣犵殑瑕佹眰璺宠繃锛夈€?2. 闇€瑕?QuestaSim 鐨?VPlan 鐪熷疄 E2E锛堟寜浣犵殑瑕佹眰璺宠繃 EDA 鐩稿叧闂锛夈€?
-鍥犳褰撳墠鐘舵€佸簲琛ㄨ堪涓猴細
-
-> **鈥滄灦鏋勪笌宸ョ▼鍩虹嚎宸叉敹鍙ｏ紱VPlan 瑙勫垝灞傚彲 build銆佸彲瀹￠槄锛涚湡瀹?EDA 闂幆浠嶉渶鍦ㄨ Questa 鐨勬満鍣ㄤ笂璺戜竴杞€傗€?*
-
-### 0.1 褰撳墠楠岃瘉缁撴灉
-
-| 椤?| 缁撴灉 |
-|---|---|
-| 涓诲浠?| **1174 passed / 0 failed / 4 skipped** |
-| 宸ヤ綔鍙?| **692 passed / 0 failed**锛坄QT_QPA_PLATFORM=offscreen`锛涙湁 PySide6 鍥炶皟鏋愭瀯 warning锛屾棤澶辫触锛?|
-| 鏋舵瀯瀹堝崼 | `[architecture] OK` |
-| 缂栬瘧妫€鏌?| `compileall` 閫€鍑虹爜 0 |
-| secret scan | `scripts/check_secrets.py` 鈫?clean |
-| VPlan status | `specs/npu_sched` 鍙锛?6 req / 43 features / 46 contracts / 46 TP / 20 cases |
-| VPlan build | PLAN_ONLY 鎴愬姛锛沗signable=false` |
-| VPlan gate | 46 contracts 鍏?`assume`銆?6 blocked銆? eligible锛堟棤 linked run锛?|
-| VPlan execute | 鏈闃呴」鐩 review gate 鎷掔粷锛沝ry-run 姝ｅ父 |
-| ISA IR 鍐掔儫 | 涓夐樁娈?30 涓枃浠讹紝閫€鍑虹爜 0锛堟湭绾冲叆鏈淇锛?|
+> 分析对象：`C:\Users\liujiangqing\Desktop\cdv_advanced`
+> 当前分支：`refactor/langgraph-migration`
+> 修复提交：`98eb87b7 fix: close release blockers and harden VPlan gates`
+> Tag：`v2.0.0`（已推送 Gitee）
+> 修复范围：除 `isa_ir_tools` / TB player 与 EDA 依赖外的已知问题
 
 ---
 
-## 1. 鏋舵瀯鍘熺悊锛堜慨澶嶅悗浠嶇劧鏄繖濂楋級
+## 0. 结论
 
-### 1.1 浜斿眰 + 24 鑺傜偣 + 8 鎵ц鍣?
+本次修复把“架构原则正确、但测试/legacy/文档/安全没收口”的状态收口到了可提交、可回归的基线：
+
+- 主套件 **1174 passed / 0 failed / 4 skipped**；
+- 工作台 **692 passed / 0 failed**；
+- 架构守卫 `[architecture] OK`；
+- 当前树 secret scan clean；
+- boards / legacy 空壳 / 文档链接 / 版本号已处理；
+- VPlan 的 gate 选 run、active 漂移、TP realization、矩阵 schema、uvm_arch 映射已增强。
+
+仍未闭环、且按要求不修的两项：
+
+1. `isa_ir_tools` / TB player 的集成与自动化测试（独立工具，按要求跳过）。
+2. 需要 QuestaSim 的 VPlan 真实 E2E（按要求跳过 EDA 相关问题）。
+
+因此当前状态应表述为：
+
+> **架构与工程基线已收口；VPlan 规划层可 build、可审阅；真实 EDA 闭环仍需在装 Questa 的机器上跑一轮。**
+
+---
+
+## 1. 架构原理（修复后仍然是这套）
+
+### 1.1 五层 + 24 节点 + 8 执行器
+
 ```text
 CLI / Workbench
-  鈫?app/services
-  鈫?L2 LangGraph锛?4 鑺傜偣锛?2 pure + 12 agent锛?  鈫?8 涓?executor锛坒ront/design/model/verify/ops/coverage/debug/audit锛?  鈫?L1 / L3 / L4 / L5
-  鈫?core锛圧unContext / ArtifactStore / EventStore / Provenance / Quality锛?```
-
-- 浜斿眰鏄兘鍔涘钩鍙帮紝24 鑺傜偣鏄帶鍒舵祦锛? 鎵ц鍣ㄦ槸瑙掕壊锛涗笁鑰呮浜ゃ€?- 鍙湁 `design` / `debug` 鐩存帴璋?LLM锛涙墍鏈?LLM 璋冪敤璧?`call_llm`锛屾祦绋嬩笌 pass/fail 淇濇寔纭畾鎬с€?
-### 1.2 濂戠害鏄瀯寤虹墿
-
-| 濂戠害 | 鍥炵瓟 | 鏉冨▉钀界偣 |
-|---|---|---|
-| dplan | RTL/鍙傝€冩ā鍨嬫€庝箞瀹炵幇 | `<run>/inputs/dplan/` + `contract/dplan_map.json` |
-| VPlan `C-*` | 璇ラ獙璇佷粈涔堛€侀獙鏀朵緷鎹?| `specs/<module>/data/contract_matrix/*.csv` |
-| Case IR 鍥涢泦鍚?| 鐢ㄤ緥鐢ㄤ粈涔堣瘉鏄庤嚜宸?| `<run>/coverage/case_ir.json` |
-| Contract OS v3 | 姣忔潯涔夊姟鐜板湪浠€涔堢姸鎬?| `<run>/contract/{contract.yaml,obligations.json}` |
-| IP release | IP 渚涘簲鏂?SoC 娑堣垂鏂圭粦瀹?| `spec/ip_releases/<ip>.json` |
-
-### 1.3 瑙勫垝灞備笌鎵ц灞傚垎绂?
-```text
-spec 鈫?front bootstrap 鈫?docs/specs + data + cases
-     鈫?浜哄伐 review锛堝搱甯岀粦瀹氾級
-     鈫?vplan build锛圥LAN_ONLY锛歍P/Case/濂戠害锛屾棤 EDA锛?     鈫?vplan execute锛堝鐢?verify 鍐呮牳锛歎VM/鍥炲綊/瑕嗙洊鐜?璇佹嵁锛?     鈫?vplan link 鈫?vplan gate 鈫?signoff
+  → app/services
+  → L2 LangGraph（24 节点：12 pure + 12 agent）
+  → 8 个 executor（front/design/model/verify/ops/coverage/debug/audit）
+  → L1 / L3 / L4 / L5
+  → core（RunContext / ArtifactStore / EventStore / Provenance / Quality）
 ```
 
-- `PLAN_ONLY` 鏄庣‘涓嶅彲绛炬牳锛?- 鏈闃?杩囨湡椤圭洰锛宍vplan execute` 涓?`vplan gate --apply` 浼氭嫆缁濓紱
-- 濂戠害 `assume 鈫?active` 鍙敱璇佹嵁 gate 鎺ㄨ繘锛屼笉闈犳墜鏀?CSV銆?
-### 1.4 璇佹嵁椹卞姩涓庡け璐ュ搷浜?
-- TP锛歚planned 鈫?HIT/OBSERVED/BACKDOOR_HIT` 鍙敱 run 璇佹嵁鎺ㄨ繘锛?- case锛歚planned 鈫?executed` 鍙敱閫愮敤渚嬭瘉鎹帹杩涳紱
-- 涔夊姟锛歚PROVEN / PARTIAL / MISSING / PENDING_BACKEND / NOT_APPLICABLE / NOT_EXECUTED`锛?- 缂?EDA 鈫?`EDA_MISSING` / `BLOCKED_EDA_MISSING`锛涚己鏃ュ織 鈫?`NO_EVIDENCE`锛?- `None 鈮?False`锛宍planned 鈮?covered`锛宍assume 鈮?active`銆?
-### 1.5 `sv/` 璧勪骇甯冨眬涓庨敋鐐?
+- 五层是能力平台，24 节点是控制流，8 执行器是角色；三者正交。
+- 只有 `design` / `debug` 直接调 LLM；所有 LLM 调用走 `call_llm`，流程与 pass/fail 保持确定性。
+
+### 1.2 契约是构建物
+
+| 契约 | 回答 | 权威落点 |
+|---|---|---|
+| dplan | RTL/参考模型怎么实现 | `<run>/inputs/dplan/` + `contract/dplan_map.json` |
+| VPlan `C-*` | 该验证什么、验收依据 | `specs/<module>/data/contract_matrix/*.csv` |
+| Case IR 四集合 | 用例用什么证明自己 | `<run>/coverage/case_ir.json` |
+| Contract OS v3 | 每条义务现在什么状态 | `<run>/contract/{contract.yaml,obligations.json}` |
+| IP release | IP 供应方/SoC 消费方绑定 | `spec/ip_releases/<ip>.json` |
+
+### 1.3 规划层与执行层分离
+
+```text
+spec → front bootstrap → docs/specs + data + cases
+     → 人工 review（哈希绑定）
+     → vplan build（PLAN_ONLY：TP/Case/契约，无 EDA）
+     → vplan execute（复用 verify 内核：UVM/回归/覆盖率/证据）
+     → vplan link → vplan gate → signoff
+```
+
+- `PLAN_ONLY` 明确不可签核；
+- 未审阅/过期项目，`vplan execute` 与 `vplan gate --apply` 会拒绝；
+- 契约 `assume → active` 只由证据 gate 推进，不靠手改 CSV。
+
+### 1.4 证据驱动与失败响亮
+
+- TP：`planned → HIT/OBSERVED/BACKDOOR_HIT` 只由 run 证据推进；
+- case：`planned → executed` 只由逐用例证据推进；
+- 义务：`PROVEN / PARTIAL / MISSING / PENDING_BACKEND / NOT_APPLICABLE / NOT_EXECUTED`；
+- 缺 EDA → `EDA_MISSING` / `BLOCKED_EDA_MISSING`；缺日志 → `NO_EVIDENCE`；
+- `None ≠ False`，`planned ≠ covered`，`assume ≠ active`。
+
+### 1.5 `sv/` 资产布局与锚点
+
 ```text
 <run>/sv/
-鈹溾攢鈹€ interface/ agents/ env/ seq/ test/ tb/ vc/
-鈹溾攢鈹€ checkers/ scbs/ svas/ covgs/ cons/
-鈹斺攢鈹€ asset_registry.csv
+├── interface/ agents/ env/ seq/ test/ tb/ vc/
+├── checkers/ scbs/ svas/ covgs/ cons/
+└── asset_registry.csv
 ```
 
-姣忎釜鏂囦欢甯?`ARTIFACT / SOURCE / CONTRACT_REFS / CASE_ID / STATUS` 閿氱偣锛沗package-assets` 鏁寸悊銆乣scan-assets --check` 鏍稿銆?
----
-
-## 2. 鏈淇娓呭崟
-
-### 2.1 娴嬭瘯涓庡畧鍗?
-| 闂 | 淇 |
-|---|---|
-| `verify/main.py` 626 琛?> registered 600 | 鎶婃帴鍙ｆ姇褰卞嚱鏁版媶鍒?`src/executors/verify/steps/interface_spec.py`锛宮ain 闄嶅埌 522 琛?|
-| `architecture_guard` 鍙湪 >2000 鏃舵鏌?registered | 鏀逛负 watched 鏂囦欢濮嬬粓鎵ц `registered` 棰勭畻锛沢uard 涓庢祴璇曞悓婧?|
-| `test_tools_boards` 2 椤瑰け璐?| `boards.py` 鎸夊疄闄呯洰褰曢噸寤猴紱`generation/__init__` 鏀逛负浠?boards 娲剧敓 |
-| `test_vplan_bootstrap` 2 椤瑰け璐?| 濂戠害璁℃暟鏀逛负鈥? 鍔熻兘 + 1 鎺ュ彛缁?= 3鈥濓紝娴嬭瘯鍚屾 |
-| `test_staged_regression` 鏃堕棿鎴?flaky | 娴嬭瘯鏄惧紡璁剧疆 expand 鐨?mtime锛屼娇鍏剁‘瀹炴棭浜?plan |
-| `test_cli_evidence` 渚濊禆浠撳簱鍐?tmp | 娴嬭瘯鐩存帴 monkeypatch `_git_changed_files` 杩斿洖 None锛屾祴鐩爣鍒嗘敮 |
-| 鏃?casemodel/isa_gen/verification_os 绌哄３ | 鍒犻櫎绌虹洰褰曘€乸ycache銆乣archture.md` 0 瀛楄妭鏂囦欢 |
-| 涓诲浠?| 浠?7 failed 鏀舵暃鍒?**1174 passed / 4 skipped** |
-| 宸ヤ綔鍙?| 692 passed锛堝師 5 failed 鏄祴璇曢『搴?鐘舵€佹薄鏌擄紝閲嶈窇宸叉秷澶憋紱CI deselect 宸茬Щ闄わ級 |
-
-### 2.2 瀹夊叏
-
-- 閲嶅啓 `TODO.md`锛氬垹闄ゅ叏閮ㄧ幆澧冨彉閲?鍑嵁鍐呭锛屾敼鎴愮湡姝ｇ殑鎶€鏈€哄叆鍙ｃ€?- 鏂板 `scripts/check_secrets.py`锛氭壂鎻?git tracked 鏂囦欢涓殑楂樼疆淇?token 鍓嶇紑锛汣I lint job 涓?pre-commit 璋冪敤銆?- `SECURITY.md` 鏀逛负鈥滃綋鍓嶆爲鎵弿 + 鍘嗗彶娉勯湶闇€杞崲/娓呭巻鍙测€濈殑鍑嗙‘琛ㄨ堪銆?- 褰撳墠宸ヤ綔鍖?secret scan clean銆?
-> 鍘嗗彶鎻愪氦閲屼粛鍙兘瀛樺湪鏃?token銆?*杞崲鍑嵁 + `git filter-repo` 娓呭巻鍙?*闇€瑕佸閮ㄦ搷浣滀笌 force push锛屾湰娆℃湭鑷姩鏀瑰啓鍘嗗彶銆?
-### 2.3 鏂囨。涓?legacy
-
-- `README.md`锛氱Щ闄ゅけ鏁堢殑 `docs/design` / `docs/notes` 閾炬帴涓庡凡鍒犻櫎鐨?`case-model` 鍛戒护锛涙枃妗ｅ叆鍙ｆ敼涓?ARCHITECTURE / CONTRACT_FLOW / PROJECT_STATUS銆?- `ARCHITECTURE.md`锛氭洿鏂板熀绾挎棩鏈熶笌娴嬭瘯鏁板瓧锛涘伐鍏锋澘鍧楄〃/鍖呰〃/鏂囦欢鍦板浘鏀逛负瀹為檯鐩綍锛涗慨姝?regression_tools銆乧ase_view 绛夎矾寰勶紱鏍囨敞鍘嗗彶 E2E 浜х墿涓嶅彲澶嶆牳銆?- `src/tools/README.md`锛氭寜瀹為檯 7 涓澘鍧椾笌褰撳墠鍖呴噸鍐欍€?- `known_limitations`锛歱layer 杈圭晫鏀逛负鈥淪V 鍖呭凡瀹炵幇锛屼絾 stimulus_plan/verify 涓婚摼灏氭湭鎺ョ嚎鈥濄€?- 鎭㈠ README 缂哄け鐨勫伐浣滃彴鎴浘 `docs/images/workbench-overview.png`銆?- 鍒犻櫎 `docs/濂戠害/vplan.md` 0 瀛楄妭鍗犱綅銆?
-### 2.4 VPlan 澧炲己
-
-| 澧炲己 | 瀹炵幇 |
-|---|---|
-| gate 閫?run 涓嶅啀渚濊禆 append 椤哄簭 | `link_run` 鍐?`linked_at`锛沗_latest()` 鎸夋椂闂村彇鏈€鏂?|
-| active 婕傜Щ鍙 | `_evaluate_contract` 澧炲姞 `active_drift`锛沗vplan gate` 杈撳嚭 `active_unsupported` 骞朵互 exit 1 鎻愮ず |
-| TP realization 鍙樉寮忕粦瀹?| VPlan 琛屾敮鎸?`realization_kind` / `stimulus_field` / `realization_agent` / `realization_sequence`锛涘彧鏈夋枃瀛楁椂浠嶄繚鎸?observe |
-| 濂戠害鐭╅樀 schema | `_load_matrix` 鏍￠獙 13 鍒椾笌 `assume/active/exempt` 鐘舵€侊紱闈炴硶鎵嬫敼鐩存帴鎶ラ敊 |
-| CSV 鍘熷瓙鍐?| `apply_active` 鏀圭敤 `atomic_write_text`锛岄伩鍏嶅崐鎴煩闃?|
-| uvm_arch 绮剧‘鏄犲皠 | scoreboard 鍏堟寜 `check_artifact/object` 缁戝畾锛涙棤澹版槑鎵嶅洖閫€鍏ㄩ儴 func/data |
-| 娴嬭瘯 | 鏂板 latest/drift銆佺煩闃?schema銆乀P realization 涓夌粍鍥炲綊娴嬭瘯 |
+每个文件带 `ARTIFACT / SOURCE / CONTRACT_REFS / CASE_ID / STATUS` 锚点；`package-assets` 整理、`scan-assets --check` 核对。
 
 ---
 
-## 3. 浠嶇劧瀛樺湪鐨勮竟鐣岋紙璇氬疄鏍囨敞锛?
-| 杈圭晫 | 鐘舵€?| 璇存槑 |
-|---|---|---|
-| VPlan 鐪熷疄 E2E | 鏈棴鐜?| `specs/npu_sched` 鏈闃呫€佹棤 linked run锛涢渶 Questa 鐜鎸?`review 鈫?execute 鈫?link 鈫?gate` 璺戜竴杞?|
-| `isa_ir_tools` / TB player | 鏈慨锛堟寜瑕佹眰锛?| 宸ュ叿鍙啋鐑燂紝浣嗘棤浠撳簱鍐呮祴璇曘€佹湭鎺?VPlan execute/verify 涓婚摼 |
-| 鍘嗗彶 secret | 閮ㄥ垎淇 | 褰撳墠鏍戝凡娓呴櫎锛涘巻鍙?token 闇€杞崲 + 鍘嗗彶娓呯悊 |
-| review 绮掑害 | 淇濇寔鐜扮姸 | 浠嶅搱甯?`docs/specs + data + cases` 涓夊潡锛涚敓鎴愯祫浜у彉鏇翠細浣垮闃呰繃鏈燂紝鍚庣画鍙媶 reviewed source / generated sidecar |
-| `sv/` 涓?legacy 鍙屽竷灞€ | 淇濈暀杩佺Щ寮€鍏?| `SIGNOFFAI_UVM_LAYOUT` / `--keep-legacy` 浠嶅瓨鍦紱闀挎湡搴旀敹鏁涗负 `sv/` 鍗曞竷灞€ |
-| 澶氬悗绔?/ IP 瑕嗙洊鐜?/ SoC v2 | 鏈彉 | 浠嶆寜 `known_limitations` 鐨?open 椤规帹杩?|
-| LLM / EDA 璺緞 | 鏈疄娴?| 鏈満鏃?Questa/LLM key |
+## 2. 本次修复清单
 
-### 3.1 褰撳墠 VPlan 瀹炴祴璇绘暟
+### 2.1 测试与守卫
+
+| 问题 | 修复 |
+|---|---|
+| `verify/main.py` 626 行 > registered 600 | 接口投影拆到 `src/executors/verify/steps/interface_spec.py`，main 降到 522 行 |
+| `architecture_guard` 只在 >2000 时检查 registered | watched 文件始终执行 `registered` 预算；guard 与测试同源 |
+| `test_tools_boards` 2 项失败 | `boards.py` 按实际目录重建；`generation/__init__` 从 boards 派生 |
+| `test_vplan_bootstrap` 2 项失败 | 契约计数改为“2 功能 + 1 接口组 = 3” |
+| `test_staged_regression` 时间戳 flaky | 测试显式设置 expand 的 mtime |
+| `test_cli_evidence` 依赖仓库内 tmp | monkeypatch `_git_changed_files` 返回 None |
+| 旧 casemodel / isa_gen / verification_os 空壳 | 删除空目录、pycache、0 字节 `archture.md` |
+| 主套件 | 从 7 failed 收敛到 **1174 passed / 4 skipped** |
+| 工作台 | **692 passed**；CI deselect 已移除 |
+
+### 2.2 安全
+
+- 重写 `TODO.md`：删除全部环境变量/凭据内容，改成技术债入口。
+- 新增 `scripts/check_secrets.py`：扫描 git tracked 文件中的高置信 token 前缀；接入 CI lint 与 pre-commit。
+- `SECURITY.md` 改为“当前树扫描 + 历史泄露需轮换/清史”的准确表述。
+- 当前工作区 secret scan clean。
+
+> 历史提交里仍可能存在旧 token。轮换凭据 + `git filter-repo` 清历史需要外部操作与 force push，本次未自动改写历史。
+
+### 2.3 文档与 legacy
+
+- `README.md`：移除失效的 `docs/design` / `docs/notes` 链接与已删除的 `case-model` 命令；文档入口改为 ARCHITECTURE / CONTRACT_FLOW / PROJECT_STATUS。
+- `ARCHITECTURE.md`：更新基线日期与测试数字；工具板块表/包表/文件地图改为实际目录；修正 regression_tools、case_view 等路径；标注历史 E2E 产物不可复核。
+- `src/tools/README.md`：按实际板块与当前包重写。
+- `known_limitations`：player 边界改为“SV 包已实现，但 stimulus_plan/verify 主链尚未接线”。
+- 恢复 README 缺失的工作台截图 `docs/images/workbench-overview.png`。
+- 删除 `docs/契约/vplan.md` 0 字节占位。
+
+### 2.4 VPlan 增强
+
+| 增强 | 实现 |
+|---|---|
+| gate 选 run 不再依赖 append 顺序 | `link_run` 写 `linked_at`；`_latest()` 按时间取最新 |
+| active 漂移可见 | `_evaluate_contract` 增加 `active_drift`；`vplan gate` 输出 `active_unsupported` 并以 exit 1 提示 |
+| TP realization 可显式绑定 | 支持 `realization_kind` / `stimulus_field` / `realization_agent` / `realization_sequence`；只有文字时仍保持 observe |
+| 契约矩阵 schema | `_load_matrix` 校验 13 列与 `assume/active/exempt` 状态 |
+| CSV 原子写 | `apply_active` 改用 `atomic_write_text` |
+| uvm_arch 精确映射 | scoreboard 先按 `check_artifact/object` 绑定；无声明才回退全部 func/data |
+| 测试 | 新增 latest/drift、矩阵 schema、TP realization 三组回归测试 |
+
+---
+
+## 3. 当前验证结果
+
+| 项 | 结果 |
+|---|---|
+| 主套件 | **1174 passed / 0 failed / 4 skipped** |
+| 工作台 | **692 passed / 0 failed**（PySide6 回调析构 warning，无 failed） |
+| 架构守卫 | `[architecture] OK` |
+| 编译检查 | `compileall` 退出码 0 |
+| secret scan | `scripts/check_secrets.py` → clean |
+| VPlan status | `specs/npu_sched`：26 req / 43 features / 46 contracts / 46 TP / 20 cases |
+| VPlan build | PLAN_ONLY 成功；`signable=false` |
+| VPlan gate | 46 contracts 全 `assume`、46 blocked、0 eligible（无 linked run） |
+| VPlan execute | 未审阅项目被 review gate 拒绝；dry-run 正常 |
+
+### 3.1 VPlan 当前读数
 
 ```text
 specs/npu_sched:
   requirements 26 / features 43 / topics 10
-  contracts 46锛坅ssume 46锛?  testpoints 46锛坧lanned 46锛?  cases 20锛坧lanned 20锛?  review: false锛坉ocs_specs/data/cases 鏈闃咃級
+  contracts 46（assume 46）
+  testpoints 46（planned 46）
+  cases 20（planned 20）
+  review: false（docs_specs/data/cases 未审阅）
   gate: 46 blocked / 0 eligible / 0 changed
 ```
 
-`vplan build` 鍙敓鎴?PLAN_ONLY锛沗vplan execute` 闈?dry-run 琚?review gate 鎷掔粷锛沝ry-run 姝ｅ父銆傝繖璇存槑闂ㄧ鏄椿鐨勶紝涔熻鏄?*褰撳墠杩樻病鏈夆€滃凡楠岃瘉鈥濈殑 VPlan run**銆?
+这说明门禁是活的，也说明**当前还没有“已验证”的 VPlan run**。
+
 ---
 
-## 4. 涓嬩竴姝ュ缓璁?
-### P0锛堝彂甯冨墠锛?
-1. 杞崲鍘嗗彶涓彲鑳芥硠闇茬殑 token锛屽苟涓庡崗浣滆€呭崗璋?`git filter-repo` 娓呭巻鍙插悗 force push銆?2. 鍦ㄨ Questa 鐨勬満鍣ㄤ笂璺戜竴娆″畬鏁?VPlan E2E锛?   `review 鈫?build 鈫?execute 鈫?link 鈫?gate 鈫?evidence verify`銆?3. 鎶?E2E 鐨?commit hash / spec_hash / run_id / package_hash 鍐欒繘鍙戝竷璇存槑銆?
-### P1锛?鈥? 鍛級
+## 4. 仍然存在的边界
 
-1. review 绮掑害鎷嗗垎锛歳eviewed source 涓?generated sidecar 鍒嗗紑銆?2. VPlan TP realization 浠?`data/dimensions.csv` 鑷姩鍥炲～锛屽噺灏戔€滆鍒?TP 鍏?observe銆佽繍琛屾湡鍗磋兘椹卞姩鈥濈殑鍙ｅ緞宸€?3. `uvm_arch` 鐢?`check_artifact` 鍋氬畬鏁磋祫浜ф槧灏勶紝骞跺湪 `scan-assets` 鏍￠獙銆?4. 缁欑煩闃靛啓鍏ュ姞澶囦唤/diff锛涚粰 review 鍔犲閲忓搱甯岀紦瀛樸€?
-### P2锛? 涓湀锛?
-1. `sv/` 鍗曞竷灞€锛宭egacy 閫€鍦恒€?2. 涓诲浠?宸ヤ綔鍙版€ц兘浼樺寲锛堝伐浣滃彴 24 鍒嗛挓浠嶅亸鎱級銆?3. IP 绾ц鐩栫巼锛圡2锛夈€丼oC 璇佹嵁 v2銆佽瘉鎹棬/璐ㄩ噺闂ㄤ粠 report 杞?block銆?4. ISA IR / TB player 鐨勭嫭绔嬫祴璇曚笌鎺ョ嚎鍐崇瓥锛堟寜瑕佹眰鏆備笉淇級銆?
+| 边界 | 状态 | 说明 |
+|---|---|---|
+| VPlan 真实 E2E | 未闭环 | 需 Questa 环境按 `review → execute → link → gate` 跑一轮 |
+| `isa_ir_tools` / TB player | 未修（按要求） | 工具可冒烟，但无仓库内测试、未接 VPlan execute/verify 主链 |
+| 历史 secret | 部分修复 | 当前树已清除；历史 token 需轮换 + 历史清理 |
+| review 粒度 | 保持现状 | 仍哈希 `docs/specs + data + cases` 三块；后续可拆 reviewed source / generated sidecar |
+| `sv/` 与 legacy 双布局 | 保留迁移开关 | 长期应收敛为 `sv/` 单布局 |
+| 多后端 / IP 覆盖率 / SoC v2 | 未变 | 仍按 `known_limitations` 的 open 项推进 |
+| LLM / EDA 路径 | 未实测 | 本机无 Questa/LLM key |
+| ruff lint | 未本地验证 | 本机无法安装 ruff；CI lint 仍需在有 ruff 的环境确认 |
+
 ---
 
-## 5. 缁撹
+## 5. 下一步建议
 
-杩欐淇娌℃湁鏀瑰彉鏋舵瀯鏂瑰悜锛岃€屾槸鎶婃灦鏋勫師鍒欒惤鍒颁簡鍙洖褰掔殑宸ョ▼鍩虹嚎锛?
-- **娴嬭瘯**锛氫富濂椾欢 1174 passed銆佸伐浣滃彴 692 passed锛? failed锛?- **瀹堝崼**锛歛rchitecture_guard 涓庢枃妗?boards 閲嶆柊鍚屾簮锛?- **瀹夊叏**锛氬綋鍓嶆爲 secret clean锛屽苟鍔犱簡鎵弿鑴氭湰锛?- **鏂囨。**锛歊EADME/ARCHITECTURE/tools README 涓庡疄闄呯洰褰曞榻愶紱
-- **VPlan**锛歡ate 閫?run銆乤ctive 婕傜Щ銆乀P realization銆佺煩闃?schema銆乽vm_arch 鏄犲皠閮芥湁澧炲己銆?
-浠嶆湭瀹屾垚鐨勫彧鏈変袱绫伙細**鐪熷疄 EDA 闂幆**涓?*ISA IR/TB player 鐨勯泦鎴?娴嬭瘯**鈥斺€旇繖涓ょ被姝ｆ槸浣犳槑纭姹備笉淇殑閮ㄥ垎銆?
+### P0（发布前）
+
+1. 轮换历史中可能泄露的 token，并与协作者协调 `git filter-repo` 清历史后 force push。
+2. 在装 Questa 的机器上跑一次完整 VPlan E2E：
+   `review → build → execute → link → gate → evidence verify`。
+3. 把 E2E 的 commit hash / spec_hash / run_id / package_hash 写进发布说明。
+
+### P1（1–2 周）
+
+1. review 粒度拆分：reviewed source 与 generated sidecar 分开。
+2. VPlan TP realization 从 `data/dimensions.csv` 自动回填。
+3. `uvm_arch` 用 `check_artifact` 做完整资产映射，并在 `scan-assets` 校验。
+4. 给矩阵写入加备份/diff；给 review 加增量哈希缓存。
+
+### P2（1 个月）
+
+1. `sv/` 单布局，legacy 退场。
+2. 主套件/工作台性能优化。
+3. IP 级覆盖率（M2）、SoC 证据 v2、证据门/质量门从 report 转 block。
+4. ISA IR / TB player 的独立测试与接线决策（按要求暂不修）。
+
 ---
 
-> 鏈姤鍛婁笌浠ｇ爜鍚屾壒鎻愪氦锛涙墍鏈夋暟瀛楁潵鑷?2026-11-10 鏈満瀹炴祴銆?
+## 6. 提交与推送
+
+- Gitee：`https://gitee.com/liujiangqing/cdv_a.git`
+- 分支：`refactor/langgraph-migration`
+- Commit：`98eb87b7`
+- Tag：`v2.0.0`
+- 远端已确认：`refs/heads/refactor/langgraph-migration` = `98eb87b7`，`refs/tags/v2.0.0` 已存在。
+
+---
+
+> 本报告与代码同批提交。所有数字来自 2026-11-10 本机实测；EDA/LLM 路径未实测。
