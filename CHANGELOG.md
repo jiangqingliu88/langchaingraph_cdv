@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-10
+
+### Changed
+
+- **Industrial agentic layout**: all orchestration moved to `src/agents/`
+  (`supervisor/`, `design/`, `verify/`, `debug/`, `coverage/`, `runtime/`,
+  `gates/`); old `src/layers/l2_orchestration/{graph,nodes,supervisor,routers}.py`
+  were deleted.
+- Removed the 24-node single graph, `build_legacy_closed_loop_graph()` and
+  `SIGNOFFAI_SUPERVISOR` rollback path. `build_closed_loop_graph()` is now the
+  only entry point.
+- Stages now describe the 9 main-graph agents; internal node names still get
+  display titles for run journals.
+- Main suite: 1177 passed / 15 skipped (legacy graph/manual-e2e tests removed).
+
 ## [2.4.0] - 2026-11-10
 
 ### Changed

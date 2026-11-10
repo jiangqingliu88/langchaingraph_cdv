@@ -1,4 +1,7 @@
 {
+  "src/agents/runtime/nodes/agent/build.py::n_design": 32,
+  "src/agents/runtime/nodes/agent/run.py::n_ops": 22,
+  "src/agents/runtime/nodes/agent/run.py::n_coverage": 39,
   "src/app/services/flow/coverage_api.py::run_fcov": 58,
   "src/app/services/flow/regression_api.py::run_regression_status": 38,
   "src/app/services/flow/regression_api.py::compare_runs": 26,
@@ -34,9 +37,6 @@
   "src/layers/l2_orchestration/execution_loop.py::_stream_run": 35,
   "src/layers/l2_orchestration/executors/base.py::_read_ctx": 22,
   "src/layers/l2_orchestration/executors/base.py::execute_task": 32,
-  "src/layers/l2_orchestration/nodes/agent/build.py::n_design": 34,
-  "src/layers/l2_orchestration/nodes/agent/run.py::n_ops": 22,
-  "src/layers/l2_orchestration/nodes/agent/run.py::n_coverage": 39,
   "src/layers/l2_orchestration/regression_tools/regression.py::_run_reference_finder": 26,
   "src/layers/l2_orchestration/regression_tools/regression.py::main": 111,
   "src/layers/l2_orchestration/regression_tools/regression_framework/core/config.py::_merge_config": 23,

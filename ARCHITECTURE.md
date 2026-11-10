@@ -2,7 +2,7 @@
 
 > 基线：2026-11-10
 >
-> 全量单测：**1201 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
+> 全量单测：**1177 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
 >
 > 历史 UVM 端到端实测：`output_e2e_v3_10_jiang_20261104_215130`（3.0 全量接线后）曾记录分级回归 **273/273 PASS**、功能计划覆盖率 **95.23%**、签核 **PASS_WITH_CAVEAT / CONDITIONAL**；**该 run 目录当前不在本工作区，不能作为当前 HEAD 的可复核证据**。Case View / 证据包的历史数字同样只作背景。
 >
@@ -261,7 +261,7 @@ flowchart TB
     CLI["CLI<br/>src/cli/commands.py"] --> SVC["PipelineExecutionService<br/>l2_orchestration/execution.py"]
     GUI["PySide6 Workbench<br/>src/workbench (可选)"] --> SVC
 
-    SVC --> GRAPH["LangGraph Supervisor 主图<br/>+ 24 节点执行图<br/>l2_orchestration/supervisor/"]
+    SVC --> GRAPH["LangGraph Supervisor 主图<br/>+ 四个专家子图<br/>src/agents/"]
     SVC --> CORE["src/core 运行事实面<br/>RunContext / ArtifactStore / Events<br/>Provenance / Jobs / Quality"]
     GRAPH --> CORE
     EXEC --> CORE
@@ -297,60 +297,62 @@ flowchart TB
 
 ---
 
-## 4. 闭环：24 节点执行图 / Supervisor 主图
+## 4. Agentic orchestration（`src/agents/`）
 
-拓扑定义在 `src/layers/l2_orchestration/graph.py` 的 `NODE_FUNCS`。节点分成两族：
-
-### 4.1 pure（12 个，不烧 token）
-
-```text
-pure/lifecycle.py   init  finalize
-pure/rounds.py      env_arch_check  round_bump
-pure/converge.py    decide  governor  governor_retry  record_decision
-pure/approval.py    approval
-pure/apply.py       apply_converge  apply_relax  apply_expand_seeds
-```
-
-确定性逻辑：决策、治理、审批、轮次、收尾。**这一族里不可能调 LLM。**
-
-### 4.2 agent（12 个，经 `_run_agent` 调 executor）
+旧的 24 节点单图、`build_legacy_closed_loop_graph()` 和
+`SIGNOFFAI_SUPERVISOR=off` 回滚路径已删除。当前只有一个入口：
 
 ```text
-agent/build.py      front  design  model  verify
-agent/run.py        ops  coverage  debug_functional
-agent/fix.py        apply_compile_retry  refactor_rtl  apply_update_model  apply_directed_test
-agent/signoff.py    audit
+src/agents/
+├── supervisor/     graph.py / state.py / routing.py
+├── design/         graph.py / loop.py / tools.py
+├── verify/         graph.py / loop.py
+├── debug/          graph.py / loop.py
+├── coverage/       graph.py / loop.py / tools.py
+├── runtime/        tool_loop.py / nodes/ / guards.py
+└── gates/          audit.py / human.py
 ```
 
-每个节点只做三件事：选哪个 executor、给什么参数、结果怎么落状态；
-质量校验 / 证据链 / 熔断计数统一在 `runtime._run_agent`，不在节点里重复。
-
-### 4.3 主流程
+### 4.1 Supervisor 主图（9 个节点）
 
 ```text
-init → front → design → model → verify → env_arch_check → round_bump
-round_bump → ops
-ops ├─ eda_missing        → audit
-    ├─ awaiting_approval  → audit
-    ├─ compile_fail       → decide
-    ├─ functional_fail    → debug_functional → decide
-    └─ run_coverage       → coverage → decide
-decide → governor → {proceed | override → approval → record_decision → 动作分支}
-                    {retry → round_bump}
-                    {abort → audit}
-动作分支 → round_bump（或 converge/abort → audit）
-audit → finalize → END
+START → init → supervisor
+  supervisor ──design──► design_expert ──► supervisor
+  supervisor ──verify──► verify_expert ──► supervisor
+  supervisor ──debug──► debug_expert ──► supervisor
+  supervisor ──coverage──► coverage_expert ──► supervisor
+  supervisor ──human_review──► human_review ──► supervisor
+  supervisor ──audit──► audit_gate ──► finalize → END
 ```
 
-- **所有回边在 `round_bump` 收口**，轮次预算在这里统一判定。
-- **人工节点**：`approval` 通过 LangGraph `interrupt()` + checkpoint 实现；`vagent resume` 用 `Command(resume=...)` 推图，不是 `update_state`。
-- **运行时对象**：`Runtime`（`runtime.py`）持有上下文、客户端、审计链；`PipelineState`（`state.py`）是图状态。
-- **执行事实面**：入口（`run_closed_loop` / `_stream_run`）在确定最终 `output_root` 后建
-  `RunContext` + `EventStore` + `ArtifactStore` + `JobSupervisor`，挂到 `Runtime`；
-  `hydrate_runtime` 在断点重入时兜底重建。`_stream_run` 的 `_emit` 把 RunJournal 事件
-  **镜像一次**进 `docs/events.jsonl` —— 节点里不再重复写 `stage.*`。
-  `n_finalize` 构建/刷新 `docs/provenance.jsonl` 与 `docs/verification_quality.json`，
-  并把 `run.finished`、`provenance.built`、`quality.gate` 落进事实日志。
+`supervisor` 只读状态、只写路由字段；`init / audit_gate / finalize` 是纯代码；
+`human_review` 在 Debug 连续返工 ≥5 次时 `interrupt()`。
+
+### 4.2 四个专家子图
+
+| 子图 | 内部 | 循环/工具 |
+|---|---|---|
+| `design_expert` | front → design → design_agent → model | design_agent 可选工具循环 |
+| `verify_expert` | verify → verify_agent → env_arch_check | verify_agent 可选 UVM 工具循环 |
+| `debug_expert` | round_bump → ops → agent_loop → debug_functional | 失败回环；agent_loop 可选 |
+| `coverage_expert` | coverage → coverage_agent → decide → governor → approval → 动作 | 非 CONVERGE 交回主图 |
+
+`SIGNOFFAI_AGENT_LOOP=on` 是总开关；单专家可用
+`SIGNOFFAI_DESIGN_LOOP` / `SIGNOFFAI_VERIFY_LOOP` /
+`SIGNOFFAI_COVERAGE_LOOP` 覆盖。默认 off，确定性 executor 仍是兜底。
+
+### 4.3 运行时与事实面
+
+- `Runtime`（`runtime.py`）持有上下文、客户端、审计链；`PipelineState`
+  （`state.py`）是图状态。
+- `_run_agent` 用 `_rebuild_ctx(state, role)` 生成 `task["ctx"]`，只保留该专家
+  声明的键，避免把完整流水线状态塞给每个 executor。
+- 入口（`run_closed_loop` / `_stream_run`）在确定最终 `output_root` 后建
+  `RunContext` + `EventStore` + `ArtifactStore` + `JobSupervisor`，挂到
+  `Runtime`；`hydrate_runtime` 在断点重入时兜底重建。
+- `n_finalize` 构建/刷新 `docs/provenance.jsonl` 与
+  `docs/verification_quality.json`，并把 `run.finished`、`provenance.built`、
+  `quality.gate` 落进事实日志。
 
 ### 4.4 结构护栏（把“人记住的不变量”变成代码检查）
 
@@ -405,65 +407,6 @@ audit → finalize → END
 当前 **9/9 killed**。新增守卫必须在 `MUTATIONS` 里有一条“改坏它会红”的
 mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
 
-### 4.6 Supervisor 主图 + 专家子图（当前默认入口）
-
-`build_closed_loop_graph()` 现在返回 **Supervisor 主图**，24 节点单图保留为
-`build_legacy_closed_loop_graph()` / `SIGNOFFAI_SUPERVISOR=off` 的回滚路径。
-
-```text
-START → init → supervisor
-  supervisor ──design──► design_expert ──► supervisor
-  supervisor ──verify──► verify_expert ──► supervisor
-  supervisor ──debug──► debug_expert ──► supervisor
-  supervisor ──coverage──► coverage_expert ──► supervisor
-  supervisor ──human_review──► human_review ──► supervisor
-  supervisor ──audit──► audit_gate ──► finalize → END
-```
-
-主图 9 个节点：`init / supervisor / design_expert / verify_expert /
-debug_expert / coverage_expert / human_review / audit_gate / finalize`。
-24 个细节点只保留在 `build_legacy_closed_loop_graph()` 与专家子图内部。
-
-| 节点/子图 | 职责 | 内部 |
-|---|---|---|
-| `supervisor` | 只读状态、只写路由字段；不调 LLM、不跑工具 | `supervisor/graph.py` |
-| `design_expert` | front → design → model | 线性子图；design 执行器内部有“生成→编译→重试”循环 |
-| `verify_expert` | verify → env_arch_check | 线性子图 |
-| `debug_expert` | round_bump → ops → debug_functional | **环形子图**：回归失败才 debug，再进下一轮 |
-| `coverage_expert` | coverage → decide → governor → approval → 动作 | 动作非 CONVERGE 只标记下一轮，交回主图重新派 debug_expert |
-| `human_review` | Debug 连续返工 ≥5 次时用 `interrupt()` 挂起；无 checkpoint 时显式降级并打 warning | `supervisor/human.py` |
-| `audit_gate` | 纯代码审计：调用确定性 audit 后，独立核对 `report.json` 与 `signoff_evidence/manifest.json`，并用 `verify_package` 重算哈希；失败写 `AUDIT_BLOCKED` | `supervisor/audit.py` |
-
-状态拆分的落点：`PipelineState` 新增 `next_agent / design_done / verify_done /
-debug_done / coverage_done / execution_done / debug_attempts / human_reviewed /
-supervisor_visits / supervisor_trace / audit_gate`，只由 supervisor/标记节点写；
-专家子图不决定“下一步派谁”。`supervisor_visits` 是主图自身的防死循环上限
-（24），不是轮次预算；轮次仍由 `round_bump` 收口。
-
-**上下文隔离**：`_run_agent` 用 `_rebuild_ctx(state, role)` 生成
-`task["ctx"]`，只保留该专家 `_AGENT_CTX_KEYS` 声明的键（如 `design` 只拿
-`spec`，`audit` 只拿 `regression/coverage/design_arch/model/target`）；
-`role=""` 保留旧的全量投影以兼容直接调用。新增 executor ctx 读取点必须同时
-加到白名单，否则会被裁掉并被测试发现。
-
-**Debug 工具循环（opt-in）**：`SIGNOFFAI_AGENT_LOOP=on` 时，`debug_expert`
-先跑 `supervisor/tool_loop.py` 的 bounded ReAct 循环（LLM 输出
-`{"action":"tool"...}` / `{"action":"final"...}`，只调用 DebugTools 白名单，
-最多 6 步），再走确定性 `debug_functional` 兜底；默认 off，避免无 LLM key
-时改变现有行为。循环每步的 `tool_calls` 写入 `debug_agent_loop` 审计读数。
-
-**Design 工具循环（opt-in）**：`SIGNOFFAI_DESIGN_LOOP=on` 时，`design_expert`
-的 `design_agent` 节点在 `n_design` 没产出 RTL 后运行；工具只有
-`read_file / write_file（仅 <run>/rtl/*.sv）/ list_rtl / check_rtl`，
-最多 8 步。写出 RTL 则清 `rtl_missing` 并进入 model；仍为空则由
-`r_after_design` 走 audit。默认 off，DesignExecutor 仍是主路径。
-
-**四个专家的总开关**：`SIGNOFFAI_AGENT_LOOP=on` 默认对 Debug 生效，同时作为
-Design/Verify/Coverage 未显式设置时的 fallback；单专家可用
-`SIGNOFFAI_DESIGN_LOOP` / `SIGNOFFAI_VERIFY_LOOP` /
-`SIGNOFFAI_COVERAGE_LOOP` 覆盖。Verify 循环用 UVM 工具
-（find_spec_yaml / jinja_render / check_static / read_file / write_file），
-Coverage 循环只读报告并最多写 `coverage/agent_notes.md`，都不跑 EDA。
 
 ---
 
@@ -1517,7 +1460,7 @@ python scripts/mutation_guards.py                     # 9 条核心守卫变异�
 | `test_signoff_reproducible.py` | Tier A 重算结论 = report；证据漂移必失败 |
 | `test_cli_common.py` | 退出码/helper 只有一处定义且 re-export 一致 |
 | `test_protocol_grouping.py` | 单端口 LLM 猜测不能劫持整份 spec；显式协议仍保留 |
-| `test_architecture_invariants.py` | 24 节点 / 8 executor / 板块 / 动作 / caveat / 文档计数一致 |
+| `test_architecture_invariants.py` | 9 agent 节点 / 8 executor / 板块 / 动作 / caveat / 文档计数一致 |
 | `test_mutation_guards.py` | 变异目标片段仍唯一存在（防止变异测试悄悄失效） |
 | `test_llm_governance.py` | 无 schema 拒绝、JSON 校验、prompt 版本失效缓存、fail-fast |
 | `test_stimulus_plan.py` | plan sha256 稳定；player 限制与“runtime 未实现”显式报错 |

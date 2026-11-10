@@ -21,19 +21,23 @@ from typing import Any, Dict
 import structlog
 from langgraph.graph import END, START, StateGraph
 
-from src.layers.l2_orchestration.nodes.pure.lifecycle import n_finalize, n_init
+from src.agents.coverage.graph import build_coverage_subgraph
+from src.agents.debug.graph import build_debug_subgraph
+from src.agents.design.graph import build_design_subgraph
+from src.agents.gates.audit import n_hard_audit_gate
+from src.agents.gates.human import n_human_review
+from src.agents.runtime.nodes.pure.lifecycle import n_finalize, n_init
+from src.agents.supervisor.state import SupervisorView
+from src.agents.verify.graph import build_verify_subgraph
 from src.layers.l2_orchestration.state import PipelineState
-
-from .audit import n_hard_audit_gate
-from .human import n_human_review
-from .state import SupervisorView
-from .subgraphs import (
-    build_coverage_subgraph, build_debug_subgraph, build_design_subgraph,
-    build_verify_subgraph,
-)
 
 logger = structlog.get_logger()
 
+#: 主图节点名（权威清单；stages/工作台从 here 读）。
+NODE_NAMES = (
+    "init", "supervisor", "design_expert", "verify_expert", "debug_expert",
+    "coverage_expert", "human_review", "audit_gate", "finalize",
+)
 #: 主图最多在 supervisor 上转几圈（不是轮次预算；防流程图自身死循环）。
 MAX_SUPERVISOR_VISITS = 24
 
@@ -117,5 +121,23 @@ def build_supervisor_graph(checkpointer=None, store=None):
     return g.compile(checkpointer=checkpointer, store=store)
 
 
-__all__ = ["build_supervisor_graph", "n_supervisor", "r_supervisor",
+#: 节点名 → 构建器/函数（工作台只读名字；测试检查清单一致）。
+NODE_FUNCS = (
+    ("init", n_init), ("supervisor", n_supervisor),
+    ("design_expert", build_design_subgraph),
+    ("verify_expert", build_verify_subgraph),
+    ("debug_expert", build_debug_subgraph),
+    ("coverage_expert", build_coverage_subgraph),
+    ("human_review", n_human_review),
+    ("audit_gate", n_hard_audit_gate),
+    ("finalize", n_finalize),
+)
+
+__all__ = ["build_supervisor_graph", "build_closed_loop_graph", "NODE_NAMES",
+           "NODE_FUNCS", "n_supervisor", "r_supervisor",
            "MAX_SUPERVISOR_VISITS"]
+
+
+def build_closed_loop_graph(checkpointer=None, store=None):
+    """Canonical entry point for the agentic graph."""
+    return build_supervisor_graph(checkpointer=checkpointer, store=store)

@@ -6,7 +6,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.4.x   | ✅        |
+| 2.5.x   | ✅        |
+| 2.4.x   | ⚠️ security fixes only |
 | 2.3.x   | ⚠️ security fixes only |
 | 2.2.x   | ⚠️ security fixes only |
 | 2.1.x   | ⚠️ security fixes only |

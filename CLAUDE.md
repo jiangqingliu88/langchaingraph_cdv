@@ -72,10 +72,11 @@ python -m src.cli.commands vplan gate specs/npu_sched [--apply]
 
 - `src/executors/` — eight stage executors; only `design` and `debug` call an LLM directly.
 - `src/layers/l1_infrastructure/` — deterministic, zero-AI layer; must not import upward.
-- `src/layers/l2_orchestration/` — LangGraph graph, routers, nodes, governance, evidence;
-  `supervisor/` is the default Supervisor main graph + design/verify/debug/coverage subgraphs,
-  `graph.py` keeps the legacy 24-node single graph for rollback
-  (`SIGNOFFAI_SUPERVISOR=off`).
+- `src/agents/` — canonical agentic orchestration: `supervisor/` main graph,
+  `design/ verify/ debug/ coverage/` expert subgraphs, `runtime/` tool loop/nodes,
+  `gates/` audit+human. Legacy 24-node graph and `SIGNOFFAI_SUPERVISOR` were removed.
+- `src/layers/l2_orchestration/` — platform runtime/state/execution loop only;
+  no graph/node definitions. Import agent graph via `src.agents.supervisor.graph`.
 - `src/layers/l3_decision/` — coverage-driven decisions, case models, test-point IR;
   `l3_decision/vplan/` loads `specs/<module>/docs/specs/*.csv` + `data/contract_matrix`
   and projects them into the kernel (planning/contract layer only).

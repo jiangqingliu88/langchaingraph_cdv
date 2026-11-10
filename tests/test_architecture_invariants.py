@@ -13,7 +13,7 @@ import pytest
 
 from config import architecture_guard as guard
 from src.layers.l2_orchestration.communication.tool_hub import ToolHub
-from src.layers.l2_orchestration.graph import NODE_FUNCS
+from src.agents.supervisor.graph import NODE_FUNCS
 from src.layers.l3_decision.decision_engine import ALL_ACTIONS
 from src.tools.boards import BOARDS
 
@@ -50,14 +50,16 @@ EXPECTED_CAVEATS = {
 # 代码结构
 # ═══════════════════════════════════════════════════════════════
 
-def test_there_are_exactly_24_nodes_split_12_pure_12_agent():
+def test_main_graph_has_nine_agent_nodes():
     names = [name for name, _ in NODE_FUNCS]
-    assert len(names) == len(set(names)) == 24
-    modules = [fn.__module__ for _, fn in NODE_FUNCS]
-    pure = [m for m in modules if ".nodes.pure." in m]
-    agent = [m for m in modules if ".nodes.agent." in m]
-    # `apply_compile_retry` 在 agent/fix.py（可回退到 debug LLM），不是 pure
-    assert len(pure) == 12 and len(agent) == 12
+    assert names == [
+        "init", "supervisor", "design_expert", "verify_expert",
+        "debug_expert", "coverage_expert", "human_review", "audit_gate",
+        "finalize",
+    ]
+    assert len(names) == len(set(names)) == 9
+    assert all(fn.__module__.startswith("src.agents")
+               for _, fn in NODE_FUNCS)
 
 
 def test_eight_executors_have_a_tool_mapping():
@@ -134,8 +136,7 @@ def test_watched_files_register_reason_plan_and_size():
 
 def test_architecture_doc_matches_code_facts():
     doc = DOC.read_text(encoding="utf-8")
-    for phrase in ("Supervisor 主图", "24 节点执行图", "八个 Executor",
-                   "pure（12 个", "agent（12 个",
+    for phrase in ("Supervisor 主图", "四个专家", "八个 Executor",
                    "steps_dag.py", "STATE_CONTRACTS",
                    "EXECUTORS_WITHOUT_HUB_TOOLS",
                    "signoff_replay_recipe_v2",

@@ -12,8 +12,8 @@ from typing import Any, Dict
 
 import structlog
 
-from src.layers.l2_orchestration.supervisor.coverage_tools import build_coverage_tools
-from src.layers.l2_orchestration.supervisor.tool_loop import run_tool_loop
+from src.agents.coverage.tools import build_coverage_tools
+from src.agents.runtime.tool_loop import run_tool_loop
 
 logger = structlog.get_logger()
 

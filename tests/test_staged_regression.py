@@ -276,7 +276,7 @@ def test_closed_loop_stops_at_the_manual_node():
     实测踩过：不拦的话每轮都停在同一个放行点、每轮都被判成 ops 失败，
     空烧 `max_rounds` 轮（5 轮 loopback 跑完，P0 一次都没跑过）。
     """
-    from src.layers.l2_orchestration.graph import r_coverage
+    from src.agents.supervisor.routing import r_coverage
     from src.layers.l2_orchestration.state import PipelineState
 
     assert r_coverage(PipelineState(run_id="r", output_root="x",

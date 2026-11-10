@@ -1,12 +1,10 @@
 """闭环流水线的**运行期设施** —— Runtime / 状态重建 / executor 调用包装。
 
-这个模块从 `graph.py` 拆出来的理由
-    `graph.py` 原来是 1741 行：节点、路由、运行期设施全挤在一个文件里，
-    「有哪些节点」看不出来（`NODE_NAMES` 是唯一线索）。拆开之后：
-      · `nodes/` 回答「有哪些节点」（24 个，pure 12 + agent 12）
-      · `routers.py` 回答「下一步走哪」
-      · **本模块**回答「节点跑起来需要什么」
-      · `graph.py` 只回答「它们怎么连起来」
+运行时设施与 agent 图的边界
+    Agent 拓扑已迁到 `src/agents/`（supervisor + 四个专家子图）；
+    本模块只保留 Runtime / `_run_agent` / context 重建等平台设施。
+    executor 节点包装在 `src/agents/runtime/nodes/`，路由在
+    `src/agents/supervisor/routing.py`。
 
 Runtime 为什么不进状态（这是这个模块存在的根本原因）
     状态进检查点、要能字节复现；而活连接 / agent 实例 / LLM 客户端不能序列化。

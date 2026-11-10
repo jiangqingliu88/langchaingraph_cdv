@@ -71,8 +71,9 @@ class ClosedLoopSteps:
         if not self._initialized:
             await self.initialize_agents()
 
-        from src.layers.l2_orchestration.graph import (
-            Runtime, build_closed_loop_graph, recursion_limit)
+        from src.agents.supervisor.graph import build_closed_loop_graph
+        from src.layers.l2_orchestration.runtime import (
+            Runtime, recursion_limit)
         from src.layers.l2_orchestration.state import PipelineState
 
         rt = Runtime(self, spec_text, approval_gate=approval_gate)
@@ -220,8 +221,9 @@ class ClosedLoopSteps:
 
         from langgraph.types import Command
 
-        from src.layers.l2_orchestration.graph import (
-            Runtime, build_closed_loop_graph, hydrate_runtime, recursion_limit)
+        from src.agents.supervisor.graph import build_closed_loop_graph
+        from src.layers.l2_orchestration.runtime import (
+            Runtime, hydrate_runtime, recursion_limit)
         from src.layers.l2_orchestration.run_journal import RunJournal
         from src.layers.l2_orchestration.state import PipelineState
 

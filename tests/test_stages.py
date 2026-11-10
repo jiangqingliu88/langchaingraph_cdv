@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 
 from src.layers.l2_orchestration import stages
-from src.layers.l2_orchestration.graph import NODE_NAMES
+from src.agents.supervisor.graph import NODE_NAMES
 from src.layers.l2_orchestration.state import PHASE_OWNERS
 
 
@@ -46,9 +46,9 @@ class TestShape:
 class TestOwnerNormalisation:
     """`PHASE_OWNERS` 里属主名带轮次后缀（`ops_r`），节点名不带（`ops`）。"""
 
-    @pytest.mark.parametrize("owner,stage", [("ops_r", "ops"),
-                                             ("coverage_r", "coverage"),
-                                             ("design", "design")])
+    @pytest.mark.parametrize("owner,stage", [("ops_r", "debug_expert"),
+                                             ("coverage_r", "coverage_expert"),
+                                             ("design", "design_expert")])
     def test_normalisation(self, owner, stage):
         assert stages._owner_matches(owner, stage)
 
@@ -58,7 +58,8 @@ class TestOwnerNormalisation:
         落不上意味着有个节点在写状态，但阶段表里没有它 —— 界面会丢掉这段进度。
         """
         unknown = {owner for owner in PHASE_OWNERS.values()
-                   if owner and not stages.get(owner.rstrip("_r"))}
+                   if owner and not any(stages._owner_matches(owner, s.id)
+                                        for s in stages.STAGES)}
         assert not unknown, f"这些属主在阶段表里找不到对应阶段：{sorted(unknown)}"
 
 
@@ -68,17 +69,17 @@ class TestLookups:
         assert stages.title_of("no_such_node") == "no_such_node"
 
     def test_title_of_known_id_is_chinese(self):
-        assert stages.title_of("ops") == "编译与仿真回归"
+        assert stages.title_of("debug_expert") == "调试专家"
 
     def test_outputs_come_from_phase_owners(self):
         """归属只有一份：outputs 由 PHASE_OWNERS 反查，不是另写一张表。"""
-        assert stages.outputs_of("ops") == sorted(
-            f for f, n in PHASE_OWNERS.items() if n == "ops_r")
+        assert set(stages.outputs_of("debug_expert")) == {
+            "debug", "env", "regression"}
 
     def test_round_scoped_reflects_the_table(self):
-        assert stages.is_round_scoped("ops")
-        assert not stages.is_round_scoped("design")
+        assert stages.is_round_scoped("debug_expert")
+        assert not stages.is_round_scoped("design_expert")
 
     def test_executor_of(self):
-        assert stages.executor_of("coverage") == "coverage"
+        assert stages.executor_of("coverage_expert") == "coverage"
         assert stages.executor_of("init") == ""

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from src.layers.l2_orchestration.supervisor.tool_loop import run_tool_loop
+from src.agents.runtime.tool_loop import run_tool_loop
 
 
 class _Tool:

@@ -16,8 +16,8 @@ from typing import Any, Dict
 
 import structlog
 
-from src.layers.l2_orchestration.supervisor.design_tools import build_design_tools
-from src.layers.l2_orchestration.supervisor.tool_loop import run_tool_loop
+from src.agents.design.tools import build_design_tools
+from src.agents.runtime.tool_loop import run_tool_loop
 
 logger = structlog.get_logger()
 

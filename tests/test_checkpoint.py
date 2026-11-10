@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.layers.l2_orchestration import graph as graph_mod
+from src.agents.supervisor import graph as graph_mod
 from src.layers.l2_orchestration.execution import PipelineExecutionService
 from src.layers.l2_orchestration.execution_helpers import CHECKPOINT_FILE, _state_of
 from src.layers.l2_orchestration.run_service import RunRequest, RunService

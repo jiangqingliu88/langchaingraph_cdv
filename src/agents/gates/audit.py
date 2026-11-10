@@ -15,7 +15,7 @@ from typing import Any, Dict
 import structlog
 
 from src.layers.l2_orchestration.evidence.signoff_package import verify_package
-from src.layers.l2_orchestration.nodes.agent.signoff import n_audit
+from src.agents.runtime.nodes.agent.signoff import n_audit
 
 logger = structlog.get_logger()
 

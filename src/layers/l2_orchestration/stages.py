@@ -1,7 +1,7 @@
 """阶段表 —— 闭环图 23 个节点的**唯一**元数据来源。
 
 为什么要有这个文件
-    节点名在此之前只是 `graph.py` 里的字面量：`n_ops` 里 append 一句
+    节点名只作为 agent 子图内部事件/显示别名存在；主图权威在
     `{"name": f"ops_r{n}"}`，`n_coverage` 里再 append 一句。于是：
 
       · 没有人能回答「一共有几个阶段、分几组、谁属于谁」；
@@ -14,12 +14,12 @@
 与另外两张表的关系（不要在这里重复定义）
     · `state.py:PHASE_OWNERS`  —— 状态字段 → 写的节点。**它是权威**，
       本模块的 `outputs` 字段在 import 时由它推导，不另写一份。
-    · `graph.py:NODE_NAMES`    —— 图的节点名清单。**它是权威**，
+    · `src/agents/supervisor/graph.py:NODE_NAMES` —— 主图节点名清单。**它是权威**，
       `tests/test_stages.py` 断言两张表一一对应（本模块刻意不 import graph，
       否则为了一个元数据表要把 langgraph / 决策引擎全拖进来）。
 
-  「加一个节点」的正确做法因此是三处：graph.py 加节点 → NODE_NAMES 加名字 →
-  这里加一行元数据。测试会钉住第三处有没有忘。
+  「加一个主图节点」的正确做法：agents/supervisor/graph.py 加节点 →
+  NODE_NAMES 加名字 → 这里加一行元数据。测试会钉住第三处有没有忘。
 """
 from __future__ import annotations
 
@@ -54,10 +54,10 @@ class StageSpec:
     """一个图节点的显示元数据。
 
     字段刻意只有"给人看的"和"给界面用的"，不含控制流信息 —— 前驱后继属于
-    `graph.py` 的边，不在这里。把拓扑写进来就是第二份真相。
+    `src/agents/supervisor/graph.py` 的边，不在这里。把拓扑写进来就是第二份真相。
     """
 
-    id: str                      # 与 graph.py 的节点名一一对应
+    id: str                      # 与 supervisor graph 的节点名一一对应
     title: str                   # 中文显示名
     group: str                   # STAGE_GROUPS 的键
     executor: str = ""           # 归属的 executor role（""=框架/控制节点）
@@ -69,47 +69,18 @@ class StageSpec:
         return STAGE_GROUPS.get(self.group, self.group)
 
 
-#: 按概念顺序排列（与 graph.py 的拓扑一致，不是按字母）。
+#: 按概念顺序排列（与 supervisor 主图拓扑一致，不是按字母）。
 STAGES: Tuple[StageSpec, ...] = (
     StageSpec("init", "初始化", "control"),
-    StageSpec("front", "前置分析", "design", executor="front", summary_key="spec"),
-    StageSpec("design", "规格与设计", "design", executor="design",
-              summary_key="design_arch"),
-    StageSpec("model", "参考模型", "design", executor="model", summary_key="model"),
-    StageSpec("verify", "验证计划与 UVM", "verify", executor="verify",
-              summary_key="tests"),
-    StageSpec("env_arch_check", "环境架构自检", "verify", executor="verify"),
-    StageSpec("round_bump", "轮次推进", "control", round_scoped=True),
-
-    StageSpec("ops", "编译与仿真回归", "exec", executor="ops", round_scoped=True,
-              summary_key="regression"),
-    StageSpec("coverage", "覆盖率收集", "analysis", executor="coverage",
-              round_scoped=True, summary_key="functional_coverage"),
-    StageSpec("debug_functional", "功能失败调试", "analysis", executor="debug",
-              round_scoped=True, summary_key="debug"),
-
-    StageSpec("decide", "决策", "converge", executor="coverage", round_scoped=True,
-              summary_key="last_action"),
-    StageSpec("governor", "治理门控", "converge", round_scoped=True,
-              summary_key="governance_outcome"),
-    StageSpec("governor_retry", "治理重试", "converge", round_scoped=True),
-    StageSpec("approval", "人工审批", "converge", round_scoped=True,
-              summary_key="approval_outcome"),
-    StageSpec("record_decision", "决策记账", "converge", round_scoped=True,
-              summary_key="pending_action"),
-    StageSpec("apply_converge", "执行收敛", "converge", round_scoped=True),
-    StageSpec("apply_compile_retry", "编译重试", "converge", round_scoped=True),
-    StageSpec("refactor_rtl", "RTL 重构", "converge", round_scoped=True,
-              summary_key="guardian_verdict"),
-    StageSpec("apply_update_model", "更新参考模型", "converge", round_scoped=True),
-    StageSpec("apply_directed_test", "生成定向测试", "converge", round_scoped=True),
-    StageSpec("apply_relax", "放宽约束", "converge", round_scoped=True),
-    StageSpec("apply_expand_seeds", "扩大随机种子", "converge", round_scoped=True),
-
-    StageSpec("audit", "质量审查", "signoff", executor="audit", summary_key="audit"),
+    StageSpec("supervisor", "Supervisor 路由", "control"),
+    StageSpec("design_expert", "设计专家", "design", executor="design"),
+    StageSpec("verify_expert", "验证专家", "verify", executor="verify"),
+    StageSpec("debug_expert", "调试专家", "exec", executor="ops", round_scoped=True),
+    StageSpec("coverage_expert", "覆盖率专家", "analysis", executor="coverage", round_scoped=True),
+    StageSpec("human_review", "人工审批", "converge"),
+    StageSpec("audit_gate", "硬审计门", "signoff", executor="audit"),
     StageSpec("finalize", "签核与证据", "signoff"),
 )
-
 _BY_ID: Dict[str, StageSpec] = {s.id: s for s in STAGES}
 
 
@@ -122,16 +93,44 @@ def get(stage_id: str) -> Optional[StageSpec]:
     return _BY_ID.get(stage_id)
 
 
+#: 内部节点名（子图执行事件）→ 中文标题。主图只剩 9 个 agent 节点，
+#: 但运行时事件仍用细粒度节点名；标题只做显示，不代表旧图还存在。
+_TITLE_ALIASES: Dict[str, str] = {
+    "front": "前置分析", "design": "规格与设计", "model": "参考模型",
+    "verify": "验证计划与 UVM", "env_arch_check": "环境架构自检",
+    "round_bump": "轮次推进", "ops": "编译与仿真回归",
+    "coverage": "覆盖率收集", "debug_functional": "功能失败调试",
+    "decide": "决策", "governor": "治理门控",
+    "governor_retry": "治理重试", "approval": "人工审批",
+    "record_decision": "决策记账", "apply_converge": "执行收敛",
+    "apply_compile_retry": "编译重试", "refactor_rtl": "RTL 重构",
+    "apply_update_model": "更新参考模型", "apply_directed_test": "生成定向测试",
+    "apply_relax": "放宽约束", "apply_expand_seeds": "扩大随机种子",
+    "audit": "质量审查", "finalize": "签核与证据",
+}
+
+
 def title_of(stage_id: str) -> str:
     """节点名 → 中文显示名。未知节点原样返回 —— 宁可在界面上看到一个 id，
     也不要因为没登记就显示成空字符串（那才是真的查不出问题）。"""
     spec = _BY_ID.get(stage_id)
-    return spec.title if spec else stage_id
+    if spec:
+        return spec.title
+    return _TITLE_ALIASES.get(stage_id, stage_id)
+
+
+_EXECUTOR_ALIASES: Dict[str, str] = {
+    "front": "front", "design": "design", "model": "model",
+    "verify": "verify", "ops": "ops", "coverage": "coverage",
+    "debug_functional": "debug", "audit": "audit",
+}
 
 
 def executor_of(stage_id: str) -> str:
     spec = _BY_ID.get(stage_id)
-    return spec.executor if spec else ""
+    if spec:
+        return spec.executor
+    return _EXECUTOR_ALIASES.get(stage_id, "")
 
 
 def group_of(stage_id: str) -> str:
@@ -162,7 +161,14 @@ def _owner_matches(owner: str, stage_id: str) -> bool:
     规范化比对 —— 与其去改 state.py 的注册表（那会牵动 387 个测试），
     不如在读取侧归一。
     """
-    return owner.rstrip("_r") == stage_id or owner == stage_id
+    aliases = {
+        "design": "design_expert", "model": "design_expert",
+        "verify": "verify_expert", "ops_r": "debug_expert",
+        "debug_functional": "debug_expert",
+        "coverage_r": "coverage_expert", "audit": "audit_gate",
+    }
+    norm = aliases.get(owner, owner.rstrip("_r"))
+    return norm == stage_id or owner == stage_id
 
 
 def grouped() -> List[Tuple[str, str, List[StageSpec]]]:

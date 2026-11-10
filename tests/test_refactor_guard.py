@@ -272,7 +272,7 @@ class TestEveryActionNameHasARoute:
         return Action(action_type)
 
     def test_all_actions_route_without_raising(self):
-        from src.layers.l2_orchestration.graph import r_action
+        from src.agents.supervisor.routing import r_action
         from src.layers.l3_decision.decision_engine import ALL_ACTIONS
 
         class _State:
@@ -289,7 +289,7 @@ class TestEveryActionNameHasARoute:
 
     def test_legacy_names_still_route(self):
         """RL 策略文件与历史轨迹里存的是老名字 —— 也得能路由。"""
-        from src.layers.l2_orchestration.graph import r_action
+        from src.agents.supervisor.routing import r_action
 
         class _State:
             def __init__(self, at):

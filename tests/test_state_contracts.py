@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import asyncio
 
-from src.layers.l2_orchestration import graph as graph_mod
-from src.layers.l2_orchestration.graph import _guarded_node
+from src.agents.runtime import guards
+from src.agents.supervisor import graph as graph_mod
+from src.agents.runtime.guards import _guarded_node
 from src.layers.l2_orchestration.state import (
     STATE_CONTRACTS,
     PipelineState,
@@ -56,7 +57,7 @@ def test_uncontracted_fields_stay_free():
 def test_warn_mode_reports_but_does_not_block(monkeypatch):
     """`SIGNOFFAI_STATE_CONTRACT=warn`：观察哨模式，不改变返回值。"""
     monkeypatch.setenv("SIGNOFFAI_STATE_CONTRACT", "warn")
-    graph_mod._STATE_WARNED.clear()
+    guards._STATE_WARNED.clear()
 
     async def bad_node(state, config):
         return {"coverage": {"functional": 1.0}}
@@ -64,7 +65,7 @@ def test_warn_mode_reports_but_does_not_block(monkeypatch):
     wrapped = _guarded_node("design", bad_node)
     out = asyncio.run(wrapped({}, {}))
     assert out == {"coverage": {"functional": 1.0}}       # 不改变返回值
-    assert ("design", "coverage") in graph_mod._STATE_WARNED
+    assert ("design", "coverage") in guards._STATE_WARNED
     assert getattr(wrapped, "__state_guard__", False) is True
 
 
@@ -86,14 +87,14 @@ def test_strict_mode_hard_fails_on_critical_field(monkeypatch):
 
 def test_strict_mode_still_warns_for_non_critical(monkeypatch):
     monkeypatch.delenv("SIGNOFFAI_STATE_CONTRACT", raising=False)
-    graph_mod._STATE_WARNED.clear()
+    guards._STATE_WARNED.clear()
 
     async def bad_node(state, config):
         return {"gaps": {}}          # gaps 不是关键字段，只告警
 
     wrapped = _guarded_node("design", bad_node)
     assert asyncio.run(wrapped({}, {})) == {"gaps": {}}
-    assert ("design", "gaps") in graph_mod._STATE_WARNED
+    assert ("design", "gaps") in guards._STATE_WARNED
 
 
 def test_wrapper_is_idempotent():
