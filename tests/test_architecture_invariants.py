@@ -134,7 +134,7 @@ def test_watched_files_register_reason_plan_and_size():
 
 def test_architecture_doc_matches_code_facts():
     doc = DOC.read_text(encoding="utf-8")
-    for phrase in ("24 节点闭环", "八个 Executor",
+    for phrase in ("Supervisor 主图", "24 节点执行图", "八个 Executor",
                    "pure（12 个", "agent（12 个",
                    "steps_dag.py", "STATE_CONTRACTS",
                    "EXECUTORS_WITHOUT_HUB_TOOLS",

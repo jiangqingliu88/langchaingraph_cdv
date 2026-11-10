@@ -2,7 +2,7 @@
 
 > 基线：2026-11-10
 >
-> 全量单测：**1176 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
+> 全量单测：**1183 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
 >
 > 历史 UVM 端到端实测：`output_e2e_v3_10_jiang_20261104_215130`（3.0 全量接线后）曾记录分级回归 **273/273 PASS**、功能计划覆盖率 **95.23%**、签核 **PASS_WITH_CAVEAT / CONDITIONAL**；**该 run 目录当前不在本工作区，不能作为当前 HEAD 的可复核证据**。Case View / 证据包的历史数字同样只作背景。
 >
@@ -261,7 +261,7 @@ flowchart TB
     CLI["CLI<br/>src/cli/commands.py"] --> SVC["PipelineExecutionService<br/>l2_orchestration/execution.py"]
     GUI["PySide6 Workbench<br/>src/workbench (可选)"] --> SVC
 
-    SVC --> GRAPH["LangGraph 24 节点<br/>l2_orchestration/graph.py"]
+    SVC --> GRAPH["LangGraph Supervisor 主图<br/>+ 24 节点执行图<br/>l2_orchestration/supervisor/"]
     SVC --> CORE["src/core 运行事实面<br/>RunContext / ArtifactStore / Events<br/>Provenance / Jobs / Quality"]
     GRAPH --> CORE
     EXEC --> CORE
@@ -297,7 +297,7 @@ flowchart TB
 
 ---
 
-## 4. 24 节点闭环
+## 4. 闭环：24 节点执行图 / Supervisor 主图
 
 拓扑定义在 `src/layers/l2_orchestration/graph.py` 的 `NODE_FUNCS`。节点分成两族：
 
@@ -404,6 +404,30 @@ audit → finalize → END
 
 当前 **9/9 killed**。新增守卫必须在 `MUTATIONS` 里有一条“改坏它会红”的
 mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
+
+### 4.6 Supervisor 主图 + 专家子图（当前默认入口）
+
+`build_closed_loop_graph()` 现在返回 **Supervisor 主图**，24 节点单图保留为
+`build_legacy_closed_loop_graph()` / `SIGNOFFAI_SUPERVISOR=off` 的回滚路径。
+
+```text
+START → init → supervisor
+  supervisor ──design──► design_expert ──► supervisor
+  supervisor ──execution──► execution_expert ──► supervisor
+  supervisor ──audit──► audit_gate ──► finalize → END
+```
+
+| 节点/子图 | 职责 | 内部 |
+|---|---|---|
+| `supervisor` | 只读状态、只写路由字段；不调 LLM、不跑工具 | `supervisor/graph.py` |
+| `design_expert` | 前置分析 → design → model → verify → env 架构检查 | 线性子图；design 执行器内部有“生成→编译→重试”循环 |
+| `execution_expert` | 轮次预算 → ops → coverage/debug → decide → governor → approval → 动作 | **环形子图**，保留原闭环的轮次/审批/证据语义 |
+| `audit_gate` | 纯代码审计：调用确定性 audit 后，独立核对 `report.json` 与 `signoff_evidence/manifest.json` | `supervisor/audit.py` |
+
+状态拆分的落点：`PipelineState` 里新增 `next_agent / design_done /
+execution_done / supervisor_visits / supervisor_trace / audit_gate`，只由
+supervisor/标记节点写；专家子图不决定“下一步派谁”。`supervisor_visits` 是
+主图自身的防死循环上限（12），不是轮次预算；轮次仍由 `round_bump` 收口。
 
 ---
 

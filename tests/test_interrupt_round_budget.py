@@ -10,7 +10,7 @@ from __future__ import annotations
 import ast
 import inspect
 
-from src.layers.l2_orchestration.graph import build_closed_loop_graph
+from src.layers.l2_orchestration.graph import build_legacy_closed_loop_graph
 from src.layers.l2_orchestration.nodes.pure.approval import n_approval
 from src.layers.l2_orchestration.nodes.pure.rounds import n_round_bump, _have_rounds_left
 from src.layers.l2_orchestration.routers import r_approval
@@ -18,7 +18,7 @@ from src.layers.l2_orchestration.state import PipelineState
 
 
 def test_approval_proceed_does_not_reenter_round_bump():
-    graph = build_closed_loop_graph().get_graph()
+    graph = build_legacy_closed_loop_graph().get_graph()
     edges = {(e.source, e.target, e.data) for e in graph.edges}
     assert ("approval", "record_decision", "proceed") in edges
     assert ("approval", "audit", "reject") in edges

@@ -174,6 +174,21 @@ class PipelineState(BaseModel):
     human_escalation: Optional[str] = None
     terminal_reason: Optional[str] = None
 
+    # ── D2. Supervisor 主图路由（与 24 节点执行细节分离）──
+    #: 主图下一次派谁：`design_expert` / `execution_expert` / `audit_gate` / `end`。
+    #: 只由 `n_supervisor` 写；子图不读它，避免“专家自己决定下一步”。
+    next_agent: str = ""
+    #: 子图是否已经完成过（主图据此决定是否再次派工）。
+    design_done: bool = False
+    execution_done: bool = False
+    #: 主图访问 supervisor 的次数（防循环失控；不是轮次预算）。
+    supervisor_visits: Annotated[int, _add] = 0
+    #: 纯审计门的结论（`report.json` / `signoff_evidence` 是否存在 + 哈希可读）。
+    audit_gate: Dict[str, Any] = Field(default_factory=dict)
+    #: 可观测的路由轨迹（只追加，不覆盖）。
+    supervisor_trace: Annotated[List[Dict[str, Any]], _add] = Field(
+        default_factory=list)
+
     # ── E. 终态结果包 ──
     # finalize 节点整体写入，run_closed_loop 原样返回给调用方（CLI / GUI / 服务层）。
     #

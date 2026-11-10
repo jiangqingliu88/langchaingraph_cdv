@@ -6,7 +6,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.0.x   | ✅        |
+| 2.1.x   | ✅        |
+| 2.0.x   | ⚠️ security fixes only |
 | 1.0.x   | ⚠️ security fixes only |
 
 ## Reporting a vulnerability

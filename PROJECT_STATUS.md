@@ -2,8 +2,8 @@
 
 > 分析对象：`C:\Users\liujiangqing\Desktop\cdv_advanced`
 > 当前分支：`refactor/langgraph-migration`
-> 修复提交：`98eb87b7 fix: close release blockers and harden VPlan gates`
-> Tag：`v2.0.0`（已推送 Gitee）
+> 历史修复提交：`98eb87b7`；本次 Supervisor 重构提交见分支 HEAD
+> 基线 tag：`v2.1.0-pre-supervisor`（重构前）
 > 修复范围：除 `isa_ir_tools` / TB player 与 EDA 依赖外的已知问题
 
 ---
@@ -12,7 +12,7 @@
 
 本次修复把“架构原则正确、但测试/legacy/文档/安全没收口”的状态收口到了可提交、可回归的基线：
 
-- 主套件 **1176 passed / 0 failed / 4 skipped**；
+- 主套件 **1183 passed / 0 failed / 4 skipped**；
 - 工作台 **692 passed / 0 failed**；
 - 架构守卫 `[architecture] OK`；
 - 当前树 secret scan clean；
@@ -32,18 +32,27 @@
 
 ## 1. 架构原理（修复后仍然是这套）
 
-### 1.1 五层 + 24 节点 + 8 执行器
+### 1.1 Supervisor 主图 + 专家子图 + 24 节点执行图
 
 ```text
 CLI / Workbench
   → app/services
-  → L2 LangGraph（24 节点：12 pure + 12 agent）
+  → L2 Supervisor 主图（只路由：design / execution / audit）
+       ├─ design_expert 子图（front → design → model → verify → env_arch_check）
+       └─ execution_expert 子图（round_bump → ops → coverage/debug → decide
+                                 → governor → approval → 动作 → round_bump）
+  → 24 节点执行图（旧单图，保留为 build_legacy_closed_loop_graph() 回滚）
   → 8 个 executor（front/design/model/verify/ops/coverage/debug/audit）
   → L1 / L3 / L4 / L5
   → core（RunContext / ArtifactStore / EventStore / Provenance / Quality）
 ```
 
-- 五层是能力平台，24 节点是控制流，8 执行器是角色；三者正交。
+- **默认入口**是 `build_closed_loop_graph()` → Supervisor 主图；`SIGNOFFAI_SUPERVISOR=off`
+  回到旧的 24 节点单图。
+- Supervisor 只读状态、只写 `next_agent / design_done / execution_done /
+  supervisor_visits / supervisor_trace / audit_gate`，不调 LLM、不跑工具。
+- 专家子图各自保留循环：design 执行器内部“生成→编译→重试”，execution 子图
+  保留轮次/审批/覆盖率闭环；`audit_gate` 是纯代码硬审计。
 - 只有 `design` / `debug` 直接调 LLM；所有 LLM 调用走 `call_llm`，流程与 pass/fail 保持确定性。
 
 ### 1.2 契约是构建物
@@ -104,7 +113,7 @@ spec → front bootstrap → docs/specs + data + cases
 | `test_staged_regression` 时间戳 flaky | 测试显式设置 expand 的 mtime |
 | `test_cli_evidence` 依赖仓库内 tmp | monkeypatch `_git_changed_files` 返回 None |
 | 旧 casemodel / isa_gen / verification_os 空壳 | 删除空目录、pycache、0 字节 `archture.md` |
-| 主套件 | 从 7 failed 收敛到 **1176 passed / 4 skipped** |
+| 主套件 | 从 7 failed 收敛到 **1183 passed / 4 skipped** |
 | 工作台 | **692 passed**；CI deselect 已移除 |
 
 ### 2.2 安全
@@ -147,13 +156,24 @@ spec → front bootstrap → docs/specs + data + cases
 | legacy 布局提示 | `SIGNOFFAI_UVM_LAYOUT=legacy` 打弃用 warning，仅用于旧 run 复现 |
 | config 可 lint | `pyproject.toml` 增加 `[tool.ruff.lint.isort] known-first-party`，避免 `src` 被误判为第三方 |
 
+### 2.6 Supervisor + 专家子图重构（默认入口）
+
+| 改造 | 实现 |
+|---|---|
+| 主图/子图分离 | `supervisor/graph.py`：`init → supervisor → design_expert/execution_expert → supervisor → audit_gate → finalize` |
+| 循环 | `execution_expert` 保留 `round_bump → ops → coverage/debug → decide → governor → approval → 动作 → round_bump` 环形边；design 执行器内部保留生成→编译→重试 |
+| 状态拆分 | `PipelineState` 增加 `next_agent / design_done / execution_done / supervisor_visits / supervisor_trace / audit_gate`；`SupervisorView` 只读投影，专家不决定下一步 |
+| 硬审计 | `audit_gate` 调确定性 `n_audit` 后，独立核对 `report.json` 与 `signoff_evidence/manifest.json`，不信任子图汇报 |
+| 回滚 | `build_legacy_closed_loop_graph()` / `SIGNOFFAI_SUPERVISOR=off` 保留旧 24 节点单图；`NODE_NAMES` 不变，stages/UI 不受影响 |
+| 版本 | 2.1.0；新增 `v2.1.0-pre-supervisor` 基线 tag |
+
 ---
 
 ## 3. 当前验证结果
 
 | 项 | 结果 |
 |---|---|
-| 主套件 | **1176 passed / 0 failed / 4 skipped** |
+| 主套件 | **1183 passed / 0 failed / 4 skipped** |
 | 工作台 | **692 passed / 0 failed**（PySide6 回调析构 warning，无 failed） |
 | 架构守卫 | `[architecture] OK` |
 | 编译检查 | `compileall` 退出码 0 |
@@ -222,9 +242,8 @@ specs/npu_sched:
 
 - Gitee：`https://gitee.com/liujiangqing/cdv_a.git`
 - 分支：`refactor/langgraph-migration`
-- Commit：`98eb87b7`
-- Tag：`v2.0.0`
-- 远端已确认：`refs/heads/refactor/langgraph-migration` = `98eb87b7`，`refs/tags/v2.0.0` 已存在。
+- 本次提交：Supervisor + 专家子图重构（见 `git log -1`）
+- Tag：`v2.1.0`（最终推送后创建）
 
 ---
 

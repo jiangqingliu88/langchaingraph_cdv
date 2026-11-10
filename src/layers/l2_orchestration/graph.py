@@ -66,8 +66,9 @@ _ = (_LEGACY_HIGH_RISK_ACTIONS, _approval_artifacts, _interrupt_approval,
      _matching_manual_node, n_approval, r_action, r_coverage,
      Runtime, hydrate_runtime, recursion_limit)
 
-__all__ = ["NODE_FUNCS", "NODE_NAMES", "build_closed_loop_graph", "Runtime",
-           "hydrate_runtime", "recursion_limit"]
+__all__ = ["NODE_FUNCS", "NODE_NAMES", "build_closed_loop_graph",
+           "build_legacy_closed_loop_graph", "build_supervisor_graph",
+           "Runtime", "hydrate_runtime", "recursion_limit"]
 
 
 NODE_FUNCS = (
@@ -129,8 +130,8 @@ def _guarded_node(name: str, fn):
     return _wrapped
 
 
-def build_closed_loop_graph(checkpointer=None, store=None):
-    """构建七 Agent 闭环图。
+def build_legacy_closed_loop_graph(checkpointer=None, store=None):
+    """构建旧的 24 节点单图（测试基线 / Supervisor 回滚路径）。
 
     拓扑（与 run_closed_loop 的语句顺序一一对应）：
       init → design → model → verify → env_arch_check → round_bump
@@ -216,3 +217,19 @@ def build_closed_loop_graph(checkpointer=None, store=None):
     g.add_edge("finalize", END)
 
     return g.compile(checkpointer=checkpointer, store=store)
+
+
+def build_closed_loop_graph(checkpointer=None, store=None):
+    """当前默认入口：Supervisor 主图 + 专家子图。
+
+    回滚：`SIGNOFFAI_SUPERVISOR=off`（或直接调用
+    `build_legacy_closed_loop_graph()`）回到 24 节点单图。
+    默认值刻意是 **on**：新架构才是当前实现，旧图只作兼容/对照。
+    """
+    mode = os.environ.get("SIGNOFFAI_SUPERVISOR", "on").strip().lower()
+    if mode in ("off", "0", "false", "legacy"):
+        return build_legacy_closed_loop_graph(
+            checkpointer=checkpointer, store=store)
+    from .supervisor.graph import build_supervisor_graph
+
+    return build_supervisor_graph(checkpointer=checkpointer, store=store)

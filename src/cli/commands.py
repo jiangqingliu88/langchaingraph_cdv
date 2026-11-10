@@ -151,7 +151,7 @@ def _find_run_id(run_id: str = None) -> str | None:
 # ═══════════════════════════════════════════════════════════════
 
 @click.group(invoke_without_command=True)
-@click.version_option(version="2.0.0", prog_name="SignOffAI")
+@click.version_option(version="2.1.0", prog_name="SignOffAI")
 @click.option("-p", "--print", "prompt", default="", help="单次查询模式（非交互），如 -p '生成 APB 验证计划'")
 @click.option("-c", "--continue", "continue_mode", is_flag=True, help="继续上次会话")
 @click.option("-r", "--resume", "resume_id", help="恢复指定会话 ID")

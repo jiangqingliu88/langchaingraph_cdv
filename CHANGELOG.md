@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-10
+
+### Changed
+
+- **Supervisor + Sub-agents orchestration** (default entry):
+  `build_closed_loop_graph()` now returns a supervisor main graph with
+  `design_expert` / `execution_expert` subgraphs and a pure `audit_gate`.
+  The legacy 24-node single graph remains available as
+  `build_legacy_closed_loop_graph()` / `SIGNOFFAI_SUPERVISOR=off`.
+- `PipelineState` adds supervisor routing fields (`next_agent`, `design_done`,
+  `execution_done`, `supervisor_visits`, `supervisor_trace`, `audit_gate`).
+- `audit_gate` independently checks `report.json` and
+  `signoff_evidence/manifest.json` before finalize.
+
 ## [2.0.0] - 2026-11-10
 
 ### Changed
@@ -27,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VPlan TP can bind explicit stimulus fields; `uvm_arch` scoreboards map via
   `check_artifact`/`object` where declared.
 - Secret scan (`scripts/check_secrets.py`) and cleaned `TODO.md`.
-- Main suite 1176 passed / 4 skipped; workbench 692 passed.
+- Main suite 1183 passed / 4 skipped; workbench 692 passed.
 
 ## [1.0.0] - 2026-11-05
 
