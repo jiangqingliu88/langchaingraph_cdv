@@ -14,6 +14,7 @@ from typing import Any, Dict
 
 import structlog
 
+from src.layers.l2_orchestration.evidence.signoff_package import verify_package
 from src.layers.l2_orchestration.nodes.agent.signoff import n_audit
 
 logger = structlog.get_logger()
@@ -35,7 +36,8 @@ async def n_hard_audit_gate(state, config) -> Dict[str, Any]:
     evidence_path = root / "signoff_evidence" / "manifest.json"
     report = _read_json(report_path)
     evidence = _read_json(evidence_path)
-    ok = bool(report) and bool(evidence)
+    verification = verify_package(evidence_path.parent) if evidence_path.is_file() else {}
+    ok = bool(report) and bool(evidence) and bool(verification.get("ok"))
     gate = {
         "ok": ok,
         "report": report_path.relative_to(root).as_posix()
@@ -45,13 +47,22 @@ async def n_hard_audit_gate(state, config) -> Dict[str, Any]:
         "verdict": str(report.get("verdict") or ""),
         "signoff_status": str(report.get("signoff_status") or ""),
         "package_hash": str(evidence.get("package_hash") or ""),
+        "verification": {
+            "ok": bool(verification.get("ok")),
+            "issues": list(verification.get("issues") or [])[:10],
+        },
     }
     if not ok:
         logger.error(
             "Supervisor 硬审计不通过：report.json / signoff_evidence/manifest.json "
-            "缺失或不可读 —— 子图的结论不能直接当签核")
+            "缺失、不可读或 package_hash 校验失败 —— 子图的结论不能直接当签核")
     merged = dict(data) if isinstance(data, dict) else {}
     merged["audit_gate"] = gate
+    if not ok:
+        merged.update({
+            "interrupted": True,
+            "terminal_reason": "audit_gate_failed",
+        })
     return merged
 
 

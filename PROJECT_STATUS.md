@@ -12,7 +12,7 @@
 
 本次修复把“架构原则正确、但测试/legacy/文档/安全没收口”的状态收口到了可提交、可回归的基线：
 
-- 主套件 **1184 passed / 0 failed / 4 skipped**；
+- 主套件 **1187 passed / 0 failed / 4 skipped**；
 - 工作台 **692 passed / 0 failed**；
 - 架构守卫 `[architecture] OK`；
 - 当前树 secret scan clean；
@@ -37,11 +37,12 @@
 ```text
 CLI / Workbench
   → app/services
-  → L2 Supervisor 主图（只路由：design / verify / debug / coverage / audit）
+  → L2 Supervisor 主图（只路由：design / verify / debug / coverage / human_review / audit）
        ├─ design_expert 子图（front → design → model）
        ├─ verify_expert 子图（verify → env_arch_check）
        ├─ debug_expert 子图（round_bump → ops → debug_functional，失败才回环）
-       └─ coverage_expert 子图（coverage → decide → governor → approval → 动作）
+       ├─ coverage_expert 子图（coverage → decide → governor → approval → 动作）
+       └─ human_review（Debug 连续 5 次返工 → interrupt() 等人）
   → 24 节点执行图（旧单图，保留为 build_legacy_closed_loop_graph() 回滚）
   → 8 个 executor（front/design/model/verify/ops/coverage/debug/audit）
   → L1 / L3 / L4 / L5
@@ -115,7 +116,7 @@ spec → front bootstrap → docs/specs + data + cases
 | `test_staged_regression` 时间戳 flaky | 测试显式设置 expand 的 mtime |
 | `test_cli_evidence` 依赖仓库内 tmp | monkeypatch `_git_changed_files` 返回 None |
 | 旧 casemodel / isa_gen / verification_os 空壳 | 删除空目录、pycache、0 字节 `archture.md` |
-| 主套件 | 从 7 failed 收敛到 **1184 passed / 4 skipped** |
+| 主套件 | 从 7 failed 收敛到 **1187 passed / 4 skipped** |
 | 工作台 | **692 passed**；CI deselect 已移除 |
 
 ### 2.2 安全
@@ -162,9 +163,11 @@ spec → front bootstrap → docs/specs + data + cases
 
 | 改造 | 实现 |
 |---|---|
-| 主图/子图分离 | `supervisor/graph.py`：主图 8 节点 `init → supervisor → design/verify/debug/coverage_expert → supervisor → audit_gate → finalize` |
+| 主图/子图分离 | `supervisor/graph.py`：主图 9 节点 `init → supervisor → design/verify/debug/coverage_expert → human_review → audit_gate → finalize` |
 | 循环 | `debug_expert` 保留 `round_bump → ops → debug_functional → round_bump` 环形边；`coverage_expert` 保留 `coverage → decide → governor → approval → 动作`；动作非 CONVERGE 时交回主图重新派 debug |
-| 状态拆分 | `PipelineState` 增加 `next_agent / design_done / verify_done / debug_done / coverage_done / execution_done / supervisor_visits / supervisor_trace / audit_gate`；`SupervisorView` 只读投影，专家不决定下一步 |
+| 状态拆分 | `PipelineState` 增加 `next_agent / design_done / verify_done / debug_done / coverage_done / execution_done / debug_attempts / human_reviewed / supervisor_visits / supervisor_trace / audit_gate`；`SupervisorView` 只读投影，专家不决定下一步 |
+| 人工门 | Debug 连续 5 次返工 → 主图 `human_review` 用 `interrupt()` 挂起；无 checkpoint 时显式 `auto_no_checkpoint` 并 warning |
+| 硬审计 | `audit_gate` 用 `verify_package` 重算文件/包哈希；失败写 `AUDIT_BLOCKED`、`terminal_reason=audit_gate_failed`，不进入 READY 签核 |
 | 硬审计 | `audit_gate` 调确定性 `n_audit` 后，独立核对 `report.json` 与 `signoff_evidence/manifest.json`，不信任子图汇报 |
 | 回滚 | `build_legacy_closed_loop_graph()` / `SIGNOFFAI_SUPERVISOR=off` 保留旧 24 节点单图；`NODE_NAMES` 不变，stages/UI 不受影响 |
 | 版本 | 2.1.0；新增 `v2.1.0-pre-supervisor` 基线 tag |
@@ -175,7 +178,7 @@ spec → front bootstrap → docs/specs + data + cases
 
 | 项 | 结果 |
 |---|---|
-| 主套件 | **1184 passed / 0 failed / 4 skipped** |
+| 主套件 | **1187 passed / 0 failed / 4 skipped** |
 | 工作台 | **692 passed / 0 failed**（PySide6 回调析构 warning，无 failed） |
 | 架构守卫 | `[architecture] OK` |
 | 编译检查 | `compileall` 退出码 0 |

@@ -90,6 +90,7 @@ def build_debug_subgraph():
     ):
         g.add_node(name, fn)
     g.add_node("mark_debug_done", _marker(debug_done=True))
+    g.add_node("mark_debug_attempt", _marker(debug_attempts=1))
     g.add_node("mark_execution_done", _marker(execution_done=True))
     g.add_edge(START, "round_bump")
     g.add_conditional_edges("round_bump", r_after_round_bump, {
@@ -103,7 +104,8 @@ def build_debug_subgraph():
         "functional_fail": "debug_functional",
         "run_coverage": "mark_debug_done",
     })
-    g.add_edge("debug_functional", "round_bump")
+    g.add_edge("debug_functional", "mark_debug_attempt")
+    g.add_edge("mark_debug_attempt", "round_bump")
     g.add_edge("mark_debug_done", END)
     g.add_edge("mark_execution_done", END)
     return g.compile()

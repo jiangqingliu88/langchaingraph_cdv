@@ -122,6 +122,19 @@ def _attach_rtl_lineage(state: PipelineState, rtl_dir: Path,
         return {}
 
 
+def _run_status(state: PipelineState) -> str:
+    """终态字符串 —— 硬审计失败必须优先于覆盖率/EDA 状态。"""
+    if state.audit_gate and state.audit_gate.get("ok") is False:
+        return "AUDIT_BLOCKED"
+    if state.eda_blocked:
+        return "BLOCKED_EDA_MISSING"
+    if state.awaiting_approval:
+        return "WAITING_APPROVAL"
+    if state.effective_coverage >= state.target:
+        return "CONVERGED"
+    return "COMPLETED"
+
+
 async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
     """证据链落盘 + manifest + 释放资源。"""
     rt = _rt(config)
@@ -265,10 +278,8 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
         "target": state.target,
         "iterations": state.iterations,
         "exclude": {"stats": exclude_stats, "effect": state.exclude_effect},
-        "status": ("BLOCKED_EDA_MISSING" if state.eda_blocked
-                   else ("WAITING_APPROVAL" if state.awaiting_approval
-                         else ("CONVERGED" if state.effective_coverage >= state.target
-                               else "COMPLETED"))),
+        "status": _run_status(state),
+        "audit_gate": state.audit_gate,
         "evidence": {"total_changes": total_changes, "chain_valid": chain_valid,
                      "evidence_path": evidence_path, "manifest_path": manifest_path,
                      "file_change_chain_path": file_chain_path,

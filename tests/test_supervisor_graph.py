@@ -18,10 +18,11 @@ def test_default_graph_is_supervisor_with_four_experts():
     graph = build_closed_loop_graph().get_graph()
     names = set(graph.nodes)
     assert {"supervisor", "design_expert", "verify_expert", "debug_expert",
-            "coverage_expert", "audit_gate", "finalize"} <= names
-    # 子图不是把 24 个节点平铺到主图：主图只有 8 个编排节点。
+            "coverage_expert", "human_review", "audit_gate",
+            "finalize"} <= names
+    # 子图不是把 24 个节点平铺到主图：主图只有 9 个编排节点。
     assert "design" not in names and "ops" not in names
-    assert len(names - {"__start__", "__end__"}) == 8
+    assert len(names - {"__start__", "__end__"}) == 9
 
 
 def test_legacy_graph_is_still_available(monkeypatch):
@@ -55,6 +56,29 @@ def test_supervisor_routes_through_four_experts_then_audit():
     assert audit["next_agent"] == "audit"
 
 
+def test_supervisor_asks_human_after_five_debug_attempts():
+    out = asyncio.run(n_supervisor(PipelineState(
+        design_done=True, verify_done=True, debug_done=True,
+        debug_attempts=5), {}))
+    assert out["next_agent"] == "human_review"
+
+    reviewed = asyncio.run(n_supervisor(PipelineState(
+        design_done=True, verify_done=True, debug_done=True,
+        debug_attempts=5, human_reviewed=True), {}))
+    assert reviewed["next_agent"] == "coverage"
+
+
+def test_human_review_without_checkpoint_degrades_loudly(monkeypatch):
+    from types import SimpleNamespace
+    from src.layers.l2_orchestration.supervisor.human import n_human_review
+
+    out = asyncio.run(n_human_review(
+        PipelineState(debug_attempts=5),
+        {"configurable": {"rt": SimpleNamespace(interrupt_mode=False)}}))
+    assert out["human_decision"] == "auto_no_checkpoint"
+    assert out["human_reviewed"] is True
+
+
 def test_supervisor_routes_interrupted_to_audit():
     out = asyncio.run(n_supervisor(
         PipelineState(interrupted=True, terminal_reason="eda_missing"), {}))
@@ -84,7 +108,8 @@ def test_all_expert_subgraphs_compile():
     assert "design" in subgraphs.build_design_subgraph().get_graph().nodes
     assert "verify" in subgraphs.build_verify_subgraph().get_graph().nodes
     debug = subgraphs.build_debug_subgraph().get_graph()
-    assert {"round_bump", "ops", "debug_functional"} <= set(debug.nodes)
+    assert {"round_bump", "ops", "debug_functional",
+            "mark_debug_attempt"} <= set(debug.nodes)
     coverage = subgraphs.build_coverage_subgraph().get_graph()
     assert {"coverage", "decide", "governor", "approval"} <= set(coverage.nodes)
 
@@ -96,12 +121,16 @@ def test_hard_audit_gate_requires_report_and_evidence(tmp_path, monkeypatch):
         return {"audit": {"verdict": "READY"}, "phases": []}
 
     monkeypatch.setattr(audit_mod, "n_audit", fake_audit)
+    monkeypatch.setattr(audit_mod, "verify_package",
+                        lambda path: {"ok": True, "issues": []})
     state = PipelineState(output_root=str(tmp_path))
 
     (tmp_path / "report.json").write_text(
         '{"verdict": "READY", "signoff_status": "APPROVED"}', encoding="utf-8")
     first = asyncio.run(audit_mod.n_hard_audit_gate(state, {}))
     assert first["audit_gate"]["ok"] is False  # 缺 signoff_evidence
+    assert first["interrupted"] is True
+    assert first["terminal_reason"] == "audit_gate_failed"
 
     (tmp_path / "signoff_evidence").mkdir()
     (tmp_path / "signoff_evidence" / "manifest.json").write_text(
@@ -110,6 +139,18 @@ def test_hard_audit_gate_requires_report_and_evidence(tmp_path, monkeypatch):
     assert second["audit_gate"]["ok"] is True
     assert second["audit_gate"]["package_hash"] == "abc"
     assert second["audit_gate"]["verdict"] == "READY"
+    assert "interrupted" not in second
+
+
+def test_finalize_status_prefers_audit_blocked():
+    from src.layers.l2_orchestration.nodes.pure.lifecycle import _run_status
+
+    blocked = PipelineState(audit_gate={"ok": False}, eda_blocked=True,
+                            effective_coverage=99.0, target=95.0)
+    assert _run_status(blocked) == "AUDIT_BLOCKED"
+    assert _run_status(PipelineState(audit_gate={"ok": True},
+                                     effective_coverage=99.0,
+                                     target=95.0)) == "CONVERGED"
 
 
 def test_router_only_accepts_known_agents():

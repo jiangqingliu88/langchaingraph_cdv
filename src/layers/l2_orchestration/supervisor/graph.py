@@ -1,12 +1,13 @@
 """Supervisor 主图 —— 只回答“下一步派哪个专家”，不执行 EDA、不做判定。
 
-拓扑（主图 8 个节点）：
+拓扑（主图 9 个节点）：
 
     START → init → supervisor
       supervisor ──design──► design_expert ──► supervisor
       supervisor ──verify──► verify_expert ──► supervisor
       supervisor ──debug──► debug_expert ──► supervisor
       supervisor ──coverage──► coverage_expert ──► supervisor
+      supervisor ──human_review──► human_review ──► supervisor
       supervisor ──audit──► audit_gate ──► finalize → END
 
 `debug_expert` / `coverage_expert` 内部各自有循环；主图只保留 supervisor 这一条
@@ -24,6 +25,7 @@ from src.layers.l2_orchestration.nodes.pure.lifecycle import n_finalize, n_init
 from src.layers.l2_orchestration.state import PipelineState
 
 from .audit import n_hard_audit_gate
+from .human import n_human_review
 from .state import SupervisorView
 from .subgraphs import (
     build_coverage_subgraph, build_debug_subgraph, build_design_subgraph,
@@ -58,6 +60,9 @@ async def n_supervisor(state: PipelineState, config) -> Dict[str, Any]:
     elif not view.debug_done:
         choice = "debug"
         reason = "verify 已完成，进入 debug_expert"
+    elif (view.debug_attempts >= 5 and not view.human_reviewed):
+        choice = "human_review"
+        reason = f"Debug 已连续返工 {view.debug_attempts} 次，暂停让人确认"
     elif not view.coverage_done:
         choice = "coverage"
         reason = "回归已通过，进入 coverage_expert"
@@ -75,7 +80,8 @@ async def n_supervisor(state: PipelineState, config) -> Dict[str, Any]:
 def r_supervisor(state: PipelineState) -> str:
     """主图条件边：只认五个合法值。"""
     choice = str(state.next_agent or "")
-    if choice in ("design", "verify", "debug", "coverage", "audit"):
+    if choice in ("design", "verify", "debug", "coverage",
+                  "human_review", "audit"):
         return choice
     return "audit"
 
@@ -89,6 +95,7 @@ def build_supervisor_graph(checkpointer=None, store=None):
     g.add_node("verify_expert", build_verify_subgraph())
     g.add_node("debug_expert", build_debug_subgraph())
     g.add_node("coverage_expert", build_coverage_subgraph())
+    g.add_node("human_review", n_human_review)
     g.add_node("audit_gate", n_hard_audit_gate)
     g.add_node("finalize", n_finalize)
 
@@ -99,10 +106,11 @@ def build_supervisor_graph(checkpointer=None, store=None):
         "verify": "verify_expert",
         "debug": "debug_expert",
         "coverage": "coverage_expert",
+        "human_review": "human_review",
         "audit": "audit_gate",
     })
     for expert in ("design_expert", "verify_expert", "debug_expert",
-                   "coverage_expert"):
+                   "coverage_expert", "human_review"):
         g.add_edge(expert, "supervisor")
     g.add_edge("audit_gate", "finalize")
     g.add_edge("finalize", END)

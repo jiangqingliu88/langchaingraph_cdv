@@ -23,6 +23,8 @@ class SupervisorView:
     debug_done: bool = False
     coverage_done: bool = False
     execution_done: bool = False
+    debug_attempts: int = 0
+    human_reviewed: bool = False
     interrupted: bool = False
     eda_blocked: bool = False
     awaiting_approval: bool = False
@@ -37,6 +39,8 @@ class SupervisorView:
             debug_done=bool(getattr(state, "debug_done", False)),
             coverage_done=bool(getattr(state, "coverage_done", False)),
             execution_done=bool(getattr(state, "execution_done", False)),
+            debug_attempts=int(getattr(state, "debug_attempts", 0) or 0),
+            human_reviewed=bool(getattr(state, "human_reviewed", False)),
             interrupted=bool(getattr(state, "interrupted", False)),
             eda_blocked=bool(getattr(state, "eda_blocked", False)),
             awaiting_approval=bool(getattr(state, "awaiting_approval", False)),

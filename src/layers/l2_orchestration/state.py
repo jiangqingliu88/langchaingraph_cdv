@@ -175,7 +175,8 @@ class PipelineState(BaseModel):
     terminal_reason: Optional[str] = None
 
     # ── D2. Supervisor 主图路由（与 24 节点执行细节分离）──
-    #: 主图下一次派谁：`design_expert` / `execution_expert` / `audit_gate` / `end`。
+    #: 主图下一次派谁：`design` / `verify` / `debug` / `coverage` /
+    #: `human_review` / `audit`。
     #: 只由 `n_supervisor` 写；子图不读它，避免“专家自己决定下一步”。
     next_agent: str = ""
     #: 子图是否已经完成过（主图据此决定是否再次派工）。
@@ -186,6 +187,11 @@ class PipelineState(BaseModel):
     execution_done: bool = False
     #: 主图访问 supervisor 的次数（防循环失控；不是轮次预算）。
     supervisor_visits: Annotated[int, _add] = 0
+    #: 本次 run 里 Debug 专家实际返工了几次（用于“连续 5 次改不对就叫人”）。
+    debug_attempts: Annotated[int, _add] = 0
+    #: 人类是否已经看过“Debug 连续返工”的告警（避免每次 supervisor 都打断）。
+    human_reviewed: bool = False
+    human_decision: str = ""
     #: 纯审计门的结论（`report.json` / `signoff_evidence` 是否存在 + 哈希可读）。
     audit_gate: Dict[str, Any] = Field(default_factory=dict)
     #: 可观测的路由轨迹（只追加，不覆盖）。
