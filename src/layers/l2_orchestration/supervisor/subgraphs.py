@@ -41,6 +41,7 @@ from src.layers.l2_orchestration.routers import (
 )
 from src.layers.l2_orchestration.state import PipelineState
 from src.layers.l2_orchestration.supervisor.debug_loop import n_debug_agent
+from src.layers.l2_orchestration.supervisor.design_loop import n_design_agent
 
 
 def _marker(**updates: Any):
@@ -55,11 +56,13 @@ def build_design_subgraph():
     g = StateGraph(PipelineState)
     g.add_node("front", n_front)
     g.add_node("design", n_design)
+    g.add_node("design_agent", n_design_agent)
     g.add_node("model", n_model)
     g.add_node("mark_design_done", _marker(design_done=True))
     g.add_edge(START, "front")
     g.add_edge("front", "design")
-    g.add_conditional_edges("design", r_after_design, {
+    g.add_edge("design", "design_agent")
+    g.add_conditional_edges("design_agent", r_after_design, {
         "ok": "model",
         "abort": "mark_design_done",
     })

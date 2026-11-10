@@ -2,7 +2,7 @@
 
 > 基线：2026-11-10
 >
-> 全量单测：**1194 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
+> 全量单测：**1198 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
 >
 > 历史 UVM 端到端实测：`output_e2e_v3_10_jiang_20261104_215130`（3.0 全量接线后）曾记录分级回归 **273/273 PASS**、功能计划覆盖率 **95.23%**、签核 **PASS_WITH_CAVEAT / CONDITIONAL**；**该 run 目录当前不在本工作区，不能作为当前 HEAD 的可复核证据**。Case View / 证据包的历史数字同样只作背景。
 >
@@ -451,6 +451,12 @@ supervisor_visits / supervisor_trace / audit_gate`，只由 supervisor/标记节
 `{"action":"tool"...}` / `{"action":"final"...}`，只调用 DebugTools 白名单，
 最多 6 步），再走确定性 `debug_functional` 兜底；默认 off，避免无 LLM key
 时改变现有行为。循环每步的 `tool_calls` 写入 `debug_agent_loop` 审计读数。
+
+**Design 工具循环（opt-in）**：`SIGNOFFAI_DESIGN_LOOP=on` 时，`design_expert`
+的 `design_agent` 节点在 `n_design` 没产出 RTL 后运行；工具只有
+`read_file / write_file（仅 <run>/rtl/*.sv）/ list_rtl / check_rtl`，
+最多 8 步。写出 RTL 则清 `rtl_missing` 并进入 model；仍为空则由
+`r_after_design` 走 audit。默认 off，DesignExecutor 仍是主路径。
 
 ---
 

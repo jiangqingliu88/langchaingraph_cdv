@@ -8,6 +8,7 @@ from typing import Any, Dict
 
 from pathlib import Path
 import json
+import os
 
 import structlog
 
@@ -83,6 +84,24 @@ def _spec_from_front(state: PipelineState) -> tuple:
                 f"{spec['design_name']} interfaces="
                 f"{len(spec.get('interfaces') or [])}")
     return dict(spec), arch
+
+
+def _rtl_missing_update(state: PipelineState, phase: Dict[str, Any],
+                        arch: Dict[str, Any]) -> Dict[str, Any]:
+    """design 没产出 RTL 时的门禁更新（Design 工具循环开启则先挂起）。"""
+    why = arch.get("rtl_discarded") or []
+    detail = "；".join(f"{d.get('ip')}: {d.get('why')}" for d in why) or "无 IP 产出"
+    loop = os.environ.get("SIGNOFFAI_DESIGN_LOOP", "off").strip().lower()
+    if loop in ("1", "on", "true", "yes"):
+        logger.warning(f"design 没产出 RTL，交给 Design 工具循环补写：{detail}")
+        return {"rtl_missing": True,
+                "phases": [phase, {"name": "rtl_gate", "status": "pending",
+                                   "reason": f"design 未产出 RTL，进入 Design 工具循环；{detail}"}]}
+    logger.error(f"design 没产出任何 RTL（rtl/ 是空的）→ 终止闭环。丢弃原因：{detail}")
+    return {"interrupted": True, "terminal_reason": "rtl_missing",
+            "phases": [phase, {"name": "rtl_gate", "status": "failed",
+                               "reason": "design 没产出任何 RTL —— 没有可验的 DUT，"
+                                         f"后面全都会连锁失败。丢弃详情：{detail}"}]}
 
 
 async def n_design(state: PipelineState, config) -> Dict[str, Any]:
@@ -186,14 +205,7 @@ async def n_design(state: PipelineState, config) -> Dict[str, Any]:
     _arch = updates.get("design_arch") or {}
     _rtl_files = list((Path(state.output_root) / "rtl").glob("*.sv"))         if (Path(state.output_root) / "rtl").is_dir() else []
     if not _rtl_files:
-        _why = _arch.get("rtl_discarded") or []
-        _detail = "；".join(f"{d.get('ip')}: {d.get('why')}" for d in _why) or "无 IP 产出"
-        logger.error(f"design 没产出任何 RTL（rtl/ 是空的）→ 终止闭环。丢弃原因：{_detail}")
-        updates.update({"interrupted": True, "terminal_reason": "rtl_missing"})
-        updates["phases"] = [phase, {
-            "name": "rtl_gate", "status": "failed",
-            "reason": f"design 没产出任何 RTL —— 没有可验的 DUT，后面全都会连锁失败。"
-                      f"丢弃详情：{_detail}"}]
+        updates.update(_rtl_missing_update(state, phase, _arch))
     return updates
 
 

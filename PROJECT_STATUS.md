@@ -12,7 +12,7 @@
 
 本次修复把“架构原则正确、但测试/legacy/文档/安全没收口”的状态收口到了可提交、可回归的基线：
 
-- 主套件 **1194 passed / 0 failed / 4 skipped**；
+- 主套件 **1198 passed / 0 failed / 4 skipped**；
 - 工作台 **692 passed / 0 failed**；
 - 架构守卫 `[architecture] OK`；
 - 当前树 secret scan clean；
@@ -116,7 +116,7 @@ spec → front bootstrap → docs/specs + data + cases
 | `test_staged_regression` 时间戳 flaky | 测试显式设置 expand 的 mtime |
 | `test_cli_evidence` 依赖仓库内 tmp | monkeypatch `_git_changed_files` 返回 None |
 | 旧 casemodel / isa_gen / verification_os 空壳 | 删除空目录、pycache、0 字节 `archture.md` |
-| 主套件 | 从 7 failed 收敛到 **1194 passed / 4 skipped** |
+| 主套件 | 从 7 failed 收敛到 **1198 passed / 4 skipped** |
 | 工作台 | **692 passed**；CI deselect 已移除 |
 
 ### 2.2 安全
@@ -169,6 +169,7 @@ spec → front bootstrap → docs/specs + data + cases
 | 人工门 | Debug 连续 5 次返工 → 主图 `human_review` 用 `interrupt()` 挂起；无 checkpoint 时显式 `auto_no_checkpoint` 并 warning |
 | 硬审计 | `audit_gate` 用 `verify_package` 重算文件/包哈希；失败写 `AUDIT_BLOCKED`、`terminal_reason=audit_gate_failed`，不进入 READY 签核 |
 | 工具循环 | `supervisor/tool_loop.py`：LLM 输出 `tool`/`final` JSON，按 DebugTools 白名单执行，最多 6 步；`SIGNOFFAI_AGENT_LOOP=on` 时接入 `debug_expert`，失败回退确定性管线 |
+| Design 工具循环 | `supervisor/design_loop.py`：`SIGNOFFAI_DESIGN_LOOP=on` 且 design 未产出 RTL 时，用 `read_file/write_file（仅 rtl/*.sv）/list_rtl/check_rtl` 补写；仍为空则 `r_after_design` 走 audit |
 | 硬审计 | `audit_gate` 调确定性 `n_audit` 后，独立核对 `report.json` 与 `signoff_evidence/manifest.json`，不信任子图汇报 |
 | 回滚 | `build_legacy_closed_loop_graph()` / `SIGNOFFAI_SUPERVISOR=off` 保留旧 24 节点单图；`NODE_NAMES` 不变，stages/UI 不受影响 |
 | 版本 | 2.3.0；新增 `v2.1.0-pre-supervisor` / `v2.2.0-pre-agent-loop` 基线 tag |
@@ -179,7 +180,7 @@ spec → front bootstrap → docs/specs + data + cases
 
 | 项 | 结果 |
 |---|---|
-| 主套件 | **1194 passed / 0 failed / 4 skipped** |
+| 主套件 | **1198 passed / 0 failed / 4 skipped** |
 | 工作台 | **692 passed / 0 failed**（PySide6 回调析构 warning，无 failed） |
 | 架构守卫 | `[architecture] OK` |
 | 编译检查 | `compileall` 退出码 0 |

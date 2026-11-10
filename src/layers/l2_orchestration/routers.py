@@ -17,8 +17,8 @@ logger = structlog.get_logger()
 
 
 def r_after_design(state: PipelineState) -> str:
-    """design 之后的分流：没 RTL 就直接去 audit（同 `eda_missing` 的出口）。"""
-    return "abort" if state.interrupted else "ok"
+    """design/design_agent 之后的分流：没 RTL 就直接去 audit。"""
+    return "abort" if (state.interrupted or state.rtl_missing) else "ok"
 
 
 def r_after_round_bump(state: PipelineState) -> str:

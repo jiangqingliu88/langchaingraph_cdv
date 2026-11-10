@@ -194,6 +194,10 @@ class PipelineState(BaseModel):
     human_decision: str = ""
     #: Debug 子图内 LLM 工具循环的审计读数（启用 SIGNOFFAI_AGENT_LOOP=on 时）。
     debug_agent_loop: Dict[str, Any] = Field(default_factory=dict)
+    #: Design 子图内 LLM 工具循环的审计读数（启用 SIGNOFFAI_DESIGN_LOOP=on 时）。
+    design_agent_loop: Dict[str, Any] = Field(default_factory=dict)
+    #: design 没产出 RTL，但 Design 工具循环仍有机会补写；门禁看这个标记。
+    rtl_missing: bool = False
     #: 纯审计门的结论（`report.json` / `signoff_evidence` 是否存在 + 哈希可读）。
     audit_gate: Dict[str, Any] = Field(default_factory=dict)
     #: 可观测的路由轨迹（只追加，不覆盖）。

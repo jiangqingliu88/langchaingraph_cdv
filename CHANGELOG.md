@@ -17,7 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `debug_functional` fallback; default off.
 - Tool calls are whitelisted by name and recorded in `debug_agent_loop`;
   unknown tools are rejected and fed back as observations.
-- Main suite: 1194 passed / 4 skipped.
+- **Design tool loop** (opt-in `SIGNOFFAI_DESIGN_LOOP=on`): `design_expert`
+  gets `read_file` / `write_file` (only `<run>/rtl/*.sv`) / `list_rtl` /
+  `check_rtl`; if `n_design` produced no RTL, the loop can write it before the
+  `rtl_missing` gate. Default off.
+- Main suite: 1198 passed / 4 skipped.
 
 ## [2.2.0] - 2026-11-10
 
