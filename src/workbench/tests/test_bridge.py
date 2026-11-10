@@ -59,8 +59,8 @@ class TestCatalog:
                           # 发布包写 spec/ip_releases/，是**对外交付物**，
                           # 只能在人点"生成发布包"时发生（列表按名字排序）
                           "ip.evidence", "ip.release_build", "ip.run",
-                          # ISA 产物落盘：**写盘**，必须显式触发
-                          "isa_gen.export",
+                          # ISA IR 编译：**写盘 + 起子进程**，必须显式触发
+                          "isa_ir.build",
                           "pipeline.answer_approval", "pipeline.approval_handler",
                           "pipeline.cancel", "pipeline.resume", "pipeline.start",
                           "soc.c_run", "soc.run"]

@@ -9,7 +9,7 @@
 
 | 板块 | 职责 | 包 |
 |---|---|---|
-| **generation** | 产生验证产物（case 模型 / UVM / ISA / 模型 / 文档） | `casemodel_tools`、`uvm_tools`、`isa_gen_tools`、`cmodel_tools`、`scmodel_tools`、`doc_tools` |
+| **generation** | 产生验证产物（UVM / ISA IR / 模型 / 文档） | `uvm_tools`、`isa_ir_tools`、`cmodel_tools`、`scmodel_tools`、`doc_tools` |
 | **checking** | 只读/判定（断言、debug、覆盖率分析、spec 校验） | `assertion_tools`、`debug_tools`、`coverage_tools`、`spec_tools` |
 | **execution** | 跑 EDA / 回归（不决定生成什么、也不决定签不签） | `regression_tools` |
 | **flow** | 跨阶段流程（签核、血缘、趋势） | `flow_tools`、`trend_tools` |
@@ -21,7 +21,7 @@
 ```text
 src/tools/
 ├─ generation/
-│  ├─ casemodel_tools/   uvm_tools/      isa_gen_tools/
+│  ├─ uvm_tools/         isa_ir_tools/
 │  ├─ cmodel_tools/      scmodel_tools/  doc_tools/
 ├─ checking/
 │  ├─ assertion_tools/   debug_tools/    coverage_tools/   spec_tools/

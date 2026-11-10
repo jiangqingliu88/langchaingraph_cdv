@@ -722,7 +722,7 @@ src/
 │   └── l5_evolution/              # 经验蒸馏
 ├── tools/             # 领域工具：checking / generation / humanview / common …
 │   ├── generation/uvm_tools/      # UVM 渲染与模板
-│   ├── generation/isa_gen_tools/  # NPU ISA 事务序列生成器（见下节）
+│   ├── generation/isa_ir_tools/   # NPU ISA IR → 命令流生成器（见下节）
 │   └── checking/                  # coverage / debug / spec / assertion 工具
 ├── cli/               # vagent CLI（commands.py + cmd_*.py 命令组）
 └── workbench/         # PySide6 桌面工作台（可选，不是 Web —— 见 CLAUDE.md）
@@ -756,27 +756,27 @@ tests/                 # pytest 套件
 
 ---
 
-## NPU ISA 激励生成器（`src/tools/generation/isa_gen_tools/`）
+## NPU ISA 激励生成器（`src/tools/generation/isa_ir_tools/`）
 
-独立工具：吃**场景 DSL**（YAML），吐**ISA 事务层 IR** + 二进制编码 + 张量数据。
+独立工具：吃一份 `.ir.txt`（手写源，或已 operand-resolved 的 `seq.ir`），
+按 `tensors → ir → commands` 三段产出可直接交接 TB 的命令包。
 
 ```powershell
-python -m src.tools.generation.isa_gen_tools.cli validate config/isa_gen/examples/npu_gemm.yaml
-python -m src.tools.generation.isa_gen_tools.cli compile  config/isa_gen/examples/npu_gemm.yaml -o out/
-python -m src.tools.generation.isa_gen_tools.cli explain  --txn gemm_txn     # 编码表疑点解读
-python -m src.tools.generation.isa_gen_tools.cli ops                          # 列 122 条 op
+cd src/tools/generation/isa_ir_tools
+python -B -X utf8 run_flow.py ir_seq/sanity_glsu_local_dram_smoke.ir.txt `
+    --target standalone --core-id 0 [--out-dir artifacts/<case>]
 ```
 
-`compile -o <dir>` 一次产齐**六件套**（文档 §3.6）：
+产物目录与产出者一一对应：
 
-| 文件 | 谁产 | 说明 |
+| 目录 | 产出者 | 内容 |
 |---|---|---|
-| `case.json` / `seq.ir.json` / `preload.json` / `expect.json` | 生成器（L1→L2） | |
-| `seq.hex` + `reg-init.txt` + `seq.lst` | **L3 编码器** | `seq.lst` 是 NICE/VNICE 指令流的**人可读视图**（与 `seq.hex` 逐行对应） |
-| `tensors/*.hex` + `manifest/*.json` + `registry.json` | **tensor_gen** | `registry.json` 是四方共用的唯一枢纽 |
+| `01_tensors/` | `isa_ir_tools.cli`（tensor_gen） | `tensor_spec.json`、`scalars.json`、`data/{*.bin,*.hex,*.memh}`、`data/manifest.json`（文件级 sha256） |
+| `02_ir/` | `ir_flow.FixedIRFlow.generate` | `seq.ir`、`seq.ir.json`、`tensors/`、`cfg_bindings.json`、`source_map.json` 等 |
+| `03_commands/` | `cmd_compile.compile_seq` | `commands.tsv` / `commands.json` / `commands.txt`、`cmddata.memh`、`data/`（mem_init 资产） |
 
-**它把"哪些数字对不上"当一等公民**：编码表里的同码碰撞、前缀不符、文档与实现不一致，
-由 `explain` 原样端出来，工具**不替编码表做判断**。
+工作台「ISA 激励」页通过 bridge 绑定调用同一套逻辑：`isa_ir.validate`（纯解析）与
+`isa_ir.build`（三阶段 + 落盘，显式触发）。完整说明见该目录的 `readme.md`。
 
 ---
 
@@ -1059,9 +1059,9 @@ include，测试恢复其原意。**这 82 个测试当时恢复全绿。**
 
 ```powershell
 python -m pytest tests/ -q                            # 2026-11-07：1165 passed / 8 failed / 2 skipped
-python -m pytest src/workbench/tests -q               # 工作台：758 项（需要 PySide6）
+python -m pytest src/workbench/tests -q               # 工作台：692 项（需要 PySide6）
 python -m pytest src/layers/l3_decision/vplan tests/test_vplan_integration.py -q
-python -m pytest src/tools/generation/isa_gen_tools/tests -q     # ISA 工具：290 passed / 1 skipped
+python -m pytest src/workbench/tests/test_isa_gen_module.py -q   # ISA IR 工具 + 工作台页面
 ```
 
 若干 **守卫型**测试值得单独提 —— 它们防的都是"**不会自动发现的退化**"：

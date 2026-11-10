@@ -122,39 +122,21 @@ BINDINGS: List[ToolBinding] = [
         doc="run 目录 → TP IR / 覆盖率计划 / 契约 / sv 资产 / 回归（只读）",
     ),
 
-    # ══ 验证管理系统：ISA 激励生成 ═══════════════════════════════
-    # 场景 DSL → ISA 事务层 IR。前四个都是**纯的**（进 dict 出 dict，
-    # 不写盘不起子进程），所以界面上反复点也没代价；落盘那条单独标非纯。
+    # ══ 验证管理系统：ISA IR 激励生成 ═══════════════════════════
+    # .ir.txt → seq.ir → commands.tsv。校验是**纯的**（只解析，不写盘），
+    # 编译跑完整三阶段并落盘（还会 fork 子进程），所以单独标非纯。
 
     ToolBinding(
-        name="isa_gen.validate",
-        target="src.tools.generation.isa_gen_tools.api:run_validate",
+        name="isa_ir.validate",
+        target="src.tools.generation.isa_ir_tools.api:run_validate",
         kind="json",
-        doc="场景 DSL → schema 校验结果",
+        doc="IR 源 / seq.ir → 动作、张量、视图计数（只解析，不写盘）",
     ),
     ToolBinding(
-        name="isa_gen.compile",
-        target="src.tools.generation.isa_gen_tools.api:run_compile",
-        kind="json",
-        doc="场景 DSL → IR（含地址分配 / preload / expect / 编译报告）",
-    ),
-    ToolBinding(
-        name="isa_gen.explain",
-        target="src.tools.generation.isa_gen_tools.api:run_explain",
-        kind="json",
-        doc="注册表解读（同码碰撞 / 类前缀不符 / 文档与编码表的分歧）",
-    ),
-    ToolBinding(
-        name="isa_gen.ops",
-        target="src.tools.generation.isa_gen_tools.api:run_ops",
-        kind="json",
-        doc="op 注册表清单",
-    ),
-    ToolBinding(
-        name="isa_gen.export",
-        target="src.tools.generation.isa_gen_tools.export:write_artifacts",
+        name="isa_ir.build",
+        target="src.tools.generation.isa_ir_tools.api:run_build",
         kind="json", pure=False,
-        doc="按文档 §3.6 的布局落盘编译产物（**写盘**，必须显式触发）",
+        doc="三阶段编译并落盘：01_tensors / 02_ir / 03_commands（**写盘 + 子进程**，必须显式触发）",
     ),
 
     # ══ 覆盖率豁免（Exclude）══════════════════════════════════════

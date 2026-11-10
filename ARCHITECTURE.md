@@ -489,7 +489,7 @@ pass（`None ≠ False`）。报告随证据包 `verdict/` 段收走，并作为
 
 | 板块 | 职责 | 包 |
 |---|---|---|
-| **generation** | 产生产物 | `uvm_tools`、`isa_gen_tools`、`cmodel_tools`、`scmodel_tools`、`doc_tools` |
+| **generation** | 产生产物 | `uvm_tools`、`isa_ir_tools`、`cmodel_tools`、`scmodel_tools`、`doc_tools` |
 | **checking** | 只读/判定 | `assertion_tools`、`debug_tools`、`coverage_tools`、`spec_tools` |
 | **execution** | 跑 EDA/回归 | `regression_tools` |
 | **flow** | 签核/血缘/趋势 | `flow_tools`、`trend_tools` |
@@ -500,7 +500,7 @@ pass（`None ≠ False`）。报告随证据包 `verdict/` 段收走，并作为
 物理目录与板块一一对应：
 
 ```text
-src/tools/generation/    uvm_tools        isa_gen_tools
+src/tools/generation/    uvm_tools        isa_ir_tools
                          cmodel_tools     scmodel_tools  doc_tools
 src/tools/checking/      assertion_tools  debug_tools  coverage_tools  spec_tools
 src/tools/execution/     regression_tools
@@ -529,7 +529,7 @@ src/tools/common/        lib
 | `checking/coverage_tools` | UCDB/HTML/报告、coverstore materialize |
 | `checking/debug_tools` | 日志分类、指纹、autofix |
 | `checking/assertion_tools` | 断言（当前流水线不生成 SVA） |
-| `generation/isa_gen_tools` | NPU ISA DSL → IR → 32bit 编码 / 张量 / manifest |
+| `generation/isa_ir_tools` | NPU ISA IR → tensors → seq.ir → commands.tsv / 张量 / manifest |
 | `flow/flow_tools` | signoff/lineage/compare 等流程 API |
 | `generation/doc_tools` / `flow/trend_tools` / `generation/cmodel_tools` / `generation/scmodel_tools` | 文档、趋势、C/Python 参考模型 |
 | `humanview/aivm_ir` | PM 手写测试点表（xlsx）→ 测试点本体 + M1 覆盖计划（`bridge.py` 已随引擎删除） |
@@ -1422,7 +1422,7 @@ python -m pytest tests/ -q                            # 全量（数量见顶部
 python -m pytest tests/core -q                        # Architecture 2.0 核心
 python -m pytest src/tools/checking src/tools/humanview -q          # 检查/视图工具包
 python -m pytest src/layers/l3_decision/vplan -q                 # VPlan 引擎 + 框架
-python -m pytest src/tools/generation/isa_gen_tools/tests -q        # ISA 工具
+python -m pytest src/workbench/tests/test_isa_gen_module.py -q      # ISA IR 工具 + 工作台页面
 python -m pytest src/workbench/tests -q               # 工作台（数量见顶部基线）
 python -m config.architecture_guard                   # 行数 / 圈复杂度预算
 python scripts/mutation_guards.py                     # 9 条核心守卫变异测试

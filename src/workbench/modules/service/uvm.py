@@ -85,7 +85,7 @@ class UVMServiceModule(ModuleBase):
         page, layout = self._page()
         layout.addWidget(QLabel("验证配置由 VPlan 执行资产与激励工具承担，本页只做入口。"))
         row = QHBoxLayout()
-        row.addWidget(_button("打开 ISA 激励", lambda: open_module(self.ctx, "verify.isa_gen")))
+        row.addWidget(_button("打开 ISA IR 激励", lambda: open_module(self.ctx, "verify.isa_gen")))
         row.addStretch(1)
         layout.addLayout(row)
         layout.addWidget(_muted("编辑的是 VPlan/激励输入；保存后回到本服务继续。"))

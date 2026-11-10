@@ -1,8 +1,7 @@
-"""ISA 激励 —— 归属「验证构建」业务线。
+"""ISA 激励模块。
 
-场景 DSL → ISA 事务层 IR。工具在 `src/tools/generation/isa_gen_tools/`，
-本模块只负责把它的产物摆成能看的四张表 —— 界面经 bridge 绑定访问工具，
-**不 import 工具包**。
+输入一份 `.ir.txt`（手写 IR 或已解析 seq.ir），经 `isa_ir_tools` 的三阶段
+流水线生成 seq.ir 与 commands.tsv；界面只经 bridge 白名单访问工具。
 """
 from .module import IsaGenModule
 

@@ -21,7 +21,7 @@ from typing import Dict, Tuple
 BOARDS: Dict[str, Tuple[str, ...]] = {
     "generation": (
         # case 模型引擎已删除；执行资产在 `src.layers.l3_decision.vplan`
-        "uvm_tools", "isa_gen_tools",
+        "uvm_tools", "isa_ir_tools",
         "cmodel_tools", "scmodel_tools", "doc_tools",
     ),
     "checking": (

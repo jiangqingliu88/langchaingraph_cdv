@@ -1,0 +1,43 @@
+// Operand-resolved IR; cfg writes are complete rows. cmddata encoding has not run.
+.case seed=20261104, instruction_policy="explicit"
+.profile chip_id=0, die_id=0, cluster_id=0, core_id=0, isa_revision="xlsx_v0.3_reviewed", address_schema="global48_xlsx_v0.3_reviewed"
+// source line 6
+group_mask_drv_xn mask=1, rs1val=0x00000001, operand_encoding="xlsx_v0.3_reviewed:S:mask,-"
+// source line 6
+.tensor Source, shape=[1,2,64], dtype="int8", generation={mode:"numeric",pattern:{kind:"ones"},seed:20261104,quantize_rm:"RNE",overflow_policy:"error",denormal_policy:"exclude",special_values:[],stream_version:2,actual_special_values:[],file:"tensors/Source.bin"}, layout={profile:"linear_atom32"}, placement={region:"dram_common",base:0x10000000}
+// source line 7
+.view Source_d, tensor="Source", layout={profile:"linear_atom32"}, placement={region:"lmem_core_spad",base:0x00001000,place:{die:0,cluster:0,core:0}}
+// source line 7
+.reserve_output Result, dtype="int8", shape=[2,64], layout={profile:"linear_atom32"}, placement={region:"dram_common",base:0x20000000,place:{die:0,cluster:0,core:0}}
+// source line 7
+.view Result_d, tensor="Result", layout={profile:"linear_atom32"}, placement={region:"dram_common",base:0x20000000,place:{die:0,cluster:0,core:0}}
+// source line 11
+mem_init schema="mem_init_v1", ref="Source_d", source_tensor="Source", isa_revision="xlsx_v0.3_reviewed", address_schema="global48_xlsx_v0.3_reviewed", path="backdoor", file="tensors/Source.hex", format="hex", region="dram_common", address_kind="global48", base=0x0040020000, shape=[1,2,64], dtype="int8", element_bits=8, byte_order="little", file_offset_bytes=0, file_row_stride_bytes=32, file_plane_stride_bytes=64, dst_row_stride_bytes=64, dst_plane_stride_bytes=128, copy_row_bytes=32, copy_bytes=64, span_bytes=128, payload_bytes=64, file_size_bytes=128, file_sha256="dc87ab4e1b09d5e3f6a620b7e9d2054d2c6e1f9d3d0a7f3d7c4b8f0f7d1c3b6a", content_sha256="c8d5b6f5c14d2a3b1c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c", tail_policy="zero", gap_policy="untouched"
+// source line 12
+mem_scrub region=dram_common, address_kind=global48, base=0x0040020000, size_bytes=128, pattern=0xa5, path=backdoor
+// source line 13
+// cfg fields module=glsu group=0 row=0 cfg_num_dim0=64<bind:src:Source_d:shape/layout>, cfg_size_dim1=2<bind:src:Source_d:shape/layout>, cfg_size_dim2=1<bind:src:Source_d:shape/layout>, cfg_mx=0<bind:src:Source_d:dtype>, cfg_type=0<bind:src:Source_d:dtype>, cfg_mantissa=0<bind:src:Source_d:dtype>, cfg_wd=3<bind:src:Source_d:dtype>, cfg_stride_dim2_in=4<bind:src:Source_d:shape/layout>, cfg_exp_mode=0<with>
+npu_cfg_drv_xn module=glsu, cfg_reg_addr=0x0000, rs1val=0x00000000, rs2val=0x00000040
+// cfg fields module=glsu group=0 row=1 cfg_stride_dim2_in=4<bind:src:Source_d:shape/layout>, cfg_mx=0<bind:src:Source_d:dtype>, cfg_type=0<bind:src:Source_d:dtype>, cfg_mantissa=0<bind:src:Source_d:dtype>, cfg_wd=3<bind:src:Source_d:dtype>, cfg_stride_dim1_in=2<bind:src:Source_d:shape/layout>
+npu_cfg_drv_xn module=glsu, cfg_reg_addr=0x0001, rs1val=0x00000002, rs2val=0x00000004
+// cfg fields module=glsu group=0 row=2 cfg_stride_dim2_out=4<bind:dst:Tile_l:shape/layout>, cfg_stride_dim1_out=2<bind:dst:Tile_l:shape/layout>
+npu_cfg_drv_xn module=glsu, cfg_reg_addr=0x0002, rs1val=0x00000002, rs2val=0x00000004
+// source line 14
+tld_drv_xn src="Source_d", dst="Tile_l", rs1val=0x00001000, rs2val=0x00010000, operand_encoding="xlsx_v0.3_reviewed:L:dst,D:src"
+// source line 15
+sync_drv_xn tag="load_complete"
+// source line 16
+wait_done tag=load_complete, phase=rsp_accept, timeout_cycles=100000
+// source line 17
+// cfg fields module=tst group=1 row=0 cfg_num_dim0=64<bind:src:Tile_l:shape/layout>, cfg_size_dim1=2<bind:src:Tile_l:shape/layout>, cfg_size_dim2=1<bind:src:Tile_l:shape/layout>, cfg_mx=0<bind:src:Tile_l:dtype>, cfg_type=0<bind:src:Tile_l:dtype>, cfg_mantissa=0<bind:src:Tile_l:dtype>, cfg_wd=3<bind:src:Tile_l:dtype>, cfg_stride_dim2_in=4<bind:src:Tile_l:dtype>, cfg_stride_dim1_in=2<bind:src:Tile_l:shape/layout>, cfg_stride_dim2_out=4<bind:dst:Result_d:shape/layout>, cfg_stride_dim1_out=2<bind:dst:Result_d:shape/layout>
+npu_cfg_drv_xn module=tst, cfg_reg_addr=0x0100, rs1val=0x00010002, rs2val=0x00000040
+// cfg fields module=tst group=1 row=1 cfg_stride_dim2_in=4<bind:src:Tile_l:shape/layout>, cfg_mx=0<bind:src:Tile_l:dtype>, cfg_type=0<bind:src:Tile_l:dtype>, cfg_mantissa=0<bind:src:Tile_l:dtype>, cfg_wd=3<bind:src:Tile_l:dtype>, cfg_stride_dim1_in=2<bind:src:Tile_l:shape/layout>
+npu_cfg_drv_xn module=tst, cfg_reg_addr=0x0101, rs1val=0x00010002, rs2val=0x00000004
+// cfg fields module=tst group=1 row=2 cfg_stride_dim2_out=4<bind:dst:Result_d:shape/layout>, cfg_stride_dim1_out=2<bind:dst:Result_d:shape/layout>
+npu_cfg_drv_xn module=tst, cfg_reg_addr=0x0102, rs1val=0x00000002, rs2val=0x00000004
+// source line 18
+tst_drv_xn src="Tile_l", dst="Result_d", rs1val=0x00001000, rs2val=0x00020000, operand_encoding="xlsx_v0.3_reviewed:L:src,D:dst"
+// source line 19
+sync_drv_xn tag="store_complete"
+// source line 20
+wait_done tag=store_complete, phase=rsp_accept, timeout_cycles=100000
