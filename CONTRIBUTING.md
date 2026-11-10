@@ -35,7 +35,7 @@ ruff format --check src/ tests/   # formatting
 pytest tests/ -q                  # core suite
 pytest src/tools/checking src/tools/humanview \
        src/layers/l3_decision/contract/tests \
-       src/layers/l3_decision/casemodel/tests -q
+       tests/test_vplan_integration.py tests/test_vplan_bootstrap.py -q
 python -m config.architecture_guard   # layer-direction invariants
 ```
 

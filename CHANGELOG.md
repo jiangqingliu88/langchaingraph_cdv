@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-10
+
+### Changed
+
+- VPlan spec-first planning layer: `docs/specs/*.csv` + `data/contract_matrix/*.csv`
+  + `cases/*.yaml`, human review gate, `PLAN_ONLY` build, execution bridge and
+  evidence-driven `vplan gate`.
+- UVM assets now use the `<run>/sv/` layout (legacy top-level layout is opt-in).
+- ISA stimulus path replaced the declarative random generator with
+  `isa_ir_tools` (IR → tensors → seq.ir → commands) and a standalone TB player.
+- Tool boards / docs / tests reconciled with the current directory layout.
+
+### Fixed
+
+- Architecture guard now enforces watched-file registered budgets.
+- VPlan gate selects the latest linked run and reports active drift.
+- Contract matrix schema validates the 13 columns and status enum; writes are atomic.
+- VPlan TP can bind explicit stimulus fields; `uvm_arch` scoreboards map via
+  `check_artifact`/`object` where declared.
+- Secret scan (`scripts/check_secrets.py`) and cleaned `TODO.md`.
+- Main suite 1174 passed / 4 skipped; workbench 692 passed.
+
 ## [1.0.0] - 2026-11-05
 
 Initial public release.

@@ -1,115 +1,31 @@
-● src/layers/（五层）和 src/agents/（七 Agent）是两种不同的切分维度，不是并列关系，而是**「平台」与「执行者」**的关系。
-     
-  一句话关系
-     
-  ▎ layers 是「横切的能力平台」（引擎），agents 是「纵向的领域角色」（驾驶员）。
+# TODO / 技术债
 
-  横切 —— layers 五层能力（所有 Agent 共享的引擎）
-    L5 进化（蒸馏）      ────────────────────────────────
-    L4 记忆（经验库）    ────────────────────────────────
-    L3 决策（决策引擎）  ────────────────────────────────
-    L2 调度（编排+通信） ────────────────────────────────
-    L1 基础设施（EDA）   ────────────────────────────────
-         │      │      │      │      │      │      │
-      design model verify  ops  coverage debug audit   ← 纵向七 Agent（领域角色）
+本文件是**代码仓库的待办入口**，不是环境变量速查表，也不保存任何凭据。
 
-  两者的调用方向（从实际 import 看到的）
+完整的架构分析、风险清单、VPlan 闭环验收项见
+[`PROJECT_STATUS.md`](PROJECT_STATUS.md)；契约流程见
+[`CONTRACT_FLOW.md`](CONTRACT_FLOW.md)。
 
-  ① L2 编排 agents（layers → agents）：
+## 当前优先级
 
-  # src/layers/l2_orchestration/execution.py
-  from src.agents.design import DesignAgent
-  from src.agents.model import ModelAgent
-  ...  # 七 Agent 全部被 L2 的 execution.py import 并编排成闭环
+- [x] **P0** 测试/守卫全绿：boards 注册表、architecture budget、VPlan bootstrap 计数、
+      staged regression 时间戳测试、CLI evidence 文案测试。
+- [x] **P0** 安全：当前树 secret scan clean；`scripts/check_secrets.py` 已接入 CI/pre-commit。
+      历史凭据的轮换/清史仍需维护者执行。
+- [ ] **P1** VPlan review 粒度拆分：reviewed source 与 generated sidecar 分开，
+      避免生成资产变更导致整份审阅失效。
+- [x] **P1** VPlan gate：按 `linked_at` 选最新 run；增加 `active_drift` /
+      `active_unsupported` 漂移报告。
+- [x] **P1** TP realization：VPlan 表支持 `stimulus_field` / `realization_kind` /
+      `realization_agent` / `realization_sequence`。
+- [x] **P1** `uvm_arch` 映射：scoreboard 优先按 `check_artifact` / `object` 绑定，
+      无声明时才回退。
+- [x] **P1** 契约矩阵 schema：13 列 + status 枚举 + 原子写。
+- [ ] **P2** `sv/` 单布局，legacy 退场；工作台/主套件性能优化。
+- [ ] **P2** 真实 Questa 环境上的 VPlan E2E：
+      `bootstrap → review → build → execute → link → gate → evidence verify`。
 
-  ② agents 依赖 layers 的能力（agents → layers）：
+## 明确不在本仓库处理
 
-  # agents 里实际 import 的 layers：
-  from src.layers.l2_orchestration.agents.base import BaseAgent   # 继承 L2 基类
-  from src.layers.l2_orchestration.agents.registry import register_agent  # L2 注册
-  from src.layers.l1_infrastructure.output_config import make_output_root  # 调 L1
-  from src.layers.l1_infrastructure.coverage_backend import ...  # 调 L1
-  from src.layers.l2_orchestration.communication.tool_subprocess import ...  # 走 MCP
-  from src.layers.l4_memory.debug_experience import ...  # 读写 L4 经验
-  from src.layers.l5_evolution.growth import ...  # 受益 L5 蒸馏
-
-  具体映射：每个 Agent 用哪些层
-
-  ┌──────────┬───────────────────────────────────┬──────────────────────────────────┐
-  │  Agent   │             横跨的层              │               说明               │
-  ├──────────┼───────────────────────────────────┼──────────────────────────────────┤
-  │ design   │ L1(output_config) + L2(base)      │ 继承 BaseAgent，用输出目录       │
-  ├──────────┼───────────────────────────────────┼──────────────────────────────────┤
-  │ ops      │ L1 + L2(tool_subprocess)          │ 通过 MCP 调 L1 的回归            │
-  ├──────────┼───────────────────────────────────┼──────────────────────────────────┤
-  │ coverage │ L1(coverage_backend) + L2 + L4    │ 收集覆盖率（L1）+ 归因校准（L4） │
-  ├──────────┼───────────────────────────────────┼──────────────────────────────────┤
-  │ debug    │ L4(debug_experience) + L5(growth) │ 读写调试经验 + 受益蒸馏          │
-  ├──────────┼───────────────────────────────────┼──────────────────────────────────┤
-  │ verify   │ L2(policy_pack)                   │ 按策略包加载领域知识             │
-  └──────────┴───────────────────────────────────┴──────────────────────────────────┘
-
-  为什么这样分（设计意图）
-
-  ┌────────────┬──────────────────────────────────────────────┬────────────────────────────────────────────────────────┐
-  │    维度    │                layers（五层）                │                    agents（七角色）                    │
-  ├────────────┼──────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
-  │ 切分方向   │ 横切（能力/引擎）                            │ 纵向（领域/角色）                                      │
-  ├────────────┼──────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
-  │ 回答的问题 │ 「怎么做」——基础设施、调度、决策、记忆、进化 │ 「谁来做」——设计、模型、验证、运维、覆盖率、调试、审计 │
-  ├────────────┼──────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
-  │ 稳定性     │ 与 DUT 类型无关，稳定                        │ 与验证领域相关，可扩展                                 │
-  ├────────────┼──────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
-  │ 复用性     │ 跨项目复用（引擎）                           │ 每个验证项目都需要这七个角色                           │
-  └────────────┴──────────────────────────────────────────────┴────────────────────────────────────────────────────────┘
-
-  一句话总结
-
-  ▎ layers 是「发动机、变速箱、导航、油箱」这套引擎，agents 是「设计工程师、验证工程师、调试工程师」这七位驾驶员——引擎（layers）是
-  ▎ 横切的、可复用的，驾驶员（agents）是纵向的、干具体活的；L2 的 execution.py
-  ▎ 负责「安排七个驾驶员按闭环流程干活」，每个驾驶员干到哪一步就调用对应层的引擎能力。
-
-  这个结构的好处是：如果要加「性能 Agent」或换「VCS 后端」，只需要在 agents 加一个角色、或在 L1
-  加一个后端，不用动五层引擎——职责分离清晰。
-
-
-$env:ANTHROPIC_MODEL="deepseek-v4-flash"
-$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4-flash"
-$env:ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-flash"
-
-$env:ANTHROPIC_BASE_URL="https://api.deepseek.com/anthropic"
-$env:ANTHROPIC_AUTH_TOKEN="<your-anthropic-auth-token>"
-$env:ANTHROPIC_MODEL="deepseek-v4-flash"
-$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4-flash"
-$env:ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-flash"
-$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-v4-flash"
-$env:CLAUDE_CODE_SUBAGENT_MODEL="deepseek-v4-flash"
-$env:CLAUDE_CODE_EFFORT_LEVEL="high"
-claude
-
-
-$env:ANTHROPIC_BASE_URL="https://open.bigmodel.cn/api/anthropic"
-$env:ANTHROPIC_AUTH_TOKEN="8f6c9d67bbcc446dbcd9dcb18882f48f.gxrwQrFxJPrJpVpx"
-$env:ANTHROPIC_MODEL="glm-5.3"
-$env:ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.3"
-$env:ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.3"
-$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.3-flash"
-$env:CLAUDE_CODE_EFFORT_LEVEL="high"
-
-
-$env:ANTHROPIC_BASE_URL="https://open.bigmodel.cn/api/anthropic"
-$env:ANTHROPIC_AUTH_TOKEN="82b96c255a1e496fbdccbd4c20c00e5b.5HqRGg6KWfSWUcB0"
-$env:ANTHROPIC_MODEL="glm-4.7-flash"
-$env:ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.7-flash"
-$env:ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.7-flash"
-$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.7-flash"
-$env:CLAUDE_CODE_EFFORT_LEVEL="high"
-
-$env:ANTHROPIC_BASE_URL="https://open.bigmodel.cn/api/anthropic"
-$env:ANTHROPIC_AUTH_TOKEN="82b96c255a1e496fbdccbd4c20c00e5b.5HqRGg6KWfSWUcB0"
-$env:ANTHROPIC_MODEL="glm-4.5-air"
-$env:ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.5-air"
-$env:ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.5-air"
-$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.5-air"
-$env:CLAUDE_CODE_EFFORT_LEVEL="high"
-
+- `isa_ir_tools` / TB player 的集成与测试（独立工具，见其目录 readme）。
+- 需要 QuestaSim 的 EDA 端到端验证（在装有 EDA 的机器上执行）。

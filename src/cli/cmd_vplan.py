@@ -313,24 +313,30 @@ def vplan_gate(project, apply, json_output):
         counts[row["status"]] = counts.get(row["status"], 0) + 1
     eligible = [r for r in results if r["eligible_active"]]
     blocked = [r for r in results if not r["eligible_active"]]
+    drift = [r for r in results if r.get("active_drift")]
     summary = {
         "contracts": len(results),
         "by_status": counts,
         "eligible_active": len(eligible),
         "blocked": len(blocked),
+        "active_unsupported": len(drift),
         "changed": changed,
         "blocked_examples": blocked[:10],
+        "active_drift_examples": drift[:10],
     }
     if json_output:
         click.echo(json.dumps(summary, ensure_ascii=False, indent=2))
     else:
         console.print(f"契约 {summary['contracts']}：{counts}")
         console.print(f"  eligible_active {len(eligible)} / blocked {len(blocked)}"
-                      f" / changed {changed}")
+                      f" / active_unsupported {len(drift)} / changed {changed}")
         for row in blocked[:5]:
             console.print(f"  [yellow]• {row['contract_id']}: "
                           f"{'; '.join(row['reasons'])}[/yellow]")
-    if any(r["status"] != "active" for r in results):
+        for row in drift[:5]:
+            console.print(f"  [red]! active 但最新 run 不支持 {row['contract_id']}: "
+                          f"{'; '.join(row['reasons'])}[/red]")
+    if any(r["status"] != "active" for r in results) or drift:
         raise SystemExit(1)
 
 

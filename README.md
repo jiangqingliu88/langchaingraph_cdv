@@ -61,8 +61,12 @@ python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activa
 pip install -e ".[dev]"                            # add ",gui" for the workbench
 cp .env.example .env                               # optional; add your LLM key
 
-# Full closed loop on the bundled APB UART spec
-python -m src.cli.commands verify specs/apb_uart/apb_uart_spec.md --json
+# VPlan spec-first project: plan first (no EDA)
+python -m src.cli.commands vplan status specs/npu_sched
+python -m src.cli.commands vplan build specs/npu_sched -o output_vplan_npu_sched
+
+# Optional: execute the VPlan project (requires review + QuestaSim)
+python -m src.cli.commands vplan execute specs/npu_sched --dry-run
 
 # Optional: compile/simulate the reference SoC (requires QuestaSim on PATH)
 python -m src.cli.commands soc check examples/open_npu_soc
@@ -89,11 +93,11 @@ steps fail honestly. Without QuestaSim, EDA-dependent stages report
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — five layers, 24-node graph, executors, evidence chain
-- [docs/design/](docs/design/) — design notes and implementation plans
-- [docs/notes/](docs/notes/) — working notes (data model, optimization, differentiation)
+- [CONTRACT_FLOW.md](CONTRACT_FLOW.md) — 契约流程（dplan / C-* / Case IR / 契约构建物 / gate）
+- [PROJECT_STATUS.md](PROJECT_STATUS.md) — 当前架构分析与风险清单
 - [examples/open_npu_soc/README.md](examples/open_npu_soc/README.md) — end-to-end reference SoC
-- `src/layers/l3_decision/vplan/runtime/framework/README.md` — methodology framework (stage contracts, test-point IR)
-- `src/layers/l3_decision/vplan/runtime/readme.md` — functional coverage methodology
+- [src/layers/l3_decision/vplan/runtime/framework/README.md](src/layers/l3_decision/vplan/runtime/framework/README.md) — methodology framework (stage contracts, test-point IR)
+- [src/layers/l3_decision/vplan/runtime/coverage.py](src/layers/l3_decision/vplan/runtime/coverage.py) — functional coverage methodology
 
 ## Contributing
 
@@ -117,15 +121,14 @@ own licenses; see [NOTICE](NOTICE).
 >
 > 关键文档：
 > - **[`ARCHITECTURE.md`](ARCHITECTURE.md)** —— **当前代码架构**（五层 / 24 节点 / 执行器 / 工具协议 / 证据链 / 扩展点）
-> - **[`docs/design/`](docs/design/)** —— 设计文档与实施计划（架构迁移 / 契约 / 覆盖率 / 证据链）
-> - **[`docs/notes/`](docs/notes/)** —— 工作笔记（数据模型 / 优化 / 差异化 / 新架构草案）
 > - **[`CONTRACT_FLOW.md`](CONTRACT_FLOW.md)** —— **契约流程用户指南**（dplan / C-* 契约矩阵 / Case IR / 契约构建物：从 spec 到 active 的完整操作与判据）
+> - **[`PROJECT_STATUS.md`](PROJECT_STATUS.md)** —— 当前架构原理、优点、风险与优化路线
 > - **[`CONTRIBUTING.md`](CONTRIBUTING.md)** —— 开发流程、代码规范、DCO 与 PR 检查
 > - **[`SECURITY.md`](SECURITY.md)** —— 漏洞报告与密钥处理
-> - `src/layers/l3_decision/vplan/runtime/framework/README.md` —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
-> - `src/layers/l3_decision/vplan/runtime/readme.md` —— **功能覆盖率方法学**（case 模型 → covergroup → 种子 → 回归）
-> - `src/layers/l3_decision/vplan/runtime/plan.py` —— 测试点 IR 的公开门面
-> - `src/layers/l3_decision/vplan/runtime/framework/` —— `contracts / model / naming / realization / stages / pipeline / constraints`
+> - [`src/layers/l3_decision/vplan/runtime/framework/README.md`](src/layers/l3_decision/vplan/runtime/framework/README.md) —— **方法学框架**（Stage 契约 / 注册表 / 流水线 / 测试点 IR）
+> - [`src/layers/l3_decision/vplan/runtime/coverage.py`](src/layers/l3_decision/vplan/runtime/coverage.py) —— **功能覆盖率方法学**
+> - [`src/layers/l3_decision/vplan/runtime/plan.py`](src/layers/l3_decision/vplan/runtime/plan.py) —— 测试点 IR 的公开门面
+> - [`src/layers/l3_decision/vplan/runtime/framework/`](src/layers/l3_decision/vplan/runtime/framework/) —— `contracts / model / naming / realization / stages / pipeline / constraints`
 
 ---
 
@@ -220,8 +223,8 @@ pip install -r requirements.txt
 # 配置（可选；不配则走确定性/模板路径，LLM 环节如实失败）
 # .env: LLM_PROVIDER=deepseek / LLM_API_KEY=... / LLM_MODEL=deepseek-chat
 
-# 一键闭环
-python -m src.cli.commands verify specs\apb_uart\apb_uart_spec.md --json
+# 一键规划（无 EDA）；执行见 VPlan 规划层
+python -m src.cli.commands vplan build specs/npu_sched -o output_vplan_npu_sched
 ```
 
 **参考 SoC 工程（Open NPU SoC v0.1）**：
@@ -298,15 +301,15 @@ RL 只管 4 个软动作，且经验统计只做"降级建议"不直接拍板（
 
 ---
 
-## 功能覆盖率方法学（case 模型 → covergroup → 种子 → 回归）
+## 功能覆盖率方法学（VPlan 执行资产 → covergroup → 种子 → 回归）
 
 **这条链是本项目"可度量、可追溯、可签核"那条主张的落点。** 规则只此一份：
 `src/layers/l3_decision/vplan/runtime/coverage.py`（模块头 = 方法学），细节见
-`src/layers/l3_decision/vplan/runtime/readme.md`。
+`src/layers/l3_decision/vplan/runtime/framework/README.md`。
 
 ### 一、模型里的东西变成 SystemVerilog
 
-| case 模型 | 变成 | 为什么 |
+| VPlan 执行资产 | 变成 | 为什么 |
 |---|---|---|
 | `Dimension` | 一组 coverpoint | 维度只归类，不承载取值 |
 | `Field` | `coverpoint <字段名>` | 字段名就是接口信号名 |
@@ -551,9 +554,6 @@ python -m src.cli.commands signoff  {generate,export,verify,checklist,diff}
 python -m src.cli.commands coverage {report,gaps,exclude,trend,merge}
 python -m src.cli.commands env      {generate,validate,compile,template}
 python -m src.cli.commands regression {stages,approve,run,report,trend,compare,reference-finder}
-python -m src.cli.commands case-model {check,lint,analyze,generate,tree,rules,uvm-tests,
-                                       covergroups,coverage-plan,associate,constraints,
-                                       gui,import-xlsx,verify-import}
 python -m src.cli.commands distill  {run,list,rollback}      # 经验蒸馏（L5）
 python -m src.cli.commands govern   {status,override,reset}  # 治理
 python -m src.cli.commands evidence {record,log,check,verify,replay,compare}
@@ -727,7 +727,7 @@ src/
 ├── cli/               # vagent CLI（commands.py + cmd_*.py 命令组）
 └── workbench/         # PySide6 桌面工作台（可选，不是 Web —— 见 CLAUDE.md）
 specs/<模块>/data/*.csv            # VPlan 执行资产（取代 case 模型 YAML）
-specs/                 # 规格库（apb_uart / apb_slave / **npu_sched**）
+specs/                 # 规格库（**npu_sched** / npu_sched_vlan）
 tests/                 # pytest 套件
 ```
 
@@ -781,6 +781,10 @@ python -B -X utf8 run_flow.py ir_seq/sanity_glsu_local_dram_smoke.ir.txt `
 ---
 
 ## 优势与劣势（诚实评估）
+
+> 下文出现的 `273/273`、`95.23%`、`332 份证据包` 等是**历史 run 记录**；
+> 当前工作区没有对应 `output_*` 产物，不能作为当前 HEAD 的可复核证据。
+> 最新的真实 E2E 需要在装 Questa 的机器上重跑并归档。
 
 ### 牛逼之处（真正稀缺的组合）
 
@@ -1058,9 +1062,9 @@ include，测试恢复其原意。**这 82 个测试当时恢复全绿。**
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q                            # 2026-11-07：1165 passed / 8 failed / 2 skipped
-python -m pytest src/workbench/tests -q               # 工作台：692 项（需要 PySide6）
-python -m pytest src/layers/l3_decision/vplan tests/test_vplan_integration.py -q
+python -m pytest tests/ -q                            # 2026-11-10：1174 passed / 4 skipped
+python -m pytest src/workbench/tests -q               # 工作台：692 passed（QT_QPA_PLATFORM=offscreen）
+python -m pytest tests/test_vplan_integration.py tests/test_vplan_bootstrap.py -q
 python -m pytest src/workbench/tests/test_isa_gen_module.py -q   # ISA IR 工具 + 工作台页面
 ```
 
@@ -1080,12 +1084,10 @@ python -m pytest src/workbench/tests/test_isa_gen_module.py -q   # ISA IR 工具
 | `tests/test_audit_evidence.py` + `signoff_package` 冒烟 | v2：目录布局、逐文件 sha256、`package_hash`、离线 `replay.py`、双环境 `compare` |
 
 **"跑测试"在这里的定位**：计数会随迁移漂动，README 不把它写成"永远全绿"。
-最近一次实测（2026-11-07）：主测试集 **1165 passed / 8 failed / 2 skipped**。
-VPlan 迁移删除了依赖旧 `specs/apb_*` 与 case 模型夹具的测试；剩余 8 项是
-迁移前就存在的契约/工具板/状态测试（caveat 码、case view 语义、mutation、
-分级回归审批、state 契约、tools boards/skills），不是 EDA 缺失导致的假失败。
-守卫型测试的价值不在通过率，而在**把本次踩过的坑固化成断言** ——
-每一条失败信息里都写着"当时是怎么错的"。
+最近一次实测（2026-11-10）：主测试集 **1174 passed / 4 skipped**；
+工作台 **692 passed**（有 PySide6 回调析构 warning，无 failed）。
+VPlan 迁移删除了一批依赖旧 case-model 夹具的测试；守卫型测试的价值不在通过率，
+而在**把本次踩过的坑固化成断言** —— 每一条失败信息里都写着"当时是怎么错的"。
 
 ---
 

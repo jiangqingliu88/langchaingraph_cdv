@@ -76,16 +76,18 @@ def line_violations(root: Path = ROOT, budget: Dict[str, Any] = None) -> List[Di
     for rel, lines in line_counts(root).items():
         entry = watched.get(rel)
         if lines > error:
-            if not entry:
-                issues.append({"type": "lines_over_error", "path": rel,
-                               "actual": lines, "limit": error,
-                               "detail": "超过硬上限且未登记拆分计划"})
-            elif lines > int(entry.get("registered", error)):
+            issues.append({"type": "lines_over_error", "path": rel,
+                           "actual": lines, "limit": error,
+                           "detail": "超过硬上限"})
+        if entry:
+            # watched 文件的 registered 是**硬预算**：不是只在 >2000 时才检查。
+            # 否则 guard 会对 626>600 这类漂移保持沉默，只有测试能发现。
+            registered = int(entry.get("registered", error))
+            if lines > registered:
                 issues.append({"type": "watched_file_grew", "path": rel,
-                               "actual": lines,
-                               "registered": int(entry.get("registered", error)),
+                               "actual": lines, "registered": registered,
                                "detail": "登记预算只能变小不能变大"})
-        elif lines > warn and not entry:
+        elif lines > warn:
             issues.append({"type": "lines_unwatched", "path": rel,
                            "actual": lines, "warn": warn,
                            "detail": "超过预警线，需登记 reason/plan"})

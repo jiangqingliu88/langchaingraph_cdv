@@ -17,3 +17,11 @@ repos:
       - id: ruff
         args: ['--fix']
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: signoffai-secret-scan
+        name: SignOffAI secret scan
+        entry: python scripts/check_secrets.py
+        language: system
+        pass_filenames: false

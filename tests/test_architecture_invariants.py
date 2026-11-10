@@ -71,8 +71,9 @@ def test_tool_boards_are_the_canonical_boards():
     assert set(BOARDS) == {"generation", "checking", "execution",
                            "flow", "integration", "common", "humanview"}
     assert "uvm_tools" in BOARDS["generation"]
-    assert "coverage_tools" in BOARDS["checking"]
-    assert "regression_tools" in BOARDS["execution"]
+    assert "assertion_tools" in BOARDS["checking"]
+    # regression_tools 已迁到 layers/l2；execution 板块保留为空。
+    assert BOARDS["execution"] == ()
 
 
 def test_decision_action_universe_is_frozen():
@@ -102,6 +103,16 @@ def test_line_guard_catches_an_unwatched_oversized_file():
     budget = {"warn": 10, "error": 20, "watched": {}}
     issues = guard.line_violations(budget=budget)
     assert any(i["type"] == "lines_over_error" for i in issues)
+
+
+def test_line_guard_enforces_watched_budget_below_hard_error():
+    """watched 的 registered 是硬预算，不是只在 >2000 时生效。"""
+    budget = {"warn": 1500, "error": 2000,
+              "watched": {"src/cli/commands.py": {
+                  "registered": 1, "reason": "test", "plan": "test"}}}
+    issues = guard.line_violations(budget=budget)
+    assert any(i["type"] == "watched_file_grew"
+               and i["path"] == "src/cli/commands.py" for i in issues)
 
 
 def test_complexity_guard_catches_a_new_hotspot():

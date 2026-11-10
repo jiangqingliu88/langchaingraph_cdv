@@ -1,16 +1,16 @@
 # SignOffAI 代码架构（当前实现）
 
-> 基线：2026-11-04
+> 基线：2026-11-10
 >
-> 全量单测：**1349 passed / 2 skipped**；工作台 **753 passed**（另有 3 个 IP 页面用例为既有失败，与本次改动无关）
+> 全量单测：**1174 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
 >
-> UVM 端到端实测：`output_e2e_v3_10_jiang_20261104_215130`（3.0 全量接线后），分级回归 **273/273 PASS**，功能计划覆盖率 **95.23%**（第 1 轮收敛），签核 **PASS_WITH_CAVEAT / CONDITIONAL**；Case View：13 个契约组 / 267 份逐用例证据 / 364 条 EVD / 13 个 CELL（黄 11 · 红 2，缺证据不冒充绿），SCB 逐条收口 **47 条 `per_scb`**、47 条 CASE 带约束 id；**状态权威对账 0 差异、TP 影子 0 差异**，Case Gate **PASS**（blocker 0）；签核包 332 份文件，`case_view` 段 278 份，`execution` 段含 `run_config / ir_shadow_diff / authority_diff / tp_shadow / seed_index / worklist`，增量 `copied=330 / reused=0`（首次打包），`evidence verify` 通过
+> 历史 UVM 端到端实测：`output_e2e_v3_10_jiang_20261104_215130`（3.0 全量接线后）曾记录分级回归 **273/273 PASS**、功能计划覆盖率 **95.23%**、签核 **PASS_WITH_CAVEAT / CONDITIONAL**；**该 run 目录当前不在本工作区，不能作为当前 HEAD 的可复核证据**。Case View / 证据包的历史数字同样只作背景。
 >
-> SoC 参考工程实测：`examples/open_npu_soc`，`soc run` 的两条用例（参考 TB `gemm_8x8` + E203 C `gemm_8x8_c`）**PASS**；参考路径 `mismatched=0`/2075 ns，C 路径 `TEST_PASS`，输出 `output_soc_design_jiang_20261031_223611`；`signoff_evidence/` 27 个文件（输入/npu RTL/golden/回归/两份波形），`soc evidence` 校验通过；两份波形都带 `design.bin`，Visualizer hierarchy 可浏览源码
+> 历史 SoC 参考工程：`examples/open_npu_soc` 曾记录 `soc run` 两条用例 PASS（参考 TB `gemm_8x8` + E203 C `gemm_8x8_c`），输出 `output_soc_design_jiang_20261031_223611`；**该 run 目录当前不在本工作区**，需在装 Questa 的机器上重跑。
 >
 > **Architecture 2.0 基线**：`src/core/` 运行事实面（RunContext / ArtifactStore / EventStore / Provenance DAG / Job Runtime / Decision Evaluation / Verification Quality Gate）已落地；**Verification Intelligence 第一层**（归因完整率、四个工程指标、增量计划、Run Diff、LocalStrategy→JobSupervisor）已接入。新增单测 `tests/core/` 89 条 + UVM IR 10 条 + Job Runtime 集成 4 条 + 合成 run 集成 1 条。
 
-本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根 `D:\SignOffAI` 为基准。
+本文描述**代码现在怎么组织**，不是愿景文档。所有路径以仓库根为基准。
 
 ---
 
@@ -489,24 +489,23 @@ pass（`None ≠ False`）。报告随证据包 `verdict/` 段收走，并作为
 
 | 板块 | 职责 | 包 |
 |---|---|---|
-| **generation** | 产生产物 | `uvm_tools`、`isa_ir_tools`、`cmodel_tools`、`scmodel_tools`、`doc_tools` |
-| **checking** | 只读/判定 | `assertion_tools`、`debug_tools`、`coverage_tools`、`spec_tools` |
-| **execution** | 跑 EDA/回归 | `regression_tools` |
-| **flow** | 签核/血缘/趋势 | `flow_tools`、`trend_tools` |
+| **generation** | 产生产物 | `uvm_tools`、`isa_ir_tools`、`cmodel_tools` |
+| **checking** | 只读/判定 | `assertion_tools` |
+| **execution** | 跑 EDA/回归 | 空（`regression_tools` 已迁到 `src/layers/l2_orchestration/`） |
+| **flow** | 趋势 | `trend_tools` |
 | **integration** | 对外集成 | `ide_tools` |
-| **humanview** | 人读视图（xlsx 测试点表 → TP IR） | `aivm_ir` |
+| **humanview** | 人读视图（测试点 / Case / 覆盖率 / SVA / SCB） | `aivm_ir`、`case_ir`、`covg_ir`、`sva_ir`、`scb_ir` |
 | **common** | 共享底层 | `lib` |
 
-物理目录与板块一一对应：
+物理目录与板块的当前状态：
 
 ```text
-src/tools/generation/    uvm_tools        isa_ir_tools
-                         cmodel_tools     scmodel_tools  doc_tools
-src/tools/checking/      assertion_tools  debug_tools  coverage_tools  spec_tools
-src/tools/execution/     regression_tools
-src/tools/flow/          flow_tools       trend_tools
+src/tools/generation/    uvm_tools        isa_ir_tools     cmodel_tools
+src/tools/checking/      assertion_tools
+src/tools/execution/     （板块占位；regression_tools 已迁到 layers/l2）
+src/tools/flow/          trend_tools
 src/tools/integration/   ide_tools
-src/tools/humanview/     aivm_ir          （PM 手写测试点表 → TP IR）
+src/tools/humanview/     aivm_ir  case_ir  covg_ir  sva_ir  scb_ir
 src/tools/common/        lib
 ```
 
@@ -523,16 +522,17 @@ src/tools/common/        lib
 
 | 包（按物理路径） | 职责 |
 |---|---|
-| `checking/spec_tools` | spec 分析、DSL、知识图 |
+| `layers/l3_decision/spec_tools` | spec 分析、DSL、知识图（已从 tools/checking 迁入 L3） |
 | `generation/uvm_tools` | UVM 环境/agent/test/sequence 生成、YAML schema |
-| `execution/regression_tools` | 回归框架、分级、后端档案、sim modes |
-| `checking/coverage_tools` | UCDB/HTML/报告、coverstore materialize |
-| `checking/debug_tools` | 日志分类、指纹、autofix |
+| `layers/l2_orchestration/regression_tools` | 回归框架、分级、后端档案、sim modes（已从 tools/execution 迁入 L2） |
+| `layers/l3_decision/evidence` | UCDB/HTML/报告、coverstore materialize、证据流水线 |
+| `layers/l3_decision/case_view` | Case View / 四集合语义 / Case Gate |
 | `checking/assertion_tools` | 断言（当前流水线不生成 SVA） |
 | `generation/isa_ir_tools` | NPU ISA IR → tensors → seq.ir → commands.tsv / 张量 / manifest |
-| `flow/flow_tools` | signoff/lineage/compare 等流程 API |
-| `generation/doc_tools` / `flow/trend_tools` / `generation/cmodel_tools` / `generation/scmodel_tools` | 文档、趋势、C/Python 参考模型 |
-| `humanview/aivm_ir` | PM 手写测试点表（xlsx）→ 测试点本体 + M1 覆盖计划（`bridge.py` 已随引擎删除） |
+| `flow/trend_tools` | 趋势 |
+| `generation/cmodel_tools` | C/Python 参考模型 |
+| `humanview/aivm_ir` | PM 手写测试点表（xlsx）→ 测试点本体 |
+| `humanview/case_ir` / `covg_ir` / `sva_ir` / `scb_ir` | Case / 覆盖率 / SVA / SCB 的人读 IR 视图 |
 
 ### 6.5 Job Runtime 与命令白名单（`src/core/jobs/`）
 
@@ -651,11 +651,11 @@ Attribute（保留） + Behavioral（新增） + Configuration（新增）
 ```
 
 设计、兼容契约与分阶段路线见
-[`docs/design/multi_dimensional_tp_ir.md`](docs/design/multi_dimensional_tp_ir.md)。
+[`vplan/runtime/framework/README.md`](src/layers/l3_decision/vplan/runtime/framework/README.md)。
 原则：**任何激励（含 AI 生成的）都必须先进 TP IR，再由编译器产出后端实现**，
 不允许直接生成 UVM sequence 绕过主键体系。
 
-建模期静态检查（`analysis/rules/coverage.py`）目前成对存在：
+建模期静态检查（`vplan/runtime/coverage.py`）目前成对存在：
 
 - `cover_bin_unreachable`（error）：每个覆盖仓至少有一个取值点能打到；
 - `value_point_unmapped`（error）：每个取值点至少落进一个仓；
@@ -1048,14 +1048,14 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
 
 - **身份在生成期注入**：`verify` 写 TP IR 的 `case_id/tst_id` → 回归目录写
   `task_meta.case_id/tst_id` → 证据聚合写 `evd_id/cell_ids`。**不从测试名反推**。
-- **证据流水线**：`coverage_tools/evidence_pipeline.py` 按
+- **证据流水线**：`src/layers/l3_decision/evidence/evidence_pipeline.py` 按
   `case_cov → tp_matrix → tp_evidence → evd → cell_matrix → case_view → gates`
   顺序产出派生物，写 `coverage/evidence_manifest.json`（每步 sha + 耗时）。
   `only=` 可单步重跑，改模型不必重跑仿真。
-- **门禁**：`humanview.case_associate_view.gates`（规则表 `gates.yaml`，blocker/
+- **门禁**：`src/layers/l3_decision/case_view/gates.py`（规则表 `gates.yaml`，blocker/
   warning/info）；`vagent coverage case-gate -o <run> [--strict]`；audit 消费其
   结论并挂 `CASE_GATE_BLOCKED`。
-- **视图**：`coverage/case_view.{json,md,html}`（`case_associate_view_v2`）四张
+- **视图**：`coverage/case_view.{json,md,html}`（`case_view_v2`）四张
   旧表 + 三张新表（分类树 / Case×CELL / 执行证据）+ 元数据（`ssot_sha256` /
   `readonly`）。设计见 `docs/design/architecture_transformation_plan.md`。
   **视图1 按逻辑 CASE 聚合**（没有 CASE 的批次测试按测试名），执行次数单列；
@@ -1070,7 +1070,7 @@ RTL diff（按内容哈希） → 依赖分析 → 受影响用例 → 预计节
   Case IR 与契约哈希；`task_meta.constraint_ids` 记下这条执行依赖的约束。
 - **审计 caveat**（四集合）：`CASE_GATE_BLOCKED`、`CASE_GROUP_PARTIAL`、
   `CASE_SVA_VACUOUS`、`CASE_SCB_NOT_EXECUTED`、`CASE_PATH_PENDING_BACKEND`、
-  `CASE_IR_EVIDENCE_MISMATCH`；门禁码另见 `case_associate_view/gates.yaml`。
+  `CASE_IR_EVIDENCE_MISMATCH`；门禁码另见 `src/layers/l3_decision/case_view/gates.yaml`。
 - **审计 caveat**（证据门 / 权威差分 / 覆盖率回退）：`EVIDENCE_GATE`、
   `AUTHORITY_DIFF`、`AUTHORITY_DIFF_MISSING`、`COVERAGE_REGRESSION` ——
   三类事实对不上或缺失时如实标记，不把"没证据"说成通过。
@@ -1394,7 +1394,7 @@ playback_log_sha256, pass_criteria}`。run 级 manifest 回答“这次 run 有�
 | 新工具包 | 放对应板块目录（`generation/checking/execution/flow/integration/humanview/common`）+ 在 `src/tools/boards.py` 登记 | 其它工具包 |
 | 新 realization | 注册 `RealizationStrategy` | `stages.py` |
 | 新约束来源 | 注册 `ConstraintCompiler` | `build_constraint` |
-| 新 EDA 后端 | `execution/regression_tools/backend_profiles.py` 加字典条目（保留键 + `run_cmd_template`） | 框架类 |
+| 新 EDA 后端 | `src/layers/l2_orchestration/regression_tools/backend_profiles.py` 加字典条目（保留键 + `run_cmd_template`） | 框架类 |
 | 新 caveat | audit 里 `_caveat(code, msg)` + 策略文件按码接受 | 三态判定 |
 | 新签核证据字段 | `signoff_package.py` 的 `SECTION_FILES` + audit 的 v2 manifest | 回放脚本（若不需要重算） |
 | 新运行时因果边 | `knowledge/schema.py` 加 `EdgeType` + `runtime.build_runtime_graph()` 建边；需要进决策就补 `trace_gap` | 图存储与证据包 |
@@ -1502,8 +1502,10 @@ python scripts/mutation_guards.py                     # 9 条核心守卫变异�
 - **知识图是查询层，不是推理层**：`runtime.py` 只把已有产物连成确定性因果链，
   没有 Neo4j / networkx，也不让 LLM 直接遍历或改写图；LLM 只读 `gap_paths` 的
   摘要（`_semantic_reason`）。
-- **player 激励后端只有 plan，没有 runtime**：`stimulus_plan.json` 可生成，
-  `ensure_backend_executable("player")` 显式报错；generated 仍是唯一可执行后端。
+- **player 的 SV 包已实现，但 stimulus_plan/verify 主链尚未接线**：
+  `isa_ir_tools/tb_player` 可独立编译播放 `.ir.txt`，但
+  `stimulus_plan.json` 仍把 player 标为 runtime 未实现；
+  `ensure_backend_executable("player")` 显式报错，generated 仍是唯一主链后端。
 - **Architecture 2.0 已落地 / 仍开放**：产物级 provenance DAG
   （`docs/provenance.jsonl`，`provenance_dag_v1`）与五维质量门已落地；
   bin 级 test/seed 溯源在缺少 per-test 覆盖率时**只标 weak**（`attributed_by`），
@@ -1596,7 +1598,7 @@ python scripts/mutation_guards.py                     # 9 条核心守卫变异�
 │  ├─ layers/                      L1–L5 分层架构
 │  ├─ executors/                   8 个 executor；verify 步骤 DAG 位于 verify/
 │  ├─ tools/                       generation / checking / execution / flow 等工具板块
-│  │  └─ execution/regression_tools/backend_capabilities.py  多后端能力矩阵
+│  │  └─ layers/l2_orchestration/regression_tools/backend_capabilities.py  多后端能力矩阵
 │  └─ workbench/                   可选 PySide6 桌面工作台
 │     └─ query/                    只读 ViewModel 查询（runs / evidence）
 ├─ examples/open_npu_soc/          SoC 参考工程

@@ -6,7 +6,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 1.0.x   | ✅        |
+| 2.0.x   | ✅        |
+| 1.0.x   | ⚠️ security fixes only |
 
 ## Reporting a vulnerability
 
@@ -40,9 +41,12 @@ areas include, but are not limited to:
 
 ## Handling secrets
 
-This repository never contains real credentials. Use `.env` (ignored by git) or
-environment variables, and start from [`.env.example`](.env.example).
-`.jwt_secret` is generated locally and must not be committed.
+The current tree is scanned by `scripts/check_secrets.py` in CI. This does **not**
+rewrite history: if a credential was committed before, assume it is compromised,
+rotate it, and coordinate a `git filter-repo` history purge with maintainers.
+Use `.env` (ignored by git) or environment variables, and start from
+[`.env.example`](.env.example). `.jwt_secret` is generated locally and must not
+be committed.
 
 If you believe a secret was committed, rotate it immediately and open a private
 report. Do not paste the secret value into a public issue.

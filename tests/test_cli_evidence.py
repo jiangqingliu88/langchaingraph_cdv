@@ -140,8 +140,18 @@ class TestCheck:
         assert result.exit_code == 0, result.output
         assert ".signoffai" not in result.output
 
-    def test_outside_a_git_repo_it_skips_instead_of_failing(self, runner, tmp_path):
-        """不在 git 仓库里就没有"改动清单"可比 —— 跳过，不是失败。"""
+    def test_outside_a_git_repo_it_skips_instead_of_failing(
+            self, runner, tmp_path, monkeypatch):
+        """不在 git 仓库里就没有"改动清单"可比 —— 跳过，不是失败。
+
+        pytest 的 tmp_path 在部分配置下会落在仓库内，`git status` 仍能
+        找到父仓库；这里直接模拟“git 不可用/非仓库”的返回值，才测的是
+        目标分支，而不是测试临时目录的位置。
+        """
+        from src.layers.l2_orchestration.evidence import human_edit
+
+        monkeypatch.setattr(human_edit, "_git_changed_files",
+                            lambda root, limit=500: None)
         (tmp_path / "a.txt").write_text("x", encoding="utf-8")
         result = _run(runner, tmp_path, "check")
         assert result.exit_code == 0, result.output

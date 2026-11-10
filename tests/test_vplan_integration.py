@@ -61,6 +61,55 @@ def test_load_project_reads_current_source():
     assert not (ROOT / "runtime_model.yaml").exists()
 
 
+def test_vplan_testpoint_can_bind_explicit_stimulus_field(tmp_path):
+    """VPlan 行显式声明 realization 时，不再把刺激强制降级成 observe-only。"""
+    from src.layers.l3_decision.vplan.build import build_testpoints
+    from src.layers.l3_decision.vplan.source import VPlanProject
+
+    project = VPlanProject(
+        root=tmp_path, module="m", dut="m",
+        spec_dir=tmp_path, spec_path=tmp_path / "m.md", spec_hash="",
+        spec_meta={}, features=[], cases=[],
+        testpoints=[{
+            "tp_id": "TP-1", "feature_id": "F-1", "topic": "接口",
+            "test_point": "value", "contract_id": "C-1",
+            "realization_kind": "stimulus", "stimulus_field": "instr_type",
+            "realization_agent": "cmd_agent", "priority": "P0",
+        }],
+    )
+    tp = build_testpoints(project)[0]
+    assert tp["realization"]["kind"] == "stimulus"
+    assert tp["realization"]["field"] == "instr_type"
+    assert tp["realization"]["agent"] == "cmd_agent"
+
+
+def test_matrix_schema_rejects_unknown_status_and_missing_columns(tmp_path):
+    """手改 CSV 不能造出“看起来合法”的状态；列不齐也不能静默读。"""
+    from src.layers.l3_decision.vplan.source import VPlanError, _load_matrix
+
+    matrix = tmp_path / "data" / "contract_matrix"
+    matrix.mkdir(parents=True)
+    (matrix / "func.csv").write_text(
+        "contract_id,class,object,description,source_ref,owner,p_level,"
+        "check_method,check_artifact,gate,status,assumption,remark\n"
+        "C-1,func,x,x,1,dv,P0,scb,x,g,active,a,\n",
+        encoding="utf-8")
+    assert _load_matrix(tmp_path)["C-1"]["status"] == "active"
+
+    (matrix / "func.csv").write_text(
+        "contract_id,class,object,description,source_ref,owner,p_level,"
+        "check_method,check_artifact,gate,status,assumption,remark\n"
+        "C-1,func,x,x,1,dv,P0,scb,x,g,done,a,\n",
+        encoding="utf-8")
+    with pytest.raises(VPlanError, match="status"):
+        _load_matrix(tmp_path)
+
+    (matrix / "func.csv").write_text("contract_id,status\nC-1,assume\n",
+                                     encoding="utf-8")
+    with pytest.raises(VPlanError, match="列不齐"):
+        _load_matrix(tmp_path)
+
+
 def test_payload_keeps_ids_and_statuses():
     proj = load_project(ROOT)
     payload = build_payload(proj)
@@ -206,6 +255,37 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
     assert "sv/tb/hdl_top.sv" in hdl
     assert "sv/env/foo_env.sv" in hvl
     assert len(scan_assets(tmp_path)) == 10
+
+
+def test_gate_uses_latest_linked_run_and_reports_active_drift():
+    """gate 选 run 不能靠 append 顺序；active 但证据不满足要单独标出。
+
+    这是纯函数级测试：不建 EDA 产物，只构造两个 linked run 条目，
+    验证 `_latest` 的排序键与 `active_drift` 字段。
+    """
+    from src.layers.l3_decision.vplan.evidence import (
+        _evaluate_contract, _latest)
+
+    old = {
+        "run_id": "run_old", "linked_at": "2026-11-09T10:00:00+00:00",
+        "contracts": [{"contract_id": "C-FUNC-UNIT-001",
+                       "tp_ids": ["TP-1"], "case_ids": []}],
+        "tp_status": {"TP-1": "HIT"}, "regression_status": "PASS",
+        "sv_contracts": ["C-FUNC-UNIT-001"],
+    }
+    new = {
+        "run_id": "run_new", "linked_at": "2026-11-10T10:00:00+00:00",
+        "contracts": [{"contract_id": "C-FUNC-UNIT-001",
+                       "tp_ids": ["TP-1"], "case_ids": []}],
+        "tp_status": {"TP-1": "MISS"}, "regression_status": "PASS",
+        "sv_contracts": ["C-FUNC-UNIT-001"],
+    }
+    assert _latest([old, new])["run_id"] == "run_new"
+    result = _evaluate_contract("C-FUNC-UNIT-001", "active", [old, new])
+    assert result["run_id"] == "run_new"
+    assert result["eligible_active"] is False
+    assert result["active_drift"] is True
+    assert any("TP not hit" in reason for reason in result["reasons"])
 
 
 def test_evidence_gate_requires_tp_regression_and_asset(tmp_path):

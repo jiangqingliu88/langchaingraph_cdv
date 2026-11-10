@@ -95,8 +95,20 @@ def _scoreboards(project, data_dir: Path) -> List[Dict[str, Any]]:
         sb = str(row.get("id") or "")
         if not sb:
             continue
+        # 优先按契约声明的 check_artifact / object 精确绑定；没有声明时才
+        # 退回“所有 func/data 契约”，避免把 scoreboard 写成万能收口。
+        tokens = {sb.lower(), str(row.get("name") or "").lower()}
+        related = sorted(
+            cid for cid, c in project.contracts.items()
+            if str(c.get("class") or "") in ("func", "data")
+            and (
+                str(c.get("check_artifact") or "").strip().lower() in tokens
+                or str(c.get("object") or "").strip().lower() in tokens
+            )
+        )
         out.append({
-            "kind": "scoreboard", "name": sb, "contracts": func_contracts,
+            "kind": "scoreboard", "name": sb,
+            "contracts": related or func_contracts,
             "tp_ids": [], "source": "data/scoreboards.csv",
             "rules": row.get("rules", ""),
         })

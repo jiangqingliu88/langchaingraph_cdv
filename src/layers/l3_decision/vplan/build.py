@@ -64,9 +64,30 @@ def _one(value: str) -> List[str]:
     return [value] if value else []
 
 
-def _realization(stimulus: str) -> Realization:
-    # VPlan 只给了刺激的**文字描述**，没有绑定到 agent 事务字段；
-    # 所以 realization 仍是 observe —— 不把"有文字"冒充成"能驱动"。
+def _realization(stimulus: str, row: Dict[str, Any]) -> Realization:
+    """VPlan 行 → realization。
+
+    默认仍是 `observe`：只给文字描述、没有绑定 agent 事务字段时，不能把
+    “有文字”冒充成“能驱动”。但允许表里显式写
+    `realization_kind` / `stimulus_field` / `realization_sequence`，
+    让计划层与运行期模型可以对齐（不强制改现有 CSV 契约）。
+    """
+    kind = str(row.get("realization_kind") or "").strip().lower()
+    field = str(row.get("stimulus_field") or "").strip()
+    agent = str(row.get("realization_agent") or row.get("agent") or "").strip()
+    sequence = str(row.get("realization_sequence") or "").strip()
+    if kind in ("stimulus", "sequence", "observe", "backdoor") and (kind != "stimulus" or field):
+        values = row.get("realization_values") or []
+        if isinstance(values, str):
+            values = [x.strip() for x in values.replace("|", ",").split(",")
+                      if x.strip()]
+        try:
+            values = [int(v) for v in values]
+        except (TypeError, ValueError):
+            values = []
+        return Realization(kind=kind, agent=agent, field=field,
+                           sequence=sequence, values=values,
+                           path=str(row.get("realization_path") or "").strip())
     if not stimulus:
         return Realization(kind="observe")
     return Realization(kind="observe",
@@ -74,7 +95,8 @@ def _realization(stimulus: str) -> Realization:
 
 
 def _tp_notes(row: Dict[str, Any], feature_id: str,
-              contract_id: str, stimulus: str) -> List[str]:
+              contract_id: str, stimulus: str,
+              realization: Realization) -> List[str]:
     notes = [
         f"vplan_status={row.get('status') or 'planned'}",
         f"feature={feature_id}",
@@ -82,8 +104,10 @@ def _tp_notes(row: Dict[str, Any], feature_id: str,
     ]
     if contract_id:
         notes.append(f"contract={contract_id}")
-    if stimulus:
+    if realization.kind == "observe" and stimulus:
         notes.append("realization=observe（VPlan stimulus 未绑定事务字段）")
+    elif realization.kind != "observe":
+        notes.append(f"realization={realization.kind}")
     return notes
 
 
@@ -101,6 +125,7 @@ def _testpoint_from_row(row: Dict[str, Any], project: VPlanProject,
     test_name = str(case.get("test_name") or "").strip()
     priority = str(row.get("priority") or "").strip()
     stimulus = str(row.get("stimulus") or "").strip()
+    realization = _realization(stimulus, row)
     tp = TestPoint(
         tp_id=tp_id,
         object=_pick(feature_id, project.dut),
@@ -114,12 +139,12 @@ def _testpoint_from_row(row: Dict[str, Any], project: VPlanProject,
         checks=_split(row.get("check_method")),
         themes=_one(topic),
         priority=priority,
-        realization=_realization(stimulus),
+        realization=realization,
         execution=Execution(test=test_name, stage=_stage(priority)),
         case_id=case_id,
         case_ids=_one(case_id),
         tst_id=tst_id_of(test_name) if test_name else "",
-        notes=_tp_notes(row, feature_id, contract_id, stimulus),
+        notes=_tp_notes(row, feature_id, contract_id, stimulus, realization),
     )
     return tp.to_dict()
 

@@ -2,17 +2,22 @@
 
 七个板块：
 
-    generation  生成产物（case 模型 / UVM / ISA / C 模型 / 文档）
-    checking    检查与判定（断言、debug、覆盖率分析、spec 校验）
-    execution   执行 EDA / 回归
+    generation  生成产物（UVM / ISA IR / C 模型）
+    checking    检查与判定（断言）
+    execution   EDA / 回归（当前实现位于 `src/layers/l2_orchestration/regression_tools/`）
     flow        签核 / 血缘 / 趋势等跨阶段流程
     integration 对外集成（IDE 桥）
     humanview   人读视图（PM 手写测试点表 → 测试点本体）
     common      共享底层（lib）
 
 **一个包只属于一个板块**；新增工具必须在这里登记（有测试钉住）。
-这不是物理搬迁的替代品 —— 目录仍可逐步迁移，但"谁负责什么"从今天起
-有一个显式、可测试的单一答案。
+
+2026-11-10 收口：
+  · `scmodel_tools` / `doc_tools` / `debug_tools` / `coverage_tools` /
+    `spec_tools` 已迁到 layers 或删除，不再登记；
+  · `case_associate_view` 已并入 `humanview.case_view`；
+  · `regression_tools` 已迁到 `src/layers/l2_orchestration/regression_tools/`，
+    因此 `execution` 板块当前没有工具包子目录（保留板块名，避免文档/CLI 口径断裂）。
 """
 from __future__ import annotations
 
@@ -20,19 +25,14 @@ from typing import Dict, Tuple
 
 BOARDS: Dict[str, Tuple[str, ...]] = {
     "generation": (
-        # case 模型引擎已删除；执行资产在 `src.layers.l3_decision.vplan`
-        "uvm_tools", "isa_ir_tools",
-        "cmodel_tools", "scmodel_tools", "doc_tools",
+        "uvm_tools", "isa_ir_tools", "cmodel_tools",
     ),
     "checking": (
-        # verification_os 已迁到 `src.layers.l3_decision.contract`
-        "assertion_tools", "debug_tools", "coverage_tools", "spec_tools",
+        "assertion_tools",
     ),
-    "execution": (
-        "regression_tools",
-    ),
+    "execution": (),
     "flow": (
-        "flow_tools", "trend_tools",
+        "trend_tools",
     ),
     "integration": (
         "ide_tools",
@@ -40,7 +40,7 @@ BOARDS: Dict[str, Tuple[str, ...]] = {
     "humanview": (
         "aivm_ir",
         # 身份层（CCAT/CASE/TST）与人类可读视图（含 Case Gate）
-        "case_ir", "case_associate_view", "covg_ir", "sva_ir", "scb_ir",
+        "case_ir", "covg_ir", "sva_ir", "scb_ir",
     ),
     "common": (
         "lib",

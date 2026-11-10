@@ -374,4 +374,9 @@ def test_seed_offset_skipped_when_plan_is_newer(tmp_path):
     expand = tmp_path / "coverage" / "seed_expand.json"
     expand.parent.mkdir()
     expand.write_text('{"round": 1, "offset": 1000}', encoding="utf-8")
+    # 显式把计划设成比扩种记录新；仅靠写入顺序会被文件系统时间粒度
+    # 或同一次 tick 抹平，测试会变成 flaky。
+    import os
+
+    os.utime(expand, (plan.stat().st_atime - 10, plan.stat().st_mtime - 10))
     assert InfrastructureManager(tmp_path)._seeded_plan(plan) == plan

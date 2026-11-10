@@ -70,17 +70,18 @@ def test_bootstrap_writes_a_loadable_project(tmp_path):
     summary = bootstrap_project(tmp_path, SPEC_TEXT, CONTRACT)
 
     assert summary["modules"] == 2
-    assert summary["contracts"] == 2
+    # 2 条功能契约 + 1 条接口组契约（clk/rst_n/din/dout 归组）。
+    assert summary["contracts"] == 3
     assert summary["interfaces"] == 4
 
     proj = load_project(tmp_path)
     # VPlan 的模块规范名 = 项目目录名（run/env/资产都从它派生）。
     assert proj.module == tmp_path.name
     assert proj.dut == tmp_path.name
-    assert len(proj.contracts) == 2
+    assert len(proj.contracts) == 3
     assert len(proj.testpoints) == 2
     assert len(proj.cases) == 2
-    assert proj.status_counts == {"assume": 2}
+    assert proj.status_counts == {"assume": 3}
     assert proj.tp_status_counts == {"planned": 2}
     assert proj.case_status_counts == {"planned": 2}
 
@@ -209,7 +210,7 @@ def test_bootstrap_uses_llm_tables_and_checks_format(tmp_path):
     summary = bootstrap_project(project, SPEC_TEXT, contract)
 
     assert summary["validation"]["ok"]
-    assert summary["features"] == 2 and summary["contracts"] == 2
+    assert summary["features"] == 2 and summary["contracts"] == 3
     assert summary["testpoints"] == 1 and summary["cases"] == 1
 
     spec_dir = project / "docs" / "specs"
@@ -226,7 +227,7 @@ def test_bootstrap_uses_llm_tables_and_checks_format(tmp_path):
     assert func[0]["status"] == "assume"
 
     proj = load_project(project)
-    assert len(proj.contracts) == 2
+    assert len(proj.contracts) == 3
     assert [tp["tp_id"] for tp in proj.testpoints] == ["TP_DEC_001"]
 
 

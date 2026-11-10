@@ -36,6 +36,9 @@ MATRIX_COLUMNS = (
 #: 由候选抽取表带进矩阵的补充字段（矩阵本身没有这几列）。
 CANDIDATE_FIELDS = ("category", "content", "candidate_status")
 
+#: 矩阵状态只能是这三类；其余值一律拒绝，避免手改 CSV 造出“看起来合法”的状态。
+MATRIX_STATUSES = ("assume", "active", "exempt")
+
 
 class VPlanError(ValueError):
     """VPlan 项目输入不成立（缺文件 / hash 不符 / 引用断裂）。"""
@@ -152,15 +155,29 @@ def _load_matrix(root: Path) -> Dict[str, Dict[str, Any]]:
     matrix_dir = root / "data" / "contract_matrix"
     if not matrix_dir.is_dir():
         raise VPlanError(f"缺少权威契约矩阵目录：{matrix_dir}")
+    required = set(MATRIX_COLUMNS)
     rows: Dict[str, Dict[str, Any]] = {}
     for path in sorted(matrix_dir.glob("*.csv")):
-        for row in _read_csv(path):
-            cid = str(row.get("contract_id") or "").strip()
-            if not cid:
-                continue
-            if cid in rows:
-                raise VPlanError(f"契约矩阵里 contract_id 重复：{cid}")
-            rows[cid] = row
+        with path.open("r", encoding="utf-8-sig", newline="") as fh:
+            reader = csv.DictReader(fh)
+            fields = set(reader.fieldnames or [])
+            missing = sorted(required - fields)
+            if missing:
+                raise VPlanError(
+                    f"契约矩阵列不齐：{path} 缺 {missing}；"
+                    f"权威矩阵必须是 {len(MATRIX_COLUMNS)} 列")
+            for row in reader:
+                cid = str(row.get("contract_id") or "").strip()
+                if not cid:
+                    continue
+                if cid in rows:
+                    raise VPlanError(f"契约矩阵里 contract_id 重复：{cid}")
+                status = str(row.get("status") or "assume").strip()
+                if status not in MATRIX_STATUSES:
+                    raise VPlanError(
+                        f"契约 {cid} 的 status={status!r} 不在 "
+                        f"{MATRIX_STATUSES}；手改状态不等于证据")
+                rows[cid] = row
     if not rows:
         raise VPlanError(f"契约矩阵为空：{matrix_dir}")
     return rows

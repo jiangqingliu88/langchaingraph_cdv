@@ -27,11 +27,15 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import yaml
+
+from src.core.runtime.atomic import atomic_write_text
 
 INDEX_SCHEMA = "vplan_evidence_index_v1"
 HIT_STATES = {"HIT", "OBSERVED", "BACKDOOR_HIT"}
@@ -229,6 +233,10 @@ def link_run(project_root: str | Path, run_dir: str | Path) -> Dict[str, Any]:
     except Exception:                      # noqa: BLE001 补映射失败不阻断 link
         pass
     entry = build_entry(run_dir)
+    # 显式记录链接时间：gate 选 run 时不能依赖“目录里 append 的顺序”，
+    # 否则“补 link 一个旧 run”会把旧证据顶到最新。
+    entry["linked_at"] = datetime.now(timezone.utc).isoformat(
+        timespec="microseconds")
     try:
         entry["run_dir"] = str(Path(entry["run_dir"]).relative_to(project.parent))
     except ValueError:
@@ -313,9 +321,19 @@ def _vplan_reasons(entry: Dict[str, Any], cid: str) -> Optional[List[str]]:
     return reasons
 
 
+def _latest(candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """按 `linked_at` 取最新；老索引没有时间戳时退回 append 顺序。"""
+    if not candidates:
+        return {}
+    return max(
+        candidates,
+        key=lambda e: (str(e.get("linked_at") or ""), str(e.get("run_id") or "")),
+    )
+
+
 def _evaluate_contract(cid: str, status: str,
                        candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
-    entry = candidates[-1] if candidates else {}
+    entry = _latest(candidates)
     reasons: List[str]
     via = "none"
     if not candidates:
@@ -333,6 +351,9 @@ def _evaluate_contract(cid: str, status: str,
         "contract_id": cid,
         "status": status,
         "eligible_active": not reasons,
+        # active 是“曾经证明过”，不是“永远有效”。最新 run 对不上时单独标出，
+        # 供 gate 漂移报告/CI 使用；不自动降级（降级是人的决定）。
+        "active_drift": status == "active" and bool(reasons),
         "reasons": reasons,
         "run_id": entry.get("run_id", "") if candidates else "",
         "via": via,
@@ -389,8 +410,9 @@ def apply_active(project_root: str | Path,
                 touched = True
                 changed += 1
         if touched:
-            with path.open("w", encoding="utf-8", newline="") as fh:
-                writer = csv.DictWriter(fh, fieldnames=fields)
-                writer.writeheader()
-                writer.writerows(rows)
+            buf = io.StringIO(newline="")
+            writer = csv.DictWriter(buf, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+            atomic_write_text(path, buf.getvalue(), newline="")
     return changed
