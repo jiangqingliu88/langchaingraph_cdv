@@ -142,6 +142,27 @@ def test_hard_audit_gate_requires_report_and_evidence(tmp_path, monkeypatch):
     assert "interrupted" not in second
 
 
+def test_agent_context_is_filtered_per_expert():
+    from src.layers.l2_orchestration.runtime import _rebuild_ctx
+
+    state = PipelineState(
+        spec={"design_name": "dut"}, design_arch={"module_name": "dut"},
+        debug={"bug": "x"}, coverage={"overall": 90.0},
+        target=95.0, round_num=2)
+    design = _rebuild_ctx(state, "design")
+    assert "spec" in design and "design_arch" not in design
+    assert "debug" not in design and "coverage" not in design
+
+    debug = _rebuild_ctx(state, "debug")
+    assert debug.get("regression") == {}  # 未写入时不伪造
+    assert "debug" in debug and "coverage" in debug
+    assert "spec" in debug and "design_arch" in debug
+
+    audit = _rebuild_ctx(state, "audit")
+    assert {"design_arch", "coverage", "target"} <= set(audit)
+    assert "debug" not in audit
+
+
 def test_finalize_status_prefers_audit_blocked():
     from src.layers.l2_orchestration.nodes.pure.lifecycle import _run_status
 

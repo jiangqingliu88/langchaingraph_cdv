@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-10
+
+### Changed
+
+- **Hard audit gate**: `audit_gate` now verifies the signoff evidence package
+  with `verify_package`; failures set `AUDIT_BLOCKED` and
+  `terminal_reason=audit_gate_failed`.
+- **Human-in-the-loop**: main graph adds `human_review`; after 5 debug
+  attempts it calls `interrupt()` when a checkpointer is active, and degrades
+  loudly (`auto_no_checkpoint`) otherwise.
+- **Per-expert context isolation**: `_run_agent` now builds `task["ctx"]` from
+  `_rebuild_ctx(state, role)`, so design/debug/coverage/audit only see their
+  declared keys instead of the full pipeline state.
+- **9-node main graph**: `init / supervisor / design / verify / debug /
+  coverage / human_review / audit / finalize`; 24 fine-grained nodes stay in
+  the legacy graph and expert subgraphs.
+- Main suite: 1188 passed / 4 skipped.
+
 ## [2.1.0] - 2026-11-10
 
 ### Changed
@@ -46,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VPlan TP can bind explicit stimulus fields; `uvm_arch` scoreboards map via
   `check_artifact`/`object` where declared.
 - Secret scan (`scripts/check_secrets.py`) and cleaned `TODO.md`.
-- Main suite 1187 passed / 4 skipped; workbench 692 passed.
+- Main suite 1188 passed / 4 skipped; workbench 692 passed.
 
 ## [1.0.0] - 2026-11-05
 

@@ -2,7 +2,7 @@
 
 > 基线：2026-11-10
 >
-> 全量单测：**1187 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
+> 全量单测：**1188 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
 >
 > 历史 UVM 端到端实测：`output_e2e_v3_10_jiang_20261104_215130`（3.0 全量接线后）曾记录分级回归 **273/273 PASS**、功能计划覆盖率 **95.23%**、签核 **PASS_WITH_CAVEAT / CONDITIONAL**；**该 run 目录当前不在本工作区，不能作为当前 HEAD 的可复核证据**。Case View / 证据包的历史数字同样只作背景。
 >
@@ -439,6 +439,12 @@ debug_done / coverage_done / execution_done / debug_attempts / human_reviewed /
 supervisor_visits / supervisor_trace / audit_gate`，只由 supervisor/标记节点写；
 专家子图不决定“下一步派谁”。`supervisor_visits` 是主图自身的防死循环上限
 （24），不是轮次预算；轮次仍由 `round_bump` 收口。
+
+**上下文隔离**：`_run_agent` 用 `_rebuild_ctx(state, role)` 生成
+`task["ctx"]`，只保留该专家 `_AGENT_CTX_KEYS` 声明的键（如 `design` 只拿
+`spec`，`audit` 只拿 `regression/coverage/design_arch/model/target`）；
+`role=""` 保留旧的全量投影以兼容直接调用。新增 executor ctx 读取点必须同时
+加到白名单，否则会被裁掉并被测试发现。
 
 ---
 

@@ -3,7 +3,7 @@
 > 分析对象：`C:\Users\liujiangqing\Desktop\cdv_advanced`
 > 当前分支：`refactor/langgraph-migration`
 > 历史修复提交：`98eb87b7`；本次 Supervisor 重构提交见分支 HEAD
-> 基线 tag：`v2.1.0-pre-supervisor`（重构前）
+> 基线 tag：`v2.1.0-pre-supervisor` / `v2.2.0-pre-agent-loop`
 > 修复范围：除 `isa_ir_tools` / TB player 与 EDA 依赖外的已知问题
 
 ---
@@ -12,7 +12,7 @@
 
 本次修复把“架构原则正确、但测试/legacy/文档/安全没收口”的状态收口到了可提交、可回归的基线：
 
-- 主套件 **1187 passed / 0 failed / 4 skipped**；
+- 主套件 **1188 passed / 0 failed / 4 skipped**；
 - 工作台 **692 passed / 0 failed**；
 - 架构守卫 `[architecture] OK`；
 - 当前树 secret scan clean；
@@ -116,7 +116,7 @@ spec → front bootstrap → docs/specs + data + cases
 | `test_staged_regression` 时间戳 flaky | 测试显式设置 expand 的 mtime |
 | `test_cli_evidence` 依赖仓库内 tmp | monkeypatch `_git_changed_files` 返回 None |
 | 旧 casemodel / isa_gen / verification_os 空壳 | 删除空目录、pycache、0 字节 `archture.md` |
-| 主套件 | 从 7 failed 收敛到 **1187 passed / 4 skipped** |
+| 主套件 | 从 7 failed 收敛到 **1188 passed / 4 skipped** |
 | 工作台 | **692 passed**；CI deselect 已移除 |
 
 ### 2.2 安全
@@ -170,7 +170,7 @@ spec → front bootstrap → docs/specs + data + cases
 | 硬审计 | `audit_gate` 用 `verify_package` 重算文件/包哈希；失败写 `AUDIT_BLOCKED`、`terminal_reason=audit_gate_failed`，不进入 READY 签核 |
 | 硬审计 | `audit_gate` 调确定性 `n_audit` 后，独立核对 `report.json` 与 `signoff_evidence/manifest.json`，不信任子图汇报 |
 | 回滚 | `build_legacy_closed_loop_graph()` / `SIGNOFFAI_SUPERVISOR=off` 保留旧 24 节点单图；`NODE_NAMES` 不变，stages/UI 不受影响 |
-| 版本 | 2.1.0；新增 `v2.1.0-pre-supervisor` 基线 tag |
+| 版本 | 2.2.0；新增 `v2.1.0-pre-supervisor` / `v2.2.0-pre-agent-loop` 基线 tag |
 
 ---
 
@@ -178,7 +178,7 @@ spec → front bootstrap → docs/specs + data + cases
 
 | 项 | 结果 |
 |---|---|
-| 主套件 | **1187 passed / 0 failed / 4 skipped** |
+| 主套件 | **1188 passed / 0 failed / 4 skipped** |
 | 工作台 | **692 passed / 0 failed**（PySide6 回调析构 warning，无 failed） |
 | 架构守卫 | `[architecture] OK` |
 | 编译检查 | `compileall` 退出码 0 |
@@ -248,7 +248,7 @@ specs/npu_sched:
 - Gitee：`https://gitee.com/liujiangqing/cdv_a.git`
 - 分支：`refactor/langgraph-migration`
 - 本次提交：Supervisor + 专家子图重构（见 `git log -1`）
-- Tag：`v2.1.0`（最终推送后创建）
+- Tag：`v2.2.0`（最终推送后创建）
 
 ---
 

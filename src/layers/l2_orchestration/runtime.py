@@ -137,21 +137,43 @@ def _load_manual_nodes() -> List[Dict[str, Any]]:
         return []
 
 
-def _rebuild_ctx(state: PipelineState) -> Dict[str, Any]:
+#: 每个专家能看到的 ctx 白名单 —— 不是“信任 executor 自己只读 consumes”。
+#: 这些键来自 `consumes` 声明 + executor 里真实的 `ctx.get(...)` 读取点；
+#: 新增读取点必须同时加到对应角色，否则这里会把它裁掉（测试会红）。
+_CTX_BASE = frozenset({
+    "run_id", "output_root", "output_dir", "target", "max_rounds",
+    "round_num", "iterations", "design_style", "sim_modes", "manual_gate",
+    "bypass_design", "bypass_design_model", "phases",
+})
+_AGENT_CTX_KEYS: Dict[str, frozenset] = {
+    "front": frozenset(),
+    "design": frozenset({"spec"}),
+    "model": frozenset({"spec", "design_arch", "agents"}),
+    "verify": frozenset({"spec", "design_arch"}),
+    "ops": frozenset({"env", "tests", "regression"}),
+    "coverage": frozenset({"spec", "regression", "coverage"}),
+    "debug": frozenset({"regression", "tests", "env", "debug",
+                        "design_arch", "model", "spec", "coverage"}),
+    "audit": frozenset({"regression", "coverage", "design_arch", "model",
+                        "semantic_validations", "target"}),
+}
+
+
+def _rebuild_ctx(state: PipelineState, role: str = "") -> Dict[str, Any]:
     """把状态投影回 agent 期望的 ctx dict。
 
-    **图化最危险的一处**。agent 读 task["ctx"]（base.py 的 ctx_key 启发式、
-    verify 读 spec 等）；如果这里给空 dict，agent 不会报错，只会静默走另一条
-    分支。原 _run 传的是累积 ctx（所有 agent 写过的键都在），故这里做全量投影。
-
-    刻意排除决策相关字段：它们不是 agent 的输入，混进去只会让 agent 看到
-    自己不该看到的东西。
+    这是**专家上下文隔离**的边界：`role` 给了就只保留该专家声明的键，
+    不再把 coverage/debug/decision 等无关状态塞进每个 executor。`role=""`
+    保留旧的全量投影（兼容直接调用 `_rebuild_ctx(state)` 的测试）。
     """
     d = state.model_dump()
     for k in ("pending_action", "last_action", "decision_log",
               "governance_outcome", "approval_outcome", "guardian_verdict",
               "human_escalation", "terminal_reason"):
         d.pop(k, None)
+    if role:
+        allowed = _CTX_BASE | _AGENT_CTX_KEYS.get(role, frozenset())
+        d = {k: v for k, v in d.items() if k in allowed}
     # output_root 用字符串，保持与既有 agent 一致
     d["output_dir"] = d.get("output_root", "")
     return d
@@ -172,7 +194,7 @@ async def _run_agent(rt: Runtime, state: PipelineState, role: str, label: str,
     if not agent:
         return {}, {"name": label, "status": "skipped", "score": 0}
 
-    task = {"ctx": _rebuild_ctx(state), "input": rt.spec_text,
+    task = {"ctx": _rebuild_ctx(state, role), "input": rt.spec_text,
             "output_dir": state.output_root,
             # 统一 RunContext 的**可序列化视图**：executor 不需要活对象，但应该
             # 能回答"我这次属于哪个 run / 父 run 是谁"。
