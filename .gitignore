@@ -83,3 +83,8 @@ csrc/
 /examples/open_npu_soc/e203_hbirdv2/fpga/
 /examples/open_npu_soc/e203_hbirdv2/riscv-tools/**/*.dump
 /examples/open_npu_soc/e203_hbirdv2/riscv-tools/**/*.rpt
+
+# pytest temp dirs created by tests that call tmp_path (local only)
+pytest-of-*/
+tmp*_liujiangqing_*/
+signoffai-theme-icons/
