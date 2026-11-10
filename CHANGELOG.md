@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-11-10
+
+### Changed
+
+- **Verify/Coverage tool loops**: `verify_expert` adds `verify_agent` over the
+  UVM tools; `coverage_expert` adds `coverage_agent` that only reads coverage
+  reports and writes `coverage/agent_notes.md`.
+- Single master switch `SIGNOFFAI_AGENT_LOOP=on`, with per-expert overrides
+  `SIGNOFFAI_DESIGN_LOOP` / `SIGNOFFAI_VERIFY_LOOP` /
+  `SIGNOFFAI_COVERAGE_LOOP`; default off.
+- Main suite: 1201 passed / 4 skipped.
+
 ## [2.3.0] - 2026-11-10
 
 ### Changed

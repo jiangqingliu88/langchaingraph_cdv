@@ -23,8 +23,10 @@ logger = structlog.get_logger()
 
 
 def _enabled() -> bool:
-    return os.environ.get("SIGNOFFAI_DESIGN_LOOP", "off").strip().lower() in (
-        "1", "on", "true", "yes")
+    value = os.environ.get("SIGNOFFAI_DESIGN_LOOP")
+    if value is None:
+        value = os.environ.get("SIGNOFFAI_AGENT_LOOP", "off")
+    return value.strip().lower() in ("1", "on", "true", "yes")
 
 
 def _goal(state) -> str:

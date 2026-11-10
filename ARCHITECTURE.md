@@ -2,7 +2,7 @@
 
 > 基线：2026-11-10
 >
-> 全量单测：**1198 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
+> 全量单测：**1201 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
 >
 > 历史 UVM 端到端实测：`output_e2e_v3_10_jiang_20261104_215130`（3.0 全量接线后）曾记录分级回归 **273/273 PASS**、功能计划覆盖率 **95.23%**、签核 **PASS_WITH_CAVEAT / CONDITIONAL**；**该 run 目录当前不在本工作区，不能作为当前 HEAD 的可复核证据**。Case View / 证据包的历史数字同样只作背景。
 >
@@ -457,6 +457,13 @@ supervisor_visits / supervisor_trace / audit_gate`，只由 supervisor/标记节
 `read_file / write_file（仅 <run>/rtl/*.sv）/ list_rtl / check_rtl`，
 最多 8 步。写出 RTL 则清 `rtl_missing` 并进入 model；仍为空则由
 `r_after_design` 走 audit。默认 off，DesignExecutor 仍是主路径。
+
+**四个专家的总开关**：`SIGNOFFAI_AGENT_LOOP=on` 默认对 Debug 生效，同时作为
+Design/Verify/Coverage 未显式设置时的 fallback；单专家可用
+`SIGNOFFAI_DESIGN_LOOP` / `SIGNOFFAI_VERIFY_LOOP` /
+`SIGNOFFAI_COVERAGE_LOOP` 覆盖。Verify 循环用 UVM 工具
+（find_spec_yaml / jinja_render / check_static / read_file / write_file），
+Coverage 循环只读报告并最多写 `coverage/agent_notes.md`，都不跑 EDA。
 
 ---
 

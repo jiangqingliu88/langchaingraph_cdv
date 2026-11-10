@@ -91,8 +91,10 @@ def _rtl_missing_update(state: PipelineState, phase: Dict[str, Any],
     """design 没产出 RTL 时的门禁更新（Design 工具循环开启则先挂起）。"""
     why = arch.get("rtl_discarded") or []
     detail = "；".join(f"{d.get('ip')}: {d.get('why')}" for d in why) or "无 IP 产出"
-    loop = os.environ.get("SIGNOFFAI_DESIGN_LOOP", "off").strip().lower()
-    if loop in ("1", "on", "true", "yes"):
+    loop = os.environ.get("SIGNOFFAI_DESIGN_LOOP")
+    if loop is None:
+        loop = os.environ.get("SIGNOFFAI_AGENT_LOOP", "off")
+    if loop.strip().lower() in ("1", "on", "true", "yes"):
         logger.warning(f"design 没产出 RTL，交给 Design 工具循环补写：{detail}")
         return {"rtl_missing": True,
                 "phases": [phase, {"name": "rtl_gate", "status": "pending",

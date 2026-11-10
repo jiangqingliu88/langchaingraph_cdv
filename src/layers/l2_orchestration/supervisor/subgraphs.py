@@ -40,8 +40,10 @@ from src.layers.l2_orchestration.routers import (
     r_after_guardian, r_after_round_bump, r_approval, r_coverage, r_governor,
 )
 from src.layers.l2_orchestration.state import PipelineState
+from src.layers.l2_orchestration.supervisor.coverage_loop import n_coverage_agent
 from src.layers.l2_orchestration.supervisor.debug_loop import n_debug_agent
 from src.layers.l2_orchestration.supervisor.design_loop import n_design_agent
+from src.layers.l2_orchestration.supervisor.verify_loop import n_verify_agent
 
 
 def _marker(**updates: Any):
@@ -75,10 +77,12 @@ def build_verify_subgraph():
     """验证专家：verify（UVM/用例/IR）→ env 架构检查。"""
     g = StateGraph(PipelineState)
     g.add_node("verify", n_verify)
+    g.add_node("verify_agent", n_verify_agent)
     g.add_node("env_arch_check", n_env_arch_check)
     g.add_node("mark_verify_done", _marker(verify_done=True))
     g.add_edge(START, "verify")
-    g.add_edge("verify", "env_arch_check")
+    g.add_edge("verify", "verify_agent")
+    g.add_edge("verify_agent", "env_arch_check")
     g.add_edge("env_arch_check", "mark_verify_done")
     g.add_edge("mark_verify_done", END)
     return g.compile()
@@ -126,6 +130,7 @@ def build_coverage_subgraph():
     g = StateGraph(PipelineState)
     for name, fn in (
         ("coverage", n_coverage),
+        ("coverage_agent", n_coverage_agent),
         ("decide", n_decide),
         ("governor", n_governor),
         ("governor_retry", n_governor_retry),
@@ -146,7 +151,8 @@ def build_coverage_subgraph():
         execution_done=True, coverage_done=True))
 
     g.add_edge(START, "coverage")
-    g.add_edge("coverage", "decide")
+    g.add_edge("coverage", "coverage_agent")
+    g.add_edge("coverage_agent", "decide")
     g.add_edge("decide", "governor")
     g.add_conditional_edges("governor", r_governor, {
         "proceed": "approval",
