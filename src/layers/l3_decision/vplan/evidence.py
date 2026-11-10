@@ -29,6 +29,7 @@ import csv
 import hashlib
 import io
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -410,6 +411,12 @@ def apply_active(project_root: str | Path,
                 touched = True
                 changed += 1
         if touched:
+            # 先留一份原矩阵副本：gate --apply 是唯一改权威 CSV 的入口，
+            # 出错时至少能人工回滚；备份不参与 gate 读取。
+            backup = path.parent / ".backup" / path.name
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            if path.is_file():
+                shutil.copy2(path, backup)
             buf = io.StringIO(newline="")
             writer = csv.DictWriter(buf, fieldnames=fields)
             writer.writeheader()

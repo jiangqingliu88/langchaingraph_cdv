@@ -12,7 +12,7 @@
 
 本次修复把“架构原则正确、但测试/legacy/文档/安全没收口”的状态收口到了可提交、可回归的基线：
 
-- 主套件 **1174 passed / 0 failed / 4 skipped**；
+- 主套件 **1176 passed / 0 failed / 4 skipped**；
 - 工作台 **692 passed / 0 failed**；
 - 架构守卫 `[architecture] OK`；
 - 当前树 secret scan clean；
@@ -104,7 +104,7 @@ spec → front bootstrap → docs/specs + data + cases
 | `test_staged_regression` 时间戳 flaky | 测试显式设置 expand 的 mtime |
 | `test_cli_evidence` 依赖仓库内 tmp | monkeypatch `_git_changed_files` 返回 None |
 | 旧 casemodel / isa_gen / verification_os 空壳 | 删除空目录、pycache、0 字节 `archture.md` |
-| 主套件 | 从 7 failed 收敛到 **1174 passed / 4 skipped** |
+| 主套件 | 从 7 failed 收敛到 **1176 passed / 4 skipped** |
 | 工作台 | **692 passed**；CI deselect 已移除 |
 
 ### 2.2 安全
@@ -135,7 +135,17 @@ spec → front bootstrap → docs/specs + data + cases
 | 契约矩阵 schema | `_load_matrix` 校验 13 列与 `assume/active/exempt` 状态 |
 | CSV 原子写 | `apply_active` 改用 `atomic_write_text` |
 | uvm_arch 精确映射 | scoreboard 先按 `check_artifact/object` 绑定；无声明才回退全部 func/data |
-| 测试 | 新增 latest/drift、矩阵 schema、TP realization 三组回归测试 |
+| 测试 | 新增 latest/drift、矩阵 schema、TP realization、uvm_arch 绑定回归测试 |
+
+### 2.5 本轮追加（review 粒度 / 布局校验 / 备份 / lint）
+
+| 增强 | 实现 |
+|---|---|
+| review 只绑权威输入 | `review.py` 改为 `vplan_review_v2`：`data/{dimensions,execution_meta,...}.csv` 等生成 sidecar 不进哈希，但 `data/contract_matrix/*`、`docs/specs`、`cases` 仍进；status 输出 `skipped_generated` |
+| `sv/` 布局可校验 | 新增 `expected_layout_kind` / `layout_mismatches`；`vplan scan-assets --check` 额外核对 `vc/hdl_files.f`、`vc/hvl_files.f` 与文件名→子目录 |
+| 矩阵写入可回滚 | `apply_active` 写入前把原 CSV 备份到 `data/contract_matrix/.backup/` |
+| legacy 布局提示 | `SIGNOFFAI_UVM_LAYOUT=legacy` 打弃用 warning，仅用于旧 run 复现 |
+| config 可 lint | `pyproject.toml` 增加 `[tool.ruff.lint.isort] known-first-party`，避免 `src` 被误判为第三方 |
 
 ---
 
@@ -143,7 +153,7 @@ spec → front bootstrap → docs/specs + data + cases
 
 | 项 | 结果 |
 |---|---|
-| 主套件 | **1174 passed / 0 failed / 4 skipped** |
+| 主套件 | **1176 passed / 0 failed / 4 skipped** |
 | 工作台 | **692 passed / 0 failed**（PySide6 回调析构 warning，无 failed） |
 | 架构守卫 | `[architecture] OK` |
 | 编译检查 | `compileall` 退出码 0 |
@@ -176,8 +186,8 @@ specs/npu_sched:
 | VPlan 真实 E2E | 未闭环 | 需 Questa 环境按 `review → execute → link → gate` 跑一轮 |
 | `isa_ir_tools` / TB player | 未修（按要求） | 工具可冒烟，但无仓库内测试、未接 VPlan execute/verify 主链 |
 | 历史 secret | 部分修复 | 当前树已清除；历史 token 需轮换 + 历史清理 |
-| review 粒度 | 保持现状 | 仍哈希 `docs/specs + data + cases` 三块；后续可拆 reviewed source / generated sidecar |
-| `sv/` 与 legacy 双布局 | 保留迁移开关 | 长期应收敛为 `sv/` 单布局 |
+| review 粒度 | **已拆分（v2）** | 生成 sidecar（`data/dimensions.csv` 等）不再进审阅哈希；权威输入变化仍会使审阅过期 |
+| `sv/` 与 legacy 双布局 | **已加校验与弃用提示** | `scan-assets --check` 核对 `vc/*.f` 与文件名→子目录布局；`SIGNOFFAI_UVM_LAYOUT=legacy` 打弃用 warning；旧 run 仍只读兼容 |
 | 多后端 / IP 覆盖率 / SoC v2 | 未变 | 仍按 `known_limitations` 的 open 项推进 |
 | LLM / EDA 路径 | 未实测 | 本机无 Questa/LLM key |
 | ruff lint | 未本地验证 | 本机无法安装 ruff；CI lint 仍需在有 ruff 的环境确认 |
@@ -195,8 +205,7 @@ specs/npu_sched:
 
 ### P1（1–2 周）
 
-1. review 粒度拆分：reviewed source 与 generated sidecar 分开。
-2. VPlan TP realization 从 `data/dimensions.csv` 自动回填。
+1. VPlan TP realization 从 `data/dimensions.csv` 自动回填（当前已支持表内显式声明）。
 3. `uvm_arch` 用 `check_artifact` 做完整资产映射，并在 `scan-assets` 校验。
 4. 给矩阵写入加备份/diff；给 review 加增量哈希缓存。
 

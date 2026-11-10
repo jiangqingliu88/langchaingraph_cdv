@@ -55,6 +55,24 @@ def test_review_then_edit_invalidates_it(tmp_path):
     assert review_status(project)["reviewed"] is True
 
 
+def test_generated_data_sidecar_does_not_invalidate_review(tmp_path):
+    """生成 sidecar（dimensions/execution_meta）变化不该让语义审阅过期。"""
+    project = _project(tmp_path)
+    record_review(project, "jiang")
+    assert review_status(project)["reviewed"] is True
+
+    (tmp_path / "data" / "dimensions.csv").write_text(
+        "dimension_id\nD_x\n", encoding="utf-8")
+    status = review_status(project)
+    assert status["reviewed"] is True
+    assert "data/dimensions.csv" in status["skipped_generated"]
+
+    # 权威契约矩阵变化仍然必须使审阅过期。
+    (tmp_path / "data" / "contract_matrix" / "func.csv").write_text(
+        "contract_id,class\nC-1,func\nC-2,func\n", encoding="utf-8")
+    assert review_status(project)["reviewed"] is False
+
+
 def test_review_requires_a_reviewer(tmp_path):
     project = _project(tmp_path)
     with pytest.raises(ValueError, match="审阅人"):

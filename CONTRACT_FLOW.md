@@ -150,6 +150,9 @@ spec → dplan 契约（design_name / interfaces / registers / features / model_
 
 ```bash
 # 审阅 docs/specs、data、cases 三块输入，记录三块目录的 sha256
+# 注：data/ 下由 bootstrap 生成/重写的 sidecar（dimensions.csv、
+#     execution_meta.csv 等）不进审阅哈希；data/contract_matrix/*.csv
+#     仍进，改权威契约矩阵会使审阅过期。
 vagent vplan review specs/npu_sched --by <你的名字> [--note "接口表已核对"]
 
 # CI：未审阅/已过期 → 退出码 1
@@ -374,7 +377,8 @@ vagent evidence compare <pkg-a> <pkg-b>
 |---|---|---|
 | 改了 case 模型 / `data/*.csv`，重建契约 | `contract_hash` 变；旧事实标 stale；旧证据对不上 | 重新 `vplan execute` 采集证据，再 `gate --apply` |
 | 直接改 `contract_matrix/*.csv` 的 `status=active` | gate 会按证据重新评估并**覆盖**；签核不认 | 不要手改；用 `gate --apply` |
-| 审阅后改了 docs/specs / data / cases | 审阅哈希变化 → `stale`，执行被拒 | 重新 `vplan review` |
+| 审阅后改了 docs/specs / data/contract_matrix / cases | 审阅哈希变化 → `stale`，执行被拒 | 重新 `vplan review` |
+| 只改了 data/dimensions.csv 等生成 sidecar | 不进审阅哈希，审阅不失效 | 无需重新 review；但需重新执行以产生新证据 |
 | 改了 spec 但没改 spec_meta 哈希 | `spec_hash` 不匹配，项目加载失败 | 更新 `docs/specs/*_spec_meta.json` 的哈希后重跑 bootstrap/校验 |
 | 契约锚点与当前契约不一致（`contract_anchor_mismatch`） | `contract check` 失败 | 契约在证据产生后被改过：重新 build + 重跑，或开新 run |
 | 影子对账有差异（`mismatched > 0`） | `contract status` 显示"有差异" | 不能签核；先查 `status/shadow_report.json` 定位哪条义务/证据不一致 |

@@ -124,6 +124,9 @@ extend-exclude = ["venv", "__pycache__", ".git", "docs"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["src", "config"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

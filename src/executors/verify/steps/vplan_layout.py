@@ -16,6 +16,9 @@ def package_vplan_assets(output_dir: Path, module_name: str) -> None:
     UVM 资产。`SIGNOFFAI_UVM_LAYOUT=legacy` 可显式关闭；失败不拦主流程。
     """
     if os.environ.get("SIGNOFFAI_UVM_LAYOUT", "vplan").strip().lower() == "legacy":
+        logger.warning(
+            "SIGNOFFAI_UVM_LAYOUT=legacy 已弃用：新 run 请使用 sv/ 布局；"
+            "legacy 仅用于旧 run 复现")
         return
     try:
         from src.layers.l3_decision.vplan import (

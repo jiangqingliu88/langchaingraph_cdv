@@ -255,6 +255,41 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
     assert "sv/tb/hdl_top.sv" in hdl
     assert "sv/env/foo_env.sv" in hvl
     assert len(scan_assets(tmp_path)) == 10
+    from src.layers.l3_decision.vplan import layout_mismatches
+    assert layout_mismatches(tmp_path) == []
+
+
+def test_uvm_arch_scoreboard_binds_by_check_artifact(tmp_path):
+    """契约声明了 check_artifact 时，scoreboard 只绑自己那份，不做“万能收口”。"""
+    import json as _json
+
+    from src.layers.l3_decision.vplan.uvm_arch import build_uvm_arch
+    from src.layers.l3_decision.vplan.source import VPlanProject
+
+    project = VPlanProject(
+        root=tmp_path, module="m", dut="m",
+        spec_dir=tmp_path, spec_path=tmp_path / "m.md", spec_hash="",
+        spec_meta={},
+        contracts={
+            "C-FUNC-001": {"contract_id": "C-FUNC-001", "class": "func",
+                           "check_artifact": "sb_a"},
+            "C-FUNC-002": {"contract_id": "C-FUNC-002", "class": "func",
+                           "check_artifact": "sb_b"},
+        },
+    )
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "scoreboards.csv").write_text(
+        "id,name,checks,evidence,description,rules\n"
+        "sb_a,A,func,x,\"\",\n"
+        "sb_b,B,func,y,\"\",\n", encoding="utf-8")
+    (tmp_path / "coverage").mkdir()
+    (tmp_path / "coverage" / "case_ir.json").write_text(
+        _json.dumps({"cases": []}), encoding="utf-8")
+
+    arch = build_uvm_arch(project, tmp_path)
+    by_name = {row["name"]: row for row in arch["scoreboards"]}
+    assert by_name["sb_a"]["contracts"] == ["C-FUNC-001"]
+    assert by_name["sb_b"]["contracts"] == ["C-FUNC-002"]
 
 
 def test_gate_uses_latest_linked_run_and_reports_active_drift():
@@ -342,6 +377,7 @@ def test_evidence_gate_requires_tp_regression_and_asset(tmp_path):
                for reason in result["C-FUNC-DEP-002"]["reasons"])
 
     assert apply_active(proj, result.values()) == 1
+    assert (matrix / ".backup" / "func.csv").is_file()
     after = {row["contract_id"]: row for row in evaluate(proj)}
     assert after["C-FUNC-UNIT-001"]["status"] == "active"
     assert after["C-FUNC-DEP-002"]["status"] == "assume"

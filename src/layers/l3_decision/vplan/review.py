@@ -24,11 +24,26 @@ from typing import Any, Dict, List
 
 from .source import VPlanError, VPlanProject
 
-SCHEMA = "vplan_review_v1"
+SCHEMA = "vplan_review_v2"
 REVIEW_SUFFIX = "_review.json"
 _ALLOW_ENV = "SIGNOFFAI_ALLOW_UNREVIEWED"
 #: 需要人工确认的三块输入（覆盖 LLM 抽出来的全部表与执行资产）。
 REVIEW_ITEMS = ("docs_specs", "data", "cases")
+#: `data/` 下由 bootstrap / 生成器写入的 sidecar —— 它们不是人工审阅对象。
+#: 把它们算进 review 哈希，会让一次“重新生成执行资产”把整份审阅打成过期。
+GENERATED_DATA_FILES = frozenset({
+    "execution_meta.csv",
+    "dimensions.csv",
+    "behavior.csv",
+    "config_space.csv",
+    "cross_matrix.csv",
+    "sub_objects.csv",
+    "assertions.csv",
+    "scoreboards.csv",
+    "execution_assets.README.md",
+})
+#: 生成器产出的子目录（同样不进 review 哈希）。
+GENERATED_DATA_DIRS = ("generated",)
 
 
 def review_path(project: VPlanProject) -> Path:
@@ -49,8 +64,29 @@ def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _digest(path: Path, exclude: Path = None) -> str:
-    """文件/目录的 sha256；目录按相对路径 + 文件哈希排序累加。"""
+def _is_generated(root: Path, item: Path) -> bool:
+    """`data/` 下是否属于“生成 sidecar”（不进 review 哈希）。"""
+    try:
+        rel = item.relative_to(root).as_posix()
+    except ValueError:
+        return False
+    parts = rel.split("/")
+    if parts[:1] != ["data"]:
+        return False
+    if parts[1:2] and parts[1] in GENERATED_DATA_DIRS:
+        return True
+    if len(parts) == 2 and parts[1] in GENERATED_DATA_FILES:
+        return True
+    return False
+
+
+def _digest(path: Path, exclude: Path = None,
+            root: Path | None = None) -> str:
+    """文件/目录的 sha256；目录按相对路径 + 文件哈希排序累加。
+
+    `root` 给出时会跳过 `_is_generated()` 判定的生成 sidecar：
+    `data/dimensions.csv` 等由 bootstrap 重写，不该让“权威输入没变”的审阅过期。
+    """
     if path.is_file():
         return _sha256_file(path)
     if not path.is_dir():
@@ -63,21 +99,38 @@ def _digest(path: Path, exclude: Path = None) -> str:
             continue
         if "__pycache__" in item.parts:
             continue
+        if root is not None and _is_generated(Path(root), item):
+            continue
         digest.update(item.relative_to(path).as_posix().encode("utf-8"))
         digest.update(_sha256_file(item).encode("utf-8"))
     return digest.hexdigest()
 
 
+def _skipped_generated(project: VPlanProject) -> List[str]:
+    """当前被排除在哈希之外的生成 sidecar（相对项目的路径）。"""
+    root = Path(project.root)
+    data = root / "data"
+    if not data.is_dir():
+        return []
+    out = [
+        item.relative_to(root).as_posix()
+        for item in sorted(data.rglob("*"))
+        if item.is_file() and _is_generated(root, item)
+    ]
+    return out
+
+
 def current_hashes(project: VPlanProject) -> Dict[str, Dict[str, Any]]:
     """当前三块输入的哈希（`exists=False` 时 sha256 为空）。"""
+    root = Path(project.root)
     rp = review_path(project)
     out: Dict[str, Dict[str, Any]] = {}
     for name, path in _item_paths(project).items():
         exists = path.exists()
         out[name] = {
-            "path": str(path.relative_to(Path(project.root))).replace("\\", "/"),
+            "path": str(path.relative_to(root)).replace("\\", "/"),
             "exists": exists,
-            "sha256": _digest(path, exclude=rp) if exists else "",
+            "sha256": _digest(path, exclude=rp, root=root) if exists else "",
         }
     return out
 
@@ -112,6 +165,8 @@ def review_status(project: VPlanProject) -> Dict[str, Any]:
         "unreviewed": unreviewed,
         "stale": stale,
         "items": current,
+        # 生成 sidecar 不进哈希 —— 让“哪些文件不参与审阅”是可见的，而不是隐式规则。
+        "skipped_generated": _skipped_generated(project),
     }
 
 
@@ -132,6 +187,7 @@ def record_review(project: VPlanProject, reviewer: str,
         "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "note": str(note or ""),
         "items": current,
+        "skipped_generated": _skipped_generated(project),
     }
     path = review_path(project)
     path.parent.mkdir(parents=True, exist_ok=True)

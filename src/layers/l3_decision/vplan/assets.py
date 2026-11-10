@@ -319,6 +319,50 @@ def _write_vc_filelists(root: Path, sv_root: Path,
         header + "".join(f"{p}\n" for p in hvl), encoding="utf-8")
 
 
+#: 文件名 → 期望的 sv 子目录。与 `_RULES` 的“产物→目录”正交：
+#: `_RULES` 管源文件怎么归位，这里管**文档里写死的布局**（vc/ 是清单、covgs/ 是覆盖组）。
+_LAYOUT_BY_NAME = (
+    (re.compile(r"_cov_if\.sv$"), "interface"),
+    (re.compile(r"^(hdl|hvl)_files\.f$"), "vc"),
+    (re.compile(r"_cov\.sv$"), "covgs"),
+    (re.compile(r"_scb\.sv$"), "scbs"),
+    (re.compile(r"_checker\.sv$|_chk\.sv$"), "checkers"),
+    (re.compile(r"_sva\.sv$"), "svas"),
+    (re.compile(r"(^|_)(test|batch)\.sv$|_test\.sv$"), "test"),
+    (re.compile(r"_cons\.sv$"), "cons"),
+)
+
+
+def expected_layout_kind(name: str) -> str:
+    """文件名 → 期望的 `sv/` 子目录；无法判断返回空串（不猜）。"""
+    for pattern, kind in _LAYOUT_BY_NAME:
+        if pattern.search(name):
+            return kind
+    return ""
+
+
+def layout_mismatches(root: str | Path,
+                      rows: List[Dict[str, str]] | None = None
+                      ) -> List[str]:
+    """核对 `sv/` 布局：`vc/` 清单齐全、`covgs/scbs/...` 文件名落在正确子目录。"""
+    run = Path(root)
+    sv = run / "sv"
+    out: List[str] = []
+    if not sv.is_dir():
+        return out
+    for name in ("vc/hdl_files.f", "vc/hvl_files.f"):
+        if not (sv / name).is_file():
+            out.append(f"缺少布局文件：sv/{name}")
+    scanned = rows if rows is not None else scan_assets(run)
+    for row in scanned:
+        expected = expected_layout_kind(Path(row["path"]).name)
+        kind = str(row.get("kind") or "")
+        if expected and kind and expected != kind:
+            out.append(
+                f"{row['path']} 应放在 sv/{expected}/，实际在 sv/{kind}/")
+    return out
+
+
 def scan_assets(root: str | Path) -> List[Dict[str, str]]:
     """扫描 `sv/**/*.sv` 的锚点（用于 --check / registry 核对）。"""
     sv_root = Path(root) / "sv"

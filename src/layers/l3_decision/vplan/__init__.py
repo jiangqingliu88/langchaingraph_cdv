@@ -7,7 +7,10 @@
 """
 from __future__ import annotations
 
-from .assets import clean_legacy_dirs, package_run_assets, scan_assets
+from .assets import (
+    clean_legacy_dirs, expected_layout_kind, layout_mismatches,
+    package_run_assets, scan_assets,
+)
 from .build import build_case_ir, build_payload, build_testpoints
 from .evidence import apply_active, evaluate, link_run, load_index
 from .execution import (
@@ -27,6 +30,7 @@ __all__ = [
     "build_execution_model", "write_execution_model",
     "build_runtime_model", "write_runtime_model",
     "package_run_assets", "scan_assets", "clean_legacy_dirs",
+    "expected_layout_kind", "layout_mismatches",
     "apply_active", "evaluate", "link_run", "load_index",
     "materialize_project_inputs", "write_plan_only_run",
     "project_summary", "run_artifacts",

@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VPlan TP can bind explicit stimulus fields; `uvm_arch` scoreboards map via
   `check_artifact`/`object` where declared.
 - Secret scan (`scripts/check_secrets.py`) and cleaned `TODO.md`.
-- Main suite 1174 passed / 4 skipped; workbench 692 passed.
+- Main suite 1176 passed / 4 skipped; workbench 692 passed.
 
 ## [1.0.0] - 2026-11-05
 

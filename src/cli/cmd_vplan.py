@@ -236,6 +236,7 @@ def vplan_scan_assets(run, check_only, json_output):
     """扫描 run 的 sv/ 锚点；`--check` 核对登记表。"""
     import csv
     from src.layers.l3_decision.vplan import scan_assets
+    from src.layers.l3_decision.vplan.assets import layout_mismatches
 
     rows = scan_assets(run)
     problems = []
@@ -251,6 +252,7 @@ def vplan_scan_assets(run, check_only, json_output):
                 problems.append(f"登记了但扫描不到：{path}")
             for path in sorted(scanned - registered):
                 problems.append(f"扫描到但未登记：{path}")
+        problems.extend(layout_mismatches(run, rows))
     result = {"assets": len(rows), "problems": problems}
     if json_output:
         click.echo(json.dumps(result, ensure_ascii=False, indent=2))
