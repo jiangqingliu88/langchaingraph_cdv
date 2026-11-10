@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `debug_functional` fallback; default off.
 - Tool calls are whitelisted by name and recorded in `debug_agent_loop`;
   unknown tools are rejected and fed back as observations.
-- Main suite: 1193 passed / 4 skipped.
+- Main suite: 1194 passed / 4 skipped.
 
 ## [2.2.0] - 2026-11-10
 

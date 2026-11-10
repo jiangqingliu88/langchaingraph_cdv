@@ -12,7 +12,7 @@
 
 本次修复把“架构原则正确、但测试/legacy/文档/安全没收口”的状态收口到了可提交、可回归的基线：
 
-- 主套件 **1193 passed / 0 failed / 4 skipped**；
+- 主套件 **1194 passed / 0 failed / 4 skipped**；
 - 工作台 **692 passed / 0 failed**；
 - 架构守卫 `[architecture] OK`；
 - 当前树 secret scan clean；
@@ -116,7 +116,7 @@ spec → front bootstrap → docs/specs + data + cases
 | `test_staged_regression` 时间戳 flaky | 测试显式设置 expand 的 mtime |
 | `test_cli_evidence` 依赖仓库内 tmp | monkeypatch `_git_changed_files` 返回 None |
 | 旧 casemodel / isa_gen / verification_os 空壳 | 删除空目录、pycache、0 字节 `archture.md` |
-| 主套件 | 从 7 failed 收敛到 **1193 passed / 4 skipped** |
+| 主套件 | 从 7 failed 收敛到 **1194 passed / 4 skipped** |
 | 工作台 | **692 passed**；CI deselect 已移除 |
 
 ### 2.2 安全
@@ -179,7 +179,7 @@ spec → front bootstrap → docs/specs + data + cases
 
 | 项 | 结果 |
 |---|---|
-| 主套件 | **1193 passed / 0 failed / 4 skipped** |
+| 主套件 | **1194 passed / 0 failed / 4 skipped** |
 | 工作台 | **692 passed / 0 failed**（PySide6 回调析构 warning，无 failed） |
 | 架构守卫 | `[architecture] OK` |
 | 编译检查 | `compileall` 退出码 0 |
