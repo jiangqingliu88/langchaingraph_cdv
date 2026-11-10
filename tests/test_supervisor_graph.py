@@ -70,6 +70,14 @@ def test_human_review_without_checkpoint_degrades_loudly(monkeypatch):
     assert out["human_reviewed"] is True
 
 
+def test_coverage_budget_comes_from_agent_card():
+    out = asyncio.run(n_supervisor(PipelineState(
+        design_done=True, verify_done=True, debug_done=True,
+        coverage_attempts=6), {}))
+    assert out["next_agent"] == "audit"
+    assert out["terminal_reason"] == "coverage_budget_exhausted"
+
+
 def test_supervisor_routes_interrupted_to_audit():
     out = asyncio.run(n_supervisor(
         PipelineState(interrupted=True, terminal_reason="eda_missing"), {}))

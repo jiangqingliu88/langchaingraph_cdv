@@ -21,7 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as agent-callable tools with structured summaries.
 - **Terminology**: `docs/AGENT_GLOSSARY.md` defines Skill vs Executor; the
   `Executor` class name remains stable (option B, no breaking rename).
-- Main suite: 1181 passed / 15 skipped.
+- Coverage loop now enforces `card("coverage").max_attempts`; exhaustion sets
+  `terminal_reason=coverage_budget_exhausted`.
+- Main suite: 1182 passed / 15 skipped.
 
 ## [2.5.0] - 2026-11-10
 

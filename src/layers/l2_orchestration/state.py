@@ -189,6 +189,8 @@ class PipelineState(BaseModel):
     supervisor_visits: Annotated[int, _add] = 0
     #: 本次 run 里 Debug 专家实际返工了几次（用于“连续 5 次改不对就叫人”）。
     debug_attempts: Annotated[int, _add] = 0
+    #: Coverage 专家已经进行过几次“非 CONVERGE 动作 → 下一轮”的循环。
+    coverage_attempts: Annotated[int, _add] = 0
     #: 人类是否已经看过“Debug 连续返工”的告警（避免每次 supervisor 都打断）。
     human_reviewed: bool = False
     human_decision: str = ""

@@ -69,6 +69,9 @@ async def n_supervisor(state: PipelineState, config) -> Dict[str, Any]:
           and not view.human_reviewed):
         choice = "human_review"
         reason = f"Debug 已连续返工 {view.debug_attempts} 次，暂停让人确认"
+    elif view.coverage_attempts >= card("coverage").max_attempts:
+        choice = "audit"
+        reason = (f"coverage 循环 {view.coverage_attempts} 次达到 AgentCard 上限")
     elif not view.coverage_done:
         choice = "coverage"
         reason = "回归已通过，进入 coverage_expert"
@@ -76,11 +79,14 @@ async def n_supervisor(state: PipelineState, config) -> Dict[str, Any]:
         choice = "audit"
         reason = "所有专家已完成，进入硬审计"
     logger.info(f"Supervisor → {choice}（{reason}）")
-    return {
+    update = {
         "next_agent": choice,
         "supervisor_visits": 1,
         "supervisor_trace": [{"visit": visits, "next": choice, "reason": reason}],
     }
+    if choice == "audit" and "coverage" in reason and "上限" in reason:
+        update["terminal_reason"] = "coverage_budget_exhausted"
+    return update
 
 
 def r_supervisor(state: PipelineState) -> str:

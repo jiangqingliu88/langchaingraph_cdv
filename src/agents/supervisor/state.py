@@ -24,6 +24,7 @@ class SupervisorView:
     coverage_done: bool = False
     execution_done: bool = False
     debug_attempts: int = 0
+    coverage_attempts: int = 0
     human_reviewed: bool = False
     interrupted: bool = False
     eda_blocked: bool = False
@@ -40,6 +41,7 @@ class SupervisorView:
             coverage_done=bool(getattr(state, "coverage_done", False)),
             execution_done=bool(getattr(state, "execution_done", False)),
             debug_attempts=int(getattr(state, "debug_attempts", 0) or 0),
+            coverage_attempts=int(getattr(state, "coverage_attempts", 0) or 0),
             human_reviewed=bool(getattr(state, "human_reviewed", False)),
             interrupted=bool(getattr(state, "interrupted", False)),
             eda_blocked=bool(getattr(state, "eda_blocked", False)),

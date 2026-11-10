@@ -44,7 +44,8 @@ def build_coverage_subgraph():
     ):
         g.add_node(name, fn)
     g.add_node("mark_round_needed", marker(
-        debug_done=False, coverage_done=False, execution_done=False))
+        debug_done=False, coverage_done=False, execution_done=False,
+        coverage_attempts=1))
     g.add_node("mark_execution_done", marker(
         execution_done=True, coverage_done=True))
 
