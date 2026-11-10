@@ -1,13 +1,13 @@
-"""专家子图 —— 主图只挂这些编译后的图，不直接铺 24 个节点。
+"""专家子图 —— 主图只挂 4 个专家，不直接铺 24 个节点。
 
-两个专家：
+    design_expert     front → design → model
+    verify_expert     verify → env_arch_check
+    debug_expert      round_bump → ops → debug_functional（失败才回环）
+    coverage_expert   coverage → decide → governor → approval → 动作
 
-    design_expert      front → design → model → verify → env_arch_check
-    execution_expert   round_bump → ops → (coverage | debug) → decide
-                       → governor → approval → record_decision → 动作 → round_bump
-
-`design_expert` 是线性子图（设计执行器内部已有“生成→编译→重试”循环）；
-`execution_expert` 保留原来的轮次循环，是有**环形边**的子图。
+`debug_expert` 是有环子图：回归失败 → debug → 下一轮 → 再跑 ops，直到通过
+或轮次预算用尽。`coverage_expert` 把“覆盖率报告 → 决策 → 动作”收在一个子图；
+动作不是 CONVERGE 时只标记“需要下一轮”，由主图重新派给 debug_expert。
 """
 from __future__ import annotations
 
@@ -50,36 +50,74 @@ def _marker(**updates: Any):
 
 
 def build_design_subgraph():
-    """设计专家：前置分析 → 设计/模型/验证 → env 架构检查。"""
+    """设计专家：前置分析 → design → model。"""
     g = StateGraph(PipelineState)
     g.add_node("front", n_front)
     g.add_node("design", n_design)
     g.add_node("model", n_model)
-    g.add_node("verify", n_verify)
-    g.add_node("env_arch_check", n_env_arch_check)
     g.add_node("mark_design_done", _marker(design_done=True))
-
     g.add_edge(START, "front")
     g.add_edge("front", "design")
     g.add_conditional_edges("design", r_after_design, {
         "ok": "model",
         "abort": "mark_design_done",
     })
-    g.add_edge("model", "verify")
-    g.add_edge("verify", "env_arch_check")
-    g.add_edge("env_arch_check", "mark_design_done")
+    g.add_edge("model", "mark_design_done")
     g.add_edge("mark_design_done", END)
     return g.compile()
 
 
-def build_execution_subgraph():
-    """执行专家：保留原闭环的轮次/调试/覆盖率循环，结束交回 Supervisor。"""
+def build_verify_subgraph():
+    """验证专家：verify（UVM/用例/IR）→ env 架构检查。"""
+    g = StateGraph(PipelineState)
+    g.add_node("verify", n_verify)
+    g.add_node("env_arch_check", n_env_arch_check)
+    g.add_node("mark_verify_done", _marker(verify_done=True))
+    g.add_edge(START, "verify")
+    g.add_edge("verify", "env_arch_check")
+    g.add_edge("env_arch_check", "mark_verify_done")
+    g.add_edge("mark_verify_done", END)
+    return g.compile()
+
+
+def build_debug_subgraph():
+    """执行/调试专家：轮次 → ops → 失败才进 debug，然后回到下一轮。"""
     g = StateGraph(PipelineState)
     for name, fn in (
         ("round_bump", n_round_bump),
         ("ops", n_ops),
-        ("coverage", n_coverage),
         ("debug_functional", n_debug_functional),
+    ):
+        g.add_node(name, fn)
+    g.add_node("mark_debug_done", _marker(debug_done=True))
+    g.add_node("mark_execution_done", _marker(execution_done=True))
+    g.add_edge(START, "round_bump")
+    g.add_conditional_edges("round_bump", r_after_round_bump, {
+        "next_round": "ops",
+        "give_up": "mark_execution_done",
+    })
+    g.add_conditional_edges("ops", r_coverage, {
+        "eda_missing": "mark_execution_done",
+        "awaiting_approval": "mark_execution_done",
+        "compile_fail": "debug_functional",
+        "functional_fail": "debug_functional",
+        "run_coverage": "mark_debug_done",
+    })
+    g.add_edge("debug_functional", "round_bump")
+    g.add_edge("mark_debug_done", END)
+    g.add_edge("mark_execution_done", END)
+    return g.compile()
+
+
+def build_coverage_subgraph():
+    """覆盖率专家：coverage → decide → governor → approval → 动作。
+
+    非 CONVERGE 动作只写 `mark_round_needed`（清掉 debug/coverage 完成标记），
+    由主图重新派 debug_expert；不在本子图里直接跑下一轮 ops。
+    """
+    g = StateGraph(PipelineState)
+    for name, fn in (
+        ("coverage", n_coverage),
         ("decide", n_decide),
         ("governor", n_governor),
         ("governor_retry", n_governor_retry),
@@ -94,21 +132,12 @@ def build_execution_subgraph():
         ("apply_expand_seeds", n_apply_expand_seeds),
     ):
         g.add_node(name, fn)
-    g.add_node("mark_execution_done", _marker(execution_done=True))
+    g.add_node("mark_round_needed", _marker(
+        debug_done=False, coverage_done=False, execution_done=False))
+    g.add_node("mark_execution_done", _marker(
+        execution_done=True, coverage_done=True))
 
-    g.add_edge(START, "round_bump")
-    g.add_conditional_edges("round_bump", r_after_round_bump, {
-        "next_round": "ops",
-        "give_up": "mark_execution_done",
-    })
-    g.add_conditional_edges("ops", r_coverage, {
-        "eda_missing": "mark_execution_done",
-        "awaiting_approval": "mark_execution_done",
-        "compile_fail": "decide",
-        "functional_fail": "debug_functional",
-        "run_coverage": "coverage",
-    })
-    g.add_edge("debug_functional", "decide")
+    g.add_edge(START, "coverage")
     g.add_edge("coverage", "decide")
     g.add_edge("decide", "governor")
     g.add_conditional_edges("governor", r_governor, {
@@ -116,10 +145,10 @@ def build_execution_subgraph():
         "retry": "governor_retry",
         "abort": "mark_execution_done",
     })
-    g.add_edge("governor_retry", "round_bump")
+    g.add_edge("governor_retry", "mark_round_needed")
     g.add_conditional_edges("approval", r_approval, {
         "proceed": "record_decision",
-        "skip": "round_bump",
+        "skip": "mark_round_needed",
         "reject": "mark_execution_done",
     })
     g.add_conditional_edges("record_decision", r_action, {
@@ -138,15 +167,18 @@ def build_execution_subgraph():
     g.add_conditional_edges("apply_converge", r_after_converge, {
         "audit": "mark_execution_done"})
     g.add_conditional_edges("apply_compile_retry", r_after_compile_retry, {
-        "next_round": "round_bump", "abort": "mark_execution_done"})
+        "next_round": "mark_round_needed", "abort": "mark_execution_done"})
     g.add_conditional_edges("refactor_rtl", r_after_guardian, {
-        "next_round": "round_bump", "abort": "mark_execution_done"})
-    g.add_edge("apply_update_model", "round_bump")
-    g.add_edge("apply_directed_test", "round_bump")
-    g.add_edge("apply_relax", "round_bump")
-    g.add_edge("apply_expand_seeds", "round_bump")
+        "next_round": "mark_round_needed", "abort": "mark_execution_done"})
+    for name in ("apply_update_model", "apply_directed_test",
+                 "apply_relax", "apply_expand_seeds"):
+        g.add_edge(name, "mark_round_needed")
+    g.add_edge("mark_round_needed", END)
     g.add_edge("mark_execution_done", END)
     return g.compile()
 
 
-__all__ = ["build_design_subgraph", "build_execution_subgraph"]
+__all__ = [
+    "build_design_subgraph", "build_verify_subgraph",
+    "build_debug_subgraph", "build_coverage_subgraph",
+]

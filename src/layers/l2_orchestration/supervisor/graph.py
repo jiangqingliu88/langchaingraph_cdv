@@ -1,14 +1,17 @@
 """Supervisor 主图 —— 只回答“下一步派哪个专家”，不执行 EDA、不做判定。
 
-拓扑：
+拓扑（主图 8 个节点）：
 
     START → init → supervisor
       supervisor ──design──► design_expert ──► supervisor
-      supervisor ──execution──► execution_expert ──► supervisor
+      supervisor ──verify──► verify_expert ──► supervisor
+      supervisor ──debug──► debug_expert ──► supervisor
+      supervisor ──coverage──► coverage_expert ──► supervisor
       supervisor ──audit──► audit_gate ──► finalize → END
 
-子图内部各自有循环/阶段；主图只保留一条受控回边。`supervisor_visits` 是
-主图自己的防失控计数，轮次预算仍由执行子图里的 `round_bump` 收口。
+`debug_expert` / `coverage_expert` 内部各自有循环；主图只保留 supervisor 这一条
+受控回边。`supervisor_visits` 是主图自己的防失控计数，轮次预算仍由
+`round_bump`（debug_expert 内）收口。
 """
 from __future__ import annotations
 
@@ -22,12 +25,15 @@ from src.layers.l2_orchestration.state import PipelineState
 
 from .audit import n_hard_audit_gate
 from .state import SupervisorView
-from .subgraphs import build_design_subgraph, build_execution_subgraph
+from .subgraphs import (
+    build_coverage_subgraph, build_debug_subgraph, build_design_subgraph,
+    build_verify_subgraph,
+)
 
 logger = structlog.get_logger()
 
 #: 主图最多在 supervisor 上转几圈（不是轮次预算；防流程图自身死循环）。
-MAX_SUPERVISOR_VISITS = 12
+MAX_SUPERVISOR_VISITS = 24
 
 
 async def n_supervisor(state: PipelineState, config) -> Dict[str, Any]:
@@ -40,15 +46,24 @@ async def n_supervisor(state: PipelineState, config) -> Dict[str, Any]:
     elif view.interrupted or view.eda_blocked or view.awaiting_approval:
         choice = "audit"
         reason = f"终止信号 terminal_reason={view.terminal_reason}"
+    elif view.execution_done:
+        choice = "audit"
+        reason = "execution_done=true，进入硬审计"
     elif not view.design_done:
         choice = "design"
         reason = "design_expert 尚未完成"
-    elif not view.execution_done:
-        choice = "execution"
-        reason = "design 已完成，进入执行专家"
+    elif not view.verify_done:
+        choice = "verify"
+        reason = "design 已完成，进入 verify_expert"
+    elif not view.debug_done:
+        choice = "debug"
+        reason = "verify 已完成，进入 debug_expert"
+    elif not view.coverage_done:
+        choice = "coverage"
+        reason = "回归已通过，进入 coverage_expert"
     else:
         choice = "audit"
-        reason = "执行专家已返回，进入硬审计"
+        reason = "所有专家已完成，进入硬审计"
     logger.info(f"Supervisor → {choice}（{reason}）")
     return {
         "next_agent": choice,
@@ -58,20 +73,22 @@ async def n_supervisor(state: PipelineState, config) -> Dict[str, Any]:
 
 
 def r_supervisor(state: PipelineState) -> str:
-    """主图条件边：只认 `next_agent` 的四个合法值。"""
+    """主图条件边：只认五个合法值。"""
     choice = str(state.next_agent or "")
-    if choice in ("design", "execution", "audit"):
+    if choice in ("design", "verify", "debug", "coverage", "audit"):
         return choice
     return "audit"
 
 
 def build_supervisor_graph(checkpointer=None, store=None):
-    """编译 Supervisor 主图（设计/执行专家是独立子图）。"""
+    """编译 Supervisor 主图（4 个专家子图 + 纯审计门）。"""
     g = StateGraph(PipelineState)
     g.add_node("init", n_init)
     g.add_node("supervisor", n_supervisor)
     g.add_node("design_expert", build_design_subgraph())
-    g.add_node("execution_expert", build_execution_subgraph())
+    g.add_node("verify_expert", build_verify_subgraph())
+    g.add_node("debug_expert", build_debug_subgraph())
+    g.add_node("coverage_expert", build_coverage_subgraph())
     g.add_node("audit_gate", n_hard_audit_gate)
     g.add_node("finalize", n_finalize)
 
@@ -79,11 +96,14 @@ def build_supervisor_graph(checkpointer=None, store=None):
     g.add_edge("init", "supervisor")
     g.add_conditional_edges("supervisor", r_supervisor, {
         "design": "design_expert",
-        "execution": "execution_expert",
+        "verify": "verify_expert",
+        "debug": "debug_expert",
+        "coverage": "coverage_expert",
         "audit": "audit_gate",
     })
-    g.add_edge("design_expert", "supervisor")
-    g.add_edge("execution_expert", "supervisor")
+    for expert in ("design_expert", "verify_expert", "debug_expert",
+                   "coverage_expert"):
+        g.add_edge(expert, "supervisor")
     g.add_edge("audit_gate", "finalize")
     g.add_edge("finalize", END)
     return g.compile(checkpointer=checkpointer, store=store)

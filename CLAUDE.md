@@ -73,7 +73,7 @@ python -m src.cli.commands vplan gate specs/npu_sched [--apply]
 - `src/executors/` — eight stage executors; only `design` and `debug` call an LLM directly.
 - `src/layers/l1_infrastructure/` — deterministic, zero-AI layer; must not import upward.
 - `src/layers/l2_orchestration/` — LangGraph graph, routers, nodes, governance, evidence;
-  `supervisor/` is the default Supervisor main graph + design/execution subgraphs,
+  `supervisor/` is the default Supervisor main graph + design/verify/debug/coverage subgraphs,
   `graph.py` keeps the legacy 24-node single graph for rollback
   (`SIGNOFFAI_SUPERVISOR=off`).
 - `src/layers/l3_decision/` — coverage-driven decisions, case models, test-point IR;

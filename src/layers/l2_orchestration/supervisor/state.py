@@ -19,6 +19,9 @@ from typing import Any
 @dataclass(frozen=True)
 class SupervisorView:
     design_done: bool = False
+    verify_done: bool = False
+    debug_done: bool = False
+    coverage_done: bool = False
     execution_done: bool = False
     interrupted: bool = False
     eda_blocked: bool = False
@@ -30,6 +33,9 @@ class SupervisorView:
     def from_state(cls, state: Any) -> "SupervisorView":
         return cls(
             design_done=bool(getattr(state, "design_done", False)),
+            verify_done=bool(getattr(state, "verify_done", False)),
+            debug_done=bool(getattr(state, "debug_done", False)),
+            coverage_done=bool(getattr(state, "coverage_done", False)),
             execution_done=bool(getattr(state, "execution_done", False)),
             interrupted=bool(getattr(state, "interrupted", False)),
             eda_blocked=bool(getattr(state, "eda_blocked", False)),

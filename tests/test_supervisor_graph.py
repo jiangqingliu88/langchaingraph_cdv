@@ -14,13 +14,14 @@ from src.layers.l2_orchestration.state import PipelineState
 from src.layers.l2_orchestration.supervisor.graph import n_supervisor, r_supervisor
 
 
-def test_default_graph_is_supervisor_with_two_experts():
+def test_default_graph_is_supervisor_with_four_experts():
     graph = build_closed_loop_graph().get_graph()
     names = set(graph.nodes)
-    assert {"supervisor", "design_expert", "execution_expert",
-            "audit_gate", "finalize"} <= names
-    # 子图不是把 24 个节点平铺到主图：主图只有编排节点。
+    assert {"supervisor", "design_expert", "verify_expert", "debug_expert",
+            "coverage_expert", "audit_gate", "finalize"} <= names
+    # 子图不是把 24 个节点平铺到主图：主图只有 8 个编排节点。
     assert "design" not in names and "ops" not in names
+    assert len(names - {"__start__", "__end__"}) == 8
 
 
 def test_legacy_graph_is_still_available(monkeypatch):
@@ -31,17 +32,26 @@ def test_legacy_graph_is_still_available(monkeypatch):
     assert "design" in set(build_legacy_closed_loop_graph().get_graph().nodes)
 
 
-def test_supervisor_routes_design_then_execution_then_audit():
+def test_supervisor_routes_through_four_experts_then_audit():
     design = asyncio.run(n_supervisor(PipelineState(), {}))
     assert design["next_agent"] == "design"
     assert design["supervisor_visits"] == 1
 
-    execution = asyncio.run(n_supervisor(
+    verify = asyncio.run(n_supervisor(
         PipelineState(design_done=True), {}))
-    assert execution["next_agent"] == "execution"
+    assert verify["next_agent"] == "verify"
+
+    debug = asyncio.run(n_supervisor(
+        PipelineState(design_done=True, verify_done=True), {}))
+    assert debug["next_agent"] == "debug"
+
+    coverage = asyncio.run(n_supervisor(
+        PipelineState(design_done=True, verify_done=True, debug_done=True), {}))
+    assert coverage["next_agent"] == "coverage"
 
     audit = asyncio.run(n_supervisor(
-        PipelineState(design_done=True, execution_done=True), {}))
+        PipelineState(design_done=True, verify_done=True, debug_done=True,
+                      coverage_done=True, execution_done=True), {}))
     assert audit["next_agent"] == "audit"
 
 
@@ -68,6 +78,17 @@ def test_design_subgraph_propagates_completion_marker(monkeypatch):
     assert out["design_done"] is True
 
 
+def test_all_expert_subgraphs_compile():
+    from src.layers.l2_orchestration.supervisor import subgraphs
+
+    assert "design" in subgraphs.build_design_subgraph().get_graph().nodes
+    assert "verify" in subgraphs.build_verify_subgraph().get_graph().nodes
+    debug = subgraphs.build_debug_subgraph().get_graph()
+    assert {"round_bump", "ops", "debug_functional"} <= set(debug.nodes)
+    coverage = subgraphs.build_coverage_subgraph().get_graph()
+    assert {"coverage", "decide", "governor", "approval"} <= set(coverage.nodes)
+
+
 def test_hard_audit_gate_requires_report_and_evidence(tmp_path, monkeypatch):
     from src.layers.l2_orchestration.supervisor import audit as audit_mod
 
@@ -92,7 +113,7 @@ def test_hard_audit_gate_requires_report_and_evidence(tmp_path, monkeypatch):
 
 
 def test_router_only_accepts_known_agents():
-    assert r_supervisor(PipelineState(next_agent="design")) == "design"
-    assert r_supervisor(PipelineState(next_agent="execution")) == "execution"
-    assert r_supervisor(PipelineState(next_agent="audit")) == "audit"
+    for name in ("design", "verify", "debug", "coverage", "audit"):
+        assert r_supervisor(PipelineState(next_agent=name)) == name
+    assert r_supervisor(PipelineState(next_agent="execution")) == "audit"
     assert r_supervisor(PipelineState(next_agent="bogus")) == "audit"

@@ -16,12 +16,25 @@ from src.core.contracts import versions
 import hashlib
 import json
 import shutil
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 SCHEMA = "soc_run_v1"
 EVIDENCE_SCHEMA = versions.EVIDENCE_SOC_PROFILE
+
+
+def _replace_with_retry(src: Path, dst: Path, attempts: int = 8) -> None:
+    """Windows 上目录 replace 可能被 AV/索引器短暂占用；重试而不是假失败。"""
+    for attempt in range(attempts):
+        try:
+            src.replace(dst)
+            return
+        except PermissionError:
+            if attempt >= attempts - 1:
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 def _sha(path: Path) -> str:
@@ -813,8 +826,8 @@ def write_soc_evidence(run_root: str | Path) -> Dict[str, Any]:
     old = root / "signoff_evidence.old"
     shutil.rmtree(old, ignore_errors=True)
     if pkg.exists():
-        pkg.replace(old)
-    tmp.replace(pkg)
+        _replace_with_retry(pkg, old)
+    _replace_with_retry(tmp, pkg)
     shutil.rmtree(old, ignore_errors=True)
     return {"path": str(pkg / "manifest.json"),
             "package_hash": manifest["package_hash"],

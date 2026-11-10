@@ -40,6 +40,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -169,6 +170,18 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "coverage/case_cov/**/*.json",
     ),
 }
+
+
+def _replace_with_retry(src: Path, dst: Path, attempts: int = 8) -> None:
+    """Windows 上目录 replace 可能被 AV/索引器短暂占用；重试而不是假失败。"""
+    for attempt in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt >= attempts - 1:
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 def sha256_file(path: Path) -> str:
@@ -613,8 +626,8 @@ def write_package(output_dir: Path, manifest: Dict[str, Any],
     old_pkg = output_dir / "signoff_evidence.old"
     shutil.rmtree(old_pkg, ignore_errors=True)
     if final_pkg.exists():
-        os.replace(final_pkg, old_pkg)
-    os.replace(pkg, final_pkg)
+        _replace_with_retry(final_pkg, old_pkg)
+    _replace_with_retry(pkg, final_pkg)
     shutil.rmtree(old_pkg, ignore_errors=True)
     return manifest
 

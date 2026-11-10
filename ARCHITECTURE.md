@@ -2,7 +2,7 @@
 
 > 基线：2026-11-10
 >
-> 全量单测：**1183 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
+> 全量单测：**1184 passed / 4 skipped**（本机，2026-11-10）；工作台 **692 passed**（`QT_QPA_PLATFORM=offscreen`，2026-11-10）。
 >
 > 历史 UVM 端到端实测：`output_e2e_v3_10_jiang_20261104_215130`（3.0 全量接线后）曾记录分级回归 **273/273 PASS**、功能计划覆盖率 **95.23%**、签核 **PASS_WITH_CAVEAT / CONDITIONAL**；**该 run 目录当前不在本工作区，不能作为当前 HEAD 的可复核证据**。Case View / 证据包的历史数字同样只作背景。
 >
@@ -413,21 +413,30 @@ mutant；`tests/test_mutation_guards.py` 钉住目标片段仍然唯一存在。
 ```text
 START → init → supervisor
   supervisor ──design──► design_expert ──► supervisor
-  supervisor ──execution──► execution_expert ──► supervisor
+  supervisor ──verify──► verify_expert ──► supervisor
+  supervisor ──debug──► debug_expert ──► supervisor
+  supervisor ──coverage──► coverage_expert ──► supervisor
   supervisor ──audit──► audit_gate ──► finalize → END
 ```
+
+主图 8 个节点：`init / supervisor / design_expert / verify_expert /
+debug_expert / coverage_expert / audit_gate / finalize`。24 个细节点只保留在
+`build_legacy_closed_loop_graph()` 与专家子图内部。
 
 | 节点/子图 | 职责 | 内部 |
 |---|---|---|
 | `supervisor` | 只读状态、只写路由字段；不调 LLM、不跑工具 | `supervisor/graph.py` |
-| `design_expert` | 前置分析 → design → model → verify → env 架构检查 | 线性子图；design 执行器内部有“生成→编译→重试”循环 |
-| `execution_expert` | 轮次预算 → ops → coverage/debug → decide → governor → approval → 动作 | **环形子图**，保留原闭环的轮次/审批/证据语义 |
+| `design_expert` | front → design → model | 线性子图；design 执行器内部有“生成→编译→重试”循环 |
+| `verify_expert` | verify → env_arch_check | 线性子图 |
+| `debug_expert` | round_bump → ops → debug_functional | **环形子图**：回归失败才 debug，再进下一轮 |
+| `coverage_expert` | coverage → decide → governor → approval → 动作 | 动作非 CONVERGE 只标记下一轮，交回主图重新派 debug_expert |
 | `audit_gate` | 纯代码审计：调用确定性 audit 后，独立核对 `report.json` 与 `signoff_evidence/manifest.json` | `supervisor/audit.py` |
 
-状态拆分的落点：`PipelineState` 里新增 `next_agent / design_done /
-execution_done / supervisor_visits / supervisor_trace / audit_gate`，只由
-supervisor/标记节点写；专家子图不决定“下一步派谁”。`supervisor_visits` 是
-主图自身的防死循环上限（12），不是轮次预算；轮次仍由 `round_bump` 收口。
+状态拆分的落点：`PipelineState` 新增 `next_agent / design_done / verify_done /
+debug_done / coverage_done / execution_done / supervisor_visits /
+supervisor_trace / audit_gate`，只由 supervisor/标记节点写；专家子图不决定
+“下一步派谁”。`supervisor_visits` 是主图自身的防死循环上限（24），不是轮次
+预算；轮次仍由 `round_bump` 收口。
 
 ---
 

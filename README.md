@@ -291,9 +291,10 @@ LLM 只在具体位置被**点状**调用（符合"LLM 只做完形填空"的定
 
 ```text
 init → supervisor
-          ├─ design_expert：front → design → model → verify → env_arch_check
-          └─ execution_expert：round_bump → ops → coverage/debug → decide
-                               → governor → approval → 动作 → round_bump
+          ├─ design_expert：front → design → model
+          ├─ verify_expert：verify → env_arch_check
+          ├─ debug_expert：round_bump → ops → debug_functional（失败才回环）
+          ├─ coverage_expert：coverage → decide → governor → approval → 动作
           └─ audit_gate（纯代码核对 report/evidence）→ finalize
 ```
 
@@ -1071,7 +1072,7 @@ include，测试恢复其原意。**这 82 个测试当时恢复全绿。**
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q                            # 2026-11-10：1183 passed / 4 skipped
+python -m pytest tests/ -q                            # 2026-11-10：1184 passed / 4 skipped
 python -m pytest src/workbench/tests -q               # 工作台：692 passed（QT_QPA_PLATFORM=offscreen）
 python -m pytest tests/test_vplan_integration.py tests/test_vplan_bootstrap.py -q
 python -m pytest src/workbench/tests/test_isa_gen_module.py -q   # ISA IR 工具 + 工作台页面
@@ -1093,7 +1094,7 @@ python -m pytest src/workbench/tests/test_isa_gen_module.py -q   # ISA IR 工具
 | `tests/test_audit_evidence.py` + `signoff_package` 冒烟 | v2：目录布局、逐文件 sha256、`package_hash`、离线 `replay.py`、双环境 `compare` |
 
 **"跑测试"在这里的定位**：计数会随迁移漂动，README 不把它写成"永远全绿"。
-最近一次实测（2026-11-10）：主测试集 **1183 passed / 4 skipped**；
+最近一次实测（2026-11-10）：主测试集 **1184 passed / 4 skipped**；
 工作台 **692 passed**（有 PySide6 回调析构 warning，无 failed）。
 VPlan 迁移删除了一批依赖旧 case-model 夹具的测试；守卫型测试的价值不在通过率，
 而在**把本次踩过的坑固化成断言** —— 每一条失败信息里都写着"当时是怎么错的"。

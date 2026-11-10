@@ -180,6 +180,9 @@ class PipelineState(BaseModel):
     next_agent: str = ""
     #: 子图是否已经完成过（主图据此决定是否再次派工）。
     design_done: bool = False
+    verify_done: bool = False
+    debug_done: bool = False
+    coverage_done: bool = False
     execution_done: bool = False
     #: 主图访问 supervisor 的次数（防循环失控；不是轮次预算）。
     supervisor_visits: Annotated[int, _add] = 0
