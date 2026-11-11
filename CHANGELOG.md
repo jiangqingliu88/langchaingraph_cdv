@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-11-11
+
+### Added
+
+- **Verification Agentic System 1.0** (`src/vas/`): a six-layer execution system
+  with Agent Runtime, TaskContract, Verification IR, deterministic Engine,
+  Evidence Store/Provenance, and GatePolicy.
+- Five IR models: Intent / Design / Resource / Execution / Evidence, with
+  `VerificationIR.trace_errors()` enforcing Requirement→Objective→Test→Run→
+  Evidence→Decision traceability.
+- Ten roles: requirement, architecture, planning, uvm, formal, regression,
+  debug, coverage, repair, signoff; each has an AgentSpec, authorized task
+  types, retry budget, and write permission.
+- Deterministic closure loop with max rounds, gap-driven repair, coverage
+  targets, and a hard GatePolicy (agents cannot sign off).
+- `vagent vas run <spec.md>` CLI; `NullEngine` returns `EDA_MISSING` rather than
+  faking passed.
+- Main suite: 1232 passed / 15 skipped.
+
 ## [2.6.0] - 2026-11-10
 
 ### Added

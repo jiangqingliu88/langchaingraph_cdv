@@ -122,6 +122,7 @@ own licenses; see [NOTICE](NOTICE).
 > L4 记忆 / L5 进化）之上。
 >
 > 关键文档：
+> - **[`docs/VAS_ARCHITECTURE.md`](docs/VAS_ARCHITECTURE.md)** —— **Verification Agentic System 1.0**（六层 / IR / TaskContract / Agent Runtime / deterministic gate）
 > - **[`ARCHITECTURE.md`](ARCHITECTURE.md)** —— **当前代码架构**（五层 / Supervisor + 四个专家子图 / 执行器 / 工具协议 / 证据链 / 扩展点）
 > - **[`CONTRACT_FLOW.md`](CONTRACT_FLOW.md)** —— **契约流程用户指南**（dplan / C-* 契约矩阵 / Case IR / 契约构建物：从 spec 到 active 的完整操作与判据）
 > - **[`PROJECT_STATUS.md`](PROJECT_STATUS.md)** —— 当前架构原理、优点、风险与优化路线
@@ -711,6 +712,15 @@ IP 与 SoC 的覆盖率**分账**：IP 看内部覆盖点，SoC 看集成场景�
 > 术语：**Skill** 是阶段能力包（`src/skills/`）；**Executor** 是它的实现类名，
 > 不是旧架构。完整说明见 [`docs/AGENT_GLOSSARY.md`](docs/AGENT_GLOSSARY.md)。
 
+## VAS 1.0（Verification Agentic System）
+
+```bash
+python -m src.cli.commands vas run <spec.md> --design-top <dut> --workspace output_vas --json
+```
+
+VAS 的 Agent 只负责理解/规划/生成/分析/修复；编译、仿真、覆盖率、Gate、签核由确定性
+Engine 和 GatePolicy 完成。详见 [`docs/VAS_ARCHITECTURE.md`](docs/VAS_ARCHITECTURE.md)。
+
 ## 目录结构（实际）
 
 ```
@@ -1075,7 +1085,7 @@ include，测试恢复其原意。**这 82 个测试当时恢复全绿。**
 ## 测试
 
 ```powershell
-python -m pytest tests/ -q                            # 2026-11-10：1182 passed / 4 skipped
+python -m pytest tests/ -q                            # 2026-11-10：1232 passed / 4 skipped
 python -m pytest src/workbench/tests -q               # 工作台：692 passed（QT_QPA_PLATFORM=offscreen）
 python -m pytest tests/test_vplan_integration.py tests/test_vplan_bootstrap.py -q
 python -m pytest src/workbench/tests/test_isa_gen_module.py -q   # ISA IR 工具 + 工作台页面
@@ -1097,7 +1107,7 @@ python -m pytest src/workbench/tests/test_isa_gen_module.py -q   # ISA IR 工具
 | `tests/test_audit_evidence.py` + `signoff_package` 冒烟 | v2：目录布局、逐文件 sha256、`package_hash`、离线 `replay.py`、双环境 `compare` |
 
 **"跑测试"在这里的定位**：计数会随迁移漂动，README 不把它写成"永远全绿"。
-最近一次实测（2026-11-10）：主测试集 **1182 passed / 4 skipped**；
+最近一次实测（2026-11-10）：主测试集 **1232 passed / 4 skipped**；
 工作台 **692 passed**（有 PySide6 回调析构 warning，无 failed）。
 VPlan 迁移删除了一批依赖旧 case-model 夹具的测试；守卫型测试的价值不在通过率，
 而在**把本次踩过的坑固化成断言** —— 每一条失败信息里都写着"当时是怎么错的"。
