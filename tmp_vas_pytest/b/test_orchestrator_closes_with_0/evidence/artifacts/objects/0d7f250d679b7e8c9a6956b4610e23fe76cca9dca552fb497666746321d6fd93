@@ -1,0 +1,221 @@
+{
+  "intent": {
+    "requirements": [
+      {
+        "id": "R001",
+        "text": "DMA overlapping address must be detected",
+        "priority": 3,
+        "source": "spec"
+      },
+      {
+        "id": "R002",
+        "text": "Unaligned access must be rejected",
+        "priority": 3,
+        "source": "spec"
+      },
+      {
+        "id": "R003",
+        "text": "Reset clears pending descriptors",
+        "priority": 3,
+        "source": "spec"
+      }
+    ],
+    "objectives": [
+      {
+        "id": "O001",
+        "requirement_id": "R001",
+        "metric": "functional_coverage",
+        "target": 95.0,
+        "description": "DMA overlapping address must be detected"
+      },
+      {
+        "id": "O002",
+        "requirement_id": "R002",
+        "metric": "functional_coverage",
+        "target": 95.0,
+        "description": "Unaligned access must be rejected"
+      },
+      {
+        "id": "O003",
+        "requirement_id": "R003",
+        "metric": "functional_coverage",
+        "target": 95.0,
+        "description": "Reset clears pending descriptors"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "S-O001",
+        "objective_id": "O001",
+        "stimulus": "directed + constrained-random",
+        "checker": "scoreboard + assertion",
+        "tags": []
+      },
+      {
+        "id": "S-O002",
+        "objective_id": "O002",
+        "stimulus": "directed + constrained-random",
+        "checker": "scoreboard + assertion",
+        "tags": []
+      },
+      {
+        "id": "S-O003",
+        "objective_id": "O003",
+        "stimulus": "directed + constrained-random",
+        "checker": "scoreboard + assertion",
+        "tags": []
+      }
+    ]
+  },
+  "design": {
+    "top": "dut",
+    "modules": [],
+    "interfaces": []
+  },
+  "resources": {
+    "resources": [],
+    "conflicts": []
+  },
+  "execution": {
+    "tests": [
+      {
+        "id": "TC_001",
+        "objective_ids": [
+          "O001"
+        ],
+        "sequence": "// sequence for S-O001",
+        "sva": "",
+        "scoreboard": "scoreboard compares DUT vs model",
+        "constraints": "// constraints from scenario"
+      },
+      {
+        "id": "TC_002",
+        "objective_ids": [
+          "O002"
+        ],
+        "sequence": "// sequence for S-O002",
+        "sva": "",
+        "scoreboard": "scoreboard compares DUT vs model",
+        "constraints": "// constraints from scenario"
+      },
+      {
+        "id": "TC_003",
+        "objective_ids": [
+          "O003"
+        ],
+        "sequence": "// sequence for S-O003",
+        "sva": "",
+        "scoreboard": "scoreboard compares DUT vs model",
+        "constraints": "// constraints from scenario"
+      },
+      {
+        "id": "SVA_001",
+        "objective_ids": [
+          "O001"
+        ],
+        "sequence": "",
+        "sva": "assert property (@(posedge clk) ...); // O001",
+        "scoreboard": "",
+        "constraints": ""
+      },
+      {
+        "id": "SVA_002",
+        "objective_ids": [
+          "O002"
+        ],
+        "sequence": "",
+        "sva": "assert property (@(posedge clk) ...); // O002",
+        "scoreboard": "",
+        "constraints": ""
+      },
+      {
+        "id": "SVA_003",
+        "objective_ids": [
+          "O003"
+        ],
+        "sequence": "",
+        "sva": "assert property (@(posedge clk) ...); // O003",
+        "scoreboard": "",
+        "constraints": ""
+      }
+    ],
+    "jobs": []
+  },
+  "evidence": {
+    "artifacts": [],
+    "runs": [
+      {
+        "id": "RUN_001",
+        "test_id": "TC_001",
+        "status": "passed",
+        "seed": 0,
+        "log": "sim.log",
+        "error": ""
+      },
+      {
+        "id": "RUN_002",
+        "test_id": "TC_002",
+        "status": "passed",
+        "seed": 0,
+        "log": "sim.log",
+        "error": ""
+      },
+      {
+        "id": "RUN_003",
+        "test_id": "TC_003",
+        "status": "passed",
+        "seed": 0,
+        "log": "sim.log",
+        "error": ""
+      },
+      {
+        "id": "RUN_004",
+        "test_id": "SVA_001",
+        "status": "passed",
+        "seed": 0,
+        "log": "sim.log",
+        "error": ""
+      },
+      {
+        "id": "RUN_005",
+        "test_id": "SVA_002",
+        "status": "passed",
+        "seed": 0,
+        "log": "sim.log",
+        "error": ""
+      },
+      {
+        "id": "RUN_006",
+        "test_id": "SVA_003",
+        "status": "passed",
+        "seed": 0,
+        "log": "sim.log",
+        "error": ""
+      }
+    ],
+    "coverage": [
+      {
+        "objective_id": "O001",
+        "value": 98.0,
+        "target": 95.0
+      },
+      {
+        "objective_id": "O002",
+        "value": 97.0,
+        "target": 95.0
+      },
+      {
+        "objective_id": "O003",
+        "value": 99.0,
+        "target": 95.0
+      }
+    ],
+    "decisions": [
+      {
+        "decision": "auto_approved",
+        "by": "orchestrator",
+        "reason": "authorized deterministic run"
+      }
+    ]
+  }
+}

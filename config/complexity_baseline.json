@@ -111,6 +111,5 @@
   "src/tools/generation/uvm_tools/tool_uvmtestgen/main.py::validate": 28,
   "src/tools/humanview/aivm_ir/_base_loader.py::load_xlsx_to_ontology": 52,
   "src/tools/humanview/aivm_ir/xlsx_loader.py::load_xlsx_to_ontology": 59,
-  "src/vas/orchestration/orchestrator.py::run": 31,
   "src/workbench/modules/flow/signoff/module.py::_fill_evidence": 36
 }

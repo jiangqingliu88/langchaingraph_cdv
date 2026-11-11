@@ -19,17 +19,6 @@ spec
   → 证据 + Gate + 签核
 ```
 
-## VAS 1.0 入口
-
-优先使用新的 VAS 闭环：
-
-```bash
-<PY> -m src.cli.commands vas run <spec.md> --design-top <dut> --workspace <out> --json
-```
-
-VAS 负责 Intent/Design/Execution/Evidence IR、Agent Runtime、确定性 Engine
-和 GatePolicy；本 skill 的 vplan/workspace 流程作为领域执行细节与证据检查。
-
 ## 0. 铁律
 
 1. **EDA 是唯一真理**：没有 `vlog/vsim/vcover` 证据，不许说 passed；

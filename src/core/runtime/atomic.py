@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +30,14 @@ def atomic_write_text(path: str | Path, text: str, *,
             fh.write(text)
             fh.flush()
             os.fsync(fh.fileno())
-        os.replace(tmp, target)
+        for attempt in range(8):
+            try:
+                os.replace(tmp, target)
+                break
+            except PermissionError:
+                if attempt >= 7:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
     except BaseException:
         try:
             os.unlink(tmp)
