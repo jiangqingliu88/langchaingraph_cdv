@@ -1,0 +1,12 @@
+{
+  "task_id": "demo",
+  "status": "BLOCKED",
+  "summary": "LLM_UNAVAILABLE",
+  "findings": [],
+  "artifacts": [
+    "findings.json"
+  ],
+  "unresolved": [],
+  "recommended_next_actions": [],
+  "validation": []
+}

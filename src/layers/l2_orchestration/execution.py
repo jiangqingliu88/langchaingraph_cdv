@@ -15,7 +15,7 @@ import structlog
 from src.layers.l1_infrastructure.output_config import make_output_root
 from src.layers.l2_orchestration.regression_tools import sim_modes as _sim_modes
 
-from src.layers.l2_orchestration.skills.registry import ExecutorRegistry
+from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
 from config.settings import Settings
 
 

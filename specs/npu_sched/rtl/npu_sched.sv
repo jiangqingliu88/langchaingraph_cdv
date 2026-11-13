@@ -426,4 +426,23 @@ module npu_sched (
     .cmd_creg_perf_cnt(cmd_creg_perf_cnt)
   );
 
+  // ── ICG 预启动 ──────────────────────────────────────────────────────
+  // 端口之前只声明、从未驱动（SVA `if_icg_*_known` 抓到全 X）。
+  // 这里与 master start 同拍拉起；真正的"start 前一拍"时钟门控握手属于
+  // ICG cell 集成，另行跟踪，不在本 RTL stub 里假装实现。
+  assign cmd_niu_icg_start       = cmd_niu_start;
+  assign cmd_glsu_icg_start      = cmd_glsu_start;
+  assign cmd_llsu_icg_start      = cmd_llsu_start;
+  assign cmd_vpu_icg_start       = cmd_vpu_start;
+  assign cmd_mpu_icg_start       = cmd_mpu_start;
+  assign cmd_xbar_ch0_icg_wstart = cmd_xbr_ch0_req_wvld;
+  assign cmd_xbar_ch1_icg_rstart = cmd_xbr_ch1_req_rvld;
+
+  // ── Dispatcher 返回值 ───────────────────────────────────────────────
+  // scoreboard 的 replay 请求作为 valid；35 位 payload 目前没有定义
+  // （32 位指令返回值 + 3 位 tag），显式置零并回显 tag，避免留下 X。
+  // 完整返回值语义待 spec 明确后接入，不在这里编一个假数据。
+  assign cmd_disp_rsp_vld  = ren;
+  assign cmd_disp_rsp_data = {32'b0, disp_cmd_inst_tag};
+
 endmodule

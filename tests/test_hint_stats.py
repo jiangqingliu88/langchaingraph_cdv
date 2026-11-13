@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.layers.l4_memory.hint_stats import HintStats, record_hint_outcome
+from src.knowledge.hint_stats import HintStats, record_hint_outcome
 
 
 @pytest.fixture()

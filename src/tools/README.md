@@ -44,13 +44,13 @@ src/tools/
 ## 怎么用
 
 ```python
-from src.tools.generation import uvm_tools, isa_ir_tools
+from src.generation import uvm_tools, isa_ir_tools
 from src.tools.checking import assertion_tools
 from src.tools.humanview import case_ir
 ```
 
-板块包是**懒加载**的：`from src.tools.generation import uvm_tools` 才真正导入
-重依赖，`import src.tools.generation` 本身很轻。
+板块包是**懒加载**的：`from src.generation import uvm_tools` 才真正导入
+重依赖，`import src.generation` 本身很轻。
 
 ## 迁移纪律
 

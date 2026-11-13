@@ -135,7 +135,7 @@ class DecisionReactor:
         from src.layers.l3_decision.brain.rl_policy import QLearningPolicy
         # L5 的经验查询由**本层**装配 —— L3 不 import L5（见 `ExperienceProvider`）
         try:
-            from src.layers.l5_evolution.growth import experience_provider
+            from src.experience.growth import experience_provider
             _experience = experience_provider
         except Exception:
             _experience = None

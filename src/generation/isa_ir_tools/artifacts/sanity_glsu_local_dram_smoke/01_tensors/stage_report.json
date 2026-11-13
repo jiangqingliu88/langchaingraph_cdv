@@ -1,0 +1,6 @@
+{
+  "stage": "tensors",
+  "isa_revision": "ISA_VERSION_V1.4",
+  "address_schema": "GLOBAL48_V1.4",
+  "source": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt"
+}

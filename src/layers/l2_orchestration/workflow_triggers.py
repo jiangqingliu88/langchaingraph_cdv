@@ -7,9 +7,9 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy import select
 
-from src.layers.l4_memory.persistence.connection import get_session
-from src.layers.l4_memory.persistence.models import WorkflowTrigger
-from src.layers.l4_memory.persistence.repository import add_audit_log
+from src.knowledge.persistence.connection import get_session
+from src.knowledge.persistence.models import WorkflowTrigger
+from src.knowledge.persistence.repository import add_audit_log
 from src.layers.l2_orchestration.communication.event_bus import get_event_bus, StandardEvent
 
 

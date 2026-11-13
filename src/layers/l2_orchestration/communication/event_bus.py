@@ -269,7 +269,7 @@ class WorkflowHandlers:
 
             # 记录审计日志
             try:
-                from src.layers.l4_memory.persistence.repository import add_audit_log
+                from src.knowledge.persistence.repository import add_audit_log
                 await add_audit_log(
                     data.get("user_id", 0), approver, "workflow.signoff_approved",
                     str(signoff_id), f"工作流: 签核批准 → 证据链锁定",
@@ -294,7 +294,7 @@ class WorkflowHandlers:
             print(f"[Workflow] Pipeline {run_id} completed — generating manifest & artifacts...")
 
             try:
-                from src.layers.l4_memory.persistence.repository import create_artifact
+                from src.knowledge.persistence.repository import create_artifact
                 # 注册 coverage artifact
                 if data.get("coverage"):
                     await create_artifact(
@@ -321,7 +321,7 @@ class WorkflowHandlers:
             print(f"[Workflow] Pipeline {run_id} failed — creating debug session...")
 
             try:
-                from src.layers.l4_memory.persistence.repository import add_audit_log
+                from src.knowledge.persistence.repository import add_audit_log
                 await add_audit_log(
                     0, "system", "workflow.pipeline_failed", run_id,
                     f"工作流: 流水线失败 → 自动调试会话 | {error[:200]}",
@@ -353,7 +353,7 @@ class WorkflowHandlers:
             print(f"[Workflow] Evidence package exported by {user} for session {session_id}")
 
             try:
-                from src.layers.l4_memory.persistence.repository import add_audit_log
+                from src.knowledge.persistence.repository import add_audit_log
                 await add_audit_log(
                     data.get("user_id", 0), user, "workflow.evidence_exported",
                     session_id, "工作流: 证据包导出", role=data.get("role", ""),
@@ -375,7 +375,7 @@ class WorkflowHandlers:
             print(f"[Workflow] ⚠️ System error: {error_msg}")
 
             try:
-                from src.layers.l4_memory.persistence.repository import add_audit_log
+                from src.knowledge.persistence.repository import add_audit_log
                 await add_audit_log(
                     0, "system", "workflow.system_error", "",
                     f"工作流: 系统错误 | {error_msg}",

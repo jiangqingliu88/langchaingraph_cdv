@@ -1,0 +1,240 @@
+{
+  "schema": "tensor_manifest_v2",
+  "tensors": [
+    {
+      "name": "Source",
+      "shape": [
+        1,
+        2,
+        64
+      ],
+      "dtype": "int8",
+      "layout": {
+        "profile": "linear_atom32",
+        "version": 1,
+        "stride_unit": "atom32",
+        "stride_dim1": 2,
+        "stride_dim2": 4,
+        "element_bits": 8,
+        "row_atoms": 2,
+        "row_bytes": 64,
+        "logical_elements": 128,
+        "logical_bytes": 1024,
+        "payload_bytes": 128,
+        "span_bytes": 4,
+        "rem_dim0": 0,
+        "tail_policy": "zero",
+        "gap_policy": "untouched",
+        "int4_nibble_order": null,
+        "valid_bits_per_row": 512,
+        "valid_bit_order": "low_address_first",
+        "row_mapping": {
+          "profile": "scatter_rows_v1",
+          "shape": [
+            1,
+            2,
+            64
+          ],
+          "file_row_stride_bytes": 64,
+          "target_dim1_stride_bytes": 64,
+          "target_dim2_stride_bytes": 128,
+          "copy_length": 64
+        }
+      },
+      "codec": {
+        "version": "ordinary v2",
+        "element_bits": 8,
+        "byte_order": "little",
+        "int4_nibble_order": null,
+        "quantize_rm": "RNE",
+        "numeric_source": "python_number"
+      },
+      "content_digest": "7eb24a18990ee4c958c89773da6cc9fbc5c278357762d02ec6ab947eb28726ff",
+      "layout_digest": "a195100acb8346c4d7e6ca0c2f36044109f334c6e33e1fc40ac5f8363ec44510",
+      "payloads": [
+        {
+          "file": "tensors/Source.bin",
+          "format": "bin",
+          "bytes": 128,
+          "sha256": "7eb24a18990ee4c958c89773da6cc9fbc5c278357762d02ec6ab947eb28726ff"
+        },
+        {
+          "file": "tensors/Source.hex",
+          "format": "hex",
+          "bytes": 272,
+          "sha256": "339865bfbd40e5c06993b08f781293aca49af71b92414317e5b8eeeee3d152d1"
+        },
+        {
+          "file": "tensors/Source.memh",
+          "format": "memh",
+          "bytes": 260,
+          "sha256": "51c2d773a9ab2479575aaae5a1abb6b7d486a105961c23b0dec92078ba8af834"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "ref": "Source_d",
+      "source_tensor": "Source",
+      "metadata_origin": "generated tensor",
+      "tensor content digest": "7eb24a18990ee4c958c89773da6cc9fbc5c278357762d02ec6ab947eb28726ff",
+      "tensor layout digest": "a195100acb8346c4d7e6ca0c2f36044109f334c6e33e1fc40ac5f8363ec44510",
+      "shape": [
+        1,
+        2,
+        64
+      ],
+      "dtype": "int8",
+      "layout": {
+        "profile": "linear_atom32",
+        "version": 1,
+        "stride_unit": "atom32",
+        "stride_dim1": 2,
+        "stride_dim2": 4,
+        "element_bits": 8,
+        "row_atoms": 2,
+        "row_bytes": 64,
+        "logical_elements": 128,
+        "logical_bytes": 1024,
+        "payload_bytes": 128,
+        "span_bytes": 4,
+        "rem_dim0": 0,
+        "tail_policy": "zero",
+        "gap_policy": "untouched",
+        "int4_nibble_order": null,
+        "valid_bits_per_row": 512,
+        "valid_bit_order": "low_address_first",
+        "row_mapping": {
+          "profile": "scatter_rows_v1",
+          "shape": [
+            1,
+            2,
+            64
+          ],
+          "file_row_stride_bytes": 64,
+          "target_dim1_stride_bytes": 64,
+          "target_dim2_stride_bytes": 128,
+          "copy_length": 64
+        }
+      },
+      "placement": {
+        "region": "lmem_core_spad",
+        "base": 4096,
+        "place": {
+          "die": 0,
+          "cluster": 0,
+          "core": 0
+        }
+      }
+    },
+    {
+      "ref": "Result",
+      "source_tensor": null,
+      "metadata_origin": "declaration",
+      "tensor content digest": null,
+      "tensor layout digest": null,
+      "shape": [
+        1,
+        2,
+        64
+      ],
+      "dtype": "int8",
+      "layout": {
+        "profile": "linear_atom32",
+        "version": 1,
+        "stride_unit": "atom32",
+        "stride_dim1": 2,
+        "stride_dim2": 4,
+        "element_bits": 8,
+        "row_atoms": 2,
+        "row_bytes": 64,
+        "logical_elements": 128,
+        "logical_bytes": 1024,
+        "payload_bytes": 128,
+        "span_bytes": 4,
+        "rem_dim0": 0,
+        "tail_policy": "zero",
+        "gap_policy": "untouched",
+        "int4_nibble_order": null,
+        "valid_bits_per_row": 512,
+        "valid_bit_order": "low_address_first",
+        "row_mapping": {
+          "profile": "scatter_rows_v1",
+          "shape": [
+            1,
+            2,
+            64
+          ],
+          "file_row_stride_bytes": 64,
+          "target_dim1_stride_bytes": 64,
+          "target_dim2_stride_bytes": 128,
+          "copy_length": 64
+        }
+      },
+      "placement": {
+        "region": "dram_common",
+        "base": 536870912,
+        "place": {
+          "die": 0,
+          "cluster": 0,
+          "core": 0
+        }
+      }
+    },
+    {
+      "ref": "Result_d",
+      "source_tensor": "Result",
+      "metadata_origin": "declaration",
+      "tensor content digest": null,
+      "tensor layout digest": null,
+      "shape": [
+        1,
+        2,
+        64
+      ],
+      "dtype": "int8",
+      "layout": {
+        "profile": "linear_atom32",
+        "version": 1,
+        "stride_unit": "atom32",
+        "stride_dim1": 2,
+        "stride_dim2": 4,
+        "element_bits": 8,
+        "row_atoms": 2,
+        "row_bytes": 64,
+        "logical_elements": 128,
+        "logical_bytes": 1024,
+        "payload_bytes": 128,
+        "span_bytes": 4,
+        "rem_dim0": 0,
+        "tail_policy": "zero",
+        "gap_policy": "untouched",
+        "int4_nibble_order": null,
+        "valid_bits_per_row": 512,
+        "valid_bit_order": "low_address_first",
+        "row_mapping": {
+          "profile": "scatter_rows_v1",
+          "shape": [
+            1,
+            2,
+            64
+          ],
+          "file_row_stride_bytes": 64,
+          "target_dim1_stride_bytes": 64,
+          "target_dim2_stride_bytes": 128,
+          "copy_length": 64
+        }
+      },
+      "placement": {
+        "region": "dram_common",
+        "base": 536870912,
+        "place": {
+          "die": 0,
+          "cluster": 0,
+          "core": 0
+        }
+      }
+    }
+  ]
+}

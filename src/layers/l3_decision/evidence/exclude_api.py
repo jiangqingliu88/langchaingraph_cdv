@@ -36,7 +36,7 @@ STATUS_TITLES = {
 
 
 def _registry(db_path: Optional[str] = None):
-    from src.layers.l4_memory.exclude_registry import ExcludeRegistry
+    from src.knowledge.exclude_registry import ExcludeRegistry
 
     return ExcludeRegistry(db_path) if db_path else ExcludeRegistry()
 

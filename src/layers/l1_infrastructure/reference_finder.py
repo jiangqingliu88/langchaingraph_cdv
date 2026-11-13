@@ -181,7 +181,7 @@ class ReferenceFinder:
         # ── 缓存命中就直接返回：省掉的是一次完整编译 + 仿真（分钟级）──
         if self.use_cache:
             try:
-                from ..l4_memory.reference_finder_cache import get_reference_finder_cache
+                from src.knowledge.reference_finder_cache import get_reference_finder_cache
                 hit = get_reference_finder_cache().get(
                     str(self.repo), rev, self.test_pattern, self._env_digest)
             except Exception as e:                            # 缓存故障不该挡住回溯
@@ -273,7 +273,7 @@ class ReferenceFinder:
         self.results.append(res)
         if self.use_cache:
             try:
-                from ..l4_memory.reference_finder_cache import get_reference_finder_cache
+                from src.knowledge.reference_finder_cache import get_reference_finder_cache
                 get_reference_finder_cache().put(
                     str(self.repo), rev, self.test_pattern, self._env_digest,
                     res.verdict, res.detail, res.passed, res.failed, res.unknown,

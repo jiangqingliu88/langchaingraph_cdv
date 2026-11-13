@@ -7,8 +7,8 @@ from pathlib import Path
 import jinja2
 
 from src.tools.common.lib.golden_library import build_ref_model_config
-from src.tools.generation.uvm_tools.tool_uvm.constants import TEMPLATES_DIR
-from src.tools.generation.uvm_tools.tool_uvm.render.jinja_renderer import JinjaRenderer
+from src.generation.uvm_tools.tool_uvm.constants import TEMPLATES_DIR
+from src.generation.uvm_tools.tool_uvm.render.jinja_renderer import JinjaRenderer
 
 APB_INTERFACES = [
     {"name": "pclk", "direction": "input", "protocol": "Clock"},

@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import List
 
 from ..core.logging_config import get_logger
-from src.layers.l4_memory.sqlite_utils import connect
+from src.knowledge.sqlite_utils import connect
 
 logger = get_logger(__name__)
 

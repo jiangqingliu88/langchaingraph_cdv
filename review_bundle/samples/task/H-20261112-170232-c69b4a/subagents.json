@@ -1,0 +1,12 @@
+[
+  {
+    "task_id": "demo",
+    "status": "BLOCKED",
+    "summary": "LLM_UNAVAILABLE",
+    "artifacts": [
+      "findings.json"
+    ],
+    "unresolved": [],
+    "at": "2026-11-12T17:02:32.473312+00:00"
+  }
+]

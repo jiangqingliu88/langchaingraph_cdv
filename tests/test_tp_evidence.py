@@ -16,8 +16,8 @@ import yaml
 
 from src.layers.l3_decision.evidence.tp_evidence import (
     LAYERS, build_tp_evidence, write_tp_evidence)
-from src.layers.l3_decision.vplan.runtime.framework.paths import compile_paths
-from src.layers.l3_decision.vplan.runtime.repository.loader import load_model_from_text
+from src.ir.vplan.runtime.framework.paths import compile_paths
+from src.ir.vplan.runtime.repository.loader import load_model_from_text
 
 MODEL = """\
 version: "1"
@@ -82,7 +82,7 @@ class TestPathGroup:
         assert not [i for i in issues if i.severity == "error"]
 
     def test_the_plan_lists_the_path_group(self):
-        from src.layers.l3_decision.vplan import engine
+        from src.ir.vplan import engine
 
         plan = engine.coverage_plan_from_text(MODEL, "demo")["plan"]
         assert plan["summary"]["path_bin_count"] == 2
@@ -116,7 +116,7 @@ cross_groups:
 
 class TestCrossGroups:
     def test_a_group_builds_an_n_way_cross(self):
-        from src.layers.l3_decision.vplan import engine
+        from src.ir.vplan import engine
 
         payload = engine.covergroups_from_text(CROSS_MODEL, "demo3")
         grp = next(c for c in payload["crosses"] if c["name"].startswith("cx_grp_"))
@@ -124,7 +124,7 @@ class TestCrossGroups:
         assert "cross cp_a, cp_b, cp_c;" in payload["covergroup_code"]
 
     def test_a_pair_already_covered_by_cross_matrix_is_not_duplicated(self):
-        from src.layers.l3_decision.vplan import engine
+        from src.ir.vplan import engine
 
         # 去掉三元组，只留 `cross_matrix` 的两两组合 → 不应再派生 `cx_grp_`
         text = CROSS_MODEL.replace(

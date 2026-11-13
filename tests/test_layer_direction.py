@@ -107,7 +107,7 @@ class TestTheStartupGuardUsesTheSameRules:
 
     pytest 那条是**事后**防线：跑测试时能拦，但生产进程 import 成功就起飞了。
     拆模块时改坏了依赖方向，要等 CI 跑完八百多个用例才发现 —— 那时人早忘了
-    自己动过什么。所以加一道启动期的：`python -m src.cli...` 冷启动就扫一遍。
+    自己动过什么。所以加一道启动期的：`python -m src.interfaces.cli...` 冷启动就扫一遍。
 
     ## 这里钉什么
 
@@ -152,7 +152,7 @@ class TestTheStartupGuardUsesTheSameRules:
             tmp_path, "l1_infrastructure/sneaky.py",
             "def helper():\n"
             "    # 运行时才加载：不在模块图上形成静态边\n"
-            "    from src.layers.l4_memory.lineage import LineageStore\n"
+            "    from src.knowledge.lineage import LineageStore\n"
             "    return LineageStore\n")
         assert ensure_layer_contract(root) == []
 
@@ -175,6 +175,6 @@ class TestTheStartupGuardUsesTheSameRules:
         root = self._fake_repo(
             tmp_path, "l2_orchestration/assembler.py",
             "from src.layers.l3_decision.decision_engine import decide\n"
-            "from src.layers.l4_memory.lineage import LineageStore\n"
-            "from src.layers.l5_evolution.distillation import distill\n")
+            "from src.knowledge.lineage import LineageStore\n"
+            "from src.experience.distillation import distill\n")
         assert ensure_layer_contract(root) == []

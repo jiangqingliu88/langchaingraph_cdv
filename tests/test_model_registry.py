@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.layers.l4_memory.model_registry import (
+from src.knowledge.model_registry import (
     KIND_TLM10, STATUS_VERIFIED, ModelRegistry,
 )
 
@@ -89,7 +89,7 @@ def test_only_the_dut_level_model_is_seeded(tmp_path):
     接口；把它们当参考模型，等于把"实现"当"规格"，而且会诱使下一轮再建一批信号级
     的东西回来。
     """
-    from src.layers.l4_memory import model_seed
+    from src.knowledge import model_seed
 
     reg = _reg(tmp_path)
     # 种的是 **DUT 级**的 `apb_uart`（不是通用协议件 `apb_slave`）——
@@ -113,7 +113,7 @@ def test_seeded_models_declare_transaction_level_semantics(tmp_path):
     老形状是 `module xxx_golden (input logic clk, rst_n, paddr, ...)` +
     `always_ff @(posedge clk)` —— 那是信号级 RTL，不是参考模型。
     """
-    from src.layers.l4_memory import model_seed
+    from src.knowledge import model_seed
 
     reg = _reg(tmp_path)
     model_seed.seed(reg)

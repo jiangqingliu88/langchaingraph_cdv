@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.layers.l3_decision.vplan import (
+from src.ir.vplan import (
     build_execution_model, build_payload, load_project, project_summary,
     run_artifacts, write_execution_model, write_plan_only_run,
 )
@@ -34,7 +34,7 @@ def test_vplan_build_does_not_import_legacy_model():
 
     code = (
         "import sys\n"
-        "import src.layers.l3_decision.vplan.build\n"
+        "import src.ir.vplan.build\n"
         "bad = sorted(m for m in sys.modules if 'casemodel' in m)\n"
         "print(bad)\n"
     )
@@ -63,8 +63,8 @@ def test_load_project_reads_current_source():
 
 def test_vplan_testpoint_can_bind_explicit_stimulus_field(tmp_path):
     """VPlan 行显式声明 realization 时，不再把刺激强制降级成 observe-only。"""
-    from src.layers.l3_decision.vplan.build import build_testpoints
-    from src.layers.l3_decision.vplan.source import VPlanProject
+    from src.ir.vplan.build import build_testpoints
+    from src.ir.vplan.source import VPlanProject
 
     project = VPlanProject(
         root=tmp_path, module="m", dut="m",
@@ -85,7 +85,7 @@ def test_vplan_testpoint_can_bind_explicit_stimulus_field(tmp_path):
 
 def test_matrix_schema_rejects_unknown_status_and_missing_columns(tmp_path):
     """手改 CSV 不能造出“看起来合法”的状态；列不齐也不能静默读。"""
-    from src.layers.l3_decision.vplan.source import VPlanError, _load_matrix
+    from src.ir.vplan.source import VPlanError, _load_matrix
 
     matrix = tmp_path / "data" / "contract_matrix"
     matrix.mkdir(parents=True)
@@ -193,7 +193,7 @@ def test_execution_model_projects_vplan_cases(tmp_path):
     assert (ROOT / "rtl" / "npu_sched.sv").is_file()
 
     path = write_execution_model(proj, tmp_path)
-    from src.layers.l3_decision.vplan.runtime.repository import load_models_from_text
+    from src.ir.vplan.runtime.repository import load_models_from_text
 
     models = load_models_from_text(path.read_text(encoding="utf-8"))
     resolved = models[0].resolve()
@@ -202,7 +202,7 @@ def test_execution_model_projects_vplan_cases(tmp_path):
 
 
 def test_package_run_assets_maps_generated_layout(tmp_path):
-    from src.layers.l3_decision.vplan import package_run_assets, scan_assets
+    from src.ir.vplan import package_run_assets, scan_assets
 
     files = {
         "agents/foo/1_interface/foo_if.sv": "interface foo_if; endinterface\n",
@@ -255,13 +255,13 @@ def test_package_run_assets_maps_generated_layout(tmp_path):
     assert "sv/tb/hdl_top.sv" in hdl
     assert "sv/env/foo_env.sv" in hvl
     assert len(scan_assets(tmp_path)) == 10
-    from src.layers.l3_decision.vplan import layout_mismatches
+    from src.ir.vplan import layout_mismatches
     assert layout_mismatches(tmp_path) == []
 
 
 def test_package_run_assets_packages_from_staging_without_legacy_dirs(tmp_path):
     """verify 的 VPlan 布局从暂存目录打包：run 根不出现顶层 agents/env/bench。"""
-    from src.layers.l3_decision.vplan import package_run_assets
+    from src.ir.vplan import package_run_assets
 
     stage = tmp_path / ".signoffai" / "uvm_stage"
     files = {
@@ -292,7 +292,7 @@ def test_package_run_assets_packages_from_staging_without_legacy_dirs(tmp_path):
 
 def test_render_task_reads_inputs_from_source_root(tmp_path):
     """渲染落点与输入根分离后，env_cov_bins 仍从 run 根读，不跟着去暂存区。"""
-    from src.tools.generation.uvm_tools.tool_uvm.generators.tasks import (
+    from src.generation.uvm_tools.tool_uvm.generators.tasks import (
         RenderTaskFactory)
 
     src = tmp_path / "run"
@@ -311,7 +311,7 @@ def test_render_task_reads_inputs_from_source_root(tmp_path):
 
 
 def test_uvm_render_root_stages_only_in_vplan_layout(tmp_path, monkeypatch):
-    from src.skills.verify.main import _uvm_render_root
+    from src.generation.verification.main import _uvm_render_root
 
     monkeypatch.delenv("SIGNOFFAI_UVM_LAYOUT", raising=False)
     stage, root = _uvm_render_root(tmp_path)
@@ -328,8 +328,8 @@ def test_uvm_arch_scoreboard_binds_by_check_artifact(tmp_path):
     """契约声明了 check_artifact 时，scoreboard 只绑自己那份，不做“万能收口”。"""
     import json as _json
 
-    from src.layers.l3_decision.vplan.uvm_arch import build_uvm_arch
-    from src.layers.l3_decision.vplan.source import VPlanProject
+    from src.ir.vplan.uvm_arch import build_uvm_arch
+    from src.ir.vplan.source import VPlanProject
 
     project = VPlanProject(
         root=tmp_path, module="m", dut="m",
@@ -363,7 +363,7 @@ def test_gate_uses_latest_linked_run_and_reports_active_drift():
     这是纯函数级测试：不建 EDA 产物，只构造两个 linked run 条目，
     验证 `_latest` 的排序键与 `active_drift` 字段。
     """
-    from src.layers.l3_decision.vplan.evidence import (
+    from src.ir.vplan.evidence import (
         _evaluate_contract, _latest)
 
     old = {
@@ -389,7 +389,7 @@ def test_gate_uses_latest_linked_run_and_reports_active_drift():
 
 
 def test_evidence_gate_requires_tp_regression_and_asset(tmp_path):
-    from src.layers.l3_decision.vplan import apply_active, evaluate, link_run
+    from src.ir.vplan import apply_active, evaluate, link_run
 
     proj = tmp_path / "proj"
     matrix = proj / "data" / "contract_matrix"
@@ -450,7 +450,7 @@ def test_evidence_gate_requires_tp_regression_and_asset(tmp_path):
 
 def test_gate_prefers_mapped_environment_obligations(tmp_path):
     """有 `vplan_map.json` 时，gate 按环境契约义务判，不再看 TP 名字。"""
-    from src.layers.l3_decision.vplan import evaluate, link_run
+    from src.ir.vplan import evaluate, link_run
 
     proj = tmp_path / "proj"
     matrix = proj / "data" / "contract_matrix"
@@ -537,11 +537,11 @@ def test_gate_prefers_mapped_environment_obligations(tmp_path):
 
 
 def test_verify_vplan_layout_default_and_legacy(tmp_path, monkeypatch):
-    from src.skills.verify.steps.vplan_layout import package_vplan_assets
+    from src.engine.verify.vplan_layout import package_vplan_assets
 
     calls = []
     monkeypatch.setattr(
-        "src.layers.l3_decision.vplan.package_run_assets",
+        "src.ir.vplan.package_run_assets",
         lambda *a, **k: calls.append(a) or {
             "assets": 0, "copied": 0, "skipped": 0})
     monkeypatch.delenv("SIGNOFFAI_UVM_LAYOUT", raising=False)
@@ -555,7 +555,7 @@ def test_verify_vplan_layout_default_and_legacy(tmp_path, monkeypatch):
 
 
 def test_clean_legacy_dirs_requires_sv(tmp_path):
-    from src.layers.l3_decision.vplan import clean_legacy_dirs
+    from src.ir.vplan import clean_legacy_dirs
 
     run = tmp_path / "run"
     (run / "agents").mkdir(parents=True)
@@ -646,7 +646,7 @@ def test_dplan_map_aligns_with_vplan_contracts():
 
 def test_uvm_arch_is_built_from_vplan_contracts(tmp_path):
     """UVM 环境架构来自 VPlan 契约/TP/case，而不是 RTL 端口猜测。"""
-    from src.layers.l3_decision.vplan.uvm_arch import write_uvm_arch
+    from src.ir.vplan.uvm_arch import write_uvm_arch
 
     proj = load_project(ROOT)
     run = tmp_path / "run_arch"

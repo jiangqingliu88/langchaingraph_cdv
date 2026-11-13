@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from src.app.services import (
+from src.interfaces.api import (
     analyze_plan, list_ips, run_closure, run_soc_project,
 )
 from src.layers.l2_orchestration.regression_tools.backend_capabilities import (

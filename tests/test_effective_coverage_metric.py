@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.layers.l4_memory.exclude_registry import (
+from src.knowledge.exclude_registry import (
     ExcludeRegistry, _bins_for_metric,
 )
 

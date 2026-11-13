@@ -61,7 +61,7 @@ def _status_for(n, kind: str, observe: bool) -> tuple:
     本函数只做委托，保证"状态只推导"从 TP 级开始成立 —— 形态与返回值不变，
     但规则不再有两份。
     """
-    from src.layers.l3_decision.contract.tp_shadow import status_for_hits
+    from src.ir.contract.tp_shadow import status_for_hits
 
     return status_for_hits(n, kind, observe)
 

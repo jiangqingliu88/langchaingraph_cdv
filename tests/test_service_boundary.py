@@ -43,22 +43,21 @@ def _product_files(root: Path):
 #: 已登记的例外：它们用引擎做**初始化 / Agent 访问 / 回归辅助**，不负责
 #: `verify` 的运行前预检。新增入口默认不允许直连；确有需要必须先登记。
 ALLOWED_CLI_IMPORTS = {
-    "src/cli/cmd_debug.py": "调试页读运行/Agent 状态",
-    "src/cli/cmd_services.py": "optimize-regression 直接编排回归引擎",
-    "src/cli/cmd_specs.py": "规格分析需要 Agent 实例",
-    "src/cli/cmd_tools.py": "工具页需要 Agent 实例",
-    "src/cli/commands.py": "_init_service / resume 等共享初始化",
-    "src/cli/repl.py": "交互式 resume",
-    "src/cli/cmd_project.py": "工程/会话管理（3.0 新增）",
-    "src/cli/cmd_session.py": "会话/人工签核（3.0 新增）",
+    "src/interfaces/cli/cmd_debug.py": "调试页读运行/Agent 状态",
+    "src/interfaces/cli/cmd_services.py": "optimize-regression 直接编排回归引擎",
+    "src/interfaces/cli/cmd_specs.py": "规格分析需要 Agent 实例",
+    "src/interfaces/cli/cmd_tools.py": "工具页需要 Agent 实例",
+    "src/interfaces/cli/commands.py": "_init_service / resume 等共享初始化",
+    "src/interfaces/cli/cmd_project.py": "工程/会话管理（3.0 新增）",
+    "src/interfaces/cli/cmd_session.py": "会话/人工签核（3.0 新增）",
 }
 
 
 def test_verify_cli_does_not_bypass_the_service_layer():
-    path = ROOT / "src" / "cli" / "cmd_verify.py"
+    path = ROOT / "src" / "interfaces" / "cli" / "cmd_verify.py"
     assert TARGET not in _imports(path), (
         "cmd_verify 不得 import PipelineExecutionService —— 走 "
-        "src.app.services.run_verify_async（预检在 VerifyRequest）")
+        "src.interfaces.api.run_verify_async（预检在 VerifyRequest）")
 
 
 def test_other_cli_engine_imports_are_explicitly_allowed():

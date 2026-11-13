@@ -79,13 +79,13 @@ python examples/open_npu_soc/golden/gemm_golden.py \
 ### 2. 用现有 CLI 检查工程
 
 ```bash
-python -m src.cli.commands soc check examples/open_npu_soc
+python -m src.interfaces.cli.commands soc check examples/open_npu_soc
 ```
 
 ### 3. 用现有回归执行器跑仿真
 
 ```bash
-python -m src.cli.commands soc run examples/open_npu_soc \
+python -m src.interfaces.cli.commands soc run examples/open_npu_soc \
     --output output_soc_v01
 ```
 
@@ -105,10 +105,10 @@ python -m src.cli.commands soc run examples/open_npu_soc \
 常用命令：
 
 ```bash
-python -m src.cli.commands soc report   <run>   # 摘要
-python -m src.cli.commands soc evidence <run>   # 逐文件哈希校验
-python -m src.cli.commands soc wave <run> --test gemm_8x8_c   # C 用例波形
-python -m src.cli.commands soc wave     <run>   # 默认最新一份 qwave.db
+python -m src.interfaces.cli.commands soc report   <run>   # 摘要
+python -m src.interfaces.cli.commands soc evidence <run>   # 逐文件哈希校验
+python -m src.interfaces.cli.commands soc wave <run> --test gemm_8x8_c   # C 用例波形
+python -m src.interfaces.cli.commands soc wave     <run>   # 默认最新一份 qwave.db
 ```
 
 `regression.yaml` 里有两条用例：参考 TB `gemm_8x8` 和 E203 C 用例
@@ -126,18 +126,18 @@ qwave.db 只剩顶层几根线（实测 1.1 KB）。工程里的两个 build 都
 否则打开时会报 `Memory ... is not logged in the waveform file`。
 
 **Hierarchy 里看源码**：Visualizer 的源码浏览要 `vopt -designfile
-design.bin -linedebug`（qwave.db 只带波形/信号名）。两个 build 都已产出
-`design.bin`，`soc wave` 会同时传 `-designfile`；在 Hierarchy 里双击
-`u_e203_subsys_top → u_npu_top → u_nice_disp` 即可看到对应 RTL 源码。
+design.bin -linedebug`。该选项会额外拉起 viscom，实测峰值 3GB，在低内存
+机器上会让 vopt `VirtualAlloc` 失败，所以默认**关闭**；`soc wave` 仍可直接
+看波形/信号。需要源码浏览时单独在有足够内存的机器上生成 `design.bin`。
 
 ### 3.0 SoC C 用例（E203 驱动 IP）
 
 ```bash
-python -m src.cli.commands soc c-cases examples/open_npu_soc
-python -m src.cli.commands soc c-run   examples/open_npu_soc \
+python -m src.interfaces.cli.commands soc c-cases examples/open_npu_soc
+python -m src.interfaces.cli.commands soc c-run   examples/open_npu_soc \
     --case C-GEMM-8X8 -o output_c_C-GEMM-8X8
 # 跑完直接开 C 用例波形
-python -m src.cli.commands soc wave output_c_C-GEMM-8X8
+python -m src.interfaces.cli.commands soc wave output_c_C-GEMM-8X8
 ```
 
 C 用例也登记在 `regression/regression.yaml`（`build_e203_c` +
@@ -166,11 +166,11 @@ func3=4（写 rd）、ACK 用 func3=0；改编码要同步改适配器
 `spec/ip_verification_plan.yaml` 定义每个 IP 的 TP 与 tests。
 
 ```bash
-python -m src.cli.commands ip list    examples/open_npu_soc
-python -m src.cli.commands ip run     examples/open_npu_soc --ip IP-NPU-GEMM
-python -m src.cli.commands ip status  examples/open_npu_soc --ip IP-NPU-GEMM
-python -m src.cli.commands ip evidence examples/open_npu_soc --ip IP-NPU-GEMM
-python -m src.cli.commands ip release examples/open_npu_soc   # SoC 团队消费的矩阵
+python -m src.interfaces.cli.commands ip list    examples/open_npu_soc
+python -m src.interfaces.cli.commands ip run     examples/open_npu_soc --ip IP-NPU-GEMM
+python -m src.interfaces.cli.commands ip status  examples/open_npu_soc --ip IP-NPU-GEMM
+python -m src.interfaces.cli.commands ip evidence examples/open_npu_soc --ip IP-NPU-GEMM
+python -m src.interfaces.cli.commands ip release examples/open_npu_soc   # SoC 团队消费的矩阵
 ```
 
 IP 证据写 `<run>/ip_evidence/<ip>.json`，引用来源 SoC run 的 TP 状态与证据包哈希；
@@ -193,7 +193,7 @@ grep mismatched=0 sim_vsim.log
 python examples/open_npu_soc/toolchain/setup_toolchain.py
 
 # 2) 编固件 + Questa 编 E203 SoC + 跑 C 用例（一条命令）
-python -m src.cli.commands soc c-run examples/open_npu_soc --case C-GEMM-8X8
+python -m src.interfaces.cli.commands soc c-run examples/open_npu_soc --case C-GEMM-8X8
 ```
 
 产物：`sw/gemm_8x8.elf/.hex/.verilog/.dump`；run 目录下

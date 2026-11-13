@@ -1,0 +1,37 @@
+// Operand-resolved IR; cfg writes are complete rows. cmddata encoding has not run.
+.case seed=20261104, instruction_policy="explicit"
+.profile chip_id=0, die_id=0, cluster_id=0, core_id=0, isa_revision="ISA_VERSION_V1.4", address_schema="GLOBAL48_V1.4"
+// source line 5
+group_mask_drv_xn mask=1, rs1val=0x00000001
+.tensor Source, shape=[1, 2, 64], dtype="int8", generation={mode:"numeric", pattern:{kind:"ones"}, seed:20261104, quantize_rm:"RNE", overflow_policy:"error", denormal_policy:"exclude", special_values:[], stream_version:2, actual_special_values:[]}, layout={profile:"linear_atom32", version:1, stride_unit:"atom32", stride_dim1:2, stride_dim2:4, element_bits:8, row_atoms:2, row_bytes:64, logical_elements:128, logical_bytes:1024, payload_bytes:128, span_bytes:4, rem_dim0:0, tail_policy:"zero", gap_policy:"untouched", int4_nibble_order:null, valid_bits_per_row:512, valid_bit_order:"low_address_first", row_mapping:{profile:"scatter_rows_v1", shape:[1, 2, 64], file_row_stride_bytes:64, target_dim1_stride_bytes:64, target_dim2_stride_bytes:128, copy_length:64}}, placement={region:"dram_common", base:0x10000000}, file="tensors/Source.bin"
+.view Source_d, tensor="Source", layout={profile:"linear_atom32"}, placement={region:"lmem_core_spad", base:0x00001000, place:{die:0, cluster:0, core:0}}
+.reserve_output Result, dtype="int8", shape=[2, 64], layout={profile:"linear_atom32"}, placement={region:"dram_common", base:0x20000000, place:{die:0, cluster:0, core:0}}
+.view Result_d, tensor="Result", layout={profile:"linear_atom32"}, placement={region:"dram_common", base:0x20000000, place:{die:0, cluster:0, core:0}}
+// source line 15
+mem_init schema="mem_init_v1", ref="Source_d", source_tensor="Source", isa_revision="xlsx_v0.3_reviewed", address_schema="global48_xlsx_v0.3_reviewed", path="backdoor", file="tensors/Source.hex", format="hex", region="dram_common", address_kind="global48", base=0x0040020000, shape=[1,2,64], dtype="int8", element_bits=8, byte_order="little", file_offset_bytes=0, file_row_stride_bytes=32, file_plane_stride_bytes=64, dst_row_stride_bytes=64, dst_plane_stride_bytes=128, copy_row_bytes=32, copy_bytes=64, span_bytes=128, payload_bytes=64, file_size_bytes=128, file_sha256="dc87ab4e1b09d5e3f6a620b7e9d2054d2c6e1f9d3d0a7f3d7c4b8f0f7d1c3b6a", content_sha256="c8d5b6f5c14d2a3b1c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c", tail_policy="zero", gap_policy="untouched"
+// source line 17
+mem_scrub region=dram_common, address_kind=global48, base=0x0040020000, size_bytes=128, pattern=0xa5, path=backdoor
+// source line 20
+npu_cfg_drv_xn module="glsu", cfg_reg_addr=0x00000000, rs1val=0x00000000, rs2val=0x00000040
+// source line 22
+npu_cfg_drv_xn module="glsu", cfg_reg_addr=0x00000001, rs1val=0x00000002, rs2val=0x00000004
+// source line 24
+npu_cfg_drv_xn module="glsu", cfg_reg_addr=0x00000002, rs1val=0x00000002, rs2val=0x00000004
+// source line 26
+tld_drv_xn src="Source_d", dst="Tile_l", rs1val=0x00001000, rs2val=0x00010000
+// source line 28
+sync_drv_xn tag="load_complete"
+// source line 30
+wait_done tag=load_complete, phase=rsp_accept, timeout_cycles=100000
+// source line 33
+npu_cfg_drv_xn module="tst", cfg_reg_addr=0x00000100, rs1val=0x00010002, rs2val=0x00000040
+// source line 35
+npu_cfg_drv_xn module="tst", cfg_reg_addr=0x00000101, rs1val=0x00010002, rs2val=0x00000004
+// source line 37
+npu_cfg_drv_xn module="tst", cfg_reg_addr=0x00000102, rs1val=0x00000002, rs2val=0x00000004
+// source line 39
+tst_drv_xn src="Tile_l", dst="Result_d", rs1val=0x00001000, rs2val=0x00020000
+// source line 41
+sync_drv_xn tag="store_complete"
+// source line 43
+wait_done tag=store_complete, phase=rsp_accept, timeout_cycles=100000

@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from ...layers.l2_orchestration import graph as graph_mod
+from src.engine.orchestration.supervisor import graph as graph_mod
 from ...layers.l2_orchestration.state import PipelineState
 
 MODULES = ("flow.pipeline", "flow.runs", "flow.evidence")

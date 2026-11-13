@@ -4,7 +4,7 @@
 与 Skill 的本质差异（三层差异化）：
   1. 命名：策略包（Policy Pack）承载"测什么设计"的风格知识，不是"怎么验证"的通用技巧
   2. 语义：内容是结构化的验证知识（测试场景 / 覆盖点 / 断言模板 / 编译选项），
-          而非自由文本的 SKILL.md
+          而非自由文本的 PLAYBOOK.md
   3. 机制：按 `--design-style` 驱动加载（design-style → 策略包），
           而非按任务文本匹配（task_text → skill）
 
@@ -121,7 +121,7 @@ class PolicyPackLoader:
         迁移到项目 B 的同类设计风格策略包，无需人工追加。
         """
         try:
-            from src.layers.l5_evolution.growth import get_policy_evolution
+            from src.experience.growth import get_policy_evolution
             for e in get_policy_evolution():
                 pack.coverage_bins.append({
                     "name": f"learned_{e.get('reason', 'gap')}",

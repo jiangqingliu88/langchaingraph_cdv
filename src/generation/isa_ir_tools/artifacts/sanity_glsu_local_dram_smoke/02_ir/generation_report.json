@@ -1,0 +1,9 @@
+{
+  "status": "semantic_ir_generated",
+  "isa_revision": "ISA_VERSION_V1.4",
+  "address_schema": "GLOBAL48_V1.4",
+  "tensor_count": 1,
+  "scalar_count": 0,
+  "scalar_declaration_count": 0,
+  "encoding": "not_run"
+}

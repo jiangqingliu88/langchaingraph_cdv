@@ -66,7 +66,7 @@ def call_tool(name: str, args: Dict[str, Any] = None, *, context=None,
               default=_UNSET):
     """agent 调工具的统一入口 —— 走完整校验 + 审计链路，返回工具原始结果。
 
-    为什么需要它：`src/skills/*` 原本是直接 import 工具函数调用，例如
+    为什么需要它：`src/engine/*` 原本是直接 import 工具函数调用，例如
 
         from src.tools.checking.assertion_tools.main import generate_sva_assertions
         sva = generate_sva_assertions(json.dumps(spec))
@@ -586,7 +586,7 @@ class ToolHub:
 
         # 注册 uvm_tools
         try:
-            from src.tools.generation.uvm_tools.agent_tools import ensure_uvm_tool_registry
+            from src.generation.uvm_tools.agent_tools import ensure_uvm_tool_registry
             uvm_reg = ensure_uvm_tool_registry()
             for old_tool in uvm_reg._tools.values():
                 itool = _OldToolAdapter(old_tool)
@@ -597,7 +597,7 @@ class ToolHub:
 
         # 注册 agent_tools 中的工具 (agent_tools.py 的工具)
         try:
-            from src.layers.l2_orchestration.skills.builtin_tools import register_all_tools
+            from src.layers.l2_orchestration.executors.builtin_tools import register_all_tools
             old_registry = register_all_tools()
             # 跳过 uvm tools（已注册），注册其他
             uvm_names = {"find_spec_yaml", "jinja_render", "quality_report",
@@ -719,14 +719,14 @@ class ToolHub:
     _LC_TOOL_MODULES = (
         ("src.tools.checking.assertion_tools.main", "assert"),
         ("src.layers.l3_decision.evidence.main", "coverage"),
-        ("src.skills.debug.tools.main", "debug"),
-        ("src.layers.l5_evolution.docs.main", "doc"),
+        ("src.engine.diagnostics.main", "debug"),
+        ("src.experience.docs.main", "doc"),
         # `src.tools.reuse_tools.main` **不存在** —— 这个条目每次 bootstrap 都报
         # "No module named 'src.tools.reuse_tools'" 再被 except 吞掉，只在启动
         # 日志里留一条假错误。去掉。
         ("src.layers.l3_decision.spec_tools.main", "spec"),
         # **uvm 的 9 个工具此前从未被注册**：真实实现是
-        # `src/tools/generation/uvm_tools/agent_tools.py` 里的 @tool（read_file / write_file /
+        # `src/generation/uvm_tools/agent_tools.py` 里的 @tool（read_file / write_file /
         # find_spec_yaml / jinja_render / check_static / check_compile /
         # check_loopback / check_health / quality_report），但这份扫描列表漏了它。
         # 于是 hub 里这些名字留的是 `agents/agent_tools.py` 中那批**没有 handler
@@ -734,7 +734,7 @@ class ToolHub:
         # 也让 `call_tool` 无法在 agent 里安全替换直调。
         # 本函数在 register_all_tools 之后跑，注册的真实实现会覆盖空声明
         # （register 遇重名会 replace）。
-        ("src.tools.generation.uvm_tools.agent_tools", "uvm"),
+        ("src.generation.uvm_tools.agent_tools", "uvm"),
     )
 
     def _load_langchain_tools(self) -> int:

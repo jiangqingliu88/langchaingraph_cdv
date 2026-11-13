@@ -1,6 +1,6 @@
 """Registry tests — 当前 7 Agent 注册中心"""
-from src.layers.l2_orchestration.skills.registry import ExecutorRegistry, register_executor
-from src.layers.l2_orchestration.skills.base import BaseExecutor
+from src.layers.l2_orchestration.executors.registry import ExecutorRegistry, register_executor
+from src.layers.l2_orchestration.executors.base import BaseExecutor
 
 
 class MockExecutor(BaseExecutor):

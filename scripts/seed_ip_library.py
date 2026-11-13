@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.layers.l4_memory.ip_registry import IpRegistry
+from src.knowledge.ip_registry import IpRegistry
 
 
 def _arith(width=32):

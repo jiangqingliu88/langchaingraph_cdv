@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from src.skills.front import dplan as llm_contract
+from src.generation.planning import dplan as llm_contract
 
 
 def test_extract_contracts_parses_design_and_model(monkeypatch):

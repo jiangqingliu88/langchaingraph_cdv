@@ -305,7 +305,7 @@ started_at / finished_at · result / error
 - 仍然**不提供**取消与进度百分比。
 - 工作台与 CLI 的契约是**文件**：同一份 run 目录既能被 CLI 读，也能被工作台
   打开；工作台不替流水线计算业务结论。
-- **写操作走 `src/app/services/`**；页面不直接调工具/读 RTL。
+- **写操作走 `src/interfaces/api/`**；页面不直接调工具/读 RTL。
 - **只读视图走 `src/workbench/query/`**：`runs.py` / `evidence.py` 返回
   ViewModel（事件、产物索引、证据 envelope），页面只渲染；老证据包没有
   `envelope` 时显式报 `missing_envelope`，不伪装通过。

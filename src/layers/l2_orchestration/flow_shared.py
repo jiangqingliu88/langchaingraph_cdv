@@ -241,7 +241,7 @@ def _schema_issues(path: Path) -> List[Dict[str, Any]]:
     是纯浪费，而 schema 是仓库里的静态文件。
     """
     try:
-        from src.tools.generation.uvm_tools.tool_uvm.schema_check import get_checker
+        from src.generation.uvm_tools.tool_uvm.schema_check import get_checker
 
         issues = get_checker().check([path])
     except Exception as exc:                   # 依赖缺失 / schema 坏 —— 别把界面拖挂

@@ -39,7 +39,7 @@ def test_reads_the_shipped_vplan_project(qt_app, settings):
 
 
 def test_run_artifacts_come_from_the_selected_run(qt_app, settings, tmp_path):
-    from src.layers.l3_decision.vplan import (
+    from src.ir.vplan import (
         load_project, run_artifacts, write_plan_only_run)
 
     root = tmp_path / "output_vplan_gui"

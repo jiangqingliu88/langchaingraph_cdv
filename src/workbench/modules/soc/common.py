@@ -1,6 +1,6 @@
 """SoC 页面公共壳 —— 工程根、run 选择、波形/证据动作。
 
-数据走 `src/cli/soc_adapter.py` 的只读函数（经 bridge/catalog 白名单），
+数据走 `src/interfaces/cli/soc_adapter.py` 的只读函数（经 bridge/catalog 白名单），
 页面本身不读 RTL、不跑 EDA（运行是 `soc.run` 的显式按钮）。
 """
 from __future__ import annotations

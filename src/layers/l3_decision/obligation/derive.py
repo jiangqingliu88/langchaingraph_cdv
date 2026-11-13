@@ -78,7 +78,7 @@ def derive_obligations(contract: Any, facts: Iterable[Dict[str, Any]], *,
                        case_ids_by_tp: Optional[Dict[str, List[str]]] = None
                        ) -> List[VerificationObligation]:
     """contract + 事实 → 统一义务列表（复用现有 `derive()` 判定）。"""
-    from src.layers.l3_decision.contract import compile_obligations, derive
+    from src.ir.contract import compile_obligations, derive
 
     obligations = compile_obligations(contract)
     facts = list(facts or [])

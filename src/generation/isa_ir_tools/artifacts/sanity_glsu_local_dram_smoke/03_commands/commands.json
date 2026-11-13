@@ -1,0 +1,338 @@
+{
+  "schema": "cmd sch program v2",
+  "target": "standalone",
+  "core_id": 0,
+  "isa_revision": "ISA_VERSION_V1.4",
+  "address_schema": "GLOBAL48_V1.4",
+  "csr_clk_rst": false,
+  "playback_file": "commands.tsv",
+  "control_execution": "testbench_player_required",
+  "dispatch_policy": {
+    "initial_nice_mask": 65535,
+    "group_mask": "local control only",
+    "non_target": "dispatch_skip",
+    "raw cmd": "bypass dispatch"
+  },
+  "source": {
+    "source": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\artifacts\\sanity_glsu_local_dram_smoke\\02_ir\\seq.ir",
+    "source_sha256": "c630ddad97dc14281eb04bffd229c261459a05718a37eced6cbcd40cda47b6f2",
+    "cmddata_width": 74,
+    "layout": {
+      "rs2val": [
+        73,
+        42
+      ],
+      "rs1val": [
+        41,
+        10
+      ],
+      "funct7": [
+        9,
+        3
+      ],
+      "xd": [
+        2,
+        2
+      ],
+      "xs1": [
+        1,
+        1
+      ],
+      "xs2": [
+        0,
+        0
+      ]
+    }
+  },
+  "commands": [
+    {
+      "index": 0,
+      "op": "dispatch_mask",
+      "kind": "control",
+      "source_line": 5,
+      "source_isa": "group_mask_drv_xn mask=1, rs1val=0x00000001",
+      "parameters": {
+        "mask": 1
+      },
+      "dispatch_parameters": {
+        "mask": 1,
+        "rs1val": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "control",
+      "op": "mem_init",
+      "source_line": 11,
+      "parameters": {
+        "schema": "mem_init_v1",
+        "ref": "Source_d",
+        "source_tensor": "Source",
+        "isa_revision": "xlsx_v0.3_reviewed",
+        "address_schema": "global48_xlsx_v0.3_reviewed",
+        "path": "backdoor",
+        "file": "data/Source.hex",
+        "format": "hex",
+        "region": "dram_common",
+        "address_kind": "global48",
+        "base": 1073872896,
+        "shape": [
+          1,
+          2,
+          64
+        ],
+        "dtype": "int8",
+        "element_bits": 8,
+        "byte_order": "little",
+        "file_offset_bytes": 0,
+        "file_row_stride_bytes": 32,
+        "file_plane_stride_bytes": 64,
+        "dst_row_stride_bytes": 64,
+        "dst_plane_stride_bytes": 128,
+        "copy_row_bytes": 32,
+        "copy_bytes": 64,
+        "span_bytes": 128,
+        "payload_bytes": 64,
+        "file_size_bytes": 128,
+        "file_sha256": "dc87ab4e1b09d5e3f6a620b7e9d2054d2c6e1f9d3d0a7f3d7c4b8f0f7d1c3b6a",
+        "content_sha256": "c8d5b6f5c14d2a3b1c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c",
+        "tail_policy": "zero",
+        "gap_policy": "untouched"
+      },
+      "passthrough": "mem_init {\"schema\":\"mem_init_v1\",\"ref\":\"Source_d\",\"source_tensor\":\"Source\",\"isa_revision\":\"xlsx_v0.3_reviewed\",\"address_schema\":\"global48_xlsx_v0.3_reviewed\",\"path\":\"backdoor\",\"file\":\"data/Source.hex\",\"format\":\"hex\",\"region\":\"dram_common\",\"address_kind\":\"global48\",\"base\":1073872896,\"shape\":[1,2,64],\"dtype\":\"int8\",\"element_bits\":8,\"byte_order\":\"little\",\"file_offset_bytes\":0,\"file_row_stride_bytes\":32,\"file_plane_stride_bytes\":64,\"dst_row_stride_bytes\":64,\"dst_plane_stride_bytes\":128,\"copy_row_bytes\":32,\"copy_bytes\":64,\"span_bytes\":128,\"payload_bytes\":64,\"file_size_bytes\":128,\"file_sha256\":\"dc87ab4e1b09d5e3f6a620b7e9d2054d2c6e1f9d3d0a7f3d7c4b8f0f7d1c3b6a\",\"content_sha256\":\"c8d5b6f5c14d2a3b1c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c\",\"tail_policy\":\"zero\",\"gap_policy\":\"untouched\"}"
+    },
+    {
+      "index": 2,
+      "kind": "control",
+      "op": "mem_scrub",
+      "source_line": 13,
+      "parameters": {
+        "region": "dram_common",
+        "address_kind": "global48",
+        "base": 1073872896,
+        "size_bytes": 128,
+        "pattern": 165,
+        "path": "backdoor"
+      },
+      "passthrough": "mem_scrub region=dram_common, address_kind=global48, base=0x0040020000, size_bytes=128, pattern=0xa5, path=backdoor"
+    },
+    {
+      "index": 3,
+      "op": "npu_cfg_drv_xn",
+      "source_line": 15,
+      "kind": "instruction",
+      "parameters": {
+        "module": "glsu",
+        "cfg_reg_addr": 0,
+        "rs1val": 0,
+        "rs2val": 64
+      },
+      "source_isa": "npu_cfg_drv_xn module=\"glsu\", cfg_reg_addr=0x00000000, rs1val=0x00000000, rs2val=0x00000040",
+      "cmddata": "000000100000000000b",
+      "funct7": 1,
+      "xd": 0,
+      "xs1": 1,
+      "xs2": 1,
+      "rs1val": 0,
+      "rs2val": 64
+    },
+    {
+      "index": 4,
+      "op": "npu_cfg_drv_xn",
+      "source_line": 17,
+      "kind": "instruction",
+      "parameters": {
+        "module": "glsu",
+        "cfg_reg_addr": 1,
+        "rs1val": 2,
+        "rs2val": 4
+      },
+      "source_isa": "npu_cfg_drv_xn module=\"glsu\", cfg_reg_addr=0x00000001, rs1val=0x00000002, rs2val=0x00000004",
+      "cmddata": "000000010000000080b",
+      "funct7": 1,
+      "xd": 0,
+      "xs1": 1,
+      "xs2": 1,
+      "rs1val": 2,
+      "rs2val": 4
+    },
+    {
+      "index": 5,
+      "op": "npu_cfg_drv_xn",
+      "source_line": 19,
+      "kind": "instruction",
+      "parameters": {
+        "module": "glsu",
+        "cfg_reg_addr": 2,
+        "rs1val": 2,
+        "rs2val": 4
+      },
+      "source_isa": "npu_cfg_drv_xn module=\"glsu\", cfg_reg_addr=0x00000002, rs1val=0x00000002, rs2val=0x00000004",
+      "cmddata": "000000010000000080b",
+      "funct7": 1,
+      "xd": 0,
+      "xs1": 1,
+      "xs2": 1,
+      "rs1val": 2,
+      "rs2val": 4
+    },
+    {
+      "index": 6,
+      "op": "tld_drv_xn",
+      "source_line": 21,
+      "kind": "instruction",
+      "parameters": {
+        "src": "Source_d",
+        "dst": "Tile_l",
+        "rs1val": 4096,
+        "rs2val": 65536
+      },
+      "source_isa": "tld_drv_xn src=\"Source_d\", dst=\"Tile_l\", rs1val=0x00001000, rs2val=0x00010000",
+      "cmddata": "000040000000040010b",
+      "funct7": 33,
+      "xd": 0,
+      "xs1": 1,
+      "xs2": 1,
+      "rs1val": 4096,
+      "rs2val": 65536
+    },
+    {
+      "index": 7,
+      "op": "sync_drv_xn",
+      "source_line": 23,
+      "kind": "instruction",
+      "parameters": {
+        "tag": "load_complete"
+      },
+      "source_isa": "sync_drv_xn tag=\"load_complete\"",
+      "cmddata": "0000000000000000024",
+      "funct7": 4,
+      "xd": 1,
+      "xs1": 0,
+      "xs2": 0,
+      "rs1val": 0,
+      "rs2val": 0
+    },
+    {
+      "index": 8,
+      "kind": "control",
+      "op": "wait done",
+      "source_line": 25,
+      "parameters": {
+        "tag": "load_complete",
+        "phase": "rsp_accept",
+        "timeout_cycles": 100000
+      },
+      "passthrough": "wait_done tag=load_complete, phase=rsp_accept, timeout_cycles=100000"
+    },
+    {
+      "index": 9,
+      "op": "npu_cfg_drv_xn",
+      "source_line": 27,
+      "kind": "instruction",
+      "parameters": {
+        "module": "tst",
+        "cfg_reg_addr": 256,
+        "rs1val": 65538,
+        "rs2val": 64
+      },
+      "source_isa": "npu_cfg_drv_xn module=\"tst\", cfg_reg_addr=0x00000100, rs1val=0x00010002, rs2val=0x00000040",
+      "cmddata": "000000100000400080b",
+      "funct7": 1,
+      "xd": 0,
+      "xs1": 1,
+      "xs2": 1,
+      "rs1val": 65538,
+      "rs2val": 64
+    },
+    {
+      "index": 10,
+      "op": "npu_cfg_drv_xn",
+      "source_line": 29,
+      "kind": "instruction",
+      "parameters": {
+        "module": "tst",
+        "cfg_reg_addr": 257,
+        "rs1val": 65538,
+        "rs2val": 4
+      },
+      "source_isa": "npu_cfg_drv_xn module=\"tst\", cfg_reg_addr=0x00000101, rs1val=0x00010002, rs2val=0x00000004",
+      "cmddata": "000000010000400080b",
+      "funct7": 1,
+      "xd": 0,
+      "xs1": 1,
+      "xs2": 1,
+      "rs1val": 65538,
+      "rs2val": 4
+    },
+    {
+      "index": 11,
+      "op": "npu_cfg_drv_xn",
+      "source_line": 31,
+      "kind": "instruction",
+      "parameters": {
+        "module": "tst",
+        "cfg_reg_addr": 258,
+        "rs1val": 2,
+        "rs2val": 4
+      },
+      "source_isa": "npu_cfg_drv_xn module=\"tst\", cfg_reg_addr=0x00000102, rs1val=0x00000002, rs2val=0x00000004",
+      "cmddata": "000000010000000080b",
+      "funct7": 1,
+      "xd": 0,
+      "xs1": 1,
+      "xs2": 1,
+      "rs1val": 2,
+      "rs2val": 4
+    },
+    {
+      "index": 12,
+      "op": "tst_drv_xn",
+      "source_line": 33,
+      "kind": "instruction",
+      "parameters": {
+        "src": "Tile_l",
+        "dst": "Result_d",
+        "rs1val": 4096,
+        "rs2val": 131072
+      },
+      "source_isa": "tst_drv_xn src=\"Tile_l\", dst=\"Result_d\", rs1val=0x00001000, rs2val=0x00020000",
+      "cmddata": "000080000000040011b",
+      "funct7": 35,
+      "xd": 0,
+      "xs1": 1,
+      "xs2": 1,
+      "rs1val": 4096,
+      "rs2val": 131072
+    },
+    {
+      "index": 13,
+      "op": "sync_drv_xn",
+      "source_line": 35,
+      "kind": "instruction",
+      "parameters": {
+        "tag": "store_complete"
+      },
+      "source_isa": "sync_drv_xn tag=\"store_complete\"",
+      "cmddata": "0000000000000000024",
+      "funct7": 4,
+      "xd": 1,
+      "xs1": 0,
+      "xs2": 0,
+      "rs1val": 0,
+      "rs2val": 0
+    },
+    {
+      "index": 14,
+      "kind": "control",
+      "op": "wait done",
+      "source_line": 37,
+      "parameters": {
+        "tag": "store_complete",
+        "phase": "rsp_accept",
+        "timeout_cycles": 100000
+      },
+      "passthrough": "wait_done tag=store_complete, phase=rsp_accept, timeout_cycles=100000"
+    }
+  ]
+}

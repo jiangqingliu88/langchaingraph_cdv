@@ -121,7 +121,10 @@ class LLMQueryEngine:
                         prompt_version=prompt_version, schema_hash=schema_hash,
                         failure_policy=failure_policy, output_format=output_format,
                         validation=detail)
-            return self._fail(f"LLM 输出不符合 schema: {detail}", failure_policy)
+            preview = (content or "")[:200].replace("\n", " ")
+            return self._fail(
+                f"LLM 输出不符合 schema: {detail} | preview={preview!r}",
+                failure_policy)
 
         # 5. 记账 + 缓存 + 审计
         if tokens:

@@ -45,9 +45,9 @@ NICE 的 ICB 主口回到 CPU 的 LSU（地址落在 DTCM），所以 CPU 侧看
 
 ```bash
 python examples/open_npu_soc/toolchain/setup_toolchain.py    # 首次
-python -m src.cli.commands soc c-run examples/open_npu_soc \
+python -m src.interfaces.cli.commands soc c-run examples/open_npu_soc \
     --case C-GEMM-8X8 -o output_c_C-GEMM-8X8
-python -m src.cli.commands soc wave output_c_C-GEMM-8X8      # Visualizer
+python -m src.interfaces.cli.commands soc wave output_c_C-GEMM-8X8      # Visualizer
 ```
 
 `regression/regression.yaml` 里也登记了 `build_e203_c` + `gemm_8x8_c`，

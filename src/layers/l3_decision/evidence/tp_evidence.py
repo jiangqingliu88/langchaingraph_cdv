@@ -269,7 +269,7 @@ def _contract_status(layers: Dict[str, Dict[str, Any]], tp: Dict[str, Any]) -> s
     传递 stage：bin 命中不能单独签核功能，要 VERIFIED 必须四层齐（见那里的
     docstring）。M2 起 `tp_evidence` 不再自己算这套规则。
     """
-    from src.layers.l3_decision.contract.derive import tp_contract_status
+    from src.ir.contract.derive import tp_contract_status
 
     stage = str((tp.get("execution") or {}).get("stage") or "")
     return tp_contract_status(layers, stage)

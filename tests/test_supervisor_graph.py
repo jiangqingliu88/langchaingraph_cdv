@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 
-from src.agents.supervisor.graph import (
+from src.engine.orchestration.supervisor.graph import (
     build_closed_loop_graph, n_supervisor, r_supervisor,
 )
 from src.layers.l2_orchestration.state import PipelineState
@@ -61,7 +61,7 @@ def test_supervisor_asks_human_after_five_debug_attempts():
 
 def test_human_review_without_checkpoint_degrades_loudly(monkeypatch):
     from types import SimpleNamespace
-    from src.agents.gates.human import n_human_review
+    from src.engine.audit.gates.human import n_human_review
 
     out = asyncio.run(n_human_review(
         PipelineState(debug_attempts=5),
@@ -86,7 +86,7 @@ def test_supervisor_routes_interrupted_to_audit():
 
 def test_design_subgraph_propagates_completion_marker(monkeypatch):
     """子图真的能跑：嵌套图的 state 更新会回到主图（不是只编译不执行）。"""
-    from src.agents.design import graph as design_graph
+    from src.agent.specialists.design import graph as design_graph
 
     async def fake(state, config):
         if state is None:
@@ -101,10 +101,10 @@ def test_design_subgraph_propagates_completion_marker(monkeypatch):
 
 
 def test_all_expert_subgraphs_compile():
-    from src.agents.coverage.graph import build_coverage_subgraph
-    from src.agents.debug.graph import build_debug_subgraph
-    from src.agents.design.graph import build_design_subgraph
-    from src.agents.verify.graph import build_verify_subgraph
+    from src.agent.specialists.coverage.graph import build_coverage_subgraph
+    from src.agent.specialists.debug.graph import build_debug_subgraph
+    from src.agent.specialists.design.graph import build_design_subgraph
+    from src.agent.specialists.verify.graph import build_verify_subgraph
 
     assert "design" in build_design_subgraph().get_graph().nodes
     assert "verify" in build_verify_subgraph().get_graph().nodes
@@ -116,12 +116,13 @@ def test_all_expert_subgraphs_compile():
 
 
 def test_hard_audit_gate_requires_report_and_evidence(tmp_path, monkeypatch):
-    from src.agents.gates import audit as audit_mod
+    from src.engine.audit.gates import audit as audit_mod
 
     async def fake_audit(state, config):
         return {"audit": {"verdict": "READY"}, "phases": []}
 
-    monkeypatch.setattr(audit_mod, "n_audit", fake_audit)
+    import src.agent.runtime.pipeline_nodes.signoff as signoff_mod
+    monkeypatch.setattr(signoff_mod, "n_audit", fake_audit)
     monkeypatch.setattr(audit_mod, "verify_package",
                         lambda path: {"ok": True, "issues": []})
     state = PipelineState(output_root=str(tmp_path))
@@ -144,8 +145,8 @@ def test_hard_audit_gate_requires_report_and_evidence(tmp_path, monkeypatch):
 
 
 def test_debug_agent_loop_is_opt_in(monkeypatch):
-    from src.agents.debug import loop as debug_loop
-    from src.agents.runtime.tool_loop import LoopResult
+    from src.agent.specialists.debug import loop as debug_loop
+    from src.agent.runtime.tool_loop import LoopResult
 
     monkeypatch.delenv("SIGNOFFAI_AGENT_LOOP", raising=False)
     off = asyncio.run(debug_loop.n_debug_agent(PipelineState(), {}))
@@ -182,7 +183,7 @@ def test_agent_context_is_filtered_per_expert():
 
 
 def test_finalize_status_prefers_audit_blocked():
-    from src.agents.runtime.nodes.pure.lifecycle import _run_status
+    from src.engine.orchestration.nodes.pure.lifecycle import _run_status
 
     blocked = PipelineState(audit_gate={"ok": False}, eda_blocked=True,
                             effective_coverage=99.0, target=95.0)

@@ -1,0 +1,285 @@
+[
+  {
+    "op": "group_mask_drv_xn",
+    "fields": {
+      "mask": 1,
+      "rs1val": 1,
+      "operand_encoding": "xlsx_v0.3_reviewed:S:mask,-",
+      "explicit_operands": true,
+      "vector_operand_cores": {
+        "0": {
+          "rs1val": 1,
+          "rs2val": 0
+        }
+      }
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 5
+    }
+  },
+  {
+    "op": "mem_init",
+    "fields": {
+      "schema": "mem_init_v1",
+      "ref": "Source_d",
+      "source_tensor": "Source",
+      "isa_revision": "xlsx_v0.3_reviewed",
+      "address_schema": "global48_xlsx_v0.3_reviewed",
+      "path": "backdoor",
+      "file": "tensors/Source.hex",
+      "format": "hex",
+      "region": "dram_common",
+      "address_kind": "global48",
+      "base": 1073872896,
+      "shape": [
+        1,
+        2,
+        64
+      ],
+      "dtype": "int8",
+      "element_bits": 8,
+      "byte_order": "little",
+      "file_offset_bytes": 0,
+      "file_row_stride_bytes": 32,
+      "file_plane_stride_bytes": 64,
+      "dst_row_stride_bytes": 64,
+      "dst_plane_stride_bytes": 128,
+      "copy_row_bytes": 32,
+      "copy_bytes": 64,
+      "span_bytes": 128,
+      "payload_bytes": 64,
+      "file_size_bytes": 128,
+      "file_sha256": "dc87ab4e1b09d5e3f6a620b7e9d2054d2c6e1f9d3d0a7f3d7c4b8f0f7d1c3b6a",
+      "content_sha256": "c8d5b6f5c14d2a3b1c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c",
+      "tail_policy": "zero",
+      "gap_policy": "untouched"
+    },
+    "passthrough": "mem_init schema=\"mem_init_v1\", ref=\"Source_d\", source_tensor=\"Source\", isa_revision=\"xlsx_v0.3_reviewed\", address_schema=\"global48_xlsx_v0.3_reviewed\", path=\"backdoor\", file=\"tensors/Source.hex\", format=\"hex\", region=\"dram_common\", address_kind=\"global48\", base=0x0040020000, shape=[1,2,64], dtype=\"int8\", element_bits=8, byte_order=\"little\", file_offset_bytes=0, file_row_stride_bytes=32, file_plane_stride_bytes=64, dst_row_stride_bytes=64, dst_plane_stride_bytes=128, copy_row_bytes=32, copy_bytes=64, span_bytes=128, payload_bytes=64, file_size_bytes=128, file_sha256=\"dc87ab4e1b09d5e3f6a620b7e9d2054d2c6e1f9d3d0a7f3d7c4b8f0f7d1c3b6a\", content_sha256=\"c8d5b6f5c14d2a3b1c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c\", tail_policy=\"zero\", gap_policy=\"untouched\"",
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 15
+    },
+    "resolved_mem_init": null
+  },
+  {
+    "op": "mem_scrub",
+    "fields": {
+      "region": "dram_common",
+      "address_kind": "global48",
+      "base": 1073872896,
+      "size_bytes": 128,
+      "pattern": 165,
+      "path": "backdoor"
+    },
+    "passthrough": "mem_scrub region=dram_common, address_kind=global48, base=0x0040020000, size_bytes=128, pattern=0xa5, path=backdoor",
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 17
+    }
+  },
+  {
+    "op": "npu_cfg_drv_xn",
+    "fields": {
+      "module": "glsu",
+      "cfg_reg_addr": 0,
+      "rs1val": 0,
+      "rs2val": 64,
+      "explicit_operands": true,
+      "cfg_packs": [],
+      "operand_encoding": "explicit: rs1/rs2 preserved",
+      "cfg_projection_status": "explicit_operands"
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 20
+    }
+  },
+  {
+    "op": "npu_cfg_drv_xn",
+    "fields": {
+      "module": "glsu",
+      "cfg_reg_addr": 1,
+      "rs1val": 2,
+      "rs2val": 4,
+      "explicit_operands": true,
+      "cfg_packs": [],
+      "operand_encoding": "explicit: rs1/rs2 preserved",
+      "cfg_projection_status": "explicit_operands"
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 22
+    }
+  },
+  {
+    "op": "npu_cfg_drv_xn",
+    "fields": {
+      "module": "glsu",
+      "cfg_reg_addr": 2,
+      "rs1val": 2,
+      "rs2val": 4,
+      "explicit_operands": true,
+      "cfg_packs": [],
+      "operand_encoding": "explicit: rs1/rs2 preserved",
+      "cfg_projection_status": "explicit_operands"
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 24
+    }
+  },
+  {
+    "op": "tld_drv_xn",
+    "fields": {
+      "src": "Source_d",
+      "dst": "Tile_l",
+      "rs1val": 4096,
+      "rs2val": 65536,
+      "operand_encoding": "xlsx_v0.3_reviewed:L:dst,D:src",
+      "explicit_operands": true,
+      "vector_operand_cores": {
+        "0": {
+          "rs1val": 4096,
+          "rs2val": 65536
+        }
+      }
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 26
+    }
+  },
+  {
+    "op": "sync_drv_xn",
+    "fields": {
+      "tag": "load_complete",
+      "explicit_operands": true,
+      "vector_operand_cores": {
+        "0": {
+          "rs1val": 0,
+          "rs2val": 0
+        }
+      }
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 28
+    }
+  },
+  {
+    "op": "wait_done",
+    "fields": {
+      "tag": "load_complete",
+      "phase": "rsp_accept",
+      "timeout_cycles": 100000
+    },
+    "passthrough": "wait_done tag=load_complete, phase=rsp_accept, timeout_cycles=100000",
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 30
+    }
+  },
+  {
+    "op": "npu_cfg_drv_xn",
+    "fields": {
+      "module": "tst",
+      "cfg_reg_addr": 256,
+      "rs1val": 65538,
+      "rs2val": 64,
+      "explicit_operands": true,
+      "cfg_packs": [],
+      "operand_encoding": "explicit: rs1/rs2 preserved",
+      "cfg_projection_status": "explicit_operands"
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 33
+    }
+  },
+  {
+    "op": "npu_cfg_drv_xn",
+    "fields": {
+      "module": "tst",
+      "cfg_reg_addr": 257,
+      "rs1val": 65538,
+      "rs2val": 4,
+      "explicit_operands": true,
+      "cfg_packs": [],
+      "operand_encoding": "explicit: rs1/rs2 preserved",
+      "cfg_projection_status": "explicit_operands"
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 35
+    }
+  },
+  {
+    "op": "npu_cfg_drv_xn",
+    "fields": {
+      "module": "tst",
+      "cfg_reg_addr": 258,
+      "rs1val": 2,
+      "rs2val": 4,
+      "explicit_operands": true,
+      "cfg_packs": [],
+      "operand_encoding": "explicit: rs1/rs2 preserved",
+      "cfg_projection_status": "explicit_operands"
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 37
+    }
+  },
+  {
+    "op": "tst_drv_xn",
+    "fields": {
+      "src": "Tile_l",
+      "dst": "Result_d",
+      "rs1val": 4096,
+      "rs2val": 131072,
+      "operand_encoding": "xlsx_v0.3_reviewed:L:src,D:dst",
+      "explicit_operands": true,
+      "vector_operand_cores": {
+        "0": {
+          "rs1val": 4096,
+          "rs2val": 131072
+        }
+      }
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 39
+    }
+  },
+  {
+    "op": "sync_drv_xn",
+    "fields": {
+      "tag": "store_complete",
+      "explicit_operands": true,
+      "vector_operand_cores": {
+        "0": {
+          "rs1val": 0,
+          "rs2val": 0
+        }
+      }
+    },
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 41
+    }
+  },
+  {
+    "op": "wait_done",
+    "fields": {
+      "tag": "store_complete",
+      "phase": "rsp_accept",
+      "timeout_cycles": 100000
+    },
+    "passthrough": "wait_done tag=store_complete, phase=rsp_accept, timeout_cycles=100000",
+    "source": {
+      "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+      "line": 43
+    }
+  }
+]

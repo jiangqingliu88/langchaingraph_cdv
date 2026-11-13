@@ -16,7 +16,7 @@
 所以这组测试用**scoreboard 自己那份格式的原文**当输入，不再是"照着我以为的
 格式编一个"。只要有人改了 `.svh` 里的报告文案而忘了改这边，这里就红。
 """
-from src.tools.generation.uvm_tools.checking.tool_check_env_arch.main import (
+from src.generation.uvm_tools.checking.tool_check_env_arch.main import (
     _parse_scoreboard_report,
     _scoreboard_passed,
 )

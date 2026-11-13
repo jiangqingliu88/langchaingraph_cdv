@@ -41,7 +41,10 @@ class RegressionRunner:
         wd = str(self.work_dir.resolve()).replace("\\", "/")
         fl = str(Path(self.filelist).resolve()).replace("\\", "/") if self.filelist else ""
 
-        cmd = [vlog, "-work", wd]
+        # `-mfcu`：SVA 的 `bind` 在 $unit 作用域，Questa 需要单一编译单元才
+        # 会在 vopt 时展开它（否则只警告 `bind found in compilation unit scope`
+        # —— 断言看着生成了，实际没进 elaborated design）。
+        cmd = [vlog, "-work", wd, "-mfcu"]
         if self.coverage:
             cmd.append("+cover=bcesf")  # branch/condition/expression/statement/fsm
         if fl:

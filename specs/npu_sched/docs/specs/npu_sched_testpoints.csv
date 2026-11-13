@@ -1,4 +1,4 @@
-tp_id,feature_id,topic,spec_ref,contract_id,test_point,stimulus,expected,check_method,case_plan,priority,status,notes
+﻿tp_id,feature_id,topic,spec_ref,contract_id,test_point,stimulus,expected,check_method,case_plan,priority,status,notes
 TP_SCHED_001,F-011,接口,2.1.5,C-IF-GRP-VALID_READY,Inst Dispatcher输入指令握手与字段保持,发送NICE/VNICE指令，随机disp_cmd_vld/cmd_disp_rdy，覆盖不同disp_cmd_inst_flag和disp_cmd_inst_tag,握手成功时disp_cmd_inst/flag/tag被正确接收，无丢失或重复,SVA,TC_SCHED_001,P0,planned,按Top Signal表
 TP_SCHED_002,F-011,接口,2.1.5,C-IF-GRP-VALID_READY,Inst Dispatcher返回数据/valid/ready握手,构造cmd_disp_rsp_vld与disp_cmd_rsp_rdy随机反压，返回不同32+3位数据,返回数据保持稳定且每次有效仅接收一次,SVA,TC_SCHED_001,P0,planned,覆盖反压
 TP_SCHED_003,F-012,接口,2.1.5,C-IF-GRP-VALID_READY,SPAD写通道ch0请求/响应握手,发起写请求，随机wvld/wrdy及响应wvld/wlast/wrdy,waddr/wdata/wstrb/wid保持；响应wlast正确；无握手丢失,SVA,TC_SCHED_002,P0,planned,512bit写数据
@@ -45,3 +45,15 @@ TP_SCHED_043,F-062,边界,2.1.4,C-RES-003,cfg/drv_buffer 4深边界与恢复,精
 TP_SCHED_044,F-062,边界,2.1.4,C-RES-003,反压满状态长时间保持与恢复,保持master/cfg_drv_buffer/decode满状态多个周期后释放,反压稳定保持，无死锁；释放后按序恢复,SCB,TC_SCHED_005,P1,planned,长稳
 TP_SCHED_045,F-021,边界,10.1,C-RES-001,活动状态下复位边界,在指令处理中、buffer非空、FIFO非空时复位,复位后所有FIFO/寄存器回到初始化状态，无残留valid,SVA,TC_SCHED_015,P1,planned,中间复位边界
 TP_SCHED_046,F-012,数据值域,2.1.5/3,C-DATA-002,SPAD读写数据与wstrb完整性,遍历wstrb 2'b11/10/01及512bit读写数据模式,高低256bit选通正确，rdata与写入数据一致，无位翻转或错拍,SCB,TC_SCHED_002,P0,planned,数据完整性
+TP_IF_GLSU_TIMING,F-011,接口,2.1.5,C-IF-GRP-GLSU,GLSU start→done/release 时序与未知值,配置并拉 cmd_glsu_start，观察 done/release；空闲拍不得出现 X,cmd_glsu_start 单拍；done/release 在复位后为已知值；start_inst_id 合法,SVA,TC_SCHED_003,P1,planned,由 data/assertions.csv 的 GLSU 规则绑定（可执行契约）
+TP_IF_CSR_TIMING,F-011,接口,2.1.5,C-IF-GRP-CSR,csr 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成
+TP_IF_DEBUG_TIMING,F-011,接口,2.1.5,C-IF-GRP-DEBUG,debug 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成
+TP_IF_ICG_TIMING,F-011,接口,2.1.5,C-IF-GRP-ICG,icg 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成
+TP_IF_INTERRUPT_TIMING,F-011,接口,2.1.5,C-IF-GRP-INTERRUPT,interrupt 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成
+TP_IF_LLSU_TIMING,F-011,接口,2.1.5,C-IF-GRP-LLSU,llsu 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成
+TP_IF_MPU_TIMING,F-011,接口,2.1.5,C-IF-GRP-MPU,mpu 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成
+TP_IF_NIU_TIMING,F-011,接口,2.1.5,C-IF-GRP-NIU,niu 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成
+TP_IF_RESERVED_TIMING,F-011,接口,2.1.5,C-IF-GRP-RESERVED,reserved 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成
+TP_IF_STATUS_TIMING,F-011,接口,2.1.5,C-IF-GRP-STATUS,status 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成
+TP_IF_VALID_READY_TIMING,F-011,接口,2.1.5,C-IF-GRP-VALID_READY,valid_ready 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成
+TP_IF_VPU_TIMING,F-011,接口,2.1.5,C-IF-GRP-VPU,vpu 接口时序与未知值,按接口组协议驱动/采样 start、vld、done、rls,复位后已知；start/done/rls 单拍；inst_id 合法,SVA,,P1,planned,由 scripts/gen_interface_contracts.py 确定性生成

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from src.skills.verify.steps_dag import (
+from src.engine.verify.steps_dag import (
     STEPS,
     STEP_NAMES,
     Step,
@@ -90,7 +90,7 @@ def test_recorder_detects_a_swap_of_independent_steps_only_if_asked():
 
 def test_verify_executor_marks_steps_in_declared_order():
     """源码级守卫：`execute_task` 里 mark 的先后必须与 DAG 一致。"""
-    src = Path("src/skills/verify/main.py").read_text(encoding="utf-8")
+    src = Path("src/generation/verification/main.py").read_text(encoding="utf-8")
     positions = [src.index(f'steps.mark("{name}")') for name in EXPECTED]
     assert positions == sorted(positions)
     assert "steps.finish()" in src

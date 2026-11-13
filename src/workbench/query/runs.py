@@ -18,12 +18,12 @@ def _read_json(path: Path) -> Dict[str, Any]:
 
 def list_soc_runs(base: str | Path = ".") -> List[Dict[str, Any]]:
     """SoC run 列表（只读；底层复用 app service）。"""
-    from src.app.services.soc_service import list_soc_runs as _impl
+    from src.interfaces.api.soc_service import list_soc_runs as _impl
     return _impl(base)
 
 
 def run_summary(run_root: str | Path) -> Dict[str, Any]:
-    from src.app.services.soc_service import run_summary as _impl
+    from src.interfaces.api.soc_service import run_summary as _impl
     return _impl(run_root)
 
 

@@ -8,9 +8,10 @@ builds:
     top: tb_soc_top
     # `+acc`：不给访问权限时 vopt 会删掉绝大部分信号，qwave.db 里只剩
     # 顶层几根线（实测 1.1 KB）；编译期保留访问后波形才有 DUT 细节。
-    # vopt 额外产出 design.bin：Visualizer 只有 qwave.db 看不到源码，必须
-    # 同时加载 vopt 的设计库（`visualizer -designfile design.bin -wavefile ...`）。
-    run_cmd: 'cd ${SOC_ROOT} && vlog -sv +acc -linedebug -f filelist.f -l ${EMAN_COMPILE_DIR}/build.log && vopt -work ${SOC_ROOT}/work -designfile ${EMAN_COMPILE_DIR}/design.bin -linedebug +acc -suppress 7061 -suppress 3009 -o tb_soc_top_opt tb_soc_top -l ${EMAN_COMPILE_DIR}/vopt.log'
+    # 说明：vopt 的 `-designfile design.bin`（Visualizer 源码浏览）在
+    # 低内存机器上会触发 viscom 峰值 3GB 并导致 vopt VirtualAlloc 失败，
+    # 默认关闭；需要源码浏览时单独生成 design.bin。
+    run_cmd: 'cd ${SOC_ROOT} && vlog -sv +acc -linedebug -f filelist.f -l ${EMAN_COMPILE_DIR}/build.log && vopt -work ${SOC_ROOT}/work -linedebug +acc -suppress 7061 -suppress 3009 -o tb_soc_top_opt tb_soc_top -l ${EMAN_COMPILE_DIR}/vopt.log'
 
   # E203 C 用例：e203_hbirdv2/ 是**只读**依赖 —— 先编整棵树，再在文件表末尾
   # 编我们的 NICE 适配器 / INT8 GEMM，用同名模块覆盖树内旧副本。
@@ -34,7 +35,7 @@ builds:
       +define+DISABLE_SV_ASSERTION=1 +define+E203_C_RUN=1
       -f ${EMAN_COMPILE_DIR}/e203_c_filelist.f
       -l ${EMAN_COMPILE_DIR}/build.log &&
-      vopt -work ${EMAN_COMPILE_DIR}/work -designfile ${EMAN_COMPILE_DIR}/design.bin
+      vopt -work ${EMAN_COMPILE_DIR}/work
       -linedebug +acc -suppress 7061 -suppress 3009
       -o tb_soc_top_opt tb_soc_top -l ${EMAN_COMPILE_DIR}/vopt.log
 
@@ -50,7 +51,7 @@ tests:
     # 报告里 `wave_path` 永远是 None。
     # **必须一行**：run_cmd 会原样写进 sim.sh，YAML 折行会变成多条命令。
     run_cmd: >-
-      (cd ${SOC_ROOT} && cp ${EMAN_COMPILE_DIR}/design.bin ${EMAN_RUN_DIR}/design.bin && vsim -c -work ${SOC_ROOT}/work -suppress 3009 -suppress 7061 tb_soc_top_opt -do "log -r /*; run -all; quit" -l ${EMAN_RUN_DIR}/sim_vsim.log -qwavedb=+signal+memory=4096,4+class+wavefile=${EMAN_RUN_DIR}/waves/gemm_8x8.db && [ -s ${EMAN_RUN_DIR}/sim_vsim.log ] && grep -q "mismatched=0" ${EMAN_RUN_DIR}/sim_vsim.log && grep -q "PASS" ${EMAN_RUN_DIR}/sim_vsim.log)
+      (cd ${SOC_ROOT} && vsim -c -work ${SOC_ROOT}/work -suppress 3009 -suppress 7061 tb_soc_top_opt -do "log -r /*; run -all; quit" -l ${EMAN_RUN_DIR}/sim_vsim.log -qwavedb=+signal+memory=4096,4+class+wavefile=${EMAN_RUN_DIR}/waves/gemm_8x8.db && [ -s ${EMAN_RUN_DIR}/sim_vsim.log ] && grep -q "mismatched=0" ${EMAN_RUN_DIR}/sim_vsim.log && grep -q "PASS" ${EMAN_RUN_DIR}/sim_vsim.log)
 
   # E203 CPU 执行 bare-metal C（sw/tests/gemm_8x8.c），经 NICE custom3 驱动
   # NPU/DMA/SRAM；判据是 E203 tb_top 的 TEST_PASS。波形里能看 custom3 指令
@@ -67,8 +68,7 @@ tests:
     # time-0 initial，开 +acc 后顺序会变；在 cwd 放一份 `.verilog` 兜底，
     # readmemh 先跑时也能装进固件。
     run_cmd: >-
-      (cd ${EMAN_RUN_DIR} && cp ${EMAN_COMPILE_DIR}/design.bin design.bin
-      && mkdir -p waves
+      (cd ${EMAN_RUN_DIR} && mkdir -p waves
       && cp ${SOC_ROOT}/sw/gemm_8x8.verilog gemm_8x8_c.verilog
       && sed -i 's/@80000000/@00000000/' gemm_8x8_c.verilog
       && cp gemm_8x8_c.verilog .verilog

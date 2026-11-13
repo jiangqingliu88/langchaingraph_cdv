@@ -1,0 +1,30 @@
+{
+  "task_id": "demo",
+  "parent_task_id": "",
+  "agent_type": "spec_analyst",
+  "objective": "分析 npu_sched 接口",
+  "scope": {
+    "read": [
+      "specs/",
+      "docs/",
+      "data/",
+      "cases/"
+    ],
+    "write": []
+  },
+  "constraints": [
+    "工程只读分析",
+    "交付物只写本子 Agent 工作区",
+    "结论必须给出文件与行号",
+    "不得宣布验证通过"
+  ],
+  "deliverables": [
+    "findings.json"
+  ],
+  "acceptance": [
+    "每个结论可追溯到文件/行号",
+    "未知项显式列出"
+  ],
+  "timeout_s": 600,
+  "status": "PENDING"
+}

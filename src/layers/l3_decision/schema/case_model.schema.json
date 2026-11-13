@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://signoffai.local/schemas/case_model.schema.json",
   "title": "SignOffAI Case Model — case 属性完备性模型",
-  "description": "case 六层属性模型：L1 对象 / L2 子对象 / L3 维度 / L4 字段 / L5 方法 / L6 检查，外加维度交叉矩阵与环境指纹。文档见 src/layers/l3_decision/vplan/runtime/readme.md。schema 只做「语法 + 类型 + 引用形状」的硬校验；「引用是否指向已存在的维度/字段」「层级是否错位」等语义问题由 completeness.py 报告。",
+  "description": "case 六层属性模型：L1 对象 / L2 子对象 / L3 维度 / L4 字段 / L5 方法 / L6 检查，外加维度交叉矩阵与环境指纹。文档见 src/ir/vplan/runtime/readme.md。schema 只做「语法 + 类型 + 引用形状」的硬校验；「引用是否指向已存在的维度/字段」「层级是否错位」等语义问题由 completeness.py 报告。",
   "type": "object",
   "additionalProperties": false,
   "if": {

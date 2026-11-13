@@ -1,0 +1,21 @@
+{
+  "status": "finished_no_proposal",
+  "summary": "发现 1 个未驱动输出",
+  "evidence": {
+    "acceptance": {
+      "met": false,
+      "reasons": [
+        "EDA_MISSING"
+      ]
+    },
+    "eda": {},
+    "changed_files": [
+      {
+        "path": ".signoffai/subagents/demo/workspace/findings.json",
+        "action": "add",
+        "sha256": ""
+      }
+    ]
+  },
+  "at": "2026-11-12T17:02:32.318200+00:00"
+}

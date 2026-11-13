@@ -108,8 +108,8 @@ class _StubRegistry:
 @pytest.fixture
 def generated_yaml(tmp_path, monkeypatch) -> str:
     """真跑一遍生成器，返回 regression.yaml 的正文。"""
-    from src.layers.l4_memory import testcase_registry as registry_mod
-    from src.tools.generation.uvm_tools.tool_find_spec_yaml import main as gen
+    from src.knowledge import testcase_registry as registry_mod
+    from src.generation.uvm_tools.tool_find_spec_yaml import main as gen
 
     monkeypatch.setattr(registry_mod, "TestcaseRegistry", _StubRegistry)
 
@@ -420,7 +420,7 @@ class TestRunRequestNormalisation:
 
 class TestWaveColumn:
     def _status(self, root):
-        from src.app.services.flow.api import run_regression_status
+        from src.interfaces.api.flow.api import run_regression_status
 
         return run_regression_status(str(root))
 
@@ -487,7 +487,7 @@ class TestCoverageColumn:
     """覆盖率列 —— 口径与波形列一致（记录 > 现场，来源标出来）。"""
 
     def _status(self, root):
-        from src.app.services.flow.api import run_regression_status
+        from src.interfaces.api.flow.api import run_regression_status
 
         return run_regression_status(str(root))
 
@@ -521,7 +521,7 @@ class TestArtifactFacts:
     """每行还带**大小与时间** —— "逐条校对"那两页要拿它判断这份产物新不新。"""
 
     def _status(self, root):
-        from src.app.services.flow.api import run_regression_status
+        from src.interfaces.api.flow.api import run_regression_status
 
         return run_regression_status(str(root))
 

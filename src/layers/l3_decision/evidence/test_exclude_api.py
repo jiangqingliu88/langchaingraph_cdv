@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.layers.l4_memory.exclude_registry import ExcludeRegistry
+from src.knowledge.exclude_registry import ExcludeRegistry
 from src.layers.l3_decision.evidence.exclude_api import (approve_exclude, read_excludes,
                                                   reject_exclude)
 

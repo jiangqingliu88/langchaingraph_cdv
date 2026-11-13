@@ -61,7 +61,7 @@ def _ensure(graph: VerificationGraph, node_type: NodeType, name: str,
 def _rtl_version_node(graph: VerificationGraph, output_dir: Path):
     """这一轮 RTL 版本 → 图节点（没有 RTL 就什么都不加）。"""
     try:
-        from src.layers.l4_memory.lineage import ensure_run_rtl_version
+        from src.knowledge.lineage import ensure_run_rtl_version
 
         info = ensure_run_rtl_version(output_dir, run_id=output_dir.name)
     except Exception:                              # noqa: BLE001

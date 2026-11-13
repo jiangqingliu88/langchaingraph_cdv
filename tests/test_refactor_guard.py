@@ -272,7 +272,7 @@ class TestEveryActionNameHasARoute:
         return Action(action_type)
 
     def test_all_actions_route_without_raising(self):
-        from src.agents.supervisor.routing import r_action
+        from src.engine.orchestration.supervisor.routing import r_action
         from src.layers.l3_decision.decision_engine import ALL_ACTIONS
 
         class _State:
@@ -289,7 +289,7 @@ class TestEveryActionNameHasARoute:
 
     def test_legacy_names_still_route(self):
         """RL 策略文件与历史轨迹里存的是老名字 —— 也得能路由。"""
-        from src.agents.supervisor.routing import r_action
+        from src.engine.orchestration.supervisor.routing import r_action
 
         class _State:
             def __init__(self, at):
@@ -312,7 +312,7 @@ class TestDesignFixReportsNoChange:
     """
 
     def test_fingerprint_and_diff_agree_with_the_guard(self, tmp_path):
-        from src.skills.design.main import DesignExecutor
+        from src.generation.design.rtl.main import DesignExecutor
 
         rtl = tmp_path / "rtl"
         rtl.mkdir()
@@ -330,7 +330,7 @@ class TestDesignFixReportsNoChange:
 
     def test_rerun_with_identical_output_counts_as_no_change(self, tmp_path):
         """LLM 原样重写一遍（内容相同）—— 字节一样就不算改动。"""
-        from src.skills.design.main import DesignExecutor
+        from src.generation.design.rtl.main import DesignExecutor
 
         rtl = tmp_path / "rtl"
         rtl.mkdir()

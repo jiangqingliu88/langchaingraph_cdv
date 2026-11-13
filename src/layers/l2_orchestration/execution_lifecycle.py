@@ -15,7 +15,7 @@ import structlog
 from src.layers.l1_infrastructure.output_config import make_output_root
 from src.layers.l2_orchestration.regression_tools import sim_modes as _sim_modes
 
-from src.layers.l2_orchestration.skills.registry import ExecutorRegistry
+from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
 from config.settings import Settings
 
 
@@ -152,7 +152,7 @@ class RunLifecycleSteps:
         返回本次提议数量。
         """
         try:
-            from src.layers.l4_memory.exclude_registry import TYPE_UNREACHABLE
+            from src.knowledge.exclude_registry import TYPE_UNREACHABLE
             blacklisted = (calibration or {}).get("blacklisted_gaps", []) or []
             if not blacklisted:
                 return 0

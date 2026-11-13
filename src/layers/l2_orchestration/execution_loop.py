@@ -4,37 +4,40 @@ Pipeline 执行服务 —— CLI 和 Web API 共享的验证流水线引擎
 单例模式，管理 Agent 生命周期 + 流水线执行 + 运行状态追踪。
 """
 from __future__ import annotations
-import time, json, uuid, asyncio
+
+import asyncio
+import json
+import time
+import uuid
 from contextlib import asynccontextmanager
 from copy import deepcopy
-from pathlib import Path
-from typing import Dict, List, Any, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import structlog
 
+from config.settings import Settings
 from src.layers.l1_infrastructure.output_config import make_output_root
 from src.layers.l2_orchestration.regression_tools import sim_modes as _sim_modes
-
-from src.layers.l2_orchestration.skills.registry import ExecutorRegistry
-from config.settings import Settings
-
+from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
 
 from .execution_helpers import (
-    _new_executor,
+    _EXECUTOR_PATHS,
     _collect_llm_audit,
-    _field,
-    _round_of,
     _coverage_of,
-    _result_of,
+    _field,
+    _interrupt_payload,
     _mirror_event,
-    _translate_debug,
-    _wire_approval_events,
-    _translate_custom,
+    _new_executor,
     _resolve_run_dir,
+    _result_of,
+    _round_of,
     _safe_checkpointer,
     _state_of,
-    _interrupt_payload,
-    _EXECUTOR_PATHS,
+    _translate_custom,
+    _translate_debug,
+    _wire_approval_events,
     logger,
 )
 
@@ -71,9 +74,8 @@ class ClosedLoopSteps:
         if not self._initialized:
             await self.initialize_agents()
 
-        from src.agents.supervisor.graph import build_closed_loop_graph
-        from src.layers.l2_orchestration.runtime import (
-            Runtime, recursion_limit)
+        from src.engine.orchestration.supervisor.graph import build_closed_loop_graph
+        from src.layers.l2_orchestration.runtime import Runtime, recursion_limit
         from src.layers.l2_orchestration.state import PipelineState
 
         rt = Runtime(self, spec_text, approval_gate=approval_gate)
@@ -221,10 +223,9 @@ class ClosedLoopSteps:
 
         from langgraph.types import Command
 
-        from src.agents.supervisor.graph import build_closed_loop_graph
-        from src.layers.l2_orchestration.runtime import (
-            Runtime, hydrate_runtime, recursion_limit)
+        from src.engine.orchestration.supervisor.graph import build_closed_loop_graph
         from src.layers.l2_orchestration.run_journal import RunJournal
+        from src.layers.l2_orchestration.runtime import Runtime, hydrate_runtime, recursion_limit
         from src.layers.l2_orchestration.state import PipelineState
 
         resumed = resume is not None
@@ -401,8 +402,8 @@ class ClosedLoopSteps:
 
         返回与输入同序的结果列表（单个模块异常以 Exception 形式留在结果里）。
         """
-        from src.layers.l2_orchestration.pipeline_scheduler import PipelineScheduler
         from src.layers.l1_infrastructure.output_config import make_output_root
+        from src.layers.l2_orchestration.pipeline_scheduler import PipelineScheduler
 
         # 先确保 agent 初始化（避免多任务并发时重复初始化竞态）
         if not self._initialized:
@@ -437,9 +438,16 @@ class ClosedLoopSteps:
         return await sched.waterfall(tasks)
 
     async def run_single_agent(
-        self, role: str, input_text: str
+        self, role: str, input_text: str, *,
+        output_dir: str | None = None,
+        ctx: dict | None = None,
+        params: dict | None = None,
     ) -> dict:
-        """执行单个 Agent，返回 {success, output, error}"""
+        """执行单个 Agent，返回 {success, output, error}。
+
+        `output_dir/ctx/params` 供长循环 agent 的 `run_stage` 工具复用：
+        skill 的产物直接落到 agent 指定的 run 目录，而不是另起时间戳目录。
+        """
         if not self._initialized:
             await self.initialize_agents()
 
@@ -447,12 +455,19 @@ class ClosedLoopSteps:
         if not agent:
             return {"success": False, "error": f"Agent not found: {role}"}
 
-        task = {"ctx": {}, "input": input_text}
+        task = {"ctx": dict(ctx or {}), "input": input_text}
+        if output_dir:
+            task["output_dir"] = str(output_dir)
+            task["run_id"] = Path(output_dir).name
+        if params:
+            task["params"] = dict(params)
         r = await agent.execute_task(task)
         return {
             "success": r.success,
             "output": r.data.get("output", "") if r.data else "",
+            "data": r.data or {},
             "error": r.error,
+            "output_dir": str(output_dir or ""),
         }
 
     async def generate_testcases(

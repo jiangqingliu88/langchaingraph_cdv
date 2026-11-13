@@ -83,7 +83,7 @@ class ExperienceProvider(Protocol):
         （原来是靠函数体内延迟 import 遮着的）。反了的话，决策引擎就没法脱离
         进化层单独跑 —— 而它全是确定性规则，是最该能单独测的那一块。
 
-    实现方：`src/layers/l5_evolution/growth.py` 的 `experience_provider`。
+    实现方：`src/experience/growth.py` 的 `experience_provider`。
     """
 
     def note(self, action_type: str) -> str:

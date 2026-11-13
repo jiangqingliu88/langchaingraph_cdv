@@ -14,7 +14,7 @@
 与另外两张表的关系（不要在这里重复定义）
     · `state.py:PHASE_OWNERS`  —— 状态字段 → 写的节点。**它是权威**，
       本模块的 `outputs` 字段在 import 时由它推导，不另写一份。
-    · `src/agents/supervisor/graph.py:NODE_NAMES` —— 主图节点名清单。**它是权威**，
+    · `src/engine/orchestration/supervisor/graph.py:NODE_NAMES` —— 主图节点名清单。**它是权威**，
       `tests/test_stages.py` 断言两张表一一对应（本模块刻意不 import graph，
       否则为了一个元数据表要把 langgraph / 决策引擎全拖进来）。
 
@@ -54,7 +54,7 @@ class StageSpec:
     """一个图节点的显示元数据。
 
     字段刻意只有"给人看的"和"给界面用的"，不含控制流信息 —— 前驱后继属于
-    `src/agents/supervisor/graph.py` 的边，不在这里。把拓扑写进来就是第二份真相。
+    `src/engine/orchestration/supervisor/graph.py` 的边，不在这里。把拓扑写进来就是第二份真相。
     """
 
     id: str                      # 与 supervisor graph 的节点名一一对应

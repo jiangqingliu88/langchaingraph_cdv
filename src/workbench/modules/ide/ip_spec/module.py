@@ -11,7 +11,7 @@
 
 **它不是什么**：这份规格是**设计时**的声明，目前不被闭环消费（与
 `manual_nodes.yaml` 同一性质）。字段刻意对齐既有的 IP 库
-（`src/layers/l4_memory/ip_registry.py` 的 `ip_name` / `category` /
+（`src/knowledge/ip_registry.py` 的 `ip_name` / `category` /
 `function_desc` / `version`），免得同一个概念在仓库里长出两套字段名。
 
 界面本体是 `modules/ide/decl_editor.py` 的共享件 —— 本文件只有下面几个类属性

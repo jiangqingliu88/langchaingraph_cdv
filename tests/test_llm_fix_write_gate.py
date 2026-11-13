@@ -204,7 +204,7 @@ class TestTheBannerMarkerStaysInStepWithGenUvm:
     def test_the_custom_marker_matches_gen_uvm(self):
         """`_CUSTOM_MARKER` 与 `gen_uvm.REGION_MARKER` 对同一批样例判定一致。"""
         from src.tools.common.lib.llm_refine import _CUSTOM_MARKER
-        from src.tools.generation.uvm_tools.tool_uvm.render.region_injector import REGION_MARKER
+        from src.generation.uvm_tools.tool_uvm.render.region_injector import REGION_MARKER
 
         for line in ("  // pragma custom body begin",
                      "// pragma custom template end",

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents.supervisor import graph as graph_mod
+from src.engine.orchestration.supervisor import graph as graph_mod
 from src.layers.l2_orchestration.execution import PipelineExecutionService
 from src.layers.l2_orchestration.execution_helpers import CHECKPOINT_FILE, _state_of
 from src.layers.l2_orchestration.run_service import RunRequest, RunService
@@ -304,7 +304,7 @@ class TestCliApprovalDrivesTheGraph:
 
         from click.testing import CliRunner
 
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
 
         rid, run_dir = self._interrupted(svc, tmp_path, monkeypatch)
         res = CliRunner().invoke(cli, ["approve", "--run", rid, "--reason", "看过波形了"])
@@ -322,7 +322,7 @@ class TestCliApprovalDrivesTheGraph:
         """`resume --decision skip` 这条路 —— `approve`/`reject` 不覆盖的答案。"""
         from click.testing import CliRunner
 
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
 
         rid, run_dir = self._interrupted(svc, tmp_path, monkeypatch)
         res = CliRunner().invoke(cli, ["resume", "--run", rid, "--decision", "skip"])
@@ -338,7 +338,7 @@ class TestCliApprovalDrivesTheGraph:
         """
         from click.testing import CliRunner
 
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
 
         monkeypatch.chdir(tmp_path)
         rid = svc.start(_req(tmp_path, output_root=str(tmp_path / "elsewhere")))
@@ -359,7 +359,7 @@ class TestCliApprovalDrivesTheGraph:
         """没有检查点 = 没有挂起的审批：**说清楚**，不是堆一个 traceback。"""
         from click.testing import CliRunner
 
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
 
         monkeypatch.chdir(tmp_path)
         run_dir = tmp_path / "output" / "fake_run_1"
@@ -378,7 +378,7 @@ class TestCliApprovalDrivesTheGraph:
 
         from click.testing import CliRunner
 
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
 
         monkeypatch.chdir(tmp_path)
         run_dir = tmp_path / "output" / "fake_run_2"

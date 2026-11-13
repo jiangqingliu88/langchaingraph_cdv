@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import json
 
-from src.skills.debug.tools.main import auto_fix, collect_sim_log
-from src.agents.runtime.tool_loop import run_tool_loop
+from src.engine.diagnostics.main import auto_fix, collect_sim_log
+from src.agent.runtime.tool_loop import run_tool_loop
 
 
 class _FakeRerun:

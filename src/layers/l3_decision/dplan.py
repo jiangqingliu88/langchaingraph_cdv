@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Iterable, List, Set
 
-from .vplan.source import VPlanProject
+from src.ir.vplan.source import VPlanProject
 
 SCHEMA = "dplan_map_v1"
 _THRESHOLD = 0.35

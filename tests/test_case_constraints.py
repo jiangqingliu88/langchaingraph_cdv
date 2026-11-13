@@ -74,7 +74,7 @@ def test_without_plan_nothing_is_invented():
 
 
 def test_contract_carries_constraints_into_the_hash():
-    from src.layers.l3_decision.contract.contract_model import contract_from_case_ir
+    from src.ir.contract.contract_model import contract_from_case_ir
 
     plain = {"module": "demo", "cases": [dict(CASE_IR["cases"][0])]}
     enriched = {"module": "demo", "cases": [dict(CASE_IR["cases"][0])]}
@@ -88,7 +88,7 @@ def test_contract_carries_constraints_into_the_hash():
 def test_enrich_reads_the_coverage_plan(tmp_path):
     import yaml
 
-    from src.skills.verify.ir_artifacts import enrich_case_ir
+    from src.engine.verify.ir_artifacts import enrich_case_ir
 
     (tmp_path / "coverage").mkdir(parents=True)
     (tmp_path / "coverage" / "coverage_plan.yaml").write_text(

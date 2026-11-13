@@ -10,7 +10,7 @@
 """
 from __future__ import annotations
 
-from src.layers.l4_memory.rule_draft import (STAGE_TITLES, collect_drafts,
+from src.knowledge.rule_draft import (STAGE_TITLES, collect_drafts,
                                             draft_from_failure, drafts_from_triage,
                                             rule_skeleton, write_drafts)
 

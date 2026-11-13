@@ -11,20 +11,20 @@ import structlog
 from src.layers.l1_infrastructure.output_config import make_output_root
 from src.layers.l2_orchestration.regression_tools import sim_modes as _sim_modes
 
-from src.layers.l2_orchestration.skills.registry import ExecutorRegistry
+from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
 from config.settings import Settings
 
 #: 执行者注册面 —— **L2 不静态 import executors**（组合根在下层/接口层）。
 #: 这里用字符串路径按需加载；Phase 4 可换成外部注入的 registry。
 _EXECUTOR_PATHS = {
-    "front": "src.skills.front:FrontExecutor",
-    "design": "src.skills.design:DesignExecutor",
-    "model": "src.skills.model:ModelExecutor",
-    "verify": "src.skills.verify:VerifyExecutor",
-    "ops": "src.skills.ops:OpsExecutor",
-    "coverage": "src.skills.coverage:CoverageExecutor",
-    "debug": "src.skills.debug:DebugExecutor",
-    "audit": "src.skills.audit:AuditExecutor",
+    "front": "src.engine.front:FrontExecutor",
+    "design": "src.generation.design.rtl:DesignExecutor",
+    "model": "src.generation.design.cmodel:ModelExecutor",
+    "verify": "src.generation.verification:VerifyExecutor",
+    "ops": "src.engine.ops:OpsExecutor",
+    "coverage": "src.engine.coverage:CoverageExecutor",
+    "debug": "src.agent.specialists.debug:DebugExecutor",
+    "audit": "src.engine.audit:AuditExecutor",
 }
 
 

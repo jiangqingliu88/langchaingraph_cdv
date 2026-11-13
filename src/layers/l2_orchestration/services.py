@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from src.layers.l4_memory.persistence import repository
+from src.knowledge.persistence import repository
 from src.layers.l2_orchestration.domain_registry import require_valid_transition, is_terminal_state
 
 
@@ -184,8 +184,8 @@ class DocService:
         require_valid_transition("doc", doc.get("status", "draft"), "review")
 
         # 更新数据库中的状态
-        from src.layers.l4_memory.persistence.connection import get_session
-        from src.layers.l4_memory.persistence.models import DocDocument
+        from src.knowledge.persistence.connection import get_session
+        from src.knowledge.persistence.models import DocDocument
         from sqlalchemy import select
         s = await get_session()
         d = (await s.execute(select(DocDocument).where(DocDocument.id == doc_id))).scalar_one_or_none()
@@ -208,8 +208,8 @@ class DocService:
             raise ValueError("文档不存在")
         require_valid_transition("doc", doc.get("status", "review"), "approved")
 
-        from src.layers.l4_memory.persistence.connection import get_session
-        from src.layers.l4_memory.persistence.models import DocDocument
+        from src.knowledge.persistence.connection import get_session
+        from src.knowledge.persistence.models import DocDocument
         from sqlalchemy import select
         s = await get_session()
         d = (await s.execute(select(DocDocument).where(DocDocument.id == doc_id))).scalar_one_or_none()
@@ -232,8 +232,8 @@ class DocService:
             raise ValueError("文档不存在")
         require_valid_transition("doc", doc.get("status", "approved"), "deprecated")
 
-        from src.layers.l4_memory.persistence.connection import get_session
-        from src.layers.l4_memory.persistence.models import DocDocument
+        from src.knowledge.persistence.connection import get_session
+        from src.knowledge.persistence.models import DocDocument
         from sqlalchemy import select
         s = await get_session()
         d = (await s.execute(select(DocDocument).where(DocDocument.id == doc_id))).scalar_one_or_none()
@@ -255,7 +255,7 @@ class PipelineService:
 
     async def cancel(self, run_id: str, actor_id: int, actor_name: str) -> dict:
         """取消流水线 running → cancelled"""
-        from src.layers.l4_memory.persistence.repository import get_pipeline_run_by_run_id, add_audit_log
+        from src.knowledge.persistence.repository import get_pipeline_run_by_run_id, add_audit_log
         run = await get_pipeline_run_by_run_id(run_id)
         if not run:
             raise ValueError("流水线不存在")
@@ -264,8 +264,8 @@ class PipelineService:
                                  run.get("state", "running"),
                                  "cancelled")
 
-        from src.layers.l4_memory.persistence.connection import get_session
-        from src.layers.l4_memory.persistence.models import PipelineRun
+        from src.knowledge.persistence.connection import get_session
+        from src.knowledge.persistence.models import PipelineRun
         from sqlalchemy import select
         s = await get_session()
         r = (await s.execute(select(PipelineRun).where(PipelineRun.run_id == run_id))).scalar_one_or_none()

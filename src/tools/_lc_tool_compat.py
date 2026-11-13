@@ -7,8 +7,8 @@ langchain-core 1.x 兼容垫片 —— 让 `@tool` 装饰后的对象重新可�
         TypeError: 'StructuredTool' object is not callable
 
     本仓库有 49 处 `@tool("name")`，且大量调用点把工具对象当普通函数用
-    （如 src/skills/design/main.py:53、src/layers/l2_orchestration/execution.py:366、
-    src/skills/verify/main.py:143、src/skills/debug/main.py:119），
+    （如 src/generation/design/rtl/main.py:53、src/layers/l2_orchestration/execution.py:366、
+    src/generation/verification/main.py:143、src/agent/specialists/debug/main.py:119），
     升级到 langchain-core 1.x 后会全部失败。
 
 做法

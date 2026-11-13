@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from src.workspace import WorkspaceZones
-from src.workspace.harness import Harness, HarnessConfig
-from src.workspace.resources import ProjectResources
+from src.runtime.workspace_manager import WorkspaceZones
+from src.agent.runtime import Harness, HarnessConfig
+from src.runtime.resources import ProjectResources
 
 
 def _project(tmp_path: Path) -> Path:

@@ -1,0 +1,122 @@
+[
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 5,
+    "logical_action_index": 0,
+    "output_line": 5,
+    "op": "group_mask_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 15,
+    "logical_action_index": 1,
+    "output_line": 11,
+    "op": "mem_init",
+    "operand_source": "passthrough"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 17,
+    "logical_action_index": 2,
+    "output_line": 13,
+    "op": "mem_scrub",
+    "operand_source": "passthrough"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 20,
+    "logical_action_index": 3,
+    "output_line": 15,
+    "op": "npu_cfg_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 22,
+    "logical_action_index": 4,
+    "output_line": 17,
+    "op": "npu_cfg_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 24,
+    "logical_action_index": 5,
+    "output_line": 19,
+    "op": "npu_cfg_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 26,
+    "logical_action_index": 6,
+    "output_line": 21,
+    "op": "tld_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 28,
+    "logical_action_index": 7,
+    "output_line": 23,
+    "op": "sync_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 30,
+    "logical_action_index": 8,
+    "output_line": 25,
+    "op": "wait_done",
+    "operand_source": "passthrough"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 33,
+    "logical_action_index": 9,
+    "output_line": 27,
+    "op": "npu_cfg_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 35,
+    "logical_action_index": 10,
+    "output_line": 29,
+    "op": "npu_cfg_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 37,
+    "logical_action_index": 11,
+    "output_line": 31,
+    "op": "npu_cfg_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 39,
+    "logical_action_index": 12,
+    "output_line": 33,
+    "op": "tst_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 41,
+    "logical_action_index": 13,
+    "output_line": 35,
+    "op": "sync_drv_xn",
+    "operand_source": "explicit"
+  },
+  {
+    "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+    "line": 43,
+    "logical_action_index": 14,
+    "output_line": 37,
+    "op": "wait_done",
+    "operand_source": "passthrough"
+  }
+]

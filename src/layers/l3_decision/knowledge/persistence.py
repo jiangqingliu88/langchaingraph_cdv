@@ -34,8 +34,8 @@ async def save_graph_to_db(graph: VerificationGraph, project_id: Optional[int] =
     返回 {"modules": n, "features": n}。
     """
     from sqlalchemy import select
-    from src.layers.l4_memory.persistence.connection import get_session
-    from src.layers.l4_memory.persistence.models import (
+    from src.knowledge.persistence.connection import get_session
+    from src.knowledge.persistence.models import (
         DesignModule, DesignFeature, ReqFeatureMap, FeatureTestpointMap,
     )
 
@@ -95,7 +95,7 @@ async def save_graph_to_db(graph: VerificationGraph, project_id: Optional[int] =
                 s.add(FeatureTestpointMap(feature_id=fid, testpoint_id=t.name))
 
         # 5. coverage_bin（设计时寄存器 bin：带 module/signal 链接；运行时 bin 由 record_coverage_bins 写）
-        from src.layers.l4_memory.persistence.models import CoverageBinRecord
+        from src.knowledge.persistence.models import CoverageBinRecord
         for bin_node in graph.nodes(NodeType.COVERAGE_BIN):
             mod_name, sig_name = "", ""
             for up in graph.neighbors(bin_node.id, direction="in"):
@@ -117,8 +117,8 @@ async def save_graph_to_db(graph: VerificationGraph, project_id: Optional[int] =
 async def load_graph_from_db(project_id: Optional[int] = None) -> VerificationGraph:
     """从持久化表载回图的设计时子图。"""
     from sqlalchemy import select
-    from src.layers.l4_memory.persistence.connection import get_session
-    from src.layers.l4_memory.persistence.models import (
+    from src.knowledge.persistence.connection import get_session
+    from src.knowledge.persistence.models import (
         DesignModule, DesignFeature, ReqFeatureMap, FeatureTestpointMap,
     )
 
@@ -159,7 +159,7 @@ async def load_graph_from_db(project_id: Optional[int] = None) -> VerificationGr
                 g.link(g.get_node(feature_id_map[tp.feature_id]), tn, EdgeType.TEST)
 
         # coverage bin（运行时语义，跨 run 沉淀）
-        from src.layers.l4_memory.persistence.models import CoverageBinRecord
+        from src.knowledge.persistence.models import CoverageBinRecord
         for c in (await s.execute(select(CoverageBinRecord))).scalars().all():
             bn = g.add_node(NodeType.COVERAGE_BIN, c.name, metric=c.metric or "",
                             signal=c.signal or "", module=c.module or "", hit=bool(c.hit))
@@ -173,7 +173,7 @@ async def load_graph_from_db(project_id: Optional[int] = None) -> VerificationGr
                     g.link(mod, bn, EdgeType.COVERAGE)
 
         # bug / fix（运行时语义）
-        from src.layers.l4_memory.persistence.models import VerificationBug, VerificationFix
+        from src.knowledge.persistence.models import VerificationBug, VerificationFix
         for b in (await s.execute(select(VerificationBug))).scalars().all():
             bn = g.add_node(NodeType.BUG, b.bug_id, description=b.description or "",
                             affected_signal=b.affected_signal or "",
@@ -206,8 +206,8 @@ async def record_coverage_bins(bins, run_id: str = "", project_id: Optional[int]
     返回写入的 bin 数。
     """
     from sqlalchemy import select
-    from src.layers.l4_memory.persistence.connection import get_session
-    from src.layers.l4_memory.persistence.models import CoverageBinRecord
+    from src.knowledge.persistence.connection import get_session
+    from src.knowledge.persistence.models import CoverageBinRecord
 
     s = await get_session()
     try:
@@ -266,8 +266,8 @@ async def record_bugs_and_fixes(bugs, fixes, run_id: str = "",
     `module`/`rtl_version_no` 缺省就**不写链接**（不是写个 0）——
     "不知道在哪个版本"与"版本 0"是两回事。
     """
-    from src.layers.l4_memory.persistence.connection import get_session
-    from src.layers.l4_memory.persistence.models import VerificationBug, VerificationFix
+    from src.knowledge.persistence.connection import get_session
+    from src.knowledge.persistence.models import VerificationBug, VerificationFix
 
     s = await get_session()
     try:
@@ -299,7 +299,7 @@ async def record_bugs_and_fixes(bugs, fixes, run_id: str = "",
     # 血缘链接（另一个库，同步 sqlite）—— 失败只记日志：它不该拖垮 bug 落库
     if module and rtl_version_no is not None:
         try:
-            from src.layers.l4_memory.lineage import LineageStore
+            from src.knowledge.lineage import LineageStore
 
             store = LineageStore()
             try:

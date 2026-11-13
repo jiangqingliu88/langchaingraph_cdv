@@ -22,8 +22,8 @@ async def lookup_cross_project_bugs(category: str, limit: int = 5,
                                     exclude_project_id: Optional[int] = None) -> List[Dict[str, Any]]:
     """跨项目查同类 bug（按 affected_feature/category）。"""
     from sqlalchemy import select, or_
-    from src.layers.l4_memory.persistence.connection import get_session
-    from src.layers.l4_memory.persistence.models import VerificationBug
+    from src.knowledge.persistence.connection import get_session
+    from src.knowledge.persistence.models import VerificationBug
 
     s = await get_session()
     try:
@@ -43,8 +43,8 @@ async def lookup_cross_project_bugs(category: str, limit: int = 5,
 async def lookup_cross_project_fixes(category: str, limit: int = 5) -> List[Dict[str, Any]]:
     """跨项目查同类 bug 的修复（bug 的 category 匹配 → 关联的 fix）。"""
     from sqlalchemy import select
-    from src.layers.l4_memory.persistence.connection import get_session
-    from src.layers.l4_memory.persistence.models import VerificationBug, VerificationFix
+    from src.knowledge.persistence.connection import get_session
+    from src.knowledge.persistence.models import VerificationBug, VerificationFix
 
     s = await get_session()
     try:

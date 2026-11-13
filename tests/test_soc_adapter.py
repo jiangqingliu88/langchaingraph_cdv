@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.cli.soc_adapter import find_wave, load_project, load_run_manifest
+from src.interfaces.cli.soc_adapter import find_wave, load_project, load_run_manifest
 
 
 ROOT = Path(__file__).resolve().parents[1] / "examples" / "open_npu_soc"
@@ -39,7 +39,7 @@ def test_find_wave_falls_back_to_glob(tmp_path: Path):
 
 
 def test_soc_run_records_context_artifacts_events_and_evidence(tmp_path: Path):
-    from src.cli.soc_adapter import SoCRun, verify_soc_evidence
+    from src.interfaces.cli.soc_adapter import SoCRun, verify_soc_evidence
 
     project = load_project(ROOT)
     run = SoCRun(project, tmp_path / "run")
@@ -65,7 +65,7 @@ def test_soc_run_records_context_artifacts_events_and_evidence(tmp_path: Path):
 
 
 def test_ip_manifest_lists_teams_and_rtl_presence():
-    from src.cli.soc_adapter import list_ips
+    from src.interfaces.cli.soc_adapter import list_ips
 
     ips = list_ips(ROOT)
     assert len(ips) >= 4
@@ -77,7 +77,7 @@ def test_ip_manifest_lists_teams_and_rtl_presence():
 
 
 def test_ip_info_returns_one_ip():
-    from src.cli.soc_adapter import ip_info
+    from src.interfaces.cli.soc_adapter import ip_info
 
     ip = ip_info(ROOT, "IP-DMA")
     assert ip["name"].startswith("Simple DMA")
@@ -108,7 +108,7 @@ def _fake_run(base: Path, name: str, *, ip_id: str = "",
 
 
 def test_ip_run_is_labelled_as_ip_not_soc(tmp_path: Path):
-    from src.cli.soc_adapter import list_soc_runs
+    from src.interfaces.cli.soc_adapter import list_soc_runs
 
     _fake_run(tmp_path, "output_soc_a", mtime=1_000)
     _fake_run(tmp_path, "output_ip_x", ip_id="IP-X", mtime=2_000)
@@ -119,7 +119,7 @@ def test_ip_run_is_labelled_as_ip_not_soc(tmp_path: Path):
 
 
 def test_latest_soc_run_ignores_ip_runs(tmp_path: Path):
-    from src.cli.soc_adapter import latest_soc_run
+    from src.interfaces.cli.soc_adapter import latest_soc_run
 
     _fake_run(tmp_path, "output_soc_a", mtime=1_000)
     _fake_run(tmp_path, "output_ip_x", ip_id="IP-X", mtime=2_000)   # 更新
@@ -127,7 +127,7 @@ def test_latest_soc_run_ignores_ip_runs(tmp_path: Path):
 
 
 def test_ip_status_prefers_the_ips_own_run(tmp_path: Path):
-    from src.cli.soc_adapter import ip_status
+    from src.interfaces.cli.soc_adapter import ip_status
 
     (tmp_path / "spec").mkdir()
     (tmp_path / "spec" / "ip_manifest.yaml").write_text(
@@ -196,7 +196,7 @@ def _stage_ip_run(root: Path, ip_id: str, *, test: str = "t1",
 
 
 def test_build_and_verify_ip_release(tmp_path: Path):
-    from src.cli.soc_adapter import (
+    from src.interfaces.cli.soc_adapter import (
         build_ip_release, ip_release_package, verify_ip_release,
     )
 
@@ -217,7 +217,7 @@ def test_build_and_verify_ip_release(tmp_path: Path):
 
 
 def test_release_marks_blocking_criteria_instead_of_passing(tmp_path: Path):
-    from src.cli.soc_adapter import build_ip_release, verify_ip_release
+    from src.interfaces.cli.soc_adapter import build_ip_release, verify_ip_release
 
     _ip_project(tmp_path)
     _stage_ip_run(tmp_path, "IP-X", evidence=False)   # 缺证据包
@@ -231,7 +231,7 @@ def test_release_marks_blocking_criteria_instead_of_passing(tmp_path: Path):
 
 
 def test_release_goes_stale_when_rtl_changes(tmp_path: Path):
-    from src.cli.soc_adapter import (
+    from src.interfaces.cli.soc_adapter import (
         build_ip_release, soc_ip_binding, verify_ip_release,
     )
 
@@ -248,7 +248,7 @@ def test_release_goes_stale_when_rtl_changes(tmp_path: Path):
 
 
 def test_soc_run_records_consumed_ip_binding(tmp_path: Path):
-    from src.cli.soc_adapter import SoCRun, load_project
+    from src.interfaces.cli.soc_adapter import SoCRun, load_project
 
     run = SoCRun(load_project(ROOT), tmp_path / "run")
     run.finish({"status": "PASS", "passed": 1, "failed": 0,

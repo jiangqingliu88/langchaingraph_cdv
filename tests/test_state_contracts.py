@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import asyncio
 
-from src.agents.runtime import guards
-from src.agents.supervisor import graph as graph_mod
-from src.agents.runtime.guards import _guarded_node
+from src.engine.orchestration import guards
+from src.engine.orchestration.supervisor import graph as graph_mod
+from src.engine.orchestration.guards import _guarded_node
 from src.layers.l2_orchestration.state import (
     STATE_CONTRACTS,
     PipelineState,

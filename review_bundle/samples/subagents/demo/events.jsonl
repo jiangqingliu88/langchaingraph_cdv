@@ -1,0 +1,2 @@
+{"ts": "2026-11-12T17:02:32.318200+00:00", "kind": "subagent.start", "agent_type": "spec_analyst", "objective": "分析 npu_sched 接口"}
+{"ts": "2026-11-12T17:02:32.466272+00:00", "kind": "subagent.finish", "status": "blocked", "summary": "LLM_UNAVAILABLE"}

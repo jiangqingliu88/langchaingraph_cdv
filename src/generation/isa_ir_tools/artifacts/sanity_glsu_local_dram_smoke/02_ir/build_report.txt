@@ -1,0 +1,11 @@
+status: semantic ir generated
+tensors: 1
+actions: 15
+expanded actions: 15
+isa revision: ISA_VERSION_V1.4
+address schema: GLOBAL48_V1.4
+references: checked
+operand projection: local glsu xn and cfg
+cfg register projection: pdf v02 complete rows glsu tst tmu mpu vpu noc
+encoding: not run
+Address placement is retained; full memmap legality is not checked.

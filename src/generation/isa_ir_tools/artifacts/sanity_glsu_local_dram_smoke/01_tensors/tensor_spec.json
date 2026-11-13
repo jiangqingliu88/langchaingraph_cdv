@@ -1,0 +1,29 @@
+{
+  "schema_version": "tensor_spec_v1",
+  "case_seed": 20261104,
+  "tensors": [
+    {
+      "shape": [
+        1,
+        2,
+        64
+      ],
+      "dtype": "int8",
+      "generation": {
+        "mode": "numeric",
+        "pattern": {
+          "kind": "ones"
+        },
+        "seed": 20261104,
+        "quantize_rm": "RNE",
+        "overflow_policy": "error",
+        "denormal_policy": "exclude",
+        "special_values": []
+      },
+      "layout": {
+        "profile": "linear_atom32"
+      },
+      "name": "Source"
+    }
+  ]
+}

@@ -1,10 +1,10 @@
 """闭环流水线的**运行期设施** —— Runtime / 状态重建 / executor 调用包装。
 
 运行时设施与 agent 图的边界
-    Agent 拓扑已迁到 `src/agents/`（supervisor + 四个专家子图）；
+    Agent 拓扑已迁到 `src/agent/specialists/`（supervisor + 四个专家子图）；
     本模块只保留 Runtime / `_run_agent` / context 重建等平台设施。
-    executor 节点包装在 `src/agents/runtime/nodes/`，路由在
-    `src/agents/supervisor/routing.py`。
+    executor 节点包装在 `src/agent/runtime/pipeline_nodes/`，路由在
+    `src/engine/orchestration/supervisor/routing.py`。
 
 Runtime 为什么不进状态（这是这个模块存在的根本原因）
     状态进检查点、要能字节复现；而活连接 / agent 实例 / LLM 客户端不能序列化。
@@ -468,7 +468,7 @@ def hydrate_runtime(rt: "Runtime", state: PipelineState) -> None:
     # 装配是 L2 的事。拿不到就传 None：引擎会跳过"经验增强"，规则照常跑
     # （决策本来就是规则先行，经验只做增强）。
     try:
-        from src.layers.l5_evolution.growth import experience_provider
+        from src.experience.growth import experience_provider
         _experience = experience_provider
     except Exception as e:
         logger.warning(f"经验查询不可用，决策将不带历史增强: {e}")
@@ -480,7 +480,7 @@ def hydrate_runtime(rt: "Runtime", state: PipelineState) -> None:
     # 此前 DistillationOrchestrator.get_live_weights() 只有 CLI 展示会调用，
     # 主循环从不读取——蒸馏结果等于白学。
     try:
-        from src.layers.l5_evolution.distillation import DistillationOrchestrator
+        from src.experience.distillation import DistillationOrchestrator
         rt.distilled_weights = DistillationOrchestrator(state.output_root)\
             .get_live_weights() or {}
         if rt.distilled_weights:
@@ -510,7 +510,7 @@ def hydrate_runtime(rt: "Runtime", state: PipelineState) -> None:
     # —— L1 不能反向 import 它（见 `InfrastructureManager.__init__` 的 docstring）。
     # 构造点在这里，所以由这里提供。拿不到就传 None，L1 会出一条 warning（不静默）。
     try:
-        from src.layers.l4_memory.testcase_registry import TestcaseRegistry
+        from src.knowledge.testcase_registry import TestcaseRegistry
         _case_lib = TestcaseRegistry()
     except Exception as e:
         logger.warning(f"case 库不可用，回归结果不会回写用例状态: {e}")
@@ -522,9 +522,9 @@ def hydrate_runtime(rt: "Runtime", state: PipelineState) -> None:
     rt.governor = Governor(state.output_root)
 
     # 跨 run 共享的状态库（项目根 .signoffai/）
-    from src.layers.l4_memory.testcase_registry import TestcaseRegistry
+    from src.knowledge.testcase_registry import TestcaseRegistry
     rt.testcase_reg = TestcaseRegistry()
-    from src.layers.l4_memory.exclude_registry import ExcludeRegistry
+    from src.knowledge.exclude_registry import ExcludeRegistry
     rt.exclude_reg = ExcludeRegistry()
 
     # 工具回执落盘（ADR-3）：每条工具调用同时写 <output>/docs/tool_receipts.jsonl

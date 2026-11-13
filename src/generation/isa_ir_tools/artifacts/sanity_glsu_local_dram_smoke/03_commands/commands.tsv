@@ -1,0 +1,15 @@
+dispatch_mask	{"mask":1}	5	group_mask_drv_xn mask=1, rs1val=0x00000001
+1	11	mem_init {"schema":"mem_init_v1","ref":"Source_d","source_tensor":"Source","isa_revision":"xlsx_v0.3_reviewed","address_schema":"global48_xlsx_v0.3_reviewed","path":"backdoor","file":"data/Source.hex","format":"hex","region":"dram_common","address_kind":"global48","base":1073872896,"shape":[1,2,64],"dtype":"int8","element_bits":8,"byte_order":"little","file_offset_bytes":0,"file_row_stride_bytes":32,"file_plane_stride_bytes":64,"dst_row_stride_bytes":64,"dst_plane_stride_bytes":128,"copy_row_bytes":32,"copy_bytes":64,"span_bytes":128,"payload_bytes":64,"file_size_bytes":128,"file_sha256":"dc87ab4e1b09d5e3f6a620b7e9d2054d2c6e1f9d3d0a7f3d7c4b8f0f7d1c3b6a","content_sha256":"c8d5b6f5c14d2a3b1c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c","tail_policy":"zero","gap_policy":"untouched"}
+2	13	mem_scrub region=dram_common, address_kind=global48, base=0x0040020000, size_bytes=128, pattern=0xa5, path=backdoor
+3	15	npu_cfg_drv_xn module="glsu", cfg_reg_addr=0x00000000, rs1val=0x00000000, rs2val=0x00000040
+4	17	npu_cfg_drv_xn module="glsu", cfg_reg_addr=0x00000001, rs1val=0x00000002, rs2val=0x00000004
+5	19	npu_cfg_drv_xn module="glsu", cfg_reg_addr=0x00000002, rs1val=0x00000002, rs2val=0x00000004
+6	21	tld_drv_xn src="Source_d", dst="Tile_l", rs1val=0x00001000, rs2val=0x00010000
+7	23	sync_drv_xn tag="load_complete"
+8	25	wait_done tag=load_complete, phase=rsp_accept, timeout_cycles=100000
+9	27	npu_cfg_drv_xn module="tst", cfg_reg_addr=0x00000100, rs1val=0x00010002, rs2val=0x00000040
+10	29	npu_cfg_drv_xn module="tst", cfg_reg_addr=0x00000101, rs1val=0x00010002, rs2val=0x00000004
+11	31	npu_cfg_drv_xn module="tst", cfg_reg_addr=0x00000102, rs1val=0x00000002, rs2val=0x00000004
+12	33	tst_drv_xn src="Tile_l", dst="Result_d", rs1val=0x00001000, rs2val=0x00020000
+13	35	sync_drv_xn tag="store_complete"
+14	37	wait_done tag=store_complete, phase=rsp_accept, timeout_cycles=100000

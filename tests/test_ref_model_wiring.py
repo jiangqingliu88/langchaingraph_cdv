@@ -22,12 +22,12 @@ import json
 
 import yaml
 
-from src.tools.generation.uvm_tools.tool_find_spec_yaml.main import (
+from src.generation.uvm_tools.tool_find_spec_yaml.main import (
     _gen_env_yaml,
     _ref_mirror_gate,
 )
-from src.tools.generation.uvm_tools.tool_uvm.constants import TEMPLATES_DIR
-from src.tools.generation.uvm_tools.tool_uvm.render.jinja_renderer import JinjaRenderer
+from src.generation.uvm_tools.tool_uvm.constants import TEMPLATES_DIR
+from src.generation.uvm_tools.tool_uvm.render.jinja_renderer import JinjaRenderer
 
 #: 一份像模像样的 APB 接口表（名字与 `apb_uart` 的 spec 一致）
 APB_IFACES = [
@@ -144,7 +144,7 @@ class TestGeneratorForwardsTheModelBody:
     """
 
     def test_body_from_the_registry_reaches_the_generated_file(self, tmp_path):
-        from src.tools.generation.uvm_tools.tool_uvm.generators.orchestrator import UVMGenerator
+        from src.generation.uvm_tools.tool_uvm.generators.orchestrator import UVMGenerator
 
         gen = UVMGenerator(JinjaRenderer(TEMPLATES_DIR), output_root=tmp_path)
         body = "tr.prdata = m_regs[tr.paddr];\n// 事务级语义\n"
@@ -168,7 +168,7 @@ class TestGeneratorForwardsTheModelBody:
 
     def test_without_body_the_stub_is_still_the_stub(self, tmp_path):
         """没给 `body` 又没给 `ref_model`：仍是空壳（行为不变）。"""
-        from src.tools.generation.uvm_tools.tool_uvm.generators.orchestrator import UVMGenerator
+        from src.generation.uvm_tools.tool_uvm.generators.orchestrator import UVMGenerator
 
         gen = UVMGenerator(JinjaRenderer(TEMPLATES_DIR), output_root=tmp_path)
         out = gen.generate_utils([{

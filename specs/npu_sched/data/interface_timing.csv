@@ -1,0 +1,19 @@
+﻿contract_id,port,role,event,rule,source_ref,check_artifact
+C-IF-GRP-GLSU,cmd_glsu_start,DUT->GLSU,request,单拍脉冲；每次 start 对应同一 inst 的一次 done,cmdsched.md:764,npu_sched_assertions
+C-IF-GRP-GLSU,cmd_glsu_start_inst_id,DUT->GLSU,request,0=inst0 / 1=inst1；done/release 必须回到同一 inst,cmdsched.md:769,npu_sched_assertions
+C-IF-GRP-GLSU,glsu_cmd_inst0_done_vld,GLSU->DUT,response,inst0 的 done 恰好一次；不得在无 start 时置起,cmdsched.md:667,npu_sched_assertions
+C-IF-GRP-GLSU,glsu_cmd_inst1_done_vld,GLSU->DUT,response,inst1 的 done 恰好一次；不得在无 start 时置起,cmdsched.md:719,npu_sched_assertions
+C-IF-GRP-GLSU,glsu_cmd_inst0_rtile_rls_vld/wtile_rls_vld/page_rls_vld/rdram_rls_vld,GLSU->DUT,release,只释放本次配置实际占有的读/写 tile、page、rdram；跨过无读写的 tile 仅在指令结束后释放,cmdsched.md:109/256,npu_sched_assertions
+C-IF-GRP-GLSU,glsu_cmd_inst0_rtile_rls_idx/wtile_rls_idx/page_rls_idx/rdram_rls_idx,GLSU->DUT,release,索引必须落在本次配置占用的集合内；不得释放未占用的资源,cmdsched.md:109,npu_sched_assertions
+C-IF-GRP-GLSU,cmd_glsu_start,monitor,sampling,monitor 只在 start 有效事件上采样事务；idle 拍只进覆盖、不进 *_mon_ap,cmdsched.md:764,npu_sched_assertions
+C-IF-GRP-CSR,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_csr_known / if_csr_*
+C-IF-GRP-DEBUG,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_debug_known / if_debug_*
+C-IF-GRP-ICG,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_icg_known / if_icg_*
+C-IF-GRP-INTERRUPT,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_interrupt_known / if_interrupt_*
+C-IF-GRP-LLSU,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_llsu_known / if_llsu_*
+C-IF-GRP-MPU,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_mpu_known / if_mpu_*
+C-IF-GRP-NIU,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_niu_known / if_niu_*
+C-IF-GRP-RESERVED,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_reserved_known / if_reserved_*
+C-IF-GRP-STATUS,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_status_known / if_status_*
+C-IF-GRP-VALID_READY,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_valid_ready_known / if_valid_ready_*
+C-IF-GRP-VPU,*,DUT/TB,interface,start/vld/done/rls 复位后不得为 X；start/done/rls 为单拍脉冲；start_inst_id 与 start 同拍合法,2.1.5,if_vpu_known / if_vpu_*

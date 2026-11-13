@@ -45,14 +45,16 @@ def test_packages_live_under_their_board_directory():
     wrong = []
     for board, pkgs in boards.BOARDS.items():
         for pkg in pkgs:
-            expected = root / board / pkg
+            expected = (Path("src/generation") / pkg if board == "generation"
+                        else root / board / pkg)
             if not expected.is_dir():
-                wrong.append(f"{pkg} 应在 {board}/ 下")
+                wrong.append(f"{pkg} 应在 {expected}")
     assert not wrong, wrong
 
 
 def test_board_packages_are_importable_and_lazy_load():
     for board in boards.BOARDS:
-        mod = importlib.import_module(f"src.tools.{board}")
+        mod = importlib.import_module(
+            "src.generation" if board == "generation" else f"src.tools.{board}")
         for pkg in boards.BOARDS[board]:
             assert getattr(mod, pkg) is not None

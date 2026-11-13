@@ -1,6 +1,6 @@
 """检查板块 —— 只读/判定类工具（断言、debug、覆盖率分析、spec 校验）。
 
-verification_os 已迁到 `src.layers.l3_decision.contract`，不再在此列。
+verification_os 已迁到 `src.ir.contract`，不再在此列。
 """
 from __future__ import annotations
 

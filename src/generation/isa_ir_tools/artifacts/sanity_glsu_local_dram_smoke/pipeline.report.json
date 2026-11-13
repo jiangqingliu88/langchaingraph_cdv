@@ -1,0 +1,62 @@
+{
+  "source": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+  "isa_revision": "ISA_VERSION_V1.4",
+  "address_schema": "GLOBAL48_V1.4",
+  "target": "standalone",
+  "core_id": 0,
+  "stages": [
+    {
+      "stage": 1,
+      "command": [
+        "D:\\SignOffAI\\venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "isa_ir_tools.pipeline",
+        "tensors",
+        "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+        "--out-dir",
+        "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\artifacts\\sanity_glsu_local_dram_smoke\\01_tensors",
+        "--isa-revision",
+        "ISA_VERSION_V1.4"
+      ],
+      "status": "passed"
+    },
+    {
+      "stage": 2,
+      "command": [
+        "D:\\SignOffAI\\venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "isa_ir_tools.pipeline",
+        "ir",
+        "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+        "--tensor-manifest",
+        "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\artifacts\\sanity_glsu_local_dram_smoke\\01_tensors\\data\\manifest.json",
+        "--out-dir",
+        "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\artifacts\\sanity_glsu_local_dram_smoke\\02_ir",
+        "--isa-revision",
+        "ISA_VERSION_V1.4"
+      ],
+      "status": "passed"
+    },
+    {
+      "stage": 3,
+      "command": [
+        "D:\\SignOffAI\\venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "isa_ir_tools.cmd_compile",
+        "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\artifacts\\sanity_glsu_local_dram_smoke\\02_ir\\seq.ir",
+        "--target",
+        "standalone",
+        "--core-id",
+        "0",
+        "--out-dir",
+        "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\artifacts\\sanity_glsu_local_dram_smoke\\03_commands",
+        "--isa-revision",
+        "ISA_VERSION_V1.4"
+      ],
+      "status": "passed"
+    }
+  ]
+}

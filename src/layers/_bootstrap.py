@@ -28,8 +28,10 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple
 
 #: 层目录名（按从底到顶）。
+#: L4/L5 已物理迁到 `src/knowledge` / `src/experience`，由
+#: `config/architecture_guard.py` 的 generation/engine/agent 分区接管。
 LAYER_NAMES: Tuple[str, ...] = (
-    "l1_infrastructure", "l2_orchestration", "l3_decision", "l4_memory", "l5_evolution",
+    "l1_infrastructure", "l2_orchestration", "l3_decision",
 )
 
 #: 层名 → 序号（1 最底）。**序号只用于报错时排序，不表达依赖方向**。
@@ -39,13 +41,7 @@ ORDER: Dict[str, int] = {name: i + 1 for i, name in enumerate(LAYER_NAMES)}
 #: 没列出来的层不受限 —— `l2_orchestration` 是**装配者**，它必须调 L3/L4/L5。
 FORBIDDEN: Dict[str, Tuple[str, ...]] = {
     # L1 是底，不能向上伸手
-    "l1_infrastructure": ("l2_orchestration", "l3_decision", "l4_memory", "l5_evolution"),
-    # 记忆层是底座
-    "l4_memory": ("l2_orchestration", "l3_decision", "l5_evolution"),
-    # 决策层不得越级到进化层（经验查询走注入）
-    "l3_decision": ("l5_evolution",),
-    # 进化层读记忆、产权重，不驱动编排
-    "l5_evolution": ("l2_orchestration", "l3_decision"),
+    "l1_infrastructure": ("l2_orchestration", "l3_decision"),
     # l2_orchestration 不限：它是装配者
 }
 

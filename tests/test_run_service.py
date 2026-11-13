@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from src.agents.supervisor import graph as graph_mod
+from src.engine.orchestration.supervisor import graph as graph_mod
 from src.layers.l2_orchestration.execution import PipelineExecutionService
 from src.layers.l2_orchestration.run_service import (
     RunRequest, RunService, get_run_service,

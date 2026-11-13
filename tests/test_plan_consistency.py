@@ -5,7 +5,7 @@ import json
 
 import yaml
 
-from src.layers.l3_decision.vplan.runtime.framework.plan_consistency import (
+from src.ir.vplan.runtime.framework.plan_consistency import (
     build_plan_consistency,
     write_plan_consistency,
 )
@@ -88,6 +88,6 @@ def test_verify_runs_consistency_after_testpoints_are_written():
     """回归：早于 TP IR 落盘时 counts 全是 0，只剩一堆假 dangling。"""
     from pathlib import Path
 
-    src = Path("src/skills/verify/main.py").read_text(encoding="utf-8")
+    src = Path("src/generation/verification/main.py").read_text(encoding="utf-8")
     assert src.index("self._write_testpoints(") < src.index(
         "self._write_plan_consistency(")

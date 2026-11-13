@@ -14,7 +14,7 @@ import subprocess
 import pytest
 from click.testing import CliRunner
 
-from src.cli.commands import cli
+from src.interfaces.cli.commands import cli
 
 
 @pytest.fixture

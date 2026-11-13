@@ -32,10 +32,10 @@ from src.layers.l2_orchestration.communication.tool_hub import _LC_SAFE_TOOLS
 TOOL_MODULES = (
     "src/tools/checking/assertion_tools/main.py",
     "src/layers/l3_decision/evidence/main.py",
-    "src/skills/debug/tools/main.py",
-    "src/layers/l5_evolution/docs/main.py",
+    "src/engine/diagnostics/main.py",
+    "src/experience/docs/main.py",
     "src/layers/l3_decision/spec_tools/main.py",
-    "src/tools/generation/uvm_tools/agent_tools.py",
+    "src/generation/uvm_tools/agent_tools.py",
 )
 
 #: **一定**有副作用的工具（写盘 / 起子进程 / 跑 EDA）。

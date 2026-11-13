@@ -1,0 +1,89 @@
+{
+  "schema": "ir_cfg_bindings_v1",
+  "actions": [
+    {
+      "source": {
+        "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+        "line": 20
+      },
+      "module": "glsu",
+      "operation": null,
+      "bind": {},
+      "contexts": {},
+      "derived": {},
+      "field_sources": {},
+      "with": {},
+      "cfg_packs": []
+    },
+    {
+      "source": {
+        "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+        "line": 22
+      },
+      "module": "glsu",
+      "operation": null,
+      "bind": {},
+      "contexts": {},
+      "derived": {},
+      "field_sources": {},
+      "with": {},
+      "cfg_packs": []
+    },
+    {
+      "source": {
+        "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+        "line": 24
+      },
+      "module": "glsu",
+      "operation": null,
+      "bind": {},
+      "contexts": {},
+      "derived": {},
+      "field_sources": {},
+      "with": {},
+      "cfg_packs": []
+    },
+    {
+      "source": {
+        "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+        "line": 33
+      },
+      "module": "tst",
+      "operation": null,
+      "bind": {},
+      "contexts": {},
+      "derived": {},
+      "field_sources": {},
+      "with": {},
+      "cfg_packs": []
+    },
+    {
+      "source": {
+        "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+        "line": 35
+      },
+      "module": "tst",
+      "operation": null,
+      "bind": {},
+      "contexts": {},
+      "derived": {},
+      "field_sources": {},
+      "with": {},
+      "cfg_packs": []
+    },
+    {
+      "source": {
+        "file": "D:\\SignOffAI\\src\\tools\\generation\\isa_ir_tools\\ir_seq\\sanity_glsu_local_dram_smoke.ir.txt",
+        "line": 37
+      },
+      "module": "tst",
+      "operation": null,
+      "bind": {},
+      "contexts": {},
+      "derived": {},
+      "field_sources": {},
+      "with": {},
+      "cfg_packs": []
+    }
+  ]
+}

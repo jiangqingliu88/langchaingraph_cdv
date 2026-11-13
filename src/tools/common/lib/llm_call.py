@@ -114,7 +114,8 @@ def call_llm(prompt: str, code: str, errors: str, *,
         raise ValueError("call_llm 需要显式 prompt_version（缓存键与审计都靠它）")
     try:
         from src.layers.l2_orchestration.context.query_engine import (
-            LLMContractError, LLMQueryEngine,
+            LLMContractError,
+            LLMQueryEngine,
         )
     except Exception as e:                          # noqa: BLE001
         logger.warning(f"LLM 引擎不可用: {e}")
@@ -152,7 +153,8 @@ def call_llm_json(prompt: str, payload: str, *,
         raise ValueError("call_llm_json 需要显式 prompt_version")
     try:
         from src.layers.l2_orchestration.context.query_engine import (
-            LLMContractError, LLMQueryEngine,
+            LLMContractError,
+            LLMQueryEngine,
         )
     except Exception as e:                          # noqa: BLE001
         logger.warning(f"LLM 引擎不可用: {e}")
@@ -177,13 +179,19 @@ def call_llm_messages(messages: List[Dict[str, Any]], *,
                       output_schema: Dict[str, Any],
                       prompt_version: str,
                       task_type: str = "agent_loop",
-                      failure_policy: str = "fallback") -> str:
-    """Chat 形态的通用入口：调用方已经拼好 messages（system/user/assistant/tool）。"""
+                      failure_policy: str = "fallback",
+                      output_format: str = "json") -> str:
+    """Chat 形态的通用入口：调用方已经拼好 messages（system/user/assistant/tool）。
+
+    `output_format="text"` 时用 `{"type": "string"}` 收原文，由调用方自己
+    解析（长循环 agent 需要先拿到原文再容错抽 JSON）。
+    """
     if not prompt_version:
         raise ValueError("call_llm_messages 需要显式 prompt_version")
     try:
         from src.layers.l2_orchestration.context.query_engine import (
-            LLMContractError, LLMQueryEngine,
+            LLMContractError,
+            LLMQueryEngine,
         )
     except Exception as e:                          # noqa: BLE001
         logger.warning(f"LLM 引擎不可用: {e}")
@@ -191,7 +199,7 @@ def call_llm_messages(messages: List[Dict[str, Any]], *,
     try:
         return LLMQueryEngine.get_instance().query(
             task_type, messages, site=caller_site(),
-            output_schema=output_schema, output_format="json",
+            output_schema=output_schema, output_format=output_format,
             prompt_version=prompt_version, failure_policy=failure_policy)
     except LLMContractError:
         raise

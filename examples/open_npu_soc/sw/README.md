@@ -19,9 +19,9 @@ v0.1 的两条路径：
 RISC-V 工具链），产物是 `gemm_8x8.elf/.hex/.verilog/.dump`。运行与波形：
 
 ```bash
-python -m src.cli.commands soc c-run examples/open_npu_soc \
+python -m src.interfaces.cli.commands soc c-run examples/open_npu_soc \
     --case C-GEMM-8X8 -o output_c_C-GEMM-8X8
-python -m src.cli.commands soc wave output_c_C-GEMM-8X8
+python -m src.interfaces.cli.commands soc wave output_c_C-GEMM-8X8
 ```
 
 NICE 编码（func3 的 bit1/bit2 是 E203 的 rs1en/rdwen）：

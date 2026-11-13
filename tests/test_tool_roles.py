@@ -42,11 +42,23 @@ def hub():
     return h
 
 
+EXECUTOR_ROOTS = (
+    ("front", "src/engine/front"),
+    ("design", "src/generation/design/rtl"),
+    ("model", "src/generation/design/cmodel"),
+    ("verify", "src/generation/verification"),
+    ("ops", "src/engine/ops"),
+    ("coverage", "src/engine/coverage"),
+    ("debug", "src/agent/specialists/debug"),
+    ("audit", "src/engine/audit"),
+)
+
+
 def _executor_roles() -> set:
-    """仓库里实际存在的 executor 角色 —— 从目录名读，不手写清单。"""
-    d = Path(__file__).resolve().parents[1] / "src" / "skills"
-    return {p.name for p in d.iterdir()
-            if p.is_dir() and (p / "main.py").is_file()}
+    """仓库里实际存在的 executor 角色 —— 从执行器位置读，不手写清单。"""
+    root = Path(__file__).resolve().parents[1]
+    return {role for role, rel in EXECUTOR_ROOTS
+            if (root / rel / "main.py").is_file()}
 
 
 class TestEveryExecutorIsInTheTable:

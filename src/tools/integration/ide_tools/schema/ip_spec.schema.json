@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://signoffai.local/schemas/ip_spec.schema.json",
   "title": "SignOffAI IP 规格 —— 集成设计环境的 IP 声明",
-  "description": "声明一个 IP 的接口、寄存器与用途。字段对齐既有的 IP 库（src/layers/l4_memory/ip_registry.py 的 ip_registry 表：ip_name / category / interface / function_desc / tags / version / status），避免同一个概念在仓库里长出两套字段名。本 schema 只做语法/类型/枚举的硬校验（additionalProperties: false，未知键即错误）。注意：这份规格是**设计时**的声明，目前不被闭环消费。",
+  "description": "声明一个 IP 的接口、寄存器与用途。字段对齐既有的 IP 库（src/knowledge/ip_registry.py 的 ip_registry 表：ip_name / category / interface / function_desc / tags / version / status），避免同一个概念在仓库里长出两套字段名。本 schema 只做语法/类型/枚举的硬校验（additionalProperties: false，未知键即错误）。注意：这份规格是**设计时**的声明，目前不被闭环消费。",
   "type": "object",
   "additionalProperties": false,
   "required": ["ips"],

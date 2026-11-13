@@ -1,0 +1,9 @@
+{"ts": "2026-11-13T02:10:00Z", "kind": "identity_migration", "key": "<all>", "old": 113, "new": 114, "reason": "class-qualified identity; nested functions computed independently", "approver": "migration"}
+{"ts": "2026-11-13T02:10:00Z", "kind": "complexity", "key": "src/generation/uvm_tools/tool_uvm/generators/tasks.py::EnvironmentRenderTask.generate", "old": null, "new": 23, "reason": "previously hidden by duplicate function name; needs split review", "approver": "migration"}
+{"ts": "2026-11-12T18:02:36+00:00", "kind": "size", "key": "src/generation/verification/main.py", "old": 600, "new": 535, "reason": "debt repayment", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-12T18:02:36+00:00", "kind": "size", "key": "src/generation/uvm_tools/tool_find_spec_yaml/main.py", "old": 450, "new": 446, "reason": "debt repayment", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-12T18:02:36+00:00", "kind": "size", "key": "src/engine/audit/main.py", "old": 600, "new": 545, "reason": "debt repayment", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-12T18:02:36+00:00", "kind": "size", "key": "src/interfaces/cli/commands.py", "old": 800, "new": 792, "reason": "debt repayment", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-12T18:02:36+00:00", "kind": "complexity", "key": "src/generation/uvm_tools/tool_uvm/generators/orchestrator.py::UVMGenerator.generate_scpreds", "old": 15, "new": null, "reason": "debt cleared", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-12T18:02:36+00:00", "kind": "complexity", "key": "src/interfaces/cli/cmd_session.py::watch", "old": 20, "new": null, "reason": "debt cleared", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-12T18:02:36+00:00", "kind": "complexity", "key": "src/layers/l2_orchestration/evidence/manifest.py::ManifestBuilder._attach_simulation_artifacts", "old": 20, "new": null, "reason": "debt cleared", "approver": "auto:reduce-debt"}

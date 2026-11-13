@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 
 from src.layers.l2_orchestration import stages
-from src.agents.supervisor.graph import NODE_NAMES
+from src.engine.orchestration.supervisor.graph import NODE_NAMES
 from src.layers.l2_orchestration.state import PHASE_OWNERS
 
 

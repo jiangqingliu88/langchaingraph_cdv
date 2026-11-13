@@ -1,0 +1,16 @@
+// index cmddata[73:0] op source_line
+0   CONTROL dispatch_mask {"mask": 1} 5
+1   CONTROL mem_init {"schema": "mem_init_v1", "ref": "Source_d", "source_tensor": "Source", "isa_revision": "xlsx_v0.3_reviewed", "address_schema": "global48_xlsx_v0.3_reviewed", "path": "backdoor", "file": "data/Source.hex", "format": "hex", "region": "dram_common", "address_kind": "global48", "base": 1073872896, "shape": [1, 2, 64], "dtype": "int8", "element_bits": 8, "byte_order": "little", "file_offset_bytes": 0, "file_row_stride_bytes": 32, "file_plane_stride_bytes": 64, "dst_row_stride_bytes": 64, "dst_plane_stride_bytes": 128, "copy_row_bytes": 32, "copy_bytes": 64, "span_bytes": 128, "payload_bytes": 64, "file_size_bytes": 128, "file_sha256": "dc87ab4e1b09d5e3f6a620b7e9d2054d2c6e1f9d3d0a7f3d7c4b8f0f7d1c3b6a", "content_sha256": "c8d5b6f5c14d2a3b1c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c", "tail_policy": "zero", "gap_policy": "untouched"} 11
+2   CONTROL mem_scrub {"region": "dram_common", "address_kind": "global48", "base": 1073872896, "size_bytes": 128, "pattern": 165, "path": "backdoor"} 13
+3   000000100000000000b npu_cfg_drv_xn 15
+4   000000010000000080b npu_cfg_drv_xn 17
+5   000000010000000080b npu_cfg_drv_xn 19
+6   000040000000040010b tld_drv_xn 21
+7   0000000000000000024 sync_drv_xn 23
+8   CONTROL wait done {"tag": "load_complete", "phase": "rsp_accept", "timeout_cycles": 100000} 25
+9   000000100000400080b npu_cfg_drv_xn 27
+10  000000010000400080b npu_cfg_drv_xn 29
+11  000000010000000080b npu_cfg_drv_xn 31
+12  000080000000040011b tst_drv_xn 33
+13  0000000000000000024 sync_drv_xn 35
+14  CONTROL wait done {"tag": "store_complete", "phase": "rsp_accept", "timeout_cycles": 100000} 37

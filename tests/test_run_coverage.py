@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 
-from src.app.services.flow.api import run_coverage
+from src.interfaces.api.flow.api import run_coverage
 
 
 def _run(tmp_path, coverage=None, *, db=True, report=True):

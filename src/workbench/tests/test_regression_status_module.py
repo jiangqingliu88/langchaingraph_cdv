@@ -57,7 +57,7 @@ def _make_regression_dir(root):
 
 @pytest.fixture
 def payload(tmp_path):
-    from src.app.services.flow.api import run_regression_status
+    from src.interfaces.api.flow.api import run_regression_status
 
     return run_regression_status(str(_make_regression_dir(tmp_path)))
 
@@ -119,7 +119,7 @@ class TestDerivedStatus:
     """没有 status.env / report.json 时退回「从日志推断」—— 必须**标出来**。"""
 
     def test_derived_is_labelled(self, tmp_path):
-        from src.app.services.flow.api import run_regression_status
+        from src.interfaces.api.flow.api import run_regression_status
 
         reg = _make_regression_dir(tmp_path)
         d = reg / "build_b1" / "test_t_old"
@@ -134,7 +134,7 @@ class TestDerivedStatus:
 
     def test_nonzero_tally_counts_as_failure(self, tmp_path):
         """配置里那条判定规则同源：日志出现非零 UVM_ERROR 计数 → fail。"""
-        from src.app.services.flow.api import run_regression_status
+        from src.interfaces.api.flow.api import run_regression_status
 
         reg = _make_regression_dir(tmp_path)
         d = reg / "build_b1" / "test_t_tally"

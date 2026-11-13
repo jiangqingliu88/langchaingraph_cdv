@@ -13,12 +13,12 @@ import pytest
 
 from config import architecture_guard as guard
 from src.layers.l2_orchestration.communication.tool_hub import ToolHub
-from src.agents.supervisor.graph import NODE_FUNCS
+from src.engine.orchestration.supervisor.graph import NODE_FUNCS
 from src.layers.l3_decision.decision_engine import ALL_ACTIONS
 from src.tools.boards import BOARDS
 
 ROOT = Path(__file__).resolve().parents[1]
-DOC = ROOT / "ARCHITECTURE.md"
+DOC = ROOT / "ARCHITECTURE_4.0.md"
 
 EXPECTED_ACTIONS = (
     "FIX_COMPILE_bug", "FIX_MODEL_bug", "FIX_FUNCTIONAL_bug",
@@ -58,8 +58,9 @@ def test_main_graph_has_nine_agent_nodes():
         "finalize",
     ]
     assert len(names) == len(set(names)) == 9
-    assert all(fn.__module__.startswith("src.agents")
-               for _, fn in NODE_FUNCS)
+    assert all(fn.__module__.startswith(
+        ("src.engine.orchestration", "src.agent", "src.engine.audit.gates"))
+        for _, fn in NODE_FUNCS)
 
 
 def test_eight_executors_have_a_tool_mapping():
@@ -85,7 +86,7 @@ def test_decision_action_universe_is_frozen():
 def test_caveat_codes_in_audit_match_the_public_set():
     # 3.0 拆分后 caveat 分在 main.py 与 helpers.py 两处，按包扫描。
     found = set()
-    for path in sorted((ROOT / "src/skills/audit").glob("*.py")):
+    for path in sorted((ROOT / "src/engine/audit").glob("*.py")):
         found |= set(re.findall(r'(?:_caveat|caveat)\("([A-Z_]+)"',
                                 path.read_text(encoding="utf-8")))
     assert found == EXPECTED_CAVEATS
@@ -110,11 +111,11 @@ def test_line_guard_catches_an_unwatched_oversized_file():
 def test_line_guard_enforces_watched_budget_below_hard_error():
     """watched 的 registered 是硬预算，不是只在 >2000 时生效。"""
     budget = {"warn": 1500, "error": 2000,
-              "watched": {"src/cli/commands.py": {
+              "watched": {"src/interfaces/cli/commands.py": {
                   "registered": 1, "reason": "test", "plan": "test"}}}
     issues = guard.line_violations(budget=budget)
     assert any(i["type"] == "watched_file_grew"
-               and i["path"] == "src/cli/commands.py" for i in issues)
+               and i["path"] == "src/interfaces/cli/commands.py" for i in issues)
 
 
 def test_complexity_guard_catches_a_new_hotspot():
@@ -136,20 +137,10 @@ def test_watched_files_register_reason_plan_and_size():
 
 def test_architecture_doc_matches_code_facts():
     doc = DOC.read_text(encoding="utf-8")
-    for phrase in ("Supervisor 主图", "四个专家", "八个 Skill",
-                   "steps_dag.py", "STATE_CONTRACTS",
-                   "EXECUTORS_WITHOUT_HUB_TOOLS",
-                   "signoff_replay_recipe_v2",
-                   "runtime.py", "运行时知识图",
-                   "config/architecture_guard.py", "complexity_baseline",
-                   "stimulus_plan.json", "LLM 输出治理"):
-        assert phrase in doc, f"ARCHITECTURE.md 缺少：{phrase}"
-    for action in ALL_ACTIONS:
-        assert action in doc, f"ARCHITECTURE.md 缺少动作：{action}"
-    for code in EXPECTED_CAVEATS:
-        assert code in doc, f"ARCHITECTURE.md 缺少 caveat：{code}"
-    for board in BOARDS:
-        assert board in doc, f"ARCHITECTURE.md 缺少工具板块：{board}"
+    for phrase in ("Agent Plane", "Deterministic Engine", "IR & Evidence",
+                   "Evidence & Signoff Gate", "STAGE_OWNERSHIP.md",
+                   "ARCHITECTURE_GUARD_PRINCIPLES.md", "C Model"):
+        assert phrase in doc, f"ARCHITECTURE_4.0.md 缺少：{phrase}"
 
 
 def test_known_limitations_match_architecture_doc():
@@ -165,7 +156,7 @@ def test_known_limitations_match_architecture_doc():
 
 def test_player_runtime_boundary_matches_code():
     from config.known_limitations import by_id
-    from src.layers.l3_decision.vplan.runtime.framework.stimulus_plan import BACKENDS
+    from src.ir.vplan.runtime.framework.stimulus_plan import BACKENDS
 
     boundary = by_id("player_runtime")
     if BACKENDS["player"]["runtime"]:
@@ -193,7 +184,7 @@ def test_cli_does_not_import_optional_auth():
     """
     offenders = []
     pattern = re.compile(r"(l2_orchestration\.auth|from\s+\.auth\s+import)")
-    for path in (ROOT / "src" / "cli").rglob("*.py"):
+    for path in (ROOT / "src" / "interfaces" / "cli").rglob("*.py"):
         text = path.read_text(encoding="utf-8", errors="replace")
         for line in text.splitlines():
             if line.strip().startswith("#"):

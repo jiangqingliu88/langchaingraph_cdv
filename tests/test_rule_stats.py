@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.layers.l4_memory.rule_stats import RuleStats, record_rule_hits, registered_rules
+from src.knowledge.rule_stats import RuleStats, record_rule_hits, registered_rules
 
 
 @dataclass

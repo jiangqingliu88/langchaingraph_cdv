@@ -122,7 +122,7 @@ def _patch_tools(module, run_dir) -> None:
     `run_dir=None` 模拟「目录不存在」——`pipeline.detail` 返回一条 error，
     `load()` 应当走 `report_payload_error` 那条路（弹横幅、清表）。
     """
-    from src.app.services.flow import run_signoff
+    from src.interfaces.api.flow import run_signoff
 
     def fake_run_tool(name=None, *, quiet=False, force=False, **kwargs):
         tool = name or (module.spec.tool.name if module.spec.tool else None)

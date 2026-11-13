@@ -125,14 +125,14 @@ class TestApprovalGate:
 class TestCLIBasicCommands:
     def test_help(self, runner):
         """vagent --help"""
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
         assert "SignOffAI" in result.output
 
     def test_init(self, runner):
         """vagent init"""
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         with tempfile.TemporaryDirectory() as tmp:
             result = runner.invoke(cli, ["init", "--output-dir", tmp])
             assert result.exit_code == 0
@@ -152,73 +152,73 @@ class TestCLISubcommandsExist:
     """确保所有子命令都可调用"""
 
     def test_signoff_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["generate", "export", "verify", "checklist", "diff"]:
             result = runner.invoke(cli, ["signoff", cmd, "--help"])
             assert result.exit_code == 0, f"signoff {cmd} failed"
 
     def test_diff_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["coverage", "spec", "regression"]:
             result = runner.invoke(cli, ["diff", cmd, "--help"])
             assert result.exit_code == 0, f"diff {cmd} failed"
 
     def test_tool_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["list", "show", "call", "history"]:
             result = runner.invoke(cli, ["tool", cmd, "--help"])
             assert result.exit_code == 0, f"tool {cmd} failed"
 
     def test_agent_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["list", "show", "run"]:
             result = runner.invoke(cli, ["agent", cmd, "--help"])
             assert result.exit_code == 0, f"agent {cmd} failed"
 
     def test_debug_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["log", "analyze", "repl"]:
             result = runner.invoke(cli, ["debug", cmd, "--help"])
             assert result.exit_code == 0, f"debug {cmd} failed"
 
     def test_config_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["show", "set", "init", "validate"]:
             result = runner.invoke(cli, ["config", cmd, "--help"])
             assert result.exit_code == 0, f"config {cmd} failed"
 
     def test_project_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["init", "status", "info", "list", "clean"]:
             result = runner.invoke(cli, ["project", cmd, "--help"])
             assert result.exit_code == 0, f"project {cmd} failed"
 
     def test_spec_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["analyze", "validate", "convert", "trace"]:
             result = runner.invoke(cli, ["spec", cmd, "--help"])
             assert result.exit_code == 0, f"spec {cmd} failed"
 
     def test_ci_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["verify", "check", "precheck"]:
             result = runner.invoke(cli, ["ci", cmd, "--help"])
             assert result.exit_code == 0, f"ci {cmd} failed"
 
     def test_regression_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["run", "report", "trend", "compare"]:
             result = runner.invoke(cli, ["regression", cmd, "--help"])
             assert result.exit_code == 0, f"regression {cmd} failed"
 
     def test_coverage_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["report", "gaps", "trend", "merge"]:
             result = runner.invoke(cli, ["coverage", cmd, "--help"])
             assert result.exit_code == 0, f"coverage {cmd} failed"
 
     def test_env_subcommands(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["generate", "validate", "compile", "template"]:
             result = runner.invoke(cli, ["env", cmd, "--help"])
             assert result.exit_code == 0, f"env {cmd} failed"
@@ -255,36 +255,33 @@ class TestDvsimRemoval:
 
     def test_no_dvsim_import_in_agents(self):
         """确认没有 Agent 引用 dvsim"""
-        import ast
-        for agent_dir in Path("src/skills").iterdir():
-            if agent_dir.is_dir():
-                for py_file in agent_dir.rglob("*.py"):
-                    code = py_file.read_text(encoding="utf-8", errors="replace")
-                    assert "import dvsim" not in code, \
-                        f"{py_file} imports dvsim"
-                    assert "from dvsim" not in code, \
-                        f"{py_file} imports from dvsim"
+        for root in (Path("src/agent"), Path("src/generation")):
+            for py_file in root.rglob("*.py"):
+                code = py_file.read_text(encoding="utf-8", errors="replace")
+                assert "import dvsim" not in code, f"{py_file} imports dvsim"
+                assert "from dvsim" not in code, \
+                    f"{py_file} imports from dvsim"
 
 
 # ── 9. 三类工程服务工作流（同一条 CLI/执行链路）────────────
 
 class TestEngineeringServiceCommands:
     def test_workflow_commands_are_registered(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["optimize-regression", "coverage-closure",
                     "metrics", "incremental"]:
             result = runner.invoke(cli, [cmd, "--help"])
             assert result.exit_code == 0, f"{cmd} --help failed: {result.output}"
 
     def test_verify_accepts_config_and_rtl(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         result = runner.invoke(cli, ["verify", "--help"])
         assert result.exit_code == 0
         assert "--vplan" in result.output
         assert "--rtl" in result.output
 
     def test_soc_subcommands_are_registered(self, runner):
-        from src.cli.commands import cli
+        from src.interfaces.cli.commands import cli
         for cmd in ["check", "golden", "run"]:
             result = runner.invoke(cli, ["soc", cmd, "--help"])
             assert result.exit_code == 0, f"soc {cmd}: {result.output}"

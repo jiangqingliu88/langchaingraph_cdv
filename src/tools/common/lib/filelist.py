@@ -258,6 +258,11 @@ def _sv_lines(output_dir: Path) -> List[str]:
     rtl_dir = output_dir / "rtl"
     if rtl_dir.is_dir():
         lines.extend(p.as_posix() for p in sorted(rtl_dir.glob("*.sv")))
+    # SVA 是 `bind` 进 DUT 的：必须在 RTL 之后**显式列文件**（只加 incdir
+    # 不会编译它 —— 这是“断言看着有、其实没进清单”踩过的坑）。
+    sva_dir = sv_root / "svas"
+    if sva_dir.is_dir():
+        lines.extend(p.as_posix() for p in sorted(sva_dir.glob("*.sv")))
 
     def _rank(path: Path) -> tuple:
         name = path.name
@@ -310,6 +315,19 @@ def _write_resolved(fl_path: Path, lines: List[str]) -> Path:
     return fl_path
 
 
+def _aux_sv_lines(output_dir: Path) -> list:
+    """run 根下的覆盖率接口/探针 + SVA（`bind` 进 DUT，必须排在 RTL 之后）。"""
+    lines: list = []
+    cov_dir = output_dir / "coverage"
+    if cov_dir.is_dir():
+        for pattern in ("*_cov_if.sv", "*_probe.sv"):
+            lines.extend(p.as_posix() for p in sorted(cov_dir.glob(pattern)))
+    sva_dir = output_dir / "assertions"
+    if sva_dir.is_dir():
+        lines.extend(p.as_posix() for p in sorted(sva_dir.glob("*.sv")))
+    return lines
+
+
 def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
                           filelist_name: str = "filelist.f") -> Path:
     """构建全环境编译 filelist。
@@ -341,6 +359,7 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
     sv_root = output_dir / "sv"
     if sv_root.is_dir() and not (output_dir / "agents").is_dir():
         lines.extend(_sv_lines(output_dir))
+        lines.extend(_aux_sv_lines(output_dir))
         return _write_resolved(fl_path, lines)
     for a in agents:
         lines.extend(_agent_lines(output_dir, a["name"]))
@@ -367,18 +386,10 @@ def build_filelist_for_tb(output_dir: Path, agents: list, env_name: str,
     #
     # 收通配而不是整个 `coverage/` 目录：那里还躺着 `coverage_points.json`、
     # `coverage_plan.yaml` 之类的非 SV 产物，一股脑收进来是给 vlog 塞垃圾。
-    cov_dir = output_dir / "coverage"
-    if cov_dir.is_dir():
-        for pattern in ("*_cov_if.sv", "*_probe.sv"):
-            lines.extend(sv.as_posix() for sv in sorted(cov_dir.glob(pattern)))
-
-    # SVA 断言（`bind` 进 DUT）—— **同样必须排在 RTL 之后**，而且**必须收进来**：
-    # 实测全 run 搜一遍，没有任何 `.f`/`.sv`/`.yaml` 引用过 `assertions/*.sv` ——
-    # 也就是说断言**一行都没编进去**，"assertion 不报错"这件事从来没被检验过
-    # （它不是"没有违规"，是"没有断言"）。
-    sva_dir = output_dir / "assertions"
-    if sva_dir.is_dir():
-        lines.extend(sv.as_posix() for sv in sorted(sva_dir.glob("*.sv")))
+    # 覆盖率接口/探针 + SVA（`bind` 进 DUT）—— 两段都必须排在 RTL 之后。
+    # 注意 VPlan `sv/` 布局在上面已经提前 return，所以这两段走
+    # `_aux_sv_lines()`，两个分支共用，避免“sv/ 分支漏收 SVA”。
+    lines.extend(_aux_sv_lines(output_dir))
 
     lines.extend(_env_lines(output_dir, env_name))
     lines.extend(_bench_lines(output_dir))

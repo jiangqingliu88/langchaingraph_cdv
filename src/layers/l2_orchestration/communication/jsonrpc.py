@@ -113,7 +113,7 @@ class A2ADispatcher:
     """
 
     def __init__(self, registry=None):
-        from src.layers.l2_orchestration.skills.registry import ExecutorRegistry
+        from src.layers.l2_orchestration.executors.registry import ExecutorRegistry
         self.registry = registry or ExecutorRegistry.get_instance()
         self._task_status: Dict[str, TaskStatus] = {}
 

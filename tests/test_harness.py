@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from src.workspace import WorkspaceZones
-from src.workspace.harness import Harness, HarnessConfig, HarnessState, StateMachine
-from src.workspace.harness.context import Compactor, estimate_messages
-from src.workspace.harness.jobs import JobManager
-from src.workspace.harness.session import Session
-from src.workspace.harness.skills import SkillLibrary
-from src.workspace.harness.state import StateTransitionError
-from src.workspace.harness.subagent import run_subagent
+from src.runtime.workspace_manager import WorkspaceZones
+from src.agent.runtime import Harness, HarnessConfig, HarnessState, StateMachine
+from src.agent.runtime.context import Compactor, estimate_messages
+from src.runtime.job_manager import JobManager
+from src.runtime.session import Session
+from src.agent.runtime.playbooks import PlaybookLibrary
+from src.agent.runtime.state import StateTransitionError
+from src.agent.runtime.subagent import run_subagent
 
 
 def _zones(tmp_path: Path) -> WorkspaceZones:
@@ -182,12 +182,12 @@ def test_invalid_proposal_triggers_next_round(tmp_path):
 
 def test_skills_are_discovered_and_readable(tmp_path):
     zones = _zones(tmp_path)
-    skills_dir = zones.root / ".skills"
+    skills_dir = zones.root / ".playbooks"
     skills_dir.mkdir()
     (skills_dir / "review.md").write_text(
         "---\nname: review\ndescription: 代码评审\n---\n先看 diff。\n",
         encoding="utf-8")
-    library = SkillLibrary(zones)
+    library = PlaybookLibrary(zones)
     assert library.names() == ["review"]
     assert "先看 diff" in library.read("review")
     assert "review" in library.prompt_section()

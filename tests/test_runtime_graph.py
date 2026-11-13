@@ -60,7 +60,7 @@ def run_dir(tmp_path: Path, monkeypatch) -> Path:
     }), encoding="utf-8")
 
     monkeypatch.setattr(
-        "src.layers.l4_memory.lineage.ensure_run_rtl_version",
+        "src.knowledge.lineage.ensure_run_rtl_version",
         lambda output_dir, module="", run_id="": {
             "module": "dut", "version_no": 7, "name": "v7",
             "content_hash": "deadbeef"})
@@ -116,7 +116,7 @@ def test_bin_nodes_are_qualified_by_coverpoint(tmp_path: Path, monkeypatch):
         {"tp_id": "TP-B", "status": "MISS", "coverpoint": "cp_b", "bin": "cp_b.empty"},
     ]}), encoding="utf-8")
     monkeypatch.setattr(
-        "src.layers.l4_memory.lineage.ensure_run_rtl_version",
+        "src.knowledge.lineage.ensure_run_rtl_version",
         lambda output_dir, module="", run_id="": {})
     graph = build_runtime_graph(root)
     names = sorted(b.name for b in graph.nodes(NodeType.COVERAGE_BIN))
@@ -138,7 +138,7 @@ def test_same_fix_is_shared_across_gaps(tmp_path: Path, monkeypatch):
         {"dimension": "op", "fix_name": "relax_op", "fingerprint": "fp_x"},
     ]}), encoding="utf-8")
     monkeypatch.setattr(
-        "src.layers.l4_memory.lineage.ensure_run_rtl_version",
+        "src.knowledge.lineage.ensure_run_rtl_version",
         lambda output_dir, module="", run_id="": {})
     graph = build_runtime_graph(root)
     assert len(graph.nodes(NodeType.FIX)) == 1

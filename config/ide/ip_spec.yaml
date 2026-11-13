@@ -6,7 +6,7 @@
 # 当前不被闭环消费（与 manual_nodes.yaml 同一性质，见
 # docs/design/gui_pipeline_architecture.md §8）。
 #
-# 字段刻意对齐既有的 IP 库（src/layers/l4_memory/ip_registry.py）：
+# 字段刻意对齐既有的 IP 库（src/knowledge/ip_registry.py）：
 #   name ↔ ip_name    category ↔ category   function ↔ function_desc
 #   revision ↔ version
 # 同一个概念在仓库里只该有一套字段名 —— 否则规格和库对不上，谁也不知道信哪边。

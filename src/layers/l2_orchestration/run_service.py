@@ -123,7 +123,7 @@ class RunService:
     def _loop_forever(cls, loop: asyncio.AbstractEventLoop) -> None:
         """loop 线程的入口 —— 它**必须扛住 SystemExit**。
 
-        这一层是不得不做的兜底，起因是一次实测事故：`src/tools/generation/uvm_tools/` 下的
+        这一层是不得不做的兜底，起因是一次实测事故：`src/generation/uvm_tools/` 下的
         `gen_uvm` 是照着独立 CLI 写的，schema 校验不过就 `raise SystemExit`。
         它被进程内调用时跑在这个循环上，于是：
 
@@ -362,7 +362,7 @@ class RunService:
     async def _run(self, handle: _RunHandle) -> Dict[str, Any]:
         """跑完一次运行 —— **这一层是 `SystemExit` 的防火墙**。
 
-        `src/tools/generation/uvm_tools/` 下那些件是照着独立 CLI 写的（`main.py` 里
+        `src/generation/uvm_tools/` 下那些件是照着独立 CLI 写的（`main.py` 里
         `sys.exit(main())`），schema 校验不过就 `raise SystemExit(...)`。当 CLI
         用没问题；可它在进程内被调用时是跑在**子线程的 asyncio 循环**上的，而
         `threading` 对 SystemExit 是**静默吞掉**的（不打印、不回调 excepthook）：

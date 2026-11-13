@@ -1,0 +1,14 @@
+{
+  "steps": [
+    {
+      "id": "G1",
+      "title": "分析 npu_sched 接口驱动",
+      "status": "done",
+      "depends_on": [],
+      "success": "task complete with evidence",
+      "attempts": 1,
+      "summary": "发现 1 个未驱动输出"
+    }
+  ],
+  "updated_at": "2026-11-12T17:02:32.300743+00:00"
+}

@@ -14,7 +14,7 @@ import threading
 import pytest
 
 from src.layers.l2_orchestration import execution as execution_mod
-from src.agents.supervisor import graph as graph_mod
+from src.engine.orchestration.supervisor import graph as graph_mod
 from src.layers.l2_orchestration.execution import PipelineExecutionService
 from src.layers.l2_orchestration.execution_helpers import _result_of
 from src.layers.l2_orchestration.run_journal import read_journal
@@ -314,7 +314,7 @@ class TestResultSurvives:
         import ast
         from pathlib import Path
 
-        from src.agents.supervisor import graph as graph_mod
+        from src.engine.orchestration.supervisor import graph as graph_mod
 
         declared = set(PipelineState.model_fields)
         tree = ast.parse(Path(graph_mod.__file__).read_text(encoding="utf-8"))
