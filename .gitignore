@@ -95,3 +95,5 @@ signoffai-theme-icons/
 # Generated evidence indexes/artifacts (point at local output_* runs)
 /specs/*/evidence/
 /src/tools/generation/isa_ir_tools/artifacts/
+
+tmp_vas_pytest/
