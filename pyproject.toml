@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "signoffai"
 version = "2.6.1"
 description = "An AI-native, auditable IC functional verification and sign-off platform"
-readme = "ARCHITECTURE_4.0.md"
+readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "SignOffAI Contributors" }]
 keywords = [
