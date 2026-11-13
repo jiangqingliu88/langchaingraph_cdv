@@ -16,7 +16,15 @@
 
 概率性智能 + 确定性执行 + 结构化验证语义 + 可追溯证据。
 
-先说明状态：以下是根据你提供的架构现状整理的逻辑架构，不代表我已经直接检查了你的最新仓库代码。
+## 九个逻辑职责平面与 Specification Intelligence
+
+本仓库统一为 **九个逻辑 Plane**：Interfaces（既有 `src/workbench`）、Agent、Orchestration、Generation、Engine、IR、Knowledge、Experience、Runtime。后八项继续使用既有 `src/*_plane` 目录，**没有新增第十个 Plane**。
+
+Specification Intelligence 是九平面协作能力，不是新的独立子系统。Specification Compiler 归 IR + Engine 协作链，Requirement Extraction 归现有 Agent，Clarification Workflow 归 Orchestration，协议知识归 Knowledge，历史决策归 Experience，RTL 事实提取归 Runtime，候选工件归 Generation，CLI 归 Workbench。三份横向契约、生命周期、实现入口和当前未验证边界见 [Specification Compiler](docs/architecture/SPECIFICATION_COMPILER.md)。
+
+下文“八个职责平面”特指八个 `src/*_plane`；加上 Interfaces 后，整体是上述九逻辑平面的协作系统，而不是九个独立 Agent。
+
+## 整体职责架构
 
 # 一、整体架构：八个核心平面
 
@@ -641,7 +649,7 @@ An Evidence-Driven Autonomous IC Verification System
 
 因为最终要证明的不是 SignOffAI 有多少个模块，而是它能不能真正替工程师完成一项复杂的 IC 验证任务。
 
-> 全量单测：**1249 passed**（2026-11-13，14 skipped）。
+> 全量单测：**1308 passed / 16 skipped（PYTEST_EXIT=0）**（2026-11-13）；Workbench：693 passed（有 PySide6 析构警告）。
 
 ## 相关文档与边界
 
@@ -679,9 +687,9 @@ An Evidence-Driven Autonomous IC Verification System
 
 | 项 | 状态 |
 |---|---|
-| M0 Architecture Guard 2.1 | ✅ 8 平面全覆盖、unzoned/cycle/lazy-debt、dependency matrix |
-| M1 Resource / Interaction IR | ✅ `vagent resource verify` + SoC 主链 preflight；intent → 重叠事实 → 场景 → 三态结论 → 证据包 |
-| M2 Evidence v2 | ✅ `evidence audit`（完整性/有效性/可信度）+ `evidence stale`（输入 hash 失效） |
+| M0 Architecture Guard 2.1 | ◐ 核心治理已落地；多环检测、整层债务、CI 旧路径等待硬化（独立治理任务） |
+| M1 Resource / Interaction IR | ◐ **M1-A 已完成**：fail-closed、三态、70 项专项测试与全量回归；M1-B 运行时 checker 与执行证据待完成 |
+| M2 Evidence v2 | ◐ 单 Run 证据包、哈希和回放已有基础；真实 trust 组合校验与跨 Run 失效传播待完成 |
 | M3 DMA Autonomous Verification | ◐ 资源冲突四类场景已可确定性验证；自然语言→生成→执行→签核主链待接 |
 | M4 Autonomous Recovery | ◐ 受控 staging + 保护路径 + Engine 复验标记已落地；自动修复闭环待接 |
 

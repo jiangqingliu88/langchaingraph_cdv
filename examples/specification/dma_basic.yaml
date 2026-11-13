@@ -1,0 +1,27 @@
+# 结构化 Specification Contract 示例。这里已经是语义输入，不是自然语言抽取结果。
+# 验证的是契约/来源/规则/冲突，不是 DMA RTL 仿真。
+document_id: dma_basic
+domain: dma
+version: 1
+sources:
+  - source_id: spec:dma-example
+    kind: spec
+    locator: example://dma/specification#bus-rules
+    producer: dma-spec-author
+requirements:
+  - {requirement_id: REQ-DMA-BOUNDARY, field: burst_boundary,
+     value: 4096, status: CONFIRMED, source_ids: [spec:dma-example],
+     statement: "DMA burst 地址边界为 4 KiB（示例）"}
+  - {requirement_id: REQ-DMA-ALIGN, field: alignment,
+     value: 64, status: CONFIRMED, source_ids: [spec:dma-example],
+     statement: "DMA 访问对齐粒度为 64 字节（示例）"}
+  - {requirement_id: REQ-DMA-OUTSTANDING, field: max_outstanding,
+     value: 4, status: CONFIRMED, source_ids: [spec:dma-example],
+     statement: "最多 4 个未完成事务（示例）"}
+  - {requirement_id: REQ-DMA-ADDR, field: address_width,
+     value: 64, status: CONFIRMED, source_ids: [spec:dma-example],
+     statement: "地址宽度为 64 位（示例）"}
+gaps: []
+conflicts: []
+lifecycle: []
+metadata: {}

@@ -222,7 +222,8 @@ def write_resource_artifacts(output_dir: Path, module: str = "",
     if path is None:
         # **清掉上一轮残留**：否则 env 渲染会读到旧资源模型，生出一份与本次
         # 声明无关的 checker（不会编译失败，只会静默检查错东西）。
-        for name in ("resource_model.json", "resource_scenarios.json"):
+        for name in ("resource_model.json", "resource_scenarios.json",
+                     "resource_intent_result.json"):
             stale = Path(output_dir) / "coverage" / name
             try:
                 if stale.is_file():
@@ -232,17 +233,28 @@ def write_resource_artifacts(output_dir: Path, module: str = "",
                 pass
         return {"available": False}
     try:
-        import yaml
-
         from src.runtime_plane.core.runtime.atomic import atomic_write_json
         from src.ir_plane.decision.resource_model import (
             compile_scenarios, coverage_summary, from_dict,
         )
+        from src.engine_plane.verify.resource_intent import (
+            read_document, verify_document,
+        )
 
-        doc = yaml.safe_load(path.read_text(encoding="utf-8",
-                                            errors="replace")) or {}
-        model = from_dict(doc if isinstance(doc, dict) else {})
+        # 同一解析入口负责 CLI 与 Verify；malformed 必须先落 INCOMPLETE，
+        # 不能让仅有告警的旁路最后被 Audit 当成“没有这项检查”。
+        doc, input_errors = read_document(path)
+        model = from_dict(doc)
+        model.declaration_errors.extend(input_errors)
         model.module = model.module or module
+        intent = verify_document(doc, module=model.module,
+                                 input_errors=input_errors)
+        atomic_write_json(Path(output_dir) / "coverage"
+                          / "resource_intent_result.json", intent)
+        if input_errors:
+            logger.warning(f"资源声明无法解析：{input_errors[0]['message']}")
+            return {"available": False, "source": str(path),
+                    "error": intent["reason"], "validation": intent["validation"]}
         facts = model.interaction_facts()
         scenarios = compile_scenarios(model)
         atomic_write_json(Path(output_dir) / "coverage" / "resource_model.json",
@@ -253,19 +265,11 @@ def write_resource_artifacts(output_dir: Path, module: str = "",
             {"schema": "resource_scenarios_v1", "module": model.module,
              "scenarios": scenarios,
              "coverage": coverage_summary(scenarios)})
-        # M1：资源交互 intent 的三态结论进主链（audit 会读，缺失=判不了）
-        try:
-            from src.engine_plane.verify.resource_intent import verify_document
-            intent = verify_document(doc if isinstance(doc, dict) else {},
-                                     module=model.module)
-            atomic_write_json(Path(output_dir) / "coverage"
-                              / "resource_intent_result.json", intent)
-        except Exception as e:                         # noqa: BLE001 旁路
-            logger.warning(f"resource intent 验证失败: {e}")
         return {"available": True, "source": str(path),
                 "resources": len(model.resources),
                 "operations": len(model.operations),
                 "scenarios": len(scenarios),
+                "intent_status": intent["status"],
                 # 供 Unified IR 的 D4 域与 StimulusPlan 的附加段复用。
                 "model": model.to_dict(),
                 "scenario_docs": scenarios}

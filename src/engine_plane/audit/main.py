@@ -14,8 +14,7 @@ logger = structlog.get_logger()
 
 from src.engine_plane.audit.helpers import (  # noqa: E402
     _read_constraint_status,
-    read_resource_intent_status,
-    add_resource_intent_caveat,
+    read_resource_intent_status, resource_intent_hard_ok, add_resource_intent_caveat,
     _read_association_report,
     _read_tp_matrix,
     _read_case_tp,
@@ -160,10 +159,10 @@ class AuditExecutor(BaseExecutor):
         # 这里先只算与策略无关的硬条件；`model_real` 仍是**事实字段**，
         # 但默认不再一票否决 —— 否则"没走参考模型链路"的 run（例如 --rtl
         # 验证专注模式）会永远无法签核，而策略明明允许没有模型。
-        # M1：资源交互 intent（无文件 = 判不了，不阻塞）
+        # M1-A：无资源声明可放行；FAIL/INCOMPLETE 都不能靠 caveat 过门。
         resource_intent_status = read_resource_intent_status(output_dir)
         gates["resource_intent_status"] = resource_intent_status or "MISSING"
-        gates["resource_intent_ok"] = resource_intent_status != "FAIL"
+        gates["resource_intent_ok"] = resource_intent_hard_ok(resource_intent_status)
         hard_ok = bool(pass_rate_ok and coverage_ok
                        and gates.get("rtl_real", False)
                        and gates.get("resource_intent_ok", True))

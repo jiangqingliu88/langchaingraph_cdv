@@ -1,0 +1,119 @@
+{
+  "schema": "m1a_acceptance_evidence_v1",
+  "generated_at": "2026-11-13T07:36:21+00:00",
+  "base_commit": "7cc3645c0530a4721c244b37025a74ffd0105ed9",
+  "scope": "static_declaration_check_only",
+  "fail_closed_cases": [
+    {
+      "case": "unknown_policy",
+      "expected": "INCOMPLETE",
+      "actual": "INCOMPLETE",
+      "reason": "输入声明未通过完整性校验",
+      "validation_rules": [
+        "unknown_policy"
+      ],
+      "facts": 1
+    },
+    {
+      "case": "zero_length",
+      "expected": "INCOMPLETE",
+      "actual": "INCOMPLETE",
+      "reason": "输入声明未通过完整性校验",
+      "validation_rules": [
+        "invalid_access_length"
+      ],
+      "facts": 1
+    },
+    {
+      "case": "negative_length",
+      "expected": "INCOMPLETE",
+      "actual": "INCOMPLETE",
+      "reason": "输入声明未通过完整性校验",
+      "validation_rules": [
+        "invalid_access_length"
+      ],
+      "facts": 1
+    },
+    {
+      "case": "out_of_resource_bounds",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "2 条确定的资源访问或地址范围违规",
+      "validation_rules": [
+        "access_out_of_bounds",
+        "access_out_of_bounds"
+      ],
+      "facts": 1
+    }
+  ],
+  "dma_gemm_examples": [
+    {
+      "file": "examples/open_npu_soc/spec/resource_intent.yaml",
+      "status": "PASS",
+      "intent_hash": "f7e91b021d1926f9fe4362e244f39932fa68619641e09193f2864762519c032a",
+      "counts": {
+        "resources": 2,
+        "operations": 8,
+        "interactions": 4,
+        "facts": 4,
+        "scenarios": 4
+      },
+      "coverage": {
+        "arbitrated": 2,
+        "unrestricted": 2
+      }
+    },
+    {
+      "file": "examples/open_npu_soc/spec/dma_gemm_conflict.yaml",
+      "status": "FAIL",
+      "intent_hash": "285f7bb86cbe72d8d2ae9b21bc084268fcbf5d4dd4339cf33a430daedc60552c",
+      "counts": {
+        "resources": 1,
+        "operations": 2,
+        "interactions": 1,
+        "facts": 1,
+        "scenarios": 1
+      },
+      "coverage": {
+        "forbidden": 1
+      }
+    },
+    {
+      "file": "examples/open_npu_soc/spec/dma_gemm_interaction.yaml",
+      "status": "PASS",
+      "intent_hash": "f7e91b021d1926f9fe4362e244f39932fa68619641e09193f2864762519c032a",
+      "counts": {
+        "resources": 2,
+        "operations": 8,
+        "interactions": 4,
+        "facts": 4,
+        "scenarios": 4
+      },
+      "coverage": {
+        "arbitrated": 2,
+        "unrestricted": 2
+      }
+    }
+  ],
+  "audit_hard_gate": {
+    "PASS": true,
+    "": true,
+    "FAIL": false,
+    "INCOMPLETE": false,
+    "BROKEN": false
+  },
+  "runtime": {
+    "systemverilog_checker_generated": false,
+    "rtl_simulation_run": false,
+    "seeds_collected": false,
+    "verification_signoff_claimed": false
+  },
+  "full_test_result": {
+    "tests_root": {"collected": 1322, "passed": 1308, "skipped": 16, "failed": 0,
+                   "pytest_exit": 0, "duration_seconds": 254.67},
+    "workbench": {"passed": 693, "failed": 0, "duration_seconds": 3230.08,
+                  "job_exit": 1,
+                  "warning": "PySide6 callback destructed warnings occurred during cleanup"},
+    "note": "A prior PowerShell Select-Object pipeline run reported exit 1 despite 1308 passed; direct exit propagation confirmed PYTEST_EXIT=0 for tests/."
+  }
+}

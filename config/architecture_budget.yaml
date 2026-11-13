@@ -30,7 +30,7 @@ watched:
     reason: "helpers 已拆出 audit/helpers.py；main 只剩 execute_task 编排"
     plan: "继续把 helpers.py（964 行）按 gates / summaries / evidence 三段拆开"
   src/workbench/cli/commands.py:
-    registered: 792
+    registered: 773
     reason: "会话查询已拆 cmd_session.py、项目管理已拆 cmd_project.py；剩 approval/archive/clean/resume/gui 与公共 helper"
     plan: "继续把 approval/archive/clean/resume/gui 搬到对应 cmd_*.py；commands.py 只留 cli 对象、helper 与导入注册"
 

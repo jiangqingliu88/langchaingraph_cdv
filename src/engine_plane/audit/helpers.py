@@ -1157,14 +1157,25 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
     }
 
 def read_resource_intent_status(output_dir: Path) -> str:
-    """M1：读资源交互 intent 的三态结论；没有文件 = 判不了（空串）。"""
+    """可读三态原样返回；结果损坏 = INCOMPLETE，而不是无此检查。"""
     try:
         doc = json.loads((Path(output_dir) / "coverage"
                           / "resource_intent_result.json").read_text(
                               encoding="utf-8", errors="replace"))
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        # 没声明资源模型的普通 run 可为 NOT_APPLICABLE；所需 profile 由上层判定。
         return ""
-    return str((doc or {}).get("status") or "")
+    except (OSError, ValueError):
+        return "INCOMPLETE"
+    if not isinstance(doc, dict):
+        return "INCOMPLETE"
+    status = str(doc.get("status") or "")
+    return status if status in ("PASS", "FAIL", "INCOMPLETE") else "INCOMPLETE"
+
+
+def resource_intent_hard_ok(status: str) -> bool:
+    """空状态=普通非资源 run；PASS 才可放行，INCOMPLETE 也不能签成通过。"""
+    return status in ("", "PASS")
 
 
 def add_resource_intent_caveat(status: str, caveat) -> None:
@@ -1173,5 +1184,5 @@ def add_resource_intent_caveat(status: str, caveat) -> None:
                "资源交互 intent 判定 FAIL：存在禁止重叠/地址溢出")
     elif status == "INCOMPLETE":
         caveat("RESOURCE_INTENT_INCOMPLETE",
-               "资源交互 intent 不完整：缺少 operations/interactions")
+               "资源交互 intent 不完整：输入非法、结果不可读或必要证据缺失")
 

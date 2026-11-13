@@ -93,7 +93,6 @@
   "src/ir_plane/decision/knowledge/graph.py::VerificationGraph.from_spec": 22,
   "src/ir_plane/decision/knowledge/persistence.py::load_graph_from_db": 35,
   "src/ir_plane/decision/knowledge/runtime.py::build_runtime_graph": 33,
-  "src/ir_plane/decision/resource_model/model.py::from_dict": 24,
   "src/ir_plane/decision/spec_tools/main.py::analyze_specification": 22,
   "src/ir_plane/decision/spec_tools/main.py::extract_features": 29,
   "src/ir_plane/decision/spec_tools/verify_dsl.py::build_graph_from_spec": 34,
