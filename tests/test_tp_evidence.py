@@ -14,10 +14,10 @@ from pathlib import Path
 
 import yaml
 
-from src.layers.l3_decision.evidence.tp_evidence import (
+from src.ir_plane.decision.evidence.tp_evidence import (
     LAYERS, build_tp_evidence, write_tp_evidence)
-from src.ir.vplan.runtime.framework.paths import compile_paths
-from src.ir.vplan.runtime.repository.loader import load_model_from_text
+from src.ir_plane.vplan.runtime.framework.paths import compile_paths
+from src.ir_plane.vplan.runtime.repository.loader import load_model_from_text
 
 MODEL = """\
 version: "1"
@@ -76,13 +76,13 @@ class TestPathGroup:
         assert first.execution.stage == "behavior"      # 后端待接，不冒充可执行
 
     def test_schema_accepts_path_groups(self):
-        from src.layers.l3_decision.schema.schema_check import SchemaChecker
+        from src.ir_plane.decision.schema.schema_check import SchemaChecker
 
         issues = SchemaChecker().check_text(MODEL)
         assert not [i for i in issues if i.severity == "error"]
 
     def test_the_plan_lists_the_path_group(self):
-        from src.ir.vplan import engine
+        from src.ir_plane.vplan import engine
 
         plan = engine.coverage_plan_from_text(MODEL, "demo")["plan"]
         assert plan["summary"]["path_bin_count"] == 2
@@ -116,7 +116,7 @@ cross_groups:
 
 class TestCrossGroups:
     def test_a_group_builds_an_n_way_cross(self):
-        from src.ir.vplan import engine
+        from src.ir_plane.vplan import engine
 
         payload = engine.covergroups_from_text(CROSS_MODEL, "demo3")
         grp = next(c for c in payload["crosses"] if c["name"].startswith("cx_grp_"))
@@ -124,7 +124,7 @@ class TestCrossGroups:
         assert "cross cp_a, cp_b, cp_c;" in payload["covergroup_code"]
 
     def test_a_pair_already_covered_by_cross_matrix_is_not_duplicated(self):
-        from src.ir.vplan import engine
+        from src.ir_plane.vplan import engine
 
         # 去掉三元组，只留 `cross_matrix` 的两两组合 → 不应再派生 `cx_grp_`
         text = CROSS_MODEL.replace(
@@ -266,7 +266,7 @@ class TestEvidenceView:
         assert "does_not_prove" in review["cross_architecture"]
 
     def test_write_and_load(self, tmp_path):
-        from src.layers.l3_decision.evidence.tp_evidence import load_tp_evidence
+        from src.ir_plane.decision.evidence.tp_evidence import load_tp_evidence
 
         run = _make_run(tmp_path)
         write_tp_evidence(run)

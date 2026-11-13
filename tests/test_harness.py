@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from src.runtime.workspace_manager import WorkspaceZones
-from src.agent.runtime import Harness, HarnessConfig, HarnessState, StateMachine
-from src.agent.runtime.context import Compactor, estimate_messages
-from src.runtime.job_manager import JobManager
-from src.runtime.session import Session
-from src.agent.runtime.playbooks import PlaybookLibrary
-from src.agent.runtime.state import StateTransitionError
-from src.agent.runtime.subagent import run_subagent
+from src.runtime_plane.workspace_manager import WorkspaceZones
+from src.agent_plane.runtime import Harness, HarnessConfig, HarnessState, StateMachine
+from src.agent_plane.runtime.context import Compactor, estimate_messages
+from src.runtime_plane.job_manager import JobManager
+from src.runtime_plane.session import Session
+from src.agent_plane.runtime.playbooks import PlaybookLibrary
+from src.agent_plane.runtime.state import StateTransitionError
+from src.agent_plane.runtime.subagent import run_subagent
 
 
 def _zones(tmp_path: Path) -> WorkspaceZones:

@@ -1,7 +1,7 @@
 """debug 经验库单测：记忆命中 / 反馈校准 / 蒸馏候选 / 统计。"""
 import pytest
 
-from src.knowledge.debug_experience import DebugExperienceStore
+from src.knowledge_plane.debug_experience import DebugExperienceStore
 
 
 @pytest.fixture

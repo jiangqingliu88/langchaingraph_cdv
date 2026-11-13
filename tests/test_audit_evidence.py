@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.engine.audit.main import _build_signoff_evidence
+from src.engine_plane.audit.main import _build_signoff_evidence
 
 
 def _run(tmp_path: Path) -> Path:

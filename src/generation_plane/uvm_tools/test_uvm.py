@@ -1,0 +1,11 @@
+"""Tests for uvm tool package"""
+import sys
+from pathlib import Path
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents if (p / "src").is_dir())))
+from src.generation_plane.uvm_tools import generate_uvm
+
+
+def test_import_generate_uvm():
+    """Test that generate_uvm is importable from uvm package"""
+    assert generate_uvm is not None
+    assert callable(generate_uvm)

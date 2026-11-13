@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import threading
 
-from src.core.runtime.events import (
+from src.runtime_plane.core.runtime.events import (
     EventStore, Spool, emit, flush_spool, set_active_store,
 )
 

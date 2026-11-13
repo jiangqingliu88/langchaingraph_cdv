@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from src.layers.l1_infrastructure.infrastructure import sha256_file
+from src.runtime_plane.infrastructure.infrastructure import sha256_file
 
 
 class TestEmptyAndMissing:

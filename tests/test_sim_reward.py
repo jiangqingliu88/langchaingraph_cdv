@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-from src.layers.l3_decision.reward import compute_sim_reward
+from src.ir_plane.decision.reward import compute_sim_reward
 
 
 def test_all_good_is_near_one():
@@ -54,7 +54,7 @@ def test_empty_inputs_are_safe():
 
 
 def test_custom_weights_are_normalised_and_used():
-    from src.layers.l3_decision.reward import normalize_weights
+    from src.ir_plane.decision.reward import normalize_weights
 
     weights, issues = normalize_weights(
         {"compile": 1.0, "regression": 1.0, "coverage": 2.0})
@@ -70,7 +70,7 @@ def test_custom_weights_are_normalised_and_used():
 
 
 def test_invalid_weights_fall_back_and_say_why():
-    from src.layers.l3_decision.reward import WEIGHTS
+    from src.ir_plane.decision.reward import WEIGHTS
 
     r = compute_sim_reward({}, {}, {}, {},
                            weights={"compile": -1, "regression": 1, "coverage": 1})
@@ -79,7 +79,7 @@ def test_invalid_weights_fall_back_and_say_why():
 
 
 def test_missing_weight_key_uses_default_and_reports():
-    from src.layers.l3_decision.reward import WEIGHTS
+    from src.ir_plane.decision.reward import WEIGHTS
 
     r = compute_sim_reward({}, {}, {}, {}, weights={"compile": 0.5})
     assert "缺少 regression" in " ".join(r["weight_issues"])
@@ -89,7 +89,7 @@ def test_missing_weight_key_uses_default_and_reports():
 
 
 def test_weights_from_policy_accepts_raw_or_loaded_policy():
-    from src.layers.l3_decision.reward import weights_from_policy
+    from src.ir_plane.decision.reward import weights_from_policy
 
     raw = {"reward_weights": {"compile": 1, "regression": 1, "coverage": 2}}
     assert weights_from_policy(raw) == raw["reward_weights"]
@@ -99,7 +99,7 @@ def test_weights_from_policy_accepts_raw_or_loaded_policy():
 
 def test_policy_file_reward_weights_are_discovered(tmp_path):
     """`reward_weights` 落在模块策略文件里就能被读出来（不用改代码）。"""
-    from src.layers.l2_orchestration.evidence.signoff_package import load_policy
+    from src.orchestration_plane.l2.evidence.signoff_package import load_policy
 
     run = tmp_path / "run_w"
     run.mkdir()
@@ -112,6 +112,6 @@ def test_policy_file_reward_weights_are_discovered(tmp_path):
         encoding="utf-8")
     policy, source = load_policy(run, "whatever")
     assert source.endswith("signoff_policy.yaml")
-    from src.layers.l3_decision.reward import weights_from_policy
+    from src.ir_plane.decision.reward import weights_from_policy
     assert weights_from_policy(policy) == {
         "compile": 0.2, "regression": 0.3, "coverage": 0.5}

@@ -10,20 +10,20 @@ from pathlib import Path
 
 import pytest
 
-from src.layers.l3_decision.decision_engine import Observation
-from src.layers.l3_decision.knowledge.persistence import load_runtime_graph
-from src.layers.l3_decision.knowledge.query import (
+from src.ir_plane.decision.decision_engine import Observation
+from src.ir_plane.decision.knowledge.persistence import load_runtime_graph
+from src.ir_plane.decision.knowledge.query import (
     enrich_observation_history,
     trace_gap,
 )
-from src.layers.l3_decision.knowledge.runtime import (
+from src.ir_plane.decision.knowledge.runtime import (
     MISS_STATUSES,
     SCHEMA,
     build_runtime_graph,
     graph_digest,
     write_runtime_graph,
 )
-from src.layers.l3_decision.knowledge.schema import EdgeType, NodeType
+from src.ir_plane.decision.knowledge.schema import EdgeType, NodeType
 
 
 @pytest.fixture()
@@ -60,7 +60,7 @@ def run_dir(tmp_path: Path, monkeypatch) -> Path:
     }), encoding="utf-8")
 
     monkeypatch.setattr(
-        "src.knowledge.lineage.ensure_run_rtl_version",
+        "src.knowledge_plane.lineage.ensure_run_rtl_version",
         lambda output_dir, module="", run_id="": {
             "module": "dut", "version_no": 7, "name": "v7",
             "content_hash": "deadbeef"})
@@ -116,7 +116,7 @@ def test_bin_nodes_are_qualified_by_coverpoint(tmp_path: Path, monkeypatch):
         {"tp_id": "TP-B", "status": "MISS", "coverpoint": "cp_b", "bin": "cp_b.empty"},
     ]}), encoding="utf-8")
     monkeypatch.setattr(
-        "src.knowledge.lineage.ensure_run_rtl_version",
+        "src.knowledge_plane.lineage.ensure_run_rtl_version",
         lambda output_dir, module="", run_id="": {})
     graph = build_runtime_graph(root)
     names = sorted(b.name for b in graph.nodes(NodeType.COVERAGE_BIN))
@@ -138,7 +138,7 @@ def test_same_fix_is_shared_across_gaps(tmp_path: Path, monkeypatch):
         {"dimension": "op", "fix_name": "relax_op", "fingerprint": "fp_x"},
     ]}), encoding="utf-8")
     monkeypatch.setattr(
-        "src.knowledge.lineage.ensure_run_rtl_version",
+        "src.knowledge_plane.lineage.ensure_run_rtl_version",
         lambda output_dir, module="", run_id="": {})
     graph = build_runtime_graph(root)
     assert len(graph.nodes(NodeType.FIX)) == 1
@@ -207,7 +207,7 @@ def test_enrich_observation_history_attaches_only_matching_gaps(run_dir: Path):
 
 def test_semantic_reason_consumes_history(run_dir: Path):
     """图不是孤立的 JSON —— 决策归因真的读到了历史版本与修复。"""
-    from src.layers.l3_decision.decision_engine import CoverageDrivenDecisionEngine
+    from src.ir_plane.decision.decision_engine import CoverageDrivenDecisionEngine
 
     write_runtime_graph(build_runtime_graph(run_dir), run_dir)
     obs = Observation(gap_paths=[{
@@ -230,7 +230,7 @@ def test_enrich_without_graph_is_a_noop(tmp_path: Path):
 
 def test_evidence_package_carries_runtime_artifacts(run_dir: Path):
     """知识图与奖励必须进证据包，不能只躺在 run 目录里。"""
-    from src.layers.l2_orchestration.evidence.signoff_package import write_package
+    from src.orchestration_plane.l2.evidence.signoff_package import write_package
 
     write_runtime_graph(build_runtime_graph(run_dir), run_dir)
     (run_dir / "coverage" / "sim_reward.json").write_text(
@@ -264,9 +264,9 @@ def test_spec_subgraph_is_merged(run_dir: Path):
 
 def test_build_query_persistence_are_separate_modules():
     """构建 / 查询 / 落盘拆开：query 不再 import runtime（避免职责又耦合回去）。"""
-    import src.layers.l3_decision.knowledge.persistence as persistence
-    import src.layers.l3_decision.knowledge.query as query
-    import src.layers.l3_decision.knowledge.runtime as runtime
+    import src.ir_plane.decision.knowledge.persistence as persistence
+    import src.ir_plane.decision.knowledge.query as query
+    import src.ir_plane.decision.knowledge.runtime as runtime
 
     assert runtime.build_runtime_graph.__module__ == runtime.__name__
     assert query.trace_gap.__module__ == query.__name__

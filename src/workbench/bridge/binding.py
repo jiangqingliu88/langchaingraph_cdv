@@ -1,6 +1,6 @@
 """工具注册表 —— 名字 → 函数，外加上一层返回值归一化。
 
-为什么需要归一化：`src/tools/` 里的包**返回值不统一**。
+为什么需要归一化：`src/runtime_plane/tools/` 里的包**返回值不统一**。
 `uvm_tools` 返回真 dict；`debug_tools`、`coverage_tools`、`assertion_tools` 这些返回的是
 **JSON 字符串**（因为它们的第一个消费者是 LangChain，而工具得给字符串）。
 界面不该为每个模块记一遍「这个要 json.loads、那个不要」—— 那是绑定表该
@@ -38,7 +38,7 @@ class ToolBinding:
     """一条绑定：清单里写的名字，对应哪个函数、怎么解释它的返回值。"""
 
     name: str
-    target: str                      # "src.engine.diagnostics.main:collect_sim_log"
+    target: str                      # "src.engine_plane.diagnostics.main:collect_sim_log"
     kind: str = "auto"
     #: False = LLM 调用 / 长任务，`call()` 默认不执行
     pure: bool = True

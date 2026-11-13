@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.core.contracts.evidence import validate_envelope
+from src.runtime_plane.core.contracts.evidence import validate_envelope
 
 
 def _read_json(path: Path) -> Dict[str, Any]:

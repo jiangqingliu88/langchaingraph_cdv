@@ -175,7 +175,7 @@ yaml 就看得清，不用追 import：
 
 ## 工具绑定
 
-模块不直接 import `src/tools/**`，而是按名字调：
+模块不直接 import `src/runtime_plane/tools/**`，而是按名字调：
 
 ```python
 payload = self.run_tool(output_dir=target)        # 用清单里绑定的主工具
@@ -185,7 +185,7 @@ payload = self.run_tool("sim.parse_log", log_text=text)
 [`bridge/binding.py`](bridge/binding.py) 负责三件事：
 
 1. **惰性 import** —— 清单里列了但没启用的模块，不会因为依赖缺失拖垮启动。
-2. **返回值归一化** —— `src/tools/` 里的返回值不统一：`uvm_tools` 返回真 dict，而 `debug_tools` / `coverage_tools` 这些返回 **JSON 字符串**
+2. **返回值归一化** —— `src/runtime_plane/tools/` 里的返回值不统一：`uvm_tools` 返回真 dict，而 `debug_tools` / `coverage_tools` 这些返回 **JSON 字符串**
    （它们的第一消费者是 LangChain）。界面不该逐个记这件事，`kind` 字段决定。
    **归一化永不抛**：`kind: json` 但拿到非 JSON 时返回 `{"raw": ..., "_parse_error": ...}`
    —— 工具的错误路径常常返回纯文本，那正是最需要显示出来的时候。

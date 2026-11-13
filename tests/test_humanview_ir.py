@@ -95,7 +95,7 @@ checks:
 
 class TestCovgIR:
     def test_valid_ir_is_ok_and_matrix_has_green_and_yellow(self):
-        from src.tools.humanview.covg_ir import matrix_of, validate_covg_text
+        from src.runtime_plane.tools.humanview.covg_ir import matrix_of, validate_covg_text
 
         result = validate_covg_text(COVG)
         assert result["ok"], result["errors"]
@@ -105,7 +105,7 @@ class TestCovgIR:
         assert counts["na"] >= 1           # 不适用的格子
 
     def test_path_without_sva_is_an_error(self):
-        from src.tools.humanview.covg_ir import validate_covg_text
+        from src.runtime_plane.tools.humanview.covg_ir import validate_covg_text
 
         broken = COVG.replace("    bound_sva: [SVA-RSP]\n", "")
         result = validate_covg_text(broken)
@@ -113,14 +113,14 @@ class TestCovgIR:
         assert any("SVA" in e and "P_OOO_RSP" in e for e in result["errors"])
 
     def test_coverpoint_without_bins_is_an_error(self):
-        from src.tools.humanview.covg_ir import validate_covg_text
+        from src.runtime_plane.tools.humanview.covg_ir import validate_covg_text
 
         broken = COVG.replace("        bins: {sync: 0, ooo: 1}\n", "")
         result = validate_covg_text(broken)
         assert any("没有任何 bins" in e for e in result["errors"])
 
     def test_markdown_has_matrix_and_traceability(self):
-        from src.tools.humanview.covg_ir import render_covg_markdown
+        from src.runtime_plane.tools.humanview.covg_ir import render_covg_markdown
 
         md = render_covg_markdown(COVG)
         assert "功能组 × 生命周期路径" in md
@@ -129,7 +129,7 @@ class TestCovgIR:
 
 class TestSVAIR:
     def test_valid_ir_is_non_vacuous(self):
-        from src.tools.humanview.sva_ir import validate_sva_text
+        from src.runtime_plane.tools.humanview.sva_ir import validate_sva_text
 
         result = validate_sva_text(SVA)
         assert result["ok"], result["errors"]
@@ -137,14 +137,14 @@ class TestSVAIR:
         assert non_vacuous["covered"] == 1
 
     def test_antecedent_never_triggered_is_vacuous_error(self):
-        from src.tools.humanview.sva_ir import validate_sva_text
+        from src.runtime_plane.tools.humanview.sva_ir import validate_sva_text
 
         result = validate_sva_text(SVA.replace("hit_count: 12", "hit_count: 0"))
         assert not result["ok"]
         assert any("vacuous" in e for e in result["errors"])
 
     def test_duplicate_property_is_an_error(self):
-        from src.tools.humanview.sva_ir import validate_sva_text
+        from src.runtime_plane.tools.humanview.sva_ir import validate_sva_text
 
         text = SVA + """
   - sva_id: SVA-DEP-2
@@ -161,13 +161,13 @@ class TestSVAIR:
         assert any("语义重复" in e for e in result["errors"])
 
     def test_class_alias_is_normalized(self):
-        from src.tools.humanview.sva_ir import norm_class
+        from src.runtime_plane.tools.humanview.sva_ir import norm_class
 
         assert norm_class("S2 时序关系") == "S2"
         assert norm_class("S7") == "S7"
 
 
-EXAMPLE_XLSX = ("src/tools/humanview/aivm_ir/example/"
+EXAMPLE_XLSX = ("src/runtime_plane/tools/humanview/aivm_ir/example/"
                 "NPU_V2.CMDSCHED.testpoint.xlsx")
 
 
@@ -175,7 +175,7 @@ class TestXlsxCaseProjection:
     def _doc(self, bindings=None):
         from pathlib import Path
 
-        from src.layers.l3_decision.case_ir import project_from_xlsx
+        from src.ir_plane.decision.case_ir import project_from_xlsx
 
         if not Path(EXAMPLE_XLSX).is_file():
             import pytest
@@ -202,7 +202,7 @@ class TestXlsxCaseProjection:
         assert case.source == "xlsx"
 
     def test_bindings_fill_dimensions_and_reduce_binding_errors(self):
-        from src.layers.l3_decision.case_ir import validate_case_doc
+        from src.ir_plane.decision.case_ir import validate_case_doc
 
         without = validate_case_doc(self._doc())
         with_bind = validate_case_doc(self._doc({
@@ -215,14 +215,14 @@ class TestXlsxCaseProjection:
         assert len(with_bind["errors"]) < len(without["errors"])
 
     def test_bindings_skeleton_has_every_case(self):
-        from src.layers.l3_decision.case_ir import bindings_skeleton
+        from src.ir_plane.decision.case_ir import bindings_skeleton
 
         doc = self._doc()
         skeleton = bindings_skeleton(doc)
         assert len(skeleton["bindings"]) == len(doc.cases)
 
     def test_case_source_xlsx_is_used_instead_of_dimension_synthesis(self):
-        from src.layers.l3_decision.case_ir import project_from_model
+        from src.ir_plane.decision.case_ir import project_from_model
 
         model = {"object": "npu_sched", "source": EXAMPLE_XLSX,
                  "dimensions": [{"id": "D_type", "fields": []}],
@@ -234,7 +234,7 @@ class TestXlsxCaseProjection:
 
 class TestSCBIR:
     def test_valid_ir_is_executed(self):
-        from src.tools.humanview.scb_ir import validate_scb_text
+        from src.runtime_plane.tools.humanview.scb_ir import validate_scb_text
 
         result = validate_scb_text(SCB)
         assert result["ok"], result["errors"]
@@ -242,21 +242,21 @@ class TestSCBIR:
         assert executed["covered"] == 1
 
     def test_execute_count_zero_is_an_error(self):
-        from src.tools.humanview.scb_ir import validate_scb_text
+        from src.runtime_plane.tools.humanview.scb_ir import validate_scb_text
 
         result = validate_scb_text(SCB.replace("execute_count: 100",
                                                "execute_count: 0"))
         assert any("从未执行" in e for e in result["errors"])
 
     def test_expected_source_equal_to_actual_is_warned(self):
-        from src.tools.humanview.scb_ir import validate_scb_text
+        from src.runtime_plane.tools.humanview.scb_ir import validate_scb_text
 
         result = validate_scb_text(SCB.replace("actual_source: rsp_item",
                                                "actual_source: tag_pending"))
         assert any("不是独立比对" in w for w in result["warnings"])
 
     def test_ledger_outstanding_is_an_error(self):
-        from src.tools.humanview.scb_ir import validate_scb_text
+        from src.runtime_plane.tools.humanview.scb_ir import validate_scb_text
 
         text = SCB.replace("    bound_cells: [RSP×P_OOO_RSP]",
                            "    outstanding: 2\n    bound_cells: [RSP×P_OOO_RSP]")

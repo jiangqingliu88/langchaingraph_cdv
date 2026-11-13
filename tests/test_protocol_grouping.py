@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.generation.uvm_tools.tool_find_spec_yaml import main as find_yaml
+from src.generation_plane.uvm_tools.tool_find_spec_yaml import main as find_yaml
 
 
 def _spec(*names, protocol=""):

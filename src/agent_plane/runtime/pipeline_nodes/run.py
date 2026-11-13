@@ -1,0 +1,419 @@
+"""executor 节点 · 执行与观测
+
+中段：编译仿真回归 → 覆盖率收集 → 功能失败调试。
+"""
+from __future__ import annotations
+
+import json
+from typing import Any, Dict
+
+from pathlib import Path
+
+import structlog
+
+from src.agent_plane.runtime.pipeline_nodes.fix import _triage_harness
+from src.orchestration_plane.l2.runtime import (
+    _token_delta, _rt, _as_float, _run_agent,
+)
+from src.orchestration_plane.l2.state import PipelineState
+
+logger = structlog.get_logger()
+
+
+async def n_ops(state: PipelineState, config) -> Dict[str, Any]:
+    rt = _rt(config)
+    # round_num 经 round_bump 后即为 1 基轮次（原 for-range 是 0 基），故直接用
+    # `sim_modes` 与 `design_style` 同位：都是"这次运行怎么跑"的输入，不是全局开关。
+    data, phase = await _run_agent(rt, state, "ops", f"ops_r{state.round_num}",
+                                   {"design_style": state.design_style,
+                                    "sim_modes": list(state.sim_modes or []),
+                                    # 分级回归的人工节点开不开（工具栏那个开关）。
+                                    # 不开 = `run_regression_staged(auto_approve=True)`。
+                                    "manual_gate": bool(state.manual_gate)})
+    regression = data.get("regression", {}) if isinstance(data, dict) else {}
+
+    # ── EDA 缺失检测（优先级最高：环境问题不是代码问题，终止闭环）──
+    if isinstance(regression, dict) and regression.get("eda_missing"):
+        _err = str(regression.get("error", ""))[:200]
+        logger.error(f"EDA 工具缺失，终止闭环（安装 QuestaSim 并加入 PATH 后重试）: {_err}")
+        return {"regression": regression, "regression_failed_count": 0,
+                "eda_blocked": True, "interrupted": True,
+                "terminal_reason": "eda_missing",
+                "phases": [phase, {"name": "eda_check", "status": "failed",
+                                   "reason": f"EDA 工具缺失: {_err}"}]}
+
+    # ── 人工节点检测：回归停在 loopback 等人放行 → 终止闭环 ──
+    # **不是失败**，机器也不该空转：不拦的话每轮都停在同一个放行点、每轮都被判成
+    # ops 失败，白烧 `max_rounds` 轮才收场（实测 5 轮跑完发现 5 次都是同一件事，
+    # 而 P0 一次都没跑过）。放行是人的动作 —— 机器在这里该做的是**停下来交棒**。
+    if isinstance(data, dict) and data.get("awaiting_approval"):
+        aw = data.get("awaiting_approval") or {}
+        logger.warning(f"分级回归停在人工节点 {aw.get('after')} → {aw.get('next')}，"
+                       f"终止闭环等人放行（{aw.get('hint', '')}）")
+        return {"regression": regression, "regression_failed_count": 0,
+                "awaiting_approval": True, "interrupted": True,
+                "terminal_reason": "awaiting_approval",
+                "phases": [phase, {"name": "manual_gate",
+                                   "status": "waiting_approval",
+                                   "reason": (f"{aw.get('after')} 已全过，进 "
+                                              f"{aw.get('next')} 前需人工放行："
+                                              f"{aw.get('hint', '')}")}]}
+
+    # ── 编译失败检测 ──
+    compile_error = None
+    if isinstance(regression, dict) and regression.get("compile") == "FAIL":
+        try:
+            from src.runtime_plane.infrastructure.compile_healer import CompileErrorAnalyzer
+            stderr = regression.get("stderr", regression.get("compile_errors", ""))
+            cr = CompileErrorAnalyzer.analyze(str(stderr))
+            compile_error = {"error_type": cr.error_type.value,
+                             "message": cr.error_message,
+                             "file": cr.error_file, "line": cr.error_line}
+        except Exception as e:
+            logger.warning(f"编译错误分析失败: {e}")
+
+    failed = regression.get("failed", 0) if isinstance(regression, dict) else 0
+    # **挂死/看门狗超时不算功能失败**：那是 bench/激励侧的事。算进去的后果是决策引擎
+    # 按 REFACTOR_RTL 去改 RTL —— 实测真跑了一轮 `design_fix`，改的是没坏的代码。
+    # `functional_failed` 由 L1 归类后给出（见 `_HANG_RE`）；没有这个键就退回旧口径。
+    harness = regression.get("harness_failures") or [] if isinstance(regression, dict) else []
+    if isinstance(regression, dict) and "functional_failed" in regression:
+        decision_failed = int(regression.get("functional_failed", 0) or 0)
+    else:
+        decision_failed = failed
+    if harness:
+        phase["harness_failures"] = harness[:5]
+        # ── C：挂死也要有**归因**，不能只留一串日志文本 ──
+        # 取指纹（规范化后 MD5）+ 归类，走 debug_tools 的纯函数工具。
+        # **只归类、不改 RTL** —— 这是"挂死不该引着改设计"与"挂死也得看得懂"
+        # 之间的分界：debug 的判断力用上了，它那条改 RTL 的路没走。
+        phase["harness_triage"] = _triage_harness(harness)
+        # **定案 → 规则草案**：这类挂死反复出现、有指纹，却没有任何规则在拦它 ——
+        # 正是最该长出一条规则的地方。只起草，不自动生效（见 rule_draft 的说明）。
+        try:
+            from src.knowledge_plane.rule_draft import (drafts_from_triage,
+                                                        write_drafts)
+
+            _n = write_drafts(Path(state.output_root),
+                              drafts_from_triage(phase["harness_triage"],
+                                                 Path(state.output_root).name))
+            if _n:
+                phase["rule_drafts"] = _n
+                logger.info(f"起草 {_n} 条规则草案 → docs/rule_drafts.md（等人拍板）")
+        except Exception as _e:                        # noqa: BLE001 起草是旁路
+            logger.debug(f"规则起草跳过: {_e}")
+        # ── B：把"为什么没进 debug"写进 phase ──
+        # 不然界面上只有一行日志，人会问"debug agent 怎么没触发"（真被问过）。
+        if not decision_failed and not compile_error:
+            phase["debug_skipped_reason"] = (
+                f"{len(harness)} 个失败全是 bench 侧（挂死/看门狗超时）—— "
+                f"debug 只修 DUT 功能错，不改 bench；已按指纹归类，见 harness_triage")
+        phase["reason"] = (str(phase.get("reason", "")) +
+                           f" | {len(harness)} 个 test 挂死/看门狗超时（bench 侧，"
+                           f"不计入功能失败）")[:400]
+        logger.warning(f"ops：{len(harness)} 个 test 挂死/看门狗超时，"
+                       f"不计入功能失败、不触发 RTL 重构：{harness[:3]}")
+    return {"regression": regression, "regression_failed_count": decision_failed,
+            "compile_error": compile_error, "phases": [phase]}
+
+
+_HIT_STATUSES = {"HIT", "OBSERVED", "BACKDOOR_HIT"}
+
+
+def _matrix_rows(state: PipelineState, data: Any) -> list:
+    """优先用本轮 executor 返回的 tp_matrix；没有再从盘上读。"""
+    matrix = data.get("tp_matrix") if isinstance(data, dict) else {}
+    rows = matrix.get("rows") if isinstance(matrix, dict) else None
+    if rows:
+        return [r for r in rows if isinstance(r, dict)]
+    try:
+        doc = json.loads(
+            (Path(state.output_root) / "coverage" / "tp_matrix.json")
+            .read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [r for r in (doc.get("rows") or []) if isinstance(r, dict)]
+
+
+def _bin_key(row: Dict[str, Any]) -> str:
+    return f"{row.get('coverpoint') or ''}.{row.get('bin') or ''}"
+
+
+def _record_decision_effect(rt, state: PipelineState, data: Any,
+                            final_coverage: float) -> None:
+    """上一轮决策的期望 vs 这一轮的实际 —— 写 `decision/evaluations.jsonl`。
+
+    **不把覆盖率上涨直接算作动作有效**：同时看 TP 命中变化、回归失败数与编译
+    状态；分不清就写 UNCERTAIN。节点重跑由 `append_record` 的 (run, round,
+    action) 幂等兜住。
+    """
+    expected = getattr(rt, "_round_expected", None)
+    action = getattr(rt, "last_action", None)
+    if not expected or not action:
+        return
+    rows = _matrix_rows(state, data)
+    current = {_bin_key(r): str(r.get("status") or "") for r in rows}
+    prev = getattr(rt, "_round_tp_snapshot", None) or {}
+    new_hits = sum(1 for k, v in current.items()
+                   if v in _HIT_STATUSES and prev.get(k) not in _HIT_STATUSES)
+    lost_hits = sum(1 for k, v in prev.items()
+                    if v in _HIT_STATUSES and current.get(k) not in _HIT_STATUSES)
+    reg = state.regression if isinstance(state.regression, dict) else {}
+    compile_ok = not bool(state.compile_error)
+    actual = {
+        "prev_coverage": getattr(rt, "_round_prev_coverage", rt.prev_coverage),
+        "coverage": final_coverage,
+        "new_hits": new_hits,
+        "lost_hits": lost_hits,
+        "tests_failed": reg.get("failed"),
+        "tests_failed_prev": getattr(rt, "_round_prev_failed", None),
+        "compile_ok": compile_ok,
+        "compile_ok_prev": getattr(rt, "_round_prev_compile_ok", None),
+        "tp_matrix_available": bool(rows),
+        "evidence": ["coverage/tp_matrix.json", "regression_stages.json"],
+    }
+    from src.runtime_plane.core.decision.eval import append_record, evaluate_round
+
+    record = evaluate_round(
+        run_id=state.run_id,
+        round_num=int(expected.get("round") or state.round_num),
+        action=action, expected=expected, actual=actual)
+    append_record(state.output_root, record)
+    if getattr(rt, "event_store", None) is not None:
+        rt.event_store.append(
+            "decision.evaluated", round=record["round"], stage="coverage",
+            status=record["status"], source="node:coverage",
+            payload={"action": record["action"]["action_type"],
+                     "status": record["status"], "reason": record["reason"],
+                     "delta": record["actual"]["delta"],
+                     "new_hits": new_hits, "lost_hits": lost_hits},
+            dedup_key=f"decision.evaluated:{state.run_id}:{record['round']}:"
+                      f"{record['action']['action_type']}")
+    rt._round_expected = None
+    rt._round_tp_snapshot = {}
+
+
+def _log_metric_effective(exclude_effect: Dict[str, Any],
+                          effective_coverage: float) -> None:
+    """口径过滤生效时记一笔 —— 让人看得出这个数是**功能口径**的，不是混合值。"""
+    if not exclude_effect.get("metric_filtered"):
+        return
+    logger.info(f"有效覆盖率按口径 {exclude_effect['metric']} 计："
+                f"{exclude_effect['covered']}/{exclude_effect['total']} bin "
+                f"→ {effective_coverage}%")
+
+
+def _safe_record_decision_effect(rt, state: PipelineState, data: Any,
+                                 final_coverage: float) -> None:
+    try:
+        _record_decision_effect(rt, state, data, final_coverage)
+    except Exception as e:                                 # noqa: BLE001
+        logger.warning(f"决策成效评估失败（忽略）: {e}")
+
+
+async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
+    """coverage 阶段 —— 原循环里最大的一块（含 Exclude 调规 / 用例配比 / 归因校准）。"""
+    rt = _rt(config)
+    svc = rt.service
+    data, phase = await _run_agent(rt, state, "coverage",
+                                   f"coverage_r{state.round_num}",
+                                   {"seed": state.seed, "round_num": state.round_num})
+
+    coverage = data.get("coverage", {}) if isinstance(data, dict) else {}
+    gaps = data.get("gaps", []) if isinstance(data, dict) else []
+    final_coverage = state.final_coverage
+    # 口径选择结果（`coverage` 不是 dict 时保持空 —— 下面按"没配置口径"处理）
+    _pick: Dict[str, Any] = {}
+    if isinstance(coverage, dict):
+        # **按口径取**（默认功能覆盖率）—— 收敛信号盯哪个数由
+        # `Settings.verification.coverage_metric` 决定，不是写死代码覆盖率。
+        #
+        # 写死代码覆盖率的后果实测过：闭环的动作（按覆盖点 gap 生成定向激励）
+        # 主要动功能覆盖率，而收敛信号盯的是代码覆盖率 —— 于是"补了但数字不动"
+        # 连续六轮，`convergence_forecast` 报 `rounds_to_target: Infinity`，
+        # 而真正的功能覆盖率同期是 64.81%。**闭环在盯一个它的动作推不动的数。**
+        from src.orchestration_plane.l2.planning import pick_coverage_value
+        _pick = pick_coverage_value(coverage)
+        final_coverage = round(_pick["value"], 1)
+        if not _pick["present"]:
+            # 缺就**说出来**，不悄悄换另一个口径（那会让目标在无声中换掉）
+            logger.warning(f"口径 {_pick['metric']} 的覆盖率没采到"
+                           f"（缺 {_pick['key']}）—— 本轮收敛信号按 0 计；"
+                           f"两个口径的现值：{ {k: coverage.get(k) for k in ('overall_pct','functional_pct')} }")
+        else:
+            logger.info(f"覆盖率口径={_pick['metric']} → {final_coverage}%"
+                        f"（另一个口径："
+                        f"{'code' if _pick['metric'] == 'functional' else 'functional'}"
+                        f"={coverage.get('overall_pct' if _pick['metric'] == 'functional' else 'functional_pct')}%）")
+
+    # ── Exclude 四步闭环：自动发现 → 提议；已批准 → 有效覆盖率调规 ──
+    coverage_map = data.get("coverage_map", {}) if isinstance(data, dict) else {}
+    exclude_effect = {"excluded": 0, "effective_total": 0,
+                      "effective_coverage": final_coverage}
+    effective_coverage = final_coverage
+    if isinstance(coverage_map, dict) and coverage_map.get("total"):
+        calibration = data.get("calibration", {}) if isinstance(data, dict) else {}
+        proposed = svc._discover_excludes(rt.exclude_reg, gaps, calibration)
+        if proposed:
+            logger.info(f"Exclude 自动发现 {proposed} 处结构性不可达覆盖点，已提议（待审批）")
+        # **按配置的口径算有效覆盖率**（`coverage_metric`）：收敛判据用的数
+        # 必须和执行侧盯的是同一个分母，否则功能口径 95% 会被代码覆盖率的
+        # 缺口拖住，闭环跑满轮次也到不了目标。
+        exclude_effect = rt.exclude_reg.effective_coverage_from_map(
+            coverage_map, metric=_pick.get("metric", ""))
+        effective_coverage = exclude_effect.get("effective_coverage", final_coverage)
+        _log_metric_effective(exclude_effect, effective_coverage)
+        if exclude_effect.get("excluded"):
+            logger.info(f"Exclude 调规：{exclude_effect['excluded']} 点已放弃，"
+                        f"有效覆盖率 {effective_coverage}%（原始 {exclude_effect['raw_coverage']}%）")
+
+    # ── 用例比例动态优化：覆盖率反馈 → 调 purpose 权重 → 影响下一轮优先级 ──
+    try:
+        _by_purpose = {
+            "functional": {"coverage": coverage.get("functional_pct", final_coverage),
+                           "sim_time": 0},
+            "protocol": {"coverage": coverage.get("branch_pct", 0), "sim_time": 0},
+            "corner": {"coverage": coverage.get("toggle_pct", 0), "sim_time": 0},
+        }
+        rt.testcase_reg.optimize_portfolio({"by_purpose": _by_purpose},
+                                           state.round_num)
+    except Exception:
+        pass
+
+    # ── 归因校准：上一轮决策动作的成效（delta 覆盖率为反馈信号）──
+    if rt.last_action is not None and rt.prev_coverage is not None:
+        try:
+            from src.knowledge_plane.coverage_experience import get_coverage_experience_store
+            # 按**名字**取（`last_action` 是具名字典，见 `converge.py` 的注释）——
+            # 加字段不再需要同步改下标，也就不会有"漏改一处、静默取错位"。
+            # `source` 一起落库：L5 蒸馏只拿 `rl_suggested` 那批学。
+            get_coverage_experience_store().record_round(
+                state.round_num, rt.last_action["action"], rt.last_action["reason"],
+                rt.last_action["gap_reasons"], rt.prev_coverage, final_coverage,
+                rt.last_action["unreachable_dims"],
+                source=rt.last_action.get("source", "rule"))
+            # ⚠️ 这里原来把「覆盖率没涨」记成**动作失败**，于是熔断计的是
+            # "这一轮没长进" —— 而覆盖率**平台期是正常的**（边际收益递减、
+            # 覆盖点本来就打不到、这一轮补的是行为不是数字）。实测后果：
+            # 闭环每轮都判 `GENERATE_DIRECTED_TEST` 失败 → 连续 3 轮 → 熔断 →
+            # 升级人工 → **闭环在 32.5% 处停住**，而 max_rounds 还有余量。
+            #
+            # 动作是否"执行成功"由执行层回答（`runtime.py` 里按 agent 的成功/异常
+            # 计），覆盖率增量是**归因信号**：上面 `record_round(...)` 已经把它
+            # 连同 delta 记进经验库了 —— 该用它去学"哪个动作有效"，不是用它去
+            # 掐断闭环。收敛与否由 `converged` / `max_rounds` 判。
+            rt.governor.after_action(rt.last_action["action"], success=True,
+                                     tokens=_token_delta(rt))
+        except Exception as e:
+            logger.warning(f"归因校准记录失败: {e}")
+    # Architecture 2.0：期望 vs 实际（旁路，失败不影响闭环）
+    _safe_record_decision_effect(rt, state, data, final_coverage)
+    rt.prev_coverage = final_coverage
+
+    # ── 粗连续奖励：把“过/不过”拆成“往好的方向走了多少” ──
+    #
+    # 只读已有产物（回归统计 / 覆盖率 / TP 矩阵 / 种子），不额外跑 EDA。
+    # 决策层用它判断最弱的一层；经验库/证据包也可引用。
+    sim_reward: Dict[str, Any] = {}
+    try:
+        from src.ir_plane.decision.reward import (
+            compute_sim_reward, weights_from_policy)
+
+        # 权重是**模块级策略**：覆盖率型 IP 与回归型 IP 的“最弱层”不该用同一把尺。
+        # 读不到策略就用 reward.py 的默认值（缺省即合法，不阻断）。
+        _weights = None
+        try:
+            from config.paths import PROJECT_ROOT
+            from src.orchestration_plane.l2.evidence.signoff_package import (
+                load_policy)
+
+            _module = str((state.spec or {}).get("design_name")
+                          or Path(state.output_root).name)
+            _policy, _ = load_policy(Path(state.output_root), _module,
+                                     project_root=PROJECT_ROOT)
+            _weights = weights_from_policy(_policy)
+        except Exception:                          # noqa: BLE001 策略是增强
+            _weights = None
+
+        _sem = data.get("semantic_validations") if isinstance(data, dict) else {}
+        sim_reward = compute_sim_reward(
+            state.regression, coverage if isinstance(coverage, dict) else {},
+            data.get("tp_matrix") if isinstance(data, dict) else {},
+            (_sem or {}).get("seed_diversity") or None,
+            weights=_weights)
+        _cov_dir = Path(state.output_root) / "coverage"
+        _cov_dir.mkdir(parents=True, exist_ok=True)
+        (_cov_dir / "sim_reward.json").write_text(
+            json.dumps(sim_reward, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info(f"粗连续奖励：{sim_reward['total']:.3f}"
+                    f"（最弱层 {sim_reward['weakest']}）")
+    except Exception as _e:                        # noqa: BLE001 旁路，不拦主流程
+        logger.debug(f"粗连续奖励计算跳过: {_e}")
+
+    # ── 运行时知识图：gap → bin/test/version/fix 的确定性因果链 ──
+    #
+    # 只读 tp_matrix / testpoints / debug_stats / lineage；落
+    # `coverage/knowledge_graph.json`，供决策与签核证据引用。
+    knowledge_graph: Dict[str, Any] = {}
+    try:
+        from src.ir_plane.decision.knowledge.runtime import (
+            build_runtime_graph, write_runtime_graph)
+
+        knowledge_graph = write_runtime_graph(
+            build_runtime_graph(state.output_root, state.spec), state.output_root)
+        logger.info(f"运行时知识图：{knowledge_graph.get('nodes', 0)} 节点 / "
+                    f"{knowledge_graph.get('edges', 0)} 边 / "
+                    f"{knowledge_graph.get('gaps', 0)} 个缺口")
+    except Exception as _e:                        # noqa: BLE001 旁路
+        logger.debug(f"运行时知识图构建跳过: {_e}")
+
+    # ── Planning：进度对比里程碑 ──
+    progress = rt.planner.check_progress(state.round_num, final_coverage)
+    if not progress["on_track"]:
+        logger.info(f"进度落后里程碑: {progress['coverage']}% vs 里程碑 "
+                    f"{progress['milestone']}%（差距 {progress['gap']}%）")
+
+    # ── 铁律 2：覆盖率数据库版本固化记录 + 原始证据（log/VCD）哈希 ──
+    from src.runtime_plane.infrastructure.infrastructure import sha256_file
+    _log_path = data.get("log_path", "") if isinstance(data, dict) else ""
+    _vcd_path = data.get("vcd_path", "") if isinstance(data, dict) else ""
+    db_entry = {
+        "round": state.round_num,
+        "coverage_db": data.get("coverage_db", {}) if isinstance(data, dict) else {},
+        "coverage_summary": data.get("coverage_summary", "") if isinstance(data, dict) else "",
+        "coverage": final_coverage,
+        "log_path": _log_path, "log_sha256": sha256_file(_log_path)[:16],
+        "vcd_path": _vcd_path, "vcd_sha256": sha256_file(_vcd_path)[:16],
+    }
+
+    return {
+        "coverage": coverage if isinstance(coverage, dict) else {},
+        "gaps": gaps if isinstance(gaps, list) else [],
+        "coverage_map": coverage_map if isinstance(coverage_map, dict) else {},
+        "calibration": data.get("calibration", {}) if isinstance(data, dict) else {},
+        "coverage_db": data.get("coverage_db", {}) if isinstance(data, dict) else {},
+        "coverage_summary": data.get("coverage_summary", "") if isinstance(data, dict) else "",
+        "log_path": _log_path, "vcd_path": _vcd_path,
+        "functional_coverage": coverage.get("functional_pct", final_coverage)
+        if isinstance(coverage, dict) else final_coverage,
+        "final_coverage": final_coverage,
+        "effective_coverage": effective_coverage,
+        "exclude_effect": exclude_effect,
+        "sim_reward": sim_reward,
+        "knowledge_graph": knowledge_graph,
+        "coverage_db_history": [db_entry],
+        "phases": [phase],
+    }
+
+
+async def n_debug_functional(state: PipelineState, config) -> Dict[str, Any]:
+    """功能回归失败 → 跳过 coverage，进 debug 修复。"""
+    rt = _rt(config)
+    logger.info(f"功能回归 {state.regression_failed_count} 失败 → 跳过 coverage，进入 debug 修复")
+    data, phase = await _run_agent(rt, state, "debug", f"debug_r{state.round_num}")
+    updates: Dict[str, Any] = {"phases": [phase]}
+    if isinstance(data.get("debug"), dict):
+        updates["debug"] = data["debug"]
+    return updates
+
+

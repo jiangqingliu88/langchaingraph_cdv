@@ -50,7 +50,7 @@ def _spec(module_id: str):
 
 
 def _patch(module, run_dir) -> None:
-    from src.interfaces.api.flow import run_decision_trace, run_manifest_info
+    from src.workbench.api.flow import run_decision_trace, run_manifest_info
 
     def fake_run_tool(name=None, *, quiet=False, force=False, **kwargs):
         tool = name or (module.spec.tool.name if module.spec.tool else None)

@@ -1,7 +1,7 @@
 """design 写手的重试必须真的换 prompt（否则进程内缓存会原样返回坏 RTL）。"""
 from __future__ import annotations
 
-from src.generation.design.rtl.main import DesignExecutor
+from src.generation_plane.design.rtl.main import DesignExecutor
 
 
 def test_retry_prompt_contains_attempt_and_compile_feedback(monkeypatch):
@@ -11,7 +11,7 @@ def test_retry_prompt_contains_attempt_and_compile_feedback(monkeypatch):
         seen["prompt"] = prompt
         return "module foo (); endmodule\n"
 
-    monkeypatch.setattr("src.tools.common.lib.llm_call.call_llm", fake_llm)
+    monkeypatch.setattr("src.runtime_plane.tools.common.lib.llm_call.call_llm", fake_llm)
     ip = {"ip_name": "scoreboard", "category": "logic",
           "function_desc": "状态表比较", "interface": [],
           "combinational": [], "sequential": [], "method": "state"}
@@ -102,7 +102,7 @@ def test_first_attempt_prompt_has_no_retry_noise(monkeypatch):
         seen["prompt"] = prompt
         return "module foo (); endmodule\n"
 
-    monkeypatch.setattr("src.tools.common.lib.llm_call.call_llm", fake_llm)
+    monkeypatch.setattr("src.runtime_plane.tools.common.lib.llm_call.call_llm", fake_llm)
     DesignExecutor._llm_write_ip(
         {"ip_name": "x", "category": "logic", "function_desc": "f",
          "interface": [], "combinational": [], "sequential": [], "method": ""},

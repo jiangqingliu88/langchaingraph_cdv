@@ -18,9 +18,9 @@ import json
 
 import pytest
 
-from src.layers.l1_infrastructure.infrastructure import (
+from src.runtime_plane.infrastructure.infrastructure import (
     classify_sim_failures, is_elab_failure_line)
-from src.layers.l2_orchestration.governance.quality_guard import (
+from src.orchestration_plane.l2.governance.quality_guard import (
     Verdict, validate_regress)
 
 #: 实测那份日志的关键几行（DPI 自动编译库加载失败）
@@ -158,7 +158,7 @@ class TestHangIsNotAFunctionalFailure:
         return tmp_path / "regression_run"
 
     def test_watchdog_timeout_is_collected(self, tmp_path):
-        from src.layers.l1_infrastructure.infrastructure import collect_hung_tests
+        from src.runtime_plane.infrastructure.infrastructure import collect_hung_tests
 
         root = self._run_dir(tmp_path, self.WATCHDOG_LOG)
         hung = collect_hung_tests(root)
@@ -166,14 +166,14 @@ class TestHangIsNotAFunctionalFailure:
         assert "SIM_WATCHDOG" in hung[0]
 
     def test_clean_log_is_not_collected(self, tmp_path):
-        from src.layers.l1_infrastructure.infrastructure import collect_hung_tests
+        from src.runtime_plane.infrastructure.infrastructure import collect_hung_tests
 
         root = self._run_dir(tmp_path, "# Errors: 0, Warnings: 0\n")
         assert collect_hung_tests(root) == []
 
     def test_gapseq_timeout_is_also_collected(self, tmp_path):
         """激励自己的超时（比看门狗早）同样归到这一类。"""
-        from src.layers.l1_infrastructure.infrastructure import collect_hung_tests
+        from src.runtime_plane.infrastructure.infrastructure import collect_hung_tests
 
         root = self._run_dir(
             tmp_path,

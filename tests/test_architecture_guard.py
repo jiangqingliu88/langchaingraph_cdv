@@ -33,10 +33,10 @@ def _baseline(path, data):
 # ── size budget ─────────────────────────────────────────────────
 
 def test_custom_root_is_scanned(tmp_path):
-    _tree(tmp_path, "src/engine/a.py", lines=3)
+    _tree(tmp_path, "src/engine_plane/a.py", lines=3)
     counts = guard.line_counts(tmp_path)
-    assert "src/engine/a.py" in counts
-    assert counts["src/engine/a.py"] == 3
+    assert "src/engine_plane/a.py" in counts
+    assert counts["src/engine_plane/a.py"] == 3
 
 
 def test_watched_file_shrink_must_tighten(tmp_path):
@@ -184,20 +184,20 @@ def test_unregistered_zone_is_reported(tmp_path):
 
 
 def test_engine_must_not_import_agent(tmp_path):
-    _tree(tmp_path, "src/agent/specialists/x.py", lines=1)
-    _tree(tmp_path, "src/engine/front/x.py",
-          text="from src.agent.specialists import x\n")
+    _tree(tmp_path, "src/agent_plane/specialists/x.py", lines=1)
+    _tree(tmp_path, "src/engine_plane/front/x.py",
+          text="from src.agent_plane.specialists import x\n")
     issues = guard.import_violations(tmp_path)
     assert any(i["type"] == "import_direction" and i["to"] == "agents"
                for i in issues)
 
 
 def test_dynamic_import_into_agent_is_checked(tmp_path):
-    _tree(tmp_path, "src/agent/specialists/x.py", lines=1)
-    _tree(tmp_path, "src/engine/front/x.py", text=(
+    _tree(tmp_path, "src/agent_plane/specialists/x.py", lines=1)
+    _tree(tmp_path, "src/engine_plane/front/x.py", text=(
         "def f():\n"
         "    import importlib\n"
-        "    return importlib.import_module('src.agent.specialists.x')\n"))
+        "    return importlib.import_module('src.agent_plane.specialists.x')\n"))
     issues = guard.import_violations(tmp_path)
     assert any(i["type"] == "lazy_import_direction" and i["to"] == "agents"
                for i in issues)

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.layers.l2_orchestration.evidence.signoff_package import (
+from src.orchestration_plane.l2.evidence.signoff_package import (
     POLICY_SCHEMA,
     PolicyError,
     load_policy,

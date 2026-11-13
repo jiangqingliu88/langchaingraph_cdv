@@ -46,7 +46,7 @@ class TestDeclarationWiring:
 
     def test_uses_the_ip_spec_schema(self):
         """schema 必须选中 ip_spec 那一份（选错就成了拿人工节点的规则校验 IP）。"""
-        from src.tools.integration.ide_tools.api import IP_SPEC
+        from src.runtime_plane.tools.integration.ide_tools.api import IP_SPEC
 
         assert IP_SPEC.schema_path.name == "ip_spec.schema.json"
         assert IP_SPEC.schema_path.exists()
@@ -62,7 +62,7 @@ class TestDeclarationWiring:
 
     def test_shipped_example_validates_clean(self, module):
         """仓库里那份示例必须**真的能过校验** —— 示例本身错了等于给了个坏榜样。"""
-        from src.tools.integration.ide_tools.api import run_ip_spec
+        from src.runtime_plane.tools.integration.ide_tools.api import run_ip_spec
 
         spec, _m, manifest_path = _shipped_spec()
         target = Path(manifest_path).parent / spec.input

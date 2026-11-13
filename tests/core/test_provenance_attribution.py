@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 
-from src.core.provenance.attribution import classify
-from src.core.provenance.graph import build_provenance, write_provenance
-from src.core.provenance.report import build_attribution_report
+from src.runtime_plane.core.provenance.attribution import classify
+from src.runtime_plane.core.provenance.graph import build_provenance, write_provenance
+from src.runtime_plane.core.provenance.report import build_attribution_report
 
 
 def _write(path, obj):

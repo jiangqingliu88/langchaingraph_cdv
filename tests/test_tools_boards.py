@@ -10,11 +10,11 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
-from src.tools import boards
+from src.runtime_plane.tools import boards
 
 
 def _tool_dirs() -> set:
-    root = Path("src/tools")
+    root = Path("src/runtime_plane/tools")
     out = set()
     for p in root.iterdir():
         if not p.is_dir() or p.name.startswith("__"):
@@ -41,11 +41,11 @@ def test_no_unregistered_tool_package():
 
 def test_packages_live_under_their_board_directory():
     """板块表不仅声明职责，还钉住**物理位置**。"""
-    root = Path("src/tools")
+    root = Path("src/runtime_plane/tools")
     wrong = []
     for board, pkgs in boards.BOARDS.items():
         for pkg in pkgs:
-            expected = (Path("src/generation") / pkg if board == "generation"
+            expected = (Path("src/generation_plane") / pkg if board == "generation"
                         else root / board / pkg)
             if not expected.is_dir():
                 wrong.append(f"{pkg} 应在 {expected}")
@@ -55,6 +55,6 @@ def test_packages_live_under_their_board_directory():
 def test_board_packages_are_importable_and_lazy_load():
     for board in boards.BOARDS:
         mod = importlib.import_module(
-            "src.generation" if board == "generation" else f"src.tools.{board}")
+            "src.generation_plane" if board == "generation" else f"src.runtime_plane.tools.{board}")
         for pkg in boards.BOARDS[board]:
             assert getattr(mod, pkg) is not None

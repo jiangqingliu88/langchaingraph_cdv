@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 
-from src.core.decision.eval import append_record, evaluate_round
-from src.core.metrics.engineering import collect, write
+from src.runtime_plane.core.decision.eval import append_record, evaluate_round
+from src.runtime_plane.core.metrics.engineering import collect, write
 
 
 def _w(path, obj):
@@ -85,7 +85,7 @@ def test_baseline_comparison_reports_regression_reduction(tmp_path):
 
 
 def test_write_metrics_file_and_event(tmp_path):
-    from src.core.runtime.events import EventStore
+    from src.runtime_plane.core.runtime.events import EventStore
     root = _run(tmp_path)
     events = EventStore(root, run_id=root.name)
     out = write(root, event_store=events)

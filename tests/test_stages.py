@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.layers.l2_orchestration import stages
-from src.engine.orchestration.supervisor.graph import NODE_NAMES
-from src.layers.l2_orchestration.state import PHASE_OWNERS
+from src.orchestration_plane.l2 import stages
+from src.orchestration_plane.supervisor.graph import NODE_NAMES
+from src.orchestration_plane.l2.state import PHASE_OWNERS
 
 
 class TestCoverage:
@@ -17,7 +17,7 @@ class TestCoverage:
         missing = sorted(set(NODE_NAMES) - set(stages.all_ids()))
         assert not missing, (
             f"这些图节点没有显示元数据：{missing}；"
-            "在 src/layers/l2_orchestration/stages.py 的 STAGES 里补上")
+            "在 src/orchestration_plane/l2/stages.py 的 STAGES 里补上")
 
     def test_no_spec_for_a_node_that_does_not_exist(self):
         """反向也要查：STAGES 里的 id 必须是真节点，否则界面会画出一个永远不亮的格子。"""

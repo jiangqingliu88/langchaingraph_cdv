@@ -140,7 +140,7 @@ class DraftsModule(ModuleBase):
         self.set_status(f"骨架已复制：{row.get('rule_id')}（粘进 semantic_check 再写判据）")
 
     def _mark_accepted(self) -> None:
-        from src.knowledge.rule_draft import mark_accepted
+        from src.knowledge_plane.rule_draft import mark_accepted
 
         row = self._selected()
         if not row or not self.run_dir:

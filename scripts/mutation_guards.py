@@ -43,49 +43,49 @@ class Mutation:
 MUTATIONS: List[Mutation] = [
     Mutation(
         name="decision_hard_overridden",
-        path="src/layers/l3_decision/decision_engine.py",
+        path="src/ir_plane/decision/decision_engine.py",
         old="return self.hard_action(observation) or self.soft_action(observation)",
         new="return self.soft_action(observation)",
         tests="tests/test_decision_phases.py",
     ),
     Mutation(
         name="steps_dag_missing_dependency",
-        path="src/engine/verify/steps_dag.py",
+        path="src/engine_plane/verify/steps_dag.py",
         old='        "env_cov_bins", deps=("dut_channel",),',
         new='        "env_cov_bins", deps=(),',
         tests="tests/test_verify_steps_dag.py",
     ),
     Mutation(
         name="plusargs_reserved_allowed",
-        path="src/layers/l2_orchestration/regression_tools/backend_profiles.py",
+        path="src/orchestration_plane/l2/regression_tools/backend_profiles.py",
         old="        if key in reserved:",
         new="        if False and key in reserved:",
         tests="tests/test_plusargs_semantics.py",
     ),
     Mutation(
         name="file_audit_hash_skipped",
-        path="src/layers/l2_orchestration/evidence/file_audit.py",
+        path="src/orchestration_plane/l2/evidence/file_audit.py",
         old='            if r.get("hash") != expect:',
         new='            if False and r.get("hash") != expect:',
         tests="tests/test_human_edit_evidence.py",
     ),
     Mutation(
         name="state_contract_wrong_owner",
-        path="src/layers/l2_orchestration/state.py",
+        path="src/orchestration_plane/l2/state.py",
         old='"sim_reward":        {"writers": ("coverage",),',
         new='"sim_reward":        {"writers": ("design",),',
         tests="tests/test_state_contracts.py",
     ),
     Mutation(
         name="tool_registry_empty_allowed",
-        path="src/layers/l2_orchestration/communication/tool_hub.py",
+        path="src/orchestration_plane/l2/communication/tool_hub.py",
         old="        undeclared = sorted(empty - cls.EXECUTORS_WITHOUT_HUB_TOOLS)",
         new="        undeclared = []",
         tests="tests/test_tool_registry.py",
     ),
     Mutation(
         name="source_terminal_accepts_anything",
-        path="src/layers/l3_decision/decision_engine.py",
+        path="src/ir_plane/decision/decision_engine.py",
         old='    "terminal": frozenset(TERMINAL_ACTIONS),',
         new='    "terminal": frozenset(ALL_ACTIONS),',
         tests="tests/test_source_transitions.py",
@@ -93,7 +93,7 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         # 判据退化成子串匹配 → 逐条 SB 的 `mismatched=0` 能把"聚合脏"骗成通过
         name="scb_pass_anchor_loosened",
-        path="src/layers/l2_orchestration/regression_tools/backend_profiles.py",
+        path="src/orchestration_plane/l2/regression_tools/backend_profiles.py",
         old=("    'grep -qE \"(\\\\[SCB_DUT\\\\]|Scoreboard:).*mismatched=0\" "
              "sim_vsim.log '"),
         new="    'grep -qE \"mismatched=0\" sim_vsim.log '",
@@ -102,7 +102,7 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         # 归属靠猜（名字对不上也发逐条行）→ "不猜" 的测试必须红
         name="scoreboard_rules_guessed",
-        path="src/engine/verify/dut_checker.py",
+        path="src/engine_plane/verify/dut_checker.py",
         old=("        owned = [str(n) for n in (sb.get(\"rules\") or []) "
              "if str(n) in known]"),
         new=("        owned = ([str(n) for n in (sb.get(\"rules\") or [])]\n"

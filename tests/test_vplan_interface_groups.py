@@ -10,12 +10,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.generation.planning.dplan.extract import merge_contracts
-from src.engine.front.vplan.extract import _top_ifaces
-from src.generation.verification.main import _vplan_uvm_spec
-from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
-from src.ir.vplan.execution import _json
-from src.tools.common.lib.ports import is_clock_port, is_reset_port
+from src.generation_plane.planning.dplan.extract import merge_contracts
+from src.engine_plane.front.vplan.extract import _top_ifaces
+from src.generation_plane.verification.main import _vplan_uvm_spec
+from src.runtime_plane.infrastructure.infrastructure import InfrastructureManager
+from src.ir_plane.vplan.execution import _json
+from src.runtime_plane.tools.common.lib.ports import is_clock_port, is_reset_port
 
 
 FULL = [
@@ -134,7 +134,7 @@ def test_setup_does_not_create_legacy_dirs_even_in_legacy_mode(tmp_path, monkeyp
 
 def test_case_ids_from_batch_theme_tags():
     """VPlan 批次 test 的 CASE 身份在 `TH-TC_*` tag 里（不是 testpoints 反查）。"""
-    from src.layers.l2_orchestration.regression_tools.regression_framework.generators.shell import _case_ids_for
+    from src.orchestration_plane.l2.regression_tools.regression_framework.generators.shell import _case_ids_for
 
     test = {"tags": ["p0", "batch", "TH-TC_CMD_INT_PERF_001"]}
     assert _case_ids_for(test, "npu_sched_env_directed_test", {}) == [
@@ -147,7 +147,7 @@ def test_case_ids_from_batch_theme_tags():
 
 def test_bootstrap_interface_group_contracts():
     """docs/specs 也要按协议给接口分组契约（C-IF-GRP-*）与端口对照表。"""
-    from src.engine.front.vplan.extract import (
+    from src.engine_plane.front.vplan.extract import (
         _interface_groups, _group_contract_rows)
 
     groups = _interface_groups(_spec()["interfaces"])
@@ -162,7 +162,7 @@ def test_bootstrap_interface_group_contracts():
 def test_interface_tables_expand_every_port(tmp_path):
     """只保留逐端口表；不再写分组汇总的 interfaces.csv。"""
     import csv
-    from src.engine.front.vplan.extract import (
+    from src.engine_plane.front.vplan.extract import (
         _interface_groups, _group_contract_rows, _write_interface_ports_table)
 
     groups = _interface_groups(_spec()["interfaces"])
@@ -182,7 +182,7 @@ def test_interface_tables_expand_every_port(tmp_path):
 
 
 def test_bit_fields_extracted_from_description():
-    from src.engine.front.vplan.extract import _bit_fields
+    from src.engine_plane.front.vplan.extract import _bit_fields
 
     assert _bit_fields(
         "指令信号：bit[2:0]=xd/xs1/xs2, bit[9:3]=func7, bit[41:10]=rs1val"
@@ -192,9 +192,9 @@ def test_bit_fields_extracted_from_description():
 
 def test_master_interface_includes_config_start_done_release():
     """一个 master 的接口 = config + start + done + 释放，按模块归组。"""
-    from src.engine.front.vplan.extract import (
+    from src.engine_plane.front.vplan.extract import (
         _group_name, _group_contract_rows, _interface_groups)
-    from src.generation.verification.main import _interface_protocol
+    from src.generation_plane.verification.main import _interface_protocol
 
     cases = (("cmd_niu_dst_base_addr", "config", "niu"),
              ("cmd_niu_start", "pulse", "niu"),
@@ -226,7 +226,7 @@ def test_master_interface_includes_config_start_done_release():
 
 def test_global_interfaces_not_in_module_table_are_kept():
     """模块表漏端口时，docs/specs 仍按全局 interfaces 分组（不丢 spec 端口）。"""
-    from src.engine.front.vplan.extract import _interface_groups
+    from src.engine_plane.front.vplan.extract import _interface_groups
 
     ifaces = list(_spec()["interfaces"]) + [
         {"name": "cmd_creg_mpu_exce0", "data_width": 32,

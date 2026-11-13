@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 
-from src.interfaces.cli import commands, common
+from src.workbench.cli import commands, common
 
 
 def test_exit_codes_are_defined_once_and_reexported():

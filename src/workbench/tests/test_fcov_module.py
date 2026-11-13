@@ -61,7 +61,7 @@ def _shipped_spec():
 @pytest.fixture
 def run_dir(tmp_path):
     """一次 VPlan 运行的目录骨架（执行资产挂在 `inputs/vplan/`）。"""
-    from src.ir.vplan import (
+    from src.ir_plane.vplan import (
         load_project, materialize_project_inputs)
 
     root = tmp_path / "output_test_20260101_000000"
@@ -321,7 +321,7 @@ class TestTheNpuModelEndToEnd:
     def npu_run(self, tmp_path):
         from pathlib import Path
 
-        from src.ir.vplan import (
+        from src.ir_plane.vplan import (
             load_project, materialize_project_inputs)
 
         root = tmp_path / "output_npu_20260101_000000"
@@ -356,7 +356,7 @@ class TestBatchesAndTraceability:
 
     @pytest.fixture
     def npu_run(self, tmp_path):
-        from src.ir.vplan import engine
+        from src.ir_plane.vplan import engine
 
         root = tmp_path / "output_npu_20260101_000000"
         (root / "inputs").mkdir(parents=True)

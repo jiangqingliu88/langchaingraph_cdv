@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from src.core.closure.plan import build_closure_plan, write_closure_plan
+from src.runtime_plane.core.closure.plan import build_closure_plan, write_closure_plan
 
 
 def _w(path, obj):

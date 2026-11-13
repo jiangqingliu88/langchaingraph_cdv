@@ -1,12 +1,12 @@
 """Manifest & Evidence Package tests — SignOffAI 签核证据链核心测试
 
-import 路径已从已删除的 src.layers.l2_orchestration.manifest
-修正为当前实际位置 src.layers.l2_orchestration.evidence.manifest。
+import 路径已从已删除的 src.orchestration_plane.l2.manifest
+修正为当前实际位置 src.orchestration_plane.l2.evidence.manifest。
 """
 import zipfile
 from pathlib import Path
 
-from src.layers.l2_orchestration.evidence.manifest import (
+from src.orchestration_plane.l2.evidence.manifest import (
     ManifestBuilder, EvidencePackager, RunManifest, PhaseArtifact,
     hash_file, hash_content, hash_json,
 )
@@ -286,7 +286,7 @@ class TestArtifactReviewListsFunctionalCoverage:
     """产物审查台要看得见功能覆盖那三份 —— 否则"生成了没有"无从查起。"""
 
     def test_the_coverage_declaration_is_listed(self, tmp_path):
-        from src.interfaces.api.flow.api import run_artifacts
+        from src.workbench.api.flow.api import run_artifacts
 
         (tmp_path / "coverage").mkdir(parents=True)
         (tmp_path / "coverage" / "coverage_points.json").write_text("{}", encoding="utf-8")
@@ -298,7 +298,7 @@ class TestArtifactReviewListsFunctionalCoverage:
 
     def test_a_missing_one_is_still_listed(self, tmp_path):
         """"还没生成"是有用的信息 —— 照列，标 `exists: false`。"""
-        from src.interfaces.api.flow.api import run_artifacts
+        from src.workbench.api.flow.api import run_artifacts
 
         payload = run_artifacts(str(tmp_path))
         by = {a["path"]: a for a in payload["artifacts"]}

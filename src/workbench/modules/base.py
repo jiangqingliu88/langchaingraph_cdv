@@ -5,7 +5,7 @@
 实现掉，子类只需要写 `build_content()`（搭控件）与 `on_refresh()`（填数据）。
 
 模块**只拿 `AnalysisResult` 式的只读结果与 `AppContext`，不自己读文件、
-不自己算结论** —— 判定逻辑都在 `src/tools/` 里那层。这样模块能脱离主窗口
+不自己算结论** —— 判定逻辑都在 `src/runtime_plane/tools/` 里那层。这样模块能脱离主窗口
 单独测，也是「工具与界面分开」这条线在界面侧的落点。
 
 `placeholder: true` 的模块**自动**得到一条关不掉的琥珀横幅：不能靠模块

@@ -6,14 +6,14 @@
 # 当前不被闭环消费（与 manual_nodes.yaml 同一性质，见
 # docs/design/gui_pipeline_architecture.md §8）。
 #
-# 字段刻意对齐既有的 IP 库（src/knowledge/ip_registry.py）：
+# 字段刻意对齐既有的 IP 库（src/knowledge_plane/ip_registry.py）：
 #   name ↔ ip_name    category ↔ category   function ↔ function_desc
 #   revision ↔ version
 # 同一个概念在仓库里只该有一套字段名 —— 否则规格和库对不上，谁也不知道信哪边。
 #
-# 读取入口：src/tools/integration/ide_tools/api.py::run_ip_spec
+# 读取入口：src/runtime_plane/tools/integration/ide_tools/api.py::run_ip_spec
 # 界面模块：src/workbench/modules/ide/ip_spec/module.py
-# schema：  src/tools/integration/ide_tools/schema/ip_spec.schema.json
+# schema：  src/runtime_plane/tools/integration/ide_tools/schema/ip_spec.schema.json
 #
 # ── 字段约定 ──
 # version              文档版本号（可省，默认 1）

@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.ir.contract import write_contract
-from src.ir.contract.contract_model import Fact, FactBundle
-from src.ir.contract.ledger import append_bundle
+from src.ir_plane.contract import write_contract
+from src.ir_plane.contract.contract_model import Fact, FactBundle
+from src.ir_plane.contract.ledger import append_bundle
 
 CASE_IR = {"module": "demo", "cases": [{
     "id": "CASE-A",
@@ -47,7 +47,7 @@ def _run(tmp_path: Path, *, with_facts=True) -> Path:
 
 
 def _filter(root, params=None, env=None, monkeypatch=None):
-    from src.engine.ops.main import _worklist_filter
+    from src.engine_plane.ops.main import _worklist_filter
 
     if env is not None:
         monkeypatch.setenv("SIGNOFFAI_WORKLIST", env)

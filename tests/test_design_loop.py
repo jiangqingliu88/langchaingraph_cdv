@@ -4,10 +4,10 @@ from __future__ import annotations
 import asyncio
 import json
 
-from src.engine.orchestration.supervisor.routing import r_after_design
-from src.layers.l2_orchestration.state import PipelineState
-from src.agent.specialists.design.tools import build_design_tools
-from src.agent.runtime.tool_loop import LoopResult
+from src.orchestration_plane.supervisor.routing import r_after_design
+from src.orchestration_plane.l2.state import PipelineState
+from src.agent_plane.specialists.design.tools import build_design_tools
+from src.agent_plane.runtime.tool_loop import LoopResult
 
 
 def _tools(root):
@@ -36,7 +36,7 @@ def test_design_tools_are_sandboxed(tmp_path):
 
 
 def test_design_loop_opt_in_writes_rtl(tmp_path, monkeypatch):
-    from src.agent.specialists.design import loop as design_loop
+    from src.agent_plane.specialists.design import loop as design_loop
 
     monkeypatch.setenv("SIGNOFFAI_DESIGN_LOOP", "1")
     state = PipelineState(output_root=str(tmp_path), rtl_missing=True,
@@ -55,7 +55,7 @@ def test_design_loop_opt_in_writes_rtl(tmp_path, monkeypatch):
 
 
 def test_design_loop_skips_when_rtl_exists(tmp_path, monkeypatch):
-    from src.agent.specialists.design import loop as design_loop
+    from src.agent_plane.specialists.design import loop as design_loop
 
     monkeypatch.setenv("SIGNOFFAI_DESIGN_LOOP", "1")
     out = asyncio.run(design_loop.n_design_agent(

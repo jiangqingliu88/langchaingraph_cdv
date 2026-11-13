@@ -32,7 +32,7 @@ def _write_run_dir(output_root, *, stages=(), flat=False, shared_case="",
     子集才真跑出产物 —— 给 `shared_case` 时每一级都会有它的目录，产物只落在
     `artifact_stage` 那一级。这正是读端要处理的现实形状。
     """
-    from src.layers.l1_infrastructure.layout import regression_root
+    from src.runtime_plane.infrastructure.layout import regression_root
 
     def emit(root_dir, case, status="pass", artifact=False):
         d = root_dir / "build_b1" / f"test_{case}"
@@ -66,8 +66,8 @@ class TestStageNamesAgreeWithTheWriter:
     """
 
     def test_every_writer_stage_is_recognised(self):
-        from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
-        from src.layers.l1_infrastructure.layout import STAGE_DIRS
+        from src.runtime_plane.infrastructure.infrastructure import InfrastructureManager
+        from src.runtime_plane.infrastructure.layout import STAGE_DIRS
 
         writer_stages = [s[0] for s in InfrastructureManager.REGRESSION_STAGES]
         missing = [s for s in writer_stages if s not in STAGE_DIRS]
@@ -82,7 +82,7 @@ class TestStageNamesAgreeWithTheWriter:
         字面量 → 这里红。查的是**代码行**（注释会讲这件事、那不算复现）。
         """
         from pathlib import Path
-        import src.layers.l1_infrastructure.infrastructure as infra
+        import src.runtime_plane.infrastructure.infrastructure as infra
 
         code_lines = [
             ln for ln in Path(infra.__file__).read_text(encoding="utf-8").splitlines()
@@ -105,7 +105,7 @@ class TestReaderRecognisesTheWrittenLayout:
         而最后一级往往只剩"随机/通用"那批，跑完什么都不落，于是
         「回归波形」「回归覆盖率」两页**整页空白**：产物明明在 p0/p1/p2。
         """
-        from src.interfaces.api.flow.api import run_regression_status
+        from src.workbench.api.flow.api import run_regression_status
 
         _write_run_dir(tmp_path, stages=("loopback", "p0", "p1"))
         payload = run_regression_status(str(tmp_path))
@@ -123,7 +123,7 @@ class TestReaderRecognisesTheWrittenLayout:
         """
         from pathlib import Path
 
-        from src.interfaces.api.flow.api import run_regression_status
+        from src.workbench.api.flow.api import run_regression_status
 
         _write_run_dir(tmp_path, stages=("p0", "p1"), shared_case="t_shared",
                        artifact_stage="p0")
@@ -137,7 +137,7 @@ class TestReaderRecognisesTheWrittenLayout:
 
     def test_flat_layout_still_reads(self, tmp_path):
         """老布局**不能因为支持分级就废掉** —— 存量运行目录都是平的。"""
-        from src.interfaces.api.flow.api import run_regression_status
+        from src.workbench.api.flow.api import run_regression_status
 
         _write_run_dir(tmp_path, flat=True)
         payload = run_regression_status(str(tmp_path))
@@ -145,8 +145,8 @@ class TestReaderRecognisesTheWrittenLayout:
 
     def test_regression_dir_itself_is_accepted(self, tmp_path):
         """传进来的可能就是**回归目录本身** —— 实测踩过，别再退回去。"""
-        from src.layers.l1_infrastructure.layout import regression_root
-        from src.interfaces.api.flow.api import run_regression_status
+        from src.runtime_plane.infrastructure.layout import regression_root
+        from src.workbench.api.flow.api import run_regression_status
 
         _write_run_dir(tmp_path, stages=("p0",))
         reg_dir = regression_root(tmp_path)
@@ -158,14 +158,14 @@ class TestLayoutFunctions:
     """三个函数的语义 —— 读端两个需求（看一个 / 看全）共用一套判据。"""
 
     def test_latest_root_is_the_newest_stage(self, tmp_path):
-        from src.layers.l1_infrastructure.layout import latest_root, regression_root
+        from src.runtime_plane.infrastructure.layout import latest_root, regression_root
 
         _write_run_dir(tmp_path, stages=("loopback", "p0", "p2"))
         assert latest_root(tmp_path) == regression_root(tmp_path) / "p2"
 
     def test_test_dirs_sees_every_stage(self, tmp_path):
         """**看全**：每一级都是证据，不是只看最后一级。"""
-        from src.layers.l1_infrastructure.layout import test_dirs
+        from src.runtime_plane.infrastructure.layout import test_dirs
 
         _write_run_dir(tmp_path, stages=("loopback", "p0", "p2"))
         assert {d.name for d in test_dirs(tmp_path)} == {
@@ -174,13 +174,13 @@ class TestLayoutFunctions:
     def test_no_regression_artifacts_returns_none_not_a_bogus_path(self, tmp_path):
         """没有产物 → `None`。**不返回一个不存在的路径** —— 那会让调用方
         读到一个空目录、当成"没有用例"，把"路径拼错了"伪装成"这轮没跑"。"""
-        from src.layers.l1_infrastructure.layout import latest_root, test_dirs
+        from src.runtime_plane.infrastructure.layout import latest_root, test_dirs
 
         assert latest_root(tmp_path) is None
         assert test_dirs(tmp_path) == []
 
     def test_empty_regression_run_is_none(self, tmp_path):
-        from src.layers.l1_infrastructure.layout import regression_root, latest_root
+        from src.runtime_plane.infrastructure.layout import regression_root, latest_root
 
         regression_root(tmp_path).mkdir()          # 目录在，但没有 build_*
         assert latest_root(tmp_path) is None

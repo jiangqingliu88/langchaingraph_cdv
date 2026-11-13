@@ -4,12 +4,12 @@ import json
 
 import pytest
 
-from src.core.contracts import (
+from src.runtime_plane.core.contracts import (
     EVENT_TYPES, PRODUCERS, build_envelope, event_producer, read_jsonl,
     register_producer, sha256_json, validate_envelope, validate_event_type,
     versions, write_jsonl,
 )
-from src.core.contracts.quality import overall_status
+from src.runtime_plane.core.contracts.quality import overall_status
 
 
 def test_versions_are_centralized_and_known():

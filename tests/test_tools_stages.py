@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 STAGES = (
-    Path("src/layers/l3_decision/evidence/PLAYBOOK.md"),
+    Path("src/ir_plane/decision/evidence/PLAYBOOK.md"),
 )
 
 REQUIRED = ("什么时候用我", "不要用我", "正确调用方式", "常见错误", "产物")
@@ -32,5 +32,5 @@ def test_skills_live_with_the_module_they_document():
     """
     for path in STAGES:
         posix = path.as_posix()
-        assert posix.startswith(("src/layers/", "src/tools/")), posix
+        assert posix.startswith(("src/runtime_plane/", "src/ir_plane/", "src/engine_plane/")), posix
         assert any(path.parent.glob("*.py")), f"{path} 旁边没有实现文件"

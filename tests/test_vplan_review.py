@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.ir.vplan import VPlanError
-from src.ir.vplan.review import (
+from src.ir_plane.vplan import VPlanError
+from src.ir_plane.vplan.review import (
     record_review, require_review, review_status)
 
 

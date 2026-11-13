@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 
-from src.core.incremental.dependencies import affected_tests, load_dependency_map
-from src.core.incremental.plan import build_plan, write_plan
-from src.core.incremental.rtl_diff import diff_runs
-from src.core.incremental.run_diff import compare_runs
+from src.runtime_plane.core.incremental.dependencies import affected_tests, load_dependency_map
+from src.runtime_plane.core.incremental.plan import build_plan, write_plan
+from src.runtime_plane.core.incremental.rtl_diff import diff_runs
+from src.runtime_plane.core.incremental.run_diff import compare_runs
 
 
 def _w(path, obj):

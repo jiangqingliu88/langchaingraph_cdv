@@ -9,7 +9,7 @@
   · **汇总表** —— 每阶段最新一轮的值，把 build 数量显式列出来，可右键复制。
 
 数据源是 `config/trend/trend.yaml`（清单的 `input:`），界面**只读**：改 YAML →
-点「刷新」。口径与判定都在 `src/tools/flow/trend_tools/`，界面只管画。
+点「刷新」。口径与判定都在 `src/runtime_plane/tools/flow/trend_tools/`，界面只管画。
 """
 from __future__ import annotations
 

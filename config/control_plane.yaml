@@ -1,6 +1,6 @@
 # 控制平面策略 —— 动作级 AUTO / APPROVAL / FORBIDDEN
 #
-# 默认表在 `src/layers/l3_decision/control_plane/actions.py`；这里只写覆盖。
+# 默认表在 `src/ir_plane/decision/control_plane/actions.py`；这里只写覆盖。
 # 模块可在 `specs/<module>/control_plane.yaml` 再覆盖一次。
 schema: control_plane_policy_v1
 defaults:

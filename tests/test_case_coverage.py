@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.tools.common.lib import case_meta
+from src.runtime_plane.tools.common.lib import case_meta
 
 
 VCOVER = """\
@@ -86,9 +86,9 @@ def _run_with_tp(tmp_path: Path, **tp):
 
 @pytest.fixture
 def fake_vcover(monkeypatch):
-    from src.layers.l3_decision.evidence import case_cov_impl as cc
-    from src.layers.l3_decision.evidence import cov_api
-    from src.tools.common.lib import collect_real_coverage as crc
+    from src.ir_plane.decision.evidence import case_cov_impl as cc
+    from src.ir_plane.decision.evidence import cov_api
+    from src.runtime_plane.tools.common.lib import collect_real_coverage as crc
 
     def fake_materialize(db, force=False):
         return str(db), ""
@@ -140,7 +140,7 @@ class TestTaskMetaGeneration:
         用例也能挂上它实际覆盖的测试点）。
         """
         import yaml
-        from src.layers.l2_orchestration.regression_tools.regression_framework.generators.shell import (
+        from src.orchestration_plane.l2.regression_tools.regression_framework.generators.shell import (
             ShellGenerator)
 
         run = tmp_path / "run"
@@ -198,7 +198,7 @@ class TestCaseCov:
 
     def test_illegal_bin_vetoes_an_otherwise_green_case(
             self, tmp_path, fake_vcover, monkeypatch):
-        from src.layers.l3_decision.evidence import case_cov_impl as cc
+        from src.ir_plane.decision.evidence import case_cov_impl as cc
         run = _run_with_tp(tmp_path)
         _task_dir(run, task="tp_a_seed_6001", tp_ids=["TP-1"])
         monkeypatch.setattr(cc, "_vcover_cvg_report",
@@ -306,7 +306,7 @@ class TestWaveManifest:
 
 class TestAuditSignoffGate:
     def _gate(self, tmp_path, rows):
-        from src.engine.audit.main import _apply_case_coverage_gate
+        from src.engine_plane.audit.main import _apply_case_coverage_gate
         gates: dict = {}
         caveats: list = []
         cc = _apply_case_coverage_gate(
@@ -357,7 +357,7 @@ class TestPerSbEvidence:
     """
 
     def test_parse_per_sb_lines(self):
-        from src.tools.common.lib.case_meta import parse_case_log
+        from src.runtime_plane.tools.common.lib.case_meta import parse_case_log
 
         facts = parse_case_log(
             "[SCB_DUT] total=40 matched=40 mismatched=0\n"
@@ -367,7 +367,7 @@ class TestPerSbEvidence:
                                              "mismatched": 1}
 
     def test_per_sb_evidence_wins_over_aggregate(self):
-        from src.layers.l3_decision.evidence.case_cov_impl import _scb_evidence
+        from src.ir_plane.decision.evidence.case_cov_impl import _scb_evidence
 
         facts = {"scb_summary": {"total": 40, "matched": 40, "mismatched": 0},
                  "log_facts": {"scb_by_id": {"SB-X": {"total": 5, "matched": 4,
@@ -378,7 +378,7 @@ class TestPerSbEvidence:
         assert out[0]["status"] == "MISSING"       # 逐条的 mismatch 不能被聚合盖住
 
     def test_log_mode_without_own_line_is_not_executed(self):
-        from src.layers.l3_decision.evidence.case_cov_impl import _scb_evidence
+        from src.ir_plane.decision.evidence.case_cov_impl import _scb_evidence
 
         facts = {"scb_summary": {"total": 40, "matched": 40, "mismatched": 0},
                  "log_facts": {}}

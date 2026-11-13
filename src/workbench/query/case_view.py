@@ -1,8 +1,8 @@
 """Case View 只读查询 —— 页面只渲染生成物，不重算、不写盘。
 
 与 `src/workbench/ARCHITECTURE.md` 的冻结契约一致：本层**不 import Qt**，
-也不 import `src.tools.*`（页面经 `bridge/catalog.py` 的工具拿数据，或直接
-读 run 目录里已经落盘的 JSON）。写操作走 `src.interfaces.api.case_view_service`。
+也不 import `src.runtime_plane.tools.*`（页面经 `bridge/catalog.py` 的工具拿数据，或直接
+读 run 目录里已经落盘的 JSON）。写操作走 `src.workbench.api.case_view_service`。
 """
 from __future__ import annotations
 

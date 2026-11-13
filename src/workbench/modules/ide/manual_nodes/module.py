@@ -3,7 +3,7 @@
 **它是什么**：一份声明「在闭环流程哪个阶段之后插一个人工干预点」的 YAML 的
 编辑器。左边写原文、下面列 schema 诊断、双击诊断跳到出问题的那一行。
 
-**它不是什么**：它**不改闭环流程**。闭环图（`src/layers/l2_orchestration/graph.py`）
+**它不是什么**：它**不改闭环流程**。闭环图（`src/orchestration_plane/l2/graph.py`）
 的 23 个节点是写死的，`build_closed_loop_graph()` 不读任何节点声明；设计文档
 `docs/design/gui_pipeline_architecture.md` §8 也明确「不在 GUI 里编辑流程拓扑」。
 所以这份 YAML 是**声明/规划**性质的，本模块只负责「把它编辑对、校验过」，等以后
@@ -15,7 +15,7 @@
 """
 from __future__ import annotations
 
-from src.tools.integration.ide_tools.api import MANUAL_NODES
+from src.runtime_plane.tools.integration.ide_tools.api import MANUAL_NODES
 from src.workbench.modules.ide.decl_editor import DeclEditorModule
 
 

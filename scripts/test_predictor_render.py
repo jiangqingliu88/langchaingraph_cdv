@@ -3,8 +3,8 @@ import sys, json, subprocess, tempfile
 from pathlib import Path
 sys.path.insert(0, 'src')
 
-from src.tools.checking.spec_tools.main import analyze_specification
-from src.generation.uvm_tools.tool_find_spec_yaml.main import _gen_apb_register_model
+from src.runtime_plane.tools.checking.spec_tools.main import analyze_specification
+from src.generation_plane.uvm_tools.tool_find_spec_yaml.main import _gen_apb_register_model
 
 # 1. 取 registers → model_body
 spec = json.loads(analyze_specification(open('specs/apb_uart/apb_uart_spec.md', encoding='utf-8').read()))

@@ -219,7 +219,7 @@ class WindowActionsMixin:
             `MODE_OPTS`），跑完要能回答"这份波形是哪门业务跑出来的"。中途改一个
             界面控件去动已经在跑的命令，那份记录就成了假的。
 
-            词条来自工具层的表（`src/layers/l2_orchestration/regression_tools/sim_modes.py`），
+            词条来自工具层的表（`src/orchestration_plane/l2/regression_tools/sim_modes.py`），
             这里不另抄一份；选择记在项目级 `.signoffai/sim_modes.json`。
             """
             from PySide6.QtWidgets import QComboBox, QLabel
@@ -235,7 +235,7 @@ class WindowActionsMixin:
                         Qt.ItemDataRole.ToolTipRole)
             self.sim_mode_box.setToolTip(
                 "回归的仿真业务：选中哪门就只跑哪门（默认 cov+wave）。" + chr(10) +
-                "词条与取值见 src/layers/l2_orchestration/regression_tools/sim_modes.py；" + chr(10) +
+                "词条与取值见 src/orchestration_plane/l2/regression_tools/sim_modes.py；" + chr(10) +
                 "标「本后端无开关」的项在当前 EDA 后端没有对应参数，"
                 "选中会被告警忽略（不会把不存在的选项塞进命令行）。")
             # 先把选中项摆好、**再接信号** —— 反过来的话，这个"回到上次选择"的

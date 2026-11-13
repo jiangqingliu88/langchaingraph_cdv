@@ -1,9 +1,9 @@
 """参考模型的本地编译门禁（`ModelExecutor._verify_model`）。
 
-**为什么在根 `tests/` 而不是 `src/generation/design/cmodel/tests/`**：`src/engine/stages/` 下没有
+**为什么在根 `tests/` 而不是 `src/generation_plane/design/cmodel/tests/`**：`src/engine_plane/stages/` 下没有
 tests 目录，agent 的测试一直放在根 `tests/`（见 `tests/test_agents.py`）。
 
-**环境守卫**：`src/layers/l2_orchestration/executors/base.py` 在模块级 import
+**环境守卫**：`src/orchestration_plane/l2/executors/base.py` 在模块级 import
 langchain，所以只要 langchain 栈不完整，这个文件根本 import 不进来 —— 那会让整套
 测试变成 collection error 而不是一条清楚的 skip。下面用 `importorskip` 挡住。
 
@@ -19,7 +19,7 @@ import pytest
 
 pytest.importorskip("langchain_classic", reason="langchain 栈不完整，agent 模块无法导入")
 
-from src.generation.design.cmodel.main import ModelExecutor  # noqa: E402
+from src.generation_plane.design.cmodel.main import ModelExecutor  # noqa: E402
 
 _V = ModelExecutor._verify_model
 
@@ -71,7 +71,7 @@ class TestHdlModels:
 
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/vlog")
         monkeypatch.setattr(
-            "src.layers.l1_infrastructure.infrastructure.InfrastructureManager",
+            "src.runtime_plane.infrastructure.infrastructure.InfrastructureManager",
             _FakeInfra)
         result = _V(tmp_path, "dut", "systemverilog", "module m; endmodule\n")
         assert result["status"] == "FAIL"
@@ -88,7 +88,7 @@ class TestHdlModels:
 
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/vlog")
         monkeypatch.setattr(
-            "src.layers.l1_infrastructure.infrastructure.InfrastructureManager",
+            "src.runtime_plane.infrastructure.infrastructure.InfrastructureManager",
             _FakeInfra)
         result = _V(tmp_path, "dut", "systemverilog", "module m; endmodule\n")
         assert result["status"] == "PASS"
@@ -105,7 +105,7 @@ class TestHdlModels:
 
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/vlog")
         monkeypatch.setattr(
-            "src.layers.l1_infrastructure.infrastructure.InfrastructureManager",
+            "src.runtime_plane.infrastructure.infrastructure.InfrastructureManager",
             _BoomInfra)
         result = _V(tmp_path, "dut", "systemverilog", "module m; endmodule\n")
         assert result["status"] == "FAIL"

@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import asyncio
 
-from src.engine.orchestration import guards
-from src.engine.orchestration.supervisor import graph as graph_mod
-from src.engine.orchestration.guards import _guarded_node
-from src.layers.l2_orchestration.state import (
+from src.orchestration_plane import guards
+from src.orchestration_plane.supervisor import graph as graph_mod
+from src.orchestration_plane.guards import _guarded_node
+from src.orchestration_plane.l2.state import (
     STATE_CONTRACTS,
     PipelineState,
     unexpected_state_writers,

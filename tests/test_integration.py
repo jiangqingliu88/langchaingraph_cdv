@@ -30,7 +30,7 @@ class TestManifestIntegration:
 
     def test_manifest_includes_pipeline_result(self):
         """验证 manifest 包含 pipeline 结果的关键字段"""
-        from src.layers.l2_orchestration.evidence.manifest import ManifestBuilder
+        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder
 
         phases = [
             {"name": "spec", "status": "passed", "score": 95, "time": 0.5, "retries": 0,
@@ -74,7 +74,7 @@ class TestContextPersistence:
     """ContextStore 持久化测试"""
 
     def test_context_snapshot_and_restore(self):
-        from src.layers.l2_orchestration.context.context import ContextStore
+        from src.orchestration_plane.l2.context.context import ContextStore
 
         store = ContextStore()
         store.put("spec", {"design_name": "ALU", "features": [{"name": "ADD"}]}, source="spec_planner")
@@ -89,7 +89,7 @@ class TestContextPersistence:
         assert "env" not in snap
 
     def test_context_prune_removes_consumed_keys(self):
-        from src.layers.l2_orchestration.context.context import ContextStore
+        from src.orchestration_plane.l2.context.context import ContextStore
 
         store = ContextStore()
         store.put("spec", {"design_name": "ALU"}, source="spec_planner")
@@ -101,7 +101,7 @@ class TestContextPersistence:
         assert "env" in store.keys()
 
     def test_context_field_level_fetch(self):
-        from src.layers.l2_orchestration.context.context import ContextStore
+        from src.orchestration_plane.l2.context.context import ContextStore
 
         store = ContextStore()
         store.put("spec", {

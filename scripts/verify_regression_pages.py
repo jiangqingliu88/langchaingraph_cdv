@@ -27,7 +27,7 @@ from PySide6.QtWidgets import QApplication      # noqa: E402
 
 app = QApplication.instance() or QApplication([])
 
-from src.layers.l2_orchestration.run_service import list_runs   # noqa: E402
+from src.orchestration_plane.l2.run_service import list_runs   # noqa: E402
 from src.workbench.settings_store import SettingsStore         # noqa: E402
 from src.workbench.tests.conftest import (make_ctx, make_window,  # noqa: E402
                                           shipped_manifest)

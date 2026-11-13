@@ -5,11 +5,11 @@
 """
 import json
 
-from src.layers.l3_decision.spec_tools import analyze_specification, extract_features, generate_test_plan
-from src.generation.uvm_tools import generate_uvm
-from src.tools.checking.assertion_tools import generate_sva_assertions
-from src.engine.diagnostics import collect_sim_log
-from src.layers.l3_decision.evidence import collect_coverage
+from src.ir_plane.decision.spec_tools import analyze_specification, extract_features, generate_test_plan
+from src.generation_plane.uvm_tools import generate_uvm
+from src.runtime_plane.tools.checking.assertion_tools import generate_sva_assertions
+from src.engine_plane.diagnostics import collect_sim_log
+from src.ir_plane.decision.evidence import collect_coverage
 
 
 def test_analyze_specification():

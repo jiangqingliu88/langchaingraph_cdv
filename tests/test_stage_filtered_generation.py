@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.layers.l2_orchestration.regression_tools.regression_framework.core.config import make_tag_matcher
-from src.layers.l2_orchestration.regression_tools.regression_framework.generators.shell import ShellGenerator
+from src.orchestration_plane.l2.regression_tools.regression_framework.core.config import make_tag_matcher
+from src.orchestration_plane.l2.regression_tools.regression_framework.generators.shell import ShellGenerator
 
 CONFIG = {
     "variables": {"SEED": 1},
@@ -64,7 +64,7 @@ def test_a_stage_with_no_matching_tests_generates_no_test_dirs(tmp_path):
 def test_staged_run_passes_the_filter_and_normal_run_does_not(monkeypatch, tmp_path):
     """L1 的**分级**路径才裁剪；普通回归仍生成全量树。"""
     import yaml
-    from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
+    from src.runtime_plane.infrastructure.infrastructure import InfrastructureManager
 
     captured = {}
 
@@ -73,7 +73,7 @@ def test_staged_run_passes_the_filter_and_normal_run_does_not(monkeypatch, tmp_p
             captured.update(kw)
 
     monkeypatch.setattr(
-        "src.layers.l2_orchestration.regression_tools.regression_framework.generators.shell.ShellGenerator",
+        "src.orchestration_plane.l2.regression_tools.regression_framework.generators.shell.ShellGenerator",
         lambda: FakeGen())
 
     reg = tmp_path / "regression.yaml"

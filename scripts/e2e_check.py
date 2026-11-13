@@ -40,7 +40,7 @@ def main() -> int:
     else:
         print("\n[info] 检测到 EDA 工具 → 期望闭环正常执行")
 
-    cmd = [str(PYTHON), "-m", "src.interfaces.cli.commands", "verify",
+    cmd = [str(PYTHON), "-m", "src.workbench.cli.commands", "verify",
            str(spec_file), "--max-rounds", "3", "--json"]
     print(f"\n=== 执行: {' '.join(cmd)} ===")
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,

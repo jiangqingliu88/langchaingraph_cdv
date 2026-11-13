@@ -33,19 +33,19 @@ BINDINGS: List[ToolBinding] = [
 
     ToolBinding(
         name="debug.collect_sim_log",
-        target="src.engine.diagnostics.main:collect_sim_log",
+        target="src.engine_plane.diagnostics.main:collect_sim_log",
         kind="json",
         doc="扫 output_dir 下的仿真日志，汇总 pass/fail 与错误摘要",
     ),
     ToolBinding(
         name="debug.collect_compile_log",
-        target="src.engine.diagnostics.main:collect_compile_log",
+        target="src.engine_plane.diagnostics.main:collect_compile_log",
         kind="json",
         doc="扫 output_dir 下的编译日志",
     ),
     ToolBinding(
         name="debug.fingerprint_error",
-        target="src.engine.diagnostics.main:fingerprint_error",
+        target="src.engine_plane.diagnostics.main:fingerprint_error",
         kind="json",
         doc="为一段错误文本算去重指纹 + 归类",
     ),
@@ -65,24 +65,24 @@ BINDINGS: List[ToolBinding] = [
     ),
 
     # ══ 日志解析（纯文本进、dict 出，不需要任何 EDA 工具）══════════
-    # 这三个来自 src/tools/common/lib/sim_log.py，是「手上有日志文本但没有 output/
+    # 这三个来自 src/runtime_plane/tools/common/lib/sim_log.py，是「手上有日志文本但没有 output/
     # 目录」时的入口 —— 界面里粘贴一段日志就能用。
 
     ToolBinding(
         name="sim.parse_log",
-        target="src.tools.common.lib.sim_log:parse_sim_log",
+        target="src.runtime_plane.tools.common.lib.sim_log:parse_sim_log",
         kind="auto",
         doc="把一段仿真日志文本解析成结构化结果",
     ),
     ToolBinding(
         name="sim.analyze_compile",
-        target="src.tools.common.lib.sim_log:analyze_compile_log",
+        target="src.runtime_plane.tools.common.lib.sim_log:analyze_compile_log",
         kind="auto",
         doc="编译日志 → 错误/警告摘要",
     ),
     ToolBinding(
         name="sim.analyze_sim",
-        target="src.tools.common.lib.sim_log:analyze_sim_log",
+        target="src.runtime_plane.tools.common.lib.sim_log:analyze_sim_log",
         kind="auto",
         doc="仿真日志 → 结果摘要",
     ),
@@ -91,19 +91,19 @@ BINDINGS: List[ToolBinding] = [
     # 读一份 YAML 按 JSON Schema 校验，纯读、无子进程，所以是 pure。
     ToolBinding(
         name="ide.manual_nodes",
-        target="src.tools.integration.ide_tools.api:run_manual_nodes",
+        target="src.runtime_plane.tools.integration.ide_tools.api:run_manual_nodes",
         kind="json",
         doc="manual_nodes.yaml → 人工节点声明 schema 校验结果",
     ),
     ToolBinding(
         name="ide.ip_spec",
-        target="src.tools.integration.ide_tools.api:run_ip_spec",
+        target="src.runtime_plane.tools.integration.ide_tools.api:run_ip_spec",
         kind="json",
         doc="ip_spec.yaml → IP 规格声明 schema 校验结果",
     ),
     ToolBinding(
         name="humanview.aivm_plan",
-        target="src.tools.humanview.aivm_ir.api:summarize_xlsx",
+        target="src.runtime_plane.tools.humanview.aivm_ir.api:summarize_xlsx",
         kind="json",
         doc="PM 手写测试点表（xlsx）→ TP 清单 / 三通道覆盖点 / M1 计划摘要（只读）",
     ),
@@ -111,13 +111,13 @@ BINDINGS: List[ToolBinding] = [
     # ══ 验证管理系统：VPlan 项目 / 运行产物 ═══════════════════════
     ToolBinding(
         name="vplan.status",
-        target="src.ir.vplan.report:project_summary",
+        target="src.ir_plane.vplan.report:project_summary",
         kind="json",
         doc="VPlan 项目 → 需求/feature/契约/TP/case 计数与状态（只读）",
     ),
     ToolBinding(
         name="vplan.run_artifacts",
-        target="src.ir.vplan.report:run_artifacts",
+        target="src.ir_plane.vplan.report:run_artifacts",
         kind="json",
         doc="run 目录 → TP IR / 覆盖率计划 / 契约 / sv 资产 / 回归（只读）",
     ),
@@ -128,13 +128,13 @@ BINDINGS: List[ToolBinding] = [
 
     ToolBinding(
         name="isa_ir.validate",
-        target="src.generation.isa_ir_tools.api:run_validate",
+        target="src.generation_plane.isa_ir_tools.api:run_validate",
         kind="json",
         doc="IR 源 / seq.ir → 动作、张量、视图计数（只解析，不写盘）",
     ),
     ToolBinding(
         name="isa_ir.build",
-        target="src.generation.isa_ir_tools.api:run_build",
+        target="src.generation_plane.isa_ir_tools.api:run_build",
         kind="json", pure=False,
         doc="三阶段编译并落盘：01_tensors / 02_ir / 03_commands（**写盘 + 子进程**，必须显式触发）",
     ),
@@ -148,19 +148,19 @@ BINDINGS: List[ToolBinding] = [
     # 所以批准/拒绝两条都是 `pure=False`：**不可逆，且不能因为切标签页就发生**。
     ToolBinding(
         name="coverage.excludes",
-        target="src.layers.l3_decision.evidence.exclude_api:read_excludes",
+        target="src.ir_plane.decision.evidence.exclude_api:read_excludes",
         kind="json",
         doc="覆盖率豁免登记册 → 待批 / 已批（带审批人与哈希指纹）/ 统计",
     ),
     ToolBinding(
         name="coverage.approve_exclude",
-        target="src.layers.l3_decision.evidence.exclude_api:approve_exclude",
+        target="src.ir_plane.decision.evidence.exclude_api:approve_exclude",
         kind="json", pure=False,
         doc="批准一条豁免 —— 签名 + 哈希指纹入链（改动覆盖率分母）",
     ),
     ToolBinding(
         name="coverage.reject_exclude",
-        target="src.layers.l3_decision.evidence.exclude_api:reject_exclude",
+        target="src.ir_plane.decision.evidence.exclude_api:reject_exclude",
         kind="json", pure=False,
         doc="拒绝一条豁免 —— 该点仍需覆盖",
     ),
@@ -168,7 +168,7 @@ BINDINGS: List[ToolBinding] = [
     # 进度趋势 —— 读一份 YAML 的纯读绑定，切标签页不弹确认。
     ToolBinding(
         name="flow.trend",
-        target="src.tools.flow.trend_tools.api:run_trend",
+        target="src.runtime_plane.tools.flow.trend_tools.api:run_trend",
         kind="json",
         doc="trend.yaml → 各阶段进度趋势（build 数量 + P0-P3 通过率）",
     ),
@@ -177,7 +177,7 @@ BINDINGS: List[ToolBinding] = [
     # 纯读、无子进程，所以是 pure；run_dir 由调用方从 pipeline.detail 取。
     ToolBinding(
         name="flow.signoff",
-        target="src.interfaces.api.flow.api:run_signoff",
+        target="src.workbench.api.flow.api:run_signoff",
         kind="json",
         doc="一次运行目录 → 签核门禁 + 六层证据链 + 总判定",
     ),
@@ -185,37 +185,37 @@ BINDINGS: List[ToolBinding] = [
     # 人工签核 —— 逐用例结论 + TB/RTL 封存（写盘动作，必须人工显式触发）
     ToolBinding(
         name="flow.manual_signoff",
-        target="src.interfaces.api.manual_signoff_service:manual_signoff",
+        target="src.workbench.api.manual_signoff_service:manual_signoff",
         kind="json",
         doc="一次运行目录 → 逐用例人工签核表 + 封存状态",
     ),
     ToolBinding(
         name="flow.review",
-        target="src.interfaces.api.review_service:review_board",
+        target="src.workbench.api.review_service:review_board",
         kind="json",
         doc="一次运行目录 → 意图/Claim/解释/下一轮上下文/证据门禁审阅表",
     ),
     ToolBinding(
         name="flow.review_decide",
-        target="src.interfaces.api.review_service:review_decide",
+        target="src.workbench.api.review_service:review_decide",
         kind="json", pure=False, trigger="user",
         doc="人工审阅结论（intent / claim / interpretation）",
     ),
     ToolBinding(
         name="flow.manual_signoff_record",
-        target="src.interfaces.api.manual_signoff_service:record_case_decision",
+        target="src.workbench.api.manual_signoff_service:record_case_decision",
         kind="json", pure=False, trigger="user",
         doc="记录一个用例的人工结论（APPROVED / REJECTED / PENDING）",
     ),
     ToolBinding(
         name="flow.seal",
-        target="src.interfaces.api.manual_signoff_service:seal_tb_rtl",
+        target="src.workbench.api.manual_signoff_service:seal_tb_rtl",
         kind="json", pure=False, trigger="user",
         doc="封存 TB + RTL：逐文件哈希 + 聚合哈希 + 签核快照",
     ),
     ToolBinding(
         name="flow.unseal",
-        target="src.interfaces.api.manual_signoff_service:unseal",
+        target="src.workbench.api.manual_signoff_service:unseal",
         kind="json", pure=False, trigger="user",
         doc="解封 TB/RTL（需要签核人 + 原因）",
     ),
@@ -223,7 +223,7 @@ BINDINGS: List[ToolBinding] = [
     # 任务总览 —— 一次运行作为一个「验证任务」：目标 / 进度 / 收敛预测 / 卡点。
     ToolBinding(
         name="flow.task",
-        target="src.interfaces.api.flow.api:run_task",
+        target="src.workbench.api.flow.api:run_task",
         kind="json",
         doc="一次运行目录 → 任务总览（目标 / 覆盖率 / 收敛预测 / 卡在哪）",
     ),
@@ -233,7 +233,7 @@ BINDINGS: List[ToolBinding] = [
     # 与哈希链），改了等于篡改结论，不给编辑入口。
     ToolBinding(
         name="flow.artifacts",
-        target="src.interfaces.api.flow.api:run_artifacts",
+        target="src.workbench.api.flow.api:run_artifacts",
         kind="json",
         doc="一次运行目录 → 中间产物清单（存在与否 / 哈希 / schema 体检）",
     ),
@@ -251,19 +251,19 @@ BINDINGS: List[ToolBinding] = [
     # 数据源同上：运行目录里的日志与产物。
     ToolBinding(
         name="agent.outputs",
-        target="src.interfaces.api.flow.api:run_agent_outputs",
+        target="src.workbench.api.flow.api:run_agent_outputs",
         kind="json",
         doc="一次运行目录 + agent 角色 → 该 agent 的阶段与产物",
     ),
     ToolBinding(
         name="flow.decision",
-        target="src.interfaces.api.flow.api:run_decision_trace",
+        target="src.workbench.api.flow.api:run_decision_trace",
         kind="json",
         doc="一次运行目录 → 逐轮决策动作与驾驭裁决",
     ),
     ToolBinding(
         name="flow.regression_status",
-        target="src.interfaces.api.flow.api:run_regression_status",
+        target="src.workbench.api.flow.api:run_regression_status",
         kind="json",
         doc="一次运行目录 → 回归用例状态（用例/状态/耗时/UVM 计数/日志/波形/覆盖率库）",
     ),
@@ -274,13 +274,13 @@ BINDINGS: List[ToolBinding] = [
     # 纯读盘（模型 + 覆盖率文本 + 几个文件），不重跑生成器、不重跑 vcover。
     ToolBinding(
         name="flow.fcov",
-        target="src.interfaces.api.flow.api:run_fcov",
+        target="src.workbench.api.flow.api:run_fcov",
         kind="json",
         doc="一次运行目录 → 功能覆盖率三表（覆盖点 / 测试点 / 资产）",
     ),
     ToolBinding(
         name="flow.coverage_report",
-        target="src.layers.l3_decision.evidence.cov_api:build_coverage_report",
+        target="src.ir_plane.decision.evidence.cov_api:build_coverage_report",
         kind="json", pure=False,
         doc="覆盖率库 → HTML 报告（已是最新则复用）；返回报告路径供界面打开",
     ),
@@ -288,86 +288,86 @@ BINDINGS: List[ToolBinding] = [
     # （只看文件在不在、多大、什么时候写的），所以是 pure。
     ToolBinding(
         name="flow.run_coverage",
-        target="src.interfaces.api.flow.api:run_coverage",
+        target="src.workbench.api.flow.api:run_coverage",
         kind="json",
         doc="一次运行目录 → 总覆盖率（总/功能 + 分项 + 合并库与报告的位置）",
     ),
     ToolBinding(
         name="flow.rule_drafts",
-        target="src.interfaces.api.flow.api:run_rule_drafts",
+        target="src.workbench.api.flow.api:run_rule_drafts",
         kind="json",
         doc="一次运行 → 起草的规则草案（含粘贴骨架与是否已被接受）",
     ),
     ToolBinding(
         name="flow.todo",
-        target="src.interfaces.api.flow.api:collect_todos",
+        target="src.workbench.api.flow.api:collect_todos",
         kind="json",
         doc="一次运行 → 「现在该干什么」（待审批 / 待签豁免 / 需人工确认 / 卡住 / 挂死）",
     ),
     ToolBinding(
         name="flow.compare",
-        target="src.interfaces.api.flow.api:compare_runs",
+        target="src.workbench.api.flow.api:compare_runs",
         kind="json",
         doc="两次运行 → 逐项对比（覆盖率 delta / 变坏的用例 / 修复的用例 / 判定变化）",
     ),
     ToolBinding(
         name="flow.manifest",
-        target="src.interfaces.api.flow.api:run_manifest_info",
+        target="src.workbench.api.flow.api:run_manifest_info",
         kind="json",
         doc="一次运行目录 → 运行清单 + 文件变更链",
     ),
     # SoC 参考工程 —— 工程适配层（不是第二套执行引擎）。
     ToolBinding(
         name="soc.project",
-        target="src.interfaces.api.soc_service:project_info",
+        target="src.workbench.api.soc_service:project_info",
         kind="json",
         doc="SoC 工程目录 → spec/interface/plan/RTL 清单与输入校验（只读）",
     ),
     ToolBinding(
         name="ip.list",
-        target="src.interfaces.api.soc_service:list_ips",
+        target="src.workbench.api.soc_service:list_ips",
         kind="json",
         doc="SoC 工程 → IP 清单（团队 / owner / version / status / RTL 存在性，只读）",
     ),
     ToolBinding(
         name="ip.info",
-        target="src.interfaces.api.soc_service:ip_info",
+        target="src.workbench.api.soc_service:ip_info",
         kind="json",
         doc="SoC 工程 + IP id → 单个 IP 的详细输入（只读）",
     ),
     ToolBinding(
         name="ip.plan",
-        target="src.interfaces.api.soc_service:ip_plan",
+        target="src.workbench.api.soc_service:ip_plan",
         kind="json",
         doc="SoC 工程 + IP id → IP 验证计划（只读）",
     ),
     ToolBinding(
         name="ip.status",
-        target="src.interfaces.api.soc_service:ip_status",
+        target="src.workbench.api.soc_service:ip_status",
         kind="json",
         doc="IP 的 TP 状态 / 来源 run / 发布就绪度（只读）",
     ),
     ToolBinding(
         name="ip.release",
-        target="src.interfaces.api.soc_service:soc_ip_release_matrix",
+        target="src.workbench.api.soc_service:soc_ip_release_matrix",
         kind="json",
         doc="SoC 团队消费的 IP release matrix（只读）",
     ),
     ToolBinding(
         name="ip.evidence",
-        target="src.interfaces.api.soc_service:write_ip_evidence",
+        target="src.workbench.api.soc_service:write_ip_evidence",
         kind="json", pure=False,
         doc="从来源 SoC run 生成 IP 级证据（写盘，显式触发）",
     ),
     ToolBinding(
         name="ip.run",
-        target="src.interfaces.api.soc_service:run_ip_regression",
+        target="src.workbench.api.soc_service:run_ip_regression",
         kind="json", pure=False,
         doc="按 IP 验证计划跑一次 IP 回归（需要 EDA，显式触发）",
     ),
     ToolBinding(
         name="ip.release_build",
-        target="src.interfaces.api.soc_service:build_ip_release",
+        target="src.workbench.api.soc_service:build_ip_release",
         kind="json", pure=False,
         # 对外交付物：人点了按钮还不够，要带审批标记（界面上是确认对话框）
         trigger="approval",
@@ -375,43 +375,43 @@ BINDINGS: List[ToolBinding] = [
     ),
     ToolBinding(
         name="ip.release_check",
-        target="src.interfaces.api.soc_service:verify_ip_release",
+        target="src.workbench.api.soc_service:verify_ip_release",
         kind="json",
         doc="校验 IP 发布包自身哈希与清单 RTL hash 的绑定（只读）",
     ),
     ToolBinding(
         name="soc.runs",
-        target="src.interfaces.api.soc_service:list_soc_runs",
+        target="src.workbench.api.soc_service:list_soc_runs",
         kind="json",
         doc="工作目录 → output_soc_* 运行列表（只读）",
     ),
     ToolBinding(
         name="soc.run_summary",
-        target="src.interfaces.api.soc_service:run_summary",
+        target="src.workbench.api.soc_service:run_summary",
         kind="json",
         doc="SoC run → 回归状态 / 波形 / 证据包摘要（只读）",
     ),
     ToolBinding(
         name="soc.verify_evidence",
-        target="src.interfaces.api.soc_service:verify_soc_evidence",
+        target="src.workbench.api.soc_service:verify_soc_evidence",
         kind="json",
         doc="SoC 证据包 → 逐文件哈希校验（只读）",
     ),
     ToolBinding(
         name="soc.c_cases",
-        target="src.interfaces.api.soc_service:list_c_cases",
+        target="src.workbench.api.soc_service:list_c_cases",
         kind="json",
         doc="SoC 工程 → C 用例清单（CPU/NICE 驱动 IP，只读）",
     ),
     ToolBinding(
         name="soc.c_run",
-        target="src.interfaces.api.soc_service:run_c_case",
+        target="src.workbench.api.soc_service:run_c_case",
         kind="json", pure=False,
         doc="编译并运行 E203 bare-metal C 用例（需要工具链/EDA，显式触发）",
     ),
     ToolBinding(
         name="soc.run",
-        target="src.interfaces.api.soc_service:run_soc_project",
+        target="src.workbench.api.soc_service:run_soc_project",
         kind="json", pure=False,
         doc="跑一次 SoC 回归（需要 EDA；显式点击才执行）",
     ),
@@ -421,19 +421,19 @@ BINDINGS: List[ToolBinding] = [
     # 写盘，所以不是 pure。
     ToolBinding(
         name="evidence.record_human_edit",
-        target="src.layers.l2_orchestration.evidence.human_edit:record_human_edit",
+        target="src.orchestration_plane.l2.evidence.human_edit:record_human_edit",
         kind="json", pure=False,
         doc="人工编辑一个文件 → 项目级变更链 + （可选）运行日志锚点",
     ),
     ToolBinding(
         name="evidence.human_edits",
-        target="src.layers.l2_orchestration.evidence.human_edit:read_human_edits",
+        target="src.orchestration_plane.l2.evidence.human_edit:read_human_edits",
         kind="json",
         doc="读回项目级人工变更链 + 完整性自校验（只读，pure）",
     ),
     ToolBinding(
         name="evidence.check_package",
-        target="src.layers.l2_orchestration.evidence.signoff_package:check_package",
+        target="src.orchestration_plane.l2.evidence.signoff_package:check_package",
         kind="json",
         doc="签核证据包 → 逐文件哈希校验 + Tier A 重算 + replay recipe 校验（纯读）",
     ),
@@ -448,61 +448,61 @@ BINDINGS: List[ToolBinding] = [
 
     ToolBinding(
         name="pipeline.start",
-        target="src.layers.l2_orchestration.run_service:start_run",
+        target="src.orchestration_plane.l2.run_service:start_run",
         kind="json", pure=False,
         doc="启动一次闭环验证（立即返回 run_id）",
     ),
     ToolBinding(
         name="pipeline.cancel",
-        target="src.layers.l2_orchestration.run_service:cancel_run",
+        target="src.orchestration_plane.l2.run_service:cancel_run",
         kind="json", pure=False,
         doc="协作式取消运行（停在节点边界）",
     ),
     ToolBinding(
         name="pipeline.runs",
-        target="src.layers.l2_orchestration.run_service:list_runs",
+        target="src.orchestration_plane.l2.run_service:list_runs",
         kind="json",
         doc="运行列表（含正在跑的与跑挂的）",
     ),
     ToolBinding(
         name="pipeline.journal",
-        target="src.layers.l2_orchestration.run_service:read_run_journal",
+        target="src.orchestration_plane.l2.run_service:read_run_journal",
         kind="json",
         doc="增量读运行日志（after_seq 只取新增）",
     ),
     ToolBinding(
         name="pipeline.status",
-        target="src.layers.l2_orchestration.run_service:run_status",
+        target="src.orchestration_plane.l2.run_service:run_status",
         kind="json",
         doc="一次运行的概览（当前阶段 / 轮次 / 状态）",
     ),
     ToolBinding(
         name="pipeline.detail",
-        target="src.layers.l2_orchestration.run_service:run_detail",
+        target="src.orchestration_plane.l2.run_service:run_detail",
         kind="json",
         doc="一次运行的全部可见信息（产物 + 过程）",
     ),
     ToolBinding(
         name="pipeline.approval_handler",
-        target="src.layers.l2_orchestration.run_service:set_approval_handler",
+        target="src.orchestration_plane.l2.run_service:set_approval_handler",
         kind="json", pure=False,
         doc="装上「有人要审批了」的接收方（界面装，None 卸载）",
     ),
     ToolBinding(
         name="pipeline.answer_approval",
-        target="src.layers.l2_orchestration.run_service:answer_approval",
+        target="src.orchestration_plane.l2.run_service:answer_approval",
         kind="json", pure=False,
         doc="回答当前挂起的审批（approve/reject/skip/review）",
     ),
     ToolBinding(
         name="pipeline.pending_approval",
-        target="src.layers.l2_orchestration.run_service:pending_approval",
+        target="src.orchestration_plane.l2.run_service:pending_approval",
         kind="json",
         doc="当前是否有人正等着审批",
     ),
     ToolBinding(
         name="pipeline.resume",
-        target="src.layers.l2_orchestration.run_service:resume_run",
+        target="src.orchestration_plane.l2.run_service:resume_run",
         kind="json", pure=False,
         doc="从检查点接着跑一次暂停的运行（approve/reject/skip）",
     ),

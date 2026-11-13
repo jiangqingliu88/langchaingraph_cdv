@@ -1,7 +1,7 @@
 """动作来源契约 —— `source` 是 L5 蒸馏的取样本依据，不能想标就标。"""
 from __future__ import annotations
 
-from src.layers.l3_decision.decision_engine import (
+from src.ir_plane.decision.decision_engine import (
     SOURCE_VALUES,
     Action,
     validate_action_source,

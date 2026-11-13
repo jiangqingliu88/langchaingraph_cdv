@@ -118,7 +118,7 @@ class CoverageClosureModule(ModuleBase):
     # ── 计划 ──
 
     def _make_plan(self) -> None:
-        from src.core.closure.plan import write_closure_plan
+        from src.runtime_plane.core.closure.plan import write_closure_plan
 
         run = self._current_run()
         path = run_dir(run) if run else None

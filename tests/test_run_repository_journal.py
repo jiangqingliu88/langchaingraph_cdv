@@ -11,8 +11,8 @@ import json
 
 import pytest
 
-from src.layers.l2_orchestration.run_journal import RunJournal
-from src.layers.l2_orchestration.run_repository import RunRepository
+from src.orchestration_plane.l2.run_journal import RunJournal
+from src.orchestration_plane.l2.run_repository import RunRepository
 
 
 @pytest.fixture
@@ -180,7 +180,7 @@ class TestOutputRootNaming:
     """`make_output_root` 的幂等承诺要在加了撞车后缀之后依然成立。"""
 
     def test_already_timestamped_is_returned_as_is(self):
-        from src.layers.l1_infrastructure.output_config import make_output_root
+        from src.runtime_plane.infrastructure.output_config import make_output_root
         name = "output_ut_20261002_120000"
         assert make_output_root(name) == name
 
@@ -190,11 +190,11 @@ class TestOutputRootNaming:
         不然目录名会长成 `output_x_20261002_120000_2_x_20261002_120000`，
         而 `RunService._unique_root` 正是靠"再调一次名字不变"来判定撞车的。
         """
-        from src.layers.l1_infrastructure.output_config import make_output_root
+        from src.runtime_plane.infrastructure.output_config import make_output_root
         name = "output_ut_20261002_120000_2"
         assert make_output_root(name) == name
 
     def test_a_plain_prefix_still_gets_a_timestamp(self):
-        from src.layers.l1_infrastructure.output_config import make_output_root
+        from src.runtime_plane.infrastructure.output_config import make_output_root
         assert make_output_root("output") != "output"
         assert make_output_root("output").startswith("output_")

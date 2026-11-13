@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.core.jobs.allowlist import CommandPolicy, check_command, scan_tool_args
+from src.runtime_plane.core.jobs.allowlist import CommandPolicy, check_command, scan_tool_args
 
 
 def _policy(mode: str) -> CommandPolicy:

@@ -1,6 +1,6 @@
 """参数整形 —— 把「吃一个 JSON 字符串」的工具包成「吃关键字参数」的。
 
-`src/engine/diagnostics` 里有几个工具签名是 `fn(input_json: str = "") -> str`：
+`src/engine_plane/diagnostics` 里有几个工具签名是 `fn(input_json: str = "") -> str`：
 参数被打包成一个 JSON 字符串（那是给 LLM 的 function-calling 准备的形状，
 模型只能传字符串）。界面这边传的是「一个输出目录、一串信号名」，硬要自己
 `json.dumps` 再传，等于把调用约定抄进每个模块里。
@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
-from src.engine.diagnostics import main as _debug_main
+from src.engine_plane.diagnostics import main as _debug_main
 
 
 def json_input(fn: Callable[..., Any]) -> Callable[..., Any]:
@@ -46,7 +46,7 @@ bisect_failed_tests = json_input(_debug_main.bisect_failed_tests)
 def stage_flow() -> dict:
     """闭环流程的**结构**：7 个阶段组 + 各自成员节点 + 那条回边。
 
-    **为什么放在这里而不是 `src/tools/`**：工具层不许 import 层代码
+    **为什么放在这里而不是 `src/runtime_plane/tools/`**：工具层不许 import 层代码
     （见 `tool_layer_architecture.md` §4.1 的三层职责）。`src/workbench/` 是
     唯一允许同时 import 两边的例外，所以"把领域阶段模型翻译成界面吃得下的
     dict"这件事落在 bridge 里。
@@ -55,7 +55,7 @@ def stage_flow() -> dict:
     建树"的。**别在界面侧再抄一份阶段清单**：抄了就是第二份真相，改了图没改界面
     就没人发现。
     """
-    from src.layers.l2_orchestration import stages
+    from src.orchestration_plane.l2 import stages
 
     groups = [{"id": gid, "title": gtitle,
                "nodes": [{"id": s.id, "title": s.title, "executor": s.executor,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from src.core.verification.quality import DIMENSIONS, evaluate, write
+from src.runtime_plane.core.verification.quality import DIMENSIONS, evaluate, write
 
 
 def _write(path, obj):
@@ -74,7 +74,7 @@ def test_regression_failure_is_fail(tmp_path):
 
 def test_write_creates_file_and_event(tmp_path):
     _good_run(tmp_path)
-    from src.core.runtime.events import EventStore
+    from src.runtime_plane.core.runtime.events import EventStore
     events = EventStore(tmp_path, run_id="r1")
     report = write(tmp_path, target=95.0, event_store=events)
     assert (tmp_path / "docs" / "verification_quality.json").is_file()

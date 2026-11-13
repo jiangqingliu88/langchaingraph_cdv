@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 
-from src.core.runtime.artifacts import ArtifactStore, sha256_file
-from src.core.runtime.events import EventStore
+from src.runtime_plane.core.runtime.artifacts import ArtifactStore, sha256_file
+from src.runtime_plane.core.runtime.events import EventStore
 
 
 def test_register_hashes_in_place(tmp_path):

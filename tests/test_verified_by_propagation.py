@@ -1,7 +1,7 @@
 """`verified_by` 汇总规则 —— EDA 背书不能被 LLM 自述稀释。"""
 from __future__ import annotations
 
-from src.layers.l2_orchestration.communication.tool_protocol import (
+from src.orchestration_plane.l2.communication.tool_protocol import (
     VERIFIED_BY_VALUES,
     aggregate_verified_by,
 )

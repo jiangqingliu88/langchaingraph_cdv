@@ -95,7 +95,7 @@ dev = [
 ]
 
 [project.scripts]
-vagent = "src.interfaces.cli.commands:cli"
+vagent = "src.workbench.cli.commands:cli"
 
 [project.urls]
 Homepage = "https://github.com/jiangqingliu88/langchaingraph_cdv"

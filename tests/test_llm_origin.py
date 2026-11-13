@@ -23,7 +23,7 @@ import json
 
 import pytest
 
-from src.layers.l2_orchestration.context.llm_origin import (
+from src.orchestration_plane.l2.context.llm_origin import (
     current, origin_scope,
 )
 
@@ -36,7 +36,7 @@ def _no_network(monkeypatch):
     而且在没有 key 的机器上结论会变。审计记的是"尝试过"，
     `status` 是不是 `ok` 与本组要验的东西无关。
     """
-    from src.layers.l2_orchestration.context.query_engine import LLMQueryEngine
+    from src.orchestration_plane.l2.context.query_engine import LLMQueryEngine
 
     monkeypatch.setattr(
         LLMQueryEngine, "_invoke_with_fallback",
@@ -99,7 +99,7 @@ class TestTheAuditRecordCarriesTheOrigin:
     """
 
     def _call(self, run_dir, node_id="design", round_num=3):
-        from src.tools.common.lib.llm_call import CODE_SCHEMA, call_llm
+        from src.runtime_plane.tools.common.lib.llm_call import CODE_SCHEMA, call_llm
 
         with origin_scope(node_id, round_num, str(run_dir)):
             call_llm("写一个 fifo", "", "", output_schema=CODE_SCHEMA,
@@ -107,7 +107,7 @@ class TestTheAuditRecordCarriesTheOrigin:
         return run_dir / "docs" / "llm_audit.jsonl"
 
     def test_the_record_has_site_node_round_and_prompt_hash(self, tmp_path):
-        from src.layers.l2_orchestration.context.query_engine import LLMQueryEngine
+        from src.orchestration_plane.l2.context.query_engine import LLMQueryEngine
 
         run = tmp_path / "output_x_20260101_000000"
         path = self._call(run)
@@ -136,7 +136,7 @@ class TestTheAuditRecordCarriesTheOrigin:
 
     def test_outside_a_run_nothing_is_written(self, tmp_path, monkeypatch):
         """没有 run 目录时**不落盘**（也没地方落）—— 只进内存，如实。"""
-        from src.tools.common.lib.llm_call import CODE_SCHEMA, call_llm
+        from src.runtime_plane.tools.common.lib.llm_call import CODE_SCHEMA, call_llm
 
         monkeypatch.chdir(tmp_path)
         call_llm("单独跑工具", "", "", output_schema=CODE_SCHEMA,

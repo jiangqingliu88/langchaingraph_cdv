@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from src.core.jobs.spec import JobSpec
-from src.core.jobs.allowlist import CommandPolicy
-from src.core.jobs.supervisor import JobSupervisor
-from src.core.runtime.artifacts import ArtifactStore
-from src.core.runtime.events import EventStore
+from src.runtime_plane.core.jobs.spec import JobSpec
+from src.runtime_plane.core.jobs.allowlist import CommandPolicy
+from src.runtime_plane.core.jobs.supervisor import JobSupervisor
+from src.runtime_plane.core.runtime.artifacts import ArtifactStore
+from src.runtime_plane.core.runtime.events import EventStore
 
 
 def _spec(tmp_path, argv, timeout=10):

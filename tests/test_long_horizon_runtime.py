@@ -3,16 +3,16 @@ from __future__ import annotations
 
 import json
 
-from src.agent.runtime.harness import Harness, HarnessConfig
-from src.agent.memory import TaskStore
-from src.agent.planner import (
+from src.agent_plane.runtime.harness import Harness, HarnessConfig
+from src.agent_plane.memory import TaskStore
+from src.agent_plane.planner import (
     acceptance_met, mark, new_plan, next_step, replan, should_replan,
 )
-from src.agent.collaboration import (
+from src.agent_plane.collaboration import (
     ScopedTools, SubagentManager, build_contract,
 )
-from src.runtime.sandbox import SandboxTools
-from src.runtime.workspace_manager import WorkspaceZones
+from src.runtime_plane.sandbox import SandboxTools
+from src.runtime_plane.workspace_manager import WorkspaceZones
 
 
 def _zones(tmp_path):

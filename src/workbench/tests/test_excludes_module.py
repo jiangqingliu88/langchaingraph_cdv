@@ -20,7 +20,7 @@ MODULE_ID = "coverage.excludes"
 @pytest.fixture
 def db(tmp_path):
     """一个只属于这个用例的豁免库 —— 用真 sqlite，不打桩存储层。"""
-    from src.knowledge.exclude_registry import ExcludeRegistry
+    from src.knowledge_plane.exclude_registry import ExcludeRegistry
 
     path = tmp_path / "exclude_registry.db"
     reg = ExcludeRegistry(path)

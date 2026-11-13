@@ -3,7 +3,7 @@
 ## 这个文件只干一件事
 
 "有哪些仿真业务、各自对应什么选项变量"是工具层的事，表在
-`src/layers/l2_orchestration/regression_tools/sim_modes.py` —— 这里**不另写一份**，只负责：
+`src/orchestration_plane/l2/regression_tools/sim_modes.py` —— 这里**不另写一份**，只负责：
 
   1. 把那张表喂给工具栏下拉；
   2. 把选中的词条**记住**，下次开工作台还是它。
@@ -50,7 +50,7 @@ NONE_LABEL = "无（不注入选项）"
 
 def mode_items() -> List[dict]:
     """下拉要的条目 —— 直接来自工具层那张表，顺序也照它。"""
-    from src.layers.l2_orchestration.regression_tools import sim_modes as tool_modes
+    from src.orchestration_plane.l2.regression_tools import sim_modes as tool_modes
 
     items = [{"mode": NONE_MODE, "label": NONE_LABEL, "note": "回归按命令原样跑",
               "supported": True}]
@@ -62,7 +62,7 @@ def mode_items() -> List[dict]:
 
 
 def default_mode() -> str:
-    from src.layers.l2_orchestration.regression_tools import sim_modes as tool_modes
+    from src.orchestration_plane.l2.regression_tools import sim_modes as tool_modes
 
     return tool_modes.DEFAULT_MODE
 

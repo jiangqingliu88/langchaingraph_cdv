@@ -1,6 +1,6 @@
 """回归效率优化服务入口。
 
-只做**历史分析 + 优化计划 + 导航**：分析用 `src/core/optimize`，执行仍由
+只做**历史分析 + 优化计划 + 导航**：分析用 `src/runtime_plane/core/optimize`，执行仍由
 CLI `optimize-regression --execute` 或现有回归执行器承担。GUI 不宣称自己
 具备自动调度能力。
 """
@@ -151,8 +151,8 @@ class RegressionServiceModule(ModuleBase):
 
 def _analyze_plan(project: str, history: str) -> dict:
     """工作线程里跑的分析：纯读 + 写一份计划，不碰控件、不跑 EDA。"""
-    from src.core.optimize.history import collect_history, find_run_dirs
-    from src.core.optimize.plan import build_plan, write_plan
+    from src.runtime_plane.core.optimize.history import collect_history, find_run_dirs
+    from src.runtime_plane.core.optimize.plan import build_plan, write_plan
 
     runs = find_run_dirs(Path(project), Path(history) if history else None)
     report = collect_history(runs)

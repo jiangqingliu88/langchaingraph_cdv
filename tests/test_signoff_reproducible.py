@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.layers.l2_orchestration.evidence.signoff_package import (
+from src.orchestration_plane.l2.evidence.signoff_package import (
     load_recipe,
     replay_tier_a,
     validate_recipe,
@@ -112,7 +112,7 @@ def test_recipe_validation_names_missing_fields():
 
 
 def test_check_package_summarises_integrity_replay_and_recipe(tmp_path):
-    from src.layers.l2_orchestration.evidence.signoff_package import check_package
+    from src.orchestration_plane.l2.evidence.signoff_package import check_package
 
     root = _run_dir(tmp_path)
     write_package(root, _manifest(root))
@@ -125,7 +125,7 @@ def test_check_package_summarises_integrity_replay_and_recipe(tmp_path):
 
 
 def test_check_package_is_honest_when_package_is_missing(tmp_path):
-    from src.layers.l2_orchestration.evidence.signoff_package import check_package
+    from src.orchestration_plane.l2.evidence.signoff_package import check_package
 
     result = check_package(tmp_path / "no_pkg")
     assert result["available"] is False

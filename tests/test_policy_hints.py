@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from src.layers.l2_orchestration.governance.policy_pack import PolicyPack, get_policy_pack_loader
+from src.orchestration_plane.l2.governance.policy_pack import PolicyPack, get_policy_pack_loader
 
 
 class TestHintItems:
@@ -62,7 +62,7 @@ class TestHintsReachThePrompt:
         """`generate_gap_directed_seq` 得收下 hints 并往下传（否则上面那根线断在半路）。"""
         import inspect
 
-        from src.layers.l3_decision.evidence.main import (generate_gap_directed_seq,
+        from src.ir_plane.decision.evidence.main import (generate_gap_directed_seq,
                                                   llm_generate_gap_stimulus)
         assert "design_hints" in inspect.signature(llm_generate_gap_stimulus).parameters
         assert "design_hints" in inspect.signature(generate_gap_directed_seq).parameters

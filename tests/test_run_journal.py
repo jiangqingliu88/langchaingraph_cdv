@@ -9,10 +9,10 @@ import json
 
 import pytest
 
-from src.layers.l2_orchestration.execution_helpers import (
+from src.orchestration_plane.l2.execution_helpers import (
     _coverage_of, _result_of, _round_of, _translate_custom, _translate_debug,
 )
-from src.layers.l2_orchestration.run_journal import (
+from src.orchestration_plane.l2.run_journal import (
     KIND_APPROVAL_DECIDED, KIND_RUN_CANCELLED, KIND_RUN_FINISHED,
     KIND_STAGE_FAILED, KIND_STAGE_FINISHED, KIND_STAGE_STARTED, JournalTail,
     RunEvent, RunJournal, iter_events, journal_path, read_journal,

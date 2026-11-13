@@ -32,7 +32,7 @@ from pathlib import Path
 
 import pytest
 
-from src.layers.l2_orchestration.communication.tool_hub import ToolHub
+from src.orchestration_plane.l2.communication.tool_hub import ToolHub
 
 
 @pytest.fixture(scope="module")
@@ -43,14 +43,14 @@ def hub():
 
 
 EXECUTOR_ROOTS = (
-    ("front", "src/engine/front"),
-    ("design", "src/generation/design/rtl"),
-    ("model", "src/generation/design/cmodel"),
-    ("verify", "src/generation/verification"),
-    ("ops", "src/engine/ops"),
-    ("coverage", "src/engine/coverage"),
-    ("debug", "src/agent/specialists/debug"),
-    ("audit", "src/engine/audit"),
+    ("front", "src/engine_plane/front"),
+    ("design", "src/generation_plane/design/rtl"),
+    ("model", "src/generation_plane/design/cmodel"),
+    ("verify", "src/generation_plane/verification"),
+    ("ops", "src/engine_plane/ops"),
+    ("coverage", "src/engine_plane/coverage"),
+    ("debug", "src/agent_plane/specialists/debug"),
+    ("audit", "src/engine_plane/audit"),
 )
 
 

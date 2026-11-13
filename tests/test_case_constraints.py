@@ -10,7 +10,7 @@
 """
 from __future__ import annotations
 
-from src.layers.l3_decision.case_ir.constraints import (
+from src.ir_plane.decision.case_ir.constraints import (
     attach_constraints, constraints_for, policy_index,
 )
 
@@ -74,7 +74,7 @@ def test_without_plan_nothing_is_invented():
 
 
 def test_contract_carries_constraints_into_the_hash():
-    from src.ir.contract.contract_model import contract_from_case_ir
+    from src.ir_plane.contract.contract_model import contract_from_case_ir
 
     plain = {"module": "demo", "cases": [dict(CASE_IR["cases"][0])]}
     enriched = {"module": "demo", "cases": [dict(CASE_IR["cases"][0])]}
@@ -88,7 +88,7 @@ def test_contract_carries_constraints_into_the_hash():
 def test_enrich_reads_the_coverage_plan(tmp_path):
     import yaml
 
-    from src.engine.verify.ir_artifacts import enrich_case_ir
+    from src.engine_plane.verify.ir_artifacts import enrich_case_ir
 
     (tmp_path / "coverage").mkdir(parents=True)
     (tmp_path / "coverage" / "coverage_plan.yaml").write_text(
@@ -98,7 +98,7 @@ def test_enrich_reads_the_coverage_plan(tmp_path):
 
 
 def test_case_view_joins_the_backing_registry():
-    from src.layers.l3_decision.case_view.builder import (
+    from src.ir_plane.decision.case_view.builder import (
         _case_constraint_items,
     )
 
@@ -113,7 +113,7 @@ def test_case_view_joins_the_backing_registry():
 
 
 def test_task_meta_keeps_constraint_ids(tmp_path):
-    from src.tools.common.lib.case_meta import write_task_meta, read_task_meta
+    from src.runtime_plane.tools.common.lib.case_meta import write_task_meta, read_task_meta
 
     write_task_meta(tmp_path, {"task": "t1", "test": "x_test", "seed": 1,
                                "case_ir_sha": "abc",

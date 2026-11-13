@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from src.knowledge.coverage_experience import CoverageExperienceStore
+from src.knowledge_plane.coverage_experience import CoverageExperienceStore
 
 
 @pytest.fixture
@@ -172,8 +172,8 @@ class TestTheDistillationOnlyLearnsFromAdoptedRlActions:
         按构造就是 RL 选过的（没进过它动作空间的名字不可能有这种来源），
         所以既不手写、也不用去 import L3 的动作表（那会被层向测试拦下）。
         """
-        from src.knowledge import coverage_experience as ce
-        from src.experience.distillation import DistillationOrchestrator
+        from src.knowledge_plane import coverage_experience as ce
+        from src.experience_plane.distillation import DistillationOrchestrator
 
         store = CoverageExperienceStore(db_path=tmp_path / "ce3.db")
         # 规则来源：5 次全涨（分数很好看，但**不是 RL 选的**）
@@ -191,8 +191,8 @@ class TestTheDistillationOnlyLearnsFromAdoptedRlActions:
 
     def test_without_rl_samples_nothing_is_proposed(self, tmp_path, monkeypatch):
         """一条 `rl_suggested` 样本都没有时**返回空** —— 不退回"拿全量凑一个"。"""
-        from src.knowledge import coverage_experience as ce
-        from src.experience.distillation import DistillationOrchestrator
+        from src.knowledge_plane import coverage_experience as ce
+        from src.experience_plane.distillation import DistillationOrchestrator
 
         store = CoverageExperienceStore(db_path=tmp_path / "ce.db")
         # 只有规则来源的样本（RL 一条都没有）

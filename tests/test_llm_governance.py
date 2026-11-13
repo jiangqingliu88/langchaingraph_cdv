@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.layers.l2_orchestration.context.query_engine import (
+from src.orchestration_plane.l2.context.query_engine import (
     LLMContractError,
     LLMQueryEngine,
 )
@@ -89,7 +89,7 @@ def test_unknown_failure_policy_is_a_programming_error():
 
 
 def test_call_llm_requires_schema_and_prompt_version():
-    from src.tools.common.lib.llm_call import call_llm
+    from src.runtime_plane.tools.common.lib.llm_call import call_llm
 
     with pytest.raises(TypeError):
         call_llm("p", "", "")               # 缺 output_schema / prompt_version
@@ -98,7 +98,7 @@ def test_call_llm_requires_schema_and_prompt_version():
 
 
 def test_code_fences_are_stripped_before_caching():
-    from src.tools.common.lib.llm_call import CODE_SCHEMA
+    from src.runtime_plane.tools.common.lib.llm_call import CODE_SCHEMA
 
     engine = _engine("```systemverilog\nmodule x; endmodule\n```")
     out = engine.query("t", MSGS, output_schema=CODE_SCHEMA,

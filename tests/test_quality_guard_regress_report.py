@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.layers.l2_orchestration.governance.quality_guard import (
+from src.orchestration_plane.l2.governance.quality_guard import (
     Verdict, validate_regress,
 )
 

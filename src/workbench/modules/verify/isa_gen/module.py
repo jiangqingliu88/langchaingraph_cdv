@@ -1,6 +1,6 @@
 """ISA 激励 —— .ir.txt 在界面上编译成 seq.ir 与 commands.tsv。
 
-工具本身在 `src/generation/isa_ir_tools/`：输入一份手写 IR（或已解析
+工具本身在 `src/generation_plane/isa_ir_tools/`：输入一份手写 IR（或已解析
 seq.ir），三阶段产出 `01_tensors / 02_ir / 03_commands`。这一页把那条
 命令行的“看得见的过程”摆出来：
 

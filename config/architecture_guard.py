@@ -223,32 +223,21 @@ def complexity_violations(root: Path = ROOT, threshold: int = COMPLEXITY_THRESHO
 
 
 _ZONES = (
-    ("src/core/", "core"),
-    ("src/layers/l1_infrastructure/", "l1"),
-    ("src/layers/l2_orchestration/", "l2"),
-    ("src/layers/l3_decision/", "l3"),
-    ("src/knowledge/", "l4"),
-    ("src/experience/", "l5"),
-    ("src/tools/", "tools"),
-    ("src/workspace/", "workspace"),
-    ("src/runtime/", "runtime"),
-    ("src/utils/", "core"),
-    ("src/interfaces/cli/", "iface"),
+    ("src/runtime_plane/core/", "core"),
+    ("src/runtime_plane/infrastructure/", "l1"),
+    ("src/runtime_plane/tools/", "tools"),
+    ("src/runtime_plane/utils/", "core"),
+    ("src/orchestration_plane/l2/", "l2"),
+    ("src/orchestration_plane/", "orchestration"),
+    ("src/ir_plane/decision/", "l3"),
+    ("src/ir_plane/", "ir"),
+    ("src/knowledge_plane/", "l4"),
+    ("src/experience_plane/", "l5"),
+    ("src/generation_plane/", "generation"),
+    ("src/agent_plane/", "agents"),
+    ("src/engine_plane/", "engine"),
+    ("src/runtime_plane/", "runtime"),
     ("src/workbench/", "iface"),
-    ("src/modes/", "iface"),
-    ("src/generation/", "generation"),
-    ("src/agent/specialists/", "agents"),
-    ("src/engine/orchestration/", "orchestration"),
-    ("src/engine/front/", "engine"),
-    ("src/engine/verify/", "engine"),
-    ("src/engine/ops/", "engine"),
-    ("src/engine/coverage/", "engine"),
-    ("src/engine/audit/", "engine"),
-    ("src/engine/diagnostics/", "engine"),
-    ("src/engine/", "iface"),
-    ("src/agent/", "iface"),
-    ("src/ir/", "ir"),
-    ("src/interfaces/", "iface"),
 )
 
 _ALLOWED = {
@@ -259,37 +248,28 @@ _ALLOWED = {
     "l5": {"l1", "l3", "l4", "core", "tools"},
     "l2": {"l1", "l3", "l4", "l5", "core", "agents", "tools", "ir", "runtime",
            "engine", "generation", "orchestration"},
-    "stages": {"l1", "l2", "l3", "l4", "l5", "core", "agents", "tools", "ir",
-               "runtime", "engine", "generation"},
-    # 确定性 Engine：不 import Generation / Agent。
-    "engine": {"core", "l1", "l2", "l3", "l4", "l5", "tools", "ir", "runtime",
-               "workspace"},
+    "engine": {"core", "l1", "l2", "l3", "l4", "l5", "tools", "ir", "runtime"},
     "orchestration": {"core", "l1", "l2", "l3", "l4", "l5", "tools", "ir",
-                      "runtime", "workspace", "engine", "generation", "agents",
-                      "iface"},
+                      "runtime", "engine", "generation", "agents", "iface"},
     "generation": {"core", "l1", "l2", "l3", "l4", "l5", "tools", "ir",
-                   "runtime", "workspace", "engine"},
+                   "runtime", "engine"},
     "tools": {"core", "l1"},
     "agents": {"l1", "l2", "l3", "l4", "l5", "core", "tools", "ir", "runtime",
                "engine", "generation", "orchestration", "iface"},
     "runtime": {"core", "l1", "tools"},
-    "workspace": {"core", "l1", "l2", "l3", "l4", "l5", "tools", "ir",
-                  "runtime"},
-    "ir": {"core", "l1", "l2", "l3", "l4", "l5", "workspace", "tools",
-           "runtime"},
-    "iface": {"core", "l1", "l2", "l3", "l4", "l5", "stages", "agents",
-              "workspace", "ir", "tools", "runtime", "engine", "generation",
-              "orchestration"},
+    "ir": {"core", "l1", "l2", "l3", "l4", "l5", "tools", "runtime"},
+    "iface": {"core", "l1", "l2", "l3", "l4", "l5", "agents", "ir", "tools",
+              "runtime", "engine", "generation", "orchestration"},
 }
 
 #: 已知的过渡债务：engine → l2 的 ExecutorBase 尚未迁到 engine/executors。
 #: 只允许具体文件，不允许整层放开。
 _DEPENDENCY_DEBT = {
-    "src/engine/front/main.py": {"l2"},
-    "src/engine/ops/main.py": {"l2"},
-    "src/engine/coverage/main.py": {"l2"},
-    "src/engine/audit/main.py": {"l2"},
-    "src/engine/audit/helpers.py": {"l2"},
+    "src/engine_plane/front/main.py": {"l2"},
+    "src/engine_plane/ops/main.py": {"l2"},
+    "src/engine_plane/coverage/main.py": {"l2"},
+    "src/engine_plane/audit/main.py": {"l2"},
+    "src/engine_plane/audit/helpers.py": {"l2"},
 }
 
 
@@ -383,7 +363,7 @@ def zone_violations(root: Path = ROOT) -> List[Dict[str, Any]]:
         rel = f"src/{child.name}/"
         if _zone_of(rel):
             continue
-        # 纯容器目录（如 src/layers/）由子目录分区覆盖，不要求自身是 zone。
+        # 纯容器目录（如 src/runtime_plane/）由子目录分区覆盖，不要求自身是 zone。
         if any(prefix.startswith(rel) for prefix, _ in _ZONES):
             continue
         issues.append({"type": "unregistered_zone", "path": rel,

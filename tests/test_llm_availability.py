@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.layers.l2_orchestration.context.llm_factory import LLMFactory
+from src.orchestration_plane.l2.context.llm_factory import LLMFactory
 
 
 class _Cfg:
@@ -102,7 +102,7 @@ class TestItDoesNotBuildAClient:
         时建一个完整客户端（pydantic 校验 + 取 key + 挂 token 回调），
         而它一次 `invoke` 都不会有（真正的调用全走 `lib/llm_call.call_llm`）。
         """
-        import src.layers.l2_orchestration.context.llm_factory as m
+        import src.orchestration_plane.l2.context.llm_factory as m
 
         built = []
         monkeypatch.setattr(m.LLMFactory, "_create_openai_compat",

@@ -15,15 +15,15 @@ from __future__ import annotations
 
 import pytest
 
-from src.engine.orchestration.supervisor import graph as graph_mod
-from src.layers.l2_orchestration.execution import PipelineExecutionService
-from src.layers.l2_orchestration.execution_helpers import CHECKPOINT_FILE, _state_of
-from src.layers.l2_orchestration.run_service import RunRequest, RunService
-from src.layers.l2_orchestration.run_journal import (
+from src.orchestration_plane.supervisor import graph as graph_mod
+from src.orchestration_plane.l2.execution import PipelineExecutionService
+from src.orchestration_plane.l2.execution_helpers import CHECKPOINT_FILE, _state_of
+from src.orchestration_plane.l2.run_service import RunRequest, RunService
+from src.orchestration_plane.l2.run_journal import (
     KIND_RUN_FINISHED, KIND_RUN_INTERRUPTED, KIND_RUN_RESUMED, RunEvent,
     read_journal,
 )
-from src.layers.l2_orchestration.state import PipelineState
+from src.orchestration_plane.l2.state import PipelineState
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -83,7 +83,7 @@ def svc(tmp_path, monkeypatch):
     # 审批门控在服务层内部构造 —— 这里把工厂换掉，让**通道模式**（无检查点那条
     # 回退路径）不至于卡在 input() 上。检查点模式下通道根本不会被问到，
     # 所以这个替换只影响降级路径，不影响 interrupt 路径的验收。
-    from src.layers.l2_orchestration.governance import approval as approval_mod
+    from src.orchestration_plane.l2.governance import approval as approval_mod
     monkeypatch.setattr(approval_mod, "create_approval_gate", _auto_gate)
     PipelineExecutionService.get_instance()._initialized = True
     service = RunService(output_base=str(tmp_path))
@@ -93,7 +93,7 @@ def svc(tmp_path, monkeypatch):
 
 def _auto_gate(mode: str = "threshold", channel=None, **kw):
     """一律"通过"的门控 —— 替掉会去读 stdin 的默认通道。"""
-    from src.layers.l2_orchestration.governance.approval import (
+    from src.orchestration_plane.l2.governance.approval import (
         ApprovalDecision, ApprovalGate, ApprovalMode, AutoChannel,
     )
     return ApprovalGate(mode=ApprovalMode.THRESHOLD,
@@ -157,7 +157,7 @@ class TestInterrupt:
 # ═══════════════════════════════════════════════════════════════
 
 def _run_dir(tmp_path, run_id):
-    from src.layers.l2_orchestration.run_repository import RunRepository
+    from src.orchestration_plane.l2.run_repository import RunRepository
     return RunRepository(str(tmp_path)).run_dir(run_id)
 
 
@@ -206,7 +206,7 @@ class TestResume:
         svc.wait(run_id, timeout=30)
         svc.shutdown(timeout=5)
 
-        from src.layers.l2_orchestration import run_service as rs
+        from src.orchestration_plane.l2 import run_service as rs
         other = RunService(output_base=str(tmp_path))
         monkeypatch.setattr(rs, "_service", other)
         try:
@@ -304,7 +304,7 @@ class TestCliApprovalDrivesTheGraph:
 
         from click.testing import CliRunner
 
-        from src.interfaces.cli.commands import cli
+        from src.workbench.cli.commands import cli
 
         rid, run_dir = self._interrupted(svc, tmp_path, monkeypatch)
         res = CliRunner().invoke(cli, ["approve", "--run", rid, "--reason", "看过波形了"])
@@ -322,7 +322,7 @@ class TestCliApprovalDrivesTheGraph:
         """`resume --decision skip` 这条路 —— `approve`/`reject` 不覆盖的答案。"""
         from click.testing import CliRunner
 
-        from src.interfaces.cli.commands import cli
+        from src.workbench.cli.commands import cli
 
         rid, run_dir = self._interrupted(svc, tmp_path, monkeypatch)
         res = CliRunner().invoke(cli, ["resume", "--run", rid, "--decision", "skip"])
@@ -338,7 +338,7 @@ class TestCliApprovalDrivesTheGraph:
         """
         from click.testing import CliRunner
 
-        from src.interfaces.cli.commands import cli
+        from src.workbench.cli.commands import cli
 
         monkeypatch.chdir(tmp_path)
         rid = svc.start(_req(tmp_path, output_root=str(tmp_path / "elsewhere")))
@@ -359,7 +359,7 @@ class TestCliApprovalDrivesTheGraph:
         """没有检查点 = 没有挂起的审批：**说清楚**，不是堆一个 traceback。"""
         from click.testing import CliRunner
 
-        from src.interfaces.cli.commands import cli
+        from src.workbench.cli.commands import cli
 
         monkeypatch.chdir(tmp_path)
         run_dir = tmp_path / "output" / "fake_run_1"
@@ -378,7 +378,7 @@ class TestCliApprovalDrivesTheGraph:
 
         from click.testing import CliRunner
 
-        from src.interfaces.cli.commands import cli
+        from src.workbench.cli.commands import cli
 
         monkeypatch.chdir(tmp_path)
         run_dir = tmp_path / "output" / "fake_run_2"
@@ -444,7 +444,7 @@ class TestTheRtlPathDoesNotShadowTheTarget:
         import ast
         from pathlib import Path
 
-        src = Path("src/layers/l2_orchestration/execution.py")
+        src = Path("src/orchestration_plane/l2/execution.py")
         tree = ast.parse(src.read_text(encoding="utf-8"))
 
         offender = None
@@ -485,7 +485,7 @@ class TestTheRtlPathDoesNotShadowTheTarget:
         (ext / "dut.sv").write_text("module dut; endmodule\n", encoding="utf-8")
 
         out = tmp_path / "out_20260101_000000"
-        from src.layers.l2_orchestration.execution import PipelineExecutionService
+        from src.orchestration_plane.l2.execution import PipelineExecutionService
 
         PipelineExecutionService.get_instance()._initialized = True
         result = asyncio.run(

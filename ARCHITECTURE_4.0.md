@@ -417,56 +417,58 @@ Deterministic Signoff
 
 # 五、工程目录应该如何理解？
 
-根据你目前给出的迁移状态，可以把代码组织理解为：
+当前代码已按 **8 个职责平面 + workbench** 收敛，旧 `layers/`、`core/`、`tools/`、`utils/`、`modes/`、`interfaces/`、`workspace/` 均已并入平面，不再作为顶层目录存在：
 
-```
+```text
 src/
+├── agent_plane/              # 理解、规划、专家、协作、记忆
+│   ├── runtime/              # harness / loop / context / state
+│   ├── planner/              # task planner / DAG / replan / acceptance
+│   ├── specialists/          # design / verify / coverage / debug
+│   ├── collaboration/        # subagent / delegation / contracts
+│   └── memory/
 │
-├── agent/
-│   ├── specialists/
-│   └── ...
+├── orchestration_plane/      # 任务编排与状态机
+│   ├── supervisor/           # graph / routing / state
+│   ├── nodes/pure/           # 确定性流程节点
+│   ├── gates/                # 人工审批 / 审计门
+│   ├── registry.py           # AgentCard 能力表
+│   ├── guards.py / markers.py
+│   └── l2/                   # 原 l2_orchestration
 │
-├── engine/
-│   ├── orchestration/
-│   ├── front/
-│   ├── verify/
-│   ├── ops/
-│   ├── coverage/
-│   ├── audit/
-│   └── diagnostics/
+├── generation_plane/         # 候选工件生成（可调 LLM）
+│   ├── design/{rtl,cmodel}/
+│   ├── verification/         # UVM / SVA / testcase
+│   ├── planning/dplan/
+│   └── {uvm,cmodel,isa_ir}_tools/
 │
-├── generation/
+├── engine_plane/             # 确定性执行与裁决（不调 LLM）
+│   ├── front/ verify/ ops/ coverage/ audit/
+│   ├── diagnostics/          # 日志 / 波形 / 失败提取
+│   └── __init__.py           # facade（惰性转发）
 │
-├── ir/
+├── ir_plane/                 # 统一验证语义
+│   ├── vplan/ contract/ proposal/
+│   └── decision/             # 原 l3_decision
 │
-├── runtime/
+├── knowledge_plane/          # 协议 / IP / 设计知识
+├── experience_plane/         # 历史失败 / 修复 / 覆盖率闭合策略
 │
-├── knowledge/
+├── runtime_plane/            # 执行基础设施
+│   ├── core/                 # 原 core
+│   ├── infrastructure/       # 原 l1_infrastructure
+│   ├── tools/                # 原 tools
+│   ├── utils/
+│   └── {task_store,session,job_manager,sandbox,...}.py
 │
-├── experience/
-│
-├── tools/
-│
-├── workspace/
-│
-├── interfaces/
-│   └── cli/
-│
-├── workbench/
-│
-├── layers/
-│   ├── l1_infrastructure/
-│   ├── l2_orchestration/
-│   └── l3_decision/
-│
-└── core/
+└── workbench/                # Interfaces Plane：CLI + API + GUI
+    ├── cli/                  # 原 interfaces/cli
+    ├── api/                  # 原 interfaces/api
+    ├── modes/                # 原 modes
+    └── ui/                   # PySide6 工作台
 ```
 
-这里特别提醒：这是根据你给出的 `_ZONES` 和历史架构描述整理的逻辑目录示意，不是对当前所有目录和文件的完整盘点。
-
-你目前还有一个值得处理的地方：`layers/` 与新八平面架构可能存在历史职责重叠。
-
-不要因为目录还存在就认为它们必须永久保留。应该确认旧 L1–L5 的职责是否已经迁入新平面，再决定是否清理。
+旧 L1–L5 的分层守卫已删除，职责边界改由 `config/architecture_guard.py` 的平面分区检查。
 
 # 六、Workbench 在哪里？
 
@@ -639,7 +641,7 @@ An Evidence-Driven Autonomous IC Verification System
 
 因为最终要证明的不是 SignOffAI 有多少个模块，而是它能不能真正替工程师完成一项复杂的 IC 验证任务。
 
-> 全量单测：**1258 passed**（2026-11-13，13 skipped）。
+> 全量单测：**1249 passed**（2026-11-13，14 skipped）。
 
 ## 相关文档与边界
 

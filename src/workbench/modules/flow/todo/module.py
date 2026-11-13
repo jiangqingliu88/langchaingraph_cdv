@@ -94,7 +94,7 @@ class TodoModule(ModuleBase):
         self._fill(payload)
 
     def _fill(self, payload: Dict[str, Any]) -> None:
-        from src.interfaces.api.flow.api import TODO_KINDS
+        from src.workbench.api.flow.api import TODO_KINDS
 
         rows = payload.get("rows") or []
         tones = {}

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from src.layers.l3_decision.case_view.render import (
+from src.ir_plane.decision.case_view.render import (
     render_html, render_markdown,
 )
 
@@ -142,7 +142,7 @@ def test_evd_batch_rows_are_labelled_not_dashed():
 
 def test_gaps_cover_every_non_green_cell():
     """视图4 必须和 Case×CELL 的颜色对得上（黄/红都要有对应的缺口行）。"""
-    from src.layers.l3_decision.case_view.builder import _cell_gaps
+    from src.ir_plane.decision.case_view.builder import _cell_gaps
 
     cells = {"cells": [
         {"cell_id": "CELL-A-P0", "color": "red",

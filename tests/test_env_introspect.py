@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.tools.common.lib.env_introspect import (binding_for_agent, env_agent_bindings)
-from src.tools.common.lib.filelist import agent_layout
+from src.runtime_plane.tools.common.lib.env_introspect import (binding_for_agent, env_agent_bindings)
+from src.runtime_plane.tools.common.lib.filelist import agent_layout
 
 #: 生成器产出的真实布局（编号子目录）
 ENV_SV = """\

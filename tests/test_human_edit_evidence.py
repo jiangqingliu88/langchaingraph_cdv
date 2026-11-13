@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from src.layers.l2_orchestration.evidence.file_audit import FileAuditTrail
-from src.layers.l2_orchestration.evidence.human_edit import (
+from src.orchestration_plane.l2.evidence.file_audit import FileAuditTrail
+from src.orchestration_plane.l2.evidence.human_edit import (
     NO_REASON, project_chain_path, read_human_edits, record_human_edit,
     resolve_author,
 )
@@ -155,7 +155,7 @@ class TestJournalAnchor:
         assert read_human_edits(repo)["total_changes"] == 1
 
     def test_the_event_lands_in_the_run_journal(self, repo, tmp_path):
-        from src.layers.l2_orchestration.run_journal import RunJournal
+        from src.orchestration_plane.l2.run_journal import RunJournal
 
         run_dir = repo / "output_demo_20260101_000000"
         (run_dir / "docs").mkdir(parents=True)
@@ -172,7 +172,7 @@ class TestJournalAnchor:
 
         events = journal.read() if hasattr(journal, "read") else None
         if events is None:                       # 用模块级读法，别依赖实例状态
-            from src.layers.l2_orchestration.run_journal import read_journal
+            from src.orchestration_plane.l2.run_journal import read_journal
             events = read_journal(run_dir)
         edited = [e for e in events if e.kind == "human.edit"]
         assert edited, [e.kind for e in events]

@@ -1,7 +1,7 @@
 """安全测试 — 认证（密码哈希 / JWT）部分
 
 说明：旧测试还覆盖 src.web API 的路径穿越防护，但 CLAUDE.md 明确禁止 Web 前端
-（src/web 不存在），故只保留当前真实存在的 src.layers.l2_orchestration.auth 测试。
+（src/web 不存在），故只保留当前真实存在的 src.orchestration_plane.l2.auth 测试。
 """
 import hashlib
 import os
@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("jwt")
 
-from src.layers.l2_orchestration.auth import hash_password, password_needs_rehash, verify_password
+from src.orchestration_plane.l2.auth import hash_password, password_needs_rehash, verify_password
 
 
 def test_password_hash_is_salted_and_verifiable():
@@ -44,7 +44,7 @@ def test_hash_password_always_unique():
 # ── JWT / Auth 安全测试 ──
 
 def test_create_and_decode_token():
-    from src.layers.l2_orchestration.auth import create_token, decode_token
+    from src.orchestration_plane.l2.auth import create_token, decode_token
     token = create_token(1, "testuser", "engineer")
     payload = decode_token(token)
     assert payload is not None
@@ -54,7 +54,7 @@ def test_create_and_decode_token():
 
 
 def test_decode_expired_token():
-    from src.layers.l2_orchestration.auth import create_token, decode_token
+    from src.orchestration_plane.l2.auth import create_token, decode_token
     import jwt as pyjwt
     from datetime import datetime, timedelta
     # 生成一个已过期的 token
@@ -70,7 +70,7 @@ def test_decode_expired_token():
 
 def test_decode_tampered_token():
     """篡改的 token 应返回 None"""
-    from src.layers.l2_orchestration.auth import create_token, decode_token
+    from src.orchestration_plane.l2.auth import create_token, decode_token
     token = create_token(1, "user", "engineer")
     tampered = token[:-5] + "XXXXX"
     result = decode_token(tampered)
@@ -79,7 +79,7 @@ def test_decode_tampered_token():
 
 def test_default_jwt_secret_is_not_hardcoded():
     """JWT SECRET_KEY 默认随机生成，而非硬编码"""
-    from src.layers.l2_orchestration import auth
+    from src.orchestration_plane.l2 import auth
     # 确保未设置环境变量时使用随机密钥
     if "JWT_SECRET" not in os.environ:
         secret1 = auth.SECRET_KEY

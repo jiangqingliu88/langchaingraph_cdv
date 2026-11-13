@@ -6,7 +6,7 @@
 
 三层：
     ui/          通用控件（主题、行表模型、表格助手、控制台、Dock 工厂）
-    bridge/      工具绑定 —— 名字 → src/tools/** 的函数路径，惰性 import
+    bridge/      工具绑定 —— 名字 → src/runtime_plane/tools/** 的函数路径，惰性 import
     modules/     业务模块：调试技术 / 集成设计环境 / 验证管理系统
 
 依赖只能从上往下：`ui ← bridge ← modules ← registry ← app`。

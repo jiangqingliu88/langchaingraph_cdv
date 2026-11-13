@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from src.engine.orchestration.supervisor import graph as graph_mod
-from src.layers.l2_orchestration.execution import PipelineExecutionService
-from src.layers.l2_orchestration.run_service import (
+from src.orchestration_plane.supervisor import graph as graph_mod
+from src.orchestration_plane.l2.execution import PipelineExecutionService
+from src.orchestration_plane.l2.run_service import (
     RunRequest, RunService, get_run_service,
 )
-from src.layers.l2_orchestration.state import PipelineState
+from src.orchestration_plane.l2.state import PipelineState
 
 
 def _graph(checkpointer=None, store=None, *, delay: float = 0.0, fail: bool = False,
@@ -362,7 +362,7 @@ def test_no_qt_in_the_service_layer():
 
     code = (
         "import sys\n"
-        "import src.layers.l2_orchestration.run_service\n"
+        "import src.orchestration_plane.l2.run_service\n"
         "bad = [m for m in sys.modules if m.startswith('PySide6')]\n"
         "print(bad)\n"
     )
@@ -374,9 +374,9 @@ def test_no_qt_in_the_service_layer():
 
 
 def test_no_qt_anywhere_in_the_layers():
-    """**整个 `src/layers/` 都不许 import Qt。**
+    """**整个 `src/runtime_plane/` 都不许 import Qt。**
 
-    `run_service.py` 的模块头写着这条规矩（"`grep PySide6 src/layers/` 必须为空"），
+    `run_service.py` 的模块头写着这条规矩（"`grep PySide6 src/runtime_plane/` 必须为空"），
     但上面那个守卫只 import 了一个模块 —— 别处新加一份 Qt 依赖没人拦。证据层
     刚加了新文件，正好撞上这个缺口，所以补成**整层扫描**。
 

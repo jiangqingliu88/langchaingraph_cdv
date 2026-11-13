@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from src.agent.runtime.tool_loop import run_tool_loop
+from src.agent_plane.runtime.tool_loop import run_tool_loop
 
 
 class _Tool:

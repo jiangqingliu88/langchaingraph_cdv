@@ -33,7 +33,7 @@ from typing import List, Set, Tuple
 
 import pytest
 
-ROOT = Path("src/layers/l2_orchestration")
+ROOT = Path("src/runtime_plane/l2_orchestration")
 
 #: 要监控的模块 —— `graph.py` 拆出来的那几个（以及 graph.py 自己）
 WATCHED: Tuple[Path, ...] = (

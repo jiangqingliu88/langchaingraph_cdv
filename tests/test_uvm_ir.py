@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from src.generation.uvm_tools.tool_uvm.ir.uvm_ir import (
+from src.generation_plane.uvm_tools.tool_uvm.ir.uvm_ir import (
     UVMConnectionIR, build_uvm_ir, validate_agent_ir, validate_ir,
 )
-from src.generation.uvm_tools.tool_uvm.models import EnvSpec
+from src.generation_plane.uvm_tools.tool_uvm.models import EnvSpec
 
 
 def _spec():
@@ -64,7 +64,7 @@ def test_validate_connection_checks_agents_and_ports():
 # ── 渲染期真正消费 IR：解析后的模型也要能映射 ──
 
 def _agent(**kw):
-    from src.generation.uvm_tools.tool_uvm.models import AgentModel
+    from src.generation_plane.uvm_tools.tool_uvm.models import AgentModel
 
     base = dict(name="apb", agent_name="apb", interface="apb",
                 interface_name="apb")
@@ -73,7 +73,7 @@ def _agent(**kw):
 
 
 def test_environment_model_maps_to_ir():
-    from src.generation.uvm_tools.tool_uvm.models import (
+    from src.generation_plane.uvm_tools.tool_uvm.models import (
         AgentCollection, EnvironmentModel,
     )
 
@@ -105,7 +105,7 @@ def test_validate_agent_ir_flags_empty_name_and_bad_direction():
 
 def test_env_level_validation_does_not_require_ports():
     """`EnvironmentModel` 的 agent 只声明名字，端口在 interface 侧。"""
-    from src.generation.uvm_tools.tool_uvm.models import EnvironmentModel
+    from src.generation_plane.uvm_tools.tool_uvm.models import EnvironmentModel
 
     env = EnvironmentModel(name="e", env_name="e")
     env.agents.append(_agent())          # 没有端口
@@ -115,7 +115,7 @@ def test_env_level_validation_does_not_require_ports():
 
 
 def test_environment_model_reports_duplicate_agents():
-    from src.generation.uvm_tools.tool_uvm.models import (
+    from src.generation_plane.uvm_tools.tool_uvm.models import (
         AgentCollection, EnvironmentModel,
     )
 

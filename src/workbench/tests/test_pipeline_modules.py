@@ -10,8 +10,8 @@ import time
 
 import pytest
 
-from src.engine.orchestration.supervisor import graph as graph_mod
-from ...layers.l2_orchestration.state import PipelineState
+from src.orchestration_plane.supervisor import graph as graph_mod
+from src.orchestration_plane.l2.state import PipelineState
 
 MODULES = ("flow.pipeline", "flow.runs", "flow.evidence")
 
@@ -62,8 +62,8 @@ def _fake_graph(checkpointer=None, store=None, *, fail: bool = False):
 @pytest.fixture
 def service(tmp_path, monkeypatch):
     """把运行服务钉在 tmp_path 上 —— 测试不碰开发机上真实的 output/。"""
-    from ...layers.l2_orchestration import run_service as rs
-    from ...layers.l2_orchestration.execution import PipelineExecutionService
+    from src.orchestration_plane.l2 import run_service as rs
+    from src.orchestration_plane.l2.execution import PipelineExecutionService
 
     PipelineExecutionService.get_instance()._initialized = True
     monkeypatch.setattr(graph_mod, "build_closed_loop_graph", lambda **kw: _fake_graph(**kw))
@@ -107,7 +107,7 @@ def _wait_until(pred, timeout: float = 20.0) -> bool:
 
 
 def _run_once(service, tmp_path, **kw):
-    from ...layers.l2_orchestration.run_service import RunRequest
+    from src.orchestration_plane.l2.run_service import RunRequest
     request = RunRequest(spec_text="# 假规格", output_root=str(tmp_path / "run"),
                          target=95.0, max_rounds=1, **kw)
     run_id = service.start(request)
@@ -271,7 +271,7 @@ class TestPipelineModule:
                                            monkeypatch):
         monkeypatch.setattr(graph_mod, "build_closed_loop_graph",
                             lambda **kw: _fake_graph(fail=True, **kw))
-        from ...layers.l2_orchestration.run_service import RunRequest
+        from src.orchestration_plane.l2.run_service import RunRequest
         run_id = service.start(RunRequest(spec_text="x",
                                           output_root=str(tmp_path / "bad"),
                                           target=95.0, max_rounds=1))
@@ -365,7 +365,7 @@ class TestApprovalDialog:
 
     def test_no_handler_means_the_terminal_channel(self, tmp_path, monkeypatch):
         """无头 CLI 的行为必须不变：没人听就走 create_approval_gate 的默认通道。"""
-        from ...layers.l2_orchestration import run_service as rs
+        from src.orchestration_plane.l2 import run_service as rs
         fresh = rs.RunService(output_base=str(tmp_path))
         assert fresh._channel_for() is None
         fresh.shutdown(timeout=2)
@@ -427,8 +427,8 @@ class TestApprovalBar:
 
         module.answer_approval("reject")
         service.wait(run_id, timeout=30)
-        from ...layers.l2_orchestration.run_journal import read_journal
-        from ...layers.l2_orchestration.run_repository import RunRepository
+        from src.orchestration_plane.l2.run_journal import read_journal
+        from src.orchestration_plane.l2.run_repository import RunRepository
         run_dir = RunRepository(str(tmp_path)).run_dir(run_id)
         decided = [e for e in read_journal(run_dir) if e.kind == "run.resumed"]
         assert decided and decided[0].payload["decision"] == "reject"

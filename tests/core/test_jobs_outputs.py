@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from src.core.jobs.outputs import OutputRegistry, OutputSpec
-from src.core.jobs.spec import JobResult
-from src.core.runtime.artifacts import ArtifactStore
+from src.runtime_plane.core.jobs.outputs import OutputRegistry, OutputSpec
+from src.runtime_plane.core.jobs.spec import JobResult
+from src.runtime_plane.core.runtime.artifacts import ArtifactStore
 
 
 def _result(tmp_path, job_id="j1", status="completed"):

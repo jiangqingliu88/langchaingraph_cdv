@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import re
 
-from src.engine.verify.dut_checker import _per_sb_rules
-from src.layers.l2_orchestration.regression_tools.backend_profiles import (
+from src.engine_plane.verify.dut_checker import _per_sb_rules
+from src.orchestration_plane.l2.regression_tools.backend_profiles import (
     QUESTA_TEMPLATE,
 )
 

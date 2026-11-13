@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.layers.l2_orchestration.communication.tool_hub import (
+from src.orchestration_plane.l2.communication.tool_hub import (
     ToolHub,
     ToolRegistryError,
 )

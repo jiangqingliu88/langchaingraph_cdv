@@ -1,8 +1,8 @@
 """接口契约的 SVA 判据：回归 PASS + 资产声明 + 进编译清单。"""
 from __future__ import annotations
 
-from src.ir.vplan.evidence import _sva_reasons
-from src.ir.vplan.runtime.coverage_render import checker_rules
+from src.ir_plane.vplan.evidence import _sva_reasons
+from src.ir_plane.vplan.runtime.coverage_render import checker_rules
 
 
 def test_cross_cycle_rule_is_not_emitted_to_env_checker():

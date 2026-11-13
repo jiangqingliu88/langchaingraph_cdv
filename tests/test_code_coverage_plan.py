@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.tools.common.lib.code_coverage_plan import dut_stores, store_specs
+from src.runtime_plane.tools.common.lib.code_coverage_plan import dut_stores, store_specs
 
 
 def _store(root: Path, rel: str, data_name: str = "t1.data"):

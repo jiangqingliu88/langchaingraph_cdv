@@ -206,7 +206,7 @@ class TestStructureFromDomain:
         而它想验的恰恰是"界面没有自己的清单"。所以改成**跟领域表比**，
         领域加节点时这条自动跟上，不需要人记得回来改。
         """
-        from src.layers.l2_orchestration.stages import STAGES
+        from src.orchestration_plane.l2.stages import STAGES
         module.refresh()
         total = sum(len(g["nodes"]) for g in module.chart._groups)
         assert total == len(STAGES), (

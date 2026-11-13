@@ -4,8 +4,8 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from src.engine.front.main import _apply_dplan_csv
-from src.engine.front.vplan.dplan_csv import (
+from src.engine_plane.front.main import _apply_dplan_csv
+from src.engine_plane.front.vplan.dplan_csv import (
     load_dplan_csvs, write_dplan_csvs)
 
 

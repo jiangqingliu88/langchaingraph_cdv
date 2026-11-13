@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from src.layers.l1_infrastructure.infrastructure import InfrastructureManager
+from src.runtime_plane.infrastructure.infrastructure import InfrastructureManager
 
 
 class _Stub:
@@ -216,7 +216,7 @@ def test_the_ops_agent_turns_the_switch_into_auto_approve(monkeypatch):
     """
     import asyncio
 
-    from src.engine.ops import main as ops_main
+    from src.engine_plane.ops import main as ops_main
 
     seen = {}
 
@@ -276,8 +276,8 @@ def test_closed_loop_stops_at_the_manual_node():
     实测踩过：不拦的话每轮都停在同一个放行点、每轮都被判成 ops 失败，
     空烧 `max_rounds` 轮（5 轮 loopback 跑完，P0 一次都没跑过）。
     """
-    from src.engine.orchestration.supervisor.routing import r_coverage
-    from src.layers.l2_orchestration.state import PipelineState
+    from src.orchestration_plane.supervisor.routing import r_coverage
+    from src.orchestration_plane.l2.state import PipelineState
 
     assert r_coverage(PipelineState(run_id="r", output_root="x",
                                     awaiting_approval=True)) == "awaiting_approval"

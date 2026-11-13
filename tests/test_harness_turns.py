@@ -5,14 +5,14 @@ import json
 
 import jsonschema
 
-from src.agent.runtime.context import prompt_messages
-from src.agent.runtime.harness import (
+from src.agent_plane.runtime.context import prompt_messages
+from src.agent_plane.runtime.harness import (
     DECISION_SCHEMA,
     Harness,
     HarnessConfig,
 )
-from src.runtime.session import Session
-from src.runtime.workspace_manager import WorkspaceZones
+from src.runtime_plane.session import Session
+from src.runtime_plane.workspace_manager import WorkspaceZones
 
 
 def _finisher(payload):

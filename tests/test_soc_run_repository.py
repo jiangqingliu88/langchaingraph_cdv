@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.layers.l2_orchestration.run_repository import RunRepository
+from src.orchestration_plane.l2.run_repository import RunRepository
 
 
 def _soc_run(tmp_path: Path) -> Path:

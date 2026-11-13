@@ -21,7 +21,7 @@ import asyncio
 
 import pytest
 
-from src.layers.l2_orchestration.governance.approval import (
+from src.orchestration_plane.l2.governance.approval import (
     ApprovalDecision, ApprovalGate, ApprovalMode, CallbackChannel,
 )
 
@@ -50,8 +50,8 @@ class _RT:
 
 def _approval_node(gate, action_type="REFACTOR_RTL", manual_nodes=None,
                    output_root=""):
-    from src.engine.orchestration.nodes.pure.approval import n_approval
-    from src.layers.l2_orchestration.state import PipelineState
+    from src.orchestration_plane.nodes.pure.approval import n_approval
+    from src.orchestration_plane.l2.state import PipelineState
 
     rt = _RT(gate, manual_nodes)
     state = PipelineState(run_id="r", output_root=output_root)
@@ -134,8 +134,8 @@ class TestLegacyFallback:
         的是**归一后的集合**而不是字面量列表 —— 老名字还得留着，声明文件与历史
         轨迹里写的可能是它。
         """
-        from src.engine.orchestration.nodes.pure.approval import _LEGACY_HIGH_RISK_ACTIONS
-        from src.layers.l3_decision.decision_engine import canonical_action
+        from src.orchestration_plane.nodes.pure.approval import _LEGACY_HIGH_RISK_ACTIONS
+        from src.ir_plane.decision.decision_engine import canonical_action
         assert {canonical_action(a) for a in _LEGACY_HIGH_RISK_ACTIONS} == {
             "FIX_FUNCTIONAL_bug", "FIX_PROTOCOL_bug", "FIX_RESET_bug",
             "FIX_CDC_bug", "FIX_DEADCODE_bug", "FIX_MODEL_bug"}
@@ -152,7 +152,7 @@ class TestLegacyFallback:
 
 class TestMatchingHelper:
     def test_it_matches_on_both_stage_and_action(self):
-        from src.engine.orchestration.nodes.pure.approval import _matching_manual_node
+        from src.orchestration_plane.nodes.pure.approval import _matching_manual_node
 
         rt = _RT(None, [_node(id="a", after="decide", action="REFACTOR_RTL"),
                         _node(id="b", after="verify", action="REFACTOR_RTL")])
@@ -162,7 +162,7 @@ class TestMatchingHelper:
 
     def test_a_runtime_without_the_attribute_does_not_explode(self):
         """运行时没有 `manual_nodes`（老对象/假对象）时按空声明处理。"""
-        from src.engine.orchestration.nodes.pure.approval import _matching_manual_node
+        from src.orchestration_plane.nodes.pure.approval import _matching_manual_node
 
         class _Bare:
             pass
@@ -190,7 +190,7 @@ class TestInterruptPayload:
         real = lt.interrupt
         lt.interrupt = fake_interrupt
         try:
-            from src.engine.orchestration.nodes.pure.approval import _interrupt_approval
+            from src.orchestration_plane.nodes.pure.approval import _interrupt_approval
             _interrupt_approval(rt, action, **kw)
         finally:
             lt.interrupt = real
@@ -228,8 +228,8 @@ class TestArtifactCollection:
     """`_approval_artifacts` —— 从运行目录取**紧凑**清单。"""
 
     def test_it_reads_the_run_artifacts(self, tmp_path):
-        from src.engine.orchestration.nodes.pure.approval import _approval_artifacts
-        from src.layers.l2_orchestration.state import PipelineState
+        from src.orchestration_plane.nodes.pure.approval import _approval_artifacts
+        from src.orchestration_plane.l2.state import PipelineState
 
         run = tmp_path / "output_demo"
         (run / "inputs" / "yaml" / "uvm").mkdir(parents=True)
@@ -251,8 +251,8 @@ class TestArtifactCollection:
 
     def test_the_list_is_compact(self, tmp_path):
         """**裁剪过的**：带 sha256 / 逐条诊断会把检查点和日志撑肥。"""
-        from src.engine.orchestration.nodes.pure.approval import _approval_artifacts
-        from src.layers.l2_orchestration.state import PipelineState
+        from src.orchestration_plane.nodes.pure.approval import _approval_artifacts
+        from src.orchestration_plane.l2.state import PipelineState
 
         run = tmp_path / "output_demo"
         run.mkdir()
@@ -263,8 +263,8 @@ class TestArtifactCollection:
 
     def test_a_missing_run_dir_is_not_an_error(self, tmp_path):
         """取不到产物**照常审批** —— 产物是给人看的附加信息，不是审批的前提。"""
-        from src.engine.orchestration.nodes.pure.approval import _approval_artifacts
-        from src.layers.l2_orchestration.state import PipelineState
+        from src.orchestration_plane.nodes.pure.approval import _approval_artifacts
+        from src.orchestration_plane.l2.state import PipelineState
 
         assert _approval_artifacts(
             PipelineState(run_id="r", output_root=str(tmp_path / "nope"))) == []
@@ -289,15 +289,15 @@ class TestAutoApprovalBeatsTheInterruptMechanism:
     """
 
     def _state(self):
-        from src.layers.l2_orchestration.state import PipelineState
+        from src.orchestration_plane.l2.state import PipelineState
 
         state = PipelineState(run_id="r", output_root="")
         state.pending_action = {"action_type": "FIX_FUNCTIONAL_bug", "reason": "改了 RTL"}
         return state
 
     def test_auto_mode_does_not_interrupt_even_with_checkpointing(self, monkeypatch):
-        from src.engine.orchestration.nodes.pure.approval import n_approval
-        from src.layers.l2_orchestration.governance.approval import (
+        from src.orchestration_plane.nodes.pure.approval import n_approval
+        from src.orchestration_plane.l2.governance.approval import (
             ApprovalMode, ApprovalGate, AutoChannel,
         )
 
@@ -314,8 +314,8 @@ class TestAutoApprovalBeatsTheInterruptMechanism:
 
     def test_threshold_mode_still_interrupts_a_high_risk_action(self, monkeypatch):
         """反过来：**该问的还得问** —— 修 auto 不等于把审批一起关掉。"""
-        from src.engine.orchestration.nodes.pure.approval import n_approval
-        from src.layers.l2_orchestration.governance.approval import (
+        from src.orchestration_plane.nodes.pure.approval import n_approval
+        from src.orchestration_plane.l2.governance.approval import (
             ApprovalMode, ApprovalGate, CallbackChannel,
         )
 

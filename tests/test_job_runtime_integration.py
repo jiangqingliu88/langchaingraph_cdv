@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.core.jobs.spec import JobResult
-from src.core.runtime.artifacts import ArtifactStore
-from src.layers.l2_orchestration.runtime import _register_artifacts
-from src.layers.l2_orchestration.regression_tools.regression_framework.execution.strategy import (
+from src.runtime_plane.core.jobs.spec import JobResult
+from src.runtime_plane.core.runtime.artifacts import ArtifactStore
+from src.orchestration_plane.l2.runtime import _register_artifacts
+from src.orchestration_plane.l2.regression_tools.regression_framework.execution.strategy import (
     LocalStrategy, get_job_supervisor, set_job_supervisor,
 )
 

@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from src.ir.vplan.runtime.framework.stimulus_plan import (
+from src.ir_plane.vplan.runtime.framework.stimulus_plan import (
     BACKENDS,
     DEFAULT_BACKEND,
     StimulusBackendError,

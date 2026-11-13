@@ -128,7 +128,7 @@ class TestImpureGuard:
     def _registry():
         registry = ToolRegistry()
         registry.register(ToolBinding(
-            name="slow", target="src.tools.common.lib.sim_log:parse_sim_log",
+            name="slow", target="src.runtime_plane.tools.common.lib.sim_log:parse_sim_log",
             pure=False))
         return registry
 

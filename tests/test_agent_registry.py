@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from src.engine.orchestration.registry import AGENT_CARDS, card, validate_registry
-from src.agent.runtime import stage_tools
-from src.engine.orchestration.stage_policy import (
+from src.orchestration_plane.registry import AGENT_CARDS, card, validate_registry
+from src.agent_plane.runtime import stage_tools
+from src.orchestration_plane.stage_policy import (
     StagePolicyError, assert_stage, assert_tool, can_call_stage,
     should_ask_human,
 )

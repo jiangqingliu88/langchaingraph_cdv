@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 
-from src.core.optimize.history import collect_history, find_run_dirs
-from src.core.optimize.plan import build_plan
-from src.core.optimize.result import compare_reports
+from src.runtime_plane.core.optimize.history import collect_history, find_run_dirs
+from src.runtime_plane.core.optimize.plan import build_plan
+from src.runtime_plane.core.optimize.result import compare_reports
 
 
 def _w(path, obj):

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from src.interfaces.api import agent_mode_service as agent_service
+from src.workbench.api import agent_mode_service as agent_service
 
 
 def _planner(*steps):

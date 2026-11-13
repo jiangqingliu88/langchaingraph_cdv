@@ -275,7 +275,7 @@ modules:
     tool: {name: ide.ip_spec, kind: json}
 
   # 人工节点 —— 编辑「流程人工节点」的声明 YAML（文本 + schema 实时校验）。
-  # **不改闭环拓扑**：这份 YAML 目前是声明/规划性质（见 src/tools/integration/ide_tools/__init__.py）。
+  # **不改闭环拓扑**：这份 YAML 目前是声明/规划性质（见 src/runtime_plane/tools/integration/ide_tools/__init__.py）。
   - id: ide.manual_nodes
     title: 人工节点
     group: ide
@@ -293,7 +293,7 @@ modules:
     factory: src.workbench.modules.ide.aivm:AivmTableModule
     area: center
     order: 30
-    input: ../src/tools/humanview/aivm_ir/example/NPU_V2.CMDSCHED.testpoint.xlsx
+    input: ../src/runtime_plane/tools/humanview/aivm_ir/example/NPU_V2.CMDSCHED.testpoint.xlsx
     tool: {name: humanview.aivm_plan, kind: json}
 
   # 覆盖率豁免审批 —— 自动发现提出的"这个洞结构不可达"，等人签字。
@@ -448,7 +448,7 @@ modules:
   # 验证流程 —— 把闭环搬上界面。
   #
   # 注意清单里**没有流程的拓扑**：有哪些阶段、谁是谁的前驱属于领域
-  # （src/layers/l2_orchestration/graph.py + stages.py）。清单只描述**视图**：
+  # （src/orchestration_plane/l2/graph.py + stages.py）。清单只描述**视图**：
   # 停在哪、轮询多快、有哪些预设。把阶段写进 YAML 会让流程有第二份真相。
   - id: flow.pipeline
     title: 验证流程

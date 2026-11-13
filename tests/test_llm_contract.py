@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from src.generation.planning import dplan as llm_contract
+from src.generation_plane.planning import dplan as llm_contract
 
 
 def test_extract_contracts_parses_design_and_model(monkeypatch):
@@ -52,7 +52,7 @@ def test_extract_contracts_parses_design_and_model(monkeypatch):
         assert kwargs.get("prompt_version")
         return json.dumps(payload)
 
-    monkeypatch.setattr("src.tools.common.lib.llm_call.call_llm", fake_call_llm)
+    monkeypatch.setattr("src.runtime_plane.tools.common.lib.llm_call.call_llm", fake_call_llm)
     doc = llm_contract.extract_contracts("a spec", module_hint="npu_sched")
     assert doc["design_name"] == "npu_sched"
     assert len(doc["interfaces"]) == 2
@@ -63,14 +63,14 @@ def test_extract_contracts_parses_design_and_model(monkeypatch):
 
 
 def test_extract_contracts_empty_on_llm_failure(monkeypatch):
-    monkeypatch.setattr("src.tools.common.lib.llm_call.call_llm",
+    monkeypatch.setattr("src.runtime_plane.tools.common.lib.llm_call.call_llm",
                         lambda *a, **k: "")
     assert llm_contract.extract_contracts("a spec") == {}
 
 
 def test_extract_contracts_rejects_contract_without_ports_or_features(monkeypatch):
     monkeypatch.setattr(
-        "src.tools.common.lib.llm_call.call_llm",
+        "src.runtime_plane.tools.common.lib.llm_call.call_llm",
         lambda *a, **k: json.dumps({"design_name": "dut", "interfaces": [],
                                     "registers": [], "features": [],
                                     "model_contract": {}}))
@@ -88,7 +88,7 @@ def test_extract_contracts_normalizes_llm_shapes(monkeypatch):
         "model_contract": {"module": "npu_sched", "ports": "same as interfaces",
                            "behaviors": "no"},
     }
-    monkeypatch.setattr("src.tools.common.lib.llm_call.call_llm",
+    monkeypatch.setattr("src.runtime_plane.tools.common.lib.llm_call.call_llm",
                         lambda *a, **k: json.dumps(payload))
     doc = llm_contract.extract_contracts("spec")
     assert doc["interfaces"][0]["data_width"] == 1

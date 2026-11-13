@@ -31,7 +31,7 @@ Workbench 是一个 **PySide6 桌面应用**，不是 Web 前端：
              （无业务词汇）       │
                             catalog.py         工具绑定表（唯一写 python 路径处）
                                  │
-                             src/tools/**      只读分析 / 查询 / 生成
+                             src/runtime_plane/tools/**      只读分析 / 查询 / 生成
 ```
 
 **依赖方向**（与上面那张旧图不同 —— 旧图容易读成"bridge 依赖 ui"）：
@@ -39,7 +39,7 @@ Workbench 是一个 **PySide6 桌面应用**，不是 Web 前端：
 | 层 | 可以依赖 | 不能依赖 |
 |---|---|---|
 | `ui/` | Qt、`ui/` 内部 | 任何业务词汇、modules、bridge |
-| `bridge/` | 标准库、`src/tools/**` | **Qt**、ui、modules |
+| `bridge/` | 标准库、`src/runtime_plane/tools/**` | **Qt**、ui、modules |
 | `modules/` | ui、bridge、bus、tasks、ctx | 其它模块的实现（只走话题/工具名） |
 | `registry/` | modules、ctx、manifest | 业务逻辑 |
 | `app.py` | registry、ui、settings | 业务结论 |
@@ -49,7 +49,7 @@ Workbench 是一个 **PySide6 桌面应用**，不是 Web 前端：
 - `bridge/`、`spec.py`、`config.py`、`topics.py` **不 import Qt** —— 清单解析、
   工具绑定与话题契约可以在无显示器环境下被测试和回答。
 - `ui/` **不认识任何业务词汇**；业务词汇只出现在 `modules/`。
-- 模块不直接 import `src/tools/**`，只通过 `bridge/catalog.py` 的绑定名调用。
+- 模块不直接 import `src/runtime_plane/tools/**`，只通过 `bridge/catalog.py` 的绑定名调用。
 
 ## 3. 启动流程
 
@@ -216,7 +216,7 @@ payload = self.run_tool("sim.parse_log", log_text=text)
 `bridge/binding.py` 负责三件事：
 
 - **惰性 import**：清单列了但没启用的模块/绑定，不会因依赖缺失拖垮启动；
-- **返回值归一化**：`src/tools/` 返回 dict 或 JSON 字符串不统一，由 `kind`
+- **返回值归一化**：`src/runtime_plane/tools/` 返回 dict 或 JSON 字符串不统一，由 `kind`
   （`auto/text/json/filesystem`）决定；**归一化永不抛**，非 JSON 原样放进
   `{"raw": ..., "_parse_error": ...}`，因为工具错误路径常返回纯文本；
 - **非纯守卫**：`pure=False` 的绑定（LLM / 编译 / 仿真 / 回归 / 写盘）默认
@@ -305,7 +305,7 @@ started_at / finished_at · result / error
 - 仍然**不提供**取消与进度百分比。
 - 工作台与 CLI 的契约是**文件**：同一份 run 目录既能被 CLI 读，也能被工作台
   打开；工作台不替流水线计算业务结论。
-- **写操作走 `src/interfaces/api/`**；页面不直接调工具/读 RTL。
+- **写操作走 `src/workbench/api/`**；页面不直接调工具/读 RTL。
 - **只读视图走 `src/workbench/query/`**：`runs.py` / `evidence.py` 返回
   ViewModel（事件、产物索引、证据 envelope），页面只渲染；老证据包没有
   `envelope` 时显式报 `missing_envelope`，不伪装通过。
@@ -477,7 +477,7 @@ GUI 不等待、不生成本地结论。
 ### 16.2 回归效率优化（`service.regression`）
 
 - 输入：项目目录 / 历史 run 目录（留空扫 `output_*`）。
-- 点击「分析并生成计划」→ `TaskRunner` 后台跑 `src/core/optimize`：
+- 点击「分析并生成计划」→ `TaskRunner` 后台跑 `src/runtime_plane/core/optimize`：
   `collect_history` → `build_plan` → `write_plan`。
 - 页面展示 flaky / failing / 慢用例 / 低边际跳过 / 预计节省；**不执行回归**。
   执行仍由 CLI `optimize-regression --execute`（或现有回归执行器）承担。
@@ -487,7 +487,7 @@ GUI 不等待、不生成本地结论。
 ### 16.3 Coverage Closure（`service.coverage`）
 
 - 运行下拉来自 `pipeline.runs`；目标覆盖率可调。
-- 「生成 Closure 计划」→ `src/core/closure.write_closure_plan` 读
+- 「生成 Closure 计划」→ `src/runtime_plane/core/closure.write_closure_plan` 读
   `tp_matrix.json` / `coverage_result.json`，写 `<run>/closure/plan.json`。
 - 展示当前/目标/缺口/动作表；**不执行仿真**。执行由 CLI
   `coverage-closure --execute` 走现有闭环。

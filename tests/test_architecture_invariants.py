@@ -12,10 +12,10 @@ from pathlib import Path
 import pytest
 
 from config import architecture_guard as guard
-from src.layers.l2_orchestration.communication.tool_hub import ToolHub
-from src.engine.orchestration.supervisor.graph import NODE_FUNCS
-from src.layers.l3_decision.decision_engine import ALL_ACTIONS
-from src.tools.boards import BOARDS
+from src.orchestration_plane.l2.communication.tool_hub import ToolHub
+from src.orchestration_plane.supervisor.graph import NODE_FUNCS
+from src.ir_plane.decision.decision_engine import ALL_ACTIONS
+from src.runtime_plane.tools.boards import BOARDS
 
 ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "ARCHITECTURE_4.0.md"
@@ -59,7 +59,7 @@ def test_main_graph_has_nine_agent_nodes():
     ]
     assert len(names) == len(set(names)) == 9
     assert all(fn.__module__.startswith(
-        ("src.engine.orchestration", "src.agent", "src.engine.audit.gates"))
+        ("src.orchestration_plane", "src.agent_plane", "src.orchestration_plane.gates"))
         for _, fn in NODE_FUNCS)
 
 
@@ -86,7 +86,7 @@ def test_decision_action_universe_is_frozen():
 def test_caveat_codes_in_audit_match_the_public_set():
     # 3.0 拆分后 caveat 分在 main.py 与 helpers.py 两处，按包扫描。
     found = set()
-    for path in sorted((ROOT / "src/engine/audit").glob("*.py")):
+    for path in sorted((ROOT / "src/engine_plane/audit").glob("*.py")):
         found |= set(re.findall(r'(?:_caveat|caveat)\("([A-Z_]+)"',
                                 path.read_text(encoding="utf-8")))
     assert found == EXPECTED_CAVEATS
@@ -111,11 +111,11 @@ def test_line_guard_catches_an_unwatched_oversized_file():
 def test_line_guard_enforces_watched_budget_below_hard_error():
     """watched 的 registered 是硬预算，不是只在 >2000 时生效。"""
     budget = {"warn": 1500, "error": 2000,
-              "watched": {"src/interfaces/cli/commands.py": {
+              "watched": {"src/workbench/cli/commands.py": {
                   "registered": 1, "reason": "test", "plan": "test"}}}
     issues = guard.line_violations(budget=budget)
     assert any(i["type"] == "watched_file_grew"
-               and i["path"] == "src/interfaces/cli/commands.py" for i in issues)
+               and i["path"] == "src/workbench/cli/commands.py" for i in issues)
 
 
 def test_complexity_guard_catches_a_new_hotspot():
@@ -156,7 +156,7 @@ def test_known_limitations_match_architecture_doc():
 
 def test_player_runtime_boundary_matches_code():
     from config.known_limitations import by_id
-    from src.ir.vplan.runtime.framework.stimulus_plan import BACKENDS
+    from src.ir_plane.vplan.runtime.framework.stimulus_plan import BACKENDS
 
     boundary = by_id("player_runtime")
     if BACKENDS["player"]["runtime"]:

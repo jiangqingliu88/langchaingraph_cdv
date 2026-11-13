@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from src.runtime.workspace_manager import WorkspaceError, WorkspaceZones
+from src.runtime_plane.workspace_manager import WorkspaceError, WorkspaceZones
 
 
 def test_direct_mode_writes_project_root_and_hides_secrets(tmp_path):

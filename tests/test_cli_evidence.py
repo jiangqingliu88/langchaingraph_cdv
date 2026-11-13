@@ -14,7 +14,7 @@ import subprocess
 import pytest
 from click.testing import CliRunner
 
-from src.interfaces.cli.commands import cli
+from src.workbench.cli.commands import cli
 
 
 @pytest.fixture
@@ -148,7 +148,7 @@ class TestCheck:
         找到父仓库；这里直接模拟“git 不可用/非仓库”的返回值，才测的是
         目标分支，而不是测试临时目录的位置。
         """
-        from src.layers.l2_orchestration.evidence import human_edit
+        from src.orchestration_plane.l2.evidence import human_edit
 
         monkeypatch.setattr(human_edit, "_git_changed_files",
                             lambda root, limit=500: None)

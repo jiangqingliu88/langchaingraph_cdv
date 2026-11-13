@@ -54,7 +54,7 @@ def _spec(module_id: str):
 
 
 def _patch(module, run_dir) -> None:
-    from src.interfaces.api.flow import run_agent_outputs
+    from src.workbench.api.flow import run_agent_outputs
 
     def fake_run_tool(name=None, *, quiet=False, force=False, **kwargs):
         tool = name or (module.spec.tool.name if module.spec.tool else None)
@@ -188,7 +188,7 @@ class TestWiring:
 
 def test_verify_outputs_point_at_sv_not_legacy_agents(tmp_path):
     """verify 的产物页跟新布局：列 sv/，不再列已废弃的顶层 agents/env/bench。"""
-    from src.interfaces.api.flow import run_agent_outputs
+    from src.workbench.api.flow import run_agent_outputs
 
     root = tmp_path / "run"
     (root / "sv" / "agents").mkdir(parents=True)

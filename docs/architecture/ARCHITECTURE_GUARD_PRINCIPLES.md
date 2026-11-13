@@ -157,12 +157,12 @@ def _own_nodes(func):
 目标方向：
 
 ```text
-engine → core, tools, ir, runtime, engine/executors
+engine → core, tools, ir, runtime, engine_plane/executors
 ```
 
-**不允许**长期依赖 `l2/l3/l4/l5/workspace`。当前 `engine/{front,ops,coverage,audit}`
+**不允许**长期依赖 `l2/l3/l4/l5/workspace`。当前 `engine_plane/{front,ops,coverage,audit}`
 模块级依赖 `l2_orchestration.executors.base`，这是 `ExecutorBase` 尚未迁到
-`engine/executors` 的过渡债务；必须登记在依赖债务文件里，并随迁移清零。
+`engine_plane/executors` 的过渡债务；必须登记在依赖债务文件里，并随迁移清零。
 在清零之前，allowlist 中的 `l2` 不是默许，而是已登记债务。
 
 ### 5.5 动态 import 的登记
@@ -178,7 +178,7 @@ engine → core, tools, ir, runtime, engine/executors
 {
   "ts": "2026-11-13T02:00:00Z",
   "kind": "complexity|size|dependency|identity_migration",
-  "key": "src/engine/ops/main.py::OpsExecutor.execute_task",
+  "key": "src/engine_plane/ops/main.py::OpsExecutor.execute_task",
   "old": 35,
   "new": 28,
   "reason": "抽出 _incremental_filter",
@@ -239,7 +239,7 @@ Guard 的实现必须用同一套 `line_violations` / `complexity_violations` �
 | F. 只扫模块级 import | 延迟 import 漏检 | 全部 import + `importlib` 字符串 |
 | G. 未登记目录不报错 | 静默跳过 | `unregistered_zone` 失败 |
 | H. `_iter_py(root)` 不生效 | 固定全局 `ROOT` | 所有扫描使用传入 root |
-| I. Engine allowlist 过宽 | 可依赖 l2-l5 | 目标只允许 core/tools/ir/runtime，过渡依赖登记为债务 |
+| I. Engine allowlist 过宽 | 可依赖 l2-l5 | 目标只允许 core/tools/ir_plane/runtime，过渡依赖登记为债务 |
 
 ## 10. 变更本文件的程序
 
