@@ -78,13 +78,14 @@ class ArchitecturePlaneModule(ModuleBase):
         else:
             total = sum(len(guard[k]) for k in
                         ("line_issues", "complexity_issues", "zone_issues",
-                         "import_issues", "debt_issues"))
+                         "import_issues", "cycle_issues", "debt_issues"))
+            total += len(guard["unzoned_files"])
             self.status.setText(f"Guard {guard['version']}：FAIL —— {total} 条违规")
             self.status.setStyleSheet("color: #c62828;")
 
         lines = []
         for key in ("line_issues", "complexity_issues", "zone_issues",
-                    "import_issues", "debt_issues"):
+                    "import_issues", "cycle_issues", "debt_issues"):
             for issue in guard[key][:8]:
                 lines.append(f"[{key}] {issue}")
         self.detail.setPlainText("\n".join(lines) if lines else "没有 Guard 违规。")

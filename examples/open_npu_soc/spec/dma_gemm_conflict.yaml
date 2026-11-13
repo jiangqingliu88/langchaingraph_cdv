@@ -1,0 +1,23 @@
+# DMA / GEMM 冲突 intent（M1/M3 示例：应判 FAIL）
+module: open_npu_soc_dma_gemm_conflict
+
+resources:
+  - {id: sram_c, type: sram, address_space: soc, base: 0x2000, size: 0x200}
+
+operations:
+  - id: dma_store
+    owner: dma
+    type: store
+    resource: sram_c
+    accesses: [{address: 0x2000, length: 0x80, access_type: write}]
+  - id: gemm_write
+    owner: gemm
+    type: compute
+    resource: sram_c
+    accesses: [{address: 0x2010, length: 0x80, access_type: write}]
+
+interactions:
+  # 部分重叠且策略禁止 → FAIL
+  - {id: IF-DMA-GEMM-CONFLICT, operation_a: dma_store,
+     operation_b: gemm_write, relation: FORBIDDEN_OVERLAP,
+     policy_id: P-DMA-GEMM-NO-OVERLAP}

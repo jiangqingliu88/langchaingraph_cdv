@@ -213,4 +213,4 @@ def test_check_reports_all_budget_dimensions(tmp_path):
     assert result["ok"] is False
     assert result["line_issues"]
     assert result["debt_issues"]
-    assert result["tool_version"] == "2.0"
+    assert result["tool_version"] == "2.1"

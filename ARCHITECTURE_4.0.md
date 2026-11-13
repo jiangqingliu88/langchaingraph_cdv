@@ -645,7 +645,7 @@ An Evidence-Driven Autonomous IC Verification System
 
 ## 相关文档与边界
 
-- Agent Plane / Deterministic Engine / IR & Evidence / Evidence & Signoff Gate 是四个平面。
+- 8 个职责平面是整体架构；Agent、Engine、IR、Evidence 是核心可信协作体系（不是第二套“四平面架构”）。
 - 归属与迁移：`docs/architecture/STAGE_OWNERSHIP.md`、`STAGE_MIGRATION_PLAN.md`、`STAGE_DEPENDENCY_MATRIX.md`。
 - 预算与债务：`docs/architecture/ARCHITECTURE_GUARD_PRINCIPLES.md`（Guard 2.0）。
 - C Model 是 Candidate Reference Model：编译通过不等于 Golden，需经过 VALIDATED / APPROVED_GOLDEN。
@@ -674,3 +674,16 @@ An Evidence-Driven Autonomous IC Verification System
 - `e203_c_path_boundary`（open）：E203 C 路径的边界
 - `optional_auth_api`（by_design）：auth.py 是可选 API 面
 - `long_output_path`（by_design）：输出目录过长会撞 Windows MAX_PATH（coverstore 打不开 → vsim-7）
+
+## 十、当前里程碑（2026-11-13）
+
+| 项 | 状态 |
+|---|---|
+| M0 Architecture Guard 2.1 | ✅ 8 平面全覆盖、unzoned/cycle/lazy-debt、dependency matrix |
+| M1 Resource / Interaction IR | ✅ `vagent resource verify`：intent → 重叠事实 → 场景 → 三态结论 |
+| M2 Evidence v2 | ✅ `evidence audit`（完整性/有效性/可信度）+ `evidence stale`（输入 hash 失效） |
+| M3 DMA Autonomous Verification | ◐ 资源冲突四类场景已可确定性验证；自然语言→生成→执行→签核主链待接 |
+| M4 Autonomous Recovery | ◐ 受控 staging + 保护路径 + Engine 复验标记已落地；自动修复闭环待接 |
+
+Guard 2.1 的规则：新平面不被静默跳过；新增逆向 import / import 环直接失败；
+延迟 import 债务已登记、只允许缩小。

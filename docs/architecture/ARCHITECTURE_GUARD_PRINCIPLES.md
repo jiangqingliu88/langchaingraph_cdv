@@ -259,6 +259,10 @@ Guard 的实现必须用同一套 `line_violations` / `complexity_violations` �
 
 ## 12. 实现状态（2026-11-13）
 
+Guard 2.1 追加：`unzoned_file`（新平面不再静默跳过）、`import_cycle`
+（CLI 注册环显式放行，跨平面环失败）、`dependency_matrix`（zone → allowed +
+实际 import 边数，供 `vagent arch matrix` 与 Workbench 使用）。
+
 已落地：`--reduce-debt` / `--approve-debt`、history、单向收紧、嵌套函数独立
 复杂度、类限定身份、延迟/动态 import 检查、未归类模块检查、`root` 参数修复。
 

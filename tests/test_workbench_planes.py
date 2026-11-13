@@ -25,7 +25,7 @@ def test_every_plane_directory_exists():
 
 def test_snapshot_reports_guard_status():
     data = snapshot()
-    assert data["guard"]["version"] == "2.0"
+    assert data["guard"]["version"] == "2.1"
     assert "ok" in data["guard"]
     assert isinstance(data["guard"]["import_issues"], list)
 

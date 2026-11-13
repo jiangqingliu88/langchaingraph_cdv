@@ -223,3 +223,44 @@ def evidence_check(repo_root, json_output):
 # 四件事一条链：**RTL 内容哈希 → 版本号 → run 挂版本 → 首次 run 当基准 →
 # 用例与 bug 各自挂在版本上**。都是 `database/lineage.db` 里的可查实体。
 
+
+@evidence_group.command("audit")
+@click.argument("package", type=click.Path(exists=True, file_okay=False,
+                                          path_type=Path))
+@click.option("--json", "json_output", is_flag=True, help="机器可读 JSON")
+def evidence_audit(package, json_output):
+    """Evidence v2：完整性 / 有效性 / 可信度三态审计。"""
+    from src.engine_plane.audit.evidence_v2 import evaluate_package
+
+    result = evaluate_package(package)
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(f"{result['status']}: {result['reason']}")
+        print(f"  completeness={result['completeness']['ok']} "
+              f"validity={result['validity']['ok']} "
+              f"trust={result['trust']['ok']}")
+    raise SystemExit(0 if result["status"] == "PASS"
+                     else 1 if result["status"] == "FAIL" else 2)
+
+
+@evidence_group.command("stale")
+@click.argument("provenance", type=click.Path(exists=True, dir_okay=False,
+                                              path_type=Path))
+@click.argument("current", type=click.Path(exists=True, dir_okay=False,
+                                           path_type=Path))
+@click.option("--json", "json_output", is_flag=True, help="机器可读 JSON")
+def evidence_stale(provenance, current, json_output):
+    """provenance 输入 hash 与当前输入不一致 → 证据失效清单。"""
+    from src.engine_plane.audit.evidence_v2 import stale_inputs
+
+    doc = json.loads(Path(current).read_text(encoding="utf-8", errors="replace"))
+    rows = stale_inputs(provenance, doc if isinstance(doc, dict) else {})
+    if json_output:
+        print(json.dumps({"stale": rows}, ensure_ascii=False, indent=2))
+    else:
+        print(f"stale inputs: {len(rows)}")
+        for row in rows:
+            print(f"  {row['path']}  {row['recorded'][:12]} -> {row['current'][:12]}")
+    raise SystemExit(1 if rows else 0)
+

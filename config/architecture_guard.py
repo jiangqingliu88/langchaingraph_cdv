@@ -25,6 +25,7 @@ import math
 import re
 import sys
 from datetime import datetime, timezone
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
@@ -43,6 +44,19 @@ COMPLEXITY_THRESHOLD = 20
 
 #: 函数内部的延迟 import 只对这几条边界做硬检查（Engine/Generation 不得依赖 Agent）。
 _LAZY_FORBIDDEN = {("engine", "agents"), ("generation", "agents")}
+
+#: 已登记的**延迟 import 债务**（zone → zone）。只允许缩小；新出现的逆向延迟
+#: import 会失败。每一对都对应迁移前的历史结构，不是默许。
+_LAZY_DEBT = {
+    ("tools", "l2"), ("tools", "l3"), ("tools", "ir"),
+    ("l1", "l2"), ("l1", "l4"),
+    ("l4", "ir"), ("l4", "generation"),
+    ("engine", "generation"),
+}
+
+#: CLI 命令模块为了"一个 cli 对象"互相 import；它们是注册表，不是业务依赖。
+#: 只在 `src.workbench.cli.` 内部放行，跨平面环仍然失败。
+_CYCLE_ALLOW_PREFIX = "src.workbench.cli."
 
 
 class GuardConfigError(RuntimeError):
@@ -394,8 +408,12 @@ def import_violations(root: Path = ROOT) -> List[Dict[str, Any]]:
             allowed = _ALLOWED.get(src_zone, set()) | _DEPENDENCY_DEBT.get(rel, set())
             if dst_zone in allowed:
                 continue
-            if lazy and (src_zone, dst_zone) not in _LAZY_FORBIDDEN:
-                continue
+            if lazy:
+                if (src_zone, dst_zone) in _LAZY_FORBIDDEN:
+                    pass  # 硬禁止：Engine/Generation 不得依赖 Agent
+                elif (src_zone, dst_zone) in _LAZY_DEBT:
+                    continue
+                # 未登记的延迟逆向依赖 → 失败
             issues.append({"type": "lazy_import_direction" if lazy
                            else "import_direction", "file": rel, "line": lineno,
                            "from": src_zone, "to": dst_zone,
@@ -510,6 +528,64 @@ def approve_debt(key: str, reason: str, approver: str, root: Path = ROOT,
     return row
 
 
+def unzoned_files(root: Path = ROOT) -> List[str]:
+    """`src/` 下没有 zone 的文件 —— 不允许被静默跳过（`src/__init__.py` 除外）。"""
+    root = Path(root)
+    return [p.relative_to(root).as_posix() for p in _iter_py(root)
+            if not _zone_of(p.relative_to(root).as_posix())
+            and p.relative_to(root).as_posix() != "src/__init__.py"]
+
+
+def dependency_matrix(root: Path = ROOT) -> Dict[str, Any]:
+    """每个 zone 的实际 import 边数 + 允许集合。GUI/CLI 展示用。"""
+    root = Path(root)
+    matrix: Dict[str, Any] = {z: {"allowed": sorted(_ALLOWED.get(z, set())),
+                                  "imports": {}} for z in _ALLOWED}
+    for path in _iter_py(root):
+        rel = path.relative_to(root).as_posix()
+        src = _zone_of(rel)
+        if not src:
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, SyntaxError):
+            continue
+        for _, module, _lazy in _imports(tree, rel):
+            dst, _err = _target_zone(module, root)
+            if dst and dst != src:
+                bucket = matrix.setdefault(src, {"allowed": [], "imports": {}})
+                bucket["imports"][dst] = bucket["imports"].get(dst, 0) + 1
+    for row in matrix.values():
+        row["imports"] = dict(sorted(row["imports"].items()))
+    return dict(sorted(matrix.items()))
+
+
+def cycle_issues(root: Path = ROOT) -> List[Dict[str, Any]]:
+    """模块级 import 环。新增环 → 失败；当前基线为零。"""
+    root = Path(root)
+    modules = {_module_name(p.relative_to(root).as_posix()) for p in _iter_py(root)}
+    graph: Dict[str, set] = {}
+    for path in _iter_py(root):
+        rel = path.relative_to(root).as_posix()
+        mod = _module_name(rel)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, SyntaxError):
+            continue
+        deps = {m for _, m, lazy in _imports(tree, rel)
+                if not lazy and m in modules}
+        if deps:
+            graph[mod] = deps
+    try:
+        TopologicalSorter(graph).prepare()
+    except CycleError as exc:
+        nodes = set(exc.args[1]) if len(exc.args) > 1 else set()
+        if nodes and all(n.startswith(_CYCLE_ALLOW_PREFIX) for n in nodes):
+            return []
+        return [{"type": "import_cycle", "modules": sorted(nodes)}]
+    return []
+
+
 def check(root: Path = ROOT, budget_path: Path = BUDGET_FILE,
           baseline_path: Path = BASELINE_FILE) -> Dict[str, Any]:
     root = Path(root)
@@ -518,12 +594,16 @@ def check(root: Path = ROOT, budget_path: Path = BUDGET_FILE,
     comp_issues = complexity_violations(root, COMPLEXITY_THRESHOLD,
                                         load_baseline(baseline_path))
     zone_issues = zone_violations(root)
+    unzoned = unzoned_files(root)
+    zone_issues += [{"type": "unzoned_file", "path": rel} for rel in unzoned]
     import_issues = import_violations(root)
+    cycles = cycle_issues(root)
     debt_types = {"budget_not_tightened", "debt_cleared", "debt_repaid",
                   "baseline_stale", "complexity_new", "complexity_grew"}
     debt_issues = [i for i in line_issues + comp_issues
                    if i["type"] in debt_types]
-    ok = not (line_issues or comp_issues or zone_issues or import_issues)
+    ok = not (line_issues or comp_issues or zone_issues or import_issues
+               or cycles)
     return {
         "ok": ok,
         "line_budget": {"warn": budget["warn"], "error": budget["error"]},
@@ -531,9 +611,13 @@ def check(root: Path = ROOT, budget_path: Path = BUDGET_FILE,
         "complexity_issues": comp_issues,
         "zone_issues": zone_issues,
         "import_issues": import_issues,
+        "cycle_issues": cycles,
+        "unzoned_files": unzoned,
+        "dependency_matrix": dependency_matrix(root),
+        "lazy_dependency_debt": [list(pair) for pair in sorted(_LAZY_DEBT)],
         "debt_issues": debt_issues,
-        "import_direction_ok": not (zone_issues or import_issues),
-        "tool_version": "2.0",
+        "import_direction_ok": not (zone_issues or import_issues or cycles),
+        "tool_version": "2.1",
     }
 
 
@@ -563,7 +647,8 @@ def main(argv: List[str] = None) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         for issue in (result["line_issues"] + result["complexity_issues"]
-                      + result["zone_issues"] + result["import_issues"]):
+                      + result["zone_issues"] + result["import_issues"]
+                      + result["cycle_issues"]):
             print(f"[architecture] {issue['type']}: {issue}")
         print("[architecture] OK" if result["ok"]
               else "[architecture] FAILED —— 见上面条目")

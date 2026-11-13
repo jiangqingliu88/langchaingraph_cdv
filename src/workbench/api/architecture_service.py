@@ -85,6 +85,8 @@ def snapshot(root: str | Path = ROOT) -> Dict[str, Any]:
             "complexity_issues": result.get("complexity_issues") or [],
             "zone_issues": result.get("zone_issues") or [],
             "import_issues": result.get("import_issues") or [],
+            "cycle_issues": result.get("cycle_issues") or [],
+            "unzoned_files": result.get("unzoned_files") or [],
             "debt_issues": result.get("debt_issues") or [],
         },
     }

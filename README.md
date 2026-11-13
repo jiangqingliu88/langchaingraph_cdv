@@ -105,6 +105,37 @@ python -m src.workbench.cli.commands soc evidence output_dma_e2e_*/
 - 证据包 27 文件，`soc evidence` 哈希校验通过；
 - DMA 信号链：`dma_load → dma_store → dma_busy → c_we`（波形 `u_dma`）。
 
+### Resource / Interaction IR（M1）
+
+```bash
+# intent → resources/operations/interactions → 确定性冲突与场景
+vagent resource verify examples/open_npu_soc/spec/dma_gemm_interaction.yaml
+vagent resource verify examples/open_npu_soc/spec/dma_gemm_conflict.yaml
+```
+
+覆盖无重叠 / 完全重叠 / 部分重叠 / 边界相邻四类场景；结论为
+`PASS / FAIL / INCOMPLETE`，可 `--out` 落盘 `resource_intent_result.json`。
+
+### Evidence v2（M2）
+
+```bash
+vagent evidence audit <run>/signoff_evidence          # 完整性/有效性/可信度
+vagent evidence stale <run>/docs/provenance.jsonl current_inputs.json
+```
+
+`audit` 把“文件存在”升级为“section 齐全 + 哈希匹配 + manifest 可信”；
+`stale` 用当前输入 hash 对比 provenance，输出失效清单。
+
+### 受控修复（M4）
+
+```bash
+vagent repair validate proposal.json --project-root <project>
+vagent repair stage proposal.json --staging <staging-dir> --project-root <project>
+```
+
+修复只能写 staging；`signoff_evidence/ contract/ coverage/ config/ .signoffai/`
+等保护路径直接拒绝；`requires_engine_verification=true`，Engine 复验前不产生 PASS。
+
 ### VPlan / 回归 / 签核
 
 ```bash
@@ -117,10 +148,13 @@ python -m src.workbench.cli.commands runs list
 
 ---
 
-## Architecture Guard 2.0
+## Architecture Guard 2.1
 
 ```bash
 python -m config.architecture_guard                 # 检查
+python -m src.workbench.cli.commands arch check     # CLI 入口
+python -m src.workbench.cli.commands arch planes    # 8 平面 + 文件数
+python -m src.workbench.cli.commands arch matrix    # zone 依赖矩阵
 python -m config.architecture_guard --json          # 机器读
 python -m config.architecture_guard --reduce-debt   # 只降不升，写 history
 python -m config.architecture_guard --approve-debt \
@@ -143,7 +177,7 @@ python -m config.architecture_guard --approve-debt \
 ./venv/Scripts/python.exe -m config.architecture_guard
 ```
 
-当前基线：**1249 passed, 14 skipped**；guard **OK**。
+当前基线：**1249 passed, 14 skipped**；guard **2.1 OK**（新平面全覆盖、无新增 import 环）。
 
 测试集合包括 Guard 单向债务、VPlan 证据、Staged 回归、SVA 契约、SoC 适配、
 Supervisor 状态机、Harness 多轮会话、安全边界等。
