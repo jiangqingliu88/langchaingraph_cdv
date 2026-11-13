@@ -1,16 +1,13 @@
 """业务模块 —— 按业务线分目录，目录名与 `config/workbench.yaml` 的 `groups[].id` 一致。
 
-    纵向 · 七条 agent 线（每条 = 一个领域角色的能力在界面上的表达）
-    design/    设计构建     规格分析 → IP 拆解 → RTL 生成
-    model/     参考模型     多语言参考模型 + 版本回滚
-    verify/    验证构建     UVM 环境 / 测试用例 / SVA 断言
-    ops/       编译与回归   编译 + 仿真 + 回归
-    coverage/  覆盖率       功能覆盖点 + 收集 + gap 归因
-    debug/     调试技术     日志、错误指纹、波形、失败用例二分
-    audit/     签核审查     四道门禁 + 签核报告
+    按 Architecture 4.0 的 8 个职责平面组织（见 architecture/planes.py）：
 
-    横向 · 一条流程与证据线（横切全部 agent）
-    flow/      流程与证据   闭环编排、运行历史、证据链、签核判定、跟踪、趋势
+    Generation Plane   design/ model/ verify/   RTL / 参考模型 / UVM / SVA
+    Engine Plane       ops/ coverage/ debug/ audit/   确定性执行与裁决
+    Evidence Plane     flow/                   运行历史、证据链、签核判定
+    Interfaces Plane   project/ soc/ ip/ service/ ide/   项目与工程入口
+    Runtime Plane      platform/               权限、环境、任务恢复
+    Agent / Orchestration / IR / Knowledge / Experience 由 architecture/ 总览展示
 
 > 为什么是"七条 agent 线 + 一条横切线"，见
 > `docs/design/agent_gui_business_architecture.md`：agent 是纵向能力，而证据/治理/

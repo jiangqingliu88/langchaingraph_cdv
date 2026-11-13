@@ -26,6 +26,14 @@ from .binding import ToolBinding
 
 BINDINGS: List[ToolBinding] = [
 
+    # ══ Architecture 4.0（只读；不执行验证）════════════════════════
+    ToolBinding(
+        name="architecture.snapshot",
+        target="src.workbench.api.architecture_service:snapshot",
+        kind="json",
+        doc="8 个职责平面的文件数 + Architecture Guard 状态",
+    ),
+
     # ══ 调试技术 ══════════════════════════════════════════════════
     # 这三个都来自 debug_tools/main.py。注意 `output_dir` 不存在时它们**不抛**，
     # 而是返回 {"error": "output_dir not found: ..."} —— 这正是界面想显示的话，

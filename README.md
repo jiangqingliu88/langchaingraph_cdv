@@ -73,6 +73,16 @@ python -m src.workbench.cli.commands -p "分析 specs/npu_sched 的 RTL 接口�
 python -m src.workbench.cli.commands -p "跑 VPlan 验证并报告证据" --mode verify
 ```
 
+### Workbench（GUI）
+
+```bash
+python -m src.workbench
+```
+
+导航树按 Architecture 4.0 的 8 个职责平面分组；「架构治理 → 架构 4.0 平面」
+显示各平面职责、禁止项、文件数和 Architecture Guard 状态。GUI 只读，
+不执行验证、不拥有独立 Engine。
+
 ### DMA / SoC 端到端
 
 ```bash

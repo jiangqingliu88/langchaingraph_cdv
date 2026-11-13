@@ -291,7 +291,7 @@ class TestStartAnnouncesTheRun:
     此前 `pipeline.start` 只管自己：新运行的 run_id 从不广播，而全工作台只有
     `运行历史` 会发 `run.selected`（还得等用户点一下）。于是启动之后，订阅了
     `run.selected` 的那些页 —— 流程视图 / 证据 / 签核判定 / 决策轨迹 / 运行清单 /
-    七条 agent 产出 —— 全都还停在**上一次**运行上。表现就是"点了启动，别的页不刷新"。
+    8 平面产出 —— 全都还停在**上一次**运行上。表现就是"点了启动，别的页不刷新"。
     """
 
     def test_start_run_publishes_run_selected(self, window, monkeypatch):

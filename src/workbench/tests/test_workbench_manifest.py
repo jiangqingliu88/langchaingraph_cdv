@@ -20,7 +20,7 @@ def test_shipped_manifest_parses():
         "ip.catalog", "ip.workspace", "ip.signoff",
         "service.uvm", "service.regression", "service.coverage",
         "platform.settings",
-        # 七条 agent 线的产出总览（清单里的书写顺序）
+        # 8 平面的产出总览（清单里的书写顺序）
         "design.output", "model.output", "ops.output",
         "ops.regression_status", "ops.regression_wave", "ops.regression_coverage",
         "coverage.output", "audit.output",
@@ -31,22 +31,23 @@ def test_shipped_manifest_parses():
         # 流程与证据线：流程视图 + 编排 + 运行历史 + 证据 + 跟踪 + 对比 + 签核 + 趋势 + 决策 + 清单
         "flow.task", "flow.diagram", "flow.artifacts", "flow.pipeline", "flow.runs", "flow.evidence",
         "flow.todo", "flow.fcov", "flow.drafts", "flow.compare", "flow.signoff", "flow.trend",
-        "flow.decision", "flow.manifest"]
+        "flow.decision", "flow.manifest", "architecture.planes"]
     assert [g.id for g in manifest.sorted_groups()] == [
         "project", "soc", "ip", "service", "ide", "flow", "design", "model",
-        "verify", "ops", "coverage", "debug", "audit", "platform"]
+        "verify", "ops", "coverage", "debug", "audit", "platform",
+        "architecture"]
 
 
 def test_shipped_manifest_is_grouped_into_business_sections():
-    """业务域 → 业务线：客户工程 / 设计时 / 工程工作区 / 运行时 / 平台配置。"""
+    """业务域 → 业务线：8 个职责平面 + 架构治理。"""
     manifest = load_manifest(default_manifest_path())
     assert [(section, [g.id for g in groups]) for section, groups in manifest.sections()] == [
-        ("项目", ["project"]),
-        ("客户工程", ["soc", "ip", "service"]),
-        ("设计时", ["ide"]),
-        ("工程工作区", ["flow", "ops", "coverage", "debug"]),
-        ("运行时", ["design", "model", "verify", "audit"]),
-        ("平台配置", ["platform"]),
+        ("Interfaces Plane", ["project", "soc", "ip", "service"]),
+        ("Generation Plane", ["ide", "design", "model", "verify"]),
+        ("Evidence Plane", ["flow"]),
+        ("Engine Plane", ["ops", "coverage", "debug", "audit"]),
+        ("Runtime Plane", ["platform"]),
+        ("架构治理", ["architecture"]),
     ]
 
 
@@ -156,7 +157,7 @@ def test_builtin_manifest_has_groups_but_no_modules():
 
 def test_describe_counts_enabled_modules():
     manifest = load_manifest(default_manifest_path())
-    assert "46 个模块" in describe(manifest)
+    assert "47 个模块" in describe(manifest)
     assert describe(None) == "清单：无"
 
 

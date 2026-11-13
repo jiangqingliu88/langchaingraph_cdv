@@ -1,4 +1,4 @@
-"""七条 agent 线的产出总览。
+"""8 平面的产出总览。
 
 七个模块共用同一个视图基类（`modules/agent_output.py`）、同一个绑定
 （`agent.outputs`），只有 `ROLE` 不同。测试打桩 `run_tool` 这一层，

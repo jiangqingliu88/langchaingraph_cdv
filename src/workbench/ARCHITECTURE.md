@@ -1,6 +1,6 @@
 # Workbench 架构（当前实现）
 
-> 基线：2026-11-04（清单 **46 个启用模块**；工作台 `pytest src/workbench/tests` **753 passed**，另有 3 个 IP 页面用例为既有失败）
+> 基线：2026-11-13（Architecture 4.0：**8 个职责平面 + workbench**；模块清单以 `config/workbench.yaml` 为准）
 >
 > 本文描述 `src/workbench/` **代码现在怎么组织**，与仓库根
 > `ARCHITECTURE.md` 是同一套系统：CLI 是唯一正式入口，工作台是它的
@@ -17,6 +17,24 @@ Workbench 是一个 **PySide6 桌面应用**，不是 Web 前端：
 - **不开发 Web UI / Dashboard / SSE**（见 `CLAUDE.md`）。工作台只做桌面窗口。
 - 工作台**不另造验证引擎**：业务数据全部来自 CLI/流水线落盘的 run 目录、
   manifest、覆盖率与证据包；工作台与流水线通过**文件契约**解耦，不共享内存状态。
+
+### 1.1 与 Architecture 4.0 的映射
+
+Workbench 属于 **Interfaces Plane**（CLI / API / GUI）。导航树的 `section`
+按 8 个职责平面对齐：
+
+| 平面 | Workbench 业务线 | 说明 |
+|---|---|---|
+| Interfaces Plane | `project` / `soc` / `ip` / `service` | 项目与工程入口；CLI 是正式入口 |
+| Generation Plane | `ide` / `design` / `model` / `verify` | 候选产物生成（RTL / CModel / UVM / SVA） |
+| Engine Plane | `ops` / `coverage` / `debug` / `audit` | 确定性执行与裁决 |
+| Evidence Plane | `flow` | 运行历史、证据链、签核判定 |
+| Runtime Plane | `platform` | 权限、环境、任务恢复 |
+| 架构治理 | `architecture` | `architecture.planes`：8 平面边界 + Guard 状态 |
+| Agent / Orchestration / IR / Knowledge / Experience | — | 由 `architecture.planes` 总览展示，不在导航树重复开页 |
+
+新增页面时，`group.section` 必须落在上表的某个平面里；`architecture.planes`
+是唯一的架构总览入口，禁止再开第二个“架构页”。
 
 ## 2. 分层与依赖方向
 
@@ -310,7 +328,7 @@ started_at / finished_at · result / error
   ViewModel（事件、产物索引、证据 envelope），页面只渲染；老证据包没有
   `envelope` 时显式报 `missing_envelope`，不伪装通过。
 
-## 9. 模块清单（`config/workbench.yaml`，46 个启用模块）
+## 9. 模块清单（`config/workbench.yaml`，47 个启用模块）
 
 | 业务线 / 域 | 模块 | 作用 |
 |---|---|---|
@@ -318,10 +336,11 @@ started_at / finished_at · result / error
 | `soc` / SoC 团队 | `soc.overview`、`soc.architecture`、`soc.verification`、`soc.c_cases`、`soc.signoff` | SoC 集成视角：工程总览 / 层级 / 回归 / C 用例 / 签核（含消费的 IP 发布包绑定）；数据来自 `soc_adapter` |
 | `ip` / IP 团队 | `ip.catalog`、`ip.workspace`、`ip.signoff` | IP 供应方视角：清单 / 工作区（IP 回归 + 生成发布包）/ 发布检查（`ip_release_v1` 准则逐条） |
 | `service` / 客户工程 | `service.uvm`、`service.regression`、`service.coverage` | 三个业务服务入口（只做导航/编排，见 §16） |
+| `architecture` / 架构治理 | `architecture.planes` | 8 个职责平面的职责/禁止项、文件数、Guard 2.0 状态（只读） |
 | `platform` / 平台配置 | `platform.settings` | 当前项目/清单/Python/Qt/EDA 工具的可读视图 |
 | `ide` / 设计时 | `ide.ip_spec`、`ide.manual_nodes`、`ide.aivm` | IP 规格、人工节点 YAML 编辑 + schema 校验；AIVM 测试点表（xlsx）只读视图（TP / 三通道覆盖点 / M1 计划摘要，绑定 `humanview.aivm_plan`） |
 | `verify` / 运行时 | `verify.vplan`、`verify.isa_gen`、`verify.output` | VPlan 项目/运行产物、ISA 激励、验证产出 |
-| `design` / `model` / `ops` / `coverage` / `debug` / `audit` | `*.output` | 各 agent 本次运行的产出视图 |
+| `design` / `model` / `ops` / `coverage` / `debug` / `audit` | `*.output` | 各 Stage 本次运行的产出视图 |
 | `ops` | `ops.regression_status`、`ops.regression_wave`、`ops.regression_coverage` | 回归状态、波形、覆盖率产物 |
 | `coverage` | `coverage.excludes` | 覆盖率豁免审批 |
 | `debug` | `debug.sim_log`、`debug.fingerprint` | 仿真日志解析、错误指纹 |

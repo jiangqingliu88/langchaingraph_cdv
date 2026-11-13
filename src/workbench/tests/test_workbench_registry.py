@@ -535,9 +535,8 @@ class TestRealManifestBuilds:
         window = make_window(qt_app, ctx)
         try:
             assert window.manager.failures() == {}
-            # 46 = 31 个专业模块 + 项目入口 2 + SoC 5 + IP 3 + 工程服务 3
-            #      + 环境与工具 1 + 测试点表（xlsx）1
-            assert len(window.modules) == 46
+            # 47 = 原 46 + Architecture 4.0 平面总览
+            assert len(window.modules) == 47
             assert {m.module_id for m in window.modules} >= {
                 "project.overview", "project.management",
                 "soc.overview", "soc.architecture", "soc.verification",
@@ -553,7 +552,7 @@ class TestRealManifestBuilds:
                 "verify.vplan", "coverage.excludes",
                 "flow.pipeline", "flow.todo", "flow.drafts", "flow.runs", "flow.evidence",
                 "flow.task", "flow.diagram", "flow.artifacts", "flow.fcov", "flow.signoff",
-                "flow.trend", "flow.decision", "flow.manifest"}
+                "flow.trend", "flow.decision", "flow.manifest", "architecture.planes"}
             # **工作区默认是空的**：实例都建好了，但没一个进 MDI
             assert window.workspace.subwindow_count() == 0
 
@@ -578,7 +577,8 @@ class TestRealManifestBuilds:
                     "回归产出", "回归状态", "回归波形", "回归覆盖率",
                     "覆盖率产出", "覆盖率豁免",
                     "仿真日志", "调试产出", "签核产出",
-                    "环境与工具"]
+                    "环境与工具",
+                    "架构 4.0 平面"]
             for module_id in expected_center_order(window):
                 window.manager.open(module_id)
             titles = [s.windowTitle() for s in window.mdi.subWindowList(
