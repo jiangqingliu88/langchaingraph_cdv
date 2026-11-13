@@ -14,6 +14,8 @@ logger = structlog.get_logger()
 
 from src.engine_plane.audit.helpers import (  # noqa: E402
     _read_constraint_status,
+    read_resource_intent_status,
+    add_resource_intent_caveat,
     _read_association_report,
     _read_tp_matrix,
     _read_case_tp,
@@ -158,7 +160,13 @@ class AuditExecutor(BaseExecutor):
         # 这里先只算与策略无关的硬条件；`model_real` 仍是**事实字段**，
         # 但默认不再一票否决 —— 否则"没走参考模型链路"的 run（例如 --rtl
         # 验证专注模式）会永远无法签核，而策略明明允许没有模型。
-        hard_ok = bool(pass_rate_ok and coverage_ok and gates.get("rtl_real", False))
+        # M1：资源交互 intent（无文件 = 判不了，不阻塞）
+        resource_intent_status = read_resource_intent_status(output_dir)
+        gates["resource_intent_status"] = resource_intent_status or "MISSING"
+        gates["resource_intent_ok"] = resource_intent_status != "FAIL"
+        hard_ok = bool(pass_rate_ok and coverage_ok
+                       and gates.get("rtl_real", False)
+                       and gates.get("resource_intent_ok", True))
 
         # ── 软缺口（caveats）：硬门禁过了，但"绿得不够实在" ──
         #
@@ -185,6 +193,8 @@ class AuditExecutor(BaseExecutor):
         def _caveat(code: str, message: str) -> None:
             caveats.append(message)
             caveat_records.append({"code": code, "message": message})
+
+        add_resource_intent_caveat(resource_intent_status, _caveat)
 
         # 约束有没有真在约束 —— **优先读 verify 直接写下的那份**，`semantic_validations`
         # 里那份当补充。

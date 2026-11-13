@@ -116,6 +116,10 @@ vagent resource verify examples/open_npu_soc/spec/dma_gemm_conflict.yaml
 覆盖无重叠 / 完全重叠 / 部分重叠 / 边界相邻四类场景；结论为
 `PASS / FAIL / INCOMPLETE`，可 `--out` 落盘 `resource_intent_result.json`。
 
+SoC 主链：`examples/open_npu_soc/spec/resource_intent.yaml` 存在时，`soc run`
+会先做确定性 preflight；`FAIL/INCOMPLETE` 直接不跑回归。结果写入
+`coverage/resource_intent_result.json` 并进入签核证据包。
+
 ### Evidence v2（M2）
 
 ```bash

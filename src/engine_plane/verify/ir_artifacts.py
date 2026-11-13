@@ -253,6 +253,15 @@ def write_resource_artifacts(output_dir: Path, module: str = "",
             {"schema": "resource_scenarios_v1", "module": model.module,
              "scenarios": scenarios,
              "coverage": coverage_summary(scenarios)})
+        # M1：资源交互 intent 的三态结论进主链（audit 会读，缺失=判不了）
+        try:
+            from src.engine_plane.verify.resource_intent import verify_document
+            intent = verify_document(doc if isinstance(doc, dict) else {},
+                                     module=model.module)
+            atomic_write_json(Path(output_dir) / "coverage"
+                              / "resource_intent_result.json", intent)
+        except Exception as e:                         # noqa: BLE001 旁路
+            logger.warning(f"resource intent 验证失败: {e}")
         return {"available": True, "source": str(path),
                 "resources": len(model.resources),
                 "operations": len(model.operations),

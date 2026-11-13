@@ -26,7 +26,7 @@ watched:
     reason: "辅助函数已拆到 helpers.py；main.py 只剩 run() 编排"
     plan: "helpers.py（1129 行）继续按 discovery / env_yaml / interface_yaml 拆"
   src/engine_plane/audit/main.py:
-    registered: 545
+    registered: 555
     reason: "helpers 已拆出 audit/helpers.py；main 只剩 execute_task 编排"
     plan: "继续把 helpers.py（964 行）按 gates / summaries / evidence 三段拆开"
   src/workbench/cli/commands.py:

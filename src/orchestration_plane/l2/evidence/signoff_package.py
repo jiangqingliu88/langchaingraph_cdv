@@ -167,6 +167,7 @@ SECTION_FILES: Dict[str, Tuple[str, ...]] = {
         "coverage/verification_ir.json",
         "coverage/resource_model.json",
         "coverage/resource_scenarios.json",
+        "coverage/resource_intent_result.json",
         "coverage/case_cov/**/*.json",
     ),
 }

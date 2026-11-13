@@ -4,7 +4,7 @@
   "src/agent_plane/runtime/pipeline_nodes/run.py::n_coverage": 39,
   "src/agent_plane/specialists/debug/main.py::DebugExecutor.execute_task": 57,
   "src/engine_plane/audit/helpers.py::_build_signoff_evidence": 44,
-  "src/engine_plane/audit/main.py::AuditExecutor.execute_task": 80,
+  "src/engine_plane/audit/main.py::AuditExecutor.execute_task": 82,
   "src/engine_plane/coverage/main.py::CoverageExecutor.execute_task": 53,
   "src/engine_plane/diagnostics/main.py::auto_fix": 24,
   "src/engine_plane/front/main.py::FrontExecutor.execute_task": 25,

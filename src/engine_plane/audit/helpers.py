@@ -1156,4 +1156,22 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
         "hard_ok": hard_ok if hard_ok is not None else None,
     }
 
+def read_resource_intent_status(output_dir: Path) -> str:
+    """M1：读资源交互 intent 的三态结论；没有文件 = 判不了（空串）。"""
+    try:
+        doc = json.loads((Path(output_dir) / "coverage"
+                          / "resource_intent_result.json").read_text(
+                              encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return ""
+    return str((doc or {}).get("status") or "")
+
+
+def add_resource_intent_caveat(status: str, caveat) -> None:
+    if status == "FAIL":
+        caveat("RESOURCE_INTENT_FAILED",
+               "资源交互 intent 判定 FAIL：存在禁止重叠/地址溢出")
+    elif status == "INCOMPLETE":
+        caveat("RESOURCE_INTENT_INCOMPLETE",
+               "资源交互 intent 不完整：缺少 operations/interactions")
 

@@ -715,13 +715,44 @@ def run_soc_project(project_root: str | Path,
                           + os.environ.get("PATH", ""))
     out_root = make_output_root(str(output) if output else
                                 f"output_soc_{root.name}")
+    resource_intent = _resource_intent_preflight(root, out_root)
+    if resource_intent and resource_intent["status"] != "PASS":
+        return {"status": "FAIL",
+                "error": f"resource intent {resource_intent['status']}: "
+                         f"{resource_intent['reason']}",
+                "resource_intent": resource_intent,
+                "output_root": str(out_root), "validation": validation}
     soc_run = SoCRun(project, out_root)
     result = InfrastructureManager(out_root).run_regression(
         reg_yaml=str(root / "regression" / "regression.yaml"), mode="local")
     summary = soc_run.finish(result)
+    if resource_intent:
+        summary["resource_intent"] = {
+            "status": resource_intent["status"],
+            "reason": resource_intent["reason"],
+            "counts": resource_intent["counts"],
+            "coverage": resource_intent["coverage"],
+        }
     return {"status": result.get("status"), "result": result,
             "summary": summary, "output_root": str(out_root),
-            "validation": validation}
+            "validation": validation,
+            "resource_intent": resource_intent}
+
+
+def _resource_intent_preflight(root: Path, out_root: Path):
+    """DMA/资源 intent 进 SoC 主链；没有声明文件 = 判不了（返回 None）。"""
+    candidates = (root / "spec" / "resource_intent.yaml",
+                  root / "spec" / "resources.yaml")
+    source = next((p for p in candidates if p.is_file()), None)
+    if source is None:
+        return None
+    from src.engine_plane.verify.resource_intent import verify_file, write_result
+
+    (Path(out_root) / "coverage").mkdir(parents=True, exist_ok=True)
+    result = verify_file(source)
+    result["source"] = str(source)
+    write_result(result, Path(out_root) / "coverage")
+    return result
 
 
 def load_run_manifest(run_root: str | Path) -> Dict[str, Any]:
@@ -748,8 +779,8 @@ def _collect_evidence_files(tmp: Path, root: Path, proj_root: Path,
                             run_doc: Dict[str, Any],
                             entries: List[Dict[str, Any]]) -> None:
     for rel in ("spec/soc_spec.yaml", "spec/interface_spec.yaml",
-                "spec/verification_plan.yaml", "regression/regression.yaml",
-                "filelist.f"):
+                "spec/verification_plan.yaml", "spec/resource_intent.yaml",
+                "regression/regression.yaml", "filelist.f"):
         _copy_evidence(tmp, "inputs", rel, proj_root, entries)
     for folder, pattern in (("vectors", "*"), ("npu", "*.sv"), ("tb", "*.sv")):
         for p in sorted((proj_root / folder).rglob(pattern)):
@@ -757,6 +788,7 @@ def _collect_evidence_files(tmp: Path, root: Path, proj_root: Path,
                            proj_root, entries)
     for rel in ("soc/soc_run.json", "artifacts/artifacts.json",
                 "docs/events.jsonl", "docs/run_context.json",
+                "coverage/resource_intent_result.json",
                 "regression_run/report.json",
                 "regression_run/report_summary.txt"):
         _copy_evidence(tmp, "execution", rel, root, entries)

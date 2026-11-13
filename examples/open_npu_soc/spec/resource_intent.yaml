@@ -1,0 +1,69 @@
+# DMA / GEMM 资源交互 intent（M1/M3 示例）
+#
+# 覆盖四类场景：无重叠 / 完全重叠 / 部分重叠 / 边界相邻。
+# 这是一个 **PASS** 示例：重叠存在，但策略允许（SERIALIZED / ARBITRATED）。
+module: open_npu_soc_dma_gemm
+check_window: 0
+
+resources:
+  - {id: sram_ab, type: sram, address_space: soc, base: 0x1000, size: 0x200}
+  - {id: sram_c,  type: sram, address_space: soc, base: 0x2000, size: 0x200}
+
+operations:
+  - id: dma_load
+    owner: dma
+    type: load
+    resource: sram_ab
+    accesses: [{address: 0x1000, length: 0x80, access_type: read}]
+  - id: gemm_read
+    owner: gemm
+    type: compute
+    resource: sram_ab
+    accesses: [{address: 0x1000, length: 0x80, access_type: read}]
+  - id: dma_store_partial
+    owner: dma
+    type: store
+    resource: sram_c
+    accesses: [{address: 0x2000, length: 0x80, access_type: write}]
+  - id: gemm_write_partial
+    owner: gemm
+    type: compute
+    resource: sram_c
+    accesses: [{address: 0x2040, length: 0x80, access_type: write}]
+  - id: dma_store_adjacent
+    owner: dma
+    type: store
+    resource: sram_c
+    accesses: [{address: 0x2000, length: 0x40, access_type: write}]
+  - id: gemm_write_adjacent
+    owner: gemm
+    type: compute
+    resource: sram_c
+    accesses: [{address: 0x2040, length: 0x40, access_type: write}]
+  - id: dma_store_disjoint
+    owner: dma
+    type: store
+    resource: sram_c
+    accesses: [{address: 0x2000, length: 0x40, access_type: write}]
+  - id: gemm_write_disjoint
+    owner: gemm
+    type: compute
+    resource: sram_c
+    accesses: [{address: 0x2080, length: 0x40, access_type: write}]
+
+interactions:
+  # 完全重叠：允许，但 checker 必须验证串行顺序
+  - {id: IF-DMA-GEMM-LOAD, operation_a: dma_load, operation_b: gemm_read,
+     relation: SERIALIZED, policy_id: P-DMA-GEMM-ORDER}
+  # 部分重叠：允许，但需要仲裁
+  - {id: IF-DMA-GEMM-PARTIAL, operation_a: dma_store_partial,
+     operation_b: gemm_write_partial, relation: ARBITRATED_OVERLAP,
+     policy_id: P-DMA-GEMM-ARB}
+  # 边界相邻：不算冲突
+  - {id: IF-DMA-GEMM-ADJ, operation_a: dma_store_adjacent,
+     operation_b: gemm_write_adjacent, relation: FORBIDDEN_OVERLAP,
+     policy_id: P-DMA-GEMM-ADJ}
+  # 无重叠
+  - {id: IF-DMA-GEMM-DISJOINT, operation_a: dma_store_disjoint,
+     operation_b: gemm_write_disjoint, relation: FORBIDDEN_OVERLAP,
+     policy_id: P-DMA-GEMM-NONE}
