@@ -4,7 +4,7 @@
 
     generation  生成产物（UVM / ISA IR / C 模型）
     checking    检查与判定（断言）
-    execution   EDA / 回归（当前实现位于 `src/orchestration_plane/l2/regression_tools/`）
+    execution   EDA / 回归及仿真适配（回归编排位于 l2；执行适配在 tools/execution/）
     flow        签核 / 血缘 / 趋势等跨阶段流程
     integration 对外集成（IDE 桥）
     humanview   人读视图（PM 手写测试点表 → 测试点本体）
@@ -16,40 +16,37 @@
   · `scmodel_tools` / `doc_tools` / `debug_tools` / `coverage_tools` /
     `spec_tools` 已迁到 layers 或删除，不再登记；
   · `case_associate_view` 已并入 `humanview.case_view`；
-  · `regression_tools` 已迁到 `src/orchestration_plane/l2/regression_tools/`，
-    因此 `execution` 板块当前没有工具包子目录（保留板块名，避免文档/CLI 口径断裂）。
+  · `regression_tools` 已迁到 `src/orchestration_plane/l2/regression_tools/`；
+  · 2026-11-14：`tools/execution/interface_timing/` 接入仿真适配，
+    作为 execution 下首个接口时序功能块，不新增板块或架构平面。
 """
+
 from __future__ import annotations
 
 from typing import Dict, Tuple
 
 BOARDS: Dict[str, Tuple[str, ...]] = {
     "generation": (
-        "uvm_tools", "isa_ir_tools", "cmodel_tools",
+        "uvm_tools",
+        "isa_ir_tools",
+        "cmodel_tools",
     ),
-    "checking": (
-        "assertion_tools",
-    ),
-    "execution": (),
-    "flow": (
-        "trend_tools",
-    ),
-    "integration": (
-        "ide_tools",
-    ),
+    "checking": ("assertion_tools",),
+    "execution": ("interface_timing",),
+    "flow": ("trend_tools",),
+    "integration": ("ide_tools",),
     "humanview": (
         "aivm_ir",
         # 身份层（CCAT/CASE/TST）与人类可读视图（含 Case Gate）
-        "case_ir", "covg_ir", "sva_ir", "scb_ir",
+        "case_ir",
+        "covg_ir",
+        "sva_ir",
+        "scb_ir",
     ),
-    "common": (
-        "lib",
-    ),
+    "common": ("lib",),
 }
 
-BOARD_OF: Dict[str, str] = {
-    pkg: board for board, pkgs in BOARDS.items() for pkg in pkgs
-}
+BOARD_OF: Dict[str, str] = {pkg: board for board, pkgs in BOARDS.items() for pkg in pkgs}
 
 
 def board_of(package: str) -> str:

@@ -1,0 +1,8 @@
+{
+  "expected_status": "PASS",
+  "actual_status": "INCOMPLETE",
+  "expectation_met": false,
+  "simulation_kind": "unavailable",
+  "seed": 4444,
+  "rtl": "pass_master.sv"
+}

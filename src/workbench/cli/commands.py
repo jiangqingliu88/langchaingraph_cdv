@@ -718,7 +718,7 @@ def gui_run(manifest, module, input, theme, reset_layout):
 # 模块 `from src.workbench.cli.commands import _repo, ...` 会拿到半成品。
 from . import (  # noqa: E402,F401
     cmd_arch,
-    cmd_config,
+    cmd_chat, cmd_config,
     cmd_contract,
     cmd_coverage,
     cmd_debug,
@@ -736,7 +736,7 @@ from . import (  # noqa: E402,F401
     cmd_services,
     cmd_session,
     cmd_signoff,
-    cmd_soc, cmd_specification, cmd_specs,
+    cmd_soc, cmd_interface_timing, cmd_specification, cmd_specs,
     cmd_tools,
     cmd_verify,
     cmd_vplan,

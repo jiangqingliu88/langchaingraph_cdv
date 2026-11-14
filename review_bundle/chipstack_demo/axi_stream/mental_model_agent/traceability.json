@@ -1,0 +1,33 @@
+[
+  {
+    "from": "source/spec.md",
+    "to": "TIM-99eb68af8ba6eb1d0d1d6367",
+    "relation": "grounds"
+  },
+  {
+    "from": "TIM-99eb68af8ba6eb1d0d1d6367",
+    "to": "D:\\cdv_a\\review_bundle\\chipstack_demo\\Archive\\run-1794629719187233900\\monitors\\monitor_r_valid_data_stable.sv",
+    "relation": "compiles_into"
+  },
+  {
+    "from": "TIM-99eb68af8ba6eb1d0d1d6367",
+    "to": "SPC-052ff0783593e5c122257ef7",
+    "relation": "joins_specification_contract"
+  },
+  {
+    "from": "R-VALID-DATA-STABLE",
+    "to": "runs/positive/runtime.json",
+    "relation": "observed_by",
+    "expected": "PASS",
+    "actual": "INCOMPLETE",
+    "runtime_kind": "unavailable"
+  },
+  {
+    "from": "R-VALID-DATA-STABLE",
+    "to": "runs/negative_control/runtime.json",
+    "relation": "observed_by",
+    "expected": "FAIL",
+    "actual": "INCOMPLETE",
+    "runtime_kind": "unavailable"
+  }
+]

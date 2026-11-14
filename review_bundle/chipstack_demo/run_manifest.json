@@ -1,0 +1,18 @@
+{
+  "schema": "chipstack_workspace_v1",
+  "layout_scope": "运行产物组织；非 Cadence 服务集成",
+  "latest_design": "axi_stream",
+  "latest_run_id": "run-1794629719187233900",
+  "seed": 4444,
+  "designs": {
+    "axi_stream": {
+      "latest_run_id": "run-1794629719187233900",
+      "manifest": "Archive\\run-1794629719187233900\\manifest.json",
+      "overall_status": "INCOMPLETE",
+      "simulation_kind": "unavailable",
+      "project_directory": "axi_stream"
+    }
+  },
+  "database": "artifacts.sqlite",
+  "database_role": "only workspace artifact index; no legacy lineage DB replacement"
+}

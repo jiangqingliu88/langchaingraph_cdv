@@ -1,0 +1,6 @@
+{
+  "mode": "structured_authoring",
+  "llm_used": false,
+  "reason": "本轮为结构化语义输入，没有 LLM 会话",
+  "records": []
+}

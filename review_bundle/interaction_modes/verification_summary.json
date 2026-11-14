@@ -1,0 +1,86 @@
+{
+  "schema": "interaction_modes_verification_v1",
+  "verification_kind": "frontend_routing_cli_native_gui_and_existing_engine_regression",
+  "shared_adapter": "agent_mode_service.agent_turn",
+  "shared_execution": "verify_mode/router and existing flow.pipeline",
+  "frontend": "PySide6 desktop, not a web server",
+  "qt_version": "6.6.3.1",
+  "workspace_default_to_git_commit": false,
+  "groups": [
+    {
+      "scope": "tests/",
+      "passed": 1348,
+      "skipped": 16,
+      "exit_code": 0,
+      "duration_seconds": 286.01,
+      "job_id": "pwsh-5637e853a4ab4384"
+    },
+    {
+      "scope": "src/workbench/tests/test_pipeline_modules.py",
+      "passed": 50,
+      "skipped": 0,
+      "exit_code": 0,
+      "duration_seconds": 1251.37,
+      "job_id": "pwsh-223e121130fd4d6b"
+    },
+    {
+      "scope": "src/workbench/tests/ excluding test_pipeline_modules.py",
+      "passed": 649,
+      "skipped": 0,
+      "exit_code": 0,
+      "duration_seconds": 1071.96,
+      "job_id": "pwsh-afde1da781094fa2"
+    }
+  ],
+  "targeted_cli_api_and_gui_checks": {
+    "passed": 44,
+    "exit_code": 0,
+    "includes": [
+      "shared chat/plan/verify routes",
+      "plan and execution approval configuration",
+      "session resume instead of duplicate execution",
+      "PySide6 TaskRunner background work",
+      "pending and rejection UI",
+      "fresh-process GUI import independent of API import order",
+      "reuse of existing flow.pipeline window"
+    ]
+  },
+  "registered_gui_modules": 48,
+  "architecture_guard": "OK",
+  "lint_selected_frontend_files": "passed",
+  "cli_chat_help": "verified",
+  "screenshot": {
+    "path": "review_bundle/interaction_modes/pyside6_interaction_module.png",
+    "width": 1450,
+    "height": 820,
+    "native_qt_capture": true,
+    "capture_process_exit": 0
+  },
+  "engine_and_hitl_constraints": {
+    "second_agent_execution_engine_created": false,
+    "extra_top_level_architecture_plane_created": false,
+    "ordinary_chat_implicitly_executes_verification": false,
+    "plan_approval_required": true,
+    "execution_tools_in_new_interaction_entry_require_approval": true,
+    "raw_agent_errors_and_empty_backend_payloads_rejected": true,
+    "model_claim_is_not_specification_testimony": true,
+    "model_candidate_is_not_runtime_verification_pass": true
+  },
+  "known_warnings": [
+    "Qt font directory is missing in the tested installation; text appearance requires user review.",
+    "Full Workbench teardown still reports PySide6 callback-destruction warnings, while both test processes return exit code 0.",
+    "Current provider interaction is a complete turn returned asynchronously, not a promised native token stream."
+  ],
+  "not_verified_by_this_delivery": [
+    "live remote LLM round trip or all-agent autonomous reasoning",
+    "real RTL simulator execution, waveform, formal proof or PPA",
+    "complete IC verification signoff",
+    "pixel-level visual inspection by this model"
+  ],
+  "jobs_recorded_as_interrupted_not_passed": [
+    "pwsh-5d1cc48cbc6d4d6f"
+  ],
+  "unrelated_working_tree_deletions_left_untouched": "ip_rtl/ existing deletions",
+  "backup_environment": "venv_broken/ (not a runnable signing-off environment)",
+  "actor_caller_test_stubs_are_not_live_llm_or_eda_evidence": true
+}

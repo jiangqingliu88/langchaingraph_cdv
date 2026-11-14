@@ -5,8 +5,28 @@
 
 统一入口：`router.run(goal, mode=...)`；CLI `vagent work <goal>` 与
 `vagent -p <goal> --mode agent|verify`。
+按需导出工作模式，避免 API → agent_plane → modes 的反向初始化环。
+
+公开入口与原 facade 一致：子模块照常 import，只有被使用时才加载其依赖。
 """
-from . import agent_mode, verify_mode
-from .router import exit_code, render, run
+
+import importlib
+
+_SUBMODULES = {"agent_mode", "verify_mode", "interaction", "router"}
+_FUNCTIONS = {"run", "render", "exit_code"}
+
+
+def __getattr__(name):
+    if name in _SUBMODULES:
+        module = importlib.import_module(f".{name}", __name__)
+        globals()[name] = module
+        return module
+    if name in _FUNCTIONS:
+        router = importlib.import_module(".router", __name__)
+        value = getattr(router, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(name)
+
 
 __all__ = ["agent_mode", "verify_mode", "run", "render", "exit_code"]

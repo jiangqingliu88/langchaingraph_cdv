@@ -2,6 +2,8 @@
 
 **状态：快速架构实现，按用户要求本轮未运行 pytest / EDA / 真实 LLM / 完整 RTL 解析。本文不据此宣称功能已通过验收。**
 
+> **实现更新（2026-11-14）**：已增加一个可运行的 [AXI4-Stream 有限时序闭环](INTERFACE_TIMING_SLICE.md)。它在上述九平面内实现 Temporal IR、原文/端口绑定、原 Specification 工作流桥接和 Monitor/Runtime 接口；Temporal IR 通过原 `specification_contract_v1` 元数据中的 `temporal_interfaces` 与 `interface_binding_reports` 进入主链。测试替身和真实仿真被严格区分；本机没有 RTL 仿真器，因此该项仍为 INCOMPLETE，不扩展为所有接口已完成。
+
 ## 1. 不增加第十个 Plane
 
 系统是九个逻辑 Plane：**Interfaces + Agent + Orchestration + Generation + Engine + IR + Knowledge + Experience + Runtime**。
@@ -20,7 +22,13 @@
 | Experience | [specification_decisions.py](../../src/experience_plane/specification_decisions.py) | 历史决策仅作 advisory，不自动成为当前规范 |
 | Runtime | [specification_extraction.py](../../src/runtime_plane/tools/specification_extraction.py) | RTL 文本/解析器适配，不推断设计意图 |
 
-## 2. Specification Lifecycle
+## 2. 运行产物的工作区
+
+原始产物先进入 `Archive/<run_id>/`，再按项目映射为 `mental_model_agent/`、`rtl_generation/`、`uvm_agent/`、`simulation_agent/` 和覆盖率/调试目录；系统级用 `artifacts.sqlite` 索引运行和文件哈希。它们来自实际运行，不是 LLM 自述完成。
+
+该布局仍属于 Runtime 的持久化职责，不是第十个 Plane，也不是 Cadence 协议/数据库接管。未执行能力写 NOT_RUN 状态。结构、SQLite 指针、legacy 兼容与查询方式见 [ChipStack 风格产物工作区](CHIPSTACK_ARTIFACT_WORKSPACE.md)。
+
+## 3. Specification Lifecycle
 
 九个阶段统一由 IR 中的 `LifecycleStage` 定义。编排器按顺序登记，允许进入澄清再返回检查；事件记录不代表清单中的业务问题已经证明。
 
@@ -38,9 +46,9 @@
 
 `EVOLUTION` 当前仅保存本次编排器中的前驱 hash/status。跨 Run 的 DAG 失效传播、历史 Signoff 失效与恢复，仍是 M2 的独立工作，不在这里伪装为已完成。
 
-## 3. 三份核心契约
+## 4. 三份核心契约
 
-### 3.1 Specification Contract
+### 4.1 Specification Contract
 
 `Schema = specification_contract_v1`，主要内容：
 
@@ -63,7 +71,7 @@
 
 **Agent/Generation/Experience 类型的来源，未经人工批准不能支撑 CONFIRMED。** 复用已有 `VerificationIntent` 的 CANDIDATE/CONFIRMED 状态，而不是另写一套意图模型。
 
-### 3.2 Intent / IR Contract
+### 4.2 Intent / IR Contract
 
 - Specification Compiler 归 **IR + Engine 协作链**；
 - 输入规范化和版本属于 IR；
@@ -71,7 +79,7 @@
 - 通过 `requirement.intent_ids` 和 `SpecRequirement.to_verification_intent()` 桥接现有 Intent；
 - 可选协议知识字段由 Knowledge 提供，Engine 只消费确定性数据，不 import Agent。
 
-### 3.3 Execution & Evidence Contract
+### 4.3 Execution & Evidence Contract
 
 Readiness 使用 `verification_readiness_v1`，三态为：
 
@@ -83,7 +91,7 @@ Readiness 使用 `verification_readiness_v1`，三态为：
 
 候选与正式值不同会记录 advisory，但候选不能覆盖正式值。人工澄清须提供 `approved_by + approval_ref + human_approved=true` 才能变成 CONFIRMED；没有完整批准信息时只能保存 ASSUMED。
 
-## 4. CLI 与结构化示例
+## 5. CLI 与结构化示例
 
 [DMA 示例](../../examples/specification/dma_basic.yaml) 是人工已确认的结构化语义输入，不是自然语言抽取或仿真结果。
 
@@ -94,7 +102,7 @@ vagent specification compile examples/specification/dma_basic.yaml --json
 
 `CONFLICT → 1`，`INCOMPLETE → 2`，`VALIDATED → 0`。默认没有调用 LLM，以可审计的结构化输入进行编译。
 
-## 5. 完整端到端所必需的接口时序语义（当前未完成）
+## 6. 完整端到端所必需的接口时序语义（当前未完成）
 
 **不能把给 LLM 阅读 Spec 等同于它可靠地理解了每个接口时序。** 当前 Compiler 没有把自然语言、信号关系或波形自动提升成已证明的接口语义。要达到完整端到端，必须补充以下接口级 `interface_timing_v1` 契约（这是下一阶段要实现的契约，不表示本轮已经实现）：
 
@@ -144,7 +152,7 @@ Engine 不能只校验文本格式：必须检查信号绑定、时钟引用、�
 
 三者不能相互替代。对 LLM 或命名约定的回退推断，时序契约应额外记录 `provenance` 与 `binding_status`，没有正式来源或人工确认的绑定不能作为端到端 Guaranteed Understanding直接进入签核。已有 NPU_SCHED 的回归证据可以证明其中的特定场景，但不能外推成所有接口、任意时序语义均已覆盖。
 
-## 6. 当前实现边界
+## 7. 当前实现边界
 
 已完成的是可嵌入的本地业务骨架：IR、确定性编译器、澄清操作、生命周期编排、九平面适配和 CLI。
 

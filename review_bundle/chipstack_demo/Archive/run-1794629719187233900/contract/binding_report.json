@@ -1,0 +1,13 @@
+{
+  "schema": "interface_binding_v1",
+  "status": "VALIDATED",
+  "issues": [],
+  "ir_hash": "TIM-99eb68af8ba6eb1d0d1d6367",
+  "binding_count": 3,
+  "scope": {
+    "interface_id": "dma_tx_stream",
+    "protocol": "axi4_stream",
+    "checks": 1,
+    "scope": "AXI4-Stream VALID/READY/DATA 稳定性子集"
+  }
+}

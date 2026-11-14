@@ -213,6 +213,10 @@ class SpecificationContract:
             raise SpecSchemaError("Specification 根节点必须是对象")
         for key in ("sources", "requirements", "conflicts", "lifecycle"):
             _items(doc.get(key), key)
+        metadata = dict(doc.get("metadata") or {})
+        if "interfaces" in doc:
+            # 旧端口表不会自动提升为已验证的 Temporal IR。
+            metadata["unvalidated_interfaces"] = doc["interfaces"]
         return cls(
             document_id=str(doc.get("document_id") or doc.get("module") or ""),
             domain=str(doc.get("domain") or "generic"),
@@ -222,7 +226,7 @@ class SpecificationContract:
             gaps=_gaps(doc.get("gaps")),
             conflicts=[_conflict(r) for r in (doc.get("conflicts") or [])],
             lifecycle=[_lifecycle(r) for r in (doc.get("lifecycle") or [])],
-            metadata=dict(doc.get("metadata") or {}),
+            metadata=metadata,
         )
 
     def to_dict(self) -> dict[str, Any]:

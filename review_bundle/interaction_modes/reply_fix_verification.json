@@ -1,0 +1,70 @@
+{
+  "schema": "interaction_reply_fix_verification_v1",
+  "report_kind": "production_gui_callback_and_model_configuration_diagnostic",
+  "frontend_defect": {
+    "finding": "The production InteractionModule submitted tasks but did not connect TaskRunner.finished or TaskRunner.failed to its own result handlers.",
+    "reproduction": "Removed the test helper's compensating signal connections; a real TaskRunner completion left the module's jobs set non-empty and the test failed.",
+    "production_fix": "InteractionModule.create_widget() now binds each completion/failure signal once, without the test manually installing callbacks.",
+    "visible_errors": "Agent error/blocked and raised exceptions are shown in chat and the top banner; busy controls are restored on receipt.",
+    "waiting_feedback": "Elapsed waiting is shown; a slow-response warning is only a warning, not an invented PASS or timeout."
+  },
+  "model_diagnostic": {
+    "last_session_count_checked": 3,
+    "all_last_session_states": "blocked",
+    "initial_step": 1,
+    "last_error": "LLM_UNAVAILABLE（无输出或输出不符合 JSON 决策 schema）",
+    "settings_provider": "deepseek",
+    "settings_model": "deepseek-flash",
+    "llm_api_key_configured": false,
+    "base_url_configured": true,
+    "repository_env_file_present": false,
+    "repository_env_example_present": true,
+    "credentials_written_or_collected": false,
+    "host_credentials_copied_into_project": false
+  },
+  "verification": {
+    "focused_frontend_and_config_tests": {
+      "passed": 15,
+      "exit_code": 0
+    },
+    "real_window_task_and_production_instance_tests": {
+      "passed": 65,
+      "exit_code": 0,
+      "duration_seconds": 122.54,
+      "includes": [
+        "signals registered by production create_widget",
+        "real QMainWindow loading through the shipped manifest",
+        "no manual test-only callback installation",
+        "backend exception feedback",
+        "LLM unavailable blocked state feedback",
+        "busy-state clearing on finish and exception",
+        "slow-wait notification without inventing a timeout"
+      ]
+    },
+    "full_repository_tests": {
+      "passed": 1349,
+      "skipped": 16,
+      "exit_code": 0,
+      "duration_seconds": 180.30,
+      "job_id": "pwsh-aba8667d80824fac"
+    },
+    "architecture_guard": "OK",
+    "lint": "passed for the new/repaired frontend files"
+  },
+  "llm_actual_provider_roundtrip": "NOT_COMPLETED: this project has no configured LLM_API_KEY in the inspected configuration.",
+  "live_or_generated_ai_answer_claimed": false,
+  "frontend_test_stubs_are_live_llm_evidence": false,
+  "actual_rtl_simulation_or_signoff_claimed": false,
+  "user_next_steps": [
+    "Restart the PySide6 application to load the repaired module; the existing Python process does not hot-reload it.",
+    "Provide a valid private provider/API key/model configuration through the project's local settings, and restart again if settings were changed while the application was open.",
+    "Verify that provider's endpoint supports the configured model and the Agent's JSON decision format; do not treat Mismatched model output as an acceptable answer.",
+    "If still blocked, inspect the now-visible chat/banner error and project session rather than repeatedly starting duplicate tasks."
+  ],
+  "not_claimed": [
+    "real remote LLM connectivity or valid credentials",
+    "complete IC verification or EDA execution",
+    "pixel-level visual inspection",
+    "git commit or push"
+  ]
+}

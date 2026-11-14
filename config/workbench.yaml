@@ -84,6 +84,13 @@ modules:
     area: center
     order: 6
 
+  - id: interaction.chat
+    title: 交互与验证
+    group: project
+    factory: src.workbench.modules.interaction.module:InteractionModule
+    area: center
+    order: 7
+
   # ══ SoC 参考工程（客户视角；工程适配层，不另造执行引擎）══════════
   - id: soc.overview
     title: SoC 总览

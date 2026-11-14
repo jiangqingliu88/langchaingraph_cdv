@@ -1,0 +1,40 @@
+# 这是作者提供的**结构化语义输入**（structured_authoring），不是 LLM 抽取成功的证明。
+# SourceAnchor 还需要 Engine 回到 source/spec.md 复核行号和文档 hash。
+interface_id: dma_tx_stream
+protocol: axi4_stream
+interface_group: dma_tx
+version: 1
+status: CONFIRMED
+clock:
+  name: aclk
+  period_ps: 10000
+  reset: aresetn
+  reset_active_high: false
+  edge: posedge
+signals:
+  - {name: m_axis_tvalid, role: VALID, width: 1, binding_status: CONFIRMED,
+     protocol: valid_ready, source_id: spec:dma-tx-v1}
+  - {name: m_axis_tready, role: READY, width: 1, binding_status: CONFIRMED,
+     protocol: valid_ready, source_id: spec:dma-tx-v1}
+  - {name: m_axis_tdata, role: DATA, width: 32, binding_status: CONFIRMED,
+     protocol: valid_ready, source_id: spec:dma-tx-v1}
+rules:
+  - rule_id: R-VALID-DATA-STABLE
+    kind: valid_ready_stable
+    valid: m_axis_tvalid
+    ready: m_axis_tready
+    stable_signals: [m_axis_tvalid, m_axis_tdata]
+    status: CONFIRMED
+    anchor:
+      source_id: spec:dma-tx-v1
+      locator: source/spec.md
+      line_start: 13
+      line_end: 13
+      document_sha256: 0d283b18d8a445202a3835b276f2f52f89e8422a9a318451353c54c850ba251c
+      quote: "When m_axis_tvalid is high while m_axis_tready is low, m_axis_tvalid and m_axis_tdata must remain stable until the transfer is accepted."
+unknowns: []
+metadata:
+  input_mode: structured_authoring
+  authority: example_spec_author
+  source_id: spec:dma-tx-v1
+  bounded_scope: "One request with backpressure; VALID and DATA only"

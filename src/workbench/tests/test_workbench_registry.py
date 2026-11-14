@@ -535,8 +535,8 @@ class TestRealManifestBuilds:
         window = make_window(qt_app, ctx)
         try:
             assert window.manager.failures() == {}
-            # 47 = 原 46 + Architecture 4.0 平面总览
-            assert len(window.modules) == 47
+            # 48 = 原 47 + 共享 Agent/Engine 的 PySide6 交互入口
+            assert len(window.modules) == 48
             assert {m.module_id for m in window.modules} >= {
                 "project.overview", "project.management",
                 "soc.overview", "soc.architecture", "soc.verification",
@@ -559,7 +559,7 @@ class TestRealManifestBuilds:
             # 按清单顺序逐个点开 —— 打开的顺序就是清单顺序（业务线 order 优先，
             # 同一条线里才轮到模块 order：design 10 < model 20 < verify 30
             # < ops 40 < coverage 50 < debug 60 < audit 70 < ide 80 < flow 90）
-            want = ["项目总览", "项目管理",
+            want = ["项目总览", "项目管理", "交互与验证",
                     "SoC 总览", "SoC 架构", "SoC 验证工作区", "SoC C 用例",
                     "SoC 签核",
                     "IP 目录", "IP 工作区", "IP 发布检查",

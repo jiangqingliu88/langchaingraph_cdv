@@ -1,0 +1,18 @@
+{
+  "schema": "provenance_dag_v1",
+  "run_id": "run-1794629719187233900",
+  "nodes": 7,
+  "edges": 5,
+  "by_kind": {
+    "artifact": 7
+  },
+  "by_type": {
+    "derived_from": 5
+  },
+  "by_confidence": {
+    "exact": 3,
+    "weak": 2
+  },
+  "unattributed_bins": [],
+  "notes": []
+}

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from dataclasses import field as dc_field
 from typing import Any
 
 from src.ir_plane.specification_compiler import (
@@ -31,7 +32,7 @@ class ValidationIssue:
     message: str
     severity: str = "ERROR"
     field: str = ""
-    refs: list[str] = field(default_factory=list)
+    refs: list[str] = dc_field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -79,6 +80,7 @@ class SpecificationCompiler:
     def compile(self, document: SpecificationContract | dict[str, Any]) -> CompilationResult:
         contract = contract_from(document)
         issues = self._schema_issues(contract)
+        issues.extend(self._interface_link_issues(contract))
         self._complete_gaps(contract)
         self._detect_conflicts(contract, issues)
         open_gaps = [gap for gap in contract.gaps if gap.status == "OPEN"]
@@ -88,6 +90,8 @@ class SpecificationCompiler:
         unknown = [r for r in contract.requirements if r.status == SpecStatus.UNKNOWN.value]
         if any(issue.severity == "ERROR" for issue in issues):
             status = "INCOMPLETE"
+        elif any(issue.severity == "CONFLICT" for issue in issues):
+            status = "CONFLICT"
         elif open_conflicts or any(r.status == SpecStatus.CONFLICT.value for r in contract.requirements):
             status = "CONFLICT"
         elif not confirmed or pending or unknown or open_gaps:
@@ -256,6 +260,78 @@ class SpecificationCompiler:
                             field=name,
                         )
                     )
+
+    def _interface_link_issues(self, contract: SpecificationContract) -> list[ValidationIssue]:
+        """声明了接口时序就必须有匹配的证据，不能从主规格入口悄悄绕过。"""
+        raw = contract.metadata.get("temporal_interfaces")
+        contract.metadata.pop("interface_readiness", None)
+        if raw is None:
+            if contract.metadata.get("unvalidated_interfaces"):
+                return [
+                    ValidationIssue(
+                        "unsupported_interface_declaration", "旧端口列表未形成已验证的 Temporal IR；不能静默忽略"
+                    )
+                ]
+            return []
+        if not isinstance(raw, list) or not raw:
+            return [ValidationIssue("invalid_temporal_interfaces", "接口时序声明必须是非空的对象列表")]
+        from src.ir_plane.interface_timing import TimingContractError, temporal_from_dict
+
+        records = []
+        issues: list[ValidationIssue] = []
+        reports = contract.metadata.get("interface_binding_reports") or {}
+        if not isinstance(reports, dict):
+            return [ValidationIssue("invalid_interface_binding_reports", "接口绑定报告必须按 interface_ir_hash 索引")]
+        for index, row in enumerate(raw):
+            if not isinstance(row, dict):
+                issues.append(ValidationIssue("invalid_temporal_interface", f"第 {index + 1} 个接口不是结构化对象"))
+                continue
+            try:
+                ir = temporal_from_dict(row)
+            except (TimingContractError, TypeError, ValueError) as exc:
+                issues.append(ValidationIssue("invalid_temporal_interface", str(exc)))
+                continue
+            ir_hash = ir.content_hash()
+            report = reports.get(ir_hash)
+            record = {
+                "interface_id": ir.interface_id,
+                "ir_hash": ir_hash,
+                "status": str((report or {}).get("status") or "MISSING"),
+            }
+            if ir.status != "CONFIRMED" or ir.metadata.get("input_mode") != "structured_authoring":
+                issues.append(
+                    ValidationIssue("unconfirmed_temporal_semantics", "接口仍处候选/未确认阶段", field=ir.interface_id)
+                )
+            if ir.protocol != "axi4_stream":
+                issues.append(ValidationIssue("unsupported_interface_protocol", f"{ir.interface_id}: {ir.protocol}"))
+            if any(signal.binding_status != "CONFIRMED" for signal in ir.signals):
+                issues.append(ValidationIssue("unconfirmed_port_binding", f"{ir.interface_id}: 存在未确认的信号绑定"))
+            if any(rule.status != "CONFIRMED" for rule in ir.rules):
+                issues.append(ValidationIssue("unconfirmed_timing_rule", f"{ir.interface_id}: 存在未确认的规则"))
+            if not isinstance(report, dict):
+                issues.append(
+                    ValidationIssue(
+                        "missing_interface_binding", f"缺少与 {ir_hash} 对应的绑定报告", field=ir.interface_id
+                    )
+                )
+            else:
+                if report.get("ir_hash") != ir_hash:
+                    issues.append(
+                        ValidationIssue(
+                            "stale_interface_binding", "接口绑定报告与当前版本不匹配", field=ir.interface_id
+                        )
+                    )
+                if report.get("status") != "VALIDATED":
+                    issues.append(
+                        ValidationIssue(
+                            "incomplete_interface_binding",
+                            f"{ir.interface_id}: {report.get('status')}",
+                            field=ir.interface_id,
+                        )
+                    )
+            records.append(record)
+        contract.metadata["interface_readiness"] = records
+        return issues
 
 
 __all__ = ["CompilationResult", "SpecificationCompiler", "ValidationIssue"]

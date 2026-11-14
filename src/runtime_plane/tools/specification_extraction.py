@@ -35,9 +35,12 @@ def extract_rtl_facts(source: str | Path, parser: Callable[[str], dict[str, Any]
     text = read_rtl(source)
     if parser is not None:
         return parser(text)
+    # 轻量回退只扫声明，不把块注释/行注释里的示例端口当成真实绑定。
+    clean_text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    clean_text = re.sub(r"//[^\n]*", "", clean_text)
     ports = [
         {"direction": match.group(1), "range": match.group(2) or "", "name": match.group(3)}
-        for match in _PORT.finditer(text)
+        for match in _PORT.finditer(clean_text)
     ]
     return {
         "schema": "rtl_surface_facts_v1",

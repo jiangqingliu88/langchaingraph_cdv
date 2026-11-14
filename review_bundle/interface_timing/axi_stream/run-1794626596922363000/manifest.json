@@ -1,0 +1,379 @@
+{
+  "schema": "interface_slice_evidence_v1",
+  "interface_ir": {
+    "schema": "interface_timing_v1",
+    "interface_id": "dma_tx_stream",
+    "protocol": "axi4_stream",
+    "interface_group": "dma_tx",
+    "status": "CONFIRMED",
+    "version": 1,
+    "clock": {
+      "name": "aclk",
+      "period_ps": 10000,
+      "reset": "aresetn",
+      "reset_active_high": false,
+      "edge": "posedge"
+    },
+    "signals": [
+      {
+        "name": "m_axis_tvalid",
+        "role": "VALID",
+        "width": 1,
+        "binding_status": "CONFIRMED",
+        "protocol": "valid_ready",
+        "source_id": "spec:dma-tx-v1"
+      },
+      {
+        "name": "m_axis_tready",
+        "role": "READY",
+        "width": 1,
+        "binding_status": "CONFIRMED",
+        "protocol": "valid_ready",
+        "source_id": "spec:dma-tx-v1"
+      },
+      {
+        "name": "m_axis_tdata",
+        "role": "DATA",
+        "width": 32,
+        "binding_status": "CONFIRMED",
+        "protocol": "valid_ready",
+        "source_id": "spec:dma-tx-v1"
+      }
+    ],
+    "rules": [
+      {
+        "rule_id": "R-VALID-DATA-STABLE",
+        "kind": "valid_ready_stable",
+        "valid": "m_axis_tvalid",
+        "ready": "m_axis_tready",
+        "stable_signals": [
+          "m_axis_tvalid",
+          "m_axis_tdata"
+        ],
+        "clock": {
+          "name": "aclk",
+          "period_ps": 10000,
+          "reset": "aresetn",
+          "reset_active_high": false,
+          "edge": "posedge"
+        },
+        "anchor": {
+          "source_id": "spec:dma-tx-v1",
+          "locator": "source/spec.md",
+          "quote": "When m_axis_tvalid is high while m_axis_tready is low, m_axis_tvalid and m_axis_tdata must remain stable until the transfer is accepted.",
+          "line_start": 13,
+          "line_end": 13,
+          "document_sha256": "0d283b18d8a445202a3835b276f2f52f89e8422a9a318451353c54c850ba251c"
+        },
+        "status": "CONFIRMED"
+      }
+    ],
+    "unknowns": [],
+    "metadata": {
+      "input_mode": "structured_authoring",
+      "authority": "example_spec_author",
+      "source_id": "spec:dma-tx-v1",
+      "bounded_scope": "One request with backpressure; VALID and DATA only"
+    }
+  },
+  "interface_ir_hash": "TIM-1656bf13a392dab3c885269c",
+  "input_mode": "structured_authoring",
+  "source_snapshot_hash": "0d283b18d8a445202a3835b276f2f52f89e8422a9a318451353c54c850ba251c",
+  "specification_readiness": {
+    "schema": "verification_readiness_v1",
+    "status": "INCOMPLETE",
+    "spec_hash": "SPC-b571b7411499ff025ad1dcec",
+    "execution_allowed": false,
+    "counts": {
+      "requirements": 1,
+      "confirmed": 1,
+      "pending": 0,
+      "unknown": 0,
+      "open_gaps": 0,
+      "open_conflicts": 0,
+      "issues": 1
+    },
+    "issues": [
+      {
+        "code": "invalid_temporal_interface",
+        "message": "本闭环要求 rule.clock 显式匹配声明时钟",
+        "severity": "ERROR",
+        "field": "",
+        "refs": []
+      }
+    ],
+    "traceability": [
+      {
+        "from": "spec:dma-tx-v1",
+        "to": "R-VALID-DATA-STABLE",
+        "relation": "supports"
+      }
+    ],
+    "contract": {
+      "schema": "specification_contract_v1",
+      "document_id": "dma_tx_stream",
+      "domain": "interface_timing",
+      "version": 1,
+      "sources": [
+        {
+          "source_id": "spec:dma-tx-v1",
+          "kind": "spec",
+          "locator": "source/spec.md",
+          "sha256": "0d283b18d8a445202a3835b276f2f52f89e8422a9a318451353c54c850ba251c",
+          "producer": "example_spec_author",
+          "metadata": {}
+        }
+      ],
+      "requirements": [
+        {
+          "requirement_id": "R-VALID-DATA-STABLE",
+          "field": "axi4_stream:valid_ready_stable",
+          "value": {
+            "valid": "m_axis_tvalid",
+            "ready": "m_axis_tready",
+            "stable_signals": [
+              "m_axis_tvalid",
+              "m_axis_tdata"
+            ]
+          },
+          "statement": "",
+          "status": "CONFIRMED",
+          "source_ids": [
+            "spec:dma-tx-v1"
+          ],
+          "intent_ids": [],
+          "confirmed_by": "",
+          "rationale": "由原文锚点、RTL 绑定与时钟/方向检查支持的时序义务",
+          "properties": {}
+        }
+      ],
+      "gaps": [],
+      "conflicts": [],
+      "lifecycle": [
+        {
+          "stage": "ingestion",
+          "detail": "1 个已登记来源",
+          "status": "VISITED",
+          "iteration": 1
+        },
+        {
+          "stage": "extraction",
+          "detail": "复用结构化输入；未默认调用 LLM",
+          "status": "VISITED",
+          "iteration": 1
+        },
+        {
+          "stage": "reconciliation",
+          "detail": "1 条需求/候选",
+          "status": "VISITED",
+          "iteration": 1
+        },
+        {
+          "stage": "gap_analysis",
+          "detail": "0 个开放缺口",
+          "status": "VISITED",
+          "iteration": 1
+        },
+        {
+          "stage": "clarification",
+          "detail": "0 项需要人工或补充分析",
+          "status": "VISITED",
+          "iteration": 1
+        },
+        {
+          "stage": "synthesis",
+          "detail": "只生成候选，不自动批准",
+          "status": "VISITED",
+          "iteration": 1
+        },
+        {
+          "stage": "ir_compilation",
+          "detail": "schema=specification_contract_v1",
+          "status": "VISITED",
+          "iteration": 1
+        },
+        {
+          "stage": "validation",
+          "detail": "INCOMPLETE",
+          "status": "VISITED",
+          "iteration": 1
+        },
+        {
+          "stage": "evolution",
+          "detail": "previous=new-document",
+          "status": "VISITED",
+          "iteration": 1
+        }
+      ],
+      "metadata": {
+        "input_mode": "structured_authoring",
+        "authority": "example_spec_author",
+        "source_id": "spec:dma-tx-v1",
+        "bounded_scope": "One request with backpressure; VALID and DATA only",
+        "temporal_interfaces": [
+          {
+            "schema": "interface_timing_v1",
+            "interface_id": "dma_tx_stream",
+            "protocol": "axi4_stream",
+            "interface_group": "dma_tx",
+            "status": "CONFIRMED",
+            "version": 1,
+            "clock": {
+              "name": "aclk",
+              "period_ps": 10000,
+              "reset": "aresetn",
+              "reset_active_high": false,
+              "edge": "posedge"
+            },
+            "signals": [
+              {
+                "name": "m_axis_tvalid",
+                "role": "VALID",
+                "width": 1,
+                "binding_status": "CONFIRMED",
+                "protocol": "valid_ready",
+                "source_id": "spec:dma-tx-v1"
+              },
+              {
+                "name": "m_axis_tready",
+                "role": "READY",
+                "width": 1,
+                "binding_status": "CONFIRMED",
+                "protocol": "valid_ready",
+                "source_id": "spec:dma-tx-v1"
+              },
+              {
+                "name": "m_axis_tdata",
+                "role": "DATA",
+                "width": 32,
+                "binding_status": "CONFIRMED",
+                "protocol": "valid_ready",
+                "source_id": "spec:dma-tx-v1"
+              }
+            ],
+            "rules": [
+              {
+                "rule_id": "R-VALID-DATA-STABLE",
+                "kind": "valid_ready_stable",
+                "valid": "m_axis_tvalid",
+                "ready": "m_axis_tready",
+                "stable_signals": [
+                  "m_axis_tvalid",
+                  "m_axis_tdata"
+                ],
+                "clock": {
+                  "name": "aclk",
+                  "period_ps": 10000,
+                  "reset": "aresetn",
+                  "reset_active_high": false,
+                  "edge": "posedge"
+                },
+                "anchor": {
+                  "source_id": "spec:dma-tx-v1",
+                  "locator": "source/spec.md",
+                  "quote": "When m_axis_tvalid is high while m_axis_tready is low, m_axis_tvalid and m_axis_tdata must remain stable until the transfer is accepted.",
+                  "line_start": 13,
+                  "line_end": 13,
+                  "document_sha256": "0d283b18d8a445202a3835b276f2f52f89e8422a9a318451353c54c850ba251c"
+                },
+                "status": "CONFIRMED"
+              }
+            ],
+            "unknowns": [],
+            "metadata": {
+              "input_mode": "structured_authoring",
+              "authority": "example_spec_author",
+              "source_id": "spec:dma-tx-v1",
+              "bounded_scope": "One request with backpressure; VALID and DATA only"
+            }
+          }
+        ],
+        "interface_binding_reports": {
+          "TIM-1656bf13a392dab3c885269c": {
+            "schema": "interface_binding_v1",
+            "status": "VALIDATED",
+            "issues": [],
+            "ir_hash": "TIM-1656bf13a392dab3c885269c",
+            "binding_count": 3,
+            "scope": {
+              "interface_id": "dma_tx_stream",
+              "protocol": "axi4_stream",
+              "checks": 1,
+              "scope": "AXI4-Stream VALID/READY/DATA 稳定性子集"
+            }
+          }
+        },
+        "knowledge_reference": {
+          "kind": "protocol_knowledge",
+          "domain": "interface_timing",
+          "locator": "signoffai://knowledge/interface_timing"
+        },
+        "experience_references": [],
+        "evolution": {
+          "previous_hash": "",
+          "previous_status": "",
+          "supersedes_previous": false,
+          "scope": "当前编排器内演进；跨 Run Evidence 失效传播另由 M2 实现"
+        },
+        "interface_readiness": []
+      }
+    },
+    "boundary": "规格编译就绪不是 RTL 仿真或 Verification Signoff 通过"
+  },
+  "overall_status": "INCOMPLETE",
+  "stage": "specification_compilation",
+  "reason": "同一 Temporal IR 在原 Specification 主链未就绪，禁止生成 monitor",
+  "traceability": [
+    {
+      "from": "source/spec.md",
+      "to": "TIM-1656bf13a392dab3c885269c",
+      "relation": "grounds"
+    },
+    {
+      "from": "TIM-1656bf13a392dab3c885269c",
+      "to": "SPC-b571b7411499ff025ad1dcec",
+      "relation": "joins_specification_contract"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "contract/binding_report.json",
+      "sha256": "79412ae87b9ce6090dbfdb1a385dbf28e640f75e94273da46c7f3bf1d7006ad9",
+      "bytes": 323
+    },
+    {
+      "path": "contract/interface_timing.json",
+      "sha256": "92b8c05cd1721ffb8587c125e0c2cd27a1cfb7e9c8bf9ed169e039eb882d80e4",
+      "bytes": 2064
+    },
+    {
+      "path": "contract/specification_readiness.json",
+      "sha256": "6012d80d3f311e46153db75e8cb3b34680b2b161337f61934e2a669f8f6d3a53",
+      "bytes": 7267
+    },
+    {
+      "path": "rtl/fail_master.sv",
+      "sha256": "4e11bbfa4e13e6fb89aae75cb3400a66559fbda627271626ef8a8d0bca2706ec",
+      "bytes": 909
+    },
+    {
+      "path": "rtl/pass_master.sv",
+      "sha256": "a71163f0d1c0e9581182101e1e4677f0a66b62e7f220cf733a747a4714ae417b",
+      "bytes": 769
+    },
+    {
+      "path": "source/spec.md",
+      "sha256": "0d283b18d8a445202a3835b276f2f52f89e8422a9a318451353c54c850ba251c",
+      "bytes": 722
+    }
+  ],
+  "scope": "single AXI4-Stream master + one handshake stability rule",
+  "not_covered": [
+    "其他协议与多时钟",
+    "TLAST/乱序/CDC",
+    "LLM 对任意原文的完整理解",
+    "跨 Run STALE 传播"
+  ],
+  "simulation_is_proof_only_for_this_rule_and_scenarios": true,
+  "rtl_simulation_completed": false
+}

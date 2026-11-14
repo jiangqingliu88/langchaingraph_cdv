@@ -4,46 +4,70 @@
 新增节点 / executor / 工具板块 / 动作 / caveat 时，必须同时改这里和
 ARCHITECTURE.md —— 否则 CI 红。
 """
+
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-import pytest
-
 from config import architecture_guard as guard
+from src.ir_plane.decision.decision_engine import ALL_ACTIONS
 from src.orchestration_plane.l2.communication.tool_hub import ToolHub
 from src.orchestration_plane.supervisor.graph import NODE_FUNCS
-from src.ir_plane.decision.decision_engine import ALL_ACTIONS
 from src.runtime_plane.tools.boards import BOARDS
 
 ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "ARCHITECTURE_4.0.md"
 
 EXPECTED_ACTIONS = (
-    "FIX_COMPILE_bug", "FIX_MODEL_bug", "FIX_FUNCTIONAL_bug",
-    "FIX_PROTOCOL_bug", "FIX_RESET_bug", "FIX_CDC_bug", "FIX_DEADCODE_bug",
-    "EXPAND_SEEDS", "RELAX_CONSTRAINT", "GENERATE_DIRECTED_TEST", "CONVERGE",
+    "FIX_COMPILE_bug",
+    "FIX_MODEL_bug",
+    "FIX_FUNCTIONAL_bug",
+    "FIX_PROTOCOL_bug",
+    "FIX_RESET_bug",
+    "FIX_CDC_bug",
+    "FIX_DEADCODE_bug",
+    "EXPAND_SEEDS",
+    "RELAX_CONSTRAINT",
+    "GENERATE_DIRECTED_TEST",
+    "CONVERGE",
 )
 
 EXPECTED_CAVEATS = {
-    "CONSTRAINT_PARTIAL", "CONSTRAINT_INACTIVE", "UCDB_NO_BINS", "CG_DUT_ZERO",
-    "ASSOCIATION_HARD_EDGE", "PLAN_INCONSISTENT", "TP_UNMAPPED",
-    "TP_TRACE_INCOMPLETE", "TP_MISSED",
+    "CONSTRAINT_PARTIAL",
+    "CONSTRAINT_INACTIVE",
+    "UCDB_NO_BINS",
+    "CG_DUT_ZERO",
+    "ASSOCIATION_HARD_EDGE",
+    "PLAN_INCONSISTENT",
+    "TP_UNMAPPED",
+    "TP_TRACE_INCOMPLETE",
+    "TP_MISSED",
     # 逐用例签核（docs/design/case_coverage_and_wave_traceability.md）
-    "TP_NOT_SIGNED_OFF", "TP_WAVE_MISSING", "TP_TIMING_WARN",
-    "MODEL_UNAVAILABLE", "BASELINE_MISSING", "BACKEND_ARGS_USED",
+    "TP_NOT_SIGNED_OFF",
+    "TP_WAVE_MISSING",
+    "TP_TIMING_WARN",
+    "MODEL_UNAVAILABLE",
+    "BASELINE_MISSING",
+    "BACKEND_ARGS_USED",
     # Case View 门禁（docs/design/architecture_transformation_plan.md D5）
     "CASE_GATE_BLOCKED",
     # case 三集合契约（arch.md §9）
-    "CASE_GROUP_PARTIAL", "CASE_SVA_VACUOUS", "CASE_SCB_NOT_EXECUTED",
-    "CASE_PATH_PENDING_BACKEND", "CASE_IR_EVIDENCE_MISMATCH",
+    "CASE_GROUP_PARTIAL",
+    "CASE_SVA_VACUOUS",
+    "CASE_SCB_NOT_EXECUTED",
+    "CASE_PATH_PENDING_BACKEND",
+    "CASE_IR_EVIDENCE_MISMATCH",
     # 五维质量门 block 模式（§15：evidence/functional 硬，其余软）
-    "QUALITY_GATE_BLOCKED", "QUALITY_GATE_WARN",
+    "QUALITY_GATE_BLOCKED",
+    "QUALITY_GATE_WARN",
     # 权威差分 / 覆盖率回退 / 证据门（audit/helpers.py）
-    "AUTHORITY_DIFF", "AUTHORITY_DIFF_MISSING",
-    "COVERAGE_REGRESSION", "EVIDENCE_GATE",
-    "RESOURCE_INTENT_FAILED", "RESOURCE_INTENT_INCOMPLETE",
+    "AUTHORITY_DIFF",
+    "AUTHORITY_DIFF_MISSING",
+    "COVERAGE_REGRESSION",
+    "EVIDENCE_GATE",
+    "RESOURCE_INTENT_FAILED",
+    "RESOURCE_INTENT_INCOMPLETE",
 }
 
 
@@ -51,33 +75,39 @@ EXPECTED_CAVEATS = {
 # 代码结构
 # ═══════════════════════════════════════════════════════════════
 
+
 def test_main_graph_has_nine_agent_nodes():
     names = [name for name, _ in NODE_FUNCS]
     assert names == [
-        "init", "supervisor", "design_expert", "verify_expert",
-        "debug_expert", "coverage_expert", "human_review", "audit_gate",
+        "init",
+        "supervisor",
+        "design_expert",
+        "verify_expert",
+        "debug_expert",
+        "coverage_expert",
+        "human_review",
+        "audit_gate",
         "finalize",
     ]
     assert len(names) == len(set(names)) == 9
-    assert all(fn.__module__.startswith(
-        ("src.orchestration_plane", "src.agent_plane", "src.orchestration_plane.gates"))
-        for _, fn in NODE_FUNCS)
+    assert all(
+        fn.__module__.startswith(("src.orchestration_plane", "src.agent_plane", "src.orchestration_plane.gates"))
+        for _, fn in NODE_FUNCS
+    )
 
 
 def test_eight_executors_have_a_tool_mapping():
     roles = set(ToolHub.EXECUTOR_TOOL_MODULES)
-    assert roles == {"front", "design", "model", "verify",
-                     "ops", "coverage", "debug", "audit"}
+    assert roles == {"front", "design", "model", "verify", "ops", "coverage", "debug", "audit"}
     assert len(roles) == 8
 
 
 def test_tool_boards_are_the_canonical_boards():
-    assert set(BOARDS) == {"generation", "checking", "execution",
-                           "flow", "integration", "common", "humanview"}
+    assert set(BOARDS) == {"generation", "checking", "execution", "flow", "integration", "common", "humanview"}
     assert "uvm_tools" in BOARDS["generation"]
     assert "assertion_tools" in BOARDS["checking"]
-    # regression_tools 已迁到 layers/l2；execution 板块保留为空。
-    assert BOARDS["execution"] == ()
+    # regression_tools 已迁到 layers/l2；interface_timing 是 execution 下首个功能块。
+    assert BOARDS["execution"] == ("interface_timing",)
 
 
 def test_decision_action_universe_is_frozen():
@@ -88,14 +118,14 @@ def test_caveat_codes_in_audit_match_the_public_set():
     # 3.0 拆分后 caveat 分在 main.py 与 helpers.py 两处，按包扫描。
     found = set()
     for path in sorted((ROOT / "src/engine_plane/audit").glob("*.py")):
-        found |= set(re.findall(r'(?:_caveat|caveat)\("([A-Z_]+)"',
-                                path.read_text(encoding="utf-8")))
+        found |= set(re.findall(r'(?:_caveat|caveat)\("([A-Z_]+)"', path.read_text(encoding="utf-8")))
     assert found == EXPECTED_CAVEATS
 
 
 # ═══════════════════════════════════════════════════════════════
 # 复杂度 / 行数预算
 # ═══════════════════════════════════════════════════════════════
+
 
 def test_file_and_complexity_budget_is_green():
     result = guard.check()
@@ -111,12 +141,13 @@ def test_line_guard_catches_an_unwatched_oversized_file():
 
 def test_line_guard_enforces_watched_budget_below_hard_error():
     """watched 的 registered 是硬预算，不是只在 >2000 时生效。"""
-    budget = {"warn": 1500, "error": 2000,
-              "watched": {"src/workbench/cli/commands.py": {
-                  "registered": 1, "reason": "test", "plan": "test"}}}
+    budget = {
+        "warn": 1500,
+        "error": 2000,
+        "watched": {"src/workbench/cli/commands.py": {"registered": 1, "reason": "test", "plan": "test"}},
+    }
     issues = guard.line_violations(budget=budget)
-    assert any(i["type"] == "watched_file_grew"
-               and i["path"] == "src/workbench/cli/commands.py" for i in issues)
+    assert any(i["type"] == "watched_file_grew" and i["path"] == "src/workbench/cli/commands.py" for i in issues)
 
 
 def test_complexity_guard_catches_a_new_hotspot():
@@ -136,11 +167,18 @@ def test_watched_files_register_reason_plan_and_size():
 # 文档同步（代码改了文档没改 → 这里红）
 # ═══════════════════════════════════════════════════════════════
 
+
 def test_architecture_doc_matches_code_facts():
     doc = DOC.read_text(encoding="utf-8")
-    for phrase in ("Agent Plane", "Deterministic Engine", "IR & Evidence",
-                   "Evidence & Signoff Gate", "STAGE_OWNERSHIP.md",
-                   "ARCHITECTURE_GUARD_PRINCIPLES.md", "C Model"):
+    for phrase in (
+        "Agent Plane",
+        "Deterministic Engine",
+        "IR & Evidence",
+        "Evidence & Signoff Gate",
+        "STAGE_OWNERSHIP.md",
+        "ARCHITECTURE_GUARD_PRINCIPLES.md",
+        "C Model",
+    ):
         assert phrase in doc, f"ARCHITECTURE_4.0.md 缺少：{phrase}"
 
 
@@ -162,8 +200,7 @@ def test_player_runtime_boundary_matches_code():
     boundary = by_id("player_runtime")
     if BACKENDS["player"]["runtime"]:
         # 实现 runtime 时必须把边界项更新为 done 并改文档，不能悄悄漂
-        assert boundary["status"] == "done", \
-            "player runtime 已实现，但 KNOWN_LIMITATIONS/§15 还写着未实现"
+        assert boundary["status"] == "done", "player runtime 已实现，但 KNOWN_LIMITATIONS/§15 还写着未实现"
     else:
         assert boundary["status"] == "open"
 
@@ -200,8 +237,7 @@ def test_known_limitations_expose_a_machine_readable_state():
     from config.known_limitations import LIMITATION_STATUSES, rows
 
     items = rows()
-    assert items and {r["id"] for r in items} == {
-        r["id"] for r in rows()}
+    assert items and {r["id"] for r in items} == {r["id"] for r in rows()}
     for row in items:
         assert row["status"] in LIMITATION_STATUSES, row
         assert row["summary"], row

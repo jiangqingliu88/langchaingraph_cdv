@@ -1,0 +1,5 @@
+{
+  "status": "NOT_RUN",
+  "reason": "未运行编译修复 Agent；编译问题请查 simulation_agent 的实际日志",
+  "performed": false
+}

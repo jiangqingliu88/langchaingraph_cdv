@@ -1,0 +1,18 @@
+{
+  "status": "INCOMPLETE",
+  "reason": "存在未证明场景，先运行/修复运行时证据",
+  "open_obligations": [
+    {
+      "scenario": "positive",
+      "expected": "PASS",
+      "actual": "INCOMPLETE",
+      "simulation_kind": "unavailable"
+    },
+    {
+      "scenario": "negative_control",
+      "expected": "FAIL",
+      "actual": "INCOMPLETE",
+      "simulation_kind": "unavailable"
+    }
+  ]
+}

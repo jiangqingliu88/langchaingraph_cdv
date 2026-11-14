@@ -1,0 +1,20 @@
+{
+  "status": "INCOMPLETE",
+  "schema": "interface_runtime_evidence_v1",
+  "seed": 4444,
+  "stimulus": "one directed request with backpressure",
+  "seed_usage": "request payload = 0x101 XOR seed",
+  "simulation_kind": "unavailable",
+  "interface_ir_hash": "TIM-99eb68af8ba6eb1d0d1d6367",
+  "rtl_source": "D:\\cdv_a\\examples\\interface_timing\\axi_stream\\rtl\\pass_master.sv",
+  "require_observation": {
+    "blocked_samples": 1,
+    "handshakes": 1
+  },
+  "reason": "iverilog/vvp 未安装或安全软件阻止使用；未执行 RTL 仿真",
+  "tool_discovery": [
+    "PATH",
+    "INTERFACE_TIMING_IVERILOG/VVP",
+    "%LOCALAPPDATA%/SignOffAI/tools/iverilog-v14/bin"
+  ]
+}

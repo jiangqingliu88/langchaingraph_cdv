@@ -1,0 +1,12 @@
+{
+  "rule_id": "R-VALID-DATA-STABLE",
+  "path": "D:\\cdv_a\\review_bundle\\chipstack_demo\\Archive\\run-1794629719187233900\\monitors\\monitor_r_valid_data_stable.sv",
+  "module": "monitor_r_valid_data_stable",
+  "valid": "m_axis_tvalid",
+  "ready": "m_axis_tready",
+  "stable_signals": [
+    "m_axis_tvalid",
+    "m_axis_tdata"
+  ],
+  "monitor_kind": "procedural_systemverilog"
+}

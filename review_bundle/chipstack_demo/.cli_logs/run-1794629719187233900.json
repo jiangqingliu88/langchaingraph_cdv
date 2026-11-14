@@ -1,0 +1,9 @@
+{
+  "command": "interface-timing run-slice",
+  "design_name": "axi_stream",
+  "seed": 4444,
+  "simulation_kind": "unavailable",
+  "simulation_executed": false,
+  "archive": "Archive\\run-1794629719187233900",
+  "captured": "2026-11-14T04:15:19+00:00"
+}

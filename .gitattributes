@@ -28,3 +28,7 @@
 *.so binary
 *.dll binary
 *.pyc binary
+
+# Archive results carry SHA-256 references to exact bytes.
+# Do not re-encode JSONL/JSON/source snapshots or otherwise normalise their EOLs.
+review_bundle/** -text

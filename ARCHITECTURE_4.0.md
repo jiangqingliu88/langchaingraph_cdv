@@ -694,7 +694,7 @@ An Evidence-Driven Autonomous IC Verification System
 
 因为最终要证明的不是 SignOffAI 有多少个模块，而是它能不能真正替工程师完成一项复杂的 IC 验证任务。
 
-> 全量单测：**1308 passed / 16 skipped（PYTEST_EXIT=0）**（2026-11-13）；Workbench：693 passed（有 PySide6 析构警告）。
+> 全量单测：**1349 passed / 16 skipped（PYTEST_EXIT=0）**（2026-11-14）；Workbench：699 passed（既有）；本次无回复缺陷修复另经 65 项真实窗口/任务链回归验证。
 
 ## 相关文档与边界
 
@@ -728,12 +728,15 @@ An Evidence-Driven Autonomous IC Verification System
 - `optional_auth_api`（by_design）：auth.py 是可选 API 面
 - `long_output_path`（by_design）：输出目录过长会撞 Windows MAX_PATH（coverstore 打不开 → vsim-7）
 
-## 十、当前里程碑（2026-11-13）
+## 十、当前里程碑（2026-11-14）
 
 | 项 | 状态 |
 |---|---|
 | M0 Architecture Guard 2.1 | ◐ 核心治理已落地；多环检测、整层债务、CI 旧路径等待硬化（独立治理任务） |
 | M1 Resource / Interaction IR | ◐ **M1-A 已完成**：fail-closed、三态、70 项专项测试与全量回归；M1-B 运行时 checker 与执行证据待完成 |
+| 横向能力 Specification Compiler | ◐ 已接通 Temporal IR → 绑定检查 → 原规格主链 → Monitor/Execution 适配；[单接口最小闭环](docs/architecture/INTERFACE_TIMING_SLICE.md) 已实现，**本机缺少真实 RTL 仿真证据** |
+| 交互入口 | ◐ 支持对话 CLI、终端 REPL 与 PySide6 桌面 GUI，提供 chat/plan/verify 三类明确动作；共享既有 Agent/Harness/Engine，桌面验证仍使用 flow.pipeline。详见 [三种交互模式](docs/architecture/INTERACTION_MODES.md) |
+| 产物工作区 | ◐ 已建立 run_manifest、专用 artifacts.sqlite、Archive/ 与项目级 mental_model/UVM/仿真/覆盖率/调试目录；未执行 formal/lint/PPA/编译修复只登记状态，详见 [工作区说明](docs/architecture/CHIPSTACK_ARTIFACT_WORKSPACE.md) |
 | M2 Evidence v2 | ◐ 单 Run 证据包、哈希和回放已有基础；真实 trust 组合校验与跨 Run 失效传播待完成 |
 | M3 DMA Autonomous Verification | ◐ 资源冲突四类场景已可确定性验证；自然语言→生成→执行→签核主链待接 |
 | M4 Autonomous Recovery | ◐ 受控 staging + 保护路径 + Engine 复验标记已落地；自动修复闭环待接 |

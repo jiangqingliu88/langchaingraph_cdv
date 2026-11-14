@@ -62,7 +62,9 @@ dependencies = [
 # 做成可选：纯 CLI 用法（check / analyze / generate）不需要它，
 # 没必要让每次安装都拖上 Qt。
 gui = [
-    "PySide6>=6.5",
+    # Qt 6.12 在当前 TaskRunner 线程退出流程中出现 native abort（A/B 对照复现）；
+    # 固定到已验证的 6.6.3.1，不以忽略进程崩溃换取测试通过。
+    "PySide6==6.6.3.1",
     "qdarkstyle>=3.2.3",
 ]
 # 可选：更多规格格式（doc_intake 会给出同样的安装提示）

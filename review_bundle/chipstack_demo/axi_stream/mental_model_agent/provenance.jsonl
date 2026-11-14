@@ -1,0 +1,12 @@
+{"attrs": {}, "id": "D:\\cdv_a\\review_bundle\\chipstack_demo\\Archive\\run-1794629719187233900\\monitors\\monitor_r_valid_data_stable.sv", "kind": "artifact", "label": "D:\\cdv_a\\review_bundle\\chipstack_demo\\Archive\\run-1794629719187233900\\monitors\\monitor_r_valid_data_stable.sv", "producer": "", "round": 0, "run_id": "run-1794629719187233900", "sha256": ""}
+{"attrs": {}, "id": "R-VALID-DATA-STABLE", "kind": "artifact", "label": "R-VALID-DATA-STABLE", "producer": "", "round": 0, "run_id": "run-1794629719187233900", "sha256": ""}
+{"attrs": {}, "id": "SPC-052ff0783593e5c122257ef7", "kind": "artifact", "label": "SPC-052ff0783593e5c122257ef7", "producer": "", "round": 0, "run_id": "run-1794629719187233900", "sha256": ""}
+{"attrs": {}, "id": "TIM-99eb68af8ba6eb1d0d1d6367", "kind": "artifact", "label": "TIM-99eb68af8ba6eb1d0d1d6367", "producer": "", "round": 0, "run_id": "run-1794629719187233900", "sha256": ""}
+{"attrs": {}, "id": "runs/negative_control/runtime.json", "kind": "artifact", "label": "runs/negative_control/runtime.json", "producer": "", "round": 0, "run_id": "run-1794629719187233900", "sha256": ""}
+{"attrs": {}, "id": "runs/positive/runtime.json", "kind": "artifact", "label": "runs/positive/runtime.json", "producer": "", "round": 0, "run_id": "run-1794629719187233900", "sha256": ""}
+{"attrs": {}, "id": "source/spec.md", "kind": "artifact", "label": "source/spec.md", "producer": "", "round": 0, "run_id": "run-1794629719187233900", "sha256": ""}
+{"confidence": "weak", "dst": "runs/negative_control/runtime.json", "evidence": "observed_by", "schema": "provenance_dag_v1", "src": "R-VALID-DATA-STABLE", "type": "derived_from"}
+{"confidence": "weak", "dst": "runs/positive/runtime.json", "evidence": "observed_by", "schema": "provenance_dag_v1", "src": "R-VALID-DATA-STABLE", "type": "derived_from"}
+{"confidence": "exact", "dst": "D:\\cdv_a\\review_bundle\\chipstack_demo\\Archive\\run-1794629719187233900\\monitors\\monitor_r_valid_data_stable.sv", "evidence": "compiles_into", "schema": "provenance_dag_v1", "src": "TIM-99eb68af8ba6eb1d0d1d6367", "type": "derived_from"}
+{"confidence": "exact", "dst": "SPC-052ff0783593e5c122257ef7", "evidence": "joins_specification_contract", "schema": "provenance_dag_v1", "src": "TIM-99eb68af8ba6eb1d0d1d6367", "type": "derived_from"}
+{"confidence": "exact", "dst": "TIM-99eb68af8ba6eb1d0d1d6367", "evidence": "grounds", "schema": "provenance_dag_v1", "src": "source/spec.md", "type": "derived_from"}
