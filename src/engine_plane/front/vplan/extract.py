@@ -465,7 +465,10 @@ def _port_row(scope: str, module: str, level: str, group: str,
     description = str(port.get("description") or "")
     return {
         "scope": scope, "module": module, "level": level,
-        "interface_group": group, "protocol": group,
+        "interface_group": group,
+        # 分组归分组、语义归语义：`protocol` 保留 pulse/config/valid_ready，
+        # 不再写成 master 组名（否则人读表和 UVM 生成都在猜协议）。
+        "protocol": str(port.get("protocol") or group),
         "port_name": name, "width": str(_port_width(port)),
         "direction": str(port.get("direction") or "INPUT").upper(),
         "description": description, "bit_fields": _bit_fields(description),

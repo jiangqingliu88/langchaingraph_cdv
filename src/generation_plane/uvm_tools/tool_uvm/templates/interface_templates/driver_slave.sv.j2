@@ -1,15 +1,22 @@
 {% include "base_templates/base_template.sv.j2" %}
+{%- import "base_templates/port_macros.j2" as pm %}
 {#- 全输入 agent 由 slave 驱动：valid 是**从端驱动**的 input 端口，ready 是
     master 侧给出的 output 端口（slave 采样）。同 master 的规则 —— valid 必须
     由驱动语义置起，不能交给随机字段。 #}
 {%- set _vld = namespace(name="") %}
 {%- set _rdy = namespace(name="") %}
+{#- 脉冲类信号（start / done / tile-page 释放）：spec 要求单拍，从端驱动也要
+    在驱动拍之后立刻拉低，否则连续两笔都为 1 就是连续两拍高。 #}
+{%- set _pp = namespace(names=[]) %}
 {%- for p in ports %}
 {%-   if p.dir == 'input' and not _vld.name and (p.name|lower).endswith('valid') %}
 {%-     set _vld.name = p.name %}
 {%-   endif %}
 {%-   if p.dir == 'output' and not _rdy.name and (p.name|lower).endswith('ready') %}
 {%-     set _rdy.name = p.name %}
+{%-   endif %}
+{%-   if p.dir == 'input' and pm.is_pulse(p) %}
+{%-     set _pp.names = _pp.names + [p.name] %}
 {%-   endif %}
 {%- endfor %}
 
@@ -157,11 +164,7 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
     @(vif.slave_cb);
 {%-   for port in ports %}
 {%-     if port.dir == 'input' %}
-{%-       set port_in_txn = namespace(found=false) %}
-{%-       for var in transaction_vars %}
-{%-         if var.name == port.name %}{% set port_in_txn.found = true %}{% endif %}
-{%-       endfor %}
-{%-       if port_in_txn.found %}
+{%-       if pm.in_txn(port.name, transaction_vars) %}
     vif.slave_cb.{{ port.name }}_slv <= rsp.{{ port.name }};   // 驱动的是从端影子变量
 {%-       endif %}
 {%-     endif %}
@@ -176,6 +179,16 @@ class {{ agent.name }}_slave_driver extends uvm_driver #({{ agent.name }}_slave_
 {%- endif %}
     @(vif.slave_cb);
     vif.slave_cb.{{ _vld.name }}_slv <= 1'b0;
+{%- endif %}
+{%- if _pp.names %}
+{%-   if not _vld.name %}
+    @(vif.slave_cb);
+{%-   endif %}
+    // **脉冲类输入只合法一拍**：已经在上面那一拍驱动过（采样按 preponed 取到高电平），
+    // 这里立刻拉低，保证下一拍 `sig |=> !sig` 成立。
+{%- for _pn in _pp.names %}
+    vif.slave_cb.{{ _pn }}_slv <= 1'b0;
+{%- endfor %}
 {%- endif %}
 {%- else %}
     // 无 input 端口：slave 仅产生响应延迟，不做信号驱动

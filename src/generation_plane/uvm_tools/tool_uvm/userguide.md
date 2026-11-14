@@ -185,8 +185,9 @@ interfaces:
     typedefs:                # 类型别名，渲染进 <name>_typedefs_pkg
       - { type_t: "bit [7:0]", type_name: "byte_t" }   # → typedef bit [7:0] byte_t;
     ports:                   # dir: output=master驱动 / input=slave驱动
-      - { name: paddr,  dir: output, width: ADDR_WIDTH }
-      - { name: prdata, dir: input,  width: DATA_WIDTH }
+      - { name: paddr,  dir: output, width: ADDR_WIDTH,  protocol: config }
+      - { name: prdata, dir: input,  width: DATA_WIDTH,  protocol: config }
+      - { name: irq,    dir: input,  width: 1,           protocol: pulse  }
     transaction_vars:        # 事务字段：isrand 驱动 / iscompare 参与自检比对 / is_master 角色
       - { name: paddr, type: "bit [ADDR_WIDTH-1:0]", iscompare: "True", isrand: "True", is_master: "True" }
 ```
@@ -202,6 +203,20 @@ interfaces:
 
 **`protocol: apb` 的额外约束**：缺 `psel` / `penable` / `pready` / `paddr` /
 `pwrite` / `pwdata` / `prdata` 任一端口，Phase A 会报 `protocol_apb_ports_missing`。
+
+**端口级 `protocol`（可选）**：描述该端口自身的语义，driver 按它决定驱动方式：
+
+| 值 | driver 行为 |
+|---|---|
+| `pulse` | 事务驱动的当拍置起，下一拍立即拉低（spec 单拍脉冲；`*_start` / `*_done_vld` / `*_rls_vld`） |
+| `config` | 作为事务载荷随事务驱动（可在事务间保持） |
+| `valid_ready` | 按普通端口驱动/采样（按通道的 vld/rdy 握手时序尚未建模） |
+| `icg` / `interrupt` / `csr` / `debug` / `status` / `reserved` | 按普通端口驱动/采样 |
+
+不写时模板按端口名兜底（`*_done_vld` / `*_rls_vld` / `*_start` 视为 `pulse`）。
+VPlan 生成的 agent YAML 会从契约自动带上这个字段；手写 YAML 建议显式写。
+注意它和 interface 级的 `protocol: apb` 不是一回事：前者是**端口**语义，
+后者是 agent 整体的协议行为（两拍 setup+access）。
 
 > 激活模式（UVM_ACTIVE / UVM_PASSIVE）**不在 interface 级配置**：interface 只描述协议与端口，
 > 激活由 env 级 `agents[].is_active` 决定（缺省 UVM_ACTIVE）；loopback 自检套件固定

@@ -1,0 +1,34 @@
+{
+  "schema": "vplan_review_v2",
+  "reviewed": true,
+  "reviewer": "jiangqingliu88",
+  "at": "2026-11-13T14:46:27+00:00",
+  "note": "E2E check after Architecture 4.0 refactor",
+  "items": {
+    "docs_specs": {
+      "path": "docs/specs",
+      "exists": true,
+      "sha256": "b5204ec8bd24661d5216bdd81a9b400669bcfdf3a12680ba9f86de6c7e2f5b87"
+    },
+    "data": {
+      "path": "data",
+      "exists": true,
+      "sha256": "1dc5342923fab9191596ad435a173ba3f189efc9f1dc536195a4d4aef82a29e1"
+    },
+    "cases": {
+      "path": "cases",
+      "exists": true,
+      "sha256": "77d45eb692e2491aa60f1c70619847ca2b16814857b0c03e7abc58915dc79a5c"
+    }
+  },
+  "skipped_generated": [
+    "data/assertions.csv",
+    "data/behavior.csv",
+    "data/config_space.csv",
+    "data/cross_matrix.csv",
+    "data/dimensions.csv",
+    "data/execution_meta.csv",
+    "data/scoreboards.csv",
+    "data/sub_objects.csv"
+  ]
+}

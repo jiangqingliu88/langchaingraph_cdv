@@ -1,0 +1,31 @@
+{#- 端口分类小工具 —— master/slave 两个 driver 共用。
+
+    模板里最容易被复制粘贴的就是这两段判断：
+      · 「这个端口是不是脉冲语义」（start / done / tile-page 释放）；
+      · 「这个端口在不在事务字段里」（driver 只驱动事务里有的字段）。
+    各写一份的后果不是编译错，而是**两边慢慢漂移**：一边把 `_rls_vld` 当脉冲、
+    另一边忘了，生成出来的 driver 行为就不一致，且谁都不会报错。
+    判定只留一份在这里，调用处只写 `pm.is_pulse(...)` / `pm.in_txn(...)`。 #}
+
+{#- 脉冲语义**优先看端口的 `protocol` 字段**（VPlan 契约里的 pulse），
+    缺失时才退回端口名约定：`*_done_vld`（完成）、`*_rls_vld`（tile/page 释放）、
+    `cmd_*_start` / `*_wstart` / `*_rstart`（启动脉冲）。
+    `*_start_inst_id` 这类随路 payload 不算 —— 它跟着 start 有效，不是脉冲本身。 #}
+{%- macro is_pulse(port) -%}
+{%-   set proto = (port.get('protocol') or '')|lower -%}
+{%-   set n = (port.get('name') or '')|lower -%}
+{%-   if proto == 'pulse' -%}
+1
+{%-   elif (not proto or proto == 'generic') and
+         (n.endswith('_done_vld') or n.endswith('_rls_vld')
+          or n.endswith('_start') or n.endswith('_wstart') or n.endswith('_rstart')) -%}
+1
+{%-   endif -%}
+{%- endmacro -%}
+
+{#- 端口是否在事务字段里（名字完全相等）。 #}
+{%- macro in_txn(name, transaction_vars) -%}
+{%-   for var in transaction_vars -%}
+{%-     if var.name == name -%}1{%- endif -%}
+{%-   endfor -%}
+{%- endmacro -%}

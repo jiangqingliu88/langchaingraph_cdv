@@ -6,9 +6,13 @@
 from __future__ import annotations
 
 import asyncio
+import operator
+from typing import Annotated, List, TypedDict
+
+from langgraph.graph import END, START, StateGraph
 
 from src.orchestration_plane.supervisor.graph import (
-    build_closed_loop_graph, n_supervisor, r_supervisor,
+    _delta_only, build_closed_loop_graph, n_supervisor, r_supervisor,
 )
 from src.orchestration_plane.l2.state import PipelineState
 
@@ -68,6 +72,42 @@ def test_human_review_without_checkpoint_degrades_loudly(monkeypatch):
         {"configurable": {"rt": SimpleNamespace(interrupt_mode=False)}}))
     assert out["human_decision"] == "auto_no_checkpoint"
     assert out["human_reviewed"] is True
+
+
+def test_subgraph_additive_fields_are_delta_only():
+    """子图边界不能把继承的 `_add` 字段再加一遍。
+
+    LangGraph 子图作为节点时，输出会带整份继承状态；父图按 reducer 合并。
+    不打这层补丁的实测形态是 supervisor 访问数 1/3/7/15/31 指数增长，1 轮
+    就跑满上限；`phases` / `round_num` / `debug_attempts` 同样被放大。
+    """
+    class Toy(TypedDict):
+        supervisor_visits: Annotated[int, operator.add]
+        phases: Annotated[List[dict], operator.add]
+        round_num: Annotated[int, operator.add]
+        verify_done: bool
+
+    def bump(state):
+        return {"supervisor_visits": 1, "phases": [{"name": "new"}]}
+
+    sg = StateGraph(Toy)
+    sg.add_node("bump", bump)
+    sg.add_edge(START, "bump")
+    sg.add_edge("bump", END)
+    sub = sg.compile()
+
+    before = {"supervisor_visits": 5, "phases": [{"name": "old"}],
+              "verify_done": True}
+    after = asyncio.run(sub.ainvoke(before))
+    # 子图输出 = 继承值 + 新增（这正是会被父图重复累加的那份）
+    assert after["supervisor_visits"] == 6
+    assert after["phases"] == [{"name": "old"}, {"name": "new"}]
+
+    delta = _delta_only(before, after)
+    assert delta["supervisor_visits"] == 1
+    assert delta["phases"] == [{"name": "new"}]
+    # 子图没动的 add 字段，增量是 0
+    assert delta["round_num"] == 0
 
 
 def test_coverage_budget_comes_from_agent_card():

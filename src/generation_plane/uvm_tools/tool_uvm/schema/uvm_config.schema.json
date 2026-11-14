@@ -609,6 +609,10 @@
             "integer",
             "string"
           ]
+        },
+        "protocol": {
+          "$comment": "端口语义（pulse/config/valid_ready…）；driver 按它决定驱动行为，不靠端口名猜",
+          "type": "string"
         }
       },
       "additionalProperties": false

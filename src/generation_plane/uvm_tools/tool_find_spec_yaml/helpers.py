@@ -352,6 +352,16 @@ def _llm_classify_protocols(names: list) -> dict:
     return {}
 
 
+def _port_group(item: Dict[str, Any], semantic: str) -> str:
+    """端口边界：显式 `interface_group` 优先，老 spec 退回语义协议。"""
+    return str(item.get("interface_group") or semantic or "").strip().lower()
+
+
+def _group_key(port: Dict[str, Any]) -> str:
+    """agent 分组键：接口组优先，其次语义协议，最后 generic。"""
+    return port.get("interface_group") or port.get("protocol") or "generic"
+
+
 def _group_agents_by_protocol(spec: dict, rtl_data: dict, module_name: str) -> list:
     """按协议边界分组 agents（优先 spec.protocol，缺失时 LLM/命名约定分类）。
 
@@ -365,10 +375,14 @@ def _group_agents_by_protocol(spec: dict, rtl_data: dict, module_name: str) -> l
             p = _spec_iface_to_port(i)
             if not p["name"]:
                 continue
+            # `protocol` = 端口语义（pulse/config/valid_ready…）；
+            # `interface_group` = agent 边界（一个 master 一组）。两者正交：
+            # VPlan 契约里两个字段都有；老 spec 只有 protocol，就用它当边界。
             p["protocol"] = str(i.get("protocol", "") or "").strip().lower()
-            # 规格里**显式**写了协议：单端口组也可信（人工给的边界）。
-            p["_explicit_protocol"] = bool(p["protocol"]
-                                           and p["protocol"] != "generic")
+            p["interface_group"] = _port_group(i, p["protocol"])
+            # 规格里**显式**给了边界：单端口组也可信（人工给的边界）。
+            p["_explicit_protocol"] = bool(p["interface_group"]
+                                           and p["interface_group"] != "generic")
             ports.append(p)
     elif rtl_data and rtl_data.get("ports"):
         for p in rtl_data["ports"]:
@@ -377,6 +391,7 @@ def _group_agents_by_protocol(spec: dict, rtl_data: dict, module_name: str) -> l
                 "direction": str(p.get("direction", "input") or "input").lower(),
                 "width": int(p.get("width", 1) or 1),
                 "protocol": "",
+                "interface_group": "",
             })
 
     if not ports:
@@ -390,14 +405,18 @@ def _group_agents_by_protocol(spec: dict, rtl_data: dict, module_name: str) -> l
             p["protocol"] = (llm_map.get(p["name"])
                              or _classify_protocol_by_name(p["name"])
                              or "generic")
+            # 没有独立边界时，语义就是边界（老 spec 的行为）。
+            p["interface_group"] = p["interface_group"] or p["protocol"]
 
-    # 按 protocol 分组（clock/reset 是 clocking，不单独成 agent）
+    # 按**接口组**分组（clock/reset 是 clocking，不单独成 agent）。
+    # 分组键不能用 `protocol`：VPlan 里它保留语义（pulse/config…），
+    # 一个 master 的 config 与 pulse 端口必须落进同一个 agent。
     groups = {}
     for p in ports:
-        proto = p["protocol"] or "generic"
-        if proto in ("clock", "reset", "clk", "rst"):
+        group = _group_key(p)
+        if group in ("clock", "reset", "clk", "rst"):
             continue
-        groups.setdefault(proto, []).append(p)
+        groups.setdefault(group, []).append(p)
 
     generic_ports = groups.pop("generic", [])
 
@@ -1003,6 +1022,19 @@ def _generate_uart_yaml(agent: dict, interface: dict, module_name: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _port_proto(port: dict) -> str:
+    """端口语义协议（pulse/config/valid_ready…）；没有就是空串。"""
+    return str(port.get("protocol") or "").strip()
+
+
+def _port_yaml_line(port: dict) -> str:
+    """agent YAML 的一行端口：有语义协议就带上，供 driver 按元数据分支。"""
+    proto = _port_proto(port)
+    extra = ", protocol: " + proto if proto else ""
+    return ("    - { name: " + port["name"] + ", dir: " + port["direction"]
+            + ", width: " + str(port.get("width", 1)) + extra + " }")
+
+
 def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> str:
     """根据 spec 中的 agent + interface 数据生成 agent YAML"""
     ag_name = agent.get("name", f"{module_name}_agent")
@@ -1030,20 +1062,26 @@ def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> 
     all_interface_ports = []
     if detected_clock:
         all_interface_ports.append({"name": detected_clock["name"], "direction": "input",
-                                     "width": detected_clock.get("width", 1)})
+                                     "width": detected_clock.get("width", 1),
+                                     "protocol": "clock"})
     else:
-        all_interface_ports.append({"name": clock_name, "direction": "input", "width": 1})
+        all_interface_ports.append({"name": clock_name, "direction": "input", "width": 1,
+                                     "protocol": "clock"})
     if detected_reset:
         all_interface_ports.append({"name": detected_reset["name"], "direction": "input",
-                                     "width": detected_reset.get("width", 1)})
+                                     "width": detected_reset.get("width", 1),
+                                     "protocol": "reset"})
     else:
-        all_interface_ports.append({"name": reset_name, "direction": "input", "width": 1})
+        all_interface_ports.append({"name": reset_name, "direction": "input", "width": 1,
+                                     "protocol": "reset"})
     # 数据端口方向反转：DUT input → interface output（TB/driver 驱动）；DUT output → interface input（TB/monitor 采样）
+    # **protocol 原样带下去**：driver 模板按它决定脉冲/握手等驱动行为，不再靠端口名猜。
     for p in data_ports:
         d = p.get("direction", p.get("dir", "input"))
         rev = "output" if d == "input" else "input"
         all_interface_ports.append({"name": p["name"], "direction": rev,
-                                     "width": p.get("width", 1)})
+                                     "width": p.get("width", 1),
+                                     "protocol": _port_proto(p)})
 
     trans_vars = agent.get("transaction_vars", [])
     if not trans_vars:
@@ -1073,8 +1111,7 @@ def _generate_interface_yaml(agent: dict, interface: dict, module_name: str) -> 
 
     lines.append("  ports:")
     for p in all_interface_ports:
-        w = p.get("width", 1)
-        lines.append("    - { name: " + p['name'] + ", dir: " + p['direction'] + ", width: " + str(w) + " }")
+        lines.append(_port_yaml_line(p))
 
     lines.append("  transaction_vars:")
     if trans_vars:

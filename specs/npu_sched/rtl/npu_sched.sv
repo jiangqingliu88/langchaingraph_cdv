@@ -435,8 +435,23 @@ module npu_sched (
   assign cmd_llsu_icg_start      = cmd_llsu_start;
   assign cmd_vpu_icg_start       = cmd_vpu_start;
   assign cmd_mpu_icg_start       = cmd_mpu_start;
-  assign cmd_xbar_ch0_icg_wstart = cmd_xbr_ch0_req_wvld;
-  assign cmd_xbar_ch1_icg_rstart = cmd_xbr_ch1_req_rvld;
+
+  // xbar icg 预启动是**单拍脉冲**：通道 valid 是电平（可连续多拍为高），
+  // 直接赋给 icg_start 会把脉冲协议变成电平，SVA `sig |=> !sig` 每拍都报。
+  // 取 valid 的上升沿作为启动脉冲。
+  logic cmd_xbr_ch0_req_wvld_q;
+  logic cmd_xbr_ch1_req_rvld_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cmd_xbr_ch0_req_wvld_q <= 1'b0;
+      cmd_xbr_ch1_req_rvld_q <= 1'b0;
+    end else begin
+      cmd_xbr_ch0_req_wvld_q <= cmd_xbr_ch0_req_wvld;
+      cmd_xbr_ch1_req_rvld_q <= cmd_xbr_ch1_req_rvld;
+    end
+  end
+  assign cmd_xbar_ch0_icg_wstart = cmd_xbr_ch0_req_wvld & ~cmd_xbr_ch0_req_wvld_q;
+  assign cmd_xbar_ch1_icg_rstart = cmd_xbr_ch1_req_rvld & ~cmd_xbr_ch1_req_rvld_q;
 
   // ── Dispatcher 返回值 ───────────────────────────────────────────────
   // scoreboard 的 replay 请求作为 valid；35 位 payload 目前没有定义

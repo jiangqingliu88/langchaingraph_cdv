@@ -88,9 +88,20 @@ def _merge_interface_attrs(itf: Dict[str, Any],
 def _vplan_uvm_spec(spec: Dict[str, Any], output_dir: Path) -> Dict[str, Any]:
     """VPlan 顶层契约 → UVM 接口声明（协议边界来自 VPlan，不是 LLM 猜）。
 
-    取 dplan 的顶层端口列表，按 `protocol` 分组交给 `find_spec_yaml`
+    取 dplan 的顶层端口列表，交给 `find_spec_yaml` 按边界分组
     （`config` / `pulse` / `interrupt` / `valid_ready` … 各成一个 interface），
     不再把所有端口压成一个 `cmd_if`。端口位宽/方向以全局 `interfaces` 为准。
+
+    **`protocol` 与 `interface_group` 是两个正交概念，不能互相覆盖：**
+
+      · `protocol` 是端口的**语义**（pulse / config / valid-related …）——
+        driver 靠它决定单拍脉冲、握手保持等驱动行为；
+      · `interface_group` 是**agent 边界**（一个 master = config + start +
+        done + 释放，便于按模块驱动/断言）。
+
+    早先这里直接把 `protocol` 改写成 master 组名（`llsu`/`niu`…），语义就
+    丢了：下游只能靠端口名后缀去猜"这是不是脉冲"，于是同一类协议在模板里
+    反复写不对。分组归分组，语义归语义，两者都留下。
     """
     try:
         from src.runtime_plane.infrastructure.layout import find_vplan_root
@@ -104,7 +115,13 @@ def _vplan_uvm_spec(spec: Dict[str, Any], output_dir: Path) -> Dict[str, Any]:
         for itf in (_top_module_interfaces(spec) or full):
             base = str(itf.get("name") or "").split("[")[0].strip()
             merged = _merge_interface_attrs(itf, full_by_name.get(base))
-            merged["protocol"] = _interface_protocol(merged)
+            group = _interface_protocol(merged)
+            semantic = str(merged.get("protocol") or "").strip().lower()
+            # 规范成 SV 友好 token：`valid-ready` → `valid_ready`（模板按它分支）。
+            semantic = re.sub(r"[^a-z0-9_]+", "_", semantic).strip("_")
+            # 语义缺失（RTL 路径没有 protocol）时才退回组名，至少不是空串。
+            merged["protocol"] = semantic or group
+            merged["interface_group"] = group
             ifaces.append(merged)
         out = dict(spec)
         if ifaces:

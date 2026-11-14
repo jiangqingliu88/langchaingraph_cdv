@@ -85,6 +85,58 @@ def test_vplan_uvm_spec_groups_by_protocol_and_keeps_widths(tmp_path):
     assert "cmd_if" not in {i["protocol"] for i in ifaces}
 
 
+def test_vplan_uvm_spec_keeps_semantic_protocol_and_group(tmp_path):
+    """语义协议不能被分组名覆盖：`protocol=pulse` + `interface_group=niu`。
+
+    这是"接口协议一直写不对"的根因回归：早先 `_vplan_uvm_spec` 把 protocol
+    改写成 master 组名，下游只剩端口名可猜，driver 的脉冲/握手行为就反复
+    写错。分组归 `interface_group`，语义必须留在 `protocol`。
+    """
+    run = tmp_path / "run"
+    (run / "inputs" / "vplan" / "data").mkdir(parents=True)
+    (run / "inputs" / "vplan" / "data" / "execution_meta.csv").write_text(
+        "version\n1\n", encoding="utf-8")
+
+    spec = {
+        "design_name": "npu_sched",
+        "architecture": {"top": "npu_sched"},
+        "interfaces": [
+            {"name": "cmd_niu_start", "data_width": 1,
+             "direction": "OUTPUT", "protocol": "pulse"},
+            {"name": "niu_cmd_inst0_done_vld", "data_width": 1,
+             "direction": "INPUT", "protocol": "pulse"},
+            {"name": "cmd_xbr_ch0_req_wdata", "data_width": 512,
+             "direction": "INPUT", "protocol": "config"},
+        ],
+        "modules": [{"name": "npu_sched", "level": "top", "interfaces": []}],
+    }
+    out = _vplan_uvm_spec(spec, run)
+    by_name = {i["name"]: i for i in out["interfaces"]}
+    assert by_name["cmd_niu_start"]["protocol"] == "pulse"
+    assert by_name["cmd_niu_start"]["interface_group"] == "niu"
+    assert by_name["niu_cmd_inst0_done_vld"]["protocol"] == "pulse"
+    assert by_name["niu_cmd_inst0_done_vld"]["interface_group"] == "niu"
+    # 非 master 端口组名就是协议名
+    assert by_name["cmd_xbr_ch0_req_wdata"]["interface_group"] == "config"
+
+
+def test_find_yaml_groups_by_interface_group_and_keeps_protocol():
+    """agent 分组看 `interface_group`；端口 `protocol` 原样带进 agent dict。"""
+    from src.generation_plane.uvm_tools.tool_find_spec_yaml import main as m
+
+    spec = {"interfaces": [
+        {"name": "cmd_niu_start", "direction": "OUTPUT", "data_width": 1,
+         "protocol": "pulse", "interface_group": "niu"},
+        {"name": "niu_cmd_inst0_done_vld", "direction": "INPUT",
+         "data_width": 1, "protocol": "pulse", "interface_group": "niu"},
+    ]}
+    agents = m._group_agents_by_protocol(spec, {}, "npu_sched")
+    assert len(agents) == 1
+    ag, _iface = agents[0]
+    assert ag["name"] == "niu"
+    assert {p["protocol"] for p in ag["ports"]} == {"pulse"}
+
+
 def test_top_ifaces_enriched_from_global_contract():
     """bootstrap 的顶层接口也要带位宽/方向/协议（否则维度全记成 1-bit）。"""
     spec = _spec()

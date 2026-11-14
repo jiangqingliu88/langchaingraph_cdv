@@ -162,6 +162,29 @@ UVM Agent ---- SVA Agent
 
 它管理整个任务生命周期，而不是自己编译 RTL 或执行仿真。
 
+### 实现约束：子图合并必须只回传增量
+
+主图把四个专家子图当节点挂载时，LangGraph 会把**子图继承来的整份状态**也写进
+子图输出，父图再按 reducer 合并。对 `Annotated[..., _add]` 字段来说，这等于
+把继承值又加了一遍：
+
+```
+supervisor 读 visits=0 → +1=1 → 子图带 1 进、带 1 出 → 父图 1+1=2
+→ 下次读 2 → visit=3 → …   实测 1 / 3 / 7 / 15 / 31
+```
+
+受影响的不只是 `supervisor_visits`：`phases`、`round_num`、`debug_attempts`、
+`coverage_attempts` 都会被指数放大（1 轮就撞上 `MAX_SUPERVISOR_VISITS`，
+最终 phases 也会成对重复）。
+
+因此 `supervisor/graph.py` 统一用 `_expert(subgraph)` 包一层：
+
+- `_additive_fields()` 从 `PipelineState.model_fields` 自动识别所有 `_add` 字段；
+- `_delta_only()` 把子图输出还原成本段增量（int 相减、list 去掉继承前缀）；
+- 父图 reducer 只叠加增量，子图内部照常读取继承状态做路由。
+
+回归：`tests/test_supervisor_graph.py::test_subgraph_additive_fields_are_delta_only`。
+
 ## 3. Generation Plane：产物生成
 
 这是 AI 与实际 IC 验证工程连接的重要位置。
@@ -191,6 +214,28 @@ UVM Agent 生成了一个 AXI Driver。
 必须经过编译、接口检查、仿真和相关验证，才能认为它可用。
 
 这就是为什么 Generation 和 Engine 应该分开。
+
+### 接口协议是**数据**，不是模板里的名字猜测
+
+VPlan 契约给每个端口同时保留两个正交字段：
+
+| 字段 | 含义 | 用途 |
+|---|---|---|
+| `protocol` | 端口语义：`pulse` / `config` / `valid_ready` / `icg` / `interrupt` … | driver 按它决定单拍脉冲、握手等驱动行为 |
+| `interface_group` | agent 边界：`niu` / `glsu` / `llsu` / `vpu` / `mpu` … | 一个 master 的 config + start + done + 释放进同一个 agent |
+
+这两个字段一路带到 `inputs/yaml/uvm/<agent>.yaml` 的端口项：
+
+```yaml
+ports:
+  - { name: llsu_cmd_inst0_done_vld, dir: output, width: 1, protocol: pulse }
+  - { name: cmd_llsu_cfg_wd,         dir: input,  width: 3, protocol: config  }
+```
+
+driver 模板优先读 `port.protocol`（`base_templates/port_macros.j2`），只在没有
+元数据时退回端口名约定。**不允许再把 `protocol` 改写成组名**——那样语义丢失，
+下游只能靠 `*_vld` / `*_rls_vld` 之类的名字后缀猜协议，正是"接口协议一直写
+不对"的根源。
 
 ## 4. Engine Plane：确定性执行与裁决
 

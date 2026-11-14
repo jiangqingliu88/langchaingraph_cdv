@@ -16,7 +16,7 @@
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List, get_origin
 
 import structlog
 from langgraph.graph import END, START, StateGraph
@@ -30,9 +30,65 @@ from src.orchestration_plane.registry import card
 from src.orchestration_plane.nodes.pure.lifecycle import n_finalize, n_init
 from src.orchestration_plane.supervisor.state import SupervisorView
 from src.agent_plane.specialists.verify.graph import build_verify_subgraph
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.l2.state import PipelineState, _add
 
 logger = structlog.get_logger()
+
+
+def _additive_fields() -> Dict[str, Any]:
+    """状态里所有 `Annotated[..., _add]` 字段 → 归零值。
+
+    LangGraph 把子图当节点时，子图**输出会带上它继承来的整份状态**，父图再
+    按 reducer 合并 —— 于是 `_add` 字段的继承值被**再加一遍**：
+
+        supervisor 读 visits=0 → +1=1 → 子图带 1 进去、原样带 1 出来
+        → 父图 1+1=2 → 下次 supervisor 读到 2 → visit=3 → 2(3+1)×2=6 …
+
+    实测 supervisor 访问数按 1/3/7/15/31 指数增长，1 轮就跑满
+    MAX_SUPERVISOR_VISITS 强转 audit；`phases`/`debug_attempts`/`round_num`
+    同样被放大。修复见 `_delta_only`：子图只回传**本段的增量**。
+    """
+    out: Dict[str, Any] = {}
+    for name, field in PipelineState.model_fields.items():
+        if not any(m is _add for m in field.metadata):
+            continue
+        out[name] = [] if get_origin(field.annotation) in (list, List) else 0
+    return out
+
+
+_ADDITIVE = _additive_fields()
+
+
+def _delta_only(before, after):
+    """子图输出 → 只保留本段增量（父图的 reducer 负责叠加）。"""
+    b = before if isinstance(before, dict) else before.model_dump()
+    a = after if isinstance(after, dict) else after.model_dump()
+    out = dict(a)
+    for name, ident in _ADDITIVE.items():
+        if name not in out:
+            continue
+        old = b.get(name, ident)
+        new = out[name]
+        if isinstance(ident, list):
+            # `_add` 对 list 是连接：子图输出 = 继承值 + 本段追加。
+            if (isinstance(old, list) and isinstance(new, list)
+                    and new[:len(old)] == old):
+                out[name] = new[len(old):]
+            else:
+                logger.warning(f"子图输出不是继承值的前缀拼接，无法做增量还原: {name}")
+        elif isinstance(old, int) and isinstance(new, int):
+            out[name] = new - old
+    return out
+
+
+def _expert(subgraph):
+    """把专家子图包成主图节点：只回传增量，避免 `_add` 字段被子图边界重复累加。"""
+    async def node(state, config):
+        out = await subgraph.ainvoke(state, config)
+        return _delta_only(state, out)
+
+    node.__name__ = getattr(subgraph, "name", "expert")
+    return node
 
 #: 主图节点名（权威清单；stages/工作台从 here 读）。
 NODE_NAMES = (
@@ -103,10 +159,12 @@ def build_supervisor_graph(checkpointer=None, store=None):
     g = StateGraph(PipelineState)
     g.add_node("init", n_init)
     g.add_node("supervisor", n_supervisor)
-    g.add_node("design_expert", build_design_subgraph())
-    g.add_node("verify_expert", build_verify_subgraph())
-    g.add_node("debug_expert", build_debug_subgraph())
-    g.add_node("coverage_expert", build_coverage_subgraph())
+    # 专家子图必须经 `_expert` 包一层：子图输出会带上继承状态，`_add` 字段
+    # 在边界处会被重复累加（supervisor 访问数按 1/3/7/15/31 指数增长）。
+    g.add_node("design_expert", _expert(build_design_subgraph()))
+    g.add_node("verify_expert", _expert(build_verify_subgraph()))
+    g.add_node("debug_expert", _expert(build_debug_subgraph()))
+    g.add_node("coverage_expert", _expert(build_coverage_subgraph()))
     g.add_node("human_review", n_human_review)
     g.add_node("audit_gate", n_hard_audit_gate)
     g.add_node("finalize", n_finalize)

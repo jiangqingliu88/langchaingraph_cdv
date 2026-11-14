@@ -48,8 +48,33 @@ def derive_env_name(output_dir: Path) -> str:
 
 
 def _repo_root() -> Path:
-    """仓库根 —— 本文件在 `src/runtime_plane/tools/common/lib/` 下，往上三级。"""
-    return Path(__file__).resolve().parents[4]
+    """仓库根 —— 按 `pyproject.toml` 认，不按层数硬数。
+
+    Architecture 4.0 把本文件从 `src/tools/common/lib/` 挪到了
+    `src/runtime_plane/tools/common/lib/`，`parents[4]` 于是从仓库根变成了
+    `src/` 本身 —— 所有拼出来的路径都多一层 `src/`，`is_dir()` 全假、
+    公共包清单静默变空。层数会再变，`pyproject.toml` 不会。
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    return here.parents[5]
+
+
+def _base_pkg_candidates() -> list:
+    """`tool_uvm/base_pkg/` 可能落在的位置 —— 新架构优先，旧路径兜底。
+
+    Architecture 4.0 把 `tool_uvm` 从 `src/tools/generation/` 搬到了
+    `src/generation_plane/`。这里只认旧路径时，搬完之后 `is_dir()` 为假、
+    清单静默变空，loopback 编译又是一串 `Could not find the package
+    (common_typedefs_pkg)` —— 路径搬家的坑不该以「编译错误」的形式出现。
+    """
+    root = _repo_root()
+    return [
+        root / "src" / "generation_plane" / "uvm_tools" / "tool_uvm" / "base_pkg",
+        root / "src" / "tools" / "generation" / "uvm_tools" / "tool_uvm" / "base_pkg",
+    ]
 
 
 def _base_pkg_lines() -> list:
@@ -59,7 +84,9 @@ def _base_pkg_lines() -> list:
     而每个 agent 包都 `import common_typedefs_pkg::*`，vlog 于是报一串
     `Could not find the package (common_typedefs_pkg)`。clk_and_rst / scb 同理。
     """
-    base = _repo_root() / "src" / "tools" / "generation" / "uvm_tools" / "tool_uvm" / "base_pkg"
+    base = next((p for p in _base_pkg_candidates() if p.is_dir()), None)
+    if base is None:
+        return []
     out = []
     for sub in ("clk_and_rst", "scb", "common_typedefs"):
         d = base / sub
