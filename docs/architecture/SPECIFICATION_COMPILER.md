@@ -94,7 +94,57 @@ vagent specification compile examples/specification/dma_basic.yaml --json
 
 `CONFLICT → 1`，`INCOMPLETE → 2`，`VALIDATED → 0`。默认没有调用 LLM，以可审计的结构化输入进行编译。
 
-## 5. 当前实现边界
+## 5. 完整端到端所必需的接口时序语义（当前未完成）
+
+**不能把给 LLM 阅读 Spec 等同于它可靠地理解了每个接口时序。** 当前 Compiler 没有把自然语言、信号关系或波形自动提升成已证明的接口语义。要达到完整端到端，必须补充以下接口级 `interface_timing_v1` 契约（这是下一阶段要实现的契约，不表示本轮已经实现）：
+
+```yaml
+interface_id: axi_stream_ingress
+protocol: axi4_stream
+version: 1
+clocks:
+  - {name: aclk, period_ps: 1000, reset: aresetn, reset_active_high: false}
+signals:
+  - {name: s_axis_tvalid, role: VALID, clock: aclk, width: 1,
+     binding_status: CONFIRMED}
+  - {name: s_axis_tready, role: READY, clock: aclk, width: 1,
+     binding_status: CONFIRMED}
+rules:
+  - {rule_id: R-HANDSHAKE, kind: HANDSHAKE,
+     valid: s_axis_tvalid, ready: s_axis_tready,
+     stable_signals: [s_axis_tvalid], clock: aclk, status: CONFIRMED}
+unknowns: []
+```
+
+这只是结构化字段示意。要真正覆盖每个接口，还需满足：
+
+| 必须回答的问题 | 不能接受的替代物 |
+|---|---|
+| 接口与端口清单是否完整？ | 只覆盖 AI 挑出来的几个接口 |
+| 信号与角色、方向、位宽、层级绑定是否确定？ | 按名字猜测 `valid/ready` |
+| 时钟域、边沿、复位极性与恢复条件是否明确？ | 默认一种时钟、默认复位有效电平 |
+| 握手、payload 稳定性、顺序、依赖、延迟边界是什么？ | 一句自然语言“接口正常通信” |
+| 每条规则如何被编译成可执行 checker/monitor？ | 只输出一个时序解释或 Markdown 报告 |
+| 实际周期/采样相位、seed、工具版本、原始波形和 checker 结果能否追溯？ | Agent 宣称“仿真看起来没问题” |
+| 不理解、缺失或冲突如何回到澄清与重验？ | 让模型自行补一个最可能的含义 |
+
+Engine 不能只校验文本格式：必须检查信号绑定、时钟引用、规则参数、未知项、冲突以及执行所需证据。Generation 只能生成候选 monitor/checker；Runtime/Engine 必须提供实际运行期 trace 和三态结论。**静态语义 PASS、运行时接口 PASS、Verification Signoff PASS 仍然是三个不同级别。**
+
+因此，本轮 Specification Compiler 是横向契约框架，不是“已保证 AI 正确理解所有接口时序”的完成品。完整端到端还需要接口时序 schema、各协议规则包、真实 Testbench/Checker 运行和相应测试验收，不能靠一次快速代码生成替代。
+
+### 与当前协议元数据真源的关系
+
+当前 `_vplan_uvm_spec()` 与 `find_spec_yaml` 已把 `port.protocol` 保留为端口语义（pulse/config/valid_ready…），用 `interface_group` 单独承载 Agent 边界，driver 也优先按协议字段驱动。这个既有链路是重要基础，后续接口时序契约必须**复用同一份协议元数据**，不能再让 AI 根据端口名另造一套解释。
+
+但仍须区分：
+
+- **协议元数据一致**：后续生成器拿到的字段没有丢；
+- **协议语义得到实现**：模板确实完成对应脉冲/握手/稳定性行为；
+- **接口时序被证明**：真实 checker/monitor 在输入、配置和波形上证明了规则。
+
+三者不能相互替代。对 LLM 或命名约定的回退推断，时序契约应额外记录 `provenance` 与 `binding_status`，没有正式来源或人工确认的绑定不能作为端到端 Guaranteed Understanding直接进入签核。已有 NPU_SCHED 的回归证据可以证明其中的特定场景，但不能外推成所有接口、任意时序语义均已覆盖。
+
+## 6. 当前实现边界
 
 已完成的是可嵌入的本地业务骨架：IR、确定性编译器、澄清操作、生命周期编排、九平面适配和 CLI。
 

@@ -188,8 +188,10 @@ def _conflict(row: dict[str, Any]) -> ConflictRecord:
 
 def _lifecycle(row: dict[str, Any]) -> LifecycleEvent:
     return LifecycleEvent(
-        stage=str(row.get("stage") or ""), detail=str(row.get("detail") or ""),
-        status=str(row.get("status") or "VISITED"), iteration=int(row.get("iteration") or 1),
+        stage=str(row.get("stage") or ""),
+        detail=str(row.get("detail") or ""),
+        status=str(row.get("status") or "VISITED"),
+        iteration=int(row.get("iteration") or 1),
     )
 
 

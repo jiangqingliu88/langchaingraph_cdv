@@ -47,8 +47,7 @@ class SpecificationWorkflow:
         if len(decisions or []) > 3:
             raise ValueError("单次澄清最多 3 轮，剩余缺口必须回到编排/人工流程")
         contract = self._extract(contract_from(deepcopy(document)), analysis)
-        required = (self.knowledge.required_for(contract.domain)
-                    if required_fields is None else tuple(required_fields))
+        required = self.knowledge.required_for(contract.domain) if required_fields is None else tuple(required_fields)
         contract.metadata["knowledge_reference"] = self.knowledge.cite(contract.domain)
         contract.metadata["experience_references"] = self.experience.recall(contract.domain)
         compiler = SpecificationCompiler(required)
@@ -79,24 +78,24 @@ class SpecificationWorkflow:
         self._versions[contract.document_id] = (result.spec_hash, result.status)
         return result
 
-    def _extract(self, contract: SpecificationContract,
-                 analysis: dict[str, Any] | None) -> SpecificationContract:
+    def _extract(self, contract: SpecificationContract, analysis: dict[str, Any] | None) -> SpecificationContract:
         contract.advance(LifecycleStage.INGESTION, f"{len(contract.sources)} 个已登记来源")
         contract.advance(LifecycleStage.EXTRACTION, "复用结构化输入；未默认调用 LLM")
         if analysis is None and self.analyst is not None:
             analysis = self.analyst.analyze(contract.to_dict())
         if analysis is not None:
             contract = self._merge_analysis(contract, analysis)
-        contract.advance(LifecycleStage.RECONCILIATION,
-                         f"{len(contract.requirements)} 条需求/候选")
+        contract.advance(LifecycleStage.RECONCILIATION, f"{len(contract.requirements)} 条需求/候选")
         return contract
 
     @staticmethod
-    def _clarify(contract: SpecificationContract, compiler: SpecificationCompiler,
-                 decisions: list[dict[str, Any]]) -> SpecificationContract:
+    def _clarify(
+        contract: SpecificationContract, compiler: SpecificationCompiler, decisions: list[dict[str, Any]]
+    ) -> SpecificationContract:
         for decision in decisions:
             contract = compiler.clarify(
-                contract, field=str(decision.get("field") or ""),
+                contract,
+                field=str(decision.get("field") or ""),
                 value=decision.get("value"),
                 human_approved=bool(decision.get("human_approved", False)),
                 approved_by=str(decision.get("approved_by") or ""),
@@ -111,8 +110,7 @@ class SpecificationWorkflow:
         if source:
             contract.sources.append(SpecSource(**source))
         for candidate in candidates:
-            if not any(old.requirement_id == candidate.requirement_id
-                       for old in contract.requirements):
+            if not any(old.requirement_id == candidate.requirement_id for old in contract.requirements):
                 contract.requirements.append(candidate)
 
     @staticmethod
