@@ -10,7 +10,7 @@
 """
 from __future__ import annotations
 
-from src.orchestration_plane.l2.coverage_map import CoverageMap
+from src.orchestration_plane.kernel.coverage_map import CoverageMap
 
 
 def _cov(**kw):

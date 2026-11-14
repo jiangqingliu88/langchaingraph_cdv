@@ -57,7 +57,7 @@ UART 串行收发模块，支持 8N1 格式，波特率可配置。
 class TestApprovalGate:
     def test_auto_mode_bypasses_all(self):
         """auto 模式：全部自动通过，不等待输入"""
-        from src.orchestration_plane.l2.governance.approval import create_approval_gate, ApprovalDecision
+        from src.orchestration_plane.kernel.governance.approval import create_approval_gate, ApprovalDecision
         gate = create_approval_gate("auto")
         assert gate.mode.value == "auto"
         assert not gate.requires_approval("any_stage", "critical")
@@ -68,35 +68,35 @@ class TestApprovalGate:
 
     def test_interactive_mode_requires_all(self):
         """interactive 模式：所有阶段都需要审批"""
-        from src.orchestration_plane.l2.governance.approval import create_approval_gate, ApprovalMode
+        from src.orchestration_plane.kernel.governance.approval import create_approval_gate, ApprovalMode
         gate = create_approval_gate("interactive")
         assert gate.mode == ApprovalMode.INTERACTIVE
         assert gate.requires_approval("any_stage", "low")
 
     def test_interactive_approve(self):
         """交互模式下输入 'y' → approve"""
-        from src.orchestration_plane.l2.governance.approval import ApprovalGate, ApprovalMode, ApprovalDecision
+        from src.orchestration_plane.kernel.governance.approval import ApprovalGate, ApprovalMode, ApprovalDecision
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "y")
         record = gate.ask("write_rtl", "mock", "low")
         assert record.decision == ApprovalDecision.APPROVE
 
     def test_interactive_reject(self):
         """交互模式下输入 'n' → reject"""
-        from src.orchestration_plane.l2.governance.approval import ApprovalGate, ApprovalMode, ApprovalDecision
+        from src.orchestration_plane.kernel.governance.approval import ApprovalGate, ApprovalMode, ApprovalDecision
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "n")
         record = gate.ask("UVM", "mock", "medium")
         assert record.decision == ApprovalDecision.REJECT
 
     def test_interactive_skip(self):
         """交互模式下输入 's' → skip"""
-        from src.orchestration_plane.l2.governance.approval import ApprovalGate, ApprovalMode, ApprovalDecision
+        from src.orchestration_plane.kernel.governance.approval import ApprovalGate, ApprovalMode, ApprovalDecision
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "s")
         record = gate.ask("cover", "mock", "low")
         assert record.decision == ApprovalDecision.SKIP
 
     def test_threshold_mode(self):
         """threshold 模式：只有高风险才审批"""
-        from src.orchestration_plane.l2.governance.approval import ApprovalGate, ApprovalMode
+        from src.orchestration_plane.kernel.governance.approval import ApprovalGate, ApprovalMode
         gate = ApprovalGate(mode=ApprovalMode.THRESHOLD, risk_threshold="high")
         assert not gate.requires_approval("low_risk", "low")
         assert not gate.requires_approval("medium_risk", "medium")
@@ -105,7 +105,7 @@ class TestApprovalGate:
 
     def test_summary_json(self):
         """审批摘要可以序列化为 JSON"""
-        from src.orchestration_plane.l2.governance.approval import ApprovalGate, ApprovalMode
+        from src.orchestration_plane.kernel.governance.approval import ApprovalGate, ApprovalMode
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE, input_func=lambda _: "y")
         gate.ask("design", "passed", "low")
         gate.ask("UVM", "passed", "low")
@@ -228,7 +228,7 @@ class TestCLISubcommandsExist:
 
 class TestContextStoreSummary:
     def test_summary_returns_structure(self):
-        from src.orchestration_plane.l2.context.context import ContextStore
+        from src.orchestration_plane.kernel.context.context import ContextStore
         store = ContextStore()
         store.put("spec", {"features": ["f1"]}, source="spec_planner")
         store.put("design_arch", {"modules": ["m1"]}, source="design_architect")

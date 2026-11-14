@@ -230,7 +230,7 @@ def test_enrich_without_graph_is_a_noop(tmp_path: Path):
 
 def test_evidence_package_carries_runtime_artifacts(run_dir: Path):
     """知识图与奖励必须进证据包，不能只躺在 run 目录里。"""
-    from src.orchestration_plane.l2.evidence.signoff_package import write_package
+    from src.orchestration_plane.kernel.evidence.signoff_package import write_package
 
     write_runtime_graph(build_runtime_graph(run_dir), run_dir)
     (run_dir / "coverage" / "sim_reward.json").write_text(

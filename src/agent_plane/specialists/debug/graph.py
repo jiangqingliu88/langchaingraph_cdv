@@ -10,7 +10,7 @@ from src.orchestration_plane.nodes.pure.rounds import n_round_bump
 from src.orchestration_plane.supervisor.routing import (
     r_after_round_bump, r_coverage,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 
 def build_debug_subgraph():

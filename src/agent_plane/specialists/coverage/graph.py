@@ -21,7 +21,7 @@ from src.orchestration_plane.supervisor.routing import (
     r_action, r_after_compile_retry, r_after_converge, r_after_guardian,
     r_approval, r_governor,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 
 def build_coverage_subgraph():

@@ -32,7 +32,7 @@ from pathlib import Path
 
 import pytest
 
-from src.orchestration_plane.l2.communication.tool_hub import ToolHub
+from src.orchestration_plane.kernel.communication.tool_hub import ToolHub
 
 
 @pytest.fixture(scope="module")

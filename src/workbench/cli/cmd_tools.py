@@ -13,7 +13,7 @@ import click
 from rich.panel import Panel  # noqa: F401
 from rich.table import Table  # noqa: F401
 
-from src.orchestration_plane.l2.execution import PipelineExecutionService
+from src.orchestration_plane.kernel.execution import PipelineExecutionService
 from src.workbench.cli.output import common_options, get_output_adapter  # noqa: F401
 from src.workbench.cli.commands import (  # noqa: F401
     cli, console, AGENT_ALIASES, VerificationCLI,
@@ -171,10 +171,10 @@ def tool_history(limit, tool_filter):
       vagent tool history --tool run_vcs    # 指定工具
     """
     try:
-        from src.orchestration_plane.l2.communication.tool_system import ToolRegistry
+        from src.orchestration_plane.kernel.communication.tool_system import ToolRegistry
         # 工具调用历史通过 debug_logger 追踪
         console.print("[dim]Tool call history:[/dim]")
-        from src.orchestration_plane.l2.middleware.debug_logger import tracer
+        from src.orchestration_plane.kernel.middleware.debug_logger import tracer
         # tracer doesn't have tool history directly, use file-based approach
         log_dir = Path("logs/execution")
         if log_dir.exists():

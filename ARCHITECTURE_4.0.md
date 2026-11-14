@@ -313,6 +313,30 @@ Case IR
 
 注意，这些是建议演进的语义类型，不代表目前都已经实现。
 
+### Mental IR：把「理解」也变成可审阅的数据
+
+Case/Execution/Evidence IR 记录的是**验证对象与事实**；Mental IR 记录的是
+**agent 对任务的理解**，放在 `src/mental_ir_plane/`：
+
+| 字段 | 回答的问题 |
+|---|---|
+| `goals` | 这份设计必须被证明成立什么？ |
+| `assumptions` | 继续验证默认依赖了哪些前提？ |
+| `ambiguities` | 规格哪里没说清、是否 blocking？ |
+| `verification_intents` | 用什么证据证明哪个目标？ |
+| `risks` | 设计与验证过程的风险及缓解 |
+
+产物落在 `<run>/mental_ir/{mental_ir.json, mental_ir.yaml, manifest.json}`，
+`manifest.json` 带规范哈希与计数。它由独立专家
+`src/agent_plane/specialists/mental/` 生成，目前**不进 supervisor 闭环**：
+
+```bash
+vagent mental build specs/npu_sched/docs/specs/npu_sched.md -o output_mental_npu_sched
+```
+
+只保留模型与落盘实现，不复制 `ir_plane`。设计说明见
+[Mental IR](docs/architecture/MENTAL_IR.md)。
+
 IR 的核心价值，是让不同 Agent 和 Engine 不再依赖彼此的内部实现，而是通过统一语义协作。
 
 ## 6. Knowledge Plane：专业知识
@@ -477,7 +501,7 @@ src/
 ├── agent_plane/              # 理解、规划、专家、协作、记忆
 │   ├── runtime/              # harness / loop / context / state
 │   ├── planner/              # task planner / DAG / replan / acceptance
-│   ├── specialists/          # design / verify / coverage / debug
+│   ├── specialists/          # design / verify / coverage / debug / mental
 │   ├── collaboration/        # subagent / delegation / contracts
 │   └── memory/
 │
@@ -487,7 +511,7 @@ src/
 │   ├── gates/                # 人工审批 / 审计门
 │   ├── registry.py           # AgentCard 能力表
 │   ├── guards.py / markers.py
-│   └── l2/                   # 原 l2_orchestration
+│   └── kernel/               # 编排内核（原 l2 调度层）
 │
 ├── generation_plane/         # 候选工件生成（可调 LLM）
 │   ├── design/{rtl,cmodel}/
@@ -503,6 +527,8 @@ src/
 ├── ir_plane/                 # 统一验证语义
 │   ├── vplan/ contract/ proposal/
 │   └── decision/             # 原 l3_decision
+│
+├── mental_ir_plane/          # 心智模型 IR（目标/假设/歧义/意图/风险）
 │
 ├── knowledge_plane/          # 协议 / IP / 设计知识
 ├── experience_plane/         # 历史失败 / 修复 / 覆盖率闭合策略

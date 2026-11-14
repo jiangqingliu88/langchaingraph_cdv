@@ -50,7 +50,7 @@ def coverage_report(run_id, json_output):
         return
 
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         manifest = builder.build(session_id=rid.replace("run_", ""))
         cov = manifest.metadata.get("coverage", {})
@@ -86,7 +86,7 @@ def coverage_gaps(run_id, json_output):
         return
 
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         manifest = builder.build(session_id=rid.replace("run_", ""))
         cov = manifest.metadata.get("coverage", {})
@@ -202,7 +202,7 @@ def coverage_merge(runs, json_output):
     count = 0
 
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         for rid in run_list:
             manifest = builder.build(session_id=rid.replace("run_", ""))

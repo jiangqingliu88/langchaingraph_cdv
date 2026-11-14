@@ -10,7 +10,7 @@ import asyncio
 from src.orchestration_plane import guards
 from src.orchestration_plane.supervisor import graph as graph_mod
 from src.orchestration_plane.guards import _guarded_node
-from src.orchestration_plane.l2.state import (
+from src.orchestration_plane.kernel.state import (
     STATE_CONTRACTS,
     PipelineState,
     unexpected_state_writers,

@@ -5,7 +5,7 @@
 """
 import pytest
 
-from src.orchestration_plane.l2.executors.registry import ExecutorRegistry
+from src.orchestration_plane.kernel.executors.registry import ExecutorRegistry
 from src.generation_plane.design.rtl import DesignExecutor
 from src.generation_plane.design.cmodel import ModelExecutor
 from src.generation_plane.verification import VerifyExecutor

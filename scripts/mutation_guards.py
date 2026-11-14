@@ -57,28 +57,28 @@ MUTATIONS: List[Mutation] = [
     ),
     Mutation(
         name="plusargs_reserved_allowed",
-        path="src/orchestration_plane/l2/regression_tools/backend_profiles.py",
+        path="src/orchestration_plane/kernel/regression_tools/backend_profiles.py",
         old="        if key in reserved:",
         new="        if False and key in reserved:",
         tests="tests/test_plusargs_semantics.py",
     ),
     Mutation(
         name="file_audit_hash_skipped",
-        path="src/orchestration_plane/l2/evidence/file_audit.py",
+        path="src/orchestration_plane/kernel/evidence/file_audit.py",
         old='            if r.get("hash") != expect:',
         new='            if False and r.get("hash") != expect:',
         tests="tests/test_human_edit_evidence.py",
     ),
     Mutation(
         name="state_contract_wrong_owner",
-        path="src/orchestration_plane/l2/state.py",
+        path="src/orchestration_plane/kernel/state.py",
         old='"sim_reward":        {"writers": ("coverage",),',
         new='"sim_reward":        {"writers": ("design",),',
         tests="tests/test_state_contracts.py",
     ),
     Mutation(
         name="tool_registry_empty_allowed",
-        path="src/orchestration_plane/l2/communication/tool_hub.py",
+        path="src/orchestration_plane/kernel/communication/tool_hub.py",
         old="        undeclared = sorted(empty - cls.EXECUTORS_WITHOUT_HUB_TOOLS)",
         new="        undeclared = []",
         tests="tests/test_tool_registry.py",
@@ -93,7 +93,7 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         # 判据退化成子串匹配 → 逐条 SB 的 `mismatched=0` 能把"聚合脏"骗成通过
         name="scb_pass_anchor_loosened",
-        path="src/orchestration_plane/l2/regression_tools/backend_profiles.py",
+        path="src/orchestration_plane/kernel/regression_tools/backend_profiles.py",
         old=("    'grep -qE \"(\\\\[SCB_DUT\\\\]|Scoreboard:).*mismatched=0\" "
              "sim_vsim.log '"),
         new="    'grep -qE \"mismatched=0\" sim_vsim.log '",

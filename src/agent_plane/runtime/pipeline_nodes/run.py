@@ -12,10 +12,10 @@ from pathlib import Path
 import structlog
 
 from src.agent_plane.runtime.pipeline_nodes.fix import _triage_harness
-from src.orchestration_plane.l2.runtime import (
+from src.orchestration_plane.kernel.runtime import (
     _token_delta, _rt, _as_float, _run_agent,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 logger = structlog.get_logger()
 
@@ -232,7 +232,7 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
         # 主要动功能覆盖率，而收敛信号盯的是代码覆盖率 —— 于是"补了但数字不动"
         # 连续六轮，`convergence_forecast` 报 `rounds_to_target: Infinity`，
         # 而真正的功能覆盖率同期是 64.81%。**闭环在盯一个它的动作推不动的数。**
-        from src.orchestration_plane.l2.planning import pick_coverage_value
+        from src.orchestration_plane.kernel.planning import pick_coverage_value
         _pick = pick_coverage_value(coverage)
         final_coverage = round(_pick["value"], 1)
         if not _pick["present"]:
@@ -324,7 +324,7 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
         _weights = None
         try:
             from config.paths import PROJECT_ROOT
-            from src.orchestration_plane.l2.evidence.signoff_package import (
+            from src.orchestration_plane.kernel.evidence.signoff_package import (
                 load_policy)
 
             _module = str((state.spec or {}).get("design_name")

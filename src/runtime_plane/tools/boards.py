@@ -4,7 +4,7 @@
 
     generation  生成产物（UVM / ISA IR / C 模型）
     checking    检查与判定（断言）
-    execution   EDA / 回归及仿真适配（回归编排位于 l2；执行适配在 tools/execution/）
+    execution   EDA / 回归及仿真适配（回归编排位于 orchestration_plane/kernel；执行适配在 tools/execution/）
     flow        签核 / 血缘 / 趋势等跨阶段流程
     integration 对外集成（IDE 桥）
     humanview   人读视图（PM 手写测试点表 → 测试点本体）
@@ -16,7 +16,7 @@
   · `scmodel_tools` / `doc_tools` / `debug_tools` / `coverage_tools` /
     `spec_tools` 已迁到 layers 或删除，不再登记；
   · `case_associate_view` 已并入 `humanview.case_view`；
-  · `regression_tools` 已迁到 `src/orchestration_plane/l2/regression_tools/`；
+  · `regression_tools` 已迁到 `src/orchestration_plane/kernel/regression_tools/`；
   · 2026-11-14：`tools/execution/interface_timing/` 接入仿真适配，
     作为 execution 下首个接口时序功能块，不新增板块或架构平面。
 """

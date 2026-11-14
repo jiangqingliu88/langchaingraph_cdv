@@ -52,15 +52,29 @@ def test_fresh_process_import_does_not_depend_on_api_load_order():
     assert result.returncode == 0, "GUI 的全新进程导入循环没有被消解"
 
 
-def test_creation_has_three_explicit_modes_without_llm(qt_app, ctx, monkeypatch):
+def test_creation_has_nine_agent_modes_without_llm(qt_app, ctx, monkeypatch):
+    from src.workbench.modes.agent_modes import AGENT_MODES
+
     invoked = []
     monkeypatch.setattr(agent_mode_service, "agent_turn", lambda *_a, **_k: invoked.append(1))
     module = _module(ctx)
-    assert [module.mode.itemData(i) for i in range(module.mode.count())] == ["chat", "plan", "verify"]
+    assert module.mode.count() == len(AGENT_MODES) == 9
+    assert [module.mode.itemData(i) for i in range(module.mode.count())] == [m.id for m in AGENT_MODES]
+    assert [module.mode.itemText(i) for i in range(module.mode.count())] == [m.label for m in AGENT_MODES]
     assert module.mode.isEnabled()
     assert not invoked
     assert not module._jobs
     assert module.approval.isHidden()
+
+
+def test_mental_mode_exposes_mental_ir_action(qt_app, ctx):
+    module = _module(ctx)
+    ids = [module.mode.itemData(i) for i in range(module.mode.count())]
+    module.mode.setCurrentIndex(ids.index("mental_model"))
+    assert not module.mental_button.isHidden()
+    assert "Mental Model" in module.mode_hint.text()
+    module.mode.setCurrentIndex(ids.index("agentic_chat"))
+    assert module.mental_button.isHidden()
 
 
 def test_send_uses_task_runner_and_preserves_paused_state(qt_app, ctx, tmp_path):

@@ -30,7 +30,7 @@ from src.orchestration_plane.registry import card
 from src.orchestration_plane.nodes.pure.lifecycle import n_finalize, n_init
 from src.orchestration_plane.supervisor.state import SupervisorView
 from src.agent_plane.specialists.verify.graph import build_verify_subgraph
-from src.orchestration_plane.l2.state import PipelineState, _add
+from src.orchestration_plane.kernel.state import PipelineState, _add
 
 logger = structlog.get_logger()
 

@@ -6,7 +6,7 @@ import os
 
 import structlog
 
-from src.orchestration_plane.l2.state import (
+from src.orchestration_plane.kernel.state import (
     CRITICAL_STATE_FIELDS, unexpected_state_writers,
 )
 

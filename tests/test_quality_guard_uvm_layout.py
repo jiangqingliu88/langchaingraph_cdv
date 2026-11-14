@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.orchestration_plane.l2.governance.quality_guard import (
+from src.orchestration_plane.kernel.governance.quality_guard import (
     Verdict, validate_uvm,
 )
 

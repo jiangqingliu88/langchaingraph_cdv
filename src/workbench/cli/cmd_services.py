@@ -212,8 +212,8 @@ def coverage_closure(project, coverage, target, spec, rtl, config, output, execu
 def _execute_closure(project, run_dir, target, spec, rtl, config, output):
     """复用现有闭环：`--rtl` 当 DUT，spec 当分析输入；不另造收敛引擎。"""
     from src.runtime_plane.infrastructure.output_config import make_output_root
-    from src.orchestration_plane.l2.execution import PipelineExecutionService
-    from src.orchestration_plane.l2.governance.approval import create_approval_gate
+    from src.orchestration_plane.kernel.execution import PipelineExecutionService
+    from src.orchestration_plane.kernel.governance.approval import create_approval_gate
 
     rtl_dir = rtl or (run_dir / "rtl" if (run_dir / "rtl").is_dir() else None)
     spec_path = spec

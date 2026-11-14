@@ -206,5 +206,5 @@ Supervisor 状态机、Harness 多轮会话、安全边界等。
 - 四个生成/诊断文件仍混有确定性检查函数（design/cmodel/verification/debug），
   第二轮将把这些函数抽到 `engine_plane/`。
 - import 环检测、字符串拼接动态 import 尚未实现。
-- `orchestration_plane/l2`、`ir_plane/decision` 是原 L2/L3 的迁移落点，后续继续按
+- `orchestration_plane/kernel`、`ir_plane/decision` 是原 L2/L3 的迁移落点，后续继续按
   职责下沉到 Engine / IR。

@@ -145,16 +145,16 @@ PySide6 离屏构造 `ArchitecturePlaneModule` 并调用真实 `architecture.sna
 
 ### 4.1 依赖债务登记被整层 allowlist 抵消
 
-代码注释说：Engine → l2 的债务“只允许具体文件，不允许整层放开”。但当前 `engine` 的 allowed 集合本身包含 `l2/l3/l4/l5`，再叠加五个文件的 debt 特例，见 [architecture_guard.py](../../config/architecture_guard.py#L263-L287)。
+代码注释说：Engine → kernel 的债务“只允许具体文件，不允许整层放开”。但当前 `engine` 的 allowed 集合本身包含 `kernel/l3/l4/l5`，再叠加五个文件的 debt 特例，见 [architecture_guard.py](../../config/architecture_guard.py#L263-L287)。
 
-**隔离反例实测**：新建一个未登记的 Engine 文件，直接 `from src.orchestration_plane.l2 import something`，`import_violations()` 返回 `[]`。
+**隔离反例实测**：新建一个未登记的 Engine 文件，直接 `from src.orchestration_plane.kernel import something`，`import_violations()` 返回 `[]`。
 
 **影响**：`_DEPENDENCY_DEBT` 的五个文件不能真正限制新增同方向依赖；文档所述的逐文件治理强度高于实际执行强度。
 
 **最小修复**：
 
 1. 目标 allowed 集合与历史债务分开；
-2. Engine → l2 只保留已登记文件/模块，新增文件即失败；
+2. Engine → kernel 只保留已登记文件/模块，新增文件即失败；
 3. 债务带 `reason/plan`，并能统计实际命中和偿还；
 4. 增加“新文件沿旧方向 import 必须失败”的回归测试。
 
@@ -211,7 +211,7 @@ CLI 把 `args.root` 传给 `reduce_debt(root)` / `approve_debt(..., root)`，但
 - 两个以上环必须全部输出；
 - `unzoned_file` / `unregistered_zone` 的 CLI 端到端负例；
 - 依赖矩阵与真实 import 结果对齐；
-- 新文件不能继承旧的 Engine → l2 债务；
+- 新文件不能继承旧的 Engine → kernel 债务；
 - GUI 的失败状态（导入违规、unzoned、line debt）而非只有 OK；
 - Guard 自身预算与规则文档状态一致性。
 
@@ -307,7 +307,7 @@ Resource 的 `base`、`size` 已声明在 [schema.py](../../src/ir_plane/decisio
 
 ### 6.5 Evidence 收集不等于 Evidence 验证
 
-资源 intent 结果已加入 [signoff_package.py](../../src/orchestration_plane/l2/evidence/signoff_package.py#L154-L172) 的 `case_view` 收集列表；而新的 Evidence audit 默认必需 section 只有 inputs/execution，见 [evidence_v2.py](../../src/engine_plane/audit/evidence_v2.py#L23-L34)。
+资源 intent 结果已加入 [signoff_package.py](../../src/orchestration_plane/kernel/evidence/signoff_package.py#L154-L172) 的 `case_view` 收集列表；而新的 Evidence audit 默认必需 section 只有 inputs/execution，见 [evidence_v2.py](../../src/engine_plane/audit/evidence_v2.py#L23-L34)。
 
 **结论**：存在文件时会被收集，但当前并没有形成“resource intent 声明 → 每场景执行结果 → 对应 checker 输出 → 三态签核”的强约束证据链。对有资源声明的 profile，应定义各自必需证据，不要让全局默认 completeness 掩盖资源场景缺证。
 
@@ -317,7 +317,7 @@ Resource 的 `base`、`size` 已声明在 [schema.py](../../src/ir_plane/decisio
 
 ### 已有强项
 
-[signoff_package.py](../../src/orchestration_plane/l2/evidence/signoff_package.py) 已有真实的文件 SHA-256、package hash、manifest hash 与 Tier-A replay 基础；这些内容比“只写一个 conclusion.json”更有工程价值，应保留并复用。
+[signoff_package.py](../../src/orchestration_plane/kernel/evidence/signoff_package.py) 已有真实的文件 SHA-256、package hash、manifest hash 与 Tier-A replay 基础；这些内容比“只写一个 conclusion.json”更有工程价值，应保留并复用。
 
 本次构造证据包还确认：
 
@@ -330,7 +330,7 @@ Resource 的 `base`、`size` 已声明在 [schema.py](../../src/ir_plane/decisio
 
 **本次反例**：三项分别填入 `not-a-hash / not-signed / not-a-hash`，函数仍返回 `PASS`、`trust.ok=True`；它并没有重算 package/manifest hash。
 
-而现有的 [verify_package()](../../src/orchestration_plane/l2/evidence/signoff_package.py#L785-L817) 已有真实 hash 校验，可复用。
+而现有的 [verify_package()](../../src/orchestration_plane/kernel/evidence/signoff_package.py#L785-L817) 已有真实 hash 校验，可复用。
 
 **结论**：新命令可做预筛，但不能单独把 `trust.ok=True` 解释为“证据包可信”。建议收敛到现有真实校验器，而不是维护第二套弱判据。三态字段展示与真实校验可以共享一个入口。
 

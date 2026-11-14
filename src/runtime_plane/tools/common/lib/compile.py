@@ -30,7 +30,7 @@ def run_compile_check(output_dir: Path, agents: list, env_name: str,
     # `.pyc`，签名是 `(env_output_dir, filelist, top_module, coverage)`）——
     # 于是这个函数每次都是 `TypeError`，编译检查从来没跑起来过。
     # `eda_backend.QuestaEdaBackend.compile` 是同一套调用，它传的就是对的。
-    from src.orchestration_plane.l2.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
+    from src.orchestration_plane.kernel.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
 
     runner = RegressionRunner(
         env_output_dir=str(output_dir),

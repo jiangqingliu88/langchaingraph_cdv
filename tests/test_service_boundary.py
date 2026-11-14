@@ -6,7 +6,7 @@
 
 允许直连的地方只有：
     · `src/app/services/**`（facade 本体）
-    · `src/orchestration_plane/l2/**`（引擎与 GUI 的线程边界 `run_service`）
+    · `src/orchestration_plane/kernel/**`（引擎与 GUI 的线程边界 `run_service`）
 测试目录不算产品代码；**注释里提到名字不算越界**（只扫 import）。
 """
 from __future__ import annotations
@@ -82,8 +82,8 @@ def test_gui_modules_do_not_bypass_the_service_layer():
 
 def test_verify_request_is_the_shared_preflight():
     """CLI 与 GUI 必须共用同一份 `VerifyRequest`（含 prepare/审批/增量窗口）。"""
-    from src.orchestration_plane.l2.run_service import RunRequest
-    from src.orchestration_plane.l2.verify_request import VerifyRequest
+    from src.orchestration_plane.kernel.run_service import RunRequest
+    from src.orchestration_plane.kernel.verify_request import VerifyRequest
 
     assert RunRequest is VerifyRequest
     for method in ("prepare", "approval_gate", "incremental_env", "resolved_spec",

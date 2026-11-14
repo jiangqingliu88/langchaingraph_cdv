@@ -14,12 +14,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.orchestration_plane.l2.regression_tools import backend_profiles
-from src.orchestration_plane.l2.regression_tools.regression_framework.core.config import (
+from src.orchestration_plane.kernel.regression_tools import backend_profiles
+from src.orchestration_plane.kernel.regression_tools.regression_framework.core.config import (
     ConfigBuilder)
-from src.orchestration_plane.l2.regression_tools.regression_framework.core.exceptions import (
+from src.orchestration_plane.kernel.regression_tools.regression_framework.core.exceptions import (
     ConfigError)
-from src.orchestration_plane.l2.regression_tools.regression_framework.generators.shell import (
+from src.orchestration_plane.kernel.regression_tools.regression_framework.generators.shell import (
     ShellGenerator)
 
 

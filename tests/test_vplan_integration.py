@@ -576,7 +576,7 @@ def test_clean_legacy_dirs_requires_sv(tmp_path):
 
 
 def test_mount_vplan_copies_the_project_into_the_run(tmp_path, monkeypatch):
-    from src.orchestration_plane.l2.verify_request import mount_vplan
+    from src.orchestration_plane.kernel.verify_request import mount_vplan
 
     # 人工审阅门：测试用显式跳过（真实流程必须先 `vplan review`）。
     monkeypatch.setenv("SIGNOFFAI_ALLOW_UNREVIEWED", "1")
@@ -596,7 +596,7 @@ def test_mount_vplan_rejects_a_case_model_file(tmp_path):
     """旧 case 模型 YAML 不再支持 —— 给错输入要响，而不是静默什么都不做。"""
     import pytest
 
-    from src.orchestration_plane.l2.verify_request import mount_vplan
+    from src.orchestration_plane.kernel.verify_request import mount_vplan
 
     cfg = tmp_path / "model.yaml"
     cfg.write_text("version: '1'\n", encoding="utf-8")

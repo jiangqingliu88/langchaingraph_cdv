@@ -218,7 +218,7 @@ def regression_compare(run_a, run_b, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         ma = builder.build(session_id=run_a.replace("run_", ""))
         mb = builder.build(session_id=run_b.replace("run_", ""))

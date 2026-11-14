@@ -1,12 +1,12 @@
 """Manifest & Evidence Package tests — SignOffAI 签核证据链核心测试
 
-import 路径已从已删除的 src.orchestration_plane.l2.manifest
-修正为当前实际位置 src.orchestration_plane.l2.evidence.manifest。
+import 路径已从已删除的 src.orchestration_plane.kernel.manifest
+修正为当前实际位置 src.orchestration_plane.kernel.evidence.manifest。
 """
 import zipfile
 from pathlib import Path
 
-from src.orchestration_plane.l2.evidence.manifest import (
+from src.orchestration_plane.kernel.evidence.manifest import (
     ManifestBuilder, EvidencePackager, RunManifest, PhaseArtifact,
     hash_file, hash_content, hash_json,
 )

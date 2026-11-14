@@ -4,8 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from src.orchestration_plane.l2.executors.base import BaseExecutor, ExecutorResult
-from src.orchestration_plane.l2.executors.registry import register_executor
+from src.orchestration_plane.kernel.executors.base import BaseExecutor, ExecutorResult
+from src.orchestration_plane.kernel.executors.registry import register_executor
 import structlog
 
 logger = structlog.get_logger()

@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 import structlog
 
-from src.orchestration_plane.l2.runtime import _rt
+from src.orchestration_plane.kernel.runtime import _rt
 
 logger = structlog.get_logger()
 

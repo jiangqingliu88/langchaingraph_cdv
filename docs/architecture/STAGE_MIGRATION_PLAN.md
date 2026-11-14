@@ -37,7 +37,7 @@
 - 不保留旧路径 shim：旧包会整目录删除，避免“两个名字指向同一实现”。
 - 包内相对导入（`from .main import X`）随包移动自然生效；跨包相对导入显式改绝对。
 - 注册点只有两处：
-  - `src/orchestration_plane/l2/execution_helpers.py` 的 `_EXECUTOR_PATHS` 点路径表；
+  - `src/orchestration_plane/kernel/execution_helpers.py` 的 `_EXECUTOR_PATHS` 点路径表；
   - `src/workbench/cli/commands.py` 的 `initialize()` 导入。
 - 迁移后同步 `config/architecture_guard.py` 分区、`config/complexity_baseline.json`
   与 `config/architecture_budget.yaml` 的路径键。

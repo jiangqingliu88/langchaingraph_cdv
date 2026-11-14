@@ -345,7 +345,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
 
         `{{ MODE_OPTS }}` 是**仿真业务的落点**（波形 / 覆盖率 / 调试…）：里面装的是
         本次启用的那几门业务的选项串，由回归框架的 `apply_modes()` 按 `modes:` 表
-        拼好（表见 `src/orchestration_plane/l2/regression_tools/common_base.yaml`，取值见 `sim_modes.py`）。
+        拼好（表见 `src/orchestration_plane/kernel/regression_tools/common_base.yaml`，取值见 `sim_modes.py`）。
         没启用任何业务时它是未定义的，所以必须 `| default("")` —— 渲染走的是
         `StrictUndefined`，裸 `{{ MODE_OPTS }}` 会在"什么都不开"的那次直接报错。
         """
@@ -372,7 +372,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
         #
         # `{{ PLUSARGS }}` 是**用户 plusargs 的唯一注入点**，位置在 `;` 之前 ——
         # 直接往整条命令尾巴追加会把参数放到判据链后面（那不是给 vsim 的）。
-        from src.orchestration_plane.l2.regression_tools.backend_profiles import render_sim_command
+        from src.orchestration_plane.kernel.regression_tools.backend_profiles import render_sim_command
 
         return render_sim_command("questa", top, uvm_test, extra_opts)
 
@@ -569,7 +569,7 @@ def _generate_regression_yaml(output_dir: Path, yaml_dir: Path,
     # "yaml 里声明给该 build 的 test"（见 InfrastructureManager.run_regression 的
     # `tests_by_build`），所以永远不会被排进去。这条不变量有测试钉着
     # （tests/test_sim_modes.py::test_common_base_builds_are_never_scheduled）。
-    from src.orchestration_plane.l2.regression_tools.sim_modes import (common_base_path,
+    from src.orchestration_plane.kernel.regression_tools.sim_modes import (common_base_path,
                                                      yaml_variables)
     _mode_vars = "\n".join(f"  {k}: '{v}'" for k, v in yaml_variables().items())
     _common_base = common_base_path().as_posix()

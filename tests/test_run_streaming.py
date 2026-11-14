@@ -13,12 +13,12 @@ import threading
 
 import pytest
 
-from src.orchestration_plane.l2 import execution as execution_mod
+from src.orchestration_plane.kernel import execution as execution_mod
 from src.orchestration_plane.supervisor import graph as graph_mod
-from src.orchestration_plane.l2.execution import PipelineExecutionService
-from src.orchestration_plane.l2.execution_helpers import _result_of
-from src.orchestration_plane.l2.run_journal import read_journal
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.execution import PipelineExecutionService
+from src.orchestration_plane.kernel.execution_helpers import _result_of
+from src.orchestration_plane.kernel.run_journal import read_journal
+from src.orchestration_plane.kernel.state import PipelineState
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -228,11 +228,11 @@ class TestApprovalWiring:
     """审批的两端要进日志 —— 签核时要能回答"谁批的、什么时候问的"。"""
 
     def test_request_and_decision_land_in_the_journal(self, tmp_path, monkeypatch):
-        from src.orchestration_plane.l2.execution_helpers import _wire_approval_events
-        from src.orchestration_plane.l2.governance.approval import (
+        from src.orchestration_plane.kernel.execution_helpers import _wire_approval_events
+        from src.orchestration_plane.kernel.governance.approval import (
             ApprovalDecision, ApprovalGate, ApprovalMode,
         )
-        from src.orchestration_plane.l2.run_journal import (
+        from src.orchestration_plane.kernel.run_journal import (
             RunJournal, read_journal,
         )
 
@@ -242,7 +242,7 @@ class TestApprovalWiring:
         gate = ApprovalGate(mode=ApprovalMode.INTERACTIVE)
         _wire_approval_events(gate, journal, emitted.append)
 
-        from src.orchestration_plane.l2.governance.approval import CallbackChannel
+        from src.orchestration_plane.kernel.governance.approval import CallbackChannel
         gate.channel = CallbackChannel(lambda req: ApprovalDecision.REJECT)
         gate.ask("REFACTOR_RTL", "时序改了", risk_level="high")
         journal.close()
@@ -258,11 +258,11 @@ class TestApprovalWiring:
         assert {e.kind for e in emitted} >= {"approval.requested", "approval.decided"}
 
     def test_an_existing_observer_is_chained_not_replaced(self, tmp_path):
-        from src.orchestration_plane.l2.execution_helpers import _wire_approval_events
-        from src.orchestration_plane.l2.governance.approval import (
+        from src.orchestration_plane.kernel.execution_helpers import _wire_approval_events
+        from src.orchestration_plane.kernel.governance.approval import (
             ApprovalGate, ApprovalMode,
         )
-        from src.orchestration_plane.l2.run_journal import RunJournal
+        from src.orchestration_plane.kernel.run_journal import RunJournal
 
         seen = []
         gate = ApprovalGate(mode=ApprovalMode.AUTO, on_decision=seen.append)

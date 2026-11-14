@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 
 from src.engine_plane.verify.dut_checker import _per_sb_rules
-from src.orchestration_plane.l2.regression_tools.backend_profiles import (
+from src.orchestration_plane.kernel.regression_tools.backend_profiles import (
     QUESTA_TEMPLATE,
 )
 

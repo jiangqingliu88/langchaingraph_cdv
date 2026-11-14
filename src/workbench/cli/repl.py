@@ -62,7 +62,7 @@ def run_once(prompt: str, *, workspace: Optional[str] = None,
         return router.exit_code(result, "verify")
     if json_output:
         try:
-            from src.orchestration_plane.l2.middleware.debug_logger import (
+            from src.orchestration_plane.kernel.middleware.debug_logger import (
                 ExecutionTracer,
             )
             ExecutionTracer().disable()      # 别让 [llm] 预览污染 stdout JSON

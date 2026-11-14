@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.runtime_plane.core.runtime.atomic import atomic_write_json
-from src.orchestration_plane.l2.flow_shared import _read_json, _resolve_run_dir
+from src.orchestration_plane.kernel.flow_shared import _read_json, _resolve_run_dir
 
 SCHEMA = "manual_signoff_v1"
 SEAL_SCHEMA = "seal_manifest_v1"

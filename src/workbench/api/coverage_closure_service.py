@@ -30,8 +30,8 @@ def _write_json(path: Path, obj: Any) -> None:
 def _execute_closure(project, run_dir: Path, target: float, spec, rtl,
                      config, output) -> Dict[str, Any]:
     from src.runtime_plane.infrastructure.output_config import make_output_root
-    from src.orchestration_plane.l2.execution import PipelineExecutionService
-    from src.orchestration_plane.l2.governance.approval import create_approval_gate
+    from src.orchestration_plane.kernel.execution import PipelineExecutionService
+    from src.orchestration_plane.kernel.governance.approval import create_approval_gate
 
     run_dir = Path(run_dir)
     rtl_dir = Path(rtl) if rtl else (run_dir / "rtl" if (run_dir / "rtl").is_dir() else None)

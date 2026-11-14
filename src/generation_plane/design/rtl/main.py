@@ -4,8 +4,8 @@ import json
 import re
 from pathlib import Path
 
-from src.orchestration_plane.l2.executors.base import BaseExecutor, ExecutorResult
-from src.orchestration_plane.l2.executors.registry import register_executor
+from src.orchestration_plane.kernel.executors.base import BaseExecutor, ExecutorResult
+from src.orchestration_plane.kernel.executors.registry import register_executor
 import structlog
 
 logger = structlog.get_logger()
@@ -50,7 +50,7 @@ class DesignExecutor(BaseExecutor):
         spec = spec_data
         if not isinstance(spec, dict) or not spec.get("design_name"):
             try:
-                from src.orchestration_plane.l2.communication.tool_hub import call_tool
+                from src.orchestration_plane.kernel.communication.tool_hub import call_tool
                 raw = call_tool("analyze_specification",
                                 {"spec_text": spec_text or str(spec_data)})
                 spec = json.loads(raw) if isinstance(raw, str) and raw.strip().startswith('{') else {}

@@ -24,7 +24,7 @@
 """
 from __future__ import annotations
 
-from src.orchestration_plane.l2.flow_shared import UVM_SCHEMA  # noqa: F401
+from src.orchestration_plane.kernel.flow_shared import UVM_SCHEMA  # noqa: F401
 from .coverage_api import run_coverage, run_fcov  # noqa: F401
 from .regression_api import compare_runs, run_regression_status  # noqa: F401
 from .run_api import (  # noqa: F401

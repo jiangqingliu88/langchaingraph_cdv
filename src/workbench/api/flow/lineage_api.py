@@ -178,7 +178,7 @@ def _run_dir_of(run_id: str) -> str:
     if p.is_dir():
         return str(p)
     try:
-        from src.orchestration_plane.l2.run_repository import RunRepository
+        from src.orchestration_plane.kernel.run_repository import RunRepository
 
         for d in RunRepository().run_dirs():
             if Path(d).name == run_id:

@@ -4,7 +4,7 @@
 界面（`src/workbench/modules/ide/manual_nodes/`）拿它显示问题。校验逻辑在工具层、
 界面是只读视图 —— 与 `trend_tools` 同一条纪律。
 
-**这份 YAML 目前不接闭环**：闭环图（`src/orchestration_plane/l2/graph.py`）的节点
+**这份 YAML 目前不接闭环**：闭环图（`src/orchestration_plane/supervisor/graph.py`）的节点
 是写死的，`build_closed_loop_graph()` 不读任何节点声明；设计文档
 `docs/design/gui_pipeline_architecture.md` §8 也明确「不在 GUI 里编辑流程拓扑」。
 所以这里的「人工节点」是**声明/规划**性质的：编辑它、校验它，等以后真有注入机制

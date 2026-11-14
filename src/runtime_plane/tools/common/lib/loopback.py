@@ -135,7 +135,7 @@ def run_agent_loopback(output_dir: Path, agent_name: str) -> dict:
     import structlog
     logger = structlog.get_logger()
 
-    from src.orchestration_plane.l2.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
+    from src.orchestration_plane.kernel.regression_tools.regression_framework.adapters.regression_runner import RegressionRunner
     from src.runtime_plane.tools.common.lib.regress_dir import get_compile_dir, get_sim_dir
     compile_dir = get_compile_dir(output_dir)
     sim_dir = get_sim_dir(output_dir)

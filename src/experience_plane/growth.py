@@ -149,7 +149,7 @@ class _GrowthExperienceProvider:
     三方**互不 import**：
       · `l3_decision.decision_engine` 定义 `ExperienceProvider`（它不该知道 L5）
       · 本模块实现那个形状（它当然可以知道自己的函数）
-      · `l2_orchestration.runtime` 在 `hydrate_runtime` 里把两者接起来
+      · `orchestration_plane.kernel.runtime` 在 `hydrate_runtime` 里把两者接起来
 
     在这之前，L3 是在 `_with_experience` 的函数体里延迟 import 本模块 ——
     那是**越级反向依赖**，只是被延迟 import 遮住了。

@@ -13,10 +13,10 @@ import time
 
 import structlog
 
-from src.orchestration_plane.l2.runtime import (
+from src.orchestration_plane.kernel.runtime import (
     hydrate_runtime, _rt, _git_head,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 logger = structlog.get_logger()
 
@@ -156,7 +156,7 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
                 json.dumps(chain, indent=2, ensure_ascii=False, default=str),
                 encoding="utf-8")
             # 回读磁盘复核：内存 verify() 等于「自己验自己」，尾部被裁发现不了
-            from src.orchestration_plane.l2.evidence.file_audit import FileAuditTrail
+            from src.orchestration_plane.kernel.evidence.file_audit import FileAuditTrail
             persisted = FileAuditTrail.verify_persisted(file_chain_path)
             if not persisted["valid"]:
                 logger.warning(f"文件变更链落盘后复核未通过: {persisted['issues']}")
@@ -169,7 +169,7 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
     # 此前没有任何东西产出它，那段打印因此永远显示 0/0 与 NO。
     evidence_path = ""
     try:
-        from src.orchestration_plane.l2.evidence.five_layer import FiveLayerEvidence
+        from src.orchestration_plane.kernel.evidence.five_layer import FiveLayerEvidence
         ev = FiveLayerEvidence(output_root).build(
             spec=state.spec, design_arch=state.design_arch, tests=state.tests,
             regression=state.regression, coverage=state.coverage,
@@ -299,7 +299,7 @@ async def n_finalize(state: PipelineState, config) -> Dict[str, Any]:
 # `_collect_llm_audit` 已随 execution.py 拆分搬到 `execution_helpers`；
 # 这里延迟引用避免循环 import（execution → lifecycle → execution）。
 def _collect_llm_audit() -> Any:
-    from src.orchestration_plane.l2.execution_helpers import _collect_llm_audit as _f
+    from src.orchestration_plane.kernel.execution_helpers import _collect_llm_audit as _f
     return _f()
 
 

@@ -5,8 +5,8 @@ import os
 import shutil
 from pathlib import Path
 
-from src.orchestration_plane.l2.executors.base import BaseExecutor, ExecutorResult
-from src.orchestration_plane.l2.executors.registry import register_executor
+from src.orchestration_plane.kernel.executors.base import BaseExecutor, ExecutorResult
+from src.orchestration_plane.kernel.executors.registry import register_executor
 from src.engine_plane.verify.steps_dag import StepRecorder
 from src.engine_plane.verify.ir_artifacts import (
     attach_tp_constraints, enrich_case_ir, testpoint_files,
@@ -124,7 +124,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
 
         # ── 策略包：按 design-style 加载设计风格验证知识，注入 spec 供测试生成 ──
         try:
-            from src.orchestration_plane.l2.governance.policy_pack import get_policy_pack_loader
+            from src.orchestration_plane.kernel.governance.policy_pack import get_policy_pack_loader
             pack = get_policy_pack_loader().load(design_style)
             if pack and isinstance(spec, dict):
                 spec["_policy_pack"] = {
@@ -171,7 +171,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
             # 经 `call_tool` 调（走 ToolHub 的 schema 校验 + 审计回执）。
             # 这两个工具的 output_dir 来自模块级 `_uvm_ctx`（不是参数），所以
             # 下面那句 set() 仍然必需 —— 它指向的是同一个 ctx 单例。
-            from src.orchestration_plane.l2.communication.tool_hub import call_tool
+            from src.orchestration_plane.kernel.communication.tool_hub import call_tool
             from src.generation_plane.uvm_tools.agent_tools import _uvm_ctx
             _uvm_ctx.set(output_dir=output_dir, agents=[], env_name=f"{module_name}_env")
             # 保存 spec 供 find_spec_yaml 读取（VPlan 顶层契约会改写协议边界）

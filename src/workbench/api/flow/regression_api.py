@@ -12,7 +12,7 @@ from src.runtime_plane.infrastructure.layout import (
     stage_roots as _layout_stage_roots,
     test_dirs as _layout_test_dirs,
 )
-from src.orchestration_plane.l2.flow_shared import (
+from src.orchestration_plane.kernel.flow_shared import (
     _COV_FIELDS, _artifacts_of, _payload_line, _read_json, _resolve_run_dir,
     _size_kb, _stages_of,
 )

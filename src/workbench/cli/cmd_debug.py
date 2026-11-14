@@ -16,7 +16,7 @@ import click
 from rich.panel import Panel  # noqa: F401
 from rich.table import Table  # noqa: F401
 
-from src.orchestration_plane.l2.execution import PipelineExecutionService
+from src.orchestration_plane.kernel.execution import PipelineExecutionService
 from src.workbench.cli.output import common_options, get_output_adapter  # noqa: F401
 from src.workbench.cli.commands import (  # noqa: F401
     cli, console, AGENT_ALIASES, VerificationCLI,

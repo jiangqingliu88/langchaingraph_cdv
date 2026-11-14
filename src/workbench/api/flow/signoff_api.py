@@ -8,7 +8,7 @@ from src.workbench.api.flow.evidence_summary import (
     recipe_summary as _recipe_summary,
     stimulus_summary as _stimulus_summary,
 )
-from src.orchestration_plane.l2.flow_shared import _num, _read_json, _read_jsonl, _resolve_run_dir
+from src.orchestration_plane.kernel.flow_shared import _num, _read_json, _read_jsonl, _resolve_run_dir
 
 GATE_TITLES = (
     ("rtl_present", "① RTL 存在"),

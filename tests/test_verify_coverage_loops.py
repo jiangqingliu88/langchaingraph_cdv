@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 from src.agent_plane.specialists.coverage.tools import build_coverage_tools
 from src.agent_plane.runtime.tool_loop import LoopResult
 

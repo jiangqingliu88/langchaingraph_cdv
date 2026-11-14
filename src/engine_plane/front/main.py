@@ -35,8 +35,8 @@ import os
 
 import structlog
 
-from src.orchestration_plane.l2.executors.base import ExecutorResult, BaseExecutor
-from src.orchestration_plane.l2.executors.registry import register_executor
+from src.orchestration_plane.kernel.executors.base import ExecutorResult, BaseExecutor
+from src.orchestration_plane.kernel.executors.registry import register_executor
 
 logger = structlog.get_logger()
 

@@ -99,7 +99,7 @@ def test_weights_from_policy_accepts_raw_or_loaded_policy():
 
 def test_policy_file_reward_weights_are_discovered(tmp_path):
     """`reward_weights` 落在模块策略文件里就能被读出来（不用改代码）。"""
-    from src.orchestration_plane.l2.evidence.signoff_package import load_policy
+    from src.orchestration_plane.kernel.evidence.signoff_package import load_policy
 
     run = tmp_path / "run_w"
     run.mkdir()

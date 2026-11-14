@@ -27,8 +27,8 @@ async def run_verify_async(*, spec_text: str = "", spec_file: str = "",
                            full_regression: bool = False,
                            incremental_from: str = "",
                            origin: str = "service") -> Dict[str, Any]:
-    from src.orchestration_plane.l2.execution import PipelineExecutionService
-    from src.orchestration_plane.l2.verify_request import VerifyRequest
+    from src.orchestration_plane.kernel.execution import PipelineExecutionService
+    from src.orchestration_plane.kernel.verify_request import VerifyRequest
 
     request = VerifyRequest(
         spec_text=spec_text, spec_file=spec_file, output_root=output_root,
@@ -70,8 +70,8 @@ async def run_multi_module_async(module_specs: List[dict],
                                  max_concurrency: int = 4,
                                  approval: str = "threshold") -> List[dict]:
     """多模块软件流水 —— 与单模块**同一个引擎**，只是并发调度。"""
-    from src.orchestration_plane.l2.execution import PipelineExecutionService
-    from src.orchestration_plane.l2.verify_request import VerifyRequest
+    from src.orchestration_plane.kernel.execution import PipelineExecutionService
+    from src.orchestration_plane.kernel.verify_request import VerifyRequest
 
     request = VerifyRequest(output_root=output_root, target=target,
                             max_rounds=int(max_rounds),

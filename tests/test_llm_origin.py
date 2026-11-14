@@ -23,7 +23,7 @@ import json
 
 import pytest
 
-from src.orchestration_plane.l2.context.llm_origin import (
+from src.orchestration_plane.kernel.context.llm_origin import (
     current, origin_scope,
 )
 
@@ -36,7 +36,7 @@ def _no_network(monkeypatch):
     而且在没有 key 的机器上结论会变。审计记的是"尝试过"，
     `status` 是不是 `ok` 与本组要验的东西无关。
     """
-    from src.orchestration_plane.l2.context.query_engine import LLMQueryEngine
+    from src.orchestration_plane.kernel.context.query_engine import LLMQueryEngine
 
     monkeypatch.setattr(
         LLMQueryEngine, "_invoke_with_fallback",
@@ -107,7 +107,7 @@ class TestTheAuditRecordCarriesTheOrigin:
         return run_dir / "docs" / "llm_audit.jsonl"
 
     def test_the_record_has_site_node_round_and_prompt_hash(self, tmp_path):
-        from src.orchestration_plane.l2.context.query_engine import LLMQueryEngine
+        from src.orchestration_plane.kernel.context.query_engine import LLMQueryEngine
 
         run = tmp_path / "output_x_20260101_000000"
         path = self._call(run)

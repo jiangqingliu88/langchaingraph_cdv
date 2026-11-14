@@ -123,6 +123,6 @@ Stage 是**工作流节点**，不是代码责任边界。一个 Stage 可以调
 
 ## 4. 本轮不动的边界
 
-- `src/runtime_plane/`（l1 基础设施、l2 调度、l3 case/evidence）暂不改名。
+- `src/runtime_plane/`（l1 基础设施、l3 case/evidence）暂不改名；原 l2 调度层已迁到 `src/orchestration_plane/kernel/`。
 - `src/runtime_plane/tools/`（UVM 模板、EDA 适配、common）暂不改名；`generation` 迁移已完成一轮。
 - `src/workspace/` 的 gate 流程保留，作为 `engine_plane/audit` 的上层包装。

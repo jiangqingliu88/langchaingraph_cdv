@@ -7,7 +7,7 @@ from src.orchestration_plane.markers import marker
 from src.agent_plane.runtime.pipeline_nodes.build import n_verify
 from src.orchestration_plane.nodes.pure.rounds import n_env_arch_check
 from src.agent_plane.specialists.verify.loop import n_verify_agent
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 
 def build_verify_subgraph():

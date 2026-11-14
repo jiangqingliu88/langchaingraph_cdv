@@ -277,7 +277,7 @@ def test_closed_loop_stops_at_the_manual_node():
     空烧 `max_rounds` 轮（5 轮 loopback 跑完，P0 一次都没跑过）。
     """
     from src.orchestration_plane.supervisor.routing import r_coverage
-    from src.orchestration_plane.l2.state import PipelineState
+    from src.orchestration_plane.kernel.state import PipelineState
 
     assert r_coverage(PipelineState(run_id="r", output_root="x",
                                     awaiting_approval=True)) == "awaiting_approval"

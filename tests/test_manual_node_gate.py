@@ -21,7 +21,7 @@ import asyncio
 
 import pytest
 
-from src.orchestration_plane.l2.governance.approval import (
+from src.orchestration_plane.kernel.governance.approval import (
     ApprovalDecision, ApprovalGate, ApprovalMode, CallbackChannel,
 )
 
@@ -51,7 +51,7 @@ class _RT:
 def _approval_node(gate, action_type="REFACTOR_RTL", manual_nodes=None,
                    output_root=""):
     from src.orchestration_plane.nodes.pure.approval import n_approval
-    from src.orchestration_plane.l2.state import PipelineState
+    from src.orchestration_plane.kernel.state import PipelineState
 
     rt = _RT(gate, manual_nodes)
     state = PipelineState(run_id="r", output_root=output_root)
@@ -229,7 +229,7 @@ class TestArtifactCollection:
 
     def test_it_reads_the_run_artifacts(self, tmp_path):
         from src.orchestration_plane.nodes.pure.approval import _approval_artifacts
-        from src.orchestration_plane.l2.state import PipelineState
+        from src.orchestration_plane.kernel.state import PipelineState
 
         run = tmp_path / "output_demo"
         (run / "inputs" / "yaml" / "uvm").mkdir(parents=True)
@@ -252,7 +252,7 @@ class TestArtifactCollection:
     def test_the_list_is_compact(self, tmp_path):
         """**裁剪过的**：带 sha256 / 逐条诊断会把检查点和日志撑肥。"""
         from src.orchestration_plane.nodes.pure.approval import _approval_artifacts
-        from src.orchestration_plane.l2.state import PipelineState
+        from src.orchestration_plane.kernel.state import PipelineState
 
         run = tmp_path / "output_demo"
         run.mkdir()
@@ -264,7 +264,7 @@ class TestArtifactCollection:
     def test_a_missing_run_dir_is_not_an_error(self, tmp_path):
         """取不到产物**照常审批** —— 产物是给人看的附加信息，不是审批的前提。"""
         from src.orchestration_plane.nodes.pure.approval import _approval_artifacts
-        from src.orchestration_plane.l2.state import PipelineState
+        from src.orchestration_plane.kernel.state import PipelineState
 
         assert _approval_artifacts(
             PipelineState(run_id="r", output_root=str(tmp_path / "nope"))) == []
@@ -289,7 +289,7 @@ class TestAutoApprovalBeatsTheInterruptMechanism:
     """
 
     def _state(self):
-        from src.orchestration_plane.l2.state import PipelineState
+        from src.orchestration_plane.kernel.state import PipelineState
 
         state = PipelineState(run_id="r", output_root="")
         state.pending_action = {"action_type": "FIX_FUNCTIONAL_bug", "reason": "改了 RTL"}
@@ -297,7 +297,7 @@ class TestAutoApprovalBeatsTheInterruptMechanism:
 
     def test_auto_mode_does_not_interrupt_even_with_checkpointing(self, monkeypatch):
         from src.orchestration_plane.nodes.pure.approval import n_approval
-        from src.orchestration_plane.l2.governance.approval import (
+        from src.orchestration_plane.kernel.governance.approval import (
             ApprovalMode, ApprovalGate, AutoChannel,
         )
 
@@ -315,7 +315,7 @@ class TestAutoApprovalBeatsTheInterruptMechanism:
     def test_threshold_mode_still_interrupts_a_high_risk_action(self, monkeypatch):
         """反过来：**该问的还得问** —— 修 auto 不等于把审批一起关掉。"""
         from src.orchestration_plane.nodes.pure.approval import n_approval
-        from src.orchestration_plane.l2.governance.approval import (
+        from src.orchestration_plane.kernel.governance.approval import (
             ApprovalMode, ApprovalGate, CallbackChannel,
         )
 

@@ -10,11 +10,11 @@ Phase 5: Verify — 重跑失败 case 验证修复
 from typing import Dict, List, Any
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from src.orchestration_plane.l2.executors.base import BaseExecutor, ExecutorResult
-from src.orchestration_plane.l2.executors.registry import register_executor
+from src.orchestration_plane.kernel.executors.base import BaseExecutor, ExecutorResult
+from src.orchestration_plane.kernel.executors.registry import register_executor
 # 工具统一入口：走 ToolHub 的 schema 校验 + 审计回执，
 # 而不是绕过 hub 直接 import 工具函数（见 call_tool 的 docstring）
-from src.orchestration_plane.l2.communication.tool_hub import call_tool
+from src.orchestration_plane.kernel.communication.tool_hub import call_tool
 from src.engine_plane.diagnostics.main import (
     DebugTools, _classify_error, _fingerprint, fingerprint_error,
 )
@@ -100,7 +100,7 @@ class DebugExecutor(BaseExecutor):
             payload = [{"role": _role.get(m.type, m.type),
                         "content": str(m.content)} for m in msgs]
 
-            from src.orchestration_plane.l2.context.query_engine import (
+            from src.orchestration_plane.kernel.context.query_engine import (
                 LLMQueryEngine,
             )
             # `site` 要自己给：这条**不经过 `lib.llm_call.call_llm`**（直连 engine），
@@ -372,7 +372,7 @@ class DebugExecutor(BaseExecutor):
 
         # ── Event Bus：发布 BUG_DETECTED（异步通知订阅者：KG / 决策 / 其它 Agent）──
         try:
-            from src.orchestration_plane.l2.communication.verification_events import publish_bug_detected
+            from src.orchestration_plane.kernel.communication.verification_events import publish_bug_detected
             for _fp, _err in list(unique.items())[:5]:
                 await publish_bug_detected(
                     signature=_fp,

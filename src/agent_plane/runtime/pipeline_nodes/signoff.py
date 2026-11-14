@@ -8,10 +8,10 @@ from typing import Any, Dict
 
 import structlog
 
-from src.orchestration_plane.l2.runtime import (
+from src.orchestration_plane.kernel.runtime import (
     _rt, _run_agent,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 logger = structlog.get_logger()
 
@@ -23,7 +23,7 @@ async def n_audit(state: PipelineState, config) -> Dict[str, Any]:
     # **最后完成的轮次**。正常路径 round_bump 已把 round_num 推到下一轮，
     # 这里必须记 `round_num - 1`，否则同一轮会被写成两条（轮次双计）。
     try:
-        from src.orchestration_plane.l2.evidence.round_facts import (
+        from src.orchestration_plane.kernel.evidence.round_facts import (
             record_round_facts)
 
         _round = state.round_num - 1 if state.round_num > 1 else state.round_num

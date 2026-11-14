@@ -7,10 +7,12 @@ agent_mode_service 复用。执行阶段必须显式选择 verify，绝不根据
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 from src.workbench.api import agent_mode_service
+from src.workbench.modes.agent_modes import AgentMode, get_mode
 
 
 class InteractionMode(str, Enum):
@@ -50,13 +52,19 @@ def _empty_result(mode: InteractionMode, session_id: str | None = None) -> dict[
     }
 
 
-def _agent_config(mode: InteractionMode) -> dict[str, Any]:
+def _agent_config(mode: InteractionMode, preset: AgentMode | None = None) -> dict[str, Any]:
+    """交互方式 + 领域角色 → Harness 配置。两种来源都真实生效。"""
+    config: dict[str, Any] = {"require_exec_approval": True}
+    if preset is not None and preset.role_prompt:
+        config["role_prompt"] = preset.role_prompt
     if mode == InteractionMode.PLAN:
-        return {"plan_first": True, "require_plan_approval": True, "require_exec_approval": True}
-    return {"require_exec_approval": True}
+        config.update({"plan_first": True, "require_plan_approval": True, "require_exec_approval": True})
+    return config
 
 
-def _decorate(result: dict[str, Any], mode: InteractionMode, frontend: str) -> dict[str, Any]:
+def _decorate(
+    result: dict[str, Any], mode: InteractionMode, frontend: str, preset: AgentMode | None = None
+) -> dict[str, Any]:
     if not isinstance(result, dict):
         raise TypeError("Agent 执行结果必须是 dict，不能把未知对象包装成成功结果")
     body = dict(result)
@@ -66,7 +74,13 @@ def _decorate(result: dict[str, Any], mode: InteractionMode, frontend: str) -> d
     )
     body.setdefault("status", body.get("verdict") or body.get("status") or "unknown")
     body.setdefault("summary", body.get("reason") or body.get("summary") or "")
-    body["interaction"] = {"mode": mode.value, "frontend": frontend}
+    body["interaction"] = {
+        "mode": mode.value,
+        "agent_mode": preset.id if preset is not None else "",
+        "specialist": preset.specialist if preset is not None else "",
+        "stages": list(preset.stages) if preset is not None else [],
+        "frontend": frontend,
+    }
     body["human_review_required"] = bool(
         body.get("pending") or body.get("status") in ("paused", "proposal") or mode == InteractionMode.PLAN
     )
@@ -77,18 +91,24 @@ def turn(
     prompt: str,
     *,
     mode: InteractionMode | str = InteractionMode.CHAT,
+    agent_mode: str | None = None,
     workspace: str | None = None,
     session_id: str | None = None,
     frontend: str = "cli",
     agent_caller: AgentCaller | None = None,
     verifier_caller: VerifyCaller | None = None,
 ) -> dict[str, Any]:
-    """处理一次交互；支持把实际 caller 注入用例，避免在测试中调用真实模型。"""
+    """处理一次交互；支持把实际 caller 注入用例，避免在测试中调用真实模型。
+
+    `agent_mode` 是领域角色（agentic_chat / mental_model / formal / uvm …），
+    与交互方式正交：GUI 选 9 种模式，后端仍只走 chat/plan/verify 三条真路径。
+    """
     selected = _mode(mode)
+    preset = get_mode(agent_mode) if agent_mode else None
     text = str(prompt or "").strip()
     if not text:
         result = _empty_result(selected, session_id)
-        result["interaction"]["frontend"] = frontend
+        result["interaction"].update({"frontend": frontend, "agent_mode": preset.id if preset else ""})
         return result
     if selected == InteractionMode.VERIFY:
         from src.workbench.modes import router
@@ -98,10 +118,10 @@ def turn(
         result = verifier_caller(text, mode="verify")
     else:
         caller = agent_caller or agent_mode_service.agent_turn
-        config = _agent_config(selected)
+        config = _agent_config(selected, preset)
         current_session = str(session_id) if session_id else None
         result = caller(text, workspace=workspace, config=config, session_id=current_session)
-    return _decorate(result, selected, frontend)
+    return _decorate(result, selected, frontend, preset)
 
 
 def resume(

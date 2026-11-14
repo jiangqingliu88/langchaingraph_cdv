@@ -10,6 +10,17 @@ from typing import Optional
 
 from config.paths import DATABASE_DIR, sqlite_url
 
+#: 仓库根 —— `.env` 以此为锚，不跟进程 cwd 走。
+#:
+#: pydantic-settings 对相对 `env_file` 是**按 cwd 解析**的：GUI 从 IDE、
+#: 桌面快捷方式或别的目录启动时，`.env` 找不到 → `LLM_API_KEY` 读成空串，
+#: 于是"文件里明明配了"和"界面显示没配"同时成立（实测 cwd=C:\Users\jiang
+#: 时 `Settings.get_instance().llm.api_key` 为空）。`run_gui.bat` 里有
+#: `cd /d %~dp0` 所以双击没问题，但 IDE 运行配置、`python -m src.workbench`
+#: 从别处启动都会踩到。
+REPO_ROOT = Path(__file__).resolve().parents[1]
+_ENV_FILE = REPO_ROOT / ".env"
+
 
 class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DB_", extra="allow")
@@ -36,7 +47,8 @@ class DatabaseSettings(BaseSettings):
 
 
 class LLMSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="LLM_", env_file=".env", env_file_encoding="utf-8", extra="allow")
+    model_config = SettingsConfigDict(env_prefix="LLM_", env_file=str(_ENV_FILE),
+                                      env_file_encoding="utf-8", extra="allow")
     provider: str = "deepseek"
     model: str = "deepseek-flash"
     temperature: float = 0.0
@@ -116,7 +128,7 @@ class PlatformSettings(BaseSettings):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="allow",
+        env_file=str(_ENV_FILE), env_file_encoding="utf-8", extra="allow",
         env_nested_delimiter="__",
     )
     database: DatabaseSettings = DatabaseSettings()
@@ -212,9 +224,13 @@ def get_settings() -> Settings:
     global _instance
     if _instance is None:
         env = os.environ.get("PLATFORM_ENV", "production")
-        # 自动加载对应环境的 .env 文件
-        env_file = ".env" if env == "production" else f".env.{env}"
-        _instance = Settings(_env_file=env_file if os.path.exists(env_file) else ".env")
+        # 自动加载对应环境的 .env 文件。**先认 cwd（兼容在别的工程目录里覆盖），
+        # 再回落到仓库根** —— 只按 cwd 找的话，GUI 从 IDE/快捷方式启动就
+        # 读不到密钥（见 `_ENV_FILE` 注释）。
+        name = ".env" if env == "production" else f".env.{env}"
+        candidates = [Path(name), REPO_ROOT / name, _ENV_FILE]
+        env_file = next((p for p in candidates if p.is_file()), _ENV_FILE)
+        _instance = Settings(_env_file=str(env_file))
 
         # 生产环境安全提醒（写 stderr，避免污染 stdout 的 --json 输出）
         if _instance.is_production:

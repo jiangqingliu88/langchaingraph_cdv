@@ -11,10 +11,10 @@ import asyncio
 
 import structlog
 
-from src.orchestration_plane.l2.runtime import (
+from src.orchestration_plane.kernel.runtime import (
     recursion_limit,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 logger = structlog.get_logger()
 
@@ -76,7 +76,7 @@ async def n_round_bump(state: PipelineState, config) -> Dict[str, Any]:
     run manifest，只回答“第几轮、哪条用例、哪个后端、哪份 plan、播放日志哈希”。
     """
     try:
-        from src.orchestration_plane.l2.evidence.round_facts import (
+        from src.orchestration_plane.kernel.evidence.round_facts import (
             record_round_facts)
 
         record_round_facts(state.output_root, state.round_num)

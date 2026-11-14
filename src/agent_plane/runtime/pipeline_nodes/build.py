@@ -12,10 +12,10 @@ import os
 
 import structlog
 
-from src.orchestration_plane.l2.runtime import (
+from src.orchestration_plane.kernel.runtime import (
     _rt, _run_agent,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 logger = structlog.get_logger()
 

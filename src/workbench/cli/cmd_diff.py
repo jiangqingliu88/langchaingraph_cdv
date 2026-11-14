@@ -37,7 +37,7 @@ def diff_coverage(run_a, run_b, fmt):
     """
     out = get_output_adapter(fmt == "json")
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         ma = builder.build(session_id=run_a.replace("run_", ""))
         mb = builder.build(session_id=run_b.replace("run_", ""))
@@ -122,7 +122,7 @@ def diff_regression(run_a, run_b, fmt):
     """
     out = get_output_adapter(fmt == "json")
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         ma = builder.build(session_id=run_a.replace("run_", ""))
         mb = builder.build(session_id=run_b.replace("run_", ""))
@@ -164,7 +164,7 @@ def diff_audit(run_a, run_b, fmt):
     """
     out = get_output_adapter(fmt == "json")
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder, EvidencePackager
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder, EvidencePackager
         builder = ManifestBuilder()
         ma = builder.build(session_id=run_a.replace("run_", ""))
         mb = builder.build(session_id=run_b.replace("run_", ""))

@@ -6,8 +6,8 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from src.orchestration_plane.l2.executors.base import BaseExecutor, ExecutorResult
-from src.orchestration_plane.l2.executors.registry import register_executor
+from src.orchestration_plane.kernel.executors.base import BaseExecutor, ExecutorResult
+from src.orchestration_plane.kernel.executors.registry import register_executor
 import structlog
 
 logger = structlog.get_logger()
@@ -100,7 +100,7 @@ class AuditExecutor(BaseExecutor):
         total = regression.get("total", 0)
         # **按口径取**（与闭环同一个来源）—— 门槛挂在哪个数上，必须与闭环盯的那个
         # 数一致；否则会出现"闭环在追功能覆盖率、审计在判代码覆盖率"这种错位。
-        from src.orchestration_plane.l2.planning import pick_coverage_value
+        from src.orchestration_plane.kernel.planning import pick_coverage_value
         _pick = pick_coverage_value(coverage)
         overall = _pick["value"]
 
@@ -308,7 +308,7 @@ class AuditExecutor(BaseExecutor):
         # （一个实验性模块不该因为"没有 verified 参考模型"就永远不能签）。
         # 策略文件默认保守：不要求参考模型、要求基线、不接受任何 caveat。
         module = _module_name(output_dir, ctx)
-        from src.orchestration_plane.l2.evidence.signoff_package import (
+        from src.orchestration_plane.kernel.evidence.signoff_package import (
             collect_versions, load_policy, write_policy_snapshot)
         policy, _policy_src = load_policy(output_dir, module, Path.cwd(),
                                           strict=True)
@@ -367,7 +367,7 @@ class AuditExecutor(BaseExecutor):
         hard_ok = _apply_coverage_delta(output_dir, hard_ok, _caveat)
         hard_ok = _apply_quality_gate_block(architecture_v2, hard_ok, _caveat)
 
-        from src.orchestration_plane.l2.evidence.verdict import (
+        from src.orchestration_plane.kernel.evidence.verdict import (
             accepted_codes_from_policy, decide_verdict, effective_caveats as _effective,
             signoff_status as _status)
 
@@ -476,7 +476,7 @@ class AuditExecutor(BaseExecutor):
         package_info: Dict[str, Any] = {}
         if evidence:
             try:
-                from src.orchestration_plane.l2.evidence.signoff_package import (
+                from src.orchestration_plane.kernel.evidence.signoff_package import (
                     write_package)
                 artifacts: Dict[str, Any] = {}
                 for name, entry in ((_read_json_file(

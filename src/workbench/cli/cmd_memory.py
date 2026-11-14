@@ -159,7 +159,7 @@ def govern_status(json_output):
     """查看驾驭状态：熔断器 + 预算 + 干预指令"""
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.governance.governor import Governor
+        from src.orchestration_plane.kernel.governance.governor import Governor
         gov = Governor("output")
         status = gov.status()
         if json_output:
@@ -185,7 +185,7 @@ def govern_status(json_output):
 def govern_override(action_type):
     """人工接管决策：强制指定下一步动作（如 RELAX_CONSTRAINT / EXPAND_SEEDS）"""
     try:
-        from src.orchestration_plane.l2.governance.governor import Intervention
+        from src.orchestration_plane.kernel.governance.governor import Intervention
         Intervention("output").write({"cmd": "override_action", "action_type": action_type})
         console.print(f"[green]已写入干预指令：override → {action_type}[/green]")
         console.print("[dim]下次闭环决策时会用此动作覆盖，执行后自动清除。[/dim]")
@@ -198,7 +198,7 @@ def govern_override(action_type):
 def govern_reset(action_type):
     """人工复位某动作的熔断状态"""
     try:
-        from src.orchestration_plane.l2.governance.governor import CircuitBreaker
+        from src.orchestration_plane.kernel.governance.governor import CircuitBreaker
         # 熔断状态是内存态，复位需通过 Governor（新建实例会丢失状态）。
         # 这里用"清除干预 + 提示"：熔断是运行时内存态，重启即复位。
         console.print(f"[yellow]熔断是运行时内存态，重启 run 即复位。[/yellow]")

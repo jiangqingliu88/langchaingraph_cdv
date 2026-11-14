@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from src.orchestration_plane.l2.governance.policy_pack import PolicyPack, get_policy_pack_loader
+from src.orchestration_plane.kernel.governance.policy_pack import PolicyPack, get_policy_pack_loader
 
 
 class TestHintItems:

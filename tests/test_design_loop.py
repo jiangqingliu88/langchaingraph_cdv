@@ -5,7 +5,7 @@ import asyncio
 import json
 
 from src.orchestration_plane.supervisor.routing import r_after_design
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 from src.agent_plane.specialists.design.tools import build_design_tools
 from src.agent_plane.runtime.tool_loop import LoopResult
 

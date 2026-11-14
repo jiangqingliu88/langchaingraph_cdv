@@ -456,7 +456,7 @@ modules:
   # 验证流程 —— 把闭环搬上界面。
   #
   # 注意清单里**没有流程的拓扑**：有哪些阶段、谁是谁的前驱属于领域
-  # （src/orchestration_plane/l2/graph.py + stages.py）。清单只描述**视图**：
+  # （src/orchestration_plane/supervisor/graph.py + stages.py）。清单只描述**视图**：
   # 停在哪、轮询多快、有哪些预设。把阶段写进 YAML 会让流程有第二份真相。
   - id: flow.pipeline
     title: 验证流程

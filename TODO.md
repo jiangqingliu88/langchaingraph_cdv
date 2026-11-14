@@ -29,3 +29,8 @@
 
 - `isa_ir_tools` / TB player 的集成与测试（独立工具，见其目录 readme）。
 - 需要 QuestaSim 的 EDA 端到端验证（在装有 EDA 的机器上执行）。
+ ◼ 搭 standalone 专家公共骨架
+  ◻ 新增 formal 专家 + Formal IR
+  ◻ 新增 unit_test 专家（纯 SV TB + 编译/运行）
+  ◻ 模式→专家 1:1 + GUI 动作按钮泛化 + AgentCard
+  ◻ 文档与架构说明

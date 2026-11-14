@@ -47,13 +47,13 @@ import structlog  # noqa: E402
 structlog.configure(logger_factory=structlog.WriteLoggerFactory(sys.stderr))
 
 from src.workbench.cli.output import OutputAdapter, common_options, get_output_adapter
-from src.orchestration_plane.l2.execution import PipelineExecutionService
-from src.orchestration_plane.l2.governance.approval import (
+from src.orchestration_plane.kernel.execution import PipelineExecutionService
+from src.orchestration_plane.kernel.governance.approval import (
     ApprovalDecision,
     PipelineTerminatedError,
     create_approval_gate,
 )
-from src.orchestration_plane.l2.executors.registry import ExecutorRegistry
+from src.orchestration_plane.kernel.executors.registry import ExecutorRegistry
 
 console = Console()
 
@@ -225,7 +225,7 @@ def _repo(output_base: str = "output"):
     **`vagent verify -o /别处/xx` 跑出来的运行不在这个命名空间里** —— 那时要用
     `--output-base` 指过去，否则命令只会说"找不到 run"（而它确实找不到）。
     """
-    from src.orchestration_plane.l2.run_repository import RunRepository
+    from src.orchestration_plane.kernel.run_repository import RunRepository
     return RunRepository(output_base)
 
 
@@ -724,9 +724,11 @@ from . import (  # noqa: E402,F401
     cmd_debug,
     cmd_diff,
     cmd_evidence,
+    cmd_formal,
     cmd_humanview,
     cmd_infra,
     cmd_memory,
+    cmd_mental,
     cmd_metrics,
     cmd_project,
     cmd_regression,
@@ -738,6 +740,7 @@ from . import (  # noqa: E402,F401
     cmd_signoff,
     cmd_soc, cmd_interface_timing, cmd_specification, cmd_specs,
     cmd_tools,
+    cmd_unit_test,
     cmd_verify,
     cmd_vplan,
     cmd_work,
@@ -757,7 +760,7 @@ def _tool_registry_or_die() -> None:
     汇总（stdout 留给 `--json` 业务输出）。
     """
     try:
-        from src.orchestration_plane.l2.communication.tool_hub import ToolHub, ToolRegistryError
+        from src.orchestration_plane.kernel.communication.tool_hub import ToolHub, ToolRegistryError
     except Exception:                                  # noqa: BLE001
         return          # 拿不到注册表就别拦人 —— 这是护栏，不是功能
     try:

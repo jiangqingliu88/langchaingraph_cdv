@@ -51,7 +51,7 @@ def evidence_group():
 @click.option("--json", "json_output", is_flag=True, help="输出机器可读 JSON")
 def evidence_verify(package, json_output):
     """逐文件 sha256 + package_hash 校验"""
-    from src.orchestration_plane.l2.evidence.signoff_package import verify_package
+    from src.orchestration_plane.kernel.evidence.signoff_package import verify_package
 
     result = verify_package(package)
     if json_output:
@@ -71,7 +71,7 @@ def evidence_verify(package, json_output):
 @click.option("--json", "json_output", is_flag=True, help="输出机器可读 JSON")
 def evidence_replay(package, json_output):
     """Tier A 离线回放：不跑 EDA，重算三态判定"""
-    from src.orchestration_plane.l2.evidence.signoff_package import replay_tier_a
+    from src.orchestration_plane.kernel.evidence.signoff_package import replay_tier_a
 
     result = replay_tier_a(package)
     if json_output:
@@ -94,7 +94,7 @@ def evidence_replay(package, json_output):
 @click.option("--json", "json_output", is_flag=True, help="输出机器可读 JSON")
 def evidence_compare(package_a, package_b, json_output):
     """双环境判定一致性（同一份证据在两种环境各判一次）"""
-    from src.orchestration_plane.l2.evidence.signoff_package import compare_packages
+    from src.orchestration_plane.kernel.evidence.signoff_package import compare_packages
 
     result = compare_packages(package_a, package_b)
     if json_output:
@@ -125,7 +125,7 @@ def evidence_record(file_path, reason, author, run_id, repo_root, json_output):
       vagent evidence record config/ide/manual_nodes.yaml -m "超时 600 → 900"
     """
     out = get_output_adapter(json_output)
-    from src.orchestration_plane.l2.evidence.human_edit import record_human_edit
+    from src.orchestration_plane.kernel.evidence.human_edit import record_human_edit
 
     info = record_human_edit(file_path, reason, author=author, run_id=run_id,
                              repo_root=repo_root)
@@ -158,7 +158,7 @@ def evidence_log(limit, repo_root, json_output):
       vagent evidence log -n 5
     """
     out = get_output_adapter(json_output)
-    from src.orchestration_plane.l2.evidence.human_edit import read_human_edits
+    from src.orchestration_plane.kernel.evidence.human_edit import read_human_edits
 
     chain = read_human_edits(repo_root)
     if not chain["exists"]:
@@ -193,7 +193,7 @@ def evidence_check(repo_root, json_output):
     有未记账的改动时退出码为 1，可以直接拿去卡 CI。
     """
     out = get_output_adapter(json_output)
-    from src.orchestration_plane.l2.evidence.human_edit import reconcile
+    from src.orchestration_plane.kernel.evidence.human_edit import reconcile
 
     report = reconcile(repo_root)
     if json_output:

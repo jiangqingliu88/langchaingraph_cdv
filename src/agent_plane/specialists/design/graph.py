@@ -7,7 +7,7 @@ from src.agent_plane.specialists.design.loop import n_design_agent
 from src.orchestration_plane.markers import marker
 from src.agent_plane.runtime.pipeline_nodes.build import n_design, n_front, n_model
 from src.orchestration_plane.supervisor.routing import r_after_design
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 
 def build_design_subgraph():

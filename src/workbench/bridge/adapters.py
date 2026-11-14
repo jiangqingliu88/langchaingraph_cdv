@@ -55,7 +55,7 @@ def stage_flow() -> dict:
     建树"的。**别在界面侧再抄一份阶段清单**：抄了就是第二份真相，改了图没改界面
     就没人发现。
     """
-    from src.orchestration_plane.l2 import stages
+    from src.orchestration_plane.kernel import stages
 
     groups = [{"id": gid, "title": gtitle,
                "nodes": [{"id": s.id, "title": s.title, "executor": s.executor,

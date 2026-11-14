@@ -30,32 +30,9 @@ from .context import AppContext
 from .manifest import ManifestError, builtin_manifest, describe, load_manifest
 from .registry import ModuleManager
 from .settings_store import SettingsStore
-from .topics import (
-    TOPIC_TASK_COMPLETED, TOPIC_TASK_STARTED, TaskCompleted, TaskStarted,
-)
 from .ui import theme
 from .ui.widgets.banner import Banner
 from .ui.widgets.console import ConsolePanel
-
-
-def _publish_task_started(ctx: AppContext, task_id: str, label: str) -> None:
-    """任务开始 → `task.started`（带上模块归属与所属 run）。"""
-    rec = ctx.tasks.record(task_id)
-    ctx.bus.publish(TOPIC_TASK_STARTED, TaskStarted(
-        task_id=task_id,
-        module_id=rec.module_id if rec else "",
-        operation=rec.operation if rec else label,
-        run_id=rec.run_id if rec else "").to_payload())
-
-
-def _publish_task_done(ctx: AppContext, task_id: str) -> None:
-    """任务结束（成功或失败）→ `task.completed`。"""
-    rec = ctx.tasks.record(task_id)
-    ctx.bus.publish(TOPIC_TASK_COMPLETED, TaskCompleted(
-        task_id=task_id,
-        status=rec.status if rec else "",
-        run_id=rec.run_id if rec else "",
-        error=rec.error if rec else "").to_payload())
 
 
 def build_parser() -> argparse.ArgumentParser:

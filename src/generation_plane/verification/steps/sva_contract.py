@@ -47,7 +47,7 @@ def sva_contract_refs(project, decls: Dict[str, Any],
 def attach_sva_assertions(output_dir: Path, module_name: str,
                           files: List[str]) -> None:
     """生成 SVA 到 `<run>/assertions/` 并追加到 `files`。"""
-    from src.orchestration_plane.l2.communication.tool_hub import call_tool
+    from src.orchestration_plane.kernel.communication.tool_hub import call_tool
     from src.ir_plane.vplan import engine
 
     from .helpers import _load_runtime_model_doc, _spec_of

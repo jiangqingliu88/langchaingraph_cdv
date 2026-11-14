@@ -62,9 +62,9 @@ orchestration(engine) → generation  # 只允许调度 Stage 执行器
 
 | 位置 | 依赖 |
 |---|---|
-| `src/orchestration_plane/l2/execution_helpers.py` | `_EXECUTOR_PATHS` 点路径 → 8 个 Stage 执行器 |
+| `src/orchestration_plane/kernel/execution_helpers.py` | `_EXECUTOR_PATHS` 点路径 → 8 个 Stage 执行器 |
 | `src/workbench/cli/commands.py` | `initialize()` 实例化 7 个执行器 |
-| `src/orchestration_plane/l2/execution_loop.py` | `engine.orchestration.supervisor.graph.build_closed_loop_graph` |
+| `src/orchestration_plane/kernel/execution_loop.py` | `engine.orchestration.supervisor.graph.build_closed_loop_graph` |
 | `src/orchestration_plane/registry.py` | `KNOWN_STAGES` 静态能力集合（不再扫描目录） |
 | `src/workbench` | supervisor graph（只读运行历史） |
 

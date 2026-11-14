@@ -11,10 +11,10 @@ import json
 
 import structlog
 
-from src.orchestration_plane.l2.runtime import (
+from src.orchestration_plane.kernel.runtime import (
     _rt, _run_agent,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 logger = structlog.get_logger()
 
@@ -67,7 +67,7 @@ async def n_refactor_rtl(state: PipelineState, config) -> Dict[str, Any]:
         # 而它属于本层。`GuardianAgent` 在 L1，不能反向 import 这里 ——
         # 所以由我们提供（见它 `__init__` 的 docstring）。不传的话守卫会
         # 因为"验证不了"而拒绝放行（那比默默跳过守卫安全）。
-        from src.orchestration_plane.l2.communication.tool_subprocess import (
+        from src.orchestration_plane.kernel.communication.tool_subprocess import (
             run_tool_in_subprocess,
         )
         guardian = GuardianAgent(Path(state.output_root),

@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.orchestration_plane.l2.flow_shared import (
+from src.orchestration_plane.kernel.flow_shared import (
     UVM_SCHEMA, _COV_FIELDS, _artifact, _line_of, _num, _read_json, _rel_to,
     _resolve_run_dir, _schema_issues, _short, _size_kb, _spec_of_run,
 )

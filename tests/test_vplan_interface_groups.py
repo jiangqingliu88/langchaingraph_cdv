@@ -186,7 +186,7 @@ def test_setup_does_not_create_legacy_dirs_even_in_legacy_mode(tmp_path, monkeyp
 
 def test_case_ids_from_batch_theme_tags():
     """VPlan 批次 test 的 CASE 身份在 `TH-TC_*` tag 里（不是 testpoints 反查）。"""
-    from src.orchestration_plane.l2.regression_tools.regression_framework.generators.shell import _case_ids_for
+    from src.orchestration_plane.kernel.regression_tools.regression_framework.generators.shell import _case_ids_for
 
     test = {"tags": ["p0", "batch", "TH-TC_CMD_INT_PERF_001"]}
     assert _case_ids_for(test, "npu_sched_env_directed_test", {}) == [

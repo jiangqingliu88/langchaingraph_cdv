@@ -11,7 +11,7 @@ import threading
 
 import pytest
 
-from src.orchestration_plane.l2.governance.approval import (
+from src.orchestration_plane.kernel.governance.approval import (
     ApprovalDecision, ApprovalGate, ApprovalMode, ApprovalRequest,
     AutoChannel, CallbackChannel, ConsoleChannel, EventChannel,
     create_approval_gate,
@@ -278,7 +278,7 @@ def _approval_node(gate, action_type="REFACTOR_RTL"):
     正好也是这些用例要的语义（REFACTOR_RTL 本来就在兜底名单里）。
     """
     from src.orchestration_plane.nodes.pure.approval import n_approval
-    from src.orchestration_plane.l2.state import PipelineState
+    from src.orchestration_plane.kernel.state import PipelineState
 
     class _RT:
         approval_gate = gate

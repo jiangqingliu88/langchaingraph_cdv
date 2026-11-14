@@ -10,7 +10,7 @@ from src.runtime_plane.core.provenance.graph import write_provenance
 from src.runtime_plane.core.provenance.report import write_attribution_report
 from src.runtime_plane.core.runtime.events import EventStore
 from src.runtime_plane.core.verification.quality import write as write_quality
-from src.orchestration_plane.l2.evidence.signoff_package import (
+from src.orchestration_plane.kernel.evidence.signoff_package import (
     verify_package, write_package,
 )
 

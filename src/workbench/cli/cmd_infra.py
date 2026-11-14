@@ -209,7 +209,7 @@ def hub_status(json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.communication.tool_hub import ToolHub
+        from src.orchestration_plane.kernel.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -247,7 +247,7 @@ def hub_list(agent, tag, category, risk, search, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.communication.tool_hub import ToolHub
+        from src.orchestration_plane.kernel.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -261,7 +261,7 @@ def hub_list(agent, tag, category, risk, search, json_output):
         elif category:
             manifests = hub.list_by_category(category)
         elif risk:
-            from src.orchestration_plane.l2.communication.tool_protocol import ToolRisk
+            from src.orchestration_plane.kernel.communication.tool_protocol import ToolRisk
             manifests = hub.list_by_risk(ToolRisk(risk))
         else:
             manifests = hub.list_all()
@@ -290,7 +290,7 @@ def hub_health(json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.communication.tool_hub import ToolHub
+        from src.orchestration_plane.kernel.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -310,7 +310,7 @@ def hub_bootstrap():
       vagent hub bootstrap
     """
     try:
-        from src.orchestration_plane.l2.communication.tool_hub import ToolHub
+        from src.orchestration_plane.kernel.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         # Reset
         hub._initialized = False
@@ -341,7 +341,7 @@ def plugin_list(json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.plugin_manager import PluginManager
+        from src.orchestration_plane.kernel.plugin_manager import PluginManager
         mgr = PluginManager()
         discovered = mgr.discover()
 
@@ -374,7 +374,7 @@ def plugin_discover(plugin_dir, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.plugin_manager import PluginManager
+        from src.orchestration_plane.kernel.plugin_manager import PluginManager
         mgr = PluginManager()
         if plugin_dir:
             mgr.add_plugin_dir(plugin_dir)
@@ -405,7 +405,7 @@ def plugin_install(name, version, upgrade):
       vagent plugin install vcs_compile --version 2.0.0
     """
     try:
-        from src.orchestration_plane.l2.tool_marketplace import ToolMarketplace
+        from src.orchestration_plane.kernel.tool_marketplace import ToolMarketplace
         market = ToolMarketplace()
         success, msg = asyncio.run(market.install(name, version, upgrade))
         if success:
@@ -426,7 +426,7 @@ def plugin_uninstall(name):
       vagent plugin uninstall vcs_compile
     """
     try:
-        from src.orchestration_plane.l2.tool_marketplace import ToolMarketplace
+        from src.orchestration_plane.kernel.tool_marketplace import ToolMarketplace
         market = ToolMarketplace()
         success, msg = market.uninstall(name)
         if success:
@@ -452,7 +452,7 @@ def plugin_search(query, category, tag, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.tool_marketplace import ToolMarketplace
+        from src.orchestration_plane.kernel.tool_marketplace import ToolMarketplace
         market = ToolMarketplace()
         tags = [tag] if tag else None
         results = market.search(query, category=category, tags=tags)
@@ -492,7 +492,7 @@ def pipeline_list(json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
+        from src.orchestration_plane.kernel.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
         orch = ToolOrchestrator()
 
         # 注册内置流水线
@@ -523,8 +523,8 @@ def pipeline_run(pipeline_name, json_output, dry_run):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
-        from src.orchestration_plane.l2.communication.tool_hub import ToolHub
+        from src.orchestration_plane.kernel.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
+        from src.orchestration_plane.kernel.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -584,7 +584,7 @@ def pipeline_graph(pipeline_name, fmt):
       vagent pipeline graph uvm_quality_check --format dot
     """
     try:
-        from src.orchestration_plane.l2.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
+        from src.orchestration_plane.kernel.tool_orchestrator import ToolOrchestrator, BUILTIN_PIPELINES
         orch = ToolOrchestrator()
         for name, pdef in BUILTIN_PIPELINES.items():
             orch.register_pipeline(pdef)
@@ -616,8 +616,8 @@ def docs_generate(output, tool):
       vagent docs generate -o docs/reference   # 指定输出目录
     """
     try:
-        from src.orchestration_plane.l2.tool_doc_generator import ToolDocGenerator
-        from src.orchestration_plane.l2.communication.tool_hub import ToolHub
+        from src.orchestration_plane.kernel.tool_doc_generator import ToolDocGenerator
+        from src.orchestration_plane.kernel.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()
@@ -653,8 +653,8 @@ def docs_preview(tool_name):
       vagent docs preview check_compile
     """
     try:
-        from src.orchestration_plane.l2.tool_doc_generator import ToolDocGenerator
-        from src.orchestration_plane.l2.communication.tool_hub import ToolHub
+        from src.orchestration_plane.kernel.tool_doc_generator import ToolDocGenerator
+        from src.orchestration_plane.kernel.communication.tool_hub import ToolHub
         hub = ToolHub.get_instance()
         if not hub._initialized:
             hub.bootstrap()

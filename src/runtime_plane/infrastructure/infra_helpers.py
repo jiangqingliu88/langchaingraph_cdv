@@ -48,7 +48,7 @@ def _strip_test_prefix_local(name):
     `test_dir.replace('test_','')` 会把 `npu_type_test_run_1_seed_2001` 里的
     中间那个 `test_` 也吃掉，于是它永远匹配不上配置里的 `npu_type_test_run_1`。
     """
-    from src.orchestration_plane.l2.regression_tools.regression_framework.core.config import (
+    from src.orchestration_plane.kernel.regression_tools.regression_framework.core.config import (
         strip_test_prefix)
     return strip_test_prefix(name)
 
@@ -254,7 +254,7 @@ def declared_tests_by_build(config: dict) -> Dict[str, set]:
             continue
         build = str(test.get("build", "")).replace("build_", "")
         # 只削**前缀**（`npu_type_test_run_1` 里中间那个 `test_` 不能被吃掉）
-        from src.orchestration_plane.l2.regression_tools.regression_framework.core.config import (
+        from src.orchestration_plane.kernel.regression_tools.regression_framework.core.config import (
             strip_test_prefix)
         name = strip_test_prefix(test.get("name", ""))
         if build and name:

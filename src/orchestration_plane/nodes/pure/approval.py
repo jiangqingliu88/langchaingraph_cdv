@@ -9,10 +9,10 @@ from typing import Any, Dict, List, Optional
 import structlog
 from langgraph.errors import GraphInterrupt
 
-from src.orchestration_plane.l2.runtime import (
+from src.orchestration_plane.kernel.runtime import (
     Runtime, _rt,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 logger = structlog.get_logger()
 
@@ -29,7 +29,7 @@ def _approval_artifacts(state: PipelineState) -> List[Dict[str, Any]]:
     详情它自己会去 `flow.artifacts` 读。
     """
     try:
-        from src.orchestration_plane.l2.run_artifacts import run_artifacts
+        from src.orchestration_plane.kernel.run_artifacts import run_artifacts
 
         report = run_artifacts(str(state.output_root))
         if not isinstance(report, dict) or report.get("error"):
@@ -60,7 +60,7 @@ def _interrupt_approval(rt, action, *, summary: str = "",
     这里，只加在 `ApprovalRequest` 上界面是看不到的（那条路只有通道模式走）。
     """
     from langgraph.types import interrupt
-    from src.orchestration_plane.l2.governance.approval import (
+    from src.orchestration_plane.kernel.governance.approval import (
         ApprovalDecision, ApprovalRecord,
     )
 
@@ -150,7 +150,7 @@ async def n_approval(state: PipelineState, config) -> Dict[str, Any]:
     summary = (node or {}).get("prompt") or action.reason
     artifacts = _approval_artifacts(state)
     try:
-        from src.orchestration_plane.l2.governance.approval import ApprovalDecision
+        from src.orchestration_plane.kernel.governance.approval import ApprovalDecision
         # **`--approval auto` 必须赢过 interrupt 机制。**
         #
         # 原来这里只判 `rt.interrupt_mode`，于是打开检查点之后**每一个**高危动作

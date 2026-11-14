@@ -15,7 +15,7 @@ from .constants import APP_TITLE, CONSOLE_PIN, CONSOLE_TITLE, NAV_PIN
 from .context import AppContext
 from .manifest import ManifestError, builtin_manifest, describe, load_manifest
 from .registry import ModuleManager
-from .topics import TaskCompleted, TaskStarted
+from .task_events import publish_task_done, publish_task_started
 from .ui import theme
 from .ui.theme import icons
 from .ui.widgets.banner import Banner
@@ -166,11 +166,11 @@ class WindowLayoutMixin:
             # 不必直接认识"是哪个模块起的任务"。发布逻辑在模块级，避免把
             # 分支堆进 `_build_window_class` 的圈复杂度。
             tasks.started.connect(
-                lambda tid, label: _publish_task_started(self.ctx, tid, label))
+                lambda tid, label: publish_task_started(self.ctx, tid, label))
             tasks.finished.connect(
-                lambda tid, payload: _publish_task_done(self.ctx, tid))
+                lambda tid, payload: publish_task_done(self.ctx, tid))
             tasks.failed.connect(
-                lambda tid, message: _publish_task_done(self.ctx, tid))
+                lambda tid, message: publish_task_done(self.ctx, tid))
 
         def _on_task_started(self, task_id: str, label: str) -> None:
             self.console.begin_task(label)

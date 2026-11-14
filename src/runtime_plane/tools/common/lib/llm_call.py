@@ -113,7 +113,7 @@ def call_llm(prompt: str, code: str, errors: str, *,
     if not prompt_version:
         raise ValueError("call_llm 需要显式 prompt_version（缓存键与审计都靠它）")
     try:
-        from src.orchestration_plane.l2.context.query_engine import (
+        from src.orchestration_plane.kernel.context.query_engine import (
             LLMContractError,
             LLMQueryEngine,
         )
@@ -152,7 +152,7 @@ def call_llm_json(prompt: str, payload: str, *,
     if not prompt_version:
         raise ValueError("call_llm_json 需要显式 prompt_version")
     try:
-        from src.orchestration_plane.l2.context.query_engine import (
+        from src.orchestration_plane.kernel.context.query_engine import (
             LLMContractError,
             LLMQueryEngine,
         )
@@ -189,7 +189,7 @@ def call_llm_messages(messages: List[Dict[str, Any]], *,
     if not prompt_version:
         raise ValueError("call_llm_messages 需要显式 prompt_version")
     try:
-        from src.orchestration_plane.l2.context.query_engine import (
+        from src.orchestration_plane.kernel.context.query_engine import (
             LLMContractError,
             LLMQueryEngine,
         )

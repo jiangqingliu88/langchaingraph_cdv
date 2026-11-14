@@ -14,7 +14,7 @@ from langgraph.graph import END, START, StateGraph
 from src.orchestration_plane.supervisor.graph import (
     _delta_only, build_closed_loop_graph, n_supervisor, r_supervisor,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 
 def test_default_graph_is_supervisor_with_four_experts():
@@ -202,7 +202,7 @@ def test_debug_agent_loop_is_opt_in(monkeypatch):
 
 
 def test_agent_context_is_filtered_per_expert():
-    from src.orchestration_plane.l2.runtime import _rebuild_ctx
+    from src.orchestration_plane.kernel.runtime import _rebuild_ctx
 
     state = PipelineState(
         spec={"design_name": "dut"}, design_arch={"module_name": "dut"},

@@ -36,7 +36,7 @@ def dump(session_id, output, list_sessions_flag, json_output):
       vagent dump <session_id> # 展示该 session 的完整执行轨迹
       vagent dump <session_id> -o evidence.zip  # 导出签核证据包
     """
-    from src.orchestration_plane.l2.evidence.manifest import (
+    from src.orchestration_plane.kernel.evidence.manifest import (
         ManifestBuilder, EvidencePackager,
         build_manifest, list_sessions as list_all_sessions,
     )

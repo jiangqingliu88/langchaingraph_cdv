@@ -7,7 +7,7 @@ import pytest
 from src.workbench.api import (
     analyze_plan, list_ips, run_closure, run_soc_project,
 )
-from src.orchestration_plane.l2.regression_tools.backend_capabilities import (
+from src.orchestration_plane.kernel.regression_tools.backend_capabilities import (
     capabilities, supports,
 )
 from src.workbench.query.evidence import read_envelope, validate_evidence

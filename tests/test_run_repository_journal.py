@@ -11,8 +11,8 @@ import json
 
 import pytest
 
-from src.orchestration_plane.l2.run_journal import RunJournal
-from src.orchestration_plane.l2.run_repository import RunRepository
+from src.orchestration_plane.kernel.run_journal import RunJournal
+from src.orchestration_plane.kernel.run_repository import RunRepository
 
 
 @pytest.fixture

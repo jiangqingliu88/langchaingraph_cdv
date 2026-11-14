@@ -14,7 +14,7 @@ from typing import Any, Dict
 
 import structlog
 
-from src.orchestration_plane.l2.evidence.signoff_package import verify_package
+from src.orchestration_plane.kernel.evidence.signoff_package import verify_package
 
 logger = structlog.get_logger()
 

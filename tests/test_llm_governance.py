@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.orchestration_plane.l2.context.query_engine import (
+from src.orchestration_plane.kernel.context.query_engine import (
     LLMContractError,
     LLMQueryEngine,
 )

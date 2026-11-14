@@ -94,13 +94,13 @@ class GuardianAgent:
 
     `run_tool` 为什么是**注入**的，不是这里 import 的
         跑 golden 用例集走的是「工具子进程」那条通路，而它属于**编排层**
-        （`l2_orchestration.communication.tool_subprocess`）。
+        （`orchestration_plane.kernel.communication.tool_subprocess`）。
 
-        本模块在 **L1**（零 AI 的确定性层）—— 直接 import 就是 L1 反向依赖 L2。
+        本模块在 **L1**（零 AI 的确定性层）—— 直接 import 就是 L1 反向依赖编排内核。
         反了的话，L1 就没法脱离编排层单独跑，也就没法单独测（而 L1 恰恰是最
         该能单独测的那一层：它不该拖进 langgraph / agent 注册表任何东西）。
 
-        所以由调用方（L2）把 runner 传进来：
+        所以由调用方（编排内核）把 runner 传进来：
             run_tool(tool_name: str, args: dict) -> {"success", "data", "error"}
 
     **不注入时不假装"跑过了"** —— `pre_refactor_check` 返回 `allowed=False`

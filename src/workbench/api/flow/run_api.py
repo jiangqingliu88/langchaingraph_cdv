@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.orchestration_plane.l2.flow_shared import (
+from src.orchestration_plane.kernel.flow_shared import (
     MAX_FILES_PER_DIR, UVM_SCHEMA, _artifact, _artifacts_of, _line_of, _num,
     _read_json, _read_journal, _resolve_run_dir, _schema_issues, _short,
     _size_kb, _stages_of,
@@ -422,7 +422,7 @@ def _task_summary(state: str, coverage: Dict[str, Any], forecast: Dict[str, Any]
     return "　".join(bits) + "。"
 
 
-from src.orchestration_plane.l2.run_artifacts import run_artifacts  # noqa: F401,E402
+from src.orchestration_plane.kernel.run_artifacts import run_artifacts  # noqa: F401,E402
 
 TODO_KINDS = {
     "approval": ("待审批", "warn"),

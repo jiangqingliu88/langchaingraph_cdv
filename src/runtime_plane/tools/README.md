@@ -11,7 +11,7 @@
 |---|---|---|
 | **generation** | 产生验证产物（UVM / ISA IR / C 模型） | `uvm_tools`、`isa_ir_tools`、`cmodel_tools` |
 | **checking** | 只读/判定（断言） | `assertion_tools` |
-| **execution** | 跑 EDA / 回归 | 空（`regression_tools` 已迁到 `src/orchestration_plane/l2/`） |
+| **execution** | 跑 EDA / 回归 | 空（`regression_tools` 已迁到 `src/orchestration_plane/kernel/`） |
 | **flow** | 跨阶段流程（趋势） | `trend_tools` |
 | **integration** | 对外集成（IDE 桥） | `ide_tools` |
 | **humanview** | 人读视图（测试点 / Case / 覆盖率 / SVA / SCB） | `aivm_ir`、`case_ir`、`covg_ir`、`sva_ir`、`scb_ir` |
@@ -26,7 +26,7 @@ src/runtime_plane/tools/
 │  └─ cmodel_tools/
 ├─ checking/
 │  └─ assertion_tools/
-├─ execution/             # 板块占位；regression_tools 已迁到 layers/l2
+├─ execution/             # 板块占位；regression_tools 已迁到 orchestration_plane/kernel
 ├─ flow/
 │  └─ trend_tools/
 ├─ integration/

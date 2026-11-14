@@ -971,7 +971,7 @@ def _tool_receipt_summary(output_dir: Path) -> Dict[str, Any]:
             counts[key] = counts.get(key, 0) + 1
     except OSError:
         return {"available": False, "total": 0, "by_verified_by": {}}
-    from src.orchestration_plane.l2.communication.tool_protocol import (
+    from src.orchestration_plane.kernel.communication.tool_protocol import (
         aggregate_verified_by)
 
     expanded = [k for k, n in counts.items() for _ in range(n)]
@@ -1060,7 +1060,7 @@ def _build_signoff_evidence(output_dir: Path, signoff: Dict[str, Any],
         output_dir / "coverage" / "plan_merge_manifest.json")
     merge_manifest_sha = (_sha256_file(merge_manifest_path)
                           if merge_manifest_path.is_file() else "")
-    from src.orchestration_plane.l2.evidence.verdict import (
+    from src.orchestration_plane.kernel.evidence.verdict import (
         accepted_codes_from_policy, effective_caveats as _effective)
 
     policy = policy or {}

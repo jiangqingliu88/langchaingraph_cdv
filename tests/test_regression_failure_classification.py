@@ -20,7 +20,7 @@ import pytest
 
 from src.runtime_plane.infrastructure.infrastructure import (
     classify_sim_failures, is_elab_failure_line)
-from src.orchestration_plane.l2.governance.quality_guard import (
+from src.orchestration_plane.kernel.governance.quality_guard import (
     Verdict, validate_regress)
 
 #: 实测那份日志的关键几行（DPI 自动编译库加载失败）

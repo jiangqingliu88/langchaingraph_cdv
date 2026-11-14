@@ -12,7 +12,7 @@ from pathlib import Path
 
 from config import architecture_guard as guard
 from src.ir_plane.decision.decision_engine import ALL_ACTIONS
-from src.orchestration_plane.l2.communication.tool_hub import ToolHub
+from src.orchestration_plane.kernel.communication.tool_hub import ToolHub
 from src.orchestration_plane.supervisor.graph import NODE_FUNCS
 from src.runtime_plane.tools.boards import BOARDS
 
@@ -106,7 +106,7 @@ def test_tool_boards_are_the_canonical_boards():
     assert set(BOARDS) == {"generation", "checking", "execution", "flow", "integration", "common", "humanview"}
     assert "uvm_tools" in BOARDS["generation"]
     assert "assertion_tools" in BOARDS["checking"]
-    # regression_tools 已迁到 layers/l2；interface_timing 是 execution 下首个功能块。
+    # regression_tools 已迁到 orchestration_plane/kernel；interface_timing 是 execution 下首个功能块。
     assert BOARDS["execution"] == ("interface_timing",)
 
 
@@ -221,8 +221,8 @@ def test_cli_does_not_import_optional_auth():
     没有守卫（改一行 import 就能悄悄破掉）。
     """
     offenders = []
-    pattern = re.compile(r"(l2_orchestration\.auth|from\s+\.auth\s+import)")
-    for path in (ROOT / "src" / "interfaces" / "cli").rglob("*.py"):
+    pattern = re.compile(r"(orchestration_plane\.kernel\.auth|from\s+\.auth\s+import)")
+    for path in (ROOT / "src" / "workbench" / "cli").rglob("*.py"):
         text = path.read_text(encoding="utf-8", errors="replace")
         for line in text.splitlines():
             if line.strip().startswith("#"):

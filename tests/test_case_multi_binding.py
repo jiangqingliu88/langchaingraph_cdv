@@ -89,7 +89,7 @@ class TestGenerationWritesAllCaseIds:
 
 class TestRegressionMapKeepsAllCases:
     def test_test_to_case_map_unions_case_ids(self, tmp_path):
-        from src.orchestration_plane.l2.regression_tools.regression_framework.generators.shell import (
+        from src.orchestration_plane.kernel.regression_tools.regression_framework.generators.shell import (
             _testpoint_case_map_detail)
 
         (tmp_path / "coverage").mkdir()

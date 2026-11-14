@@ -3,8 +3,8 @@ from typing import Dict, Any
 import json
 from pathlib import Path
 
-from src.orchestration_plane.l2.executors.base import BaseExecutor, ExecutorResult
-from src.orchestration_plane.l2.executors.registry import register_executor
+from src.orchestration_plane.kernel.executors.base import BaseExecutor, ExecutorResult
+from src.orchestration_plane.kernel.executors.registry import register_executor
 import structlog
 
 logger = structlog.get_logger()
@@ -136,7 +136,7 @@ class CoverageExecutor(BaseExecutor):
         # ── 覆盖地图：bin 级精确定位（对应自动驾驶的"定位层"）──
         coverage_map = {}
         try:
-            from src.orchestration_plane.l2.coverage_map import CoverageMap
+            from src.orchestration_plane.kernel.coverage_map import CoverageMap
             functional_detail = nested_cov.get("functional_detail", {})
             coverage_map = CoverageMap().build(nested_cov, toggle_details, functional_detail)
         except Exception as e:
@@ -155,7 +155,7 @@ class CoverageExecutor(BaseExecutor):
 
         # ── Event Bus：发布 COVERAGE_UPDATED（异步通知订阅者：KG / 决策 / 其它 Agent）──
         try:
-            from src.orchestration_plane.l2.communication.verification_events import publish_coverage_updated
+            from src.orchestration_plane.kernel.communication.verification_events import publish_coverage_updated
             _module = (ctx.get("spec", {}).get("design_name", "dut")
                        if isinstance(ctx, dict) else "dut")
             _ov = nested_cov.get("overall_pct", nested_cov.get("coverage_pct", 0))

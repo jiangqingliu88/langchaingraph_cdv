@@ -48,8 +48,8 @@ _LAZY_FORBIDDEN = {("engine", "agents"), ("generation", "agents")}
 #: 已登记的**延迟 import 债务**（zone → zone）。只允许缩小；新出现的逆向延迟
 #: import 会失败。每一对都对应迁移前的历史结构，不是默许。
 _LAZY_DEBT = {
-    ("tools", "l2"), ("tools", "l3"), ("tools", "ir"),
-    ("l1", "l2"), ("l1", "l4"),
+    ("tools", "kernel"), ("tools", "l3"), ("tools", "ir"),
+    ("l1", "kernel"), ("l1", "l4"),
     ("l4", "ir"), ("l4", "generation"),
     ("engine", "generation"),
 }
@@ -241,10 +241,11 @@ _ZONES = (
     ("src/runtime_plane/infrastructure/", "l1"),
     ("src/runtime_plane/tools/", "tools"),
     ("src/runtime_plane/utils/", "core"),
-    ("src/orchestration_plane/l2/", "l2"),
+    ("src/orchestration_plane/kernel/", "kernel"),
     ("src/orchestration_plane/", "orchestration"),
     ("src/ir_plane/decision/", "l3"),
     ("src/ir_plane/", "ir"),
+    ("src/mental_ir_plane/", "mental_ir"),
     ("src/knowledge_plane/", "l4"),
     ("src/experience_plane/", "l5"),
     ("src/generation_plane/", "generation"),
@@ -260,30 +261,32 @@ _ALLOWED = {
     "l3": {"l1", "l4", "core", "tools", "ir"},
     "l4": {"l1", "core", "tools"},
     "l5": {"l1", "l3", "l4", "core", "tools"},
-    "l2": {"l1", "l3", "l4", "l5", "core", "agents", "tools", "ir", "runtime",
+    "kernel": {"l1", "l3", "l4", "l5", "core", "agents", "tools", "ir", "runtime",
            "engine", "generation", "orchestration"},
-    "engine": {"core", "l1", "l2", "l3", "l4", "l5", "tools", "ir", "runtime"},
-    "orchestration": {"core", "l1", "l2", "l3", "l4", "l5", "tools", "ir",
+    "engine": {"core", "l1", "kernel", "l3", "l4", "l5", "tools", "ir", "runtime"},
+    "orchestration": {"core", "l1", "kernel", "l3", "l4", "l5", "tools", "ir",
                       "runtime", "engine", "generation", "agents", "iface"},
-    "generation": {"core", "l1", "l2", "l3", "l4", "l5", "tools", "ir",
+    "generation": {"core", "l1", "kernel", "l3", "l4", "l5", "tools", "ir",
                    "runtime", "engine"},
     "tools": {"core", "l1"},
-    "agents": {"l1", "l2", "l3", "l4", "l5", "core", "tools", "ir", "runtime",
-               "engine", "generation", "orchestration", "iface"},
+    "agents": {"l1", "kernel", "l3", "l4", "l5", "core", "tools", "ir", "runtime",
+               "engine", "generation", "orchestration", "iface", "mental_ir"},
     "runtime": {"core", "l1", "tools"},
-    "ir": {"core", "l1", "l2", "l3", "l4", "l5", "tools", "runtime"},
-    "iface": {"core", "l1", "l2", "l3", "l4", "l5", "agents", "ir", "tools",
+    "ir": {"core", "l1", "kernel", "l3", "l4", "l5", "tools", "runtime"},
+    #: Mental IR 是理解层的叶子：只依赖 core（原子写）与 tools（LLM 出口）。
+    "mental_ir": {"core", "tools"},
+    "iface": {"core", "l1", "kernel", "l3", "l4", "l5", "agents", "ir", "tools",
               "runtime", "engine", "generation", "orchestration"},
 }
 
-#: 已知的过渡债务：engine → l2 的 ExecutorBase 尚未迁到 engine/executors。
+#: 已知的过渡债务：engine → kernel 的 ExecutorBase 尚未迁到 engine/executors。
 #: 只允许具体文件，不允许整层放开。
 _DEPENDENCY_DEBT = {
-    "src/engine_plane/front/main.py": {"l2"},
-    "src/engine_plane/ops/main.py": {"l2"},
-    "src/engine_plane/coverage/main.py": {"l2"},
-    "src/engine_plane/audit/main.py": {"l2"},
-    "src/engine_plane/audit/helpers.py": {"l2"},
+    "src/engine_plane/front/main.py": {"kernel"},
+    "src/engine_plane/ops/main.py": {"kernel"},
+    "src/engine_plane/coverage/main.py": {"kernel"},
+    "src/engine_plane/audit/main.py": {"kernel"},
+    "src/engine_plane/audit/helpers.py": {"kernel"},
 }
 
 

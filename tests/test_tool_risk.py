@@ -25,7 +25,7 @@ from typing import Set
 
 import pytest
 
-from src.orchestration_plane.l2.communication.tool_hub import _LC_SAFE_TOOLS
+from src.orchestration_plane.kernel.communication.tool_hub import _LC_SAFE_TOOLS
 
 #: 会注册 LangChain `@tool` 的模块 —— 与 `tool_hub._LC_TOOL_MODULES` 同源。
 #: 那份表是 `(模块名, 标签)`，这里只要文件路径（AST 要读文件）。
@@ -104,7 +104,7 @@ def test_the_safe_list_has_no_ghosts():
 
 def test_unknown_tools_default_to_write():
     """默认方向是 fail-safe —— 这条钉住"反转别被改回去"。"""
-    from src.orchestration_plane.l2.communication.tool_hub import ToolRisk
+    from src.orchestration_plane.kernel.communication.tool_hub import ToolRisk
 
     # 一个肯定不在 SAFE 清单里的名字
     assert "definitely_not_a_registered_tool" not in _LC_SAFE_TOOLS

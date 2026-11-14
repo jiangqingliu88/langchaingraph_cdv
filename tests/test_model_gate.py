@@ -3,7 +3,7 @@
 **为什么在根 `tests/` 而不是 `src/generation_plane/design/cmodel/tests/`**：`src/engine_plane/stages/` 下没有
 tests 目录，agent 的测试一直放在根 `tests/`（见 `tests/test_agents.py`）。
 
-**环境守卫**：`src/orchestration_plane/l2/executors/base.py` 在模块级 import
+**环境守卫**：`src/orchestration_plane/kernel/executors/base.py` 在模块级 import
 langchain，所以只要 langchain 栈不完整，这个文件根本 import 不进来 —— 那会让整套
 测试变成 collection error 而不是一条清楚的 skip。下面用 `importorskip` 挡住。
 

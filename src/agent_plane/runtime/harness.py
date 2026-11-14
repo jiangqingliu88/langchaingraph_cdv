@@ -1314,7 +1314,7 @@ class Harness:
             # 模型偶尔输出原生 tool tags / markdown，被 schema 校验判空；
             # 有 provider 时补一次“只输出 JSON”的提醒再试。
             try:
-                from src.orchestration_plane.l2.context.llm_factory import LLMFactory
+                from src.orchestration_plane.kernel.context.llm_factory import LLMFactory
                 available = LLMFactory.is_available()
             except Exception:                     # noqa: BLE001
                 available = False

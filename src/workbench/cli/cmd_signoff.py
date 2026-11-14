@@ -57,7 +57,7 @@ def signoff_generate(run_id, report_type, title, project_id, json_output):
         sys.exit(1)
 
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         manifest = builder.build(session_id=rid.replace("run_", ""))
 
@@ -114,7 +114,7 @@ def signoff_export(run_id, output, json_output):
         sys.exit(1)
 
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder, EvidencePackager
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder, EvidencePackager
         builder = ManifestBuilder()
         manifest = builder.build(session_id=rid.replace("run_", ""))
 
@@ -154,7 +154,7 @@ def signoff_verify(run_id, json_output):
         sys.exit(1)
 
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         manifest = builder.build(session_id=rid.replace("run_", ""))
 
@@ -253,7 +253,7 @@ def signoff_diff(run_a, run_b, json_output):
     """
     out = get_output_adapter(json_output)
     try:
-        from src.orchestration_plane.l2.evidence.manifest import ManifestBuilder
+        from src.orchestration_plane.kernel.evidence.manifest import ManifestBuilder
         builder = ManifestBuilder()
         ma = builder.build(session_id=run_a.replace("run_", ""))
         mb = builder.build(session_id=run_b.replace("run_", ""))

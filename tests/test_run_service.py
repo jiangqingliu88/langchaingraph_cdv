@@ -11,11 +11,11 @@ from pathlib import Path
 import pytest
 
 from src.orchestration_plane.supervisor import graph as graph_mod
-from src.orchestration_plane.l2.execution import PipelineExecutionService
-from src.orchestration_plane.l2.run_service import (
+from src.orchestration_plane.kernel.execution import PipelineExecutionService
+from src.orchestration_plane.kernel.run_service import (
     RunRequest, RunService, get_run_service,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 
 
 def _graph(checkpointer=None, store=None, *, delay: float = 0.0, fail: bool = False,
@@ -362,7 +362,7 @@ def test_no_qt_in_the_service_layer():
 
     code = (
         "import sys\n"
-        "import src.orchestration_plane.l2.run_service\n"
+        "import src.orchestration_plane.kernel.run_service\n"
         "bad = [m for m in sys.modules if m.startswith('PySide6')]\n"
         "print(bad)\n"
     )

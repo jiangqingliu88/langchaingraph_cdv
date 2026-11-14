@@ -15,7 +15,7 @@ from typing import Any, Dict, Iterable, List, Sequence
 
 from src.orchestration_plane.registry import card
 from src.orchestration_plane.stage_policy import assert_stage
-from src.orchestration_plane.l2.runtime import _run_agent
+from src.orchestration_plane.kernel.runtime import _run_agent
 
 
 class StageTool:

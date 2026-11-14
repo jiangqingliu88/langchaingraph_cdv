@@ -95,6 +95,36 @@ venv\Scripts\vagent.exe gui
 - 点击「打开验证流程」调用现有 `open_module()` 定位 `flow.pipeline`，不另建第二套执行页面。
 - 输入路径只作为工作区/自然语言任务输入传给同一服务；未知文件、错误或 absent 状态不会自动变为确认事实。
 
+### GUI 的 9 种 Agent 模式
+
+下拉框来自单一清单 [agent_modes.py](../../src/workbench/modes/agent_modes.py)——
+界面、后端 config、测试都读这一份，不存在"界面 9 个模式、后端只认 3 个"的第二份真相。
+**模式是领域角色，交互方式（chat / plan / verify）是底层真路径**，两者正交：
+
+| 模式 | 描述 | 交互 | 对应 agent（`specialists/`） | stages |
+|---|---|---|---|---|
+| Agentic Chat | General-purpose chat for workspace exploration and code assistance | chat | harness（不是专家） | - |
+| Mental Model | Design understanding and analysis mode | chat | `mental` | - |
+| Formal | Formal verification agent mode | plan | `verify`（Formal 工具链未接入，先按 verify 计划模式） | verify |
+| UVM | UVM testplan, testbench development mode | plan | `verify` | verify |
+| RTL Designer | Lint violation Auto-fix | plan | `design` | front/design/model |
+| Unit Testing Agent | Unit testing and testbench development (SV based, no UVM) | plan | `verify`（无独立 unit_test 专家，靠 role_prompt 约束纯 SV） | verify |
+| Functional Coverage (interface-based) | Functional coverage monitor generation (RTL interface-based) | plan | `coverage` | coverage |
+| Debug | DV debug agent mode | plan | `debug` | ops/debug |
+| Workflows | End-to-end automated workflows | verify | `supervisor`（编排主图，不是单一专家） | 全阶段 |
+
+**为什么现在不能 1:1 对应**：`specialists/` 目前只有 design / verify / debug /
+coverage / mental 五个专家；Formal 与 Unit Testing 没有独立专家，Agentic Chat 不是
+专家，Workflows 走 supervisor 主图。上表是**当前真实映射**，UI 的 hint/tooltip
+和返回结果的 `interaction.specialist/stages` 都从这里来；新增专家后只改
+`agent_modes.py` 一处即可。
+
+- `plan` 模式会设置 `plan_first=True` / `require_plan_approval=True`，并保留执行审批；
+- `verify` 模式走既有 `verify_mode/router`，不经过 agent chat；
+- Mental Model 模式下出现「生成 Mental IR」按钮：选择 spec 后运行
+  `agent_plane/specialists/mental`，产物落在
+  `<workspace>/output_mental_<spec>/mental_ir/`。
+
 ## 3. 一致性与人审边界
 
 新增 [共享适配器](../../src/workbench/modes/interaction.py) 很薄，只负责模式适配和展示元数据：

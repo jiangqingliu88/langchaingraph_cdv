@@ -140,7 +140,7 @@ class TestTaskMetaGeneration:
         用例也能挂上它实际覆盖的测试点）。
         """
         import yaml
-        from src.orchestration_plane.l2.regression_tools.regression_framework.generators.shell import (
+        from src.orchestration_plane.kernel.regression_tools.regression_framework.generators.shell import (
             ShellGenerator)
 
         run = tmp_path / "run"

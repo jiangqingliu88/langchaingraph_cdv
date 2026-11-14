@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from src.workbench.modes.agent_modes import AGENT_MODES, get_mode
 from src.workbench.modes.interaction import model_configuration_label, pending_text, resume, turn
 from src.workbench.modules.base import ModuleBase
 from src.workbench.modules.service.common import open_module, publish_run
@@ -49,7 +51,9 @@ class InteractionModule(ModuleBase):
         self.session_id = ""
         self._last_result: dict[str, Any] = {}
         self.agent_caller: Callable[..., dict[str, Any]] | None = None  # 用例注入；不默认调用
-        self._mode_options = (("对话 chat", "chat"), ("候选计划 plan", "plan"), ("显式验证 verify", "verify"))
+        #: 9 种领域模式（Agentic Chat / Mental Model / Formal / UVM / …）。
+        #: 交互方式（chat/plan/verify）由每个模式自己带，不在界面写第二份。
+        self._mode_options = tuple((m.label, m.id) for m in AGENT_MODES)
 
     def create_widget(self) -> QWidget:
         widget = super().create_widget()
@@ -91,10 +95,21 @@ class InteractionModule(ModuleBase):
         return root
 
     def _controls(self):
+        box = QVBoxLayout()
         line = QHBoxLayout()
         self.mode = QComboBox()
         for label, key in self._mode_options:
             self.mode.addItem(label, key)
+        for index, preset in enumerate(AGENT_MODES):
+            stages = "/".join(preset.stages) or "-"
+            self.mode.setItemData(
+                index,
+                f"{preset.label} —— {preset.description}"
+                f"（交互：{preset.interaction}；agent：{preset.agent_label}；"
+                f"stages：{stages}）",
+                Qt.ItemDataRole.ToolTipRole,
+            )
+        self.mode.setToolTip("选择 Agent 模式；切换模式会开启新任务，旧会话仍保留")
         self.mode.currentIndexChanged.connect(self._mode_changed)
         line.addWidget(self.mode)
         self.workspace = QLineEdit(str(Path.cwd()))
@@ -113,7 +128,21 @@ class InteractionModule(ModuleBase):
         self.open_flow_button = QPushButton("打开验证流程")
         self.open_flow_button.clicked.connect(self.open_verification)
         line.addWidget(self.open_flow_button)
-        return line
+        # 统一的「模式动作」按钮：Mental IR / Formal 计划 / 单测生成，
+        # 具体跑哪个专家由模式注册表的 `action` 决定，界面不再为每个模式写分支。
+        self.mode_action_button = QPushButton("执行模式动作")
+        self.mode_action_button.setVisible(False)
+        self.mode_action_button.clicked.connect(self.run_mode_action)
+        self.mental_button = self.mode_action_button  # 兼容旧引用
+        line.addWidget(self.mode_action_button)
+
+        box.addLayout(line)
+        self.mode_hint = QLabel()
+        self.mode_hint.setWordWrap(True)
+        self.mode_hint.setStyleSheet("color: gray;")
+        box.addWidget(self.mode_hint)
+        self._apply_mode_hint(get_mode(self.mode.currentData()))
+        return box
 
     def _conversation_page(self) -> QWidget:
         page = QWidget()
@@ -147,9 +176,14 @@ class InteractionModule(ModuleBase):
         help_text = QPlainTextEdit()
         help_text.setReadOnly(True)
         help_text.setPlainText(
+            "AGENT 模式（9 种）：Agentic Chat / Mental Model / Formal / UVM / "
+            "RTL Designer / Unit Testing / Functional Coverage / Debug / Workflows。\n"
+            "每种模式注入自己的 role_prompt；底层交互仍只有三条真路径：\n"
             "CHAT：同一个 agent_turn()，多轮继续使用原 session。\n"
             "PLAN：要求真实计划检查点，approval=人工确认，不是自动执行。\n"
-            "VERIFY：走已有 verify_mode/router，入口动作不等于 PASS。\n\n"
+            "VERIFY：走已有 verify_mode/router，入口动作不等于 PASS。\n"
+            "Mental Model 模式另有「生成 Mental IR」入口，产物在 "
+            "<workspace>/output_mental_<spec>/mental_ir/。\n\n"
             "终端：vagent、vagent chat、vagent -r <session_id>。\n"
             "GUI：PySide6 QMainWindow；执行与审批详情由 flow.pipeline 承接。\n\n"
             "本前端不宣称秒级流式 LLM 推理。完整响应/失败状态由\n"
@@ -215,20 +249,124 @@ class InteractionModule(ModuleBase):
         if not text:
             self.state.setText("请先输入问题或明确的验证目标。")
             return
-        mode = self.mode.currentData()
+        preset = get_mode(self.mode.currentData())
         workspace = self._workspace_value()
-        self.history.appendPlainText(f"\n[用户 / {mode}] {text}")
+        self.history.appendPlainText(f"\n[用户 / {preset.label}] {text}")
         self._submit(
-            "agent" if mode != "verify" else "verification",
+            "verification" if preset.interaction == "verify" else "agent",
             lambda: turn(
                 text,
-                mode=mode,
+                mode=preset.interaction,
+                agent_mode=preset.id,
                 workspace=workspace,
                 session_id=self.session_id or None,
                 frontend="gui",
                 agent_caller=self.agent_caller,
             ),
         )
+
+    def _pick_file(self, title: str, filters: str) -> Path | None:
+        chosen, _filter = QFileDialog.getOpenFileName(
+            self.content, title,
+            self._workspace_value() or str(Path.cwd()), filters)
+        return Path(chosen) if chosen else None
+
+    def _workspace_path(self) -> Path:
+        return Path(self._workspace_value() or Path.cwd())
+
+    def run_mode_action(self) -> None:
+        """按当前模式执行独立动作（不是所有模式都有动作）。"""
+        preset = get_mode(self.mode.currentData())
+        if preset.action == "mental_ir":
+            self._run_mental_ir()
+        elif preset.action == "formal_plan":
+            self._run_formal_plan()
+        elif preset.action == "unit_test":
+            self._run_unit_test()
+        else:
+            self.state.setText(
+                f"{preset.label} 没有独立动作入口，请在对话里描述目标。")
+
+    def generate_mental_ir(self) -> None:
+        """兼容旧入口：等同 Mental Model 的「生成 Mental IR」。"""
+        self._run_mental_ir()
+
+    def _run_mental_ir(self) -> None:
+        spec = self._pick_file("选择 spec 文件",
+                               "Spec (*.md *.txt *.json);;All Files (*)")
+        if spec is None:
+            return
+        out = self._workspace_path() / f"output_mental_{spec.stem}"
+        text = spec.read_text(encoding="utf-8", errors="replace")
+
+        def operation() -> dict[str, Any]:
+            from src.agent_plane.specialists.mental.main import run as mental_run
+
+            result = mental_run(text, out, module=spec.stem,
+                                spec_path=str(spec))
+            counts = result["counts"]
+            result["summary"] = (
+                f"Mental IR：goals={counts['goals']} "
+                f"assumptions={counts['assumptions']} "
+                f"ambiguities={counts['ambiguities']}"
+                f"(blocking={counts['blocking_ambiguities']}) "
+                f"intents={counts['verification_intents']} "
+                f"risks={counts['risks']} · digest={result['digest'][:12]}… "
+                f"→ {result['files']['dir']}")
+            return result
+
+        self.history.appendPlainText(
+            f"\n[用户 / Mental Model] 生成 Mental IR：{spec}")
+        self._submit("mental", operation)
+
+    def _run_formal_plan(self) -> None:
+        spec = self._pick_file("选择 spec 文件",
+                               "Spec (*.md *.txt *.json);;All Files (*)")
+        if spec is None:
+            return
+        out = self._workspace_path() / f"output_formal_{spec.stem}"
+        text = spec.read_text(encoding="utf-8", errors="replace")
+
+        def operation() -> dict[str, Any]:
+            from src.agent_plane.specialists.formal.main import run as formal_run
+
+            result = formal_run(text, out, module=spec.stem,
+                                spec_path=str(spec))
+            counts = result["counts"]
+            engine = result.get("engine") or {}
+            result["summary"] = (
+                f"Formal IR：assert={counts['assert']} "
+                f"assume={counts['assume']} cover={counts['cover']} "
+                f"obligations={counts['proof_obligations']}"
+                f"(unproved={counts['unproved_obligations']}) · "
+                f"engine_ran={engine.get('ran')} · "
+                f"digest={result['digest'][:12]}… → {result['files']['dir']}")
+            return result
+
+        self.history.appendPlainText(
+            f"\n[用户 / Formal] 生成 Formal IR：{spec}")
+        self._submit("formal", operation)
+
+    def _run_unit_test(self) -> None:
+        rtl = self._pick_file("选择 RTL 文件",
+                              "SystemVerilog (*.sv *.v);;All Files (*)")
+        if rtl is None:
+            return
+        out = self._workspace_path() / f"output_unit_{rtl.stem}"
+
+        def operation() -> dict[str, Any]:
+            from src.agent_plane.specialists.unit_test.main import run as unit_run
+
+            result = unit_run(rtl, out)
+            result["summary"] = (
+                f"Unit Test：{result['module']} status={result['status']} "
+                f"compile={result['compile']} run={result['run']} "
+                f"→ {Path(result['report']).parent}")
+            return result
+
+        self.history.appendPlainText(
+            f"\n[用户 / Unit Testing] 生成/运行单测：{rtl}")
+        self._submit("unit-test", operation)
 
     def on_finished(self, task_id: str, result: Any) -> None:
         if task_id not in self._jobs:
@@ -314,10 +452,24 @@ class InteractionModule(ModuleBase):
         self.history.appendPlainText("\n── 新任务（旧会话仍保留在工作区）──")
         self.state.setText("等待新目标")
 
+    def _apply_mode_hint(self, preset) -> None:
+        if hasattr(self, "mode_hint"):
+            stages = "/".join(preset.stages) or "-"
+            text = (f"{preset.label}：{preset.description}　"
+                    f"（交互：{preset.interaction}；agent：{preset.agent_label}；"
+                    f"stages：{stages}）")
+            if preset.gap:
+                text += f"　⚠ {preset.gap}"
+            self.mode_hint.setText(text)
+        if hasattr(self, "mental_button"):
+            self.mental_button.setVisible(preset.id == "mental_model")
+
     def _mode_changed(self, _index: int) -> None:
+        preset = get_mode(self.mode.currentData())
+        self._apply_mode_hint(preset)
         if hasattr(self, "state"):
             self.new_task()
-            self.state.setText(f"当前模式：{self.mode.currentData()}")
+            self.state.setText(f"当前模式：{preset.label} —— {preset.description}")
 
     def _browse_workspace(self) -> None:
         chosen = QFileDialog.getExistingDirectory(self.content, "选择项目工作区", self.workspace.text())

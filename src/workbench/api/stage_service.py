@@ -23,7 +23,7 @@ def run_stage_executor(role: str, *, input_text: str = "",
         return {"ok": False, "error": f"未知 stage：{role}（可选 {', '.join(STAGES)}）"}
 
     async def _run() -> Dict[str, Any]:
-        from src.orchestration_plane.l2.execution import PipelineExecutionService
+        from src.orchestration_plane.kernel.execution import PipelineExecutionService
         service = PipelineExecutionService.get_instance()
         await service.initialize_agents()
         return await service.run_single_agent(

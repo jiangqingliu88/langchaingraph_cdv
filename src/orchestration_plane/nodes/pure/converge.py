@@ -11,10 +11,10 @@ import json
 
 import structlog
 
-from src.orchestration_plane.l2.runtime import (
+from src.orchestration_plane.kernel.runtime import (
     _rt,
 )
-from src.orchestration_plane.l2.state import PipelineState
+from src.orchestration_plane.kernel.state import PipelineState
 from src.ir_plane.decision.decision_engine import Action, Observation
 
 logger = structlog.get_logger()
@@ -63,7 +63,7 @@ async def n_decide(state: PipelineState, config) -> Dict[str, Any]:
     # 事件驱动决策：发 COVERAGE_UPDATED → DecisionReactor → 读结果
     if rt.decision_reactor is not None:
         try:
-            from src.orchestration_plane.l2.communication.verification_events import (
+            from src.orchestration_plane.kernel.communication.verification_events import (
                 publish_observation)
             await publish_observation(obs)
             action = rt.decision_reactor.last_action or rt.engine.decide(obs)
