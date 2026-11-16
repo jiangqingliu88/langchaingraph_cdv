@@ -11,7 +11,7 @@ import json
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from agents import Agent, Runner
 
@@ -93,6 +93,29 @@ class ReActAgent:
     @property
     def role(self) -> RoleSpec:
         return self.ROLE
+
+    # ── ChipStack 目录契约（R-020） ──
+
+    @property
+    def artifact_dir_name(self) -> str:
+        """本角色在 run / design 目录下的固定子目录名。"""
+        from src.agent_plane.domains import artifact_dir
+
+        return artifact_dir(self.role.role_id)
+
+    @property
+    def artifact_root(self) -> Optional[Path]:
+        """产物目录；没有显式 `output_root` 时返回 None（不伪造写权限）。"""
+        if not self.output_root:
+            return None
+        return Path(self.output_root) / self.artifact_dir_name
+
+    def ensure_artifact_root(self) -> Optional[Path]:
+        """建好本 agent 的产物目录并返回；只应在已有 `output_root` 时调用。"""
+        root = self.artifact_root
+        if root is not None:
+            (root / "logs").mkdir(parents=True, exist_ok=True)
+        return root
 
     def _instructions(self) -> str:
         return (

@@ -27,7 +27,7 @@ Stage 是**工作流节点**，不是代码责任边界。一个 Stage 可以调
 | `ops` | 编译/仿真/回归执行 | `engine_plane/ops` | 纯确定性 EDA |
 | `coverage` | 覆盖率收集/统计/闭环 | `engine_plane/coverage` | 纯确定性 EDA |
 | `audit` | 证据、校验、签核裁决 | `engine_plane/audit` | 纯确定性 |
-| `debug` | 失败分析（LLM）+ 日志/波形解析（确定性） | 拆分 | `main.py` → `agent_plane/specialists/debug`；`tools/` → `engine_plane/diagnostics` |
+| `debug` | 失败分析（LLM）+ 日志/波形解析（确定性） | 拆分 | `main.py` → `agent_plane/verification/dv_debug_agent`；`tools/` → `engine_plane/diagnostics` |
 
 ## 2. 文件级归属
 
@@ -83,9 +83,9 @@ Stage 是**工作流节点**，不是代码责任边界。一个 Stage 可以调
 
 | 文件 | 主归属 | 备注 |
 |---|---|---|
-| `debug/__init__.py` | `agent_plane/specialists/debug` | |
-| `debug/main.py` | `agent_plane/specialists/debug` | `_llm_analyze/_llm_regenerate_file` 为 LLM |
-| `debug/test_debug_waveform.py` | `agent_plane/specialists/debug` | 测试随代码走 |
+| `debug/__init__.py` | `agent_plane/verification/dv_debug_agent` | |
+| `debug/main.py` | `agent_plane/verification/dv_debug_agent` | `_llm_analyze/_llm_regenerate_file` 为 LLM |
+| `debug/test_debug_waveform.py` | `agent_plane/verification/dv_debug_agent` | 测试随代码走 |
 | `debug/tools/__init__.py` | `engine_plane/diagnostics` | |
 | `debug/tools/main.py` | `engine_plane/diagnostics` | 日志/编译错误解析、指纹、bisect |
 | `debug/tools/waveform.py` | `engine_plane/diagnostics` | Questa 波形转信号时间线 |
@@ -106,10 +106,10 @@ Stage 是**工作流节点**，不是代码责任边界。一个 Stage 可以调
 | `agents/runtime_plane/stage_tools.py` | `agent_plane/runtime_plane/stage_tools.py` | Stage 工具适配 |
 | `agents/registry.py` | `orchestration_plane/registry.py` | AgentCard 能力表（静态） |
 | `agents/stage_policy.py` | `orchestration_plane/stage_policy.py` | 阶段策略校验 |
-| `agents/design/*` | `agent_plane/specialists/design` | LLM 设计专家 |
-| `agents/verify/*` | `agent_plane/specialists/verify` | LLM 验证专家 |
-| `agents/coverage/*` | `agent_plane/specialists/coverage` | LLM 覆盖率专家 |
-| `agents/debug/*` | `agent_plane/specialists/debug` | LLM 调试专家 |
+| `agents/design/*` | `agent_plane/design_generation/rtl_upgrade_agent` | LLM 设计专家 |
+| `agents/verify/*` | `agent_plane/verification/uvm_coding_agent` | LLM 验证专家 |
+| `agents/coverage/*` | `agent_plane/verification/functional_coverage_agent` | LLM 覆盖率专家 |
+| `agents/debug/*` | `agent_plane/verification/dv_debug_agent` | LLM 调试专家 |
 | `agents/gates/{audit,human}.py` | `engine_plane/audit/gates` | 人工/审计门 |
 
 ## 3. 混合职责债务（第二轮拆分）
@@ -119,7 +119,7 @@ Stage 是**工作流节点**，不是代码责任边界。一个 Stage 可以调
 | `generation_plane/design/rtl/main.py` | 生成 + vlog 编译检查 | `_is_valid_rtl/_verify_ip_rtl` 抽到 `engine_plane/design/rtl/compile` |
 | `generation_plane/design/cmodel/main.py` | 生成 + 编译验证 | `_verify_model` 抽到 `engine_plane/design/cmodel/compile` |
 | `generation_plane/verification/main.py` | 生成 + 确定性 IR/assoc 写入 | `_write_association_report/_annotate_coverage_plan` 抽到 `engine_plane/verify` |
-| `agent_plane/specialists/debug/main.py` | LLM 分析 + 波形/信号取数 | 取数调用 `engine_plane/diagnostics`，不自己解析 |
+| `agent_plane/verification/dv_debug_agent/main.py` | LLM 分析 + 波形/信号取数 | 取数调用 `engine_plane/diagnostics`，不自己解析 |
 
 ## 4. 本轮不动的边界
 

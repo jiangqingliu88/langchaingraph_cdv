@@ -43,6 +43,10 @@ def unique_output_root(base: str | Path) -> Path:
     root = Path(make_output_root(str(base or "output")))
     if not root.exists():
         return root
+    # ChipStack 目录：`create_run` 已经保证唯一并写好 manifest，
+    # 再追加 `_2` 会让 manifest / run_id 与实际目录对不上。
+    if (root / "run_manifest.json").is_file():
+        return root
     for i in range(2, 1000):
         candidate = root.with_name(f"{root.name}_{i}")
         if not candidate.exists():

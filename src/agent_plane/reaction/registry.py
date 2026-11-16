@@ -55,6 +55,8 @@ def create_agent(role_id: str, *, workspace_root=".", **kwargs):
 
 def role_metadata() -> list[dict[str, Any]]:
     """返回各 Agent 自己的 RoleSpec；这里不运行 loop 或模型。"""
+    from src.agent_plane.domains import artifact_dir
+
     rows = []
     for role_id in ROLE_LOCATIONS:
         cls, _ = _entry(role_id)
@@ -66,6 +68,7 @@ def role_metadata() -> list[dict[str, Any]]:
                 "title": spec.title,
                 "package": f"src/agent_plane/{ROLE_LOCATIONS[role_id][0]}/",
                 "class": cls.__name__,
+                "artifact_dir": artifact_dir(role_id),
                 "inputs": list(spec.inputs),
                 "responsibility": spec.responsibility,
                 "instructions": spec.instructions,

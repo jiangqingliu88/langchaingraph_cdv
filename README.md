@@ -27,10 +27,11 @@
 ```text
 src/
 ├── agent_plane/          # Agent 内部 Domain 分组，不新增架构 Plane
+│   ├── domains.py        # 五个 Domain ↔ R-020 产物目录的权威注册表
 │   ├── reaction/         # openai-agents Agent/Runner、模型与工具适配
 │   ├── design_understanding/ design_verification/ design_signoff/
 │   ├── design_generation/ verification/  # 十个独立 SDK ReAct 角色
-│   ├── specialists/      # 既有生成器与兼容实现（角色接口未整体迁移删除）
+│   ├── common.py         # 独立专家的 LLM 校验/原子落盘骨架
 │   └── runtime/ planner/ collaboration/ memory/
 ├── orchestration_plane/  # supervisor / nodes / gates / registry + l2
 ├── generation_plane/     # design{rtl,cmodel} / verification / planning / *_tools
@@ -39,8 +40,17 @@ src/
 ├── knowledge_plane/
 ├── experience_plane/
 ├── runtime_plane/        # core / infrastructure / tools / utils + task_store/session
-└── workbench/            # Interfaces：cli / api / modes / ui
+│   ├── core/project_layout.py  # ProjectLayout：ChipStack L0–L5 工程目录契约
+│   └── artifacts/        # 产物工作区投影 + project_layout 兼容入口
+└── workbench/            # Interfaces：cli / api / modes（含 modes/chats 对话入口）/ ui
 ```
+
+**工程目录**按 ChipStack `CS-DIR-REQ-001` 的 L0–L5 五层模型组织：输入
+（`spec/ rtl/ tb/ ecn/ ref/`）与产物（`chipstack_artifacts/`）物理分离，每次
+运行有 `run_manifest.json`、CLI 日志、agent 固定子目录与可清理/归档的产物根。
+CLI 入口 `vagent project {init,layout,check,runs}` 与 `vagent workspace
+{new-run,agents,backup,archive}`；GUI 在「项目 → 工程目录」。详见
+[CHIPSTACK_PROJECT_LAYOUT.md](docs/architecture/CHIPSTACK_PROJECT_LAYOUT.md)。
 
 边界由 `config/architecture_guard.py` 强制执行：
 
@@ -77,15 +87,22 @@ EDA 端到端需要 `vlog / vopt / vsim / vcover` 在 PATH（QuestaSim 2024.1 �
 
 ## 快速开始
 
+两种前端模式：**CLI（headless）** 与 **PySide6 UI / TUI（interactive）**。
+`chat / plan / verify` 是两者共用的交互方式，不是第三种前端。
+
 ```bash
-# 交互式 REPL
-python -m src.workbench.cli.commands
+# 查看两种前端模式
+python -m src.workbench.cli.commands modes
 
-# 单次任务（agent 模式）
+# CLI headless：单次任务 / 确定性 verify / 每个 agent 的子命令
 python -m src.workbench.cli.commands -p "分析 specs/npu_sched 的 RTL 接口并给出验证计划"
-
-# 确定性 verify 模式
 python -m src.workbench.cli.commands -p "跑 VPlan 验证并报告证据" --mode verify
+python -m src.workbench.cli.commands formal chat "生成 FormalPlan"
+
+# UI / TUI：PySide6 或终端 REPL（按 chat/plan/verify 区分任务）
+python -m src.workbench.cli.commands gui
+python -m src.workbench.cli.commands
+python -m src.workbench.cli.commands chat --repl --mode plan
 ```
 
 ### Workbench（GUI）
@@ -209,6 +226,8 @@ Supervisor 状态机、Harness 多轮会话、安全边界等。
 ## 文档
 
 - [文档总索引](docs/INDEX.md)（当前说明、学习笔记与历史记录）
+- [ChipStack 工程目录架构（L0–L5）](docs/architecture/CHIPSTACK_PROJECT_LAYOUT.md)
+- [ChipStack 2.0 对齐矩阵](docs/architecture/CHIPSTACK_2_ALIGNMENT.md)
 - [Agent Domain / SDK 目录](docs/architecture/AGENT_DOMAIN_LAYOUT.md)
 - [独立专家与兼容入口](docs/architecture/SPECIALIST_AGENTS.md)
 - [交互模式](docs/architecture/INTERACTION_MODES.md)

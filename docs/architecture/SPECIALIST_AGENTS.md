@@ -1,88 +1,49 @@
-# 独立专家与兼容实现目录（specialists）
+# 独立专家（specialists）已退休 —— 迁移映射
 
-> **本页描述原 `specialists/` 目录及其 CLI/GUI/阶段接线，不是十个新 SDK ReAct
-> 角色的唯一入口。** 新角色的 Domain 分组、`openai-agents` Agent/Runner、
-> 工具适配与受限写入见 [Agent Domain 与 ReAct 布局](AGENT_DOMAIN_LAYOUT.md)。
-> 这里的九类专家/入口、原阶段 owner 和协作契约仍是兼容实现；新入口可能调用其
-> 受限读取器或生成器，但不会把旧目录整体迁移、改名或删除。
+> **`src/agent_plane/specialists/` 已删除。** 本页不再描述一个现存目录，
+> 只保留迁移后的落点，便于旧 import / 文档 / 书签对照。
+> 当前 Agent 分组与 SDK ReAct 入口见
+> [Agent Domain 与 ReAct 布局](AGENT_DOMAIN_LAYOUT.md)。
 
-旧入口中的目录名可与 GUI 模式 id 相同；独立专家另有 `main.py` / `graph.py`。
-不可按这两个目录体系的文件数推断 Agent 或执行后端的数量，也不能用旧
-`generate → store` 路径冒充所有新角色都是 SDK ReAct。
+## 1. 为什么不是“直接删”
 
-## 1. 目录
+原 `specialists/` 不是兼容壳：它同时承载了 supervisor 的四个专家子图、
+独立专家的生成器、CLI/GUI 的执行入口和九个对话入口。直接删会打断
+`supervisor` 闭环与 `vagent formal/mental/unit-test/repair`。本次先搬迁活代码，
+再删除目录。
 
-```text
-src/agent_plane/specialists/
-├── common.py                 # LLM JSON 校验/重试 + 原子落盘（独立专家共用）
-├── chat_common.py            # 9 个 agent 共用的对话 turn
-│
-├── agentic_chat/             # 通用 Harness 对话（不是专家子图）
-├── mental_model/             # 心智模型 IR（独立专家）
-├── formal/                   # Formal IR（独立专家）
-├── uvm/                      # UVM 专家（原 verify 子图实现）
-├── rtl_designer/             # RTL/模型（闭环 design 子图）
-├── unit_testing/             # 纯 SV 单测（独立专家）
-├── functional_coverage/      # 覆盖率（闭环 coverage 子图）
-├── debug/                    # 调试（闭环 debug 子图）
-├── workflows/                # 端到端流程（对话入口，执行走 verify router）
-```
+## 2. 迁移映射
 
-## 2. 每个 agent 都有对话入口
-
-```bash
-vagent agents list                      # 9 个 agent + 目录 + 命令
-vagent agents chat uvm "分析这份 testplan"
-vagent uvm chat "分析这份 testplan"     # 每个 agent 的专属命令
-```
-
-`specialists/<agent>/chat.py` 只声明 `AGENT_ID`，统一走
-`chat_common.chat()` → `workbench.modes.interaction.turn()`：
-交互方式（chat / plan / verify）与 role_prompt 都来自
-`workbench/modes/agent_modes.py`，CLI/GUI 共用同一份配置。
-
-## 3. 三类 agent
-
-| 类型 | 目录 | 驱动方式 |
+| 原路径（`src/agent_plane/specialists/`） | 新路径 | 内容 |
 |---|---|---|
-| 闭环专家 | `rtl_designer` / `uvm` / `debug` / `functional_coverage` | `orchestration_plane/supervisor` 主图按阶段调度 |
-| 独立专家 | `mental_model` / `formal` / `unit_testing` | `vagent <cmd>` 或 GUI 模式动作按钮 |
-| 入口型 | `agentic_chat` / `workflows` | 通用 Harness / verify router（不新增执行链） |
+| `common.py` | `src/agent_plane/common.py` | 独立专家共用 LLM 校验/重试/原子落盘 |
+| `chat_common.py` | `src/workbench/modes/chats/common.py` | 九类对话的公共入口 |
+| `<agent>/chat.py` | `src/workbench/modes/chats/<agent>.py` | `agentic_chat / mental_model / formal / uvm / rtl_designer / unit_testing / functional_coverage / debug / workflows` |
+| `formal/main.py`、`formal/graph.py` | `verification/formal_agent/` | FormalPlan 生成器 + 独立子图 |
+| `mental_model/main.py`、`mental_model/graph.py` | `design_understanding/mental_model_agent/` | Mental IR 生成器 + 独立子图 |
+| `unit_testing/main.py`、`unit_testing/graph.py` | `design_verification/simulation_agent/` | 纯 SV testbench 生成/编译/运行 |
+| `rtl_designer/tools.py` | `design_generation/rtl_upgrade_agent/design_tools.py`（公共入口仍是 `tools.py`） | 窄沙箱设计工具 |
+| `rtl_designer/loop.py`、`graph.py` | `design_generation/rtl_upgrade_agent/` | Design 子图 + opt-in 工具循环 |
+| `uvm/loop.py`、`graph.py` | `verification/uvm_coding_agent/` | Verify 子图 + opt-in 工具循环 |
+| `functional_coverage/tools.py`、`loop.py`、`graph.py` | `verification/functional_coverage_agent/` | 只读覆盖率工具 + Coverage 子图 |
+| `debug/main.py`、`graph.py`、`loop.py`、`repair_policy.py` | `verification/dv_debug_agent/` | DebugExecutor + Debug 子图 + 受控修复 |
+| `debug/test_debug_waveform.py` | `tests/test_debug_waveform.py` | 随测试目录走 |
 
-## 4. 三个独立专家
+## 3. 调用方更新
 
-共用 `specialists/common.py`：`generate_json_object()`（校验/重试）、
-`write_json_artifact()`（JSON+YAML+manifest 原子写）、`SpecialistError`。
+- `orchestration_plane/supervisor/graph.py` 的四个专家子图改用新 Domain 路径；
+- `execution_helpers.py` 的 `debug` 执行器映射改为
+  `src.agent_plane.verification.dv_debug_agent:DebugExecutor`；
+- CLI `cmd_formal / cmd_mental / cmd_unit_test / cmd_repair` 与
+  `VerificationCLI` 改到新路径；
+- GUI `modules/interaction` 与 `modes/agent_chat.py` 改用
+  `workbench/modes/chats/`；
+- `tests/` 中所有旧 import 同步更新。
 
-| 专家 | 输入 | 产物 | 如实边界 |
-|---|---|---|---|
-| `mental_model` | spec 文本 | `<run>/mental_ir/{mental_ir.json,yaml,manifest.json}` | 候选理解，必须人审 |
-| `formal` | spec 文本 | `<run>/formal/{formal_plan.json,yaml,manifest.json}` | 只生成性质/假设/证明义务；`engine.ran=false` |
-| `unit_testing` | RTL 文件 | `<run>/unit_test/{<dut>_tb.sv, report.json, rtl/}` | 只有 compile+run 都通过才是 PASS；无 EDA 是 GENERATED_ONLY |
+## 4. 边界未变
 
-```bash
-vagent mental build <spec.md> -o <run>        # 或 vagent mental-model ...
-vagent formal build <spec.md> -o <run>
-vagent unit-test build <dut.sv> -o <run>      # 或 vagent unit-testing ...
-```
-
-## 5. GUI 模式 → 目录
-
-| GUI 模式 | 目录 | 动作 |
-|---|---|---|
-| Agentic Chat | `agentic_chat` | 对话 |
-| Mental Model | `mental_model` | 生成 Mental IR |
-| Formal | `formal` | 生成 Formal 计划 |
-| UVM | `uvm` | 对话/计划（UVM 子图） |
-| RTL Designer | `rtl_designer` | 对话/计划 |
-| Unit Testing | `unit_testing` | 生成/运行单测 |
-| Functional Coverage | `functional_coverage` | 对话/计划 |
-| Debug | `debug` | 对话/计划 |
-| Workflows | `workflows` | 打开验证流程（supervisor） |
-
-## 6. 边界
-
-- 独立专家只生成/检查自己的产物，不驱动闭环；
-- 要进 supervisor 必须另做路由与阶段接线，不能靠"多一个目录"冒充接入；
-- Formal 未接形式引擎时 `engine.ran=false`；Unit Testing 无 EDA 时
-  `GENERATED_ONLY`；两者都不是"通过"。
+- 生成器产物仍是**候选**：FormalPlan / Mental IR / testbench 存在不等于
+  proof、理解或仿真通过。
+- `NOT_RUN` / `INCOMPLETE` / `VALIDATED` / `PASS` 不混用。
+- 原目录已删除；若发现遗漏引用，直接改到上表的新路径，不要恢复
+  `specialists/` 兼容层。

@@ -11,7 +11,7 @@ from src.generation_plane.design.cmodel import ModelExecutor
 from src.generation_plane.verification import VerifyExecutor
 from src.engine_plane.ops import OpsExecutor
 from src.engine_plane.coverage import CoverageExecutor
-from src.agent_plane.specialists.debug import DebugExecutor
+from src.agent_plane.verification.dv_debug_agent import DebugExecutor
 from src.engine_plane.audit import AuditExecutor
 
 CURRENT_AGENTS = [

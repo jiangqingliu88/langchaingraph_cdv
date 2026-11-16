@@ -1,4 +1,4 @@
-"""`vagent agents` —— 9 个 agent 的统一入口 + 每个 agent 的专属命令。
+"""`vagent agents` —— ChipStack 2.0 的 10 个 agent 统一入口 + 专属命令。
 
 两种用法等价：
     vagent agents chat uvm "分析这份 testplan"
@@ -48,30 +48,42 @@ def _chat_command(agent_id: str):
 
 @cli.group("agents")
 def agent_group():
-    """9 个 agent：列出、按 agent 对话（与旧的 `vagent agent` 执行器命令区分）。"""
+    """10 个 agent：列出、按 agent 对话（与旧的 `vagent agent` 执行器命令区分）。"""
 
 
 @agent_group.command("list")
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def agent_list(json_output):
-    """列出 9 个 agent、对应目录与交互方式。"""
-    rows = [
-        {
-            "id": m.id,
-            "label": m.label,
-            "directory": f"src/agent_plane/specialists/{m.specialist}",
-            "interaction": m.interaction,
-            "action": m.action,
-            "command": f"vagent {_command_name(m.id)} chat '<prompt>'",
-            "general_command": f"vagent agents chat {m.id} '<prompt>'",
-        }
-        for m in AGENT_MODES
-    ]
+    """列出 ChipStack 2.0 的 10 个 agent、CLI/TUI 名与产物目录。"""
+    from src.agent_plane.domains import all_agents
+
+    preset_ids = {m.id for m in AGENT_MODES}
+    rows = []
+    for spec in all_agents():
+        mode_id = spec.tui_mode if spec.tui_mode in preset_ids else (
+            spec.agent_id if spec.agent_id in preset_ids else "")
+        rows.append({
+            "id": spec.agent_id,
+            "label": spec.title,
+            "domain": spec.domain,
+            "cli": spec.cli_name,
+            "tui": mode_id,
+            "artifact": spec.artifact_dir,
+            "inputs": spec.inputs,
+            "chat": bool(mode_id),
+            "command": (
+                "vagent experimental rtl-generation chat '<prompt>'"
+                if spec.cli_name == "rtl-generation" and mode_id
+                else f"vagent {spec.cli_name} chat '<prompt>'" if spec.cli_name and mode_id
+                else f"vagent agents chat {spec.agent_id} '<prompt>'" if mode_id else ""),
+        })
     if json_output:
         click.echo(json.dumps(rows, ensure_ascii=False, indent=2))
         return
     for row in rows:
-        console.print(f"  {row['id']:<20} → {row['directory']}  ({row['interaction']})  {row['command']}")
+        chat = row["command"] or "（无独立对话入口）"
+        console.print(f"  {row['id']:<26} cli={row['cli'] or '-':<24} "
+                      f"tui={row['tui'] or '-':<20} → {row['artifact']:<28} {chat}")
 
 
 @agent_group.command("chat")
@@ -79,6 +91,10 @@ def agent_list(json_output):
 @_chat_options
 def agent_chat(agent_id, prompt, workspace, session_id, json_output):
     """通用入口：`vagent agents chat <agent_id> <prompt>`。"""
+    if agent_id not in {m.id for m in AGENT_MODES}:
+        raise click.ClickException(
+            f"{agent_id} 没有独立对话入口；可用：{', '.join(m.id for m in AGENT_MODES)}"
+        )
     chat_and_render(agent_id, prompt, workspace=workspace, session_id=session_id, json_output=json_output)
 
 

@@ -17,7 +17,7 @@ class FunctionalCoverageAgent(ReActAgent):
     )
 
     def backend_tools(self, workspace_root, output_root):
-        from src.agent_plane.specialists.functional_coverage.tools import ListCoverageFilesTool, ReadCoverageTool
+        from src.agent_plane.verification.functional_coverage_agent.tools import ListCoverageFilesTool, ReadCoverageTool
 
         return [
             ReadCoverageTool(workspace_root),

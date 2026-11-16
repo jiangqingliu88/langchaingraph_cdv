@@ -145,12 +145,19 @@ class ProjectManagementModule(ModuleBase):
 
         row = QHBoxLayout()
         row.addWidget(_button("刷新", self._reload))
+        row.addWidget(_button("工程目录 / 产物", self._open_workspace))
         row.addStretch(1)
         layout.addLayout(row)
         layout.addWidget(_muted("切换项目：重启工作台并加 `--project <id>`。"
                                 "热切换会留下旧 cwd 的单例句柄，所以不在这里做。"))
         self._reload()
         return root
+
+    def _open_workspace(self) -> None:
+        from .common import open_module
+
+        if not open_module(self.ctx, "project.workspace"):
+            self.show_warning("工作台没有加载「工程目录」模块 —— 检查清单里的 project.workspace。")
 
     def _reload(self) -> None:
         from ...projects import current, load_projects

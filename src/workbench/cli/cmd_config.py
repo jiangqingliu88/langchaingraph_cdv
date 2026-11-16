@@ -89,6 +89,28 @@ def config_show(section, json_output):
         out.print_result(all_config, title="Current Configuration")
 
 
+@config.command("lookup")
+@click.option("--config", "explicit", default="", help="显式配置路径（最高优先级）")
+@click.option("--root", default=".", help="工程根（最后一档查找）")
+@click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
+def config_lookup(explicit, root, json_output):
+    """按 ChipStack 2.0 顺序查 `cli_config.yaml`：--config → 安装目录 → CHIPSTACK_HOME → 工程根。"""
+    from src.workbench.chipstack_compat import load_effective_config
+
+    resolved = load_effective_config(explicit or None, root)
+    payload = resolved.to_dict()
+    if json_output:
+        click.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    if not payload["sources"]:
+        console.print("[yellow]没有找到 cli_config.yaml[/yellow]")
+        return
+    console.print(f"[green]生效配置：{payload['path']}[/green]")
+    for source in payload["sources"]:
+        console.print(f"  · {source}")
+    console.print(json.dumps(payload["data"], ensure_ascii=False, indent=2)[:4000])
+
+
 @config.command("set")
 @click.argument("key")
 @click.argument("value")

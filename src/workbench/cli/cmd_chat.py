@@ -41,11 +41,11 @@ def chat_command(
 ):
     """自然语言交互；显式 --mode verify 才进入确定性验证主链。"""
     if repl:
-        if prompt or interaction_mode != "chat" or session_id or resume_id:
-            raise click.UsageError("--repl 不接受 prompt、mode、session 或 resume")
+        if prompt or session_id or resume_id:
+            raise click.UsageError("--repl 不接受 prompt、session 或 resume；模式用 --mode")
         from src.workbench.cli.repl import run_interactive
 
-        raise SystemExit(run_interactive(workspace=workspace))
+        raise SystemExit(run_interactive(workspace=workspace, mode=interaction_mode))
     if resume_id:
         if interaction_mode == "verify":
             raise click.UsageError("Agent 会话恢复不能与 verify 模式混用")

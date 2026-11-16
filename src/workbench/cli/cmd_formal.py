@@ -31,8 +31,8 @@ def formal_group():
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def formal_build(spec, output, module, json_output):
     """从 spec 生成 Formal IR 并落盘到 `<run>/formal/`。"""
-    from src.agent_plane.specialists.common import SpecialistError
-    from src.agent_plane.specialists.formal.main import run
+    from src.agent_plane.common import SpecialistError
+    from src.agent_plane.verification.formal_agent.main import run
 
     text = spec.read_text(encoding="utf-8", errors="replace")
     out = output or Path(f"output_formal_{spec.stem}")

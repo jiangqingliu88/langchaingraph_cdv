@@ -78,7 +78,7 @@ vagent mental build <spec.md> -o <run> --json
 Python 入口：
 
 ```python
-from src.agent_plane.specialists.mental import run, generate_mental_ir
+from src.agent_plane.design_understanding.mental_model_agent import run, generate_mental_ir
 result = run(spec_text, "output_x", module="npu_sched", spec_path="spec.md")
 ir = generate_mental_ir(spec_text, module="npu_sched")
 ```

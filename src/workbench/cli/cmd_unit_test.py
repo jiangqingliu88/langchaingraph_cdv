@@ -33,8 +33,8 @@ def unit_test_group():
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def unit_test_build(rtl, output, module, no_compile, no_sim, json_output):
     """生成 unit testbench → 编译 → 运行。"""
-    from src.agent_plane.specialists.common import SpecialistError
-    from src.agent_plane.specialists.unit_testing.main import run
+    from src.agent_plane.common import SpecialistError
+    from src.agent_plane.design_verification.simulation_agent.main import run
 
     out = output or Path(f"output_unit_{rtl.stem}")
     try:

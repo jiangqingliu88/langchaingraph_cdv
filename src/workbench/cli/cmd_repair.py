@@ -29,7 +29,7 @@ def repair_group():
 @click.option("--json", "json_output", is_flag=True)
 def repair_validate(proposal, project_root, json_output):
     """检查 proposal 是否越过受控边界。"""
-    from src.agent_plane.specialists.debug.repair_policy import (
+    from src.agent_plane.verification.dv_debug_agent.repair_policy import (
         proposal_from_dict, validate_proposal,
     )
 
@@ -50,7 +50,7 @@ def repair_validate(proposal, project_root, json_output):
 @click.option("--json", "json_output", is_flag=True)
 def repair_stage(proposal, staging, project_root, json_output):
     """把 proposal 写进 staging（绝不写项目根）。"""
-    from src.agent_plane.specialists.debug.repair_policy import (
+    from src.agent_plane.verification.dv_debug_agent.repair_policy import (
         proposal_from_dict, stage_patch,
     )
 

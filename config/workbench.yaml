@@ -84,6 +84,15 @@ modules:
     area: center
     order: 6
 
+  # ChipStack 五层工程目录（L0–L5）的界面落点：
+  # 目录树 / 验收清单 / 运行索引 / agent 产物，全部来自 ProjectLayout。
+  - id: project.workspace
+    title: 工程目录
+    group: project
+    factory: src.workbench.modules.service.workspace:ProjectWorkspaceModule
+    area: center
+    order: 8
+
   - id: interaction.chat
     title: 交互与验证
     group: project
@@ -451,6 +460,18 @@ modules:
     area: center
     order: 20
     tool: {name: flow.artifacts, kind: json}
+    params: {subscribe: run.selected}
+
+  # Markdown 产物 —— 一次运行里所有 .md 的浏览 / 编辑 / 预览。
+  # 与「产物审查」分工：那页管中间 YAML（schema 可诊断），这页管人读的
+  # Markdown（mental model、summary、rule drafts…）。保存同样记证据链，
+  # 同样不会自动重跑。
+  - id: flow.markdown
+    title: Markdown 产物
+    group: flow
+    factory: src.workbench.modules.flow.markdown:MarkdownArtifactsModule
+    area: center
+    order: 21
     params: {subscribe: run.selected}
 
   # 验证流程 —— 把闭环搬上界面。

@@ -48,6 +48,10 @@ def _read_json(path: Path, default: Any) -> Any:
         return default
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def _sha256(path: Path) -> str:
     import hashlib
 
@@ -107,6 +111,7 @@ class ChipStackWorkspace:
         result.setdefault("artifacts", [])
         result.setdefault("rtl_simulation_completed", False)
         self.project.mkdir(parents=True, exist_ok=True)
+        self._ensure_compile_config()
         self._publish_mental_model(result)
         self._publish_rtl()
         self._publish_uvm(result)
@@ -120,8 +125,31 @@ class ChipStackWorkspace:
         # 项目入口的文件与 Archive 同步，后续历史仍由 Archive 保留。
         self._index_sqlite(result, seed)
         self._write_run_manifest(result, seed)
-        _write_json(self.project / "run_manifest.json", result)
+        _write_json(self.project / "run_manifest.json", {
+            "schema": "run_manifest_v1",
+            "run_id": self.run_id,
+            "started_at": result.get("started_at") or _now_iso(),
+            "entrypoint": result.get("entrypoint") or "interface-timing run-slice",
+            "design_name": self.design_name,
+            "top_module": self.design_name,
+            "agents_invoked": result.get("agents_invoked") or [
+                "mental_model_agent", "simulation_agent",
+                "functional_coverage_agent", "uvm_agent",
+            ],
+            "status": result.get("overall_status") or "UNKNOWN",
+            "run_dir": str(self.project),
+            "evidence_manifest": str(manifest),
+            **result,
+        })
         return result
+
+    def _ensure_compile_config(self) -> None:
+        """R-014/R-015：每个工程聚合目录都要有一份稳定的 compile_config.yaml。"""
+        from .project_layout import COMPILE_CONFIG_NAME, DEFAULT_COMPILE_CONFIG
+
+        path = self.project / COMPILE_CONFIG_NAME
+        if not path.exists():
+            _write_json(path, DEFAULT_COMPILE_CONFIG)
 
     def _publish_mental_model(self, result: dict[str, Any]) -> None:
         root = self.project / "mental_model_agent"
@@ -209,7 +237,10 @@ class ChipStackWorkspace:
             _status(root / "status.json", "NOT_COPIED", "解析/准备阶段未形成可用的源 RTL 快照")
 
     def _publish_uvm(self, result: dict[str, Any]) -> None:
+        # 手册 §5：UVM 产物在 artifact root 的 `uvm_agent/`；同时保留 design 内
+        # 的副本供既有测试/旧调用方读取。两份是同一批文件，不产生第二份真相。
         root = self.project / "uvm_agent"
+        root_level = self.root / "uvm_agent"
         monitor = result.get("monitor")
         if monitor:
             source = Path(monitor["path"])
@@ -224,6 +255,7 @@ class ChipStackWorkspace:
             if bench.is_file():
                 (root / "testbench").mkdir(parents=True, exist_ok=True)
                 shutil.copy2(bench, root / "testbench" / f"{name}_tb.sv")
+        _copy_tree(root, root_level)
 
     def _publish_simulation(self, result: dict[str, Any], seed: int) -> None:
         root = self.project / "simulation_agent"
@@ -318,17 +350,26 @@ class ChipStackWorkspace:
         with (logs / f"{self.run_id}.jsonl").open("w", encoding="utf-8") as fh:
             for line in lines:
                 fh.write(line + "\n")
-        _write_json(
-            self.root / ".cli_logs" / f"{self.run_id}.json",
-            {
-                "command": "interface-timing run-slice",
-                "design_name": self.design_name,
-                "seed": seed,
-                "simulation_kind": result.get("simulation_kind"),
-                "simulation_executed": result.get("simulation_kind") == "rtl_simulation",
-                "archive": str(self.archive.relative_to(self.root)),
-                "captured": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            },
+        payload = {
+            "command": "interface-timing run-slice",
+            "design_name": self.design_name,
+            "run_id": self.run_id,
+            "seed": seed,
+            "simulation_kind": result.get("simulation_kind"),
+            "simulation_executed": result.get("simulation_kind") == "rtl_simulation",
+            "archive": str(self.archive.relative_to(self.root)),
+            "captured": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        _write_json(self.root / ".cli_logs" / f"{self.run_id}.json", payload)
+        # R-022：规范的 CLI 日志位置与命名
+        from .project_layout import CLI_LOGS_DIR
+
+        cli_dir = self.root / CLI_LOGS_DIR
+        cli_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        (cli_dir / f"cli_{stamp}.log").write_text(
+            "\n".join(f"{key}: {value}" for key, value in payload.items()) + "\n",
+            encoding="utf-8",
         )
         # structured authoring 不是聊天对话；没有对话内容就不伪造 TUI 聊天历史。
         _write_json(
@@ -418,8 +459,16 @@ class ChipStackWorkspace:
         _write_json(
             path,
             {
-                "schema": "chipstack_workspace_v1",
+                "schema": "run_manifest_index_v1",
                 "layout_scope": "运行产物组织；非 Cadence 服务集成",
+                # R-021 的 run 级必填字段（根索引保留最近一次）
+                "run_id": self.run_id,
+                "started_at": result.get("started_at") or _now_iso(),
+                "entrypoint": result.get("entrypoint") or "interface-timing run-slice",
+                "design_name": self.design_name,
+                "top_module": self.design_name,
+                "agents_invoked": result.get("agents_invoked") or [],
+                "status": result.get("overall_status") or "UNKNOWN",
                 "latest_design": self.design_name,
                 "latest_run_id": self.run_id,
                 "seed": seed,

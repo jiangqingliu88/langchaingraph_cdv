@@ -1,7 +1,7 @@
 """闭环流水线的**运行期设施** —— Runtime / 状态重建 / executor 调用包装。
 
 运行时设施与 agent 图的边界
-    Agent 拓扑已迁到 `src/agent_plane/specialists/`（supervisor + 四个专家子图）；
+    Agent 拓扑已迁到 `src/orchestration_plane/supervisor/ + Domain 子图 `（supervisor + 四个专家子图）；
     本模块只保留 Runtime / `_run_agent` / context 重建等平台设施。
     executor 节点包装在 `src/agent_plane/runtime/pipeline_nodes/`，路由在
     `src/orchestration_plane/supervisor/routing.py`。

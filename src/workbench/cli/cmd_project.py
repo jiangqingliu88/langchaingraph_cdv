@@ -1,150 +1,180 @@
-"""项目管理命令（Phase 2.4）。
+"""项目管理命令 —— 全部走 ChipStack 五层工程目录架构。
 
-从 `src/workbench/cli/commands.py` 拆出：project init/status/info/list/clean + web。
+`project init` 一次建出 L2 输入 / L3 配置 / L4 产物根 / L5 工作流目录；
+`status` / `layout` / `check` / `runs` 只读地查看同一份 `ProjectLayout`。
+不再生成 `output_<user>_<ts>` 那种游离于架构之外的目录。
 """
 from __future__ import annotations
 
 import asyncio
+import shutil
+import sys
 from pathlib import Path
 
 import click
 
 from src.workbench.cli.commands import (
-    PipelineExecutionService, _get_git_info, cli, console, get_output_adapter,
+    _get_git_info, cli, console, get_output_adapter,
 )
+from src.workbench.cli.layout_output import (
+    dump_json, layer_lines, load_layout, print_agents, print_checks,
+    print_layers, print_runs, summary_payload,
+)
+
+
+def _root_option(func):
+    return click.option("--root", default=".", show_default=True,
+                        help="DESIGN_ROOT（默认当前目录）")(func)
+
+
+def _artifact_option(func):
+    return click.option("--artifact-root", default="",
+                        help="产物根（默认读 cli_config.yaml，否则 chipstack_artifacts/）")(func)
 
 
 @cli.group()
 def project():
-    """项目管理"""
+    """项目管理（ChipStack 工程目录架构）"""
     pass
 
 
 @project.command("init")
 @click.argument("name")
+@click.option("--dir", "directory", default=".", show_default=True,
+              help="父目录；NAME 为绝对路径时忽略")
+@click.option("--top", default="", help="顶层 module 名（默认与 NAME 相同）")
 @click.option("--template", "-t", default="default",
-              type=click.Choice(["default", "uart", "axi", "alu"]),
-              help="项目模板")
-def project_init(name, template):
-    """创建新项目目录结构
+              type=click.Choice(["default", "uart", "alu", "axi"]),
+              help="输入模板")
+@click.option("--artifact-root", default="",
+              help="产物根（默认 chipstack_artifacts/）")
+@click.option("--force", is_flag=True, help="目录已存在时补齐缺失文件")
+def project_init(name, directory, top, template, artifact_root, force):
+    """创建 ChipStack 工程目录（L2 输入 / L3 配置 / L4 产物 / L5 工作流）
 
     \b
     示例:
-      vagent project init my_project                      # 默认模板
-      vagent project init my_project --template uart      # UART 模板
-      vagent project init my_project --template axi       # AXI 模板
+      vagent project init sync_fifo --top sync_fifo
+      vagent project init sync_fifo -t uart --dir D:/work
+      vagent project init . --top sync_fifo --force     # 就地初始化当前目录
     """
-    project_dir = Path(name)
-    if project_dir.exists():
-        console.print(f"[red]Directory '{name}' already exists[/red]")
-        return
+    target = Path(name).expanduser()
+    if not target.is_absolute():
+        target = Path(directory).expanduser() / target
+    target = target.resolve()
 
-    # Create directory structure
-    from src.runtime_plane.infrastructure.output_config import make_output_root
-    project_output = make_output_root()
-    dirs = [
-        "specs", project_output, "logs",
-        f"{project_output}/docs/de", f"{project_output}/docs/dv",
-        "src/rtl", "src/tb", "src/stages",
-    ]
-    for d in dirs:
-        (project_dir / d).mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        non_empty = any(target.iterdir())
+        if non_empty and not force:
+            console.print(f"[red]目录已存在且非空：{target}[/red]")
+            console.print("[dim]用 --force 补齐缺失文件（不覆盖已有输入）。[/dim]")
+            sys.exit(1)
 
-    # Create default files
-    (project_dir / "README.md").write_text(
-        f"# {name}\n\nSignOffAI Project — Created with template: {template}\n", encoding="utf-8"
+    layout = load_layout(target, artifact_root or None)
+    scaffolded = layout.scaffold(
+        name=name if name not in ("", ".") else target.name,
+        top=top or target.name,
+        template=template,
+        artifact_root=artifact_root,
     )
-    (project_dir / ".gitignore").write_text(
-        "output_*/\noutput/\nlogs/\n*.pyc\n__pycache__/\n.env\n*.db\n", encoding="utf-8"
-    )
-    (project_dir / "valiflow.md").write_text(
-        "---\nproject: " + name + "\n---\n\n## constraints\n\n## fi_profile\n\n## known_issues\n",
-        encoding="utf-8"
-    )
-
-    # Template-specific files
-    if template == "uart":
-        (project_dir / "specs" / "uart_spec.md").write_text(
-            "# UART Specification\n\n## Features\n- 8-N-1 configuration\n- Baud rate: 115200\n"
-            "## Interfaces\n- NAME: uart_rx, TYPE: input, WIDTH: 1\n- NAME: uart_tx, TYPE: output, WIDTH: 1\n",
-            encoding="utf-8"
-        )
-    elif template == "alu":
-        (project_dir / "specs" / "alu_spec.md").write_text(
-            "# ALU Specification\n\n## Features\n- Arithmetic: ADD, SUB, MUL\n- Logic: AND, OR, XOR\n"
-            "## Interfaces\n- NAME: clk, TYPE: input, WIDTH: 1\n- NAME: rst_n, TYPE: input, WIDTH: 1\n",
-            encoding="utf-8"
-        )
-
-    console.print(f"[green]Project '{name}' created with template '{template}'[/green]")
-    console.print(f"[dim]Directory: {project_dir.absolute()}[/dim]")
-    console.print(f"[dim]Next: cd {name} && vagent init && vagent verify specs/*.md[/dim]")
+    console.print(f"[green]ChipStack 工程已生成：{scaffolded.design_root}[/green]")
+    console.print(f"[dim]产物根：{scaffolded.artifact_root}[/dim]")
+    print_layers(scaffolded)
+    console.print(
+        "\n[dim]下一步：把 spec 放进 spec/、RTL 放进 rtl/，然后 "
+        f"`cd {scaffolded.design_root} && vagent workspace new-run {scaffolded.top_module}`[/dim]")
 
 
 @project.command("status")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def project_status(json_output):
-    """当前项目状态概览"""
-    out = get_output_adapter(json_output)
-    cwd = Path.cwd()
-
-    status_info = {
-        "directory": str(cwd),
-        "has_output": bool(list(cwd.glob("output_*")) or (cwd / "output").exists()),
-        "has_logs": (cwd / "logs").exists(),
-        "has_specs": list((cwd / "specs").glob("*.md")) if (cwd / "specs").exists() else [],
-        "has_valiflow": (cwd / "valiflow.md").exists(),
-        "has_env": (cwd / ".env").exists(),
-    }
-
-    # List recent runs
-    service = PipelineExecutionService.get_instance()
-    runs = service.list_runs()[-5:]
-    status_info["recent_runs"] = runs
-
-    out.print_result(status_info, title="Project Status")
+@_root_option
+@_artifact_option
+def project_status(json_output, root, artifact_root):
+    """当前工程状态（分层、验收、最近运行）"""
+    layout = load_layout(root, artifact_root or None)
+    if json_output:
+        click.echo(dump_json(summary_payload(layout)))
+        return
+    print_layers(layout)
+    print_checks(layout)
+    print_runs(layout)
 
 
 @project.command("info")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
-def project_info(json_output):
-    """项目详细信息"""
-    out = get_output_adapter(json_output)
-    cwd = Path.cwd()
-
+@_root_option
+@_artifact_option
+def project_info(json_output, root, artifact_root):
+    """工程详细信息（目录、配置、git、spec）"""
+    layout = load_layout(root, artifact_root or None)
     info = {
-        "name": cwd.name,
-        "path": str(cwd.absolute()),
-        "git": _get_git_info(cwd),
-        "specs": [],
-        "runs_count": 0,
+        "name": layout.design_root.name,
+        "path": str(layout.design_root),
+        "artifact_root": str(layout.artifact_root),
+        "top_module": layout.top_module,
+        "config": layout.config,
+        "git": _get_git_info(layout.design_root),
+        "specs": [
+            {"path": str(p.relative_to(layout.design_root)), "size": p.stat().st_size}
+            for p in sorted((layout.design_root / "spec").rglob("*"))
+            if p.is_file()
+        ] if (layout.design_root / "spec").is_dir() else [],
+        "runs": layout.list_runs(),
     }
+    if json_output:
+        click.echo(dump_json(info))
+        return
+    out = get_output_adapter(json_output)
+    out.print_result(info, title=f"Project: {layout.design_root.name}")
+    print_layers(layout)
 
-    specs_dir = cwd / "specs"
-    if specs_dir.exists():
-        for f in specs_dir.rglob("*.md"):
-            info["specs"].append({
-                "path": str(f.relative_to(cwd)),
-                "size": f.stat().st_size,
-            })
 
-    service = PipelineExecutionService.get_instance()
-    info["runs_count"] = len(service.list_runs())
+@project.command("layout")
+@_root_option
+@_artifact_option
+def project_layout(root, artifact_root):
+    """打印 L0–L5 五层目录树"""
+    layout = load_layout(root, artifact_root or None)
+    for line in layer_lines(layout):
+        console.print(line)
 
-    # DB stats
-    try:
-        stats = asyncio.run(_get_db_stats())
-        info["db_stats"] = stats
-    except Exception:
-        pass
 
-    out.print_result(info, title=f"Project: {cwd.name}")
+@project.command("check")
+@click.option("--strict", is_flag=True, help="WARN 也算失败")
+@_root_option
+@_artifact_option
+def project_check(strict, root, artifact_root):
+    """按 CS-DIR-REQ-001 §7 验收当前工程目录"""
+    layout = load_layout(root, artifact_root or None)
+    failures = print_checks(layout)
+    if failures or (strict and any(
+            row["status"] == "WARN" for row in layout.audit())):
+        sys.exit(1)
+
+
+@project.command("runs")
+@_root_option
+@_artifact_option
+def project_runs(root, artifact_root):
+    """列出 run_manifest.json 里的运行"""
+    layout = load_layout(root, artifact_root or None)
+    print_runs(layout)
+
+
+@project.command("agents")
+@click.option("--run-id", default="", help="指定 run（默认最新）")
+@_root_option
+@_artifact_option
+def project_agents(run_id, root, artifact_root):
+    """列出五个 Agent Domain 与固定产物目录"""
+    layout = load_layout(root, artifact_root or None)
+    print_agents(layout, run_id)
 
 
 @project.command("list")
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def project_list(json_output):
-    """列出所有项目"""
+    """列出数据库里登记的所有项目"""
     out = get_output_adapter(json_output)
     try:
         projects = asyncio.run(_list_db_projects())
@@ -159,31 +189,34 @@ def project_list(json_output):
 
 
 @project.command("clean")
-@click.option("--all", "clean_all", is_flag=True, help="清理所有（含日志）")
-def project_clean(clean_all):
-    """清理输出目录
+@click.option("--yes", "-y", is_flag=True, help="不确认直接删除")
+@click.option("--legacy", is_flag=True, help="同时清理旧的 output*/logs/")
+@_root_option
+@_artifact_option
+def project_clean(yes, legacy, root, artifact_root):
+    """删除产物根（L4）—— 输入与配置不受影响，可原地重跑
 
     \b
     示例:
-      vagent project clean              # 清理 output/
-      vagent project clean --all        # 清理 output/ + logs/
+      vagent project clean            # 删除 chipstack_artifacts/
+      vagent project clean --legacy   # 顺带清理旧 output*/ 与 logs/
     """
-    cwd = Path.cwd()
-    import shutil
-    # 清理所有 output_ 前缀的目录（含旧 output/ 目录）
-    removed_any = False
-    for pattern in ["output"] + sorted(cwd.glob("output_*")):
-        target = cwd / pattern if isinstance(pattern, str) else pattern
-        if target.exists():
-            shutil.rmtree(target)
-            console.print(f"[green]Cleaned: {target.name}/[/green]")
-            removed_any = True
-    if clean_all and (logs := cwd / "logs").exists():
-        shutil.rmtree(logs)
-        console.print(f"[green]Cleaned: logs/[/green]")
-        removed_any = True
-    if not removed_any:
-        console.print("[dim]No output directories found[/dim]")
+    layout = load_layout(root, artifact_root or None)
+    targets = []
+    if layout.artifact_root.exists():
+        targets.append(layout.artifact_root)
+    if legacy:
+        targets.extend(sorted(layout.design_root.glob("output*")))
+        if (layout.design_root / "logs").exists():
+            targets.append(layout.design_root / "logs")
+    if not targets:
+        console.print("[dim]没有可清理的产物目录[/dim]")
+        return
+    for target in targets:
+        if not yes and not click.confirm(f"删除 {target}？", default=False):
+            continue
+        shutil.rmtree(target, ignore_errors=True)
+        console.print(f"[green]已清理：{target}[/green]")
 
 
 async def _get_db_stats() -> dict:
@@ -222,4 +255,3 @@ def web_command(host, port, reload):
     """Web 仪表盘（已移除 —— 个人级 CLI，禁止 Web 前端）"""
     console.print("[yellow]Web 前端已移除（CLAUDE.md 规定：个人级 CLI，禁止 Web 开发）。[/yellow]")
     console.print("[dim]所有功能通过命令行接口交付：vagent verify / runs / logs / show / trend ...[/dim]")
-

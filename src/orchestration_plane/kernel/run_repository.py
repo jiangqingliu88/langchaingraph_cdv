@@ -68,6 +68,16 @@ class RunRepository:
                          if p.is_dir() and not p.name.startswith("."))
         except OSError:
             pass
+        # ChipStack L4：`<DESIGN_ROOT>/chipstack_artifacts/<top>-<run_id>/`
+        try:
+            from src.runtime_plane.artifacts.project_layout import ProjectLayout
+
+            layout = ProjectLayout.discover(parent)
+            if layout.artifact_root.is_dir():
+                found.extend(p for p in layout.artifact_root.iterdir()
+                             if p.is_dir() and not p.name.startswith("."))
+        except Exception:                              # noqa: BLE001 目录契约不可用不影响旧布局
+            pass
         return sorted(set(found), key=lambda p: p.name, reverse=True)
 
     def list_runs(self, limit: int = 50) -> List[Dict[str, Any]]:
@@ -75,8 +85,23 @@ class RunRepository:
         runs = []
         for d in self.run_dirs():
             manifest = d / "docs" / "manifest.json"
+            run_manifest = d / "run_manifest.json"
             if manifest.exists():
                 runs.append(self._summary(d, manifest))
+            elif run_manifest.exists():
+                doc = self._read_json(run_manifest) or {}
+                status = str(doc.get("status") or "").upper()
+                runs.append({
+                    "run_id": doc.get("run_id") or d.name,
+                    "dir": str(d),
+                    "artifacts": True,
+                    "finished": status in ("FINISHED", "FAILED", "PASS", "COMPLETE"),
+                    "state": status.lower() or "unknown",
+                    "current_stage": doc.get("entrypoint", ""),
+                    "top_module": doc.get("top_module", ""),
+                    "started_at": doc.get("started_at", ""),
+                    "finished_at": doc.get("finished_at", ""),
+                })
             else:
                 ip = self._ip_summary(d)
                 soc = ip or self._soc_summary(d) or self._c_summary(d)

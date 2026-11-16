@@ -24,7 +24,7 @@ class FormalAgent(ReActAgent):
     )
 
     def backend_tools(self, workspace_root, output_root):
-        from src.agent_plane.specialists.formal.main import generate_formal_plan, store_formal_plan
+        from src.agent_plane.verification.formal_agent.main import generate_formal_plan, store_formal_plan
         from src.ir_plane.formal import FormalPlan
 
         def _convert_plan(*, plan, output_dir=None):

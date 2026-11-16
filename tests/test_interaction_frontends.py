@@ -1,4 +1,4 @@
-"""三个前端的 Agent/Engine 共享与审批边界。"""
+"""两种前端（CLI headless / UI·TUI）的 Agent/Engine 共享与审批边界。"""
 
 from __future__ import annotations
 
@@ -21,7 +21,10 @@ def test_chat_uses_agent_turn_with_multi_turn_and_execution_approval():
     assert received[0][1]["session_id"] is None
     assert received[0][1]["config"] == {"require_exec_approval": True}
     assert "frontend" not in received[0][1]
-    assert reply["interaction"] == {"mode": "chat", "frontend": "gui"}
+    assert reply["interaction"] == {
+        "mode": "chat", "agent_mode": "", "specialist": "", "stages": [],
+        "frontend": "gui",
+    }
     assert reply["human_review_required"] is True
     turn("继续解释", session_id="session-1", agent_caller=spy)
     assert received[1][1]["session_id"] == "session-1"

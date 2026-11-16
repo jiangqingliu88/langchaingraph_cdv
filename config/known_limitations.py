@@ -20,7 +20,7 @@ KNOWN_LIMITATIONS: Tuple[Dict[str, str], ...] = (
     {"id": "single_machine_regression", "status": "by_design",
      "text": "单机串行回归"},
     {"id": "no_web_ui", "status": "by_design",
-     "text": "不开发 Web UI"},
+     "text": "不开发 Web 服务器；仅提供单文件 HTML 产物浏览器导出"},
     {"id": "coarse_reward", "status": "by_design",
      "text": "奖励信号是“粗连续”"},
     {"id": "kg_is_query_only", "status": "by_design",

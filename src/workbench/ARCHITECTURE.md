@@ -14,7 +14,9 @@ Workbench 是一个 **PySide6 桌面应用**，不是 Web 前端：
 - 等价入口：`vagent gui run ...`（CLI 里同一套参数）
 - 依赖：`PySide6` 与 `qdarkstyle` 都在 `pip install -e .[gui]` 里，**可选**；
   缺失时 `bootstrap.require_pyside6()` 给出装法并以退出码 2 结束，不甩 traceback。
-- **不开发 Web UI / Dashboard / SSE**（见 `CLAUDE.md`）。工作台只做桌面窗口。
+- **不开发 Web 服务器 / Dashboard / SSE**（见 `CLAUDE.md`）。工作台只做桌面窗口；
+  需要离线查看/编辑产物时用 `vagent setup artifact-review-html` 导出**单文件
+  HTML**，不启动任何服务。
 - 工作台**不另造验证引擎**：业务数据全部来自 CLI/流水线落盘的 run 目录、
   manifest、覆盖率与证据包；工作台与流水线通过**文件契约**解耦，不共享内存状态。
 
@@ -413,7 +415,8 @@ python -m pytest src/workbench/tests -q
 
 - **清单增删模块/窗格要重开窗口**：「文件 → 重新载入清单」只重新校验并提示，
   不做原地热重载（与其做一套容易出 bug 的热插拔，不如显式重启）。
-- **不做 Web UI / SSE / Dashboard**；工作台是桌面外壳，交付仍以 CLI 为准。
+- **不做 Web 服务器 / SSE / Dashboard**；工作台是桌面外壳，交付仍以 CLI 为准。
+  单文件 HTML 产物浏览器（`setup artifact-review-html`）是离线导出，不是 Web 服务。
 - **原理图 / 状态机等占位模块**没有真实数据源；`placeholder: true` 会自动挂
   关不掉的演示横幅。
 - **控制台日志上限 5000 行**（仿真日志几十万行，不设上限会吃内存）。

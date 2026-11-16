@@ -18,7 +18,7 @@ class SimulationAgent(ReActAgent):
     )
 
     def backend_tools(self, workspace_root, output_root):
-        from src.agent_plane.specialists.unit_testing.main import generate_tb
+        from src.agent_plane.design_verification.simulation_agent.main import generate_tb
 
         return [
             legacy_function_tool(

@@ -106,7 +106,7 @@ def test_store_round_trip(tmp_path):
 
 
 def test_generate_validates_and_writes(tmp_path, monkeypatch):
-    from src.agent_plane.specialists.mental_model import main as mental
+    from src.agent_plane.design_understanding.mental_model_agent import main as mental
 
     monkeypatch.setattr(
         "src.runtime_plane.tools.common.lib.llm_call.call_llm_messages",
@@ -126,7 +126,7 @@ def test_generate_validates_and_writes(tmp_path, monkeypatch):
 
 
 def test_generate_does_not_write_on_llm_failure(tmp_path, monkeypatch):
-    from src.agent_plane.specialists.mental_model import main as mental
+    from src.agent_plane.design_understanding.mental_model_agent import main as mental
 
     monkeypatch.setattr(
         "src.runtime_plane.tools.common.lib.llm_call.call_llm_messages", lambda *a, **k: "", raising=True

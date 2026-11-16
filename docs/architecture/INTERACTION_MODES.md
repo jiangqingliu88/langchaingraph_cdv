@@ -1,39 +1,52 @@
-# 对话、终端与 PySide6 桌面 GUI：一个底层验证内核
+# 两种前端模式：CLI（headless）与 PySide6 UI / TUI
 
 ## 1. 实现原则
 
-三种入口共享现有 `agent_mode_service`、Agent/Harness、Workspace 与 `verify_mode/router`。没有为名称为 chat / terminal / desktop 的三个入口各造一条验证链，也没有新增架构职责平面。
+系统只对外提供**两种前端模式**：
 
-本项目的 **GUI 是 PySide6 桌面窗口**，不是新起的 Web 服务器，也不是 DeepSeek Harness 的网页外壳。
+1. **CLI（headless）**：脚本、回归、CI。每个 agent 都有子命令，输出 JSON /
+   退出码，不依赖 Qt。
+2. **PySide6 UI / TUI（interactive）**：`vagent gui` 桌面窗口与终端 REPL。
+   按 `chat / plan / verify` 区分任务，能监控执行步骤、看日志/状态、浏览与
+   编辑 Markdown 产物。
+
+`chat / plan / verify` 是**两种前端共用的交互方式**，不是第三种前端。
+三种口径的唯一清单在 [`src/workbench/frontends.py`](../../src/workbench/frontends.py)，
+`vagent modes` 可直接查看。
+
+两种前端共享现有 `agent_mode_service`、Agent/Harness、Workspace 与
+`verify_mode/router`；没有为 CLI 和 UI 各造一条验证链，也没有新增架构职责平面。
+
+本项目的 **GUI 是 PySide6 桌面窗口**，不是 Web 服务器。
 
 ```text
- 对话 CLI ────────────────┐
- vagent chat               │
-                           ├── modes.interaction ─── agent_mode_service
- 终端 REPL ────────────────┤                         ├── Agent / Harness
- vagent / vagent -r  ──────┘                         ├── 既有 LLM 预算与审计
-                                                     ├── Workspace / Session
-                                                     └── 审批与恢复
-
- PySide6 GUI ── TaskRunner 后台执行同一个 turn
-              ── pending / proposal / error 展示真实状态
-              ── 明确审批后，恢复同一个 Harness checkpoint
-              ── 打开既有 flow.pipeline 查看验证与证据
+ CLI headless ─────────────┐
+   vagent <agent> chat ...  │
+   vagent -p ...            ├── modes.interaction ─── agent_mode_service
+   vagent verify / runs ... │                         ├── Agent / Harness
+                            │                         ├── LLM 预算与审计
+ PySide6 UI / TUI ──────────┤                         └── Workspace / Session
+   vagent gui               │
+   vagent / chat --repl     └── 审批恢复 / 步骤监控 / Markdown 产物
 
  明确 verify ───────────── verify_mode / router ── 既有 Engine 与运行记录
 ```
 
 ## 2. 入口与职责
 
-| 入口 | 命令或页面 | 负责什么 |
+| 前端模式 | 命令或页面 | 负责什么 |
 |---|---|---|
-| 对话 CLI | `vagent chat "解释这段握手"` | 单次自然语言交互；可沿用现有 Agent session |
-| 候选计划 | `vagent chat --mode plan "制定验证计划"` | 强制计划与操作审批候选，返回真实检查点 |
-| 终端长循环 | `vagent`、`vagent chat --repl`、`vagent -r <session>` | 多轮 REPL、命令与人工审批/恢复 |
-| 显式验证 | `vagent ... --mode verify "明确目标"` | 使用既有确定性验证主链，不把模型文本当成运行证据 |
-| 桌面 GUI | `vagent gui` | PySide6 中提供「项目 → 交互与验证」；验证详情仍由原有「验证流程」页承载 |
+| CLI（headless） | `vagent <agent> chat '<prompt>'`、`vagent agents chat <agent> ...` | 每个 agent 独立子命令；单次任务，可脚本化 |
+| CLI（headless） | `vagent -p '<task>' --mode agent\|verify` | 单次执行；verify 走确定性主链 |
+| CLI（headless） | `vagent chat --mode chat\|plan\|verify '<goal>'` | 单次 chat/plan/verify；plan 用 `--resume` 审批 |
+| CLI（headless） | `vagent verify / runs / signoff / regression ...` | 回归与签核命令，JSON/退出码 |
+| UI / TUI（interactive） | `vagent gui` | PySide6：模式任务、步骤监控、日志/状态、Markdown 产物编辑 |
+| UI / TUI（interactive） | `vagent`、`vagent chat --repl [--mode ...]`、`vagent -r <session>` | 终端 REPL：同一套 chat/plan/verify、审批与恢复 |
 
-`agent` / `verify` 是底层执行模式；`chat` / `plan` / `verify` 是新增交互适配层的三类明确动作。GUI 选择「显式验证 verify」时，不依据普通聊天判断该运行哪个命令，而是将用户选定并已明确提交的目标交给已有验证路由。
+`chat` / `plan` / `verify` 的行为在两模式中一致：
+- `verify` 不依据普通聊天猜命令，而是把用户明确提交的目标交给验证路由；
+- `plan` 返回真实 `pending.kind=plan` 检查点，必须人工审查；
+- `chat` 只对话，执行类操作仍要求审批。
 
 ### 单次对话
 
@@ -55,17 +68,33 @@ venv\Scripts\vagent.exe chat --resume <session-id> --approve yes
 
 如果要拒绝、补充回答或调整计划，可分别使用 `--approve no`、`--answer`、`--plan-text`。必要的模型输出格式、调用预算与审计仍由原 Harness / Query Engine 负责。
 
-### 多轮终端
+### TUI 主窗口
+
+`src/workbench/tui/app.py` 是独立的 TUI 主窗口（与老 PySide6 GUI 并列）：
+
+- 顶部显示领域模式 / 交互方式 / workspace / 会话；
+- 左侧列出 7 个领域模式，右侧列出命名会话；
+- 显示当前工程最新 run；
+- `/agent <mode>` 切领域模式，`/mode chat|plan|verify` 切交互方式；
+- 每个 turn 仍走 `Repl` → Agent/Harness/verify 主链。
+
+### 多轮终端（TUI / REPL）
 
 ```powershell
 venv\Scripts\vagent.exe
-```
-
-```powershell
 venv\Scripts\vagent.exe chat --repl
+venv\Scripts\vagent.exe chat --repl --mode plan
+venv\Scripts\vagent.exe chat --repl --mode verify
 ```
 
-两者都进入已有长循环 REPL；`/approve`、`/deny`、`/answer`、`/plan`、`/status` 继续使用既有实现。新单轮命令并未重写 REPL。
+两者都进入长循环 REPL；`/mode [chat|plan|verify]`、`/approve`、`/deny`、
+`/answer`、`/plan`、`/status` 继续使用同一套实现。当前模式在提示头与
+`/status` 里可见：`plan` 带计划审批，`verify` 直接走确定性主链。
+
+Markdown 产物在 TUI 里用 `/md`：
+`/md list [dir]` 列出 workspace 内 `.md`，`/md show <path>` 查看，
+`/md edit <path>` 交给系统默认编辑器打开（路径限制在 workspace 内）。
+PySide6 的 `flow.markdown` 页提供同一批文件的编辑 + 预览 + 证据链记账。
 
 ### 明确验证执行
 
@@ -79,7 +108,7 @@ venv\Scripts\vagent.exe chat --mode verify "验证指定的规格文件"
 
 前者保留原命令行为。对外状态、退出码、运行目录和证据仍由原验证内核维护。对于本机不存在的 EDA，保持 INCOMPLETE；不能因为通过交互界面发起了任务就显示 PASS。
 
-### 桌面 GUI
+### PySide6 UI
 
 ```powershell
 venv\Scripts\vagent.exe gui
@@ -95,13 +124,18 @@ venv\Scripts\vagent.exe gui
 - 点击「打开验证流程」调用现有 `open_module()` 定位 `flow.pipeline`，不另建第二套执行页面。
 - 输入路径只作为工作区/自然语言任务输入传给同一服务；未知文件、错误或 absent 状态不会自动变为确认事实。
 
+**Markdown 产物**：`flow.markdown` 页列出所选运行目录下的全部 `.md`
+（mental model、summary、rule drafts…），右窗格可编辑原文、预览 Markdown；
+保存会写回文件并用 `record_human_edit()` 记进证据链（带 run_id），**不会
+自动重跑**。
+
 ### GUI 的 9 种 Agent 模式
 
 下拉框来自单一清单 [agent_modes.py](../../src/workbench/modes/agent_modes.py)——
 界面、后端 config、测试都读这一份，不存在"界面 9 个模式、后端只认 3 个"的第二份真相。
 **模式是领域角色，交互方式（chat / plan / verify）是底层真路径**，两者正交：
 
-| 模式 | 描述 | 交互 | 对应 agent（`specialists/`） | stages |
+| 模式 | 描述 | 交互 | 对应对话入口（`workbench/modes/chats/`） | stages |
 |---|---|---|---|---|
 | Agentic Chat | General-purpose chat for workspace exploration and code assistance | chat | `agentic_chat`（通用 Harness） | - |
 | Mental Model | Design understanding and analysis mode | chat | `mental_model` | - |
@@ -113,7 +147,7 @@ venv\Scripts\vagent.exe gui
 | Debug | DV debug agent mode | plan | `debug` | ops/debug |
 | Workflows | End-to-end automated workflows | verify | `workflows`（入口；执行走 supervisor） | 全阶段 |
 
-**新 SDK Agent 与下表的关系**：下表保留 GUI/CLI 兼容入口在 `specialists/` 中的
+**新 SDK Agent 与下表的关系**：下表保留 GUI/CLI 兼容入口在 `workbench/modes/chats/` 中的
 真实映射，不因新增 Domain Agent 而重写旧模式配置。十个独立的 SDK ReAct 角色由
 [`src/agent_plane/reaction/registry.py`](../../src/agent_plane/reaction/registry.py)
 按 `create_react_agent()` 创建；其 Domain、工具与 `Runner` 边界见
@@ -143,9 +177,9 @@ vagent uvm chat "分析这份 testplan"
 - `plan` 模式会设置 `plan_first=True` / `require_plan_approval=True`，并保留执行审批；
 - `verify` 模式走既有 `verify_mode/router`，不经过 agent chat；
 - 模式注册表里的 `action` 决定是否出现**统一动作按钮**（界面不再按模式写分支）：
-  - Mental Model → 「生成 Mental IR」→ `specialists/mental_model`；
-  - Formal → 「生成 Formal 计划」→ `specialists/formal`；
-  - Unit Testing → 「生成/运行单测」→ `specialists/unit_testing`。
+  - Mental Model → 「生成 Mental IR」→ `design_understanding/mental_model_agent`；
+  - Formal → 「生成 Formal 计划」→ `verification/formal_agent`；
+  - Unit Testing → 「生成/运行单测」→ `design_verification/simulation_agent`。
   产物分别落在 `<workspace>/output_*/` 下对应子目录。
 
 ## 3. 一致性与人审边界

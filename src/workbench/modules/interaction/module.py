@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -69,7 +70,7 @@ class InteractionModule(ModuleBase):
         root = QWidget()
         layout = QVBoxLayout(root)
         layout.setSpacing(6)
-        title = QLabel("三种入口 · 一个验证内核")
+        title = QLabel("PySide6 UI / TUI · 一个验证内核")
         font = title.font()
         font.setBold(True)
         title.setFont(font)
@@ -111,6 +112,11 @@ class InteractionModule(ModuleBase):
                 Qt.ItemDataRole.ToolTipRole,
             )
         self.mode.setToolTip("选择 Agent 模式；切换模式会开启新任务，旧会话仍保留")
+        wanted = os.environ.get("SIGNOFFAI_GUI_AGENT_MODE", "").strip()
+        if wanted:
+            index = self.mode.findData(wanted)
+            if index >= 0:
+                self.mode.setCurrentIndex(index)
         self.mode.currentIndexChanged.connect(self._mode_changed)
         line.addWidget(self.mode)
         self.workspace = QLineEdit(str(Path.cwd()))
@@ -299,7 +305,7 @@ class InteractionModule(ModuleBase):
         text = spec.read_text(encoding="utf-8", errors="replace")
 
         def operation() -> dict[str, Any]:
-            from src.agent_plane.specialists.mental_model.main import run as mental_run
+            from src.agent_plane.design_understanding.mental_model_agent.main import run as mental_run
 
             result = mental_run(text, out, module=spec.stem, spec_path=str(spec))
             counts = result["counts"]
@@ -325,7 +331,7 @@ class InteractionModule(ModuleBase):
         text = spec.read_text(encoding="utf-8", errors="replace")
 
         def operation() -> dict[str, Any]:
-            from src.agent_plane.specialists.formal.main import run as formal_run
+            from src.agent_plane.verification.formal_agent.main import run as formal_run
 
             result = formal_run(text, out, module=spec.stem, spec_path=str(spec))
             counts = result["counts"]
@@ -350,7 +356,7 @@ class InteractionModule(ModuleBase):
         out = self._workspace_path() / f"output_unit_{rtl.stem}"
 
         def operation() -> dict[str, Any]:
-            from src.agent_plane.specialists.unit_testing.main import run as unit_run
+            from src.agent_plane.design_verification.simulation_agent.main import run as unit_run
 
             result = unit_run(rtl, out)
             result["summary"] = (

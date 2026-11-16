@@ -22,6 +22,8 @@
 
 Agent Domain 按 **design_understanding / design_verification / design_signoff / design_generation / verification** 组织，承载十个独立的 [`openai-agents` ReAct 角色](docs/architecture/AGENT_DOMAIN_LAYOUT.md)，复用 `agents.Agent` 与 `Runner`，属于 Agent Plane 内部责任分工，不新增 Plane。原 specialist 实现和旧调用/别名的兼容入口保留，未运行能力继续标记为 `NOT_RUN` 或 `INCOMPLETE`。
 
+**工程目录统一为 ChipStack `CS-DIR-REQ-001` 的 L0–L5 五层模型**：安装层 / 用户配置层 / 工程输入层 / 工程配置层 / 产物层 / 工作流层。唯一实现是 [`ProjectLayout`](src/runtime_plane/core/project_layout.py)，五个 Agent Domain 与 R-020 固定产物子目录的映射在 [`agent_plane/domains.py`](src/agent_plane/domains.py)。CLI（`vagent project/workspace`）、PySide6 工作台（「项目 → 工程目录」）与所有 agent 产物路径都只消费这两个模块，不再各自拼目录。详见 [CHIPSTACK_PROJECT_LAYOUT.md](docs/architecture/CHIPSTACK_PROJECT_LAYOUT.md)。
+
 Specification Intelligence 是九平面协作能力，不是新的独立子系统。Specification Compiler 归 IR + Engine 协作链，Requirement Extraction 归现有 Agent，Clarification Workflow 归 Orchestration，协议知识归 Knowledge，历史决策归 Experience，RTL 事实提取归 Runtime，候选工件归 Generation，CLI 归 Workbench。三份横向契约、生命周期、实现入口和当前未验证边界见 [Specification Compiler](docs/architecture/SPECIFICATION_COMPILER.md)。
 
 下文“八个职责平面”特指八个 `src/*_plane`；加上 Interfaces 后，整体是上述九逻辑平面的协作系统，而不是九个独立 Agent。
@@ -330,7 +332,7 @@ Case/Execution/Evidence IR 记录的是**验证对象与事实**；Mental IR 记
 
 产物落在 `<run>/mental_ir/{mental_ir.json, mental_ir.yaml, manifest.json}`，
 `manifest.json` 带规范哈希与计数。它由独立专家
-`src/agent_plane/specialists/mental/` 生成，目前**不进 supervisor 闭环**：
+`src/agent_plane/design_understanding/mental_model_agent/` 生成，目前**不进 supervisor 闭环**：
 
 ```bash
 vagent mental build specs/npu_sched/docs/specs/npu_sched.md -o output_mental_npu_sched
@@ -347,8 +349,9 @@ cover）、proof_obligations、engine_requirements、coverage_goals。产物在
 证明义务默认 `not_run`——生成属性不等于已经证明。
 
 三个独立专家（mental / formal / unit_test）共用
-`agent_plane/specialists/common.py` 的 LLM 校验与原子落盘骨架，详见
-[Standalone 专家](docs/architecture/SPECIALIST_AGENTS.md)。
+`agent_plane/common.py` 的 LLM 校验与原子落盘骨架；原 `specialists/` 已退休，
+生成器/工具/子图迁移到五个 Domain，对话入口迁移到 `workbench/modes/chats/`，
+详见 [Standalone 专家（已退休）](docs/architecture/SPECIALIST_AGENTS.md)。
 
 IR 的核心价值，是让不同 Agent 和 Engine 不再依赖彼此的内部实现，而是通过统一语义协作。
 
@@ -514,8 +517,10 @@ src/
 ├── agent_plane/              # 理解、规划、专家、协作、记忆
 │   ├── runtime/              # harness / loop / context / state
 │   ├── planner/              # task planner / DAG / replan / acceptance
-│   ├── specialists/          # 9 agent：agentic_chat / mental_model / formal / uvm /
-│   │                         #   rtl_designer / unit_testing / functional_coverage / debug / workflows
+│   ├── design_understanding/ design_verification/ design_signoff/
+│   │                         # 五个 Domain：生成器 / 工具 / 子图 / ReAct Agent
+│   ├── design_generation/ verification/
+│   ├── common.py             # 独立专家共用的 LLM 校验 / 原子落盘
 │   ├── collaboration/        # subagent / delegation / contracts
 │   └── memory/
 │
@@ -776,7 +781,7 @@ An Evidence-Driven Autonomous IC Verification System
 | M0 Architecture Guard 2.1 | ◐ 核心治理已落地；多环检测、整层债务、CI 旧路径等待硬化（独立治理任务） |
 | M1 Resource / Interaction IR | ◐ **M1-A 已完成**：fail-closed、三态、70 项专项测试与全量回归；M1-B 运行时 checker 与执行证据待完成 |
 | 横向能力 Specification Compiler | ◐ 已接通 Temporal IR → 绑定检查 → 原规格主链 → Monitor/Execution 适配；[单接口最小闭环](docs/architecture/INTERFACE_TIMING_SLICE.md) 已实现，**本机缺少真实 RTL 仿真证据** |
-| 交互入口 | ◐ 支持对话 CLI、终端 REPL 与 PySide6 桌面 GUI，提供 chat/plan/verify 三类明确动作；共享既有 Agent/Harness/Engine，桌面验证仍使用 flow.pipeline。详见 [三种交互模式](docs/architecture/INTERACTION_MODES.md) |
+| 交互入口 | ◐ 两种前端模式：CLI（headless，每个 agent 有子命令）与 PySide6 UI / TUI（interactive，含终端 REPL）；两者共用 chat/plan/verify 三种交互方式，共享既有 Agent/Harness/Engine。详见 [两种前端模式](docs/architecture/INTERACTION_MODES.md) |
 | 产物工作区 | ◐ 已建立 run_manifest、专用 artifacts.sqlite、Archive/ 与项目级 mental_model/UVM/仿真/覆盖率/调试目录；未执行 formal/lint/PPA/编译修复只登记状态，详见 [工作区说明](docs/architecture/CHIPSTACK_ARTIFACT_WORKSPACE.md) |
 | M2 Evidence v2 | ◐ 单 Run 证据包、哈希和回放已有基础；真实 trust 组合校验与跨 Run 失效传播待完成 |
 | M3 DMA Autonomous Verification | ◐ 资源冲突四类场景已可确定性验证；自然语言→生成→执行→签核主链待接 |

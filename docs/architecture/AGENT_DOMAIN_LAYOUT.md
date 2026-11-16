@@ -50,7 +50,17 @@ src/agent_plane/
 
 每个角色目录都至少有 `agent.py` 与 `__init__.py`。专用工具需要额外文件时单独放 `tools.py`，而不是把所有生成器复制进这些新目录。
 
-原 `specialists/<role>/graph.py` 路径仍服务于既有工作流，不冒充新 SDK Agent 的同一种结构。新 SDK 前端是 `reaction` 与 Domain 下的新 Agent；旧图作为兼容执行后端保留。
+**目录架构注册表**：五个 Domain 与 ChipStack R-020 固定产物子目录的映射在
+[`src/agent_plane/domains.py`](../../src/agent_plane/domains.py)，由
+[`project_layout.py`](../../src/runtime_plane/core/project_layout.py) 的
+`AGENT_ARTIFACT_DIRS` 约束。`ReActAgent.artifact_root` 直接派生自它；GUI 的
+「工程目录」页与 `vagent workspace agents` 都从这里取表。详见
+[CHIPSTACK_PROJECT_LAYOUT.md](CHIPSTACK_PROJECT_LAYOUT.md)。
+
+原 `specialists/` 已退休：生成器/工具/子图已迁入对应 Domain（例如
+`verification/formal_agent/main.py`、`design_generation/rtl_upgrade_agent/design_tools.py`），
+九个对话入口迁到 `src/workbench/modes/chats/`。完整映射见
+[SPECIALIST_AGENTS.md](SPECIALIST_AGENTS.md)。
 
 ## 3. 十个角色的真实能力与边界
 

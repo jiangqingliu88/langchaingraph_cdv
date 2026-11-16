@@ -21,15 +21,15 @@ from typing import Any, Dict, List, get_origin
 import structlog
 from langgraph.graph import END, START, StateGraph
 
-from src.agent_plane.specialists.functional_coverage.graph import build_coverage_subgraph
-from src.agent_plane.specialists.debug.graph import build_debug_subgraph
-from src.agent_plane.specialists.rtl_designer.graph import build_design_subgraph
+from src.agent_plane.verification.functional_coverage_agent.graph import build_coverage_subgraph
+from src.agent_plane.verification.dv_debug_agent.graph import build_debug_subgraph
+from src.agent_plane.design_generation.rtl_upgrade_agent.graph import build_design_subgraph
 from src.orchestration_plane.gates.audit import n_hard_audit_gate
 from src.orchestration_plane.gates.human import n_human_review
 from src.orchestration_plane.registry import card
 from src.orchestration_plane.nodes.pure.lifecycle import n_finalize, n_init
 from src.orchestration_plane.supervisor.state import SupervisorView
-from src.agent_plane.specialists.uvm.graph import build_verify_subgraph
+from src.agent_plane.verification.uvm_coding_agent.graph import build_verify_subgraph
 from src.orchestration_plane.kernel.state import PipelineState, _add
 
 logger = structlog.get_logger()

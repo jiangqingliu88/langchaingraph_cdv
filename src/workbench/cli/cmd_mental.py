@@ -33,7 +33,7 @@ def mental_group():
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def mental_build(spec, output, module, json_output):
     """从 spec 生成 Mental IR 并落盘。"""
-    from src.agent_plane.specialists.mental_model.main import MentalIRError, run
+    from src.agent_plane.design_understanding.mental_model_agent.main import MentalIRError, run
 
     text = spec.read_text(encoding="utf-8", errors="replace")
     out = output or Path(f"output_mental_{spec.stem}")

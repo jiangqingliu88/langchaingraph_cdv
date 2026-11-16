@@ -12,11 +12,13 @@
 | 兼容专家目录 | [Specialists](architecture/SPECIALIST_AGENTS.md) | 原 CLI/GUI/阶段和生成器兼容入口 |
 | 对话与模式 | [Interaction Modes](architecture/INTERACTION_MODES.md) | `chat` / `plan` / `verify`、既有模式映射 |
 | 接口时序验证 | [Interface Timing Slice](architecture/INTERFACE_TIMING_SLICE.md) | 有界 AXI4-Stream 证据与后端缺席行为 |
+| ChipStack 2.0 对齐 | [Alignment Matrix](architecture/CHIPSTACK_2_ALIGNMENT.md) | 10 Agent / 6 接口 / CLI 名 / 配置 / 产物约定与缺口 |
+| ChipStack 工程目录 | [Project Layout](architecture/CHIPSTACK_PROJECT_LAYOUT.md) | L0–L5、run manifest、agent 目录、验收清单 |
 | ChipStack 风格工作区 | [Artifact Workspace](architecture/CHIPSTACK_ARTIFACT_WORKSPACE.md) | 产物索引和 `Archived/<run_id>`真实来源；非 Cadence 数据库适配 |
 | Specification Compiler | [Specification Compiler](architecture/SPECIFICATION_COMPILER.md) | 有界规格/IR 编译与绑定证据 |
 | Mental IR | [Mental IR](architecture/MENTAL_IR.md) | SourceAnchor 与候选设计理解 |
 
-十个 SDK Agent 的物理入口是 [`reaction/registry.py`](../src/agent_plane/reaction/registry.py)。它们是 Agent Plane 内部独立角色；原 `specialists/`、supervisor 以及联合作业契约并未被整体迁移或重写。
+十个 SDK Agent 的物理入口是 [`reaction/registry.py`](../src/agent_plane/reaction/registry.py)，`__init__.py` 采用惰性导出，避免只看生成器也被 SDK 依赖挡住。原 `specialists/` 已退休：生成器/工具/子图迁入五个 Domain，对话入口迁到 `workbench/modes/chats/`，映射见 [SPECIALIST_AGENTS.md](architecture/SPECIALIST_AGENTS.md)。supervisor 与联合作业契约保留。
 
 ## 2. 依赖、环境与安装
 

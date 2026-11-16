@@ -3,7 +3,7 @@
 这些模式是**领域角色**，和底层交互方式（chat / plan / verify）正交：
   · `interaction` 决定走哪条真实后端（agent_turn / 计划审批 / verify router）；
   · `role_prompt` 注入 Harness 的 system prompt，改变专家的关注点；
-  · `specialist` 指向 `src/agent_plane/specialists/` 里的专家（空 = 通用 Harness）；
+  · `specialist` 指向 `src/workbench/modes/chats/` 里的对话入口（空 = 通用 Harness）；
   · `stages` 是该模式实际涉及的阶段执行器；
   · `gap` 是没有专门专家时的诚实说明 —— 不把"没有"伪装成"已实现"。
 
@@ -26,7 +26,7 @@ class AgentMode:
     description: str
     interaction: str
     role_prompt: str = ""
-    #: 对应 `src/agent_plane/specialists/<specialist>`（空 = 通用 Harness）。
+    #: 对应 `workbench/modes/chats/<specialist>`（空 = 通用 Harness）。
     specialist: str = ""
     #: 该模式实际会走到的阶段执行器。
     stages: tuple[str, ...] = ()
@@ -138,7 +138,7 @@ AGENT_MODES: tuple[AgentMode, ...] = (
         "coverage → audit），明确每一步的输入、产物与门禁；执行走验证流程。",
         specialist="workflows",
         stages=("front", "design", "model", "verify", "ops", "coverage", "debug", "audit"),
-        gap="走编排主图（supervisor），不是 specialists/ 下的单一专家",
+        gap="走编排主图（supervisor），不是 chats/ 下的单一对话入口",
     ),
 )
 

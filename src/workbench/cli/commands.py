@@ -125,7 +125,7 @@ class VerificationCLI:
         self.agent_config = {}
 
     async def initialize(self):
-        from src.agent_plane.specialists.debug import DebugExecutor
+        from src.agent_plane.verification.dv_debug_agent import DebugExecutor
         from src.engine_plane.audit import AuditExecutor
         from src.engine_plane.coverage import CoverageExecutor
         from src.engine_plane.ops import OpsExecutor
@@ -190,18 +190,19 @@ def cli(ctx, prompt, continue_mode, resume_id, workspace, json_output, work_mode
     # 无子命令时，进入 REPL 或单次任务
     if ctx.invoked_subcommand is None:
         from src.workbench.cli.repl import run_interactive, run_once
+        repl_mode = "verify" if str(work_mode).lower() in ("verify", "engine") else "chat"
         if prompt:
             raise SystemExit(run_once(prompt, workspace=workspace,
                                       json_output=json_output,
                                       mode=work_mode))
         elif continue_mode:
             raise SystemExit(run_interactive(continue_latest=True,
-                                             workspace=workspace))
+                                             workspace=workspace, mode=repl_mode))
         elif resume_id:
             raise SystemExit(run_interactive(session_id=resume_id,
-                                             workspace=workspace))
+                                             workspace=workspace, mode=repl_mode))
         else:
-            raise SystemExit(run_interactive(workspace=workspace))
+            raise SystemExit(run_interactive(workspace=workspace, mode=repl_mode))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -663,29 +664,12 @@ def _exclude_registry():
 # 验证工作台（PySide6 桌面窗口）
 # ═══════════════════════════════════════════════════════════════
 
-@cli.group("gui")
-def gui_group():
-    """打开验证工作台（PySide6 桌面窗口，界面由 YAML 清单驱动）"""
-    pass
-
-
-@gui_group.command("run")
-@click.argument("manifest", required=False, type=click.Path(exists=True))
-@click.option("--module", "-m", default=None,
-              help="启动后聚焦到这个模块 id（写在清单里的 id）")
-@click.option("--input", "-i", default=None,
-              help="覆盖指定模块的业务输入路径")
-@click.option("--theme", default=None, help="主题名，留空用清单里的设置")
-@click.option("--reset-layout", is_flag=True, help="忽略上次保存的窗口布局")
-def gui_run(manifest, module, input, theme, reset_layout):
-    """启动工作台。
-
-    \b
-    示例:
-      vagent gui run                          # 用默认清单 config/workbench.yaml
-      vagent gui run my.yaml                  # 用别的清单
-      vagent gui run -m debug.sim_log         # 直接聚焦某个模块
-    """
+def _launch_gui(manifest, *, module=None, input=None, theme=None,
+                reset_layout=False, mode=None):
+    """PySide6 是可选依赖 —— 缺失时给装法而不是 traceback（stderr + 退出码 2）。"""
+    if mode:
+        os.environ["SIGNOFFAI_GUI_AGENT_MODE"] = str(mode)
+        module = module or "interaction.chat"
     args = [a for a in [manifest] if a]
     if module:
         args += ["--module", module]
@@ -695,8 +679,6 @@ def gui_run(manifest, module, input, theme, reset_layout):
         args += ["--theme", theme]
     if reset_layout:
         args += ["--reset-layout"]
-
-    # PySide6 是可选依赖 —— 缺失时给装法而不是 traceback（约定：stderr + 退出码 2）
     try:
         from src.workbench.app import main as workbench_main
     except ImportError as exc:
@@ -708,6 +690,39 @@ def gui_run(manifest, module, input, theme, reset_layout):
             err=True)
         sys.exit(2)
     sys.exit(workbench_main(args))
+
+
+@cli.group("gui", invoke_without_command=True)
+@click.option("--mode", default=None, help="直接打开交互页并选中 Agent 模式（如 formal）")
+@click.option("--module", "-m", default=None, help="启动后聚焦的模块 id")
+@click.pass_context
+def gui_group(ctx, mode, module):
+    """打开验证工作台（`vagent gui [--mode ...]` 或 `vagent gui run`）"""
+    if ctx.invoked_subcommand is None:
+        _launch_gui(None, mode=mode, module=module)
+
+
+@gui_group.command("run")
+@click.argument("manifest", required=False, type=click.Path(exists=True))
+@click.option("--module", "-m", default=None,
+              help="启动后聚焦到这个模块 id（写在清单里的 id）")
+@click.option("--input", "-i", default=None,
+              help="覆盖指定模块的业务输入路径")
+@click.option("--theme", default=None, help="主题名，留空用清单里的设置")
+@click.option("--reset-layout", is_flag=True, help="忽略上次保存的窗口布局")
+@click.option("--mode", default=None, help="直接选中交互页的 Agent 模式（如 formal）")
+def gui_run(manifest, module, input, theme, reset_layout, mode):
+    """启动工作台。
+
+    \b
+    示例:
+      vagent gui                              # 直接打开（ChipStack 2.0 风格）
+      vagent gui --mode formal                # 打开并选中 Formal
+      vagent gui run                          # 用默认清单 config/workbench.yaml
+      vagent gui run -m debug.sim_log         # 直接聚焦某个模块
+    """
+    _launch_gui(manifest, module=module, input=input, theme=theme,
+                reset_layout=reset_layout, mode=mode)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -723,7 +738,8 @@ from . import (  # noqa: E402,F401
     cmd_humanview, cmd_infra, cmd_memory, cmd_metrics,
     cmd_project, cmd_regression, cmd_repair, cmd_resource, cmd_runs,
     cmd_services, cmd_session, cmd_signoff, cmd_soc, cmd_specs,
-    cmd_tools, cmd_verify, cmd_vplan, cmd_work,
+    cmd_tools, cmd_verify, cmd_vplan, cmd_work, cmd_workspace, cmd_modes,
+    cmd_chipstack,
 )
 
 

@@ -76,7 +76,7 @@ orchestration(engine) → generation  # 只允许调度 Stage 执行器
 | design/model | `tests/test_design_loop.py`、`tests/test_model_gate.py` |
 | verify | `tests/test_vplan_sva_contract.py`、`tests/test_stages.py` |
 | ops | `tests/test_regression*`、`tests/test_staged_regression.py` |
-| debug | `tests/test_debug_fake_eda.py`、`src/agent_plane/specialists/debug/test_debug_waveform.py` |
+| debug | `tests/test_debug_fake_eda.py`、`tests/test_debug_waveform.py` |
 | coverage | `tests/test_coverage*` |
 | audit | `tests/test_approval.py`、`tests/test_manual_node_gate.py` |
 | orchestration | `tests/test_supervisor_graph.py`、`test_state_contracts.py`、`test_architecture_invariants.py` |

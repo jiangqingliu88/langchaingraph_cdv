@@ -1,4 +1,4 @@
-"""三种前端的共享适配层：对话、可审查计划、确定性验证执行。
+"""两种前端（CLI headless / PySide6 UI·TUI）共享的交互适配层：对话、可审查计划、确定性验证执行。
 
 这里不实现另一个 Agent、分类器或执行引擎。实际 turn/resume 均由
 agent_mode_service 复用。执行阶段必须显式选择 verify，绝不根据普通聊天

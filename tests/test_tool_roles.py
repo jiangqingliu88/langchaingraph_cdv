@@ -49,7 +49,7 @@ EXECUTOR_ROOTS = (
     ("verify", "src/generation_plane/verification"),
     ("ops", "src/engine_plane/ops"),
     ("coverage", "src/engine_plane/coverage"),
-    ("debug", "src/agent_plane/specialists/debug"),
+    ("debug", "src/agent_plane/verification/dv_debug_agent"),
     ("audit", "src/engine_plane/audit"),
 )
 

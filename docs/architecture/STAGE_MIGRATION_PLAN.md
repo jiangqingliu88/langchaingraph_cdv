@@ -17,7 +17,7 @@
 | `src/engine_plane/stages/ops/` | `src/engine_plane/ops/` | EDA 执行 |
 | `src/engine_plane/stages/coverage/` | `src/engine_plane/coverage/` | 覆盖率 |
 | `src/engine_plane/stages/audit/` | `src/engine_plane/audit/` | 证据/签核 |
-| `src/engine_plane/stages/debug/main.py` | `src/agent_plane/specialists/debug/` | LLM 根因/修复 |
+| `src/engine_plane/stages/debug/main.py` | `src/agent_plane/verification/dv_debug_agent/` | LLM 根因/修复 |
 | `src/engine_plane/stages/debug/tools/` | `src/engine_plane/diagnostics/` | 确定性日志/波形解析 |
 | `src/engine_plane/agents/supervisor/` | `src/orchestration_plane/supervisor/` | 确定性调度 |
 | `src/engine_plane/agents/runtime_plane/nodes/pure/` | `src/orchestration_plane/nodes/pure/` | 确定性节点 |
@@ -25,7 +25,7 @@
 | `src/engine_plane/agents/runtime_plane/{guards,markers}.py` | `src/orchestration_plane/` | 节点守卫 |
 | `src/engine_plane/agents/runtime_plane/{tool_loop,stage_tools}.py` | `src/agent_plane/runtime_plane/` | LLM 工具循环 |
 | `src/engine_plane/agents/gates/` | `src/engine_plane/audit/gates/` | 签核门 |
-| `src/engine_plane/agents/{design,verify,coverage,debug}/` | `src/agent_plane/specialists/*` | 专家 Agent |
+| `src/engine_plane/agents/{design,verify,coverage,debug}/` | `src/agent_plane/{design_understanding,design_verification,design_generation,verification,design_signoff}/*` | 专家 Agent |
 | `src/engine_plane/agents/registry.py` | `src/orchestration_plane/registry.py` | AgentCard 能力表 |
 | `src/engine_plane/agents/stage_policy.py` | `src/orchestration_plane/stage_policy.py` | 阶段策略 |
 
@@ -53,7 +53,7 @@
 | `tests/test_state_contracts.py` | guards 新路径 |
 | `tests/test_agent_registry.py` | `engine.orchestration.registry` / `stage_policy` + `agent.runtime.stage_tools` |
 | `tests/test_agent_tool_loop.py` / `test_debug_fake_eda.py` | `agent.runtime.tool_loop` |
-| `tests/test_design_loop.py` | `agent.specialists.design` + supervisor routing |
+| `tests/test_design_loop.py` | `design_generation.rtl_upgrade_agent` + supervisor routing |
 | `tests/test_approval.py` / `test_manual_node_gate.py` | `engine.orchestration.nodes.pure.approval` |
 | `tests/test_architecture_invariants.py` | 节点模块前缀断言改为 `src.engine.orchestration` / `src.agent` |
 | `src/workbench/tests/test_pipeline_modules.py` | supervisor graph 新路径 |
@@ -68,7 +68,7 @@
 5. `engine_plane/diagnostics`（debug tools）
 6. `engine_plane/coverage`
 7. `engine_plane/audit` + `engine_plane/audit/gates`
-8. `orchestration_plane/` + `agent_plane/specialists` + `agent_plane/runtime`
+8. `orchestration_plane/` + 五个 Agent Domain + `agent_plane/runtime`
 
 每步：移动 → 全仓替换 import → compileall → import sweep → guard。
 

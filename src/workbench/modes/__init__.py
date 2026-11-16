@@ -1,7 +1,10 @@
-"""SignOffAI 的两种工作模式（同一系统的不同意图）。
+"""两种**执行**工作模式（与两种**前端**模式正交）。
 
 - Agent Mode：长循环理解、规划、生成、修复；可调用 Engine。
 - Verify Mode：确定性编译/回归/覆盖率/证据/签核内核。
+
+前端只有两种：CLI（headless）与 PySide6 UI/TUI（interactive），见
+`src/workbench/frontends.py`。chat / plan / verify 是两种前端共用的交互方式。
 
 统一入口：`router.run(goal, mode=...)`；CLI `vagent work <goal>` 与
 `vagent -p <goal> --mode agent|verify`。

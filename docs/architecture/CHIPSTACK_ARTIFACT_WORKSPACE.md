@@ -1,5 +1,9 @@
 # ChipStack 风格产物工作区
 
+> 目录架构已统一到 `CS-DIR-REQ-001` 的 L0–L5 五层模型，权威实现与 CLI/GUI
+> 入口见 [CHIPSTACK_PROJECT_LAYOUT.md](CHIPSTACK_PROJECT_LAYOUT.md)。本文保留
+> interface-timing 产物投影的细节；该投影现在复用同一套目录/manifest/日志契约。
+
 ## 1. 这次调整的是什么
 
 按你给出的目录理念，本次调整的是**运行产物组织**，不是重排源码、增加 Agent 类型或增加架构平面。现有 IR / Engine / Generation / Runtime / Orchestration 的职责与验证语义保留。

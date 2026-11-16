@@ -23,7 +23,7 @@ _EXECUTOR_PATHS = {
     "verify": "src.generation_plane.verification:VerifyExecutor",
     "ops": "src.engine_plane.ops:OpsExecutor",
     "coverage": "src.engine_plane.coverage:CoverageExecutor",
-    "debug": "src.agent_plane.specialists.debug:DebugExecutor",
+    "debug": "src.agent_plane.verification.dv_debug_agent:DebugExecutor",
     "audit": "src.engine_plane.audit:AuditExecutor",
 }
 
