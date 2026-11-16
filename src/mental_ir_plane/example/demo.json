@@ -1,0 +1,415 @@
+{
+  "id": "5b0f21ab-4f14-4ee9-87d5-04ecd8539199",
+  "top_module_name": "sync_fifo",
+  "module_summaries": {},
+  "module_features": {},
+  "top_module_detailed_description": "sync_fifo is a small, parameterized, single-clock synchronous FIFO intended as a reusable on-chip buffering IP block between a producer and a c",
+  "module_basic_functionalities": {
+    "sync_fifo": [
+      {
+        "id": "81b2391a-c49c-4e99-b308-df3478216db4",
+        "function": "Reset and Initialize FIFO State",
+        "description": "Synchronous active-low reset initialization.\n- What it does: Clears the write pointer, read pointer, and entry count to zero so the FIFO starts empty and re",
+        "description_only": "Synchronous active-low reset clears the write pointer, read pointer, and count to zero; the FIFO then reports `empty=1`, `full=0`, and drives `rd_data=0",
+        "isLocked": false,
+        "rtl_files_referenced": [
+          {
+            "source_file": "sync_fifo.sv",
+            "line_range": "19-50",
+            "description": "Parameter/port declarations, pointer and memory arrays, and the combinational logic deriving `full`, `empty`, `do_wr`, `do_rd`, and `rd_data`."
+          }
+        ],
+        "spec_sections_referenced": [
+          {
+            "source_file": "sync_fifo_spec.md",
+            "section": "Reset",
+            "text_anchor": "\"rst_n is synchronous and active low\""
+          },
+          {
+            "source_file": "sync_fifo_spec.md",
+            "section": "Write",
+            "text_anchor": "\"A write is accepted when wr_en=1 and full=0\""
+          }
+        ]
+      }
+    ]
+  },
+  "module_hierarchy": {},
+  "module_descriptions": [],
+  "module_code_blocks": {},
+  "module_signals": {},
+  "module_parameters": {},
+  "module_instances": {},
+  "clock_ports": [
+    {
+      "id": "afd84958-7cfa-4814-ace5-c0ed6d9f7f2f",
+      "name": "clk",
+      "description": "Single functional clock for the FIFO. All registered state (write pointer, read pointer, and count) is updated on the rising edge of clk; there is no second c",
+      "type": "input wire logic",
+      "full_type_details": "input wire logic",
+      "active_clock_edge": "posedge",
+      "input_ports": [
+        "clk"
+      ],
+      "output_ports": [],
+      "single_line_description": "Single functional clock for the FIFO. All registered state (write pointer, read pointer, and count) is updated on the rising edge of clk; there is "
+    }
+  ],
+  "reset_ports": [
+    {
+      "id": "e2d6f5b4-3e1a-4a3b-8ebf-f5bb268aaba9",
+      "name": "rst_n",
+      "description": "Synchronous active-low reset. When rst_n=0 at a rising edge of clk, wr_ptr, rd_ptr, and count are cleared to zero (empty asserted, full deasserted in the foll",
+      "type": "input wire logic",
+      "full_type_details": "input wire logic",
+      "polarity": "active low",
+      "single_line_description": "Synchronous active-low reset. When rst_n=0 at a rising edge of clk, wr_ptr, rd_ptr, and count are cleared to zero (empty asserted, full deasserted"
+    }
+  ],
+  "input_ports": [
+    {
+      "id": "4db27caf-353d-45bf-a3c3-0d2b948c08a2",
+      "name": "wr_en",
+      "description": "Write request. A write is accepted only when wr_en=1 and full=0 at a rising clock edge; while full=1 the request is ignored even if a read is accepted in the",
+      "type": "input wire logic",
+      "full_type_details": "input wire logic",
+      "single_line_description": "Write request. A write is accepted only when wr_en=1 and full=0 at a rising clock edge; while full=1 the request is ignored even if a read is acce"
+    },
+    {
+      "id": "6ab2b573-510e-4882-85b1-e774c4bc4442",
+      "name": "wr_data",
+      "description": "Write data bus of width DATA_W. When a write is accepted it is stored into the circular-buffer memory at the current write pointer (mem[wr_ptr]).",
+      "type": "input wire logic [DATA_W-1:0]",
+      "full_type_details": "input wire logic [DATA_W-1:0]",
+      "single_line_description": "Write data bus of width DATA_W. When a write is accepted it is stored into the circular-buffer memory at the current write pointer (mem[wr_ptr])."
+    },
+    {
+      "id": "26d40ae5-c270-4a0c-baf5-e9f93c325973",
+      "name": "rd_en",
+      "description": "Read request. A read is accepted only when rd_en=1 and empty=0 at a rising clock edge; while empty=1 the request is ignored even if a write is accepted in the",
+      "type": "input wire logic",
+      "full_type_details": "input wire logic",
+      "single_line_description": "Read request. A read is accepted only when rd_en=1 and empty=0 at a rising clock edge; while empty=1 the request is ignored even if a write is acce"
+    }
+  ],
+  "inout_ports": [],
+  "output_ports": [
+    {
+      "id": "060f8270-2331-4fce-a841-f07f9d8eb867",
+      "name": "rd_data",
+      "description": "First-word fall-through (FWFT) read data of width DATA_W. Combinational output: driven to all zeros while empty=1, otherwise equals the head entry mem[rd_ptr].",
+      "type": "output logic [DATA_W-1:0]",
+      "full_type_details": "output logic [DATA_W-1:0]",
+      "single_line_description": "First-word fall-through (FWFT) read data of width DATA_W. Combinational output: driven to all zeros while empty=1, otherwise equals the head entry "
+    },
+    {
+      "id": "dc5cd5e5-3dde-4f60-80da-24b1fe07169e",
+      "name": "full",
+      "description": "Full status flag. Combinational: full = (count == DEPTH). Asserted when the FIFO holds DEPTH entries; a write is blocked while it is asserted.",
+      "type": "output logic",
+      "full_type_details": "output logic",
+      "single_line_description": "Full status flag. Combinational: full = (count == DEPTH). Asserted when the FIFO holds DEPTH entries; a write is blocked while it is asserted."
+    },
+    {
+      "id": "067a2d31-ee36-4813-884d-c53a567c8d1d",
+      "name": "empty",
+      "description": "Empty status flag. Combinational: empty = (count == 0). Asserted when the FIFO holds no entries; a read is blocked while it is asserted and rd_data is forced t",
+      "type": "output logic",
+      "full_type_details": "output logic",
+      "single_line_description": "Empty status flag. Combinational: empty = (count == 0). Asserted when the FIFO holds no entries; a read is blocked while it is asserted and rd_data"
+    },
+    {
+      "id": "02d4e003-f803-4a96-b31c-d9812ebe9525",
+      "name": "count",
+      "description": "Number of valid entries currently in the FIFO, range 0..DEPTH. Width is $clog2(DEPTH)+1 bits (CNT_W = ADDR_W+1). Combinational function of the registered",
+      "type": "output logic [$clog2(DEPTH):0]",
+      "full_type_details": "output logic [$clog2(DEPTH):0]",
+      "single_line_description": "Number of valid entries currently in the FIFO, range 0..DEPTH. Width is $clog2(DEPTH)+1 bits (CNT_W = ADDR_W+1). Combinational function of the"
+    }
+  ],
+  "interfaces": [],
+  "interface_ports": [],
+  "interface_details": [],
+  "design_parameters": [
+    {
+      "id": "197b20dd-49d2-4659-9894-5b805601c051",
+      "name": "ADDR_W",
+      "description": "Pointer width derived from DEPTH as $clog2(DEPTH); sets the width of wr_ptr and rd_ptr, which index the DEPTH-entry memory array and wrap modulo DEPTH.",
+      "type": "int unsigned",
+      "kind": "mealy",
+      "value": "$clog2(DEPTH) (4 for default DEPTH=16)",
+      "is_enabled": true,
+      "category": "4"
+    },
+    {
+      "id": "f97e62c1-8bda-4d26-8491-44dd575428af",
+      "name": "CNT_W",
+      "description": "Width of the count/occupancy value, derived as ADDR_W + 1 = $clog2(DEPTH)+1, so count can represent the full range 0..DEPTH including the full condition.",
+      "type": "int unsigned",
+      "kind": "mealy",
+      "value": "ADDR_W + 1 (5 for default DEPTH=16)",
+      "is_enabled": true,
+      "category": "4"
+    },
+    {
+      "id": "978d77dd-4fc9-4a1b-b6b0-20fba6256e69",
+      "name": "DEPTH_CNT",
+      "description": "Constant representation of DEPTH sized to CNT_W bits; used to compare against count to generate the full flag (full = count == DEPTH_CNT).",
+      "type": "logic [CNT_W-1:0]",
+      "kind": "mealy",
+      "value": "CNT_W'(DEPTH) (5'd16 for default DEPTH=16)",
+      "is_enabled": true,
+      "category": "4"
+    }
+  ],
+  "end_to_end_functionality": [
+    {
+      "id": "1b25b331-cf62-41ac-a486-1d6638d2fafd",
+      "function": "Reset and re-initialization sequence",
+      "description": "Power-up / recovery path that brings the FIFO to a known empty state before any traffic. rst_n is synchronous and active-low; there is a single clock `clk` an",
+      "isLocked": false,
+      "rtl_files_referenced": [
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "52-57",
+          "description": "Synchronous active-low reset block clearing wr_ptr, rd_ptr and count on the rising clock edge."
+        }
+      ],
+      "spec_sections_referenced": [
+        {
+          "source_file": "sync_fifo_spec.md",
+          "section": "Reset",
+          "text_anchor": "rst_n is synchronous and active low"
+        },
+        {
+          "source_file": "sync_fifo_spec.md",
+          "section": "Status flags",
+          "text_anchor": "The flags are combinational functions of count"
+        }
+      ]
+    }
+  ],
+  "corner_case_functionality": [
+    {
+      "id": "2565933e-ccc1-49ed-a285-2455cd3730bc",
+      "condition": "Write requested while `full=1` (`count == DEPTH`)",
+      "expected_behavior": "Write is ignored: no memory write occurs, `wr_ptr` does not move, and `count` stays at `DEPTH`. Spec row: 'Write when full | Ignored. `count` stays at `",
+      "handling_mechanism": "`do_wr` is a qualified enable, `wr_en && !full`, so the write pointer/memory update block is gated off and the case statement default branch holds `cou",
+      "rtl_files_referenced": [
+        {
+          "line_range": "46-61",
+          "description": "Full comparison and gated do_wr that suppress memory writes and pointer movement while full."
+        },
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "67-71",
+          "description": "Default case branch that holds count when no operation is accepted."
+        }
+      ],
+      "spec_sections_referenced": [
+        {
+          "source_file": "sync_fifo_spec.md",
+          "section": "Corner cases",
+          "text_anchor": "Write when full | Ignored"
+        }
+      ]
+    },
+    {
+      "id": "42e9b572-773a-493b-b5f9-9a7727c3c0fb",
+      "condition": "Read requested while `empty=1` (`count == 0`)",
+      "expected_behavior": "Read is ignored: `rd_ptr` does not move, `count` stays at 0, and `rd_data` remains 0. Spec row: 'Read when empty | Ignored. `count` stays at 0, `rd_data",
+      "handling_mechanism": "`do_rd = rd_en && !empty` gates the read-pointer increment, and `rd_data` is muxed to `{DATA_W{1'b0}}` when `empty` is true (source: `sync_fifo.sv:47-50`)",
+      "rtl_files_referenced": [
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "47-50",
+          "description": "Empty-gated read enable and zero-forced read data path for the underflow corner case."
+        },
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "63-65",
+          "description": "Read pointer increments only when do_rd is asserted."
+        }
+      ],
+      "spec_sections_referenced": [
+        {
+          "source_file": "sync_fifo_spec.md",
+          "section": "Corner cases",
+          "text_anchor": "Read when empty | Ignored"
+        }
+      ]
+    },
+    {
+      "id": "25137336-f371-4b0f-b667-a791fee8f5a2",
+      "condition": "Simultaneous write and read while `full=1` (read makes room in the same cycle)",
+      "expected_behavior": "Conservative behavior: the write is still blocked while the read is accepted, so `count` decrements by one and the concurrently offered `wr_data` is drop",
+      "handling_mechanism": "`do_wr` uses the pre-edge `full` value rather than a 'full and not reading' expression, so `do_wr=0` and `do_rd=1`; case `2'b01` decrements `count` (sou",
+      "rtl_files_referenced": [
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "46-49",
+          "description": "Independent gating of do_wr/do_rd from pre-edge full/empty that enforces conservative full handling."
+        },
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "67-72",
+          "description": "Case 2'b01 count decrement for the accepted read while the write is dropped."
+        }
+      ],
+      "spec_sections_referenced": [
+        {
+          "source_file": "sync_fifo_spec.md",
+          "section": "Corner cases",
+          "text_anchor": "Simultaneous read+write when full"
+        }
+      ]
+    },
+    {
+      "id": "725938a3-4bb5-46ca-bfd6-f171f0564799",
+      "condition": "Simultaneous write and read while `empty=1` (write provides data in the same cycle)",
+      "expected_behavior": "Conservative behavior: the read is still blocked while the write is accepted, so `count` increments by one and `rd_data` does not return the just-written",
+      "handling_mechanism": "`do_rd` uses the pre-edge `empty` value, so `do_wr=1`, `do_rd=0`; the `2'b10` case increments `count` and `rd_data` stays zero for that cycle because `r",
+      "rtl_files_referenced": [
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "48-50",
+          "description": "Read blocked by pre-edge empty while the write proceeds; read data mux behavior."
+        },
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "67-71",
+          "description": "Case 2'b10 count increment for the accepted write while the read is dropped."
+        }
+      ],
+      "spec_sections_referenced": [
+        {
+          "source_file": "sync_fifo_spec.md",
+          "section": "Corner cases",
+          "text_anchor": "Simultaneous read+write when empty"
+        }
+      ]
+    }
+  ],
+  "error_scenarios": [
+    {
+      "id": "1f31d146-963f-457c-b78f-2b2722cbf350",
+      "error_scenario": "Write overflow attempt — producer asserts `wr_en` after the FIFO has reached `count == DEPTH` (`full=1`).",
+      "detection_mechanism": "`full` is asserted combinationally when `count == DEPTH_CNT`, so the producer/testbench can detect the condition by sampling `full` (and `cou",
+      "system_response": "The write is silently dropped: `do_wr` is forced low, `mem[wr_ptr]` is not updated, `wr_ptr` holds, and `count` remains at `DEPTH`; no error fla",
+      "recovery_actions": "Producer must deassert or hold `wr_en` and retry after the consumer performs an accepted read that drops `count` below `DEPTH` and deasserts `f",
+      "rtl_files_referenced": [
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "46-49",
+          "description": "Full flag and do_wr gating that implement overflow suppression."
+        },
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "58-71",
+          "description": "Write/pointer/count logic held steady while the blocked write is dropped."
+        }
+      ],
+      "spec_sections_referenced": [
+        {
+          "source_file": "sync_fifo_spec.md",
+          "section": "Write",
+          "text_anchor": "While full=1, wr_en is ignored"
+        },
+        {
+          "source_file": "sync_fifo_spec.md",
+          "section": "Assumptions and exclusions",
+          "text_anchor": "no error reporting beyond full/empty"
+        }
+      ]
+    }
+  ],
+  "signal_groups": [],
+  "signals_to_channels": "INVALID_KEY_PLACEHOLDER",
+  "channels_to_transactions": "INVALID_KEY_PLACEHOLDER",
+  "rtl_stats": {},
+  "inconsistencies": {},
+  "user_defined_types": {},
+  "imports": [],
+  "includes": [],
+  "relevant_files": {
+    "top_file": "/work/home/jqliu/cad_ai_demo/sync_fifo_demo/rtl/sync_fifo.sv",
+    "dependent_files": []
+  },
+  "internal_signals": [
+    {
+      "id": "61fb06e0-2857-42c8-885a-2646883fd3c0",
+      "name": "mem",
+      "type": "logic [DATA_W-1:0] mem [0:DEPTH-1]",
+      "full_hierarchy": "sync_fifo.mem"
+    },
+    {
+      "id": "0f7d39ff-cdd3-4435-8a17-91dedee6d025",
+      "name": "wr_ptr",
+      "type": "logic [ADDR_W-1:0]",
+      "full_hierarchy": "sync_fifo.wr_ptr"
+    },
+    {
+      "id": "6944c817-a4be-41f9-841e-ae4d5bec8c5a",
+      "name": "rd_ptr",
+      "type": "logic [ADDR_W-1:0]",
+      "full_hierarchy": "sync_fifo.rd_ptr"
+    },
+    {
+      "id": "5413d7a3-be4a-4355-8437-1ddd39eb5865",
+      "name": "do_wr",
+      "type": "logic",
+      "full_hierarchy": "sync_fifo.do_wr"
+    },
+    {
+      "id": "5633ac1a-56b9-4255-ae54-ae22939a0a08",
+      "name": "do_rd",
+      "type": "logic",
+      "full_hierarchy": "sync_fifo.do_rd"
+    },
+    {
+      "id": "6dbb098a-caef-4b79-b8e9-1c5747e13307",
+      "name": "count",
+      "type": "logic [CNT_W-1:0] ($clog2(DEPTH)+1)",
+      "full_hierarchy": "sync_fifo.count"
+    }
+  ],
+  "basic_functionality": [
+    {
+      "id": "81b2391a-c49c-4e99-b308-df3478216db4",
+      "function": "Reset and Initialize FIFO State",
+      "description": "Synchronous active-low reset initialization.\n- What it does: Clears the write pointer, read pointer, and entry count to zero so the FIFO starts empty and read",
+      "description_only": "Synchronous active-low reset clears the write pointer, read pointer, and count to zero; the FIFO then reports `empty=1`, `full=0`, and drives `rd_data=0",
+      "isLocked": false,
+      "rtl_files_referenced": [
+        {
+          "source_file": "sync_fifo.sv",
+          "line_range": "19-50",
+          "description": "Parameter/port declarations, pointer and memory arrays, and the combinational logic deriving `full`, `empty`, `do_wr`, `do_rd`, and `rd_data`."
+        }
+      ],
+      "spec_sections_referenced": [
+        {
+          "source_file": "sync_fifo_spec.md",
+          "section": "Reset",
+          "text_anchor": "\"rst_n is synchronous and active low\""
+        },
+        {
+          "source_file": "sync_fifo_spec.md",
+          "section": "Write",
+          "text_anchor": "\"A write is accepted when wr_en=1 and full=0\""
+        }
+      ]
+    }
+  ],
+  "all_port_names": [
+    "wr_en",
+    "wr_data",
+    "rd_en",
+    "rd_data",
+    "full",
+    "empty",
+    "count",
+    "clk",
+    "rst_n"
+  ]
+}
