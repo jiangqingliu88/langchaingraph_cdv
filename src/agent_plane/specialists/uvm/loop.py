@@ -4,12 +4,13 @@
 read_file / write_file），让 Verify 在确定性生成之后自己检查并修补环境。
 默认 off；`SIGNOFFAI_VERIFY_LOOP=on` 才运行，失败只记录、不阻断确定性管线。
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 
@@ -36,24 +37,29 @@ def _goal(state) -> str:
     )
 
 
-async def n_verify_agent(state, config) -> Dict[str, Any]:
+async def n_verify_agent(state, config) -> dict[str, Any]:
     if not _enabled():
-        return {"verify_agent_loop": {"skipped": True,
-                                      "reason": "SIGNOFFAI_VERIFY_LOOP!=on"}}
+        return {"verify_agent_loop": {"skipped": True, "reason": "SIGNOFFAI_VERIFY_LOOP!=on"}}
     output_dir = getattr(state, "output_root", "output")
     try:
         from src.generation_plane.uvm_tools.agent_tools import (
-            _uvm_ctx, check_static, find_spec_yaml, jinja_render,
-            read_file, write_file,
+            _uvm_ctx,
+            check_static,
+            find_spec_yaml,
+            jinja_render,
+            read_file,
+            write_file,
         )
 
-        _uvm_ctx.set(output_dir=output_dir, agents=[],
-                     env_name=f"{(getattr(state, 'spec', {}) or {}).get('design_name', 'dut')}_env")
+        _uvm_ctx.set(
+            output_dir=output_dir,
+            agents=[],
+            env_name=f"{(getattr(state, 'spec', {}) or {}).get('design_name', 'dut')}_env",
+        )
         tools = [find_spec_yaml, jinja_render, check_static, read_file, write_file]
-        result = await asyncio.to_thread(
-            run_tool_loop, _goal(state), tools, max_steps=8)
+        result = await asyncio.to_thread(run_tool_loop, _goal(state), tools, max_steps=8)
         return {"verify_agent_loop": result.to_dict()}
-    except Exception as exc:                           # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         logger.warning(f"Verify 工具循环失败，保留确定性管线: {exc}")
         return {"verify_agent_loop": {"ok": False, "error": str(exc)}}
 

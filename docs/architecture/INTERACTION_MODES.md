@@ -103,27 +103,39 @@ venv\Scripts\vagent.exe gui
 
 | 模式 | 描述 | 交互 | 对应 agent（`specialists/`） | stages |
 |---|---|---|---|---|
-| Agentic Chat | General-purpose chat for workspace exploration and code assistance | chat | harness（不是专家） | - |
-| Mental Model | Design understanding and analysis mode | chat | `mental` | - |
-| Formal | Formal verification agent mode | plan | `verify`（Formal 工具链未接入，先按 verify 计划模式） | verify |
-| UVM | UVM testplan, testbench development mode | plan | `verify` | verify |
-| RTL Designer | Lint violation Auto-fix | plan | `design` | front/design/model |
-| Unit Testing Agent | Unit testing and testbench development (SV based, no UVM) | plan | `verify`（无独立 unit_test 专家，靠 role_prompt 约束纯 SV） | verify |
-| Functional Coverage (interface-based) | Functional coverage monitor generation (RTL interface-based) | plan | `coverage` | coverage |
+| Agentic Chat | General-purpose chat for workspace exploration and code assistance | chat | `agentic_chat`（通用 Harness） | - |
+| Mental Model | Design understanding and analysis mode | chat | `mental_model` | - |
+| Formal | Formal verification agent mode | plan | `formal`（生成 Formal IR；无引擎时 engine.ran=false） | verify |
+| UVM | UVM testplan, testbench development mode | plan | `uvm`（UVM 子图，原 verify 实现） | verify |
+| RTL Designer | Lint violation Auto-fix | plan | `rtl_designer` | front/design/model |
+| Unit Testing Agent | Unit testing and testbench development (SV based, no UVM) | plan | `unit_testing`（纯 SV TB 生成 + vlog/vsim） | verify |
+| Functional Coverage (interface-based) | Functional coverage monitor generation (RTL interface-based) | plan | `functional_coverage` | coverage |
 | Debug | DV debug agent mode | plan | `debug` | ops/debug |
-| Workflows | End-to-end automated workflows | verify | `supervisor`（编排主图，不是单一专家） | 全阶段 |
+| Workflows | End-to-end automated workflows | verify | `workflows`（入口；执行走 supervisor） | 全阶段 |
 
-**为什么现在不能 1:1 对应**：`specialists/` 目前只有 design / verify / debug /
-coverage / mental 五个专家；Formal 与 Unit Testing 没有独立专家，Agentic Chat 不是
-专家，Workflows 走 supervisor 主图。上表是**当前真实映射**，UI 的 hint/tooltip
-和返回结果的 `interaction.specialist/stages` 都从这里来；新增专家后只改
+**对应关系**：8 个业务模式现在都有明确落点——`mental_model` / `formal` /
+`unit_testing` 是独立专家（见 [Standalone 专家](SPECIALIST_AGENTS.md)），
+`rtl_designer` / `uvm` / `debug` / `functional_coverage` 是闭环专家，
+`workflows` 是执行入口（走 supervisor）；Agentic Chat 是 `agentic_chat` 通用
+Harness。上表是**当前真实映射**，UI 的 hint/tooltip 和返回结果的
+`interaction.specialist/stages` 都从这里来；新增专家后只改
 `agent_modes.py` 一处即可。
+
+每个 agent 都有对话命令（与 GUI 共用同一份模式配置）：
+
+```powershell
+vagent agents list
+vagent agents chat uvm "分析这份 testplan"
+vagent uvm chat "分析这份 testplan"
+```
 
 - `plan` 模式会设置 `plan_first=True` / `require_plan_approval=True`，并保留执行审批；
 - `verify` 模式走既有 `verify_mode/router`，不经过 agent chat；
-- Mental Model 模式下出现「生成 Mental IR」按钮：选择 spec 后运行
-  `agent_plane/specialists/mental`，产物落在
-  `<workspace>/output_mental_<spec>/mental_ir/`。
+- 模式注册表里的 `action` 决定是否出现**统一动作按钮**（界面不再按模式写分支）：
+  - Mental Model → 「生成 Mental IR」→ `specialists/mental_model`；
+  - Formal → 「生成 Formal 计划」→ `specialists/formal`；
+  - Unit Testing → 「生成/运行单测」→ `specialists/unit_testing`。
+  产物分别落在 `<workspace>/output_*/` 下对应子目录。
 
 ## 3. 一致性与人审边界
 

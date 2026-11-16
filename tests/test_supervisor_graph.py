@@ -126,7 +126,7 @@ def test_supervisor_routes_interrupted_to_audit():
 
 def test_design_subgraph_propagates_completion_marker(monkeypatch):
     """子图真的能跑：嵌套图的 state 更新会回到主图（不是只编译不执行）。"""
-    from src.agent_plane.specialists.design import graph as design_graph
+    from src.agent_plane.specialists.rtl_designer import graph as design_graph
 
     async def fake(state, config):
         if state is None:
@@ -141,10 +141,10 @@ def test_design_subgraph_propagates_completion_marker(monkeypatch):
 
 
 def test_all_expert_subgraphs_compile():
-    from src.agent_plane.specialists.coverage.graph import build_coverage_subgraph
+    from src.agent_plane.specialists.functional_coverage.graph import build_coverage_subgraph
     from src.agent_plane.specialists.debug.graph import build_debug_subgraph
-    from src.agent_plane.specialists.design.graph import build_design_subgraph
-    from src.agent_plane.specialists.verify.graph import build_verify_subgraph
+    from src.agent_plane.specialists.rtl_designer.graph import build_design_subgraph
+    from src.agent_plane.specialists.uvm.graph import build_verify_subgraph
 
     assert "design" in build_design_subgraph().get_graph().nodes
     assert "verify" in build_verify_subgraph().get_graph().nodes

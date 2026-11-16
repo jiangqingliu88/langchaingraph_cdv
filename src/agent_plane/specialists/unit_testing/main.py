@@ -12,7 +12,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import structlog
 
@@ -47,7 +47,7 @@ testbench（**不要 UVM**，不要 `uvm_pkg` / `uvm_*` 宏）。
 """
 
 
-def _messages(module: str, rtl_text: str) -> List[Dict[str, str]]:
+def _messages(module: str, rtl_text: str) -> list[dict[str, str]]:
     return [
         {"role": "system", "content": _system_prompt(module)},
         {"role": "user", "content": f"RTL:\n{rtl_text[:MAX_RTL_CHARS]}"},
@@ -95,14 +95,10 @@ def generate_tb(rtl_text: str, *, module: str, attempts: int = 2) -> str:
     raise SpecialistError(f"无法生成 unit testbench（{attempts} 次尝试）：{last}")
 
 
-def _run_cmd(cmd: List[str], cwd: Path, log_path: Path,
-             timeout: int) -> Dict[str, Any]:
+def _run_cmd(cmd: list[str], cwd: Path, log_path: Path, timeout: int) -> dict[str, Any]:
     try:
-        proc = subprocess.run(
-            cmd, cwd=str(cwd), capture_output=True, text=True,
-            timeout=timeout, check=False)
-        log_path.write_text(
-            (proc.stdout or "") + "\n" + (proc.stderr or ""), encoding="utf-8")
+        proc = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, timeout=timeout, check=False)
+        log_path.write_text((proc.stdout or "") + "\n" + (proc.stderr or ""), encoding="utf-8")
         return {"returncode": proc.returncode, "log": str(log_path)}
     except FileNotFoundError:
         return {"returncode": 127, "log": "", "missing_tool": cmd[0]}
@@ -122,15 +118,15 @@ def _sim_errors(log_path: Path) -> int:
     return 1 if re.search(r"\$fatal|\bFATAL\b|Fatal:", text) else 0
 
 
-def run(rtl_path: str | Path, output_dir: str | Path, *, module: str = "",
-        compile: bool = True, simulate: bool = True) -> Dict[str, Any]:
+def run(
+    rtl_path: str | Path, output_dir: str | Path, *, module: str = "", compile: bool = True, simulate: bool = True
+) -> dict[str, Any]:
     """生成 TB → 编译 → 运行 → report。同步入口（CLI 用）。"""
     rtl = Path(rtl_path)
     if not rtl.is_file():
         raise SpecialistError(f"RTL 文件不存在：{rtl}")
     rtl_text = rtl.read_text(encoding="utf-8", errors="replace")
-    mod = module.strip() or next(
-        (m.group(1) for m in _MODULE_RE.finditer(rtl_text)), rtl.stem)
+    mod = module.strip() or next((m.group(1) for m in _MODULE_RE.finditer(rtl_text)), rtl.stem)
 
     tb_text = generate_tb(rtl_text, module=mod)
     out = Path(output_dir) / "unit_test"
@@ -142,7 +138,7 @@ def run(rtl_path: str | Path, output_dir: str | Path, *, module: str = "",
     tb_path = out / f"{mod}_tb.sv"
     tb_path.write_text(tb_text + "\n", encoding="utf-8")
 
-    report: Dict[str, Any] = {
+    report: dict[str, Any] = {
         "schema": "unit_test_report_v1",
         "module": mod,
         "generated_at": now_iso(),
@@ -157,15 +153,15 @@ def run(rtl_path: str | Path, output_dir: str | Path, *, module: str = "",
         if not shutil.which("vlog"):
             report["compile"]["reason"] = "vlog 不在 PATH"
         else:
-            res = _run_cmd(
-                ["vlog", "-sv", str(rtl_copy), str(tb_path)],
-                out, out / "compile.log", COMPILE_TIMEOUT)
+            res = _run_cmd(["vlog", "-sv", str(rtl_copy), str(tb_path)], out, out / "compile.log", COMPILE_TIMEOUT)
             ok = res.get("returncode") == 0 and not res.get("missing_tool")
-            report["compile"].update({
-                "status": "PASS" if ok else "FAIL",
-                "returncode": res.get("returncode"),
-                "log": res.get("log", ""),
-            })
+            report["compile"].update(
+                {
+                    "status": "PASS" if ok else "FAIL",
+                    "returncode": res.get("returncode"),
+                    "log": res.get("log", ""),
+                }
+            )
             if res.get("missing_tool"):
                 report["compile"]["reason"] = f"{res['missing_tool']} 不在 PATH"
 
@@ -173,18 +169,18 @@ def run(rtl_path: str | Path, output_dir: str | Path, *, module: str = "",
         if not shutil.which("vsim"):
             report["run"]["reason"] = "vsim 不在 PATH"
         else:
-            res = _run_cmd(
-                ["vsim", "-c", "-do", "run -all; quit -f", f"{mod}_tb"],
-                out, out / "sim.log", SIM_TIMEOUT)
+            res = _run_cmd(["vsim", "-c", "-do", "run -all; quit -f", f"{mod}_tb"], out, out / "sim.log", SIM_TIMEOUT)
             log_path = Path(res.get("log") or "")
             errors = _sim_errors(log_path) if log_path.is_file() else 0
             ok = res.get("returncode") == 0 and errors == 0
-            report["run"].update({
-                "status": "PASS" if ok else "FAIL",
-                "returncode": res.get("returncode"),
-                "log": res.get("log", ""),
-                "errors": errors,
-            })
+            report["run"].update(
+                {
+                    "status": "PASS" if ok else "FAIL",
+                    "returncode": res.get("returncode"),
+                    "log": res.get("log", ""),
+                    "errors": errors,
+                }
+            )
             if res.get("missing_tool"):
                 report["run"]["reason"] = f"{res['missing_tool']} 不在 PATH"
 
@@ -199,8 +195,7 @@ def run(rtl_path: str | Path, output_dir: str | Path, *, module: str = "",
         report["status"] = "GENERATED_ONLY"
 
     report_path = out / "report.json"
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
-                           encoding="utf-8")
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info(f"Unit Test：{mod} · {report['status']} → {report_path}")
     return {
         "status": report["status"],
@@ -212,27 +207,29 @@ def run(rtl_path: str | Path, output_dir: str | Path, *, module: str = "",
     }
 
 
-async def arun(rtl_path: str | Path, output_dir: str | Path, *, module: str = "",
-               compile: bool = True, simulate: bool = True) -> Dict[str, Any]:
+async def arun(
+    rtl_path: str | Path, output_dir: str | Path, *, module: str = "", compile: bool = True, simulate: bool = True
+) -> dict[str, Any]:
     from .graph import build_unit_test_graph
 
-    final = await build_unit_test_graph().ainvoke({
-        "rtl_path": str(rtl_path),
-        "output_dir": str(output_dir),
-        "module": module,
-        "compile": compile,
-        "simulate": simulate,
-    })
+    final = await build_unit_test_graph().ainvoke(
+        {
+            "rtl_path": str(rtl_path),
+            "output_dir": str(output_dir),
+            "module": module,
+            "compile": compile,
+            "simulate": simulate,
+        }
+    )
     return final["result"]
 
 
-def run_async(rtl_path: str | Path, output_dir: str | Path, *, module: str = "",
-              compile: bool = True, simulate: bool = True) -> Dict[str, Any]:
+def run_async(
+    rtl_path: str | Path, output_dir: str | Path, *, module: str = "", compile: bool = True, simulate: bool = True
+) -> dict[str, Any]:
     import asyncio
 
-    return asyncio.run(arun(rtl_path, output_dir, module=module,
-                            compile=compile, simulate=simulate))
+    return asyncio.run(arun(rtl_path, output_dir, module=module, compile=compile, simulate=simulate))
 
 
-__all__ = ["PROMPT_VERSION", "SpecialistError", "generate_tb", "run",
-           "arun", "run_async"]
+__all__ = ["PROMPT_VERSION", "SpecialistError", "generate_tb", "run", "arun", "run_async"]

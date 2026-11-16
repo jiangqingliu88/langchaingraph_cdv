@@ -5,22 +5,23 @@
   · write_file 只能写 `<run>/rtl/*.sv`；
   · check_rtl 只做纯代码的 module/文件统计，不跑 EDA。
 """
+
 from __future__ import annotations
 
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 
 class _Tool:
     name = ""
     description = ""
 
-    def invoke(self, args: Dict[str, Any]) -> str:
+    def invoke(self, args: dict[str, Any]) -> str:
         return self._run(args or {})
 
-    def _run(self, args: Dict[str, Any]) -> str:
+    def _run(self, args: dict[str, Any]) -> str:
         raise NotImplementedError
 
 
@@ -58,8 +59,9 @@ class WriteRTLTool(_Tool):
             return json.dumps({"error": "only <run>/rtl/*.sv is writable"})
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        return json.dumps({"ok": True, "path": path.relative_to(self.root).as_posix(),
-                           "bytes": len(content.encode("utf-8"))})
+        return json.dumps(
+            {"ok": True, "path": path.relative_to(self.root).as_posix(), "bytes": len(content.encode("utf-8"))}
+        )
 
 
 class ListRTLTool(_Tool):
@@ -85,21 +87,23 @@ class CheckRTLTool(_Tool):
 
     def _run(self, args):
         files = sorted(self.rtl.glob("*.sv")) if self.rtl.is_dir() else []
-        modules: List[str] = []
+        modules: list[str] = []
         for path in files:
             text = path.read_text(encoding="utf-8", errors="replace")
             modules.extend(re.findall(r"\bmodule\s+(\w+)", text))
-        return json.dumps({
-            "rtl_present": bool(files),
-            "files": [p.name for p in files],
-            "modules": sorted(set(modules)),
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "rtl_present": bool(files),
+                "files": [p.name for p in files],
+                "modules": sorted(set(modules)),
+            },
+            ensure_ascii=False,
+        )
 
 
-def build_design_tools(root: str | Path) -> List[Any]:
+def build_design_tools(root: str | Path) -> list[Any]:
     root = Path(root)
-    return [ReadFileTool(root), WriteRTLTool(root), ListRTLTool(root),
-            CheckRTLTool(root)]
+    return [ReadFileTool(root), WriteRTLTool(root), ListRTLTool(root), CheckRTLTool(root)]
 
 
 __all__ = ["build_design_tools"]

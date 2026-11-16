@@ -3,6 +3,7 @@
 不碰 Questa：用 `.vcd` 当波形（`extract_signal_trace` 直接读）。测的是
 "agent 会不会真去取波形、取的是不是该取的那个信号"，不是 Questa 转换器。
 """
+
 from __future__ import annotations
 
 from src.agent_plane.specialists.debug.main import DebugExecutor

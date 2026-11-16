@@ -5,12 +5,13 @@
 `skipped`，不改变旧行为；开启后失败也只会记录错误，后面的 `debug_functional`
 仍可兜底。
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 
@@ -20,8 +21,7 @@ logger = structlog.get_logger()
 
 
 def _enabled() -> bool:
-    return os.environ.get("SIGNOFFAI_AGENT_LOOP", "off").strip().lower() in (
-        "1", "on", "true", "yes")
+    return os.environ.get("SIGNOFFAI_AGENT_LOOP", "off").strip().lower() in ("1", "on", "true", "yes")
 
 
 def _goal(state) -> str:
@@ -35,18 +35,16 @@ def _goal(state) -> str:
     )
 
 
-async def n_debug_agent(state, config) -> Dict[str, Any]:
+async def n_debug_agent(state, config) -> dict[str, Any]:
     if not _enabled():
-        return {"debug_agent_loop": {"skipped": True,
-                                     "reason": "SIGNOFFAI_AGENT_LOOP!=on"}}
+        return {"debug_agent_loop": {"skipped": True, "reason": "SIGNOFFAI_AGENT_LOOP!=on"}}
     try:
         from src.engine_plane.diagnostics import DebugTools
 
         tools = DebugTools().get_tools()
-        result = await asyncio.to_thread(
-            run_tool_loop, _goal(state), tools, max_steps=6)
+        result = await asyncio.to_thread(run_tool_loop, _goal(state), tools, max_steps=6)
         return {"debug_agent_loop": result.to_dict()}
-    except Exception as exc:                           # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         logger.warning(f"Debug 工具循环失败，回退确定性管线: {exc}")
         return {"debug_agent_loop": {"ok": False, "error": str(exc)}}
 

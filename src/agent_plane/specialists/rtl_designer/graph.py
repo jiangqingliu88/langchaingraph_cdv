@@ -1,13 +1,15 @@
 """Design expert subgraph: front -> design -> design_agent (opt-in) -> model."""
+
 from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from src.agent_plane.specialists.design.loop import n_design_agent
-from src.orchestration_plane.markers import marker
 from src.agent_plane.runtime.pipeline_nodes.build import n_design, n_front, n_model
-from src.orchestration_plane.supervisor.routing import r_after_design
 from src.orchestration_plane.kernel.state import PipelineState
+from src.orchestration_plane.markers import marker
+from src.orchestration_plane.supervisor.routing import r_after_design
+
+from .loop import n_design_agent
 
 
 def build_design_subgraph():
@@ -20,10 +22,14 @@ def build_design_subgraph():
     g.add_edge(START, "front")
     g.add_edge("front", "design")
     g.add_edge("design", "design_agent")
-    g.add_conditional_edges("design_agent", r_after_design, {
-        "ok": "model",
-        "abort": "mark_design_done",
-    })
+    g.add_conditional_edges(
+        "design_agent",
+        r_after_design,
+        {
+            "ok": "model",
+            "abort": "mark_design_done",
+        },
+    )
     g.add_edge("model", "mark_design_done")
     g.add_edge("mark_design_done", END)
     return g.compile()

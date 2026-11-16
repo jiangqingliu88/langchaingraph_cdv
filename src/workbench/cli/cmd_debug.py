@@ -3,6 +3,7 @@
 从 `src/workbench/cli/commands.py` 拆出；导入本模块即把命令注册到 `cli`。
 共享 helper 仍从 `commands` 导入，别在这里再造一份。
 """
+
 from __future__ import annotations
 
 import asyncio  # noqa: F401
@@ -17,10 +18,14 @@ from rich.panel import Panel  # noqa: F401
 from rich.table import Table  # noqa: F401
 
 from src.orchestration_plane.kernel.execution import PipelineExecutionService
-from src.workbench.cli.output import common_options, get_output_adapter  # noqa: F401
 from src.workbench.cli.commands import (  # noqa: F401
-    cli, console, AGENT_ALIASES, VerificationCLI,
+    AGENT_ALIASES,
+    VerificationCLI,
+    cli,
+    console,
 )
+from src.workbench.cli.output import common_options, get_output_adapter  # noqa: F401
+
 
 @cli.group()
 def debug():
@@ -85,9 +90,15 @@ def debug_log(run_id, phase, level, agent_filter, tail, json_output):
         for e in entries:
             ts = e.get("timestamp", "")[:19]
             evt = e.get("event", "?")
-            icon = {"pipeline_start": "▶", "pipeline_end": "■", "llm_call": "🧠",
-                    "tool_call": "🔧", "file_write": "📄", "phase_start": "→",
-                    "phase_end": "←"}.get(evt, "·")
+            icon = {
+                "pipeline_start": "▶",
+                "pipeline_end": "■",
+                "llm_call": "🧠",
+                "tool_call": "🔧",
+                "file_write": "📄",
+                "phase_start": "→",
+                "phase_end": "←",
+            }.get(evt, "·")
             detail = str(e.get("workflow", e.get("tool", e.get("agent", ""))))[:40]
             status = e.get("status", e.get("success", ""))
             console.print(f"  [dim]{ts}[/dim] {icon} [{evt}] {detail} {status}")
@@ -112,14 +123,17 @@ def debug_analyze(run_id, log_file, json_output):
         # Basic analysis
         error_lines = [l for l in content.split("\n") if "error" in l.lower() or "fail" in l.lower()]
         warning_lines = [l for l in content.split("\n") if "warn" in l.lower()]
-        out.print_result({
-            "file": log_file,
-            "size": len(content),
-            "error_count": len(error_lines),
-            "warning_count": len(warning_lines),
-            "sample_errors": error_lines[:10],
-            "sample_warnings": warning_lines[:5],
-        }, title="Log Analysis")
+        out.print_result(
+            {
+                "file": log_file,
+                "size": len(content),
+                "error_count": len(error_lines),
+                "warning_count": len(warning_lines),
+                "sample_errors": error_lines[:10],
+                "sample_warnings": warning_lines[:5],
+            },
+            title="Log Analysis",
+        )
         return
 
     if run_id:
@@ -129,15 +143,17 @@ def debug_analyze(run_id, log_file, json_output):
             out.print_error(f"Run {run_id} not found")
             return
 
-        failed_phases = [p for p in state.get("phases", [])
-                         if p.get("status") in ("failed", "error")]
-        out.print_result({
-            "run_id": run_id,
-            "state": state.get("state", "unknown"),
-            "failed_phases": failed_phases,
-            "passed": state.get("passed", 0),
-            "total": state.get("total", 0),
-        }, title="Failure Analysis")
+        failed_phases = [p for p in state.get("phases", []) if p.get("status") in ("failed", "error")]
+        out.print_result(
+            {
+                "run_id": run_id,
+                "state": state.get("state", "unknown"),
+                "failed_phases": failed_phases,
+                "passed": state.get("passed", 0),
+                "total": state.get("total", 0),
+            },
+            title="Failure Analysis",
+        )
         return
 
     out.print_error("Use --run <run_id> or --log <log_file>")
@@ -157,19 +173,17 @@ def debug_exp(distill, json_output):
     """
     out = get_output_adapter(json_output)
     from src.knowledge_plane.debug_experience import get_debug_experience_store
+
     store = get_debug_experience_store()
     entries = store.distill_candidates() if distill else store.list_all()
     stats = store.stats()
 
     if json_output:
-        click.echo(json.dumps({"stats": stats, "entries": entries},
-                              indent=2, ensure_ascii=False, default=str))
+        click.echo(json.dumps({"stats": stats, "entries": entries}, indent=2, ensure_ascii=False, default=str))
         return
 
     if not entries:
-        console.print(
-            f"[dim]经验库为空（共 {stats['total']} 条）。跑一次带失败的验证后，"
-            f"debug 会自动积累经验。[/dim]")
+        console.print(f"[dim]经验库为空（共 {stats['total']} 条）。跑一次带失败的验证后，debug 会自动积累经验。[/dim]")
         return
 
     table = Table(title=f"Debug 经验库 — 共 {stats['total']} 条（可复用 {stats['reusable']}）")
@@ -201,9 +215,11 @@ def debug_repl(agent_alias):
     """
     console.print("[bold cyan]SignOffAI Debug REPL[/bold cyan]")
     console.print(f"Agents: {', '.join(AGENT_ALIASES.keys())}")
-    console.print("Commands: [yellow]agents[/yellow] | [yellow]tools[/yellow] <agent> | "
-                   "[yellow]<agent>[/yellow] [input] | [yellow]exec[/yellow] <agent> <tool> | "
-                   "[yellow]ctx[/yellow] | [yellow]quit[/yellow]")
+    console.print(
+        "Commands: [yellow]agents[/yellow] | [yellow]tools[/yellow] <agent> | "
+        "[yellow]<agent>[/yellow] [input] | [yellow]exec[/yellow] <agent> <tool> | "
+        "[yellow]ctx[/yellow] | [yellow]quit[/yellow]"
+    )
     app = VerificationCLI()
     asyncio.run(app.initialize())
 
@@ -235,12 +251,14 @@ def debug_repl(agent_alias):
             continue
 
         if cmd == "ctx":
-            console.print(Panel(
-                f"[bold]input[/bold]: {str(ctx['input'])[:200]}\n"
-                f"[bold]output[/bold]: {str(ctx['output'])[:300]}\n"
-                f"[bold]last_agent[/bold]: {ctx['last_agent']}",
-                title="Context"
-            ))
+            console.print(
+                Panel(
+                    f"[bold]input[/bold]: {str(ctx['input'])[:200]}\n"
+                    f"[bold]output[/bold]: {str(ctx['output'])[:300]}\n"
+                    f"[bold]last_agent[/bold]: {ctx['last_agent']}",
+                    title="Context",
+                )
+            )
             continue
 
         if cmd in ("agents", "ls"):
@@ -270,7 +288,7 @@ def debug_repl(agent_alias):
             table = Table(title=f"Tools: {inst.display_name} ({alias})")
             table.add_column("Name", style="yellow")
             table.add_column("Type")
-            for t in (inst.tools or []):
+            for t in inst.tools or []:
                 tname = getattr(t, "name", str(t))
                 ttype = type(t).__name__
                 table.add_row(tname, ttype)
@@ -290,7 +308,7 @@ def debug_repl(agent_alias):
                 console.print(f"[red]Agent '{alias}' not found[/red]")
                 continue
             target_tool = None
-            for t in (inst.tools or []):
+            for t in inst.tools or []:
                 if getattr(t, "name", "") == tool_name:
                     target_tool = t
                     break
@@ -350,3 +368,15 @@ def repl():
     console.print("[dim]Note: 'vagent repl' is deprecated. Use 'vagent debug repl' instead.[/dim]")
     ctx = click.Context(debug_repl)
     debug_repl.invoke(ctx)
+
+
+@debug.command("chat")
+@click.argument("prompt")
+@click.option("--workspace", default=None, help="项目工作区（默认当前目录）")
+@click.option("--session", "session_id", default=None, help="沿用既有 session")
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def debug_chat(prompt, workspace, session_id, json_output):
+    """与 Debug 对话（与 GUI 同一份模式配置）。"""
+    from src.workbench.modes.agent_chat import chat_and_render
+
+    chat_and_render("debug", prompt, workspace=workspace, session_id=session_id, json_output=json_output)

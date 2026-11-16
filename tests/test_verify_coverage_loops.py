@@ -5,7 +5,7 @@ import asyncio
 import json
 
 from src.orchestration_plane.kernel.state import PipelineState
-from src.agent_plane.specialists.coverage.tools import build_coverage_tools
+from src.agent_plane.specialists.functional_coverage.tools import build_coverage_tools
 from src.agent_plane.runtime.tool_loop import LoopResult
 
 
@@ -27,7 +27,7 @@ def test_coverage_tools_read_report_and_write_note(tmp_path):
 
 
 def test_verify_loop_is_opt_in_and_fakeable(tmp_path, monkeypatch):
-    from src.agent_plane.specialists.verify import loop as verify_loop
+    from src.agent_plane.specialists.uvm import loop as verify_loop
 
     monkeypatch.delenv("SIGNOFFAI_VERIFY_LOOP", raising=False)
     off = asyncio.run(verify_loop.n_verify_agent(PipelineState(), {}))
@@ -42,7 +42,7 @@ def test_verify_loop_is_opt_in_and_fakeable(tmp_path, monkeypatch):
 
 
 def test_coverage_loop_is_opt_in_and_fakeable(tmp_path, monkeypatch):
-    from src.agent_plane.specialists.coverage import loop as coverage_loop
+    from src.agent_plane.specialists.functional_coverage import loop as coverage_loop
 
     monkeypatch.delenv("SIGNOFFAI_COVERAGE_LOOP", raising=False)
     off = asyncio.run(coverage_loop.n_coverage_agent(PipelineState(), {}))

@@ -61,13 +61,10 @@ class FormalProperty(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
     id: str
-    name: Text = Field(
-        default="", validation_alias=AliasChoices("name", "id", "title"))
-    expression: Text = Field(
-        default="", validation_alias=AliasChoices("expression", "expr", "property", "sva"))
+    name: Text = Field(default="", validation_alias=AliasChoices("name", "id", "title"))
+    expression: Text = Field(default="", validation_alias=AliasChoices("expression", "expr", "property", "sva"))
     kind: PropertyKind = "assert"
-    description: Text = Field(
-        default="", validation_alias=AliasChoices("description", "statement", "intent"))
+    description: Text = Field(default="", validation_alias=AliasChoices("description", "statement", "intent"))
 
 
 class ProofObligation(BaseModel):
@@ -76,8 +73,8 @@ class ProofObligation(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     id: str
     property_ids: StrList = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("property_ids", "properties", "props"))
+        default_factory=list, validation_alias=AliasChoices("property_ids", "properties", "props")
+    )
     status: ObligationStatus = "not_run"
     engine: Text = ""
 
@@ -96,8 +93,7 @@ class FormalPlan(BaseModel):
     notes: StrList = Field(default_factory=list)
     source_anchors: Annotated[list[FormalSourceAnchor], ItemList] = Field(default_factory=list)
     #: **是否真的跑过形式引擎**。没有引擎时如实写 false + 原因。
-    engine: dict[str, Any] = Field(
-        default_factory=lambda: {"ran": False, "reason": "no formal engine configured"})
+    engine: dict[str, Any] = Field(default_factory=lambda: {"ran": False, "reason": "no formal engine configured"})
     generated_at: str = ""
     generator: dict[str, Any] = Field(default_factory=dict)
 
@@ -106,8 +102,7 @@ class FormalPlan(BaseModel):
             mode="json",
             exclude={"generated_at", "generator", "engine"},
         )
-        return json.dumps(doc, ensure_ascii=False, sort_keys=True,
-                          separators=(",", ":"))
+        return json.dumps(doc, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     def digest(self) -> str:
         return hashlib.sha256(self.canonical().encode("utf-8")).hexdigest()
@@ -122,10 +117,16 @@ class FormalPlan(BaseModel):
             "assume": kinds["assume"],
             "cover": kinds["cover"],
             "proof_obligations": len(self.proof_obligations),
-            "unproved_obligations": sum(
-                1 for o in self.proof_obligations if o.status != "proved"),
+            "unproved_obligations": sum(1 for o in self.proof_obligations if o.status != "proved"),
         }
 
 
-__all__ = ["SCHEMA", "PropertyKind", "ObligationStatus", "FormalSourceAnchor",
-           "FormalProperty", "ProofObligation", "FormalPlan"]
+__all__ = [
+    "SCHEMA",
+    "PropertyKind",
+    "ObligationStatus",
+    "FormalSourceAnchor",
+    "FormalProperty",
+    "ProofObligation",
+    "FormalPlan",
+]

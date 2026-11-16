@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -49,8 +50,8 @@ def strip_code_fence(text: str) -> str:
 
 
 def generate_json_object(
-    messages: List[Dict[str, str]],
-    validate: Callable[[Dict[str, Any]], Any],
+    messages: list[dict[str, str]],
+    validate: Callable[[dict[str, Any]], Any],
     *,
     task_type: str,
     prompt_version: str,
@@ -85,10 +86,7 @@ def generate_json_object(
                 return validate(doc)
             except (ValueError, ValidationError) as exc:
                 last_error = str(exc)[:800]
-                feedback = (
-                    f"{repair_prefix}：{last_error}\n"
-                    "请只输出修正后的 JSON 对象，不要在 JSON 外写解释。"
-                )
+                feedback = f"{repair_prefix}：{last_error}\n请只输出修正后的 JSON 对象，不要在 JSON 外写解释。"
     raise SpecialistError(f"LLM 输出无法通过校验（{attempts} 次尝试）：{last_error}")
 
 
@@ -96,28 +94,27 @@ def write_json_artifact(
     run_dir: str | Path,
     subdir: str,
     stem: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     *,
     manifest_schema: str,
     digest: str,
-    counts: Dict[str, Any],
-    extra: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    counts: dict[str, Any],
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """`<run>/<subdir>/<stem>.{json,yaml}` + `manifest.json`（原子写）。"""
+    import yaml
+
     from src.runtime_plane.core.runtime.atomic import (
         atomic_write_json,
         atomic_write_text,
     )
-
-    import yaml
 
     out = Path(run_dir) / subdir
     out.mkdir(parents=True, exist_ok=True)
     json_path = out / f"{stem}.json"
     atomic_write_json(json_path, payload)
     yaml_path = out / f"{stem}.yaml"
-    atomic_write_text(yaml_path, yaml.safe_dump(
-        payload, allow_unicode=True, sort_keys=False))
+    atomic_write_text(yaml_path, yaml.safe_dump(payload, allow_unicode=True, sort_keys=False))
     manifest = {
         "schema": manifest_schema,
         "digest": digest,

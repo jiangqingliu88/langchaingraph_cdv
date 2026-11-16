@@ -337,6 +337,17 @@ vagent mental build specs/npu_sched/docs/specs/npu_sched.md -o output_mental_npu
 只保留模型与落盘实现，不复制 `ir_plane`。设计说明见
 [Mental IR](docs/architecture/MENTAL_IR.md)。
 
+### Formal IR：把「准备怎么证」也变成数据
+
+`src/ir_plane/formal/` 定义 `formal_plan_v1`：properties（assert / assume /
+cover）、proof_obligations、engine_requirements、coverage_goals。产物在
+`<run>/formal/formal_plan.json`。**没有形式引擎时 `engine.ran=false` + 原因**，
+证明义务默认 `not_run`——生成属性不等于已经证明。
+
+三个独立专家（mental / formal / unit_test）共用
+`agent_plane/specialists/common.py` 的 LLM 校验与原子落盘骨架，详见
+[Standalone 专家](docs/architecture/SPECIALIST_AGENTS.md)。
+
 IR 的核心价值，是让不同 Agent 和 Engine 不再依赖彼此的内部实现，而是通过统一语义协作。
 
 ## 6. Knowledge Plane：专业知识
@@ -501,7 +512,8 @@ src/
 ├── agent_plane/              # 理解、规划、专家、协作、记忆
 │   ├── runtime/              # harness / loop / context / state
 │   ├── planner/              # task planner / DAG / replan / acceptance
-│   ├── specialists/          # design / verify / coverage / debug / mental
+│   ├── specialists/          # 9 agent：agentic_chat / mental_model / formal / uvm /
+│   │                         #   rtl_designer / unit_testing / functional_coverage / debug / workflows
 │   ├── collaboration/        # subagent / delegation / contracts
 │   └── memory/
 │
@@ -526,6 +538,7 @@ src/
 │
 ├── ir_plane/                 # 统一验证语义
 │   ├── vplan/ contract/ proposal/
+│   ├── formal/               # Formal IR（性质/证明义务/引擎状态）
 │   └── decision/             # 原 l3_decision
 │
 ├── mental_ir_plane/          # 心智模型 IR（目标/假设/歧义/意图/风险）

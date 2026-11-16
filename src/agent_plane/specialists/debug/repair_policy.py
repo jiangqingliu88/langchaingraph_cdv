@@ -7,13 +7,14 @@
   · 路径必须是项目内相对路径，拒绝 `..` / 绝对路径 / symlink 逃逸；
   · 应用后必须由 Engine 重新验证 —— 本模块不宣布 PASS。
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 #: 这些前缀/文件是签核事实或治理配置，修复不能直接改。
 PROTECTED_PREFIXES = (
@@ -25,8 +26,12 @@ PROTECTED_PREFIXES = (
     ".git/",
 )
 PROTECTED_NAMES = {
-    "manifest.json", "report.json", "run.json", "soc_run.json",
-    ".env", ".jwt_secret",
+    "manifest.json",
+    "report.json",
+    "run.json",
+    "soc_run.json",
+    ".env",
+    ".jwt_secret",
 }
 
 
@@ -35,7 +40,7 @@ class RepairProposal:
     target: str
     patch: str
     rationale: str
-    diagnosis_evidence: List[str] = field(default_factory=list)
+    diagnosis_evidence: list[str] = field(default_factory=list)
     author: str = "agent"
     max_bytes: int = 512 * 1024
 
@@ -49,9 +54,8 @@ def _is_protected(rel: str) -> bool:
     return any(rel.startswith(prefix) for prefix in PROTECTED_PREFIXES)
 
 
-def validate_proposal(proposal: RepairProposal,
-                      project_root: str | Path = ".") -> Dict[str, Any]:
-    issues: List[str] = []
+def validate_proposal(proposal: RepairProposal, project_root: str | Path = ".") -> dict[str, Any]:
+    issues: list[str] = []
     target = str(proposal.target or "").replace("\\", "/")
     if not target:
         issues.append("target 为空")
@@ -79,8 +83,7 @@ def validate_proposal(proposal: RepairProposal,
     return {"ok": not issues, "issues": issues, "target": target}
 
 
-def stage_patch(proposal: RepairProposal, staging_root: str | Path,
-                project_root: str | Path = ".") -> Dict[str, Any]:
+def stage_patch(proposal: RepairProposal, staging_root: str | Path, project_root: str | Path = ".") -> dict[str, Any]:
     """把修复写进 staging；**绝不写项目根**。返回 Engine 复验所需的引用。"""
     check = validate_proposal(proposal, project_root)
     if not check["ok"]:
@@ -109,13 +112,11 @@ def stage_patch(proposal: RepairProposal, staging_root: str | Path,
         "requires_engine_verification": True,
         "status": "STAGED",
     }
-    (staging / "proposal.json").write_text(
-        json.dumps(record, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8")
+    (staging / "proposal.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {"ok": True, **record}
 
 
-def proposal_from_dict(doc: Dict[str, Any]) -> RepairProposal:
+def proposal_from_dict(doc: dict[str, Any]) -> RepairProposal:
     return RepairProposal(
         target=str(doc.get("target") or ""),
         patch=str(doc.get("patch") or ""),
@@ -127,6 +128,10 @@ def proposal_from_dict(doc: Dict[str, Any]) -> RepairProposal:
 
 
 __all__ = [
-    "PROTECTED_NAMES", "PROTECTED_PREFIXES", "RepairProposal",
-    "proposal_from_dict", "stage_patch", "validate_proposal",
+    "PROTECTED_NAMES",
+    "PROTECTED_PREFIXES",
+    "RepairProposal",
+    "proposal_from_dict",
+    "stage_patch",
+    "validate_proposal",
 ]

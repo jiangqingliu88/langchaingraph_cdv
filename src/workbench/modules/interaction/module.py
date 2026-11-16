@@ -102,11 +102,12 @@ class InteractionModule(ModuleBase):
             self.mode.addItem(label, key)
         for index, preset in enumerate(AGENT_MODES):
             stages = "/".join(preset.stages) or "-"
+            action = f"；动作：{preset.action_label}" if preset.action else ""
             self.mode.setItemData(
                 index,
                 f"{preset.label} —— {preset.description}"
                 f"（交互：{preset.interaction}；agent：{preset.agent_label}；"
-                f"stages：{stages}）",
+                f"stages：{stages}{action}）",
                 Qt.ItemDataRole.ToolTipRole,
             )
         self.mode.setToolTip("选择 Agent 模式；切换模式会开启新任务，旧会话仍保留")
@@ -182,8 +183,8 @@ class InteractionModule(ModuleBase):
             "CHAT：同一个 agent_turn()，多轮继续使用原 session。\n"
             "PLAN：要求真实计划检查点，approval=人工确认，不是自动执行。\n"
             "VERIFY：走已有 verify_mode/router，入口动作不等于 PASS。\n"
-            "Mental Model 模式另有「生成 Mental IR」入口，产物在 "
-            "<workspace>/output_mental_<spec>/mental_ir/。\n\n"
+            "模式动作：Mental Model → 生成 Mental IR；Formal → 生成 Formal 计划；"
+            "Unit Testing → 生成/运行单测。产物在 <workspace>/output_*/ 下对应子目录。\n\n"
             "终端：vagent、vagent chat、vagent -r <session_id>。\n"
             "GUI：PySide6 QMainWindow；执行与审批详情由 flow.pipeline 承接。\n\n"
             "本前端不宣称秒级流式 LLM 推理。完整响应/失败状态由\n"
@@ -267,8 +268,8 @@ class InteractionModule(ModuleBase):
 
     def _pick_file(self, title: str, filters: str) -> Path | None:
         chosen, _filter = QFileDialog.getOpenFileName(
-            self.content, title,
-            self._workspace_value() or str(Path.cwd()), filters)
+            self.content, title, self._workspace_value() or str(Path.cwd()), filters
+        )
         return Path(chosen) if chosen else None
 
     def _workspace_path(self) -> Path:
@@ -284,26 +285,23 @@ class InteractionModule(ModuleBase):
         elif preset.action == "unit_test":
             self._run_unit_test()
         else:
-            self.state.setText(
-                f"{preset.label} 没有独立动作入口，请在对话里描述目标。")
+            self.state.setText(f"{preset.label} 没有独立动作入口，请在对话里描述目标。")
 
     def generate_mental_ir(self) -> None:
         """兼容旧入口：等同 Mental Model 的「生成 Mental IR」。"""
         self._run_mental_ir()
 
     def _run_mental_ir(self) -> None:
-        spec = self._pick_file("选择 spec 文件",
-                               "Spec (*.md *.txt *.json);;All Files (*)")
+        spec = self._pick_file("选择 spec 文件", "Spec (*.md *.txt *.json);;All Files (*)")
         if spec is None:
             return
         out = self._workspace_path() / f"output_mental_{spec.stem}"
         text = spec.read_text(encoding="utf-8", errors="replace")
 
         def operation() -> dict[str, Any]:
-            from src.agent_plane.specialists.mental.main import run as mental_run
+            from src.agent_plane.specialists.mental_model.main import run as mental_run
 
-            result = mental_run(text, out, module=spec.stem,
-                                spec_path=str(spec))
+            result = mental_run(text, out, module=spec.stem, spec_path=str(spec))
             counts = result["counts"]
             result["summary"] = (
                 f"Mental IR：goals={counts['goals']} "
@@ -312,16 +310,15 @@ class InteractionModule(ModuleBase):
                 f"(blocking={counts['blocking_ambiguities']}) "
                 f"intents={counts['verification_intents']} "
                 f"risks={counts['risks']} · digest={result['digest'][:12]}… "
-                f"→ {result['files']['dir']}")
+                f"→ {result['files']['dir']}"
+            )
             return result
 
-        self.history.appendPlainText(
-            f"\n[用户 / Mental Model] 生成 Mental IR：{spec}")
+        self.history.appendPlainText(f"\n[用户 / Mental Model] 生成 Mental IR：{spec}")
         self._submit("mental", operation)
 
     def _run_formal_plan(self) -> None:
-        spec = self._pick_file("选择 spec 文件",
-                               "Spec (*.md *.txt *.json);;All Files (*)")
+        spec = self._pick_file("选择 spec 文件", "Spec (*.md *.txt *.json);;All Files (*)")
         if spec is None:
             return
         out = self._workspace_path() / f"output_formal_{spec.stem}"
@@ -330,8 +327,7 @@ class InteractionModule(ModuleBase):
         def operation() -> dict[str, Any]:
             from src.agent_plane.specialists.formal.main import run as formal_run
 
-            result = formal_run(text, out, module=spec.stem,
-                                spec_path=str(spec))
+            result = formal_run(text, out, module=spec.stem, spec_path=str(spec))
             counts = result["counts"]
             engine = result.get("engine") or {}
             result["summary"] = (
@@ -340,32 +336,31 @@ class InteractionModule(ModuleBase):
                 f"obligations={counts['proof_obligations']}"
                 f"(unproved={counts['unproved_obligations']}) · "
                 f"engine_ran={engine.get('ran')} · "
-                f"digest={result['digest'][:12]}… → {result['files']['dir']}")
+                f"digest={result['digest'][:12]}… → {result['files']['dir']}"
+            )
             return result
 
-        self.history.appendPlainText(
-            f"\n[用户 / Formal] 生成 Formal IR：{spec}")
+        self.history.appendPlainText(f"\n[用户 / Formal] 生成 Formal IR：{spec}")
         self._submit("formal", operation)
 
     def _run_unit_test(self) -> None:
-        rtl = self._pick_file("选择 RTL 文件",
-                              "SystemVerilog (*.sv *.v);;All Files (*)")
+        rtl = self._pick_file("选择 RTL 文件", "SystemVerilog (*.sv *.v);;All Files (*)")
         if rtl is None:
             return
         out = self._workspace_path() / f"output_unit_{rtl.stem}"
 
         def operation() -> dict[str, Any]:
-            from src.agent_plane.specialists.unit_test.main import run as unit_run
+            from src.agent_plane.specialists.unit_testing.main import run as unit_run
 
             result = unit_run(rtl, out)
             result["summary"] = (
                 f"Unit Test：{result['module']} status={result['status']} "
                 f"compile={result['compile']} run={result['run']} "
-                f"→ {Path(result['report']).parent}")
+                f"→ {Path(result['report']).parent}"
+            )
             return result
 
-        self.history.appendPlainText(
-            f"\n[用户 / Unit Testing] 生成/运行单测：{rtl}")
+        self.history.appendPlainText(f"\n[用户 / Unit Testing] 生成/运行单测：{rtl}")
         self._submit("unit-test", operation)
 
     def on_finished(self, task_id: str, result: Any) -> None:
@@ -386,8 +381,10 @@ class InteractionModule(ModuleBase):
         if error:
             self.history.appendPlainText(f"错误：{error}")
             self.show_error(str(error))
-        elif status in ("blocked", "failed", "error", "invalid"):
+        elif status in ("blocked", "failed", "error", "invalid") or status.endswith("_FAIL"):
             self.show_warning(f"Agent 未完成：{summary}")
+        elif status == "GENERATED_ONLY":
+            self.show_warning("已生成产物，但未编译/运行（没有 EDA 或显式关闭），不能当作测试通过。")
         elif status == "proposal":
             self.show_warning("当前结果是候选提案，仍需人工复核，不是验证通过")
         self.details.setPlainText(json.dumps(result, ensure_ascii=False, default=str, indent=2))
@@ -455,14 +452,20 @@ class InteractionModule(ModuleBase):
     def _apply_mode_hint(self, preset) -> None:
         if hasattr(self, "mode_hint"):
             stages = "/".join(preset.stages) or "-"
-            text = (f"{preset.label}：{preset.description}　"
-                    f"（交互：{preset.interaction}；agent：{preset.agent_label}；"
-                    f"stages：{stages}）")
+            text = (
+                f"{preset.label}：{preset.description}　"
+                f"（交互：{preset.interaction}；agent：{preset.agent_label}；"
+                f"stages：{stages}）"
+            )
             if preset.gap:
                 text += f"　⚠ {preset.gap}"
             self.mode_hint.setText(text)
-        if hasattr(self, "mental_button"):
-            self.mental_button.setVisible(preset.id == "mental_model")
+        if hasattr(self, "mode_action_button"):
+            has_action = bool(preset.action)
+            self.mode_action_button.setVisible(has_action)
+            if has_action:
+                self.mode_action_button.setText(preset.action_label or preset.label)
+                self.mode_action_button.setToolTip(f"{preset.label}：{preset.action_label or '执行模式动作'}")
 
     def _mode_changed(self, _index: int) -> None:
         preset = get_mode(self.mode.currentData())

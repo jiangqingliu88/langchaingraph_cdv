@@ -1,19 +1,20 @@
 """Coverage 工具集 —— 只读 run 的覆盖率报告，最多写一份 agent 备注。"""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 
 class _Tool:
     name = ""
     description = ""
 
-    def invoke(self, args: Dict[str, Any]) -> str:
+    def invoke(self, args: dict[str, Any]) -> str:
         return self._run(args or {})
 
-    def _run(self, args: Dict[str, Any]) -> str:
+    def _run(self, args: dict[str, Any]) -> str:
         raise NotImplementedError
 
 
@@ -30,8 +31,7 @@ class ReadCoverageTool(_RootTool):
     description = "读取 <run>/sim/coverage/coverage_result.json 或 <run>/coverage/coverage_result.json"
 
     def _run(self, args):
-        for rel in ("sim/coverage/coverage_result.json",
-                    "coverage/coverage_result.json"):
+        for rel in ("sim/coverage/coverage_result.json", "coverage/coverage_result.json"):
             path = (self.root / rel).resolve()
             if path.is_file() and self._inside(path):
                 return path.read_text(encoding="utf-8", errors="replace")[:20000]
@@ -47,8 +47,7 @@ class ListCoverageFilesTool(_RootTool):
         for sub in ("coverage", "sim/coverage"):
             base = self.root / sub
             if base.is_dir():
-                files.extend(p.relative_to(self.root).as_posix()
-                             for p in sorted(base.rglob("*")) if p.is_file())
+                files.extend(p.relative_to(self.root).as_posix() for p in sorted(base.rglob("*")) if p.is_file())
         return json.dumps({"files": files[:200], "count": len(files)})
 
 
@@ -79,10 +78,9 @@ class WriteNoteTool(_RootTool):
         return json.dumps({"ok": True, "path": "coverage/agent_notes.md"})
 
 
-def build_coverage_tools(root: str | Path) -> List[Any]:
+def build_coverage_tools(root: str | Path) -> list[Any]:
     root = Path(root)
-    return [ReadCoverageTool(root), ListCoverageFilesTool(root),
-            ReadFileTool(root), WriteNoteTool(root)]
+    return [ReadCoverageTool(root), ListCoverageFilesTool(root), ReadFileTool(root), WriteNoteTool(root)]
 
 
 __all__ = ["build_coverage_tools"]

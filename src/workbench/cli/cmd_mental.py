@@ -33,7 +33,7 @@ def mental_group():
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def mental_build(spec, output, module, json_output):
     """从 spec 生成 Mental IR 并落盘。"""
-    from src.agent_plane.specialists.mental.main import MentalIRError, run
+    from src.agent_plane.specialists.mental_model.main import MentalIRError, run
 
     text = spec.read_text(encoding="utf-8", errors="replace")
     out = output or Path(f"output_mental_{spec.stem}")
@@ -57,3 +57,15 @@ def mental_build(spec, output, module, json_output):
 
 
 __all__ = ["mental_group"]
+
+
+@mental_group.command("chat")
+@click.argument("prompt")
+@click.option("--workspace", default=None, help="项目工作区（默认当前目录）")
+@click.option("--session", "session_id", default=None, help="沿用既有 session")
+@click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
+def mental_chat(prompt, workspace, session_id, json_output):
+    """与 Mental Model 对话（与 GUI 同一份模式配置）。"""
+    from src.workbench.modes.agent_chat import chat_and_render
+
+    chat_and_render("mental_model", prompt, workspace=workspace, session_id=session_id, json_output=json_output)

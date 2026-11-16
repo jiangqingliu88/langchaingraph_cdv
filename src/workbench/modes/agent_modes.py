@@ -49,6 +49,7 @@ AGENT_MODES: tuple[AgentMode, ...] = (
         "General-purpose chat for workspace exploration and code assistance",
         "chat",
         "",
+        specialist="agentic_chat",
         gap="通用 Harness 对话，不是专家子图",
     ),
     AgentMode(
@@ -59,7 +60,7 @@ AGENT_MODES: tuple[AgentMode, ...] = (
         "你处于 Mental Model 模式：先把设计意图摊开——验证目标、依赖假设、"
         "规格歧义（blocking 要明确）、验证意图与风险。拿不准的写进歧义，"
         "不要编成目标；需要结构化产物时使用「生成 Mental IR」入口。",
-        specialist="mental",
+        specialist="mental_model",
         action="mental_ir",
         action_label="生成 Mental IR",
     ),
@@ -81,8 +82,9 @@ AGENT_MODES: tuple[AgentMode, ...] = (
         "UVM testplan, testbench development mode",
         "plan",
         "你处于 UVM 模式：围绕 testplan、UVM 组件、sequence、scoreboard 与覆盖率展开；产物必须可编译、可运行、可判定。",
-        specialist="verify",
+        specialist="uvm",
         stages=("verify",),
+        gap="实现复用 verify 专家；uvm/ 是它的 agent 入口",
     ),
     AgentMode(
         "rtl_designer",
@@ -91,7 +93,7 @@ AGENT_MODES: tuple[AgentMode, ...] = (
         "plan",
         "你处于 RTL Designer 模式：先定位 lint 规则与违规证据，再改 RTL；"
         "修复后必须重新跑检查，不得用「看起来对」代替验证结果。",
-        specialist="design",
+        specialist="rtl_designer",
         stages=("front", "design", "model"),
     ),
     AgentMode(
@@ -101,7 +103,7 @@ AGENT_MODES: tuple[AgentMode, ...] = (
         "plan",
         "你处于 Unit Testing 模式：为单位模块搭纯 SystemVerilog testbench"
         "（不引入 UVM），关注激励、检查器与可复现的通过/失败判定。",
-        specialist="unit_test",
+        specialist="unit_testing",
         stages=("verify",),
         gap="v1：生成+编译/运行纯 SV TB；无 EDA 时状态是 GENERATED_ONLY",
         action="unit_test",
@@ -114,7 +116,7 @@ AGENT_MODES: tuple[AgentMode, ...] = (
         "plan",
         "你处于 Functional Coverage 模式：基于 RTL 接口生成功能覆盖率监视器"
         "（covergroup + 采样点），确保 bin 可命中、可解释、能归因到接口。",
-        specialist="coverage",
+        specialist="functional_coverage",
         stages=("coverage",),
     ),
     AgentMode(
@@ -134,9 +136,8 @@ AGENT_MODES: tuple[AgentMode, ...] = (
         "verify",
         "你处于 Workflows 模式：面向端到端流程（front → verify → ops → "
         "coverage → audit），明确每一步的输入、产物与门禁；执行走验证流程。",
-        specialist="supervisor",
-        stages=("front", "design", "model", "verify", "ops", "coverage",
-                "debug", "audit"),
+        specialist="workflows",
+        stages=("front", "design", "model", "verify", "ops", "coverage", "debug", "audit"),
         gap="走编排主图（supervisor），不是 specialists/ 下的单一专家",
     ),
 )
@@ -158,5 +159,4 @@ def specialist_map() -> dict[str, str]:
     return {m.id: m.agent_label for m in AGENT_MODES}
 
 
-__all__ = ["AGENT_MODES", "AgentMode", "INTERACTIONS", "get_mode", "mode_ids",
-           "specialist_map"]
+__all__ = ["AGENT_MODES", "AgentMode", "INTERACTIONS", "get_mode", "mode_ids", "specialist_map"]

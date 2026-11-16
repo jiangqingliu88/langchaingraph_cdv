@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -49,75 +49,79 @@ def _system_prompt(module: str) -> str:
 """
 
 
-def _messages(module: str, spec_text: str) -> List[Dict[str, str]]:
+def _messages(module: str, spec_text: str) -> list[dict[str, str]]:
     return [
         {"role": "system", "content": _system_prompt(module)},
         {"role": "user", "content": spec_text[:MAX_SPEC_CHARS]},
     ]
 
 
-def generate_formal_plan(spec_text: str, *, module: str,
-                         spec_path: str = "",
-                         output_dir: Optional[Path] = None) -> FormalPlan:
+def generate_formal_plan(
+    spec_text: str, *, module: str, spec_path: str = "", output_dir: Path | None = None
+) -> FormalPlan:
     if not str(module or "").strip():
         raise SpecialistError("module 不能为空")
     if not str(spec_text or "").strip():
         raise SpecialistError("spec 文本为空，无法生成 Formal IR")
 
-    def validate(doc: Dict[str, Any]) -> FormalPlan:
+    def validate(doc: dict[str, Any]) -> FormalPlan:
         doc["module"] = module
         doc.setdefault("generated_at", now_iso())
         doc["generator"] = {"prompt_version": PROMPT_VERSION}
         anchors = list(doc.get("source_anchors") or [])
         if spec_path:
-            anchors.insert(0, {
-                "kind": "spec",
-                "path": str(spec_path).replace("\\", "/"),
-                "sha256": sha256_text(spec_text),
-            })
+            anchors.insert(
+                0,
+                {
+                    "kind": "spec",
+                    "path": str(spec_path).replace("\\", "/"),
+                    "sha256": sha256_text(spec_text),
+                },
+            )
         doc["source_anchors"] = anchors
         # 没有引擎就如实写清楚 —— 计划存在 ≠ 已经证明。
-        doc.setdefault("engine", {"ran": False,
-                                  "reason": "no formal engine configured"})
+        doc.setdefault("engine", {"ran": False, "reason": "no formal engine configured"})
         plan = FormalPlan.model_validate(doc)
         logger.info(f"Formal IR：{module} · {plan.counts()}")
         return plan
 
     return generate_json_object(
-        _messages(module, spec_text), validate,
-        task_type="formal_plan", prompt_version=PROMPT_VERSION)
+        _messages(module, spec_text), validate, task_type="formal_plan", prompt_version=PROMPT_VERSION
+    )
 
 
-async def arun(spec_text: str, output_dir: str | Path, *, module: str = "",
-               spec_path: str = "") -> Dict[str, Any]:
+async def arun(spec_text: str, output_dir: str | Path, *, module: str = "", spec_path: str = "") -> dict[str, Any]:
     from .graph import build_formal_graph
 
-    final = await build_formal_graph().ainvoke({
-        "spec_text": spec_text,
-        "output_dir": str(output_dir),
-        "module": module,
-        "spec_path": spec_path,
-    })
+    final = await build_formal_graph().ainvoke(
+        {
+            "spec_text": spec_text,
+            "output_dir": str(output_dir),
+            "module": module,
+            "spec_path": spec_path,
+        }
+    )
     return final["result"]
 
 
-def run(spec_text: str, output_dir: str | Path, *, module: str = "",
-        spec_path: str = "") -> Dict[str, Any]:
+def run(spec_text: str, output_dir: str | Path, *, module: str = "", spec_path: str = "") -> dict[str, Any]:
     import asyncio
 
-    return asyncio.run(arun(spec_text, output_dir, module=module,
-                            spec_path=spec_path))
+    return asyncio.run(arun(spec_text, output_dir, module=module, spec_path=spec_path))
 
 
-def store_formal_plan(output_dir: str | Path, plan: FormalPlan) -> Dict[str, Any]:
+def store_formal_plan(output_dir: str | Path, plan: FormalPlan) -> dict[str, Any]:
     files = write_json_artifact(
-        output_dir, "formal", "formal_plan", plan.model_dump(mode="json"),
+        output_dir,
+        "formal",
+        "formal_plan",
+        plan.model_dump(mode="json"),
         manifest_schema="formal_plan_manifest_v1",
-        digest=plan.digest(), counts=plan.counts(),
+        digest=plan.digest(),
+        counts=plan.counts(),
         extra={"module": plan.module, "engine": plan.engine},
     )
     return files
 
 
-__all__ = ["PROMPT_VERSION", "generate_formal_plan", "store_formal_plan",
-           "arun", "run", "SpecialistError"]
+__all__ = ["PROMPT_VERSION", "generate_formal_plan", "store_formal_plan", "arun", "run", "SpecialistError"]

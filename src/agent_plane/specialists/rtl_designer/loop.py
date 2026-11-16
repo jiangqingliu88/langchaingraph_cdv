@@ -6,18 +6,20 @@ check_rtl，再把控制权交回 design 子图的门禁。
 
 没有 LLM key / 没写出 RTL 时只记录 `design_agent_loop`，不伪造成功。
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 
-from src.agent_plane.specialists.design.tools import build_design_tools
 from src.agent_plane.runtime.tool_loop import run_tool_loop
+
+from .tools import build_design_tools
 
 logger = structlog.get_logger()
 
@@ -41,26 +43,21 @@ def _goal(state) -> str:
     )
 
 
-async def n_design_agent(state, config) -> Dict[str, Any]:
+async def n_design_agent(state, config) -> dict[str, Any]:
     if not _enabled():
-        return {"design_agent_loop": {"skipped": True,
-                                      "reason": "SIGNOFFAI_DESIGN_LOOP!=on"}}
+        return {"design_agent_loop": {"skipped": True, "reason": "SIGNOFFAI_DESIGN_LOOP!=on"}}
     if not getattr(state, "rtl_missing", False):
-        return {"design_agent_loop": {"skipped": True,
-                                      "reason": "rtl_present"}}
+        return {"design_agent_loop": {"skipped": True, "reason": "rtl_present"}}
     root = getattr(state, "output_root", "output")
     try:
-        result = await asyncio.to_thread(
-            run_tool_loop, _goal(state), build_design_tools(root), max_steps=8)
-        updates: Dict[str, Any] = {"design_agent_loop": result.to_dict()}
+        result = await asyncio.to_thread(run_tool_loop, _goal(state), build_design_tools(root), max_steps=8)
+        updates: dict[str, Any] = {"design_agent_loop": result.to_dict()}
         rtl = Path(root) / "rtl"
         if result.ok and rtl.is_dir() and any(rtl.glob("*.sv")):
             updates["rtl_missing"] = False
-            updates["phases"] = [{
-                "name": "design_agent", "status": "passed",
-                "tool_calls": len(result.tool_calls)}]
+            updates["phases"] = [{"name": "design_agent", "status": "passed", "tool_calls": len(result.tool_calls)}]
         return updates
-    except Exception as exc:                           # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         logger.warning(f"Design 工具循环失败，回退确定性门禁: {exc}")
         return {"design_agent_loop": {"ok": False, "error": str(exc)}}
 

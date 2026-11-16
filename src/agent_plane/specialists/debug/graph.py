@@ -1,16 +1,18 @@
 """Debug expert subgraph: round_bump -> ops -> debug loop (cycle)."""
+
 from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
 from src.agent_plane.runtime.pipeline_nodes.run import n_debug_functional, n_ops
 from src.agent_plane.specialists.debug.loop import n_debug_agent
+from src.orchestration_plane.kernel.state import PipelineState
 from src.orchestration_plane.markers import marker
 from src.orchestration_plane.nodes.pure.rounds import n_round_bump
 from src.orchestration_plane.supervisor.routing import (
-    r_after_round_bump, r_coverage,
+    r_after_round_bump,
+    r_coverage,
 )
-from src.orchestration_plane.kernel.state import PipelineState
 
 
 def build_debug_subgraph():
@@ -24,17 +26,25 @@ def build_debug_subgraph():
     g.add_node("mark_execution_done", marker(execution_done=True))
 
     g.add_edge(START, "round_bump")
-    g.add_conditional_edges("round_bump", r_after_round_bump, {
-        "next_round": "ops",
-        "give_up": "mark_execution_done",
-    })
-    g.add_conditional_edges("ops", r_coverage, {
-        "eda_missing": "mark_execution_done",
-        "awaiting_approval": "mark_execution_done",
-        "compile_fail": "agent_loop",
-        "functional_fail": "agent_loop",
-        "run_coverage": "mark_debug_done",
-    })
+    g.add_conditional_edges(
+        "round_bump",
+        r_after_round_bump,
+        {
+            "next_round": "ops",
+            "give_up": "mark_execution_done",
+        },
+    )
+    g.add_conditional_edges(
+        "ops",
+        r_coverage,
+        {
+            "eda_missing": "mark_execution_done",
+            "awaiting_approval": "mark_execution_done",
+            "compile_fail": "agent_loop",
+            "functional_fail": "agent_loop",
+            "run_coverage": "mark_debug_done",
+        },
+    )
     g.add_edge("agent_loop", "debug_functional")
     g.add_edge("debug_functional", "mark_debug_attempt")
     g.add_edge("mark_debug_attempt", "round_bump")

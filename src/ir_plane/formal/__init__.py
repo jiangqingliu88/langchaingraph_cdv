@@ -12,5 +12,4 @@ from .model import (
     ProofObligation,
 )
 
-__all__ = ["FormalPlan", "FormalProperty", "FormalSourceAnchor",
-           "ProofObligation"]
+__all__ = ["FormalPlan", "FormalProperty", "FormalSourceAnchor", "ProofObligation"]
