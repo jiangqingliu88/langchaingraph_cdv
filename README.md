@@ -26,7 +26,12 @@
 
 ```text
 src/
-├── agent_plane/          # runtime / planner / specialists / collaboration / memory
+├── agent_plane/          # Agent 内部 Domain 分组，不新增架构 Plane
+│   ├── reaction/         # openai-agents Agent/Runner、模型与工具适配
+│   ├── design_understanding/ design_verification/ design_signoff/
+│   ├── design_generation/ verification/  # 十个独立 SDK ReAct 角色
+│   ├── specialists/      # 既有生成器与兼容实现（角色接口未整体迁移删除）
+│   └── runtime/ planner/ collaboration/ memory/
 ├── orchestration_plane/  # supervisor / nodes / gates / registry + l2
 ├── generation_plane/     # design{rtl,cmodel} / verification / planning / *_tools
 ├── engine_plane/         # front / verify / ops / coverage / audit / diagnostics
@@ -48,13 +53,23 @@ src/
 
 ## 安装
 
-```bash
-# 仓库自带 venv（Windows）
-./venv/Scripts/python.exe -m pip install -e . --no-deps
+```powershell
+# 仓库根目录：按已合并的 requirements.txt 安装（含 Agent 扩展与约束）
+& .\venv\Scripts\python.exe -I -m pip install -r .\requirements.txt
 
-# 或普通环境
-python -m pip install -e .
+# 或在新的 Python 环境按项目自身依赖安装
+python -m pip install -e ".[dev,gui]"
 ```
+
+`requirements.txt` 包含基础依赖和核验后的 Agent Stack。它由基础清单与
+`requirements/agent-stack-resolved.txt` 合并去重而来。重新运行
+`python scripts/sync_requirements.py` 会按基础 `pyproject.toml` 重建，不应在
+没有保留 Agent 扩展段时直接覆盖该文件。
+
+`-I` 用于隔离外部 `PYTHONPATH`，确保调用项目 venv 而不是另一环境的 pip。
+本仓库核对版本为 `openai-agents==0.24.0`、`openai==3.51.0`，并保留项目的
+`langchain-core==1.6.6`。普通模型生成、数据库服务和观测上报都仍需各自配置，
+安装上述包不等于这些外部能力已经启动。
 
 EDA 端到端需要 `vlog / vopt / vsim / vcover` 在 PATH（QuestaSim 2024.1 验证通过）。
 
@@ -80,8 +95,8 @@ python -m src.workbench
 ```
 
 导航树按 Architecture 4.0 的 8 个职责平面分组；「架构治理 → 架构 4.0 平面」
-显示各平面职责、禁止项、文件数和 Architecture Guard 状态。GUI 只读，
-不执行验证、不拥有独立 Engine。
+显示各平面职责、禁止项、文件数和 Architecture Guard 状态。GUI 是任务发起、
+审批与展示的交互入口，本身不拥有独立 Engine；界面完成展示不等于 Engine 已给出通过结论。
 
 ### DMA / SoC 端到端
 
@@ -181,7 +196,10 @@ python -m config.architecture_guard --approve-debt \
 ./venv/Scripts/python.exe -m config.architecture_guard
 ```
 
-当前基线：**1249 passed, 14 skipped**；guard **2.1 OK**（新平面全覆盖、无新增 import 环）。
+历史全量测试基线：**1249 passed, 14 skipped**；这不是新十角色 SDK 适配层的当前全量测试数字。
+新 Agent/依赖整理阶段的实际核查为：十个 SDK Agent 构造、SDK 消息/调用类型、隔离导入与
+`pip check`、CLI 导入，以及 **Architecture Guard OK**。没有据此宣称模型生成正确性、
+EDA、仿真或全量回归已经通过。执行完整测试时，以当次实际输出更新本节，而不是沿用旧计数。
 
 测试集合包括 Guard 单向债务、VPlan 证据、Staged 回归、SVA 契约、SoC 适配、
 Supervisor 状态机、Harness 多轮会话、安全边界等。
@@ -190,6 +208,10 @@ Supervisor 状态机、Harness 多轮会话、安全边界等。
 
 ## 文档
 
+- [文档总索引](docs/INDEX.md)（当前说明、学习笔记与历史记录）
+- [Agent Domain / SDK 目录](docs/architecture/AGENT_DOMAIN_LAYOUT.md)
+- [独立专家与兼容入口](docs/architecture/SPECIALIST_AGENTS.md)
+- [交互模式](docs/architecture/INTERACTION_MODES.md)
 - [Architecture 4.0](ARCHITECTURE_4.0.md)
 - [Stage Ownership](docs/architecture/STAGE_OWNERSHIP.md)
 - [Stage Migration Plan](docs/architecture/STAGE_MIGRATION_PLAN.md)

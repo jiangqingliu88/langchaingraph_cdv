@@ -1,7 +1,14 @@
-# 9 个 Agent 的目录、对话与产物
+# 独立专家与兼容实现目录（specialists）
 
-> 目录名 = GUI 模式 id。每个目录都有 `chat.py`；独立专家另有 `main.py` /
-> `graph.py`。目录唯一，不保留别名副本（旧路径已删除）。
+> **本页描述原 `specialists/` 目录及其 CLI/GUI/阶段接线，不是十个新 SDK ReAct
+> 角色的唯一入口。** 新角色的 Domain 分组、`openai-agents` Agent/Runner、
+> 工具适配与受限写入见 [Agent Domain 与 ReAct 布局](AGENT_DOMAIN_LAYOUT.md)。
+> 这里的九类专家/入口、原阶段 owner 和协作契约仍是兼容实现；新入口可能调用其
+> 受限读取器或生成器，但不会把旧目录整体迁移、改名或删除。
+
+旧入口中的目录名可与 GUI 模式 id 相同；独立专家另有 `main.py` / `graph.py`。
+不可按这两个目录体系的文件数推断 Agent 或执行后端的数量，也不能用旧
+`generate → store` 路径冒充所有新角色都是 SDK ReAct。
 
 ## 1. 目录
 

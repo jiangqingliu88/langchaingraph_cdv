@@ -113,6 +113,17 @@ venv\Scripts\vagent.exe gui
 | Debug | DV debug agent mode | plan | `debug` | ops/debug |
 | Workflows | End-to-end automated workflows | verify | `workflows`（入口；执行走 supervisor） | 全阶段 |
 
+**新 SDK Agent 与下表的关系**：下表保留 GUI/CLI 兼容入口在 `specialists/` 中的
+真实映射，不因新增 Domain Agent 而重写旧模式配置。十个独立的 SDK ReAct 角色由
+[`src/agent_plane/reaction/registry.py`](../../src/agent_plane/reaction/registry.py)
+按 `create_react_agent()` 创建；其 Domain、工具与 `Runner` 边界见
+[Agent Domain 与 ReAct 布局](AGENT_DOMAIN_LAYOUT.md)。两者可共享旧的
+`ReadFile`、`generate_formal_plan`、`generate_tb` 等实际实现，但不是同一入口。
+
+因此，**本页是交互路由说明，不应被解读为全部 Agent 都由旧 LangGraph 单节点执行**。
+新 `formal_agent`、`simulation_agent` 等规范角色与下列 CLI 活动名有兼容别名；实际
+策略、候选结论、缺失后端和 SDK 审批状态不能被 UI 的按钮文字覆盖为已验证结果。
+
 **对应关系**：8 个业务模式现在都有明确落点——`mental_model` / `formal` /
 `unit_testing` 是独立专家（见 [Standalone 专家](SPECIALIST_AGENTS.md)），
 `rtl_designer` / `uvm` / `debug` / `functional_coverage` 是闭环专家，
