@@ -1,0 +1,19 @@
+{
+  "source": "requirements/agent-stack-resolved.txt",
+  "target": "requirements.txt",
+  "unique_active_requirements": 69,
+  "duplicate_constraints_removed": 7,
+  "backup": "review_bundle\\dependency_merges\\requirements_before_agent_stack.txt",
+  "source_sha256": "ea6e02dd9b79933655bbaa0f31c9bc2d83e2fab92e2d922918658add284102b8",
+  "before_sha256": "5a8082ce803c890d173422cec3629a2b65ab42252395cf206744ec63d364f54a",
+  "after_sha256": "1e4a2eebc26f0d9eee384c33781e4b88ea07574680b4debc6e8d7ac461070de8",
+  "commented_pymongo_remains_disabled": true,
+  "setuptools_correction": "The isolated project environment contains setuptools 65.5.0. The earlier contaminated metadata snapshot reported 75.3.0; this unpinned input was aligned to the actual project distribution rather than silently upgrading it.",
+  "all_source_requirements_present": true,
+  "all_actual_versions_match_constraints": true,
+  "pip_dry_run": {
+    "passed": true,
+    "exit_code": 0,
+    "isolated_interpreter": true
+  }
+}

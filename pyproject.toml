@@ -55,6 +55,8 @@ dependencies = [
     "structlog>=23.0",
     "python-dotenv>=1.0",
     "jsonschema>=4.0.0",
+    # 原生 Agent/Runner/FunctionTool 与审批机制：按已核对的 0.24 API 接入。
+    "openai-agents==0.24.0",
 ]
 
 [project.optional-dependencies]

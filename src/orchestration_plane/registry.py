@@ -41,6 +41,9 @@ class AgentCard:
     write_scope: tuple[str, ...] = ()
     #: 独立专家：走自己的 CLI/服务入口，不在 supervisor 主图的阶段链里。
     standalone: bool = False
+    #: 这些 Domain/loop 仅用于角色元数据，不新增架构职责平面。
+    domain: str = ""
+    loop_protocol: str = "legacy"
 
 
 AGENT_CARDS: dict[str, AgentCard] = {
@@ -107,7 +110,36 @@ AGENT_CARDS: dict[str, AgentCard] = {
 }
 
 
+def _specialist_cards() -> dict[str, AgentCard]:
+    """每个独立角色一张卡；旧专家工厂与新角色元数据共存。"""
+    from src.agent_plane.reaction.registry import role_metadata
+
+    cards = {}
+    for spec in role_metadata():
+        role = spec["role_id"]
+        cards[role] = AgentCard(
+            name=role,
+            description=spec["responsibility"],
+            tools=tuple(spec["allowed_tools"]),
+            max_attempts=spec["max_steps"],
+            requires_human_after=1 if spec["write_allowed"] else 0,
+            write_scope=(f"review_bundle/agents/{role}/",) if spec["write_allowed"] else (),
+            standalone=True,
+            domain=spec["domain"],
+            loop_protocol="openai_agents_react",
+        )
+    return cards
+
+
+SPECIALIST_CARDS = _specialist_cards()
+
+
 def card(agent: str) -> AgentCard:
+    from src.agent_plane.reaction.registry import canonical_role
+
+    role = canonical_role(agent)
+    if role in SPECIALIST_CARDS:
+        return SPECIALIST_CARDS[role]
     try:
         return AGENT_CARDS[agent]
     except KeyError as exc:
@@ -117,7 +149,7 @@ def card(agent: str) -> AgentCard:
 def validate_registry() -> list[str]:
     """校验 agent card 的能力名；返回问题列表（空=通过）。"""
     issues: list[str] = []
-    for name, c in AGENT_CARDS.items():
+    for name, c in dict(AGENT_CARDS, **SPECIALIST_CARDS).items():
         if c.name != name:
             issues.append(f"card key {name!r} != card.name {c.name!r}")
         for stage in c.stages:
@@ -128,4 +160,4 @@ def validate_registry() -> list[str]:
     return issues
 
 
-__all__ = ["AgentCard", "AGENT_CARDS", "card", "validate_registry"]
+__all__ = ["AgentCard", "AGENT_CARDS", "SPECIALIST_CARDS", "card", "validate_registry"]

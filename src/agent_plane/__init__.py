@@ -15,6 +15,10 @@ from src.agent_plane.collaboration import (
 )
 
 from src.workbench.modes.agent_mode import run_goal
+from src.agent_plane.reaction.registry import (
+    create_agent as create_react_agent,
+    role_metadata as react_agent_metadata,
+)
 
 __all__ = [
     "run_goal", "Harness", "HarnessConfig", "ProjectMemory", "TaskStore",
@@ -22,4 +26,5 @@ __all__ = [
     "should_replan", "acceptance_met", "downstream_of", "layers",
     "AGENT_TYPES", "SubagentContract", "SubagentResult", "SubagentManager",
     "build_contract",
+    "create_react_agent", "react_agent_metadata",
 ]

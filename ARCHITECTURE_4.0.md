@@ -20,6 +20,8 @@
 
 本仓库统一为 **九个逻辑 Plane**：Interfaces（既有 `src/workbench`）、Agent、Orchestration、Generation、Engine、IR、Knowledge、Experience、Runtime。后八项继续使用既有 `src/*_plane` 目录，**没有新增第十个 Plane**。
 
+Agent Domain 按 **design_understanding / design_verification / design_signoff / design_generation / verification** 组织，承载十个独立的 [`openai-agents` ReAct 角色](docs/architecture/AGENT_DOMAIN_LAYOUT.md)，复用 `agents.Agent` 与 `Runner`，属于 Agent Plane 内部责任分工，不新增 Plane。原 specialist 实现和旧调用/别名的兼容入口保留，未运行能力继续标记为 `NOT_RUN` 或 `INCOMPLETE`。
+
 Specification Intelligence 是九平面协作能力，不是新的独立子系统。Specification Compiler 归 IR + Engine 协作链，Requirement Extraction 归现有 Agent，Clarification Workflow 归 Orchestration，协议知识归 Knowledge，历史决策归 Experience，RTL 事实提取归 Runtime，候选工件归 Generation，CLI 归 Workbench。三份横向契约、生命周期、实现入口和当前未验证边界见 [Specification Compiler](docs/architecture/SPECIFICATION_COMPILER.md)。
 
 下文“八个职责平面”特指八个 `src/*_plane`；加上 Interfaces 后，整体是上述九逻辑平面的协作系统，而不是九个独立 Agent。

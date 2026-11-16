@@ -1,0 +1,69 @@
+{
+  "schema": "agent_domain_layout_acceptance_v1",
+  "sdk": {
+    "distribution": "openai-agents",
+    "installed_version": "0.24.0",
+    "import_package": "agents",
+    "pip_check": "No broken requirements found"
+  },
+  "architecture_planes_added": 0,
+  "domains": {
+    "design_understanding": [
+      "mental_model_agent"
+    ],
+    "design_verification": [
+      "simulation_agent"
+    ],
+    "design_signoff": [
+      "lint_autofix"
+    ],
+    "design_generation": [
+      "rtl_upgrade_agent",
+      "rtl_early_estimation_agent"
+    ],
+    "verification": [
+      "formal_agent",
+      "functional_coverage_agent",
+      "test_plan_agent",
+      "uvm_coding_agent",
+      "dv_debug_agent"
+    ]
+  },
+  "entry": "src/agent_plane/reaction/registry.py",
+  "verified": {
+    "sdk_agent_construction": "10/10 CONSTRUCTED; workflow=agents.Agent",
+    "sdk_model_types": "ModelResponse / function tools parsed with expected SDK types",
+    "aliases_and_cards": "role_metadata count is 10; validate_registry returns no issues",
+    "compileall": "all new reaction/domain packages compile, exit 0",
+    "lint": "ruff passed",
+    "cli": "--help succeeds with all command registrations",
+    "architecture_guard": "OK"
+  },
+  "workspaces": {
+    "read_scope": "bounded source locators, line ranges and SHA-256",
+    "writes": "explicit workspace/output_root and SDK approval required",
+    "backend_states": [
+      "candidate",
+      "INCOMPLETE",
+      "PENDING_HUMAN",
+      "NOT_RUN"
+    ]
+  },
+  "not_performed": [
+    "remote model/provider calls",
+    "real EDA, waveforms, PPA, SuperLint or formal proof",
+    "full Python/Workbench regression",
+    "end-to-end agent behavior evaluation",
+    "visual UI acceptance"
+  ],
+  "preserved": [
+    "existing specialist generator adapters",
+    "SourceAnchor/source hash semantics",
+    "ip_rtl existing deletions",
+    "docs/package_learn learning material",
+    "review_bundle/chipstack_artifacts local prototypes"
+  ],
+  "requirements_notice": "Existing requirements.txt contains other manual dependency edits. It was not blindly overwritten to preserve those changes. pyproject.toml is the authoritative pin for the new SDK version.",
+  "commit_or_push_done": false,
+  "record_rewrite_reason": "Quoting was normalized using an actual JSON serializer; no additional passing claim has been added."
+}

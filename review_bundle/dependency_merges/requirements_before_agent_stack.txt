@@ -1,0 +1,50 @@
+# AUTO-GENERATED from pyproject.toml — do not edit by hand.
+# Regenerate: python scripts/sync_requirements.py
+
+# ── 运行依赖 ─────────────────────────────────────────────
+langchain-core==1.6.6
+langchain-openai==1.6.7
+langgraph==1.2.12
+langgraph-checkpoint-sqlite==3.1.1
+jinja2>=3.1.0
+pydantic>=2.0
+pydantic-settings>=2.0
+sqlalchemy>=2.0
+aiosqlite>=0.19.0
+rich>=13.0
+click>=8.0
+pyyaml>=6.0
+openpyxl>=3.1.0
+tqdm>=4.60
+tenacity>=8.0
+structlog>=23.0
+python-dotenv>=1.0
+jsonschema>=4.0.0
+
+# ── GUI（可选；本文件默认装，纯 CLI 可删）──────────────
+PySide6>=6.5
+qdarkstyle>=3.2.3
+
+# ── 可选：更多规格格式（python-docx / pypdf） ──
+# python-docx>=1.1.0
+# pypdf>=4.0.0
+
+# ── 可选：Anthropic 提供商 ──
+# langchain-anthropic
+
+# ── 可选：Slack / 工具市场 / 数据脚本 ──
+# requests>=2.31.0
+# aiohttp>=3.9.0
+# numpy>=1.26.0
+
+# ── 可选：HTTP API 与认证（CLI 不需要） ──
+# fastapi>=0.109.0
+# PyJWT>=2.8.0
+# uvicorn[standard]>=0.27.0
+
+# ── 可选：开发/测试 ──
+# pytest>=8.0
+# pytest-asyncio>=0.23.0
+# pytest-cov>=4.0
+# black>=24.0
+# ruff>=0.1.0
