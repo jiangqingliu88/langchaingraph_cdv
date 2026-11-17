@@ -18,7 +18,7 @@ from src.agent_plane.common import (
     sha256_text,
     write_json_artifact,
 )
-from src.ir_plane.formal import FormalPlan
+from src.mental_ir_plane.formal import FormalPlan
 
 logger = structlog.get_logger()
 

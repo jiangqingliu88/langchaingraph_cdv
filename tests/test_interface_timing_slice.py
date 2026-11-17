@@ -15,7 +15,7 @@ from src.engine_plane.interface_timing import check_anchor, check_temporal_ir
 from src.engine_plane.interface_timing.checker import _rule_issues
 from src.engine_plane.specification_compiler import SpecificationCompiler
 from src.generation_plane.interface_timing import render_monitor, write_monitor
-from src.ir_plane.interface_timing import TimingContractError, temporal_from_dict, to_specification_document
+from src.mental_ir_plane.interface_timing import TimingContractError, temporal_from_dict, to_specification_document
 from src.orchestration_plane.interface_timing_workflow import TemporalSlicePipeline
 from src.runtime_plane.tools.execution.interface_timing import SimulationResult, simulate
 from src.runtime_plane.tools.execution.interface_timing.simulator import _evaluate_monitor_text, _render_testbench

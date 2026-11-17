@@ -11,10 +11,10 @@ _LAZY = {
     "run_verify": ("src.workbench.api.verify_service", "run_verify"),
     "run_verify_async": ("src.workbench.api.verify_service", "run_verify_async"),
     "run_goal": ("src.workbench.modes.verify_mode", "run_goal"),
-    "load_project": ("src.ir_plane.vplan", "load_project"),
-    "evaluate": ("src.ir_plane.vplan", "evaluate"),
-    "link_run": ("src.ir_plane.vplan", "link_run"),
-    "apply_active": ("src.ir_plane.vplan", "apply_active"),
+    "load_project": ("src.mental_ir_plane.vplan", "load_project"),
+    "evaluate": ("src.mental_ir_plane.vplan", "evaluate"),
+    "link_run": ("src.mental_ir_plane.vplan", "link_run"),
+    "apply_active": ("src.mental_ir_plane.vplan", "apply_active"),
 }
 
 __all__ = list(_LAZY)

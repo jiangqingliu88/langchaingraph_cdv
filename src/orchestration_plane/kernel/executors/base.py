@@ -384,7 +384,7 @@ class BaseExecutor(ABC, ExecutorSubject):
         # FileNotFoundError 而不是"这个角色没有 schema"。删掉即回落到下面那句
         # `if not schema_path: return True, []`（无 schema 则跳过）。
         schema_map = {
-            "spec": "src/ir_plane/decision/spec_tools/schema.yaml",
+            "spec": "src/mental_ir_plane/decision/spec_tools/schema.yaml",
             "uvm": "src/generation_plane/uvm_tools/schema.yaml",
             "assert": "src/runtime_plane/tools/checking/assertion_tools/schema.yaml",
             "debug": "src/engine_plane/diagnostics/schema.yaml",

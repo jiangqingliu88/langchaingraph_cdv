@@ -14,7 +14,7 @@ from src.generation_plane.planning.dplan.extract import merge_contracts
 from src.engine_plane.front.vplan.extract import _top_ifaces
 from src.generation_plane.verification.main import _vplan_uvm_spec
 from src.runtime_plane.infrastructure.infrastructure import InfrastructureManager
-from src.ir_plane.vplan.execution import _json
+from src.mental_ir_plane.vplan.execution import _json
 from src.runtime_plane.tools.common.lib.ports import is_clock_port, is_reset_port
 
 

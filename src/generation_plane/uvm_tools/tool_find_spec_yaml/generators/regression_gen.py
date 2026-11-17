@@ -189,7 +189,7 @@ def _tp_regression_lines(output_dir: Path, module_name: str, env_name: str,
     分级取 TP IR 的 `execution.stage`（由专题优先级派生）—— **不再靠目录名
     或 tag 手写**："这一条该在哪一级跑"是模型说的。
     """
-    from src.ir_plane.vplan import engine
+    from src.mental_ir_plane.vplan import engine
 
     project = engine.project_for(_load_spec(output_dir) or {}, output_dir)
     if project is None:

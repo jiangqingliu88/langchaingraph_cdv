@@ -100,7 +100,7 @@ def _run_vplan_project(root: Path, output, json_output: bool, rtl_dir) -> None:
         raise click.UsageError(
             "VPlan 项目当前只接规划/契约层，不接受 --rtl；执行层尚未接入")
     from src.runtime_plane.infrastructure.output_config import make_output_root
-    from src.ir_plane.vplan import (
+    from src.mental_ir_plane.vplan import (
         VPlanError, load_project, write_plan_only_run)
 
     try:

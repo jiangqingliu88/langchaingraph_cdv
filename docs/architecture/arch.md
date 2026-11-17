@@ -159,7 +159,7 @@ runtime_plane/
 ```
 src/agent_plane/
 src/engine_plane/
-src/ir_plane/
+src/mental_ir_plane/
 src/runtime_plane/
 src/orchestration_plane/
 src/generation_plane/

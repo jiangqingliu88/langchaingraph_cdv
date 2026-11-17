@@ -37,7 +37,7 @@ python -m src.workbench.cli.commands interface-timing runs --workspace review_bu
 
 ## 目录职责
 
-- Temporal IR 与规格桥接：`src/ir_plane/interface_timing/`。
+- Temporal IR 与规格桥接：`src/mental_ir_plane/interface_timing/`。
 - 绑定检查：`src/engine_plane/interface_timing/`。
 - Monitor 生成：`src/generation_plane/interface_timing/`。
 - 真实仿真适配：`src/runtime_plane/tools/execution/interface_timing/`。

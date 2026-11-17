@@ -21,12 +21,15 @@ Mental IR 回答更靠前的一层：
   不应把它当成验证完成的依据。
 - **不是 Case IR 的替代**：Case IR 仍是用例/断言/SCB 的身份源；Mental IR 只
   解释「为什么这么验」。
-- **不是另一份 ir_plane**：`src/mental_ir_plane/` 只保留模型与落盘，不复制
-  `src/ir_plane/` 的实现。
+- **不是另一份 IR 层**：`src/mental_ir_plane/` 现在是唯一 IR 根：
+  `model.py / store.py` 是理解层，`unified/` 是融合投影，平级的
+  `contract / decision / formal / interface_timing / proposal /
+  specification_compiler / vplan` 是引擎与契约；统一层只消费快照，不复制引擎。
 
 ## 3. 数据模型（`mental_ir_v1`）
 
-`src/mental_ir_plane/model.py`：
+`src/mental_ir_plane/model.py`（Mental）与 `src/mental_ir_plane/dplan/model.py`
+（DPlan IR，`dplan_ir_v1`）是两条“总”层输入：前者回答理解，后者回答实现/模型契约。
 
 | 字段 | 说明 |
 |---|---|
@@ -90,10 +93,36 @@ ir = generate_mental_ir(spec_text, module="npu_sched")
 - 引用时把 `manifest.json.digest` 一并记入证据，回答"依据的是哪版理解"；
 - `blocking=true` 的歧义应由 human_review 拦下，不能自动消解。
 
-## 7. 边界与待办
+## 7. 统一 IR（已落地分层适配器）
 
-跨 Mental、DPlan 与 VPlan 的融合投影见 [融合优化 IR 设计](IR_FUSION_MENTAL_DPLAN_VPLAN.md)。该提案不改变本页 Mental IR 的独立候选理解语义，也不把规划合并当成执行证据。
+Mental 是唯一 IR 根；DPlan / VPlan 作为投影输入并入
+`src/mental_ir_plane/unified/`：
+
+```text
+schema.py       包络 / 实体 / 关系 / 缺口
+adapters/       mental / dplan / vplan（接受快照，不 import 执行引擎）
+build.py        项目作用域对象图 + 最佳候选关系
+views.py        Mental / DPlan / VPlan 三种只读投影
+store.py        unified IR JSON 原子读写
+```
+
+```bash
+vagent mental unify \
+  --mental output_mental_npu_sched/mental_ir/mental_ir.json \
+  --dplan specs/npu_sched/docs/specs/npu_sched_dplan.json \
+  --vplan specs/npu_sched \
+  --out output/unified_ir.json --views-out output/unified_views.json
+```
+
+- 旧 `mental_ir_plane/vplan/types.py` 已变为兼容入口（类型定义在
+  `mental_ir_plane/unified/vplan_types.py`）；VPlan 执行引擎与 DPlan 对齐引擎保留。
+- 关系默认 `candidate`；同名 native id 也只是候选，不自动升级为 confirmed。
+- `Execution / Evidence` 仍是独立记录；统一 IR 不是签核表。
+
+设计说明见 [融合优化 IR](IR_FUSION_MENTAL_DPLAN_VPLAN.md)。
+
+## 8. 边界与待办
 
 - 不进 supervisor 闭环：当前只有独立 CLI/服务入口。
 - 不做自动澄清：歧义输出给人和后续工作流，不在本轮自动改写 spec。
-- 不与 `ir_plane` 共享代码：未来若需要复用，应通过稳定接口抽取，而不是复制目录。
+- 统一层只消费快照；执行/契约引擎仍由 `contract / decision / vplan / ...` 负责。

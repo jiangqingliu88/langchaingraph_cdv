@@ -25,17 +25,17 @@ def print(*args, **kwargs):
 
 
 def _parse_cvg_text(*args, **kwargs):
-    from src.ir_plane.decision.evidence.cvg_parse import _parse_cvg_text as _impl
+    from src.mental_ir_plane.decision.evidence.cvg_parse import _parse_cvg_text as _impl
     return _impl(*args, **kwargs)
 
 
 def merge_regression_coverage(*args, **kwargs):
-    from src.ir_plane.decision.evidence.coverage_merge import merge_regression_coverage as _impl
+    from src.mental_ir_plane.decision.evidence.coverage_merge import merge_regression_coverage as _impl
     return _impl(*args, **kwargs)
 
 
 def analyze_seed_diversity(*args, **kwargs):
-    from src.ir_plane.decision.evidence.seed_diversity import analyze_seed_diversity as _impl
+    from src.mental_ir_plane.decision.evidence.seed_diversity import analyze_seed_diversity as _impl
     return _impl(*args, **kwargs)
 
 
@@ -486,7 +486,7 @@ def _attach_evidence(od: Path, result: dict, max_cases: int) -> None:
     旁路：失败只记一句，不拦"度量"这条主流程。
     """
     try:
-        from src.ir_plane.decision.evidence.evidence_pipeline import (
+        from src.mental_ir_plane.decision.evidence.evidence_pipeline import (
             attach_to_result)
 
         attach_to_result(od, result, max_cases=max_cases)

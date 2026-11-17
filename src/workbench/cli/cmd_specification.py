@@ -31,7 +31,7 @@ def specification_group():
 @click.option("--json", "json_output", is_flag=True, help="完整契约和校验报告")
 def specification_compile(document: str, out: str, json_output: bool):
     """编译结构化 Specification Contract；VALIDATED=0/CONFLICT=1/INCOMPLETE=2。"""
-    from src.ir_plane.specification_compiler import SpecSchemaError
+    from src.mental_ir_plane.specification_compiler import SpecSchemaError
     from src.orchestration_plane.specification_workflow import SpecificationWorkflow
 
     try:
@@ -59,7 +59,7 @@ def specification_compile(document: str, out: str, json_output: bool):
 @specification_group.command("lifecycle")
 def specification_lifecycle():
     """展示九个业务生命周期阶段；由 IR 统一定义。"""
-    from src.ir_plane.specification_compiler import LIFECYCLE
+    from src.mental_ir_plane.specification_compiler import LIFECYCLE
 
     for index, name in enumerate(LIFECYCLE, start=1):
         click.echo(f"{index:02d}  {name}")

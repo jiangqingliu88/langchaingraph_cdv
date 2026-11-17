@@ -85,7 +85,7 @@ unknown_policy.yaml       → INCOMPLETE  exit 2
 
 ### 4.1 Resource Model：先验证声明，再解释地址
 
-[model.py](../../src/ir_plane/decision/resource_model/model.py) 已增加：
+[model.py](../../src/mental_ir_plane/decision/resource_model/model.py) 已增加：
 
 - 整数与容器解析错误记录，禁止失败后静默变成合法的 0；
 - ID、引用、address_space、资源绑定检查；
@@ -102,7 +102,7 @@ unknown_policy.yaml       → INCOMPLETE  exit 2
 
 ### 4.2 Policy：未知策略不再降级成无限制
 
-[policy.py](../../src/ir_plane/decision/resource_model/policy.py#L18-L28) 对未知策略返回：
+[policy.py](../../src/mental_ir_plane/decision/resource_model/policy.py#L18-L28) 对未知策略返回：
 
 ```json
 {
@@ -209,8 +209,8 @@ Workbench 的 77 项 manifest / registry / flow view 测试通过。完整 Workb
 
 | 文件 | 修改目的 |
 |---|---|
-| [model.py](../../src/ir_plane/decision/resource_model/model.py) | 声明解析、ID/引用/数值/边界校验，fail-closed |
-| [policy.py](../../src/ir_plane/decision/resource_model/policy.py) | 未知策略不可裁决，不按 UNRESTRICTED |
+| [model.py](../../src/mental_ir_plane/decision/resource_model/model.py) | 声明解析、ID/引用/数值/边界校验，fail-closed |
+| [policy.py](../../src/mental_ir_plane/decision/resource_model/policy.py) | 未知策略不可裁决，不按 UNRESTRICTED |
 | [resource_intent.py](../../src/engine_plane/verify/resource_intent.py) | 文件解析、三态裁决、坏的文件结果结构化 |
 | [ir_artifacts.py](../../src/engine_plane/verify/ir_artifacts.py) | 复用解析入口，错误结果落盘，避免旧结果残留 |
 | [helpers.py](../../src/engine_plane/audit/helpers.py) | 损坏结果归类 INCOMPLETE，明确硬门禁 |

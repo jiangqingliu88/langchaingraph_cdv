@@ -11,7 +11,7 @@
 | `generation_plane/` | 产出候选设计/验证工件；可以调用 LLM；产物必须可追溯 |
 | `engine_plane/` | 确定性解析、检查、执行、诊断、覆盖率、证据与裁决；**不得调用 LLM** |
 | `agent_plane/` | 推理、规划、根因分析、修复建议；LLM 驱动 |
-| `ir_plane/` | 机器可检查的语义模型与契约 |
+| `mental_ir_plane/` | 机器可检查的语义模型与契约 |
 
 Stage 是**工作流节点**，不是代码责任边界。一个 Stage 可以调用
 `generation_plane/`、`engine_plane/`、`agent_plane/` 中的模块，但这些模块不因此搬进 Stage。

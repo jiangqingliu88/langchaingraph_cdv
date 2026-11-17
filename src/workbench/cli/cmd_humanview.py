@@ -43,7 +43,7 @@ def _print_validation(title: str, result: dict, as_json: bool) -> int:
 @click.option("--json", "-j", "as_json", is_flag=True, help="JSON 输出")
 def humanview_case_xlsx(path, bindings, module, out, emit_bindings, as_json):
     """业务测试点表（xlsx）→ Case IR（CCAT/CASE；不自动猜维度）"""
-    from src.ir_plane.decision.case_ir import (bindings_skeleton,
+    from src.mental_ir_plane.decision.case_ir import (bindings_skeleton,
                                              project_from_xlsx,
                                              validate_case_doc)
 

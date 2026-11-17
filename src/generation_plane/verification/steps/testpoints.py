@@ -19,7 +19,7 @@ class TestpointSteps:
     def _prebuild_testpoints(self, output_dir: Path,
                              module_name: str) -> Optional[Dict[str, Any]]:
         """env 渲染前的**只算不写**版本：失败返回 None（位图/timing 不生成）。"""
-        from src.ir_plane.vplan import engine
+        from src.mental_ir_plane.vplan import engine
 
         if engine.project_for(None, output_dir) is None:
             return None
@@ -38,7 +38,7 @@ class TestpointSteps:
         接口），而 IR 的落盘要等 `_write_testpoints`。两份共用这一份 payload，
         避免"渲染用的 TP 集合"与"落盘的 TP 集合"各算一遍、可能漂。
         """
-        from src.ir_plane.vplan import engine
+        from src.mental_ir_plane.vplan import engine
 
         project = engine.project_for(None, output_dir)
         if project is None:
@@ -52,8 +52,8 @@ class TestpointSteps:
                              module_name: str) -> Dict[str, Any]:
         """A：语义映射（Intent）与待证明结论（Claim）—— 只产候选，不改判定。"""
         try:
-            from src.ir_plane.decision.claims import write_claims
-            from src.ir_plane.decision.intent import load_intents, write_intents
+            from src.mental_ir_plane.decision.claims import write_claims
+            from src.mental_ir_plane.decision.intent import load_intents, write_intents
 
             summary = write_intents(output_dir, case_ir, module=module_name)
             claims = write_claims(output_dir, load_intents(output_dir))
@@ -94,7 +94,7 @@ class TestpointSteps:
         不静默换后端。资源场景作为附加段并入 plan（P2）。
         """
         try:
-            from src.ir_plane.vplan.runtime.framework.stimulus_plan import (
+            from src.mental_ir_plane.vplan.runtime.framework.stimulus_plan import (
                 DEFAULT_BACKEND, build_and_write)
 
             plan = build_and_write(
@@ -177,7 +177,7 @@ class TestpointSteps:
             # **引用闭合**：读数落 `coverage/case_closure.json`，由 Case Gate 判。
             try:
                 from src.engine_plane.verify.ir_artifacts import write_case_closure
-                from src.ir_plane.vplan import engine
+                from src.mental_ir_plane.vplan import engine
 
                 _project = engine.project_for(None, output_dir)
                 _dims = None

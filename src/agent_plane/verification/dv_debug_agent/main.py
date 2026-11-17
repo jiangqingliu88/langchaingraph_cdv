@@ -397,7 +397,7 @@ class DebugExecutor(BaseExecutor):
 
         # ── V2 Knowledge Graph：bug/fix 落库（跨 run 沉淀，供图溯源）──
         try:
-            from src.ir_plane.decision.knowledge.persistence import record_bugs_and_fixes
+            from src.mental_ir_plane.decision.knowledge.persistence import record_bugs_and_fixes
 
             _bugs = []
             for _fp, _err in unique.items():

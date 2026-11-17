@@ -23,8 +23,8 @@
 
 | 功能块 | 位置 | 职责 |
 |---|---|---|
-| Temporal IR | [interface_timing/model.py](../../src/ir_plane/interface_timing/model.py) | 时钟、复位、信号绑定、规则、原文锚点与稳定 hash |
-| 原规格契约桥接 | [interface_timing/bridge.py](../../src/ir_plane/interface_timing/bridge.py) | 转为既有 `specification_contract_v1`，让原 Specification 工作流继续处理 |
+| Temporal IR | [interface_timing/model.py](../../src/mental_ir_plane/interface_timing/model.py) | 时钟、复位、信号绑定、规则、原文锚点与稳定 hash |
+| 原规格契约桥接 | [interface_timing/bridge.py](../../src/mental_ir_plane/interface_timing/bridge.py) | 转为既有 `specification_contract_v1`，让原 Specification 工作流继续处理 |
 | Agent 候选提取 | [temporal_extractor.py](../../src/agent_plane/specification/temporal_extractor.py) | 注入可选 analyzer；强制保留候选与来源责任 |
 | 协议知识 | [axi_stream.py](../../src/knowledge_plane/interface_protocols/axi_stream.py) | 当前握手必要角色和语义规则说明，不替当前设计确认 |
 | 绑定校验 | [checker.py](../../src/engine_plane/interface_timing/checker.py) | 来源 hash/行号、端口方向/位宽、时钟/复位、规则与未知项检查 |

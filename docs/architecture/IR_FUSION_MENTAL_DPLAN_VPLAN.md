@@ -1,8 +1,12 @@
 # 融合优化 IR：Mental + DPlan + VPlan
 
-> 状态：**设计方案 / 兼容投影提案**，不是已经落地的转换器、运行产物或签核结果。
+> 状态：**已落地分层适配器（`unified_design_verification_ir_v1`）**；仍是逻辑投影，
+> 不是签核表。实现：`src/mental_ir_plane/unified/`（schema → adapters → build →
+> views → store）；DPlan 自身有稳定 `dplan_ir_v1`
+> （`src/mental_ir_plane/dplan/`），CLI：`vagent mental dplan check|normalize`、
+> `vagent mental unify`。
 >
-> 核心结论：采用 **一个项目作用域的对象图 + 三种权威投影 + 可追溯关系边**，而不是叠加成一份互相覆盖的大 JSON。复用现有 Mental、DPlan、VPlan 契约，不另增职责平面；Execution 和 Evidence 保持独立。
+> 核心结论：采用 **一个项目作用域的对象图 + 三种权威投影 + 可追溯关系边**，而不是叠加成一份互相覆盖的大 JSON。复用现有 Mental、DPlan、VPlan 契约，不另增职责平面；Execution 和 Evidence 保持独立。旧 `mental_ir_plane/vplan` 与 `mental_ir_plane/decision/dplan` 保留为执行/对齐引擎，**不再定义融合 IR 权威**。
 
 ## 1. 为什么要融合，以及不能融合什么
 
@@ -40,11 +44,11 @@
 - 文件能按 UTF-8 解码，但存在 3 个 U+FFFD 以及多处疑似双重编码/乱码描述。保留原始快照，从可读原始输入恢复或人工审阅，不猜修中文。
 - `version="1.0"` 和对齐输出的 `schema="dplan_map_v1"` 是两个概念，不应混写为“原始 DPlan 也已经有完整统一 schema”。
 
-当前 [dplan 对齐](../../src/ir_plane/decision/dplan.py#L165-L195)的主要产物是 `dplan_map_v1`：features/modules/behaviors 与 VPlan feature、requirement、contract、testpoint 的映射和缺口。这正好是融合 IR 的关系边来源，而不是应丢弃的历史数据。
+当前 [dplan 对齐](../../src/mental_ir_plane/decision/dplan.py#L165-L195)的主要产物是 `dplan_map_v1`：features/modules/behaviors 与 VPlan feature、requirement、contract、testpoint 的映射和缺口。这正好是融合 IR 的关系边来源，而不是应丢弃的历史数据。
 
 ### 2.3 VPlan 样例
 
-通过现有 [`load_project()`](../../src/ir_plane/vplan/source.py#L225-L278)以默认 `allow_spec_drift=False` 读取了当前 NPU 项目：
+通过现有 [`load_project()`](../../src/mental_ir_plane/vplan/source.py#L225-L278)以默认 `allow_spec_drift=False` 读取了当前 NPU 项目：
 
 | 对象 | 实际数量/状态 |
 |---|---|
@@ -246,7 +250,7 @@ VPlan 中的章节号 `/` 不应直接当路径分隔符。Mental 样例中的 `
 - `cases.csv` / `case_ir_v1`：保留 case、feats（契约引用位）、checks、SVA/SCB/group 及 `not_applicable`。
 - `Checker` 是一种单独的检查类型，不能放进 SVA 计数。`unmodeled_checks` 必须留下，保证“未建模”不是“已经检查”。
 
-参考 [Case IR 的生成](../../src/ir_plane/vplan/build.py#L204-L283)：计划状态、未建模检查和绑定结构应分别保留。融合层宣传统一字段时不得丢失这些已有语义。
+参考 [Case IR 的生成](../../src/mental_ir_plane/vplan/build.py#L204-L283)：计划状态、未建模检查和绑定结构应分别保留。融合层宣传统一字段时不得丢失这些已有语义。
 
 ## 9. 关系边与覆盖含义
 
@@ -430,7 +434,7 @@ VPlan 中的章节号 `/` 不应直接当路径分隔符。Mental 样例中的 `
 6. **在兼容投影稳定后新增输出**：建议放独立的暂存 `contract/coherent_ir.json`，不覆盖原 `dplan_map.json`、Case IR、契约矩阵或团队既有产物。
 7. **最后才接 Execution/Evidence**：保持真实工具/审核结果只读追加，避免合并器反向修改 Engine 状态。
 
-后续真正实现时，可复用 `src/mental_ir_plane` 的 SourceAnchor/canonical hash 经验、`src/ir_plane/vplan/source.py` 的哈希和引用校验，以及 `src/ir_plane/decision/dplan.py` 的对齐 view。这里只建议可复用接口，不复制这些模块的另一份业务实现，也不新增第十个 Plane。
+后续真正实现时，可复用 `src/mental_ir_plane` 的 SourceAnchor/canonical hash 经验、`src/mental_ir_plane/vplan/source.py` 的哈希和引用校验，以及 `src/mental_ir_plane/decision/dplan.py` 的对齐 view。这里只建议可复用接口，不复制这些模块的另一份业务实现，也不新增第十个 Plane。
 
 ## 14. 本方案的最低验收清单
 

@@ -108,7 +108,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         # **早于 env 生成解析一次**：测试点位图（`tp_seen`）要进覆盖率接口，
         # 而接口在 `jinja_render` 之前就要落盘。这里只读文件，没有副作用；
         # 第 2 步复用同一份，不再重复解析。
-        from src.ir_plane.vplan import engine
+        from src.mental_ir_plane.vplan import engine
 
         vplan_project = engine.project_for(spec, output_dir)
         params = task.get("params", {}) or {}
@@ -314,7 +314,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
     def _write_plan_consistency(self, output_dir: Path) -> None:
         """TP IR / StimulusPlan / constraint_backing 的同源校验。"""
         try:
-            from src.ir_plane.vplan.runtime.framework.plan_consistency import (
+            from src.mental_ir_plane.vplan.runtime.framework.plan_consistency import (
                 write_plan_consistency)
 
             summary = write_plan_consistency(output_dir)
@@ -340,7 +340,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         **不硬崩**：任何一步出问题只记日志。关联校验是**旁路**，不该因为它
         跑不起来就把 verify 变成失败 —— 该失败的是"关联真断了"，不是"校验没跑成"。
         """
-        from src.ir_plane.vplan import engine
+        from src.mental_ir_plane.vplan import engine
 
         module_name = str(_spec_of(output_dir).get("design_name") or "dut")
         project = engine.project_for(_spec_of(output_dir), output_dir)
@@ -425,7 +425,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         与 tb_top 都从那一份读身份。**没生成就返回空字典** —— 调用方据此不写
         `dut_if`，于是两个模板一个字都不出（一致地"都没有"，而不是单边有）。
         """
-        from src.ir_plane.vplan import engine
+        from src.mental_ir_plane.vplan import engine
 
         project = engine.project_for(_spec_of(output_dir), output_dir)
         if project is None:
@@ -499,7 +499,7 @@ class VerifyExecutor(TestpointSteps, EnvCovSteps, ConstraintSteps, GapRenderStep
         拿不到模型（文件不在 / 解析失败）就返回空 —— 调用方据此退回自动分箱，
         **不静默假装有模型**。
         """
-        from src.ir_plane.vplan import engine
+        from src.mental_ir_plane.vplan import engine
 
         project = engine.project_for(_spec_of(output_dir), output_dir)
         if project is None:

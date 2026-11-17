@@ -175,7 +175,7 @@ class TestXlsxCaseProjection:
     def _doc(self, bindings=None):
         from pathlib import Path
 
-        from src.ir_plane.decision.case_ir import project_from_xlsx
+        from src.mental_ir_plane.decision.case_ir import project_from_xlsx
 
         if not Path(EXAMPLE_XLSX).is_file():
             import pytest
@@ -202,7 +202,7 @@ class TestXlsxCaseProjection:
         assert case.source == "xlsx"
 
     def test_bindings_fill_dimensions_and_reduce_binding_errors(self):
-        from src.ir_plane.decision.case_ir import validate_case_doc
+        from src.mental_ir_plane.decision.case_ir import validate_case_doc
 
         without = validate_case_doc(self._doc())
         with_bind = validate_case_doc(self._doc({
@@ -215,14 +215,14 @@ class TestXlsxCaseProjection:
         assert len(with_bind["errors"]) < len(without["errors"])
 
     def test_bindings_skeleton_has_every_case(self):
-        from src.ir_plane.decision.case_ir import bindings_skeleton
+        from src.mental_ir_plane.decision.case_ir import bindings_skeleton
 
         doc = self._doc()
         skeleton = bindings_skeleton(doc)
         assert len(skeleton["bindings"]) == len(doc.cases)
 
     def test_case_source_xlsx_is_used_instead_of_dimension_synthesis(self):
-        from src.ir_plane.decision.case_ir import project_from_model
+        from src.mental_ir_plane.decision.case_ir import project_from_model
 
         model = {"object": "npu_sched", "source": EXAMPLE_XLSX,
                  "dimensions": [{"id": "D_type", "fields": []}],

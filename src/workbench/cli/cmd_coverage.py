@@ -336,7 +336,7 @@ def coverage_tp_evidence(output_dir, tp_id, json_output):
       vagent coverage tp-evidence -o output_xxx
       vagent coverage tp-evidence -o output_xxx --tp TP-NPUSCH-D_QUEUE-0
     """
-    from src.ir_plane.decision.evidence.tp_evidence import load_tp_evidence
+    from src.mental_ir_plane.decision.evidence.tp_evidence import load_tp_evidence
 
     ev = load_tp_evidence(Path(output_dir))
     tps = ev.get("tps") or []
@@ -383,7 +383,7 @@ def coverage_case_evidence(output_dir, fmt, out_prefix):
       vagent coverage case-evidence -o output_xxx
       vagent coverage case-evidence -o output_xxx -f html --out report/case_view
     """
-    from src.ir_plane.decision.case_view import (
+    from src.mental_ir_plane.decision.case_view import (
         build_case_view, render_html, render_markdown, render_terminal)
 
     try:
@@ -449,7 +449,7 @@ def coverage_case_gate(output_dir, json_output, strict, show_rules):
       vagent coverage case-gate -o output_xxx
       vagent coverage case-gate -o output_xxx --strict   # CI 里当硬门
     """
-    from src.ir_plane.decision.case_view.gates import (
+    from src.mental_ir_plane.decision.case_view.gates import (
         load_declarative, load_rules, rules_table, write_gates)
 
     if show_rules:

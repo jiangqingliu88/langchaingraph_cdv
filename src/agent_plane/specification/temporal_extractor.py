@@ -10,7 +10,7 @@ from copy import deepcopy
 from typing import Any
 from collections.abc import Callable
 
-from src.ir_plane.interface_timing import TimingContractError, temporal_from_dict
+from src.mental_ir_plane.interface_timing import TimingContractError, temporal_from_dict
 
 
 class TemporalCandidateExtractor:

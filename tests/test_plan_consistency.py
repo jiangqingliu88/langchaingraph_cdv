@@ -5,7 +5,7 @@ import json
 
 import yaml
 
-from src.ir_plane.vplan.runtime.framework.plan_consistency import (
+from src.mental_ir_plane.vplan.runtime.framework.plan_consistency import (
     build_plan_consistency,
     write_plan_consistency,
 )

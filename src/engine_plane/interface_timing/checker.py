@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.ir_plane.interface_timing import InterfaceTimingIR, source_hash
+from src.mental_ir_plane.interface_timing import InterfaceTimingIR, source_hash
 from src.knowledge_plane.interface_protocols.axi_stream import (
     HANDSHAKE,
     handshake_requirements,

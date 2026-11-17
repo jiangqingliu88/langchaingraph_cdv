@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.ir_plane.interface_timing import InterfaceTimingIR
+from src.mental_ir_plane.interface_timing import InterfaceTimingIR
 from src.knowledge_plane.interface_protocols.axi_stream import HANDSHAKE
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")

@@ -20,7 +20,7 @@ def build_dut_checker(decls: Dict[str, Any],
                       meta: Dict[str, Any]) -> Dict[str, Any]:
     """模型 `assertions` → env 逐拍检查规则（失败给 `{}`，不编规则）。"""
     try:
-        from src.ir_plane.vplan.runtime.coverage import checker_rules
+        from src.mental_ir_plane.vplan.runtime.coverage import checker_rules
         got = checker_rules(decls.get("assertions"), meta.get("signals") or [])
         for skipped in got["skipped"]:
             logger.warning(f"DUT 检查跳过：{skipped}")
@@ -50,7 +50,7 @@ def _per_sb_rules(scoreboards: Any,
     对不上（规则被跳过 / 拼错）的条目也不发 —— 静默忽略会让签核看到一行
     "这条 SB 一条规则都没数"却以为比过了。
     """
-    from src.ir_plane.decision.case_ir.ir_core import scb_id_of
+    from src.mental_ir_plane.decision.case_ir.ir_core import scb_id_of
 
     known = {str(r.get("name") or "") for r in rules or []}
     out: List[Dict[str, Any]] = []

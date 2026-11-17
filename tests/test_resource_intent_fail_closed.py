@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from src.engine_plane.verify.resource_intent import verify_document, verify_file
-from src.ir_plane.decision.resource_model import AddressRange, overlap
-from src.ir_plane.decision.resource_model.policy import evaluate
+from src.mental_ir_plane.decision.resource_model import AddressRange, overlap
+from src.mental_ir_plane.decision.resource_model.policy import evaluate
 
 
 def _doc(relation: str = "FORBIDDEN_OVERLAP"):

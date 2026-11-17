@@ -110,9 +110,9 @@ PySide6 离屏构造 `ArchitecturePlaneModule` 并调用真实 `architecture.sna
 
 #### F. Resource/Interaction 的确定性计算路径确实存在
 
-- 数据模型覆盖 Resource、Operation、Access、Interaction，见 [schema.py](../../src/ir_plane/decision/resource_model/schema.py#L15-L68)；
-- 地址重叠采用左闭右开区间，能区分 NONE / ADJACENT / PARTIAL / FULL / CONTAINED，见 [address.py](../../src/ir_plane/decision/resource_model/address.py#L35-L53)；
-- 冲突由声明策略计算，不调用 LLM，见 [policy.py](../../src/ir_plane/decision/resource_model/policy.py#L17-L47)；
+- 数据模型覆盖 Resource、Operation、Access、Interaction，见 [schema.py](../../src/mental_ir_plane/decision/resource_model/schema.py#L15-L68)；
+- 地址重叠采用左闭右开区间，能区分 NONE / ADJACENT / PARTIAL / FULL / CONTAINED，见 [address.py](../../src/mental_ir_plane/decision/resource_model/address.py#L35-L53)；
+- 冲突由声明策略计算，不调用 LLM，见 [policy.py](../../src/mental_ir_plane/decision/resource_model/policy.py#L17-L47)；
 - 三态结果由 Engine 生成，见 [resource_intent.py](../../src/engine_plane/verify/resource_intent.py#L25-L71)；
 - Verify 生成前写入资源模型和场景，随后交给 checker 渲染，见 [verification/main.py](../../src/generation_plane/verification/main.py#L231-L237)；
 - Audit 已把 `FAIL` 纳入硬门禁，见 [audit/main.py](../../src/engine_plane/audit/main.py#L163-L169)；
@@ -221,7 +221,7 @@ CLI 把 `args.root` 传给 `reduce_debt(root)` / `approve_debt(..., root)`，但
 
 ### 5.1 未知 relation 拼错后按 UNRESTRICTED 处理，最终可 PASS
 
-[policy.py](../../src/ir_plane/decision/resource_model/policy.py#L21-L23) 对未知策略返回 `conflict=False / requires_checker=False`；这个结果没有被提升为 `validation` 错误。
+[policy.py](../../src/mental_ir_plane/decision/resource_model/policy.py#L21-L23) 对未知策略返回 `conflict=False / requires_checker=False`；这个结果没有被提升为 `validation` 错误。
 
 **实测**：把 `FORBIDDEN_OVERLAP` 改成拼错的 `FORBIDEN_OVERLAP`，两次完全相同地址、禁止重叠的操作最终得到：
 
@@ -233,7 +233,7 @@ status=PASS；conflicts=[]；reason=未知策略 FORBIDEN_OVERLAP，按 UNRESTRI
 
 ### 5.2 负数/零长度访问不做非法输入处理，最终可 PASS
 
-[AddressRange.valid](../../src/ir_plane/decision/resource_model/address.py#L23-L24) 会识别非法长度，但 `overlap()` 对非法区间直接返回 NONE；[ResourceModel.validate()](../../src/ir_plane/decision/resource_model/model.py#L31-L44) 没有检查这一点。
+[AddressRange.valid](../../src/mental_ir_plane/decision/resource_model/address.py#L23-L24) 会识别非法长度，但 `overlap()` 对非法区间直接返回 NONE；[ResourceModel.validate()](../../src/mental_ir_plane/decision/resource_model/model.py#L31-L44) 没有检查这一点。
 
 **实测**：两个操作使用同一地址，但 length 分别为 -1 和 0，仍得到 `PASS`、`validation=[]`。
 
@@ -241,7 +241,7 @@ status=PASS；conflicts=[]；reason=未知策略 FORBIDEN_OVERLAP，按 UNRESTRI
 
 ### 5.3 资源 base/size 没有进入访问合法性校验，越界访问仍可 PASS
 
-Resource 的 `base`、`size` 已声明在 [schema.py](../../src/ir_plane/decision/resource_model/schema.py#L17-L24)，但实际 overlap 只使用 access.address/length 和 address_space，见 [model.py](../../src/ir_plane/decision/resource_model/model.py#L46-L85)。
+Resource 的 `base`、`size` 已声明在 [schema.py](../../src/mental_ir_plane/decision/resource_model/schema.py#L17-L24)，但实际 overlap 只使用 access.address/length 和 address_space，见 [model.py](../../src/mental_ir_plane/decision/resource_model/model.py#L46-L85)。
 
 **实测**：资源声明为 `[0x1000, 0x1100)`，DMA 访问 `[0x9000, 0x9020)`、GEMM 访问 `[0x9100, 0x9120)`，最终得到 `PASS`、`validation=[]`。
 

@@ -29,7 +29,7 @@ def _worklist_filter(output_dir: Path, params: Dict[str, Any]) -> str:
     if str(os.environ.get("SIGNOFFAI_WORKLIST", "")).lower() in ("0", "off", "false"):
         return ""
     try:
-        from src.ir_plane.contract.worklist import write_worklist
+        from src.mental_ir_plane.contract.worklist import write_worklist
 
         data = write_worklist(output_dir)
     except Exception as e:                          # noqa: BLE001 旁路
@@ -92,7 +92,7 @@ def _contract_gate(output_dir: Path, params: Dict[str, Any]):
     if not (Path(output_dir) / "coverage" / "testpoints.yaml").is_file():
         return None
 
-    from src.ir_plane.contract import check_contract
+    from src.mental_ir_plane.contract import check_contract
 
     result = check_contract(output_dir)
     if result.get("ok"):

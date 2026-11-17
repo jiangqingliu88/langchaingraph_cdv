@@ -191,7 +191,7 @@ class TestVerificationPlanDrivesScope:
         return g, g.snapshot()
 
     def test_cdc_forces_full_regression(self, tmp_path):
-        from src.ir_plane.decision.decision_engine import FIX_CDC, verification_plan
+        from src.mental_ir_plane.decision.decision_engine import FIX_CDC, verification_plan
         g, snap = self._guard(tmp_path)
         (g.rtl_dir / "uart_tx.sv").write_text("// tx v2", encoding="utf-8")
         scope = g.scope(snap, plan=verification_plan(FIX_CDC))
@@ -199,7 +199,7 @@ class TestVerificationPlanDrivesScope:
         assert "CDC" in scope["why"]
 
     def test_reset_pulls_in_its_own_tag(self, tmp_path):
-        from src.ir_plane.decision.decision_engine import FIX_RESET, verification_plan
+        from src.mental_ir_plane.decision.decision_engine import FIX_RESET, verification_plan
         g, snap = self._guard(tmp_path)
         (g.rtl_dir / "uart_tx.sv").write_text("// tx v2", encoding="utf-8")
         scope = g.scope(snap, plan=verification_plan(FIX_RESET))
@@ -207,7 +207,7 @@ class TestVerificationPlanDrivesScope:
 
     def test_plan_tag_absent_from_regression_falls_back_to_full(self, tmp_path):
         """计划要的 tag 回归里没有 —— 退回全量，不假装跑过了。"""
-        from src.ir_plane.decision.decision_engine import FIX_PROTOCOL, verification_plan
+        from src.mental_ir_plane.decision.decision_engine import FIX_PROTOCOL, verification_plan
         g, snap = self._guard(tmp_path)
         (g.rtl_dir / "uart_tx.sv").write_text("// tx v2", encoding="utf-8")
         scope = g.scope(snap, plan=verification_plan(FIX_PROTOCOL))
@@ -215,7 +215,7 @@ class TestVerificationPlanDrivesScope:
         assert "退回全量" in scope["why"]
 
     def test_compile_class_does_not_run_the_full_regression(self, tmp_path):
-        from src.ir_plane.decision.decision_engine import FIX_COMPILE, verification_plan
+        from src.mental_ir_plane.decision.decision_engine import FIX_COMPILE, verification_plan
         g, snap = self._guard(tmp_path)
         (g.rtl_dir / "uart_tx.sv").write_text("// tx v2", encoding="utf-8")
         out = g.verify(snap, plan=verification_plan(FIX_COMPILE),
@@ -224,7 +224,7 @@ class TestVerificationPlanDrivesScope:
         assert "编译" in out["error"]
 
     def test_deadcode_class_hands_over_to_a_human(self, tmp_path):
-        from src.ir_plane.decision.decision_engine import FIX_DEADCODE, verification_plan
+        from src.mental_ir_plane.decision.decision_engine import FIX_DEADCODE, verification_plan
         g, snap = self._guard(tmp_path)
         (g.rtl_dir / "uart_tx.sv").write_text("// tx v2", encoding="utf-8")
         out = g.verify(snap, plan=verification_plan(FIX_DEADCODE),
@@ -268,12 +268,12 @@ class TestEveryActionNameHasARoute:
 
     @staticmethod
     def _action(action_type: str):
-        from src.ir_plane.decision.decision_engine import Action
+        from src.mental_ir_plane.decision.decision_engine import Action
         return Action(action_type)
 
     def test_all_actions_route_without_raising(self):
         from src.orchestration_plane.supervisor.routing import r_action
-        from src.ir_plane.decision.decision_engine import ALL_ACTIONS
+        from src.mental_ir_plane.decision.decision_engine import ALL_ACTIONS
 
         class _State:
             """`r_action` 只用 `state.action()`。"""

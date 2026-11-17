@@ -19,7 +19,7 @@ class ActionCandidate:
 
 
 def from_obligations(obligations: List[Any]) -> List[ActionCandidate]:
-    from src.ir_plane.decision.obligation import actions_for
+    from src.mental_ir_plane.decision.obligation import actions_for
 
     out: List[ActionCandidate] = []
     for ob in obligations:

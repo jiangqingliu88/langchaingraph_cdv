@@ -48,7 +48,7 @@ def attach_sva_assertions(output_dir: Path, module_name: str,
                           files: List[str]) -> None:
     """生成 SVA 到 `<run>/assertions/` 并追加到 `files`。"""
     from src.orchestration_plane.kernel.communication.tool_hub import call_tool
-    from src.ir_plane.vplan import engine
+    from src.mental_ir_plane.vplan import engine
 
     from .helpers import _load_runtime_model_doc, _spec_of
 

@@ -10,7 +10,7 @@
 """
 from __future__ import annotations
 
-from src.ir_plane.decision.case_ir.constraints import (
+from src.mental_ir_plane.decision.case_ir.constraints import (
     attach_constraints, constraints_for, policy_index,
 )
 
@@ -74,7 +74,7 @@ def test_without_plan_nothing_is_invented():
 
 
 def test_contract_carries_constraints_into_the_hash():
-    from src.ir_plane.contract.contract_model import contract_from_case_ir
+    from src.mental_ir_plane.contract.contract_model import contract_from_case_ir
 
     plain = {"module": "demo", "cases": [dict(CASE_IR["cases"][0])]}
     enriched = {"module": "demo", "cases": [dict(CASE_IR["cases"][0])]}
@@ -98,7 +98,7 @@ def test_enrich_reads_the_coverage_plan(tmp_path):
 
 
 def test_case_view_joins_the_backing_registry():
-    from src.ir_plane.decision.case_view.builder import (
+    from src.mental_ir_plane.decision.case_view.builder import (
         _case_constraint_items,
     )
 

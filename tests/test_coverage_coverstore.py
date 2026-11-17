@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from src.ir_plane.decision.evidence import cov_api
+from src.mental_ir_plane.decision.evidence import cov_api
 
 
 def _fake_store(tmp_path: Path):

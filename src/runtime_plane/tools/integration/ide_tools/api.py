@@ -15,7 +15,7 @@
 "看起来像配置"的文档。
 
 它复用 **schema 无关**的 `SchemaChecker`
-（`src/ir_plane/decision/schema/schema_check.py`）—— 把 schema 路径换成
+（`src/mental_ir_plane/decision/schema/schema_check.py`）—— 把 schema 路径换成
 `manual_nodes.schema.json` 即可，校验与中文诊断口径完全一致。
 
 失败**响亮**（与全仓库一致）：没有路径 / 文件不在 / YAML 坏 —— 返回
@@ -36,7 +36,7 @@ def _schema_checker(schema_path):
     实现在 `l3_decision/schema/schema_check.py`（L3）。工具层**模块级** import L3
     会构成静态方向逆流；函数内加载只在真正校验时才建立运行期依赖。
     """
-    from src.ir_plane.decision.schema.schema_check import (
+    from src.mental_ir_plane.decision.schema.schema_check import (
         SchemaChecker,
     )
     return SchemaChecker(schema_path)

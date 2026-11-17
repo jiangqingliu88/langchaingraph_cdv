@@ -124,7 +124,7 @@ def test_shipped_example_is_valid():
 def test_schema_is_loadable_and_self_valid():
     """schema 自身要能过 check_schema 自检（SchemaChecker 构造时就会跑）。"""
     from src.runtime_plane.tools.integration.ide_tools.api import SCHEMA_PATH
-    from src.ir_plane.decision.schema.schema_check import SchemaChecker
+    from src.mental_ir_plane.decision.schema.schema_check import SchemaChecker
 
     assert SCHEMA_PATH.exists()
     SchemaChecker(SCHEMA_PATH)                 # 构造即自检，坏了会 SystemExit

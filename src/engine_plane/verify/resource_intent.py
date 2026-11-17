@@ -68,12 +68,12 @@ def verify_document(
     解析失败留下的 ``input_errors`` 与模型声明错误统一进入 validation。
     当原始形状无法安全计算时，不生成伪造的 NONE overlap 或场景。
     """
-    from src.ir_plane.decision.resource_model import (
+    from src.mental_ir_plane.decision.resource_model import (
         compile_scenarios,
         coverage_summary,
         from_dict,
     )
-    from src.ir_plane.decision.resource_model.model import _issue
+    from src.mental_ir_plane.decision.resource_model.model import _issue
 
     width_errors = _verify_address_width(address_width)
     if not isinstance(doc, dict):

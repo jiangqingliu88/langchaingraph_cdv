@@ -42,8 +42,8 @@ def knowledge_export(project_name, out_path, coverage, json_output):
     import asyncio
     out = get_output_adapter(json_output)
     try:
-        from src.ir_plane.decision.knowledge.persistence import load_graph_from_db
-        from src.ir_plane.decision.knowledge.marketplace import export_signoff_package
+        from src.mental_ir_plane.decision.knowledge.persistence import load_graph_from_db
+        from src.mental_ir_plane.decision.knowledge.marketplace import export_signoff_package
         g = asyncio.run(load_graph_from_db())
         if len(g) == 0:
             out.print_error("知识图谱为空：先跑一次 design 阶段把 KG 写入库")
@@ -65,9 +65,9 @@ def knowledge_import(package_path, json_output):
     import asyncio
     out = get_output_adapter(json_output)
     try:
-        from src.ir_plane.decision.knowledge.persistence import (
+        from src.mental_ir_plane.decision.knowledge.persistence import (
             load_graph_from_db, save_graph_to_db)
-        from src.ir_plane.decision.knowledge.marketplace import (
+        from src.mental_ir_plane.decision.knowledge.marketplace import (
             load_signoff_package, merge_package_into_graph)
         pkg = load_signoff_package(package_path)
         g = asyncio.run(load_graph_from_db())

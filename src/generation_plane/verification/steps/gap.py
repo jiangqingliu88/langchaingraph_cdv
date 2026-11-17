@@ -24,7 +24,7 @@ class GapRenderSteps:
         `verify_supplement` 判 FAIL 20，那个动作等于空转（实测）。
         """
         import re
-        from src.ir_plane.decision.evidence.main import generate_gap_directed_seq
+        from src.mental_ir_plane.decision.evidence.main import generate_gap_directed_seq
         from src.runtime_plane.tools.common.lib.env_introspect import (binding_for_agent,
                                                  env_active_agents,
                                                  env_agent_bindings)

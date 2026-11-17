@@ -1,6 +1,6 @@
 """检查板块 —— 只读/判定类工具（断言、debug、覆盖率分析、spec 校验）。
 
-verification_os 已迁到 `src.ir_plane.contract`，不再在此列。
+verification_os 已迁到 `src.mental_ir_plane.contract`，不再在此列。
 """
 from __future__ import annotations
 

@@ -14,35 +14,35 @@ from config.settings import questa_exe, questa_home
 # 解析 / 合并 / 种子分析在 L3；这里用**延迟包装**保留同名 API，避免
 # tools → l3 的模块级静态依赖（Phase 3）。调用方仍可 `from ... import`。
 def _parse_cvg_bin_hits(*args, **kwargs):
-    from src.ir_plane.decision.evidence.cvg_parse import (
+    from src.mental_ir_plane.decision.evidence.cvg_parse import (
         _parse_cvg_bin_hits as _impl,
     )
     return _impl(*args, **kwargs)
 
 
 def _parse_cvg_details(*args, **kwargs):
-    from src.ir_plane.decision.evidence.cvg_parse import (
+    from src.mental_ir_plane.decision.evidence.cvg_parse import (
         _parse_cvg_details as _impl,
     )
     return _impl(*args, **kwargs)
 
 
 def _parse_cvg_text(*args, **kwargs):
-    from src.ir_plane.decision.evidence.cvg_parse import (
+    from src.mental_ir_plane.decision.evidence.cvg_parse import (
         _parse_cvg_text as _impl,
     )
     return _impl(*args, **kwargs)
 
 
 def merge_regression_coverage(*args, **kwargs):
-    from src.ir_plane.decision.evidence.coverage_merge import (
+    from src.mental_ir_plane.decision.evidence.coverage_merge import (
         merge_regression_coverage as _impl,
     )
     return _impl(*args, **kwargs)
 
 
 def analyze_seed_diversity(*args, **kwargs):
-    from src.ir_plane.decision.evidence.seed_diversity import (
+    from src.mental_ir_plane.decision.evidence.seed_diversity import (
         analyze_seed_diversity as _impl,
     )
     return _impl(*args, **kwargs)

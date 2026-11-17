@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import time
 
-from src.ir_plane.decision.evidence import cov_api
+from src.mental_ir_plane.decision.evidence import cov_api
 
 
 class TestFindCoverageDb:

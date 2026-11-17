@@ -82,14 +82,14 @@ def _spec_of(output_dir: Path) -> Dict[str, Any]:
 
 def _load_runtime_model_doc(text: str) -> Dict[str, Any]:
     """运行期模型文本 → dict（`vplan/runtime/coverage_parse`）。"""
-    from src.ir_plane.vplan.runtime.coverage import parse_model_text
+    from src.mental_ir_plane.vplan.runtime.coverage import parse_model_text
 
     return parse_model_text(text)
 
 
 def _assertion_signals(decls: Dict[str, Any]) -> List[Dict[str, Any]]:
     """`assertions[].signals` → 覆盖率接口要额外引的信号（实现同一处）。"""
-    from src.ir_plane.vplan.runtime.coverage import assertion_signals
+    from src.mental_ir_plane.vplan.runtime.coverage import assertion_signals
 
     return assertion_signals(decls)
 

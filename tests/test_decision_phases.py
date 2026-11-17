@@ -5,8 +5,8 @@
 """
 from __future__ import annotations
 
-from src.ir_plane.decision.brain.decision_brain import DecisionBrain
-from src.ir_plane.decision.decision_engine import (
+from src.mental_ir_plane.decision.brain.decision_brain import DecisionBrain
+from src.mental_ir_plane.decision.decision_engine import (
     Action,
     CoverageDrivenDecisionEngine,
     Observation,

@@ -10,20 +10,20 @@ from pathlib import Path
 
 import pytest
 
-from src.ir_plane.decision.decision_engine import Observation
-from src.ir_plane.decision.knowledge.persistence import load_runtime_graph
-from src.ir_plane.decision.knowledge.query import (
+from src.mental_ir_plane.decision.decision_engine import Observation
+from src.mental_ir_plane.decision.knowledge.persistence import load_runtime_graph
+from src.mental_ir_plane.decision.knowledge.query import (
     enrich_observation_history,
     trace_gap,
 )
-from src.ir_plane.decision.knowledge.runtime import (
+from src.mental_ir_plane.decision.knowledge.runtime import (
     MISS_STATUSES,
     SCHEMA,
     build_runtime_graph,
     graph_digest,
     write_runtime_graph,
 )
-from src.ir_plane.decision.knowledge.schema import EdgeType, NodeType
+from src.mental_ir_plane.decision.knowledge.schema import EdgeType, NodeType
 
 
 @pytest.fixture()
@@ -207,7 +207,7 @@ def test_enrich_observation_history_attaches_only_matching_gaps(run_dir: Path):
 
 def test_semantic_reason_consumes_history(run_dir: Path):
     """图不是孤立的 JSON —— 决策归因真的读到了历史版本与修复。"""
-    from src.ir_plane.decision.decision_engine import CoverageDrivenDecisionEngine
+    from src.mental_ir_plane.decision.decision_engine import CoverageDrivenDecisionEngine
 
     write_runtime_graph(build_runtime_graph(run_dir), run_dir)
     obs = Observation(gap_paths=[{
@@ -264,9 +264,9 @@ def test_spec_subgraph_is_merged(run_dir: Path):
 
 def test_build_query_persistence_are_separate_modules():
     """构建 / 查询 / 落盘拆开：query 不再 import runtime（避免职责又耦合回去）。"""
-    import src.ir_plane.decision.knowledge.persistence as persistence
-    import src.ir_plane.decision.knowledge.query as query
-    import src.ir_plane.decision.knowledge.runtime as runtime
+    import src.mental_ir_plane.decision.knowledge.persistence as persistence
+    import src.mental_ir_plane.decision.knowledge.query as query
+    import src.mental_ir_plane.decision.knowledge.runtime as runtime
 
     assert runtime.build_runtime_graph.__module__ == runtime.__name__
     assert query.trace_gap.__module__ == query.__name__

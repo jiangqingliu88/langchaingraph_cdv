@@ -43,7 +43,7 @@ class ConstraintSteps:
         一个空的 `transactions` 渲染出来的协调序列是个空壳（发送循环一次都不进），
         不生成比生成空壳诚实。
         """
-        from src.ir_plane.vplan import engine
+        from src.mental_ir_plane.vplan import engine
 
         project = engine.project_for(_spec_of(output_dir), output_dir)
         if project is None:

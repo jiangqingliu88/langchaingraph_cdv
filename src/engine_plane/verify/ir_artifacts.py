@@ -60,11 +60,11 @@ def write_case_closure(output_dir: Path, case_ir: Dict[str, Any],
     VPlan 路径直接传 `known_dimensions`（`data/dimensions.csv` 的 id）；
     老路径才从 case 模型读。
     """
-    from src.ir_plane.decision.case_ir import parse_declared, validate_case_closure
+    from src.mental_ir_plane.decision.case_ir import parse_declared, validate_case_closure
 
     known = list(known_dimensions or [])
     if not known and case_model is not None:
-        from src.ir_plane.vplan.runtime.repository import load_model
+        from src.mental_ir_plane.vplan.runtime.repository import load_model
 
         known = [d.key for d in load_model(case_model).dimensions]
     closure = validate_case_closure(parse_declared(case_ir, module=module),
@@ -85,7 +85,7 @@ def enrich_case_ir(output_dir: Path, case_ir: Dict[str, Any]) -> Dict[str, Any]:
     if not case_ir or not case_ir.get("cases"):
         return case_ir
     try:
-        from src.ir_plane.decision.case_ir import attach_constraints
+        from src.mental_ir_plane.decision.case_ir import attach_constraints
 
         return attach_constraints(case_ir, load_coverage_plan(output_dir))
     except Exception as e:                             # noqa: BLE001 旁路
@@ -122,7 +122,7 @@ def _restamp_testpoints_yaml(payload: Dict[str, Any]) -> None:
     try:
         import hashlib
 
-        from src.ir_plane.vplan.serialize import testpoints_yaml
+        from src.mental_ir_plane.vplan.serialize import testpoints_yaml
 
         text = testpoints_yaml(payload)
         payload["testpoints_yaml"] = text
@@ -168,7 +168,7 @@ def write_verification_ir(output_dir: Path, case_ir: Dict[str, Any],
         return {}
     try:
         from src.runtime_plane.core.runtime.atomic import atomic_write_json
-        from src.ir_plane.decision.verification_ir import (
+        from src.mental_ir_plane.decision.verification_ir import (
             compile_from_case_ir, validate,
         )
 
@@ -234,7 +234,7 @@ def write_resource_artifacts(output_dir: Path, module: str = "",
         return {"available": False}
     try:
         from src.runtime_plane.core.runtime.atomic import atomic_write_json
-        from src.ir_plane.decision.resource_model import (
+        from src.mental_ir_plane.decision.resource_model import (
             compile_scenarios, coverage_summary, from_dict,
         )
         from src.engine_plane.verify.resource_intent import (
@@ -310,7 +310,7 @@ def write_contract_build(output_dir: Path, case_ir: Dict[str, Any]) -> None:
     if not case_ir or not case_ir.get("cases"):
         return
     try:
-        from src.ir_plane.contract import write_contract
+        from src.mental_ir_plane.contract import write_contract
 
         manifest = write_contract(output_dir, case_ir)
         logger.info(f"契约：{manifest['contract_id']} · "

@@ -15,7 +15,7 @@ from src.orchestration_plane.kernel.runtime import (
     _rt,
 )
 from src.orchestration_plane.kernel.state import PipelineState
-from src.ir_plane.decision.decision_engine import Action, Observation
+from src.mental_ir_plane.decision.decision_engine import Action, Observation
 
 logger = structlog.get_logger()
 
@@ -40,7 +40,7 @@ async def n_decide(state: PipelineState, config) -> Dict[str, Any]:
 
     # 语义化：用 Verification Knowledge Graph 补 gap_paths（精准归因）
     try:
-        from src.ir_plane.decision.decision_engine import enrich_observation
+        from src.mental_ir_plane.decision.decision_engine import enrich_observation
         _spec = state.spec
         if not _spec:
             _sp = Path(state.output_root) / "spec.json"
@@ -53,7 +53,7 @@ async def n_decide(state: PipelineState, config) -> Dict[str, Any]:
 
     # 运行时图：给每个 gap_path 挂上“历史版本/修复”的确定性因果链。
     try:
-        from src.ir_plane.decision.knowledge.query import (
+        from src.mental_ir_plane.decision.knowledge.query import (
             enrich_observation_history)
 
         obs = enrich_observation_history(obs, state.output_root)
@@ -130,7 +130,7 @@ def _tp_snapshot(state: PipelineState) -> tuple:
 def _capture_expected_effect(rt, state: PipelineState, action: Action) -> None:
     """记录动作的期望效果（运行期上下文，不进 checkpoint）。失败只 debug。"""
     try:
-        from src.ir_plane.decision.decision_engine import verification_plan
+        from src.mental_ir_plane.decision.decision_engine import verification_plan
 
         plan = verification_plan(action.action_type)
         snapshot, missed = _tp_snapshot(state)
@@ -164,7 +164,7 @@ async def n_record_decision(state: PipelineState, config) -> Dict[str, Any]:
     action = state.action()
     # `source` 标签是 L5 蒸馏的取样本依据；错标不会改变执行，但会让学习偏。
     try:
-        from src.ir_plane.decision.decision_engine import validate_action_source
+        from src.mental_ir_plane.decision.decision_engine import validate_action_source
         for _issue in validate_action_source(action):
             logger.warning(f"决策来源契约: {_issue}")
     except Exception:

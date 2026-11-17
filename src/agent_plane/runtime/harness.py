@@ -874,7 +874,7 @@ class Harness:
         questions = list(dict.fromkeys(str(q) for q in questions if str(q).strip()))
         evidence = self._proposal_evidence(args)
         try:
-            from src.ir_plane.proposal.schema import ProposalError, new_proposal
+            from src.mental_ir_plane.proposal.schema import ProposalError, new_proposal
             proposal = new_proposal(self.session.task, self.zones,
                                     evidence=evidence, open_questions=questions)
         except ProposalError as exc:

@@ -86,7 +86,7 @@ async def n_refactor_rtl(state: PipelineState, config) -> Dict[str, Any]:
     # 理由是"改一个 bug 可能把已经好的功能改坏"，而原来改完没有任何比对：
     # 守卫要的黄金基线只在收敛时才存（这个闭环从没收敛过 → 每次都被放行）。
     from src.runtime_plane.infrastructure.refactor_guard import RefactorGuard
-    from src.ir_plane.decision.decision_engine import verification_plan
+    from src.mental_ir_plane.decision.decision_engine import verification_plan
 
     # 根因 → 验证计划：跑多少、还该补什么验证、要不要人看（见 `VERIFICATION_PLANS`）
     plan = verification_plan(action.action_type)

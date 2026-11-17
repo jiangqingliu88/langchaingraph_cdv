@@ -10,4 +10,13 @@
 {"ts": "2026-11-13T05:19:02+00:00", "kind": "size", "key": "src/engine_plane/audit/main.py", "old": 545, "new": 555, "reason": "M1 resource intent gate in audit chain", "approver": "jiangqingliu88"}
 {"ts": "2026-11-13T05:19:11+00:00", "kind": "complexity", "key": "src/engine_plane/audit/main.py::AuditExecutor.execute_task", "old": 80, "new": 82, "reason": "M1 resource intent gate in audit chain", "approver": "jiangqingliu88"}
 {"ts": "2026-11-13T07:12:12+00:00", "kind": "size", "key": "src/workbench/cli/commands.py", "old": 792, "new": 773, "reason": "debt repayment", "approver": "auto:reduce-debt"}
-{"ts": "2026-11-13T07:12:12+00:00", "kind": "complexity", "key": "src/ir_plane/decision/resource_model/model.py::from_dict", "old": 24, "new": null, "reason": "debt cleared", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-13T07:12:12+00:00", "kind": "complexity", "key": "src/mental_ir_plane/decision/resource_model/model.py::from_dict", "old": 24, "new": null, "reason": "debt cleared", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-17T16:49:08+00:00", "kind": "complexity", "key": "src/mental_ir_plane/unified/adapters/dplan.py::import_dplan", "old": null, "new": 40, "reason": "分层导入器/审计分支覆盖多种 profile；后续拆分", "approver": "claude"}
+{"ts": "2026-11-17T16:49:18+00:00", "kind": "complexity", "key": "src/mental_ir_plane/unified/adapters/vplan.py::import_vplan", "old": null, "new": 24, "reason": "分层导入器/审计分支覆盖多种 profile；后续拆分", "approver": "claude"}
+{"ts": "2026-11-17T16:49:28+00:00", "kind": "complexity", "key": "src/mental_ir_plane/unified/build.py::build_unified_ir", "old": null, "new": 43, "reason": "分层导入器/审计分支覆盖多种 profile；后续拆分", "approver": "claude"}
+{"ts": "2026-11-17T16:49:38+00:00", "kind": "complexity", "key": "src/mental_ir_plane/unified/schema.py::UnifiedIR.from_dict", "old": null, "new": 41, "reason": "分层导入器/审计分支覆盖多种 profile；后续拆分", "approver": "claude"}
+{"ts": "2026-11-17T16:49:48+00:00", "kind": "complexity", "key": "src/runtime_plane/core/project_layout.py::ProjectLayout.audit", "old": null, "new": 22, "reason": "分层导入器/审计分支覆盖多种 profile；后续拆分", "approver": "claude"}
+{"ts": "2026-11-17T17:00:50+00:00", "kind": "size", "key": "src/engine_plane/audit/main.py", "old": 555, "new": 554, "reason": "debt repayment", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-17T17:00:50+00:00", "kind": "size", "key": "src/workbench/cli/commands.py", "old": 773, "new": 771, "reason": "debt repayment", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-17T17:00:50+00:00", "kind": "complexity", "key": "src/mental_ir_plane/unified/adapters/dplan.py::import_dplan", "old": 40, "new": null, "reason": "debt cleared", "approver": "auto:reduce-debt"}
+{"ts": "2026-11-17T17:00:50+00:00", "kind": "complexity", "key": "src/mental_ir_plane/unified/build.py::build_unified_ir", "old": 43, "new": 40, "reason": "debt repayment", "approver": "auto:reduce-debt"}

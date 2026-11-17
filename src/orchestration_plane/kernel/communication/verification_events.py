@@ -82,7 +82,7 @@ def register_verification_handlers() -> None:
     async def _on_coverage_updated(event):
         """覆盖率更新 → 更新 KG 的 coverage_bin（gap 挂到 module）。"""
         try:
-            from src.ir_plane.decision.knowledge.persistence import record_coverage_bins
+            from src.mental_ir_plane.decision.knowledge.persistence import record_coverage_bins
             d = event.data
             gap = d.get("gap", "")
             module = d.get("module", "")
@@ -98,7 +98,7 @@ def register_verification_handlers() -> None:
     async def _on_bug_detected(event):
         """bug 检测 → 更新 KG 的 bug 节点（affects signal）。"""
         try:
-            from src.ir_plane.decision.knowledge.persistence import record_bugs_and_fixes
+            from src.mental_ir_plane.decision.knowledge.persistence import record_bugs_and_fixes
             d = event.data
             await record_bugs_and_fixes(
                 [{"bug_id": d.get("signature", ""),
@@ -130,9 +130,9 @@ class DecisionReactor:
 
     def __init__(self, target: float = 95.0, rl_json_path: str = None,
                  distilled_weights: dict = None):
-        from src.ir_plane.decision.decision_engine import CoverageDrivenDecisionEngine
-        from src.ir_plane.decision.brain.decision_brain import DecisionBrain
-        from src.ir_plane.decision.brain.rl_policy import QLearningPolicy
+        from src.mental_ir_plane.decision.decision_engine import CoverageDrivenDecisionEngine
+        from src.mental_ir_plane.decision.brain.decision_brain import DecisionBrain
+        from src.mental_ir_plane.decision.brain.rl_policy import QLearningPolicy
         # L5 的经验查询由**本层**装配 —— L3 不 import L5（见 `ExperienceProvider`）
         try:
             from src.experience_plane.growth import experience_provider
@@ -154,7 +154,7 @@ class DecisionReactor:
 
         @bus.on(StandardEvent.COVERAGE_UPDATED)
         async def _on_coverage_updated(event):
-            from src.ir_plane.decision.decision_engine import Observation
+            from src.mental_ir_plane.decision.decision_engine import Observation
             d = event.data
             obs_data = d.get("observation")
             if obs_data and isinstance(obs_data, dict):

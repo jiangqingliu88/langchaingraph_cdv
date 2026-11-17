@@ -190,7 +190,7 @@ def _audit(root: Path, action: str, *, actor: str, input_sha: str,
            output_sha: str, decision: str = "APPROVAL") -> None:
     """动作审计：高风险动作必须有 appr_id（绑定输入哈希）。"""
     try:
-        from src.ir_plane.decision.control_plane import approval_token, record
+        from src.mental_ir_plane.decision.control_plane import approval_token, record
 
         record(root, {
             "action": action, "role": "engineer", "decision": decision,

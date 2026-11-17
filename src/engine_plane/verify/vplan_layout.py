@@ -24,7 +24,7 @@ def package_vplan_assets(output_dir: Path, module_name: str,
             "legacy 仅用于旧 run 复现")
         return
     try:
-        from src.ir_plane.vplan import (
+        from src.mental_ir_plane.vplan import (
             clean_legacy_dirs, package_run_assets)
 
         summary = package_run_assets(output_dir, module_name, move=True,

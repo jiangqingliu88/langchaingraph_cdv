@@ -9,7 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Callable
 
-from src.ir_plane.specification_compiler import SpecSchemaError, SpecStatus
+from src.mental_ir_plane.specification_compiler import SpecSchemaError, SpecStatus
 
 
 class SpecificationAnalyst:

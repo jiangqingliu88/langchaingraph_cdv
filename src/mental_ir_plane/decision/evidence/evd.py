@@ -1,4 +1,3 @@
-
 """EVD —— **一次执行的证据身份**（去重键 `(run, tst, seed, cfg)`）。
 
 `case_cov/<stage>/<task>.json` 本来就是一次执行的证据；它缺的只是**身份**：

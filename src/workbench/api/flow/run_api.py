@@ -459,7 +459,7 @@ def collect_todos(run_dir: str = "") -> Dict[str, Any]:
     # 提议由覆盖率阶段的自动发现一直攒，而批准会动覆盖率分母（不可逆），
     # 所以"有没有攒着没人批的"是这页最该先说的一条。
     try:
-        from src.ir_plane.decision.evidence.exclude_api import read_excludes
+        from src.mental_ir_plane.decision.evidence.exclude_api import read_excludes
 
         pending = (read_excludes() or {}).get("pending") or []
         if pending:

@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from src.ir_plane.decision.case_view.gates import (
+from src.mental_ir_plane.decision.case_view.gates import (
     load_declarative, load_rules, rules_table, validate_case_view,
 )
 

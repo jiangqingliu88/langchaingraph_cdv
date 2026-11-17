@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from dataclasses import field as dc_field
 from typing import Any
 
-from src.ir_plane.specification_compiler import (
+from src.mental_ir_plane.specification_compiler import (
     READINESS_SCHEMA,
     ConflictRecord,
     GapRecord,
@@ -275,7 +275,7 @@ class SpecificationCompiler:
             return []
         if not isinstance(raw, list) or not raw:
             return [ValidationIssue("invalid_temporal_interfaces", "接口时序声明必须是非空的对象列表")]
-        from src.ir_plane.interface_timing import TimingContractError, temporal_from_dict
+        from src.mental_ir_plane.interface_timing import TimingContractError, temporal_from_dict
 
         records = []
         issues: list[ValidationIssue] = []

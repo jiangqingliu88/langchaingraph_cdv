@@ -17,7 +17,7 @@
 | Orchestration | [specification_workflow.py](../../src/orchestration_plane/specification_workflow.py) | 组织生命周期、候选合并与澄清，不批准规格 |
 | Generation | [candidates.py](../../src/generation_plane/specification/candidates.py) | 候选 Requirement 生成，不能自我确认设计意图 |
 | Engine | [compiler.py](../../src/engine_plane/specification_compiler/compiler.py) | 确定性 Schema、来源、Gap、Conflict、Readiness 校验 |
-| IR | [contracts.py](../../src/ir_plane/specification_compiler/contracts.py) | 规格状态、来源、生命周期、Intent 关联、版本与可追溯图 |
+| IR | [contracts.py](../../src/mental_ir_plane/specification_compiler/contracts.py) | 规格状态、来源、生命周期、Intent 关联、版本与可追溯图 |
 | Knowledge | [specification_rules.py](../../src/knowledge_plane/specification_rules.py) | DMA/AXI 等领域必要字段与引用，不替 Agent 推理 |
 | Experience | [specification_decisions.py](../../src/experience_plane/specification_decisions.py) | 历史决策仅作 advisory，不自动成为当前规范 |
 | Runtime | [specification_extraction.py](../../src/runtime_plane/tools/specification_extraction.py) | RTL 文本/解析器适配，不推断设计意图 |

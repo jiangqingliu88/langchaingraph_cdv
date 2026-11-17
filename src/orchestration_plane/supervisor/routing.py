@@ -11,7 +11,7 @@ import structlog
 # 判据只能有一份，所以从节点那边 import，而不是在这里再写一遍 `state.round_num < max_rounds`。
 from src.orchestration_plane.nodes.pure.rounds import _have_rounds_left
 from src.orchestration_plane.kernel.state import PipelineState
-from src.ir_plane.decision.decision_engine import Action
+from src.mental_ir_plane.decision.decision_engine import Action
 
 logger = structlog.get_logger()
 
@@ -68,7 +68,7 @@ def r_action(state: PipelineState) -> str:
     `UPDATE_MODEL`）映射到 `FIX_*_bug` 的分类名 —— RL 策略文件和历史轨迹里存的是
     老名字，直接比会判成"未映射"。
     """
-    from src.ir_plane.decision.decision_engine import canonical_action
+    from src.mental_ir_plane.decision.decision_engine import canonical_action
 
     at = canonical_action((state.action() or Action("")).action_type)
     allowed = {"CONVERGE", "FIX_COMPILE_bug", "FIX_MODEL_bug", "FIX_FUNCTIONAL_bug",

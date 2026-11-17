@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from config import architecture_guard as guard
-from src.ir_plane.decision.decision_engine import ALL_ACTIONS
+from src.mental_ir_plane.decision.decision_engine import ALL_ACTIONS
 from src.orchestration_plane.kernel.communication.tool_hub import ToolHub
 from src.orchestration_plane.supervisor.graph import NODE_FUNCS
 from src.runtime_plane.tools.boards import BOARDS
@@ -195,7 +195,7 @@ def test_known_limitations_match_architecture_doc():
 
 def test_player_runtime_boundary_matches_code():
     from config.known_limitations import by_id
-    from src.ir_plane.vplan.runtime.framework.stimulus_plan import BACKENDS
+    from src.mental_ir_plane.vplan.runtime.framework.stimulus_plan import BACKENDS
 
     boundary = by_id("player_runtime")
     if BACKENDS["player"]["runtime"]:

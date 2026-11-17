@@ -31,10 +31,10 @@ from src.orchestration_plane.kernel.communication.tool_hub import _LC_SAFE_TOOLS
 #: 那份表是 `(模块名, 标签)`，这里只要文件路径（AST 要读文件）。
 TOOL_MODULES = (
     "src/runtime_plane/tools/checking/assertion_tools/main.py",
-    "src/ir_plane/decision/evidence/main.py",
+    "src/mental_ir_plane/decision/evidence/main.py",
     "src/engine_plane/diagnostics/main.py",
     "src/experience_plane/docs/main.py",
-    "src/ir_plane/decision/spec_tools/main.py",
+    "src/mental_ir_plane/decision/spec_tools/main.py",
     "src/generation_plane/uvm_tools/agent_tools.py",
 )
 

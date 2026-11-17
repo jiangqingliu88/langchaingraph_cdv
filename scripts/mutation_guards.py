@@ -43,7 +43,7 @@ class Mutation:
 MUTATIONS: List[Mutation] = [
     Mutation(
         name="decision_hard_overridden",
-        path="src/ir_plane/decision/decision_engine.py",
+        path="src/mental_ir_plane/decision/decision_engine.py",
         old="return self.hard_action(observation) or self.soft_action(observation)",
         new="return self.soft_action(observation)",
         tests="tests/test_decision_phases.py",
@@ -85,7 +85,7 @@ MUTATIONS: List[Mutation] = [
     ),
     Mutation(
         name="source_terminal_accepts_anything",
-        path="src/ir_plane/decision/decision_engine.py",
+        path="src/mental_ir_plane/decision/decision_engine.py",
         old='    "terminal": frozenset(TERMINAL_ACTIONS),',
         new='    "terminal": frozenset(ALL_ACTIONS),',
         tests="tests/test_source_transitions.py",

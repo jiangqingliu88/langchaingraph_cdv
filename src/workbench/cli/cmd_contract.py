@@ -41,7 +41,7 @@ def contract_build(run_dir, vplan_dir, module, json_output):
       vagent contract build --run output_xxx
       vagent contract build --run output_xxx --vplan specs/npu_sched
     """
-    from src.ir_plane.contract import write_contract
+    from src.mental_ir_plane.contract import write_contract
 
     root = _resolve_run_dir(run_dir)
     case_ir_path = root / "coverage" / "case_ir.json"
@@ -55,7 +55,7 @@ def contract_build(run_dir, vplan_dir, module, json_output):
         click.echo(f"VPlan 项目不存在: {vplan_dir}", err=True)
         raise SystemExit(2)
     if not case_ir.get("cases") and vplan_dir:
-        from src.ir_plane.vplan import engine
+        from src.mental_ir_plane.vplan import engine
 
         payload = engine.run_testpoints(
             engine.load_project_from(vplan_dir),
@@ -85,7 +85,7 @@ def contract_build(run_dir, vplan_dir, module, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def contract_check(run_dir, json_output):
     """校验契约自洽（存在 / 哈希 / 义务数）—— ops 的前置门禁同一套逻辑"""
-    from src.ir_plane.contract import check_contract
+    from src.mental_ir_plane.contract import check_contract
 
     result = check_contract(_resolve_run_dir(run_dir))
     if json_output:
@@ -111,7 +111,7 @@ def contract_why(obligation_id, run_dir, json_output):
     示例:
       vagent contract why OBL-GROUP-CASE-D_DEP-CG-D_DEP-FUNCTIONAL --run output_xxx
     """
-    from src.ir_plane.contract import explain
+    from src.mental_ir_plane.contract import explain
 
     data = explain(_resolve_run_dir(run_dir), obligation_id)
     if json_output:
@@ -142,7 +142,7 @@ def contract_why(obligation_id, run_dir, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def contract_worklist(run_dir, json_output):
     """未清偿义务 → 需要重跑的回归 test 清单（义务驱动执行）"""
-    from src.ir_plane.contract.worklist import write_worklist
+    from src.mental_ir_plane.contract.worklist import write_worklist
 
     data = write_worklist(_resolve_run_dir(run_dir))
     if json_output:
@@ -167,7 +167,7 @@ def contract_worklist(run_dir, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def contract_seeds(run_dir, json_output):
     """种子索引：哪个 seed 清偿了哪些义务（可复现证据）"""
-    from src.ir_plane.contract.seeds import write_seed_index
+    from src.mental_ir_plane.contract.seeds import write_seed_index
 
     data = write_seed_index(_resolve_run_dir(run_dir))
     if json_output:
@@ -190,7 +190,7 @@ def contract_seeds(run_dir, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def contract_status(run_dir, json_output):
     """OS 视图：契约 / 账本 / case 与 TP 两级影子对账"""
-    from src.ir_plane.contract import status_summary
+    from src.mental_ir_plane.contract import status_summary
 
     data = status_summary(_resolve_run_dir(run_dir))
     if json_output:
@@ -217,7 +217,7 @@ def contract_status(run_dir, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="JSON 输出")
 def contract_show(run_dir, json_output):
     """查看契约与义务清单（按 case 归并）"""
-    from src.ir_plane.contract import load_contract, read_manifest
+    from src.mental_ir_plane.contract import load_contract, read_manifest
 
     root = _resolve_run_dir(run_dir)
     manifest = read_manifest(root)

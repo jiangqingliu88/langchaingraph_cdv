@@ -316,7 +316,7 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
     # 决策层用它判断最弱的一层；经验库/证据包也可引用。
     sim_reward: Dict[str, Any] = {}
     try:
-        from src.ir_plane.decision.reward import (
+        from src.mental_ir_plane.decision.reward import (
             compute_sim_reward, weights_from_policy)
 
         # 权重是**模块级策略**：覆盖率型 IP 与回归型 IP 的“最弱层”不该用同一把尺。
@@ -356,7 +356,7 @@ async def n_coverage(state: PipelineState, config) -> Dict[str, Any]:
     # `coverage/knowledge_graph.json`，供决策与签核证据引用。
     knowledge_graph: Dict[str, Any] = {}
     try:
-        from src.ir_plane.decision.knowledge.runtime import (
+        from src.mental_ir_plane.decision.knowledge.runtime import (
             build_runtime_graph, write_runtime_graph)
 
         knowledge_graph = write_runtime_graph(

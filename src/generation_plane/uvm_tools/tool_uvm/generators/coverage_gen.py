@@ -15,7 +15,7 @@ def write_coverage_plan(output_dir: Path, case_model: Optional[Path],
 
     调用方负责"找 case 模型"（那是 spec/布局层的职责）；本函数只做生成与落盘。
     """
-    from src.ir_plane.vplan import engine
+    from src.mental_ir_plane.vplan import engine
 
     project = engine.project_for(None, output_dir)
     if project is None:

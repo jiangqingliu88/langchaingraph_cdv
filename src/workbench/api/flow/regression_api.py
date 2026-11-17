@@ -264,7 +264,7 @@ def _artifact_facts(path: str) -> tuple:
     省得两处各写一遍 stat 与时间格式。
     """
     try:
-        from src.ir_plane.decision.evidence.cov_api import file_facts
+        from src.mental_ir_plane.decision.evidence.cov_api import file_facts
 
         facts = file_facts(path)
         return facts["kb"], facts["time"]
@@ -280,7 +280,7 @@ def _find_coverage(test_dir: Path) -> tuple:
     抄一份到这边就是第二份真相。**读不到就给空**，让它自己解释。
     """
     try:
-        from src.ir_plane.decision.evidence.cov_api import find_coverage_db
+        from src.mental_ir_plane.decision.evidence.cov_api import find_coverage_db
 
         return find_coverage_db(test_dir)
     except Exception:                                  # noqa: BLE001 扫描失败不该拖垮这页

@@ -243,8 +243,13 @@ _ZONES = (
     ("src/runtime_plane/utils/", "core"),
     ("src/orchestration_plane/kernel/", "kernel"),
     ("src/orchestration_plane/", "orchestration"),
-    ("src/ir_plane/decision/", "l3"),
-    ("src/ir_plane/", "ir"),
+    ("src/mental_ir_plane/decision/", "l3"),
+    ("src/mental_ir_plane/contract/", "ir"),
+    ("src/mental_ir_plane/formal/", "ir"),
+    ("src/mental_ir_plane/interface_timing/", "ir"),
+    ("src/mental_ir_plane/proposal/", "ir"),
+    ("src/mental_ir_plane/specification_compiler/", "ir"),
+    ("src/mental_ir_plane/vplan/", "ir"),
     ("src/mental_ir_plane/", "mental_ir"),
     ("src/knowledge_plane/", "l4"),
     ("src/experience_plane/", "l5"),
@@ -272,11 +277,11 @@ _ALLOWED = {
     "agents": {"l1", "kernel", "l3", "l4", "l5", "core", "tools", "ir", "runtime",
                "engine", "generation", "orchestration", "iface", "mental_ir"},
     "runtime": {"core", "l1", "tools"},
-    "ir": {"core", "l1", "kernel", "l3", "l4", "l5", "tools", "runtime"},
+    "ir": {"core", "l1", "kernel", "l3", "l4", "l5", "tools", "runtime", "mental_ir"},
     #: Mental IR 是理解层的叶子：只依赖 core（原子写）与 tools（LLM 出口）。
     "mental_ir": {"core", "tools"},
     "iface": {"core", "l1", "kernel", "l3", "l4", "l5", "agents", "ir", "tools",
-              "runtime", "engine", "generation", "orchestration"},
+              "runtime", "engine", "generation", "orchestration", "mental_ir"},
 }
 
 #: 已知的过渡债务：engine → kernel 的 ExecutorBase 尚未迁到 engine/executors。

@@ -679,7 +679,7 @@ class ToolAuditor:
             pass
         # 控制平面：每次工具调用都留一条动作决策（默认 AUTO，只审计不拦）。
         try:
-            from src.ir_plane.decision.control_plane import decide_and_record
+            from src.mental_ir_plane.decision.control_plane import decide_and_record
 
             decide_and_record(
                 Path(self._receipt_path).parent.parent,

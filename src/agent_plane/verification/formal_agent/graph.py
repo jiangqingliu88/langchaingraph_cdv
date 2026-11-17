@@ -8,7 +8,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from src.ir_plane.formal import FormalPlan
+from src.mental_ir_plane.formal import FormalPlan
 
 
 class FormalState(TypedDict, total=False):

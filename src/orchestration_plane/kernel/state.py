@@ -233,7 +233,7 @@ class PipelineState(BaseModel):
         """把 pending_action 还原成 Action 对象（惰性 import，避免 L3→L2 环）。"""
         if not self.pending_action:
             return None
-        from src.ir_plane.decision.decision_engine import Action
+        from src.mental_ir_plane.decision.decision_engine import Action
         return Action(**self.pending_action)
 
 

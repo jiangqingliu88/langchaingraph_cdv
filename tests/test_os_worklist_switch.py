@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.ir_plane.contract import write_contract
-from src.ir_plane.contract.contract_model import Fact, FactBundle
-from src.ir_plane.contract.ledger import append_bundle
+from src.mental_ir_plane.contract import write_contract
+from src.mental_ir_plane.contract.contract_model import Fact, FactBundle
+from src.mental_ir_plane.contract.ledger import append_bundle
 
 CASE_IR = {"module": "demo", "cases": [{
     "id": "CASE-A",

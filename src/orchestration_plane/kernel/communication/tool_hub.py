@@ -718,13 +718,13 @@ class ToolHub:
     # 没有任何 @tool，故无工具可注册。
     _LC_TOOL_MODULES = (
         ("src.runtime_plane.tools.checking.assertion_tools.main", "assert"),
-        ("src.ir_plane.decision.evidence.main", "coverage"),
+        ("src.mental_ir_plane.decision.evidence.main", "coverage"),
         ("src.engine_plane.diagnostics.main", "debug"),
         ("src.experience_plane.docs.main", "doc"),
         # `src.runtime_plane.tools.reuse_tools.main` **不存在** —— 这个条目每次 bootstrap 都报
         # "No module named 'src.runtime_plane.tools.reuse_tools'" 再被 except 吞掉，只在启动
         # 日志里留一条假错误。去掉。
-        ("src.ir_plane.decision.spec_tools.main", "spec"),
+        ("src.mental_ir_plane.decision.spec_tools.main", "spec"),
         # **uvm 的 9 个工具此前从未被注册**：真实实现是
         # `src/generation_plane/uvm_tools/agent_tools.py` 里的 @tool（read_file / write_file /
         # find_spec_yaml / jinja_render / check_static / check_compile /

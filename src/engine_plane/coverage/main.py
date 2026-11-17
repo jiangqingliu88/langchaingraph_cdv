@@ -124,7 +124,7 @@ class CoverageExecutor(BaseExecutor):
         # ── 语义层降维：真实 gap 归因（constraint / unstimulated / unreachable）──
         toggle_details = []
         try:
-            from src.ir_plane.decision.evidence.main import build_coverage_gaps
+            from src.mental_ir_plane.decision.evidence.main import build_coverage_gaps
             from src.runtime_plane.infrastructure.coverage_backend import get_coverage_backend
             constraints = self._extract_constraints(output_dir)
             toggle_details = get_coverage_backend().parse_toggle_details(output_dir)
@@ -144,7 +144,7 @@ class CoverageExecutor(BaseExecutor):
 
         # ── V2 Knowledge Graph：覆盖率 bin 命中状态落库（跨 run 跟踪进度）──
         try:
-            from src.ir_plane.decision.knowledge.persistence import record_coverage_bins
+            from src.mental_ir_plane.decision.knowledge.persistence import record_coverage_bins
             _bins = coverage_map.get("bins", []) if isinstance(coverage_map, dict) else []
             if _bins:
                 _run_id = Path(output_dir).name
@@ -276,7 +276,7 @@ class CoverageExecutor(BaseExecutor):
         # **统一判据**：与 verify 分解测试点用的是同一处解析 —— 两个读法会在
         # 同一个 run 里各拿一份模型（verify 认 config/、coverage 只认 inputs/），
         # 于是"分解出来的测试点"和"生成的覆盖点"来自两份不同的模型。
-        from src.ir_plane.vplan import engine
+        from src.mental_ir_plane.vplan import engine
 
         project = engine.project_for(spec, output_dir)
         cov_dir = output_dir / "coverage"

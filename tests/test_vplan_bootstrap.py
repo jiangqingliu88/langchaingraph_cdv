@@ -14,7 +14,7 @@ import hashlib
 import json
 
 from src.engine_plane.front.vplan import bootstrap_project
-from src.ir_plane.vplan import load_project
+from src.mental_ir_plane.vplan import load_project
 
 SPEC_TEXT = """# demo pipeline
 

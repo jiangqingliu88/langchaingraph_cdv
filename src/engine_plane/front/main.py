@@ -168,8 +168,8 @@ def _write_dplan_inputs(output_dir: Path, info: Dict[str, Any]) -> None:
         root = find_vplan_root(None, output_dir)
         if root is None:
             return
-        from src.ir_plane.vplan import load_project
-        from src.ir_plane.decision.dplan import (
+        from src.mental_ir_plane.vplan import load_project
+        from src.mental_ir_plane.decision.dplan import (
             build_dplan_map, write_dplan_contracts)
 
         result = write_dplan_contracts(output_dir, info, load_project(root))
@@ -274,7 +274,7 @@ class FrontExecutor(BaseExecutor):
         if spec_text.strip():
             try:
                 import json as _json
-                from src.ir_plane.decision.spec_tools.main import analyze_specification
+                from src.mental_ir_plane.decision.spec_tools.main import analyze_specification
                 raw = analyze_specification(spec_text)
                 doc = _json.loads(raw) if isinstance(raw, str) and raw.strip().startswith("{") else {}
                 if isinstance(doc, dict):

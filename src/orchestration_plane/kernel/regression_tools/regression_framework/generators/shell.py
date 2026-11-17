@@ -164,7 +164,7 @@ def _case_ir_sha(run_root) -> str:
 def _tst_id(test: str, seed) -> str:
     """`TST-<test>@<seed>` —— 与 `humanview.case_ir.tst_id_of` 同一口径。"""
     try:
-        from src.ir_plane.decision.case_ir import tst_id_of
+        from src.mental_ir_plane.decision.case_ir import tst_id_of
         return tst_id_of(test, seed)
     except Exception:                            # noqa: BLE001 身份层不可用不挡生成
         return f"TST-{test}@{seed}" if test else ""

@@ -32,14 +32,14 @@ def vplan_group():
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def vplan_status(project, allow_spec_drift, json_output):
     """只读：项目计数与契约/TP/case 状态。"""
-    from src.ir_plane.vplan import VPlanError, load_project
+    from src.mental_ir_plane.vplan import VPlanError, load_project
 
     _ensure_project_inputs(project, quiet=json_output)
     try:
         proj = load_project(project, allow_spec_drift=allow_spec_drift)
     except VPlanError as exc:
         raise click.ClickException(str(exc)) from exc
-    from src.ir_plane.vplan import review_status
+    from src.mental_ir_plane.vplan import review_status
 
     summary = {
         "project": str(proj.root),
@@ -110,7 +110,7 @@ def vplan_review(project, reviewer, note, check, json_output):
     `vplan execute` 会拒绝未审阅/已过期的项目（开发调试可加
     `--allow-unreviewed` 显式跳过）。
     """
-    from src.ir_plane.vplan import (
+    from src.mental_ir_plane.vplan import (
         VPlanError, load_project, record_review, review_status)
 
     try:
@@ -151,7 +151,7 @@ def vplan_review(project, reviewer, note, check, json_output):
 def vplan_build(project, output, allow_spec_drift, rebootstrap, json_output):
     """把 VPlan 项目写成一次只规划的 run（TP/Case/契约 IR）。"""
     from src.runtime_plane.infrastructure.output_config import make_output_root
-    from src.ir_plane.vplan import (
+    from src.mental_ir_plane.vplan import (
         VPlanError, load_project, write_plan_only_run,
     )
 
@@ -181,7 +181,7 @@ def vplan_build(project, output, allow_spec_drift, rebootstrap, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def vplan_package_assets(run, json_output):
     """把 run 里 SignOffAI 生成的 UVM 资产整理成 VPlan sv/ 布局。"""
-    from src.ir_plane.vplan import package_run_assets, scan_assets
+    from src.mental_ir_plane.vplan import package_run_assets, scan_assets
 
     summary = package_run_assets(run)
     summary["scanned"] = len(scan_assets(run))
@@ -205,7 +205,7 @@ def vplan_package_assets(run, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def vplan_clean_layout(run, apply, json_output):
     """删除内核的顶层工作目录，只保留 VPlan sv/ 布局。"""
-    from src.ir_plane.vplan import clean_legacy_dirs
+    from src.mental_ir_plane.vplan import clean_legacy_dirs
 
     try:
         summary = clean_legacy_dirs(run, apply=apply)
@@ -235,8 +235,8 @@ def vplan_clean_layout(run, apply, json_output):
 def vplan_scan_assets(run, check_only, json_output):
     """扫描 run 的 sv/ 锚点；`--check` 核对登记表。"""
     import csv
-    from src.ir_plane.vplan import scan_assets
-    from src.ir_plane.vplan.assets import layout_mismatches
+    from src.mental_ir_plane.vplan import scan_assets
+    from src.mental_ir_plane.vplan.assets import layout_mismatches
 
     rows = scan_assets(run)
     problems = []
@@ -272,7 +272,7 @@ def vplan_scan_assets(run, check_only, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def vplan_link(project, run, json_output):
     """把 run 记进 evidence/index.json，并把 VPlan 契约结构物化到 inputs/vplan。"""
-    from src.ir_plane.vplan import (
+    from src.mental_ir_plane.vplan import (
         link_run, load_project, materialize_project_inputs)
 
     proj = load_project(project)
@@ -297,7 +297,7 @@ def vplan_link(project, run, json_output):
 @click.option("--json", "-j", "json_output", is_flag=True, help="纯 JSON 输出")
 def vplan_gate(project, apply, json_output):
     """按证据评估 C-*：TP/回归/资产，或映射到的环境契约义务全部清偿。"""
-    from src.ir_plane.vplan import (
+    from src.mental_ir_plane.vplan import (
         VPlanError, apply_active, evaluate, load_project, require_review)
 
     if apply:
@@ -366,7 +366,7 @@ def _spec_contract(spec_text: str, module: str, llm: bool,
     contract: dict = {}
     try:
         import json as _json
-        from src.ir_plane.decision.spec_tools.main import analyze_specification
+        from src.mental_ir_plane.decision.spec_tools.main import analyze_specification
 
         raw = analyze_specification(spec_text)
         doc = (_json.loads(raw)
@@ -543,9 +543,9 @@ def _finalize_run(proj, result, clean_legacy) -> dict:
     if not (isinstance(result, dict) and result.get("output_root")):
         return extra
     from src.runtime_plane.core.runtime.atomic import atomic_write_json, atomic_write_text
-    from src.ir_plane.vplan import (
+    from src.mental_ir_plane.vplan import (
         clean_legacy_dirs, materialize_project_inputs, package_run_assets)
-    from src.ir_plane.vplan.build import build_contract_link
+    from src.mental_ir_plane.vplan.build import build_contract_link
 
     run_root = Path(str(result["output_root"]))
     extra["vplan_inputs"] = materialize_project_inputs(proj, run_root)
@@ -564,7 +564,7 @@ def _finalize_run(proj, result, clean_legacy) -> dict:
     })
     extra["assets"] = package_run_assets(run_root, proj.module)
     try:
-        from src.ir_plane.vplan.uvm_arch import write_uvm_arch
+        from src.mental_ir_plane.vplan.uvm_arch import write_uvm_arch
 
         extra["uvm_arch"] = write_uvm_arch(run_root, proj)
     except Exception as exc:                       # noqa: BLE001 旁路
@@ -615,7 +615,7 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run,
                   allow_unreviewed, json_output):
     """用 VPlan case/契约 + 执行资产跑现有 verify 内核（UVM/回归/证据）。"""
     from src.runtime_plane.infrastructure.output_config import make_output_root
-    from src.ir_plane.vplan import VPlanError, load_project
+    from src.mental_ir_plane.vplan import VPlanError, load_project
 
     _ensure_project_inputs(project, llm=from_spec, quiet=json_output,
                            force=rebootstrap, assets=not dry_run)
@@ -624,7 +624,7 @@ def vplan_execute(project, output, max_rounds, sim_modes, dry_run,
     except VPlanError as exc:
         raise click.ClickException(str(exc)) from exc
     if not dry_run:
-        from src.ir_plane.vplan import require_review
+        from src.mental_ir_plane.vplan import require_review
 
         if allow_unreviewed:
             console.print("[yellow]! 已跳过人工审阅门（--allow-unreviewed，"

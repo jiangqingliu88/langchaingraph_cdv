@@ -119,13 +119,13 @@ BINDINGS: List[ToolBinding] = [
     # ══ 验证管理系统：VPlan 项目 / 运行产物 ═══════════════════════
     ToolBinding(
         name="vplan.status",
-        target="src.ir_plane.vplan.report:project_summary",
+        target="src.mental_ir_plane.vplan.report:project_summary",
         kind="json",
         doc="VPlan 项目 → 需求/feature/契约/TP/case 计数与状态（只读）",
     ),
     ToolBinding(
         name="vplan.run_artifacts",
-        target="src.ir_plane.vplan.report:run_artifacts",
+        target="src.mental_ir_plane.vplan.report:run_artifacts",
         kind="json",
         doc="run 目录 → TP IR / 覆盖率计划 / 契约 / sv 资产 / 回归（只读）",
     ),
@@ -156,19 +156,19 @@ BINDINGS: List[ToolBinding] = [
     # 所以批准/拒绝两条都是 `pure=False`：**不可逆，且不能因为切标签页就发生**。
     ToolBinding(
         name="coverage.excludes",
-        target="src.ir_plane.decision.evidence.exclude_api:read_excludes",
+        target="src.mental_ir_plane.decision.evidence.exclude_api:read_excludes",
         kind="json",
         doc="覆盖率豁免登记册 → 待批 / 已批（带审批人与哈希指纹）/ 统计",
     ),
     ToolBinding(
         name="coverage.approve_exclude",
-        target="src.ir_plane.decision.evidence.exclude_api:approve_exclude",
+        target="src.mental_ir_plane.decision.evidence.exclude_api:approve_exclude",
         kind="json", pure=False,
         doc="批准一条豁免 —— 签名 + 哈希指纹入链（改动覆盖率分母）",
     ),
     ToolBinding(
         name="coverage.reject_exclude",
-        target="src.ir_plane.decision.evidence.exclude_api:reject_exclude",
+        target="src.mental_ir_plane.decision.evidence.exclude_api:reject_exclude",
         kind="json", pure=False,
         doc="拒绝一条豁免 —— 该点仍需覆盖",
     ),
@@ -288,7 +288,7 @@ BINDINGS: List[ToolBinding] = [
     ),
     ToolBinding(
         name="flow.coverage_report",
-        target="src.ir_plane.decision.evidence.cov_api:build_coverage_report",
+        target="src.mental_ir_plane.decision.evidence.cov_api:build_coverage_report",
         kind="json", pure=False,
         doc="覆盖率库 → HTML 报告（已是最新则复用）；返回报告路径供界面打开",
     ),

@@ -64,7 +64,7 @@ def mount_vplan(vplan: str, run_root: str | Path) -> Optional[Path]:
             f"不是 VPlan 项目目录：{src}（case 模型 YAML 已不再支持；"
             "请给含 data/*.csv 与 cases/*.yaml 的项目根）")
     from src.runtime_plane.infrastructure.layout import vplan_inputs_dir
-    from src.ir_plane.vplan import (
+    from src.mental_ir_plane.vplan import (
         load_project, materialize_project_inputs, require_review)
 
     project = load_project(src)

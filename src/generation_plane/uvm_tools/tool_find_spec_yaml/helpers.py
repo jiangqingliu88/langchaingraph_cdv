@@ -1294,7 +1294,7 @@ def _vplan_test_lines(output_dir) -> List[str]:
         # 而 VPlan 项目的执行资产优先级更高。
         # 直接读草稿的后果实测过：NPU 那份 12 维度的手写模型被绕过，
         # 注入进来的是草稿的 4 条 —— 而**日志只说"注入 5 行"，看不出少了什么**。
-        from src.ir_plane.vplan import engine
+        from src.mental_ir_plane.vplan import engine
 
         project = engine.project_for(_load_spec(output_dir) or {}, output_dir)
         if project is None:

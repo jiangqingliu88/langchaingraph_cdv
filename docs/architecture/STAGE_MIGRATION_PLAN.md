@@ -57,7 +57,7 @@
 | `tests/test_approval.py` / `test_manual_node_gate.py` | `engine.orchestration.nodes.pure.approval` |
 | `tests/test_architecture_invariants.py` | 节点模块前缀断言改为 `src.engine.orchestration` / `src.agent` |
 | `src/workbench/tests/test_pipeline_modules.py` | supervisor graph 新路径 |
-| `src/ir_plane/contract/tests/test_build.py` | `engine.ops.main` |
+| `src/mental_ir_plane/contract/tests/test_build.py` | `engine.ops.main` |
 
 ## 4. 迁移顺序
 

@@ -33,7 +33,7 @@ PLANES: tuple[PlaneSpec, ...] = (
     PlaneSpec("Engine", "src/engine_plane",
               "解析、检查、编译、仿真、覆盖率、诊断、证据、签核",
               "不得调用 LLM、不得依赖 Agent"),
-    PlaneSpec("IR", "src/ir_plane",
+    PlaneSpec("IR", "src/mental_ir_plane",
               "Intent / Execution / Evidence / Case / Resource 语义契约",
               "不执行 EDA、不持有运行时状态"),
     PlaneSpec("Knowledge", "src/knowledge_plane",

@@ -43,7 +43,7 @@ def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
 def _audit(root: Path, action: str, *, reviewer: str, input_sha: str,
            output_sha: str) -> None:
     try:
-        from src.ir_plane.decision.control_plane import approval_token, record
+        from src.mental_ir_plane.decision.control_plane import approval_token, record
 
         record(root, {"action": action, "role": "engineer",
                       "decision": "APPROVAL", "risk": "HIGH",
@@ -69,7 +69,7 @@ def _intents(root: Path) -> List[Dict[str, Any]]:
     case_ir = _read_json(root / "coverage" / "case_ir.json") or {}
     if not case_ir.get("cases"):
         return []
-    from src.ir_plane.decision.intent import intents_from_case_ir
+    from src.mental_ir_plane.decision.intent import intents_from_case_ir
     return [i.to_dict() for i in intents_from_case_ir(
         case_ir, module=str(case_ir.get("module") or ""))]
 
@@ -79,8 +79,8 @@ def _claims(root: Path, intents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     rows = [c for c in (doc.get("claims") or []) if isinstance(c, dict)]
     if rows:
         return rows
-    from src.ir_plane.decision.claims import claims_from_intents
-    from src.ir_plane.decision.intent import from_dict
+    from src.mental_ir_plane.decision.claims import claims_from_intents
+    from src.mental_ir_plane.decision.intent import from_dict
     return [c.to_dict() for c in claims_from_intents(
         [from_dict(i) for i in intents])]
 
@@ -210,7 +210,7 @@ def review_board(run_dir: str = "") -> Dict[str, Any]:
 
 def _materialize_intents(root: Path):
     """老 run 没有 intents.json 时，从 case_ir 生成一份可审阅的构建物。"""
-    from src.ir_plane.decision.intent import (
+    from src.mental_ir_plane.decision.intent import (
         intents_from_case_ir, load_intents, save_intents,
     )
     intents = load_intents(root)
@@ -225,7 +225,7 @@ def _materialize_intents(root: Path):
 
 
 def _materialize_claims(root: Path):
-    from src.ir_plane.decision.claims import (
+    from src.mental_ir_plane.decision.claims import (
         claims_from_intents, load_claims, save_claims,
     )
     claims = load_claims(root)
@@ -239,7 +239,7 @@ def _materialize_claims(root: Path):
 
 def _decide_intent(root: Path, item_id: str, decision: str,
                    reviewer: str, comment: str) -> Dict[str, Any]:
-    from src.ir_plane.decision.intent import promote, save_intents
+    from src.mental_ir_plane.decision.intent import promote, save_intents
     intents = _materialize_intents(root)
     target = next((i for i in intents if i.intent_id == item_id), None)
     if target is None:
@@ -258,7 +258,7 @@ def _decide_intent(root: Path, item_id: str, decision: str,
 
 def _decide_claim(root: Path, item_id: str, decision: str,
                   reviewer: str, comment: str) -> Dict[str, Any]:
-    from src.ir_plane.decision.claims import save_claims
+    from src.mental_ir_plane.decision.claims import save_claims
     if decision not in ("CONFIRMED", "REJECTED", "CANDIDATE"):
         return {"error": f"未知 Claim 结论：{decision}"}
     claims = _materialize_claims(root)

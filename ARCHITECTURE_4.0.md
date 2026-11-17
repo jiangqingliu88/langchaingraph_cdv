@@ -338,12 +338,12 @@ Case/Execution/Evidence IR 记录的是**验证对象与事实**；Mental IR 记
 vagent mental build specs/npu_sched/docs/specs/npu_sched.md -o output_mental_npu_sched
 ```
 
-只保留模型与落盘实现，不复制 `ir_plane`。设计说明见
+只保留模型与落盘实现，不复制 `mental_ir_plane`。设计说明见
 [Mental IR](docs/architecture/MENTAL_IR.md)。
 
 ### Formal IR：把「准备怎么证」也变成数据
 
-`src/ir_plane/formal/` 定义 `formal_plan_v1`：properties（assert / assume /
+`src/mental_ir_plane/formal/` 定义 `formal_plan_v1`：properties（assert / assume /
 cover）、proof_obligations、engine_requirements、coverage_goals。产物在
 `<run>/formal/formal_plan.json`。**没有形式引擎时 `engine.ran=false` + 原因**，
 证明义务默认 `not_run`——生成属性不等于已经证明。
@@ -543,12 +543,12 @@ src/
 │   ├── diagnostics/          # 日志 / 波形 / 失败提取
 │   └── __init__.py           # facade（惰性转发）
 │
-├── ir_plane/                 # 统一验证语义
-│   ├── vplan/ contract/ proposal/
-│   ├── formal/               # Formal IR（性质/证明义务/引擎状态）
-│   └── decision/             # 原 l3_decision
-│
-├── mental_ir_plane/          # 心智模型 IR（目标/假设/歧义/意图/风险）
+├── mental_ir_plane/          # 唯一 IR 根：理解 + 融合 + 引擎
+│   ├── model.py / store.py   # 心智模型（目标/假设/歧义/意图/风险）
+│   ├── unified/              # Mental + DPlan + VPlan 统一对象图
+│   ├── contract/ decision/ formal/ interface_timing/
+│   ├── proposal/ specification_compiler/ vplan/
+│   └── example/
 │
 ├── knowledge_plane/          # 协议 / IP / 设计知识
 ├── experience_plane/         # 历史失败 / 修复 / 覆盖率闭合策略

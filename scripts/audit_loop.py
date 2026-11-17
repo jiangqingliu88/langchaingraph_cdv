@@ -2,7 +2,7 @@ import os
 
 print('=== 决策链路环节盘点 ===')
 checks = [
-    ('L3 决策引擎 (旧 layers)', 'src/ir_plane/decision/decision_engine.py'),
+    ('L3 决策引擎 (旧 layers)', 'src/mental_ir_plane/decision/decision_engine.py'),
     ('L3 决策引擎 (五层副本)', 'src/layers_engine/l3_decision/decision_engine.py'),
     ('引擎 decision_callback', 'src/layers_engine/l2_orchestration/engine/query.py'),
     ('决策闭环驱动器 (旧 execution.py)', 'src/orchestration_plane/kernel/execution.py'),

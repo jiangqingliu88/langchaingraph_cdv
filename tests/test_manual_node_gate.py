@@ -135,7 +135,7 @@ class TestLegacyFallback:
         轨迹里写的可能是它。
         """
         from src.orchestration_plane.nodes.pure.approval import _LEGACY_HIGH_RISK_ACTIONS
-        from src.ir_plane.decision.decision_engine import canonical_action
+        from src.mental_ir_plane.decision.decision_engine import canonical_action
         assert {canonical_action(a) for a in _LEGACY_HIGH_RISK_ACTIONS} == {
             "FIX_FUNCTIONAL_bug", "FIX_PROTOCOL_bug", "FIX_RESET_bug",
             "FIX_CDC_bug", "FIX_DEADCODE_bug", "FIX_MODEL_bug"}

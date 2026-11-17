@@ -1,4 +1,3 @@
-
 """case_cov 的实现细节（Phase 4 拆分；公共 API 在 `case_cov.py`）。"""
 from __future__ import annotations
 

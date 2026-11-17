@@ -227,7 +227,7 @@ def _execute_closure(project, run_dir, target, spec, rtl, config, output):
     spec_text = spec_path.read_text(encoding="utf-8") if spec_path else ""
     out_root = make_output_root(str(output) if output else f"output_closure_{run_dir.name}")
     if config:
-        from src.ir_plane.vplan import (
+        from src.mental_ir_plane.vplan import (
             load_project, materialize_project_inputs)
         materialize_project_inputs(load_project(config), out_root)
 

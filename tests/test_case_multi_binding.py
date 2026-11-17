@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import yaml
 
-from src.ir_plane.vplan.runtime import plan
-from src.ir_plane.vplan.runtime.repository import load_models_from_text
+from src.mental_ir_plane.vplan.runtime import plan
+from src.mental_ir_plane.vplan.runtime.repository import load_models_from_text
 
 MODEL = """
 object: T
@@ -46,7 +46,7 @@ def _bundle():
 
 class TestResolveAll:
     def test_all_cases_sharing_a_dimension_are_returned(self):
-        from src.ir_plane.decision.case_ir import parse_declared
+        from src.mental_ir_plane.decision.case_ir import parse_declared
 
         doc = parse_declared(yaml.safe_load(MODEL)["cases"], module="T")
         assert doc.resolve_all(dimension="D_x") == ["CASE-A", "CASE-B"]
@@ -54,7 +54,7 @@ class TestResolveAll:
         assert doc.resolve(dimension="D_x") == "CASE-A"
 
     def test_no_match_is_empty_not_a_default_case(self):
-        from src.ir_plane.decision.case_ir import parse_declared
+        from src.mental_ir_plane.decision.case_ir import parse_declared
 
         doc = parse_declared(yaml.safe_load(MODEL)["cases"], module="T")
         assert doc.resolve_all(dimension="D_missing") == []

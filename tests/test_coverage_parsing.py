@@ -236,7 +236,7 @@ class TestGapSequenceHasItsOwnTimeout:
     """
 
     def _seq(self) -> str:
-        from src.ir_plane.decision.evidence.main import generate_gap_directed_seq
+        from src.mental_ir_plane.decision.evidence.main import generate_gap_directed_seq
 
         return generate_gap_directed_seq(
             "apb", [{"dimension": "toggle", "location": "paddr[7:0]",

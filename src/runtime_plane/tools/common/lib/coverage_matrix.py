@@ -12,7 +12,7 @@ def print(*args, **kwargs):
 
 
 def _parse_cvg_bin_hits(*args, **kwargs):
-    from src.ir_plane.decision.evidence.cvg_parse import _parse_cvg_bin_hits as _impl
+    from src.mental_ir_plane.decision.evidence.cvg_parse import _parse_cvg_bin_hits as _impl
     return _impl(*args, **kwargs)
 
 
@@ -61,7 +61,7 @@ def _status_for(n, kind: str, observe: bool) -> tuple:
     本函数只做委托，保证"状态只推导"从 TP 级开始成立 —— 形态与返回值不变，
     但规则不再有两份。
     """
-    from src.ir_plane.contract.tp_shadow import status_for_hits
+    from src.mental_ir_plane.contract.tp_shadow import status_for_hits
 
     return status_for_hits(n, kind, observe)
 
@@ -316,7 +316,7 @@ def _owned_bins(tp: dict) -> list:
 def _case_cov_matrix(od: Path, *, max_cases: int = 0,
                      require_wave: bool = True, force: bool = False) -> dict:
     """逐用例解析回归目录 → 覆盖切片 + 用例 ↔ 测试点证据表（委托检查层）。"""
-    from src.ir_plane.decision.evidence.case_cov import case_cov_matrix
+    from src.mental_ir_plane.decision.evidence.case_cov import case_cov_matrix
     return case_cov_matrix(od, max_cases=max_cases, require_wave=require_wave,
                            force=force)
 

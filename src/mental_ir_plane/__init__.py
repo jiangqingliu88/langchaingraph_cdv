@@ -1,11 +1,16 @@
-"""Mental IR —— agent 的「心智模型」结构化表达。
+"""唯一 IR 根 —— 总（理解 + 融合） + 分（引擎与契约）。
 
-与 `src/ir_plane/` 的 Case/Execution/Evidence IR 不同，这里回答的是**理解层**
-的问题：规格到底要求验证什么？哪些前提是假设？哪些点还没说清？验证意图如何
-落到证据上？它由 `agent_plane/design_understanding/mental_model_agent` 生成，供人审阅，也可以作为
-verify / coverage 的上下文。
+    src/mental_ir_plane/
+    ├── model.py / store.py     理解层（MentalIR）
+    ├── dplan/                  设计与模型契约（DesignPlan / dplan_ir_v1）
+    ├── unified/                融合层（Mental + DPlan + VPlan）
+    ├── contract/ decision/ formal/ interface_timing/
+    ├── proposal/ specification_compiler/ vplan/
+    └── example/
 
-只保留模型与落盘，不复制 `ir_plane` 的实现。
+`model/store` 回答「理解什么」；`unified` 回答「三份输入如何关联」；
+其余子包保留契约、计划、用例与执行模型。详见同目录 `README.md`。
+原 `src/ir_plane` 已删除。
 """
 
 from .model import (
@@ -24,6 +29,16 @@ from .store import (
     read_mental_ir,
     write_mental_ir,
 )
+from .unified import (
+    UnifiedIR,
+    build_unified_ir,
+    dplan_view,
+    mental_view,
+    read_unified,
+    views,
+    vplan_view,
+    write_unified,
+)
 
 __all__ = [
     "Ambiguity",
@@ -38,4 +53,12 @@ __all__ = [
     "mental_ir_path",
     "read_mental_ir",
     "write_mental_ir",
+    "UnifiedIR",
+    "build_unified_ir",
+    "mental_view",
+    "dplan_view",
+    "vplan_view",
+    "views",
+    "read_unified",
+    "write_unified",
 ]

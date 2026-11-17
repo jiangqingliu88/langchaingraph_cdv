@@ -15,7 +15,7 @@ from typing import Any
 
 from src.engine_plane.interface_timing import check_temporal_ir
 from src.generation_plane.interface_timing import write_monitor
-from src.ir_plane.interface_timing import (
+from src.mental_ir_plane.interface_timing import (
     TimingContractError,
     source_hash,
     temporal_from_dict,

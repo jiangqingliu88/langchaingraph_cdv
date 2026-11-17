@@ -11,7 +11,7 @@ from typing import Any
 
 from src.engine_plane.specification_compiler import CompilationResult, SpecificationCompiler
 from src.experience_plane.specification_decisions import ExperienceReferences
-from src.ir_plane.specification_compiler import (
+from src.mental_ir_plane.specification_compiler import (
     LifecycleStage,
     SpecificationContract,
     SpecSource,

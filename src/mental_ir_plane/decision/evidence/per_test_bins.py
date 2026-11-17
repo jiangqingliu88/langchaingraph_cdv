@@ -1,6 +1,3 @@
-
-
-
 """Per-test 覆盖率生产端 —— 回归目录里的逐 test ucdb → `coverage/per_test_bins.json`。
 
     regression_run/<stage>/.../test_<name>_seed_<n>/cov/<test>/_ucdb/*.ucdb

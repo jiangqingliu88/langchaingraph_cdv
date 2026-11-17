@@ -34,7 +34,7 @@ def run_coverage(run_dir: str = "") -> Dict[str, Any]:
               for key, label in _COV_FIELDS]
 
     try:
-        from src.ir_plane.decision.evidence.cov_api import find_run_coverage
+        from src.mental_ir_plane.decision.evidence.cov_api import find_run_coverage
 
         files = find_run_coverage(root)
     except Exception:                                  # noqa: BLE001 扫盘失败不该拖垮这页
@@ -59,7 +59,7 @@ def run_coverage(run_dir: str = "") -> Dict[str, Any]:
 def _tp_evidence_section(root: Path, notes: List[str]) -> Dict[str, Any]:
     """TP Cov 证据视图（四层）—— 失败只在 notes 里说，不拖垮整页。"""
     try:
-        from src.ir_plane.decision.evidence.tp_evidence import build_tp_evidence
+        from src.mental_ir_plane.decision.evidence.tp_evidence import build_tp_evidence
 
         return build_tp_evidence(root)
     except Exception as exc:                        # noqa: BLE001 页面不该挂
@@ -70,7 +70,7 @@ def _tp_evidence_section(root: Path, notes: List[str]) -> Dict[str, Any]:
 def _case_view_section(root: Path, notes: List[str]) -> Dict[str, Any]:
     """Case 关联视图（用例/契约/矩阵/缺口四张表）—— 失败只在 notes 里说。"""
     try:
-        from src.ir_plane.decision.case_view.builder import build_case_view
+        from src.mental_ir_plane.decision.case_view.builder import build_case_view
 
         return build_case_view(root)
     except Exception as exc:                        # noqa: BLE001 页面不该挂
@@ -131,7 +131,7 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
     if not root.is_dir():
         return {"error": f"run_dir not found: {run_dir}"}
 
-    from src.ir_plane.vplan import engine
+    from src.mental_ir_plane.vplan import engine
 
     project = engine.project_for(_spec_of_run(root), root)
     notes: List[str] = []
@@ -163,7 +163,7 @@ def run_fcov(run_dir: str = "") -> Dict[str, Any]:
 
     measured, measured_path = {}, ""
     try:
-        from src.ir_plane.decision.evidence.cov_api import functional_coverage_details
+        from src.mental_ir_plane.decision.evidence.cov_api import functional_coverage_details
 
         cgs, measured_path = functional_coverage_details(root)
         for cg in cgs:

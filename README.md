@@ -36,7 +36,11 @@ src/
 ├── orchestration_plane/  # supervisor / nodes / gates / registry + l2
 ├── generation_plane/     # design{rtl,cmodel} / verification / planning / *_tools
 ├── engine_plane/         # front / verify / ops / coverage / audit / diagnostics
-├── ir_plane/             # vplan / contract / proposal + decision
+├── mental_ir_plane/      # 唯一 IR 根
+│   ├── model.py/store.py # 理解层（MentalIR）
+│   ├── dplan/            # 设计与模型契约（dplan_ir_v1）
+│   ├── unified/          # Mental + DPlan + VPlan 统一对象图
+│   └── contract/ decision/ formal/ interface_timing/ proposal/ specification_compiler/ vplan/
 ├── knowledge_plane/
 ├── experience_plane/
 ├── runtime_plane/        # core / infrastructure / tools / utils + task_store/session
@@ -247,5 +251,5 @@ Supervisor 状态机、Harness 多轮会话、安全边界等。
 - 四个生成/诊断文件仍混有确定性检查函数（design/cmodel/verification/debug），
   第二轮将把这些函数抽到 `engine_plane/`。
 - import 环检测、字符串拼接动态 import 尚未实现。
-- `orchestration_plane/kernel`、`ir_plane/decision` 是原 L2/L3 的迁移落点，后续继续按
+- `orchestration_plane/kernel`、`mental_ir_plane/decision` 是原 L2/L3 的迁移落点，后续继续按
   职责下沉到 Engine / IR。

@@ -26,7 +26,7 @@ import time
 import structlog
 
 from src.orchestration_plane.kernel.state import PipelineState
-from src.ir_plane.decision.decision_engine import CoverageDrivenDecisionEngine
+from src.mental_ir_plane.decision.decision_engine import CoverageDrivenDecisionEngine
 
 logger = structlog.get_logger()
 
