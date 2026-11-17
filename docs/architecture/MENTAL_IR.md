@@ -92,6 +92,8 @@ ir = generate_mental_ir(spec_text, module="npu_sched")
 
 ## 7. 边界与待办
 
+跨 Mental、DPlan 与 VPlan 的融合投影见 [融合优化 IR 设计](IR_FUSION_MENTAL_DPLAN_VPLAN.md)。该提案不改变本页 Mental IR 的独立候选理解语义，也不把规划合并当成执行证据。
+
 - 不进 supervisor 闭环：当前只有独立 CLI/服务入口。
 - 不做自动澄清：歧义输出给人和后续工作流，不在本轮自动改写 spec。
 - 不与 `ir_plane` 共享代码：未来若需要复用，应通过稳定接口抽取，而不是复制目录。

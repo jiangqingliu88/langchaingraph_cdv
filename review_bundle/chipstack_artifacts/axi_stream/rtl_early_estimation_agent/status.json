@@ -1,0 +1,5 @@
+{
+  "status": "NOT_RUN",
+  "reason": "未执行面积/功耗/性能估算，不生成 PPA 数值",
+  "performed": false
+}

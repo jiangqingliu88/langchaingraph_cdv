@@ -1,0 +1,5 @@
+{
+  "status": "NOT_RUN",
+  "reason": "未调用形式验证工具（例如 JasperGold），不提供 formal proof",
+  "performed": false
+}

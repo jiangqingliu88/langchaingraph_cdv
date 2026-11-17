@@ -1,0 +1,8 @@
+{
+  "expected_status": "FAIL",
+  "actual_status": "INCOMPLETE",
+  "expectation_met": false,
+  "simulation_kind": "unavailable",
+  "seed": 4242,
+  "rtl": "fail_master.sv"
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "interface_scenario_coverage_v1",
+  "rows": [
+    {
+      "scenario": "positive",
+      "actual_status": "INCOMPLETE",
+      "expected_status": "PASS",
+      "counts": null
+    },
+    {
+      "scenario": "negative_control",
+      "actual_status": "INCOMPLETE",
+      "expected_status": "FAIL",
+      "counts": null
+    }
+  ],
+  "scope": "仅当前 VALID/READY/DATA 场景，不是完整功能覆盖率或 100% 闭合"
+}

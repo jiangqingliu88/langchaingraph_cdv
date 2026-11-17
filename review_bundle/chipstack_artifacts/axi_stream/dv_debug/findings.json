@@ -1,0 +1,20 @@
+{
+  "binding_issues": [],
+  "runtime_findings": [
+    {
+      "scenario": "positive",
+      "expected": "PASS",
+      "actual": "INCOMPLETE",
+      "expected_negative_control": false,
+      "reason": "iverilog/vvp 未安装或安全软件阻止使用；未执行 RTL 仿真"
+    },
+    {
+      "scenario": "negative_control",
+      "expected": "FAIL",
+      "actual": "INCOMPLETE",
+      "expected_negative_control": true,
+      "reason": "iverilog/vvp 未安装或安全软件阻止使用；未执行 RTL 仿真"
+    }
+  ],
+  "no_llm_root_cause_claim": true
+}

@@ -17,6 +17,7 @@
 | ChipStack 风格工作区 | [Artifact Workspace](architecture/CHIPSTACK_ARTIFACT_WORKSPACE.md) | 产物索引和 `Archived/<run_id>`真实来源；非 Cadence 数据库适配 |
 | Specification Compiler | [Specification Compiler](architecture/SPECIFICATION_COMPILER.md) | 有界规格/IR 编译与绑定证据 |
 | Mental IR | [Mental IR](architecture/MENTAL_IR.md) | SourceAnchor 与候选设计理解 |
+| Mental + DPlan + VPlan 融合 IR | [融合优化 IR（设计提案）](architecture/IR_FUSION_MENTAL_DPLAN_VPLAN.md) | 对象图、三投影、来源/去重/冲突与执行证据边界；非已实现转换器 |
 
 十个 SDK Agent 的物理入口是 [`reaction/registry.py`](../src/agent_plane/reaction/registry.py)，`__init__.py` 采用惰性导出，避免只看生成器也被 SDK 依赖挡住。原 `specialists/` 已退休：生成器/工具/子图迁入五个 Domain，对话入口迁到 `workbench/modes/chats/`，映射见 [SPECIALIST_AGENTS.md](architecture/SPECIALIST_AGENTS.md)。supervisor 与联合作业契约保留。
 
